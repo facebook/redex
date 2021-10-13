@@ -10,6 +10,63 @@
 #include "Resolver.h"
 #include "TypeUtil.h"
 
+CodeRefs::CodeRefs(const DexMethod* method) {
+  if (!method->get_code()) {
+    return;
+  }
+  std::unordered_set<const DexType*> types_set;
+  std::unordered_set<const DexMethod*> methods_set;
+  std::unordered_set<const DexField*> fields_set;
+  editable_cfg_adapter::iterate(
+      method->get_code(), [&](const MethodItemEntry& mie) {
+        auto insn = mie.insn;
+        if (insn->has_type()) {
+          always_assert(insn->get_type());
+          types_set.insert(insn->get_type());
+        } else if (insn->has_method()) {
+          auto callee_ref = insn->get_method();
+          auto callee =
+              resolve_method(callee_ref, opcode_to_search(insn), method);
+          if (!callee) {
+            invalid_refs = true;
+            return editable_cfg_adapter::LOOP_BREAK;
+          }
+          if (callee != callee_ref) {
+            types_set.insert(callee_ref->get_class());
+          }
+          methods_set.insert(callee);
+        } else if (insn->has_field()) {
+          auto field_ref = insn->get_field();
+          auto field = resolve_field(field_ref);
+          if (!field) {
+            invalid_refs = true;
+            return editable_cfg_adapter::LOOP_BREAK;
+          }
+          if (field != field_ref) {
+            types_set.insert(field_ref->get_class());
+          }
+          fields_set.insert(field);
+        }
+        return editable_cfg_adapter::LOOP_CONTINUE;
+      });
+  if (invalid_refs) {
+    return;
+  }
+
+  std::vector<DexType*> catch_types;
+  method->get_code()->gather_catch_types(catch_types);
+  for (auto type : catch_types) {
+    if (type) {
+      types_set.insert(type);
+    }
+  }
+
+  std::copy(types_set.begin(), types_set.end(), std::back_inserter(types));
+  std::copy(methods_set.begin(), methods_set.end(),
+            std::back_inserter(methods));
+  std::copy(fields_set.begin(), fields_set.end(), std::back_inserter(fields));
+}
+
 bool RefChecker::check_type(const DexType* type) const {
   auto res = m_type_cache.get(type, boost::none);
   if (res == boost::none) {
@@ -56,9 +113,8 @@ bool RefChecker::check_class(const DexClass* cls) const {
     return false;
   }
   const auto fields = cls->get_all_fields();
-  if (std::any_of(fields.begin(), fields.end(), [this](DexField* field) {
-        return !check_field(field);
-      })) {
+  if (std::any_of(fields.begin(), fields.end(),
+                  [this](DexField* field) { return !check_field(field); })) {
     return false;
   }
   const auto methods = cls->get_all_methods();
@@ -70,38 +126,24 @@ bool RefChecker::check_class(const DexClass* cls) const {
   return true;
 }
 
-bool RefChecker::check_method_and_code(const DexMethod* method) const {
-  if (!check_method(method)) {
+bool RefChecker::check_code_refs(const CodeRefs& code_refs) const {
+  if (code_refs.invalid_refs) {
     return false;
   }
-  if (method->get_code()) {
-    bool all_refs_valid = true;
-    editable_cfg_adapter::iterate(
-        method->get_code(),
-        [this, method, &all_refs_valid](const MethodItemEntry& mie) {
-          auto insn = mie.insn;
-          if (insn->has_type()) {
-            if (!check_type(insn->get_type())) {
-              all_refs_valid = false;
-              return editable_cfg_adapter::LOOP_BREAK;
-            }
-          } else if (insn->has_field()) {
-            auto field = resolve_field(insn->get_field());
-            if (!field || !check_field(field)) {
-              all_refs_valid = false;
-              return editable_cfg_adapter::LOOP_BREAK;
-            }
-          } else if (insn->has_method()) {
-            auto callee = resolve_method(
-                insn->get_method(), opcode_to_search(insn), method);
-            if (!callee || !check_method(callee)) {
-              all_refs_valid = false;
-              return editable_cfg_adapter::LOOP_BREAK;
-            }
-          }
-          return editable_cfg_adapter::LOOP_CONTINUE;
-        });
-    return all_refs_valid;
+  for (auto type : code_refs.types) {
+    if (!check_type(type)) {
+      return false;
+    }
+  }
+  for (auto method : code_refs.methods) {
+    if (!check_method(method)) {
+      return false;
+    }
+  }
+  for (auto field : code_refs.fields) {
+    if (!check_field(field)) {
+      return false;
+    }
   }
   return true;
 }

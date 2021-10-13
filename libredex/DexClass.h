@@ -1226,7 +1226,8 @@ class DexClass {
   void remove_field(const DexField* f);
   // Remove the field from the class and delete the definition.
   void remove_field_definition(DexField* f);
-  DexField* find_field(const char* name, const DexType* field_type) const;
+  DexField* find_ifield(const char* name, const DexType* field_type) const;
+  DexField* find_sfield(const char* name, const DexType* field_type) const;
 
   DexAnnotationDirectory* get_annotation_directory();
   DexAccessFlags get_access() const { return m_access_flags; }

@@ -16,11 +16,24 @@ class DexClass;
 class DexType;
 class PassManager;
 class DexStore;
+class TypeSystem;
 using DexStoresVector = std::vector<DexStore>;
+using Scope = std::vector<DexClass*>;
 
 namespace class_merging {
 
 struct ModelSpec;
+
+/**
+ * Find all possible mergeables and roots by scanning the type hierarchy.
+ * - Only leaf classes: not interface, not abstract, and has no subclasses.
+ * - No throwable classes. ClassMerging service doesn't analyze throw edges and
+ *   merging throwable classes has an chance to change the control flow.
+ */
+void find_all_mergeables_and_roots(const TypeSystem& type_system,
+                                   const Scope& scope,
+                                   size_t global_min_count,
+                                   ModelSpec* merging_spec);
 
 /**
  * Analyze type hierarchy to find anonymous classes to merge.

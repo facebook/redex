@@ -85,9 +85,6 @@ TEST_F(InterproceduralConstantPropagationTest, constantArgument) {
      (load-param v0)
      (load-param v1)
      (const v1 0)
-     (goto :label)
-     (const v0 0)
-     (:label)
      (return-void)
     )
   )");
@@ -266,9 +263,6 @@ TEST_F(InterproceduralConstantPropagationTest, constantTwoArgument) {
      (const v1 0)
      (const-string "hello")
      (move-result-pseudo-object v2)
-     (goto :label)
-     (const v0 0)
-     (:label)
      (return-void)
     )
   )");
@@ -392,9 +386,6 @@ TEST_F(InterproceduralConstantPropagationTest, argumentsGreaterThanZero) {
     (
      (load-param v0)
      (load-param v1)
-     (goto :label)
-     (const v0 0)
-     (:label)
      (return-void)
     )
   )");
@@ -892,9 +883,6 @@ TEST_F(InterproceduralConstantPropagationTest, constantField) {
   auto expected_code2 = assembler::ircode_from_string(R"(
     (
      (const v0 1)
-     (goto :label)
-     (const v0 0)
-     (:label)
      (return-void)
     )
   )");
@@ -1206,9 +1194,6 @@ TEST_F(InterproceduralConstantPropagationTest, constantReturnValue) {
     (
      (invoke-static () "LFoo;.constantReturnValue:()I")
      (move-result v0)
-     (goto :label)
-     (const v0 1)
-     (:label)
      (return-void)
     )
   )");
@@ -1256,9 +1241,6 @@ TEST_F(InterproceduralConstantPropagationTest, VirtualMethodReturnValue) {
      (load-param-object v0)
      (invoke-virtual (v0) "LFoo;.virtualMethod:()I")
      (move-result v0)
-     (goto :label)
-     (const v0 1)
-     (:label)
      (return-void)
     )
   )");
@@ -1605,9 +1587,6 @@ TEST_F(InterproceduralConstantPropagationTest, neverReturns) {
      (const v1 1)
 
      (const v2 1)
-     (goto :if-true-2)
-     (const v3 2)
-     (:if-true-2)
      (return-void)
     )
   )");

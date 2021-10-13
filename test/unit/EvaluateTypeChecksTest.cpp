@@ -55,12 +55,19 @@ class EvaluateTypeChecksTest : public RedexTest {
         {type_class(m_foo), type_class(m_bar), type_class(m_baz)});
     DexStoresVector stores{store};
     auto scope = build_class_scope(stores);
-    XStoreRefs xstores(stores);
+
+    using namespace shrinker;
+    ShrinkerConfig shrinker_config;
+    shrinker_config.run_const_prop = true;
+    shrinker_config.run_copy_prop = true;
+    shrinker_config.run_local_dce = true;
+    shrinker_config.compute_pure_methods = false;
+    Shrinker shrinker(stores, scope, shrinker_config);
 
     auto method_str = std::string("(") + method_line + " " + in + " )";
     auto method = assembler::class_with_method(type, method_str);
 
-    check_casts::EvaluateTypeChecksPass::optimize(method, xstores);
+    check_casts::EvaluateTypeChecksPass::optimize(method, shrinker);
 
     auto expected_str = regularize(out);
     auto actual_str = assembler::to_string(method->get_code());
@@ -290,7 +297,7 @@ TEST_F(EvaluateTypeChecksTest,
         (move-result-pseudo v0)
 
         (move v1 v0)
-        (move v2 v0)
+        (xor-int/lit8 v2 v0 1)
 
         (if-nez v1 :L1)
         (const v0 0)
@@ -304,6 +311,67 @@ TEST_F(EvaluateTypeChecksTest,
   auto method_str = "method (private static) \"LTest;.test:(LBaz;)I\"";
 
   EXPECT_TRUE(run("LTest;", method_str, code, code));
+}
+
+TEST_F(EvaluateTypeChecksTest,
+       instance_of_optimize_always_succeed_nez_multi_use_yes) {
+  auto code = R"(
+       (
+        (load-param-object v0)
+        (load-param-object v1)
+        (instance-of v0 "LFoo;")
+        (move-result-pseudo v2)
+
+        (move v3 v2)
+
+        (if-nez v1 :L1)
+
+        (if-nez v3 :L0)
+        (const v0 0)
+        (return v0)
+
+        (:L0)
+        (const v0 1)
+        (return v0)
+
+        (:L1)
+        (if-eqz v2 :L2)
+        (const v0 2)
+        (return v0)
+
+        (:L2)
+        (const v0 3)
+        (return v0)
+       )
+      )";
+  auto method_str = "method (private static) \"LTest;.test:(LBaz;I)I\"";
+
+  auto expected = R"(
+      (
+       (load-param-object v0)
+       (load-param-object v1)
+
+       (if-nez v1 :L1)
+
+       (if-nez v0 :L0)
+       (const v0 0)
+       (return v0)
+
+       (:L0)
+       (const v0 1)
+       (return v0)
+
+       (:L1)
+       (if-eqz v0 :L2)
+       (const v0 2)
+       (return v0)
+
+       (:L2)
+       (const v0 3)
+       (return v0)
+      )
+     )";
+  EXPECT_TRUE(run("LTest;", method_str, code, expected));
 }
 
 TEST_F(EvaluateTypeChecksTest,

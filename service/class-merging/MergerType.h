@@ -14,7 +14,7 @@
 
 namespace class_merging {
 
-std::string get_root_type_name_tag(const DexType* root_type);
+std::string get_type_name_tag(const DexType* root_type);
 
 using FieldsMap = std::unordered_map<const DexType*, std::vector<DexField*>>;
 
@@ -95,7 +95,8 @@ struct MergerType {
     std::string build_type_name(
         const std::string& prefix,
         const DexType* root_type,
-        const std::string& name,
+        const TypeSet& intf_set,
+        const boost::optional<size_t>& opt_dex_id,
         size_t count,
         const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
         const InterdexSubgroupIdx subgroup_idx) const;
@@ -165,6 +166,8 @@ struct MergerType {
   // The DexType behind this MergerType. The type may or may not be
   // backed by a DexClass already
   const DexType* type;
+  // Suggested dex to store the merger class.
+  boost::optional<size_t> dex_id;
   // The set of mergeable types. Those are effectively the types that
   // will be erased.
   // Notice: a merger may be defined that does not have any mergeable types

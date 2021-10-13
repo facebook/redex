@@ -121,6 +121,15 @@ struct VirtualScope {
   std::vector<VirtualMethod> methods;
   // interface set the VirtualScope contributes to
   TypeSet interfaces;
+
+  bool has_def() const {
+    for (auto& meth : methods) {
+      if (meth.first->is_def()) {
+        return true;
+      }
+    }
+    return false;
+  }
 };
 
 using InterfaceScope = std::vector<const VirtualScope*>;

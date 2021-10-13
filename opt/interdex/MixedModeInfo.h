@@ -9,7 +9,7 @@
 
 #include <unordered_set>
 
-#include "ApkManager.h"
+#include "AssetManager.h"
 #include "DexClass.h"
 
 namespace interdex {

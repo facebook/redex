@@ -11,7 +11,8 @@
 
 void FrequentlyUsedPointers::load() {
 #define LOAD_FREQUENTLY_USED_TYPE(func_name, java_name) \
-  m_type_##func_name = DexType::make_type(java_name);
+  m_type_##func_name = DexType::make_type(java_name);   \
+  m_well_known_types.insert(m_type_##func_name);
 #define FOR_EACH LOAD_FREQUENTLY_USED_TYPE
   WELL_KNOWN_TYPES
 #undef FOR_EACH

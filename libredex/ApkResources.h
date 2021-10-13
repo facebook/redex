@@ -38,19 +38,67 @@ bool get_bool_attribute_value(const android::ResXMLTree& parser,
                               const android::String16& attribute_name,
                               bool default_value);
 
+class ResourcesArscFile : public ResourceTableFile {
+ public:
+  ResourcesArscFile(const ResourcesArscFile&) = delete;
+  ResourcesArscFile& operator=(const ResourcesArscFile&) = delete;
+
+  android::ResTable res_table;
+
+  explicit ResourcesArscFile(const std::string& path);
+  std::vector<std::string> get_resource_strings_by_name(
+      const std::string& res_name);
+  void remap_ids(const std::map<uint32_t, uint32_t>& old_to_remapped_ids);
+  size_t serialize();
+
+  void collect_resid_values_and_hashes(
+      const std::vector<uint32_t>& ids,
+      std::map<size_t, std::vector<uint32_t>>* res_by_hash) override;
+  bool resource_value_identical(uint32_t a_id, uint32_t b_id) override;
+  std::unordered_set<uint32_t> get_types_by_name(
+      const std::unordered_set<std::string>& type_names) override;
+  void delete_resource(uint32_t res_id) override;
+  void remap_res_ids_and_serialize(
+      const std::vector<std::string>& resource_files,
+      const std::map<uint32_t, uint32_t>& old_to_new) override;
+  std::unordered_set<std::string> get_files_by_rid(
+      uint32_t res_id,
+      ResourcePathType path_type = ResourcePathType::DevicePath) override;
+  void walk_references_for_resource(
+      uint32_t resID,
+      std::unordered_set<uint32_t>* nodes_visited,
+      std::unordered_set<std::string>* potential_file_paths) override;
+
+  ~ResourcesArscFile() override;
+
+  size_t get_length() const;
+
+ private:
+  RedexMappedFile m_f;
+  size_t m_arsc_len;
+  std::map<uint32_t, android::Vector<android::Res_value>> tmp_id_to_values;
+  bool m_file_closed = false;
+};
+
 class ApkResources : public AndroidResources {
  public:
   explicit ApkResources(const std::string& directory)
       : AndroidResources(directory),
         m_manifest(directory + "/AndroidManifest.xml") {}
+  ~ApkResources() override;
+
   boost::optional<int32_t> get_min_sdk() override;
   ManifestClassInfo get_manifest_class_info() override;
+  std::unordered_set<uint32_t> get_xml_reference_attributes(
+      const std::string& filename) override;
+
   void collect_layout_classes_and_attributes_for_file(
       const std::string& file_path,
       const std::unordered_set<std::string>& attributes_to_read,
       std::unordered_set<std::string>* out_classes,
       std::unordered_multimap<std::string, std::string>* out_attributes)
       override;
+
   // Given the bytes of a binary XML file, replace the entries (if any) in the
   // ResStringPool. Writes result to the given Vector output param.
   // Returns android::NO_ERROR (0) on success, or one of the corresponding
@@ -65,9 +113,13 @@ class ApkResources : public AndroidResources {
   int inline_xml_reference_attributes(
       const std::string& filename,
       const std::map<uint32_t, android::Res_value>& id_to_inline_value);
-  void remap_xml_reference_attributes(
+  size_t remap_xml_reference_attributes(
       const std::string& filename,
-      const std::map<uint32_t, uint32_t>& kept_to_remapped_ids);
+      const std::map<uint32_t, uint32_t>& kept_to_remapped_ids) override;
+  std::unique_ptr<ResourceTableFile> load_res_table() override;
+  std::unordered_set<std::string> find_all_xml_files() override;
+  std::vector<std::string> find_resources_files() override;
+  std::string get_base_assets_dir() override;
 
  protected:
   std::vector<std::string> find_res_directories() override;
@@ -82,31 +134,4 @@ class ApkResources : public AndroidResources {
 
  private:
   const std::string m_manifest;
-};
-
-class ResourcesArscFile {
- public:
-  ResourcesArscFile(const ResourcesArscFile&) = delete;
-  ResourcesArscFile& operator=(const ResourcesArscFile&) = delete;
-
-  android::ResTable res_table;
-  android::SortedVector<uint32_t> sorted_res_ids;
-  std::map<uint32_t, std::string> id_to_name;
-  std::map<std::string, std::vector<uint32_t>> name_to_ids;
-
-  explicit ResourcesArscFile(const std::string& path);
-  std::vector<std::string> get_resource_strings_by_name(
-      const std::string& res_name);
-  void remap_ids(const std::map<uint32_t, uint32_t>& old_to_remapped_ids);
-  std::unordered_set<uint32_t> get_types_by_name(
-      const std::unordered_set<std::string>& type_names);
-  size_t serialize();
-  ~ResourcesArscFile();
-
-  size_t get_length() const;
-
- private:
-  RedexMappedFile m_f;
-  size_t m_arsc_len;
-  bool m_file_closed = false;
 };

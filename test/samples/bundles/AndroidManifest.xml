@@ -5,7 +5,7 @@
     android:versionName="1.0">
 
   <instrumentation
-      android:name=".MyInstrumentation"
+      android:name="androidx.test.runner.AndroidJUnitRunner"
       android:targetPackage="com.fb.bundles" />
 
   <uses-sdk android:targetSdkVersion="29" android:minSdkVersion="21" />
@@ -42,6 +42,11 @@
     <activity
         android:name=".PublicActivity"
         android:exported="true" />
+
+    <activity
+        android:name=".ThemeActivity"
+        android:theme="@style/ThemeA"
+        android:exported="false" />
 
     <activity-alias
         android:name="com.fb.FooActivity"

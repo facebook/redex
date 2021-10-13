@@ -18,7 +18,7 @@ namespace class_merging {
  * E.g., "Lcom/facebook/analytics/structuredlogger/base/TypedEventBase;" ->
  * "EBase"
  */
-std::string get_root_type_name_tag(const DexType* root_type) {
+std::string get_type_name_tag(const DexType* root_type) {
   auto root_type_name = type::get_simple_name(root_type);
   std::ostringstream root_name_tag;
   std::string::reverse_iterator rit = root_type_name.rbegin();
@@ -60,15 +60,24 @@ std::string get_root_type_name_tag(const DexType* root_type) {
 std::string MergerType::Shape::build_type_name(
     const std::string& prefix,
     const DexType* root_type,
-    const std::string& name,
+    const TypeSet& intf_set,
+    const boost::optional<size_t>& opt_dex_id,
     size_t count,
     const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
     const InterdexSubgroupIdx subgroup_idx) const {
-  auto root_name_tag = get_root_type_name_tag(root_type);
+  auto parent = root_type;
+  if (root_type == type::java_lang_Object() && intf_set.size() == 1) {
+    parent = *intf_set.begin();
+  }
+  auto root_name_tag = get_type_name_tag(parent);
   std::ostringstream ss;
-  ss << "L" << prefix << root_name_tag << name;
+  ss << "L" << prefix << root_name_tag << "Shape";
   ss << count << "S" << string_fields << reference_fields << bool_fields
      << int_fields << long_fields << double_fields << float_fields;
+
+  if (opt_dex_id && *opt_dex_id > 0) {
+    ss << "_" << *opt_dex_id;
+  }
 
   if (interdex_subgroup_idx != boost::none) {
     ss << "_I" << interdex_subgroup_idx.get();

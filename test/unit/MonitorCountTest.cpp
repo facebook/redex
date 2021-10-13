@@ -35,6 +35,9 @@ TEST_F(MonitorCountTest, good1) {
   code->build_cfg();
 
   EXPECT_EQ(find_synchronized_throw_outside_catch_all(*code), nullptr);
+
+  auto sketchy_insns = Analyzer(code->cfg()).get_sketchy_instructions();
+  EXPECT_TRUE(sketchy_insns.empty());
 }
 
 TEST_F(MonitorCountTest, noCatch) {
@@ -61,6 +64,10 @@ TEST_F(MonitorCountTest, noCatch) {
   ASSERT_NE(bad_insn, nullptr);
   EXPECT_EQ(bad_insn->opcode(), OPCODE_CHECK_CAST);
   EXPECT_EQ(bad_insn->get_type(), DexType::get_type("LBar;"));
+
+  auto sketchy_insns = Analyzer(code->cfg()).get_sketchy_instructions();
+  EXPECT_EQ(sketchy_insns.size(), 1);
+  EXPECT_EQ(sketchy_insns.front()->insn, bad_insn);
 }
 
 TEST_F(MonitorCountTest, catchButNotCatchAll) {
@@ -85,4 +92,37 @@ TEST_F(MonitorCountTest, catchButNotCatchAll) {
   ASSERT_NE(bad_insn, nullptr);
   EXPECT_EQ(bad_insn->opcode(), OPCODE_CHECK_CAST);
   EXPECT_EQ(bad_insn->get_type(), DexType::get_type("LFoo;"));
+
+  auto sketchy_insns = Analyzer(code->cfg()).get_sketchy_instructions();
+  EXPECT_EQ(sketchy_insns.size(), 1);
+  EXPECT_EQ(sketchy_insns.front()->insn, bad_insn);
+}
+
+TEST_F(MonitorCountTest, monitorMismatchesBranchy) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (:l0)
+      (monitor-enter v0)
+      (goto :l0)
+    )
+  )");
+  code->build_cfg();
+
+  auto blocks = Analyzer(code->cfg()).get_monitor_mismatches();
+  ASSERT_EQ(blocks.size(), 1);
+}
+
+TEST_F(MonitorCountTest, monitorMismatchesReturn) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (monitor-enter v0)
+      (return-void)
+    )
+  )");
+  code->build_cfg();
+
+  auto blocks = Analyzer(code->cfg()).get_monitor_mismatches();
+  ASSERT_EQ(blocks.size(), 1);
 }

@@ -553,72 +553,6 @@ void Allocator::select(const IRCode* code,
 }
 
 /*
- * Ad-hoc heuristic: if we are going to be able to allocate a non-range
- * instruction with N operands without spilling, we must have N vregs that are
- * not live-out at that instruction. So range-ify the instruction if that is
- * not true. This is a liberal heuristic, since the N operands may interfere at
- * other instructions and fail to find a slot that's < 16.
- *
- * Wide operands further complicate things, since they may not fit even when
- * there are N available vregs. Right now we just range-ify any instruction
- * that references a wide reg.
- */
-bool should_convert_to_range(const interference::Graph& ig,
-                             const SpillPlan& spill_plan,
-                             const IRInstruction* insn) {
-  if (!opcode::has_range_form(insn->opcode())) {
-    return false;
-  }
-  constexpr vreg_t NON_RANGE_MAX_VREG = 15;
-  bool has_wide{false};
-  bool has_spill{false};
-  std::unordered_set<reg_t> src_reg_set;
-  for (size_t i = 0; i < insn->srcs_size(); ++i) {
-    auto src = insn->src(i);
-    src_reg_set.emplace(src);
-    auto& node = ig.get_node(src);
-    if (node.width() > 1) {
-      has_wide = true;
-    }
-    if (spill_plan.global_spills.count(src)) {
-      has_spill = true;
-    }
-  }
-  if (!has_spill) {
-    return false;
-  }
-  if (has_wide) {
-    return true;
-  }
-
-  auto& liveness = ig.get_liveness(insn);
-  vreg_t low_regs_occupied{0};
-  for (auto reg : liveness.elements()) {
-    auto& node = ig.get_node(reg);
-    if (node.max_vreg() > NON_RANGE_MAX_VREG || src_reg_set.count(reg)) {
-      continue;
-    }
-    if (node.width() > 1) {
-      return true;
-    }
-    ++low_regs_occupied;
-  }
-  return insn->srcs_size() + low_regs_occupied > NON_RANGE_MAX_VREG + 1;
-}
-
-void Allocator::choose_range_promotions(const IRCode* code,
-                                        const interference::Graph& ig,
-                                        const SpillPlan& spill_plan,
-                                        RangeSet* range_set) {
-  for (const auto& mie : InstructionIterable(code)) {
-    const auto* insn = mie.insn;
-    if (should_convert_to_range(ig, spill_plan, insn)) {
-      range_set->emplace(insn);
-    }
-  }
-}
-
-/*
  * Assign virtual registers to our symbolic range-related registers, spilling
  * where necessary. We try to align the various ranges to minimize spillage.
  *
@@ -1134,7 +1068,6 @@ void Allocator::allocate(DexMethod* method) {
     select(code, ig, &select_stack, &reg_transform, &spill_plan);
 
     TRACE(REG, 5, "Transform before range alloc:\n%s", SHOW(reg_transform));
-    choose_range_promotions(code, ig, spill_plan, &range_set);
     range_set.prioritize();
     select_ranges(code, ig, range_set, &reg_transform, &spill_plan);
     // Select registers for symregs that can be addressed using all 16 bits.

@@ -1,0 +1,5 @@
+interaction,appear#
+ColdStart,2
+index,name,appear100,appear#,avg_call,avg_order,avg_rank100,min_api_level
+1,Lcom/facebook/redextest/SourceBlocksTest;.foo:()V,99.0000,1,2.0000,0.0000,0.000000,29
+2,Lcom/facebook/redextest/SourceBlocksTest;.bazz:()V,98.0000,2,3.0000,0.0000,0.000000,29

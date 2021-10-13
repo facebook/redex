@@ -77,29 +77,61 @@ bool ends_with_may_throw(cfg::Block* p) {
 }
 
 /*
- * Given an output ordering, Find adjacent positions that are exact duplicates
- * and delete the extras. Make sure not to delete any positions that are
- * referenced by a parent pointer.
+ * Given an method-item-entry ordering, delete positions that are...
+ * - duplicates with the previous position, even across block boundaries
+ *   (they will get reconstituted when the cfg is rebuild)
+ * - adjacent to an immediately following position, as the last position wins.
+ * Parent positions are kept as needed.
  */
-void remove_duplicate_positions(IRList* ir) {
-  std::unordered_set<DexPosition*> keep;
-  for (auto& mie : *ir) {
-    if (mie.type == MFLOW_POSITION && mie.pos->parent != nullptr) {
-      keep.insert(mie.pos->parent);
-    }
-  }
+void remove_redundant_positions(IRList* ir) {
+  // We build a set of duplicate positions.
+  std::unordered_set<DexPosition*> duplicate_positions;
+  std::unordered_map<DexPosition*, IRList::iterator> positions_to_remove;
   DexPosition* prev = nullptr;
-  for (auto it = ir->begin(); it != ir->end();) {
+  for (auto it = ir->begin(); it != ir->end(); it++) {
     if (it->type == MFLOW_POSITION) {
       DexPosition* curr = it->pos.get();
-      if (prev != nullptr && *curr == *prev && keep.count(curr) == 0) {
-        it = ir->erase_and_dispose(it);
-        continue;
-      } else {
-        prev = curr;
+      positions_to_remove.emplace(curr, it);
+      if (prev != nullptr && *curr == *prev) {
+        duplicate_positions.insert(curr);
       }
+      prev = curr;
     }
-    ++it;
+  }
+
+  // Backward pass to find positions that are not adjacent to an immediately
+  // following position and must be kept (including their parents).
+  bool keep_prev = false;
+  for (auto it = ir->rbegin(); it != ir->rend(); it++) {
+    switch (it->type) {
+    case MFLOW_OPCODE:
+    case MFLOW_DEX_OPCODE:
+    case MFLOW_TARGET:
+    case MFLOW_TRY:
+    case MFLOW_CATCH:
+      keep_prev = true;
+      break;
+    case MFLOW_POSITION: {
+      DexPosition* curr = it->pos.get();
+      if (keep_prev && !duplicate_positions.count(curr)) {
+        for (auto pos = curr; pos && positions_to_remove.erase(pos);
+             pos = pos->parent) {
+        }
+        keep_prev = false;
+      }
+      break;
+    }
+    case MFLOW_SOURCE_BLOCK:
+    case MFLOW_DEBUG:
+    case MFLOW_FALLTHROUGH:
+      // ignore
+      break;
+    }
+  }
+
+  // Final pass to do the actual deletion.
+  for (auto& p : positions_to_remove) {
+    ir->erase_and_dispose(p.second);
   }
 }
 
@@ -230,6 +262,10 @@ void Block::remove_insn(const IRList::iterator& it) {
 }
 
 void Block::remove_mie(const IRList::iterator& it) {
+  if (it->type == MFLOW_OPCODE) {
+    m_parent->m_removed_insns.push_back(it->insn);
+  }
+
   m_entries.erase_and_dispose(it);
 }
 
@@ -359,6 +395,22 @@ IRList::iterator Block::get_first_non_param_loading_insn() {
   return end();
 }
 
+IRList::iterator Block::get_last_param_loading_insn() {
+  IRList::iterator res = end();
+  for (auto it = begin(); it != end(); ++it) {
+    if (it->type != MFLOW_OPCODE) {
+      continue;
+    }
+    if (opcode::is_a_load_param(it->insn->opcode())) {
+      res = it;
+    } else {
+      // There won't be another one.
+      break;
+    }
+  }
+  return res;
+}
+
 IRList::iterator Block::get_first_insn_before_position() {
   for (auto it = begin(); it != end(); ++it) {
     if (it->type == MFLOW_OPCODE) {
@@ -458,32 +510,6 @@ std::vector<Edge*> Block::get_outgoing_throws_in_order() const {
     return e1->throw_info()->index < e2->throw_info()->index;
   });
   return result;
-}
-
-// We remove the first matching target because multiple switch cases can point
-// to the same block. We use this function to move information from the target
-// entries to the CFG edges. The two edges are identical, save the case key, so
-// it doesn't matter which target is taken. We arbitrarily choose to process the
-// targets in forward order.
-boost::optional<Edge::CaseKey> Block::remove_first_matching_target(
-    MethodItemEntry* branch) {
-  for (auto it = m_entries.begin(); it != m_entries.end(); ++it) {
-    auto& mie = *it;
-    if (mie.type == MFLOW_TARGET && mie.target->src == branch) {
-      boost::optional<Edge::CaseKey> result;
-      if (mie.target->type == BRANCH_MULTI) {
-        always_assert_log(opcode::is_switch(branch->insn->opcode()),
-                          "block %zu in %s\n", id(), SHOW(*m_parent));
-        result = mie.target->case_key;
-      }
-      m_entries.erase_and_dispose(it);
-      return result;
-    }
-  }
-  not_reached_log("block %zu has no targets matching %s:\n%s",
-                  id(),
-                  SHOW(branch->insn),
-                  SHOW(&m_entries));
 }
 
 // These assume that the iterator is inside this block
@@ -663,7 +689,7 @@ void ControlFlowGraph::find_block_boundaries(IRList* ir,
     } else if (it->type == MFLOW_CATCH) {
       try_catches[it->centry] = block;
     } else if (it->type == MFLOW_TARGET) {
-      branch_to_targets[it->target->src].push_back(block);
+      branch_to_targets[it->target->src].emplace_back(block, &*it);
     } else if (it->type == MFLOW_POSITION) {
       current_position = it->pos.get();
     }
@@ -729,16 +755,30 @@ void ControlFlowGraph::connect_blocks(BranchToTargets& branch_to_targets) {
         fallthrough = !opcode::is_goto(last_op);
         auto const& target_blocks = branch_to_targets[&last_mie];
 
-        for (auto target_block : target_blocks) {
+        for (auto& p : target_blocks) {
+          auto target_block = p.first;
+          auto& target_mie = *p.second;
+          always_assert(target_mie.type == MFLOW_TARGET);
+          always_assert(target_mie.target->src == &last_mie);
+          Edge::MaybeCaseKey case_key;
+          if (target_mie.target->type == BRANCH_MULTI) {
+            always_assert_log(opcode::is_switch(last_mie.insn->opcode()),
+                              "block %zu in %s\n", target_block->id(),
+                              SHOW(*this));
+            case_key = target_mie.target->case_key;
+          } else {
+            always_assert(target_mie.target->type == BRANCH_SIMPLE);
+          }
           if (m_editable) {
             // The the branch information is stored in the edges, we don't need
             // the targets inside the blocks anymore
-            auto case_key =
-                target_block->remove_first_matching_target(&last_mie);
-            if (case_key != boost::none) {
-              add_edge(b, target_block, *case_key);
-              continue;
-            }
+            target_block->m_entries.erase_and_dispose(
+                target_block->m_entries.iterator_to(target_mie));
+          }
+
+          if (case_key) {
+            add_edge(b, target_block, *case_key);
+            continue;
           }
           auto edge_type = opcode::is_goto(last_op) ? EDGE_GOTO : EDGE_BRANCH;
           add_edge(b, target_block, edge_type);
@@ -893,8 +933,12 @@ void chain_consecutive_source_blocks(IRList& list) {
 
 } // namespace
 
-void ControlFlowGraph::simplify() {
-  remove_unreachable_blocks();
+uint32_t ControlFlowGraph::simplify() {
+  auto [num_insns_removed, registers_size_possibly_reduced] =
+      remove_unreachable_blocks();
+  if (registers_size_possibly_reduced) {
+    recompute_registers_size();
+  }
   // FIXME: "Empty" blocks with only `DexPosition`s should be merged
   //        into their successors for consistency. Otherwise
   //        `remove_empty_blocks` will remove them, which it will not
@@ -904,18 +948,23 @@ void ControlFlowGraph::simplify() {
   for (auto& p : m_blocks) {
     chain_consecutive_source_blocks(p.second->m_entries);
   }
+
+  return num_insns_removed;
 }
 
 // remove blocks with no predecessors
-uint32_t ControlFlowGraph::remove_unreachable_blocks() {
+std::pair<uint32_t, bool> ControlFlowGraph::remove_unreachable_blocks() {
   uint32_t num_insns_removed = 0;
   remove_unreachable_succ_edges();
   std::vector<std::unique_ptr<DexPosition>> dangling;
-  bool need_register_size_fix = false;
+  bool registers_size_possibly_reduced = false;
   for (auto it = m_blocks.begin(); it != m_blocks.end();) {
     Block* b = it->second;
     const auto& preds = b->preds();
     if (preds.empty() && b != entry_block()) {
+      if (b == exit_block()) {
+        set_exit_block(nullptr);
+      }
       for (auto& mie : *b) {
         if (mie.type == MFLOW_POSITION) {
           dangling.push_back(std::move(mie.pos));
@@ -927,7 +976,7 @@ uint32_t ControlFlowGraph::remove_unreachable_blocks() {
             if (size_required >= m_registers_size) {
               // We're deleting an instruction that may have been the max
               // register of the entire function.
-              need_register_size_fix = true;
+              registers_size_possibly_reduced = true;
             }
           }
         }
@@ -945,12 +994,9 @@ uint32_t ControlFlowGraph::remove_unreachable_blocks() {
     }
   }
 
-  if (need_register_size_fix) {
-    recompute_registers_size();
-  }
   fix_dangling_parents(std::move(dangling));
 
-  return num_insns_removed;
+  return std::make_pair(num_insns_removed, registers_size_possibly_reduced);
 }
 
 void ControlFlowGraph::fix_dangling_parents(
@@ -1787,7 +1833,7 @@ IRList* ControlFlowGraph::linearize(
   for (Block* b : ordering) {
     result->splice(result->end(), b->m_entries);
   }
-  remove_duplicate_positions(result);
+  remove_redundant_positions(result);
 
   return result;
 }
@@ -1969,7 +2015,9 @@ std::vector<Block*> ControlFlowGraph::blocks_reverse_post_deprecated() const {
   return postorder;
 }
 
-ControlFlowGraph::~ControlFlowGraph() { free_all_blocks_and_edges(); }
+ControlFlowGraph::~ControlFlowGraph() {
+  free_all_blocks_and_edges_and_removed_insns();
+}
 
 Block* ControlFlowGraph::create_block() {
   size_t id = next_block_id();
@@ -2093,18 +2141,13 @@ std::vector<Block*> ControlFlowGraph::return_blocks() const {
  * picks the head of the SCC.
  */
 void ControlFlowGraph::calculate_exit_block() {
-  if (m_exit_block != nullptr) {
-    if (!m_editable) {
-      return;
-    }
-    if (get_pred_edge_of_type(m_exit_block, EDGE_GHOST) != nullptr) {
-      // Need to clear old exit block before recomputing the exit of a CFG
-      // with multiple exit points
-      remove_block(m_exit_block);
-      m_exit_block = nullptr;
-    }
+  if (m_editable) {
+    reset_exit_block();
+  } else if (m_exit_block != nullptr) {
+    // nothing to do, as nothing can ever change in non-editable cfg
+    return;
   }
-
+  always_assert(m_exit_block == nullptr);
   ExitBlocks eb;
   eb.visit(entry_block());
   if (eb.exit_blocks.size() == 1) {
@@ -2115,6 +2158,21 @@ void ControlFlowGraph::calculate_exit_block() {
       add_edge(b, m_exit_block, EDGE_GHOST);
     }
   }
+}
+
+void ControlFlowGraph::reset_exit_block() {
+  if (m_exit_block == nullptr) {
+    return;
+  }
+  if (get_pred_edge_of_type(m_exit_block, EDGE_GHOST) == nullptr) {
+    m_exit_block = nullptr;
+    return;
+  }
+  // If we get here, we have a "ghost" exit block, that was created to represent
+  // multiple exist blocks. We need to remove that "ghost" exit block before
+  // recomputing the exit of a CFG with multiple exit points.
+  remove_block(m_exit_block);
+  always_assert(m_exit_block == nullptr);
 }
 
 // public API edge removal functions
@@ -2150,19 +2208,33 @@ void ControlFlowGraph::remove_edge(Edge* edge, bool cleanup) {
       cleanup);
 }
 
-void ControlFlowGraph::free_all_blocks_and_edges() {
-  for (const auto& entry : m_blocks) {
-    Block* b = entry.second;
-    delete b;
+void ControlFlowGraph::free_all_blocks_and_edges_and_removed_insns() {
+  if (m_owns_insns) {
+    for (const auto& entry : m_blocks) {
+      Block* b = entry.second;
+      b->free();
+      delete b;
+    }
+  } else {
+    for (const auto& entry : m_blocks) {
+      Block* b = entry.second;
+      delete b;
+    }
   }
 
   for (Edge* e : m_edges) {
     delete e;
   }
+
+  if (m_owns_removed_insns) {
+    for (auto* insn : m_removed_insns) {
+      delete insn;
+    }
+  }
 }
 
 void ControlFlowGraph::clear() {
-  free_all_blocks_and_edges();
+  free_all_blocks_and_edges_and_removed_insns();
 
   m_blocks.clear();
   m_edges.clear();
@@ -2187,6 +2259,7 @@ void ControlFlowGraph::cleanup_deleted_edges(const EdgeSet& edges) {
       auto remaining_forward_edges = pred_block->succs();
       if ((opcode::is_a_conditional_branch(op) || opcode::is_switch(op)) &&
           remaining_forward_edges.size() == 1) {
+        m_removed_insns.push_back(last_insn);
         pred_block->m_entries.erase_and_dispose(last_it);
         Edge* fwd_edge = remaining_forward_edges[0];
         fwd_edge->set_type(EDGE_GOTO);
@@ -2383,8 +2456,10 @@ void ControlFlowGraph::remove_insn(const InstructionIterator& it) {
     //
     // Don't cleanup because we're deleting the instruction at the end of this
     // function
+    singleton_iterable<Block*> iterable(block);
     free_edges(remove_succ_edge_if(
-        block, [](const Edge* e) { return e->type() == EDGE_BRANCH; },
+        iterable.begin(), iterable.end(),
+        [](const Edge* e) { return e->type() == EDGE_BRANCH; },
         /* cleanup */ false));
   } else if (insn->has_move_result_any()) {
     // delete the move-result(-pseudo) too
@@ -2407,6 +2482,7 @@ void ControlFlowGraph::remove_insn(const InstructionIterator& it) {
           always_assert_log(move_result_block->preds().size() == 1,
                             "Multiple edges to a move-result-pseudo in %zu. %s",
                             move_result_block->id(), SHOW(*this));
+          m_removed_insns.push_back(first_it->insn);
           move_result_block->m_entries.erase_and_dispose(first_it);
         }
       }
@@ -2416,12 +2492,14 @@ void ControlFlowGraph::remove_insn(const InstructionIterator& it) {
       auto mrp_it = std::next(it);
       always_assert(mrp_it.block() == block);
       if (opcode::is_move_result_any(mrp_it->insn->opcode())) {
+        m_removed_insns.push_back(mrp_it->insn);
         block->m_entries.erase_and_dispose(mrp_it.unwrap());
       }
     }
   }
 
   // delete the requested instruction
+  m_removed_insns.push_back(it->insn);
   block->m_entries.erase_and_dispose(it.unwrap());
 }
 
@@ -2541,7 +2619,7 @@ template <typename EdgePredicate>
 void ControlFlowGraph::copy_succ_edges_if(Block* from,
                                           Block* to,
                                           EdgePredicate edge_predicate) {
-  const auto& edges = get_succ_edges_if(from, edge_predicate);
+  const auto& edges = get_succ_edges_if(from, std::move(edge_predicate));
 
   for (auto e : edges) {
     Edge* copy = new Edge(*e);
@@ -2588,19 +2666,26 @@ bool ControlFlowGraph::push_back(Block* b, IRInstruction* insn) {
   return push_back(b, std::vector<IRInstruction*>{insn});
 }
 
-void ControlFlowGraph::remove_blocks(const std::vector<Block*>& blocks) {
+uint32_t ControlFlowGraph::remove_blocks(const std::vector<Block*>& blocks) {
   std::vector<std::unique_ptr<DexPosition>> dangling;
+  uint32_t insns_removed = 0;
 
   for (auto block : blocks) {
     if (block == entry_block()) {
       always_assert(block->succs().size() == 1);
       set_entry_block(block->succs()[0]->target());
     }
+    if (block == exit_block()) {
+      set_exit_block(nullptr);
+    }
     delete_pred_edges(block);
     delete_succ_edges(block);
 
     for (auto& mie : *block) {
-      if (mie.type == MFLOW_POSITION) {
+      if (mie.type == MFLOW_OPCODE) {
+        m_removed_insns.push_back(mie.insn);
+        insns_removed++;
+      } else if (mie.type == MFLOW_POSITION) {
         dangling.push_back(std::move(mie.pos));
       }
     }
@@ -2614,10 +2699,11 @@ void ControlFlowGraph::remove_blocks(const std::vector<Block*>& blocks) {
   }
 
   fix_dangling_parents(std::move(dangling));
+  return insns_removed;
 }
 
 // delete old_block and reroute its predecessors to new_block
-void ControlFlowGraph::replace_blocks(
+uint32_t ControlFlowGraph::replace_blocks(
     const std::vector<std::pair<Block*, Block*>>& old_new_blocks) {
   std::vector<Block*> blocks_to_remove;
   for (auto& p : old_new_blocks) {
@@ -2629,7 +2715,7 @@ void ControlFlowGraph::replace_blocks(
     }
     blocks_to_remove.push_back(old_block);
   }
-  remove_blocks(blocks_to_remove);
+  return remove_blocks(blocks_to_remove);
 }
 
 std::ostream& ControlFlowGraph::write_dot_format(std::ostream& o) const {
@@ -2645,14 +2731,18 @@ std::ostream& ControlFlowGraph::write_dot_format(std::ostream& o) const {
 
 ControlFlowGraph::EdgeSet ControlFlowGraph::remove_succ_edges(Block* b,
                                                               bool cleanup) {
+  singleton_iterable<Block*> iterable(b);
   return remove_succ_edge_if(
-      b, [](const Edge*) { return true; }, cleanup);
+      iterable.begin(), iterable.end(), [](const Edge*) { return true; },
+      cleanup);
 }
 
 ControlFlowGraph::EdgeSet ControlFlowGraph::remove_pred_edges(Block* b,
                                                               bool cleanup) {
+  singleton_iterable<Block*> iterable(b);
   return remove_pred_edge_if(
-      b, [](const Edge*) { return true; }, cleanup);
+      iterable.begin(), iterable.end(), [](const Edge*) { return true; },
+      cleanup);
 }
 
 DexPosition* ControlFlowGraph::get_dbg_pos(const cfg::InstructionIterator& it) {

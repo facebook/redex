@@ -12,7 +12,7 @@ class NoopPostLowering : public PostLowering {
  public:
   void sync() override {}
   void run(const DexStoresVector& stores) override {}
-  void finalize(ApkManager& mgr) override {}
+  void finalize(AssetManager& mgr) override {}
 
   std::unordered_map<DexClass*, std::vector<DexMethod*>> get_detached_methods()
       override {

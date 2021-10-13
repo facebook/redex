@@ -54,7 +54,7 @@ include_directories(
         ${ZLIB_INCLUDE_DIRS}
         ${includes})
 
-install(DIRECTORY libredex util libresource shared
+install(DIRECTORY libredex util libresource shared service
         DESTINATION include/redex
         FILES_MATCHING PATTERN "*.h" PATTERN "*.def")
 install(DIRECTORY sparta/include/

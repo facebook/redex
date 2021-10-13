@@ -36,9 +36,10 @@ void CrossDexRelocator::gather_possibly_relocatable_methods(
                          ? 0
                          : m_xstore_refs->get_store_idx(cls->get_type());
   auto can_relocate_common = [&](DexMethod* m) {
-    bool basic_constraints =
-        m->is_concrete() && m->get_code() && can_rename(m) && !root(m) &&
-        !m->rstate.no_optimizations() && method::no_invoke_super(m);
+    bool basic_constraints = m->is_concrete() && m->get_code() &&
+                             can_rename(m) && !root(m) &&
+                             !m->rstate.no_optimizations() &&
+                             method::no_invoke_super(*m->get_code());
     if (!basic_constraints) {
       return false;
     }

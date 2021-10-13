@@ -401,7 +401,7 @@ static void analyze_method_recursive(
       analyze_method_recursive(callee, call_graph, visiting, fp_iter_map,
                                summary_map);
       if (summary_map->count(callee) != 0) {
-        invoke_to_summary_map.emplace(edge->invoke_iterator()->insn,
+        invoke_to_summary_map.emplace(edge->invoke_insn(),
                                       summary_map->at(callee));
       }
     }

@@ -124,17 +124,21 @@ void test_object_inliner(
 
       ObjectInlinePlugin plugin = ObjectInlinePlugin(
           field_map, field_swap_refs, {0}, result_reg, 0, callee_type);
-      cfg::CFGInliner::inline_cfg(caller.get(), it, *callee_ctor,
-                                  caller->get_registers_size(), plugin);
+      cfg::CFGInliner::inline_cfg(caller.get(), it,
+                                  /* needs_receiver_cast */ nullptr,
+                                  *callee_ctor, caller->get_registers_size(),
+                                  plugin);
       insn = instr_code->begin()->insn;
       it = find_instruction_matching(caller.get(), insn);
-      cfg::CFGInliner::inline_cfg(caller.get(), it, callee,
+      cfg::CFGInliner::inline_cfg(caller.get(), it,
+                                  /* needs_receiver_cast */ nullptr, callee,
                                   caller->get_registers_size(), plugin);
     } else {
       object_inliner_plugin::ObjectInlinePlugin plugin =
           object_inliner_plugin::ObjectInlinePlugin(
               field_map, field_swap_refs, {0}, result_reg, 0, callee_type);
-      cfg::CFGInliner::inline_cfg(caller.get(), it, callee,
+      cfg::CFGInliner::inline_cfg(caller.get(), it,
+                                  /* needs_receiver_cast */ nullptr, callee,
                                   caller->get_registers_size(), plugin);
     }
 

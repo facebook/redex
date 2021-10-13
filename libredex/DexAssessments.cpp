@@ -151,7 +151,7 @@ class Assessor {
     // enriched with trailing positions in all blocks
     // (ControlFlowGraph::find_block_boundaries), while linearlization (via
     // remove_duplicate_positions) removes redundant positions across block
-    // boundaries. This, we keep track of last positions across blocks, just as
+    // boundaries. Thus, we keep track of last positions across blocks, just as
     // the cfg would when building an editable cfg (and just as symbolication
     // would when going backwards to find the position relevant to an
     // instruction offset).

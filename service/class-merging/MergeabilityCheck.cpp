@@ -22,17 +22,15 @@ using namespace class_merging;
 MergeabilityChecker::MergeabilityChecker(const Scope& scope,
                                          const ModelSpec& spec,
                                          const RefChecker& ref_checker,
-                                         const TypeSet& generated,
-                                         const TypeSet& to_merge)
+                                         const TypeSet& generated)
     : m_scope(scope),
       m_spec(spec),
       m_ref_checker(ref_checker),
       m_generated(generated),
-      m_const_class_safe_types(spec.const_class_safe_types),
-      m_to_merge(to_merge) {}
+      m_const_class_safe_types(spec.const_class_safe_types) {}
 
 void MergeabilityChecker::exclude_cannot_delete(TypeSet& non_mergeables) {
-  for (const auto& type : m_to_merge) {
+  for (const auto& type : m_spec.merging_targets) {
     const auto& cls = type_class(type);
     if (!can_delete(cls)) {
       non_mergeables.insert(type);
@@ -102,7 +100,7 @@ TypeSet MergeabilityChecker::exclude_unsupported_bytecode_for(
     }
 
     const auto& type = type::get_element_type_if_array(insn->get_type());
-    if (m_to_merge.count(type) > 0) {
+    if (m_spec.merging_targets.count(type) > 0) {
 
       if (insn->opcode() != OPCODE_CONST_CLASS ||
           m_const_class_safe_types.empty()) {
@@ -176,7 +174,7 @@ void MergeabilityChecker::exclude_static_fields(TypeSet& non_mergeables) {
   }
 
   walk::fields(m_scope, [&non_mergeables, this](DexField* field) {
-    if (m_to_merge.count(field->get_class())) {
+    if (m_spec.merging_targets.count(field->get_class())) {
       if (is_static(field)) {
         auto rtype = type::get_element_type_if_array(field->get_type());
         if (!type::is_primitive(rtype) && rtype != string_type) {
@@ -197,7 +195,7 @@ void MergeabilityChecker::exclude_static_fields(TypeSet& non_mergeables) {
 
 void MergeabilityChecker::exclude_unsafe_sdk_and_store_refs(
     TypeSet& non_mergeables) {
-  for (auto type : m_to_merge) {
+  for (auto type : m_spec.merging_targets) {
     if (non_mergeables.count(type)) {
       continue;
     }

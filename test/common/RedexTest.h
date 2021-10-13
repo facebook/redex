@@ -25,6 +25,7 @@
 #ifndef IS_REDEX_TEST_LIBRARY
 #include "SanitizersConfig.h"
 #endif
+#include "RedexTestUtils.h"
 
 struct RedexTest : public testing::Test {
   RedexTest() { g_redex = new RedexContext(); }
@@ -43,6 +44,7 @@ struct RedexIntegrationTest : public RedexTest {
   std::vector<DexStore> stores;
   boost::optional<DexClasses&> classes;
   DexMetadata dex_metadata;
+  redex::TempDir configfiles_out_dir;
 
  public:
   RedexIntegrationTest() {
@@ -61,7 +63,10 @@ struct RedexIntegrationTest : public RedexTest {
     }
     classes = root_store.get_dexen().back();
     stores.emplace_back(std::move(root_store));
+    configfiles_out_dir = redex::make_tmp_dir("RedexIntegrationTest%%%%%%%%");
   }
+
+  std::string& get_configfiles_out_dir() { return configfiles_out_dir.path; }
 
   void run_passes(
       const std::vector<Pass*>& passes,
@@ -87,6 +92,7 @@ struct RedexIntegrationTest : public RedexTest {
 
     manager->set_testing_mode();
     ConfigFiles conf(json_conf);
+    conf.set_outdir(configfiles_out_dir.path);
     manager->run_passes(stores, conf);
   }
 

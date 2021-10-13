@@ -78,6 +78,9 @@ class IRCode {
   IRCode();
 
   explicit IRCode(DexMethod*);
+
+  explicit IRCode(std::unique_ptr<cfg::ControlFlowGraph>);
+
   /*
    * Construct an IRCode for a DexMethod that has no DexCode (that is, a new
    * method that we are creating instead of something from an input dex file.)

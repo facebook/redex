@@ -261,6 +261,11 @@ class ConcurrentMapContainer
     return this->get_container(slot).at(KeyProjection()(key));
   }
 
+  Value& at_unsafe(const Key& key) {
+    size_t slot = Hash()(key) % n_slots;
+    return this->get_container(slot).at(KeyProjection()(key));
+  }
+
   iterator find(const Key& key) {
     size_t slot = Hash()(key) % n_slots;
     const auto& it = m_slots[slot].find(KeyProjection()(key));

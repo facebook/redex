@@ -41,7 +41,8 @@ check_PROGRAMS = \
     strip_debug_info_test \
     synth_test \
     type_analysis_transform_test \
-    type_inference_test
+    type_inference_test \
+    verifier_artifacts_test
 
 TESTS = $(check_PROGRAMS)
 
@@ -137,6 +138,9 @@ EXTRA_type_analysis_transform_test_DEPENDENCIES = type_analysis_transform_test-c
 
 type_inference_test_SOURCES = TypeInferenceTest.cpp
 EXTRA_type_inference_test_DEPENDENCIES = type_inference_test-class.dex
+
+verifier_artifacts_test_SOURCES = VerifierTest.cpp
+EXTRA_verifier_artifacts_test_DEPENDENCIES = verifier_artifacts_test-class.dex
 
 # Note: Should switch to d8, instead.
 javac_source_target = -source 1.7 -target 1.7
@@ -240,4 +244,7 @@ type_analysis_transform_test-class.jar: TypeAnalysisTransformTest.java
 	$(create_jar)
 
 type_inference_test-class.jar: TypeInferenceTest.java
+	$(create_jar)
+
+verifier_artifacts_test-class.jar: VerifierTest.java
 	$(create_jar)

@@ -37,7 +37,10 @@
 #include "IRInstruction.h"
 #include "IROpcode.h"
 #include "PassManager.h"
+#include "RedexContext.h"
 #include "Show.h"
+#include "SourceBlocks.h"
+#include "Trace.h"
 #include "TypeInference.h"
 #include "Walkers.h"
 
@@ -48,8 +51,30 @@ constexpr const char* METRIC_BRANCHES_MOVED_OVER = "num_branches_moved_over";
 constexpr const char* METRIC_INVERTED_CONDITIONAL_BRANCHES =
     "num_inverted_conditional_branches";
 constexpr const char* METRIC_CLOBBERED_REGISTERS = "num_clobbered_registers";
+constexpr const char* METRIC_SKIPPED_BRANCHES = "num_skipped_branches";
 
 } // namespace
+
+// Helper function that checks if a branch is hot.
+// Here we assume that :
+// 1. if a represenative block is hit, the rest of source blocks are also
+// covered.
+// 2. if a represenative block is hit via any one interaction, it is considered
+// to be "hot" Potentially introduce hotness threshhold here.
+
+bool UpCodeMotionPass::is_hot(cfg::Block* b) {
+  const auto* rep_block = source_blocks::get_first_source_block(b);
+  if (rep_block == nullptr) {
+    return false;
+  }
+  bool is_hot = false;
+  rep_block->foreach_val_early([&is_hot](const auto& val) {
+    is_hot = (val && val->val > 0.0f);
+    return is_hot;
+  });
+
+  return is_hot;
+}
 
 // Helper function that scans a block for leading const and move instructions,
 // and returning a value that indicates whether there's no other kind of
@@ -203,15 +228,16 @@ bool UpCodeMotionPass::gather_instructions_to_insert(
   return true;
 }
 
-UpCodeMotionPass::Stats UpCodeMotionPass::process_code(bool is_static,
-                                                       DexType* declaring_type,
-                                                       DexTypeList* args,
-                                                       IRCode* code) {
+UpCodeMotionPass::Stats UpCodeMotionPass::process_code(
+    bool is_static,
+    DexType* declaring_type,
+    DexTypeList* args,
+    IRCode* code,
+    bool is_branch_hot_check) {
   Stats stats;
 
   code->build_cfg(/* editable = true*/);
   auto& cfg = code->cfg();
-
   std::unique_ptr<type_inference::TypeInference> type_inference;
   std::unordered_set<cfg::Block*> blocks_to_remove_set;
   std::vector<cfg::Block*> blocks_to_remove;
@@ -261,6 +287,14 @@ UpCodeMotionPass::Stats UpCodeMotionPass::process_code(bool is_static,
       stats.inverted_conditional_branches++;
     }
 
+    if (is_branch_hot_check) {
+      if (is_hot(b)) {
+        if (!is_hot(branch_edge->target())) {
+          stats.skipped_branches++;
+          continue;
+        }
+      }
+    }
     // We want to insert the (cloned) movable instructions of the branch edge
     // target block just in front of the if-instruction. However, if the if-
     // instruction reads from the same registers that the movable
@@ -341,39 +375,41 @@ void UpCodeMotionPass::run_pass(DexStoresVector& stores,
                                 PassManager& mgr) {
   auto scope = build_class_scope(stores);
 
-  Stats stats = walk::parallel::methods<Stats>(scope, [](DexMethod* method) {
+  Stats stats = walk::parallel::methods<Stats>(scope, [&](DexMethod* method) {
     const auto code = method->get_code();
     if (!code) {
       return Stats{};
     }
 
-    Stats stats =
-        UpCodeMotionPass::process_code(is_static(method), method->get_class(),
-                                       method->get_proto()->get_args(), code);
-    if (stats.instructions_moved || stats.branches_moved_over) {
+    Stats stats_lambda = UpCodeMotionPass::process_code(
+        is_static(method), method->get_class(), method->get_proto()->get_args(),
+        code, m_check_if_branch_is_hot);
+    if (stats_lambda.instructions_moved || stats_lambda.branches_moved_over) {
       TRACE(UCM, 3,
             "[up code motion] Moved %zu instructions over %zu conditional "
             "branches while inverting %zu conditional branches and dealing "
-            "with %zu clobbered registers in {%s}",
-            stats.instructions_moved, stats.branches_moved_over,
-            stats.inverted_conditional_branches, stats.clobbered_registers,
+            "with %zu cold branches and %zu clobbered registers in {%s}",
+            stats_lambda.instructions_moved, stats_lambda.branches_moved_over,
+            stats_lambda.inverted_conditional_branches,
+            stats_lambda.skipped_branches, stats_lambda.clobbered_registers,
             SHOW(method));
     }
-    return stats;
+    return stats_lambda;
   });
 
   mgr.incr_metric(METRIC_INSTRUCTIONS_MOVED, stats.instructions_moved);
   mgr.incr_metric(METRIC_BRANCHES_MOVED_OVER, stats.branches_moved_over);
   mgr.incr_metric(METRIC_INVERTED_CONDITIONAL_BRANCHES,
                   stats.inverted_conditional_branches);
+  mgr.incr_metric(METRIC_SKIPPED_BRANCHES, stats.skipped_branches);
   mgr.incr_metric(METRIC_CLOBBERED_REGISTERS, stats.clobbered_registers);
-  TRACE(
-      UCM, 1,
-      "[up code motion] Moved %zu instructions over %zu conditional branches "
-      "while inverting %zu conditional branches and dealing with %zu clobbered "
-      "registers in total",
-      stats.instructions_moved, stats.branches_moved_over,
-      stats.inverted_conditional_branches, stats.clobbered_registers);
+  TRACE(UCM, 1,
+        "[up code motion] Moved %zu instructions over %zu conditional branches "
+        "while inverting %zu conditional branches and dealing with %zu cold "
+        "branches and %zu clobbered registers in total",
+        stats.instructions_moved, stats.branches_moved_over,
+        stats.inverted_conditional_branches, stats.skipped_branches,
+        stats.clobbered_registers);
 }
 
 static UpCodeMotionPass s_pass;

@@ -12,13 +12,17 @@ import static org.fest.assertions.api.Assertions.*;
 import org.junit.Before;
 import org.junit.Test;
 
+import com.facebook.redexinline.ForceInline;
+
 public class ConstantPropagationTest {
 
   // use MethodInline so redex sees these constants but `javac` and d8 do not
+  @ForceInline
   long getLong() {
     return 0x0002000300040005L;
   }
 
+  @ForceInline
   long getLong2() { return 0x0002000300040006L; }
 
   // CHECK: method: virtual redex.ConstantPropagationTest.if_long

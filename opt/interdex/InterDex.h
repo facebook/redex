@@ -9,7 +9,7 @@
 
 #include <unordered_set>
 
-#include "ApkManager.h"
+#include "AssetManager.h"
 #include "CrossDexRefMinimizer.h"
 #include "CrossDexRelocator.h"
 #include "DexClass.h"
@@ -27,7 +27,7 @@ class InterDex {
  public:
   InterDex(const Scope& original_scope,
            const DexClassesVector& dexen,
-           ApkManager& apk_manager,
+           AssetManager& asset_manager,
            ConfigFiles& conf,
            std::vector<std::unique_ptr<InterDexPassPlugin>>& plugins,
            int64_t linear_alloc_limit,
@@ -45,9 +45,10 @@ class InterDex {
            size_t reserve_mrefs,
            const XStoreRefs* xstore_refs,
            int min_sdk,
-           bool sort_remaining_classes)
+           bool sort_remaining_classes,
+           std::string method_for_canary_clinit_reference)
       : m_dexen(dexen),
-        m_apk_manager(apk_manager),
+        m_asset_manager(asset_manager),
         m_conf(conf),
         m_plugins(plugins),
         m_static_prune_classes(static_prune_classes),
@@ -65,7 +66,9 @@ class InterDex {
         m_original_scope(original_scope),
         m_scope(build_class_scope(m_dexen)),
         m_xstore_refs(xstore_refs),
-        m_sort_remaining_classes(sort_remaining_classes) {
+        m_sort_remaining_classes(sort_remaining_classes),
+        m_method_for_canary_clinit_reference(
+            std::move(method_for_canary_clinit_reference)) {
     m_dexes_structure.set_linear_alloc_limit(linear_alloc_limit);
     m_dexes_structure.set_reserve_frefs(reserve_frefs);
     m_dexes_structure.set_reserve_trefs(reserve_trefs);
@@ -139,6 +142,8 @@ class InterDex {
   void emit_remaining_classes(DexInfo& dex_info);
   void flush_out_dex(DexInfo& dex_info);
 
+  void set_clinit_method_if_needed(DexClass* cls);
+
   /**
    * Stores in m_interdex_order a list of coldstart types. It will only contain:
    * * classes that still exist in the current scope
@@ -156,7 +161,7 @@ class InterDex {
 
   const DexClassesVector& m_dexen;
   DexClassesVector m_outdex;
-  ApkManager& m_apk_manager;
+  AssetManager& m_asset_manager;
   ConfigFiles& m_conf;
   std::vector<std::unique_ptr<InterDexPassPlugin>>& m_plugins;
   // TODO: Encapsulate (primary|all) dex flags under one config.
@@ -187,6 +192,7 @@ class InterDex {
   const XStoreRefs* m_xstore_refs;
   bool m_sort_remaining_classes;
   size_t m_current_classes_when_emitting_remaining{0};
+  std::string m_method_for_canary_clinit_reference;
 };
 
 } // namespace interdex

@@ -22,10 +22,10 @@ namespace constant_propagation {
  * register.
  */
 void Transform::replace_with_const(const ConstantEnvironment& env,
-                                   const IRList::iterator& it,
+                                   const cfg::InstructionIterator& cfg_it,
                                    const XStoreRefs* xstores,
                                    const DexType* declaring_type) {
-  auto* insn = it->insn;
+  auto* insn = cfg_it->insn;
   auto value = env.get(insn->dest());
   auto replacement = ConstantValue::apply_visitor(
       value_to_instruction_visitor(insn, xstores, declaring_type), value);
@@ -33,9 +33,10 @@ void Transform::replace_with_const(const ConstantEnvironment& env,
     return;
   }
   if (opcode::is_a_move_result_pseudo(insn->opcode())) {
-    m_replacements.emplace_back(std::prev(it)->insn, replacement);
+    auto primary_it = cfg_it.cfg().primary_instruction_of_move_result(cfg_it);
+    m_mutation->replace(primary_it, replacement);
   } else {
-    m_replacements.emplace_back(insn, replacement);
+    m_mutation->replace(cfg_it, replacement);
   }
   ++m_stats.materialized_consts;
 }
@@ -46,10 +47,10 @@ void Transform::replace_with_const(const ConstantEnvironment& env,
  * removing not used arguments.
  */
 void Transform::generate_const_param(const ConstantEnvironment& env,
-                                     const IRList::iterator& it,
+                                     const cfg::InstructionIterator& cfg_it,
                                      const XStoreRefs* xstores,
                                      const DexType* declaring_type) {
-  auto* insn = it->insn;
+  auto* insn = cfg_it->insn;
   auto value = env.get(insn->dest());
   auto replacement = ConstantValue::apply_visitor(
       value_to_instruction_visitor(insn, xstores, declaring_type), value);
@@ -60,11 +61,12 @@ void Transform::generate_const_param(const ConstantEnvironment& env,
                               replacement.end());
   ++m_stats.added_param_const;
 }
+
 bool Transform::eliminate_redundant_null_check(
     const ConstantEnvironment& env,
     const WholeProgramState& /* unused */,
-    const IRList::iterator& it) {
-  auto* insn = it->insn;
+    const cfg::InstructionIterator& cfg_it) {
+  auto* insn = cfg_it->insn;
   switch (insn->opcode()) {
   case OPCODE_INVOKE_STATIC: {
     if (auto index =
@@ -72,7 +74,7 @@ bool Transform::eliminate_redundant_null_check(
       ++m_stats.null_checks_method_calls;
       auto val = env.get(insn->src(*index)).maybe_get<SignedConstantDomain>();
       if (val && val->interval() == sign_domain::Interval::NEZ) {
-        m_deletes.push_back(it);
+        m_mutation->remove(cfg_it);
         ++m_stats.null_checks;
         return true;
       }
@@ -85,10 +87,11 @@ bool Transform::eliminate_redundant_null_check(
   return false;
 }
 
-bool Transform::eliminate_redundant_put(const ConstantEnvironment& env,
-                                        const WholeProgramState& wps,
-                                        const IRList::iterator& it) {
-  auto* insn = it->insn;
+bool Transform::eliminate_redundant_put(
+    const ConstantEnvironment& env,
+    const WholeProgramState& wps,
+    const cfg::InstructionIterator& cfg_it) {
+  auto* insn = cfg_it->insn;
   switch (insn->opcode()) {
   case OPCODE_SPUT:
   case OPCODE_SPUT_BOOLEAN:
@@ -121,7 +124,7 @@ bool Transform::eliminate_redundant_put(const ConstantEnvironment& env,
       TRACE(FINALINLINE, 2, "%s has %s", SHOW(field), SHOW(existing_val));
       // This field must already hold this value. We don't need to write to it
       // again.
-      m_deletes.push_back(it);
+      m_mutation->remove(cfg_it);
       return true;
     }
     break;
@@ -135,34 +138,37 @@ bool Transform::eliminate_redundant_put(const ConstantEnvironment& env,
 
 void Transform::simplify_instruction(const ConstantEnvironment& env,
                                      const WholeProgramState& wps,
-                                     const IRList::iterator& it,
+                                     const cfg::InstructionIterator& cfg_it,
                                      const XStoreRefs* xstores,
                                      const DexType* declaring_type) {
-  auto* insn = it->insn;
+  auto* insn = cfg_it->insn;
   switch (insn->opcode()) {
   case IOPCODE_LOAD_PARAM:
   case IOPCODE_LOAD_PARAM_OBJECT:
   case IOPCODE_LOAD_PARAM_WIDE: {
-    generate_const_param(env, it, xstores, declaring_type);
+    if (m_config.add_param_const) {
+      generate_const_param(env, cfg_it, xstores, declaring_type);
+    }
     break;
   }
   case OPCODE_MOVE:
   case OPCODE_MOVE_WIDE:
     if (m_config.replace_moves_with_consts) {
-      replace_with_const(env, it, xstores, declaring_type);
+      replace_with_const(env, cfg_it, xstores, declaring_type);
     }
     break;
   case IOPCODE_MOVE_RESULT_PSEUDO:
   case IOPCODE_MOVE_RESULT_PSEUDO_WIDE:
   case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT: {
-    auto* primary_insn = ir_list::primary_instruction_of_move_result_pseudo(it);
+    auto& cfg = cfg_it.cfg();
+    auto primary_insn = cfg.primary_instruction_of_move_result(cfg_it)->insn;
     auto op = primary_insn->opcode();
     if (opcode::is_an_sget(op) || opcode::is_an_iget(op) ||
         opcode::is_an_aget(op) || opcode::is_div_int_lit(op) ||
         opcode::is_rem_int_lit(op) || opcode::is_instance_of(op) ||
         opcode::is_rem_int_or_long(op) || opcode::is_div_int_or_long(op) ||
         opcode::is_check_cast(op)) {
-      replace_with_const(env, it, xstores, declaring_type);
+      replace_with_const(env, cfg_it, xstores, declaring_type);
     }
     break;
   }
@@ -175,14 +181,15 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
   case OPCODE_MOVE_RESULT_WIDE:
   case OPCODE_MOVE_RESULT_OBJECT: {
     if (m_config.replace_move_result_with_consts) {
-      replace_with_const(env, it, xstores, declaring_type);
+      replace_with_const(env, cfg_it, xstores, declaring_type);
     } else if (m_config.getter_methods_for_immutable_fields) {
-      auto primary_insn = ir_list::primary_instruction_of_move_result(it);
+      auto& cfg = cfg_it.cfg();
+      auto primary_insn = cfg.primary_instruction_of_move_result(cfg_it)->insn;
       if (opcode::is_invoke_virtual(primary_insn->opcode())) {
         auto invoked =
             resolve_method(primary_insn->get_method(), MethodSearch::Virtual);
         if (m_config.getter_methods_for_immutable_fields->count(invoked)) {
-          replace_with_const(env, it, xstores, declaring_type);
+          replace_with_const(env, cfg_it, xstores, declaring_type);
         }
       }
     }
@@ -215,7 +222,7 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
   case OPCODE_AND_LONG:
   case OPCODE_OR_LONG:
   case OPCODE_XOR_LONG: {
-    replace_with_const(env, it, xstores, declaring_type);
+    replace_with_const(env, cfg_it, xstores, declaring_type);
     break;
   }
 
@@ -224,18 +231,13 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
   }
 }
 
-void Transform::remove_dead_switch(const ConstantEnvironment& env,
-                                   cfg::ControlFlowGraph& cfg,
-                                   cfg::Block* block) {
+void Transform::remove_dead_switch(
+    const intraprocedural::FixpointIterator& intra_cp,
+    const ConstantEnvironment& env,
+    cfg::ControlFlowGraph& cfg,
+    cfg::Block* block) {
 
   if (!m_config.remove_dead_switch) {
-    return;
-  }
-
-  // TODO: The cfg for constant propagation is assumed to be non-editable.
-  // Once the editable cfg is used, the following optimization logic should be
-  // simpler.
-  if (cfg.editable()) {
     return;
   }
 
@@ -244,83 +246,48 @@ void Transform::remove_dead_switch(const ConstantEnvironment& env,
   auto* insn = insn_it->insn;
   always_assert(opcode::is_switch(insn->opcode()));
 
-  // Find successor blocks and a default block for switch
-  std::unordered_set<cfg::Block*> succs;
-  cfg::Block* def_block = nullptr;
-  for (auto& edge : block->succs()) {
-    auto type = edge->type();
-    auto target = edge->target();
-    if (type == cfg::EDGE_GOTO) {
-      always_assert(def_block == nullptr);
-      def_block = target;
-    } else {
-      always_assert(type == cfg::EDGE_BRANCH);
+  // Prune infeasible or unnecessary branches
+  cfg::Edge* goto_edge = cfg.get_succ_edge_of_type(block, cfg::EDGE_GOTO);
+  std::unordered_set<cfg::Block*> remaining_branch_targets;
+  std::vector<cfg::Edge*> remaining_branch_edges;
+  bool goto_is_feasible = !intra_cp.analyze_edge(goto_edge, env).is_bottom();
+  for (auto branch_edge : cfg.get_succ_edges_of_type(block, cfg::EDGE_BRANCH)) {
+    auto branch_is_feasible =
+        !intra_cp.analyze_edge(branch_edge, env).is_bottom();
+    if (branch_is_feasible && branch_edge->target() != goto_edge->target()) {
+      remaining_branch_edges.push_back(branch_edge);
+      remaining_branch_targets.insert(branch_edge->target());
+      continue;
     }
-    succs.insert(edge->target());
-  }
-  always_assert(def_block != nullptr);
-
-  auto is_switch_label = [=](MethodItemEntry& mie) {
-    return (mie.type == MFLOW_TARGET && mie.target->type == BRANCH_MULTI &&
-            mie.target->src->insn == insn);
-  };
-
-  // Find a non-default block which is uniquely reachable with a constant.
-  cfg::Block* reachable = nullptr;
-  auto eval_switch = env.get<SignedConstantDomain>(insn->src(0));
-  // If switch value is not an exact constant, do not replace the switch by a
-  // goto.
-  bool should_goto = eval_switch.constant_domain().is_value();
-  for (auto succ : succs) {
-    for (auto& mie : *succ) {
-      if (is_switch_label(mie)) {
-        auto eval_case =
-            eval_switch.meet(SignedConstantDomain(mie.target->case_key));
-        if (eval_case.is_bottom() || def_block == succ) {
-          // Unreachable label or any switch targeted label in default block is
-          // simply removed.
-          mie.type = MFLOW_FALLTHROUGH;
-          delete mie.target;
-        } else {
-          if (reachable != nullptr) {
-            should_goto = false;
-          } else {
-            reachable = succ;
-          }
-        }
-      }
+    if (branch_is_feasible && branch_edge->target() == goto_edge->target()) {
+      goto_is_feasible = true;
     }
+    m_edge_deletes.push_back(branch_edge);
   }
 
-  // When non-default blocks are unreachable, simply remove the switch.
-  if (reachable == nullptr) {
-    m_deletes.emplace_back(insn_it);
+  // When all remaining branches are infeasible, the cfg will remove the switch
+  // instruction.
+  if (remaining_branch_targets.empty()) {
     ++m_stats.branches_removed;
     return;
   }
 
-  if (!should_goto) {
+  if (remaining_branch_targets.size() > 1 || goto_is_feasible) {
+    // TODO: When !goto_is_feasible, cut off the goto edge...
     return;
   }
-  ++m_stats.branches_removed;
 
+  always_assert(remaining_branch_targets.size() == 1);
+  always_assert(!goto_is_feasible);
+  ++m_stats.branches_removed;
   // Replace the switch by a goto to the uniquely reachable block
-  m_replacements.push_back({insn, {new IRInstruction(OPCODE_GOTO)}});
-  // Change the first label for the goto.
-  bool has_changed = false;
-  for (auto& mie : *reachable) {
-    if (is_switch_label(mie)) {
-      if (!has_changed) {
-        mie.target->type = BRANCH_SIMPLE;
-        has_changed = true;
-      } else {
-        // From the second targets, just become a nop, if any.
-        mie.type = MFLOW_FALLTHROUGH;
-        delete mie.target;
-      }
-    }
-  }
-  always_assert(has_changed);
+  // We do that by deleting all but one of the remaining branch edges, and then
+  // the cfg will rewrite the remaining branch into a goto and remove the switch
+  // instruction.
+  m_edge_deletes.push_back(goto_edge);
+  m_edge_deletes.insert(m_edge_deletes.end(),
+                        std::next(remaining_branch_edges.begin()),
+                        remaining_branch_edges.end());
 }
 
 /*
@@ -339,7 +306,7 @@ void Transform::eliminate_dead_branch(
   }
   auto* insn = insn_it->insn;
   if (opcode::is_switch(insn->opcode())) {
-    remove_dead_switch(env, cfg, block);
+    remove_dead_switch(intra_cp, env, cfg, block);
     return;
   }
 
@@ -347,23 +314,18 @@ void Transform::eliminate_dead_branch(
     return;
   }
 
-  const auto& succs = cfg.get_succ_edges_if(
-      block, [](const cfg::Edge* e) { return e->type() != cfg::EDGE_GHOST; });
+  const auto& succs = block->succs();
   always_assert_log(succs.size() == 2, "actually %zu\n%s", succs.size(),
                     SHOW(InstructionIterable(*block)));
   for (auto& edge : succs) {
     // Check if the fixpoint analysis has determined the successors to be
     // unreachable
     if (intra_cp.analyze_edge(edge, env).is_bottom()) {
-      auto is_fallthrough = edge->type() == cfg::EDGE_GOTO;
-      TRACE(CONSTP, 2, "Changed conditional branch %s as it is always %s",
-            SHOW(insn), is_fallthrough ? "true" : "false");
+      TRACE(CONSTP, 2, "Removing conditional branch %s", SHOW(insn));
       ++m_stats.branches_removed;
-      if (is_fallthrough) {
-        m_replacements.push_back({insn, {new IRInstruction(OPCODE_GOTO)}});
-      } else {
-        m_deletes.emplace_back(insn_it);
-      }
+      // We delete the infeasible edge, and then the cfg will rewrite the
+      // remaining branch into a goto and remove the if- instruction.
+      m_edge_deletes.push_back(edge);
       // Assuming :block is reachable, then at least one of its successors must
       // be reachable, so we can break after finding one that's unreachable
       break;
@@ -373,9 +335,9 @@ void Transform::eliminate_dead_branch(
 
 bool Transform::replace_with_throw(
     const ConstantEnvironment& env,
-    const IRList::iterator& it,
+    const cfg::InstructionIterator& cfg_it,
     npe::NullPointerExceptionCreator* npe_creator) {
-  auto* insn = it->insn;
+  auto* insn = cfg_it->insn;
   auto dereferenced_object_src_index = get_dereferenced_object_src_index(insn);
   if (!dereferenced_object_src_index) {
     return false;
@@ -391,51 +353,74 @@ bool Transform::replace_with_throw(
   // We'll replace this instruction with a different instruction sequence that
   // unconditionally throws a null pointer exception.
 
-  m_replacements.emplace_back(insn, npe_creator->get_insns(insn));
-  m_rebuild_cfg = true;
+  m_mutation->replace(cfg_it, npe_creator->get_insns(insn));
   ++m_stats.throws;
 
   if (insn->has_move_result_any()) {
-    auto move_result_it = std::next(it);
-    if (opcode::is_move_result_any(move_result_it->insn->opcode())) {
+    auto& cfg = cfg_it.cfg();
+    auto move_result_it = cfg.move_result_of(cfg_it);
+    if (!move_result_it.is_end()) {
       m_redundant_move_results.insert(move_result_it->insn);
     }
   }
   return true;
 }
 
-void Transform::apply_changes(IRCode* code) {
-  for (auto const& p : m_replacements) {
-    IRInstruction* old_op = p.first;
-    std::vector<IRInstruction*> new_ops = p.second;
-    if (opcode::is_branch(old_op->opcode())) {
-      always_assert(new_ops.size() == 1);
-      code->replace_branch(old_op, new_ops.at(0));
+void Transform::apply_changes(cfg::ControlFlowGraph& cfg) {
+  if (!m_edge_deletes.empty()) {
+    cfg.delete_edges(m_edge_deletes.begin(), m_edge_deletes.end());
+    m_edge_deletes.clear();
+  }
+
+  always_assert(m_mutation != nullptr);
+  m_mutation->flush();
+
+  if (!m_added_param_values.empty()) {
+    // Insert after last load-param (and not before first non-load-param
+    // instructions, as that may suggest that the added instructions are to be
+    // associated with the position of the non-load-param instruction).
+    auto block = cfg.entry_block();
+    auto last_load_params_it = block->get_last_param_loading_insn();
+    if (last_load_params_it == block->end()) {
+      block->push_front(m_added_param_values);
     } else {
-      code->replace_opcode(old_op, new_ops);
+      cfg.insert_after(block->to_cfg_instruction_iterator(last_load_params_it),
+                       m_added_param_values);
     }
-  }
-  for (const auto& it : m_deletes) {
-    TRACE(CONSTP, 4, "Removing instruction %s", SHOW(it->insn));
-    code->remove_opcode(it);
-  }
-  auto params = code->get_param_instructions();
-  for (auto insn : m_added_param_values) {
-    code->insert_before(params.end(), insn);
-  }
-  if (m_rebuild_cfg) {
-    code->build_cfg(/* editable */);
-    code->clear_cfg();
+    m_added_param_values.clear();
   }
 }
 
-Transform::Stats Transform::apply_on_uneditable_cfg(
+void Transform::apply(const intraprocedural::FixpointIterator& fp_iter,
+                      const WholeProgramState& wps,
+                      cfg::ControlFlowGraph& cfg,
+                      const XStoreRefs* xstores,
+                      bool is_static,
+                      DexType* declaring_type,
+                      DexProto* proto) {
+  legacy_apply_constants_and_prune_unreachable(fp_iter, wps, cfg, xstores,
+                                               declaring_type);
+  if (xstores) {
+    m_stats.unreachable_instructions_removed += cfg.simplify();
+    // legacy_apply_constants_and_prune_unreachable creates some new blocks that
+    // fp_iter isn't aware of. As turns out, legacy_apply_forward_targets
+    // doesn't care, and will still do the right thing.
+    legacy_apply_forward_targets(fp_iter, cfg, is_static, declaring_type, proto,
+                                 xstores);
+    m_stats.unreachable_instructions_removed +=
+        cfg.remove_unreachable_blocks().first;
+  }
+}
+
+void Transform::legacy_apply_constants_and_prune_unreachable(
     const intraprocedural::FixpointIterator& intra_cp,
     const WholeProgramState& wps,
-    IRCode* code,
+    cfg::ControlFlowGraph& cfg,
     const XStoreRefs* xstores,
     const DexType* declaring_type) {
-  auto& cfg = code->cfg();
+  always_assert(cfg.editable());
+  always_assert(m_mutation == nullptr);
+  m_mutation = std::make_unique<cfg::CFGMutation>(cfg);
   npe::NullPointerExceptionCreator npe_creator(&cfg);
   for (const auto& block : cfg.blocks()) {
     auto env = intra_cp.get_entry_state_at(block);
@@ -445,22 +430,23 @@ Transform::Stats Transform::apply_on_uneditable_cfg(
       continue;
     }
     auto last_insn = block->get_last_insn();
-    for (auto& mie : InstructionIterable(block)) {
-      auto it = code->iterator_to(mie);
-      bool any_changes = eliminate_redundant_put(env, wps, it) ||
-                         eliminate_redundant_null_check(env, wps, it) ||
-                         replace_with_throw(env, it, &npe_creator);
-      auto* insn = mie.insn;
+    auto ii = InstructionIterable(block);
+    for (auto it = ii.begin(); it != ii.end(); it++) {
+      auto cfg_it = block->to_cfg_instruction_iterator(it);
+      bool any_changes = eliminate_redundant_put(env, wps, cfg_it) ||
+                         eliminate_redundant_null_check(env, wps, cfg_it) ||
+                         replace_with_throw(env, cfg_it, &npe_creator);
+      auto* insn = cfg_it->insn;
       intra_cp.analyze_instruction(insn, &env, insn == last_insn->insn);
       if (!any_changes && !m_redundant_move_results.count(insn)) {
-        simplify_instruction(env, wps, code->iterator_to(mie), xstores,
-                             declaring_type);
+        simplify_instruction(env, wps, cfg_it, xstores, declaring_type);
       }
     }
     eliminate_dead_branch(intra_cp, env, cfg, block);
   }
-  apply_changes(code);
-  return m_stats;
+  apply_changes(cfg);
+  m_mutation = nullptr;
+  cfg.simplify();
 }
 
 void Transform::forward_targets(
@@ -469,11 +455,7 @@ void Transform::forward_targets(
     cfg::ControlFlowGraph& cfg,
     cfg::Block* block,
     std::unique_ptr<LivenessFixpointIterator>& liveness_fixpoint_iter) {
-  if (env.is_bottom()) {
-    // we found an unreachable block; ignore it
-    return;
-  }
-
+  always_assert(!env.is_bottom());
   // normal edges are of type goto or branch, not throw or ghost
   auto is_normal = [](const cfg::Edge* e) {
     return e->type() == cfg::EDGE_GOTO || e->type() == cfg::EDGE_BRANCH;
@@ -622,15 +604,17 @@ void Transform::forward_targets(
 }
 
 bool Transform::has_problematic_return(cfg::ControlFlowGraph& cfg,
-                                       DexMethod* method,
+                                       bool is_static,
+                                       DexType* declaring_type,
+                                       DexProto* proto,
                                        const XStoreRefs* xstores) {
   // Nothing to check without method information
-  if (!method) {
+  if (!declaring_type || !proto) {
     return false;
   }
 
   // No return issues when rtype is primitive
-  auto rtype = method->get_proto()->get_rtype();
+  auto rtype = proto->get_rtype();
   if (type::is_primitive(rtype)) {
     return false;
   }
@@ -647,14 +631,14 @@ bool Transform::has_problematic_return(cfg::ControlFlowGraph& cfg,
 
   // For all return instructions, check whether the reaching definitions are of
   // a type that's unavailable/external, or defined in a different store.
-  auto declaring_class_idx = xstores->get_store_idx(method->get_class());
+  auto declaring_class_idx = xstores->get_store_idx(declaring_type);
   auto is_problematic_return_type = [&](const DexType* t, IRInstruction* insn) {
     t = type::get_element_type_if_array(t);
     if (!type_class_internal(t)) {
       // An unavailable or external class
       TRACE(CONSTP, 2,
-            "Skipping {%s} because {%s} is unavailable/external in {%s}",
-            SHOW(method), SHOW(t), SHOW(insn));
+            "Skipping {%s::%s} because {%s} is unavailable/external in {%s}",
+            SHOW(declaring_type), SHOW(proto), SHOW(t), SHOW(insn));
       return true;
     }
     if (!xstores) {
@@ -665,9 +649,11 @@ bool Transform::has_problematic_return(cfg::ControlFlowGraph& cfg,
       return false;
     }
     TRACE(CONSTP, 2,
-          "Skipping {%s} because {%s} is from different store (%zu vs %zu) in "
+          "Skipping {%s::%s} because {%s} is from different store (%zu vs %zu) "
+          "in "
           "{%s}",
-          SHOW(method), SHOW(t), declaring_class_idx, t_idx, SHOW(insn));
+          SHOW(declaring_type), SHOW(proto), SHOW(t), declaring_class_idx,
+          t_idx, SHOW(insn));
     return true;
   };
   reaching_defs::MoveAwareFixpointIterator fp_iter(cfg);
@@ -702,7 +688,7 @@ bool Transform::has_problematic_return(cfg::ControlFlowGraph& cfg,
           } else if (op == OPCODE_AGET_OBJECT) {
             if (!ti) {
               ti.reset(new type_inference::TypeInference(cfg));
-              ti->run(method);
+              ti->run(is_static, declaring_type, proto->get_args());
             }
             auto& type_environments = ti->get_type_environments();
             auto& type_environment = type_environments.at(def);
@@ -721,14 +707,18 @@ bool Transform::has_problematic_return(cfg::ControlFlowGraph& cfg,
   return false;
 }
 
-Transform::Stats Transform::apply(
+void Transform::legacy_apply_forward_targets(
     const intraprocedural::FixpointIterator& intra_cp,
     cfg::ControlFlowGraph& cfg,
-    DexMethod* method,
+    bool is_static,
+    DexType* declaring_type,
+    DexProto* proto,
     const XStoreRefs* xstores) {
   if (g_redex->instrument_mode) {
-    return m_stats;
+    return;
   }
+
+  cfg.calculate_exit_block();
 
   // The following is an attempt to avoid creating a control-flow structure that
   // triggers the Android bug described in T55782799, related to a return
@@ -736,16 +726,22 @@ Transform::Stats Transform::apply(
   // from a different store.
   // Besides that Android bug, it really shouldn't be necessary to do anything
   // special about unavailable types or cross-store references here.
-  if (has_problematic_return(cfg, method, xstores)) {
-    return m_stats;
+  if (has_problematic_return(cfg, is_static, declaring_type, proto, xstores)) {
+    return;
   }
 
+  // Note that the given intra_cp might not be aware of all blocks that exist in
+  // the cfg.
   std::unique_ptr<LivenessFixpointIterator> liveness_fixpoint_iter;
   for (auto block : cfg.blocks()) {
     auto env = intra_cp.get_exit_state_at(block);
+    if (env.is_bottom()) {
+      // We found an unreachable block, or one that was added the cfg after
+      // intra_cp has run; just ignore it.
+      continue;
+    }
     forward_targets(intra_cp, env, cfg, block, liveness_fixpoint_iter);
   }
-  return m_stats;
 }
 
 void Transform::Stats::log_metrics(ScopedMetrics& sm, bool with_scope) const {
@@ -757,6 +753,8 @@ void Transform::Stats::log_metrics(ScopedMetrics& sm, bool with_scope) const {
   sm.set_metric("throws", throws);
   sm.set_metric("null_checks", null_checks);
   sm.set_metric("null_checks_method_calls", null_checks_method_calls);
+  sm.set_metric("unreachable_instructions_removed",
+                unreachable_instructions_removed);
   TRACE(CONSTP, 3, "Null checks removed: %zu(%zu)", null_checks,
         null_checks_method_calls);
   sm.set_metric("added_param_const", added_param_const);

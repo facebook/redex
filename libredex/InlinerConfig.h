@@ -16,20 +16,37 @@ namespace inliner {
  * The global inliner config.
  */
 struct InlinerConfig {
+  bool delete_non_virtuals{true};
   // inline virtual methods
   bool virtual_inline{true};
   bool true_virtual_inline{false};
   bool throws_inline{false};
+  bool throw_after_no_return{false};
   bool enforce_method_size_limit{true};
   bool multiple_callers{false};
-  bool inline_small_non_deletables{true};
-  bool use_constant_propagation_and_local_dce_for_callee_size{true};
-  bool use_cfg_inliner{false};
+  bool use_call_site_summaries{true};
   bool intermediate_shrinking{false};
   shrinker::ShrinkerConfig shrinker;
   bool shrink_other_methods{true};
   bool unique_inlined_registers{true};
+  bool respect_sketchy_methods{true};
   bool debug{false};
+  bool check_min_sdk_refs{true};
+
+  /*
+   * Some versions of ART (5.0.0 - 5.0.2) will fail to verify a method if it
+   * is too large. See https://code.google.com/p/android/issues/detail?id=66655.
+   *
+   * The verifier rounds up to the next power of two, and doesn't support any
+   * size greater than 16. See
+   * http://androidxref.com/5.0.0_r2/xref/art/compiler/dex/verified_method.cc#107
+   */
+  uint64_t soft_max_instruction_size{1 << 15};
+  // INSTRUCTION_BUFFER is added because the final method size is often larger
+  // than our estimate -- during the sync phase, we may have to pick larger
+  // branch opcodes to encode large jumps.
+  uint64_t instruction_size_buffer{1 << 12};
+
   std::unordered_set<DexType*> allowlist_no_method_limit;
   // We will populate the information to rstate of classes and methods.
   std::unordered_set<DexType*> m_no_inline_annos;

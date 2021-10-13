@@ -97,6 +97,8 @@ TEST_F(ConstantPropagationTest, PrimitiveArray) {
 
      (:if-true-label)
      (const v0 2)
+
+     (return-void)
     )
 )");
 
@@ -111,11 +113,9 @@ TEST_F(ConstantPropagationTest, PrimitiveArray) {
      (aput v1 v2 v0)
      (const v3 1)
 
-     (goto :if-true-label)
-     (const v0 1)
-
-     (:if-true-label)
      (const v0 2)
+
+     (return-void)
     )
 )");
   EXPECT_CODE_EQ(code.get(), expected_code.get());
@@ -138,6 +138,8 @@ TEST_F(ConstantPropagationTest, PrimitiveArrayAliased) {
 
      (:if-true-label)
      (const v0 2)
+
+     (return-void)
     )
 )");
 
@@ -154,11 +156,9 @@ TEST_F(ConstantPropagationTest, PrimitiveArrayAliased) {
      (aput v1 v3 v0)
      (const v4 1)
 
-     (goto :if-true-label)
-     (const v0 1)
-
-     (:if-true-label)
      (const v0 2)
+
+     (return-void)
     )
 )");
   EXPECT_CODE_EQ(code.get(), expected_code.get());
@@ -183,6 +183,8 @@ TEST_F(ConstantPropagationTest, PrimitiveArrayEscapesViaCall) {
 
      (:if-true-label)
      (const v0 2)
+
+     (return-void)
     )
 )");
 
@@ -209,6 +211,8 @@ TEST_F(ConstantPropagationTest, PrimitiveArrayEscapesViaPut) {
 
      (:if-true-label)
      (const v0 2)
+
+     (return-void)
     )
 )");
 
@@ -236,6 +240,8 @@ TEST_F(ConstantPropagationTest, PrimitiveArrayEscapesViaFilledNewArray) {
 
      (:if-true-label)
      (const v0 2)
+
+     (return-void)
     )
 )");
 

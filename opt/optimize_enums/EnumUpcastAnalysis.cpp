@@ -68,6 +68,7 @@ enum Reason {
   MULTI_ENUM_TYPES = 8,
   UNSAFE_INVOCATION_ON_CANDIDATE_ENUM = 9,
   IFIELD_SET_OUTSIDE_INIT = 10,
+  CAST_ENUM_ARRAY_TO_OBJECT = 11,
 };
 
 /**
@@ -246,6 +247,8 @@ class EnumUpcastDetector {
     always_assert(insn->opcode() == OPCODE_INVOKE_STATIC);
     auto method_ref = insn->get_method();
     if (method_ref == STRING_VALUEOF_METHOD) {
+      EnumTypes types = env->get(insn->src(0));
+      check_object_cast(types, insn, rejected_enums);
       return;
     }
     auto container = method_ref->get_class();
@@ -339,10 +342,7 @@ class EnumUpcastDetector {
       }
     } else if (method == STRINGBUILDER_APPEND_METHOD) {
       EnumTypes b_types = env->get(insn->src(1));
-      auto that_types = discard_primitives(b_types);
-      if (that_types.size() > 1) {
-        reject(insn, that_types, rejected_enums, MULTI_ENUM_TYPES);
-      }
+      check_object_cast(b_types, insn, rejected_enums);
       return;
     }
     // If not special cases, do the general processing.
@@ -386,6 +386,17 @@ class EnumUpcastDetector {
     }
     type = const_cast<DexType*>(type::get_element_type_if_array(type));
     return m_candidate_enums->count_unsafe(type);
+  }
+
+  void check_object_cast(const EnumTypes& types,
+                         const IRInstruction* insn,
+                         ConcurrentSet<DexType*>* rejected_enums) const {
+    auto that_types = discard_primitives(types);
+    if (that_types.size() > 1) {
+      reject(insn, that_types, rejected_enums, MULTI_ENUM_TYPES);
+    } else if (that_types.size() == 1 && type::is_array(*that_types.begin())) {
+      reject(insn, that_types, rejected_enums, CAST_ENUM_ARRAY_TO_OBJECT);
+    }
   }
 
   /**

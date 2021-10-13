@@ -32,6 +32,7 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IROpcode.h"
+#include "ShowCFG.h"
 #include "StringBuilder.h"
 
 namespace {
@@ -1519,40 +1520,25 @@ std::string show(const IRList* ir) {
   return ret;
 }
 
+namespace {
+
+struct NoneSpecial {
+  void mie_before(std::ostream&, const MethodItemEntry&) {}
+  void mie_after(std::ostream&, const MethodItemEntry&) {}
+  void start_block(std::ostream&, const cfg::Block*) {}
+  void end_block(std::ostream&, const cfg::Block*) {}
+};
+
+} // namespace
+
 std::string show(const cfg::Block* block) {
-  std::ostringstream ss;
-  for (const auto& mie : *block) {
-    ss << "   " << show(mie) << "\n";
-  }
-  return ss.str();
+  NoneSpecial nothing{};
+  return show(block, nothing);
 }
 
 std::string show(const cfg::ControlFlowGraph& cfg) {
-  const auto& blocks = cfg.blocks();
-  std::ostringstream ss;
-  ss << "CFG:\n";
-  for (const auto& b : blocks) {
-    ss << " Block B" << b->id() << ":";
-    if (b == cfg.entry_block()) {
-      ss << " entry";
-    }
-    ss << "\n";
-
-    ss << "   preds:";
-    for (const auto& p : b->preds()) {
-      ss << " (" << *p << " B" << p->src()->id() << ")";
-    }
-    ss << "\n";
-
-    ss << show(b);
-
-    ss << "   succs:";
-    for (auto& s : b->succs()) {
-      ss << " (" << *s << " B" << s->target()->id() << ")";
-    }
-    ss << "\n";
-  }
-  return ss.str();
+  NoneSpecial nothing{};
+  return show(cfg, nothing);
 }
 
 std::string show(const MethodCreator* mc) {

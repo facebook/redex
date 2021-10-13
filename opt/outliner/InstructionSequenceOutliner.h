@@ -7,44 +7,25 @@
 
 #pragma once
 
+#include "OutliningProfileGuidance.h"
 #include "Pass.h"
 
-namespace instruction_sequence_outliner {
-
-enum class PerfSensitivity : char {
-  // Never derive limits from perf sensitivity.
-  kNeverUse,
-  // Treat all perf-sensitive methods as "warm" when no method profiles are
-  // given.
-  kWarmWhenNoProfiles,
-  // Treat all perf-sensitive methods as "hot" when no method profiles are
-  // given.
-  kHotWhenNoProfiles,
-  // Treat all perf-sensitive methods as "warm."
-  kAlwaysWarm,
-  // Treat all perf-sensitive methods as "hot."
-  kAlwaysHot,
-};
+namespace outliner {
 
 struct Config {
   size_t min_insns_size{3};
   size_t max_insns_size{77};
-  bool use_method_profiles{true};
-  float method_profiles_appear_percent{1};
-  float method_profiles_hot_call_count{10};
-  float method_profiles_warm_call_count{1};
-  PerfSensitivity perf_sensitivity{PerfSensitivity::kAlwaysHot};
   bool reorder_with_method_profiles{true};
-  float block_profiles_hits{-1};
   bool reuse_outlined_methods_across_dexes{true};
   size_t max_outlined_methods_per_class{100};
   size_t savings_threshold{10};
   bool outline_from_primary_dex{false};
   bool full_dbg_positions{false};
   bool debug_make_crashing{false};
+  ProfileGuidanceConfig profile_guidance;
 };
 
-} // namespace instruction_sequence_outliner
+} // namespace outliner
 
 class InstructionSequenceOutliner : public Pass {
  public:
@@ -56,6 +37,6 @@ class InstructionSequenceOutliner : public Pass {
                 PassManager& mgr) override;
 
  private:
-  instruction_sequence_outliner::Config m_config;
+  outliner::Config m_config;
   size_t m_iteration{0};
 };

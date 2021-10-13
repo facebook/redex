@@ -48,6 +48,7 @@ check_PROGRAMS = \
     evaluate_type_checks_test \
     exception_test \
     extract_native_test \
+    fast_reg_alloc_test \
     fbjni_marker_test \
     final_inline_test \
     final_inline_v2_test \
@@ -73,7 +74,7 @@ check_PROGRAMS = \
     match_flow_test \
     match_test \
     method_inline_test \
-    method_merger_test \
+    method_util_test \
     monitor_count_test \
     mutf8_compare_test \
     leb_test \
@@ -214,6 +215,8 @@ exception_test_SOURCES = RedexExceptionTest.cpp
 
 extract_native_test_SOURCES = ExtractNativeTest.cpp
 
+fast_reg_alloc_test_SOURCES = FastRegAllocTest.cpp
+
 fbjni_marker_test_SOURCES = FbjniMarkerTest.cpp
 
 final_inline_test_SOURCES = FinalInlineTest.cpp
@@ -272,7 +275,7 @@ match_flow_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 method_inline_test_SOURCES = MethodInlineTest.cpp
 
-method_merger_test_SOURCES = MethodMergerTest.cpp
+method_util_test_SOURCES = MethodUtilTest.cpp
 
 monitor_count_test_SOURCES = MonitorCountTest.cpp
 
@@ -461,6 +464,7 @@ TESTS = \
     evaluate_type_checks_test \
     exception_test \
     extract_native_test \
+    fast_reg_alloc_test \
     final_inline_test \
     final_inline_v2_test \
     fp_ev_test \
@@ -485,7 +489,6 @@ TESTS = \
     match_flow_test \
     match_test \
     method_inline_test \
-    method_merger_test \
     monitor_count_test \
     mutf8_compare_test \
     leb_test \

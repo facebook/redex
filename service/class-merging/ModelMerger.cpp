@@ -61,7 +61,7 @@ DexField* scan_type_tag_field(const char* type_tag_field_name,
   DexField* field = nullptr;
   while (field == nullptr && type != type::java_lang_Object()) {
     auto cls = type_class(type);
-    field = cls->find_field(type_tag_field_name, type::_int());
+    field = cls->find_ifield(type_tag_field_name, type::_int());
     type = cls->get_super_class();
   }
 
@@ -454,10 +454,9 @@ void trim_method_debug_map(
   TRACE(CLMG, 5, "Method debug map trimmed %zu", trimmed_cnt);
 }
 
-void write_out_type_mapping(
-    const ConfigFiles& conf,
-    const std::unordered_map<const DexType*, DexType*>& mergeable_to_merger,
-    const TypeToMethodMap& method_dedup_map) {
+void write_out_type_mapping(const ConfigFiles& conf,
+                            const std::vector<const MergerType*>& mergers,
+                            const TypeToMethodMap& method_dedup_map) {
   std::string mapping_file = conf.metafile(TE_MAPPING_FILE_NAME);
   std::ofstream os(mapping_file, std::ios_base::app);
   if (!os.is_open()) {
@@ -465,15 +464,15 @@ void write_out_type_mapping(
   }
 
   std::ostringstream out;
-  for (const auto& pair : mergeable_to_merger) {
-    auto mergeable = pair.first;
-    auto merger = pair.second;
-    out << SHOW(mergeable) << " -> " << SHOW(merger) << std::endl;
+  for (auto merger : mergers) {
+    for (auto mergeable : merger->mergeables) {
+      out << SHOW(mergeable) << " -> " << SHOW(merger->type) << std::endl;
 
-    if (method_dedup_map.count(mergeable)) {
-      for (auto& symbol_map : method_dedup_map.at(mergeable)) {
-        out << "  " << symbol_map.first << " -> " << SHOW(symbol_map.second)
-            << std::endl;
+      if (method_dedup_map.count(mergeable)) {
+        for (auto& symbol_map : method_dedup_map.at(mergeable)) {
+          out << "  " << symbol_map.first << " -> " << SHOW(symbol_map.second)
+              << std::endl;
+        }
       }
     }
   }
@@ -556,7 +555,7 @@ std::vector<DexClass*> ModelMerger::merge_model(Scope& scope,
     cls->rstate.set_interdex_subgroup(merger.interdex_subgroup);
     cls->rstate.set_generated();
 
-    add_class(cls, scope, stores);
+    add_class(cls, scope, stores, merger.dex_id);
     merger_classes.push_back(cls);
 
     if (!merger.has_mergeables()) {
@@ -627,7 +626,7 @@ std::vector<DexClass*> ModelMerger::merge_model(Scope& scope,
 
   // Write out mapping files
   auto method_dedup_map = mm.get_method_dedup_map();
-  write_out_type_mapping(conf, mergeable_to_merger, method_dedup_map);
+  write_out_type_mapping(conf, to_materialize, method_dedup_map);
   if (!to_materialize.empty()) {
     post_process(model, type_tags, mergeable_to_merger_ctor);
   }
@@ -668,12 +667,6 @@ void ModelMerger::update_redex_stats(const std::string& prefix,
                   m_stats.m_num_vmethods_dedupped);
   mgr.set_metric(prefix + "_const_lifted_methods",
                  m_stats.m_num_const_lifted_methods);
-  mgr.incr_metric(prefix + "_merged_static_methods",
-                  m_stats.m_num_merged_static_methods);
-  mgr.incr_metric(prefix + "_merged_direct_methods",
-                  m_stats.m_num_merged_direct_methods);
-  mgr.incr_metric(prefix + "_merged_nonvirt_methods",
-                  m_stats.m_num_merged_nonvirt_methods);
 }
 
 } // namespace class_merging

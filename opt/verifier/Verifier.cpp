@@ -19,6 +19,7 @@
 #include "DexUtil.h"
 #include "IRInstruction.h"
 #include "ReachableClasses.h"
+#include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"
 
@@ -131,15 +132,13 @@ void verifyStore(DexStoresVector& stores,
           getAllowedStores(stores, store, store_map);
       if (allowed_stores.find(target_store_name) == allowed_stores.end()) {
         TRACE(VERIFY, 5, "BAD REFERENCE from %s %s to %s %s",
-              store.get_name().c_str(), source->get_deobfuscated_name().c_str(),
-              target_store_name.c_str(),
-              target->get_deobfuscated_name().c_str());
+              store.get_name().c_str(), show_deobfuscated(source).c_str(),
+              target_store_name.c_str(), show_deobfuscated(target).c_str());
       }
       if (fd != nullptr) {
         fprintf(fd, "%s:%s->%s:%s\n", store.get_name().c_str(),
-                source->get_deobfuscated_name().c_str(),
-                target_store_name.c_str(),
-                target->get_deobfuscated_name().c_str());
+                show_deobfuscated(source).c_str(), target_store_name.c_str(),
+                show_deobfuscated(target).c_str());
       }
     }
   }

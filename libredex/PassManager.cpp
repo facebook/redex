@@ -12,6 +12,7 @@
 #include <cinttypes>
 #include <cstdio>
 #include <cstdlib>
+#include <limits>
 #include <list>
 #include <thread>
 #include <typeinfo>
@@ -25,7 +26,7 @@
 
 #include "AnalysisUsage.h"
 #include "ApiLevelChecker.h"
-#include "ApkManager.h"
+#include "AssetManager.h"
 #include "CommandProfiling.h"
 #include "ConfigFiles.h"
 #include "Debug.h"
@@ -33,11 +34,13 @@
 #include "DexLoader.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
+#include "Dominators.h"
 #include "GraphVisualizer.h"
 #include "IRCode.h"
 #include "IRTypeChecker.h"
 #include "InstructionLowering.h"
 #include "JemallocUtil.h"
+#include "Macros.h"
 #include "MethodProfiles.h"
 #include "Native.h"
 #include "OptData.h"
@@ -204,9 +207,29 @@ struct CheckerConfig {
                                                    bool exit_on_fail = true) {
     TRACE(PM, 1, "Running IRTypeChecker...");
     Timer t("IRTypeChecker");
-    std::atomic<size_t> errors{0};
-    boost::optional<std::string> first_error_msg;
-    walk::parallel::methods(scope, [&](DexMethod* dex_method) {
+
+    struct Result {
+      size_t errors{0};
+      DexMethod* smallest_error_method{nullptr};
+      size_t smallest_size{std::numeric_limits<size_t>::max()};
+
+      Result() = default;
+      explicit Result(DexMethod* m)
+          : errors(1),
+            smallest_error_method(m),
+            smallest_size(m->get_code()->count_opcodes()) {}
+
+      Result& operator+=(const Result& other) {
+        errors += other.errors;
+        if (smallest_size > other.smallest_size) {
+          smallest_size = other.smallest_size;
+          smallest_error_method = other.smallest_error_method;
+        }
+        return *this;
+      }
+    };
+
+    auto run_checker = [&](DexMethod* dex_method) {
       IRTypeChecker checker(dex_method, validate_access);
       if (verify_moves) {
         checker.verify_moves();
@@ -215,26 +238,39 @@ struct CheckerConfig {
         checker.check_no_overwrite_this();
       }
       checker.run();
-      if (checker.fail()) {
-        bool first = errors.fetch_add(1) == 0;
-        if (first) {
-          std::ostringstream oss;
-          oss << "Inconsistency found in Dex code for " << show(dex_method)
-              << std::endl
-              << " " << checker.what() << std::endl
-              << "Code:" << std::endl
-              << show(dex_method->get_code());
-          first_error_msg = oss.str();
-        }
-      }
-    });
+      return checker;
+    };
 
-    if (errors.load() > 0 && exit_on_fail) {
-      redex_assert(first_error_msg);
-      fail_error(*first_error_msg, errors.load());
+    auto res =
+        walk::parallel::methods<Result>(scope, [&](DexMethod* dex_method) {
+          auto checker = run_checker(dex_method);
+          if (!checker.fail()) {
+            return Result();
+          }
+          return Result(dex_method);
+        });
+
+    if (res.errors == 0) {
+      return boost::none;
     }
 
-    return first_error_msg;
+    // Re-run the smallest method to produce error message.
+    auto checker = run_checker(res.smallest_error_method);
+    redex_assert(checker.fail());
+
+    std::ostringstream oss;
+    oss << "Inconsistency found in Dex code for "
+        << show(res.smallest_error_method) << std::endl
+        << " " << checker.what() << std::endl
+        << "Code:" << std::endl
+        << show(res.smallest_error_method->get_code());
+
+    if (res.errors > 1) {
+      oss << "\n(" << (res.errors - 1) << " more issues!)";
+    }
+
+    always_assert_log(!exit_on_fail, "%s", oss.str().c_str());
+    return oss.str();
   }
 
   static void fail_error(const std::string& error_msg, size_t errors = 1) {
@@ -423,6 +459,10 @@ class JNINativeContextHelper {
         auto native_func = native::get_native_function_for_dex_method(m);
         if (native_func) {
           m_removable_natives.emplace(native_func);
+        } else {
+          // There's a native method which we don't find. Let's be conservative
+          // and ask Redex not to remove it.
+          m->rstate.set_root();
         }
       }
     });
@@ -701,9 +741,6 @@ class AfterPassSizes {
       std::cerr << "After-pass-size to " << tmp_dir << std::endl;
     }
     conf->set_outdir(tmp_dir);
-    // Gotta ensure "meta" exists.
-    auto meta_path = boost::filesystem::path(tmp_dir) / "meta";
-    boost::filesystem::create_directory(meta_path);
 
     // Close output. No noise. (Maybe make this configurable)
     if (!m_debug) {
@@ -744,41 +781,167 @@ class AfterPassSizes {
 };
 
 struct SourceBlocksStats {
-  unsigned int total_blocks;
-  unsigned int source_blocks_present;
+  size_t total_blocks{0};
+  size_t source_blocks_present{0};
+  size_t source_blocks_total{0};
+  size_t methods_with_sbs{0};
+  size_t flow_violation_idom{0};
+  size_t flow_violation_direct_predecessors{0};
+  size_t flow_violation_cold_direct_predecessors{0};
+  size_t methods_with_cold_direct_predecessor_violations{0};
+  size_t methods_with_idom_violations{0};
+  size_t methods_with_direct_predecessor_violations{0};
+  size_t methods_with_code{0};
 
   SourceBlocksStats& operator+=(const SourceBlocksStats& that) {
     total_blocks += that.total_blocks;
     source_blocks_present += that.source_blocks_present;
+    source_blocks_total += that.source_blocks_total;
+    methods_with_sbs += that.methods_with_sbs;
+    flow_violation_idom += that.flow_violation_idom;
+    flow_violation_direct_predecessors +=
+        that.flow_violation_direct_predecessors;
+    flow_violation_cold_direct_predecessors +=
+        that.flow_violation_cold_direct_predecessors;
+    methods_with_cold_direct_predecessor_violations +=
+        that.methods_with_cold_direct_predecessor_violations;
+    methods_with_idom_violations += that.methods_with_idom_violations;
+    methods_with_direct_predecessor_violations +=
+        that.methods_with_direct_predecessor_violations;
+    methods_with_code += that.methods_with_code;
     return *this;
   }
 };
 
-void track_source_block_coverage(const DexStoresVector& stores) {
+bool is_source_block_hot(SourceBlock* sb) {
+  bool is_hot = false;
+  if (sb != nullptr) {
+    sb->foreach_val_early([&is_hot](const auto& val) {
+      is_hot = val && val->val > 0.0f;
+      return is_hot;
+    });
+  }
+  return is_hot;
+}
+
+void track_source_block_coverage(PassManager& mgr,
+                                 const DexStoresVector& stores) {
+  Timer opt_timer("Calculate SourceBlock Coverage");
   auto stats = walk::parallel::methods<SourceBlocksStats>(
       build_class_scope(stores), [](DexMethod* m) -> SourceBlocksStats {
-        SourceBlocksStats ret{0u, 0u};
+        SourceBlocksStats ret;
         auto code = m->get_code();
         if (!code) {
           return ret;
         }
-
-        code->build_cfg(/* editable */ false);
+        ret.methods_with_code++;
+        code->build_cfg(/* editable */ true);
         auto& cfg = code->cfg();
+        auto dominators =
+            dominators::SimpleFastDominators<cfg::GraphInterface>(cfg);
+
+        bool seen_dir_cold_dir_pred = false;
+        bool seen_idom_viol = false;
+        bool seen_direct_pred_viol = false;
+        bool seen_sb = false;
         for (auto block : cfg.blocks()) {
           ret.total_blocks++;
           if (source_blocks::has_source_blocks(block)) {
             ret.source_blocks_present++;
+            seen_sb = true;
+            source_blocks::foreach_source_block(
+                block,
+                [&](auto* sb ATTRIBUTE_UNUSED) { ret.source_blocks_total++; });
+          }
+          if (block != cfg.entry_block()) {
+            auto immediate_dominator = dominators.get_idom(block);
+            if (!immediate_dominator) {
+              continue;
+            }
+            auto* first_sb_immediate_dominator =
+                source_blocks::get_first_source_block(immediate_dominator);
+            auto* first_sb_current_b =
+                source_blocks::get_first_source_block(block);
+
+            bool is_idom_hot =
+                is_source_block_hot(first_sb_immediate_dominator);
+            bool is_curr_block_hot = is_source_block_hot(first_sb_current_b);
+
+            if (!is_idom_hot && is_curr_block_hot) {
+              ret.flow_violation_idom++;
+              seen_idom_viol = true;
+            }
+
+            // If current block is hot, one of its predecessors must also be
+            // hot. If all predecessors of a block are cold, the block must also
+            // be cold
+            if (is_curr_block_hot) {
+              auto found_hot_pred = [&]() {
+                for (auto predecessor : block->preds()) {
+                  auto* first_sb_pred =
+                      source_blocks::get_first_source_block(predecessor->src());
+                  if (is_source_block_hot(first_sb_pred)) {
+                    return true;
+                  }
+                }
+                return false;
+              }();
+              if (!found_hot_pred) {
+                ret.flow_violation_direct_predecessors++;
+                seen_direct_pred_viol = true;
+              }
+
+              bool all_predecessors_cold = [&]() {
+                for (auto predecessor : block->preds()) {
+                  auto* first_sb_pred =
+                      source_blocks::get_first_source_block(predecessor->src());
+                  if (is_source_block_hot(first_sb_pred)) {
+                    return false;
+                  }
+                }
+                return true;
+              }();
+              if (all_predecessors_cold) {
+                ret.flow_violation_cold_direct_predecessors++;
+                seen_dir_cold_dir_pred = true;
+              }
+            }
           }
         }
+        if (seen_dir_cold_dir_pred) {
+          ret.methods_with_cold_direct_predecessor_violations++;
+        }
+        if (seen_idom_viol) {
+          ret.methods_with_idom_violations++;
+        }
+        if (seen_direct_pred_viol) {
+          ret.methods_with_direct_predecessor_violations++;
+        }
+
+        if (seen_sb) {
+          ret.methods_with_sbs++;
+        }
+
         code->clear_cfg();
         return ret;
       });
 
-  TRACE(INSTRUMENT, 4,
-        "Total Basic Blocks = %d, Basic Blocks with SourceBlock = %d (%.1f%%)",
-        stats.total_blocks, stats.source_blocks_present,
-        ((double)stats.source_blocks_present) * 100 / stats.total_blocks);
+  mgr.set_metric("~assessment~methods~with~code", stats.methods_with_code);
+  mgr.set_metric("~blocks~count", stats.total_blocks);
+  mgr.set_metric("~blocks~with~source~blocks", stats.source_blocks_present);
+  mgr.set_metric("~assessment~source~blocks~total", stats.source_blocks_total);
+  mgr.set_metric("~assessment~methods~with~sbs", stats.methods_with_sbs);
+  mgr.set_metric("~flow~violation~idom", stats.flow_violation_idom);
+  mgr.set_metric("~flow~violation~methods~idom",
+                 stats.methods_with_idom_violations);
+  mgr.set_metric("~flow~violation~direct~predecessors",
+                 stats.flow_violation_direct_predecessors);
+  mgr.set_metric("~flow~violation~methods~direct~predecessors",
+                 stats.methods_with_direct_predecessor_violations);
+  mgr.set_metric("~flow~violation~cold~direct~predecessors",
+                 stats.flow_violation_cold_direct_predecessors);
+  mgr.set_metric("~flow~violation~methods~direct~cold~predecessors",
+                 stats.methods_with_cold_direct_predecessor_violations);
 }
 
 void run_assessor(PassManager& pm, const Scope& scope, bool initially = false) {
@@ -819,7 +982,7 @@ PassManager::PassManager(
     std::unique_ptr<keep_rules::ProguardConfiguration> pg_config,
     const Json::Value& config,
     const RedexOptions& options)
-    : m_apk_mgr(get_apk_dir(config)),
+    : m_asset_mgr(get_apk_dir(config)),
       m_registered_passes(passes),
       m_current_pass_info(nullptr),
       m_pg_config(std::move(pg_config)),
@@ -1040,6 +1203,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       }
       if (run_assessor) {
         ::run_assessor(*this, scope);
+        track_source_block_coverage(*this, stores);
       }
       if (run_type_checker) {
         // It's OK to overwrite the `this` register if we are not yet at the
@@ -1103,10 +1267,6 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
     if (after_pass_size.handle(m_current_pass_info, &stores, &conf)) {
       // Measuring child. Return to write things out.
       break;
-    }
-
-    if (traceEnabled(INSTRUMENT, 4)) {
-      track_source_block_coverage(stores);
     }
 
     m_current_pass_info = nullptr;

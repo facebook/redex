@@ -7,15 +7,16 @@
 
 #pragma once
 
+#include <boost/filesystem.hpp>
 #include <memory>
 #include <string>
 #include <vector>
 
-class ApkManager {
+class AssetManager {
  public:
-  explicit ApkManager(std::string apk_dir) : m_apk_dir(std::move(apk_dir)) {}
+  explicit AssetManager(const std::string& dir);
 
-  virtual ~ApkManager() {
+  virtual ~AssetManager() {
     for (auto& fd : m_files) {
       if (*fd != nullptr) {
         fclose(*fd);
@@ -24,7 +25,7 @@ class ApkManager {
     }
   }
 
-  bool has_asset_dir();
+  bool has_secondary_dex_dir();
   std::shared_ptr<FILE*> new_asset_file(
       const char* filename,
       const char* dir_path = "/assets/secondary-program-dex-jars/",
@@ -32,5 +33,5 @@ class ApkManager {
 
  private:
   std::vector<std::shared_ptr<FILE*>> m_files;
-  std::string m_apk_dir;
+  std::string m_base_dir;
 };

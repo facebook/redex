@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <unordered_set>
+
 #include "WellKnownTypes.h"
 
 class DexType;
@@ -39,6 +41,8 @@ class FrequentlyUsedPointers {
 #define FOR_EACH STORE_FIELDREF
   PRIMITIVE_PSEUDO_TYPE_FIELDS
 #undef FOR_EACH
+
+  std::unordered_set<const DexType*> m_well_known_types;
 };
 
 #undef STORE_TYPE

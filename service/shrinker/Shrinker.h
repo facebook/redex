@@ -15,6 +15,7 @@
 #include "DexClass.h"
 #include "DexStore.h"
 #include "IPConstantPropagationAnalysis.h"
+#include "IRCode.h"
 #include "LocalDce.h"
 #include "MethodProfiles.h"
 #include "RandomForest.h"
@@ -34,6 +35,17 @@ class Shrinker {
       const std::unordered_set<DexMethodRef*>& configured_pure_methods = {},
       const std::unordered_set<DexString*>& configured_finalish_field_names =
           {});
+
+  constant_propagation::Transform::Stats constant_propagation(
+      bool is_static,
+      DexType* declaring_type,
+      DexProto*,
+      IRCode* code,
+      const ConstantEnvironment&,
+      const constant_propagation::Transform::Config& config);
+  LocalDce::Stats local_dce(IRCode* code, bool normalize_new_instances = true);
+  copy_propagation_impl::Stats copy_propagation(DexMethod* method);
+
   void shrink_method(DexMethod* method);
   const constant_propagation::Transform::Stats& get_const_prop_stats() const {
     return m_const_prop_stats;
@@ -75,6 +87,9 @@ class Shrinker {
   }
   double get_reg_alloc_seconds() const {
     return m_reg_alloc_timer.get_seconds();
+  }
+  double get_fast_reg_alloc_seconds() const {
+    return m_fast_reg_alloc_timer.get_seconds();
   }
 
   struct MethodContext {
@@ -122,6 +137,7 @@ class Shrinker {
   AccumulatingTimer m_dedup_blocks_timer;
   dedup_blocks_impl::Stats m_dedup_blocks_stats;
   AccumulatingTimer m_reg_alloc_timer;
+  AccumulatingTimer m_fast_reg_alloc_timer;
   size_t m_methods_shrunk{0};
   size_t m_methods_reg_alloced{0};
 };

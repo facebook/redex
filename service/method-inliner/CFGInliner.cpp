@@ -26,10 +26,12 @@ namespace cfg {
  */
 void CFGInliner::inline_cfg(ControlFlowGraph* caller,
                             const InstructionIterator& callsite,
+                            DexType* needs_receiver_cast,
                             const ControlFlowGraph& callee_orig,
                             size_t next_caller_reg) {
   CFGInlinerPlugin base_plugin;
-  inline_cfg(caller, callsite, callee_orig, next_caller_reg, base_plugin);
+  inline_cfg(caller, callsite, needs_receiver_cast, callee_orig,
+             next_caller_reg, base_plugin);
 }
 
 namespace {
@@ -114,6 +116,7 @@ void normalize_source_blocks(ControlFlowGraph& cfg, float factor, size_t idx) {
 
 void CFGInliner::inline_cfg(ControlFlowGraph* caller,
                             const InstructionIterator& inline_site,
+                            DexType* needs_receiver_cast,
                             const ControlFlowGraph& callee_orig,
                             size_t next_caller_reg,
                             CFGInlinerPlugin& plugin) {
@@ -122,6 +125,7 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
   // copy the callee because we're going to move its contents into the caller
   ControlFlowGraph callee;
   callee_orig.deep_copy(&callee);
+  remove_ghost_exit_block(&callee);
 
   {
     auto num = num_interactions(inline_site, callee_orig);
@@ -133,8 +137,22 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
     }
   }
 
-  remove_ghost_exit_block(&callee);
   cleanup_callee_debug(&callee);
+  if (needs_receiver_cast) {
+    auto param_insns = callee.get_param_instructions();
+    auto first_load_param_insn = param_insns.front().insn;
+    auto first_param_reg = first_load_param_insn->dest();
+    auto last_param_insn_it =
+        callee.find_insn(param_insns.back().insn, callee.entry_block());
+    auto check_cast_insn = (new IRInstruction(OPCODE_CHECK_CAST))
+                               ->set_type(needs_receiver_cast)
+                               ->set_src(0, first_param_reg);
+    auto move_result_insn =
+        (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
+            ->set_dest(first_param_reg);
+    callee.insert_after(last_param_insn_it,
+                        {check_cast_insn, move_result_insn});
+  }
 
   TRACE(CFG, 3, "caller %s", SHOW(*caller));
   TRACE(CFG, 3, "callee %s", SHOW(callee));
@@ -153,6 +171,10 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
   // Find the closest dbg position for the inline site, if split before
   DexPosition* inline_site_dbg_pos =
       inline_after ? nullptr : inline_site.cfg().get_dbg_pos(inline_site);
+
+  if (plugin.update_before_reg_remap(caller, &callee)) {
+    next_caller_reg = caller->get_registers_size();
+  }
 
   // make the invoke last of its block or first based on inline_after
   auto split = inline_after ? maybe_split_block(caller, inline_site)
@@ -180,10 +202,6 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
       split_on_inline->m_entries.push_front(*(new MethodItemEntry(
           std::make_unique<DexPosition>(*inline_site_dbg_pos))));
     }
-  }
-
-  if (plugin.update_before_reg_remap(caller, &callee)) {
-    next_caller_reg = caller->get_registers_size();
   }
 
   // make sure the callee's registers don't overlap with the caller's
@@ -251,9 +269,9 @@ void CFGInliner::cleanup_callee_debug(ControlFlowGraph* cfg) {
 }
 
 void CFGInliner::remove_ghost_exit_block(ControlFlowGraph* cfg) {
-  auto ext = cfg->exit_block();
-  if (ext && cfg->get_pred_edge_of_type(ext, EDGE_GHOST)) {
-    cfg->remove_block(ext);
+  auto exit_block = cfg->exit_block();
+  if (exit_block && cfg->get_pred_edge_of_type(exit_block, EDGE_GHOST)) {
+    cfg->remove_block(exit_block);
     cfg->set_exit_block(nullptr);
   }
 }

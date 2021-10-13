@@ -7,8 +7,10 @@
 
 #include "ClassMergingPass.h"
 
+#include "ClassAssemblingUtils.h"
 #include "ClassMerging.h"
 #include "ConfigFiles.h"
+#include "ConfigUtils.h"
 #include "DexUtil.h"
 #include "MergingStrategies.h"
 #include "Show.h"
@@ -18,41 +20,9 @@ using namespace class_merging;
 
 namespace {
 
-DexType* get_type(const std::string& type_s) {
-  auto type = DexType::get_type(type_s.c_str());
-  if (type == nullptr) {
-    TRACE(CLMG, 2, "[ClassMerging] Warning: No type found for target type %s",
-          type_s.c_str());
-  }
-  return type;
-}
-
-std::vector<DexType*> get_types(const std::vector<std::string>& target_types) {
-  std::vector<DexType*> types;
-  for (const auto& type_s : target_types) {
-    auto target_type = get_type(type_s);
-    if (target_type == nullptr) continue;
-    types.push_back(target_type);
-  }
-  return types;
-}
-
-void load_types_and_prefixes(const std::vector<std::string>& type_names,
-                             std::unordered_set<const DexType*>& types,
-                             std::unordered_set<std::string>& prefixes) {
-  for (const auto& type_s : type_names) {
-    auto target_type = get_type(type_s);
-    if (target_type == nullptr) {
-      prefixes.insert(type_s);
-    } else {
-      types.insert(target_type);
-    }
-  }
-}
-
 template <typename Types>
 void load_types(const std::vector<std::string>& type_names, Types& types) {
-  std::vector<DexType*> ts = get_types(type_names);
+  std::vector<DexType*> ts = utils::get_types(type_names);
   for (const auto& t : ts) {
     const auto& cls = type_class(t);
     if (cls == nullptr) {
@@ -148,15 +118,6 @@ void ClassMergingPass::bind_config() {
   bind("process_method_meta", false, process_method_meta);
   int64_t max_num_dispatch_target;
   bind("max_num_dispatch_target", 0, max_num_dispatch_target);
-  bool merge_static_methods_within_shape;
-  bind("merge_static_methods_within_shape", false,
-       merge_static_methods_within_shape);
-  bool merge_direct_methods_within_shape;
-  bind("merge_direct_methods_within_shape", false,
-       merge_direct_methods_within_shape);
-  bool merge_nonvirt_methods_within_shape;
-  bind("merge_nonvirt_methods_within_shape", false,
-       merge_nonvirt_methods_within_shape);
   trait(Traits::Pass::unique, true);
 
   // load model specifications
@@ -192,8 +153,8 @@ void ClassMergingPass::bind_config() {
       load_types(root_names, model.roots);
       std::vector<std::string> excl_names;
       model_spec.get("exclude", {}, excl_names);
-      load_types_and_prefixes(excl_names, model.exclude_types,
-                              model.exclude_prefixes);
+      utils::load_types_and_prefixes(excl_names, model.exclude_types,
+                                     model.exclude_prefixes);
       model_spec.get("class_name_prefix", "", model.class_name_prefix);
       Json::Value generated;
       model_spec.get("generated", Json::Value(), generated);
@@ -250,12 +211,6 @@ void ClassMergingPass::bind_config() {
         model.max_count = boost::optional<size_t>(max_count);
       }
       model.process_method_meta = process_method_meta;
-      model.merge_static_methods_within_shape =
-          merge_static_methods_within_shape;
-      model.merge_direct_methods_within_shape =
-          merge_direct_methods_within_shape;
-      model.merge_nonvirt_methods_within_shape =
-          merge_nonvirt_methods_within_shape;
       model.max_num_dispatch_target = m_max_num_dispatch_target;
 
       if (!verify_model_spec(model)) {
@@ -287,6 +242,12 @@ void ClassMergingPass::run_pass(DexStoresVector& stores,
             "Change include_primary_dex to true because the apk will be single "
             "dex");
       model_spec.include_primary_dex = true;
+    }
+    // TODO: We will move the logic of collecting mergeables outside of Model
+    // building. Then this step can be removed.
+    handle_interface_as_root(model_spec, scope, stores);
+    for (const auto root : model_spec.roots) {
+      always_assert(!is_interface(type_class(root)));
     }
     class_merging::merge_model(scope, conf, mgr, stores, model_spec);
   }

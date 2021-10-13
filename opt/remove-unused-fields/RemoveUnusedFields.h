@@ -36,7 +36,7 @@ struct Config {
   bool remove_vestigial_objects_written_fields;
   std::unordered_set<const DexType*> blocklist_types;
   std::unordered_set<const DexType*> blocklist_classes;
-  boost::optional<std::unordered_set<DexField*>> allowlist;
+  std::unordered_set<const DexType*> allowlist_types;
 };
 
 class PassImpl : public Pass {
@@ -60,6 +60,11 @@ class PassImpl : public Pass {
          {},
          m_config.blocklist_classes,
          "Fields in these classes will never be removed.");
+    bind("allowlist_types",
+         {},
+         m_config.allowlist_types,
+         "Fields with these types that are otherwise eligible to be removed "
+         "will be removed regardless of their lifetime dependencies.");
 
     // These options make it a bit more convenient to bisect the list of removed
     // fields to isolate one that's causing issues.
@@ -67,35 +72,6 @@ class PassImpl : public Pass {
          false,
          m_export_removed,
          "Write all removed fields to " + std::string(REMOVED_FIELDS_FILENAME));
-
-    bind("allowlist_file",
-         {boost::none},
-         m_allowlist_file,
-         "If specified, RMUF will only remove fields listed in this file. You "
-         "can use the file created by the `export_removed` option as input "
-         "here.");
-    after_configuration([&]() {
-      if (!m_allowlist_file) {
-        return;
-      }
-      std::ifstream ifs(*m_allowlist_file);
-      if (!ifs) {
-        std::cerr << "RMUF: failed to open allowlist file at "
-                  << *m_allowlist_file << std::endl;
-        return;
-      }
-      m_config.allowlist = std::unordered_set<DexField*>();
-      std::string field_str;
-      while (std::getline(ifs, field_str)) {
-        auto* field = DexField::get_field(field_str);
-        if (field == nullptr || !field->is_def()) {
-          std::cerr << "RMUF: failed to resolve " << field_str << std::endl;
-        }
-        m_config.allowlist->emplace(static_cast<DexField*>(field));
-      }
-      std::cerr << "RMUF: Found " << m_config.allowlist->size()
-                << " allowed fields" << std::endl;
-    });
   }
 
   void run_pass(DexStoresVector& stores,
@@ -104,7 +80,6 @@ class PassImpl : public Pass {
 
  private:
   Config m_config;
-  boost::optional<std::string> m_allowlist_file;
   bool m_export_removed;
 };
 

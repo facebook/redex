@@ -1560,11 +1560,12 @@ uint32_t emit_instruction_offset_debug_info(
                      param_to_sizes.begin(), param_to_sizes.end()};
 
   // 2)
-  // For API level 26 and above, ART defaults to printing PCs
-  // in place of line numbers so IODI debug programs aren't needed.
   bool requires_iodi_programs =
-      (iodi_metadata.disable_min_sdk_opt || iodi_metadata.min_sdk < 26) ||
-      iodi_layer > 0;
+      iodi_layer > 0 ||
+      (iodi_metadata.layer_mode == IODIMetadata::IODILayerMode::kFull) ||
+      (iodi_metadata.layer_mode ==
+           IODIMetadata::IODILayerMode::kSkipLayer0AtApi26 &&
+       iodi_metadata.min_sdk < 26);
   std::unordered_map<uint32_t, std::map<uint32_t, uint32_t>> param_size_to_oset;
   uint32_t initial_offset = offset;
   for (int32_t size = pso.next(); size != -1; size = pso.next()) {

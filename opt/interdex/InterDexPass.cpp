@@ -105,6 +105,10 @@ void InterDexPass::bind_config() {
   bind("sort_remaining_classes", false, m_sort_remaining_classes,
        "Whether to sort classes in non-primary, non-perf-sensitive dexes "
        "according to their inheritance hierarchies");
+  bind("method_for_canary_clinit_reference", "",
+       m_method_for_canary_clinit_reference,
+       "If set, canary classes will have a clinit generated which call the "
+       "specified method, if it exists");
 
   trait(Traits::Pass::unique, true);
 }
@@ -123,13 +127,14 @@ void InterDexPass::run_pass(
   mgr.set_metric(METRIC_RESERVED_MREFS, refs_info.mrefs);
 
   bool force_single_dex = conf.get_json_config().get("force_single_dex", false);
-  InterDex interdex(original_scope, dexen, mgr.apk_manager(), conf, plugins,
+  InterDex interdex(original_scope, dexen, mgr.asset_manager(), conf, plugins,
                     m_linear_alloc_limit, m_static_prune, m_normal_primary_dex,
                     m_keep_primary_order, force_single_dex, m_emit_canaries,
                     m_minimize_cross_dex_refs, m_minimize_cross_dex_refs_config,
                     m_cross_dex_relocator_config, refs_info.frefs,
                     refs_info.trefs, refs_info.mrefs, &xstore_refs,
-                    mgr.get_redex_options().min_sdk, m_sort_remaining_classes);
+                    mgr.get_redex_options().min_sdk, m_sort_remaining_classes,
+                    m_method_for_canary_clinit_reference);
 
   if (m_expect_order_list) {
     always_assert_log(
@@ -205,14 +210,15 @@ void InterDexPass::run_pass_on_nonroot_store(const Scope& original_scope,
   CrossDexRelocatorConfig cross_dex_relocator_config;
 
   // Initialize interdex and run for nonroot store
-  InterDex interdex(original_scope, dexen, mgr.apk_manager(), conf, plugins,
+  InterDex interdex(original_scope, dexen, mgr.asset_manager(), conf, plugins,
                     m_linear_alloc_limit, m_static_prune, m_normal_primary_dex,
                     m_keep_primary_order, false /* force single dex */,
                     false /* emit canaries */,
                     false /* minimize_cross_dex_refs */, cross_dex_refs_config,
                     cross_dex_relocator_config, refs_info.frefs,
                     refs_info.trefs, refs_info.mrefs, &xstore_refs,
-                    mgr.get_redex_options().min_sdk, m_sort_remaining_classes);
+                    mgr.get_redex_options().min_sdk, m_sort_remaining_classes,
+                    m_method_for_canary_clinit_reference);
 
   interdex.run_on_nonroot_store();
 

@@ -95,7 +95,8 @@ constexpr const char* METRIC_EXPERIMENT_METHODS = "num_experiment_methods";
 
 VirtualMerging::VirtualMerging(DexStoresVector& stores,
                                const inliner::InlinerConfig& inliner_config,
-                               size_t max_overriding_method_instructions)
+                               size_t max_overriding_method_instructions,
+                               const api::AndroidSDK* min_sdk_api)
     : m_scope(build_class_scope(stores)),
       m_xstores(stores),
       m_xdexes(stores),
@@ -107,12 +108,16 @@ VirtualMerging::VirtualMerging(DexStoresVector& stores,
   };
 
   std::unordered_set<DexMethod*> no_default_inlinables;
-  m_inliner_config.use_cfg_inliner = true;
   // disable shrinking options, minimizing initialization time
   m_inliner_config.shrinker = shrinker::ShrinkerConfig();
-  m_inliner.reset(new MultiMethodInliner(m_scope, stores, no_default_inlinables,
-                                         concurrent_resolver, m_inliner_config,
-                                         MultiMethodInlinerMode::None));
+  m_inliner.reset(new MultiMethodInliner(
+      m_scope, stores, no_default_inlinables, concurrent_resolver,
+      m_inliner_config, MultiMethodInlinerMode::None,
+      /* true_virtual_callers */ {},
+      /* inline_for_speed */ nullptr,
+      /* bool analyze_and_prune_inits */ false,
+      /* const std::unordered_set<DexMethodRef*>& configured_pure_methods */ {},
+      min_sdk_api));
 }
 VirtualMerging::~VirtualMerging() {}
 
@@ -564,7 +569,9 @@ std::pair<std::vector<MethodData>, VirtualMergingStats> create_ordering(
               q.second.begin(),
               q.second.end(),
               [&](const auto* m) {
-                if (m->get_code()->sum_opcode_sizes() >
+                size_t estimated_callee_size =
+                    m->get_code()->sum_opcode_sizes();
+                if (estimated_callee_size >
                     max_overriding_method_instructions) {
                   TRACE(VM,
                         5,
@@ -580,9 +587,9 @@ std::pair<std::vector<MethodData>, VirtualMergingStats> create_ordering(
                         ? 64 // we'll need some extra instruction; 64
                              // is conservative
                         : overridden_method->get_code()->sum_opcode_sizes();
-                if (!inliner.is_inlinable(overridden_method, m,
-                                          nullptr /* invoke_virtual_insn */,
-                                          estimated_caller_size)) {
+                if (!inliner.is_inlinable(
+                        overridden_method, m, nullptr /* invoke_virtual_insn */,
+                        estimated_caller_size, estimated_callee_size)) {
                   TRACE(VM,
                         3,
                         "[VM] Cannot inline %s into %s",
@@ -780,13 +787,16 @@ VirtualMergingStats apply_ordering(
             const_cast<DexMethod*>(overriding_method_const);
         overriding_method = method_fn(overriding_method);
 
+        size_t estimated_callee_size =
+            overriding_method->get_code()->sum_opcode_sizes();
         size_t estimated_insn_size =
             is_abstract(overridden_method)
                 ? 64 // we'll need some extra instruction; 64 is conservative
                 : overridden_method->get_code()->sum_opcode_sizes();
-        bool is_inlineable = inliner.is_inlinable(
-            overridden_method, overriding_method,
-            nullptr /* invoke_virtual_insn */, estimated_insn_size);
+        bool is_inlineable =
+            inliner.is_inlinable(overridden_method, overriding_method,
+                                 nullptr /* invoke_virtual_insn */,
+                                 estimated_insn_size, estimated_callee_size);
         always_assert_log(is_inlineable, "[VM] Cannot inline %s into %s",
                           SHOW(overriding_method), SHOW(overridden_method));
 
@@ -968,6 +978,7 @@ VirtualMergingStats apply_ordering(
         overriding_method->get_code()->build_cfg(/* editable */ true);
         inliner::inline_with_cfg(
             overridden_method, overriding_method, invoke_virtual_insn,
+            /* needs_receiver_cast */ nullptr,
             overridden_method->get_code()->cfg().get_registers_size());
         inliner.visibility_changes_apply_and_record_make_static(
             get_visibility_changes(overriding_method,
@@ -1213,12 +1224,26 @@ void VirtualMergingPass::run_pass(DexStoresVector& stores,
 
   auto dedupped = dedup_vmethods::dedup(stores);
 
-  const auto& inliner_config = conf.get_inliner_config();
+  const api::AndroidSDK* min_sdk_api{nullptr};
+  int32_t min_sdk = mgr.get_redex_options().min_sdk;
+  mgr.incr_metric("min_sdk", min_sdk);
+  TRACE(INLINE, 2, "min_sdk: %d", min_sdk);
+  auto min_sdk_api_file = conf.get_android_sdk_api_file(min_sdk);
+  if (!min_sdk_api_file) {
+    mgr.incr_metric("min_sdk_no_file", 1);
+    TRACE(INLINE, 2, "Android SDK API %d file cannot be found.", min_sdk);
+  } else {
+    min_sdk_api = &conf.get_android_sdk_api(min_sdk);
+  }
 
+  auto inliner_config = conf.get_inliner_config();
+  // We don't need to worry about inlining synchronized code, as we always
+  // inline at the top-level outside of other try-catch regions.
+  inliner_config.respect_sketchy_methods = false;
   auto ab_experiment_context =
       ab_test::ABExperimentContext::create("virtual_merging");
   VirtualMerging vm(stores, inliner_config,
-                    m_max_overriding_method_instructions);
+                    m_max_overriding_method_instructions, min_sdk_api);
   vm.run(m_use_profiles ? conf.get_method_profiles()
                         : method_profiles::MethodProfiles(),
          ab_experiment_context.get());

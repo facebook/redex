@@ -60,7 +60,7 @@ void FixpointIterator::analyze_node(call_graph::NodeId const& node,
     if (edge->callee() == m_call_graph.exit()) {
       continue; // ghost edge to the ghost exit node
     }
-    outgoing_insns.emplace(edge->invoke_iterator()->insn);
+    outgoing_insns.emplace(edge->invoke_insn());
   }
   for (auto* block : cfg.blocks()) {
     auto state = intra_cp->get_entry_state_at(block);
@@ -85,11 +85,10 @@ Domain FixpointIterator::analyze_edge(
     const std::shared_ptr<call_graph::Edge>& edge,
     const Domain& exit_state_at_source) const {
   Domain entry_state_at_dest;
-  auto it = edge->invoke_iterator();
-  if (it == IRList::iterator()) {
+  auto insn = edge->invoke_insn();
+  if (insn == nullptr) {
     entry_state_at_dest.set(CURRENT_PARTITION_LABEL, ArgumentDomain::top());
   } else {
-    auto insn = it->insn;
     entry_state_at_dest.set(CURRENT_PARTITION_LABEL,
                             exit_state_at_source.get(insn));
   }

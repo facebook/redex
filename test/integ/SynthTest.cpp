@@ -143,8 +143,8 @@ TEST_F(SynthTest1, synthetic) {
     ASSERT_TRUE(assert_classes(*classes, has_alpha_access_gone));
   }
 
-  // Make sure that we didn't wrongly eliminate the wrapper with the trivial exception handler
-  // Make sure synthetic method is removed from class Alpha.
+  // Make sure that we didn't wrongly eliminate the wrapper with the trivial
+  // exception handler Make sure synthetic method is removed from class Alpha.
   for (const auto& cls : *classes) {
     const auto class_name = cls->get_type()->get_name()->c_str();
     // Make sure the synthetic method has NOT been removed.

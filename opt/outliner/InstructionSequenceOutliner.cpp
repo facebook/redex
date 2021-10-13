@@ -87,7 +87,6 @@
 #include "DexLimits.h"
 #include "DexPosition.h"
 #include "DexUtil.h"
-#include "Dominators.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "InterDexPass.h"
@@ -98,18 +97,18 @@
 #include "MutablePriorityQueue.h"
 #include "OutlinedMethods.h"
 #include "OutlinerTypeAnalysis.h"
+#include "OutliningProfileGuidanceImpl.h"
 #include "PartialCandidates.h"
 #include "PassManager.h"
 #include "ReachingInitializeds.h"
 #include "RefChecker.h"
 #include "Resolver.h"
 #include "Show.h"
-#include "SourceBlocks.h"
 #include "StlUtil.h"
 #include "Trace.h"
 #include "Walkers.h"
 
-using namespace instruction_sequence_outliner;
+using namespace outliner;
 
 namespace {
 
@@ -651,143 +650,6 @@ static bool append_to_partial_candidate(
   return true;
 }
 
-class CanOutlineBlockDecider {
- private:
-  const Config& m_config;
-  bool m_sufficiently_warm;
-  bool m_sufficiently_hot;
-  mutable std::unique_ptr<LazyUnorderedMap<cfg::Block*, bool>> m_is_in_loop;
-  mutable std::unique_ptr<LazyUnorderedMap<cfg::Block*, boost::optional<float>>>
-      m_max_vals;
-  mutable std::unique_ptr<dominators::SimpleFastDominators<cfg::GraphInterface>>
-      m_dominators;
-
- public:
-  CanOutlineBlockDecider(const Config& config,
-                         bool sufficiently_warm,
-                         bool sufficiently_hot)
-      : m_config(config),
-        m_sufficiently_warm(sufficiently_warm),
-        m_sufficiently_hot(sufficiently_hot) {}
-
-  enum class Result {
-    CanOutline,
-    BlockExceedsThresholds,
-    WarmLoop,
-    WarmLoopExceedsThresholds,
-    WarmLoopNoSourceBlocks,
-    Hot,
-    HotExceedsThresholds,
-    HotNoSourceBlocks,
-  };
-
-  Result can_outline_from_big_block(
-      const big_blocks::BigBlock& big_block) const {
-    if (!m_sufficiently_hot && !m_sufficiently_warm) {
-      return Result::CanOutline;
-    }
-    if (!m_sufficiently_hot) {
-      always_assert(m_sufficiently_warm);
-      // Make sure m_is_in_loop is initialized
-      if (!m_is_in_loop) {
-        m_is_in_loop.reset(
-            new LazyUnorderedMap<cfg::Block*, bool>([](cfg::Block* block) {
-              std::unordered_set<cfg::Block*> visited;
-              std::queue<cfg::Block*> work_queue;
-              for (auto e : block->succs()) {
-                work_queue.push(e->target());
-              }
-              while (!work_queue.empty()) {
-                auto other_block = work_queue.front();
-                work_queue.pop();
-                if (visited.insert(other_block).second) {
-                  if (block == other_block) {
-                    return true;
-                  }
-                  for (auto e : other_block->succs()) {
-                    work_queue.push(e->target());
-                  }
-                }
-              }
-              return false;
-            }));
-      }
-      if (!(*m_is_in_loop)[big_block.get_first_block()]) {
-        return Result::CanOutline;
-      }
-    }
-    // If we get here,
-    // - the method is hot, or
-    // - the method is not hot but warm, and the big block is in a loop
-    if (m_config.block_profiles_hits < 0) {
-      return m_sufficiently_hot ? Result::Hot : Result::WarmLoop;
-    }
-    // Make sure m_max_vals is initialized
-    if (!m_max_vals) {
-      m_max_vals.reset(
-          new LazyUnorderedMap<cfg::Block*, boost::optional<float>>(
-              [](cfg::Block* block) -> boost::optional<float> {
-                auto* sb = source_blocks::get_first_source_block(block);
-                if (sb == nullptr) {
-                  return boost::none;
-                }
-                boost::optional<float> max_val;
-                sb->foreach_val([&](const auto& val_pair) {
-                  if (!val_pair) {
-                    return;
-                  }
-                  if (!max_val || (val_pair && val_pair->val > *max_val)) {
-                    max_val = val_pair->val;
-                  }
-                });
-                return max_val;
-              }));
-    }
-    // Via m_max_vals, we consider the maximum hit number for each block.
-    // Across all blocks, we are gathering the *minimum* of those hit numbers.
-    boost::optional<float> min_val;
-    for (auto block : big_block.get_blocks()) {
-      auto val = (*m_max_vals)[block];
-      if (!min_val || (val && *val < *min_val)) {
-        min_val = val;
-        if (min_val && *min_val == 0) {
-          break;
-        }
-      }
-    }
-    // Let's also look back at dominators. It's beneficial if we can tighten the
-    // minimum.
-    auto block = big_block.get_first_block();
-    auto& cfg = block->cfg();
-    auto entry_block = cfg.entry_block();
-    if (block != entry_block && (!min_val || *min_val != 0)) {
-      if (!m_dominators) {
-        m_dominators.reset(
-            new dominators::SimpleFastDominators<cfg::GraphInterface>(cfg));
-      }
-      do {
-        block = m_dominators->get_idom(block);
-        auto val = (*m_max_vals)[block];
-        if (!min_val || (val && *val < *min_val)) {
-          min_val = val;
-          if (min_val && *min_val == 0) {
-            break;
-          }
-        }
-      } while (block != entry_block);
-    }
-    if (!min_val) {
-      return m_sufficiently_hot ? Result::HotNoSourceBlocks
-                                : Result::WarmLoopNoSourceBlocks;
-    }
-    if (*min_val > m_config.block_profiles_hits) {
-      return m_sufficiently_hot ? Result::HotExceedsThresholds
-                                : Result::WarmLoopExceedsThresholds;
-    }
-    return Result::CanOutline;
-  }
-};
-
 static bool can_outline_insn(const RefChecker& ref_checker,
                              const OptionalReachingInitializedsEnvironments&
                                  reaching_initialized_init_first_param,
@@ -1328,21 +1190,6 @@ static bool can_outline_from_method(DexMethod* method) {
   if (method->rstate.no_optimizations() || method->rstate.outlined()) {
     return false;
   }
-  bool has_monitor{false};
-  editable_cfg_adapter::iterate_with_iterator(
-      method->get_code(), [&](const IRList::iterator& it) {
-        auto insn = it->insn;
-        if (opcode::is_a_monitor(insn->opcode())) {
-          has_monitor = true;
-          return editable_cfg_adapter::LOOP_BREAK;
-        }
-        return editable_cfg_adapter::LOOP_CONTINUE;
-      });
-  if (has_monitor) {
-    // TODO: Properly deal with this Android Verifier check:
-    // https://cs.android.com/android/platform/superproject/+/android-11.0.0_r1:art/runtime/verifier/method_verifier.cc;l=3642
-    return false;
-  }
 
   return true;
 }
@@ -1372,7 +1219,7 @@ static void get_recurring_cores(
         code.build_cfg(/* editable */ true);
         code.cfg().calculate_exit_block();
         CanOutlineBlockDecider block_decider(
-            config, sufficiently_warm_methods.count(method),
+            config.profile_guidance, sufficiently_warm_methods.count(method),
             sufficiently_hot_methods.count(method));
         auto& cfg = code.cfg();
         OptionalReachingInitializedsEnvironments
@@ -1822,26 +1669,8 @@ class OutlinedMethodCreator {
   // Gets the set of unique dbg-position patterns.
   std::set<uint32_t> get_outlined_dbg_positions_patterns(
       const Candidate& c, const CandidateInfo& ci) {
-    std::vector<DexMethod*> ordered_methods;
-    for (auto& p : ci.methods) {
-      ordered_methods.push_back(p.first);
-    }
-    // Sort methods to make sure we get deterministic pattern-ids.
-    std::sort(ordered_methods.begin(), ordered_methods.end(),
-              compare_dexmethods);
     std::set<uint32_t> pattern_ids;
-    auto manager = g_redex->get_position_pattern_switch_manager();
-    for (auto method : ordered_methods) {
-      auto& cmls = ci.methods.at(method);
-      for (auto& cml : cmls) {
-        auto positions = get_outlined_dbg_positions(c, cml, method);
-        auto pattern_id = manager->make_pattern(positions);
-        if (m_config.full_dbg_positions) {
-          m_call_site_pattern_ids.emplace(cml.first_insn, pattern_id);
-        }
-        pattern_ids.insert(pattern_id);
-      }
-    }
+    add_outlined_dbg_position_patterns(c, ci, &pattern_ids);
     always_assert(!pattern_ids.empty());
     if (!m_config.full_dbg_positions) {
       // Find the "best" representative set of debug position, that is the one
@@ -1849,6 +1678,7 @@ class OutlinedMethodCreator {
       // positions
       uint32_t best_pattern_id = *pattern_ids.begin();
       size_t best_unique_positions{0};
+      auto manager = g_redex->get_position_pattern_switch_manager();
       const auto& all_managed_patterns = manager->get_patterns();
       for (auto pattern_id : pattern_ids) {
         std::unordered_set<DexPosition*> unique_positions;
@@ -1875,6 +1705,33 @@ class OutlinedMethodCreator {
       : m_config(config),
         m_mgr(mgr),
         m_method_name_generator(method_name_generator) {}
+
+  // Infers outlined pattern ids.
+  void add_outlined_dbg_position_patterns(const Candidate& c,
+                                          const CandidateInfo& ci,
+                                          std::set<uint32_t>* pattern_ids) {
+    auto manager = g_redex->get_position_pattern_switch_manager();
+    // Order methods to make sure we get deterministic pattern-ids.
+    std::vector<DexMethod*> ordered_methods;
+    for (auto& p : ci.methods) {
+      ordered_methods.push_back(p.first);
+    }
+    std::sort(ordered_methods.begin(), ordered_methods.end(),
+              compare_dexmethods);
+    for (auto method : ordered_methods) {
+      auto& cmls = ci.methods.at(method);
+      for (auto& cml : cmls) {
+        // if the current method is reused then the call site
+        // didn't have the pattern id. Need to create and add pattern_id
+        auto positions = get_outlined_dbg_positions(c, cml, method);
+        auto pattern_id = manager->make_pattern(positions);
+        if (m_config.full_dbg_positions) {
+          m_call_site_pattern_ids.emplace(cml.first_insn, pattern_id);
+        }
+        pattern_ids->insert(pattern_id);
+      }
+    }
+  }
 
   // Obtain outlined method for a candidate.
   DexMethod* create_outlined_method(const Candidate& c,
@@ -2016,6 +1873,22 @@ static void rewrite_at_location(DexMethod* outlined_method,
     // occurrences after processing a candidate.
     not_reached();
   }
+
+  auto code = method->get_code();
+  if (code->get_debug_item() == nullptr) {
+    // Create an empty item so that debug info of method we are outlining from
+    // does not get lost.
+    code->set_debug_item(std::make_unique<DexDebugItem>());
+    // Create a synthetic initial position.
+    cfg.insert_before(cfg.entry_block(),
+                      cfg.entry_block()->get_first_non_param_loading_insn(),
+                      DexPosition::make_synthetic_entry_position(method));
+    TRACE(ISO, 6,
+          "[instruction sequence outliner] setting debug item and synthetic "
+          "entry position in %s",
+          SHOW(method));
+  }
+
   auto last_dbg_pos = skip_fileless(cfg.get_dbg_pos(first_insn_it));
   cfg::CFGMutation cfg_mutation(cfg);
   const auto first_arg_reg = c.temp_regs;
@@ -2409,6 +2282,7 @@ using NewlyOutlinedMethods =
 
 // Outlining all occurrences of a particular candidate.
 bool outline_candidate(
+    const Config& config,
     const Candidate& c,
     const CandidateInfo& ci,
     ReusableOutlinedMethods* outlined_methods,
@@ -2428,9 +2302,6 @@ bool outline_candidate(
   }
   auto rtype = c.res_type ? c.res_type : type::_void();
   type_refs_to_insert.insert(const_cast<DexType*>(rtype));
-  auto call_site_pattern_ids =
-      outlined_method_creator->get_call_site_pattern_ids();
-  auto manager = g_redex->get_position_pattern_switch_manager();
 
   DexMethod* outlined_method{find_reusable_method(
       c, ci, *outlined_methods, reuse_outlined_methods_across_dexes)};
@@ -2440,28 +2311,19 @@ bool outline_candidate(
       return false;
     }
 
-    auto& pairs = outlined_methods->map.at(c);
-    auto it = std::find_if(
-        pairs.begin(), pairs.end(),
-        [&outlined_method](
-            const std::pair<DexMethod*, std::set<uint32_t>>& pair) {
-          return pair.first == outlined_method;
-        });
-    auto& pattern_ids = it->second;
-
-    (*num_reused_methods)++;
-    for (auto& p : ci.methods) {
-      auto method = p.first;
-      for (auto& cml : p.second) {
-        // if the current method is reused then the call site
-        // didn't have the pattern id. Need to create and add pattern_id
-        auto positions =
-            outlined_method_creator->get_outlined_dbg_positions(c, cml, method);
-        auto pattern_id = manager->make_pattern(positions);
-        call_site_pattern_ids->emplace(cml.first_insn, pattern_id);
-        pattern_ids.insert(pattern_id);
-      }
+    if (config.full_dbg_positions) {
+      auto& pairs = outlined_methods->map.at(c);
+      auto it = std::find_if(
+          pairs.begin(), pairs.end(),
+          [&outlined_method](
+              const std::pair<DexMethod*, std::set<uint32_t>>& pair) {
+            return pair.first == outlined_method;
+          });
+      auto& pattern_ids = it->second;
+      outlined_method_creator->add_outlined_dbg_position_patterns(c, ci,
+                                                                  &pattern_ids);
     }
+    (*num_reused_methods)++;
 
     TRACE(ISO, 5, "[invoke sequence outliner] reused %s",
           SHOW(outlined_method));
@@ -2498,6 +2360,8 @@ bool outline_candidate(
     }
   }
   dex_state->insert_type_refs(type_refs_to_insert);
+  auto call_site_pattern_ids =
+      outlined_method_creator->get_call_site_pattern_ids();
   for (auto& p : ci.methods) {
     auto method = p.first;
     auto& cfg = method->get_code()->cfg();
@@ -2591,7 +2455,7 @@ static NewlyOutlinedMethods outline(
           "[invoke sequence outliner] %4zx(%3zu) [%zu]: %zu byte savings",
           cwi.info.count, cwi.info.methods.size(), cwi.candidate.size,
           2 * savings);
-    if (outline_candidate(cwi.candidate, cwi.info, outlined_methods,
+    if (outline_candidate(config, cwi.candidate, cwi.info, outlined_methods,
                           &newly_outlined_methods, &dex_state,
                           &host_class_selector, &outlined_method_creator,
                           ab_experiment_context, num_reused_methods,
@@ -2847,113 +2711,6 @@ static size_t clear_cfgs(const Scope& scope) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// gather_sufficiently_warm_and_hot_methods
-////////////////////////////////////////////////////////////////////////////////
-
-// We'll look around the provided configuration information to identify hot and
-// warm methods. The preferred way is now to use "method profiles". We look at
-// each interaction. If a method appears in at least 1% of the samples, then...
-// - If the method is invoked at least 10 times on average, we won't outline
-//   from it at all (truly "hot")
-// - If the method is invoked less often ("at least once", otherwise it wouldn't
-//   appear in the method profiles), then we won't outline from any of its loops
-//   ("warm" code)
-//
-// The actual thresholds are configurable.
-//
-// The intention here is to avoid outlining any code snippet that runs many
-// times, in which case the call overhead might become significant. Otherwise,
-// if it is called only rarely (0 to 9 times), then any added CPU overhead might
-// be made up by the I/O savings due to reduced code size.
-//
-// When method profiles are completely unavailable, we can use cold-start
-// classes to identify warm code.
-static void gather_sufficiently_warm_and_hot_methods(
-    const Scope& scope,
-    ConfigFiles& config_files,
-    const Config& config,
-    std::unordered_set<DexMethod*>* sufficiently_warm_methods,
-    std::unordered_set<DexMethod*>* sufficiently_hot_methods) {
-  bool has_method_profiles{false};
-  if (config.use_method_profiles) {
-    auto& method_profiles = config_files.get_method_profiles();
-    if (method_profiles.has_stats()) {
-      has_method_profiles = true;
-      for (auto& p : method_profiles.all_interactions()) {
-        auto& method_stats = p.second;
-        walk::methods(scope, [sufficiently_warm_methods,
-                              sufficiently_hot_methods, &method_stats,
-                              &config](DexMethod* method) {
-          auto it = method_stats.find(method);
-          if (it == method_stats.end()) {
-            return;
-          }
-          if (it->second.appear_percent >=
-              config.method_profiles_appear_percent) {
-            if (it->second.call_count > config.method_profiles_hot_call_count) {
-              sufficiently_hot_methods->insert(method);
-            } else if (it->second.call_count >=
-                       config.method_profiles_warm_call_count) {
-              sufficiently_warm_methods->insert(method);
-            }
-          }
-        });
-      }
-    }
-  }
-
-  switch (config.perf_sensitivity) {
-  case PerfSensitivity::kNeverUse:
-    break;
-
-  case PerfSensitivity::kWarmWhenNoProfiles:
-    if (has_method_profiles) {
-      break;
-    }
-    FALLTHROUGH_INTENDED;
-  case PerfSensitivity::kAlwaysWarm:
-    walk::methods(scope, [sufficiently_warm_methods](DexMethod* method) {
-      if (type_class(method->get_class())->is_perf_sensitive()) {
-        sufficiently_warm_methods->insert(method);
-      }
-    });
-    break;
-
-  case PerfSensitivity::kHotWhenNoProfiles:
-    if (has_method_profiles) {
-      break;
-    }
-    FALLTHROUGH_INTENDED;
-  case PerfSensitivity::kAlwaysHot:
-    walk::methods(scope, [sufficiently_hot_methods](DexMethod* method) {
-      if (type_class(method->get_class())->is_perf_sensitive()) {
-        sufficiently_hot_methods->insert(method);
-      }
-    });
-    break;
-  }
-}
-
-PerfSensitivity parse_perf_sensitivity(const std::string& str) {
-  if (str == "never") {
-    return PerfSensitivity::kNeverUse;
-  }
-  if (str == "warm-when-no-profiles") {
-    return PerfSensitivity::kWarmWhenNoProfiles;
-  }
-  if (str == "always-warm") {
-    return PerfSensitivity::kAlwaysWarm;
-  }
-  if (str == "hot-when-no-profiles") {
-    return PerfSensitivity::kHotWhenNoProfiles;
-  }
-  if (str == "always-hot") {
-    return PerfSensitivity::kAlwaysHot;
-  }
-  always_assert_log(false, "Unknown perf sensitivity: %s", str.c_str());
-}
-
-////////////////////////////////////////////////////////////////////////////////
 // reorder_all_methods
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -3152,7 +2909,6 @@ class OutlinedMethodBodySetter {
 
   // set body for each method stored in ReusableOutlinedMethod
   void set_method_body(ReusableOutlinedMethods& outlined_methods) {
-
     for (auto& c : outlined_methods.order) {
       auto& method_pattern_pairs = outlined_methods.map[c];
       auto& outlined_method = method_pattern_pairs.front().first;
@@ -3174,31 +2930,31 @@ class OutlinedMethodBodySetter {
 } // namespace
 
 void InstructionSequenceOutliner::bind_config() {
+  auto& pg = m_config.profile_guidance;
   bind("min_insns_size", m_config.min_insns_size, m_config.min_insns_size,
        "Minimum number of instructions to be outlined in a sequence");
   bind("max_insns_size", m_config.max_insns_size, m_config.max_insns_size,
        "Maximum number of instructions to be outlined in a sequence");
-  bind("use_method_profiles", m_config.use_method_profiles,
-       m_config.use_method_profiles,
+  bind("use_method_profiles", pg.use_method_profiles, pg.use_method_profiles,
        "Whether to use provided method-profiles configuration data to "
        "determine if certain code should not be outlined from a method");
   bind("method_profiles_appear_percent",
-       m_config.method_profiles_appear_percent,
-       m_config.method_profiles_appear_percent,
+       pg.method_profiles_appear_percent,
+       pg.method_profiles_appear_percent,
        "Cut off when a method in a method profile is deemed relevant");
   bind("method_profiles_hot_call_count",
-       m_config.method_profiles_hot_call_count,
-       m_config.method_profiles_hot_call_count,
+       pg.method_profiles_hot_call_count,
+       pg.method_profiles_hot_call_count,
        "No code is outlined out of hot methods");
   bind("method_profiles_warm_call_count",
-       m_config.method_profiles_warm_call_count,
-       m_config.method_profiles_warm_call_count,
+       pg.method_profiles_warm_call_count,
+       pg.method_profiles_warm_call_count,
        "Loops are not outlined from warm methods");
   std::string perf_sensitivity_str;
   bind("perf_sensitivity", "always-hot", perf_sensitivity_str);
   bind("block_profiles_hits",
-       m_config.block_profiles_hits,
-       m_config.block_profiles_hits,
+       pg.block_profiles_hits,
+       pg.block_profiles_hits,
        "No code is outlined out of hot blocks in hot methods");
   bind("reuse_outlined_methods_across_dexes",
        m_config.reuse_outlined_methods_across_dexes,
@@ -3229,7 +2985,8 @@ void InstructionSequenceOutliner::bind_config() {
     always_assert(m_config.max_insns_size >= m_config.min_insns_size);
     always_assert(m_config.max_outlined_methods_per_class > 0);
     always_assert(!perf_sensitivity_str.empty());
-    m_config.perf_sensitivity = parse_perf_sensitivity(perf_sensitivity_str);
+    m_config.profile_guidance.perf_sensitivity =
+        parse_perf_sensitivity(perf_sensitivity_str);
   });
 }
 
@@ -3259,9 +3016,9 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
   auto scope = build_class_scope(stores);
   std::unordered_set<DexMethod*> sufficiently_warm_methods;
   std::unordered_set<DexMethod*> sufficiently_hot_methods;
-  gather_sufficiently_warm_and_hot_methods(scope, config, m_config,
-                                           &sufficiently_warm_methods,
-                                           &sufficiently_hot_methods);
+  gather_sufficiently_warm_and_hot_methods(
+      scope, config, m_config.profile_guidance, &sufficiently_warm_methods,
+      &sufficiently_hot_methods);
   mgr.incr_metric("num_sufficiently_warm_methods",
                   sufficiently_warm_methods.size());
   mgr.incr_metric("num_sufficiently_hot_methods",

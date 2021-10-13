@@ -50,8 +50,6 @@
 
 namespace {
 
-const uint32_t PACKAGE_RESID_START = 0x7f000000;
-
 void ensure_file_contents(const std::string& file_contents,
                           const std::string& filename) {
   if (file_contents.empty()) {
@@ -337,6 +335,10 @@ std::vector<std::string> ApkResources::find_lib_directories() {
   return {m_directory + "/lib"};
 }
 
+std::string ApkResources::get_base_assets_dir() {
+  return m_directory + "/assets";
+}
+
 namespace {
 bool is_binary_xml(const void* data, size_t size) {
   if (size < sizeof(android::ResChunk_header)) {
@@ -514,6 +516,43 @@ ManifestClassInfo ApkResources::get_manifest_class_info() {
   return classes;
 }
 
+std::unordered_set<uint32_t> ApkResources::get_xml_reference_attributes(
+    const std::string& filename) {
+  std::unordered_set<uint32_t> result;
+  if (is_raw_resource(filename)) {
+    return result;
+  }
+  auto file = RedexMappedFile::open(filename);
+  android::ResXMLTree parser;
+  parser.setTo(file.const_data(), file.size());
+  if (parser.getError() != android::NO_ERROR) {
+    throw std::runtime_error("Unable to read file: " + filename);
+  }
+
+  android::ResXMLParser::event_code_t type;
+  do {
+    type = parser.next();
+    if (type == android::ResXMLParser::START_TAG) {
+      const size_t attr_count = parser.getAttributeCount();
+      for (size_t i = 0; i < attr_count; ++i) {
+        if (parser.getAttributeDataType(i) ==
+                android::Res_value::TYPE_REFERENCE ||
+            parser.getAttributeDataType(i) ==
+                android::Res_value::TYPE_ATTRIBUTE) {
+          android::Res_value outValue;
+          parser.getAttributeValue(i, &outValue);
+          if (outValue.data > PACKAGE_RESID_START) {
+            result.emplace(outValue.data);
+          }
+        }
+      }
+    }
+  } while (type != android::ResXMLParser::BAD_DOCUMENT &&
+           type != android::ResXMLParser::END_DOCUMENT);
+
+  return result;
+}
+
 int ApkResources::replace_in_xml_string_pool(
     const void* data,
     const size_t len,
@@ -631,6 +670,16 @@ bool ApkResources::rename_classes_in_layout(
   return true;
 }
 
+std::unordered_set<std::string> ApkResources::find_all_xml_files() {
+  std::string manifest_path = m_directory + "/AndroidManifest.xml";
+  std::unordered_set<std::string> all_xml_files;
+  all_xml_files.emplace(manifest_path);
+  for (const std::string& path : get_xml_files(m_directory + "/res")) {
+    all_xml_files.emplace(path);
+  }
+  return all_xml_files;
+}
+
 namespace {
 bool is_drawable_attribute(android::ResXMLTree& parser, size_t attr_index) {
   size_t name_size;
@@ -654,6 +703,15 @@ bool is_drawable_attribute(android::ResXMLTree& parser, size_t attr_index) {
 
   return false;
 }
+
+size_t getHashFromValues(const android::Vector<android::Res_value>& values) {
+  size_t hash = 0;
+  for (size_t i = 0; i < values.size(); ++i) {
+    boost::hash_combine(hash, values[i].data);
+  }
+  return hash;
+}
+
 } // namespace
 
 int ApkResources::inline_xml_reference_attributes(
@@ -710,11 +768,11 @@ int ApkResources::inline_xml_reference_attributes(
   return num_values_inlined;
 }
 
-void ApkResources::remap_xml_reference_attributes(
+size_t ApkResources::remap_xml_reference_attributes(
     const std::string& filename,
     const std::map<uint32_t, uint32_t>& kept_to_remapped_ids) {
   if (is_raw_resource(filename)) {
-    return;
+    return 0;
   }
   std::string file_contents = read_entire_file(filename);
   ensure_file_contents(file_contents, filename);
@@ -766,6 +824,116 @@ void ApkResources::remap_xml_reference_attributes(
   if (made_change) {
     write_string_to_file(filename, file_contents);
   }
+  return made_change;
+}
+
+std::unique_ptr<ResourceTableFile> ApkResources::load_res_table() {
+  std::string arsc_path = m_directory + std::string("/resources.arsc");
+  return std::make_unique<ResourcesArscFile>(arsc_path);
+}
+
+std::vector<std::string> ApkResources::find_resources_files() {
+  return {m_directory + std::string("/resources.arsc")};
+}
+
+ApkResources::~ApkResources() {}
+
+void ResourcesArscFile::remap_res_ids_and_serialize(
+    const std::vector<std::string>& /* resource_files */,
+    const std::map<uint32_t, uint32_t>& old_to_new) {
+  remap_ids(old_to_new);
+  serialize();
+}
+
+std::unordered_set<std::string> ResourcesArscFile::get_files_by_rid(
+    uint32_t res_id, ResourcePathType /* unused */) {
+  std::unordered_set<std::string> ret;
+  android::Vector<android::Res_value> out_values;
+  res_table.getAllValuesForResource(res_id, out_values);
+  for (size_t i = 0; i < out_values.size(); i++) {
+    auto val = out_values[i];
+    if (val.dataType == android::Res_value::TYPE_STRING) {
+      // data is an index into string pool.
+      auto file_path = res_table.getString8FromIndex(0, val.data);
+      auto file_chars = file_path.string();
+      if (file_chars != nullptr) {
+        auto file_str = std::string(file_chars);
+        if (is_resource_file(file_str)) {
+          ret.emplace(file_str);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+void ResourcesArscFile::walk_references_for_resource(
+    uint32_t resID,
+    std::unordered_set<uint32_t>* nodes_visited,
+    std::unordered_set<std::string>* potential_file_paths) {
+  if (nodes_visited->find(resID) != nodes_visited->end()) {
+    return;
+  }
+  nodes_visited->emplace(resID);
+
+  ssize_t pkg_index = res_table.getResourcePackageIndex(resID);
+
+  android::Vector<android::Res_value> initial_values;
+  res_table.getAllValuesForResource(resID, initial_values);
+
+  std::stack<android::Res_value> nodes_to_explore;
+  for (size_t index = 0; index < initial_values.size(); ++index) {
+    nodes_to_explore.push(initial_values[index]);
+  }
+
+  while (!nodes_to_explore.empty()) {
+    android::Res_value r = nodes_to_explore.top();
+    nodes_to_explore.pop();
+    if (r.dataType == android::Res_value::TYPE_STRING) {
+      android::String8 str = res_table.getString8FromIndex(pkg_index, r.data);
+      potential_file_paths->insert(std::string(str.string()));
+      continue;
+    }
+
+    // Skip any non-references or already visited nodes
+    if ((r.dataType != android::Res_value::TYPE_REFERENCE &&
+         r.dataType != android::Res_value::TYPE_ATTRIBUTE) ||
+        r.data <= PACKAGE_RESID_START ||
+        nodes_visited->find(r.data) != nodes_visited->end()) {
+      continue;
+    }
+
+    nodes_visited->insert(r.data);
+    android::Vector<android::Res_value> inner_values;
+    res_table.getAllValuesForResource(r.data, inner_values);
+    for (size_t index = 0; index < inner_values.size(); ++index) {
+      nodes_to_explore.push(inner_values[index]);
+    }
+  }
+}
+
+void ResourcesArscFile::delete_resource(uint32_t res_id) {
+  res_table.deleteResource(res_id);
+}
+
+void ResourcesArscFile::collect_resid_values_and_hashes(
+    const std::vector<uint32_t>& ids,
+    std::map<size_t, std::vector<uint32_t>>* res_by_hash) {
+  tmp_id_to_values.clear();
+  for (uint32_t id : ids) {
+    android::Vector<android::Res_value> row_values;
+    res_table.getAllValuesForResource(id, row_values);
+    (*res_by_hash)[getHashFromValues(row_values)].push_back(id);
+    tmp_id_to_values[id] = row_values;
+  }
+}
+
+bool ResourcesArscFile::resource_value_identical(uint32_t a_id, uint32_t b_id) {
+  if (tmp_id_to_values[a_id].size() != tmp_id_to_values[b_id].size()) {
+    return false;
+  }
+
+  return res_table.areResourceValuesIdentical(a_id, b_id);
 }
 
 ResourcesArscFile::ResourcesArscFile(const std::string& path)

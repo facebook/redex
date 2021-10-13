@@ -20,7 +20,8 @@ void test(const std::string& code_str,
           size_t expected_instructions_moved,
           size_t expected_branches_moved_over,
           size_t expected_inverted_conditional_branches,
-          size_t expected_clobbered_registers) {
+          size_t expected_clobbered_registers,
+          bool branch_hotness_check = true) {
   auto code = assembler::ircode_from_string(code_str);
   auto expected = assembler::ircode_from_string(expected_str);
 
@@ -28,7 +29,7 @@ void test(const std::string& code_str,
   DexTypeList* args = DexTypeList::make_type_list({});
   DexType* declaring_type = nullptr;
   UpCodeMotionPass::Stats stats = UpCodeMotionPass::process_code(
-      is_static, declaring_type, args, code.get());
+      is_static, declaring_type, args, code.get(), branch_hotness_check);
   EXPECT_EQ(expected_instructions_moved, stats.instructions_moved);
   EXPECT_EQ(expected_branches_moved_over, stats.branches_moved_over);
   EXPECT_EQ(expected_inverted_conditional_branches,
@@ -356,4 +357,81 @@ TEST_F(UpCodeMotionTest, clobbered_two_references) {
     )
   )";
   test(code_str, expected_str, 2, 1, 0, 2);
+}
+
+/*
+ * Check if instructions are moved if the branching block is not hot
+ * (should move)
+ * */
+TEST_F(UpCodeMotionTest, hot_branch) {
+  const auto& code_str = R"(
+  (
+    (if-eqz v0 :L1)
+
+    (const v1 0)
+    (const v2 0)
+
+    (:L0)
+    (return v1)
+
+    (:L1)
+    (.src_block "LFoo;.m:()V" 2 ())
+    (const v2 1)
+    (goto :L0))
+
+  )";
+
+  const auto& expected_str = R"(
+  (
+    (const v2 1)
+    (if-eqz v0 :L0)
+
+    (const v1 0)
+    (const v2 0)
+
+    (:L0)
+    (return v1)
+
+    )
+)";
+
+  test(code_str, expected_str, 1, 1, 0, 0);
+}
+
+TEST_F(UpCodeMotionTest, hot_branch_2) {
+  const auto& code_str = R"(
+  (
+      (.src_block "LFoo;.m:()V" 1 (0.1 0.2))
+      (if-eqz v0 :true)
+
+      (const v1 0)
+      (const v2 0)
+      (:end)
+      (return v1)
+
+      (:true)
+      (.src_block "LFoo;.k:()V" 2 (0.0 0.0))
+      (const v2 1)
+      (goto :end))
+
+  )";
+
+  const auto& expected_str = R"(
+  (
+      (.src_block "LFoo;.m:()V" 1 (0.1 0.2))
+      (if-eqz v0 :true)
+
+      (const v1 0)
+      (const v2 0)
+      (:end)
+      (return v1)
+
+      (:true)
+      (.src_block "LFoo;.k:()V" 2 (0.0 0.0))
+      (const v2 1)
+      (goto :end)
+    )
+)";
+
+  test(code_str, expected_str, 0, 0, 0, 0);
 }

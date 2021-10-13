@@ -510,12 +510,9 @@ size_t process_hoisting_for_block(cfg::Block* block,
                                   type_inference::TypeInference& type_inference,
                                   constant_uses::ConstantUses& constant_uses) {
 
-  auto all_preds_are_same = [](const std::vector<cfg::Edge*>& edge_lst) {
-    if (edge_lst.size() == 1) {
-      return true;
-    }
-    std::set<cfg::Block*> count;
-    for (auto e : edge_lst) {
+  auto all_preds_are_same = [](const std::vector<cfg::Edge*>& edges) {
+    std::unordered_set<cfg::Block*> count;
+    for (auto e : edges) {
       count.insert(e->src());
     }
     return count.size() == 1;
@@ -544,11 +541,15 @@ size_t process_hoisting_for_block(cfg::Block* block,
   }
 
   std::vector<cfg::Block*> succ_blocks = get_succ_blocks(block);
-  // make sure every successor has same predecessor
+  // make sure every successor has same predecessor and none will have to throw.
   for (auto succ_block : succ_blocks) {
     const auto& preds_of_succ_block = succ_block->preds();
     if (!all_preds_are_same(preds_of_succ_block)) {
       // we can only hoist the prefix if the block has only one incoming edge
+      return 0;
+    }
+
+    if (cfg.get_succ_edge_of_type(succ_block, cfg::EDGE_THROW)) {
       return 0;
     }
   }

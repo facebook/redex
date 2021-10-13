@@ -10,7 +10,7 @@
 #include "Creators.h"
 #include "DexAsm.h"
 #include "IRCode.h"
-#include "Inliner.h"
+#include "LegacyInliner.h"
 #include "TestGenerator.h"
 #include "Util.h"
 
@@ -72,7 +72,7 @@ class InlinerTestAliasedInputs : public EquivalenceTest {
         break;
       }
     }
-    inliner::inline_method(m, m_callee->get_code(), invoke_it);
+    legacy_inliner::inline_method(m, m_callee->get_code(), invoke_it);
   }
 };
 
@@ -143,7 +143,7 @@ class InlinerTestLargeIfOffset : public EquivalenceTest {
         break;
       }
     }
-    inliner::inline_method(m, m_callee->get_code(), invoke_it);
+    legacy_inliner::inline_method(m, m_callee->get_code(), invoke_it);
     // make sure we actually bloated the method
     always_assert(m->get_code()->count_opcodes() > NOP_COUNT);
   }

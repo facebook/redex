@@ -13,12 +13,12 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
-#include "Inliner.h"
+#include "LegacyInliner.h"
 #include "MethodDedup.h"
-#include "MethodMerger.h"
 #include "MethodReference.h"
 #include "Mutators.h"
 #include "Resolver.h"
+#include "Show.h"
 #include "SwitchDispatch.h"
 #include "TypeReference.h"
 #include "Walkers.h"
@@ -557,7 +557,7 @@ void ModelMethodMerger::inline_dispatch_entries(DexMethod* dispatch) {
   for (auto& pair : callsites) {
     auto callee_code = pair.first;
     auto& call_pos = pair.second;
-    inliner::inline_method(dispatch, callee_code, call_pos);
+    legacy_inliner::inline_method(dispatch, callee_code, call_pos);
   }
   TRACE(CLMG,
         9,
@@ -924,68 +924,6 @@ void ModelMethodMerger::merge_virt_itf_methods() {
     auto dispatch = pair.second;
     merger_cls->add_method(dispatch);
   }
-}
-
-/**
- * Merge static/direct/non-virtual methods within each shape based on proto
- * grouping.
- */
-void ModelMethodMerger::merge_methods_within_shape() {
-  if (!m_model_spec.merge_direct_methods_within_shape &&
-      !m_model_spec.merge_static_methods_within_shape &&
-      !m_model_spec.merge_nonvirt_methods_within_shape) {
-    return;
-  }
-  using MethodGroups = std::vector<std::vector<DexMethod*>>;
-  using ProcessFunc =
-      std::function<void(std::vector<DexMethod*>&, MethodGroups&)>;
-  ProcessFunc do_nothing = [](std::vector<DexMethod*>&, MethodGroups&) {};
-  ProcessFunc add_methods = [](std::vector<DexMethod*>& methods,
-                               MethodGroups& groups) {
-    if (methods.size() < 3) {
-      return;
-    }
-    groups.push_back(methods);
-  };
-  ProcessFunc process_non_vmethods = do_nothing;
-  if (m_model_spec.merge_nonvirt_methods_within_shape) {
-    process_non_vmethods = add_methods;
-  }
-  ProcessFunc process_non_ctors = do_nothing;
-  if (m_model_spec.merge_direct_methods_within_shape ||
-      m_model_spec.merge_static_methods_within_shape) {
-    ProcessFunc process_direct = do_nothing;
-    ProcessFunc process_static = do_nothing;
-    if (m_model_spec.merge_direct_methods_within_shape) {
-      process_direct = add_methods;
-    }
-    if (m_model_spec.merge_static_methods_within_shape) {
-      process_static = add_methods;
-    }
-    process_non_ctors = [process_direct,
-                         process_static](std::vector<DexMethod*>& methods,
-                                         MethodGroups& groups) {
-      auto it = std::partition(methods.begin(),
-                               methods.end(),
-                               [](DexMethod* meth) { return is_static(meth); });
-      std::vector<DexMethod*> statics(methods.begin(), it);
-      std::vector<DexMethod*> directs(it, methods.end());
-      process_static(statics, groups);
-      process_direct(directs, groups);
-    };
-  }
-
-  std::vector<std::vector<DexMethod*>> method_groups;
-  for (auto merger : m_mergers) {
-    auto& non_ctors = m_merger_non_ctors.at(merger);
-    auto& non_vmethods = m_merger_non_vmethods.at(merger);
-    process_non_ctors(non_ctors, method_groups);
-    process_non_vmethods(non_vmethods, method_groups);
-  }
-  auto stats = method_merger::merge_methods(method_groups, m_scope);
-  m_stats.m_num_merged_nonvirt_methods += stats.num_merged_nonvirt_methods;
-  m_stats.m_num_merged_static_methods += stats.num_merged_static_methods;
-  m_stats.m_num_merged_direct_methods += stats.num_merged_direct_methods;
 }
 
 } // namespace class_merging

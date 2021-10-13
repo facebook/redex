@@ -48,6 +48,29 @@ void DexStore::add_classes(DexClasses classes) {
   m_dexen.push_back(std::move(classes));
 }
 
+void DexStore::add_class(DexClass* new_cls,
+                         DexStoresVector& stores,
+                         boost::optional<size_t> dex_id) {
+  redex_assert(!stores.empty());
+  if (dex_id == boost::none) {
+    DexClassesVector& root_store = stores.front().get_dexen();
+    redex_assert(!root_store.empty());
+    // Add the class to the last dex of root_store.
+    root_store.back().emplace_back(new_cls);
+  } else {
+    size_t id = *dex_id;
+    for (auto& store : stores) {
+      auto& dexen = store.get_dexen();
+      if (id < dexen.size()) {
+        dexen[id].emplace_back(new_cls);
+        return;
+      }
+      id -= dexen.size();
+    }
+    not_reached_log("Invalid dex_id %zu", *dex_id);
+  }
+}
+
 void DexMetadata::parse(const std::string& path) {
   std::ifstream input(path);
   Json::Value store;

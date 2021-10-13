@@ -1149,10 +1149,12 @@ const std::unordered_set<DexMethodRef*>& get_kotlin_null_assertions() {
 
 FixpointIterator::FixpointIterator(
     const cfg::ControlFlowGraph& cfg,
-    InstructionAnalyzer<ConstantEnvironment> insn_analyzer)
+    InstructionAnalyzer<ConstantEnvironment> insn_analyzer,
+    bool imprecise_switches)
     : MonotonicFixpointIterator(cfg),
       m_insn_analyzer(std::move(insn_analyzer)),
-      m_kotlin_null_check_assertions(get_kotlin_null_assertions()) {}
+      m_kotlin_null_check_assertions(get_kotlin_null_assertions()),
+      m_imprecise_switches(imprecise_switches) {}
 
 void FixpointIterator::analyze_instruction(const IRInstruction* insn,
                                            ConstantEnvironment* env,
@@ -1318,19 +1320,34 @@ ConstantEnvironment FixpointIterator::analyze_edge(
     auto selector_val = env.get(insn->src(0));
     const auto& case_key = edge->case_key();
     if (case_key) {
-      env.set(insn->src(0), selector_val.meet(SignedConstantDomain(*case_key)));
-    } else if (edge->type() == cfg::EDGE_GOTO) {
+      always_assert(edge->type() == cfg::EDGE_BRANCH);
+      selector_val.meet_with(SignedConstantDomain(*case_key));
+      if (m_imprecise_switches) {
+        // We could refine the selector value itself, for maximum knowledge.
+        // However, in practice, this can cause following blocks to be refined
+        // with the constant, which then degrades subsequent block deduping.
+        if (selector_val.is_bottom()) {
+          env.set_to_bottom();
+          return env;
+        }
+      } else {
+        env.set(insn->src(0), selector_val);
+      }
+    } else {
+      always_assert(edge->type() == cfg::EDGE_GOTO);
       // We are looking at the fallthrough case. Set env to bottom in case there
       // is a non-fallthrough edge with a case-key that is equal to the actual
       // selector value.
-      for (auto succ : edge->src()->succs()) {
+      auto scd = selector_val.maybe_get<SignedConstantDomain>();
+      auto selector_const = scd->get_constant();
+      if (!selector_const) {
+        return env;
+      }
+      auto succ = get_switch_succ(edge->src(), *selector_const);
+      if (succ != nullptr) {
         const auto& succ_case_key = succ->case_key();
-        if (succ_case_key && ConstantValue::apply_visitor(
-                                 runtime_equals_visitor(), selector_val,
-                                 SignedConstantDomain(*succ_case_key))) {
-          env.set_to_bottom();
-          break;
-        }
+        always_assert(succ_case_key && *selector_const == *succ_case_key);
+        env.set_to_bottom();
       }
     }
   } else if (edge->type() != cfg::EDGE_THROW) {

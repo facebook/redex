@@ -15,6 +15,24 @@ AM_CPPFLAGS = $(COMMON_INCLUDES)
 noinst_LTLIBRARIES = libredex.la libopt.la
 
 #
+# build protobuf
+#
+if SET_PROTOBUF
+
+proto_res_in = \
+	proto/Resources.proto \
+	proto/Configuration.proto
+
+protores/%.pb.cc protores/%.pb.h: proto/%.proto | mdir ; $(PROTOC) --proto_path=$(dir $^) --cpp_out=$(top_srcdir)/protores $^
+mdir: ; mkdir -p $(top_srcdir)/protores
+
+proto_res_header_out = $(addprefix protores/, $(notdir ${proto_res_in:.proto=.pb.h}))
+proto_res_body_out = $(addprefix protores/, $(notdir ${proto_res_in:.proto=.pb.cc}))
+BUILT_SOURCES = $(proto_res_header_out)
+
+endif
+
+#
 # libredex: the optimizer's guts
 #
 
@@ -25,8 +43,8 @@ libredex_la_SOURCES = \
 	libredex/AnalysisUsage.cpp \
 	libredex/AnnoUtils.cpp \
 	libredex/ApiLevelChecker.cpp \
-	libredex/ApkManager.cpp \
 	libredex/ApkResources.cpp \
+	libredex/AssetManager.cpp \
 	libredex/BigBlocks.cpp \
 	libredex/BundleResources.cpp \
 	libredex/CFGMutation.cpp \
@@ -156,7 +174,7 @@ libredex_la_SOURCES = \
 	service/class-merging/ApproximateShapeMerging.cpp \
 	service/class-merging/ClassAssemblingUtils.cpp \
 	service/class-merging/ClassMerging.cpp \
-	service/class-merging/AnonymousModelGenerator.cpp \
+	service/class-merging/ConfigUtils.cpp \
 	service/class-merging/MergeabilityCheck.cpp \
 	service/class-merging/MergerType.cpp \
 	service/class-merging/MergingStrategies.cpp \
@@ -194,13 +212,17 @@ libredex_la_SOURCES = \
 	service/method-dedup/MethodDedup.cpp \
 	service/method-dedup/NormalizeConstructor.cpp \
 	service/method-dedup/TypeTags.cpp \
+	service/method-inliner/CallSiteSummaries.cpp \
 	service/method-inliner/CFGInliner.cpp \
 	service/method-inliner/ConstructorAnalysis.cpp \
 	service/method-inliner/Deleter.cpp \
 	service/method-inliner/Inliner.cpp \
+	service/method-inliner/LegacyInliner.cpp \
 	service/method-inliner/MethodInliner.cpp \
 	service/method-inliner/ObjectInlinePlugin.cpp \
+	service/method-inliner/RecursionPruner.cpp \
 	service/method-merger/MethodMerger.cpp \
+	service/method-outliner/OutliningProfileGuidanceImpl.cpp \
 	service/reduce-boolean-branches/ReduceBooleanBranches.cpp \
 	service/reference-update/MethodReference.cpp \
 	service/reference-update/TypeReference.cpp \
@@ -210,6 +232,8 @@ libredex_la_SOURCES = \
 	service/regalloc/RegisterType.cpp \
 	service/regalloc/Split.cpp \
 	service/regalloc/VirtualRegistersFile.cpp \
+	service/regalloc-fast/LinearScan.cpp \
+	service/regalloc-fast/LiveInterval.cpp \
 	service/shrinker/Shrinker.cpp \
 	service/switch-dispatch/SwitchDispatch.cpp \
 	service/switch-partitioning/SwitchEquivFinder.cpp \
@@ -235,6 +259,15 @@ libredex_la_LIBADD = \
 	$(BOOST_THREAD_LIB) \
 	-lpthread
 
+if SET_PROTOBUF
+libredex_la_SOURCES += \
+	protores/Resources.pb.cc \
+	protores/Configuration.pb.cc
+
+libredex_la_LIBADD += \
+	$(LIBPROTOBUF_LIBS)
+endif
+
 #
 # libopt: the optimization passes
 #
@@ -259,6 +292,8 @@ libopt_la_SOURCES = \
 	opt/check-recursion/CheckRecursion.cpp \
 	opt/class-merging/AnonymousClassMergingPass.cpp \
 	opt/class-merging/ClassMergingPass.cpp \
+	opt/class-merging/IntraDexClassMergingPass.cpp \
+	opt/class-merging/ModelSpecGenerator.cpp \
 	opt/class-splitting/ClassSplitting.cpp \
 	opt/constant-propagation/ConstantPropagationPass.cpp \
 	opt/constant-propagation/ConstantPropagationRuntimeAssert.cpp \
@@ -304,6 +339,7 @@ libopt_la_SOURCES = \
 	opt/print-members/PrintMembers.cpp \
 	opt/rebindrefs/ReBindRefs.cpp \
 	opt/regalloc/RegAlloc.cpp \
+	opt/regalloc-fast/FastRegAlloc.cpp \
 	opt/remove-apilevel-checks/RemoveApiLevelChecks.cpp \
 	opt/remove-builders/RemoveBuilders.cpp \
 	opt/remove-builders/RemoveBuildersHelper.cpp \
@@ -391,10 +427,16 @@ redex_all_LDADD = \
 	$(BOOST_FILESYSTEM_LIB) \
 	$(BOOST_SYSTEM_LIB) \
 	$(BOOST_REGEX_LIB) \
+	$(BOOST_IOSTREAMS_LIB) \
 	$(BOOST_PROGRAM_OPTIONS_LIB) \
 	$(BOOST_THREAD_LIB) \
 	-lpthread \
 	-ldl
+
+if SET_PROTOBUF
+redex_all_LDADD += \
+	$(LIBPROTOBUF_LIBS)
+endif
 
 redex_all_LDFLAGS = \
 	-rdynamic # function names in stack traces

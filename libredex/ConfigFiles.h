@@ -110,7 +110,7 @@ struct ConfigFiles {
   std::string get_outdir() const { return outdir; }
 
   // For development only!
-  void set_outdir(const std::string& new_outdir) { outdir = new_outdir; }
+  void set_outdir(const std::string& new_outdir);
 
   const ProguardMap& get_proguard_map() const;
 

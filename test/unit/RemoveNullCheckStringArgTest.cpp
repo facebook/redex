@@ -198,3 +198,79 @@ TEST_F(RemoveNullcheckStringArgTest, simpleStatic) {
   auto expected_code = assembler::ircode_from_string(expected_str);
   EXPECT_CODE_EQ(expected_code.get(), actual_code.get());
 }
+
+TEST_F(RemoveNullcheckStringArgTest, removeAssertPositive) {
+  auto str = R"(
+    (
+     (load-param-object v0)
+     (load-param-object v1)
+     (const-string "args")
+     (move-result-pseudo-object v2)
+     (invoke-static (v1 v2) "Lkotlin/jvm/internal/Intrinsics;.checkParameterIsNotNull:(Ljava/lang/Object;Ljava/lang/String;)V")
+     (return-void)
+    )
+  )";
+
+  auto actual_code = assembler::ircode_from_string(str);
+  {
+    cfg::ScopedCFG cfg(actual_code.get());
+    RemoveNullcheckStringArg pass;
+    RemoveNullcheckStringArg::TransferMap transferMap;
+    RemoveNullcheckStringArg::NewMethodSet newMethods;
+    pass.setup(transferMap, newMethods);
+    pass.change_in_cfg(*cfg, transferMap, false);
+  }
+
+  auto expected_str = R"(
+    (
+     (load-param-object v0)
+     (load-param-object v1)
+     (const-string "args")
+     (move-result-pseudo-object v2)
+     (return-void)
+    )
+  )";
+
+  auto expected_code = assembler::ircode_from_string(expected_str);
+  EXPECT_CODE_EQ(expected_code.get(), actual_code.get());
+}
+
+TEST_F(RemoveNullcheckStringArgTest, removeAssertNegative) {
+  auto str = R"(
+    (
+     (load-param-object v0)
+     (load-param-object v1)
+     (const-string "args")
+     (move-result-pseudo-object v2)
+     (invoke-static (v1 v2) "Lkotlin/jvm/internal/Intrinsics;.checkParameterIsNotNull:(Ljava/lang/Object;Ljava/lang/String;)V")
+     (invoke-static (v1) "Lkotlin/jvm/internal/Intrinsics;.foo:(Ljava/lang/Object;)V")
+     (return-void)
+    )
+  )";
+
+  auto actual_code = assembler::ircode_from_string(str);
+  {
+    cfg::ScopedCFG cfg(actual_code.get());
+    RemoveNullcheckStringArg pass;
+    RemoveNullcheckStringArg::TransferMap transferMap;
+    RemoveNullcheckStringArg::NewMethodSet newMethods;
+    pass.setup(transferMap, newMethods);
+    pass.change_in_cfg(*cfg, transferMap, false);
+  }
+
+  auto expected_str = R"(
+    (
+     (load-param-object v0)
+     (load-param-object v1)
+     (const-string "args")
+     (move-result-pseudo-object v2)
+     (const v3 1)
+     (invoke-static (v1 v3) "Lkotlin/jvm/internal/Intrinsics;.$WrCheckParameter_V1_3:(Ljava/lang/Object;I)V")
+     (invoke-static (v1) "Lkotlin/jvm/internal/Intrinsics;.foo:(Ljava/lang/Object;)V")
+     (return-void)
+    )
+  )";
+
+  auto expected_code = assembler::ircode_from_string(expected_str);
+  EXPECT_CODE_EQ(expected_code.get(), actual_code.get());
+}

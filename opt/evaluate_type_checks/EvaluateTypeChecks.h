@@ -8,6 +8,7 @@
 #pragma once
 
 #include "Pass.h"
+#include "Shrinker.h"
 
 #include <boost/optional.hpp>
 
@@ -26,7 +27,7 @@ class EvaluateTypeChecksPass : public Pass {
   // Exposed for testing.
   static boost::optional<int32_t> evaluate(const DexType* src_type,
                                            const DexType* test_type);
-  static void optimize(DexMethod* m, XStoreRefs& xstores);
+  static void optimize(DexMethod* m, shrinker::Shrinker& shrinker);
 };
 
 } // namespace check_casts

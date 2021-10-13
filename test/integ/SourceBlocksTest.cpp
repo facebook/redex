@@ -24,9 +24,12 @@
 
 class SourceBlocksTest : public RedexIntegrationTest {
  protected:
-  void enable_pass(InsertSourceBlocksPass& isbp) {
-    isbp.m_force_run = true;
+  void enable_pass(InsertSourceBlocksPass& isbp) { isbp.m_force_run = true; }
+  void enable_always_inject(InsertSourceBlocksPass& isbp) {
     isbp.m_always_inject = true;
+  }
+  void disable_always_inject(InsertSourceBlocksPass& isbp) {
+    isbp.m_always_inject = false;
   }
   void set_insert_after_excs(InsertSourceBlocksPass& isbp, bool val) {
     isbp.m_insert_after_excs = val;
@@ -96,6 +99,7 @@ TEST_F(SourceBlocksTest, source_blocks) {
     InsertSourceBlocksPass isbp{};
     run_passes({&isbp}, nullptr, Json::nullValue, [&](const auto&) {
       enable_pass(isbp);
+      enable_always_inject(isbp);
       set_insert_after_excs(isbp, false);
     });
 
@@ -130,7 +134,6 @@ TEST_F(SourceBlocksTest, source_blocks) {
   // Run inliner, check that we have mix now.
   {
     inliner::InlinerConfig conf{};
-    conf.use_cfg_inliner = true;
     auto scope = build_class_scope(stores);
     conf.populate(scope);
 
@@ -189,8 +192,6 @@ TEST_F(SourceBlocksTest, source_blocks) {
               "String;)V\" 0 ()) (iput-object v3 v2 "
               "\"Lcom/facebook/redextest/SourceBlocksTest;.mHello:Ljava/lang/"
               "String;\") (.pos:dbg_2 "
-              "\"Lcom/facebook/redextest/SourceBlocksTest;.baz:(Ljava/lang/"
-              "String;)V\" SourceBlocksTest.java 23 dbg_0) (.pos:dbg_3 "
               "\"Lcom/facebook/redextest/SourceBlocksTest;.bar:()V\" "
               "SourceBlocksTest.java 19) (return-void))");
 
@@ -224,6 +225,7 @@ TEST_F(SourceBlocksTest, source_blocks_insert_after_exc) {
     InsertSourceBlocksPass isbp{};
     run_passes({&isbp}, nullptr, Json::nullValue, [&](const auto&) {
       enable_pass(isbp);
+      enable_always_inject(isbp);
       set_insert_after_excs(isbp, true);
     });
   }
@@ -234,6 +236,7 @@ TEST_F(SourceBlocksTest, source_blocks_insert_after_exc) {
       {"Lcom/facebook/redextest/SourceBlocksTest;.<init>:()V", 3},
       {"Lcom/facebook/redextest/SourceBlocksTest;.baz:(Ljava/lang/String;)V",
        2},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.bazz:()V", 2},
   };
 
   for (auto* m : cls->get_all_methods()) {
@@ -310,6 +313,62 @@ TEST_F(SourceBlocksTest, source_blocks_profile) {
        "B0: 0(0.3:0.4)"},
       {"Lcom/facebook/redextest/SourceBlocksTest;.baz:(Ljava/lang/String;)V",
        "B0: 0(0.4:0.5)"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.bazz:()V", "B0: 0(0:0)"},
+  };
+
+  for (auto* m : cls->get_all_methods()) {
+    if (m->get_code() == nullptr) {
+      continue;
+    }
+    cfg::ScopedCFG cfg{m->get_code()};
+    auto actual = get_blocks_as_txt(*cfg);
+    auto it = kExpectations.find(show(m));
+    if (it == kExpectations.end()) {
+      EXPECT_TRUE(false) << "No expectation for " << show(m) << ": " << actual;
+      continue;
+    }
+    EXPECT_EQ(actual, it->second) << show(m);
+  }
+}
+
+TEST_F(SourceBlocksTest, source_blocks_profile_no_always_inject) {
+  auto profile_path = std::getenv("profile");
+  ASSERT_NE(profile_path, nullptr) << "Missing profile path.";
+
+  auto type = DexType::get_type("Lcom/facebook/redextest/SourceBlocksTest;");
+  ASSERT_NE(type, nullptr);
+  auto cls = type_class(type);
+  ASSERT_NE(cls, nullptr);
+
+  // Check that no code has source blocks so far.
+  {
+    for (const auto* m : cls->get_all_methods()) {
+      if (m->get_code() == nullptr) {
+        continue;
+      }
+      for (const auto& mie : *m->get_code()) {
+        ASSERT_NE(mie.type, MFLOW_SOURCE_BLOCK);
+      }
+    }
+  }
+
+  // Run the pass, check that each block has a SourceBlock.
+  InsertSourceBlocksPass isbp{};
+  run_passes({&isbp}, nullptr, Json::nullValue, [&](const auto&) {
+    enable_pass(isbp);
+    disable_always_inject(isbp);
+    set_insert_after_excs(isbp, false);
+    set_profile(isbp, profile_path);
+  });
+
+  std::unordered_map<std::string, std::string> kExpectations = {
+      {"Lcom/facebook/redextest/SourceBlocksTest;.bar:()V", "B0: 0(0.1:0.2)"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.foo:()V", "B0: 0(0.2:0.3)"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.<init>:()V",
+       "B0: 0(0.3:0.4)"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.baz:(Ljava/lang/String;)V",
+       "B0: 0(0.4:0.5)"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.bazz:()V", "B0:"},
   };
 
   for (auto* m : cls->get_all_methods()) {
@@ -366,6 +425,132 @@ TEST_F(SourceBlocksTest, source_blocks_profile_exc) {
        "B0: 0(0.1:0.3) 1(0.2:0.2) 2(0.3:0.1)"},
       {"Lcom/facebook/redextest/SourceBlocksTest;.baz:(Ljava/lang/String;)V",
        "B0: 0(0.7:0.1) 1(0.8:0.2)"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.bazz:()V",
+       "B0: 0(0:0) 1(0:0)"},
+  };
+
+  for (auto* m : cls->get_all_methods()) {
+    if (m->get_code() == nullptr) {
+      continue;
+    }
+    cfg::ScopedCFG cfg{m->get_code()};
+    auto actual = get_blocks_as_txt(*cfg);
+    auto it = kExpectations.find(show(m));
+    if (it == kExpectations.end()) {
+      EXPECT_TRUE(false) << "No expectation for " << show(m) << ": " << actual;
+      continue;
+    }
+    EXPECT_EQ(actual, it->second) << show(m);
+  }
+}
+
+TEST_F(SourceBlocksTest, source_blocks_profile_exc_no_always_inject) {
+  auto profile_path = std::getenv("profile2");
+  ASSERT_NE(profile_path, nullptr) << "Missing profile2 path.";
+
+  auto type = DexType::get_type("Lcom/facebook/redextest/SourceBlocksTest;");
+  ASSERT_NE(type, nullptr);
+  auto cls = type_class(type);
+  ASSERT_NE(cls, nullptr);
+
+  // Check that no code has source blocks so far.
+  {
+    for (const auto* m : cls->get_all_methods()) {
+      if (m->get_code() == nullptr) {
+        continue;
+      }
+      for (const auto& mie : *m->get_code()) {
+        ASSERT_NE(mie.type, MFLOW_SOURCE_BLOCK);
+      }
+    }
+  }
+
+  // Run the pass, check that each block has a SourceBlock.
+  InsertSourceBlocksPass isbp{};
+  run_passes({&isbp}, nullptr, Json::nullValue, [&](const auto&) {
+    enable_pass(isbp);
+    disable_always_inject(isbp);
+    set_insert_after_excs(isbp, true);
+    set_profile(isbp, profile_path);
+  });
+
+  std::unordered_map<std::string, std::string> kExpectations = {
+      {"Lcom/facebook/redextest/SourceBlocksTest;.bar:()V",
+       "B0: 0(0.4:0.6) 1(0.5:0.5) 2(0.6:0.4)"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.foo:()V",
+       "B0: 0(0:0.3) 1(0.1:0.2) 2(0.2:0.1) 3(0.3:0)"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.<init>:()V",
+       "B0: 0(0.1:0.3) 1(0.2:0.2) 2(0.3:0.1)"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.baz:(Ljava/lang/String;)V",
+       "B0: 0(0.7:0.1) 1(0.8:0.2)"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.bazz:()V", "B0:"},
+  };
+
+  for (auto* m : cls->get_all_methods()) {
+    if (m->get_code() == nullptr) {
+      continue;
+    }
+    cfg::ScopedCFG cfg{m->get_code()};
+    auto actual = get_blocks_as_txt(*cfg);
+    auto it = kExpectations.find(show(m));
+    if (it == kExpectations.end()) {
+      EXPECT_TRUE(false) << "No expectation for " << show(m) << ": " << actual;
+      continue;
+    }
+    EXPECT_EQ(actual, it->second) << show(m);
+  }
+}
+
+TEST_F(SourceBlocksTest, source_blocks_profile_always_inject_method_profiles) {
+  auto profile_path = std::getenv("profile3");
+  ASSERT_NE(profile_path, nullptr) << "Missing profile path.";
+
+  auto method_profile_path = std::getenv("method-profile");
+  ASSERT_NE(method_profile_path, nullptr) << "Missing method-profile path.";
+
+  auto type = DexType::get_type("Lcom/facebook/redextest/SourceBlocksTest;");
+  ASSERT_NE(type, nullptr);
+  auto cls = type_class(type);
+  ASSERT_NE(cls, nullptr);
+
+  // Check that no code has source blocks so far.
+  {
+    for (const auto* m : cls->get_all_methods()) {
+      if (m->get_code() == nullptr) {
+        continue;
+      }
+      for (const auto& mie : *m->get_code()) {
+        ASSERT_NE(mie.type, MFLOW_SOURCE_BLOCK);
+      }
+    }
+  }
+
+  // Need to set up a configuration that will load method profiles.
+  Json::Value mp_val = Json::arrayValue;
+  mp_val.resize(1);
+  mp_val[0] = method_profile_path;
+  Json::Value conf_val = Json::objectValue;
+  conf_val["agg_method_stats_files"] = mp_val;
+
+  // Run the pass, check that each block has a SourceBlock.
+  InsertSourceBlocksPass isbp{};
+  run_passes({&isbp}, nullptr, conf_val, [&](const auto&) {
+    enable_pass(isbp);
+    enable_always_inject(isbp);
+    set_insert_after_excs(isbp, false);
+    set_profile(isbp, profile_path);
+  });
+
+  std::unordered_map<std::string, std::string> kExpectations = {
+      {"Lcom/facebook/redextest/SourceBlocksTest;.bar:()V", "B0: 0(0.1:0.2)"},
+      // This comes from method profiles.
+      {"Lcom/facebook/redextest/SourceBlocksTest;.foo:()V", "B0: 0(1:99)"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.<init>:()V",
+       "B0: 0(0.3:0.4)"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.baz:(Ljava/lang/String;)V",
+       "B0: 0(0.4:0.5)"},
+      // This comes from method profiles.
+      {"Lcom/facebook/redextest/SourceBlocksTest;.bazz:()V", "B0: 0(1:98)"},
   };
 
   for (auto* m : cls->get_all_methods()) {

@@ -92,6 +92,8 @@ void RuntimeAssertTransform::apply(
     DexMethod* method) {
   auto* code = method->get_code();
   always_assert(code != nullptr);
+  always_assert_log(!code->editable_cfg_built(),
+                    "TODO: Upgrade RuntimeAssertTransform to use cfg.");
   auto ii = InstructionIterable(code);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
     it = insert_field_assert(wps, code, it);

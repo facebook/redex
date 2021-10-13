@@ -8,6 +8,7 @@
 #include "Shrinker.h"
 
 #include "ConstructorParams.h"
+#include "LinearScan.h"
 #include "RandomForest.h"
 #include "RegisterAllocation.h"
 #include "ScopedMetrics.h"
@@ -80,7 +81,8 @@ Shrinker::Shrinker(
       m_config(config),
       m_enabled(config.run_const_prop || config.run_cse ||
                 config.run_copy_prop || config.run_local_dce ||
-                config.run_reg_alloc || config.run_dedup_blocks),
+                config.run_reg_alloc || config.run_fast_reg_alloc ||
+                config.run_dedup_blocks),
       m_pure_methods(configured_pure_methods),
       m_finalish_field_names(configured_finalish_field_names) {
   if (config.run_cse || config.run_local_dce) {
@@ -118,9 +120,52 @@ Shrinker::Shrinker(
   }
 }
 
+constant_propagation::Transform::Stats Shrinker::constant_propagation(
+    bool is_static,
+    DexType* declaring_type,
+    DexProto* proto,
+    IRCode* code,
+    const ConstantEnvironment& initial_env,
+    const constant_propagation::Transform::Config& config) {
+  if (!code->editable_cfg_built()) {
+    code->build_cfg(/* editable */ true);
+  }
+  {
+    constant_propagation::intraprocedural::FixpointIterator fp_iter(
+        code->cfg(),
+        constant_propagation::ConstantPrimitiveAndBoxedAnalyzer(
+            &m_immut_analyzer_state, &m_immut_analyzer_state,
+            constant_propagation::EnumFieldAnalyzerState::get(),
+            constant_propagation::BoxedBooleanAnalyzerState::get(), nullptr),
+        /* imprecise_switches */ true);
+    fp_iter.run(initial_env);
+    constant_propagation::Transform tf(config);
+    tf.apply(fp_iter, constant_propagation::WholeProgramState(), code->cfg(),
+             &m_xstores, is_static, declaring_type, proto);
+    return tf.get_stats();
+  }
+}
+
+LocalDce::Stats Shrinker::local_dce(IRCode* code,
+                                    bool normalize_new_instances) {
+  // LocalDce doesn't care if editable_cfg_built
+  auto local_dce = LocalDce(m_pure_methods);
+  local_dce.dce(code, normalize_new_instances);
+  return local_dce.get_stats();
+}
+
+copy_propagation_impl::Stats Shrinker::copy_propagation(DexMethod* method) {
+  copy_propagation_impl::Config config;
+  copy_propagation_impl::CopyPropagation copy_propagation(config);
+  return copy_propagation.run(method->get_code(), method);
+}
+
 void Shrinker::shrink_method(DexMethod* method) {
   auto code = method->get_code();
   bool editable_cfg_built = code->editable_cfg_built();
+  // force simplification/linearization of any existing editable cfg once, and
+  // forget existing cfg for a clean start
+  code->clear_cfg();
 
   constant_propagation::Transform::Stats const_prop_stats;
   cse_impl::Stats cse_stats;
@@ -130,41 +175,9 @@ void Shrinker::shrink_method(DexMethod* method) {
 
   if (m_config.run_const_prop) {
     auto timer = m_const_prop_timer.scope();
-    if (editable_cfg_built) {
-      code->clear_cfg();
-    }
-    if (!code->cfg_built()) {
-      code->build_cfg(/* editable */ false);
-    }
-    {
-      constant_propagation::intraprocedural::FixpointIterator fp_iter(
-          code->cfg(),
-          constant_propagation::ConstantPrimitiveAndBoxedAnalyzer(
-              &m_immut_analyzer_state, &m_immut_analyzer_state,
-              constant_propagation::EnumFieldAnalyzerState::get(),
-              constant_propagation::BoxedBooleanAnalyzerState::get(), nullptr));
-      fp_iter.run({});
-      constant_propagation::Transform::Config config;
-      constant_propagation::Transform tf(config);
-      const_prop_stats = tf.apply_on_uneditable_cfg(
-          fp_iter, constant_propagation::WholeProgramState(), code, &m_xstores,
-          method->get_class());
-    }
-    always_assert(!code->editable_cfg_built());
-    code->build_cfg(/* editable */ true);
-    code->cfg().calculate_exit_block();
-    {
-      constant_propagation::intraprocedural::FixpointIterator fp_iter(
-          code->cfg(),
-          constant_propagation::ConstantPrimitiveAndBoxedAnalyzer(
-              &m_immut_analyzer_state, &m_immut_analyzer_state,
-              constant_propagation::EnumFieldAnalyzerState::get(),
-              constant_propagation::BoxedBooleanAnalyzerState::get(), nullptr));
-      fp_iter.run({});
-      constant_propagation::Transform::Config config;
-      constant_propagation::Transform tf(config);
-      const_prop_stats += tf.apply(fp_iter, code->cfg(), method, &m_xstores);
-    }
+    const_prop_stats =
+        constant_propagation(is_static(method), method->get_class(),
+                             method->get_proto(), code, {}, {});
   }
 
   if (m_config.run_cse) {
@@ -183,17 +196,12 @@ void Shrinker::shrink_method(DexMethod* method) {
 
   if (m_config.run_copy_prop) {
     auto timer = m_copy_prop_timer.scope();
-    copy_propagation_impl::Config config;
-    copy_propagation_impl::CopyPropagation copy_propagation(config);
-    copy_prop_stats = copy_propagation.run(code, method);
+    copy_prop_stats = copy_propagation(method);
   }
 
   if (m_config.run_local_dce) {
     auto timer = m_local_dce_timer.scope();
-    // LocalDce doesn't care if editable_cfg_built
-    auto local_dce = LocalDce(m_pure_methods);
-    local_dce.dce(code);
-    local_dce_stats = local_dce.get_stats();
+    local_dce_stats = local_dce(code);
   }
 
   using stats_t = std::tuple<size_t, size_t, size_t, size_t>;
@@ -242,6 +250,12 @@ void Shrinker::shrink_method(DexMethod* method) {
 
       reg_alloc_inc = 1;
     }
+  }
+
+  if (m_config.run_fast_reg_alloc) {
+    auto timer = m_fast_reg_alloc_timer.scope();
+    auto allocator = fastregalloc::LinearScanAllocator(method);
+    allocator.allocate();
   }
 
   if (m_config.run_dedup_blocks) {

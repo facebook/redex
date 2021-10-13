@@ -4,6 +4,10 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+
+# pyre-strict
+
+
 import enum
 import itertools
 import os
@@ -12,12 +16,15 @@ import re
 import signal
 import subprocess
 import sys
+import typing
 
 
-IS_WINDOWS = os.name == "nt"
+IS_WINDOWS: bool = os.name == "nt"
 
 
-_BACKTRACE_PATTERN = re.compile(r"^([^(]+)(?:\((.*)\))?\[(0x[0-9a-f]+)\]$")
+_BACKTRACE_PATTERN: typing.Pattern[str] = re.compile(
+    r"^([^(]+)(?:\((.*)\))?\[(0x[0-9a-f]+)\]$"
+)
 
 
 _IGNORE_EXACT_LINES = {
@@ -43,7 +50,7 @@ _IGNORE_LINES_WITH_SUBSTR = [
 ]
 
 
-def _should_skip_line(line):
+def _should_skip_line(line: str) -> bool:
     global _IGNORE_EXACT_LINES, _IGNORE_LINES_WITH_SUBSTR
     if line in _IGNORE_EXACT_LINES:
         return True
@@ -53,7 +60,7 @@ def _should_skip_line(line):
 
 
 # Check whether addr2line is available
-def _has_addr2line():
+def _has_addr2line() -> bool:
     try:
         subprocess.check_call(
             ["addr2line", "-v"],
@@ -68,7 +75,7 @@ def _has_addr2line():
 _ADDR2LINE_BASE = ["addr2line", "-f", "-i", "-C", "-e"]
 
 
-def _symbolize(filename, offset):
+def _symbolize(filename: str, offset: str) -> typing.List[str]:
     # It's good enough not to use server mode.
     try:
         output = subprocess.check_output(_ADDR2LINE_BASE + [filename, offset])
@@ -77,11 +84,13 @@ def _symbolize(filename, offset):
         return ["<addr2line error>"]
 
 
-def maybe_addr2line(lines, out=sys.stderr):
+def maybe_addr2line(
+    lines: typing.Iterable[str], out: typing.TextIO = sys.stderr
+) -> None:
     global _BACKTRACE_PATTERN
 
     # Generate backtrace lines.
-    def find_matches():
+    def find_matches() -> typing.Generator[typing.Match[str], None, None]:
         for line in lines:
             stripped_line = line.strip()
             m = _BACKTRACE_PATTERN.fullmatch(stripped_line)
@@ -116,7 +125,7 @@ def maybe_addr2line(lines, out=sys.stderr):
     out.write("\n")
 
 
-def find_abort_error(lines):
+def find_abort_error(lines: typing.Iterable[str]) -> typing.Optional[str]:
     terminate_lines = []
     for line in lines:
         stripped_line = line.rstrip()
@@ -164,19 +173,37 @@ def find_abort_error(lines):
     return "\n".join(" " + line for line in terminate_lines)
 
 
-def run_and_stream_stderr(args, env, pass_fds):
+# pyre-fixme[24] # Cannot express the generics required pre-3.9
+PopenType = subprocess.Popen
+
+
+def run_and_stream_stderr(
+    args: typing.List[str],
+    env: typing.Dict[str, str],
+    pass_fds: typing.Optional[typing.List[int]],
+) -> typing.Tuple[
+    PopenType,
+    typing.Callable[
+        [typing.Optional[typing.Callable[[str], str]]],
+        typing.Tuple[int, typing.List[str]],
+    ],
+]:
     if IS_WINDOWS:
         # Windows does not support `pass_fds` parameter.
-        proc = subprocess.Popen(args, env=env, stderr=subprocess.PIPE)
+        proc: PopenType = subprocess.Popen(args, env=env, stderr=subprocess.PIPE)
     else:
-        proc = subprocess.Popen(
+        proc: PopenType = subprocess.Popen(
             args, env=env, pass_fds=pass_fds, stderr=subprocess.PIPE
         )
 
-    def stream_and_return(line_handler=None):
-        err_out = []
+    def stream_and_return(
+        line_handler: typing.Optional[typing.Callable[[str], str]] = None
+    ) -> typing.Tuple[int, typing.List[str]]:
+        err_out: typing.List[str] = []
         # Copy and stash the output.
-        for line in proc.stderr:
+        stderr = proc.stderr
+        assert stderr is not None
+        for line in stderr:
             try:
                 str_line = line.decode(sys.stdout.encoding)
             except UnicodeDecodeError:
@@ -209,19 +236,21 @@ class BinaryState(enum.Enum):
 
 
 class SigIntHandler:
-    def __init__(self):
-        self._old_handler = None
-        self._state = BinaryState.UNSTARTED
-        self._proc = None
+    def __init__(self) -> None:
+        # pyre-fixme[4]
+        self._old_handler: typing.Optional[typing.Any] = None
+        self._state: BinaryState = BinaryState.UNSTARTED
+        self._proc: typing.Optional[PopenType] = None
 
-    def __enter__(self):
+    def __enter__(self) -> "SigIntHandler":
         self.install()
         return self
 
-    def __exit__(self, *args, **kwargs):
+    # pyre-fixme[2]
+    def __exit__(self, *args, **kwargs) -> None:
         self.set_finished()
 
-    def install(self):
+    def install(self) -> None:
         # On Linux, support ctrl-c.
         # Note: must be on the main thread. Add checks. Portability is an issue.
         if platform.system() != "Linux":
@@ -230,33 +259,35 @@ class SigIntHandler:
         self._old_handler = signal.getsignal(signal.SIGINT)
         signal.signal(signal.SIGINT, self._sigint_handler)
 
-    def uninstall(self):
+    def uninstall(self) -> None:
         if self._old_handler is not None:
             signal.signal(signal.SIGINT, self._old_handler)
 
-    def set_state(self, new_state):
+    def set_state(self, new_state: BinaryState) -> None:
         self._state = new_state
 
-    def set_started(self, new_proc):
+    def set_started(self, new_proc: PopenType) -> None:
         self.set_proc(new_proc)
         self.set_state(BinaryState.STARTED)
 
-    def set_postprocessing(self):
+    def set_postprocessing(self) -> None:
         self.set_state(BinaryState.POSTPROCESSING)
 
-    def set_finished(self):
+    def set_finished(self) -> None:
         self.set_state(BinaryState.FINISHED)
         self.uninstall()
 
-    def set_proc(self, new_proc):
+    def set_proc(self, new_proc: PopenType) -> None:
         self._proc = new_proc
 
-    def _sigalrm_handler(self, _signum, _frame):
+    def _sigalrm_handler(self, _signum, _frame) -> None:
         signal.signal(signal.SIGALRM, signal.SIG_DFL)
         if self._state == BinaryState.STARTED:
             # Send SIGINT in case redex-all was not in the same process
             # group and wait some more.
-            self._proc.send_signal(signal.SIGINT)
+            proc = self._proc
+            assert proc is not None
+            proc.send_signal(signal.SIGINT)
             signal.alarm(3)
             return
         if self._state == BinaryState.POSTPROCESSING:
@@ -266,7 +297,7 @@ class SigIntHandler:
         # Kill ourselves.
         os.kill(os.getpid(), signal.SIGINT)
 
-    def _sigint_handler(self, _signum, _frame):
+    def _sigint_handler(self, _signum, _frame) -> None:
         signal.signal(signal.SIGINT, self._old_handler)
         if self._state == BinaryState.UNSTARTED or self._state == BinaryState.FINISHED:
             os.kill(os.getpid(), signal.SIGINT)

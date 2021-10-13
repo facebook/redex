@@ -21,4 +21,8 @@ public class SourceBlocksTest {
   private void baz(String s) {
     mHello = s;
   }
+
+  public void bazz() {
+    bar();
+  }
 }

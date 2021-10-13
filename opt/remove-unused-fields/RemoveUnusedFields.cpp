@@ -72,10 +72,6 @@ class RemoveUnusedFields final {
            m_config.blocklist_classes.count(field->get_class()) != 0;
   }
 
-  bool is_allowlisted(DexField* field) const {
-    return !m_config.allowlist || m_config.allowlist->count(field) != 0;
-  }
-
   bool can_remove_unread_field_put(DexField* field) const {
     auto t = field->get_type();
     // When no non-null value is ever written to a field, then it can never hold
@@ -87,6 +83,10 @@ class RemoveUnusedFields final {
     // Certain types don't have lifetimes, or at least nobody should depend on
     // them.
     if (!m_type_lifetimes.has_lifetime(t)) {
+      return true;
+    }
+
+    if (m_config.allowlist_types.count(t)) {
       return true;
     }
 
@@ -126,8 +126,7 @@ class RemoveUnusedFields final {
             stats.reads,
             stats.writes,
             is_synthetic(field));
-      if (can_remove(field) && !is_blocklisted(field) &&
-          is_allowlisted(field)) {
+      if (can_remove(field) && !is_blocklisted(field)) {
         if (m_config.remove_unread_fields && stats.reads == 0) {
           m_unread_fields.emplace(field);
           if (m_config.remove_vestigial_objects_written_fields &&

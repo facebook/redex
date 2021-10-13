@@ -113,6 +113,7 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/service/reduce-boolean-branches \
 	-I$(top_srcdir)/service/reference-update \
 	-I$(top_srcdir)/service/regalloc \
+	-I$(top_srcdir)/service/regalloc-fast \
 	-I$(top_srcdir)/service/shrinker \
 	-I$(top_srcdir)/service/switch-dispatch \
 	-I$(top_srcdir)/service/switch-partitioning \
@@ -124,3 +125,9 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/tools/redexdump \
 	-I$(top_srcdir)/util \
 	-I/usr/include/jsoncpp
+
+if SET_PROTOBUF
+COMMON_INCLUDES += \
+	-I$(top_srcdir)/protores \
+	$(PROTOBUF_CXXFLAGS)
+endif

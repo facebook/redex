@@ -10,6 +10,7 @@
 #include "ConstantPropagationAnalysis.h"
 #include "ConstantPropagationTransform.h"
 
+#include "ScopedCFG.h"
 #include "Trace.h"
 #include "Walkers.h"
 
@@ -22,30 +23,18 @@ Transform::Stats ConstantPropagation::run(DexMethod* method,
   }
   TRACE(CONSTP, 2, "Method: %s", SHOW(method));
   auto code = method->get_code();
-  code->build_cfg(/* editable */ false);
+  cfg::ScopedCFG cfg(code);
 
-  TRACE(CONSTP, 5, "CFG: %s", SHOW(code->cfg()));
+  TRACE(CONSTP, 5, "CFG: %s", SHOW(*cfg));
   Transform::Stats local_stats;
   {
-    intraprocedural::FixpointIterator fp_iter(code->cfg(),
+    intraprocedural::FixpointIterator fp_iter(*cfg,
                                               ConstantPrimitiveAnalyzer());
     fp_iter.run({});
     constant_propagation::Transform tf(m_config.transform);
-    local_stats = tf.apply_on_uneditable_cfg(
-        fp_iter, WholeProgramState(), code, xstores, method->get_class());
-  }
-  if (xstores) {
-    always_assert(!code->editable_cfg_built());
-    code->build_cfg(/* editable */ true);
-    code->cfg().calculate_exit_block();
-    {
-      intraprocedural::FixpointIterator fp_iter(code->cfg(),
-                                                ConstantPrimitiveAnalyzer());
-      fp_iter.run({});
-      constant_propagation::Transform tf(m_config.transform);
-      local_stats += tf.apply(fp_iter, code->cfg(), method, xstores);
-    }
-    code->clear_cfg();
+    tf.apply(fp_iter, WholeProgramState(), code->cfg(), xstores,
+             is_static(method), method->get_class(), method->get_proto());
+    local_stats = tf.get_stats();
   }
   return local_stats;
 }

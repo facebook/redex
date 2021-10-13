@@ -20,29 +20,6 @@ namespace mog = method_override_graph;
 
 namespace {
 
-std::vector<DexMethod*> get_static_methods(
-    const std::vector<DexMethod*>& dmethods) {
-  std::vector<DexMethod*> methods;
-  for (auto method : dmethods) {
-    if (!is_static(method)) {
-      continue;
-    }
-    methods.push_back(method);
-  }
-  return methods;
-}
-std::vector<DexMethod*> get_direct_instance_methods(
-    const std::vector<DexMethod*>& dmethods) {
-  std::vector<DexMethod*> methods;
-  for (auto method : dmethods) {
-    if (is_static(method) || method::is_constructor(method)) {
-      continue;
-    }
-    methods.push_back(method);
-  }
-  return methods;
-}
-
 std::unordered_set<DexMethod*> methodgroups_to_methodset(
     const method_merger::MethodGroups& method_groups) {
   std::unordered_set<DexMethod*> method_set;
@@ -192,51 +169,4 @@ Stats merge_methods(const MethodGroups& method_groups,
   return stats;
 }
 
-Stats merge_methods_within_class(const DexClasses& classes,
-                                 const DexClasses& scope,
-                                 bool merge_static,
-                                 bool merge_non_virtual,
-                                 bool merge_direct) {
-  MethodGroups method_groups;
-  if (merge_non_virtual) {
-    std::unordered_map<DexType*, std::vector<DexMethod*>> methods;
-    std::for_each(classes.begin(), classes.end(),
-                  [&methods](DexClass* clazz) { methods[clazz->get_type()]; });
-    auto non_virtuals =
-        mog::get_non_true_virtuals(*mog::build_graph(scope), scope);
-    std::for_each(non_virtuals.begin(), non_virtuals.end(),
-                  [&methods](DexMethod* method) {
-                    auto type = method->get_class();
-                    if (!methods.count(type) || !can_rename(method) ||
-                        root(method)) {
-                      return;
-                    }
-                    methods[type].push_back(method);
-                  });
-    for (auto& p : methods) {
-      method_groups.push_back(std::move(p.second));
-    }
-  }
-  if (merge_static || merge_direct) {
-    std::function<void(DexClass*)> add_statics = [](DexClass* cls) {};
-    if (merge_static) {
-      add_statics = [&method_groups](DexClass* cls) {
-        auto methods = get_static_methods(cls->get_dmethods());
-        method_groups.push_back(std::move(methods));
-      };
-    }
-    std::function<void(DexClass*)> add_directs = [](DexClass* cls) {};
-    if (merge_direct) {
-      add_directs = [&method_groups](DexClass* cls) {
-        auto methods = get_direct_instance_methods(cls->get_dmethods());
-        method_groups.push_back(methods);
-      };
-    }
-    for (auto cls : classes) {
-      add_statics(cls);
-      add_directs(cls);
-    }
-  }
-  return merge_methods(method_groups, scope);
-}
 } // namespace method_merger

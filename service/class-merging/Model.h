@@ -26,6 +26,7 @@ using ConstTypeHashSet = std::unordered_set<const DexType*>;
 namespace class_merging {
 
 using TypeToTypeSet = std::unordered_map<const DexType*, TypeSet>;
+using TypeGroupByDex = std::vector<std::pair<boost::optional<size_t>, TypeSet>>;
 
 enum InterDexGroupingType {
   DISABLED = 0, // No interdex grouping.
@@ -135,12 +136,6 @@ struct ModelSpec {
   InterDexGroupingType merge_per_interdex_set{InterDexGroupingType::DISABLED};
   // whether to perform class merging on the primary dex.
   bool include_primary_dex{false};
-  // Merge static methods within shape.
-  bool merge_static_methods_within_shape{false};
-  // Merge direct methods within shape.
-  bool merge_direct_methods_within_shape{false};
-  // Merge nonvirt methods within shape.
-  bool merge_nonvirt_methods_within_shape{false};
   // Process @MethodMeta annotations
   bool process_method_meta{false};
   // Max mergeable count per merger type
@@ -157,6 +152,8 @@ struct ModelSpec {
   bool dedup_throw_blocks{true};
   // Replace string literals matching a merged type.
   bool replace_type_like_const_strings{true};
+  // Indicates if the merging should be performed per dex.
+  bool per_dex_grouping{false};
 
   bool generate_type_tag() const {
     return type_tag_config == TypeTagConfig::GENERATE;
@@ -206,6 +203,7 @@ class Model {
    * Build a Model given a scope and a specification.
    */
   static Model build_model(const Scope& scope,
+                           const DexStoresVector& stores,
                            const ConfigFiles& conf,
                            const ModelSpec& spec,
                            const TypeSystem& type_system,
@@ -308,8 +306,6 @@ class Model {
 
   // the roots (base types) for the model
   std::vector<MergerType*> m_roots;
-  // all types in this model
-  TypeSet m_types;
   // the new generated class hierarchy during analysis.
   // Types are not changed during analysis and m_hierarchy represents
   // the class hierarchy as known to the analysis and what the final
@@ -339,6 +335,7 @@ class Model {
 
   const Scope& m_scope;
   const ConfigFiles& m_conf;
+  const XDexRefs m_x_dex;
 
   static std::unordered_map<DexType*, size_t> s_cls_to_interdex_group;
   static size_t s_num_interdex_groups;
@@ -349,6 +346,7 @@ class Model {
    * roots.
    */
   Model(const Scope& scope,
+        const DexStoresVector& stores,
         const ConfigFiles& conf,
         const ModelSpec& spec,
         const TypeSystem& type_system,
@@ -376,13 +374,15 @@ class Model {
       const DexType* merger_type,
       const MergerType::Shape& shape,
       const TypeSet& intf_set,
-      const std::vector<const DexType*>& group_values,
+      const boost::optional<size_t>& dex_id,
+      const ConstTypeVector& group_values,
       const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
       const InterdexSubgroupIdx subgroup_idx);
   void create_mergers_helper(
       const DexType* merger_type,
       const MergerType::Shape& shape,
       const TypeSet& intf_set,
+      const boost::optional<size_t>& dex_id,
       const TypeSet& group_values,
       const strategy::Strategy strategy,
       const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
@@ -398,7 +398,12 @@ class Model {
                           MergerType::ShapeHierarchy& hier);
   void flatten_shapes(const MergerType& merger,
                       MergerType::ShapeCollector& shapes);
-  std::vector<TypeSet> group_per_interdex_set(const TypeSet& types);
+  TypeGroupByDex group_per_dex(bool per_dex_grouping, const TypeSet& types);
+  TypeSet get_types_in_current_interdex_group(
+      const TypeSet& types, const ConstTypeHashSet& interdex_group_types);
+
+  std::vector<ConstTypeHashSet> group_by_interdex_set(
+      const ConstTypeHashSet& types);
   void map_fields(MergerType& merger,
                   const std::vector<const DexType*>& classes);
 
@@ -462,11 +467,6 @@ struct ModelStats {
   uint32_t m_num_static_non_virt_dedupped = 0;
   uint32_t m_num_vmethods_dedupped = 0;
   uint32_t m_num_const_lifted_methods = 0;
-  // Stats of methods merging within each class. They are number of merged
-  // methods minus number of dispatch methods.
-  uint32_t m_num_merged_static_methods = 0;
-  uint32_t m_num_merged_direct_methods = 0;
-  uint32_t m_num_merged_nonvirt_methods = 0;
 
   ModelStats& operator+=(const ModelStats& stats);
 };

@@ -22,6 +22,7 @@
 #include "DexStore.h"
 #include "IRCode.h"
 #include "Macros.h"
+#include "MethodProfiles.h"
 #include "PassManager.h"
 #include "RedexMappedFile.h"
 #include "ScopedCFG.h"
@@ -36,7 +37,7 @@ namespace {
 source_blocks::InsertResult source_blocks(
     DexMethod* method,
     IRCode* code,
-    const std::vector<boost::optional<std::string>>& profiles,
+    const std::vector<source_blocks::ProfileData>& profiles,
     bool serialize,
     bool exc_inject) {
   ScopedCFG cfg(code);
@@ -175,14 +176,40 @@ struct ProfileFile {
   }
 };
 
-void run_source_blocks(
-    DexStoresVector& stores,
-    ConfigFiles& conf,
-    PassManager& mgr,
-    bool serialize,
-    bool exc_inject,
-    bool always_inject,
-    std::vector<std::unique_ptr<ProfileFile>>& profile_files) {
+boost::optional<SourceBlock::Val> maybe_val_from_mp(
+    const method_profiles::MethodProfiles& method_profiles,
+    const std::string& interaction,
+    const DexMethodRef* mref) {
+  if (!method_profiles.has_stats()) {
+    return boost::none;
+  }
+
+  const auto& mp_map = method_profiles.all_interactions();
+  const auto& inter_it = mp_map.find(interaction);
+  if (inter_it == mp_map.end()) {
+    return boost::none;
+  }
+
+  const auto& inter_map = inter_it->second;
+  auto it = inter_map.find(mref);
+  if (it == inter_map.end()) {
+    return boost::none;
+  }
+
+  // For now, just convert to coverage. Having stats means it's not zero.
+  redex_assert(it->second.call_count > 0);
+  return SourceBlock::Val(1, it->second.appear_percent);
+}
+
+void run_source_blocks(DexStoresVector& stores,
+                       ConfigFiles& conf,
+                       PassManager& mgr,
+                       bool serialize,
+                       bool exc_inject,
+                       bool always_inject,
+                       std::vector<std::unique_ptr<ProfileFile>>& profile_files,
+                       const method_profiles::MethodProfiles& method_profiles,
+                       const std::vector<std::string>& interactions) {
   auto scope = build_class_scope(stores);
 
   std::mutex serialized_guard;
@@ -192,28 +219,80 @@ void run_source_blocks(
 
   std::atomic<size_t> skipped{0};
 
-  auto find_profiles = [&profile_files](const DexMethodRef* mref) {
+  auto find_profiles = [&profile_files, &always_inject, &method_profiles,
+                        &interactions](const DexMethodRef* mref) {
+    std::vector<source_blocks::ProfileData> profiles;
+    profiles.reserve(profile_files.size());
+
+    auto val_to_str = [](const auto& v) -> std::string {
+      if (!v) {
+        return "x";
+      }
+      return std::to_string(v->val) + ":" + std::to_string(v->appear100);
+    };
+    auto maybe_val_to_str = [&val_to_str](const auto& val_opt) {
+      return val_opt ? val_to_str(*val_opt) : "n/a";
+    };
+
     if (profile_files.empty()) {
-      return std::make_pair(std::vector<boost::optional<std::string>>(), false);
+      if (always_inject) {
+        // Some effort to recover from method profiles in general.
+        redex_assert(method_profiles.has_stats() || interactions.empty());
+
+        for (const auto& inter : interactions) {
+          auto val_opt = maybe_val_from_mp(method_profiles, inter, mref);
+          profiles.emplace_back(val_opt ? *val_opt : SourceBlock::Val(0, 0));
+        }
+      }
+      return std::make_pair(std::move(profiles), false);
     }
-    std::vector<boost::optional<std::string>> profiles;
+
     bool found_one = false;
     for (auto& profile_file : profile_files) {
+      auto val_opt =
+          maybe_val_from_mp(method_profiles, profile_file->interaction, mref);
+
       auto it = profile_file->method_meta.find(mref);
       if (it == profile_file->method_meta.end()) {
-        profiles.emplace_back(boost::none);
+        if (always_inject) {
+          TRACE(METH_PROF, 3,
+                "No basic block profile for %s. Always-inject=true, falling "
+                "back to method profiles: %s",
+                SHOW(mref),
+                [&]() {
+                  if (!val_opt) {
+                    return "no-profile=" + val_to_str(SourceBlock::Val(0, 0));
+                  }
+                  return "profile=" + val_to_str(*val_opt);
+                }()
+                    .c_str());
+          profiles.emplace_back(val_opt ? *val_opt : SourceBlock::Val(0, 0));
+        } else {
+          TRACE(METH_PROF, 3,
+                "No basic block profile for %s. Always-inject=false, not "
+                "injecting.",
+                SHOW(mref));
+          profiles.emplace_back(std::nullopt);
+        }
         continue;
       }
       found_one = true;
       const auto& pos = it->second;
-      profiles.emplace_back(std::string(
-          profile_file->mapped_file.const_data() + pos.first, pos.second));
+      profiles.emplace_back(std::make_pair(
+          std::string(profile_file->mapped_file.const_data() + pos.first,
+                      pos.second),
+          val_opt));
+      TRACE(METH_PROF, 3,
+            "Found basic block profile for %s. Error fallback is %s.",
+            SHOW(mref), maybe_val_to_str(val_opt).c_str());
     }
+
     if (!found_one) {
       TRACE(METH_PROF, 2, "No basic block profile for %s!", SHOW(mref));
     }
     return std::make_pair(std::move(profiles), found_one);
   };
+
   walk::parallel::methods(scope, [&](DexMethod* method) {
     auto code = method->get_code();
     if (code != nullptr) {
@@ -223,6 +302,7 @@ void run_source_blocks(
         skipped.fetch_add(1);
         return;
       }
+
       auto res =
           source_blocks(method, code, profiles.first, serialize, exc_inject);
       std::unique_lock<std::mutex> lock(serialized_guard);
@@ -252,30 +332,46 @@ void run_source_blocks(
     ofs << show(p.first) << "," << p.second << "\n";
   }
 }
-} // namespace
 
-void InsertSourceBlocksPass::bind_config() {
-  bind("always_inject",
-       m_always_inject,
-       m_always_inject,
-       "Always inject source blocks, even if profiles are missing.");
-  bind("force_run", m_force_run, m_force_run);
-  bind("force_serialize",
-       m_force_serialize,
-       m_force_serialize,
-       "Force serialization of the CFGs. Testing only.");
-  bind("insert_after_excs", m_insert_after_excs, m_insert_after_excs);
-  bind("profile_files", "", m_profile_files);
+template <typename T, typename Fn>
+void sort_coldstart_and_set_indices(T& container, const Fn& fn) {
+  std::sort(container.begin(), container.end(),
+            [&fn](const auto& lhs_in, const auto& rhs_in) {
+              if (lhs_in == rhs_in) {
+                return false;
+              }
+              const auto& lhs = fn(lhs_in);
+              const auto& rhs = fn(rhs_in);
+              if (lhs == rhs) {
+                return false;
+              }
+              if (lhs == "ColdStart") {
+                return true;
+              }
+              if (rhs == "ColdStart") {
+                return false;
+              }
+              return lhs < rhs;
+            });
+
+  std::unordered_map<std::string, size_t> interaction_indices;
+  for (size_t i = 0; i != container.size(); ++i) {
+    interaction_indices[fn(container[i])] = i;
+  }
+  g_redex->set_sb_interaction_index(interaction_indices);
 }
 
-void InsertSourceBlocksPass::run_pass(DexStoresVector& stores,
-                                      ConfigFiles& conf,
-                                      PassManager& mgr) {
+std::pair<std::vector<std::unique_ptr<ProfileFile>>, std::vector<std::string>>
+prepare_profile_files_and_interactions(const std::string& profile_files_str,
+                                       ConfigFiles& conf,
+                                       bool always_inject) {
   std::vector<std::unique_ptr<ProfileFile>> profile_files;
-  if (!m_profile_files.empty()) {
+  std::vector<std::string> interactions;
+
+  if (!profile_files_str.empty()) {
     Timer t("reading files");
     std::vector<std::string> files;
-    boost::split(files, m_profile_files, [](const auto& c) {
+    boost::split(files, profile_files_str, [](const auto& c) {
       constexpr char separator =
 #if IS_WINDOWS
           ';';
@@ -297,35 +393,62 @@ void InsertSourceBlocksPass::run_pass(DexStoresVector& stores,
         indices);
 
     // Sort the interactions.
-    std::sort(profile_files.begin(), profile_files.end(),
-              [](const auto& lhs, const auto& rhs) {
-                if (lhs == rhs) {
-                  return false;
-                }
-                if (lhs->interaction == "ColdStart") {
-                  return true;
-                }
-                if (rhs->interaction == "ColdStart") {
-                  return false;
-                }
-                return lhs->interaction < rhs->interaction;
-              });
-    std::unordered_map<std::string, size_t> interaction_indices;
-    for (size_t i = 0; i != profile_files.size(); ++i) {
-      interaction_indices[profile_files[i]->interaction] = i;
+    sort_coldstart_and_set_indices(
+        profile_files,
+        [](const auto& u) -> const std::string& { return u->interaction; });
+
+    std::transform(profile_files.begin(), profile_files.end(),
+                   std::back_inserter(interactions),
+                   [](const auto& p) { return p->interaction; });
+  } else if (always_inject) {
+    // Need to recover interaction names from method profiles.
+    if (conf.get_method_profiles().has_stats()) {
+      const auto& mp_map = conf.get_method_profiles().all_interactions();
+      std::transform(mp_map.begin(), mp_map.end(),
+                     std::back_inserter(interactions),
+                     [](const auto& p) { return p.first; });
+      sort_coldstart_and_set_indices(
+          interactions, [](const auto& s) -> const std::string& { return s; });
     }
-    g_redex->set_sb_interaction_index(interaction_indices);
   }
 
+  return std::make_pair(std::move(profile_files), std::move(interactions));
+}
+
+} // namespace
+
+void InsertSourceBlocksPass::bind_config() {
+  bind("always_inject",
+       m_always_inject,
+       m_always_inject,
+       "Always inject source blocks, even if profiles are missing.");
+  bind("force_run", m_force_run, m_force_run);
+  bind("force_serialize",
+       m_force_serialize,
+       m_force_serialize,
+       "Force serialization of the CFGs. Testing only.");
+  bind("insert_after_excs", m_insert_after_excs, m_insert_after_excs);
+  bind("profile_files", "", m_profile_files);
+}
+
+void InsertSourceBlocksPass::run_pass(DexStoresVector& stores,
+                                      ConfigFiles& conf,
+                                      PassManager& mgr) {
   bool is_instr_mode = mgr.get_redex_options().instrument_pass_enabled;
+  bool always_inject = m_always_inject || m_force_serialize || is_instr_mode;
+
+  auto prep = prepare_profile_files_and_interactions(m_profile_files, conf,
+                                                     always_inject);
+
   run_source_blocks(stores,
                     conf,
                     mgr,
                     /* serialize= */ m_force_serialize || is_instr_mode,
                     m_insert_after_excs,
-                    /* always_inject= */ m_always_inject || m_force_serialize ||
-                        is_instr_mode,
-                    profile_files);
+                    /* always_inject= */ always_inject,
+                    /* profile_files= */ prep.first,
+                    conf.get_method_profiles(),
+                    /* interactions= */ prep.second);
 }
 
 static InsertSourceBlocksPass s_pass;

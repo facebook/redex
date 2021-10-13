@@ -19,6 +19,7 @@
 #include "ApkResources.h"
 #include "BundleResources.h"
 #include "Debug.h"
+#include "DetectBundle.h"
 #include "DexUtil.h"
 #include "IOUtil.h"
 #include "Macros.h"
@@ -52,9 +53,7 @@ std::unique_ptr<AndroidResources> create_resource_reader(
 // TODO (T91001948): Integrate protobuf dependency in supported platforms for
 // open source
 #ifdef HAS_PROTOBUF
-  std::string bundle_config =
-      (boost::filesystem::path(directory) / "BundleConfig.pb").string();
-  if (boost::filesystem::exists(bundle_config)) {
+  if (has_bundle_config(directory)) {
     return std::make_unique<BundleResources>(directory);
   } else {
     return std::make_unique<ApkResources>(directory);

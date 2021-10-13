@@ -42,7 +42,7 @@ std::string to_string(const ModelSpec& spec) {
 void load_generated_types(const ModelSpec& spec,
                           const Scope& scope,
                           const TypeSystem& type_system,
-                          const TypeSet& models,
+                          const ConstTypeHashSet& models,
                           TypeSet& generated) {
   generated.insert(models.begin(), models.end());
   for (const auto& type : spec.gen_types) {
@@ -78,7 +78,7 @@ bool is_subset(const Set& left, const Set& right) {
 }
 
 void print_interface_maps(const TypeToTypeSet& intf_to_classes,
-                          const TypeSet& types) {
+                          const ConstTypeHashSet& types) {
   std::vector<const DexType*> intfs;
   for (const auto& intf_to_classes_it : intf_to_classes) {
     intfs.emplace_back(intf_to_classes_it.first);
@@ -158,16 +158,17 @@ size_t trim_groups(MergerType::ShapeCollector& shapes, size_t min_count) {
 const TypeSet Model::empty_set = TypeSet();
 
 Model::Model(const Scope& scope,
+             const DexStoresVector& stores,
              const ConfigFiles& conf,
              const ModelSpec& spec,
              const TypeSystem& type_system,
              const RefChecker& refchecker)
     : m_spec(spec),
-      m_types(spec.merging_targets.begin(), spec.merging_targets.end()),
       m_type_system(type_system),
       m_ref_checker(refchecker),
       m_scope(scope),
-      m_conf(conf) {
+      m_conf(conf),
+      m_x_dex(XDexRefs(stores)) {
   init(scope, spec, type_system);
 }
 
@@ -178,7 +179,7 @@ void Model::init(const Scope& scope,
   for (const auto root : spec.roots) {
     build_interface_map(root, {});
   }
-  print_interface_maps(m_intf_to_classes, m_types);
+  print_interface_maps(m_intf_to_classes, m_spec.merging_targets);
 
   for (const auto root : spec.roots) {
     MergerType* root_merger = build_mergers(root);
@@ -187,24 +188,25 @@ void Model::init(const Scope& scope,
 
   // load all generated types and find non mergeables
   TypeSet generated;
-  load_generated_types(spec, scope, type_system, m_types, generated);
+  load_generated_types(spec, scope, type_system, m_spec.merging_targets,
+                       generated);
   TRACE(CLMG, 4, "Generated types %ld", generated.size());
   exclude_types(spec.exclude_types);
-  MergeabilityChecker checker(scope, spec, m_ref_checker, generated, m_types);
+  MergeabilityChecker checker(scope, spec, m_ref_checker, generated);
   m_non_mergeables = checker.get_non_mergeables();
   TRACE(CLMG, 3, "Non mergeables %ld", m_non_mergeables.size());
   m_metric.non_mergeables = m_non_mergeables.size();
-  m_metric.all_types = m_types.size();
+  m_metric.all_types = m_spec.merging_targets.size();
 }
 
 void Model::build_hierarchy(const TypeSet& roots) {
-  for (const auto& type : m_types) {
+  for (const auto& type : m_spec.merging_targets) {
     if (roots.count(type) > 0) {
       continue;
     }
     const auto cls = type_class(type);
     const auto super = cls->get_super_class();
-    redex_assert(super != nullptr && super != type::java_lang_Object());
+    redex_assert(super != nullptr);
     m_hierarchy[super].insert(type);
     m_parents[type] = super;
   }
@@ -354,17 +356,19 @@ MergerType& Model::create_merger_helper(
     const DexType* merger_type,
     const MergerType::Shape& shape,
     const TypeSet& intf_set,
-    const std::vector<const DexType*>& group_values,
+    const boost::optional<size_t>& dex_id,
+    const ConstTypeVector& group_values,
     const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
     const InterdexSubgroupIdx subgroup_idx) {
   size_t group_count = m_shape_to_count[shape]++;
   std::string name = shape.build_type_name(
-      m_spec.class_name_prefix, merger_type, std::string("Shape"), group_count,
+      m_spec.class_name_prefix, merger_type, intf_set, dex_id, group_count,
       interdex_subgroup_idx, subgroup_idx);
   const auto& shape_type = DexType::make_type(name.c_str());
   TRACE(CLMG, 7, "Build shape type %s", SHOW(shape_type));
   auto& merger_shape = create_merger_shape(shape_type, shape, merger_type,
                                            intf_set, group_values);
+  merger_shape.dex_id = dex_id;
   merger_shape.interdex_subgroup = interdex_subgroup_idx;
 
   map_fields(merger_shape, group_values);
@@ -375,6 +379,7 @@ void Model::create_mergers_helper(
     const DexType* merger_type,
     const MergerType::Shape& shape,
     const TypeSet& intf_set,
+    const boost::optional<size_t>& dex_id,
     const TypeSet& group_values,
     const strategy::Strategy strategy,
     const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
@@ -383,8 +388,8 @@ void Model::create_mergers_helper(
   InterdexSubgroupIdx subgroup_cnt = 0;
   strategy::apply_grouping(
       strategy, group_values, min_mergeables_count, max_mergeables_count,
-      [&](const std::vector<const DexType*>& group) {
-        create_merger_helper(merger_type, shape, intf_set, group,
+      [&](const ConstTypeVector& group) {
+        create_merger_helper(merger_type, shape, intf_set, dex_id, group,
                              interdex_subgroup_idx, subgroup_cnt++);
       });
 }
@@ -659,10 +664,58 @@ size_t get_interdex_group(
 
 namespace class_merging {
 
-std::vector<TypeSet> Model::group_per_interdex_set(const TypeSet& types) {
-  ConstTypeHashSet type_hash_set{types.begin(), types.end()};
-  const auto& type_to_usages = get_type_usages(type_hash_set, m_scope);
-  std::vector<TypeSet> new_groups(s_num_interdex_groups);
+/**
+ * Group merging targets according to their dex ids. Return a vector of dex_id
+ * and types.
+ */
+TypeGroupByDex Model::group_per_dex(bool per_dex_grouping,
+                                    const TypeSet& types) {
+  if (!per_dex_grouping) {
+    TypeSet group(types.begin(), types.end());
+    return {{boost::none, group}};
+  } else {
+    std::vector<TypeSet> new_groups(m_x_dex.num_dexes());
+    for (auto type : types) {
+      auto dex_id = m_x_dex.get_dex_idx(type);
+      new_groups[dex_id].emplace(type);
+    }
+    TypeGroupByDex result(m_x_dex.num_dexes());
+    size_t dex_id = 0;
+    for (auto&& group : new_groups) {
+      result.emplace_back(std::make_pair(dex_id, std::move(group)));
+      ++dex_id;
+    }
+    return result;
+  }
+}
+
+TypeSet Model::get_types_in_current_interdex_group(
+    const TypeSet& types, const ConstTypeHashSet& interdex_group_types) {
+  TypeSet group;
+  for (auto* type : types) {
+    if (interdex_group_types.count(type)) {
+      group.insert(type);
+    }
+  }
+  return group;
+}
+
+/**
+ * Split the types into groups according to the interdex grouping information.
+ * Note that types may be dropped if they are not allowed be merged.
+ */
+std::vector<ConstTypeHashSet> Model::group_by_interdex_set(
+    const ConstTypeHashSet& types) {
+  size_t num_group = 1;
+  if (is_merge_per_interdex_set_enabled() && s_num_interdex_groups > 1) {
+    num_group = s_num_interdex_groups;
+  }
+  std::vector<ConstTypeHashSet> new_groups(num_group);
+  if (num_group == 1) {
+    new_groups[0].insert(types.begin(), types.end());
+    return new_groups;
+  }
+  const auto& type_to_usages = get_type_usages(types, m_scope);
   for (const auto& pair : type_to_usages) {
     auto index = get_interdex_group(pair.second, s_cls_to_interdex_group,
                                     s_num_interdex_groups);
@@ -689,6 +742,8 @@ void Model::flatten_shapes(const MergerType& merger,
                            MergerType::ShapeCollector& shapes) {
   size_t num_trimmed_types = trim_groups(shapes, m_spec.min_count);
   m_metric.dropped += num_trimmed_types;
+  // Group all merging targets according to interdex grouping.
+  auto all_interdex_groups = group_by_interdex_set(m_spec.merging_targets);
   // sort shapes by mergeables count
   std::vector<const MergerType::Shape*> keys;
   for (auto& shape_it : shapes) {
@@ -726,30 +781,32 @@ void Model::flatten_shapes(const MergerType& merger,
                 return left_group.size() > right_group.size();
               });
 
-    bool merge_per_interdex_set = is_merge_per_interdex_set_enabled();
-
     for (const TypeSet* intf_set : intf_sets) {
-      const TypeSet& group_values = shape_hierarchy.groups.at(*intf_set);
-      if (merge_per_interdex_set && s_num_interdex_groups > 1) {
-        auto new_groups = group_per_interdex_set(group_values);
-
-        redex_assert(new_groups.size() <
-                     std::numeric_limits<InterdexSubgroupIdx>::max());
-        for (InterdexSubgroupIdx gindex = 0; gindex < new_groups.size();
-             gindex++) {
-          if (new_groups[gindex].empty() ||
-              new_groups[gindex].size() < m_spec.min_count) {
-            continue;
+      const TypeSet& implementors = shape_hierarchy.groups.at(*intf_set);
+      for (auto& pair : group_per_dex(m_spec.per_dex_grouping, implementors)) {
+        auto dex_id = pair.first;
+        auto group_values = pair.second;
+        if (all_interdex_groups.size() > 1) {
+          for (InterdexSubgroupIdx interdex_gid = 0;
+               interdex_gid < all_interdex_groups.size();
+               interdex_gid++) {
+            if (all_interdex_groups[interdex_gid].empty()) {
+              continue;
+            }
+            auto new_group = get_types_in_current_interdex_group(
+                group_values, all_interdex_groups[interdex_gid]);
+            if (new_group.size() < m_spec.min_count) {
+              continue;
+            }
+            create_mergers_helper(merger.type, *shape, *intf_set, dex_id,
+                                  new_group, m_spec.strategy, interdex_gid,
+                                  m_spec.max_count, m_spec.min_count);
           }
-
-          create_mergers_helper(merger.type, *shape, *intf_set,
-                                new_groups[gindex], m_spec.strategy, gindex,
+        } else {
+          create_mergers_helper(merger.type, *shape, *intf_set, dex_id,
+                                group_values, m_spec.strategy, boost::none,
                                 m_spec.max_count, m_spec.min_count);
         }
-      } else {
-        create_mergers_helper(merger.type, *shape, *intf_set, group_values,
-                              m_spec.strategy, boost::none, m_spec.max_count,
-                              m_spec.min_count);
       }
     }
   }
@@ -917,8 +974,14 @@ void Model::add_interface_scope(MergerType& merger,
     intf_meths.interfaces.insert(intf_scope.interfaces.begin(),
                                  intf_scope.interfaces.end());
     for (const auto& vmeth : intf_scope.methods) {
-      if (!vmeth.first->is_def()) continue;
-      if (merger.mergeables.count(vmeth.first->get_class()) == 0) continue;
+      // Only insert method defs
+      if (!vmeth.first->is_def()) {
+        continue;
+      }
+      // Only collect intf methods on mergeable types
+      if (merger.mergeables.count(vmeth.first->get_class()) == 0) {
+        continue;
+      }
       TRACE(CLMG,
             8,
             "add interface method %s (%s)",
@@ -936,8 +999,14 @@ void Model::add_interface_scope(MergerType& merger,
       return;
     }
   }
-  merger.intfs_methods.push_back(MergerType::InterfaceMethod());
-  insert(merger.intfs_methods.back());
+
+  // No match for existing InterfaceMethods. Now create a new InterfaceMethod
+  // and insert the current VirtualScope. But we only do so if the VirtualScope
+  // has at least one method def.
+  if (intf_scope.has_def()) {
+    merger.intfs_methods.push_back(MergerType::InterfaceMethod());
+    insert(merger.intfs_methods.back());
+  }
 }
 
 void Model::distribute_virtual_methods(
@@ -1045,7 +1114,7 @@ std::string Model::print() const {
     count += merger.second.mergeables.size();
   }
   std::ostringstream ss;
-  ss << m_spec.name << " Model: all types " << m_types.size()
+  ss << m_spec.name << " Model: all types " << m_spec.merging_targets.size()
      << ", merge types " << m_mergers.size() << ", mergeables " << count
      << "\n";
   for (const auto root_merger : m_roots) {
@@ -1195,6 +1264,7 @@ std::string Model::print(const DexType* type, int nest) const {
 }
 
 Model Model::build_model(const Scope& scope,
+                         const DexStoresVector& stores,
                          const ConfigFiles& conf,
                          const ModelSpec& spec,
                          const TypeSystem& type_system,
@@ -1202,7 +1272,7 @@ Model Model::build_model(const Scope& scope,
   Timer t("build_model");
 
   TRACE(CLMG, 3, "Build Model for %s", to_string(spec).c_str());
-  Model model(scope, conf, spec, type_system, refchecker);
+  Model model(scope, stores, conf, spec, type_system, refchecker);
   TRACE(CLMG, 3, "Model:\n%s\nBuild Model done", model.print().c_str());
 
   TRACE(CLMG, 3, "Shape Model");
@@ -1241,9 +1311,6 @@ ModelStats& ModelStats::operator+=(const ModelStats& stats) {
   m_num_static_non_virt_dedupped += stats.m_num_static_non_virt_dedupped;
   m_num_vmethods_dedupped += stats.m_num_vmethods_dedupped;
   m_num_const_lifted_methods += stats.m_num_const_lifted_methods;
-  m_num_merged_static_methods += stats.m_num_merged_static_methods;
-  m_num_merged_direct_methods += stats.m_num_merged_direct_methods;
-  m_num_merged_nonvirt_methods += stats.m_num_merged_nonvirt_methods;
   return *this;
 }
 

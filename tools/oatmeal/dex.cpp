@@ -316,6 +316,7 @@ void load_class_data_item(
     uint32_t code_off = read_uleb128(&encd);
     code_item_offset[code_off] = 0;
   }
+  (void)ndex;
 }
 
 /*

@@ -62,7 +62,6 @@ class ModelMethodMerger {
     merge_ctors();
     dedup_non_ctor_non_virt_methods();
     merge_virt_itf_methods();
-    merge_methods_within_shape();
     return get_mergeable_ctor_map();
   }
 
@@ -119,7 +118,6 @@ class ModelMethodMerger {
   void merge_ctors();
   void dedup_non_ctor_non_virt_methods();
   void merge_virt_itf_methods();
-  void merge_methods_within_shape();
   void fix_visibility();
 
   void merge_virtual_methods(

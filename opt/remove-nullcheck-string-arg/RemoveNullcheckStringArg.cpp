@@ -12,6 +12,7 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "KotlinNullCheckMethods.h"
+#include "LiveRange.h"
 #include "PassManager.h"
 #include "ReachingDefinitions.h"
 #include "Show.h"
@@ -266,6 +267,9 @@ RemoveNullcheckStringArg::Stats RemoveNullcheckStringArg::change_in_cfg(
     param_index.insert(std::make_pair(load_insn->dest(), arg_index++));
   }
 
+  live_range::MoveAwareChains chains(cfg);
+  live_range::DefUseChains du_chains = chains.get_def_use_chains();
+
   for (cfg::Block* block : cfg.blocks()) {
     auto env = reaching_defs_iter.get_entry_state_at(block);
     if (env.is_bottom()) {
@@ -306,6 +310,17 @@ RemoveNullcheckStringArg::Stats RemoveNullcheckStringArg::change_in_cfg(
         }
         auto param_iter = param_index.find(param_load_insn->dest());
         always_assert(param_iter != param_index.end());
+
+        auto use_set = du_chains[param_load_insn];
+        if (use_set.size() == 1) {
+          for (const auto& p : use_set) {
+            always_assert(p.insn == insn);
+          }
+          // If we have single use which is null check, remove null check.
+          m.remove(cfg.find_insn(insn));
+          continue;
+        }
+
         auto index = param_iter->second;
         auto tmp_reg = cfg.allocate_temp();
         IRInstruction* cst_insn = new IRInstruction(OPCODE_CONST);

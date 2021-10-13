@@ -26,6 +26,25 @@ std::string pretty_prefix_for_cls(const DexClass* cls) {
 }
 } // namespace
 
+IODIMetadata::IODILayerMode IODIMetadata::parseLayerMode(const std::string& v) {
+  // kFull,
+  //   // For API level 26 and above, ART defaults to printing PCs
+  //   // in place of line numbers so IODI debug programs aren't needed.
+  //   kSkipLayer0AtApi26,
+  //   // Always skip the layer 0 programs. Mostly for testing.
+  //   kAlwaysSkipLayer0,
+  if (v == "full") {
+    return IODILayerMode::kFull;
+  }
+  if (v == "skip-layer-0-at-api-26") {
+    return IODILayerMode::kSkipLayer0AtApi26;
+  }
+  if (v == "always-skip-layer-0") {
+    return IODILayerMode::kAlwaysSkipLayer0;
+  }
+  always_assert_log(false, "Unsupported IODILayerMode: %s", v.c_str());
+}
+
 std::string IODIMetadata::get_iodi_name(const DexMethod* m) {
   std::string prefix = pretty_prefix_for_cls(type_class(m->get_class()));
   prefix += m->str();

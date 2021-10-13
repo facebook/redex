@@ -296,7 +296,8 @@ ThrowPropagationPass::Stats ThrowPropagationPass::run(
   }
 
   if (stats.throws_inserted > 0) {
-    stats.unreachable_instruction_count += cfg->remove_unreachable_blocks();
+    stats.unreachable_instruction_count +=
+        cfg->remove_unreachable_blocks().first;
     cfg->recompute_registers_size();
   }
 

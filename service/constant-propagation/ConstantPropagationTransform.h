@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "CFGMutation.h"
 #include "ConstantEnvironment.h"
 #include "ConstantPropagationAnalysis.h"
 #include "ConstantPropagationWholeProgramState.h"
@@ -30,6 +31,7 @@ class Transform final {
     bool replace_moves_with_consts{true};
     bool replace_move_result_with_consts{false};
     bool remove_dead_switch{true};
+    bool add_param_const{true};
     const DexType* class_under_init{nullptr};
     // These methods are known pure, we can replace their results with constant
     // value.
@@ -46,6 +48,7 @@ class Transform final {
     size_t throws{0};
     size_t null_checks{0};
     size_t null_checks_method_calls{0};
+    size_t unreachable_instructions_removed{0};
 
     Stats& operator+=(const Stats& that) {
       branches_removed += that.branches_removed;
@@ -55,6 +58,7 @@ class Transform final {
       throws += that.throws;
       null_checks += that.null_checks;
       null_checks_method_calls += that.null_checks_method_calls;
+      unreachable_instructions_removed += that.unreachable_instructions_removed;
       return *this;
     }
 
@@ -66,54 +70,71 @@ class Transform final {
         m_kotlin_null_check_assertions(
             kotlin_nullcheck_wrapper::get_kotlin_null_assertions()) {}
 
-  // Apply transformations on uneditable cfg
-  // TODO: Migrate all to use editable cfg via `apply` method
-  Stats apply_on_uneditable_cfg(const intraprocedural::FixpointIterator&,
-                                const WholeProgramState&,
-                                IRCode*,
-                                const XStoreRefs*,
-                                const DexType*);
+  // Apply all available transformations on editable cfg
+  // May run cfg.calculate_exit_block as a side-effect.
+  void apply(const intraprocedural::FixpointIterator& fp_iter,
+             const WholeProgramState& wps,
+             cfg::ControlFlowGraph& cfg,
+             const XStoreRefs* xstores,
+             bool is_static,
+             DexType* declaring_type,
+             DexProto*);
 
-  // Apply (new) transformations on editable cfg
-  Stats apply(const intraprocedural::FixpointIterator&,
-              cfg::ControlFlowGraph&,
-              DexMethod*,
-              const XStoreRefs*);
+  // Apply transformations on editable cfg; don't call directly, prefer calling
+  // `apply` instead.
+  void legacy_apply_constants_and_prune_unreachable(
+      const intraprocedural::FixpointIterator&,
+      const WholeProgramState&,
+      cfg::ControlFlowGraph&,
+      const XStoreRefs*,
+      const DexType*);
+
+  // Apply targets-forwarding transformations on editable cfg; don't call
+  // directly, prefer calling `apply` instead.
+  // Runs cfg.calculate_exit_block as a side-effect.
+  void legacy_apply_forward_targets(const intraprocedural::FixpointIterator&,
+                                    cfg::ControlFlowGraph&,
+                                    bool is_static,
+                                    DexType* declaring_type,
+                                    DexProto*,
+                                    const XStoreRefs*);
+
+  const Stats& get_stats() const { return m_stats; }
 
  private:
   /*
    * The methods in this class queue up their transformations. After they are
-   * all done, the apply_changes() method does the actual modification of the
-   * IRCode.
+   * all done, the apply_changes() method does the actual modifications.
    */
-  void apply_changes(IRCode*);
+  void apply_changes(cfg::ControlFlowGraph&);
 
   void simplify_instruction(const ConstantEnvironment&,
                             const WholeProgramState& wps,
-                            const IRList::iterator&,
+                            const cfg::InstructionIterator& cfg_it,
                             const XStoreRefs*,
                             const DexType*);
 
   void replace_with_const(const ConstantEnvironment&,
-                          const IRList::iterator&,
+                          const cfg::InstructionIterator& cfg_it,
                           const XStoreRefs*,
                           const DexType*);
   void generate_const_param(const ConstantEnvironment&,
-                            const IRList::iterator&,
+                            const cfg::InstructionIterator& cfg_it,
                             const XStoreRefs*,
                             const DexType*);
 
   bool eliminate_redundant_put(const ConstantEnvironment&,
                                const WholeProgramState& wps,
-                               const IRList::iterator&);
+                               const cfg::InstructionIterator& cfg_it);
   bool eliminate_redundant_null_check(const ConstantEnvironment&,
                                       const WholeProgramState& wps,
-                                      const IRList::iterator&);
+                                      const cfg::InstructionIterator& cfg_it);
   bool replace_with_throw(const ConstantEnvironment&,
-                          const IRList::iterator&,
+                          const cfg::InstructionIterator& cfg_it,
                           npe::NullPointerExceptionCreator* npe_creator);
 
-  void remove_dead_switch(const ConstantEnvironment&,
+  void remove_dead_switch(const intraprocedural::FixpointIterator& intra_cp,
+                          const ConstantEnvironment&,
                           cfg::ControlFlowGraph&,
                           cfg::Block*);
 
@@ -133,16 +154,16 @@ class Transform final {
   // or a type defined in a store different from the one where the method is
   // defined in.
   bool has_problematic_return(cfg::ControlFlowGraph&,
-                              DexMethod*,
+                              bool is_static,
+                              DexType* declaring_type,
+                              DexProto* proto,
                               const XStoreRefs*);
 
   const Config m_config;
-  std::vector<std::pair<IRInstruction*, std::vector<IRInstruction*>>>
-      m_replacements;
+  std::unique_ptr<cfg::CFGMutation> m_mutation;
   std::vector<IRInstruction*> m_added_param_values;
-  std::vector<IRList::iterator> m_deletes;
   std::unordered_set<IRInstruction*> m_redundant_move_results;
-  bool m_rebuild_cfg{0};
+  std::vector<cfg::Edge*> m_edge_deletes;
   Stats m_stats;
   const std::unordered_set<DexMethodRef*> m_kotlin_null_check_assertions;
 };

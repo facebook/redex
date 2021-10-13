@@ -24,6 +24,7 @@ struct Config {
 struct Stats {
   int eligible_blocks{0};
   int blocks_removed{0};
+  int insns_removed{0};
   int blocks_split{0};
   int positions_inserted{0};
   // map from block size to number of blocks with that size

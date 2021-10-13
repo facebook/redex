@@ -50,10 +50,10 @@ Graph complete_call_graph(
 
 struct CallSite {
   const DexMethod* callee;
-  IRList::iterator invoke;
+  IRInstruction* invoke_insn;
 
-  CallSite(const DexMethod* callee, const IRList::iterator& invoke)
-      : callee(callee), invoke(invoke) {}
+  CallSite(const DexMethod* callee, IRInstruction* invoke_insn)
+      : callee(callee), invoke_insn(invoke_insn) {}
 };
 
 using CallSites = std::vector<CallSite>;
@@ -116,15 +116,15 @@ using NodeId = std::shared_ptr<Node>;
 
 class Edge {
  public:
-  Edge(NodeId caller, NodeId callee, const IRList::iterator& invoke_it);
-  IRList::iterator invoke_iterator() const { return m_invoke_it; }
+  Edge(NodeId caller, NodeId callee, IRInstruction* invoke_insn);
+  IRInstruction* invoke_insn() const { return m_invoke_insn; }
   NodeId caller() const { return m_caller; }
   NodeId callee() const { return m_callee; }
 
  private:
   NodeId m_caller;
   NodeId m_callee;
-  IRList::iterator m_invoke_it;
+  IRInstruction* m_invoke_insn;
 };
 
 class Graph final {
@@ -160,7 +160,7 @@ class Graph final {
 
   void add_edge(const NodeId& caller,
                 const NodeId& callee,
-                const IRList::iterator& invoke_it);
+                IRInstruction* invoke_insn);
 
   std::shared_ptr<Node> m_entry;
   std::shared_ptr<Node> m_exit;

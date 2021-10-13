@@ -12,6 +12,14 @@ import static org.fest.assertions.api.Assertions.assertThat;
 import org.junit.Test;
 
 interface IA {
+  // PRECHECK: method: virtual redex.IA.do_something
+  // POSTCHECK: method: virtual redex.IA.do_something
+  public int do_something();
+}
+
+interface IE {
+  // PRECHECK: method: virtual redex.IE.do_something
+  // POSTCHECK-NOT: method: virtual redex.IE.do_something
   public int do_something();
 }
 
@@ -36,11 +44,11 @@ class D extends BB {
   public int do_something() { return 2; }
 }
 
-interface IE {
-  public int do_something();
+abstract class F implements IE {
+  // PRECHECK: method: virtual redex.F.do_something
+  // POSTCHECK-NOT: method: virtual redex.F.do_something
+  public abstract int do_something();
 }
-
-abstract class F implements IE {}
 
 class G extends F {
   // PRECHECK: method: virtual redex.G.do_something
@@ -54,38 +62,71 @@ class H extends F {
   public int do_something() { return 4; }
 }
 
+interface J {
+  int getInt();
+}
+interface K {
+  int getAnotherInt();
+}
+
 interface IGetInt {
   public int getInt();
   public int getAnotherInt();
+  public J getJ();
+  public int add();
 }
 
 abstract class GetInt implements IGetInt {}
 
-class GetInt1 extends GetInt {
+class GetInt1 extends GetInt implements J, K {
   // CHECK: method: virtual redex.GetInt1.getAnotherInt
   public int getAnotherInt() { return 2; }
 
   // PRECHECK: method: virtual redex.GetInt1.getInt
   // POSTCHECK-NOT: method: virtual redex.GetInt1.getInt
   public int getInt() { return 1; }
+
+  // PRECHECK: method: virtual redex.GetInt1.getJ
+  // POSTCHECK-NOT: method: virtual redex.GetInt1.getJ
+  public J getJ() { return this; }
+
+  // PRECHECK: method: virtual redex.GetInt1.add
+  // POSTCHECK: method: virtual redex.GetInt1.add
+  public int add() { J j = this; K k = this; return j.getInt() + k.getAnotherInt(); }
 }
 
-class GetInt2 extends GetInt {
+class GetInt2 extends GetInt implements J, K {
   // CHECK: method: virtual redex.GetInt2.getAnotherInt
   public int getAnotherInt() { return 3; }
 
   // PRECHECK: method: virtual redex.GetInt2.getInt
   // POSTCHECK-NOT: method: virtual redex.GetInt2.getInt
   public int getInt() { return 1; }
+
+  // PRECHECK: method: virtual redex.GetInt2.getJ
+  // POSTCHECK-NOT: method: virtual redex.GetInt2.getJ
+  public J getJ() { return this; }
+
+  // PRECHECK: method: virtual redex.GetInt2.add
+  // POSTCHECK: method: virtual redex.GetInt2.add
+  public int add() { J j = this; K k = this; return j.getInt() + k.getAnotherInt(); }
 }
 
-class GetInt3 extends GetInt {
+class GetInt3 extends GetInt implements J, K {
   // CHECK: method: virtual redex.GetInt3.getAnotherInt
   public int getAnotherInt() { return 4; }
 
   // PRECHECK: method: virtual redex.GetInt3.getInt
   // POSTCHECK-NOT: method: virtual redex.GetInt3.getInt
   public int getInt() { return 1; }
+
+  // PRECHECK: method: virtual redex.GetInt3.getJ
+  // POSTCHECK-NOT: method: virtual redex.GetInt3.getJ
+  public J getJ() { return this; }
+
+  // PRECHECK: method: virtual redex.GetInt3.add
+  // POSTCHECK: method: virtual redex.GetInt3.add
+  public int add() { J j = this; K k = this; return j.getInt() + k.getAnotherInt(); }
 }
 
 class SameImplementation {
@@ -100,6 +141,25 @@ class SameImplementation2 extends SameImplementation {
   @Override
   public int getInt() {
     return 1;
+  }
+}
+
+abstract class AAA {
+  public abstract int return_BBB_field();
+  public abstract BBB return_BBB_self();
+}
+
+class BBB extends AAA {
+  int field = 42;
+
+  @Override
+  public int return_BBB_field() {
+    return field;
+  }
+
+  @Override
+  public BBB return_BBB_self() {
+    return this;
   }
 }
 
@@ -141,8 +201,28 @@ public class TrueVirtualInlineTest {
   public void test_return_self() {
     CC c = new CC();
     // PRECHECK: invoke-virtual {{.*}} redex.CC.return_self
-    // POSTCHECK: invoke-virtual {{.*}} redex.CC.return_self
+    // POSTCHECK-NOT: invoke-virtual {{.*}} redex.CC.return_self
     assertThat(c.return_self() instanceof CC).isTrue();
+    // CHECK: return-void
+  }
+
+  // CHECK: method: virtual redex.TrueVirtualInlineTest.test_return_BBB_field
+  @Test
+  public void test_return_BBB_field() {
+    AAA a = new BBB();
+    // PRECHECK: invoke-virtual {{.*}} redex.AAA.return_BBB_field
+    // POSTCHECK: check-cast {{.*}} redex.BBB
+    assertThat(a.return_BBB_field() == 42).isTrue();
+    // CHECK: return-void
+  }
+
+  // CHECK: method: virtual redex.TrueVirtualInlineTest.test_return_BBB_self
+  @Test
+  public void test_return_BBB_self() {
+    AAA a = new BBB();
+    // PRECHECK: invoke-virtual {{.*}} redex.AAA.return_BBB_self
+    // POSTCHECK: check-cast {{.*}} redex.BBB
+    assertThat(a.return_BBB_self() instanceof BBB).isTrue();
     // CHECK: return-void
   }
 
@@ -183,5 +263,39 @@ public class TrueVirtualInlineTest {
     // POSTCHECK-NOT: invoke-virtual {{.*}} redex.SameImplementation.getInt
     assertThat(get_int.getInt()).isEqualTo(1);
     // CHECK: return-void
+  }
+
+  // CHECK: method: virtual redex.TrueVirtualInlineTest.test_same_implementation3
+  @Test
+  public void test_same_implementation3() {
+    GetInt get_int;
+    if (Math.random() > 1) {
+      get_int = new GetInt1();
+    } else if (Math.random() < 0) {
+      get_int = new GetInt3();
+    } else {
+      get_int = new GetInt2();
+    }
+
+    // PRECHECK: invoke-virtual {{.*}} redex.GetInt.getJ
+    // POSTCHECK: check-cast {{.*}} redex.J
+    assertThat(get_int.getJ() instanceof GetInt).isTrue();
+  }
+
+  // CHECK: method: virtual redex.TrueVirtualInlineTest.test_same_implementation4
+  @Test
+  public void test_same_implementation4() {
+    GetInt get_int;
+    if (Math.random() > 1) {
+      get_int = new GetInt1();
+    } else if (Math.random() < 0) {
+      get_int = new GetInt3();
+    } else {
+      get_int = new GetInt2();
+    }
+
+    // PRECHECK: invoke-virtual {{.*}} redex.GetInt.add
+    // POSTCHECK: invoke-virtual {{.*}} redex.GetInt.add
+    assertThat(get_int.add() > 0).isTrue();
   }
 }

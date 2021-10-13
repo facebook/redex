@@ -202,11 +202,13 @@ void PassImpl::optimize(
           config.getter_methods_for_immutable_fields =
               &immut_analyzer_state->attribute_methods;
           Transform tf(config);
-          return tf.apply_on_uneditable_cfg(*intra_cp,
-                                            fp_iter.get_whole_program_state(),
-                                            &code,
-                                            &xstores,
-                                            method->get_class());
+          tf.legacy_apply_constants_and_prune_unreachable(
+              *intra_cp,
+              fp_iter.get_whole_program_state(),
+              code.cfg(),
+              &xstores,
+              method->get_class());
+          return tf.get_stats();
         }
       });
 }
@@ -217,8 +219,8 @@ void PassImpl::run(const DexStoresVector& stores) {
   // Rebuild all CFGs here -- this should be more efficient than doing them
   // within FixpointIterator::analyze_node(), since that can get called
   // multiple times for a given method
-  walk::parallel::code(scope, [](DexMethod*, IRCode& code) {
-    code.build_cfg(/* editable */ false);
+  walk::parallel::code(scope, [&](DexMethod*, IRCode& code) {
+    code.build_cfg(/* editable */ !m_config.create_runtime_asserts);
     code.cfg().calculate_exit_block();
   });
   // Hold the analyzer state of ImmutableAttributeAnalyzer.
@@ -227,6 +229,8 @@ void PassImpl::run(const DexStoresVector& stores) {
   immutable_state::analyze_constructors(scope, immut_analyzer_state.get());
   auto fp_iter = analyze(scope, immut_analyzer_state.get());
   optimize(scope, xstores, *fp_iter, immut_analyzer_state.get());
+  walk::parallel::code(scope,
+                       [](DexMethod*, IRCode& code) { code.clear_cfg(); });
 }
 
 void PassImpl::run_pass(DexStoresVector& stores,

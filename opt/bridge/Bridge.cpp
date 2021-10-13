@@ -25,9 +25,10 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
-#include "Inliner.h"
+#include "LegacyInliner.h"
 #include "PassManager.h"
 #include "ReachableClasses.h"
+#include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"
 
@@ -122,7 +123,7 @@ void do_inlining(DexMethod* bridge, DexMethod* bridgee) {
         return mie.type == MFLOW_OPCODE &&
                opcode::is_an_invoke(mie.insn->opcode());
       });
-  inliner::inline_tail_call(bridge, bridgee, invoke);
+  legacy_inliner::inline_tail_call(bridge, bridgee, invoke);
 }
 } // namespace
 

@@ -9,19 +9,23 @@
 
 #include "AnonymousClassMergingPass.h"
 
-#include "AnonymousModelGenerator.h"
 #include "ClassMerging.h"
 #include "ConfigFiles.h"
+#include "ConfigUtils.h"
 #include "MergingStrategies.h"
+#include "ModelSpecGenerator.h"
 #include "PassManager.h"
 
 namespace class_merging {
 
 void AnonymousClassMergingPass::bind_config() {
+  std::vector<std::string> excl_names;
   bind("exclude",
        {},
-       m_merging_spec.exclude_types,
+       excl_names,
        "Do not merge the classes or its implementors");
+  utils::load_types_and_prefixes(excl_names, m_merging_spec.exclude_types,
+                                 m_merging_spec.exclude_prefixes);
   bind("min_eligible",
        500,
        m_min_eligible_classes,

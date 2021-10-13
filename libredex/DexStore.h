@@ -62,6 +62,14 @@ class DexStore {
 
   void remove_classes(const DexClasses& classes);
   void add_classes(DexClasses classes);
+
+  /**
+   * Add a class to the dex stores. If dex_id is none, add the class to the last
+   * dex of root_store.
+   */
+  static void add_class(DexClass* new_cls,
+                        DexStoresVector& stores,
+                        boost::optional<size_t> dex_id);
 };
 
 class DexStoreClassesIterator
@@ -283,6 +291,8 @@ class XStoreRefs {
     size_t store_idx = get_store_idx(caller->get_class());
     return illegal_ref(store_idx, callee->get_class());
   }
+
+  size_t size() const { return m_xstores.size(); }
 };
 
 /**
