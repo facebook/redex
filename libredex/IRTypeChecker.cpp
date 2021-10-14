@@ -726,13 +726,32 @@ void validate_access(const DexMethod* accessor, const DexMember* accessee) {
   throw TypeCheckingException(out.str());
 }
 
+void validate_invoke_super(const DexMethodRef* callee) {
+  auto callee_cls = type_class(callee->get_class());
+  if (!callee_cls || !is_interface(callee_cls)) {
+    return;
+  }
+
+  std::ostringstream out;
+  out << "\nillegal invoke-super to interface method defined in class "
+      << show_deobfuscated(callee_cls)
+      << "(note that this can happen when external framework SDKs are not "
+         "passed to D8 as a classpath dependency; in such cases D8 may "
+         "silently generate illegal invoke-supers to interface methods)";
+
+  throw TypeCheckingException(out.str());
+}
+
 } // namespace
 
 IRTypeChecker::~IRTypeChecker() {}
 
-IRTypeChecker::IRTypeChecker(DexMethod* dex_method, bool validate_access)
+IRTypeChecker::IRTypeChecker(DexMethod* dex_method,
+                             bool validate_access,
+                             bool validate_invoke_super)
     : m_dex_method(dex_method),
       m_validate_access(validate_access),
+      m_validate_invoke_super(validate_invoke_super),
       m_complete(false),
       m_verify_moves(false),
       m_check_no_overwrite_this(false),
@@ -1250,6 +1269,9 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
       auto resolved =
           resolve_method(dex_method, opcode_to_search(insn), m_dex_method);
       ::validate_access(m_dex_method, resolved);
+    }
+    if (m_validate_invoke_super && insn->opcode() == OPCODE_INVOKE_SUPER) {
+      validate_invoke_super(dex_method);
     }
     break;
   }

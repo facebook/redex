@@ -89,6 +89,8 @@ struct CheckerConfig {
     run_type_checker_after_each_pass =
         type_checker_args.get("run_after_each_pass", true).asBool();
     verify_moves = type_checker_args.get("verify_moves", true).asBool();
+    validate_invoke_super =
+        type_checker_args.get("validate_invoke_super", true).asBool();
     check_no_overwrite_this =
         type_checker_args.get("check_no_overwrite_this", false).asBool();
     check_num_of_refs =
@@ -204,6 +206,7 @@ struct CheckerConfig {
                                                    bool verify_moves,
                                                    bool check_no_overwrite_this,
                                                    bool validate_access,
+                                                   bool validate_invoke_super,
                                                    bool exit_on_fail = true) {
     TRACE(PM, 1, "Running IRTypeChecker...");
     Timer t("IRTypeChecker");
@@ -230,7 +233,7 @@ struct CheckerConfig {
     };
 
     auto run_checker = [&](DexMethod* dex_method) {
-      IRTypeChecker checker(dex_method, validate_access);
+      IRTypeChecker checker(dex_method, validate_access, validate_invoke_super);
       if (verify_moves) {
         checker.verify_moves();
       }
@@ -286,6 +289,7 @@ struct CheckerConfig {
   bool run_type_checker_after_each_pass;
   bool run_type_checker_on_input_ignore_access;
   bool verify_moves;
+  bool validate_invoke_super;
   bool check_no_overwrite_this;
   bool check_num_of_refs;
 };
@@ -1210,7 +1214,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
         // output phase -- the register allocator can fix it up later.
         CheckerConfig::run_verifier(scope, checker_conf.verify_moves,
                                     /* check_no_overwrite_this */ false,
-                                    /* validate_access */ false);
+                                    /* validate_access */ false,
+                                    checker_conf.validate_invoke_super);
       }
       if (i >= min_pass_idx_for_dex_ref_check) {
         CheckerConfig::ref_validation(stores, pass->name());
@@ -1276,9 +1281,9 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
 
   // Always run the type checker before generating the optimized dex code.
   scope = build_class_scope(it);
-  CheckerConfig::run_verifier(scope, checker_conf.verify_moves,
-                              get_redex_options().no_overwrite_this(),
-                              /* validate_access */ true);
+  CheckerConfig::run_verifier(
+      scope, checker_conf.verify_moves, get_redex_options().no_overwrite_this(),
+      /* validate_access */ true, checker_conf.validate_invoke_super);
 
   jni_native_context_helper.post_passes(scope, conf);
 

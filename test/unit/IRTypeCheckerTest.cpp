@@ -2681,3 +2681,29 @@ TEST_F(IRTypeCheckerTest, synchronizedThrowOutsideCatchAllInTry) {
   checker.run();
   EXPECT_TRUE(checker.fail());
 }
+
+TEST_F(IRTypeCheckerTest, invokeSuperInterfaceMethod) {
+  // Construct type hierarchy.
+  const auto interface_type = DexType::make_type("LI;");
+  ClassCreator interface_type_creator(interface_type);
+  interface_type_creator.set_super(type::java_lang_Object());
+  interface_type_creator.set_access(ACC_INTERFACE);
+  auto foo_method =
+      DexMethod::make_method("LI;.foo:()V")->make_concrete(ACC_PUBLIC, true);
+  interface_type_creator.add_method(foo_method);
+  interface_type_creator.create();
+
+  // Construct code that references the above hierarchy.
+  using namespace dex_asm;
+  IRCode* code = m_method->get_code();
+  code->push_back(dasm(OPCODE_CONST, {0_v, 0_L}));
+  code->push_back(dasm(OPCODE_INVOKE_SUPER, foo_method, {0_v}));
+  code->push_back(dasm(OPCODE_RETURN_VOID));
+
+  IRTypeChecker checker(m_method);
+  checker.run();
+  // Checks
+  EXPECT_FALSE(checker.good());
+  EXPECT_THAT(checker.what(),
+              MatchesRegex(".*\nillegal invoke-super to interface method.*"));
+}
