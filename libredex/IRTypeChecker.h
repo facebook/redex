@@ -41,7 +41,9 @@ class IRTypeChecker final {
   // definition must be located after the definition of TypeInference.
   ~IRTypeChecker();
 
-  explicit IRTypeChecker(DexMethod* dex_method, bool validate_access = false);
+  explicit IRTypeChecker(DexMethod* dex_method,
+                         bool validate_access = false,
+                         bool validate_invoke_super = true);
 
   IRTypeChecker(const IRTypeChecker&) = delete;
   IRTypeChecker(IRTypeChecker&& other) = default;
@@ -143,6 +145,7 @@ class IRTypeChecker final {
 
   DexMethod* m_dex_method;
   bool m_validate_access;
+  bool m_validate_invoke_super;
   bool m_complete;
   bool m_verify_moves;
   bool m_check_no_overwrite_this;
