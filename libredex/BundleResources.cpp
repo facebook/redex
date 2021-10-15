@@ -962,6 +962,77 @@ void reset_pb_source(google::protobuf::Message* message) {
     }
   }
 }
+
+bool compare_reference(const aapt::pb::Reference& a,
+                       const aapt::pb::Reference& b) {
+  if (a.type() != b.type()) {
+    return a.type() < b.type();
+  }
+  if (a.id() != b.id()) {
+    return a.id() < b.id();
+  }
+  int name_compare = a.name().compare(b.name());
+  if (name_compare != 0) {
+    return name_compare < 0;
+  }
+  if (a.private_() != b.private_()) {
+    return a.private_();
+  }
+  // Just make some kind of consistent ordering of unknown/false/true that is
+  // meaningless outside this function.
+  auto dynamic_to_int = [](const aapt::pb::Reference& r) {
+    if (!r.has_is_dynamic()) {
+      return -1;
+    }
+    if (!r.is_dynamic().value()) {
+      return 0;
+    }
+    return 1;
+  };
+  auto da = dynamic_to_int(a);
+  auto db = dynamic_to_int(b);
+  if (da != db) {
+    return da < db;
+  }
+  return false;
+}
+
+void reorder_style(aapt::pb::Style* style) {
+  std::stable_sort(
+      style->mutable_entry()->begin(),
+      style->mutable_entry()->end(),
+      [style](const aapt::pb::Style_Entry& a, const aapt::pb::Style_Entry& b) {
+        always_assert_log(a.has_key() && b.has_key(),
+                          "Unexpected styleable missing reference: %s",
+                          style->DebugString().c_str());
+        return compare_reference(a.key(), b.key());
+      });
+}
+
+void reorder_config_value_repeated_field(aapt::pb::ResourceTable* pb_restable) {
+  for (int package_idx = 0; package_idx < pb_restable->package_size();
+       package_idx++) {
+    auto package = pb_restable->mutable_package(package_idx);
+    for (int type_idx = 0; type_idx < package->type_size(); type_idx++) {
+      auto type = package->mutable_type(type_idx);
+      for (int entry_idx = 0; entry_idx < type->entry_size(); entry_idx++) {
+        auto entry = type->mutable_entry(entry_idx);
+        for (int cv_idx = 0; cv_idx < entry->config_value_size(); cv_idx++) {
+          auto config_value = entry->mutable_config_value(cv_idx);
+          if (config_value->has_value()) {
+            auto value = config_value->mutable_value();
+            if (value->has_compound_value()) {
+              auto compound_value = value->mutable_compound_value();
+              if (compound_value->has_style()) {
+                reorder_style(compound_value->mutable_style());
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
 } // namespace
 
 void ResourcesPbFile::collect_resource_data_for_file(
@@ -985,6 +1056,10 @@ void ResourcesPbFile::collect_resource_data_for_file(
           // bundles should omit this data.
           reset_pb_source(&pb_restable);
         }
+        // Repeated fields might not be comming in ordered, to make following
+        // config_value comparison work with different order, reorder repeated
+        // fields in config_value's value
+        reorder_config_value_repeated_field(&pb_restable);
         for (const aapt::pb::Package& pb_package : pb_restable.package()) {
           auto current_package_id = pb_package.package_id().id();
           TRACE(RES, 9, "Package: %s %X", pb_package.package_name().c_str(),

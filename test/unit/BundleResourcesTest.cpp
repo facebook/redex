@@ -319,6 +319,49 @@ TEST(BundleResources, ReadResource) {
     EXPECT_NE(
         res_table_pb->get_hash_from_values(id_to_configvalue.at(baz_ids[0])),
         res_table_pb->get_hash_from_values(id_to_configvalue.at(boo_ids[0])));
+
+    auto style_not_sorted_ids =
+        res_table->get_res_ids_by_name("StyleNotSorted");
+    EXPECT_EQ(style_not_sorted_ids.size(), 1);
+    auto style_sorted_ids = res_table->get_res_ids_by_name("StyleSorted");
+    EXPECT_EQ(style_sorted_ids.size(), 1);
+    EXPECT_EQ(res_table_pb->get_hash_from_values(
+                  id_to_configvalue.at(style_not_sorted_ids[0])),
+              res_table_pb->get_hash_from_values(
+                  id_to_configvalue.at(style_sorted_ids[0])));
+
+    auto theme_different_a_ids =
+        res_table->get_res_ids_by_name("ThemeDifferentA");
+    EXPECT_EQ(theme_different_a_ids.size(), 1);
+    auto theme_different_b_ids =
+        res_table->get_res_ids_by_name("ThemeDifferentB");
+    EXPECT_EQ(theme_different_b_ids.size(), 1);
+    EXPECT_NE(res_table_pb->get_hash_from_values(
+                  id_to_configvalue.at(theme_different_a_ids[0])),
+              res_table_pb->get_hash_from_values(
+                  id_to_configvalue.at(theme_different_b_ids[0])));
+
+    auto same_attribute_a_ids =
+        res_table->get_res_ids_by_name("SameAttributeA");
+    EXPECT_EQ(same_attribute_a_ids.size(), 1);
+    auto same_attribute_b_ids =
+        res_table->get_res_ids_by_name("SameAttributeB");
+    EXPECT_EQ(same_attribute_b_ids.size(), 1);
+    EXPECT_EQ(res_table_pb->get_hash_from_values(
+                  id_to_configvalue.at(same_attribute_a_ids[0])),
+              res_table_pb->get_hash_from_values(
+                  id_to_configvalue.at(same_attribute_b_ids[0])));
+
+    auto same_styleable_a_ids =
+        res_table->get_res_ids_by_name("SameStyleableA");
+    EXPECT_EQ(same_styleable_a_ids.size(), 1);
+    auto same_styleable_b_ids =
+        res_table->get_res_ids_by_name("SameStyleableB");
+    EXPECT_EQ(same_styleable_b_ids.size(), 1);
+    EXPECT_NE(res_table_pb->get_hash_from_values(
+                  id_to_configvalue.at(same_styleable_a_ids[0])),
+              res_table_pb->get_hash_from_values(
+                  id_to_configvalue.at(same_styleable_b_ids[0])));
   });
 }
 
