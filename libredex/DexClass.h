@@ -468,6 +468,25 @@ struct dexfields_comparator {
 };
 
 class DexTypeList {
+ public:
+  using ContainerType = std::deque<DexType*>;
+
+  using value_type = DexType*;
+  using iterator = typename ContainerType::iterator;
+  using const_iterator = typename ContainerType::const_iterator;
+
+  iterator begin() { return m_list.begin(); }
+  iterator end() { return m_list.end(); }
+
+  const_iterator begin() const { return m_list.begin(); }
+  const_iterator end() const { return m_list.end(); }
+
+  size_t size() const { return get_type_list().size(); }
+  bool empty() const { return m_list.empty(); }
+
+  DexType* at(size_t i) const { return get_type_list().at(i); }
+
+ private:
   friend struct RedexContext;
 
   std::deque<DexType*> m_list;
@@ -476,8 +495,6 @@ class DexTypeList {
   explicit DexTypeList(std::deque<DexType*>&& p) { m_list = std::move(p); }
 
  public:
-  std::deque<DexType*>::iterator begin() { return m_list.begin(); }
-  std::deque<DexType*>::iterator end() { return m_list.end(); }
   // DexTypeList retrieval/creation
 
   // If the DexTypeList exists, return it, otherwise create it and return it.
@@ -493,10 +510,6 @@ class DexTypeList {
 
  public:
   const std::deque<DexType*>& get_type_list() const { return m_list; }
-
-  size_t size() const { return get_type_list().size(); }
-
-  DexType* at(size_t i) const { return get_type_list().at(i); }
 
   /**
    * Returns size of the encoded typelist in bytes, input
@@ -914,7 +927,7 @@ class DexMethod : public DexMethodRef {
     DexType* cls = DexType::make_type(cls_name);
     DexString* name = DexString::make_string(meth_name);
     DexType* rtype = DexType::make_type(rtype_str);
-    std::deque<DexType*> args;
+    DexTypeList::ContainerType args;
     for (auto const arg_str : arg_strs) {
       DexType* arg = DexType::make_type(arg_str);
       args.push_back(arg);

@@ -672,7 +672,7 @@ DexMethodRef* DexMethod::get_method(
     const dex_member_refs::MethodDescriptorTokens& mdt) {
   auto cls = DexType::get_type(mdt.cls.c_str());
   auto name = DexString::get_string(mdt.name);
-  std::deque<DexType*> args;
+  DexTypeList::ContainerType args;
   for (auto& arg_str : mdt.args) {
     args.push_back(DexType::get_type(arg_str.c_str()));
   }
@@ -693,7 +693,7 @@ DexMethodRef* DexMethod::make_method(const std::string& full_descriptor) {
   auto mdt = dex_member_refs::parse_method(full_descriptor);
   auto cls = DexType::make_type(mdt.cls.c_str());
   auto name = DexString::make_string(mdt.name);
-  std::deque<DexType*> args;
+  DexTypeList::ContainerType args;
   for (auto& arg_str : mdt.args) {
     args.push_back(DexType::make_type(arg_str.c_str()));
   }
@@ -707,7 +707,7 @@ DexMethodRef* DexMethod::make_method(
     const std::string& name,
     std::initializer_list<std::string> arg_types,
     const std::string& return_type) {
-  std::deque<DexType*> dex_types;
+  DexTypeList::ContainerType dex_types;
   for (const std::string& type_str : arg_types) {
     dex_types.push_back(DexType::make_type(type_str.c_str()));
   }
@@ -1241,7 +1241,7 @@ static DexString* make_shorty(const DexType* rtype, const DexTypeList* args) {
   std::string s;
   s.push_back(type::type_shorty(rtype));
   if (args != nullptr) {
-    for (auto arg : args->get_type_list()) {
+    for (auto arg : *args) {
       s.push_back(type::type_shorty(arg));
     }
   }
@@ -1710,20 +1710,20 @@ DexProto* DexType::get_non_overlapping_proto(DexString* method_name,
   if (!methodref_in_context) {
     return orig_proto;
   }
-  std::deque<DexType*> new_arg_list;
-  const auto& type_list = orig_proto->get_args()->get_type_list();
+  DexTypeList::ContainerType new_arg_list;
   auto rtype = orig_proto->get_rtype();
-  for (auto t : type_list) {
+  for (auto t : *orig_proto->get_args()) {
     new_arg_list.push_back(t);
   }
   new_arg_list.push_back(type::_int());
   DexTypeList* new_args =
-      DexTypeList::make_type_list(std::deque<DexType*>{new_arg_list});
+      DexTypeList::make_type_list(DexTypeList::ContainerType{new_arg_list});
   DexProto* new_proto = DexProto::make_proto(rtype, new_args);
   methodref_in_context = DexMethod::get_method(this, method_name, new_proto);
   while (methodref_in_context) {
     new_arg_list.push_back(type::_int());
-    new_args = DexTypeList::make_type_list(std::deque<DexType*>{new_arg_list});
+    new_args =
+        DexTypeList::make_type_list(DexTypeList::ContainerType{new_arg_list});
     new_proto = DexProto::make_proto(rtype, new_args);
     methodref_in_context = DexMethod::get_method(this, method_name, new_proto);
   }
