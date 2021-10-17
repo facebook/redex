@@ -49,6 +49,7 @@
 #include "IODIMetadata.h"
 #include "InstructionLowering.h"
 #include "JarLoader.h"
+#include "JemallocUtil.h"
 #include "Macros.h"
 #include "MonitorCount.h"
 #include "NoOptimizationsMatcher.h"
@@ -1224,6 +1225,13 @@ void dump_class_method_info_map(const std::string& file_path,
   });
 }
 
+void maybe_dump_jemalloc_profile(const char* env_name) {
+  auto* dump_path = std::getenv(env_name);
+  if (dump_path != nullptr) {
+    jemalloc_util::dump(dump_path);
+  }
+}
+
 } // namespace
 
 int main(int argc, char* argv[]) {
@@ -1294,6 +1302,7 @@ int main(int argc, char* argv[]) {
           ScopedCommandProfiling::maybe_from_env("FRONTEND_", "frontend");
       redex_frontend(conf, args, *pg_config, stores, stats);
       conf.parse_global_config();
+      maybe_dump_jemalloc_profile("MALLOC_PROFILE_DUMP_FRONTEND");
     }
 
     // Initialize purity defaults, if set.
@@ -1326,6 +1335,7 @@ int main(int argc, char* argv[]) {
     {
       Timer t("Running optimization passes");
       manager.run_passes(stores, conf);
+      maybe_dump_jemalloc_profile("MALLOC_PROFILE_DUMP_AFTER_ALL_PASSES");
     }
 
     if (args.stop_pass_idx == boost::none) {
@@ -1341,6 +1351,7 @@ int main(int argc, char* argv[]) {
       redex::write_all_intermediate(conf, args.out_dir, args.redex_options,
                                     stores, args.entry_data);
     }
+    maybe_dump_jemalloc_profile("MALLOC_PROFILE_DUMP_BACKEND");
 
     stats_output_path = conf.metafile(
         args.config.get("stats_output", "redex-stats.txt").asString());

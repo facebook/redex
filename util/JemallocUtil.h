@@ -6,12 +6,15 @@
  */
 
 #include <cstdio>
+#include <string>
 
 namespace jemalloc_util {
 
 void enable_profiling();
 
 void disable_profiling();
+
+void dump(const std::string& file_name);
 
 class ScopedProfiling final {
  public:
