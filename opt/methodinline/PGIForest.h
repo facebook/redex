@@ -167,6 +167,26 @@ inline float get_max_hits_or_zero(const MethodContext& context) {
   return 0;
 }
 
+inline float get_max_appear100_or_zero(const MethodContext& context) {
+  if (!context.m_vals) {
+    return 0;
+  }
+  boost::optional<float> max = boost::none;
+  for (const auto& v : context.m_vals->appear100) {
+    if (v) {
+      if (!max) {
+        max = v;
+      } else {
+        max = std::max(*max, *v);
+      }
+    }
+  }
+  if (max) {
+    return *max;
+  }
+  return 0;
+}
+
 inline PGIForest::FeatureFunctionMap get_default_feature_function_map() {
   return {
       // Caller.
@@ -175,6 +195,10 @@ inline PGIForest::FeatureFunctionMap get_default_feature_function_map() {
       {"caller_hits",
        [](const MethodContext& caller, const MethodContext&) {
          return get_max_hits_or_zero(caller);
+       }},
+      {"caller_appear100",
+       [](const MethodContext& caller, const MethodContext&) {
+         return get_max_appear100_or_zero(caller);
        }},
       {"caller_insns", [](const MethodContext& caller,
                           const MethodContext&) { return caller.m_insns; }},
@@ -202,6 +226,10 @@ inline PGIForest::FeatureFunctionMap get_default_feature_function_map() {
       {"callee_hits",
        [](const MethodContext&, const MethodContext& callee) {
          return get_max_hits_or_zero(callee);
+       }},
+      {"callee_appear100",
+       [](const MethodContext&, const MethodContext& callee) {
+         return get_max_appear100_or_zero(callee);
        }},
       {"callee_insns",
        [](const MethodContext&, const MethodContext& callee) {
