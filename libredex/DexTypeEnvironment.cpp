@@ -18,10 +18,14 @@ bool implements(const DexClass* cls, const DexType* intf) {
   if (is_interface(cls)) {
     return false;
   }
-  for (const auto interface : cls->get_interfaces()->get_type_list()) {
-    if (interface == intf) {
-      return true;
+  auto parent = cls;
+  while (parent) {
+    for (const auto interface : parent->get_interfaces()->get_type_list()) {
+      if (interface == intf) {
+        return true;
+      }
     }
+    parent = type_class(parent->get_super_class());
   }
   return false;
 }
