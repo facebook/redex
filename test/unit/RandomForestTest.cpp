@@ -44,11 +44,11 @@ TEST_F(RandomForestTest, deserialize_forest) {
 
 TEST_F(RandomForestTest, deserialize_acc) {
   auto simple_acc_true1 = deserialize("(forest (acc 1 0))");
-  EXPECT_EQ(simple_acc_true1.dump(), "(acc 1)");
+  EXPECT_EQ(simple_acc_true1.dump(), "(accf 1.000000)");
   auto simple_acc_true2 = deserialize("(forest (acc 1 1))");
-  EXPECT_EQ(simple_acc_true2.dump(), "(acc 1)");
+  EXPECT_EQ(simple_acc_true2.dump(), "(accf 1.000000)");
   auto simple_acc_false = deserialize("(forest (acc 13 14))");
-  EXPECT_EQ(simple_acc_false.dump(), "(acc 0)");
+  EXPECT_EQ(simple_acc_false.dump(), "(accf 0.000000)");
 
   EXPECT_ANY_THROW(deserialize("(forest (acc))"));
   EXPECT_ANY_THROW(deserialize("(forest (acc 0))"));
@@ -74,7 +74,8 @@ TEST_F(RandomForestTest, deserialize_feat) {
 
   auto forest =
       deserialize("(forest (feat \"caller_hits\" 5.5 (acc 1 0) (acc 0 1)))");
-  EXPECT_EQ(forest.dump(), "(feat \"caller_hits\" 5.500000 (acc 1) (acc 0))");
+  EXPECT_EQ(forest.dump(),
+            "(feat \"caller_hits\" 5.500000 (accf 1.000000) (accf 0.000000))");
 }
 
 TEST_F(RandomForestTest, accept_acc) {
