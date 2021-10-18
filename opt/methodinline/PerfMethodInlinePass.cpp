@@ -265,7 +265,8 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
     boost::optional<size_t> exp_force_top_x_entries_min_callee_size =
         boost::none;
     boost::optional<float> exp_force_top_x_entries_min_appear100 = boost::none;
-    size_t accept_threshold{0};
+    float accept_threshold{0};
+    bool accept_over{true};
   };
 
   InlineForSpeedDecisionTrees(const MethodProfiles* method_profiles,
@@ -285,7 +286,7 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
     auto& caller_context = get_or_create(caller_method);
     auto& callee_context = get_or_create(callee_method);
 
-    size_t accepted{0};
+    float accepted{0};
     // While "normal" is more expensive, do it first anyways to fill `accepted`.
     if (!should_inline_normal(caller_method, callee_method, caller_context,
                               callee_context, accepted) &&
@@ -325,7 +326,7 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
 
         TRACE(METH_PROF,
               5,
-              "[InlineForSpeedDecisionTrees] %zu: "
+              "[InlineForSpeedDecisionTrees] %.3f: "
               "%s!%u!%u!%u!%1.5f!%1.5f!%u!%u!%u!%u!%u!%s!%u!%u!%u!%1.5f!%1.5f!%"
               "u!%u!%u!%u!%u!%s",
               accepted,
@@ -412,7 +413,7 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
                             const DexMethod* callee_method,
                             const MethodContext& caller_context,
                             const MethodContext& callee_context,
-                            size_t& accepted) {
+                            float& accepted) {
     auto has_matching = [&](const auto& selector_fn, auto min_hits) {
       if (!caller_context.m_vals || !callee_context.m_vals) {
         return false;
@@ -453,7 +454,8 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
     if (m_config.accept_threshold == 0) {
       return default_ret;
     }
-    return accepted >= m_config.accept_threshold;
+    return m_config.accept_over ? accepted >= m_config.accept_threshold
+                                : accepted <= m_config.accept_threshold;
   }
 
  protected:
@@ -810,10 +812,14 @@ struct PerfMethodInlinePass::Config {
 void PerfMethodInlinePass::bind_config() {
   std::string random_forest_file;
   bind("random_forest_file", "", random_forest_file);
-  size_t accept_threshold;
+  float accept_threshold;
   bind("accept_threshold", 0, accept_threshold,
        "Threshold of trees to accept an inlining decision. 0 uses default "
        "(half).");
+  bool accept_over;
+  bind("accept_over", true, accept_over,
+       "Comparison is accept-value >= threshold when true and accept-value <= "
+       "threshold otherwise");
   float min_hits;
   bind("min_hits", std::numeric_limits<float>::min(), min_hits,
        "Threshold for caller and callee method call-count to consider "
@@ -860,8 +866,8 @@ void PerfMethodInlinePass::bind_config() {
   bind("caller_list_callee_min_appear", 1.0f, caller_list_callee_min_appear);
   std::string which_ifs;
   bind("decision_mode", "", which_ifs);
-  after_configuration([this, random_forest_file, accept_threshold, min_hits,
-                       min_appear, min_block_hits, min_block_appear,
+  after_configuration([this, random_forest_file, accept_threshold, accept_over,
+                       min_hits, min_appear, min_block_hits, min_block_appear,
                        interactions_str, exp_force_top_x_entries,
                        exp_force_top_x_entries_min_callee_size,
                        exp_force_top_x_entries_min_appear100, caller_list_file,
@@ -889,6 +895,7 @@ void PerfMethodInlinePass::bind_config() {
     };
     auto& dec_trees_config = this->m_config->dec_trees_config;
     dec_trees_config.accept_threshold = accept_threshold;
+    dec_trees_config.accept_over = accept_over;
     dec_trees_config.min_method_hits = assign_opt(min_hits);
     dec_trees_config.min_method_appear = assign_opt(min_appear);
     dec_trees_config.min_block_hits = assign_opt(min_block_hits);

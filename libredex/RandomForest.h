@@ -34,24 +34,24 @@ class Forest {
    public:
     virtual ~DecisionTreeNode() {}
 
-    virtual bool accept(Args... args) const = 0;
+    virtual float accept(Args... args) const = 0;
     virtual std::unique_ptr<DecisionTreeNode> clone() const = 0;
     virtual std::string dump() const = 0; // Meant for testing.
   };
 
   struct DecisionTreeCategory : public DecisionTreeNode {
-    bool acc;
+    float acc;
 
-    explicit DecisionTreeCategory(bool acc) : acc(acc) {}
+    explicit DecisionTreeCategory(float acc) : acc(acc) {}
 
-    bool accept(Args...) const override { return acc; }
+    float accept(Args...) const override { return acc; }
 
     std::unique_ptr<DecisionTreeNode> clone() const override {
       return std::make_unique<DecisionTreeCategory>(acc);
     }
 
     std::string dump() const override {
-      return std::string("(acc ") + std::to_string(acc) + ")";
+      return std::string("(accf ") + std::to_string(acc) + ")";
     }
   };
 
@@ -76,7 +76,7 @@ class Forest {
           feature_fn(fn),
           threshold(threshold) {}
 
-    bool accept(Args... args) const override {
+    float accept(Args... args) const override {
       return feature_fn(args...) <= threshold ? true_branch->accept(args...)
                                               : false_branch->accept(args...);
     }
@@ -100,6 +100,7 @@ class Forest {
   static std::unique_ptr<DecisionTreeNode> deserialize_tree(
       const s_expr& expr, const FeatureFunctionMap& feature_fns) {
     s_expr tail;
+    // Old boolean style
     if (s_patn({s_patn("acc")}, tail).match_with(expr)) {
       always_assert(tail.size() == 2);
       std::string acc_str, rej_str;
@@ -113,7 +114,19 @@ class Forest {
       size_t rej = std::stoul(rej_str, &idx);
       always_assert(idx == rej_str.length());
       always_assert(acc != 0 || rej != 0);
-      return std::make_unique<DecisionTreeCategory>(acc >= rej);
+      return std::make_unique<DecisionTreeCategory>(acc >= rej ? 1.0 : 0.0);
+    }
+
+    if (s_patn({s_patn("accf")}, tail).match_with(expr)) {
+      always_assert(tail.size() == 1);
+      std::string acc_str;
+      s_expr rest;
+      s_patn({s_patn(&acc_str)}, rest).must_match(tail, "Need acc value");
+      always_assert(rest.is_nil());
+      size_t idx;
+      auto acc = std::stof(acc_str, &idx);
+      always_assert(idx == acc_str.length());
+      return std::make_unique<DecisionTreeCategory>(acc);
     }
 
     s_patn({s_patn("feat")}, tail).must_match(expr, "Expected feat or acc");
@@ -186,17 +199,15 @@ class Forest {
 
   size_t size() const { return m_trees.size(); }
 
-  bool accept(Args... args, size_t* c = nullptr) const {
-    size_t acc_count{0};
+  bool accept(Args... args, float* c = nullptr) const {
+    float acc_sum{0};
     for (const auto& dec_tree : m_trees) {
-      if (dec_tree->accept(args...)) {
-        ++acc_count;
-      }
+      acc_sum += dec_tree->accept(args...);
     }
     if (c != nullptr) {
-      *c = acc_count;
+      *c = acc_sum;
     }
-    return 2 * acc_count >= m_trees.size();
+    return 2 * acc_sum >= m_trees.size();
   }
 
   std::string dump() const {
