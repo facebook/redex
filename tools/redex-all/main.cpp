@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <boost/format.hpp>
 #include <boost/thread/thread.hpp>
 #include <cinttypes>
 #include <cstring>
@@ -47,6 +48,7 @@
 #include "DuplicateClasses.h"
 #include "GlobalConfig.h"
 #include "IODIMetadata.h"
+#include "IOUtil.h"
 #include "InstructionLowering.h"
 #include "JarLoader.h"
 #include "Macros.h"
@@ -79,6 +81,7 @@ constexpr const char* DEBUG_LINE_MAP = "redex-debug-line-map-v2";
 constexpr const char* IODI_METADATA = "iodi-metadata";
 constexpr const char* OPT_DECISIONS = "redex-opt-decisions.json";
 constexpr const char* CLASS_METHOD_INFO_MAP = "redex-class-method-info-map.txt";
+constexpr const char* RESID_TO_NAME = "resid_to_name.json";
 
 const std::string k_usage_header = "usage: redex-all [options...] dex-files...";
 
@@ -1003,6 +1006,22 @@ void redex_frontend(ConfigFiles& conf, /* input */
   }
 }
 
+void write_out_resid_to_name(ConfigFiles& conf,
+                             const std::string& resid_to_name_filename) {
+  std::string apk_dir;
+  conf.get_json_config().get("apk_dir", "", apk_dir);
+  always_assert(apk_dir.size());
+  auto resources = create_resource_reader(apk_dir);
+  auto res_table = resources->load_res_table();
+  Json::Value resid_to_name_json;
+  boost::format hex_format("0x%08x");
+  for (const auto& pair : res_table->id_to_name) {
+    resid_to_name_json[(hex_format % pair.first).str()] = pair.second;
+  }
+  write_string_to_file(resid_to_name_filename,
+                       resid_to_name_json.toStyledString());
+}
+
 /**
  * Post processing steps: write dex and collect stats
  */
@@ -1013,6 +1032,9 @@ void redex_backend(ConfigFiles& conf,
   Timer redex_backend_timer("Redex_backend");
   const RedexOptions& redex_options = manager.get_redex_options();
   const auto& output_dir = conf.get_outdir();
+
+  const std::string& resid_to_name_filename = conf.metafile(RESID_TO_NAME);
+  write_out_resid_to_name(conf, resid_to_name_filename);
 
   instruction_lowering::Stats instruction_lowering_stats;
   {
