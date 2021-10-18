@@ -96,7 +96,7 @@ struct RedexContext {
                     const DexFieldSpec& ref,
                     bool rename_on_collision);
 
-  using DexTypeListContainerType = std::deque<DexType*>;
+  using DexTypeListContainerType = std::vector<DexType*>;
 
   DexTypeList* make_type_list(DexTypeListContainerType&& p);
   DexTypeList* get_type_list(DexTypeListContainerType&& p);

@@ -469,7 +469,7 @@ struct dexfields_comparator {
 
 class DexTypeList {
  public:
-  using ContainerType = std::deque<DexType*>;
+  using ContainerType = std::vector<DexType*>;
 
   using value_type = DexType*;
   using iterator = typename ContainerType::iterator;
