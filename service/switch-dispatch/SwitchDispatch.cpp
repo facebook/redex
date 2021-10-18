@@ -298,8 +298,7 @@ dispatch::DispatchMethod create_two_level_switch_dispatch(
     if (subcase_count == max_num_leaf_switch ||
         case_index == cases.size() - 1) {
       auto sub_name = spec.name + "$" + std::to_string(dispatch_index);
-      auto new_arg_list =
-          prepend_and_make(spec.proto->get_args(), spec.owner_type);
+      auto new_arg_list = spec.proto->get_args()->push_front(spec.owner_type);
       auto static_dispatch_proto =
           DexProto::make_proto(spec.proto->get_rtype(), new_arg_list);
       dispatch::Spec sub_spec{spec.owner_type,
@@ -423,10 +422,8 @@ dispatch::Type possible_type(DexMethod* method) {
 }
 
 DexProto* append_int_arg(DexProto* proto) {
-  auto args_list = proto->get_args()->get_type_list_internal();
-  args_list.push_back(type::_int());
-  return DexProto::make_proto(
-      proto->get_rtype(), DexTypeList::make_type_list(std::move(args_list)));
+  auto args_list = proto->get_args()->push_back(type::_int());
+  return DexProto::make_proto(proto->get_rtype(), args_list);
 }
 
 #define LOG_AND_RETURN(fmt, ...)                       \

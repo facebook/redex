@@ -122,7 +122,8 @@ static bool compare_dextypes_for_normalization(const DexType* a,
 }
 
 static DexProto* normalize_proto(DexProto* proto) {
-  auto args_copy = proto->get_args()->get_type_list_internal();
+  DexTypeList::ContainerType args_copy(proto->get_args()->begin(),
+                                       proto->get_args()->end());
   std::stable_sort(args_copy.begin(), args_copy.end(),
                    compare_dextypes_for_normalization);
   DexType* rtype = proto->get_rtype();

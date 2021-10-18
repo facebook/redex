@@ -91,21 +91,6 @@ DexProto* get_new_proto(
     const std::unordered_map<const DexType*, DexType*>& old_to_new);
 
 /**
- * Helper functions building a modified DexTypeList by appending or prepending
- * elements.
- */
-DexTypeList* prepend_and_make(const DexTypeList* list, DexType* new_type);
-
-DexTypeList* append_and_make(const DexTypeList* list, DexType* new_type);
-
-DexTypeList* append_and_make(const DexTypeList* list,
-                             const std::vector<DexType*>& new_types);
-
-DexTypeList* replace_head_and_make(const DexTypeList* list, DexType* new_head);
-
-DexTypeList* drop_and_make(const DexTypeList* list, size_t num_types_to_drop);
-
-/**
  * Update all method signature type references in-place using the old_to_new
  * map. We update all references to an old type to the provided new type.
  *

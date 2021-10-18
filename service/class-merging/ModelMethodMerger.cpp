@@ -72,7 +72,7 @@ void staticize_with_new_arg_head(DexMethod* meth, DexType* new_head) {
   DexMethodSpec spec;
   auto args = meth->get_proto()->get_args();
   always_assert(args->size());
-  auto new_type_list = type_reference::replace_head_and_make(args, new_head);
+  auto new_type_list = args->replace_head(new_head);
   auto new_proto =
       DexProto::make_proto(meth->get_proto()->get_rtype(), new_type_list);
   spec.proto = new_proto;
@@ -696,8 +696,7 @@ void ModelMethodMerger::merge_ctors() {
       }
 
       // Create dispatch.
-      auto dispatch_arg_list =
-          type_reference::append_and_make(ctor_proto->get_args(), type::_int());
+      auto dispatch_arg_list = ctor_proto->get_args()->push_back(type::_int());
       auto dispatch_proto =
           pass_type_tag_param
               ? DexProto::make_proto(ctor_proto->get_rtype(), dispatch_arg_list)

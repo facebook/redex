@@ -27,14 +27,12 @@ void fix_colliding_dmethods(
   for (auto it : colliding_methods) {
     auto meth = it.first;
     auto new_proto = it.second;
-    auto new_arg_list =
-        type_reference::append_and_make(new_proto->get_args(), type::_int());
+    auto new_arg_list = new_proto->get_args()->push_back(type::_int());
     new_proto = DexProto::make_proto(new_proto->get_rtype(), new_arg_list);
     size_t arg_count = 1;
     while (DexMethod::get_method(
                meth->get_class(), meth->get_name(), new_proto) != nullptr) {
-      new_arg_list =
-          type_reference::append_and_make(new_proto->get_args(), type::_int());
+      new_arg_list = new_proto->get_args()->push_back(type::_int());
       new_proto = DexProto::make_proto(new_proto->get_rtype(), new_arg_list);
       ++arg_count;
     }
@@ -498,41 +496,6 @@ DexProto* get_new_proto(
 
   return DexProto::make_proto(const_cast<DexType*>(rtype),
                               DexTypeList::make_type_list(std::move(lst)));
-}
-
-DexTypeList* prepend_and_make(const DexTypeList* list, DexType* new_type) {
-  auto prepended = DexTypeList::ContainerType(list->get_type_list_internal());
-  prepended.push_front(new_type);
-  return DexTypeList::make_type_list(std::move(prepended));
-}
-
-DexTypeList* append_and_make(const DexTypeList* list, DexType* new_type) {
-  auto appended = DexTypeList::ContainerType(list->get_type_list_internal());
-  appended.push_back(new_type);
-  return DexTypeList::make_type_list(std::move(appended));
-}
-
-DexTypeList* append_and_make(const DexTypeList* list,
-                             const std::vector<DexType*>& new_types) {
-  auto appended = DexTypeList::ContainerType(list->get_type_list_internal());
-  appended.insert(appended.end(), new_types.begin(), new_types.end());
-  return DexTypeList::make_type_list(std::move(appended));
-}
-
-DexTypeList* replace_head_and_make(const DexTypeList* list, DexType* new_head) {
-  auto new_list = DexTypeList::ContainerType(list->get_type_list_internal());
-  always_assert(!new_list.empty());
-  new_list.pop_front();
-  new_list.push_front(new_head);
-  return DexTypeList::make_type_list(std::move(new_list));
-}
-
-DexTypeList* drop_and_make(const DexTypeList* list, size_t num_types_to_drop) {
-  auto dropped = DexTypeList::ContainerType(list->get_type_list_internal());
-  for (size_t i = 0; i < num_types_to_drop; ++i) {
-    dropped.pop_back();
-  }
-  return DexTypeList::make_type_list(std::move(dropped));
 }
 
 void update_method_signature_type_references(

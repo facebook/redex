@@ -141,7 +141,8 @@ using CtorSummaries = std::
 DexProto* generalize_proto(const std::vector<DexType*>& normalized_typelist,
                            const ConstructorSummary& summary,
                            const DexProto* original_proto) {
-  auto new_type_list = original_proto->get_args()->get_type_list_internal();
+  DexTypeList::ContainerType new_type_list{original_proto->get_args()->begin(),
+                                           original_proto->get_args()->end()};
   for (size_t field_id = 0; field_id < summary.field_id_to_arg_id.size();
        field_id++) {
     auto arg_id = summary.field_id_to_arg_id[field_id];

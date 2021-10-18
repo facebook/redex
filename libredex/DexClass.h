@@ -499,8 +499,6 @@ class DexTypeList {
     return g_redex->get_type_list(std::move(p));
   }
 
-  const ContainerType& get_type_list_internal() const { return m_list; }
-
   /**
    * Returns size of the encoded typelist in bytes, input
    * pointer must be aligned.
@@ -529,6 +527,15 @@ class DexTypeList {
   bool equals(const std::vector<DexType*>& vec) const {
     return std::equal(m_list.begin(), m_list.end(), vec.begin(), vec.end());
   }
+
+  DexTypeList* push_front(DexType* t) const;
+  DexTypeList* pop_front() const;
+  DexTypeList* pop_front(size_t n) const;
+
+  DexTypeList* push_back(DexType* t) const;
+  DexTypeList* push_back(const std::vector<DexType*>& t) const;
+
+  DexTypeList* replace_head(DexType* new_head) const;
 
  private:
   // See UNIQUENESS above for the rationale for the private constructor pattern.

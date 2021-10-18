@@ -84,8 +84,8 @@ DexMethod* generate_dispatch(const DexType* base_type,
   // Owner and proto
   auto orig_name = std::string(intf_method->c_str());
   auto front_meth = targets.front();
-  auto new_arg_list = prepend_and_make(front_meth->get_proto()->get_args(),
-                                       const_cast<DexType*>(base_type));
+  auto new_arg_list = front_meth->get_proto()->get_args()->push_front(
+      const_cast<DexType*>(base_type));
   auto rtype = front_meth->get_proto()->get_rtype();
   auto new_proto = DexProto::make_proto(rtype, new_arg_list);
   auto dispatch_name =

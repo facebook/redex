@@ -631,8 +631,9 @@ void reject_enums_for_colliding_constructors(
     std::unordered_set<DexTypeList*> modified_params_lists;
     for (auto ctor : ctors) {
       std::unordered_set<DexType*> transforming_enums;
-      auto param_types =
-          ctor->get_proto()->get_args()->get_type_list_internal();
+      DexTypeList::ContainerType param_types{
+          ctor->get_proto()->get_args()->begin(),
+          ctor->get_proto()->get_args()->end()};
       for (size_t i = 0; i < param_types.size(); i++) {
         auto base_type = const_cast<DexType*>(
             type::get_element_type_if_array(param_types[i]));

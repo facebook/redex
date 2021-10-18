@@ -139,6 +139,42 @@ int DexTypeList::encode(DexOutputIdx* dodx, uint32_t* output) const {
   return (int)(((uint8_t*)typep) - (uint8_t*)output);
 }
 
+DexTypeList* DexTypeList::push_front(DexType* t) const {
+  ContainerType new_list;
+  new_list.push_back(t);
+  new_list.insert(new_list.end(), m_list.begin(), m_list.end());
+  return make_type_list(std::move(new_list));
+}
+
+DexTypeList* DexTypeList::pop_front() const {
+  redex_assert(!m_list.empty());
+  ContainerType new_list{m_list.begin() + 1, m_list.end()};
+  return make_type_list(std::move(new_list));
+}
+DexTypeList* DexTypeList::pop_front(size_t n) const {
+  redex_assert(m_list.size() >= n);
+  ContainerType new_list{m_list.begin() + n, m_list.end()};
+  return make_type_list(std::move(new_list));
+}
+
+DexTypeList* DexTypeList::push_back(DexType* t) const {
+  ContainerType new_list{m_list};
+  new_list.push_back(t);
+  return make_type_list(std::move(new_list));
+}
+DexTypeList* DexTypeList::push_back(const std::vector<DexType*>& t) const {
+  ContainerType new_list{m_list};
+  new_list.insert(new_list.end(), t.begin(), t.end());
+  return make_type_list(std::move(new_list));
+}
+
+DexTypeList* DexTypeList::replace_head(DexType* new_head) const {
+  redex_assert(!m_list.empty());
+  ContainerType new_list{m_list};
+  new_list[0] = new_head;
+  return make_type_list(std::move(new_list));
+}
+
 DexField* DexFieldRef::make_concrete(DexAccessFlags access_flags,
                                      DexEncodedValue* v) {
   // FIXME assert if already concrete
