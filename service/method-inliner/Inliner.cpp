@@ -191,22 +191,6 @@ MultiMethodInliner::MultiMethodInliner(
       ++caller_callee[caller][callee];
     }
   }
-  if (inline_for_speed && !m_x_dex_callees.empty()) {
-    // pruning of any (caller, callee) pair if callee is involved in any x-dex
-    // caller/callee relationship
-    // TODO: This is to maintain the old IntraDex behavior for the
-    // PerfMethodInlinePass; evaluate if this is the best behavior for the
-    // PerfMethodInlinePass.
-    for (auto callee : m_x_dex_callees) {
-      callee_caller.erase(callee);
-    }
-    for (auto& p : caller_callee) {
-      std20::erase_if(
-          p.second, [&](auto& it) { return m_x_dex_callees.count(it->first); });
-    }
-    std20::erase_if(caller_callee,
-                    [&](auto& it) { return it->second.empty(); });
-  }
 }
 
 void MultiMethodInliner::inline_methods(bool methods_need_deconstruct) {
