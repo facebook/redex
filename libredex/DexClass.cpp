@@ -884,14 +884,23 @@ void DexClass::load_class_data_item(DexIdx* idx,
   uint32_t dmethod_count = read_uleb128(&encd);
   uint32_t vmethod_count = read_uleb128(&encd);
   uint32_t ndex = 0;
+
+  std::vector<DexEncodedValue*> empty{};
+  std::vector<DexEncodedValue*>& used =
+      (svalues == nullptr || svalues->evalues() == nullptr)
+          ? empty
+          : *svalues->evalues();
+  auto it = used.begin();
+
   m_sfields.reserve(sfield_count);
   for (uint32_t i = 0; i < sfield_count; i++) {
     ndex += read_uleb128(&encd);
     auto access_flags = (DexAccessFlags)read_uleb128(&encd);
     DexField* df = static_cast<DexField*>(idx->get_fieldidx(ndex));
     DexEncodedValue* ev = nullptr;
-    if (svalues != nullptr) {
-      ev = svalues->pop_next();
+    if (it != used.end()) {
+      ev = *it;
+      ++it;
     }
     df->make_concrete(access_flags, ev);
     m_sfields.push_back(df);
@@ -1165,17 +1174,20 @@ static DexEncodedValueArray* load_static_values(DexIdx* idx, uint32_t sv_off) {
 }
 
 DexEncodedValueArray* DexClass::get_static_values() {
-  bool has_static_values = false;
-  auto aev = std::make_unique<std::deque<DexEncodedValue*>>();
+  std::deque<DexEncodedValue*> deque;
   for (auto it = m_sfields.rbegin(); it != m_sfields.rend(); ++it) {
     auto const& f = *it;
     DexEncodedValue* ev = f->get_static_value();
-    if (!ev->is_zero() || has_static_values) {
-      has_static_values = true;
-      aev->push_front(ev);
+    if (!ev->is_zero() || !deque.empty()) {
+      deque.push_front(ev);
     }
   }
-  if (!has_static_values) return nullptr;
+  if (deque.empty()) {
+    return nullptr;
+  }
+
+  auto aev = std::make_unique<std::vector<DexEncodedValue*>>(deque.begin(),
+                                                             deque.end());
   return new DexEncodedValueArray(aev.release(), true);
 }
 

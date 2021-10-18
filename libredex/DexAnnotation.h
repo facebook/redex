@@ -284,7 +284,7 @@ class DexEncodedValueMethodHandle : public DexEncodedValue {
 };
 
 class DexEncodedValueArray : public DexEncodedValue {
-  std::unique_ptr<std::deque<DexEncodedValue*>> m_evalues;
+  std::unique_ptr<std::vector<DexEncodedValue*>> m_evalues;
   bool m_static_val;
 
  public:
@@ -292,21 +292,14 @@ class DexEncodedValueArray : public DexEncodedValue {
    * Static values are encoded without a DEVT_ARRAY header byte
    * so we differentiate that here.
    */
-  explicit DexEncodedValueArray(std::deque<DexEncodedValue*>* evalues,
+  explicit DexEncodedValueArray(std::vector<DexEncodedValue*>* evalues,
                                 bool static_val = false)
       : DexEncodedValue(DEVT_ARRAY), m_evalues(evalues) {
     m_static_val = static_val;
   }
 
-  std::deque<DexEncodedValue*>* evalues() const { return m_evalues.get(); }
+  std::vector<DexEncodedValue*>* evalues() const { return m_evalues.get(); }
   bool is_static_val() const { return m_static_val; }
-
-  DexEncodedValue* pop_next() {
-    if (m_evalues->empty()) return nullptr;
-    DexEncodedValue* rv = m_evalues->front();
-    m_evalues->pop_front();
-    return rv;
-  }
 
   void gather_types(std::vector<DexType*>& ltype) const override;
   void gather_fields(std::vector<DexFieldRef*>& lfield) const override;

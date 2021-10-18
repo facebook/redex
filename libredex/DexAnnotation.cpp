@@ -360,7 +360,8 @@ static DexAnnotationElement get_annotation_element(DexIdx* idx,
 DexEncodedValueArray* get_encoded_value_array(DexIdx* idx,
                                               const uint8_t*& encdata) {
   uint32_t size = read_uleb128(&encdata);
-  auto* evlist = new std::deque<DexEncodedValue*>();
+  auto* evlist = new std::vector<DexEncodedValue*>();
+  evlist->reserve(size);
   for (uint32_t i = 0; i < size; i++) {
     DexEncodedValue* adev = DexEncodedValue::get_encoded_value(idx, encdata);
     evlist->push_back(adev);

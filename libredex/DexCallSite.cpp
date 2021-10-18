@@ -45,12 +45,15 @@ void DexCallSite::gather_fields(std::vector<DexFieldRef*>& lfield) const {
 }
 
 DexEncodedValueArray DexCallSite::as_encoded_value_array() const {
-  auto aev = std::make_unique<std::deque<DexEncodedValue*>>();
+  auto aev = std::make_unique<std::vector<DexEncodedValue*>>();
+  aev->reserve(m_linker_method_args.size() + 3);
+
+  aev->push_back(new DexEncodedValueMethodHandle(m_linker_method_handle));
+  aev->push_back(new DexEncodedValueString(m_linker_method_name));
+  aev->push_back(new DexEncodedValueMethodType(m_linker_method_type));
   for (auto arg : m_linker_method_args) {
     aev->push_back(arg);
   }
-  aev->push_front(new DexEncodedValueMethodType(m_linker_method_type));
-  aev->push_front(new DexEncodedValueString(m_linker_method_name));
-  aev->push_front(new DexEncodedValueMethodHandle(m_linker_method_handle));
+
   return DexEncodedValueArray(aev.release(), true);
 }
