@@ -50,8 +50,7 @@ void dump(const std::string& file_name) {
     return;
   }
   auto* c_str = file_name.c_str();
-  int err =
-      mallctl("prof.dump", nullptr, nullptr, &c_str, sizeof(const char*));
+  int err = mallctl("prof.dump", nullptr, nullptr, &c_str, sizeof(const char*));
   if (err != 0) {
     std::cerr << "mallctl failed with: " << err << std::endl;
   }
