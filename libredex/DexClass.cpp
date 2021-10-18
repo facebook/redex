@@ -848,6 +848,7 @@ void DexClass::load_class_data_item(DexIdx* idx,
   uint32_t dmethod_count = read_uleb128(&encd);
   uint32_t vmethod_count = read_uleb128(&encd);
   uint32_t ndex = 0;
+  m_sfields.reserve(sfield_count);
   for (uint32_t i = 0; i < sfield_count; i++) {
     ndex += read_uleb128(&encd);
     auto access_flags = (DexAccessFlags)read_uleb128(&encd);
@@ -860,6 +861,7 @@ void DexClass::load_class_data_item(DexIdx* idx,
     m_sfields.push_back(df);
   }
   ndex = 0;
+  m_ifields.reserve(ifield_count);
   for (uint32_t i = 0; i < ifield_count; i++) {
     ndex += read_uleb128(&encd);
     auto access_flags = (DexAccessFlags)read_uleb128(&encd);

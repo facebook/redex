@@ -511,6 +511,7 @@ DexEncodedValue* DexEncodedValue::get_encoded_value(DexIdx* idx,
     DexType* type = idx->get_typeidx(tidx);
     always_assert_log(type != nullptr,
                       "Invalid DEVT_ANNOTATION within annotation type");
+    eanno->reserve(count);
     for (uint32_t i = 0; i < count; i++) {
       DexAnnotationElement dae = get_annotation_element(idx, encdata);
       eanno->push_back(dae);
@@ -531,6 +532,7 @@ DexAnnotation* DexAnnotation::get_annotation(DexIdx* idx, uint32_t anno_off) {
   DexType* type = idx->get_typeidx(tidx);
   always_assert_log(type != nullptr, "Invalid annotation type");
   DexAnnotation* anno = new DexAnnotation(type, (DexAnnotationVisibility)viz);
+  anno->m_anno_elems.reserve(count);
   for (uint32_t i = 0; i < count; i++) {
     DexAnnotationElement dae = get_annotation_element(idx, encdata);
     anno->m_anno_elems.push_back(dae);
