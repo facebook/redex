@@ -69,12 +69,12 @@ inline bool is_constructor(const DexMethodRef* meth) {
 
 /** Determine if the method takes no arguments. */
 inline bool has_no_args(const DexMethodRef* meth) {
-  return meth->get_proto()->get_args()->get_type_list().empty();
+  return meth->get_proto()->get_args()->empty();
 }
 
 /** Determine if the method takes exactly n arguments. */
 inline bool has_n_args(const DexMethodRef* meth, size_t n) {
-  return meth->get_proto()->get_args()->get_type_list().size() == n;
+  return meth->get_proto()->get_args()->size() == n;
 }
 
 /**

@@ -227,7 +227,7 @@ bool check_cast(const DexType* type, const DexType* base_type) {
   if (cls == nullptr) return false;
   if (check_cast(cls->get_super_class(), base_type)) return true;
   auto intfs = cls->get_interfaces();
-  for (auto intf : intfs->get_type_list()) {
+  for (auto intf : *intfs) {
     if (check_cast(intf, base_type)) return true;
   }
   return false;

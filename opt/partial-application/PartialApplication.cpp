@@ -184,13 +184,13 @@ DexField* try_get_enum_utils_f_field(EnumUtilsCache& cache,
 // Identify how many argument slots an invocation needs after expansion of wide
 // types, and thus whether a range instruction will be needed.
 std::pair<param_index_t, bool> analyze_args(const DexMethod* callee) {
-  const auto& args = callee->get_proto()->get_args()->get_type_list();
-  param_index_t src_regs = args.size();
+  const auto* args = callee->get_proto()->get_args();
+  param_index_t src_regs = args->size();
   if (!is_static(callee)) {
     src_regs++;
   }
   param_index_t expanded_src_regs{!is_static(callee)};
-  for (auto t : args) {
+  for (auto t : *args) {
     expanded_src_regs += type::is_wide_type(t) ? 2 : 1;
   }
   auto needs_range = expanded_src_regs > 5;
@@ -772,16 +772,16 @@ class CalleeInvocationSelector {
 DexTypeList* get_partial_application_args(bool callee_is_static,
                                           const DexProto* callee_proto,
                                           const CallSiteSummary* css) {
-  const auto& args = callee_proto->get_args()->get_type_list();
-  std::deque<DexType*> new_args;
+  const auto* args = callee_proto->get_args();
+  DexTypeList::ContainerType new_args;
   param_index_t offset = 0;
   if (!callee_is_static) {
     always_assert(css->arguments.get(0).is_top());
     offset++;
   }
-  for (param_index_t i = 0; i < args.size(); i++) {
+  for (param_index_t i = 0; i < args->size(); i++) {
     if (css->arguments.get(offset + i).is_top()) {
-      new_args.push_back(args.at(i));
+      new_args.push_back(args->at(i));
     }
   }
   return DexTypeList::make_type_list(std::move(new_args));
@@ -1021,8 +1021,7 @@ void push_callee_arg(EnumUtilsCache& enum_utils_cache,
       always_assert(object->jvm_cached_singleton);
       always_assert(object->attributes.size() == 1);
       auto valueOf = type::get_value_of_method_for_type(object->type);
-      auto valueOf_arg_type =
-          valueOf->get_proto()->get_args()->get_type_list().at(0);
+      auto valueOf_arg_type = valueOf->get_proto()->get_args()->at(0);
       auto tmp = method_creator->make_local(valueOf_arg_type);
       const auto& signed_value2 =
           object->attributes.front().value.maybe_get<SignedConstantDomain>();
@@ -1072,13 +1071,13 @@ void create_partial_application_methods(EnumUtilsCache& enum_utils_cache,
       callee_args.push_back(method_creator.get_local(next_arg_idx++));
     }
     auto proto = callee->get_proto();
-    const auto& args = proto->get_args()->get_type_list();
-    for (param_index_t i = 0; i < args.size(); i++) {
+    const auto* args = proto->get_args();
+    for (param_index_t i = 0; i < args->size(); i++) {
       const auto& value = css->arguments.get(offset + i);
       if (value.is_top()) {
         callee_args.push_back(method_creator.get_local(next_arg_idx++));
       } else {
-        push_callee_arg(enum_utils_cache, args.at(i), value, &method_creator,
+        push_callee_arg(enum_utils_cache, args->at(i), value, &method_creator,
                         main_block, &callee_args);
       }
     }

@@ -174,9 +174,8 @@ std::string show_type_list(const DexTypeList* l, bool deobfuscated) {
     return "";
   }
 
-  const auto& type_list = l->get_type_list();
-  string_builders::DynamicStringBuilder b(type_list.size());
-  for (const auto& type : type_list) {
+  string_builders::DynamicStringBuilder b(l->size());
+  for (const auto& type : *l) {
     b << show_type(type, deobfuscated);
   }
   return b.str();
@@ -1021,7 +1020,7 @@ std::string vshow(const DexTypeList* p) {
   if (!p) return "";
   std::ostringstream ss;
   bool first = true;
-  for (auto const& type : p->get_type_list()) {
+  for (auto const& type : *p) {
     if (!first) {
       ss << ", ";
     } else {
@@ -1116,7 +1115,7 @@ std::string vshow(const DexClass* p) {
   if (p->get_interfaces()) {
     ss << " implements ";
     bool first = true;
-    for (auto const type : p->get_interfaces()->get_type_list()) {
+    for (auto const type : *p->get_interfaces()) {
       if (first)
         first = false;
       else

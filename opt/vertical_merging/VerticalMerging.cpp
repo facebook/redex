@@ -406,7 +406,7 @@ void record_method_signature(
       record_dont_merge_state(proto->get_rtype(), kConditional,
                               dont_merge_status);
       DexTypeList* args = proto->get_args();
-      for (const DexType* type : args->get_type_list()) {
+      for (const DexType* type : *args) {
         record_dont_merge_state(type, kConditional, dont_merge_status);
       }
     }
@@ -549,14 +549,14 @@ void update_references(const Scope& scope,
 void update_implements(DexClass* from_cls, DexClass* to_cls) {
   std::set<DexType*, dextypes_comparator> new_intfs;
   TRACE(VMERGE, 5, "interface before : ");
-  for (const auto& cls_intf : to_cls->get_interfaces()->get_type_list()) {
+  for (const auto& cls_intf : *to_cls->get_interfaces()) {
     TRACE(VMERGE, 5, "  %s", SHOW(cls_intf));
     new_intfs.emplace(cls_intf);
   }
-  for (const auto& cls_intf : from_cls->get_interfaces()->get_type_list()) {
+  for (const auto& cls_intf : *from_cls->get_interfaces()) {
     new_intfs.emplace(cls_intf);
   }
-  std::deque<DexType*> deque;
+  DexTypeList::ContainerType deque;
 
   TRACE(VMERGE, 5, "interface after : ");
   for (const auto& intf : new_intfs) {

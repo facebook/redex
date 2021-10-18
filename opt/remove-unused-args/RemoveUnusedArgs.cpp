@@ -122,7 +122,7 @@ static bool compare_dextypes_for_normalization(const DexType* a,
 }
 
 static DexProto* normalize_proto(DexProto* proto) {
-  auto args_copy = proto->get_args()->get_type_list();
+  auto args_copy = proto->get_args()->get_type_list_internal();
   std::stable_sort(args_copy.begin(), args_copy.end(),
                    compare_dextypes_for_normalization);
   DexType* rtype = proto->get_rtype();
@@ -300,10 +300,10 @@ std::deque<uint16_t> compute_live_args(
  * Returns an updated argument type list for the given method with the given
  * live argument indices.
  */
-std::deque<DexType*> RemoveArgs::get_live_arg_type_list(
+DexTypeList::ContainerType RemoveArgs::get_live_arg_type_list(
     DexMethod* method, const std::deque<uint16_t>& live_arg_idxs) {
-  std::deque<DexType*> live_args;
-  auto args_list = method->get_proto()->get_args()->get_type_list();
+  DexTypeList::ContainerType live_args;
+  auto args_list = method->get_proto()->get_args();
 
   for (uint16_t arg_num : live_arg_idxs) {
     if (!is_static(method)) {
@@ -312,7 +312,7 @@ std::deque<DexType*> RemoveArgs::get_live_arg_type_list(
       }
       arg_num--;
     }
-    live_args.push_back(args_list.at(arg_num));
+    live_args.push_back(args_list->at(arg_num));
   }
   return live_args;
 }
@@ -494,11 +494,11 @@ static std::deque<uint16_t> update_method_body_for_reordered_proto(
       (*load_param_infos_it)++;
     }
   }
-  for (auto t : original_proto->get_args()->get_type_list()) {
+  for (auto t : *original_proto->get_args()) {
     idxs_by_type[t].push_back(idx++);
   }
 
-  for (auto t : reordered_proto->get_args()->get_type_list()) {
+  for (auto t : *reordered_proto->get_args()) {
     auto& deque = idxs_by_type.find(t)->second;
     auto new_idx = deque.front();
     deque.pop_front();

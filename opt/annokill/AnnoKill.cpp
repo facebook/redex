@@ -218,7 +218,7 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
 
     const auto proto = meth->get_proto();
     has_anno(proto->get_rtype());
-    for (const auto& arg : proto->get_args()->get_type_list()) {
+    for (const auto& arg : *proto->get_args()) {
       has_anno(arg);
     }
   });
@@ -305,7 +305,7 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
             add_concurrent_referenced_anno(rtype);
           }
           auto arg_list = proto->get_args();
-          for (const auto& arg : arg_list->get_type_list()) {
+          for (const auto& arg : *arg_list) {
             if (all_annos.count(arg) > 0) {
               referenced = true;
               add_concurrent_referenced_anno(arg);

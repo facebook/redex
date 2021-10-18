@@ -352,7 +352,7 @@ bool matches_onclick_method(const DexMethod* dmethod,
   auto prototype = dmethod->get_proto();
   auto args_list = prototype->get_args();
   if (args_list->size() == 1) {
-    auto first_type = args_list->get_type_list()[0];
+    auto first_type = args_list->at(0);
     if (strcmp(first_type->c_str(), "Landroid/view/View;") == 0) {
       std::string method_name = dmethod->c_str();
       return names_to_keep.count(method_name) > 0;

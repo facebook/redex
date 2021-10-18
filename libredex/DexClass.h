@@ -481,35 +481,25 @@ class DexTypeList {
   const_iterator begin() const { return m_list.begin(); }
   const_iterator end() const { return m_list.end(); }
 
-  size_t size() const { return get_type_list().size(); }
+  size_t size() const { return m_list.size(); }
   bool empty() const { return m_list.empty(); }
 
-  DexType* at(size_t i) const { return get_type_list().at(i); }
+  DexType* at(size_t i) const { return m_list.at(i); }
 
- private:
-  friend struct RedexContext;
-
-  std::deque<DexType*> m_list;
-
-  // See UNIQUENESS above for the rationale for the private constructor pattern.
-  explicit DexTypeList(std::deque<DexType*>&& p) { m_list = std::move(p); }
-
- public:
   // DexTypeList retrieval/creation
 
   // If the DexTypeList exists, return it, otherwise create it and return it.
   // See also get_type_list()
-  static DexTypeList* make_type_list(std::deque<DexType*>&& p) {
+  static DexTypeList* make_type_list(ContainerType&& p) {
     return g_redex->make_type_list(std::move(p));
   }
 
   // Return an existing DexTypeList or nullptr if one does not exist.
-  static DexTypeList* get_type_list(std::deque<DexType*>&& p) {
+  static DexTypeList* get_type_list(ContainerType&& p) {
     return g_redex->get_type_list(std::move(p));
   }
 
- public:
-  const std::deque<DexType*>& get_type_list() const { return m_list; }
+  const ContainerType& get_type_list_internal() const { return m_list; }
 
   /**
    * Returns size of the encoded typelist in bytes, input
@@ -539,6 +529,14 @@ class DexTypeList {
   bool equals(const std::vector<DexType*>& vec) const {
     return std::equal(m_list.begin(), m_list.end(), vec.begin(), vec.end());
   }
+
+ private:
+  // See UNIQUENESS above for the rationale for the private constructor pattern.
+  explicit DexTypeList(ContainerType&& p) { m_list = std::move(p); }
+
+  ContainerType m_list;
+
+  friend struct RedexContext;
 };
 
 inline bool compare_dextypelists(const DexTypeList* a, const DexTypeList* b) {

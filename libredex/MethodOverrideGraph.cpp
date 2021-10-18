@@ -201,7 +201,7 @@ class GraphBuilder {
 
   SignatureMap unify_super_interface_signatures(const DexClass* cls) {
     SignatureMap super_interface_signatures;
-    for (auto* intf : cls->get_interfaces()->get_type_list()) {
+    for (auto* intf : *cls->get_interfaces()) {
       auto intf_cls = type_class(intf);
       if (intf_cls != nullptr) {
         unify_signature_maps(analyze_interface(intf_cls),

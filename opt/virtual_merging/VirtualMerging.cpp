@@ -835,7 +835,7 @@ VirtualMergingStats apply_ordering(
           load_param_insn->set_dest(overridden_code->allocate_temp());
           overridden_code->push_back(load_param_insn);
           param_regs.push_back(load_param_insn->dest());
-          for (auto t : proto->get_args()->get_type_list()) {
+          for (auto t : *proto->get_args()) {
             if (type::is_wide_type(t)) {
               load_param_insn = new IRInstruction(IOPCODE_LOAD_PARAM_WIDE);
               load_param_insn->set_dest(overridden_code->allocate_wide_temp());
@@ -891,8 +891,7 @@ VirtualMergingStats apply_ordering(
             last_it = it;
           }
           always_assert(param_regs.size() == param_regs_set.size());
-          always_assert(1 + proto->get_args()->get_type_list().size() ==
-                        param_regs_set.size());
+          always_assert(1 + proto->get_args()->size() == param_regs_set.size());
           always_assert(last_it != block->end());
 
           // We'll split the block right after the last load-param instruction
@@ -928,8 +927,7 @@ VirtualMergingStats apply_ordering(
           allocate_wide_temp = [=]() { return cfg_ptr->allocate_wide_temp(); };
           cleanup = []() {};
         }
-        always_assert(1 + proto->get_args()->get_type_list().size() ==
-                      param_regs.size());
+        always_assert(1 + proto->get_args()->size() == param_regs.size());
 
         // invoke-virtual temp, param1, ..., paramN, OverridingMethod
         auto invoke_virtual_insn = new IRInstruction(OPCODE_INVOKE_VIRTUAL);

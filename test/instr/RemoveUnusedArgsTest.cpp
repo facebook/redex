@@ -308,7 +308,7 @@ TEST_F(PreVerify, PrivatesUsedArgs) {
 
   for (auto dmethod : dmethods) {
     if (!method::is_constructor(dmethod)) {
-      auto num_args = dmethod->get_proto()->get_args()->get_type_list().size();
+      auto num_args = dmethod->get_proto()->get_args()->size();
       if (num_args == 2) {
         two_args_method = true;
       } else {
@@ -337,7 +337,7 @@ TEST_F(PostVerify, PrivatesUsedArgs) {
   std::vector<DexMethod*> overloaded_methods;
   for (auto dmethod : dmethods) {
     if (!method::is_constructor(dmethod)) {
-      auto num_args = dmethod->get_proto()->get_args()->get_type_list().size();
+      auto num_args = dmethod->get_proto()->get_args()->size();
       EXPECT_EQ(num_args, 2);
       overloaded_methods.emplace_back(dmethod);
     }

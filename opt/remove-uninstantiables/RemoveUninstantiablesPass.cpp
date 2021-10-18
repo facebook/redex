@@ -329,7 +329,7 @@ RemoveUninstantiablesPass::compute_scoped_uninstantiable_types(
       (*instantiable_children)[cls->get_super_class()].insert(cls->get_type());
     }
     uninstantiable_types.erase(cls->get_type());
-    for (auto interface : cls->get_interfaces()->get_type_list()) {
+    for (auto interface : *cls->get_interfaces()) {
       visit(type_class(interface));
     }
     return true;

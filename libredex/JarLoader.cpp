@@ -308,7 +308,7 @@ static DexTypeList* extract_arguments(const char*& buf) {
     buf++;
     return DexTypeList::make_type_list({});
   }
-  std::deque<DexType*> args;
+  DexTypeList::ContainerType args;
   while (*buf != ')') {
     DexType* dtype = parse_type(buf);
     if (dtype == nullptr) return nullptr;

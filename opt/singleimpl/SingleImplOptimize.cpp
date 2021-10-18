@@ -60,9 +60,8 @@ DexProto* get_or_make_proto(const DexType* intf,
   if (rtype == intf) rtype = impl;
   DexTypeList* new_args = nullptr;
   const auto args = proto->get_args();
-  std::deque<DexType*> new_arg_list;
-  const auto& arg_list = args->get_type_list();
-  for (const auto arg : arg_list) {
+  DexTypeList::ContainerType new_arg_list;
+  for (const auto arg : *args) {
     new_arg_list.push_back(arg == intf ? impl : arg);
   }
   new_args = DexTypeList::make_type_list(std::move(new_arg_list));
@@ -110,8 +109,7 @@ void remove_interface(const DexType* intf, const SingleImplData& data) {
   std::unordered_set<DexType*> new_intfs;
   auto collect_interfaces = [&](DexClass* impl) {
     auto intfs = impl->get_interfaces();
-    auto intf_types = intfs->get_type_list();
-    for (auto type : intf_types) {
+    for (auto type : *intfs) {
       if (intf != type) {
         // make interface public if it was not already. It may happen
         // the parent interface is package protected (a type cannot be
@@ -134,9 +132,8 @@ void remove_interface(const DexType* intf, const SingleImplData& data) {
   auto intf_cls = type_class(intf);
   collect_interfaces(intf_cls);
 
-  std::deque<DexType*> revisited_intfs;
-  std::copy(new_intfs.begin(), new_intfs.end(),
-            std::back_inserter(revisited_intfs));
+  DexTypeList::ContainerType revisited_intfs{new_intfs.begin(),
+                                             new_intfs.end()};
   std::sort(revisited_intfs.begin(), revisited_intfs.end(), compare_dextypes);
   cls->set_interfaces(DexTypeList::make_type_list(std::move(revisited_intfs)));
   cls->combine_annotations_with(intf_cls);
@@ -383,10 +380,9 @@ CheckCastSet OptimizationImpl::fix_instructions(const DexType* intf,
             }
 
             // Parameters.
-            const auto& arg_list =
-                mref->get_proto()->get_args()->get_type_list();
+            const auto* arg_list = mref->get_proto()->get_args();
             size_t idx = insn->opcode() == OPCODE_INVOKE_STATIC ? 0 : 1;
-            for (const auto arg : arg_list) {
+            for (const auto arg : *arg_list) {
               if (arg != intf) {
                 idx++;
                 continue;
@@ -624,7 +620,7 @@ void OptimizationImpl::drop_single_impl_collision(const DexType* intf,
   auto proto = method->get_proto();
   check_type(proto->get_rtype());
   auto args_list = proto->get_args();
-  for (auto arg : args_list->get_type_list()) {
+  for (auto arg : *args_list) {
     check_type(arg);
   }
 }

@@ -362,18 +362,18 @@ class EnumUpcastDetector {
     auto proto = method->get_proto();
     auto container = method->get_class();
     // Check the type of arguments.
-    const std::deque<DexType*>& args = proto->get_args()->get_type_list();
-    always_assert(args.size() == insn->srcs_size() ||
-                  args.size() == insn->srcs_size() - 1);
+    auto* args = proto->get_args();
+    always_assert(args->size() == insn->srcs_size() ||
+                  args->size() == insn->srcs_size() - 1);
     size_t arg_id = 0;
-    if (insn->srcs_size() == args.size() + 1) {
+    if (insn->srcs_size() == args->size() + 1) {
       // this pointer
       reject_if_inconsistent(insn, env->get(insn->src(arg_id)), container,
                              rejected_enums, CAST_THIS_POINTER);
       arg_id++;
     }
     // Arguments
-    auto it = args.begin();
+    auto it = args->begin();
     for (; arg_id < insn->srcs_size(); ++arg_id, ++it) {
       reject_if_inconsistent(insn, env->get(insn->src(arg_id)), *it,
                              rejected_enums, CAST_PARAMETER);
@@ -607,7 +607,7 @@ EnumTypeEnvironment EnumFixpointIterator::gen_env(const DexMethod* method) {
     env.set(it->insn->dest(), EnumTypes(method->get_class()));
     ++it;
   }
-  for (DexType* type : args->get_type_list()) {
+  for (DexType* type : *args) {
     env.set(it->insn->dest(), EnumTypes(type));
     ++it;
   }
@@ -631,7 +631,8 @@ void reject_enums_for_colliding_constructors(
     std::unordered_set<DexTypeList*> modified_params_lists;
     for (auto ctor : ctors) {
       std::unordered_set<DexType*> transforming_enums;
-      auto param_types = ctor->get_proto()->get_args()->get_type_list();
+      auto param_types =
+          ctor->get_proto()->get_args()->get_type_list_internal();
       for (size_t i = 0; i < param_types.size(); i++) {
         auto base_type = const_cast<DexType*>(
             type::get_element_type_if_array(param_types[i]));
@@ -754,8 +755,8 @@ bool is_enum_valueof(const DexMethodRef* method) {
   if (method->get_class() != proto->get_rtype()) {
     return false;
   }
-  auto& args = proto->get_args()->get_type_list();
-  return args.size() == 1 && args.front() == type::java_lang_String();
+  auto* args = proto->get_args();
+  return args->size() == 1 && args->at(0) == type::java_lang_String();
 }
 
 bool is_enum_values(const DexMethodRef* method) {

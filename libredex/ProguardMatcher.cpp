@@ -130,7 +130,7 @@ struct ClassMatcher {
   bool search_interfaces(const DexClass* cls) {
     const auto* interfaces = cls->get_interfaces();
     if (!interfaces) return false;
-    for (const auto& impl : interfaces->get_type_list()) {
+    for (const auto& impl : *interfaces) {
       auto impl_class = type_class(impl);
       if (impl_class) {
         if (type_and_annotation_match(impl_class) ||
@@ -213,7 +213,7 @@ void build_extends_or_implements_hierarchy(const Scope& scope,
     if (super != nullptr) {
       (*hierarchy)[super].insert(type);
     }
-    for (const auto& impl : cls->get_interfaces()->get_type_list()) {
+    for (const auto& impl : *cls->get_interfaces()) {
       (*hierarchy)[impl].insert(type);
     }
   }

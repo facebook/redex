@@ -69,9 +69,8 @@ static DexType* get_receiver_type_demand(DexType* callee_rtype,
         return dex_method->get_class();
       }
     }
-    const auto& arg_types =
-        dex_method->get_proto()->get_args()->get_type_list();
-    return arg_types.at(src_index);
+    const auto* arg_types = dex_method->get_proto()->get_args();
+    return arg_types->at(src_index);
   }
   default:
     if (opcode::is_a_conditional_branch(use.insn->opcode())) {

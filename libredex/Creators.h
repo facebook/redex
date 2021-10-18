@@ -595,5 +595,5 @@ struct ClassCreator {
   static std::string show_type(const DexType* type);
 
   DexClass* m_cls;
-  std::deque<DexType*> m_interfaces;
+  DexTypeList::ContainerType m_interfaces;
 };

@@ -613,7 +613,7 @@ class DexElemManager {
     if (cls == nullptr) return nullptr;
     auto found_def = find_def(ref, cls->get_type());
     if (found_def != nullptr) return found_def;
-    for (auto& intf : cls->get_interfaces()->get_type_list()) {
+    for (auto& intf : *cls->get_interfaces()) {
       auto found = find_def_in_class_and_intf(ref, type_class(intf));
       if (found != nullptr) return found;
     }

@@ -25,10 +25,10 @@ DexString* get_name(DexMethod* meth) {
 DexProto* make_static_sig(DexMethod* meth) {
   auto proto = meth->get_proto();
   auto rtype = proto->get_rtype();
-  std::deque<DexType*> arg_list;
+  DexTypeList::ContainerType arg_list;
   arg_list.push_back(meth->get_class());
-  auto args = proto->get_args()->get_type_list();
-  arg_list.insert(arg_list.end(), args.begin(), args.end());
+  auto* args = proto->get_args();
+  arg_list.insert(arg_list.end(), args->begin(), args->end());
   auto new_args = DexTypeList::make_type_list(std::move(arg_list));
   return DexProto::make_proto(rtype, new_args);
 }
@@ -531,7 +531,7 @@ void MethodCreator::load_locals(DexMethod* meth) {
   auto proto = meth->get_proto();
   auto args = proto->get_args();
   if (args) {
-    for (auto arg : args->get_type_list()) {
+    for (auto arg : *args) {
       make_local_at(arg, it->insn->dest());
       ++it;
     }

@@ -63,7 +63,7 @@ void process_proto(std::unordered_set<const DexType*>* class_references,
   // Types referenced in protos.
   auto const& proto = meth->get_proto();
   class_references->insert(type::get_element_type_if_array(proto->get_rtype()));
-  for (auto const& ptype : proto->get_args()->get_type_list()) {
+  for (auto const& ptype : *proto->get_args()) {
     class_references->insert(type::get_element_type_if_array(ptype));
   }
 }

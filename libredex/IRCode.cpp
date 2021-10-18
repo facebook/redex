@@ -324,14 +324,14 @@ static void associate_try_items(IRList* ir,
 void generate_load_params(const DexMethod* method,
                           size_t temp_regs,
                           IRCode* code) {
-  auto args = method->get_proto()->get_args()->get_type_list();
+  auto* args = method->get_proto()->get_args();
   auto param_reg = temp_regs;
   if (!is_static(method)) {
     auto insn = new IRInstruction(IOPCODE_LOAD_PARAM_OBJECT);
     insn->set_dest(param_reg++);
     code->push_back(insn);
   }
-  for (DexType* arg : args) {
+  for (DexType* arg : *args) {
     IROpcode op;
     auto prev_reg = param_reg;
     if (type::is_wide_type(arg)) {
@@ -690,12 +690,12 @@ uint16_t calc_outs_size(const IRCode* code) {
 }
 
 void calculate_ins_size(const DexMethod* method, DexCode* dex_code) {
-  auto& args_list = method->get_proto()->get_args()->get_type_list();
+  auto* args_list = method->get_proto()->get_args();
   uint16_t ins_size{0};
   if (!is_static(method)) {
     ++ins_size;
   }
-  for (auto arg : args_list) {
+  for (auto arg : *args_list) {
     if (type::is_wide_type(arg)) {
       ins_size += 2;
     } else {

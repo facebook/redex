@@ -99,6 +99,24 @@ class DexClassHasher final {
       hash(p.second);
     }
   }
+
+  // Template magic.
+  template <typename, typename = void>
+  struct has_size : std::false_type {};
+  template <typename T>
+  struct has_size<T, std::void_t<decltype(&T::size)>> : std::true_type {};
+
+  // Not applying to map-like things (like unordered_map) should be done by
+  // failures to hash the elements.
+  template <typename T,
+            typename std::enable_if<has_size<T>::value, T>::type* = nullptr>
+  void hash(const T& c) {
+    hash((uint64_t)c.size());
+    for (const auto& elem : c) {
+      hash(elem);
+    }
+  }
+
   DexClass* m_cls;
   size_t m_hash{0};
   size_t m_code_hash{0};

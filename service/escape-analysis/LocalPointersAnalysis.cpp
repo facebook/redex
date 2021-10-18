@@ -318,9 +318,8 @@ void escape_invoke_params(const IRInstruction* insn,
     env->set_may_escape(insn->src(0), insn);
     ++idx;
   }
-  const auto& arg_types =
-      insn->get_method()->get_proto()->get_args()->get_type_list();
-  for (const auto* arg : arg_types) {
+  const auto* arg_types = insn->get_method()->get_proto()->get_args();
+  for (const auto* arg : *arg_types) {
     if (!type::is_primitive(arg)) {
       env->set_may_escape(insn->src(idx), insn);
     }

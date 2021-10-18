@@ -45,7 +45,7 @@ DexMethod* create_an_init_method(
     const std::vector<DexField*>& fields_to_assign_null = {},
     bool before_init_call = false,
     bool spurious_init_call = false) {
-  std::deque<DexType*> param_types;
+  DexTypeList::ContainerType param_types;
   auto java_lang_Object = DexType::make_type("Ljava/lang/Object;");
   for (size_t i = 0; i < num_param_types; i++) {
     param_types.push_back(java_lang_Object);

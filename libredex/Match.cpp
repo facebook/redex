@@ -14,7 +14,7 @@ bool is_assignable_to_interface(const DexType* type, const DexType* iface) {
   if (type == iface) return true;
   auto cls = type_class(type);
   if (cls) {
-    for (auto extends : cls->get_interfaces()->get_type_list()) {
+    for (auto extends : *cls->get_interfaces()) {
       if (is_assignable_to_interface(extends, iface)) {
         return true;
       }

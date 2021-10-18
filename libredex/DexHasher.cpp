@@ -273,7 +273,7 @@ void DexClassHasher::hash(const DexFieldRef* f) {
 
 void DexClassHasher::hash(const DexType* t) { hash(t->get_name()); }
 
-void DexClassHasher::hash(const DexTypeList* l) { hash(l->get_type_list()); }
+void DexClassHasher::hash(const DexTypeList* l) { hash(*l); }
 
 void DexClassHasher::hash(const ParamAnnotations* m) {
   if (m) {

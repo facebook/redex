@@ -96,8 +96,10 @@ struct RedexContext {
                     const DexFieldSpec& ref,
                     bool rename_on_collision);
 
-  DexTypeList* make_type_list(std::deque<DexType*>&& p);
-  DexTypeList* get_type_list(std::deque<DexType*>&& p);
+  using DexTypeListContainerType = std::deque<DexType*>;
+
+  DexTypeList* make_type_list(DexTypeListContainerType&& p);
+  DexTypeList* get_type_list(DexTypeListContainerType&& p);
 
   DexProto* make_proto(const DexType* rtype,
                        const DexTypeList* args,
@@ -316,9 +318,9 @@ struct RedexContext {
   std::mutex s_field_lock;
 
   // DexTypeList
-  ConcurrentMap<std::deque<DexType*>,
+  ConcurrentMap<DexTypeListContainerType,
                 DexTypeList*,
-                boost::hash<std::deque<DexType*>>>
+                boost::hash<DexTypeListContainerType>>
       s_typelist_map;
 
   // DexProto

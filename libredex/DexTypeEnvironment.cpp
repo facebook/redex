@@ -18,7 +18,7 @@ bool implements(const DexClass* cls, const DexType* intf) {
   if (is_interface(cls)) {
     return false;
   }
-  for (const auto interface : cls->get_interfaces()->get_type_list()) {
+  for (const auto interface : *cls->get_interfaces()) {
     if (interface == intf) {
       return true;
     }

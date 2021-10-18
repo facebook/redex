@@ -470,7 +470,7 @@ bool can_update_wrappee(const ClassHierarchy& ch,
     return false;
   }
   DexProto* old_proto = wrappee->get_proto();
-  auto new_args = old_proto->get_args()->get_type_list();
+  auto new_args = old_proto->get_args()->get_type_list_internal();
   new_args.push_front(wrappee->get_class());
   DexProto* new_proto = DexProto::make_proto(
       old_proto->get_rtype(), DexTypeList::make_type_list(std::move(new_args)));

@@ -405,7 +405,7 @@ std::string merger_info(const MergerType& merger) {
 
 void set_interfaces(DexClass* cls, const TypeSet& intfs) {
   if (!intfs.empty()) {
-    auto intf_list = std::deque<DexType*>();
+    auto intf_list = DexTypeList::ContainerType();
     for (const auto& intf : intfs) {
       intf_list.emplace_back(const_cast<DexType*>(intf));
     }

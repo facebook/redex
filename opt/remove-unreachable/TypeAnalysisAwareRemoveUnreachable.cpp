@@ -81,7 +81,7 @@ class TypeAnaysisAwareClosureMarker final
     }
     push(method, method->get_class());
     push(method, method->get_proto()->get_rtype());
-    for (auto const& t : method->get_proto()->get_args()->get_type_list()) {
+    for (auto const& t : *method->get_proto()->get_args()) {
       push(method, t);
     }
 

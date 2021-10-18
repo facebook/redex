@@ -177,10 +177,10 @@ BuilderStateMap Outliner::gather_builder_states(
  */
 const DexTypeList* Outliner::typelist_from_state(
     const BuilderState& state) const {
-  std::deque<DexType*> args;
+  DexTypeList::ContainerType args;
   for (auto* insn : state) {
     auto method = insn->get_method();
-    args.emplace_back(method->get_proto()->get_args()->get_type_list().at(0));
+    args.emplace_back(method->get_proto()->get_args()->at(0));
   }
   return DexTypeList::make_type_list(std::move(args));
 }

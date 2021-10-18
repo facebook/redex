@@ -106,8 +106,7 @@ class Analyzer {
         if (!m_is_static && param_index-- == 0) {
           result = result | AnalysisResult::Object;
         } else {
-          auto& args_list = m_args->get_type_list();
-          result = result | analyze(args_list.at(param_index));
+          result = result | analyze(m_args->at(param_index));
         }
         break;
       }

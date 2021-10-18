@@ -216,9 +216,7 @@ bool IRInstruction::invoke_src_is_wide(src_index_t i) const {
     --i;
   }
 
-  const std::deque<DexType*>& args =
-      m_method->get_proto()->get_args()->get_type_list();
-  return type::is_wide_type(args[i]);
+  return type::is_wide_type(m_method->get_proto()->get_args()->at(i));
 }
 
 bool IRInstruction::src_is_wide(src_index_t i) const {
@@ -281,14 +279,14 @@ bool IRInstruction::src_is_wide(src_index_t i) const {
 
 void IRInstruction::normalize_registers() {
   if (opcode::is_an_invoke(opcode())) {
-    auto& args = get_method()->get_proto()->get_args()->get_type_list();
+    auto* args = get_method()->get_proto()->get_args();
     size_t old_srcs_idx{0};
     size_t srcs_idx{0};
     if (m_opcode != OPCODE_INVOKE_STATIC) {
       ++srcs_idx;
       ++old_srcs_idx;
     }
-    for (size_t args_idx = 0; args_idx < args.size(); ++args_idx) {
+    for (size_t args_idx = 0; args_idx < args->size(); ++args_idx) {
       always_assert_log(
           old_srcs_idx < srcs_size(),
           "Invalid arg indices in %s args_idx %zu old_srcs_idx %zu",
@@ -296,7 +294,7 @@ void IRInstruction::normalize_registers() {
           args_idx,
           old_srcs_idx);
       set_src(srcs_idx++, src(old_srcs_idx));
-      old_srcs_idx += type::is_wide_type(args.at(args_idx)) ? 2 : 1;
+      old_srcs_idx += type::is_wide_type(args->at(args_idx)) ? 2 : 1;
     }
     always_assert(old_srcs_idx == srcs_size());
     set_srcs_size(srcs_idx);
@@ -305,9 +303,9 @@ void IRInstruction::normalize_registers() {
 
 void IRInstruction::denormalize_registers() {
   if (opcode::is_an_invoke(m_opcode)) {
-    auto& args = get_method()->get_proto()->get_args()->get_type_list();
+    auto* args = get_method()->get_proto()->get_args();
     bool has_wide = false;
-    for (const auto& arg : args) {
+    for (const auto& arg : *args) {
       if (type::is_wide_type(arg)) {
         has_wide = true;
         break;
@@ -323,9 +321,9 @@ void IRInstruction::denormalize_registers() {
     if (m_opcode != OPCODE_INVOKE_STATIC) {
       srcs.push_back(src(srcs_idx++));
     }
-    for (; args_idx < args.size(); ++args_idx, ++srcs_idx) {
+    for (; args_idx < args->size(); ++args_idx, ++srcs_idx) {
       srcs.push_back(src(srcs_idx));
-      if (type::is_wide_type(args.at(args_idx))) {
+      if (type::is_wide_type(args->at(args_idx))) {
         srcs.push_back(src(srcs_idx) + 1);
       }
     }

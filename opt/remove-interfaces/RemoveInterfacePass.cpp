@@ -178,17 +178,17 @@ DexTypeList* get_new_impl_list(const DexType* impl,
                                const DexType* intf_to_remove) {
   std::set<DexType*, dextypes_comparator> new_intfs;
   auto cls = type_class(impl);
-  for (const auto intf : cls->get_interfaces()->get_type_list()) {
+  for (const auto intf : *cls->get_interfaces()) {
     if (intf == intf_to_remove) {
       continue;
     }
     new_intfs.insert(intf);
   }
   auto cls_to_remove = type_class(intf_to_remove);
-  auto& super_intfs = cls_to_remove->get_interfaces()->get_type_list();
-  new_intfs.insert(super_intfs.begin(), super_intfs.end());
-  std::deque<DexType*> deque(new_intfs.begin(), new_intfs.end());
-  return DexTypeList::make_type_list(std::move(deque));
+  auto* super_intfs = cls_to_remove->get_interfaces();
+  new_intfs.insert(super_intfs->begin(), super_intfs->end());
+  return DexTypeList::make_type_list(
+      DexTypeList::ContainerType{new_intfs.begin(), new_intfs.end()});
 }
 
 const DexType* get_replacement_type(const TypeSystem& type_system,
@@ -413,8 +413,7 @@ MethodOrderedSet find_dispatch_targets(const TypeSystem& type_system,
 void include_parent_interfaces(const DexType* root, TypeSet& interfaces) {
   TypeSet parent_interfaces;
   for (const auto intf : interfaces) {
-    auto parent_intfs = type_class(intf)->get_interfaces()->get_type_list();
-    for (const auto parent_intf : parent_intfs) {
+    for (const auto parent_intf : *type_class(intf)->get_interfaces()) {
       if (parent_intf != root) {
         parent_interfaces.insert(parent_intf);
       }

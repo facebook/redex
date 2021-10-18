@@ -1738,7 +1738,7 @@ class OutlinedMethodCreator {
                                     const DexType* host_class,
                                     std::set<uint32_t>* pattern_ids) {
     auto name = m_method_name_generator.get_name(c);
-    std::deque<DexType*> arg_types;
+    DexTypeList::ContainerType arg_types;
     for (auto t : c.arg_types) {
       arg_types.push_back(const_cast<DexType*>(t));
     }

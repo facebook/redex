@@ -163,8 +163,7 @@ void propagate_levels(const ClassHierarchy& ch,
 
   auto* intfs = cls->get_interfaces();
   if (intfs) {
-    const auto& interfaces = intfs->get_type_list();
-    for (auto* intf : interfaces) {
+    for (auto* intf : *intfs) {
       auto* intf_cls = type_class(intf);
       if (intf_cls) {
         min_level =

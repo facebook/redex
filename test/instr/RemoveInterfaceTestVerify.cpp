@@ -80,17 +80,12 @@ TEST_F(PreVerify, TestInputIsComplete) {
   ASSERT_NE(nullptr, find_vmethod_named(*sb_cls, "concat"));
   ASSERT_NE(nullptr, find_vmethod_named(*sb_cls, "add"));
 
-  EXPECT_THAT(fa_cls->get_interfaces()->get_type_list(),
-              Contains(a_cls->get_type()));
-  EXPECT_THAT(sa_cls->get_interfaces()->get_type_list(),
-              Contains(a_cls->get_type()));
-  EXPECT_THAT(fb_cls->get_interfaces()->get_type_list(),
-              Contains(b_cls->get_type()));
-  EXPECT_THAT(sb_cls->get_interfaces()->get_type_list(),
-              Contains(b_cls->get_type()));
+  EXPECT_THAT(*fa_cls->get_interfaces(), Contains(a_cls->get_type()));
+  EXPECT_THAT(*sa_cls->get_interfaces(), Contains(a_cls->get_type()));
+  EXPECT_THAT(*fb_cls->get_interfaces(), Contains(b_cls->get_type()));
+  EXPECT_THAT(*sb_cls->get_interfaces(), Contains(b_cls->get_type()));
 
-  EXPECT_THAT(um_cls->get_interfaces()->get_type_list(),
-              Contains(ui_cls->get_type()));
+  EXPECT_THAT(*um_cls->get_interfaces(), Contains(ui_cls->get_type()));
 
   auto test_cls =
       find_class_named(classes, "Lcom/facebook/redextest/RemoveInterfaceTest;");
@@ -155,24 +150,15 @@ TEST_F(PostVerify, InterfaceInheritanceRemoved) {
       find_class_named(classes, "Lcom/facebook/redextest/UnremovableModel;");
   ASSERT_NE(nullptr, um_cls);
 
-  EXPECT_THAT(fa_cls->get_interfaces()->get_type_list(),
-              Not(Contains(a_cls->get_type())));
-  EXPECT_THAT(sa_cls->get_interfaces()->get_type_list(),
-              Not(Contains(a_cls->get_type())));
-  EXPECT_THAT(fb_cls->get_interfaces()->get_type_list(),
-              Not(Contains(b_cls->get_type())));
-  EXPECT_THAT(sb_cls->get_interfaces()->get_type_list(),
-              Not(Contains(b_cls->get_type())));
+  EXPECT_THAT(*fa_cls->get_interfaces(), Not(Contains(a_cls->get_type())));
+  EXPECT_THAT(*sa_cls->get_interfaces(), Not(Contains(a_cls->get_type())));
+  EXPECT_THAT(*fb_cls->get_interfaces(), Not(Contains(b_cls->get_type())));
+  EXPECT_THAT(*sb_cls->get_interfaces(), Not(Contains(b_cls->get_type())));
 
-  EXPECT_THAT(fa_cls->get_interfaces()->get_type_list(),
-              Contains(super_cls->get_type()));
-  EXPECT_THAT(sa_cls->get_interfaces()->get_type_list(),
-              Contains(super_cls->get_type()));
-  EXPECT_THAT(fb_cls->get_interfaces()->get_type_list(),
-              Contains(super_cls->get_type()));
-  EXPECT_THAT(sb_cls->get_interfaces()->get_type_list(),
-              Contains(super_cls->get_type()));
+  EXPECT_THAT(*fa_cls->get_interfaces(), Contains(super_cls->get_type()));
+  EXPECT_THAT(*sa_cls->get_interfaces(), Contains(super_cls->get_type()));
+  EXPECT_THAT(*fb_cls->get_interfaces(), Contains(super_cls->get_type()));
+  EXPECT_THAT(*sb_cls->get_interfaces(), Contains(super_cls->get_type()));
 
-  EXPECT_THAT(um_cls->get_interfaces()->get_type_list(),
-              Contains(ui_cls->get_type()));
+  EXPECT_THAT(*um_cls->get_interfaces(), Contains(ui_cls->get_type()));
 }

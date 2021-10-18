@@ -243,7 +243,7 @@ std::unique_ptr<local::LocalTypeAnalyzer> GlobalTypeAnalyzer::analyze_method(
 
 bool args_have_type(const DexProto* proto, const DexType* type) {
   always_assert(type);
-  for (const auto arg_type : proto->get_args()->get_type_list()) {
+  for (const auto arg_type : *proto->get_args()) {
     if (arg_type == type) {
       return true;
     }
@@ -287,8 +287,8 @@ bool is_likely_anonymous_class(const DexType* type) {
   }
   const auto* super_type = cls->get_super_class();
   if (super_type == type::java_lang_Object()) {
-    auto intfs = cls->get_interfaces()->get_type_list();
-    return intfs.size() == 1;
+    auto* intfs = cls->get_interfaces();
+    return intfs->size() == 1;
   }
   const auto* super_cls = type_class(super_type);
   if (super_cls && is_abstract(super_cls)) {

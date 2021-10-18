@@ -179,7 +179,7 @@ bool RefChecker::check_type_internal(const DexType* type) const {
       return false;
     }
     auto interfaces = cls->get_interfaces();
-    for (auto t : interfaces->get_type_list()) {
+    for (auto t : *interfaces) {
       if (!check_type(t)) {
         return false;
       }
@@ -197,7 +197,7 @@ bool RefChecker::check_method_internal(const DexMethod* method) const {
     return false;
   }
   auto args = method->get_proto()->get_args();
-  for (auto t : args->get_type_list()) {
+  for (auto t : *args) {
     if (!check_type(t)) {
       return false;
     }

@@ -81,8 +81,7 @@ static size_t sum_src_sizes(const IRInstruction* insn) {
     // Account for the implicit `this` parameter
     ++size;
   }
-  auto& types = insn->get_method()->get_proto()->get_args()->get_type_list();
-  for (auto* type : types) {
+  for (auto* type : *insn->get_method()->get_proto()->get_args()) {
     size += type::is_wide_type(type) ? 2 : 1;
   }
   return size;

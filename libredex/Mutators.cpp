@@ -58,7 +58,7 @@ namespace mutators {
 
 void make_static(DexMethod* method, KeepThis keep /* = Yes */) {
   auto proto = method->get_proto();
-  auto params = proto->get_args()->get_type_list();
+  auto params = proto->get_args()->get_type_list_internal();
   auto cls_type = method->get_class();
   if (keep == KeepThis::Yes) {
     // make `this` an explicit parameter
@@ -84,7 +84,7 @@ void make_static(DexMethod* method, KeepThis keep /* = Yes */) {
 void make_non_static(DexMethod* method, bool make_virtual) {
   always_assert(method->get_access() & ACC_STATIC);
   auto proto = method->get_proto();
-  auto params = proto->get_args()->get_type_list();
+  auto params = proto->get_args()->get_type_list_internal();
   auto cls_type = method->get_class();
   // Limitation: We can only deal with static methods that have a first
   // of the parameter class type.

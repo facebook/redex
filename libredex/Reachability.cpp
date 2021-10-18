@@ -455,13 +455,13 @@ void TransitiveClosureMarker::visit_cls(const DexClass* cls) {
       // if m_remove_no_argument_constructors, make an exception. This is only
       // used for testing
       if (!m_remove_no_argument_constructors &&
-          m->get_proto()->get_args()->get_type_list().empty()) {
+          m->get_proto()->get_args()->empty()) {
         push(cls, m);
       }
     }
   }
   push(cls, type_class(cls->get_super_class()));
-  for (auto const& t : cls->get_interfaces()->get_type_list()) {
+  for (auto const& t : *cls->get_interfaces()) {
     push(cls, t);
   }
   const DexAnnotationSet* annoset = cls->get_anno_set();
@@ -532,7 +532,7 @@ DexMethod* TransitiveClosureMarker::resolve_without_context(
       return resolved;
     }
   }
-  for (auto const& interface : cls->get_interfaces()->get_type_list()) {
+  for (auto const& interface : *cls->get_interfaces()) {
     auto const resolved =
         resolve_without_context(method, type_class(interface));
     if (resolved) {
@@ -553,7 +553,7 @@ void TransitiveClosureMarker::visit_method_ref(const DexMethodRef* method) {
   }
   push(method, method->get_class());
   push(method, method->get_proto()->get_rtype());
-  for (auto const& t : method->get_proto()->get_args()->get_type_list()) {
+  for (auto const& t : *method->get_proto()->get_args()) {
     push(method, t);
   }
   auto m = method->as_def();

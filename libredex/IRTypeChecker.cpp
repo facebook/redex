@@ -314,8 +314,8 @@ static bool is_move_result_pseudo(const MethodItemEntry& mie) {
 
 Result check_load_params(const DexMethod* method) {
   bool is_static_method = is_static(method);
-  const auto& signature = method->get_proto()->get_args()->get_type_list();
-  auto sig_it = signature.begin();
+  const auto* signature = method->get_proto()->get_args();
+  auto sig_it = signature->begin();
   size_t load_insns_cnt = 0;
 
   auto handle_instance =
@@ -329,7 +329,7 @@ Result check_load_params(const DexMethod* method) {
     return boost::none;
   };
   auto handle_other = [&](IRInstruction* insn) -> boost::optional<std::string> {
-    if (sig_it == signature.end()) {
+    if (sig_it == signature->end()) {
       return std::string("Not enough argument types for ") + show(insn);
     }
     bool ok = false;
@@ -1223,10 +1223,9 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
   case OPCODE_INVOKE_STATIC:
   case OPCODE_INVOKE_INTERFACE: {
     DexMethodRef* dex_method = insn->get_method();
-    const auto& arg_types =
-        dex_method->get_proto()->get_args()->get_type_list();
+    const auto* arg_types = dex_method->get_proto()->get_args();
     size_t expected_args =
-        (insn->opcode() != OPCODE_INVOKE_STATIC ? 1 : 0) + arg_types.size();
+        (insn->opcode() != OPCODE_INVOKE_STATIC ? 1 : 0) + arg_types->size();
     if (insn->srcs_size() != expected_args) {
       std::ostringstream out;
       out << SHOW(insn) << ": argument count mismatch; "
@@ -1243,7 +1242,7 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
       assume_assignable(current_state->get_dex_type(src),
                         dex_method->get_class());
     }
-    for (DexType* arg_type : arg_types) {
+    for (DexType* arg_type : *arg_types) {
       if (type::is_object(arg_type)) {
         auto src = insn->src(src_idx++);
         assume_reference(current_state, src);

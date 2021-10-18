@@ -235,10 +235,9 @@ DexType* CheckCastAnalysis::get_type_demand(IRInstruction* insn,
   case OPCODE_INVOKE_STATIC:
   case OPCODE_INVOKE_INTERFACE: {
     DexMethodRef* insn_method = insn->get_method();
-    const auto& arg_types =
-        insn_method->get_proto()->get_args()->get_type_list();
+    const auto* arg_types = insn_method->get_proto()->get_args();
     size_t expected_args =
-        (insn->opcode() != OPCODE_INVOKE_STATIC ? 1 : 0) + arg_types.size();
+        (insn->opcode() != OPCODE_INVOKE_STATIC ? 1 : 0) + arg_types->size();
     always_assert(insn->srcs_size() == expected_args);
 
     if (insn->opcode() != OPCODE_INVOKE_STATIC) {
@@ -246,7 +245,7 @@ DexType* CheckCastAnalysis::get_type_demand(IRInstruction* insn,
       // method is invoked.
       if (src_index-- == 0) return insn_method->get_class();
     }
-    return arg_types.at(src_index);
+    return arg_types->at(src_index);
   }
   case OPCODE_INVOKE_CUSTOM:
   case OPCODE_INVOKE_POLYMORPHIC:
@@ -427,7 +426,7 @@ CheckCastAnalysis::CheckCastAnalysis(const CheckCastConfig& config,
       // We also handle interface hierarchies here.
       auto cls = type_class(type);
       if (cls) {
-        for (auto interface : cls->get_interfaces()->get_type_list()) {
+        for (auto interface : *cls->get_interfaces()) {
           queue.push(interface);
         }
       }

@@ -71,10 +71,8 @@ void emit_check_cast(const dispatch::Spec& spec,
                      DexMethod* callee,
                      MethodBlock* block) {
   if (!args.empty() && spec.proto->get_args()->size()) {
-    auto dispatch_head_arg_type =
-        spec.proto->get_args()->get_type_list().front();
-    auto callee_head_arg_type =
-        callee->get_proto()->get_args()->get_type_list().front();
+    auto dispatch_head_arg_type = spec.proto->get_args()->at(0);
+    auto callee_head_arg_type = callee->get_proto()->get_args()->at(0);
     if (dispatch_head_arg_type != callee_head_arg_type) {
       block->check_cast(args.front(), callee_head_arg_type);
     }
@@ -425,7 +423,7 @@ dispatch::Type possible_type(DexMethod* method) {
 }
 
 DexProto* append_int_arg(DexProto* proto) {
-  auto args_list = proto->get_args()->get_type_list();
+  auto args_list = proto->get_args()->get_type_list_internal();
   args_list.push_back(type::_int());
   return DexProto::make_proto(
       proto->get_rtype(), DexTypeList::make_type_list(std::move(args_list)));

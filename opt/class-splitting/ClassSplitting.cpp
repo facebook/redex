@@ -142,11 +142,11 @@ class ClassSplittingImpl {
     } else {
       name += "$dtramp";
     }
-    std::deque<DexType*> arg_types;
+    DexTypeList::ContainerType arg_types;
     if (!is_static(method)) {
       arg_types.push_back(method->get_class());
     }
-    for (auto t : method->get_proto()->get_args()->get_type_list()) {
+    for (auto t : *method->get_proto()->get_args()) {
       arg_types.push_back(const_cast<DexType*>(t));
     }
     auto type_list = DexTypeList::make_type_list(std::move(arg_types));
@@ -407,10 +407,10 @@ class ClassSplittingImpl {
     auto invoke_insn = new IRInstruction(OPCODE_INVOKE_STATIC);
     invoke_insn->set_method(target);
     auto proto = target->get_proto();
-    auto& type_list = proto->get_args()->get_type_list();
-    invoke_insn->set_srcs_size(type_list.size());
-    for (size_t i = 0; i < type_list.size(); i++) {
-      auto t = type_list.at(i);
+    auto* type_list = proto->get_args();
+    invoke_insn->set_srcs_size(type_list->size());
+    for (size_t i = 0; i < type_list->size(); i++) {
+      auto t = type_list->at(i);
       IRInstruction* load_param_insn;
       if (type::is_wide_type(t)) {
         load_param_insn = new IRInstruction(IOPCODE_LOAD_PARAM_WIDE);

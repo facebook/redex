@@ -34,8 +34,7 @@ void update_scope(const TypeSet& removable, Scope& scope) {
 }
 
 void get_super_interfaces(TypeSet& interfaces, DexClass* intf) {
-  const auto super_intfs = intf->get_interfaces()->get_type_list();
-  for (const auto super : super_intfs) {
+  for (const auto super : *intf->get_interfaces()) {
     interfaces.insert(super);
     auto super_intf = type_class(super);
     if (super_intf != nullptr) {
@@ -45,8 +44,7 @@ void get_super_interfaces(TypeSet& interfaces, DexClass* intf) {
 }
 
 void get_interfaces(TypeSet& interfaces, DexClass* cls) {
-  const auto intfs = cls->get_interfaces()->get_type_list();
-  for (const auto& intf : intfs) {
+  for (const auto& intf : *cls->get_interfaces()) {
     interfaces.insert(intf);
     const auto intf_cls = type_class(intf);
     if (intf_cls != nullptr) {
@@ -128,7 +126,7 @@ void remove_referenced(const Scope& scope,
   walk::parallel::methods(scope, [&](DexMethod* meth) {
     const auto proto = meth->get_proto();
     check_type(proto->get_rtype());
-    for (const auto& type : proto->get_args()->get_type_list()) {
+    for (const auto& type : *proto->get_args()) {
       check_type(type);
     }
   });
@@ -203,7 +201,7 @@ void remove_referenced(const Scope& scope,
 }
 
 bool implements_removables(const TypeSet& removable, DexClass* cls) {
-  for (const auto intf : cls->get_interfaces()->get_type_list()) {
+  for (const auto intf : *cls->get_interfaces()) {
     if (removable.count(intf) > 0) {
       return true;
     }
@@ -216,7 +214,7 @@ void get_impls(DexType* intf,
                std::set<DexType*, dextypes_comparator>& new_intfs) {
   const auto cls_intf = type_class(intf);
   if (cls_intf == nullptr) return;
-  for (const auto& super_intf : cls_intf->get_interfaces()->get_type_list()) {
+  for (const auto& super_intf : *cls_intf->get_interfaces()) {
     if (removable.count(super_intf) == 0) {
       new_intfs.insert(super_intf);
       continue;
@@ -229,17 +227,14 @@ void set_new_impl_list(const TypeSet& removable, DexClass* cls) {
   TRACE(UNREF_INTF, 3, "Changing implements for %s:\n\tfrom %s", SHOW(cls),
         SHOW(cls->get_interfaces()));
   std::set<DexType*, dextypes_comparator> new_intfs;
-  for (const auto& intf : cls->get_interfaces()->get_type_list()) {
+  for (const auto& intf : *cls->get_interfaces()) {
     if (removable.count(intf) == 0) {
       new_intfs.insert(intf);
       continue;
     }
     get_impls(intf, removable, new_intfs);
   }
-  std::deque<DexType*> deque;
-  for (const auto& intf : new_intfs) {
-    deque.emplace_back(intf);
-  }
+  DexTypeList::ContainerType deque{new_intfs.begin(), new_intfs.end()};
   auto implements = DexTypeList::make_type_list(std::move(deque));
   TRACE(UNREF_INTF, 3, "\tto %s", SHOW(implements));
   cls->set_interfaces(implements);

@@ -444,12 +444,10 @@ OnMethodExitMap build_onMethodExit_map(const DexClass& cls,
     // - onMethodExit(int offset), or
     // - onMethodExit(int offset, short vec1, ..., short vecN);
     const auto* args = m->get_proto()->get_args();
-    if (args->size() == 0 ||
-        *args->get_type_list().begin() != DexType::make_type("I") ||
-        std::any_of(std::next(args->get_type_list().begin(), 1),
-                    args->get_type_list().end(), [](const auto& type) {
-                      return type != DexType::make_type("S");
-                    })) {
+    if (args->empty() || *args->begin() != DexType::make_type("I") ||
+        std::any_of(
+            std::next(args->begin(), 1), args->end(),
+            [](const auto& type) { return type != DexType::make_type("S"); })) {
       always_assert_log(
           false,
           "[InstrumentPass] error: Proto type of onMethodExit must be "
@@ -482,8 +480,7 @@ DexMethod* load_onMethodBegin(const DexClass& cls,
       continue;
     }
     const auto* args = m->get_proto()->get_args();
-    if (args->size() != 1 ||
-        *args->get_type_list().begin() != DexType::make_type("I")) {
+    if (args->size() != 1 || *args->begin() != DexType::make_type("I")) {
       always_assert_log(
           false,
           "[InstrumentPass] error: Proto type of onMethodBegin must be "

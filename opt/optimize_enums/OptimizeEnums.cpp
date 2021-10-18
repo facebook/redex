@@ -514,8 +514,8 @@ class OptimizeEnums {
    */
   static bool is_simple_enum_constructor(const DexClass* cls,
                                          const DexMethod* method) {
-    const auto& params = method->get_proto()->get_args()->get_type_list();
-    if (!is_private(method) || params.size() < 2) {
+    const auto* params = method->get_proto()->get_args();
+    if (!is_private(method) || params->size() < 2) {
       return false;
     }
 

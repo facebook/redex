@@ -46,17 +46,17 @@ constexpr const char* METRIC_RETAINED_CHECK_CASTS = "num_retained_check_casts";
  * we will only have one entry { A => C }
  * keep that in mind when using this map
  */
-void map_interfaces(const std::deque<DexType*>& intf_list,
+void map_interfaces(const DexTypeList* intf_list,
                     DexClass* cls,
                     TypeToTypes& intfs_to_classes) {
-  for (auto& intf : intf_list) {
+  for (auto& intf : *intf_list) {
     const auto intf_cls = type_class(intf);
     if (intf_cls == nullptr || intf_cls->is_external()) continue;
     if (std::find(intfs_to_classes[intf].begin(), intfs_to_classes[intf].end(),
                   cls->get_type()) == intfs_to_classes[intf].end()) {
       intfs_to_classes[intf].push_back(cls->get_type());
       auto intfs = intf_cls->get_interfaces();
-      map_interfaces(intfs->get_type_list(), cls, intfs_to_classes);
+      map_interfaces(intfs, cls, intfs_to_classes);
     }
   }
 }
@@ -73,7 +73,7 @@ void build_type_maps(const Scope& scope,
       continue;
     }
     auto intfs = cls->get_interfaces();
-    map_interfaces(intfs->get_type_list(), cls, intfs_to_classes);
+    map_interfaces(intfs, cls, intfs_to_classes);
   }
 }
 

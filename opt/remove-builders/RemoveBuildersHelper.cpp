@@ -582,8 +582,8 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
 
 bool has_only_argument(DexMethod* method, DexType* type) {
   DexProto* proto = method->get_proto();
-  const auto& args = proto->get_args()->get_type_list();
-  if (args.size() != 1 || args[0] != type) {
+  const auto& args = *proto->get_args();
+  if (args.size() != 1 || args.at(0) != type) {
     return false;
   }
 
@@ -621,7 +621,7 @@ IROpcode get_iget_type(DexField* field) {
  */
 bool params_change_regs(DexMethod* method) {
   DexProto* proto = method->get_proto();
-  auto args = proto->get_args()->get_type_list();
+  auto* args = proto->get_args();
 
   auto code = method->get_code();
   code->build_cfg(/* editable */ false);
@@ -632,7 +632,7 @@ bool params_change_regs(DexMethod* method) {
   // Skip the `this` param
   auto param_it = std::next(param_insns.begin());
 
-  for (DexType* arg : args) {
+  for (DexType* arg : *args) {
     std::function<void(IRList::iterator, TaintedRegs*)> trans =
         [&](const IRList::iterator& it, TaintedRegs* tregs) {
           if (!opcode::is_a_load_param(it->insn->opcode())) {
@@ -684,7 +684,7 @@ bool params_change_regs(DexMethod* method) {
 DexProto* make_proto_for(DexClass* cls) {
   const auto& fields = cls->get_ifields();
 
-  std::deque<DexType*> dfields;
+  DexTypeList::ContainerType dfields;
   for (const DexField* field : fields) {
     dfields.push_back(field->get_type());
   }

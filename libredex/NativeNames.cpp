@@ -92,7 +92,7 @@ void get_native_long_name_for_method_impl(std::ostringstream& out,
   get_native_short_name_for_method_impl(out, method);
   out << "__";
   DexTypeList* types = method->get_proto()->get_args();
-  for (DexType* type : types->get_type_list()) {
+  for (DexType* type : *types) {
     mangle_type_name_in_signature(out, type->get_name()->str());
   }
 }

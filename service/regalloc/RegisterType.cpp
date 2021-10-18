@@ -328,12 +328,12 @@ static RegisterType invoke_src_type(const IRInstruction* insn, vreg_t i) {
       --i;
     }
   }
-  const auto& types = method->get_proto()->get_args()->get_type_list();
-  always_assert_log(types.size() > i, "Invalid invoke insn %s\n", SHOW(insn));
-  auto* type = types.at(i);
+  const auto* types = method->get_proto()->get_args();
+  always_assert_log(types->size() > i, "Invalid invoke insn %s\n", SHOW(insn));
+  auto* type = types->at(i);
   if (type::is_wide_type(type)) {
     return RegisterType::WIDE;
-  } else if (type::is_primitive(types.at(i))) {
+  } else if (type::is_primitive(type)) {
     return RegisterType::NORMAL;
   } else {
     return RegisterType::OBJECT;

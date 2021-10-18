@@ -116,9 +116,8 @@ boost::optional<size_t> get_ctor_type_tag_param_idx(
     return type_tag_param_idx;
   }
 
-  auto type_list = ctor_proto->get_args()->get_type_list();
   size_t idx = 0;
-  for (auto type : type_list) {
+  for (auto type : *ctor_proto->get_args()) {
     if (type == type::_int()) {
       always_assert_log(!type_tag_param_idx,
                         "More than one potential type tag param found!");

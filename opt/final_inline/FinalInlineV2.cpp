@@ -730,16 +730,14 @@ bool get_ifields_read(
             // superclass or interface of ifield_cls.
             if (callee != nullptr &&
                 !parent_intf_set.count(callee->get_class())) {
-              for (const auto& type :
-                   callee->get_proto()->get_args()->get_type_list()) {
+              for (const auto& type : *callee->get_proto()->get_args()) {
                 if (parent_intf_set.count(type)) {
                   no_current_type = false;
                 }
               }
             } else if (callee == nullptr &&
                        !parent_intf_set.count(insn_method->get_class())) {
-              for (const auto& type :
-                   insn_method->get_proto()->get_args()->get_type_list()) {
+              for (const auto& type : *insn_method->get_proto()->get_args()) {
                 if (parent_intf_set.count(type)) {
                   no_current_type = false;
                 }

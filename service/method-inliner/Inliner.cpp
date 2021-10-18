@@ -1954,29 +1954,29 @@ std::shared_ptr<std::vector<DexType*>> MultiMethodInliner::get_callee_type_refs(
   }
 
   std::unordered_set<DexType*> type_refs_set;
-  editable_cfg_adapter::iterate(
-      callee->get_code(), [&](const MethodItemEntry& mie) {
-        auto insn = mie.insn;
-        if (insn->has_type()) {
-          type_refs_set.insert(insn->get_type());
-        } else if (insn->has_method()) {
-          auto meth = insn->get_method();
-          type_refs_set.insert(meth->get_class());
-          auto proto = meth->get_proto();
-          type_refs_set.insert(proto->get_rtype());
-          auto args = proto->get_args();
-          if (args != nullptr) {
-            for (const auto& arg : args->get_type_list()) {
-              type_refs_set.insert(arg);
-            }
-          }
-        } else if (insn->has_field()) {
-          auto field = insn->get_field();
-          type_refs_set.insert(field->get_class());
-          type_refs_set.insert(field->get_type());
-        }
-        return editable_cfg_adapter::LOOP_CONTINUE;
-      });
+  editable_cfg_adapter::iterate(callee->get_code(),
+                                [&](const MethodItemEntry& mie) {
+                                  auto insn = mie.insn;
+                                  if (insn->has_type()) {
+                                    type_refs_set.insert(insn->get_type());
+                                  } else if (insn->has_method()) {
+                                    auto meth = insn->get_method();
+                                    type_refs_set.insert(meth->get_class());
+                                    auto proto = meth->get_proto();
+                                    type_refs_set.insert(proto->get_rtype());
+                                    auto args = proto->get_args();
+                                    if (args != nullptr) {
+                                      for (const auto& arg : *args) {
+                                        type_refs_set.insert(arg);
+                                      }
+                                    }
+                                  } else if (insn->has_field()) {
+                                    auto field = insn->get_field();
+                                    type_refs_set.insert(field->get_class());
+                                    type_refs_set.insert(field->get_type());
+                                  }
+                                  return editable_cfg_adapter::LOOP_CONTINUE;
+                                });
 
   auto type_refs = std::make_shared<std::vector<DexType*>>();
   for (auto type : type_refs_set) {

@@ -22,6 +22,9 @@
 #include "Show.h"
 #include "Trace.h"
 
+static_assert(std::is_same<DexTypeList::ContainerType,
+                           RedexContext::DexTypeListContainerType>::value);
+
 RedexContext* g_redex;
 
 RedexContext::RedexContext(bool allow_class_duplicates)
@@ -252,7 +255,8 @@ void RedexContext::mutate_field(DexFieldRef* field,
   s_field_map.emplace(r, field);
 }
 
-DexTypeList* RedexContext::make_type_list(std::deque<DexType*>&& p) {
+DexTypeList* RedexContext::make_type_list(
+    RedexContext::DexTypeListContainerType&& p) {
   auto rv = s_typelist_map.get(p, nullptr);
   if (rv != nullptr) {
     return rv;
@@ -261,7 +265,8 @@ DexTypeList* RedexContext::make_type_list(std::deque<DexType*>&& p) {
   return try_insert(typelist->m_list, typelist, &s_typelist_map);
 }
 
-DexTypeList* RedexContext::get_type_list(std::deque<DexType*>&& p) {
+DexTypeList* RedexContext::get_type_list(
+    RedexContext::DexTypeListContainerType&& p) {
   return s_typelist_map.get(p, nullptr);
 }
 

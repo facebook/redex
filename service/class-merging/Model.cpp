@@ -645,7 +645,7 @@ ConcurrentMap<DexType*, TypeHashSet> get_type_usages(
         res.update(rtype, updater);
       }
 
-      for (const auto& type : proto->get_args()->get_type_list()) {
+      for (const auto& type : *proto->get_args()) {
         if (type && types.count(type)) {
           res.update(type, updater);
         }
