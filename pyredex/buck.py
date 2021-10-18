@@ -11,6 +11,7 @@
 import json
 import logging
 import os
+import platform
 import typing
 from io import TextIOWrapper
 
@@ -40,6 +41,8 @@ class BuckConnection:
             "BUCK_EVENT_PIPE" not in os.environ
             or "BUCK_EVENT_PIPE" not in os.environ
             or "BUCK_ACTION_ID" not in os.environ
+            # TODO(T103482589) Work around an issue on macs.
+            or platform.system() == "Darwin"
         ):
             self.has_buck = False
             return
