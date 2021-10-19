@@ -74,7 +74,6 @@ struct ReachableObjectHash {
 
 struct IgnoreSets {
   IgnoreSets() = default;
-  std::unordered_set<const DexMethodRef*> methods;
   std::unordered_set<const DexType*> string_literals;
   std::unordered_set<const DexType*> string_literal_annos;
   std::unordered_set<const DexType*> system_annos;

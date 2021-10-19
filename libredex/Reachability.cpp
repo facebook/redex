@@ -321,10 +321,6 @@ void TransitiveClosureMarker::push(const Parent* parent,
     return;
   }
 
-  if (m_ignore_sets.methods.count(method)) {
-    return;
-  }
-
   record_reachability(parent, method);
   if (m_reachable_objects->marked(method)) {
     return;
