@@ -208,12 +208,6 @@ class RootSetMarker {
    */
   void mark(const Scope& scope);
 
-  /*
-   * Mark all DexMethods (and their respective classes) as seeds.
-   */
-  void mark_methods_as_seed(
-      const std::unordered_set<const DexMethod*>& methods);
-
   /**
    * Mark everything as seed.
    */
@@ -344,19 +338,6 @@ class TransitiveClosureMarker {
 
   static DexMethodRef* s_class_forname;
 };
-
-/*
- * Compute all reachable objects from the provided seeds only.
- */
-std::unique_ptr<ReachableObjects> compute_reachable_objects(
-    const DexStoresVector& stores,
-    const IgnoreSets& ignore_sets,
-    int* num_ignore_check_strings,
-    const std::unordered_set<const DexMethod*>& seeds,
-    bool record_reachability = false,
-    std::unique_ptr<const method_override_graph::Graph>*
-        out_method_override_graph = nullptr,
-    bool remove_no_argument_constructors = false);
 
 /*
  * Compute all reachable objects from the existing configurations
