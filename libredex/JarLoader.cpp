@@ -8,6 +8,7 @@
 #include <boost/iostreams/device/mapped_file.hpp>
 
 #include <cstdint>
+#include <iostream>
 #include <utility>
 #include <vector>
 #include <zlib.h>
@@ -560,6 +561,7 @@ static const int kSignatureSize = 4;
 /* CDFile
  * Central directory file header entry structures.
  */
+static constexpr uint16_t kCompMethodStore = 0;
 static const uint16_t kCompMethodDeflate(8);
 static const uint8_t kCDFile[] = {'P', 'K', 0x01, 0x02};
 
@@ -697,7 +699,19 @@ static bool get_jar_entries(const uint8_t* mapping,
 static int jar_uncompress(Bytef* dest,
                           uLongf* destLen,
                           const Bytef* source,
-                          uLong sourceLen) {
+                          uLong sourceLen,
+                          uint32_t comp_method) {
+  if (comp_method == kCompMethodStore) {
+    if (sourceLen > *destLen) {
+      std::cerr << "Not enough space for STOREd entry: " << sourceLen << " vs "
+                << *destLen << std::endl;
+      return Z_BUF_ERROR;
+    }
+    memcpy(dest, source, sourceLen);
+    *destLen = sourceLen;
+    return Z_OK;
+  }
+
   z_stream stream;
   int err;
 
@@ -726,16 +740,19 @@ static bool decompress_class(jar_entry& file,
                              const uint8_t* mapping,
                              uint8_t* outbuffer,
                              ssize_t bufsize) {
-  if (file.cd_entry.comp_method != kCompMethodDeflate) {
-    fprintf(stderr, "Unknown compression method %d, Bailing\n",
-            file.cd_entry.comp_method);
+  if (file.cd_entry.comp_method != kCompMethodDeflate &&
+      file.cd_entry.comp_method != kCompMethodStore) {
+    fprintf(stderr, "Unknown compression method %d for %s, Bailing\n",
+            file.cd_entry.comp_method, file.filename);
     return false;
   }
+
   const uint8_t* lfile = mapping + file.cd_entry.disk_offset;
   if (memcmp(lfile, kLFile, kSignatureSize) != 0) {
     fprintf(stderr, "Invalid local file entry, bailing\n");
     return false;
   }
+
   pk_lfile pkf;
   memcpy(&pkf, lfile, sizeof(pk_lfile));
   if (pkf.comp_size == 0 && pkf.ucomp_size == 0 &&
@@ -744,7 +761,9 @@ static bool decompress_class(jar_entry& file,
     pkf.comp_size = file.cd_entry.comp_size;
     pkf.ucomp_size = file.cd_entry.ucomp_size;
   }
+
   lfile += sizeof(pk_lfile);
+
   if (pkf.fname_len != file.cd_entry.fname_len ||
       pkf.comp_size != file.cd_entry.comp_size ||
       pkf.ucomp_size != file.cd_entry.ucomp_size ||
@@ -758,16 +777,20 @@ static bool decompress_class(jar_entry& file,
             file.cd_entry.ucomp_size, file.cd_entry.comp_method, pkf.extra_len);
     return false;
   }
+
   lfile += pkf.fname_len;
   lfile += pkf.extra_len;
   uLongf dlen = bufsize;
-  int zlibrv = jar_uncompress(outbuffer, &dlen, lfile, pkf.comp_size);
+  int zlibrv = jar_uncompress(outbuffer, &dlen, lfile, pkf.comp_size,
+                              file.cd_entry.comp_method);
   if (zlibrv != Z_OK) {
     fprintf(stderr, "uncompress failed with code %d, Bailing\n", zlibrv);
     return false;
   }
   if (dlen != pkf.ucomp_size) {
-    fprintf(stderr, "mis-match on uncompressed size, Bailing\n");
+    std::cerr << (char*)file.filename
+              << ": mis-match on uncompressed size: " << dlen << " vs "
+              << pkf.ucomp_size << "! Bailing." << std::endl;
     return false;
   }
   return true;
