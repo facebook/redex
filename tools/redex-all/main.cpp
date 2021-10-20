@@ -1007,11 +1007,12 @@ void redex_frontend(ConfigFiles& conf, /* input */
   }
 }
 
-void write_out_resid_to_name(ConfigFiles& conf,
-                             const std::string& resid_to_name_filename) {
+void write_out_resid_to_name(ConfigFiles& conf) {
   std::string apk_dir;
   conf.get_json_config().get("apk_dir", "", apk_dir);
-  always_assert(apk_dir.size());
+  if (!apk_dir.size()) {
+    return;
+  }
   auto resources = create_resource_reader(apk_dir);
   auto res_table = resources->load_res_table();
   Json::Value resid_to_name_json;
@@ -1019,7 +1020,7 @@ void write_out_resid_to_name(ConfigFiles& conf,
   for (const auto& pair : res_table->id_to_name) {
     resid_to_name_json[(hex_format % pair.first).str()] = pair.second;
   }
-  write_string_to_file(resid_to_name_filename,
+  write_string_to_file(conf.metafile(RESID_TO_NAME),
                        resid_to_name_json.toStyledString());
 }
 
@@ -1034,8 +1035,7 @@ void redex_backend(ConfigFiles& conf,
   const RedexOptions& redex_options = manager.get_redex_options();
   const auto& output_dir = conf.get_outdir();
 
-  const std::string& resid_to_name_filename = conf.metafile(RESID_TO_NAME);
-  write_out_resid_to_name(conf, resid_to_name_filename);
+  write_out_resid_to_name(conf);
 
   instruction_lowering::Stats instruction_lowering_stats;
   {
