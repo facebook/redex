@@ -2528,7 +2528,7 @@ OPCODE: GOTO
 )");
 }
 
-TEST_F(ControlFlowTest, empty_block_move_source_blocks_complex) {
+TEST_F(ControlFlowTest, empty_block_not_move_source_blocks_complex) {
   auto code = assembler::ircode_from_string(R"(
     (
       (.src_block "LFoo;.m:()V" 1)
@@ -2554,7 +2554,7 @@ TEST_F(ControlFlowTest, empty_block_move_source_blocks_complex) {
   }
 
   EXPECT_EQ(sanitize(show(code.get())), R"(TARGET: SIMPLE
-SOURCE-BLOCKS: LFoo;.m:()V@1() LFoo;.m:()V@2() LFoo;.m:()V@3()
+SOURCE-BLOCKS: LFoo;.m:()V@3()
 OPCODE: IF_EQZ v0
 OPCODE: RETURN_VOID
 TARGET: SIMPLE
