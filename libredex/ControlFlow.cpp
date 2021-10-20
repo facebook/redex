@@ -20,6 +20,7 @@
 #include "GraphUtil.h"
 #include "IRList.h"
 #include "Show.h"
+#include "SourceBlocks.h"
 #include "Trace.h"
 #include "Transform.h"
 
@@ -1070,7 +1071,24 @@ void ControlFlowGraph::remove_empty_blocks() {
         ++it;
         continue;
       }
-      // b is empty. Reorganize the edges so we can remove it
+
+      // Does it have source blocks, and the successor does have multiple
+      // predecessors?
+      bool move_source_blocks{false};
+      if (source_blocks::has_source_blocks(b)) {
+        // The entry block has a virtual in-edge, don't merge on a single
+        // back-edge.
+        if (succ->preds().size() == 1 && succ != m_entry_block) {
+          // Good case: just move the source blocks forward.
+          move_source_blocks = true;
+        } else if (g_redex->instrument_mode) {
+          // If we are instrumenting, it is necessary to keep the block for its
+          // source-blocks.
+          continue;
+        }
+      }
+
+      // b is empty and removable. Reorganize the edges so we can remove it
 
       // Remove the one goto edge from b to succ
       delete_edges_between(b, succ);
@@ -1109,7 +1127,7 @@ void ControlFlowGraph::remove_empty_blocks() {
 
       // Move all source blocks.
       // Note: the order of source blocks does not really matter.
-      {
+      if (move_source_blocks) {
         bool first = true;
         for (auto& mie : *b) {
           if (mie.type == MFLOW_SOURCE_BLOCK) {
