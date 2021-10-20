@@ -487,7 +487,10 @@ void RedexContext::publish_class(DexClass* cls) {
   const DexType* type = cls->get_type();
   const auto& pair = m_type_to_class.emplace(type, cls);
   bool insertion_took_place = pair.second;
-  always_assert(insertion_took_place);
+  always_assert_log(insertion_took_place,
+                    "No insertion for class: %s with deobfuscated name: %s",
+                    cls->get_name()->c_str(),
+                    cls->get_deobfuscated_name().c_str());
   if (cls->is_external()) {
     m_external_classes.emplace_back(cls);
   }
