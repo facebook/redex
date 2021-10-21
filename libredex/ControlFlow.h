@@ -355,9 +355,9 @@ class Block final {
 
   // These assume that the iterator is inside this block
   InstructionIterator to_cfg_instruction_iterator(
-      const ir_list::InstructionIterator& list_it);
+      const ir_list::InstructionIterator& list_it, bool next_on_end = false);
   InstructionIterator to_cfg_instruction_iterator(
-      const IRList::iterator& list_it);
+      const IRList::iterator& list_it, bool next_on_end = false);
   InstructionIterator to_cfg_instruction_iterator(MethodItemEntry& mie);
 
   // These forward to implementations in ControlFlowGraph, See comment there
