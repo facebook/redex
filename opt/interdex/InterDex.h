@@ -23,6 +23,8 @@ namespace interdex {
 
 bool is_canary(DexClass* clazz);
 
+bool compare_dexclasses_for_compressed_size(DexClass* c1, DexClass* c2);
+
 class InterDex {
  public:
   InterDex(const Scope& original_scope,

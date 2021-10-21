@@ -44,6 +44,7 @@ constexpr const char* METRIC_RELOCATED_VIRTUAL_METHODS =
 constexpr const char* METRIC_CURRENT_CLASSES_WHEN_EMITTING_REMAINING =
     "num_current_classes_when_emitting_remaining";
 
+constexpr const char* METRIC_LINEAR_ALLOC_LIMIT = "linear_alloc_limit";
 constexpr const char* METRIC_RESERVED_FREFS = "reserved_frefs";
 constexpr const char* METRIC_RESERVED_TREFS = "reserved_trefs";
 constexpr const char* METRIC_RESERVED_MREFS = "reserved_mrefs";

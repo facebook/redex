@@ -122,6 +122,7 @@ void InterDexPass::run_pass(
     ConfigFiles& conf,
     PassManager& mgr,
     const ReserveRefsInfo& refs_info) {
+  mgr.set_metric(METRIC_LINEAR_ALLOC_LIMIT, m_linear_alloc_limit);
   mgr.set_metric(METRIC_RESERVED_FREFS, refs_info.frefs);
   mgr.set_metric(METRIC_RESERVED_TREFS, refs_info.trefs);
   mgr.set_metric(METRIC_RESERVED_MREFS, refs_info.mrefs);
