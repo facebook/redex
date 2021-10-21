@@ -184,7 +184,7 @@ void strip_out_collision(const Scope& scope,
     }
     DexProto* new_proto = type_reference::get_new_proto(proto, intf_merge_map);
     DexType* type = meth->get_class();
-    DexString* name = meth->get_name();
+    auto* name = meth->get_name();
     DexMethodRef* existing_meth = DexMethod::get_method(type, name, new_proto);
     if (existing_meth == nullptr) {
       // When there is no virtual method conflict if we are merging the

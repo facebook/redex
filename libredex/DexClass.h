@@ -91,28 +91,28 @@ class DexString {
 
   // If the DexString exists, return it, otherwise create it and return it.
   // See also get_string()
-  static DexString* make_string(const char* nstr, uint32_t utfsize) {
+  static const DexString* make_string(const char* nstr, uint32_t utfsize) {
     return g_redex->make_string(nstr, utfsize);
   }
 
-  static DexString* make_string(const char* nstr) {
+  static const DexString* make_string(const char* nstr) {
     return make_string(nstr, length_of_utf8_string(nstr));
   }
 
-  static DexString* make_string(const std::string& nstr) {
+  static const DexString* make_string(const std::string& nstr) {
     return make_string(nstr.c_str());
   }
 
   // Return an existing DexString or nullptr if one does not exist.
-  static DexString* get_string(const char* nstr, uint32_t utfsize) {
+  static const DexString* get_string(const char* nstr, uint32_t utfsize) {
     return g_redex->get_string(nstr, utfsize);
   }
 
-  static DexString* get_string(const char* nstr) {
+  static const DexString* get_string(const char* nstr) {
     return get_string(nstr, (uint32_t)strlen(nstr));
   }
 
-  static DexString* get_string(const std::string& str) {
+  static const DexString* get_string(const std::string& str) {
     return get_string(str.c_str(), (uint32_t)strlen(str.c_str()));
   }
 
@@ -185,17 +185,17 @@ struct dexstrings_comparator {
 class DexType {
   friend struct RedexContext;
 
-  DexString* m_name;
+  const DexString* m_name;
 
   // See UNIQUENESS above for the rationale for the private constructor pattern.
-  explicit DexType(DexString* dstring) { m_name = dstring; }
+  explicit DexType(const DexString* dstring) { m_name = dstring; }
 
  public:
   // DexType retrieval/creation
 
   // If the DexType exists, return it, otherwise create it and return it.
   // See also get_type()
-  static DexType* make_type(DexString* dstring) {
+  static DexType* make_type(const DexString* dstring) {
     return g_redex->make_type(dstring);
   }
 
@@ -218,7 +218,7 @@ class DexType {
   }
 
   // Return an existing DexType or nullptr if one does not exist.
-  static DexType* get_type(DexString* dstring) {
+  static DexType* get_type(const DexString* dstring) {
     return g_redex->get_type(dstring);
   }
 
@@ -235,12 +235,14 @@ class DexType {
   }
 
  public:
-  void set_name(DexString* new_name) { g_redex->set_type_name(this, new_name); }
+  void set_name(const DexString* new_name) {
+    g_redex->set_type_name(this, new_name);
+  }
 
-  DexString* get_name() const { return m_name; }
+  const DexString* get_name() const { return m_name; }
   const char* c_str() const { return get_name()->c_str(); }
   const std::string& str() const { return get_name()->str(); }
-  DexProto* get_non_overlapping_proto(DexString*, DexProto*);
+  DexProto* get_non_overlapping_proto(const DexString*, DexProto*);
 };
 
 /* Non-optimizing DexSpec compliant ordering */
@@ -280,7 +282,7 @@ class DexFieldRef {
   bool m_external;
 
   ~DexFieldRef() {}
-  DexFieldRef(DexType* container, DexString* name, DexType* type) {
+  DexFieldRef(DexType* container, const DexString* name, DexType* type) {
     m_spec.cls = container;
     m_spec.name = name;
     m_spec.type = type;
@@ -296,15 +298,16 @@ class DexFieldRef {
   DexField* as_def();
 
   DexType* get_class() const { return m_spec.cls; }
-  DexString* get_name() const { return m_spec.name; }
+  const DexString* get_name() const { return m_spec.name; }
   const char* c_str() const { return get_name()->c_str(); }
   const std::string& str() const { return get_name()->str(); }
   DexType* get_type() const { return m_spec.type; }
 
   template <typename C>
   void gather_types_shallow(C& ltype) const;
-  template <typename C>
-  void gather_strings_shallow(C& lstring) const;
+  void gather_strings_shallow(std::vector<const DexString*>& lstring) const;
+  void gather_strings_shallow(
+      std::unordered_set<const DexString*>& lstring) const;
 
   void change(const DexFieldSpec& ref, bool rename_on_collision = false) {
     g_redex->mutate_field(this, ref, rename_on_collision);
@@ -327,7 +330,7 @@ class DexField : public DexFieldRef {
   std::string m_deobfuscated_name;
 
   // See UNIQUENESS above for the rationale for the private constructor pattern.
-  DexField(DexType* container, DexString* name, DexType* type)
+  DexField(DexType* container, const DexString* name, DexType* type)
       : DexFieldRef(container, name, type) {
     m_access = static_cast<DexAccessFlags>(0);
     m_anno = nullptr;
@@ -367,9 +370,9 @@ class DexField : public DexFieldRef {
    * Make a field using a full descriptor: Lcls;.name:type
    */
   static DexFieldRef* make_field(const std::string&);
-  static DexString* get_unique_name(DexType* container,
-                                    DexString* name,
-                                    DexType* type) {
+  static const DexString* get_unique_name(DexType* container,
+                                          const DexString* name,
+                                          DexType* type) {
     auto ret = name;
     for (uint32_t i = 0; get_field(container, ret, type); i++) {
       ret = DexString::make_string(name->str() + "r$" + std::to_string(i));
@@ -437,12 +440,16 @@ class DexField : public DexFieldRef {
 
   template <typename C>
   void gather_types(C& ltype) const;
-  template <typename C>
-  void gather_strings(C& lstring) const;
+  void gather_strings(std::vector<const DexString*>& lstring) const;
+  void gather_strings(std::unordered_set<const DexString*>& lstring) const;
   template <typename C>
   void gather_fields(C& lfield) const;
   template <typename C>
   void gather_methods(C& lmethod) const;
+
+ private:
+  template <typename C>
+  void gather_strings_internal(C& lstring) const;
 };
 
 /* Non-optimizing DexSpec compliant ordering */
@@ -566,10 +573,10 @@ class DexProto {
 
   DexTypeList* m_args;
   DexType* m_rtype;
-  DexString* m_shorty;
+  const DexString* m_shorty;
 
   // See UNIQUENESS above for the rationale for the private constructor pattern.
-  DexProto(DexType* rtype, DexTypeList* args, DexString* shorty) {
+  DexProto(DexType* rtype, DexTypeList* args, const DexString* shorty) {
     m_rtype = rtype;
     m_args = args;
     m_shorty = shorty;
@@ -596,13 +603,13 @@ class DexProto {
  public:
   DexType* get_rtype() const { return m_rtype; }
   DexTypeList* get_args() const { return m_args; }
-  DexString* get_shorty() const { return m_shorty; }
+  const DexString* get_shorty() const { return m_shorty; }
   bool is_void() const { return get_rtype() == DexType::make_type("V"); }
 
   template <typename C>
   void gather_types(C& ltype) const;
-  template <typename C>
-  void gather_strings(C& lstring) const;
+  void gather_strings(std::vector<const DexString*>& lstring) const;
+  void gather_strings(std::unordered_set<const DexString*>& lstring) const;
 };
 
 /* Non-optimizing DexSpec compliant ordering */
@@ -651,7 +658,7 @@ struct DexDebugEntry final {
   DexDebugEntry(const DexDebugEntry&) = delete;
   DexDebugEntry(DexDebugEntry&& other) noexcept;
   ~DexDebugEntry();
-  void gather_strings(std::vector<DexString*>& lstring) const;
+  void gather_strings(std::vector<const DexString*>& lstring) const;
   void gather_types(std::vector<DexType*>& ltype) const;
 };
 
@@ -678,7 +685,7 @@ class DexDebugItem {
   uint32_t get_on_disk_size() const { return m_on_disk_size; }
   uint32_t get_source_checksum() const { return m_source_checksum; }
   uint32_t get_source_offset() const { return m_source_offset; }
-  void bind_positions(DexMethod* method, DexString* file);
+  void bind_positions(DexMethod* method, const DexString* file);
 
   /* Returns number of bytes encoded, *output has no alignment requirements */
   static int encode(
@@ -689,7 +696,7 @@ class DexDebugItem {
       const std::vector<std::unique_ptr<DexDebugInstruction>>& dbgops);
 
   void gather_types(std::vector<DexType*>& ltype) const;
-  void gather_strings(std::vector<DexString*>& lstring) const;
+  void gather_strings(std::vector<const DexString*>& lstring) const;
 };
 
 std::vector<std::unique_ptr<DexDebugInstruction>> generate_debug_instructions(
@@ -822,7 +829,7 @@ class DexMethodRef {
   bool m_external;
 
   ~DexMethodRef() {}
-  DexMethodRef(DexType* type, DexString* name, DexProto* proto)
+  DexMethodRef(DexType* type, const DexString* name, DexProto* proto)
       : m_spec(type, name, proto) {
     m_concrete = false;
     m_external = false;
@@ -836,15 +843,16 @@ class DexMethodRef {
   DexMethod* as_def();
 
   DexType* get_class() const { return m_spec.cls; }
-  DexString* get_name() const { return m_spec.name; }
+  const DexString* get_name() const { return m_spec.name; }
   const char* c_str() const { return get_name()->c_str(); }
   const std::string& str() const { return get_name()->str(); }
   DexProto* get_proto() const { return m_spec.proto; }
 
   template <typename C>
   void gather_types_shallow(C& ltype) const;
-  template <typename C>
-  void gather_strings_shallow(C& lstring) const;
+  void gather_strings_shallow(std::vector<const DexString*>& lstring) const;
+  void gather_strings_shallow(
+      std::unordered_set<const DexString*>& lstring) const;
 
   void change(const DexMethodSpec& ref, bool rename_on_collision) {
     g_redex->mutate_method(this, ref, rename_on_collision);
@@ -882,7 +890,7 @@ class DexMethod : public DexMethodRef {
   std::string m_deobfuscated_name;
 
   // See UNIQUENESS above for the rationale for the private constructor pattern.
-  DexMethod(DexType* type, DexString* name, DexProto* proto);
+  DexMethod(DexType* type, const DexString* name, DexProto* proto);
   ~DexMethod();
 
   // For friend classes to use with smart pointers.
@@ -900,9 +908,9 @@ class DexMethod : public DexMethodRef {
 
   // If the DexMethod exists, return it, otherwise create it and return it.
   // See also get_method()
-  static DexMethodRef* make_method(DexType* type,
-                                   DexString* name,
-                                   DexProto* proto) {
+  static DexMethodRef* make_method(const DexType* type,
+                                   const DexString* name,
+                                   const DexProto* proto) {
     return g_redex->make_method(type, name, proto);
   }
 
@@ -915,11 +923,11 @@ class DexMethod : public DexMethodRef {
    */
   static DexMethod* make_method_from(DexMethod* that,
                                      DexType* target_cls,
-                                     DexString* name);
+                                     const DexString* name);
   // Make a copy of method `that`, including the `rstate`.
   static DexMethod* make_full_method_from(DexMethod* that,
                                           DexType* target_cls,
-                                          DexString* name);
+                                          const DexString* name);
 
   /**
    * This creates everything along the chain of Dex<Member>, so it should
@@ -930,7 +938,7 @@ class DexMethod : public DexMethodRef {
                                    const char* rtype_str,
                                    const std::vector<const char*>& arg_strs) {
     DexType* cls = DexType::make_type(cls_name);
-    DexString* name = DexString::make_string(meth_name);
+    auto* name = DexString::make_string(meth_name);
     DexType* rtype = DexType::make_type(rtype_str);
     DexTypeList::ContainerType args;
     for (auto const arg_str : arg_strs) {
@@ -968,9 +976,9 @@ class DexMethod : public DexMethodRef {
   static DexMethodRef* make_method(const std::string&);
 
   // Return an existing DexMethod or nullptr if one does not exist.
-  static DexMethodRef* get_method(DexType* type,
-                                  DexString* name,
-                                  DexProto* proto) {
+  static DexMethodRef* get_method(const DexType* type,
+                                  const DexString* name,
+                                  const DexProto* proto) {
     return g_redex->get_method(type, name, proto);
   }
 
@@ -978,9 +986,9 @@ class DexMethod : public DexMethodRef {
     return g_redex->get_method(spec.cls, spec.name, spec.proto);
   }
 
-  static DexString* get_unique_name(DexType* type,
-                                    DexString* name,
-                                    DexProto* proto) {
+  static const DexString* get_unique_name(DexType* type,
+                                          const DexString* name,
+                                          DexProto* proto) {
     auto ret = name;
     for (uint32_t i = 0; get_method(type, ret, proto); i++) {
       ret = DexString::make_string(name->str() + "r$" + std::to_string(i));
@@ -1106,8 +1114,10 @@ class DexMethod : public DexMethodRef {
   void gather_methods(C& lmethod) const;
   template <typename C>
   void gather_methods_from_annos(C& lmethod) const;
-  template <typename C>
-  void gather_strings(C& lstring, bool exclude_loads = false) const;
+  void gather_strings(std::vector<const DexString*>& lstring,
+                      bool exclude_loads = false) const;
+  void gather_strings(std::unordered_set<const DexString*>& lstring,
+                      bool exclude_loads = false) const;
   template <typename C>
   void gather_callsites(C& lcallsite) const;
   template <typename C>
@@ -1132,6 +1142,10 @@ class DexMethod : public DexMethodRef {
   // currently cache references and do not clean up, including global ones like
   // `MethodProfiles` which maps `DexMethodRef`s to data.
   static void delete_method_DO_NOT_USE(DexMethod* method) { delete method; }
+
+ private:
+  template <typename C>
+  void gather_strings_internal(C& lstring, bool exclude_loads) const;
 };
 
 using dexcode_to_offset = std::unordered_map<DexCode*, uint32_t>;
@@ -1141,7 +1155,7 @@ class DexClass {
   DexType* m_super_class;
   DexType* m_self;
   DexTypeList* m_interfaces;
-  DexString* m_source_file;
+  const DexString* m_source_file;
   DexAnnotationSet* m_anno;
   std::string m_deobfuscated_name;
   const std::string m_location; // TODO: string interning
@@ -1247,11 +1261,11 @@ class DexClass {
   DexAccessFlags get_access() const { return m_access_flags; }
   DexType* get_super_class() const { return m_super_class; }
   DexType* get_type() const { return m_self; }
-  DexString* get_name() const { return m_self->get_name(); }
+  const DexString* get_name() const { return m_self->get_name(); }
   const char* c_str() const { return get_name()->c_str(); }
   const std::string& str() const { return get_name()->str(); }
   DexTypeList* get_interfaces() const { return m_interfaces; }
-  DexString* get_source_file() const { return m_source_file; }
+  const DexString* get_source_file() const { return m_source_file; }
   bool has_class_data() const;
   bool is_def() const { return true; }
   bool is_external() const { return m_external; }
@@ -1259,7 +1273,9 @@ class DexClass {
   const DexAnnotationSet* get_anno_set() const { return m_anno; }
   DexAnnotationSet* get_anno_set() { return m_anno; }
   void attach_annotation_set(DexAnnotationSet* anno) { m_anno = anno; }
-  void set_source_file(DexString* source_file) { m_source_file = source_file; }
+  void set_source_file(const DexString* source_file) {
+    m_source_file = source_file;
+  }
 
   /**
    * This also adds `name` as an alias for this DexType in the g_redex global
@@ -1314,8 +1330,10 @@ class DexClass {
 
   template <typename C>
   void gather_types(C& ltype) const;
-  template <typename C>
-  void gather_strings(C& lstring, bool exclude_loads = false) const;
+  void gather_strings(std::vector<const DexString*>& lstring,
+                      bool exclude_loads = false) const;
+  void gather_strings(std::unordered_set<const DexString*>& lstring,
+                      bool exclude_loads = false) const;
   template <typename C>
   void gather_fields(C& lfield) const;
   template <typename C>
@@ -1341,6 +1359,9 @@ class DexClass {
  private:
   void sort_methods();
   void sort_fields();
+
+  template <typename C>
+  void gather_strings_internal(C& lstring, bool exclude_loads) const;
 };
 
 inline bool compare_dexclasses(const DexClass* a, const DexClass* b) {
@@ -1398,7 +1419,7 @@ inline DexClass* type_class_internal(const DexType* t) {
  * For a set of classes, compute all referenced strings, types, fields and
  * methods, such that components are sorted and unique.
  */
-void gather_components(std::vector<DexString*>& lstring,
+void gather_components(std::vector<const DexString*>& lstring,
                        std::vector<DexType*>& ltype,
                        std::vector<DexFieldRef*>& lfield,
                        std::vector<DexMethodRef*>& lmethod,

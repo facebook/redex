@@ -156,7 +156,7 @@ struct ConditionallyMarked {
 };
 
 struct References {
-  std::vector<DexString*> strings;
+  std::vector<const DexString*> strings;
   std::vector<DexType*> types;
   std::vector<DexFieldRef*> fields;
   std::vector<DexMethodRef*> methods;
@@ -315,7 +315,7 @@ class TransitiveClosureMarker {
 
   template <class Parent>
   void push_typelike_strings(const Parent* parent,
-                             const std::vector<DexString*>& strings);
+                             const std::vector<const DexString*>& strings);
 
   template <class Parent, class Object>
   void record_reachability(Parent* parent, Object* object);

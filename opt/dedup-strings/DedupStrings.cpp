@@ -80,13 +80,13 @@ void DedupStrings::run(
       indices);
 
   // For each string, figure out how many times it's loaded per dex
-  ConcurrentMap<DexString*, std::unordered_map<size_t, size_t>> occurrences =
-      get_occurrences(scope, methods_to_dex, perf_sensitive_methods,
-                      non_load_strings);
+  ConcurrentMap<const DexString*, std::unordered_map<size_t, size_t>>
+      occurrences = get_occurrences(scope, methods_to_dex,
+                                    perf_sensitive_methods, non_load_strings);
 
   // Use heuristics to determine which strings to dedup,
   // and figure out factory method details
-  std::unordered_map<DexString*, DedupStrings::DedupStringInfo>
+  std::unordered_map<const DexString*, DedupStrings::DedupStringInfo>
       strings_to_dedup =
           get_strings_to_dedup(dexen, occurrences, methods_to_dex,
                                perf_sensitive_methods, non_load_strings);
@@ -177,7 +177,9 @@ std::unordered_map<const DexMethod*, size_t> DedupStrings::get_methods_to_dex(
 }
 
 DexMethod* DedupStrings::make_const_string_loader_method(
-    DexClasses& dex, size_t dex_id, const std::vector<DexString*>& strings) {
+    DexClasses& dex,
+    size_t dex_id,
+    const std::vector<const DexString*>& strings) {
   // Create a new class to host the string lookup method
   auto host_cls_name =
       DexString::make_string(std::string(DEDUP_STRINGS_CLASS_NAME_PREFIX) +
@@ -238,7 +240,7 @@ void DedupStrings::gather_non_load_strings(
     DexClasses& classes, std::unordered_set<const DexString*>* strings) {
   // Let's figure out the set of "non-load" strings, i.e. the strings which
   // are referenced by some metadata (and not just const-string instructions)
-  std::vector<DexString*> lstring;
+  std::vector<const DexString*> lstring;
   std::vector<DexType*> ltype;
   std::vector<DexFieldRef*> lfield;
   std::vector<DexMethodRef*> lmethod;
@@ -252,15 +254,17 @@ void DedupStrings::gather_non_load_strings(
   strings->insert(m_ignore_strings.begin(), m_ignore_strings.end());
 }
 
-ConcurrentMap<DexString*, std::unordered_map<size_t, size_t>>
+ConcurrentMap<const DexString*, std::unordered_map<size_t, size_t>>
 DedupStrings::get_occurrences(
     const Scope& scope,
     const std::unordered_map<const DexMethod*, size_t>& methods_to_dex,
     const std::unordered_set<const DexMethod*>& perf_sensitive_methods,
     std::unordered_set<const DexString*> non_load_strings[]) {
   // For each string, figure out how many times it's loaded per dex
-  ConcurrentMap<DexString*, std::unordered_map<size_t, size_t>> occurrences;
-  ConcurrentMap<DexString*, std::unordered_set<size_t>> perf_sensitive_strings;
+  ConcurrentMap<const DexString*, std::unordered_map<size_t, size_t>>
+      occurrences;
+  ConcurrentMap<const DexString*, std::unordered_set<size_t>>
+      perf_sensitive_strings;
   walk::parallel::code(
       scope, [&occurrences, &perf_sensitive_strings, &methods_to_dex,
               &perf_sensitive_methods](DexMethod* method, IRCode& code) {
@@ -304,10 +308,10 @@ DedupStrings::get_occurrences(
   return occurrences;
 }
 
-std::unordered_map<DexString*, DedupStrings::DedupStringInfo>
+std::unordered_map<const DexString*, DedupStrings::DedupStringInfo>
 DedupStrings::get_strings_to_dedup(
     DexClassesVector& dexen,
-    const ConcurrentMap<DexString*, std::unordered_map<size_t, size_t>>&
+    const ConcurrentMap<const DexString*, std::unordered_map<size_t, size_t>>&
         occurrences,
     std::unordered_map<const DexMethod*, size_t>& methods_to_dex,
     std::unordered_set<const DexMethod*>& perf_sensitive_methods,
@@ -316,14 +320,14 @@ DedupStrings::get_strings_to_dedup(
   // methods as appropriate, and persist relevant information to aid the later
   // rewriting of all const-string instructions.
 
-  std::unordered_map<DexString*, DedupStrings::DedupStringInfo>
+  std::unordered_map<const DexString*, DedupStrings::DedupStringInfo>
       strings_to_dedup;
 
   // Do a cost/benefit analysis to figure out which strings to access via
   // factory methods, and where to put to the factory method
-  std::vector<DexString*> strings_in_dexes[dexen.size()];
+  std::vector<const DexString*> strings_in_dexes[dexen.size()];
   std::unordered_set<size_t> hosting_dexnrs;
-  std::vector<DexString*> ordered_strings;
+  std::vector<const DexString*> ordered_strings;
   ordered_strings.reserve(occurrences.size());
   for (auto& p : occurrences) {
     const auto& m = p.second;
@@ -332,13 +336,13 @@ DedupStrings::get_strings_to_dedup(
     ordered_strings.push_back(p.first);
   }
   std::sort(ordered_strings.begin(), ordered_strings.end(), compare_dexstrings);
-  for (DexString* s : ordered_strings) {
+  for (auto* s : ordered_strings) {
     // We are going to look at the situation of a particular string here
     const auto& m = occurrences.at_unsafe(s);
     always_assert(m.size() > 1);
     const auto entry_size = s->get_entry_size();
     const auto get_size_reduction = [entry_size, non_load_strings](
-                                        DexString* str, size_t dexnr,
+                                        const DexString* str, size_t dexnr,
                                         size_t loads) -> size_t {
       const auto has_non_load_string = non_load_strings[dexnr].count(str) != 0;
       if (has_non_load_string) {
@@ -492,19 +496,20 @@ DedupStrings::get_strings_to_dedup(
   // Order strings to give more often used strings smaller indices;
   // generate factory methods; remember details in dedup-info data structure
   for (size_t dexnr = 0; dexnr < dexen.size(); ++dexnr) {
-    std::vector<DexString*>& strings = strings_in_dexes[dexnr];
+    std::vector<const DexString*>& strings = strings_in_dexes[dexnr];
     if (strings.empty()) {
       continue;
     }
-    std::sort(strings.begin(), strings.end(),
-              [&strings_to_dedup](DexString* a, DexString* b) -> bool {
-                auto a_loads = strings_to_dedup[a].duplicate_string_loads;
-                auto b_loads = strings_to_dedup[b].duplicate_string_loads;
-                if (a_loads != b_loads) {
-                  return a_loads > b_loads;
-                }
-                return dexstrings_comparator()(a, b);
-              });
+    std::sort(
+        strings.begin(), strings.end(),
+        [&strings_to_dedup](const DexString* a, const DexString* b) -> bool {
+          auto a_loads = strings_to_dedup[a].duplicate_string_loads;
+          auto b_loads = strings_to_dedup[b].duplicate_string_loads;
+          if (a_loads != b_loads) {
+            return a_loads > b_loads;
+          }
+          return dexstrings_comparator()(a, b);
+        });
     const auto const_string_method =
         make_const_string_loader_method(dexen.at(dexnr), dexnr, strings);
     always_assert(strings.size() < 0xFFFFFFFF);
@@ -534,7 +539,7 @@ void DedupStrings::rewrite_const_string_instructions(
     const Scope& scope,
     const std::unordered_map<const DexMethod*, size_t>& methods_to_dex,
     const std::unordered_set<const DexMethod*>& perf_sensitive_methods,
-    const std::unordered_map<DexString*, DedupStrings::DedupStringInfo>&
+    const std::unordered_map<const DexString*, DedupStrings::DedupStringInfo>&
         strings_to_dedup,
     std::unique_ptr<ab_test::ABExperimentContext>& ab_experiment_context) {
 
@@ -693,7 +698,7 @@ void DedupStringsPass::run_pass(DexStoresVector& stores,
   std::unordered_map<std::string, std::string> exp_states;
   conf.get_json_config().get("ab_experiments_states", {}, exp_states);
 
-  std::unordered_set<DexString*> exp_strings_to_ignore;
+  std::unordered_set<const DexString*> exp_strings_to_ignore;
   for (const auto& exp_state : exp_states) {
     if (exp_state.second == "branch_or_test" ||
         exp_state.second == "branch_or_control") {

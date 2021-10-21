@@ -468,9 +468,8 @@ void merge(const BaseSigs& base_sigs,
 DexMethod* make_miranda(const DexType* type,
                         const DexString* name,
                         const DexProto* proto) {
-  auto miranda = DexMethod::make_method(const_cast<DexType*>(type),
-                                        const_cast<DexString*>(name),
-                                        const_cast<DexProto*>(proto));
+  auto miranda = DexMethod::make_method(
+      const_cast<DexType*>(type), name, const_cast<DexProto*>(proto));
   // The next assert may fire because we don't delete DexMethod from the
   // cache and we may find one we have deleted and it was a def.
   // Come up with a better assert story

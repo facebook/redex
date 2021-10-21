@@ -147,24 +147,25 @@ class DexInstruction : public Gatherable {
 
 class DexOpcodeString : public DexInstruction {
  private:
-  DexString* m_string;
+  const DexString* m_string;
 
  public:
   uint16_t size() const override;
   void encode(DexOutputIdx* dodx, uint16_t*& insns) const override;
-  void gather_strings(std::vector<DexString*>& lstring) const override;
+  void gather_strings(std::vector<const DexString*>& lstring) const override;
   DexOpcodeString* clone() const override { return new DexOpcodeString(*this); }
 
-  DexOpcodeString(DexOpcode opcode, DexString* str) : DexInstruction(opcode) {
+  DexOpcodeString(DexOpcode opcode, const DexString* str)
+      : DexInstruction(opcode) {
     m_string = str;
     m_ref_type = REF_STRING;
   }
 
-  DexString* get_string() const { return m_string; }
+  const DexString* get_string() const { return m_string; }
 
   bool jumbo() const { return opcode() == DOPCODE_CONST_STRING_JUMBO; }
 
-  void set_string(DexString* str) { m_string = str; }
+  void set_string(const DexString* str) { m_string = str; }
 };
 
 class DexOpcodeType : public DexInstruction {
@@ -242,7 +243,7 @@ class DexOpcodeCallSite : public DexInstruction {
   uint16_t size() const override;
   void encode(DexOutputIdx* dodx, uint16_t*& insns) const override;
   void gather_callsites(std::vector<DexCallSite*>& lcallsite) const override;
-  void gather_strings(std::vector<DexString*>& lstring) const override;
+  void gather_strings(std::vector<const DexString*>& lstring) const override;
   void gather_methodhandles(
       std::vector<DexMethodHandle*>& lmethodhandle) const override;
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const override;

@@ -17,7 +17,7 @@
 namespace {
 
 // TODO: make naming of methods smart
-DexString* get_name(DexMethod* meth) {
+const DexString* get_name(DexMethod* meth) {
   std::string name = "__st__" + meth->get_name()->str();
   return DexString::make_string(name);
 }
@@ -385,7 +385,7 @@ void MethodBlock::load_const(Location& loc, double value) {
   push_instruction(load);
 }
 
-void MethodBlock::load_const(Location& loc, DexString* value) {
+void MethodBlock::load_const(Location& loc, const DexString* value) {
   always_assert(!loc.is_wide());
   IRInstruction* load = new IRInstruction(OPCODE_CONST_STRING);
   load->set_string(value);
@@ -634,7 +634,7 @@ MethodCreator::MethodCreator(DexMethodRef* ref,
                     with_debug_item){};
 
 MethodCreator::MethodCreator(DexType* cls,
-                             DexString* name,
+                             const DexString* name,
                              DexProto* proto,
                              DexAccessFlags access,
                              DexAnnotationSet* anno,
@@ -699,14 +699,14 @@ DexMethod* MethodCreator::make_static_from(DexMethod* meth,
   return make_static_from(name, meth, target_cls);
 }
 
-DexMethod* MethodCreator::make_static_from(DexString* name,
+DexMethod* MethodCreator::make_static_from(const DexString* name,
                                            DexMethod* meth,
                                            DexClass* target_cls) {
   auto proto = make_static_sig(meth);
   return make_static_from(name, proto, meth, target_cls);
 }
 
-DexMethod* MethodCreator::make_static_from(DexString* name,
+DexMethod* MethodCreator::make_static_from(const DexString* name,
                                            DexProto* proto,
                                            DexMethod* meth,
                                            DexClass* target_cls) {

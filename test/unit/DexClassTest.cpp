@@ -25,8 +25,8 @@ TEST_F(DexClassTest, testUniqueMethodName) {
       )
     )");
   auto type = DexType::make_type("LFoo;");
-  DexString* newname = DexMethod::get_unique_name(
-      type, DexString::make_string("bar"), method->get_proto());
+  auto newname = DexMethod::get_unique_name(type, DexString::make_string("bar"),
+                                            method->get_proto());
   EXPECT_EQ(newname->str(), "barr$0");
   DexMethod::make_method("LFoo;.barr$0:(I)V");
   newname = DexMethod::get_unique_name(type, DexString::make_string("bar"),
@@ -45,8 +45,8 @@ TEST_F(DexClassTest, testUniqueFieldName) {
   class_creator.set_super(type::java_lang_Object());
   class_creator.create();
   auto type = DexType::make_type("LFoo;");
-  DexString* newname = DexField::get_unique_name(
-      type, DexString::make_string("bar"), DexType::make_type("I"));
+  auto newname = DexField::get_unique_name(type, DexString::make_string("bar"),
+                                           DexType::make_type("I"));
   EXPECT_EQ(newname->str(), "bar"); // no conflict, should not be renamed
   DexField::make_field("LFoo;.bar:I");
   newname = DexField::get_unique_name(type, DexString::make_string("bar"),

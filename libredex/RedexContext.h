@@ -56,8 +56,8 @@ struct RedexContext {
   explicit RedexContext(bool allow_class_duplicates = false);
   ~RedexContext();
 
-  DexString* make_string(const char* nstr, uint32_t utfsize);
-  DexString* get_string(const char* nstr, uint32_t utfsize);
+  const DexString* make_string(const char* nstr, uint32_t utfsize);
+  const DexString* get_string(const char* nstr, uint32_t utfsize);
 
   DexType* make_type(const DexString* dstring);
   DexType* get_type(const DexString* dstring);
@@ -65,15 +65,15 @@ struct RedexContext {
   /**
    * Change the name of a type, but do not remove the old name from the mapping
    */
-  void set_type_name(DexType* type, DexString* new_name);
+  void set_type_name(DexType* type, const DexString* new_name);
   /**
    * Add an additional name to refer to a type (a deobfuscated name for example)
    */
-  void alias_type_name(DexType* type, DexString* new_name);
+  void alias_type_name(DexType* type, const DexString* new_name);
   /**
    * Remove a name -> type entry from the map
    */
-  void remove_type_name(DexString* name);
+  void remove_type_name(const DexString* name);
 
   DexFieldRef* make_field(const DexType* container,
                           const DexString* name,
@@ -86,7 +86,7 @@ struct RedexContext {
    * Add an additional name to refer to a field (a deobfuscated name for
    * example)
    */
-  void alias_field_name(DexFieldRef* field, DexString* new_name);
+  void alias_field_name(DexFieldRef* field, const DexString* new_name);
 
   void erase_field(DexFieldRef*);
   void erase_field(const DexType* container,
@@ -117,7 +117,7 @@ struct RedexContext {
    * Add an additional name to refer to a method (a deobfuscated name for
    * example)
    */
-  void alias_method_name(DexMethodRef* method, DexString* new_name);
+  void alias_method_name(DexMethodRef* method, const DexString* new_name);
 
   DexMethodHandle* make_methodhandle();
   DexMethodHandle* get_methodhandle();
@@ -256,9 +256,9 @@ struct RedexContext {
 
   template <size_t n_slots = 31>
   using ConcurrentProjectedStringMap =
-      ConcurrentMapContainer<std::map<const char*, DexString*, Strcmp>,
+      ConcurrentMapContainer<std::map<const char*, const DexString*, Strcmp>,
                              StringMapKey,
-                             DexString*,
+                             const DexString*,
                              StringMapKeyHash,
                              StringMapKeyProjection,
                              n_slots>;

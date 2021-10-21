@@ -231,7 +231,7 @@ struct MethodBlock {
    * Load the string value into the given Location.
    * The Location must be compatible with the given type.
    */
-  void load_const(Location& loc, DexString* value);
+  void load_const(Location& loc, const DexString* value);
 
   /**
    * Load the type value into the given Location.
@@ -396,7 +396,7 @@ struct MethodCreator {
                 DexAnnotationSet* anno = nullptr,
                 bool with_debug_item = false);
   MethodCreator(DexType* cls,
-                DexString* name,
+                const DexString* name,
                 DexProto* proto,
                 DexAccessFlags access,
                 DexAnnotationSet* anno = nullptr,
@@ -446,7 +446,7 @@ struct MethodCreator {
    * Same as make_static_from(DexMethod*, DexClass*); but create a method
    * with the given name.
    */
-  static DexMethod* make_static_from(DexString* name,
+  static DexMethod* make_static_from(const DexString* name,
                                      DexMethod* meth,
                                      DexClass* target_cls);
 
@@ -455,7 +455,7 @@ struct MethodCreator {
    * with the given name and the given proto.
    * The proto provided must be compatible with the code in meth.
    */
-  static DexMethod* make_static_from(DexString* name,
+  static DexMethod* make_static_from(const DexString* name,
                                      DexProto* proto,
                                      DexMethod* meth,
                                      DexClass* target_cls);

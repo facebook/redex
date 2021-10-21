@@ -77,7 +77,7 @@ MultiMethodInliner::MultiMethodInliner(
     const std::unordered_set<DexMethodRef*>& configured_pure_methods,
     const api::AndroidSDK* min_sdk_api,
     bool cross_dex_penalty,
-    const std::unordered_set<DexString*>& configured_finalish_field_names)
+    const std::unordered_set<const DexString*>& configured_finalish_field_names)
     : m_concurrent_resolver(std::move(concurrent_resolve_fn)),
       m_scheduler(
           [this](DexMethod* method) {

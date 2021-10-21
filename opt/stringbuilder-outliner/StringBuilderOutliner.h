@@ -242,7 +242,7 @@ class Outliner {
   Config m_config;
   Stats m_stats;
 
-  DexString* m_append_str;
+  const DexString* m_append_str;
   DexType* m_stringbuilder;
   DexMethodRef* m_stringbuilder_default_ctor;
   DexMethodRef* m_stringbuilder_capacity_ctor;

@@ -66,7 +66,7 @@ struct DexItemIter<DexMethod*, F> {
  */
 void blocklist_field(DexMethod* reflecting_method,
                      DexType* type,
-                     DexString* name,
+                     const DexString* name,
                      bool declared) {
   auto* cls = type_class(type);
   if (cls == nullptr) {
@@ -93,7 +93,7 @@ void blocklist_field(DexMethod* reflecting_method,
 
 void blocklist_method(DexMethod* reflecting_method,
                       DexType* type,
-                      DexString* name,
+                      const DexString* name,
                       const boost::optional<std::vector<DexType*>>& params,
                       bool declared) {
   auto* cls = type_class(type);
@@ -182,7 +182,7 @@ void analyze_reflection(const Scope& scope) {
     if (arg_str && arg_str->obj_kind == AbstractObjectKind::STRING) {
       return arg_str->dex_string;
     } else {
-      return (DexString*)nullptr;
+      return (const DexString*)nullptr;
     }
   };
 
@@ -229,7 +229,7 @@ void analyze_reflection(const Scope& scope) {
       }
 
       // Deal with methods that take a varying number of arguments.
-      DexString* arg_str_value = dex_string_lookup(*analysis, refl_type, insn);
+      auto arg_str_value = dex_string_lookup(*analysis, refl_type, insn);
       if (arg_str_value == nullptr) {
         continue;
       }

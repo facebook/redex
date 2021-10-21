@@ -659,7 +659,7 @@ EscapeReason OptimizationImpl::can_optimize(const DexType* intf,
 void OptimizationImpl::rename_possible_collisions(const DexType* intf,
                                                   const SingleImplData& data) {
 
-  const auto& rename = [](DexMethodRef* meth, DexString* name) {
+  const auto& rename = [](DexMethodRef* meth, const DexString* name) {
     DexMethodSpec spec;
     spec.cls = meth->get_class();
     spec.name = name;

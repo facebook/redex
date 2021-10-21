@@ -989,7 +989,7 @@ std::ostream& operator<<(std::ostream& o, const DexType& type) {
   return o;
 }
 
-inline std::string show(DexString* p) {
+inline std::string show(const DexString* p) {
   if (!p) return "";
   return p->str();
 }

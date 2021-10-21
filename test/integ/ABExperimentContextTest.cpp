@@ -37,7 +37,7 @@ void change_called_method(const std::string& exp_name,
 
       auto m_ref = insn->get_method();
       if (m_ref->get_name()->str() == original_method_name) {
-        DexString* name = DexString::make_string(new_method_name);
+        auto name = DexString::make_string(new_method_name);
         DexMethodRef* method = DexMethod::make_method(m_ref->get_class(), name,
                                                       m_ref->get_proto());
         insn->set_method(method);

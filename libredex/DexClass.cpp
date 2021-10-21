@@ -239,7 +239,8 @@ DexDebugEntry::~DexDebugEntry() {
   }
 }
 
-void DexDebugEntry::gather_strings(std::vector<DexString*>& lstring) const {
+void DexDebugEntry::gather_strings(
+    std::vector<const DexString*>& lstring) const {
   if (type == DexDebugEntryType::Instruction) {
     insn->gather_strings(lstring);
   }
@@ -456,7 +457,7 @@ int DexDebugItem::encode(
   return (int)(encdata - output);
 }
 
-void DexDebugItem::bind_positions(DexMethod* method, DexString* file) {
+void DexDebugItem::bind_positions(DexMethod* method, const DexString* file) {
   auto* method_str = DexString::make_string(show(method));
   for (auto& entry : m_dbg_entries) {
     switch (entry.type) {
@@ -475,7 +476,8 @@ void DexDebugItem::gather_types(std::vector<DexType*>& ltype) const {
   }
 }
 
-void DexDebugItem::gather_strings(std::vector<DexString*>& lstring) const {
+void DexDebugItem::gather_strings(
+    std::vector<const DexString*>& lstring) const {
   for (auto& entry : m_dbg_entries) {
     entry.gather_strings(lstring);
   }
@@ -626,7 +628,7 @@ int DexCode::encode(DexOutputIdx* dodx, uint32_t* output) {
   return (int)(hemit - ((uint8_t*)output));
 }
 
-DexMethod::DexMethod(DexType* type, DexString* name, DexProto* proto)
+DexMethod::DexMethod(DexType* type, const DexString* name, DexProto* proto)
     : DexMethodRef(type, name, proto) {
   m_virtual = false;
   m_anno = nullptr;
@@ -669,7 +671,7 @@ size_t hash_value(const DexMethodSpec& r) {
 
 DexMethod* DexMethod::make_method_from(DexMethod* that,
                                        DexType* target_cls,
-                                       DexString* name) {
+                                       const DexString* name) {
   auto m = static_cast<DexMethod*>(
       DexMethod::make_method(target_cls, name, that->get_proto()));
   redex_assert(m != that);
@@ -698,7 +700,7 @@ DexMethod* DexMethod::make_method_from(DexMethod* that,
 
 DexMethod* DexMethod::make_full_method_from(DexMethod* that,
                                             DexType* target_cls,
-                                            DexString* name) {
+                                            const DexString* name) {
   auto m = make_method_from(that, target_cls, name);
   m->rstate = that->rstate;
   return m;
@@ -1287,7 +1289,8 @@ void DexTypeList::gather_types(C& ltype) const {
 }
 INSTANTIATE(DexTypeList::gather_types, DexType*)
 
-static DexString* make_shorty(const DexType* rtype, const DexTypeList* args) {
+static const DexString* make_shorty(const DexType* rtype,
+                                    const DexTypeList* args) {
   std::string s;
   s.push_back(type::type_shorty(rtype));
   if (args != nullptr) {
@@ -1314,13 +1317,17 @@ void DexProto::gather_types(C& ltype) const {
 }
 INSTANTIATE(DexProto::gather_types, DexType*)
 
-template <typename C>
-void DexProto::gather_strings(C& lstring) const {
+void DexProto::gather_strings(std::vector<const DexString*>& lstring) const {
   if (m_shorty) {
     c_append(lstring, m_shorty);
   }
 }
-INSTANTIATE(DexProto::gather_strings, DexString*)
+void DexProto::gather_strings(
+    std::unordered_set<const DexString*>& lstring) const {
+  if (m_shorty) {
+    c_append(lstring, m_shorty);
+  }
+}
 
 namespace {
 
@@ -1400,7 +1407,7 @@ void DexClass::gather_load_types(std::unordered_set<DexType*>& ltype) const {
 }
 
 template <typename C>
-void DexClass::gather_strings(C& lstring, bool exclude_loads) const {
+void DexClass::gather_strings_internal(C& lstring, bool exclude_loads) const {
   for (auto const& m : m_dmethods) {
     m->gather_strings(lstring, exclude_loads);
   }
@@ -1415,12 +1422,19 @@ void DexClass::gather_strings(C& lstring, bool exclude_loads) const {
   }
   if (m_source_file) c_append(lstring, m_source_file);
   if (m_anno) {
-    std::vector<DexString*> strings;
+    std::vector<const DexString*> strings;
     m_anno->gather_strings(strings);
     c_append_all(lstring, strings.begin(), strings.end());
   }
 }
-INSTANTIATE2(DexClass::gather_strings, DexString*, bool)
+void DexClass::gather_strings(std::vector<const DexString*>& lstring,
+                              bool exclude_loads) const {
+  gather_strings_internal(lstring, exclude_loads);
+}
+void DexClass::gather_strings(std::unordered_set<const DexString*>& lstring,
+                              bool exclude_loads) const {
+  gather_strings_internal(lstring, exclude_loads);
+}
 
 template <typename C>
 void DexClass::gather_fields(C& lfield) const {
@@ -1546,11 +1560,14 @@ void DexFieldRef::gather_types_shallow(C& ltype) const {
 }
 INSTANTIATE(DexFieldRef::gather_types_shallow, DexType*)
 
-template <typename C>
-void DexFieldRef::gather_strings_shallow(C& lstring) const {
+void DexFieldRef::gather_strings_shallow(
+    std::vector<const DexString*>& lstring) const {
   c_append(lstring, m_spec.name);
 }
-INSTANTIATE(DexFieldRef::gather_strings_shallow, DexString*)
+void DexFieldRef::gather_strings_shallow(
+    std::unordered_set<const DexString*>& lstring) const {
+  c_append(lstring, m_spec.name);
+}
 
 template <typename C>
 void DexField::gather_types(C& ltype) const {
@@ -1562,13 +1579,19 @@ void DexField::gather_types(C& ltype) const {
 INSTANTIATE(DexField::gather_types, DexType*)
 
 template <typename C>
-void DexField::gather_strings(C& lstring) const {
-  std::vector<DexString*> string_vec;
+void DexField::gather_strings_internal(C& lstring) const {
+  std::vector<const DexString*> string_vec;
   if (m_value) m_value->gather_strings(string_vec);
   if (m_anno) m_anno->gather_strings(string_vec);
   c_append_all(lstring, string_vec.begin(), string_vec.end());
 }
-INSTANTIATE(DexField::gather_strings, DexString*)
+void DexField::gather_strings(std::vector<const DexString*>& lstring) const {
+  gather_strings_internal(lstring);
+}
+void DexField::gather_strings(
+    std::unordered_set<const DexString*>& lstring) const {
+  gather_strings_internal(lstring);
+}
 
 template <typename C>
 void DexField::gather_fields(C& lfield) const {
@@ -1656,9 +1679,9 @@ void DexMethod::gather_methodhandles(C& lmethodhandle) const {
 }
 INSTANTIATE(DexMethod::gather_methodhandles, DexMethodHandle*)
 template <typename C>
-void DexMethod::gather_strings(C& lstring, bool exclude_loads) const {
+void DexMethod::gather_strings_internal(C& lstring, bool exclude_loads) const {
   // We handle m_name and proto in the first-layer gather.
-  std::vector<DexString*> strings_vec; // Simplify refactor.
+  std::vector<const DexString*> strings_vec; // Simplify refactor.
   if (m_code && !exclude_loads) m_code->gather_strings(strings_vec);
   if (m_anno) m_anno->gather_strings(strings_vec);
   auto param_anno = get_param_anno();
@@ -1670,7 +1693,15 @@ void DexMethod::gather_strings(C& lstring, bool exclude_loads) const {
   }
   c_append_all(lstring, strings_vec.begin(), strings_vec.end());
 }
-INSTANTIATE2(DexMethod::gather_strings, DexString*, bool)
+void DexMethod::gather_strings(std::vector<const DexString*>& lstring,
+                               bool exclude_loads) const {
+  gather_strings_internal(lstring, exclude_loads);
+}
+void DexMethod::gather_strings(std::unordered_set<const DexString*>& lstring,
+                               bool exclude_loads) const {
+  gather_strings_internal(lstring, exclude_loads);
+}
+
 template <typename C>
 void DexMethod::gather_fields(C& lfield) const {
   std::vector<DexFieldRef*> fields_vec; // Simplify refactor.
@@ -1736,12 +1767,16 @@ void DexMethodRef::gather_types_shallow(C& ltype) const {
 }
 INSTANTIATE(DexMethodRef::gather_types_shallow, DexType*)
 
-template <typename C>
-void DexMethodRef::gather_strings_shallow(C& lstring) const {
+void DexMethodRef::gather_strings_shallow(
+    std::vector<const DexString*>& lstring) const {
   lstring.insert(lstring.end(), m_spec.name);
   m_spec.proto->gather_strings(lstring);
 }
-INSTANTIATE(DexMethodRef::gather_strings_shallow, DexString*)
+void DexMethodRef::gather_strings_shallow(
+    std::unordered_set<const DexString*>& lstring) const {
+  lstring.insert(lstring.end(), m_spec.name);
+  m_spec.proto->gather_strings(lstring);
+}
 
 uint32_t DexCode::size() const {
   uint32_t size = 0;
@@ -1753,7 +1788,7 @@ uint32_t DexCode::size() const {
   return size;
 }
 
-DexProto* DexType::get_non_overlapping_proto(DexString* method_name,
+DexProto* DexType::get_non_overlapping_proto(const DexString* method_name,
                                              DexProto* orig_proto) {
   auto methodref_in_context =
       DexMethod::get_method(this, method_name, orig_proto);
@@ -1794,7 +1829,7 @@ void DexMethod::add_load_params(size_t num_add_loads) {
   }
 }
 
-void gather_components(std::vector<DexString*>& lstring,
+void gather_components(std::vector<const DexString*>& lstring,
                        std::vector<DexType*>& ltype,
                        std::vector<DexFieldRef*>& lfield,
                        std::vector<DexMethodRef*>& lmethod,
@@ -1803,7 +1838,7 @@ void gather_components(std::vector<DexString*>& lstring,
                        const DexClasses& classes,
                        bool exclude_loads) {
   // Gather references reachable from each class.
-  std::unordered_set<DexString*> strings;
+  std::unordered_set<const DexString*> strings;
   std::unordered_set<DexType*> types;
   std::unordered_set<DexFieldRef*> fields;
   std::unordered_set<DexMethodRef*> methods;

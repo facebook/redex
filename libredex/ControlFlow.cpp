@@ -1429,7 +1429,8 @@ void ControlFlowGraph::gather_catch_types(std::vector<DexType*>& types) const {
   }
 }
 
-void ControlFlowGraph::gather_strings(std::vector<DexString*>& strings) const {
+void ControlFlowGraph::gather_strings(
+    std::vector<const DexString*>& strings) const {
   always_assert(editable());
   for (const auto& entry : m_blocks) {
     entry.second->m_entries.gather_strings(strings);

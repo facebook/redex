@@ -35,7 +35,7 @@ inline Operand operator"" _L(unsigned long long v) {
 
 IRInstruction* dasm(IROpcode opcode, std::initializer_list<Operand> = {});
 IRInstruction* dasm(IROpcode opcode,
-                    DexString* string,
+                    const DexString* string,
                     std::initializer_list<Operand> = {});
 IRInstruction* dasm(IROpcode opcode,
                     DexType* type,

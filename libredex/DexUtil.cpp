@@ -30,7 +30,7 @@ DexAccessFlags merge_visibility(uint32_t vis1, uint32_t vis2) {
   return ACC_PRIVATE;
 }
 
-void create_runtime_exception_block(DexString* except_str,
+void create_runtime_exception_block(const DexString* except_str,
                                     std::vector<IRInstruction*>& block) {
   // clang-format off
   // new-instance v0, Ljava/lang/RuntimeException; // type@3852

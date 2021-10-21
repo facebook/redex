@@ -81,7 +81,7 @@ using AbstractHeapAddress = uint64_t;
 struct AbstractObject final : public sparta::AbstractValue<AbstractObject> {
   AbstractObjectKind obj_kind;
   DexType* dex_type;
-  DexString* dex_string;
+  const DexString* dex_string;
   boost::optional<int64_t> dex_int = boost::none;
   // Attaching a set of potential dex types.
   std::unordered_set<DexType*> potential_dex_types;
@@ -103,7 +103,7 @@ struct AbstractObject final : public sparta::AbstractValue<AbstractObject> {
   // abstract value.
   AbstractObject() = default;
 
-  explicit AbstractObject(DexString* s)
+  explicit AbstractObject(const DexString* s)
       : obj_kind(STRING), dex_type(nullptr), dex_string(s) {}
 
   explicit AbstractObject(int64_t i)
@@ -124,14 +124,14 @@ struct AbstractObject final : public sparta::AbstractValue<AbstractObject> {
     always_assert(k == OBJECT || k == CLASS);
   }
 
-  AbstractObject(AbstractObjectKind k, DexType* t, DexString* s)
+  AbstractObject(AbstractObjectKind k, DexType* t, const DexString* s)
       : obj_kind(k), dex_type(t), dex_string(s) {
     always_assert(k == FIELD || k == METHOD);
   }
 
   AbstractObject(AbstractObjectKind k,
                  DexType* t,
-                 DexString* s,
+                 const DexString* s,
                  std::unordered_set<DexType*> p)
       : obj_kind(k),
         dex_type(t),

@@ -25,8 +25,8 @@ namespace {
  *   "Lcom/baz/Foo;"
  * looks that up in the map, then transforms back to the form of the input.
  */
-DexString* lookup_signature_annotation(const rewriter::TypeStringMap& mapping,
-                                       DexString* anno) {
+const DexString* lookup_signature_annotation(
+    const rewriter::TypeStringMap& mapping, const DexString* anno) {
   bool has_bracket = false;
   bool added_semicolon = false;
   std::string anno_str = anno->str();
@@ -75,7 +75,7 @@ DexString* lookup_signature_annotation(const rewriter::TypeStringMap& mapping,
   // Lcom/baz/Foo;
 
   // Use get_string because if it's in the map, then it must also already exist
-  DexString* transformed_anno = DexString::get_string(anno_str);
+  auto* transformed_anno = DexString::get_string(anno_str);
   if (transformed_anno == nullptr) {
     return nullptr;
   }
@@ -107,7 +107,7 @@ uint32_t get_array_level(const DexString* name) {
   return level;
 }
 
-DexString* make_array(const DexString* name, uint32_t level) {
+const DexString* make_array(const DexString* name, uint32_t level) {
   std::string array;
   array.reserve(name->size() + level + 1);
   array.append(level, '[');
@@ -125,7 +125,8 @@ TypeStringMap::TypeStringMap(
   }
 }
 
-void TypeStringMap::add_type_name(DexString* old_name, DexString* new_name) {
+void TypeStringMap::add_type_name(const DexString* old_name,
+                                  const DexString* new_name) {
   always_assert(old_name && new_name);
   m_type_name_map[old_name] = new_name;
   if (old_name->str()[0] != '[') {
@@ -141,7 +142,8 @@ void TypeStringMap::add_type_name(DexString* old_name, DexString* new_name) {
   m_type_name_map[old_name] = new_name;
 }
 
-DexString* TypeStringMap::get_new_type_name(DexString* old_name) const {
+const DexString* TypeStringMap::get_new_type_name(
+    const DexString* old_name) const {
   auto it = m_type_name_map.find(old_name);
   if (it != m_type_name_map.end()) {
     return it->second;
@@ -176,8 +178,8 @@ void rewrite_dalvik_annotation_signature(const Scope& scope,
       for (auto strev : *evs) {
         if (strev->evtype() != DEVT_STRING) continue;
         auto stringev = static_cast<DexEncodedValueString*>(strev);
-        DexString* old_str = stringev->string();
-        DexString* new_str = lookup_signature_annotation(mapping, old_str);
+        auto* old_str = stringev->string();
+        auto* new_str = lookup_signature_annotation(mapping, old_str);
         if (new_str != nullptr) {
           TRACE(RENAME, 5, "Rewriting Signature from '%s' to '%s'",
                 old_str->c_str(), new_str->c_str());
@@ -197,8 +199,8 @@ uint32_t rewrite_string_literal_instructions(const Scope& scope,
       if (insn->opcode() != OPCODE_CONST_STRING) {
         continue;
       }
-      DexString* old_str = insn->get_string();
-      DexString* internal_str = DexString::get_string(
+      auto* old_str = insn->get_string();
+      auto* internal_str = DexString::get_string(
           java_names::external_to_internal(old_str->str()));
       if (!internal_str || !DexType::get_type(internal_str)) {
         continue;

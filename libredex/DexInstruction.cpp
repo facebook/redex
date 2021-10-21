@@ -632,7 +632,8 @@ DexInstruction* DexInstruction::set_arg_word_count(uint16_t count) {
   return this;
 }
 
-void DexOpcodeString::gather_strings(std::vector<DexString*>& lstring) const {
+void DexOpcodeString::gather_strings(
+    std::vector<const DexString*>& lstring) const {
   lstring.push_back(m_string);
 }
 
@@ -710,7 +711,8 @@ void DexOpcodeCallSite::gather_callsites(
   lcallsite.emplace_back(m_callsite);
 }
 
-void DexOpcodeCallSite::gather_strings(std::vector<DexString*>& lstring) const {
+void DexOpcodeCallSite::gather_strings(
+    std::vector<const DexString*>& lstring) const {
   m_callsite->gather_strings(lstring);
 }
 
@@ -1045,13 +1047,13 @@ DexInstruction* DexInstruction::make_instruction(DexIdx* idx,
   /* StringRef: */
   case DOPCODE_CONST_STRING: {
     uint16_t sidx = *insns++;
-    DexString* str = idx->get_stringidx(sidx);
+    auto str = idx->get_stringidx(sidx);
     return new DexOpcodeString(fopcode, str);
   }
   case DOPCODE_CONST_STRING_JUMBO: {
     uint32_t sidx = *insns++;
     sidx |= (*insns++) << 16;
-    DexString* str = idx->get_stringidx(sidx);
+    auto str = idx->get_stringidx(sidx);
     return new DexOpcodeString(fopcode, str);
   }
   case DOPCODE_CONST_CLASS:

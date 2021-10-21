@@ -86,7 +86,7 @@ struct ConstPropTest : public RedexTest {
           << clazz->c_str();
     } else {
       ASSERT_EQ(static_cast<DexEncodedValueString*>(val)->string(),
-                boost::get<DexString*>(expected))
+                boost::get<const DexString*>(expected))
           << "Incorrect value for field " << field->c_str() << "(\""
           << show(field->get_static_value()) << "\") in class "
           << clazz->c_str();

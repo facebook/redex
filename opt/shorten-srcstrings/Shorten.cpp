@@ -46,10 +46,11 @@ static bool is_reasonable_string(const char* str, size_t len) {
   return true;
 }
 
-DexString* get_suitable_string(std::unordered_set<DexString*>& set,
-                               std::vector<DexString*>& dex_strings) {
+const DexString* get_suitable_string(
+    std::unordered_set<const DexString*>& set,
+    std::vector<const DexString*>& dex_strings) {
   while (!dex_strings.empty()) {
-    DexString* val = dex_strings.back();
+    auto val = dex_strings.back();
     dex_strings.pop_back();
     auto valstr = val->c_str();
     auto vallen = strlen(valstr);
@@ -68,8 +69,9 @@ static void strip_src_strings(DexStoresVector& stores,
                               PassManager& mgr) {
   size_t shortened = 0;
   size_t string_savings = 0;
-  std::unordered_map<DexString*, std::vector<DexString*>> global_src_strings;
-  std::unordered_set<DexString*> shortened_used;
+  std::unordered_map<const DexString*, std::vector<const DexString*>>
+      global_src_strings;
+  std::unordered_set<const DexString*> shortened_used;
   for (auto& classes : DexStoreClassesIterator(stores)) {
     for (auto const& clazz : classes) {
       auto src_string = clazz->get_source_file();
@@ -83,8 +85,8 @@ static void strip_src_strings(DexStoresVector& stores,
   }
 
   for (auto& classes : DexStoreClassesIterator(stores)) {
-    std::unordered_map<DexString*, DexString*> src_to_shortened;
-    std::vector<DexString*> current_dex_strings;
+    std::unordered_map<const DexString*, const DexString*> src_to_shortened;
+    std::vector<const DexString*> current_dex_strings;
     for (auto const& clazz : classes) {
       clazz->gather_strings(current_dex_strings);
     }
@@ -99,7 +101,7 @@ static void strip_src_strings(DexStoresVector& stores,
       if (!src_string) {
         continue;
       }
-      DexString* shortened_src_string = nullptr;
+      const DexString* shortened_src_string = nullptr;
       if (src_to_shortened.count(src_string) == 0) {
         shortened_src_string =
             get_suitable_string(shortened_used, current_dex_strings);

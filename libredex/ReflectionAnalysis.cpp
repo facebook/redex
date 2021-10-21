@@ -889,9 +889,10 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     }
   }
 
-  DexString* get_dex_string_from_insn(AbstractObjectEnvironment* current_state,
-                                      const IRInstruction* insn,
-                                      reg_t reg) const {
+  const DexString* get_dex_string_from_insn(
+      AbstractObjectEnvironment* current_state,
+      const IRInstruction* insn,
+      reg_t reg) const {
     auto element_name =
         current_state->get_abstract_obj(insn->src(reg)).get_object();
     if (element_name && element_name->obj_kind == STRING) {
@@ -970,7 +971,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     }
     case CLASS: {
       AbstractObjectKind element_kind;
-      DexString* element_name = nullptr;
+      const DexString* element_name = nullptr;
       boost::optional<std::vector<DexType*>> method_param_types = boost::none;
       if (callee == m_cache->get_method ||
           callee == m_cache->get_declared_method) {

@@ -27,7 +27,7 @@ constexpr const char* CONTINUATION_IMPL =
 
 // Check if cls is from Kotlin source
 bool is_kotlin_class(DexClass* cls) {
-  DexString* src_string = cls->get_source_file();
+  auto src_string = cls->get_source_file();
   if (src_string && boost::algorithm::ends_with(src_string->str(), ".kt")) {
     return true;
   }

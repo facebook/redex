@@ -75,7 +75,7 @@ Shrinker::Shrinker(
     const Scope& scope,
     const ShrinkerConfig& config,
     const std::unordered_set<DexMethodRef*>& configured_pure_methods,
-    const std::unordered_set<DexString*>& configured_finalish_field_names)
+    const std::unordered_set<const DexString*>& configured_finalish_field_names)
     : m_forest(load(config.reg_alloc_random_forest)),
       m_xstores(stores),
       m_config(config),

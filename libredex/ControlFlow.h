@@ -892,7 +892,7 @@ class ControlFlowGraph {
   boost::sub_range<IRList> get_param_instructions() const;
 
   void gather_catch_types(std::vector<DexType*>& types) const;
-  void gather_strings(std::vector<DexString*>& strings) const;
+  void gather_strings(std::vector<const DexString*>& strings) const;
   void gather_types(std::vector<DexType*>& types) const;
   void gather_fields(std::vector<DexFieldRef*>& fields) const;
   void gather_methods(std::vector<DexMethodRef*>& methods) const;

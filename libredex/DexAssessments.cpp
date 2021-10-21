@@ -133,7 +133,7 @@ bool needs_position(IROpcode opcode) {
 class Assessor {
  private:
   PositionPatternSwitchManager* m_manager;
-  DexString* m_unknown_source;
+  const DexString* m_unknown_source;
 
  public:
   Assessor()

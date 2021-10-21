@@ -154,7 +154,7 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
   stats->num_type_lists += type_lists.size();
 
   for (uint32_t sidx = 0; sidx < dh->string_ids_size; ++sidx) {
-    DexString* str = m_idx->get_stringidx(sidx);
+    auto str = m_idx->get_stringidx(sidx);
     stats->strings_total_size += str->get_entry_size();
   }
 

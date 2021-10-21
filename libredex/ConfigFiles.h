@@ -94,7 +94,7 @@ struct ConfigFiles {
 
   const std::unordered_set<DexType*>& get_no_optimizations_annos();
   const std::unordered_set<DexMethodRef*>& get_pure_methods();
-  const std::unordered_set<DexString*>& get_finalish_field_names();
+  const std::unordered_set<const DexString*>& get_finalish_field_names();
   const std::unordered_set<DexType*>& get_do_not_devirt_anon();
 
   const std::unordered_set<std::string>&
@@ -191,7 +191,7 @@ struct ConfigFiles {
   std::unordered_set<DexMethodRef*> m_pure_methods;
   // names of fields that behave similar to final fields, i.e. written once
   // before use
-  std::unordered_set<DexString*> m_finalish_field_names;
+  std::unordered_set<const DexString*> m_finalish_field_names;
   // Global inliner config.
   std::unique_ptr<inliner::InlinerConfig> m_inliner_config;
   // min_sdk AndroidAPI

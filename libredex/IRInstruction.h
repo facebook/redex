@@ -283,12 +283,12 @@ class IRInstruction final {
     return this;
   }
 
-  DexString* get_string() const {
+  const DexString* get_string() const {
     always_assert(has_string());
     return m_string;
   }
 
-  IRInstruction* set_string(DexString* str) {
+  IRInstruction* set_string(const DexString* str) {
     always_assert(has_string());
     m_string = str;
     return this;
@@ -360,7 +360,7 @@ class IRInstruction final {
     return this;
   }
 
-  void gather_strings(std::vector<DexString*>& lstring) const {
+  void gather_strings(std::vector<const DexString*>& lstring) const {
     if (has_string()) {
       lstring.push_back(m_string);
     }
@@ -410,7 +410,7 @@ class IRInstruction final {
     // Zero-initialize this union with the uint64_t member instead of a
     // pointer-type member so that it works properly even on 32-bit machines
     uint64_t m_literal{0};
-    DexString* m_string;
+    const DexString* m_string;
     DexType* m_type;
     DexFieldRef* m_field;
     DexMethodRef* m_method;

@@ -150,7 +150,7 @@ struct CandidateInstructionCore {
   union {
     DexMethodRef* method;
     DexFieldRef* field;
-    DexString* string;
+    const DexString* string;
     DexType* type;
     DexOpcodeData* data;
     int64_t literal{0};
@@ -1622,7 +1622,7 @@ class MethodNameGenerator {
 
   // Compute the name of the outlined method in a way that tends to be stable
   // across Redex runs.
-  DexString* get_name(const Candidate& c) {
+  const DexString* get_name(const Candidate& c) {
     StableHash stable_hash = stable_hash_value(c);
     auto unique_method_id = m_unique_method_ids[stable_hash]++;
     m_max_unique_method_id = std::max(m_max_unique_method_id, unique_method_id);

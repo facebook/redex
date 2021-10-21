@@ -128,10 +128,11 @@ using Environment = EnvironmentWithStoreImpl<BlameStore>;
 
 class FixpointIterator final : public ir_analyzer::BaseIRAnalyzer<Environment> {
  public:
-  explicit FixpointIterator(const cfg::ControlFlowGraph& cfg,
-                            std::unordered_set<const IRInstruction*> allocators,
-                            std::unordered_set<DexMethodRef*> safe_method_refs,
-                            std::unordered_set<DexString*> safe_method_names);
+  explicit FixpointIterator(
+      const cfg::ControlFlowGraph& cfg,
+      std::unordered_set<const IRInstruction*> allocators,
+      std::unordered_set<DexMethodRef*> safe_method_refs,
+      std::unordered_set<const DexString*> safe_method_names);
 
   void analyze_instruction(const IRInstruction* insn,
                            Environment* env) const override;
@@ -145,7 +146,7 @@ class FixpointIterator final : public ir_analyzer::BaseIRAnalyzer<Environment> {
 
   // Methods that are assumed not to escape any of their parameters, identified
   // by their names.
-  std::unordered_set<DexString*> m_safe_method_names;
+  std::unordered_set<const DexString*> m_safe_method_names;
 
   /* Returns true if and only if `insn` is considered an allocator */
   bool is_allocator(const IRInstruction* insn) const;
@@ -161,13 +162,13 @@ struct SafeMethod {
       : type(SafeMethod::ByRef), method_ref(method_ref) {}
 
   // NOLINTNEXTLINE
-  /* implicit */ SafeMethod(DexString* method_name)
+  /* implicit */ SafeMethod(const DexString* method_name)
       : type(SafeMethod::ByName), method_name(method_name) {}
 
   enum { ByRef, ByName } type;
   union {
     DexMethodRef* method_ref;
-    DexString* method_name;
+    const DexString* method_name;
   };
 };
 

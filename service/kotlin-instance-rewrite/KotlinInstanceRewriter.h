@@ -65,5 +65,5 @@ class KotlinInstanceRewriter {
 
  private:
   const size_t max_no_of_instance = 1;
-  DexString* m_instance = nullptr;
+  const DexString* m_instance = nullptr;
 };

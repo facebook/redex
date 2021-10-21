@@ -217,7 +217,7 @@ static DexField* make_dexfield(std::vector<cp_entry>& cpool,
       !extract_utf8(cpool, finfo.descNdx, dbuffer, MAX_CLASS_NAMELEN)) {
     return nullptr;
   }
-  DexString* name = DexString::make_string(nbuffer);
+  auto name = DexString::make_string(nbuffer);
   DexType* desc = DexType::make_type(dbuffer);
   DexField* field =
       static_cast<DexField*>(DexField::make_field(self, name, desc));
@@ -332,7 +332,7 @@ static DexMethod* make_dexmethod(std::vector<cp_entry>& cpool,
       !extract_utf8(cpool, finfo.descNdx, dbuffer, MAX_CLASS_NAMELEN)) {
     return nullptr;
   }
-  DexString* name = DexString::make_string(nbuffer);
+  auto name = DexString::make_string(nbuffer);
   const char* ptr = dbuffer;
   DexTypeList* tlist = extract_arguments(ptr);
   if (tlist == nullptr) return nullptr;

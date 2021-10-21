@@ -309,7 +309,7 @@ struct MethodItemEntry {
     this->dex_insn = dex_insn;
   }
 
-  void gather_strings(std::vector<DexString*>& lstring) const;
+  void gather_strings(std::vector<const DexString*>& lstring) const;
   void gather_types(std::vector<DexType*>& ltype) const;
   void gather_fields(std::vector<DexFieldRef*>& lfield) const;
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const;
@@ -517,7 +517,7 @@ class IRList {
   IRList::const_reverse_iterator rend() const { return m_list.rend(); }
 
   void gather_catch_types(std::vector<DexType*>& ltype) const;
-  void gather_strings(std::vector<DexString*>& lstring) const;
+  void gather_strings(std::vector<const DexString*>& lstring) const;
   void gather_types(std::vector<DexType*>& ltype) const;
   void gather_fields(std::vector<DexFieldRef*>& lfield) const;
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const;

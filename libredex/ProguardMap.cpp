@@ -255,7 +255,7 @@ std::string ProguardMap::deobfuscate_method(const std::string& method) const {
 }
 
 std::vector<ProguardMap::Frame> ProguardMap::deobfuscate_frame(
-    DexString* method_name, uint32_t line) const {
+    const DexString* method_name, uint32_t line) const {
   std::vector<Frame> frames;
   auto ranges_it =
       m_obfMethodLinesMap.find(pg_impl::lines_key(method_name->str()));
@@ -518,7 +518,7 @@ namespace pg_impl {
  * called on an inner class like "Baz$Inner", use just the outer class for the
  * source file name -- in this case we would return "Baz.java".
  */
-DexString* file_name_from_method_string(const DexString* method) {
+const DexString* file_name_from_method_string(const DexString* method) {
   const auto& s = method->str();
   auto end = s.rfind(";.");
   auto innercls_pos = s.rfind('$', end);

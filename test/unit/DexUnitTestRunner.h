@@ -19,7 +19,7 @@
 #include "PassManager.h"
 #include "RedexContext.h"
 
-using EvType = boost::variant<uint64_t, DexString*>;
+using EvType = boost::variant<uint64_t, const DexString*>;
 
 class DexUnitTestRunner {
   static std::mutex g_setup_lock;
@@ -58,7 +58,7 @@ class DexUnitTestRunner {
       ev->value(boost::get<uint64_t>(val));
       return ev;
     } else {
-      return new DexEncodedValueString(boost::get<DexString*>(val));
+      return new DexEncodedValueString(boost::get<const DexString*>(val));
     }
   }
 

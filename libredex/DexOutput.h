@@ -28,7 +28,7 @@ using facebook::Locator;
 
 class DexCallSite;
 
-using dexstring_to_idx = std::unordered_map<DexString*, uint32_t>;
+using dexstring_to_idx = std::unordered_map<const DexString*, uint32_t>;
 using dextype_to_idx = std::unordered_map<DexType*, uint16_t>;
 using dexproto_to_idx = std::unordered_map<DexProto*, uint32_t>;
 using dexfield_to_idx = std::unordered_map<DexFieldRef*, uint32_t>;
@@ -36,7 +36,7 @@ using dexmethod_to_idx = std::unordered_map<DexMethodRef*, uint32_t>;
 using dexcallsite_to_idx = std::unordered_map<DexCallSite*, uint32_t>;
 using dexmethodhandle_to_idx = std::unordered_map<DexMethodHandle*, uint32_t>;
 
-using LocatorIndex = std::unordered_map<DexString*, Locator>;
+using LocatorIndex = std::unordered_map<const DexString*, Locator>;
 LocatorIndex make_locator_index(DexStoresVector& stores);
 
 enum class SortMode {
@@ -103,7 +103,7 @@ class DexOutputIdx {
     return *m_methodhandle;
   }
 
-  uint32_t stringidx(DexString* s) const { return m_string->at(s); }
+  uint32_t stringidx(const DexString* s) const { return m_string->at(s); }
   uint16_t typeidx(DexType* t) const { return m_type->at(t); }
   uint16_t protoidx(DexProto* p) const { return m_proto->at(p); }
   uint32_t fieldidx(DexFieldRef* f) const { return m_field->at(f); }
@@ -215,7 +215,7 @@ inline bool compare_dexmethodhandles(const DexMethodHandle* a,
 
 class GatheredTypes {
  private:
-  std::vector<DexString*> m_lstring;
+  std::vector<const DexString*> m_lstring;
   std::vector<DexType*> m_ltype;
   std::vector<DexFieldRef*> m_lfield;
   std::vector<DexMethodRef*> m_lmethod;
@@ -252,9 +252,10 @@ class GatheredTypes {
 
   DexOutputIdx* get_dodx(const uint8_t* base);
   template <class T = decltype(compare_dexstrings)>
-  std::vector<DexString*> get_dexstring_emitlist(T cmp = compare_dexstrings);
-  std::vector<DexString*> get_cls_order_dexstring_emitlist();
-  std::vector<DexString*> keep_cls_strings_together_emitlist();
+  std::vector<const DexString*> get_dexstring_emitlist(
+      T cmp = compare_dexstrings);
+  std::vector<const DexString*> get_cls_order_dexstring_emitlist();
+  std::vector<const DexString*> keep_cls_strings_together_emitlist();
   std::vector<DexMethod*> get_dexmethod_emitlist();
   std::vector<DexMethodHandle*> get_dexmethodhandle_emitlist();
   std::vector<DexCallSite*> get_dexcallsite_emitlist();
@@ -272,12 +273,12 @@ class GatheredTypes {
       const method_profiles::MethodProfiles* method_profiles);
   void set_legacy_order(bool legacy_order);
 
-  std::unordered_set<DexString*> index_type_names();
+  std::unordered_set<const DexString*> index_type_names();
 };
 
 template <class T>
-std::vector<DexString*> GatheredTypes::get_dexstring_emitlist(T cmp) {
-  std::vector<DexString*> strlist(m_lstring);
+std::vector<const DexString*> GatheredTypes::get_dexstring_emitlist(T cmp) {
+  std::vector<const DexString*> strlist(m_lstring);
   std::sort(strlist.begin(), strlist.end(), std::cref(cmp));
   return strlist;
 }
@@ -388,7 +389,8 @@ class DexOutput {
   void emit_locator(Locator locator);
   void emit_magic_locators();
   std::unique_ptr<Locator> locator_for_descriptor(
-      const std::unordered_set<DexString*>& type_names, DexString* descriptor);
+      const std::unordered_set<const DexString*>& type_names,
+      const DexString* descriptor);
 
   void inc_offset(uint32_t v);
 

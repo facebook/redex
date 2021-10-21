@@ -26,15 +26,16 @@ class CommonSubexpressionEliminationTest : public RedexTest {
   }
 };
 
-void test(const Scope& scope,
-          const std::string& code_str,
-          const std::string& expected_str,
-          size_t expected_instructions_eliminated,
-          bool is_static = true,
-          bool is_init_or_clinit = false,
-          DexType* declaring_type = nullptr,
-          DexTypeList* args = DexTypeList::make_type_list({}),
-          const std::unordered_set<DexString*>& finalish_field_names = {}) {
+void test(
+    const Scope& scope,
+    const std::string& code_str,
+    const std::string& expected_str,
+    size_t expected_instructions_eliminated,
+    bool is_static = true,
+    bool is_init_or_clinit = false,
+    DexType* declaring_type = nullptr,
+    DexTypeList* args = DexTypeList::make_type_list({}),
+    const std::unordered_set<const DexString*>& finalish_field_names = {}) {
   auto field_a = DexField::make_field("LFoo;.a:I")->make_concrete(ACC_PUBLIC);
 
   auto field_b = DexField::make_field("LFoo;.b:I")->make_concrete(ACC_PUBLIC);

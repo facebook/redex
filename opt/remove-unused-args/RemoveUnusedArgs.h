@@ -57,7 +57,7 @@ class RemoveArgs {
     std::unordered_map<DexTypeList*, size_t> reordering_uniquifiers;
     std::unordered_map<DexTypeList*, size_t> general_uniquifiers;
   };
-  std::unordered_map<DexString*, NamedRenameMap> m_rename_maps;
+  std::unordered_map<const DexString*, NamedRenameMap> m_rename_maps;
   ConcurrentSet<DexMethod*> m_result_used;
   std::unordered_map<DexProto*, DexProto*> m_reordered_protos;
   const std::vector<std::string>& m_blocklist;

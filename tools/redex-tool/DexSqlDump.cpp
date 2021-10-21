@@ -40,7 +40,7 @@ namespace {
 static std::unordered_map<DexClass*, int> class_ids;
 static std::unordered_map<DexMethod*, int> method_ids;
 static std::unordered_map<DexField*, int> field_ids;
-static std::unordered_map<DexString*, int> string_ids;
+static std::unordered_map<const DexString*, int> string_ids;
 
 void dump_field_refs(FILE* fdout,
                      const char* prefix,

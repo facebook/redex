@@ -502,7 +502,8 @@ class DexElemManager {
       DexType*,
       std::unordered_map<
           K,
-          std::unordered_map<DexString*, std::unique_ptr<DexNameWrapper<T>>>>>
+          std::unordered_map<const DexString*,
+                             std::unique_ptr<DexNameWrapper<T>>>>>
       elements;
   using RefCtrFn = std::function<S(const std::string&)>;
   using SigGetFn = std::function<K(R)>;
@@ -526,7 +527,7 @@ class DexElemManager {
   // void lock_elements() { mark_all_unrenamable = true; }
   // void unlock_elements() { mark_all_unrenamable = false; }
 
-  inline bool contains_elem(DexType* cls, K sig, DexString* name) {
+  inline bool contains_elem(DexType* cls, K sig, const DexString* name) {
     return elements.count(cls) > 0 && elements[cls].count(sig) > 0 &&
            elements[cls][sig].count(name) > 0;
   }
@@ -691,8 +692,8 @@ using FieldRenamingContext = RenamingContext<DexField*>;
 // Method renaming context is special because we have to make sure we don't
 // rename <init> or <clinit> ever regardless of configs
 class MethodRenamingContext : public RenamingContext<DexMethod*> {
-  DexString* initstr = DexString::get_string("<init>");
-  DexString* clinitstr = DexString::get_string("<clinit>");
+  const DexString* initstr = DexString::get_string("<init>");
+  const DexString* clinitstr = DexString::get_string("<clinit>");
   DexMethodManager& name_mapping;
 
  public:

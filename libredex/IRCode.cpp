@@ -1076,7 +1076,7 @@ void IRCode::gather_catch_types(std::vector<DexType*>& ltype) const {
   if (m_dbg) m_dbg->gather_types(ltype);
 }
 
-void IRCode::gather_strings(std::vector<DexString*>& lstring) const {
+void IRCode::gather_strings(std::vector<const DexString*>& lstring) const {
   if (editable_cfg_built()) {
     m_cfg->gather_strings(lstring);
   } else {

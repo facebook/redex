@@ -33,7 +33,7 @@ TEST_F(IRInstructionTest, RoundTrip) {
   using namespace instruction_lowering::impl;
 
   DexType* ty = DexType::make_type("Lfoo;");
-  DexString* str = DexString::make_string("foo");
+  auto str = DexString::make_string("foo");
   DexFieldRef* field = DexField::make_field(ty, str, ty);
   auto* method = static_cast<DexMethod*>(DexMethod::make_method(
       ty, str, DexProto::make_proto(ty, DexTypeList::make_type_list({}))));
