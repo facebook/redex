@@ -209,6 +209,15 @@ void do_order_classes(const std::vector<std::string>& coldstart_class_names,
       });
 }
 
+} // namespace
+
+namespace interdex {
+
+bool is_canary(DexClass* clazz) {
+  const char* cname = clazz->get_type()->get_name()->c_str();
+  return strncmp(cname, CANARY_PREFIX, strlen(CANARY_PREFIX)) == 0;
+}
+
 // Compare two classes for sorting in a way that is best for compression.
 bool compare_dexclasses_for_compressed_size(DexClass* c1, DexClass* c2) {
   // Canary classes go last
@@ -264,15 +273,6 @@ bool compare_dexclasses_for_compressed_size(DexClass* c1, DexClass* c2) {
   }
   // Final tie-breaker: Compare types, which means names
   return compare_dextypes(c1->get_type(), c2->get_type());
-}
-
-} // namespace
-
-namespace interdex {
-
-bool is_canary(DexClass* clazz) {
-  const char* cname = clazz->get_type()->get_name()->c_str();
-  return strncmp(cname, CANARY_PREFIX, strlen(CANARY_PREFIX)) == 0;
 }
 
 bool InterDex::should_skip_class_due_to_plugin(DexClass* clazz) {

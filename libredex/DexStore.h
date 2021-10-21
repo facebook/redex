@@ -56,6 +56,7 @@ class DexStore {
   const std::vector<DexClasses>& get_dexen() const;
   std::vector<std::string> get_dependencies() const;
   bool is_root_store() const;
+  bool is_longtail_store() const;
 
   void set_generated() { m_generated = true; }
   bool is_generated() const { return m_generated; }

@@ -197,6 +197,31 @@ ConfigFiles::load_class_lists() {
   return lists;
 }
 
+const std::vector<std::string>& ConfigFiles::get_dead_class_list() {
+  if (!m_dead_class_list_attempted) {
+    m_dead_class_list_attempted = true;
+    std::string dead_class_list_filename;
+    this->m_json.get("dead_class_list", "", dead_class_list_filename);
+    if (!dead_class_list_filename.empty()) {
+      std::ifstream input(dead_class_list_filename);
+      if (!input) {
+        fprintf(stderr,
+                "[error] Can not open <dead_class_list> file, path is %s\n",
+                dead_class_list_filename.c_str());
+        exit(EXIT_FAILURE);
+      }
+      std::string classname;
+      while (input >> classname) {
+        std::string converted = std::string("L") + classname + std::string(";");
+        std::replace(converted.begin(), converted.end(), '.', '/');
+        auto translated = m_proguard_map->translate_class(converted);
+        m_dead_class_list.push_back(std::move(translated));
+      }
+    }
+  }
+  return m_dead_class_list;
+}
+
 void ConfigFiles::load_method_sorting_allowlisted_substrings() {
   const auto& json_cfg = get_json_config();
   Json::Value json_result;

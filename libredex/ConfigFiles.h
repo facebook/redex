@@ -83,6 +83,8 @@ struct ConfigFiles {
     return m_class_lists.at(name);
   }
 
+  const std::vector<std::string>& get_dead_class_list();
+
   const method_profiles::MethodProfiles& get_method_profiles() {
     ensure_agg_method_stats_loaded();
     return *m_method_profiles;
@@ -172,6 +174,8 @@ struct ConfigFiles {
   std::string m_coldstart_class_filename;
   std::vector<std::string> m_coldstart_classes;
   std::unordered_map<std::string, std::vector<std::string>> m_class_lists;
+  std::vector<std::string> m_dead_class_list;
+  bool m_dead_class_list_attempted{false};
   std::unordered_set<std::string> m_method_sorting_allowlisted_substrings;
   std::string m_printseeds; // Filename to dump computed seeds.
   std::unique_ptr<method_profiles::MethodProfiles> m_method_profiles;
