@@ -153,7 +153,7 @@ ThrowPropagationPass::Stats ThrowPropagationPass::run(
           return true;
         }
         it = block->to_cfg_instruction_iterator(
-            InstructionIterable(block).begin());
+            InstructionIterable(block).begin(), /*next_on_end=*/true);
       }
       switch (it->insn->opcode()) {
       case OPCODE_CONST:

@@ -515,7 +515,7 @@ std::vector<Edge*> Block::get_outgoing_throws_in_order() const {
 
 // These assume that the iterator is inside this block
 cfg::InstructionIterator Block::to_cfg_instruction_iterator(
-    const ir_list::InstructionIterator& list_it) {
+    const ir_list::InstructionIterator& list_it, bool next_on_end) {
   if (ControlFlowGraph::DEBUG && list_it.unwrap() != end()) {
     bool inside = false;
     auto needle = list_it.unwrap();
@@ -526,14 +526,18 @@ cfg::InstructionIterator Block::to_cfg_instruction_iterator(
     }
     always_assert(inside);
   }
-  return cfg::InstructionIterator(*m_parent, this, list_it);
+  auto it = cfg::InstructionIterator(*m_parent, this, list_it);
+  if (next_on_end && list_it.unwrap() == end()) {
+    ++it;
+  }
+  return it;
 }
 
 cfg::InstructionIterator Block::to_cfg_instruction_iterator(
-    const IRList::iterator& list_it) {
+    const IRList::iterator& list_it, bool next_on_end) {
   always_assert(list_it == this->end() || list_it->type == MFLOW_OPCODE);
   return to_cfg_instruction_iterator(
-      ir_list::InstructionIterator(list_it, this->end()));
+      ir_list::InstructionIterator(list_it, this->end()), next_on_end);
 }
 
 cfg::InstructionIterator Block::to_cfg_instruction_iterator(
