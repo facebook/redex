@@ -169,6 +169,7 @@ DexTypeList* DexIdx::get_type_list(uint32_t offset) {
   uint32_t size = *tlp++;
   const uint16_t* typep = (const uint16_t*)tlp;
   DexTypeList::ContainerType tlist;
+  tlist.reserve(size);
   for (uint32_t i = 0; i < size; i++) {
     tlist.push_back(get_typeidx(typep[i]));
   }
