@@ -1084,6 +1084,7 @@ void ControlFlowGraph::remove_empty_blocks() {
         } else if (g_redex->instrument_mode) {
           // If we are instrumenting, it is necessary to keep the block for its
           // source-blocks.
+          ++it;
           continue;
         }
       }
