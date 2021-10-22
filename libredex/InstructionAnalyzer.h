@@ -56,7 +56,8 @@
   X(invoke)           \
   X(unop)             \
   X(binop)            \
-  X(binop_lit)
+  X(binop_lit)        \
+  X(init_class)
 
 /* clang-format on */
 
@@ -396,6 +397,9 @@ class InstructionAnalyzerCombiner final {
           std::index_sequence_for<Analyzers...>{}, insn, env);
     case OPCODE_FILLED_NEW_ARRAY:
       return analyze_filled_new_array(
+          std::index_sequence_for<Analyzers...>{}, insn, env);
+    case IOPCODE_INIT_CLASS:
+      return analyze_init_class(
           std::index_sequence_for<Analyzers...>{}, insn, env);
     }
   }

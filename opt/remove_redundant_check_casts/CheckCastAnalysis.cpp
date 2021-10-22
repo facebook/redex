@@ -144,6 +144,7 @@ DexType* CheckCastAnalysis::get_type_demand(IRInstruction* insn,
   case OPCODE_SPUT_CHAR:
   case OPCODE_SPUT_SHORT:
   case OPCODE_SPUT_WIDE:
+  case IOPCODE_INIT_CLASS:
     not_reached();
 
   case OPCODE_FILLED_NEW_ARRAY:

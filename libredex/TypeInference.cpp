@@ -1064,6 +1064,9 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     set_integer(current_state, RESULT_REGISTER);
     break;
   }
+  case IOPCODE_INIT_CLASS: {
+    break;
+  }
   }
 
   // If the opcode does not set the RESULT_REGISTER, clear it.

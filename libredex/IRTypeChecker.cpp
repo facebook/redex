@@ -1431,6 +1431,9 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
     assume_integer(current_state, insn->src(0));
     break;
   }
+  case IOPCODE_INIT_CLASS: {
+    break;
+  }
   }
   if (insn->has_field() && m_validate_access) {
     auto search = opcode::is_an_sfield_op(insn->opcode())

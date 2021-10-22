@@ -209,6 +209,7 @@ TypeDemand ConstantUses::get_type_demand(IRInstruction* insn,
   case OPCODE_SGET_SHORT:
   case OPCODE_SGET_WIDE:
   case OPCODE_SGET_OBJECT:
+  case IOPCODE_INIT_CLASS:
     not_reached();
 
   case OPCODE_RETURN:
