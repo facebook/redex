@@ -21,6 +21,7 @@ class DexType;
   TM(ACCESS)          \
   TM(ANNO)            \
   TM(API_UTILS)       \
+  TM(APP_MOD_USE)     \
   TM(ARGS)            \
   TM(ASSESSOR)        \
   TM(BBPROFILE)       \
@@ -151,7 +152,6 @@ class DexType;
   TM(VIRT)            \
   TM(VM)              \
   TM(VMERGE)          \
-  TM(V_USE)           \
   TM(KOTLIN_INSTANCE) \
   TM(KOTLIN_STATS)    \
   /* End of list */
