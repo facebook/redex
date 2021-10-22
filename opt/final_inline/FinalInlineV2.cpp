@@ -502,6 +502,18 @@ cp::WholeProgramState analyze_and_simplify_inits(
     if (ctors.size() > 1) {
       continue;
     }
+    if (ctors.size() == 1) {
+      bool has_same_type_arg = false;
+      auto cls_type = cls->get_type();
+      for (auto arg_type : *(ctors[0]->get_proto()->get_args())) {
+        if (arg_type == cls_type) {
+          has_same_type_arg = true;
+        }
+      }
+      if (has_same_type_arg) {
+        continue;
+      }
+    }
     cp::set_ifield_values(cls, eligible_ifields, &env);
     if (ctors.size() == 1) {
       auto ctor = ctors[0];
