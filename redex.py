@@ -1102,28 +1102,35 @@ def finalize_redex(state: State) -> None:
         logging.debug("Creating redex-instrument-metadata.zip")
         zipfile_path = join(dirname(state.args.out), "redex-instrument-metadata.zip")
 
-        FILES = [
+        FILES_MUST = [
+            join(dirname(state.args.out), f) for f in ("redex-instrument-metadata.txt",)
+        ]
+
+        FILES_MAY = [
             join(dirname(state.args.out), f)
             for f in (
-                "redex-instrument-metadata.txt",
                 "redex-source-block-method-dictionary.csv",
                 "redex-source-blocks.csv",
             )
         ]
+        FILES_ACTUALLY = [
+            *FILES_MUST,
+            *[f for f in FILES_MAY if os.path.exists(f)],
+        ]
 
         # Write a checksum file.
         hash = hashlib.md5()
-        for f in FILES:
+        for f in FILES_ACTUALLY:
             hash.update(open(f, "rb").read())
         checksum_path = join(dirname(state.args.out), "redex-instrument-checksum.txt")
         with open(checksum_path, "w") as f:
             f.write(f"{hash.hexdigest()}\n")
 
         with zipfile.ZipFile(zipfile_path, "w", compression=zipfile.ZIP_DEFLATED) as z:
-            for f in [*FILES, checksum_path]:
+            for f in [*FILES_ACTUALLY, checksum_path]:
                 z.write(f, os.path.basename(f))
 
-        for f in [*FILES, checksum_path]:
+        for f in [*FILES_ACTUALLY, checksum_path]:
             os.remove(f)
 
     redex_stats_filename = state.config_dict.get("stats_output", "redex-stats.txt")
