@@ -48,7 +48,7 @@ class InterDex {
            const XStoreRefs* xstore_refs,
            int min_sdk,
            bool sort_remaining_classes,
-           std::string method_for_canary_clinit_reference)
+           std::vector<std::string> methods_for_canary_clinit_reference)
       : m_dexen(dexen),
         m_asset_manager(asset_manager),
         m_conf(conf),
@@ -69,8 +69,8 @@ class InterDex {
         m_scope(build_class_scope(m_dexen)),
         m_xstore_refs(xstore_refs),
         m_sort_remaining_classes(sort_remaining_classes),
-        m_method_for_canary_clinit_reference(
-            std::move(method_for_canary_clinit_reference)) {
+        m_methods_for_canary_clinit_reference(
+            std::move(methods_for_canary_clinit_reference)) {
     m_dexes_structure.set_linear_alloc_limit(linear_alloc_limit);
     m_dexes_structure.set_reserve_frefs(reserve_frefs);
     m_dexes_structure.set_reserve_trefs(reserve_trefs);
@@ -147,7 +147,7 @@ class InterDex {
   DexClass* get_canary_cls(DexInfo& dex_info);
   void flush_out_dex(DexInfo& dex_info, DexClass* canary_cls);
 
-  void set_clinit_method_if_needed(DexClass* cls);
+  void set_clinit_methods_if_needed(DexClass* cls);
 
   /**
    * Stores in m_interdex_order a list of coldstart types. It will only contain:
@@ -197,7 +197,7 @@ class InterDex {
   const XStoreRefs* m_xstore_refs;
   bool m_sort_remaining_classes;
   size_t m_current_classes_when_emitting_remaining{0};
-  std::string m_method_for_canary_clinit_reference;
+  std::vector<std::string> m_methods_for_canary_clinit_reference;
 };
 
 } // namespace interdex
