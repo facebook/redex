@@ -22,6 +22,11 @@
 #include "TypeUtil.h"
 
 /**
+ * Given an instruction, determine which class' would get initialized, if any.
+ */
+const DexType* get_init_class_type_demand(const IRInstruction* insn);
+
+/**
  * Data structure to represent requested but unapplied visibility changes.
  */
 struct VisibilityChanges {

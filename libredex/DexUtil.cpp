@@ -21,6 +21,40 @@
 #include "Trace.h"
 #include "UnknownVirtuals.h"
 
+const DexType* get_init_class_type_demand(const IRInstruction* insn) {
+  switch (insn->opcode()) {
+  case OPCODE_INVOKE_STATIC: {
+    // It's the resolved method that counts
+    auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
+    return method ? method->get_class() : nullptr;
+  }
+  case OPCODE_SGET:
+  case OPCODE_SGET_WIDE:
+  case OPCODE_SGET_OBJECT:
+  case OPCODE_SGET_BOOLEAN:
+  case OPCODE_SGET_BYTE:
+  case OPCODE_SGET_CHAR:
+  case OPCODE_SGET_SHORT:
+  case OPCODE_SPUT:
+  case OPCODE_SPUT_WIDE:
+  case OPCODE_SPUT_OBJECT:
+  case OPCODE_SPUT_BOOLEAN:
+  case OPCODE_SPUT_BYTE:
+  case OPCODE_SPUT_CHAR:
+  case OPCODE_SPUT_SHORT: {
+    // It's the resolved field that counts
+    auto field = resolve_field(insn->get_field(), FieldSearch::Static);
+    return field ? field->get_class() : nullptr;
+  }
+  case IOPCODE_INIT_CLASS:
+  case OPCODE_NEW_INSTANCE: {
+    return insn->get_type();
+  }
+  default:
+    return nullptr;
+  }
+}
+
 DexAccessFlags merge_visibility(uint32_t vis1, uint32_t vis2) {
   vis1 &= VISIBILITY_MASK;
   vis2 &= VISIBILITY_MASK;

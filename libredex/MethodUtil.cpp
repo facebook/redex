@@ -29,7 +29,7 @@ bool is_trivial_clinit(const IRCode& code) {
   });
 }
 
-bool clinit_may_have_side_effects(const DexClass* cls) {
+const DexClass* clinit_may_have_side_effects(const DexClass* cls) {
   auto clinit = cls->get_clinit();
   if (clinit && clinit->get_code()) {
     bool non_trivial{false};
@@ -46,14 +46,14 @@ bool clinit_may_have_side_effects(const DexClass* cls) {
           return editable_cfg_adapter::LOOP_CONTINUE;
         });
     if (non_trivial) {
-      return true;
+      return cls;
     }
   }
   if (cls->get_super_class() == type::java_lang_Object()) {
-    return false;
+    return nullptr;
   }
   auto super_cls = type_class(cls->get_super_class());
-  return !super_cls || clinit_may_have_side_effects(super_cls);
+  return super_cls ? clinit_may_have_side_effects(super_cls) : nullptr;
 }
 
 bool no_invoke_super(const IRCode& code) {

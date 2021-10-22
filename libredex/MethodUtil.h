@@ -38,10 +38,14 @@ bool is_trivial_clinit(const IRCode& code);
 /**
  * Return true if change the exeution time of the <clinit> of the cls may change
  * the program behavior.
+ *
  * TODO: We can assume no side effect for more cases, like if it only accesses
  * other classes whose <clinit> also has no side effect.
+ *
+ * Returns the first type along the chain of super types whose clinit actually
+ * may have side effects.
  */
-bool clinit_may_have_side_effects(const DexClass* cls);
+const DexClass* clinit_may_have_side_effects(const DexClass* cls);
 
 /**
  * Check that the method contains no invoke-super instruction; this is a
