@@ -8,6 +8,7 @@
 #pragma once
 
 #include <boost/optional.hpp>
+#include <iosfwd>
 #include <json/value.h>
 
 #include "ApproximateShapeMerging.h"
@@ -154,6 +155,12 @@ struct ModelSpec {
   bool replace_type_like_const_strings{true};
   // Indicates if the merging should be performed per dex.
   bool per_dex_grouping{false};
+
+  enum class TypeUsagesMode {
+    kAllTypeRefs,
+    kClassLoads,
+  };
+  TypeUsagesMode type_usages_mode{TypeUsagesMode::kAllTypeRefs};
 
   bool generate_type_tag() const {
     return type_tag_config == TypeTagConfig::GENERATE;
@@ -470,5 +477,7 @@ struct ModelStats {
 
   ModelStats& operator+=(const ModelStats& stats);
 };
+
+std::ostream& operator<<(std::ostream& os, ModelSpec::TypeUsagesMode mode);
 
 } // namespace class_merging

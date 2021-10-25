@@ -7,6 +7,9 @@
 
 #include "Model.h"
 
+#include <ostream>
+#include <sstream>
+
 #include "AnnoUtils.h"
 #include "ApproximateShapeMerging.h"
 #include "ConfigFiles.h"
@@ -608,43 +611,92 @@ DexType* check_current_instance(const ConstTypeHashSet& types,
 }
 
 ConcurrentMap<DexType*, TypeHashSet> get_type_usages(
-    const ConstTypeHashSet& types, const Scope& scope) {
+    const ConstTypeHashSet& types,
+    const Scope& scope,
+    ModelSpec::TypeUsagesMode mode) {
+  TRACE(CLMG, 1, "TypeUsagesMode %s",
+        [&]() {
+          std::ostringstream oss;
+          oss << mode;
+          return oss.str();
+        }()
+            .c_str());
   ConcurrentMap<DexType*, TypeHashSet> res;
   // Ensure all types will be handled.
   for (auto* t : types) {
     res.emplace(const_cast<DexType*>(t), TypeHashSet());
   }
 
-  walk::parallel::opcodes(scope, [&](DexMethod* method, IRInstruction* insn) {
-    auto cls = method->get_class();
-    const auto& updater =
-        [&cls](DexType* /* key */, std::unordered_set<DexType*>& set,
-               bool /* already_exists */) { set.emplace(cls); };
+  switch (mode) {
+  case ModelSpec::TypeUsagesMode::kAllTypeRefs: {
+    walk::parallel::opcodes(scope, [&](DexMethod* method, IRInstruction* insn) {
+      auto cls = method->get_class();
+      const auto& updater =
+          [&cls](DexType* /* key */, std::unordered_set<DexType*>& set,
+                 bool /* already_exists */) { set.emplace(cls); };
 
-    auto current_instance = check_current_instance(types, insn);
-    if (current_instance) {
-      res.update(current_instance, updater);
-    }
-
-    if (insn->has_method()) {
-      auto callee =
-          resolve_method(insn->get_method(), opcode_to_search(insn), method);
-      if (!callee) {
-        return;
-      }
-      auto proto = callee->get_proto();
-      auto rtype = proto->get_rtype();
-      if (rtype && types.count(rtype)) {
-        res.update(rtype, updater);
+      auto current_instance = check_current_instance(types, insn);
+      if (current_instance) {
+        res.update(current_instance, updater);
       }
 
-      for (const auto& type : proto->get_args()->get_type_list()) {
-        if (type && types.count(type)) {
-          res.update(type, updater);
+      if (insn->has_method()) {
+        auto callee =
+            resolve_method(insn->get_method(), opcode_to_search(insn), method);
+        if (!callee) {
+          return;
+        }
+        auto proto = callee->get_proto();
+        auto rtype = proto->get_rtype();
+        if (rtype && types.count(rtype)) {
+          res.update(rtype, updater);
+        }
+
+        for (const auto& type : proto->get_args()->get_type_list()) {
+          if (type && types.count(type)) {
+            res.update(type, updater);
+          }
         }
       }
-    }
-  });
+    });
+    break;
+  }
+
+  case ModelSpec::TypeUsagesMode::kClassLoads: {
+    walk::parallel::opcodes(scope, [&](DexMethod* method, IRInstruction* insn) {
+      auto cls = method->get_class();
+      const auto& updater =
+          [&cls](DexType* /* key */, std::unordered_set<DexType*>& set,
+                 bool /* already_exists */) { set.emplace(cls); };
+
+      if (insn->opcode() == OPCODE_CONST_CLASS ||
+          insn->opcode() == OPCODE_CHECK_CAST ||
+          insn->opcode() == OPCODE_INSTANCE_OF ||
+          insn->opcode() == OPCODE_NEW_INSTANCE) {
+        auto current_instance = check_current_instance(types, insn);
+        if (current_instance) {
+          res.update(current_instance, updater);
+        }
+      } else if (insn->has_field()) {
+        if (opcode::is_an_sfield_op(insn->opcode())) {
+          auto current_instance = check_current_instance(types, insn);
+          if (current_instance) {
+            res.update(current_instance, updater);
+          }
+        }
+      } else if (insn->has_method()) {
+        // Load and initialize class for static member access.
+        if (opcode::is_invoke_static(insn->opcode())) {
+          auto current_instance = check_current_instance(types, insn);
+          if (current_instance) {
+            res.update(current_instance, updater);
+          }
+        }
+      }
+    });
+    break;
+  }
+  }
 
   return res;
 }
@@ -667,6 +719,18 @@ size_t get_interdex_group(
 } // namespace
 
 namespace class_merging {
+
+std::ostream& operator<<(std::ostream& os, ModelSpec::TypeUsagesMode mode) {
+  switch (mode) {
+  case ModelSpec::TypeUsagesMode::kAllTypeRefs:
+    os << "all";
+    break;
+  case ModelSpec::TypeUsagesMode::kClassLoads:
+    os << "class-loads";
+    break;
+  }
+  return os;
+}
 
 /**
  * Group merging targets according to their dex ids. Return a vector of dex_id
@@ -719,7 +783,8 @@ std::vector<ConstTypeHashSet> Model::group_by_interdex_set(
     new_groups[0].insert(types.begin(), types.end());
     return new_groups;
   }
-  const auto& type_to_usages = get_type_usages(types, m_scope);
+  const auto& type_to_usages =
+      get_type_usages(types, m_scope, m_spec.type_usages_mode);
   for (const auto& pair : type_to_usages) {
     auto index = get_interdex_group(pair.second, s_cls_to_interdex_group,
                                     s_num_interdex_groups);
@@ -1286,6 +1351,7 @@ Model Model::build_model(const Scope& scope,
   TRACE(CLMG, 3, "Final Model");
   model.collect_methods();
   TRACE(CLMG, 3, "Model:\n%s\nFinal Model done", model.print().c_str());
+
   return model;
 }
 
