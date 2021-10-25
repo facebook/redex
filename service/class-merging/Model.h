@@ -8,6 +8,7 @@
 #pragma once
 
 #include <boost/optional.hpp>
+#include <iosfwd>
 #include <json/value.h>
 
 #include "ApproximateShapeMerging.h"
@@ -157,6 +158,12 @@ struct ModelSpec {
   // The Model targets are generated code. If so, we consider merging_targets as
   // a part of the generated set.
   bool is_generated_code{false};
+
+  enum class TypeUsagesMode {
+    kAllTypeRefs,
+    kClassLoads,
+  };
+  TypeUsagesMode type_usages_mode{TypeUsagesMode::kAllTypeRefs};
 
   bool generate_type_tag() const {
     return type_tag_config == TypeTagConfig::GENERATE;
@@ -473,5 +480,7 @@ struct ModelStats {
 
   ModelStats& operator+=(const ModelStats& stats);
 };
+
+std::ostream& operator<<(std::ostream& os, ModelSpec::TypeUsagesMode mode);
 
 } // namespace class_merging
