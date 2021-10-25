@@ -13,12 +13,15 @@
 #include "AnnoUtils.h"
 #include "ApproximateShapeMerging.h"
 #include "ConfigFiles.h"
+#include "ControlFlow.h"
 #include "MergeabilityCheck.h"
 #include "MergingStrategies.h"
 #include "PassManager.h"
 #include "RefChecker.h"
 #include "Resolver.h"
+#include "ScopedCFG.h"
 #include "Show.h"
+#include "SourceBlocks.h"
 #include "Walkers.h"
 
 using namespace class_merging;
@@ -627,6 +630,37 @@ ConcurrentMap<DexType*, TypeHashSet> get_type_usages(
     res.emplace(const_cast<DexType*>(t), TypeHashSet());
   }
 
+  auto class_loads_update = [&](auto* insn, auto* cls) {
+    const auto& updater =
+        [&cls](DexType* /* key */, std::unordered_set<DexType*>& set,
+               bool /* already_exists */) { set.emplace(cls); };
+
+    if (insn->opcode() == OPCODE_CONST_CLASS ||
+        insn->opcode() == OPCODE_CHECK_CAST ||
+        insn->opcode() == OPCODE_INSTANCE_OF ||
+        insn->opcode() == OPCODE_NEW_INSTANCE) {
+      auto current_instance = check_current_instance(types, insn);
+      if (current_instance) {
+        res.update(current_instance, updater);
+      }
+    } else if (insn->has_field()) {
+      if (opcode::is_an_sfield_op(insn->opcode())) {
+        auto current_instance = check_current_instance(types, insn);
+        if (current_instance) {
+          res.update(current_instance, updater);
+        }
+      }
+    } else if (insn->has_method()) {
+      // Load and initialize class for static member access.
+      if (opcode::is_invoke_static(insn->opcode())) {
+        auto current_instance = check_current_instance(types, insn);
+        if (current_instance) {
+          res.update(current_instance, updater);
+        }
+      }
+    }
+  };
+
   switch (mode) {
   case ModelSpec::TypeUsagesMode::kAllTypeRefs: {
     walk::parallel::opcodes(scope, [&](DexMethod* method, IRInstruction* insn) {
@@ -665,31 +699,31 @@ ConcurrentMap<DexType*, TypeHashSet> get_type_usages(
   case ModelSpec::TypeUsagesMode::kClassLoads: {
     walk::parallel::opcodes(scope, [&](DexMethod* method, IRInstruction* insn) {
       auto cls = method->get_class();
-      const auto& updater =
-          [&cls](DexType* /* key */, std::unordered_set<DexType*>& set,
-                 bool /* already_exists */) { set.emplace(cls); };
+      class_loads_update(insn, cls);
+    });
+    break;
+  }
 
-      if (insn->opcode() == OPCODE_CONST_CLASS ||
-          insn->opcode() == OPCODE_CHECK_CAST ||
-          insn->opcode() == OPCODE_INSTANCE_OF ||
-          insn->opcode() == OPCODE_NEW_INSTANCE) {
-        auto current_instance = check_current_instance(types, insn);
-        if (current_instance) {
-          res.update(current_instance, updater);
-        }
-      } else if (insn->has_field()) {
-        if (opcode::is_an_sfield_op(insn->opcode())) {
-          auto current_instance = check_current_instance(types, insn);
-          if (current_instance) {
-            res.update(current_instance, updater);
-          }
-        }
-      } else if (insn->has_method()) {
-        // Load and initialize class for static member access.
-        if (opcode::is_invoke_static(insn->opcode())) {
-          auto current_instance = check_current_instance(types, insn);
-          if (current_instance) {
-            res.update(current_instance, updater);
+  case ModelSpec::TypeUsagesMode::kClassLoadsBasicBlockFiltering: {
+    auto is_not_cold = [](cfg::Block* b) {
+      auto* sb = source_blocks::get_first_source_block(b);
+      if (sb == nullptr) {
+        // Conservatively assume that missing SBs mean no profiling data.
+        return true;
+      }
+      return sb->foreach_val_early(
+          [](const auto& v) { return v && v->val > 0; });
+    };
+    walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
+      auto cls = method->get_class();
+
+      cfg::ScopedCFG cfg{&code};
+
+      for (auto* b : cfg->blocks()) {
+        // TODO: If we split by interaction, we could check here specifically.
+        if (is_not_cold(b)) {
+          for (auto& mie : ir_list::InstructionIterable(b)) {
+            class_loads_update(mie.insn, cls);
           }
         }
       }
@@ -727,6 +761,9 @@ std::ostream& operator<<(std::ostream& os, ModelSpec::TypeUsagesMode mode) {
     break;
   case ModelSpec::TypeUsagesMode::kClassLoads:
     os << "class-loads";
+    break;
+  case ModelSpec::TypeUsagesMode::kClassLoadsBasicBlockFiltering:
+    os << "class-loads-bb";
     break;
   }
   return os;

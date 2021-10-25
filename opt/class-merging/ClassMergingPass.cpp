@@ -144,6 +144,8 @@ void ClassMergingPass::bind_config() {
         return ModelSpec::TypeUsagesMode::kAllTypeRefs;
       } else if (s == "class-loads") {
         return ModelSpec::TypeUsagesMode::kClassLoads;
+      } else if (s == "class-loads-bb") {
+        return ModelSpec::TypeUsagesMode::kClassLoadsBasicBlockFiltering;
       } else {
         always_assert_log(false, "Unknown type-usage-mode %s", s.c_str());
       }
