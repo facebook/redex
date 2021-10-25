@@ -621,6 +621,10 @@ DexType* check_current_instance(const ConstTypeHashSet& types,
 ConcurrentMap<DexType*, TypeHashSet> get_type_usages(
     const ConstTypeHashSet& types, const Scope& scope) {
   ConcurrentMap<DexType*, TypeHashSet> res;
+  // Ensure all types will be handled.
+  for (auto* t : types) {
+    res.emplace(const_cast<DexType*>(t), TypeHashSet());
+  }
 
   walk::parallel::opcodes(scope, [&](DexMethod* method, IRInstruction* insn) {
     auto cls = method->get_class();
