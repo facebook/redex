@@ -162,6 +162,7 @@ struct ModelSpec {
   enum class TypeUsagesMode {
     kAllTypeRefs,
     kClassLoads,
+    kClassLoadsBasicBlockFiltering,
   };
   TypeUsagesMode type_usages_mode{TypeUsagesMode::kAllTypeRefs};
 
