@@ -312,6 +312,7 @@ bool InterDex::emit_class(DexInfo& dex_info,
                           DexClass* clazz,
                           bool check_if_skip,
                           bool perf_sensitive,
+                          DexClass** canary_cls,
                           std::vector<DexClass*>* erased_classes) {
   if (is_canary(clazz)) {
     // Nothing to do here.
@@ -343,12 +344,13 @@ bool InterDex::emit_class(DexInfo& dex_info,
   bool fits_current_dex = m_dexes_structure.add_class_to_current_dex(
       clazz_mrefs, clazz_frefs, clazz_trefs, clazz);
   if (!fits_current_dex) {
-    flush_out_dex(dex_info);
+    flush_out_dex(dex_info, *canary_cls);
+    *canary_cls = get_canary_cls(dex_info);
 
-    // Plugins may maintain internal state after gathering refs, and then they
-    // tend to forget that state after flushing out (class merging,
-    // looking at you). So, let's redo gathering of refs here to give
-    // plugins a chance to rebuild their internal state.
+    // Plugins may maintain internal state after gathering refs, and
+    // then they tend to forget that state after flushing out (class
+    // merging, looking at you). So, let's redo gathering of refs here
+    // to give plugins a chance to rebuild their internal state.
     clazz_mrefs.clear();
     clazz_frefs.clear();
     clazz_trefs.clear();
@@ -395,7 +397,7 @@ void InterDex::emit_primary_dex(
       }
 
       emit_class(primary_dex_info, cls, /* check_if_skip */ true,
-                 /* perf_sensitive */ true);
+                 /* perf_sensitive */ true, /* canary_cls */ nullptr);
       coldstart_classes_in_primary++;
     }
   }
@@ -403,7 +405,7 @@ void InterDex::emit_primary_dex(
   // Now add the rest.
   for (DexClass* cls : primary_dex) {
     emit_class(primary_dex_info, cls, /* check_if_skip */ true,
-               /* perf_sensitive */ false);
+               /* perf_sensitive */ false, /* canary_cls */ nullptr);
   }
   TRACE(IDEX, 2,
         "[primary dex]: %zu out of %zu classes in primary dex "
@@ -414,7 +416,7 @@ void InterDex::emit_primary_dex(
         "from interdex list.",
         coldstart_classes_skipped_in_primary, primary_dex.size());
 
-  flush_out_dex(primary_dex_info);
+  flush_out_dex(primary_dex_info, /* canary_cls */ nullptr);
 
   // Double check only 1 dex was created.
   always_assert_log(
@@ -426,7 +428,8 @@ void InterDex::emit_primary_dex(
 void InterDex::emit_interdex_classes(
     DexInfo& dex_info,
     const std::vector<DexType*>& interdex_types,
-    const std::unordered_set<DexClass*>& unreferenced_classes) {
+    const std::unordered_set<DexClass*>& unreferenced_classes,
+    DexClass** canary_cls) {
   if (interdex_types.empty()) {
     TRACE(IDEX, 2, "No interdex classes passed.");
     return;
@@ -495,7 +498,8 @@ void InterDex::emit_interdex_classes(
               !m_emitting_bg_set,
               "End marker discovered between background start/end markers");
           TRACE(IDEX, 2, "Terminating dex due to %s", SHOW(type));
-          flush_out_dex(dex_info);
+          flush_out_dex(dex_info, *canary_cls);
+          *canary_cls = get_canary_cls(dex_info);
           if (end_marker == cold_start_end_marker) {
             dex_info.coldstart = false;
           }
@@ -514,7 +518,7 @@ void InterDex::emit_interdex_classes(
       }
       dex_info.betamap_ordered = true;
       emit_class(dex_info, cls, /* check_if_skip */ true,
-                 /* perf_sensitive */ true);
+                 /* perf_sensitive */ true, canary_cls);
     }
   }
 
@@ -524,7 +528,7 @@ void InterDex::emit_interdex_classes(
 
     if (cls && unreferenced_classes.count(cls)) {
       emit_class(dex_info, cls, /* check_if_skip */ true,
-                 /* perf_sensitive */ false);
+                 /* perf_sensitive */ false, canary_cls);
     }
   }
 
@@ -758,14 +762,15 @@ void InterDex::init_cross_dex_ref_minimizer_and_relocate_methods() {
   }
 }
 
-void InterDex::emit_remaining_classes(DexInfo& dex_info) {
+void InterDex::emit_remaining_classes(DexInfo& dex_info,
+                                      DexClass** canary_cls) {
   m_current_classes_when_emitting_remaining =
       m_dexes_structure.get_current_dex_classes().size();
 
   if (!m_minimize_cross_dex_refs) {
     for (DexClass* cls : m_scope) {
       emit_class(dex_info, cls, /* check_if_skip */ true,
-                 /* perf_sensitive */ false);
+                 /* perf_sensitive */ false, canary_cls);
     }
     return;
   }
@@ -798,8 +803,9 @@ void InterDex::emit_remaining_classes(DexInfo& dex_info) {
     }
 
     std::vector<DexClass*> erased_classes;
-    bool emitted = emit_class(dex_info, cls, /* check_if_skip */ false,
-                              /* perf_sensitive */ false, &erased_classes);
+    bool emitted =
+        emit_class(dex_info, cls, /* check_if_skip */ false,
+                   /* perf_sensitive */ false, canary_cls, &erased_classes);
     int new_dexnum = m_dexes_structure.get_num_dexes();
     bool overflowed = dexnum != new_dexnum;
     m_cross_dex_ref_minimizer.erase(cls, emitted, overflowed);
@@ -866,7 +872,7 @@ void InterDex::run_in_force_single_dex_mode() {
 
   // Emit all no matter what it is.
   if (!m_dexes_structure.get_current_dex_classes().empty()) {
-    flush_out_dex(dex_info);
+    flush_out_dex(dex_info, /* canary_cls */ nullptr);
   }
 
   TRACE(IDEX, 7, "IDEX: force_single_dex dex number: %zu",
@@ -901,10 +907,12 @@ void InterDex::run() {
 
   // Emit interdex classes, if any.
   DexInfo dex_info;
-  emit_interdex_classes(dex_info, m_interdex_types, unreferenced_classes);
+  DexClass* canary_cls = get_canary_cls(dex_info);
+  emit_interdex_classes(dex_info, m_interdex_types, unreferenced_classes,
+                        &canary_cls);
 
   // Now emit the classes that weren't specified in the head or primary list.
-  emit_remaining_classes(dex_info);
+  emit_remaining_classes(dex_info, &canary_cls);
 
   // Add whatever leftovers there are from plugins.
   for (const auto& plugin : m_plugins) {
@@ -914,13 +922,14 @@ void InterDex::run() {
       TRACE(IDEX, 4, "IDEX: Emitting %s-plugin generated leftover class :: %s",
             name.c_str(), SHOW(add_class));
       emit_class(dex_info, add_class, /* check_if_skip */ false,
-                 /* perf_sensitive */ false);
+                 /* perf_sensitive */ false, &canary_cls);
     }
   }
 
   // Emit what is left, if any.
   if (!m_dexes_structure.get_current_dex_classes().empty()) {
-    flush_out_dex(dex_info);
+    flush_out_dex(dex_info, canary_cls);
+    canary_cls = nullptr;
   }
 
   // Emit dex info manifest
@@ -951,28 +960,30 @@ void InterDex::run() {
 
 void InterDex::run_on_nonroot_store() {
   TRACE(IDEX, 2, "IDEX: Running on non-root store");
+  auto canary_cls = get_canary_cls(EMPTY_DEX_INFO);
   for (DexClass* cls : m_scope) {
     emit_class(EMPTY_DEX_INFO, cls, /* check_if_skip */ false,
-               /* perf_sensitive */ false);
+               /* perf_sensitive */ false, &canary_cls);
   }
 
   // Emit what is left, if any.
   if (!m_dexes_structure.get_current_dex_classes().empty()) {
-    flush_out_dex(EMPTY_DEX_INFO);
+    flush_out_dex(EMPTY_DEX_INFO, canary_cls);
   }
 
   print_stats(&m_dexes_structure);
 }
 
 void InterDex::add_dexes_from_store(const DexStore& store) {
+  auto canary_cls = get_canary_cls(EMPTY_DEX_INFO);
   const auto& dexes = store.get_dexen();
   for (const DexClasses& classes : dexes) {
     for (DexClass* cls : classes) {
       emit_class(EMPTY_DEX_INFO, cls, /* check_if_skip */ false,
-                 /* perf_sensitive */ false);
+                 /* perf_sensitive */ false, &canary_cls);
     }
   }
-  flush_out_dex(EMPTY_DEX_INFO);
+  flush_out_dex(EMPTY_DEX_INFO, canary_cls);
 }
 
 void InterDex::set_clinit_method_if_needed(DexClass* cls) {
@@ -1002,10 +1013,48 @@ void InterDex::set_clinit_method_if_needed(DexClass* cls) {
   code->set_registers_size(1);
 }
 
+// Creates a canary class if necessary. (In particular, the primary dex never
+// has a canary class.) This method should be called after flush_out_dex when
+// beginning a new dex. As canary classes are added in the end without checks,
+// the implied references are added here immediately to ensure that we don't
+// exceed limits.
+DexClass* InterDex::get_canary_cls(DexInfo& dex_info) {
+  if (!m_emit_canaries || dex_info.primary) {
+    return nullptr;
+  }
+  int dexnum = m_dexes_structure.get_num_dexes();
+  char buf[CANARY_CLASS_BUFSIZE];
+  snprintf(buf, sizeof(buf), CANARY_CLASS_FORMAT, dexnum);
+  std::string canary_name(buf);
+  auto canary_type = DexType::get_type(canary_name);
+  if (!canary_type) {
+    TRACE(IDEX, 4, "Warning, no canary class %s found.", buf);
+    canary_type = DexType::make_type(canary_name.c_str());
+  }
+  auto canary_cls = type_class(canary_type);
+  if (!canary_cls) {
+    ClassCreator cc(canary_type);
+    cc.set_access(ACC_PUBLIC | ACC_ABSTRACT);
+    cc.set_super(type::java_lang_Object());
+    canary_cls = cc.create();
+    // Don't rename the Canary we've created
+    canary_cls->rstate.set_keepnames();
+  }
+  set_clinit_method_if_needed(canary_cls);
+  MethodRefs clazz_mrefs;
+  FieldRefs clazz_frefs;
+  TypeRefs clazz_trefs;
+  canary_cls->gather_methods(clazz_mrefs);
+  canary_cls->gather_fields(clazz_frefs);
+  canary_cls->gather_types(clazz_trefs);
+  m_dexes_structure.add_refs_no_checks(clazz_mrefs, clazz_frefs, clazz_trefs);
+  return canary_cls;
+}
+
 /**
  * This needs to be called before getting to the next dex.
  */
-void InterDex::flush_out_dex(DexInfo& dex_info) {
+void InterDex::flush_out_dex(DexInfo& dex_info, DexClass* canary_cls) {
 
   int dexnum = m_dexes_structure.get_num_dexes();
   if (dex_info.primary) {
@@ -1024,28 +1073,13 @@ void InterDex::flush_out_dex(DexInfo& dex_info) {
           m_dexes_structure.get_current_dex_classes().size());
   }
 
-  // Find the Canary class and add it in.
-  if (m_emit_canaries && !dex_info.primary) {
-    char buf[CANARY_CLASS_BUFSIZE];
-    snprintf(buf, sizeof(buf), CANARY_CLASS_FORMAT, dexnum);
-    std::string canary_name(buf);
-    auto canary_type = DexType::get_type(canary_name);
-    if (!canary_type) {
-      TRACE(IDEX, 4, "Warning, no canary class %s found.", buf);
-      canary_type = DexType::make_type(canary_name.c_str());
-    }
-    auto canary_cls = type_class(canary_type);
-    if (!canary_cls) {
-      ClassCreator cc(canary_type);
-      cc.set_access(ACC_PUBLIC | ACC_ABSTRACT);
-      cc.set_super(type::java_lang_Object());
-      canary_cls = cc.create();
-      // Don't rename the Canary we've created
-      canary_cls->rstate.set_keepnames();
-    }
-    set_clinit_method_if_needed(canary_cls);
+  // Add the Canary class, if any.
+  if (canary_cls) {
+    always_assert(
+        m_dexes_structure.current_dex_has_tref(canary_cls->get_type()));
     m_dexes_structure.add_class_no_checks(canary_cls);
-    m_dex_infos.emplace_back(std::make_tuple(canary_name, dex_info));
+    m_dex_infos.emplace_back(
+        std::make_tuple(canary_cls->get_name()->str(), dex_info));
   }
 
   std::unordered_set<DexClass*> additional_classes;
@@ -1117,7 +1151,7 @@ void InterDex::flush_out_dex(DexInfo& dex_info) {
             return a.second < b.second;
           });
       std::sort(remaining_classes.begin(), remaining_classes.end(),
-                compare_dexclasses_for_compressed_size);
+                interdex::compare_dexclasses_for_compressed_size);
       // Rearrange classes so that...
       // - perf_sensitive_classes go first, then
       // - classes_with_sort_num that got ordered by the method profiles, and

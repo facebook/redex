@@ -134,6 +134,12 @@ void DexesStructure::add_class_no_checks(const MethodRefs& clazz_mrefs,
   update_stats(clazz_mrefs, clazz_frefs, clazz);
 }
 
+void DexesStructure::add_refs_no_checks(const MethodRefs& clazz_mrefs,
+                                        const FieldRefs& clazz_frefs,
+                                        const TypeRefs& clazz_trefs) {
+  m_current_dex.add_refs_no_checks(clazz_mrefs, clazz_frefs, clazz_trefs);
+}
+
 DexClasses DexesStructure::end_dex(DexInfo dex_info) {
   m_info.num_dexes++;
 
@@ -231,11 +237,17 @@ void DexStructure::add_class_no_checks(const MethodRefs& clazz_mrefs,
                                        unsigned laclazz,
                                        DexClass* clazz) {
   TRACE(IDEX, 7, "Adding class: %s", SHOW(clazz));
+  add_refs_no_checks(clazz_mrefs, clazz_frefs, clazz_trefs);
+  m_linear_alloc_size += laclazz;
+  m_classes.push_back(clazz);
+}
+
+void DexStructure::add_refs_no_checks(const MethodRefs& clazz_mrefs,
+                                      const FieldRefs& clazz_frefs,
+                                      const TypeRefs& clazz_trefs) {
   m_mrefs.insert(clazz_mrefs.begin(), clazz_mrefs.end());
   m_frefs.insert(clazz_frefs.begin(), clazz_frefs.end());
   m_trefs.insert(clazz_trefs.begin(), clazz_trefs.end());
-  m_linear_alloc_size += laclazz;
-  m_classes.push_back(clazz);
 }
 
 /*

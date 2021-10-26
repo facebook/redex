@@ -131,6 +131,7 @@ class InterDex {
                   DexClass* clazz,
                   bool check_if_skip,
                   bool perf_sensitive,
+                  DexClass** canary_cls,
                   std::vector<DexClass*>* erased_classes = nullptr);
   void emit_primary_dex(
       const DexClasses& primary_dex,
@@ -139,10 +140,12 @@ class InterDex {
   void emit_interdex_classes(
       DexInfo& dex_info,
       const std::vector<DexType*>& interdex_types,
-      const std::unordered_set<DexClass*>& unreferenced_classes);
+      const std::unordered_set<DexClass*>& unreferenced_classes,
+      DexClass** canary_cls);
   void init_cross_dex_ref_minimizer_and_relocate_methods();
-  void emit_remaining_classes(DexInfo& dex_info);
-  void flush_out_dex(DexInfo& dex_info);
+  void emit_remaining_classes(DexInfo& dex_info, DexClass** canary_cls);
+  DexClass* get_canary_cls(DexInfo& dex_info);
+  void flush_out_dex(DexInfo& dex_info, DexClass* canary_cls);
 
   void set_clinit_method_if_needed(DexClass* cls);
 
