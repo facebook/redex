@@ -157,7 +157,7 @@ TEST_F(ReachabilityTest, FieldReachabilityProguardTest) {
 
   std::unordered_set<std::string> reachable_fields_names;
   for (const auto* f : reachable_fields) {
-    reachable_fields_names.insert(f->get_deobfuscated_name());
+    reachable_fields_names.insert(f->get_deobfuscated_name_or_empty());
   }
 
   EXPECT_EQ(reachable_fields.size(), 2);

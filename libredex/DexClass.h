@@ -13,9 +13,11 @@
 #include <initializer_list>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 
+#include "Debug.h"
 #include "DexAccess.h"
 #include "DexAnnotation.h"
 #include "DexDefs.h"
@@ -115,6 +117,8 @@ class DexString {
   static const DexString* get_string(const std::string& str) {
     return get_string(str.c_str(), (uint32_t)strlen(str.c_str()));
   }
+
+  static const std::string EMPTY;
 
  public:
   bool is_simple() const { return size() == m_utfsize; }
@@ -327,7 +331,7 @@ class DexField : public DexFieldRef {
   DexAccessFlags m_access;
   DexAnnotationSet* m_anno;
   DexEncodedValue* m_value; /* Static Only */
-  std::string m_deobfuscated_name;
+  const DexString* m_deobfuscated_name{nullptr};
 
   // See UNIQUENESS above for the rationale for the private constructor pattern.
   DexField(DexType* container, const DexString* name, DexType* type)
@@ -394,17 +398,24 @@ class DexField : public DexFieldRef {
     m_access = access;
   }
 
-  void set_external() {
-    always_assert_log(!m_concrete, "Unexpected concrete field %s\n",
-                      self_show().c_str());
-    m_deobfuscated_name = self_show();
-    m_external = true;
-  }
+  void set_external();
 
   void set_deobfuscated_name(const std::string& name);
+  void set_deobfuscated_name(const DexString* name);
+  void set_deobfuscated_name(const DexString& name);
 
-  const std::string& get_deobfuscated_name() const {
+  const DexString& get_deobfuscated_name() const {
+    redex_assert(m_deobfuscated_name != nullptr);
+    return *m_deobfuscated_name;
+  }
+  const DexString* get_deobfuscated_name_or_null() const {
     return m_deobfuscated_name;
+  }
+  const std::string& get_deobfuscated_name_or_empty() const {
+    if (m_deobfuscated_name == nullptr) {
+      return DexString::EMPTY;
+    }
+    return m_deobfuscated_name->str();
   }
 
   // Return just the name of the field.
@@ -887,7 +898,7 @@ class DexMethod : public DexMethodRef {
   std::unique_ptr<DexCode> m_dex_code;
   std::unique_ptr<IRCode> m_code;
   ParamAnnotations m_param_anno;
-  std::string m_deobfuscated_name;
+  const DexString* m_deobfuscated_name{nullptr};
 
   // See UNIQUENESS above for the rationale for the private constructor pattern.
   DexMethod(DexType* type, const DexString* name, DexProto* proto);
@@ -1019,9 +1030,22 @@ class DexMethod : public DexMethodRef {
   }
 
   void set_deobfuscated_name(const std::string& name);
+  void set_deobfuscated_name(const DexString* name);
+  void set_deobfuscated_name(const DexString& name);
 
-  const std::string& get_deobfuscated_name() const {
+  const DexString& get_deobfuscated_name() const {
+    redex_assert(m_deobfuscated_name != nullptr);
+    return *m_deobfuscated_name;
+  }
+  const DexString* get_deobfuscated_name_or_null() const {
     return m_deobfuscated_name;
+  }
+  const std::string& get_deobfuscated_name_or_empty() const {
+    if (m_deobfuscated_name == nullptr) {
+      return DexString::EMPTY;
+      ;
+    }
+    return m_deobfuscated_name->str();
   }
 
   // Return just the name of the method.
@@ -1043,12 +1067,7 @@ class DexMethod : public DexMethodRef {
     m_virtual = is_virtual;
   }
 
-  void set_external() {
-    always_assert_log(!m_concrete, "Unexpected concrete method %s\n",
-                      self_show().c_str());
-    m_deobfuscated_name = self_show();
-    m_external = true;
-  }
+  void set_external();
   void set_dex_code(std::unique_ptr<DexCode> code) {
     m_dex_code = std::move(code);
   }
@@ -1157,7 +1176,7 @@ class DexClass {
   DexTypeList* m_interfaces;
   const DexString* m_source_file;
   DexAnnotationSet* m_anno;
-  std::string m_deobfuscated_name;
+  const DexString* m_deobfuscated_name{nullptr};
   const std::string m_location; // TODO: string interning
   std::vector<DexField*> m_sfields;
   std::vector<DexField*> m_ifields;
@@ -1282,9 +1301,21 @@ class DexClass {
    * type map.
    */
   void set_deobfuscated_name(const std::string& name);
+  void set_deobfuscated_name(const DexString* name);
+  void set_deobfuscated_name(const DexString& name);
 
-  const std::string& get_deobfuscated_name() const {
+  const DexString& get_deobfuscated_name() const {
+    redex_assert(m_deobfuscated_name != nullptr);
+    return *m_deobfuscated_name;
+  }
+  const DexString* get_deobfuscated_name_or_null() const {
     return m_deobfuscated_name;
+  }
+  const std::string& get_deobfuscated_name_or_empty() const {
+    if (m_deobfuscated_name == nullptr) {
+      return DexString::EMPTY;
+    }
+    return m_deobfuscated_name->str();
   }
 
   // Returns the location of this class - can be dex/jar file.

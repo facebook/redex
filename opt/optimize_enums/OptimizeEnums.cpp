@@ -582,14 +582,15 @@ class OptimizeEnums {
 
       auto& sfields = cls->get_sfields();
       const auto all_sfield_names_contain = [&sfields](const char* sub) {
-        return std::all_of(
-            sfields.begin(), sfields.end(), [sub](DexField* sfield) {
-              const auto& deobfuscated_name = sfield->get_deobfuscated_name();
-              const auto& name = deobfuscated_name.empty()
-                                     ? sfield->get_name()->str()
-                                     : deobfuscated_name;
-              return name.find(sub) != std::string::npos;
-            });
+        return std::all_of(sfields.begin(), sfields.end(),
+                           [sub](DexField* sfield) {
+                             const auto& deobfuscated_name =
+                                 sfield->get_deobfuscated_name_or_empty();
+                             const auto& name = deobfuscated_name.empty()
+                                                    ? sfield->get_name()->str()
+                                                    : deobfuscated_name;
+                             return name.find(sub) != std::string::npos;
+                           });
       };
 
       // We expect the generated classes to ONLY contain the lookup tables

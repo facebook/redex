@@ -77,7 +77,7 @@ bool get_line_num(const DexMethod* method,
  * "some/package/class_name;" -> "class_name"
  */
 std::string get_deobfuscated_name_substr(const DexClass* cls) {
-  auto name = cls->get_deobfuscated_name();
+  auto name = cls->get_deobfuscated_name_or_empty();
   if (name.empty()) {
     name = SHOW(cls);
   }
@@ -90,7 +90,7 @@ std::string get_deobfuscated_name_substr(const DexClass* cls) {
  * Returns the deobfuscated name for the given method.
  */
 std::string get_deobfuscated_name(const DexMethod* method) {
-  auto name = method->get_deobfuscated_name();
+  auto name = method->get_deobfuscated_name_or_empty();
   if (name.empty()) {
     name = SHOW(method);
   }

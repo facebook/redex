@@ -470,7 +470,7 @@ void OptimizationImpl::rewrite_interface_methods(const DexType* intf,
       // have these zombies lying around.
       new_meth->clear_annotations();
       new_meth->make_non_concrete();
-      auto deoob_impl_name = impl->get_deobfuscated_name();
+      auto deoob_impl_name = impl->get_deobfuscated_name_or_empty();
       auto unique = deobfuscated_name_counters[deoob_impl_name]++;
       auto new_deob_name = deoob_impl_name + "." +
                            meth->get_simple_deobfuscated_name() +

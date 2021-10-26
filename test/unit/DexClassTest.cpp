@@ -152,23 +152,23 @@ TEST_F(DexClassTest, testObfuscatedNames) {
   auto clazz = type_class(type);
   auto field = DexField::make_field("LX/001;.A00:I")->make_concrete(ACC_PUBLIC);
 
-  EXPECT_EQ(clazz->get_deobfuscated_name(), "LX/001;");
-  EXPECT_EQ(method->get_deobfuscated_name(), "");
-  EXPECT_EQ(field->get_deobfuscated_name(), "");
+  EXPECT_EQ(clazz->get_deobfuscated_name_or_empty(), "LX/001;");
+  EXPECT_EQ(method->get_deobfuscated_name_or_empty(), "");
+  EXPECT_EQ(field->get_deobfuscated_name_or_empty(), "");
 
   clazz->set_deobfuscated_name("Lbaz;");
   method->set_deobfuscated_name("Lbaz;.foo:(I)V");
   field->set_deobfuscated_name("Lbaz;.bar:I");
 
-  EXPECT_EQ(clazz->get_deobfuscated_name(), "Lbaz;");
+  EXPECT_EQ(clazz->get_deobfuscated_name_or_empty(), "Lbaz;");
   EXPECT_EQ(clazz->str(), "LX/001;");
   EXPECT_EQ(type->str(), "LX/001;");
 
   EXPECT_EQ(method->str(), "A01");
-  EXPECT_EQ(method->get_deobfuscated_name(), "Lbaz;.foo:(I)V");
+  EXPECT_EQ(method->get_deobfuscated_name_or_empty(), "Lbaz;.foo:(I)V");
   EXPECT_EQ(method->get_simple_deobfuscated_name(), "foo");
 
   EXPECT_EQ(field->str(), "A00");
-  EXPECT_EQ(field->get_deobfuscated_name(), "Lbaz;.bar:I");
+  EXPECT_EQ(field->get_deobfuscated_name_or_empty(), "Lbaz;.bar:I");
   EXPECT_EQ(field->get_simple_deobfuscated_name(), "bar");
 }

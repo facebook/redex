@@ -211,11 +211,13 @@ void RedexContext::erase_field(DexFieldRef* field) {
   s_field_map.erase(field->m_spec);
   // Also remove the alias from the map
   if (field->is_def()) {
-    DexFieldSpec r(field->m_spec.cls,
-                   DexString::make_string(
-                       field->DexFieldRef::as_def()->get_deobfuscated_name()),
-                   field->m_spec.type);
-    s_field_map.erase(r);
+    if (field->DexFieldRef::as_def()->get_deobfuscated_name_or_null() !=
+        nullptr) {
+      DexFieldSpec r(field->m_spec.cls,
+                     &field->DexFieldRef::as_def()->get_deobfuscated_name(),
+                     field->m_spec.type);
+      s_field_map.erase(r);
+    }
   }
 }
 
@@ -336,11 +338,13 @@ void RedexContext::erase_method(DexMethodRef* method) {
   s_method_map.erase(method->m_spec);
   // Also remove the alias from the map
   if (method->is_def()) {
-    DexMethodSpec r(method->m_spec.cls,
-                    DexString::make_string(
-                        method->DexMethodRef::as_def()->m_deobfuscated_name),
-                    method->m_spec.proto);
-    s_method_map.erase(r);
+    if (method->DexMethodRef::as_def()->get_deobfuscated_name_or_null() !=
+        nullptr) {
+      DexMethodSpec r(method->m_spec.cls,
+                      &method->DexMethodRef::as_def()->get_deobfuscated_name(),
+                      method->m_spec.proto);
+      s_method_map.erase(r);
+    }
   }
 }
 

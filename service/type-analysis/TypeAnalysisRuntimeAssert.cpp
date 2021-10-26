@@ -60,10 +60,10 @@ static IRList::iterator insert_throw_error(IRCode* code,
                                            const DexMember* member,
                                            DexMethodRef* handler) {
   auto member_name_reg = code->allocate_temp();
-  it = code->insert_after(it,
-                          ((new IRInstruction(OPCODE_CONST_STRING))
-                               ->set_string(DexString::make_string(
-                                   member->get_deobfuscated_name()))));
+  it = code->insert_after(
+      it,
+      ((new IRInstruction(OPCODE_CONST_STRING))
+           ->set_string(member->get_deobfuscated_name_or_null())));
   it =
       code->insert_after(it,
                          ((new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))

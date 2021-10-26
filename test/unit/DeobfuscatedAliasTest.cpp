@@ -24,7 +24,7 @@ TEST_F(DeobfuscatedAliasTest, testField) {
   auto get_result_deobfuscated = DexField::get_field("Lbaz;.bar:I");
   EXPECT_EQ(field, get_result_original);
   EXPECT_EQ(nullptr, get_result_old_deobfuscated);
-  EXPECT_EQ("bar", field->get_deobfuscated_name());
+  EXPECT_EQ("bar", field->get_deobfuscated_name_or_empty());
   EXPECT_EQ(field, get_result_deobfuscated);
 }
 
@@ -33,7 +33,7 @@ TEST_F(DeobfuscatedAliasTest, testFieldDuplicate) {
   field->set_deobfuscated_name("foo");
   // Doesn't change anything, but shouldn't crash
   auto get_result = DexField::get_field("Lbaz;.foo:I");
-  EXPECT_EQ("foo", field->get_deobfuscated_name());
+  EXPECT_EQ("foo", field->get_deobfuscated_name_or_empty());
   EXPECT_EQ(field, get_result);
 }
 
@@ -61,7 +61,7 @@ TEST_F(DeobfuscatedAliasTest, testMethod) {
   auto get_result_deobfuscated = DexMethod::get_method("Lbaz;.bar:()I");
   EXPECT_EQ(method, get_result_original);
   EXPECT_EQ(nullptr, get_result_old_deobfuscated);
-  EXPECT_EQ("bar", method->get_deobfuscated_name());
+  EXPECT_EQ("bar", method->get_deobfuscated_name_or_empty());
   EXPECT_EQ(method, get_result_deobfuscated);
 }
 
@@ -71,7 +71,7 @@ TEST_F(DeobfuscatedAliasTest, testMethodDuplicate) {
   method->set_deobfuscated_name("foo");
   // Doesn't change anything, but shouldn't crash
   auto get_result = DexMethod::get_method("Lbaz;.foo:()I");
-  EXPECT_EQ("foo", method->get_deobfuscated_name());
+  EXPECT_EQ("foo", method->get_deobfuscated_name_or_empty());
   EXPECT_EQ(method, get_result);
 }
 

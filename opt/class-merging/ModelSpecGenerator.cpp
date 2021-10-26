@@ -20,7 +20,7 @@ constexpr const char* LAMBDA_CLASS_NAME_PREFIX = "$$Lambda$";
  * Return true if the name matches "$$Lambda$" or "$[0-9]".
  */
 bool maybe_anonymous_class(const DexClass* cls) {
-  const auto& name = cls->get_deobfuscated_name();
+  const auto& name = cls->get_deobfuscated_name_or_empty();
   auto pos = name.rfind('$');
   if (pos == std::string::npos) {
     return false;
@@ -76,7 +76,7 @@ bool is_from_allowed_packages(
   if (allowed_packages.empty()) {
     return true;
   }
-  const auto& name = cls->get_deobfuscated_name();
+  const auto& name = cls->get_deobfuscated_name_or_empty();
   for (auto& prefix : allowed_packages) {
     if (boost::starts_with(name, prefix)) {
       return true;

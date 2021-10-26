@@ -81,12 +81,15 @@ void keep_rules::print_seeds(std::ostream& output,
                              const bool allowshrinking_filter,
                              const bool allowobfuscation_filter) {
   for (const auto& cls : classes) {
-    auto deob = cls->get_deobfuscated_name();
-    if (deob.empty()) {
+    const auto& deob = [&]() {
+      const auto& s = cls->get_deobfuscated_name_or_empty();
+      if (!s.empty()) {
+        return s;
+      }
       std::cerr << "WARNING: this class has no deobu name: "
                 << cls->get_name()->c_str() << std::endl;
-      deob = cls->get_name()->c_str();
-    }
+      return cls->get_name()->str();
+    }();
     std::string name = java_names::internal_to_external(deob);
     if (impl::KeepState::has_keep(cls)) {
       show_class(

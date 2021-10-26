@@ -629,7 +629,7 @@ Result check_monitors(const DexMethod* method) {
   if (!blocks.empty()) {
     std::ostringstream out;
     out << "Monitor-stack mismatch (unverifiable code) in "
-        << method->get_deobfuscated_name() << " at blocks ";
+        << method->get_deobfuscated_name_or_empty() << " at blocks ";
     for (auto b : blocks) {
       out << "(";
       for (auto e : b->preds()) {
@@ -655,7 +655,7 @@ Result check_monitors(const DexMethod* method) {
     std::ostringstream out;
     out << "Throwing instructions in a synchronized region in a try-block "
            "without a catch-all in "
-        << method->get_deobfuscated_name();
+        << method->get_deobfuscated_name_or_empty();
     bool first = true;
     for (auto& it : sketchy_insns) {
       if (!sketchy_blocks.count(it.block())) {
@@ -809,7 +809,8 @@ void IRTypeChecker::run() {
     } catch (const TypeCheckingException& e) {
       m_good = false;
       std::ostringstream out;
-      out << "Type error in method " << m_dex_method->get_deobfuscated_name()
+      out << "Type error in method "
+          << m_dex_method->get_deobfuscated_name_or_empty()
           << " at instruction '" << SHOW(insn) << "' @ " << std::hex
           << static_cast<const void*>(&mie) << " for " << e.what();
       m_what = out.str();
@@ -1477,5 +1478,5 @@ std::ostream& operator<<(std::ostream& output, const IRTypeChecker& checker) {
 void IRTypeChecker::check_completion() const {
   always_assert_log(m_complete,
                     "The type checker did not run on method %s.\n",
-                    m_dex_method->get_deobfuscated_name().c_str());
+                    m_dex_method->get_deobfuscated_name_or_empty().c_str());
 }

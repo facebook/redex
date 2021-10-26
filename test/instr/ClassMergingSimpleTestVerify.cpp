@@ -24,7 +24,7 @@ TEST_F(PostVerify, SinkCommonCtorInvocation) {
       classes, "Lcom/facebook/redextest/SimpleBaseShape0S0000000;");
 
   for (auto dm : cls->get_dmethods()) {
-    if (dm->get_deobfuscated_name() !=
+    if (dm->get_deobfuscated_name_or_empty() !=
         "Lcom/facebook/redextest/SimpleBaseShape0S0000000;.<init>:(Ljava/lang/"
         "String;I)V")
       continue;

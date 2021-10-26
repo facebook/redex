@@ -103,7 +103,7 @@ void LevelChecker::init_method(DexMethod* method) {
 
 DexClass* LevelChecker::get_outer_class(const DexClass* cls) {
   TraceContext context(cls->get_type());
-  const std::string& cls_name = cls->get_deobfuscated_name();
+  const std::string& cls_name = cls->get_deobfuscated_name_or_empty();
   auto cash_idx = cls_name.find_last_of('$');
   if (cash_idx == std::string::npos) {
     // this is not an inner class

@@ -2495,7 +2495,7 @@ void write_method_mapping(const std::string& filename,
     }
     auto deobf_class = [&] {
       if (cls) {
-        auto deobname = cls->get_deobfuscated_name();
+        auto deobname = cls->get_deobfuscated_name_or_empty();
         if (!deobname.empty()) return deobname;
       }
       return show(typecls);
@@ -2517,9 +2517,11 @@ void write_method_mapping(const std::string& filename,
     // Consult the cached method names, or just give it back verbatim.
     auto deobf_method = [&] {
       if (resolved_method->is_def()) {
-        auto deobfname =
-            static_cast<DexMethod*>(resolved_method)->get_deobfuscated_name();
-        if (!deobfname.empty()) return deobfname;
+        const auto& deobfname =
+            resolved_method->as_def()->get_deobfuscated_name_or_empty();
+        if (!deobfname.empty()) {
+          return deobfname;
+        }
       }
       return show(resolved_method);
     }();
@@ -2553,7 +2555,7 @@ void write_class_mapping(const std::string& filename,
     DexClass* cls = classes->at(idx);
     auto deobf_class = [&] {
       if (cls) {
-        auto deobname = cls->get_deobfuscated_name();
+        auto deobname = cls->get_deobfuscated_name_or_empty();
         if (!deobname.empty()) return deobname;
       }
       return show(cls);
@@ -2603,7 +2605,7 @@ void write_pg_mapping(
 
   auto deobf_class = [&](DexClass* cls) {
     if (cls) {
-      auto deobname = cls->get_deobfuscated_name();
+      auto deobname = cls->get_deobfuscated_name_or_empty();
       if (!deobname.empty()) return deobname;
     }
     return show(cls);
@@ -2745,22 +2747,22 @@ void write_full_mapping(const std::string& filename, DexClasses* classes) {
 
   std::ofstream ofs(filename.c_str(), std::ofstream::out | std::ofstream::app);
   for (auto cls : *classes) {
-    ofs << "type " << cls->get_deobfuscated_name() << " -> " << show(cls)
-        << std::endl;
+    ofs << "type " << cls->get_deobfuscated_name_or_empty() << " -> "
+        << show(cls) << std::endl;
     for (auto field : cls->get_ifields()) {
-      ofs << "ifield " << field->get_deobfuscated_name() << " -> "
+      ofs << "ifield " << field->get_deobfuscated_name_or_empty() << " -> "
           << show(field) << std::endl;
     }
     for (auto field : cls->get_sfields()) {
-      ofs << "sfield " << field->get_deobfuscated_name() << " -> "
+      ofs << "sfield " << field->get_deobfuscated_name_or_empty() << " -> "
           << show(field) << std::endl;
     }
     for (auto method : cls->get_dmethods()) {
-      ofs << "dmethod " << method->get_deobfuscated_name() << " -> "
+      ofs << "dmethod " << method->get_deobfuscated_name_or_empty() << " -> "
           << show(method) << std::endl;
     }
     for (auto method : cls->get_vmethods()) {
-      ofs << "vmethod " << method->get_deobfuscated_name() << " -> "
+      ofs << "vmethod " << method->get_deobfuscated_name_or_empty() << " -> "
           << show(method) << std::endl;
     }
   }
@@ -3045,7 +3047,7 @@ LocatorIndex make_locator_index(DexStoresVector& stores) {
                             .second;
         // We shouldn't see the same class defined in two dexen
         always_assert_log(inserted, "This was already inserted %s\n",
-                          (*clsit)->get_deobfuscated_name().c_str());
+                          (*clsit)->get_deobfuscated_name_or_empty().c_str());
         (void)inserted; // Shut up compiler when defined(NDEBUG)
       }
     }
