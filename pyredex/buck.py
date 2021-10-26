@@ -104,7 +104,8 @@ class BuckConnection:
             local.write(os.linesep)
             local.write(message)
             local.flush()
-        except BrokenPipeError:
+        except (BrokenPipeError, BlockingIOError) as e:
+            logging.error("Buck pipe is broken! %s", e)
             self.has_buck = False
             self.event_pipe = None
 
