@@ -13,6 +13,9 @@ public class AppModuleUsageClass {
   // Violation 1
   public AppModuleUsageOtherClass other_class2;
 
+  // Violation on allowlist
+  public AppModuleUsageOtherClass other_class3;
+
   @UsesAppModule({"AppModule"})
   public static void method1() {
     AppModuleUsageOtherClass.otherMethod();
@@ -45,7 +48,13 @@ public class AppModuleUsageClass {
     return x;
   }
 
-  public static void method7() {
+  // Violation on allowlist
+  public void method7() {
+    AppModuleUsageOtherClass.otherMethod();
+    AppModuleUsageThirdClass.method();
+  }
+
+  public static void method8() {
     try {
       Class.forName("AppModuleUsageOtherClass").getDeclaredConstructors();
     } catch (ClassNotFoundException | SecurityException ignoreException) {
@@ -54,7 +63,7 @@ public class AppModuleUsageClass {
   }
 
   @UsesAppModule({"AppModule"})
-  public void method8() {
+  public void method9() {
     try {
       other_class.getClass().getDeclaredMethod("doSomethingToMe");
     } catch (NoSuchMethodException | SecurityException ignoreException) {
@@ -63,7 +72,7 @@ public class AppModuleUsageClass {
   }
 
   @UsesAppModule({"AppModule"})
-  public void method9() {
+  public void method10() {
     try {
       Field field = AppModuleUsageClass.class.getDeclaredField("other_class");
       field.get(this);

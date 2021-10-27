@@ -9,5 +9,5 @@
 @UsesAppModule({"AppModule"})
 public class AppModuleUsageThirdClass {
   public AppModuleUsageOtherClass field;
-  public void method() { AppModuleUsageOtherClass.otherMethod(); }
+  public static void method() { AppModuleUsageOtherClass.otherMethod(); }
 }

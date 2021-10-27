@@ -7,6 +7,7 @@
 
 #include "DexClass.h"
 #include "Pass.h"
+#include <string>
 
 namespace AppModuleUsage {
 struct UseCount {
@@ -51,6 +52,7 @@ class AppModuleUsagePass : public Pass {
     bind("uses_app_module_annotation_descriptor",
          "Lcom/facebook/redex/annotations/UsesAppModule;",
          m_uses_app_module_annotation_descriptor);
+    bind("allow_list_filepath", "", m_allow_list_filepath);
   }
 
   // Entrypoint for the AppModuleUsagePass pass
@@ -62,6 +64,8 @@ class AppModuleUsagePass : public Pass {
       T* entrypoint, DexType* annotation_type);
 
  private:
+  void load_allow_list(DexStoresVector&,
+                       const std::unordered_map<std::string, unsigned int>&);
   void analyze_direct_app_module_usage(const Scope&);
   void analyze_reflective_app_module_usage(const Scope&);
   // Outputs report of violations, crashes if `m_crash_with_violations` true
@@ -91,6 +95,11 @@ class AppModuleUsagePass : public Pass {
   ConcurrentMap<DexMethod*, std::unordered_set<unsigned int>>
       m_stores_method_uses_reflectively_map;
 
+  // Map of violations from entrypoint names to the names of stores used
+  // by the entrypoint
+  std::unordered_map<std::string, std::unordered_set<unsigned int>>
+      m_allow_list_map;
+
   // To quickly look up wich DexStore ("module") a DexType is from
   ConcurrentMap<DexType*, unsigned int> m_type_store_map;
 
@@ -98,4 +107,5 @@ class AppModuleUsagePass : public Pass {
   bool m_output_module_use_count;
   bool m_crash_with_violations;
   std::string m_uses_app_module_annotation_descriptor;
+  std::string m_allow_list_filepath;
 };
