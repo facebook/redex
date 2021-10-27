@@ -1077,7 +1077,21 @@ void InterDex::flush_out_dex(DexInfo& dex_info, DexClass* canary_cls) {
   if (canary_cls) {
     always_assert(
         m_dexes_structure.current_dex_has_tref(canary_cls->get_type()));
-    m_dexes_structure.add_class_no_checks(canary_cls);
+
+
+    // Properly try to insert the class.
+
+    MethodRefs clazz_mrefs;
+    FieldRefs clazz_frefs;
+    TypeRefs clazz_trefs;
+    std::vector<DexClass*> erased_classes;
+    gather_refs(m_plugins, dex_info, canary_cls, &clazz_mrefs, &clazz_frefs,
+                &clazz_trefs, &erased_classes, true);
+
+    bool canary_added = m_dexes_structure.add_class_to_current_dex(
+        clazz_mrefs, clazz_frefs, clazz_trefs, canary_cls);
+    always_assert(canary_added);
+
     m_dex_infos.emplace_back(
         std::make_tuple(canary_cls->get_name()->str(), dex_info));
   }
