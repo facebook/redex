@@ -267,7 +267,7 @@ void AppModuleUsagePass::analyze_reflective_app_module_usage(
       IRInstruction* insn = mie.insn;
       boost::optional<DexType*> type = boost::none;
       if (!opcode::is_an_invoke(insn->opcode())) {
-        TRACE(APP_MOD_USE, 6, "Investigating reflection \n");
+        TRACE(APP_MOD_USE, 9, "Investigating reflection \n");
         // If an object type is from refletion it will be in the RESULT_REGISTER
         // for some instruction
         const auto& o = analysis->get_abstract_object(RESULT_REGISTER, insn);
@@ -278,7 +278,7 @@ void AppModuleUsagePass::analyze_reflective_app_module_usage(
                   reflection::REFLECTION))) {
           // If the obj is a CLASS then it must have a class source of
           // REFLECTION
-          TRACE(APP_MOD_USE, 6, "Found an abstract object \n");
+          TRACE(APP_MOD_USE, 8, "Found an abstract object \n");
           type = type_used(o.get());
         }
       }
@@ -293,7 +293,7 @@ void AppModuleUsagePass::analyze_reflective_app_module_usage(
                       std::unordered_set<unsigned int>& stores_used,
                       bool /* exists */) { stores_used.emplace(store); });
           TRACE(APP_MOD_USE,
-                5,
+                6,
                 "%s used reflectively by %s\n",
                 SHOW(type.get()),
                 SHOW(method));
