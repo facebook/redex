@@ -363,7 +363,6 @@ class CheckUniqueDeobfuscatedNames {
     std::unordered_map<const DexString*, DexMethod*> method_names;
     walk::methods(scope, [&method_names, pass_name](DexMethod* dex_method) {
       auto deob = dex_method->get_deobfuscated_name_or_null();
-      redex_assert(deob);
       auto it = method_names.find(deob);
       if (it != method_names.end()) {
         fprintf(
