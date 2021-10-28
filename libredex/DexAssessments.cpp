@@ -293,10 +293,34 @@ DexAssessment DexScopeAssessor::run() {
     }
   };
 
+  std::atomic<size_t> classes_without_deobfuscated_name{0};
+  walk::parallel::classes(m_scope,
+                          [&classes_without_deobfuscated_name](DexClass* c) {
+                            if (c->get_deobfuscated_name_or_null() == nullptr) {
+                              classes_without_deobfuscated_name.fetch_add(1);
+                            }
+                          });
+
+  std::atomic<size_t> fields_without_deobfuscated_name{0};
+  walk::parallel::fields(m_scope,
+                         [&fields_without_deobfuscated_name](DexField* f) {
+                           if (f->get_deobfuscated_name_or_null() == nullptr) {
+                             fields_without_deobfuscated_name.fetch_add(1);
+                           }
+                         });
+
   dex_position::Assessor dex_position_assessor;
+  std::atomic<size_t> methods_without_deobfuscated_name{0};
   auto combined_assessment = walk::parallel::methods<Assessment>(
-      m_scope, [&dex_position_assessor](DexMethod* method) {
+      m_scope,
+      [&dex_position_assessor,
+       &methods_without_deobfuscated_name](DexMethod* method) {
         Assessment assessment;
+
+        if (method->get_deobfuscated_name_or_null() == nullptr) {
+          methods_without_deobfuscated_name.fetch_add(1);
+        }
+
         auto code = method->get_code();
         if (!code) {
           return assessment;
@@ -331,6 +355,13 @@ DexAssessment DexScopeAssessor::run() {
       });
 
   auto res = combined_assessment.to_dex_assessment();
+  res["without_deobfuscated_names.methods"] =
+      methods_without_deobfuscated_name.load();
+  res["without_deobfuscated_names.fields"] =
+      fields_without_deobfuscated_name.load();
+  res["without_deobfuscated_names.classes"] =
+      classes_without_deobfuscated_name.load();
+
   if (combined_assessment.has_problems()) {
     TRACE(ASSESSOR, 1, "[scope assessor] %s", to_string(res).c_str());
   }
