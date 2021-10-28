@@ -204,6 +204,7 @@ class Model {
     size_t non_mergeables{0};
     size_t excluded{0};
     size_t dropped{0};
+    std::map<InterdexSubgroupIdx, size_t> interdex_groups{};
   } m_metric;
 
   // Stats for approximate shape merging

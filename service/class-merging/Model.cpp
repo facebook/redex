@@ -907,6 +907,7 @@ void Model::flatten_shapes(const MergerType& merger,
             create_mergers_helper(merger.type, *shape, *intf_set, dex_id,
                                   new_group, m_spec.strategy, interdex_gid,
                                   m_spec.max_count, m_spec.min_count);
+            m_metric.interdex_groups[interdex_gid] += new_group.size();
           }
         } else {
           create_mergers_helper(merger.type, *shape, *intf_set, dex_id,
@@ -1412,6 +1413,15 @@ void Model::update_redex_stats(PassManager& mgr) const {
                     m_approx_stats.mergeables);
     mgr.incr_metric(m_spec.class_name_prefix + "_approx_fields_added",
                     m_approx_stats.fields_added);
+  }
+  for (auto& pair : m_metric.interdex_groups) {
+    auto group_id = pair.first;
+    auto group_size = pair.second;
+    mgr.incr_metric(m_spec.class_name_prefix + "_interdex_group_" +
+                        std::to_string(group_id),
+                    group_size);
+    TRACE(CLMG, 3, "InterDex Group %s_%u %lu", m_spec.class_name_prefix.c_str(),
+          group_id, group_size);
   }
 }
 
