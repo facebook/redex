@@ -951,10 +951,12 @@ ResourcesArscFile::ResourcesArscFile(const std::string& path)
     uint32_t id = sorted_res_ids[index];
     android::ResTable::resource_name name;
     res_table.getResourceName(id, true, &name);
-    std::string name_string(
-        android::String8(name.name8, name.nameLen).string());
-    id_to_name.emplace(id, name_string);
-    name_to_ids[name_string].push_back(id);
+    if (name.name8 != nullptr) {
+      std::string name_string(
+          android::String8(name.name8, name.nameLen).string());
+      id_to_name.emplace(id, name_string);
+      name_to_ids[name_string].push_back(id);
+    }
   }
 }
 
