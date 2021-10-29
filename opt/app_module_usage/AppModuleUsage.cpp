@@ -138,18 +138,23 @@ void AppModuleUsagePass::run_pass(DexStoresVector& stores,
   TRACE(APP_MOD_USE, 4, "*** Direct analysis done\n");
   analyze_reflective_app_module_usage(full_scope);
   TRACE(APP_MOD_USE, 4, "*** Reflective analysis done\n");
-  generate_report(stores, conf, mgr);
+
+  auto report_path = conf.metafile(USES_AM_ANNO_VIOLATIONS_FILENAME);
+  auto module_use_path = conf.metafile(APP_MODULE_USAGE_OUTPUT_FILENAME);
+  auto module_count_path = conf.metafile(APP_MODULE_COUNT_OUTPUT_FILENAME);
+
+  generate_report(stores, report_path, mgr);
   TRACE(APP_MOD_USE, 4, "*** Report done\n");
 
   if (m_output_entrypoints_to_modules) {
     TRACE(APP_MOD_USE, 4, "*** Outputting module use at %s\n",
           APP_MODULE_USAGE_OUTPUT_FILENAME);
-    output_usages(stores, conf);
+    output_usages(stores, module_use_path);
   }
   if (m_output_module_use_count) {
     TRACE(APP_MOD_USE, 4, "*** Outputting module use count at %s\n",
           APP_MODULE_COUNT_OUTPUT_FILENAME);
-    output_use_count(stores, conf);
+    output_use_count(stores, module_count_path);
   }
 
   unsigned int num_methods_access_app_module = 0;
@@ -345,12 +350,11 @@ template std::unordered_set<std::string>
 AppModuleUsagePass::get_modules_used<DexClass>(DexClass*, DexType*);
 
 void AppModuleUsagePass::generate_report(const DexStoresVector& stores,
-                                         const ConfigFiles& conf,
+                                         const std::string& path,
                                          PassManager& mgr) {
   unsigned int violation_count = 0;
   auto annotation_type =
       DexType::make_type(m_uses_app_module_annotation_descriptor.c_str());
-  auto path = conf.metafile(USES_AM_ANNO_VIOLATIONS_FILENAME);
   std::ofstream ofs(path, std::ofstream::out | std::ofstream::trunc);
   // Method violations
   for (const auto& pair : m_stores_method_uses_map) {
@@ -448,8 +452,7 @@ template void AppModuleUsagePass::violation(DexField*,
                                             bool);
 
 void AppModuleUsagePass::output_usages(const DexStoresVector& stores,
-                                       const ConfigFiles& conf) {
-  auto path = conf.metafile(APP_MODULE_USAGE_OUTPUT_FILENAME);
+                                       const std::string& path) {
   std::ofstream ofs(path, std::ofstream::out | std::ofstream::trunc);
   for (const auto& pair : m_stores_method_uses_map) {
     auto reflective_references =
@@ -474,8 +477,7 @@ void AppModuleUsagePass::output_usages(const DexStoresVector& stores,
 }
 
 void AppModuleUsagePass::output_use_count(const DexStoresVector& stores,
-                                          const ConfigFiles& conf) {
-  auto path = conf.metafile(APP_MODULE_COUNT_OUTPUT_FILENAME);
+                                          const std::string& path) {
   std::ofstream ofs(path, std::ofstream::out | std::ofstream::trunc);
   for (const auto& pair : m_stores_use_count) {
     ofs << "\"" << stores.at(pair.first).get_name() << "\", "

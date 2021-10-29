@@ -70,7 +70,7 @@ class AppModuleUsagePass : public Pass {
   void analyze_reflective_app_module_usage(const Scope&);
   // Outputs report of violations, crashes if `m_crash_with_violations` true
   void generate_report(const DexStoresVector&,
-                       const ConfigFiles&,
+                       const std::string&,
                        PassManager&);
   // Handle a violation of `entrypoint` using `module` unannotated
   template <typename T>
@@ -79,9 +79,9 @@ class AppModuleUsagePass : public Pass {
                  std::ofstream& ofs,
                  bool print_name);
   // Outputs methods to store mapping to meta file
-  void output_usages(const DexStoresVector&, const ConfigFiles&);
+  void output_usages(const DexStoresVector&, const std::string&);
   // Outputs stores to number of uses mapping to meta file
-  void output_use_count(const DexStoresVector&, const ConfigFiles&);
+  void output_use_count(const DexStoresVector&, const std::string&);
   // Map of count of app modules to the count of times they're used directly
   // and reflectively
   ConcurrentMap<unsigned int, AppModuleUsage::UseCount> m_stores_use_count;
