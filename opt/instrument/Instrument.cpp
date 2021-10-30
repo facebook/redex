@@ -588,6 +588,53 @@ void InstrumentPass::bind_config() {
   });
 }
 
+namespace {
+
+// Possible finalize some fields to help Redex clean up unused instrumentation.
+void maybe_unset_dynamic_analysis(DexStoresVector& stores,
+                                  ConfigFiles& conf,
+                                  const std::string& analysis_class_name) {
+  auto analysis_type = DexType::get_type(analysis_class_name);
+  if (analysis_type == nullptr) {
+    return;
+  }
+  auto analysis_cls = type_class(analysis_type);
+  if (analysis_cls == nullptr) {
+    return;
+  }
+
+  // Undo all can_rename and can_delete on it.
+  analysis_cls->rstate.unset_root();
+  for (auto* m : analysis_cls->get_all_methods()) {
+    m->rstate.unset_root();
+  }
+  for (auto* f : analysis_cls->get_all_fields()) {
+    f->rstate.unset_root();
+  }
+
+  auto field = analysis_cls->find_field_from_simple_deobfuscated_name(
+      "sNumStaticallyInstrumented");
+  if (field != nullptr) {
+    // Make it final. The default value should be 0, and may lead to other
+    // optimizations, e.g., by FinalInline.
+    field->set_access(field->get_access() | DexAccessFlags::ACC_FINAL);
+  }
+}
+
+} // namespace
+
+void InstrumentPass::eval_pass(DexStoresVector& stores,
+                               ConfigFiles& conf,
+                               PassManager& mgr) {
+  if (!conf.get_json_config().get("instrument_pass_enabled", false) &&
+      !mgr.get_redex_options().instrument_pass_enabled) {
+    maybe_unset_dynamic_analysis(stores, conf, m_options.analysis_class_name);
+    return;
+  }
+
+  // Note: Could do the inverse and protect necessary members here.
+}
+
 // Check for inclusion in allow/block lists of methods/classes. It supports:
 // - "Lcom/fb/foo/" matches "^Lcom/fb/foo/*" or "^Lcom/facebook/debug;"
 // - "Lcom/fb/foo;.bar()V" matches exact full method names.
