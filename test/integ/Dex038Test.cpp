@@ -324,7 +324,7 @@ TEST(Dex038Test, ReadWriteDex038) {
   DexMetadata dm;
   dm.set_id("classes");
   DexStore root_store(dm);
-  root_store.add_classes(load_classes_from_dex(dexfile, true, 38));
+  root_store.add_classes(load_classes_from_dex(dexfile, true, true, 38));
   DexClasses& classes = root_store.get_dexen().back();
   std::vector<DexStore> stores;
   stores.emplace_back(std::move(root_store));

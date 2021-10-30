@@ -168,6 +168,7 @@ void post_dexen_changes(const Scope& v, DexStoresVector& stores) {
 void load_root_dexen(DexStore& store,
                      const std::string& dexen_dir_str,
                      bool balloon,
+                     bool throw_on_balloon_error,
                      bool verbose,
                      int support_dex_version) {
   namespace fs = boost::filesystem;
@@ -222,8 +223,10 @@ void load_root_dexen(DexStore& store,
       TRACE(MAIN, 1, "Loading %s", dex.string().c_str());
     }
     // N.B. throaway stats for now
-    DexClasses classes = load_classes_from_dex(dex.string().c_str(), balloon,
-                                               support_dex_version);
+    DexClasses classes = load_classes_from_dex(
+        dex.string().c_str(), balloon,
+        /* throw_on_balloon_error */ throw_on_balloon_error,
+        support_dex_version);
     store.add_classes(std::move(classes));
   }
 }

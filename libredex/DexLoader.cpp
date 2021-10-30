@@ -12,6 +12,7 @@
 #include "DexMethodHandle.h"
 #include "IRCode.h"
 #include "Macros.h"
+#include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"
 #include "WorkQueue.h"
@@ -523,41 +524,65 @@ DexClasses DexLoader::load_dex(const dex_header* dh, dex_stats_t* stats) {
   return classes;
 }
 
-static void balloon_all(const Scope& scope) {
+static void balloon_all(const Scope& scope, bool throw_on_error) {
+  ConcurrentMap<DexMethod*, std::string> ir_balloon_errors;
   walk::parallel::methods(scope, [&](DexMethod* m) {
     if (m->get_dex_code()) {
-      m->balloon();
+      try {
+        m->balloon();
+      } catch (RedexException& re) {
+        ir_balloon_errors.emplace(m, re.what());
+      }
     }
   });
+
+  if (!ir_balloon_errors.empty()) {
+    std::ostringstream oss;
+    oss << "Error lifting DexCode to IRCode for the following methods:"
+        << std::endl;
+    for (const auto& [method, msg] : ir_balloon_errors) {
+      oss << show(method) << ": " << msg << std::endl;
+    }
+
+    always_assert_log(!throw_on_error,
+                      "%s" /* format string must be a string literal */,
+                      oss.str().c_str());
+    TRACE(MAIN, 1, "%s" /* format string must be a string literal */,
+          oss.str().c_str());
+  }
 }
 
 DexClasses load_classes_from_dex(const char* location,
                                  bool balloon,
+                                 bool throw_on_balloon_error,
                                  int support_dex_version) {
   dex_stats_t stats;
-  return load_classes_from_dex(location, &stats, balloon, support_dex_version);
+  return load_classes_from_dex(location, &stats, balloon,
+                               throw_on_balloon_error, support_dex_version);
 }
 
 DexClasses load_classes_from_dex(const char* location,
                                  dex_stats_t* stats,
                                  bool balloon,
+                                 bool throw_on_balloon_error,
                                  int support_dex_version) {
   TRACE(MAIN, 1, "Loading classes from dex from %s", location);
   DexLoader dl(location);
   auto classes = dl.load_dex(location, stats, support_dex_version);
   if (balloon) {
-    balloon_all(classes);
+    balloon_all(classes, throw_on_balloon_error);
   }
   return classes;
 }
 
 DexClasses load_classes_from_dex(const dex_header* dh,
                                  const char* location,
-                                 bool balloon) {
+                                 bool balloon,
+                                 bool throw_on_balloon_error) {
   DexLoader dl(location);
   auto classes = dl.load_dex(dh, nullptr);
   if (balloon) {
-    balloon_all(classes);
+    balloon_all(classes, throw_on_balloon_error);
   }
   return classes;
 }
@@ -568,4 +593,4 @@ std::string load_dex_magic_from_dex(const char* location) {
   return dh->magic;
 }
 
-void balloon_for_test(const Scope& scope) { balloon_all(scope); }
+void balloon_for_test(const Scope& scope) { balloon_all(scope, true); }

@@ -44,6 +44,7 @@ class Tool {
                        const std::string& apk_dir,
                        const std::string& dexen_dir,
                        bool balloon = true,
+                       bool throw_on_balloon_error = true,
                        int support_dex_version = 35);
 
   void add_standard_options(po::options_description& options) const;
