@@ -634,9 +634,12 @@ Result check_monitors(const DexMethod* method) {
       out << "(";
       for (auto e : b->preds()) {
         auto count = monitor_analyzer.get_exit_state_at(e->src());
-        out << "B" << e->src()->id() << ":" << show(count) << " | ";
+        count = monitor_analyzer.analyze_edge(e, count);
+        if (!count.is_bottom()) {
+          out << "B" << e->src()->id() << ":" << show(count) << " | ";
+        }
       }
-      auto count = monitor_analyzer.get_exit_state_at(b);
+      auto count = monitor_analyzer.get_entry_state_at(b);
       out << ") ==> B" << b->id() << ":" << show(count) << ", ";
     }
     out << " in\n" + show(code->cfg());

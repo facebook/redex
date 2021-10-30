@@ -9,6 +9,7 @@
 
 #include <algorithm>
 
+#include "DexClass.h"
 #include "IRCode.h"
 #include "Show.h"
 #include "Trace.h"
@@ -165,9 +166,23 @@ MonitorCountDomain Analyzer::analyze_edge(
     //
     // As such, pretend this edge isn't there.
     return MonitorCountDomain::bottom();
-  default:
-    return env;
+  case OPCODE_INVOKE_STATIC: {
+    // We have observed that the Kotlin compiler injects invocations to a
+    // certain marker in a way that causes imbalanced monitor stack. We choose
+    // to ignore that here.
+    auto method = insn->get_method()->as_def();
+    if (method) {
+      const auto& name = method->get_fully_deobfuscated_name();
+      if (name == "Lkotlin/jvm/internal/InlineMarker;.finallyStart:(I)V") {
+        return MonitorCountDomain::bottom();
+      }
+    }
+    break;
   }
+  default:
+    break;
+  }
+  return env;
 }
 
 void Analyzer::analyze_instruction(const IRInstruction* insn,
