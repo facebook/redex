@@ -159,12 +159,13 @@ struct ModelSpec {
   // a part of the generated set.
   bool is_generated_code{false};
 
-  enum class TypeUsagesMode {
+  enum class InterDexGroupingInferringMode {
     kAllTypeRefs,
     kClassLoads,
     kClassLoadsBasicBlockFiltering,
   };
-  TypeUsagesMode type_usages_mode{TypeUsagesMode::kAllTypeRefs};
+  InterDexGroupingInferringMode interdex_grouping_inferring_mode{
+      InterDexGroupingInferringMode::kAllTypeRefs};
 
   bool generate_type_tag() const {
     return type_tag_config == TypeTagConfig::GENERATE;
@@ -483,6 +484,7 @@ struct ModelStats {
   ModelStats& operator+=(const ModelStats& stats);
 };
 
-std::ostream& operator<<(std::ostream& os, ModelSpec::TypeUsagesMode mode);
+std::ostream& operator<<(std::ostream& os,
+                         ModelSpec::InterDexGroupingInferringMode mode);
 
 } // namespace class_merging

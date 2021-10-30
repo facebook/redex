@@ -616,8 +616,8 @@ DexType* check_current_instance(const ConstTypeHashSet& types,
 ConcurrentMap<DexType*, TypeHashSet> get_type_usages(
     const ConstTypeHashSet& types,
     const Scope& scope,
-    ModelSpec::TypeUsagesMode mode) {
-  TRACE(CLMG, 1, "TypeUsagesMode %s",
+    ModelSpec::InterDexGroupingInferringMode mode) {
+  TRACE(CLMG, 1, "InterDex Grouping Inferring Mode %s",
         [&]() {
           std::ostringstream oss;
           oss << mode;
@@ -662,7 +662,7 @@ ConcurrentMap<DexType*, TypeHashSet> get_type_usages(
   };
 
   switch (mode) {
-  case ModelSpec::TypeUsagesMode::kAllTypeRefs: {
+  case ModelSpec::InterDexGroupingInferringMode::kAllTypeRefs: {
     walk::parallel::opcodes(scope, [&](DexMethod* method, IRInstruction* insn) {
       auto cls = method->get_class();
       const auto& updater =
@@ -696,7 +696,7 @@ ConcurrentMap<DexType*, TypeHashSet> get_type_usages(
     break;
   }
 
-  case ModelSpec::TypeUsagesMode::kClassLoads: {
+  case ModelSpec::InterDexGroupingInferringMode::kClassLoads: {
     walk::parallel::opcodes(scope, [&](DexMethod* method, IRInstruction* insn) {
       auto cls = method->get_class();
       class_loads_update(insn, cls);
@@ -704,7 +704,8 @@ ConcurrentMap<DexType*, TypeHashSet> get_type_usages(
     break;
   }
 
-  case ModelSpec::TypeUsagesMode::kClassLoadsBasicBlockFiltering: {
+  case ModelSpec::InterDexGroupingInferringMode::
+      kClassLoadsBasicBlockFiltering: {
     auto is_not_cold = [](cfg::Block* b) {
       auto* sb = source_blocks::get_first_source_block(b);
       if (sb == nullptr) {
@@ -754,15 +755,16 @@ size_t get_interdex_group(
 
 namespace class_merging {
 
-std::ostream& operator<<(std::ostream& os, ModelSpec::TypeUsagesMode mode) {
+std::ostream& operator<<(std::ostream& os,
+                         ModelSpec::InterDexGroupingInferringMode mode) {
   switch (mode) {
-  case ModelSpec::TypeUsagesMode::kAllTypeRefs:
+  case ModelSpec::InterDexGroupingInferringMode::kAllTypeRefs:
     os << "all";
     break;
-  case ModelSpec::TypeUsagesMode::kClassLoads:
+  case ModelSpec::InterDexGroupingInferringMode::kClassLoads:
     os << "class-loads";
     break;
-  case ModelSpec::TypeUsagesMode::kClassLoadsBasicBlockFiltering:
+  case ModelSpec::InterDexGroupingInferringMode::kClassLoadsBasicBlockFiltering:
     os << "class-loads-bb";
     break;
   }
@@ -821,7 +823,7 @@ std::vector<ConstTypeHashSet> Model::group_by_interdex_set(
     return new_groups;
   }
   const auto& type_to_usages =
-      get_type_usages(types, m_scope, m_spec.type_usages_mode);
+      get_type_usages(types, m_scope, m_spec.interdex_grouping_inferring_mode);
   for (const auto& pair : type_to_usages) {
     auto index = get_interdex_group(pair.second, s_cls_to_interdex_group,
                                     s_num_interdex_groups);
