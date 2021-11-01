@@ -143,7 +143,7 @@ void AppModuleUsagePass::run_pass(DexStoresVector& stores,
   auto module_use_path = conf.metafile(APP_MODULE_USAGE_OUTPUT_FILENAME);
   auto module_count_path = conf.metafile(APP_MODULE_COUNT_OUTPUT_FILENAME);
 
-  generate_report(stores, report_path, mgr);
+  auto num_violations = generate_report(stores, report_path, mgr);
   TRACE(APP_MOD_USE, 4, "*** Report done\n");
 
   if (m_output_entrypoints_to_modules) {
@@ -167,6 +167,12 @@ void AppModuleUsagePass::run_pass(DexStoresVector& stores,
   }
   mgr.set_metric("num_methods_access_app_module",
                  num_methods_access_app_module);
+
+  if (m_crash_with_violations) {
+    always_assert_log(num_violations == 0,
+                      "There are @UsesAppModule violations. See %s \n",
+                      report_path.c_str());
+  }
 }
 
 void AppModuleUsagePass::load_allow_list(
@@ -272,7 +278,7 @@ void AppModuleUsagePass::analyze_reflective_app_module_usage(
       IRInstruction* insn = mie.insn;
       boost::optional<DexType*> type = boost::none;
       if (!opcode::is_an_invoke(insn->opcode())) {
-        TRACE(APP_MOD_USE, 9, "Investigating reflection \n");
+        TRACE(APP_MOD_USE, 6, "Investigating reflection \n");
         // If an object type is from refletion it will be in the RESULT_REGISTER
         // for some instruction
         const auto& o = analysis->get_abstract_object(RESULT_REGISTER, insn);
@@ -283,7 +289,7 @@ void AppModuleUsagePass::analyze_reflective_app_module_usage(
                   reflection::REFLECTION))) {
           // If the obj is a CLASS then it must have a class source of
           // REFLECTION
-          TRACE(APP_MOD_USE, 8, "Found an abstract object \n");
+          TRACE(APP_MOD_USE, 6, "Found an abstract object \n");
           type = type_used(o.get());
         }
       }
@@ -298,7 +304,7 @@ void AppModuleUsagePass::analyze_reflective_app_module_usage(
                       std::unordered_set<unsigned int>& stores_used,
                       bool /* exists */) { stores_used.emplace(store); });
           TRACE(APP_MOD_USE,
-                6,
+                5,
                 "%s used reflectively by %s\n",
                 SHOW(type.get()),
                 SHOW(method));
@@ -349,10 +355,10 @@ AppModuleUsagePass::get_modules_used<DexField>(DexField*, DexType*);
 template std::unordered_set<std::string>
 AppModuleUsagePass::get_modules_used<DexClass>(DexClass*, DexType*);
 
-void AppModuleUsagePass::generate_report(const DexStoresVector& stores,
-                                         const std::string& path,
-                                         PassManager& mgr) {
-  unsigned int violation_count = 0;
+size_t AppModuleUsagePass::generate_report(const DexStoresVector& stores,
+                                           const std::string& path,
+                                           PassManager& mgr) {
+  size_t violation_count = 0;
   auto annotation_type =
       DexType::make_type(m_uses_app_module_annotation_descriptor.c_str());
   std::ofstream ofs(path, std::ofstream::out | std::ofstream::trunc);
@@ -421,6 +427,7 @@ void AppModuleUsagePass::generate_report(const DexStoresVector& stores,
     }
   });
   mgr.set_metric("num_violations", violation_count);
+  return violation_count;
 }
 
 template <typename T>
@@ -432,15 +439,15 @@ void AppModuleUsagePass::violation(T* entrypoint,
     ofs << SHOW(entrypoint);
   }
   ofs << ", " << module;
+  int level = 4;
+  if (m_crash_with_violations) {
+    level = 0;
+  }
   TRACE(APP_MOD_USE,
-        4,
+        level,
         "%s uses app module \"%s\" without annotation\n",
         SHOW(entrypoint),
         module.c_str());
-  always_assert_log(!m_crash_with_violations,
-                    "%s uses app module \"%s\" without "
-                    "@UsesAppModule annotation.\n",
-                    SHOW(entrypoint), module.c_str());
 }
 template void AppModuleUsagePass::violation(DexMethod*,
                                             const std::string&,

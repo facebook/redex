@@ -76,14 +76,9 @@ TEST_F(AppModuleUsageTest, testOneStore) {
 
 TEST_F(AppModuleUsageTest, testTwoStores) {
   split_two_stores(stores);
-
   // root_store holds AppModuleUsageClass
   // second_store holds AppModuleUsageOtherClass & AppModuleUsageThirdClass
-  // configure to not crash on violations
-  auto config_file_env = std::getenv("config_file");
-  always_assert_log(config_file_env,
-                    "Config file must be specified to AppModuleUsageTest.\n");
-
+  auto config_file_env = std::getenv("default_config_file");
   std::ifstream config_file(config_file_env, std::ifstream::binary);
   Json::Value cfg;
   config_file >> cfg;
@@ -97,31 +92,30 @@ TEST_F(AppModuleUsageTest, testTwoStores) {
 
 TEST_F(AppModuleUsageTest, testTwoStoresCrash) {
   split_two_stores(stores);
-  auto config_file_env = std::getenv("default_config_file");
+  // configure to crash on violations
+  auto config_file_env = std::getenv("config_file");
+  always_assert_log(config_file_env,
+                    "Config file must be specified to AppModuleUsageTest.\n");
   std::ifstream config_file(config_file_env, std::ifstream::binary);
+  Json::Value cfg;
+  config_file >> cfg;
 
   // root_store holds AppModuleUsageClass
   // second_store holds AppModuleUsageOtherClass & AppModuleUsageThirdClass
-  // will crash on violation without config
-  EXPECT_ANY_THROW(run_passes({new AppModuleUsagePass}));
+  // will crash on violation with config
+  EXPECT_ANY_THROW(run_passes({new AppModuleUsagePass}, nullptr, cfg));
 }
 
 TEST_F(AppModuleUsageTest, testThreeStores) {
   split_three_stores(stores);
-
   // root_store holds AppModuleUsageClass
   // second_store holds AppModuleUsageOtherClass
   // third_store holds AppModuleUsageThirdClass
-  // configure to not crash on violations
-  auto config_file_env = std::getenv("config_file");
-  always_assert_log(config_file_env,
-                    "Config file must be specified to AppModuleUsageTest.\n");
-
+  auto config_file_env = std::getenv("default_config_file");
   std::ifstream config_file(config_file_env, std::ifstream::binary);
   Json::Value cfg;
   config_file >> cfg;
   run_passes({new AppModuleUsagePass}, nullptr, cfg);
-
   // AppModuleUsageOtherClass and AppModuleUsageThirdClass each have a method
   // with a App module access when in different stores
   EXPECT_EQ(pass_manager->get_pass_info()[0].metrics.at(
@@ -134,12 +128,17 @@ TEST_F(AppModuleUsageTest, testThreeStores) {
 
 TEST_F(AppModuleUsageTest, testThreeStoresCrash) {
   split_three_stores(stores);
-  auto config_file_env = std::getenv("default_config_file");
+  // configure to crash on violations
+  auto config_file_env = std::getenv("config_file");
+  always_assert_log(config_file_env,
+                    "Config file must be specified to AppModuleUsageTest.\n");
   std::ifstream config_file(config_file_env, std::ifstream::binary);
+  Json::Value cfg;
+  config_file >> cfg;
 
   // root_store holds AppModuleUsageClass
   // second_store holds AppModuleUsageOtherClass
   // third_store holds AppModuleUsageThirdClass
-  // will crash on violation without config
-  EXPECT_ANY_THROW(run_passes({new AppModuleUsagePass}));
+  // will crash on violation with config
+  EXPECT_ANY_THROW(run_passes({new AppModuleUsagePass}, nullptr, cfg));
 }

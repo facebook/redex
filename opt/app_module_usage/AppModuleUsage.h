@@ -7,6 +7,7 @@
 
 #include "DexClass.h"
 #include "Pass.h"
+#include <cstddef>
 #include <string>
 
 namespace AppModuleUsage {
@@ -48,7 +49,7 @@ class AppModuleUsagePass : public Pass {
     bind("output_entrypoints_to_modules", true,
          m_output_entrypoints_to_modules);
     bind("output_module_use_count", true, m_output_module_use_count);
-    bind("crash_with_violations", true, m_crash_with_violations);
+    bind("crash_with_violations", false, m_crash_with_violations);
     bind("uses_app_module_annotation_descriptor",
          "Lcom/facebook/redex/annotations/UsesAppModule;",
          m_uses_app_module_annotation_descriptor);
@@ -68,10 +69,10 @@ class AppModuleUsagePass : public Pass {
                        const std::unordered_map<std::string, unsigned int>&);
   void analyze_direct_app_module_usage(const Scope&);
   void analyze_reflective_app_module_usage(const Scope&);
-  // Outputs report of violations, crashes if `m_crash_with_violations` true
-  void generate_report(const DexStoresVector&,
-                       const std::string&,
-                       PassManager&);
+  // Outputs report of violations, returns the number of violations
+  size_t generate_report(const DexStoresVector&,
+                         const std::string&,
+                         PassManager&);
   // Handle a violation of `entrypoint` using `module` unannotated
   template <typename T>
   void violation(T* entrypoint,
