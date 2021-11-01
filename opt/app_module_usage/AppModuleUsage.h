@@ -34,12 +34,12 @@ struct UseCount {
  * each method, and "redex-app-module-count.csv" mapping app modules to the
  * number of places it's referenced.
  *
- * Each line of "redex-app-module-usage.csv" is the full descriptor
- * of a method followed by a list of the names of all modules used by the method
- * (each prefixed with "(r)" is used reflectively or "(d&r)" if referenced both
- * directed and reflectively). Each line of "redex-app-module-count.csv" is the
- * name of a module followed by its count of direct references, then its count
- * of reflective references.
+ * Each line of "redex-app-module-usage.csv" is the source module name, followed
+ * by the full descriptor of a method, followed by a list of the names of all
+ * modules used by the method (each prefixed with "(r)" is used reflectively or
+ * "(d&r)" if referenced both directed and reflectively). Each line of
+ * "redex-app-module-count.csv" is the name of a module followed by its count of
+ * direct references, then its count of reflective references.
  */
 class AppModuleUsagePass : public Pass {
  public:

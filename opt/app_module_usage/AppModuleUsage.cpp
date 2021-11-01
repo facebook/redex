@@ -465,7 +465,17 @@ void AppModuleUsagePass::output_usages(const DexStoresVector& stores,
     auto reflective_references =
         m_stores_method_uses_reflectively_map.at(pair.first);
     if (!pair.second.empty() || !reflective_references.empty()) {
-      ofs << "\"" << SHOW(pair.first) << "\"";
+      const auto method = pair.first;
+      if (m_type_store_map.count(method->get_class()) > 0) {
+        ofs << "\""
+            << stores.at(m_type_store_map.at(method->get_class()))
+                   .get_name()
+                   .c_str()
+            << "\", ";
+      } else {
+        ofs << "\"\", ";
+      }
+      ofs << "\"" << SHOW(method) << "\"";
       for (unsigned int store_id : pair.second) {
         if (reflective_references.count(store_id) > 0) {
           ofs << ", \"(d&r)" << stores.at(store_id).get_name().c_str() << "\"";
