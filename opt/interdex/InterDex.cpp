@@ -46,8 +46,6 @@ constexpr const char* SCROLL_SET_END_FORMAT = "LScrollSetEnd";
 constexpr const char* BG_SET_START_FORMAT = "LBackgroundSetStart";
 constexpr const char* BG_SET_END_FORMAT = "LBackgroundSetEnd";
 
-constexpr size_t MAX_DEX_NUM = 99;
-
 static interdex::DexInfo EMPTY_DEX_INFO;
 
 std::unordered_set<DexClass*> find_unrefenced_coldstart_classes(
@@ -1013,16 +1011,7 @@ void InterDex::set_clinit_method_if_needed(DexClass* cls) {
   code->set_registers_size(1);
 }
 
-// Creates a canary class if necessary. (In particular, the primary dex never
-// has a canary class.) This method should be called after flush_out_dex when
-// beginning a new dex. As canary classes are added in the end without checks,
-// the implied references are added here immediately to ensure that we don't
-// exceed limits.
-DexClass* InterDex::get_canary_cls(DexInfo& dex_info) {
-  if (!m_emit_canaries || dex_info.primary) {
-    return nullptr;
-  }
-  int dexnum = m_dexes_structure.get_num_dexes();
+DexClass* create_canary(int dexnum) {
   char buf[CANARY_CLASS_BUFSIZE];
   snprintf(buf, sizeof(buf), CANARY_CLASS_FORMAT, dexnum);
   std::string canary_name(buf);
@@ -1040,6 +1029,20 @@ DexClass* InterDex::get_canary_cls(DexInfo& dex_info) {
     // Don't rename the Canary we've created
     canary_cls->rstate.set_keepnames();
   }
+  return canary_cls;
+}
+
+// Creates a canary class if necessary. (In particular, the primary dex never
+// has a canary class.) This method should be called after flush_out_dex when
+// beginning a new dex. As canary classes are added in the end without checks,
+// the implied references are added here immediately to ensure that we don't
+// exceed limits.
+DexClass* InterDex::get_canary_cls(DexInfo& dex_info) {
+  if (!m_emit_canaries || dex_info.primary) {
+    return nullptr;
+  }
+  int dexnum = m_dexes_structure.get_num_dexes();
+  auto canary_cls = create_canary(dexnum);
   set_clinit_method_if_needed(canary_cls);
   MethodRefs clazz_mrefs;
   FieldRefs clazz_frefs;

@@ -21,7 +21,11 @@ class XStoreRefs;
 
 namespace interdex {
 
+constexpr size_t MAX_DEX_NUM = 99;
+
 bool is_canary(DexClass* clazz);
+
+DexClass* create_canary(int dexnum);
 
 bool compare_dexclasses_for_compressed_size(DexClass* c1, DexClass* c2);
 
