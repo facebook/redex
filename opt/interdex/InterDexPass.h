@@ -48,6 +48,7 @@ constexpr const char* METRIC_LINEAR_ALLOC_LIMIT = "linear_alloc_limit";
 constexpr const char* METRIC_RESERVED_FREFS = "reserved_frefs";
 constexpr const char* METRIC_RESERVED_TREFS = "reserved_trefs";
 constexpr const char* METRIC_RESERVED_MREFS = "reserved_mrefs";
+constexpr const char* METRIC_EMIT_CANARIES = "emit_canaries";
 
 struct ReserveRefsInfo {
   int64_t frefs;

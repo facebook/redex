@@ -126,6 +126,7 @@ void InterDexPass::run_pass(
   mgr.set_metric(METRIC_RESERVED_FREFS, refs_info.frefs);
   mgr.set_metric(METRIC_RESERVED_TREFS, refs_info.trefs);
   mgr.set_metric(METRIC_RESERVED_MREFS, refs_info.mrefs);
+  mgr.set_metric(METRIC_EMIT_CANARIES, m_emit_canaries);
 
   bool force_single_dex = conf.get_json_config().get("force_single_dex", false);
   InterDex interdex(original_scope, dexen, mgr.asset_manager(), conf, plugins,
