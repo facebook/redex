@@ -954,7 +954,7 @@ def prepare_redex(args: argparse.Namespace) -> State:
             if e.errno != errno.EEXIST:
                 raise e
 
-    with BuckPartScope("Unpacking", "Unpacking Redex input"):
+    with BuckPartScope("redex::Unpacking", "Unpacking Redex input"):
         logging.debug("Unpacking...")
         unpack_start_time = timer()
         if not extracted_apk_dir:
@@ -1215,10 +1215,10 @@ def run_redex(
         else:
             assert args.input_apk
 
-        with BuckPartScope("Preparing", "Prepare to run redex"):
+        with BuckPartScope("redex::Preparing", "Prepare to run redex"):
             state = prepare_redex(args)
 
-        with BuckPartScope("Run redex-all", "Actually run redex binary"):
+        with BuckPartScope("redex::Run redex-all", "Actually run redex binary"):
             run_redex_binary(state, exception_formatter, output_line_handler)
 
         if args.stop_pass:
