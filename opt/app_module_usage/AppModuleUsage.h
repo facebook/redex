@@ -66,13 +66,11 @@ class AppModuleUsagePass : public Pass {
 
  private:
   void load_allow_list(DexStoresVector&,
-                       const std::unordered_map<std::string, unsigned int>&);
+                       const std::unordered_map<std::string, DexStore*>&);
   void analyze_direct_app_module_usage(const Scope&);
   void analyze_reflective_app_module_usage(const Scope&);
   // Outputs report of violations, returns the number of violations
-  size_t generate_report(const DexStoresVector&,
-                         const std::string&,
-                         PassManager&);
+  size_t generate_report(const Scope&, const std::string&, PassManager&);
   // Handle a violation of `entrypoint` using `module` unannotated
   template <typename T>
   void violation(T* entrypoint,
@@ -85,24 +83,24 @@ class AppModuleUsagePass : public Pass {
   void output_use_count(const DexStoresVector&, const std::string&);
   // Map of count of app modules to the count of times they're used directly
   // and reflectively
-  ConcurrentMap<unsigned int, AppModuleUsage::UseCount> m_stores_use_count;
+  ConcurrentMap<DexStore*, AppModuleUsage::UseCount> m_stores_use_count;
 
   // Map of all methods to the stores of the modules used by the method
-  ConcurrentMap<DexMethod*, std::unordered_set<unsigned int>>
+  ConcurrentMap<DexMethod*, std::unordered_set<DexStore*>>
       m_stores_method_uses_map;
 
   // Map of all methods to the stores of the modules used reflectively by the
   // method
-  ConcurrentMap<DexMethod*, std::unordered_set<unsigned int>>
+  ConcurrentMap<DexMethod*, std::unordered_set<DexStore*>>
       m_stores_method_uses_reflectively_map;
 
   // Map of violations from entrypoint names to the names of stores used
   // by the entrypoint
-  std::unordered_map<std::string, std::unordered_set<unsigned int>>
+  std::unordered_map<std::string, std::unordered_set<DexStore*>>
       m_allow_list_map;
 
   // To quickly look up wich DexStore ("module") a DexType is from
-  ConcurrentMap<DexType*, unsigned int> m_type_store_map;
+  ConcurrentMap<DexType*, DexStore*> m_type_store_map;
 
   bool m_output_entrypoints_to_modules;
   bool m_output_module_use_count;

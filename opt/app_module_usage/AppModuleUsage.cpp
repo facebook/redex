@@ -115,21 +115,19 @@ void AppModuleUsagePass::run_pass(DexStoresVector& stores,
                                   PassManager& mgr) {
   const auto& full_scope = build_class_scope(stores);
   // To quickly look up wich DexStore ("module") a name represents
-  std::unordered_map<std::string, unsigned int> name_store_map;
+  std::unordered_map<std::string, DexStore*> name_store_map;
   reflection::MetadataCache refl_metadata_cache;
-  for (unsigned int idx = 0; idx < stores.size(); idx++) {
-    const auto& store = stores.at(idx);
+  for (auto& store : stores) {
     Scope scope = build_class_scope(store.get_dexen());
-    name_store_map.emplace(store.get_name(), idx);
+    name_store_map.emplace(store.get_name(), &store);
     walk::parallel::classes(scope, [&](DexClass* cls) {
-      m_type_store_map.emplace(cls->get_type(), idx);
+      m_type_store_map.emplace(cls->get_type(), &store);
     });
   }
   walk::parallel::methods(full_scope, [&](DexMethod* method) {
-    m_stores_method_uses_map.emplace(method,
-                                     std::unordered_set<unsigned int>{});
+    m_stores_method_uses_map.emplace(method, std::unordered_set<DexStore*>{});
     m_stores_method_uses_reflectively_map.emplace(
-        method, std::unordered_set<unsigned int>{});
+        method, std::unordered_set<DexStore*>{});
   });
 
   load_allow_list(stores, name_store_map);
@@ -143,7 +141,7 @@ void AppModuleUsagePass::run_pass(DexStoresVector& stores,
   auto module_use_path = conf.metafile(APP_MODULE_USAGE_OUTPUT_FILENAME);
   auto module_count_path = conf.metafile(APP_MODULE_COUNT_OUTPUT_FILENAME);
 
-  auto num_violations = generate_report(stores, report_path, mgr);
+  auto num_violations = generate_report(full_scope, report_path, mgr);
   TRACE(APP_MOD_USE, 4, "*** Report done\n");
 
   if (m_output_entrypoints_to_modules) {
@@ -177,7 +175,7 @@ void AppModuleUsagePass::run_pass(DexStoresVector& stores,
 
 void AppModuleUsagePass::load_allow_list(
     DexStoresVector& stores,
-    const std::unordered_map<std::string, unsigned int>& name_store_map) {
+    const std::unordered_map<std::string, DexStore*>& name_store_map) {
   if (m_allow_list_filepath.empty()) {
     TRACE(APP_MOD_USE, 1, "WARNING: No violation allow list file provided");
     return;
@@ -195,15 +193,15 @@ void AppModuleUsagePass::load_allow_list(
         comma = line.find_first_of(',', comma + 1); // next comma or end of line
         const auto& store_name = line.substr(store_start, comma - store_start);
         if (name_store_map.count(store_name) > 0) {
-          const auto& store_id = name_store_map.at(store_name);
+          auto store = name_store_map.at(store_name);
           TRACE(APP_MOD_USE, 6,
-                "adding allowlist entry \"%s\" uses module \"%s\" (id: %u)\n",
-                entrypoint.c_str(), store_name.c_str(), store_id);
+                "adding allowlist entry \"%s\" uses module \"%s\"\n",
+                entrypoint.c_str(), store_name.c_str());
           if (m_allow_list_map.count(entrypoint) == 0) {
             m_allow_list_map.emplace(entrypoint,
-                                     std::unordered_set<unsigned int>{});
+                                     std::unordered_set<DexStore*>{});
           }
-          m_allow_list_map.at(entrypoint).emplace(store_id);
+          m_allow_list_map.at(entrypoint).emplace(store);
         } else {
           TRACE(APP_MOD_USE, 4,
                 "Cannot add module %s to allow list, it does not exist\n",
@@ -220,7 +218,6 @@ void AppModuleUsagePass::load_allow_list(
 }
 
 void AppModuleUsagePass::analyze_direct_app_module_usage(const Scope& scope) {
-  unsigned int root_store = 0;
   walk::parallel::opcodes(scope, [&](DexMethod* method, IRInstruction* insn) {
     std::unordered_set<DexType*> types_referenced;
     auto method_class = method->get_class();
@@ -240,16 +237,16 @@ void AppModuleUsagePass::analyze_direct_app_module_usage(const Scope& scope) {
     for (DexType* type : types_referenced) {
       if (m_type_store_map.count(type) > 0) {
         const auto store = m_type_store_map.at(type);
-        if (store != root_store && store != method_store) {
+        if (!store->is_root_store() && store != method_store) {
           // App module reference!
           // add the store for the referenced type to the map
           m_stores_method_uses_map.update(
               method,
               [store](DexMethod* /* method */,
-                      std::unordered_set<unsigned int>& stores_used,
+                      std::unordered_set<DexStore*>& stores_used,
                       bool /* exists */) { stores_used.emplace(store); });
           m_stores_use_count.update(store,
-                                    [](const unsigned int& /*store*/,
+                                    [](DexStore* /*store*/,
                                        AppModuleUsage::UseCount& count,
                                        bool /* exists */) {
                                       count.direct_count =
@@ -263,7 +260,6 @@ void AppModuleUsagePass::analyze_direct_app_module_usage(const Scope& scope) {
 
 void AppModuleUsagePass::analyze_reflective_app_module_usage(
     const Scope& scope) {
-  unsigned int root_store = 0;
   // Reflective Reference
   reflection::MetadataCache refl_metadata_cache;
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
@@ -295,13 +291,13 @@ void AppModuleUsagePass::analyze_reflective_app_module_usage(
       }
       if (type.has_value() && m_type_store_map.count(type.get()) > 0) {
         const auto store = m_type_store_map.at(type.get());
-        if (store != root_store && store != method_store) {
+        if (!store->is_root_store() && store != method_store) {
           // App module reference!
           // add the store for the referenced type to the map
           m_stores_method_uses_reflectively_map.update(
               method,
               [store](DexMethod* /* method */,
-                      std::unordered_set<unsigned int>& stores_used,
+                      std::unordered_set<DexStore*>& stores_used,
                       bool /* exists */) { stores_used.emplace(store); });
           TRACE(APP_MOD_USE,
                 5,
@@ -309,7 +305,7 @@ void AppModuleUsagePass::analyze_reflective_app_module_usage(
                 SHOW(type.get()),
                 SHOW(method));
           m_stores_use_count.update(store,
-                                    [](const unsigned int& /*store*/,
+                                    [](DexStore* /*store*/,
                                        AppModuleUsage::UseCount& count,
                                        bool /* exists */) {
                                       count.reflective_count =
@@ -355,7 +351,7 @@ AppModuleUsagePass::get_modules_used<DexField>(DexField*, DexType*);
 template std::unordered_set<std::string>
 AppModuleUsagePass::get_modules_used<DexClass>(DexClass*, DexType*);
 
-size_t AppModuleUsagePass::generate_report(const DexStoresVector& stores,
+size_t AppModuleUsagePass::generate_report(const Scope& scope,
                                            const std::string& path,
                                            PassManager& mgr) {
   size_t violation_count = 0;
@@ -372,8 +368,8 @@ size_t AppModuleUsagePass::generate_report(const DexStoresVector& stores,
     annotated_module_names.merge(
         get_modules_used(type_class(method->get_class()), annotation_type));
     // check for violations
-    auto violation_check = [&](const auto& store) {
-      const auto& used_module_name = stores.at(store).get_name();
+    auto violation_check = [&](auto store) {
+      const auto& used_module_name = store->get_name();
       if (annotated_module_names.count(used_module_name) == 0 &&
           (m_allow_list_map.count(method_name) == 0 ||
            m_allow_list_map.at(method_name).count(store) == 0)) {
@@ -395,7 +391,7 @@ size_t AppModuleUsagePass::generate_report(const DexStoresVector& stores,
     }
   }
   // Field violations
-  walk::fields(build_class_scope(stores), [&](DexField* field) {
+  walk::fields(scope, [&](DexField* field) {
     auto annotated_module_names = get_modules_used(field, annotation_type);
     std::string field_name = show(field);
     // combine annotations from class
@@ -406,18 +402,16 @@ size_t AppModuleUsagePass::generate_report(const DexStoresVector& stores,
         m_type_store_map.count(field->get_class()) > 0) {
       // get_type is the type of the field, the app module that class is from is
       // referenced by the field
-      auto store_used_id = m_type_store_map.at(field->get_type());
-      const auto& store_used = stores.at(store_used_id);
+      auto store_used = m_type_store_map.at(field->get_type());
       // get_class is the contatining class of the field, the app module that
       // class is in is the module the field is in
-      const auto& store_from =
-          stores.at(m_type_store_map.at(field->get_class()));
-      if (!store_used.is_root_store() &&
-          store_used.get_name() != store_from.get_name() &&
-          annotated_module_names.count(store_used.get_name()) == 0 &&
+      auto store_from = m_type_store_map.at(field->get_class());
+      if (!store_used->is_root_store() &&
+          store_used->get_name() != store_from->get_name() &&
+          annotated_module_names.count(store_used->get_name()) == 0 &&
           (m_allow_list_map.count(field_name) == 0 ||
-           m_allow_list_map.at(field_name).count(store_used_id) == 0)) {
-        violation(field, store_used.get_name(), ofs, print_name);
+           m_allow_list_map.at(field_name).count(store_used) == 0)) {
+        violation(field, store_used->get_name(), ofs, print_name);
         print_name = false;
         violation_count++;
       }
@@ -468,24 +462,22 @@ void AppModuleUsagePass::output_usages(const DexStoresVector& stores,
       const auto method = pair.first;
       if (m_type_store_map.count(method->get_class()) > 0) {
         ofs << "\""
-            << stores.at(m_type_store_map.at(method->get_class()))
-                   .get_name()
-                   .c_str()
+            << m_type_store_map.at(method->get_class())->get_name().c_str()
             << "\", ";
       } else {
         ofs << "\"\", ";
       }
       ofs << "\"" << SHOW(method) << "\"";
-      for (unsigned int store_id : pair.second) {
-        if (reflective_references.count(store_id) > 0) {
-          ofs << ", \"(d&r)" << stores.at(store_id).get_name().c_str() << "\"";
+      for (auto store : pair.second) {
+        if (reflective_references.count(store) > 0) {
+          ofs << ", \"(d&r)" << store->get_name().c_str() << "\"";
         } else {
-          ofs << ", \"" << stores.at(store_id).get_name() << "\"";
+          ofs << ", \"" << store->get_name() << "\"";
         }
       }
-      for (unsigned int store_id : reflective_references) {
-        if (pair.second.count(store_id) == 0) {
-          ofs << ", \"(r)" << stores.at(store_id).get_name().c_str() << "\"";
+      for (auto store : reflective_references) {
+        if (pair.second.count(store) == 0) {
+          ofs << ", \"(r)" << store->get_name().c_str() << "\"";
         }
       }
       ofs << "\n";
@@ -497,9 +489,8 @@ void AppModuleUsagePass::output_use_count(const DexStoresVector& stores,
                                           const std::string& path) {
   std::ofstream ofs(path, std::ofstream::out | std::ofstream::trunc);
   for (const auto& pair : m_stores_use_count) {
-    ofs << "\"" << stores.at(pair.first).get_name() << "\", "
-        << pair.second.direct_count << ", " << pair.second.reflective_count
-        << "\n";
+    ofs << "\"" << pair.first->get_name() << "\", " << pair.second.direct_count
+        << ", " << pair.second.reflective_count << "\n";
   }
 }
 
