@@ -21,6 +21,7 @@ class DexType;
   TM(ACCESS)          \
   TM(ANNO)            \
   TM(API_UTILS)       \
+  TM(APP_MOD_USE)     \
   TM(ARGS)            \
   TM(ASSESSOR)        \
   TM(BBPROFILE)       \

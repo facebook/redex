@@ -13,6 +13,7 @@ AM_LOG_FLAGS = -c 'dexfile=$0-class.dex $0'
 
 check_PROGRAMS = \
     ab_experiment_context_test \
+    app_module_usage_test \
     call_graph_test \
     clinit_side_effect_test \
     constant_propagation_test \
@@ -42,12 +43,16 @@ check_PROGRAMS = \
     synth_test \
     type_analysis_transform_test \
     type_inference_test \
+    uses_app_module_annotation_test \
     verifier_artifacts_test
 
 TESTS = $(check_PROGRAMS)
 
 ab_experiment_context_test_SOURCES = ABExperimentContextTest.cpp
 EXTRA_ab_experiment_context_test_DEPENDENCIES = ab_experiment_context_test-class.dex
+
+app_module_usage_test_SOURCES = AppModuleUsageTest.cpp
+EXTRA_app_module_usage_test_DEPNDENCIES = uses_app_module_annotation-class.dex app_module_usage_test-class.dex app_module_usage_test_other-class.dex app_module_usage_test_third-class.dex
 
 call_graph_test_SOURCES = CallGraphTest.cpp
 EXTRA_call_graph_test_DEPENDENCIES = call_graph_test-class.dex
@@ -139,6 +144,9 @@ EXTRA_type_analysis_transform_test_DEPENDENCIES = type_analysis_transform_test-c
 type_inference_test_SOURCES = TypeInferenceTest.cpp
 EXTRA_type_inference_test_DEPENDENCIES = type_inference_test-class.dex
 
+uses_app_module_annotation_test_SOURCES = UsesAppModuleTest.cpp
+EXTRA_uses_app_module_annotation_test_DEPENDENCIES = uses_app_module_annotation-class.dex uses_app_module_annotation_test-class.dex app_module_usage_test-class.dex app_module_usage_test_other-class.dex app_module_usage_test_third-class.dex
+
 verifier_artifacts_test_SOURCES = VerifierTest.cpp
 EXTRA_verifier_artifacts_test_DEPENDENCIES = verifier_artifacts_test-class.dex
 
@@ -157,6 +165,15 @@ SUFFIXES = .dex
 	$(DX) --dex --output=$@ $^
 
 ab_experiment_context_test-class.jar: ABExperimentContextTest.java
+	$(create_jar)
+
+app_module_usage_test-class.jar: AppModuleUsageClass.java
+	$(create_jar)
+
+app_module_usage_test_other-class.jar: AppModuleUsageOtherClass.java
+	$(create_jar)
+
+app_module_usage_test_third-class.jar: AppModuleUsageThirdClass.java
 	$(create_jar)
 
 call_graph_test-class.jar: CallGraphTest.java
@@ -244,6 +261,12 @@ type_analysis_transform_test-class.jar: TypeAnalysisTransformTest.java
 	$(create_jar)
 
 type_inference_test-class.jar: TypeInferenceTest.java
+	$(create_jar)
+
+uses_app_module_annotation-class.dex: UsesAppModule.java
+	$(create_jar)
+
+uses_app_module_annotation_test-class.jar: UsesAppModuleAnnotated.java
 	$(create_jar)
 
 verifier_artifacts_test-class.jar: VerifierTest.java

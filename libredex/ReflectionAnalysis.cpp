@@ -1197,6 +1197,14 @@ boost::optional<AbstractObject> ReflectionAnalysis::get_abstract_object(
   return m_analyzer->get_abstract_object(reg, insn);
 }
 
+boost::optional<ClassObjectSource> ReflectionAnalysis::get_class_source(
+    size_t reg, IRInstruction* insn) const {
+  if (m_analyzer == nullptr) {
+    return boost::none;
+  }
+  return m_analyzer->get_class_source(reg, insn);
+}
+
 CallingContextMap ReflectionAnalysis::get_calling_context_partition() const {
   if (m_analyzer == nullptr) {
     return CallingContextMap::top();
