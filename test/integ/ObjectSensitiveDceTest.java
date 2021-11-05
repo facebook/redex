@@ -17,6 +17,11 @@ class ObjectSensitiveDceTest {
     UselessWithClInitWithSideEffects useless = new UselessWithClInitWithSideEffects();
     useless.foo();
   }
+
+  public static void method_needing_init_class() {
+    UselessWithMethodNeedingInitClass useless = new UselessWithMethodNeedingInitClass();
+    useless.foo();
+  }
 }
 
 class Useless {
@@ -37,5 +42,13 @@ class UselessWithClInitWithSideEffects {
   }
   public void foo() {
     F = 42;
+  }
+}
+
+class UselessWithMethodNeedingInitClass {
+  int F;
+  public UselessWithMethodNeedingInitClass() {}
+  public void foo() {
+    F = new UselessWithClInitWithSideEffects().F;
   }
 }

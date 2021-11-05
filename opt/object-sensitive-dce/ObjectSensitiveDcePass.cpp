@@ -151,8 +151,8 @@ void ObjectSensitiveDcePass::run_pass(DexStoresVector& stores,
     std::ifstream file_input(*m_external_side_effect_summaries_file);
     summary_serialization::read(file_input, &effect_summaries);
   }
-  side_effects::analyze_scope(scope, call_graph, *ptrs_fp_iter_map,
-                              &effect_summaries);
+  side_effects::analyze_scope(init_classes_with_side_effects, scope, call_graph,
+                              *ptrs_fp_iter_map, &effect_summaries);
 
   std::atomic<size_t> removed{0};
   std::atomic<size_t> init_class_instructions_added{0};

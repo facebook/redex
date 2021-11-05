@@ -84,3 +84,26 @@ TEST_F(ObjectSensitiveDceTest, clinit_with_side_effects) {
   it++;
   ASSERT_EQ(it->insn->opcode(), OPCODE_RETURN_VOID);
 }
+
+TEST_F(ObjectSensitiveDceTest, method_needing_init_class) {
+  auto method_ref = DexMethod::get_method(
+      "Lcom/facebook/redextest/"
+      "ObjectSensitiveDceTest;.method_needing_init_class:()V");
+  EXPECT_NE(method_ref, nullptr);
+  auto method = method_ref->as_def();
+  EXPECT_NE(method, nullptr);
+
+  std::vector<Pass*> passes = {
+      new ObjectSensitiveDcePass(),
+  };
+
+  run_passes(passes);
+
+  // Nothing could get optimized away, because the invoke-virtual to foo
+  // triggers a clinit with side-effects, so it couldn't get removed, and thus
+  // the object creation itself is required.
+  auto code = method->get_code();
+  ASSERT_EQ(method::count_opcode_of_types(code, {OPCODE_NEW_INSTANCE}), 1);
+  ASSERT_EQ(method::count_opcode_of_types(code, {OPCODE_INVOKE_DIRECT}), 1);
+  ASSERT_EQ(method::count_opcode_of_types(code, {OPCODE_INVOKE_VIRTUAL}), 1);
+}
