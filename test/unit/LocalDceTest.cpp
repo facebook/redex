@@ -247,11 +247,13 @@ struct LocalDceEnhanceTest : public RedexTest {
   }
   void dce(const Scope& scope,
            IRCode* code,
-           bool create_init_class_insns = false) {
+           bool create_init_class_insns = false,
+           DexType* declaring_type = nullptr) {
     init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
         scope, create_init_class_insns);
     const auto& pure_methods = get_no_side_effect_methods(scope);
-    LocalDce(&init_classes_with_side_effects, pure_methods).dce(code);
+    LocalDce(&init_classes_with_side_effects, pure_methods)
+        .dce(code, /* normalize_new_instances */ true, declaring_type);
   }
 
   void add_clinit(DexType* type) {
@@ -782,5 +784,48 @@ TEST_F(LocalDceEnhanceTest, ReplaceAllThreeWithInitClass) {
   )");
   IRCode* ircode = code.get();
   dce(scope, ircode, /* create_init_class_insns */ true);
+  EXPECT_CODE_EQ(ircode, expected_code.get());
+}
+
+TEST_F(LocalDceEnhanceTest, ReplaceAllThreeWithInitClassAndPrune) {
+  Scope scope = create_empty_scope();
+
+  DexType* a_type = DexType::make_type("LA;");
+  DexClass* a_cls =
+      create_internal_class(a_type, type::java_lang_Object(), {}, ACC_PUBLIC);
+  add_clinit(a_type);
+  auto field =
+      DexField::make_field("LA;.f:I")->make_concrete(ACC_PUBLIC | ACC_STATIC);
+  a_cls->add_field(field);
+  auto method = DexMethod::make_method("LA;.pure:()V")
+                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  method->set_code(assembler::ircode_from_string(R"(
+                    (
+                      (return-void)
+                    )
+                    )"));
+  a_cls->add_method(method);
+  scope.push_back(a_cls);
+
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (new-instance "LA;")
+      (move-result-pseudo v0)
+      (sget "LA;.f:I")
+      (move-result-pseudo v0)
+      (invoke-static () "LA;.pure:()V")
+      (return-void)
+    )
+  )");
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (init-class "LA;")
+      (return-void)
+    )
+  )");
+  IRCode* ircode = code.get();
+  dce(scope, ircode, /* create_init_class_insns */ true,
+      /* declaring_type */ type::java_lang_Object());
   EXPECT_CODE_EQ(ircode, expected_code.get());
 }
