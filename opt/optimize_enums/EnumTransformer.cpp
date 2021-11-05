@@ -342,6 +342,7 @@ struct EnumUtil {
     cc.set_super(type::java_lang_Object());
     DexClass* cls = cc.create();
     cls->rstate.set_generated();
+    cls->rstate.set_clinit_has_no_side_effects();
 
     auto values_field = make_values_field(cls);
     auto clinit_method = make_clinit_method(cls, fields_count);

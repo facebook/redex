@@ -30,6 +30,9 @@ bool is_trivial_clinit(const IRCode& code) {
 }
 
 const DexClass* clinit_may_have_side_effects(const DexClass* cls) {
+  if (cls->rstate.clinit_has_no_side_effects()) {
+    return nullptr;
+  }
   auto clinit = cls->get_clinit();
   if (clinit && clinit->get_code()) {
     bool non_trivial{false};

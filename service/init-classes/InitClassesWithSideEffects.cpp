@@ -50,7 +50,11 @@ const InitClasses* InitClassesWithSideEffects::compute(const DexClass* cls) {
 InitClassesWithSideEffects::InitClassesWithSideEffects(
     const Scope& scope, bool create_init_class_insns)
     : m_create_init_class_insns(create_init_class_insns) {
-  walk::parallel::classes(scope, [&](const DexClass* cls) { compute(cls); });
+  walk::parallel::classes(scope, [&](DexClass* cls) {
+    if (compute(cls)->empty() && !cls->rstate.clinit_has_no_side_effects()) {
+      cls->rstate.set_clinit_has_no_side_effects();
+    }
+  });
 }
 
 const InitClasses* InitClassesWithSideEffects::get(const DexType* type) const {

@@ -96,6 +96,10 @@ class ReferencedState {
     // because it signals that the class must be initialized at this point.
     bool m_init_class : 1;
 
+    // This may be set on classes, indicating that its static initializer has no
+    // side effects.
+    bool m_clinit_has_no_side_effects : 1;
+
     InnerStruct() {
       // Initializers in bit fields are C++20...
       m_by_string = false;
@@ -126,6 +130,7 @@ class ReferencedState {
       m_name_used = false;
 
       m_init_class = false;
+      m_clinit_has_no_side_effects = false;
     }
   } inner_struct;
 
@@ -385,6 +390,12 @@ class ReferencedState {
 
   bool init_class() const { return inner_struct.m_init_class; }
   void set_init_class() { inner_struct.m_init_class = true; }
+  void set_clinit_has_no_side_effects() {
+    inner_struct.m_clinit_has_no_side_effects = true;
+  }
+  bool clinit_has_no_side_effects() const {
+    return inner_struct.m_clinit_has_no_side_effects;
+  }
 
  private:
   // Does any keep rule (whether -keep or -keepnames) match this DexMember?
