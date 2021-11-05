@@ -8,7 +8,9 @@
 #include "InitClassPruner.h"
 
 #include "CFGMutation.h"
+#include "InitClassBackwardAnalysis.h"
 #include "InitClassForwardAnalysis.h"
+#include "Show.h"
 
 namespace init_classes {
 
@@ -28,6 +30,14 @@ InitClassPruner::InitClassPruner(
       m_cfg(cfg) {}
 
 void InitClassPruner::apply() {
+  apply_forward();
+  if (m_stats.init_class_instructions >
+      m_stats.init_class_instructions_removed) {
+    apply_backward();
+  }
+}
+
+void InitClassPruner::apply_forward() {
   InitClassForwardFixpointIterator fp_iter(m_init_classes_with_side_effects,
                                            m_cfg);
   auto initial_env = fp_iter.initial_env(m_declaring_type);
@@ -56,6 +66,34 @@ void InitClassPruner::apply() {
     }
   }
   mutation.flush();
+}
+
+void InitClassPruner::apply_backward() {
+  m_cfg.calculate_exit_block();
+  InitClassBackwardFixpointIterator fp_iter(m_init_classes_with_side_effects,
+                                            m_cfg);
+  fp_iter.run({});
+  cfg::CFGMutation mutation(m_cfg);
+  for (cfg::Block* block : m_cfg.blocks()) {
+    auto env = fp_iter.get_entry_state_at(block);
+    for (auto it = block->rbegin(); it != block->rend(); it++) {
+      if (it->type != MFLOW_OPCODE) {
+        continue;
+      }
+      auto insn = it->insn;
+      if (opcode::is_init_class(insn->opcode())) {
+        const auto& c = env.get_constant();
+        if (c && insn->get_type() == *c) {
+          auto forward_it = std::prev(it.base());
+          mutation.remove(block->to_cfg_instruction_iterator(forward_it));
+          m_stats.init_class_instructions_removed++;
+        }
+      }
+      fp_iter.analyze_instruction(it->insn, &env);
+    }
+  }
+  mutation.flush();
+  m_cfg.reset_exit_block();
 }
 
 } // namespace init_classes

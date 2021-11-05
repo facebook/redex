@@ -32,6 +32,8 @@ class InitClassPruner {
   void apply();
 
  private:
+  void apply_forward();
+  void apply_backward();
   const InitClassesWithSideEffects& m_init_classes_with_side_effects;
   const DexType* m_declaring_type;
   cfg::ControlFlowGraph& m_cfg;

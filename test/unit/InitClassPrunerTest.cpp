@@ -148,3 +148,68 @@ TEST_F(InitClassPrunerTest, remove_reundant_forward) {
   run_init_class_pruner(code.get());
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
+
+TEST_F(
+    InitClassPrunerTest,
+    remove_init_class_before_instruction_that_triggers_static_initialization) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (init-class "LC;")
+      (new-instance "LC;")
+      (move-result-pseudo-object v0)
+      (return-void)
+    )
+  )");
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (new-instance "LC;")
+      (move-result-pseudo-object v0)
+      (return-void)
+    )
+  )");
+
+  run_init_class_pruner(code.get());
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
+TEST_F(
+    InitClassPrunerTest,
+    remove_init_class_before_instruction_that_triggers_static_initialization2) {
+  // instructions with no init-class type demand can be interspersed
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (init-class "LC;")
+      (nop)
+      (new-instance "LC;")
+      (move-result-pseudo-object v0)
+      (return-void)
+    )
+  )");
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (nop)
+      (new-instance "LC;")
+      (move-result-pseudo-object v0)
+      (return-void)
+    )
+  )");
+
+  run_init_class_pruner(code.get());
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
+TEST_F(InitClassPrunerTest, invoke_clears_last_init_class_domain) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (init-class "LC;")
+      (invoke-static () "LD;.foo:()I")
+      (new-instance "LC;")
+      (move-result-pseudo-object v0)
+      (return-void)
+    )
+  )");
+  auto expected_code = std::make_unique<IRCode>(*code);
+
+  run_init_class_pruner(code.get());
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
