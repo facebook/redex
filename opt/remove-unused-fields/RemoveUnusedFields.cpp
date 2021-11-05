@@ -71,6 +71,8 @@ class RemoveUnusedFields final {
     return m_unremovable_unread_field_puts;
   }
 
+  size_t init_classes() const { return m_init_classes; }
+
  private:
   bool is_blocklisted(const DexField* field) const {
     return m_config.blocklist_types.count(field->get_type()) != 0 ||
@@ -210,6 +212,7 @@ class RemoveUnusedFields final {
                   field->get_class());
           if (init_class_insn) {
             new_insns.push_back(init_class_insn);
+            m_init_classes++;
           }
         }
         if (replace_insn) {
@@ -240,6 +243,7 @@ class RemoveUnusedFields final {
   std::unordered_set<const DexField*> m_vestigial_objects_written_fields;
   field_op_tracker::TypeLifetimes m_type_lifetimes;
   std::atomic<size_t> m_unremovable_unread_field_puts{0};
+  std::atomic<size_t> m_init_classes{0};
 };
 
 } // namespace
@@ -262,6 +266,7 @@ void PassImpl::run_pass(DexStoresVector& stores,
                  rmuf.vestigial_objects_written_fields().size());
   mgr.set_metric("unremovable_unread_field_puts",
                  rmuf.unremovable_unread_field_puts());
+  mgr.set_metric("init_classes", rmuf.init_classes());
 
   if (m_export_removed) {
     std::vector<const DexField*> removed_fields(rmuf.unread_fields().begin(),
