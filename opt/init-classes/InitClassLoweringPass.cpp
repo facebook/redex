@@ -146,12 +146,63 @@ void make_public(const std::vector<DexField*>& fields,
     visit(f->get_type());
   }
 }
+
+void log_in_clinits(const Scope& scope,
+                    const init_classes::InitClassesWithSideEffects&
+                        init_classes_with_side_effects) {
+  auto log_e_method = DexMethod::make_method(
+      "Landroid/util/Log;.e:(Ljava/lang/String;Ljava/lang/String;)I");
+  auto tag_str = DexString::make_string("clinit-with-side-effects");
+  walk::parallel::classes(scope, [&](DexClass* cls) {
+    auto type = cls->get_type();
+    if (init_classes_with_side_effects.refine(type) != type) {
+      return;
+    }
+    auto clinit = cls->get_clinit();
+    if (!clinit || !clinit->get_code()) {
+      return;
+    }
+    cfg::ScopedCFG cfg(clinit->get_code());
+    auto tmp0 = cfg->allocate_temp();
+    auto tag = (new IRInstruction(OPCODE_CONST_STRING))->set_string(tag_str);
+    auto tag_result =
+        (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))->set_dest(tmp0);
+    auto tmp1 = cfg->allocate_temp();
+    auto message =
+        (new IRInstruction(OPCODE_CONST_STRING))
+            ->set_string(DexString::make_string(show_deobfuscated(type)));
+    auto message_result =
+        (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))->set_dest(tmp1);
+    auto invoke = (new IRInstruction(OPCODE_INVOKE_STATIC))
+                      ->set_method(log_e_method)
+                      ->set_srcs_size(2)
+                      ->set_src(0, tmp0)
+                      ->set_src(1, tmp1);
+    std::vector<IRInstruction*> insns{tag, tag_result, message, message_result,
+                                      invoke};
+    auto block = cfg->entry_block();
+    auto last_load_params_it = block->get_last_param_loading_insn();
+    if (last_load_params_it == block->end()) {
+      block->push_front(insns);
+    } else {
+      cfg->insert_after(block->to_cfg_instruction_iterator(last_load_params_it),
+                        insns);
+    }
+    TRACE(ICL,
+          6,
+          "[InitClassLowering] added logging to %s:\n%s",
+          SHOW(clinit),
+          SHOW(*cfg));
+  });
+}
 } // namespace
 
 void InitClassLoweringPass::bind_config() {
   bind(
       "drop", m_drop, m_drop,
       "Whether to drop the init-class instructions, instead of lowering them.");
+  bind("log_in_clinits", m_log_in_clinits, m_log_in_clinits,
+       "Whether to insert log statements in clinits with side-effects.");
 }
 
 void InitClassLoweringPass::run_pass(DexStoresVector& stores,
@@ -163,6 +214,9 @@ void InitClassLoweringPass::run_pass(DexStoresVector& stores,
         create_init_class_insns);
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, create_init_class_insns);
+  if (m_log_in_clinits) {
+    log_in_clinits(scope, init_classes_with_side_effects);
+  }
   std::atomic<size_t> sget_instructions_added{0};
   std::atomic<size_t> methods_with_init_class{0};
   InitClassFields init_class_fields;

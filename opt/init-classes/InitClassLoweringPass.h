@@ -20,4 +20,5 @@ class InitClassLoweringPass : public Pass {
 
  private:
   bool m_drop{false};
+  bool m_log_in_clinits{false};
 };
