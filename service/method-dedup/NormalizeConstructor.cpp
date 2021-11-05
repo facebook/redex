@@ -62,7 +62,7 @@ boost::optional<ConstructorSummary> summarize_constructor_logic(
   if (!code) {
     return boost::none;
   }
-  IRInstruction* super_ctor_invocatoin = nullptr;
+  IRInstruction* super_ctor_invocation = nullptr;
   std::unordered_map<uint32_t, uint32_t> reg_to_arg_id;
   std::unordered_map<DexFieldRef*, uint32_t> field_to_arg_id;
   uint32_t arg_index = 0;
@@ -72,12 +72,12 @@ boost::optional<ConstructorSummary> summarize_constructor_logic(
     auto opcode = insn->opcode();
     if (opcode::is_invoke_direct(opcode)) {
       auto ref = insn->get_method();
-      if (!super_ctor_invocatoin && method::is_init(ref) &&
+      if (!super_ctor_invocation && method::is_init(ref) &&
           ref->get_class() != method->get_class()) {
-        super_ctor_invocatoin = insn;
+        super_ctor_invocation = insn;
         return editable_cfg_adapter::LoopExit::LOOP_CONTINUE;
       } else {
-        super_ctor_invocatoin = nullptr;
+        super_ctor_invocation = nullptr;
         return editable_cfg_adapter::LoopExit::LOOP_BREAK;
       }
     } else if (opcode::is_return_void(opcode)) {
@@ -93,16 +93,16 @@ boost::optional<ConstructorSummary> summarize_constructor_logic(
       return editable_cfg_adapter::LoopExit::LOOP_CONTINUE;
     }
     // Not accept any other instruction.
-    super_ctor_invocatoin = nullptr;
+    super_ctor_invocation = nullptr;
     return editable_cfg_adapter::LoopExit::LOOP_BREAK;
   });
-  if (!super_ctor_invocatoin) {
+  if (!super_ctor_invocation) {
     return boost::none;
   }
   if (field_to_arg_id.size() != ifields.size()) {
     return boost::none;
   }
-  ConstructorSummary summary(super_ctor_invocatoin->get_method(),
+  ConstructorSummary summary(super_ctor_invocation->get_method(),
                              ifields.size());
   std::unordered_set<uint32_t> used_args;
   for (auto field : ifields) {
@@ -110,9 +110,9 @@ boost::optional<ConstructorSummary> summarize_constructor_logic(
     summary.field_id_to_arg_id.push_back(arg_id);
     used_args.insert(arg_id);
   }
-  redex_assert(reg_to_arg_id[super_ctor_invocatoin->src(0)] == 0);
-  for (size_t id = 1; id < super_ctor_invocatoin->srcs_size(); id++) {
-    auto arg_id = reg_to_arg_id[super_ctor_invocatoin->src(id)];
+  redex_assert(reg_to_arg_id[super_ctor_invocation->src(0)] == 0);
+  for (size_t id = 1; id < super_ctor_invocation->srcs_size(); id++) {
+    auto arg_id = reg_to_arg_id[super_ctor_invocation->src(id)];
     summary.field_id_to_arg_id.push_back(arg_id);
     used_args.insert(arg_id);
   }
