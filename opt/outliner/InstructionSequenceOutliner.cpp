@@ -645,7 +645,11 @@ static bool append_to_partial_candidate(
   pc->insns_size++;
   if (!opcode::is_a_move(opcode)) {
     // Moves are likely still eliminated by reg-alloc or other opts
-    pc->size += insn->size();
+    if (insn->opcode() == IOPCODE_INIT_CLASS) {
+      pc->size += 2;
+    } else {
+      pc->size += insn->size();
+    }
   }
   return true;
 }
