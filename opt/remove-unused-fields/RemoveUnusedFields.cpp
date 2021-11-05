@@ -16,6 +16,7 @@
 #include "DexClass.h"
 #include "FieldOpTracker.h"
 #include "IRCode.h"
+#include "InitClassesWithSideEffects.h"
 #include "PassManager.h"
 #include "Resolver.h"
 #include "Show.h"
@@ -39,8 +40,12 @@ bool has_non_zero_static_value(DexField* field) {
 
 class RemoveUnusedFields final {
  public:
-  RemoveUnusedFields(const Config& config, const Scope& scope)
-      : m_config(config), m_scope(scope) {
+  RemoveUnusedFields(const Config& config,
+                     const Scope& scope,
+                     bool create_init_class_insns)
+      : m_config(config),
+        m_scope(scope),
+        m_init_classes_with_side_effects(scope, create_init_class_insns) {
     analyze();
     transform();
   }
@@ -195,6 +200,18 @@ class RemoveUnusedFields final {
             replace_insn = true;
           }
         }
+        if (!replace_insn && !remove_insn) {
+          continue;
+        }
+        std::vector<IRInstruction*> new_insns;
+        if (field && is_static(field)) {
+          auto init_class_insn =
+              m_init_classes_with_side_effects.create_init_class_insn(
+                  field->get_class());
+          if (init_class_insn) {
+            new_insns.push_back(init_class_insn);
+          }
+        }
         if (replace_insn) {
           auto move_result = cfg.move_result_of(insn_it);
           if (move_result.is_end()) {
@@ -204,10 +221,9 @@ class RemoveUnusedFields final {
           IRInstruction* const0 = new IRInstruction(
               write_insn->dest_is_wide() ? OPCODE_CONST_WIDE : OPCODE_CONST);
           const0->set_dest(write_insn->dest())->set_literal(0);
-          m.replace(insn_it, {const0});
-        } else if (remove_insn) {
-          m.remove(insn_it);
+          new_insns.push_back(const0);
         }
+        m.replace(insn_it, new_insns);
       }
       m.flush();
       code.clear_cfg();
@@ -216,6 +232,8 @@ class RemoveUnusedFields final {
 
   const Config& m_config;
   const Scope& m_scope;
+  const init_classes::InitClassesWithSideEffects
+      m_init_classes_with_side_effects;
   std::unordered_set<const DexField*> m_unread_fields;
   std::unordered_set<const DexField*> m_unwritten_fields;
   std::unordered_set<const DexField*> m_zero_written_fields;
@@ -231,8 +249,12 @@ namespace remove_unused_fields {
 void PassImpl::run_pass(DexStoresVector& stores,
                         ConfigFiles& conf,
                         PassManager& mgr) {
+  always_assert_log(
+      !mgr.init_class_lowering_has_run(),
+      "Implementation limitation: RemoveUnusedFieldsPass could introduce new "
+      "init-class instructions.");
   auto scope = build_class_scope(stores);
-  RemoveUnusedFields rmuf(m_config, scope);
+  RemoveUnusedFields rmuf(m_config, scope, conf.create_init_class_insns());
   mgr.set_metric("unread_fields", rmuf.unread_fields().size());
   mgr.set_metric("unwritten_fields", rmuf.unwritten_fields().size());
   mgr.set_metric("zero_written_fields", rmuf.zero_written_fields().size());
