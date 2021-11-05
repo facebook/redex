@@ -11,6 +11,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "CFGMutation.h"
 #include "ConfigFiles.h"
 #include "Debug.h"
 #include "DexAccess.h"
@@ -969,47 +970,58 @@ size_t inline_final_gets(
     if (field_type == cp::FieldType::STATIC && method::is_clinit(method)) {
       return;
     }
-    std::vector<std::pair<IRInstruction*, std::vector<IRInstruction*>>>
-        replacements;
-    editable_cfg_adapter::iterate_with_iterator(
-        &code, [&](const IRList::iterator& it) {
-          auto insn = it->insn;
-          auto op = insn->opcode();
-          if (opcode::is_an_iget(op) || opcode::is_an_sget(op)) {
-            auto field = resolve_field(insn->get_field());
-            if (field == nullptr || blocklist_types.count(field->get_class())) {
-              return editable_cfg_adapter::LOOP_CONTINUE;
-            }
-            if (field_type == cp::FieldType::INSTANCE &&
-                method::is_init(method) &&
-                method->get_class() == field->get_class()) {
-              // Don't propagate a field's value in ctors of its class with
-              // value after ctor finished.
-              return editable_cfg_adapter::LOOP_CONTINUE;
-            }
-            auto replacement = ConstantValue::apply_visitor(
-                cp::value_to_instruction_visitor(
-                    ir_list::move_result_pseudo_of(it),
-                    xstores,
-                    method->get_class()),
-                wps.get_field_value(field));
-            if (replacement.empty()) {
-              return editable_cfg_adapter::LOOP_CONTINUE;
-            }
-            replacements.emplace_back(insn, replacement);
+    code.build_cfg(/* editable */);
+    cfg::CFGMutation mutation(code.cfg());
+    size_t replacements = 0;
+    for (auto block : code.cfg().blocks()) {
+      auto ii = InstructionIterable(block);
+      for (auto it = ii.begin(); it != ii.end(); it++) {
+        auto insn = it->insn;
+        auto op = insn->opcode();
+        if (opcode::is_an_iget(op) || opcode::is_an_sget(op)) {
+          auto field = resolve_field(insn->get_field());
+          if (field == nullptr || blocklist_types.count(field->get_class())) {
+            continue;
           }
-          return editable_cfg_adapter::LOOP_CONTINUE;
-        });
-    for (auto const& p : replacements) {
-      code.replace_opcode(p.first, p.second);
+          if (field_type == cp::FieldType::INSTANCE &&
+              method::is_init(method) &&
+              method->get_class() == field->get_class()) {
+            // Don't propagate a field's value in ctors of its class with
+            // value after ctor finished.
+            continue;
+          }
+          auto cfg_it = block->to_cfg_instruction_iterator(it);
+          auto replacement = ConstantValue::apply_visitor(
+              cp::value_to_instruction_visitor(
+                  code.cfg().move_result_of(cfg_it)->insn,
+                  xstores,
+                  method->get_class()),
+              wps.get_field_value(field));
+          if (replacement.empty()) {
+            continue;
+          }
+          auto init_class_insn =
+              opcode::is_an_sget(op)
+                  ? init_classes_with_side_effects.create_init_class_insn(
+                        field->get_class())
+                  : nullptr;
+          if (init_class_insn) {
+            replacement.insert(replacement.begin(), init_class_insn);
+          }
+          mutation.replace(cfg_it, replacement);
+          replacements++;
+        }
+      }
     }
-    if (!replacements.empty() && maybe_shrinker) {
+    mutation.flush();
+    code.clear_cfg();
+    if (replacements > 0 && maybe_shrinker) {
       // We need to rebuild the cfg.
       code.build_cfg(/* editable */);
       code.clear_cfg();
       maybe_shrinker->shrink_method(method);
     }
-    inlined_count.fetch_add(replacements.size());
+    inlined_count.fetch_add(replacements);
   });
   return inlined_count;
 }
@@ -1053,6 +1065,10 @@ size_t FinalInlinePassV2::run_inline_ifields(
 void FinalInlinePassV2::run_pass(DexStoresVector& stores,
                                  ConfigFiles& conf,
                                  PassManager& mgr) {
+  always_assert_log(
+      !mgr.init_class_lowering_has_run(),
+      "Implementation limitation: FinalInlinePassV2 could introduce new "
+      "init-class instructions.");
   if (mgr.no_proguard_rules()) {
     TRACE(FINALINLINE,
           1,
