@@ -17,13 +17,16 @@ namespace {
 class ClInitSideEffectsAnalysis {
  private:
   const method::ClInitHasNoSideEffectsPredicate* m_clinit_has_no_side_effects;
+  const std::unordered_set<DexMethod*>* m_non_true_virtuals;
   std::unordered_set<DexMethodRef*> m_active;
   std::unordered_set<DexType*> m_initialized;
 
  public:
   explicit ClInitSideEffectsAnalysis(
-      const method::ClInitHasNoSideEffectsPredicate* clinit_has_no_side_effects)
-      : m_clinit_has_no_side_effects(clinit_has_no_side_effects) {}
+      const method::ClInitHasNoSideEffectsPredicate* clinit_has_no_side_effects,
+      const std::unordered_set<DexMethod*>* non_true_virtuals)
+      : m_clinit_has_no_side_effects(clinit_has_no_side_effects),
+        m_non_true_virtuals(non_true_virtuals) {}
 
   const DexClass* run(const DexClass* cls) {
     std::stack<const DexClass*> stack;
@@ -88,14 +91,18 @@ class ClInitSideEffectsAnalysis {
       return false;
     }
     if (opcode::is_invoke_interface(insn->opcode()) ||
-        opcode::is_invoke_virtual(insn->opcode()) ||
         opcode::is_invoke_super(insn->opcode())) {
       return true;
     }
     always_assert(opcode::is_invoke_direct(insn->opcode()) ||
+                  opcode::is_invoke_virtual(insn->opcode()) ||
                   opcode::is_invoke_static(insn->opcode()));
     auto method = resolve_method(method_ref, opcode_to_search(insn));
     if (!method) {
+      return true;
+    }
+    if (opcode::is_invoke_virtual(insn->opcode()) &&
+        (!m_non_true_virtuals || !m_non_true_virtuals->count(method))) {
       return true;
     }
     if (opcode::is_invoke_static(insn->opcode()) &&
@@ -473,8 +480,10 @@ bool is_clinit_invoked_method_benign(const DexMethodRef* method_ref) {
 
 const DexClass* clinit_may_have_side_effects(
     const DexClass* cls,
-    const ClInitHasNoSideEffectsPredicate* clinit_has_no_side_effects) {
-  ClInitSideEffectsAnalysis analysis(clinit_has_no_side_effects);
+    const ClInitHasNoSideEffectsPredicate* clinit_has_no_side_effects,
+    const std::unordered_set<DexMethod*>* non_true_virtuals) {
+  ClInitSideEffectsAnalysis analysis(clinit_has_no_side_effects,
+                                     non_true_virtuals);
   return analysis.run(cls);
 }
 

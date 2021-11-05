@@ -50,8 +50,8 @@ using ClInitHasNoSideEffectsPredicate = std::function<bool(const DexType*)>;
  */
 const DexClass* clinit_may_have_side_effects(
     const DexClass* cls,
-    const ClInitHasNoSideEffectsPredicate* clinit_has_no_side_effects =
-        nullptr);
+    const ClInitHasNoSideEffectsPredicate* clinit_has_no_side_effects = nullptr,
+    const std::unordered_set<DexMethod*>* non_true_virtuals = nullptr);
 
 /**
  * Check that the method contains no invoke-super instruction; this is a

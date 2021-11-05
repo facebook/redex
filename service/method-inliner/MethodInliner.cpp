@@ -649,8 +649,6 @@ void run_inliner(DexStoresVector& stores,
   }
 
   auto scope = build_class_scope(stores);
-  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
-      scope, conf.create_init_class_insns());
 
   auto inliner_config = conf.get_inliner_config();
   const api::AndroidSDK* min_sdk_api{nullptr};
@@ -699,6 +697,9 @@ void run_inliner(DexStoresVector& stores,
   if (inliner_config.virtual_inline) {
     method_override_graph = mog::build_graph(scope);
   }
+
+  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+      scope, conf.create_init_class_insns(), method_override_graph.get());
 
   auto candidates = gather_non_virtual_methods(
       scope, method_override_graph.get(), conf.get_do_not_devirt_anon());

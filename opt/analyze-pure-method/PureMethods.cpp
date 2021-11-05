@@ -50,7 +50,7 @@ AnalyzePureMethodsPass::Stats
 AnalyzePureMethodsPass::analyze_and_set_pure_methods(Scope& scope) {
   auto method_override_graph = method_override_graph::build_graph(scope);
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
-      scope, /* create_init_class_insns */ false);
+      scope, /* create_init_class_insns */ false, method_override_graph.get());
   // Build all the CFGs
   walk::parallel::code(scope, [&](DexMethod*, IRCode& code) {
     code.build_cfg(/* editable */ false);

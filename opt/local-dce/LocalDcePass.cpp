@@ -61,13 +61,6 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
                             ConfigFiles& conf,
                             PassManager& mgr) {
   auto scope = build_class_scope(stores);
-  std::unique_ptr<init_classes::InitClassesWithSideEffects>
-      init_classes_with_side_effects;
-  if (!mgr.init_class_lowering_has_run()) {
-    init_classes_with_side_effects =
-        std::make_unique<init_classes::InitClassesWithSideEffects>(
-            scope, conf.create_init_class_insns());
-  }
 
   auto pure_methods = get_pure_methods();
   auto configured_pure_methods = conf.get_pure_methods();
@@ -76,10 +69,19 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
   auto immutable_getters = get_immutable_getters(scope);
   pure_methods.insert(immutable_getters.begin(), immutable_getters.end());
   std::unique_ptr<const method_override_graph::Graph> override_graph;
+  if (!mgr.unreliable_virtual_scopes()) {
+    override_graph = method_override_graph::build_graph(scope);
+  }
+  std::unique_ptr<init_classes::InitClassesWithSideEffects>
+      init_classes_with_side_effects;
+  if (!mgr.init_class_lowering_has_run()) {
+    init_classes_with_side_effects =
+        std::make_unique<init_classes::InitClassesWithSideEffects>(
+            scope, conf.create_init_class_insns(), override_graph.get());
+  }
   std::unordered_set<const DexMethod*> computed_no_side_effects_methods;
   size_t computed_no_side_effects_methods_iterations = 0;
   if (!mgr.unreliable_virtual_scopes()) {
-    override_graph = method_override_graph::build_graph(scope);
     method::ClInitHasNoSideEffectsPredicate clinit_has_no_side_effects =
         [&](const DexType* type) {
           return !init_classes_with_side_effects ||

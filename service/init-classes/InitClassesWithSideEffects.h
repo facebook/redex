@@ -13,6 +13,7 @@
 #include "ConcurrentContainers.h"
 #include "DexClass.h"
 #include "IRInstruction.h"
+#include "MethodOverrideGraph.h"
 #include "MethodUtil.h"
 
 namespace init_classes {
@@ -30,12 +31,16 @@ class InitClassesWithSideEffects {
   InitClasses m_empty_init_classes;
   bool m_create_init_class_insns;
 
-  const InitClasses* compute(const DexClass* cls,
-                             const method::ClInitHasNoSideEffectsPredicate&
-                                 clinit_has_no_side_effects);
+  const InitClasses* compute(
+      const DexClass* cls,
+      const method::ClInitHasNoSideEffectsPredicate& clinit_has_no_side_effects,
+      const std::unordered_set<DexMethod*>* non_true_virtuals);
 
  public:
-  InitClassesWithSideEffects(const Scope& scope, bool create_init_class_insns);
+  InitClassesWithSideEffects(
+      const Scope& scope,
+      bool create_init_class_insns,
+      const method_override_graph::Graph* method_override_graph = nullptr);
 
   // Determine list of classes with static initializers with side effects that
   // would get triggered when the given type is initialized. The list is ordered
