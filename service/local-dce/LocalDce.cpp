@@ -231,6 +231,12 @@ bool LocalDce::is_required(const cfg::ControlFlowGraph& cfg,
     return bliveness.test(inst->dest());
   } else if (opcode::is_filled_new_array(inst->opcode()) ||
              inst->has_move_result_pseudo()) {
+    if (opcode::is_an_sget(inst->opcode())) {
+      auto field = resolve_field(inst->get_field(), FieldSearch::Static);
+      if (field && field->rstate.init_class()) {
+        return true;
+      }
+    }
     // These instructions pass their dests via the return-value slot, but
     // aren't inherently live like the invoke-* instructions.
     return bliveness.test(bliveness.size() - 1);

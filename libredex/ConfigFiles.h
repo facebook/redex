@@ -158,6 +158,8 @@ struct ConfigFiles {
 
   bool emit_outgoing_hashes() const;
 
+  bool create_init_class_insns() const;
+
  private:
   JsonWrapper m_json;
   std::string outdir;

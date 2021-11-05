@@ -91,6 +91,11 @@ class ReferencedState {
     bool m_is_kotlin : 1;
 
     bool m_name_used : 1;
+
+    // Whether a field is used to indicate that an sget cannot be removed
+    // because it signals that the class must be initialized at this point.
+    bool m_init_class : 1;
+
     InnerStruct() {
       // Initializers in bit fields are C++20...
       m_by_string = false;
@@ -119,6 +124,8 @@ class ReferencedState {
       m_is_kotlin = false;
 
       m_name_used = false;
+
+      m_init_class = false;
     }
   } inner_struct;
 
@@ -196,6 +203,9 @@ class ReferencedState {
           this->inner_struct.m_is_kotlin & other.inner_struct.m_is_kotlin;
       this->inner_struct.m_outlined =
           this->inner_struct.m_outlined & other.inner_struct.m_outlined;
+
+      this->inner_struct.m_init_class =
+          this->inner_struct.m_init_class | other.inner_struct.m_init_class;
     }
   }
 
@@ -372,6 +382,9 @@ class ReferencedState {
   void set_cls_kotlin() { inner_struct.m_is_kotlin = true; }
   void set_name_used() { inner_struct.m_name_used = true; }
   bool name_used() { return inner_struct.m_name_used; }
+
+  bool init_class() const { return inner_struct.m_init_class; }
+  void set_init_class() { inner_struct.m_init_class = true; }
 
  private:
   // Does any keep rule (whether -keep or -keepnames) match this DexMember?

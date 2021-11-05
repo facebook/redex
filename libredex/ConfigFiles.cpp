@@ -363,6 +363,10 @@ bool ConfigFiles::emit_outgoing_hashes() const {
   return m_json.get("emit_outgoing_hashes", false);
 }
 
+bool ConfigFiles::create_init_class_insns() const {
+  return m_json.get("create_init_class_insns", true);
+}
+
 void ConfigFiles::set_outdir(const std::string& new_outdir) {
   // Gotta ensure "meta" exists.
   auto meta_path = boost::filesystem::path(new_outdir) / "meta";

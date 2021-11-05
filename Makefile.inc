@@ -35,6 +35,7 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/opt/delsuper \
 	-I$(top_srcdir)/opt/evaluate_type_checks \
 	-I$(top_srcdir)/opt/final_inline \
+	-I$(top_srcdir)/opt/init-classes \
 	-I$(top_srcdir)/opt/instrument \
 	-I$(top_srcdir)/opt/interdex \
 	-I$(top_srcdir)/opt/layout-reachability \
