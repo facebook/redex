@@ -44,6 +44,7 @@ struct InitClassPrunerTest : public RedexTest {
     d_creator.create();
     add_clinit(b_type);
     add_clinit(c_type);
+    add_ifield(c_type);
   }
 
   void add_clinit(DexType* type) {
@@ -59,6 +60,14 @@ struct InitClassPrunerTest : public RedexTest {
     code->push_back(dex_asm::dasm(OPCODE_INVOKE_STATIC, method, {}));
     code->push_back(dex_asm::dasm(OPCODE_RETURN_VOID));
     type_class(type)->add_method(clinit);
+  }
+
+  void add_ifield(DexType* type) {
+    auto ifield_name = DexString::make_string("existing_field");
+    auto field = static_cast<DexField*>(
+        DexField::make_field(type, ifield_name, type::_int()));
+    field->make_concrete(ACC_PUBLIC);
+    type_class(type)->add_field(field);
   }
 
   void run_init_class_pruner(IRCode* ircode) {
@@ -209,6 +218,27 @@ TEST_F(InitClassPrunerTest, invoke_clears_last_init_class_domain) {
     )
   )");
   auto expected_code = std::make_unique<IRCode>(*code);
+
+  run_init_class_pruner(code.get());
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
+TEST_F(InitClassPrunerTest, remove_after_ifield_access) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (iget v0 "LC;.existing_field:I")
+      (move-result-pseudo v0)
+      (init-class "LC;")
+      (return-void)
+    )
+  )");
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (iget v0 "LC;.existing_field:I")
+      (move-result-pseudo v0)
+      (return-void)
+    )
+  )");
 
   run_init_class_pruner(code.get());
   EXPECT_CODE_EQ(code.get(), expected_code.get());

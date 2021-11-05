@@ -47,7 +47,9 @@ void InitClassPruner::apply_forward() {
     auto env = fp_iter.get_entry_state_at(block);
     auto ii = InstructionIterable(block);
     for (auto it = ii.begin(); it != ii.end();
-         fp_iter.analyze_instruction(it++->insn, &env)) {
+         fp_iter.analyze_instruction(it->insn, &env,
+                                     it->insn == ii.end()->insn),
+              it++) {
       auto insn = it->insn;
       if (!opcode::is_init_class(insn->opcode())) {
         continue;
