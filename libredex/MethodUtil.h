@@ -35,6 +35,9 @@ inline bool is_any_init(const DexMethodRef* method) {
  */
 bool is_trivial_clinit(const IRCode& code);
 
+bool is_clinit_invoked_method_benign(const DexMethodRef*);
+
+using ClInitHasNoSideEffectsPredicate = std::function<bool(const DexType*)>;
 /**
  * Return true if change the exeution time of the <clinit> of the cls may change
  * the program behavior.
@@ -45,7 +48,10 @@ bool is_trivial_clinit(const IRCode& code);
  * Returns the first type along the chain of super types whose clinit actually
  * may have side effects.
  */
-const DexClass* clinit_may_have_side_effects(const DexClass* cls);
+const DexClass* clinit_may_have_side_effects(
+    const DexClass* cls,
+    const ClInitHasNoSideEffectsPredicate* clinit_has_no_side_effects =
+        nullptr);
 
 /**
  * Check that the method contains no invoke-super instruction; this is a

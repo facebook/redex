@@ -13,6 +13,7 @@
 #include "ConcurrentContainers.h"
 #include "DexClass.h"
 #include "IRInstruction.h"
+#include "MethodUtil.h"
 
 namespace init_classes {
 
@@ -25,10 +26,13 @@ using InitClasses = std::vector<const DexClass*>;
 class InitClassesWithSideEffects {
  private:
   ConcurrentMap<const DexType*, std::shared_ptr<InitClasses>> m_init_classes;
+  std::atomic<size_t> m_trivial_init_classes{0};
   InitClasses m_empty_init_classes;
   bool m_create_init_class_insns;
 
-  const InitClasses* compute(const DexClass* cls);
+  const InitClasses* compute(const DexClass* cls,
+                             const method::ClInitHasNoSideEffectsPredicate&
+                                 clinit_has_no_side_effects);
 
  public:
   InitClassesWithSideEffects(const Scope& scope, bool create_init_class_insns);
