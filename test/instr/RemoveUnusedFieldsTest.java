@@ -82,6 +82,8 @@ class RemoveUnusedFieldsTest {
     someArray = new Object[1];
     unusedTwiceWrittenField1 = someArray;
     unusedTwiceWrittenField2 = someArray;
+    UsingSomeClassWithClinitWithSideEffect.init();
+    UsingSomeClassWithoutClinit.init();
   }
 }
 
@@ -104,4 +106,35 @@ class SomeSubObject extends SomeObject {
   public SomeSubObject(Object object) {
     super(object);
   }
+}
+
+// CHECK-LABEL: class: redex.UsingSomeClassWithClinitWithSideEffect
+class UsingSomeClassWithClinitWithSideEffect {
+  public static void init() {
+    // CHECK: redex.SomeClassWithClinitWithSideEffect.$redex_init_class:redex.SomeClassWithClinitWithSideEffect
+    SomeClassWithClinitWithSideEffect.unusedField = 1;
+  }
+}
+
+// CHECK-LABEL: class: redex.SomeClassWithClinitWithSideEffect
+class SomeClassWithClinitWithSideEffect {
+  static {
+    try {
+      System.loadLibrary("boo"); // side effect
+    } catch (Throwable t) {
+    }
+  }
+  public static int unusedField;
+}
+
+// CHECK-LABEL: class: redex.UsingSomeClassWithoutClinit
+class UsingSomeClassWithoutClinit {
+  public static void init() {
+    // CHECK-NOT: redex.SomeClassWithoutClinit.$redex_init_class:redex.SomeClassWithoutClinit
+    SomeClassWithoutClinit.unusedField = 1;
+  }
+}
+
+class SomeClassWithoutClinit {
+  public static int unusedField;
 }
