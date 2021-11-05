@@ -58,6 +58,8 @@ class RemoveClasses {
  public:
   RemoveClasses(const DexType* super_cls,
                 const Scope& scope,
+                const init_classes::InitClassesWithSideEffects&
+                    init_classes_with_side_effects,
                 const inliner::InlinerConfig& inliner_config,
                 const std::vector<DexType*>& blocklist,
                 bool propagate_escape_results,
@@ -67,7 +69,12 @@ class RemoveClasses {
         m_blocklist(blocklist),
         m_type_system(scope),
         m_propagate_escape_results(propagate_escape_results),
-        m_transform(scope, m_type_system, super_cls, inliner_config, stores),
+        m_transform(scope,
+                    m_type_system,
+                    super_cls,
+                    init_classes_with_side_effects,
+                    inliner_config,
+                    stores),
         m_stores(stores) {
     gather_classes();
   }
@@ -376,10 +383,12 @@ void RemoveBuilderPatternPass::run_pass(DexStoresVector& stores,
                                         ConfigFiles& conf,
                                         PassManager& mgr) {
   auto scope = build_class_scope(stores);
+  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+      scope, conf.create_init_class_insns());
   for (const auto& root : m_roots) {
-    RemoveClasses rm_builder_pattern(root, scope, conf.get_inliner_config(),
-                                     m_blocklist, m_propagate_escape_results,
-                                     stores);
+    RemoveClasses rm_builder_pattern(
+        root, scope, init_classes_with_side_effects, conf.get_inliner_config(),
+        m_blocklist, m_propagate_escape_results, stores);
     rm_builder_pattern.optimize();
     rm_builder_pattern.print_stats(mgr);
     rm_builder_pattern.cleanup();

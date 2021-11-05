@@ -683,7 +683,7 @@ class CodeTransformer final {
       }
     } break;
     default: {
-      if (insn->has_type()) {
+      if (insn->has_type() && insn->opcode() != IOPCODE_INIT_CLASS) {
         auto type = insn->get_type();
         always_assert_log(try_convert_to_int_type(type) == nullptr,
                           "Unhandled type in %s method %s\n", SHOW(insn),
@@ -1172,7 +1172,7 @@ class EnumTransformer final {
             always_assert_log(field_ref->is_def(), "Invalid insn %s in %s\n",
                               SHOW(insn), SHOW(method));
           }
-        } else if (insn->has_type()) {
+        } else if (insn->has_type() && insn->opcode() != IOPCODE_INIT_CLASS) {
           auto type_ref = insn->get_type();
           always_assert_log(!try_convert_to_int_type(type_ref),
                             "Invalid insn %s in %s\n", SHOW(insn),

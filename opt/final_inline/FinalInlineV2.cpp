@@ -11,6 +11,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "ConfigFiles.h"
 #include "Debug.h"
 #include "DexAccess.h"
 #include "DexClass.h"
@@ -416,6 +417,8 @@ StaticFieldReadAnalysis::Result StaticFieldReadAnalysis::analyze(
  */
 cp::WholeProgramState analyze_and_simplify_clinits(
     const Scope& scope,
+    const init_classes::InitClassesWithSideEffects&
+        init_classes_with_side_effects,
     const XStoreRefs* xstores,
     const std::unordered_set<const DexType*>& blocklist_types,
     const std::unordered_set<std::string>& allowed_opaque_callee_names) {
@@ -463,7 +466,7 @@ cp::WholeProgramState analyze_and_simplify_clinits(
             .legacy_apply_constants_and_prune_unreachable(
                 intra_cp, wps, *cfg, xstores, cls->get_type());
         // Delete the instructions rendered dead by the removal of those sputs.
-        LocalDce(pure_methods).dce(*cfg);
+        LocalDce(&init_classes_with_side_effects, pure_methods).dce(*cfg);
       }
       // If the clinit is empty now, delete it.
       if (method::is_trivial_clinit(*code)) {
@@ -488,6 +491,8 @@ cp::WholeProgramState analyze_and_simplify_clinits(
  */
 cp::WholeProgramState analyze_and_simplify_inits(
     const Scope& scope,
+    const init_classes::InitClassesWithSideEffects&
+        init_classes_with_side_effects,
     const XStoreRefs* xstores,
     const std::unordered_set<const DexType*>& blocklist_types,
     const cp::EligibleIfields& eligible_ifields) {
@@ -534,7 +539,7 @@ cp::WholeProgramState analyze_and_simplify_inits(
             .legacy_apply_constants_and_prune_unreachable(
                 intra_cp, wps, *cfg, xstores, cls->get_type());
         // Delete the instructions rendered dead by the removal of those iputs.
-        LocalDce(pure_methods).dce(code);
+        LocalDce(&init_classes_with_side_effects, pure_methods).dce(code);
       }
     }
     wps.collect_instance_finals(cls, eligible_ifields,
@@ -936,6 +941,8 @@ cp::EligibleIfields gather_ifield_candidates(
 size_t inline_final_gets(
     std::optional<DexStoresVector*> stores,
     const Scope& scope,
+    const init_classes::InitClassesWithSideEffects&
+        init_classes_with_side_effects,
     const XStoreRefs* xstores,
     const cp::WholeProgramState& wps,
     const std::unordered_set<const DexType*>& blocklist_types,
@@ -951,7 +958,9 @@ size_t inline_final_gets(
   shrinker_config.compute_pure_methods = false;
 
   auto maybe_shrinker =
-      stores ? std::make_optional<Shrinker>(**stores, scope, shrinker_config)
+      stores ? std::make_optional<Shrinker>(**stores, scope,
+                                            init_classes_with_side_effects,
+                                            shrinker_config)
              : std::nullopt;
 
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
@@ -1006,14 +1015,17 @@ size_t inline_final_gets(
 } // namespace
 
 size_t FinalInlinePassV2::run(const Scope& scope,
+                              const init_classes::InitClassesWithSideEffects&
+                                  init_classes_with_side_effects,
                               const XStoreRefs* xstores,
                               const Config& config,
                               std::optional<DexStoresVector*> stores) {
   try {
     auto wps = final_inline::analyze_and_simplify_clinits(
-        scope, xstores, config.blocklist_types);
-    return inline_final_gets(stores, scope, xstores, wps,
-                             config.blocklist_types, cp::FieldType::STATIC);
+        scope, init_classes_with_side_effects, xstores, config.blocklist_types);
+    return inline_final_gets(stores, scope, init_classes_with_side_effects,
+                             xstores, wps, config.blocklist_types,
+                             cp::FieldType::STATIC);
   } catch (final_inline::class_initialization_cycle& e) {
     std::cerr << e.what();
     return 0;
@@ -1022,18 +1034,22 @@ size_t FinalInlinePassV2::run(const Scope& scope,
 
 size_t FinalInlinePassV2::run_inline_ifields(
     const Scope& scope,
+    const init_classes::InitClassesWithSideEffects&
+        init_classes_with_side_effects,
     const XStoreRefs* xstores,
     const cp::EligibleIfields& eligible_ifields,
     const Config& config,
     std::optional<DexStoresVector*> stores) {
   auto wps = final_inline::analyze_and_simplify_inits(
-      scope, xstores, config.blocklist_types, eligible_ifields);
-  return inline_final_gets(stores, scope, xstores, wps, config.blocklist_types,
+      scope, init_classes_with_side_effects, xstores, config.blocklist_types,
+      eligible_ifields);
+  return inline_final_gets(stores, scope, init_classes_with_side_effects,
+                           xstores, wps, config.blocklist_types,
                            cp::FieldType::INSTANCE);
 }
 
 void FinalInlinePassV2::run_pass(DexStoresVector& stores,
-                                 ConfigFiles& /* conf */,
+                                 ConfigFiles& conf,
                                  PassManager& mgr) {
   if (mgr.no_proguard_rules()) {
     TRACE(FINALINLINE,
@@ -1043,14 +1059,18 @@ void FinalInlinePassV2::run_pass(DexStoresVector& stores,
     return;
   }
   auto scope = build_class_scope(stores);
+  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+      scope, conf.create_init_class_insns());
   XStoreRefs xstores(stores);
-  auto inlined_sfields_count = run(scope, &xstores, m_config, &stores);
+  auto inlined_sfields_count =
+      run(scope, init_classes_with_side_effects, &xstores, m_config, &stores);
   size_t inlined_ifields_count{0};
   if (m_config.inline_instance_field) {
     cp::EligibleIfields eligible_ifields =
         gather_ifield_candidates(scope, m_config.allowlist_method_names);
-    inlined_ifields_count = run_inline_ifields(
-        scope, &xstores, eligible_ifields, m_config, &stores);
+    inlined_ifields_count =
+        run_inline_ifields(scope, init_classes_with_side_effects, &xstores,
+                           eligible_ifields, m_config, &stores);
   }
   mgr.incr_metric("num_static_finals_inlined", inlined_sfields_count);
   mgr.incr_metric("num_instance_finals_inlined", inlined_ifields_count);

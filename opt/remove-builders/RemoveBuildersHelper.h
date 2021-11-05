@@ -90,7 +90,9 @@ get_tainted_regs(uint32_t regs_size,
 
 class BuilderTransform {
  public:
-  BuilderTransform(const inliner::InlinerConfig& inliner_config,
+  BuilderTransform(const init_classes::InitClassesWithSideEffects&
+                       init_classes_with_side_effects,
+                   const inliner::InlinerConfig& inliner_config,
                    const Scope& scope,
                    DexStoresVector& stores,
                    bool throws_inline)
@@ -105,12 +107,9 @@ class BuilderTransform {
     };
 
     std::unordered_set<DexMethod*> no_default_inlinables;
-    m_inliner = std::unique_ptr<MultiMethodInliner>(
-        new MultiMethodInliner(scope,
-                               stores,
-                               no_default_inlinables,
-                               concurrent_resolver,
-                               m_inliner_config));
+    m_inliner = std::unique_ptr<MultiMethodInliner>(new MultiMethodInliner(
+        scope, init_classes_with_side_effects, stores, no_default_inlinables,
+        concurrent_resolver, m_inliner_config));
   }
 
   bool inline_methods(

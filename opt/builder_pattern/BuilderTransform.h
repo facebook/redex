@@ -24,6 +24,8 @@ class BuilderTransform {
   BuilderTransform(const Scope& scope,
                    const TypeSystem& type_system,
                    const DexType* root,
+                   const init_classes::InitClassesWithSideEffects&
+                       init_classes_with_side_effects,
                    const inliner::InlinerConfig& inliner_config,
                    DexStoresVector& stores);
   ~BuilderTransform();

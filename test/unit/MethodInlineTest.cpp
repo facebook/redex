@@ -441,11 +441,10 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining) {
 
   inliner::InlinerConfig inliner_config;
   inliner_config.populate(scope);
-  MultiMethodInliner inliner(scope,
-                             stores,
-                             canidates,
-                             concurrent_resolver,
-                             inliner_config,
+  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+      scope, /* create_init_class_insns */ false);
+  MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
+                             canidates, concurrent_resolver, inliner_config,
                              intra_dex ? IntraDex : InterDex);
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
@@ -494,8 +493,11 @@ TEST_F(MethodInlineTest, size_limit) {
   inliner::InlinerConfig inliner_config;
   inliner_config.soft_max_instruction_size = 0;
   inliner_config.populate(scope);
-  MultiMethodInliner inliner(scope, stores, canidates, concurrent_resolver,
-                             inliner_config, IntraDex);
+  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+      scope, /* create_init_class_insns */ false);
+  MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
+                             canidates, concurrent_resolver, inliner_config,
+                             IntraDex);
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), 0);
@@ -531,11 +533,10 @@ TEST_F(MethodInlineTest, minimal_self_loop_regression) {
   api::LevelChecker::init(0, scope);
   inliner::InlinerConfig inliner_config;
   inliner_config.populate(scope);
-  MultiMethodInliner inliner(scope,
-                             stores,
-                             candidates,
-                             concurrent_resolver,
-                             inliner_config,
+  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+      scope, /* create_init_class_insns */ false);
+  MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
+                             candidates, concurrent_resolver, inliner_config,
                              intra_dex ? IntraDex : InterDex);
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
@@ -581,11 +582,10 @@ TEST_F(MethodInlineTest, non_unique_inlined_registers) {
   inliner::InlinerConfig inliner_config;
   inliner_config.populate(scope);
   inliner_config.unique_inlined_registers = false;
-  MultiMethodInliner inliner(scope,
-                             stores,
-                             candidates,
-                             concurrent_resolver,
-                             inliner_config,
+  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+      scope, /* create_init_class_insns */ false);
+  MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
+                             candidates, concurrent_resolver, inliner_config,
                              intra_dex ? IntraDex : InterDex);
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
@@ -654,11 +654,10 @@ TEST_F(MethodInlineTest, inline_beneficial_on_average_after_constant_prop) {
   inliner_config.shrinker.run_local_dce = true;
   check_method->get_code()->build_cfg(true);
   foo_main->get_code()->build_cfg(true);
-  MultiMethodInliner inliner(scope,
-                             stores,
-                             candidates,
-                             concurrent_resolver,
-                             inliner_config,
+  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+      scope, /* create_init_class_insns */ false);
+  MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
+                             candidates, concurrent_resolver, inliner_config,
                              intra_dex ? IntraDex : InterDex);
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
@@ -725,11 +724,10 @@ TEST_F(MethodInlineTest,
   inliner_config.shrinker.run_local_dce = true;
   check_method->get_code()->build_cfg(true);
   foo_main->get_code()->build_cfg(true);
-  MultiMethodInliner inliner(scope,
-                             stores,
-                             candidates,
-                             concurrent_resolver,
-                             inliner_config,
+  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+      scope, /* create_init_class_insns */ false);
+  MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
+                             candidates, concurrent_resolver, inliner_config,
                              intra_dex ? IntraDex : InterDex);
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
@@ -807,11 +805,10 @@ TEST_F(
   inliner_config.shrinker.run_local_dce = true;
   check_method->get_code()->build_cfg(true);
   foo_main->get_code()->build_cfg(true);
-  MultiMethodInliner inliner(scope,
-                             stores,
-                             candidates,
-                             concurrent_resolver,
-                             inliner_config,
+  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+      scope, /* create_init_class_insns */ false);
+  MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
+                             candidates, concurrent_resolver, inliner_config,
                              intra_dex ? IntraDex : InterDex);
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
@@ -882,11 +879,10 @@ TEST_F(MethodInlineTest, throw_after_no_return) {
   inliner_config.throw_after_no_return = true;
   check_method->get_code()->build_cfg(true);
   foo_main->get_code()->build_cfg(true);
-  MultiMethodInliner inliner(scope,
-                             stores,
-                             candidates,
-                             concurrent_resolver,
-                             inliner_config,
+  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+      scope, /* create_init_class_insns */ false);
+  MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
+                             candidates, concurrent_resolver, inliner_config,
                              intra_dex ? IntraDex : InterDex);
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
@@ -962,8 +958,11 @@ TEST_F(MethodInlineTest, boxed_boolean) {
   foo_main->get_code()->build_cfg(true);
   std::unordered_set<DexMethodRef*> pure_methods{
       DexMethod::get_method("Ljava/lang/Boolean;.booleanValue:()Z")};
-  MultiMethodInliner inliner(scope, stores, candidates, concurrent_resolver,
-                             inliner_config, intra_dex ? IntraDex : InterDex,
+  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+      scope, /* create_init_class_insns */ false);
+  MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
+                             candidates, concurrent_resolver, inliner_config,
+                             intra_dex ? IntraDex : InterDex,
                              /* true_virtual_callers */ {},
                              /* inline_for_speed */ nullptr,
                              /* analyze_and_prune_inits */ false, pure_methods);
@@ -1050,8 +1049,11 @@ TEST_F(MethodInlineTest, boxed_boolean_without_shrinking) {
   foo_main->get_code()->build_cfg(true);
   std::unordered_set<DexMethodRef*> pure_methods{
       DexMethod::get_method("Ljava/lang/Boolean;.booleanValue:()Z")};
-  MultiMethodInliner inliner(scope, stores, candidates, concurrent_resolver,
-                             inliner_config, intra_dex ? IntraDex : InterDex,
+  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+      scope, /* create_init_class_insns */ false);
+  MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
+                             candidates, concurrent_resolver, inliner_config,
+                             intra_dex ? IntraDex : InterDex,
                              /* true_virtual_callers */ {},
                              /* inline_for_speed */ nullptr,
                              /* analyze_and_prune_inits */ false, pure_methods);
@@ -1228,8 +1230,11 @@ TEST_F(MethodInlineTest, visibility_change_static_invoke) {
   init->get_code()->build_cfg(true);
 
   {
-    MultiMethodInliner inliner(scope, stores, candidates, concurrent_resolver,
-                               inliner_config, intra_dex ? IntraDex : InterDex,
+    init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+        scope, /* create_init_class_insns */ false);
+    MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
+                               candidates, concurrent_resolver, inliner_config,
+                               intra_dex ? IntraDex : InterDex,
                                /* true_virtual_callers */ {},
                                /* inline_for_speed */ nullptr,
                                /* analyze_and_prune_inits */ false, {});
@@ -1402,8 +1407,11 @@ TEST_F(MethodInlineTest, unused_result) {
   callee->get_code()->build_cfg(true);
 
   {
-    MultiMethodInliner inliner(scope, stores, candidates, concurrent_resolver,
-                               inliner_config, intra_dex ? IntraDex : InterDex,
+    init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+        scope, /* create_init_class_insns */ false);
+    MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
+                               candidates, concurrent_resolver, inliner_config,
+                               intra_dex ? IntraDex : InterDex,
                                /* true_virtual_callers */ {},
                                /* inline_for_speed */ nullptr,
                                /* analyze_and_prune_inits */ false, {});
@@ -1549,8 +1557,11 @@ TEST_F(MethodInlineTest, caller_caller_callee_call_site) {
   callee->get_code()->build_cfg(true);
 
   {
-    MultiMethodInliner inliner(scope, stores, candidates, concurrent_resolver,
-                               inliner_config, intra_dex ? IntraDex : InterDex,
+    init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+        scope, /* create_init_class_insns */ false);
+    MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
+                               candidates, concurrent_resolver, inliner_config,
+                               intra_dex ? IntraDex : InterDex,
                                /* true_virtual_callers */ {},
                                /* inline_for_speed */ nullptr,
                                /* analyze_and_prune_inits */ false, {});
@@ -1655,8 +1666,11 @@ TEST_F(MethodInlineTest,
   callee->get_code()->build_cfg(true);
 
   {
-    MultiMethodInliner inliner(scope, stores, candidates, concurrent_resolver,
-                               inliner_config, IntraDex,
+    init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+        scope, /* create_init_class_insns */ false);
+    MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
+                               candidates, concurrent_resolver, inliner_config,
+                               IntraDex,
                                /* true_virtual_callers */ {},
                                /* inline_for_speed */ nullptr,
                                /* analyze_and_prune_inits */ false, {});
@@ -1737,8 +1751,11 @@ TEST_F(MethodInlineTest, dont_inline_sketchy_callee_into_into_try) {
   callee->get_code()->build_cfg(true);
 
   {
-    MultiMethodInliner inliner(scope, stores, candidates, concurrent_resolver,
-                               inliner_config, IntraDex,
+    init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+        scope, /* create_init_class_insns */ false);
+    MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
+                               candidates, concurrent_resolver, inliner_config,
+                               IntraDex,
                                /* true_virtual_callers */ {},
                                /* inline_for_speed */ nullptr,
                                /* analyze_and_prune_inits */ false, {});

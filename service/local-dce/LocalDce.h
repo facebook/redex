@@ -8,6 +8,7 @@
 #pragma once
 
 #include "IRCode.h"
+#include "InitClassesWithSideEffects.h"
 #include "MethodOverrideGraph.h"
 
 #include <boost/dynamic_bitset.hpp>
@@ -25,6 +26,7 @@ class LocalDce {
  public:
   struct Stats {
     size_t npe_instruction_count{0};
+    size_t init_class_instructions_added{0};
     size_t dead_instruction_count{0};
     size_t unreachable_instruction_count{0};
     size_t aliased_new_instances{0};
@@ -32,6 +34,7 @@ class LocalDce {
 
     Stats& operator+=(const Stats& that) {
       npe_instruction_count += that.npe_instruction_count;
+      init_class_instructions_added += that.init_class_instructions_added;
       dead_instruction_count += that.dead_instruction_count;
       unreachable_instruction_count += that.unreachable_instruction_count;
       aliased_new_instances += that.aliased_new_instances;
@@ -67,12 +70,17 @@ class LocalDce {
    */
 
   explicit LocalDce(
+      const init_classes::InitClassesWithSideEffects*
+          init_classes_with_side_effects,
       const std::unordered_set<DexMethodRef*>& pure_methods,
       const method_override_graph::Graph* method_override_graph = nullptr,
-      bool may_allocate_registers = false)
-      : m_pure_methods(pure_methods),
+      bool may_allocate_registers = false,
+      bool ignore_pure_method_init_classes = false)
+      : m_init_classes_with_side_effects(init_classes_with_side_effects),
+        m_pure_methods(pure_methods),
         m_method_override_graph(method_override_graph),
-        m_may_allocate_registers(may_allocate_registers) {}
+        m_may_allocate_registers(may_allocate_registers),
+        m_ignore_pure_method_init_classes(ignore_pure_method_init_classes) {}
 
   const Stats& get_stats() const { return m_stats; }
 
@@ -82,9 +90,12 @@ class LocalDce {
       const cfg::ControlFlowGraph& cfg, const std::vector<cfg::Block*>& blocks);
 
  private:
+  const init_classes::InitClassesWithSideEffects*
+      m_init_classes_with_side_effects;
   const std::unordered_set<DexMethodRef*>& m_pure_methods;
   const method_override_graph::Graph* m_method_override_graph;
   const bool m_may_allocate_registers;
+  const bool m_ignore_pure_method_init_classes;
   Stats m_stats;
 
   bool is_required(const cfg::ControlFlowGraph& cfg,

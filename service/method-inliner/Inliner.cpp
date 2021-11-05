@@ -65,6 +65,8 @@ constexpr uint64_t HARD_MAX_INSTRUCTION_SIZE = UINT64_C(1) << 32;
 
 MultiMethodInliner::MultiMethodInliner(
     const std::vector<DexClass*>& scope,
+    const init_classes::InitClassesWithSideEffects&
+        init_classes_with_side_effects,
     DexStoresVector& stores,
     const std::unordered_set<DexMethod*>& candidates,
     std::function<DexMethod*(DexMethodRef*, MethodSearch)>
@@ -107,6 +109,7 @@ MultiMethodInliner::MultiMethodInliner(
       m_cross_dex_penalty(cross_dex_penalty),
       m_shrinker(stores,
                  scope,
+                 init_classes_with_side_effects,
                  config.shrinker,
                  configured_pure_methods,
                  configured_finalish_field_names) {

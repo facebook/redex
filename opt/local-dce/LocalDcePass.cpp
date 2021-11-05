@@ -21,6 +21,7 @@
 #include "GraphUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
+#include "InitClassesWithSideEffects.h"
 #include "MethodOverrideGraph.h"
 #include "PassManager.h"
 #include "Purity.h"
@@ -34,6 +35,8 @@
 namespace {
 
 constexpr const char* METRIC_NPE_INSTRUCTIONS = "num_npe_instructions";
+constexpr const char* METRIC_INIT_CLASS_INSTRUCTIONS_ADDED =
+    "num_init_class_instructions_added";
 constexpr const char* METRIC_DEAD_INSTRUCTIONS = "num_dead_instructions";
 constexpr const char* METRIC_UNREACHABLE_INSTRUCTIONS =
     "num_unreachable_instructions";
@@ -52,6 +55,14 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
                             ConfigFiles& conf,
                             PassManager& mgr) {
   auto scope = build_class_scope(stores);
+  std::unique_ptr<init_classes::InitClassesWithSideEffects>
+      init_classes_with_side_effects;
+  if (!mgr.init_class_lowering_has_run()) {
+    init_classes_with_side_effects =
+        std::make_unique<init_classes::InitClassesWithSideEffects>(
+            scope, conf.create_init_class_insns());
+  }
+
   auto pure_methods = get_pure_methods();
   auto configured_pure_methods = conf.get_pure_methods();
   pure_methods.insert(configured_pure_methods.begin(),
@@ -89,12 +100,14 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
           return LocalDce::Stats();
         }
 
-        LocalDce ldce(pure_methods, override_graph.get(),
-                      may_allocate_registers);
+        LocalDce ldce(init_classes_with_side_effects.get(), pure_methods,
+                      override_graph.get(), may_allocate_registers);
         ldce.dce(code);
         return ldce.get_stats();
       });
   mgr.incr_metric(METRIC_NPE_INSTRUCTIONS, stats.npe_instruction_count);
+  mgr.incr_metric(METRIC_INIT_CLASS_INSTRUCTIONS_ADDED,
+                  stats.init_class_instructions_added);
   mgr.incr_metric(METRIC_DEAD_INSTRUCTIONS, stats.dead_instruction_count);
   mgr.incr_metric(METRIC_UNREACHABLE_INSTRUCTIONS,
                   stats.unreachable_instruction_count);
@@ -107,9 +120,11 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
                   computed_no_side_effects_methods_iterations);
 
   TRACE(DCE, 1,
-        "instructions removed -- npe: %zu, dead: %zu, unreachable: %zu; "
+        "instructions removed -- npe: %zu, dead: %zu, init-class: %zu, "
+        "unreachable: %zu; "
         "normalized %zu new-instance instructions, %zu aliasaed",
         stats.npe_instruction_count, stats.dead_instruction_count,
+        stats.init_class_instructions_added,
         stats.unreachable_instruction_count, stats.normalized_new_instances,
         stats.aliased_new_instances);
 }

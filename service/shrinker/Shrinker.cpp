@@ -73,6 +73,8 @@ bool should_shrink(IRCode* code, const Shrinker::ShrinkerForest& forest) {
 Shrinker::Shrinker(
     DexStoresVector& stores,
     const Scope& scope,
+    const init_classes::InitClassesWithSideEffects&
+        init_classes_with_side_effects,
     const ShrinkerConfig& config,
     const std::unordered_set<DexMethodRef*>& configured_pure_methods,
     const std::unordered_set<const DexString*>& configured_finalish_field_names)
@@ -83,6 +85,7 @@ Shrinker::Shrinker(
                 config.run_copy_prop || config.run_local_dce ||
                 config.run_reg_alloc || config.run_fast_reg_alloc ||
                 config.run_dedup_blocks),
+      m_init_classes_with_side_effects(init_classes_with_side_effects),
       m_pure_methods(configured_pure_methods),
       m_finalish_field_names(configured_finalish_field_names) {
   if (config.run_cse || config.run_local_dce) {
@@ -149,7 +152,7 @@ constant_propagation::Transform::Stats Shrinker::constant_propagation(
 LocalDce::Stats Shrinker::local_dce(IRCode* code,
                                     bool normalize_new_instances) {
   // LocalDce doesn't care if editable_cfg_built
-  auto local_dce = LocalDce(m_pure_methods);
+  auto local_dce = LocalDce(&m_init_classes_with_side_effects, m_pure_methods);
   local_dce.dce(code, normalize_new_instances);
   return local_dce.get_stats();
 }

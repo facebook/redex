@@ -15,6 +15,7 @@
 #include "DexUtil.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
+#include "InitClassesWithSideEffects.h"
 #include "RedexTest.h"
 #include "RemoveUnusedArgs.h"
 #include "ScopeHelper.h"
@@ -25,12 +26,15 @@ struct RemoveUnusedArgsTest : public RedexTest {
 
   RemoveUnusedArgsTest() {
     Scope dummy_scope;
+    init_classes::InitClassesWithSideEffects
+        dummy_init_classes_with_side_effects(
+            dummy_scope, /* create_init_class_insns */ false);
     auto obj_t = type::java_lang_Object();
     auto dummy_t = DexType::make_type("LA;");
     auto dummy_cls = create_internal_class(dummy_t, obj_t, {});
     dummy_scope.push_back(dummy_cls);
-    m_remove_args =
-        new remove_unused_args::RemoveArgs(dummy_scope, m_blocklist);
+    m_remove_args = new remove_unused_args::RemoveArgs(
+        dummy_scope, dummy_init_classes_with_side_effects, m_blocklist);
   }
 
   ~RemoveUnusedArgsTest() {}

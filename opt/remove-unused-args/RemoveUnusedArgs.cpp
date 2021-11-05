@@ -627,7 +627,8 @@ RemoveArgs::MethodStats RemoveArgs::update_method_protos(
         }
 
         std::unordered_set<DexMethodRef*> pure_methods;
-        auto local_dce = LocalDce(pure_methods);
+        auto local_dce =
+            LocalDce(&m_init_classes_with_side_effects, pure_methods);
         local_dce.dce(method->get_code());
         const auto& stats = local_dce.get_stats();
         if (stats.dead_instruction_count |
@@ -710,6 +711,8 @@ void RemoveUnusedArgsPass::run_pass(DexStoresVector& stores,
                                     ConfigFiles& conf,
                                     PassManager& mgr) {
   auto scope = build_class_scope(stores);
+  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+      scope, conf.create_init_class_insns());
 
   size_t num_callsite_args_removed = 0;
   size_t num_method_params_removed = 0;
@@ -720,7 +723,8 @@ void RemoveUnusedArgsPass::run_pass(DexStoresVector& stores,
   LocalDce::Stats local_dce_stats{0, 0};
   while (true) {
     num_iterations++;
-    RemoveArgs rm_args(scope, m_blocklist, m_total_iterations++);
+    RemoveArgs rm_args(scope, init_classes_with_side_effects, m_blocklist,
+                       m_total_iterations++);
     auto pass_stats = rm_args.run(conf);
     if (pass_stats.methods_updated_count == 0) {
       break;

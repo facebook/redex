@@ -93,6 +93,11 @@ class PassManager {
   void record_running_regalloc() { m_regalloc_has_run = true; }
   bool regalloc_has_run() const { return m_regalloc_has_run; }
 
+  void record_init_class_lowering() { m_init_class_lowering_has_run = true; }
+  bool init_class_lowering_has_run() const {
+    return m_init_class_lowering_has_run;
+  }
+
   void record_running_interdex() { m_interdex_has_run = true; }
   bool interdex_has_run() const { return m_interdex_has_run; }
 
@@ -135,6 +140,7 @@ class PassManager {
   const RedexOptions m_redex_options;
   bool m_testing_mode{false};
   bool m_regalloc_has_run{false};
+  bool m_init_class_lowering_has_run{false};
   bool m_interdex_has_run{false};
   bool m_unreliable_virtual_scopes{false};
 

@@ -1139,6 +1139,8 @@ void PartialApplicationPass::run_pass(DexStoresVector& stores,
                                       ConfigFiles& conf,
                                       PassManager& mgr) {
   const auto scope = build_class_scope(stores);
+  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+      scope, conf.create_init_class_insns());
 
   auto excluded_classes = get_excluded_classes(stores);
 
@@ -1163,7 +1165,8 @@ void PartialApplicationPass::run_pass(DexStoresVector& stores,
   ShrinkerConfig shrinker_config;
   shrinker_config.run_local_dce = true;
   shrinker_config.compute_pure_methods = false;
-  Shrinker shrinker(stores, scope, shrinker_config);
+  Shrinker shrinker(stores, scope, init_classes_with_side_effects,
+                    shrinker_config);
 
   std::unordered_set<const IRInstruction*> excluded_invoke_insns;
   auto get_callee_fn = [&excluded_classes, &excluded_invoke_insns](

@@ -269,6 +269,8 @@ void InitClassLoweringPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_SGET_INSTRUCTIONS_ADDED, sget_instructions_added);
   mgr.incr_metric(METRIC_FIELDS_MADE_PUBLIC, fields_made_public);
   mgr.incr_metric(METRIC_TYPES_MADE_PUBLIC, types_made_public);
+
+  mgr.record_init_class_lowering();
 }
 
 static InitClassLoweringPass s_pass;

@@ -277,6 +277,12 @@ void check_load_params(DexMethod* method) {
 }
 
 DexInstruction* create_dex_instruction(const IRInstruction* insn) {
+  // TODO: Assert that this never happens. IOPCODE_INIT_CLASS should never make
+  // it here.
+  if (insn->opcode() == IOPCODE_INIT_CLASS) {
+    return new DexInstruction(DOPCODE_NOP);
+  }
+
   auto op = opcode::to_dex_opcode(insn->opcode());
   switch (opcode::ref(insn->opcode())) {
   case opcode::Ref::None:

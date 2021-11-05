@@ -147,6 +147,7 @@ void LocalDce::dce(cfg::ControlFlowGraph& cfg, bool normalize_new_instances) {
   cfg::CFGMutation mutation(cfg);
   std::unique_ptr<npe::NullPointerExceptionCreator> npe_creator;
   size_t npe_instructions = 0;
+  size_t init_class_instructions_added = 0;
   for (const auto& pair : dead_instructions) {
     cfg::Block* b = pair.first;
     const IRList::iterator& it = pair.second;
@@ -170,7 +171,17 @@ void LocalDce::dce(cfg::ControlFlowGraph& cfg, bool normalize_new_instances) {
       npe_instructions++;
     } else {
       TRACE(DCE, 2, "DEAD: %s", SHOW(insn));
-      mutation.remove(cfg_it);
+      auto init_class_insn =
+          m_init_classes_with_side_effects
+              ? m_init_classes_with_side_effects->create_init_class_insn(
+                    get_init_class_type_demand(insn))
+              : nullptr;
+      if (init_class_insn) {
+        init_class_instructions_added++;
+        mutation.replace(cfg_it, {init_class_insn});
+      } else {
+        mutation.remove(cfg_it);
+      }
     }
   }
   mutation.flush();
@@ -178,6 +189,7 @@ void LocalDce::dce(cfg::ControlFlowGraph& cfg, bool normalize_new_instances) {
   cfg.recompute_registers_size();
 
   m_stats.npe_instruction_count += npe_instructions;
+  m_stats.init_class_instructions_added += init_class_instructions_added;
   m_stats.dead_instruction_count += dead_instructions.size();
   m_stats.unreachable_instruction_count += unreachable_insn_count;
 
@@ -208,6 +220,13 @@ bool LocalDce::is_required(const cfg::ControlFlowGraph& cfg,
       if (!assumenosideeffects(inst->get_method(), meth)) {
         return true;
       }
+      if (!m_init_classes_with_side_effects &&
+          inst->opcode() == OPCODE_INVOKE_STATIC) {
+        if (!m_ignore_pure_method_init_classes ||
+            !m_pure_methods.count(inst->get_method())) {
+          return true;
+        }
+      }
       return bliveness.test(bliveness.size() - 1);
     } else if (opcode::is_a_conditional_branch(inst->opcode())) {
       cfg::Edge* goto_edge = cfg.get_succ_edge_of_type(b, cfg::EDGE_GOTO);
@@ -236,6 +255,11 @@ bool LocalDce::is_required(const cfg::ControlFlowGraph& cfg,
       if (field && field->rstate.init_class()) {
         return true;
       }
+    }
+    if (!m_init_classes_with_side_effects &&
+        (inst->opcode() == OPCODE_NEW_INSTANCE ||
+         opcode::is_an_sfield_op(inst->opcode()))) {
+      return true;
     }
     // These instructions pass their dests via the return-value slot, but
     // aren't inherently live like the invoke-* instructions.

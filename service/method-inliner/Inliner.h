@@ -129,6 +129,8 @@ class MultiMethodInliner {
    */
   MultiMethodInliner(
       const std::vector<DexClass*>& scope,
+      const init_classes::InitClassesWithSideEffects&
+          init_classes_with_side_effects,
       DexStoresVector& stores,
       const std::unordered_set<DexMethod*>& candidates,
       std::function<DexMethod*(DexMethodRef*, MethodSearch)>

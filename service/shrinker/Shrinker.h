@@ -16,6 +16,7 @@
 #include "DexStore.h"
 #include "IPConstantPropagationAnalysis.h"
 #include "IRCode.h"
+#include "InitClassesWithSideEffects.h"
 #include "LocalDce.h"
 #include "MethodProfiles.h"
 #include "RandomForest.h"
@@ -31,6 +32,8 @@ class Shrinker {
   Shrinker(
       DexStoresVector& stores,
       const Scope& scope,
+      const init_classes::InitClassesWithSideEffects&
+          init_classes_with_side_effects,
       const ShrinkerConfig& config,
       const std::unordered_set<DexMethodRef*>& configured_pure_methods = {},
       const std::unordered_set<const DexString*>&
@@ -119,6 +122,8 @@ class Shrinker {
   const bool m_enabled;
   std::unique_ptr<cse_impl::SharedState> m_cse_shared_state;
 
+  const init_classes::InitClassesWithSideEffects&
+      m_init_classes_with_side_effects;
   std::unordered_set<DexMethodRef*> m_pure_methods;
   std::unordered_set<const DexString*> m_finalish_field_names;
 

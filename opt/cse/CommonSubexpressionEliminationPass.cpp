@@ -51,6 +51,8 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
                                                   ConfigFiles& conf,
                                                   PassManager& mgr) {
   const auto scope = build_class_scope(stores);
+  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+      scope, conf.create_init_class_insns());
 
   walk::parallel::code(scope, [&](DexMethod*, IRCode& code) {
     code.build_cfg(/* editable */ true);
@@ -107,7 +109,8 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
               copy_prop_config);
           copy_propagation.run(code, method);
 
-          auto local_dce = LocalDce(shared_state.get_pure_methods(),
+          auto local_dce = LocalDce(&init_classes_with_side_effects,
+                                    shared_state.get_pure_methods(),
                                     shared_state.get_method_override_graph(),
                                     /* may_allocate_registers */ true);
           local_dce.dce(code);

@@ -10,6 +10,7 @@
 #include <mutex>
 
 #include "ConcurrentContainers.h"
+#include "InitClassesWithSideEffects.h"
 #include "LocalDce.h"
 #include "MethodOverrideGraph.h"
 #include "Pass.h"
@@ -41,13 +42,20 @@ class RemoveArgs {
   };
 
   RemoveArgs(const Scope& scope,
+             const init_classes::InitClassesWithSideEffects&
+                 init_classes_with_side_effects,
              const std::vector<std::string>& blocklist,
              size_t iteration = 0)
-      : m_scope(scope), m_blocklist(blocklist), m_iteration(iteration){};
+      : m_scope(scope),
+        m_init_classes_with_side_effects(init_classes_with_side_effects),
+        m_blocklist(blocklist),
+        m_iteration(iteration) {}
   RemoveArgs::PassStats run(ConfigFiles& conf);
 
  private:
   const Scope& m_scope;
+  const init_classes::InitClassesWithSideEffects&
+      m_init_classes_with_side_effects;
   ConcurrentMap<DexMethod*, std::deque<uint16_t>> m_live_arg_idxs_map;
   // Data structure to remember running indices to make method names unique when
   // we reorder prototypes across virtual scopes, or do other general changes to

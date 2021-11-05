@@ -14,11 +14,14 @@
 
 namespace builder_pattern {
 
-BuilderTransform::BuilderTransform(const Scope& scope,
-                                   const TypeSystem& type_system,
-                                   const DexType* root,
-                                   const inliner::InlinerConfig& inliner_config,
-                                   DexStoresVector& stores)
+BuilderTransform::BuilderTransform(
+    const Scope& scope,
+    const TypeSystem& type_system,
+    const DexType* root,
+    const init_classes::InitClassesWithSideEffects&
+        init_classes_with_side_effects,
+    const inliner::InlinerConfig& inliner_config,
+    DexStoresVector& stores)
     : m_type_system(type_system),
       m_root(root),
       m_inliner_config(inliner_config) {
@@ -35,8 +38,8 @@ BuilderTransform::BuilderTransform(const Scope& scope,
   m_inliner_config.shrinker.run_local_dce = true;
   m_inliner_config.shrinker.compute_pure_methods = false;
   m_inliner = std::unique_ptr<MultiMethodInliner>(new MultiMethodInliner(
-      scope, stores, no_default_inlinables, concurrent_resolver,
-      m_inliner_config, MultiMethodInlinerMode::None));
+      scope, init_classes_with_side_effects, stores, no_default_inlinables,
+      concurrent_resolver, m_inliner_config, MultiMethodInlinerMode::None));
 }
 
 std::unordered_set<const IRInstruction*>

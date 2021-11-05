@@ -645,6 +645,8 @@ void run_inliner(DexStoresVector& stores,
   }
 
   auto scope = build_class_scope(stores);
+  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+      scope, conf.create_init_class_insns());
 
   auto inliner_config = conf.get_inliner_config();
   const api::AndroidSDK* min_sdk_api{nullptr};
@@ -728,11 +730,11 @@ void run_inliner(DexStoresVector& stores,
       inliner_config.shrinker.run_const_prop;
 
   // inline candidates
-  MultiMethodInliner inliner(scope, stores, candidates, concurrent_resolver,
-                             inliner_config, intra_dex ? IntraDex : InterDex,
-                             true_virtual_callers, inline_for_speed,
-                             analyze_and_prune_inits, conf.get_pure_methods(),
-                             min_sdk_api, cross_dex_penalty);
+  MultiMethodInliner inliner(
+      scope, init_classes_with_side_effects, stores, candidates,
+      concurrent_resolver, inliner_config, intra_dex ? IntraDex : InterDex,
+      true_virtual_callers, inline_for_speed, analyze_and_prune_inits,
+      conf.get_pure_methods(), min_sdk_api, cross_dex_penalty);
   inliner.inline_methods(/* need_deconstruct */ false);
 
   walk::parallel::code(scope,
@@ -885,6 +887,8 @@ void run_inliner(DexStoresVector& stores,
   mgr.incr_metric("blocks_eliminated_by_dedup_blocks",
                   shrinker.get_dedup_blocks_stats().blocks_removed);
   mgr.incr_metric("methods_reg_alloced", shrinker.get_methods_reg_alloced());
+  mgr.incr_metric("localdce_init_class_instructions_added",
+                  shrinker.get_local_dce_stats().init_class_instructions_added);
 
   // Expose the shrinking timers as Timers.
   Timer::add_timer("Inliner.Shrinking.ConstantPropagation",

@@ -29,6 +29,13 @@ struct FinalInlineTest : public RedexTest {
     return field;
   }
 
+  static size_t run(const Scope& scope, const XStoreRefs* xstores) {
+    init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+        scope, /* create_init_class_insns */ false);
+    return FinalInlinePassV2::run(
+        scope, init_classes_with_side_effects, xstores);
+  }
+
   std::unique_ptr<ClassCreator> m_cc;
 };
 
@@ -45,7 +52,7 @@ TEST_F(FinalInlineTest, encodeValues) {
   )"));
   auto cls = m_cc->create();
 
-  FinalInlinePassV2::run({cls}, /* xstores */ nullptr);
+  run({cls}, /* xstores */ nullptr);
 
   EXPECT_EQ(cls->get_clinit(), nullptr);
   EXPECT_EQ(field->get_static_value()->value(), 1);
@@ -74,7 +81,7 @@ TEST_F(FinalInlineTest, encodeTypeValues) {
   DexStoresVector stores{store};
   auto scope = build_class_scope(stores);
   XStoreRefs xstores(stores);
-  FinalInlinePassV2::run(scope, &xstores);
+  run(scope, &xstores);
 
   EXPECT_EQ(cls->get_clinit(), nullptr);
   EXPECT_EQ(field->get_static_value()->evtype(), DEVT_TYPE);
@@ -108,7 +115,7 @@ TEST_F(FinalInlineTest, encodeTypeValuesXStore) {
   DexStoresVector stores{store1, store2};
   auto scope = build_class_scope(stores);
   XStoreRefs xstores(stores);
-  FinalInlinePassV2::run(scope, &xstores);
+  run(scope, &xstores);
 
   EXPECT_NE(cls->get_clinit(), nullptr);
   EXPECT_EQ(field->get_static_value()->evtype(), DEVT_NULL);
@@ -133,7 +140,7 @@ TEST_F(FinalInlineTest, fieldSetInLoop) {
   auto cls = m_cc->create();
 
   auto original = assembler::to_s_expr(cls->get_clinit()->get_code());
-  FinalInlinePassV2::run({cls}, /* xstores */ nullptr);
+  run({cls}, /* xstores */ nullptr);
   EXPECT_EQ(assembler::to_s_expr(cls->get_clinit()->get_code()), original);
   EXPECT_EQ(field_bar->get_static_value()->value(), 0);
 }
@@ -163,7 +170,7 @@ TEST_F(FinalInlineTest, fieldConditionallySet) {
   auto cls = m_cc->create();
 
   auto original = assembler::to_s_expr(cls->get_clinit()->get_code());
-  FinalInlinePassV2::run({cls}, /* xstores */ nullptr);
+  run({cls}, /* xstores */ nullptr);
   EXPECT_EQ(assembler::to_s_expr(cls->get_clinit()->get_code()), original);
   EXPECT_EQ(field_bar->get_static_value()->value(), 0);
   EXPECT_EQ(field_baz->get_static_value()->value(), 0);
@@ -198,7 +205,7 @@ TEST_F(FinalInlineTest, dominatedSget) {
   )");
 
   auto original = assembler::to_s_expr(cls->get_clinit()->get_code());
-  FinalInlinePassV2::run({cls}, /* xstores */ nullptr);
+  run({cls}, /* xstores */ nullptr);
   EXPECT_CODE_EQ(cls->get_clinit()->get_code(), expected.get());
   EXPECT_EQ(field_bar->get_static_value()->value(), 0);
   EXPECT_EQ(field_baz->get_static_value()->value(), 1);
