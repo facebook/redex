@@ -171,15 +171,25 @@ class IRCode {
   /* Generate DexCode from IRCode */
   std::unique_ptr<DexCode> sync(const DexMethod*);
 
+  /* DEPRECATED! Use the version below that passes in the iterator instead,
+   * which is O(1) instead of O(n). */
   /* Passes memory ownership of "from" to callee.  It will delete it. */
   void replace_opcode(IRInstruction* from, IRInstruction* to) {
     m_ir_list->replace_opcode(from, to);
   }
 
+  /* DEPRECATED! Use the version below that passes in the iterator instead,
+   * which is O(1) instead of O(n). */
   /* Passes memory ownership of "from" to callee.  It will delete it. */
   void replace_opcode(IRInstruction* to_delete,
                       const std::vector<IRInstruction*>& replacements) {
     m_ir_list->replace_opcode(to_delete, replacements);
+  }
+
+  /* Passes memory ownership of "from" to callee.  It will delete it. */
+  void replace_opcode(const IRList::iterator& it,
+                      const std::vector<IRInstruction*>& replacements) {
+    m_ir_list->replace_opcode(it, replacements);
   }
 
   /*

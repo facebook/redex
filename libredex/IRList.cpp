@@ -442,6 +442,12 @@ void IRList::replace_opcode(IRInstruction* to_delete,
   always_assert_log(it != m_list.end(),
                     "No match found while replacing '%s'",
                     SHOW(to_delete));
+  replace_opcode(it, replacements);
+}
+
+void IRList::replace_opcode(const IRList::iterator& it,
+                            const std::vector<IRInstruction*>& replacements) {
+  always_assert(it->type == MFLOW_OPCODE);
   for (auto insn : replacements) {
     insert_before(it, insn);
   }
