@@ -295,6 +295,13 @@ void LocalDce::normalize_new_instances(cfg::ControlFlowGraph& cfg) {
   // TODO: This normalization optimization doesn't really belong to local-dce,
   // but it combines nicely as local-dce will clean-up redundant new-instance
   // instructions and moves afterwards.
+
+  // Let's not do the transformation if there's a chance that it could leave
+  // behind dangling new-instance instructions that LocalDce couldn't remove.
+  if (!m_init_classes_with_side_effects) {
+    return;
+  }
+
   cfg::CFGMutation mutation(cfg);
   reaching_defs::MoveAwareFixpointIterator fp_iter(cfg);
   fp_iter.run({});
