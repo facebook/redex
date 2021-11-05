@@ -148,6 +148,12 @@ void make_public(const std::vector<DexField*>& fields,
 }
 } // namespace
 
+void InitClassLoweringPass::bind_config() {
+  bind(
+      "drop", m_drop, m_drop,
+      "Whether to drop the init-class instructions, instead of lowering them.");
+}
+
 void InitClassLoweringPass::run_pass(DexStoresVector& stores,
                                      ConfigFiles& conf,
                                      PassManager& mgr) {
@@ -205,6 +211,10 @@ void InitClassLoweringPass::run_pass(DexStoresVector& stores,
               continue;
             }
             always_assert(create_init_class_insns);
+            if (m_drop) {
+              mutation.remove(block->to_cfg_instruction_iterator(it));
+              continue;
+            }
             auto field = init_class_fields.get(it->insn->get_type());
             reg_t reg = get_reg(field);
             auto sget_insn =

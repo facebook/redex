@@ -14,5 +14,10 @@ class InitClassLoweringPass : public Pass {
  public:
   InitClassLoweringPass() : Pass("InitClassLoweringPass") {}
 
+  void bind_config() override;
+
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+
+ private:
+  bool m_drop{false};
 };
