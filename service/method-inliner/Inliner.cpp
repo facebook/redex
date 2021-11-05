@@ -1135,8 +1135,12 @@ static float get_invoke_cost(const DexMethod* callee, float result_used) {
 static size_t get_inlined_cost(IRInstruction* insn) {
   auto op = insn->opcode();
   size_t cost{0};
-  if (!opcode::is_an_internal(op) && !opcode::is_a_move(op) &&
-      !opcode::is_a_return(op)) {
+  if (opcode::is_an_internal(op) || opcode::is_a_move(op) ||
+      opcode::is_a_return(op)) {
+    if (op == IOPCODE_INIT_CLASS) {
+      cost += 2;
+    }
+  } else {
     cost++;
     auto regs = insn->srcs_size() +
                 ((insn->has_dest() || insn->has_move_result_pseudo()) ? 1 : 0);
