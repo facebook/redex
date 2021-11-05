@@ -941,7 +941,7 @@ cp::EligibleIfields gather_ifield_candidates(
   return eligible_ifields;
 }
 
-size_t inline_final_gets(
+FinalInlinePassV2::Stats inline_final_gets(
     std::optional<DexStoresVector*> stores,
     const Scope& scope,
     const init_classes::InitClassesWithSideEffects&
@@ -951,6 +951,7 @@ size_t inline_final_gets(
     const std::unordered_set<const DexType*>& blocklist_types,
     cp::FieldType field_type) {
   std::atomic<size_t> inlined_count{0};
+  std::atomic<size_t> init_classes{0};
   using namespace shrinker;
 
   ShrinkerConfig shrinker_config;
@@ -1007,6 +1008,7 @@ size_t inline_final_gets(
                   : nullptr;
           if (init_class_insn) {
             replacement.insert(replacement.begin(), init_class_insn);
+            init_classes++;
           }
           mutation.replace(cfg_it, replacement);
           replacements++;
@@ -1023,17 +1025,18 @@ size_t inline_final_gets(
     }
     inlined_count.fetch_add(replacements);
   });
-  return inlined_count;
+  return {(size_t)inlined_count, (size_t)init_classes};
 }
 
 } // namespace
 
-size_t FinalInlinePassV2::run(const Scope& scope,
-                              const init_classes::InitClassesWithSideEffects&
-                                  init_classes_with_side_effects,
-                              const XStoreRefs* xstores,
-                              const Config& config,
-                              std::optional<DexStoresVector*> stores) {
+FinalInlinePassV2::Stats FinalInlinePassV2::run(
+    const Scope& scope,
+    const init_classes::InitClassesWithSideEffects&
+        init_classes_with_side_effects,
+    const XStoreRefs* xstores,
+    const Config& config,
+    std::optional<DexStoresVector*> stores) {
   try {
     auto wps = final_inline::analyze_and_simplify_clinits(
         scope, init_classes_with_side_effects, xstores, config.blocklist_types);
@@ -1042,11 +1045,11 @@ size_t FinalInlinePassV2::run(const Scope& scope,
                              cp::FieldType::STATIC);
   } catch (final_inline::class_initialization_cycle& e) {
     std::cerr << e.what();
-    return 0;
+    return {0, 0};
   }
 }
 
-size_t FinalInlinePassV2::run_inline_ifields(
+FinalInlinePassV2::Stats FinalInlinePassV2::run_inline_ifields(
     const Scope& scope,
     const init_classes::InitClassesWithSideEffects&
         init_classes_with_side_effects,
@@ -1080,18 +1083,20 @@ void FinalInlinePassV2::run_pass(DexStoresVector& stores,
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, conf.create_init_class_insns());
   XStoreRefs xstores(stores);
-  auto inlined_sfields_count =
+  auto sfield_stats =
       run(scope, init_classes_with_side_effects, &xstores, m_config, &stores);
-  size_t inlined_ifields_count{0};
+  FinalInlinePassV2::Stats ifield_stats{0, 0};
   if (m_config.inline_instance_field) {
     cp::EligibleIfields eligible_ifields =
         gather_ifield_candidates(scope, m_config.allowlist_method_names);
-    inlined_ifields_count =
+    ifield_stats =
         run_inline_ifields(scope, init_classes_with_side_effects, &xstores,
                            eligible_ifields, m_config, &stores);
+    always_assert(ifield_stats.init_classes == 0);
   }
-  mgr.incr_metric("num_static_finals_inlined", inlined_sfields_count);
-  mgr.incr_metric("num_instance_finals_inlined", inlined_ifields_count);
+  mgr.incr_metric("num_static_finals_inlined", sfield_stats.inlined_count);
+  mgr.incr_metric("num_instance_finals_inlined", ifield_stats.inlined_count);
+  mgr.incr_metric("num_init_classes", sfield_stats.init_classes);
 }
 
 static FinalInlinePassV2 s_pass;

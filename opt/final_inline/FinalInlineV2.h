@@ -40,13 +40,17 @@ class FinalInlinePassV2 : public Pass {
          "field read in methods invoked by <init>");
   }
 
-  static size_t run(const Scope&,
-                    const init_classes::InitClassesWithSideEffects&
-                        init_classes_with_side_effects,
-                    const XStoreRefs*,
-                    const Config& config = Config(),
-                    std::optional<DexStoresVector*> stores = std::nullopt);
-  static size_t run_inline_ifields(
+  struct Stats {
+    size_t inlined_count;
+    size_t init_classes;
+  };
+  static Stats run(const Scope&,
+                   const init_classes::InitClassesWithSideEffects&
+                       init_classes_with_side_effects,
+                   const XStoreRefs*,
+                   const Config& config = Config(),
+                   std::optional<DexStoresVector*> stores = std::nullopt);
+  static Stats run_inline_ifields(
       const Scope&,
       const init_classes::InitClassesWithSideEffects&
           init_classes_with_side_effects,

@@ -29,7 +29,8 @@ struct FinalInlineTest : public RedexTest {
     return field;
   }
 
-  static size_t run(const Scope& scope, const XStoreRefs* xstores) {
+  static FinalInlinePassV2::Stats run(const Scope& scope,
+                                      const XStoreRefs* xstores) {
     init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
         scope, /* create_init_class_insns */ false);
     return FinalInlinePassV2::run(
