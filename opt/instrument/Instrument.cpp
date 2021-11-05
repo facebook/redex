@@ -612,6 +612,9 @@ void maybe_unset_dynamic_analysis(DexStoresVector& stores,
     f->rstate.unset_root();
   }
 
+  // We don't care about running it's clinit
+  analysis_cls->rstate.set_clinit_has_no_side_effects();
+
   auto field = analysis_cls->find_field_from_simple_deobfuscated_name(
       "sNumStaticallyInstrumented");
   if (field != nullptr) {
