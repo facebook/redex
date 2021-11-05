@@ -110,8 +110,13 @@ Shrinker::Shrinker(
       }
       std::unordered_set<const DexMethod*> computed_no_side_effects_methods;
       /* Returns computed_no_side_effects_methods_iterations */
-      compute_no_side_effects_methods(scope, override_graph, m_pure_methods,
-                                      &computed_no_side_effects_methods);
+      method::ClInitHasNoSideEffectsPredicate clinit_has_no_side_effects =
+          [&](const DexType* type) {
+            return !init_classes_with_side_effects.refine(type);
+          };
+      compute_no_side_effects_methods(
+          scope, override_graph, clinit_has_no_side_effects, m_pure_methods,
+          &computed_no_side_effects_methods);
       for (auto m : computed_no_side_effects_methods) {
         m_pure_methods.insert(const_cast<DexMethod*>(m));
       }

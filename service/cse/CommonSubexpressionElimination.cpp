@@ -985,13 +985,15 @@ void SharedState::init_finalizable_fields(const Scope& scope) {
   m_stats.finalizable_fields = m_finalizable_fields.size();
 }
 
-void SharedState::init_scope(const Scope& scope) {
+void SharedState::init_scope(
+    const Scope& scope,
+    const method::ClInitHasNoSideEffectsPredicate& clinit_has_no_side_effects) {
   always_assert(!m_method_override_graph);
   m_method_override_graph = method_override_graph::build_graph(scope);
 
   auto iterations = compute_conditionally_pure_methods(
-      scope, m_method_override_graph.get(), m_pure_methods,
-      &m_conditionally_pure_methods);
+      scope, m_method_override_graph.get(), clinit_has_no_side_effects,
+      m_pure_methods, &m_conditionally_pure_methods);
   m_stats.conditionally_pure_methods = m_conditionally_pure_methods.size();
   m_stats.conditionally_pure_methods_iterations = iterations;
   for (const auto& p : m_conditionally_pure_methods) {

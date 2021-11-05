@@ -67,7 +67,11 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
 
   auto shared_state =
       SharedState(pure_methods, conf.get_finalish_field_names());
-  shared_state.init_scope(scope);
+  method::ClInitHasNoSideEffectsPredicate clinit_has_no_side_effects =
+      [&](const DexType* type) {
+        return !init_classes_with_side_effects.refine(type);
+      };
+  shared_state.init_scope(scope, clinit_has_no_side_effects);
 
   // The following default 'features' of copy propagation would only
   // interfere with what CSE is trying to do.

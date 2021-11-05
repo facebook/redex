@@ -12,6 +12,7 @@
 #include "Creators.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
+#include "InitClassesWithSideEffects.h"
 #include "Purity.h"
 #include "RedexTest.h"
 #include "VirtualScope.h"
@@ -62,7 +63,13 @@ void test(
 
   auto pure_methods = get_pure_methods();
   cse_impl::SharedState shared_state(pure_methods, finalish_field_names);
-  shared_state.init_scope(scope);
+  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+      scope, /* create_init_class_insns */ false);
+  method::ClInitHasNoSideEffectsPredicate clinit_has_no_side_effects =
+      [&](const DexType* type) {
+        return !init_classes_with_side_effects.refine(type);
+      };
+  shared_state.init_scope(scope, clinit_has_no_side_effects);
   cse_impl::CommonSubexpressionElimination cse(&shared_state, code->cfg(),
                                                is_static, is_init_or_clinit,
                                                declaring_type, args);

@@ -80,10 +80,15 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
   size_t computed_no_side_effects_methods_iterations = 0;
   if (!mgr.unreliable_virtual_scopes()) {
     override_graph = method_override_graph::build_graph(scope);
+    method::ClInitHasNoSideEffectsPredicate clinit_has_no_side_effects =
+        [&](const DexType* type) {
+          return !init_classes_with_side_effects ||
+                 !init_classes_with_side_effects->refine(type);
+        };
     computed_no_side_effects_methods_iterations =
-        compute_no_side_effects_methods(scope, override_graph.get(),
-                                        pure_methods,
-                                        &computed_no_side_effects_methods);
+        compute_no_side_effects_methods(
+            scope, override_graph.get(), clinit_has_no_side_effects,
+            pure_methods, &computed_no_side_effects_methods);
     for (auto m : computed_no_side_effects_methods) {
       pure_methods.insert(const_cast<DexMethod*>(m));
     }

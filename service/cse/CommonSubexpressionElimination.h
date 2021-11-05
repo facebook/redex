@@ -72,7 +72,9 @@ class SharedState {
   explicit SharedState(
       const std::unordered_set<DexMethodRef*>& pure_methods,
       const std::unordered_set<const DexString*>& finalish_field_names);
-  void init_scope(const Scope&);
+  void init_scope(const Scope&,
+                  const method::ClInitHasNoSideEffectsPredicate&
+                      clinit_has_no_side_effects);
   CseUnorderedLocationSet get_relevant_written_locations(
       const IRInstruction* insn,
       DexType* exact_virtual_scope,

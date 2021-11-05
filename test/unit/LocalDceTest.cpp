@@ -234,11 +234,18 @@ TEST_F(LocalDceTryTest, deadCast) {
 struct LocalDceEnhanceTest : public RedexTest {
  protected:
   static std::unordered_set<DexMethodRef*> get_no_side_effect_methods(
-      const Scope& scope) {
+      const Scope& scope,
+      const init_classes::InitClassesWithSideEffects&
+          init_classes_with_side_effects) {
     std::unordered_set<DexMethodRef*> pure_methods;
     auto override_graph = method_override_graph::build_graph(scope);
     std::unordered_set<const DexMethod*> computed_no_side_effects_methods;
-    compute_no_side_effects_methods(scope, override_graph.get(), pure_methods,
+    method::ClInitHasNoSideEffectsPredicate clinit_has_no_side_effects =
+        [&](const DexType* type) {
+          return !init_classes_with_side_effects.refine(type);
+        };
+    compute_no_side_effects_methods(scope, override_graph.get(),
+                                    clinit_has_no_side_effects, pure_methods,
                                     &computed_no_side_effects_methods);
     for (auto m : computed_no_side_effects_methods) {
       pure_methods.insert(const_cast<DexMethod*>(m));
@@ -251,7 +258,8 @@ struct LocalDceEnhanceTest : public RedexTest {
            DexType* declaring_type = nullptr) {
     init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
         scope, create_init_class_insns);
-    const auto& pure_methods = get_no_side_effect_methods(scope);
+    const auto& pure_methods =
+        get_no_side_effect_methods(scope, init_classes_with_side_effects);
     LocalDce(&init_classes_with_side_effects, pure_methods)
         .dce(code, /* normalize_new_instances */ true, declaring_type);
   }
@@ -515,7 +523,8 @@ TEST_F(LocalDceEnhanceTest, NoImplementorMayAllocateRegistersTest) {
   )");
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, /* create_init_class_insns */ false);
-  const auto& pure_methods = get_no_side_effect_methods(scope);
+  const auto& pure_methods =
+      get_no_side_effect_methods(scope, init_classes_with_side_effects);
   auto override_graph = method_override_graph::build_graph(scope);
   LocalDce ldce(&init_classes_with_side_effects, pure_methods,
                 override_graph.get(),
@@ -560,7 +569,12 @@ TEST_F(LocalDceTryTest, invoked_static_method_with_pure_external_barrier) {
   // would.
   auto override_graph = method_override_graph::build_graph(scope);
   std::unordered_set<const DexMethod*> computed_no_side_effects_methods;
-  compute_no_side_effects_methods(scope, override_graph.get(), pure_methods,
+  method::ClInitHasNoSideEffectsPredicate clinit_has_no_side_effects =
+      [&](const DexType* type) {
+        return !init_classes_with_side_effects.refine(type);
+      };
+  compute_no_side_effects_methods(scope, override_graph.get(),
+                                  clinit_has_no_side_effects, pure_methods,
                                   &computed_no_side_effects_methods);
   for (auto m : computed_no_side_effects_methods) {
     pure_methods.insert(const_cast<DexMethod*>(m));
