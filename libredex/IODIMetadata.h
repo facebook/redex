@@ -38,6 +38,8 @@ class IODIMetadata {
     // For API level 26 and above, ART defaults to printing PCs
     // in place of line numbers so IODI debug programs aren't needed.
     kSkipLayer0AtApi26,
+    // Always skip the layer 0 programs except for primary. Mostly for testing.
+    kAlwaysSkipLayer0ExceptPrimary,
     // Always skip the layer 0 programs. Mostly for testing.
     kAlwaysSkipLayer0,
   };

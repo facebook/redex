@@ -39,6 +39,9 @@ IODIMetadata::IODILayerMode IODIMetadata::parseLayerMode(const std::string& v) {
   if (v == "skip-layer-0-at-api-26") {
     return IODILayerMode::kSkipLayer0AtApi26;
   }
+  if (v == "always-skip-layer-0-except-primary") {
+    return IODILayerMode::kAlwaysSkipLayer0ExceptPrimary;
+  }
   if (v == "always-skip-layer-0") {
     return IODILayerMode::kAlwaysSkipLayer0;
   }
