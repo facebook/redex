@@ -497,6 +497,21 @@ std::string create_inlining_trace_msg(const DexMethod* caller,
 
 } // namespace
 
+DexType* MultiMethodInliner::get_needs_init_class(DexMethod* callee) const {
+  if (!is_static(callee)) {
+    return nullptr;
+  }
+  auto insn =
+      m_shrinker.get_init_classes_with_side_effects().create_init_class_insn(
+          callee->get_class());
+  if (insn == nullptr) {
+    return nullptr;
+  }
+  auto type = const_cast<DexType*>(insn->get_type());
+  delete insn;
+  return type;
+}
+
 void MultiMethodInliner::inline_inlinables(
     DexMethod* caller_method,
     const std::vector<Inlinable>& inlinables,
@@ -587,6 +602,7 @@ void MultiMethodInliner::inline_inlinables(
 
   VisibilityChanges visibility_changes;
   std::unordered_set<DexMethod*> visibility_changes_for;
+  size_t init_classes = 0;
   for (const auto& inlinable : ordered_inlinables) {
     auto callee_method = inlinable.callee;
     auto callee = callee_method->get_code();
@@ -724,9 +740,10 @@ void MultiMethodInliner::inline_inlinables(
     auto it = m_inlined_invokes_need_cast.find(callsite_insn);
     auto needs_receiver_cast =
         it == m_inlined_invokes_need_cast.end() ? nullptr : it->second;
+    auto needs_init_class = get_needs_init_class(callee_method);
     bool success = inliner::inline_with_cfg(
         caller_method, callee_method, callsite_insn, needs_receiver_cast,
-        *cfg_next_caller_reg, inlinable.reduced_cfg);
+        needs_init_class, *cfg_next_caller_reg, inlinable.reduced_cfg);
     if (!success) {
       calls_not_inlined++;
       continue;
@@ -740,6 +757,9 @@ void MultiMethodInliner::inline_inlinables(
           *inlinable.reduced_cfg, caller_method->get_class(), callee_method));
     } else {
       visibility_changes_for.insert(callee_method);
+    }
+    if (is_static(callee_method)) {
+      init_classes++;
     }
 
     inlined_callees.push_back(callee_method);
@@ -787,6 +807,9 @@ void MultiMethodInliner::inline_inlinables(
   }
   if (caller_too_large) {
     info.caller_too_large += caller_too_large;
+  }
+  if (init_classes) {
+    info.init_classes += init_classes;
   }
 }
 
@@ -2111,6 +2134,7 @@ bool inline_with_cfg(
     DexMethod* callee_method,
     IRInstruction* callsite,
     DexType* needs_receiver_cast,
+    DexType* needs_init_class,
     size_t next_caller_reg,
     const std::shared_ptr<cfg::ControlFlowGraph>& reduced_cfg) {
 
@@ -2163,7 +2187,7 @@ bool inline_with_cfg(
   log_opt(INLINED, caller_method, callsite);
 
   cfg::CFGInliner::inline_cfg(&caller_cfg, callsite_it, needs_receiver_cast,
-                              callee_cfg, next_caller_reg);
+                              needs_init_class, callee_cfg, next_caller_reg);
 
   return true;
 }

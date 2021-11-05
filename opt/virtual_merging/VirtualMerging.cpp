@@ -978,7 +978,7 @@ VirtualMergingStats apply_ordering(
         overriding_method->get_code()->build_cfg(/* editable */ true);
         inliner::inline_with_cfg(
             overridden_method, overriding_method, invoke_virtual_insn,
-            /* needs_receiver_cast */ nullptr,
+            /* needs_receiver_cast */ nullptr, /* needs_init_class */ nullptr,
             overridden_method->get_code()->cfg().get_registers_size());
         inliner.visibility_changes_apply_and_record_make_static(
             get_visibility_changes(overriding_method,

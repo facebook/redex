@@ -32,6 +32,7 @@ bool inline_with_cfg(
     DexMethod* callee_method,
     IRInstruction* callsite,
     DexType* needs_receiver_cast,
+    DexType* needs_init_class,
     size_t next_caller_reg,
     const std::shared_ptr<cfg::ControlFlowGraph>& reduced_cfg = nullptr);
 
@@ -196,6 +197,8 @@ class MultiMethodInliner {
   shrinker::Shrinker& get_shrinker() { return m_shrinker; }
 
  private:
+  DexType* get_needs_init_class(DexMethod* callee) const;
+
   DexMethod* get_callee(DexMethod* caller, IRInstruction* insn);
 
   void inline_inlinables(DexMethod* caller,
@@ -563,6 +566,7 @@ class MultiMethodInliner {
 
     // statistics that may be incremented concurrently
     std::atomic<size_t> calls_inlined{0};
+    std::atomic<size_t> init_classes{0};
     std::atomic<size_t> calls_not_inlinable{0};
     std::atomic<size_t> calls_not_inlined{0};
     std::atomic<size_t> no_returns{0};

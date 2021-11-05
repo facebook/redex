@@ -117,6 +117,11 @@ class Shrinker {
 
   void log_metrics(ScopedMetrics& sm) const;
 
+  const init_classes::InitClassesWithSideEffects&
+  get_init_classes_with_side_effects() const {
+    return m_init_classes_with_side_effects;
+  }
+
  private:
   ShrinkerForest m_forest;
   const XStoreRefs m_xstores;

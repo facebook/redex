@@ -38,6 +38,7 @@ void test_inliner(const std::string& caller_str,
   cfg::CFGInliner::inline_cfg(&caller,
                               get_invoke(&caller),
                               /* needs_receiver_cast */ nullptr,
+                              /* needs_init_class */ nullptr,
                               callee,
                               caller.get_registers_size());
 

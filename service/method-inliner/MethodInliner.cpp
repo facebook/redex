@@ -637,6 +637,10 @@ void run_inliner(DexStoresVector& stores,
                  bool intra_dex /* false */,
                  InlineForSpeed* inline_for_speed /* nullptr */,
                  bool inline_bridge_synth_only /* false */) {
+  always_assert_log(
+      !mgr.init_class_lowering_has_run(),
+      "Implementation limitation: The inliner could introduce new "
+      "init-class instructions.");
   if (mgr.no_proguard_rules()) {
     TRACE(INLINE, 1,
           "MethodInlinePass not run because no ProGuard configuration was "
@@ -815,6 +819,7 @@ void run_inliner(DexStoresVector& stores,
   mgr.incr_metric("problematic_refs", inliner.get_info().problematic_refs);
   mgr.incr_metric("caller_too_large", inliner.get_info().caller_too_large);
   mgr.incr_metric("inlined_init_count", inlined_init_count);
+  mgr.incr_metric("init_classes", inliner.get_info().init_classes);
   mgr.incr_metric("calls_inlined", inliner.get_info().calls_inlined);
   mgr.incr_metric("calls_not_inlinable",
                   inliner.get_info().calls_not_inlinable);

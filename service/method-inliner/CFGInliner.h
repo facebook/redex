@@ -24,6 +24,7 @@ class CFGInliner {
   static void inline_cfg(ControlFlowGraph* caller,
                          const cfg::InstructionIterator& callsite,
                          DexType* needs_receiver_cast,
+                         DexType* needs_init_class,
                          const ControlFlowGraph& callee,
                          size_t next_caller_reg);
 
@@ -34,6 +35,7 @@ class CFGInliner {
   static void inline_cfg(ControlFlowGraph* caller,
                          const cfg::InstructionIterator& inline_site,
                          DexType* needs_receiver_cast,
+                         DexType* needs_init_class,
                          const ControlFlowGraph& callee,
                          size_t next_caller_reg,
                          CFGInlinerPlugin& plugin);
