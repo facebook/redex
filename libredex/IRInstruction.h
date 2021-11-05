@@ -368,6 +368,8 @@ class IRInstruction final {
 
   void gather_types(std::vector<DexType*>& ltype) const;
 
+  void gather_init_classes(std::vector<DexType*>& ltype) const;
+
   void gather_fields(std::vector<DexFieldRef*>& lfield) const;
 
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const;

@@ -43,6 +43,7 @@ class InterDexPassPlugin {
                            const DexClass*,
                            std::vector<DexMethodRef*>&,
                            std::vector<DexFieldRef*>&,
+                           std::vector<DexType*>&,
                            std::vector<DexType*>&) {}
 
   // In each dex, reserve this many frefs to be potentially added after the

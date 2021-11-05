@@ -294,6 +294,12 @@ void MethodItemEntry::gather_types(std::vector<DexType*>& ltype) const {
   }
 }
 
+void MethodItemEntry::gather_init_classes(std::vector<DexType*>& ltype) const {
+  if (type == MFLOW_OPCODE) {
+    insn->gather_init_classes(ltype);
+  }
+}
+
 opcode::Branchingness MethodItemEntry::branchingness() const {
   switch (type) {
   case MFLOW_OPCODE:
@@ -761,6 +767,12 @@ void IRList::gather_catch_types(std::vector<DexType*>& ltype) const {
 void IRList::gather_types(std::vector<DexType*>& ltype) const {
   for (auto& mie : m_list) {
     mie.gather_types(ltype);
+  }
+}
+
+void IRList::gather_init_classes(std::vector<DexType*>& ltype) const {
+  for (auto& mie : m_list) {
+    mie.gather_init_classes(ltype);
   }
 }
 

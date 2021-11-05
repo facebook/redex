@@ -1445,6 +1445,13 @@ void ControlFlowGraph::gather_types(std::vector<DexType*>& types) const {
   }
 }
 
+void ControlFlowGraph::gather_init_classes(std::vector<DexType*>& types) const {
+  always_assert(editable());
+  for (const auto& entry : m_blocks) {
+    entry.second->m_entries.gather_init_classes(types);
+  }
+}
+
 void ControlFlowGraph::gather_fields(std::vector<DexFieldRef*>& fields) const {
   always_assert(editable());
   for (const auto& entry : m_blocks) {

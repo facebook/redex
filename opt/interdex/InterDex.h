@@ -14,6 +14,7 @@
 #include "CrossDexRelocator.h"
 #include "DexClass.h"
 #include "DexStructure.h"
+#include "InitClassesWithSideEffects.h"
 #include "InterDexPassPlugin.h"
 #include "MixedModeInfo.h"
 
@@ -52,7 +53,9 @@ class InterDex {
            const XStoreRefs* xstore_refs,
            int min_sdk,
            bool sort_remaining_classes,
-           std::vector<std::string> methods_for_canary_clinit_reference)
+           std::vector<std::string> methods_for_canary_clinit_reference,
+           const init_classes::InitClassesWithSideEffects&
+               init_classes_with_side_effects)
       : m_dexen(dexen),
         m_asset_manager(asset_manager),
         m_conf(conf),
@@ -80,6 +83,8 @@ class InterDex {
     m_dexes_structure.set_reserve_trefs(reserve_trefs);
     m_dexes_structure.set_reserve_mrefs(reserve_mrefs);
     m_dexes_structure.set_min_sdk(min_sdk);
+    m_dexes_structure.set_init_classes_with_side_effects(
+        &init_classes_with_side_effects);
 
     load_interdex_types();
   }

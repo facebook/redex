@@ -28,6 +28,7 @@
 #include "MethodProfiles.h"
 #include "ReachableClasses.h"
 #include "Show.h"
+#include "StlUtil.h"
 #include "StringUtil.h"
 #include "Walkers.h"
 #include "file-utils.h"
@@ -136,21 +137,26 @@ void gather_refs(
     const DexClass* cls,
     interdex::MethodRefs* mrefs,
     interdex::FieldRefs* frefs,
-    interdex::TypeRefs* trefs) {
+    interdex::TypeRefs* trefs,
+    interdex::TypeRefs* itrefs) {
   std::vector<DexMethodRef*> method_refs;
   std::vector<DexFieldRef*> field_refs;
   std::vector<DexType*> type_refs;
+  std::vector<DexType*> init_type_refs;
   cls->gather_methods(method_refs);
   cls->gather_fields(field_refs);
   cls->gather_types(type_refs);
+  cls->gather_init_classes(init_type_refs);
 
   for (const auto& plugin : plugins) {
-    plugin->gather_refs(dex_info, cls, method_refs, field_refs, type_refs);
+    plugin->gather_refs(dex_info, cls, method_refs, field_refs, type_refs,
+                        init_type_refs);
   }
 
   mrefs->insert(method_refs.begin(), method_refs.end());
   frefs->insert(field_refs.begin(), field_refs.end());
   trefs->insert(type_refs.begin(), type_refs.end());
+  itrefs->insert(init_type_refs.begin(), init_type_refs.end());
 }
 
 void print_stats(interdex::DexesStructure* dexes_structure) {
@@ -332,11 +338,12 @@ bool InterDex::emit_class(DexInfo& dex_info,
   MethodRefs clazz_mrefs;
   FieldRefs clazz_frefs;
   TypeRefs clazz_trefs;
+  TypeRefs clazz_itrefs;
   gather_refs(m_plugins, dex_info, clazz, &clazz_mrefs, &clazz_frefs,
-              &clazz_trefs);
+              &clazz_trefs, &clazz_itrefs);
 
   bool fits_current_dex = m_dexes_structure.add_class_to_current_dex(
-      clazz_mrefs, clazz_frefs, clazz_trefs, clazz);
+      clazz_mrefs, clazz_frefs, clazz_trefs, clazz_itrefs, clazz);
   if (!fits_current_dex) {
     flush_out_dex(dex_info, *canary_cls);
     *canary_cls = get_canary_cls(dex_info);
@@ -353,11 +360,12 @@ bool InterDex::emit_class(DexInfo& dex_info,
     clazz_mrefs.clear();
     clazz_frefs.clear();
     clazz_trefs.clear();
+    clazz_itrefs.clear();
     gather_refs(m_plugins, dex_info, clazz, &clazz_mrefs, &clazz_frefs,
-                &clazz_trefs);
+                &clazz_trefs, &clazz_itrefs);
 
     m_dexes_structure.add_class_no_checks(clazz_mrefs, clazz_frefs, clazz_trefs,
-                                          clazz);
+                                          clazz_itrefs, clazz);
   }
   return true;
 }
@@ -849,11 +857,12 @@ void InterDex::run_in_force_single_dex_mode() {
     MethodRefs clazz_mrefs;
     FieldRefs clazz_frefs;
     TypeRefs clazz_trefs;
+    TypeRefs clazz_itrefs;
     gather_refs(m_plugins, dex_info, cls, &clazz_mrefs, &clazz_frefs,
-                &clazz_trefs);
+                &clazz_trefs, &clazz_itrefs);
 
     m_dexes_structure.add_class_no_checks(clazz_mrefs, clazz_frefs, clazz_trefs,
-                                          cls);
+                                          clazz_itrefs, cls);
   }
 
   // Emit all no matter what it is.
@@ -1040,10 +1049,14 @@ DexClass* InterDex::get_canary_cls(DexInfo& dex_info) {
   MethodRefs clazz_mrefs;
   FieldRefs clazz_frefs;
   TypeRefs clazz_trefs;
+  std::vector<DexType*> clazz_itrefs;
   canary_cls->gather_methods(clazz_mrefs);
   canary_cls->gather_fields(clazz_frefs);
   canary_cls->gather_types(clazz_trefs);
-  m_dexes_structure.add_refs_no_checks(clazz_mrefs, clazz_frefs, clazz_trefs);
+  canary_cls->gather_init_classes(clazz_itrefs);
+  m_dexes_structure.add_refs_no_checks(
+      clazz_mrefs, clazz_frefs, clazz_trefs,
+      TypeRefs(clazz_itrefs.begin(), clazz_itrefs.end()));
   return canary_cls;
 }
 
@@ -1079,11 +1092,12 @@ void InterDex::flush_out_dex(DexInfo& dex_info, DexClass* canary_cls) {
     MethodRefs clazz_mrefs;
     FieldRefs clazz_frefs;
     TypeRefs clazz_trefs;
+    TypeRefs clazz_itrefs;
     gather_refs(m_plugins, dex_info, canary_cls, &clazz_mrefs, &clazz_frefs,
-                &clazz_trefs);
+                &clazz_trefs, &clazz_itrefs);
 
     bool canary_added = m_dexes_structure.add_class_to_current_dex(
-        clazz_mrefs, clazz_frefs, clazz_trefs, canary_cls);
+        clazz_mrefs, clazz_frefs, clazz_trefs, clazz_itrefs, canary_cls);
     always_assert(canary_added);
 
     m_dex_infos.emplace_back(

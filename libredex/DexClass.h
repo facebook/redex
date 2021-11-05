@@ -1142,6 +1142,8 @@ class DexMethod : public DexMethodRef {
   template <typename C>
   void gather_methodhandles(C& lmethodhandle) const;
 
+  void gather_init_classes(std::vector<DexType*>& ltype) const;
+
   /*
    * DexCode <-> IRCode conversion methods.
    *
@@ -1375,6 +1377,7 @@ class DexClass {
   void gather_methodhandles(C& lmethodhandle) const;
 
   void gather_load_types(std::unordered_set<DexType*>& ltype) const;
+  void gather_init_classes(std::vector<DexType*>& ltype) const;
 
   // Whether to optimize for perf, instead of space.
   // This bit is only set by the InterDex pass and not available earlier.

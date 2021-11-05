@@ -894,6 +894,7 @@ class ControlFlowGraph {
   void gather_catch_types(std::vector<DexType*>& types) const;
   void gather_strings(std::vector<const DexString*>& strings) const;
   void gather_types(std::vector<DexType*>& types) const;
+  void gather_init_classes(std::vector<DexType*>& types) const;
   void gather_fields(std::vector<DexFieldRef*>& fields) const;
   void gather_methods(std::vector<DexMethodRef*>& methods) const;
   void gather_callsites(std::vector<DexCallSite*>& callsites) const;

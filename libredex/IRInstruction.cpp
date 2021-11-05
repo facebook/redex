@@ -408,6 +408,13 @@ uint64_t IRInstruction::hash() const {
   return result;
 }
 
+void IRInstruction::gather_init_classes(std::vector<DexType*>& ltype) const {
+  auto type = get_init_class_type_demand(this);
+  if (type) {
+    ltype.push_back(const_cast<DexType*>(type));
+  }
+}
+
 void IRInstruction::gather_types(std::vector<DexType*>& ltype) const {
   switch (opcode::ref(opcode())) {
   case opcode::Ref::None:

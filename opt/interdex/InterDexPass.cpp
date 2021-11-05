@@ -116,6 +116,8 @@ void InterDexPass::bind_config() {
 void InterDexPass::run_pass(
     const Scope& original_scope,
     const XStoreRefs& xstore_refs,
+    const init_classes::InitClassesWithSideEffects&
+        init_classes_with_side_effects,
     DexStoresVector& stores,
     DexClassesVector& dexen,
     std::vector<std::unique_ptr<InterDexPassPlugin>>& plugins,
@@ -136,7 +138,8 @@ void InterDexPass::run_pass(
                     m_cross_dex_relocator_config, refs_info.frefs,
                     refs_info.trefs, refs_info.mrefs, &xstore_refs,
                     mgr.get_redex_options().min_sdk, m_sort_remaining_classes,
-                    m_methods_for_canary_clinit_reference);
+                    m_methods_for_canary_clinit_reference,
+                    init_classes_with_side_effects);
 
   if (m_expect_order_list) {
     always_assert_log(
@@ -195,12 +198,15 @@ void InterDexPass::run_pass(
                  interdex.get_current_classes_when_emitting_remaining());
 }
 
-void InterDexPass::run_pass_on_nonroot_store(const Scope& original_scope,
-                                             const XStoreRefs& xstore_refs,
-                                             DexClassesVector& dexen,
-                                             ConfigFiles& conf,
-                                             PassManager& mgr,
-                                             const ReserveRefsInfo& refs_info) {
+void InterDexPass::run_pass_on_nonroot_store(
+    const Scope& original_scope,
+    const XStoreRefs& xstore_refs,
+    const init_classes::InitClassesWithSideEffects&
+        init_classes_with_side_effects,
+    DexClassesVector& dexen,
+    ConfigFiles& conf,
+    PassManager& mgr,
+    const ReserveRefsInfo& refs_info) {
   // Setup default configs for non-root store
   // For now, no plugins configured for non-root stores to run.
   std::vector<std::unique_ptr<InterDexPassPlugin>> plugins;
@@ -212,15 +218,15 @@ void InterDexPass::run_pass_on_nonroot_store(const Scope& original_scope,
   CrossDexRelocatorConfig cross_dex_relocator_config;
 
   // Initialize interdex and run for nonroot store
-  InterDex interdex(original_scope, dexen, mgr.asset_manager(), conf, plugins,
-                    m_linear_alloc_limit, m_static_prune, m_normal_primary_dex,
-                    m_keep_primary_order, false /* force single dex */,
-                    false /* emit canaries */,
-                    false /* minimize_cross_dex_refs */, cross_dex_refs_config,
-                    cross_dex_relocator_config, refs_info.frefs,
-                    refs_info.trefs, refs_info.mrefs, &xstore_refs,
-                    mgr.get_redex_options().min_sdk, m_sort_remaining_classes,
-                    m_methods_for_canary_clinit_reference);
+  InterDex interdex(
+      original_scope, dexen, mgr.asset_manager(), conf, plugins,
+      m_linear_alloc_limit, m_static_prune, m_normal_primary_dex,
+      m_keep_primary_order, false /* force single dex */,
+      false /* emit canaries */, false /* minimize_cross_dex_refs */,
+      cross_dex_refs_config, cross_dex_relocator_config, refs_info.frefs,
+      refs_info.trefs, refs_info.mrefs, &xstore_refs,
+      mgr.get_redex_options().min_sdk, m_sort_remaining_classes,
+      m_methods_for_canary_clinit_reference, init_classes_with_side_effects);
 
   interdex.run_on_nonroot_store();
 
@@ -238,6 +244,8 @@ void InterDexPass::run_pass(DexStoresVector& stores,
   }
 
   Scope original_scope = build_class_scope(stores);
+  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+      original_scope, conf.create_init_class_insns());
   XStoreRefs xstore_refs(stores);
 
   // Setup all external plugins.
@@ -257,8 +265,8 @@ void InterDexPass::run_pass(DexStoresVector& stores,
   std::vector<DexStore*> parallel_stores;
   for (auto& store : stores) {
     if (store.is_root_store()) {
-      run_pass(original_scope, xstore_refs, stores, store.get_dexen(), plugins,
-               conf, mgr, refs_info);
+      run_pass(original_scope, xstore_refs, init_classes_with_side_effects,
+               stores, store.get_dexen(), plugins, conf, mgr, refs_info);
     } else if (!store.is_generated()) {
       parallel_stores.push_back(&store);
     }
@@ -267,6 +275,7 @@ void InterDexPass::run_pass(DexStoresVector& stores,
   workqueue_run<DexStore*>(
       [&](DexStore* store) {
         run_pass_on_nonroot_store(original_scope, xstore_refs,
+                                  init_classes_with_side_effects,
                                   store->get_dexen(), conf, mgr, refs_info);
       },
       parallel_stores);

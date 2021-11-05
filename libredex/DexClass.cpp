@@ -1442,6 +1442,15 @@ void DexClass::gather_load_types(std::unordered_set<DexType*>& ltype) const {
   }
 }
 
+void DexClass::gather_init_classes(std::vector<DexType*>& ltype) const {
+  for (auto const& m : m_dmethods) {
+    m->gather_init_classes(ltype);
+  }
+  for (auto const& m : m_vmethods) {
+    m->gather_init_classes(ltype);
+  }
+}
+
 template <typename C>
 void DexClass::gather_strings_internal(C& lstring, bool exclude_loads) const {
   for (auto const& m : m_dmethods) {
@@ -1730,6 +1739,10 @@ void DexMethod::gather_types(C& ltype) const {
   c_append_all(ltype, type_vec.begin(), type_vec.end());
 }
 INSTANTIATE(DexMethod::gather_types, DexType*)
+
+void DexMethod::gather_init_classes(std::vector<DexType*>& ltype) const {
+  if (m_code) m_code->gather_init_classes(ltype);
+}
 
 template <typename C>
 void DexMethod::gather_callsites(C& lcallsite) const {

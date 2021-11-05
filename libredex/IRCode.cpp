@@ -1093,6 +1093,14 @@ void IRCode::gather_types(std::vector<DexType*>& ltype) const {
   }
 }
 
+void IRCode::gather_init_classes(std::vector<DexType*>& ltype) const {
+  if (editable_cfg_built()) {
+    m_cfg->gather_init_classes(ltype);
+  } else {
+    m_ir_list->gather_init_classes(ltype);
+  }
+}
+
 void IRCode::gather_fields(std::vector<DexFieldRef*>& lfield) const {
   if (editable_cfg_built()) {
     m_cfg->gather_fields(lfield);
