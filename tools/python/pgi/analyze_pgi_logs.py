@@ -121,7 +121,7 @@ InlineForSpeedDataTyping = [
     ("callee", _identity),
     *[("callee_" + name, fn) for name, fn in SingleMetrics],
     ("interaction", _identity),
-    ("confidence", int),
+    ("confidence", float),
 ]
 InlineForSpeedData = namedtuple(
     "InlineForSpeedData",
