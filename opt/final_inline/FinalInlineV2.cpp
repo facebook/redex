@@ -466,7 +466,8 @@ cp::WholeProgramState analyze_and_simplify_clinits(
             .legacy_apply_constants_and_prune_unreachable(
                 intra_cp, wps, *cfg, xstores, cls->get_type());
         // Delete the instructions rendered dead by the removal of those sputs.
-        LocalDce(&init_classes_with_side_effects, pure_methods).dce(*cfg);
+        LocalDce(&init_classes_with_side_effects, pure_methods)
+            .dce(*cfg, /* normalize_new_instances */ true, clinit->get_class());
       }
       // If the clinit is empty now, delete it.
       if (method::is_trivial_clinit(*code)) {
@@ -539,7 +540,8 @@ cp::WholeProgramState analyze_and_simplify_inits(
             .legacy_apply_constants_and_prune_unreachable(
                 intra_cp, wps, *cfg, xstores, cls->get_type());
         // Delete the instructions rendered dead by the removal of those iputs.
-        LocalDce(&init_classes_with_side_effects, pure_methods).dce(code);
+        LocalDce(&init_classes_with_side_effects, pure_methods)
+            .dce(*cfg, /* normalize_new_instances */ true, ctor->get_class());
       }
     }
     wps.collect_instance_finals(cls, eligible_ifields,

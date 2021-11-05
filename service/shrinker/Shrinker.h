@@ -46,7 +46,9 @@ class Shrinker {
       IRCode* code,
       const ConstantEnvironment&,
       const constant_propagation::Transform::Config& config);
-  LocalDce::Stats local_dce(IRCode* code, bool normalize_new_instances = true);
+  LocalDce::Stats local_dce(IRCode* code,
+                            bool normalize_new_instances = true,
+                            DexType* declaring_type = nullptr);
   copy_propagation_impl::Stats copy_propagation(DexMethod* method);
 
   void shrink_method(DexMethod* method);

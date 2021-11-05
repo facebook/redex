@@ -1225,7 +1225,8 @@ MultiMethodInliner::apply_call_site_summary(
   config.add_param_const = false;
   m_shrinker.constant_propagation(is_static, declaring_type, proto,
                                   &cloned_code, initial_env, config);
-  m_shrinker.local_dce(&cloned_code, /* normalize_new_instances */ false);
+  m_shrinker.local_dce(&cloned_code, /* normalize_new_instances */ false,
+                       declaring_type);
 
   // Re-build cfg once more to get linearized representation, good for
   // predicting fallthrough branches

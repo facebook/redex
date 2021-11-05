@@ -889,6 +889,15 @@ void run_inliner(DexStoresVector& stores,
   mgr.incr_metric("methods_reg_alloced", shrinker.get_methods_reg_alloced());
   mgr.incr_metric("localdce_init_class_instructions_added",
                   shrinker.get_local_dce_stats().init_class_instructions_added);
+  mgr.incr_metric(
+      "localdce_init_class_instructions",
+      shrinker.get_local_dce_stats().init_classes.init_class_instructions);
+  mgr.incr_metric("localdce_init_class_instructions_removed",
+                  shrinker.get_local_dce_stats()
+                      .init_classes.init_class_instructions_removed);
+  mgr.incr_metric("localdce_init_class_instructions_refined",
+                  shrinker.get_local_dce_stats()
+                      .init_classes.init_class_instructions_refined);
 
   // Expose the shrinking timers as Timers.
   Timer::add_timer("Inliner.Shrinking.ConstantPropagation",

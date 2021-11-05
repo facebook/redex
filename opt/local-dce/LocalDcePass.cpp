@@ -48,6 +48,12 @@ constexpr const char* METRIC_COMPUTED_NO_SIDE_EFFECTS_METHODS =
     "num_computed_no_side_effects_methods";
 constexpr const char* METRIC_COMPUTED_NO_SIDE_EFFECTS_METHODS_ITERATIONS =
     "num_computed_no_side_effects_methods_iterations";
+constexpr const char* METRIC_INIT_CLASS_INSTRUCTIONS =
+    "num_init_class_instructions";
+constexpr const char* METRIC_INIT_CLASS_INSTRUCTIONS_REMOVED =
+    "num_init_class_instructions_removed";
+constexpr const char* METRIC_INIT_CLASS_INSTRUCTIONS_REFINED =
+    "num_init_class_instructions_refined";
 
 } // namespace
 
@@ -102,7 +108,7 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
 
         LocalDce ldce(init_classes_with_side_effects.get(), pure_methods,
                       override_graph.get(), may_allocate_registers);
-        ldce.dce(code);
+        ldce.dce(code, /* normalize_new_instances */ true, m->get_class());
         return ldce.get_stats();
       });
   mgr.incr_metric(METRIC_NPE_INSTRUCTIONS, stats.npe_instruction_count);
@@ -118,9 +124,14 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
                   computed_no_side_effects_methods.size());
   mgr.incr_metric(METRIC_COMPUTED_NO_SIDE_EFFECTS_METHODS_ITERATIONS,
                   computed_no_side_effects_methods_iterations);
-
+  mgr.incr_metric(METRIC_INIT_CLASS_INSTRUCTIONS,
+                  stats.init_classes.init_class_instructions);
+  mgr.incr_metric(METRIC_INIT_CLASS_INSTRUCTIONS_REMOVED,
+                  stats.init_classes.init_class_instructions_removed);
+  mgr.incr_metric(METRIC_INIT_CLASS_INSTRUCTIONS_REFINED,
+                  stats.init_classes.init_class_instructions_refined);
   TRACE(DCE, 1,
-        "instructions removed -- npe: %zu, dead: %zu, init-class: %zu, "
+        "instructions removed -- npe: %zu, dead: %zu, init-class added: %zu, "
         "unreachable: %zu; "
         "normalized %zu new-instance instructions, %zu aliasaed",
         stats.npe_instruction_count, stats.dead_instruction_count,

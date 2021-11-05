@@ -150,10 +150,11 @@ constant_propagation::Transform::Stats Shrinker::constant_propagation(
 }
 
 LocalDce::Stats Shrinker::local_dce(IRCode* code,
-                                    bool normalize_new_instances) {
+                                    bool normalize_new_instances,
+                                    DexType* declaring_type) {
   // LocalDce doesn't care if editable_cfg_built
   auto local_dce = LocalDce(&m_init_classes_with_side_effects, m_pure_methods);
-  local_dce.dce(code, normalize_new_instances);
+  local_dce.dce(code, normalize_new_instances, declaring_type);
   return local_dce.get_stats();
 }
 
@@ -204,7 +205,8 @@ void Shrinker::shrink_method(DexMethod* method) {
 
   if (m_config.run_local_dce) {
     auto timer = m_local_dce_timer.scope();
-    local_dce_stats = local_dce(code);
+    local_dce_stats = local_dce(code, /* normalize_new_instances */ true,
+                                method->get_class());
   }
 
   using stats_t = std::tuple<size_t, size_t, size_t, size_t>;

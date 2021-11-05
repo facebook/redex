@@ -30,7 +30,7 @@ class RemoveArgs {
     size_t method_results_removed_count{0};
     size_t method_protos_reordered_count{0};
     size_t methods_updated_count{0};
-    LocalDce::Stats local_dce_stats{0, 0};
+    LocalDce::Stats local_dce_stats;
   };
   struct PassStats {
     size_t method_params_removed_count{0};
@@ -38,7 +38,7 @@ class RemoveArgs {
     size_t callsite_args_removed_count{0};
     size_t method_results_removed_count{0};
     size_t method_protos_reordered_count{0};
-    LocalDce::Stats local_dce_stats{0, 0};
+    LocalDce::Stats local_dce_stats;
   };
 
   RemoveArgs(const Scope& scope,

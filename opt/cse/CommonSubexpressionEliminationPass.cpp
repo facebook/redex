@@ -113,7 +113,8 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
                                     shared_state.get_pure_methods(),
                                     shared_state.get_method_override_graph(),
                                     /* may_allocate_registers */ true);
-          local_dce.dce(code);
+          local_dce.dce(
+              code, /* normalize_new_instances */ true, method->get_class());
 
           if (traceEnabled(CSE, 5)) {
             TRACE(CSE, 5, "[CSE] end of iteration:\n%s", SHOW(code->cfg()));

@@ -8,6 +8,7 @@
 #pragma once
 
 #include "IRCode.h"
+#include "InitClassPruner.h"
 #include "InitClassesWithSideEffects.h"
 #include "MethodOverrideGraph.h"
 
@@ -31,6 +32,7 @@ class LocalDce {
     size_t unreachable_instruction_count{0};
     size_t aliased_new_instances{0};
     size_t normalized_new_instances{0};
+    init_classes::Stats init_classes;
 
     Stats& operator+=(const Stats& that) {
       npe_instruction_count += that.npe_instruction_count;
@@ -39,6 +41,7 @@ class LocalDce {
       unreachable_instruction_count += that.unreachable_instruction_count;
       aliased_new_instances += that.aliased_new_instances;
       normalized_new_instances += that.normalized_new_instances;
+      init_classes += that.init_classes;
       return *this;
     }
   };
@@ -84,10 +87,16 @@ class LocalDce {
 
   const Stats& get_stats() const { return m_stats; }
 
-  void dce(IRCode*, bool normalize_new_instances = true);
-  void dce(cfg::ControlFlowGraph&, bool normalize_new_instances = true);
+  void dce(IRCode*,
+           bool normalize_new_instances = true,
+           DexType* declaring_type = nullptr);
+  void dce(cfg::ControlFlowGraph&,
+           bool normalize_new_instances = true,
+           DexType* declaring_type = nullptr);
   std::vector<std::pair<cfg::Block*, IRList::iterator>> get_dead_instructions(
-      const cfg::ControlFlowGraph& cfg, const std::vector<cfg::Block*>& blocks);
+      const cfg::ControlFlowGraph& cfg,
+      const std::vector<cfg::Block*>& blocks,
+      bool* any_init_class_insns);
 
  private:
   const init_classes::InitClassesWithSideEffects*
@@ -104,4 +113,5 @@ class LocalDce {
                    const boost::dynamic_bitset<>& bliveness);
   bool assumenosideeffects(DexMethodRef* ref, DexMethod* meth);
   void normalize_new_instances(cfg::ControlFlowGraph& cfg);
+  void prune_init_classes(cfg::ControlFlowGraph& cfg, DexType* declaring_type);
 };

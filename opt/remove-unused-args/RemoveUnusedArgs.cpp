@@ -50,11 +50,6 @@ constexpr const char* METRIC_UNREACHABLE_INSTRUCTION_COUNT =
     "num_local_dce_unreachable_instruction_count";
 constexpr const char* METRIC_ITERATIONS = "iterations";
 
-static LocalDce::Stats add_dce_stats(LocalDce::Stats a, LocalDce::Stats b) {
-  return {a.dead_instruction_count + b.dead_instruction_count,
-          a.unreachable_instruction_count + b.unreachable_instruction_count};
-};
-
 /**
  * Returns metrics as listed above from running RemoveArgs:
  * run() removes unused params from method signatures and param loads, then
@@ -629,12 +624,13 @@ RemoveArgs::MethodStats RemoveArgs::update_method_protos(
         std::unordered_set<DexMethodRef*> pure_methods;
         auto local_dce =
             LocalDce(&m_init_classes_with_side_effects, pure_methods);
-        local_dce.dce(method->get_code());
+        local_dce.dce(method->get_code(), /* normalize_new_instances */ true,
+                      method->get_class());
         const auto& stats = local_dce.get_stats();
         if (stats.dead_instruction_count |
             stats.unreachable_instruction_count) {
           std::lock_guard<std::mutex> lock(local_dce_stats_mutex);
-          local_dce_stats = add_dce_stats(local_dce_stats, stats);
+          local_dce_stats += stats;
         }
       }
 
@@ -720,7 +716,7 @@ void RemoveUnusedArgsPass::run_pass(DexStoresVector& stores,
   size_t num_method_results_removed_count = 0;
   size_t num_method_protos_reordered_count = 0;
   size_t num_iterations = 0;
-  LocalDce::Stats local_dce_stats{0, 0};
+  LocalDce::Stats local_dce_stats;
   while (true) {
     num_iterations++;
     RemoveArgs rm_args(scope, init_classes_with_side_effects, m_blocklist,
@@ -735,8 +731,7 @@ void RemoveUnusedArgsPass::run_pass(DexStoresVector& stores,
     num_method_results_removed_count += pass_stats.method_results_removed_count;
     num_method_protos_reordered_count +=
         pass_stats.method_protos_reordered_count;
-    local_dce_stats =
-        add_dce_stats(local_dce_stats, pass_stats.local_dce_stats);
+    local_dce_stats += pass_stats.local_dce_stats;
   }
 
   TRACE(ARGS,

@@ -73,7 +73,8 @@ void update_liveness(const IRInstruction* inst,
 
 std::vector<std::pair<cfg::Block*, IRList::iterator>>
 LocalDce::get_dead_instructions(const cfg::ControlFlowGraph& cfg,
-                                const std::vector<cfg::Block*>& blocks) {
+                                const std::vector<cfg::Block*>& blocks,
+                                bool* any_init_class_insns) {
   auto regs = cfg.get_registers_size();
   std::unordered_map<cfg::BlockId, boost::dynamic_bitset<>> liveness;
   for (cfg::Block* b : cfg.blocks()) {
@@ -114,6 +115,9 @@ LocalDce::get_dead_instructions(const cfg::ControlFlowGraph& cfg,
         bool required = is_required(cfg, b, it->insn, bliveness);
         if (required) {
           update_liveness(it->insn, bliveness);
+          if (it->insn->opcode() == IOPCODE_INIT_CLASS) {
+            *any_init_class_insns = true;
+          }
         } else {
           // move-result-pseudo instructions will be automatically removed
           // when their primary instruction is deleted.
@@ -133,14 +137,17 @@ LocalDce::get_dead_instructions(const cfg::ControlFlowGraph& cfg,
   return dead_instructions;
 }
 
-void LocalDce::dce(cfg::ControlFlowGraph& cfg, bool normalize_new_instances) {
+void LocalDce::dce(cfg::ControlFlowGraph& cfg,
+                   bool normalize_new_instances,
+                   DexType* declaring_type) {
   if (normalize_new_instances) {
     this->normalize_new_instances(cfg);
   }
   TRACE(DCE, 5, "%s", SHOW(cfg));
   const auto& blocks = graph::postorder_sort<cfg::GraphInterface>(cfg);
+  bool any_init_class_insns = false;
   std::vector<std::pair<cfg::Block*, IRList::iterator>> dead_instructions =
-      get_dead_instructions(cfg, blocks);
+      get_dead_instructions(cfg, blocks, &any_init_class_insns);
 
   // Remove dead instructions.
   std::unordered_set<IRInstruction*> seen;
@@ -179,12 +186,19 @@ void LocalDce::dce(cfg::ControlFlowGraph& cfg, bool normalize_new_instances) {
       if (init_class_insn) {
         init_class_instructions_added++;
         mutation.replace(cfg_it, {init_class_insn});
+        any_init_class_insns = true;
       } else {
         mutation.remove(cfg_it);
       }
     }
   }
   mutation.flush();
+
+  if (any_init_class_insns && m_init_classes_with_side_effects &&
+      declaring_type) {
+    prune_init_classes(cfg, declaring_type);
+  }
+
   auto unreachable_insn_count = cfg.remove_unreachable_blocks().first;
   cfg.recompute_registers_size();
 
@@ -197,9 +211,11 @@ void LocalDce::dce(cfg::ControlFlowGraph& cfg, bool normalize_new_instances) {
   TRACE(DCE, 5, "%s", SHOW(cfg));
 }
 
-void LocalDce::dce(IRCode* code, bool normalize_new_instances) {
+void LocalDce::dce(IRCode* code,
+                   bool normalize_new_instances,
+                   DexType* declaring_type) {
   cfg::ScopedCFG cfg(code);
-  dce(*cfg, normalize_new_instances);
+  dce(*cfg, normalize_new_instances, declaring_type);
 }
 
 /*
@@ -358,4 +374,12 @@ void LocalDce::normalize_new_instances(cfg::ControlFlowGraph& cfg) {
     }
   }
   mutation.flush();
+}
+
+void LocalDce::prune_init_classes(cfg::ControlFlowGraph& cfg,
+                                  DexType* declaring_type) {
+  init_classes::InitClassPruner init_class_pruner(
+      *m_init_classes_with_side_effects, declaring_type, cfg);
+  init_class_pruner.apply();
+  m_stats.init_classes = init_class_pruner.get_stats();
 }
