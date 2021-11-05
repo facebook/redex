@@ -1465,6 +1465,8 @@ uint32_t emit_instruction_offset_debug_info(
     IODIMetadata& iodi_metadata,
     size_t iodi_layer,
     uint32_t line_addin,
+    size_t store_number,
+    size_t dex_number,
     uint8_t* output,
     uint32_t offset,
     int* dbgcount,
@@ -1569,7 +1571,10 @@ uint32_t emit_instruction_offset_debug_info(
       (iodi_metadata.layer_mode == IODIMetadata::IODILayerMode::kFull) ||
       (iodi_metadata.layer_mode ==
            IODIMetadata::IODILayerMode::kSkipLayer0AtApi26 &&
-       iodi_metadata.min_sdk < 26);
+       iodi_metadata.min_sdk < 26) ||
+      (iodi_metadata.layer_mode ==
+           IODIMetadata::IODILayerMode::kAlwaysSkipLayer0ExceptPrimary &&
+       store_number == 0 && dex_number == 0);
   std::unordered_map<uint32_t, std::map<uint32_t, uint32_t>> param_size_to_oset;
   uint32_t initial_offset = offset;
   for (int32_t size = pso.next(); size != -1; size = pso.next()) {
@@ -2138,6 +2143,8 @@ uint32_t emit_instruction_offset_debug_info(
     std::vector<CodeItemEmit>& code_items,
     IODIMetadata& iodi_metadata,
     bool iodi_layers,
+    size_t store_number,
+    size_t dex_number,
     uint8_t* output,
     uint32_t offset,
     int* dbgcount,
@@ -2208,8 +2215,8 @@ uint32_t emit_instruction_offset_debug_info(
       const size_t before_size = code_items_tmp.size();
       offset += emit_instruction_offset_debug_info(
           dodx, pos_mapper, code_items_tmp, iodi_metadata, i,
-          i << DexOutput::kIODILayerShift, output, offset, dbgcount,
-          code_debug_map);
+          i << DexOutput::kIODILayerShift, store_number, dex_number, output,
+          offset, dbgcount, code_debug_map);
       const size_t after_size = code_items_tmp.size();
       redex_assert(after_size < before_size);
     }
@@ -2251,6 +2258,8 @@ void DexOutput::generate_debug_items() {
         m_code_item_emits,
         *m_iodi_metadata,
         m_debug_info_kind == DebugInfoKind::InstructionOffsetsLayered,
+        m_store_number,
+        m_dex_number,
         m_output.get(),
         m_offset,
         &dbgcount,
