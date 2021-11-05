@@ -2013,15 +2013,19 @@ class DexState {
   DexState(const DexState&) = delete;
   DexState& operator=(const DexState&) = delete;
   DexState(PassManager& mgr,
+           const init_classes::InitClassesWithSideEffects&
+               init_classes_with_side_effects,
            DexClasses& dex,
            size_t dex_id,
            size_t reserved_trefs,
            size_t reserved_mrefs)
       : m_mgr(mgr), m_dex(dex), m_dex_id(dex_id) {
     std::unordered_set<DexMethodRef*> method_refs;
+    std::vector<DexType*> init_classes;
     for (auto cls : dex) {
       cls->gather_methods(method_refs);
       cls->gather_types(m_type_refs);
+      cls->gather_init_classes(init_classes);
     }
     m_method_refs_count = method_refs.size() + reserved_mrefs;
 
@@ -2029,6 +2033,13 @@ class DexState {
       class_ids.emplace(cls->get_type(), class_ids.size());
     });
 
+    std::unordered_set<DexType*> refined_types;
+    for (auto type : init_classes) {
+      auto refined_type = init_classes_with_side_effects.refine(type);
+      if (refined_type) {
+        m_type_refs.insert(const_cast<DexType*>(refined_type));
+      }
+    }
     max_type_refs =
         get_max_type_refs(m_mgr.get_redex_options().min_sdk) - reserved_trefs;
   }
@@ -3017,6 +3028,8 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
   }
 
   auto scope = build_class_scope(stores);
+  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+      scope, config.create_init_class_insns());
   std::unordered_set<DexMethod*> sufficiently_warm_methods;
   std::unordered_set<DexMethod*> sufficiently_hot_methods;
   gather_sufficiently_warm_and_hot_methods(
@@ -3094,7 +3107,8 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
 
       // TODO: Merge candidates that are equivalent except that one returns
       // something and the other doesn't. Affects around 1.5% of candidates.
-      DexState dex_state(mgr, dex, dex_id++, reserved_trefs, reserved_mrefs);
+      DexState dex_state(mgr, init_classes_with_side_effects, dex, dex_id++,
+                         reserved_trefs, reserved_mrefs);
       auto newly_outlined_methods =
           outline(m_config, mgr, dex_state, min_sdk, &candidates_with_infos,
                   &candidate_ids_by_methods, &outlined_methods, iteration,
