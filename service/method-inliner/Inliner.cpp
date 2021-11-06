@@ -498,7 +498,7 @@ std::string create_inlining_trace_msg(const DexMethod* caller,
 } // namespace
 
 DexType* MultiMethodInliner::get_needs_init_class(DexMethod* callee) const {
-  if (!is_static(callee)) {
+  if (!is_static(callee) || assumenosideeffects(callee)) {
     return nullptr;
   }
   auto insn =

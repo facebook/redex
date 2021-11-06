@@ -17,6 +17,7 @@
 #include "DexClass.h"
 #include "DexLoader.h"
 #include "EditableCfgAdapter.h"
+#include "ReachableClasses.h"
 #include "Resolver.h"
 #include "Trace.h"
 #include "UnknownVirtuals.h"
@@ -26,7 +27,8 @@ const DexType* get_init_class_type_demand(const IRInstruction* insn) {
   case OPCODE_INVOKE_STATIC: {
     // It's the resolved method that counts
     auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
-    return method ? method->get_class() : nullptr;
+    return (method && !assumenosideeffects(method)) ? method->get_class()
+                                                    : nullptr;
   }
   case OPCODE_SGET:
   case OPCODE_SGET_WIDE:
