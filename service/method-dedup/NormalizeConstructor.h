@@ -22,7 +22,9 @@
  *   this.f1 = a;
  *   this.f3 = c;
  *   this.f4 = e;
- *   super.<init>(this, b, d);
+ *   const x 5
+ *   const y 10
+ *   super.<init>(this, b, y, d, x);
  * }
  *
  * is logically equal to
@@ -31,7 +33,9 @@
  *   this.f3 = c;
  *   this.f4 = e;
  *   this.f1 = a;
- *   super.<init>(this, b, d);
+ *   const x 5
+ *   const y 10
+ *   super.<init>(this, b, y, d, x);
  * }
  *
  * Summarize the logic of simple constructors and use the information to

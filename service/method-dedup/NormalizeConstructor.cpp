@@ -22,18 +22,21 @@ namespace {
  * initialize a fraction of its instance fields or only being passed to the
  * super constructor. Some or all instsance fields are initialised from args,
  * however every argument must initialise either a field or be passed to
- * the super constructor.
+ * the super constructor. The super constructor is also allowed to receive
+ * values from const-literal instructions.
  *
  * void <init>(E e, B b, A a, D d, C c) {
  *   this.f1 = a;
  *   // f2 is not initialised by this constructor
  *   this.f3 = c;
  *   this.f4 = e;
- *   super.<init>(this, b, d);
+ *   const x 5
+ *   const y 10
+ *   super.<init>(this, b, y, d, x);
  * }
  *
  * If the fields are in order of f1, f2, f3, f4 and we assume the super
- * constructor arguments are f5 and f6.
+ * constructor arguments are arg1 -> arg4.
  *
  * The summary of the constructor is
  *   super_ctor : super.<init>
@@ -42,7 +45,7 @@ namespace {
  *      f2  <-  NO_ORIGIN
  *      f3  <-  5
  *      f4  <-  1
- *      super_ctor arg1 <- 2, arg2 <- 4
+ *      super_ctor arg1 <- 2, arg2 <- const 10, arg3 <- 4, arg4 <- const 5
  *
  * Any two bijective constructors like this in the same class are isomorphic.
  * We cluster constructors together based on their summaries' hashes. Then, we
@@ -54,23 +57,31 @@ namespace {
  * with method2 (and vice-versa).
  *
  * The list of restrictions is:
- *   - the constructors to be deduped can only have load-param, iput, move and
- *     return-void instructions, plus an invoke-direct to the super constructor
+ *   - the constructors to be deduped can only have load-param, iput, move,
+ *     const-literal and return-void instructions, plus an invoke-direct to the
+ *     super constructor
  *   - the iput instructions and the invoke-direct will only receive their
  *     source registers form the load-param instructions, and they are not
  *     allowed to share them, e.g. f_i and f_j cannot both be set to parameter
- *     param_k
+ *     param_k. Also, the invoke-direct is allowed to have registers with
+ *     values from const-literals.
  */
 
-enum class FieldOriginType { ARG, NO_ORIGIN };
+enum class FieldOriginType { ARG, CONST_INT_LITERAL, NO_ORIGIN };
 
 struct FieldOrigin {
   FieldOrigin() : type(FieldOriginType::NO_ORIGIN) {}
   explicit FieldOrigin(uint32_t arg_id)
       : type(FieldOriginType::ARG), arg_id(arg_id) {}
+  explicit FieldOrigin(int64_t const_int_literal)
+      : type(FieldOriginType::CONST_INT_LITERAL),
+        const_int_literal(const_int_literal) {}
 
   FieldOriginType type;
-  uint32_t arg_id;
+  union {
+    uint32_t arg_id;
+    int64_t const_int_literal;
+  };
 };
 
 struct ConstructorSummary {
@@ -91,14 +102,18 @@ struct ConstructorSummary {
       if (field_origin.type == FieldOriginType::NO_ORIGIN) {
         boost::hash_combine(hash, 11);
         boost::hash_combine(hash, "no origin");
-      } else {
+      } else if (field_origin.type == FieldOriginType::ARG) {
         boost::hash_combine(hash, 37);
         boost::hash_combine(hash, "argument id");
+      } else {
+        boost::hash_combine(hash, field_origin.const_int_literal);
+        boost::hash_combine(hash, "const int literal");
       }
     }
 
     boost::hash_combine(hash, field_id_to_origin.size());
     boost::hash_combine(hash, get_arg_ids_origin_size());
+    boost::hash_combine(hash, get_const_origin_size());
     boost::hash_combine(hash, show(super_ctor));
 
     return hash;
@@ -118,6 +133,12 @@ struct ConstructorSummary {
       if (field_id_to_origin[i].type != other.field_id_to_origin[i].type) {
         return false;
       }
+      if (field_id_to_origin[i].type == FieldOriginType::CONST_INT_LITERAL) {
+        if (field_id_to_origin[i].const_int_literal !=
+            other.field_id_to_origin[i].const_int_literal) {
+          return false;
+        }
+      }
     }
     return super_ctor == other.super_ctor;
   }
@@ -132,6 +153,16 @@ struct ConstructorSummary {
       }
     }
     return used_arg_ids.size();
+  }
+
+  size_t get_const_origin_size() const {
+    std::vector<int64_t> const_int_literals;
+    for (auto origin : field_id_to_origin) {
+      if (origin.type == FieldOriginType::CONST_INT_LITERAL) {
+        const_int_literals.push_back(origin.const_int_literal);
+      }
+    }
+    return const_int_literals.size();
   }
 };
 
@@ -157,27 +188,30 @@ bool is_simple_super_invoke(
     }
 
     auto* def = *defs.elements().begin();
-    if (!opcode::is_a_load_param(def->opcode())) {
-      return false;
-    }
+    if (opcode::is_a_load_param(def->opcode())) {
+      auto arg_idx = load_params.at(def);
+      if (src_idx == 0) {
+        if (arg_idx != 0) {
+          return false;
+        }
+        continue;
+      }
 
-    auto arg_idx = load_params.at(def);
-    if (src_idx == 0) {
-      if (arg_idx != 0) {
+      if (used_args.count(arg_idx)) {
+        // Do not handle the case in which multiple iputs have their
+        // values coming from the same parameters. This makes it simpler
+        // to check whether two candidate constructors are actually
+        // dedupable.
         return false;
       }
-      continue;
-    }
+      used_args.insert(arg_idx);
+      ctor_params_to_origin.push_back(FieldOrigin(arg_idx));
 
-    if (used_args.count(arg_idx)) {
-      // Do not handle the case in which multiple iputs have their
-      // values coming from the same parameters. This makes it simpler
-      // to check whether two candidate constructors are actually
-      // dedupable.
+    } else if (opcode::is_a_literal_const(def->opcode())) {
+      ctor_params_to_origin.push_back(FieldOrigin(def->get_literal()));
+    } else {
       return false;
     }
-    used_args.insert(arg_idx);
-    ctor_params_to_origin.push_back(FieldOrigin(arg_idx));
   }
   return true;
 }
@@ -243,7 +277,7 @@ boost::optional<ConstructorSummary> summarize_constructor_logic(
         if (!opcode::is_a_load_param(def->opcode())) {
           return boost::none;
         }
-        auto arg_idx = load_params.at(def);
+        uint32_t arg_idx = load_params.at(def);
         if (used_args.count(arg_idx)) {
           // Do not handle the case in which multiple iputs have their
           // values coming from the same parameters. This makes it simpler
@@ -254,7 +288,8 @@ boost::optional<ConstructorSummary> summarize_constructor_logic(
         used_args.insert(arg_idx);
         field_to_origin.insert({f, FieldOrigin(arg_idx)});
       } else if (opcode::is_a_load_param(opcode) || opcode::is_a_move(opcode) ||
-                 opcode::is_return_void(opcode)) {
+                 opcode::is_return_void(opcode) ||
+                 opcode::is_a_literal_const(opcode)) {
         // these instructions are allowed inside the constructor
       } else {
         return boost::none;
@@ -284,8 +319,8 @@ boost::optional<ConstructorSummary> summarize_constructor_logic(
     return boost::none;
   }
   if (used_args.size() != method->get_proto()->get_args()->size()) {
-    // Not support methods with unused arguments. We can remove unused arguments
-    // or reordering the instructions first.
+    // Not support methods with unused arguments. We can remove unused
+    // arguments or reordering the instructions first.
     return boost::none;
   }
   return summary;
@@ -322,10 +357,10 @@ DexProto* generalize_proto(const std::vector<DexType*>& normalized_typelist,
 /**
  * Choose the first one method that can be a representative, return nullptr if
  * no one is found.
- * When a representative is decided, its argument types may not be compatible to
- * other constructors', so its proto may need a change. The change should happen
- * at the end to avoid invalidating the key of the method set, so a new proto
- * record is needed for pending changes and method collision checking.
+ * When a representative is decided, its argument types may not be compatible
+ * to other constructors', so its proto may need a change. The change should
+ * happen at the end to avoid invalidating the key of the method set, so a new
+ * proto record is needed for pending changes and method collision checking.
  */
 DexMethod* get_representative(
     const CtorSummaries& methods,
@@ -340,7 +375,8 @@ DexMethod* get_representative(
     normalized_typelist.push_back(field->get_type());
   }
   normalized_typelist.insert(normalized_typelist.end(),
-                             super_ctor_args->begin(), super_ctor_args->end());
+                             super_ctor_args->begin(),
+                             super_ctor_args->end());
 
   for (auto& pair : methods) {
     auto method = pair.first;
