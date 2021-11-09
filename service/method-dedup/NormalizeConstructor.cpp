@@ -9,7 +9,10 @@
 
 #include "DexClass.h"
 #include "EditableCfgAdapter.h"
+#include "IRInstruction.h"
 #include "MethodReference.h"
+#include "ReachingDefinitions.h"
+#include "ScopedCFG.h"
 #include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"
@@ -50,72 +53,139 @@ struct ConstructorSummary {
   }
 };
 
+/*
+ * The invoke-direct instruction to the super constructor should have
+ * all src registers coming from a unique argument.
+ */
+bool is_simple_super_invoke(
+    IRInstruction* insn,
+    reaching_defs::Environment& env,
+    const std::unordered_map<IRInstruction*, uint32_t>& load_params,
+    std::unordered_set<uint32_t>& used_args,
+    std::vector<uint32_t>& ctor_params_to_arg_id) {
+  for (size_t src_idx = 0; src_idx < insn->srcs_size(); src_idx++) {
+    auto src = insn->src(src_idx);
+    const auto& defs = env.get(src);
+    always_assert(!defs.is_bottom() && !defs.is_top());
+
+    // only look for instructions that have a single definition,
+    // coming from an object parameter
+    if (defs.size() != 1) {
+      return false;
+    }
+
+    if (src_idx == 0) {
+      auto* load_param_this = *defs.elements().begin();
+      if (load_params.count(load_param_this) == 0 ||
+          load_params.at(load_param_this) != 0) {
+        return false;
+      }
+      continue;
+    }
+    auto* def = *defs.elements().begin();
+    if (!opcode::is_a_load_param(def->opcode())) {
+      return false;
+    }
+    auto arg_idx = load_params.at(def);
+
+    ctor_params_to_arg_id.push_back(arg_idx);
+    used_args.insert(arg_idx);
+  }
+  return true;
+}
+
 /**
  * @param ifields : Should include all the instance fields of the class.
  */
 boost::optional<ConstructorSummary> summarize_constructor_logic(
     const std::vector<DexField*>& ifields, DexMethod* method) {
-  if (root(method) || !is_constructor(method) || !method::is_init(method)) {
-    return boost::none;
-  }
-  auto code = method->get_code();
-  if (!code) {
+  if (root(method) || !is_constructor(method) || !method::is_init(method) ||
+      method->get_code() == nullptr) {
     return boost::none;
   }
   IRInstruction* super_ctor_invocation = nullptr;
-  std::unordered_map<uint32_t, uint32_t> reg_to_arg_id;
   std::unordered_map<DexFieldRef*, uint32_t> field_to_arg_id;
-  uint32_t arg_index = 0;
+  std::vector<uint32_t> ctor_params_to_arg_id;
+  std::unordered_set<uint32_t> used_args;
+
+  cfg::ScopedCFG cfg(method->get_code());
+
+  std::unordered_map<IRInstruction*, uint32_t> load_params;
+  uint32_t param_idx{0};
+  auto param_instructions = cfg->get_param_instructions();
+  for (auto& param_insn : param_instructions) {
+    auto* insn = param_insn.insn;
+    load_params.emplace(insn, param_idx++);
+  }
+
   // TODO: Give up if there's exception handling.
-  editable_cfg_adapter::iterate(code, [&](const MethodItemEntry& mie) {
-    auto insn = mie.insn;
-    auto opcode = insn->opcode();
-    if (opcode::is_invoke_direct(opcode)) {
-      auto ref = insn->get_method();
-      if (!super_ctor_invocation && method::is_init(ref) &&
-          ref->get_class() != method->get_class()) {
-        super_ctor_invocation = insn;
-        return editable_cfg_adapter::LoopExit::LOOP_CONTINUE;
-      } else {
-        super_ctor_invocation = nullptr;
-        return editable_cfg_adapter::LoopExit::LOOP_BREAK;
-      }
-    } else if (opcode::is_return_void(opcode)) {
-      return editable_cfg_adapter::LoopExit::LOOP_BREAK;
-    } else if (opcode::is_an_iput(opcode)) {
-      field_to_arg_id[insn->get_field()] = reg_to_arg_id[insn->src(0)];
-      return editable_cfg_adapter::LoopExit::LOOP_CONTINUE;
-    } else if (opcode::is_a_load_param(opcode)) {
-      reg_to_arg_id[insn->dest()] = arg_index++;
-      return editable_cfg_adapter::LoopExit::LOOP_CONTINUE;
-    } else if (opcode::is_a_move(opcode)) {
-      reg_to_arg_id[insn->dest()] = reg_to_arg_id[insn->src(0)];
-      return editable_cfg_adapter::LoopExit::LOOP_CONTINUE;
+  reaching_defs::MoveAwareFixpointIterator reaching_definitions(*cfg);
+  reaching_definitions.run({});
+  for (cfg::Block* block : cfg->blocks()) {
+    auto env = reaching_definitions.get_entry_state_at(block);
+    if (env.is_bottom()) {
+      continue;
     }
-    // Not accept any other instruction.
-    super_ctor_invocation = nullptr;
-    return editable_cfg_adapter::LoopExit::LOOP_BREAK;
-  });
-  if (!super_ctor_invocation) {
+    auto ii = InstructionIterable(block);
+    for (auto it = ii.begin(); it != ii.end(); it++) {
+      auto* insn = it->insn;
+      auto opcode = insn->opcode();
+      if (opcode::is_invoke_direct(opcode)) {
+        auto ref = insn->get_method();
+        if (super_ctor_invocation != nullptr || !method::is_init(ref) ||
+            ref->get_class() == method->get_class()) {
+          return boost::none;
+        }
+
+        super_ctor_invocation = insn;
+        if (!is_simple_super_invoke(insn, env, load_params, used_args,
+                                    ctor_params_to_arg_id)) {
+          return boost::none;
+        }
+      } else if (opcode::is_an_iput(opcode)) {
+        redex_assert(insn->srcs_size() == 2);
+        auto* f = insn->get_field();
+        auto src = insn->src(0);
+        const auto& defs = env.get(src);
+        always_assert(!defs.is_bottom() && !defs.is_top());
+        if (defs.size() != 1) {
+          return boost::none;
+        }
+        auto* def = *defs.elements().begin();
+        if (!opcode::is_a_load_param(def->opcode())) {
+          return boost::none;
+        }
+        auto arg_idx = load_params.at(def);
+
+        field_to_arg_id.insert({f, arg_idx});
+        used_args.insert(arg_idx);
+      } else if (opcode::is_a_load_param(opcode) || opcode::is_a_move(opcode) ||
+                 opcode::is_return_void(opcode)) {
+      } else {
+        return boost::none;
+      }
+      reaching_definitions.analyze_instruction(insn, &env);
+    }
+  }
+
+  if (super_ctor_invocation == nullptr) {
     return boost::none;
   }
+
   if (field_to_arg_id.size() != ifields.size()) {
     return boost::none;
   }
   ConstructorSummary summary(super_ctor_invocation->get_method(),
                              ifields.size());
-  std::unordered_set<uint32_t> used_args;
   for (auto field : ifields) {
     auto arg_id = field_to_arg_id[field];
     summary.field_id_to_arg_id.push_back(arg_id);
-    used_args.insert(arg_id);
   }
-  redex_assert(reg_to_arg_id[super_ctor_invocation->src(0)] == 0);
-  for (size_t id = 1; id < super_ctor_invocation->srcs_size(); id++) {
-    auto arg_id = reg_to_arg_id[super_ctor_invocation->src(id)];
-    summary.field_id_to_arg_id.push_back(arg_id);
-    used_args.insert(arg_id);
+
+  for (auto& f_orig : ctor_params_to_arg_id) {
+    summary.field_id_to_arg_id.push_back(f_orig);
   }
+
   // Ensure bijection.
   if (used_args.size() != summary.field_id_to_arg_id.size()) {
     return boost::none;
