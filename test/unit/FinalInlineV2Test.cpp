@@ -8,6 +8,7 @@
 #include <gtest/gtest.h>
 
 #include "Creators.h"
+#include "DexAccess.h"
 #include "FinalInlineV2.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
@@ -21,18 +22,22 @@ struct FinalInlineTest : public RedexTest {
   }
 
  protected:
-  DexField* create_field_with_zero_value(const char* name) {
+  DexField* create_field_with_zero_value(const char* name,
+                                         ClassCreator* class_creator,
+                                         DexAccessFlags access = ACC_PUBLIC |
+                                                                 ACC_STATIC) {
     auto field = static_cast<DexField*>(DexField::make_field(name));
     auto encoded_value = DexEncodedValue::zero_for_type(field->get_type());
-    field->make_concrete(ACC_PUBLIC | ACC_STATIC, encoded_value);
-    m_cc->add_field(field);
+    field->make_concrete(access, encoded_value);
+    class_creator->add_field(field);
     return field;
   }
 
   static FinalInlinePassV2::Stats run(const Scope& scope,
-                                      const XStoreRefs* xstores) {
+                                      const XStoreRefs* xstores,
+                                      bool create_init_class_insns = false) {
     init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
-        scope, /* create_init_class_insns */ false);
+        scope, create_init_class_insns);
     return FinalInlinePassV2::run(
         scope, init_classes_with_side_effects, xstores);
   }
@@ -41,7 +46,7 @@ struct FinalInlineTest : public RedexTest {
 };
 
 TEST_F(FinalInlineTest, encodeValues) {
-  auto field = create_field_with_zero_value("LFoo;.bar:I");
+  auto field = create_field_with_zero_value("LFoo;.bar:I", m_cc.get());
   m_cc->add_method(assembler::method_from_string(R"(
     (method (public static) "LFoo;.<clinit>:()V"
      (
@@ -64,7 +69,8 @@ TEST_F(FinalInlineTest, encodeTypeValues) {
   cc2.set_super(type::java_lang_Object());
   auto cls2 = cc2.create();
 
-  auto field = create_field_with_zero_value("LFoo;.bar:Ljava/lang/Class;");
+  auto field =
+      create_field_with_zero_value("LFoo;.bar:Ljava/lang/Class;", m_cc.get());
   m_cc->add_method(assembler::method_from_string(R"(
     (method (public static) "LFoo;.<clinit>:()V"
      (
@@ -96,7 +102,8 @@ TEST_F(FinalInlineTest, encodeTypeValuesXStore) {
   cc2.set_super(type::java_lang_Object());
   auto cls2 = cc2.create();
 
-  auto field = create_field_with_zero_value("LFoo;.bar:Ljava/lang/Class;");
+  auto field =
+      create_field_with_zero_value("LFoo;.bar:Ljava/lang/Class;", m_cc.get());
   m_cc->add_method(assembler::method_from_string(R"(
     (method (public static) "LFoo;.<clinit>:()V"
      (
@@ -123,7 +130,7 @@ TEST_F(FinalInlineTest, encodeTypeValuesXStore) {
 }
 
 TEST_F(FinalInlineTest, fieldSetInLoop) {
-  auto field_bar = create_field_with_zero_value("LFoo;.bar:I");
+  auto field_bar = create_field_with_zero_value("LFoo;.bar:I", m_cc.get());
   m_cc->add_method(assembler::method_from_string(R"(
     (method (public static) "LFoo;.<clinit>:()V"
      (
@@ -147,8 +154,8 @@ TEST_F(FinalInlineTest, fieldSetInLoop) {
 }
 
 TEST_F(FinalInlineTest, fieldConditionallySet) {
-  auto field_bar = create_field_with_zero_value("LFoo;.bar:I");
-  auto field_baz = create_field_with_zero_value("LFoo;.baz:I");
+  auto field_bar = create_field_with_zero_value("LFoo;.bar:I", m_cc.get());
+  auto field_baz = create_field_with_zero_value("LFoo;.baz:I", m_cc.get());
   m_cc->add_method(assembler::method_from_string(R"(
     (method (public static) "LFoo;.<clinit>:()V"
      (
@@ -178,8 +185,8 @@ TEST_F(FinalInlineTest, fieldConditionallySet) {
 }
 
 TEST_F(FinalInlineTest, dominatedSget) {
-  auto field_bar = create_field_with_zero_value("LFoo;.bar:I");
-  auto field_baz = create_field_with_zero_value("LFoo;.baz:I");
+  auto field_bar = create_field_with_zero_value("LFoo;.bar:I", m_cc.get());
+  auto field_baz = create_field_with_zero_value("LFoo;.baz:I", m_cc.get());
   m_cc->add_method(assembler::method_from_string(R"(
     (method (public static) "LFoo;.<clinit>:()V"
      (
@@ -210,4 +217,92 @@ TEST_F(FinalInlineTest, dominatedSget) {
   EXPECT_CODE_EQ(cls->get_clinit()->get_code(), expected.get());
   EXPECT_EQ(field_bar->get_static_value()->value(), 0);
   EXPECT_EQ(field_baz->get_static_value()->value(), 1);
+}
+
+TEST_F(FinalInlineTest, ReplaceSgetAddInitClass) {
+  ClassCreator cc2(DexType::make_type("LBar;"));
+  cc2.set_super(type::java_lang_Object());
+  cc2.add_method(assembler::method_from_string(R"(
+    (method (public static) "LBar;.<clinit>:()V"
+     (
+      (invoke-static () "Lunknown;.unknown:()V")
+      (return-void)
+     )
+    )
+  )"));
+  auto field = create_field_with_zero_value(
+      "LBar;.bar:I", &cc2, ACC_PUBLIC | ACC_STATIC | ACC_FINAL);
+  auto cls2 = cc2.create();
+
+  m_cc->add_method(assembler::method_from_string(R"(
+    (method (public static) "LFoo;.getbar:()I"
+     (
+      (sget "LBar;.bar:I")
+      (move-result-pseudo v0)
+      (return v0)
+     )
+    )
+  )"));
+  auto cls = m_cc->create();
+
+  auto store = DexStore("store");
+  store.add_classes({cls, cls2});
+  DexStoresVector stores{store};
+  auto scope = build_class_scope(stores);
+  XStoreRefs xstores(stores);
+  run(scope, &xstores, /* create_init_class_insns */ true);
+
+  auto expected = assembler::ircode_from_string(R"(
+    (
+      (init-class "LBar;")
+      (const v0 0)
+      (return v0)
+    )
+  )");
+  EXPECT_EQ(cls->get_all_methods().size(), 1);
+  EXPECT_CODE_EQ(cls->get_all_methods()[0]->get_code(), expected.get());
+  EXPECT_EQ(field->get_static_value()->value(), 0);
+}
+
+TEST_F(FinalInlineTest, ReplaceSgetNoInitClass) {
+  ClassCreator cc2(DexType::make_type("LBar;"));
+  cc2.set_super(type::java_lang_Object());
+  cc2.add_method(assembler::method_from_string(R"(
+    (method (public static) "LBar;.<clinit>:()V"
+     (
+      (return-void)
+     )
+    )
+  )"));
+  auto field = create_field_with_zero_value(
+      "LBar;.bar:I", &cc2, ACC_PUBLIC | ACC_STATIC | ACC_FINAL);
+  auto cls2 = cc2.create();
+
+  m_cc->add_method(assembler::method_from_string(R"(
+    (method (public static) "LFoo;.getbar:()I"
+     (
+      (sget "LBar;.bar:I")
+      (move-result-pseudo v0)
+      (return v0)
+     )
+    )
+  )"));
+  auto cls = m_cc->create();
+
+  auto store = DexStore("store");
+  store.add_classes({cls, cls2});
+  DexStoresVector stores{store};
+  auto scope = build_class_scope(stores);
+  XStoreRefs xstores(stores);
+  run(scope, &xstores, /* create_init_class_insns */ true);
+
+  auto expected = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (return v0)
+    )
+  )");
+  EXPECT_EQ(cls->get_all_methods().size(), 1);
+  EXPECT_CODE_EQ(cls->get_all_methods()[0]->get_code(), expected.get());
+  EXPECT_EQ(field->get_static_value()->value(), 0);
 }
