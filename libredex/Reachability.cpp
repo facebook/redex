@@ -673,60 +673,6 @@ void sweep(DexStoresVector& stores,
   }
 }
 
-std::unordered_set<DexMethod*> compute_reachable_methods(
-    DexStoresVector& stores, const ReachableObjects& reachables) {
-  ConcurrentSet<DexMethod*> concurrent_reachable_methods;
-
-  auto get_all_marked_methods =
-      [&reachables](const std::vector<DexMethod*>& methods) {
-        std::vector<DexMethod*> unmarked;
-        for (auto* m : methods) {
-          if (reachables.marked_unsafe(m)) {
-            unmarked.push_back(m);
-          }
-        }
-        return unmarked;
-      };
-
-  for (auto& dex : DexStoreClassesIterator(stores)) {
-    walk::parallel::classes(dex, [&](DexClass* cls) {
-      auto methods = get_all_marked_methods(cls->get_all_methods());
-      concurrent_reachable_methods.insert(methods.begin(), methods.end());
-    });
-  }
-
-  std::unordered_set<DexMethod*> reachable_methods(
-      concurrent_reachable_methods.begin(), concurrent_reachable_methods.end());
-  return reachable_methods;
-}
-
-std::unordered_set<DexField*> compute_reachable_fields(
-    DexStoresVector& stores, const ReachableObjects& reachables) {
-  ConcurrentSet<DexField*> concurrent_reachable_fields;
-
-  auto get_all_marked_fields =
-      [&reachables](const std::vector<DexField*>& fields) {
-        std::vector<DexField*> unmarked;
-        for (auto* f : fields) {
-          if (reachables.marked_unsafe(f)) {
-            unmarked.push_back(f);
-          }
-        }
-        return unmarked;
-      };
-
-  for (auto& dex : DexStoreClassesIterator(stores)) {
-    walk::parallel::classes(dex, [&](DexClass* cls) {
-      auto fields = get_all_marked_fields(cls->get_all_fields());
-      concurrent_reachable_fields.insert(fields.begin(), fields.end());
-    });
-  }
-
-  std::unordered_set<DexField*> reachable_fields(
-      concurrent_reachable_fields.begin(), concurrent_reachable_fields.end());
-  return reachable_fields;
-}
-
 ObjectCounts count_objects(const DexStoresVector& stores) {
   ObjectCounts counts;
   for (auto const& dex : DexStoreClassesIterator(stores)) {
