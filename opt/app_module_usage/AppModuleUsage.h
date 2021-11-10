@@ -74,7 +74,8 @@ class AppModuleUsagePass : public Pass {
   // Handle a violation of `entrypoint` using `module` unannotated
   template <typename T>
   void violation(T* entrypoint,
-                 const std::string& module,
+                 const std::string& from_module,
+                 const std::string& to_module,
                  std::ofstream& ofs,
                  bool print_name);
   // Outputs methods to store mapping to meta file
