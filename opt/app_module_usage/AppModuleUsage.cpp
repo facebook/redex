@@ -362,6 +362,7 @@ size_t AppModuleUsagePass::generate_report(const Scope& scope,
   for (const auto& pair : m_stores_method_uses_map) {
     auto method = pair.first;
     std::string method_name = show(method);
+    auto store_from = m_type_store_map.at(method->get_class());
     bool print_name = true;
     auto annotated_module_names = get_modules_used(method, annotation_type);
     // combine annotations from class
@@ -373,7 +374,8 @@ size_t AppModuleUsagePass::generate_report(const Scope& scope,
       if (annotated_module_names.count(used_module_name) == 0 &&
           (m_allow_list_map.count(method_name) == 0 ||
            m_allow_list_map.at(method_name).count(store) == 0)) {
-        violation(method, used_module_name, ofs, print_name);
+        violation(method, store_from->get_name(), used_module_name, ofs,
+                  print_name);
         print_name = false;
         violation_count++;
       }
@@ -411,7 +413,8 @@ size_t AppModuleUsagePass::generate_report(const Scope& scope,
           annotated_module_names.count(store_used->get_name()) == 0 &&
           (m_allow_list_map.count(field_name) == 0 ||
            m_allow_list_map.at(field_name).count(store_used) == 0)) {
-        violation(field, store_used->get_name(), ofs, print_name);
+        violation(field, store_from->get_name(), store_used->get_name(), ofs,
+                  print_name);
         print_name = false;
         violation_count++;
       }
@@ -426,31 +429,30 @@ size_t AppModuleUsagePass::generate_report(const Scope& scope,
 
 template <typename T>
 void AppModuleUsagePass::violation(T* entrypoint,
-                                   const std::string& module,
+                                   const std::string& from_module,
+                                   const std::string& to_module,
                                    std::ofstream& ofs,
                                    bool print_name) {
   if (print_name) {
     ofs << SHOW(entrypoint);
   }
-  ofs << ", " << module;
+  ofs << ", " << to_module;
   int level = 4;
   if (m_crash_with_violations) {
     level = 0;
   }
   TRACE(APP_MOD_USE,
         level,
-        "%s uses app module \"%s\" without annotation\n",
+        "%s (from module \"%s\") uses app module \"%s\" without annotation\n",
         SHOW(entrypoint),
-        module.c_str());
+        from_module.c_str(),
+        to_module.c_str());
 }
-template void AppModuleUsagePass::violation(DexMethod*,
-                                            const std::string&,
-                                            std::ofstream&,
-                                            bool);
-template void AppModuleUsagePass::violation(DexField*,
-                                            const std::string&,
-                                            std::ofstream&,
-                                            bool);
+
+template void AppModuleUsagePass::violation(
+    DexMethod*, const std::string&, const std::string&, std::ofstream&, bool);
+template void AppModuleUsagePass::violation(
+    DexField*, const std::string&, const std::string&, std::ofstream&, bool);
 
 void AppModuleUsagePass::output_usages(const DexStoresVector& stores,
                                        const std::string& path) {
