@@ -1299,6 +1299,7 @@ CommonSubexpressionElimination::CommonSubexpressionElimination(
           break;
         }
       }
+
       if (skip) {
         continue;
       }
@@ -1393,12 +1394,40 @@ bool CommonSubexpressionElimination::patch(bool runtime_assertions) {
     reg_t temp_reg = q.second;
     IRInstruction* insn = f.insn;
     auto& it = iterators.at(insn);
-    IRInstruction* move_insn = new IRInstruction(move_opcode);
-    move_insn->set_src(0, temp_reg)->set_dest(insn->dest());
-    m_cfg.insert_after(it, move_insn);
 
-    if (runtime_assertions) {
-      to_check.emplace_back(f, move_insn);
+    bool has_lit_const{false};
+    for (auto earlier_insn : earlier_insns) {
+      // Consider this case:
+      //   1.(const v0 0)
+      //   2.(iput-object v0 v3
+      //   "Lcom/facebook/litho/Output;.mT:Ljava/lang/Object;") 3.(const v0 0)
+      //   4.boxing-unboxing v0
+      //   5.(move-result v0)
+      //   6.(iput-boolean v0 v4 "LX/002;.chromeVisibility:Z")
+      // We need to make sure that after opt-out "boxing-unboxing v0", v0 used
+      // in insn 6. should not be the one used in insn 2, since in line 2, v0 is
+      // used as null-0 and in line 4, v0 should be int. Therfore, instead of
+      // insert a move, if there is any literal_const load in earlier_insns, we
+      // just clone that const insn and override the dest to current insn's
+      // dest. No need to add this new insn for runtime-assertion since it is
+      // just a clone.
+      auto earlier_opcode = earlier_insn->opcode();
+      if (!opcode::is_a_literal_const(earlier_opcode)) {
+        continue;
+      }
+      IRInstruction* clone_insn =
+          (new IRInstruction(*earlier_insn))->set_dest(insn->dest());
+      m_cfg.insert_after(it, clone_insn);
+      has_lit_const = true;
+    }
+
+    if (!has_lit_const) {
+      IRInstruction* move_insn = new IRInstruction(move_opcode);
+      move_insn->set_src(0, temp_reg)->set_dest(insn->dest());
+      m_cfg.insert_after(it, move_insn);
+      if (runtime_assertions) {
+        to_check.emplace_back(f, move_insn);
+      }
     }
 
     for (auto earlier_insn : earlier_insns) {
@@ -1416,7 +1445,9 @@ bool CommonSubexpressionElimination::patch(bool runtime_assertions) {
     m_stats.eliminated_opcodes[insn->opcode()]++;
   }
 
-  // insert moves to define the forwarded value
+  // insert moves to define the forwarded value. For const values, the inserted
+  // moves are pointless. We just keep the unified implementation here since
+  // those moves are harmless and will be finally eliminated later by LocalDce.
 
   for (const auto& r : temps) {
     size_t earlier_insns_index = r.first;
