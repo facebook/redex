@@ -68,9 +68,11 @@ InterDexGroupingType get_merge_per_interdex_type(
     const std::string& merge_per_interdex_set) {
 
   const static std::unordered_map<std::string, InterDexGroupingType>
-      string_to_grouping = {{"disabled", InterDexGroupingType::DISABLED},
-                            {"non-hot-set", InterDexGroupingType::NON_HOT_SET},
-                            {"full", InterDexGroupingType::FULL}};
+      string_to_grouping = {
+          {"disabled", InterDexGroupingType::DISABLED},
+          {"non-hot-set", InterDexGroupingType::NON_HOT_SET},
+          {"non-ordered-set", InterDexGroupingType::NON_ORDERED_SET},
+          {"full", InterDexGroupingType::FULL}};
 
   always_assert_log(string_to_grouping.count(merge_per_interdex_set) > 0,
                     "InterDex Grouping Type %s not found. Please check the list"
@@ -215,15 +217,17 @@ void ClassMergingPass::bind_config() {
       model_spec.get("merging_strategy", "by_cls_count", merging_strategy);
       model.strategy = get_merging_strategy(merging_strategy);
 
+      // InterDex grouping option is by default `non-ordered-set`.
       std::string merge_per_interdex_set;
-      model_spec.get("merge_per_interdex_set", "disabled",
+      model_spec.get("merge_per_interdex_set", "non-ordered-set",
                      merge_per_interdex_set);
       model.merge_per_interdex_set =
           get_merge_per_interdex_type(merge_per_interdex_set);
 
       always_assert_log(!model.merge_per_interdex_set ||
                             (model.type_tag_config != TypeTagConfig::NONE),
-                        "Cannot group when type tag is not needed.");
+                        "Cannot group %s when type tag is not needed.",
+                        model.name.c_str());
 
       size_t max_count;
       model_spec.get("max_count", 0, max_count);
