@@ -397,7 +397,7 @@ DexMethodRef* get_value_of_method_for_type(const DexType* type) {
         "Ljava/lang/Long;.valueOf:(J)Ljava/lang/Long;");
   } else if (type == type::java_lang_Float()) {
     return DexMethod::make_method(
-        "Ljava/lang/Float;.valueOf:(Z)Ljava/lang/Float;");
+        "Ljava/lang/Float;.valueOf:(F)Ljava/lang/Float;");
   } else if (type == type::java_lang_Double()) {
     return DexMethod::make_method(
         "Ljava/lang/Double;.valueOf:(D)Ljava/lang/Double;");
