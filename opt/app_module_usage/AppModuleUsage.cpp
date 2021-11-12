@@ -186,26 +186,57 @@ void AppModuleUsagePass::load_allow_list(
     while (getline(ifs, line)) {
       auto comma = line.find_first_of(',');
       const auto& entrypoint = line.substr(0, comma);
+      auto asterisk = entrypoint.find_first_of('*');
       do {
         const auto& last_comma = comma;
         const auto& store_start =
             line.find_first_not_of(" ,\"", last_comma + 1);
         comma = line.find_first_of(',', comma + 1); // next comma or end of line
         const auto& store_name = line.substr(store_start, comma - store_start);
-        if (name_store_map.count(store_name) > 0) {
-          auto store = name_store_map.at(store_name);
-          TRACE(APP_MOD_USE, 6,
-                "adding allowlist entry \"%s\" uses module \"%s\"\n",
-                entrypoint.c_str(), store_name.c_str());
+        DexStore* store = nullptr;
+        if (name_store_map.count(store_name)) {
+          store = name_store_map.at(store_name);
+        }
+        TRACE(APP_MOD_USE, 6,
+              "adding allowlist entry \"%s\" uses module \"%s\"\n",
+              entrypoint.c_str(), store_name.c_str());
+        if (asterisk == std::string::npos) {
+          // no asterisk => no prefix/pattern
           if (m_allow_list_map.count(entrypoint) == 0) {
             m_allow_list_map.emplace(entrypoint,
                                      std::unordered_set<DexStore*>{});
           }
-          m_allow_list_map.at(entrypoint).emplace(store);
+          if (store_name.find_first_of('*') != std::string::npos) {
+            TRACE(APP_MOD_USE, 6, "entrypoint %s is allowed any store \n",
+                  entrypoint.c_str());
+            // allow any store to be used
+            for (const auto& pair : name_store_map) {
+              m_allow_list_map.at(entrypoint).emplace(pair.second);
+            }
+          } else if (store != nullptr) {
+            m_allow_list_map.at(entrypoint).emplace(store);
+          }
         } else {
-          TRACE(APP_MOD_USE, 4,
-                "Cannot add module %s to allow list, it does not exist\n",
-                store_name.c_str());
+          // asterisk => prefix behavior
+          const auto& prefix = entrypoint.substr(0, asterisk);
+          TRACE(APP_MOD_USE, 6,
+                "entrypoint name is a prefix: \"%s\" => \"%s\"\n",
+                entrypoint.c_str(), prefix.c_str());
+          if (m_allow_list_prefix_map.count(prefix) == 0) {
+            m_allow_list_prefix_map.emplace(prefix,
+                                            std::unordered_set<DexStore*>{});
+          }
+          if (store_name.find_first_of('*') != std::string::npos) {
+            // allow any store to be used
+            TRACE(APP_MOD_USE, 6,
+                  "entrypoints prefixed %s are allowed to use any store \n",
+                  prefix.c_str());
+            for (const auto& pair : name_store_map) {
+              m_allow_list_prefix_map.at(prefix).emplace(pair.second);
+            }
+          } else if (store != nullptr) {
+            m_allow_list_prefix_map.at(prefix).emplace(store);
+          }
         }
       } while (comma != std::string::npos);
     }
@@ -372,8 +403,7 @@ size_t AppModuleUsagePass::generate_report(const Scope& scope,
     auto violation_check = [&](auto store) {
       const auto& used_module_name = store->get_name();
       if (annotated_module_names.count(used_module_name) == 0 &&
-          (m_allow_list_map.count(method_name) == 0 ||
-           m_allow_list_map.at(method_name).count(store) == 0)) {
+          !violation_is_in_allowlist(method_name, store)) {
         violation(method, store_from->get_name(), used_module_name, ofs,
                   print_name);
         print_name = false;
@@ -411,8 +441,7 @@ size_t AppModuleUsagePass::generate_report(const Scope& scope,
       if (!store_used->is_root_store() &&
           store_used->get_name() != store_from->get_name() &&
           annotated_module_names.count(store_used->get_name()) == 0 &&
-          (m_allow_list_map.count(field_name) == 0 ||
-           m_allow_list_map.at(field_name).count(store_used) == 0)) {
+          !violation_is_in_allowlist(field_name, store_used)) {
         violation(field, store_from->get_name(), store_used->get_name(), ofs,
                   print_name);
         print_name = false;
@@ -425,6 +454,24 @@ size_t AppModuleUsagePass::generate_report(const Scope& scope,
   });
   mgr.set_metric("num_violations", violation_count);
   return violation_count;
+}
+
+bool AppModuleUsagePass::violation_is_in_allowlist(
+    const std::string& entrypoint_name, DexStore* store_used) {
+  if (m_allow_list_map.count(entrypoint_name) == 0) {
+    // ruled out the exact item in the map so look for a prefix that matches
+    // non optimized for now
+    for (const auto& pair : m_allow_list_prefix_map) {
+      const auto& prefix = pair.first;
+      if (entrypoint_name.find_first_of(prefix) == 0) {
+        // entrypoint_name matches prefix
+        return true;
+      }
+    }
+  } else {
+    return m_allow_list_map.at(entrypoint_name).count(store_used) > 0;
+  }
+  return false;
 }
 
 template <typename T>
