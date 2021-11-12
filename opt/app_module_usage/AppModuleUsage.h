@@ -71,6 +71,8 @@ class AppModuleUsagePass : public Pass {
   void analyze_reflective_app_module_usage(const Scope&);
   // Outputs report of violations, returns the number of violations
   size_t generate_report(const Scope&, const std::string&, PassManager&);
+  // returns true if the given entrypoint name is allowed to use the given store
+  bool violation_is_in_allowlist(const std::string&, DexStore*);
   // Handle a violation of `entrypoint` using `module` unannotated
   template <typename T>
   void violation(T* entrypoint,
@@ -99,6 +101,11 @@ class AppModuleUsagePass : public Pass {
   // by the entrypoint
   std::unordered_map<std::string, std::unordered_set<DexStore*>>
       m_allow_list_map;
+
+  // Map of violations from entrypoint prefixes to the names of stores
+  // used by the entrypoint(s)
+  std::unordered_map<std::string, std::unordered_set<DexStore*>>
+      m_allow_list_prefix_map;
 
   // To quickly look up wich DexStore ("module") a DexType is from
   ConcurrentMap<DexType*, DexStore*> m_type_store_map;
