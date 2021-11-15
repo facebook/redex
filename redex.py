@@ -86,7 +86,7 @@ def dbg_prefix(dbg: str, src_root: typing.Optional[str] = None) -> typing.List[s
         if dbg == "gdb":
             cmd += ["-ex", quote("directory %s" % src_root)]
         elif dbg == "lldb":
-            cmd += ["-o", quote('settings set target.source-map "." "%s"' % src_root)]
+            cmd += ["-o", f'settings set target.source-map "." {quote(src_root)}']
 
     DBG_END = {"gdb": "--args", "lldb": "--"}
     cmd.append(DBG_END[dbg])
