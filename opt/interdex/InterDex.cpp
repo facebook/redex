@@ -34,9 +34,14 @@
 
 namespace {
 
-constexpr const char* CANARY_PREFIX = "Lsecondary/dex";
-constexpr const char CANARY_CLASS_FORMAT[] = "Lsecondary/dex%02d/Canary;";
-constexpr size_t CANARY_CLASS_BUFSIZE = sizeof(CANARY_CLASS_FORMAT);
+constexpr const char* SECONDARY_CANARY_PREFIX = "Lsecondary/dex";
+constexpr const char SECONDARY_CANARY_CLASS_FORMAT[] =
+    "Lsecondary/dex%02d/Canary;";
+constexpr size_t SECONDARY_CANARY_CLASS_BUFSIZE =
+    sizeof(SECONDARY_CANARY_CLASS_FORMAT);
+
+constexpr const char STORE_CANARY_CLASS_FORMAT[] = "Lstore%04x/dex%02d/Canary;";
+constexpr size_t STORE_CANARY_CLASS_BUFSIZE = sizeof(STORE_CANARY_CLASS_FORMAT);
 
 constexpr const char* END_MARKER_FORMAT = "LDexEndMarker";
 
@@ -47,6 +52,21 @@ constexpr const char* BG_SET_START_FORMAT = "LBackgroundSetStart";
 constexpr const char* BG_SET_END_FORMAT = "LBackgroundSetEnd";
 
 static interdex::DexInfo EMPTY_DEX_INFO;
+
+std::string get_canary_name(int dexnum, const DexString* store_name) {
+  if (store_name) {
+    char buf[STORE_CANARY_CLASS_BUFSIZE];
+    int store_id = store_name->java_hashcode() & 0xFFFF;
+    // Yes, there could be collisions. We assume that is handled outside of
+    // Redex.
+    snprintf(buf, sizeof(buf), STORE_CANARY_CLASS_FORMAT, store_id, dexnum + 1);
+    return std::string(buf);
+  } else {
+    char buf[SECONDARY_CANARY_CLASS_BUFSIZE];
+    snprintf(buf, sizeof(buf), SECONDARY_CANARY_CLASS_FORMAT, dexnum);
+    return std::string(buf);
+  }
+}
 
 std::unordered_set<DexClass*> find_unrefenced_coldstart_classes(
     const Scope& scope,
@@ -216,7 +236,8 @@ namespace interdex {
 
 bool is_canary(DexClass* clazz) {
   const char* cname = clazz->get_type()->get_name()->c_str();
-  return strncmp(cname, CANARY_PREFIX, strlen(CANARY_PREFIX)) == 0;
+  return strncmp(cname, SECONDARY_CANARY_PREFIX,
+                 strlen(SECONDARY_CANARY_PREFIX)) == 0;
 }
 
 // Compare two classes for sorting in a way that is best for compression.
@@ -1011,13 +1032,11 @@ void InterDex::set_clinit_method_if_needed(DexClass* cls) {
   code->set_registers_size(1);
 }
 
-DexClass* create_canary(int dexnum) {
-  char buf[CANARY_CLASS_BUFSIZE];
-  snprintf(buf, sizeof(buf), CANARY_CLASS_FORMAT, dexnum);
-  std::string canary_name(buf);
+DexClass* create_canary(int dexnum, const DexString* store_name) {
+  std::string canary_name = get_canary_name(dexnum, store_name);
   auto canary_type = DexType::get_type(canary_name);
   if (!canary_type) {
-    TRACE(IDEX, 4, "Warning, no canary class %s found.", buf);
+    TRACE(IDEX, 4, "Warning, no canary class %s found.", canary_name.c_str());
     canary_type = DexType::make_type(canary_name.c_str());
   }
   auto canary_cls = type_class(canary_type);
