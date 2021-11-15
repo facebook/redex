@@ -19,15 +19,13 @@
 #include <unordered_map>
 #include <utility>
 
+#include "ControlFlow.h"
 #include "Debug.h"
+#include "DexClass.h"
+#include "IRCode.h"
 #include "Macros.h"
 #include "Show.h"
-
-#if !IS_WINDOWS
-struct TraceContextAccess {
-  static const TraceContext* get_s_context() { return TraceContext::s_context; }
-};
-#endif
+#include "TraceContextAccess.h"
 
 namespace {
 

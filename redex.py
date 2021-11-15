@@ -88,6 +88,14 @@ def dbg_prefix(dbg: str, src_root: typing.Optional[str] = None) -> typing.List[s
         elif dbg == "lldb":
             cmd += ["-o", f'settings set target.source-map "." {quote(src_root)}']
 
+            # This makes assumptions about buck-out... I couldn't find an easy
+            # way to just get the config file beside this script...
+            dir_name = dirname(abspath(__file__))
+            dir_name = dirname(dir_name)
+            lldbinit_file = dir_name + "/.lldbinit/.lldbinit"
+            if isfile(lldbinit_file):
+                cmd += ["-o", f"command source {quote(lldbinit_file)}"]
+
     DBG_END = {"gdb": "--args", "lldb": "--"}
     cmd.append(DBG_END[dbg])
 

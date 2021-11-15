@@ -89,6 +89,7 @@ libredex_la_SOURCES = \
 	libredex/InitCollisionFinder.cpp \
 	libredex/InlinerConfig.cpp \
 	libredex/InstructionLowering.cpp \
+	libredex/InteractiveDebugging.cpp \
 	libredex/IODIMetadata.cpp \
 	libredex/IRAssembler.cpp \
 	libredex/IRCode.cpp \

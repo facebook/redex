@@ -226,6 +226,7 @@ class TraceContext {
 
 #if !IS_WINDOWS
   const std::string& get_string_value() const;
+  const DexMethodRef* get_dex_method_ref() const { return this->method; }
 #endif
 
  private:
