@@ -7,9 +7,12 @@
 
 #pragma once
 
-#include "Trace.h"
+#include "Macros.h"
 
 #if !IS_WINDOWS
+
+#include "Trace.h"
+
 struct TraceContextAccess {
   static const TraceContext* get_s_context() { return TraceContext::s_context; }
 };

@@ -7,11 +7,13 @@
 
 #pragma once
 
+#include "Macros.h"
+
+#if !defined(NDEBUG) && !IS_WINDOWS
+
 #include "ControlFlow.h"
 #include "DexClass.h"
 #include "IRCode.h"
-
-#if !defined(NDEBUG) && !IS_WINDOWS
 
 // The following APIs are intended to be called from the debugger (athough
 // there's no harm calling them from internal code if desired).
