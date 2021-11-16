@@ -60,8 +60,6 @@
 
 namespace {
 
-constexpr bool kDebugForceInstrumentMode = false;
-
 using hash_t = std::size_t;
 
 static bool is_branch_or_goto(const cfg::Edge* edge) {
@@ -239,11 +237,11 @@ class DedupBlocksImpl {
         check_inits(cfg);
       }
       record_stats(dups);
-      bool res = deduplicate(dups, cfg);
+      deduplicate(dups, cfg);
       if (m_config->debug) {
         check_inits(cfg);
       }
-      return res;
+      return true;
     }
 
     return false;
@@ -310,7 +308,7 @@ class DedupBlocksImpl {
     Duplicates duplicates;
 
     for (cfg::Block* block : blocks) {
-      if (is_eligible(block, cfg)) {
+      if (is_eligible(block)) {
         // Find a group that matches this one. The key equality function of this
         // map is actually a check that they are duplicates, not that they're
         // the same block.
@@ -338,45 +336,9 @@ class DedupBlocksImpl {
     return duplicates;
   }
 
-  static size_t remove_instructions(cfg::Block* block,
-                                    const cfg::ControlFlowGraph& cfg) {
-    size_t cnt{0};
-
-    auto it = block->begin();
-    while (it != block->end()) {
-      auto cur_it = it;
-      ++it;
-
-      switch (cur_it->type) {
-      // Remove.
-      case MFLOW_OPCODE: {
-        block->remove_mie(cur_it);
-        ++cnt;
-      } break;
-
-      // Keep.
-      case MFLOW_SOURCE_BLOCK:
-      case MFLOW_POSITION:
-      case MFLOW_DEBUG:
-        break;
-
-      // Shouldn't be here.
-      case MFLOW_TARGET:
-      case MFLOW_CATCH:
-      case MFLOW_TRY:
-      case MFLOW_DEX_OPCODE:
-      case MFLOW_FALLTHROUGH:
-        always_assert_log(false, "Found unsupported mie %s\n%s", SHOW(*cur_it),
-                          SHOW(cfg));
-      }
-    }
-
-    return cnt;
-  }
-
   // remove all but one of a duplicate set. Reroute the predecessors to the
   // canonical block
-  bool deduplicate(const Duplicates& dups, cfg::ControlFlowGraph& cfg) {
+  void deduplicate(const Duplicates& dups, cfg::ControlFlowGraph& cfg) {
     // Copy the BlockSets into a vector so that we're not reading the map while
     // editing the CFG.
     std::vector<BlockSet> order;
@@ -384,81 +346,24 @@ class DedupBlocksImpl {
       order.push_back(entry->second);
     }
 
-    size_t cnt{0}; // Removed blocks.
+    // Replace duplicated blocks with the "canon" (block with lowest ID).
+    std::vector<std::pair<cfg::Block*, cfg::Block*>> blocks_to_replace;
+    for (const BlockSet& group : order) {
+      // canon is block with lowest id.
+      cfg::Block* canon = *group.begin();
 
-    if (g_redex->instrument_mode || kDebugForceInstrumentMode) {
-      for (const BlockSet& group : order) {
-        // canon is block with lowest id.
-        cfg::Block* canon = *group.begin();
-
-        for (cfg::Block* block : group) {
-          if (block == canon) {
-            continue;
-          }
-
+      for (cfg::Block* block : group) {
+        if (block != canon) {
           always_assert(canon->id() < block->id());
 
-          // If there is an incoming exception edge, forwarding does *not*
-          // work. This should have been filtered before.
-          auto exc_check_fn = [&]() {
-            if (cfg.get_pred_edge_of_type(block, cfg::EdgeType::EDGE_THROW) ==
-                nullptr) {
-              return true;
-            }
-            auto it = block->get_first_insn();
-            if (it == block->end()) {
-              return true;
-            }
-            return !opcode::is_move_exception(it->insn->opcode());
-          };
-          redex_assert(exc_check_fn());
-
-          // Don't remove directly. Just remove everything but source blocks
-          // and dex positions. Then remove all outgoing edges and make a goto
-          // to the replacement.
-          //
-          // This will overcount source blocks, and not deal correctly with
-          // exceptions.
-          //
-          // TODO: Consider splitting all in-edges of the canonical block and
-          //       adding its source blocks there. This will still not deal
-          //       correctly with exception edges, but fix counting.
-
-          cfg.delete_edges(block->succs().begin(), block->succs().end());
-
-          // Undercounts branch instructions.
-          m_stats.insns_removed += remove_instructions(block, cfg);
-
-          cfg.add_edge(block, canon, cfg::EDGE_GOTO);
-
-          ++cnt;
+          blocks_to_replace.emplace_back(block, canon);
+          ++m_stats.blocks_removed;
         }
       }
-      cfg.simplify();
-    } else {
-      // Replace duplicated blocks with the "canon" (block with lowest ID).
-      std::vector<std::pair<cfg::Block*, cfg::Block*>> blocks_to_replace;
-      for (const BlockSet& group : order) {
-        // canon is block with lowest id.
-        cfg::Block* canon = *group.begin();
-
-        for (cfg::Block* block : group) {
-          if (block != canon) {
-            always_assert(canon->id() < block->id());
-
-            blocks_to_replace.emplace_back(block, canon);
-            ++cnt;
-          }
-        }
-      }
-
-      // Note that replace_blocks also fixes any arising dangling parents.
-      m_stats.insns_removed += cfg.replace_blocks(blocks_to_replace);
     }
 
-    m_stats.blocks_removed += cnt;
-
-    return cnt > 0;
+    // Note that replace_blocks also fixes any arising dangling parents.
+    m_stats.insns_removed += cfg.replace_blocks(blocks_to_replace);
   }
 
   // The algorithm below identifies the best groups of blocks that share the
@@ -758,7 +663,7 @@ class DedupBlocksImpl {
     }
   }
 
-  bool is_eligible(cfg::Block* block, cfg::ControlFlowGraph& cfg) {
+  bool is_eligible(cfg::Block* block) {
     // We can't split up move-result(-pseudo) instruction pairs
     if (begins_with_move_result(block)) {
       return false;
@@ -767,25 +672,6 @@ class DedupBlocksImpl {
     // For debugability, we don't want to dedup blocks that end with a throw
     if (!m_config->dedup_throws && ends_with_throw(block)) {
       return false;
-    }
-
-    // Empty blocks are possibly necessary for profiling markers, or will
-    // be cleaned up by CFG deconstruction.
-    if ((g_redex->instrument_mode || kDebugForceInstrumentMode) &&
-        block->get_first_insn() == block->end()) {
-      return false;
-    }
-
-    // When instrumenting, do not deduplicate catch handler head blocks. If the
-    // handlers are similar, splitting should make this a minimal block of
-    // `move-exception` + `goto`.
-    if ((g_redex->instrument_mode || kDebugForceInstrumentMode) &&
-        cfg.get_pred_edge_of_type(block, cfg::EdgeType::EDGE_THROW)) {
-      auto first = block->get_first_insn();
-      if (first != block->end() &&
-          opcode::is_move_exception(first->insn->opcode())) {
-        return false;
-      }
     }
 
     // TODO: It's not worth the goto to merge return-only blocks. What size is
