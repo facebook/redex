@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "Macros.h"
+
 #if !defined(NDEBUG) && !IS_WINDOWS
 
 #include "InteractiveDebugging.h"
