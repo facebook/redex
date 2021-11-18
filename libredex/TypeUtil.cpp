@@ -501,4 +501,12 @@ boost::optional<int32_t> evaluate_type_check(const DexType* src_type,
   return boost::none;
 }
 
+bool is_kotlin_lambda(const DexClass* cls) {
+  DexType* kotlin_type = DexType::make_type("Lkotlin/jvm/internal/Lambda;");
+  if (cls->get_super_class() == kotlin_type) {
+    return true;
+  }
+  return false;
+}
+
 }; // namespace type

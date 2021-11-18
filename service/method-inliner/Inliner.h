@@ -565,6 +565,7 @@ class MultiMethodInliner {
     int critical_path_length{0};
 
     // statistics that may be incremented concurrently
+    std::atomic<size_t> kotlin_lambda_inlined{0};
     std::atomic<size_t> calls_inlined{0};
     std::atomic<size_t> init_classes{0};
     std::atomic<size_t> calls_not_inlinable{0};

@@ -822,6 +822,8 @@ void run_inliner(DexStoresVector& stores,
   mgr.incr_metric("inlined_init_count", inlined_init_count);
   mgr.incr_metric("init_classes", inliner.get_info().init_classes);
   mgr.incr_metric("calls_inlined", inliner.get_info().calls_inlined);
+  mgr.incr_metric("kotlin_lambda_inlined",
+                  inliner.get_info().kotlin_lambda_inlined);
   mgr.incr_metric("calls_not_inlinable",
                   inliner.get_info().calls_not_inlinable);
   mgr.incr_metric("no_returns", inliner.get_info().no_returns);

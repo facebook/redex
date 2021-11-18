@@ -763,6 +763,9 @@ void MultiMethodInliner::inline_inlinables(
     }
 
     inlined_callees.push_back(callee_method);
+    if (type::is_kotlin_lambda(type_class(callee_method->get_class()))) {
+      info.kotlin_lambda_inlined++;
+    }
   }
 
   if (!inlined_callees.empty()) {

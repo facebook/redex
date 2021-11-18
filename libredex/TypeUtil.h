@@ -223,4 +223,9 @@ bool is_uninstantiable_class(DexType* type);
 boost::optional<int32_t> evaluate_type_check(const DexType* src_type,
                                              const DexType* test_type);
 
+/**
+ * Return true if the cls is derived from Kotlin lambda.
+ */
+bool is_kotlin_lambda(const DexClass* cls);
+
 }; // namespace type
