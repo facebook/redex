@@ -123,7 +123,7 @@ InterfaceMap build_interface_map(const ClassHierarchy& hierarchy) {
   for (const auto& cls_it : hierarchy) {
     const auto cls = type_class(cls_it.first);
     if (cls == nullptr) continue;
-    if (is_interface(cls)) continue;
+    if (!is_interface(cls)) continue;
     TypeSet implementors;
     get_all_children(hierarchy, cls->get_type(), implementors);
     implementors.insert(cls->get_type());
