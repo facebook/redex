@@ -68,9 +68,11 @@ InterDexGroupingType get_merge_per_interdex_type(
     const std::string& merge_per_interdex_set) {
 
   const static std::unordered_map<std::string, InterDexGroupingType>
-      string_to_grouping = {{"disabled", InterDexGroupingType::DISABLED},
-                            {"non-hot-set", InterDexGroupingType::NON_HOT_SET},
-                            {"full", InterDexGroupingType::FULL}};
+      string_to_grouping = {
+          {"disabled", InterDexGroupingType::DISABLED},
+          {"non-hot-set", InterDexGroupingType::NON_HOT_SET},
+          {"non-ordered-set", InterDexGroupingType::NON_ORDERED_SET},
+          {"full", InterDexGroupingType::FULL}};
 
   always_assert_log(string_to_grouping.count(merge_per_interdex_set) > 0,
                     "InterDex Grouping Type %s not found. Please check the list"
