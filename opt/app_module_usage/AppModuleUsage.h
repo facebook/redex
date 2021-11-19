@@ -67,8 +67,8 @@ class AppModuleUsagePass : public Pass {
  private:
   void load_allow_list(DexStoresVector&,
                        const std::unordered_map<std::string, DexStore*>&);
-  void analyze_direct_app_module_usage(const Scope&);
-  void analyze_reflective_app_module_usage(const Scope&);
+  void analyze_direct_app_module_usage(const Scope&, const std::string&);
+  void analyze_reflective_app_module_usage(const Scope&, const std::string&);
   // Outputs report of violations, returns the number of violations
   size_t generate_report(const Scope&, const std::string&, PassManager&);
   // returns true if the given entrypoint name is allowed to use the given store

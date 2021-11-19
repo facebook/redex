@@ -33,6 +33,8 @@ constexpr const char* APP_MODULE_COUNT_OUTPUT_FILENAME =
     "redex-app-module-count.csv";
 constexpr const char* USES_AM_ANNO_VIOLATIONS_FILENAME =
     "redex-app-module-annotation-violations.csv";
+constexpr const char* SUPER_VERBOSE_DETIALS_FILENAME =
+    "redex-app-module-verbose-details.txt";
 // @UsesAppModule DexType descriptor
 // returns potential type for an AbstractObject
 boost::optional<DexType*> type_used(const reflection::AbstractObject& o) {
@@ -132,10 +134,13 @@ void AppModuleUsagePass::run_pass(DexStoresVector& stores,
 
   load_allow_list(stores, name_store_map);
 
-  analyze_direct_app_module_usage(full_scope);
+  auto verbose_path = conf.metafile(SUPER_VERBOSE_DETIALS_FILENAME);
+
+  analyze_direct_app_module_usage(full_scope, verbose_path);
   TRACE(APP_MOD_USE, 4, "*** Direct analysis done\n");
-  analyze_reflective_app_module_usage(full_scope);
+  analyze_reflective_app_module_usage(full_scope, verbose_path);
   TRACE(APP_MOD_USE, 4, "*** Reflective analysis done\n");
+  TRACE(APP_MOD_USE, 2, "See %s for full details.\n", verbose_path.c_str());
 
   auto report_path = conf.metafile(USES_AM_ANNO_VIOLATIONS_FILENAME);
   auto module_use_path = conf.metafile(APP_MODULE_USAGE_OUTPUT_FILENAME);
@@ -248,7 +253,9 @@ void AppModuleUsagePass::load_allow_list(
   }
 }
 
-void AppModuleUsagePass::analyze_direct_app_module_usage(const Scope& scope) {
+void AppModuleUsagePass::analyze_direct_app_module_usage(
+    const Scope& scope, const std::string& path) {
+  std::ofstream ofs(path, std::ofstream::out | std::ofstream::trunc);
   walk::parallel::opcodes(scope, [&](DexMethod* method, IRInstruction* insn) {
     std::unordered_set<DexType*> types_referenced;
     auto method_class = method->get_class();
@@ -283,6 +290,9 @@ void AppModuleUsagePass::analyze_direct_app_module_usage(const Scope& scope) {
                                       count.direct_count =
                                           count.direct_count + 1;
                                     });
+          ofs << SHOW(method) << " from module \"" << method_store->get_name()
+              << "\" references app module \"" << store->get_name()
+              << "\" by using the class \"" << type->str() << "\"\n";
         }
       }
     }
@@ -290,7 +300,8 @@ void AppModuleUsagePass::analyze_direct_app_module_usage(const Scope& scope) {
 }
 
 void AppModuleUsagePass::analyze_reflective_app_module_usage(
-    const Scope& scope) {
+    const Scope& scope, const std::string& path) {
+  std::ofstream ofs(path, std::ofstream::out | std::ofstream::trunc);
   // Reflective Reference
   reflection::MetadataCache refl_metadata_cache;
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
@@ -342,6 +353,11 @@ void AppModuleUsagePass::analyze_reflective_app_module_usage(
                                       count.reflective_count =
                                           count.reflective_count + 1;
                                     });
+
+          ofs << SHOW(method) << " from module \"" << method_store->get_name()
+              << "\" *reflectively* references app module \""
+              << store->get_name() << "\" by using the class \""
+              << type.get()->str() << "\"\n";
         }
       }
     }
