@@ -228,4 +228,9 @@ boost::optional<int32_t> evaluate_type_check(const DexType* src_type,
  */
 bool is_kotlin_lambda(const DexClass* cls);
 
+/*
+ * Return true if the cls is kotlin non capturing lambda.
+ */
+bool is_kotlin_non_capturing_lambda(const DexClass* cls);
+
 }; // namespace type

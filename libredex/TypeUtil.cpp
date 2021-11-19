@@ -509,4 +509,16 @@ bool is_kotlin_lambda(const DexClass* cls) {
   return false;
 }
 
+bool is_kotlin_non_capturing_lambda(const DexClass* cls) {
+  if (!is_kotlin_lambda(cls)) {
+    return false;
+  }
+
+  if (cls->get_ifields().empty()) {
+    return true;
+  }
+
+  return false;
+}
+
 }; // namespace type

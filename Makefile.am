@@ -246,6 +246,7 @@ libredex_la_SOURCES = \
 	service/type-analysis/WholeProgramState.cpp \
 	service/type-analysis/TypeAnalysisTransform.cpp \
 	service/type-analysis/TypeAnalysisRuntimeAssert.cpp \
+	service/type-analysis/ResolveMethodRefs.cpp \
 	service/type-string-rewriter/TypeStringRewriter.cpp \
 	shared/DexDefs.cpp \
 	shared/DexEncoding.cpp \
