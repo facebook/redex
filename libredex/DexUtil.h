@@ -73,6 +73,7 @@ VisibilityChanges get_visibility_changes(
  *       new type.
  */
 void relocate_method(DexMethod* method, DexType* to_type);
+void relocate_field(DexField* field, DexType* to_type);
 
 /**
  * Checks if a method can be relocated, i.e. if it doesn't require any changes

@@ -320,6 +320,7 @@ libopt_la_SOURCES = \
 	opt/interdex/InterDex.cpp \
 	opt/interdex/InterDexPass.cpp \
 	opt/kotlin-lambda/RewriteKotlinSingletonInstance.cpp \
+	opt/kotlin-lambda/KotlinObjectInliner.cpp \
 	opt/layout-reachability/LayoutReachabilityPass.cpp \
 	opt/local-dce/LocalDcePass.cpp \
 	opt/merge_interface/MergeInterface.cpp \

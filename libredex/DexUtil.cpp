@@ -248,6 +248,17 @@ void create_store(const std::string& store_name,
   stores.emplace_back(std::move(store));
 }
 
+void relocate_field(DexField* field, DexType* to_type) {
+  // change_visibility(field, to_type);
+  auto from_cls = type_class(field->get_class());
+  auto to_cls = type_class(to_type);
+  from_cls->remove_field(field);
+  DexFieldSpec spec;
+  spec.cls = to_type;
+  field->change(spec, true /* rename on collision */);
+  to_cls->add_field(field);
+}
+
 void relocate_method(DexMethod* method, DexType* to_type) {
   change_visibility(method, to_type);
   auto from_cls = type_class(method->get_class());
