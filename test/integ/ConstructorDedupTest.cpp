@@ -22,7 +22,7 @@ TEST_F(ConstructorDedupTest, dedup) {
   std::vector<DexClass*> scope({cls});
   auto ctors = cls->get_ctors();
   auto dedupped = method_dedup::dedup_constructors(scope, scope);
-  EXPECT_EQ(dedupped, 2);
+  EXPECT_EQ(dedupped, 6);
   walk::parallel::methods(scope, [&](DexMethod* method) {
     IRTypeChecker checker(method);
     checker.run();
@@ -33,17 +33,30 @@ TEST_F(ConstructorDedupTest, dedup) {
       fprintf(stderr, "Code:\n%s\n", SHOW(method->get_code()->cfg()));
       exit(EXIT_FAILURE);
     }
-    if (method->str() != "dedup_0") {
+    auto method_name = method->str();
+    if (method_name.find("dedup_") == std::string::npos) {
       return;
     }
-    // All the constructor invocations are calling ctors[0].
+    DexMethod* ctor{nullptr};
+    if (method_name == "dedup_0") {
+      // All the constructor invocations are calling ctors[0].
+      ctor = ctors[0];
+    } else if (method_name == "dedup_1") {
+      // All the constructor invocations are calling ctors[1] - the proto also
+      // contains additional integer parameters to address collisions
+      ctor = ctors[1];
+    } else {
+      // All the constructor invocations are calling ctors[2].
+      ctor = ctors[2];
+    }
+
     for (auto& mie : InstructionIterable(method->get_code())) {
       auto insn = mie.insn;
       if (insn->has_method()) {
         auto callee = insn->get_method();
         if (callee->get_class() == type && method::is_init(callee)) {
           // Only one constructor is used.
-          EXPECT_EQ(callee, ctors[0]);
+          EXPECT_EQ(callee, ctor);
         }
       }
     }

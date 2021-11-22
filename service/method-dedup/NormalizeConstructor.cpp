@@ -14,6 +14,7 @@
 #include "ScopedCFG.h"
 #include "Show.h"
 #include "Trace.h"
+#include "TypeReference.h"
 #include "Walkers.h"
 
 namespace {
@@ -361,13 +362,19 @@ DexProto* generalize_proto(const std::vector<DexType*>& normalized_typelist,
  * to other constructors', so its proto may need a change. The change should
  * happen at the end to avoid invalidating the key of the method set, so a new
  * proto record is needed for pending changes and method collision checking.
+ * If no representative is found due to proto collisions, then we pick the first
+ * method in the cluster as a representative and the generalized (colliding)
+ * protos will be updated after deduplication - the collision will be fixed by
+ * adding an unsued integer parameter at the end.
  */
 DexMethod* get_representative(
     const CtorSummaries& methods,
     const std::vector<DexField*>& fields,
     const DexMethodRef* super_ctor,
-    std::unordered_set<DexProto*>* pending_new_protos,
-    std::unordered_map<DexMethodRef*, DexProto*>* global_pending_ctor_changes) {
+    std::unordered_set<DexProto*>& pending_new_protos,
+    std::unordered_map<DexMethod*, DexProto*>& global_pending_ctor_changes,
+    std::unordered_map<DexMethod*, DexProto*>&
+        pending_colliding_constructors_changes) {
   std::vector<DexType*> normalized_typelist;
   auto super_ctor_args = super_ctor->get_proto()->get_args();
   normalized_typelist.reserve(fields.size() + super_ctor_args->size());
@@ -378,15 +385,24 @@ DexMethod* get_representative(
                              super_ctor_args->begin(),
                              super_ctor_args->end());
 
+  DexProto* generalized_proto_for_collision{nullptr};
+  DexMethod* representative_for_collision{nullptr};
   for (auto& pair : methods) {
     auto method = pair.first;
     auto& summary = pair.second;
     auto new_proto =
         generalize_proto(normalized_typelist, *summary, method->get_proto());
+    if (representative_for_collision == nullptr) {
+      // Store representative and proto generalisation to use
+      // if no representative can be found
+      representative_for_collision = method;
+      generalized_proto_for_collision = new_proto;
+    }
+
     if (new_proto == method->get_proto()) {
       return method;
     }
-    if (pending_new_protos->count(new_proto)) {
+    if (pending_new_protos.count(new_proto)) {
       // The proto is pending for another constructor on this class.
       continue;
     }
@@ -396,13 +412,20 @@ DexMethod* get_representative(
       // spec of the `method` to the new.
       continue;
     }
-    pending_new_protos->insert(new_proto);
-    if (new_proto != method->get_proto()) {
-      (*global_pending_ctor_changes)[method] = new_proto;
-    }
+    pending_new_protos.insert(new_proto);
+    global_pending_ctor_changes[method] = new_proto;
     return method;
   }
-  return nullptr;
+
+  // If no representative has been found due to proto collisions use the first
+  // method in the cluster as representative, generalise it using the new proto
+  // and fix collisions later on
+  pending_colliding_constructors_changes.insert(
+      {representative_for_collision, generalized_proto_for_collision});
+  pending_new_protos.insert(generalized_proto_for_collision);
+  global_pending_ctor_changes[representative_for_collision] =
+      generalized_proto_for_collision;
+  return representative_for_collision;
 }
 
 /**
@@ -454,7 +477,9 @@ uint32_t dedup_constructors(const std::vector<DexClass*>& classes,
   std::unordered_map<DexMethod*, DexMethod*> old_to_new;
   CtorSummaries methods_summaries;
   std::unordered_set<DexMethod*> ctor_set;
-  std::unordered_map<DexMethodRef*, DexProto*> global_pending_ctor_changes;
+  std::unordered_map<DexMethod*, DexProto*> global_pending_ctor_changes;
+  std::unordered_map<DexMethod*, DexProto*>
+      pending_colliding_constructors_changes;
   walk::classes(classes, [&](DexClass* cls) {
     auto ctors = cls->get_ctors();
     if (ctors.size() < 2) {
@@ -484,17 +509,20 @@ uint32_t dedup_constructors(const std::vector<DexClass*>& classes,
         }
         // The methods in this group are logically the same, we can use one to
         // represent others with proper transformation.
-        auto representative = get_representative(
-            cluster, cls->get_ifields(), pair.first, &pending_new_protos,
-            &global_pending_ctor_changes);
+        auto representative =
+            get_representative(cluster, cls->get_ifields(), pair.first,
+                               pending_new_protos, global_pending_ctor_changes,
+                               pending_colliding_constructors_changes);
         if (!representative) {
           TRACE(METH_DEDUP,
                 2,
-                "%zu constructors in %s are the same but not deduplicated.",
+                "%zu constructors in %s are in same cluster but not "
+                "deduplicated.",
                 cluster.size(),
                 SHOW(cls->get_type()));
           continue;
         }
+
         methods_summaries.insert(cluster.begin(), cluster.end());
 
         auto& representative_summary = cluster[representative];
@@ -507,6 +535,12 @@ uint32_t dedup_constructors(const std::vector<DexClass*>& classes,
             // by the representative
             old_to_new[old_ctor] = representative;
             ctor_set.insert(old_ctor);
+          } else {
+            TRACE(METH_DEDUP, 2,
+                  "Could not replace %s with %s due to different summaries: "
+                  "%s\n%s\n",
+                  SHOW(old_ctor), SHOW(representative),
+                  SHOW(old_ctor->get_code()), SHOW(representative->get_code()));
           }
         }
       }
@@ -531,8 +565,18 @@ uint32_t dedup_constructors(const std::vector<DexClass*>& classes,
     auto method = pair.first;
     DexMethodSpec spec;
     spec.proto = pair.second;
+    if (pending_colliding_constructors_changes.count(method) != 0) {
+      continue;
+    }
     method->change(spec, /* rename_on_collision */ false);
   }
+
+  // Change colliding prototypes by adding additiona (unused) parameters
+  std::vector<std::pair<DexMethod*, DexProto*>> colliding_methods(
+      pending_colliding_constructors_changes.begin(),
+      pending_colliding_constructors_changes.end());
+  type_reference::fix_colliding_dmethods(scope, colliding_methods);
+
   TRACE(METH_DEDUP, 2, "normalized-deduped constructors %zu",
         old_to_new.size());
   return old_to_new.size();

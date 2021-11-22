@@ -108,4 +108,7 @@ void update_field_type_references(
     const Scope& scope,
     const std::unordered_map<const DexType*, DexType*>& old_to_new);
 
+void fix_colliding_dmethods(
+    const Scope& scope,
+    const std::vector<std::pair<DexMethod*, DexProto*>>& colliding_methods);
 } // namespace type_reference

@@ -14,86 +14,6 @@
 #include "Walkers.h"
 
 namespace {
-
-void fix_colliding_dmethods(
-    const Scope& scope,
-    const std::vector<std::pair<DexMethod*, DexProto*>>& colliding_methods) {
-  if (colliding_methods.empty()) {
-    return;
-  }
-  // Fix colliding methods by appending an additional param.
-  TRACE(REFU, 9, "sig: colliding_methods %zu", colliding_methods.size());
-  std::unordered_map<DexMethod*, size_t> num_additional_args;
-  for (auto it : colliding_methods) {
-    auto meth = it.first;
-    auto new_proto = it.second;
-    auto new_arg_list = new_proto->get_args()->push_back(type::_int());
-    new_proto = DexProto::make_proto(new_proto->get_rtype(), new_arg_list);
-    size_t arg_count = 1;
-    while (DexMethod::get_method(
-               meth->get_class(), meth->get_name(), new_proto) != nullptr) {
-      new_arg_list = new_proto->get_args()->push_back(type::_int());
-      new_proto = DexProto::make_proto(new_proto->get_rtype(), new_arg_list);
-      ++arg_count;
-    }
-
-    DexMethodSpec spec;
-    spec.proto = new_proto;
-    meth->change(spec, false /* rename on collision */);
-    num_additional_args[meth] = arg_count;
-
-    auto code = meth->get_code();
-    for (size_t i = 0; i < arg_count; ++i) {
-      auto new_param_reg = code->allocate_temp();
-      auto params = code->get_param_instructions();
-      auto new_param_load = new IRInstruction(IOPCODE_LOAD_PARAM);
-      new_param_load->set_dest(new_param_reg);
-      code->insert_before(params.end(), new_param_load);
-    }
-    TRACE(REFU,
-          9,
-          "sig: patching colliding method %s with %zu additional args",
-          SHOW(meth),
-          arg_count);
-  }
-
-  walk::parallel::code(scope, [&](DexMethod* meth, IRCode& code) {
-    method_reference::CallSites callsites;
-    for (auto& mie : InstructionIterable(code)) {
-      auto insn = mie.insn;
-      if (!insn->has_method()) {
-        continue;
-      }
-      const auto callee = resolve_method(
-          insn->get_method(),
-          opcode_to_search(const_cast<IRInstruction*>(insn)), meth);
-      if (callee == nullptr ||
-          num_additional_args.find(callee) == num_additional_args.end()) {
-        continue;
-      }
-      callsites.emplace_back(meth, &mie, callee);
-    }
-
-    for (const auto& callsite : callsites) {
-      auto callee = callsite.callee;
-      always_assert(callee != nullptr);
-      TRACE(REFU,
-            9,
-            "sig: patching colliding method callsite to %s in %s",
-            SHOW(callee),
-            SHOW(meth));
-      // 42 is a dummy int val as the additional argument to the patched
-      // colliding method.
-      std::vector<uint32_t> additional_args;
-      for (size_t i = 0; i < num_additional_args.at(callee); ++i) {
-        additional_args.push_back(42);
-      }
-      method_reference::NewCallee new_callee(callee, additional_args);
-      method_reference::patch_callsite(callsite, new_callee);
-    }
-  });
-}
-
 /**
  * The old types should all have definitions so that it's unlikely that we are
  * trying to update a virtual method that may override any external virtual
@@ -612,6 +532,85 @@ void update_field_type_references(
             "ReBindRefsPass is enabled before ClassMergingPass\n",
             SHOW(insn));
       }
+    }
+  });
+}
+
+void fix_colliding_dmethods(
+    const Scope& scope,
+    const std::vector<std::pair<DexMethod*, DexProto*>>& colliding_methods) {
+  if (colliding_methods.empty()) {
+    return;
+  }
+  // Fix colliding methods by appending an additional param.
+  TRACE(REFU, 9, "sig: colliding_methods %zu", colliding_methods.size());
+  std::unordered_map<DexMethod*, size_t> num_additional_args;
+  for (auto it : colliding_methods) {
+    auto meth = it.first;
+    auto new_proto = it.second;
+    auto new_arg_list = new_proto->get_args()->push_back(type::_int());
+    new_proto = DexProto::make_proto(new_proto->get_rtype(), new_arg_list);
+    size_t arg_count = 1;
+    while (DexMethod::get_method(
+               meth->get_class(), meth->get_name(), new_proto) != nullptr) {
+      new_arg_list = new_proto->get_args()->push_back(type::_int());
+      new_proto = DexProto::make_proto(new_proto->get_rtype(), new_arg_list);
+      ++arg_count;
+    }
+
+    DexMethodSpec spec;
+    spec.proto = new_proto;
+    meth->change(spec, false /* rename on collision */);
+    num_additional_args[meth] = arg_count;
+
+    auto code = meth->get_code();
+    for (size_t i = 0; i < arg_count; ++i) {
+      auto new_param_reg = code->allocate_temp();
+      auto params = code->get_param_instructions();
+      auto new_param_load = new IRInstruction(IOPCODE_LOAD_PARAM);
+      new_param_load->set_dest(new_param_reg);
+      code->insert_before(params.end(), new_param_load);
+    }
+    TRACE(REFU,
+          9,
+          "sig: patching colliding method %s with %zu additional args",
+          SHOW(meth),
+          arg_count);
+  }
+
+  walk::parallel::code(scope, [&](DexMethod* meth, IRCode& code) {
+    method_reference::CallSites callsites;
+    for (auto& mie : InstructionIterable(code)) {
+      auto insn = mie.insn;
+      if (!insn->has_method()) {
+        continue;
+      }
+      const auto callee = resolve_method(
+          insn->get_method(),
+          opcode_to_search(const_cast<IRInstruction*>(insn)), meth);
+      if (callee == nullptr ||
+          num_additional_args.find(callee) == num_additional_args.end()) {
+        continue;
+      }
+      callsites.emplace_back(meth, &mie, callee);
+    }
+
+    for (const auto& callsite : callsites) {
+      auto callee = callsite.callee;
+      always_assert(callee != nullptr);
+      TRACE(REFU,
+            9,
+            "sig: patching colliding method callsite to %s in %s",
+            SHOW(callee),
+            SHOW(meth));
+      // 42 is a dummy int val as the additional argument to the patched
+      // colliding method.
+      std::vector<uint32_t> additional_args;
+      for (size_t i = 0; i < num_additional_args.at(callee); ++i) {
+        additional_args.push_back(42);
+      }
+      method_reference::NewCallee new_callee(callee, additional_args);
+      method_reference::patch_callsite(callsite, new_callee);
     }
   });
 }
