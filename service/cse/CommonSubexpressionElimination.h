@@ -80,7 +80,6 @@ class SharedState {
       DexType* exact_virtual_scope,
       const CseUnorderedLocationSet& read_locations);
   void log_barrier(const Barrier& barrier);
-  bool has_potential_unboxing_method(const IRInstruction* insn) const;
   bool has_pure_method(const IRInstruction* insn) const;
   bool is_finalish(const DexField* field) const;
   void cleanup();
@@ -94,16 +93,6 @@ class SharedState {
   const method_override_graph::Graph* get_method_override_graph() const;
   const std::unordered_set<const DexField*>& get_finalizable_fields() const {
     return m_finalizable_fields;
-  }
-
-  const std::unordered_map<const DexMethodRef*, const DexMethodRef*>&
-  get_boxing_map() const {
-    return m_boxing_map;
-  }
-
-  const std::unordered_map<const DexMethodRef*, const DexMethodRef*>&
-  get_abstract_map() const {
-    return m_abstract_map;
   }
 
  private:
@@ -128,10 +117,6 @@ class SharedState {
       m_conditionally_pure_methods;
   std::unique_ptr<const method_override_graph::Graph> m_method_override_graph;
   SharedStateStats m_stats;
-  // boxing to unboxing mapping
-  std::unordered_map<const DexMethodRef*, const DexMethodRef*> m_boxing_map;
-  // unboxing to its abstract mapping
-  std::unordered_map<const DexMethodRef*, const DexMethodRef*> m_abstract_map;
 };
 
 class CommonSubexpressionElimination {
@@ -167,9 +152,6 @@ class CommonSubexpressionElimination {
   bool m_is_static;
   DexType* m_declaring_type;
   DexTypeList* m_args;
-
-  std::vector<IRInstruction*> m_unboxing;
-  std::unordered_map<const DexMethodRef*, const DexMethodRef*> m_abs_map;
 
   void insert_runtime_assertions(
       const std::vector<std::pair<Forward, IRInstruction*>>& to_check);

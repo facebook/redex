@@ -184,14 +184,6 @@ DexType* make_array_type(const DexType* type, uint32_t level);
 DexType* get_boxed_reference_type(const DexType* type);
 
 DexMethodRef* get_unboxing_method_for_type(const DexType* type);
-
-/* Takes a reference type, returns the Number(i.e. abstract) method of its
- * corresponding unboxing method. Notes: this is only used for detecting
- * boxing/unboxing pattern in CSE. Once we can resolve Ljava/lang/Number;.* to
- * its proper impls in each callsite, this function can be removed.
- */
-DexMethodRef* get_Number_unboxing_method_for_type(const DexType* type);
-
 DexMethodRef* get_value_of_method_for_type(const DexType* type);
 
 /**

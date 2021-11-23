@@ -354,27 +354,6 @@ DexMethodRef* get_unboxing_method_for_type(const DexType* type) {
   return nullptr;
 }
 
-DexMethodRef* get_Number_unboxing_method_for_type(const DexType* type) {
-  if (type == type::java_lang_Boolean()) {
-    return DexMethod::make_method("Ljava/lang/Number;.booleanValue:()Z");
-  } else if (type == type::java_lang_Byte()) {
-    return DexMethod::make_method("Ljava/lang/Number;.byteValue:()B");
-  } else if (type == type::java_lang_Short()) {
-    return DexMethod::make_method("Ljava/lang/Number;.shortValue:()S");
-  } else if (type == type::java_lang_Character()) {
-    return DexMethod::make_method("Ljava/lang/Number;.charValue:()C");
-  } else if (type == type::java_lang_Integer()) {
-    return DexMethod::make_method("Ljava/lang/Number;.intValue:()I");
-  } else if (type == type::java_lang_Long()) {
-    return DexMethod::make_method("Ljava/lang/Number;.longValue:()J");
-  } else if (type == type::java_lang_Float()) {
-    return DexMethod::make_method("Ljava/lang/Number;.floatValue:()F");
-  } else if (type == type::java_lang_Double()) {
-    return DexMethod::make_method("Ljava/lang/Number;.doubleValue:()D");
-  }
-  return nullptr;
-}
-
 // Take a reference type, returns its valueOf function
 DexMethodRef* get_value_of_method_for_type(const DexType* type) {
   if (type == type::java_lang_Boolean()) {

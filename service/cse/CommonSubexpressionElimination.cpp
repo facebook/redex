@@ -98,10 +98,6 @@ const IROpcode IOPCODE_PRE_STATE_SRC = IROpcode(0xFFFF);
 // Marker opcode for positional values that must not be moved.
 const IROpcode IOPCODE_POSITIONAL = IROpcode(0xFFFE);
 
-// This is only used for an INVOKE-VIRTUAL insn. Marker opocode for a potential
-// unboxing value.
-const IROpcode IOPCODE_POSITIONAL_UNBOXING = IROpcode(0xFFFD);
-
 struct IRValue {
   IROpcode opcode;
   std::vector<value_id_t> srcs;
@@ -511,20 +507,7 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
     return m_using_other_tracked_location_bit;
   }
 
-  const std::vector<IRInstruction*>& get_unboxing_insns() {
-    return m_unboxing_insns;
-  }
-
-  const std::unordered_map<const DexMethodRef*, const DexMethodRef*>&
-  get_abstract_map() {
-    return m_shared_state->get_abstract_map();
-  }
-
  private:
-  // After analysis, the insns in this list should be refined to call its
-  // unboxing implementor.
-  mutable std::vector<IRInstruction*> m_unboxing_insns;
-
   CseUnorderedLocationSet get_clobbered_locations(
       const IRInstruction* insn, CseEnvironment* current_state) const {
     DexType* exact_virtual_scope = nullptr;
@@ -555,54 +538,6 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
     return *value_id;
   }
 
-  boost::optional<value_id_t> unwrap_value(const IRValue& value,
-                                           const DexMethodRef* unwrap_method,
-                                           const DexMethodRef* wrap_method,
-                                           const DexMethodRef* abs_method,
-                                           bool is_unboxed) const {
-    if (is_unboxed) {
-      // for unboxing in boxing-unboxing pattern, the value could be an invoke
-      // or IOPCODE_POSITIONAL_UNBOXING.
-      if (!opcode::is_an_invoke(value.opcode) &&
-          value.opcode != IOPCODE_POSITIONAL_UNBOXING) {
-        return boost::none;
-      }
-    } else {
-      // for boxing, we only consider invoke value.
-      if (!opcode::is_an_invoke(value.opcode)) {
-        return boost::none;
-      }
-    }
-
-    auto value_method = opcode::is_an_invoke(value.opcode)
-                            ? value.method
-                            : value.positional_insn->get_method();
-    bool has_unwrap_method = is_unboxed ? (value_method == unwrap_method ||
-                                           value_method == abs_method)
-                                        : value_method == unwrap_method;
-    if (!has_unwrap_method) {
-      return boost::none;
-    }
-
-    auto it = m_proper_id_values.find(value.srcs.at(0));
-    if (it == m_proper_id_values.end()) {
-      return boost::none;
-    }
-
-    const auto& inner_value = it->second;
-    // For unboxing-boxing pattern, we don't consider abs-unboxing (i.e.
-    // Ljava/lang/Number;.*value()*) at this time.
-    if (opcode::is_an_invoke(inner_value.opcode) &&
-        inner_value.method == wrap_method) {
-      auto unwrapped_value = inner_value.srcs.at(0);
-      if (!is_pre_state_src(unwrapped_value)) {
-        // TODO: Support capturing pre-state values
-        return boost::optional<value_id_t>(unwrapped_value);
-      }
-    }
-    return boost::none;
-  }
-
   boost::optional<value_id_t> get_value_id(const IRValue& value) const {
     auto it = m_value_ids.find(value);
     if (it != m_value_ids.end()) {
@@ -628,50 +563,12 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
         id |= (src & ValueIdFlags::IS_TRACKED_LOCATION_MASK);
       }
     }
+    m_value_ids.emplace(value, id);
     if (value.opcode == IOPCODE_POSITIONAL) {
       m_positional_insns.emplace(id, value.positional_insn);
     } else if (value.opcode == IOPCODE_PRE_STATE_SRC) {
       m_pre_state_value_ids.insert(id);
-    } else {
-      auto abs_map = m_shared_state->get_abstract_map();
-      for (const auto& boxing_pair : m_shared_state->get_boxing_map()) {
-        const auto* box_method = boxing_pair.first;
-        const auto* unbox_method = boxing_pair.second;
-
-        const DexMethodRef* abs_method = nullptr;
-        auto abs_it = abs_map.find(boxing_pair.second);
-        if (abs_it != abs_map.end()) {
-          abs_method = abs_it->second;
-        }
-        auto optional_unboxed_value_id = unwrap_value(
-            value, unbox_method, box_method, abs_method, /* unboxed */ true);
-        if (optional_unboxed_value_id) {
-          // boxing-unboxing
-          if (value.opcode == IOPCODE_POSITIONAL_UNBOXING) {
-            // Since value is in boxing-unboxing pattern, we record it in
-            // m_unboxing_insns.
-            auto temp_insn = value.positional_insn;
-            m_unboxing_insns.emplace_back(
-                const_cast<IRInstruction*>(temp_insn));
-          }
-          return optional_unboxed_value_id;
-        }
-        auto optional_boxed_value_id = unwrap_value(
-            value, box_method, unbox_method, abs_method, /* boxed */ false);
-        if (optional_boxed_value_id) {
-          // unboxing-boxing
-          return optional_boxed_value_id;
-        }
-      }
-      if (value.opcode == IOPCODE_POSITIONAL_UNBOXING) {
-        // This means this value is not in a boxing-unboxing pattern. Therefore,
-        // we put it in m_positional_insns list.
-        m_positional_insns.emplace(id, value.positional_insn);
-      } else {
-        m_proper_id_values.emplace(id, value);
-      }
     }
-    m_value_ids.emplace(value, id);
     return boost::optional<value_id_t>(id);
   }
 
@@ -772,7 +669,6 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
       std::sort(value.srcs.begin(), value.srcs.end());
     }
     bool is_positional;
-    bool is_potential_abs_unboxing = false;
     switch (insn->opcode()) {
     case IOPCODE_LOAD_PARAM:
     case IOPCODE_LOAD_PARAM_OBJECT:
@@ -783,12 +679,7 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
     case OPCODE_FILLED_NEW_ARRAY:
       is_positional = true;
       break;
-    case OPCODE_INVOKE_VIRTUAL: {
-      is_potential_abs_unboxing =
-          m_shared_state->has_potential_unboxing_method(insn);
-      is_positional = !m_shared_state->has_pure_method(insn);
-      break;
-    }
+    case OPCODE_INVOKE_VIRTUAL:
     case OPCODE_INVOKE_SUPER:
     case OPCODE_INVOKE_DIRECT:
     case OPCODE_INVOKE_STATIC:
@@ -805,11 +696,7 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
       break;
     }
     if (is_positional) {
-      if (is_potential_abs_unboxing) {
-        value.opcode = IOPCODE_POSITIONAL_UNBOXING;
-      } else {
-        value.opcode = IOPCODE_POSITIONAL;
-      }
+      value.opcode = IOPCODE_POSITIONAL;
       value.positional_insn = insn;
     } else if (insn->has_literal()) {
       value.literal = insn->get_literal();
@@ -871,7 +758,6 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
   mutable std::unordered_set<value_id_t> m_pre_state_value_ids;
   mutable std::unordered_map<value_id_t, const IRInstruction*>
       m_positional_insns;
-  mutable std::unordered_map<value_id_t, IRValue> m_proper_id_values;
 };
 
 } // namespace
@@ -1009,20 +895,6 @@ SharedState::SharedState(
 
   if (traceEnabled(CSE, 2)) {
     m_barriers.reset(new ConcurrentMap<Barrier, size_t, BarrierHasher>());
-  }
-
-  const std::vector<DexType*> boxing_types = {
-      type::java_lang_Boolean(), type::java_lang_Byte(),
-      type::java_lang_Short(),   type::java_lang_Character(),
-      type::java_lang_Integer(), type::java_lang_Long(),
-      type::java_lang_Float(),   type::java_lang_Double()};
-
-  for (const auto* type : boxing_types) {
-    const auto* box_method = type::get_value_of_method_for_type(type);
-    const auto* unbox_method = type::get_unboxing_method_for_type(type);
-    const auto* abs_method = type::get_Number_unboxing_method_for_type(type);
-    m_boxing_map.insert({box_method, unbox_method});
-    m_abstract_map.insert({unbox_method, abs_method});
   }
 }
 
@@ -1281,18 +1153,6 @@ SharedState::get_read_locations_of_conditionally_pure_method(
   }
 }
 
-bool SharedState::has_potential_unboxing_method(
-    const IRInstruction* insn) const {
-  auto method_ref = insn->get_method();
-  for (const auto& abs_pair : get_abstract_map()) {
-    const auto* abs_method = abs_pair.second;
-    if (method_ref == abs_method) {
-      return true;
-    }
-  }
-  return false;
-}
-
 bool SharedState::has_pure_method(const IRInstruction* insn) const {
   auto method_ref = insn->get_method();
   if (m_pure_methods.find(method_ref) != m_pure_methods.end()) {
@@ -1362,8 +1222,6 @@ CommonSubexpressionElimination::CommonSubexpressionElimination(
       m_args(args) {
   Analyzer analyzer(shared_state, cfg, is_static, is_init_or_clinit,
                     declaring_type);
-  m_unboxing = analyzer.get_unboxing_insns();
-  m_abs_map = analyzer.get_abstract_map();
   m_stats.max_value_ids = analyzer.get_value_ids_size();
   if (analyzer.using_other_tracked_location_bit()) {
     m_stats.methods_using_other_tracked_location_bit = 1;
@@ -1515,10 +1373,6 @@ bool CommonSubexpressionElimination::patch(bool runtime_assertions) {
     }
   }
 
-  for (size_t i = 0; i < m_unboxing.size(); ++i) {
-    iterator_insns.insert(m_unboxing[i]);
-  }
-
   // find all iterators in one sweep
 
   std::unordered_map<IRInstruction*, cfg::InstructionIterator> iterators;
@@ -1624,34 +1478,6 @@ bool CommonSubexpressionElimination::patch(bool runtime_assertions) {
   TRACE(CSE, 5, "[CSE] after:\n%s", SHOW(m_cfg));
 
   m_stats.instructions_eliminated += m_forward.size();
-
-  // For the abs methods which are part of boxing-unboxing pattern, we refine it
-  // to its impl, which will be viewed as "pure" method and can be optmized out
-  // later.
-  for (size_t i = 0; i < m_unboxing.size(); ++i) {
-    auto& it = iterators.at(m_unboxing[i]);
-    IRInstruction* unboxing_insn = m_unboxing[i];
-    auto method_ref = unboxing_insn->get_method();
-    for (const auto& abs_pair : m_abs_map) {
-      const auto* impl = abs_pair.first;
-      const auto* abs_method = abs_pair.second;
-      if (method_ref == abs_method) {
-        // Add check-cast.
-        auto check_cast = new IRInstruction(OPCODE_CHECK_CAST);
-        check_cast->set_src(0, unboxing_insn->src(0));
-        check_cast->set_type(impl->get_class());
-        m_cfg.insert_before(it, check_cast);
-        // Add move_result_pseudo_object.
-        auto pseudo_move_result =
-            new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
-        pseudo_move_result->set_dest(check_cast->src(0));
-        m_cfg.insert_before(it, pseudo_move_result);
-        // Replace the call method from abs_unboxing method to its impl.
-        m_unboxing[i]->set_method(const_cast<DexMethodRef*>(impl));
-        break;
-      }
-    }
-  }
   return true;
 }
 
