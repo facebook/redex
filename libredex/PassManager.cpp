@@ -819,6 +819,81 @@ void run_assessor(PassManager& pm, const Scope& scope, bool initially = false) {
   }
 }
 
+// For debugging purpose allows tracing a class after each pass.
+// Env variable TRACE_CLASS_FILE provides the name of the output file where
+// these data will be written and env variable TRACE_CLASS_NAME would provide
+// the name of the class to be traced.
+class TraceClassAfterEachPass {
+ public:
+  TraceClassAfterEachPass() {
+
+    trace_class_file = getenv("TRACE_CLASS_FILE");
+    trace_class_name = getenv("TRACE_CLASS_NAME");
+    std::cerr << "TRACE_CLASS_FILE="
+              << (trace_class_file == nullptr ? "" : trace_class_file)
+              << std::endl;
+    std::cerr << "TRACE_CLASS_NAME="
+              << (trace_class_name == nullptr ? "" : trace_class_name)
+              << std::endl;
+    if (trace_class_name) {
+      if (trace_class_file) {
+        try {
+          int int_fd = std::stoi(trace_class_file);
+          fd = fdopen(int_fd, "w");
+        } catch (std::invalid_argument&) {
+          // Not an integer file descriptor; real file name.
+          fd = fopen(trace_class_file, "w");
+        }
+        if (!fd) {
+          fprintf(stderr,
+                  "Unable to open TRACE_CLASS_FILE, falling back to stderr\n");
+          fd = stderr;
+        }
+      }
+    }
+  }
+
+  ~TraceClassAfterEachPass() {
+    if (fd != stderr) {
+      fclose(fd);
+    }
+  }
+
+  void dump_cls(DexClass* cls) {
+    fprintf(fd, "Class %s\n", SHOW(cls));
+    std::vector<DexMethod*> methods = cls->get_all_methods();
+    std::vector<DexField*> fields = cls->get_all_fields();
+    for (auto* v : fields) {
+      fprintf(fd, "Field %s\n", SHOW(v));
+    }
+    for (auto* v : methods) {
+      fprintf(fd, "Method %s\n", SHOW(v));
+      if (v->get_code()) {
+        fprintf(fd, "%s\n", SHOW(v->get_code()));
+      }
+    }
+  }
+
+  void dump(const std::string& pass_name) {
+    if (trace_class_name) {
+      fprintf(fd, "After Pass  %s\n", pass_name.c_str());
+      auto* typ = DexType::get_type(trace_class_name);
+      if (typ && type_class(typ)) {
+        dump_cls(type_class(typ));
+      } else {
+        fprintf(fd, "Class = %s not foud\n", trace_class_name);
+      }
+    }
+  }
+
+ private:
+  FILE* fd = stderr;
+  char* trace_class_file;
+  char* trace_class_name;
+};
+
+static TraceClassAfterEachPass trace_cls;
+
 } // namespace
 
 std::unique_ptr<keep_rules::ProguardConfiguration> empty_pg_config() {
@@ -1092,7 +1167,6 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   /////////////////////
   // MAIN PASS LOOP. //
   /////////////////////
-
   for (size_t i = 0; i < m_activated_passes.size(); ++i) {
     Pass* pass = m_activated_passes[i];
     const size_t pass_run = ++runs[pass];
@@ -1115,6 +1189,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
           profiler_all_info, &pass->name());
       jemalloc_util::ScopedProfiling malloc_prof(m_malloc_profile_pass == pass);
       pass->run_pass(stores, conf, *this);
+      trace_cls.dump(pass->name());
     }
 
     vm_hwm.trace_log(this, pass);
