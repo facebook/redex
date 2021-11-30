@@ -122,7 +122,7 @@ void DexClassHasher::hash(const IRInstruction* insn) {
   } else if (insn->has_data()) {
     auto data = insn->get_data();
     hash(data->data_size());
-    for (auto i = 0; i < data->data_size(); i++) {
+    for (size_t i = 0; i < data->data_size(); i++) {
       hash(data->data()[i]);
     }
   }

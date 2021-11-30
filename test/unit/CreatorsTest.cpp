@@ -106,7 +106,7 @@ TEST_F(CreatorsTest, MakeSwitchMultiIndices) {
 
     DexOpcodeData* dex_data = static_cast<DexOpcodeData*>(insn);
     const uint16_t* data = dex_data->data();
-    printf(" data size: %d\n", dex_data->size());
+    printf(" data size: %zu\n", dex_data->size());
     EXPECT_EQ(dex_data->size(), 12); // (4 cases * 2) + 4
     EXPECT_EQ(*data, 4); // 4 cases
     uint32_t* data32 = (uint32_t*)&data[1];

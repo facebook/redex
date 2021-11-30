@@ -87,7 +87,7 @@ class DexInstruction : public Gatherable {
   /* Creates the right subclass of DexInstruction for the given opcode */
   static DexInstruction* make_instruction(DexOpcode);
   virtual void encode(DexOutputIdx* dodx, uint16_t*& insns) const;
-  virtual uint16_t size() const;
+  virtual size_t size() const;
   virtual DexInstruction* clone() const { return new DexInstruction(*this); }
   bool operator==(const DexInstruction&) const;
 
@@ -150,7 +150,7 @@ class DexOpcodeString : public DexInstruction {
   DexString* m_string;
 
  public:
-  uint16_t size() const override;
+  size_t size() const override;
   void encode(DexOutputIdx* dodx, uint16_t*& insns) const override;
   void gather_strings(std::vector<DexString*>& lstring) const override;
   DexOpcodeString* clone() const override { return new DexOpcodeString(*this); }
@@ -172,7 +172,7 @@ class DexOpcodeType : public DexInstruction {
   DexType* m_type;
 
  public:
-  uint16_t size() const override;
+  size_t size() const override;
   void encode(DexOutputIdx* dodx, uint16_t*& insns) const override;
   void gather_types(std::vector<DexType*>& ltype) const override;
   DexOpcodeType* clone() const override { return new DexOpcodeType(*this); }
@@ -198,7 +198,7 @@ class DexOpcodeField : public DexInstruction {
   DexFieldRef* m_field;
 
  public:
-  uint16_t size() const override;
+  size_t size() const override;
   void encode(DexOutputIdx* dodx, uint16_t*& insns) const override;
   void gather_fields(std::vector<DexFieldRef*>& lfield) const override;
   DexOpcodeField* clone() const override { return new DexOpcodeField(*this); }
@@ -218,7 +218,7 @@ class DexOpcodeMethod : public DexInstruction {
   DexMethodRef* m_method;
 
  public:
-  uint16_t size() const override;
+  size_t size() const override;
   void encode(DexOutputIdx* dodx, uint16_t*& insns) const override;
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const override;
   DexOpcodeMethod* clone() const override { return new DexOpcodeMethod(*this); }
@@ -239,7 +239,7 @@ class DexOpcodeCallSite : public DexInstruction {
   DexCallSite* m_callsite;
 
  public:
-  uint16_t size() const override;
+  size_t size() const override;
   void encode(DexOutputIdx* dodx, uint16_t*& insns) const override;
   void gather_callsites(std::vector<DexCallSite*>& lcallsite) const override;
   void gather_strings(std::vector<DexString*>& lstring) const override;
@@ -267,7 +267,7 @@ class DexOpcodeMethodHandle : public DexInstruction {
   DexMethodHandle* m_methodhandle;
 
  public:
-  uint16_t size() const override;
+  size_t size() const override;
   void encode(DexOutputIdx* dodx, uint16_t*& insns) const override;
   void gather_methodhandles(
       std::vector<DexMethodHandle*>& lmethodhandle) const override;
@@ -294,36 +294,36 @@ class DexOpcodeMethodHandle : public DexInstruction {
 
 class DexOpcodeData : public DexInstruction {
  private:
-  uint16_t m_data_count;
-  uint16_t* m_data;
+  std::unique_ptr<uint16_t[]> m_data;
+  size_t m_data_count;
 
  public:
   // This size refers to the whole instruction, not just the data portion
-  uint16_t size() const override;
+  size_t size() const override;
   void encode(DexOutputIdx* dodx, uint16_t*& insns) const override;
   DexOpcodeData* clone() const override { return new DexOpcodeData(*this); }
 
-  DexOpcodeData(const uint16_t* opcodes, int count)
+  DexOpcodeData(const uint16_t* opcodes, size_t count)
       : DexInstruction(opcodes, 0),
-        m_data_count(count),
-        m_data(new uint16_t[count]) {
+        m_data(std::make_unique<uint16_t[]>(count)),
+        m_data_count(count) {
     opcodes++;
-    memcpy(m_data, opcodes, count * sizeof(uint16_t));
+    memcpy(m_data.get(), opcodes, count * sizeof(uint16_t));
   }
 
   explicit DexOpcodeData(const std::vector<uint16_t>& opcodes)
       : DexInstruction(&opcodes[0], 0),
-        m_data_count(opcodes.size() - 1),
-        m_data(new uint16_t[opcodes.size() - 1]) {
+        m_data(std::make_unique<uint16_t[]>(opcodes.size() - 1)),
+        m_data_count(opcodes.size() - 1) {
     const uint16_t* data = opcodes.data() + 1;
-    memcpy(m_data, data, (opcodes.size() - 1) * sizeof(uint16_t));
+    memcpy(m_data.get(), data, (opcodes.size() - 1) * sizeof(uint16_t));
   }
 
   DexOpcodeData(const DexOpcodeData& op)
       : DexInstruction(op),
-        m_data_count(op.m_data_count),
-        m_data(new uint16_t[m_data_count]) {
-    memcpy(m_data, op.m_data, m_data_count * sizeof(uint16_t));
+        m_data(std::make_unique<uint16_t[]>(op.m_data_count)),
+        m_data_count(op.m_data_count) {
+    memcpy(m_data.get(), op.m_data.get(), m_data_count * sizeof(uint16_t));
   }
 
   DexOpcodeData& operator=(DexOpcodeData op) {
@@ -332,11 +332,9 @@ class DexOpcodeData : public DexInstruction {
     return *this;
   }
 
-  ~DexOpcodeData() override { delete[] m_data; }
-
-  const uint16_t* data() const { return m_data; }
+  const uint16_t* data() const { return m_data.get(); }
   // This size refers to just the length of the data array
-  uint16_t data_size() const { return m_data_count; }
+  size_t data_size() const { return m_data_count; }
 };
 
 // helper function to create fill-array-data-payload according to

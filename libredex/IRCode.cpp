@@ -935,27 +935,44 @@ bool IRCode::try_sync(DexCode* code) {
     always_assert_log(!targets.empty(), "need to have targets for %s",
                       SHOW(*multiopcode));
     if (multiopcode->dex_insn->opcode() == DOPCODE_SPARSE_SWITCH) {
-      // Emit sparse.
-      const size_t count = (targets.size() * 4) + 2;
-      auto sparse_payload = std::make_unique<uint16_t[]>(count);
-      sparse_payload[0] = FOPCODE_SPARSE_SWITCH;
-      sparse_payload[1] = targets.size();
-      uint32_t* spkeys = (uint32_t*)&sparse_payload[2];
-      uint32_t* sptargets =
-          (uint32_t*)&sparse_payload[2 + (targets.size() * 2)];
-      for (BranchTarget* target : targets) {
-        *spkeys++ = target->case_key;
-        *sptargets++ = multi_targets[target] - entry_to_addr.at(multiopcode);
-      }
       // Emit align nop
       if (addr & 1) {
         DexInstruction* nop = new DexInstruction(DOPCODE_NOP);
         opout.push_back(nop);
         addr++;
       }
+
+      // TODO: Any integrity checks should really be in the DexOpcodeData
+      //       constructors, which do not know right now about the formats.
+
+      // Emit sparse.
+
+      // Note: the count does *not* need to fit into 16 bits, but the targets
+      //       do.
+      always_assert(targets.size() <= std::numeric_limits<uint16_t>::max());
+
+      // Be legible, the compiler should improve this:
+      //    * opcode
+      //    * "size" = targets
+      //    * target keys x int in shorts
+      //    * target offsets x int in shorts
+      const size_t count = 1 + 1 + 2 * targets.size() * (4 / 2);
+      auto sparse_payload = std::make_unique<uint16_t[]>(count);
+
+      sparse_payload[0] = FOPCODE_SPARSE_SWITCH;
+
+      sparse_payload[1] = (uint16_t)targets.size();
+      uint32_t* spkeys = (uint32_t*)&sparse_payload[2];
+      uint32_t* sptargets =
+          (uint32_t*)&sparse_payload[2 + (targets.size() * 2)];
+
+      for (BranchTarget* target : targets) {
+        *spkeys++ = target->case_key;
+        *sptargets++ = multi_targets[target] - entry_to_addr.at(multiopcode);
+      }
+
       // Insert the new fopcode...
-      DexInstruction* fop =
-          new DexOpcodeData(sparse_payload.get(), (int)(count - 1));
+      DexInstruction* fop = new DexOpcodeData(sparse_payload.get(), count - 1);
       opout.push_back(fop);
       // re-write the source opcode with the address of the
       // fopcode, increment the address of the fopcode.
@@ -996,8 +1013,7 @@ bool IRCode::try_sync(DexCode* code) {
         addr++;
       }
       // Insert the new fopcode...
-      DexInstruction* fop =
-          new DexOpcodeData(packed_payload.get(), (int)(count - 1));
+      DexInstruction* fop = new DexOpcodeData(packed_payload.get(), count - 1);
       opout.push_back(fop);
       // re-write the source opcode with the address of the
       // fopcode, increment the address of the fopcode.
