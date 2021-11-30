@@ -292,8 +292,9 @@ StaticFieldReadAnalysis::StaticFieldReadAnalysis(
   // from the callees so the analysis gives up less often.
   for (const auto& name : allowed_opaque_callee_names) {
     DexMethodRef* callee = DexMethod::get_method(name);
-    always_assert_log(callee, "Method %s does not exist.", name.c_str());
-    m_allowed_opaque_callees.emplace(callee);
+    if (callee) {
+      m_allowed_opaque_callees.emplace(callee);
+    }
   }
 }
 
