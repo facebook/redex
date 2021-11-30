@@ -388,7 +388,14 @@ MethodOrderedSet find_dispatch_targets(const TypeSystem& type_system,
       if (type_system.is_subtype(virt_scope->type, impl)) {
         auto target =
             find_matching_virtual_method(type_system, impl, virt_scope);
-        always_assert(target != nullptr);
+        TRACE(RM_INTF, 5, "Found target %s on impl %s", SHOW(target),
+              SHOW(impl));
+        // Skip the current impl if no target is found from it. We currently do
+        // not handle this case. Will fall through to the match completeness
+        // check, and bail out subsequently.
+        if (target == nullptr) {
+          continue;
+        }
         targets.insert(target);
         matched.push_back(impl);
       }
