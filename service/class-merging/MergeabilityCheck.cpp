@@ -29,7 +29,8 @@ MergeabilityChecker::MergeabilityChecker(const Scope& scope,
       m_generated(generated),
       m_const_class_safe_types(spec.const_class_safe_types) {}
 
-void MergeabilityChecker::exclude_cannot_delete(TypeSet& non_mergeables) {
+void MergeabilityChecker::exclude_unsupported_cls_property(
+    TypeSet& non_mergeables) {
   for (const auto& type : m_spec.merging_targets) {
     const auto& cls = type_class(type);
     if (!can_delete(cls)) {
@@ -53,6 +54,11 @@ void MergeabilityChecker::exclude_cannot_delete(TypeSet& non_mergeables) {
     if (!has_ctor) {
       non_mergeables.insert(type);
       TRACE(CLMG, 5, "Has no ctor %s", SHOW(type));
+    }
+    // We do not support merging abstract and non-abstract classes together.
+    if (is_abstract(cls)) {
+      non_mergeables.insert(type);
+      TRACE(CLMG, 5, "Is abstract %s", SHOW(type));
     }
   }
 }
@@ -233,7 +239,7 @@ TypeSet MergeabilityChecker::get_non_mergeables() {
   TypeSet non_mergeables;
   size_t prev_size = 0;
 
-  exclude_cannot_delete(non_mergeables);
+  exclude_unsupported_cls_property(non_mergeables);
   TRACE(CLMG, 4, "Non mergeables (no delete) %ld", non_mergeables.size());
   prev_size = non_mergeables.size();
 

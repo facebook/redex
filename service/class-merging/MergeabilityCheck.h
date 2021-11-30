@@ -41,7 +41,7 @@ class MergeabilityChecker {
   const TypeSet& m_generated;
   const std::unordered_set<DexType*>& m_const_class_safe_types;
 
-  void exclude_cannot_delete(TypeSet& non_mergeables);
+  void exclude_unsupported_cls_property(TypeSet& non_mergeables);
   void exclude_unsupported_bytecode(TypeSet& non_mergeables);
   void exclude_static_fields(TypeSet& non_mergeables);
   void exclude_unsafe_sdk_and_store_refs(TypeSet& non_mergeables);
