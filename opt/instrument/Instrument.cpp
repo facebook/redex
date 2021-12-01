@@ -17,6 +17,9 @@
 #include "MethodReference.h"
 #include "PassManager.h"
 #include "Show.h"
+#include "Shrinker.h"
+#include "ShrinkerConfig.h"
+#include "Timer.h"
 #include "TypeSystem.h"
 #include "Walkers.h"
 
@@ -931,6 +934,31 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
     std::cerr << "[InstrumentPass] Unknown instrumentation strategy.\n";
     exit(1);
   }
+
+  Timer cleanup{"Cleanup"};
+  // We're done and have inserted our instrumentation. Allow further cleanup.
+  g_redex->instrument_mode = false;
+
+  // Be nice and immediately destruct some painful block overhead.
+
+  auto scope = build_class_scope(stores);
+
+  // Simple config.
+  shrinker::ShrinkerConfig shrinker_config;
+  shrinker_config.run_const_prop = true;
+  shrinker_config.run_copy_prop = true;
+  shrinker_config.run_local_dce = true;
+  shrinker_config.compute_pure_methods = false;
+
+  shrinker::Shrinker shrinker(stores, scope, shrinker_config);
+
+  walk::parallel::methods(scope, [&](auto* m) {
+    if (m->get_code() == nullptr) {
+      return;
+    }
+
+    shrinker.shrink_method(m);
+  });
 }
 
 static InstrumentPass s_pass;
