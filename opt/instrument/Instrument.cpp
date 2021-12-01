@@ -11,12 +11,16 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRList.h"
+#include "InitClassesWithSideEffects.h"
 #include "InterDexPass.h"
 #include "InterDexPassPlugin.h"
 #include "Match.h"
 #include "MethodReference.h"
 #include "PassManager.h"
 #include "Show.h"
+#include "Shrinker.h"
+#include "ShrinkerConfig.h"
+#include "Timer.h"
 #include "TypeSystem.h"
 #include "Walkers.h"
 
@@ -964,6 +968,35 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
     std::cerr << "[InstrumentPass] Unknown instrumentation strategy.\n";
     exit(1);
   }
+
+  Timer cleanup{"Cleanup"};
+  // We're done and have inserted our instrumentation. Allow further cleanup.
+  g_redex->instrument_mode = false;
+
+  // Be nice and immediately destruct some painful block overhead.
+
+  auto scope = build_class_scope(stores);
+
+  // Simple config.
+  shrinker::ShrinkerConfig shrinker_config;
+  shrinker_config.run_const_prop = true;
+  shrinker_config.run_copy_prop = true;
+  shrinker_config.run_local_dce = true;
+  shrinker_config.compute_pure_methods = false;
+
+  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+      scope, cfg.create_init_class_insns());
+
+  shrinker::Shrinker shrinker(stores, scope, init_classes_with_side_effects,
+                              shrinker_config);
+
+  walk::parallel::methods(scope, [&](auto* m) {
+    if (m->get_code() == nullptr) {
+      return;
+    }
+
+    shrinker.shrink_method(m);
+  });
 }
 
 static InstrumentPass s_pass;
