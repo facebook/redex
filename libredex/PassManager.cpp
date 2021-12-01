@@ -59,8 +59,6 @@ namespace {
 
 constexpr const char* INCOMING_HASHES = "incoming_hashes.txt";
 constexpr const char* OUTGOING_HASHES = "outgoing_hashes.txt";
-
-constexpr const char* JNI_OUTPUT_DIR = "/tmp/JNI_OUTPUT/";
 constexpr const char* REMOVABLE_NATIVES = "redex-removable-natives.txt";
 const std::string PASS_ORDER_KEY = "pass_order";
 
@@ -450,33 +448,34 @@ class AnalysisUsageHelper {
 
 class JNINativeContextHelper {
  public:
-  explicit JNINativeContextHelper(const Scope& scope) {
-    // TODO (T90874859): Remove the hardcoded path and use a program option
-    // instead. Currently we don't have full integration with the build system
-    // and we need to make changes to the build step to pass this piece of
-    // information in from native build toolchain.
-    //
-    // Currently, if the path is not found, the native context is going to be
-    // empty.
-    g_native_context = std::make_unique<native::NativeContext>(
-        native::NativeContext::build(JNI_OUTPUT_DIR, scope));
+  explicit JNINativeContextHelper(const Scope& scope,
+                                  const std::string& jni_output_dir) {
+    if (!jni_output_dir.empty()) {
+      // Currently, if the path is not found, the native context is going to be
+      // empty.
+      g_native_context = std::make_unique<native::NativeContext>(
+          native::NativeContext::build(jni_output_dir, scope));
 
-    // Before running any passes, treat everything as removable.
-    walk::methods(scope, [this](DexMethod* m) {
-      if (is_native(m)) {
-        auto native_func = native::get_native_function_for_dex_method(m);
-        if (native_func) {
-          m_removable_natives.emplace(native_func);
-        } else {
-          // There's a native method which we don't find. Let's be conservative
-          // and ask Redex not to remove it.
-          m->rstate.set_root();
+      // Before running any passes, treat everything as removable.
+      walk::methods(scope, [this](DexMethod* m) {
+        if (is_native(m)) {
+          auto native_func = native::get_native_function_for_dex_method(m);
+          if (native_func) {
+            m_removable_natives.emplace(native_func);
+          } else {
+            // There's a native method which we don't find. Let's be
+            // conservative and ask Redex not to remove it.
+            m->rstate.set_root();
+          }
         }
-      }
-    });
+      });
+    }
   }
 
   void post_passes(const Scope& scope, ConfigFiles& conf) {
+    if (!g_native_context) {
+      return;
+    }
     // After running all passes, walk through the removable functions and
     // remove the ones should remain.
     walk::methods(scope, [this](DexMethod* m) {
@@ -1160,7 +1159,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
     }
   };
 
-  JNINativeContextHelper jni_native_context_helper(scope);
+  JNINativeContextHelper jni_native_context_helper(
+      scope, m_redex_options.jni_summary_path);
 
   std::unordered_map<const Pass*, size_t> runs;
 

@@ -336,7 +336,9 @@ Arguments parse_args(int argc, char* argv[]) {
                    "Stop before pass n and output IR to file");
   od.add_options()("output-ir", po::value<std::string>(),
                    "IR output directory, used with --stop-pass");
-
+  od.add_options()("jni-summary",
+                   po::value<std::string>(),
+                   "Path to JNI summary directory of json files.");
   po::positional_options_description pod;
   pod.add("dex-files", -1);
   po::variables_map vm;
@@ -495,6 +497,10 @@ Arguments parse_args(int argc, char* argv[]) {
     // The out_dir is for final apk only or intermediate results only.
     always_assert(args.stop_pass_idx);
     args.out_dir = vm["output-ir"].as<std::string>();
+  }
+
+  if (vm.count("jni-summary")) {
+    args.redex_options.jni_summary_path = vm["jni-summary"].as<std::string>();
   }
 
   if (args.stop_pass_idx != boost::none) {

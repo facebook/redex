@@ -20,6 +20,7 @@ void RedexOptions::serialize(Json::Value& entry_data) const {
   options["min_sdk"] = min_sdk;
   options["debug_info_kind"] = debug_info_kind_to_string(debug_info_kind);
   options["redacted"] = redacted;
+  options["jni_summary_path"] = jni_summary_path;
 }
 
 void RedexOptions::deserialize(const Json::Value& entry_data) {
@@ -32,6 +33,7 @@ void RedexOptions::deserialize(const Json::Value& entry_data) {
   debug_info_kind =
       parse_debug_info_kind(options_data["debug_info_kind"].asString());
   redacted = options_data["redacted"].asBool();
+  jni_summary_path = options_data["jni_summary_path"].asString();
 }
 
 Architecture parse_architecture(const std::string& s) {

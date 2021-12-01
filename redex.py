@@ -284,6 +284,8 @@ def run_redex_binary(
         args += ["--used-js-assets=" + x for x in state.args.used_js_assets]
     if state.args.arch:
         args += ["--arch=" + state.args.arch]
+    if state.args.jni_summary:
+        args += ["--jni-summary=" + state.args.jni_summary]
     args += ["-S" + x for x in state.args.passthru]
     args += ["-J" + x for x in state.args.passthru_json]
 
@@ -705,6 +707,13 @@ Given an APK, produce a better APK!
         "--packed-profiles",
         type=str,
         help="Path to packed profiles (expects tar.xz)",
+    )
+
+    parser.add_argument(
+        "--jni-summary",
+        default=None,
+        type=str,
+        help="Path to JNI summary directory of json files.",
     )
 
     # Passthrough mode.

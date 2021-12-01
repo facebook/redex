@@ -10,6 +10,8 @@
 #include <cstdint>
 #include <string>
 
+#include <boost/optional.hpp>
+
 namespace Json {
 class Value;
 } // namespace Json
@@ -53,6 +55,7 @@ class RedexOptions {
   int32_t min_sdk{0};
   Architecture arch{Architecture::UNKNOWN};
   DebugInfoKind debug_info_kind{DebugInfoKind::NoCustomSymbolication};
+  std::string jni_summary_path;
 
   /*
    * Overwriting the `this` register breaks the verifier before Android M and
