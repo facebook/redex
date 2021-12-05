@@ -1054,6 +1054,11 @@ bool tainted_reg_escapes(
         // TODO(emmasevastian): Treat this case separate.
         return true;
       }
+    } else if (opcode::is_check_cast(op)) {
+      if (tainted[insn->src(0)]) {
+        TRACE(BUILDERS, 5, "Not supported: %s", SHOW(insn));
+        return true;
+      }
     }
   }
   return false;
