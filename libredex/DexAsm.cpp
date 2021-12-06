@@ -63,31 +63,7 @@ bool unsupported(IROpcode opcode) {
 }
 
 void assemble(IRInstruction* insn, std::initializer_list<Operand> args) {
-  auto arg = args.begin();
-  if (insn->has_dest()) {
-    always_assert(arg->tag == VREG);
-    insn->set_dest(arg->v);
-    ++arg;
-  }
-  for (size_t i = 0; i < insn->srcs_size(); ++i) {
-    always_assert(arg->tag == VREG);
-    insn->set_src(i, arg->v);
-    arg = std::next(arg);
-  }
-  if (arg != args.end()) {
-    switch (arg->tag) {
-    case LITERAL:
-      insn->set_literal(arg->v);
-      break;
-    case VREG:
-    default:
-      not_reached_log("Encountered unexpected tag 0x%x", arg->tag);
-    }
-    arg = std::next(arg);
-  }
-  always_assert_log(arg == args.end(),
-                    "Found excess arguments for opcode 0x%x",
-                    insn->opcode());
+  assemble(insn, args.begin(), args.end());
 }
 
 IRInstruction* dasm(IROpcode opcode, std::initializer_list<Operand> args) {
@@ -127,10 +103,6 @@ IRInstruction* dasm(IROpcode opcode,
 IRInstruction* dasm(IROpcode opcode,
                     DexMethodRef* method,
                     std::initializer_list<Operand> args) {
-  auto insn = new IRInstruction(opcode);
-  insn->set_method(method);
-  insn->set_srcs_size(args.size());
-  assemble(insn, args);
-  return insn;
+  return dasm(opcode, method, args.begin(), args.end());
 }
 } // namespace dex_asm

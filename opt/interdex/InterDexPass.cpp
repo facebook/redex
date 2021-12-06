@@ -105,10 +105,10 @@ void InterDexPass::bind_config() {
   bind("sort_remaining_classes", false, m_sort_remaining_classes,
        "Whether to sort classes in non-primary, non-perf-sensitive dexes "
        "according to their inheritance hierarchies");
-  bind("method_for_canary_clinit_reference", "",
-       m_method_for_canary_clinit_reference,
+  bind("methods_for_canary_clinit_reference", {},
+       m_methods_for_canary_clinit_reference,
        "If set, canary classes will have a clinit generated which call the "
-       "specified method, if it exists");
+       "specified methods, if they exist");
 
   trait(Traits::Pass::unique, true);
 }
@@ -136,7 +136,7 @@ void InterDexPass::run_pass(
                     m_cross_dex_relocator_config, refs_info.frefs,
                     refs_info.trefs, refs_info.mrefs, &xstore_refs,
                     mgr.get_redex_options().min_sdk, m_sort_remaining_classes,
-                    m_method_for_canary_clinit_reference);
+                    m_methods_for_canary_clinit_reference);
 
   if (m_expect_order_list) {
     always_assert_log(
@@ -220,7 +220,7 @@ void InterDexPass::run_pass_on_nonroot_store(const Scope& original_scope,
                     cross_dex_relocator_config, refs_info.frefs,
                     refs_info.trefs, refs_info.mrefs, &xstore_refs,
                     mgr.get_redex_options().min_sdk, m_sort_remaining_classes,
-                    m_method_for_canary_clinit_reference);
+                    m_methods_for_canary_clinit_reference);
 
   interdex.run_on_nonroot_store();
 

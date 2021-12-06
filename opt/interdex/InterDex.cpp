@@ -1005,17 +1005,15 @@ void InterDex::add_dexes_from_store(const DexStore& store) {
   flush_out_dex(EMPTY_DEX_INFO, canary_cls);
 }
 
-void InterDex::set_clinit_method_if_needed(DexClass* cls) {
+void InterDex::set_clinit_methods_if_needed(DexClass* cls) {
   using namespace dex_asm;
-  if (m_method_for_canary_clinit_reference.empty()) {
+
+  if (m_methods_for_canary_clinit_reference.empty()) {
+    // No methods to call from clinit; don't create clinit.
     return;
   }
-  DexMethodRef* method =
-      DexMethod::get_method(m_method_for_canary_clinit_reference);
-  if (!method) {
-    // No need to do anything if this method isn't present in the build.
-    return;
-  }
+
+  // Create a clinit static method.
   auto proto =
       DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
   DexMethod* clinit =
@@ -1025,11 +1023,40 @@ void InterDex::set_clinit_method_if_needed(DexClass* cls) {
   clinit->set_code(std::make_unique<IRCode>());
   cls->add_method(clinit);
   clinit->set_deobfuscated_name(show_deobfuscated(clinit));
+
+  // Add code to clinit to call the other methods.
   auto code = clinit->get_code();
-  code->push_back(dasm(OPCODE_CONST_WIDE, {0_v, 0_L}));
-  code->push_back(dasm(OPCODE_INVOKE_STATIC, method, {0_v}));
+  size_t max_size = 0;
+  for (const auto& method_name : m_methods_for_canary_clinit_reference) {
+    // No need to do anything if this method isn't present in the build.
+    if (DexMethodRef* method = DexMethod::get_method(method_name)) {
+      std::vector<Operand> reg_operands;
+      int64_t reg = 0;
+      for (auto* dex_type : *method->get_proto()->get_args()) {
+        Operand reg_operand = {VREG, reg};
+        switch (dex_type->get_name()->c_str()[0]) {
+        case 'J':
+        case 'D':
+          // 8 bytes
+          code->push_back(dasm(OPCODE_CONST_WIDE, {reg_operand, 0_L}));
+          reg_operands.push_back(reg_operand);
+          reg += 2;
+          break;
+        default:
+          // 4 or fewer bytes
+          code->push_back(dasm(OPCODE_CONST, {reg_operand, 0_L}));
+          reg_operands.push_back(reg_operand);
+          ++reg;
+          break;
+        }
+      }
+      max_size = std::max(max_size, (size_t)reg);
+      code->push_back(dasm(OPCODE_INVOKE_STATIC, method, reg_operands.begin(),
+                           reg_operands.end()));
+    }
+  }
+  code->set_registers_size(max_size);
   code->push_back(dasm(OPCODE_RETURN_VOID));
-  code->set_registers_size(1);
 }
 
 DexClass* create_canary(int dexnum, const DexString* store_name) {
@@ -1062,7 +1089,7 @@ DexClass* InterDex::get_canary_cls(DexInfo& dex_info) {
   }
   int dexnum = m_dexes_structure.get_num_dexes();
   auto canary_cls = create_canary(dexnum);
-  set_clinit_method_if_needed(canary_cls);
+  set_clinit_methods_if_needed(canary_cls);
   MethodRefs clazz_mrefs;
   FieldRefs clazz_frefs;
   TypeRefs clazz_trefs;

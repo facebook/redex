@@ -97,7 +97,7 @@ class InterDexPass : public Pass {
   CrossDexRelocatorConfig m_cross_dex_relocator_config;
   bool m_expect_order_list;
   bool m_sort_remaining_classes;
-  std::string m_method_for_canary_clinit_reference;
+  std::vector<std::string> m_methods_for_canary_clinit_reference;
 
   size_t m_run{0}; // Which iteration of `run_pass`.
   size_t m_eval{0}; // How many `eval_pass` iterations.
