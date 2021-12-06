@@ -1023,14 +1023,36 @@ void InterDex::set_clinit_methods_if_needed(DexClass* cls) {
 
   // Add code to clinit to call the other methods.
   auto code = clinit->get_code();
-  code->set_registers_size(1);
+  size_t max_size = 0;
   for (const auto& method_name : m_methods_for_canary_clinit_reference) {
     // No need to do anything if this method isn't present in the build.
     if (DexMethodRef* method = DexMethod::get_method(method_name)) {
-      code->push_back(dasm(OPCODE_CONST_WIDE, {0_v, 0_L}));
-      code->push_back(dasm(OPCODE_INVOKE_STATIC, method, {0_v}));
+      std::vector<Operand> reg_operands;
+      int64_t reg = 0;
+      for (auto* dex_type : *method->get_proto()->get_args()) {
+        Operand reg_operand = {VREG, reg};
+        switch (dex_type->get_name()->c_str()[0]) {
+        case 'J':
+        case 'D':
+          // 8 bytes
+          code->push_back(dasm(OPCODE_CONST_WIDE, {reg_operand, 0_L}));
+          reg_operands.push_back(reg_operand);
+          reg += 2;
+          break;
+        default:
+          // 4 or fewer bytes
+          code->push_back(dasm(OPCODE_CONST, {reg_operand, 0_L}));
+          reg_operands.push_back(reg_operand);
+          ++reg;
+          break;
+        }
+      }
+      max_size = std::max(max_size, (size_t)reg);
+      code->push_back(dasm(OPCODE_INVOKE_STATIC, method, reg_operands.begin(),
+                           reg_operands.end()));
     }
   }
+  code->set_registers_size(max_size);
   code->push_back(dasm(OPCODE_RETURN_VOID));
 }
 
