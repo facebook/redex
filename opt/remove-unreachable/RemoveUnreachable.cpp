@@ -25,6 +25,7 @@ const std::string UNREACHABLE_SYMBOLS_FILENAME =
     "redex-unreachable-removed-symbols.txt";
 const std::string REMOVED_SYMBOLS_REFERENCES_FILENAME =
     "redex-unreachable-removed-symbols-references.txt";
+const std::string RMU_PASS_NAME = "RemoveUnreachablePass";
 
 void root_metrics(DexStoresVector& stores, PassManager& pm) {
   auto scope = build_class_scope(stores);
@@ -189,8 +190,10 @@ void RemoveUnreachablePassBase::run_pass(DexStoresVector& stores,
       m_emit_graph_on_run &&
       static_cast<int64_t>(pm.get_current_pass_info()->repeat + 1) ==
           *m_emit_graph_on_run;
-  bool output_unreachable_symbols = m_always_emit_unreachable_symbols ||
-                                    pm.get_current_pass_info()->repeat == 0;
+  bool output_unreachable_symbols =
+      m_always_emit_unreachable_symbols ||
+      (pm.get_current_pass_info()->repeat == 0 &&
+       pm.get_current_pass_info()->pass->name() == RMU_PASS_NAME);
   TRACE(RMU, 2, "RMU: output unreachable symbols %d",
         output_unreachable_symbols);
   TRACE(RMU, 2, "RMU: remove_no_argument_constructors %d",
