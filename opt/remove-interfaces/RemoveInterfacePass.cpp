@@ -278,10 +278,19 @@ size_t exclude_unremovables(const Scope& scope,
                             const DexStoresVector& stores,
                             const TypeSystem& type_system,
                             bool include_primary_dex,
+                            const std::vector<DexType*>& excluded_interfaces,
                             TypeSet& candidates) {
   size_t count = 0;
   always_assert(stores.size());
   XStoreRefs xstores(stores);
+
+  // Excluded by config
+  for (auto ex : excluded_interfaces) {
+    if (candidates.count(ex) != 0) {
+      candidates.erase(ex);
+      count++;
+    }
+  }
 
   // Skip intfs with single or none implementor. For some reason, they are
   // not properly removed by either SingleImpl or UnreferencedInterfacesPass.
@@ -529,8 +538,9 @@ void RemoveInterfacePass::remove_interfaces_for_root(
   include_parent_interfaces(root, interfaces);
 
   m_total_num_interface += interfaces.size();
-  m_num_interface_excluded += exclude_unremovables(
-      scope, stores, type_system, m_include_primary_dex, interfaces);
+  m_num_interface_excluded +=
+      exclude_unremovables(scope, stores, type_system, m_include_primary_dex,
+                           m_excluded_interfaces, interfaces);
 
   TRACE(RM_INTF, 5, "removable interfaces %ld", interfaces.size());
   TypeSet removed =
@@ -563,6 +573,9 @@ void RemoveInterfacePass::remove_interfaces_for_root(
 
 void RemoveInterfacePass::bind_config() {
   bind("interface_roots", {}, m_interface_roots, Configurable::default_doc(),
+       Configurable::bindflags::types::warn_if_unresolvable);
+  bind("excluded_interfaces", {}, m_excluded_interfaces,
+       Configurable::default_doc(),
        Configurable::bindflags::types::warn_if_unresolvable);
   bind("include_primary_dex", false, m_include_primary_dex);
   bind("keep_debug_info", false, m_keep_debug_info);

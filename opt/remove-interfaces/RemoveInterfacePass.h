@@ -40,6 +40,7 @@ class RemoveInterfacePass : public Pass {
 
  private:
   std::vector<DexType*> m_interface_roots;
+  std::vector<DexType*> m_excluded_interfaces;
   DexType* m_interface_dispatch_anno;
   size_t m_total_num_interface = 0;
   size_t m_num_interface_removed = 0;
