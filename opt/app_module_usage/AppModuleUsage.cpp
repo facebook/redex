@@ -33,7 +33,7 @@ constexpr const char* APP_MODULE_COUNT_OUTPUT_FILENAME =
     "redex-app-module-count.csv";
 constexpr const char* USES_AM_ANNO_VIOLATIONS_FILENAME =
     "redex-app-module-annotation-violations.csv";
-constexpr const char* SUPER_VERBOSE_DETIALS_FILENAME =
+constexpr const char* SUPER_VERBOSE_DETAILS_FILENAME =
     "redex-app-module-verbose-details.txt";
 // @UsesAppModule DexType descriptor
 // returns potential type for an AbstractObject
@@ -134,7 +134,7 @@ void AppModuleUsagePass::run_pass(DexStoresVector& stores,
 
   load_allow_list(stores, name_store_map);
 
-  auto verbose_path = conf.metafile(SUPER_VERBOSE_DETIALS_FILENAME);
+  auto verbose_path = conf.metafile(SUPER_VERBOSE_DETAILS_FILENAME);
 
   analyze_direct_app_module_usage(full_scope, verbose_path);
   TRACE(APP_MOD_USE, 4, "*** Direct analysis done\n");
