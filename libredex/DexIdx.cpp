@@ -110,8 +110,14 @@ const DexString* DexIdx::get_stringidx_fromdex(uint32_t stridx) {
                     "String data offset out of range");
   const uint8_t* dstr = m_dexbase + stroff;
   /* Strip off uleb128 size encoding */
-  int utfsize = read_uleb128(&dstr);
-  return DexString::make_string((const char*)dstr, utfsize);
+  uint32_t utfsize = read_uleb128(&dstr);
+  auto ret = DexString::make_string((const char*)dstr);
+  always_assert_log(
+      ret->length() == utfsize,
+      "Parsed string UTF size is not the same as stringidx size. %u != %u",
+      ret->length(),
+      utfsize);
+  return ret;
 }
 
 DexType* DexIdx::get_typeidx_fromdex(uint32_t typeidx) {

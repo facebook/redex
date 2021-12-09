@@ -111,9 +111,9 @@ static StoredValue* try_insert(Key key,
   return container->at(key);
 }
 
-const DexString* RedexContext::make_string(const char* nstr, uint32_t utfsize) {
+const DexString* RedexContext::make_string(const char* nstr, uint32_t size) {
   always_assert(nstr != nullptr);
-  auto p = std::make_pair(nstr, utfsize);
+  auto p = std::make_pair(nstr, size);
   auto& segment = s_string_map.at(p);
 
   auto rv = segment.get(p, nullptr);
@@ -124,16 +124,16 @@ const DexString* RedexContext::make_string(const char* nstr, uint32_t utfsize) {
   // std::string. The c_str is valid until a the string is destroyed, or until a
   // non-const function is called on the string (but note the std::string itself
   // is const)
-  auto dexstring = new DexString(nstr, utfsize);
-  auto p2 = std::make_pair(dexstring->c_str(), utfsize);
+  auto dexstring = new DexString(nstr);
+  auto p2 = std::make_pair(dexstring->c_str(), size);
   return try_insert<DexString, const DexString>(p2, dexstring, &segment);
 }
 
-const DexString* RedexContext::get_string(const char* nstr, uint32_t utfsize) {
+const DexString* RedexContext::get_string(const char* nstr, uint32_t size) {
   if (nstr == nullptr) {
     return nullptr;
   }
-  auto p = std::make_pair(nstr, utfsize);
+  auto p = std::make_pair(nstr, size);
   auto& segment = s_string_map.at(p);
   return segment.get(p, nullptr);
 }

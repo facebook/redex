@@ -306,7 +306,7 @@ DexType* make_array_type(const DexType* type, uint32_t level) {
   name.reserve(size + 1);
   name.append(level, '[');
   name.append(elem_name.begin(), elem_name.end());
-  return DexType::make_type(name.c_str(), name.size());
+  return DexType::make_type(DexString::make_string(name));
 }
 
 DexType* get_boxed_reference_type(const DexType* type) {

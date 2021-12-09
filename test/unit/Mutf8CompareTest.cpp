@@ -15,7 +15,7 @@ class Mutf8CompareTest : public RedexTest {};
 
 TEST_F(Mutf8CompareTest, empty) {
   auto s1 = DexString::make_string(";");
-  auto s2 = DexString::make_string(";\300\200", 2);
+  auto s2 = DexString::make_string(";\300\200");
   EXPECT_TRUE(compare_dexstrings(s1, s2));
   EXPECT_FALSE(compare_dexstrings(s2, s1));
 }

@@ -78,8 +78,9 @@ class DexString {
   uint32_t m_utfsize;
 
   // See UNIQUENESS above for the rationale for the private constructor pattern.
-  DexString(std::string nstr, uint32_t utfsize)
-      : m_storage(std::move(nstr)), m_utfsize(utfsize) {}
+  explicit DexString(std::string nstr)
+      : m_storage(std::move(nstr)),
+        m_utfsize(length_of_utf8_string(m_storage.c_str())) {}
 
  public:
   uint32_t size() const { return static_cast<uint32_t>(m_storage.size()); }
@@ -93,29 +94,21 @@ class DexString {
 
   // If the DexString exists, return it, otherwise create it and return it.
   // See also get_string()
-  static const DexString* make_string(const char* nstr, uint32_t utfsize) {
-    return g_redex->make_string(nstr, utfsize);
-  }
-
   static const DexString* make_string(const char* nstr) {
-    return make_string(nstr, length_of_utf8_string(nstr));
+    return g_redex->make_string(nstr, (uint32_t)strlen(nstr));
   }
 
   static const DexString* make_string(const std::string& nstr) {
-    return make_string(nstr.c_str());
+    return g_redex->make_string(nstr.c_str(), (uint32_t)nstr.size());
   }
 
   // Return an existing DexString or nullptr if one does not exist.
-  static const DexString* get_string(const char* nstr, uint32_t utfsize) {
-    return g_redex->get_string(nstr, utfsize);
-  }
-
   static const DexString* get_string(const char* nstr) {
-    return get_string(nstr, (uint32_t)strlen(nstr));
+    return g_redex->get_string(nstr, (uint32_t)strlen(nstr));
   }
 
   static const DexString* get_string(const std::string& str) {
-    return get_string(str.c_str(), (uint32_t)strlen(str.c_str()));
+    return g_redex->get_string(str.c_str(), (uint32_t)str.size());
   }
 
   static const std::string EMPTY;
@@ -207,8 +200,8 @@ class DexType {
     return make_type(DexString::make_string(type_string));
   }
 
-  static DexType* make_type(const char* type_string, int utfsize) {
-    return make_type(DexString::make_string(type_string, utfsize));
+  static DexType* make_type(const std::string& str) {
+    return make_type(DexString::make_string(str));
   }
 
   // Always makes a new type that is unique.
@@ -232,10 +225,6 @@ class DexType {
 
   static DexType* get_type(const std::string& str) {
     return get_type(DexString::get_string(str));
-  }
-
-  static DexType* get_type(const char* type_string, int utfsize) {
-    return get_type(DexString::get_string(type_string, utfsize));
   }
 
  public:
