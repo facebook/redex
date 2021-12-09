@@ -17,6 +17,7 @@
 #include <map>
 #include <mutex>
 #include <sstream>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -56,8 +57,8 @@ struct RedexContext {
   explicit RedexContext(bool allow_class_duplicates = false);
   ~RedexContext();
 
-  const DexString* make_string(const char* nstr, uint32_t utfsize);
-  const DexString* get_string(const char* nstr, uint32_t utfsize);
+  const DexString* make_string(std::string_view s);
+  const DexString* get_string(std::string_view s);
 
   DexType* make_type(const DexString* dstring);
   DexType* get_type(const DexString* dstring);
@@ -246,21 +247,18 @@ struct RedexContext {
   // The two layers give infrastructure overhead, however, the base size
   // of a `std::map` and `ConcurrentContainer` is quite small.
 
-  using StringMapKey = std::pair<const char*, uint32_t>;
+  using StringMapKey = std::string_view;
   struct StringMapKeyHash {
-    size_t operator()(const StringMapKey& k) const { return k.second; }
-  };
-  struct StringMapKeyProjection {
-    const char* operator()(const StringMapKey& k) const { return k.first; }
+    size_t operator()(const StringMapKey& k) const { return k.size(); }
   };
 
   template <size_t n_slots = 31>
   using ConcurrentProjectedStringMap =
-      ConcurrentMapContainer<std::map<const char*, const DexString*, Strcmp>,
+      ConcurrentMapContainer<std::map<std::string_view, const DexString*>,
                              StringMapKey,
                              const DexString*,
                              StringMapKeyHash,
-                             StringMapKeyProjection,
+                             Identity,
                              n_slots>;
 
   template <size_t n_slots, size_t m_slots>
@@ -270,22 +268,12 @@ struct RedexContext {
     AType map;
 
     ConcurrentProjectedStringMap<n_slots>& at(const StringMapKey& k) {
-      size_t hashed = TruncatedStringHash()(k.first) % m_slots;
+      size_t hashed = TruncatedStringHash()(k.data(), k.size()) % m_slots;
       return map[hashed];
     }
 
     typename AType::iterator begin() { return map.begin(); }
     typename AType::iterator end() { return map.end(); }
-  };
-
-  struct Strcmp {
-    bool operator()(const char* a, const char* b) const {
-#if defined(__SSE4_2__) && defined(__linux__) && defined(__STRCMP_LESS__)
-      return strcmp_less(a, b);
-#else
-      return strcmp(a, b) < 0;
-#endif
-    }
   };
 
   // Hash a 32-byte subsequence of a given string, offset by 32 bytes from the
@@ -298,10 +286,10 @@ struct RedexContext {
   // cache line (offset + hash_prefix_len <= 64) and hash enough of the string
   // to minimize the chance of duplicate sections
   struct TruncatedStringHash {
-    size_t operator()(const char* s) {
+    size_t operator()(const char* s, uint32_t string_size) {
       constexpr size_t hash_prefix_len = 32;
       constexpr size_t offset = 32;
-      size_t len = strnlen(s, offset + hash_prefix_len);
+      size_t len = std::min<size_t>(string_size, offset + hash_prefix_len);
       size_t start = std::max<int64_t>(0, int64_t(len - hash_prefix_len));
       return boost::hash_range(s + start, s + len);
     }

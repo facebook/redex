@@ -32,7 +32,7 @@ PRIMITIVE_PSEUDO_TYPE_FIELDS
 
 } // namespace pseudo
 
-bool is_valid(const std::string& descriptor) {
+bool is_valid(std::string_view descriptor) {
   if (descriptor.empty()) {
     return false;
   }
@@ -81,7 +81,7 @@ bool is_valid(const std::string& descriptor) {
   for (; i != descriptor.length() - 1; ++i) {
     if (descriptor[i] == '/') {
       // Found a segment, do a check.
-      if (!is_valid_identifier(descriptor, start, i - start)) {
+      if (!is_valid_identifier(descriptor.substr(start, i - start))) {
         return false;
       }
       start = i + 1;
@@ -89,7 +89,7 @@ bool is_valid(const std::string& descriptor) {
   }
   if (start != i) {
     // Handle tail.
-    if (!is_valid_identifier(descriptor, start, i - start)) {
+    if (!is_valid_identifier(descriptor.substr(start, i - start))) {
       return false;
     }
   }

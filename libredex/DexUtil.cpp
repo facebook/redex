@@ -11,6 +11,7 @@
 #include <boost/filesystem.hpp>
 #include <boost/regex.hpp>
 #include <deque>
+#include <string_view>
 #include <unordered_set>
 
 #include "Debug.h"
@@ -448,17 +449,13 @@ bool relocate_method_if_no_changes(DexMethod* method, DexType* to_type) {
   return true;
 }
 
-bool is_valid_identifier(const std::string& s) {
-  return is_valid_identifier(s, 0, s.length());
-}
-
-bool is_valid_identifier(const std::string& s, size_t start, size_t len) {
-  if (len == 0) {
+bool is_valid_identifier(std::string_view s) {
+  if (s.empty()) {
     // Identifiers must not be empty.
     return false;
   }
-  for (size_t i = start; i != start + len; ++i) {
-    switch (s.at(i)) {
+  for (char c : s) {
+    switch (c) {
     // Forbidden characters. This may not work for UTF encodings.
     case '/':
     case ';':

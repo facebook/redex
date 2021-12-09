@@ -77,14 +77,14 @@ TEST_F(DexUtilTest, is_valid_identifier) {
 
 TEST_F(DexUtilTest, is_valid_identifier_range) {
   std::string s = ";[FooBar123$Hello_World-Test./";
-  EXPECT_TRUE(is_valid_identifier(s, 2, s.length() - 4));
+  EXPECT_TRUE(is_valid_identifier(s.substr(2, s.length() - 4)));
 
-  EXPECT_FALSE(is_valid_identifier(s, 1, s.length() - 4));
-  EXPECT_FALSE(is_valid_identifier(s, 2, s.length() - 3));
+  EXPECT_FALSE(is_valid_identifier(s.substr(s.length() - 4)));
+  EXPECT_FALSE(is_valid_identifier(s.substr(2, s.length() - 3)));
 
-  EXPECT_FALSE(is_valid_identifier(s, 2, 0));
+  EXPECT_FALSE(is_valid_identifier(s.substr(2, 0)));
 
   std::string mod = s;
   mod[mod.length() / 2] = ';';
-  EXPECT_FALSE(is_valid_identifier(mod, 2, mod.length() - 4));
+  EXPECT_FALSE(is_valid_identifier(mod.substr(2, mod.length() - 4)));
 }

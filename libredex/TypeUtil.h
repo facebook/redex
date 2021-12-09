@@ -46,7 +46,7 @@ PRIMITIVE_PSEUDO_TYPE_FIELDS
 
 // Do some simple checks to ascertain whether the descriptor looks valid.
 // NOTE: may fail for UTF strings.
-bool is_valid(const std::string& descriptor);
+bool is_valid(std::string_view descriptor);
 
 /**
  * Return true if the type is a primitive.

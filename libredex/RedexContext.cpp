@@ -111,31 +111,25 @@ static StoredValue* try_insert(Key key,
   return container->at(key);
 }
 
-const DexString* RedexContext::make_string(const char* nstr, uint32_t size) {
-  always_assert(nstr != nullptr);
-  auto p = std::make_pair(nstr, size);
-  auto& segment = s_string_map.at(p);
+const DexString* RedexContext::make_string(std::string_view str) {
+  auto& segment = s_string_map.at(str);
 
-  auto rv = segment.get(p, nullptr);
+  auto rv = segment.get(str, nullptr);
   if (rv != nullptr) {
     return rv;
   }
-  // Note that DexStrings are keyed by the c_str() of the underlying
-  // std::string. The c_str is valid until a the string is destroyed, or until a
-  // non-const function is called on the string (but note the std::string itself
-  // is const)
-  auto dexstring = new DexString(nstr);
-  auto p2 = std::make_pair(dexstring->c_str(), size);
+  // Note that DexStrings are keyed by the string_view of the underlying
+  // std::string. The string_view is valid until a the string is destroyed, or
+  // until a non-const function is called on the string (but note the
+  // std::string itself is const)
+  auto dexstring = new DexString(std::string(str));
+  auto p2 = std::string_view(dexstring->c_str(), str.size());
   return try_insert<DexString, const DexString>(p2, dexstring, &segment);
 }
 
-const DexString* RedexContext::get_string(const char* nstr, uint32_t size) {
-  if (nstr == nullptr) {
-    return nullptr;
-  }
-  auto p = std::make_pair(nstr, size);
-  auto& segment = s_string_map.at(p);
-  return segment.get(p, nullptr);
+const DexString* RedexContext::get_string(std::string_view str) {
+  auto& segment = s_string_map.at(str);
+  return segment.get(str, nullptr);
 }
 
 DexType* RedexContext::make_type(const DexString* dstring) {

@@ -26,7 +26,7 @@ namespace java_declarations {
  * TODO: have more robust support for above 1 and 2
  */
 dex_member_refs::FieldDescriptorTokens parse_field_declaration(
-    const std::string& line);
+    std::string_view line);
 
 /*
  * @param line Java method declaration
@@ -44,5 +44,5 @@ dex_member_refs::FieldDescriptorTokens parse_field_declaration(
  * TODO: have more robust support for above 1 and 2
  */
 dex_member_refs::MethodDescriptorTokens parse_method_declaration(
-    const std::string& line);
+    std::string_view line);
 } // namespace java_declarations

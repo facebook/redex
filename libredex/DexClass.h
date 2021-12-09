@@ -94,21 +94,13 @@ class DexString {
 
   // If the DexString exists, return it, otherwise create it and return it.
   // See also get_string()
-  static const DexString* make_string(const char* nstr) {
-    return g_redex->make_string(nstr, (uint32_t)strlen(nstr));
-  }
-
-  static const DexString* make_string(const std::string& nstr) {
-    return g_redex->make_string(nstr.c_str(), (uint32_t)nstr.size());
+  static const DexString* make_string(std::string_view nstr) {
+    return g_redex->make_string(nstr);
   }
 
   // Return an existing DexString or nullptr if one does not exist.
-  static const DexString* get_string(const char* nstr) {
-    return g_redex->get_string(nstr, (uint32_t)strlen(nstr));
-  }
-
-  static const DexString* get_string(const std::string& str) {
-    return g_redex->get_string(str.c_str(), (uint32_t)str.size());
+  static const DexString* get_string(std::string_view s) {
+    return g_redex->get_string(s);
   }
 
   static const std::string EMPTY;
@@ -196,11 +188,7 @@ class DexType {
     return g_redex->make_type(dstring);
   }
 
-  static DexType* make_type(const char* type_string) {
-    return make_type(DexString::make_string(type_string));
-  }
-
-  static DexType* make_type(const std::string& str) {
+  static DexType* make_type(std::string_view str) {
     return make_type(DexString::make_string(str));
   }
 
@@ -219,11 +207,7 @@ class DexType {
     return g_redex->get_type(dstring);
   }
 
-  static DexType* get_type(const char* type_string) {
-    return get_type(DexString::get_string(type_string));
-  }
-
-  static DexType* get_type(const std::string& str) {
+  static DexType* get_type(std::string_view str) {
     return get_type(DexString::get_string(str));
   }
 
@@ -357,12 +341,13 @@ class DexField : public DexFieldRef {
   /**
    * Get a field using a full descriptor: Lcls;.name:type
    */
-  static DexFieldRef* get_field(const std::string&);
+  static DexFieldRef* get_field(std::string_view);
 
   /**
    * Make a field using a full descriptor: Lcls;.name:type
    */
-  static DexFieldRef* make_field(const std::string&);
+  static DexFieldRef* make_field(std::string_view);
+
   static const DexString* get_unique_name(DexType* container,
                                           const DexString* name,
                                           DexType* type) {
@@ -968,12 +953,12 @@ class DexMethod : public DexMethodRef {
    * will lead to asserts, i.e., throws.
    */
   template <bool kCheckFormat = false>
-  static DexMethodRef* get_method(const std::string&);
+  static DexMethodRef* get_method(std::string_view);
 
   /**
    * Make a method using a full descriptor: Lcls;.name:(args)rtype
    */
-  static DexMethodRef* make_method(const std::string&);
+  static DexMethodRef* make_method(std::string_view);
 
   // Return an existing DexMethod or nullptr if one does not exist.
   static DexMethodRef* get_method(const DexType* type,

@@ -193,21 +193,21 @@ DexField* DexFieldRef::make_concrete(DexAccessFlags access_flags,
 
 DexFieldRef* DexField::get_field(
     const dex_member_refs::FieldDescriptorTokens& fdt) {
-  auto cls = DexType::get_type(fdt.cls.c_str());
+  auto cls = DexType::get_type(fdt.cls);
   auto name = DexString::get_string(fdt.name);
-  auto type = DexType::get_type(fdt.type.c_str());
+  auto type = DexType::get_type(fdt.type);
   return DexField::get_field(cls, name, type);
 }
 
-DexFieldRef* DexField::get_field(const std::string& full_descriptor) {
+DexFieldRef* DexField::get_field(std::string_view full_descriptor) {
   return get_field(dex_member_refs::parse_field(full_descriptor));
 }
 
-DexFieldRef* DexField::make_field(const std::string& full_descriptor) {
+DexFieldRef* DexField::make_field(std::string_view full_descriptor) {
   auto fdt = dex_member_refs::parse_field(full_descriptor);
-  auto cls = DexType::make_type(fdt.cls.c_str());
+  auto cls = DexType::make_type(fdt.cls);
   auto name = DexString::make_string(fdt.name);
-  auto type = DexType::make_type(fdt.type.c_str());
+  auto type = DexType::make_type(fdt.type);
   return DexField::make_field(cls, name, type);
 }
 
@@ -718,35 +718,35 @@ DexMethod* DexMethod::make_full_method_from(DexMethod* that,
 
 DexMethodRef* DexMethod::get_method(
     const dex_member_refs::MethodDescriptorTokens& mdt) {
-  auto cls = DexType::get_type(mdt.cls.c_str());
+  auto cls = DexType::get_type(mdt.cls);
   auto name = DexString::get_string(mdt.name);
   DexTypeList::ContainerType args;
   for (auto& arg_str : mdt.args) {
-    args.push_back(DexType::get_type(arg_str.c_str()));
+    args.push_back(DexType::get_type(arg_str));
   }
   auto dtl = DexTypeList::get_type_list(std::move(args));
-  auto rtype = DexType::get_type(mdt.rtype.c_str());
+  auto rtype = DexType::get_type(mdt.rtype);
   return DexMethod::get_method(cls, name, DexProto::get_proto(rtype, dtl));
 }
 
 template <bool kCheckFormat>
-DexMethodRef* DexMethod::get_method(const std::string& full_descriptor) {
+DexMethodRef* DexMethod::get_method(std::string_view full_descriptor) {
   return get_method(
       dex_member_refs::parse_method<kCheckFormat>(full_descriptor));
 }
-template DexMethodRef* DexMethod::get_method<false>(const std::string&);
-template DexMethodRef* DexMethod::get_method<true>(const std::string&);
+template DexMethodRef* DexMethod::get_method<false>(std::string_view);
+template DexMethodRef* DexMethod::get_method<true>(std::string_view);
 
-DexMethodRef* DexMethod::make_method(const std::string& full_descriptor) {
+DexMethodRef* DexMethod::make_method(std::string_view full_descriptor) {
   auto mdt = dex_member_refs::parse_method(full_descriptor);
-  auto cls = DexType::make_type(mdt.cls.c_str());
+  auto cls = DexType::make_type(mdt.cls);
   auto name = DexString::make_string(mdt.name);
   DexTypeList::ContainerType args;
   for (auto& arg_str : mdt.args) {
-    args.push_back(DexType::make_type(arg_str.c_str()));
+    args.push_back(DexType::make_type(arg_str));
   }
   auto dtl = DexTypeList::make_type_list(std::move(args));
-  auto rtype = DexType::make_type(mdt.rtype.c_str());
+  auto rtype = DexType::make_type(mdt.rtype);
   return DexMethod::make_method(cls, name, DexProto::make_proto(rtype, dtl));
 }
 

@@ -20,7 +20,7 @@ class FbjniMarker {
   DexMethod* process_method(DexType* type, const std::string& method_str);
 
  private:
-  std::string to_internal_type(const std::string& str);
+  std::string to_internal_type(std::string_view str);
 
   std::unordered_set<DexType*> types;
 };
