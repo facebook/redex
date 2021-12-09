@@ -292,6 +292,7 @@ void BuilderTransform::cleanup() {
           SHOW(method));
     method->set_code(copy->release_code());
     DexMethod::erase_method(copy);
+    DexMethod::delete_method_DO_NOT_USE(copy);
   }
 }
 
