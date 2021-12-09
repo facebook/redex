@@ -8,6 +8,7 @@
 #pragma once
 
 #include <boost/optional.hpp>
+#include <string_view>
 
 #include "DexClass.h"
 #include "Timer.h"
@@ -150,15 +151,15 @@ class MethodProfiles {
   bool parse_stats_file(const std::string& csv_filename);
 
   // Read a line of data (not a header)
-  bool parse_line(std::string& line);
+  bool parse_line(std::string_view line);
   // Read a line from the main section of the aggregated stats file and put an
   // entry into m_method_stats
-  bool parse_main(std::string& line);
+  bool parse_main(std::string_view line);
   // Read a line of data from the metadata section (at the top of the file)
-  bool parse_metadata(std::string& line);
+  bool parse_metadata(std::string_view line);
 
   // Parse the first line and make sure it matches our expectations
-  bool parse_header(std::string& line);
+  bool parse_header(std::string_view line);
 };
 
 // NOTE: Do not use this comparator directly in `std::sort` calls, as it is

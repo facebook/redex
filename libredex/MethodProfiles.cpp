@@ -8,11 +8,13 @@
 #include "MethodProfiles.h"
 
 #include <boost/algorithm/string.hpp>
+#include <charconv>
 #include <fstream>
 #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "CppUtil.h"
 #include "Show.h"
 
 using namespace method_profiles;
@@ -22,21 +24,24 @@ extern int errno;
 namespace {
 
 template <class Func>
-bool parse_cells(std::string& line, const Func& parse_cell) {
+bool parse_cells(std::string_view line, const Func& parse_cell) {
   char* save_ptr = nullptr;
-  char* tok = const_cast<char*>(line.c_str());
   uint32_t i = 0;
   // Assuming there are no quoted strings containing commas!
-  while ((tok = strtok_r(tok, ",", &save_ptr)) != nullptr) {
-    bool success = parse_cell(tok, i);
+  for (auto cell : split_string(line, ",")) {
+    if (cell.back() == '\n') {
+      cell.remove_suffix(1);
+    }
+    bool success = parse_cell(cell, i);
     if (!success) {
       return false;
     }
-    tok = nullptr;
     ++i;
   }
   return true;
 }
+
+bool empty_column(std::string_view sv) { return sv.empty() || sv == "\n"; }
 
 } // namespace
 
@@ -99,46 +104,60 @@ bool MethodProfiles::parse_stats_file(const std::string& csv_filename) {
   return true;
 }
 
-int64_t parse_int(const char* tok) {
-  char* rest = nullptr;
-  const auto result = strtol(tok, &rest, 10);
-  const auto len = strlen(rest);
-  always_assert_log(rest != tok, "can't parse %s into a int64_t", tok);
-  always_assert_log(len == 0 || (len == 1 && rest[0] == '\n'),
-                    "can't parse %s into a int64_t", tok);
+// This should have worked for double too as described in p0067r5.
+// But libc++ 7 did not implement floating point conversions.
+template <typename IntType = int64_t>
+IntType parse_int(std::string_view tok) {
+  IntType result{};
+  auto [ptr, ec]{std::from_chars(tok.data(), tok.data() + tok.size(), result)};
+  std::string_view rest(ptr, tok.size() - (ptr - tok.data()));
+
+  always_assert_log(ec == std::errc(), "can't parse %s into an int: %s",
+                    SHOW(tok), std::make_error_condition(ec).message().c_str());
+  always_assert_log(empty_column(rest), "can't parse %s into an int",
+                    SHOW(tok));
   return result;
 }
 
-double parse_double(const char* tok) {
-  char* rest = nullptr;
-  const auto result = strtod(tok, &rest);
-  const auto len = strlen(rest);
-  always_assert_log(rest != tok, "can't parse %s into a double", tok);
-  always_assert_log(len == 0 || (len == 1 && rest[0] == '\n'),
-                    "can't parse %s into a double", tok);
+// `strtod` requires c string to be null terminated, std::string_view::data()
+// doesn't have this guarantee. Our `string_view`s are taken from
+// `std::string`s. This should be safe.
+double parse_double(std::string_view tok) {
+  char* ptr = nullptr;
+  const auto result = strtod(tok.data(), &ptr);
+  always_assert_log(
+      ptr <= (tok.data() + tok.size()),
+      "strtod went over std::string_view boundary for string_view %s",
+      SHOW(tok));
+
+  std::string_view rest(ptr, tok.size() - (ptr - tok.data()));
+  always_assert_log(ptr != tok.data(), "can't parse %s into a double",
+                    SHOW(tok));
+  always_assert_log(empty_column(rest), "can't parse %s into a double",
+                    SHOW(tok));
   return result;
 }
 
-bool MethodProfiles::parse_metadata(std::string& line) {
+bool MethodProfiles::parse_metadata(std::string_view line) {
   always_assert(m_mode == METADATA);
   uint32_t interaction_count{0};
-  auto parse_cell = [&](char* tok, uint32_t col) -> bool {
+  auto parse_cell = [&](std::string_view cell, uint32_t col) -> bool {
     switch (col) {
     case 0:
-      m_interaction_id = std::string(tok);
+      m_interaction_id = std::string(cell);
       return true;
     case 1: {
-      int64_t parsed = parse_int(tok);
+      auto parsed = parse_int(cell);
       always_assert(parsed <= std::numeric_limits<uint32_t>::max());
       always_assert(parsed >= 0);
       interaction_count = static_cast<uint32_t>(parsed);
       return true;
     }
     default: {
-      auto len = strnlen(tok, 1);
-      bool ok = (len == 0 || (len == 1 && tok[0] == '\n'));
+      bool ok = empty_column(cell);
       if (!ok) {
-        std::cerr << "Unexpected extra value in metadata: " << tok << std::endl;
+        std::cerr << "Unexpected extra value in metadata: " << cell
+                  << std::endl;
       }
       return ok;
     }
@@ -155,55 +174,49 @@ bool MethodProfiles::parse_metadata(std::string& line) {
   return true;
 }
 
-bool MethodProfiles::parse_main(std::string& line) {
+bool MethodProfiles::parse_main(std::string_view line) {
   always_assert(m_mode == MAIN);
   Stats stats;
   std::string interaction_id;
   DexMethodRef* ref = nullptr;
-  auto parse_cell = [&](char* tok, uint32_t col) -> bool {
+  auto parse_cell = [&](std::string_view cell, uint32_t col) -> bool {
     switch (col) {
     case INDEX:
       // Don't need this raw data. It's an arbitrary index (the line number in
       // the file)
       return true;
     case NAME:
-      ref = DexMethod::get_method</*kCheckFormat=*/true>(tok);
+      ref = DexMethod::get_method</*kCheckFormat=*/true>(std::string(cell));
       if (ref == nullptr) {
-        TRACE(METH_PROF, 6, "failed to resolve %s", tok);
+        TRACE(METH_PROF, 6, "failed to resolve %s", SHOW(cell));
       }
       return true;
     case APPEAR100:
-      stats.appear_percent = parse_double(tok);
+      stats.appear_percent = parse_double(cell);
       return true;
     case APPEAR_NUMBER:
       // Don't need this raw data. appear_percent is the same thing but
       // normalized
       return true;
     case AVG_CALL:
-      stats.call_count = parse_double(tok);
+      stats.call_count = parse_double(cell);
       return true;
     case AVG_ORDER:
       // Don't need this raw data. order_percent is the same thing but
       // normalized
       return true;
     case AVG_RANK100:
-      stats.order_percent = parse_double(tok);
+      stats.order_percent = parse_double(cell);
       return true;
     case MIN_API_LEVEL: {
-      int64_t level = parse_int(tok);
-      always_assert(level <= std::numeric_limits<int16_t>::max());
-      always_assert(level >= std::numeric_limits<int16_t>::min());
-      stats.min_api_level = static_cast<int16_t>(level);
+      stats.min_api_level = parse_int<int16_t>(cell);
       return true;
     }
     default:
       const auto& search = m_optional_columns.find(col);
       if (search != m_optional_columns.end()) {
         if (search->second == "interaction") {
-          interaction_id = tok;
-          if (interaction_id.back() == '\n') {
-            interaction_id.resize(interaction_id.size() - 1);
-          }
+          interaction_id = cell;
           return true;
         }
       }
@@ -212,7 +225,6 @@ bool MethodProfiles::parse_main(std::string& line) {
     }
   };
 
-  std::string copy(line);
   bool success = parse_cells(line, parse_cell);
   if (!success) {
     return false;
@@ -229,13 +241,14 @@ bool MethodProfiles::parse_main(std::string& line) {
           stats.order_percent, stats.min_api_level);
     m_method_stats[interaction_id].emplace(ref, stats);
   } else {
+    std::string copy(line);
     m_unresolved_lines[interaction_id].push_back(copy);
     TRACE(METH_PROF, 6, "unresolved: %s", copy.c_str());
   }
   return true;
 }
 
-bool MethodProfiles::parse_line(std::string& line) {
+bool MethodProfiles::parse_line(std::string_view line) {
   if (m_mode == MAIN) {
     return parse_main(line);
   } else if (m_mode == METADATA) {
@@ -276,13 +289,12 @@ void MethodProfiles::process_unresolved_lines() {
         total_rows, unresolved_size());
 }
 
-bool MethodProfiles::parse_header(std::string& line) {
+bool MethodProfiles::parse_header(std::string_view line) {
   always_assert(m_mode == NONE);
-  auto check_cell = [](const char* expected, const char* tok,
+  auto check_cell = [](std::string_view expected, std::string_view cell,
                        uint32_t col) -> bool {
-    const size_t MAX_CELL_LENGTH = 1000;
-    if (strncmp(tok, expected, MAX_CELL_LENGTH) != 0) {
-      std::cerr << "Unexpected Header (column " << col << "): " << tok
+    if (expected != cell) {
+      std::cerr << "Unexpected Header (column " << col << "): " << cell
                 << " != " << expected << "\n";
       return false;
     }
@@ -291,17 +303,16 @@ bool MethodProfiles::parse_header(std::string& line) {
   if (boost::starts_with(line, "interaction")) {
     m_mode = METADATA;
     // Extra metadata at the top of the file that we want to parse
-    auto parse_cell = [&](char* tok, uint32_t col) -> bool {
+    auto parse_cell = [&](std::string_view cell, uint32_t col) -> bool {
       switch (col) {
       case 0:
-        return check_cell("interaction", tok, col);
+        return check_cell("interaction", cell, col);
       case 1:
-        return check_cell("appear#", tok, col);
+        return check_cell("appear#", cell, col);
       default: {
-        auto len = strnlen(tok, 1);
-        bool ok = (len == 0 || (len == 1 && tok[0] == '\n'));
+        auto ok = empty_column(cell);
         if (!ok) {
-          std::cerr << "Unexpected Metadata Column: " << tok << std::endl;
+          std::cerr << "Unexpected Metadata Column: " << cell << std::endl;
         }
         return ok;
       }
@@ -310,30 +321,26 @@ bool MethodProfiles::parse_header(std::string& line) {
     return parse_cells(line, parse_cell);
   } else {
     m_mode = MAIN;
-    auto parse_cell = [&](char* tok, uint32_t col) -> bool {
+    auto parse_cell = [&](std::string_view cell, uint32_t col) -> bool {
       switch (col) {
       case INDEX:
-        return check_cell("index", tok, col);
+        return check_cell("index", cell, col);
       case NAME:
-        return check_cell("name", tok, col);
+        return check_cell("name", cell, col);
       case APPEAR100:
-        return check_cell("appear100", tok, col);
+        return check_cell("appear100", cell, col);
       case APPEAR_NUMBER:
-        return check_cell("appear#", tok, col);
+        return check_cell("appear#", cell, col);
       case AVG_CALL:
-        return check_cell("avg_call", tok, col);
+        return check_cell("avg_call", cell, col);
       case AVG_ORDER:
-        return check_cell("avg_order", tok, col);
+        return check_cell("avg_order", cell, col);
       case AVG_RANK100:
-        return check_cell("avg_rank100", tok, col);
+        return check_cell("avg_rank100", cell, col);
       case MIN_API_LEVEL:
-        return check_cell("min_api_level", tok, col);
+        return check_cell("min_api_level", cell, col);
       default:
-        std::string column_name = tok;
-        if (column_name.back() == '\n') {
-          column_name.resize(column_name.size() - 1);
-        }
-        m_optional_columns.emplace(col, column_name);
+        m_optional_columns.emplace(col, std::string(cell));
         return true;
       }
     };
