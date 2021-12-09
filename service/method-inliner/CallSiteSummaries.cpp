@@ -39,15 +39,21 @@ std::string CallSiteSummary::get_key() const {
   return oss.str();
 }
 
+static void append_signed_constant(std::ostringstream& oss,
+                                   const SignedConstantDomain& signed_value) {
+  auto c = signed_value.get_constant();
+  if (c) {
+    // prefer compact pretty value
+    oss << *c;
+  } else {
+    oss << signed_value;
+  }
+}
+
 void CallSiteSummary::append_key_value(std::ostringstream& oss,
                                        const ConstantValue& value) {
   if (const auto& signed_value = value.maybe_get<SignedConstantDomain>()) {
-    auto c = signed_value->get_constant();
-    if (c) {
-      oss << *c;
-    } else {
-      oss << show(*signed_value);
-    }
+    append_signed_constant(oss, *signed_value);
   } else if (const auto& singleton_value =
                  value.maybe_get<SingletonObjectDomain>()) {
     auto field = *singleton_value->get_constant();
@@ -76,12 +82,9 @@ void CallSiteSummary::append_key_value(std::ostringstream& oss,
       oss << "=";
       if (const auto& signed_value2 =
               attr.value.maybe_get<SignedConstantDomain>()) {
-        auto c = signed_value2->get_constant();
-        if (c) {
-          oss << *c;
-        } else {
-          oss << show(*signed_value2);
-        }
+        append_signed_constant(oss, *signed_value2);
+      } else {
+        not_reached_log("unexpected attr value: %s", SHOW(attr.value));
       }
     }
     oss << "}";
