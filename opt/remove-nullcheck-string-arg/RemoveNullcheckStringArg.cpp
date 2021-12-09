@@ -286,7 +286,7 @@ RemoveNullcheckStringArg::Stats RemoveNullcheckStringArg::change_in_cfg(
       if (iter == transfer_map.end()) {
         continue;
       }
-      IRInstruction* new_insn = new IRInstruction(OPCODE_INVOKE_STATIC);
+      auto new_insn = std::make_unique<IRInstruction>(OPCODE_INVOKE_STATIC);
       if (iter->second.second) {
         // We could have params copied via intermediate registers.
         auto defs = env.get(insn->src(0));
@@ -329,12 +329,12 @@ RemoveNullcheckStringArg::Stats RemoveNullcheckStringArg::change_in_cfg(
             ->set_srcs_size(2)
             ->set_src(0, insn->src(0))
             ->set_src(1, tmp_reg);
-        m.replace(cfg.find_insn(insn), {cst_insn, new_insn});
+        m.replace(cfg.find_insn(insn), {cst_insn, new_insn.release()});
       } else {
         new_insn->set_method(iter->second.first)
             ->set_srcs_size(1)
             ->set_src(0, insn->src(0));
-        m.replace(cfg.find_insn(insn), {new_insn});
+        m.replace(cfg.find_insn(insn), {new_insn.release()});
       }
       stats.null_check_insns_changed++;
     }
