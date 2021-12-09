@@ -132,7 +132,7 @@ void AppModuleUsagePass::run_pass(DexStoresVector& stores,
         method, std::unordered_set<DexStore*>{});
   });
 
-  load_allow_list(stores, name_store_map);
+  load_preexisting_violations(stores, name_store_map);
 
   auto verbose_path = conf.metafile(SUPER_VERBOSE_DETAILS_FILENAME);
 
@@ -178,20 +178,19 @@ void AppModuleUsagePass::run_pass(DexStoresVector& stores,
   }
 }
 
-void AppModuleUsagePass::load_allow_list(
+void AppModuleUsagePass::load_preexisting_violations(
     DexStoresVector& stores,
     const std::unordered_map<std::string, DexStore*>& name_store_map) {
-  if (m_allow_list_filepath.empty()) {
-    TRACE(APP_MOD_USE, 1, "WARNING: No violation allow list file provided");
+  if (m_preexisting_violations_filepath.empty()) {
+    TRACE(APP_MOD_USE, 1, "No preexisting violations provided.");
     return;
   }
-  std::ifstream ifs(m_allow_list_filepath);
+  std::ifstream ifs(m_preexisting_violations_filepath);
   std::string line;
   if (ifs.is_open()) {
     while (getline(ifs, line)) {
       auto comma = line.find_first_of(',');
       const auto& entrypoint = line.substr(0, comma);
-      auto asterisk = entrypoint.find_first_of('*');
       do {
         const auto& last_comma = comma;
         const auto& store_start =
@@ -202,54 +201,27 @@ void AppModuleUsagePass::load_allow_list(
         if (name_store_map.count(store_name)) {
           store = name_store_map.at(store_name);
         }
-        TRACE(APP_MOD_USE, 6,
-              "adding allowlist entry \"%s\" uses module \"%s\"\n",
-              entrypoint.c_str(), store_name.c_str());
-        if (asterisk == std::string::npos) {
-          // no asterisk => no prefix/pattern
-          if (m_allow_list_map.count(entrypoint) == 0) {
-            m_allow_list_map.emplace(entrypoint,
-                                     std::unordered_set<DexStore*>{});
+        if (m_preexisting_violations.count(entrypoint) == 0) {
+          m_preexisting_violations.emplace(entrypoint,
+                                           std::unordered_set<DexStore*>{});
+        }
+        if (store_name.find_first_of('*') != std::string::npos) {
+          TRACE(APP_MOD_USE, 6, "entrypoint %s is allowed any store \n",
+                entrypoint.c_str());
+          // allow any store to be used
+          for (const auto& pair : name_store_map) {
+            m_preexisting_violations.at(entrypoint).emplace(pair.second);
           }
-          if (store_name.find_first_of('*') != std::string::npos) {
-            TRACE(APP_MOD_USE, 6, "entrypoint %s is allowed any store \n",
-                  entrypoint.c_str());
-            // allow any store to be used
-            for (const auto& pair : name_store_map) {
-              m_allow_list_map.at(entrypoint).emplace(pair.second);
-            }
-          } else if (store != nullptr) {
-            m_allow_list_map.at(entrypoint).emplace(store);
-          }
-        } else {
-          // asterisk => prefix behavior
-          const auto& prefix = entrypoint.substr(0, asterisk);
-          TRACE(APP_MOD_USE, 6,
-                "entrypoint name is a prefix: \"%s\" => \"%s\"\n",
-                entrypoint.c_str(), prefix.c_str());
-          if (m_allow_list_prefix_map.count(prefix) == 0) {
-            m_allow_list_prefix_map.emplace(prefix,
-                                            std::unordered_set<DexStore*>{});
-          }
-          if (store_name.find_first_of('*') != std::string::npos) {
-            // allow any store to be used
-            TRACE(APP_MOD_USE, 6,
-                  "entrypoints prefixed %s are allowed to use any store \n",
-                  prefix.c_str());
-            for (const auto& pair : name_store_map) {
-              m_allow_list_prefix_map.at(prefix).emplace(pair.second);
-            }
-          } else if (store != nullptr) {
-            m_allow_list_prefix_map.at(prefix).emplace(store);
-          }
+        } else if (store != nullptr) {
+          m_preexisting_violations.at(entrypoint).emplace(store);
         }
       } while (comma != std::string::npos);
     }
     ifs.close();
   } else {
     fprintf(stderr,
-            "WARNING: Could not open violation allow list at \"%s\"\n",
-            m_allow_list_filepath.c_str());
+            "WARNING: Could not open preexisting violations list at \"%s\"\n",
+            m_preexisting_violations_filepath.c_str());
   }
 }
 
@@ -419,7 +391,7 @@ size_t AppModuleUsagePass::generate_report(const Scope& scope,
     auto violation_check = [&](auto store) {
       const auto& used_module_name = store->get_name();
       if (annotated_module_names.count(used_module_name) == 0 &&
-          !violation_is_in_allowlist(method_name, store)) {
+          !preexisting_access_permitted(method_name, store)) {
         violation(method, store_from->get_name(), used_module_name, ofs,
                   print_name);
         print_name = false;
@@ -457,7 +429,7 @@ size_t AppModuleUsagePass::generate_report(const Scope& scope,
       if (!store_used->is_root_store() &&
           store_used->get_name() != store_from->get_name() &&
           annotated_module_names.count(store_used->get_name()) == 0 &&
-          !violation_is_in_allowlist(field_name, store_used)) {
+          !preexisting_access_permitted(field_name, store_used)) {
         violation(field, store_from->get_name(), store_used->get_name(), ofs,
                   print_name);
         print_name = false;
@@ -472,20 +444,11 @@ size_t AppModuleUsagePass::generate_report(const Scope& scope,
   return violation_count;
 }
 
-bool AppModuleUsagePass::violation_is_in_allowlist(
+bool AppModuleUsagePass::preexisting_access_permitted(
     const std::string& entrypoint_name, DexStore* store_used) {
-  if (m_allow_list_map.count(entrypoint_name) == 0) {
-    // ruled out the exact item in the map so look for a prefix that matches
-    // non optimized for now
-    for (const auto& pair : m_allow_list_prefix_map) {
-      const auto& prefix = pair.first;
-      if (entrypoint_name.find_first_of(prefix) == 0) {
-        // entrypoint_name matches prefix
-        return true;
-      }
-    }
-  } else {
-    return m_allow_list_map.at(entrypoint_name).count(store_used) > 0;
+  auto it = m_preexisting_violations.find(entrypoint_name);
+  if (it != m_preexisting_violations.end()) {
+    return it->second.count(store_used);
   }
   return false;
 }
