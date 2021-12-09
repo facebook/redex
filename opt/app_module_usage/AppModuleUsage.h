@@ -53,7 +53,8 @@ class AppModuleUsagePass : public Pass {
     bind("uses_app_module_annotation_descriptor",
          "Lcom/facebook/redex/annotations/UsesAppModule;",
          m_uses_app_module_annotation_descriptor);
-    bind("allow_list_filepath", "", m_allow_list_filepath);
+    bind("preexisting_violations_filepath", "",
+         m_preexisting_violations_filepath);
   }
 
   // Entrypoint for the AppModuleUsagePass pass
@@ -65,14 +66,16 @@ class AppModuleUsagePass : public Pass {
       T* entrypoint, DexType* annotation_type);
 
  private:
-  void load_allow_list(DexStoresVector&,
-                       const std::unordered_map<std::string, DexStore*>&);
+  void load_preexisting_violations(
+      DexStoresVector&, const std::unordered_map<std::string, DexStore*>&);
   void analyze_direct_app_module_usage(const Scope&);
   void analyze_reflective_app_module_usage(const Scope&);
   // Outputs report of violations, returns the number of violations
   size_t generate_report(const Scope&, const std::string&, PassManager&);
+
   // returns true if the given entrypoint name is allowed to use the given store
-  bool violation_is_in_allowlist(const std::string&, DexStore*);
+  bool preexisting_access_permitted(const std::string&, DexStore*);
+
   // Handle a violation of `entrypoint` using `module` unannotated
   template <typename T>
   void violation(T* entrypoint,
@@ -100,12 +103,7 @@ class AppModuleUsagePass : public Pass {
   // Map of violations from entrypoint names to the names of stores used
   // by the entrypoint
   std::unordered_map<std::string, std::unordered_set<DexStore*>>
-      m_allow_list_map;
-
-  // Map of violations from entrypoint prefixes to the names of stores
-  // used by the entrypoint(s)
-  std::unordered_map<std::string, std::unordered_set<DexStore*>>
-      m_allow_list_prefix_map;
+      m_preexisting_violations;
 
   // To quickly look up wich DexStore ("module") a DexType is from
   ConcurrentMap<DexType*, DexStore*> m_type_store_map;
@@ -114,5 +112,5 @@ class AppModuleUsagePass : public Pass {
   bool m_output_module_use_count;
   bool m_crash_with_violations;
   std::string m_uses_app_module_annotation_descriptor;
-  std::string m_allow_list_filepath;
+  std::string m_preexisting_violations_filepath;
 };
