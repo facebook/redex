@@ -72,6 +72,24 @@ ConstantValue meet(const ConstantValue& left, const ConstantValue& right) {
   if (is_nez(right) && is_not_null(left)) {
     return left;
   }
+
+  // SingletonObjectDomain and ObjectWithImmutAttrDomain both represent object
+  // references and they have intersection.
+  // Handle their meet operator specially.
+  auto is_singleton_obj = [](const ConstantValue& value) {
+    auto obj = value.maybe_get<SingletonObjectDomain>();
+    return obj;
+  };
+  auto is_obj_with_immutable_attr = [](const ConstantValue& value) {
+    auto obj = value.maybe_get<ObjectWithImmutAttrDomain>();
+    return obj;
+  };
+  if (is_singleton_obj(left) && is_obj_with_immutable_attr(right)) {
+    return right;
+  }
+  if (is_singleton_obj(right) && is_obj_with_immutable_attr(left)) {
+    return left;
+  }
   // Non-null objects of different custom object domains can never alias, so
   // they meet at bottom, which is the default meet implementation for
   // disjoint domains.
