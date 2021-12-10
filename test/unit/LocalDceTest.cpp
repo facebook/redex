@@ -621,6 +621,56 @@ TEST_F(LocalDceTryTest, normalize_new_instances) {
   EXPECT_CODE_EQ(ircode, expected_code.get());
 }
 
+TEST_F(LocalDceTryTest, normalize_new_instances_sb) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (.src_block "LFoo;.bar:()V" 0)
+      (new-instance "Ljava/lang/Object;")
+      (move-result-pseudo-object v0)
+      (.src_block "LFoo;.bar:()V" 1)
+      (new-instance "Ljava/lang/Object;")
+      (move-result-pseudo-object v1)
+      (.src_block "LFoo;.bar:()V" 2)
+      (new-instance "Ljava/lang/Object;")
+      (move-result-pseudo-object v2)
+      (.src_block "LFoo;.bar:()V" 3)
+      (invoke-direct (v0) "Ljava/lang/Object;.<init>:()V")
+      (.src_block "LFoo;.bar:()V" 4)
+      (invoke-direct (v1) "Ljava/lang/Object;.<init>:()V")
+      (.src_block "LFoo;.bar:()V" 5)
+      (invoke-direct (v2) "Ljava/lang/Object;.<init>:()V")
+      (.src_block "LFoo;.bar:()V" 6)
+      (return-void)
+    )
+  )");
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (.src_block "LFoo;.bar:()V" 0)
+      (new-instance "Ljava/lang/Object;")
+      (move-result-pseudo-object v0)
+      (.src_block "LFoo;.bar:()V" 1)
+      (invoke-direct (v0) "Ljava/lang/Object;.<init>:()V")
+      (.src_block "LFoo;.bar:()V" 4)
+      (new-instance "Ljava/lang/Object;")
+      (move-result-pseudo-object v1)
+      (.src_block "LFoo;.bar:()V" 2)
+      (invoke-direct (v1) "Ljava/lang/Object;.<init>:()V")
+      (.src_block "LFoo;.bar:()V" 5)
+      (new-instance "Ljava/lang/Object;")
+      (move-result-pseudo-object v2)
+      (.src_block "LFoo;.bar:()V" 3)
+      (invoke-direct (v2) "Ljava/lang/Object;.<init>:()V")
+      (.src_block "LFoo;.bar:()V" 6)
+      (return-void)
+    )
+  )");
+
+  Scope scope{type_class(type::java_lang_Object())};
+  IRCode* ircode = code.get();
+  dce(ircode);
+  EXPECT_CODE_EQ(ircode, expected_code.get());
+}
+
 TEST_F(LocalDceTryTest, normalize_new_instances_no_aliases) {
   // This is currently a limitation of the normalization; could be improved one
   // day.

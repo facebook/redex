@@ -366,6 +366,28 @@ void LocalDce::normalize_new_instances(cfg::ControlFlowGraph& cfg) {
         continue;
       }
 
+      // Scan for the move-result-pseudo and a source block afterwards.
+      std::unique_ptr<SourceBlock> sb_move;
+      {
+        auto original_move_cfg_it =
+            cfg.move_result_of(cfg.find_insn(old_new_instance_insn, block));
+        redex_assert(!original_move_cfg_it.is_end());
+        auto* move_block = original_move_cfg_it.block();
+        auto original_move_it = original_move_cfg_it.unwrap();
+        ++original_move_it;
+        while (original_move_it != move_block->end()) {
+          if (original_move_it->type == MFLOW_OPCODE) {
+            break;
+          }
+          if (original_move_it->type == MFLOW_SOURCE_BLOCK) {
+            sb_move = std::move(original_move_it->src_block);
+            block->remove_mie(original_move_it);
+            break;
+          }
+          ++original_move_it;
+        }
+      }
+
       // We don't bother removing the old new-instance instruction (or other
       // intermediate move-object instructions) here, as LocalDce will do that
       // as part of its normal operation.
@@ -374,9 +396,18 @@ void LocalDce::normalize_new_instances(cfg::ControlFlowGraph& cfg) {
       auto move_result_pseudo_object_insn =
           new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
       move_result_pseudo_object_insn->set_dest(reg);
-      mutation.insert_before(
-          block->to_cfg_instruction_iterator(it),
-          {new_instance_insn, move_result_pseudo_object_insn});
+      if (sb_move == nullptr) {
+        mutation.insert_before(
+            block->to_cfg_instruction_iterator(it),
+            {new_instance_insn, move_result_pseudo_object_insn});
+      } else {
+        std::vector<cfg::ControlFlowGraph::InsertVariant> tmp;
+        tmp.emplace_back(new_instance_insn);
+        tmp.emplace_back(move_result_pseudo_object_insn);
+        tmp.emplace_back(std::move(sb_move));
+        mutation.insert_before_var(block->to_cfg_instruction_iterator(it),
+                                   std::move(tmp));
+      }
       m_stats.normalized_new_instances++;
     }
   }
