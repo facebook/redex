@@ -1384,6 +1384,73 @@ TEST_F(ControlFlowTest, insertion_it) {
   EXPECT_CODE_EQ(expected.get(), code.get());
 }
 
+TEST_F(ControlFlowTest, insertion_it_var) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (if-eqz v0 :true)
+
+      (const v1 1)
+
+      (:exit)
+      (return-void)
+
+      (:true)
+      (const v2 2)
+      (goto :exit)
+    )
+  )");
+  code->build_cfg(/* editable */ true);
+  auto& cfg = code->cfg();
+  IRInstruction add{OPCODE_ADD_INT_LIT8};
+  add.set_literal(1);
+  auto ii = cfg::InstructionIterable(cfg);
+  for (auto it = ii.begin(); it != ii.end(); ++it) {
+    auto insn = it->insn;
+    if (opcode::is_a_const(insn->opcode())) {
+      auto new_insn = new IRInstruction(add);
+      new_insn->set_src(0, insn->dest());
+      new_insn->set_dest(insn->dest());
+
+      std::vector<cfg::ControlFlowGraph::InsertVariant> to_add;
+      to_add.emplace_back(new IRInstruction(*new_insn));
+
+      auto* mref = DexMethod::make_method("LFoo;.bar:()V");
+      to_add.emplace_back(std::make_unique<SourceBlock>(mref, 0));
+      to_add.emplace_back(new IRInstruction(*new_insn));
+
+      cfg.insert_after(it, to_add.begin(), to_add.end());
+    }
+  }
+  code->clear_cfg();
+
+  auto expected = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (add-int/lit8 v0 v0 1)
+      (.src_block "LFoo;.bar:()V" 0)
+      (add-int/lit8 v0 v0 1)
+      (if-eqz v0 :true)
+
+      (const v1 1)
+      (add-int/lit8 v1 v1 1)
+      (.src_block "LFoo;.bar:()V" 0)
+      (add-int/lit8 v1 v1 1)
+
+      (:exit)
+      (return-void)
+
+      (:true)
+      (const v2 2)
+      (add-int/lit8 v2 v2 1)
+      (.src_block "LFoo;.bar:()V" 0)
+      (add-int/lit8 v2 v2 1)
+      (goto :exit)
+    )
+  )");
+  EXPECT_CODE_EQ(expected.get(), code.get());
+}
+
 TEST_F(ControlFlowTest, insertion_after_may_throw) {
   auto code = assembler::ircode_from_string(R"(
     (

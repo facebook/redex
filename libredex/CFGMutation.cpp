@@ -40,6 +40,8 @@ void CFGMutation::flush() {
   clear();
 }
 
+CFGMutation::ChangeSet::~ChangeSet() {}
+
 void CFGMutation::ChangeSet::apply(ControlFlowGraph& cfg,
                                    InstructionIterator& it) {
   always_assert_log(
@@ -60,7 +62,32 @@ void CFGMutation::ChangeSet::apply(ControlFlowGraph& cfg,
     cfg.insert_after(it, std::move(pos));
   }
 
-  if (!m_replace.has_value() && m_insert_after.empty()) {
+  for (auto&& sb : m_insert_sb_before) {
+    cfg.insert_before(it, std::move(sb));
+  }
+  for (auto&& sb : m_insert_sb_after) {
+    cfg.insert_after(it, std::move(sb));
+  }
+
+  // Sequencing of the many options is really hard. We want to retain the
+  // optimized variants, so exclude some combinations.
+  redex_assert(!(m_replace.has_value() && (!m_insert_after_var.empty() ||
+                                           !m_insert_before_var.empty())));
+  redex_assert(!(!m_insert_after.empty() && (!m_insert_after_var.empty() ||
+                                             !m_insert_before_var.empty())));
+  redex_assert(!(!m_insert_before.empty() && (!m_insert_after_var.empty() ||
+                                              !m_insert_before_var.empty())));
+  redex_assert(!(!m_insert_after_var.empty() && !m_insert_before_var.empty()));
+
+  if (!m_insert_after_var.empty() || !m_insert_before_var.empty()) {
+    if (!m_insert_before_var.empty()) {
+      invalidated = cfg.insert_before(
+          it, m_insert_before_var.begin(), m_insert_before_var.end());
+    } else {
+      invalidated = cfg.insert_after(
+          it, m_insert_after_var.begin(), m_insert_after_var.end());
+    }
+  } else if (!m_replace.has_value() && m_insert_after.empty()) {
     invalidated = cfg.insert_before(it, m_insert_before);
   } else if (!m_replace.has_value() && m_insert_before.empty()) {
     invalidated = cfg.insert_after(it, m_insert_after);

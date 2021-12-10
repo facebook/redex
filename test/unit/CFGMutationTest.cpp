@@ -416,4 +416,95 @@ TEST_F(CFGMutationTest, Clear) {
       ))");
 }
 
+TEST_F(CFGMutationTest, InsertBeforeVariant) {
+  EXPECT_MUTATION(
+      [](ControlFlowGraph& cfg) {
+        CFGMutation m(cfg);
+
+        std::vector<cfg::ControlFlowGraph::InsertVariant> tmp;
+
+        auto* mref = DexMethod::make_method("LFoo;.bar:()V");
+        auto* sref = DexString::make_string("foo");
+
+        tmp.emplace_back(std::make_unique<DexPosition>(sref, sref, 1));
+        tmp.emplace_back(std::make_unique<SourceBlock>(mref, 0));
+
+        tmp.emplace_back(dasm(OPCODE_CONST, {1_v, 1_L}));
+
+        tmp.emplace_back(std::make_unique<DexPosition>(sref, sref, 2));
+        tmp.emplace_back(std::make_unique<SourceBlock>(mref, 1));
+
+        tmp.emplace_back(dasm(OPCODE_CONST, {2_v, 2_L}));
+
+        tmp.emplace_back(std::make_unique<DexPosition>(sref, sref, 3));
+        tmp.emplace_back(std::make_unique<SourceBlock>(mref, 2));
+
+        m.insert_before_var(nth_insn(cfg, 1), std::move(tmp));
+        m.flush();
+      },
+      /* ACTUAL */ R"((
+        (const v0 0)
+        (const v2 2)
+        (return-void)
+      ))",
+      /* EXPECTED */ R"((
+        (const v0 0)
+        (.pos:dbg_1 foo foo 1)
+        (.src_block "LFoo;.bar:()V" 0)
+        (const v1 1)
+        (.pos:dbg_1 foo foo 2)
+        (.src_block "LFoo;.bar:()V" 1)
+        (const v2 2)
+        (.pos:dbg_1 foo foo 3)
+        (.src_block "LFoo;.bar:()V" 2)
+        (const v2 2)
+        (return-void)
+      ))");
+}
+
+TEST_F(CFGMutationTest, InsertAfterVariant) {
+  EXPECT_MUTATION(
+      [](ControlFlowGraph& cfg) {
+        CFGMutation m(cfg);
+        std::vector<cfg::ControlFlowGraph::InsertVariant> tmp;
+
+        auto* mref = DexMethod::make_method("LFoo;.bar:()V");
+        auto* sref = DexString::make_string("foo");
+
+        tmp.emplace_back(std::make_unique<DexPosition>(sref, sref, 1));
+        tmp.emplace_back(std::make_unique<SourceBlock>(mref, 0));
+
+        tmp.emplace_back(dasm(OPCODE_CONST, {1_v, 1_L}));
+
+        tmp.emplace_back(std::make_unique<DexPosition>(sref, sref, 2));
+        tmp.emplace_back(std::make_unique<SourceBlock>(mref, 1));
+
+        tmp.emplace_back(dasm(OPCODE_CONST, {2_v, 2_L}));
+
+        tmp.emplace_back(std::make_unique<DexPosition>(sref, sref, 3));
+        tmp.emplace_back(std::make_unique<SourceBlock>(mref, 2));
+
+        m.insert_after_var(nth_insn(cfg, 0), std::move(tmp));
+        m.flush();
+      },
+      /* ACTUAL */ R"((
+        (const v0 0)
+        (const v2 2)
+        (return-void)
+      ))",
+      /* EXPECTED */ R"((
+        (const v0 0)
+        (.pos:dbg_1 foo foo 1)
+        (.src_block "LFoo;.bar:()V" 0)
+        (const v1 1)
+        (.pos:dbg_1 foo foo 2)
+        (.src_block "LFoo;.bar:()V" 1)
+        (const v2 2)
+        (.pos:dbg_1 foo foo 3)
+        (.src_block "LFoo;.bar:()V" 2)
+        (const v2 2)
+        (return-void)
+      ))");
+}
+
 } // namespace
