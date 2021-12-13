@@ -27,6 +27,7 @@
 #include "RedexMappedFile.h"
 #include "ScopedCFG.h"
 #include "Show.h"
+#include "SourceBlockConsistencyCheck.h"
 #include "SourceBlocks.h"
 #include "Trace.h"
 #include "Walkers.h"
@@ -311,6 +312,11 @@ void run_source_blocks(DexStoresVector& stores,
       profile_count += profiles.second ? 1 : 0;
     }
   });
+
+  if (mgr.get_assessor_config().run_sb_consistency) {
+    source_blocks::get_sbcc().initialize(scope);
+  }
+
   mgr.set_metric("inserted_source_blocks", blocks);
   mgr.set_metric("handled_methods", serialized.size());
   mgr.set_metric("skipped_methods", skipped.load());

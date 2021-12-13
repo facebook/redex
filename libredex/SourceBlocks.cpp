@@ -21,6 +21,7 @@
 #include "S_Expression.h"
 #include "ScopedMetrics.h"
 #include "Show.h"
+#include "SourceBlockConsistencyCheck.h"
 #include "Timer.h"
 #include "Trace.h"
 #include "Walkers.h"
@@ -34,6 +35,8 @@ namespace {
 
 constexpr SourceBlock::Val kFailVal = SourceBlock::Val::none();
 constexpr SourceBlock::Val kXVal = SourceBlock::Val::none();
+
+static SourceBlockConsistencyCheck s_sbcc;
 
 struct InsertHelper {
   DexMethod* method;
@@ -385,6 +388,8 @@ struct InsertHelper {
 
 } // namespace
 
+SourceBlockConsistencyCheck& get_sbcc() { return s_sbcc; }
+
 InsertResult insert_source_blocks(DexMethod* method,
                                   ControlFlowGraph* cfg,
                                   const std::vector<ProfileData>& profiles,
@@ -629,6 +634,11 @@ void track_source_block_coverage(ScopedMetrics& sm,
         code->clear_cfg();
         return ret;
       });
+
+  size_t consistency_check_violations =
+      s_sbcc.is_initialized() ? s_sbcc.run(build_class_scope(stores)) : 0;
+
+  sm.set_metric("~consistency~check~violations", consistency_check_violations);
 
   sm.set_metric("~assessment~methods~with~code", stats.methods_with_code);
   sm.set_metric("~assessment~methods~with~sbs", stats.methods_with_sbs);

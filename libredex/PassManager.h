@@ -18,6 +18,7 @@
 #include "AnalysisUsage.h"
 #include "AssetManager.h"
 #include "DexHasher.h"
+#include "GlobalConfig.h"
 #include "JsonWrapper.h"
 #include "ProguardConfiguration.h"
 #include "RedexOptions.h"
@@ -118,6 +119,10 @@ class PassManager {
 
   Pass* find_pass(const std::string& pass_name) const;
 
+  const AssessorConfig& get_assessor_config() const {
+    return m_assessor_config;
+  }
+
  private:
   void activate_pass(const std::string& name, const Json::Value& conf);
 
@@ -149,4 +154,6 @@ class PassManager {
   boost::optional<hashing::DexHash> m_initial_hash;
   AccumulatingTimer m_hashers_timer;
   AccumulatingTimer m_check_unique_deobfuscateds_timer;
+
+  AssessorConfig m_assessor_config;
 };

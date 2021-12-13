@@ -64,6 +64,7 @@ struct AssessorConfig : public Configurable {
   bool run_after_each_pass{false};
   bool run_initially{false};
   bool run_finally{false};
+  bool run_sb_consistency{false};
 };
 
 struct CheckUniqueDeobfuscatedNamesConfig : public Configurable {
