@@ -233,8 +233,6 @@ class IntervalDomain final : public AbstractDomain<IntervalDomain<Num>> {
   }
 };
 
-} // namespace sparta
-
 template <typename Num>
 inline std::ostream& operator<<(std::ostream& o,
                                 const sparta::IntervalDomain<Num>& i) {
@@ -264,3 +262,5 @@ inline std::ostream& operator<<(std::ostream& o,
 
   return o << "]";
 }
+
+} // namespace sparta
