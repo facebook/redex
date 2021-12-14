@@ -21,7 +21,7 @@ namespace constant_propagation {
  * evaluated. So, `env.get(dest)` holds the _new_ value of the destination
  * register.
  */
-void Transform::replace_with_const(const ConstantEnvironment& env,
+bool Transform::replace_with_const(const ConstantEnvironment& env,
                                    const cfg::InstructionIterator& cfg_it,
                                    const XStoreRefs* xstores,
                                    const DexType* declaring_type) {
@@ -30,7 +30,7 @@ void Transform::replace_with_const(const ConstantEnvironment& env,
   auto replacement = ConstantValue::apply_visitor(
       value_to_instruction_visitor(insn, xstores, declaring_type), value);
   if (replacement.empty()) {
-    return;
+    return false;
   }
   if (opcode::is_a_move_result_pseudo(insn->opcode())) {
     auto primary_it = cfg_it.cfg().primary_instruction_of_move_result(cfg_it);
@@ -39,6 +39,7 @@ void Transform::replace_with_const(const ConstantEnvironment& env,
     m_mutation->replace(cfg_it, replacement);
   }
   ++m_stats.materialized_consts;
+  return true;
 }
 
 /*
@@ -136,6 +137,190 @@ bool Transform::eliminate_redundant_put(
   return false;
 }
 
+namespace {
+
+void try_simplify(const ConstantEnvironment& env,
+                  const cfg::InstructionIterator& cfg_it,
+                  cfg::CFGMutation& mutation) {
+  auto* insn = cfg_it->insn;
+
+  auto reg_is_exact = [&env](reg_t reg, int64_t val) {
+    auto value = env.get(reg).maybe_get<SignedConstantDomain>();
+    if (!value || !value->get_constant() || *value->get_constant() != val) {
+      return false;
+    }
+    return true;
+  };
+
+  auto replace_with_move = [&](reg_t src_reg) {
+    IRInstruction* move = new IRInstruction(OPCODE_MOVE);
+    move->set_src(0, src_reg);
+    move->set_dest(insn->dest());
+    mutation.replace(cfg_it, {move});
+  };
+
+  auto replace_with_const = [&](int64_t val) {
+    IRInstruction* c = new IRInstruction(OPCODE_CONST);
+    c->set_dest(insn->dest());
+    c->set_literal(val);
+    mutation.replace(cfg_it, {c});
+  };
+
+  auto replace_with_neg = [&](reg_t src_reg) {
+    IRInstruction* neg = new IRInstruction(OPCODE_NEG_INT);
+    neg->set_src(0, src_reg);
+    neg->set_dest(insn->dest());
+    mutation.replace(cfg_it, {neg});
+  };
+
+  switch (insn->opcode()) {
+    // These should have been handled by PeepHole, really.
+
+  case OPCODE_ADD_INT_LIT16:
+  case OPCODE_ADD_INT_LIT8: {
+    if (insn->get_literal() == 0) {
+      replace_with_move(insn->src(0));
+    }
+    break;
+  }
+
+  case OPCODE_RSUB_INT:
+  case OPCODE_RSUB_INT_LIT8: {
+    if (insn->get_literal() == 0) {
+      replace_with_neg(insn->src(0));
+    }
+    break;
+  }
+
+  case OPCODE_MUL_INT_LIT16:
+  case OPCODE_MUL_INT_LIT8: {
+    if (insn->get_literal() == 1) {
+      replace_with_move(insn->src(0));
+      break;
+    }
+    if (insn->get_literal() == 0) {
+      replace_with_const(0);
+      break;
+    }
+    if (insn->get_literal() == -1) {
+      replace_with_neg(insn->src(0));
+      break;
+    }
+    break;
+  }
+  case OPCODE_AND_INT_LIT16:
+  case OPCODE_AND_INT_LIT8: {
+    if (insn->get_literal() == 0) {
+      replace_with_const(0);
+      break;
+    }
+    if (insn->get_literal() == -1) {
+      replace_with_move(insn->src(0));
+      break;
+    }
+    break;
+  }
+  case OPCODE_OR_INT_LIT16:
+  case OPCODE_OR_INT_LIT8: {
+    if (insn->get_literal() == 0) {
+      replace_with_move(insn->src(0));
+      break;
+    }
+    if (insn->get_literal() == -1) {
+      replace_with_const(-1);
+      break;
+    }
+    break;
+  }
+  case OPCODE_XOR_INT_LIT16:
+  case OPCODE_XOR_INT_LIT8: {
+    // TODO
+    break;
+  }
+
+  case OPCODE_SHL_INT_LIT8:
+  case OPCODE_USHR_INT_LIT8:
+  case OPCODE_SHR_INT_LIT8: {
+    // Can at most simplify the operand, but doesn't make much sense.
+    break;
+  }
+
+  case OPCODE_ADD_INT: {
+    if (reg_is_exact(insn->src(0), 0)) {
+      replace_with_move(insn->src(1));
+    } else if (reg_is_exact(insn->src(1), 0)) {
+      replace_with_move(insn->src(0));
+    }
+    break;
+  }
+
+  case OPCODE_SUB_INT: {
+    if (reg_is_exact(insn->src(0), 0)) {
+      replace_with_neg(insn->src(1));
+    } else if (reg_is_exact(insn->src(1), 0)) {
+      replace_with_move(insn->src(0));
+    }
+    break;
+  }
+
+  case OPCODE_MUL_INT: {
+    if (reg_is_exact(insn->src(0), 1)) {
+      replace_with_move(insn->src(1));
+    } else if (reg_is_exact(insn->src(1), 1)) {
+      replace_with_move(insn->src(0));
+    } else if (reg_is_exact(insn->src(0), 0) || reg_is_exact(insn->src(1), 0)) {
+      replace_with_const(0);
+    } else if (reg_is_exact(insn->src(0), -1)) {
+      replace_with_neg(insn->src(1));
+    } else if (reg_is_exact(insn->src(1), -1)) {
+      replace_with_neg(insn->src(0));
+    }
+    break;
+  }
+
+  case OPCODE_AND_INT: {
+    if (reg_is_exact(insn->src(0), -1)) {
+      replace_with_move(insn->src(1));
+    } else if (reg_is_exact(insn->src(1), -1)) {
+      replace_with_move(insn->src(0));
+    } else if (reg_is_exact(insn->src(0), 0) || reg_is_exact(insn->src(1), 0)) {
+      replace_with_const(0);
+    }
+    break;
+  }
+
+  case OPCODE_OR_INT: {
+    if (reg_is_exact(insn->src(0), 0)) {
+      replace_with_move(insn->src(1));
+    } else if (reg_is_exact(insn->src(1), 0)) {
+      replace_with_move(insn->src(0));
+    } else if (reg_is_exact(insn->src(0), -1) ||
+               reg_is_exact(insn->src(1), -1)) {
+      replace_with_const(-1);
+    }
+    break;
+  }
+
+  case OPCODE_XOR_INT:
+    // TODO
+    break;
+
+  case OPCODE_ADD_LONG:
+  case OPCODE_SUB_LONG:
+  case OPCODE_MUL_LONG:
+  case OPCODE_AND_LONG:
+  case OPCODE_OR_LONG:
+  case OPCODE_XOR_LONG:
+    // TODO: More complicated version of the above.
+    break;
+
+  default:
+    return;
+  }
+}
+
+} // namespace
+
 void Transform::simplify_instruction(const ConstantEnvironment& env,
                                      const WholeProgramState& wps,
                                      const cfg::InstructionIterator& cfg_it,
@@ -222,7 +407,10 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
   case OPCODE_AND_LONG:
   case OPCODE_OR_LONG:
   case OPCODE_XOR_LONG: {
-    replace_with_const(env, cfg_it, xstores, declaring_type);
+    if (replace_with_const(env, cfg_it, xstores, declaring_type)) {
+      break;
+    }
+    try_simplify(env, cfg_it, *m_mutation);
     break;
   }
 

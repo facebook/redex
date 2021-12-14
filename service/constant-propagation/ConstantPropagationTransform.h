@@ -114,7 +114,7 @@ class Transform final {
                             const XStoreRefs*,
                             const DexType*);
 
-  void replace_with_const(const ConstantEnvironment&,
+  bool replace_with_const(const ConstantEnvironment&,
                           const cfg::InstructionIterator& cfg_it,
                           const XStoreRefs*,
                           const DexType*);
