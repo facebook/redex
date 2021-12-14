@@ -461,11 +461,15 @@ class JNINativeContextHelper {
         if (is_native(m)) {
           auto native_func = native::get_native_function_for_dex_method(m);
           if (native_func) {
+            TRACE(NATIVE, 2, "Found native function %s",
+                  native_func->get_name().c_str());
             m_removable_natives.emplace(native_func);
           } else {
             // There's a native method which we don't find. Let's be
             // conservative and ask Redex not to remove it.
             m->rstate.set_root();
+            // Ignore "linking" failures for pre-existing "linking" failures.
+            m_java_method_no_impl_on_input.emplace(m);
           }
         }
       });
@@ -484,11 +488,19 @@ class JNINativeContextHelper {
         if (native_func) {
           auto it = m_removable_natives.find(native_func);
           if (it != m_removable_natives.end()) {
+            TRACE(NATIVE, 2, "Cannot remove native function %s, called as %s",
+                  native_func->get_name().c_str(), SHOW(m));
             m_removable_natives.erase(it);
           }
+        } else if (!m_java_method_no_impl_on_input.count(m)) {
+          // TODO: "Linking" error: Change this to an assertion failure
+          TRACE(PM, 1, "Unable to find native implementation for %s.", SHOW(m));
         }
       }
     });
+
+    TRACE(NATIVE, 2, "Total removable natives: %lu",
+          m_removable_natives.size());
 
     auto removable_natives_file_name = conf.metafile(REMOVABLE_NATIVES);
     std::vector<std::string> output_symbols;
@@ -503,6 +515,7 @@ class JNINativeContextHelper {
 
     std::ofstream out(removable_natives_file_name);
 
+    // TODO: For better human readability, change this to CSV of native,java?
     for (const auto& name : output_symbols) {
       out << name << std::endl;
     }
@@ -512,6 +525,7 @@ class JNINativeContextHelper {
 
  private:
   std::unordered_set<native::Function*> m_removable_natives;
+  std::unordered_set<DexMethod*> m_java_method_no_impl_on_input;
 };
 
 void process_method_profiles(PassManager& mgr, ConfigFiles& conf) {

@@ -7,30 +7,24 @@
 
 #pragma once
 
-#include <boost/filesystem.hpp>
+#include <filesystem>
 
 #include "DexClass.h"
 
 namespace native {
 
-class CompilationUnit;
+class SoLibrary;
 
 class Function {
  public:
-  Function(const CompilationUnit* cu,
-           std::string name,
-           DexMethod* java_declaration)
-      : m_compilation_unit(cu),
-        m_name(std::move(name)),
-        m_java_declarations({}) {
+  Function(const SoLibrary* lib, std::string name, DexMethod* java_declaration)
+      : m_so_library(lib), m_name(std::move(name)), m_java_declarations({}) {
     if (java_declaration) {
       m_java_declarations.insert(java_declaration);
     }
   }
 
-  const CompilationUnit* get_compilation_unit() const {
-    return m_compilation_unit;
-  }
+  const SoLibrary* get_so_library() const { return m_so_library; }
   std::string get_name() const { return m_name; }
   const std::unordered_set<DexMethod*>& get_java_declarations() const {
     return m_java_declarations;
@@ -41,23 +35,22 @@ class Function {
   }
 
  private:
-  const CompilationUnit* m_compilation_unit;
+  const SoLibrary* m_so_library;
   std::string m_name;
   std::unordered_set<DexMethod*> m_java_declarations;
 };
 
-class CompilationUnit {
+class SoLibrary {
  public:
-  CompilationUnit(std::string name, boost::filesystem::path infodir)
+  SoLibrary(std::string name, std::filesystem::path json)
       : m_name(std::move(name)),
-        m_infodir_path(std::move(infodir)),
+        m_json_path(std::move(json)),
         m_name_to_functions({}) {}
 
   std::string get_name() const { return m_name; }
-  boost::filesystem::path get_infodir_path() const { return m_infodir_path; }
+  std::filesystem::path get_json_path() const { return m_json_path; }
 
-  void populate_functions(const std::unordered_map<std::string, DexMethod*>&
-                              expected_names_to_decl);
+  void populate_functions();
   std::unordered_map<std::string, Function>& get_functions() {
     return m_name_to_functions;
   }
@@ -75,17 +68,16 @@ class CompilationUnit {
 
  private:
   std::string m_name;
-  boost::filesystem::path m_infodir_path;
+  std::filesystem::path m_json_path;
   std::unordered_map<std::string, Function> m_name_to_functions;
 };
 
-std::unordered_map<std::string, CompilationUnit> get_compilation_units(
-    const boost::filesystem::path& path);
+std::vector<SoLibrary> get_so_libraries(const std::filesystem::path& path);
 
 struct NativeContext {
   static NativeContext build(const std::string& path_to_native_results,
                              const Scope& java_scope);
-  std::unordered_map<std::string, CompilationUnit> name_to_compilation_units;
+  std::vector<SoLibrary> so_libraries;
   std::unordered_map<DexMethod*, Function*> java_declaration_to_function;
 };
 

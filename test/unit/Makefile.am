@@ -300,6 +300,7 @@ mutf8_compare_test_SOURCES = Mutf8CompareTest.cpp
 leb_test_SOURCES = LebTest.cpp
 
 native_test_SOURCES = NativeTest.cpp
+native_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 native_names_test_SOURCES = NativeNamesTest.cpp
 
