@@ -8,7 +8,6 @@
 #include "MethodProfiles.h"
 
 #include <boost/algorithm/string.hpp>
-#include <charconv>
 #include <fstream>
 #include <iostream>
 #include <stdio.h>
@@ -104,24 +103,26 @@ bool MethodProfiles::parse_stats_file(const std::string& csv_filename) {
   return true;
 }
 
-// This should have worked for double too as described in p0067r5.
-// But libc++ 7 did not implement floating point conversions.
-template <typename IntType = int64_t>
+// `strtol` and `strtod` requires c string to be null terminated,
+// std::string_view::data() doesn't have this guarantee. Our `string_view`s are
+// taken from `std::string`s. This should be safe.
+template <typename IntType>
 IntType parse_int(std::string_view tok) {
-  IntType result{};
-  auto [ptr, ec]{std::from_chars(tok.data(), tok.data() + tok.size(), result)};
-  std::string_view rest(ptr, tok.size() - (ptr - tok.data()));
+  char* ptr = nullptr;
+  const auto parsed = strtol(tok.data(), &ptr, 10);
+  always_assert_log(
+      ptr <= (tok.data() + tok.size()),
+      "strtod went over std::string_view boundary for string_view %s",
+      SHOW(tok));
 
-  always_assert_log(ec == std::errc(), "can't parse %s into an int: %s",
-                    SHOW(tok), std::make_error_condition(ec).message().c_str());
-  always_assert_log(empty_column(rest), "can't parse %s into an int",
-                    SHOW(tok));
-  return result;
+  std::string_view rest(ptr, tok.size() - (ptr - tok.data()));
+  always_assert_log(ptr != tok.data(), "can't parse %s into a int", SHOW(tok));
+  always_assert_log(empty_column(rest), "can't parse %s into a int", SHOW(tok));
+  always_assert(parsed <= std::numeric_limits<IntType>::max());
+  always_assert(parsed >= std::numeric_limits<IntType>::min());
+  return static_cast<IntType>(parsed);
 }
 
-// `strtod` requires c string to be null terminated, std::string_view::data()
-// doesn't have this guarantee. Our `string_view`s are taken from
-// `std::string`s. This should be safe.
 double parse_double(std::string_view tok) {
   char* ptr = nullptr;
   const auto result = strtod(tok.data(), &ptr);
@@ -147,10 +148,7 @@ bool MethodProfiles::parse_metadata(std::string_view line) {
       m_interaction_id = std::string(cell);
       return true;
     case 1: {
-      auto parsed = parse_int(cell);
-      always_assert(parsed <= std::numeric_limits<uint32_t>::max());
-      always_assert(parsed >= 0);
-      interaction_count = static_cast<uint32_t>(parsed);
+      interaction_count = parse_int<uint32_t>(cell);
       return true;
     }
     default: {
