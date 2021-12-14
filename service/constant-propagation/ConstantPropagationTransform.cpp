@@ -141,6 +141,7 @@ namespace {
 
 void try_simplify(const ConstantEnvironment& env,
                   const cfg::InstructionIterator& cfg_it,
+                  const Transform::Config& config,
                   cfg::CFGMutation& mutation) {
   auto* insn = cfg_it->insn;
 
@@ -152,22 +153,81 @@ void try_simplify(const ConstantEnvironment& env,
     return true;
   };
 
+  auto reg_fits_lit8 = [&env](reg_t reg) -> std::optional<int8_t> {
+    auto value = env.get(reg).maybe_get<SignedConstantDomain>();
+    if (!value || !value->get_constant()) {
+      return std::nullopt;
+    }
+    int val = *value->get_constant();
+    if (val < -128 || val > 127) {
+      return std::nullopt;
+    }
+    return (int8_t)val;
+  };
+
+  auto maybe_reduce_lit8 = [&](size_t idx) -> bool {
+    if (!config.to_int_lit8) {
+      return false;
+    }
+
+    auto val = reg_fits_lit8(insn->src(idx));
+    if (!val) {
+      return false;
+    }
+
+    auto new_op = [&]() -> IROpcode {
+      switch (insn->opcode()) {
+      case OPCODE_ADD_INT:
+        return OPCODE_ADD_INT_LIT8;
+      // TODO: SUB to RSUB
+      case OPCODE_MUL_INT:
+        return OPCODE_MUL_INT_LIT8;
+      case OPCODE_AND_INT:
+        return OPCODE_AND_INT_LIT8;
+      case OPCODE_OR_INT:
+        return OPCODE_OR_INT_LIT8;
+      case OPCODE_XOR_INT:
+        return OPCODE_XOR_INT_LIT8;
+      default:
+        always_assert(false);
+      }
+      not_reached();
+    }();
+
+    auto repl = new IRInstruction(new_op);
+    repl->set_src(0, insn->src(idx == 0 ? 1 : 0));
+    repl->set_dest(insn->dest());
+    repl->set_literal(*val);
+    mutation.replace(cfg_it, {repl});
+    return true;
+  };
+
+  auto maybe_reduce_lit8_both = [&]() {
+    if (maybe_reduce_lit8(0)) {
+      return true;
+    }
+    if (maybe_reduce_lit8(1)) {
+      return true;
+    }
+    return false;
+  };
+
   auto replace_with_move = [&](reg_t src_reg) {
-    IRInstruction* move = new IRInstruction(OPCODE_MOVE);
+    auto* move = new IRInstruction(OPCODE_MOVE);
     move->set_src(0, src_reg);
     move->set_dest(insn->dest());
     mutation.replace(cfg_it, {move});
   };
 
   auto replace_with_const = [&](int64_t val) {
-    IRInstruction* c = new IRInstruction(OPCODE_CONST);
+    auto* c = new IRInstruction(OPCODE_CONST);
     c->set_dest(insn->dest());
     c->set_literal(val);
     mutation.replace(cfg_it, {c});
   };
 
   auto replace_with_neg = [&](reg_t src_reg) {
-    IRInstruction* neg = new IRInstruction(OPCODE_NEG_INT);
+    auto* neg = new IRInstruction(OPCODE_NEG_INT);
     neg->set_src(0, src_reg);
     neg->set_dest(insn->dest());
     mutation.replace(cfg_it, {neg});
@@ -250,6 +310,8 @@ void try_simplify(const ConstantEnvironment& env,
       replace_with_move(insn->src(1));
     } else if (reg_is_exact(insn->src(1), 0)) {
       replace_with_move(insn->src(0));
+    } else if (maybe_reduce_lit8_both()) {
+      break;
     }
     break;
   }
@@ -274,6 +336,8 @@ void try_simplify(const ConstantEnvironment& env,
       replace_with_neg(insn->src(1));
     } else if (reg_is_exact(insn->src(1), -1)) {
       replace_with_neg(insn->src(0));
+    } else if (maybe_reduce_lit8_both()) {
+      break;
     }
     break;
   }
@@ -285,6 +349,8 @@ void try_simplify(const ConstantEnvironment& env,
       replace_with_move(insn->src(0));
     } else if (reg_is_exact(insn->src(0), 0) || reg_is_exact(insn->src(1), 0)) {
       replace_with_const(0);
+    } else if (maybe_reduce_lit8_both()) {
+      break;
     }
     break;
   }
@@ -297,12 +363,16 @@ void try_simplify(const ConstantEnvironment& env,
     } else if (reg_is_exact(insn->src(0), -1) ||
                reg_is_exact(insn->src(1), -1)) {
       replace_with_const(-1);
+    } else if (maybe_reduce_lit8_both()) {
+      break;
     }
     break;
   }
 
   case OPCODE_XOR_INT:
-    // TODO
+    if (maybe_reduce_lit8_both()) {
+      break;
+    }
     break;
 
   case OPCODE_ADD_LONG:
@@ -410,7 +480,7 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
     if (replace_with_const(env, cfg_it, xstores, declaring_type)) {
       break;
     }
-    try_simplify(env, cfg_it, *m_mutation);
+    try_simplify(env, cfg_it, m_config, *m_mutation);
     break;
   }
 

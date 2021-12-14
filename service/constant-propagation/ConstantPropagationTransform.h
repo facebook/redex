@@ -32,6 +32,7 @@ class Transform final {
     bool replace_move_result_with_consts{false};
     bool remove_dead_switch{true};
     bool add_param_const{true};
+    bool to_int_lit8{true};
     const DexType* class_under_init{nullptr};
     // These methods are known pure, we can replace their results with constant
     // value.
