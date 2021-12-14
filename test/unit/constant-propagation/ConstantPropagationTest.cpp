@@ -1084,3 +1084,58 @@ TEST_F(ConstantPropagationTest, ArithmeticFoldingToLit8) {
   )");
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
+
+TEST_F(ConstantPropagationTest, ArithmeticFoldingToLit16) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+
+      (const v127 32767)
+      (const v128 -32768)
+
+      (add-int v2 v0 v127)
+      (add-int v3 v128 v0)
+
+      (mul-int v4 v0 v127)
+      (mul-int v5 v128 v0)
+
+      (or-int v6 v0 v127)
+      (or-int v7 v128 v0)
+
+      (and-int v8 v0 v127)
+      (and-int v9 v128 v0)
+
+      (return v0)
+    )
+  )");
+
+  DexMethod::make_method("LFoo;.bar:(I)I");
+  auto config = cp::Transform::Config();
+  config.to_int_lit16 = true;
+  do_const_prop(code.get(), cp::ConstantPrimitiveAnalyzer(), config,
+                /* editable_cfg */ false);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+
+      (const v127 32767)
+      (const v128 -32768)
+
+      (add-int/lit16 v2 v0 32767)
+      (add-int/lit16 v3 v0 -32768)
+
+      (mul-int/lit16 v4 v0 32767)
+      (mul-int/lit16 v5 v0 -32768)
+
+      (or-int/lit16 v6 v0 32767)
+      (or-int/lit16 v7 v0 -32768)
+
+      (and-int/lit16 v8 v0 32767)
+      (and-int/lit16 v9 v0 -32768)
+
+      (return v0)
+    )
+  )");
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}

@@ -158,7 +158,7 @@ void try_simplify(const ConstantEnvironment& env,
     if (!value || !value->get_constant()) {
       return std::nullopt;
     }
-    int val = *value->get_constant();
+    int64_t val = *value->get_constant();
     if (val < -128 || val > 127) {
       return std::nullopt;
     }
@@ -207,6 +207,65 @@ void try_simplify(const ConstantEnvironment& env,
       return true;
     }
     if (maybe_reduce_lit8(1)) {
+      return true;
+    }
+    return false;
+  };
+
+  auto reg_fits_lit16 = [&env](reg_t reg) -> std::optional<int16_t> {
+    auto value = env.get(reg).maybe_get<SignedConstantDomain>();
+    if (!value || !value->get_constant()) {
+      return std::nullopt;
+    }
+    int64_t val = *value->get_constant();
+    if (val < -32768 || val > 32767) {
+      return std::nullopt;
+    }
+    return (int16_t)val;
+  };
+
+  auto maybe_reduce_lit16 = [&](size_t idx) -> bool {
+    if (!config.to_int_lit16) {
+      return false;
+    }
+
+    auto val = reg_fits_lit16(insn->src(idx));
+    if (!val) {
+      return false;
+    }
+
+    auto new_op = [&]() -> IROpcode {
+      switch (insn->opcode()) {
+      case OPCODE_ADD_INT:
+        return OPCODE_ADD_INT_LIT16;
+      // TODO: SUB to RSUB
+      case OPCODE_MUL_INT:
+        return OPCODE_MUL_INT_LIT16;
+      case OPCODE_AND_INT:
+        return OPCODE_AND_INT_LIT16;
+      case OPCODE_OR_INT:
+        return OPCODE_OR_INT_LIT16;
+      case OPCODE_XOR_INT:
+        return OPCODE_XOR_INT_LIT16;
+      default:
+        always_assert(false);
+      }
+      not_reached();
+    }();
+
+    auto repl = new IRInstruction(new_op);
+    repl->set_src(0, insn->src(idx == 0 ? 1 : 0));
+    repl->set_dest(insn->dest());
+    repl->set_literal(*val);
+    mutation.replace(cfg_it, {repl});
+    return true;
+  };
+
+  auto maybe_reduce_lit16_both = [&]() {
+    if (maybe_reduce_lit16(0)) {
+      return true;
+    }
+    if (maybe_reduce_lit16(1)) {
       return true;
     }
     return false;
@@ -312,6 +371,8 @@ void try_simplify(const ConstantEnvironment& env,
       replace_with_move(insn->src(0));
     } else if (maybe_reduce_lit8_both()) {
       break;
+    } else if (maybe_reduce_lit16_both()) {
+      break;
     }
     break;
   }
@@ -338,6 +399,8 @@ void try_simplify(const ConstantEnvironment& env,
       replace_with_neg(insn->src(0));
     } else if (maybe_reduce_lit8_both()) {
       break;
+    } else if (maybe_reduce_lit16_both()) {
+      break;
     }
     break;
   }
@@ -350,6 +413,8 @@ void try_simplify(const ConstantEnvironment& env,
     } else if (reg_is_exact(insn->src(0), 0) || reg_is_exact(insn->src(1), 0)) {
       replace_with_const(0);
     } else if (maybe_reduce_lit8_both()) {
+      break;
+    } else if (maybe_reduce_lit16_both()) {
       break;
     }
     break;
@@ -365,12 +430,16 @@ void try_simplify(const ConstantEnvironment& env,
       replace_with_const(-1);
     } else if (maybe_reduce_lit8_both()) {
       break;
+    } else if (maybe_reduce_lit16_both()) {
+      break;
     }
     break;
   }
 
   case OPCODE_XOR_INT:
     if (maybe_reduce_lit8_both()) {
+      break;
+    } else if (maybe_reduce_lit16_both()) {
       break;
     }
     break;

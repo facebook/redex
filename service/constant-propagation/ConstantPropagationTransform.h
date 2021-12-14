@@ -33,6 +33,7 @@ class Transform final {
     bool remove_dead_switch{true};
     bool add_param_const{true};
     bool to_int_lit8{true};
+    bool to_int_lit16{false}; // Does not seem beneficial by default.
     const DexType* class_under_init{nullptr};
     // These methods are known pure, we can replace their results with constant
     // value.
