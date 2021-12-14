@@ -1724,8 +1724,29 @@ void ControlFlowGraph::build_chains(
   }
   handle_block(m_entry_block);
 
+  std::vector<Block*> move_result_blocks_out_of_order;
+
   for (const auto& entry : m_blocks) {
+    // Must not handle blocks that start with a move-result. These need to go
+    // into the same chain as the owner.
+    if (entry.second->starts_with_move_result()) {
+      if (DEBUG) {
+        move_result_blocks_out_of_order.push_back(entry.second);
+      }
+      continue;
+    }
+
     handle_block(entry.second);
+  }
+
+  // All postponed move-result blocks should be in a chain now, or they were
+  // dangling and should have been removed.
+  if (DEBUG) {
+    for (auto* b : move_result_blocks_out_of_order) {
+      always_assert_log(block_to_chain->count(b) > 0,
+                        "Did not find B%zu in chains of\n%s", b->id(),
+                        SHOW(*this));
+    }
   }
 }
 
