@@ -107,9 +107,10 @@ class BuilderTransform {
     };
 
     std::unordered_set<DexMethod*> no_default_inlinables;
+    int min_sdk = 0;
     m_inliner = std::unique_ptr<MultiMethodInliner>(new MultiMethodInliner(
         scope, init_classes_with_side_effects, stores, no_default_inlinables,
-        concurrent_resolver, m_inliner_config));
+        concurrent_resolver, m_inliner_config, min_sdk));
   }
 
   bool inline_methods(

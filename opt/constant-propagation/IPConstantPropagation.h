@@ -71,13 +71,15 @@ class PassImpl : public Pass {
    * tests. run() is a more direct way to call this pass. The caller is
    * responsible for picking the right Config settings.
    */
-  void run(const DexStoresVector& stores);
+  void run(const DexStoresVector& stores, int min_sdk = 0);
 
   /*
    * Exposed for testing purposes.
    */
   std::unique_ptr<FixpointIterator> analyze(
-      const Scope&, const ImmutableAttributeAnalyzerState*);
+      const Scope&,
+      const ImmutableAttributeAnalyzerState*,
+      const ApiLevelAnalyzerState* api_level_analyzer_state);
 
  private:
   void compute_analysis_stats(const WholeProgramState&);

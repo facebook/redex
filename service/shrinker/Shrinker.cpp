@@ -76,11 +76,13 @@ Shrinker::Shrinker(
     const init_classes::InitClassesWithSideEffects&
         init_classes_with_side_effects,
     const ShrinkerConfig& config,
+    int min_sdk,
     const std::unordered_set<DexMethodRef*>& configured_pure_methods,
     const std::unordered_set<const DexString*>& configured_finalish_field_names)
     : m_forest(load(config.reg_alloc_random_forest)),
       m_xstores(stores),
       m_config(config),
+      m_min_sdk(min_sdk),
       m_enabled(config.run_const_prop || config.run_cse ||
                 config.run_copy_prop || config.run_local_dce ||
                 config.run_reg_alloc || config.run_fast_reg_alloc ||
@@ -88,6 +90,12 @@ Shrinker::Shrinker(
       m_init_classes_with_side_effects(init_classes_with_side_effects),
       m_pure_methods(configured_pure_methods),
       m_finalish_field_names(configured_finalish_field_names) {
+  // Initialize the singletons that `operator()` needs ahead of time to
+  // avoid a data race.
+  static_cast<void>(constant_propagation::EnumFieldAnalyzerState::get());
+  static_cast<void>(constant_propagation::BoxedBooleanAnalyzerState::get());
+  static_cast<void>(constant_propagation::ApiLevelAnalyzerState::get());
+
   if (config.run_cse || config.run_local_dce) {
     if (config.compute_pure_methods) {
       const auto& pure_methods = get_pure_methods();
@@ -144,7 +152,9 @@ constant_propagation::Transform::Stats Shrinker::constant_propagation(
         constant_propagation::ConstantPrimitiveAndBoxedAnalyzer(
             &m_immut_analyzer_state, &m_immut_analyzer_state,
             constant_propagation::EnumFieldAnalyzerState::get(),
-            constant_propagation::BoxedBooleanAnalyzerState::get(), nullptr),
+            constant_propagation::BoxedBooleanAnalyzerState::get(),
+            constant_propagation::ApiLevelAnalyzerState::get(m_min_sdk),
+            nullptr),
         /* imprecise_switches */ true);
     fp_iter.run(initial_env);
     constant_propagation::Transform tf(config);

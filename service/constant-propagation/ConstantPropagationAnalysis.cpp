@@ -1116,6 +1116,33 @@ bool EnumUtilsFieldAnalyzer::analyze_sget(
   return true;
 }
 
+boost::optional<DexFieldRef*> g_sdk_int_field{boost::none};
+ApiLevelAnalyzerState ApiLevelAnalyzerState::get(int32_t min_sdk) {
+  if (!g_sdk_int_field) {
+    // Be careful, there could be a data race here if this is called in parallel
+    g_sdk_int_field =
+        DexField::get_field("Landroid/os/Build$VERSION;.SDK_INT:I");
+    // In tests, we create and destroy g_redex repeatedly. So we need to reset
+    // the singleton.
+    g_redex->add_destruction_task([]() { g_sdk_int_field = boost::none; });
+  }
+  return {*g_sdk_int_field, min_sdk};
+}
+
+bool ApiLevelAnalyzer::analyze_sget(const ApiLevelAnalyzerState& state,
+                                    const IRInstruction* insn,
+                                    ConstantEnvironment* env) {
+  auto field = insn->get_field();
+  if (field && field == state.sdk_int_field) {
+    // possible range is [min_sdk, max_int]
+    env->set(RESULT_REGISTER,
+             SignedConstantDomain(state.min_sdk,
+                                  std::numeric_limits<int32_t>::max()));
+    return true;
+  }
+  return false;
+}
+
 namespace intraprocedural {
 
 namespace {

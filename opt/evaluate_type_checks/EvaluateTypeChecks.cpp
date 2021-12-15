@@ -499,8 +499,9 @@ void EvaluateTypeChecksPass::run_pass(DexStoresVector& stores,
   shrinker_config.run_copy_prop = true;
   shrinker_config.run_local_dce = true;
   shrinker_config.compute_pure_methods = false;
+  int min_sdk = mgr.get_redex_options().min_sdk;
   shrinker::Shrinker shrinker(
-      stores, scope, init_classes_with_side_effects, shrinker_config);
+      stores, scope, init_classes_with_side_effects, shrinker_config, min_sdk);
 
   auto stats = walk::parallel::methods<RemoveResult>(
       scope, [&shrinker](DexMethod* method) {

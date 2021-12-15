@@ -45,13 +45,17 @@ class RemoveUnusedFields final {
   RemoveUnusedFields(const Config& config,
                      bool create_init_class_insns,
                      const ShrinkerConfig& shrinker_config,
+                     int min_sdk,
                      DexStoresVector& stores,
                      const Scope& scope)
       : m_config(config),
         m_scope(scope),
         m_init_classes_with_side_effects(scope, create_init_class_insns),
-        m_shrinker(
-            stores, scope, m_init_classes_with_side_effects, shrinker_config) {
+        m_shrinker(stores,
+                   scope,
+                   m_init_classes_with_side_effects,
+                   shrinker_config,
+                   min_sdk) {
     analyze();
     transform();
   }
@@ -281,8 +285,9 @@ void PassImpl::run_pass(DexStoresVector& stores,
   shrinker_config.run_local_dce = true;
   shrinker_config.compute_pure_methods = false;
 
+  int min_sdk = mgr.get_redex_options().min_sdk;
   RemoveUnusedFields rmuf(m_config, conf.create_init_class_insns(),
-                          shrinker_config, stores, scope);
+                          shrinker_config, min_sdk, stores, scope);
   mgr.set_metric("unread_fields", rmuf.unread_fields().size());
   mgr.set_metric("unwritten_fields", rmuf.unwritten_fields().size());
   mgr.set_metric("zero_written_fields", rmuf.zero_written_fields().size());

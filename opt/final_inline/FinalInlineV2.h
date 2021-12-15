@@ -45,6 +45,7 @@ class FinalInlinePassV2 : public Pass {
     size_t init_classes;
   };
   static Stats run(const Scope&,
+                   int min_sdk,
                    const init_classes::InitClassesWithSideEffects&
                        init_classes_with_side_effects,
                    const XStoreRefs*,
@@ -52,6 +53,7 @@ class FinalInlinePassV2 : public Pass {
                    std::optional<DexStoresVector*> stores = std::nullopt);
   static Stats run_inline_ifields(
       const Scope&,
+      int min_sdk,
       const init_classes::InitClassesWithSideEffects&
           init_classes_with_side_effects,
       const XStoreRefs*,

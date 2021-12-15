@@ -443,9 +443,10 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining) {
   inliner_config.populate(scope);
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, /* create_init_class_insns */ false);
+  int min_sdk = 0;
   MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
                              canidates, concurrent_resolver, inliner_config,
-                             intra_dex ? IntraDex : InterDex);
+                             min_sdk, intra_dex ? IntraDex : InterDex);
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), expected_inlined.size());
@@ -495,9 +496,10 @@ TEST_F(MethodInlineTest, size_limit) {
   inliner_config.populate(scope);
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, /* create_init_class_insns */ false);
+  int min_sdk = 0;
   MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
                              canidates, concurrent_resolver, inliner_config,
-                             IntraDex);
+                             min_sdk, IntraDex);
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), 0);
@@ -535,9 +537,10 @@ TEST_F(MethodInlineTest, minimal_self_loop_regression) {
   inliner_config.populate(scope);
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, /* create_init_class_insns */ false);
+  int min_sdk = 0;
   MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
                              candidates, concurrent_resolver, inliner_config,
-                             intra_dex ? IntraDex : InterDex);
+                             min_sdk, intra_dex ? IntraDex : InterDex);
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), expected_inlined.size());
@@ -584,9 +587,10 @@ TEST_F(MethodInlineTest, non_unique_inlined_registers) {
   inliner_config.unique_inlined_registers = false;
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, /* create_init_class_insns */ false);
+  int min_sdk = 0;
   MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
                              candidates, concurrent_resolver, inliner_config,
-                             intra_dex ? IntraDex : InterDex);
+                             min_sdk, intra_dex ? IntraDex : InterDex);
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), expected_inlined.size());
@@ -656,9 +660,10 @@ TEST_F(MethodInlineTest, inline_beneficial_on_average_after_constant_prop) {
   foo_main->get_code()->build_cfg(true);
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, /* create_init_class_insns */ false);
+  int min_sdk = 0;
   MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
                              candidates, concurrent_resolver, inliner_config,
-                             intra_dex ? IntraDex : InterDex);
+                             min_sdk, intra_dex ? IntraDex : InterDex);
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), expected_inlined.size());
@@ -726,9 +731,10 @@ TEST_F(MethodInlineTest,
   foo_main->get_code()->build_cfg(true);
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, /* create_init_class_insns */ false);
+  int min_sdk = 0;
   MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
                              candidates, concurrent_resolver, inliner_config,
-                             intra_dex ? IntraDex : InterDex);
+                             min_sdk, intra_dex ? IntraDex : InterDex);
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), expected_inlined.size());
@@ -807,9 +813,10 @@ TEST_F(
   foo_main->get_code()->build_cfg(true);
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, /* create_init_class_insns */ false);
+  int min_sdk = 0;
   MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
                              candidates, concurrent_resolver, inliner_config,
-                             intra_dex ? IntraDex : InterDex);
+                             min_sdk, intra_dex ? IntraDex : InterDex);
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), expected_inlined.size());
@@ -881,9 +888,10 @@ TEST_F(MethodInlineTest, throw_after_no_return) {
   foo_main->get_code()->build_cfg(true);
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, /* create_init_class_insns */ false);
+  int min_sdk = 0;
   MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
                              candidates, concurrent_resolver, inliner_config,
-                             intra_dex ? IntraDex : InterDex);
+                             min_sdk, intra_dex ? IntraDex : InterDex);
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), 0);
@@ -960,9 +968,10 @@ TEST_F(MethodInlineTest, boxed_boolean) {
       DexMethod::get_method("Ljava/lang/Boolean;.booleanValue:()Z")};
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, /* create_init_class_insns */ false);
+  int min_sdk = 0;
   MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
                              candidates, concurrent_resolver, inliner_config,
-                             intra_dex ? IntraDex : InterDex,
+                             min_sdk, intra_dex ? IntraDex : InterDex,
                              /* true_virtual_callers */ {},
                              /* inline_for_speed */ nullptr,
                              /* analyze_and_prune_inits */ false, pure_methods);
@@ -1051,9 +1060,10 @@ TEST_F(MethodInlineTest, boxed_boolean_without_shrinking) {
       DexMethod::get_method("Ljava/lang/Boolean;.booleanValue:()Z")};
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, /* create_init_class_insns */ false);
+  int min_sdk = 0;
   MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
                              candidates, concurrent_resolver, inliner_config,
-                             intra_dex ? IntraDex : InterDex,
+                             min_sdk, intra_dex ? IntraDex : InterDex,
                              /* true_virtual_callers */ {},
                              /* inline_for_speed */ nullptr,
                              /* analyze_and_prune_inits */ false, pure_methods);
@@ -1232,9 +1242,10 @@ TEST_F(MethodInlineTest, visibility_change_static_invoke) {
   {
     init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
         scope, /* create_init_class_insns */ false);
+    int min_sdk = 0;
     MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
                                candidates, concurrent_resolver, inliner_config,
-                               intra_dex ? IntraDex : InterDex,
+                               min_sdk, intra_dex ? IntraDex : InterDex,
                                /* true_virtual_callers */ {},
                                /* inline_for_speed */ nullptr,
                                /* analyze_and_prune_inits */ false, {});
@@ -1409,9 +1420,10 @@ TEST_F(MethodInlineTest, unused_result) {
   {
     init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
         scope, /* create_init_class_insns */ false);
+    int min_sdk = 0;
     MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
                                candidates, concurrent_resolver, inliner_config,
-                               intra_dex ? IntraDex : InterDex,
+                               min_sdk, intra_dex ? IntraDex : InterDex,
                                /* true_virtual_callers */ {},
                                /* inline_for_speed */ nullptr,
                                /* analyze_and_prune_inits */ false, {});
@@ -1559,9 +1571,10 @@ TEST_F(MethodInlineTest, caller_caller_callee_call_site) {
   {
     init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
         scope, /* create_init_class_insns */ false);
+    int min_sdk = 0;
     MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
                                candidates, concurrent_resolver, inliner_config,
-                               intra_dex ? IntraDex : InterDex,
+                               min_sdk, intra_dex ? IntraDex : InterDex,
                                /* true_virtual_callers */ {},
                                /* inline_for_speed */ nullptr,
                                /* analyze_and_prune_inits */ false, {});
@@ -1668,9 +1681,10 @@ TEST_F(MethodInlineTest,
   {
     init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
         scope, /* create_init_class_insns */ false);
+    int min_sdk = 0;
     MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
                                candidates, concurrent_resolver, inliner_config,
-                               IntraDex,
+                               min_sdk, IntraDex,
                                /* true_virtual_callers */ {},
                                /* inline_for_speed */ nullptr,
                                /* analyze_and_prune_inits */ false, {});
@@ -1753,9 +1767,10 @@ TEST_F(MethodInlineTest, dont_inline_sketchy_callee_into_into_try) {
   {
     init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
         scope, /* create_init_class_insns */ false);
+    int min_sdk = 0;
     MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
                                candidates, concurrent_resolver, inliner_config,
-                               IntraDex,
+                               min_sdk, IntraDex,
                                /* true_virtual_callers */ {},
                                /* inline_for_speed */ nullptr,
                                /* analyze_and_prune_inits */ false, {});

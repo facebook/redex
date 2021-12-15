@@ -389,6 +389,25 @@ class ConstantClassObjectAnalyzer
   }
 };
 
+struct ApiLevelAnalyzerState {
+  // Construction of this object is expensive because get_method acquires a
+  // global lock. `get` caches those lookups.
+  static ApiLevelAnalyzerState get(int32_t min_sdk = 0);
+
+  const DexFieldRef* sdk_int_field;
+  int32_t min_sdk;
+};
+
+class ApiLevelAnalyzer final
+    : public InstructionAnalyzerBase<ApiLevelAnalyzer,
+                                     ConstantEnvironment,
+                                     ApiLevelAnalyzerState> {
+ public:
+  static bool analyze_sget(const ApiLevelAnalyzerState& state,
+                           const IRInstruction* insn,
+                           ConstantEnvironment* env);
+};
+
 /*
  * Utility methods.
  */
@@ -530,6 +549,7 @@ using ConstantPrimitiveAndBoxedAnalyzer =
                                 ImmutableAttributeAnalyzer,
                                 EnumFieldAnalyzer,
                                 BoxedBooleanAnalyzer,
+                                ApiLevelAnalyzer,
                                 PrimitiveAnalyzer>;
 
 } // namespace constant_propagation

@@ -266,7 +266,8 @@ CallSiteSummarizer::get_invoke_call_site_summaries(
           m_shrinker.get_immut_analyzer_state(),
           m_shrinker.get_immut_analyzer_state(),
           constant_propagation::EnumFieldAnalyzerState::get(),
-          constant_propagation::BoxedBooleanAnalyzerState::get(), nullptr));
+          constant_propagation::BoxedBooleanAnalyzerState::get(),
+          constant_propagation::ApiLevelAnalyzerState::get(), nullptr));
   intra_cp.run(initial_env);
   for (const auto& block : cfg.blocks()) {
     auto env = intra_cp.get_entry_state_at(block);

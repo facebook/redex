@@ -33,19 +33,24 @@ using CombinedAnalyzer =
                                 BoxedBooleanAnalyzer,
                                 StringAnalyzer,
                                 ConstantClassObjectAnalyzer,
+                                ApiLevelAnalyzer,
                                 PrimitiveAnalyzer>;
 
 class AnalyzerGenerator {
   const ImmutableAttributeAnalyzerState* m_immut_analyzer_state;
+  const ApiLevelAnalyzerState* m_api_level_analyzer_state;
 
  public:
   explicit AnalyzerGenerator(
-      const ImmutableAttributeAnalyzerState* immut_analyzer_state)
-      : m_immut_analyzer_state(immut_analyzer_state) {
+      const ImmutableAttributeAnalyzerState* immut_analyzer_state,
+      const ApiLevelAnalyzerState* api_level_analyzer_state)
+      : m_immut_analyzer_state(immut_analyzer_state),
+        m_api_level_analyzer_state(api_level_analyzer_state) {
     // Initialize the singletons that `operator()` needs ahead of time to
     // avoid a data race.
     static_cast<void>(EnumFieldAnalyzerState::get());
     static_cast<void>(BoxedBooleanAnalyzerState::get());
+    static_cast<void>(ApiLevelAnalyzerState::get());
   }
 
   std::unique_ptr<intraprocedural::FixpointIterator> operator()(
@@ -73,12 +78,14 @@ class AnalyzerGenerator {
 
     auto intra_cp = std::make_unique<intraprocedural::FixpointIterator>(
         code.cfg(),
-        CombinedAnalyzer(class_under_init,
-                         const_cast<ImmutableAttributeAnalyzerState*>(
-                             m_immut_analyzer_state),
-                         &wps, EnumFieldAnalyzerState::get(),
-                         BoxedBooleanAnalyzerState::get(), nullptr, nullptr,
-                         nullptr));
+        CombinedAnalyzer(
+            class_under_init,
+            const_cast<ImmutableAttributeAnalyzerState*>(
+                m_immut_analyzer_state),
+            &wps, EnumFieldAnalyzerState::get(),
+            BoxedBooleanAnalyzerState::get(), nullptr, nullptr,
+            *const_cast<ApiLevelAnalyzerState*>(m_api_level_analyzer_state),
+            nullptr));
     intra_cp->run(env);
 
     return intra_cp;
@@ -100,7 +107,8 @@ class AnalyzerGenerator {
  */
 std::unique_ptr<FixpointIterator> PassImpl::analyze(
     const Scope& scope,
-    const ImmutableAttributeAnalyzerState* immut_analyzer_state) {
+    const ImmutableAttributeAnalyzerState* immut_analyzer_state,
+    const ApiLevelAnalyzerState* api_level_analyzer_state) {
   auto method_override_graph = mog::build_graph(scope);
   call_graph::Graph cg =
       m_config.use_multiple_callee_callgraph
@@ -112,7 +120,7 @@ std::unique_ptr<FixpointIterator> PassImpl::analyze(
   m_stats.callgraph_edges = cg_stats.num_edges;
   m_stats.callgraph_callsites = cg_stats.num_callsites;
   auto fp_iter = std::make_unique<FixpointIterator>(
-      cg, AnalyzerGenerator(immut_analyzer_state));
+      cg, AnalyzerGenerator(immut_analyzer_state, api_level_analyzer_state));
   // Run the bootstrap. All field value and method return values are
   // represented by Top.
   fp_iter->run({{CURRENT_PARTITION_LABEL, ArgumentDomain()}});
@@ -213,7 +221,7 @@ void PassImpl::optimize(
       });
 }
 
-void PassImpl::run(const DexStoresVector& stores) {
+void PassImpl::run(const DexStoresVector& stores, int min_sdk) {
   auto scope = build_class_scope(stores);
   XStoreRefs xstores(stores);
   // Rebuild all CFGs here -- this should be more efficient than doing them
@@ -224,11 +232,13 @@ void PassImpl::run(const DexStoresVector& stores) {
     code.cfg().calculate_exit_block();
   });
   // Hold the analyzer state of ImmutableAttributeAnalyzer.
-  std::unique_ptr<ImmutableAttributeAnalyzerState> immut_analyzer_state =
-      std::make_unique<ImmutableAttributeAnalyzerState>();
-  immutable_state::analyze_constructors(scope, immut_analyzer_state.get());
-  auto fp_iter = analyze(scope, immut_analyzer_state.get());
-  optimize(scope, xstores, *fp_iter, immut_analyzer_state.get());
+  ImmutableAttributeAnalyzerState immut_analyzer_state;
+  immutable_state::analyze_constructors(scope, &immut_analyzer_state);
+  ApiLevelAnalyzerState api_level_analyzer_state =
+      ApiLevelAnalyzerState::get(min_sdk);
+  auto fp_iter =
+      analyze(scope, &immut_analyzer_state, &api_level_analyzer_state);
+  optimize(scope, xstores, *fp_iter, &immut_analyzer_state);
   walk::parallel::code(scope,
                        [](DexMethod*, IRCode& code) { code.clear_cfg(); });
 }
@@ -241,7 +251,8 @@ void PassImpl::run_pass(DexStoresVector& stores,
         RuntimeAssertTransform::Config(config.get_proguard_map());
   }
 
-  run(stores);
+  int min_sdk = mgr.get_redex_options().min_sdk;
+  run(stores, min_sdk);
 
   ScopedMetrics sm(mgr);
   m_transform_stats.log_metrics(sm, /* with_scope= */ false);

@@ -37,9 +37,11 @@ BuilderTransform::BuilderTransform(
   m_inliner_config.shrinker.run_copy_prop = true;
   m_inliner_config.shrinker.run_local_dce = true;
   m_inliner_config.shrinker.compute_pure_methods = false;
+  int min_sdk = 0;
   m_inliner = std::unique_ptr<MultiMethodInliner>(new MultiMethodInliner(
       scope, init_classes_with_side_effects, stores, no_default_inlinables,
-      concurrent_resolver, m_inliner_config, MultiMethodInlinerMode::None));
+      concurrent_resolver, m_inliner_config, min_sdk,
+      MultiMethodInlinerMode::None));
 }
 
 std::unordered_set<const IRInstruction*>

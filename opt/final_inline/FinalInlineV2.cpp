@@ -945,6 +945,7 @@ cp::EligibleIfields gather_ifield_candidates(
 FinalInlinePassV2::Stats inline_final_gets(
     std::optional<DexStoresVector*> stores,
     const Scope& scope,
+    int min_sdk,
     const init_classes::InitClassesWithSideEffects&
         init_classes_with_side_effects,
     const XStoreRefs* xstores,
@@ -965,7 +966,7 @@ FinalInlinePassV2::Stats inline_final_gets(
   auto maybe_shrinker =
       stores ? std::make_optional<Shrinker>(**stores, scope,
                                             init_classes_with_side_effects,
-                                            shrinker_config)
+                                            shrinker_config, min_sdk)
              : std::nullopt;
 
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
@@ -1033,6 +1034,7 @@ FinalInlinePassV2::Stats inline_final_gets(
 
 FinalInlinePassV2::Stats FinalInlinePassV2::run(
     const Scope& scope,
+    int min_sdk,
     const init_classes::InitClassesWithSideEffects&
         init_classes_with_side_effects,
     const XStoreRefs* xstores,
@@ -1041,9 +1043,9 @@ FinalInlinePassV2::Stats FinalInlinePassV2::run(
   try {
     auto wps = final_inline::analyze_and_simplify_clinits(
         scope, init_classes_with_side_effects, xstores, config.blocklist_types);
-    return inline_final_gets(stores, scope, init_classes_with_side_effects,
-                             xstores, wps, config.blocklist_types,
-                             cp::FieldType::STATIC);
+    return inline_final_gets(stores, scope, min_sdk,
+                             init_classes_with_side_effects, xstores, wps,
+                             config.blocklist_types, cp::FieldType::STATIC);
   } catch (final_inline::class_initialization_cycle& e) {
     std::cerr << e.what();
     return {0, 0};
@@ -1052,6 +1054,7 @@ FinalInlinePassV2::Stats FinalInlinePassV2::run(
 
 FinalInlinePassV2::Stats FinalInlinePassV2::run_inline_ifields(
     const Scope& scope,
+    int min_sdk,
     const init_classes::InitClassesWithSideEffects&
         init_classes_with_side_effects,
     const XStoreRefs* xstores,
@@ -1061,9 +1064,9 @@ FinalInlinePassV2::Stats FinalInlinePassV2::run_inline_ifields(
   auto wps = final_inline::analyze_and_simplify_inits(
       scope, init_classes_with_side_effects, xstores, config.blocklist_types,
       eligible_ifields);
-  return inline_final_gets(stores, scope, init_classes_with_side_effects,
-                           xstores, wps, config.blocklist_types,
-                           cp::FieldType::INSTANCE);
+  return inline_final_gets(stores, scope, min_sdk,
+                           init_classes_with_side_effects, xstores, wps,
+                           config.blocklist_types, cp::FieldType::INSTANCE);
 }
 
 void FinalInlinePassV2::run_pass(DexStoresVector& stores,
@@ -1081,18 +1084,19 @@ void FinalInlinePassV2::run_pass(DexStoresVector& stores,
     return;
   }
   auto scope = build_class_scope(stores);
+  auto min_sdk = mgr.get_redex_options().min_sdk;
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, conf.create_init_class_insns());
   XStoreRefs xstores(stores);
-  auto sfield_stats =
-      run(scope, init_classes_with_side_effects, &xstores, m_config, &stores);
+  auto sfield_stats = run(scope, min_sdk, init_classes_with_side_effects,
+                          &xstores, m_config, &stores);
   FinalInlinePassV2::Stats ifield_stats{0, 0};
   if (m_config.inline_instance_field) {
     cp::EligibleIfields eligible_ifields =
         gather_ifield_candidates(scope, m_config.allowlist_method_names);
     ifield_stats =
-        run_inline_ifields(scope, init_classes_with_side_effects, &xstores,
-                           eligible_ifields, m_config, &stores);
+        run_inline_ifields(scope, min_sdk, init_classes_with_side_effects,
+                           &xstores, eligible_ifields, m_config, &stores);
     always_assert(ifield_stats.init_classes == 0);
   }
   mgr.incr_metric("num_static_finals_inlined", sfield_stats.inlined_count);

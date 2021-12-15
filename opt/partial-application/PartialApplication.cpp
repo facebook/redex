@@ -1144,6 +1144,7 @@ void PartialApplicationPass::run_pass(DexStoresVector& stores,
 
   auto excluded_classes = get_excluded_classes(stores);
 
+  int min_sdk = mgr.get_redex_options().min_sdk;
   auto min_sdk_api = get_min_sdk_api(conf, mgr);
   XStoreRefs xstores(stores);
   // RefChecker store_idx is initialized with `largest_root_store_id()`, so that
@@ -1166,7 +1167,7 @@ void PartialApplicationPass::run_pass(DexStoresVector& stores,
   shrinker_config.run_local_dce = true;
   shrinker_config.compute_pure_methods = false;
   Shrinker shrinker(stores, scope, init_classes_with_side_effects,
-                    shrinker_config);
+                    shrinker_config, min_sdk);
 
   std::unordered_set<const IRInstruction*> excluded_invoke_insns;
   auto get_callee_fn = [&excluded_classes, &excluded_invoke_insns](

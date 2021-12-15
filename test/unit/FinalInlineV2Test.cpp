@@ -38,8 +38,9 @@ struct FinalInlineTest : public RedexTest {
                                       bool create_init_class_insns = false) {
     init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
         scope, create_init_class_insns);
+    int min_sdk = 0;
     return FinalInlinePassV2::run(
-        scope, init_classes_with_side_effects, xstores);
+        scope, min_sdk, init_classes_with_side_effects, xstores);
   }
 
   std::unique_ptr<ClassCreator> m_cc;

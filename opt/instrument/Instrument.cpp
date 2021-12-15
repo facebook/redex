@@ -987,8 +987,9 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, cfg.create_init_class_insns());
 
+  int min_sdk = pm.get_redex_options().min_sdk;
   shrinker::Shrinker shrinker(stores, scope, init_classes_with_side_effects,
-                              shrinker_config);
+                              shrinker_config, min_sdk);
 
   walk::parallel::methods(scope, [&](auto* m) {
     if (m->get_code() == nullptr) {

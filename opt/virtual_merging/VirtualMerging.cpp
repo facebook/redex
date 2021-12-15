@@ -112,9 +112,11 @@ VirtualMerging::VirtualMerging(DexStoresVector& stores,
   std::unordered_set<DexMethod*> no_default_inlinables;
   // disable shrinking options, minimizing initialization time
   m_inliner_config.shrinker = shrinker::ShrinkerConfig();
+  int min_sdk = 0;
   m_inliner.reset(new MultiMethodInliner(
       m_scope, m_init_classes_with_side_effects, stores, no_default_inlinables,
-      concurrent_resolver, m_inliner_config, MultiMethodInlinerMode::None,
+      concurrent_resolver, m_inliner_config, min_sdk,
+      MultiMethodInlinerMode::None,
       /* true_virtual_callers */ {},
       /* inline_for_speed */ nullptr,
       /* bool analyze_and_prune_inits */ false,

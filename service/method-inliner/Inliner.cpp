@@ -72,6 +72,7 @@ MultiMethodInliner::MultiMethodInliner(
     std::function<DexMethod*(DexMethodRef*, MethodSearch)>
         concurrent_resolve_fn,
     const inliner::InlinerConfig& config,
+    int min_sdk,
     MultiMethodInlinerMode mode /* default is InterDex */,
     const CalleeCallerInsns& true_virtual_callers,
     InlineForSpeed* inline_for_speed,
@@ -111,6 +112,7 @@ MultiMethodInliner::MultiMethodInliner(
                  scope,
                  init_classes_with_side_effects,
                  config.shrinker,
+                 min_sdk,
                  configured_pure_methods,
                  configured_finalish_field_names) {
   Timer t("MultiMethodInliner construction");

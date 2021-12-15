@@ -137,6 +137,7 @@ class MultiMethodInliner {
       std::function<DexMethod*(DexMethodRef*, MethodSearch)>
           concurrent_resolve_fn,
       const inliner::InlinerConfig& config,
+      int min_sdk,
       MultiMethodInlinerMode mode = InterDex,
       const CalleeCallerInsns& true_virtual_callers = {},
       InlineForSpeed* inline_for_speed = nullptr,

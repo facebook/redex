@@ -651,9 +651,9 @@ void run_inliner(DexStoresVector& stores,
   auto scope = build_class_scope(stores);
 
   auto inliner_config = conf.get_inliner_config();
+  int32_t min_sdk = mgr.get_redex_options().min_sdk;
   const api::AndroidSDK* min_sdk_api{nullptr};
   if (inliner_config.check_min_sdk_refs) {
-    int32_t min_sdk = mgr.get_redex_options().min_sdk;
     mgr.incr_metric("min_sdk", min_sdk);
     TRACE(INLINE, 2, "min_sdk: %d", min_sdk);
     auto min_sdk_api_file = conf.get_android_sdk_api_file(min_sdk);
@@ -735,11 +735,12 @@ void run_inliner(DexStoresVector& stores,
       inliner_config.shrinker.run_const_prop;
 
   // inline candidates
-  MultiMethodInliner inliner(
-      scope, init_classes_with_side_effects, stores, candidates,
-      concurrent_resolver, inliner_config, intra_dex ? IntraDex : InterDex,
-      true_virtual_callers, inline_for_speed, analyze_and_prune_inits,
-      conf.get_pure_methods(), min_sdk_api, cross_dex_penalty);
+  MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
+                             candidates, concurrent_resolver, inliner_config,
+                             min_sdk, intra_dex ? IntraDex : InterDex,
+                             true_virtual_callers, inline_for_speed,
+                             analyze_and_prune_inits, conf.get_pure_methods(),
+                             min_sdk_api, cross_dex_penalty);
   inliner.inline_methods(/* need_deconstruct */ false);
 
   walk::parallel::code(scope,

@@ -35,6 +35,7 @@ class Shrinker {
       const init_classes::InitClassesWithSideEffects&
           init_classes_with_side_effects,
       const ShrinkerConfig& config,
+      int min_sdk,
       const std::unordered_set<DexMethodRef*>& configured_pure_methods = {},
       const std::unordered_set<const DexString*>&
           configured_finalish_field_names = {});
@@ -126,6 +127,7 @@ class Shrinker {
   ShrinkerForest m_forest;
   const XStoreRefs m_xstores;
   const ShrinkerConfig m_config;
+  const int m_min_sdk;
   const bool m_enabled;
   std::unique_ptr<cse_impl::SharedState> m_cse_shared_state;
 

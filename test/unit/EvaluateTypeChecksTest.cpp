@@ -64,8 +64,12 @@ class EvaluateTypeChecksTest : public RedexTest {
     shrinker_config.run_copy_prop = true;
     shrinker_config.run_local_dce = true;
     shrinker_config.compute_pure_methods = false;
-    Shrinker shrinker(
-        stores, scope, init_classes_with_side_effects, shrinker_config);
+    int min_sdk = 0;
+    Shrinker shrinker(stores,
+                      scope,
+                      init_classes_with_side_effects,
+                      shrinker_config,
+                      min_sdk);
 
     auto method_str = std::string("(") + method_line + " " + in + " )";
     auto method = assembler::class_with_method(type, method_str);

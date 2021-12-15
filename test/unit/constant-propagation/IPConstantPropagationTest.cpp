@@ -29,9 +29,13 @@ struct InterproceduralConstantPropagationTest : public RedexTest {
   InterproceduralConstantPropagationTest() {
     // EnumFieldAnalyzer requires that this method exists
     method::java_lang_Enum_equals();
+    DexField::make_field("Landroid/os/Build$VERSION;.SDK_INT:I");
+    m_api_level_analyzer_state = ApiLevelAnalyzerState::get(min_sdk);
   }
 
+  const int min_sdk = 42;
   ImmutableAttributeAnalyzerState m_immut_analyzer_state;
+  ApiLevelAnalyzerState m_api_level_analyzer_state;
 };
 
 static DexStoresVector make_simple_stores(const Scope& scope) {
@@ -1053,7 +1057,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantFieldAfterClinit) {
   config.max_heap_analysis_iterations = 2;
 
   auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(
-      scope, &m_immut_analyzer_state);
+      scope, &m_immut_analyzer_state, &m_api_level_analyzer_state);
   auto& wps = fp_iter->get_whole_program_state();
   EXPECT_EQ(wps.get_field_value(field_qux), SignedConstantDomain(0));
   EXPECT_EQ(wps.get_field_value(field_corge), SignedConstantDomain(1));
@@ -1144,7 +1148,7 @@ TEST_F(InterproceduralConstantPropagationTest,
   config.max_heap_analysis_iterations = 1;
 
   auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(
-      scope, &m_immut_analyzer_state);
+      scope, &m_immut_analyzer_state, &m_api_level_analyzer_state);
   auto& wps = fp_iter->get_whole_program_state();
   EXPECT_EQ(wps.get_field_value(field_qux), ConstantValue::top());
 
@@ -1640,7 +1644,7 @@ TEST_F(InterproceduralConstantPropagationTest, whiteBoxReturnValues) {
   InterproceduralConstantPropagationPass::Config config;
   config.max_heap_analysis_iterations = 1;
   auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(
-      scope, &m_immut_analyzer_state);
+      scope, &m_immut_analyzer_state, &m_api_level_analyzer_state);
   auto& wps = fp_iter->get_whole_program_state();
 
   // Make sure we mark methods that have a reachable return-void statement as
@@ -1652,4 +1656,39 @@ TEST_F(InterproceduralConstantPropagationTest, whiteBoxReturnValues) {
   EXPECT_EQ(wps.get_return_value(never_returns),
             SignedConstantDomain::bottom());
   EXPECT_EQ(wps.get_return_value(returns_constant), SignedConstantDomain(1));
+}
+
+TEST_F(InterproceduralConstantPropagationTest, min_sdk) {
+  auto cls_ty = DexType::make_type("LFoo;");
+  ClassCreator creator(cls_ty);
+  creator.set_super(type::java_lang_Object());
+
+  auto returns_min_sdk = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.returnsConstant:()I"
+     (
+      (sget "Landroid/os/Build$VERSION;.SDK_INT:I")
+      (move-result-pseudo v0)
+      (return v0)
+     )
+    )
+  )");
+  creator.add_method(returns_min_sdk);
+
+  Scope scope{creator.create()};
+  walk::code(scope, [](DexMethod*, IRCode& code) {
+    code.build_cfg(/* editable */ false);
+  });
+
+  InterproceduralConstantPropagationPass::Config config;
+  config.max_heap_analysis_iterations = 1;
+  auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(
+      scope, &m_immut_analyzer_state, &m_api_level_analyzer_state);
+  auto& wps = fp_iter->get_whole_program_state();
+
+  // Make sure we mark methods that have a reachable return-void statement as
+  // "returning" Top.
+  // And for a method that has no implementation in dex we also want its
+  // return value be Top but not Bottom.
+  EXPECT_EQ(wps.get_return_value(returns_min_sdk),
+            SignedConstantDomain(min_sdk, std::numeric_limits<int32_t>::max()));
 }
