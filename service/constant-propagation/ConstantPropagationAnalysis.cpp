@@ -9,6 +9,7 @@
 
 #include <boost/functional/hash.hpp>
 #include <cinttypes>
+#include <limits>
 #include <mutex>
 #include <set>
 
@@ -1258,6 +1259,40 @@ static const std::unordered_map<IROpcode, IfZeroMeetWith, boost::hash<IROpcode>>
          {sign_domain::Interval::GEZ, sign_domain::Interval::LEZ}},
     };
 
+static std::pair<SignedConstantDomain, SignedConstantDomain> refine_lt(
+    const SignedConstantDomain& left, const SignedConstantDomain& right) {
+  always_assert(left.min_element() < std::numeric_limits<int64_t>::max());
+  always_assert(right.max_element() > std::numeric_limits<int64_t>::min());
+  return {left.meet(SignedConstantDomain(std::numeric_limits<int64_t>::min(),
+                                         right.max_element() - 1)),
+          right.meet(SignedConstantDomain(
+              left.min_element() + 1, std::numeric_limits<int64_t>::max()))};
+}
+
+static std::pair<SignedConstantDomain, SignedConstantDomain> refine_le(
+    const SignedConstantDomain& left, const SignedConstantDomain& right) {
+  return {left.meet(SignedConstantDomain(std::numeric_limits<int64_t>::min(),
+                                         right.max_element())),
+          right.meet(SignedConstantDomain(
+              left.min_element(), std::numeric_limits<int64_t>::max()))};
+}
+
+static SignedConstantDomain refine_ne_left(const SignedConstantDomain& left,
+                                           const SignedConstantDomain& right) {
+  auto c = right.get_constant();
+  if (c) {
+    if (*c == left.min_element()) {
+      always_assert(*c < left.max_element());
+      return SignedConstantDomain(*c + 1, left.max_element());
+    }
+    if (*c == left.max_element()) {
+      always_assert(*c > left.min_element());
+      return SignedConstantDomain(left.min_element(), *c - 1);
+    }
+  }
+  return left;
+}
+
 /*
  * If we can determine that a branch is not taken based on the constants in
  * the environment, set the environment to bottom upon entry into the
@@ -1298,30 +1333,79 @@ static void analyze_if(const IRInstruction* insn,
   case OPCODE_IF_NE: {
     if (ConstantValue::apply_visitor(runtime_equals_visitor(), left, right)) {
       env->set_to_bottom();
+    } else {
+      auto scd_left = left.maybe_get<SignedConstantDomain>();
+      auto scd_right = right.maybe_get<SignedConstantDomain>();
+      if (scd_left && scd_right) {
+        env->set(insn->src(0), refine_ne_left(*scd_left, *scd_right));
+        if (insn->srcs_size() > 1) {
+          env->set(insn->src(1), refine_ne_left(*scd_right, *scd_left));
+        }
+      }
     }
     break;
   }
   case OPCODE_IF_LT: {
     if (ConstantValue::apply_visitor(runtime_leq_visitor(), right, left)) {
       env->set_to_bottom();
+    } else {
+      auto scd_left = left.maybe_get<SignedConstantDomain>();
+      auto scd_right = right.maybe_get<SignedConstantDomain>();
+      if (scd_left && scd_right) {
+        auto p = refine_lt(*scd_left, *scd_right);
+        env->set(insn->src(0), p.first);
+        if (insn->srcs_size() > 1) {
+          env->set(insn->src(1), p.second);
+        }
+      }
     }
     break;
   }
   case OPCODE_IF_GT: {
     if (ConstantValue::apply_visitor(runtime_leq_visitor(), left, right)) {
       env->set_to_bottom();
+    } else {
+      auto scd_left = left.maybe_get<SignedConstantDomain>();
+      auto scd_right = right.maybe_get<SignedConstantDomain>();
+      if (scd_left && scd_right) {
+        auto p = refine_lt(*scd_right, *scd_left);
+        env->set(insn->src(0), p.second);
+        if (insn->srcs_size() > 1) {
+          env->set(insn->src(1), p.first);
+        }
+      }
     }
     break;
   }
   case OPCODE_IF_LE: {
     if (ConstantValue::apply_visitor(runtime_lt_visitor(), right, left)) {
       env->set_to_bottom();
+    } else {
+      auto scd_left = left.maybe_get<SignedConstantDomain>();
+      auto scd_right = right.maybe_get<SignedConstantDomain>();
+      if (scd_left && scd_right) {
+        auto p = refine_le(*scd_left, *scd_right);
+        env->set(insn->src(0), p.first);
+        if (insn->srcs_size() > 1) {
+          env->set(insn->src(1), p.second);
+        }
+      }
     }
     break;
   }
   case OPCODE_IF_GE: {
     if (ConstantValue::apply_visitor(runtime_lt_visitor(), left, right)) {
       env->set_to_bottom();
+    } else {
+      auto scd_left = left.maybe_get<SignedConstantDomain>();
+      auto scd_right = right.maybe_get<SignedConstantDomain>();
+      if (scd_left && scd_right) {
+        auto p = refine_le(*scd_right, *scd_left);
+        env->set(insn->src(0), p.second);
+        if (insn->srcs_size() > 1) {
+          env->set(insn->src(1), p.first);
+        }
+      }
     }
     break;
   }

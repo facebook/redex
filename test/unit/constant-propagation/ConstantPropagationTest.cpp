@@ -1207,3 +1207,89 @@ TEST_F(ConstantPropagationTest, ArithmeticFoldingToLit16) {
   )");
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
+
+TEST_F(ConstantPropagationTest, ComparisonRefinesNumericInterval) {
+  // v0: [200, +inf)
+  // v1: (-inf, 100)
+  // ==> v0 > v1, v0 >= v1, v0 != v1
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (load-param v1)
+      (const v2 200)
+      (if-lt v0 v2 :exit)
+      (const v2 100)
+      (if-gt v1 v2 :exit)
+
+      (if-gt v0 v1 :exit)
+      (if-ge v0 v1 :exit)
+      (if-ne v0 v1 :exit)
+      (const-string "unreachable")
+      (move-result-pseudo-object v3)
+      (return-object v3)
+
+      (:exit)
+      (const v3 0)
+      (return-object v3)
+    )
+  )");
+
+  do_const_prop(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (load-param v1)
+      (const v2 200)
+      (if-lt v0 v2 :exit)
+      (const v2 100)
+      (if-gt v1 v2 :exit)
+
+      (:exit)
+      (const v3 0)
+      (return-object v3)
+    )
+  )");
+
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
+TEST_F(ConstantPropagationTest, NEChopsOffNumericInterval) {
+  // If we have x >= 200 and x != 200, then we know that x > 200.
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (const v2 200)
+      (if-lt v0 v2 :exit)
+      (if-eq v0 v2 :exit)
+
+      (if-gt v0 v2 :exit)
+      (const-string "unreachable")
+      (move-result-pseudo-object v3)
+      (return-object v3)
+
+      (:exit)
+      (const v3 0)
+      (return-object v3)
+    )
+  )");
+
+  do_const_prop(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (const v2 200)
+      (if-lt v0 v2 :exit)
+      (if-eq v0 v2 :exit)
+
+      (:exit)
+      (const v3 0)
+      (return-object v3)
+    )
+  )");
+
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}
