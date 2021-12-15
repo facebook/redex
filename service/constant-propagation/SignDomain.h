@@ -49,4 +49,8 @@ Domain from_int(int64_t);
 
 bool contains(Interval, int64_t);
 
+int64_t max_int(Interval interval);
+
+int64_t min_int(Interval interval);
+
 } // namespace sign_domain

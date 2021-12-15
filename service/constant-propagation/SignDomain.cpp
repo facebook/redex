@@ -105,4 +105,42 @@ bool contains(Interval interval, int64_t point) {
   }
 }
 
+int64_t max_int(Interval interval) {
+  switch (interval) {
+  case sign_domain::Interval::EMPTY:
+    not_reached_log("Empty interval does not have a max element");
+  case sign_domain::Interval::EQZ:
+  case sign_domain::Interval::LEZ:
+    return 0;
+  case sign_domain::Interval::LTZ:
+    return -1;
+  case sign_domain::Interval::GEZ:
+  case sign_domain::Interval::GTZ:
+  case sign_domain::Interval::ALL:
+  case sign_domain::Interval::NEZ:
+    return std::numeric_limits<int64_t>::max();
+  case sign_domain::Interval::SIZE:
+    not_reached();
+  }
+}
+
+int64_t min_int(Interval interval) {
+  switch (interval) {
+  case sign_domain::Interval::EMPTY:
+    not_reached_log("Empty interval does not have a min element");
+  case sign_domain::Interval::EQZ:
+  case sign_domain::Interval::GEZ:
+    return 0;
+  case sign_domain::Interval::GTZ:
+    return 1;
+  case sign_domain::Interval::LEZ:
+  case sign_domain::Interval::LTZ:
+  case sign_domain::Interval::ALL:
+  case sign_domain::Interval::NEZ:
+    return std::numeric_limits<int64_t>::min();
+  case sign_domain::Interval::SIZE:
+    not_reached();
+  }
+}
+
 } // namespace sign_domain

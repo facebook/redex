@@ -642,8 +642,9 @@ void Transform::eliminate_dead_branch(
   }
 
   const auto& succs = block->succs();
-  always_assert_log(succs.size() == 2, "actually %zu\n%s", succs.size(),
-                    SHOW(InstructionIterable(*block)));
+  always_assert_log(succs.size() == 2, "actually %zu\n%s in B%zu:\n%s",
+                    succs.size(), SHOW(InstructionIterable(*block)),
+                    block->id(), SHOW(cfg));
   for (auto& edge : succs) {
     // Check if the fixpoint analysis has determined the successors to be
     // unreachable
