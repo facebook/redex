@@ -375,6 +375,7 @@ libopt_la_SOURCES = \
 	opt/result-propagation/ResultPropagation.cpp \
 	opt/resolve-proguard-values/ResolveProguardAssumeValues.cpp \
 	opt/shorten-srcstrings/Shorten.cpp \
+	opt/shrinker/ShrinkerPass.cpp \
 	opt/make-public/MakePublicPass.cpp \
 	opt/methodinline/IntraDexInlinePass.cpp \
 	opt/methodinline/MethodInlinePass.cpp \

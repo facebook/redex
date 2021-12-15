@@ -17,6 +17,7 @@
 #include "ReachableClasses.h"
 #include "ReducedProductAbstractDomain.h"
 #include "Resolver.h"
+#include "ScopedCFG.h"
 #include "Walkers.h"
 
 // Analyze a constructor to learn how the instance fields are initialized.
@@ -169,18 +170,14 @@ std::vector<std::pair<ImmutableAttr::Attr, size_t>> analyze_initializer(
   std::vector<std::pair<ImmutableAttr::Attr, size_t>> usage;
   Environment init_env;
   size_t param_id = 0;
-  auto code = method->get_code();
-  auto& cfg = code->cfg();
-  boost::sub_range<IRList> param_instruction =
-      code->editable_cfg_built() ? cfg.get_param_instructions()
-                                 : code->get_param_instructions();
-  for (const auto& mie : param_instruction) {
+  cfg::ScopedCFG cfg(const_cast<IRCode*>(method->get_code()));
+  for (const auto& mie : cfg->get_param_instructions()) {
     init_env.set(mie.insn->dest(), ParamIdxDomain(param_id++));
   }
-  InitFixpointIterator fp_iter(cfg, method->get_class(), state);
+  InitFixpointIterator fp_iter(*cfg, method->get_class(), state);
   fp_iter.run(init_env);
   auto return_env = Environment::bottom();
-  for (cfg::Block* block : cfg.blocks()) {
+  for (cfg::Block* block : cfg->blocks()) {
     auto env = fp_iter.get_entry_state_at(block);
     for (auto& mie : InstructionIterable(block)) {
       auto* insn = mie.insn;

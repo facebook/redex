@@ -783,10 +783,13 @@ class OptimizeEnums {
       return;
     }
 
-    cfg::Block* fallthrough = nullptr;
     std::vector<std::pair<int32_t, cfg::Block*>> cases;
     const auto& field_enum_map = generated_switch_cases.at(info.array_field);
-    for (const auto& pair : finder.key_to_case()) {
+    const auto& key_to_case = finder.key_to_case();
+    auto fallthrough_it = key_to_case.find(boost::none);
+    cfg::Block* fallthrough =
+        fallthrough_it == key_to_case.end() ? nullptr : fallthrough_it->second;
+    for (const auto& pair : key_to_case) {
       auto old_case_key = pair.first;
       cfg::Block* leaf = pair.second;
 
@@ -810,8 +813,6 @@ class OptimizeEnums {
       }
 
       if (old_case_key == boost::none) {
-        always_assert_log(fallthrough == nullptr, "only 1 fallthrough allowed");
-        fallthrough = leaf;
         continue;
       }
 
@@ -821,9 +822,12 @@ class OptimizeEnums {
         auto new_case_key = enum_field_to_ordinal.at(field_enum);
         cases.emplace_back(new_case_key, leaf);
       } else {
-        // Ignore blocks with negative case key, which should be dead code.
+        // Ignore blocks with...
+        // - negative case key, which should be dead code
+        // - 0 case key, as long as the leaf block is the fallthrough block, as
+        //   0 encodes the default case
         always_assert_log(
-            *old_case_key < 0,
+            *old_case_key < 0 || (*old_case_key == 0 && fallthrough == leaf),
             "can't find case key %d leaving block %zu\n%s\nin %s\n",
             *old_case_key, branch_block->id(), info.str().c_str(), SHOW(cfg));
       }
