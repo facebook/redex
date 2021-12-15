@@ -21,6 +21,22 @@
 
 namespace mog = method_override_graph;
 
+namespace {
+
+// Whether, for a given type, a non-top value represents useful information.
+bool is_useful(DexType* type, const ConstantValue& value) {
+  always_assert(!value.is_top());
+  if (type::is_boolean(type)) {
+    // Since a boolean value can only have 1 and 0 as values, "GEZ" tells us
+    // nothing useful.
+    return !value.equals(SignedConstantDomain(sign_domain::Interval::GEZ)) &&
+           !value.equals(SignedConstantDomain(0, 1));
+  }
+  return true;
+}
+
+} // namespace
+
 namespace constant_propagation {
 
 namespace interprocedural {
@@ -154,13 +170,7 @@ void PassImpl::compute_analysis_stats(const WholeProgramState& wps) {
     for (auto& pair : wps.get_field_partition().bindings()) {
       auto* field = pair.first;
       auto& value = pair.second;
-      if (value.is_top()) {
-        continue;
-      }
-      // Since a boolean value can only have 1 and 0 as values, "GEZ" tells us
-      // nothing useful about this field.
-      if (type::is_boolean(field->get_type()) &&
-          value.equals(SignedConstantDomain(sign_domain::Interval::GEZ))) {
+      if (value.is_top() || !is_useful(field->get_type(), value)) {
         continue;
       }
       ++m_stats.constant_fields;
@@ -170,11 +180,8 @@ void PassImpl::compute_analysis_stats(const WholeProgramState& wps) {
     for (auto& pair : wps.get_method_partition().bindings()) {
       auto* method = pair.first;
       auto& value = pair.second;
-      if (value.is_top()) {
-        continue;
-      }
-      if (type::is_boolean(method->get_proto()->get_rtype()) &&
-          value.equals(SignedConstantDomain(sign_domain::Interval::GEZ))) {
+      if (value.is_top() ||
+          !is_useful(method->get_proto()->get_rtype(), value)) {
         continue;
       }
       ++m_stats.constant_methods;
