@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <filesystem>
+#include <boost/filesystem.hpp>
 
 #include "DexClass.h"
 
@@ -42,13 +42,13 @@ class Function {
 
 class SoLibrary {
  public:
-  SoLibrary(std::string name, std::filesystem::path json)
+  SoLibrary(std::string name, boost::filesystem::path json)
       : m_name(std::move(name)),
         m_json_path(std::move(json)),
         m_name_to_functions({}) {}
 
   std::string get_name() const { return m_name; }
-  std::filesystem::path get_json_path() const { return m_json_path; }
+  boost::filesystem::path get_json_path() const { return m_json_path; }
 
   void populate_functions();
   std::unordered_map<std::string, Function>& get_functions() {
@@ -68,11 +68,11 @@ class SoLibrary {
 
  private:
   std::string m_name;
-  std::filesystem::path m_json_path;
+  boost::filesystem::path m_json_path;
   std::unordered_map<std::string, Function> m_name_to_functions;
 };
 
-std::vector<SoLibrary> get_so_libraries(const std::filesystem::path& path);
+std::vector<SoLibrary> get_so_libraries(const boost::filesystem::path& path);
 
 struct NativeContext {
   static NativeContext build(const std::string& path_to_native_results,

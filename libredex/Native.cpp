@@ -19,7 +19,7 @@
 #include "Trace.h"
 #include "Walkers.h"
 
-namespace fs = std::filesystem;
+namespace fs = boost::filesystem;
 
 namespace {
 
@@ -62,7 +62,7 @@ void SoLibrary::populate_functions() {
   // Native methods can be registered with RegisterNatives calls. Use specific
   // analyses to extract information.
 
-  auto registered_natives_opt = read_json_from_file(m_json_path);
+  auto registered_natives_opt = read_json_from_file(m_json_path.string());
 
   always_assert_log(
       registered_natives_opt, "File not opened: %s", m_json_path.c_str());
