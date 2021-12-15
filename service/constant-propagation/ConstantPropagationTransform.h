@@ -166,6 +166,7 @@ class Transform final {
   std::vector<IRInstruction*> m_added_param_values;
   std::unordered_set<IRInstruction*> m_redundant_move_results;
   std::vector<cfg::Edge*> m_edge_deletes;
+  std::vector<std::tuple<cfg::Block*, cfg::Block*, cfg::EdgeType>> m_edge_adds;
   Stats m_stats;
   const std::unordered_set<DexMethodRef*> m_kotlin_null_check_assertions;
 };

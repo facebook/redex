@@ -9,6 +9,7 @@
 
 #include "ReachingDefinitions.h"
 #include "ScopedMetrics.h"
+#include "StlUtil.h"
 #include "Trace.h"
 #include "Transform.h"
 #include "TypeInference.h"
@@ -575,21 +576,55 @@ void Transform::remove_dead_switch(
 
   // Prune infeasible or unnecessary branches
   cfg::Edge* goto_edge = cfg.get_succ_edge_of_type(block, cfg::EDGE_GOTO);
-  std::unordered_set<cfg::Block*> remaining_branch_targets;
+  std::unordered_map<cfg::Block*, uint32_t> remaining_branch_targets;
+  std::map<int32_t, cfg::Block*> remaining_branch_keys;
   std::vector<cfg::Edge*> remaining_branch_edges;
-  bool goto_is_feasible = !intra_cp.analyze_edge(goto_edge, env).is_bottom();
   for (auto branch_edge : cfg.get_succ_edges_of_type(block, cfg::EDGE_BRANCH)) {
     auto branch_is_feasible =
         !intra_cp.analyze_edge(branch_edge, env).is_bottom();
-    if (branch_is_feasible && branch_edge->target() != goto_edge->target()) {
+    if (branch_is_feasible) {
       remaining_branch_edges.push_back(branch_edge);
-      remaining_branch_targets.insert(branch_edge->target());
+      remaining_branch_targets[branch_edge->target()]++;
+      remaining_branch_keys.emplace(*branch_edge->case_key(),
+                                    branch_edge->target());
       continue;
     }
-    if (branch_is_feasible && branch_edge->target() == goto_edge->target()) {
-      goto_is_feasible = true;
-    }
     m_edge_deletes.push_back(branch_edge);
+  }
+
+  bool goto_is_feasible = !intra_cp.analyze_edge(goto_edge, env).is_bottom();
+  if (!goto_is_feasible && !remaining_branch_targets.empty()) {
+    // Rewire infeasible goto to absorb all cases to most common target
+    cfg::Block* most_common_target{nullptr};
+    uint32_t most_common_target_count{0};
+    std::unordered_set<cfg::Block*> visited;
+    for (auto& p : remaining_branch_keys) {
+      auto target = p.second;
+      if (!visited.insert(target).second) {
+        continue;
+      }
+      auto count = remaining_branch_targets.at(target);
+      if (count > most_common_target_count) {
+        most_common_target = target;
+        most_common_target_count = count;
+      }
+    }
+    always_assert(most_common_target != nullptr);
+    if (most_common_target != goto_edge->target()) {
+      m_edge_deletes.push_back(goto_edge);
+      m_edge_adds.emplace_back(block, most_common_target, cfg::EDGE_GOTO);
+    }
+    auto removed = std20::erase_if(remaining_branch_edges, [&](auto* e) {
+      if (e->target() == most_common_target) {
+        m_edge_deletes.push_back(e);
+        return true;
+      }
+      return false;
+    });
+    always_assert(removed == most_common_target_count);
+    remaining_branch_targets.erase(most_common_target);
+    ++m_stats.branches_removed;
+    // goto is now feasible
   }
 
   // When all remaining branches are infeasible, the cfg will remove the switch
@@ -598,22 +633,21 @@ void Transform::remove_dead_switch(
     ++m_stats.branches_removed;
     return;
   }
+  always_assert(!remaining_branch_edges.empty());
 
-  if (remaining_branch_targets.size() > 1 || goto_is_feasible) {
-    // TODO: When !goto_is_feasible, cut off the goto edge...
+  remaining_branch_targets[goto_edge->target()]++;
+  if (remaining_branch_targets.size() > 1) {
     return;
   }
 
   always_assert(remaining_branch_targets.size() == 1);
-  always_assert(!goto_is_feasible);
   ++m_stats.branches_removed;
   // Replace the switch by a goto to the uniquely reachable block
   // We do that by deleting all but one of the remaining branch edges, and then
   // the cfg will rewrite the remaining branch into a goto and remove the switch
   // instruction.
-  m_edge_deletes.push_back(goto_edge);
   m_edge_deletes.insert(m_edge_deletes.end(),
-                        std::next(remaining_branch_edges.begin()),
+                        remaining_branch_edges.begin(),
                         remaining_branch_edges.end());
 }
 
@@ -695,6 +729,12 @@ bool Transform::replace_with_throw(
 }
 
 void Transform::apply_changes(cfg::ControlFlowGraph& cfg) {
+  if (!m_edge_adds.empty()) {
+    for (auto& t : m_edge_adds) {
+      cfg.add_edge(std::get<0>(t), std::get<1>(t), std::get<2>(t));
+    }
+    m_edge_adds.clear();
+  }
   if (!m_edge_deletes.empty()) {
     cfg.delete_edges(m_edge_deletes.begin(), m_edge_deletes.end());
     m_edge_deletes.clear();
@@ -730,6 +770,7 @@ void Transform::apply(const intraprocedural::FixpointIterator& fp_iter,
                                                declaring_type);
   if (xstores && !g_redex->instrument_mode) {
     m_stats.unreachable_instructions_removed += cfg.simplify();
+    fp_iter.clear_switch_succ_cache();
     // legacy_apply_constants_and_prune_unreachable creates some new blocks that
     // fp_iter isn't aware of. As turns out, legacy_apply_forward_targets
     // doesn't care, and will still do the right thing.

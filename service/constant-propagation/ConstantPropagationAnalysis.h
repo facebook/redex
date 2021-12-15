@@ -53,27 +53,48 @@ class FixpointIterator final
   void analyze_node(const NodeId& block,
                     ConstantEnvironment* state_at_entry) const override;
 
+  void clear_switch_succ_cache() const { m_switch_succs.clear(); }
+
  private:
-  using SwitchSuccs = std::unordered_map<int32_t, cfg::Edge*>;
+  using SwitchSuccs = std::unordered_map<int32_t, uint32_t>;
   mutable std::unordered_map<cfg::Block*, SwitchSuccs> m_switch_succs;
   InstructionAnalyzer<ConstantEnvironment> m_insn_analyzer;
   const std::unordered_set<DexMethodRef*>& m_kotlin_null_check_assertions;
   const bool m_imprecise_switches;
 
-  cfg::Edge* get_switch_succ(cfg::Block* block, int case_key) const {
+  const SwitchSuccs& find_switch_succs(cfg::Block* block) const {
     auto it = m_switch_succs.find(block);
     if (it == m_switch_succs.end()) {
-      SwitchSuccs switch_succs;
+      std::vector<int32_t> keys;
       for (auto succ : block->succs()) {
         if (succ->type() == cfg::EDGE_BRANCH) {
-          switch_succs.emplace(*succ->case_key(), succ);
+          keys.push_back(*succ->case_key());
         }
+      }
+      std::sort(keys.begin(), keys.end());
+      SwitchSuccs switch_succs;
+      for (auto key : keys) {
+        switch_succs.emplace(key, switch_succs.size());
       }
       it = m_switch_succs.emplace(block, std::move(switch_succs)).first;
     }
-    auto& switch_succs = it->second;
-    auto it2 = switch_succs.find(case_key);
-    return it2 == switch_succs.end() ? nullptr : it2->second;
+    return it->second;
+  }
+
+  bool has_switch_consecutive_case_keys(cfg::Block* block,
+                                        int32_t min_case_key,
+                                        int32_t max_case_key) const {
+    const auto& succs = find_switch_succs(block);
+    auto min_it = succs.find(min_case_key);
+    if (min_it == succs.end()) {
+      return false;
+    }
+    auto max_it = succs.find(max_case_key);
+    if (max_it == succs.end()) {
+      return false;
+    }
+    return max_it->second - min_it->second ==
+           (uint32_t)(max_case_key - min_case_key);
   }
 };
 

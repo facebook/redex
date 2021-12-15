@@ -1339,15 +1339,26 @@ ConstantEnvironment FixpointIterator::analyze_edge(
       // is a non-fallthrough edge with a case-key that is equal to the actual
       // selector value.
       auto scd = selector_val.maybe_get<SignedConstantDomain>();
-      auto selector_const = scd ? scd->get_constant() : boost::none;
-      if (!selector_const) {
+      if (!scd) {
         return env;
       }
-      auto succ = get_switch_succ(edge->src(), *selector_const);
-      if (succ != nullptr) {
-        const auto& succ_case_key = succ->case_key();
-        always_assert(succ_case_key && *selector_const == *succ_case_key);
+      auto selector_const = scd->get_constant();
+      if (selector_const &&
+          has_switch_consecutive_case_keys(edge->src(), *selector_const,
+                                           *selector_const)) {
         env.set_to_bottom();
+        return env;
+      }
+      auto numeric_interval_domain = scd->numeric_interval_domain();
+      if (numeric_interval_domain.is_bottom()) {
+        return env;
+      }
+      auto lb = numeric_interval_domain.lower_bound();
+      auto ub = numeric_interval_domain.upper_bound();
+      if (lb > NumericIntervalDomain::MIN && ub < NumericIntervalDomain::MAX &&
+          has_switch_consecutive_case_keys(edge->src(), lb, ub)) {
+        env.set_to_bottom();
+        return env;
       }
     }
   } else if (edge->type() != cfg::EDGE_THROW) {
