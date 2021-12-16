@@ -71,17 +71,6 @@ public class AppModuleUsageClass {
     }
   }
 
-  @UsesAppModule({"AppModule"})
-  public void method10() {
-    try {
-      Field field = AppModuleUsageClass.class.getDeclaredField("other_class");
-      field.get(this);
-    } catch (IllegalAccessException | IllegalArgumentException |
-             NoSuchFieldException ignoreException) {
-      /* okay to ignore in test*/
-    }
-  }
-
   public static void noAppModuleMethod() {}
 
   public static void noAppModuleMethod2() { method1(); }

@@ -86,7 +86,7 @@ TEST_F(AppModuleUsageTest, testTwoStores) {
 
   EXPECT_EQ(pass_manager->get_pass_info()[0].metrics.at(
                 "num_methods_access_app_module"),
-            10);
+            9);
   EXPECT_EQ(pass_manager->get_pass_info()[0].metrics.at("num_violations"), 5);
 }
 
@@ -120,7 +120,7 @@ TEST_F(AppModuleUsageTest, testThreeStores) {
   // with a App module access when in different stores
   EXPECT_EQ(pass_manager->get_pass_info()[0].metrics.at(
                 "num_methods_access_app_module"),
-            12);
+            11);
   // 2 extra violations in AppModuleUsageOtherClass when
   // AppMopuleUsageThirdClass is in another store
   EXPECT_EQ(pass_manager->get_pass_info()[0].metrics.at("num_violations"), 7);

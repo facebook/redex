@@ -35,81 +35,6 @@ constexpr const char* USES_AM_ANNO_VIOLATIONS_FILENAME =
     "redex-app-module-annotation-violations.csv";
 constexpr const char* SUPER_VERBOSE_DETAILS_FILENAME =
     "redex-app-module-verbose-details.txt";
-// @UsesAppModule DexType descriptor
-// returns potential type for an AbstractObject
-boost::optional<DexType*> type_used(const reflection::AbstractObject& o) {
-  DexClass* clazz = nullptr;
-  if (o.dex_type) {
-    clazz = type_class(o.dex_type);
-  }
-  switch (o.obj_kind) {
-  case reflection::OBJECT:
-    TRACE(APP_MOD_USE, 8,
-          "Reflection with result kind of OBJECT found as type ");
-    if (o.dex_type) {
-      TRACE(APP_MOD_USE, 8, "%s\n", SHOW(o.dex_type));
-      return o.dex_type;
-    } else {
-      TRACE(APP_MOD_USE, 8, "undetermined\n");
-    }
-    break;
-  case reflection::INT:
-    [[fallthrough]];
-  case reflection::STRING:
-    break;
-  case reflection::CLASS:
-    TRACE(APP_MOD_USE, 8,
-          "Reflection with result kind of CLASS found as class ");
-    if (o.dex_type) {
-      TRACE(APP_MOD_USE, 8, "%s\n", SHOW(o.dex_type));
-      return o.dex_type;
-    } else {
-      TRACE(APP_MOD_USE, 8, "undetermined\n");
-    }
-    break;
-  case reflection::FIELD:
-    TRACE(APP_MOD_USE,
-          8,
-          "Reflection with result kind of FIELD (%s) from class ",
-          o.dex_string->c_str());
-    if (clazz && !clazz->is_external() && o.dex_string) {
-      auto field = clazz->find_field_from_simple_deobfuscated_name(
-          o.dex_string->c_str());
-      if (field) {
-        TRACE(APP_MOD_USE, 8, "%s\n", field->get_type()->c_str());
-        return field->get_type();
-      } else {
-        TRACE(APP_MOD_USE, 8, "undetermined; could not find field\n");
-      }
-    } else {
-      TRACE(APP_MOD_USE,
-            8,
-            "undetermined; source class could not be created or is external\n");
-    }
-    break;
-  case reflection::METHOD:
-    TRACE(APP_MOD_USE,
-          8,
-          "Reflection with result kind of METHOD (%s) from class ",
-          o.dex_string->c_str());
-    if (clazz && !clazz->is_external() && o.dex_string) {
-      auto reflective_method = clazz->find_method_from_simple_deobfuscated_name(
-          o.dex_string->c_str());
-      if (reflective_method && reflective_method->get_class()) {
-        TRACE(APP_MOD_USE, 8, "%s\n", reflective_method->get_class()->c_str());
-        return reflective_method->get_class();
-      } else {
-        TRACE(APP_MOD_USE, 8, "undetermined; could not find method\n");
-      }
-    } else {
-      TRACE(APP_MOD_USE,
-            8,
-            "undetermined; source class could not be created or is external\n");
-    }
-    break;
-  }
-  return boost::none;
-}
 } // namespace
 
 void AppModuleUsagePass::run_pass(DexStoresVector& stores,
@@ -300,7 +225,7 @@ void AppModuleUsagePass::analyze_reflective_app_module_usage(
           // If the obj is a CLASS then it must have a class source of
           // REFLECTION
           TRACE(APP_MOD_USE, 6, "Found an abstract object \n");
-          type = type_used(o.get());
+          type = o.get().dex_type;
         }
       }
       if (type.has_value() && m_type_store_map.count(type.get()) > 0) {
