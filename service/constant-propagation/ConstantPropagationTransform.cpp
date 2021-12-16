@@ -127,6 +127,7 @@ bool Transform::eliminate_redundant_put(
       // This field must already hold this value. We don't need to write to it
       // again.
       m_mutation->remove(cfg_it);
+      ++m_stats.redundant_puts_removed;
       return true;
     }
     break;
@@ -1120,6 +1121,7 @@ void Transform::Stats::log_metrics(ScopedMetrics& sm, bool with_scope) const {
   sm.set_metric("null_checks_method_calls", null_checks_method_calls);
   sm.set_metric("unreachable_instructions_removed",
                 unreachable_instructions_removed);
+  sm.set_metric("redundant_puts_removed", redundant_puts_removed);
   TRACE(CONSTP, 3, "Null checks removed: %zu(%zu)", null_checks,
         null_checks_method_calls);
   sm.set_metric("added_param_const", added_param_const);

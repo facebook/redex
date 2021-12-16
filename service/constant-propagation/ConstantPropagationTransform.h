@@ -51,6 +51,7 @@ class Transform final {
     size_t null_checks{0};
     size_t null_checks_method_calls{0};
     size_t unreachable_instructions_removed{0};
+    size_t redundant_puts_removed{0};
 
     Stats& operator+=(const Stats& that) {
       branches_removed += that.branches_removed;
@@ -61,6 +62,7 @@ class Transform final {
       null_checks += that.null_checks;
       null_checks_method_calls += that.null_checks_method_calls;
       unreachable_instructions_removed += that.unreachable_instructions_removed;
+      redundant_puts_removed += that.redundant_puts_removed;
       return *this;
     }
 

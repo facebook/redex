@@ -64,6 +64,7 @@ void ShrinkerPass::run_pass(DexStoresVector& stores,
       "instructions_eliminated_const_prop",
       shrinker.get_const_prop_stats().branches_removed +
           shrinker.get_const_prop_stats().unreachable_instructions_removed +
+          shrinker.get_const_prop_stats().redundant_puts_removed +
           shrinker.get_const_prop_stats().branches_forwarded +
           shrinker.get_const_prop_stats().materialized_consts +
           shrinker.get_const_prop_stats().added_param_const +
