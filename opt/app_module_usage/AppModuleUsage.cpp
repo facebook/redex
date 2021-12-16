@@ -40,7 +40,6 @@ constexpr const char* SUPER_VERBOSE_DETAILS_FILENAME =
 void AppModuleUsagePass::run_pass(DexStoresVector& stores,
                                   ConfigFiles& conf,
                                   PassManager& mgr) {
-  const auto& full_scope = build_class_scope(stores);
   // To quickly look up wich DexStore ("module") a name represents
   std::unordered_map<std::string, DexStore*> name_store_map;
   reflection::MetadataCache refl_metadata_cache;
@@ -51,6 +50,8 @@ void AppModuleUsagePass::run_pass(DexStoresVector& stores,
       m_type_store_map.emplace(cls->get_type(), &store);
     });
   }
+
+  const auto& full_scope = build_class_scope(stores);
   walk::parallel::methods(full_scope, [&](DexMethod* method) {
     m_stores_method_uses_map.emplace(method, std::unordered_set<DexStore*>{});
     m_stores_method_uses_reflectively_map.emplace(
@@ -62,25 +63,22 @@ void AppModuleUsagePass::run_pass(DexStoresVector& stores,
   auto verbose_path = conf.metafile(SUPER_VERBOSE_DETAILS_FILENAME);
 
   analyze_direct_app_module_usage(full_scope, verbose_path);
-  TRACE(APP_MOD_USE, 4, "*** Direct analysis done\n");
   analyze_reflective_app_module_usage(full_scope, verbose_path);
-  TRACE(APP_MOD_USE, 4, "*** Reflective analysis done\n");
-  TRACE(APP_MOD_USE, 2, "See %s for full details.\n", verbose_path.c_str());
+  TRACE(APP_MOD_USE, 2, "See %s for full details.", verbose_path.c_str());
 
   auto report_path = conf.metafile(USES_AM_ANNO_VIOLATIONS_FILENAME);
   auto module_use_path = conf.metafile(APP_MODULE_USAGE_OUTPUT_FILENAME);
   auto module_count_path = conf.metafile(APP_MODULE_COUNT_OUTPUT_FILENAME);
 
   auto num_violations = generate_report(full_scope, report_path, mgr);
-  TRACE(APP_MOD_USE, 4, "*** Report done\n");
 
   if (m_output_entrypoints_to_modules) {
-    TRACE(APP_MOD_USE, 4, "*** Outputting module use at %s\n",
+    TRACE(APP_MOD_USE, 4, "Outputting module use at %s",
           APP_MODULE_USAGE_OUTPUT_FILENAME);
     output_usages(stores, module_use_path);
   }
   if (m_output_module_use_count) {
-    TRACE(APP_MOD_USE, 4, "*** Outputting module use count at %s\n",
+    TRACE(APP_MOD_USE, 4, "Outputting module use count at %s",
           APP_MODULE_COUNT_OUTPUT_FILENAME);
     output_use_count(stores, module_count_path);
   }
@@ -126,19 +124,15 @@ void AppModuleUsagePass::load_preexisting_violations(
         if (name_store_map.count(store_name)) {
           store = name_store_map.at(store_name);
         }
-        if (m_preexisting_violations.count(entrypoint) == 0) {
-          m_preexisting_violations.emplace(entrypoint,
-                                           std::unordered_set<DexStore*>{});
-        }
         if (store_name.find_first_of('*') != std::string::npos) {
           TRACE(APP_MOD_USE, 6, "entrypoint %s is allowed any store \n",
                 entrypoint.c_str());
           // allow any store to be used
           for (const auto& pair : name_store_map) {
-            m_preexisting_violations.at(entrypoint).emplace(pair.second);
+            m_preexisting_violations[entrypoint].emplace(pair.second);
           }
         } else if (store != nullptr) {
-          m_preexisting_violations.at(entrypoint).emplace(store);
+          m_preexisting_violations[entrypoint].emplace(store);
         }
       } while (comma != std::string::npos);
     }
@@ -211,7 +205,7 @@ void AppModuleUsagePass::analyze_reflective_app_module_usage(
             /* metadata_cache */ &refl_metadata_cache);
     for (auto& mie : InstructionIterable(code)) {
       IRInstruction* insn = mie.insn;
-      boost::optional<DexType*> type = boost::none;
+      DexType* type = nullptr;
       if (!opcode::is_an_invoke(insn->opcode())) {
         TRACE(APP_MOD_USE, 6, "Investigating reflection \n");
         // If an object type is from refletion it will be in the RESULT_REGISTER
@@ -228,8 +222,8 @@ void AppModuleUsagePass::analyze_reflective_app_module_usage(
           type = o.get().dex_type;
         }
       }
-      if (type.has_value() && m_type_store_map.count(type.get()) > 0) {
-        const auto store = m_type_store_map.at(type.get());
+      if (type && m_type_store_map.count(type)) {
+        const auto store = m_type_store_map.at(type);
         if (!store->is_root_store() && store != method_store) {
           // App module reference!
           // add the store for the referenced type to the map
@@ -241,7 +235,7 @@ void AppModuleUsagePass::analyze_reflective_app_module_usage(
           TRACE(APP_MOD_USE,
                 5,
                 "%s used reflectively by %s\n",
-                SHOW(type.get()),
+                SHOW(type),
                 SHOW(method));
           m_stores_use_count.update(store,
                                     [](DexStore* /*store*/,
@@ -253,8 +247,8 @@ void AppModuleUsagePass::analyze_reflective_app_module_usage(
 
           ofs << SHOW(method) << " from module \"" << method_store->get_name()
               << "\" *reflectively* references app module \""
-              << store->get_name() << "\" by using the class \""
-              << type.get()->str() << "\"\n";
+              << store->get_name() << "\" by using the class \"" << type->str()
+              << "\"\n";
         }
       }
     }
