@@ -229,6 +229,10 @@ void PassImpl::optimize(
 }
 
 void PassImpl::run(const DexStoresVector& stores, int min_sdk) {
+  // reset statistics, to be meaningful when pass runs multiple times
+  m_stats = Stats();
+  m_transform_stats = Transform::Stats();
+
   auto scope = build_class_scope(stores);
   XStoreRefs xstores(stores);
   // Rebuild all CFGs here -- this should be more efficient than doing them
