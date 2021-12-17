@@ -1692,3 +1692,60 @@ TEST_F(InterproceduralConstantPropagationTest, min_sdk) {
   EXPECT_EQ(wps.get_return_value(returns_min_sdk),
             SignedConstantDomain(min_sdk, std::numeric_limits<int32_t>::max()));
 }
+
+TEST_F(InterproceduralConstantPropagationTest, ghost_edges) {
+  auto cls_ty = DexType::make_type("LFoo;");
+  ClassCreator creator(cls_ty);
+  creator.set_super(type::java_lang_Object());
+
+  auto does_not_return = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.doesNotTerminate:()I"
+     (
+      (load-param v0)
+      (if-eqz v0 :loop2)
+
+      (:loop1)
+      (const v0 0)
+      (if-eqz v0 :loop1)
+      (goto :loop1)
+
+      (:loop2)
+      (const v0 0)
+      (if-eqz v0 :loop2)
+      (goto :loop2)
+     )
+    )
+  )");
+  creator.add_method(does_not_return);
+
+  Scope scope{creator.create()};
+
+  // Check that cfg will indeed have ghost edges...
+  auto code = does_not_return->get_code();
+  code->build_cfg(/* editable */ true);
+  code->cfg().calculate_exit_block();
+  auto exit_block = does_not_return->get_code()->cfg().exit_block();
+  EXPECT_NE(exit_block, nullptr);
+  EXPECT_EQ(exit_block->preds().size(), 2);
+  EXPECT_EQ(exit_block->preds().front()->type(), cfg::EDGE_GHOST);
+  code->clear_cfg();
+
+  InterproceduralConstantPropagationPass().run(make_simple_stores(scope));
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (if-eqz v0 :loop2)
+
+      (:loop1)
+      (const v0 0)
+      (goto :loop1)
+
+      (:loop2)
+      (const v0 0)
+      (goto :loop2)
+    )
+  )");
+
+  EXPECT_CODE_EQ(code, expected_code.get());
+}

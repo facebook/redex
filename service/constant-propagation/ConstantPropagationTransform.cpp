@@ -676,7 +676,10 @@ void Transform::eliminate_dead_branch(
     return;
   }
 
-  const auto& succs = block->succs();
+  // Get all normal succs (goto/branch edges, excluding ghost edges).
+  const auto succs = cfg.get_succ_edges_if(block, [](const auto* e) {
+    return e->type() == cfg::EDGE_GOTO || e->type() == cfg::EDGE_BRANCH;
+  });
   always_assert_log(succs.size() == 2, "actually %zu\n%s in B%zu:\n%s",
                     succs.size(), SHOW(InstructionIterable(*block)),
                     block->id(), SHOW(cfg));
