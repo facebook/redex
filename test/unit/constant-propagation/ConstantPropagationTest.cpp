@@ -547,6 +547,39 @@ TEST_F(ConstantPropagationTest, SwitchInfeasibleNonDefault) {
             assembler::to_s_expr(expected_code.get()));
 }
 
+TEST_F(ConstantPropagationTest, SwitchExtremeCaseKeys) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (const v1 -2000000000)
+      (if-lt v0 v1 :exit)
+      (const v1 2000000000)
+      (if-gt v0 v1 :exit)
+      (switch v0 (:a :b))
+      (:a -2000000000) ; reachable
+      (:b 2000000000) ; reachable
+      (:exit)
+      (return v1)
+    )
+  )");
+  do_const_prop(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (const v1 -2000000000)
+      (if-lt v0 v1 :exit)
+      (const v1 2000000000)
+      (if-gt v0 v1 :exit)
+      (:exit)
+      (return v1)
+    )
+  )");
+
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
 // Constant-propagation recognizes and propagates information about infeasible
 // switch default cases
 TEST_F(ConstantPropagationTest, SwitchInfeasibleDefault) {

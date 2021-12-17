@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <limits>
 #include <unordered_set>
 #include <utility>
 
@@ -84,6 +85,7 @@ class FixpointIterator final
   bool has_switch_consecutive_case_keys(cfg::Block* block,
                                         int32_t min_case_key,
                                         int32_t max_case_key) const {
+    always_assert(min_case_key <= max_case_key);
     const auto& succs = find_switch_succs(block);
     auto min_it = succs.find(min_case_key);
     if (min_it == succs.end()) {
@@ -93,8 +95,11 @@ class FixpointIterator final
     if (max_it == succs.end()) {
       return false;
     }
-    return max_it->second - min_it->second ==
-           (uint32_t)(max_case_key - min_case_key);
+    always_assert(min_it->second <= max_it->second);
+    uint32_t cases_keys = max_it->second - min_it->second;
+    int64_t n = (int64_t)max_case_key - min_case_key;
+    always_assert(n >= 0 && n < std::numeric_limits<uint32_t>::max());
+    return cases_keys == (uint32_t)n;
   }
 };
 
