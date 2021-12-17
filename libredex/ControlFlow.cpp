@@ -2291,6 +2291,23 @@ void ControlFlowGraph::clear() {
   m_editable = true;
 }
 
+namespace {
+
+Edge* get_singleton_normal_forward_edge(Block* block) {
+  Edge* singleton = nullptr;
+  for (auto succ : block->succs()) {
+    if (succ->type() == EDGE_GOTO || succ->type() == EDGE_BRANCH) {
+      if (singleton) {
+        return nullptr;
+      }
+      singleton = succ;
+    }
+  }
+  return singleton;
+}
+
+} // namespace
+
 // After `edges` have been removed from the graph,
 //   * Turn BRANCHes/SWITCHes with one outgoing edge into GOTOs
 void ControlFlowGraph::cleanup_deleted_edges(const EdgeSet& edges) {
@@ -2300,12 +2317,11 @@ void ControlFlowGraph::cleanup_deleted_edges(const EdgeSet& edges) {
     if (last_it != pred_block->end()) {
       auto last_insn = last_it->insn;
       auto op = last_insn->opcode();
-      auto remaining_forward_edges = pred_block->succs();
+      Edge* fwd_edge;
       if ((opcode::is_a_conditional_branch(op) || opcode::is_switch(op)) &&
-          remaining_forward_edges.size() == 1) {
+          (fwd_edge = get_singleton_normal_forward_edge(pred_block))) {
         m_removed_insns.push_back(last_insn);
         pred_block->m_entries.erase_and_dispose(last_it);
-        Edge* fwd_edge = remaining_forward_edges[0];
         fwd_edge->set_type(EDGE_GOTO);
         fwd_edge->set_case_key(boost::none);
       }
