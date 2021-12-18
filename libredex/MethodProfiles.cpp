@@ -354,7 +354,8 @@ dexmethods_profiled_comparator::dexmethods_profiled_comparator(
     : m_method_profiles(method_profiles),
       m_allowlisted_substrings(&config->method_sorting_allowlisted_substrings),
       m_legacy_order(config->legacy_order),
-      m_min_appear_percent(config->min_appear_percent) {
+      m_min_appear_percent(config->min_appear_percent),
+      m_second_min_appear_percent(config->second_min_appear_percent) {
   always_assert(m_method_profiles != nullptr);
   always_assert(m_allowlisted_substrings != nullptr);
 
@@ -416,6 +417,9 @@ dexmethods_profiled_comparator::dexmethods_profiled_comparator(
 double dexmethods_profiled_comparator::get_method_sort_num(
     const DexMethod* method) {
   double range_begin = 0.0;
+
+  std::optional<double> secondary_ordering = std::nullopt;
+
   for (const auto& interaction_id : m_interactions) {
     if (interaction_id == COLD_START && m_coldstart_start_marker != nullptr &&
         m_coldstart_end_marker != nullptr) {
@@ -429,22 +433,49 @@ double dexmethods_profiled_comparator::get_method_sort_num(
     auto it = stats_map.find(method);
     if (it != stats_map.end()) {
       const auto& stat = it->second;
-      if (m_legacy_order && stat.appear_percent >= 95.0) {
-        return range_begin + RANGE_SIZE / 2;
-      } else if (!m_legacy_order &&
-                 stat.appear_percent >= m_min_appear_percent) {
+      if (m_legacy_order) {
+        if (stat.appear_percent >= 95.0) {
+          return range_begin + RANGE_SIZE / 2;
+        } else {
+          continue;
+        }
+      }
+
+      auto mixed_ordering = [](double appear_percent, double appear_bias,
+                               double order_percent, double order_multiplier) {
         // Prefer high appearance percents and low order percents. This
         // intentionally doesn't strictly order methods by appear_percent then
         // order_percent, rather both values are used and with greater weight
         // given to appear_percent.
         double raw_score =
-            (100.0 - stat.appear_percent) + 0.1 * stat.order_percent;
-        double score = std::min(100.0, std::max(raw_score, 0.0));
+            (appear_bias - appear_percent) + order_multiplier * order_percent;
+        return std::min(100.0, std::max(raw_score, 0.0));
+      };
+
+      if (stat.appear_percent >= m_min_appear_percent) {
+        double score =
+            mixed_ordering(stat.appear_percent, 100.0, stat.order_percent, 0.1);
         // Reminder: Lower sort numbers come sooner in the dex file
         return range_begin + score * RANGE_SIZE / 100.0;
       }
+
+      if (stat.appear_percent >= m_second_min_appear_percent) {
+        if (!secondary_ordering) {
+          double score =
+              mixed_ordering(stat.appear_percent, m_min_appear_percent,
+                             stat.order_percent, 0.1);
+
+          secondary_ordering = RANGE_STRIDE * m_interactions.size() +
+                               range_begin + score * RANGE_SIZE / 100.0;
+        }
+        continue;
+      }
     }
     range_begin += RANGE_STRIDE;
+  }
+
+  if (secondary_ordering) {
+    return *secondary_ordering;
   }
 
   // If the method is not present in profiled order file we'll put it in the

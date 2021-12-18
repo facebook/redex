@@ -173,6 +173,7 @@ class dexmethods_profiled_comparator {
   std::unordered_map<DexMethod*, double> m_cache;
   bool m_legacy_order;
   double m_min_appear_percent;
+  double m_second_min_appear_percent;
   std::vector<std::string> m_interactions;
 
   const DexMethod* m_coldstart_start_marker;
