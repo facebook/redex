@@ -69,6 +69,14 @@ void CheckUniqueDeobfuscatedNamesConfig::bind_config() {
   bind("run_finally", run_finally, run_finally);
 }
 
+void MethodProfileOrderingConfig::bind_config() {
+  bind("method_sorting_allowlisted_substrings",
+       method_sorting_allowlisted_substrings,
+       method_sorting_allowlisted_substrings);
+  bind("legacy_profiled_code_item_sort_order", legacy_order, legacy_order);
+  bind("min_appear_percent", min_appear_percent, min_appear_percent);
+}
+
 void GlobalConfig::bind_config() {
   bool bool_param;
   std::string string_param;
@@ -90,7 +98,6 @@ void GlobalConfig::bind_config() {
   bind("android_sdk_api_28_file", "", string_param);
   bind("android_sdk_api_29_file", "", string_param);
   bind("bytecode_sort_mode", {}, string_vector_param);
-  bind("legacy_profiled_code_item_sort_order", true, bool_param);
   bind("coldstart_classes", "", string_param);
   bind("compute_xml_reachability", false, bool_param);
   bind("unused_keep_rule_abort", false, bool_param);
@@ -116,7 +123,6 @@ void GlobalConfig::bind_config() {
   bind("keep_packages", {}, string_vector_param);
   bind("legacy_reflection_reachability", false, bool_param);
   bind("lower_with_cfg", {}, bool_param);
-  bind("method_sorting_allowlisted_substrings", {}, string_vector_param);
   bind("no_optimizations_annotations", {}, string_vector_param);
   // TODO: Remove unused profiled_methods_file option and all build system
   // references
@@ -155,6 +161,7 @@ GlobalConfigRegistry& GlobalConfig::default_registry() {
       register_as<CheckUniqueDeobfuscatedNamesConfig>(
           "check_unique_deobfuscated_names"),
       register_as<OptDecisionsConfig>("opt_decisions"),
+      register_as<MethodProfileOrderingConfig>("method_profile_order"),
   };
   return registry;
 }

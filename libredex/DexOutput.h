@@ -226,10 +226,7 @@ class GatheredTypes {
   std::unordered_map<const DexString*, unsigned int> m_cls_load_strings;
   std::unordered_map<const DexString*, unsigned int> m_cls_strings;
   std::unordered_map<const DexMethod*, unsigned int> m_methods_in_cls_order;
-  const method_profiles::MethodProfiles* m_method_profiles{nullptr};
-  const std::unordered_set<std::string>*
-      m_method_sorting_allowlisted_substrings{nullptr};
-  bool m_legacy_order{true};
+  ConfigFiles* m_config{nullptr};
 
   dexstring_to_idx* get_string_index(cmp_dstring cmp = compare_dexstrings);
   dextype_to_idx* get_type_index(cmp_dtype cmp = compare_dextypes);
@@ -267,11 +264,7 @@ class GatheredTypes {
   void sort_dexmethod_emitlist_cls_order(std::vector<DexMethod*>& lmeth);
   void sort_dexmethod_emitlist_clinit_order(std::vector<DexMethod*>& lmeth);
   void sort_dexmethod_emitlist_profiled_order(std::vector<DexMethod*>& lmeth);
-  void set_method_sorting_allowlisted_substrings(
-      const std::unordered_set<std::string>* allowlisted_substrings);
-  void set_method_profiles(
-      const method_profiles::MethodProfiles* method_profiles);
-  void set_legacy_order(bool legacy_order);
+  void set_config(ConfigFiles* config);
 
   std::unordered_set<const DexString*> index_type_names();
 };

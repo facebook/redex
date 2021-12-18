@@ -14,6 +14,8 @@
 #include "Timer.h"
 #include "Trace.h"
 
+struct MethodProfileOrderingConfig;
+
 namespace method_profiles {
 
 // These names (and their order) match the columns of the csv
@@ -199,9 +201,7 @@ class dexmethods_profiled_comparator {
   dexmethods_profiled_comparator(
       const std::vector<DexMethod*>& initial_order,
       const method_profiles::MethodProfiles* method_profiles,
-      const std::unordered_set<std::string>* allowlisted_substrings,
-      bool legacy_order,
-      double min_appear_percent = 10.0);
+      const MethodProfileOrderingConfig* config);
 
   // See class comment.
   dexmethods_profiled_comparator(const dexmethods_profiled_comparator&) =

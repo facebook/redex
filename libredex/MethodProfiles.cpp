@@ -14,6 +14,7 @@
 #include <stdlib.h>
 
 #include "CppUtil.h"
+#include "GlobalConfig.h"
 #include "Show.h"
 
 using namespace method_profiles;
@@ -349,13 +350,11 @@ bool MethodProfiles::parse_header(std::string_view line) {
 dexmethods_profiled_comparator::dexmethods_profiled_comparator(
     const std::vector<DexMethod*>& initial_order,
     const method_profiles::MethodProfiles* method_profiles,
-    const std::unordered_set<std::string>* allowlisted_substrings,
-    bool legacy_order,
-    double min_appear_percent)
+    const MethodProfileOrderingConfig* config)
     : m_method_profiles(method_profiles),
-      m_allowlisted_substrings(allowlisted_substrings),
-      m_legacy_order(legacy_order),
-      m_min_appear_percent(min_appear_percent) {
+      m_allowlisted_substrings(&config->method_sorting_allowlisted_substrings),
+      m_legacy_order(config->legacy_order),
+      m_min_appear_percent(config->min_appear_percent) {
   always_assert(m_method_profiles != nullptr);
   always_assert(m_allowlisted_substrings != nullptr);
 

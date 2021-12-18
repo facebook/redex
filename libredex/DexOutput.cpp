@@ -42,6 +42,7 @@
 #include "DexMethodHandle.h"
 #include "DexPosition.h"
 #include "DexUtil.h"
+#include "GlobalConfig.h"
 #include "IODIMetadata.h"
 #include "IRCode.h"
 #include "Macros.h"
@@ -176,11 +177,17 @@ void GatheredTypes::sort_dexmethod_emitlist_cls_order(
 void GatheredTypes::sort_dexmethod_emitlist_profiled_order(
     std::vector<DexMethod*>& lmeth) {
   // Use std::ref to avoid comparator copies.
+  redex_assert(m_config != nullptr);
+
+  MethodProfileOrderingConfig* config =
+      m_config->get_global_config()
+          .get_config_by_name<MethodProfileOrderingConfig>(
+              "method_profile_order");
+
   method_profiles::dexmethods_profiled_comparator comparator(
       lmeth,
-      m_method_profiles,
-      m_method_sorting_allowlisted_substrings,
-      m_legacy_order);
+      /*method_profiles=*/&m_config->get_method_profiles(),
+      config);
   std::stable_sort(lmeth.begin(), lmeth.end(), std::ref(comparator));
 }
 
@@ -2811,33 +2818,13 @@ void DexOutput::write_symbol_files() {
                                 m_method_bytecode_offsets);
 }
 
-void GatheredTypes::set_method_sorting_allowlisted_substrings(
-    const std::unordered_set<std::string>* allowlisted_substrings) {
-  m_method_sorting_allowlisted_substrings = allowlisted_substrings;
-}
-
-void GatheredTypes::set_method_profiles(
-    const method_profiles::MethodProfiles* method_profiles) {
-  m_method_profiles = method_profiles;
-}
-
-void GatheredTypes::set_legacy_order(bool legacy_order) {
-  m_legacy_order = legacy_order;
-}
+void GatheredTypes::set_config(ConfigFiles* config) { m_config = config; }
 
 void DexOutput::prepare(SortMode string_mode,
                         const std::vector<SortMode>& code_mode,
                         ConfigFiles& conf,
                         const std::string& dex_magic) {
-
-  if (std::find(code_mode.begin(), code_mode.end(),
-                SortMode::METHOD_PROFILED_ORDER) != code_mode.end()) {
-    m_gtypes->set_method_profiles(&conf.get_method_profiles());
-    m_gtypes->set_legacy_order(conf.get_json_config().get(
-        "legacy_profiled_code_item_sort_order", true));
-    m_gtypes->set_method_sorting_allowlisted_substrings(
-        &conf.get_method_sorting_allowlisted_substrings());
-  }
+  m_gtypes->set_config(&conf);
 
   fix_jumbos(m_classes, m_dodx.get());
   init_header_offsets(dex_magic);

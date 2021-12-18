@@ -8,6 +8,7 @@
 #include <gtest/gtest.h>
 #include <json/json.h>
 
+#include "ConfigFiles.h"
 #include "ControlFlow.h"
 #include "DexInstruction.h"
 #include "DexPosition.h"
@@ -40,6 +41,7 @@ TEST_F(DexOutputTest, testSimilarityOrderer) {
 
   Json::Value cfg;
   ConfigFiles config_files(cfg);
+  config_files.parse_global_config();
   std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make(""));
   auto scope = build_class_scope(stores);
 
@@ -91,6 +93,7 @@ TEST_F(DexOutputTest, testPerfSensitive) {
 
   Json::Value cfg;
   ConfigFiles config_files(cfg);
+  config_files.parse_global_config();
   std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make(""));
 
   (*classes)[1]->set_perf_sensitive(true);
