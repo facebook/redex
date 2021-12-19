@@ -148,6 +148,7 @@ libredex_la_SOURCES = \
 	libredex/Resolver.cpp \
 	libredex/ScopedMetrics.cpp \
 	libredex/Show.cpp \
+	libredex/SourceBlockConsistencyCheck.cpp \
 	libredex/SourceBlocks.cpp \
 	libredex/Timer.cpp \
 	libredex/Trace.cpp \

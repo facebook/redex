@@ -243,7 +243,26 @@ inline const SourceBlock* get_first_source_block(const cfg::Block* b) {
   return nullptr;
 }
 
+inline SourceBlock* get_last_source_block(cfg::Block* b) {
+  auto rit = std::find_if(b->rbegin(), b->rend(), [](const auto& mie) {
+    return mie.type == MFLOW_SOURCE_BLOCK;
+  });
+
+  if (rit == b->rend()) {
+    return nullptr;
+  }
+
+  return rit->src_block.get();
+}
+inline const SourceBlock* get_last_source_block(const cfg::Block* b) {
+  return const_cast<SourceBlock*>(
+      get_last_source_block(const_cast<cfg::Block*>(b)));
+}
+
 void track_source_block_coverage(ScopedMetrics& sm,
                                  const DexStoresVector& stores);
+
+class SourceBlockConsistencyCheck;
+SourceBlockConsistencyCheck& get_sbcc();
 
 } // namespace source_blocks

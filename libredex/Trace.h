@@ -126,6 +126,7 @@ class DexType;
   TM(RMUF)            \
   TM(RMUNINST)        \
   TM(RP)              \
+  TM(SBCC)            \
   TM(SDIS)            \
   TM(SHORTEN)         \
   TM(SPLIT_RES)       \

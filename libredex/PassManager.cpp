@@ -606,6 +606,8 @@ AssessorConfig get_assessor_config(const ConfigFiles& conf,
       assessor_args.get("run_after_each_pass", false).asBool();
   res.run_initially = assessor_args.get("run_initially", false).asBool();
   res.run_finally = assessor_args.get("run_finally", false).asBool();
+  res.run_sb_consistency =
+      assessor_args.get("run_sb_consistency", false).asBool();
   return res;
 }
 
@@ -991,7 +993,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       is_run_hasher_after_each_pass(conf, get_redex_options());
 
   // Retrieve the assessor's settings.
-  auto assessor_config = get_assessor_config(conf, get_redex_options());
+  m_assessor_config = ::get_assessor_config(conf, get_redex_options());
+  const auto& assessor_config = this->get_assessor_config();
 
   // Retrieve the type checker's settings.
   CheckerConfig checker_conf{conf};
@@ -1050,6 +1053,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
     if (run_hasher || run_assessor || run_type_checker ||
         check_unique_deobfuscated.m_after_each_pass) {
       scope = build_class_scope(it);
+
       if (run_hasher) {
         m_current_pass_info->hash = boost::optional<hashing::DexHash>(
             this->run_hasher(pass->name().c_str(), scope));
