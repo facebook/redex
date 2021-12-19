@@ -528,6 +528,9 @@ struct SourceBlocksStats {
   std::array<size_t, gCountersNonEntry.size()> non_entry_methods{};
   std::array<std::pair<size_t, size_t>, gCountersNonEntry.size()>
       non_entry_min_max{};
+  std::array<std::pair<const DexMethod*, const DexMethod*>,
+             gCountersNonEntry.size()>
+      non_entry_min_max_methods{};
 
   SourceBlocksStats& operator+=(const SourceBlocksStats& that) {
     methods_with_code += that.methods_with_code;
@@ -550,10 +553,36 @@ struct SourceBlocksStats {
                                              that.non_entry_min_max[i].second);
     }
 
+    for (size_t i = 0; i != non_entry_min_max_methods.size(); ++i) {
+      auto set_min_max = [](auto& lhs, auto& rhs, auto fn) {
+        if (rhs == nullptr) {
+          return;
+        }
+        if (lhs == nullptr) {
+          lhs = rhs;
+          return;
+        }
+        auto lhs_count = lhs->get_code()->count_opcodes();
+        auto rhs_count = rhs->get_code()->count_opcodes();
+        auto op = fn(lhs_count, rhs_count);
+        if (op == rhs_count &&
+            (op != lhs_count || compare_dexmethods(rhs, lhs))) {
+          lhs = rhs;
+        }
+      };
+
+      set_min_max(non_entry_min_max_methods[i].first,
+                  that.non_entry_min_max_methods[i].first,
+                  [](auto lhs, auto rhs) { return std::min(lhs, rhs); });
+      set_min_max(non_entry_min_max_methods[i].second,
+                  that.non_entry_min_max_methods[i].second,
+                  [](auto lhs, auto rhs) { return std::max(lhs, rhs); });
+    }
+
     return *this;
   }
 
-  void fill_derived() {
+  void fill_derived(const DexMethod* m) {
     methods_with_code = 1;
 
     static_assert(gCounters[1].first == "~blocks~with~source~blocks");
@@ -563,6 +592,11 @@ struct SourceBlocksStats {
       non_entry_methods[i] = non_entry[i] > 0 ? 1 : 0;
       non_entry_min_max[i].first = non_entry[i];
       non_entry_min_max[i].second = non_entry[i];
+
+      if (non_entry[i] != 0) {
+        non_entry_min_max_methods[i].first = m;
+        non_entry_min_max_methods[i].second = m;
+      }
     }
   }
 };
@@ -600,7 +634,7 @@ void track_source_block_coverage(ScopedMetrics& sm,
           }
         }
 
-        ret.fill_derived();
+        ret.fill_derived(m);
 
         code->clear_cfg();
         return ret;
@@ -620,6 +654,15 @@ void track_source_block_coverage(ScopedMetrics& sm,
     sm.set_metric("methods", stats.non_entry_methods[i]);
     sm.set_metric("min", stats.non_entry_min_max[i].first);
     sm.set_metric("max", stats.non_entry_min_max[i].second);
+
+    auto min_max = [&](const DexMethod* m, const char* name) {
+      if (m != nullptr) {
+        auto min_max_scope = sm.scope(name);
+        sm.set_metric(show_deobfuscated(m), m->get_code()->count_opcodes());
+      }
+    };
+    min_max(stats.non_entry_min_max_methods[i].first, "min_method");
+    min_max(stats.non_entry_min_max_methods[i].second, "max_method");
   }
 }
 
