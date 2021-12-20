@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <cctype>
 #include <string_view>
 #include <utility>
 
@@ -126,4 +127,17 @@ inline StringSplitterIterable split_string(std::string_view str,
                                            std::string_view delim) {
   StringSplitterIterator ss(str, delim);
   return StringSplitterIterable(ss /* begin */, ss.end());
+}
+
+inline std::string_view trim_whitespaces(std::string_view str) {
+  if (str.empty()) {
+    return str;
+  }
+  while (isspace(str.front())) {
+    str.remove_prefix(1);
+  }
+  while (isspace(str.back())) {
+    str.remove_suffix(1);
+  }
+  return str;
 }

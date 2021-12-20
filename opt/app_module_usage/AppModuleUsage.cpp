@@ -15,6 +15,7 @@
 #include <string>
 
 #include "ConfigFiles.h"
+#include "CppUtil.h"
 #include "DexAnnotation.h"
 #include "DexClass.h"
 #include "DexStore.h"
@@ -40,12 +41,9 @@ constexpr const char* SUPER_VERBOSE_DETAILS_FILENAME =
 void AppModuleUsagePass::run_pass(DexStoresVector& stores,
                                   ConfigFiles& conf,
                                   PassManager& mgr) {
-  // To quickly look up wich DexStore ("module") a name represents
-  std::unordered_map<std::string, DexStore*> name_store_map;
-  reflection::MetadataCache refl_metadata_cache;
+
   for (auto& store : stores) {
     Scope scope = build_class_scope(store.get_dexen());
-    name_store_map.emplace(store.get_name(), &store);
     walk::parallel::classes(scope, [&](DexClass* cls) {
       m_type_store_map.emplace(cls->get_type(), &store);
     });
@@ -58,7 +56,7 @@ void AppModuleUsagePass::run_pass(DexStoresVector& stores,
         method, std::unordered_set<DexStore*>{});
   });
 
-  load_preexisting_violations(stores, name_store_map);
+  load_preexisting_violations(stores);
 
   auto verbose_path = conf.metafile(SUPER_VERBOSE_DETAILS_FILENAME);
 
@@ -101,47 +99,46 @@ void AppModuleUsagePass::run_pass(DexStoresVector& stores,
   }
 }
 
-void AppModuleUsagePass::load_preexisting_violations(
-    DexStoresVector& stores,
-    const std::unordered_map<std::string, DexStore*>& name_store_map) {
+void AppModuleUsagePass::load_preexisting_violations(DexStoresVector& stores) {
   if (m_preexisting_violations_filepath.empty()) {
     TRACE(APP_MOD_USE, 1, "No preexisting violations provided.");
     return;
   }
   std::ifstream ifs(m_preexisting_violations_filepath);
-  std::string line;
-  if (ifs.is_open()) {
-    while (getline(ifs, line)) {
-      auto comma = line.find_first_of(',');
-      const auto& entrypoint = line.substr(0, comma);
-      do {
-        const auto& last_comma = comma;
-        const auto& store_start =
-            line.find_first_not_of(" ,\"", last_comma + 1);
-        comma = line.find_first_of(',', comma + 1); // next comma or end of line
-        const auto& store_name = line.substr(store_start, comma - store_start);
-        DexStore* store = nullptr;
-        if (name_store_map.count(store_name)) {
-          store = name_store_map.at(store_name);
-        }
-        if (store_name.find_first_of('*') != std::string::npos) {
-          TRACE(APP_MOD_USE, 6, "entrypoint %s is allowed any store \n",
-                entrypoint.c_str());
-          // allow any store to be used
-          for (const auto& pair : name_store_map) {
-            m_preexisting_violations[entrypoint].emplace(pair.second);
-          }
-        } else if (store != nullptr) {
-          m_preexisting_violations[entrypoint].emplace(store);
-        }
-      } while (comma != std::string::npos);
-    }
-    ifs.close();
-  } else {
+  if (!ifs.is_open()) {
     fprintf(stderr,
-            "WARNING: Could not open preexisting violations list at \"%s\"\n",
+            "WARNING: Could not open preexisting violations at \"%s\"\n",
             m_preexisting_violations_filepath.c_str());
+    return;
   }
+
+  // To quickly look up wich DexStore ("module") a name represents
+  std::unordered_map<std::string, DexStore*> names_to_stores;
+  for (auto& store : stores) {
+    names_to_stores.emplace(store.get_name(), &store);
+  }
+
+  std::string line;
+  while (getline(ifs, line)) {
+    boost::optional<std::string> entrypoint;
+    for (std::string_view csv_component : split_string(line, ",")) {
+      csv_component = trim_whitespaces(csv_component);
+      if (!entrypoint) {
+        entrypoint = std::string(csv_component);
+      } else {
+        std::string store_name(csv_component);
+        auto it = names_to_stores.find(store_name);
+        if (it != names_to_stores.end()) {
+          m_preexisting_violations[*entrypoint].emplace(it->second);
+        } else {
+          TRACE(APP_MOD_USE, 2,
+                "Module %s from preexisting violations no longer exists.",
+                store_name.c_str());
+        }
+      }
+    }
+  }
+  ifs.close();
 }
 
 void AppModuleUsagePass::analyze_direct_app_module_usage(
