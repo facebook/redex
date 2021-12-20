@@ -67,7 +67,9 @@ TEST_F(AppModuleUsageTest, testOneStore) {
   // AppModuleUsageClass and AppModuleUsageOtherClass are in the root store
   auto config_file_env = std::getenv("default_config_file");
   std::ifstream config_file(config_file_env, std::ifstream::binary);
-  run_passes({new AppModuleUsagePass});
+  Json::Value cfg;
+  config_file >> cfg;
+  run_passes({new AppModuleUsagePass}, nullptr, cfg);
   EXPECT_EQ(pass_manager->get_pass_info()[0].metrics.at(
                 "num_methods_access_app_module"),
             0);

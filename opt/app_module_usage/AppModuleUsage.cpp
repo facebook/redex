@@ -22,74 +22,133 @@
 #include "DexUtil.h"
 #include "IRInstruction.h"
 #include "PassManager.h"
-#include "ReflectionAnalysis.h"
 #include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"
 
 namespace {
 constexpr const char* APP_MODULE_USAGE_OUTPUT_FILENAME =
-    "redex-app-module-usage.csv";
+    "redex-app-module-usage.txt";
 constexpr const char* APP_MODULE_COUNT_OUTPUT_FILENAME =
     "redex-app-module-count.csv";
 constexpr const char* USES_AM_ANNO_VIOLATIONS_FILENAME =
     "redex-app-module-annotation-violations.csv";
-constexpr const char* SUPER_VERBOSE_DETAILS_FILENAME =
-    "redex-app-module-verbose-details.txt";
+
+void write_violations_to_file(const app_module_usage::Violations& violations,
+                              const std::string& path) {
+  std::ofstream ofs(path, std::ofstream::out | std::ofstream::trunc);
+  for (const auto& [entrypoint, modules] : violations) {
+    ofs << entrypoint;
+    for (const auto& module : modules) {
+      ofs << ", " << module;
+    }
+    ofs << std::endl;
+  }
+  ofs.close();
+}
+
+void write_method_module_usages_to_file(
+    const app_module_usage::MethodStoresReferenced& method_store_refs,
+    const ConcurrentMap<DexType*, DexStore*>& type_store_map,
+    const std::string& path) {
+
+  TRACE(APP_MOD_USE, 4, "Outputting module usages at %s", path.c_str());
+  std::ofstream ofs(path, std::ofstream::out | std::ofstream::trunc);
+  for (const auto& [method, store_refs] : method_store_refs) {
+    if (store_refs.empty()) {
+      continue;
+    }
+    auto it = type_store_map.find(method->get_class());
+    if (it != type_store_map.end()) {
+      ofs << "(" << it->second->get_name() << ") ";
+    }
+    ofs << show(method);
+    for (const auto& [store, refl_only] : store_refs) {
+      ofs << ", ";
+      if (refl_only) {
+        ofs << "(reflection) ";
+      }
+      ofs << store->get_name();
+    }
+    ofs << std::endl;
+  }
+  ofs.close();
+}
+
+void write_app_module_use_stats(
+    const app_module_usage::MethodStoresReferenced& method_store_refs,
+    const std::string& path) {
+
+  struct ModuleUseCount {
+    unsigned int direct_count{0};
+    unsigned int reflective_count{0};
+  };
+
+  std::unordered_map<DexStore*, ModuleUseCount> counts;
+
+  for (const auto& [method, store_refs] : method_store_refs) {
+    for (const auto& [store, refl_only] : store_refs) {
+      auto& count = counts[store];
+      if (refl_only) {
+        count.reflective_count++;
+      } else {
+        count.direct_count++;
+      }
+    }
+  }
+
+  TRACE(APP_MOD_USE, 4, "Outputting module use count at %s", path.c_str());
+  std::ofstream ofs(path, std::ofstream::out | std::ofstream::trunc);
+  for (const auto& [module, use_count] : counts) {
+    ofs << module->get_name() << ", " << use_count.direct_count << ", "
+        << use_count.reflective_count << std::endl;
+  }
+  ofs.close();
+}
 } // namespace
 
 void AppModuleUsagePass::run_pass(DexStoresVector& stores,
                                   ConfigFiles& conf,
                                   PassManager& mgr) {
 
+  if (!m_uses_app_module_annotation) {
+    fprintf(
+        stderr,
+        "WARNING: Annotation class not found. Skipping AppModuleUsagePass.");
+    return;
+  }
+
   for (auto& store : stores) {
     Scope scope = build_class_scope(store.get_dexen());
-    walk::parallel::classes(scope, [&](DexClass* cls) {
+    walk::classes(scope, [&](DexClass* cls) {
       m_type_store_map.emplace(cls->get_type(), &store);
     });
   }
 
-  const auto& full_scope = build_class_scope(stores);
-  walk::parallel::methods(full_scope, [&](DexMethod* method) {
-    m_stores_method_uses_map.emplace(method, std::unordered_set<DexStore*>{});
-    m_stores_method_uses_reflectively_map.emplace(
-        method, std::unordered_set<DexStore*>{});
-  });
-
   load_preexisting_violations(stores);
 
-  auto verbose_path = conf.metafile(SUPER_VERBOSE_DETAILS_FILENAME);
-
-  analyze_direct_app_module_usage(full_scope, verbose_path);
-  analyze_reflective_app_module_usage(full_scope, verbose_path);
-  TRACE(APP_MOD_USE, 2, "See %s for full details.", verbose_path.c_str());
-
-  auto report_path = conf.metafile(USES_AM_ANNO_VIOLATIONS_FILENAME);
-
-  auto num_violations = generate_report(full_scope, report_path, mgr);
+  const auto& full_scope = build_class_scope(stores);
+  // TODO: Remove classes from scope that are exempt from checking.
+  auto method_store_refs = analyze_method_xstore_references(full_scope);
+  auto field_store_refs = analyze_field_xstore_references(full_scope);
 
   if (m_output_module_use) {
-    {
-      auto module_use_path = conf.metafile(APP_MODULE_USAGE_OUTPUT_FILENAME);
-      output_usages(module_use_path);
-    }
+    auto module_use_path = conf.metafile(APP_MODULE_USAGE_OUTPUT_FILENAME);
+    write_method_module_usages_to_file(method_store_refs, m_type_store_map,
+                                       module_use_path);
 
-    {
-      auto module_count_path = conf.metafile(APP_MODULE_COUNT_OUTPUT_FILENAME);
-      output_use_count(module_count_path);
-    }
+    auto module_count_path = conf.metafile(APP_MODULE_COUNT_OUTPUT_FILENAME);
+    write_app_module_use_stats(method_store_refs, module_count_path);
   }
 
-  unsigned int num_methods_access_app_module = 0;
-  for (const auto& pair : m_stores_method_uses_map) {
-    auto reflective_references =
-        m_stores_method_uses_reflectively_map.at(pair.first);
-    if (!pair.second.empty() || !reflective_references.empty()) {
-      num_methods_access_app_module++;
-    }
-  }
-  mgr.set_metric("num_methods_access_app_module",
-                 num_methods_access_app_module);
+  app_module_usage::Violations violations;
+  auto num_violations =
+      gather_violations(method_store_refs, field_store_refs, violations);
+  auto report_path = conf.metafile(USES_AM_ANNO_VIOLATIONS_FILENAME);
+  write_violations_to_file(violations, report_path);
+
+  mgr.set_metric("num_methods_access_app_module", method_store_refs.size());
+  mgr.set_metric("num_violations", num_violations);
 
   if (m_crash_with_violations) {
     always_assert_log(num_violations == 0,
@@ -140,71 +199,38 @@ void AppModuleUsagePass::load_preexisting_violations(DexStoresVector& stores) {
   ifs.close();
 }
 
-void AppModuleUsagePass::analyze_direct_app_module_usage(
-    const Scope& scope, const std::string& path) {
-  std::ofstream ofs(path, std::ofstream::out | std::ofstream::trunc);
-  walk::parallel::opcodes(scope, [&](DexMethod* method, IRInstruction* insn) {
-    std::unordered_set<DexType*> types_referenced;
-    auto method_class = method->get_class();
-    always_assert_log(m_type_store_map.count(method_class) > 0,
-                      "%s is missing from m_type_store_map",
-                      SHOW(method_class));
-    const auto method_store = m_type_store_map.at(method_class);
-    if (insn->has_method()) {
-      types_referenced.emplace(insn->get_method()->get_class());
-    }
-    if (insn->has_field()) {
-      types_referenced.emplace(insn->get_field()->get_class());
-    }
-    if (insn->has_type()) {
-      types_referenced.emplace(insn->get_type());
-    }
-    for (DexType* type : types_referenced) {
-      if (m_type_store_map.count(type) > 0) {
-        const auto store = m_type_store_map.at(type);
-        if (!store->is_root_store() && store != method_store) {
-          // App module reference!
-          // add the store for the referenced type to the map
-          m_stores_method_uses_map.update(
-              method,
-              [store](DexMethod* /* method */,
-                      std::unordered_set<DexStore*>& stores_used,
-                      bool /* exists */) { stores_used.emplace(store); });
-          m_stores_use_count.update(store,
-                                    [](DexStore* /*store*/,
-                                       AppModuleUsage::UseCount& count,
-                                       bool /* exists */) {
-                                      count.direct_count =
-                                          count.direct_count + 1;
-                                    });
-          ofs << SHOW(method) << " from module \"" << method_store->get_name()
-              << "\" references app module \"" << store->get_name()
-              << "\" by using the class \"" << type->str() << "\"\n";
-        }
-      }
-    }
-  });
-}
+ConcurrentMap<DexMethod*, app_module_usage::StoresReferenced>
+AppModuleUsagePass::analyze_method_xstore_references(const Scope& scope) {
 
-void AppModuleUsagePass::analyze_reflective_app_module_usage(
-    const Scope& scope, const std::string& path) {
-  std::ofstream ofs(path, std::ofstream::out | std::ofstream::trunc);
-  // Reflective Reference
+  auto get_type_ref_for_insn = [](IRInstruction* insn) -> DexType* {
+    if (insn->has_method()) {
+      return insn->get_method()->get_class();
+    } else if (insn->has_field()) {
+      return insn->get_field()->get_class();
+    } else if (insn->has_type()) {
+      return insn->get_type();
+    }
+    return nullptr;
+  };
+
+  ConcurrentMap<DexMethod*, app_module_usage::StoresReferenced>
+      method_store_refs;
   reflection::MetadataCache refl_metadata_cache;
+
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
-    const auto method_store = m_type_store_map.at(method->get_class());
+    const auto* method_store = m_type_store_map.at(method->get_class());
     std::unique_ptr<reflection::ReflectionAnalysis> analysis =
         std::make_unique<reflection::ReflectionAnalysis>(
             /* dex_method */ method,
             /* context (interprocedural only) */ nullptr,
             /* summary_query_fn (interprocedural only) */ nullptr,
             /* metadata_cache */ &refl_metadata_cache);
-    for (auto& mie : InstructionIterable(code)) {
-      IRInstruction* insn = mie.insn;
-      DexType* type = nullptr;
+
+    auto get_reflective_type_ref_for_insn =
+        [&analysis](IRInstruction* insn) -> DexType* {
       if (!opcode::is_an_invoke(insn->opcode())) {
-        // If an object type is from refletion it will be in the RESULT_REGISTER
-        // for some instruction
+        // If an object type is from reflection it will be in the
+        // RESULT_REGISTER for some instruction.
         const auto& o = analysis->get_abstract_object(RESULT_REGISTER, insn);
         if (o &&
             (o.get().obj_kind != reflection::CLASS ||
@@ -213,40 +239,122 @@ void AppModuleUsagePass::analyze_reflective_app_module_usage(
                   reflection::REFLECTION))) {
           // If the obj is a CLASS then it must have a class source of
           // REFLECTION
-          type = o.get().dex_type;
+          return o.get().dex_type;
         }
       }
-      if (type && m_type_store_map.count(type)) {
-        const auto store = m_type_store_map.at(type);
-        if (!store->is_root_store() && store != method_store) {
-          // App module reference!
-          // add the store for the referenced type to the map
-          m_stores_method_uses_reflectively_map.update(
-              method,
-              [store](DexMethod* /* method */,
-                      std::unordered_set<DexStore*>& stores_used,
-                      bool /* exists */) { stores_used.emplace(store); });
-          TRACE(APP_MOD_USE,
-                5,
-                "%s used reflectively by %s\n",
-                SHOW(type),
-                SHOW(method));
-          m_stores_use_count.update(store,
-                                    [](DexStore* /*store*/,
-                                       AppModuleUsage::UseCount& count,
-                                       bool /* exists */) {
-                                      count.reflective_count =
-                                          count.reflective_count + 1;
-                                    });
+      return nullptr;
+    };
 
-          ofs << SHOW(method) << " from module \"" << method_store->get_name()
-              << "\" *reflectively* references app module \""
-              << store->get_name() << "\" by using the class \"" << type->str()
-              << "\"\n";
+    auto get_store_if_access_is_xstore = [&](DexType* to) -> DexStore* {
+      // The type may be external.
+      auto it = m_type_store_map.find(to);
+      if (it == m_type_store_map.end()) {
+        return nullptr;
+      }
+      auto store = it->second;
+      if (!store->is_root_store() && store != method_store) {
+        return store;
+      }
+      return nullptr;
+    };
+
+    app_module_usage::StoresReferenced stores_referenced;
+    for (const auto& mie : InstructionIterable(code)) {
+      IRInstruction* insn = mie.insn;
+      auto maybe_type_ref = get_type_ref_for_insn(insn);
+      if (maybe_type_ref) {
+        auto maybe_store = get_store_if_access_is_xstore(maybe_type_ref);
+        if (maybe_store) {
+          // Creates the value if it doesn't exist.
+          stores_referenced[maybe_store] = false /* used_only_reflectively */;
+        }
+      }
+      auto maybe_refl_type_ref = get_reflective_type_ref_for_insn(insn);
+      if (maybe_refl_type_ref) {
+        auto maybe_store = get_store_if_access_is_xstore(maybe_refl_type_ref);
+        if (maybe_store) {
+          if (!stores_referenced.count(maybe_store)) {
+            stores_referenced.emplace(maybe_store, true);
+          }
+          // If the entry already exists, doesn't matter if we add it because
+          // |= true is always no-op.
         }
       }
     }
+
+    if (!stores_referenced.empty()) {
+      method_store_refs.emplace(method, std::move(stores_referenced));
+    }
   });
+
+  return method_store_refs;
+}
+
+ConcurrentMap<DexField*, DexStore*>
+AppModuleUsagePass::analyze_field_xstore_references(const Scope& scope) {
+  ConcurrentMap<DexField*, DexStore*> ret;
+  walk::parallel::fields(scope, [&](DexField* field) {
+    auto field_store = m_type_store_map.at(field->get_class());
+
+    auto field_type = field->get_type();
+    auto it = m_type_store_map.find(field_type);
+    if (it == m_type_store_map.end()) {
+      // Type may be external.
+      return;
+    }
+    auto store = it->second;
+    if (!store->is_root_store() && store != field_store) {
+      ret.emplace(field, store);
+    }
+  });
+  return ret;
+}
+
+unsigned AppModuleUsagePass::gather_violations(
+    const app_module_usage::MethodStoresReferenced& method_store_refs,
+    const ConcurrentMap<DexField*, DexStore*>& field_store_refs,
+    app_module_usage::Violations& violations) const {
+
+  unsigned n_violations{0u};
+  for (const auto& [method, stores_referenced] : method_store_refs) {
+    auto method_name = show(method);
+    for (const auto& [store, only_reflection] : stores_referenced) {
+      if (access_granted_by_annotation(method, store)) {
+        continue;
+      }
+      if (access_excused_due_to_preexisting(show(method), store)) {
+        continue;
+      }
+      TRACE(
+          APP_MOD_USE,
+          m_crash_with_violations ? 0 : 4,
+          "%s (from module \"%s\") uses app module \"%s\" without annotation\n",
+          method_name.c_str(),
+          m_type_store_map.at(method->get_class())->get_name().c_str(),
+          store->get_name().c_str());
+      violations[method_name].emplace(store->get_name());
+      n_violations++;
+    }
+  }
+
+  for (const auto& [field, store] : field_store_refs) {
+    auto field_name = show(field);
+    if (access_granted_by_annotation(field, store)) {
+      continue;
+    }
+    if (access_excused_due_to_preexisting(show(field), store)) {
+      continue;
+    }
+    TRACE(APP_MOD_USE,
+          m_crash_with_violations ? 0 : 4,
+          "%s (from module \"%s\") uses app module \"%s\" without annotation\n",
+          field_name.c_str(),
+          m_type_store_map.at(field->get_class())->get_name().c_str(),
+          store->get_name().c_str());
+    violations[field_name].emplace(store->get_name());
+    n_violations++;
+  }
+  return n_violations;
 }
 
 template <typename T>
@@ -283,82 +391,8 @@ AppModuleUsagePass::get_modules_used<DexField>(DexField*, DexType*);
 template std::unordered_set<std::string>
 AppModuleUsagePass::get_modules_used<DexClass>(DexClass*, DexType*);
 
-size_t AppModuleUsagePass::generate_report(const Scope& scope,
-                                           const std::string& path,
-                                           PassManager& mgr) {
-  size_t violation_count = 0;
-  auto annotation_type =
-      DexType::make_type(m_uses_app_module_annotation_descriptor.c_str());
-  std::ofstream ofs(path, std::ofstream::out | std::ofstream::trunc);
-  // Method violations
-  for (const auto& pair : m_stores_method_uses_map) {
-    auto method = pair.first;
-    std::string method_name = show(method);
-    auto store_from = m_type_store_map.at(method->get_class());
-    bool print_name = true;
-    auto annotated_module_names = get_modules_used(method, annotation_type);
-    // combine annotations from class
-    annotated_module_names.merge(
-        get_modules_used(type_class(method->get_class()), annotation_type));
-    // check for violations
-    auto violation_check = [&](auto store) {
-      const auto& used_module_name = store->get_name();
-      if (annotated_module_names.count(used_module_name) == 0 &&
-          !preexisting_access_permitted(method_name, store)) {
-        violation(method, store_from->get_name(), used_module_name, ofs,
-                  print_name);
-        print_name = false;
-        violation_count++;
-      }
-    };
-    std::for_each(pair.second.begin(), pair.second.end(), violation_check);
-    std::for_each(m_stores_method_uses_reflectively_map.at(method).begin(),
-                  m_stores_method_uses_reflectively_map.at(method).end(),
-                  [&](const auto& store) {
-                    if (pair.second.count(store) == 0) {
-                      violation_check(store);
-                    }
-                  });
-    if (!print_name) {
-      ofs << "\n";
-    }
-  }
-  // Field violations
-  walk::fields(scope, [&](DexField* field) {
-    auto annotated_module_names = get_modules_used(field, annotation_type);
-    std::string field_name = show(field);
-    // combine annotations from class
-    annotated_module_names.merge(
-        get_modules_used(type_class(field->get_class()), annotation_type));
-    bool print_name = true;
-    if (m_type_store_map.count(field->get_type()) > 0 &&
-        m_type_store_map.count(field->get_class()) > 0) {
-      // get_type is the type of the field, the app module that class is from is
-      // referenced by the field
-      auto store_used = m_type_store_map.at(field->get_type());
-      // get_class is the contatining class of the field, the app module that
-      // class is in is the module the field is in
-      auto store_from = m_type_store_map.at(field->get_class());
-      if (!store_used->is_root_store() &&
-          store_used->get_name() != store_from->get_name() &&
-          annotated_module_names.count(store_used->get_name()) == 0 &&
-          !preexisting_access_permitted(field_name, store_used)) {
-        violation(field, store_from->get_name(), store_used->get_name(), ofs,
-                  print_name);
-        print_name = false;
-        violation_count++;
-      }
-    }
-    if (!print_name) {
-      ofs << "\n";
-    }
-  });
-  mgr.set_metric("num_violations", violation_count);
-  return violation_count;
-}
-
-bool AppModuleUsagePass::preexisting_access_permitted(
-    const std::string& entrypoint_name, DexStore* store_used) {
+bool AppModuleUsagePass::access_excused_due_to_preexisting(
+    const std::string& entrypoint_name, DexStore* store_used) const {
   auto it = m_preexisting_violations.find(entrypoint_name);
   if (it != m_preexisting_violations.end()) {
     return it->second.count(store_used);
@@ -366,75 +400,35 @@ bool AppModuleUsagePass::preexisting_access_permitted(
   return false;
 }
 
-template <typename T>
-void AppModuleUsagePass::violation(T* entrypoint,
-                                   const std::string& from_module,
-                                   const std::string& to_module,
-                                   std::ofstream& ofs,
-                                   bool print_name) {
-  if (print_name) {
-    ofs << SHOW(entrypoint);
+bool AppModuleUsagePass::access_granted_by_annotation(DexMethod* method,
+                                                      DexStore* target) const {
+  if (get_modules_used(method, m_uses_app_module_annotation)
+          .count(target->get_name())) {
+    return true;
   }
-  ofs << ", " << to_module;
-  int level = 4;
-  if (m_crash_with_violations) {
-    level = 0;
-  }
-  TRACE(APP_MOD_USE,
-        level,
-        "%s (from module \"%s\") uses app module \"%s\" without annotation\n",
-        SHOW(entrypoint),
-        from_module.c_str(),
-        to_module.c_str());
+  return access_granted_by_annotation(type_class(method->get_class()), target);
 }
 
-template void AppModuleUsagePass::violation(
-    DexMethod*, const std::string&, const std::string&, std::ofstream&, bool);
-template void AppModuleUsagePass::violation(
-    DexField*, const std::string&, const std::string&, std::ofstream&, bool);
-
-void AppModuleUsagePass::output_usages(const std::string& path) {
-  TRACE(APP_MOD_USE, 4, "Outputting module usages at %s", path.c_str());
-  std::ofstream ofs(path, std::ofstream::out | std::ofstream::trunc);
-  for (const auto& pair : m_stores_method_uses_map) {
-    auto reflective_references =
-        m_stores_method_uses_reflectively_map.at(pair.first);
-    if (!pair.second.empty() || !reflective_references.empty()) {
-      const auto method = pair.first;
-      if (m_type_store_map.count(method->get_class()) > 0) {
-        ofs << "\""
-            << m_type_store_map.at(method->get_class())->get_name().c_str()
-            << "\", ";
-      } else {
-        ofs << "\"\", ";
-      }
-      ofs << "\"" << SHOW(method) << "\"";
-      for (auto store : pair.second) {
-        if (reflective_references.count(store) > 0) {
-          ofs << ", \"(d&r)" << store->get_name().c_str() << "\"";
-        } else {
-          ofs << ", \"" << store->get_name() << "\"";
-        }
-      }
-      for (auto store : reflective_references) {
-        if (pair.second.count(store) == 0) {
-          ofs << ", \"(r)" << store->get_name().c_str() << "\"";
-        }
-      }
-      ofs << "\n";
-    }
+bool AppModuleUsagePass::access_granted_by_annotation(DexField* field,
+                                                      DexStore* target) const {
+  if (get_modules_used(field, m_uses_app_module_annotation)
+          .count(target->get_name())) {
+    return true;
   }
-  ofs.close();
+  return access_granted_by_annotation(type_class(field->get_class()), target);
 }
 
-void AppModuleUsagePass::output_use_count(const std::string& path) {
-  TRACE(APP_MOD_USE, 4, "Outputting module use count at %s", path.c_str());
-  std::ofstream ofs(path, std::ofstream::out | std::ofstream::trunc);
-  for (const auto& pair : m_stores_use_count) {
-    ofs << "\"" << pair.first->get_name() << "\", " << pair.second.direct_count
-        << ", " << pair.second.reflective_count << "\n";
+bool AppModuleUsagePass::access_granted_by_annotation(DexClass* cls,
+                                                      DexStore* target) const {
+  if (!cls) {
+    return false;
   }
-  ofs.close();
+  if (get_modules_used(cls, m_uses_app_module_annotation)
+          .count(target->get_name())) {
+    return true;
+  }
+  // TODO: check outer class.
+  return false;
 }
 
 static AppModuleUsagePass s_pass;
