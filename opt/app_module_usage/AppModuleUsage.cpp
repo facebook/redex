@@ -65,20 +65,19 @@ void AppModuleUsagePass::run_pass(DexStoresVector& stores,
   TRACE(APP_MOD_USE, 2, "See %s for full details.", verbose_path.c_str());
 
   auto report_path = conf.metafile(USES_AM_ANNO_VIOLATIONS_FILENAME);
-  auto module_use_path = conf.metafile(APP_MODULE_USAGE_OUTPUT_FILENAME);
-  auto module_count_path = conf.metafile(APP_MODULE_COUNT_OUTPUT_FILENAME);
 
   auto num_violations = generate_report(full_scope, report_path, mgr);
 
-  if (m_output_entrypoints_to_modules) {
-    TRACE(APP_MOD_USE, 4, "Outputting module use at %s",
-          APP_MODULE_USAGE_OUTPUT_FILENAME);
-    output_usages(stores, module_use_path);
-  }
-  if (m_output_module_use_count) {
-    TRACE(APP_MOD_USE, 4, "Outputting module use count at %s",
-          APP_MODULE_COUNT_OUTPUT_FILENAME);
-    output_use_count(stores, module_count_path);
+  if (m_output_module_use) {
+    {
+      auto module_use_path = conf.metafile(APP_MODULE_USAGE_OUTPUT_FILENAME);
+      output_usages(module_use_path);
+    }
+
+    {
+      auto module_count_path = conf.metafile(APP_MODULE_COUNT_OUTPUT_FILENAME);
+      output_use_count(module_count_path);
+    }
   }
 
   unsigned int num_methods_access_app_module = 0;
@@ -204,7 +203,6 @@ void AppModuleUsagePass::analyze_reflective_app_module_usage(
       IRInstruction* insn = mie.insn;
       DexType* type = nullptr;
       if (!opcode::is_an_invoke(insn->opcode())) {
-        TRACE(APP_MOD_USE, 6, "Investigating reflection \n");
         // If an object type is from refletion it will be in the RESULT_REGISTER
         // for some instruction
         const auto& o = analysis->get_abstract_object(RESULT_REGISTER, insn);
@@ -215,7 +213,6 @@ void AppModuleUsagePass::analyze_reflective_app_module_usage(
                   reflection::REFLECTION))) {
           // If the obj is a CLASS then it must have a class source of
           // REFLECTION
-          TRACE(APP_MOD_USE, 6, "Found an abstract object \n");
           type = o.get().dex_type;
         }
       }
@@ -396,8 +393,8 @@ template void AppModuleUsagePass::violation(
 template void AppModuleUsagePass::violation(
     DexField*, const std::string&, const std::string&, std::ofstream&, bool);
 
-void AppModuleUsagePass::output_usages(const DexStoresVector& stores,
-                                       const std::string& path) {
+void AppModuleUsagePass::output_usages(const std::string& path) {
+  TRACE(APP_MOD_USE, 4, "Outputting module usages at %s", path.c_str());
   std::ofstream ofs(path, std::ofstream::out | std::ofstream::trunc);
   for (const auto& pair : m_stores_method_uses_map) {
     auto reflective_references =
@@ -427,15 +424,17 @@ void AppModuleUsagePass::output_usages(const DexStoresVector& stores,
       ofs << "\n";
     }
   }
+  ofs.close();
 }
 
-void AppModuleUsagePass::output_use_count(const DexStoresVector& stores,
-                                          const std::string& path) {
+void AppModuleUsagePass::output_use_count(const std::string& path) {
+  TRACE(APP_MOD_USE, 4, "Outputting module use count at %s", path.c_str());
   std::ofstream ofs(path, std::ofstream::out | std::ofstream::trunc);
   for (const auto& pair : m_stores_use_count) {
     ofs << "\"" << pair.first->get_name() << "\", " << pair.second.direct_count
         << ", " << pair.second.reflective_count << "\n";
   }
+  ofs.close();
 }
 
 static AppModuleUsagePass s_pass;

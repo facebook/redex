@@ -46,15 +46,13 @@ class AppModuleUsagePass : public Pass {
   AppModuleUsagePass() : Pass("AppModuleUsagePass") {}
 
   void bind_config() override {
-    bind("output_entrypoints_to_modules", true,
-         m_output_entrypoints_to_modules);
-    bind("output_module_use_count", true, m_output_module_use_count);
-    bind("crash_with_violations", false, m_crash_with_violations);
     bind("uses_app_module_annotation_descriptor",
          "Lcom/facebook/redex/annotations/UsesAppModule;",
          m_uses_app_module_annotation_descriptor);
     bind("preexisting_violations_filepath", "",
          m_preexisting_violations_filepath);
+    bind("output_module_use", false, m_output_module_use);
+    bind("crash_with_violations", false, m_crash_with_violations);
   }
 
   // Entrypoint for the AppModuleUsagePass pass
@@ -83,9 +81,9 @@ class AppModuleUsagePass : public Pass {
                  std::ofstream& ofs,
                  bool print_name);
   // Outputs methods to store mapping to meta file
-  void output_usages(const DexStoresVector&, const std::string&);
+  void output_usages(const std::string&);
   // Outputs stores to number of uses mapping to meta file
-  void output_use_count(const DexStoresVector&, const std::string&);
+  void output_use_count(const std::string&);
   // Map of count of app modules to the count of times they're used directly
   // and reflectively
   ConcurrentMap<DexStore*, AppModuleUsage::UseCount> m_stores_use_count;
@@ -107,8 +105,7 @@ class AppModuleUsagePass : public Pass {
   // To quickly look up wich DexStore ("module") a DexType is from
   ConcurrentMap<DexType*, DexStore*> m_type_store_map;
 
-  bool m_output_entrypoints_to_modules;
-  bool m_output_module_use_count;
+  bool m_output_module_use;
   bool m_crash_with_violations;
   std::string m_uses_app_module_annotation_descriptor;
   std::string m_preexisting_violations_filepath;
