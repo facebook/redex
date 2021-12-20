@@ -861,8 +861,16 @@ MethodInfo instrument_basic_blocks(IRCode& code,
 
   MethodInfo info;
   info.method = method;
-  info.entry_source_blocks =
-      source_blocks::gather_source_blocks(cfg.entry_block());
+  // When there are too many blocks, collect all source blocks into the entry
+  // block to track them conservatively.
+  info.entry_source_blocks = too_many_blocks ? [&]() {
+    std::vector<SourceBlock*> all;
+    for (auto* b : cfg.blocks()) {
+      auto tmp = source_blocks::gather_source_blocks(b);
+      all.insert(all.end(), tmp.begin(), tmp.end());
+    }
+    return all;
+  }() : source_blocks::gather_source_blocks(cfg.entry_block());
   info.too_many_blocks = too_many_blocks;
   info.num_too_many_blocks = too_many_blocks ? 1 : 0;
   info.offset = method_offset;
