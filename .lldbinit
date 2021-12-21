@@ -1,3 +1,4 @@
+command alias dumpmethname expr dumpmethname()
 command alias dumpcfg expr dumpcfg()
 command alias dumpir expr dumpir()
 command regex dumpblock 's/(.+)/expr dumpblock(%1)/'

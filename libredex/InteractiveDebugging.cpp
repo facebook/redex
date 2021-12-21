@@ -51,8 +51,11 @@ void write(const char* format, ...) {
   }
 }
 
-const IRCode* get_current_ir_code() {
+const DexMethod* get_current_dex_method() {
   auto* trace_context = TraceContextAccess::get_s_context();
+  if (!trace_context) {
+    return nullptr;
+  }
   auto* dex_method_ref = trace_context->get_dex_method_ref();
   if (!dex_method_ref) {
     write("No DexMethodRef set in current TraceContext\n");
@@ -63,6 +66,15 @@ const IRCode* get_current_ir_code() {
   if (!dex_method) {
     write("DexMethodRef (%s) in current TraceContext is not a DexMethod\n",
           dex_method_ref->c_str());
+    return nullptr;
+  }
+
+  return dex_method;
+}
+
+const IRCode* get_current_ir_code() {
+  auto dex_method = get_current_dex_method();
+  if (!dex_method) {
     return nullptr;
   }
 
@@ -91,7 +103,7 @@ CFGHolder::CFGHolder(const IRCode* ir_code)
 
   m_cfg_was_built = m_ir_code->cfg_built();
   if (!m_cfg_was_built) {
-    m_ir_code->build_cfg(false);
+    m_ir_code->build_cfg(true);
   }
 }
 
@@ -175,4 +187,14 @@ void setdumpfilemode(const char* mode) {
   }
 }
 
+const char* methname() {
+  auto dex_method = get_current_dex_method();
+  if (!dex_method) {
+    return "";
+  }
+
+  return strdup(show(dex_method).c_str());
+}
+
+void dumpmethname() { write("%s\n", methname()); }
 #endif
