@@ -153,6 +153,9 @@ struct ModelSpec {
   bool dedup_throw_blocks{true};
   // Replace string literals matching a merged type.
   bool replace_type_like_const_strings{true};
+  // Whether string literals matching class names disqualifies classes from
+  // being merged
+  bool type_like_const_strings_unsafe{false};
   // Indicates if the merging should be performed per dex.
   bool per_dex_grouping{false};
 

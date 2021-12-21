@@ -230,6 +230,8 @@ void ClassMergingPass::bind_config() {
       model_spec.get("keep_debug_info", false, model.keep_debug_info);
       model_spec.get("replace_type_like_const_strings", true,
                      model.replace_type_like_const_strings);
+      model_spec.get("type_like_const_strings_unsafe", false,
+                     model.type_like_const_strings_unsafe);
       if (max_count > 0) {
         model.max_count = boost::optional<size_t>(max_count);
       }
