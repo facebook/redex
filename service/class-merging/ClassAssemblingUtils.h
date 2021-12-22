@@ -54,8 +54,4 @@ void add_class(DexClass* new_cls,
                DexStoresVector& stores,
                boost::optional<size_t> dex_id);
 
-void handle_interface_as_root(ModelSpec& spec,
-                              Scope& scope,
-                              DexStoresVector& stores);
-
 } // namespace class_merging
