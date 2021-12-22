@@ -76,6 +76,9 @@ class RegisterTypeAnalyzer final
 
   static bool analyze_filled_new_array(const IRInstruction* insn,
                                        DexTypeEnvironment* env);
+
+  static bool analyze_invoke(const IRInstruction* insn,
+                             DexTypeEnvironment* env);
 };
 
 /*

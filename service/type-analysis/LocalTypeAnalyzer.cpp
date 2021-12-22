@@ -84,8 +84,8 @@ bool RegisterTypeAnalyzer::analyze_aget(const IRInstruction* insn,
     return true;
   }
 
-  always_assert_log(
-      type::is_array(*array_type), "Wrong array type %s", SHOW(*array_type));
+  always_assert_log(type::is_array(*array_type), "Wrong array type %s",
+                    SHOW(*array_type));
   auto idx_opt = env->get(insn->src(1)).get_constant();
   auto nullness = env->get(insn->src(0)).get_array_element_nullness(idx_opt);
   const auto ctype = type::get_array_component_type(*array_type);
@@ -337,6 +337,45 @@ bool RegisterTypeAnalyzer::analyze_filled_new_array(const IRInstruction* insn,
   // TODO(zwei): proper array nullness domain population.
   env->set(RESULT_REGISTER, DexTypeDomain(insn->get_type(), 0));
   return true;
+}
+
+bool RegisterTypeAnalyzer::analyze_invoke(const IRInstruction* insn,
+                                          DexTypeEnvironment* env) {
+  auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
+  if (method == nullptr) {
+    return analyze_default(insn, env);
+  }
+  // Note we don't need to take care of the RESULT_REGISTER update from this
+  // point. The remaining cases are already taken care by the
+  // WholeProgramAwareAnalyzer::analyze_invoke.
+  if (!method->is_external() && !is_native(method)) {
+    return false;
+  }
+
+  // If an ArrayNullnessDomain is passed to an external or native call, it
+  // escape the analyzable domain. We have to rewrite all the nullness of its
+  // elements to top, since we don't know how it will be manipulated externally.
+  // Reference: T107422148
+  for (auto src : insn->srcs()) {
+    auto type_domain = env->get(src);
+    auto array_nullness = type_domain.get_array_nullness();
+    auto dex_type = type_domain.get_dex_type();
+
+    if (!array_nullness.is_top() && array_nullness.get_length() &&
+        *array_nullness.get_length() > 0 && dex_type) {
+      env->mutate_reg_environment([&](RegTypeEnvironment* env) {
+        env->map([&](const DexTypeDomain& domain) {
+          auto dex_type_local = domain.get_dex_type();
+          if (dex_type_local && *dex_type == *dex_type_local) {
+            return DexTypeDomain(*dex_type_local,
+                                 domain.get_nullness().element());
+          }
+          return domain;
+        });
+      });
+    }
+  }
+  return false;
 }
 
 namespace {

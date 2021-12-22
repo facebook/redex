@@ -340,3 +340,19 @@ class TestL {
     Foo f2 = new Foo(f1);
   }
 }
+
+class TestM {
+  static class A {}
+
+  static native void updateArrayOfA(A[] arrayOfA);
+
+  static A callNative() {
+    A[] array = new A[1];
+    updateArrayOfA(array);
+    return array[0];
+  }
+
+  static void main() {
+    callNative();
+  }
+}
