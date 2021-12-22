@@ -308,3 +308,22 @@ TEST_F(GlobalTypeAnalysisTest, InstanceSensitiveCtorNullnessTest) {
   EXPECT_EQ(ftype.get_single_domain(),
             SingletonDexTypeDomain(get_type("TestL$A")));
 }
+
+TEST_F(GlobalTypeAnalysisTest, ArrayNullnessEscapeTest) {
+  auto scope = build_class_scope(stores);
+  set_root_method("Lcom/facebook/redextest/TestM;.main:()V");
+  GlobalTypeAnalysis analysis;
+  auto gta = analysis.analyze(scope);
+  auto wps = gta->get_whole_program_state();
+
+  auto call_native =
+      get_method("TestM;.callNative", "", "Lcom/facebook/redextest/TestM$A;");
+  auto rtype = wps.get_return_type(call_native);
+  EXPECT_FALSE(rtype.is_top());
+  EXPECT_FALSE(rtype.is_not_null());
+  EXPECT_TRUE(rtype.is_nullable());
+  EXPECT_EQ(rtype.get_single_domain(),
+            SingletonDexTypeDomain(
+                get_type_simple("Lcom/facebook/redextest/TestM$A;")));
+  EXPECT_TRUE(rtype.get_array_nullness().is_top());
+}

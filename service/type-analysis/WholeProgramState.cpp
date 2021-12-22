@@ -421,7 +421,7 @@ bool WholeProgramAwareAnalyzer::analyze_invoke(
       insn->get_method());
   if (known_type) {
     env->set(RESULT_REGISTER, *known_type);
-    return true;
+    return false;
   }
 
   auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
@@ -435,7 +435,7 @@ bool WholeProgramAwareAnalyzer::analyze_invoke(
   }
   auto type = whole_program_state->get_return_type(method);
   env->set(RESULT_REGISTER, type);
-  return true;
+  return false;
 }
 
 } // namespace type_analyzer
