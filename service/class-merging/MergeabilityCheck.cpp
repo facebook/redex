@@ -97,6 +97,23 @@ TypeSet MergeabilityChecker::exclude_unsupported_bytecode_refs_for(
       continue;
     }
 
+    // The presence of type-like strings can indicate that types are used by
+    // reflection, and then it's not safe to merge those types.
+    if (m_spec.type_like_const_strings_unsafe &&
+        insn->opcode() == OPCODE_CONST_STRING) {
+      const DexString* str = insn->get_string();
+      std::string class_name = java_names::external_to_internal(str->str());
+      DexType* maybe_type = DexType::get_type(class_name);
+      if (maybe_type && m_spec.merging_targets.count(maybe_type) > 0) {
+        non_mergeables.insert(maybe_type);
+        TRACE(CLMG,
+              5,
+              "[non mergeable] type like const string unsafe: %s",
+              SHOW(insn));
+      }
+      continue;
+    }
+
     // Java language level enforcement recommended!
     //
     // For mergeables with type tags, it is not safe to merge those
