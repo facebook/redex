@@ -129,6 +129,8 @@ class IRTypeChecker final {
   boost::optional<const DexType*> get_dex_type(IRInstruction* insn,
                                                reg_t reg) const;
 
+  std::string dump_annotated_cfg(DexMethod* method) const;
+
  private:
   void check_completion() const;
 

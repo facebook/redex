@@ -15,7 +15,9 @@
 #include "Match.h"
 #include "MonitorCount.h"
 #include "Resolver.h"
+#include "ScopedCFG.h"
 #include "Show.h"
+#include "ShowCFG.h"
 #include "StlUtil.h"
 #include "Trace.h"
 
@@ -1482,4 +1484,13 @@ void IRTypeChecker::check_completion() const {
   always_assert_log(m_complete,
                     "The type checker did not run on method %s.\n",
                     m_dex_method->get_deobfuscated_name_or_empty().c_str());
+}
+
+std::string IRTypeChecker::dump_annotated_cfg(DexMethod* method) const {
+  cfg::ScopedCFG cfg{method->get_code()};
+
+  TypeInference inf{method->get_code()->cfg()};
+  inf.run(m_dex_method);
+
+  return show_analysis<TypeEnvironment>(method->get_code()->cfg(), inf);
 }

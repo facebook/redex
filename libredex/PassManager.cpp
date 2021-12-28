@@ -94,6 +94,10 @@ class CheckerConfig {
         type_checker_args.get("validate_invoke_super", true).asBool();
     m_check_no_overwrite_this =
         type_checker_args.get("check_no_overwrite_this", false).asBool();
+
+    m_annotated_cfg_on_error =
+        type_checker_args.get("annotated_cfg_on_error", false).asBool();
+
     m_check_num_of_refs =
         type_checker_args.get("check_num_of_refs", false).asBool();
 
@@ -238,7 +242,7 @@ class CheckerConfig {
       }
     };
 
-    auto run_checker = [&](DexMethod* dex_method) {
+    auto run_checker_tmpl = [&](DexMethod* dex_method, auto fn) {
       IRTypeChecker checker(dex_method, m_validate_access,
                             m_validate_invoke_super);
       if (m_verify_moves) {
@@ -247,8 +251,18 @@ class CheckerConfig {
       if (m_check_no_overwrite_this) {
         checker.check_no_overwrite_this();
       }
-      checker.run();
-      return checker;
+      return fn(std::move(checker));
+    };
+    auto run_checker = [&](DexMethod* dex_method) {
+      return run_checker_tmpl(dex_method, [](auto checker) {
+        checker.run();
+        return checker;
+      });
+    };
+    auto run_checker_error = [&](DexMethod* dex_method) {
+      return run_checker_tmpl(dex_method, [&](auto checker) {
+        return checker.dump_annotated_cfg(dex_method);
+      });
     };
 
     auto res =
@@ -273,7 +287,9 @@ class CheckerConfig {
         << show(res.smallest_error_method) << std::endl
         << " " << checker.what() << std::endl
         << "Code:" << std::endl
-        << show(res.smallest_error_method->get_code());
+        << (m_annotated_cfg_on_error
+                ? run_checker_error(res.smallest_error_method)
+                : show(res.smallest_error_method->get_code()));
 
     if (res.errors > 1) {
       oss << "\n(" << (res.errors - 1) << " more issues!)";
@@ -302,6 +318,7 @@ class CheckerConfig {
   bool m_check_num_of_refs;
   // TODO(fengliu): Kill the `validate_access` flag.
   bool m_validate_access{true};
+  bool m_annotated_cfg_on_error{false};
 };
 
 class ScopedVmHWM {
