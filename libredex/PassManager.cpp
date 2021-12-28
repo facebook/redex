@@ -78,42 +78,43 @@ std::string get_apk_dir(const Json::Value& config) {
   return apkdir;
 }
 
-struct CheckerConfig {
+class CheckerConfig {
+ public:
   explicit CheckerConfig(const ConfigFiles& conf) {
     const Json::Value& type_checker_args =
         conf.get_json_config()["ir_type_checker"];
-    run_type_checker_on_input =
+    m_run_type_checker_on_input =
         type_checker_args.get("run_on_input", true).asBool();
-    run_type_checker_on_input_ignore_access =
+    m_run_type_checker_on_input_ignore_access =
         type_checker_args.get("run_on_input_ignore_access", false).asBool();
-    run_type_checker_after_each_pass =
+    m_run_type_checker_after_each_pass =
         type_checker_args.get("run_after_each_pass", true).asBool();
-    verify_moves = type_checker_args.get("verify_moves", true).asBool();
-    validate_invoke_super =
+    m_verify_moves = type_checker_args.get("verify_moves", true).asBool();
+    m_validate_invoke_super =
         type_checker_args.get("validate_invoke_super", true).asBool();
-    check_no_overwrite_this =
+    m_check_no_overwrite_this =
         type_checker_args.get("check_no_overwrite_this", false).asBool();
-    check_num_of_refs =
+    m_check_num_of_refs =
         type_checker_args.get("check_num_of_refs", false).asBool();
 
     for (auto& trigger_pass : type_checker_args["run_after_passes"]) {
-      type_checker_trigger_passes.insert(trigger_pass.asString());
+      m_type_checker_trigger_passes.insert(trigger_pass.asString());
     }
   }
 
   void on_input(const Scope& scope) {
-    if (!run_type_checker_on_input) {
+    if (!m_run_type_checker_on_input) {
       std::cerr << "Note: input type checking is turned off!" << std::endl;
       return;
     }
-    auto res = run_verifier(scope, verify_moves,
-                            /* check_no_overwrite_this= */ false,
-                            /* validate_access= */ true,
-                            /* exit_on_fail= */ false);
+
+    auto res =
+        check_no_overwrite_this(false).validate_access(true).run_verifier(
+            scope, /* exit_on_fail= */ false);
     if (!res) {
       return; // No issues.
     }
-    if (!run_type_checker_on_input_ignore_access) {
+    if (!m_run_type_checker_on_input_ignore_access) {
       std::string msg = *res;
       msg +=
           "\n If you are confident that this does not matter (e.g., because "
@@ -124,10 +125,8 @@ struct CheckerConfig {
       fail_error(msg);
     }
 
-    res = run_verifier(scope, verify_moves,
-                       /* check_no_overwrite_this= */ false,
-                       /* validate_access= */ false,
-                       /* exit_on_fail= */ false);
+    res = check_no_overwrite_this(false).validate_access(false).run_verifier(
+        scope, /* exit_on_fail= */ false);
     if (!res) {
       std::cerr << "Warning: input has accessibility issues. Continuing."
                 << std::endl;
@@ -141,8 +140,8 @@ struct CheckerConfig {
   }
 
   bool run_after_pass(const Pass* pass) {
-    return run_type_checker_after_each_pass ||
-           type_checker_trigger_passes.count(pass->name()) > 0;
+    return m_run_type_checker_after_each_pass ||
+           m_type_checker_trigger_passes.count(pass->name()) > 0;
   }
 
   /**
@@ -151,7 +150,7 @@ struct CheckerConfig {
    */
   size_t min_pass_idx_for_dex_ref_check(
       const std::vector<Pass*>& activated_passes) {
-    if (!check_num_of_refs) {
+    if (!m_check_num_of_refs) {
       return activated_passes.size();
     }
     size_t idx = 0;
@@ -201,13 +200,20 @@ struct CheckerConfig {
     }
   }
 
-  // TODO(fengliu): Kill the `validate_access` flag.
-  static boost::optional<std::string> run_verifier(const Scope& scope,
-                                                   bool verify_moves,
-                                                   bool check_no_overwrite_this,
-                                                   bool validate_access,
-                                                   bool validate_invoke_super,
-                                                   bool exit_on_fail = true) {
+  // Literate style.
+  CheckerConfig check_no_overwrite_this(bool val) const {
+    CheckerConfig ret = *this;
+    ret.m_check_no_overwrite_this = val;
+    return ret;
+  }
+  CheckerConfig validate_access(bool val) const {
+    CheckerConfig ret = *this;
+    ret.m_validate_access = val;
+    return ret;
+  }
+
+  boost::optional<std::string> run_verifier(const Scope& scope,
+                                            bool exit_on_fail = true) {
     TRACE(PM, 1, "Running IRTypeChecker...");
     Timer t("IRTypeChecker");
 
@@ -233,11 +239,12 @@ struct CheckerConfig {
     };
 
     auto run_checker = [&](DexMethod* dex_method) {
-      IRTypeChecker checker(dex_method, validate_access, validate_invoke_super);
-      if (verify_moves) {
+      IRTypeChecker checker(dex_method, m_validate_access,
+                            m_validate_invoke_super);
+      if (m_verify_moves) {
         checker.verify_moves();
       }
-      if (check_no_overwrite_this) {
+      if (m_check_no_overwrite_this) {
         checker.check_no_overwrite_this();
       }
       checker.run();
@@ -284,14 +291,17 @@ struct CheckerConfig {
     _exit(EXIT_FAILURE);
   }
 
-  std::unordered_set<std::string> type_checker_trigger_passes;
-  bool run_type_checker_on_input;
-  bool run_type_checker_after_each_pass;
-  bool run_type_checker_on_input_ignore_access;
-  bool verify_moves;
-  bool validate_invoke_super;
-  bool check_no_overwrite_this;
-  bool check_num_of_refs;
+ private:
+  std::unordered_set<std::string> m_type_checker_trigger_passes;
+  bool m_run_type_checker_on_input;
+  bool m_run_type_checker_after_each_pass;
+  bool m_run_type_checker_on_input_ignore_access;
+  bool m_verify_moves;
+  bool m_validate_invoke_super;
+  bool m_check_no_overwrite_this;
+  bool m_check_num_of_refs;
+  // TODO(fengliu): Kill the `validate_access` flag.
+  bool m_validate_access{true};
 };
 
 class ScopedVmHWM {
@@ -1164,10 +1174,9 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       if (run_type_checker) {
         // It's OK to overwrite the `this` register if we are not yet at the
         // output phase -- the register allocator can fix it up later.
-        CheckerConfig::run_verifier(scope, checker_conf.verify_moves,
-                                    /* check_no_overwrite_this */ false,
-                                    /* validate_access */ false,
-                                    checker_conf.validate_invoke_super);
+        checker_conf.check_no_overwrite_this(false)
+            .validate_access(false)
+            .run_verifier(scope);
       }
       if (i >= min_pass_idx_for_dex_ref_check) {
         CheckerConfig::ref_validation(stores, pass->name());
@@ -1234,9 +1243,9 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
 
   // Always run the type checker before generating the optimized dex code.
   scope = build_class_scope(it);
-  CheckerConfig::run_verifier(
-      scope, checker_conf.verify_moves, get_redex_options().no_overwrite_this(),
-      /* validate_access */ true, checker_conf.validate_invoke_super);
+  checker_conf.check_no_overwrite_this(get_redex_options().no_overwrite_this())
+      .validate_access(true)
+      .run_verifier(scope);
 
   jni_native_context_helper.post_passes(scope, conf);
 
