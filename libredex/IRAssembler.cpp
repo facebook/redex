@@ -957,7 +957,8 @@ DexMethod* method_from_s_expr(const s_expr& e) {
   s_expr code_expr;
   s_patn({s_patn(code_expr)}, tail).match_with(tail);
   always_assert_log(code_expr.is_list(), "Expecting code listing");
-  bool is_virtual = !is_static(access_flags) && !is_private(access_flags);
+  bool is_virtual = !is_static(access_flags) && !is_private(access_flags) &&
+                    !is_constructor(access_flags);
   return method->make_concrete(access_flags, ircode_from_s_expr(code_expr),
                                is_virtual);
 }

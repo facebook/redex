@@ -191,6 +191,7 @@ libredex_la_SOURCES = \
 	service/constant-propagation/ConstantPropagationTransform.cpp \
 	service/constant-propagation/ConstantPropagationWholeProgramState.cpp \
 	service/constant-propagation/ConstructorParams.cpp \
+	service/constant-propagation/DefinitelyAssignedIFields.cpp \
 	service/constant-propagation/IPConstantPropagationAnalysis.cpp \
 	service/constant-propagation/ObjectDomain.cpp \
 	service/constant-propagation/SignDomain.cpp \

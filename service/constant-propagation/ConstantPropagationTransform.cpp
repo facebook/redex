@@ -9,6 +9,7 @@
 
 #include "ReachingDefinitions.h"
 #include "ScopedMetrics.h"
+#include "SignedConstantDomain.h"
 #include "StlUtil.h"
 #include "Trace.h"
 #include "Transform.h"
@@ -113,13 +114,19 @@ bool Transform::eliminate_redundant_put(
     if (!field) {
       break;
     }
-    // WholeProgramState tells us the abstract value of a field across
-    // all program traces outside their class's <clinit> or <init>; the
-    // ConstantEnvironment tells us the abstract value
-    // of a non-escaping field at this particular program point.
-    auto existing_val = m_config.class_under_init == field->get_class()
-                            ? env.get(field)
-                            : wps.get_field_value(field);
+    // WholeProgramState tells us the observable abstract value of a field
+    // across all program traces outside their class's <clinit> or <init>, so we
+    // need to join with 0 here as we are effectively creating a new observation
+    // point at which the field might still have its default value.
+    // The ConstantEnvironment tells us the abstract value of a non-escaping
+    // field at this particular program point.
+    ConstantValue existing_val;
+    if (m_config.class_under_init == field->get_class()) {
+      existing_val = env.get(field);
+    } else {
+      existing_val = wps.get_field_value(field);
+      existing_val.join_with(SignedConstantDomain(0));
+    }
     auto new_val = env.get(insn->src(0));
     if (ConstantValue::apply_visitor(runtime_equals_visitor(), existing_val,
                                      new_val)) {

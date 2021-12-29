@@ -51,12 +51,14 @@ class WholeProgramState {
   WholeProgramState(const Scope&,
                     const interprocedural::FixpointIterator&,
                     const std::unordered_set<DexMethod*>&,
-                    const std::unordered_set<const DexType*>&);
+                    const std::unordered_set<const DexType*>&,
+                    const std::unordered_set<const DexField*>&);
 
   WholeProgramState(const Scope&,
                     const interprocedural::FixpointIterator&,
                     const std::unordered_set<DexMethod*>&,
                     const std::unordered_set<const DexType*>&,
+                    const std::unordered_set<const DexField*>&,
                     const call_graph::Graph& call_graph);
 
   /*
@@ -142,8 +144,10 @@ class WholeProgramState {
   }
 
  private:
-  void collect(const Scope& scope,
-               const interprocedural::FixpointIterator& fp_iter);
+  void collect(
+      const Scope& scope,
+      const interprocedural::FixpointIterator& fp_iter,
+      const std::unordered_set<const DexField*>& definitely_assigned_ifields);
 
   void collect_field_values(
       const IRInstruction* insn,

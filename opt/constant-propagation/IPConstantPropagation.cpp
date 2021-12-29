@@ -11,6 +11,7 @@
 #include "ConstantEnvironment.h"
 #include "ConstantPropagationAnalysis.h"
 #include "ConstructorParams.h"
+#include "DefinitelyAssignedIFields.h"
 #include "IPConstantPropagationAnalysis.h"
 #include "MethodOverrideGraph.h"
 #include "PassManager.h"
@@ -142,15 +143,22 @@ std::unique_ptr<FixpointIterator> PassImpl::analyze(
   fp_iter->run({{CURRENT_PARTITION_LABEL, ArgumentDomain()}});
   auto non_true_virtuals =
       mog::get_non_true_virtuals(*method_override_graph, scope);
+  std::unordered_set<const DexField*> definitely_assigned_ifields;
+  if (m_config.compute_definitely_assigned_ifields) {
+    definitely_assigned_ifields =
+        definitely_assigned_ifields::get_definitely_assigned_ifields(scope);
+  }
+  m_stats.definitely_assigned_ifields = definitely_assigned_ifields.size();
   for (size_t i = 0; i < m_config.max_heap_analysis_iterations; ++i) {
     // Build an approximation of all the field values and method return values.
     auto wps =
         m_config.use_multiple_callee_callgraph
-            ? std::make_unique<WholeProgramState>(scope, *fp_iter,
-                                                  non_true_virtuals,
-                                                  m_config.field_blocklist, cg)
+            ? std::make_unique<WholeProgramState>(
+                  scope, *fp_iter, non_true_virtuals, m_config.field_blocklist,
+                  definitely_assigned_ifields, cg)
             : std::make_unique<WholeProgramState>(
-                  scope, *fp_iter, non_true_virtuals, m_config.field_blocklist);
+                  scope, *fp_iter, non_true_virtuals, m_config.field_blocklist,
+                  definitely_assigned_ifields);
     // If this approximation is not better than the previous one, we are done.
     if (fp_iter->get_whole_program_state().leq(*wps)) {
       break;
@@ -160,18 +168,29 @@ std::unique_ptr<FixpointIterator> PassImpl::analyze(
     fp_iter->set_whole_program_state(std::move(wps));
     fp_iter->run({{CURRENT_PARTITION_LABEL, ArgumentDomain()}});
   }
-  compute_analysis_stats(fp_iter->get_whole_program_state());
+  compute_analysis_stats(fp_iter->get_whole_program_state(),
+                         definitely_assigned_ifields);
 
   return fp_iter;
 }
 
-void PassImpl::compute_analysis_stats(const WholeProgramState& wps) {
+void PassImpl::compute_analysis_stats(
+    const WholeProgramState& wps,
+    const std::unordered_set<const DexField*>& definitely_assigned_ifields) {
   if (!wps.get_field_partition().is_top()) {
     for (auto& pair : wps.get_field_partition().bindings()) {
       auto* field = pair.first;
       auto& value = pair.second;
       if (value.is_top() || !is_useful(field->get_type(), value)) {
         continue;
+      }
+      if (definitely_assigned_ifields.count(field)) {
+        ++m_stats.constant_definitely_assigned_ifields;
+        TRACE(ICONSTP, 4, "definitely assigned field partition for %s: %s",
+              SHOW(field), SHOW(value));
+      } else {
+        TRACE(ICONSTP, 4, "field partition for %s: %s", SHOW(field),
+              SHOW(value));
       }
       ++m_stats.constant_fields;
     }
@@ -184,6 +203,8 @@ void PassImpl::compute_analysis_stats(const WholeProgramState& wps) {
           !is_useful(method->get_proto()->get_rtype(), value)) {
         continue;
       }
+      TRACE(ICONSTP, 4, "method partition for %s: %s", SHOW(method),
+            SHOW(value));
       ++m_stats.constant_methods;
     }
   }
@@ -268,6 +289,10 @@ void PassImpl::run_pass(DexStoresVector& stores,
   ScopedMetrics sm(mgr);
   m_transform_stats.log_metrics(sm, /* with_scope= */ false);
 
+  mgr.incr_metric("definitely_assigned_ifields",
+                  m_stats.definitely_assigned_ifields);
+  mgr.incr_metric("constant_definitely_assigned_ifields",
+                  m_stats.constant_definitely_assigned_ifields);
   mgr.incr_metric("constant_fields", m_stats.constant_fields);
   mgr.incr_metric("constant_methods", m_stats.constant_methods);
   mgr.incr_metric("callgraph_edges", m_stats.callgraph_edges);

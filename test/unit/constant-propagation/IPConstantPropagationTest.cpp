@@ -19,6 +19,7 @@
 #include "IRAssembler.h"
 #include "MethodOverrideGraph.h"
 #include "RedexTest.h"
+#include "VirtualScope.h"
 #include "Walkers.h"
 
 using namespace constant_propagation;
@@ -27,6 +28,15 @@ using namespace constant_propagation::interprocedural;
 struct InterproceduralConstantPropagationTest : public RedexTest {
  public:
   InterproceduralConstantPropagationTest() {
+    // Calling get_vmethods under the hood initializes the object-class, which
+    // we need in the tests to create a proper scope
+    get_vmethods(type::java_lang_Object());
+
+    auto object_ctor = static_cast<DexMethod*>(method::java_lang_Object_ctor());
+    object_ctor->set_access(ACC_PUBLIC | ACC_CONSTRUCTOR);
+    object_ctor->set_external();
+    type_class(type::java_lang_Object())->add_method(object_ctor);
+
     // EnumFieldAnalyzer requires that this method exists
     method::java_lang_Enum_equals();
     DexField::make_field("Landroid/os/Build$VERSION;.SDK_INT:I");
@@ -1748,4 +1758,280 @@ TEST_F(InterproceduralConstantPropagationTest, ghost_edges) {
   )");
 
   EXPECT_CODE_EQ(code, expected_code.get());
+}
+
+TEST_F(InterproceduralConstantPropagationTest,
+       nezConstantFieldAfterInit_simple) {
+  auto cls_ty = DexType::make_type("LFoo;");
+  ClassCreator creator(cls_ty);
+  creator.set_super(type::java_lang_Object());
+
+  auto field_f = DexField::make_field("LFoo;.f:I")->make_concrete(ACC_PUBLIC);
+  creator.add_field(field_f);
+
+  auto init = assembler::method_from_string(R"(
+    (method (public constructor) "LFoo;.<init>:()V"
+     (
+      (load-param-object v0)
+      (invoke-direct (v0) "Ljava/lang/Object;.<init>:()V")
+      (const v1 42)
+      (iput v1 v0 "LFoo;.f:I")
+      (return-void)
+     )
+    )
+  )");
+  init->rstate.set_root(); // Make this an entry point
+  creator.add_method(init);
+
+  auto m = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.baz:(LFoo;)I"
+     (
+      (load-param-object v0)
+      (iget v0 "LFoo;.f:I")
+      (move-result-pseudo v0)
+      (return v0)
+     )
+    )
+  )");
+  m->rstate.set_root(); // Make this an entry point
+  creator.add_method(m);
+
+  Scope scope{creator.create()};
+  walk::code(scope, [](DexMethod*, IRCode& code) {
+    code.build_cfg(/* editable */ false);
+    code.cfg().calculate_exit_block();
+  });
+
+  InterproceduralConstantPropagationPass::Config config;
+  config.max_heap_analysis_iterations = 2;
+
+  auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(
+      scope, &m_immut_analyzer_state, &m_api_level_analyzer_state);
+  auto& wps = fp_iter->get_whole_program_state();
+  // as the field is definitely-assigned, 0 was not added to the numeric
+  // interval domain
+  EXPECT_EQ(wps.get_field_value(field_f), SignedConstantDomain(42));
+
+  InterproceduralConstantPropagationPass(config).run(make_simple_stores(scope));
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (const v0 42)
+      (return v0)
+    )
+  )");
+
+  EXPECT_CODE_EQ(m->get_code(), expected_code.get());
+}
+
+TEST_F(InterproceduralConstantPropagationTest,
+       nezConstantFieldAfterInit_branching) {
+  auto cls_ty = DexType::make_type("LFoo;");
+  ClassCreator creator(cls_ty);
+  creator.set_super(type::java_lang_Object());
+
+  auto field_f = DexField::make_field("LFoo;.f:I")->make_concrete(ACC_PUBLIC);
+  creator.add_field(field_f);
+
+  auto init = assembler::method_from_string(R"(
+    (method (public constructor) "LFoo;.<init>:(Z)V"
+     (
+      (load-param-object v0)
+      (load-param v2)
+      (invoke-direct (v0) "Ljava/lang/Object;.<init>:()V")
+      (if-eqz v2 :second)
+      (const v1 42) ; feasible
+      (iput v1 v0 "LFoo;.f:I")
+      (return-void)
+      (:second)
+      (const v1 23) ; feasible
+      (iput v1 v0 "LFoo;.f:I")
+      (return-void)
+     )
+    )
+  )");
+  init->rstate.set_root(); // Make this an entry point
+  creator.add_method(init);
+
+  auto m = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.baz:(LFoo;)I"
+     (
+      (load-param-object v0)
+      (iget v0 "LFoo;.f:I")
+      (move-result-pseudo v0)
+      (const v1 300)
+      (if-gtz v0 :skip)
+      (const v1 400)
+      (:skip)
+      (return v1)
+     )
+    )
+  )");
+  m->rstate.set_root(); // Make this an entry point
+  creator.add_method(m);
+
+  Scope scope{creator.create()};
+  walk::code(scope, [](DexMethod*, IRCode& code) {
+    code.build_cfg(/* editable */ false);
+    code.cfg().calculate_exit_block();
+  });
+
+  InterproceduralConstantPropagationPass::Config config;
+  config.max_heap_analysis_iterations = 2;
+
+  auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(
+      scope, &m_immut_analyzer_state, &m_api_level_analyzer_state);
+  auto& wps = fp_iter->get_whole_program_state();
+  // as the field is definitely-assigned, even with the branching in the
+  // constructor, 0 was not added to the numeric interval domain
+  EXPECT_EQ(wps.get_field_value(field_f), SignedConstantDomain(23, 42));
+
+  InterproceduralConstantPropagationPass(config).run(make_simple_stores(scope));
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (iget v0 "LFoo;.f:I")
+      (move-result-pseudo v0)
+      (const v1 300)
+      (return v1)
+    )
+  )");
+
+  EXPECT_CODE_EQ(m->get_code(), expected_code.get());
+}
+
+TEST_F(InterproceduralConstantPropagationTest,
+       constantFieldAfterInit_this_escaped) {
+  auto cls_ty = DexType::make_type("LFoo;");
+  ClassCreator creator(cls_ty);
+  creator.set_super(type::java_lang_Object());
+
+  auto field_f = DexField::make_field("LFoo;.f:I")->make_concrete(ACC_PUBLIC);
+  creator.add_field(field_f);
+
+  auto init = assembler::method_from_string(R"(
+    (method (public constructor) "LFoo;.<init>:()V"
+     (
+      (load-param-object v0)
+      (invoke-direct (v0) "Ljava/lang/Object;.<init>:()V")
+      (sput-object v0 "LFoo;.some_global_field:LFoo;") ; 'this' escapes here
+      (const v1 42)
+      (iput v1 v0 "LFoo;.f:I")
+      (return-void)
+     )
+    )
+  )");
+  init->rstate.set_root(); // Make this an entry point
+  creator.add_method(init);
+
+  auto m = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.baz:(LFoo;)I"
+     (
+      (load-param-object v0)
+      (iget v0 "LFoo;.f:I")
+      (move-result-pseudo v0)
+      (return v0)
+     )
+    )
+  )");
+  m->rstate.set_root(); // Make this an entry point
+  creator.add_method(m);
+
+  Scope scope{creator.create()};
+  walk::code(scope, [](DexMethod*, IRCode& code) {
+    code.build_cfg(/* editable */ false);
+    code.cfg().calculate_exit_block();
+  });
+
+  InterproceduralConstantPropagationPass::Config config;
+  config.max_heap_analysis_iterations = 2;
+
+  auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(
+      scope, &m_immut_analyzer_state, &m_api_level_analyzer_state);
+  auto& wps = fp_iter->get_whole_program_state();
+  // 0 is included in the numeric interval as 'this' escaped before the
+  // assignment
+  EXPECT_EQ(wps.get_field_value(field_f), SignedConstantDomain(0, 42));
+
+  InterproceduralConstantPropagationPass(config).run(make_simple_stores(scope));
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (iget v0 "LFoo;.f:I")
+      (move-result-pseudo v0)
+      (return v0)
+    )
+  )");
+
+  EXPECT_CODE_EQ(m->get_code(), expected_code.get());
+}
+
+TEST_F(InterproceduralConstantPropagationTest,
+       constantFieldAfterInit_read_before_write) {
+  auto cls_ty = DexType::make_type("LFoo;");
+  ClassCreator creator(cls_ty);
+  creator.set_super(type::java_lang_Object());
+
+  auto field_f = DexField::make_field("LFoo;.f:I")->make_concrete(ACC_PUBLIC);
+  creator.add_field(field_f);
+
+  auto init = assembler::method_from_string(R"(
+    (method (public constructor) "LFoo;.<init>:()V"
+     (
+      (load-param-object v0)
+      (invoke-direct (v0) "Ljava/lang/Object;.<init>:()V")
+      (iget v0 "LFoo;.f:I") ; read before...
+      (move-result-pseudo v1)
+      (const v1 42)
+      (iput v1 v0 "LFoo;.f:I") ; ...write
+      (return-void)
+     )
+    )
+  )");
+  init->rstate.set_root(); // Make this an entry point
+  creator.add_method(init);
+
+  auto m = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.baz:(LFoo;)I"
+     (
+      (load-param-object v0)
+      (iget v0 "LFoo;.f:I")
+      (move-result-pseudo v0)
+      (return v0)
+     )
+    )
+  )");
+  m->rstate.set_root(); // Make this an entry point
+  creator.add_method(m);
+
+  Scope scope{creator.create()};
+  walk::code(scope, [](DexMethod*, IRCode& code) {
+    code.build_cfg(/* editable */ false);
+    code.cfg().calculate_exit_block();
+  });
+
+  InterproceduralConstantPropagationPass::Config config;
+  config.max_heap_analysis_iterations = 2;
+
+  auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(
+      scope, &m_immut_analyzer_state, &m_api_level_analyzer_state);
+  auto& wps = fp_iter->get_whole_program_state();
+  // 0 is included in the numeric interval as the field was read before written
+  EXPECT_EQ(wps.get_field_value(field_f), SignedConstantDomain(0, 42));
+
+  InterproceduralConstantPropagationPass(config).run(make_simple_stores(scope));
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (iget v0 "LFoo;.f:I")
+      (move-result-pseudo v0)
+      (return v0)
+    )
+  )");
+
+  EXPECT_CODE_EQ(m->get_code(), expected_code.get());
 }
