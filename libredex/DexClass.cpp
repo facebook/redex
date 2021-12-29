@@ -832,6 +832,7 @@ void DexClass::remove_method_definition(DexMethod* m) {
   remove_method(m);
   // Virtually delete the definition of the method.
   m->m_concrete = false;
+  m->release_code();
 }
 
 void DexMethod::become_virtual() {
