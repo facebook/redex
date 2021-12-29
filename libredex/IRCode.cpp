@@ -438,6 +438,7 @@ void balloon(DexMethod* method, IRList* ir_list) {
   std::unordered_map<MethodItemEntry*, DexOpcodeData*> entry_to_data;
 
   uint32_t addr = 0;
+  std::vector<std::unique_ptr<DexInstruction>> to_delete;
   for (auto insn : *instructions) {
     MethodItemEntry* mei;
     if (insn->opcode() == DOPCODE_NOP ||
@@ -448,6 +449,8 @@ void balloon(DexMethod* method, IRList* ir_list) {
       mei = new MethodItemEntry();
       if (dex_opcode::is_fopcode(insn->opcode())) {
         entry_to_data.emplace(mei, static_cast<DexOpcodeData*>(insn));
+      } else {
+        to_delete.emplace_back(insn);
       }
     } else {
       mei = new MethodItemEntry(insn);
