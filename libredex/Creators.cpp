@@ -41,7 +41,7 @@ std::string ClassCreator::show_type(const DexType* type) { return show(type); }
 MethodBlock::MethodBlock(const IRList::iterator& iterator,
                          MethodCreator* creator)
     : mc(creator), curr(iterator) {
-  mc->blocks.push_back(this);
+  mc->blocks.push_back(std::unique_ptr<MethodBlock>(this));
 }
 
 void MethodBlock::invoke(DexMethod* meth, const std::vector<Location>& args) {

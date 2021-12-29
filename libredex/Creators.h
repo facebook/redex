@@ -492,7 +492,8 @@ struct MethodCreator {
   DexMethod* method;
   IRCode* meth_code;
   std::vector<Location> locals;
-  std::vector<MethodBlock*> blocks;
+  std::vector<std::unique_ptr<MethodBlock>> blocks;
+  // The main block should also be in `blocks` and is owned there.
   MethodBlock* main_block;
   bool m_with_debug_item;
 
