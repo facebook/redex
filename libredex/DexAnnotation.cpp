@@ -18,66 +18,66 @@
 
 void DexEncodedValueMethodType::gather_strings(
     std::vector<const DexString*>& lstring) const {
-  m_proto->gather_strings(lstring);
+  proto()->gather_strings(lstring);
 }
 
 void DexEncodedValueString::gather_strings(
     std::vector<const DexString*>& lstring) const {
-  lstring.push_back(m_string);
+  lstring.push_back(string());
 }
 
 void DexEncodedValueType::gather_types(std::vector<DexType*>& ltype) const {
-  ltype.push_back(m_type);
+  ltype.push_back(type());
 }
 
 void DexEncodedValueField::gather_fields(
     std::vector<DexFieldRef*>& lfield) const {
-  lfield.push_back(m_field);
+  lfield.push_back(field());
 }
 
 void DexEncodedValueMethod::gather_methods(
     std::vector<DexMethodRef*>& lmethod) const {
-  lmethod.push_back(m_method);
+  lmethod.push_back(method());
 }
 
 void DexEncodedValueMethodHandle::gather_methods(
     std::vector<DexMethodRef*>& lmethod) const {
-  m_methodhandle->gather_methods(lmethod);
+  methodhandle()->gather_methods(lmethod);
 }
 
 void DexEncodedValueMethodHandle::gather_fields(
     std::vector<DexFieldRef*>& lfield) const {
-  m_methodhandle->gather_fields(lfield);
+  methodhandle()->gather_fields(lfield);
 }
 
 void DexEncodedValueMethodHandle::gather_methodhandles(
     std::vector<DexMethodHandle*>& lhandles) const {
-  lhandles.push_back(m_methodhandle);
+  lhandles.push_back(methodhandle());
 }
 
 void DexEncodedValueArray::gather_strings(
     std::vector<const DexString*>& lstring) const {
-  for (auto ev : *m_evalues) {
+  for (auto ev : *evalues()) {
     ev->gather_strings(lstring);
   }
 }
 
 void DexEncodedValueArray::gather_types(std::vector<DexType*>& ltype) const {
-  for (auto ev : *m_evalues) {
+  for (auto ev : *evalues()) {
     ev->gather_types(ltype);
   }
 }
 
 void DexEncodedValueArray::gather_fields(
     std::vector<DexFieldRef*>& lfield) const {
-  for (auto ev : *m_evalues) {
+  for (auto ev : *evalues()) {
     ev->gather_fields(lfield);
   }
 }
 
 void DexEncodedValueArray::gather_methods(
     std::vector<DexMethodRef*>& lmethod) const {
-  for (auto ev : *m_evalues) {
+  for (auto ev : *evalues()) {
     ev->gather_methods(lmethod);
   }
 }
@@ -289,33 +289,33 @@ void DexEncodedValueBit::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
 }
 
 void DexEncodedValueString::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
-  uint32_t sidx = dodx->stringidx(m_string);
+  uint32_t sidx = dodx->stringidx(string());
   type_encoder(encdata, m_evtype, sidx);
 }
 
 void DexEncodedValueType::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
-  uint32_t tidx = dodx->typeidx(m_type);
+  uint32_t tidx = dodx->typeidx(type());
   type_encoder(encdata, m_evtype, tidx);
 }
 
 void DexEncodedValueField::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
-  uint32_t fidx = dodx->fieldidx(m_field);
+  uint32_t fidx = dodx->fieldidx(field());
   type_encoder(encdata, m_evtype, fidx);
 }
 
 void DexEncodedValueMethod::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
-  uint32_t midx = dodx->methodidx(m_method);
+  uint32_t midx = dodx->methodidx(method());
   type_encoder(encdata, m_evtype, midx);
 }
 
 void DexEncodedValueMethodType::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
-  uint32_t pidx = dodx->protoidx(m_proto);
+  uint32_t pidx = dodx->protoidx(proto());
   type_encoder(encdata, m_evtype, pidx);
 }
 
 void DexEncodedValueMethodHandle::encode(DexOutputIdx* dodx,
                                          uint8_t*& encdata) {
-  uint32_t mhidx = dodx->methodhandleidx(m_methodhandle);
+  uint32_t mhidx = dodx->methodhandleidx(methodhandle());
   type_encoder(encdata, m_evtype, mhidx);
 }
 
@@ -328,8 +328,8 @@ void DexEncodedValueArray::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
     uint8_t devtb = DEVT_HDR_TYPE(m_evtype);
     *encdata++ = devtb;
   }
-  encdata = write_uleb128(encdata, (uint32_t)m_evalues->size());
-  for (auto const& ev : *m_evalues) {
+  encdata = write_uleb128(encdata, (uint32_t)evalues()->size());
+  for (auto const& ev : *evalues()) {
     ev->encode(dodx, encdata);
   }
 }
@@ -412,19 +412,19 @@ bool DexEncodedValue::is_wide() const {
 
 DexEncodedValue* DexEncodedValue::zero_for_type(DexType* type) {
   if (type == type::_byte()) {
-    return new DexEncodedValue(DEVT_BYTE, 0);
+    return new DexEncodedValue(DEVT_BYTE, (uint64_t)0);
   } else if (type == type::_char()) {
-    return new DexEncodedValue(DEVT_CHAR, 0);
+    return new DexEncodedValue(DEVT_CHAR, (uint64_t)0);
   } else if (type == type::_short()) {
-    return new DexEncodedValue(DEVT_SHORT, 0);
+    return new DexEncodedValue(DEVT_SHORT, (uint64_t)0);
   } else if (type == type::_int()) {
-    return new DexEncodedValue(DEVT_INT, 0);
+    return new DexEncodedValue(DEVT_INT, (uint64_t)0);
   } else if (type == type::_long()) {
-    return new DexEncodedValue(DEVT_LONG, 0);
+    return new DexEncodedValue(DEVT_LONG, (uint64_t)0);
   } else if (type == type::_float()) {
-    return new DexEncodedValue(DEVT_FLOAT, 0);
+    return new DexEncodedValue(DEVT_FLOAT, (uint64_t)0);
   } else if (type == type::_double()) {
-    return new DexEncodedValue(DEVT_DOUBLE, 0);
+    return new DexEncodedValue(DEVT_DOUBLE, (uint64_t)0);
   } else if (type == type::_boolean()) {
     return new DexEncodedValueBit(DEVT_BOOLEAN, false);
   } else {
@@ -869,29 +869,29 @@ std::string DexEncodedValueArray::show_deobfuscated() const {
   return show_helper(this, true);
 }
 
-std::string DexEncodedValueString::show() const { return ::show(m_string); }
+std::string DexEncodedValueString::show() const { return ::show(string()); }
 
-std::string DexEncodedValueType::show() const { return ::show(m_type); }
+std::string DexEncodedValueType::show() const { return ::show(type()); }
 
-std::string DexEncodedValueField::show() const { return ::show(m_field); }
+std::string DexEncodedValueField::show() const { return ::show(field()); }
 std::string DexEncodedValueField::show_deobfuscated() const {
-  return ::show_deobfuscated(m_field);
+  return ::show_deobfuscated(field());
 }
 
-std::string DexEncodedValueMethod::show() const { return ::show(m_method); }
+std::string DexEncodedValueMethod::show() const { return ::show(method()); }
 std::string DexEncodedValueMethod::show_deobfuscated() const {
-  return ::show_deobfuscated(m_method);
+  return ::show_deobfuscated(method());
 }
 
-std::string DexEncodedValueMethodType::show() const { return ::show(m_proto); }
+std::string DexEncodedValueMethodType::show() const { return ::show(proto()); }
 std::string DexEncodedValueMethodType::show_deobfuscated() const {
-  return ::show_deobfuscated(m_proto);
+  return ::show_deobfuscated(proto());
 }
 
 std::string DexEncodedValueMethodHandle::show() const {
-  return ::show(m_methodhandle);
+  return ::show(methodhandle());
 }
 std::string DexEncodedValueMethodHandle::show_deobfuscated() const {
   // TODO(T58570881) - fix deobfuscation
-  return ::show(m_methodhandle);
+  return ::show(methodhandle());
 }
