@@ -150,7 +150,6 @@ void LocalDce::dce(cfg::ControlFlowGraph& cfg,
       get_dead_instructions(cfg, blocks, &any_init_class_insns);
 
   // Remove dead instructions.
-  std::unordered_set<IRInstruction*> seen;
   cfg::CFGMutation mutation(cfg);
   std::unique_ptr<npe::NullPointerExceptionCreator> npe_creator;
   size_t npe_instructions = 0;
@@ -159,9 +158,6 @@ void LocalDce::dce(cfg::ControlFlowGraph& cfg,
     cfg::Block* b = pair.first;
     const IRList::iterator& it = pair.second;
     auto insn = it->insn;
-    if (!seen.emplace(insn).second) {
-      continue;
-    }
     auto cfg_it = b->to_cfg_instruction_iterator(it);
     DexMethod* method;
     if (m_may_allocate_registers && m_method_override_graph &&
