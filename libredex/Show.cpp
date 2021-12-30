@@ -1055,7 +1055,7 @@ std::string show(const DexCode* code) {
   ss << "regs: " << code->get_registers_size()
      << ", ins: " << code->get_ins_size() << ", outs: " << code->get_outs_size()
      << "\n";
-  if (code->m_insns != nullptr) {
+  if (code->m_insns) {
     for (auto const& insn : code->get_instructions()) {
       ss << show(insn) << "\n";
     }

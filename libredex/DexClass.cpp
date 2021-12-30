@@ -496,9 +496,12 @@ DexCode::DexCode(const DexCode& that)
     : m_registers_size(that.m_registers_size),
       m_ins_size(that.m_ins_size),
       m_outs_size(that.m_outs_size),
-      m_insns(std::make_unique<std::vector<DexInstruction*>>()) {
-  for (auto& insn : *that.m_insns) {
-    m_insns->emplace_back(insn->clone());
+      m_insns(that.m_insns ? std::make_optional<std::vector<DexInstruction*>>()
+                           : std::nullopt) {
+  if (that.m_insns) {
+    for (auto& insn : *that.m_insns) {
+      m_insns->emplace_back(insn->clone());
+    }
   }
   for (auto& try_ : that.m_tries) {
     m_tries.emplace_back(new DexTryItem(*try_));
@@ -523,7 +526,7 @@ std::unique_ptr<DexCode> DexCode::get_dex_code(DexIdx* idx, uint32_t offset) {
   dc->m_registers_size = code->registers_size;
   dc->m_ins_size = code->ins_size;
   dc->m_outs_size = code->outs_size;
-  dc->m_insns.reset(new std::vector<DexInstruction*>());
+  dc->m_insns = std::vector<DexInstruction*>();
   const uint16_t* cdata = (const uint16_t*)(code + 1);
   uint32_t tries = code->tries_size;
   if (code->insns_size) {

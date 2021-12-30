@@ -439,7 +439,7 @@ void balloon(DexMethod* method, IRList* ir_list) {
 
   uint32_t addr = 0;
   std::vector<std::unique_ptr<DexInstruction>> to_delete;
-  for (auto insn : *instructions) {
+  for (auto insn : instructions) {
     MethodItemEntry* mei;
     if (insn->opcode() == DOPCODE_NOP ||
         dex_opcode::is_fopcode(insn->opcode())) {
