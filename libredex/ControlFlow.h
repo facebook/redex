@@ -1541,8 +1541,15 @@ bool ControlFlowGraph::insert(const InstructionIterator& position,
         insns_it = std::prev(end_index);
         std::vector<std::unique_ptr<DexPosition>> dangling;
         for (auto it = pos; it != b->m_entries.end();) {
-          if (it->type == MFLOW_POSITION) {
+          switch (it->type) {
+          case MFLOW_POSITION:
             dangling.push_back(std::move(it->pos));
+            break;
+          case MFLOW_OPCODE:
+            m_removed_insns.push_back(it->insn);
+            break;
+          default:
+            break;
           }
           it = b->m_entries.erase_and_dispose(it);
           invalidated_its = true;
