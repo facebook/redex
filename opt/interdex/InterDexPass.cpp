@@ -92,6 +92,9 @@ void InterDexPass::bind_config() {
   bind("minimize_cross_dex_refs_relocate_virtual_methods", false,
        m_cross_dex_relocator_config.relocate_virtual_methods);
 
+  bind("fill_last_coldstart_dex", m_fill_last_coldstart_dex,
+       m_fill_last_coldstart_dex);
+
   // The actual number of relocated methods per class tends to be just a
   // fraction of this number, as relocated methods get re-relocated back into
   // their original class when they end up in the same dex.
@@ -132,7 +135,8 @@ void InterDexPass::run_pass(
   InterDex interdex(original_scope, dexen, mgr.asset_manager(), conf, plugins,
                     m_linear_alloc_limit, m_static_prune, m_normal_primary_dex,
                     m_keep_primary_order, force_single_dex, m_emit_canaries,
-                    m_minimize_cross_dex_refs, m_minimize_cross_dex_refs_config,
+                    m_minimize_cross_dex_refs, m_fill_last_coldstart_dex,
+                    m_minimize_cross_dex_refs_config,
                     m_cross_dex_relocator_config, refs_info.frefs,
                     refs_info.trefs, refs_info.mrefs, &xstore_refs,
                     mgr.get_redex_options().min_sdk, m_sort_remaining_classes,
@@ -212,15 +216,15 @@ void InterDexPass::run_pass_on_nonroot_store(const Scope& original_scope,
   CrossDexRelocatorConfig cross_dex_relocator_config;
 
   // Initialize interdex and run for nonroot store
-  InterDex interdex(original_scope, dexen, mgr.asset_manager(), conf, plugins,
-                    m_linear_alloc_limit, m_static_prune, m_normal_primary_dex,
-                    m_keep_primary_order, false /* force single dex */,
-                    false /* emit canaries */,
-                    false /* minimize_cross_dex_refs */, cross_dex_refs_config,
-                    cross_dex_relocator_config, refs_info.frefs,
-                    refs_info.trefs, refs_info.mrefs, &xstore_refs,
-                    mgr.get_redex_options().min_sdk, m_sort_remaining_classes,
-                    m_methods_for_canary_clinit_reference);
+  InterDex interdex(
+      original_scope, dexen, mgr.asset_manager(), conf, plugins,
+      m_linear_alloc_limit, m_static_prune, m_normal_primary_dex,
+      m_keep_primary_order, false /* force single dex */,
+      false /* emit canaries */, false /* minimize_cross_dex_refs */,
+      /* fill_last_coldstart_dex=*/false, cross_dex_refs_config,
+      cross_dex_relocator_config, refs_info.frefs, refs_info.trefs,
+      refs_info.mrefs, &xstore_refs, mgr.get_redex_options().min_sdk,
+      m_sort_remaining_classes, m_methods_for_canary_clinit_reference);
 
   interdex.run_on_nonroot_store();
 

@@ -327,24 +327,25 @@ bool InterDex::should_not_relocate_methods_of_class(const DexClass* clazz) {
   return false;
 }
 
-bool InterDex::emit_class(DexInfo& dex_info,
-                          DexClass* clazz,
-                          bool check_if_skip,
-                          bool perf_sensitive,
-                          DexClass** canary_cls,
-                          std::vector<DexClass*>* erased_classes) {
+InterDex::EmitResult InterDex::emit_class(
+    DexInfo& dex_info,
+    DexClass* clazz,
+    bool check_if_skip,
+    bool perf_sensitive,
+    DexClass** canary_cls,
+    std::vector<DexClass*>* erased_classes) {
   if (is_canary(clazz)) {
     // Nothing to do here.
-    return false;
+    return {false, false};
   }
 
   if (m_dexes_structure.has_class(clazz)) {
     TRACE(IDEX, 6, "Trying to re-add class %s!", SHOW(clazz));
-    return false;
+    return {false, false};
   }
 
   if (check_if_skip && (should_skip_class_due_to_plugin(clazz))) {
-    return false;
+    return {false, false};
   }
 
   if (perf_sensitive) {
@@ -381,7 +382,7 @@ bool InterDex::emit_class(DexInfo& dex_info,
     m_dexes_structure.add_class_no_checks(clazz_mrefs, clazz_frefs, clazz_trefs,
                                           clazz);
   }
-  return true;
+  return {true, !fits_current_dex};
 }
 
 void InterDex::emit_primary_dex(
@@ -460,6 +461,7 @@ void InterDex::emit_interdex_classes(
 
   size_t cls_skipped_in_secondary = 0;
 
+  bool reset_coldstart_on_overflow = false;
   for (auto it = interdex_types.begin(); it != interdex_types.end(); ++it) {
     DexType* type = *it;
     DexClass* cls = type_class(type);
@@ -517,10 +519,17 @@ void InterDex::emit_interdex_classes(
               !m_emitting_bg_set,
               "End marker discovered between background start/end markers");
           TRACE(IDEX, 2, "Terminating dex due to %s", SHOW(type));
-          flush_out_dex(dex_info, *canary_cls);
-          *canary_cls = get_canary_cls(dex_info);
-          if (end_marker == cold_start_end_marker) {
-            dex_info.coldstart = false;
+          if (end_marker != cold_start_end_marker ||
+              !m_fill_last_coldstart_dex) {
+            flush_out_dex(dex_info, *canary_cls);
+            *canary_cls = get_canary_cls(dex_info);
+            if (end_marker == cold_start_end_marker) {
+              dex_info.coldstart = false;
+            }
+          } else {
+            // if (end_marker == cold_start_end_marker) {
+            //   dex_info.coldstart = false;
+            reset_coldstart_on_overflow = true;
           }
         }
       }
@@ -536,8 +545,13 @@ void InterDex::emit_interdex_classes(
         m_emitting_extended = true;
       }
       dex_info.betamap_ordered = true;
-      emit_class(dex_info, cls, /* check_if_skip */ true,
-                 /* perf_sensitive */ true, canary_cls);
+      auto res = emit_class(dex_info, cls, /* check_if_skip */ true,
+                            /* perf_sensitive */ true, canary_cls);
+
+      if (res.overflowed && reset_coldstart_on_overflow) {
+        dex_info.coldstart = false;
+        reset_coldstart_on_overflow = false;
+      }
     }
   }
 
@@ -546,8 +560,13 @@ void InterDex::emit_interdex_classes(
     DexClass* cls = type_class(type);
 
     if (cls && unreferenced_classes.count(cls)) {
-      emit_class(dex_info, cls, /* check_if_skip */ true,
-                 /* perf_sensitive */ false, canary_cls);
+      auto res = emit_class(dex_info, cls, /* check_if_skip */ true,
+                            /* perf_sensitive */ false, canary_cls);
+
+      if (res.overflowed && reset_coldstart_on_overflow) {
+        dex_info.coldstart = false;
+        reset_coldstart_on_overflow = false;
+      }
     }
   }
 

@@ -92,6 +92,7 @@ class InterDexPass : public Pass {
   bool m_can_touch_coldstart_cls;
   bool m_can_touch_coldstart_extended_cls;
   bool m_minimize_cross_dex_refs;
+  bool m_fill_last_coldstart_dex{false};
   cross_dex_ref_minimizer::CrossDexRefMinimizerConfig
       m_minimize_cross_dex_refs_config;
   CrossDexRelocatorConfig m_cross_dex_relocator_config;

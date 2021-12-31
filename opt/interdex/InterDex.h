@@ -43,6 +43,7 @@ class InterDex {
            bool force_single_dex,
            bool emit_canaries,
            bool minimize_cross_dex_refs,
+           bool fill_last_coldstart_dex,
            const cross_dex_ref_minimizer::CrossDexRefMinimizerConfig&
                cross_dex_refs_config,
            const CrossDexRelocatorConfig& cross_dex_relocator_config,
@@ -63,6 +64,7 @@ class InterDex {
         m_force_single_dex(force_single_dex),
         m_emit_canaries(emit_canaries),
         m_minimize_cross_dex_refs(minimize_cross_dex_refs),
+        m_fill_last_coldstart_dex(fill_last_coldstart_dex),
         m_emitting_scroll_set(false),
         m_emitting_bg_set(false),
         m_emitted_bg_set(false),
@@ -131,12 +133,20 @@ class InterDex {
   bool should_not_relocate_methods_of_class(const DexClass* clazz);
   void add_to_scope(DexClass* cls);
   bool should_skip_class_due_to_plugin(DexClass* clazz);
-  bool emit_class(DexInfo& dex_info,
-                  DexClass* clazz,
-                  bool check_if_skip,
-                  bool perf_sensitive,
-                  DexClass** canary_cls,
-                  std::vector<DexClass*>* erased_classes = nullptr);
+
+  struct EmitResult {
+    bool emitted{false};
+    bool overflowed{false};
+
+    operator bool() const { return emitted; }
+  };
+
+  EmitResult emit_class(DexInfo& dex_info,
+                        DexClass* clazz,
+                        bool check_if_skip,
+                        bool perf_sensitive,
+                        DexClass** canary_cls,
+                        std::vector<DexClass*>* erased_classes = nullptr);
   void emit_primary_dex(
       const DexClasses& primary_dex,
       const std::vector<DexType*>& interdex_order,
@@ -180,6 +190,7 @@ class InterDex {
   bool m_force_single_dex;
   bool m_emit_canaries;
   bool m_minimize_cross_dex_refs;
+  bool m_fill_last_coldstart_dex;
 
   bool m_emitting_scroll_set;
   bool m_emitting_bg_set;
