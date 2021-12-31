@@ -92,6 +92,9 @@ void InterDexPass::bind_config() {
   bind("minimize_cross_dex_refs_relocate_virtual_methods", false,
        m_cross_dex_relocator_config.relocate_virtual_methods);
 
+  bind("fill_last_coldstart_dex", m_fill_last_coldstart_dex,
+       m_fill_last_coldstart_dex);
+
   // The actual number of relocated methods per class tends to be just a
   // fraction of this number, as relocated methods get re-relocated back into
   // their original class when they end up in the same dex.
@@ -131,15 +134,15 @@ void InterDexPass::run_pass(
   mgr.set_metric(METRIC_EMIT_CANARIES, m_emit_canaries);
 
   bool force_single_dex = conf.get_json_config().get("force_single_dex", false);
-  InterDex interdex(original_scope, dexen, mgr.asset_manager(), conf, plugins,
-                    m_linear_alloc_limit, m_static_prune, m_normal_primary_dex,
-                    m_keep_primary_order, force_single_dex, m_emit_canaries,
-                    m_minimize_cross_dex_refs, m_minimize_cross_dex_refs_config,
-                    m_cross_dex_relocator_config, refs_info.frefs,
-                    refs_info.trefs, refs_info.mrefs, &xstore_refs,
-                    mgr.get_redex_options().min_sdk, m_sort_remaining_classes,
-                    m_methods_for_canary_clinit_reference,
-                    init_classes_with_side_effects);
+  InterDex interdex(
+      original_scope, dexen, mgr.asset_manager(), conf, plugins,
+      m_linear_alloc_limit, m_static_prune, m_normal_primary_dex,
+      m_keep_primary_order, force_single_dex, m_emit_canaries,
+      m_minimize_cross_dex_refs, m_fill_last_coldstart_dex,
+      m_minimize_cross_dex_refs_config, m_cross_dex_relocator_config,
+      refs_info.frefs, refs_info.trefs, refs_info.mrefs, &xstore_refs,
+      mgr.get_redex_options().min_sdk, m_sort_remaining_classes,
+      m_methods_for_canary_clinit_reference, init_classes_with_side_effects);
 
   if (m_expect_order_list) {
     always_assert_log(
@@ -223,10 +226,11 @@ void InterDexPass::run_pass_on_nonroot_store(
       m_linear_alloc_limit, m_static_prune, m_normal_primary_dex,
       m_keep_primary_order, false /* force single dex */,
       false /* emit canaries */, false /* minimize_cross_dex_refs */,
-      cross_dex_refs_config, cross_dex_relocator_config, refs_info.frefs,
-      refs_info.trefs, refs_info.mrefs, &xstore_refs,
-      mgr.get_redex_options().min_sdk, m_sort_remaining_classes,
-      m_methods_for_canary_clinit_reference, init_classes_with_side_effects);
+      /* fill_last_coldstart_dex=*/false, cross_dex_refs_config,
+      cross_dex_relocator_config, refs_info.frefs, refs_info.trefs,
+      refs_info.mrefs, &xstore_refs, mgr.get_redex_options().min_sdk,
+      m_sort_remaining_classes, m_methods_for_canary_clinit_reference,
+      init_classes_with_side_effects);
 
   interdex.run_on_nonroot_store();
 
