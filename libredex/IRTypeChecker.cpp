@@ -1494,3 +1494,65 @@ std::string IRTypeChecker::dump_annotated_cfg(DexMethod* method) const {
 
   return show_analysis<TypeEnvironment>(method->get_code()->cfg(), inf);
 }
+
+std::string IRTypeChecker::dump_annotated_cfg_reduced(DexMethod* method) const {
+  cfg::ScopedCFG cfg{method->get_code()};
+
+  TypeInference inf{method->get_code()->cfg()};
+  inf.run(m_dex_method);
+
+  struct TypeInferenceReducedSpecial {
+    TypeEnvironment cur;
+    const TypeInference& iter;
+
+    explicit TypeInferenceReducedSpecial(const TypeInference& iter)
+        : iter(iter) {}
+
+    void add_reg(std::ostream& os, reg_t r) const {
+      os << " v" << r << "=";
+      auto type = cur.get_type(r);
+      os << type << "/";
+      auto dtype = cur.get_dex_type(r);
+      if (dtype) {
+        os << show(*dtype);
+      } else {
+        os << "T";
+      }
+    }
+
+    void mie_before(std::ostream& os, const MethodItemEntry& mie) {}
+    void mie_after(std::ostream& os, const MethodItemEntry& mie) {
+      if (mie.type != MFLOW_OPCODE) {
+        return;
+      }
+
+      // Find inputs.
+      if (mie.insn->srcs_size() != 0) {
+        os << "     inputs:";
+        for (reg_t r : mie.insn->srcs()) {
+          add_reg(os, r);
+        }
+        os << "\n";
+      }
+
+      iter.analyze_instruction(mie.insn, &cur);
+      cur.reduce();
+
+      // Find outputs.
+      if (mie.insn->has_dest()) {
+        os << "     output:";
+        add_reg(os, mie.insn->dest());
+        os << "\n";
+      }
+    }
+
+    void start_block(std::ostream& os, cfg::Block* b) {
+      cur = iter.get_entry_state_at(b);
+      os << "entry state: " << cur << "\n";
+    }
+    void end_block(std::ostream& os, cfg::Block* b) {}
+  };
+
+  TypeInferenceReducedSpecial special(inf);
+  return show(method->get_code()->cfg(), special);
+}

@@ -130,6 +130,7 @@ class IRTypeChecker final {
                                                reg_t reg) const;
 
   std::string dump_annotated_cfg(DexMethod* method) const;
+  std::string dump_annotated_cfg_reduced(DexMethod* method) const;
 
  private:
   void check_completion() const;

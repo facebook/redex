@@ -97,6 +97,8 @@ class CheckerConfig {
 
     m_annotated_cfg_on_error =
         type_checker_args.get("annotated_cfg_on_error", false).asBool();
+    m_annotated_cfg_on_error_reduced =
+        type_checker_args.get("annotated_cfg_on_error_reduced", true).asBool();
 
     m_check_num_of_refs =
         type_checker_args.get("check_num_of_refs", false).asBool();
@@ -260,9 +262,16 @@ class CheckerConfig {
       });
     };
     auto run_checker_error = [&](DexMethod* dex_method) {
-      return run_checker_tmpl(dex_method, [&](auto checker) {
-        return checker.dump_annotated_cfg(dex_method);
-      });
+      if (m_annotated_cfg_on_error) {
+        return run_checker_tmpl(dex_method, [&](auto checker) {
+          if (m_annotated_cfg_on_error_reduced) {
+            return checker.dump_annotated_cfg_reduced(dex_method);
+          } else {
+            return checker.dump_annotated_cfg(dex_method);
+          }
+        });
+      }
+      return show(dex_method->get_code());
     };
 
     auto res =
@@ -287,9 +296,7 @@ class CheckerConfig {
         << show(res.smallest_error_method) << std::endl
         << " " << checker.what() << std::endl
         << "Code:" << std::endl
-        << (m_annotated_cfg_on_error
-                ? run_checker_error(res.smallest_error_method)
-                : show(res.smallest_error_method->get_code()));
+        << run_checker_error(res.smallest_error_method);
 
     if (res.errors > 1) {
       oss << "\n(" << (res.errors - 1) << " more issues!)";
@@ -319,6 +326,7 @@ class CheckerConfig {
   // TODO(fengliu): Kill the `validate_access` flag.
   bool m_validate_access{true};
   bool m_annotated_cfg_on_error{false};
+  bool m_annotated_cfg_on_error_reduced{true};
 };
 
 class ScopedVmHWM {
