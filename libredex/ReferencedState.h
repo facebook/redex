@@ -156,6 +156,10 @@ class ReferencedState {
   ReferencedState& operator=(const ReferencedState& other) {
     if (this != &other) {
       this->inner_struct = other.inner_struct;
+      if (other.m_keep_reasons.load() != nullptr) {
+        auto& k = ensure_keep_reasons();
+        k.m_keep_reasons = other.m_keep_reasons.load()->m_keep_reasons;
+      }
     }
     return *this;
   }
