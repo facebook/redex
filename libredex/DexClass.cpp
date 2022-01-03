@@ -1982,3 +1982,14 @@ void gather_components(std::vector<const DexString*>& lstring,
 std::string DexField::self_show() const { return show(this); }
 std::string DexMethod::self_show() const { return show(this); }
 std::string DexClass::self_show() const { return show(m_self); }
+
+void DexMethodRef::erase_method(DexMethodRef* mref) {
+  g_redex->erase_method(mref);
+  if (mref->is_def()) {
+    auto m = mref->as_def();
+    if (m->get_name() != m->get_deobfuscated_name_or_null()) {
+      g_redex->erase_method(m->get_class(), m->get_deobfuscated_name_or_null(),
+                            m->get_proto());
+    }
+  }
+}

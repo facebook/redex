@@ -858,7 +858,7 @@ class DexMethodRef {
 
   // This only removes the given method reference from the `RedexContext`, but
   // does not free the method.
-  static void erase_method(DexMethodRef* m) { return g_redex->erase_method(m); }
+  static void erase_method(DexMethodRef* mref);
 };
 
 class DexMethod : public DexMethodRef {
