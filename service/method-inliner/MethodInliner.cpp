@@ -776,6 +776,14 @@ void run_inliner(DexStoresVector& stores,
     filter_candidates_bridge_synth_only(mgr, scope, candidates, "remaining_");
   }
 
+  if (!deleted.empty()) {
+    // Can't really delete because of possible deob links. At least let's erase
+    // any code.
+    for (auto* m : deleted) {
+      m->make_non_concrete();
+    }
+  }
+
   TRACE(INLINE, 3, "recursive %ld", inliner.get_info().recursive);
   TRACE(INLINE, 3, "max_call_stack_depth %ld",
         inliner.get_info().max_call_stack_depth);
