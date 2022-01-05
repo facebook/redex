@@ -780,7 +780,7 @@ void run_inliner(DexStoresVector& stores,
     // Can't really delete because of possible deob links. At least let's erase
     // any code.
     for (auto* m : deleted) {
-      m->make_non_concrete();
+      m->release_code();
     }
   }
 
