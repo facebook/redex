@@ -96,12 +96,18 @@ struct VirtualMergingStats {
 
 class VirtualMerging {
  public:
+  enum class Strategy {
+    kLexicographical,
+    kProfileCallCount,
+  };
+
   VirtualMerging(DexStoresVector&,
                  const inliner::InlinerConfig&,
                  size_t,
                  const api::AndroidSDK* min_sdk_api = nullptr);
   ~VirtualMerging();
   void run(const method_profiles::MethodProfiles&,
+           Strategy strategy,
            ab_test::ABExperimentContext* ab_experiment_context = nullptr);
   const VirtualMergingStats& get_stats() { return m_stats; }
 
@@ -135,7 +141,9 @@ class VirtualMerging {
 
  private:
   MergablePairsByVirtualScope compute_mergeable_pairs_by_virtual_scopes(
-      const method_profiles::MethodProfiles&, VirtualMergingStats&) const;
+      const method_profiles::MethodProfiles&,
+      Strategy strategy,
+      VirtualMergingStats&) const;
 
   void merge_methods(
       const MergablePairsByVirtualScope& mergable_pairs,

@@ -236,7 +236,8 @@ class MergePairsBuilder {
       const std::unordered_set<const DexMethod*>& mergeable_methods,
       const XStoreRefs& xstores,
       const XDexRefs& xdexes,
-      const method_profiles::MethodProfiles& profiles) {
+      const method_profiles::MethodProfiles& profiles,
+      VirtualMerging::Strategy strategy) {
     if (!init()) {
       return boost::none;
     }
@@ -252,7 +253,7 @@ class MergePairsBuilder {
     }
 
     auto mergeable_pairs =
-        create_merge_pair_sequence(mergeable_pairs_map, profiles);
+        create_merge_pair_sequence(mergeable_pairs_map, profiles, strategy);
     return std::make_pair(stats, mergeable_pairs);
   }
 
@@ -348,7 +349,8 @@ class MergePairsBuilder {
 
   PairSeq create_merge_pair_sequence(
       const MergablesMap& mergeable_pairs_map,
-      const method_profiles::MethodProfiles& profiles) {
+      const method_profiles::MethodProfiles& profiles,
+      VirtualMerging::Strategy strategy) {
     // we do a depth-first traversal of the subtype structure, adding
     // mergeable pairs as we find them; this ensures that mergeable pairs
     // can later be processed sequentially --- first inlining pairs that
@@ -381,10 +383,16 @@ class MergePairsBuilder {
             }
             t_method = t_method_it->second;
           }
-          double acc_call_count = 0;
-          if (auto mstats = profiles.get_method_stat(
-                  method_profiles::COLD_START, t_method)) {
-            acc_call_count = mstats->call_count;
+          double order_value = 0;
+          switch (strategy) {
+          case VirtualMerging::Strategy::kLexicographical:
+            break;
+          case VirtualMerging::Strategy::kProfileCallCount:
+            if (auto mstats = profiles.get_method_stat(
+                    method_profiles::COLD_START, t_method)) {
+              order_value = mstats->call_count;
+            }
+            break;
           }
 
           {
@@ -396,8 +404,9 @@ class MergePairsBuilder {
             if (it != override_map.end()) {
               auto& t_overrides = it->second;
               redex_assert(!t_overrides.empty());
-              // Use stable sort to retain order if call count is unavailable.
-              // As insertion is pushing to front, sort low to high.
+              // Use stable sort to retain order if other ordering is
+              // unavailable. As insertion is pushing to front, sort low to
+              // high.
               std::stable_sort(t_overrides.begin(), t_overrides.end(),
                                [](const auto& lhs, const auto& rhs) {
                                  return lhs.second < rhs.second;
@@ -407,7 +416,7 @@ class MergePairsBuilder {
                 redex_assert(assert_it != mergeable_pairs_map.end() &&
                              assert_it->second == t_method);
                 mergeable_pairs.emplace_back(t_method, p.first);
-                acc_call_count += p.second;
+                order_value += p.second;
               }
               // Clear the vector. Leave it empty for the assert above
               // (to ensure things are not handled twice).
@@ -420,8 +429,8 @@ class MergePairsBuilder {
           if (overridden_method_it == mergeable_pairs_map.end()) {
             return;
           }
-          override_map[overridden_method_it->second].emplace_back(
-              t_method, acc_call_count);
+          override_map[overridden_method_it->second].emplace_back(t_method,
+                                                                  order_value);
         },
         virtual_scope->type);
     for (const auto& p : override_map) {
@@ -450,6 +459,7 @@ class MergePairsBuilder {
 VirtualMerging::MergablePairsByVirtualScope
 VirtualMerging::compute_mergeable_pairs_by_virtual_scopes(
     const method_profiles::MethodProfiles& profiles,
+    Strategy strategy,
     VirtualMergingStats& stats) const {
   ConcurrentMap<const VirtualScope*, LocalStats> local_stats;
   std::vector<const VirtualScope*> virtual_scopes;
@@ -463,7 +473,7 @@ VirtualMerging::compute_mergeable_pairs_by_virtual_scopes(
       virtual_scopes, [&](const VirtualScope* virtual_scope) {
         MergePairsBuilder mpb(virtual_scope);
         auto res = mpb.build(m_mergeable_scope_methods.at(virtual_scope),
-                             m_xstores, m_xdexes, profiles);
+                             m_xstores, m_xdexes, profiles, strategy);
         if (!res) {
           return;
         }
@@ -1173,6 +1183,7 @@ void VirtualMerging::remap_invoke_virtuals() {
 }
 
 void VirtualMerging::run(const method_profiles::MethodProfiles& profiles,
+                         Strategy strategy,
                          ab_test::ABExperimentContext* ab_experiment_context) {
   TRACE(VM, 1, "[VM] Finding unsupported virtual scopes");
   find_unsupported_virtual_scopes();
@@ -1180,13 +1191,14 @@ void VirtualMerging::run(const method_profiles::MethodProfiles& profiles,
   compute_mergeable_scope_methods();
   TRACE(VM, 1, "[VM] Computing mergeable pairs by virtual scopes");
   auto stats_copy = m_stats;
-  auto scopes = compute_mergeable_pairs_by_virtual_scopes(profiles, m_stats);
+  auto scopes =
+      compute_mergeable_pairs_by_virtual_scopes(profiles, strategy, m_stats);
 
   MergablePairsByVirtualScope exp_scopes;
   if (ab_experiment_context != nullptr &&
       !ab_experiment_context->use_control()) {
     exp_scopes = compute_mergeable_pairs_by_virtual_scopes(
-        method_profiles::MethodProfiles(), stats_copy);
+        profiles, Strategy::kLexicographical, stats_copy);
     redex_assert(m_stats == stats_copy);
   }
 
@@ -1246,8 +1258,9 @@ void VirtualMergingPass::run_pass(DexStoresVector& stores,
       ab_test::ABExperimentContext::create("virtual_merging");
   VirtualMerging vm(stores, inliner_config,
                     m_max_overriding_method_instructions, min_sdk_api);
-  vm.run(m_use_profiles ? conf.get_method_profiles()
-                        : method_profiles::MethodProfiles(),
+  vm.run(conf.get_method_profiles(),
+         m_use_profiles ? VirtualMerging::Strategy::kProfileCallCount
+                        : VirtualMerging::Strategy::kLexicographical,
          ab_experiment_context.get());
   auto stats = vm.get_stats();
 
