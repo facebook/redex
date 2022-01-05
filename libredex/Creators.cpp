@@ -624,26 +624,26 @@ MethodCreator::MethodCreator(DexMethod* meth)
 
 MethodCreator::MethodCreator(DexMethodRef* ref,
                              DexAccessFlags access,
-                             DexAnnotationSet* anno,
+                             std::unique_ptr<DexAnnotationSet> anno,
                              bool with_debug_item)
     : MethodCreator(ref->get_class(),
                     ref->get_name(),
                     ref->get_proto(),
                     access,
-                    anno,
+                    std::move(anno),
                     with_debug_item){};
 
 MethodCreator::MethodCreator(DexType* cls,
                              const DexString* name,
                              DexProto* proto,
                              DexAccessFlags access,
-                             DexAnnotationSet* anno,
+                             std::unique_ptr<DexAnnotationSet> anno,
                              bool with_debug_item)
     : method(static_cast<DexMethod*>(DexMethod::make_method(cls, name, proto))),
       m_with_debug_item(with_debug_item) {
   always_assert_log(!method->is_concrete(), "Method already defined");
   if (anno) {
-    method->attach_annotation_set(anno);
+    method->attach_annotation_set(std::move(anno));
   }
   method->make_concrete(
       access, !(access & (ACC_STATIC | ACC_PRIVATE | ACC_CONSTRUCTOR)));

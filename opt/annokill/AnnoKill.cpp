@@ -154,8 +154,8 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
     if (!param_annos) {
       return;
     }
-    for (auto pa : *param_annos) {
-      annos_in_aset(pa.second);
+    for (auto& pa : *param_annos) {
+      annos_in_aset(pa.second.get());
     }
   });
   // all annotations in fields
@@ -579,13 +579,13 @@ bool AnnoKill::kill_annotations() {
     if (param_annos) {
       m_stats.method_param_asets += param_annos->size();
       bool clear_pas = true;
-      for (auto pa : *param_annos) {
-        auto param_aset = pa.second;
+      for (auto& pa : *param_annos) {
+        auto& param_aset = pa.second;
         if (param_aset->size() == 0) {
           continue;
         }
-        auto keep_list = build_anno_keep(param_aset);
-        cleanup_aset(param_aset, referenced_annos, keep_list);
+        auto keep_list = build_anno_keep(param_aset.get());
+        cleanup_aset(param_aset.get(), referenced_annos, keep_list);
         if (param_aset->size() == 0) {
           continue;
         }
@@ -599,9 +599,6 @@ bool AnnoKill::kill_annotations() {
               SHOW(method->get_name()),
               SHOW(method->get_proto()));
         m_stats.method_param_asets_cleared += param_annos->size();
-        for (auto pa : *param_annos) {
-          delete pa.second;
-        }
         param_annos->clear();
       }
     }

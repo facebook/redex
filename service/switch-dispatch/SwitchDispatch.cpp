@@ -38,12 +38,15 @@ constexpr uint64_t MAX_NUM_DISPATCH_INSTRUCTION = 40000;
 
 MethodCreator* init_method_creator(const dispatch::Spec& spec,
                                    DexMethod* orig_method) {
-  return new MethodCreator(spec.owner_type,
-                           DexString::make_string(spec.name),
-                           spec.proto,
-                           spec.access_flags,
-                           orig_method->get_anno_set(),
-                           spec.keep_debug_info);
+  return new MethodCreator(
+      spec.owner_type,
+      DexString::make_string(spec.name),
+      spec.proto,
+      spec.access_flags,
+      orig_method->get_anno_set() == nullptr
+          ? std::unique_ptr<DexAnnotationSet>()
+          : std::make_unique<DexAnnotationSet>(*orig_method->get_anno_set()),
+      spec.keep_debug_info);
 }
 
 void emit_call(const dispatch::Spec& spec,

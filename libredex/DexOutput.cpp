@@ -1209,11 +1209,11 @@ void DexOutput::unique_xrefs(asetmap_t& asetmap,
     if (xrefmap.count(xref)) continue;
     std::vector<uint32_t> xref_bytes;
     xref_bytes.push_back((unsigned int)xref->size());
-    for (auto param : *xref) {
-      DexAnnotationSet* das = param.second;
-      always_assert_log(asetmap.count(das) != 0, "Uninitialized aset %p '%s'",
-                        das, SHOW(das));
-      xref_bytes.push_back(asetmap[das]);
+    for (auto& param : *xref) {
+      auto& das = param.second;
+      always_assert_log(asetmap.count(das.get()) != 0,
+                        "Uninitialized aset %p '%s'", das.get(), SHOW(das));
+      xref_bytes.push_back(asetmap[das.get()]);
     }
     if (xref_offsets.count(xref_bytes)) {
       xrefmap[xref] = xref_offsets[xref_bytes];

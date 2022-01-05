@@ -302,7 +302,7 @@ class DexField : public DexFieldRef {
 
   /* Concrete method members */
   DexAccessFlags m_access;
-  DexAnnotationSet* m_anno;
+  std::unique_ptr<DexAnnotationSet> m_anno;
   DexEncodedValue* m_value; /* Static Only */
   const DexString* m_deobfuscated_name{nullptr};
 
@@ -359,7 +359,7 @@ class DexField : public DexFieldRef {
   }
 
  public:
-  DexAnnotationSet* get_anno_set() const { return m_anno; }
+  DexAnnotationSet* get_anno_set() const { return m_anno.get(); }
   DexEncodedValue* get_static_value() const { return m_value; }
   DexAccessFlags get_access() const {
     always_assert(is_def());
@@ -407,12 +407,12 @@ class DexField : public DexFieldRef {
     m_value = v != nullptr ? v : DexEncodedValue::zero_for_type(get_type());
   }
 
-  void clear_annotations() {
-    delete m_anno;
-    m_anno = nullptr;
+  std::unique_ptr<DexAnnotationSet> release_annotations() {
+    return std::move(m_anno);
   }
+  void clear_annotations() { m_anno.reset(); }
 
-  void attach_annotation_set(DexAnnotationSet* aset) {
+  void attach_annotation_set(std::unique_ptr<DexAnnotationSet> aset) {
     always_assert_type_log(
         !m_concrete, RedexError::BAD_ANNOTATION, "field %s.%s is concrete\n",
         m_spec.cls->get_name()->c_str(), m_spec.name->c_str());
@@ -420,7 +420,7 @@ class DexField : public DexFieldRef {
         !m_anno, RedexError::BAD_ANNOTATION, "field %s.%s annotation exists\n",
         m_spec.cls->get_name()->c_str(), m_spec.name->c_str());
 
-    m_anno = aset;
+    m_anno = std::move(aset);
   }
 
   template <typename C>
@@ -871,7 +871,7 @@ class DexMethod : public DexMethodRef {
   bool m_virtual{false};
   DexAccessFlags m_access;
 
-  DexAnnotationSet* m_anno;
+  std::unique_ptr<DexAnnotationSet> m_anno;
   std::unique_ptr<DexCode> m_dex_code;
   std::unique_ptr<IRCode> m_code;
   ParamAnnotations m_param_anno;
@@ -985,8 +985,8 @@ class DexMethod : public DexMethodRef {
   }
 
  public:
-  const DexAnnotationSet* get_anno_set() const { return m_anno; }
-  DexAnnotationSet* get_anno_set() { return m_anno; }
+  const DexAnnotationSet* get_anno_set() const { return m_anno.get(); }
+  DexAnnotationSet* get_anno_set() { return m_anno.get(); }
   const DexCode* get_dex_code() const { return m_dex_code.get(); }
   DexCode* get_dex_code() { return m_dex_code.get(); }
   IRCode* get_code() { return m_code.get(); }
@@ -1053,10 +1053,10 @@ class DexMethod : public DexMethodRef {
   void make_non_concrete();
 
   void become_virtual();
-  void clear_annotations() {
-    delete m_anno;
-    m_anno = nullptr;
+  std::unique_ptr<DexAnnotationSet> release_annotations() {
+    return std::move(m_anno);
   }
+  void clear_annotations() { m_anno.reset(); }
 
   /**
    * Note that this is to combine annotation for two methods that should
@@ -1068,7 +1068,7 @@ class DexMethod : public DexMethodRef {
     auto other_anno_set = other->get_anno_set();
     if (other_anno_set != nullptr) {
       if (m_anno == nullptr) {
-        m_anno = new DexAnnotationSet(*other->m_anno);
+        m_anno = std::make_unique<DexAnnotationSet>(*other->m_anno);
       } else {
         m_anno->combine_with(*other->m_anno);
       }
@@ -1084,22 +1084,23 @@ class DexMethod : public DexMethodRef {
   }
 
   void add_load_params(size_t num_add_loads);
-  void attach_annotation_set(DexAnnotationSet* aset) {
+  void attach_annotation_set(std::unique_ptr<DexAnnotationSet> aset) {
     always_assert_type_log(!m_concrete, RedexError::BAD_ANNOTATION,
                            "method %s is concrete\n", self_show().c_str());
     always_assert_type_log(!m_anno, RedexError::BAD_ANNOTATION,
                            "method %s annotation exists\n",
                            self_show().c_str());
-    m_anno = aset;
+    m_anno = std::move(aset);
   }
-  void attach_param_annotation_set(int paramno, DexAnnotationSet* aset) {
+  void attach_param_annotation_set(int paramno,
+                                   std::unique_ptr<DexAnnotationSet> aset) {
     always_assert_type_log(!m_concrete, RedexError::BAD_ANNOTATION,
                            "method %s is concrete\n", self_show().c_str());
     always_assert_type_log(m_param_anno.count(paramno) == 0,
                            RedexError::BAD_ANNOTATION,
                            "param %d annotation to method %s exists\n", paramno,
                            self_show().c_str());
-    m_param_anno[paramno] = aset;
+    m_param_anno[paramno] = std::move(aset);
   }
 
   template <typename C>
@@ -1154,7 +1155,7 @@ class DexClass {
   DexType* m_self;
   DexTypeList* m_interfaces;
   const DexString* m_source_file;
-  DexAnnotationSet* m_anno;
+  std::unique_ptr<DexAnnotationSet> m_anno;
   const DexString* m_deobfuscated_name{nullptr};
   const std::string m_location; // TODO: string interning
   std::vector<DexField*> m_sfields;
@@ -1268,9 +1269,11 @@ class DexClass {
   bool is_def() const { return true; }
   bool is_external() const { return m_external; }
   DexEncodedValueArray* get_static_values();
-  const DexAnnotationSet* get_anno_set() const { return m_anno; }
-  DexAnnotationSet* get_anno_set() { return m_anno; }
-  void attach_annotation_set(DexAnnotationSet* anno) { m_anno = anno; }
+  const DexAnnotationSet* get_anno_set() const { return m_anno.get(); }
+  DexAnnotationSet* get_anno_set() { return m_anno.get(); }
+  void attach_annotation_set(std::unique_ptr<DexAnnotationSet> anno) {
+    m_anno = std::move(anno);
+  }
   void set_source_file(const DexString* source_file) {
     m_source_file = source_file;
   }
@@ -1316,7 +1319,7 @@ class DexClass {
     auto other_anno_set = other->get_anno_set();
     if (other_anno_set != nullptr) {
       if (m_anno == nullptr) {
-        m_anno = new DexAnnotationSet(*other->m_anno);
+        m_anno = std::make_unique<DexAnnotationSet>(*other->m_anno);
       } else {
         m_anno->combine_with(*other->m_anno);
       }
@@ -1329,10 +1332,7 @@ class DexClass {
     m_interfaces = intfs;
   }
 
-  void clear_annotations() {
-    delete m_anno;
-    m_anno = nullptr;
-  }
+  void clear_annotations() { m_anno.reset(); }
   /* Encodes class_data_item, returns size in bytes.  No
    * alignment requirements on *output
    */

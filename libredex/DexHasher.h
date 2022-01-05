@@ -91,6 +91,10 @@ class DexClassHasher final {
       hash(elem);
     }
   }
+  template <typename T>
+  void hash(const std::unique_ptr<T>& uptr) {
+    hash(uptr.get());
+  }
   template <class K, class V>
   void hash(const std::map<K, V>& l) {
     hash((uint64_t)l.size());

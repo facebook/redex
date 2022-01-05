@@ -547,11 +547,11 @@ void DexAnnotation::add_element(const char* key, DexEncodedValue* value) {
   m_anno_elems.emplace_back(DexString::make_string(key), value);
 }
 
-DexAnnotationSet* DexAnnotationSet::get_annotation_set(DexIdx* idx,
-                                                       uint32_t aset_off) {
+std::unique_ptr<DexAnnotationSet> DexAnnotationSet::get_annotation_set(
+    DexIdx* idx, uint32_t aset_off) {
   if (aset_off == 0) return nullptr;
   const uint32_t* adata = idx->get_uint_data(aset_off);
-  DexAnnotationSet* aset = new DexAnnotationSet();
+  auto aset = std::make_unique<DexAnnotationSet>();
   uint32_t count = *adata++;
   for (uint32_t i = 0; i < count; i++) {
     uint32_t off = adata[i];
@@ -594,8 +594,8 @@ void DexAnnotationDirectory::calc_internals() {
       m_xref_size += 4 + 4 * pa->size();
       m_xref_count++;
       for (auto const& pp : *pa) {
-        DexAnnotationSet* das = pp.second;
-        cntviz += updateCount(das);
+        auto& das = pp.second;
+        cntviz += updateCount(das.get());
       }
     }
   }
@@ -638,8 +638,8 @@ void DexAnnotationDirectory::gather_asets(
   if (m_method_param) {
     for (auto mpanno : *m_method_param) {
       ParamAnnotations* params = mpanno.second;
-      for (auto param : *params)
-        aset.push_back(param.second);
+      for (auto& param : *params)
+        aset.push_back(param.second.get());
     }
   }
 }
@@ -675,8 +675,8 @@ void DexAnnotationDirectory::gather_annotations(
   if (m_method_param) {
     for (auto mpanno : *m_method_param) {
       ParamAnnotations* params = mpanno.second;
-      for (auto param : *params) {
-        DexAnnotationSet* das = param.second;
+      for (auto& param : *params) {
+        auto& das = param.second;
         das->gather_annotations(alist);
       }
     }
