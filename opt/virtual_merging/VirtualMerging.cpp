@@ -908,7 +908,8 @@ VirtualMergingStats apply_ordering(
     const MethodFn& method_fn,
     std::unordered_map<DexClass*, std::vector<const DexMethod*>>&
         virtual_methods_to_remove,
-    std::unordered_map<DexMethod*, DexMethod*>& virtual_methods_to_remap) {
+    std::unordered_map<DexMethod*, DexMethod*>& virtual_methods_to_remap,
+    VirtualMerging::InsertionStrategy insertion_strategy) {
   VirtualMergingStats stats;
   for (auto& p : ordering) {
     auto overridden_method = const_cast<DexMethod*>(p.first);
@@ -1049,13 +1050,28 @@ VirtualMergingStats apply_ordering(
                 new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO);
             move_result_pseudo_insn->set_dest(if_temp_reg);
             block->push_back(move_result_pseudo_insn);
-            auto if_insn = new IRInstruction(OPCODE_IF_NEZ);
-            if_insn->set_src(0, if_temp_reg);
-            // if-nez if_temp, new_code
-            // (fall through to old code)
-            overridden_cfg.create_branch(
-                block, if_insn, block->goes_to() /* false */, new_block
-                /* true */);
+
+            switch (insertion_strategy) {
+            case VirtualMerging::InsertionStrategy::kJumpTo: {
+              // if-nez if_temp, new_code
+              // (fall through to old code)
+              auto if_insn = new IRInstruction(OPCODE_IF_NEZ);
+              if_insn->set_src(0, if_temp_reg);
+              overridden_cfg.create_branch(
+                  block, if_insn, /*fls=*/block->goes_to(), /*tru=*/new_block);
+              break;
+            }
+
+            case VirtualMerging::InsertionStrategy::kFallthrough: {
+              // if-eqz if_temp, old code
+              // (fall through to new_code)
+              auto if_insn = new IRInstruction(OPCODE_IF_EQZ);
+              if_insn->set_src(0, if_temp_reg);
+              overridden_cfg.create_branch(block, if_insn, /*fls=*/new_block,
+                                           /*tru=*/block->goes_to());
+              break;
+            }
+            }
           }
           // we'll define helper functions in a way that lets them mutate the
           // cfg
@@ -1152,7 +1168,8 @@ VirtualMergingStats apply_ordering(
 void VirtualMerging::merge_methods(
     const MergablePairsByVirtualScope& mergable_pairs,
     const MergablePairsByVirtualScope& exp_mergable_pairs,
-    ab_test::ABExperimentContext* ab_experiment_context) {
+    ab_test::ABExperimentContext* ab_experiment_context,
+    InsertionStrategy insertion_strategy) {
   auto ordering_pair = create_ordering(
       mergable_pairs, m_max_overriding_method_instructions, *m_inliner);
   m_stats += ordering_pair.second;
@@ -1175,9 +1192,9 @@ void VirtualMerging::merge_methods(
     return m;
   };
 
-  auto stats =
-      apply_ordering(*m_inliner, ordering_pair.first, make_clone,
-                     m_virtual_methods_to_remove, m_virtual_methods_to_remap);
+  auto stats = apply_ordering(*m_inliner, ordering_pair.first, make_clone,
+                              m_virtual_methods_to_remove,
+                              m_virtual_methods_to_remap, insertion_strategy);
   m_stats += stats;
 
   always_assert(m_stats.mergeable_pairs ==
@@ -1230,7 +1247,8 @@ void VirtualMerging::merge_methods(
                             SHOW(m));
           return m;
         },
-        exp_virtual_methods_to_remove, exp_virtual_methods_to_remap);
+        exp_virtual_methods_to_remove, exp_virtual_methods_to_remap,
+        insertion_strategy);
     redex_assert(stats == exp_stats);
 
     check_remove(m_virtual_methods_to_remove, exp_virtual_methods_to_remove,
@@ -1308,6 +1326,7 @@ void VirtualMerging::remap_invoke_virtuals() {
 
 void VirtualMerging::run(const method_profiles::MethodProfiles& profiles,
                          Strategy strategy,
+                         InsertionStrategy insertion_strategy,
                          Strategy ab_strategy,
                          ab_test::ABExperimentContext* ab_experiment_context) {
   TRACE(VM, 1, "[VM] Finding unsupported virtual scopes");
@@ -1328,7 +1347,7 @@ void VirtualMerging::run(const method_profiles::MethodProfiles& profiles,
   }
 
   TRACE(VM, 1, "[VM] Merging methods");
-  merge_methods(scopes, exp_scopes, ab_experiment_context);
+  merge_methods(scopes, exp_scopes, ab_experiment_context, insertion_strategy);
   TRACE(VM, 1, "[VM] Removing methods");
   remove_methods();
   TRACE(VM, 1, "[VM] Remapping invoke-virtual instructions");
@@ -1405,6 +1424,7 @@ void VirtualMergingPass::run_pass(DexStoresVector& stores,
                     m_max_overriding_method_instructions, min_sdk_api);
   vm.run(conf.get_method_profiles(),
          m_strategy,
+         VirtualMerging::InsertionStrategy::kJumpTo,
          m_ab_strategy,
          ab_experiment_context.get());
   auto stats = vm.get_stats();

@@ -102,6 +102,11 @@ class VirtualMerging {
     kProfileAppearBucketsAndCallCount,
   };
 
+  enum class InsertionStrategy {
+    kJumpTo,
+    kFallthrough,
+  };
+
   VirtualMerging(DexStoresVector&,
                  const inliner::InlinerConfig&,
                  size_t,
@@ -109,6 +114,7 @@ class VirtualMerging {
   ~VirtualMerging();
   void run(const method_profiles::MethodProfiles&,
            Strategy strategy,
+           InsertionStrategy insertion_strategy,
            Strategy ab_strategy = Strategy::kLexicographical,
            ab_test::ABExperimentContext* ab_experiment_context = nullptr);
   const VirtualMergingStats& get_stats() { return m_stats; }
@@ -147,10 +153,10 @@ class VirtualMerging {
       Strategy strategy,
       VirtualMergingStats&) const;
 
-  void merge_methods(
-      const MergablePairsByVirtualScope& mergable_pairs,
-      const MergablePairsByVirtualScope& exp_mergable_pairs,
-      ab_test::ABExperimentContext* ab_experiment_context = nullptr);
+  void merge_methods(const MergablePairsByVirtualScope& mergable_pairs,
+                     const MergablePairsByVirtualScope& exp_mergable_pairs,
+                     ab_test::ABExperimentContext* ab_experiment_context,
+                     InsertionStrategy insertion_strategy);
   std::unordered_map<DexClass*, std::vector<const DexMethod*>>
       m_virtual_methods_to_remove;
   std::unordered_map<DexMethod*, DexMethod*> m_virtual_methods_to_remap;
