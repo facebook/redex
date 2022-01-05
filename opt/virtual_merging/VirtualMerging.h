@@ -116,6 +116,7 @@ class VirtualMerging {
            Strategy strategy,
            InsertionStrategy insertion_strategy,
            Strategy ab_strategy = Strategy::kLexicographical,
+           InsertionStrategy ab_insertion_strategy = InsertionStrategy::kJumpTo,
            ab_test::ABExperimentContext* ab_experiment_context = nullptr);
   const VirtualMergingStats& get_stats() { return m_stats; }
 
@@ -156,7 +157,8 @@ class VirtualMerging {
   void merge_methods(const MergablePairsByVirtualScope& mergable_pairs,
                      const MergablePairsByVirtualScope& exp_mergable_pairs,
                      ab_test::ABExperimentContext* ab_experiment_context,
-                     InsertionStrategy insertion_strategy);
+                     InsertionStrategy insertion_strategy,
+                     InsertionStrategy ab_insertion_strategy);
   std::unordered_map<DexClass*, std::vector<const DexMethod*>>
       m_virtual_methods_to_remove;
   std::unordered_map<DexMethod*, DexMethod*> m_virtual_methods_to_remap;
@@ -177,6 +179,10 @@ class VirtualMergingPass : public Pass {
   int64_t m_max_overriding_method_instructions;
   VirtualMerging::Strategy m_strategy{
       VirtualMerging::Strategy::kProfileCallCount};
+  VirtualMerging::InsertionStrategy m_insertion_strategy{
+      VirtualMerging::InsertionStrategy::kJumpTo};
   VirtualMerging::Strategy m_ab_strategy{
       VirtualMerging::Strategy::kLexicographical};
+  VirtualMerging::InsertionStrategy m_ab_insertion_strategy{
+      VirtualMerging::InsertionStrategy::kJumpTo};
 };

@@ -1169,7 +1169,8 @@ void VirtualMerging::merge_methods(
     const MergablePairsByVirtualScope& mergable_pairs,
     const MergablePairsByVirtualScope& exp_mergable_pairs,
     ab_test::ABExperimentContext* ab_experiment_context,
-    InsertionStrategy insertion_strategy) {
+    InsertionStrategy insertion_strategy,
+    InsertionStrategy ab_insertion_strategy) {
   auto ordering_pair = create_ordering(
       mergable_pairs, m_max_overriding_method_instructions, *m_inliner);
   m_stats += ordering_pair.second;
@@ -1248,7 +1249,7 @@ void VirtualMerging::merge_methods(
           return m;
         },
         exp_virtual_methods_to_remove, exp_virtual_methods_to_remap,
-        insertion_strategy);
+        ab_insertion_strategy);
     redex_assert(stats == exp_stats);
 
     check_remove(m_virtual_methods_to_remove, exp_virtual_methods_to_remove,
@@ -1328,6 +1329,7 @@ void VirtualMerging::run(const method_profiles::MethodProfiles& profiles,
                          Strategy strategy,
                          InsertionStrategy insertion_strategy,
                          Strategy ab_strategy,
+                         InsertionStrategy ab_insertion_strategy,
                          ab_test::ABExperimentContext* ab_experiment_context) {
   TRACE(VM, 1, "[VM] Finding unsupported virtual scopes");
   find_unsupported_virtual_scopes();
@@ -1347,7 +1349,8 @@ void VirtualMerging::run(const method_profiles::MethodProfiles& profiles,
   }
 
   TRACE(VM, 1, "[VM] Merging methods");
-  merge_methods(scopes, exp_scopes, ab_experiment_context, insertion_strategy);
+  merge_methods(scopes, exp_scopes, ab_experiment_context, insertion_strategy,
+                ab_insertion_strategy);
   TRACE(VM, 1, "[VM] Removing methods");
   remove_methods();
   TRACE(VM, 1, "[VM] Remapping invoke-virtual instructions");
@@ -1369,7 +1372,13 @@ void VirtualMergingPass::bind_config() {
   std::string ab_strategy;
   bind("ab_strategy", "lexicographical", ab_strategy);
 
-  after_configuration([this, strategy, ab_strategy] {
+  std::string insertion_strategy;
+  bind("insertion_strategy", "jump-to", insertion_strategy);
+  std::string ab_insertion_strategy;
+  bind("ab_insertion_strategy", "jump-to", ab_insertion_strategy);
+
+  after_configuration([this, strategy, ab_strategy, insertion_strategy,
+                       ab_insertion_strategy] {
     always_assert(m_max_overriding_method_instructions >= 0);
 
     auto parse_strategy = [](const std::string& s) {
@@ -1387,6 +1396,19 @@ void VirtualMergingPass::bind_config() {
 
     m_strategy = parse_strategy(strategy);
     m_ab_strategy = parse_strategy(ab_strategy);
+
+    auto parse_insertion_strategy = [](const std::string& s) {
+      if (s == "jump-to") {
+        return VirtualMerging::InsertionStrategy::kJumpTo;
+      }
+      if (s == "fallthrough") {
+        return VirtualMerging::InsertionStrategy::kFallthrough;
+      }
+      always_assert_log(false, "Unknown insertion strategy %s", s.c_str());
+    };
+
+    m_insertion_strategy = parse_insertion_strategy(insertion_strategy);
+    m_ab_insertion_strategy = parse_insertion_strategy(ab_insertion_strategy);
   });
 }
 
@@ -1426,6 +1448,7 @@ void VirtualMergingPass::run_pass(DexStoresVector& stores,
          m_strategy,
          VirtualMerging::InsertionStrategy::kJumpTo,
          m_ab_strategy,
+         VirtualMerging::InsertionStrategy::kJumpTo,
          ab_experiment_context.get());
   auto stats = vm.get_stats();
 
