@@ -804,3 +804,346 @@ TEST_F(VirtualMergingTest, MergedBarFooProfiles) {
 
   ASSERT_EQ(normalized, out_str);
 }
+
+TEST_F(VirtualMergingTest, MergedFooProfilesAppearBucketsAllAppear100) {
+  auto scope = build_class_scope(stores);
+
+  api::LevelChecker::init(19, scope);
+  inliner::InlinerConfig inliner_config;
+  inliner_config.populate(scope);
+
+  std::unordered_map<const DexMethodRef*, method_profiles::Stats> profile_data;
+  auto make_call_count_stat = [](double call_count, double appear100) {
+    method_profiles::Stats stats{};
+    stats.call_count = call_count;
+    stats.appear_percent = appear100;
+    return stats;
+  };
+  // Normal order 3->2->1, call-count 2->1->3, same appear..
+  profile_data.emplace(get_method(23, "foo"), make_call_count_stat(100, 100));
+  profile_data.emplace(get_method(21, "foo"), make_call_count_stat(50, 100));
+  profile_data.emplace(get_method(1, "foo"), make_call_count_stat(100, 100));
+
+  VirtualMerging vm{stores, inliner_config, 100};
+  vm.run(method_profiles::MethodProfiles::initialize(
+             method_profiles::COLD_START, std::move(profile_data)),
+         VirtualMerging::Strategy::kProfileCallCount);
+
+  auto a_foo = get_method(0, "foo");
+  ASSERT_NE(nullptr, a_foo);
+
+  post_process(const_cast<DexMethod*>(a_foo));
+
+  std::string out_str = assembler::to_string(a_foo->get_code());
+
+  auto expected = R"(
+    (
+      (load-param-object v1)
+
+      (instance-of v1 "LA2;")
+      (move-result-pseudo v0)
+      (if-nez v0 :L10)
+
+      (instance-of v1 "LA1;")
+      (move-result-pseudo v0)
+      (if-nez v0 :L5)
+
+      (instance-of v1 "LA3;")
+      (move-result-pseudo v0)
+      (if-nez v0 :L0)
+
+      (const v0 0)
+      (return v0)
+
+        (:L0)
+        (check-cast v1 "LA3;")
+        (move-result-pseudo-object v1)
+
+        (instance-of v1 "LA33;")
+        (move-result-pseudo v0)
+        (if-nez v0 :L4)
+
+        (instance-of v1 "LA32;")
+        (move-result-pseudo v0)
+        (if-nez v0 :L3)
+
+        (instance-of v1 "LA31;")
+        (move-result-pseudo v0)
+        (if-nez v0 :L2)
+
+        (const v0 3)
+        (:L1)
+        (return v0)
+
+          (:L2)
+          (check-cast v1 "LA31;")
+          (move-result-pseudo-object v1)
+          (const v0 31)
+          (goto :L1)
+
+          (:L3)
+          (check-cast v1 "LA32;")
+          (move-result-pseudo-object v1)
+          (const v0 32)
+          (goto :L1)
+
+          (:L4)
+          (check-cast v1 "LA33;")
+          (move-result-pseudo-object v1)
+          (const v0 33)
+          (goto :L1)
+
+        (:L5)
+        (check-cast v1 "LA1;")
+        (move-result-pseudo-object v1)
+
+        (instance-of v1 "LA13;")
+        (move-result-pseudo v0)
+        (if-nez v0 :L9)
+
+        (instance-of v1 "LA12;")
+        (move-result-pseudo v0)
+        (if-nez v0 :L8)
+
+        (instance-of v1 "LA11;")
+        (move-result-pseudo v0)
+        (if-nez v0 :L7)
+
+        (const v0 1)
+        (:L6)
+        (return v0)
+
+          (:L7)
+          (check-cast v1 "LA11;")
+          (move-result-pseudo-object v1)
+          (const v0 11)
+          (goto :L6)
+
+          (:L8)
+          (check-cast v1 "LA12;")
+          (move-result-pseudo-object v1)
+          (const v0 12)
+          (goto :L6)
+
+          (:L9)
+          (check-cast v1 "LA13;")
+          (move-result-pseudo-object v1)
+          (const v0 13)
+          (goto :L6)
+
+        (:L10)
+        (check-cast v1 "LA2;")
+        (move-result-pseudo-object v1)
+
+        (instance-of v1 "LA23;")
+        (move-result-pseudo v0)
+        (if-nez v0 :L14)
+
+        (instance-of v1 "LA21;")
+        (move-result-pseudo v0)
+        (if-nez v0 :L13)
+
+        (instance-of v1 "LA22;")
+        (move-result-pseudo v0)
+        (if-nez v0 :L12)
+
+        (const v0 2)
+        (:L11)
+        (return v0)
+
+          (:L12)
+          (check-cast v1 "LA22;")
+          (move-result-pseudo-object v1)
+          (const v0 22)
+          (goto :L11)
+
+          (:L13)
+          (check-cast v1 "LA21;")
+          (move-result-pseudo-object v1)
+          (const v0 21)
+          (goto :L11)
+
+          (:L14)
+          (check-cast v1 "LA23;")
+          (move-result-pseudo-object v1)
+          (const v0 23)
+          (goto :L11)
+    )
+  )";
+  auto exp_ir = assembler::ircode_from_string(expected);
+  auto normalized = assembler::to_string(exp_ir.get());
+
+  ASSERT_EQ(normalized, out_str);
+}
+
+TEST_F(VirtualMergingTest, MergedFooProfilesAppearBucketsDiffAppear100) {
+  auto scope = build_class_scope(stores);
+
+  api::LevelChecker::init(19, scope);
+  inliner::InlinerConfig inliner_config;
+  inliner_config.populate(scope);
+
+  std::unordered_map<const DexMethodRef*, method_profiles::Stats> profile_data;
+  auto make_call_count_stat = [](double call_count, double appear100) {
+    method_profiles::Stats stats{};
+    stats.call_count = call_count;
+    stats.appear_percent = appear100;
+    return stats;
+  };
+  // Normal order 3->2->1, call-count 2->1->3, but with appear now 1->2->3.
+  profile_data.emplace(get_method(23, "foo"), make_call_count_stat(90, 80));
+  profile_data.emplace(get_method(22, "foo"), make_call_count_stat(100, 80));
+  profile_data.emplace(get_method(21, "foo"), make_call_count_stat(50, 100));
+  profile_data.emplace(get_method(1, "foo"), make_call_count_stat(90, 90));
+
+  VirtualMerging vm{stores, inliner_config, 100};
+  vm.run(method_profiles::MethodProfiles::initialize(
+             method_profiles::COLD_START, std::move(profile_data)),
+         VirtualMerging::Strategy::kProfileAppearBucketsAndCallCount);
+
+  auto a_foo = get_method(0, "foo");
+  ASSERT_NE(nullptr, a_foo);
+
+  post_process(const_cast<DexMethod*>(a_foo));
+
+  std::string out_str = assembler::to_string(a_foo->get_code());
+
+  auto expected = R"(
+    (
+      (load-param-object v1)
+
+      (instance-of v1 "LA2;")
+      (move-result-pseudo v0)
+      (if-nez v0 :L10)
+
+      (instance-of v1 "LA1;")
+      (move-result-pseudo v0)
+      (if-nez v0 :L5)
+
+      (instance-of v1 "LA3;")
+      (move-result-pseudo v0)
+      (if-nez v0 :L0)
+
+      (const v0 0)
+      (return v0)
+
+        (:L0)
+        (check-cast v1 "LA3;")
+        (move-result-pseudo-object v1)
+
+        (instance-of v1 "LA33;")
+        (move-result-pseudo v0)
+        (if-nez v0 :L4)
+
+        (instance-of v1 "LA32;")
+        (move-result-pseudo v0)
+        (if-nez v0 :L3)
+
+        (instance-of v1 "LA31;")
+        (move-result-pseudo v0)
+        (if-nez v0 :L2)
+
+        (const v0 3)
+        (:L1)
+        (return v0)
+
+          (:L2)
+          (check-cast v1 "LA31;")
+          (move-result-pseudo-object v1)
+          (const v0 31)
+          (goto :L1)
+
+          (:L3)
+          (check-cast v1 "LA32;")
+          (move-result-pseudo-object v1)
+          (const v0 32)
+          (goto :L1)
+
+          (:L4)
+          (check-cast v1 "LA33;")
+          (move-result-pseudo-object v1)
+          (const v0 33)
+          (goto :L1)
+
+        (:L5)
+        (check-cast v1 "LA1;")
+        (move-result-pseudo-object v1)
+
+        (instance-of v1 "LA13;")
+        (move-result-pseudo v0)
+        (if-nez v0 :L9)
+
+        (instance-of v1 "LA12;")
+        (move-result-pseudo v0)
+        (if-nez v0 :L8)
+
+        (instance-of v1 "LA11;")
+        (move-result-pseudo v0)
+        (if-nez v0 :L7)
+
+        (const v0 1)
+        (:L6)
+        (return v0)
+
+          (:L7)
+          (check-cast v1 "LA11;")
+          (move-result-pseudo-object v1)
+          (const v0 11)
+          (goto :L6)
+
+          (:L8)
+          (check-cast v1 "LA12;")
+          (move-result-pseudo-object v1)
+          (const v0 12)
+          (goto :L6)
+
+          (:L9)
+          (check-cast v1 "LA13;")
+          (move-result-pseudo-object v1)
+          (const v0 13)
+          (goto :L6)
+
+        (:L10)
+        (check-cast v1 "LA2;")
+        (move-result-pseudo-object v1)
+
+        (instance-of v1 "LA21;")
+        (move-result-pseudo v0)
+        (if-nez v0 :L14)
+
+        (instance-of v1 "LA22;")
+        (move-result-pseudo v0)
+        (if-nez v0 :L13)
+
+        (instance-of v1 "LA23;")
+        (move-result-pseudo v0)
+        (if-nez v0 :L12)
+
+        (const v0 2)
+        (:L11)
+        (return v0)
+
+          (:L12)
+          (check-cast v1 "LA23;")
+          (move-result-pseudo-object v1)
+          (const v0 23)
+          (goto :L11)
+
+          (:L13)
+          (check-cast v1 "LA22;")
+          (move-result-pseudo-object v1)
+          (const v0 22)
+          (goto :L11)
+
+          (:L14)
+          (check-cast v1 "LA21;")
+          (move-result-pseudo-object v1)
+          (const v0 21)
+          (goto :L11)
+    )
+  )";
+  auto exp_ir = assembler::ircode_from_string(expected);
+  auto normalized = assembler::to_string(exp_ir.get());
+
+  ASSERT_EQ(normalized, out_str);
+}
