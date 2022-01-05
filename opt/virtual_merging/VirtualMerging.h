@@ -108,6 +108,7 @@ class VirtualMerging {
   ~VirtualMerging();
   void run(const method_profiles::MethodProfiles&,
            Strategy strategy,
+           Strategy ab_strategy = Strategy::kLexicographical,
            ab_test::ABExperimentContext* ab_experiment_context = nullptr);
   const VirtualMergingStats& get_stats() { return m_stats; }
 
@@ -167,5 +168,8 @@ class VirtualMergingPass : public Pass {
 
  private:
   int64_t m_max_overriding_method_instructions;
-  bool m_use_profiles{true};
+  VirtualMerging::Strategy m_strategy{
+      VirtualMerging::Strategy::kProfileCallCount};
+  VirtualMerging::Strategy m_ab_strategy{
+      VirtualMerging::Strategy::kLexicographical};
 };
