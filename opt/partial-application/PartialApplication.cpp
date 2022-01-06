@@ -1156,7 +1156,7 @@ void PartialApplicationPass::run_pass(DexStoresVector& stores,
   std::unordered_set<DexMethod*> sufficiently_warm_methods;
   std::unordered_set<DexMethod*> sufficiently_hot_methods;
   gather_sufficiently_warm_and_hot_methods(
-      scope, conf, m_profile_guidance_config, &sufficiently_warm_methods,
+      scope, conf, mgr, m_profile_guidance_config, &sufficiently_warm_methods,
       &sufficiently_hot_methods);
   mgr.incr_metric("num_sufficiently_warm_methods",
                   sufficiently_warm_methods.size());
