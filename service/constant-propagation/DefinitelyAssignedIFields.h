@@ -15,6 +15,7 @@ namespace definitely_assigned_ifields {
 // before they are ever read. This method assumes that editable cfgs have been
 // build, and exit-blocks calculated.
 std::unordered_set<const DexField*> get_definitely_assigned_ifields(
+    const std::unordered_set<const DexType*>& basetype_blocklist,
     const Scope& scope);
 } // namespace definitely_assigned_ifields
 } // namespace constant_propagation

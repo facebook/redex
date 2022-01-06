@@ -19,6 +19,7 @@
 #include "Resolver.h"
 #include "StlUtil.h"
 #include "Timer.h"
+#include "TypeUtil.h"
 #include "Walkers.h"
 
 namespace {
@@ -289,6 +290,7 @@ class Analyzer final : public BaseIRAnalyzer<ConstructorAnalysisEnvironment> {
 namespace constant_propagation {
 namespace definitely_assigned_ifields {
 std::unordered_set<const DexField*> get_definitely_assigned_ifields(
+    const std::unordered_set<const DexType*>& basetype_blocklist,
     const Scope& scope) {
   Timer t("get_definitely_assigned_ifields");
   ConcurrentMap<DexMethod*, std::shared_ptr<AnalysisResult>> analysis_results;
@@ -309,6 +311,16 @@ std::unordered_set<const DexField*> get_definitely_assigned_ifields(
       // invocations won't read or write own fields; this is certainly true for
       // the most common case, Object::<init>.
       res = std::make_shared<AnalysisResult>();
+      // ... except for ctors of types on the blocklist.
+      // TODO: Consider using the SummaryGenerator to analyze AOSP classes to
+      // find external constructors where this may escape.
+      for (auto basetype : basetype_blocklist) {
+        if (type::is_subclass(basetype, ctor->get_class())) {
+          TRACE(CSE, 1, "=== !!! excluded %s", SHOW(ctor));
+          res->may_this_have_escaped = true;
+          break;
+        }
+      }
     }
     analysis_results.update(
         ctor,
