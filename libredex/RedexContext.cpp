@@ -56,8 +56,14 @@ RedexContext::~RedexContext() {
     delete f;
   }
   // Delete DexTypeLists.
+  std::vector<const DexTypeListContainerType*> keys;
+  keys.reserve(s_typelist_map.size());
   for (auto const& p : s_typelist_map) {
     delete p.second;
+    keys.push_back(p.first);
+  }
+  for (auto* p : keys) {
+    delete p;
   }
   // Delete DexProtos.
   for (auto const& p : s_proto_map) {
@@ -251,17 +257,23 @@ void RedexContext::mutate_field(DexFieldRef* field,
 
 DexTypeList* RedexContext::make_type_list(
     RedexContext::DexTypeListContainerType&& p) {
-  auto rv = s_typelist_map.get(p, nullptr);
+  auto on_heap = std::make_unique<DexTypeListContainerType>(p);
+
+  auto rv = s_typelist_map.get(on_heap.get(), nullptr);
   if (rv != nullptr) {
     return rv;
   }
-  auto typelist = new DexTypeList(std::move(p));
-  return try_insert(typelist->m_list, typelist, &s_typelist_map);
+  auto typelist = new DexTypeList(on_heap.get());
+  auto ret = try_insert(typelist->m_list, typelist, &s_typelist_map);
+  if (ret == typelist) {
+    (void)on_heap.release();
+  }
+  return ret;
 }
 
 DexTypeList* RedexContext::get_type_list(
-    RedexContext::DexTypeListContainerType&& p) {
-  return s_typelist_map.get(p, nullptr);
+    const RedexContext::DexTypeListContainerType& p) {
+  return s_typelist_map.get(&p, nullptr);
 }
 
 DexProto* RedexContext::make_proto(const DexType* rtype,

@@ -100,7 +100,7 @@ struct RedexContext {
   using DexTypeListContainerType = std::vector<DexType*>;
 
   DexTypeList* make_type_list(DexTypeListContainerType&& p);
-  DexTypeList* get_type_list(DexTypeListContainerType&& p);
+  DexTypeList* get_type_list(const DexTypeListContainerType& p);
 
   DexProto* make_proto(const DexType* rtype,
                        const DexTypeList* args,
@@ -306,9 +306,21 @@ struct RedexContext {
   std::mutex s_field_lock;
 
   // DexTypeList
-  ConcurrentMap<DexTypeListContainerType,
+  struct DexTypeListContainerTypePtrHash {
+    size_t operator()(const DexTypeListContainerType* d) const {
+      return boost::hash<DexTypeListContainerType>()(*d);
+    }
+  };
+  struct DexTypeListContainerTypePtrEquals {
+    size_t operator()(const DexTypeListContainerType* lhs,
+                      const DexTypeListContainerType* rhs) const {
+      return lhs == rhs || *lhs == *rhs;
+    }
+  };
+  ConcurrentMap<const DexTypeListContainerType*,
                 DexTypeList*,
-                boost::hash<DexTypeListContainerType>>
+                DexTypeListContainerTypePtrHash,
+                DexTypeListContainerTypePtrEquals>
       s_typelist_map;
 
   // DexProto

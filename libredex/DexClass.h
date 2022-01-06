@@ -467,16 +467,16 @@ class DexTypeList {
   using iterator = typename ContainerType::iterator;
   using const_iterator = typename ContainerType::const_iterator;
 
-  iterator begin() { return m_list.begin(); }
-  iterator end() { return m_list.end(); }
+  iterator begin() { return m_list->begin(); }
+  iterator end() { return m_list->end(); }
 
-  const_iterator begin() const { return m_list.begin(); }
-  const_iterator end() const { return m_list.end(); }
+  const_iterator begin() const { return m_list->begin(); }
+  const_iterator end() const { return m_list->end(); }
 
-  size_t size() const { return m_list.size(); }
-  bool empty() const { return m_list.empty(); }
+  size_t size() const { return m_list->size(); }
+  bool empty() const { return m_list->empty(); }
 
-  DexType* at(size_t i) const { return m_list.at(i); }
+  DexType* at(size_t i) const { return m_list->at(i); }
 
   // DexTypeList retrieval/creation
 
@@ -498,11 +498,11 @@ class DexTypeList {
   int encode(DexOutputIdx* dodx, uint32_t* output) const;
 
   friend bool operator<(const DexTypeList& a, const DexTypeList& b) {
-    auto ita = a.m_list.begin();
-    auto itb = b.m_list.begin();
+    auto ita = a.m_list->begin();
+    auto itb = b.m_list->begin();
     while (1) {
-      if (itb == b.m_list.end()) return false;
-      if (ita == a.m_list.end()) return true;
+      if (itb == b.m_list->end()) return false;
+      if (ita == a.m_list->end()) return true;
       if (*ita != *itb) {
         const DexType* ta = *ita;
         const DexType* tb = *itb;
@@ -517,7 +517,7 @@ class DexTypeList {
   void gather_types(C& ltype) const;
 
   bool equals(const std::vector<DexType*>& vec) const {
-    return std::equal(m_list.begin(), m_list.end(), vec.begin(), vec.end());
+    return std::equal(m_list->begin(), m_list->end(), vec.begin(), vec.end());
   }
 
   DexTypeList* push_front(DexType* t) const;
@@ -531,9 +531,9 @@ class DexTypeList {
 
  private:
   // See UNIQUENESS above for the rationale for the private constructor pattern.
-  explicit DexTypeList(ContainerType&& p) { m_list = std::move(p); }
+  explicit DexTypeList(ContainerType* p) : m_list(p) {}
 
-  ContainerType m_list;
+  ContainerType* m_list; // This should really be const.
 
   friend struct RedexContext;
 };
