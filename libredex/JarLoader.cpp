@@ -625,6 +625,21 @@ PACKED(struct pk_lfile {
 struct jar_entry {
   struct pk_cd_file cd_entry;
   uint8_t* filename;
+
+  jar_entry() = default;
+  jar_entry(const jar_entry&) = delete;
+  jar_entry(jar_entry&& other) noexcept { *this = std::move(other); }
+
+  jar_entry& operator=(const jar_entry&) = delete;
+  jar_entry& operator=(jar_entry&& other) noexcept {
+    if (this != &other) {
+      filename = std::exchange(other.filename, nullptr);
+      cd_entry = other.cd_entry;
+      memset(&other.cd_entry, 0, sizeof(other.cd_entry));
+    }
+    return *this;
+  }
+
   ~jar_entry() {
     if (filename != nullptr) {
       free(filename);
