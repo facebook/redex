@@ -8,6 +8,7 @@
 #include "utils/Visitor.h"
 #include "androidfw/TypeWrappers.h"
 
+#include <limits>
 #include <sstream>
 #include <string>
 
