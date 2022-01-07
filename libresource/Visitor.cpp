@@ -141,6 +141,15 @@ class ResChunkPullParser {
   android::ResChunk_header* m_current_chunk;
 };
 
+void collect_spans(android::ResStringPool_span* ptr,
+                   std::vector<android::ResStringPool_span*>* out) {
+  while (dtohl(*reinterpret_cast<const uint32_t*>(ptr)) !=
+         android::ResStringPool_span::END) {
+    out->emplace_back(ptr);
+    ptr++;
+  }
+}
+
 bool ResourceTableVisitor::valid(const android::ResTable_package* package) {
   if (package == nullptr) {
     return false;

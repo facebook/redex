@@ -8,9 +8,17 @@
 #ifndef _FB_ANDROID_VISITOR_H
 #define _FB_ANDROID_VISITOR_H
 
+#include <string>
+#include <vector>
+
 #include "androidfw/ResourceTypes.h"
 
 namespace arsc {
+
+// Helper methods regarding the serialization format.
+void collect_spans(android::ResStringPool_span* ptr,
+                   std::vector<android::ResStringPool_span*>* out);
+
 // Class to traverse various structures in resources.arsc file. Callers should
 // override various methods that are relevant for their use case. Mutating data
 // is allowed, though traversal logic will not expect anything data to change
