@@ -495,9 +495,8 @@ size_t hot_all_pred_cold(
   return 1;
 }
 
-size_t chain_hot_violations(
-    Block* block,
-    const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
+template <typename Fn>
+size_t chain_hot_violations_tmpl(Block* block, const Fn& fn) {
   size_t sum{0};
   for (auto& mie : *block) {
     if (mie.type != MFLOW_SOURCE_BLOCK) {
@@ -509,33 +508,49 @@ size_t chain_hot_violations(
       // Check that each interaction has at least as high a hit value as the
       // next SourceBlock.
       auto* next = sb->next.get();
+      size_t local_sum{0};
       for (size_t i = 0; i != sb->vals.size(); ++i) {
         auto sb_val = sb->get_val(i);
         auto next_val = next->get_val(i);
         if (sb_val) {
           if (next_val && *sb_val < *next_val) {
-            ++sum;
+            ++local_sum;
           }
         } else if (next_val) {
-          ++sum;
+          ++local_sum;
         }
       }
+      sum += fn(local_sum);
     }
   }
 
   return sum;
 }
 
+size_t chain_hot_violations(
+    Block* block,
+    const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
+  return chain_hot_violations_tmpl(block, [](auto val) { return val; });
+}
+
+size_t chain_hot_one_violations(
+    Block* block,
+    const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
+  return chain_hot_violations_tmpl(block,
+                                   [](auto val) { return val > 0 ? 1 : 0; });
+}
+
 // Ugly but necessary for constexpr below.
 using CounterFnPtr = size_t (*)(
     Block*, const dominators::SimpleFastDominators<cfg::GraphInterface>&);
 
-constexpr std::array<std::pair<std::string_view, CounterFnPtr>, 4> gCounters = {
+constexpr std::array<std::pair<std::string_view, CounterFnPtr>, 5> gCounters = {
     {
         {"~blocks~count", &count_blocks},
         {"~blocks~with~source~blocks", &count_block_has_sbs},
         {"~assessment~source~blocks~total", &count_all_sbs},
         {"~flow~violation~in~chain", &chain_hot_violations},
+        {"~flow~violation~in~chain~one", &chain_hot_one_violations},
     }};
 
 constexpr std::array<std::pair<std::string_view, CounterFnPtr>, 3>
