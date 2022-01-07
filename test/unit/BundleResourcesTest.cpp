@@ -246,9 +246,11 @@ TEST(BundleResources, ReadResource) {
         drawable_res_names.emplace(pair.second);
       }
     }
-    EXPECT_EQ(drawable_res_names.size(), 2);
+    EXPECT_EQ(drawable_res_names.size(), 4);
     EXPECT_EQ(drawable_res_names.count("icon"), 1);
     EXPECT_EQ(drawable_res_names.count("prickly"), 1);
+    EXPECT_EQ(drawable_res_names.count("x_icon"), 1);
+    EXPECT_EQ(drawable_res_names.count("x_prickly"), 1);
 
     auto padding_right_ids = res_table->get_res_ids_by_name("padding_right");
     EXPECT_EQ(padding_right_ids.size(), 1);
