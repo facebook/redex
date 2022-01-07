@@ -172,6 +172,7 @@ libredex_la_SOURCES = \
 	libresource/TypeWrappers.cpp \
 	libresource/Unicode.cpp \
 	libresource/VectorImpl.cpp \
+	libresource/Visitor.cpp \
 	service/api-levels/ApiLevelsUtils.cpp \
 	service/class-merging/ApproximateShapeMerging.cpp \
 	service/class-merging/ClassAssemblingUtils.cpp \
