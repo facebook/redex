@@ -180,6 +180,8 @@ class AndroidResources {
   // Classnames present in native libraries (lib/*/*.so)
   std::unordered_set<std::string> get_native_classes();
 
+  const std::string& get_directory() { return m_directory; }
+
   virtual ~AndroidResources() {}
 
  protected:
