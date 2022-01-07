@@ -637,11 +637,11 @@ int ApkResources::replace_in_xml_string_pool(
   new_pool.serialize(serialized_pool);
 
   // Assemble
-  push_short(*out_data, android::RES_XML_TYPE);
-  push_short(*out_data, chunk_size);
+  arsc::push_short(android::RES_XML_TYPE, out_data);
+  arsc::push_short(chunk_size, out_data);
   auto total_size =
       chunk_size + serialized_nodes.size() + serialized_pool.size();
-  push_long(*out_data, total_size);
+  arsc::push_long(total_size, out_data);
 
   out_data->appendVector(serialized_pool);
   out_data->appendVector(serialized_nodes);

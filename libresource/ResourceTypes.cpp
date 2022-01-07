@@ -487,11 +487,12 @@ void ResStringPool::serializeWithAdditionalStrings(Vector<char>& cVec) {
     string_idx.push_back(serialized_strings.size());
     if (utf8) {
       auto s = string8ObjectAt(i);
-      encode_string8(serialized_strings, s);
+      arsc::encode_string8(s, &serialized_strings);
     } else {
       size_t out_len;
       auto s = stringAt(i, &out_len);
-      encode_string16(serialized_strings, String16(s));
+      auto u16 = String16(s);
+      arsc::encode_string16(u16, &serialized_strings);
     }
   }
   // Add any more Strings
@@ -500,35 +501,35 @@ void ResStringPool::serializeWithAdditionalStrings(Vector<char>& cVec) {
     string_idx.push_back(serialized_strings.size());
     auto s = mAppendedStrings[i];
     if (utf8) {
-      encode_string8(serialized_strings, s);
+      arsc::encode_string8(s, &serialized_strings);
     } else {
       auto u16 = String16(s);
-      encode_string16(serialized_strings, u16);
+      arsc::encode_string16(u16, &serialized_strings);
     }
   }
-  align_vec(serialized_strings, 4);
+  arsc::align_vec(4, &serialized_strings);
   // ResChunk_header
   auto header_size = dtohs(mHeader->header.headerSize);
-  push_short(cVec, RES_STRING_POOL_TYPE);
-  push_short(cVec, header_size);
+  arsc::push_short(RES_STRING_POOL_TYPE, &cVec);
+  arsc::push_short(header_size, &cVec);
   // Sum of header size, plus the size of all the String/style data.
   auto total_size = header_size + string_idx.size() * sizeof(uint32_t) +
                     serialized_strings.size() * sizeof(char);
-  push_long(cVec, total_size);
+  arsc::push_long(total_size, &cVec);
   // ResStringPool_header
   auto string_count = string_idx.size();
-  push_long(cVec, string_count);
-  push_long(cVec, 0); // style count
+  arsc::push_long(string_count, &cVec);
+  arsc::push_long(0, &cVec); // style count
   // May have wrecked the sort order (not supporting resort right now), so clear
   // the bit.
   auto flags = dtohl(mHeader->flags) & ~ResStringPool_header::SORTED_FLAG;
-  push_long(cVec, flags);
+  arsc::push_long(flags, &cVec);
   // strings start
-  push_long(cVec, header_size + sizeof(uint32_t) * string_count);
+  arsc::push_long(header_size + sizeof(uint32_t) * string_count, &cVec);
   // styles start
-  push_long(cVec, 0);
+  arsc::push_long(0, &cVec);
   for (const uint32_t &i : string_idx) {
-    push_long(cVec, i);
+    arsc::push_long(i, &cVec);
   }
   cVec.appendVector(serialized_strings);
 }
@@ -3272,25 +3273,25 @@ struct ResTable::Package
 
         auto header_size = sizeof(ResTable_package); // should be 288
         auto total_size = header_size + serialized_strings.size();
-        push_short(cVec, RES_TABLE_PACKAGE_TYPE);
-        push_short(cVec, header_size);
-        push_long(cVec, total_size);
-        push_long(cVec, dtohl(package->id));
+        arsc::push_short(RES_TABLE_PACKAGE_TYPE, &cVec);
+        arsc::push_short(header_size, &cVec);
+        arsc::push_long(total_size, &cVec);
+        arsc::push_long(dtohl(package->id), &cVec);
         auto num_elements = sizeof(package->name) / sizeof(package->name[0]);
         for (size_t i = 0; i < num_elements; i++) {
-          push_short(cVec, dtohs(package->name[i]));
+          arsc::push_short(dtohs(package->name[i]), &cVec);
         }
-        push_long(cVec, header_size); // type strings start (skip over header)
+        arsc::push_long(header_size, &cVec); // type strings start (skip over header)
         auto last_public_type = dtohl(package->lastPublicType);
         // If 0 types are marked as public, keep the count at 0 regardless of
         // any appended types.
         if (last_public_type > 0) {
           last_public_type += typeStrings.appendedStringCount();
         }
-        push_long(cVec, last_public_type);
-        push_long(cVec, header_size + typestr_size); // key strings start
-        push_long(cVec, dtohl(package->lastPublicKey));
-        push_long(cVec, dtohl(package->typeIdOffset));
+        arsc::push_long(last_public_type, &cVec);
+        arsc::push_long(header_size + typestr_size, &cVec); // key strings start
+        arsc::push_long(dtohl(package->lastPublicKey), &cVec);
+        arsc::push_long(dtohl(package->typeIdOffset), &cVec);
         cVec.appendVector(serialized_strings);
     }
 
@@ -7265,24 +7266,24 @@ void ResTable::serializeSingleResType(
   }
   // Write out the header struct, followed by each offset uint32_t, followed by
   // all the entry bytes we already serialized.
-  push_short(output, RES_TABLE_TYPE_TYPE);
+  arsc::push_short(RES_TABLE_TYPE_TYPE, &output);
   auto type_header_size = sizeof(ResTable_type);
-  push_short(output, type_header_size);
+  arsc::push_short(type_header_size, &output);
   auto entries_start = type_header_size + offsets.size() * sizeof(uint32_t);
   auto total_size = entries_start + serialized_entries.size();
-  push_long(output, total_size);
+  arsc::push_long(total_size, &output);
   output.push_back(type_id);
   output.push_back(0); // pad to 4 bytes
   output.push_back(0);
   output.push_back(0);
-  push_long(output, num_ids);
-  push_long(output, entries_start);
+  arsc::push_long(num_ids, &output);
+  arsc::push_long(entries_start, &output);
   auto cp = &config;
   for (size_t i = 0; i < cp->size; i++) {
     output.push_back(*((unsigned char*)(cp) + i));
   }
   for (size_t i = 0; i < num_ids; i++) {
-    push_long(output, offsets[i]);
+    arsc::push_long(offsets[i], &output);
   }
   output.appendVector(serialized_entries);
 }
@@ -7329,16 +7330,16 @@ void ResTable::defineNewType(
   const auto typespec_header_size = sizeof(ResTable_typeSpec);
   const auto typespec_total_size =
       typespec_header_size + sizeof(uint32_t) * num_ids;
-  push_short(output, RES_TABLE_TYPE_SPEC_TYPE);
-  push_short(output, typespec_header_size); // header size
-  push_long(output, typespec_total_size);
+  arsc::push_short(RES_TABLE_TYPE_SPEC_TYPE, &output);
+  arsc::push_short(typespec_header_size, &output); // header size
+  arsc::push_long(typespec_total_size, &output);
   output.push_back(type_id);
   output.push_back(0); // pad to 4 bytes
   output.push_back(0);
   output.push_back(0);
-  push_long(output, num_ids);
+  arsc::push_long(num_ids, &output);
   for (size_t i = 0; i < num_ids; i++) {
-    push_long(output, spec_flags[i]);
+    arsc::push_long(spec_flags[i], &output);
   }
   // Basic sanity check :)
   LOG_FATAL_IF(
