@@ -1121,9 +1121,9 @@ void ResourcesPbFile::delete_resource(uint32_t res_id) {
   m_ids_to_remove.emplace(res_id);
 }
 
-std::unordered_set<std::string> ResourcesPbFile::get_files_by_rid(
+std::vector<std::string> ResourcesPbFile::get_files_by_rid(
     uint32_t res_id, ResourcePathType path_type) {
-  std::unordered_set<std::string> ret;
+  std::vector<std::string> ret;
   if (m_res_id_to_configvalue.count(res_id) == 0) {
     return ret;
   }
@@ -1131,9 +1131,9 @@ std::unordered_set<std::string> ResourcesPbFile::get_files_by_rid(
   auto handle_path = [&](const std::string& file_path) {
     if (is_resource_file(file_path)) {
       if (path_type == ResourcePathType::ZipPath) {
-        ret.emplace(module_name + "/" + file_path);
+        ret.emplace_back(module_name + "/" + file_path);
       } else {
-        ret.emplace(file_path);
+        ret.emplace_back(file_path);
       }
     }
   };

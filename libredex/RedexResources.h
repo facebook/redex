@@ -108,9 +108,11 @@ class ResourceTableFile {
       const std::vector<std::string>& resource_files,
       const std::map<uint32_t, uint32_t>& old_to_new) = 0;
 
-  // Return the set of files' name(include the path) represented by res_id if
-  // there is. Otherwise, return NULL.
-  virtual std::unordered_set<std::string> get_files_by_rid(
+  // Returns any file paths from entries in the given ID. A non-existent ID or
+  // an for which all values are not files will return an empty vector.
+  // NOTE: callers should be resilient against duplicate file paths being
+  // returned, which could concievably exist.
+  virtual std::vector<std::string> get_files_by_rid(
       uint32_t res_id,
       ResourcePathType path_type = ResourcePathType::DevicePath) = 0;
 
