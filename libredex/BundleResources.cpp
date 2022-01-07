@@ -35,6 +35,11 @@
 
 namespace {
 
+#define MAKE_RES_ID(package, type, entry)                        \
+  ((PACKAGE_MASK_BIT & ((package) << PACKAGE_INDEX_BIT_SHIFT)) | \
+   (TYPE_MASK_BIT & ((type) << TYPE_INDEX_BIT_SHIFT)) |          \
+   (ENTRY_MASK_BIT & (entry)))
+
 void read_protobuf_file_contents(
     const std::string& file,
     const std::function<void(google::protobuf::io::CodedInputStream&, size_t)>&
@@ -680,9 +685,7 @@ void remove_or_change_resource_ids(
   google::protobuf::RepeatedPtrField<aapt::pb::Entry> new_entries;
   for (const auto& entry : type->entry()) {
     uint32_t res_id =
-        (PACKAGE_MASK_BIT & (package_id << PACKAGE_INDEX_BIT_SHIFT)) |
-        (TYPE_MASK_BIT & ((type->type_id().id()) << TYPE_INDEX_BIT_SHIFT)) |
-        (ENTRY_MASK_BIT & (entry.entry_id().id()));
+        MAKE_RES_ID(package_id, type->type_id().id(), entry.entry_id().id());
     if (ids_to_remove.count(res_id)) {
       continue;
     }
@@ -911,6 +914,70 @@ void ResourcesPbFile::remap_res_ids_and_serialize(
 }
 
 namespace {
+void remap_entry_file_paths(
+    const std::unordered_map<std::string, std::string>& old_to_new,
+    uint32_t package_id,
+    uint32_t type_id,
+    aapt::pb::Entry* entry) {
+  uint32_t res_id = MAKE_RES_ID(package_id, type_id, entry->entry_id().id());
+  auto config_size = entry->config_value_size();
+  for (int i = 0; i < config_size; i++) {
+    auto value = entry->mutable_config_value(i)->mutable_value();
+    if (value->has_item()) {
+      auto item = value->mutable_item();
+      if (item->has_file()) {
+        auto file = item->mutable_file();
+        auto search = old_to_new.find(file->path());
+        if (search != old_to_new.end()) {
+          TRACE(RES, 8, "Writing file path %s to ID 0x%x",
+                search->second.c_str(), res_id);
+          file->set_path(search->second);
+        }
+      }
+    }
+  }
+}
+} // namespace
+
+void ResourcesPbFile::remap_file_paths_and_serialize(
+    const std::vector<std::string>& resource_files,
+    const std::unordered_map<std::string, std::string>& old_to_new) {
+  for (const auto& resources_pb_path : resource_files) {
+    TRACE(RES,
+          9,
+          "BundleResources changing file paths for file: %s",
+          resources_pb_path.c_str());
+    read_protobuf_file_contents(
+        resources_pb_path,
+        [&](google::protobuf::io::CodedInputStream& input,
+            size_t /* unused */) {
+          aapt::pb::ResourceTable pb_restable;
+          bool read_finish = pb_restable.ParseFromCodedStream(&input);
+          always_assert_log(read_finish,
+                            "BundleResoource failed to read %s",
+                            resources_pb_path.c_str());
+          int package_size = pb_restable.package_size();
+          for (int i = 0; i < package_size; i++) {
+            auto package = pb_restable.mutable_package(i);
+            auto current_package_id = package->package_id().id();
+            int type_size = package->type_size();
+            for (int j = 0; j < type_size; j++) {
+              auto type = package->mutable_type(j);
+              auto current_type_id = type->type_id().id();
+              int entry_size = type->entry_size();
+              for (int k = 0; k < entry_size; k++) {
+                remap_entry_file_paths(old_to_new, current_package_id,
+                                       current_type_id, type->mutable_entry(k));
+              }
+            }
+          }
+          std::ofstream out(resources_pb_path, std::ofstream::binary);
+          always_assert(pb_restable.SerializeToOstream(&out));
+        });
+  }
+}
+
+namespace {
 
 std::string module_name_from_pb_path(const std::string& resources_pb_path) {
   auto p = boost::filesystem::path(resources_pb_path);
@@ -1084,11 +1151,8 @@ void ResourcesPbFile::collect_resource_data_for_file(
                   "Broken assumption for only one package for resources.");
               std::string name_string = pb_entry.name();
               auto current_entry_id = pb_entry.entry_id().id();
-              auto current_resource_id =
-                  (PACKAGE_MASK_BIT &
-                   (current_package_id << PACKAGE_INDEX_BIT_SHIFT)) |
-                  (TYPE_MASK_BIT & (current_type_id << TYPE_INDEX_BIT_SHIFT)) |
-                  (ENTRY_MASK_BIT & current_entry_id);
+              auto current_resource_id = MAKE_RES_ID(
+                  current_package_id, current_type_id, current_entry_id);
               TRACE(RES, 9, "    Entry: %s %X %X", pb_entry.name().c_str(),
                     current_entry_id, current_resource_id);
               sorted_res_ids.add(current_resource_id);

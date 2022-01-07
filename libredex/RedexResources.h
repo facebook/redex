@@ -108,6 +108,10 @@ class ResourceTableFile {
       const std::vector<std::string>& resource_files,
       const std::map<uint32_t, uint32_t>& old_to_new) = 0;
 
+  virtual void remap_file_paths_and_serialize(
+      const std::vector<std::string>& resource_files,
+      const std::unordered_map<std::string, std::string>& old_to_new) = 0;
+
   // Returns any file paths from entries in the given ID. A non-existent ID or
   // an for which all values are not files will return an empty vector.
   // NOTE: callers should be resilient against duplicate file paths being

@@ -32,6 +32,7 @@
 #include "utils/String16.h"
 #include "utils/String8.h"
 #include "utils/TypeHelpers.h"
+#include "utils/Visitor.h"
 
 #include "Debug.h"
 #include "DexUtil.h"
@@ -843,6 +844,97 @@ void ResourcesArscFile::remap_res_ids_and_serialize(
     const std::map<uint32_t, uint32_t>& old_to_new) {
   remap_ids(old_to_new);
   serialize();
+}
+
+namespace {
+// Parses the global string pool for the resources.arsc file. Stores a lookup
+// from string to the index in the pool. "Global string pool" in this case will
+// refer to all string values, file paths, and styles (that is, HTML tags) used
+// throughout the resource table itself.
+//
+// The global string pool however does NOT include:
+// 1) Names of resource types, i.e. "anim", "color", "drawable", "mipmap" etc.
+// 2) The keys of resource items, i.e. "app_name" for usage "@string/app_name".
+// 3) Any string used in an XML document like the manifest or layout. That will
+//    be held in the XML document's own string pool.
+class GlobalStringPoolReader : public arsc::ResourceTableVisitor {
+ public:
+  ~GlobalStringPoolReader() override {}
+
+  bool visit_global_strings(android::ResStringPool_header* header) override {
+    always_assert_log(
+        m_global_strings.setTo(header, dtohl(header->header.size)) ==
+            android::NO_ERROR,
+        "Failed to parse global strings!");
+    auto size = m_global_strings.size();
+    for (uint32_t i = 0; i < size; i++) {
+      size_t u16_len;
+      auto wide_chars = m_global_strings.stringAt(i, &u16_len);
+      android::String16 s16(wide_chars, u16_len);
+      android::String8 s8(s16);
+      std::string value(s8.string());
+      m_string_to_idx.emplace(value, i);
+      TRACE(RES, 9, "GLOBAL STRING [%u] = %s", i, value.c_str());
+    }
+    return false; // Don't parse anything else
+  }
+
+  uint32_t get_string_idx(const std::string& s) {
+    return m_string_to_idx.at(s);
+  }
+
+ private:
+  android::ResStringPool m_global_strings;
+  std::unordered_map<std::string, uint32_t> m_string_to_idx;
+};
+
+class StringPoolRefRemappingVisitor : public arsc::StringPoolRefVisitor {
+ public:
+  ~StringPoolRefRemappingVisitor() override {}
+
+  explicit StringPoolRefRemappingVisitor(
+      const std::unordered_map<uint32_t, uint32_t>& old_to_new)
+      : m_old_to_new(old_to_new) {}
+
+  void remap_impl(const uint32_t& idx,
+                  const std::function<void(const uint32_t&)>& setter) {
+    auto search = m_old_to_new.find(idx);
+    if (search != m_old_to_new.end()) {
+      auto new_value = search->second;
+      TRACE(RES, 9, "REMAP IDX %u -> %u", idx, new_value);
+      setter(htodl(new_value));
+    }
+  }
+
+  bool visit_global_strings_ref(android::Res_value* value) override {
+    TRACE(RES, 9, "visit string Res_value, offset = %ld",
+          get_file_offset(value));
+    remap_impl(dtohl(value->data),
+               [&value](const uint32_t new_value) { value->data = new_value; });
+    return true;
+  }
+
+ private:
+  const std::unordered_map<uint32_t, uint32_t>& m_old_to_new;
+};
+} // namespace
+
+void ResourcesArscFile::remap_file_paths_and_serialize(
+    const std::vector<std::string>& /* resource_files */,
+    const std::unordered_map<std::string, std::string>& old_to_new) {
+  TRACE(RES, 9, "BEGIN GlobalStringPoolReader");
+  GlobalStringPoolReader string_reader;
+  string_reader.visit(m_f.data(), m_arsc_len);
+  std::unordered_map<uint32_t, uint32_t> old_to_new_idx;
+  for (auto& pair : old_to_new) {
+    old_to_new_idx.emplace(string_reader.get_string_idx(pair.first),
+                           string_reader.get_string_idx(pair.second));
+  }
+  TRACE(RES, 9, "BEGIN StringPoolRefRemappingVisitor");
+  StringPoolRefRemappingVisitor remapper(old_to_new_idx);
+  // Note: file is opened for writing. Visitor will in place change the data
+  // (without altering any data sizes).
+  remapper.visit(m_f.data(), m_arsc_len);
 }
 
 std::vector<std::string> ResourcesArscFile::get_files_by_rid(
