@@ -225,14 +225,95 @@ struct LocalStats {
   size_t inconcrete_overridden_methods{0};
 };
 
+struct SimpleOrdering {
+  using Map = std::unordered_map<const DexMethodRef*, double>;
+  Map map;
+  SimpleOrdering() = default;
+  explicit SimpleOrdering(const method_profiles::MethodProfiles& profiles)
+      : map(create_call_count_ordering(profiles)) {}
+
+  double get_order(const DexMethodRef* m) const {
+    auto it = map.find(m);
+    if (it == map.end()) {
+      return 0;
+    }
+    return it->second;
+  }
+
+  static Map create_call_count_ordering(
+      const method_profiles::MethodProfiles& profiles) {
+    std::unordered_map<const DexMethodRef*, std::pair<double, double>>
+        call_counts;
+    // Fill first part with cold-start.
+    for (auto& p : profiles.method_stats(method_profiles::COLD_START)) {
+      call_counts.emplace(p.first, std::make_pair(p.second.call_count, 0.0));
+    }
+    // Second part with maximum of other interactions.
+    for (auto& p : profiles.all_interactions()) {
+      for (auto& q : p.second) {
+        auto& cc = call_counts[q.first].second;
+        cc = std::max(cc, q.second.call_count);
+      }
+    }
+
+    std::vector<const DexMethodRef*> profile_methods;
+    profile_methods.reserve(call_counts.size());
+    for (auto& p : call_counts) {
+      profile_methods.push_back(p.first);
+    }
+
+    std::sort(profile_methods.begin(), profile_methods.end(),
+              [&call_counts](const auto* lhs, const auto* rhs) {
+                auto& lhs_p = call_counts.at(lhs);
+                auto& rhs_p = call_counts.at(rhs);
+
+                if (lhs_p.first != rhs_p.first) {
+                  return lhs_p.first < rhs_p.first;
+                }
+
+                if (lhs_p.second != rhs_p.second) {
+                  return lhs_p.second < rhs_p.second;
+                }
+
+                return compare_dexmethods(lhs, rhs);
+              });
+
+    SimpleOrdering::Map ret;
+    for (size_t i = 0; i < profile_methods.size(); ++i) {
+      // +1 to have 0 empty for methods without profile.
+      ret.emplace(profile_methods[i],
+                  ((double)i + 1) / (profile_methods.size() + 1));
+    }
+
+    return ret;
+  }
+};
+
+struct SimpleOrderingProvider {
+  mutable std::once_flag flag;
+  const method_profiles::MethodProfiles& profiles;
+  mutable SimpleOrdering ordering;
+
+  explicit SimpleOrderingProvider(
+      const method_profiles::MethodProfiles& profiles)
+      : profiles(profiles) {}
+
+  const SimpleOrdering& operator()() const {
+    std::call_once(flag, [&]() { ordering = SimpleOrdering(profiles); });
+    return ordering;
+  }
+};
+
+template <typename OrderingProvider>
 class MergePairsBuilder {
   using MergablesMap = std::unordered_map<const DexMethod*, const DexMethod*>;
 
  public:
   using PairSeq = std::vector<std::pair<const DexMethod*, const DexMethod*>>;
 
-  explicit MergePairsBuilder(const VirtualScope* virtual_scope)
-      : virtual_scope(virtual_scope) {}
+  MergePairsBuilder(const VirtualScope* virtual_scope,
+                    const OrderingProvider& ordering_provider)
+      : virtual_scope(virtual_scope), m_ordering_provider(ordering_provider) {}
 
   boost::optional<std::pair<LocalStats, PairSeq>> build(
       const std::unordered_set<const DexMethod*>& mergeable_methods,
@@ -349,68 +430,6 @@ class MergePairsBuilder {
     return mergeable_pairs_map;
   }
 
-  struct SimpleOrdering {
-    using Map = std::unordered_map<const DexMethodRef*, double>;
-    Map map;
-    explicit SimpleOrdering(Map map) : map(std::move(map)) {}
-
-    double get_order(const DexMethodRef* m) const {
-      auto it = map.find(m);
-      if (it == map.end()) {
-        return 0;
-      }
-      return it->second;
-    }
-  };
-
-  static SimpleOrdering create_call_count_ordering(
-      const method_profiles::MethodProfiles& profiles) {
-    std::unordered_map<const DexMethodRef*, std::pair<double, double>>
-        call_counts;
-    // Fill first part with cold-start.
-    for (auto& p : profiles.method_stats(method_profiles::COLD_START)) {
-      call_counts.emplace(p.first, std::make_pair(p.second.call_count, 0.0));
-    }
-    // Second part with maximum of other interactions.
-    for (auto& p : profiles.all_interactions()) {
-      for (auto& q : p.second) {
-        auto& cc = call_counts[q.first].second;
-        cc = std::max(cc, q.second.call_count);
-      }
-    }
-
-    std::vector<const DexMethodRef*> profile_methods;
-    profile_methods.reserve(call_counts.size());
-    for (auto& p : call_counts) {
-      profile_methods.push_back(p.first);
-    }
-
-    std::sort(profile_methods.begin(), profile_methods.end(),
-              [&call_counts](const auto* lhs, const auto* rhs) {
-                auto& lhs_p = call_counts.at(lhs);
-                auto& rhs_p = call_counts.at(rhs);
-
-                if (lhs_p.first != rhs_p.first) {
-                  return lhs_p.first < rhs_p.first;
-                }
-
-                if (lhs_p.second != rhs_p.second) {
-                  return lhs_p.second < rhs_p.second;
-                }
-
-                return compare_dexmethods(lhs, rhs);
-              });
-
-    SimpleOrdering::Map ret;
-    for (size_t i = 0; i < profile_methods.size(); ++i) {
-      // +1 to have 0 empty for methods without profile.
-      ret.emplace(profile_methods[i],
-                  ((double)i + 1) / (profile_methods.size() + 1));
-    }
-
-    return SimpleOrdering{ret};
-  }
-
   PairSeq create_merge_pair_sequence(
       const MergablesMap& mergeable_pairs_map,
       const method_profiles::MethodProfiles& profiles,
@@ -424,16 +443,6 @@ class MergePairsBuilder {
     std::unordered_map<const DexMethod*,
                        std::vector<std::pair<const DexMethod*, double>>>
         override_map;
-
-    std::optional<SimpleOrdering> simple_ordering = std::nullopt;
-    auto get_simple_ordering = [&profiles,
-                                &simple_ordering]() -> const SimpleOrdering& {
-      if (simple_ordering) {
-        return *simple_ordering;
-      }
-      simple_ordering = create_call_count_ordering(profiles);
-      return *simple_ordering;
-    };
 
     self_recursive_fn(
         [&](auto self, const DexType* t) {
@@ -503,7 +512,7 @@ class MergePairsBuilder {
                                kAppear100Buckets);
             }
 
-            double call_part = get_simple_ordering().get_order(t_method);
+            double call_part = m_ordering_provider().get_order(t_method);
             order_value = appear_part + call_part;
             // Summing up does not make much sense here and would overvalue
             // multiple appear subcalls over single but high-call-count ones.
@@ -569,6 +578,7 @@ class MergePairsBuilder {
   }
 
   const VirtualScope* virtual_scope;
+  const OrderingProvider& m_ordering_provider;
   std::vector<DexMethod*> methods;
   std::unordered_map<const DexType*, DexMethod*> types_to_methods;
   std::unordered_map<const DexType*, std::vector<DexType*>> subtypes;
@@ -593,9 +603,10 @@ VirtualMerging::compute_mergeable_pairs_by_virtual_scopes(
   ConcurrentMap<const VirtualScope*,
                 std::vector<std::pair<const DexMethod*, const DexMethod*>>>
       mergeable_pairs_by_virtual_scopes;
+  SimpleOrderingProvider ordering_provider{profiles};
   walk::parallel::virtual_scopes(
       virtual_scopes, [&](const VirtualScope* virtual_scope) {
-        MergePairsBuilder mpb(virtual_scope);
+        MergePairsBuilder mpb(virtual_scope, ordering_provider);
         auto res = mpb.build(m_mergeable_scope_methods.at(virtual_scope),
                              m_xstores, m_xdexes, profiles, strategy);
         if (!res) {
