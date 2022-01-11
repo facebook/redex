@@ -255,8 +255,8 @@ RemoveNullcheckStringArg::Stats RemoveNullcheckStringArg::change_in_cfg(
   Stats stats{};
   cfg::CFGMutation m(cfg);
   auto params = cfg.get_param_instructions();
-  std::unordered_map<size_t, uint32_t> param_index;
-  uint32_t arg_index = is_virtual ? -1 : 0;
+  std::unordered_map<size_t, int> param_index;
+  int arg_index = is_virtual ? -1 : 0;
 
   reaching_defs::MoveAwareFixpointIterator reaching_defs_iter(cfg);
   reaching_defs_iter.run({});
@@ -322,6 +322,10 @@ RemoveNullcheckStringArg::Stats RemoveNullcheckStringArg::change_in_cfg(
         }
 
         auto index = param_iter->second;
+        // If for any reason we have assertion on this pointer
+        if (index == -1) {
+          continue;
+        }
         auto tmp_reg = cfg.allocate_temp();
         IRInstruction* cst_insn = new IRInstruction(OPCODE_CONST);
         cst_insn->set_literal(index)->set_dest(tmp_reg);
