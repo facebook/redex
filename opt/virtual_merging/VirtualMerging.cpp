@@ -1182,6 +1182,7 @@ void VirtualMerging::remap_invoke_virtuals() {
 
 void VirtualMerging::run(const method_profiles::MethodProfiles& profiles,
                          Strategy strategy,
+                         Strategy ab_strategy,
                          ab_test::ABExperimentContext* ab_experiment_context) {
   TRACE(VM, 1, "[VM] Finding unsupported virtual scopes");
   find_unsupported_virtual_scopes();
@@ -1196,7 +1197,7 @@ void VirtualMerging::run(const method_profiles::MethodProfiles& profiles,
   if (ab_experiment_context != nullptr &&
       !ab_experiment_context->use_control()) {
     exp_scopes = compute_mergeable_pairs_by_virtual_scopes(
-        profiles, Strategy::kLexicographical, stats_copy);
+        profiles, ab_strategy, stats_copy);
     redex_assert(m_stats == stats_copy);
   }
 
@@ -1218,10 +1219,27 @@ void VirtualMergingPass::bind_config() {
   bind("max_overriding_method_instructions",
        default_max_overriding_method_instructions,
        m_max_overriding_method_instructions);
-  bind("use_profiles", true, m_use_profiles);
+  std::string strategy;
+  bind("strategy", "call-count", strategy);
+  std::string ab_strategy;
+  bind("ab_strategy", "lexicographical", ab_strategy);
 
-  after_configuration(
-      [this] { always_assert(m_max_overriding_method_instructions >= 0); });
+  after_configuration([this, strategy, ab_strategy] {
+    always_assert(m_max_overriding_method_instructions >= 0);
+
+    auto parse_strategy = [](const std::string& s) {
+      if (s == "call-count") {
+        return VirtualMerging::Strategy::kProfileCallCount;
+      }
+      if (s == "lexicographical") {
+        return VirtualMerging::Strategy::kLexicographical;
+      }
+      always_assert_log(false, "Unknown strategy %s", s.c_str());
+    };
+
+    m_strategy = parse_strategy(strategy);
+    m_ab_strategy = parse_strategy(ab_strategy);
+  });
 }
 
 void VirtualMergingPass::run_pass(DexStoresVector& stores,
@@ -1257,8 +1275,8 @@ void VirtualMergingPass::run_pass(DexStoresVector& stores,
   VirtualMerging vm(stores, inliner_config,
                     m_max_overriding_method_instructions, min_sdk_api);
   vm.run(conf.get_method_profiles(),
-         m_use_profiles ? VirtualMerging::Strategy::kProfileCallCount
-                        : VirtualMerging::Strategy::kLexicographical,
+         m_strategy,
+         m_ab_strategy,
          ab_experiment_context.get());
   auto stats = vm.get_stats();
 
