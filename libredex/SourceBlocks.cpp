@@ -561,7 +561,6 @@ constexpr std::array<std::pair<std::string_view, CounterFnPtr>, 3>
     }};
 
 struct SourceBlocksStats {
-  size_t methods_with_code{0};
   size_t methods_with_sbs{0};
 
   std::array<size_t, gCounters.size()> global{};
@@ -575,7 +574,6 @@ struct SourceBlocksStats {
       non_entry_min_max_methods{};
 
   SourceBlocksStats& operator+=(const SourceBlocksStats& that) {
-    methods_with_code += that.methods_with_code;
     methods_with_sbs += that.methods_with_sbs;
 
     for (size_t i = 0; i != global.size(); ++i) {
@@ -625,8 +623,6 @@ struct SourceBlocksStats {
   }
 
   void fill_derived(const DexMethod* m) {
-    methods_with_code = 1;
-
     static_assert(gCounters[1].first == "~blocks~with~source~blocks");
     methods_with_sbs = global[1] > 0 ? 1 : 0;
 
@@ -687,7 +683,6 @@ void track_source_block_coverage(ScopedMetrics& sm,
 
   sm.set_metric("~consistency~check~violations", consistency_check_violations);
 
-  sm.set_metric("~assessment~methods~with~code", stats.methods_with_code);
   sm.set_metric("~assessment~methods~with~sbs", stats.methods_with_sbs);
 
   for (size_t i = 0; i != gCounters.size(); ++i) {

@@ -309,6 +309,26 @@ DexAssessment DexScopeAssessor::run() {
                            }
                          });
 
+  std::atomic<size_t> num_methods{0};
+  std::atomic<size_t> methods_with_code{0};
+  std::atomic<size_t> num_instructions{0};
+  std::atomic<size_t> sum_opcodes{0};
+  walk::parallel::methods(
+      m_scope,
+      [&num_methods, &methods_with_code, &num_instructions, &sum_opcodes](
+          auto* m) {
+        num_methods.fetch_add(1, std::memory_order_relaxed);
+        auto code = m->get_code();
+        if (code == nullptr) {
+          return;
+        }
+        methods_with_code.fetch_add(1, std::memory_order_relaxed);
+        num_instructions.fetch_add(code->count_opcodes(),
+                                   std::memory_order_relaxed);
+        sum_opcodes.fetch_add(code->sum_opcode_sizes(),
+                              std::memory_order_relaxed);
+      });
+
   dex_position::Assessor dex_position_assessor;
   std::atomic<size_t> methods_without_deobfuscated_name{0};
   auto combined_assessment = walk::parallel::methods<Assessment>(
@@ -361,6 +381,11 @@ DexAssessment DexScopeAssessor::run() {
       fields_without_deobfuscated_name.load();
   res["without_deobfuscated_names.classes"] =
       classes_without_deobfuscated_name.load();
+
+  res["num_methods"] = num_methods.load();
+  res["methods~with~code"] = methods_with_code.load();
+  res["num_instructions"] = num_instructions.load();
+  res["sum_opcodes"] = sum_opcodes.load();
 
   if (combined_assessment.has_problems()) {
     TRACE(ASSESSOR, 1, "[scope assessor] %s", to_string(res).c_str());
