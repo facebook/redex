@@ -91,6 +91,8 @@ constexpr const char* METRIC_REMOVED_VIRTUAL_METHODS =
 
 constexpr const char* METRIC_EXPERIMENT_METHODS = "num_experiment_methods";
 
+constexpr size_t kAppear100Buckets = 10;
+
 } // namespace
 
 VirtualMerging::VirtualMerging(DexStoresVector& stores,
@@ -343,6 +345,68 @@ class MergePairsBuilder {
     return mergeable_pairs_map;
   }
 
+  struct SimpleOrdering {
+    using Map = std::unordered_map<const DexMethodRef*, double>;
+    Map map;
+    explicit SimpleOrdering(Map map) : map(std::move(map)) {}
+
+    double get_order(const DexMethodRef* m) const {
+      auto it = map.find(m);
+      if (it == map.end()) {
+        return 0;
+      }
+      return it->second;
+    }
+  };
+
+  static SimpleOrdering create_call_count_ordering(
+      const method_profiles::MethodProfiles& profiles) {
+    std::unordered_map<const DexMethodRef*, std::pair<double, double>>
+        call_counts;
+    // Fill first part with cold-start.
+    for (auto& p : profiles.method_stats(method_profiles::COLD_START)) {
+      call_counts.emplace(p.first, std::make_pair(p.second.call_count, 0.0));
+    }
+    // Second part with maximum of other interactions.
+    for (auto& p : profiles.all_interactions()) {
+      for (auto& q : p.second) {
+        auto& cc = call_counts[q.first].second;
+        cc = std::max(cc, q.second.call_count);
+      }
+    }
+
+    std::vector<const DexMethodRef*> profile_methods;
+    profile_methods.reserve(call_counts.size());
+    for (auto& p : call_counts) {
+      profile_methods.push_back(p.first);
+    }
+
+    std::sort(profile_methods.begin(), profile_methods.end(),
+              [&call_counts](const auto* lhs, const auto* rhs) {
+                auto& lhs_p = call_counts.at(lhs);
+                auto& rhs_p = call_counts.at(rhs);
+
+                if (lhs_p.first != rhs_p.first) {
+                  return lhs_p.first < rhs_p.first;
+                }
+
+                if (lhs_p.second != rhs_p.second) {
+                  return lhs_p.second < rhs_p.second;
+                }
+
+                return compare_dexmethods(lhs, rhs);
+              });
+
+    SimpleOrdering::Map ret;
+    for (size_t i = 0; i < profile_methods.size(); ++i) {
+      // +1 to have 0 empty for methods without profile.
+      ret.emplace(profile_methods[i],
+                  ((double)i + 1) / (profile_methods.size() + 1));
+    }
+
+    return SimpleOrdering{ret};
+  }
+
   PairSeq create_merge_pair_sequence(
       const MergablesMap& mergeable_pairs_map,
       const method_profiles::MethodProfiles& profiles,
@@ -356,6 +420,17 @@ class MergePairsBuilder {
     std::unordered_map<const DexMethod*,
                        std::vector<std::pair<const DexMethod*, double>>>
         override_map;
+
+    std::optional<SimpleOrdering> simple_ordering = std::nullopt;
+    auto get_simple_ordering = [&profiles,
+                                &simple_ordering]() -> const SimpleOrdering& {
+      if (simple_ordering) {
+        return *simple_ordering;
+      }
+      simple_ordering = create_call_count_ordering(profiles);
+      return *simple_ordering;
+    };
+
     self_recursive_fn(
         [&](auto self, const DexType* t) {
           if (visited.count(t)) {
@@ -379,7 +454,14 @@ class MergePairsBuilder {
             }
             t_method = t_method_it->second;
           }
+
           double order_value = 0;
+          enum OrderMix {
+            kSum,
+            kMax,
+          };
+          OrderMix order_mix = OrderMix::kSum;
+
           switch (strategy) {
           case VirtualMerging::Strategy::kLexicographical:
             break;
@@ -389,6 +471,41 @@ class MergePairsBuilder {
               order_value = mstats->call_count;
             }
             break;
+          case VirtualMerging::Strategy::kProfileAppearBucketsAndCallCount: {
+            // Using appear100 with buckets, and adding in normalized
+            // call-count.
+            //
+            // To merge interactions, give precedence to cold-start for bucket.
+            // If a method is not executed during cold-start, sort it into the
+            // next lower bucket.
+            auto cold_stats =
+                profiles.get_method_stat(method_profiles::COLD_START, t_method);
+            double appear_part;
+            if (cold_stats) {
+              appear_part =
+                  std::floor(cold_stats->appear_percent / kAppear100Buckets) *
+                  kAppear100Buckets;
+            } else {
+              double max_appear{0};
+              for (auto& i : profiles.all_interactions()) {
+                auto it = i.second.find(t_method);
+                if (it != i.second.end()) {
+                  max_appear = std::max(max_appear, it->second.appear_percent);
+                }
+              }
+              appear_part =
+                  std::max(0.0,
+                           std::floor(max_appear / kAppear100Buckets - 1) *
+                               kAppear100Buckets);
+            }
+
+            double call_part = get_simple_ordering().get_order(t_method);
+            order_value = appear_part + call_part;
+            // Summing up does not make much sense here and would overvalue
+            // multiple appear subcalls over single but high-call-count ones.
+            order_mix = OrderMix::kMax;
+            break;
+          }
           }
 
           {
@@ -412,7 +529,14 @@ class MergePairsBuilder {
                 redex_assert(assert_it != mergeable_pairs_map.end() &&
                              assert_it->second == t_method);
                 mergeable_pairs.emplace_back(t_method, p.first);
-                order_value += p.second;
+                switch (order_mix) {
+                case OrderMix::kSum:
+                  order_value += p.second;
+                  break;
+                case OrderMix::kMax:
+                  order_value = std::max(order_value, p.second);
+                  break;
+                }
               }
               // Clear the vector. Leave it empty for the assert above
               // (to ensure things are not handled twice).
@@ -1233,6 +1357,9 @@ void VirtualMergingPass::bind_config() {
       }
       if (s == "lexicographical") {
         return VirtualMerging::Strategy::kLexicographical;
+      }
+      if (s == "appear-buckets") {
+        return VirtualMerging::Strategy::kProfileAppearBucketsAndCallCount;
       }
       always_assert_log(false, "Unknown strategy %s", s.c_str());
     };

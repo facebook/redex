@@ -98,6 +98,7 @@ class VirtualMerging {
   enum class Strategy {
     kLexicographical,
     kProfileCallCount,
+    kProfileAppearBucketsAndCallCount,
   };
 
   VirtualMerging(DexStoresVector&,
