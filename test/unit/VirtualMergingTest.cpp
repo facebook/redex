@@ -111,6 +111,26 @@ class VirtualMergingTest : public RedexTest {
 
   const DexType* get_type(size_t idx) { return types.at(idx)->get_type(); }
 
+  struct OptFail {
+    std::optional<::testing::AssertionResult> fail{std::nullopt};
+
+    ::testing::AssertionResult& add_fail() {
+      if (!fail) {
+        fail = ::testing::AssertionFailure();
+      }
+      return *fail;
+    }
+
+    operator bool() const { return fail.operator bool(); }
+
+    ::testing::AssertionResult result() {
+      if (fail) {
+        return *fail;
+      }
+      return ::testing::AssertionSuccess();
+    }
+  };
+
   // A dominator check tests ordering without having to be totally explicit and
   // at the whim of block linearization.
   ::testing::AssertionResult instanceof_dominators(
@@ -158,13 +178,7 @@ class VirtualMergingTest : public RedexTest {
 
     auto dom = dominators::SimpleFastDominators<cfg::GraphInterface>(*cfg);
 
-    std::optional<::testing::AssertionResult> fail{std::nullopt};
-    auto add_fail = [&]() -> ::testing::AssertionResult& {
-      if (!fail) {
-        fail = ::testing::AssertionFailure();
-      }
-      return *fail;
-    };
+    OptFail fail;
 
     for (const auto& v : order) {
       cfg::Block* last_block = nullptr;
@@ -177,8 +191,9 @@ class VirtualMergingTest : public RedexTest {
           continue;
         }
         if (last_block == b) {
-          add_fail() << "\n"
-                     << show(last_type) << " & " << show(t) << " in same block";
+          fail.add_fail() << "\n"
+                          << show(last_type) << " & " << show(t)
+                          << " in same block";
           continue;
         }
 
@@ -191,8 +206,9 @@ class VirtualMergingTest : public RedexTest {
         }
 
         if (last_block != b) {
-          add_fail() << "\n"
-                     << show(last_type) << " does not dominate " << show(t);
+          fail.add_fail() << "\n"
+                          << show(last_type) << " does not dominate "
+                          << show(t);
           continue;
         }
 
@@ -201,10 +217,25 @@ class VirtualMergingTest : public RedexTest {
       }
     }
 
-    if (fail) {
-      return *fail;
+    return fail.result();
+  }
+
+  // Test that all `if` instructions after `instance-of` or the given opcode.
+  ::testing::AssertionResult test_if_direction(const DexMethod* m,
+                                               IROpcode expected) {
+    cfg::ScopedCFG cfg(const_cast<DexMethod*>(m)->get_code());
+    OptFail fail;
+    for (auto b : cfg->blocks()) {
+      // Check if there's an INSTANCE_OF here.
+      if (!b->contains_opcode(OPCODE_INSTANCE_OF)) {
+        continue;
+      }
+      if (b->get_last_insn()->insn->opcode() != expected) {
+        fail.add_fail() << "\nBlock " << b->id() << " ends with "
+                        << show(b->get_last_insn()->insn);
+      }
     }
-    return ::testing::AssertionSuccess();
+    return fail.result();
   }
 
  protected:
@@ -235,7 +266,8 @@ TEST_F(VirtualMergingTest, MergedFooNoProfiles) {
   VirtualMerging vm{stores, inliner_config, 100};
   vm.run(method_profiles::MethodProfiles::initialize(
              method_profiles::COLD_START, std::move(profile_data)),
-         VirtualMerging::Strategy::kLexicographical);
+         VirtualMerging::Strategy::kLexicographical,
+         VirtualMerging::InsertionStrategy::kJumpTo);
 
   auto a_foo = get_method(0, "foo");
   ASSERT_NE(nullptr, a_foo);
@@ -248,6 +280,7 @@ TEST_F(VirtualMergingTest, MergedFooNoProfiles) {
           {get_type(23), get_type(22), get_type(21)}, // A2 sub-block
           {get_type(33), get_type(32), get_type(31)}, // A3 sub-block
       }));
+  EXPECT_TRUE(test_if_direction(a_foo, OPCODE_IF_NEZ));
 }
 
 TEST_F(VirtualMergingTest, MergedBarNoProfiles) {
@@ -271,7 +304,8 @@ TEST_F(VirtualMergingTest, MergedBarNoProfiles) {
   VirtualMerging vm{stores, inliner_config, 100};
   vm.run(method_profiles::MethodProfiles::initialize(
              method_profiles::COLD_START, std::move(profile_data)),
-         VirtualMerging::Strategy::kLexicographical);
+         VirtualMerging::Strategy::kLexicographical,
+         VirtualMerging::InsertionStrategy::kJumpTo);
 
   auto a_bar = get_method(0, "bar");
   ASSERT_NE(nullptr, a_bar);
@@ -307,7 +341,8 @@ TEST_F(VirtualMergingTest, MergedFooProfiles) {
   VirtualMerging vm{stores, inliner_config, 100};
   vm.run(method_profiles::MethodProfiles::initialize(
              method_profiles::COLD_START, std::move(profile_data)),
-         VirtualMerging::Strategy::kProfileCallCount);
+         VirtualMerging::Strategy::kProfileCallCount,
+         VirtualMerging::InsertionStrategy::kJumpTo);
 
   auto a_foo = get_method(0, "foo");
   ASSERT_NE(nullptr, a_foo);
@@ -343,7 +378,8 @@ TEST_F(VirtualMergingTest, MergedBarFooProfiles) {
   VirtualMerging vm{stores, inliner_config, 100};
   vm.run(method_profiles::MethodProfiles::initialize(
              method_profiles::COLD_START, std::move(profile_data)),
-         VirtualMerging::Strategy::kProfileCallCount);
+         VirtualMerging::Strategy::kProfileCallCount,
+         VirtualMerging::InsertionStrategy::kJumpTo);
 
   auto a_bar = get_method(0, "bar");
   ASSERT_NE(nullptr, a_bar);
@@ -380,7 +416,8 @@ TEST_F(VirtualMergingTest, MergedFooProfilesAppearBucketsAllAppear100) {
   VirtualMerging vm{stores, inliner_config, 100};
   vm.run(method_profiles::MethodProfiles::initialize(
              method_profiles::COLD_START, std::move(profile_data)),
-         VirtualMerging::Strategy::kProfileCallCount);
+         VirtualMerging::Strategy::kProfileCallCount,
+         VirtualMerging::InsertionStrategy::kJumpTo);
 
   auto a_foo = get_method(0, "foo");
   ASSERT_NE(nullptr, a_foo);
@@ -418,7 +455,8 @@ TEST_F(VirtualMergingTest, MergedFooProfilesAppearBucketsDiffAppear100) {
   VirtualMerging vm{stores, inliner_config, 100};
   vm.run(method_profiles::MethodProfiles::initialize(
              method_profiles::COLD_START, std::move(profile_data)),
-         VirtualMerging::Strategy::kProfileAppearBucketsAndCallCount);
+         VirtualMerging::Strategy::kProfileAppearBucketsAndCallCount,
+         VirtualMerging::InsertionStrategy::kJumpTo);
 
   auto a_foo = get_method(0, "foo");
   ASSERT_NE(nullptr, a_foo);
@@ -431,4 +469,42 @@ TEST_F(VirtualMergingTest, MergedFooProfilesAppearBucketsDiffAppear100) {
           {get_type(21), get_type(22), get_type(23)}, // A2 sub-block
           {get_type(33), get_type(32), get_type(31)}, // A3 sub-block
       }));
+}
+
+TEST_F(VirtualMergingTest, MergedFooNoProfilesFallthrough) {
+  auto scope = build_class_scope(stores);
+
+  api::LevelChecker::init(19, scope);
+  inliner::InlinerConfig inliner_config;
+  inliner_config.populate(scope);
+
+  std::unordered_map<const DexMethodRef*, method_profiles::Stats> profile_data;
+  auto make_call_count_stat = [](double call_count) {
+    method_profiles::Stats stats{};
+    stats.call_count = call_count;
+    return stats;
+  };
+  // Normal order 3->2->1, reorder to 2->1->3.
+  profile_data.emplace(get_method(23, "foo"), make_call_count_stat(100));
+  profile_data.emplace(get_method(21, "foo"), make_call_count_stat(50));
+  profile_data.emplace(get_method(1, "foo"), make_call_count_stat(100));
+
+  VirtualMerging vm{stores, inliner_config, 100};
+  vm.run(method_profiles::MethodProfiles::initialize(
+             method_profiles::COLD_START, std::move(profile_data)),
+         VirtualMerging::Strategy::kLexicographical,
+         VirtualMerging::InsertionStrategy::kFallthrough);
+
+  auto a_foo = get_method(0, "foo");
+  ASSERT_NE(nullptr, a_foo);
+
+  EXPECT_TRUE(instanceof_dominators(
+      a_foo,
+      {
+          {get_type(3), get_type(2), get_type(1)}, // Head block.
+          {get_type(13), get_type(12), get_type(11)}, // A1 sub-block
+          {get_type(23), get_type(22), get_type(21)}, // A2 sub-block
+          {get_type(33), get_type(32), get_type(31)}, // A3 sub-block
+      }));
+  EXPECT_TRUE(test_if_direction(a_foo, OPCODE_IF_EQZ));
 }
