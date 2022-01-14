@@ -119,6 +119,8 @@ struct SourceBlock {
   DexMethodRef* src{nullptr};
   std::unique_ptr<SourceBlock> next;
   // Large methods exist, but a 32-bit integer is safe.
+  // Use the maximum for things that we do not want to emit at this point.
+  static constexpr uint32_t kSyntheticId = std::numeric_limits<uint32_t>::max();
   uint32_t id{0};
   // Float has enough precision.
   class Val {

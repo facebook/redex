@@ -340,6 +340,10 @@ void write_metadata(const ConfigFiles& cfg,
 
       bool first2 = true;
       for (auto* sb : v) {
+        // Do not list synthetic source blocks.
+        if (sb->id == SourceBlock::kSyntheticId) {
+          continue;
+        }
         if (first2) {
           first2 = false;
         } else {
