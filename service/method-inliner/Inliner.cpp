@@ -182,10 +182,12 @@ MultiMethodInliner::MultiMethodInliner(
       });
   m_x_dex_callees.insert(concurrent_x_dex_callees.begin(),
                          concurrent_x_dex_callees.end());
-  callee_caller.insert(concurrent_callee_caller.begin(),
-                       concurrent_callee_caller.end());
-  caller_callee.insert(concurrent_caller_callee.begin(),
-                       concurrent_caller_callee.end());
+  for (auto& p : concurrent_callee_caller) {
+    callee_caller.insert(std::move(p));
+  }
+  for (auto& p : concurrent_caller_callee) {
+    caller_callee.insert(std::move(p));
+  }
   for (const auto& callee_callers : true_virtual_callers) {
     auto callee = callee_callers.first;
     for (const auto& caller_insns : callee_callers.second.caller_insns) {

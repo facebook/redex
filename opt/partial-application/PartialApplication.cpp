@@ -322,16 +322,20 @@ void gather_caller_callees(
     }
   });
 
-  callee_caller->insert(concurrent_callee_caller.begin(),
-                        concurrent_callee_caller.end());
-  caller_callee->insert(concurrent_caller_callee.begin(),
-                        concurrent_caller_callee.end());
+  for (auto& p : concurrent_callee_caller) {
+    callee_caller->insert(std::move(p));
+  }
+  for (auto& p : concurrent_caller_callee) {
+    caller_callee->insert(std::move(p));
+  }
   excluded_invoke_insns->insert(concurrent_excluded_invoke_insns.begin(),
                                 concurrent_excluded_invoke_insns.end());
-  arg_exclusivity->insert(concurrent_arg_exclusivity.begin(),
-                          concurrent_arg_exclusivity.end());
-  callee_caller_classes->insert(concurrent_callee_caller_classes.begin(),
-                                concurrent_callee_caller_classes.end());
+  for (auto& p : concurrent_arg_exclusivity) {
+    arg_exclusivity->insert(std::move(p));
+  }
+  for (auto& p : concurrent_callee_caller_classes) {
+    callee_caller_classes->insert(std::move(p));
+  }
 }
 
 using InvokeCallSiteSummaries =

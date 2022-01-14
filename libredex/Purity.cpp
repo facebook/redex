@@ -451,12 +451,14 @@ size_t compute_locations_closure(
   walk::parallel::methods(scope, [&](DexMethod* method) {
     auto lads = init_func(method);
     if (lads) {
-      concurrent_method_lads.emplace(method, *lads);
+      concurrent_method_lads.emplace(method, std::move(*lads));
     }
   });
 
-  std::unordered_map<const DexMethod*, LocationsAndDependencies> method_lads(
-      concurrent_method_lads.begin(), concurrent_method_lads.end());
+  std::unordered_map<const DexMethod*, LocationsAndDependencies> method_lads;
+  for (auto& p : concurrent_method_lads) {
+    method_lads.insert(std::move(p));
+  }
 
   // 2. Compute inverse dependencies so that we know what needs to be recomputed
   // during the fixpoint computation, and determine set of methods that are
@@ -686,7 +688,7 @@ size_t compute_locations_closure(
   // For all methods which have a known set of locations at this point,
   // persist that information
   for (auto& p : method_lads) {
-    result->emplace(p.first, p.second.locations);
+    result->emplace(p.first, std::move(p.second.locations));
   }
 
   return iterations;
