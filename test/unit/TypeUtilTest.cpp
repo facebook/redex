@@ -129,3 +129,24 @@ TEST_F(TypeUtilTest, is_valid_array) {
   EXPECT_FALSE(is_valid("[L;"));
   EXPECT_FALSE(is_valid("[;"));
 }
+
+TEST_F(TypeUtilTest, check_cast_array) {
+  using namespace type;
+
+  EXPECT_FALSE(check_cast(DexType::make_type("[I"), DexType::make_type("[J")));
+  EXPECT_FALSE(check_cast(DexType::make_type("[Z"), DexType::make_type("[B")));
+  EXPECT_FALSE(check_cast(DexType::make_type("[F"), DexType::make_type("[D")));
+  EXPECT_TRUE(check_cast(DexType::make_type("[I"),
+                         DexType::make_type("Ljava/lang/Object;")));
+
+  EXPECT_TRUE(check_cast(DexType::make_type("[Ljava/lang/Object;"),
+                         DexType::make_type("[Ljava/lang/Object;")));
+  EXPECT_TRUE(check_cast(DexType::make_type("[Ljava/lang/Object;"),
+                         DexType::make_type("Ljava/lang/Object;")));
+  EXPECT_TRUE(check_cast(DexType::make_type("[[Ljava/lang/Object;"),
+                         DexType::make_type("[[Ljava/lang/Object;")));
+  EXPECT_FALSE(check_cast(DexType::make_type("[Ljava/lang/Object;"),
+                          DexType::make_type("[[Ljava/lang/Object;")));
+  EXPECT_TRUE(check_cast(DexType::make_type("[[Ljava/lang/Object;"),
+                         DexType::make_type("[Ljava/lang/Object;")));
+}

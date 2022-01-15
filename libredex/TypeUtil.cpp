@@ -214,10 +214,10 @@ bool check_cast(const DexType* type, const DexType* base_type) {
   if (type == base_type) return true;
   if (type != nullptr && is_array(type)) {
     if (base_type != nullptr && is_array(base_type)) {
-      auto element_type = get_array_element_type(type);
-      auto element_base_type = get_array_element_type(base_type);
-      if (!is_primitive(element_type) && !is_primitive(element_base_type) &&
-          check_cast(element_type, element_base_type)) {
+      auto component_type = get_array_component_type(type);
+      auto component_base_type = get_array_component_type(base_type);
+      if (!is_primitive(component_type) && !is_primitive(component_base_type) &&
+          check_cast(component_type, component_base_type)) {
         return true;
       }
     }
