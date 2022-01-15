@@ -221,20 +221,23 @@ TEST_F(CopyPropagationTest, non_zero_constant_cannot_have_object_type_demand) {
   // if-s on non-zero constants cannot effectively include Object in the
   // type demand, reducing the type demand to Int, allowing for more
   // copy-propagation
-  auto code = assembler::ircode_from_string(R"(
-    (
+  auto method = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.bar:()V"
+     (
       (const v0 42)
       (if-eqz v0 :L1) ; must be int, as it's non-zero
       (const v0 42)
       (add-int v1 v0 v0) ; int demand
       (:L1)
       (return-void)
+     )
     )
 )");
+  auto code = method->get_code();
   code->set_registers_size(2);
 
   copy_propagation_impl::Config config;
-  CopyPropagation(config).run(code.get());
+  CopyPropagation(config).run(code, method);
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -246,7 +249,65 @@ TEST_F(CopyPropagationTest, non_zero_constant_cannot_have_object_type_demand) {
     )
 )");
 
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_CODE_EQ(code, expected_code.get());
+}
+
+TEST_F(CopyPropagationTest, if_eqz_can_create_demand) {
+  auto method = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.bar:(ZZ)V"
+     (
+      (load-param v1)
+      (load-param v2)
+      (const v0 0)
+      ; zero could be int, object (or float)
+      (if-eqz v1 :L1)
+      (if-eqz v2 :L2)
+      (sget "LFoo;.a:I")
+      (move-result-pseudo v0)
+      (:L2)
+      ; the combined type of v0 is now int,
+      ; and if-eqz projects back this combined type demand,
+      ; and thus v0 must have been an int
+      (if-eqz v0 :L3)
+      (:L3)
+      (return-void)
+
+      (:L1)
+      (const v0 0)
+      (add-int v1 v0 v0) ; int demand
+      (return-void)
+     )
+    )
+)");
+  auto code = method->get_code();
+  code->set_registers_size(2);
+
+  copy_propagation_impl::Config config;
+  CopyPropagation(config).run(code, method);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param v1)
+      (load-param v2)
+      (const v0 0)
+      (if-eqz v1 :L1)
+      (if-eqz v2 :L2)
+      (sget "LFoo;.a:I")
+      (move-result-pseudo v0)
+      (:L2)
+      (if-eqz v0 :L3)
+      (:L3)
+      (return-void)
+
+      (:L1)
+      ; The next instruction can be removed, as, in both cases, the type demand is int.
+      ; (const v0 0)
+      (add-int v1 v0 v0) ; int demand
+      (return-void)
+    )
+)");
+
+  EXPECT_CODE_EQ(code, expected_code.get());
 }
 
 TEST_F(CopyPropagationTest, consts_safe_by_constant_uses_aput) {

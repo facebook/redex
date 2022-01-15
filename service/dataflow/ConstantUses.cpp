@@ -103,6 +103,8 @@ ConstantUses::ConstantUses(const cfg::ControlFlowGraph& cfg, DexMethod* method)
                 break;
               case OPCODE_IF_EQ:
               case OPCODE_IF_NE:
+              case OPCODE_IF_EQZ:
+              case OPCODE_IF_NEZ:
                 need_type_inference = true;
                 break;
               default:
@@ -178,6 +180,10 @@ TypeDemand ConstantUses::get_type_demand(DexType* type) {
   default:
     return TypeDemand::Object;
   }
+}
+
+static bool is_non_zero_int(IRType type) {
+  return type == SCALAR || type == INT || type == CONST;
 }
 
 TypeDemand ConstantUses::get_type_demand(IRInstruction* insn,
@@ -358,13 +364,8 @@ TypeDemand ConstantUses::get_type_demand(IRInstruction* insn,
         if (t1.element() == REFERENCE || t2.element() == REFERENCE) {
           return TypeDemand::Object;
         }
-        t1.meet_with(type_inference::TypeDomain(SCALAR));
-        t2.meet_with(type_inference::TypeDomain(SCALAR));
-        if (!t1.is_top() && !t1.is_bottom() && !t2.is_top() &&
-            !t2.is_bottom()) {
-          if (t1.element() == SCALAR || t2.element() == SCALAR) {
-            return TypeDemand::Int;
-          }
+        if (is_non_zero_int(t1.element()) || is_non_zero_int(t2.element())) {
+          return TypeDemand::Int;
         }
         return TypeDemand::IntOrObject;
       }
@@ -378,6 +379,27 @@ TypeDemand ConstantUses::get_type_demand(IRInstruction* insn,
 
   case OPCODE_IF_EQZ:
   case OPCODE_IF_NEZ:
+    if (m_type_inference) {
+      auto& type_environments = m_type_inference->get_type_environments();
+      auto& type_environment = type_environments.at(insn);
+      auto t = type_environment.get_type(insn->src(0));
+      if (!t.is_top() && !t.is_bottom()) {
+        if (t.element() == REFERENCE) {
+          return TypeDemand::Object;
+        }
+        if (is_non_zero_int(t.element())) {
+          return TypeDemand::Int;
+        }
+        return TypeDemand::IntOrObject;
+      }
+    } else {
+      TRACE(CU, 3,
+            "[CU] if-eqz or if-nez instruction encountered {%s}, but type "
+            "inference is unavailable",
+            SHOW(insn));
+    }
+    return TypeDemand::Error;
+
   case OPCODE_IF_LTZ:
   case OPCODE_IF_GEZ:
   case OPCODE_IF_GTZ:
