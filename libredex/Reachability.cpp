@@ -629,17 +629,15 @@ void ReachableObjects::record_is_seed(Seed* seed) {
  * Remove unmarked classes / methods / fields. and add all swept objects to
  * :removed_symbols.
  */
-template <class Container, class FnPtr>
+template <class Container, typename EraseHookFn>
 static void sweep_if_unmarked(const ReachableObjects& reachables,
-                              FnPtr erase_hook,
+                              EraseHookFn erase_hook,
                               Container* c,
                               ConcurrentSet<std::string>* removed_symbols) {
   auto p = [&](const auto& m) {
     if (reachables.marked_unsafe(m) == 0) {
       TRACE(RMU, 2, "Removing %s", SHOW(m));
-      if (erase_hook) {
-        erase_hook(m);
-      }
+      erase_hook(m);
       return false;
     }
     return true;
@@ -658,17 +656,25 @@ void sweep(DexStoresVector& stores,
            ConcurrentSet<std::string>* removed_symbols) {
   Timer t("Sweep");
   for (auto& dex : DexStoreClassesIterator(stores)) {
-    sweep_if_unmarked(reachables, (void (*)(DexClass*))(nullptr), &dex,
-                      removed_symbols);
+    sweep_if_unmarked(
+        reachables, [](auto c) {}, &dex, removed_symbols);
+
+    auto sweep_method = [&](DexMethodRef* m) {
+      if (m->is_def()) {
+        m->as_def()->release_code(); // Free code.
+      }
+      DexMethod::erase_method(m);
+    };
+
     walk::parallel::classes(dex, [&](DexClass* cls) {
       sweep_if_unmarked(reachables, DexField::erase_field, &cls->get_ifields(),
                         removed_symbols);
       sweep_if_unmarked(reachables, DexField::erase_field, &cls->get_sfields(),
                         removed_symbols);
-      sweep_if_unmarked(reachables, DexMethod::erase_method,
-                        &cls->get_dmethods(), removed_symbols);
-      sweep_if_unmarked(reachables, DexMethod::erase_method,
-                        &cls->get_vmethods(), removed_symbols);
+      sweep_if_unmarked(reachables, sweep_method, &cls->get_dmethods(),
+                        removed_symbols);
+      sweep_if_unmarked(reachables, sweep_method, &cls->get_vmethods(),
+                        removed_symbols);
     });
   }
 }
