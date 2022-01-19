@@ -772,12 +772,15 @@ DexMethodRef* DexMethod::make_method(
 void DexClass::set_deobfuscated_name(const std::string& name) {
   // If the class has an old deobfuscated_name which is not equal to
   // `show(self)`, erase the name mapping from the global type map.
-  if (m_deobfuscated_name != nullptr) {
+  if (kInsertDeobfuscatedNameLinks && m_deobfuscated_name != nullptr) {
     if (m_deobfuscated_name != m_self->get_name()) {
       g_redex->remove_type_name(m_deobfuscated_name);
     }
   }
   m_deobfuscated_name = DexString::make_string(name);
+  if (!kInsertDeobfuscatedNameLinks) {
+    return;
+  }
   if (m_deobfuscated_name == m_self->get_name()) {
     return;
   }
@@ -796,12 +799,15 @@ void DexClass::set_deobfuscated_name(const std::string& name) {
 void DexClass::set_deobfuscated_name(const DexString* name) {
   // If the class has an old deobfuscated_name which is not equal to
   // `show(self)`, erase the name mapping from the global type map.
-  if (m_deobfuscated_name != nullptr) {
+  if (kInsertDeobfuscatedNameLinks && m_deobfuscated_name != nullptr) {
     if (m_deobfuscated_name != m_self->get_name()) {
       g_redex->remove_type_name(m_deobfuscated_name);
     }
   }
   m_deobfuscated_name = name;
+  if (!kInsertDeobfuscatedNameLinks) {
+    return;
+  }
   if (m_deobfuscated_name == m_self->get_name()) {
     return;
   }
@@ -886,13 +892,17 @@ void DexMethod::set_deobfuscated_name(const std::string& name) {
   // If the method has an old deobfuscated_name which is not equal to the name,
   // erase the mapping using the old (and now invalid) deobfuscated_name from
   // the global type map.
-  if (m_deobfuscated_name != nullptr && !m_deobfuscated_name->str().empty()) {
+  if (kInsertDeobfuscatedNameLinks && m_deobfuscated_name != nullptr &&
+      !m_deobfuscated_name->str().empty()) {
     if (m_deobfuscated_name != this->get_name()) {
       g_redex->erase_method(this->get_class(), m_deobfuscated_name,
                             this->get_proto());
     }
   }
   m_deobfuscated_name = DexString::make_string(name);
+  if (!kInsertDeobfuscatedNameLinks) {
+    return;
+  }
   if (m_deobfuscated_name == this->get_name()) {
     return;
   }
@@ -1664,13 +1674,16 @@ void DexField::set_deobfuscated_name(const std::string& name) {
   // If the field has an old deobfuscated_name which is not equal to the name,
   // erase the mapping using the old (and now invalid) deobfuscated_name from
   // the global type map.
-  if (m_deobfuscated_name != nullptr) {
+  if (kInsertDeobfuscatedNameLinks && m_deobfuscated_name != nullptr) {
     if (m_deobfuscated_name != this->get_name()) {
       g_redex->erase_field(this->get_class(), m_deobfuscated_name,
                            this->get_type());
     }
   }
   m_deobfuscated_name = DexString::make_string(name);
+  if (!kInsertDeobfuscatedNameLinks) {
+    return;
+  }
   if (m_deobfuscated_name == this->get_name()) {
     return;
   }
@@ -1690,13 +1703,16 @@ void DexField::set_deobfuscated_name(const DexString* name) {
   // If the field has an old deobfuscated_name which is not equal to the name,
   // erase the mapping using the old (and now invalid) deobfuscated_name from
   // the global type map.
-  if (m_deobfuscated_name != nullptr) {
+  if (kInsertDeobfuscatedNameLinks && m_deobfuscated_name != nullptr) {
     if (m_deobfuscated_name != this->get_name()) {
       g_redex->erase_field(this->get_class(), m_deobfuscated_name,
                            this->get_type());
     }
   }
   m_deobfuscated_name = name;
+  if (!kInsertDeobfuscatedNameLinks) {
+    return;
+  }
   if (m_deobfuscated_name == this->get_name()) {
     return;
   }

@@ -65,6 +65,8 @@ class DexString;
 class DexType;
 class PositionMapper;
 
+constexpr bool kInsertDeobfuscatedNameLinks = true;
+
 using Scope = std::vector<DexClass*>;
 
 #if defined(__SSE4_2__) && defined(__linux__) && defined(__STRCMP_LESS__)

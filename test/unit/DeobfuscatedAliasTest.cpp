@@ -25,7 +25,9 @@ TEST_F(DeobfuscatedAliasTest, testField) {
   EXPECT_EQ(field, get_result_original);
   EXPECT_EQ(nullptr, get_result_old_deobfuscated);
   EXPECT_EQ("bar", field->get_deobfuscated_name_or_empty());
-  EXPECT_EQ(field, get_result_deobfuscated);
+  if (kInsertDeobfuscatedNameLinks) {
+    EXPECT_EQ(field, get_result_deobfuscated);
+  }
 }
 
 TEST_F(DeobfuscatedAliasTest, testFieldDuplicate) {
@@ -62,7 +64,9 @@ TEST_F(DeobfuscatedAliasTest, testMethod) {
   EXPECT_EQ(method, get_result_original);
   EXPECT_EQ(nullptr, get_result_old_deobfuscated);
   EXPECT_EQ("bar", method->get_deobfuscated_name_or_empty());
-  EXPECT_EQ(method, get_result_deobfuscated);
+  if (kInsertDeobfuscatedNameLinks) {
+    EXPECT_EQ(method, get_result_deobfuscated);
+  }
 }
 
 TEST_F(DeobfuscatedAliasTest, testMethodDuplicate) {
