@@ -350,16 +350,16 @@ class IRTypeCheckerTest : public RedexTest {
     add_code(m_method, insns);
   }
 
-  void add_code(const std::unique_ptr<IRCode>& insns) {
-    add_code(m_method, insns);
+  void add_code(std::unique_ptr<IRCode> insns) {
+    add_code(m_method, std::move(insns));
   }
 
   void add_code_ret_obj(const std::vector<IRInstruction*>& insns) {
     add_code(m_method_ret_obj, insns);
   }
 
-  void add_code_ret_obj(const std::unique_ptr<IRCode>& insns) {
-    add_code(m_method_ret_obj, insns);
+  void add_code_ret_obj(std::unique_ptr<IRCode> insns) {
+    add_code(m_method_ret_obj, std::move(insns));
   }
 
   void add_code(DexMethod* m, const std::vector<IRInstruction*>& insns) {
@@ -369,11 +369,12 @@ class IRTypeCheckerTest : public RedexTest {
     }
   }
 
-  void add_code(DexMethod* m, const std::unique_ptr<IRCode>& insns) {
+  void add_code(DexMethod* m, std::unique_ptr<IRCode> insns) {
     IRCode* code = m->get_code();
     for (const auto& insn : *insns) {
       code->push_back(insn);
     }
+    insns->set_insn_ownership(false);
   }
 
  protected:
@@ -823,7 +824,7 @@ TEST_F(IRTypeCheckerTest, filledNewArray) {
       (return v9)
     )
   )");
-  add_code(insns);
+  add_code(std::move(insns));
   IRTypeChecker checker(m_method);
   checker.run();
   EXPECT_TRUE(checker.good()) << checker.what();

@@ -49,7 +49,7 @@ class IRCode {
   // Hack: in general the IRCode is not handled as owning instructions, as they
   //       might be shared. Toggle to true via `set_insn_ownership` to destruct
   //       instructions on delete.
-  bool m_owns_insns{false};
+  bool m_owns_insns{true};
 
   // TODO(jezng): we shouldn't be storing / exposing the DexDebugItem... just
   // exposing the param names should be enough
