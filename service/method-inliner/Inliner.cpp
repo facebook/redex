@@ -421,7 +421,7 @@ void MultiMethodInliner::inline_callees(
 void MultiMethodInliner::inline_callees(
     DexMethod* caller,
     const std::unordered_set<IRInstruction*>& insns,
-    bool delete_removed_insns) {
+    std::vector<IRInstruction*>* deleted_insns) {
   TraceContext context{caller};
   std::vector<Inlinable> inlinables;
   editable_cfg_adapter::iterate_with_iterator(
@@ -439,7 +439,7 @@ void MultiMethodInliner::inline_callees(
         return editable_cfg_adapter::LOOP_CONTINUE;
       });
 
-  inline_inlinables(caller, inlinables, delete_removed_insns);
+  inline_inlinables(caller, inlinables, deleted_insns);
 }
 
 bool MultiMethodInliner::inline_inlinables_need_deconstruct(DexMethod* method) {
@@ -519,7 +519,7 @@ DexType* MultiMethodInliner::get_needs_init_class(DexMethod* callee) const {
 void MultiMethodInliner::inline_inlinables(
     DexMethod* caller_method,
     const std::vector<Inlinable>& inlinables,
-    bool delete_removed_insns) {
+    std::vector<IRInstruction*>* deleted_insns) {
   auto timer = m_inline_inlinables_timer.scope();
   if (for_speed() && m_ab_experiment_context->use_control()) {
     return;
@@ -536,9 +536,9 @@ void MultiMethodInliner::inline_inlinables(
     for (auto code : need_deconstruct) {
       always_assert(!code->editable_cfg_built());
       code->build_cfg(/* editable */ true);
-      if (!delete_removed_insns) {
-        code->cfg().set_removed_insn_ownerhsip(false);
-      }
+      // if (deleted_insns != nullptr) {
+      //   code->cfg().set_removed_insn_ownerhsip(false);
+      // }
     }
   }
 
@@ -789,7 +789,7 @@ void MultiMethodInliner::inline_inlinables(
   }
 
   for (IRCode* code : need_deconstruct) {
-    code->clear_cfg();
+    code->clear_cfg(nullptr, deleted_insns);
   }
 
   info.calls_inlined += inlined_callees.size();

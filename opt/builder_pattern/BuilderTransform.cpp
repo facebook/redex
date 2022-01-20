@@ -46,12 +46,11 @@ BuilderTransform::BuilderTransform(
 
 std::unordered_set<const IRInstruction*>
 BuilderTransform::get_not_inlined_insns(
-    DexMethod* caller, const std::unordered_set<IRInstruction*>& insns) {
+    DexMethod* caller,
+    const std::unordered_set<IRInstruction*>& insns,
+    std::vector<IRInstruction*>* deleted_insns) {
   always_assert(caller && caller->get_code());
-  // TODO: We are going to leak instructions when we are successful. Change this
-  // to true after making the pass aware of memory ownership.
-  bool delete_removed_insns = false;
-  m_inliner->inline_callees(caller, insns, delete_removed_insns);
+  m_inliner->inline_callees(caller, insns, deleted_insns);
   std::unordered_set<const IRInstruction*> not_inlined_insns;
   // Check if everything was inlined.
   auto* code = caller->get_code();
@@ -112,7 +111,7 @@ bool BuilderTransform::inline_super_calls_and_ctors(const DexType* type) {
       m_method_copy[method] = method_copy;
 
       size_t num_insns_not_inlined =
-          get_not_inlined_insns(method, inlinable_insns).size();
+          get_not_inlined_insns(method, inlinable_insns, nullptr).size();
       if (num_insns_not_inlined > 0) {
         return false;
       }

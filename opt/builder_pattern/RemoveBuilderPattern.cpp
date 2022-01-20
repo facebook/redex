@@ -12,6 +12,7 @@
 #include "BuilderAnalysis.h"
 #include "BuilderTransform.h"
 #include "ConfigFiles.h"
+#include "CppUtil.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "PassManager.h"
@@ -235,6 +236,15 @@ class RemoveClasses {
 
     do {
       analysis->run_analysis();
+
+      std::vector<IRInstruction*> deleted_insns;
+      // When ending the scope, free the instructions.
+      auto deleted_guard = at_scope_exit([&deleted_insns]() {
+        for (auto* insn : deleted_insns) {
+          delete insn;
+        }
+      });
+
       if (!analysis->has_usage()) {
         TRACE(BLD_PATTERN, 6, "No builder to remove from %s", SHOW(method));
         break;
@@ -286,7 +296,7 @@ class RemoveClasses {
       }
 
       auto not_inlined_insns =
-          m_transform.get_not_inlined_insns(method, to_inline);
+          m_transform.get_not_inlined_insns(method, to_inline, &deleted_insns);
 
       if (!not_inlined_insns.empty()) {
         auto to_eliminate =

@@ -958,6 +958,10 @@ class ControlFlowGraph {
 
   std::size_t opcode_hash() const;
 
+  std::vector<IRInstruction*> release_removed_instructions() {
+    return std::move(m_removed_insns);
+  }
+
  private:
   friend class Block;
 

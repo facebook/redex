@@ -633,7 +633,8 @@ void IRCode::build_cfg(bool editable) {
 }
 
 void IRCode::clear_cfg(
-    const std::unique_ptr<cfg::LinearizationStrategy>& custom_strategy) {
+    const std::unique_ptr<cfg::LinearizationStrategy>& custom_strategy,
+    std::vector<IRInstruction*>* deleted_insns) {
   if (!m_cfg) {
     return;
   }
@@ -654,6 +655,10 @@ void IRCode::clear_cfg(
     m_ir_list = m_cfg->linearize(custom_strategy);
   }
 
+  if (deleted_insns != nullptr) {
+    auto removed = m_cfg->release_removed_instructions();
+    deleted_insns->insert(deleted_insns->end(), removed.begin(), removed.end());
+  }
   m_cfg.reset();
   for (auto it = m_ir_list->begin(); it != m_ir_list->end();) {
     if (it->type == MFLOW_FALLTHROUGH) {

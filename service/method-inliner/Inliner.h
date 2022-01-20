@@ -178,7 +178,7 @@ class MultiMethodInliner {
    */
   void inline_callees(DexMethod* caller,
                       const std::unordered_set<IRInstruction*>& insns,
-                      bool delete_removed_insns = true);
+                      std::vector<IRInstruction*>* deleted_insns = nullptr);
 
   /**
    * Return true if the callee is inlinable into the caller.
@@ -204,7 +204,7 @@ class MultiMethodInliner {
 
   void inline_inlinables(DexMethod* caller,
                          const std::vector<Inlinable>& inlinables,
-                         bool delete_removed_insns = true);
+                         std::vector<IRInstruction*>* deleted_insns = nullptr);
 
   /**
    * Return true if the method is related to enum (java.lang.Enum and derived).

@@ -171,8 +171,13 @@ class IRCode {
 
   // if the cfg was editable, linearize it back into m_ir_list
   // custom_strategy controls the linearization of the CFG.
+  //
+  // The CFG may have stored instructions that were removed. If deleted_insns is
+  // not null, the instructions are moved into the given vector. It is then the
+  // caller's responsibility to free them.
   void clear_cfg(const std::unique_ptr<cfg::LinearizationStrategy>&
-                     custom_strategy = nullptr);
+                     custom_strategy = nullptr,
+                 std::vector<IRInstruction*>* deleted_insns = nullptr);
 
   bool cfg_built() const;
   bool editable_cfg_built() const;
