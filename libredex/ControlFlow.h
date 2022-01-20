@@ -391,6 +391,11 @@ class Block final {
   bool push_back(const std::vector<IRInstruction*>& insns);
   bool push_back(IRInstruction* insn);
 
+  void insert_before(const IRList::iterator& it,
+                     std::unique_ptr<SourceBlock> sb);
+  void insert_after(const IRList::iterator& it,
+                    std::unique_ptr<SourceBlock> sb);
+
   bool structural_equals(const Block* other) const;
 
  private:
