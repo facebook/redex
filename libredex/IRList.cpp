@@ -902,3 +902,12 @@ IRInstruction* move_result_pseudo_of(IRList::iterator it) {
 }
 
 } // namespace ir_list
+
+void IRList::insn_clear_and_dispose() {
+  m_list.clear_and_dispose([](auto* mie) {
+    if (mie->type == MFLOW_OPCODE) {
+      delete mie->insn;
+    }
+    delete mie;
+  });
+}

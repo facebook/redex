@@ -46,6 +46,11 @@ class IRCode {
   reg_t m_registers_size{0};
   bool m_cfg_serialized_with_custom_strategy = false;
 
+  // Hack: in general the IRCode is not handled as owning instructions, as they
+  //       might be shared. Toggle to true via `set_insn_ownership` to destruct
+  //       instructions on delete.
+  bool m_owns_insns{false};
+
   // TODO(jezng): we shouldn't be storing / exposing the DexDebugItem... just
   // exposing the param names should be enough
   std::unique_ptr<DexDebugItem> m_dbg;
@@ -96,6 +101,8 @@ class IRCode {
   IRCode(const IRCode& code);
 
   ~IRCode();
+
+  void set_insn_ownership(bool owns_insns) { m_owns_insns = owns_insns; }
 
   bool structural_equals(const IRCode& other) const {
     return m_ir_list->structural_equals(*other.m_ir_list,

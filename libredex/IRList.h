@@ -543,6 +543,7 @@ class IRList {
     return m_list.erase_and_dispose(it, disposer);
   }
   void clear_and_dispose() { m_list.clear_and_dispose(disposer); }
+  void insn_clear_and_dispose();
 
   IRList::iterator iterator_to(MethodItemEntry& mie) {
     return m_list.iterator_to(mie);

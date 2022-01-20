@@ -575,7 +575,12 @@ IRList* deep_copy_ir_list(IRList* old_ir_list) {
 IRCode::IRCode() : m_ir_list(new IRList()) {}
 
 IRCode::~IRCode() {
-  m_ir_list->clear_and_dispose();
+  if (m_owns_insns) {
+    m_ir_list->insn_clear_and_dispose();
+  } else {
+    m_ir_list->clear_and_dispose();
+  }
+
   delete m_ir_list;
 }
 
