@@ -15,6 +15,7 @@
 #include "ControlFlow.h"
 #include "CppUtil.h"
 #include "Debug.h"
+#include "IRCode.h"
 #include "IRList.h"
 
 class DexMethod;
@@ -241,6 +242,30 @@ inline const SourceBlock* get_first_source_block(const cfg::Block* b) {
     return mie.src_block.get();
   }
   return nullptr;
+}
+
+inline SourceBlock* get_first_source_block(cfg::ControlFlowGraph* cfg) {
+  for (auto* b : cfg->blocks()) {
+    auto sb = get_first_source_block(b);
+    if (sb != nullptr) {
+      return sb;
+    }
+  }
+  return nullptr;
+}
+
+inline SourceBlock* get_first_source_block(IRCode* code) {
+  if (code->cfg_built()) {
+    return get_first_source_block(&code->cfg());
+  } else {
+    for (const auto& mie : *code) {
+      if (mie.type != MFLOW_SOURCE_BLOCK) {
+        continue;
+      }
+      return mie.src_block.get();
+    }
+    return nullptr;
+  }
 }
 
 inline SourceBlock* get_last_source_block(cfg::Block* b) {

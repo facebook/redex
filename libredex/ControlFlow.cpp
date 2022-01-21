@@ -2599,6 +2599,16 @@ void ControlFlowGraph::insert_after(Block* block,
   block->m_entries.insert_after(it, std::move(pos));
 }
 
+void Block::insert_before(const IRList::iterator& it,
+                          std::unique_ptr<SourceBlock> sb) {
+  m_entries.insert_before(it, std::move(sb));
+}
+
+void Block::insert_after(const IRList::iterator& it,
+                         std::unique_ptr<SourceBlock> sb) {
+  m_entries.insert_after(it, std::move(sb));
+}
+
 void ControlFlowGraph::insert_before(const InstructionIterator& it,
                                      std::unique_ptr<SourceBlock> sb) {
   always_assert(m_editable);
