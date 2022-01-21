@@ -16,11 +16,14 @@ std::unique_ptr<ABExperimentContext> ABExperimentContext::create(
   return std::make_unique<ABExperimentContextImpl>(exp_name);
 }
 
-void ABExperimentContext::parse_experiments_states(
-    const std::unordered_map<std::string, std::string>& states,
-    const boost::optional<std::string>& default_state,
-    bool /* unused */) {
-  ABExperimentContextImpl::parse_experiments_states(states, default_state);
+void ABExperimentContext::parse_experiments_states(ConfigFiles& conf,
+                                                   bool /* unused */) {
+  ABExperimentContextImpl::parse_experiments_states(conf);
+}
+
+std::unordered_set<std::string>
+ABExperimentContext::get_all_experiments_names() {
+  return ABExperimentContextImpl::get_all_experiments_names();
 }
 
 void ABExperimentContext::reset_global_state() {

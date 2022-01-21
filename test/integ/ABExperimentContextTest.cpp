@@ -12,11 +12,44 @@
 #include "DexClass.h"
 #include "RedexTest.h"
 
+#include <json/json.h>
+
 namespace ab_test {
 
 struct ABExperimentContextTest : public RedexIntegrationTest {
   void SetUp() override { ABExperimentContextImpl::reset_global_state(); }
 };
+
+void set_state_for_experiments(
+    const std::vector<std::string>& exp_names,
+    const std::string& state,
+    const boost::optional<std::string>& default_state = boost::none) {
+  std::string config = "{\"ab_experiments_states\":{";
+
+  for (uint32_t i = 0; i < exp_names.size(); i++) {
+    config += "\"" + exp_names[i] + "\":\"" + state + "\"";
+    if (i != exp_names.size() - 1) {
+      config += ",";
+    }
+  }
+
+  config += "},";
+
+  config += "\"ab_experiments_default\":\"";
+  config += default_state ? *default_state : "test";
+
+  config += "\"";
+
+  config += "}\n";
+
+  Json::Value json_conf;
+  std::istringstream temp_json(config);
+
+  temp_json >> json_conf;
+
+  ConfigFiles conf_files(json_conf);
+  ab_test::ABExperimentContextImpl::parse_experiments_states(conf_files);
+}
 
 void change_called_method(const std::string& exp_name,
                           DexMethod* m,
@@ -61,8 +94,7 @@ TEST_F(ABExperimentContextTest, testCFGConstructorBasicFunctionality) {
 }
 
 TEST_F(ABExperimentContextTest, testTestingMode) {
-  ab_test::ABExperimentContextImpl::parse_experiments_states(
-      {{"ab_experiment", "test"}}, /*default_state=*/boost::none);
+  set_state_for_experiments({"ab_experiment"}, "test");
 
   ASSERT_TRUE(classes);
   DexMethod* m =
@@ -87,8 +119,7 @@ TEST_F(ABExperimentContextTest, testTestingMode) {
 }
 
 TEST_F(ABExperimentContextTest, testTestingModeDefault) {
-  ab_test::ABExperimentContextImpl::parse_experiments_states(
-      {}, /*default_state=*/std::string("test"));
+  set_state_for_experiments({}, "", boost::optional<std::string>("test"));
 
   ASSERT_TRUE(classes);
   DexMethod* m =
@@ -113,8 +144,7 @@ TEST_F(ABExperimentContextTest, testTestingModeDefault) {
 }
 
 TEST_F(ABExperimentContextTest, testControlMode) {
-  ab_test::ABExperimentContextImpl::parse_experiments_states(
-      {{"ab_experiment", "control"}}, /*default_state=*/boost::none);
+  set_state_for_experiments({"ab_experiment"}, "control");
   ASSERT_TRUE(classes);
   DexMethod* m =
       (*classes)[0]->find_method_from_simple_deobfuscated_name("getNum");
@@ -138,8 +168,7 @@ TEST_F(ABExperimentContextTest, testControlMode) {
 }
 
 TEST_F(ABExperimentContextTest, testControlModeDefault) {
-  ab_test::ABExperimentContextImpl::parse_experiments_states(
-      {}, /*default_state=*/std::string("control"));
+  set_state_for_experiments({}, "", boost::optional<std::string>("control"));
   ASSERT_TRUE(classes);
   DexMethod* m =
       (*classes)[0]->find_method_from_simple_deobfuscated_name("getNum");

@@ -694,16 +694,11 @@ void DedupStringsPass::run_pass(DexStoresVector& stores,
     return;
   }
 
-  // TODO(T94561083): move the functionality in ABExperimentContext
-  std::unordered_map<std::string, std::string> exp_states;
-  conf.get_json_config().get("ab_experiments_states", {}, exp_states);
+  auto exp_names = ab_test::ABExperimentContext::get_all_experiments_names();
 
   std::unordered_set<const DexString*> exp_strings_to_ignore;
-  for (const auto& exp_state : exp_states) {
-    if (exp_state.second == "branch_or_test" ||
-        exp_state.second == "branch_or_control") {
-      exp_strings_to_ignore.insert(DexString::make_string(exp_state.first));
-    }
+  for (const auto& exp_name : exp_names) {
+    exp_strings_to_ignore.insert(DexString::make_string(exp_name));
   }
 
   DedupStrings ds(m_max_factory_methods,
