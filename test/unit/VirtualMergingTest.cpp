@@ -19,7 +19,6 @@
 #include "RedexTest.h"
 #include "ScopedCFG.h"
 #include "Show.h"
-#include "SourceBlocks.h"
 #include "StlUtil.h"
 #include "VirtualMerging.h"
 
@@ -45,32 +44,23 @@ class VirtualMergingTest : public RedexTest {
       cls_creator.add_method(ctor);
       // Should add a super call here, but...
 
-      auto make_code = [](int32_t val, auto mref, float sb_val) {
+      auto make_code = [](int32_t val) {
         std::string src = R"(
             (
               (load-param-object v1)
-              (.src_block "Y" 0 (Z Z))
               (const v0 X)
               (return v0)
             ))";
         src.replace(src.find('X'), 1, std::to_string(val));
-        src.replace(src.find('Z'), 1, std::to_string(sb_val));
-        src.replace(src.find('Z'), 1, std::to_string(sb_val));
-        src.replace(src.find('Y'), 1, show(mref));
         return assembler::ircode_from_string(src);
       };
-      auto foo_ref = DexMethod::make_method(std::string(name) + ".foo:()I");
-      auto foo =
-          foo_ref->make_concrete(ACC_PUBLIC,
-                                 make_code(foo_val, foo_ref, idx / 100.0f),
-                                 /*is_virtual=*/true);
+      auto foo = DexMethod::make_method(std::string(name) + ".foo:()I")
+                     ->make_concrete(
+                         ACC_PUBLIC, make_code(foo_val), /*is_virtual=*/true);
       cls_creator.add_method(foo);
-
-      auto bar_ref = DexMethod::make_method(std::string(name) + ".bar:()I");
-      auto bar =
-          bar_ref->make_concrete(ACC_PUBLIC,
-                                 make_code(bar_val, bar_ref, idx / 100.0f),
-                                 /*is_virtual=*/true);
+      auto bar = DexMethod::make_method(std::string(name) + ".bar:()I")
+                     ->make_concrete(
+                         ACC_PUBLIC, make_code(bar_val), /*is_virtual=*/true);
       cls_creator.add_method(bar);
 
       DexClass* res = cls_creator.create();
@@ -291,16 +281,6 @@ TEST_F(VirtualMergingTest, MergedFooNoProfiles) {
           {get_type(33), get_type(32), get_type(31)}, // A3 sub-block
       }));
   EXPECT_TRUE(test_if_direction(a_foo, OPCODE_IF_NEZ));
-
-  // Check that we got source blocks inserted correctly.
-  {
-    cfg::ScopedCFG cfg(const_cast<DexMethod*>(a_foo)->get_code());
-    auto blocks = cfg->blocks();
-    bool all = std::all_of(blocks.begin(), blocks.end(), [](auto* b) {
-      return source_blocks::has_source_blocks(b);
-    });
-    EXPECT_TRUE(all) << show(*cfg);
-  }
 }
 
 TEST_F(VirtualMergingTest, MergedBarNoProfiles) {

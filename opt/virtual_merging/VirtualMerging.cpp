@@ -53,8 +53,6 @@
 #include "MethodProfiles.h"
 #include "PassManager.h"
 #include "Resolver.h"
-#include "ScopedCFG.h"
-#include "SourceBlocks.h"
 #include "StlUtil.h"
 #include "TypeSystem.h"
 #include "Walkers.h"
@@ -914,205 +912,6 @@ void check_remap(
   }
 }
 
-void reset_sb(SourceBlock& sb, DexMethodRef* ref, uint32_t id) {
-  sb.src = ref;
-  sb.id = id;
-  for (auto& v : sb.vals) {
-    *v = SourceBlock::Val::ValPair{0, 0};
-  }
-}
-
-struct SBHelper {
-  DexMethod* overridden;
-  const std::vector<const DexMethod*>& v;
-  const bool overridden_had_source_blocks;
-  const bool create_source_blocks;
-
-  explicit SBHelper(DexMethod* overridden,
-                    const std::vector<const DexMethod*>& v)
-      : overridden(overridden),
-        v(v),
-        overridden_had_source_blocks(
-            overridden->get_code() != nullptr &&
-            method_get_first_source_block(overridden) != nullptr),
-        create_source_blocks([&]() {
-          for (auto* m : v) {
-            if (method_get_first_source_block(m) != nullptr) {
-              return true;
-            }
-          }
-          return false;
-        }()) {
-    // Fix up the host with empty source blocks if necessary. It's easier to
-    // do this ahead of time.
-    if (create_source_blocks && !overridden_had_source_blocks &&
-        overridden->get_code() != nullptr) {
-      normalize_overridden_method_withouts_sbs(overridden,
-                                               get_arbitrary_first_sb());
-    }
-  }
-
-  static SourceBlock* method_get_first_source_block(const DexMethod* m) {
-    auto code = m->get_code();
-    if (code->cfg_built()) {
-      return source_blocks::get_first_source_block(code->cfg().entry_block());
-    } else {
-      for (auto& mie : *code) {
-        if (mie.type == MFLOW_SOURCE_BLOCK) {
-          return mie.src_block.get();
-        }
-      };
-    }
-    return nullptr;
-  }
-
-  SourceBlock* get_arbitrary_first_sb() {
-    for (auto* m : v) {
-      auto* sb = method_get_first_source_block(m);
-      if (sb != nullptr) {
-        return sb;
-      }
-    }
-    not_reached();
-  }
-
-  static void normalize_overridden_method_withouts_sbs(
-      DexMethod* overridden_method, SourceBlock* arbitrary_sb) {
-    auto* code = overridden_method->get_code();
-    cfg::ScopedCFG cfg(code);
-
-    for (auto* block : cfg->blocks()) {
-      if (block == cfg->entry_block()) {
-        // Special handling.
-        continue;
-      }
-      auto new_sb = std::make_unique<SourceBlock>(*arbitrary_sb);
-      // Bit weird, but better than making up real numbers.
-      reset_sb(*new_sb, overridden_method, SourceBlock::kSyntheticId);
-
-      auto it = block->get_first_insn();
-      if (it == block->end()) {
-        block->insert_before(block->begin(), std::move(new_sb));
-      } else {
-        if (opcode::is_a_move_result(it->insn->opcode())) {
-          block->insert_after(it, std::move(new_sb));
-        } else {
-          block->insert_before(it, std::move(new_sb));
-        }
-      }
-    }
-
-    auto* block = cfg->entry_block();
-    auto new_sb = std::make_unique<SourceBlock>(*arbitrary_sb);
-    // Bit weird, but better than making up real numbers.
-    reset_sb(*new_sb, overridden_method, SourceBlock::kSyntheticId);
-    auto it = block->get_first_non_param_loading_insn();
-    if (it == block->end()) {
-      block->insert_before(it, std::move(new_sb));
-    } else {
-      block->insert_after(it, std::move(new_sb));
-    }
-  }
-
-  std::unique_ptr<SourceBlock> gen_arbitrary_reset_sb() {
-    auto src_block = std::make_unique<SourceBlock>(*get_arbitrary_first_sb());
-    reset_sb(*src_block, overridden, SourceBlock::kSyntheticId);
-    return src_block;
-  }
-
-  struct ScopedSplitHelper {
-    cfg::Block* block{nullptr};
-    SourceBlock* first_sb{nullptr};
-    DexMethod* overriding{nullptr};
-    SBHelper* parent{nullptr};
-
-    ScopedSplitHelper(cfg::Block* block,
-                      IRList::iterator last_it,
-                      DexMethod* overriding,
-                      SBHelper* parent)
-        : block(block),
-          first_sb([&]() -> SourceBlock* {
-            for (auto it = std::next(last_it); it != block->end(); ++it) {
-              if (it->type == MFLOW_SOURCE_BLOCK) {
-                return it->src_block.get();
-              }
-            }
-            return nullptr;
-          }()),
-          overriding(overriding),
-          parent(parent) {}
-
-    ~ScopedSplitHelper() {
-      if (block != nullptr) {
-        auto overriding_sb = method_get_first_source_block(overriding);
-        auto new_sb = std::make_unique<SourceBlock>(
-            overriding_sb != nullptr ? *overriding_sb
-            : first_sb != nullptr    ? *first_sb
-                                     : *parent->get_arbitrary_first_sb());
-        new_sb->src = parent->overridden;
-        new_sb->id = SourceBlock::kSyntheticId;
-        if (overriding_sb != nullptr && first_sb != nullptr) {
-          for (size_t i = 0; i != new_sb->vals.size(); ++i) {
-            if (!new_sb->get_val(i)) {
-              new_sb->vals[i] = first_sb->vals[i];
-            } else if (first_sb->get_val(i)) {
-              new_sb->vals[i]->val += first_sb->vals[i]->val;
-              new_sb->vals[i]->appear100 =
-                  std::max(new_sb->vals[i]->appear100, first_sb->vals[i]->val);
-            }
-          }
-        }
-        block->insert_before(block->end(), std::move(new_sb));
-      }
-    }
-
-    ScopedSplitHelper(const ScopedSplitHelper&) = delete;
-    ScopedSplitHelper(ScopedSplitHelper&& rhs)
-        : block(rhs.block),
-          first_sb(rhs.first_sb),
-          overriding(rhs.overriding),
-          parent(rhs.parent) {
-      rhs.block = nullptr;
-    }
-
-    ScopedSplitHelper& operator=(const ScopedSplitHelper&) = delete;
-    ScopedSplitHelper& operator=(ScopedSplitHelper&& rhs) {
-      block = rhs.block;
-      first_sb = rhs.first_sb;
-      overriding = rhs.overriding;
-      parent = rhs.parent;
-
-      rhs.block = nullptr;
-
-      return *this;
-    }
-  };
-
-  std::optional<ScopedSplitHelper> handle_split(cfg::Block* block,
-                                                IRList::iterator it,
-                                                DexMethod* overriding) {
-    if (!create_source_blocks) {
-      return std::nullopt;
-    }
-    return ScopedSplitHelper(block, it, overriding, this);
-  }
-
-  void add_return_sb(
-      DexMethod* overriding,
-      const std::function<void(std::unique_ptr<SourceBlock>)>& push_sb) {
-    if (create_source_blocks) {
-      // Let's assume there's always normal return.
-      auto o_sb = source_blocks::get_first_source_block(overriding->get_code());
-      if (o_sb != nullptr) {
-        auto new_sb = std::make_unique<SourceBlock>(*o_sb);
-        new_sb->src = overriding;
-        new_sb->id = SourceBlock::kSyntheticId;
-        push_sb(std::move(new_sb));
-      }
-    }
-  }
-};
-
 template <typename MethodFn>
 VirtualMergingStats apply_ordering(
     MultiMethodInliner& inliner,
@@ -1130,8 +929,6 @@ VirtualMergingStats apply_ordering(
         continue;
       }
       overridden_method = method_fn(overridden_method);
-
-      SBHelper sb_helper(overridden_method, q.second);
 
       auto* virtual_scope = q.first;
 
@@ -1163,7 +960,6 @@ VirtualMergingStats apply_ordering(
         always_assert(overridden_method->get_proto() == proto);
         std::vector<uint32_t> param_regs;
         std::function<void(IRInstruction*)> push_insn;
-        std::function<void(std::unique_ptr<SourceBlock>)> push_sb;
         std::function<uint32_t()> allocate_temp;
         std::function<uint32_t()> allocate_wide_temp;
         std::function<void()> cleanup;
@@ -1202,18 +998,10 @@ VirtualMergingStats apply_ordering(
             overridden_code->push_back(load_param_insn);
             param_regs.push_back(load_param_insn->dest());
           }
-
-          if (sb_helper.create_source_blocks) {
-            overridden_code->push_back(sb_helper.gen_arbitrary_reset_sb());
-          }
-
           // we'll define helper functions in a way that lets them mutate the
           // new IRCode
           push_insn = [=](IRInstruction* insn) {
             overridden_code->push_back(insn);
-          };
-          push_sb = [=](std::unique_ptr<SourceBlock> sb) {
-            overridden_code->push_back(std::move(sb));
           };
           allocate_temp = [=]() { return overridden_code->allocate_temp(); };
           allocate_wide_temp = [=]() {
@@ -1258,12 +1046,8 @@ VirtualMergingStats apply_ordering(
 
           // We'll split the block right after the last load-param instruction
           // --- that's where we'll insert the new if-statement.
-          {
-            auto sb_scoped =
-                sb_helper.handle_split(block, last_it, overriding_method);
-            overridden_cfg.split_block(block, last_it);
-          }
-
+          overridden_cfg.split_block(
+              block->to_cfg_instruction_iterator(last_it));
           auto new_block = overridden_cfg.create_block();
           {
             // instance-of param0, DeclaringTypeOfOverridingMethod
@@ -1304,9 +1088,6 @@ VirtualMergingStats apply_ordering(
           // cfg
           push_insn = [=](IRInstruction* insn) { new_block->push_back(insn); };
           auto* cfg_ptr = &overridden_cfg;
-          push_sb = [=](std::unique_ptr<SourceBlock> sb) {
-            new_block->insert_before(new_block->end(), std::move(sb));
-          };
           allocate_temp = [=]() { return cfg_ptr->allocate_temp(); };
           allocate_wide_temp = [=]() { return cfg_ptr->allocate_wide_temp(); };
           cleanup = []() {};
@@ -1336,7 +1117,6 @@ VirtualMergingStats apply_ordering(
         push_insn(invoke_virtual_insn);
         if (proto->is_void()) {
           // return-void
-          sb_helper.add_return_sb(overriding_method, push_sb);
           auto return_insn = new IRInstruction(OPCODE_RETURN_VOID);
           push_insn(return_insn);
         } else {
@@ -1349,7 +1129,6 @@ VirtualMergingStats apply_ordering(
                                  : allocate_temp();
           move_result_insn->set_dest(result_temp);
           push_insn(move_result_insn);
-          sb_helper.add_return_sb(overriding_method, push_sb);
           // return result_temp
           op = opcode::return_opcode(rtype);
           auto return_insn = new IRInstruction(op);
