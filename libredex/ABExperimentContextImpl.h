@@ -8,6 +8,7 @@
 #pragma once
 
 #include "ABExperimentContext.h"
+#include "ConfigFiles.h"
 #include "ControlFlow.h"
 
 enum class ABExperimentState;
@@ -27,9 +28,8 @@ class ABExperimentContextImpl : public ABExperimentContext {
 
   ~ABExperimentContextImpl() override {}
 
-  static void parse_experiments_states(
-      const std::unordered_map<std::string, std::string>& states,
-      const boost::optional<std::string>& default_state);
+  static void parse_experiments_states(ConfigFiles& conf);
+  static std::unordered_set<std::string> get_all_experiments_names();
 
  private:
   ABExperimentState m_state;

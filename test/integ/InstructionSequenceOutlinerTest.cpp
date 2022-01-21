@@ -89,10 +89,15 @@ class InstructionSequenceOutlinerTest : public RedexIntegrationTest {
   void SetUp() override {
     reset_ab_experiments_global_state();
 
-    std::unordered_map<std::string, std::string> states;
-    states["outliner_v1"] = "test";
-    ab_test::ABExperimentContext::parse_experiments_states(
-        states, /*default_state=*/boost::none, false);
+    std::string config =
+        "{\"ab_experiments_states\":{\"outliner_v1\":\"test\"}}";
+    Json::Value json_conf;
+    std::istringstream temp_json(config);
+
+    temp_json >> json_conf;
+
+    ConfigFiles conf_files(json_conf);
+    ab_test::ABExperimentContext::parse_experiments_states(conf_files, false);
   }
 
  private:

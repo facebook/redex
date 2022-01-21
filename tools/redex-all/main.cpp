@@ -1331,25 +1331,8 @@ int main(int argc, char* argv[]) {
     PassManager manager(passes, std::move(pg_config), args.config,
                         args.redex_options);
 
-    std::unordered_map<std::string, std::string> exp_states;
-    conf.get_json_config().get("ab_experiments_states", {}, exp_states);
-    {
-      std::unordered_map<std::string, std::string> exp_states_override;
-      conf.get_json_config().get("ab_experiments_states_override", {},
-                                 exp_states_override);
-      for (auto& p : exp_states_override) {
-        exp_states[p.first] = std::move(p.second);
-      }
-    }
-    auto exp_state_default = [&]() -> boost::optional<std::string> {
-      if (!conf.get_json_config().contains("ab_experiments_default")) {
-        return boost::none;
-      }
-      return conf.get_json_config().get("ab_experiments_default",
-                                        std::string(""));
-    }();
     ab_test::ABExperimentContext::parse_experiments_states(
-        exp_states, exp_state_default, !manager.get_redex_options().redacted);
+        conf, !manager.get_redex_options().redacted);
 
     {
       Timer t("Running optimization passes");

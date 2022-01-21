@@ -9,6 +9,7 @@
 
 #include <boost/optional.hpp>
 
+#include "ConfigFiles.h"
 #include "ControlFlow.h"
 
 struct RedexTest;
@@ -41,10 +42,9 @@ class ABExperimentContext {
 
   virtual ~ABExperimentContext() {}
 
-  static void parse_experiments_states(
-      const std::unordered_map<std::string, std::string>& states,
-      const boost::optional<std::string>& default_state,
-      bool);
+  static void parse_experiments_states(ConfigFiles&, bool);
+
+  static std::unordered_set<std::string> get_all_experiments_names();
 
  private:
   static void reset_global_state();
