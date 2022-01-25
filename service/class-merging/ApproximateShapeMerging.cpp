@@ -300,9 +300,9 @@ void simple_greedy_approximation(const JsonWrapper& specs,
         always_assert(shapes.find(*it) != shapes.end());
         TRACE(CLMG, 9, "          - distance between %s and %s = %zu",
               s0.to_string().c_str(), it->to_string().c_str(), dist);
-        stats.shapes_merged++;
-        stats.mergeables += shapes[*it].types.size();
-        stats.fields_added += shapes[*it].types.size() * dist;
+        stats.m_shapes_merged++;
+        stats.m_mergeables += shapes[*it].types.size();
+        stats.m_fields_added += shapes[*it].types.size() * dist;
         merge_shapes(*it, s0, shapes);
         it = shapes_list.erase(it);
       } else {
@@ -398,9 +398,9 @@ void max_mergeable_greedy(const JsonWrapper& specs,
       }
       remove_from_DAG(from_shape, pred_map, succ_map);
       // stats
-      stats.shapes_merged++;
-      stats.mergeables += shapes[from_shape].types.size();
-      stats.fields_added +=
+      stats.m_shapes_merged++;
+      stats.m_mergeables += shapes[from_shape].types.size();
+      stats.m_fields_added +=
           shapes[from_shape].types.size() * distance(to_shape, from_shape);
       // Actual merge
       merge_map[to_shape].insert(from_shape);
@@ -491,9 +491,9 @@ void max_shape_merged_greedy(const JsonWrapper& specs,
             return l < r;
           });
       // Stats
-      stats.shapes_merged++;
-      stats.mergeables += shapes[*it].types.size();
-      stats.fields_added += shapes[*it].types.size() * distance(*max, *it);
+      stats.m_shapes_merged++;
+      stats.m_mergeables += shapes[*it].types.size();
+      stats.m_fields_added += shapes[*it].types.size() * distance(*max, *it);
       merge_map[*max].insert(*it);
       merge_shapes(*it, *max, shapes);
       merged.insert(*max);

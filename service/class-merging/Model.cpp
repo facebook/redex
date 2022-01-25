@@ -201,8 +201,8 @@ void Model::init(const Scope& scope,
   MergeabilityChecker checker(scope, spec, m_ref_checker, generated);
   m_non_mergeables = checker.get_non_mergeables();
   TRACE(CLMG, 3, "Non mergeables %ld", m_non_mergeables.size());
-  m_metric.non_mergeables = m_non_mergeables.size();
-  m_metric.all_types = m_spec.merging_targets.size();
+  m_stats.m_non_mergeables = m_non_mergeables.size();
+  m_stats.m_all_types = m_spec.merging_targets.size();
 }
 
 void Model::build_hierarchy(const TypeSet& roots) {
@@ -462,7 +462,7 @@ void Model::shape_model() {
     shape_merger(*merger, shapes);
     approximate_shapes(shapes);
 
-    m_metric.dropped += trim_shapes(shapes, m_spec.min_count);
+    m_stats.m_dropped += trim_shapes(shapes, m_spec.min_count);
     for (auto& shape_it : shapes) {
       break_by_interface(*merger, shape_it.first, shape_it.second);
     }
@@ -471,7 +471,7 @@ void Model::shape_model() {
   }
 
   // Update excluded metrics
-  m_metric.excluded = m_excluded.size();
+  m_stats.m_excluded = m_excluded.size();
   TRACE(CLMG, 4, "Excluded types total %ld", m_excluded.size());
 }
 
@@ -542,11 +542,12 @@ void Model::approximate_shapes(MergerType::ShapeCollector& shapes) {
 
   // Select an approximation algorithm
   if (algo_name == "simple_greedy") {
-    simple_greedy_approximation(approx_spec, shapes, m_approx_stats);
+    simple_greedy_approximation(approx_spec, shapes, m_stats.m_approx_stats);
   } else if (algo_name == "max_mergeable_greedy") {
-    max_mergeable_greedy(approx_spec, m_conf, shapes, m_approx_stats);
+    max_mergeable_greedy(approx_spec, m_conf, shapes, m_stats.m_approx_stats);
   } else if (algo_name == "max_shape_merged_greedy") {
-    max_shape_merged_greedy(approx_spec, m_conf, shapes, m_approx_stats);
+    max_shape_merged_greedy(approx_spec, m_conf, shapes,
+                            m_stats.m_approx_stats);
   } else {
     TRACE(CLMG, 3,
           "[approx] Invalid approximate shape merging spec, skipping...");
@@ -849,7 +850,7 @@ std::vector<ConstTypeHashSet> Model::group_by_interdex_set(
 void Model::flatten_shapes(const MergerType& merger,
                            MergerType::ShapeCollector& shapes) {
   size_t num_trimmed_types = trim_groups(shapes, m_spec.min_count);
-  m_metric.dropped += num_trimmed_types;
+  m_stats.m_dropped += num_trimmed_types;
   // Group all merging targets according to interdex grouping.
   auto all_interdex_groups = group_by_interdex_set(m_spec.merging_targets);
   // sort shapes by mergeables count
@@ -909,7 +910,7 @@ void Model::flatten_shapes(const MergerType& merger,
             create_mergers_helper(merger.type, *shape, *intf_set, dex_id,
                                   new_group, m_spec.strategy, interdex_gid,
                                   m_spec.max_count, m_spec.min_count);
-            m_metric.interdex_groups[interdex_gid] += new_group.size();
+            m_stats.m_interdex_groups[interdex_gid] += new_group.size();
           }
         } else {
           create_mergers_helper(merger.type, *shape, *intf_set, dex_id,
@@ -1399,35 +1400,18 @@ Model Model::build_model(const Scope& scope,
   return model;
 }
 
-void Model::update_redex_stats(PassManager& mgr) const {
-  mgr.incr_metric(m_spec.class_name_prefix + "_all_types", m_metric.all_types);
-  mgr.incr_metric(m_spec.class_name_prefix + "_non_mergeables",
-                  m_metric.non_mergeables);
-  mgr.incr_metric(m_spec.class_name_prefix + "_excluded_types",
-                  m_metric.excluded);
-  mgr.incr_metric(m_spec.class_name_prefix + "_dropped_types",
-                  m_metric.dropped);
-
-  if (!m_spec.approximate_shape_merging.isNull()) {
-    mgr.incr_metric(m_spec.class_name_prefix + "_approx_shapes_merged",
-                    m_approx_stats.shapes_merged);
-    mgr.incr_metric(m_spec.class_name_prefix + "_approx_mergeables",
-                    m_approx_stats.mergeables);
-    mgr.incr_metric(m_spec.class_name_prefix + "_approx_fields_added",
-                    m_approx_stats.fields_added);
-  }
-  for (auto& pair : m_metric.interdex_groups) {
-    auto group_id = pair.first;
-    auto group_size = pair.second;
-    mgr.incr_metric(m_spec.class_name_prefix + "_interdex_group_" +
-                        std::to_string(group_id),
-                    group_size);
-    TRACE(CLMG, 3, "InterDex Group %s_%u %lu", m_spec.class_name_prefix.c_str(),
-          group_id, group_size);
-  }
-}
-
 ModelStats& ModelStats::operator+=(const ModelStats& stats) {
+  m_all_types += stats.m_all_types;
+  m_non_mergeables += stats.m_non_mergeables;
+  m_excluded += stats.m_excluded;
+  m_dropped += stats.m_dropped;
+
+  for (const auto& pair : stats.m_interdex_groups) {
+    m_interdex_groups[pair.first] += pair.second;
+  }
+
+  m_approx_stats += stats.m_approx_stats;
+
   m_num_classes_merged += stats.m_num_classes_merged;
   m_num_generated_classes += stats.m_num_generated_classes;
   m_num_ctor_dedupped += stats.m_num_ctor_dedupped;
@@ -1435,6 +1419,33 @@ ModelStats& ModelStats::operator+=(const ModelStats& stats) {
   m_num_vmethods_dedupped += stats.m_num_vmethods_dedupped;
   m_num_const_lifted_methods += stats.m_num_const_lifted_methods;
   return *this;
+}
+
+void ModelStats::update_redex_stats(const std::string& prefix,
+                                    PassManager& mgr) const {
+  mgr.incr_metric(prefix + "_all_types", m_all_types);
+  mgr.incr_metric(prefix + "_non_mergeables", m_non_mergeables);
+  mgr.incr_metric(prefix + "_excluded_types", m_excluded);
+  mgr.incr_metric(prefix + "_dropped_types", m_dropped);
+
+  for (auto& pair : m_interdex_groups) {
+    auto group_id = pair.first;
+    auto group_size = pair.second;
+    mgr.incr_metric(prefix + "_interdex_group_" + std::to_string(group_id),
+                    group_size);
+    TRACE(CLMG, 3, "InterDex Group %s_%u %lu", prefix.c_str(), group_id,
+          group_size);
+  }
+
+  m_approx_stats.update_redex_stats(prefix, mgr);
+
+  mgr.incr_metric(prefix + "_merger_class_generated", m_num_generated_classes);
+  mgr.incr_metric(prefix + "_class_merged", m_num_classes_merged);
+  mgr.incr_metric(prefix + "_ctor_dedupped", m_num_ctor_dedupped);
+  mgr.incr_metric(prefix + "_static_non_virt_dedupped",
+                  m_num_static_non_virt_dedupped);
+  mgr.incr_metric(prefix + "_vmethods_dedupped", m_num_vmethods_dedupped);
+  mgr.set_metric(prefix + "_const_lifted_methods", m_num_const_lifted_methods);
 }
 
 } // namespace class_merging

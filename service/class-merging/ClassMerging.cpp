@@ -142,13 +142,14 @@ void merge_model(const TypeSystem& type_system,
       create_ref_checker(spec.per_dex_grouping, &xstores, conf, min_sdk);
   auto model =
       Model::build_model(scope, stores, conf, spec, type_system, *refchecker);
-  model.update_redex_stats(mgr);
+  ModelStats stats = model.get_model_stats();
 
   ModelMerger mm;
   auto merger_classes = mm.merge_model(scope, stores, conf, model);
   auto num_dedupped = method_dedup::dedup_constructors(merger_classes, scope);
   mm.increase_ctor_dedupped_stats(num_dedupped);
-  mm.update_redex_stats(spec.class_name_prefix, mgr);
+  stats += mm.get_model_stats();
+  stats.update_redex_stats(spec.class_name_prefix, mgr);
 }
 
 } // namespace class_merging
