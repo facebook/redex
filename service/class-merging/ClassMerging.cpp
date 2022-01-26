@@ -114,24 +114,24 @@ void load_roots_subtypes_as_merging_targets(const TypeSystem& type_system,
 
 namespace class_merging {
 
-void merge_model(Scope& scope,
-                 ConfigFiles& conf,
-                 PassManager& mgr,
-                 DexStoresVector& stores,
-                 ModelSpec& spec) {
+const ModelStats merge_model(Scope& scope,
+                             ConfigFiles& conf,
+                             PassManager& mgr,
+                             DexStoresVector& stores,
+                             ModelSpec& spec) {
   TypeSystem type_system(scope);
   if (spec.merging_targets.empty()) {
     load_roots_subtypes_as_merging_targets(type_system, &spec);
   }
-  merge_model(type_system, scope, conf, mgr, stores, spec);
+  return merge_model(type_system, scope, conf, mgr, stores, spec);
 }
 
-void merge_model(const TypeSystem& type_system,
-                 Scope& scope,
-                 ConfigFiles& conf,
-                 PassManager& mgr,
-                 DexStoresVector& stores,
-                 ModelSpec& spec) {
+const ModelStats merge_model(const TypeSystem& type_system,
+                             Scope& scope,
+                             ConfigFiles& conf,
+                             PassManager& mgr,
+                             DexStoresVector& stores,
+                             ModelSpec& spec) {
   set_up(conf);
   always_assert(s_is_initialized);
   TRACE(CLMG, 2, "[ClassMerging] merging %s model", spec.name.c_str());
@@ -150,6 +150,7 @@ void merge_model(const TypeSystem& type_system,
   mm.increase_ctor_dedupped_stats(num_dedupped);
   stats += mm.get_model_stats();
   stats.update_redex_stats(spec.class_name_prefix, mgr);
+  return stats;
 }
 
 } // namespace class_merging

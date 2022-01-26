@@ -274,6 +274,7 @@ void ClassMergingPass::run_pass(DexStoresVector& stores,
   }
 
   auto scope = build_class_scope(stores);
+  ModelStats total_stats;
   for (ModelSpec& model_spec : m_model_specs) {
     if (!model_spec.enabled) {
       continue;
@@ -284,9 +285,11 @@ void ClassMergingPass::run_pass(DexStoresVector& stores,
             "dex");
       model_spec.include_primary_dex = true;
     }
-    class_merging::merge_model(scope, conf, mgr, stores, model_spec);
+    total_stats +=
+        class_merging::merge_model(scope, conf, mgr, stores, model_spec);
   }
   post_dexen_changes(scope, stores);
+  total_stats.update_redex_stats(" total", mgr);
 }
 
 static ClassMergingPass s_pass;
