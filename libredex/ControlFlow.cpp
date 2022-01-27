@@ -2399,6 +2399,49 @@ Block* ControlFlowGraph::split_block(const cfg::InstructionIterator& it) {
   return split_block(it.block(), it.unwrap());
 }
 
+Block* ControlFlowGraph::split_block_before(Block* old_block,
+                                            const IRList::iterator& raw_it) {
+  always_assert(editable());
+  // Do not split in front of special move instructions. This would likely end
+  // up being illegal.
+  always_assert(!opcode::is_a_move_result(raw_it->insn->opcode()) &&
+                !opcode::is_a_move_result_pseudo(raw_it->insn->opcode()));
+
+  // new_block will be the predecessor.
+  Block* new_block = create_block();
+
+  // move the rest of the instructions after the split point into the new block
+  new_block->m_entries.splice_selection(
+      new_block->begin(), old_block->m_entries, old_block->begin(), raw_it);
+
+  // make the incoming edges go to the new block...
+  std::vector<Edge*> to_move(old_block->preds().begin(),
+                             old_block->preds().end());
+  for (auto e : to_move) {
+    set_edge_target(e, new_block);
+  }
+
+  // Copy outgoing throw edges.
+  for (auto e : old_block->succs()) {
+    if (e->type() != EDGE_THROW) {
+      continue;
+    }
+    auto new_edge = new Edge(*e);
+    new_edge->set_src(new_block);
+    add_edge(new_edge);
+  }
+
+  // connect the halves of the block we just split up
+  add_edge(new_block, old_block, EDGE_GOTO);
+  return new_block;
+}
+
+Block* ControlFlowGraph::split_block_before(
+    const cfg::InstructionIterator& it) {
+  always_assert(!it.is_end());
+  return split_block_before(it.block(), it.unwrap());
+}
+
 void ControlFlowGraph::merge_blocks(Block* pred, Block* succ) {
   const auto& not_throws = [](const Edge* e) {
     return e->type() != EDGE_THROW;
