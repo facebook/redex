@@ -98,7 +98,7 @@ Shrinker::Shrinker(
 
   if (config.run_cse || config.run_local_dce) {
     if (config.compute_pure_methods) {
-      const auto& pure_methods = get_pure_methods();
+      const auto& pure_methods = ::get_pure_methods();
       m_pure_methods.insert(pure_methods.begin(), pure_methods.end());
       auto immutable_getters = get_immutable_getters(scope);
       m_pure_methods.insert(immutable_getters.begin(), immutable_getters.end());
