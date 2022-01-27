@@ -213,6 +213,8 @@ struct SourceBlock {
     }
     last->next = std::move(sb);
   }
+
+  std::string show(bool quoted_src = false) const;
 };
 
 /*

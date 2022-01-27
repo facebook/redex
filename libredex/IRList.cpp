@@ -8,6 +8,7 @@
 #include "IRList.h"
 
 #include <iterator>
+#include <sstream>
 #include <vector>
 
 #include "DexClass.h"
@@ -883,3 +884,32 @@ IRInstruction* move_result_pseudo_of(IRList::iterator it) {
 }
 
 } // namespace ir_list
+
+std::string SourceBlock::show(bool quoted_src) const {
+  std::ostringstream o;
+
+  for (const auto* cur = this; cur != nullptr; cur = cur->next.get()) {
+    if (cur != this) {
+      o << " ";
+    }
+    if (quoted_src) {
+      o << "\"";
+    }
+    o << ::show(cur->src);
+    if (quoted_src) {
+      o << "\"";
+    }
+    o << "@" << cur->id;
+    o << "(";
+    for (const auto& val : cur->vals) {
+      if (val) {
+        o << val->val << ":" << val->appear100;
+      } else {
+        o << "x";
+      }
+      o << "|";
+    }
+    o << ")";
+  }
+  return o.str();
+}
