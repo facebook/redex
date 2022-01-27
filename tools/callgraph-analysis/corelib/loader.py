@@ -6,7 +6,11 @@
 
 import array
 import mmap
+import re
 import struct
+
+re_methodname = r"^(ENTRY|EXIT|(L.+;\..+:\((\[?(L.+;|Z|B|S|C|I|J|F|D|V))*\)(\[?(L.+;|Z|B|S|C|I|J|F|D|V))))$"
+re_classname = r"^L.+;$"
 
 
 class CallGraphNode(object):
@@ -23,6 +27,7 @@ class CallGraphNode(object):
 class CallGraph(object):
     def __init__(self):
         self.nodes = {}
+        self.node_classes = {}
 
     def read_node(self, mapping):
         node_name_size = struct.unpack("<L", mapping.read(4))[0]
@@ -33,6 +38,15 @@ class CallGraph(object):
 
     def add_node(self, node):
         self.nodes[node.name] = node
+        if ";" in node.name:
+            split = node.name.split(".")
+            class_name = split[0]
+            method_name = split[1].split(":")[0]
+            if class_name not in self.node_classes:
+                self.node_classes[class_name] = {}
+            if method_name not in self.node_classes[class_name]:
+                self.node_classes[class_name][method_name] = []
+            self.node_classes[class_name][method_name].append(node)
 
     def add_edge(self, node, succ):
         if succ not in node.succs:
@@ -42,9 +56,45 @@ class CallGraph(object):
             succ.preds.add(node)
 
     def get_node(self, node_name):
+        if re.match(re_methodname, node_name) is None:
+            print("input don't match method name regex")
+            return None
+        if node_name not in self.nodes:
+            print("node don't exist in callgraph")
+            return None
         return self.nodes[node_name]
 
+    def get_nodes_in_class(self, class_name):
+        if re.match(re_classname, class_name) is None:
+            print("input don't match class name regex")
+            return None
+        if class_name not in self.node_classes:
+            print("class not exist in callgraph")
+            return None
+        return_val = []
+        for value in self.node_classes[class_name].values():
+            return_val.extend(value)
+        return return_val
+
+    def get_nodes_in_class_method(self, class_name, method_name):
+        if re.match(re_classname, class_name) is None:
+            print("input don't match class name regex")
+            return None
+        if class_name not in self.node_classes:
+            print("class not exist in callgraph")
+            return None
+        if method_name not in self.node_classes[class_name]:
+            print("method not exist in class or callgraph")
+            return None
+        return self.node_classes[class_name][method_name]
+
     def get_node_preds(self, node_name):
+        if re.match(re_methodname, node_name) is None:
+            print("input don't match method name regex")
+            return None
+        if node_name not in self.nodes:
+            print("node don't exist")
+            return None
         return self.nodes[node_name].preds
 
     def get_node_succs(self, node_name):
