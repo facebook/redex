@@ -174,10 +174,8 @@ TypeSet MergeabilityChecker::exclude_unsupported_bytecode_refs_for(
         break;
       }
       if (!use_insn->has_method()) {
-        TRACE(CLMG,
-              5,
-              "[non mergeable] const class unsafe use %s",
-              SHOW(use_insn));
+        TRACE(CLMG, 5, "[non mergeable] const class unsafe use @ %s in %s",
+              SHOW(use_insn), SHOW(method));
         non_mergeables.insert(referenced_type);
         break;
       }
