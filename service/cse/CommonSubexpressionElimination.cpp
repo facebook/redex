@@ -1453,6 +1453,7 @@ CommonSubexpressionElimination::CommonSubexpressionElimination(
 }
 
 static IROpcode get_move_opcode(const IRInstruction* earlier_insn) {
+  always_assert(!opcode::is_a_literal_const(earlier_insn->opcode()));
   if (earlier_insn->has_dest()) {
     return earlier_insn->dest_is_wide()     ? OPCODE_MOVE_WIDE
            : earlier_insn->dest_is_object() ? OPCODE_MOVE_OBJECT
@@ -1470,6 +1471,34 @@ static IROpcode get_move_opcode(const IRInstruction* earlier_insn) {
                ? OPCODE_MOVE_OBJECT
                : OPCODE_MOVE;
   }
+}
+
+static std::pair<IROpcode, std::optional<int64_t>> get_move_or_const_literal(
+    const sparta::PatriciaTreeSet<const IRInstruction*>& insns) {
+  std::optional<IROpcode> opcode;
+  std::optional<int64_t> literal;
+  for (auto insn : insns) {
+    if (opcode::is_a_literal_const(insn->opcode())) {
+      if (literal) {
+        always_assert(*literal == insn->get_literal());
+        always_assert(*opcode == insn->opcode());
+      } else {
+        literal = insn->get_literal();
+        opcode = insn->opcode();
+      }
+      continue;
+    }
+    if (opcode) {
+      always_assert(*opcode == get_move_opcode(insn));
+    } else {
+      opcode = get_move_opcode(insn);
+    }
+  }
+  always_assert(opcode);
+  always_assert(opcode::is_a_move(*opcode) ||
+                opcode::is_a_literal_const(*opcode));
+  always_assert(!opcode::is_a_literal_const(*opcode) || literal);
+  return std::make_pair(*opcode, literal);
 }
 
 bool CommonSubexpressionElimination::patch(bool runtime_assertions) {
@@ -1494,12 +1523,15 @@ bool CommonSubexpressionElimination::patch(bool runtime_assertions) {
       continue;
     }
     auto& earlier_insns = m_earlier_insns.at(f.earlier_insns_index);
+    auto move_or_const_literal = get_move_or_const_literal(earlier_insns);
+    auto opcode = move_or_const_literal.first;
+    if (!opcode::is_a_move(opcode)) {
+      continue;
+    }
     combined_earlier_insns.insert(earlier_insns.begin(), earlier_insns.end());
-    IROpcode move_opcode = get_move_opcode(*earlier_insns.begin());
-    reg_t temp_reg = move_opcode == OPCODE_MOVE_WIDE
-                         ? m_cfg.allocate_wide_temp()
-                         : m_cfg.allocate_temp();
-    temps.emplace(f.earlier_insns_index, std::make_pair(move_opcode, temp_reg));
+    reg_t temp_reg = opcode == OPCODE_MOVE_WIDE ? m_cfg.allocate_wide_temp()
+                                                : m_cfg.allocate_temp();
+    temps.emplace(f.earlier_insns_index, std::make_pair(opcode, temp_reg));
   }
   for (auto earlier_insn : combined_earlier_insns) {
     iterator_insns.insert(earlier_insn);
@@ -1535,21 +1567,24 @@ bool CommonSubexpressionElimination::patch(bool runtime_assertions) {
   std::vector<std::pair<Forward, IRInstruction*>> to_check;
   for (const auto& f : m_forward) {
     auto& earlier_insns = m_earlier_insns.at(f.earlier_insns_index);
-    auto& q = temps.at(f.earlier_insns_index);
-    IROpcode move_opcode = q.first;
-    reg_t temp_reg = q.second;
+
     IRInstruction* insn = f.insn;
     auto& it = iterators.at(insn);
 
-    bool has_lit_const{false};
-    for (auto earlier_insn : earlier_insns) {
+    auto temp_it = temps.find(f.earlier_insns_index);
+    if (temp_it == temps.end()) {
+      auto move_or_const_literal = get_move_or_const_literal(earlier_insns);
+      auto const_opcode = move_or_const_literal.first;
+      always_assert(opcode::is_a_literal_const(const_opcode));
+      auto literal = *(move_or_const_literal.second);
+
       // Consider this case:
-      //   1.(const v0 0)
-      //   2.(iput-object v0 v3
-      //   "Lcom/facebook/litho/Output;.mT:Ljava/lang/Object;") 3.(const v0 0)
-      //   4.boxing-unboxing v0
-      //   5.(move-result v0)
-      //   6.(iput-boolean v0 v4 "LX/002;.chromeVisibility:Z")
+      //   1. (const v0 0)
+      //   2. (iput-object v0 v3 "LClass1;.field:Ljava/lang/Object;")
+      //   3. (const v0 0)
+      //   4. boxing-unboxing v0
+      //   5. (move-result v0)
+      //   6. (iput-boolean v0 v4 "LClass2;.field:Z")
       // We need to make sure that after opt-out "boxing-unboxing v0", v0 used
       // in insn 6. should not be the one used in insn 2, since in line 2, v0 is
       // used as null-0 and in line 4, v0 should be int. Therfore, instead of
@@ -1557,28 +1592,31 @@ bool CommonSubexpressionElimination::patch(bool runtime_assertions) {
       // just clone that const insn and override the dest to current insn's
       // dest. No need to add this new insn for runtime-assertion since it is
       // just a clone.
-      auto earlier_opcode = earlier_insn->opcode();
-      if (!opcode::is_a_literal_const(earlier_opcode)) {
-        continue;
-      }
-      IRInstruction* clone_insn =
-          (new IRInstruction(*earlier_insn))->set_dest(insn->dest());
-      m_cfg.insert_after(it, clone_insn);
-      has_lit_const = true;
-    }
+      IRInstruction* const_insn = new IRInstruction(const_opcode);
+      const_insn->set_literal(literal)->set_dest(insn->dest());
+      m_cfg.insert_after(it, const_insn);
 
-    if (!has_lit_const) {
+      for (auto earlier_insn : earlier_insns) {
+        TRACE(CSE, 4, "[CSE] forwarding %s to %s as const %ld",
+              SHOW(earlier_insn), SHOW(insn), literal);
+      }
+    } else {
+      auto& q = temp_it->second;
+      auto move_opcode = q.first;
+      always_assert(opcode::is_a_move(move_opcode));
+      reg_t temp_reg = q.second;
+
       IRInstruction* move_insn = new IRInstruction(move_opcode);
       move_insn->set_src(0, temp_reg)->set_dest(insn->dest());
       m_cfg.insert_after(it, move_insn);
       if (runtime_assertions) {
         to_check.emplace_back(f, move_insn);
       }
-    }
 
-    for (auto earlier_insn : earlier_insns) {
-      TRACE(CSE, 4, "[CSE] forwarding %s to %s via v%u", SHOW(earlier_insn),
-            SHOW(insn), temp_reg);
+      for (auto earlier_insn : earlier_insns) {
+        TRACE(CSE, 4, "[CSE] forwarding %s to %s via v%u", SHOW(earlier_insn),
+              SHOW(insn), temp_reg);
+      }
     }
 
     if (opcode::is_move_result_any(insn->opcode())) {

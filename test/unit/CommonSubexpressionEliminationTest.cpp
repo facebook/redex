@@ -1299,7 +1299,6 @@ TEST_F(CommonSubexpressionEliminationTest, wrap_and_unwrap) {
   auto expected_str = R"(
     (
       (const-wide v0 3)
-      (move-wide v2 v0)
       (invoke-static (v0) "Ljava/lang/Long;.valueOf:(J)Ljava/lang/Long;")
       (move-result-object v0)
       (invoke-virtual (v0) "Ljava/lang/Long;.longValue:()J")
@@ -1326,7 +1325,6 @@ TEST_F(CommonSubexpressionEliminationTest, wrap_and_unwrap_1) {
   auto expected_str = R"(
     (
       (const-wide v0 3)
-      (move-wide v2 v0)
       (invoke-static (v0) "Ljava/lang/Long;.valueOf:(J)Ljava/lang/Long;")
       (move-result-object v0)
       (check-cast v0 "Ljava/lang/Long;")
@@ -1361,11 +1359,9 @@ TEST_F(CommonSubexpressionEliminationTest, wrap_and_unwrap_2) {
   auto expected_str = R"(
     (
       (const-wide v0 3)
-      (move-wide v6 v0)
       (invoke-static (v0) "Ljava/lang/Long;.valueOf:(J)Ljava/lang/Long;")
       (move-result-object v0)
       (const-wide v2 4)
-      (move-wide v8 v2)
       (invoke-static (v2) "Ljava/lang/Long;.valueOf:(J)Ljava/lang/Long;")
       (move-result-object v2)
       (invoke-virtual (v0) "Ljava/lang/Long;.longValue:()J")
@@ -1402,11 +1398,9 @@ TEST_F(CommonSubexpressionEliminationTest, wrap_and_unwrap_3) {
   auto expected_str = R"(
     (
       (const-wide v0 3)
-      (move-wide v6 v0)
       (invoke-static (v0) "Ljava/lang/Long;.valueOf:(J)Ljava/lang/Long;")
       (move-result-object v0)
       (const-wide v2 4)
-      (move-wide v8 v2)
       (invoke-static (v2) "Ljava/lang/Long;.valueOf:(J)Ljava/lang/Long;")
       (move-result-object v2)
       (invoke-virtual (v0) "Ljava/lang/Long;.longValue:()J")
@@ -1440,7 +1434,6 @@ TEST_F(CommonSubexpressionEliminationTest, wrap_and_unwrap_4) {
   auto expected_str = R"(
     (
       (const v0 0)
-      (move v1 v0)
       (iput-object v0 v3 "Lcom/facebook/litho/Output;.mT:Ljava/lang/Object;")
       (const v0 0)
       (invoke-static (v0) "Ljava/lang/Boolean;.valueOf:(Z)Ljava/lang/Boolean;")
@@ -1473,7 +1466,6 @@ TEST_F(CommonSubexpressionEliminationTest, wrap_and_unwrap_5) {
       (const v0 0)
       (iput-object v0 v3 "Lcom/facebook/litho/Output;.mT:Ljava/lang/Object;")
       (const v0 1)
-      (move v1 v0)
       (invoke-static (v0) "Ljava/lang/Boolean;.valueOf:(Z)Ljava/lang/Boolean;")
       (move-result-object v0)
       (invoke-virtual (v0) "Ljava/lang/Boolean;.booleanValue:()Z")
@@ -1500,7 +1492,6 @@ TEST_F(CommonSubexpressionEliminationTest, unwrap_and_wrap) {
   auto expected_str = R"(
     (
       (const-wide v2 0)
-      (move-wide v4 v2)
       (invoke-virtual (v2) "Ljava/lang/Boolean;.booleanValue:()Z")
       (move-result v0)
       (invoke-static (v0) "Ljava/lang/Boolean;.valueOf:(Z)Ljava/lang/Boolean;")
@@ -2086,4 +2077,37 @@ TEST_F(CommonSubexpressionEliminationTest, finalizable) {
        code_str,
        expected_str,
        1);
+}
+
+TEST_F(CommonSubexpressionEliminationTest, const_regression) {
+  auto code_str = R"(
+    (
+      (load-param-object v3)
+      (const v0 0)
+      (iput-object v0 v3 "Lcom/facebook/litho/Output;.mT:Ljava/lang/Object;")
+      (const v0 0)
+      (invoke-static (v0) "Ljava/lang/Boolean;.valueOf:(Z)Ljava/lang/Boolean;")
+      (move-result-object v1)
+      (invoke-virtual (v1) "Ljava/lang/Boolean;.booleanValue:()Z")
+      (move-result v0)
+      (return v0)
+    )
+  )";
+  auto expected_str = R"(
+    (
+      (load-param-object v3)
+      (const v0 0)
+      ; (move v4 v0) -- this spurious move with a non-object type, competing
+      ;                 with the -object use below, must not be introduced here
+      (iput-object v0 v3 "Lcom/facebook/litho/Output;.mT:Ljava/lang/Object;")
+      (const v0 0)
+      (invoke-static (v0) "Ljava/lang/Boolean;.valueOf:(Z)Ljava/lang/Boolean;")
+      (move-result-object v1)
+      (invoke-virtual (v1) "Ljava/lang/Boolean;.booleanValue:()Z")
+      (move-result v0)
+      (const v0 0)
+      (return v0)
+    )
+  )";
+  test(Scope{type_class(type::java_lang_Object())}, code_str, expected_str, 1);
 }
