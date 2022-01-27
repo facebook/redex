@@ -591,12 +591,131 @@ size_t insert_onMethodExit_calls(
 
   // Which blocks should have onMethodExits? Let's ignore infinite loop cases,
   // and do on returns/throws that have no successors.
+
+  // Deduping these blocks can help. But it turns out it is too restricted
+  // because it is sensitive to registers. As such, we do this manually.
+  //
+  // Because of catch handlers this is more complicated than it should be. We
+  // do need duplicates to retain the right throw edges.
+  //
+  // For simplicity we will always rename the throw/return-non-void register.
+  // That is easier than remembering and fixing it up later, and reg-alloc
+  // should be able to deal with it.
+  using CatchCoverage =
+      std::vector<std::pair<const DexType*, const cfg::Block*>>;
+  auto create_catch_coverage = [](const cfg::Block* b) {
+    auto index_order = b->get_outgoing_throws_in_order();
+    CatchCoverage ret{};
+    ret.reserve(index_order.size());
+    std::transform(index_order.begin(), index_order.end(),
+                   std::back_inserter(ret), [](auto e) {
+                     return std::pair<const DexType*, const cfg::Block*>(
+                         e->throw_info()->catch_type, e->target());
+                   });
+    return ret;
+  };
+  struct CatchCoverageHash {
+    std::size_t operator()(const CatchCoverage& key) const {
+      std::size_t seed = 0;
+      boost::hash_range(seed, key.begin(), key.end());
+      return seed;
+    }
+  };
+  using DedupeMap =
+      std::unordered_map<CatchCoverage, cfg::Block*, CatchCoverageHash>;
+
+  enum RegType {
+    kNone,
+    kObject,
+    kInt,
+    kWide,
+  };
+
+  auto handle_instrumentation = [&cfg, &create_invoke_insts](
+                                    DedupeMap& map,
+                                    std::optional<reg_t>& tmp_reg,
+                                    cfg::Block* b, CatchCoverage& cv,
+                                    RegType reg_type) {
+    auto pushback_move = [reg_type](cfg::Block* b, reg_t from, reg_t to) {
+      auto move_insn =
+          new IRInstruction(reg_type == RegType::kObject ? OPCODE_MOVE_OBJECT
+                            : reg_type == RegType::kWide ? OPCODE_MOVE_WIDE
+                                                         : OPCODE_MOVE);
+      move_insn->set_src(0, from);
+      move_insn->set_dest(to);
+      b->push_back(move_insn);
+    };
+
+    auto it = map.find(cv);
+    if (it == map.end()) {
+      // Split before the last instruction.
+      auto new_pred = cfg.split_block_before(b, b->get_last_insn());
+
+      auto last_insn = b->get_last_insn()->insn;
+
+      // If there is a reg involved, check for a temp reg, rename the
+      // operand operand, and insert a move.
+      if (reg_type != RegType::kNone) {
+        // First time, allocate a temp reg.
+        if (!tmp_reg) {
+          tmp_reg = reg_type == RegType::kWide ? cfg.allocate_wide_temp()
+                                               : cfg.allocate_temp();
+        }
+        // Insert a move.
+        pushback_move(new_pred, last_insn->src(0), *tmp_reg);
+        // Change the return's operand.
+        last_insn->set_src(0, *tmp_reg);
+      }
+
+      // Now instrument the return.
+      b->insert_before(b->to_cfg_instruction_iterator(b->get_last_insn()),
+                       create_invoke_insts());
+
+      // And store in the cache.
+      map.emplace(std::move(cv), b);
+    } else {
+      auto last_insn = b->get_last_insn()->insn;
+      std::optional<reg_t> ret_reg =
+          reg_type == RegType::kNone ? std::nullopt
+                                     : std::optional<reg_t>(last_insn->src(0));
+      // Delete the last instruction, possibly add an aligning move, then
+      // fall-through.
+      b->remove_insn(b->get_last_insn());
+      if (ret_reg) {
+        redex_assert(tmp_reg);
+        pushback_move(b, *ret_reg, *tmp_reg);
+      }
+      cfg.add_edge(b, it->second, cfg::EdgeType::EDGE_GOTO);
+    }
+  };
+
+  DedupeMap return_map{};
+  DedupeMap throw_map{};
+  std::optional<reg_t> return_temp_reg{std::nullopt};
+  std::optional<reg_t> throw_temp_reg{std::nullopt};
+
   const auto& exit_blocks = only_terminal_return_or_throw_blocks(cfg);
   for (cfg::Block* b : exit_blocks) {
     assert(b->succs().empty());
-    // The later DedupBlocksPass could deduplicate these calls.
-    b->insert_before(b->to_cfg_instruction_iterator(b->get_last_insn()),
-                     create_invoke_insts());
+
+    auto cv = create_catch_coverage(b);
+
+    if (b->branchingness() == opcode::Branchingness::BRANCH_RETURN) {
+      auto ret_insn = b->get_last_insn()->insn;
+      auto ret_opcode = ret_insn->opcode();
+      redex_assert(opcode::is_a_return(ret_opcode));
+      handle_instrumentation(
+          return_map, return_temp_reg, b, cv,
+          opcode::is_return_void(ret_opcode)     ? RegType::kNone
+          : opcode::is_return_object(ret_opcode) ? RegType::kObject
+          : opcode::is_return_wide(ret_opcode)   ? RegType::kWide
+                                                 : RegType::kInt);
+      redex_assert(return_temp_reg || opcode::is_return_void(ret_opcode));
+    } else {
+      redex_assert(b->branchingness() == opcode::Branchingness::BRANCH_THROW);
+      handle_instrumentation(throw_map, throw_temp_reg, b, cv,
+                             RegType::kObject);
+    }
   }
   return exit_blocks.size();
 }
@@ -808,6 +927,9 @@ MethodInfo instrument_basic_blocks(IRCode& code,
                                    const size_t method_offset,
                                    const size_t max_num_blocks,
                                    const InstrumentPass::Options& options) {
+  MethodInfo info;
+  info.method = method;
+
   using namespace cfg;
 
   code.build_cfg(/*editable*/ true);
@@ -828,7 +950,38 @@ MethodInfo instrument_basic_blocks(IRCode& code,
   TRACE(INSTRUMENT, DEBUG_CFG ? 0 : 10, "BEFORE: %s, %s\n%s",
         show_deobfuscated(method).c_str(), SHOW(method), SHOW(cfg));
 
-  // Step 2: Insert onMethodBegin to track method execution, and bit-vector
+  // Step 2: Fill in some info eagerly. This is necessary as later steps may be
+  //         modifying the CFG.
+  info.bit_id_2_block_id.reserve(num_to_instrument);
+  info.bit_id_2_source_blocks.reserve(num_to_instrument);
+  for (const auto& i : blocks) {
+    if (i.is_instrumentable()) {
+      info.bit_id_2_block_id.push_back(i.block->id());
+      info.bit_id_2_source_blocks.emplace_back(
+          source_blocks::gather_source_blocks(i.block));
+      for (auto* merged_block : i.merge_in) {
+        auto& vec = info.bit_id_2_source_blocks.back();
+        auto sb_vec = source_blocks::gather_source_blocks(merged_block);
+        vec.insert(vec.end(), sb_vec.begin(), sb_vec.end());
+      }
+      TRACE(INSTRUMENT, 10, "%s Block %zu: idx=%zu SBs=%s",
+            show_deobfuscated(method).c_str(), i.block->id(),
+            info.bit_id_2_block_id.size() - 1,
+            [&]() {
+              std::string ret;
+              for (auto* sb : info.bit_id_2_source_blocks.back()) {
+                ret.append(sb->show());
+                ret.append(";");
+              }
+              return ret;
+            }()
+                .c_str());
+    } else {
+      info.rejected_blocks[i.block->id()] = i.type;
+    }
+  }
+
+  // Step 3: Insert onMethodBegin to track method execution, and bit-vector
   //         allocation code in its method entry point.
   //
   const size_t origin_num_non_entry_blocks = cfg.blocks().size() - 1;
@@ -840,11 +993,17 @@ MethodInfo instrument_basic_blocks(IRCode& code,
       insert_prologue_insts(cfg, onMethodBegin, num_vectors, method_offset);
   const size_t after_prologue_num_non_entry_blocks = cfg.blocks().size() - 1;
 
-  // Step 3: Insert block coverage update instructions to each blocks.
+  // Step 4: Insert block coverage update instructions to each blocks.
   //
   insert_block_coverage_computations(blocks, reg_vectors);
 
-  // Step 4: Insert onMethodExit in exit block(s).
+  TRACE(INSTRUMENT, DEBUG_CFG ? 0 : 10, "WITH COVERAGE INSNS: %s, %s\n%s",
+        show_deobfuscated(method).c_str(), SHOW(method), SHOW(cfg));
+
+  // Gather early as step 4 may modify CFG.
+  auto num_non_entry_blocks = cfg.blocks().size() - 1;
+
+  // Step 5: Insert onMethodExit in exit block(s).
   //
   // TODO: What about no exit blocks possibly due to infinite loops? Such case
   // is extremely rare in our apps. In this case, let us do method tracing by
@@ -860,8 +1019,6 @@ MethodInfo instrument_basic_blocks(IRCode& code,
     });
   };
 
-  MethodInfo info;
-  info.method = method;
   // When there are too many blocks, collect all source blocks into the entry
   // block to track them conservatively.
   info.entry_source_blocks = too_many_blocks ? [&]() {
@@ -875,7 +1032,7 @@ MethodInfo instrument_basic_blocks(IRCode& code,
   info.too_many_blocks = too_many_blocks;
   info.num_too_many_blocks = too_many_blocks ? 1 : 0;
   info.offset = method_offset;
-  info.num_non_entry_blocks = cfg.blocks().size() - 1;
+  info.num_non_entry_blocks = num_non_entry_blocks;
   info.num_vectors = num_vectors;
   info.num_exit_calls = num_exit_calls;
   info.num_empty_blocks = count(BlockType::Empty);
@@ -903,23 +1060,6 @@ MethodInfo instrument_basic_blocks(IRCode& code,
                           ? rhs.merge_in.size()
                           : 0);
       });
-
-  info.bit_id_2_block_id.reserve(num_to_instrument);
-  info.bit_id_2_source_blocks.reserve(num_to_instrument);
-  for (const auto& i : blocks) {
-    if (i.is_instrumentable()) {
-      info.bit_id_2_block_id.push_back(i.block->id());
-      info.bit_id_2_source_blocks.emplace_back(
-          source_blocks::gather_source_blocks(i.block));
-      for (auto* merged_block : i.merge_in) {
-        auto& vec = info.bit_id_2_source_blocks.back();
-        auto sb_vec = source_blocks::gather_source_blocks(merged_block);
-        vec.insert(vec.end(), sb_vec.begin(), sb_vec.end());
-      }
-    } else {
-      info.rejected_blocks[i.block->id()] = i.type;
-    }
-  }
 
   const size_t num_rejected_blocks =
       info.num_empty_blocks + info.num_useless_blocks +

@@ -677,6 +677,14 @@ class ControlFlowGraph {
   Block* split_block(const cfg::InstructionIterator& it);
   Block* split_block(Block* block, const IRList::iterator& it);
 
+  // Same as above, splits so that `it` will be the first instruction in the
+  // successor block. The new block is the predecessor and will be returned.
+  //
+  // Note: Incoming edges are changed. Outgoing edges of type EDGE_THROW are
+  //       duplicated.
+  Block* split_block_before(const cfg::InstructionIterator& it);
+  Block* split_block_before(Block* block, const IRList::iterator& it);
+
   // Merge `succ` into `pred` and delete `succ`
   //
   // `pred` must be the only predecessor of `succ`
