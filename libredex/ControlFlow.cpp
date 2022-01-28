@@ -2282,6 +2282,7 @@ void ControlFlowGraph::free_all_blocks_and_edges_and_removed_insns() {
     for (auto* insn : m_removed_insns) {
       delete insn;
     }
+    m_removed_insns.clear();
   }
 }
 

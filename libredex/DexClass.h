@@ -1311,6 +1311,8 @@ class DexClass {
     m_access_flags = access;
   }
 
+  void set_external();
+
   void set_super_class(DexType* super_class) {
     always_assert_log(!m_external, "Unexpected external class %s\n",
                       self_show().c_str());

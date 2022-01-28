@@ -418,7 +418,7 @@ void MultiMethodInliner::inline_callees(
   }
 }
 
-void MultiMethodInliner::inline_callees(
+size_t MultiMethodInliner::inline_callees(
     DexMethod* caller,
     const std::unordered_set<IRInstruction*>& insns,
     std::vector<IRInstruction*>* deleted_insns) {
@@ -439,7 +439,7 @@ void MultiMethodInliner::inline_callees(
         return editable_cfg_adapter::LOOP_CONTINUE;
       });
 
-  inline_inlinables(caller, inlinables, deleted_insns);
+  return inline_inlinables(caller, inlinables, deleted_insns);
 }
 
 bool MultiMethodInliner::inline_inlinables_need_deconstruct(DexMethod* method) {
@@ -516,13 +516,13 @@ DexType* MultiMethodInliner::get_needs_init_class(DexMethod* callee) const {
   return type;
 }
 
-void MultiMethodInliner::inline_inlinables(
+size_t MultiMethodInliner::inline_inlinables(
     DexMethod* caller_method,
     const std::vector<Inlinable>& inlinables,
     std::vector<IRInstruction*>* deleted_insns) {
   auto timer = m_inline_inlinables_timer.scope();
   if (for_speed() && m_ab_experiment_context->use_control()) {
-    return;
+    return 0;
   }
 
   auto caller = caller_method->get_code();
@@ -818,6 +818,7 @@ void MultiMethodInliner::inline_inlinables(
   if (init_classes) {
     info.init_classes += init_classes;
   }
+  return inlined_callees.size();
 }
 
 void MultiMethodInliner::postprocess_method(DexMethod* method) {

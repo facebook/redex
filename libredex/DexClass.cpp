@@ -826,6 +826,11 @@ void DexClass::set_deobfuscated_name(const DexString& name) {
   set_deobfuscated_name(&name);
 }
 
+void DexClass::set_external() {
+  m_deobfuscated_name = DexString::make_string(self_show());
+  m_external = true;
+}
+
 void DexClass::remove_method(const DexMethod* m) {
   auto& meths = m->is_virtual() ? m_vmethods : m_dmethods;
   auto it = std::find(meths.begin(), meths.end(), m);
