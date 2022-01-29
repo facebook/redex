@@ -23,6 +23,12 @@ bool implements(const DexClass* cls, const DexType* intf) {
       return true;
     }
   }
+
+  auto* super_type = cls->get_super_class();
+  auto* super_cls = type_class(cls->get_super_class());
+  if (super_cls && super_type != type::java_lang_Object()) {
+    return implements(super_cls, intf);
+  }
   return false;
 }
 
@@ -76,10 +82,10 @@ const DexType* find_common_type(const DexType* l, const DexType* r) {
   }
 
   // One is interface, and the other implements it.
-  if (is_interface(l_cls) && implements(r_cls, l)) {
+  if (is_interface(l_cls) && !is_interface(r_cls) && implements(r_cls, l)) {
     return l;
   }
-  if (is_interface(r_cls) && implements(l_cls, r)) {
+  if (is_interface(r_cls) && !is_interface(l_cls) && implements(l_cls, r)) {
     return r;
   }
 
