@@ -16,14 +16,14 @@
 #pragma once
 
 #include <cstdint>
+#include <iosfwd>
 #include <memory>
-#include <ostream>
 #include <string>
+#include <vector>
 
-#include "Debug.h"
-#include "DexClass.h"
-#include "IRInstruction.h"
-#include "Sha1.h"
+class DexClass;
+
+using Scope = std::vector<DexClass*>;
 
 namespace hashing {
 
@@ -47,85 +47,15 @@ class DexScopeHasher final {
 
 class DexClassHasher final {
  public:
-  explicit DexClassHasher(DexClass* cls) : m_cls(cls) {}
+  explicit DexClassHasher(DexClass* cls);
   DexHash run();
   void print(std::ostream&);
 
+  ~DexClassHasher();
+
  private:
-  DexHash get_hash() const;
-  void hash_metadata();
-  void hash(const std::string& str);
-  void hash(int value);
-  void hash(uint64_t value);
-  void hash(uint32_t value);
-  void hash(uint16_t value);
-  void hash(uint8_t value);
-  void hash(bool value);
-  void hash(const IRCode* c);
-  void hash(const IRInstruction* insn);
-  void hash(const EncodedAnnotations* a);
-  void hash(const ParamAnnotations* m);
-  void hash(const DexAnnotation* a);
-  void hash(const DexAnnotationSet* s);
-  void hash(const DexAnnotationElement& elem);
-  void hash(const DexEncodedValue* v);
-  void hash(const DexProto* p);
-  void hash(const DexMethodRef* m);
-  void hash(const DexMethod* m);
-  void hash(const DexFieldRef* f);
-  void hash(const DexField* f);
-  void hash(const DexType* t);
-  void hash(const DexTypeList* l);
-  void hash(const DexString* s);
-  template <class T>
-  void hash(const std::vector<T>& l) {
-    hash((uint64_t)l.size());
-    for (const auto& elem : l) {
-      hash(elem);
-    }
-  }
-  template <class T>
-  void hash(const std::deque<T>& l) {
-    hash((uint64_t)l.size());
-    for (const auto& elem : l) {
-      hash(elem);
-    }
-  }
-  template <typename T>
-  void hash(const std::unique_ptr<T>& uptr) {
-    hash(uptr.get());
-  }
-  template <class K, class V>
-  void hash(const std::map<K, V>& l) {
-    hash((uint64_t)l.size());
-    for (const auto& p : l) {
-      hash(p.first);
-      hash(p.second);
-    }
-  }
-
-  // Template magic.
-  template <typename, typename = void>
-  struct has_size : std::false_type {};
-  template <typename T>
-  struct has_size<T, std::void_t<decltype(&T::size)>> : std::true_type {};
-
-  // Not applying to map-like things (like unordered_map) should be done by
-  // failures to hash the elements.
-  template <typename T,
-            typename std::enable_if<has_size<T>::value, T>::type* = nullptr>
-  void hash(const T& c) {
-    hash((uint64_t)c.size());
-    for (const auto& elem : c) {
-      hash(elem);
-    }
-  }
-
-  DexClass* m_cls;
-  size_t m_hash{0};
-  size_t m_code_hash{0};
-  size_t m_registers_hash{0};
-  size_t m_positions_hash{0};
+  struct Fwd;
+  std::unique_ptr<Fwd> m_fwd;
 };
 
 void print_classes(std::ostream& output, const Scope& classes);

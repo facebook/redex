@@ -9,9 +9,11 @@
 
 #include <unordered_map>
 
+#include "DexClass.h"
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "Match.h"
+#include "PassManager.h"
 #include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"

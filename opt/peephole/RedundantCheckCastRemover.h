@@ -7,9 +7,12 @@
 
 #pragma once
 
-#include "DexClass.h"
-#include "PassManager.h"
+#include <string>
 #include <vector>
+
+class DexClass;
+class IRInstruction;
+class PassManager;
 
 class RedundantCheckCastRemover {
  public:
