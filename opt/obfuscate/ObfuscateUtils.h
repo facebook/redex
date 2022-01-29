@@ -9,6 +9,7 @@
 
 #include "ClassHierarchy.h"
 #include "DexAccess.h"
+#include "DexAnnotation.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "ReachableClasses.h"

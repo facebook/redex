@@ -9,6 +9,7 @@
 
 #include "ClassHierarchy.h"
 #include "Debug.h"
+#include "DexAnnotation.h"
 #include "DexClass.h"
 #include "DexLoader.h"
 #include "DexOutput.h"

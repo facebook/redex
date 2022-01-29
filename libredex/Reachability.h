@@ -18,6 +18,8 @@
 #include "SpartaWorkQueue.h"
 #include "Thread.h"
 
+class DexAnnotation;
+
 namespace reachability {
 
 enum class ReachableObjectType : uint8_t {

@@ -15,6 +15,7 @@
 
 #include "ClassHierarchy.h"
 #include "ConcurrentContainers.h"
+#include "DexAnnotation.h"
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "ProguardMatcher.h"

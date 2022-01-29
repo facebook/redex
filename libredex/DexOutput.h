@@ -26,6 +26,7 @@
 #include <locator.h>
 using facebook::Locator;
 
+class DexAnnotation;
 class DexCallSite;
 
 using dexstring_to_idx = std::unordered_map<const DexString*, uint32_t>;

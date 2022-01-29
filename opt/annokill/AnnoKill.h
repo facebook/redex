@@ -14,6 +14,9 @@
 #include <unordered_set>
 #include <vector>
 
+class DexAnnotation;
+class DexAnnotationSet;
+
 class AnnoKill {
  public:
   using AnnoSet = std::unordered_set<DexType*>;

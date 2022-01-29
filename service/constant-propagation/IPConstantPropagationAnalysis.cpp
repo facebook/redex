@@ -7,6 +7,8 @@
 
 #include "IPConstantPropagationAnalysis.h"
 
+#include "DexAnnotation.h"
+
 namespace constant_propagation {
 
 namespace interprocedural {

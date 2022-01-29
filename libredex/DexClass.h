@@ -19,7 +19,6 @@
 
 #include "Debug.h"
 #include "DexAccess.h"
-#include "DexAnnotation.h"
 #include "DexDefs.h"
 #include "DexEncoding.h"
 #include "RedexContext.h"
@@ -54,8 +53,12 @@
  * imports.
  */
 
+class DexAnnotationDirectory;
+class DexAnnotationSet;
 class DexClass;
 class DexDebugInstruction;
+class DexEncodedValue;
+class DexEncodedValueArray;
 class DexField;
 class DexIdx;
 class DexInstruction;
@@ -64,6 +67,9 @@ struct DexPosition;
 class DexString;
 class DexType;
 class PositionMapper;
+
+// Must be same as in DexAnnotations.h!
+using ParamAnnotations = std::map<int, std::unique_ptr<DexAnnotationSet>>;
 
 constexpr bool kInsertDeobfuscatedNameLinks = false;
 
@@ -309,16 +315,13 @@ class DexField : public DexFieldRef {
   const DexString* m_deobfuscated_name{nullptr};
 
   // See UNIQUENESS above for the rationale for the private constructor pattern.
-  DexField(DexType* container, const DexString* name, DexType* type)
-      : DexFieldRef(container, name, type) {
-    m_access = static_cast<DexAccessFlags>(0);
-    m_anno = nullptr;
-    m_value = nullptr;
-  }
+  DexField(DexType* container, const DexString* name, DexType* type);
 
   std::string self_show() const; // To avoid "Show.h" in the header.
 
  public:
+  ~DexField();
+
   ReferencedState rstate; // Tracks whether this field can be deleted or renamed
 
   // DexField retrieval/creation
@@ -397,33 +400,14 @@ class DexField : public DexFieldRef {
   // Return just the name of the field.
   std::string get_simple_deobfuscated_name() const;
 
-  void set_value(DexEncodedValue* v) {
-    always_assert_log(
-        m_concrete,
-        "Field needs to be concrete to be attached an encoded value.");
-    always_assert(is_static(m_access));
-    // The last contiguous block of static fields with null values are not
-    // represented in the encoded value array. OTOH null-initialized static
-    // fields that appear earlier in the static field list have explicit values.
-    // Let's standardize things here.
-    m_value = v != nullptr ? v : DexEncodedValue::zero_for_type(get_type());
-  }
+  void set_value(DexEncodedValue* v);
 
   std::unique_ptr<DexAnnotationSet> release_annotations() {
     return std::move(m_anno);
   }
-  void clear_annotations() { m_anno.reset(); }
+  void clear_annotations();
 
-  void attach_annotation_set(std::unique_ptr<DexAnnotationSet> aset) {
-    always_assert_type_log(
-        !m_concrete, RedexError::BAD_ANNOTATION, "field %s.%s is concrete\n",
-        m_spec.cls->get_name()->c_str(), m_spec.name->c_str());
-    always_assert_type_log(
-        !m_anno, RedexError::BAD_ANNOTATION, "field %s.%s annotation exists\n",
-        m_spec.cls->get_name()->c_str(), m_spec.name->c_str());
-
-    m_anno = std::move(aset);
-  }
+  void attach_annotation_set(std::unique_ptr<DexAnnotationSet> aset);
 
   template <typename C>
   void gather_types(C& ltype) const;
@@ -1058,7 +1042,7 @@ class DexMethod : public DexMethodRef {
   std::unique_ptr<DexAnnotationSet> release_annotations() {
     return std::move(m_anno);
   }
-  void clear_annotations() { m_anno.reset(); }
+  void clear_annotations();
 
   /**
    * Note that this is to combine annotation for two methods that should
@@ -1066,44 +1050,12 @@ class DexMethod : public DexMethodRef {
    * merging parent and child's inherited method. If you want to use this
    * method you should check if their protos are the same before using this.
    */
-  void combine_annotations_with(DexMethod* other) {
-    auto other_anno_set = other->get_anno_set();
-    if (other_anno_set != nullptr) {
-      if (m_anno == nullptr) {
-        m_anno = std::make_unique<DexAnnotationSet>(*other->m_anno);
-      } else {
-        m_anno->combine_with(*other->m_anno);
-      }
-    }
-    for (auto& pair : other->m_param_anno) {
-      if (m_param_anno.count(pair.first) == 0 ||
-          m_param_anno[pair.first] == nullptr) {
-        m_param_anno.emplace(pair.first, new DexAnnotationSet(*pair.second));
-      } else {
-        m_param_anno[pair.first]->combine_with(*pair.second);
-      }
-    }
-  }
+  void combine_annotations_with(DexMethod* other);
 
   void add_load_params(size_t num_add_loads);
-  void attach_annotation_set(std::unique_ptr<DexAnnotationSet> aset) {
-    always_assert_type_log(!m_concrete, RedexError::BAD_ANNOTATION,
-                           "method %s is concrete\n", self_show().c_str());
-    always_assert_type_log(!m_anno, RedexError::BAD_ANNOTATION,
-                           "method %s annotation exists\n",
-                           self_show().c_str());
-    m_anno = std::move(aset);
-  }
+  void attach_annotation_set(std::unique_ptr<DexAnnotationSet> aset);
   void attach_param_annotation_set(int paramno,
-                                   std::unique_ptr<DexAnnotationSet> aset) {
-    always_assert_type_log(!m_concrete, RedexError::BAD_ANNOTATION,
-                           "method %s is concrete\n", self_show().c_str());
-    always_assert_type_log(m_param_anno.count(paramno) == 0,
-                           RedexError::BAD_ANNOTATION,
-                           "param %d annotation to method %s exists\n", paramno,
-                           self_show().c_str());
-    m_param_anno[paramno] = std::move(aset);
-  }
+                                   std::unique_ptr<DexAnnotationSet> aset);
 
   template <typename C>
   void gather_types(C& ltype) const;
@@ -1168,7 +1120,7 @@ class DexClass {
   bool m_external;
   bool m_perf_sensitive;
 
-  explicit DexClass(const std::string& location) : m_location(location){};
+  explicit DexClass(const std::string& location);
   void load_class_annotations(DexIdx* idx, uint32_t anno_off);
   void load_class_data_item(DexIdx* idx,
                             uint32_t cdi_off,
@@ -1183,6 +1135,8 @@ class DexClass {
 
  public:
   ReferencedState rstate;
+
+  ~DexClass();
 
   // May return nullptr on benign duplicate class
   static DexClass* create(DexIdx* idx,
@@ -1273,9 +1227,7 @@ class DexClass {
   DexEncodedValueArray* get_static_values();
   const DexAnnotationSet* get_anno_set() const { return m_anno.get(); }
   DexAnnotationSet* get_anno_set() { return m_anno.get(); }
-  void attach_annotation_set(std::unique_ptr<DexAnnotationSet> anno) {
-    m_anno = std::move(anno);
-  }
+  void attach_annotation_set(std::unique_ptr<DexAnnotationSet> anno);
   void set_source_file(const DexString* source_file) {
     m_source_file = source_file;
   }
@@ -1319,16 +1271,7 @@ class DexClass {
     m_super_class = super_class;
   }
 
-  void combine_annotations_with(DexClass* other) {
-    auto other_anno_set = other->get_anno_set();
-    if (other_anno_set != nullptr) {
-      if (m_anno == nullptr) {
-        m_anno = std::make_unique<DexAnnotationSet>(*other->m_anno);
-      } else {
-        m_anno->combine_with(*other->m_anno);
-      }
-    }
-  }
+  void combine_annotations_with(DexClass* other);
 
   void set_interfaces(DexTypeList* intfs) {
     always_assert_log(!m_external, "Unexpected external class %s\n",
@@ -1336,7 +1279,7 @@ class DexClass {
     m_interfaces = intfs;
   }
 
-  void clear_annotations() { m_anno.reset(); }
+  void clear_annotations();
   /* Encodes class_data_item, returns size in bytes.  No
    * alignment requirements on *output
    */

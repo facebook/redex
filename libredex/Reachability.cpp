@@ -12,6 +12,7 @@
 #include <boost/range/adaptor/map.hpp>
 
 #include "BinarySerialization.h"
+#include "DexAnnotation.h"
 #include "DexUtil.h"
 #include "ProguardConfiguration.h"
 #include "ReachableClasses.h"

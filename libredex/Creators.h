@@ -10,6 +10,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "DexAnnotation.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRCode.h"

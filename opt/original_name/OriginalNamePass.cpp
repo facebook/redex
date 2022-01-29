@@ -7,6 +7,7 @@
 
 #include "OriginalNamePass.h"
 #include "ClassHierarchy.h"
+#include "DexAnnotation.h"
 #include "DexUtil.h"
 #include "PassManager.h"
 #include "Show.h"
