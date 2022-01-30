@@ -625,10 +625,22 @@ void RenameClassesPassV2::eval_pass(DexStoresVector& stores,
   eval_classes(scope, class_hierarchy, conf, m_rename_annotations, mgr);
 }
 
-void RenameClassesPassV2::rename_classes(Scope& scope,
-                                         ConfigFiles& conf,
-                                         bool rename_annotations,
-                                         PassManager& mgr) {
+std::unordered_set<DexClass*> RenameClassesPassV2::get_renamable_classes(
+    Scope& scope) {
+  std::unordered_set<DexClass*> renamable_classes;
+  for (auto clazz : scope) {
+    if (m_force_rename_classes.count(clazz) ||
+        !m_dont_rename_reasons.count(clazz)) {
+      renamable_classes.insert(clazz);
+    }
+  }
+  return renamable_classes;
+}
+
+void RenameClassesPassV2::rename_classes(
+    Scope& scope,
+    const std::unordered_set<DexClass*>& renamable_classes,
+    PassManager& mgr) {
   rewriter::TypeStringMap name_mapping;
   uint32_t sequence = 0;
   for (auto clazz : scope) {
@@ -653,8 +665,10 @@ void RenameClassesPassV2::rename_classes(Scope& scope,
               metric.c_str());
       }
       sequence++;
+      always_assert(!renamable_classes.count(clazz));
       continue;
     }
+    always_assert(renamable_classes.count(clazz));
 
     mgr.incr_metric(METRIC_RENAMED_CLASSES, 1);
 
@@ -760,14 +774,13 @@ std::string RenameClassesPassV2::prepend_package_prefix(
   return ss.str();
 }
 
-void RenameClassesPassV2::run_pass(DexStoresVector& stores,
-                                   ConfigFiles& conf,
-                                   PassManager& mgr) {
+std::unordered_set<DexClass*> RenameClassesPassV2::get_renamable_classes(
+    Scope& scope, ConfigFiles& conf, PassManager& mgr) {
   if (mgr.no_proguard_rules()) {
     TRACE(RENAME, 1,
           "RenameClassesPassV2 not run because no ProGuard configuration was "
           "provided.");
-    return;
+    return {};
   }
 
   if (!m_package_prefix.empty()) {
@@ -777,7 +790,6 @@ void RenameClassesPassV2::run_pass(DexStoresVector& stores,
         "emit_locator_strings.\n");
   }
 
-  auto scope = build_class_scope(stores);
   ClassHierarchy class_hierarchy = build_type_hierarchy(scope);
   eval_classes_post(scope, class_hierarchy, mgr);
 
@@ -786,6 +798,7 @@ void RenameClassesPassV2::run_pass(DexStoresVector& stores,
                                  Locator::global_class_index_digits_max),
                     "scope size %zu too large", scope.size());
   int total_classes = scope.size();
+  mgr.incr_metric(METRIC_CLASSES_IN_SCOPE, total_classes);
 
   // encode the whole sequence as base 62: [0 - 9], [A - Z], [a - z]
   m_digits = std::ceil(std::log(total_classes) /
@@ -794,9 +807,14 @@ void RenameClassesPassV2::run_pass(DexStoresVector& stores,
         "Total classes in scope for renaming: %d chosen number of digits: %d",
         total_classes, m_digits);
 
-  rename_classes(scope, conf, m_rename_annotations, mgr);
+  return get_renamable_classes(scope);
+}
 
-  mgr.incr_metric(METRIC_CLASSES_IN_SCOPE, total_classes);
+void RenameClassesPassV2::run_pass(DexStoresVector& stores,
+                                   ConfigFiles& conf,
+                                   PassManager& mgr) {
+  auto scope = build_class_scope(stores);
+  rename_classes(scope, get_renamable_classes(scope, conf, mgr), mgr);
 
   TRACE(RENAME, 1, "String savings, at least %d-%d = %d bytes ",
         m_base_strings_size, m_ren_strings_size,
