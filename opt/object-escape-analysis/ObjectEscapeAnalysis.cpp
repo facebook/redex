@@ -95,7 +95,7 @@ namespace mog = method_override_graph;
 
 namespace {
 
-const uint MAX_INLINE_INVOKES_ITERATIONS = 8;
+const int MAX_INLINE_INVOKES_ITERATIONS = 8;
 
 using Locations = std::vector<std::pair<DexMethod*, const IRInstruction*>>;
 // Collect all allocation and invoke instructions, as well as non-virtual
@@ -659,7 +659,7 @@ class RootMethodReducer {
   // invoke- instructions, until there are no more such uses.
   bool inline_invokes() {
     auto& cfg = m_method->get_code()->cfg();
-    for (uint iteration = 0; iteration < MAX_INLINE_INVOKES_ITERATIONS;
+    for (int iteration = 0; iteration < MAX_INLINE_INVOKES_ITERATIONS;
          iteration++) {
       std::unordered_set<IRInstruction*> invokes_to_inline;
 
