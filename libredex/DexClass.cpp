@@ -250,6 +250,10 @@ void DexField::attach_annotation_set(std::unique_ptr<DexAnnotationSet> aset) {
   m_anno = std::move(aset);
 }
 
+std::unique_ptr<DexAnnotationSet> DexField::release_annotations() {
+  return std::move(m_anno);
+}
+
 DexDebugEntry::DexDebugEntry(uint32_t addr,
                              std::unique_ptr<DexDebugInstruction> insn)
     : type(DexDebugEntryType::Instruction), addr(addr), insn(std::move(insn)) {}
@@ -838,6 +842,10 @@ void DexMethod::attach_param_annotation_set(
                          "param %d annotation to method %s exists\n", paramno,
                          self_show().c_str());
   m_param_anno[paramno] = std::move(aset);
+}
+
+std::unique_ptr<DexAnnotationSet> DexMethod::release_annotations() {
+  return std::move(m_anno);
 }
 
 void DexClass::set_deobfuscated_name(const std::string& name) {

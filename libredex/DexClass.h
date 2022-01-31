@@ -402,9 +402,7 @@ class DexField : public DexFieldRef {
 
   void set_value(DexEncodedValue* v);
 
-  std::unique_ptr<DexAnnotationSet> release_annotations() {
-    return std::move(m_anno);
-  }
+  std::unique_ptr<DexAnnotationSet> release_annotations();
   void clear_annotations();
 
   void attach_annotation_set(std::unique_ptr<DexAnnotationSet> aset);
@@ -1039,9 +1037,7 @@ class DexMethod : public DexMethodRef {
   void make_non_concrete();
 
   void become_virtual();
-  std::unique_ptr<DexAnnotationSet> release_annotations() {
-    return std::move(m_anno);
-  }
+  std::unique_ptr<DexAnnotationSet> release_annotations();
   void clear_annotations();
 
   /**
