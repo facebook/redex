@@ -298,8 +298,9 @@ class DexFieldRef {
     g_redex->mutate_field(this, ref, rename_on_collision);
   }
 
+  DexField* make_concrete(DexAccessFlags access_flags);
   DexField* make_concrete(DexAccessFlags access_flags,
-                          DexEncodedValue* v = nullptr);
+                          std::unique_ptr<DexEncodedValue> v);
 
   static void erase_field(DexFieldRef* f) { return g_redex->erase_field(f); }
 };
@@ -311,7 +312,7 @@ class DexField : public DexFieldRef {
   /* Concrete method members */
   DexAccessFlags m_access;
   std::unique_ptr<DexAnnotationSet> m_anno;
-  DexEncodedValue* m_value; /* Static Only */
+  std::unique_ptr<DexEncodedValue> m_value; /* Static Only */
   const DexString* m_deobfuscated_name{nullptr};
 
   // See UNIQUENESS above for the rationale for the private constructor pattern.
@@ -365,7 +366,7 @@ class DexField : public DexFieldRef {
 
  public:
   DexAnnotationSet* get_anno_set() const { return m_anno.get(); }
-  DexEncodedValue* get_static_value() const { return m_value; }
+  DexEncodedValue* get_static_value() const { return m_value.get(); }
   DexAccessFlags get_access() const {
     always_assert(is_def());
     return m_access;
@@ -400,7 +401,7 @@ class DexField : public DexFieldRef {
   // Return just the name of the field.
   std::string get_simple_deobfuscated_name() const;
 
-  void set_value(DexEncodedValue* v);
+  void set_value(std::unique_ptr<DexEncodedValue> v);
 
   std::unique_ptr<DexAnnotationSet> release_annotations();
   void clear_annotations();
@@ -1120,7 +1121,7 @@ class DexClass {
   void load_class_annotations(DexIdx* idx, uint32_t anno_off);
   void load_class_data_item(DexIdx* idx,
                             uint32_t cdi_off,
-                            DexEncodedValueArray* svalues);
+                            std::unique_ptr<DexEncodedValueArray> svalues);
 
   friend struct ClassCreator;
 

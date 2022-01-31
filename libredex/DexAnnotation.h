@@ -97,9 +97,13 @@ class DexEncodedValue : public Gatherable {
     return seed;
   }
 
+  virtual std::unique_ptr<DexEncodedValue> clone() const {
+    return std::make_unique<DexEncodedValue>(*this);
+  }
+
   bool is_zero() const;
   bool is_wide() const;
-  static DexEncodedValue* zero_for_type(DexType* type);
+  static std::unique_ptr<DexEncodedValue> zero_for_type(DexType* type);
 };
 
 inline size_t hash_value(const DexEncodedValue& v) { return v.hash_value(); }
@@ -110,6 +114,10 @@ class DexEncodedValueBit : public DexEncodedValue {
       : DexEncodedValue(type, bit) {}
 
   void encode(DexOutputIdx* dodx, uint8_t*& encdata) override;
+
+  std::unique_ptr<DexEncodedValue> clone() const override {
+    return std::unique_ptr<DexEncodedValue>(new DexEncodedValueBit(*this));
+  }
 };
 
 class DexEncodedValueString : public DexEncodedValue {
@@ -137,6 +145,10 @@ class DexEncodedValueString : public DexEncodedValue {
     boost::hash_combine(seed, (uintptr_t)m_value_ptr_const);
     return seed;
   }
+
+  std::unique_ptr<DexEncodedValue> clone() const override {
+    return std::unique_ptr<DexEncodedValue>(new DexEncodedValueString(*this));
+  }
 };
 
 class DexEncodedValuePtr : public DexEncodedValue {
@@ -157,6 +169,10 @@ class DexEncodedValuePtr : public DexEncodedValue {
     boost::hash_combine(seed, (uintptr_t)m_value_ptr);
     return seed;
   }
+
+  std::unique_ptr<DexEncodedValue> clone() const override {
+    return std::unique_ptr<DexEncodedValue>(new DexEncodedValuePtr(*this));
+  }
 };
 
 class DexEncodedValueType : public DexEncodedValuePtr {
@@ -170,6 +186,10 @@ class DexEncodedValueType : public DexEncodedValuePtr {
   DexType* type() const { return (DexType*)m_value_ptr; }
   void set_type(DexType* type) { m_value_ptr = type; }
   std::string show() const override;
+
+  std::unique_ptr<DexEncodedValue> clone() const override {
+    return std::unique_ptr<DexEncodedValue>(new DexEncodedValueType(*this));
+  }
 };
 
 class DexEncodedValueField : public DexEncodedValuePtr {
@@ -184,6 +204,10 @@ class DexEncodedValueField : public DexEncodedValuePtr {
   void set_field(DexFieldRef* field) { m_value_ptr = field; }
   std::string show() const override;
   std::string show_deobfuscated() const override;
+
+  std::unique_ptr<DexEncodedValue> clone() const override {
+    return std::unique_ptr<DexEncodedValue>(new DexEncodedValueField(*this));
+  }
 };
 
 class DexEncodedValueMethod : public DexEncodedValuePtr {
@@ -198,6 +222,10 @@ class DexEncodedValueMethod : public DexEncodedValuePtr {
   void set_method(DexMethodRef* method) { m_value_ptr = method; }
   std::string show() const override;
   std::string show_deobfuscated() const override;
+
+  std::unique_ptr<DexEncodedValue> clone() const override {
+    return std::unique_ptr<DexEncodedValue>(new DexEncodedValueMethod(*this));
+  }
 };
 
 class DexEncodedValueMethodType : public DexEncodedValuePtr {
@@ -212,6 +240,11 @@ class DexEncodedValueMethodType : public DexEncodedValuePtr {
   void set_proto(DexProto* proto) { m_value_ptr = proto; }
   std::string show() const override;
   std::string show_deobfuscated() const override;
+
+  std::unique_ptr<DexEncodedValue> clone() const override {
+    return std::unique_ptr<DexEncodedValue>(
+        new DexEncodedValueMethodType(*this));
+  }
 };
 
 class DexEncodedValueMethodHandle : public DexEncodedValuePtr {
@@ -233,6 +266,11 @@ class DexEncodedValueMethodHandle : public DexEncodedValuePtr {
   }
   std::string show() const override;
   std::string show_deobfuscated() const override;
+
+  std::unique_ptr<DexEncodedValue> clone() const override {
+    return std::unique_ptr<DexEncodedValue>(
+        new DexEncodedValueMethodHandle(*this));
+  }
 };
 
 // NOTE: Different from the other values, this one owns the given vector.
@@ -304,6 +342,17 @@ class DexEncodedValueArray : public DexEncodedValue {
       boost::hash_combine(seed, *elem);
     }
     return seed;
+  }
+
+  std::unique_ptr<DexEncodedValue> clone() const override {
+    // Need to copy the array, if any.
+    std::vector<DexEncodedValue*>* evalues_copy =
+        m_value_ptr == nullptr
+            ? nullptr
+            : new std::vector<DexEncodedValue*>(
+                  *(std::vector<DexEncodedValue*>*)m_value_ptr);
+    return std::unique_ptr<DexEncodedValue>(
+        new DexEncodedValueArray(evalues_copy, m_static_val));
   }
 };
 

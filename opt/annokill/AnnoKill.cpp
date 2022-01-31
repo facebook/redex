@@ -336,7 +336,7 @@ AnnoKill::AnnoSet AnnoKill::get_removable_annotation_instances() {
       continue;
     }
 
-    auto aset = clazz->get_anno_set();
+    auto* aset = clazz->get_anno_set();
     if (!aset) {
       continue;
     }

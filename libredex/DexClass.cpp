@@ -184,14 +184,18 @@ DexField::DexField(DexType* container, const DexString* name, DexType* type)
       m_value(nullptr) {}
 DexField::~DexField() = default; // For forwarding.
 
+DexField* DexFieldRef::make_concrete(DexAccessFlags access_flags) {
+  return make_concrete(access_flags, nullptr);
+}
+
 DexField* DexFieldRef::make_concrete(DexAccessFlags access_flags,
-                                     DexEncodedValue* v) {
+                                     std::unique_ptr<DexEncodedValue> v) {
   // FIXME assert if already concrete
   auto that = static_cast<DexField*>(this);
   that->m_access = access_flags;
   that->m_concrete = true;
   if (is_static(access_flags)) {
-    that->set_value(v);
+    that->set_value(std::move(v));
   } else {
     always_assert(v == nullptr);
   }
@@ -225,7 +229,7 @@ void DexField::set_external() {
   m_external = true;
 }
 
-void DexField::set_value(DexEncodedValue* v) {
+void DexField::set_value(std::unique_ptr<DexEncodedValue> v) {
   always_assert_log(
       m_concrete,
       "Field needs to be concrete to be attached an encoded value.");
@@ -234,7 +238,8 @@ void DexField::set_value(DexEncodedValue* v) {
   // represented in the encoded value array. OTOH null-initialized static
   // fields that appear earlier in the static field list have explicit values.
   // Let's standardize things here.
-  m_value = v != nullptr ? v : DexEncodedValue::zero_for_type(get_type());
+  m_value =
+      v != nullptr ? std::move(v) : DexEncodedValue::zero_for_type(get_type());
 }
 
 void DexField::clear_annotations() { m_anno.reset(); }
@@ -1010,9 +1015,10 @@ std::string DexMethod::get_simple_deobfuscated_name() const {
 /*
  * See class_data_item in Dex spec.
  */
-void DexClass::load_class_data_item(DexIdx* idx,
-                                    uint32_t cdi_off,
-                                    DexEncodedValueArray* svalues) {
+void DexClass::load_class_data_item(
+    DexIdx* idx,
+    uint32_t cdi_off,
+    std::unique_ptr<DexEncodedValueArray> svalues) {
   if (cdi_off == 0) return;
   const uint8_t* encd = idx->get_uleb_data(cdi_off);
   uint32_t sfield_count = read_uleb128(&encd);
@@ -1038,7 +1044,9 @@ void DexClass::load_class_data_item(DexIdx* idx,
       ev = *it;
       ++it;
     }
-    df->make_concrete(access_flags, ev);
+    // We are gonna own the element.
+    auto ev_uptr = std::unique_ptr<DexEncodedValue>(ev);
+    df->make_concrete(access_flags, std::move(ev_uptr));
     m_sfields.push_back(df);
   }
   ndex = 0;
@@ -1416,7 +1424,7 @@ DexClass* DexClass::create(DexIdx* idx,
   cls->load_class_annotations(idx, cdef->annotations_off);
   auto deva = std::unique_ptr<DexEncodedValueArray>(
       load_static_values(idx, cdef->static_values_off));
-  cls->load_class_data_item(idx, cdef->class_data_offset, deva.get());
+  cls->load_class_data_item(idx, cdef->class_data_offset, std::move(deva));
   g_redex->publish_class(cls);
   return cls;
 }

@@ -410,26 +410,35 @@ bool DexEncodedValue::is_wide() const {
   return m_evtype == DEVT_LONG || m_evtype == DEVT_DOUBLE;
 }
 
-DexEncodedValue* DexEncodedValue::zero_for_type(DexType* type) {
+std::unique_ptr<DexEncodedValue> DexEncodedValue::zero_for_type(DexType* type) {
   if (type == type::_byte()) {
-    return new DexEncodedValue(DEVT_BYTE, (uint64_t)0);
+    return std::unique_ptr<DexEncodedValue>(
+        new DexEncodedValue(DEVT_BYTE, (uint64_t)0));
   } else if (type == type::_char()) {
-    return new DexEncodedValue(DEVT_CHAR, (uint64_t)0);
+    return std::unique_ptr<DexEncodedValue>(
+        new DexEncodedValue(DEVT_CHAR, (uint64_t)0));
   } else if (type == type::_short()) {
-    return new DexEncodedValue(DEVT_SHORT, (uint64_t)0);
+    return std::unique_ptr<DexEncodedValue>(
+        new DexEncodedValue(DEVT_SHORT, (uint64_t)0));
   } else if (type == type::_int()) {
-    return new DexEncodedValue(DEVT_INT, (uint64_t)0);
+    return std::unique_ptr<DexEncodedValue>(
+        new DexEncodedValue(DEVT_INT, (uint64_t)0));
   } else if (type == type::_long()) {
-    return new DexEncodedValue(DEVT_LONG, (uint64_t)0);
+    return std::unique_ptr<DexEncodedValue>(
+        new DexEncodedValue(DEVT_LONG, (uint64_t)0));
   } else if (type == type::_float()) {
-    return new DexEncodedValue(DEVT_FLOAT, (uint64_t)0);
+    return std::unique_ptr<DexEncodedValue>(
+        new DexEncodedValue(DEVT_FLOAT, (uint64_t)0));
   } else if (type == type::_double()) {
-    return new DexEncodedValue(DEVT_DOUBLE, (uint64_t)0);
+    return std::unique_ptr<DexEncodedValue>(
+        new DexEncodedValue(DEVT_DOUBLE, (uint64_t)0));
   } else if (type == type::_boolean()) {
-    return new DexEncodedValueBit(DEVT_BOOLEAN, false);
+    return std::unique_ptr<DexEncodedValue>(
+        new DexEncodedValueBit(DEVT_BOOLEAN, false));
   } else {
     // not a primitive
-    return new DexEncodedValueBit(DEVT_NULL, false);
+    return std::unique_ptr<DexEncodedValue>(
+        new DexEncodedValueBit(DEVT_NULL, false));
   }
 }
 

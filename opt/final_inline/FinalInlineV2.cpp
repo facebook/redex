@@ -174,14 +174,16 @@ using CombinedInitAnalyzer =
  * Converts a ConstantValue into its equivalent encoded_value. Returns null if
  * no such encoding is known.
  */
-class encoding_visitor : public boost::static_visitor<DexEncodedValue*> {
+class encoding_visitor
+    : public boost::static_visitor<std::unique_ptr<DexEncodedValue>> {
  public:
   explicit encoding_visitor(const DexField* field,
                             const XStoreRefs* xstores,
                             const DexType* declaring_type)
       : m_field(field), m_xstores(xstores), m_declaring_type(declaring_type) {}
 
-  DexEncodedValue* operator()(const SignedConstantDomain& dom) const {
+  std::unique_ptr<DexEncodedValue> operator()(
+      const SignedConstantDomain& dom) const {
     auto cst = dom.get_constant();
     if (!cst) {
       return nullptr;
@@ -191,7 +193,7 @@ class encoding_visitor : public boost::static_visitor<DexEncodedValue*> {
     return ev;
   }
 
-  DexEncodedValue* operator()(const StringDomain& dom) const {
+  std::unique_ptr<DexEncodedValue> operator()(const StringDomain& dom) const {
     auto cst = dom.get_constant();
 
     // Older DalvikVM handles only two types of classes:
@@ -200,13 +202,14 @@ class encoding_visitor : public boost::static_visitor<DexEncodedValue*> {
     // "sput-object Ljava/lang/CharSequence;" pair. Such pair can cause a
     // libdvm.so abort with "Bogus static initialization".
     if (cst && m_field->get_type() == type::java_lang_String()) {
-      return new DexEncodedValueString(*cst);
+      return std::unique_ptr<DexEncodedValue>(new DexEncodedValueString(*cst));
     } else {
       return nullptr;
     }
   }
 
-  DexEncodedValue* operator()(const ConstantClassObjectDomain& dom) const {
+  std::unique_ptr<DexEncodedValue> operator()(
+      const ConstantClassObjectDomain& dom) const {
     auto cst = dom.get_constant();
     if (!cst) {
       return nullptr;
@@ -219,11 +222,11 @@ class encoding_visitor : public boost::static_visitor<DexEncodedValue*> {
     if (!m_xstores || m_xstores->illegal_ref(m_declaring_type, type)) {
       return nullptr;
     }
-    return new DexEncodedValueType(type);
+    return std::unique_ptr<DexEncodedValue>(new DexEncodedValueType(type));
   }
 
   template <typename Domain>
-  DexEncodedValue* operator()(const Domain&) const {
+  std::unique_ptr<DexEncodedValue> operator()(const Domain&) const {
     return nullptr;
   }
 
@@ -267,7 +270,7 @@ void encode_values(DexClass* cls,
     if (encoded_value == nullptr) {
       continue;
     }
-    field->set_value(encoded_value);
+    field->set_value(std::move(encoded_value));
     TRACE(FINALINLINE, 2, "Found encodable field: %s %s", SHOW(field),
           SHOW(value));
   }

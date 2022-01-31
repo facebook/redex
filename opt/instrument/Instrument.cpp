@@ -798,8 +798,11 @@ InstrumentPass::patch_sharded_arrays(
                                    DexString::make_string(new_name),
                                    template_field->get_type()));
           new_field->set_deobfuscated_name(deobfuscated_name);
-          new_field->make_concrete(template_field->get_access(),
-                                   template_field->get_static_value());
+          new_field->make_concrete(
+              template_field->get_access(),
+              template_field->get_static_value() == nullptr
+                  ? nullptr
+                  : template_field->get_static_value()->clone());
           fields[i] = new_field;
           TRACE(INSTRUMENT, 2, "Created array: %s", SHOW(new_field));
           cls->add_field(new_field);

@@ -27,8 +27,8 @@ struct FinalInlineTest : public RedexTest {
                                          DexAccessFlags access = ACC_PUBLIC |
                                                                  ACC_STATIC) {
     auto field = static_cast<DexField*>(DexField::make_field(name));
-    auto encoded_value = DexEncodedValue::zero_for_type(field->get_type());
-    field->make_concrete(access, encoded_value);
+    field->make_concrete(access,
+                         DexEncodedValue::zero_for_type(field->get_type()));
     class_creator->add_field(field);
     return field;
   }

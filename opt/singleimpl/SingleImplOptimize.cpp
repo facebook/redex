@@ -235,7 +235,10 @@ void OptimizationImpl::set_field_defs(const DexType* intf,
     if (field_anno) {
       f->attach_annotation_set(std::move(field_anno));
     }
-    f->make_concrete(field->get_access(), field->get_static_value());
+    f->make_concrete(field->get_access(),
+                     field->get_static_value() == nullptr
+                         ? std::unique_ptr<DexEncodedValue>()
+                         : field->get_static_value()->clone());
     auto cls = type_class(field->get_class());
     cls->remove_field(field);
     cls->add_field(f);

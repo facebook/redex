@@ -672,7 +672,8 @@ TEST_F(RuntimeAssertTest, RuntimeAssertField) {
   // resolve_field() on Foo.qux, they will find it and treat it as a known field
   auto field = DexField::make_field("LFoo;.qux:I")
                    ->make_concrete(ACC_PUBLIC | ACC_STATIC,
-                                   new DexEncodedValueBit(DEVT_INT, 1));
+                                   std::unique_ptr<DexEncodedValue>(
+                                       new DexEncodedValueBit(DEVT_INT, 1)));
   creator.add_field(field);
 
   auto method = assembler::method_from_string(R"(
@@ -855,7 +856,8 @@ TEST_F(InterproceduralConstantPropagationTest, constantField) {
 
   auto field = DexField::make_field("LFoo;.qux:I")
                    ->make_concrete(ACC_PUBLIC | ACC_STATIC,
-                                   new DexEncodedValueBit(DEVT_INT, 1));
+                                   std::unique_ptr<DexEncodedValue>(
+                                       new DexEncodedValueBit(DEVT_INT, 1)));
   creator.add_field(field);
 
   auto m1 = assembler::method_from_string(R"(
@@ -911,7 +913,8 @@ TEST_F(InterproceduralConstantPropagationTest, nonConstantField) {
 
   auto field = DexField::make_field("LFoo;.qux:I")
                    ->make_concrete(ACC_PUBLIC | ACC_STATIC,
-                                   new DexEncodedValueBit(DEVT_INT, 1));
+                                   std::unique_ptr<DexEncodedValue>(
+                                       new DexEncodedValueBit(DEVT_INT, 1)));
   creator.add_field(field);
 
   auto m1 = assembler::method_from_string(R"(
@@ -962,7 +965,8 @@ TEST_F(InterproceduralConstantPropagationTest, nonConstantFieldDueToKeep) {
 
   auto field = DexField::make_field("LFoo;.qux:I")
                    ->make_concrete(ACC_PUBLIC | ACC_STATIC,
-                                   new DexEncodedValueBit(DEVT_INT, 1));
+                                   std::unique_ptr<DexEncodedValue>(
+                                       new DexEncodedValueBit(DEVT_INT, 1)));
   creator.add_field(field);
 
   auto m1 = assembler::method_from_string(R"(
@@ -1014,9 +1018,11 @@ TEST_F(InterproceduralConstantPropagationTest, constantFieldAfterClinit) {
   ClassCreator creator(cls_ty);
   creator.set_super(type::java_lang_Object());
 
-  auto field_qux = DexField::make_field("LFoo;.qux:I")
-                       ->make_concrete(ACC_PUBLIC | ACC_STATIC,
-                                       new DexEncodedValueBit(DEVT_INT, 1));
+  auto field_qux =
+      DexField::make_field("LFoo;.qux:I")
+          ->make_concrete(ACC_PUBLIC | ACC_STATIC,
+                          std::unique_ptr<DexEncodedValue>(
+                              new DexEncodedValueBit(DEVT_INT, 1)));
   creator.add_field(field_qux);
 
   auto field_corge = DexField::make_field("LFoo;.corge:I")
@@ -1102,10 +1108,11 @@ TEST_F(InterproceduralConstantPropagationTest,
   auto cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(type::java_lang_Object());
-
-  auto field_qux = DexField::make_field("LFoo;.qux:I")
-                       ->make_concrete(ACC_PUBLIC | ACC_STATIC,
-                                       new DexEncodedValueBit(DEVT_INT, 0));
+  auto field_qux =
+      DexField::make_field("LFoo;.qux:I")
+          ->make_concrete(ACC_PUBLIC | ACC_STATIC,
+                          std::unique_ptr<DexEncodedValue>(
+                              new DexEncodedValueBit(DEVT_INT, 0)));
   creator.add_field(field_qux);
 
   auto clinit = assembler::method_from_string(R"(

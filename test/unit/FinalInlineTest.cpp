@@ -120,8 +120,8 @@ DexField* add_concrete_field(DexClass* cls,
   auto field_name = DexString::make_string(name);
   auto field =
       static_cast<DexField*>(DexField::make_field(container, field_name, type));
-  auto ev = DexUnitTestRunner::make_ev(type, val);
-  field->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL, ev);
+  field->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL,
+                       DexUnitTestRunner::make_ev(type, val));
   cls->add_field(field);
   return field;
 }
