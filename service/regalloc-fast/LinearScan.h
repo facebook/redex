@@ -77,6 +77,8 @@ using FreeRegPool = std::queue<reg_t>;
 class LinearScanAllocator final {
  public:
   explicit LinearScanAllocator(DexMethod* method);
+  LinearScanAllocator(IRCode* code,
+                      const std::function<std::string()>& method_describer);
   ~LinearScanAllocator() {}
   /*
    * For each live interval in ascending order of first def:

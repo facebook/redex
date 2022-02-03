@@ -174,13 +174,42 @@ LocalDce::Stats Shrinker::local_dce(IRCode* code,
 }
 
 copy_propagation_impl::Stats Shrinker::copy_propagation(DexMethod* method) {
-  copy_propagation_impl::Config config;
-  copy_propagation_impl::CopyPropagation copy_propagation(config);
-  return copy_propagation.run(method->get_code(), method);
+  return copy_propagation(method->get_code(),
+                          is_static(method),
+                          method->get_class(),
+                          method->get_proto()->get_rtype(),
+                          method->get_proto()->get_args(),
+                          [method]() { return show(method); });
 }
 
+copy_propagation_impl::Stats Shrinker::copy_propagation(
+    IRCode* code,
+    bool is_static,
+    DexType* declaring_type,
+    DexType* rtype,
+    DexTypeList* args,
+    std::function<std::string()> method_describer) {
+  copy_propagation_impl::Config config;
+  copy_propagation_impl::CopyPropagation copy_propagation(config);
+  return copy_propagation.run(code, is_static, declaring_type, rtype, args,
+                              std::move(method_describer));
+}
 void Shrinker::shrink_method(DexMethod* method) {
-  auto code = method->get_code();
+  shrink_code(method->get_code(),
+              is_static(method),
+              method::is_init(method) || method::is_clinit(method),
+              method->get_class(),
+              method->get_proto(),
+              [method]() { return show(method); });
+}
+
+void Shrinker::shrink_code(
+    IRCode* code,
+    bool is_static,
+    bool is_init_or_clinit,
+    DexType* declaring_type,
+    DexProto* proto,
+    const std::function<std::string()>& method_describer) {
   bool editable_cfg_built = code->editable_cfg_built();
   // force simplification/linearization of any existing editable cfg once, and
   // forget existing cfg for a clean start
@@ -195,8 +224,7 @@ void Shrinker::shrink_method(DexMethod* method) {
   if (m_config.run_const_prop) {
     auto timer = m_const_prop_timer.scope();
     const_prop_stats =
-        constant_propagation(is_static(method), method->get_class(),
-                             method->get_proto(), code, {}, {});
+        constant_propagation(is_static, declaring_type, proto, code, {}, {});
   }
 
   if (m_config.run_cse) {
@@ -206,22 +234,23 @@ void Shrinker::shrink_method(DexMethod* method) {
     }
 
     cse_impl::CommonSubexpressionElimination cse(
-        m_cse_shared_state.get(), code->cfg(), is_static(method),
-        method::is_init(method) || method::is_clinit(method),
-        method->get_class(), method->get_proto()->get_args());
+        m_cse_shared_state.get(), code->cfg(), is_static, is_init_or_clinit,
+        declaring_type, proto->get_args());
     cse.patch();
     cse_stats = cse.get_stats();
   }
 
   if (m_config.run_copy_prop) {
     auto timer = m_copy_prop_timer.scope();
-    copy_prop_stats = copy_propagation(method);
+    copy_prop_stats =
+        copy_propagation(code, is_static, declaring_type, proto->get_rtype(),
+                         proto->get_args(), method_describer);
   }
 
   if (m_config.run_local_dce) {
     auto timer = m_local_dce_timer.scope();
-    local_dce_stats = local_dce(code, /* normalize_new_instances */ true,
-                                method->get_class());
+    local_dce_stats =
+        local_dce(code, /* normalize_new_instances */ true, declaring_type);
   }
 
   using stats_t = std::tuple<size_t, size_t, size_t, size_t>;
@@ -256,14 +285,15 @@ void Shrinker::shrink_method(DexMethod* method) {
 
       auto config = regalloc::graph_coloring::Allocator::Config{};
       config.no_overwrite_this = true; // Downstream passes may rely on this.
-      regalloc::graph_coloring::allocate(config, method);
+      regalloc::graph_coloring::allocate(config, code, is_static,
+                                         method_describer);
       // After this, any CFG is gone.
 
       // Assume that dedup will run, so building CFG is OK.
       auto after_features = get_features(4);
       TRACE(MMINL, 4,
             "Inliner.RegAlloc: %s: (%zu, %zu, %zu) -> (%zu, %zu, %zu)",
-            SHOW(method), std::get<0>(before_features),
+            method_describer().c_str(), std::get<0>(before_features),
             std::get<1>(before_features), std::get<2>(before_features),
             std::get<0>(after_features), std::get<1>(after_features),
             std::get<2>(after_features));
@@ -274,7 +304,7 @@ void Shrinker::shrink_method(DexMethod* method) {
 
   if (m_config.run_fast_reg_alloc) {
     auto timer = m_fast_reg_alloc_timer.scope();
-    auto allocator = fastregalloc::LinearScanAllocator(method);
+    auto allocator = fastregalloc::LinearScanAllocator(code, method_describer);
     allocator.allocate();
   }
 
@@ -285,7 +315,8 @@ void Shrinker::shrink_method(DexMethod* method) {
     }
 
     dedup_blocks_impl::Config config;
-    dedup_blocks_impl::DedupBlocks dedup_blocks(&config, method);
+    dedup_blocks_impl::DedupBlocks dedup_blocks(
+        &config, code, is_static, declaring_type, proto->get_args());
     dedup_blocks.run();
     dedup_blocks_stats = dedup_blocks.get_stats();
   }

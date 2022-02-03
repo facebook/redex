@@ -71,8 +71,20 @@
 namespace constant_uses {
 
 ConstantUses::ConstantUses(const cfg::ControlFlowGraph& cfg, DexMethod* method)
-    : m_reaching_definitions(cfg),
-      m_rtype(method ? method->get_proto()->get_rtype() : nullptr) {
+    : ConstantUses(cfg,
+                   method ? is_static(method) : true,
+                   method ? method->get_class() : nullptr,
+                   method ? method->get_proto()->get_rtype() : nullptr,
+                   method ? method->get_proto()->get_args() : nullptr,
+                   [method]() { return show(method); }) {}
+
+ConstantUses::ConstantUses(const cfg::ControlFlowGraph& cfg,
+                           bool is_static,
+                           DexType* declaring_type,
+                           DexType* rtype,
+                           DexTypeList* args,
+                           const std::function<std::string()>& method_describer)
+    : m_reaching_definitions(cfg), m_rtype(rtype) {
   m_reaching_definitions.run(reaching_defs::Environment());
 
   bool need_type_inference = false;
@@ -118,11 +130,11 @@ ConstantUses::ConstantUses(const cfg::ControlFlowGraph& cfg, DexMethod* method)
     }
   }
 
-  TRACE(CU, 2, "[CU] ConstantUses(%s) need_type_inference:%u", SHOW(method),
-        need_type_inference);
-  if (need_type_inference && method) {
+  TRACE(CU, 2, "[CU] ConstantUses(%s) need_type_inference:%u",
+        method_describer().c_str(), need_type_inference);
+  if (need_type_inference && args) {
     m_type_inference.reset(new type_inference::TypeInference(cfg));
-    m_type_inference->run(method);
+    m_type_inference->run(is_static, declaring_type, args);
   }
 }
 

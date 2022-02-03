@@ -51,8 +51,21 @@ class Shrinker {
                             bool normalize_new_instances = true,
                             DexType* declaring_type = nullptr);
   copy_propagation_impl::Stats copy_propagation(DexMethod* method);
+  copy_propagation_impl::Stats copy_propagation(
+      IRCode*,
+      bool is_static,
+      DexType* declaring_type,
+      DexType* rtype,
+      DexTypeList* args,
+      std::function<std::string()> method_describer);
 
   void shrink_method(DexMethod* method);
+  void shrink_code(IRCode* code,
+                   bool is_static,
+                   bool is_init_or_clinit,
+                   DexType* declaring_type,
+                   DexProto* proto,
+                   const std::function<std::string()>& method_describer);
   const constant_propagation::Transform::Stats& get_const_prop_stats() const {
     return m_const_prop_stats;
   }

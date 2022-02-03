@@ -49,6 +49,13 @@ class CopyPropagation final {
 
   Stats run(IRCode*, DexMethod* = nullptr);
 
+  Stats run(IRCode*,
+            bool is_static,
+            DexType* declaring_type,
+            DexType* rtype,
+            DexTypeList* args,
+            std::function<std::string()> method_describer);
+
  private:
   const Config& m_config;
 };

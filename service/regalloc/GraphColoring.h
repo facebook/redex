@@ -123,7 +123,7 @@ class Allocator {
                      RegisterTransform*,
                      SpillPlan*);
 
-  void select_params(const DexMethod*,
+  void select_params(const IRCode*,
                      const interference::Graph&,
                      RegisterTransform*,
                      SpillPlan*);
@@ -147,6 +147,7 @@ class Allocator {
              IRCode*);
 
   void allocate(DexMethod*);
+  void allocate(IRCode*, bool);
 
   const Stats& get_stats() const { return m_stats; }
 

@@ -38,20 +38,27 @@ static void TRACE_live_intervals(const LiveIntervals& live_intervals) {
   TRACE(FREG, 9, "\n");
 }
 
-LinearScanAllocator::LinearScanAllocator(DexMethod* method) {
-  TRACE(FREG, 9, "Running FastRegAlloc for method {%s}", SHOW(method));
-  if (method->get_code() == nullptr) {
+LinearScanAllocator::LinearScanAllocator(DexMethod* method)
+    : LinearScanAllocator(method->get_code(),
+                          [method]() { return show(method); }) {}
+
+LinearScanAllocator::LinearScanAllocator(
+    IRCode* code, const std::function<std::string()>& method_describer) {
+  TRACE(FREG,
+        9,
+        "Running FastRegAlloc for method {%s}",
+        method_describer().c_str());
+  if (code == nullptr) {
     return;
   }
-  auto& code = *method->get_code();
-  TRACE(FREG, 9, "[Original Code]\n%s", SHOW(&code));
+  TRACE(FREG, 9, "[Original Code]\n%s", SHOW(code));
   {
     // clear_cfg() called by ScopedCFG destructor will linearize the
     // instructions in the code
-    cfg::ScopedCFG cfg_for_linearize = cfg::ScopedCFG(&code);
+    cfg::ScopedCFG cfg_for_linearize = cfg::ScopedCFG(code);
   }
-  m_live_intervals = init_live_intervals(&code);
-  init_vreg_occurences(&code);
+  m_live_intervals = init_live_intervals(code);
+  init_vreg_occurences(code);
   TRACE_live_intervals(m_live_intervals);
 }
 

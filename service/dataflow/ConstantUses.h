@@ -9,6 +9,7 @@
 
 #include "ReachingDefinitions.h"
 #include "TypeInference.h"
+#include <functional>
 
 namespace constant_uses {
 
@@ -29,6 +30,12 @@ enum TypeDemand : uint8_t {
 class ConstantUses {
  public:
   ConstantUses(const cfg::ControlFlowGraph& cfg, DexMethod* method);
+  ConstantUses(const cfg::ControlFlowGraph& cfg,
+               bool is_static,
+               DexType* declaring_type,
+               DexType* rtype,
+               DexTypeList* args,
+               const std::function<std::string()>& method_describer);
 
   // Given a const or const-wide instruction, retrieve all instructions that
   // use it.

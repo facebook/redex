@@ -35,6 +35,11 @@ struct Stats {
 class DedupBlocks {
  public:
   DedupBlocks(const Config* config, DexMethod* method);
+  DedupBlocks(const Config* config,
+              IRCode* code,
+              bool is_static,
+              DexType* declaring_type,
+              DexTypeList* args);
 
   const Stats& get_stats() const { return m_stats; }
 
@@ -42,7 +47,10 @@ class DedupBlocks {
 
  private:
   const Config* m_config;
-  DexMethod* m_method;
+  IRCode* m_code;
+  bool m_is_static;
+  DexType* m_declaring_type;
+  DexTypeList* m_args;
   Stats m_stats;
 };
 

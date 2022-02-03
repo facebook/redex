@@ -16,6 +16,10 @@ namespace graph_coloring {
 
 // Note: this always destroys any CFG the method might have created.
 Allocator::Stats allocate(const Allocator::Config&, DexMethod*);
+Allocator::Stats allocate(const Allocator::Config&,
+                          IRCode*,
+                          bool is_static,
+                          const std::function<std::string()>& method_describer);
 
 } // namespace graph_coloring
 } // namespace regalloc

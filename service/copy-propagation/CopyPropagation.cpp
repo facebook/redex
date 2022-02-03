@@ -80,7 +80,11 @@ class AliasFixpointIterator final
     : public MonotonicFixpointIterator<cfg::GraphInterface, AliasDomain> {
  public:
   cfg::ControlFlowGraph& m_cfg;
-  DexMethod* m_method;
+  bool m_is_static;
+  DexType* m_declaring_type;
+  DexType* m_rtype;
+  DexTypeList* m_args;
+  std::function<std::string()> m_method_describer;
   const Config& m_config;
   const std::unordered_set<const IRInstruction*>& m_range_set;
   Stats& m_stats;
@@ -89,7 +93,11 @@ class AliasFixpointIterator final
 
   AliasFixpointIterator(
       cfg::ControlFlowGraph& cfg,
-      DexMethod* method,
+      bool is_static,
+      DexType* declaring_type,
+      DexType* rtype,
+      DexTypeList* args,
+      std::function<std::string()> method_describer,
       const Config& config,
       const std::unordered_set<const IRInstruction*>& range_set,
       Stats& stats,
@@ -97,7 +105,11 @@ class AliasFixpointIterator final
       : MonotonicFixpointIterator<cfg::GraphInterface, AliasDomain>(
             cfg, cfg.blocks().size()),
         m_cfg(cfg),
-        m_method(method),
+        m_is_static(is_static),
+        m_declaring_type(declaring_type),
+        m_rtype(rtype),
+        m_args(args),
+        m_method_describer(std::move(method_describer)),
         m_config(config),
         m_range_set(range_set),
         m_stats(stats),
@@ -110,7 +122,9 @@ class AliasFixpointIterator final
     }
     if (m_config.eliminate_const_literals_with_same_type_demands) {
       if (!m_constant_uses) {
-        m_constant_uses.reset(new constant_uses::ConstantUses(m_cfg, m_method));
+        m_constant_uses.reset(new constant_uses::ConstantUses(
+            m_cfg, m_is_static, m_declaring_type, m_rtype, m_args,
+            m_method_describer));
         if (m_constant_uses->has_type_inference()) {
           m_stats.type_inferences++;
         }
@@ -485,6 +499,20 @@ Stats CopyPropagation::run(const Scope& scope) {
 }
 
 Stats CopyPropagation::run(IRCode* code, DexMethod* method) {
+  return run(code,
+             method ? is_static(method) : true,
+             method ? method->get_class() : nullptr,
+             method ? method->get_proto()->get_rtype() : nullptr,
+             method ? method->get_proto()->get_args() : nullptr,
+             [method]() { return show(method); });
+}
+
+Stats CopyPropagation::run(IRCode* code,
+                           bool is_static,
+                           DexType* declaring_type,
+                           DexType* rtype,
+                           DexTypeList* args,
+                           std::function<std::string()> method_describer) {
   Stats stats;
   cfg::ScopedCFG cfg(code);
 
@@ -512,8 +540,9 @@ Stats CopyPropagation::run(IRCode* code, DexMethod* method) {
     }
   }
 
-  AliasFixpointIterator fixpoint(
-      *cfg, method, m_config, range_set, stats, m_config.regalloc_has_run);
+  AliasFixpointIterator fixpoint(*cfg, is_static, declaring_type, rtype, args,
+                                 std::move(method_describer), m_config,
+                                 range_set, stats, m_config.regalloc_has_run);
   fixpoint.run(AliasDomain());
 
   cfg::CFGMutation mutation{*cfg};
