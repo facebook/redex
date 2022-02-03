@@ -191,3 +191,26 @@ TEST_F(ObjectEscapeAnalysisTest, reduceTo42IdentityMatters) {
 )");
   ASSERT_EQ(actual.str(), assembler::to_s_expr(expected.get()).str());
 }
+
+TEST_F(ObjectEscapeAnalysisTest, DontOptimizeFinalInInit) {
+  std::vector<Pass*> passes = {
+      new ObjectEscapeAnalysisPass(),
+  };
+
+  run_passes(passes);
+
+  auto actual = get_s_expr(
+      "Lcom/facebook/redextest/"
+      "ObjectEscapeAnalysisTest$DontOptimizeFinalInInit;.<init>:()V");
+  auto expected = assembler::ircode_from_string(R"(
+   (
+      (load-param-object v3)
+      (invoke-direct (v3) "Ljava/lang/Object;.<init>:()V")
+      (const v2 42)
+      (iput v2 v3 "Lcom/facebook/redextest/ObjectEscapeAnalysisTest$DontOptimizeFinalInInit;.x:I")
+      (iput v2 v3 "Lcom/facebook/redextest/ObjectEscapeAnalysisTest$DontOptimizeFinalInInit;.y:I")
+      (return-void)
+    )
+)");
+  ASSERT_EQ(actual.str(), assembler::to_s_expr(expected.get()).str());
+}

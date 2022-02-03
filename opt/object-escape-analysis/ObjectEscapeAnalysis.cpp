@@ -554,6 +554,7 @@ class RootMethodReducer {
   MultiMethodInliner& m_inliner;
   const std::unordered_map<DexMethod*, MethodSummary>& m_method_summaries;
   Stats* m_stats;
+  bool m_is_init_or_clinit;
   DexMethod* m_method;
   const std::unordered_map<DexType*, bool>& m_types;
 
@@ -562,16 +563,18 @@ class RootMethodReducer {
       MultiMethodInliner& inliner,
       const std::unordered_map<DexMethod*, MethodSummary>& method_summaries,
       Stats* stats,
+      bool is_init_or_clinit,
       DexMethod* method,
       const std::unordered_map<DexType*, bool>& types)
       : m_inliner(inliner),
         m_method_summaries(method_summaries),
         m_stats(stats),
+        m_is_init_or_clinit(is_init_or_clinit),
         m_method(method),
         m_types(types) {}
 
   bool reduce() {
-    m_inliner.get_shrinker().shrink_method(m_method);
+    shrink();
     auto initial_code_size{get_code_size(m_method)};
 
     if (!inline_anchors() || !inline_invokes()) {
@@ -584,7 +587,7 @@ class RootMethodReducer {
       }
     }
 
-    m_inliner.get_shrinker().shrink_method(m_method);
+    shrink();
     auto net_savings = get_net_savings(initial_code_size);
     if (net_savings < 0) {
       m_stats->too_costly++;
@@ -600,6 +603,15 @@ class RootMethodReducer {
   }
 
  private:
+  void shrink() {
+    m_inliner.get_shrinker().shrink_code(m_method->get_code(),
+                                         is_static(m_method),
+                                         m_is_init_or_clinit,
+                                         m_method->get_class(),
+                                         m_method->get_proto(),
+                                         [this]() { return show(m_method); });
+  }
+
   bool inline_insns(const std::unordered_set<IRInstruction*>& insns) {
     auto inlined = m_inliner.inline_callees(m_method, insns);
     return inlined == insns.size();
@@ -915,8 +927,10 @@ void reduce(
             method,
             method->get_class(),
             DexString::make_string(name_str + "$redex_stack_allocated"));
-        RootMethodReducer root_method_reducer{inliner, method_summaries, stats,
-                                              copy, types};
+        RootMethodReducer root_method_reducer{
+            inliner, method_summaries,
+            stats,   method::is_init(method) || method::is_clinit(method),
+            copy,    types};
         if (root_method_reducer.reduce()) {
           reduced_methods.emplace(method, copy);
         } else {

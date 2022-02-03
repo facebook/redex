@@ -134,4 +134,23 @@ public class ObjectEscapeAnalysisTest {
     I i = I.allocator(42);
     return i == null;
   }
+
+
+  static class J {
+    public J() {}
+  }
+
+  static class DontOptimizeFinalInInit {
+    final int x;
+    int y;
+    DontOptimizeFinalInInit() {
+      J j = new J();
+      int x = read_x(j);
+      this.x = 42;
+      this.y = this.x; // must not use previously read value of x (even though x is final)
+    }
+    int read_x(J j) {
+      return this.x;
+    }
+  }
 }
