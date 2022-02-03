@@ -11,6 +11,7 @@
 #include <unordered_set>
 
 #include "DexClass.h"
+#include "Timer.h"
 
 /**
  * Method ordering based on code similarity. Methods are selected one after
@@ -67,6 +68,7 @@ class MethodSimilarityOrderer {
   DexMethod* get_next();
 
   static void order(std::vector<DexMethod*>& methods) {
+    Timer t("Reordering methods by similarity");
     MethodSimilarityOrderer mso(methods);
     methods.clear();
 
