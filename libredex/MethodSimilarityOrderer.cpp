@@ -98,11 +98,13 @@ void MethodSimilarityOrderer::insert(DexMethod* method) {
   }
 }
 
-DexMethod* MethodSimilarityOrderer::get_next() {
+void MethodSimilarityOrderer::get_next() {
+  // Clear best candidates.
+  m_best_candidate_ids.clear();
+
   if (m_methods.empty()) {
-    return nullptr;
+    return;
   }
-  boost::optional<size_t> best_candidate_index;
 
   // If the next method is part of a perf sensitive class,
   // then do not look for a candidate, just preserve the
@@ -147,44 +149,64 @@ DexMethod* MethodSimilarityOrderer::get_next() {
         continue;
       }
       if (!best_candidate_score ||
-          score.value() > best_candidate_score->value() ||
-          (score.value() == best_candidate_score->value() &&
-           best_candidate_index &&
-           m_method_indices.at(p.first) < *best_candidate_index)) {
-        best_candidate_index = m_method_indices.at(p.first);
+          score.value() > best_candidate_score->value()) {
+        m_best_candidate_ids.clear();
+        auto id = m_method_indices.at(p.first);
+
+        m_best_candidate_ids.insert(id);
         best_candidate_score = p.second;
+      } else if (score.value() == best_candidate_score->value()) {
+        auto id = m_method_indices.at(p.first);
+        m_best_candidate_ids.insert(id);
       }
     }
     if (best_candidate_score) {
-      TRACE(
-          OPUT, 3,
-          "[method-similarity-orderer]   selected %s with %d = %zu - %zu - %zu",
-          SHOW(m_methods.at(*best_candidate_index)),
-          best_candidate_score->value(), best_candidate_score->shared,
-          best_candidate_score->missing, best_candidate_score->additional);
+      for (auto best_candidate_index : m_best_candidate_ids) {
+        TRACE(
+            OPUT, 3,
+            "[method-similarity-orderer] selected %s with %d = %zu - %zu -%zu ",
+            SHOW(m_methods.at(best_candidate_index)),
+            best_candidate_score->value(), best_candidate_score->shared,
+            best_candidate_score->missing, best_candidate_score->additional);
+      }
     }
   }
-  if (!best_candidate_index) {
-    best_candidate_index = m_methods.begin()->first;
+  if (m_best_candidate_ids.empty()) {
+    auto id = m_methods.begin()->first;
+    m_best_candidate_ids.insert(id);
     TRACE(OPUT, 3, "[method-similarity-orderer] reverted to %s",
-          SHOW(m_methods.at(*best_candidate_index)));
+          SHOW(m_methods.at(id)));
   }
-  auto best_candidate_method = m_methods.at(*best_candidate_index);
-  m_last_code_hash_ids =
-      std::move(m_method_code_hash_ids.at(best_candidate_method));
-  m_methods.erase(*best_candidate_index);
-  m_method_code_hash_ids.erase(best_candidate_method);
-  for (auto it = m_last_code_hash_ids.begin();
-       it != m_last_code_hash_ids.end();) {
-    auto code_hash_id = *it;
-    auto& methods = m_code_hash_id_methods.at(code_hash_id);
-    methods.erase(best_candidate_method);
-    if (methods.empty()) {
-      m_code_hash_id_methods.erase(code_hash_id);
-      it = m_last_code_hash_ids.erase(it);
-    } else {
-      it++;
+}
+
+void MethodSimilarityOrderer::order(std::vector<DexMethod*>& methods) {
+  Timer t("Reordering methods by similarity");
+  for (auto* method : methods) {
+    insert(method);
+  }
+
+  methods.clear();
+
+  for (get_next(); !m_best_candidate_ids.empty(); get_next()) {
+    for (auto id : m_best_candidate_ids) {
+      auto best_candidate_method = m_methods.at(id);
+      m_last_code_hash_ids =
+          std::move(m_method_code_hash_ids.at(best_candidate_method));
+      m_methods.erase(id);
+      m_method_code_hash_ids.erase(best_candidate_method);
+      for (auto it = m_last_code_hash_ids.begin();
+           it != m_last_code_hash_ids.end();) {
+        auto code_hash_id = *it;
+        auto& meths = m_code_hash_id_methods.at(code_hash_id);
+        meths.erase(best_candidate_method);
+        if (meths.empty()) {
+          m_code_hash_id_methods.erase(code_hash_id);
+          it = m_last_code_hash_ids.erase(it);
+        } else {
+          it++;
+        }
+      }
+      methods.push_back(best_candidate_method);
     }
   }
-  return best_candidate_method;
 }
