@@ -811,8 +811,8 @@ ImmutableAttributeAnalyzerState::add_initializer(DexMethod* initialize_method,
 ImmutableAttributeAnalyzerState::Initializer&
 ImmutableAttributeAnalyzerState::add_initializer(
     DexMethod* initialize_method, const ImmutableAttr::Attr& attr) {
-  return attr.is_field() ? add_initializer(initialize_method, attr.field)
-                         : add_initializer(initialize_method, attr.method);
+  return attr.is_field() ? add_initializer(initialize_method, attr.val.field)
+                         : add_initializer(initialize_method, attr.val.method);
 }
 
 ImmutableAttributeAnalyzerState::ImmutableAttributeAnalyzerState() {

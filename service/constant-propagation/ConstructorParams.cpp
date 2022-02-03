@@ -137,10 +137,10 @@ class InitFixpointIterator final
         if (it != m_state.method_initializers.end()) {
           for (auto& initializer : it->second) {
             if (initializer.attr.is_method()) {
-              env->set(initializer.attr.method,
+              env->set(initializer.attr.val.method,
                        env->get(insn->src(initializer.insn_src_id_of_attr)));
             } else { // is_field
-              env->set(initializer.attr.field,
+              env->set(initializer.attr.val.field,
                        env->get(insn->src(initializer.insn_src_id_of_attr)));
             }
           }
