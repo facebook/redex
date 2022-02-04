@@ -89,9 +89,6 @@ struct ImmutableTest : public ConstantPropagationTest {
     auto type = DexType::make_type(DexString::make_string(class_name));
     ObjectWithImmutAttr obj(type, fields_expr.size());
     obj.jvm_cached_singleton = cached;
-
-    std::vector<std::pair<ImmutableAttr::Attr, AttrDomain>> attrs;
-
     for (size_t i = 0; i < fields_expr.size(); i++) {
       std::string member_name;
       s_expr value;
@@ -99,46 +96,34 @@ struct ImmutableTest : public ConstantPropagationTest {
           s_patn({s_patn(&member_name)}, value).match_with(fields_expr[i]);
       always_assert_log(matched,
                         "Need a pair of field_name(or method_name) and value");
+      ImmutableAttr::Attr attr;
       auto it = member_name.find(":(");
-      auto attr = [&]() {
-        if (it == std::string::npos) {
-          auto field = static_cast<DexField*>(
-              DexField::make_field(class_name + "." + member_name));
-          return ImmutableAttr::Attr(field);
-        } else {
-          auto method = static_cast<DexMethod*>(
-              DexMethod::make_method(class_name + "." + member_name));
-          return ImmutableAttr::Attr(method);
-        }
-      }();
+      if (it == std::string::npos) {
+        auto field = static_cast<DexField*>(
+            DexField::make_field(class_name + "." + member_name));
+        attr.kind = ImmutableAttr::Attr::Kind::Field;
+        attr.field = field;
+      } else {
+        auto method = static_cast<DexMethod*>(
+            DexMethod::make_method(class_name + "." + member_name));
+        attr.kind = ImmutableAttr::Attr::Kind::Method;
+        attr.method = method;
+      }
       always_assert_log(value.size() == 1, "Only accept string or integer");
-      auto get_val = [&]() -> AttrDomain {
-        if (value[0].is_int32()) {
-          return SignedConstantDomain(value[0].get_int32());
-        } else if (value[0].is_string()) {
-          auto value_s = value[0].get_string();
-          // "T" is special, it means Top.
-          if (value_s == "T") {
-            return AttrDomain::top();
-          } else {
-            return StringDomain(DexString::make_string(value_s));
-          }
+      if (value[0].is_int32()) {
+        obj.write_value(attr, SignedConstantDomain(value[0].get_int32()));
+      } else if (value[0].is_string()) {
+        auto value_s = value[0].get_string();
+        // "T" is special, it means Top.
+        if (value_s == "T") {
+          obj.write_value(attr, AttrDomain::top());
         } else {
-          always_assert_log(false, "value is not supported");
-        };
-      };
-      attrs.emplace_back(attr, get_val());
+          obj.write_value(attr, StringDomain(DexString::make_string(value_s)));
+        }
+      } else {
+        always_assert_log(false, "value is not supported");
+      }
     }
-
-    // Need to sort attrs before inserting.
-    std::sort(attrs.begin(), attrs.end(), [](const auto& lhs, const auto& rhs) {
-      return lhs.first < rhs.first;
-    });
-
-    for (auto& p : attrs) {
-      obj.write_value(p.first, p.second);
-    }
-
     return ObjectWithImmutAttrDomain(std::move(obj));
   }
 };
@@ -216,9 +201,8 @@ TEST_F(ImmutableTest, abstract_domain) {
         ("c:I" 2)
       )
     ))");
-    EXPECT_EQ(a_1_c_1.get_constant()->runtime_equals(*b_1_c_2.get_constant()),
-              TriState::False)
-        << a_1_c_1 << " vs " << b_1_c_2;
+    EXPECT_TRUE(a_1_c_1.get_constant()->runtime_equals(
+                    *b_1_c_2.get_constant()) == TriState::False);
   }
   // join
   {
