@@ -301,7 +301,8 @@ struct ImmutableAttributeAnalyzerState {
     long end;
   };
 
-  ConcurrentMap<DexMethod*, std::vector<Initializer>> method_initializers;
+  ConcurrentMap<DexMethod*, std::vector<std::unique_ptr<Initializer>>>
+      method_initializers;
   ConcurrentSet<DexMethod*> attribute_methods;
   ConcurrentSet<DexField*> attribute_fields;
   std::unordered_map<DexMethod*, CachedBoxedObjects> cached_boxed_objects;

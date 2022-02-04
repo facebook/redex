@@ -74,10 +74,10 @@ void CallSiteSummary::append_key_value(std::ostringstream& oss,
         oss << ",";
       }
       if (attr.attr.is_field()) {
-        oss << show(attr.attr.field);
+        oss << show(attr.attr.val.field);
       } else {
         always_assert(attr.attr.is_method());
-        oss << show(attr.attr.method);
+        oss << show(attr.attr.val.method);
       }
       oss << "=";
       if (const auto& signed_value2 =

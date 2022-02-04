@@ -785,9 +785,16 @@ ImmutableAttributeAnalyzerState::add_initializer(DexMethod* initialize_method,
   ImmutableAttributeAnalyzerState::Initializer* new_initializer = nullptr;
   method_initializers.update(
       initialize_method,
-      [&](DexMethod*, std::vector<Initializer>& initializers, bool) {
-        initializers.push_back(Initializer(attr));
-        new_initializer = &initializers.back();
+      [&](DexMethod*, std::vector<std::unique_ptr<Initializer>>& initializers,
+          bool) {
+        initializers.emplace_back(
+            std::make_unique<Initializer>(Initializer(attr)));
+        new_initializer = initializers.back().get();
+        // Need to keep this sorted for fast join and runtime_equals.
+        std::sort(initializers.begin(), initializers.end(),
+                  [](const auto& lhs, const auto& rhs) {
+                    return lhs->attr < rhs->attr;
+                  });
       });
   redex_assert(new_initializer);
   return *new_initializer;
@@ -800,9 +807,16 @@ ImmutableAttributeAnalyzerState::add_initializer(DexMethod* initialize_method,
   ImmutableAttributeAnalyzerState::Initializer* new_initializer = nullptr;
   method_initializers.update(
       initialize_method,
-      [&](DexMethod*, std::vector<Initializer>& initializers, bool) {
-        initializers.push_back(Initializer(attr));
-        new_initializer = &initializers.back();
+      [&](DexMethod*, std::vector<std::unique_ptr<Initializer>>& initializers,
+          bool) {
+        initializers.emplace_back(
+            std::make_unique<Initializer>(Initializer(attr)));
+        new_initializer = initializers.back().get();
+        // Need to keep this sorted for fast join and runtime_equals.
+        std::sort(initializers.begin(), initializers.end(),
+                  [](const auto& lhs, const auto& rhs) {
+                    return lhs->attr < rhs->attr;
+                  });
       });
   redex_assert(new_initializer);
   return *new_initializer;
@@ -811,8 +825,8 @@ ImmutableAttributeAnalyzerState::add_initializer(DexMethod* initialize_method,
 ImmutableAttributeAnalyzerState::Initializer&
 ImmutableAttributeAnalyzerState::add_initializer(
     DexMethod* initialize_method, const ImmutableAttr::Attr& attr) {
-  return attr.is_field() ? add_initializer(initialize_method, attr.field)
-                         : add_initializer(initialize_method, attr.method);
+  return attr.is_field() ? add_initializer(initialize_method, attr.val.field)
+                         : add_initializer(initialize_method, attr.val.method);
 }
 
 ImmutableAttributeAnalyzerState::ImmutableAttributeAnalyzerState() {
@@ -990,34 +1004,34 @@ bool ImmutableAttributeAnalyzer::analyze_method_initialization(
   reg_t obj_reg;
   bool has_value = false;
   for (auto& initializer : it->second) {
-    obj_reg = initializer.obj_is_dest()
+    obj_reg = initializer->obj_is_dest()
                   ? RESULT_REGISTER
-                  : insn->src(*initializer.insn_src_id_of_obj);
-    const auto& domain = env->get(insn->src(initializer.insn_src_id_of_attr));
+                  : insn->src(*initializer->insn_src_id_of_obj);
+    const auto& domain = env->get(insn->src(initializer->insn_src_id_of_attr));
     if (const auto& signed_value = domain.maybe_get<SignedConstantDomain>()) {
       auto constant = signed_value->get_constant();
       if (!constant) {
-        object.write_value(initializer.attr, SignedConstantDomain::top());
+        object.write_value(initializer->attr, SignedConstantDomain::top());
         continue;
       }
       object.jvm_cached_singleton =
           state->is_jvm_cached_object(method, *constant);
-      object.write_value(initializer.attr, *signed_value);
+      object.write_value(initializer->attr, *signed_value);
       has_value = true;
     } else if (const auto& string_value = domain.maybe_get<StringDomain>()) {
       if (!string_value->is_value()) {
-        object.write_value(initializer.attr, StringDomain::top());
+        object.write_value(initializer->attr, StringDomain::top());
         continue;
       }
-      object.write_value(initializer.attr, *string_value);
+      object.write_value(initializer->attr, *string_value);
       has_value = true;
     } else if (const auto& type_value =
                    domain.maybe_get<ConstantClassObjectDomain>()) {
       if (!type_value->is_value()) {
-        object.write_value(initializer.attr, ConstantClassObjectDomain::top());
+        object.write_value(initializer->attr, ConstantClassObjectDomain::top());
         continue;
       }
-      object.write_value(initializer.attr, *type_value);
+      object.write_value(initializer->attr, *type_value);
       has_value = true;
     }
   }
@@ -1106,12 +1120,12 @@ bool EnumUtilsFieldAnalyzer::analyze_sget(
   const auto& initializers = it->second;
   always_assert(initializers.size() == 1);
   const auto& initializer = initializers.front();
-  always_assert(initializer.insn_src_id_of_attr == 0);
+  always_assert(initializer->insn_src_id_of_attr == 0);
 
   const auto& name = field->str();
   auto value = std::stoi(name.substr(1));
   ObjectWithImmutAttr object(integer_type, 1);
-  object.write_value(initializer.attr, SignedConstantDomain(value));
+  object.write_value(initializer->attr, SignedConstantDomain(value));
   object.jvm_cached_singleton = state->is_jvm_cached_object(valueOf, value);
   env->set(RESULT_REGISTER, ObjectWithImmutAttrDomain(std::move(object)));
   return true;

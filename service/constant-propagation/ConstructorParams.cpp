@@ -136,16 +136,16 @@ class InitFixpointIterator final
         auto it = m_state.method_initializers.find(method);
         if (it != m_state.method_initializers.end()) {
           for (auto& initializer : it->second) {
-            if (initializer.attr.is_method()) {
-              env->set(initializer.attr.method,
-                       env->get(insn->src(initializer.insn_src_id_of_attr)));
+            if (initializer->attr.is_method()) {
+              env->set(initializer->attr.val.method,
+                       env->get(insn->src(initializer->insn_src_id_of_attr)));
             } else { // is_field
-              env->set(initializer.attr.field,
-                       env->get(insn->src(initializer.insn_src_id_of_attr)));
+              env->set(initializer->attr.val.field,
+                       env->get(insn->src(initializer->insn_src_id_of_attr)));
             }
           }
           auto& first_initializer = *it->second.begin();
-          if (first_initializer.obj_is_dest()) {
+          if (first_initializer->obj_is_dest()) {
             env->set(RESULT_REGISTER, obj_domain);
             return;
           }
