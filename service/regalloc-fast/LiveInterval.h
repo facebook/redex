@@ -45,7 +45,8 @@ VRegAliveRangeInBlock get_live_range_in_block(
  * ranges, which is the live interval of this vreg. Put live interval and vreg
  * info into the result vector and sort before return.
  */
-LiveIntervals init_live_intervals(IRCode* code);
+LiveIntervals init_live_intervals(IRCode* code,
+                                  std::vector<IRInstruction*>* insns);
 
 IntervalEndPoints calculate_live_interval(
     std::vector<RangeInBlock>& insn_ranges,

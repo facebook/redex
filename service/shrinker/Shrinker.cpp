@@ -304,7 +304,8 @@ void Shrinker::shrink_code(
 
   if (m_config.run_fast_reg_alloc) {
     auto timer = m_reg_alloc_timer.scope();
-    auto allocator = fastregalloc::LinearScanAllocator(code, method_describer);
+    auto allocator =
+        fastregalloc::LinearScanAllocator(code, is_static, method_describer);
     allocator.allocate();
   }
 
