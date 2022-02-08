@@ -73,12 +73,14 @@ class DexEncodedValue : public Gatherable {
       : m_value_ptr_const(value_ptr), m_evtype(type) {}
 
  public:
+  virtual ~DexEncodedValue() = default;
+
   DexEncodedValueTypes evtype() const { return m_evtype; }
   bool is_evtype_primitive() const;
   void value(uint64_t value) { m_value = value; }
   uint64_t value() const { return m_value; }
-  static DexEncodedValue* get_encoded_value(DexIdx* idx,
-                                            const uint8_t*& encdata);
+  static std::unique_ptr<DexEncodedValue> get_encoded_value(
+      DexIdx* idx, const uint8_t*& encdata);
   DexEncodedValueTypes evtype() { return m_evtype; }
   virtual void encode(DexOutputIdx* dodx, uint8_t*& encdata);
   void vencode(DexOutputIdx* dodx, std::vector<uint8_t>& bytes);

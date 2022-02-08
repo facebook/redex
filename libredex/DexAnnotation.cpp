@@ -355,8 +355,8 @@ static DexAnnotationElement get_annotation_element(DexIdx* idx,
   auto name = idx->get_stringidx(sidx);
   always_assert_log(name != nullptr,
                     "Invalid string idx in annotation element");
-  DexEncodedValue* dev = DexEncodedValue::get_encoded_value(idx, encdata);
-  return DexAnnotationElement(name, std::unique_ptr<DexEncodedValue>(dev));
+  return DexAnnotationElement(name,
+                              DexEncodedValue::get_encoded_value(idx, encdata));
 }
 
 std::unique_ptr<DexEncodedValueArray> get_encoded_value_array(
@@ -365,8 +365,7 @@ std::unique_ptr<DexEncodedValueArray> get_encoded_value_array(
   auto* evlist = new std::vector<std::unique_ptr<DexEncodedValue>>();
   evlist->reserve(size);
   for (uint32_t i = 0; i < size; i++) {
-    DexEncodedValue* adev = DexEncodedValue::get_encoded_value(idx, encdata);
-    evlist->emplace_back(adev);
+    evlist->emplace_back(DexEncodedValue::get_encoded_value(idx, encdata));
   }
   return std::make_unique<DexEncodedValueArray>(evlist);
 }
@@ -442,8 +441,8 @@ std::unique_ptr<DexEncodedValue> DexEncodedValue::zero_for_type(DexType* type) {
   }
 }
 
-DexEncodedValue* DexEncodedValue::get_encoded_value(DexIdx* idx,
-                                                    const uint8_t*& encdata) {
+std::unique_ptr<DexEncodedValue> DexEncodedValue::get_encoded_value(
+    DexIdx* idx, const uint8_t*& encdata) {
   uint8_t evhdr = *encdata++;
   DexEncodedValueTypes evt = (DexEncodedValueTypes)DEVT_HDR_TYPE(evhdr);
   uint8_t evarg = DEVT_HDR_ARG(evhdr);
@@ -452,52 +451,56 @@ DexEncodedValue* DexEncodedValue::get_encoded_value(DexIdx* idx,
   case DEVT_INT:
   case DEVT_LONG: {
     uint64_t v = read_evarg(encdata, evarg, true /* sign_extend */);
-    return new DexEncodedValue(evt, v);
+    return std::unique_ptr<DexEncodedValue>(new DexEncodedValue(evt, v));
   }
   case DEVT_BYTE:
   case DEVT_CHAR: {
     uint64_t v = read_evarg(encdata, evarg, false /* sign_extend */);
-    return new DexEncodedValue(evt, v);
+    return std::unique_ptr<DexEncodedValue>(new DexEncodedValue(evt, v));
   }
   case DEVT_FLOAT: {
     // We sign extend floats so that they can be treated just like signed ints
     uint64_t v = read_evarg(encdata, evarg, true /* sign_extend */)
                  << ((3 - evarg) * 8);
-    return new DexEncodedValue(evt, v);
+    return std::unique_ptr<DexEncodedValue>(new DexEncodedValue(evt, v));
   }
   case DEVT_DOUBLE: {
     uint64_t v = read_evarg(encdata, evarg, false /* sign_extend */)
                  << ((7 - evarg) * 8);
-    return new DexEncodedValue(evt, v);
+    return std::unique_ptr<DexEncodedValue>(new DexEncodedValue(evt, v));
   }
   case DEVT_METHOD_TYPE: {
     uint32_t evidx = (uint32_t)read_evarg(encdata, evarg);
     DexProto* evproto = idx->get_protoidx(evidx);
-    return new DexEncodedValueMethodType(evproto);
+    return std::unique_ptr<DexEncodedValue>(
+        new DexEncodedValueMethodType(evproto));
   }
   case DEVT_METHOD_HANDLE: {
     uint32_t evidx = (uint32_t)read_evarg(encdata, evarg);
     DexMethodHandle* evmethodhandle = idx->get_methodhandleidx(evidx);
-    return new DexEncodedValueMethodHandle(evmethodhandle);
+    return std::unique_ptr<DexEncodedValue>(
+        new DexEncodedValueMethodHandle(evmethodhandle));
   }
 
   case DEVT_NULL:
-    return new DexEncodedValueBit(evt, false);
+    return std::unique_ptr<DexEncodedValue>(new DexEncodedValueBit(evt, false));
   case DEVT_BOOLEAN:
-    return new DexEncodedValueBit(evt, evarg > 0);
+    return std::unique_ptr<DexEncodedValue>(
+        new DexEncodedValueBit(evt, evarg > 0));
   case DEVT_STRING: {
     uint32_t evidx = (uint32_t)read_evarg(encdata, evarg);
     auto evstring = idx->get_stringidx(evidx);
     always_assert_log(evstring != nullptr,
                       "Invalid string idx in annotation element");
-    return new DexEncodedValueString(evstring);
+    return std::unique_ptr<DexEncodedValue>(
+        new DexEncodedValueString(evstring));
   }
   case DEVT_TYPE: {
     uint32_t evidx = (uint32_t)read_evarg(encdata, evarg);
     DexType* evtype = idx->get_typeidx(evidx);
     always_assert_log(evtype != nullptr,
                       "Invalid type idx in annotation element");
-    return new DexEncodedValueType(evtype);
+    return std::unique_ptr<DexEncodedValue>(new DexEncodedValueType(evtype));
   }
   case DEVT_FIELD:
   case DEVT_ENUM: {
@@ -505,17 +508,19 @@ DexEncodedValue* DexEncodedValue::get_encoded_value(DexIdx* idx,
     DexFieldRef* evfield = idx->get_fieldidx(evidx);
     always_assert_log(evfield != nullptr,
                       "Invalid field idx in annotation element");
-    return new DexEncodedValueField(evt, evfield);
+    return std::unique_ptr<DexEncodedValue>(
+        new DexEncodedValueField(evt, evfield));
   }
   case DEVT_METHOD: {
     uint32_t evidx = (uint32_t)read_evarg(encdata, evarg);
     DexMethodRef* evmethod = idx->get_methodidx(evidx);
     always_assert_log(evmethod != nullptr,
                       "Invalid method idx in annotation element");
-    return new DexEncodedValueMethod(evmethod);
+    return std::unique_ptr<DexEncodedValue>(
+        new DexEncodedValueMethod(evmethod));
   }
   case DEVT_ARRAY:
-    return get_encoded_value_array(idx, encdata).release();
+    return get_encoded_value_array(idx, encdata);
   case DEVT_ANNOTATION: {
     EncodedAnnotations eanno{};
     uint32_t tidx = read_uleb128(&encdata);
@@ -527,7 +532,8 @@ DexEncodedValue* DexEncodedValue::get_encoded_value(DexIdx* idx,
     for (uint32_t i = 0; i < count; i++) {
       eanno.emplace_back(get_annotation_element(idx, encdata));
     }
-    return new DexEncodedValueAnnotation(type, std::move(eanno));
+    return std::unique_ptr<DexEncodedValue>(
+        new DexEncodedValueAnnotation(type, std::move(eanno)));
   }
   };
   not_reached_log("Bogus annotation");
