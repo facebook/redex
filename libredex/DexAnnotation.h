@@ -99,13 +99,22 @@ class DexEncodedValue : public Gatherable {
     return seed;
   }
 
-  virtual std::unique_ptr<DexEncodedValue> clone() const {
-    return std::make_unique<DexEncodedValue>(*this);
-  }
+  virtual std::unique_ptr<DexEncodedValue> clone() const = 0;
 
   bool is_zero() const;
   bool is_wide() const;
   static std::unique_ptr<DexEncodedValue> zero_for_type(DexType* type);
+};
+
+class DexEncodedValuePrimitive final : public DexEncodedValue {
+ public:
+  explicit DexEncodedValuePrimitive(DexEncodedValueTypes type,
+                                    uint64_t value = 0)
+      : DexEncodedValue(type, value) {}
+
+  std::unique_ptr<DexEncodedValue> clone() const override {
+    return std::make_unique<DexEncodedValuePrimitive>(*this);
+  }
 };
 
 inline size_t hash_value(const DexEncodedValue& v) { return v.hash_value(); }
@@ -432,6 +441,15 @@ class DexEncodedValueAnnotation : public DexEncodedValue {
 
   std::string show() const override;
   std::string show_deobfuscated() const override;
+
+  std::unique_ptr<DexEncodedValue> clone() const override {
+    EncodedAnnotations copy;
+    std::transform(m_annotations.begin(),
+                   m_annotations.end(),
+                   std::back_inserter(copy),
+                   [](const auto& a) { return a.clone(); });
+    return std::make_unique<DexEncodedValueAnnotation>(m_type, std::move(copy));
+  }
 };
 
 class DexAnnotation : public Gatherable {

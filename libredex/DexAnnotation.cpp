@@ -412,25 +412,25 @@ bool DexEncodedValue::is_wide() const {
 std::unique_ptr<DexEncodedValue> DexEncodedValue::zero_for_type(DexType* type) {
   if (type == type::_byte()) {
     return std::unique_ptr<DexEncodedValue>(
-        new DexEncodedValue(DEVT_BYTE, (uint64_t)0));
+        new DexEncodedValuePrimitive(DEVT_BYTE, (uint64_t)0));
   } else if (type == type::_char()) {
     return std::unique_ptr<DexEncodedValue>(
-        new DexEncodedValue(DEVT_CHAR, (uint64_t)0));
+        new DexEncodedValuePrimitive(DEVT_CHAR, (uint64_t)0));
   } else if (type == type::_short()) {
     return std::unique_ptr<DexEncodedValue>(
-        new DexEncodedValue(DEVT_SHORT, (uint64_t)0));
+        new DexEncodedValuePrimitive(DEVT_SHORT, (uint64_t)0));
   } else if (type == type::_int()) {
     return std::unique_ptr<DexEncodedValue>(
-        new DexEncodedValue(DEVT_INT, (uint64_t)0));
+        new DexEncodedValuePrimitive(DEVT_INT, (uint64_t)0));
   } else if (type == type::_long()) {
     return std::unique_ptr<DexEncodedValue>(
-        new DexEncodedValue(DEVT_LONG, (uint64_t)0));
+        new DexEncodedValuePrimitive(DEVT_LONG, (uint64_t)0));
   } else if (type == type::_float()) {
     return std::unique_ptr<DexEncodedValue>(
-        new DexEncodedValue(DEVT_FLOAT, (uint64_t)0));
+        new DexEncodedValuePrimitive(DEVT_FLOAT, (uint64_t)0));
   } else if (type == type::_double()) {
     return std::unique_ptr<DexEncodedValue>(
-        new DexEncodedValue(DEVT_DOUBLE, (uint64_t)0));
+        new DexEncodedValuePrimitive(DEVT_DOUBLE, (uint64_t)0));
   } else if (type == type::_boolean()) {
     return std::unique_ptr<DexEncodedValue>(
         new DexEncodedValueBit(DEVT_BOOLEAN, false));
@@ -451,23 +451,27 @@ std::unique_ptr<DexEncodedValue> DexEncodedValue::get_encoded_value(
   case DEVT_INT:
   case DEVT_LONG: {
     uint64_t v = read_evarg(encdata, evarg, true /* sign_extend */);
-    return std::unique_ptr<DexEncodedValue>(new DexEncodedValue(evt, v));
+    return std::unique_ptr<DexEncodedValue>(
+        new DexEncodedValuePrimitive(evt, v));
   }
   case DEVT_BYTE:
   case DEVT_CHAR: {
     uint64_t v = read_evarg(encdata, evarg, false /* sign_extend */);
-    return std::unique_ptr<DexEncodedValue>(new DexEncodedValue(evt, v));
+    return std::unique_ptr<DexEncodedValue>(
+        new DexEncodedValuePrimitive(evt, v));
   }
   case DEVT_FLOAT: {
     // We sign extend floats so that they can be treated just like signed ints
     uint64_t v = read_evarg(encdata, evarg, true /* sign_extend */)
                  << ((3 - evarg) * 8);
-    return std::unique_ptr<DexEncodedValue>(new DexEncodedValue(evt, v));
+    return std::unique_ptr<DexEncodedValue>(
+        new DexEncodedValuePrimitive(evt, v));
   }
   case DEVT_DOUBLE: {
     uint64_t v = read_evarg(encdata, evarg, false /* sign_extend */)
                  << ((7 - evarg) * 8);
-    return std::unique_ptr<DexEncodedValue>(new DexEncodedValue(evt, v));
+    return std::unique_ptr<DexEncodedValue>(
+        new DexEncodedValuePrimitive(evt, v));
   }
   case DEVT_METHOD_TYPE: {
     uint32_t evidx = (uint32_t)read_evarg(encdata, evarg);
