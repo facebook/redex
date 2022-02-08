@@ -405,20 +405,22 @@ using EncodedAnnotations = std::vector<DexAnnotationElement>;
 std::string show(const EncodedAnnotations*);
 std::string show_deobfuscated(const EncodedAnnotations*);
 
+std::string show(const EncodedAnnotations&);
+std::string show_deobfuscated(const EncodedAnnotations&);
+
 class DexEncodedValueAnnotation : public DexEncodedValue {
   DexType* m_type;
-  EncodedAnnotations* m_annotations;
+  EncodedAnnotations m_annotations;
 
  public:
-  DexEncodedValueAnnotation(DexType* type, EncodedAnnotations* annotations)
-      : DexEncodedValue(DEVT_ANNOTATION) {
-    m_type = type;
-    m_annotations = annotations;
-  }
+  DexEncodedValueAnnotation(DexType* type, EncodedAnnotations annotations)
+      : DexEncodedValue(DEVT_ANNOTATION),
+        m_type(type),
+        m_annotations(std::move(annotations)) {}
 
   DexType* type() const { return m_type; }
   void set_type(DexType* type) { m_type = type; }
-  const EncodedAnnotations* annotations() const { return m_annotations; }
+  const EncodedAnnotations& annotations() const { return m_annotations; }
 
   void gather_types(std::vector<DexType*>& ltype) const override;
   void gather_fields(std::vector<DexFieldRef*>& lfield) const override;

@@ -84,7 +84,7 @@ void DexEncodedValueArray::gather_methods(
 
 void DexEncodedValueAnnotation::gather_strings(
     std::vector<const DexString*>& lstring) const {
-  for (auto const& elem : *m_annotations) {
+  for (auto const& elem : m_annotations) {
     lstring.push_back(elem.string);
     elem.encoded_value->gather_strings(lstring);
   }
@@ -93,21 +93,21 @@ void DexEncodedValueAnnotation::gather_strings(
 void DexEncodedValueAnnotation::gather_types(
     std::vector<DexType*>& ltype) const {
   ltype.push_back(m_type);
-  for (auto const& anno : *m_annotations) {
+  for (auto const& anno : m_annotations) {
     anno.encoded_value->gather_types(ltype);
   }
 }
 
 void DexEncodedValueAnnotation::gather_fields(
     std::vector<DexFieldRef*>& lfield) const {
-  for (auto const& anno : *m_annotations) {
+  for (auto const& anno : m_annotations) {
     anno.encoded_value->gather_fields(lfield);
   }
 }
 
 void DexEncodedValueAnnotation::gather_methods(
     std::vector<DexMethodRef*>& lmethod) const {
-  for (auto const& anno : *m_annotations) {
+  for (auto const& anno : m_annotations) {
     anno.encoded_value->gather_methods(lmethod);
   }
 }
@@ -339,8 +339,8 @@ void DexEncodedValueAnnotation::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
   uint32_t tidx = dodx->typeidx(m_type);
   *encdata++ = devtb;
   encdata = write_uleb128(encdata, tidx);
-  encdata = write_uleb128(encdata, (uint32_t)m_annotations->size());
-  for (auto const& dae : *m_annotations) {
+  encdata = write_uleb128(encdata, (uint32_t)m_annotations.size());
+  for (auto const& dae : m_annotations) {
     auto str = dae.string;
     DexEncodedValue* dev = dae.encoded_value.get();
     uint32_t sidx = dodx->stringidx(str);
@@ -517,17 +517,17 @@ DexEncodedValue* DexEncodedValue::get_encoded_value(DexIdx* idx,
   case DEVT_ARRAY:
     return get_encoded_value_array(idx, encdata).release();
   case DEVT_ANNOTATION: {
-    EncodedAnnotations* eanno = new EncodedAnnotations();
+    EncodedAnnotations eanno{};
     uint32_t tidx = read_uleb128(&encdata);
     uint32_t count = read_uleb128(&encdata);
     DexType* type = idx->get_typeidx(tidx);
     always_assert_log(type != nullptr,
                       "Invalid DEVT_ANNOTATION within annotation type");
-    eanno->reserve(count);
+    eanno.reserve(count);
     for (uint32_t i = 0; i < count; i++) {
-      eanno->emplace_back(get_annotation_element(idx, encdata));
+      eanno.emplace_back(get_annotation_element(idx, encdata));
     }
-    return new DexEncodedValueAnnotation(type, eanno);
+    return new DexEncodedValueAnnotation(type, std::move(eanno));
   }
   };
   not_reached_log("Bogus annotation");
@@ -851,6 +851,14 @@ std::string show(const EncodedAnnotations* annos) {
 
 std::string show_deobfuscated(const EncodedAnnotations* annos) {
   return show_helper(annos, true);
+}
+
+std::string show(const EncodedAnnotations& annos) {
+  return show_helper(&annos, false);
+}
+
+std::string show_deobfuscated(const EncodedAnnotations& annos) {
+  return show_helper(&annos, true);
 }
 
 std::string DexEncodedValue::show() const {

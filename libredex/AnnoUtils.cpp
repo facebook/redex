@@ -132,8 +132,8 @@ const DexEncodedValue* parse_default_anno_value(
             target_elem.encoded_value->evtype());
       always_assert(target_elem.encoded_value->evtype() == DEVT_ANNOTATION);
 
-      auto default_value_annos = default_values->annotations();
-      for (const auto& default_value_anno : *default_value_annos) {
+      const auto& default_value_annos = default_values->annotations();
+      for (const auto& default_value_anno : default_value_annos) {
         if (default_value_anno.string->str() != target_anno_element_name) {
           continue;
         }
