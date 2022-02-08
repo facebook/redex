@@ -112,8 +112,6 @@ void ShrinkerPass::run_pass(DexStoresVector& stores,
                    shrinker.get_dedup_blocks_seconds());
   Timer::add_timer("Shrinker.Shrinking.RegAlloc",
                    shrinker.get_reg_alloc_seconds());
-  Timer::add_timer("Shrinker.Shrinking.FastRegAlloc",
-                   shrinker.get_fast_reg_alloc_seconds());
 }
 
 static ShrinkerPass s_pass;

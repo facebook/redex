@@ -107,9 +107,6 @@ class Shrinker {
   double get_reg_alloc_seconds() const {
     return m_reg_alloc_timer.get_seconds();
   }
-  double get_fast_reg_alloc_seconds() const {
-    return m_fast_reg_alloc_timer.get_seconds();
-  }
 
   struct MethodContext {
     uint32_t m_regs{0};
@@ -164,7 +161,6 @@ class Shrinker {
   AccumulatingTimer m_dedup_blocks_timer;
   dedup_blocks_impl::Stats m_dedup_blocks_stats;
   AccumulatingTimer m_reg_alloc_timer;
-  AccumulatingTimer m_fast_reg_alloc_timer;
   size_t m_methods_shrunk{0};
   size_t m_methods_reg_alloced{0};
 };
