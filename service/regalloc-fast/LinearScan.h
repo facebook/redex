@@ -10,6 +10,7 @@
 #include "DexClass.h"
 #include "IRCode.h"
 #include "LiveRange.h"
+#include "ScopedCFG.h"
 #include <cstdint>
 #include <functional>
 #include <queue>
@@ -131,7 +132,7 @@ class LinearScanAllocator final {
   LinearScanAllocator(IRCode* code,
                       bool is_static,
                       const std::function<std::string()>& method_describer);
-  ~LinearScanAllocator() {}
+
   /*
    * For each live interval in ascending order of first def:
    * expire_old_intervals; check if anything in free queue, if so, allocate a
@@ -141,7 +142,8 @@ class LinearScanAllocator final {
   void allocate();
 
  private:
-  IRCode* m_code;
+  // Ensure that we have an editable CFG for the duration of the optimization
+  cfg::ScopedCFG m_cfg;
   bool m_is_static;
 
   /*

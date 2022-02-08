@@ -33,8 +33,10 @@ TEST_F(FastRegAllocTest, RegAlloc) {
     )
 )");
 
-  fastregalloc::LinearScanAllocator allocator(method);
-  allocator.allocate();
+  {
+    fastregalloc::LinearScanAllocator allocator(method);
+    allocator.allocate();
+  }
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -68,8 +70,10 @@ TEST_F(FastRegAllocTest, NoUseVReg) {
     )
 )");
 
-  fastregalloc::LinearScanAllocator allocator(method);
-  allocator.allocate();
+  {
+    fastregalloc::LinearScanAllocator allocator(method);
+    allocator.allocate();
+  }
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -100,8 +104,10 @@ TEST_F(FastRegAllocTest, ControlFlow) {
     )
 )");
 
-  fastregalloc::LinearScanAllocator allocator(method);
-  allocator.allocate();
+  {
+    fastregalloc::LinearScanAllocator allocator(method);
+    allocator.allocate();
+  }
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -139,8 +145,10 @@ TEST_F(FastRegAllocTest, CheckCodeFlow) {
     )
 )");
 
-  fastregalloc::LinearScanAllocator allocator(method);
-  allocator.allocate();
+  {
+    fastregalloc::LinearScanAllocator allocator(method);
+    allocator.allocate();
+  }
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -173,8 +181,10 @@ TEST_F(FastRegAllocTest, CheckVRegInLoop) {
     )
 )");
 
-  fastregalloc::LinearScanAllocator allocator(method);
-  allocator.allocate();
+  {
+    fastregalloc::LinearScanAllocator allocator(method);
+    allocator.allocate();
+  }
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -208,8 +218,10 @@ TEST_F(FastRegAllocTest, WideVReg) {
     )
 )");
 
-  fastregalloc::LinearScanAllocator allocator(method);
-  allocator.allocate();
+  {
+    fastregalloc::LinearScanAllocator allocator(method);
+    allocator.allocate();
+  }
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -262,8 +274,10 @@ TEST_F(FastRegAllocTest, ParamAlloc) {
     )
 )");
 
-  fastregalloc::LinearScanAllocator allocator(method);
-  allocator.allocate();
+  {
+    fastregalloc::LinearScanAllocator allocator(method);
+    allocator.allocate();
+  }
 
   auto expected_code = assembler::ircode_from_string(R"(
     (

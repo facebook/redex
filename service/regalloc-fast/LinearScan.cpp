@@ -46,7 +46,7 @@ LinearScanAllocator::LinearScanAllocator(
     IRCode* code,
     bool is_static,
     const std::function<std::string()>& method_describer)
-    : m_code(code), m_is_static(is_static) {
+    : m_cfg(code), m_is_static(is_static) {
   TRACE(FREG,
         9,
         "Running FastRegAlloc for method {%s}",
@@ -84,13 +84,12 @@ void LinearScanAllocator::allocate() {
       use.insn->set_src(use.src_index, interval.reg.value());
     }
   }
-  m_code->set_registers_size(m_reg_count);
+  m_cfg->set_registers_size(m_reg_count);
   TRACE(FREG, 9, "FastRegAlloc pass complete!");
 }
 
 void LinearScanAllocator::init_vreg_occurences() {
-  m_code->build_cfg(/*editable*/ false);
-  for (auto& mie : InstructionIterable(m_code)) {
+  for (auto& mie : InstructionIterable(*m_cfg)) {
     auto insn = mie.insn;
     if (insn->has_dest()) {
       vreg_t dest_reg = insn->dest();
@@ -104,7 +103,7 @@ void LinearScanAllocator::init_vreg_occurences() {
       }
     }
   }
-  for (auto& mie : InstructionIterable(m_code)) {
+  for (auto& mie : InstructionIterable(*m_cfg)) {
     auto insn = mie.insn;
     for (src_index_t i = 0; i < insn->srcs_size(); ++i) {
       vreg_t src_reg = insn->src(i);
