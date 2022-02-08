@@ -638,7 +638,6 @@ static void sweep_if_unmarked(const ReachableObjects& reachables,
   auto p = [&](const auto& m) {
     if (reachables.marked_unsafe(m) == 0) {
       TRACE(RMU, 2, "Removing %s", SHOW(m));
-      erase_hook(m);
       return false;
     }
     return true;
@@ -647,6 +646,11 @@ static void sweep_if_unmarked(const ReachableObjects& reachables,
   if (removed_symbols) {
     for (auto i = it; i != c->end(); i++) {
       removed_symbols->insert(show_deobfuscated(*i));
+      erase_hook(*i);
+    }
+  } else {
+    for (auto i = it; i != c->end(); i++) {
+      erase_hook(*i);
     }
   }
   c->erase(it, c->end());
@@ -668,10 +672,10 @@ void sweep(DexStoresVector& stores,
     };
 
     walk::parallel::classes(dex, [&](DexClass* cls) {
-      sweep_if_unmarked(reachables, DexField::erase_field, &cls->get_ifields(),
-                        removed_symbols);
-      sweep_if_unmarked(reachables, DexField::erase_field, &cls->get_sfields(),
-                        removed_symbols);
+      sweep_if_unmarked(reachables, DexField::delete_field_DO_NOT_USE,
+                        &cls->get_ifields(), removed_symbols);
+      sweep_if_unmarked(reachables, DexField::delete_field_DO_NOT_USE,
+                        &cls->get_sfields(), removed_symbols);
       sweep_if_unmarked(reachables, sweep_method, &cls->get_dmethods(),
                         removed_symbols);
       sweep_if_unmarked(reachables, sweep_method, &cls->get_vmethods(),
