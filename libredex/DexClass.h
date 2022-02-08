@@ -1221,7 +1221,7 @@ class DexClass {
   bool has_class_data() const;
   bool is_def() const { return true; }
   bool is_external() const { return m_external; }
-  DexEncodedValueArray* get_static_values();
+  std::unique_ptr<DexEncodedValueArray> get_static_values();
   const DexAnnotationSet* get_anno_set() const { return m_anno.get(); }
   DexAnnotationSet* get_anno_set() { return m_anno.get(); }
   void attach_annotation_set(std::unique_ptr<DexAnnotationSet> anno);

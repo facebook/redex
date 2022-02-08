@@ -57,27 +57,27 @@ void DexEncodedValueMethodHandle::gather_methodhandles(
 
 void DexEncodedValueArray::gather_strings(
     std::vector<const DexString*>& lstring) const {
-  for (auto ev : *evalues()) {
+  for (auto& ev : *evalues()) {
     ev->gather_strings(lstring);
   }
 }
 
 void DexEncodedValueArray::gather_types(std::vector<DexType*>& ltype) const {
-  for (auto ev : *evalues()) {
+  for (auto& ev : *evalues()) {
     ev->gather_types(ltype);
   }
 }
 
 void DexEncodedValueArray::gather_fields(
     std::vector<DexFieldRef*>& lfield) const {
-  for (auto ev : *evalues()) {
+  for (auto& ev : *evalues()) {
     ev->gather_fields(lfield);
   }
 }
 
 void DexEncodedValueArray::gather_methods(
     std::vector<DexMethodRef*>& lmethod) const {
-  for (auto ev : *evalues()) {
+  for (auto& ev : *evalues()) {
     ev->gather_methods(lmethod);
   }
 }
@@ -359,16 +359,16 @@ static DexAnnotationElement get_annotation_element(DexIdx* idx,
   return DexAnnotationElement(name, std::unique_ptr<DexEncodedValue>(dev));
 }
 
-DexEncodedValueArray* get_encoded_value_array(DexIdx* idx,
-                                              const uint8_t*& encdata) {
+std::unique_ptr<DexEncodedValueArray> get_encoded_value_array(
+    DexIdx* idx, const uint8_t*& encdata) {
   uint32_t size = read_uleb128(&encdata);
-  auto* evlist = new std::vector<DexEncodedValue*>();
+  auto* evlist = new std::vector<std::unique_ptr<DexEncodedValue>>();
   evlist->reserve(size);
   for (uint32_t i = 0; i < size; i++) {
     DexEncodedValue* adev = DexEncodedValue::get_encoded_value(idx, encdata);
-    evlist->push_back(adev);
+    evlist->emplace_back(adev);
   }
-  return new DexEncodedValueArray(evlist);
+  return std::make_unique<DexEncodedValueArray>(evlist);
 }
 
 bool DexEncodedValue::is_evtype_primitive() const {
@@ -515,7 +515,7 @@ DexEncodedValue* DexEncodedValue::get_encoded_value(DexIdx* idx,
     return new DexEncodedValueMethod(evmethod);
   }
   case DEVT_ARRAY:
-    return get_encoded_value_array(idx, encdata);
+    return get_encoded_value_array(idx, encdata).release();
   case DEVT_ANNOTATION: {
     EncodedAnnotations* eanno = new EncodedAnnotations();
     uint32_t tidx = read_uleb128(&encdata);

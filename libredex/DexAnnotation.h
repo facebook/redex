@@ -278,16 +278,15 @@ class DexEncodedValueArray : public DexEncodedValue {
   bool m_static_val;
 
  public:
+  using Storage = std::vector<std::unique_ptr<DexEncodedValue>>;
+
   /*
    * Static values are encoded without a DEVT_ARRAY header byte
    * so we differentiate that here.
    */
-  explicit DexEncodedValueArray(std::vector<DexEncodedValue*>* evalues,
-                                bool static_val = false)
+  explicit DexEncodedValueArray(Storage* evalues, bool static_val = false)
       : DexEncodedValue(DEVT_ARRAY, evalues), m_static_val(static_val) {}
-  ~DexEncodedValueArray() {
-    delete (std::vector<DexEncodedValue*>*)m_value_ptr;
-  }
+  ~DexEncodedValueArray() { delete (Storage*)m_value_ptr; }
 
   // May not copy or assign, as the element is owned.
   DexEncodedValueArray(const DexEncodedValueArray&) = delete;
@@ -300,15 +299,18 @@ class DexEncodedValueArray : public DexEncodedValue {
     rhs.m_value_ptr = nullptr;
   }
   DexEncodedValueArray& operator=(DexEncodedValueArray&& rhs) noexcept {
-    delete (std::vector<DexEncodedValue*>*)m_value_ptr;
+    if (this == &rhs) {
+      return *this;
+    }
+    delete (Storage*)m_value_ptr;
     m_value_ptr = rhs.m_value_ptr;
     m_static_val = rhs.m_static_val;
     rhs.m_value_ptr = nullptr;
     return *this;
   }
 
-  std::vector<DexEncodedValue*>* evalues() const {
-    return (std::vector<DexEncodedValue*>*)m_value_ptr;
+  std::vector<std::unique_ptr<DexEncodedValue>>* evalues() const {
+    return (Storage*)m_value_ptr;
   }
   bool is_static_val() const { return m_static_val; }
 
@@ -346,19 +348,25 @@ class DexEncodedValueArray : public DexEncodedValue {
 
   std::unique_ptr<DexEncodedValue> clone() const override {
     // Need to copy the array, if any.
-    std::vector<DexEncodedValue*>* evalues_copy =
-        m_value_ptr == nullptr
-            ? nullptr
-            : new std::vector<DexEncodedValue*>(
-                  *(std::vector<DexEncodedValue*>*)m_value_ptr);
+    Storage* evalues_copy;
+    if (m_value_ptr == nullptr) {
+      evalues_copy = nullptr;
+    } else {
+      auto* old = (Storage*)m_value_ptr;
+      evalues_copy = new Storage();
+      evalues_copy->reserve(old->size());
+      for (auto& orig : *old) {
+        evalues_copy->emplace_back(orig->clone());
+      }
+    }
     return std::unique_ptr<DexEncodedValue>(
         new DexEncodedValueArray(evalues_copy, m_static_val));
   }
 };
 
 /* For loading static values */
-DexEncodedValueArray* get_encoded_value_array(DexIdx* idx,
-                                              const uint8_t*& encdata);
+std::unique_ptr<DexEncodedValueArray> get_encoded_value_array(
+    DexIdx* idx, const uint8_t*& encdata);
 
 /*
  * These are not "full blown" annotations, they are

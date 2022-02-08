@@ -185,7 +185,7 @@ void testReadDex(const char* dexfile) {
       !strcmp(SHOW(cs->method_type()->get_args()), DEX038_CLASS_NAME) &&
       cs->args().size() == 3 &&
       !strcmp(SHOW(cs->args()[0]), VOID_RETURN_OBJECT_PROTO) &&
-      ((DexEncodedValueMethodHandle*)cs->args()[1])->methodhandle() == instanceStringSupplierMethodHandle &&
+      ((DexEncodedValueMethodHandle*)cs->args()[1].get())->methodhandle() == instanceStringSupplierMethodHandle &&
       !strcmp(SHOW(cs->args()[2]), VOID_RETURN_STRING_PROTO);
   }), -1);
 
@@ -204,7 +204,7 @@ void testReadDex(const char* dexfile) {
       !strcmp(SHOW(cs->method_type()->get_args()), DEX038_CLASS_NAME) &&
       cs->args().size() == 3 &&
       !strcmp(SHOW(cs->args()[0]), VOID_RETURN_OBJECT_PROTO) &&
-      ((DexEncodedValueMethodHandle*)cs->args()[1])->methodhandle() == directMethodHandle &&
+      ((DexEncodedValueMethodHandle*)cs->args()[1].get())->methodhandle() == directMethodHandle &&
       !strcmp(SHOW(cs->args()[2]), VOID_RETURN_STRING_PROTO);
   }), -1);
 
@@ -223,7 +223,7 @@ void testReadDex(const char* dexfile) {
       !strcmp(SHOW(cs->method_type()->get_args()), "") &&
       cs->args().size() == 3 &&
       !strcmp(SHOW(cs->args()[0]), VOID_RETURN_OBJECT_PROTO) &&
-      ((DexEncodedValueMethodHandle*)cs->args()[1])->methodhandle() == constructorMethodHandle &&
+      ((DexEncodedValueMethodHandle*)cs->args()[1].get())->methodhandle() == constructorMethodHandle &&
       !strcmp(SHOW(cs->args()[2]), VOID_RETURN_STRING_PROTO);
   }), -1);
 
@@ -242,7 +242,7 @@ void testReadDex(const char* dexfile) {
       !strcmp(SHOW(cs->method_type()->get_args()), "") &&
       cs->args().size() == 3 &&
       !strcmp(SHOW(cs->args()[0]), VOID_RETURN_OBJECT_PROTO) &&
-      ((DexEncodedValueMethodHandle*)cs->args()[1])->methodhandle() == staticStringSupplierMethodHandle &&
+      ((DexEncodedValueMethodHandle*)cs->args()[1].get())->methodhandle() == staticStringSupplierMethodHandle &&
       !strcmp(SHOW(cs->args()[2]), VOID_RETURN_STRING_PROTO);
   }), -1);
 
@@ -261,7 +261,7 @@ void testReadDex(const char* dexfile) {
       !strcmp(SHOW(cs->method_type()->get_args()), "") &&
       cs->args().size() == 3 &&
       !strcmp(SHOW(cs->args()[0]), VOID_RETURN_OBJECT_PROTO) &&
-      ((DexEncodedValueMethodHandle*)cs->args()[1])->methodhandle() == lambdaRun0MethodHandle &&
+      ((DexEncodedValueMethodHandle*)cs->args()[1].get())->methodhandle() == lambdaRun0MethodHandle &&
       !strcmp(SHOW(cs->args()[2]), VOID_RETURN_STRING_PROTO);
   }), -1);
 
@@ -280,7 +280,7 @@ void testReadDex(const char* dexfile) {
       !strcmp(SHOW(cs->method_type()->get_args()), "") &&
       cs->args().size() == 3 &&
       !strcmp(SHOW(cs->args()[0]), VOID_RETURN_OBJECT_PROTO) &&
-      ((DexEncodedValueMethodHandle*)cs->args()[1])->methodhandle() == lambdaRun1MethodHandle &&
+      ((DexEncodedValueMethodHandle*)cs->args()[1].get())->methodhandle() == lambdaRun1MethodHandle &&
       !strcmp(SHOW(cs->args()[2]), VOID_RETURN_STRING_PROTO);
   }), -1);
 
@@ -299,7 +299,7 @@ void testReadDex(const char* dexfile) {
       !strcmp(SHOW(cs->method_type()->get_args()), "") &&
       cs->args().size() == 3 &&
       !strcmp(SHOW(cs->args()[0]), VOID_RETURN_OBJECT_PROTO) &&
-      ((DexEncodedValueMethodHandle*)cs->args()[1])->methodhandle() == lambdaRun2MethodHandle &&
+      ((DexEncodedValueMethodHandle*)cs->args()[1].get())->methodhandle() == lambdaRun2MethodHandle &&
       !strcmp(SHOW(cs->args()[2]), VOID_RETURN_STRING_PROTO);
   }), -1);
 

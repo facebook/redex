@@ -59,15 +59,15 @@ DexCallSite* DexIdx::get_callsiteidx_fromdex(uint32_t csidx) {
   const uint8_t* callsite_data = m_dexbase + m_callsite_ids[csidx].callsite_off;
   auto callsite_eva = get_encoded_value_array(this, callsite_data);
   auto evalues = callsite_eva->evalues();
-  DexEncodedValue* ev_linker_method_handle = evalues->at(0);
+  DexEncodedValue* ev_linker_method_handle = evalues->at(0).get();
   always_assert_log(ev_linker_method_handle->evtype() == DEVT_METHOD_HANDLE,
                     "Unexpected evtype callsite item arg 0: %d",
                     ev_linker_method_handle->evtype());
-  DexEncodedValue* ev_linker_method_name = evalues->at(1);
+  DexEncodedValue* ev_linker_method_name = evalues->at(1).get();
   always_assert_log(ev_linker_method_name->evtype() == DEVT_STRING,
                     "Unexpected evtype callsite item arg 1: %d",
                     ev_linker_method_name->evtype());
-  DexEncodedValue* ev_linker_method_type = evalues->at(2);
+  DexEncodedValue* ev_linker_method_type = evalues->at(2).get();
   always_assert_log(ev_linker_method_type->evtype() == DEVT_METHOD_TYPE,
                     "Unexpected evtype callsite item arg 2: %d",
                     ev_linker_method_type->evtype());
@@ -77,15 +77,15 @@ DexCallSite* DexIdx::get_callsiteidx_fromdex(uint32_t csidx) {
       ((DexEncodedValueString*)ev_linker_method_name)->string();
   DexProto* linker_method_proto =
       ((DexEncodedValueMethodType*)ev_linker_method_type)->proto();
-  std::vector<DexEncodedValue*> linker_args;
+  std::vector<std::unique_ptr<DexEncodedValue>> linker_args;
   for (unsigned long i = 3; i < evalues->size(); ++i) {
-    DexEncodedValue* ev = evalues->at(i);
-    linker_args.emplace_back(ev);
+    auto& ev = evalues->at(i);
+    linker_args.emplace_back(std::move(ev));
   }
   auto callsite = new DexCallSite(linker_method_handle,
                                   linker_method_name,
                                   linker_method_proto,
-                                  linker_args);
+                                  std::move(linker_args));
   return callsite;
 }
 

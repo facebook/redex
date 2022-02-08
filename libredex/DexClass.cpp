@@ -1027,8 +1027,8 @@ void DexClass::load_class_data_item(
   uint32_t vmethod_count = read_uleb128(&encd);
   uint32_t ndex = 0;
 
-  std::vector<DexEncodedValue*> empty{};
-  std::vector<DexEncodedValue*>& used =
+  std::vector<std::unique_ptr<DexEncodedValue>> empty{};
+  std::vector<std::unique_ptr<DexEncodedValue>>& used =
       (svalues == nullptr || svalues->evalues() == nullptr)
           ? empty
           : *svalues->evalues();
@@ -1039,14 +1039,13 @@ void DexClass::load_class_data_item(
     ndex += read_uleb128(&encd);
     auto access_flags = (DexAccessFlags)read_uleb128(&encd);
     DexField* df = static_cast<DexField*>(idx->get_fieldidx(ndex));
-    DexEncodedValue* ev = nullptr;
+    std::unique_ptr<DexEncodedValue> ev = nullptr;
     if (it != used.end()) {
-      ev = *it;
+      ev = std::move(*it);
       ++it;
     }
     // We are gonna own the element.
-    auto ev_uptr = std::unique_ptr<DexEncodedValue>(ev);
-    df->make_concrete(access_flags, std::move(ev_uptr));
+    df->make_concrete(access_flags, std::move(ev));
     m_sfields.push_back(df);
   }
   ndex = 0;
@@ -1328,28 +1327,32 @@ void DexClass::attach_annotation_set(std::unique_ptr<DexAnnotationSet> anno) {
 
 void DexClass::clear_annotations() { m_anno.reset(); }
 
-static DexEncodedValueArray* load_static_values(DexIdx* idx, uint32_t sv_off) {
+static std::unique_ptr<DexEncodedValueArray> load_static_values(
+    DexIdx* idx, uint32_t sv_off) {
   if (sv_off == 0) return nullptr;
   const uint8_t* encd = idx->get_uleb_data(sv_off);
   return get_encoded_value_array(idx, encd);
 }
 
-DexEncodedValueArray* DexClass::get_static_values() {
-  std::deque<DexEncodedValue*> deque;
+std::unique_ptr<DexEncodedValueArray> DexClass::get_static_values() {
+  std::deque<std::unique_ptr<DexEncodedValue>> deque;
   for (auto it = m_sfields.rbegin(); it != m_sfields.rend(); ++it) {
     auto const& f = *it;
     DexEncodedValue* ev = f->get_static_value();
     if (!ev->is_zero() || !deque.empty()) {
-      deque.push_front(ev);
+      deque.push_front(ev->clone());
     }
   }
   if (deque.empty()) {
     return nullptr;
   }
 
-  auto aev = std::make_unique<std::vector<DexEncodedValue*>>(deque.begin(),
-                                                             deque.end());
-  return new DexEncodedValueArray(aev.release(), true);
+  auto aev = std::make_unique<std::vector<std::unique_ptr<DexEncodedValue>>>();
+  aev->reserve(deque.size());
+  for (auto& d : deque) {
+    aev->emplace_back(std::move(d));
+  }
+  return std::make_unique<DexEncodedValueArray>(aev.release(), true);
 }
 
 DexAnnotationDirectory* DexClass::get_annotation_directory() {

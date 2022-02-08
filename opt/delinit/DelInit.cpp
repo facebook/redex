@@ -102,9 +102,9 @@ void find_referenced_classes(const Scope& scope) {
         if (ev->evtype() != DEVT_ARRAY) continue;
         auto arrayev = static_cast<DexEncodedValueArray*>(ev.get());
         auto const& evs = arrayev->evalues();
-        for (auto strev : *evs) {
+        for (auto& strev : *evs) {
           if (strev->evtype() != DEVT_STRING) continue;
-          auto stringev = static_cast<DexEncodedValueString*>(strev);
+          auto stringev = static_cast<DexEncodedValueString*>(strev.get());
           process_signature_anno(stringev->string());
         }
       }

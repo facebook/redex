@@ -451,10 +451,10 @@ bool AnnoKill::should_kill_bad_signature(DexAnnotation* da) {
     if (ev->evtype() != DEVT_ARRAY) continue;
     auto arrayev = static_cast<DexEncodedValueArray*>(ev.get());
     auto const& evs = arrayev->evalues();
-    for (auto strev : *evs) {
+    for (auto& strev : *evs) {
       if (strev->evtype() != DEVT_STRING) continue;
       const auto& sigstr =
-          static_cast<DexEncodedValueString*>(strev)->string()->str();
+          static_cast<DexEncodedValueString*>(strev.get())->string()->str();
       always_assert(sigstr.length() > 0);
       const auto* sigcstr = sigstr.c_str();
       // @Signature grammar is non-trivial[1], nevermind the fact that

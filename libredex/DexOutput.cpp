@@ -274,11 +274,11 @@ dexproto_to_idx* GatheredTypes::get_proto_index(cmp_dproto cmp) {
   }
   for (auto const& c : m_lcallsite) {
     protos.push_back(c->method_type());
-    for (auto arg : c->args()) {
+    for (auto& arg : c->args()) {
       // n.b. how deep could this recursion go? what if there was a method
       // handle here?
       if (arg->evtype() == DEVT_METHOD_TYPE) {
-        protos.push_back(((DexEncodedValueMethodType*)arg)->proto());
+        protos.push_back(((DexEncodedValueMethodType*)arg.get())->proto());
       }
     }
   }

@@ -175,9 +175,9 @@ void rewrite_dalvik_annotation_signature(const Scope& scope,
       if (ev->evtype() != DEVT_ARRAY) continue;
       auto arrayev = static_cast<DexEncodedValueArray*>(ev.get());
       auto const& evs = arrayev->evalues();
-      for (auto strev : *evs) {
+      for (auto& strev : *evs) {
         if (strev->evtype() != DEVT_STRING) continue;
-        auto stringev = static_cast<DexEncodedValueString*>(strev);
+        auto stringev = static_cast<DexEncodedValueString*>(strev.get());
         auto* old_str = stringev->string();
         auto* new_str = lookup_signature_annotation(mapping, old_str);
         if (new_str != nullptr) {
