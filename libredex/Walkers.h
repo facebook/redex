@@ -301,7 +301,7 @@ class walk {
       for (const auto& it : *param_anno) {
         auto& anno_list = it.second->get_annotations();
         for (auto& anno : anno_list) {
-          walker(anno);
+          walker(anno.get());
         }
       }
     });
@@ -313,7 +313,7 @@ class walk {
     if (!anno_set) return;
     auto& anno_list = anno_set->get_annotations();
     for (auto& anno : anno_list) {
-      walker(anno);
+      walker(anno.get());
     }
   }
 

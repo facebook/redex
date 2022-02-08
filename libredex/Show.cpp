@@ -1144,9 +1144,9 @@ std::string show(const DexAnnotationSet* p) {
   if (!p) return "";
   std::ostringstream ss;
   bool first = true;
-  for (auto const anno : p->get_annotations()) {
+  for (auto const& anno : p->get_annotations()) {
     if (!first) ss << ", ";
-    ss << show(anno);
+    ss << show(anno.get());
     first = false;
   }
   return ss.str();

@@ -529,10 +529,9 @@ inline auto any_annos(match_t<DexAnnotation*, P> p) {
     }
 
     const auto& annos = anno_set->get_annotations();
-    return std::any_of(
-        annos.begin(), annos.end(), [&p](const DexAnnotation* anno) {
-          return p.matches(anno);
-        });
+    return std::any_of(annos.begin(), annos.end(), [&p](const auto& anno) {
+      return p.matches(anno.get());
+    });
   });
 }
 

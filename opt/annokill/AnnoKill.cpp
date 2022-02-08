@@ -342,7 +342,7 @@ AnnoKill::AnnoSet AnnoKill::get_removable_annotation_instances() {
     }
 
     auto& annos = aset->get_annotations();
-    for (auto anno : annos) {
+    for (auto& anno : annos) {
       if (m_kill.count(anno->type())) {
         bannotations.insert(clazz->get_type());
         TRACE(
@@ -373,9 +373,9 @@ void AnnoKill::cleanup_aset(
     const std::unordered_set<const DexType*>& keep_annos) {
   m_stats.annotations += aset->size();
   auto& annos = aset->get_annotations();
-  auto fn = [&](DexAnnotation* da) {
+  auto fn = [&](const auto& da) {
     auto anno_type = da->type();
-    count_annotation(da);
+    count_annotation(da.get());
 
     if (referenced_annos.count(anno_type) > 0) {
       TRACE(ANNO,
@@ -383,12 +383,12 @@ void AnnoKill::cleanup_aset(
             "Annotation type %s with type referenced in "
             "code, skipping...\n\tannotation: %s",
             SHOW(anno_type),
-            SHOW(da));
+            SHOW(da.get()));
       return false;
     }
 
     if (keep_annos.count(anno_type) > 0) {
-      TRACE(ANNO, 4, "Prohibited from removing annotation %s", SHOW(da));
+      TRACE(ANNO, 4, "Prohibited from removing annotation %s", SHOW(da.get()));
       return false;
     }
 
@@ -398,7 +398,7 @@ void AnnoKill::cleanup_aset(
             "Exclude annotation type %s, "
             "skipping...\n\tannotation: %s",
             SHOW(anno_type),
-            SHOW(da));
+            SHOW(da.get()));
       return false;
     }
 
@@ -408,9 +408,8 @@ void AnnoKill::cleanup_aset(
             "Annotation instance (type: %s) marked for removal, "
             "annotation: %s",
             SHOW(anno_type),
-            SHOW(da));
+            SHOW(da.get()));
       m_stats.annotations_killed++;
-      delete da;
       return true;
     }
 
@@ -420,23 +419,20 @@ void AnnoKill::cleanup_aset(
             "Annotation instance (type: %s) marked for forced removal, "
             "annotation: %s",
             SHOW(anno_type),
-            SHOW(da));
+            SHOW(da.get()));
       m_stats.annotations_killed++;
-      delete da;
       return true;
     }
 
     if (!m_only_force_kill && !da->system_visible()) {
-      TRACE(ANNO, 3, "Killing annotation instance %s", SHOW(da));
+      TRACE(ANNO, 3, "Killing annotation instance %s", SHOW(da.get()));
       m_stats.annotations_killed++;
-      delete da;
       return true;
     }
 
     if (anno_type == DexType::get_type("Ldalvik/annotation/Signature;")) {
-      if (should_kill_bad_signature(da)) {
+      if (should_kill_bad_signature(da.get())) {
         m_stats.signatures_killed++;
-        delete da;
         return true;
       }
     }

@@ -431,9 +431,11 @@ class DexAnnotation : public Gatherable {
   DexAnnotation(DexType* type, DexAnnotationVisibility viz)
       : m_type(type), m_viz(viz) {}
 
-  static DexAnnotation* get_annotation(DexIdx* idx, uint32_t anno_off);
   DexAnnotation(const DexAnnotation&) = delete;
   DexAnnotation(DexAnnotation&&) = default;
+
+  static std::unique_ptr<DexAnnotation> get_annotation(DexIdx* idx,
+                                                       uint32_t anno_off);
   void gather_types(std::vector<DexType*>& ltype) const override;
   void gather_fields(std::vector<DexFieldRef*>& lfield) const override;
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const override;
@@ -468,13 +470,13 @@ class DexAnnotation : public Gatherable {
 };
 
 class DexAnnotationSet : public Gatherable {
-  std::vector<DexAnnotation*> m_annotations;
+  std::vector<std::unique_ptr<DexAnnotation>> m_annotations;
 
  public:
   DexAnnotationSet() = default;
   DexAnnotationSet(const DexAnnotationSet& that) {
     for (const auto& anno : that.m_annotations) {
-      m_annotations.push_back(new DexAnnotation(anno->clone()));
+      m_annotations.emplace_back(new DexAnnotation(anno->clone()));
     }
   }
 
@@ -499,7 +501,7 @@ class DexAnnotationSet : public Gatherable {
    */
   void combine_with(const DexAnnotationSet& other) {
     std::unordered_set<DexType*> existing_annos_type;
-    for (const auto existing_anno : m_annotations) {
+    for (const auto& existing_anno : m_annotations) {
       existing_annos_type.emplace(existing_anno->type());
     }
     auto const& other_annos = other.m_annotations;
@@ -510,11 +512,15 @@ class DexAnnotationSet : public Gatherable {
     }
   }
 
-  const std::vector<DexAnnotation*>& get_annotations() const {
+  const std::vector<std::unique_ptr<DexAnnotation>>& get_annotations() const {
     return m_annotations;
   }
-  std::vector<DexAnnotation*>& get_annotations() { return m_annotations; }
-  void add_annotation(DexAnnotation* anno) { m_annotations.emplace_back(anno); }
+  std::vector<std::unique_ptr<DexAnnotation>>& get_annotations() {
+    return m_annotations;
+  }
+  void add_annotation(std::unique_ptr<DexAnnotation> anno) {
+    m_annotations.emplace_back(std::move(anno));
+  }
   void vencode(DexOutputIdx* dodx,
                std::vector<uint32_t>& asetout,
                std::map<DexAnnotation*, uint32_t>& annoout);

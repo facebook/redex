@@ -39,9 +39,9 @@ std::vector<Location> get_args_for(DexProto* proto, MethodCreator* mc) {
 }
 
 std::unique_ptr<DexAnnotationSet> get_anno_set(DexType* anno_type) {
-  auto anno = new DexAnnotation(anno_type, DexAnnotationVisibility::DAV_BUILD);
   auto anno_set = std::make_unique<DexAnnotationSet>();
-  anno_set->add_annotation(anno);
+  anno_set->add_annotation(std::make_unique<DexAnnotation>(
+      anno_type, DexAnnotationVisibility::DAV_BUILD));
   return anno_set;
 }
 DexMethod* materialized_dispatch(DexType* owner, MethodCreator* mc) {

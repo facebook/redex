@@ -173,10 +173,11 @@ std::string parse_str_anno_value(const DexMethod* method,
                               std::move(name));
 }
 
-DexAnnotationSet* create_anno_set(
+std::unique_ptr<DexAnnotationSet> create_anno_set(
     const std::vector<std::pair<std::string, std::string>>& elements,
     DexType* anno_type) {
-  auto anno = new DexAnnotation(anno_type, DexAnnotationVisibility::DAV_BUILD);
+  auto anno = std::make_unique<DexAnnotation>(
+      anno_type, DexAnnotationVisibility::DAV_BUILD);
   for (const auto& pair : elements) {
     auto key = pair.first;
     auto elem_val = pair.second;
@@ -185,7 +186,7 @@ DexAnnotationSet* create_anno_set(
         std::unique_ptr<DexEncodedValue>(
             new DexEncodedValueString(DexString::make_string(elem_val))));
   }
-  DexAnnotationSet* anno_set = new DexAnnotationSet();
-  anno_set->add_annotation(anno);
+  auto anno_set = std::make_unique<DexAnnotationSet>();
+  anno_set->add_annotation(std::move(anno));
   return anno_set;
 }

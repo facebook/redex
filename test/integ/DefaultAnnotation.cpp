@@ -39,7 +39,7 @@ TEST_F(DefaultAnnotationTest, defaultAnnotation) {
       std::string no_such_anno_name = "noSuchVal";
 
       if (set) {
-        for (auto const anno : set->get_annotations()) {
+        for (auto const& anno : set->get_annotations()) {
           // annotation with default value
           if ("foo" == dex_method->str()) {
             // ensure that method foo() has only

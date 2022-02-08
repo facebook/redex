@@ -363,7 +363,7 @@ std::unordered_set<std::string> AppModuleUsagePass::get_modules_used(
   std::unordered_set<std::string> modules = {};
   auto anno_set = entrypoint->get_anno_set();
   if (anno_set) {
-    for (DexAnnotation* annotation : anno_set->get_annotations()) {
+    for (const auto& annotation : anno_set->get_annotations()) {
       if (annotation->type() == annotation_type) {
         for (const DexAnnotationElement& anno_elem : annotation->anno_elems()) {
           always_assert(anno_elem.string->str() == "value");

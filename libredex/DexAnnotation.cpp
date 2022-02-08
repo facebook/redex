@@ -533,7 +533,8 @@ DexEncodedValue* DexEncodedValue::get_encoded_value(DexIdx* idx,
   not_reached_log("Bogus annotation");
 }
 
-DexAnnotation* DexAnnotation::get_annotation(DexIdx* idx, uint32_t anno_off) {
+std::unique_ptr<DexAnnotation> DexAnnotation::get_annotation(
+    DexIdx* idx, uint32_t anno_off) {
   if (anno_off == 0) return nullptr;
   const uint8_t* encdata = idx->get_uleb_data(anno_off);
   uint8_t viz = *encdata++;
@@ -542,7 +543,8 @@ DexAnnotation* DexAnnotation::get_annotation(DexIdx* idx, uint32_t anno_off) {
   uint32_t count = read_uleb128(&encdata);
   DexType* type = idx->get_typeidx(tidx);
   always_assert_log(type != nullptr, "Invalid annotation type");
-  DexAnnotation* anno = new DexAnnotation(type, (DexAnnotationVisibility)viz);
+  auto anno =
+      std::make_unique<DexAnnotation>(type, (DexAnnotationVisibility)viz);
   anno->m_anno_elems.reserve(count);
   for (uint32_t i = 0; i < count; i++) {
     anno->m_anno_elems.emplace_back(get_annotation_element(idx, encdata));
@@ -566,9 +568,9 @@ std::unique_ptr<DexAnnotationSet> DexAnnotationSet::get_annotation_set(
   uint32_t count = *adata++;
   for (uint32_t i = 0; i < count; i++) {
     uint32_t off = adata[i];
-    DexAnnotation* anno = DexAnnotation::get_annotation(idx, off);
+    auto anno = DexAnnotation::get_annotation(idx, off);
     if (anno != nullptr) {
-      aset->m_annotations.push_back(anno);
+      aset->m_annotations.emplace_back(std::move(anno));
     }
   }
   return aset;
@@ -629,10 +631,6 @@ bool method_param_annotation_compare(
 bool field_annotation_compare(std::pair<DexFieldRef*, DexAnnotationSet*> a,
                               std::pair<DexFieldRef*, DexAnnotationSet*> b) {
   return compare_dexfields(a.first, b.first);
-}
-
-bool type_annotation_compare(DexAnnotation* a, DexAnnotation* b) {
-  return compare_dextypes(a->type(), b->type());
 }
 
 void DexAnnotationDirectory::gather_asets(
@@ -762,8 +760,8 @@ void DexAnnotationDirectory::vencode(
 }
 
 void DexAnnotationSet::gather_annotations(std::vector<DexAnnotation*>& list) {
-  for (auto annotation : m_annotations) {
-    list.push_back(annotation);
+  for (auto& annotation : m_annotations) {
+    list.push_back(annotation.get());
   }
 }
 
@@ -772,13 +770,15 @@ void DexAnnotationSet::vencode(DexOutputIdx* dodx,
                                std::map<DexAnnotation*, uint32_t>& annoout) {
   asetout.push_back((uint32_t)m_annotations.size());
   std::sort(m_annotations.begin(), m_annotations.end(),
-            type_annotation_compare);
-  for (auto anno : m_annotations) {
-    always_assert_log(annoout.count(anno) != 0,
+            [](const auto& a, const auto& b) {
+              return compare_dextypes(a->type(), b->type());
+            });
+  for (auto& anno : m_annotations) {
+    always_assert_log(annoout.count(anno.get()) != 0,
                       "Uninitialized annotation %p '%s', bailing\n",
-                      anno,
-                      show(anno).c_str());
-    asetout.push_back(annoout[anno]);
+                      anno.get(),
+                      show(anno.get()).c_str());
+    asetout.push_back(annoout[anno.get()]);
   }
 }
 

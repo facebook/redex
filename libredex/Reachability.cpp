@@ -408,8 +408,8 @@ void TransitiveClosureMarker::visit_cls(const DexClass* cls) {
               SHOW(anno->type()));
         continue;
       }
-      record_reachability(cls, anno);
-      gather_and_push(anno);
+      record_reachability(cls, anno.get());
+      gather_and_push(anno.get());
     }
   }
   for (auto const& m : cls->get_ifields()) {
