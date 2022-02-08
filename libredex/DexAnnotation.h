@@ -368,13 +368,28 @@ DexEncodedValueArray* get_encoded_value_array(DexIdx* idx,
  * InnerClass annotations things like access flags
  * or defining method/class.
  */
-class DexAnnotationElement {
+class DexAnnotationElement final {
  public:
-  DexAnnotationElement(const DexString* s, DexEncodedValue* ev)
-      : string(s), encoded_value(ev) {}
+  DexAnnotationElement(const DexString* s, std::unique_ptr<DexEncodedValue> ev)
+      : string(s), encoded_value(std::move(ev)) {}
+
+  DexAnnotationElement(const DexAnnotationElement&) = delete;
+  DexAnnotationElement& operator=(const DexAnnotationElement&) = delete;
+
+  DexAnnotationElement(DexAnnotationElement&& other) noexcept
+      : string(other.string), encoded_value(std::move(other.encoded_value)) {}
+  DexAnnotationElement& operator=(DexAnnotationElement&& other) noexcept {
+    string = other.string;
+    encoded_value = std::move(other.encoded_value);
+    return *this;
+  }
+
+  DexAnnotationElement clone() const {
+    return DexAnnotationElement(string, encoded_value->clone());
+  }
 
   const DexString* string;
-  DexEncodedValue* encoded_value;
+  std::unique_ptr<DexEncodedValue> encoded_value;
 };
 
 using EncodedAnnotations = std::vector<DexAnnotationElement>;
@@ -417,6 +432,8 @@ class DexAnnotation : public Gatherable {
       : m_type(type), m_viz(viz) {}
 
   static DexAnnotation* get_annotation(DexIdx* idx, uint32_t anno_off);
+  DexAnnotation(const DexAnnotation&) = delete;
+  DexAnnotation(DexAnnotation&&) = default;
   void gather_types(std::vector<DexType*>& ltype) const override;
   void gather_fields(std::vector<DexFieldRef*>& lfield) const override;
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const override;
@@ -431,7 +448,23 @@ class DexAnnotation : public Gatherable {
   bool system_visible() const { return m_viz == DAV_SYSTEM; }
 
   void vencode(DexOutputIdx* dodx, std::vector<uint8_t>& bytes);
-  void add_element(const char* key, DexEncodedValue* value);
+  void add_element(const char* key, std::unique_ptr<DexEncodedValue> value);
+  void add_element(DexAnnotationElement elem);
+
+  DexAnnotation clone() const {
+    EncodedAnnotations copy;
+    std::transform(m_anno_elems.begin(),
+                   m_anno_elems.end(),
+                   std::back_inserter(copy),
+                   [](const auto& a) { return a.clone(); });
+    return DexAnnotation(std::move(copy), m_type, m_viz);
+  }
+
+ private:
+  DexAnnotation(EncodedAnnotations anno_elems,
+                DexType* type,
+                DexAnnotationVisibility viz)
+      : m_anno_elems(std::move(anno_elems)), m_type(type), m_viz(viz) {}
 };
 
 class DexAnnotationSet : public Gatherable {
@@ -441,7 +474,7 @@ class DexAnnotationSet : public Gatherable {
   DexAnnotationSet() = default;
   DexAnnotationSet(const DexAnnotationSet& that) {
     for (const auto& anno : that.m_annotations) {
-      m_annotations.push_back(new DexAnnotation(*anno));
+      m_annotations.push_back(new DexAnnotation(anno->clone()));
     }
   }
 
@@ -472,7 +505,7 @@ class DexAnnotationSet : public Gatherable {
     auto const& other_annos = other.m_annotations;
     for (auto const& anno : other_annos) {
       if (existing_annos_type.count(anno->type()) == 0) {
-        m_annotations.emplace_back(new DexAnnotation(*anno));
+        m_annotations.emplace_back(new DexAnnotation(anno->clone()));
       }
     }
   }

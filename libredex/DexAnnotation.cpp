@@ -342,7 +342,7 @@ void DexEncodedValueAnnotation::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
   encdata = write_uleb128(encdata, (uint32_t)m_annotations->size());
   for (auto const& dae : *m_annotations) {
     auto str = dae.string;
-    DexEncodedValue* dev = dae.encoded_value;
+    DexEncodedValue* dev = dae.encoded_value.get();
     uint32_t sidx = dodx->stringidx(str);
     encdata = write_uleb128(encdata, sidx);
     dev->encode(dodx, encdata);
@@ -356,7 +356,7 @@ static DexAnnotationElement get_annotation_element(DexIdx* idx,
   always_assert_log(name != nullptr,
                     "Invalid string idx in annotation element");
   DexEncodedValue* dev = DexEncodedValue::get_encoded_value(idx, encdata);
-  return DexAnnotationElement(name, dev);
+  return DexAnnotationElement(name, std::unique_ptr<DexEncodedValue>(dev));
 }
 
 DexEncodedValueArray* get_encoded_value_array(DexIdx* idx,
@@ -525,8 +525,7 @@ DexEncodedValue* DexEncodedValue::get_encoded_value(DexIdx* idx,
                       "Invalid DEVT_ANNOTATION within annotation type");
     eanno->reserve(count);
     for (uint32_t i = 0; i < count; i++) {
-      DexAnnotationElement dae = get_annotation_element(idx, encdata);
-      eanno->push_back(dae);
+      eanno->emplace_back(get_annotation_element(idx, encdata));
     }
     return new DexEncodedValueAnnotation(type, eanno);
   }
@@ -546,14 +545,17 @@ DexAnnotation* DexAnnotation::get_annotation(DexIdx* idx, uint32_t anno_off) {
   DexAnnotation* anno = new DexAnnotation(type, (DexAnnotationVisibility)viz);
   anno->m_anno_elems.reserve(count);
   for (uint32_t i = 0; i < count; i++) {
-    DexAnnotationElement dae = get_annotation_element(idx, encdata);
-    anno->m_anno_elems.push_back(dae);
+    anno->m_anno_elems.emplace_back(get_annotation_element(idx, encdata));
   }
   return anno;
 }
 
-void DexAnnotation::add_element(const char* key, DexEncodedValue* value) {
-  m_anno_elems.emplace_back(DexString::make_string(key), value);
+void DexAnnotation::add_element(const char* key,
+                                std::unique_ptr<DexEncodedValue> value) {
+  m_anno_elems.emplace_back(DexString::make_string(key), std::move(value));
+}
+void DexAnnotation::add_element(DexAnnotationElement elem) {
+  m_anno_elems.emplace_back(std::move(elem));
 }
 
 std::unique_ptr<DexAnnotationSet> DexAnnotationSet::get_annotation_set(
@@ -792,9 +794,9 @@ void DexAnnotation::vencode(DexOutputIdx* dodx, std::vector<uint8_t>& bytes) {
   bytes.push_back(m_viz);
   uleb_append(bytes, dodx->typeidx(m_type));
   uleb_append(bytes, (uint32_t)m_anno_elems.size());
-  for (auto elem : m_anno_elems) {
+  for (auto& elem : m_anno_elems) {
     auto string = elem.string;
-    DexEncodedValue* ev = elem.encoded_value;
+    DexEncodedValue* ev = elem.encoded_value.get();
     uleb_append(bytes, dodx->stringidx(string));
     ev->vencode(dodx, bytes);
   }

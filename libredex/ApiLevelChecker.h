@@ -86,7 +86,7 @@ class LevelChecker {
         const DexAnnotationElement& api_elem = elems[0];
         always_assert(api_elem.string == DexString::get_string("api") ||
                       api_elem.string == DexString::get_string("value"));
-        const DexEncodedValue* value = api_elem.encoded_value;
+        const auto& value = api_elem.encoded_value;
         always_assert(value->evtype() == DEVT_INT);
         int32_t result = static_cast<int32_t>(value->value());
         return std::max(result, s_min_level);

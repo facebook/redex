@@ -38,10 +38,11 @@ std::vector<DexMethod*> delete_methods(
 
   // if a removable candidate is referenced by an annotation do not delete
   walk::annotations(scope, [&](DexAnnotation* anno) {
-    for (auto anno_element : anno->anno_elems()) {
-      auto ev = anno_element.encoded_value;
+    for (auto& anno_element : anno->anno_elems()) {
+      auto& ev = anno_element.encoded_value;
       if (ev->evtype() == DEVT_METHOD) {
-        DexEncodedValueMethod* evm = static_cast<DexEncodedValueMethod*>(ev);
+        DexEncodedValueMethod* evm =
+            static_cast<DexEncodedValueMethod*>(ev.get());
         if (evm->method()->is_def()) {
           removable.erase(evm->method()->as_def());
         }

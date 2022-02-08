@@ -533,9 +533,9 @@ void OptimizationImpl::rewrite_annotations(Scope& scope,
       if (anno->type() != enclosingMethod) continue;
       const auto& elems = anno->anno_elems();
       for (auto& elem : elems) {
-        auto value = elem.encoded_value;
+        auto& value = elem.encoded_value;
         if (value->evtype() == DexEncodedValueTypes::DEVT_METHOD) {
-          auto method_value = static_cast<DexEncodedValueMethod*>(value);
+          auto method_value = static_cast<DexEncodedValueMethod*>(value.get());
           const auto& meth_it =
               m_intf_meth_to_impl_meth.find(method_value->method());
           if (meth_it == m_intf_meth_to_impl_meth.end()) {

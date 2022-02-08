@@ -169,11 +169,11 @@ void rewrite_dalvik_annotation_signature(const Scope& scope,
       DexType::get_type("Ldalvik/annotation/Signature;");
   walk::parallel::annotations(scope, [&](DexAnnotation* anno) {
     if (anno->type() != dalviksig) return;
-    auto elems = anno->anno_elems();
-    for (auto elem : elems) {
-      auto ev = elem.encoded_value;
+    auto& elems = anno->anno_elems();
+    for (auto& elem : elems) {
+      auto& ev = elem.encoded_value;
       if (ev->evtype() != DEVT_ARRAY) continue;
-      auto arrayev = static_cast<DexEncodedValueArray*>(ev);
+      auto arrayev = static_cast<DexEncodedValueArray*>(ev.get());
       auto const& evs = arrayev->evalues();
       for (auto strev : *evs) {
         if (strev->evtype() != DEVT_STRING) continue;

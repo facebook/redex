@@ -96,11 +96,11 @@ void find_referenced_classes(const Scope& scope) {
     // Signature annotations contain strings that Jackson uses
     // to construct the underlying types.
     if (anno->type() == dalviksig) {
-      auto elems = anno->anno_elems();
+      auto& elems = anno->anno_elems();
       for (auto const& elem : elems) {
-        auto ev = elem.encoded_value;
+        auto& ev = elem.encoded_value;
         if (ev->evtype() != DEVT_ARRAY) continue;
-        auto arrayev = static_cast<DexEncodedValueArray*>(ev);
+        auto arrayev = static_cast<DexEncodedValueArray*>(ev.get());
         auto const& evs = arrayev->evalues();
         for (auto strev : *evs) {
           if (strev->evtype() != DEVT_STRING) continue;
@@ -114,9 +114,9 @@ void find_referenced_classes(const Scope& scope) {
     // Example:
     //    @JsonDeserialize(using=MyJsonDeserializer.class)
     if (anno->runtime_visible()) {
-      auto elems = anno->anno_elems();
+      auto& elems = anno->anno_elems();
       for (auto const& dae : elems) {
-        auto evalue = dae.encoded_value;
+        auto& evalue = dae.encoded_value;
         std::vector<DexType*> ltype;
         evalue->gather_types(ltype);
         if (!ltype.empty()) {

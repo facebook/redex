@@ -32,7 +32,7 @@ const DexEncodedValue* parse_anno_value_helper(const DexAnnotationSet* anno_set,
       always_assert(elem.encoded_value->evtype() == type);
       auto val = elem.encoded_value->value();
       TRACE(ANNO, 9, " parsed annotation value: %" PRIu64, val);
-      return elem.encoded_value;
+      return elem.encoded_value.get();
     }
 
     for (auto& elem : elems) {
@@ -41,7 +41,7 @@ const DexEncodedValue* parse_anno_value_helper(const DexAnnotationSet* anno_set,
       }
       always_assert(elem.encoded_value->evtype() == type);
       TRACE(ANNO, 9, " parsed annotation elem: %s", SHOW(elem.encoded_value));
-      return elem.encoded_value;
+      return elem.encoded_value.get();
     }
 
     const DexEncodedValue* default_value =
@@ -126,7 +126,8 @@ const DexEncodedValue* parse_default_anno_value(
         continue;
       }
       DexEncodedValueAnnotation* default_values =
-          static_cast<DexEncodedValueAnnotation*>(target_elem.encoded_value);
+          static_cast<DexEncodedValueAnnotation*>(
+              target_elem.encoded_value.get());
       TRACE(ANNO, 9, "default values: %s type %d\n", SHOW(default_values),
             target_elem.encoded_value->evtype());
       always_assert(target_elem.encoded_value->evtype() == DEVT_ANNOTATION);
@@ -136,7 +137,7 @@ const DexEncodedValue* parse_default_anno_value(
         if (default_value_anno.string->str() != target_anno_element_name) {
           continue;
         }
-        return default_value_anno.encoded_value;
+        return default_value_anno.encoded_value.get();
       }
     }
   }
@@ -181,7 +182,8 @@ DexAnnotationSet* create_anno_set(
     auto elem_val = pair.second;
     anno->add_element(
         key.c_str(),
-        new DexEncodedValueString(DexString::make_string(elem_val)));
+        std::unique_ptr<DexEncodedValue>(
+            new DexEncodedValueString(DexString::make_string(elem_val))));
   }
   DexAnnotationSet* anno_set = new DexAnnotationSet();
   anno_set->add_annotation(anno);
