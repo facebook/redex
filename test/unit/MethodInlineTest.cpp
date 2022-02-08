@@ -87,7 +87,8 @@ DexMethod* make_a_method(DexClass* cls, const char* name, int val) {
       DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
   auto ref = DexMethod::make_method(cls->get_type(),
                                     DexString::make_string(name), proto);
-  MethodCreator mc(ref, ACC_STATIC | ACC_PUBLIC);
+  MethodCreator mc(ref, ACC_STATIC | ACC_PUBLIC, /*anno*/ nullptr,
+                   /*with_debug_item*/ false);
   auto main_block = mc.get_main_block();
   auto loc = mc.make_local(type::_int());
   main_block->load_const(loc, val);
@@ -108,7 +109,8 @@ DexMethod* make_loopy_method(DexClass* cls, const char* name) {
       DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
   auto ref = DexMethod::make_method(cls->get_type(),
                                     DexString::make_string(name), proto);
-  MethodCreator mc(ref, ACC_STATIC | ACC_PUBLIC);
+  MethodCreator mc(ref, ACC_STATIC | ACC_PUBLIC, /*anno*/ nullptr,
+                   /*with_debug_item*/ false);
   auto method = mc.create();
   method->set_code(assembler::ircode_from_string("((:begin) (goto :begin))"));
   cls->add_method(method);
@@ -232,7 +234,8 @@ DexMethod* make_a_method_calls_others(DexClass* cls,
       DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
   auto ref = DexMethod::make_method(cls->get_type(),
                                     DexString::make_string(name), proto);
-  MethodCreator mc(ref, ACC_STATIC | ACC_PUBLIC);
+  MethodCreator mc(ref, ACC_STATIC | ACC_PUBLIC, /*anno*/ nullptr,
+                   /*with_debug_item*/ false);
   auto main_block = mc.get_main_block();
   for (auto callee : methods) {
     main_block->invoke(callee, {});
@@ -251,7 +254,8 @@ DexMethod* make_a_method_calls_others_with_arg(
       DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
   auto ref = DexMethod::make_method(cls->get_type(),
                                     DexString::make_string(name), proto);
-  MethodCreator mc(ref, ACC_STATIC | ACC_PUBLIC);
+  MethodCreator mc(ref, ACC_STATIC | ACC_PUBLIC, /*anno*/ nullptr,
+                   /*with_debug_item*/ false);
   auto main_block = mc.get_main_block();
   auto loc = mc.make_local(type::_int());
   for (auto& p : methods) {
@@ -272,7 +276,8 @@ DexMethod* make_a_method_calls_others_with_arg(
       DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
   auto ref = DexMethod::make_method(cls->get_type(),
                                     DexString::make_string(name), proto);
-  MethodCreator mc(ref, ACC_STATIC | ACC_PUBLIC);
+  MethodCreator mc(ref, ACC_STATIC | ACC_PUBLIC, /*anno*/ nullptr,
+                   /*with_debug_item*/ false);
   auto main_block = mc.get_main_block();
   auto loc = mc.make_local(type::_int());
   for (auto& p : methods) {

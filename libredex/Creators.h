@@ -395,13 +395,13 @@ struct MethodCreator {
   MethodCreator(DexMethodRef* ref,
                 DexAccessFlags access,
                 std::unique_ptr<DexAnnotationSet> anno = nullptr,
-                bool with_debug_item = false);
+                bool with_debug_item = true);
   MethodCreator(DexType* cls,
                 const DexString* name,
                 DexProto* proto,
                 DexAccessFlags access,
                 std::unique_ptr<DexAnnotationSet> anno = nullptr,
-                bool with_debug_item = false);
+                bool with_debug_item = true);
 
   /**
    * Get an existing local.
