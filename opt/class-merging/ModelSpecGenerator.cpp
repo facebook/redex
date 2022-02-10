@@ -14,12 +14,17 @@
 
 namespace {
 
-constexpr const char* LAMBDA_CLASS_NAME_PREFIX = "$$Lambda$";
-
 /**
- * Return true if the name matches "$$Lambda$" or "$[0-9]".
+ * Return true if the name matches "$$Lambda$", "$$ExternalSyntheticLambda", or
+ * "$[0-9]".
  */
 bool maybe_anonymous_class(const DexClass* cls) {
+  static constexpr std::array<const char*, 2> patterns = {
+      // https://r8.googlesource.com/r8/+/refs/tags/3.1.34/src/main/java/com/android/tools/r8/synthesis/SyntheticNaming.java#140
+      "$$ExternalSyntheticLambda",
+      // Desugared lambda classes from older versions of D8.
+      "$$Lambda$",
+  };
   const auto& name = cls->get_deobfuscated_name_or_empty();
   auto pos = name.rfind('$');
   if (pos == std::string::npos) {
@@ -27,7 +32,10 @@ bool maybe_anonymous_class(const DexClass* cls) {
   }
   pos++;
   return (pos < name.size() && name[pos] >= '0' && name[pos] <= '9') ||
-         name.find(LAMBDA_CLASS_NAME_PREFIX) != std::string::npos;
+         std::any_of(patterns.begin(), patterns.end(),
+                     [&name](const std::string& pattern) {
+                       return name.find(pattern) != std::string::npos;
+                     });
 }
 
 /**
