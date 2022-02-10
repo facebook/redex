@@ -287,15 +287,8 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
     auto& callee_context = get_or_create(callee_method);
 
     float accepted{0};
-    // While "normal" is more expensive, do it first anyways to fill `accepted`.
-    if (!should_inline_normal(caller_method, callee_method, caller_context,
-                              callee_context, accepted) &&
-        !should_inline_exp(caller_method, callee_method, caller_context,
-                           callee_context)) {
-      return false;
-    }
 
-    if (traceEnabled(METH_PROF, 5)) {
+    auto print_stats = [&](const char* suffix) {
       for (size_t i = 0;
            i != m_method_context_context.m_interaction_list.size();
            ++i) {
@@ -326,9 +319,10 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
 
         TRACE(METH_PROF,
               5,
-              "[InlineForSpeedDecisionTrees] %.3f: "
+              "[InlineForSpeedDecisionTrees%s] %.3f: "
               "%s!%u!%u!%u!%1.5f!%1.5f!%u!%u!%u!%u!%u!%s!%u!%u!%u!%1.5f!%1.5f!%"
               "u!%u!%u!%u!%u!%s",
+              suffix,
               accepted,
               // Caller
               SHOW(caller_method),
@@ -356,7 +350,23 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
               callee_context.m_deepest_loop,
               m_method_context_context.m_interaction_list[i].c_str());
       }
+    };
+
+    // While "normal" is more expensive, do it first anyways to fill `accepted`.
+    if (!should_inline_normal(caller_method, callee_method, caller_context,
+                              callee_context, accepted) &&
+        !should_inline_exp(caller_method, callee_method, caller_context,
+                           callee_context)) {
+      if (traceEnabled(METH_PROF, 5)) {
+        print_stats("-not");
+      }
+      return false;
     }
+
+    if (traceEnabled(METH_PROF, 5)) {
+      print_stats("");
+    }
+
     return true;
   }
 
