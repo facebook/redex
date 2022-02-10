@@ -214,3 +214,24 @@ TEST_F(ObjectEscapeAnalysisTest, DontOptimizeFinalInInit) {
 )");
   ASSERT_EQ(actual.str(), assembler::to_s_expr(expected.get()).str());
 }
+
+TEST_F(ObjectEscapeAnalysisTest, reduceTo42WithInitClass) {
+  std::vector<Pass*> passes = {
+      new ObjectEscapeAnalysisPass(),
+  };
+
+  run_passes(passes);
+
+  auto actual = get_s_expr(
+      "Lcom/facebook/redextest/"
+      "ObjectEscapeAnalysisTest;.reduceTo42WithInitClass:()I");
+  auto expected = assembler::ircode_from_string(R"(
+   (
+      (init-class "Lcom/facebook/redextest/ObjectEscapeAnalysisTest$K;")
+
+      (const v1 42)
+      (return v1)
+    )
+)");
+  ASSERT_EQ(actual.str(), assembler::to_s_expr(expected.get()).str());
+}

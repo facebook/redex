@@ -809,6 +809,13 @@ class RootMethodReducer {
     }
 
     always_assert(!new_instance_insn_it.is_end());
+    auto init_class_insn =
+        m_inliner.get_shrinker()
+            .get_init_classes_with_side_effects()
+            .create_init_class_insn(new_instance_insn->get_type());
+    if (init_class_insn) {
+      mutation.insert_before(new_instance_insn_it, {init_class_insn});
+    }
     if (identity_matters) {
       new_instance_insn_it->insn->set_type(type::java_lang_Object());
     } else {
@@ -958,6 +965,8 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
                                         PassManager& mgr) {
   const auto scope = build_class_scope(stores);
   auto method_override_graph = mog::build_graph(scope);
+  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+      scope, conf.create_init_class_insns(), method_override_graph.get());
   auto non_true_virtual =
       mog::get_non_true_virtuals(*method_override_graph, scope);
 

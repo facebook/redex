@@ -153,4 +153,29 @@ public class ObjectEscapeAnalysisTest {
       return this.x;
     }
   }
+
+
+  static class K {
+    int x;
+    static int X;
+    static class CyclicStaticInitDependency {
+      static int Y;
+      static { Y = X; }
+    }
+    static {
+      // Static initialization order matters.
+      X = CyclicStaticInitDependency.Y;
+    }
+    public K(int x) {
+      this.x = x;
+    }
+    public int getX() {
+      return this.x;
+    }
+  }
+
+  public static int reduceTo42WithInitClass() {
+    K k = new K(42);
+    return k.getX();
+  }
 }
