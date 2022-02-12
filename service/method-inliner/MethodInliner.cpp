@@ -358,25 +358,25 @@ static DexType* reduce_type_demands(
 }
 
 bool can_have_unknown_implementations(const mog::Graph& method_override_graph,
-                                      const DexMethod* method,
-                                      bool consider_overridden_methods = true) {
+                                      const DexMethod* method) {
+  if (method->is_external()) {
+    return true;
+  }
   // Why can_rename? To mirror what VirtualRenamer looks at.
-  if (method->is_external() || (is_interface(type_class(method->get_class())) &&
-                                (root(method) || !can_rename(method)))) {
+  if (is_interface(type_class(method->get_class())) &&
+      (root(method) || !can_rename(method))) {
     // We cannot rule out that there are dynamically added classes, possibly
     // even created at runtime via Proxy.newProxyInstance, that override
     // this method. So we assume the worst.
     return true;
   }
-  if (consider_overridden_methods) {
-    const auto& overridden_methods = mog::get_overridden_methods(
-        method_override_graph, method, /* include_interfaces */ true);
-    for (auto overridden_method : overridden_methods) {
-      if (can_have_unknown_implementations(
-              method_override_graph, overridden_method,
-              /* consider_overridden_methods */ false)) {
-        return true;
-      }
+  // Also check that for all overridden methods.
+  const auto& overridden_methods = mog::get_overridden_methods(
+      method_override_graph, method, /* include_interfaces */ true);
+  for (auto overridden_method : overridden_methods) {
+    if (is_interface(type_class(overridden_method->get_class())) &&
+        (root(overridden_method) || !can_rename(overridden_method))) {
+      return true;
     }
   }
   return false;
