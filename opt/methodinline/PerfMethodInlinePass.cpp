@@ -18,6 +18,7 @@
 
 #include "ConfigFiles.h"
 #include "ControlFlow.h"
+#include "CppUtil.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRCode.h"
@@ -267,6 +268,7 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
     boost::optional<float> exp_force_top_x_entries_min_appear100 = boost::none;
     float accept_threshold{0};
     bool accept_over{true};
+    bool break_chains{false};
   };
 
   InlineForSpeedDecisionTrees(const MethodProfiles* method_profiles,
@@ -365,6 +367,10 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
 
     if (traceEnabled(METH_PROF, 5)) {
       print_stats("");
+    }
+
+    if (m_config.break_chains) {
+      m_inline_calls[caller_method].insert(callee_method);
     }
 
     return true;
@@ -469,10 +475,10 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
   }
 
  protected:
-  bool should_inline_callsite_impl(
-      const DexMethod* caller_method ATTRIBUTE_UNUSED,
-      const DexMethod* callee_method ATTRIBUTE_UNUSED,
-      const cfg::Block* caller_block) final {
+  bool should_inline_callsite_impl(const DexMethod* caller_method,
+                                   const DexMethod* callee_method
+                                       ATTRIBUTE_UNUSED,
+                                   const cfg::Block* caller_block) final {
     // This is not really great, but it would mean recomputing the method-level
     // choice to understand.
     if (m_config.exp_force_top_x_entries) {
@@ -510,6 +516,19 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
     if (inline_appear && !*inline_appear) {
       return false;
     }
+
+    if (m_config.break_chains) {
+      {
+        std::unique_lock<std::mutex> lock{m_inline_calls_mutex};
+        if (!m_inline_calls_culled) {
+          cull_inline_calls_now();
+        }
+      }
+      if (m_inline_calls.count(caller_method) == 0) {
+        return false;
+      }
+    }
+
     return true;
   }
 
@@ -559,11 +578,90 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
     }
   }
 
+  void cull_inline_calls_now() {
+    // This is a simplistic greedy algorithm. We take the highest edge, as given
+    // by the very simple heuristic of callee call-count (then name). We could
+    // probably scale by caller call-count, or appear.
+
+    auto edge_heuristic = [&](const auto* /*caller*/,
+                              const auto* callee) -> float {
+      const auto& vals = m_cache.at(callee).m_vals;
+      if (!vals) {
+        return -1;
+      }
+      return *vals->hits.at(0);
+    };
+
+    auto order = [&](const auto& lhs, const auto& rhs) {
+      auto lhs_h = edge_heuristic(lhs.first, lhs.second);
+      auto rhs_h = edge_heuristic(rhs.first, rhs.second);
+      if (lhs_h != rhs_h) {
+        return lhs_h > rhs_h;
+      }
+      if (lhs.first != rhs.first) {
+        return compare_dexmethods(lhs.first, rhs.first);
+      }
+      return compare_dexmethods(lhs.second, rhs.second);
+    };
+
+    using ElemT = std::pair<const DexMethod*, const DexMethod*>;
+    std::priority_queue<ElemT, std::vector<ElemT>, decltype(order)> queue(
+        order);
+
+    auto filtered_map = m_inline_calls;
+
+    // Fill the queue with all our edges.
+    for (const auto& p : m_inline_calls) {
+      for (const auto* callee : p.second) {
+        if (p.first != callee) { // No cycles.
+          queue.emplace(p.first, callee);
+          filtered_map[callee];
+        } else {
+          filtered_map.at(p.first).erase(callee);
+        }
+      }
+    }
+
+    while (!queue.empty()) {
+      auto top = queue.top();
+      queue.pop();
+
+      auto* caller = top.first;
+      auto* callee = top.second;
+
+      if (filtered_map.at(caller).count(callee) == 0) {
+        continue;
+      }
+
+      // Remove all out edges from the callee.
+      filtered_map.at(callee).clear();
+    }
+
+    {
+      for (auto it = filtered_map.begin(); it != filtered_map.end();) {
+        if (it->second.empty()) {
+          it = filtered_map.erase(it);
+        } else {
+          ++it;
+        }
+      }
+    }
+
+    m_inline_calls = std::move(filtered_map);
+
+    m_inline_calls_culled = true;
+  }
+
   MethodContextContext m_method_context_context;
   std::unordered_map<const DexMethod*, MethodContext> m_cache;
   PGIForest m_forest;
   DecisionTreesConfig m_config;
   std::vector<std::unordered_set<const DexMethodRef*>> top_n_entries;
+  // Collect "yes" decisions based on methods, possibly to break chains later.
+  std::mutex m_inline_calls_mutex;
+  std::unordered_map<const DexMethod*, std::unordered_set<const DexMethod*>>
+      m_inline_calls;
+  bool m_inline_calls_culled{false};
 };
 
 class InlineForSpeedCallerList final : public InlineForSpeedBase {
@@ -846,6 +944,8 @@ void PerfMethodInlinePass::bind_config() {
   bind("min_block_appear", -1.0f, min_block_appear,
        "Threshold for caller source-block appear100 to consider inlining. A "
        "negative value elides the check.");
+  bool break_chains;
+  bind("break_chains", true, break_chains);
   std::string interactions_str;
   bind("interactions", "", interactions_str,
        "Comma-separated list of interactions to use. An empty value uses all "
@@ -882,7 +982,8 @@ void PerfMethodInlinePass::bind_config() {
                        exp_force_top_x_entries_min_callee_size,
                        exp_force_top_x_entries_min_appear100, caller_list_file,
                        caller_list_prefix, caller_list_callee_min_hits,
-                       caller_list_callee_min_appear, which_ifs]() {
+                       caller_list_callee_min_appear, which_ifs,
+                       break_chains]() {
     this->m_config = std::make_unique<PerfMethodInlinePass::Config>();
     if (!random_forest_file.empty()) {
       std::stringstream buffer;
@@ -910,6 +1011,7 @@ void PerfMethodInlinePass::bind_config() {
     dec_trees_config.min_method_appear = assign_opt(min_appear);
     dec_trees_config.min_block_hits = assign_opt(min_block_hits);
     dec_trees_config.min_block_appear = assign_opt(min_block_appear);
+    dec_trees_config.break_chains = break_chains;
     this->m_config->interactions_str = interactions_str;
 
     auto assign_opt_size_t = [](size_t v) -> boost::optional<size_t> {
