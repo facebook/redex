@@ -278,7 +278,7 @@ bool can_have_unknown_implementations(const mog::Graph& method_override_graph,
   }
   // Why can_rename? To mirror what VirtualRenamer looks at.
   if (is_interface(type_class(method->get_class())) &&
-                              (root(method) || !can_rename(method))) {
+      (root(method) || !can_rename(method))) {
     // We cannot rule out that there are dynamically added classes, possibly
     // even created at runtime via Proxy.newProxyInstance, that override
     // this method. So we assume the worst.
@@ -289,10 +289,10 @@ bool can_have_unknown_implementations(const mog::Graph& method_override_graph,
       method_override_graph, method, /* include_interfaces */ true);
   for (auto overridden_method : overridden_methods) {
     if (is_interface(type_class(overridden_method->get_class())) &&
-                                (root(overridden_method) || !can_rename(overridden_method))) {
-        return true;
-      }
+        (root(overridden_method) || !can_rename(overridden_method))) {
+      return true;
     }
+  }
   return false;
 };
 
