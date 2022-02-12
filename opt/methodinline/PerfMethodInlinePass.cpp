@@ -589,7 +589,11 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
       if (!vals) {
         return -1;
       }
-      return *vals->hits.at(0);
+      const auto& val = vals->hits.at(0);
+      if (!val) {
+        return 0;
+      }
+      return *val;
     };
 
     auto order = [&](const auto& lhs, const auto& rhs) {
