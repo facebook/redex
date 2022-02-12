@@ -18,6 +18,10 @@ void CFGMutation::clear() {
 }
 
 void CFGMutation::flush() {
+  if (m_changes.empty()) {
+    return;
+  }
+
   auto ii = InstructionIterable(m_cfg);
   for (auto it = ii.begin(); !m_changes.empty() && !it.is_end();) {
     auto c = m_changes.find(it->insn);
