@@ -21,6 +21,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <sys/types.h>
+#include <type_traits>
 
 // ---------------------------------------------------------------------------
 
@@ -151,7 +152,7 @@ void destroy_type(TYPE* p, size_t n) {
 
 template<typename TYPE> inline
 void copy_type(TYPE* d, const TYPE* s, size_t n) {
-    if (!traits<TYPE>::has_trivial_copy) {
+    if (!std::is_trivially_copyable<TYPE>::value) {
         while (n > 0) {
             n--;
             new(d) TYPE(*s);
