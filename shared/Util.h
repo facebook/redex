@@ -12,6 +12,8 @@
 #include <type_traits>
 #include <utility>
 
+#include "NoDefaultComparator.h"
+
 #define CHECK(cond, ...)                                                     \
   do {                                                                       \
     auto cond_eval = (cond);                                                 \
@@ -64,62 +66,6 @@ struct mimic_const {
 };
 template <typename In, typename Out>
 using mimic_const_t = typename mimic_const<In, Out>::type;
-
-template <typename T>
-struct fake_dependency : public std::false_type {};
-
-#define DISALLOW_DEFAULT_COMPARATOR(klass)                                   \
-  namespace std {                                                            \
-  template <typename T, typename A>                                          \
-  class map<const klass*, T, std::less<const klass*>, A> {                   \
-    static_assert(fake_dependency<T>::value,                                 \
-                  #klass                                                     \
-                  " must not use default pointer comparison in std::map");   \
-  };                                                                         \
-  template <typename T, typename A>                                          \
-  class multimap<const klass*, T, std::less<const klass*>, A> {              \
-    static_assert(                                                           \
-        fake_dependency<T>::value,                                           \
-        #klass " must not use default pointer comparison in std::multimap"); \
-  };                                                                         \
-  template <typename A>                                                      \
-  class set<const klass*, std::less<const klass*>, A> {                      \
-    static_assert(fake_dependency<A>::value,                                 \
-                  #klass                                                     \
-                  " must not use default pointer comparison in std::set");   \
-  };                                                                         \
-  template <typename A>                                                      \
-  class multiset<const klass*, std::less<const klass*>, A> {                 \
-    static_assert(                                                           \
-        fake_dependency<A>::value,                                           \
-        #klass " must not use default pointer comparison in std::multiset"); \
-  };                                                                         \
-                                                                             \
-  template <typename T, typename A>                                          \
-  class map<klass*, T, std::less<klass*>, A> {                               \
-    static_assert(fake_dependency<T>::value,                                 \
-                  #klass                                                     \
-                  " must not use default pointer comparison in std::map");   \
-  };                                                                         \
-  template <typename T, typename A>                                          \
-  class multimap<klass*, T, std::less<klass*>, A> {                          \
-    static_assert(                                                           \
-        fake_dependency<T>::value,                                           \
-        #klass " must not use default pointer comparison in std::multimap"); \
-  };                                                                         \
-  template <typename A>                                                      \
-  class set<klass*, std::less<klass*>, A> {                                  \
-    static_assert(fake_dependency<A>::value,                                 \
-                  #klass                                                     \
-                  " must not use default pointer comparison in std::set");   \
-  };                                                                         \
-  template <typename A>                                                      \
-  class multiset<klass*, std::less<klass*>, A> {                             \
-    static_assert(                                                           \
-        fake_dependency<A>::value,                                           \
-        #klass " must not use default pointer comparison in std::multiset"); \
-  };                                                                         \
-  }
 
 #ifdef __GNUC__
 #define PACKED(class_to_pack) class_to_pack __attribute__((packed))

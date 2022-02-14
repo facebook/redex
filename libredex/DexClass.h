@@ -21,9 +21,9 @@
 #include "DexAccess.h"
 #include "DexDefs.h"
 #include "DexEncoding.h"
+#include "NoDefaultComparator.h"
 #include "RedexContext.h"
 #include "ReferencedState.h"
-#include "Util.h"
 
 /*
  * The structures defined here are literal representations

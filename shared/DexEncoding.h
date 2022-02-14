@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <stdint.h>
+#include <cstdint>
 #include <string>
 
 namespace dex_encoding {

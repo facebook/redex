@@ -7,9 +7,7 @@
 
 #pragma once
 
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
+#include <cstdint>
 
 #include "Util.h"
 
@@ -72,7 +70,7 @@ enum MethodHandleType {
   // Method handle is a direct method invoker
   METHOD_HANDLE_TYPE_INVOKE_DIRECT = 0x07,
   // Method handle is an interface method invoker
-  METHOD_HANDLE_TYPE_INVOKE_INTERFACE = 0x08 
+  METHOD_HANDLE_TYPE_INVOKE_INTERFACE = 0x08
 };
 
 /* clang-format on */
