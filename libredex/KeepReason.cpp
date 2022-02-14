@@ -7,6 +7,8 @@
 
 #include "KeepReason.h"
 
+#include <ostream>
+
 #include "ProguardPrintConfiguration.h"
 #include "RedexContext.h"
 #include "Show.h"

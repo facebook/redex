@@ -8,7 +8,7 @@
 #pragma once
 
 #include <boost/functional/hash.hpp>
-#include <ostream>
+#include <iosfwd>
 #include <unordered_set>
 
 #include "Debug.h"
