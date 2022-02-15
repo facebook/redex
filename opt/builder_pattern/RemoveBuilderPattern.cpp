@@ -166,11 +166,11 @@ class RemoveClasses {
     for (auto method : methods) {
       BuilderAnalysis analysis(m_classes, m_excluded_types, method);
 
-      bool are_builders_to_remove =
+      bool have_builders_to_remove =
           inline_builders_and_check_method(method, &analysis);
       m_num_usages += analysis.get_total_num_usages();
 
-      if (!are_builders_to_remove) {
+      if (!have_builders_to_remove) {
         continue;
       }
 
@@ -331,7 +331,7 @@ class RemoveClasses {
       }
 
       // If we inlined everything, we still need to make sure we don't have
-      // new  methods to inlined (for example from something that was inlined
+      // new methods to inline (for example from something that was inlined
       // in this step).
     } while (true);
 

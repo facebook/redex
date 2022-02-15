@@ -297,7 +297,7 @@ void BuilderAnalysis::populate_usage() {
   auto& cfg = code->cfg();
 
   // If the instantiated type is not excluded, updates the usages map.
-  // Otherise, updating the excluded instantiation list.
+  // Otherwise, update the excluded instantiation list.
   auto update_usages = [&](const IRInstruction* val, IRInstruction* insn) {
     if (auto referenced_type = get_instantiated_type(val)) {
       if (m_exclude.count(referenced_type) == 0) {
