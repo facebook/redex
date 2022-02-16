@@ -69,6 +69,7 @@ class ResourcesArscFile : public ResourceTableFile {
   void remap_file_paths_and_serialize(
       const std::vector<std::string>& resource_files,
       const std::unordered_map<std::string, std::string>& old_to_new) override;
+  void remove_unreferenced_strings() override;
   std::vector<std::string> get_files_by_rid(
       uint32_t res_id,
       ResourcePathType path_type = ResourcePathType::DevicePath) override;

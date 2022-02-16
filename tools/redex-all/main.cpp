@@ -1030,6 +1030,24 @@ void write_out_resid_to_name(ConfigFiles& conf) {
                        resid_to_name_json.toStyledString());
 }
 
+// Performa final wave of cleanup (i.e. garbage collect unreferenced strings,
+// etc) so that this only needs to happen once and not after every resource
+// modification.
+void finalize_resource_table(ConfigFiles& conf) {
+  if (!conf.finalize_resource_table()) {
+    return;
+  }
+  std::string apk_dir;
+  conf.get_json_config().get("apk_dir", "", apk_dir);
+  if (apk_dir.empty()) {
+    return;
+  }
+  TRACE(MAIN, 1, "Finalizing resource table.");
+  auto resources = create_resource_reader(apk_dir);
+  auto res_table = resources->load_res_table();
+  res_table->remove_unreferenced_strings();
+}
+
 /**
  * Post processing steps: write dex and collect stats
  */
@@ -1042,6 +1060,7 @@ void redex_backend(ConfigFiles& conf,
   const auto& output_dir = conf.get_outdir();
 
   write_out_resid_to_name(conf);
+  finalize_resource_table(conf);
 
   instruction_lowering::Stats instruction_lowering_stats;
   {

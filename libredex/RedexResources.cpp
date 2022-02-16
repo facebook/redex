@@ -392,3 +392,8 @@ std::unordered_set<std::string> AndroidResources::get_native_classes() {
       /*push_tasks_while_running=*/true);
   return all_classes;
 }
+
+void ResourceTableFile::remove_unreferenced_strings() {
+  // Intentionally left empty, proto resource table will not contain a relevant
+  // structure to prune.
+}

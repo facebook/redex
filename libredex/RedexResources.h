@@ -112,6 +112,10 @@ class ResourceTableFile {
       const std::vector<std::string>& resource_files,
       const std::unordered_map<std::string, std::string>& old_to_new) = 0;
 
+  // Removes entries from string pool structures that are not referenced by
+  // entries/values in the resource table
+  virtual void remove_unreferenced_strings();
+
   // Returns any file paths from entries in the given ID. A non-existent ID or
   // an for which all values are not files will return an empty vector.
   // NOTE: callers should be resilient against duplicate file paths being

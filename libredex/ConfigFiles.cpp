@@ -354,6 +354,10 @@ bool ConfigFiles::create_init_class_insns() const {
   return m_json.get("create_init_class_insns", true);
 }
 
+bool ConfigFiles::finalize_resource_table() const {
+  return m_json.get("finalize_resource_table", false);
+}
+
 void ConfigFiles::set_outdir(const std::string& new_outdir) {
   // Gotta ensure "meta" exists.
   auto meta_path = boost::filesystem::path(new_outdir) / "meta";

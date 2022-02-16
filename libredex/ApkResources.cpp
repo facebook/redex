@@ -889,16 +889,12 @@ class GlobalStringPoolReader : public arsc::ResourceTableVisitor {
 
   bool visit_global_strings(android::ResStringPool_header* header) override {
     always_assert_log(
-        m_global_strings.setTo(header, dtohl(header->header.size)) ==
+        m_global_strings->setTo(header, dtohl(header->header.size)) ==
             android::NO_ERROR,
         "Failed to parse global strings!");
-    auto size = m_global_strings.size();
+    auto size = m_global_strings->size();
     for (uint32_t i = 0; i < size; i++) {
-      size_t u16_len;
-      auto wide_chars = m_global_strings.stringAt(i, &u16_len);
-      android::String16 s16(wide_chars, u16_len);
-      android::String8 s8(s16);
-      std::string value(s8.string());
+      auto value = apk::get_string_from_pool(*m_global_strings, i);
       m_string_to_idx.emplace(value, i);
       TRACE(RES, 9, "GLOBAL STRING [%u] = %s", i, value.c_str());
     }
@@ -909,8 +905,13 @@ class GlobalStringPoolReader : public arsc::ResourceTableVisitor {
     return m_string_to_idx.at(s);
   }
 
+  std::shared_ptr<android::ResStringPool> global_strings() {
+    return m_global_strings;
+  }
+
  private:
-  android::ResStringPool m_global_strings;
+  std::shared_ptr<android::ResStringPool> m_global_strings =
+      std::make_shared<android::ResStringPool>();
   std::unordered_map<std::string, uint32_t> m_string_to_idx;
 };
 
@@ -943,6 +944,103 @@ class StringPoolRefRemappingVisitor : public arsc::StringPoolRefVisitor {
  private:
   const std::unordered_map<uint32_t, uint32_t>& m_old_to_new;
 };
+
+// Collects string references into the global string pool from values and styles
+// and per package, the entries into the key string pool.
+class PackageStringRefCollector : public arsc::StringPoolRefVisitor {
+ public:
+  ~PackageStringRefCollector() override {}
+
+  bool visit_package(android::ResTable_package* package) override {
+    std::set<android::ResStringPool_ref*> entries;
+    m_package_entries.emplace(package, std::move(entries));
+    std::shared_ptr<android::ResStringPool> key_strings =
+        std::make_shared<android::ResStringPool>();
+    m_package_key_strings.emplace(package, std::move(key_strings));
+    StringPoolRefVisitor::visit_package(package);
+    return true;
+  }
+
+  bool visit_key_strings(android::ResTable_package* package,
+                         android::ResStringPool_header* pool) override {
+    auto& key_strings = m_package_key_strings.at(package);
+    always_assert_log(key_strings->getError() == android::NO_INIT,
+                      "Key strings re-init!");
+    always_assert_log(key_strings->setTo(pool, dtohl(pool->header.size)) ==
+                          android::NO_ERROR,
+                      "Failed to parse key strings!");
+    StringPoolRefVisitor::visit_key_strings(package, pool);
+    return true;
+  }
+
+  bool visit_type_spec(android::ResTable_package* package,
+                       android::ResTable_typeSpec* type_spec) override {
+    arsc::TypeInfo info{type_spec, {}};
+    auto search = m_package_types.find(package);
+    if (search == m_package_types.end()) {
+      std::vector<arsc::TypeInfo> infos;
+      infos.emplace_back(info);
+      m_package_types.emplace(package, infos);
+    } else {
+      search->second.emplace_back(info);
+    }
+    StringPoolRefVisitor::visit_type_spec(package, type_spec);
+    return true;
+  }
+
+  bool visit_type(android::ResTable_package* package,
+                  android::ResTable_typeSpec* type_spec,
+                  android::ResTable_type* type) override {
+    auto& infos = m_package_types.at(package);
+    for (auto& info : infos) {
+      if (info.spec->id == type_spec->id) {
+        info.configs.emplace_back(type);
+      }
+    }
+    StringPoolRefVisitor::visit_type(package, type_spec, type);
+    return true;
+  }
+
+  bool visit_type_strings(android::ResTable_package* package,
+                          android::ResStringPool_header* pool) override {
+    m_package_type_strings.emplace(package, pool);
+    StringPoolRefVisitor::visit_type_strings(package, pool);
+    return true;
+  }
+
+  bool visit_global_strings_ref(android::Res_value* value) override {
+    m_values.emplace(value);
+    return true;
+  }
+
+  bool visit_global_strings_ref(android::ResStringPool_ref* value) override {
+    m_span_refs.emplace(value);
+    return true;
+  }
+
+  bool visit_key_strings_ref(android::ResTable_package* package,
+                             android::ResStringPool_ref* value) override {
+    auto& entry_set = m_package_entries.at(package);
+    entry_set.emplace(value);
+    return true;
+  }
+
+  // Values that are references into the global string pool.
+  std::set<android::Res_value*> m_values;
+  // References into the global string pool from a ResStringPool_span.
+  std::set<android::ResStringPool_ref*> m_span_refs;
+  // References into the key string pool from entries;
+  std::map<android::ResTable_package*, std::set<android::ResStringPool_ref*>>
+      m_package_entries;
+  std::map<android::ResTable_package*, std::shared_ptr<android::ResStringPool>>
+      m_package_key_strings;
+  // TODO: Parse and rebuild the type strings. For now, just copy it.
+  std::map<android::ResTable_package*, android::ResStringPool_header*>
+      m_package_type_strings;
+  // Representation of types/configs within a package.
+  std::map<android::ResTable_package*, std::vector<arsc::TypeInfo>>
+      m_package_types;
+};
 } // namespace
 
 void ResourcesArscFile::remap_file_paths_and_serialize(
@@ -961,6 +1059,211 @@ void ResourcesArscFile::remap_file_paths_and_serialize(
   // Note: file is opened for writing. Visitor will in place change the data
   // (without altering any data sizes).
   remapper.visit(m_f.data(), m_arsc_len);
+}
+
+namespace {
+
+// Copy an individual index from the pool to the builder. API here is weird due
+// to this largely being identical for UTF-8 pools and UTF-16 pools, except for
+// the data type and the API call to get the character pointer.
+template <typename CharType>
+void add_string_idx_to_builder(
+    const android::ResStringPool& string_pool,
+    size_t idx,
+    const CharType* s,
+    size_t len,
+    const std::function<void(android::ResStringPool_span*)>& span_remapper,
+    arsc::ResStringPoolBuilder* builder) {
+  if (idx < string_pool.styleCount()) {
+    arsc::SpanVector vec;
+    arsc::collect_spans((android::ResStringPool_span*)string_pool.styleAt(idx),
+                        &vec);
+    for (auto& span : vec) {
+      span_remapper(span);
+    }
+    builder->add_style(s, len, vec);
+  } else {
+    builder->add_string(s, len);
+  }
+}
+
+// Copies the string data for the kept indicies from the given pool to the
+// builder. If needed, a remapper function can be run against the spans required
+// by a kept index.
+void rebuild_string_pool(
+    const android::ResStringPool& string_pool,
+    const std::unordered_map<uint32_t, uint32_t>& kept_old_to_new,
+    const std::function<void(android::ResStringPool_span*)>& span_remapper,
+    arsc::ResStringPoolBuilder* builder) {
+  const auto original_string_count = string_pool.size();
+  const auto is_utf8 = string_pool.isUTF8();
+  for (size_t idx = 0; idx < original_string_count; idx++) {
+    if (kept_old_to_new.count(idx) == 0) {
+      continue;
+    }
+    size_t length;
+    if (is_utf8) {
+      auto s = string_pool.string8At(idx, &length);
+      size_t actual_length = apk::read_utf8_length_from_string_pool_data(s);
+      add_string_idx_to_builder<char>(string_pool, idx, s, actual_length,
+                                      span_remapper, builder);
+    } else {
+      auto s = string_pool.stringAt(idx, &length);
+      add_string_idx_to_builder<char16_t>(string_pool, idx, s, length,
+                                          span_remapper, builder);
+    }
+  }
+}
+
+// Given the kept strings, build the mapping from old -> new in the projected
+// new string pool.
+void project_string_mapping(
+    const std::unordered_set<uint32_t>& used_strings,
+    const size_t& string_count,
+    std::unordered_map<uint32_t, uint32_t>* kept_old_to_new) {
+  for (size_t i = 0; i < string_count; i++) {
+    if (used_strings.count(i) > 0) {
+      auto new_index = kept_old_to_new->size();
+      TRACE(RES, 9, "MAPPING %zu => %zu", i, new_index);
+      kept_old_to_new->emplace(i, new_index);
+    }
+  }
+}
+
+#define POOL_FLAGS(pool)                                               \
+  (((pool)->isUTF8() ? android::ResStringPool_header::UTF8_FLAG : 0) | \
+   ((pool)->isSorted() ? android::ResStringPool_header::SORTED_FLAG : 0))
+
+} // namespace
+
+void ResourcesArscFile::remove_unreferenced_strings() {
+  // Find the global string pool and read its settings.
+  GlobalStringPoolReader string_reader;
+  string_reader.visit(m_f.data(), m_arsc_len);
+  auto string_pool = string_reader.global_strings();
+  TRACE(RES, 9, "Global string pool has %zu styles and %zu total strings",
+        string_pool->styleCount(), string_pool->size());
+  auto is_utf8 = string_pool->isUTF8();
+  auto is_sorted = string_pool->isSorted();
+  auto flags = (is_utf8 ? android::ResStringPool_header::UTF8_FLAG : 0) |
+               (is_sorted ? android::ResStringPool_header::SORTED_FLAG : 0);
+
+  // 1) Collect all referenced global string indicies and key string indicies.
+  PackageStringRefCollector collector;
+  collector.visit(m_f.data(), m_arsc_len);
+  std::unordered_set<uint32_t> used_global_strings;
+  for (const auto& value : collector.m_values) {
+    used_global_strings.emplace(dtohl(value->data));
+  }
+  for (const auto& value : collector.m_span_refs) {
+    used_global_strings.emplace(dtohl(value->index));
+  }
+
+  // 2) Build the compacted map of old -> new indicies for used global strings.
+  std::unordered_map<uint32_t, uint32_t> global_old_to_new;
+  project_string_mapping(used_global_strings, string_pool->size(),
+                         &global_old_to_new);
+
+  // 3) Remap all Res_value structs
+  auto remap_value = [&global_old_to_new](android::Res_value* value) {
+    always_assert_log(value->dataType == android::Res_value::TYPE_STRING,
+                      "Wrong data type for string remapping");
+    auto old = dtohl(value->data);
+    TRACE(RES, 9, "REMAP OLD %u", old);
+    auto remapped_data = global_old_to_new.at(old);
+    value->data = htodl(remapped_data);
+  };
+  for (const auto& value : collector.m_values) {
+    remap_value(value);
+  }
+
+  // 4) Actually build the new global ResStringPool. While doing this, remap all
+  //    span refs encountered (in case ResStringPool has copied its underlying
+  //    data).
+  auto remap_spans = [&global_old_to_new](android::ResStringPool_span* span) {
+    auto old = dtohl(span->name.index);
+    TRACE(RES, 9, "REMAP OLD %u", old);
+    span->name.index = htodl(global_old_to_new.at(old));
+  };
+  std::shared_ptr<arsc::ResStringPoolBuilder> global_strings_builder =
+      std::make_shared<arsc::ResStringPoolBuilder>(flags);
+  rebuild_string_pool(*string_pool, global_old_to_new, remap_spans,
+                      global_strings_builder.get());
+
+  // 4) Serialize the ResTable with the modified ResStringPool (which will have
+  // a different size).
+  arsc::ResTableBuilder table_builder;
+  table_builder.set_global_strings(global_strings_builder);
+  for (auto& package_entries : collector.m_package_entries) {
+    // 5) Do a similar remapping as above, but for key strings.
+    //
+    //    TODO: also do a similar step for type strings pool, and any empty type
+    //    chunks that had all their entries deleted.
+    //
+    auto& package = package_entries.first;
+    // Copy standard fields which will be unchanged in the output.
+    std::shared_ptr<arsc::ResPackageBuilder> package_builder =
+        std::make_shared<arsc::ResPackageBuilder>();
+    package_builder->set_id(dtohl(package->id));
+    package_builder->copy_package_name(package);
+    package_builder->set_last_public_key(dtohl(package->lastPublicKey));
+    package_builder->set_last_public_type(dtohl(package->lastPublicType));
+    package_builder->set_type_id_offset(dtohl(package->typeIdOffset));
+
+    // Build new key string pool indicies.
+    auto refs = package_entries.second;
+    auto key_string_pool = collector.m_package_key_strings.at(package);
+    std::unordered_set<uint32_t> used_key_strings;
+    for (auto& ref : refs) {
+      used_key_strings.emplace(dtohl(ref->index));
+    }
+    std::unordered_map<uint32_t, uint32_t> key_old_to_new;
+    project_string_mapping(used_key_strings, key_string_pool->size(),
+                           &key_old_to_new);
+
+    // Remap the entries.
+    for (auto& ref : refs) {
+      auto old = dtohl(ref->index);
+      TRACE(RES, 9, "REMAP OLD KEY %u", old);
+      ref->index = htodl(key_old_to_new.at(old));
+    }
+
+    // Actually build the key strings pool.
+    std::shared_ptr<arsc::ResStringPoolBuilder> key_strings_builder =
+        std::make_shared<arsc::ResStringPoolBuilder>(
+            POOL_FLAGS(key_string_pool));
+    rebuild_string_pool(
+        *key_string_pool, key_old_to_new, [](android::ResStringPool_span*) {},
+        key_strings_builder.get());
+    package_builder->set_key_strings(key_strings_builder);
+    package_builder->set_type_strings(
+        collector.m_package_type_strings.at(package));
+
+    // Copy over all existing type data, which has been remapped by the step
+    // above.
+    auto search = collector.m_package_types.find(package);
+    if (search != collector.m_package_types.end()) {
+      auto types = search->second;
+      for (auto& info : types) {
+        package_builder->add_type(info);
+      }
+    }
+    table_builder.add_package(package_builder);
+  }
+  android::Vector<char> serialized;
+  table_builder.serialize(&serialized);
+
+  // 6) Actually write the table to disk so changes take effect.
+  TRACE(RES, 9, "Writing resources.arsc file, total size = %zu",
+        serialized.size());
+  // NOTE: ResourcesArscFile now has two ways to read/manipulate the underlying
+  // data. This is not good, but a necessary intermediate step while we work on
+  // moving away from the forked methods in ResTable class to stand alone APIs.
+  // Eventually, we should stop constructing ResTable instance automatically in
+  // the constructor so we don't have to worry about it having invalid
+  // underlying data as a result of this call.
+  m_arsc_len = write_serialized_data(serialized, std::move(m_f));
+  m_file_closed = true;
 }
 
 std::vector<std::string> ResourcesArscFile::get_files_by_rid(

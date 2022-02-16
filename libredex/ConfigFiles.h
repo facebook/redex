@@ -155,6 +155,8 @@ struct ConfigFiles {
 
   bool create_init_class_insns() const;
 
+  bool finalize_resource_table() const;
+
  private:
   JsonWrapper m_json;
   std::string outdir;
