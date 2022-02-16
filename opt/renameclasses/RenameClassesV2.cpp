@@ -20,6 +20,7 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"
+#include "KeepReason.h"
 #include "PassManager.h"
 #include "ReachableClasses.h"
 #include "RedexResources.h"
@@ -87,7 +88,7 @@ bool dont_rename_reason_to_metric_per_rule(DontRenameReasonCode reason) {
     // Set to true to add more detailed metrics for renamer if needed
     return false;
   case DontRenameReasonCode::ProguardCantRename:
-    return RedexContext::record_keep_reasons();
+    return keep_reason::Reason::record_keep_reasons();
   default:
     return false;
   }
@@ -404,7 +405,7 @@ static void sanity_check(const Scope& scope,
 }
 
 std::string get_keep_rule(const DexClass* clazz) {
-  if (RedexContext::record_keep_reasons()) {
+  if (keep_reason::Reason::record_keep_reasons()) {
     const auto& keep_reasons = clazz->rstate.keep_reasons();
     for (const auto* reason : keep_reasons) {
       if (reason->type == keep_reason::KEEP_RULE &&

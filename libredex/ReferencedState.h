@@ -15,7 +15,6 @@
 
 #include "Debug.h"
 #include "KeepReason.h"
-#include "RedexContext.h"
 
 namespace ir_meta_io {
 class IRMetaIO;
@@ -267,8 +266,8 @@ class ReferencedState {
   // these string references, and potentially eliminate dead resource .xml files
   void set_referenced_by_resource_xml() {
     inner_struct.m_by_resources = true;
-    if (RedexContext::record_keep_reasons()) {
-      add_keep_reason(RedexContext::make_keep_reason(keep_reason::XML));
+    if (keep_reason::Reason::record_keep_reasons()) {
+      add_keep_reason(keep_reason::Reason::make_keep_reason(keep_reason::XML));
     }
   }
 
@@ -302,9 +301,9 @@ class ReferencedState {
     inner_struct.m_keep = true;
     unset_allowshrinking();
     unset_allowobfuscation();
-    if (RedexContext::record_keep_reasons()) {
+    if (keep_reason::Reason::record_keep_reasons()) {
       add_keep_reason(
-          RedexContext::make_keep_reason(std::forward<Args>(args)...));
+          keep_reason::Reason::make_keep_reason(std::forward<Args>(args)...));
     }
   }
 
@@ -315,7 +314,7 @@ class ReferencedState {
   }
 
   const keep_reason::ReasonPtrSet& keep_reasons() const {
-    if (!RedexContext::record_keep_reasons()) {
+    if (!keep_reason::Reason::record_keep_reasons()) {
       // We really should not allow this.
       static keep_reason::ReasonPtrSet SINGLETON;
       return SINGLETON;
@@ -412,9 +411,9 @@ class ReferencedState {
   template <class... Args>
   void set_has_keep(Args&&... args) {
     inner_struct.m_keep = true;
-    if (RedexContext::record_keep_reasons()) {
+    if (keep_reason::Reason::record_keep_reasons()) {
       add_keep_reason(
-          RedexContext::make_keep_reason(std::forward<Args>(args)...));
+          keep_reason::Reason::make_keep_reason(std::forward<Args>(args)...));
     }
   }
 
@@ -441,7 +440,7 @@ class ReferencedState {
   }
 
   KeepReasons& ensure_keep_reasons() const {
-    always_assert(RedexContext::record_keep_reasons());
+    always_assert(keep_reason::Reason::record_keep_reasons());
     // First see whether it's already done to avoid allocating.
     auto attempt = m_keep_reasons.load();
     if (attempt != nullptr) {
@@ -457,7 +456,7 @@ class ReferencedState {
   }
 
   void add_keep_reason(const keep_reason::Reason* reason) {
-    always_assert(RedexContext::record_keep_reasons());
+    always_assert(keep_reason::Reason::record_keep_reasons());
     auto& keep_reasons = ensure_keep_reasons();
     std::lock_guard<std::mutex> lock(keep_reasons.m_keep_reasons_mtx);
     keep_reasons.m_keep_reasons.emplace(reason);

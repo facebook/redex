@@ -52,6 +52,7 @@
 #include "InstructionLowering.h"
 #include "JarLoader.h"
 #include "JemallocUtil.h"
+#include "KeepReason.h"
 #include "Macros.h"
 #include "MonitorCount.h"
 #include "NoOptimizationsMatcher.h"
@@ -1008,7 +1009,7 @@ void redex_frontend(ConfigFiles& conf, /* input */
     init_reachable_classes(scope, ReachableClassesConfig(json_config));
   }
 
-  if (RedexContext::record_keep_reasons()) {
+  if (keep_reason::Reason::record_keep_reasons()) {
     dump_keep_reasons(conf, args, stores);
   }
 }
@@ -1317,7 +1318,7 @@ int main(int argc, char* argv[]) {
     //       list of library JARS.
     Arguments args = parse_args(argc, argv);
 
-    RedexContext::set_record_keep_reasons(
+    keep_reason::Reason::set_record_keep_reasons(
         args.config.get("record_keep_reasons", false).asBool());
 
     // For convenience.

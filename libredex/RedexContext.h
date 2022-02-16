@@ -25,23 +25,23 @@
 #include "Debug.h"
 #include "DexMemberRefs.h"
 #include "FrequentlyUsedPointersCache.h"
-#include "KeepReason.h"
 
 class DexCallSite;
+class DexClass;
 class DexDebugInstruction;
+class DexField;
+class DexFieldRef;
+class DexMethod;
+class DexMethodHandle;
+class DexMethodRef;
+class DexProto;
 class DexString;
 class DexType;
-class DexFieldRef;
 class DexTypeList;
-class DexProto;
-class DexMethodRef;
-class DexMethodHandle;
-class DexClass;
-class DexField;
-struct DexFieldSpec;
-struct DexDebugEntry;
-struct DexPosition;
 class PositionPatternSwitchManager;
+struct DexDebugEntry;
+struct DexFieldSpec;
+struct DexPosition;
 struct RedexContext;
 namespace keep_rules {
 struct AssumeReturnValue;
@@ -150,25 +150,6 @@ struct RedexContext {
 
   const std::vector<DexClass*>& external_classes() const {
     return m_external_classes;
-  }
-
-  /*
-   * This returns true if we want to preserve keep reasons for better
-   * diagnostics.
-   */
-  static bool record_keep_reasons() { return g_redex->m_record_keep_reasons; }
-  static void set_record_keep_reasons(bool v) {
-    g_redex->m_record_keep_reasons = v;
-  }
-
-  template <class... Args>
-  static keep_reason::Reason* make_keep_reason(Args&&... args) {
-    auto to_insert =
-        std::make_unique<keep_reason::Reason>(std::forward<Args>(args)...);
-    if (g_redex->s_keep_reasons.emplace(to_insert.get(), to_insert.get())) {
-      return to_insert.release();
-    }
-    return g_redex->s_keep_reasons.at(to_insert.get());
   }
 
   // Add a lambda to be called when RedexContext is destructed. This is
@@ -341,19 +322,12 @@ struct RedexContext {
 
   const std::vector<const DexType*> m_empty_types;
 
-  ConcurrentMap<keep_reason::Reason*,
-                keep_reason::Reason*,
-                keep_reason::ReasonPtrHash,
-                keep_reason::ReasonPtrEqual>
-      s_keep_reasons;
-
   // These functions will be called when ~RedexContext() is called
   std::mutex m_destruction_tasks_lock;
   std::vector<Task> m_destruction_tasks;
 
   std::unordered_map<std::string, size_t> m_sb_interaction_indices;
 
-  bool m_record_keep_reasons{false};
   bool m_allow_class_duplicates;
 
   bool m_pointers_cache_loaded{false};

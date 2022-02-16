@@ -58,6 +58,24 @@ struct Reason {
     always_assert(type == REFLECTION);
   }
 
+  /*
+   * This returns true if we want to preserve keep reasons for better
+   * diagnostics.
+   */
+  static bool record_keep_reasons() { return s_record_keep_reasons; }
+  static void set_record_keep_reasons(bool v);
+  static void release_keep_reasons();
+
+  template <class... Args>
+  static Reason* make_keep_reason(Args&&... args) {
+    auto to_insert = std::make_unique<Reason>(std::forward<Args>(args)...);
+    return try_insert(std::move(to_insert));
+  }
+
+  static Reason* try_insert(std::unique_ptr<Reason> to_insert);
+
+  static bool s_record_keep_reasons;
+
   friend bool operator==(const Reason&, const Reason&);
 
   friend std::ostream& operator<<(std::ostream&, const Reason&);

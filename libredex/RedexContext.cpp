@@ -18,6 +18,7 @@
 #include "DexClass.h"
 #include "DexPosition.h"
 #include "DuplicateClasses.h"
+#include "KeepReason.h"
 #include "ProguardConfiguration.h"
 #include "Show.h"
 #include "Trace.h"
@@ -82,9 +83,8 @@ RedexContext::~RedexContext() {
     delete it.second;
   }
 
-  for (const auto& p : s_keep_reasons) {
-    delete p.second;
-  }
+  // Also free Keep Reasons.
+  keep_reason::Reason::release_keep_reasons();
 
   for (const Task& t : m_destruction_tasks) {
     t();
