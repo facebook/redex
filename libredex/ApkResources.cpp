@@ -1180,10 +1180,16 @@ void ResourcesArscFile::remove_unreferenced_strings() {
   // 4) Actually build the new global ResStringPool. While doing this, remap all
   //    span refs encountered (in case ResStringPool has copied its underlying
   //    data).
-  auto remap_spans = [&global_old_to_new](android::ResStringPool_span* span) {
-    auto old = dtohl(span->name.index);
-    TRACE(RES, 9, "REMAP OLD %u", old);
-    span->name.index = htodl(global_old_to_new.at(old));
+  std::unordered_set<android::ResStringPool_span*> remapped_spans;
+  auto remap_spans = [&global_old_to_new,
+                      &remapped_spans](android::ResStringPool_span* span) {
+    // Guard against span offsets that have been "canonicalized"
+    if (remapped_spans.count(span) == 0) {
+      remapped_spans.emplace(span);
+      auto old = dtohl(span->name.index);
+      TRACE(RES, 9, "REMAP OLD %u", old);
+      span->name.index = htodl(global_old_to_new.at(old));
+    }
   };
   std::shared_ptr<arsc::ResStringPoolBuilder> global_strings_builder =
       std::make_shared<arsc::ResStringPoolBuilder>(flags);
