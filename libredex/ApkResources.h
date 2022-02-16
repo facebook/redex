@@ -38,6 +38,11 @@ bool get_bool_attribute_value(const android::ResXMLTree& parser,
                               const android::String16& attribute_name,
                               bool default_value);
 
+namespace apk {
+std::string get_string_from_pool(const android::ResStringPool& pool,
+                                 size_t idx);
+} // namespace apk
+
 class ResourcesArscFile : public ResourceTableFile {
  public:
   ResourcesArscFile(const ResourcesArscFile&) = delete;

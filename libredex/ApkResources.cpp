@@ -49,6 +49,32 @@
 #undef NO_ERROR
 #endif
 
+namespace apk {
+std::string get_string_from_pool(const android::ResStringPool& pool,
+                                 size_t idx) {
+  size_t u16_len;
+  auto wide_chars = pool.stringAt(idx, &u16_len);
+  android::String16 s16(wide_chars, u16_len);
+  android::String8 string8(s16);
+  return std::string(string8.string());
+}
+
+// The import of AOSP code that Redex has right now predates
+// https://cs.android.com/android/_/android/platform/frameworks/base/+/d0f116b619feede0cfdb647157ce5ab4d50a1c46
+// which properly returns UTF-8 lengths when reading UTF-8 string data. We have
+// the bugged version which returns UTF-16 lengths for the UTF-8 data! Find the
+// correct length by walking back from the pointer (being mindful that it might
+// take two bytes to encode the length for long lengths).
+size_t read_utf8_length_from_string_pool_data(const char* s) {
+  uint8_t maybe = *((uint8_t*)s - 2);
+  uint8_t len = *((uint8_t*)s - 1);
+  if ((maybe & 0x80) != 0) {
+    return ((maybe & 0x7F) << 8) | len;
+  }
+  return len;
+}
+} // namespace apk
+
 namespace {
 
 void ensure_file_contents(const std::string& file_contents,
