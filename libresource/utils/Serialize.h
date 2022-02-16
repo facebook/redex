@@ -122,6 +122,9 @@ class ResPackageBuilder {
   void set_type_strings(android::ResStringPool_header* existing_data) {
     m_type_strings.second = existing_data;
   }
+  void add_chunk(android::ResChunk_header* header) {
+    m_unknown_chunks.emplace_back(header);
+  }
   void serialize(android::Vector<char>* out);
 
  private:
@@ -132,6 +135,9 @@ class ResPackageBuilder {
   std::pair<std::shared_ptr<ResStringPoolBuilder>, android::ResStringPool_header*>
       m_type_strings;
   std::map<uint8_t, TypeInfo> m_id_to_type;
+  // Chunks to emit after all type info. Meant to represent any unparsed struct
+  // like libraries, overlay, etc.
+  std::vector<android::ResChunk_header*> m_unknown_chunks;
   uint32_t m_id = 0;
   uint32_t m_last_public_type = 0;
   uint32_t m_last_public_key = 0;

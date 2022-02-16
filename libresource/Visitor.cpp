@@ -320,7 +320,11 @@ bool ResourceTableVisitor::visit_package(android::ResTable_package* package) {
       }
       break;
     default:
-      ALOGE("unexpected chunk type %x, ignoring", dtohs(parser.chunk()->type));
+      auto unknown = parser.chunk();
+      ALOGE("unexpected chunk type %x in package", dtohs(unknown->type));
+      if (!visit_unknown_chunk(package, unknown)) {
+        return false;
+      }
       break;
     }
   }
@@ -328,6 +332,13 @@ bool ResourceTableVisitor::visit_package(android::ResTable_package* package) {
     ALOGE("corrupt package %x", package_id);
     return false;
   }
+  return true;
+}
+
+bool ResourceTableVisitor::visit_unknown_chunk(
+  android::ResTable_package* package,
+  android::ResChunk_header* header) {
+  LOGVV("visit unknown chunk, offset = %ld", get_file_offset(header));
   return true;
 }
 

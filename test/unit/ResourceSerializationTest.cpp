@@ -13,6 +13,7 @@
 #include "Debug.h"
 #include "RedexMappedFile.h"
 #include "RedexResources.h"
+#include "RedexTestUtils.h"
 #include "SanitizersConfig.h"
 #include "androidfw/ResourceTypes.h"
 #include "utils/Serialize.h"
@@ -62,6 +63,29 @@ void assert_serialized_data(const void* original,
     auto actual = *((const char*)original + i);
     ASSERT_EQ(actual, serialized[i]);
   }
+}
+
+void copy_file(const std::string& from, const std::string& to) {
+  std::ifstream src_stream(from, std::ios::binary);
+  std::ofstream dest_stream(to, std::ios::binary);
+  dest_stream << src_stream.rdbuf();
+}
+
+bool are_files_equal(const std::string& p1, const std::string& p2) {
+  std::ifstream f1(p1, std::ifstream::binary | std::ifstream::ate);
+  std::ifstream f2(p2, std::ifstream::binary | std::ifstream::ate);
+  always_assert_log(!f1.fail(), "Failed to read path %s", p1.c_str());
+  always_assert_log(!f2.fail(), "Failed to read path %s", p2.c_str());
+  if (f1.tellg() != f2.tellg()) {
+    std::cerr << "File length mismatch. " << f1.tellg() << " != " << f2.tellg()
+              << std::endl;
+    return false;
+  }
+  f1.seekg(0, std::ifstream::beg);
+  f2.seekg(0, std::ifstream::beg);
+  return std::equal(std::istreambuf_iterator<char>(f1.rdbuf()),
+                    std::istreambuf_iterator<char>(),
+                    std::istreambuf_iterator<char>(f2.rdbuf()));
 }
 } // namespace
 
@@ -365,4 +389,16 @@ TEST(ResStringPoolBuilder, TestPoolRebuildStyle8) {
   android::Vector<char> serialized;
   builder.serialize(&serialized);
   assert_serialized_data(&data, data.size(), serialized);
+}
+
+TEST(ResTableParse, TestUnknownPackageChunks) {
+  // A table with one package, which has a fake chunk that is made up. The chunk
+  // that is not known/recognized should just be copied as-is to the output.
+  auto tmp_dir = redex::make_tmp_dir("ResTableParse%%%%%%%%");
+  auto res_path = tmp_dir.path + "/resources.arsc";
+  copy_file(std::getenv("resources_unknown_chunk"), res_path);
+  ResourcesArscFile res_table(res_path);
+  res_table.remove_unreferenced_strings();
+  EXPECT_TRUE(
+      are_files_equal(std::getenv("resources_unknown_chunk"), res_path));
 }

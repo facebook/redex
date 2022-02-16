@@ -957,6 +957,8 @@ class PackageStringRefCollector : public arsc::StringPoolRefVisitor {
     std::shared_ptr<android::ResStringPool> key_strings =
         std::make_shared<android::ResStringPool>();
     m_package_key_strings.emplace(package, std::move(key_strings));
+    std::vector<android::ResChunk_header*> headers;
+    m_package_unknown_chunks.emplace(package, std::move(headers));
     StringPoolRefVisitor::visit_package(package);
     return true;
   }
@@ -1025,6 +1027,13 @@ class PackageStringRefCollector : public arsc::StringPoolRefVisitor {
     return true;
   }
 
+  bool visit_unknown_chunk(android::ResTable_package* package,
+                           android::ResChunk_header* header) override {
+    auto& chunks = m_package_unknown_chunks.at(package);
+    chunks.emplace_back(header);
+    return true;
+  }
+
   // Values that are references into the global string pool.
   std::set<android::Res_value*> m_values;
   // References into the global string pool from a ResStringPool_span.
@@ -1040,6 +1049,10 @@ class PackageStringRefCollector : public arsc::StringPoolRefVisitor {
   // Representation of types/configs within a package.
   std::map<android::ResTable_package*, std::vector<arsc::TypeInfo>>
       m_package_types;
+  // Chunks belonging to a package that we do not parse/edit. Will be preserved
+  // as-is.
+  std::map<android::ResTable_package*, std::vector<android::ResChunk_header*>>
+      m_package_unknown_chunks;
 };
 } // namespace
 
@@ -1253,6 +1266,12 @@ void ResourcesArscFile::remove_unreferenced_strings() {
       for (auto& info : types) {
         package_builder->add_type(info);
       }
+    }
+
+    // Finally, preserve any chunks that we are not parsing.
+    auto& unknown_chunks = collector.m_package_unknown_chunks.at(package);
+    for (auto& header : unknown_chunks) {
+      package_builder->add_chunk(header);
     }
     table_builder.add_package(package_builder);
   }

@@ -299,9 +299,10 @@ void ResPackageBuilder::serialize(android::Vector<char>* out) {
       push_chunk((android::ResChunk_header*)type, &temp);
     }
   }
-  //
-  // TODO (T109368718): future proof for emitting unknown chunk types as-is.
-  //
+  // All other chunks
+  for (auto header : m_unknown_chunks) {
+    push_chunk(header, &temp);
+  }
   // ResTable_package's ResChunk_header
   auto header_size = sizeof(android::ResTable_package);
   push_short(android::RES_TABLE_PACKAGE_TYPE, out);

@@ -61,6 +61,9 @@ class ResourceTableVisitor {
                                android::ResTable_type* type,
                                android::ResTable_map_entry* entry,
                                android::ResTable_map* value);
+  // Callback for a chunk type that was not recognized (the format does change)
+  virtual bool visit_unknown_chunk(android::ResTable_package* package,
+                                   android::ResChunk_header* header);
   virtual ~ResourceTableVisitor() {}
   // Returns how far into the file this pointer is.
   long get_file_offset(const void* ptr) {
