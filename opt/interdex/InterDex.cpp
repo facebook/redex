@@ -520,7 +520,7 @@ void InterDex::emit_interdex_classes(
               "End marker discovered between background start/end markers");
           TRACE(IDEX, 2, "Terminating dex due to %s", SHOW(type));
           if (end_marker != cold_start_end_marker ||
-              !m_fill_last_coldstart_dex) {
+              !m_fill_last_coldstart_dex || m_end_markers.size() == 1) {
             flush_out_dex(dex_info, *canary_cls);
             *canary_cls = get_canary_cls(dex_info);
             if (end_marker == cold_start_end_marker) {
