@@ -67,6 +67,50 @@ void update_liveness(const IRInstruction* inst,
   }
 }
 
+bool has_normalizable_new_instance(cfg::ControlFlowGraph& cfg) {
+  auto ii = InstructionIterable(cfg);
+  auto get_next = [&cfg, &ii](const auto& it) {
+    auto next_it = std::next(it);
+    if (!next_it.is_end() && next_it.block() == it.block()) {
+      return next_it;
+    }
+    cfg::Block* block = it.block();
+    std::unordered_set<cfg::Block*> visited;
+    while (true) {
+      auto edge = cfg.get_succ_edge_of_type(block, cfg::EDGE_GOTO);
+      always_assert(edge);
+      block = edge->target();
+      if (!visited.insert(block).second) {
+        // non-terminating empty self-loop
+        return ii.end();
+      }
+      auto first_insn_it = block->get_first_insn();
+      if (first_insn_it != block->end()) {
+        return block->to_cfg_instruction_iterator(first_insn_it);
+      }
+    }
+  };
+  for (auto it = ii.begin(); it != ii.end(); it++) {
+    if (!opcode::is_new_instance(it->insn->opcode())) {
+      continue;
+    }
+    auto next_it = get_next(it);
+    always_assert(!next_it.is_end());
+    always_assert(opcode::is_a_move_result_pseudo(next_it->insn->opcode()));
+    if (next_it.block() != it.block()) {
+      // implementation limitation
+      return true;
+    }
+    auto reg = next_it->insn->dest();
+    auto next_next_it = get_next(next_it);
+    if (!opcode::is_invoke_direct(next_next_it->insn->opcode()) ||
+        !method::is_init(next_next_it->insn->get_method()) ||
+        next_next_it->insn->src(0) != reg) {
+      return true;
+    }
+  }
+  return false;
+}
 } // namespace
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -295,6 +339,9 @@ void LocalDce::normalize_new_instances(cfg::ControlFlowGraph& cfg) {
   // Let's not do the transformation if there's a chance that it could leave
   // behind dangling new-instance instructions that LocalDce couldn't remove.
   if (!m_init_classes_with_side_effects) {
+    return;
+  }
+  if (!has_normalizable_new_instance(cfg)) {
     return;
   }
 
