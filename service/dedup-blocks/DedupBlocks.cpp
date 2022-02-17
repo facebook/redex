@@ -52,6 +52,7 @@
 #include "Liveness.h"
 #include "PassManager.h"
 #include "ReachingDefinitions.h"
+#include "RedexContext.h"
 #include "Show.h"
 #include "StlUtil.h"
 #include "Trace.h"

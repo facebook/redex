@@ -6,6 +6,8 @@
  */
 
 #pragma once
+
+#include "ConcurrentContainers.h"
 #include "DexUtil.h"
 
 class PassManager;

@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "ConcurrentContainers.h"
 #include "DexClass.h"
 #include "ProguardConfiguration.h"
 #include "ProguardMap.h"

@@ -11,6 +11,7 @@
 
 #include "DexPosition.h"
 #include "IROpcode.h"
+#include "RedexContext.h"
 #include "Show.h"
 #include "Transform.h"
 
@@ -37,6 +38,19 @@ DexProto* make_static_sig(DexMethod* meth) {
 
 std::string ClassCreator::show_cls(const DexClass* cls) { return show(cls); }
 std::string ClassCreator::show_type(const DexType* type) { return show(type); }
+
+DexClass* ClassCreator::create() {
+  always_assert_log(m_cls->m_self, "Self cannot be null in a DexClass");
+  if (m_cls->m_super_class == NULL) {
+    if (m_cls->m_self != type::java_lang_Object()) {
+      always_assert_log(m_cls->m_super_class, "No supertype found for %s",
+                        show_type(m_cls->m_self).c_str());
+    }
+  }
+  m_cls->m_interfaces = DexTypeList::make_type_list(std::move(m_interfaces));
+  g_redex->publish_class(m_cls);
+  return m_cls;
+}
 
 MethodBlock::MethodBlock(const IRList::iterator& iterator,
                          MethodCreator* creator)
@@ -714,8 +728,8 @@ DexMethod* MethodCreator::make_static_from(const DexString* name,
   redex_assert(!method::is_init(meth) && !method::is_clinit(meth));
   auto smeth = static_cast<DexMethod*>(
       DexMethod::make_method(target_cls->get_type(), name, proto));
-  smeth->make_concrete(
-      meth->get_access() | ACC_STATIC, meth->release_code(), false);
+  smeth->make_concrete(meth->get_access() | ACC_STATIC, meth->release_code(),
+                       false);
   target_cls->add_method(smeth);
   return smeth;
 }

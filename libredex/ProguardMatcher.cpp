@@ -23,6 +23,7 @@
 #include "ProguardRegex.h"
 #include "ProguardReporting.h"
 #include "ReachableClasses.h"
+#include "RedexContext.h"
 #include "Show.h"
 #include "StringBuilder.h"
 #include "Timer.h"

@@ -578,18 +578,7 @@ struct ClassCreator {
   /**
    * Create the DexClass. The creator should not be used after this call.
    */
-  DexClass* create() {
-    always_assert_log(m_cls->m_self, "Self cannot be null in a DexClass");
-    if (m_cls->m_super_class == NULL) {
-      if (m_cls->m_self != type::java_lang_Object()) {
-        always_assert_log(m_cls->m_super_class, "No supertype found for %s",
-                          show_type(m_cls->m_self).c_str());
-      }
-    }
-    m_cls->m_interfaces = DexTypeList::make_type_list(std::move(m_interfaces));
-    g_redex->publish_class(m_cls);
-    return m_cls;
-  }
+  DexClass* create();
 
  private:
   // To avoid "Show.h" in the header.

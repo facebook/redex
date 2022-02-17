@@ -24,6 +24,7 @@
 #include "Macros.h"
 #include "MethodProfiles.h"
 #include "PassManager.h"
+#include "RedexContext.h"
 #include "RedexMappedFile.h"
 #include "ScopedCFG.h"
 #include "Show.h"

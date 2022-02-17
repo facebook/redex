@@ -8,6 +8,7 @@
 #include "ConstantPropagationTransform.h"
 
 #include "ReachingDefinitions.h"
+#include "RedexContext.h"
 #include "ScopedMetrics.h"
 #include "SignedConstantDomain.h"
 #include "StlUtil.h"

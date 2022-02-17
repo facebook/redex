@@ -14,6 +14,7 @@
 #include "DexUtil.h"
 #include "Match.h"
 #include "MonitorCount.h"
+#include "RedexContext.h"
 #include "Resolver.h"
 #include "ScopedCFG.h"
 #include "Show.h"

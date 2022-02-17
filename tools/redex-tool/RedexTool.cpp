@@ -5,12 +5,14 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "RedexTool.h"
+
 #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "RedexTool.h"
+#include "RedexContext.h"
 #include "Tool.h"
 #include "ToolRegistry.h"
 

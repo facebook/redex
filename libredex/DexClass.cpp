@@ -21,6 +21,7 @@
 #include "DuplicateClasses.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
+#include "RedexContext.h"
 #include "Show.h"
 #include "StringBuilder.h"
 #include "Util.h"
@@ -122,6 +123,15 @@ std::string get_simple_deobf_name(const T* ref) {
 
 const std::string DexString::EMPTY;
 
+const DexString* DexString::make_string(std::string_view nstr) {
+  return g_redex->make_string(nstr);
+}
+
+// Return an existing DexString or nullptr if one does not exist.
+const DexString* DexString::get_string(std::string_view s) {
+  return g_redex->get_string(s);
+}
+
 uint32_t DexString::length() const {
   if (is_simple()) {
     return size();
@@ -178,6 +188,14 @@ DexTypeList* DexTypeList::replace_head(DexType* new_head) const {
   return make_type_list(std::move(new_list));
 }
 
+DexTypeList* DexTypeList::make_type_list(ContainerType&& p) {
+  return g_redex->make_type_list(std::move(p));
+}
+
+DexTypeList* DexTypeList::get_type_list(ContainerType&& p) {
+  return g_redex->get_type_list(std::move(p));
+}
+
 DexField::DexField(DexType* container, const DexString* name, DexType* type)
     : DexFieldRef(container, name, type),
       m_access(static_cast<DexAccessFlags>(0)),
@@ -202,6 +220,14 @@ DexField* DexFieldRef::make_concrete(DexAccessFlags access_flags,
   return that;
 }
 
+void DexFieldRef::change(const DexFieldSpec& ref, bool rename_on_collision) {
+  g_redex->mutate_field(this, ref, rename_on_collision);
+}
+
+void DexFieldRef::erase_field(DexFieldRef* f) {
+  return g_redex->erase_field(f);
+}
+
 DexFieldRef* DexField::get_field(
     const dex_member_refs::FieldDescriptorTokens& fdt) {
   auto cls = DexType::get_type(fdt.cls);
@@ -212,6 +238,18 @@ DexFieldRef* DexField::get_field(
 
 DexFieldRef* DexField::get_field(std::string_view full_descriptor) {
   return get_field(dex_member_refs::parse_field(full_descriptor));
+}
+
+DexFieldRef* DexField::make_field(const DexType* container,
+                                  const DexString* name,
+                                  const DexType* type) {
+  return g_redex->make_field(container, name, type);
+}
+
+DexFieldRef* DexField::get_field(const DexType* container,
+                                 const DexString* name,
+                                 const DexType* type) {
+  return g_redex->get_field(container, name, type);
 }
 
 DexFieldRef* DexField::make_field(std::string_view full_descriptor) {
@@ -723,6 +761,16 @@ size_t hash_value(const DexMethodSpec& r) {
   return seed;
 }
 
+DexMethodRef* DexMethod::make_method(const DexType* type,
+                                     const DexString* name,
+                                     const DexProto* proto) {
+  return g_redex->make_method(type, name, proto);
+}
+
+DexMethodRef* DexMethod::make_method(const DexMethodSpec& spec) {
+  return g_redex->make_method(spec.cls, spec.name, spec.proto);
+}
+
 DexMethod* DexMethod::make_method_from(DexMethod* that,
                                        DexType* target_cls,
                                        const DexString* name) {
@@ -750,6 +798,16 @@ DexMethod* DexMethod::make_method_from(DexMethod* that,
   }
 
   return m;
+}
+
+DexMethodRef* DexMethod::get_method(const DexType* type,
+                                    const DexString* name,
+                                    const DexProto* proto) {
+  return g_redex->get_method(type, name, proto);
+}
+
+DexMethodRef* DexMethod::get_method(const DexMethodSpec& spec) {
+  return g_redex->get_method(spec.cls, spec.name, spec.proto);
 }
 
 DexMethod* DexMethod::make_full_method_from(DexMethod* that,
@@ -967,6 +1025,10 @@ DexMethod* DexMethodRef::make_concrete(DexAccessFlags access,
 
 DexMethod* DexMethodRef::make_concrete(DexAccessFlags access, bool is_virtual) {
   return make_concrete(access, std::unique_ptr<IRCode>(nullptr), is_virtual);
+}
+
+void DexMethodRef::change(const DexMethodSpec& ref, bool rename_on_collision) {
+  g_redex->mutate_method(this, ref, rename_on_collision);
 }
 
 void DexMethod::make_non_concrete() {
@@ -1467,9 +1529,19 @@ static const DexString* make_shorty(const DexType* rtype,
   return DexString::make_string(s);
 }
 
+DexProto* DexProto::make_proto(const DexType* rtype,
+                               const DexTypeList* args,
+                               const DexString* shorty) {
+  return g_redex->make_proto(rtype, args, shorty);
+}
+
 DexProto* DexProto::make_proto(const DexType* rtype, const DexTypeList* args) {
   auto shorty = make_shorty(rtype, args);
   return DexProto::make_proto(rtype, args, shorty);
+}
+
+DexProto* DexProto::get_proto(const DexType* rtype, const DexTypeList* args) {
+  return g_redex->get_proto(rtype, args);
 }
 
 template <typename C>
@@ -2009,6 +2081,18 @@ uint32_t DexCode::size() const {
   return size;
 }
 
+DexType* DexType::make_type(const DexString* dstring) {
+  return g_redex->make_type(dstring);
+}
+
+DexType* DexType::get_type(const DexString* dstring) {
+  return g_redex->get_type(dstring);
+}
+
+void DexType::set_name(const DexString* new_name) {
+  g_redex->set_type_name(this, new_name);
+}
+
 DexProto* DexType::get_non_overlapping_proto(const DexString* method_name,
                                              DexProto* orig_proto) {
   auto methodref_in_context =
@@ -2125,3 +2209,5 @@ void DexMethodRef::erase_method(DexMethodRef* mref) {
     }
   }
 }
+
+DexClass* type_class(const DexType* t) { return g_redex->type_class(t); }

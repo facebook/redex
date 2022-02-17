@@ -11,6 +11,7 @@
 #include "DexClass.h"
 #include "DexPosition.h"
 #include "DexUtil.h"
+#include "RedexContext.h"
 #include "Show.h"
 #include "Trace.h"
 

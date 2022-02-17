@@ -9,6 +9,7 @@
 
 #include <boost/optional/optional_io.hpp>
 
+#include "ConcurrentContainers.h"
 #include "DexTypeEnvironment.h"
 #include "HashedAbstractPartition.h"
 #include "InstructionAnalyzer.h"

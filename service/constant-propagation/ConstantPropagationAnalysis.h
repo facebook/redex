@@ -11,6 +11,7 @@
 #include <unordered_set>
 #include <utility>
 
+#include "ConcurrentContainers.h"
 #include "ConstantEnvironment.h"
 #include "IRCode.h"
 #include "InstructionAnalyzer.h"

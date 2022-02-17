@@ -101,6 +101,7 @@
 #include "PartialCandidates.h"
 #include "PassManager.h"
 #include "ReachingInitializeds.h"
+#include "RedexContext.h"
 #include "RefChecker.h"
 #include "Resolver.h"
 #include "Show.h"

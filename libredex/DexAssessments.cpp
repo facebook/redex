@@ -15,6 +15,7 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IROpcode.h"
+#include "RedexContext.h"
 #include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"

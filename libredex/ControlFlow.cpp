@@ -19,6 +19,7 @@
 #include "DexUtil.h"
 #include "GraphUtil.h"
 #include "IRList.h"
+#include "RedexContext.h"
 #include "Show.h"
 #include "SourceBlocks.h"
 #include "Trace.h"

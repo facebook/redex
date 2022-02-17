@@ -17,6 +17,7 @@
 #include "Match.h"
 #include "MethodReference.h"
 #include "PassManager.h"
+#include "RedexContext.h"
 #include "Show.h"
 #include "Shrinker.h"
 #include "ShrinkerConfig.h"

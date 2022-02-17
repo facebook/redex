@@ -21,8 +21,8 @@
 #include "DexAccess.h"
 #include "DexDefs.h"
 #include "DexEncoding.h"
+#include "DexMemberRefs.h"
 #include "NoDefaultComparator.h"
-#include "RedexContext.h"
 #include "ReferencedState.h"
 
 /*
@@ -55,6 +55,7 @@
 
 class DexAnnotationDirectory;
 class DexAnnotationSet;
+class DexCallSite;
 class DexClass;
 class DexDebugInstruction;
 class DexEncodedValue;
@@ -62,8 +63,10 @@ class DexEncodedValueArray;
 class DexField;
 class DexIdx;
 class DexInstruction;
+class DexMethodHandle;
 class DexOutputIdx;
 struct DexPosition;
+class DexProto;
 class DexString;
 class DexType;
 class PositionMapper;
@@ -102,14 +105,10 @@ class DexString {
 
   // If the DexString exists, return it, otherwise create it and return it.
   // See also get_string()
-  static const DexString* make_string(std::string_view nstr) {
-    return g_redex->make_string(nstr);
-  }
+  static const DexString* make_string(std::string_view nstr);
 
   // Return an existing DexString or nullptr if one does not exist.
-  static const DexString* get_string(std::string_view s) {
-    return g_redex->get_string(s);
-  }
+  static const DexString* get_string(std::string_view s);
 
   static const std::string EMPTY;
 
@@ -192,9 +191,7 @@ class DexType {
 
   // If the DexType exists, return it, otherwise create it and return it.
   // See also get_type()
-  static DexType* make_type(const DexString* dstring) {
-    return g_redex->make_type(dstring);
-  }
+  static DexType* make_type(const DexString* dstring);
 
   static DexType* make_type(std::string_view str) {
     return make_type(DexString::make_string(str));
@@ -211,18 +208,14 @@ class DexType {
   }
 
   // Return an existing DexType or nullptr if one does not exist.
-  static DexType* get_type(const DexString* dstring) {
-    return g_redex->get_type(dstring);
-  }
+  static DexType* get_type(const DexString* dstring);
 
   static DexType* get_type(std::string_view str) {
     return get_type(DexString::get_string(str));
   }
 
  public:
-  void set_name(const DexString* new_name) {
-    g_redex->set_type_name(this, new_name);
-  }
+  void set_name(const DexString* new_name);
 
   const DexString* get_name() const { return m_name; }
   const char* c_str() const { return get_name()->c_str(); }
@@ -294,15 +287,13 @@ class DexFieldRef {
   void gather_strings_shallow(
       std::unordered_set<const DexString*>& lstring) const;
 
-  void change(const DexFieldSpec& ref, bool rename_on_collision = false) {
-    g_redex->mutate_field(this, ref, rename_on_collision);
-  }
+  void change(const DexFieldSpec& ref, bool rename_on_collision = false);
 
   DexField* make_concrete(DexAccessFlags access_flags);
   DexField* make_concrete(DexAccessFlags access_flags,
                           std::unique_ptr<DexEncodedValue> v);
 
-  static void erase_field(DexFieldRef* f) { return g_redex->erase_field(f); }
+  static void erase_field(DexFieldRef* f);
 
   // This method frees the given `DexFieldRed` - different from `erase_field`,
   // which removes the field from the `RedexContext`.
@@ -341,16 +332,12 @@ class DexField : public DexFieldRef {
   // See also get_field()
   static DexFieldRef* make_field(const DexType* container,
                                  const DexString* name,
-                                 const DexType* type) {
-    return g_redex->make_field(container, name, type);
-  }
+                                 const DexType* type);
 
   // Return an existing DexField or nullptr if one does not exist.
   static DexFieldRef* get_field(const DexType* container,
                                 const DexString* name,
-                                const DexType* type) {
-    return g_redex->get_field(container, name, type);
-  }
+                                const DexType* type);
 
   static DexFieldRef* get_field(const dex_member_refs::FieldDescriptorTokens&);
 
@@ -477,14 +464,10 @@ class DexTypeList {
 
   // If the DexTypeList exists, return it, otherwise create it and return it.
   // See also get_type_list()
-  static DexTypeList* make_type_list(ContainerType&& p) {
-    return g_redex->make_type_list(std::move(p));
-  }
+  static DexTypeList* make_type_list(ContainerType&& p);
 
   // Return an existing DexTypeList or nullptr if one does not exist.
-  static DexTypeList* get_type_list(ContainerType&& p) {
-    return g_redex->get_type_list(std::move(p));
-  }
+  static DexTypeList* get_type_list(ContainerType&& p);
 
   /**
    * Returns size of the encoded typelist in bytes, input
@@ -569,16 +552,12 @@ class DexProto {
   // See also get_proto()
   static DexProto* make_proto(const DexType* rtype,
                               const DexTypeList* args,
-                              const DexString* shorty) {
-    return g_redex->make_proto(rtype, args, shorty);
-  }
+                              const DexString* shorty);
 
   static DexProto* make_proto(const DexType* rtype, const DexTypeList* args);
 
   // Return an existing DexProto or nullptr if one does not exist.
-  static DexProto* get_proto(const DexType* rtype, const DexTypeList* args) {
-    return g_redex->get_proto(rtype, args);
-  }
+  static DexProto* get_proto(const DexType* rtype, const DexTypeList* args);
 
  public:
   DexType* get_rtype() const { return m_rtype; }
@@ -837,9 +816,7 @@ class DexMethodRef {
   void gather_strings_shallow(
       std::unordered_set<const DexString*>& lstring) const;
 
-  void change(const DexMethodSpec& ref, bool rename_on_collision) {
-    g_redex->mutate_method(this, ref, rename_on_collision);
-  }
+  void change(const DexMethodSpec& ref, bool rename_on_collision);
 
   DexMethod* make_concrete(DexAccessFlags,
                            std::unique_ptr<DexCode>,
@@ -893,13 +870,9 @@ class DexMethod : public DexMethodRef {
   // See also get_method()
   static DexMethodRef* make_method(const DexType* type,
                                    const DexString* name,
-                                   const DexProto* proto) {
-    return g_redex->make_method(type, name, proto);
-  }
+                                   const DexProto* proto);
 
-  static DexMethodRef* make_method(const DexMethodSpec& spec) {
-    return g_redex->make_method(spec.cls, spec.name, spec.proto);
-  }
+  static DexMethodRef* make_method(const DexMethodSpec& spec);
 
   /**
    * Create a copy of method `that`. This excludes `rstate`.
@@ -961,13 +934,9 @@ class DexMethod : public DexMethodRef {
   // Return an existing DexMethod or nullptr if one does not exist.
   static DexMethodRef* get_method(const DexType* type,
                                   const DexString* name,
-                                  const DexProto* proto) {
-    return g_redex->get_method(type, name, proto);
-  }
+                                  const DexProto* proto);
 
-  static DexMethodRef* get_method(const DexMethodSpec& spec) {
-    return g_redex->get_method(spec.cls, spec.name, spec.proto);
-  }
+  static DexMethodRef* get_method(const DexMethodSpec& spec);
 
   static const DexString* get_unique_name(DexType* type,
                                           const DexString* name,
@@ -1368,7 +1337,7 @@ struct dexmethods_comparator {
  * Return the DexClass that represents the DexType in input or nullptr if
  * no such DexClass exists.
  */
-inline DexClass* type_class(const DexType* t) { return g_redex->type_class(t); }
+DexClass* type_class(const DexType* t);
 
 /**
  * Return the DexClass that represents an internal DexType or nullptr if

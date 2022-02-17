@@ -10,6 +10,7 @@
 #include <set>
 #include <string>
 
+#include "ConcurrentContainers.h"
 #include "DexClass.h"
 #include "Pass.h"
 #include "ReflectionAnalysis.h"
