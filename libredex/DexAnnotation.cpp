@@ -254,14 +254,15 @@ void DexEncodedValue::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
   case DEVT_SHORT:
   case DEVT_INT:
   case DEVT_LONG:
-    type_encoder_signext(encdata, m_evtype, m_value);
+    type_encoder_signext(encdata, m_evtype, m_val.m_value);
     return;
   case DEVT_FLOAT:
   case DEVT_DOUBLE:
-    type_encoder_fp(encdata, m_evtype, m_value);
+    type_encoder_fp(encdata, m_evtype, m_val.m_value);
     return;
   default:
-    type_encoder(encdata, m_evtype, m_value);
+    // TOOD: Should this really be here?
+    type_encoder(encdata, m_evtype, as_value());
     return;
   }
 }
@@ -282,7 +283,7 @@ void DexEncodedValue::vencode(DexOutputIdx* dodx, std::vector<uint8_t>& bytes) {
 
 void DexEncodedValueBit::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
   uint8_t devtb = DEVT_HDR_TYPE(m_evtype);
-  if (m_value) {
+  if (m_val.m_value) {
     devtb |= TO_DEVT_HDR_ARG(1);
   }
   *encdata++ = devtb;
@@ -397,7 +398,7 @@ bool DexEncodedValue::is_zero() const {
   case DEVT_FLOAT:
   case DEVT_DOUBLE:
   case DEVT_BOOLEAN:
-    return m_value == 0;
+    return m_val.m_value == 0;
   case DEVT_NULL:
     return true;
   default:
@@ -873,7 +874,7 @@ std::string show_deobfuscated(const EncodedAnnotations& annos) {
 
 std::string DexEncodedValue::show() const {
   std::ostringstream ss;
-  ss << m_value;
+  ss << as_value();
   return ss.str();
 }
 
