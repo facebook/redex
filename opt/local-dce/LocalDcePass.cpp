@@ -8,7 +8,6 @@
 #include "LocalDcePass.h"
 
 #include <array>
-#include <iostream>
 #include <unordered_set>
 #include <vector>
 

@@ -7,7 +7,6 @@
 
 #include <atomic>
 #include <fstream>
-#include <iostream>
 
 #include "RemoveUnusedFields.h"
 

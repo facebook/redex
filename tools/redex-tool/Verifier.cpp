@@ -13,7 +13,6 @@
 #include "Walkers.h"
 
 #include <algorithm>
-#include <iostream>
 #include <map>
 #include <string>
 #include <unordered_map>

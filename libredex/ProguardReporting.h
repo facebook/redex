@@ -7,10 +7,11 @@
 
 #pragma once
 
+#include <iosfwd>
+
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "ProguardMap.h"
-#include <iostream>
 
 namespace redex {
 

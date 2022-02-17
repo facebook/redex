@@ -9,7 +9,7 @@
 
 #include <cstddef>
 #include <functional>
-#include <iostream>
+#include <ostream>
 #include <sstream>
 #include <utility>
 

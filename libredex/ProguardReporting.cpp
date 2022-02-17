@@ -6,6 +6,10 @@
  */
 
 #include "ProguardReporting.h"
+
+#include <iostream>
+#include <ostream>
+
 #include "DexClass.h"
 #include "ReachableClasses.h"
 

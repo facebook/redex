@@ -12,6 +12,7 @@
 #include <cinttypes>
 #include <cstdio>
 #include <cstdlib>
+#include <iostream>
 #include <limits>
 #include <list>
 #include <thread>

@@ -8,9 +8,9 @@
 #include "RedexContext.h"
 
 #include <exception>
-#include <iostream>
 #include <mutex>
 #include <regex>
+#include <sstream>
 #include <unordered_set>
 
 #include "Debug.h"

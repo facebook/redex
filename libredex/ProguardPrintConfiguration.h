@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <iosfwd>
+
 #include "DexUtil.h"
 #include "ProguardConfiguration.h"
 

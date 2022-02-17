@@ -9,7 +9,6 @@
 #include <cstdint>
 #include <cstdlib>
 #include <gtest/gtest.h>
-#include <iostream>
 #include <string>
 
 #include "DexClass.h"

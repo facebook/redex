@@ -6,7 +6,7 @@
  */
 
 #include <fstream>
-#include <iostream>
+#include <sstream>
 
 #include "DexClass.h"
 #include "DexPosition.h"

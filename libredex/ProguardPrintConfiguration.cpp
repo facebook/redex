@@ -8,7 +8,7 @@
 #include "ProguardPrintConfiguration.h"
 #include "ProguardReporting.h"
 
-#include <iostream>
+#include <ostream>
 #include <sstream>
 
 std::string show_keep_style(const keep_rules::KeepSpec& keep_rule) {

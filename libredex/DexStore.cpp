@@ -6,7 +6,8 @@
  */
 
 #include <fstream>
-#include <iostream>
+#include <sstream>
+
 #include <json/json.h>
 
 #include "CppUtil.h"

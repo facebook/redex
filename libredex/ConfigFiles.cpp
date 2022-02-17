@@ -9,7 +9,6 @@
 
 #include <boost/filesystem.hpp>
 #include <fstream>
-#include <iostream>
 #include <json/json.h>
 #include <string>
 #include <vector>

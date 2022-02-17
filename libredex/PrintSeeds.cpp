@@ -7,6 +7,9 @@
 
 #include "PrintSeeds.h"
 
+#include <iostream>
+#include <ostream>
+
 #include "DexUtil.h"
 #include "ProguardConfiguration.h"
 #include "ProguardMap.h"
