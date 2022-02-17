@@ -1507,27 +1507,49 @@ cfg::InstructionIterator ControlFlowGraph::primary_instruction_of_move_result(
   }
 }
 
-cfg::InstructionIterator ControlFlowGraph::move_result_of(
+cfg::InstructionIterator ControlFlowGraph::next_following_gotos(
     const cfg::InstructionIterator& it) {
-  auto next_insn = std::next(it);
-  auto end = cfg::InstructionIterable(*this).end();
-  if (next_insn != end && it.block() == next_insn.block()) {
-    // The easy case where the move result is in the same block
-    auto op = next_insn->insn->opcode();
-    if (opcode::is_move_result_any(op)) {
-      always_assert(primary_instruction_of_move_result(next_insn) == it);
-      return next_insn;
+  auto next_it = std::next(it);
+  if (!next_it.is_end() && next_it.block() == it.block()) {
+    return next_it;
+  }
+  // We reached the end of the current block; let's look at the immediate
+  // goto-target.
+  auto block = it.block()->goes_to();
+  if (!block) {
+    return InstructionIterable(*this).end();
+  }
+  auto first_insn_it = block->get_first_insn();
+  if (first_insn_it != block->end()) {
+    return block->to_cfg_instruction_iterator(first_insn_it);
+  }
+  // The immediate goto-target block was empty, so we have to continue our
+  // chase. We have to check for non-terminating self-loops while doing that.
+  std::unordered_set<cfg::Block*> visited{block};
+  while (true) {
+    block = block->goes_to();
+    if (!block || !visited.insert(block).second) {
+      // non-terminating empty self-loop
+      return InstructionIterable(*this).end();
     }
-  } else {
-    auto next_block = it.block()->goes_to();
-    if (next_block != nullptr && next_block->starts_with_move_result()) {
-      next_insn =
-          next_block->to_cfg_instruction_iterator(next_block->get_first_insn());
-      always_assert(primary_instruction_of_move_result(next_insn) == it);
-      return next_insn;
+    first_insn_it = block->get_first_insn();
+    if (first_insn_it != block->end()) {
+      return block->to_cfg_instruction_iterator(first_insn_it);
     }
   }
-  return end;
+}
+
+cfg::InstructionIterator ControlFlowGraph::move_result_of(
+    const cfg::InstructionIterator& it) {
+  auto next_it = next_following_gotos(it);
+  if (next_it.is_end()) {
+    return next_it;
+  }
+  if (opcode::is_move_result_any(next_it->insn->opcode())) {
+    always_assert(primary_instruction_of_move_result(next_it) == it);
+    return next_it;
+  }
+  return cfg::InstructionIterable(*this).end();
 }
 
 /*

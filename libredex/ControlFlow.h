@@ -928,6 +928,14 @@ class ControlFlowGraph {
   cfg::InstructionIterator move_result_of(const cfg::InstructionIterator& it);
 
   /*
+   * Gets the next instruction, following gotos if the end of blocks are
+   * reached. In case of an infinite loop, `InstructionIterable(*this).end()` is
+   * returned.
+   */
+  cfg::InstructionIterator next_following_gotos(
+      const cfg::InstructionIterator& it);
+
+  /*
    * clear and fill `new_cfg` with a copy of `this`. Copies of all instructions
    * will be made, and are owned by the caller. Consider calling
    * set_insn_ownership on the new cfg to have it own the instructions.
