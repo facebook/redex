@@ -53,7 +53,8 @@ class InterDex {
            const XStoreRefs* xstore_refs,
            int min_sdk,
            bool sort_remaining_classes,
-           std::vector<std::string> methods_for_canary_clinit_reference)
+           std::vector<std::string> methods_for_canary_clinit_reference,
+           bool transitively_close_interdex_order)
       : m_dexen(dexen),
         m_asset_manager(asset_manager),
         m_conf(conf),
@@ -76,7 +77,8 @@ class InterDex {
         m_xstore_refs(xstore_refs),
         m_sort_remaining_classes(sort_remaining_classes),
         m_methods_for_canary_clinit_reference(
-            std::move(methods_for_canary_clinit_reference)) {
+            std::move(methods_for_canary_clinit_reference)),
+        m_transitively_close_interdex_order(transitively_close_interdex_order) {
     m_dexes_structure.set_linear_alloc_limit(linear_alloc_limit);
     m_dexes_structure.set_reserve_frefs(reserve_frefs);
     m_dexes_structure.set_reserve_trefs(reserve_trefs);
@@ -126,6 +128,14 @@ class InterDex {
 
   size_t get_current_classes_when_emitting_remaining() const {
     return m_current_classes_when_emitting_remaining;
+  }
+
+  size_t get_transitive_closure_added() const {
+    return m_transitive_closure_added;
+  }
+
+  size_t get_transitive_closure_moved() const {
+    return m_transitive_closure_moved;
   }
 
  private:
@@ -213,6 +223,10 @@ class InterDex {
   bool m_sort_remaining_classes;
   size_t m_current_classes_when_emitting_remaining{0};
   std::vector<std::string> m_methods_for_canary_clinit_reference;
+
+  size_t m_transitive_closure_added{0};
+  size_t m_transitive_closure_moved{0};
+  const bool m_transitively_close_interdex_order;
 };
 
 } // namespace interdex

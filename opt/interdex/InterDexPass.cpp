@@ -113,6 +113,9 @@ void InterDexPass::bind_config() {
        "If set, canary classes will have a clinit generated which call the "
        "specified methods, if they exist");
 
+  bind("transitively_close_interdex_order", m_transitively_close_interdex_order,
+       m_transitively_close_interdex_order);
+
   trait(Traits::Pass::unique, true);
 }
 
@@ -140,7 +143,8 @@ void InterDexPass::run_pass(
                     m_cross_dex_relocator_config, refs_info.frefs,
                     refs_info.trefs, refs_info.mrefs, &xstore_refs,
                     mgr.get_redex_options().min_sdk, m_sort_remaining_classes,
-                    m_methods_for_canary_clinit_reference);
+                    m_methods_for_canary_clinit_reference,
+                    m_transitively_close_interdex_order);
 
   if (m_expect_order_list) {
     always_assert_log(
@@ -160,6 +164,9 @@ void InterDexPass::run_pass(
   mgr.set_metric(METRIC_COLD_START_SET_DEX_COUNT,
                  interdex.get_num_cold_start_set_dexes());
   mgr.set_metric(METRIC_SCROLL_SET_DEX_COUNT, interdex.get_num_scroll_dexes());
+
+  mgr.set_metric("transitive_added", interdex.get_transitive_closure_added());
+  mgr.set_metric("transitive_moved", interdex.get_transitive_closure_moved());
 
   plugins.clear();
 
@@ -224,7 +231,8 @@ void InterDexPass::run_pass_on_nonroot_store(const Scope& original_scope,
       /* fill_last_coldstart_dex=*/false, cross_dex_refs_config,
       cross_dex_relocator_config, refs_info.frefs, refs_info.trefs,
       refs_info.mrefs, &xstore_refs, mgr.get_redex_options().min_sdk,
-      m_sort_remaining_classes, m_methods_for_canary_clinit_reference);
+      m_sort_remaining_classes, m_methods_for_canary_clinit_reference,
+      m_transitively_close_interdex_order);
 
   interdex.run_on_nonroot_store();
 

@@ -15,6 +15,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "CppUtil.h"
 #include "Creators.h"
 #include "Debug.h"
 #include "DexAsm.h"
@@ -622,6 +623,17 @@ void InterDex::load_interdex_types() {
 
   std::unordered_set<DexClass*> classes(m_scope.begin(), m_scope.end());
 
+  std::unordered_set<DexType*> all_set{};
+
+  if (m_transitively_close_interdex_order) {
+    for (auto* cls : m_dexen[0]) {
+      all_set.insert(cls->get_type()); // Ignore primary.
+    }
+  }
+
+  std::unordered_set<DexType*> moved_or_double{};
+  std::unordered_set<DexType*> transitive_added{};
+
   for (const auto& entry : interdexorder) {
     DexType* type = DexType::get_type(entry.c_str());
     if (!type) {
@@ -671,6 +683,41 @@ void InterDex::load_interdex_types() {
         // Skipping generated classes that should end up in a specific group.
         continue;
       }
+
+      if (m_transitively_close_interdex_order) {
+        if (all_set.count(type) != 0) {
+          // Moved earlier.
+          moved_or_double.insert(type);
+          continue;
+        }
+
+        // Transitive closure.
+        self_recursive_fn(
+            [&](const auto& self, DexType* cur, bool add_self) {
+              DexClass* cur_cls = type_class(cur);
+              if (!cur_cls || classes.count(cur_cls) == 0 ||
+                  all_set.count(cur) != 0) {
+                return;
+              }
+              all_set.insert(cur);
+              if (add_self) {
+                transitive_added.insert(cur);
+              }
+
+              // Superclass first.
+              self(self, cur_cls->get_super_class(), true);
+              // Then interfaces.
+              for (auto* intf : *cur_cls->get_interfaces()) {
+                self(self, intf, true);
+              }
+
+              // Then self.
+              if (add_self) {
+                m_interdex_types.emplace_back(cur);
+              }
+            },
+            type, false);
+      }
     }
 
     m_interdex_types.emplace_back(type);
@@ -681,8 +728,25 @@ void InterDex::load_interdex_types() {
                     "Too many interdex subgroups!\n");
   if (interdex_group_classes.size() > curr_interdex_group) {
     for (DexType* type : interdex_group_classes.at(curr_interdex_group)) {
-      m_interdex_types.push_back(type);
+      // TODO: Does the above need to filter? Do we need to transitively close
+      //       here, too?
+      if (!m_transitively_close_interdex_order || all_set.count(type) == 0) {
+        m_interdex_types.push_back(type);
+      }
     }
+  }
+
+  if (m_transitively_close_interdex_order) {
+    std::unordered_set<DexType*> transitive_moved;
+    for (auto* t : moved_or_double) {
+      if (transitive_added.count(t) != 0) {
+        transitive_moved.insert(t);
+        transitive_added.erase(t);
+      }
+    }
+
+    m_transitive_closure_added = transitive_added.size();
+    m_transitive_closure_moved = transitive_moved.size();
   }
 }
 
