@@ -6,6 +6,8 @@
  */
 
 #include "DexLoader.h"
+
+#include "AggregateException.h"
 #include "DexAccess.h"
 #include "DexCallSite.h"
 #include "DexDefs.h"

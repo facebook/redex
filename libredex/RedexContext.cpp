@@ -509,29 +509,6 @@ DexClass* RedexContext::type_class(const DexType* t) {
   return it != m_type_to_class.end() ? it->second : nullptr;
 }
 
-void run_rethrow_first_aggregate(const std::function<void()>& f) {
-  try {
-    f();
-  } catch (const aggregate_exception& ae) {
-    if (ae.m_exceptions.size() > 1) {
-      // We cannot modify exceptions. Log the other messages to stderr.
-      std::cerr << "Too many exceptions. Other exceptions: " << std::endl;
-      for (auto it = ae.m_exceptions.begin() + 1; it != ae.m_exceptions.end();
-           ++it) {
-        try {
-          std::rethrow_exception(*it);
-        } catch (const std::exception& e) {
-          std::cerr << " " << e.what() << std::endl;
-        } catch (...) {
-          std::cerr << " (Not a std::exception)" << std::endl;
-        }
-      }
-    }
-    // Rethrow the first one.
-    std::rethrow_exception(ae.m_exceptions.at(0));
-  }
-}
-
 void RedexContext::set_field_value(DexField* field,
                                    keep_rules::AssumeReturnValue& val) {
   field_values.emplace(field,

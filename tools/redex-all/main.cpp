@@ -36,6 +36,7 @@
 #include <json/json.h>
 
 #include "ABExperimentContext.h"
+#include "AggregateException.h"
 #include "CommandProfiling.h"
 #include "CommentFilter.h"
 #include "ControlFlow.h" // To set DEBUG.
