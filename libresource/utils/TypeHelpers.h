@@ -22,6 +22,8 @@
 #include <string.h>
 #include <sys/types.h>
 
+#include <type_traits>
+
 // ---------------------------------------------------------------------------
 
 namespace android {
@@ -149,16 +151,21 @@ void destroy_type(TYPE* p, size_t n) {
     }
 }
 
-template<typename TYPE> inline
-void copy_type(TYPE* d, const TYPE* s, size_t n) {
-    if (!traits<TYPE>::has_trivial_copy) {
-        while (n > 0) {
-            n--;
-            new(d) TYPE(*s);
-            d++, s++;
-        }
-    } else {
-        memcpy(d,s,n*sizeof(TYPE));
+template<typename TYPE>
+typename std::enable_if<traits<TYPE>::has_trivial_copy>::type
+inline
+copy_type(TYPE* d, const TYPE* s, size_t n) {
+    memcpy(d,s,n*sizeof(TYPE));
+}
+
+template<typename TYPE>
+typename std::enable_if<!traits<TYPE>::has_trivial_copy>::type
+inline
+copy_type(TYPE* d, const TYPE* s, size_t n) {
+    while (n > 0) {
+        n--;
+        new(d) TYPE(*s);
+        d++, s++;
     }
 }
 
