@@ -10,7 +10,7 @@
 #include <bitset>
 #include <cstdint>
 #include <initializer_list>
-#include <ostream>
+#include <iosfwd>
 #include <unordered_map>
 #include <utility>
 #include <vector>

@@ -8,6 +8,7 @@
 #include "ReflectionAnalysis.h"
 
 #include <iomanip>
+#include <ostream>
 #include <unordered_map>
 
 #include <boost/optional.hpp>

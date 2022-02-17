@@ -7,8 +7,8 @@
 
 #pragma once
 
+#include <iosfwd>
 #include <memory>
-#include <ostream>
 #include <unordered_map>
 #include <vector>
 

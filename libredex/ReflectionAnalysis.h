@@ -7,8 +7,8 @@
 
 #pragma once
 
+#include <iosfwd>
 #include <memory>
-#include <ostream>
 
 #include <boost/optional.hpp>
 #include <utility>

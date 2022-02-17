@@ -7,6 +7,8 @@
 
 #include "LocalPointersAnalysis.h"
 
+#include <ostream>
+
 #include "DexUtil.h"
 #include "PatriciaTreeSet.h"
 #include "Resolver.h"

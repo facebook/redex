@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <ostream>
+#include <iosfwd>
 
 #include <boost/optional.hpp>
 
