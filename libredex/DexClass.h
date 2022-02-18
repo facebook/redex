@@ -467,7 +467,7 @@ class DexTypeList {
   static DexTypeList* make_type_list(ContainerType&& p);
 
   // Return an existing DexTypeList or nullptr if one does not exist.
-  static DexTypeList* get_type_list(ContainerType&& p);
+  static DexTypeList* get_type_list(const ContainerType& p);
 
   /**
    * Returns size of the encoded typelist in bytes, input

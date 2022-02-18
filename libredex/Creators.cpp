@@ -41,7 +41,7 @@ std::string ClassCreator::show_type(const DexType* type) { return show(type); }
 
 DexClass* ClassCreator::create() {
   always_assert_log(m_cls->m_self, "Self cannot be null in a DexClass");
-  if (m_cls->m_super_class == NULL) {
+  if (m_cls->m_super_class == nullptr) {
     if (m_cls->m_self != type::java_lang_Object()) {
       always_assert_log(m_cls->m_super_class, "No supertype found for %s",
                         show_type(m_cls->m_self).c_str());

@@ -192,8 +192,8 @@ DexTypeList* DexTypeList::make_type_list(ContainerType&& p) {
   return g_redex->make_type_list(std::move(p));
 }
 
-DexTypeList* DexTypeList::get_type_list(ContainerType&& p) {
-  return g_redex->get_type_list(std::move(p));
+DexTypeList* DexTypeList::get_type_list(const ContainerType& p) {
+  return g_redex->get_type_list(p);
 }
 
 DexField::DexField(DexType* container, const DexString* name, DexType* type)
@@ -826,8 +826,14 @@ DexMethodRef* DexMethod::get_method(
   for (auto& arg_str : mdt.args) {
     args.push_back(DexType::get_type(arg_str));
   }
-  auto dtl = DexTypeList::get_type_list(std::move(args));
+  auto dtl = DexTypeList::get_type_list(args);
+  if (dtl == nullptr) {
+    return nullptr;
+  }
   auto rtype = DexType::get_type(mdt.rtype);
+  if (rtype == nullptr) {
+    return nullptr;
+  }
   return DexMethod::get_method(cls, name, DexProto::get_proto(rtype, dtl));
 }
 
