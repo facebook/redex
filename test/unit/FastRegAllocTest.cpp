@@ -9,7 +9,9 @@
 #include "LinearScan.h"
 #include "RedexTest.h"
 
-struct FastRegAllocTest : public RedexTest {};
+struct FastRegAllocTest : public RedexTest {
+  FastRegAllocTest() { g_redex->instrument_mode = false; }
+};
 
 /*
  * Check function: allocate() in class: LinearScanAllocator
@@ -307,6 +309,46 @@ TEST_F(FastRegAllocTest, ParamAlloc) {
       (move-result-pseudo-object v0)
       (invoke-direct (v0 v4 v3 v2) "LAppStateCollector;.<init>:(Ljava/io/File;LSessionManager;LForegroundEntityMapper;)V")
       (return-object v0)
+    )
+)");
+  EXPECT_CODE_EQ(method->get_code(), expected_code.get());
+}
+
+TEST_F(FastRegAllocTest, EmptyBlocks) {
+  // In "instrument_mode", empty blocks with source-block information are not
+  // always merged into with their successor blocks, leaving behind blocks with
+  // no instructions that need to be dealt with properly
+  g_redex->instrument_mode = true;
+  auto method = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.bar:()Z"
+      (
+        (const v999 0)
+        (switch v999 (:empty_block :successor_block))
+
+        (:empty_block 1)
+        (.src_block "LFoo;.bar:()V" 0)
+
+        (:successor_block 2)
+        (return v999)
+      )
+    )
+)");
+
+  {
+    fastregalloc::LinearScanAllocator allocator(method);
+    allocator.allocate();
+  }
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+        (const v0 0)
+        (switch v0 (:empty_block :successor_block))
+
+        (:empty_block 1)
+        (.src_block "LFoo;.bar:()V" 0)
+
+        (:successor_block 2)
+        (return v0)
     )
 )");
   EXPECT_CODE_EQ(method->get_code(), expected_code.get());

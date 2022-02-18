@@ -56,7 +56,7 @@ LinearScanAllocator::LinearScanAllocator(
   TRACE(FREG, 9, "[Original Code]\n%s", SHOW(code));
 
   live_range::renumber_registers(code, /* width_aware */ true);
-  m_live_intervals = init_live_intervals(code, &m_insns);
+  m_live_intervals = init_live_intervals(code, &m_live_interval_points);
   init_vreg_occurences();
   TRACE_live_intervals(m_live_intervals);
 }
@@ -116,7 +116,7 @@ reg_t LinearScanAllocator::allocate_register(reg_t for_vreg,
                                              uint32_t end_point) {
   bool wide = m_wide_vregs.count(for_vreg);
   if (!m_this_vreg || *m_this_vreg != for_vreg) {
-    auto shape = IRInstructionShape::get(m_insns.at(end_point));
+    auto shape = IRInstructionShape::get(m_live_interval_points.at(end_point));
     auto& free_regs = m_free_regs[shape];
     for (auto it = free_regs.begin(); it != free_regs.end(); it++) {
       auto reg = *it;
@@ -147,8 +147,8 @@ void LinearScanAllocator::expire_old_intervals(uint32_t end_point) {
     m_active_intervals.pop();
     if (!m_this_vreg || *m_this_vreg != interval_to_free.vreg) {
       reg_t freed_reg = interval_to_free.reg.value();
-      auto shape =
-          IRInstructionShape::get(m_insns.at(interval_to_free.end_point));
+      auto shape = IRInstructionShape::get(
+          m_live_interval_points.at(interval_to_free.end_point));
       auto& free_regs = m_free_regs[shape];
       bool success = free_regs.insert(freed_reg).second;
       always_assert(success);

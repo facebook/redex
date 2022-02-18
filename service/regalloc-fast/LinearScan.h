@@ -71,6 +71,55 @@ using ActiveIntervals =
                         std::vector<std::pair<size_t, uint32_t>>,
                         CmpActiveIntervalEndPoint>;
 
+struct LiveIntervalPoint {
+  enum class Kind : uint8_t {
+    MISSING,
+    INSTRUCTION,
+    EMPTY_BLOCK,
+  };
+  Kind kind = Kind::MISSING;
+  union {
+    IRInstruction* insn;
+    cfg::BlockId block_id;
+  };
+  bool is_missing() const { return kind == Kind::MISSING; }
+  static LiveIntervalPoint get() { return LiveIntervalPoint(); }
+  static LiveIntervalPoint get(IRInstruction* insn) {
+    LiveIntervalPoint lip;
+    lip.kind = Kind::INSTRUCTION;
+    lip.insn = insn;
+    return lip;
+  }
+  static LiveIntervalPoint get(cfg::Block* block) {
+    LiveIntervalPoint lip;
+    lip.kind = Kind::EMPTY_BLOCK;
+    lip.block_id = block->id();
+    return lip;
+  }
+  bool operator==(const LiveIntervalPoint& other) const {
+    switch (kind) {
+    case Kind::MISSING:
+      return other.kind == Kind::MISSING;
+    case Kind::INSTRUCTION:
+      return other.kind == Kind::INSTRUCTION && insn == other.insn;
+    case Kind::EMPTY_BLOCK:
+      return other.kind == Kind::EMPTY_BLOCK && block_id == other.block_id;
+    }
+  }
+  struct Hasher {
+    size_t operator()(const LiveIntervalPoint& lip) const {
+      switch (lip.kind) {
+      case Kind::MISSING:
+        return 0;
+      case Kind::INSTRUCTION:
+        return (size_t)lip.insn;
+      case Kind::EMPTY_BLOCK:
+        return lip.block_id;
+      }
+    }
+  };
+};
+
 using FreeRegPool = std::set<reg_t>;
 
 /*
@@ -90,23 +139,33 @@ struct IRInstructionShape {
     const DexMethodRef* method;
     const DexOpcodeData* data;
   };
-  static IRInstructionShape get(IRInstruction* insn) {
+  static IRInstructionShape get(const LiveIntervalPoint& lip) {
     IRInstructionShape shape;
-    shape.opcode = insn->opcode();
-    if (insn->has_literal()) {
-      shape.literal = insn->get_literal();
-    } else if (insn->has_type()) {
-      shape.type = insn->get_type();
-    } else if (insn->has_field()) {
-      shape.field = insn->get_field();
-    } else if (insn->has_method()) {
-      shape.method = insn->get_method();
-    } else if (insn->has_string()) {
-      shape.string = insn->get_string();
-    } else if (insn->has_data()) {
-      shape.data = insn->get_data();
+    switch (lip.kind) {
+    case LiveIntervalPoint::Kind::MISSING:
+      not_reached();
+    case LiveIntervalPoint::Kind::EMPTY_BLOCK:
+      shape.opcode = OPCODE_NOP;
+      return shape;
+    case LiveIntervalPoint::Kind::INSTRUCTION: {
+      auto* insn = lip.insn;
+      shape.opcode = insn->opcode();
+      if (insn->has_literal()) {
+        shape.literal = insn->get_literal();
+      } else if (insn->has_type()) {
+        shape.type = insn->get_type();
+      } else if (insn->has_field()) {
+        shape.field = insn->get_field();
+      } else if (insn->has_method()) {
+        shape.method = insn->get_method();
+      } else if (insn->has_string()) {
+        shape.string = insn->get_string();
+      } else if (insn->has_data()) {
+        shape.data = insn->get_data();
+      }
+      return shape;
     }
-    return shape;
+    }
   }
 
   bool operator==(const IRInstructionShape& other) const {
@@ -170,9 +229,9 @@ class LinearScanAllocator final {
       m_free_regs;
 
   /*
-   * List of instructions indexed by live-interval start-/end-points.
+   * List of live interval points indexed by live-interval start-/end-points.
    */
-  std::vector<IRInstruction*> m_insns;
+  std::vector<LiveIntervalPoint> m_live_interval_points;
 
   /*
    * We keep track of the vreg in which the "this" argument is stored. We will

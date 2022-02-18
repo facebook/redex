@@ -16,9 +16,10 @@
 
 namespace fastregalloc {
 
-using InsnIdx = std::unordered_map<IRInstruction*, uint32_t>;
+using LiveIntervalPointIndices =
+    std::unordered_map<LiveIntervalPoint, uint32_t, LiveIntervalPoint::Hasher>;
 
-using RangeInBlock = std::pair<IRInstruction*, IRInstruction*>;
+using RangeInBlock = std::pair<LiveIntervalPoint, LiveIntervalPoint>;
 using VRegAliveRangeInBlock = std::unordered_map<vreg_t, RangeInBlock>;
 using VRegAliveInsns = std::unordered_map<vreg_t, std::vector<RangeInBlock>>;
 
@@ -45,12 +46,10 @@ VRegAliveRangeInBlock get_live_range_in_block(
  * ranges, which is the live interval of this vreg. Put live interval and vreg
  * info into the result vector and sort before return.
  */
-LiveIntervals init_live_intervals(IRCode* code,
-                                  std::vector<IRInstruction*>* insns);
+LiveIntervals init_live_intervals(
+    IRCode* code, std::vector<LiveIntervalPoint>* live_interval_points);
 
 IntervalEndPoints calculate_live_interval(
-    std::vector<RangeInBlock>& insn_ranges,
-    const InsnIdx& insn_idx,
-    const uint32_t max_idx);
+    std::vector<RangeInBlock>& ranges, const LiveIntervalPointIndices& indices);
 
 } // namespace fastregalloc
