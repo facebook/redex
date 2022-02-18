@@ -108,6 +108,9 @@ class RemoveClasses {
                    m_excluded_types.size());
     mgr.set_metric(root_name + "_num_total_usages", m_num_usages);
     mgr.set_metric(root_name + "_num_removed_usages", m_num_removed_usages);
+
+    TRACE(BLD_PATTERN, 1, "num_classes_excluded %lu", m_excluded_types.size());
+    TRACE(BLD_PATTERN, 1, "num_classes_removed %lu", m_removed_types.size());
     for (const auto& type : m_excluded_types) {
       TRACE(BLD_PATTERN, 2, "Excluded type: %s", SHOW(type));
     }
@@ -271,7 +274,7 @@ class RemoveClasses {
         // Check if any of the instance builder types cannot be removed.
         auto non_removable_types = analysis->non_removable_types();
         if (!non_removable_types.empty()) {
-          for (DexType* type : non_removable_types) {
+          for (const auto* type : non_removable_types) {
             if (m_excluded_types.count(type) == 0 &&
                 !m_propagate_escape_results) {
               local_excludes.emplace(type);
