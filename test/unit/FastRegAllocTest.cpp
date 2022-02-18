@@ -45,8 +45,8 @@ TEST_F(FastRegAllocTest, RegAlloc) {
       (const v4 1)
       (const v3 0)
       (add-int v2 v4 v3)
-      (const v5 -1)
-      (add-int v3 v4 v5)
+      (const v3 -1)
+      (add-int v3 v4 v3)
       (add-int v1 v4 v3)
       (const v3 2)
       (add-int v0 v4 v3)
@@ -348,6 +348,34 @@ TEST_F(FastRegAllocTest, EmptyBlocks) {
         (.src_block "LFoo;.bar:()V" 0)
 
         (:successor_block 2)
+        (return v0)
+    )
+)");
+  EXPECT_CODE_EQ(method->get_code(), expected_code.get());
+}
+
+TEST_F(FastRegAllocTest, DefUseIntervalBoundaries) {
+  auto method = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.bar:()Z"
+      (
+        (const v0 0)
+        (move v1 v0)
+        (move v2 v1)
+        (return v2)
+      )
+    )
+)");
+
+  {
+    fastregalloc::LinearScanAllocator allocator(method);
+    allocator.allocate();
+  }
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+        (const v1 0)
+        (move v1 v1)
+        (move v0 v1)
         (return v0)
     )
 )");

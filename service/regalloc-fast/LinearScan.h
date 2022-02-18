@@ -75,7 +75,7 @@ struct LiveIntervalPoint {
   enum class Kind : uint8_t {
     MISSING,
     INSTRUCTION,
-    EMPTY_BLOCK,
+    BLOCK_END,
   };
   Kind kind = Kind::MISSING;
   union {
@@ -92,7 +92,7 @@ struct LiveIntervalPoint {
   }
   static LiveIntervalPoint get(cfg::Block* block) {
     LiveIntervalPoint lip;
-    lip.kind = Kind::EMPTY_BLOCK;
+    lip.kind = Kind::BLOCK_END;
     lip.block_id = block->id();
     return lip;
   }
@@ -102,8 +102,8 @@ struct LiveIntervalPoint {
       return other.kind == Kind::MISSING;
     case Kind::INSTRUCTION:
       return other.kind == Kind::INSTRUCTION && insn == other.insn;
-    case Kind::EMPTY_BLOCK:
-      return other.kind == Kind::EMPTY_BLOCK && block_id == other.block_id;
+    case Kind::BLOCK_END:
+      return other.kind == Kind::BLOCK_END && block_id == other.block_id;
     }
   }
   struct Hasher {
@@ -113,7 +113,7 @@ struct LiveIntervalPoint {
         return 0;
       case Kind::INSTRUCTION:
         return (size_t)lip.insn;
-      case Kind::EMPTY_BLOCK:
+      case Kind::BLOCK_END:
         return lip.block_id;
       }
     }
@@ -144,7 +144,7 @@ struct IRInstructionShape {
     switch (lip.kind) {
     case LiveIntervalPoint::Kind::MISSING:
       not_reached();
-    case LiveIntervalPoint::Kind::EMPTY_BLOCK:
+    case LiveIntervalPoint::Kind::BLOCK_END:
       shape.opcode = OPCODE_NOP;
       return shape;
     case LiveIntervalPoint::Kind::INSTRUCTION: {

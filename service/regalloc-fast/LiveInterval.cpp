@@ -41,16 +41,16 @@ LiveIntervals init_live_intervals(
   // number the instructions to get sortable live intervals
   LiveIntervalPointIndices indices;
   for (auto block : cfg->blocks()) {
-    auto size = indices.size();
     for (auto& mie : InstructionIterable(block)) {
       auto lip = LiveIntervalPoint::get(mie.insn);
       auto success = indices.emplace(lip, indices.size()).second;
       always_assert(success);
       live_interval_points->push_back(lip);
     }
-    if (size == indices.size() &&
-        block->branchingness() != opcode::BRANCH_NONE) {
-      // empty block that is not an unreachable ghost exit block
+    if (cfg->get_succ_edge_if(
+            block, [](cfg::Edge* e) { return e->type() != cfg::EDGE_GHOST; })) {
+      // Any block with continuing control-flow could have a live-out registers,
+      // and thus we allocate a block-end point for it.
       auto lip = LiveIntervalPoint::get(block);
       auto success = indices.emplace(lip, indices.size()).second;
       always_assert(success);
@@ -79,6 +79,7 @@ IntervalEndPoints calculate_live_interval(
   uint32_t interval_start = max_index;
   uint32_t interval_end = 0;
   for (auto& range : ranges) {
+    always_assert(!range.first.is_missing());
     auto range_start = indices.at(range.first);
     interval_start = std::min(interval_start, range_start);
     // if there is deadcode (def no use), we assume the live interval lasts
@@ -100,37 +101,30 @@ VRegAliveRangeInBlock get_live_range_in_block(
   LivenessDomain live_in = fixpoint_iter.get_live_in_vars_at(block);
   LivenessDomain live_out = fixpoint_iter.get_live_out_vars_at(block);
 
-  LiveIntervalPoint first;
-  LiveIntervalPoint last;
   auto first_insn_it = block->get_first_insn();
-  if (first_insn_it == block->end()) {
-    first = last = LiveIntervalPoint::get(block);
-  } else {
-    first = LiveIntervalPoint::get(first_insn_it->insn);
-    auto last_insn_it = block->get_last_insn();
-    always_assert(last_insn_it != block->end());
-    last = LiveIntervalPoint::get(last_insn_it->insn);
-  }
-  always_assert(!first.is_missing());
-  always_assert(!last.is_missing());
+  LiveIntervalPoint first = first_insn_it == block->end()
+                                ? LiveIntervalPoint::get(block)
+                                : LiveIntervalPoint::get(first_insn_it->insn);
   for (auto vreg : live_in.elements()) {
-    bool emplaced =
-        vreg_block_range
-            .emplace(vreg, std::make_pair(first, LiveIntervalPoint::get()))
-            .second;
+    auto range = std::make_pair(first, LiveIntervalPoint::get());
+    bool emplaced = vreg_block_range.emplace(vreg, range).second;
     always_assert(emplaced);
   }
-  for (auto& mie : InstructionIterable(block)) {
-    auto insn = mie.insn;
+  auto ii = InstructionIterable(block);
+  for (auto it = ii.begin(); it != ii.end(); it++) {
+    auto insn = it->insn;
     if (insn->has_dest()) {
       vreg_t vreg = insn->dest();
-      vreg_block_range.emplace(vreg,
-                               std::make_pair(LiveIntervalPoint::get(insn),
-                                              LiveIntervalPoint::get()));
+      auto next = std::next(it) == ii.end()
+                      ? LiveIntervalPoint::get(block)
+                      : LiveIntervalPoint::get(std::next(it)->insn);
+      auto range = std::make_pair(next, LiveIntervalPoint::get());
+      vreg_block_range.emplace(vreg, range);
       // emplace might silently fail if we already had an entry
     }
   }
 
+  LiveIntervalPoint last = LiveIntervalPoint::get(block);
   for (auto vreg : live_out.elements()) {
     vreg_block_range.at(vreg).second = last;
   }
