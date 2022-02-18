@@ -696,7 +696,8 @@ void InterDex::load_interdex_types() {
             [&](const auto& self, DexType* cur, bool add_self) {
               DexClass* cur_cls = type_class(cur);
               if (!cur_cls || classes.count(cur_cls) == 0 ||
-                  all_set.count(cur) != 0) {
+                  all_set.count(cur) != 0 ||
+                  cur_cls->rstate.has_interdex_subgroup()) {
                 return;
               }
               all_set.insert(cur);
