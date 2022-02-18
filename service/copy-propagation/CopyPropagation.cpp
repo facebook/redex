@@ -66,6 +66,8 @@ using namespace aliased_registers;
 
 namespace {
 
+using BlockRegs = std::unordered_map<cfg::Block*, std::unordered_set<reg_t>>;
+
 // Represents a register that may be wide.
 // There are three valid states:
 //   {-, -}      =  none
@@ -89,7 +91,7 @@ class AliasFixpointIterator final
   const std::unordered_set<const IRInstruction*>& m_range_set;
   Stats& m_stats;
   mutable std::unique_ptr<constant_uses::ConstantUses> m_constant_uses;
-  const bool m_break_exc_edges;
+  const BlockRegs& m_check_cast_throw_targets_regs;
 
   AliasFixpointIterator(
       cfg::ControlFlowGraph& cfg,
@@ -101,7 +103,7 @@ class AliasFixpointIterator final
       const Config& config,
       const std::unordered_set<const IRInstruction*>& range_set,
       Stats& stats,
-      bool break_exc_edges)
+      const BlockRegs& check_cast_throw_targets_regs)
       : MonotonicFixpointIterator<cfg::GraphInterface, AliasDomain>(
             cfg, cfg.blocks().size()),
         m_cfg(cfg),
@@ -113,7 +115,7 @@ class AliasFixpointIterator final
         m_config(config),
         m_range_set(range_set),
         m_stats(stats),
-        m_break_exc_edges(break_exc_edges) {}
+        m_check_cast_throw_targets_regs(check_cast_throw_targets_regs) {}
 
   constant_uses::TypeDemand get_constant_type_demand(
       IRInstruction* insn) const {
@@ -134,6 +136,22 @@ class AliasFixpointIterator final
     return constant_uses::TypeDemand::Error;
   }
 
+  // We must not create live-in values that alias with the
+  // move-result-pseudo-object destination register of a check-cast instruction
+  // that has this block as a throw target. See Interference.cpp /
+  // GraphBuilder::build for the long explanation.
+  void break_check_cast_aliases(cfg::Block* block,
+                                AliasedRegisters& aliases) const {
+    auto it = m_check_cast_throw_targets_regs.find(block);
+    if (it == m_check_cast_throw_targets_regs.end()) {
+      return;
+    }
+    auto& regs = it->second;
+    for (auto reg : regs) {
+      aliases.break_alias(Value::create_register(reg));
+    }
+  }
+
   // An instruction can be removed if we know the source and destination are
   // aliases.
   //
@@ -143,6 +161,7 @@ class AliasFixpointIterator final
   size_t run_on_block(cfg::Block* block,
                       AliasedRegisters& aliases,
                       cfg::CFGMutation* mutation) const {
+    break_check_cast_aliases(block, aliases);
 
     size_t moves_eliminated = 0;
     const auto& iterable = InstructionIterable(block);
@@ -443,12 +462,30 @@ class AliasFixpointIterator final
   AliasDomain analyze_edge(
       const EdgeId& edge,
       const AliasDomain& exit_state_at_source) const override {
-    if (m_break_exc_edges && edge->type() == cfg::EdgeType::EDGE_THROW) {
-      return AliasDomain::top();
-    }
     return exit_state_at_source;
   }
 };
+
+BlockRegs get_check_cast_throw_targets_regs(cfg::ControlFlowGraph& cfg) {
+  BlockRegs check_cast_throw_targets_regs;
+  for (auto block : cfg.blocks()) {
+    auto ii = InstructionIterable(block);
+    for (auto it = ii.begin(); it != ii.end(); it++) {
+      if (opcode::is_check_cast(it->insn->opcode())) {
+        auto move_result_it =
+            cfg.move_result_of(block->to_cfg_instruction_iterator(it));
+        auto reg = move_result_it->insn->dest();
+        for (auto* e : cfg.get_succ_edges_of_type(block, cfg::EDGE_THROW)) {
+          // We need to remember for all catch handlers which check-cast
+          // move-result-pseudo-object dest registers should be kept alive to
+          // deal with a special quirk of our check-cast instruction lowering.
+          check_cast_throw_targets_regs[e->target()].insert(reg);
+        }
+      }
+    }
+  }
+  return check_cast_throw_targets_regs;
+}
 
 } // namespace
 
@@ -540,9 +577,11 @@ Stats CopyPropagation::run(IRCode* code,
     }
   }
 
-  AliasFixpointIterator fixpoint(*cfg, is_static, declaring_type, rtype, args,
-                                 std::move(method_describer), m_config,
-                                 range_set, stats, m_config.regalloc_has_run);
+  auto check_cast_throw_targets_regs = get_check_cast_throw_targets_regs(*cfg);
+
+  AliasFixpointIterator fixpoint(
+      *cfg, is_static, declaring_type, rtype, args, std::move(method_describer),
+      m_config, range_set, stats, check_cast_throw_targets_regs);
   fixpoint.run(AliasDomain());
 
   cfg::CFGMutation mutation{*cfg};
