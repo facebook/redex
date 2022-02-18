@@ -625,7 +625,7 @@ void InterDex::load_interdex_types() {
 
   std::unordered_set<DexType*> all_set{};
 
-  if (m_transitively_close_interdex_order) {
+  if (m_transitively_close_interdex_order && !m_force_single_dex) {
     for (auto* cls : m_dexen[0]) {
       all_set.insert(cls->get_type()); // Ignore primary.
     }
