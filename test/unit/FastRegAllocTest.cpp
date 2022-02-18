@@ -190,15 +190,15 @@ TEST_F(FastRegAllocTest, CheckVRegInLoop) {
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
-      (const v1 10)
-      (const v0 1)
+      (const v2 10)
+      (const v3 1)
       (:LHead)
-      (if-gt v1 v0 :Loop)
-      (add-int/lit8 v3 v1 1)
-      (move v2 v3)
-      (return v2)
+      (if-gt v2 v3 :Loop)
+      (add-int/lit8 v1 v2 1)
+      (move v0 v1)
+      (return v0)
       (:Loop)
-      (add-int/lit8 v1 v1 -1)
+      (add-int/lit8 v2 v2 -1)
       (goto :LHead)
     )
 )");

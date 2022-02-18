@@ -13,7 +13,6 @@
 
 #include "DexUtil.h"
 #include "LinearScan.h"
-#include "MonotonicFixpointIterator.h"
 #include "ScopedCFG.h"
 
 namespace fastregalloc {
@@ -40,7 +39,8 @@ LiveIntervals init_live_intervals(
 
   // number the instructions to get sortable live intervals
   LiveIntervalPointIndices indices;
-  for (auto block : cfg->blocks()) {
+  auto ordered_blocks = get_ordered_blocks(*cfg, liveness_fixpoint_iter);
+  for (auto block : ordered_blocks) {
     for (auto& mie : InstructionIterable(block)) {
       auto lip = LiveIntervalPoint::get(mie.insn);
       auto success = indices.emplace(lip, indices.size()).second;
@@ -140,6 +140,83 @@ VRegAliveRangeInBlock get_live_range_in_block(
   }
 
   return vreg_block_range;
+}
+
+std::vector<cfg::Block*> get_ordered_blocks(
+    cfg::ControlFlowGraph& cfg,
+    const LivenessFixpointIterator& liveness_fixpoint_iter) {
+  // For each block, compute distance (in number of blocks) from exit-block.
+  std::unordered_map<cfg::Block*, size_t> block_depths;
+  std::queue<std::pair<cfg::Block*, size_t>> work_queue;
+  work_queue.emplace(cfg.exit_block(), 1);
+  while (!work_queue.empty()) {
+    auto [block, depth] = work_queue.front();
+    work_queue.pop();
+    if (!block_depths.emplace(block, depth).second) {
+      continue;
+    }
+    for (auto e : block->preds()) {
+      work_queue.emplace(e->src(), depth + 1);
+    }
+  }
+
+  // Compute (maximum) depth (in number of blocks, from exit-block) of each
+  // assigned register
+  std::unordered_map<vreg_t, size_t> vreg_defs_depths;
+  for (auto block : cfg.blocks()) {
+    for (auto& mie : InstructionIterable(block)) {
+      if (mie.insn->has_dest()) {
+        auto& depth = vreg_defs_depths[mie.insn->dest()];
+        depth = std::max(depth, block_depths.at(block));
+      }
+    }
+  }
+
+  // For each block, compute the maximum distance (in number of blocks, from
+  // exit-block) over all live-in registers
+  std::unordered_map<cfg::Block*, size_t> live_in_def_depths;
+  for (cfg::Block* block : cfg.blocks()) {
+    auto live_in = liveness_fixpoint_iter.get_live_in_vars_at(block);
+    size_t depth = 0;
+    for (auto vreg : live_in.elements()) {
+      auto vreg_defs_depth = vreg_defs_depths.at(vreg);
+      depth = std::max(depth, vreg_defs_depth);
+    }
+    live_in_def_depths.emplace(block, depth);
+  }
+
+  // Collect blocks by doing a post-order traversal, processing predecessors in
+  // their live-in-def-depths order, smallest depths goes last
+  std::unordered_set<cfg::Block*> visited;
+  std::vector<cfg::Block*> ordered_blocks;
+  std::function<void(cfg::Block*)> visit;
+  visit = [&](cfg::Block* block) {
+    if (!visited.insert(block).second) {
+      return;
+    }
+    std::vector<cfg::Block*> pred_blocks;
+    for (auto e : block->preds()) {
+      pred_blocks.push_back(e->src());
+    }
+    // We might have duplicates, but that's okay.
+    std::sort(pred_blocks.begin(),
+              pred_blocks.end(),
+              [&live_in_def_depths](cfg::Block* a, cfg::Block* b) {
+                auto a_depth = live_in_def_depths.at(a);
+                auto b_depth = live_in_def_depths.at(b);
+                if (a_depth != b_depth) {
+                  return a_depth > b_depth;
+                }
+                return a->id() < b->id();
+              });
+    for (auto pred_block : pred_blocks) {
+      visit(pred_block);
+    }
+    ordered_blocks.push_back(block);
+  };
+  visit(cfg.exit_block());
+  always_assert(ordered_blocks.size() == cfg.blocks().size());
+  return ordered_blocks;
 }
 
 } // namespace fastregalloc

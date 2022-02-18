@@ -52,4 +52,8 @@ LiveIntervals init_live_intervals(
 IntervalEndPoints calculate_live_interval(
     std::vector<RangeInBlock>& ranges, const LiveIntervalPointIndices& indices);
 
+std::vector<cfg::Block*> get_ordered_blocks(
+    cfg::ControlFlowGraph& cfg,
+    const LivenessFixpointIterator& liveness_fixpoint_iter);
+
 } // namespace fastregalloc
