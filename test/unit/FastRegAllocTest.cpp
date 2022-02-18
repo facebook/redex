@@ -381,3 +381,101 @@ TEST_F(FastRegAllocTest, DefUseIntervalBoundaries) {
 )");
   EXPECT_CODE_EQ(method->get_code(), expected_code.get());
 }
+
+TEST_F(FastRegAllocTest, CheckCast) {
+  // The move-result-pseudo-object associated with a check-cast must not have
+  // the same dest register as the src(0) of the check cast, if that dest
+  // register is live-in to any catch handler of the check-cast. See
+  // Interference.cpp / GraphBuilder::build for the long explanation. This is a
+  // regression test to ensure that the two registers do *NOT* the unified, even
+  // though they don't have overlapping live ranges.
+  auto method = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.bar:(Ljava/lang/Object;)Ljava/lang/Object;"
+      (
+        (load-param-object v111)
+
+        (.try_start a)
+        (check-cast v111 "LX;")
+        (move-result-pseudo-object v999)
+        (return v999)
+        (.try_end a)
+
+        (.catch (a))
+        (return v111)
+      )
+    )
+)");
+
+  {
+    fastregalloc::LinearScanAllocator allocator(method);
+    allocator.allocate();
+  }
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+        (load-param-object v1)
+
+        (.try_start a)
+        (check-cast v1 "LX;")
+        (move-result-pseudo-object v0)
+        (return v0)
+        (.try_end a)
+
+        (.catch (a))
+        (return v1)
+    )
+)");
+  EXPECT_CODE_EQ(method->get_code(), expected_code.get());
+}
+
+TEST_F(FastRegAllocTest, CheckCast2) {
+  // Don't unify v0 and v1!
+  auto method = assembler::method_from_string(R"(
+    (method (public) "LFoo;.bar:(LBaseType;Z)LSubType;"
+     (
+        (load-param-object v2)
+        (load-param v3)
+        (const v1 0)
+        (if-eqz v3 :L0)
+        (return-object v1)
+
+        (.try_start c0)
+        (:L0)
+        (check-cast v2 "LSubType;")
+        (move-result-pseudo-object v0)
+        (return-object v0)
+
+        (.try_end c0)
+        (.catch (c0))
+        (return-object v1)
+     )
+    )
+)");
+  method->get_code()->set_registers_size(2);
+
+  {
+    fastregalloc::LinearScanAllocator allocator(method);
+    allocator.allocate();
+  }
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+        (load-param-object v2)
+        (load-param v3)
+        (const v1 0)
+        (if-eqz v3 :L0)
+        (return-object v1)
+
+        (.try_start c0)
+        (:L0)
+        (check-cast v2 "LSubType;")
+        (move-result-pseudo-object v0)
+        (return-object v0)
+
+        (.try_end c0)
+        (.catch (c0))
+        (return-object v1)
+    )
+)");
+  EXPECT_CODE_EQ(method->get_code(), expected_code.get());
+}

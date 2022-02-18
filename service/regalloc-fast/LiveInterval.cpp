@@ -27,9 +27,20 @@ LiveIntervals init_live_intervals(
   cfg->calculate_exit_block();
   LivenessFixpointIterator liveness_fixpoint_iter(*cfg);
   liveness_fixpoint_iter.run({});
+  std::unordered_map<cfg::Block*, std::unordered_set<vreg_t>>
+      check_cast_throw_targets_vregs;
   for (cfg::Block* block : cfg->blocks()) {
-    auto vreg_block_range =
-        get_live_range_in_block(liveness_fixpoint_iter, block);
+    auto vreg_block_range = get_live_range_in_block(
+        liveness_fixpoint_iter, block, &check_cast_throw_targets_vregs);
+    for (auto& pair : vreg_block_range) {
+      vreg_t vreg = pair.first;
+      RangeInBlock range = pair.second;
+      vreg_alive_insns[vreg].push_back(range);
+    }
+  }
+  for (auto& [block, vregs] : check_cast_throw_targets_vregs) {
+    auto vreg_block_range = get_check_cast_throw_targets_live_range(
+        liveness_fixpoint_iter, block, vregs);
     for (auto& pair : vreg_block_range) {
       vreg_t vreg = pair.first;
       RangeInBlock range = pair.second;
@@ -51,7 +62,7 @@ LiveIntervals init_live_intervals(
             block, [](cfg::Edge* e) { return e->type() != cfg::EDGE_GHOST; })) {
       // Any block with continuing control-flow could have a live-out registers,
       // and thus we allocate a block-end point for it.
-      auto lip = LiveIntervalPoint::get(block);
+      auto lip = LiveIntervalPoint::get_block_end(block);
       auto success = indices.emplace(lip, indices.size()).second;
       always_assert(success);
       live_interval_points->push_back(lip);
@@ -96,15 +107,15 @@ IntervalEndPoints calculate_live_interval(
 }
 
 VRegAliveRangeInBlock get_live_range_in_block(
-    const LivenessFixpointIterator& fixpoint_iter, cfg::Block* block) {
+    const LivenessFixpointIterator& fixpoint_iter,
+    cfg::Block* block,
+    std::unordered_map<cfg::Block*, std::unordered_set<vreg_t>>*
+        check_cast_throw_targets_vregs) {
   VRegAliveRangeInBlock vreg_block_range;
   LivenessDomain live_in = fixpoint_iter.get_live_in_vars_at(block);
   LivenessDomain live_out = fixpoint_iter.get_live_out_vars_at(block);
 
-  auto first_insn_it = block->get_first_insn();
-  LiveIntervalPoint first = first_insn_it == block->end()
-                                ? LiveIntervalPoint::get(block)
-                                : LiveIntervalPoint::get(first_insn_it->insn);
+  LiveIntervalPoint first = LiveIntervalPoint::get_block_begin(block);
   for (auto vreg : live_in.elements()) {
     auto range = std::make_pair(first, LiveIntervalPoint::get());
     bool emplaced = vreg_block_range.emplace(vreg, range).second;
@@ -116,15 +127,30 @@ VRegAliveRangeInBlock get_live_range_in_block(
     if (insn->has_dest()) {
       vreg_t vreg = insn->dest();
       auto next = std::next(it) == ii.end()
-                      ? LiveIntervalPoint::get(block)
+                      ? LiveIntervalPoint::get_block_end(block)
                       : LiveIntervalPoint::get(std::next(it)->insn);
       auto range = std::make_pair(next, LiveIntervalPoint::get());
       vreg_block_range.emplace(vreg, range);
       // emplace might silently fail if we already had an entry
+
+      if (insn->opcode() == IOPCODE_MOVE_RESULT_PSEUDO_OBJECT) {
+        auto& cfg = block->cfg();
+        auto primary_insn_it = cfg.primary_instruction_of_move_result(
+            block->to_cfg_instruction_iterator(it.unwrap()));
+        if (primary_insn_it->insn->opcode() == OPCODE_CHECK_CAST) {
+          // We need to remember for all catch handlers which check-cast
+          // move-result-pseudo-object dest registers should be kept alive to
+          // deal with a special quirk of our check-cast instruction lowering.
+          for (auto e : cfg.get_succ_edges_of_type(primary_insn_it.block(),
+                                                   cfg::EDGE_THROW)) {
+            (*check_cast_throw_targets_vregs)[e->target()].insert(vreg);
+          }
+        }
+      }
     }
   }
 
-  LiveIntervalPoint last = LiveIntervalPoint::get(block);
+  LiveIntervalPoint last = LiveIntervalPoint::get_block_end(block);
   for (auto vreg : live_out.elements()) {
     vreg_block_range.at(vreg).second = last;
   }
@@ -139,6 +165,24 @@ VRegAliveRangeInBlock get_live_range_in_block(
     }
   }
 
+  return vreg_block_range;
+}
+
+VRegAliveRangeInBlock get_check_cast_throw_targets_live_range(
+    const LivenessFixpointIterator& fixpoint_iter,
+    cfg::Block* block,
+    const std::unordered_set<vreg_t>& vregs) {
+  VRegAliveRangeInBlock vreg_block_range;
+  LivenessDomain live_in = fixpoint_iter.get_live_in_vars_at(block);
+  auto elements = live_in.elements();
+  for (auto vreg : vregs) {
+    if (!elements.contains(vreg)) {
+      LiveIntervalPoint first = LiveIntervalPoint::get_block_begin(block);
+      auto range = std::make_pair(first, first);
+      bool emplaced = vreg_block_range.emplace(vreg, range).second;
+      always_assert(emplaced);
+    }
+  }
   return vreg_block_range;
 }
 

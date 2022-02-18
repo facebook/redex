@@ -90,7 +90,12 @@ struct LiveIntervalPoint {
     lip.insn = insn;
     return lip;
   }
-  static LiveIntervalPoint get(cfg::Block* block) {
+  static LiveIntervalPoint get_block_begin(cfg::Block* block) {
+    auto first_insn_it = block->get_first_insn();
+    return first_insn_it == block->end() ? get_block_end(block)
+                                         : get(first_insn_it->insn);
+  }
+  static LiveIntervalPoint get_block_end(cfg::Block* block) {
     LiveIntervalPoint lip;
     lip.kind = Kind::BLOCK_END;
     lip.block_id = block->id();

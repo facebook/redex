@@ -38,7 +38,24 @@ using VRegBlockRanges = std::vector<IntervalEndPoints>;
  * Use of this vreg within the basic block.
  */
 VRegAliveRangeInBlock get_live_range_in_block(
-    const LivenessFixpointIterator& fixpoint_iter, cfg::Block* block);
+    const LivenessFixpointIterator& fixpoint_iter,
+    cfg::Block* block,
+    std::unordered_map<cfg::Block*, std::unordered_set<vreg_t>>*
+        check_cast_throw_targets_vregs);
+
+/*
+ * The move-result-pseudo-object associated with a check-cast must not have
+ * the same dest register as the src(0) of the check cast, if that dest
+ * register is live-in to any catch handler of the check-cast. This function
+ * produces auxiliary live-ranges that make the check-casts
+ * move-result-pseudo-object's dest register appear live-in to catch handler
+ * target blocks (if it isn't already live). See Interference.cpp /
+ * GraphBuilder::build for the long explanation.
+ */
+VRegAliveRangeInBlock get_check_cast_throw_targets_live_range(
+    const LivenessFixpointIterator& fixpoint_iter,
+    cfg::Block* block,
+    const std::unordered_set<vreg_t>& vregs);
 
 /*
  * Order the instruction list. Then for each vreg, turn each instruction range
