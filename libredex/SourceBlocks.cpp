@@ -11,6 +11,7 @@
 #include <optional>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 
 #include "ControlFlow.h"
 #include "Debug.h"
@@ -19,8 +20,10 @@
 #include "IROpcode.h"
 #include "Macros.h"
 #include "S_Expression.h"
+#include "ScopedCFG.h"
 #include "ScopedMetrics.h"
 #include "Show.h"
+#include "ShowCFG.h"
 #include "SourceBlockConsistencyCheck.h"
 #include "Timer.h"
 #include "Trace.h"
@@ -675,5 +678,195 @@ void track_source_block_coverage(ScopedMetrics& sm,
     min_max(stats.non_entry_min_max_methods[i].second, "max_method");
   }
 }
+
+struct ViolationsHelper::ViolationsHelperImpl {
+  std::unordered_map<DexMethod*, size_t> violations_start;
+  std::vector<std::string> print;
+
+  ViolationsHelperImpl(const Scope& scope, std::vector<std::string> to_vis)
+      : print(std::move(to_vis)) {
+    {
+      std::mutex lock;
+      walk::parallel::methods(scope, [this, &lock](DexMethod* m) {
+        if (m->get_code() == nullptr) {
+          return;
+        }
+        m->get_code()->build_cfg();
+        auto val = hot_immediate_dom_not_hot_cfg(m->get_code()->cfg());
+        {
+          std::unique_lock<std::mutex> ulock{lock};
+          violations_start[m] = val;
+        }
+        m->get_code()->clear_cfg();
+      });
+    }
+
+    print_all();
+  }
+
+  ~ViolationsHelperImpl() {
+    {
+      std::mutex lock;
+
+      struct MethodDelta {
+        DexMethod* method;
+        size_t violations_delta;
+        size_t method_size;
+
+        MethodDelta(DexMethod* p1, size_t p2, size_t p3)
+            : method(p1), violations_delta(p2), method_size(p3) {}
+      };
+
+      std::vector<MethodDelta> top_changes;
+      constexpr size_t kTopChanges = 10;
+
+      workqueue_run<std::pair<DexMethod*, size_t>>(
+          [&](const std::pair<DexMethod*, size_t>& p) {
+            auto* m = p.first;
+            if (m->get_code() == nullptr) {
+              return;
+            }
+            cfg::ScopedCFG cfg(m->get_code());
+            auto val = hot_immediate_dom_not_hot_cfg(*cfg);
+            if (val <= p.second) {
+              return;
+            }
+
+            auto m_delta = val - p.second;
+            size_t s = m->get_code()->sum_opcode_sizes();
+            std::unique_lock<std::mutex> ulock{lock};
+            if (top_changes.size() < kTopChanges) {
+              top_changes.emplace_back(m, m_delta, s);
+              return;
+            }
+            MethodDelta m_t{m, m_delta, s};
+            auto cmp = [](const auto& t1, const auto& t2) {
+              if (t1.violations_delta > t2.violations_delta) {
+                return true;
+              }
+              if (t1.violations_delta < t2.violations_delta) {
+                return false;
+              }
+
+              if (t1.method_size < t2.method_size) {
+                return true;
+              }
+              if (t1.method_size > t2.method_size) {
+                return false;
+              }
+
+              return compare_dexmethods(t1.method, t2.method);
+            };
+
+            if (cmp(m_t, top_changes.back())) {
+              top_changes.back() = m_t;
+              std::sort(top_changes.begin(), top_changes.end(), cmp);
+            }
+          },
+          violations_start);
+
+      for (auto& t : top_changes) {
+        TRACE(MMINL, 0, "%s (size %zu): +%zu", SHOW(t.method), t.method_size,
+              t.violations_delta);
+      }
+    }
+
+    print_all();
+  }
+
+  static size_t hot_immediate_dom_not_hot_cfg(cfg::ControlFlowGraph& cfg) {
+    size_t sum{0};
+    dominators::SimpleFastDominators<cfg::GraphInterface> dom{cfg};
+    for (auto* b : cfg.blocks()) {
+      sum += hot_immediate_dom_not_hot(b, dom);
+    }
+    return sum;
+  }
+
+  void print_all() const {
+    for (const auto& m_str : print) {
+      auto* m = DexMethod::get_method(m_str);
+      if (m != nullptr) {
+        redex_assert(m != nullptr && m->is_def());
+        auto* m_def = m->as_def();
+        print_cfg_with_violations(m_def);
+      }
+    }
+  }
+
+  static void print_cfg_with_violations(DexMethod* m) {
+    struct SBSpecial {
+      cfg::Block* cur{nullptr};
+      dominators::SimpleFastDominators<cfg::GraphInterface> dom;
+
+      explicit SBSpecial(cfg::ControlFlowGraph& cfg)
+          : dom(dominators::SimpleFastDominators<cfg::GraphInterface>(cfg)) {}
+
+      void mie_before(std::ostream&, const MethodItemEntry&) {}
+      void mie_after(std::ostream& os, const MethodItemEntry& mie) {
+        if (mie.type != MFLOW_SOURCE_BLOCK) {
+          return;
+        }
+
+        auto immediate_dominator = dom.get_idom(cur);
+        if (!immediate_dominator) {
+          os << " NO DOMINATOR\n";
+          return;
+        }
+
+        if (!source_blocks::has_source_block_positive_val(
+                mie.src_block.get())) {
+          os << " NOT HOT\n";
+          return;
+        }
+
+        auto* first_sb_immediate_dominator =
+            source_blocks::get_first_source_block(immediate_dominator);
+        if (!first_sb_immediate_dominator) {
+          os << " NO DOMINATOR SOURCE BLOCK B" << immediate_dominator->id()
+             << "\n";
+          return;
+        }
+
+        bool is_idom_hot = source_blocks::has_source_block_positive_val(
+            first_sb_immediate_dominator);
+        if (is_idom_hot) {
+          os << " DOMINATOR HOT\n";
+          return;
+        }
+
+        os << " !!! B" << immediate_dominator->id() << ": ";
+        auto sb = first_sb_immediate_dominator;
+        os << " \"" << show(sb->src) << "\"@" << sb->id;
+        for (const auto& val : sb->vals) {
+          os << " ";
+          if (val) {
+            os << val->val << "/" << val->appear100;
+          } else {
+            os << "N/A";
+          }
+        }
+        os << "\n";
+      }
+
+      void start_block(std::ostream&, cfg::Block* b) { cur = b; }
+      void end_block(std::ostream&, cfg::Block*) { cur = nullptr; }
+    };
+
+    m->get_code()->build_cfg();
+    auto& cfg = m->get_code()->cfg();
+
+    SBSpecial special{cfg};
+    TRACE(MMINL, 0, "=== %s ===\n%s\n", SHOW(m),
+          show<SBSpecial>(cfg, special).c_str());
+
+    m->get_code()->clear_cfg();
+  }
+};
+
+ViolationsHelper::ViolationsHelper(const Scope& scope,
+                                   std::vector<std::string> to_vis)
+    : impl(std::make_unique<ViolationsHelperImpl>(scope, std::move(to_vis))) {}
+ViolationsHelper::~ViolationsHelper() {}
 
 } // namespace source_blocks
