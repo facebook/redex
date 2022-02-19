@@ -543,17 +543,54 @@ size_t chain_hot_one_violations(
                                    [](auto val) { return val > 0 ? 1 : 0; });
 }
 
+size_t chain_and_dom_violations(
+    Block* block,
+    const dominators::SimpleFastDominators<cfg::GraphInterface>& dom) {
+  const SourceBlock* last = nullptr;
+  for (auto* b = dom.get_idom(block); last == nullptr && b != nullptr;
+       b = dom.get_idom(b)) {
+    last = get_last_source_block(b);
+    if (b == b->cfg().entry_block()) {
+      break;
+    }
+  }
+
+  size_t sum{0};
+  foreach_source_block(block, [&sum, &last](const auto* sb) {
+    if (last != nullptr) {
+      for (size_t i = 0; i != sb->vals.size(); ++i) {
+        auto last_val = last->get_val(i);
+        auto sb_val = sb->get_val(i);
+        if (last_val) {
+          if (sb_val && *last_val < *sb_val) {
+            sum++;
+            break;
+          }
+        } else if (sb_val) {
+          sum++;
+          break;
+        }
+      }
+    }
+
+    last = sb;
+  });
+
+  return sum;
+}
+
 // Ugly but necessary for constexpr below.
 using CounterFnPtr = size_t (*)(
     Block*, const dominators::SimpleFastDominators<cfg::GraphInterface>&);
 
-constexpr std::array<std::pair<std::string_view, CounterFnPtr>, 5> gCounters = {
+constexpr std::array<std::pair<std::string_view, CounterFnPtr>, 6> gCounters = {
     {
         {"~blocks~count", &count_blocks},
         {"~blocks~with~source~blocks", &count_block_has_sbs},
         {"~assessment~source~blocks~total", &count_all_sbs},
         {"~flow~violation~in~chain", &chain_hot_violations},
         {"~flow~violation~in~chain~one", &chain_hot_one_violations},
+        {"~flow~violation~chain~and~dom", &chain_and_dom_violations},
     }};
 
 constexpr std::array<std::pair<std::string_view, CounterFnPtr>, 3>
