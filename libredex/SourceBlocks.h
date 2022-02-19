@@ -290,4 +290,12 @@ void track_source_block_coverage(ScopedMetrics& sm,
 class SourceBlockConsistencyCheck;
 SourceBlockConsistencyCheck& get_sbcc();
 
+struct ViolationsHelper {
+  struct ViolationsHelperImpl;
+  std::unique_ptr<ViolationsHelperImpl> impl;
+
+  ViolationsHelper(const Scope& scope, std::vector<std::string> to_vis);
+  ~ViolationsHelper();
+};
+
 } // namespace source_blocks
