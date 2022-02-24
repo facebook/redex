@@ -34,8 +34,13 @@ struct VRegLiveInterval {
     if (end_point != vreg_live_interval.end_point) {
       return end_point < vreg_live_interval.end_point;
     }
-    // at most one def per insn, first def idx all different
-    return start_point < vreg_live_interval.start_point;
+    if (start_point != vreg_live_interval.start_point) {
+      return start_point < vreg_live_interval.start_point;
+    }
+    // We might have live-interval with the same start- and end-points, due to
+    // auxiliary live-intervals created to represent the check-cast quirk. We
+    // disambiguate those last.
+    return vreg < vreg_live_interval.vreg;
   }
 };
 /*
