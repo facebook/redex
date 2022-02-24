@@ -934,7 +934,8 @@ MethodInfo instrument_basic_blocks(IRCode& code,
   code.build_cfg(/*editable*/ true);
   ControlFlowGraph& cfg = code.cfg();
 
-  const std::string& before_cfg = show(cfg);
+  std::string before_cfg =
+      traceEnabled(INSTRUMENT, 7) ? show(cfg) : std::string("");
 
   // Step 1: Get sorted basic blocks to instrument with their information.
   //
