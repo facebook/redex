@@ -39,6 +39,56 @@ struct TokenIndex {
   size_t line() const { return it->line; }
 
   TokenType type() const { return it->type; }
+
+  std::string show_context(size_t lines) const {
+    redex_assert(it != data.end());
+
+    size_t this_line = line();
+    auto start_it = it;
+    while (start_it != data.begin() && start_it->line >= this_line - lines) {
+      --start_it;
+    }
+    if (start_it->line < this_line - lines) {
+      ++start_it;
+    }
+
+    auto end_it = it;
+    while (end_it != data.end() && end_it->line <= this_line + lines) {
+      ++end_it;
+    }
+
+    std::string ret;
+    std::optional<size_t> last_line = std::nullopt;
+    bool new_line = true;
+    for (auto show_it = start_it; show_it != end_it; ++show_it) {
+      if (!last_line || last_line != show_it->line) {
+        if (last_line) {
+          ret.append("\n");
+        }
+        ret.append(std::to_string(show_it->line));
+        ret.append(": ");
+        last_line = show_it->line;
+        new_line = true;
+      }
+      if (!new_line) {
+        ret.append(" ");
+      }
+
+      if (show_it == it) {
+        ret.append("!>");
+      }
+
+      ret.append(show_it->show());
+
+      if (show_it == it) {
+        ret.append("<!");
+      }
+
+      new_line = false;
+    }
+
+    return ret;
+  }
 };
 
 bool parse_boolean_command(TokenIndex& idx,
@@ -70,19 +120,22 @@ bool parse_single_filepath_command(TokenIndex& idx,
       std::cerr
           << "Expecting at least one file as an argument but found end of "
              "file at line "
-          << line_number << std::endl;
+          << line_number << std::endl
+          << idx.show_context(2) << std::endl;
       return true;
     }
     // Fail without consumption if this is a command token.
     if (idx.it->is_command()) {
       std::cerr << "Expecting a file path argument but got command "
-                << idx.show() << " at line  " << idx.line() << std::endl;
+                << idx.show() << " at line  " << idx.line() << std::endl
+                << idx.show_context(2) << std::endl;
       return true;
     }
     // Parse the filename.
     if (idx.type() != TokenType::filepath) {
       std::cerr << "Expected a filepath but got " << idx.show() << " at line "
-                << idx.line() << std::endl;
+                << idx.line() << std::endl
+                << idx.show_context(2) << std::endl;
       return true;
     }
     *filepath = idx.it->data.to_string();
@@ -98,7 +151,8 @@ void parse_filepaths(TokenIndex& idx, std::vector<std::string>* into) {
   if (idx.type() != TokenType::filepath) {
     if (!kOptional) {
       std::cerr << "Expected filepath but got " << idx.show() << " at line "
-                << idx.line() << std::endl;
+                << idx.line() << std::endl
+                << idx.show_context(2) << std::endl;
     }
     return;
   }
@@ -126,13 +180,15 @@ bool parse_filepath_command(TokenIndex& idx,
     // Fail without consumption if this is a command token.
     if (idx.it->is_command()) {
       std::cerr << "Expecting a file path argument but got command "
-                << idx.show() << " at line  " << idx.line() << std::endl;
+                << idx.show() << " at line  " << idx.line() << std::endl
+                << idx.show_context(2) << std::endl;
       return true;
     }
     // Parse the filename.
     if (idx.type() != TokenType::filepath) {
       std::cerr << "Expected a filepath but got " << idx.show() << " at line "
-                << idx.line() << std::endl;
+                << idx.line() << std::endl
+                << idx.show_context(2) << std::endl;
       return true;
     }
     parse_filepaths(idx, filepaths);
@@ -165,7 +221,8 @@ bool parse_jars(TokenIndex& idx,
       std::cerr
           << "Expecting at least one file as an argument but found end of "
              "file at line "
-          << line_number << std::endl;
+          << line_number << std::endl
+          << idx.show_context(2) << std::endl;
       return true;
     }
     // Parse the list of filenames.
@@ -222,7 +279,8 @@ bool parse_repackageclasses(TokenIndex& idx) {
   // Ignore repackageclasses.
   idx.next();
   if (idx.type() == TokenType::identifier) {
-    std::cerr << "Ignoring -repackageclasses " << idx.it->data << std::endl;
+    std::cerr << "Ignoring -repackageclasses " << idx.it->data << std::endl
+              << idx.show_context(2) << std::endl;
     idx.next();
   }
   return true;
@@ -234,7 +292,8 @@ bool parse_target(TokenIndex& idx, std::string* target_version) {
     // Check to make sure the next TokenType is a version token.
     if (idx.type() != TokenType::target_version_token) {
       std::cerr << "Expected a target version but got " << idx.show()
-                << " at line " << idx.line() << std::endl;
+                << " at line " << idx.line() << std::endl
+                << idx.show_context(2) << std::endl;
       return true;
     }
     *target_version = idx.it->data.to_string();
@@ -291,7 +350,8 @@ bool parse_modifiers(TokenIndex& idx, KeepSpec* keep) {
     idx.next();
     if (!is_modifier(idx.type())) {
       std::cerr << "Expected keep option modifier but found : " << idx.show()
-                << " at line number " << idx.line() << std::endl;
+                << " at line number " << idx.line() << std::endl
+                << idx.show_context(2) << std::endl;
       return false;
     }
     switch (idx.type()) {
@@ -370,7 +430,8 @@ std::string parse_annotation_type(TokenIndex& idx) {
   idx.next();
   if (idx.type() != TokenType::identifier) {
     std::cerr << "Expecting a class identifier after @ but got " << idx.show()
-              << " at line " << idx.line() << std::endl;
+              << " at line " << idx.line() << std::endl
+              << idx.show_context(2) << std::endl;
     return "";
   }
   const auto& typ = idx.it->data;
@@ -408,7 +469,8 @@ bool parse_access_flags(TokenIndex& idx,
         if (is_access_flag_set(setFlags_, access_flag)) {
           std::cerr << "Access flag " << idx.show()
                     << " occurs with conflicting settings at line "
-                    << idx.line() << std::endl;
+                    << idx.line() << std::endl
+                    << idx.show_context(2) << std::endl;
           return false;
         }
         set_access_flag(unsetFlags_, access_flag);
@@ -417,7 +479,8 @@ bool parse_access_flags(TokenIndex& idx,
         if (is_access_flag_set(unsetFlags_, access_flag)) {
           std::cerr << "Access flag " << idx.show()
                     << " occurs with conflicting settings at line "
-                    << idx.line() << std::endl;
+                    << idx.line() << std::endl
+                    << idx.show_context(2) << std::endl;
           return false;
         }
         set_access_flag(setFlags_, access_flag);
@@ -456,7 +519,8 @@ bool parse_class_token(TokenIndex& idx,
     break;
   default:
     std::cerr << "Expected interface, class or enum but got " << idx.show()
-              << " at line number " << idx.line() << std::endl;
+              << " at line number " << idx.line() << std::endl
+              << idx.show_context(2) << std::endl;
     return false;
   }
   idx.next();
@@ -468,7 +532,8 @@ bool parse_class_token(TokenIndex& idx,
 // is returned.
 bool consume_token(TokenIndex& idx, const TokenType& tok) {
   if (idx.type() != tok) {
-    std::cerr << "Unexpected TokenType " << idx.show() << std::endl;
+    std::cerr << "Unexpected TokenType " << idx.show() << std::endl
+              << idx.show_context(2) << std::endl;
     return false;
   }
   idx.next();
@@ -480,7 +545,8 @@ void gobble_semicolon(TokenIndex& idx, bool* ok) {
   *ok = consume_token(idx, TokenType::semiColon);
   if (!*ok) {
     std::cerr << "Expecting a semicolon but found " << idx.show() << " at line "
-              << idx.line() << std::endl;
+              << idx.line() << std::endl
+              << idx.show_context(2) << std::endl;
     return;
   }
 }
@@ -514,7 +580,8 @@ void parse_member_specification(TokenIndex& idx,
   // The next TokenType better be an identifier.
   if (idx.type() != TokenType::identifier) {
     std::cerr << "Expecting field or member specification but got "
-              << idx.show() << " at line " << idx.line() << std::endl;
+              << idx.show() << " at line " << idx.line() << std::endl
+              << idx.show_context(2) << std::endl;
     *ok = false;
     skip_to_semicolon(idx);
     return;
@@ -559,7 +626,8 @@ void parse_member_specification(TokenIndex& idx,
     // This TokenType is the type for the member specification.
     if (idx.type() != TokenType::identifier) {
       std::cerr << "Expecting type identifier but got " << idx.show()
-                << " at line " << idx.line() << std::endl;
+                << " at line " << idx.line() << std::endl
+                << idx.show_context(2) << std::endl;
       *ok = false;
       skip_to_semicolon(idx);
       return;
@@ -569,7 +637,8 @@ void parse_member_specification(TokenIndex& idx,
     member_specification.descriptor = convert_wildcard_type(typ.to_string());
     if (idx.type() != TokenType::identifier) {
       std::cerr << "Expecting identifier name for class member but got "
-                << idx.show() << " at line " << idx.line() << std::endl;
+                << idx.show() << " at line " << idx.line() << std::endl
+                << idx.show_context(2) << std::endl;
       *ok = false;
       skip_to_semicolon(idx);
       return;
@@ -589,7 +658,8 @@ void parse_member_specification(TokenIndex& idx,
       }
       if (idx.type() != TokenType::identifier) {
         std::cerr << "Expecting type identifier but got " << idx.show()
-                  << " at line " << idx.line() << std::endl;
+                  << " at line " << idx.line() << std::endl
+                  << idx.show_context(2) << std::endl;
         *ok = false;
         return;
       }
@@ -600,7 +670,8 @@ void parse_member_specification(TokenIndex& idx,
       if (idx.type() != TokenType::comma &&
           idx.type() != TokenType::closeBracket) {
         std::cerr << "Expecting comma or ) but got " << idx.show()
-                  << " at line " << idx.line() << std::endl;
+                  << " at line " << idx.line() << std::endl
+                  << idx.show_context(2) << std::endl;
         *ok = false;
         return;
       }
@@ -610,7 +681,8 @@ void parse_member_specification(TokenIndex& idx,
         consume_token(idx, TokenType::comma);
         if (idx.type() != TokenType::identifier) {
           std::cerr << "Expecting type identifier after comma but got "
-                    << idx.show() << " at line " << idx.line() << std::endl;
+                    << idx.show() << " at line " << idx.line() << std::endl
+                    << idx.show_context(2) << std::endl;
           *ok = false;
           return;
         }
@@ -694,7 +766,8 @@ ClassSpecification parse_class_specification(TokenIndex& idx, bool* ok) {
   // Parse the class name.
   if (idx.type() != TokenType::identifier) {
     std::cerr << "Expected class name but got " << idx.show() << " at line "
-              << idx.line() << std::endl;
+              << idx.line() << std::endl
+              << idx.show_context(2) << std::endl;
     *ok = false;
     return class_spec;
   }
@@ -707,7 +780,8 @@ ClassSpecification parse_class_specification(TokenIndex& idx, bool* ok) {
     class_spec.extendsAnnotationType = parse_annotation_type(idx);
     if (idx.type() != TokenType::identifier) {
       std::cerr << "Expecting a class name after extends/implements but got "
-                << idx.show() << " at line " << idx.line() << std::endl;
+                << idx.show() << " at line " << idx.line() << std::endl
+                << idx.show_context(2) << std::endl;
       *ok = false;
       class_spec.extendsClassName = "";
     } else {
@@ -769,7 +843,8 @@ void parse(const std::vector<Token>& vec,
     uint32_t line = idx.line();
     if (!idx.it->is_command()) {
       std::cerr << "Expecting command but found " << idx.show() << " at line "
-                << idx.line() << std::endl;
+                << idx.line() << std::endl
+                << idx.show_context(2) << std::endl;
       idx.next();
       skip_to_next_command(idx);
       continue;
@@ -1015,11 +1090,13 @@ void parse(const std::vector<Token>& vec,
       // It is benign to drop -dontnote
       if (name != "dontnote") {
         std::cerr << "Unimplemented command (skipping): " << idx.show()
-                  << " at line " << idx.line() << std::endl;
+                  << " at line " << idx.line() << std::endl
+                  << idx.show_context(2) << std::endl;
       }
     } else {
       std::cerr << "Unexpected TokenType " << idx.show() << " at line "
-                << idx.line() << std::endl;
+                << idx.line() << std::endl
+                << idx.show_context(2) << std::endl;
       (*parse_errors)++;
     }
     idx.next();
