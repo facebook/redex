@@ -64,6 +64,7 @@ enum class TokenType {
   target_version_token,
   filter_pattern,
   eof_token,
+  comment,
 
   // Input/Output Options
   include,

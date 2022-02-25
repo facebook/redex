@@ -29,9 +29,16 @@ struct TokenIndex {
              std::vector<Token>::const_iterator it)
       : data(data), it(it) {}
 
+  void skip_comments() {
+    while (it != data.end() && it->type == TokenType::comment) {
+      ++it;
+    }
+  }
+
   void next() {
     redex_assert(it != data.end());
     ++it;
+    skip_comments();
   }
 
   std::string show() const { return it->show(); }
@@ -839,6 +846,10 @@ void parse(const std::vector<Token>& vec,
     // Break out if we are at the end of the TokenType stream.
     if (idx.type() == TokenType::eof_token) {
       break;
+    }
+    if (idx.type() == TokenType::comment) {
+      idx.next();
+      continue;
     }
     uint32_t line = idx.line();
     if (!idx.it->is_command()) {

@@ -145,6 +145,7 @@ TEST(ProguardLexerTest, assortment) {
       {22, TokenType::keep},
       {22, TokenType::classToken},
       {22, TokenType::identifier},
+      {22, TokenType::comment},
       {23, TokenType::dontobfuscate},
       {24, TokenType::dump},
       {24, TokenType::filepath},

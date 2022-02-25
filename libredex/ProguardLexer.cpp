@@ -304,6 +304,8 @@ std::string Token::show() const {
     return "filter: " + data.to_string();
   case TokenType::eof_token:
     return "<EOF>";
+  case TokenType::comment:
+    return "#" + data.to_string();
 
   // Input/Output Options
   case TokenType::include:
@@ -446,6 +448,7 @@ bool Token::is_command() const {
   case TokenType::target_version_token:
   case TokenType::filter_pattern:
   case TokenType::eof_token:
+  case TokenType::comment:
     return false;
 
   case TokenType::command:
@@ -649,11 +652,15 @@ std::vector<Token> lex(const boost::string_view& in) {
     // Skip comments.
     if (ch == '#') {
       auto eol_pos = data.find('\n');
+      boost::string_view comment_data;
       if (eol_pos != boost::string_view::npos) {
+        comment_data = data.substr(1, eol_pos - 1);
         data = data.substr(eol_pos + 1);
       } else {
+        comment_data = data.substr(1);
         data = boost::string_view();
       }
+      tokens.emplace_back(TokenType::comment, line, comment_data);
       ++line;
       continue;
     }
