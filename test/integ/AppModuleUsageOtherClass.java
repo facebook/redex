@@ -5,7 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-
 @UsesAppModule({"classes", "AppModule"})
 public class AppModuleUsageOtherClass {
   @UsesAppModule({"AppModule"}) public int field;

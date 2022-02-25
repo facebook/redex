@@ -51,13 +51,19 @@ void split_three_stores(std::vector<DexStore>& stores) {
   DexStore third_store(third_dex_metadata);
   auto third_class =
       type_class(DexType::get_type("LAppModuleUsageThirdClass;"));
-  third_store.add_classes(std::vector<DexClass*>{third_class});
+  auto third_class_inner_class = type_class(
+      DexType::get_type("LAppModuleUsageThirdClass$InnerClass$123;"));
+  third_store.add_classes(
+      std::vector<DexClass*>{third_class, third_class_inner_class});
   stores.emplace_back(third_store);
   // remove OtherClass & ThirdClass from root store classes
   root_dex_classes.erase(
       std::find(root_dex_classes.begin(), root_dex_classes.end(), other_class));
   root_dex_classes.erase(
       std::find(root_dex_classes.begin(), root_dex_classes.end(), third_class));
+  root_dex_classes.erase(std::find(root_dex_classes.begin(),
+                                   root_dex_classes.end(),
+                                   third_class_inner_class));
 }
 } // namespace
 
@@ -88,7 +94,7 @@ TEST_F(AppModuleUsageTest, testTwoStores) {
 
   EXPECT_EQ(pass_manager->get_pass_info()[0].metrics.at(
                 "num_methods_access_app_module"),
-            9);
+            10);
   EXPECT_EQ(pass_manager->get_pass_info()[0].metrics.at("num_violations"), 5);
 }
 
@@ -122,7 +128,7 @@ TEST_F(AppModuleUsageTest, testThreeStores) {
   // with a App module access when in different stores
   EXPECT_EQ(pass_manager->get_pass_info()[0].metrics.at(
                 "num_methods_access_app_module"),
-            11);
+            12);
   // 2 extra violations in AppModuleUsageOtherClass when
   // AppMopuleUsageThirdClass is in another store
   EXPECT_EQ(pass_manager->get_pass_info()[0].metrics.at("num_violations"), 7);

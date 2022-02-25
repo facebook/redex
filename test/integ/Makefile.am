@@ -270,7 +270,7 @@ type_analysis_transform_test-class.jar: TypeAnalysisTransformTest.java
 type_inference_test-class.jar: TypeInferenceTest.java
 	$(create_jar)
 
-uses_app_module_annotation-class.dex: UsesAppModule.java
+uses_app_module_annotation-class.jar: UsesAppModule.java
 	$(create_jar)
 
 uses_app_module_annotation_test-class.jar: UsesAppModuleAnnotated.java

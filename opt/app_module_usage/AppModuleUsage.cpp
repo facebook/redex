@@ -327,7 +327,7 @@ unsigned AppModuleUsagePass::gather_violations(
       }
       TRACE(
           APP_MOD_USE,
-          m_crash_with_violations ? 0 : 4,
+          0,
           "%s (from module \"%s\") uses app module \"%s\" without annotation\n",
           method_name.c_str(),
           m_type_store_map.at(method->get_class())->get_name().c_str(),
@@ -346,7 +346,7 @@ unsigned AppModuleUsagePass::gather_violations(
       continue;
     }
     TRACE(APP_MOD_USE,
-          m_crash_with_violations ? 0 : 4,
+          0,
           "%s (from module \"%s\") uses app module \"%s\" without annotation\n",
           field_name.c_str(),
           m_type_store_map.at(field->get_class())->get_name().c_str(),
@@ -428,7 +428,20 @@ bool AppModuleUsagePass::access_granted_by_annotation(DexClass* cls,
           .count(target->get_name())) {
     return true;
   }
-  // TODO: check outer class.
+
+  // Check outer class.
+  std::string_view cls_name = cls->str();
+  auto dollar_sign_idx = cls_name.rfind("$");
+  while (dollar_sign_idx != std::string_view::npos) {
+    cls_name.remove_suffix(cls_name.size() - dollar_sign_idx);
+    std::string new_class_name = std::string(cls_name) + ";";
+    auto* ty = DexType::get_type(new_class_name);
+    DexClass* outer_class = ty ? type_class(ty) : nullptr;
+    if (outer_class) {
+      return access_granted_by_annotation(outer_class, target);
+    }
+    dollar_sign_idx = cls_name.rfind("$");
+  }
   return false;
 }
 

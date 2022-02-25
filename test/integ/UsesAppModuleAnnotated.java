@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+
 @UsesAppModule({"AppModule"})
 public class UsesAppModuleAnnotated {
   @UsesAppModule({"AppModule"}) private AppModuleUsageOtherClass field;

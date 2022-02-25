@@ -16,7 +16,7 @@ import java.lang.annotation.Target;
  * @param value the list of names (as strings) of the voltron modulues used
  */
 @Target({ElementType.METHOD, ElementType.TYPE, ElementType.FIELD})
-@Retention(RetentionPolicy.CLASS)
+@Retention(RetentionPolicy.RUNTIME)
 public @interface UsesAppModule {
   String[] value() default {};
 }
