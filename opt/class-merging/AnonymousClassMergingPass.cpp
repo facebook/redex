@@ -26,11 +26,11 @@ void AnonymousClassMergingPass::bind_config() {
        "Do not merge the classes or its implementors");
   utils::load_types_and_prefixes(excl_names, m_merging_spec.exclude_types,
                                  m_merging_spec.exclude_prefixes);
-  bind("min_eligible",
+  bind("global_min_count",
        500,
-       m_min_eligible_classes,
-       "Strip out interfaces or supertypes with less than min_eligible "
-       "implementors or subclasses");
+       m_global_min_count,
+       "Ignore interface or class hierarchies with less than "
+       "global_min_count implementors or subclasses");
   bind("include_primary_dex", false, m_merging_spec.include_primary_dex);
   bind("allowed_packages",
        {},
@@ -58,7 +58,7 @@ void AnonymousClassMergingPass::run_pass(DexStoresVector& stores,
   m_merging_spec.min_count = m_min_count;
 
   discover_mergeable_anonymous_classes(
-      stores, allowed_packages, m_min_eligible_classes, &m_merging_spec, &mgr);
+      stores, allowed_packages, m_global_min_count, &m_merging_spec, &mgr);
   if (!m_merging_spec.roots.empty()) {
     auto scope = build_class_scope(stores);
     class_merging::merge_model(scope, conf, mgr, stores, m_merging_spec);

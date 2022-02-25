@@ -29,7 +29,8 @@ void IntraDexClassMergingPass::bind_config() {
   bind("global_min_count",
        200,
        m_global_min_count,
-       "Minimal number of subclasses or implementors for each filtered root");
+       "Ignore interface or class hierarchies with less than global_mint_count "
+       "implementors or subclasses");
 }
 
 void IntraDexClassMergingPass::run_pass(DexStoresVector& stores,
