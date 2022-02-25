@@ -60,21 +60,24 @@ using VRegDefsUses =
 using WideVReg = std::unordered_set<vreg_t>;
 
 /*
- * Comparator for ActiveIntervals
+ * ActiveInterval, ordered first by start_point, and then by live_interval_idx.
  */
-struct CmpActiveIntervalEndPoint {
-  bool operator()(const std::pair<size_t, uint32_t>& lhs,
-                  const std::pair<size_t, uint32_t>& rhs) {
-    return lhs.second < rhs.second;
+struct ActiveInterval {
+  int32_t live_interval_idx;
+  uint32_t start_point;
+  bool operator<(const ActiveInterval& other) const {
+    if (start_point != other.start_point) {
+      return start_point < other.start_point;
+    }
+    return live_interval_idx < other.live_interval_idx;
   }
 };
+
 /*
  * Order active intervals by their first use insn idx, asc.
  */
 using ActiveIntervals =
-    std::priority_queue<std::pair<size_t, uint32_t>,
-                        std::vector<std::pair<size_t, uint32_t>>,
-                        CmpActiveIntervalEndPoint>;
+    std::priority_queue<ActiveInterval, std::vector<ActiveInterval>>;
 
 struct LiveIntervalPoint {
   enum class Kind : uint8_t {

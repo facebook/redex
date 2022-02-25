@@ -65,14 +65,14 @@ void LinearScanAllocator::allocate() {
   if (m_live_intervals.empty()) {
     return;
   }
-  for (int idx = m_live_intervals.size() - 1; idx >= 0; --idx) {
+  for (int32_t idx = m_live_intervals.size() - 1; idx >= 0; --idx) {
     auto& live_interval = m_live_intervals[idx];
     expire_old_intervals(live_interval.end_point);
     // TODO: (in the future) add spill here given dex constraints
     vreg_t cur_vreg = live_interval.vreg;
     reg_t alloc_reg = allocate_register(cur_vreg, live_interval.end_point);
     live_interval.reg = alloc_reg;
-    m_active_intervals.push(std::make_pair(idx, live_interval.start_point));
+    m_active_intervals.push({idx, live_interval.start_point});
   }
   for (auto& interval : m_live_intervals) {
     auto& vreg_defs_uses = m_vreg_defs_uses[interval.vreg];
@@ -142,8 +142,9 @@ reg_t LinearScanAllocator::allocate_register(reg_t for_vreg,
 
 void LinearScanAllocator::expire_old_intervals(uint32_t end_point) {
   while (!m_active_intervals.empty() &&
-         m_active_intervals.top().second > end_point) {
-    auto& interval_to_free = m_live_intervals[m_active_intervals.top().first];
+         m_active_intervals.top().start_point > end_point) {
+    auto& interval_to_free =
+        m_live_intervals[m_active_intervals.top().live_interval_idx];
     m_active_intervals.pop();
     if (!m_this_vreg || *m_this_vreg != interval_to_free.vreg) {
       reg_t freed_reg = interval_to_free.reg.value();
