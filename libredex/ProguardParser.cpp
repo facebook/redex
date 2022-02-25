@@ -9,6 +9,7 @@
 #include <iostream>
 #include <vector>
 
+#include "Debug.h"
 #include "Macros.h"
 #include "ProguardLexer.h"
 #include "ProguardMap.h"
@@ -20,32 +21,52 @@ namespace keep_rules {
 namespace proguard_parser {
 namespace {
 
-bool parse_boolean_command(std::vector<Token>::iterator* it,
+struct TokenIndex {
+  const std::vector<Token>& data;
+  std::vector<Token>::const_iterator it;
+
+  TokenIndex(const std::vector<Token>& data,
+             std::vector<Token>::const_iterator it)
+      : data(data), it(it) {}
+
+  void next() {
+    redex_assert(it != data.end());
+    ++it;
+  }
+
+  std::string show() const { return it->show(); }
+
+  size_t line() const { return it->line; }
+
+  TokenType type() const { return it->type; }
+};
+
+bool parse_boolean_command(TokenIndex& idx,
                            TokenType boolean_option,
                            bool* option,
                            bool value) {
-  if ((*it)->type != boolean_option) {
+  if (idx.type() != boolean_option) {
     return false;
   }
-  ++(*it);
+  idx.next();
   *option = value;
   return true;
 }
 
-void skip_to_next_command(std::vector<Token>::iterator* it) {
-  while (((*it)->type != TokenType::eof_token) && (!(*it)->is_command())) {
-    ++(*it);
+void skip_to_next_command(TokenIndex& idx) {
+  while ((idx.type() != TokenType::eof_token) && (!idx.it->is_command())) {
+    idx.next();
   }
 }
 
-bool parse_single_filepath_command(std::vector<Token>::iterator* it,
+bool parse_single_filepath_command(TokenIndex& idx,
                                    TokenType filepath_command_token,
                                    std::string* filepath) {
-  if ((*it)->type == filepath_command_token) {
-    unsigned int line_number = (*it)->line;
-    ++(*it); // Consume the command token.
+  if (idx.type() == filepath_command_token) {
+    unsigned int line_number = idx.line();
+    idx.next(); // Consume the command token.
     // Fail without consumption if this is an end of file token.
-    if ((*it)->type == TokenType::eof_token) {
+    if (idx.type() == TokenType::eof_token) {
       std::cerr
           << "Expecting at least one file as an argument but found end of "
              "file at line "
@@ -53,50 +74,49 @@ bool parse_single_filepath_command(std::vector<Token>::iterator* it,
       return true;
     }
     // Fail without consumption if this is a command token.
-    if ((*it)->is_command()) {
+    if (idx.it->is_command()) {
       std::cerr << "Expecting a file path argument but got command "
-                << (*it)->show() << " at line  " << (*it)->line << std::endl;
+                << idx.show() << " at line  " << idx.line() << std::endl;
       return true;
     }
     // Parse the filename.
-    if ((*it)->type != TokenType::filepath) {
-      std::cerr << "Expected a filepath but got " << (*it)->show()
-                << " at line " << (*it)->line << std::endl;
+    if (idx.type() != TokenType::filepath) {
+      std::cerr << "Expected a filepath but got " << idx.show() << " at line "
+                << idx.line() << std::endl;
       return true;
     }
-    *filepath = (*it)->data.to_string();
-    ++(*it); // Consume the filepath token
+    *filepath = idx.it->data.to_string();
+    idx.next(); // Consume the filepath token
     return true;
   }
   return false;
 }
 
 template <bool kOptional = false>
-void parse_filepaths(std::vector<Token>::iterator* it,
-                     std::vector<std::string>* into) {
+void parse_filepaths(TokenIndex& idx, std::vector<std::string>* into) {
   std::vector<std::string> filepaths;
-  if ((*it)->type != TokenType::filepath) {
+  if (idx.type() != TokenType::filepath) {
     if (!kOptional) {
-      std::cerr << "Expected filepath but got " << (*it)->show() << " at line "
-                << (*it)->line << std::endl;
+      std::cerr << "Expected filepath but got " << idx.show() << " at line "
+                << idx.line() << std::endl;
     }
     return;
   }
-  while ((*it)->type == TokenType::filepath) {
-    into->push_back((*it)->data.to_string());
-    ++(*it);
+  while (idx.type() == TokenType::filepath) {
+    into->push_back(idx.it->data.to_string());
+    idx.next();
   }
 }
 
-bool parse_filepath_command(std::vector<Token>::iterator* it,
+bool parse_filepath_command(TokenIndex& idx,
                             TokenType filepath_command_token,
                             const std::string& basedir,
                             std::vector<std::string>* filepaths) {
-  if ((*it)->type == filepath_command_token) {
-    unsigned int line_number = (*it)->line;
-    ++(*it); // Consume the command token.
+  if (idx.type() == filepath_command_token) {
+    unsigned int line_number = idx.line();
+    idx.next(); // Consume the command token.
     // Fail without consumption if this is an end of file token.
-    if ((*it)->type == TokenType::eof_token) {
+    if (idx.type() == TokenType::eof_token) {
       std::cerr
           << "Expecting at least one file as an argument but found end of "
              "file at line "
@@ -104,44 +124,44 @@ bool parse_filepath_command(std::vector<Token>::iterator* it,
       return true;
     }
     // Fail without consumption if this is a command token.
-    if ((*it)->is_command()) {
+    if (idx.it->is_command()) {
       std::cerr << "Expecting a file path argument but got command "
-                << (*it)->show() << " at line  " << (*it)->line << std::endl;
+                << idx.show() << " at line  " << idx.line() << std::endl;
       return true;
     }
     // Parse the filename.
-    if ((*it)->type != TokenType::filepath) {
-      std::cerr << "Expected a filepath but got " << (*it)->show()
-                << " at line " << (*it)->line << std::endl;
+    if (idx.type() != TokenType::filepath) {
+      std::cerr << "Expected a filepath but got " << idx.show() << " at line "
+                << idx.line() << std::endl;
       return true;
     }
-    parse_filepaths(it, filepaths);
+    parse_filepaths(idx, filepaths);
     return true;
   }
   return false;
 }
 
-bool parse_optional_filepath_command(std::vector<Token>::iterator* it,
+bool parse_optional_filepath_command(TokenIndex& idx,
                                      TokenType filepath_command_token,
                                      std::vector<std::string>* filepaths) {
-  if ((*it)->type != filepath_command_token) {
+  if (idx.type() != filepath_command_token) {
     return false;
   }
-  ++(*it); // Consume the command token.
+  idx.next(); // Consume the command token.
   // Parse an optional filepath argument.
-  parse_filepaths</*kOptional=*/true>(it, filepaths);
+  parse_filepaths</*kOptional=*/true>(idx, filepaths);
   return true;
 }
 
-bool parse_jars(std::vector<Token>::iterator* it,
+bool parse_jars(TokenIndex& idx,
                 TokenType jar_token,
                 const std::string& basedir,
                 std::vector<std::string>* jars) {
-  if ((*it)->type == jar_token) {
-    unsigned int line_number = (*it)->line;
-    ++(*it); // Consume the jar token.
+  if (idx.type() == jar_token) {
+    unsigned int line_number = idx.line();
+    idx.next(); // Consume the jar token.
     // Fail without consumption if this is an end of file token.
-    if ((*it)->type == TokenType::eof_token) {
+    if (idx.type() == TokenType::eof_token) {
       std::cerr
           << "Expecting at least one file as an argument but found end of "
              "file at line "
@@ -149,115 +169,113 @@ bool parse_jars(std::vector<Token>::iterator* it,
       return true;
     }
     // Parse the list of filenames.
-    parse_filepaths(it, jars);
+    parse_filepaths(idx, jars);
     return true;
   }
   return false;
 }
 
-bool parse_dontusemixedcaseclassnames(std::vector<Token>::iterator* it,
+bool parse_dontusemixedcaseclassnames(TokenIndex& idx,
                                       bool* dontusemixedcaseclassnames) {
-  if ((*it)->type != TokenType::dontusemixedcaseclassnames_token) {
+  if (idx.type() != TokenType::dontusemixedcaseclassnames_token) {
     return false;
   }
   *dontusemixedcaseclassnames = true;
-  ++(*it);
+  idx.next();
   return true;
 }
 
-bool parse_dontpreverify(std::vector<Token>::iterator* it,
-                         bool* dontpreverify) {
-  if ((*it)->type != TokenType::dontpreverify_token) {
+bool parse_dontpreverify(TokenIndex& idx, bool* dontpreverify) {
+  if (idx.type() != TokenType::dontpreverify_token) {
     return false;
   }
   *dontpreverify = true;
-  ++(*it);
+  idx.next();
   return true;
 }
 
-bool parse_verbose(std::vector<Token>::iterator* it, bool* verbose) {
-  if ((*it)->type != TokenType::verbose_token) {
+bool parse_verbose(TokenIndex& idx, bool* verbose) {
+  if (idx.type() != TokenType::verbose_token) {
     return false;
   }
   *verbose = true;
-  ++(*it);
+  idx.next();
   return true;
 }
 
-bool parse_bool_command(std::vector<Token>::iterator* it,
+bool parse_bool_command(TokenIndex& idx,
                         TokenType bool_command_token,
                         bool new_value,
                         bool* bool_value) {
-  if ((*it)->type == bool_command_token) {
-    ++(*it); // Consume the boolean command token.
+  if (idx.type() == bool_command_token) {
+    idx.next(); // Consume the boolean command token.
     *bool_value = new_value;
     return true;
   }
   return false;
 }
 
-bool parse_repackageclasses(std::vector<Token>::iterator* it) {
-  if ((*it)->type != TokenType::repackageclasses) {
+bool parse_repackageclasses(TokenIndex& idx) {
+  if (idx.type() != TokenType::repackageclasses) {
     return false;
   }
   // Ignore repackageclasses.
-  ++(*it);
-  if ((*it)->type == TokenType::identifier) {
-    std::cerr << "Ignoring -repackageclasses " << (*it)->data << std::endl;
-    ++(*it);
+  idx.next();
+  if (idx.type() == TokenType::identifier) {
+    std::cerr << "Ignoring -repackageclasses " << idx.it->data << std::endl;
+    idx.next();
   }
   return true;
 }
 
-bool parse_target(std::vector<Token>::iterator* it,
-                  std::string* target_version) {
-  if ((*it)->type == TokenType::target) {
-    ++(*it); // Consume the target command token.
+bool parse_target(TokenIndex& idx, std::string* target_version) {
+  if (idx.type() == TokenType::target) {
+    idx.next(); // Consume the target command token.
     // Check to make sure the next TokenType is a version token.
-    if ((*it)->type != TokenType::target_version_token) {
-      std::cerr << "Expected a target version but got " << (*it)->show()
-                << " at line " << (*it)->line << std::endl;
+    if (idx.type() != TokenType::target_version_token) {
+      std::cerr << "Expected a target version but got " << idx.show()
+                << " at line " << idx.line() << std::endl;
       return true;
     }
-    *target_version = (*it)->data.to_string();
+    *target_version = idx.it->data.to_string();
     // Consume the target version token.
-    ++(*it);
+    idx.next();
     return true;
   }
   return false;
 }
 
-bool parse_allowaccessmodification(std::vector<Token>::iterator* it,
+bool parse_allowaccessmodification(TokenIndex& idx,
                                    bool* allowaccessmodification) {
-  if ((*it)->type != TokenType::allowaccessmodification_token) {
+  if (idx.type() != TokenType::allowaccessmodification_token) {
     return false;
   }
-  ++(*it);
+  idx.next();
   *allowaccessmodification = true;
   return true;
 }
 
-bool parse_filter_list_command(std::vector<Token>::iterator* it,
+bool parse_filter_list_command(TokenIndex& idx,
                                TokenType filter_command_token,
                                std::vector<std::string>* filters) {
-  if ((*it)->type != filter_command_token) {
+  if (idx.type() != filter_command_token) {
     return false;
   }
-  ++(*it);
-  while ((*it)->type == TokenType::filter_pattern) {
-    filters->push_back((*it)->data.to_string());
-    ++(*it);
+  idx.next();
+  while (idx.type() == TokenType::filter_pattern) {
+    filters->push_back(idx.it->data.to_string());
+    idx.next();
   }
   return true;
 }
 
-bool parse_optimizationpasses_command(std::vector<Token>::iterator* it) {
-  if ((*it)->type != TokenType::optimizationpasses) {
+bool parse_optimizationpasses_command(TokenIndex& idx) {
+  if (idx.type() != TokenType::optimizationpasses) {
     return false;
   }
-  ++(*it);
+  idx.next();
   // Comsume the next token.
-  ++(*it);
+  idx.next();
   return true;
 }
 
@@ -268,15 +286,15 @@ bool is_modifier(TokenType tok) {
          tok == TokenType::allowobfuscation_token;
 }
 
-bool parse_modifiers(std::vector<Token>::iterator* it, KeepSpec* keep) {
-  while ((*it)->type == TokenType::comma) {
-    ++(*it);
-    if (!is_modifier((*it)->type)) {
-      std::cerr << "Expected keep option modifier but found : " << (*it)->show()
-                << " at line number " << (*it)->line << std::endl;
+bool parse_modifiers(TokenIndex& idx, KeepSpec* keep) {
+  while (idx.type() == TokenType::comma) {
+    idx.next();
+    if (!is_modifier(idx.type())) {
+      std::cerr << "Expected keep option modifier but found : " << idx.show()
+                << " at line number " << idx.line() << std::endl;
       return false;
     }
-    switch ((*it)->type) {
+    switch (idx.type()) {
     case TokenType::includedescriptorclasses_token:
       keep->includedescriptorclasses = true;
       break;
@@ -292,7 +310,7 @@ bool parse_modifiers(std::vector<Token>::iterator* it, KeepSpec* keep) {
     default:
       break;
     }
-    ++(*it);
+    idx.next();
   }
   return true;
 }
@@ -345,18 +363,18 @@ bool is_negation_or_class_access_modifier(TokenType type) {
   }
 }
 
-std::string parse_annotation_type(std::vector<Token>::iterator* it) {
-  if ((*it)->type != TokenType::annotation_application) {
+std::string parse_annotation_type(TokenIndex& idx) {
+  if (idx.type() != TokenType::annotation_application) {
     return "";
   }
-  ++(*it);
-  if ((*it)->type != TokenType::identifier) {
-    std::cerr << "Expecting a class identifier after @ but got "
-              << (*it)->show() << " at line " << (*it)->line << std::endl;
+  idx.next();
+  if (idx.type() != TokenType::identifier) {
+    std::cerr << "Expecting a class identifier after @ but got " << idx.show()
+              << " at line " << idx.line() << std::endl;
     return "";
   }
-  const auto& typ = (*it)->data;
-  ++(*it);
+  const auto& typ = idx.it->data;
+  idx.next();
   return convert_wildcard_type(typ.to_string());
 }
 
@@ -370,36 +388,36 @@ void set_access_flag(DexAccessFlags& accessFlags,
   accessFlags = accessFlags | settingFlag;
 }
 
-bool parse_access_flags(std::vector<Token>::iterator* it,
+bool parse_access_flags(TokenIndex& idx,
                         DexAccessFlags& setFlags_,
                         DexAccessFlags& unsetFlags_) {
   bool negated = false;
-  while (is_negation_or_class_access_modifier((*it)->type)) {
+  while (is_negation_or_class_access_modifier(idx.type())) {
     // Copy the iterator so we can peek and see if the next TokenType is an
     // access token; we don't want to modify the main iterator otherwise
-    auto access_it = *it;
-    if ((*it)->type == TokenType::notToken) {
+    auto access_it = idx.it;
+    if (idx.type() == TokenType::notToken) {
       negated = true;
       ++access_it;
     }
     bool ok;
     DexAccessFlags access_flag = process_access_modifier(access_it->type, &ok);
     if (ok) {
-      *it = ++access_it;
+      idx.it = ++access_it;
       if (negated) {
         if (is_access_flag_set(setFlags_, access_flag)) {
-          std::cerr << "Access flag " << (*it)->show()
+          std::cerr << "Access flag " << idx.show()
                     << " occurs with conflicting settings at line "
-                    << (*it)->line << std::endl;
+                    << idx.line() << std::endl;
           return false;
         }
         set_access_flag(unsetFlags_, access_flag);
         negated = false;
       } else {
         if (is_access_flag_set(unsetFlags_, access_flag)) {
-          std::cerr << "Access flag " << (*it)->show()
+          std::cerr << "Access flag " << idx.show()
                     << " occurs with conflicting settings at line "
-                    << (*it)->line << std::endl;
+                    << idx.line() << std::endl;
           return false;
         }
         set_access_flag(setFlags_, access_flag);
@@ -415,16 +433,16 @@ bool parse_access_flags(std::vector<Token>::iterator* it,
 /*
  * Parse [!](class|interface|enum|@interface).
  */
-bool parse_class_token(std::vector<Token>::iterator* it,
+bool parse_class_token(TokenIndex& idx,
                        DexAccessFlags& setFlags_,
                        DexAccessFlags& unsetFlags_) {
   bool negated = false;
-  if ((*it)->type == TokenType::notToken) {
+  if (idx.type() == TokenType::notToken) {
     negated = true;
-    ++(*it);
+    idx.next();
   }
   // Make sure the next keyword is interface, class, enum.
-  switch ((*it)->type) {
+  switch (idx.type()) {
   case TokenType::interface:
     set_access_flag(negated ? unsetFlags_ : setFlags_, ACC_INTERFACE);
     break;
@@ -437,77 +455,77 @@ bool parse_class_token(std::vector<Token>::iterator* it,
   case TokenType::classToken:
     break;
   default:
-    std::cerr << "Expected interface, class or enum but got " << (*it)->show()
-              << " at line number " << (*it)->line << std::endl;
+    std::cerr << "Expected interface, class or enum but got " << idx.show()
+              << " at line number " << idx.line() << std::endl;
     return false;
   }
-  ++(*it);
+  idx.next();
   return true;
 }
 
 // Consume an expected token, indicating if that TokenType was found.
 // If some other TokenType is found, then it is not consumed and false
 // is returned.
-bool consume_token(std::vector<Token>::iterator* it, const TokenType& tok) {
-  if ((*it)->type != tok) {
-    std::cerr << "Unexpected TokenType " << (*it)->show() << std::endl;
+bool consume_token(TokenIndex& idx, const TokenType& tok) {
+  if (idx.type() != tok) {
+    std::cerr << "Unexpected TokenType " << idx.show() << std::endl;
     return false;
   }
-  ++(*it);
+  idx.next();
   return true;
 }
 
 // Consume an expected semicolon, complaining if one was not found.
-void gobble_semicolon(std::vector<Token>::iterator* it, bool* ok) {
-  *ok = consume_token(it, TokenType::semiColon);
+void gobble_semicolon(TokenIndex& idx, bool* ok) {
+  *ok = consume_token(idx, TokenType::semiColon);
   if (!*ok) {
-    std::cerr << "Expecting a semicolon but found " << (*it)->show()
-              << " at line " << (*it)->line << std::endl;
+    std::cerr << "Expecting a semicolon but found " << idx.show() << " at line "
+              << idx.line() << std::endl;
     return;
   }
 }
 
-void skip_to_semicolon(std::vector<Token>::iterator* it) {
-  while (((*it)->type != TokenType::semiColon) &&
-         ((*it)->type != TokenType::eof_token)) {
-    ++(*it);
+void skip_to_semicolon(TokenIndex& idx) {
+  while ((idx.type() != TokenType::semiColon) &&
+         (idx.type() != TokenType::eof_token)) {
+    idx.next();
   }
-  if ((*it)->type == TokenType::semiColon) {
-    ++(*it);
+  if (idx.type() == TokenType::semiColon) {
+    idx.next();
   }
 }
 
-void parse_member_specification(std::vector<Token>::iterator* it,
+void parse_member_specification(TokenIndex& idx,
                                 ClassSpecification* class_spec,
                                 bool* ok) {
   MemberSpecification member_specification;
   *ok = true;
-  member_specification.annotationType = parse_annotation_type(it);
-  if (!parse_access_flags(it,
+  member_specification.annotationType = parse_annotation_type(idx);
+  if (!parse_access_flags(idx,
                           member_specification.requiredSetAccessFlags,
                           member_specification.requiredUnsetAccessFlags)) {
     // There was a problem parsing the access flags. Return an empty class spec
     // for now.
     std::cerr << "Problem parsing access flags for member specification.\n";
     *ok = false;
-    skip_to_semicolon(it);
+    skip_to_semicolon(idx);
     return;
   }
   // The next TokenType better be an identifier.
-  if ((*it)->type != TokenType::identifier) {
+  if (idx.type() != TokenType::identifier) {
     std::cerr << "Expecting field or member specification but got "
-              << (*it)->show() << " at line " << (*it)->line << std::endl;
+              << idx.show() << " at line " << idx.line() << std::endl;
     *ok = false;
-    skip_to_semicolon(it);
+    skip_to_semicolon(idx);
     return;
   }
-  const auto& ident = (*it)->data;
+  const auto& ident = idx.it->data;
   // Check for "*".
   if (ident == "*") {
     member_specification.name = "";
     member_specification.descriptor = "";
-    ++(*it);
-    gobble_semicolon(it, ok);
+    idx.next();
+    gobble_semicolon(idx, ok);
     class_spec->methodSpecifications.push_back(member_specification);
     class_spec->fieldSpecifications.push_back(member_specification);
     return;
@@ -516,8 +534,8 @@ void parse_member_specification(std::vector<Token>::iterator* it,
   if (ident == "<methods>") {
     member_specification.name = "";
     member_specification.descriptor = "";
-    ++(*it);
-    gobble_semicolon(it, ok);
+    idx.next();
+    gobble_semicolon(idx, ok);
     class_spec->methodSpecifications.push_back(member_specification);
     return;
   }
@@ -525,8 +543,8 @@ void parse_member_specification(std::vector<Token>::iterator* it,
   if (ident == "<fields>") {
     member_specification.name = "";
     member_specification.descriptor = "";
-    ++(*it);
-    gobble_semicolon(it, ok);
+    idx.next();
+    gobble_semicolon(idx, ok);
     class_spec->fieldSpecifications.push_back(member_specification);
     return;
   }
@@ -536,63 +554,63 @@ void parse_member_specification(std::vector<Token>::iterator* it,
     member_specification.descriptor = "V";
     set_access_flag(member_specification.requiredSetAccessFlags,
                     ACC_CONSTRUCTOR);
-    ++(*it);
+    idx.next();
   } else {
     // This TokenType is the type for the member specification.
-    if ((*it)->type != TokenType::identifier) {
-      std::cerr << "Expecting type identifier but got " << (*it)->show()
-                << " at line " << (*it)->line << std::endl;
+    if (idx.type() != TokenType::identifier) {
+      std::cerr << "Expecting type identifier but got " << idx.show()
+                << " at line " << idx.line() << std::endl;
       *ok = false;
-      skip_to_semicolon(it);
+      skip_to_semicolon(idx);
       return;
     }
-    const auto& typ = (*it)->data;
-    ++(*it);
+    const auto& typ = idx.it->data;
+    idx.next();
     member_specification.descriptor = convert_wildcard_type(typ.to_string());
-    if ((*it)->type != TokenType::identifier) {
+    if (idx.type() != TokenType::identifier) {
       std::cerr << "Expecting identifier name for class member but got "
-                << (*it)->show() << " at line " << (*it)->line << std::endl;
+                << idx.show() << " at line " << idx.line() << std::endl;
       *ok = false;
-      skip_to_semicolon(it);
+      skip_to_semicolon(idx);
       return;
     }
-    member_specification.name = (*it)->data.to_string();
-    ++(*it);
+    member_specification.name = idx.it->data.to_string();
+    idx.next();
   }
   // Check to see if this is a method specification.
-  if ((*it)->type == TokenType::openBracket) {
-    consume_token(it, TokenType::openBracket);
+  if (idx.type() == TokenType::openBracket) {
+    consume_token(idx, TokenType::openBracket);
     std::string arg = "(";
     while (true) {
       // If there is a ")" next we are done.
-      if ((*it)->type == TokenType::closeBracket) {
-        consume_token(it, TokenType::closeBracket);
+      if (idx.type() == TokenType::closeBracket) {
+        consume_token(idx, TokenType::closeBracket);
         break;
       }
-      if ((*it)->type != TokenType::identifier) {
-        std::cerr << "Expecting type identifier but got " << (*it)->show()
-                  << " at line " << (*it)->line << std::endl;
+      if (idx.type() != TokenType::identifier) {
+        std::cerr << "Expecting type identifier but got " << idx.show()
+                  << " at line " << idx.line() << std::endl;
         *ok = false;
         return;
       }
-      const auto& typ = (*it)->data;
-      consume_token(it, TokenType::identifier);
+      const auto& typ = idx.it->data;
+      consume_token(idx, TokenType::identifier);
       arg += convert_wildcard_type(typ.to_string());
       // The next TokenType better be a comma or a closing bracket.
-      if ((*it)->type != TokenType::comma &&
-          (*it)->type != TokenType::closeBracket) {
-        std::cerr << "Expecting comma or ) but got " << (*it)->show()
-                  << " at line " << (*it)->line << std::endl;
+      if (idx.type() != TokenType::comma &&
+          idx.type() != TokenType::closeBracket) {
+        std::cerr << "Expecting comma or ) but got " << idx.show()
+                  << " at line " << idx.line() << std::endl;
         *ok = false;
         return;
       }
       // If the next TokenType is a comma (rather than closing bracket) consume
       // it and check that it is followed by an identifier.
-      if ((*it)->type == TokenType::comma) {
-        consume_token(it, TokenType::comma);
-        if ((*it)->type != TokenType::identifier) {
+      if (idx.type() == TokenType::comma) {
+        consume_token(idx, TokenType::comma);
+        if (idx.type() != TokenType::identifier) {
           std::cerr << "Expecting type identifier after comma but got "
-                    << (*it)->show() << " at line " << (*it)->line << std::endl;
+                    << idx.show() << " at line " << idx.line() << std::endl;
           *ok = false;
           return;
         }
@@ -603,24 +621,24 @@ void parse_member_specification(std::vector<Token>::iterator* it,
     member_specification.descriptor = arg;
   }
   // if with value, look for return
-  if ((*it)->type == TokenType::returns) {
-    ++(*it);
-    const auto& rident = (*it)->data;
+  if (idx.type() == TokenType::returns) {
+    idx.next();
+    const auto& rident = idx.it->data;
     if (rident == "true") {
       member_specification.return_value.value_type =
           AssumeReturnValue::ValueType::ValueBool;
       member_specification.return_value.value.v = 1;
-      ++(*it);
+      idx.next();
     }
     if (rident == "false") {
       member_specification.return_value.value_type =
           AssumeReturnValue::ValueType::ValueBool;
       member_specification.return_value.value.v = 0;
-      ++(*it);
+      idx.next();
     }
   }
   // Make sure member specification ends with a semicolon.
-  gobble_semicolon(it, ok);
+  gobble_semicolon(idx, ok);
   if (!ok) {
     return;
   }
@@ -631,22 +649,22 @@ void parse_member_specification(std::vector<Token>::iterator* it,
   }
 }
 
-void parse_member_specifications(std::vector<Token>::iterator* it,
+void parse_member_specifications(TokenIndex& idx,
                                  ClassSpecification* class_spec,
                                  bool* ok) {
-  if ((*it)->type == TokenType::openCurlyBracket) {
-    ++(*it);
-    while (((*it)->type != TokenType::closeCurlyBracket) &&
-           ((*it)->type != TokenType::eof_token)) {
-      parse_member_specification(it, class_spec, ok);
+  if (idx.type() == TokenType::openCurlyBracket) {
+    idx.next();
+    while ((idx.type() != TokenType::closeCurlyBracket) &&
+           (idx.type() != TokenType::eof_token)) {
+      parse_member_specification(idx, class_spec, ok);
       if (!*ok) {
         // We failed to parse a member specification so skip to the next
         // semicolon.
-        skip_to_semicolon(it);
+        skip_to_semicolon(idx);
       }
     }
-    if ((*it)->type == TokenType::closeCurlyBracket) {
-      ++(*it);
+    if (idx.type() == TokenType::closeCurlyBracket) {
+      idx.next();
     }
   }
 }
@@ -656,13 +674,12 @@ bool member_comparison(const MemberSpecification& m1,
   return m1.name < m2.name;
 }
 
-ClassSpecification parse_class_specification(std::vector<Token>::iterator* it,
-                                             bool* ok) {
+ClassSpecification parse_class_specification(TokenIndex& idx, bool* ok) {
   ClassSpecification class_spec;
   *ok = true;
-  class_spec.annotationType = parse_annotation_type(it);
+  class_spec.annotationType = parse_annotation_type(idx);
   if (!parse_access_flags(
-          it, class_spec.setAccessFlags, class_spec.unsetAccessFlags)) {
+          idx, class_spec.setAccessFlags, class_spec.unsetAccessFlags)) {
     // There was a problem parsing the access flags. Return an empty class spec
     // for now.
     std::cerr << "Problem parsing access flags for class specification.\n";
@@ -670,36 +687,36 @@ ClassSpecification parse_class_specification(std::vector<Token>::iterator* it,
     return class_spec;
   }
   if (!parse_class_token(
-          it, class_spec.setAccessFlags, class_spec.unsetAccessFlags)) {
+          idx, class_spec.setAccessFlags, class_spec.unsetAccessFlags)) {
     *ok = false;
     return class_spec;
   }
   // Parse the class name.
-  if ((*it)->type != TokenType::identifier) {
-    std::cerr << "Expected class name but got " << (*it)->show() << " at line "
-              << (*it)->line << std::endl;
+  if (idx.type() != TokenType::identifier) {
+    std::cerr << "Expected class name but got " << idx.show() << " at line "
+              << idx.line() << std::endl;
     *ok = false;
     return class_spec;
   }
-  class_spec.className = (*it)->data.to_string();
-  ++(*it);
+  class_spec.className = idx.it->data.to_string();
+  idx.next();
   // Parse extends/implements if present, treating implements like extends.
-  if (((*it)->type == TokenType::extends) ||
-      ((*it)->type == TokenType::implements)) {
-    ++(*it);
-    class_spec.extendsAnnotationType = parse_annotation_type(it);
-    if ((*it)->type != TokenType::identifier) {
+  if ((idx.type() == TokenType::extends) ||
+      (idx.type() == TokenType::implements)) {
+    idx.next();
+    class_spec.extendsAnnotationType = parse_annotation_type(idx);
+    if (idx.type() != TokenType::identifier) {
       std::cerr << "Expecting a class name after extends/implements but got "
-                << (*it)->show() << " at line " << (*it)->line << std::endl;
+                << idx.show() << " at line " << idx.line() << std::endl;
       *ok = false;
       class_spec.extendsClassName = "";
     } else {
-      class_spec.extendsClassName = (*it)->data.to_string();
+      class_spec.extendsClassName = idx.it->data.to_string();
     }
-    ++(*it);
+    idx.next();
   }
   // Parse the member specifications, if there are any
-  parse_member_specifications(it, &class_spec, ok);
+  parse_member_specifications(idx, &class_spec, ok);
   std::sort(class_spec.fieldSpecifications.begin(),
             class_spec.fieldSpecifications.end(),
             member_comparison);
@@ -709,7 +726,7 @@ ClassSpecification parse_class_specification(std::vector<Token>::iterator* it,
   return class_spec;
 }
 
-bool parse_keep(std::vector<Token>::iterator* it,
+bool parse_keep(TokenIndex& idx,
                 TokenType keep_kind,
                 KeepSpecSet* spec,
                 bool mark_classes,
@@ -718,95 +735,95 @@ bool parse_keep(std::vector<Token>::iterator* it,
                 const std::string& filename,
                 uint32_t line,
                 bool* ok) {
-  if ((*it)->type == keep_kind) {
-    ++(*it); // Consume the keep token
+  if (idx.type() == keep_kind) {
+    idx.next(); // Consume the keep token
     auto keep = std::make_unique<KeepSpec>();
     keep->mark_classes = mark_classes;
     keep->mark_conditionally = mark_conditionally;
     keep->allowshrinking = allowshrinking;
     keep->source_filename = filename;
     keep->source_line = line;
-    if (!parse_modifiers(it, &*keep)) {
-      skip_to_next_command(it);
+    if (!parse_modifiers(idx, &*keep)) {
+      skip_to_next_command(idx);
       return true;
     }
-    keep->class_spec = parse_class_specification(it, ok);
+    keep->class_spec = parse_class_specification(idx, ok);
     spec->emplace(std::move(keep));
     return true;
   }
   return false;
 }
 
-void parse(std::vector<Token>::iterator it,
-           std::vector<Token>::iterator tokens_end,
+void parse(const std::vector<Token>& vec,
            ProguardConfiguration* pg_config,
            unsigned int* parse_errors,
            const std::string& filename) {
   *parse_errors = 0;
   bool ok;
-  while (it != tokens_end) {
+  TokenIndex idx{vec, vec.begin()};
+  while (idx.it != idx.data.end()) {
     // Break out if we are at the end of the TokenType stream.
-    if (it->type == TokenType::eof_token) {
+    if (idx.type() == TokenType::eof_token) {
       break;
     }
-    uint32_t line = it->line;
-    if (!it->is_command()) {
-      std::cerr << "Expecting command but found " << it->show() << " at line "
-                << it->line << std::endl;
-      ++it;
-      skip_to_next_command(&it);
+    uint32_t line = idx.line();
+    if (!idx.it->is_command()) {
+      std::cerr << "Expecting command but found " << idx.show() << " at line "
+                << idx.line() << std::endl;
+      idx.next();
+      skip_to_next_command(idx);
       continue;
     }
 
     // Input/Output Options
-    if (parse_filepath_command(&it,
+    if (parse_filepath_command(idx,
                                TokenType::include,
                                pg_config->basedirectory,
                                &pg_config->includes)) {
       continue;
     }
     if (parse_single_filepath_command(
-            &it, TokenType::basedirectory, &pg_config->basedirectory)) {
+            idx, TokenType::basedirectory, &pg_config->basedirectory)) {
       continue;
     }
-    if (parse_jars(&it,
+    if (parse_jars(idx,
                    TokenType::injars,
                    pg_config->basedirectory,
                    &pg_config->injars)) {
       continue;
     }
-    if (parse_jars(&it,
+    if (parse_jars(idx,
                    TokenType::outjars,
                    pg_config->basedirectory,
                    &pg_config->outjars)) {
       continue;
     }
-    if (parse_jars(&it,
+    if (parse_jars(idx,
                    TokenType::libraryjars,
                    pg_config->basedirectory,
                    &pg_config->libraryjars)) {
       continue;
     }
     // -skipnonpubliclibraryclasses not supported
-    if (it->type == TokenType::dontskipnonpubliclibraryclasses) {
+    if (idx.type() == TokenType::dontskipnonpubliclibraryclasses) {
       // Silenty ignore the dontskipnonpubliclibraryclasses option.
-      ++it;
+      idx.next();
       continue;
     }
     // -dontskipnonpubliclibraryclassmembers not supported
-    if (parse_filepath_command(&it,
+    if (parse_filepath_command(idx,
                                TokenType::keepdirectories,
                                pg_config->basedirectory,
                                &pg_config->keepdirectories)) {
       continue;
     }
-    if (parse_target(&it, &pg_config->target_version)) {
+    if (parse_target(idx, &pg_config->target_version)) {
       continue;
     }
     // -forceprocessing not supported
 
     // Keep Options
-    if (parse_keep(&it,
+    if (parse_keep(idx,
                    TokenType::keep,
                    &pg_config->keep_rules,
                    true, // mark_classes
@@ -820,7 +837,7 @@ void parse(std::vector<Token>::iterator it,
       }
       continue;
     }
-    if (parse_keep(&it,
+    if (parse_keep(idx,
                    TokenType::keepclassmembers,
                    &pg_config->keep_rules,
                    false, // mark_classes
@@ -834,7 +851,7 @@ void parse(std::vector<Token>::iterator it,
       }
       continue;
     }
-    if (parse_keep(&it,
+    if (parse_keep(idx,
                    TokenType::keepclasseswithmembers,
                    &pg_config->keep_rules,
                    false, // mark_classes
@@ -848,7 +865,7 @@ void parse(std::vector<Token>::iterator it,
       }
       continue;
     }
-    if (parse_keep(&it,
+    if (parse_keep(idx,
                    TokenType::keepnames,
                    &pg_config->keep_rules,
                    true, // mark_classes
@@ -862,7 +879,7 @@ void parse(std::vector<Token>::iterator it,
       }
       continue;
     }
-    if (parse_keep(&it,
+    if (parse_keep(idx,
                    TokenType::keepclassmembernames,
                    &pg_config->keep_rules,
                    false, // mark_classes
@@ -876,7 +893,7 @@ void parse(std::vector<Token>::iterator it,
       }
       continue;
     }
-    if (parse_keep(&it,
+    if (parse_keep(idx,
                    TokenType::keepclasseswithmembernames,
                    &pg_config->keep_rules,
                    false, // mark_classes
@@ -891,33 +908,33 @@ void parse(std::vector<Token>::iterator it,
       continue;
     }
     if (parse_optional_filepath_command(
-            &it, TokenType::printseeds, &pg_config->printseeds)) {
+            idx, TokenType::printseeds, &pg_config->printseeds)) {
       continue;
     }
 
     // Shrinking Options
     if (parse_bool_command(
-            &it, TokenType::dontshrink, false, &pg_config->shrink)) {
+            idx, TokenType::dontshrink, false, &pg_config->shrink)) {
       continue;
     }
     if (parse_optional_filepath_command(
-            &it, TokenType::printusage, &pg_config->printusage)) {
+            idx, TokenType::printusage, &pg_config->printusage)) {
       continue;
     }
 
     // Optimization Options
     if (parse_boolean_command(
-            &it, TokenType::dontoptimize, &pg_config->optimize, false)) {
+            idx, TokenType::dontoptimize, &pg_config->optimize, false)) {
       continue;
     }
     if (parse_filter_list_command(
-            &it, TokenType::optimizations, &pg_config->optimization_filters)) {
+            idx, TokenType::optimizations, &pg_config->optimization_filters)) {
       continue;
     }
-    if (parse_optimizationpasses_command(&it)) {
+    if (parse_optimizationpasses_command(idx)) {
       continue;
     }
-    if (parse_keep(&it,
+    if (parse_keep(idx,
                    TokenType::assumenosideeffects,
                    &pg_config->assumenosideeffects_rules,
                    false, // mark_classes
@@ -928,7 +945,7 @@ void parse(std::vector<Token>::iterator it,
                    &ok)) {
       continue;
     }
-    if (parse_keep(&it,
+    if (parse_keep(idx,
                    TokenType::whyareyoukeeping,
                    &pg_config->whyareyoukeeping_rules,
                    false, // mark_classes
@@ -941,72 +958,72 @@ void parse(std::vector<Token>::iterator it,
     }
 
     // Obfuscation Options
-    if (it->type == TokenType::dontobfuscate) {
+    if (idx.type() == TokenType::dontobfuscate) {
       pg_config->dontobfuscate = true;
-      ++it;
+      idx.next();
       continue;
     }
     // Redex ignores -dontskipnonpubliclibraryclasses
-    if (it->type == TokenType::dontskipnonpubliclibraryclasses) {
-      ++it;
+    if (idx.type() == TokenType::dontskipnonpubliclibraryclasses) {
+      idx.next();
       continue;
     }
     if (parse_optional_filepath_command(
-            &it, TokenType::printmapping, &pg_config->printmapping)) {
+            idx, TokenType::printmapping, &pg_config->printmapping)) {
       continue;
     }
-    if (parse_optional_filepath_command(&it,
+    if (parse_optional_filepath_command(idx,
                                         TokenType::printconfiguration,
                                         &pg_config->printconfiguration)) {
       continue;
     }
 
-    if (parse_allowaccessmodification(&it,
+    if (parse_allowaccessmodification(idx,
                                       &pg_config->allowaccessmodification)) {
       continue;
     }
     if (parse_dontusemixedcaseclassnames(
-            &it, &pg_config->dontusemixedcaseclassnames)) {
+            idx, &pg_config->dontusemixedcaseclassnames)) {
       continue;
     }
     if (parse_filter_list_command(
-            &it, TokenType::keeppackagenames, &pg_config->keeppackagenames)) {
+            idx, TokenType::keeppackagenames, &pg_config->keeppackagenames)) {
       continue;
     }
-    if (parse_dontpreverify(&it, &pg_config->dontpreverify)) {
+    if (parse_dontpreverify(idx, &pg_config->dontpreverify)) {
       continue;
     }
-    if (parse_verbose(&it, &pg_config->verbose)) {
+    if (parse_verbose(idx, &pg_config->verbose)) {
       continue;
     }
-    if (parse_repackageclasses(&it)) {
+    if (parse_repackageclasses(idx)) {
       continue;
     }
 
     if (parse_filter_list_command(
-            &it, TokenType::dontwarn, &pg_config->dontwarn)) {
+            idx, TokenType::dontwarn, &pg_config->dontwarn)) {
       continue;
     }
     if (parse_filter_list_command(
-            &it, TokenType::keepattributes, &pg_config->keepattributes)) {
+            idx, TokenType::keepattributes, &pg_config->keepattributes)) {
       continue;
     }
 
     // Skip unknown token.
-    if (it->is_command()) {
-      const auto& name = it->data;
+    if (idx.it->is_command()) {
+      const auto& name = idx.it->data;
       // It is benign to drop -dontnote
       if (name != "dontnote") {
-        std::cerr << "Unimplemented command (skipping): " << it->show()
-                  << " at line " << it->line << std::endl;
+        std::cerr << "Unimplemented command (skipping): " << idx.show()
+                  << " at line " << idx.line() << std::endl;
       }
     } else {
-      std::cerr << "Unexpected TokenType " << it->show() << " at line "
-                << it->line << std::endl;
+      std::cerr << "Unexpected TokenType " << idx.show() << " at line "
+                << idx.line() << std::endl;
       (*parse_errors)++;
     }
-    ++it;
-    skip_to_next_command(&it);
+    idx.next();
+    skip_to_next_command(idx);
   }
 }
 
@@ -1025,7 +1042,7 @@ void parse(const boost::string_view& config,
   }
   unsigned int parse_errors = 0;
   if (ok) {
-    parse(tokens.begin(), tokens.end(), pg_config, &parse_errors, filename);
+    parse(tokens, pg_config, &parse_errors, filename);
   } else {
     std::cerr << "Found unkown tokens in " << filename << "\n";
   }
