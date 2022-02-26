@@ -420,7 +420,7 @@ std::unique_ptr<SourceBlock> source_block_from_s_expr(const s_expr& e) {
       },
       val_expr)
       .must_match(e, "Expected 2+ args for src_block directive");
-  auto* method = DexMethod::make_method(method_str);
+  auto* method = DexString::make_string(method_str);
   uint32_t id;
   {
     std::istringstream in(id_str);

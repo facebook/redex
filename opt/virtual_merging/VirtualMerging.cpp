@@ -914,8 +914,8 @@ void check_remap(
   }
 }
 
-void reset_sb(SourceBlock& sb, DexMethodRef* ref, uint32_t id) {
-  sb.src = ref;
+void reset_sb(SourceBlock& sb, DexMethod* ref, uint32_t id) {
+  sb.src = ref->get_deobfuscated_name_or_null();
   sb.id = id;
   for (auto& v : sb.vals) {
     v = SourceBlock::Val{0, 0};
@@ -1049,7 +1049,7 @@ struct SBHelper {
             overriding_sb != nullptr ? *overriding_sb
             : first_sb != nullptr    ? *first_sb
                                      : *parent->get_arbitrary_first_sb());
-        new_sb->src = parent->overridden;
+        new_sb->src = parent->overridden->get_deobfuscated_name_or_null();
         new_sb->id = SourceBlock::kSyntheticId;
         if (overriding_sb != nullptr && first_sb != nullptr) {
           for (size_t i = 0; i != new_sb->vals.size(); ++i) {
@@ -1105,7 +1105,7 @@ struct SBHelper {
       auto o_sb = source_blocks::get_first_source_block(overriding->get_code());
       if (o_sb != nullptr) {
         auto new_sb = std::make_unique<SourceBlock>(*o_sb);
-        new_sb->src = overriding;
+        new_sb->src = overriding->get_deobfuscated_name_or_null();
         new_sb->id = SourceBlock::kSyntheticId;
         push_sb(std::move(new_sb));
       }

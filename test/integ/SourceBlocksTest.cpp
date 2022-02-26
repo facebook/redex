@@ -21,8 +21,18 @@
 #include "ScopedCFG.h"
 #include "Show.h"
 #include "SourceBlocks.h"
+#include "Walkers.h"
 
 class SourceBlocksTest : public RedexIntegrationTest {
+ public:
+  SourceBlocksTest() {
+    // The loading code in integ-test does not insert deobfuscated names.
+    walk::methods(*classes, [](auto* m) {
+      redex_assert(m->get_deobfuscated_name_or_null() == nullptr);
+      m->set_deobfuscated_name(show(m));
+    });
+  }
+
  protected:
   void enable_pass(InsertSourceBlocksPass& isbp) { isbp.m_force_run = true; }
   void enable_always_inject(InsertSourceBlocksPass& isbp) {
@@ -82,7 +92,9 @@ class SourceBlocksTest : public RedexIntegrationTest {
     for (auto* b : cfg->blocks()) {
       std::vector<SourceBlock::Val> vals{val};
       source_blocks::impl::BlockAccessor::push_source_block(
-          b, std::make_unique<SourceBlock>(method, id++, std::move(vals)));
+          b,
+          std::make_unique<SourceBlock>(method->get_deobfuscated_name_or_null(),
+                                        id++, std::move(vals)));
     }
   }
 
@@ -155,7 +167,7 @@ TEST_F(SourceBlocksTest, source_blocks) {
           EXPECT_EQ(seen_ids.count(mie.src_block->id), 0u);
           seen_ids.insert(mie.src_block->id);
 
-          EXPECT_EQ(mie.src_block->src, m);
+          EXPECT_EQ(mie.src_block->src, m->get_deobfuscated_name_or_null());
         }
         EXPECT_TRUE(seen_source_block_in_b);
       }
@@ -205,7 +217,7 @@ TEST_F(SourceBlocksTest, source_blocks) {
             continue;
           }
           ASSERT_TRUE(mie.src_block != nullptr);
-          seen_methods.insert(mie.src_block->src);
+          seen_methods.insert(DexMethod::get_method(mie.src_block->src->str()));
         }
       }
     }
@@ -296,7 +308,7 @@ TEST_F(SourceBlocksTest, source_blocks_insert_after_exc) {
         EXPECT_EQ(seen_ids.count(mie.src_block->id), 0u);
         seen_ids.insert(mie.src_block->id);
 
-        EXPECT_EQ(mie.src_block->src, m);
+        EXPECT_EQ(mie.src_block->src, m->get_deobfuscated_name_or_null());
       }
       EXPECT_GT(b_seen, 0u);
       max_seen = std::max(max_seen, b_seen);

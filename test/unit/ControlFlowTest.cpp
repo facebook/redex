@@ -1415,7 +1415,7 @@ TEST_F(ControlFlowTest, insertion_it_var) {
       std::vector<cfg::ControlFlowGraph::InsertVariant> to_add;
       to_add.emplace_back(new IRInstruction(*new_insn));
 
-      auto* mref = DexMethod::make_method("LFoo;.bar:()V");
+      auto* mref = DexString::make_string("LFoo;.bar:()V");
       to_add.emplace_back(std::make_unique<SourceBlock>(mref, 0));
       to_add.emplace_back(new IRInstruction(*new_insn));
 

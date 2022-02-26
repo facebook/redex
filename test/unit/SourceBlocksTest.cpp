@@ -40,6 +40,7 @@ class SourceBlocksTest : public RedexTest {
     auto m = DexMethod::make_method(name + ".bar:()V")
                  ->make_concrete(ACC_PUBLIC | ACC_STATIC,
                                  assembler::ircode_from_string(code), false);
+    m->set_deobfuscated_name(show(m));
     cc.add_method(m);
 
     cc.create();

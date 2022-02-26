@@ -116,7 +116,7 @@ struct BranchTarget {
  * which will be used for profiling information.
  */
 struct SourceBlock {
-  DexMethodRef* src{nullptr};
+  const DexString* src{nullptr};
   std::unique_ptr<SourceBlock> next;
   // Large methods exist, but a 32-bit integer is safe.
   // Use the maximum for things that we do not want to emit at this point.
@@ -171,8 +171,8 @@ struct SourceBlock {
   std::vector<Val> vals;
 
   SourceBlock() = default;
-  SourceBlock(DexMethodRef* src, size_t id) : src(src), id(id) {}
-  SourceBlock(DexMethodRef* src, size_t id, std::vector<Val> v)
+  SourceBlock(const DexString* src, size_t id) : src(src), id(id) {}
+  SourceBlock(const DexString* src, size_t id, std::vector<Val> v)
       : src(src), id(id), vals(std::move(v)) {}
   SourceBlock(const SourceBlock& other)
       : src(other.src),

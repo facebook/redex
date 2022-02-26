@@ -42,7 +42,7 @@ constexpr SourceBlock::Val kXVal = SourceBlock::Val::none();
 static SourceBlockConsistencyCheck s_sbcc;
 
 struct InsertHelper {
-  DexMethod* method;
+  const DexString* method;
   uint32_t id{0};
   std::ostringstream oss;
   bool serialize;
@@ -67,7 +67,7 @@ struct InsertHelper {
   };
   std::vector<ProfileParserState> parser_state;
 
-  InsertHelper(DexMethod* method,
+  InsertHelper(const DexString* method,
                const std::vector<ProfileData>& profiles,
                bool serialize,
                bool insert_after_excs)
@@ -398,7 +398,8 @@ InsertResult insert_source_blocks(DexMethod* method,
                                   const std::vector<ProfileData>& profiles,
                                   bool serialize,
                                   bool insert_after_excs) {
-  InsertHelper helper(method, profiles, serialize, insert_after_excs);
+  InsertHelper helper(&method->get_deobfuscated_name(), profiles, serialize,
+                      insert_after_excs);
 
   impl::visit_in_order(
       cfg, [&](Block* cur) { helper.start(cur); },

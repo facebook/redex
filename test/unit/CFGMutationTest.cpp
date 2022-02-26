@@ -423,7 +423,7 @@ TEST_F(CFGMutationTest, InsertBeforeVariant) {
 
         std::vector<cfg::ControlFlowGraph::InsertVariant> tmp;
 
-        auto* mref = DexMethod::make_method("LFoo;.bar:()V");
+        auto* mref = DexString::make_string("LFoo;.bar:()V");
         auto* sref = DexString::make_string("foo");
 
         tmp.emplace_back(std::make_unique<DexPosition>(sref, sref, 1));
@@ -468,7 +468,7 @@ TEST_F(CFGMutationTest, InsertAfterVariant) {
         CFGMutation m(cfg);
         std::vector<cfg::ControlFlowGraph::InsertVariant> tmp;
 
-        auto* mref = DexMethod::make_method("LFoo;.bar:()V");
+        auto* mref = DexString::make_string("LFoo;.bar:()V");
         auto* sref = DexString::make_string("foo");
 
         tmp.emplace_back(std::make_unique<DexPosition>(sref, sref, 1));
