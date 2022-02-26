@@ -19,4 +19,27 @@
     </attr>
     <attr name="unused_boolean_attr" format="boolean" />
   </declare-styleable>
+
+  <attr name="SameAttributeA">
+    <flag name="overdrive" value="0x01" />
+    <flag name="distortion" value="0x02" />
+    <flag name="delay" value="0x04" />
+    <flag name="reverb" value="0x08" />
+  </attr>
+  <attr name="SameAttributeB">
+    <flag name="reverb" value="0x08" />
+    <flag name="overdrive" value="0x01" />
+    <flag name="delay" value="0x04" />
+    <flag name="distortion" value="0x02" />
+  </attr>
+
+  <declare-styleable name="SameStyleableA">
+    <attr name="a_boolean" format="boolean" />
+    <attr name="b_boolean" format="boolean" />
+  </declare-styleable>
+
+  <declare-styleable name="SameStyleableB">
+    <attr name="b_boolean" format="boolean" />
+    <attr name="a_boolean" format="boolean" />
+  </declare-styleable>
 </resources>
