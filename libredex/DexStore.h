@@ -48,6 +48,7 @@ class DexStore {
   explicit DexStore(const std::string& name);
 
   std::string get_name() const;
+  size_t num_dexes() const { return m_dexen.size(); }
   const std::string& get_dex_magic() const { return dex_magic; }
   void set_dex_magic(const std::string& input_dex_magic) {
     dex_magic = input_dex_magic;
