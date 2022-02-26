@@ -51,7 +51,8 @@ void AnonymousClassMergingPass::run_pass(DexStoresVector& stores,
   m_merging_spec.class_name_prefix = "Anon";
   m_merging_spec.strategy = strategy::BY_REFS;
   m_merging_spec.merge_per_interdex_set = InterDexGroupingType::NON_ORDERED_SET;
-  if (conf.force_single_dex()) {
+  if (conf.force_single_dex() ||
+      (!stores.empty() && stores[0].num_dexes() == 1)) {
     m_merging_spec.include_primary_dex = true;
   }
   m_merging_spec.dedup_throw_blocks = false;
