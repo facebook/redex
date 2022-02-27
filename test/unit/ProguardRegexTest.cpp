@@ -101,7 +101,7 @@ TEST(ProguardRegexTest, types) {
   }
 
   {
-    auto proguard_regex = "com.*.redex.test.proguard.Delta";
+    std::string_view proguard_regex = "com.*.redex.test.proguard.Delta";
     auto descriptor = proguard_parser::convert_wildcard_type(proguard_regex);
     boost::cmatch m;
     auto r = proguard_parser::form_type_regex(descriptor);
@@ -113,7 +113,7 @@ TEST(ProguardRegexTest, types) {
   }
 
   {
-    auto proguard_regex = "com.*.redex.*.proguard.Delta";
+    std::string_view proguard_regex = "com.*.redex.*.proguard.Delta";
     auto descriptor = proguard_parser::convert_wildcard_type(proguard_regex);
     boost::cmatch m;
     auto r = proguard_parser::form_type_regex(descriptor);
@@ -131,7 +131,7 @@ TEST(ProguardRegexTest, types) {
 
   { // Test matching using ** to match agaist a package name with any
     // number of separators.
-    auto proguard_regex = "com.**.proguard.Delta";
+    std::string_view proguard_regex = "com.**.proguard.Delta";
     auto descriptor = proguard_parser::convert_wildcard_type(proguard_regex);
     boost::cmatch m;
     auto r = proguard_parser::form_type_regex(descriptor);
@@ -142,7 +142,7 @@ TEST(ProguardRegexTest, types) {
   }
 
   {
-    auto proguard_regex = "com.**.proguard.**";
+    std::string_view proguard_regex = "com.**.proguard.**";
     auto descriptor = proguard_parser::convert_wildcard_type(proguard_regex);
     boost::cmatch m;
     auto r = proguard_parser::form_type_regex(descriptor);
@@ -153,7 +153,7 @@ TEST(ProguardRegexTest, types) {
   }
 
   {
-    auto proguard_regex = "**proguard**";
+    std::string_view proguard_regex = "**proguard**";
     auto descriptor = proguard_parser::convert_wildcard_type(proguard_regex);
     boost::cmatch m;
     auto r = proguard_parser::form_type_regex(descriptor);
@@ -170,7 +170,7 @@ TEST(ProguardRegexTest, types) {
 
   { // The ? symbol should match any character in a class type except
     // the class separator symbol.
-    auto proguard_regex = "com.alpha?beta.gamma";
+    std::string_view proguard_regex = "com.alpha?beta.gamma";
     auto descriptor = proguard_parser::convert_wildcard_type(proguard_regex);
     auto r = proguard_parser::form_type_regex(descriptor);
     boost::regex matcher(r);
@@ -182,7 +182,7 @@ TEST(ProguardRegexTest, types) {
   }
 
   { // Make sure ** does not match primitive types or array types.
-    auto proguard_regex = "**";
+    std::string_view proguard_regex = "**";
     auto descriptor = proguard_parser::convert_wildcard_type(proguard_regex);
     auto r = proguard_parser::form_type_regex(descriptor);
     EXPECT_EQ("L(?:[^\\[]*);", r);
@@ -194,7 +194,7 @@ TEST(ProguardRegexTest, types) {
   }
 
   { // Make sure ** works with array types.
-    auto proguard_regex = "**[]";
+    std::string_view proguard_regex = "**[]";
     auto descriptor = proguard_parser::convert_wildcard_type(proguard_regex);
     auto r = proguard_parser::form_type_regex(descriptor);
     EXPECT_EQ("\\[L(?:[^\\[]*);", r);
@@ -207,7 +207,7 @@ TEST(ProguardRegexTest, types) {
   }
 
   { // Make sure ** works with multiple array types.
-    auto proguard_regex = "java.**[][]";
+    std::string_view proguard_regex = "java.**[][]";
     auto descriptor = proguard_parser::convert_wildcard_type(proguard_regex);
     auto r = proguard_parser::form_type_regex(descriptor);
     EXPECT_EQ("\\[\\[Ljava\\/(?:[^\\[]*);", r);
@@ -220,7 +220,7 @@ TEST(ProguardRegexTest, types) {
   }
 
   { // Make sure *** matches any type.
-    auto proguard_regex = "***";
+    std::string_view proguard_regex = "***";
     auto descriptor = proguard_parser::convert_wildcard_type(proguard_regex);
     auto r = proguard_parser::form_type_regex(descriptor);
     EXPECT_EQ("\\[*(?:(?:B|S|I|J|Z|F|D|C|V)|L.*;)", r);
@@ -232,7 +232,7 @@ TEST(ProguardRegexTest, types) {
   }
 
   { // Check handling of ...
-    auto proguard_regex = "...";
+    std::string_view proguard_regex = "...";
     auto descriptor = proguard_parser::convert_wildcard_type(proguard_regex);
     auto r = proguard_parser::form_type_regex(descriptor);
     EXPECT_EQ("(?:\\[*(?:(?:B|S|I|J|Z|F|D|C)|L.*;))*", r);
@@ -245,7 +245,8 @@ TEST(ProguardRegexTest, types) {
   }
 
   { // Check matching of nesting class types using $.
-    auto proguard_regex = "com.facebook.redex.test.proguard.Delta$B";
+    std::string_view proguard_regex =
+        "com.facebook.redex.test.proguard.Delta$B";
     auto descriptor = proguard_parser::convert_wildcard_type(proguard_regex);
     auto r = proguard_parser::form_type_regex(descriptor);
     boost::regex matcher(r);
@@ -255,17 +256,17 @@ TEST(ProguardRegexTest, types) {
 
   // Check convert_wildcard_type
   {
-    auto proguard_regex = "**";
+    std::string_view proguard_regex = "**";
     auto descriptor = proguard_parser::convert_wildcard_type(proguard_regex);
     EXPECT_EQ("L**;", descriptor);
   }
   {
-    auto proguard_regex = "alpha.**.beta";
+    std::string_view proguard_regex = "alpha.**.beta";
     auto descriptor = proguard_parser::convert_wildcard_type(proguard_regex);
     EXPECT_EQ("Lalpha/**/beta;", descriptor);
   }
   {
-    auto proguard_regex = "alpha.**.beta";
+    std::string_view proguard_regex = "alpha.**.beta";
     auto descriptor = proguard_parser::convert_wildcard_type(proguard_regex);
     EXPECT_EQ("Lalpha/**/beta;", descriptor);
   }

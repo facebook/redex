@@ -37,6 +37,18 @@ std::string convert_scalar_type(const std::string& type) {
   return java_names::external_to_internal(type);
 }
 
+std::string convert_scalar_type(std::string_view type) {
+  static const std::unordered_map<std::string_view, std::string> prim_map = {
+      {"void", "V"},  {"boolean", "Z"}, {"byte", "B"},
+      {"short", "S"}, {"char", "C"},    {"int", "I"},
+      {"long", "J"},  {"float", "F"},   {"double", "D"}};
+  auto it = prim_map.find(type);
+  if (it != prim_map.end()) {
+    return it->second;
+  }
+  return java_names::external_to_internal(type);
+}
+
 std::string convert_field(const std::string& cls,
                           const std::string& type,
                           const std::string& name) {
@@ -644,6 +656,10 @@ void apply_deobfuscated_names(const std::vector<DexClasses>& dexen,
 }
 
 std::string convert_type(std::string type) {
+  return convert_type(std::string_view(type));
+}
+
+std::string convert_type(std::string_view type) {
   auto dimpos = type.find('[');
   if (dimpos == std::string::npos) {
     return convert_scalar_type(type);

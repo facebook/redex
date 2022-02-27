@@ -22,25 +22,27 @@ namespace proguard_parser {
 namespace {
 
 struct TokenIndex {
-  const std::vector<Token>& data;
+  const std::vector<Token>& vec;
   std::vector<Token>::const_iterator it;
 
-  TokenIndex(const std::vector<Token>& data,
+  TokenIndex(const std::vector<Token>& vec,
              std::vector<Token>::const_iterator it)
-      : data(data), it(it) {}
+      : vec(vec), it(it) {}
 
   void skip_comments() {
-    while (it != data.end() && it->type == TokenType::comment) {
+    while (it != vec.end() && it->type == TokenType::comment) {
       ++it;
     }
   }
 
   void next() {
-    redex_assert(it != data.end());
+    redex_assert(it != vec.end());
     ++it;
     skip_comments();
   }
 
+  std::string_view data() const { return it->data; }
+  std::string str() const { return std::string{it->data}; }
   std::string show() const { return it->show(); }
 
   size_t line() const { return it->line; }
@@ -48,11 +50,11 @@ struct TokenIndex {
   TokenType type() const { return it->type; }
 
   std::string show_context(size_t lines) const {
-    redex_assert(it != data.end());
+    redex_assert(it != vec.end());
 
     size_t this_line = line();
     auto start_it = it;
-    while (start_it != data.begin() && start_it->line >= this_line - lines) {
+    while (start_it != vec.begin() && start_it->line >= this_line - lines) {
       --start_it;
     }
     if (start_it->line < this_line - lines) {
@@ -60,7 +62,7 @@ struct TokenIndex {
     }
 
     auto end_it = it;
-    while (end_it != data.end() && end_it->line <= this_line + lines) {
+    while (end_it != vec.end() && end_it->line <= this_line + lines) {
       ++end_it;
     }
 
@@ -145,7 +147,7 @@ bool parse_single_filepath_command(TokenIndex& idx,
                 << idx.show_context(2) << std::endl;
       return true;
     }
-    *filepath = idx.it->data.to_string();
+    *filepath = idx.str();
     idx.next(); // Consume the filepath token
     return true;
   }
@@ -164,7 +166,7 @@ void parse_filepaths(TokenIndex& idx, std::vector<std::string>* into) {
     return;
   }
   while (idx.type() == TokenType::filepath) {
-    into->push_back(idx.it->data.to_string());
+    into->push_back(idx.str());
     idx.next();
   }
 }
@@ -286,7 +288,7 @@ bool parse_repackageclasses(TokenIndex& idx) {
   // Ignore repackageclasses.
   idx.next();
   if (idx.type() == TokenType::identifier) {
-    std::cerr << "Ignoring -repackageclasses " << idx.it->data << std::endl
+    std::cerr << "Ignoring -repackageclasses " << idx.data() << std::endl
               << idx.show_context(2) << std::endl;
     idx.next();
   }
@@ -303,7 +305,7 @@ bool parse_target(TokenIndex& idx, std::string* target_version) {
                 << idx.show_context(2) << std::endl;
       return true;
     }
-    *target_version = idx.it->data.to_string();
+    *target_version = idx.str();
     // Consume the target version token.
     idx.next();
     return true;
@@ -329,7 +331,7 @@ bool parse_filter_list_command(TokenIndex& idx,
   }
   idx.next();
   while (idx.type() == TokenType::filter_pattern) {
-    filters->push_back(idx.it->data.to_string());
+    filters->push_back(idx.str());
     idx.next();
   }
   return true;
@@ -441,9 +443,9 @@ std::string parse_annotation_type(TokenIndex& idx) {
               << idx.show_context(2) << std::endl;
     return "";
   }
-  const auto& typ = idx.it->data;
+  const auto& typ = idx.data();
   idx.next();
-  return convert_wildcard_type(typ.to_string());
+  return convert_wildcard_type(typ);
 }
 
 bool is_access_flag_set(const DexAccessFlags accessFlags,
@@ -593,7 +595,7 @@ void parse_member_specification(TokenIndex& idx,
     skip_to_semicolon(idx);
     return;
   }
-  const auto& ident = idx.it->data;
+  const auto& ident = idx.data();
   // Check for "*".
   if (ident == "*") {
     member_specification.name = "";
@@ -639,9 +641,9 @@ void parse_member_specification(TokenIndex& idx,
       skip_to_semicolon(idx);
       return;
     }
-    const auto& typ = idx.it->data;
+    const auto& typ = idx.data();
     idx.next();
-    member_specification.descriptor = convert_wildcard_type(typ.to_string());
+    member_specification.descriptor = convert_wildcard_type(typ);
     if (idx.type() != TokenType::identifier) {
       std::cerr << "Expecting identifier name for class member but got "
                 << idx.show() << " at line " << idx.line() << std::endl
@@ -650,7 +652,7 @@ void parse_member_specification(TokenIndex& idx,
       skip_to_semicolon(idx);
       return;
     }
-    member_specification.name = idx.it->data.to_string();
+    member_specification.name = idx.str();
     idx.next();
   }
   // Check to see if this is a method specification.
@@ -670,9 +672,9 @@ void parse_member_specification(TokenIndex& idx,
         *ok = false;
         return;
       }
-      const auto& typ = idx.it->data;
+      const auto& typ = idx.data();
       consume_token(idx, TokenType::identifier);
-      arg += convert_wildcard_type(typ.to_string());
+      arg += convert_wildcard_type(typ);
       // The next TokenType better be a comma or a closing bracket.
       if (idx.type() != TokenType::comma &&
           idx.type() != TokenType::closeBracket) {
@@ -702,7 +704,7 @@ void parse_member_specification(TokenIndex& idx,
   // if with value, look for return
   if (idx.type() == TokenType::returns) {
     idx.next();
-    const auto& rident = idx.it->data;
+    const auto& rident = idx.data();
     if (rident == "true") {
       member_specification.return_value.value_type =
           AssumeReturnValue::ValueType::ValueBool;
@@ -778,7 +780,7 @@ ClassSpecification parse_class_specification(TokenIndex& idx, bool* ok) {
     *ok = false;
     return class_spec;
   }
-  class_spec.className = idx.it->data.to_string();
+  class_spec.className = idx.str();
   idx.next();
   // Parse extends/implements if present, treating implements like extends.
   if ((idx.type() == TokenType::extends) ||
@@ -792,7 +794,7 @@ ClassSpecification parse_class_specification(TokenIndex& idx, bool* ok) {
       *ok = false;
       class_spec.extendsClassName = "";
     } else {
-      class_spec.extendsClassName = idx.it->data.to_string();
+      class_spec.extendsClassName = idx.str();
     }
     idx.next();
   }
@@ -842,7 +844,7 @@ void parse(const std::vector<Token>& vec,
   *parse_errors = 0;
   bool ok;
   TokenIndex idx{vec, vec.begin()};
-  while (idx.it != idx.data.end()) {
+  while (idx.it != idx.vec.end()) {
     // Break out if we are at the end of the TokenType stream.
     if (idx.type() == TokenType::eof_token) {
       break;
@@ -1097,7 +1099,7 @@ void parse(const std::vector<Token>& vec,
 
     // Skip unknown token.
     if (idx.it->is_command()) {
-      const auto& name = idx.it->data;
+      const auto& name = idx.data();
       // It is benign to drop -dontnote
       if (name != "dontnote") {
         std::cerr << "Unimplemented command (skipping): " << idx.show()
@@ -1115,7 +1117,7 @@ void parse(const std::vector<Token>& vec,
   }
 }
 
-void parse(const boost::string_view& config,
+void parse(const std::string_view& config,
            ProguardConfiguration* pg_config,
            const std::string& filename) {
   std::vector<Token> tokens = lex(config);
@@ -1123,7 +1125,7 @@ void parse(const boost::string_view& config,
   // Check for bad tokens.
   for (auto& tok : tokens) {
     if (tok.type == TokenType::unknownToken) {
-      std::string spelling ATTRIBUTE_UNUSED = tok.data.to_string();
+      std::string spelling ATTRIBUTE_UNUSED = std::string(tok.data);
       ok = false;
     }
     // std::cout << tok.show() << " at line " << tok.line << std::endl;
@@ -1155,7 +1157,7 @@ void parse(std::istream& config,
 
 void parse_file(const std::string& filename, ProguardConfiguration* pg_config) {
   redex::read_file_with_contents(filename, [&](const char* data, size_t s) {
-    boost::string_view view(data, s);
+    std::string_view view(data, s);
     parse(view, pg_config, filename);
     // Parse the included files.
     for (const auto& included_filename : pg_config->includes) {

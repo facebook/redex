@@ -43,7 +43,7 @@ bool is_not_idenfitier_character(char ch) {
 
 // An identifier can refer to a class name, a field name or a package name.
 // https://docs.oracle.com/javase/specs/jls/se16/html/jls-3.html#jls-JavaLetter
-bool is_identifier(const boost::string_view& ident) {
+bool is_identifier(const std::string_view& ident) {
   for (const char& ch : ident) {
     // java identifiers can be multi-lingual so membership testing is complex.
     // much simpler to test for what is definitely not an identifier and then
@@ -56,7 +56,7 @@ bool is_identifier(const boost::string_view& ident) {
   return true;
 }
 
-void skip_whitespace(boost::string_view& data, unsigned int* line) {
+void skip_whitespace(std::string_view& data, unsigned int* line) {
   size_t index = 0;
   for (; index != data.size(); ++index) {
     char ch = data[index];
@@ -68,18 +68,18 @@ void skip_whitespace(boost::string_view& data, unsigned int* line) {
     }
   }
   if (index == data.size()) {
-    data = boost::string_view();
+    data = std::string_view();
   } else {
     data = data.substr(index);
   }
 }
 
-boost::string_view read_path(boost::string_view& data, unsigned int* line) {
+std::string_view read_path(std::string_view& data, unsigned int* line) {
   skip_whitespace(data, line);
   // Handle the case for optional filepath arguments by
   // returning an empty filepath.
   if (data.empty() || data[0] == '-') {
-    return boost::string_view();
+    return std::string_view();
   }
 
   bool has_quotes = data[0] == '"';
@@ -99,7 +99,7 @@ boost::string_view read_path(boost::string_view& data, unsigned int* line) {
 
   if (start == end) {
     data = data.substr(start);
-    return boost::string_view(); // Should maybe be an error.
+    return std::string_view(); // Should maybe be an error.
   }
 
   size_t adjusted_end = end;
@@ -111,9 +111,9 @@ boost::string_view read_path(boost::string_view& data, unsigned int* line) {
   return ret;
 }
 
-std::vector<std::pair<boost::string_view, unsigned int>> read_paths(
-    boost::string_view& data, unsigned int* line) {
-  std::vector<std::pair<boost::string_view, unsigned int>> paths;
+std::vector<std::pair<std::string_view, unsigned int>> read_paths(
+    std::string_view& data, unsigned int* line) {
+  std::vector<std::pair<std::string_view, unsigned int>> paths;
   paths.push_back({read_path(data, line), *line});
   skip_whitespace(data, line);
   while (!data.empty() && data[0] == kPathDelim) {
@@ -125,9 +125,9 @@ std::vector<std::pair<boost::string_view, unsigned int>> read_paths(
 }
 
 template <bool kSkipWs, typename FilterFn>
-boost::string_view parse_part_fn(boost::string_view& data,
-                                 unsigned int* line,
-                                 FilterFn fn) {
+std::string_view parse_part_fn(std::string_view& data,
+                               unsigned int* line,
+                               FilterFn fn) {
   if (kSkipWs) {
     skip_whitespace(data, line);
   }
@@ -136,19 +136,19 @@ boost::string_view parse_part_fn(boost::string_view& data,
                   ? data.substr(0, first_delim - data.begin())
                   : data;
   data = first_delim != data.end() ? data.substr(first_delim - data.begin())
-                                   : boost::string_view();
+                                   : std::string_view();
   return part;
 }
 
-boost::string_view read_target_version(boost::string_view& data,
-                                       unsigned int* line) {
+std::string_view read_target_version(std::string_view& data,
+                                     unsigned int* line) {
   auto is_version_character = [](char ch) { return ch == '.' || isdigit(ch); };
   return parse_part_fn</*kSkipWs=*/true>(
       data, line, [&](char c) { return !is_version_character(c); });
 }
 
-boost::string_view parse_package_name(boost::string_view& data,
-                                      unsigned int* line) {
+std::string_view parse_package_name(std::string_view& data,
+                                    unsigned int* line) {
   auto pkg_name_char = [](char ch) {
     return isalnum(ch) || ch == '.' || ch == '\'' || ch == '_' || ch == '$';
   };
@@ -156,8 +156,8 @@ boost::string_view parse_package_name(boost::string_view& data,
       data, line, [&](char c) { return !pkg_name_char(c); });
 }
 
-bool lex_filter(boost::string_view& data,
-                boost::string_view* filter,
+bool lex_filter(std::string_view& data,
+                std::string_view* filter,
                 unsigned int* line) {
   skip_whitespace(data, line);
   // Make sure we are not at the end of the file or the start of another
@@ -170,10 +170,10 @@ bool lex_filter(boost::string_view& data,
   return true;
 }
 
-std::vector<boost::string_view> lex_filter_list(boost::string_view& data,
-                                                unsigned int* line) {
-  std::vector<boost::string_view> filter_list;
-  boost::string_view filter;
+std::vector<std::string_view> lex_filter_list(std::string_view& data,
+                                              unsigned int* line) {
+  std::vector<std::string_view> filter_list;
+  std::string_view filter;
   bool ok = lex_filter(data, &filter, line);
   if (!ok) {
     return filter_list;
@@ -203,14 +203,14 @@ struct StringViewEquals {
   bool operator()(const std::string& s1, const std::string& s2) const {
     return s1 == s2;
   }
-  bool operator()(const std::string& s1, const boost::string_view& v2) const {
+  bool operator()(const std::string& s1, const std::string_view& v2) const {
     return v2 == s1;
   }
-  bool operator()(const boost::string_view& v1, const std::string& s2) const {
+  bool operator()(const std::string_view& v1, const std::string& s2) const {
     return v1 == s2;
   }
-  bool operator()(const boost::string_view& v1,
-                  const boost::string_view& v2) const {
+  bool operator()(const std::string_view& v1,
+                  const std::string_view& v2) const {
     return v1 == v2;
   }
 };
@@ -219,11 +219,11 @@ using namespace boost::multi_index;
 
 template <typename Q>
 using UnorderedStringViewIndexableMap = multi_index_container<
-    MyPair<boost::string_view, Q>,
-    indexed_by<hashed_unique<member<MyPair<boost::string_view, Q>,
-                                    boost::string_view,
-                                    &MyPair<boost::string_view, Q>::first>,
-                             boost::hash<boost::string_view>,
+    MyPair<std::string_view, Q>,
+    indexed_by<hashed_unique<member<MyPair<std::string_view, Q>,
+                                    std::string_view,
+                                    &MyPair<std::string_view, Q>::first>,
+                             boost::hash<std::string_view>,
                              StringViewEquals>>>;
 
 } // namespace
@@ -291,21 +291,21 @@ std::string Token::show() const {
   case TokenType::varargs:
     return "varargs";
   case TokenType::command:
-    return "-" + data.to_string();
+    return "-" + std::string(data);
   case TokenType::identifier:
-    return "identifier: " + data.to_string();
+    return "identifier: " + std::string(data);
   case TokenType::arrayType:
     return "[]";
   case TokenType::filepath:
-    return "filepath " + data.to_string();
+    return "filepath " + std::string(data);
   case TokenType::target_version_token:
-    return data.to_string();
+    return std::string(data);
   case TokenType::filter_pattern:
-    return "filter: " + data.to_string();
+    return "filter: " + std::string(data);
   case TokenType::eof_token:
     return "<EOF>";
   case TokenType::comment:
-    return "#" + data.to_string();
+    return "#" + std::string(data);
 
   // Input/Output Options
   case TokenType::include:
@@ -405,7 +405,7 @@ std::string Token::show() const {
 
   case TokenType::unknownToken:
     return "unknown token at line " + std::to_string(line) + " : " +
-           data.to_string();
+           std::string(data);
   }
   not_reached();
 }
@@ -524,7 +524,7 @@ bool Token::is_command() const {
   not_reached();
 }
 
-std::vector<Token> lex(const boost::string_view& in) {
+std::vector<Token> lex(const std::string_view& in) {
   std::unordered_map<char, TokenType> simple_tokens{
       {'{', TokenType::openCurlyBracket},
       {'}', TokenType::closeCurlyBracket},
@@ -637,28 +637,28 @@ std::vector<Token> lex(const boost::string_view& in) {
   unsigned int line = 1;
 
   auto add_token = [&](TokenType type) { tokens.emplace_back(type, line); };
-  auto add_token_data = [&](TokenType type, const boost::string_view& data) {
+  auto add_token_data = [&](TokenType type, const std::string_view& data) {
     tokens.emplace_back(type, line, data);
   };
   auto add_token_line_data =
-      [&](TokenType type, size_t t_line, const boost::string_view& data) {
+      [&](TokenType type, size_t t_line, const std::string_view& data) {
         tokens.emplace_back(type, t_line, data);
       };
 
-  boost::string_view data = in;
+  std::string_view data = in;
   while (!data.empty()) {
     char ch = data[0];
 
     // Skip comments.
     if (ch == '#') {
       auto eol_pos = data.find('\n');
-      boost::string_view comment_data;
-      if (eol_pos != boost::string_view::npos) {
+      std::string_view comment_data;
+      if (eol_pos != std::string_view::npos) {
         comment_data = data.substr(1, eol_pos - 1);
         data = data.substr(eol_pos + 1);
       } else {
         comment_data = data.substr(1);
-        data = boost::string_view();
+        data = std::string_view();
       }
       tokens.emplace_back(TokenType::comment, line, comment_data);
       ++line;
