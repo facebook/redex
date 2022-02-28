@@ -593,7 +593,6 @@ std::vector<Token> lex(const std::string_view& in) {
        TokenType::dontusemixedcaseclassnames_token},
       {"dontskipnonpubliclibraryclasses",
        TokenType::dontskipnonpubliclibraryclasses},
-      {"keeppackagenames", TokenType::keeppackagenames},
 
       // Preverification Options.
       {"dontpreverify", TokenType::dontpreverify_token},
@@ -629,6 +628,7 @@ std::vector<Token> lex(const std::string_view& in) {
       {"keepattributes", TokenType::keepattributes},
       // General Options
       {"dontwarn", TokenType::dontwarn},
+      {"keeppackagenames", TokenType::keeppackagenames},
   };
 
   std::vector<Token> tokens;
