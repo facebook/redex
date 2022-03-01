@@ -1385,12 +1385,8 @@ uint32_t ControlFlowGraph::sum_opcode_sizes() const {
   return result;
 }
 
-boost::sub_range<IRList> ControlFlowGraph::get_param_instructions() const {
-  if (!m_editable) {
-    return m_orig_list->get_param_instructions();
-  }
-
-  // Find the first block that has instructions
+Block* ControlFlowGraph::get_first_block_with_insns() const {
+  always_assert(editable());
   Block* block = entry_block();
   std::unordered_set<Block*> visited{block};
   while (block != nullptr &&
@@ -1402,6 +1398,14 @@ boost::sub_range<IRList> ControlFlowGraph::get_param_instructions() const {
       break;
     }
   }
+  return block;
+}
+
+boost::sub_range<IRList> ControlFlowGraph::get_param_instructions() const {
+  if (!m_editable) {
+    return m_orig_list->get_param_instructions();
+  }
+  Block* block = get_first_block_with_insns();
   if (block == nullptr) {
     // Return an empty sub_range
     return boost::sub_range<IRList>();

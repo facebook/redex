@@ -910,6 +910,10 @@ class ControlFlowGraph {
   // the instructions.
   void recompute_registers_size();
 
+  // Only used in editable cfg. \returns the first block that has instructions
+  // if there is any. Otherwise, \returns null.
+  Block* get_first_block_with_insns() const;
+
   // by default, start at the entry block
   boost::sub_range<IRList> get_param_instructions() const;
 
