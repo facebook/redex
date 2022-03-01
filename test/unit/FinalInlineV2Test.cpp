@@ -117,9 +117,9 @@ TEST_F(FinalInlineTest, encodeTypeValuesXStore) {
   )"));
   auto cls = m_cc->create();
 
-  auto store1 = DexStore("store1");
+  auto store1 = DexStore("classes");
   store1.add_classes({cls});
-  auto store2 = DexStore("store2");
+  auto store2 = DexStore("other_store");
   store2.add_classes({cls2});
   DexStoresVector stores{store1, store2};
   auto scope = build_class_scope(stores);

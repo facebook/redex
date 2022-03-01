@@ -15,9 +15,72 @@
 #include "DexUtil.h"
 #include "Show.h"
 
+namespace {
 constexpr const char* ROOT_STORE_NAME = "classes";
 
-DexStore::DexStore(const std::string& name) { m_metadata.set_id(name); }
+DexStoresDependencies build_transitive_resolved_dependencies(
+    const DexStoresVector& stores) {
+  DexStoresDependencies transitive_resolved_dependencies;
+  if (stores.size() == 1) {
+    // special case to accomodate tests with non-standard store names
+    auto& store = stores.front();
+    transitive_resolved_dependencies.emplace(&store, DexStoreDependencies());
+    return transitive_resolved_dependencies;
+  }
+
+  // We handle the root store separately, as it may appear twist in the list
+  // of stores (a quick to handle the primary dex).
+  auto& root_store = stores.front();
+  always_assert_log(
+      root_store.get_name() == ROOT_STORE_NAME,
+      "Root store has name {%s}, but should be {%s}, out of %zu stores",
+      root_store.get_name().c_str(), ROOT_STORE_NAME, stores.size());
+  // For some reason, the root store is referenced by the name "dex" via
+  // dependencies
+  std::unordered_map<std::string, const DexStore*> named_stores;
+  named_stores.emplace("dex", &root_store);
+  for (auto& store : stores) {
+    if (&store == &root_store) {
+      continue;
+    }
+    auto emplaced = named_stores.emplace(store.get_name(), &store).second;
+    always_assert_log(emplaced, "Duplicate store name: %s",
+                      store.get_name().c_str());
+  }
+
+  std::function<const DexStoreDependencies&(const DexStore* store)> build;
+  build = [&](const DexStore* store) -> const DexStoreDependencies& {
+    auto it = transitive_resolved_dependencies.find(store);
+    if (it == transitive_resolved_dependencies.end()) {
+      DexStoreDependencies deps;
+      for (auto& dependency_name : store->get_dependencies()) {
+        auto it2 = named_stores.find(dependency_name);
+        if (it2 == named_stores.end()) {
+          // This routinely happens for some reason
+          continue;
+        }
+        auto dependency_store = it2->second;
+        deps.insert(dependency_store);
+        const auto& deps_deps = build(dependency_store);
+        deps.insert(deps_deps.begin(), deps_deps.end());
+      }
+      it = transitive_resolved_dependencies.emplace(store, std::move(deps))
+               .first;
+    }
+    return it->second;
+  };
+  for (auto& store : stores) {
+    build(&store);
+  }
+  return transitive_resolved_dependencies;
+}
+
+} // namespace
+
+DexStore::DexStore(std::string name, std::vector<std::string> deps) {
+  m_metadata.set_id(std::move(name));
+  m_metadata.set_dependencies(std::move(deps));
+}
 
 std::string DexStore::get_name() const { return m_metadata.get_id(); }
 
@@ -99,7 +162,9 @@ std::unordered_set<const DexType*> get_root_store_types(
   return types;
 }
 
-XStoreRefs::XStoreRefs(const DexStoresVector& stores) {
+XStoreRefs::XStoreRefs(const DexStoresVector& stores)
+    : m_transitive_resolved_dependencies(
+          build_transitive_resolved_dependencies(stores)) {
   m_xstores.push_back(std::unordered_set<const DexType*>());
   m_stores.push_back(&stores[0]);
   for (const auto& cls : stores[0].get_dexen()[0]) {
@@ -156,8 +221,8 @@ XDexRefs::XDexRefs(const DexStoresVector& stores) {
 
 size_t XDexRefs::get_dex_idx(const DexType* type) const {
   auto it = m_dexes.find(type);
-  always_assert_log(
-      it != m_dexes.end(), "type %s not in the current APK", SHOW(type));
+  always_assert_log(it != m_dexes.end(), "type %s not in the current APK",
+                    SHOW(type));
   return it->second;
 }
 

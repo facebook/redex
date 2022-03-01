@@ -19,6 +19,10 @@
 class DexStore;
 using DexStoresVector = std::vector<DexStore>;
 
+using DexStoreDependencies = std::unordered_set<const DexStore*>;
+using DexStoresDependencies =
+    std::unordered_map<const DexStore*, DexStoreDependencies>;
+
 class DexMetadata {
   std::string id;
   std::vector<std::string> dependencies;
@@ -27,12 +31,15 @@ class DexMetadata {
  public:
   const std::string& get_id() const { return id; }
   void set_id(std::string name) { id = std::move(name); }
-  void set_files(const std::vector<std::string>& f) { files = f; }
+  void set_files(std::vector<std::string> fs) { files = std::move(fs); }
   const std::vector<std::string>& get_files() const { return files; }
   const std::vector<std::string>& get_dependencies() const {
     return dependencies;
   }
   std::vector<std::string>& get_dependencies() { return dependencies; }
+  void set_dependencies(std::vector<std::string> deps) {
+    dependencies = std::move(deps);
+  }
 
   void parse(const std::string& path);
 };
@@ -45,7 +52,7 @@ class DexStore {
 
  public:
   explicit DexStore(const DexMetadata& metadata) : m_metadata(metadata){};
-  explicit DexStore(const std::string& name);
+  explicit DexStore(std::string name, std::vector<std::string> deps = {});
 
   std::string get_name() const;
   size_t num_dexes() const { return m_dexen.size(); }
@@ -173,11 +180,26 @@ class XStoreRefs {
    */
   size_t m_root_stores;
 
+  /**
+   * Transitive dependencies. Includes dependencies on root store, but ignores
+   * primary distinction.
+   */
+  DexStoresDependencies m_transitive_resolved_dependencies;
+
   static std::string show_type(const DexType* type); // To avoid "Show.h" in the
                                                      // header.
 
  public:
   explicit XStoreRefs(const DexStoresVector& stores);
+
+  /**
+   * Gets transitive dependencies. Includes dependencies on root store, but
+   * ignores primary distinction.
+   */
+  const DexStoreDependencies& get_transitive_resolved_dependencies(
+      const DexStore* store) const {
+    return m_transitive_resolved_dependencies.at(store);
+  }
 
   /**
    * If there's no secondary dexes, it returns 0. Otherwise it returns 1.
@@ -274,14 +296,12 @@ class XStoreRefs {
     }
 
     // Check if the caller depends on the callee,
-    // TODO - do it transitively.
     if (caller_store_idx >= m_root_stores) {
-      const auto& callee_store_name = get_store(callee_store_idx)->get_name();
+      const auto& callee_store = get_store(callee_store_idx);
+      const auto& caller_store = get_store(caller_store_idx);
       const auto& caller_dependencies =
-          get_store(caller_store_idx)->get_dependencies();
-
-      if (std::find(caller_dependencies.begin(), caller_dependencies.end(),
-                    callee_store_name) != caller_dependencies.end()) {
+          get_transitive_resolved_dependencies(caller_store);
+      if (caller_dependencies.count(callee_store)) {
         return false;
       }
     }
