@@ -67,21 +67,21 @@ TEST_F(DexOutputTest, testSimilarityOrderer) {
       "LDexOutputTest$NonPerfSensitiveClass;.<init>:(LDexOutputTest;)V",
       "LDexOutputTest$PerfSensitiveClass;.<init>:(LDexOutputTest;)V",
       "LDexOutputTest$SecondPerfSensitiveClass;.<init>:(LDexOutputTest;)V",
+      "LDexOutputTest;.<init>:()V",
       "LDexOutputTest$NonPerfSensitiveClass;.EjustReturnFive:()I",
       "LDexOutputTest$PerfSensitiveClass;.EjustReturnFive:()I",
       "LDexOutputTest$SecondPerfSensitiveClass;.EjustReturnFive:()I",
       "LDexOutputTest;.AjustReturnFive:()I",
       "LDexOutputTest;.EjustReturnFive:()I",
+      "LDexOutputTest;.DgetSixpublic:()I",
       "LDexOutputTest$NonPerfSensitiveClass;.FsomeLogic:(I)I",
       "LDexOutputTest$PerfSensitiveClass;.FsomeLogic:(I)I",
       "LDexOutputTest$SecondPerfSensitiveClass;.FsomeLogic:(I)I",
       "LDexOutputTest;.CsomeLogic:(I)I",
       "LDexOutputTest;.FsomeLogic:(I)I",
       "LDexOutputTest;.HsomeLogic:(I)I",
-      "LDexOutputTest;.<init>:()V",
       "LDexOutputTest;.BjustCallSixpublic:()I",
-      "LDexOutputTest;.GjustCallSixpublic:()I",
-      "LDexOutputTest;.DgetSixpublic:()I"};
+      "LDexOutputTest;.GjustCallSixpublic:()I"};
 
   EXPECT_TRUE(std::equal(method_names.begin(), method_names.end(),
                          expected_order.begin()));
@@ -121,9 +121,11 @@ TEST_F(DexOutputTest, testPerfSensitive) {
 
   std::vector<std::string> expected_order = {
       "LDexOutputTest$NonPerfSensitiveClass;.<init>:(LDexOutputTest;)V",
+      "LDexOutputTest;.<init>:()V",
       "LDexOutputTest$NonPerfSensitiveClass;.EjustReturnFive:()I",
       "LDexOutputTest;.AjustReturnFive:()I",
       "LDexOutputTest;.EjustReturnFive:()I",
+      "LDexOutputTest;.DgetSixpublic:()I",
       "LDexOutputTest$NonPerfSensitiveClass;.FsomeLogic:(I)I",
       "LDexOutputTest$PerfSensitiveClass;.<init>:(LDexOutputTest;)V",
       "LDexOutputTest$PerfSensitiveClass;.EjustReturnFive:()I",
@@ -131,13 +133,11 @@ TEST_F(DexOutputTest, testPerfSensitive) {
       "LDexOutputTest$SecondPerfSensitiveClass;.<init>:(LDexOutputTest;)V",
       "LDexOutputTest$SecondPerfSensitiveClass;.EjustReturnFive:()I",
       "LDexOutputTest$SecondPerfSensitiveClass;.FsomeLogic:(I)I",
-      "LDexOutputTest;.<init>:()V",
       "LDexOutputTest;.BjustCallSixpublic:()I",
       "LDexOutputTest;.GjustCallSixpublic:()I",
       "LDexOutputTest;.CsomeLogic:(I)I",
       "LDexOutputTest;.FsomeLogic:(I)I",
-      "LDexOutputTest;.HsomeLogic:(I)I",
-      "LDexOutputTest;.DgetSixpublic:()I"};
+      "LDexOutputTest;.HsomeLogic:(I)I"};
 
   EXPECT_TRUE(std::equal(method_names.begin(), method_names.end(),
                          expected_order.begin()));

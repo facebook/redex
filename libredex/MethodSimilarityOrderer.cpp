@@ -65,7 +65,7 @@ void MethodSimilarityOrderer::gather_code_hash_ids(
   // We'll further partition chunks into smaller pieces, and then hash those
   // sub-chunks
   for (auto& chunk : chunks) {
-    constexpr size_t chunk_size = 3;
+    constexpr size_t chunk_size = 1;
     if (chunk.end - chunk.start < chunk_size) {
       hash_sub_chunk(chunk);
       continue;
