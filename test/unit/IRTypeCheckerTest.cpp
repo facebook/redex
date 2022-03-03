@@ -95,7 +95,7 @@ struct TestValueType {
  */
 void field_incompatible_fail_helper(const TestValueType& a_type,
                                     const TestValueType& b_type,
-                                    const std::string& exp_fail_str,
+                                    const internal::string& exp_fail_str,
                                     IROpcode opcode_to_test,
                                     bool is_put,
                                     OperandType ir_suffix,
@@ -181,7 +181,7 @@ void field_incompatible_fail_helper(const TestValueType& a_type,
   IRTypeChecker checker(method);
   checker.run();
   EXPECT_TRUE(checker.fail());
-  EXPECT_THAT(checker.what(), MatchesRegex(exp_fail_str.c_str()));
+  EXPECT_THAT(checker.what(), MatchesRegex(exp_fail_str));
 }
 
 /**
@@ -2107,8 +2107,8 @@ TEST_F(IRTypeCheckerTest, putShortFieldIncompatibleClassFail) {
   TestValueType b_type(dex_type_b, type::java_lang_Object(), "LB;.<init>:()V",
                        "LB;.f:S;");
 
-  field_incompatible_fail_helper(a_type, b_type, exp_fail_str.c_str(), op, true,
-                                 SHORT, m_method);
+  field_incompatible_fail_helper(a_type, b_type, exp_fail_str, op, true, SHORT,
+                                 m_method);
 }
 
 /**
