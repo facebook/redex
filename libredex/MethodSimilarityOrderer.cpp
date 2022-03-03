@@ -10,20 +10,34 @@
 #include "DexInstruction.h"
 #include "Show.h"
 #include "Trace.h"
+#include "WorkQueue.h"
+
+namespace {
+// Similarity score for each candidate method, based on the number of
+// shared, missing and additional hash ids when compared to the previously
+// chosen method.
+struct Score {
+  uint32_t shared{0};
+  uint32_t missing{0};
+  uint32_t additional{0};
+  int32_t value() const { return 2 * shared - missing - 2 * additional; }
+};
+
+struct Chunk {
+  uint32_t start;
+  uint32_t end;
+};
+}; // namespace
 
 void MethodSimilarityOrderer::gather_code_hash_ids(
-    const DexCode* code, std::unordered_set<CodeHashId>& code_hash_ids) {
-  auto& instructions = code->get_instructions();
+    const std::vector<DexInstruction*>& instructions,
+    std::unordered_set<CodeHashId>& code_hash_ids) {
+  std::vector<Chunk> chunks;
+  uint32_t start{0};
 
   // First, we partition the instructions into chunks, where each chunk ends
   // when an instruction can change control-flow.
-  struct Chunk {
-    size_t start;
-    size_t end;
-  };
-  std::vector<Chunk> chunks;
-  size_t start{0};
-  for (size_t i = 0; i < instructions.size(); i++) {
+  for (uint32_t i = 0; i < (uint32_t)instructions.size(); i++) {
     auto op = instructions.at(i)->opcode();
     if (dex_opcode::is_branch(op) || dex_opcode::is_return(op) ||
         op == DOPCODE_THROW) {
@@ -36,8 +50,8 @@ void MethodSimilarityOrderer::gather_code_hash_ids(
   // it
   auto hash_sub_chunk = [&](const Chunk& sub_chunk) {
     always_assert(sub_chunk.start < sub_chunk.end);
-    uint64_t code_hash{0};
-    for (size_t i = sub_chunk.start; i < sub_chunk.end; i++) {
+    StableHash code_hash{0};
+    for (uint32_t i = sub_chunk.start; i < sub_chunk.end; i++) {
       auto insn = instructions.at(i);
       auto op = insn->opcode();
       code_hash = code_hash * 23 + op;
@@ -55,9 +69,11 @@ void MethodSimilarityOrderer::gather_code_hash_ids(
         code_hash = code_hash * 17 + insn->src(j);
       }
     }
-    auto it = m_code_hash_ids.find(code_hash);
-    if (it == m_code_hash_ids.end()) {
-      it = m_code_hash_ids.emplace(code_hash, m_code_hash_ids.size()).first;
+    auto it = m_stable_hash_to_code_hash_id.find(code_hash);
+    if (it == m_stable_hash_to_code_hash_id.end()) {
+      it = m_stable_hash_to_code_hash_id
+               .emplace(code_hash, m_stable_hash_to_code_hash_id.size())
+               .first;
     }
     code_hash_ids.insert(it->second);
   };
@@ -65,24 +81,92 @@ void MethodSimilarityOrderer::gather_code_hash_ids(
   // We'll further partition chunks into smaller pieces, and then hash those
   // sub-chunks
   for (auto& chunk : chunks) {
-    constexpr size_t chunk_size = 1;
+    constexpr uint32_t chunk_size = 1;
     if (chunk.end - chunk.start < chunk_size) {
       hash_sub_chunk(chunk);
       continue;
     }
-    for (size_t i = chunk.start; i <= chunk.end - chunk_size; i++) {
+    for (uint32_t i = chunk.start; i <= chunk.end - chunk_size; i++) {
       hash_sub_chunk({i, i + chunk_size});
     }
   }
 }
 
-void MethodSimilarityOrderer::insert(DexMethod* method) {
-  always_assert(m_method_indices.count(method) == 0);
-  size_t index = m_methods.size();
-  m_methods.emplace(index, method);
-  m_method_indices.emplace(method, index);
+static inline Score get_score(
+    const std::unordered_set<MethodSimilarityOrderer::CodeHashId>&
+        code_hash_ids_i,
+    const std::unordered_set<MethodSimilarityOrderer::CodeHashId>&
+        code_hash_ids_j) {
+  Score score;
+  uint32_t i_size = code_hash_ids_i.size();
+  uint32_t j_size = code_hash_ids_j.size();
 
-  auto& code_hash_ids = m_method_code_hash_ids[method];
+  bool is_i_size_small = i_size < j_size;
+  auto& code_hash_ids_small =
+      is_i_size_small ? code_hash_ids_i : code_hash_ids_j;
+  auto& code_hash_ids_large =
+      is_i_size_small ? code_hash_ids_j : code_hash_ids_i;
+
+  for (auto hash_id : code_hash_ids_small) {
+    if (code_hash_ids_large.count(hash_id) != 0) {
+      score.shared++;
+    }
+  }
+  score.missing = i_size - score.shared;
+  score.additional = j_size - score.shared;
+
+  return score;
+}
+
+void MethodSimilarityOrderer::compute_score() {
+  m_score_map.clear();
+  m_score_map.resize(m_id_to_method.size());
+
+  std::vector<MethodId> method_ids;
+  for (auto& p : m_id_to_method) {
+    auto method_id = p.first;
+    m_method_id_to_buffer_id[method_id] = method_ids.size();
+    method_ids.push_back(method_id);
+  }
+
+  std::vector<uint32_t> indices(method_ids.size());
+  std::iota(indices.begin(), indices.end(), 0);
+  workqueue_run<uint32_t>(
+      [&](uint32_t i) {
+        MethodId method_i = method_ids[i];
+        const auto& code_hash_ids_i = m_method_id_to_code_hash_ids[method_i];
+        std::unordered_map<ScoreValue, std::vector<MethodId>> score_map;
+
+        for (uint32_t j = 0; j < (uint32_t)method_ids.size(); j++) {
+          if (i == j) {
+            continue;
+          }
+
+          MethodId method_j = method_ids[j];
+          const auto& code_hash_ids_j = m_method_id_to_code_hash_ids[method_j];
+          auto score = get_score(code_hash_ids_i, code_hash_ids_j);
+          if (score.value() >= 0) {
+            score_map[score.value()].push_back(method_j);
+          }
+        }
+
+        // Mapping from score value (key) to Method Ids. The key is in a
+        // decreasing score order. Becuase it iterates Method Id in order,
+        // the vector is already sorted by Method index (source order).
+        std::map<ScoreValue, std::vector<MethodId>, std::greater<ScoreValue>>
+            map(score_map.begin(), score_map.end());
+        m_score_map[i] = std::move(map);
+      },
+      indices);
+}
+
+void MethodSimilarityOrderer::insert(DexMethod* method) {
+  always_assert(m_method_to_id.count(method) == 0);
+  uint32_t index = m_id_to_method.size();
+  m_id_to_method.emplace(index, method);
+  m_method_to_id.emplace(method, index);
+
+  auto& code_hash_ids = m_method_id_to_code_hash_ids[index];
 
   if (type_class(method->get_class())->is_perf_sensitive()) {
     return;
@@ -90,93 +174,52 @@ void MethodSimilarityOrderer::insert(DexMethod* method) {
 
   auto* code = method->get_dex_code();
   if (code) {
-    gather_code_hash_ids(code, code_hash_ids);
-  }
-
-  for (auto code_hash_id : code_hash_ids) {
-    m_code_hash_id_methods[code_hash_id].insert(method);
+    gather_code_hash_ids(code->get_instructions(), code_hash_ids);
   }
 }
 
-void MethodSimilarityOrderer::get_next() {
+boost::optional<MethodSimilarityOrderer::MethodId>
+MethodSimilarityOrderer::get_next() {
   // Clear best candidates.
-  m_best_candidate_ids.clear();
-
-  if (m_methods.empty()) {
-    return;
+  if (m_id_to_method.empty()) {
+    return {};
   }
 
   // If the next method is part of a perf sensitive class,
   // then do not look for a candidate, just preserve the
   // original order.
-  auto* next_method = m_methods.begin()->second;
-  bool is_next_perf_sensitive = m_method_code_hash_ids[next_method].empty();
+  auto method_id = m_id_to_method.begin()->first;
+  bool is_next_perf_sensitive = m_method_id_to_code_hash_ids[method_id].empty();
 
-  if (!is_next_perf_sensitive && !m_last_code_hash_ids.empty()) {
-    // Similarity score for each candidate method, based on the number of
-    // shared, missing and additional hash ids when compared to the previously
-    // chosen method.
-    struct Score {
-      size_t shared{0};
-      size_t missing{0};
-      size_t additional{0};
-      int value() const { return 2 * shared - missing - 2 * additional; }
-    };
-    std::unordered_map<DexMethod*, Score> candidate_scores;
-    // To compute the score, we add up how many matching code-hash-ids we
-    // have...
-    for (auto code_hash_id : m_last_code_hash_ids) {
-      for (auto method : m_code_hash_id_methods.at(code_hash_id)) {
-        candidate_scores[method].shared++;
-      }
-    }
-    // minus penalty points for every non-matching code-hash-id
-    for (auto& p : candidate_scores) {
-      auto& other_code_hash_ids = m_method_code_hash_ids.at(p.first);
-
-      size_t other_code_hash_ids_size = other_code_hash_ids.size();
-      size_t last_code_hash_ids_size = m_last_code_hash_ids.size();
-
-      p.second.additional = other_code_hash_ids_size - p.second.shared;
-      p.second.missing = last_code_hash_ids_size - p.second.shared;
-    }
-    // Then we'll find the best matching candidate with a non-negative score
-    // that is not perf sensitive.
-    boost::optional<Score> best_candidate_score;
-    for (auto& p : candidate_scores) {
-      auto& score = p.second;
-      if (score.value() < 0 || m_method_code_hash_ids[p.first].empty()) {
-        continue;
-      }
-      if (!best_candidate_score ||
-          score.value() > best_candidate_score->value()) {
-        m_best_candidate_ids.clear();
-        auto id = m_method_indices.at(p.first);
-
-        m_best_candidate_ids.insert(id);
-        best_candidate_score = p.second;
-      } else if (score.value() == best_candidate_score->value()) {
-        auto id = m_method_indices.at(p.first);
-        m_best_candidate_ids.insert(id);
-      }
-    }
-    if (best_candidate_score) {
-      for (auto best_candidate_index : m_best_candidate_ids) {
-        TRACE(
-            OPUT, 3,
-            "[method-similarity-orderer] selected %s with %d = %zu - %zu -%zu ",
-            SHOW(m_methods.at(best_candidate_index)),
-            best_candidate_score->value(), best_candidate_score->shared,
-            best_candidate_score->missing, best_candidate_score->additional);
+  if (!is_next_perf_sensitive && m_last_method_id != boost::none) {
+    // Iterate m_score_map from the highest score..
+    for (auto& p : m_score_map[m_method_id_to_buffer_id[*m_last_method_id]]) {
+      for (auto& m_id : p.second) {
+        // The first match is the one with the highest score
+        // at the smallest index in the source order.
+        if (m_id_to_method.count(m_id)) {
+          TRACE(OPUT, 3,
+                "[method-similarity-orderer] selected %s with score %d",
+                SHOW(m_id_to_method[m_id]), p.first);
+          return m_id;
+        }
       }
     }
   }
-  if (m_best_candidate_ids.empty()) {
-    auto id = m_methods.begin()->first;
-    m_best_candidate_ids.insert(id);
-    TRACE(OPUT, 3, "[method-similarity-orderer] reverted to %s",
-          SHOW(m_methods.at(id)));
-  }
+  boost::optional<MethodId> best_method_id = m_id_to_method.begin()->first;
+  TRACE(OPUT,
+        3,
+        "[method-similarity-orderer] reverted to %s",
+        SHOW(*best_method_id));
+  return best_method_id;
+}
+
+void MethodSimilarityOrderer::remove_method(DexMethod* meth) {
+  if (!m_method_to_id.count(meth)) return;
+
+  auto method_id = m_method_to_id[meth];
+  m_id_to_method.erase(method_id);
+  m_method_to_id.erase(meth);
 }
 
 void MethodSimilarityOrderer::order(std::vector<DexMethod*>& methods) {
@@ -187,26 +230,16 @@ void MethodSimilarityOrderer::order(std::vector<DexMethod*>& methods) {
 
   methods.clear();
 
-  for (get_next(); !m_best_candidate_ids.empty(); get_next()) {
-    for (auto id : m_best_candidate_ids) {
-      auto best_candidate_method = m_methods.at(id);
-      m_last_code_hash_ids =
-          std::move(m_method_code_hash_ids.at(best_candidate_method));
-      m_methods.erase(id);
-      m_method_code_hash_ids.erase(best_candidate_method);
-      for (auto it = m_last_code_hash_ids.begin();
-           it != m_last_code_hash_ids.end();) {
-        auto code_hash_id = *it;
-        auto& meths = m_code_hash_id_methods.at(code_hash_id);
-        meths.erase(best_candidate_method);
-        if (meths.empty()) {
-          m_code_hash_id_methods.erase(code_hash_id);
-          it = m_last_code_hash_ids.erase(it);
-        } else {
-          it++;
-        }
-      }
-      methods.push_back(best_candidate_method);
-    }
+  // Compute scores among methods in parallel.
+  compute_score();
+
+  m_last_method_id = boost::none;
+  for (boost::optional<MethodId> best_method_id = get_next();
+       best_method_id != boost::none;
+       best_method_id = get_next()) {
+    m_last_method_id = best_method_id;
+    auto meth = m_id_to_method[*m_last_method_id];
+    methods.push_back(meth);
+    remove_method(meth);
   }
 }

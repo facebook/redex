@@ -14,6 +14,8 @@
 #include "DexClass.h"
 #include "Timer.h"
 
+class DexInstruction;
+
 /**
  * Method ordering based on code similarity. Methods are selected one after
  * another and, whenever a method has previously been picked, the logic checks
@@ -28,40 +30,60 @@
  * in better compression.
  */
 class MethodSimilarityOrderer {
-  // Hash id for a sequence (chunk) of instructions
-  using CodeHashId = size_t;
+ public:
+  // Converted unique id (32 bit) for a sequence (chunk) of instructions
+  // represented by stable_hash.
+  using CodeHashId = uint32_t;
 
-  // Set of hash ids belonging to the previously chosen method code
-  std::unordered_set<CodeHashId> m_last_code_hash_ids;
+  using StableHash = uint64_t;
 
-  std::set<size_t> m_best_candidate_ids;
+  // This is a synthetic 64 bit id, representing a method's index in the
+  // original ordering.
+  using MethodId = uint64_t;
 
+  using ScoreValue = int32_t;
+
+  using BufferId = uint32_t;
+
+ private:
   // Mirrors the order in each the methods have been added to the orderer
-  std::map<size_t, DexMethod*> m_methods;
+  std::map<MethodId, DexMethod*> m_id_to_method;
 
   // The inverse of m_methods
-  std::unordered_map<DexMethod*, size_t> m_method_indices;
+  std::unordered_map<DexMethod*, MethodId> m_method_to_id;
 
   // Mapping from each method to its set of hash ids
-  std::unordered_map<DexMethod*, std::unordered_set<CodeHashId>>
-      m_method_code_hash_ids;
+  std::unordered_map<MethodId, std::unordered_set<CodeHashId>>
+      m_method_id_to_code_hash_ids;
 
-  // Mapping from hash ids to the sets of all methods containing a sequence
-  // of instructions with that hash id
-  std::unordered_map<CodeHashId, std::unordered_set<DexMethod*>>
-      m_code_hash_id_methods;
+  // Mapping from Method Id to buffer index to m_score_map.
+  std::unordered_map<MethodId, BufferId> m_method_id_to_buffer_id;
 
-  // Mapping from hashed code sequences to their respective hash ids
-  std::unordered_map<uint64_t, CodeHashId> m_code_hash_ids;
+  // Vector to contain similarity score among all Methods for the given
+  // buffer indexed Method. ThreadPool accesses this vector concurrently.
+  std::vector<
+      std::map<ScoreValue, std::vector<MethodId>, std::greater<ScoreValue>>>
+      m_score_map;
 
-  void insert(DexMethod* method);
+  // Last Method Id that is ordered.
+  boost::optional<MethodId> m_last_method_id;
+
+  // Mapping from stable hash (64 bit) to code hash id (32 bit). This saves
+  // space.
+  std::unordered_map<StableHash, CodeHashId> m_stable_hash_to_code_hash_id;
+
+  void insert(DexMethod* meth);
+
+  void remove_method(DexMethod* meth);
 
   // Gather the hash ids of all instruction sequences
   // (of a certain size) inside code
-  void gather_code_hash_ids(const DexCode* code,
+  void gather_code_hash_ids(const std::vector<DexInstruction*>& instructions,
                             std::unordered_set<CodeHashId>& code_hash_ids);
 
-  void get_next();
+  boost::optional<MethodId> get_next();
+
+  void compute_score();
 
  public:
   void order(std::vector<DexMethod*>& methods);

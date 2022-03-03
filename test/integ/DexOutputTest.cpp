@@ -73,7 +73,6 @@ TEST_F(DexOutputTest, testSimilarityOrderer) {
       "LDexOutputTest$SecondPerfSensitiveClass;.EjustReturnFive:()I",
       "LDexOutputTest;.AjustReturnFive:()I",
       "LDexOutputTest;.EjustReturnFive:()I",
-      "LDexOutputTest;.DgetSixpublic:()I",
       "LDexOutputTest$NonPerfSensitiveClass;.FsomeLogic:(I)I",
       "LDexOutputTest$PerfSensitiveClass;.FsomeLogic:(I)I",
       "LDexOutputTest$SecondPerfSensitiveClass;.FsomeLogic:(I)I",
@@ -81,7 +80,8 @@ TEST_F(DexOutputTest, testSimilarityOrderer) {
       "LDexOutputTest;.FsomeLogic:(I)I",
       "LDexOutputTest;.HsomeLogic:(I)I",
       "LDexOutputTest;.BjustCallSixpublic:()I",
-      "LDexOutputTest;.GjustCallSixpublic:()I"};
+      "LDexOutputTest;.GjustCallSixpublic:()I",
+      "LDexOutputTest;.DgetSixpublic:()I"};
 
   EXPECT_TRUE(std::equal(method_names.begin(), method_names.end(),
                          expected_order.begin()));
@@ -125,7 +125,6 @@ TEST_F(DexOutputTest, testPerfSensitive) {
       "LDexOutputTest$NonPerfSensitiveClass;.EjustReturnFive:()I",
       "LDexOutputTest;.AjustReturnFive:()I",
       "LDexOutputTest;.EjustReturnFive:()I",
-      "LDexOutputTest;.DgetSixpublic:()I",
       "LDexOutputTest$NonPerfSensitiveClass;.FsomeLogic:(I)I",
       "LDexOutputTest$PerfSensitiveClass;.<init>:(LDexOutputTest;)V",
       "LDexOutputTest$PerfSensitiveClass;.EjustReturnFive:()I",
@@ -137,7 +136,8 @@ TEST_F(DexOutputTest, testPerfSensitive) {
       "LDexOutputTest;.GjustCallSixpublic:()I",
       "LDexOutputTest;.CsomeLogic:(I)I",
       "LDexOutputTest;.FsomeLogic:(I)I",
-      "LDexOutputTest;.HsomeLogic:(I)I"};
+      "LDexOutputTest;.HsomeLogic:(I)I",
+      "LDexOutputTest;.DgetSixpublic:()I"};
 
   EXPECT_TRUE(std::equal(method_names.begin(), method_names.end(),
                          expected_order.begin()));
