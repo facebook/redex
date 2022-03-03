@@ -52,8 +52,8 @@ class MethodSimilarityOrderer {
   // The inverse of m_methods
   std::unordered_map<DexMethod*, MethodId> m_method_to_id;
 
-  // Mapping from each method to its set of hash ids
-  std::unordered_map<MethodId, std::unordered_set<CodeHashId>>
+  // Mapping from each method to a vector of hash ids
+  std::unordered_map<MethodId, std::vector<CodeHashId>>
       m_method_id_to_code_hash_ids;
 
   // Mapping from Method Id to buffer index to m_score_map.
@@ -79,7 +79,7 @@ class MethodSimilarityOrderer {
   // Gather the hash ids of all instruction sequences
   // (of a certain size) inside code
   void gather_code_hash_ids(const std::vector<DexInstruction*>& instructions,
-                            std::unordered_set<CodeHashId>& code_hash_ids);
+                            std::vector<CodeHashId>& code_hash_ids);
 
   boost::optional<MethodId> get_next();
 

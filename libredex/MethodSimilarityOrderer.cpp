@@ -27,11 +27,24 @@ struct Chunk {
   uint32_t start;
   uint32_t end;
 };
+
+template <typename T>
+struct CountingFakeOutputIterator {
+  uint32_t& counter;
+  T fake;
+  explicit CountingFakeOutputIterator(uint32_t& c) : counter(c) {}
+  CountingFakeOutputIterator& operator++() {
+    counter++;
+    return *this;
+  }
+  T& operator*() { return fake; }
+};
 }; // namespace
 
 void MethodSimilarityOrderer::gather_code_hash_ids(
     const std::vector<DexInstruction*>& instructions,
-    std::unordered_set<CodeHashId>& code_hash_ids) {
+    std::vector<CodeHashId>& code_hash_ids) {
+
   std::vector<Chunk> chunks;
   uint32_t start{0};
 
@@ -45,6 +58,8 @@ void MethodSimilarityOrderer::gather_code_hash_ids(
       start = i;
     }
   }
+
+  std::unordered_set<StableHash> stable_hashes;
 
   // For any instruction-sequence, we can compute a (stable) hash representing
   // it
@@ -69,13 +84,7 @@ void MethodSimilarityOrderer::gather_code_hash_ids(
         code_hash = code_hash * 17 + insn->src(j);
       }
     }
-    auto it = m_stable_hash_to_code_hash_id.find(code_hash);
-    if (it == m_stable_hash_to_code_hash_id.end()) {
-      it = m_stable_hash_to_code_hash_id
-               .emplace(code_hash, m_stable_hash_to_code_hash_id.size())
-               .first;
-    }
-    code_hash_ids.insert(it->second);
+    stable_hashes.insert(code_hash);
   };
 
   // We'll further partition chunks into smaller pieces, and then hash those
@@ -90,28 +99,37 @@ void MethodSimilarityOrderer::gather_code_hash_ids(
       hash_sub_chunk({i, i + chunk_size});
     }
   }
+
+  // Initialize the vector for code hash.
+  // Publish code hash ids from stable hashes.
+  code_hash_ids.reserve(stable_hashes.size());
+  for (StableHash stable_hash : stable_hashes) {
+    if (m_stable_hash_to_code_hash_id.count(stable_hash) == 0) {
+      // Assign a unique code hash id if it appears for the first time.
+      auto code_hash_id = m_stable_hash_to_code_hash_id.size();
+      m_stable_hash_to_code_hash_id[stable_hash] = code_hash_id;
+    }
+    code_hash_ids.push_back(m_stable_hash_to_code_hash_id[stable_hash]);
+  }
+  // Sort the code hash Ids to check the overlaps in the linear time.
+  std::sort(code_hash_ids.begin(), code_hash_ids.end());
 }
 
+// For the given code hash ids (i) and code hash ids (j), get score for j
+// against i.
 static inline Score get_score(
-    const std::unordered_set<MethodSimilarityOrderer::CodeHashId>&
-        code_hash_ids_i,
-    const std::unordered_set<MethodSimilarityOrderer::CodeHashId>&
-        code_hash_ids_j) {
-  Score score;
+    const std::vector<MethodSimilarityOrderer::CodeHashId>& code_hash_ids_i,
+    const std::vector<MethodSimilarityOrderer::CodeHashId>& code_hash_ids_j) {
   uint32_t i_size = code_hash_ids_i.size();
   uint32_t j_size = code_hash_ids_j.size();
 
-  bool is_i_size_small = i_size < j_size;
-  auto& code_hash_ids_small =
-      is_i_size_small ? code_hash_ids_i : code_hash_ids_j;
-  auto& code_hash_ids_large =
-      is_i_size_small ? code_hash_ids_j : code_hash_ids_i;
+  Score score;
+  std::set_intersection(
+      code_hash_ids_i.begin(), code_hash_ids_i.end(), code_hash_ids_j.begin(),
+      code_hash_ids_j.end(),
+      CountingFakeOutputIterator<MethodSimilarityOrderer::CodeHashId>(
+          score.shared));
 
-  for (auto hash_id : code_hash_ids_small) {
-    if (code_hash_ids_large.count(hash_id) != 0) {
-      score.shared++;
-    }
-  }
   score.missing = i_size - score.shared;
   score.additional = j_size - score.shared;
 
