@@ -3,7 +3,7 @@
 
 -keepnames class *
 
--keep class com.facebook.redex.test.instr.RemoveBuilderPatternTest { *; }
+-keep class com.facebook.redex.test.instr.TestBuilder { *; }
 
 # Don't muck with test infra
 
