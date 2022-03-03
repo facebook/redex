@@ -90,3 +90,13 @@ body {
   font-weight: bold;
   padding: 15px;
 }
+
+/* Social Banner */
+.SocialBanner {
+  font-weight: bold;
+  font-size: 20px;
+  padding: 20px;
+  max-width: 768px;
+  margin: 0 auto;
+  text-align: center;
+}
