@@ -18,6 +18,7 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"
+#include "PassManager.h"
 #include "ReachableClasses.h"
 #include "Show.h"
 #include "Trace.h"
@@ -110,14 +111,15 @@ std::set<std::string> getAllowedStores(DexStoresVector& stores,
   return store_map[store.get_name()];
 }
 
-void verifyStore(DexStoresVector& stores,
-                 DexStore& store,
-                 class_to_store_map_t map,
-                 const allowed_store_map_t& store_map,
-                 FILE* fd) {
+uint64_t verifyStore(DexStoresVector& stores,
+                     DexStore& store,
+                     class_to_store_map_t map,
+                     const allowed_store_map_t& store_map,
+                     FILE* fd) {
   refs_t class_refs;
   auto scope = build_class_scope(store.get_dexen());
   build_refs(scope, class_refs);
+  uint64_t dependencies{0};
   for (auto& ref : class_refs) {
     const auto target = ref.first;
     for (const auto& source : ref.second) {
@@ -140,8 +142,10 @@ void verifyStore(DexStoresVector& stores,
                 show_deobfuscated(source).c_str(), target_store_name.c_str(),
                 show_deobfuscated(target).c_str());
       }
+      dependencies++;
     }
   }
+  return dependencies;
 }
 
 } // namespace
@@ -165,13 +169,18 @@ void VerifierPass::run_pass(DexStoresVector& stores,
       map[cls] = &store;
     }
   }
+
+  uint64_t dependencies{0};
   for (auto& store : stores) {
-    verifyStore(stores, store, map, store_map, fd);
+    dependencies += verifyStore(stores, store, map, store_map, fd);
   }
 
   if (fd != nullptr) {
     fclose(fd);
   }
+
+  TRACE(VERIFY, 1, "%lu dependencies found", dependencies);
+  mgr.incr_metric("dependencies", dependencies);
 }
 
 static VerifierPass s_pass;
