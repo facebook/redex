@@ -53,6 +53,11 @@ DexStoresDependencies build_transitive_resolved_dependencies(
     auto it = transitive_resolved_dependencies.find(store);
     if (it == transitive_resolved_dependencies.end()) {
       DexStoreDependencies deps;
+      if (store != &root_store) {
+        // It's safe and convenient to have an implicit dependency on the root
+        // store, as the root store is always present.
+        deps.insert(&root_store);
+      }
       for (auto& dependency_name : store->get_dependencies()) {
         auto it2 = named_stores.find(dependency_name);
         if (it2 == named_stores.end()) {
