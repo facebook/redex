@@ -82,7 +82,7 @@ DexStore::DexStore(std::string name, std::vector<std::string> deps) {
   m_metadata.set_dependencies(std::move(deps));
 }
 
-std::string DexStore::get_name() const { return m_metadata.get_id(); }
+const std::string& DexStore::get_name() const { return m_metadata.get_id(); }
 
 bool DexStore::is_root_store() const {
   return m_metadata.get_id() == ROOT_STORE_NAME;

@@ -55,7 +55,7 @@ class DexStore {
   explicit DexStore(const DexMetadata& metadata) : m_metadata(metadata){};
   explicit DexStore(std::string name, std::vector<std::string> deps = {});
 
-  std::string get_name() const;
+  const std::string& get_name() const;
   size_t num_dexes() const { return m_dexen.size(); }
   const std::string& get_dex_magic() const { return dex_magic; }
   void set_dex_magic(const std::string& input_dex_magic) {
