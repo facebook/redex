@@ -13,6 +13,7 @@
 #include "OutliningProfileGuidance.h"
 
 struct ConfigFiles;
+class PassManager;
 
 namespace outliner_impl {
 
@@ -41,6 +42,7 @@ namespace outliner_impl {
 void gather_sufficiently_warm_and_hot_methods(
     const Scope& scope,
     ConfigFiles& config_files,
+    PassManager& mgr,
     const outliner::ProfileGuidanceConfig& config,
     std::unordered_set<DexMethod*>* sufficiently_warm_methods,
     std::unordered_set<DexMethod*>* sufficiently_hot_methods);

@@ -411,7 +411,7 @@ CheckCastAnalysis::CheckCastAnalysis(const CheckCastConfig& config,
     auto& demands = p.second;
     if (demands.count(nullptr)) {
       // no need to keep around anything else
-      std20::erase_if(demands, [](auto it) { return *it; });
+      std20::erase_if(demands, [](auto* t) { return t; });
       always_assert(demands.count(nullptr));
       always_assert(demands.size() == 1);
       continue;

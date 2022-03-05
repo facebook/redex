@@ -315,8 +315,7 @@ void AnalysisImpl::escape_cross_stores() {
  * Clean up the single impl map.
  */
 void AnalysisImpl::remove_escaped() {
-  std20::erase_if(single_impls,
-                  [](auto it) { return it->second.is_escaped(); });
+  std20::erase_if(single_impls, [](auto& p) { return p.second.is_escaped(); });
 }
 
 /**

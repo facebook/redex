@@ -773,8 +773,7 @@ static std::unordered_set<cfg::Block*> get_eventual_targets_after_outlining(
   auto targets = get_targets((*succs_it)->target());
   for (succs_it++; succs_it != succs.end() && !targets.empty(); succs_it++) {
     auto other_targets = get_targets((*succs_it)->target());
-    std20::erase_if(targets,
-                    [&](auto it) { return !other_targets.count(*it); });
+    std20::erase_if(targets, [&](auto* b) { return !other_targets.count(b); });
   }
   return targets;
 }
@@ -2478,8 +2477,8 @@ static NewlyOutlinedMethods outline(
         auto& other_c = candidates_with_infos->at(other_id);
         for (auto& cml : cmls) {
           auto& other_cmls = other_c.info.methods.at(method);
-          std20::erase_if(other_cmls, [&](auto it) {
-            if (ranges_overlap(cml.ranges, it->ranges)) {
+          std20::erase_if(other_cmls, [&](auto& other_cml) {
+            if (ranges_overlap(cml.ranges, other_cml.ranges)) {
               other_c.info.count--;
               if (other_id != id) {
                 other_candidate_ids_with_changes.insert(other_id);
@@ -3017,7 +3016,7 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
   std::unordered_set<DexMethod*> sufficiently_warm_methods;
   std::unordered_set<DexMethod*> sufficiently_hot_methods;
   gather_sufficiently_warm_and_hot_methods(
-      scope, config, m_config.profile_guidance, &sufficiently_warm_methods,
+      scope, config, mgr, m_config.profile_guidance, &sufficiently_warm_methods,
       &sufficiently_hot_methods);
   mgr.incr_metric("num_sufficiently_warm_methods",
                   sufficiently_warm_methods.size());

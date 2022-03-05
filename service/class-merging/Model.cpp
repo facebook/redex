@@ -31,6 +31,14 @@ std::unordered_map<DexType*, size_t> Model::s_cls_to_interdex_group;
 
 namespace {
 
+std::string show(const TypeSet& types) {
+  std::ostringstream ss;
+  for (auto type : types) {
+    ss << show(type);
+  }
+  return ss.str();
+}
+
 constexpr const char* CLASS_MARKER_DELIMITER = "DexEndMarker";
 
 std::string to_string(const ModelSpec& spec) {
@@ -50,7 +58,10 @@ void load_generated_types(const ModelSpec& spec,
                           const TypeSystem& type_system,
                           const ConstTypeHashSet& models,
                           TypeSet& generated) {
-  generated.insert(models.begin(), models.end());
+  if (spec.is_generated_code) {
+    generated.insert(models.begin(), models.end());
+  }
+
   for (const auto& type : spec.gen_types) {
     const auto& cls = type_class(type);
     redex_assert(cls != nullptr);
@@ -313,9 +324,9 @@ MergerType& Model::create_merger_shape(
     const DexType* parent,
     const TypeSet& intfs,
     const std::vector<const DexType*>& classes) {
-  TRACE(CLMG, 7, "Create Shape %s - %s, parent %s, intfs %ld, classes %ld",
+  TRACE(CLMG, 7, "Create Shape %s - %s, parent %s, intfs %zu (%s), classes %zu",
         SHOW(shape_type), shape.to_string().c_str(), SHOW(parent), intfs.size(),
-        classes.size());
+        SHOW(intfs), classes.size());
   auto& merger = m_mergers[shape_type];
   merger.type = shape_type;
   merger.shape = shape;
@@ -616,8 +627,8 @@ DexType* check_current_instance(const ConstTypeHashSet& types,
 ConcurrentMap<DexType*, TypeHashSet> get_type_usages(
     const ConstTypeHashSet& types,
     const Scope& scope,
-    ModelSpec::TypeUsagesMode mode) {
-  TRACE(CLMG, 1, "TypeUsagesMode %s",
+    ModelSpec::InterDexGroupingInferringMode mode) {
+  TRACE(CLMG, 1, "InterDex Grouping Inferring Mode %s",
         [&]() {
           std::ostringstream oss;
           oss << mode;
@@ -662,7 +673,7 @@ ConcurrentMap<DexType*, TypeHashSet> get_type_usages(
   };
 
   switch (mode) {
-  case ModelSpec::TypeUsagesMode::kAllTypeRefs: {
+  case ModelSpec::InterDexGroupingInferringMode::kAllTypeRefs: {
     walk::parallel::opcodes(scope, [&](DexMethod* method, IRInstruction* insn) {
       auto cls = method->get_class();
       const auto& updater =
@@ -696,7 +707,7 @@ ConcurrentMap<DexType*, TypeHashSet> get_type_usages(
     break;
   }
 
-  case ModelSpec::TypeUsagesMode::kClassLoads: {
+  case ModelSpec::InterDexGroupingInferringMode::kClassLoads: {
     walk::parallel::opcodes(scope, [&](DexMethod* method, IRInstruction* insn) {
       auto cls = method->get_class();
       class_loads_update(insn, cls);
@@ -704,7 +715,8 @@ ConcurrentMap<DexType*, TypeHashSet> get_type_usages(
     break;
   }
 
-  case ModelSpec::TypeUsagesMode::kClassLoadsBasicBlockFiltering: {
+  case ModelSpec::InterDexGroupingInferringMode::
+      kClassLoadsBasicBlockFiltering: {
     auto is_not_cold = [](cfg::Block* b) {
       auto* sb = source_blocks::get_first_source_block(b);
       if (sb == nullptr) {
@@ -754,15 +766,16 @@ size_t get_interdex_group(
 
 namespace class_merging {
 
-std::ostream& operator<<(std::ostream& os, ModelSpec::TypeUsagesMode mode) {
+std::ostream& operator<<(std::ostream& os,
+                         ModelSpec::InterDexGroupingInferringMode mode) {
   switch (mode) {
-  case ModelSpec::TypeUsagesMode::kAllTypeRefs:
+  case ModelSpec::InterDexGroupingInferringMode::kAllTypeRefs:
     os << "all";
     break;
-  case ModelSpec::TypeUsagesMode::kClassLoads:
+  case ModelSpec::InterDexGroupingInferringMode::kClassLoads:
     os << "class-loads";
     break;
-  case ModelSpec::TypeUsagesMode::kClassLoadsBasicBlockFiltering:
+  case ModelSpec::InterDexGroupingInferringMode::kClassLoadsBasicBlockFiltering:
     os << "class-loads-bb";
     break;
   }
@@ -821,7 +834,7 @@ std::vector<ConstTypeHashSet> Model::group_by_interdex_set(
     return new_groups;
   }
   const auto& type_to_usages =
-      get_type_usages(types, m_scope, m_spec.type_usages_mode);
+      get_type_usages(types, m_scope, m_spec.interdex_grouping_inferring_mode);
   for (const auto& pair : type_to_usages) {
     auto index = get_interdex_group(pair.second, s_cls_to_interdex_group,
                                     s_num_interdex_groups);

@@ -671,8 +671,7 @@ size_t compute_locations_closure(
 
       // remove inverse dependency entries as appropriate
       auto& entries = idit->second;
-      std20::erase_if(entries,
-                      [&](auto it) { return !method_lads.count(*it); });
+      std20::erase_if(entries, [&](auto* m) { return !method_lads.count(m); });
 
       if (entries.empty()) {
         // remove inverse dependency

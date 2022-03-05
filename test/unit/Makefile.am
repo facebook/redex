@@ -54,6 +54,7 @@ check_PROGRAMS = \
     final_inline_v2_test \
     fp_ev_test \
     global_type_analysis_test \
+    get_deobfuscated_test \
     graph_util_test \
     hierarchy_util_test \
     instruction_sequence_outliner_test \
@@ -226,6 +227,8 @@ final_inline_v2_test_SOURCES = FinalInlineV2Test.cpp
 fp_ev_test_SOURCES = FpEvTest.cpp
 
 global_type_analysis_test_SOURCES = type-analysis/GlobalTypeAnalysisTest.cpp
+
+get_deobfuscated_test_SOURCES = GetDeobfuscatedTest.cpp
 
 graph_util_test_SOURCES = GraphUtilTest.cpp
 
@@ -470,6 +473,7 @@ TESTS = \
     final_inline_v2_test \
     fp_ev_test \
     global_type_analysis_test \
+    get_deobfuscated_test \
     graph_util_test \
     hierarchy_util_test \
     instruction_sequence_outliner_test \

@@ -1211,7 +1211,6 @@ void InterDex::flush_out_dex(DexInfo& dex_info, DexClass* canary_cls) {
     always_assert(
         m_dexes_structure.current_dex_has_tref(canary_cls->get_type()));
 
-
     // Properly try to insert the class.
 
     MethodRefs clazz_mrefs;

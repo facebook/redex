@@ -24,9 +24,9 @@ namespace {
  */
 void treat_generated_stores(DexStoresVector& stores,
                             interdex::InterDex* interdex) {
-  std20::erase_if(stores, [&](auto it) {
-    if (it->is_generated()) {
-      interdex->add_dexes_from_store(*it);
+  std20::erase_if(stores, [&](auto& s) {
+    if (s.is_generated()) {
+      interdex->add_dexes_from_store(s);
       return true;
     }
     return false;

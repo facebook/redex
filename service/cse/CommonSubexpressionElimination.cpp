@@ -1121,8 +1121,8 @@ CseUnorderedLocationSet SharedState::get_relevant_written_locations(
   }
 
   // Remove written locations that are not read
-  std20::erase_if(written_locations, [&read_locations](auto it) {
-    return !read_locations.count(*it);
+  std20::erase_if(written_locations, [&read_locations](auto& l) {
+    return !read_locations.count(l);
   });
 
   return written_locations;

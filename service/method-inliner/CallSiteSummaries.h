@@ -21,6 +21,9 @@ struct CallSiteSummary {
    * contains fields or methods.
    */
   std::string get_key() const;
+
+  static void append_key_value(std::ostringstream& oss,
+                               const ConstantValue& value);
 };
 
 struct CalleeCallSiteSummary {
@@ -68,6 +71,7 @@ class CallSiteSummarizer {
   const MethodToMethodOccurrences& m_caller_callee;
   GetCalleeFunction m_get_callee_fn;
   HasCalleeOtherCallSitesPredicate m_has_callee_other_call_sites_fn;
+  std::function<bool(const ConstantValue&)>* m_filter_fn;
   CallSiteSummaryStats* m_stats;
 
   /**
@@ -94,9 +98,6 @@ class CallSiteSummarizer {
   ConcurrentMap<std::string, std::unique_ptr<const CallSiteSummary>>
       m_call_site_summaries;
 
-  const CallSiteSummary* internalize_call_site_summary(
-      const CallSiteSummary& call_site_summary);
-
   /**
    * For all (reachable) invoke instructions in a given method, collect
    * information about their arguments, i.e. whether particular arguments
@@ -114,9 +115,13 @@ class CallSiteSummarizer {
       const MethodToMethodOccurrences& caller_callee,
       GetCalleeFunction get_callee_fn,
       HasCalleeOtherCallSitesPredicate has_callee_other_call_sites_fn,
+      std::function<bool(const ConstantValue&)>* filter_fn,
       CallSiteSummaryStats* stats);
 
   void summarize();
+
+  const CallSiteSummary* internalize_call_site_summary(
+      const CallSiteSummary& call_site_summary);
 
   const std::vector<CallSiteSummaryOccurrences>*
   get_callee_call_site_summary_occurrences(const DexMethod* callee) const;

@@ -167,8 +167,8 @@ void analyze_true_instance_ofs(
     std::remove_cv_t<std::remove_pointer_t<decltype(uses)>> filtered_uses;
     if (has_moves) {
       filtered_uses = *uses;
-      std20::erase_if(filtered_uses, [](const auto& it) {
-        return opcode::is_a_move(it->insn->opcode());
+      std20::erase_if(filtered_uses, [](const auto& u) {
+        return opcode::is_a_move(u.insn->opcode());
       });
       uses = &filtered_uses;
     }
