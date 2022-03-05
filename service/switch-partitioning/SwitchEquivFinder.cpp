@@ -375,13 +375,13 @@ void SwitchEquivFinder::normalize_extra_loads(
   // Remove loads that aren't used outside the if-else chain blocks
   for (auto& block_and_insns : m_extra_loads) {
     InstructionSet& insns = block_and_insns.second;
-    std20::erase_if(insns, [&used_defs](auto& p) {
-      return used_defs.count(p.second) == 0;
+    std20::erase_if(insns, [&used_defs](auto it) {
+      return used_defs.count(it->second) == 0;
     });
   }
 
   // Remove empty instruction lists from `m_extra_loads` (possibly emptying it)
-  std20::erase_if(m_extra_loads, [](auto& p) { return p.second.empty(); });
+  std20::erase_if(m_extra_loads, [](auto it) { return it->second.empty(); });
 }
 
 // Use a sparta analysis to find the value of reg at the beginning of each leaf

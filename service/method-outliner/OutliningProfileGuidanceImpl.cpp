@@ -9,7 +9,6 @@
 
 #include "ConfigFiles.h"
 #include "MethodProfiles.h"
-#include "PassManager.h"
 #include "SourceBlocks.h"
 #include "Walkers.h"
 
@@ -20,7 +19,6 @@ using namespace outliner;
 void gather_sufficiently_warm_and_hot_methods(
     const Scope& scope,
     ConfigFiles& config_files,
-    PassManager& mgr,
     const ProfileGuidanceConfig& config,
     std::unordered_set<DexMethod*>* sufficiently_warm_methods,
     std::unordered_set<DexMethod*>* sufficiently_hot_methods) {
@@ -55,22 +53,6 @@ void gather_sufficiently_warm_and_hot_methods(
     }
   }
 
-  std::unordered_set<DexType*> perf_sensitive_classes;
-  if (mgr.interdex_has_run()) {
-    walk::classes(scope, [&perf_sensitive_classes](DexClass* cls) {
-      if (cls->is_perf_sensitive()) {
-        perf_sensitive_classes.insert(cls->get_type());
-      }
-    });
-  } else {
-    for (const auto& str : config_files.get_coldstart_classes()) {
-      DexType* type = DexType::get_type(str);
-      if (type) {
-        perf_sensitive_classes.insert(type);
-      }
-    }
-  }
-
   switch (config.perf_sensitivity) {
   case PerfSensitivity::kNeverUse:
     break;
@@ -81,13 +63,11 @@ void gather_sufficiently_warm_and_hot_methods(
     }
     FALLTHROUGH_INTENDED;
   case PerfSensitivity::kAlwaysWarm:
-    walk::methods(scope,
-                  [sufficiently_warm_methods,
-                   &perf_sensitive_classes](DexMethod* method) {
-                    if (perf_sensitive_classes.count(method->get_class())) {
-                      sufficiently_warm_methods->insert(method);
-                    }
-                  });
+    walk::methods(scope, [sufficiently_warm_methods](DexMethod* method) {
+      if (type_class(method->get_class())->is_perf_sensitive()) {
+        sufficiently_warm_methods->insert(method);
+      }
+    });
     break;
 
   case PerfSensitivity::kHotWhenNoProfiles:
@@ -96,13 +76,11 @@ void gather_sufficiently_warm_and_hot_methods(
     }
     FALLTHROUGH_INTENDED;
   case PerfSensitivity::kAlwaysHot:
-    walk::methods(
-        scope,
-        [sufficiently_hot_methods, &perf_sensitive_classes](DexMethod* method) {
-          if (perf_sensitive_classes.count(method->get_class())) {
-            sufficiently_hot_methods->insert(method);
-          }
-        });
+    walk::methods(scope, [sufficiently_hot_methods](DexMethod* method) {
+      if (type_class(method->get_class())->is_perf_sensitive()) {
+        sufficiently_hot_methods->insert(method);
+      }
+    });
     break;
   }
 }

@@ -403,7 +403,7 @@ void Transform::apply(const intraprocedural::FixpointIterator& fp_iter,
                       DexProto* proto) {
   legacy_apply_constants_and_prune_unreachable(fp_iter, wps, cfg, xstores,
                                                declaring_type);
-  if (xstores && !g_redex->instrument_mode) {
+  if (xstores) {
     m_stats.unreachable_instructions_removed += cfg.simplify();
     // legacy_apply_constants_and_prune_unreachable creates some new blocks that
     // fp_iter isn't aware of. As turns out, legacy_apply_forward_targets
@@ -717,6 +717,10 @@ void Transform::legacy_apply_forward_targets(
     DexType* declaring_type,
     DexProto* proto,
     const XStoreRefs* xstores) {
+  if (g_redex->instrument_mode) {
+    return;
+  }
+
   cfg.calculate_exit_block();
 
   // The following is an attempt to avoid creating a control-flow structure that

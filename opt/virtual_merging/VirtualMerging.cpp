@@ -872,7 +872,7 @@ void check_keys(const T& c1, const T& c2) {
   auto c1_keys = get_keys(c1);
   auto c2_keys = get_keys(c2);
   std20::erase_if(c1_keys,
-                  [&c2_keys](const auto& k) { return c2_keys.count(k) != 0; });
+                  [&c2_keys](const auto& k) { return c2_keys.count(*k) != 0; });
   redex_assert(c1_keys.empty());
 };
 
@@ -1272,8 +1272,8 @@ void VirtualMerging::merge_methods(
                    std::inserter(all_methods, all_methods.end()),
                    [](const auto& p) { return p.first; });
     auto remap_keys = get_keys(m_virtual_methods_to_remap);
-    std20::erase_if(all_methods, [&remap_keys](const auto* m) {
-      return remap_keys.count(const_cast<DexMethod*>(m)) != 0;
+    std20::erase_if(all_methods, [&remap_keys](const auto& m) {
+      return remap_keys.count(const_cast<DexMethod*>(*m)) != 0;
     });
 
     TRACE(VM, 3, "[VM] Registering %zu methods for experiments",

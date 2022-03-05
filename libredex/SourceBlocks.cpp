@@ -410,6 +410,17 @@ InsertResult insert_source_blocks(DexMethod* method,
   return {helper.id, helper.oss.str(), !had_failures};
 }
 
+bool has_source_block_positive_val(const SourceBlock* sb) {
+  bool any_positive_val = false;
+  if (sb != nullptr) {
+    sb->foreach_val_early([&any_positive_val](const auto& val) {
+      any_positive_val = val && val->val > 0.0f;
+      return any_positive_val;
+    });
+  }
+  return any_positive_val;
+}
+
 namespace {
 
 bool is_source_block_hot(SourceBlock* sb) {
@@ -668,17 +679,6 @@ void track_source_block_coverage(ScopedMetrics& sm,
   }
 }
 
-bool has_source_block_positive_val(const SourceBlock* sb) {
-  bool any_positive_val = false;
-  if (sb != nullptr) {
-    sb->foreach_val_early([&any_positive_val](const auto& val) {
-      any_positive_val = val && val->val > 0.0f;
-      return any_positive_val;
-    });
-  }
-  return any_positive_val;
-}
-
 struct ViolationsHelper::ViolationsHelperImpl {
   std::unordered_map<DexMethod*, size_t> violations_start;
   std::vector<std::string> print;
@@ -868,6 +868,5 @@ ViolationsHelper::ViolationsHelper(const Scope& scope,
                                    std::vector<std::string> to_vis)
     : impl(std::make_unique<ViolationsHelperImpl>(scope, std::move(to_vis))) {}
 ViolationsHelper::~ViolationsHelper() {}
-
 
 } // namespace source_blocks

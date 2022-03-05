@@ -165,7 +165,7 @@ class VirtualMergingTest : public RedexTest {
       }
       auto missing = all_types;
       std20::erase_if(missing,
-                      [&found](auto t) { return found.count(t) != 0; });
+                      [&found](auto t) { return found.count(*t) != 0; });
       if (!missing.empty()) {
         auto ret = ::testing::AssertionFailure();
         ret << "Did not find type-check(s) for";

@@ -21,6 +21,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <sys/types.h>
+#include <type_traits>
 
 #include <type_traits>
 

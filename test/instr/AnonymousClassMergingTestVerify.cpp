@@ -28,17 +28,10 @@ TEST_F(PostVerify, MergeablesRemoval) {
 
 TEST_F(PostVerify, InterfaceMethodsOnShape) {
   auto shape = find_class_named(
-      classes, "Lcom/facebook/redex/AnonInterface1Shape1S0100000;");
-  ASSERT_NE(shape, nullptr) << "Not find merged shape for Interface1\n";
+      classes, "Lcom/facebook/redex/AnonInterface1Shape5S0100000;");
+  ASSERT_NE(shape, nullptr);
   auto magic1 = find_vmethod_named(*shape, "magic1");
   ASSERT_NE(magic1, nullptr);
   auto magic2 = find_vmethod_named(*shape, "magic2");
   ASSERT_NE(magic2, nullptr);
-
-  // This test covers external default method implementation.
-  // https://developer.android.com/reference/java/lang/Iterable#spliterator()
-  auto iterable_shape = find_class_named(
-      classes, "Lcom/facebook/redex/AnonIterableShape0S0200000;");
-  ASSERT_NE(iterable_shape, nullptr)
-      << "Not find merged shape for java.lang.Iterable\n";
 }

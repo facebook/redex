@@ -366,16 +366,6 @@ void MethodBlock::load_const(Location& loc, int32_t value) {
   push_instruction(load);
 }
 
-void MethodBlock::load_const(Location& loc, int64_t value, DexType* type) {
-  always_assert(type::is_wide_type(type) == loc.is_wide());
-  IRInstruction* load =
-      new IRInstruction(loc.is_wide() ? OPCODE_CONST_WIDE : OPCODE_CONST);
-  load->set_dest(loc.get_reg());
-  load->set_literal(value);
-  loc.type = type;
-  push_instruction(load);
-}
-
 void MethodBlock::load_const(Location& loc, double value) {
   always_assert(loc.is_wide());
   IRInstruction* load = new IRInstruction(OPCODE_CONST_WIDE);

@@ -101,7 +101,6 @@ class DexType;
   TM(ORIGINALNAME)    \
   TM(OSDCE)           \
   TM(OUTLINE)         \
-  TM(PA)              \
   TM(PEEPHOLE)        \
   TM(PGR)             \
   TM(PM)              \

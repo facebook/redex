@@ -127,6 +127,7 @@ const std::unordered_set<DexType*>& ConfigFiles::get_do_not_devirt_anon() {
   }
   return m_no_devirtualize_annos;
 }
+
 /**
  * Read an interdex list file and return as a vector of appropriately-formatted
  * classname strings.

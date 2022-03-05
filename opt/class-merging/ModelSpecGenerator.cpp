@@ -39,16 +39,16 @@ bool maybe_anonymous_class(const DexClass* cls) {
 }
 
 /**
- * The methods and fields may have associated keeping rules, exclude the classes
- * if they or their methods/fields are not deleteable. For example, methods
- * annotated with @android.webkit.JavascriptInterface are invoked reflectively,
- * and we should keep them according to their keeping rules.
+ * The methods may have associated keeping rules, exclude the classes if they or
+ * their methods are not deleteable. For example, methods annotated
+ * with @android.webkit.JavascriptInterface are invoked reflectively, and we
+ * should keep them.
  *
- * In practice, we find some constructors of anonymous classes are kept by
- * overly-conservative rules. So we loose the checking for the constructors of
- * anonymous classes.
+ * Why not check the constructors and fields?
+ * Some of the constructors and fields are marked as non-deletable but the class
+ * is apparently mergeable.
  */
-bool can_delete_class(const DexClass* cls, bool is_anonymous_class) {
+bool can_delete_class_or_nonctor_methods(const DexClass* cls) {
   if (!can_delete(cls)) {
     return false;
   }
@@ -58,21 +58,9 @@ bool can_delete_class(const DexClass* cls, bool is_anonymous_class) {
     return false;
   }
   auto& dmethods = cls->get_dmethods();
-  if (std::any_of(dmethods.begin(), dmethods.end(),
-                  [&is_anonymous_class](const DexMethod* m) {
-                    return (!is_anonymous_class || !is_constructor(m)) &&
-                           !can_delete(m);
-                  })) {
-    return false;
-  }
-  auto& ifields = cls->get_ifields();
-  if (std::any_of(ifields.begin(), ifields.end(),
-                  [](const DexField* f) { return !can_delete(f); })) {
-    return false;
-  }
-  auto& sfields = cls->get_sfields();
-  if (std::any_of(sfields.begin(), sfields.end(),
-                  [](const DexField* f) { return !can_delete(f); })) {
+  if (std::any_of(dmethods.begin(), dmethods.end(), [](const DexMethod* m) {
+        return !is_constructor(m) && !can_delete(m);
+      })) {
     return false;
   }
   return true;
@@ -113,9 +101,8 @@ void find_all_mergeables_and_roots(const TypeSystem& type_system,
         cls->get_clinit() || throwable.count(cur_type)) {
       continue;
     }
-    bool is_anonymous_class = maybe_anonymous_class(cls);
     // TODO: Can merge named classes.
-    if (!is_anonymous_class) {
+    if (!maybe_anonymous_class(cls)) {
       continue;
     }
     TypeSet children;
@@ -123,7 +110,7 @@ void find_all_mergeables_and_roots(const TypeSystem& type_system,
     if (!children.empty()) {
       continue;
     }
-    if (!can_delete_class(cls, is_anonymous_class)) {
+    if (!can_delete_class_or_nonctor_methods(cls)) {
       continue;
     }
     auto* intfs = cls->get_interfaces();
@@ -182,15 +169,11 @@ void discover_mergeable_anonymous_classes(
   for (auto* type : root_store_classes) {
     auto cls = type_class(type);
     auto* itfs = cls->get_interfaces();
-    if (is_interface(cls) || itfs->size() > 1 || cls->get_clinit() ||
-        !is_from_allowed_packages(allowed_packages, cls)) {
+    if (is_interface(cls) || itfs->size() > 1 || !maybe_anonymous_class(cls) ||
+        cls->get_clinit() || !is_from_allowed_packages(allowed_packages, cls)) {
       continue;
     }
-    bool is_anonymous_class = maybe_anonymous_class(cls);
-    if (!is_anonymous_class) {
-      continue;
-    }
-    if (!can_delete_class(cls, is_anonymous_class)) {
+    if (!can_delete_class_or_nonctor_methods(cls)) {
       continue;
     }
     auto super_cls = cls->get_super_class();

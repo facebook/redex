@@ -141,13 +141,6 @@ Examples of usage:
         "--input-type", type=str, choices=("logcat", "dexdump", "lines")
     )
     parser.add_argument("--skip-unsymbolicated", action="store_true")
-
-    parser.add_argument(
-        "--log-level",
-        default="info",
-        help="Specify the python logging level",
-    )
-
     if args is not None:
         for flag, arg in args:
             parser.add_argument(flag, **arg)
@@ -155,23 +148,10 @@ Examples of usage:
     return parser.parse_args()
 
 
-def _init_logging(level_str: str) -> None:
-    levels = {
-        "critical": logging.CRITICAL,
-        "error": logging.ERROR,
-        "warn": logging.WARNING,
-        "warning": logging.WARNING,
-        "info": logging.INFO,
-        "debug": logging.DEBUG,
-    }
-    level = levels[level_str]
-    logging.basicConfig(level=level)
-
-
 def main(arg_desc=None, symbol_file_generator=None):
-    args = parse_args(arg_desc)
+    logging.basicConfig(level=logging.INFO)
 
-    _init_logging(args.log_level)
+    args = parse_args(arg_desc)
 
     if args.skip_unsymbolicated and args.input_type != "lines":
         logging.warning(

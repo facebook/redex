@@ -692,8 +692,8 @@ void ModelMethodMerger::merge_ctors() {
       for (const auto ctor : ctors) {
         ctor_signatures[ctor->get_class()] =
             type_reference::get_method_signature(ctor);
-        TRACE(CLMG, 9, "  converting ctor %s", SHOW(ctor));
         staticize_with_new_arg_head(ctor, target_type);
+        TRACE(CLMG, 9, "  converting ctor %s", SHOW(ctor));
       }
 
       // Create dispatch.

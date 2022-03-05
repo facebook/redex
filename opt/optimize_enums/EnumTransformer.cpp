@@ -1453,7 +1453,8 @@ class EnumTransformer final {
     auto synth_field_access = synth_access();
     DexField* values_field = nullptr;
 
-    std20::erase_if(sfields, [&](auto* field) {
+    std20::erase_if(sfields, [&](auto it) {
+      auto field = *it;
       if (enum_constants.count(field)) {
         return true;
       }
@@ -1469,7 +1470,8 @@ class EnumTransformer final {
     always_assert(values_field);
     auto& dmethods = enum_cls->get_dmethods();
     // Delete <init>, values() and valueOf(String) methods, and clean <clinit>.
-    std20::erase_if(dmethods, [&, this](auto* method) {
+    std20::erase_if(dmethods, [&, this](auto it) {
+      auto method = *it;
       if (method::is_clinit(method)) {
         clean_clinit(enum_constants, enum_cls, method, values_field);
         return empty(method->get_code());

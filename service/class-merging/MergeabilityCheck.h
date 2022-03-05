@@ -46,7 +46,7 @@ class MergeabilityChecker {
   void exclude_static_fields(TypeSet& non_mergeables);
   void exclude_unsafe_sdk_and_store_refs(TypeSet& non_mergeables);
 
-  TypeSet exclude_unsupported_bytecode_refs_for(DexMethod* method);
+  TypeSet exclude_unsupported_bytecode_for(DexMethod* method);
 };
 
 } // namespace class_merging

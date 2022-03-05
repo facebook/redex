@@ -34,60 +34,55 @@ std::string CallSiteSummary::get_key() const {
     }
     oss << arg_idx << ":";
     const auto& value = bindings.at(arg_idx);
-    append_key_value(oss, value);
-  }
-  return oss.str();
-}
-
-void CallSiteSummary::append_key_value(std::ostringstream& oss,
-                                       const ConstantValue& value) {
-  if (const auto& signed_value = value.maybe_get<SignedConstantDomain>()) {
-    auto c = signed_value->get_constant();
-    if (c) {
-      oss << *c;
-    } else {
-      oss << show(*signed_value);
-    }
-  } else if (const auto& singleton_value =
-                 value.maybe_get<SingletonObjectDomain>()) {
-    auto field = *singleton_value->get_constant();
-    oss << show(field);
-  } else if (const auto& obj_or_none =
-                 value.maybe_get<ObjectWithImmutAttrDomain>()) {
-    auto object = obj_or_none->get_constant();
-    if (object->jvm_cached_singleton) {
-      oss << "(cached)";
-    }
-    oss << show(object->type);
-    oss << "{";
-    bool first{true};
-    for (auto& attr : object->attributes) {
-      if (first) {
-        first = false;
+    if (const auto& signed_value = value.maybe_get<SignedConstantDomain>()) {
+      auto c = signed_value->get_constant();
+      if (c) {
+        oss << *c;
       } else {
-        oss << ",";
+        oss << show(*signed_value);
       }
-      if (attr.attr.is_field()) {
-        oss << show(attr.attr.field);
-      } else {
-        always_assert(attr.attr.is_method());
-        oss << show(attr.attr.method);
+    } else if (const auto& singleton_value =
+                   value.maybe_get<SingletonObjectDomain>()) {
+      auto field = *singleton_value->get_constant();
+      oss << show(field);
+    } else if (const auto& obj_or_none =
+                   value.maybe_get<ObjectWithImmutAttrDomain>()) {
+      auto object = obj_or_none->get_constant();
+      if (object->jvm_cached_singleton) {
+        oss << "(cached)";
       }
-      oss << "=";
-      if (const auto& signed_value2 =
-              attr.value.maybe_get<SignedConstantDomain>()) {
-        auto c = signed_value2->get_constant();
-        if (c) {
-          oss << *c;
+      oss << show(object->type);
+      oss << "{";
+      bool first{true};
+      for (auto& attr : object->attributes) {
+        if (first) {
+          first = false;
         } else {
-          oss << show(*signed_value2);
+          oss << ",";
+        }
+        if (attr.attr.is_field()) {
+          oss << show(attr.attr.field);
+        } else {
+          always_assert(attr.attr.is_method());
+          oss << show(attr.attr.method);
+        }
+        oss << "=";
+        if (const auto& signed_value2 =
+                attr.value.maybe_get<SignedConstantDomain>()) {
+          auto c = signed_value2->get_constant();
+          if (c) {
+            oss << *c;
+          } else {
+            oss << show(*signed_value2);
+          }
         }
       }
+      oss << "}";
+    } else {
+      not_reached_log("unexpected value: %s", SHOW(value));
     }
-    oss << "}";
-  } else {
-    not_reached_log("unexpected value: %s", SHOW(value));
   }
+  return oss.str();
 }
 
 namespace inliner {
@@ -98,7 +93,6 @@ CallSiteSummarizer::CallSiteSummarizer(
     const MethodToMethodOccurrences& caller_callee,
     GetCalleeFunction get_callee_fn,
     HasCalleeOtherCallSitesPredicate has_callee_other_call_sites_fn,
-    std::function<bool(const ConstantValue&)>* filter_fn,
     CallSiteSummaryStats* stats)
     : m_shrinker(shrinker),
       m_callee_caller(callee_caller),
@@ -106,7 +100,6 @@ CallSiteSummarizer::CallSiteSummarizer(
       m_get_callee_fn(std::move(get_callee_fn)),
       m_has_callee_other_call_sites_fn(
           std::move(has_callee_other_call_sites_fn)),
-      m_filter_fn(filter_fn),
       m_stats(stats) {}
 
 const CallSiteSummary* CallSiteSummarizer::internalize_call_site_summary(
@@ -283,12 +276,6 @@ CallSiteSummarizer::get_invoke_call_site_summaries(
         for (size_t i = is_static(callee) ? 0 : 1; i < srcs.size(); ++i) {
           auto val = env.get(srcs[i]);
           always_assert(!val.is_bottom());
-          if (val.is_top()) {
-            continue;
-          }
-          if (m_filter_fn && !(*m_filter_fn)(val)) {
-            continue;
-          }
           call_site_summary.arguments.set(i, val);
         }
         call_site_summary.result_used =

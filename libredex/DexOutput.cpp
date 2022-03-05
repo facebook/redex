@@ -1528,7 +1528,7 @@ uint32_t emit_instruction_offset_debug_info(
   free((void*)tmp);
 
   std20::erase_if(clustered_methods,
-                  [](auto& p) { return p.second.size() <= 1; });
+                  [](auto it) { return it->second.size() <= 1; });
 
   std::vector<const DexMethod*> cluster_induced_order;
   for (const auto& p : clustered_methods) {
@@ -1590,7 +1590,7 @@ uint32_t emit_instruction_offset_debug_info(
           .push_back(p.first);
     }
     std20::erase_if(clusters_in_sizes,
-                    [](auto& p) { return p.second.size() == 1; });
+                    [](auto it) { return it->second.size() == 1; });
     size_t combinations = 1;
     for (const auto& p : clusters_in_sizes) {
       combinations *= p.second.size();

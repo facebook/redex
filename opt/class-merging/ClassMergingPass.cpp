@@ -126,9 +126,8 @@ void ClassMergingPass::bind_config() {
   std::vector<Json::Value> models;
   bind("models", {}, models);
 
-  std::string dflt_interdex_grouping_inferring_mode;
-  bind("default_interdex_grouping_inferring_mode", "",
-       dflt_interdex_grouping_inferring_mode);
+  std::string dflt_type_usages_mode;
+  bind("default_type_usages_mode", "", dflt_type_usages_mode);
 
   after_configuration([=] {
     if (max_num_dispatch_target > 0) {
@@ -138,29 +137,23 @@ void ClassMergingPass::bind_config() {
 
     if (models.empty()) return;
 
-    auto parse_grouping_inferring_mode =
-        [](const std::string& s,
-           ModelSpec::InterDexGroupingInferringMode dflt) {
-          if (s.empty()) {
-            return dflt;
-          }
-          if (s == "all-types") {
-            return ModelSpec::InterDexGroupingInferringMode::kAllTypeRefs;
-          } else if (s == "class-loads") {
-            return ModelSpec::InterDexGroupingInferringMode::kClassLoads;
-          } else if (s == "class-loads-bb") {
-            return ModelSpec::InterDexGroupingInferringMode::
-                kClassLoadsBasicBlockFiltering;
-          } else {
-            always_assert_log(false,
-                              "Unknown interdex-grouping-inferring-mode %s",
-                              s.c_str());
-          }
-        };
-    ModelSpec::InterDexGroupingInferringMode default_mode =
-        parse_grouping_inferring_mode(
-            dflt_interdex_grouping_inferring_mode,
-            ModelSpec().interdex_grouping_inferring_mode);
+    auto parse_usage_mode = [](const std::string& s,
+                               ModelSpec::TypeUsagesMode dflt) {
+      if (s.empty()) {
+        return dflt;
+      }
+      if (s == "all-types") {
+        return ModelSpec::TypeUsagesMode::kAllTypeRefs;
+      } else if (s == "class-loads") {
+        return ModelSpec::TypeUsagesMode::kClassLoads;
+      } else if (s == "class-loads-bb") {
+        return ModelSpec::TypeUsagesMode::kClassLoadsBasicBlockFiltering;
+      } else {
+        always_assert_log(false, "Unknown type-usage-mode %s", s.c_str());
+      }
+    };
+    ModelSpec::TypeUsagesMode default_mode =
+        parse_usage_mode(dflt_type_usages_mode, ModelSpec().type_usages_mode);
 
     // load each model spec for erasure
     for (auto it = models.begin(); it != models.end(); ++it) {
@@ -244,13 +237,10 @@ void ClassMergingPass::bind_config() {
       }
       model.process_method_meta = process_method_meta;
       model.max_num_dispatch_target = m_max_num_dispatch_target;
-      // Assume config based models are all generated code.
-      model.is_generated_code = true;
 
       std::string usage_mode_str =
           model_spec.get("type_usage_mode", std::string(""));
-      model.interdex_grouping_inferring_mode =
-          parse_grouping_inferring_mode(usage_mode_str, default_mode);
+      model.type_usages_mode = parse_usage_mode(usage_mode_str, default_mode);
 
       if (!verify_model_spec(model)) {
         continue;
