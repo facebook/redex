@@ -2,6 +2,8 @@
 
 <img src="SPARTA.png" width="300" height="300"/> 
 
+[![Support Ukraine](https://img.shields.io/badge/Support-Ukraine-FFD500?style=flat&labelColor=005BBB)](https://opensource.fb.com/support-ukraine)
+
 SPARTA is a library of software components specially designed for building high-performance static analyzers based on the theory of Abstract Interpretation.
 
 ## Abstract Interpretation
