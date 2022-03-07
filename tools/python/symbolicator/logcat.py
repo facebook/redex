@@ -5,6 +5,7 @@
 
 from __future__ import absolute_import, division, print_function, unicode_literals
 
+import logging
 import re
 
 
@@ -73,6 +74,7 @@ class LogcatSymbolicator(object):
 
         lineno = int(matchobj.group("lineno"))
         cls = matchobj.group("class")
+        logging.debug("Starting with %s:%d", cls, lineno)
         if self.symbol_maps.iodi_metadata is not None:
             mapped_lineno, _ = self.symbol_maps.iodi_metadata.map_iodi(
                 self.symbol_maps.debug_line_map,
@@ -81,9 +83,11 @@ class LogcatSymbolicator(object):
                 lineno,
             )
             lineno = mapped_lineno if mapped_lineno else lineno
+            logging.debug("IODI mapped_lineno=%s lineno=%d", mapped_lineno, lineno)
         positions = self.symbol_maps.line_map.get_stack(lineno - 1)
         if cls in self.symbol_maps.class_map:
             cls = self.symbol_maps.class_map[cls]
+            logging.debug("Class-map: cls=%s", cls)
         result = ""
         while positions:
             pos = positions.pop(0)
@@ -91,7 +95,11 @@ class LogcatSymbolicator(object):
                 self.pending_switches.append(
                     {"prefix": matchobj.group("prefix"), "line": pos.line}
                 )
+                logging.debug(
+                    "Switch position: %s %d", matchobj.group("prefix"), pos.line
+                )
             elif pos.method == "redex.$Position.pattern":
+                logging.debug("Switch pattern: %d", pos.line)
                 pattern_id = pos.line
                 if self.pending_switches:
                     ps = self.pending_switches.pop()
@@ -105,6 +113,7 @@ class LogcatSymbolicator(object):
                     pattern_id,
                 )
             elif pos.method is None:
+                logging.debug("Position without method")
                 result += "%s\tat %s.%s(%s:%d)\n" % (
                     matchobj.group("prefix"),
                     cls,
@@ -113,6 +122,9 @@ class LogcatSymbolicator(object):
                     pos.line,
                 )
             else:
+                logging.debug(
+                    "Position with method: %s/%s:%d", pos.method, pos.file, pos.line
+                )
                 result += "%s\tat %s(%s:%d)\n" % (
                     matchobj.group("prefix"),
                     pos.method,

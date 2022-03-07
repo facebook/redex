@@ -106,7 +106,9 @@ static DexType* get_receiver_type_demand(DexType* callee_rtype,
  * for inlining.
  */
 std::unordered_set<DexMethod*> gather_non_virtual_methods(
-    Scope& scope, const mog::Graph* method_override_graph, const std::unordered_set<DexType*>& no_devirtualize_anno) {
+    Scope& scope,
+    const mog::Graph* method_override_graph,
+    const std::unordered_set<DexType*>& no_devirtualize_anno) {
   // trace counter
   size_t all_methods = 0;
   size_t direct_methods = 0;
@@ -119,7 +121,6 @@ std::unordered_set<DexMethod*> gather_non_virtual_methods(
   size_t dont_strip = 0;
   size_t non_virt_dont_strip = 0;
   size_t non_virt_methods = 0;
-
   // collect all non virtual methods (dmethods and vmethods)
   std::unordered_set<DexMethod*> methods;
   walk::methods(scope, [&](DexMethod* method) {
@@ -154,9 +155,9 @@ std::unordered_set<DexMethod*> gather_non_virtual_methods(
         non_virtual_no_code++;
         continue;
       }
-       if (has_any_annotation(vmeth, no_devirtualize_anno)) {
-                 continue;
-                       }
+      if (has_any_annotation(vmeth, no_devirtualize_anno)) {
+        continue;
+      }
       methods.insert(vmeth);
     }
   }
@@ -262,10 +263,10 @@ static DexType* reduce_type_demands(
     return nullptr;
   }
   // remove less specific object types
-  std20::erase_if(*type_demands, [&type_demands](auto it) {
+  std20::erase_if(*type_demands, [&type_demands](auto u) {
     return std::find_if(type_demands->begin(), type_demands->end(),
-                        [&it](const DexType* t) {
-                          return t != *it && type::check_cast(t, *it);
+                        [u](const DexType* t) {
+                          return t != u && type::check_cast(t, u);
                         }) != type_demands->end();
   });
   return type_demands->size() == 1 ? *type_demands->begin() : nullptr;
@@ -407,7 +408,7 @@ void gather_true_virtual_methods(const mog::Graph& method_override_graph,
       auto overriding_methods =
           mog::get_overriding_methods(method_override_graph, callee);
       std20::erase_if(overriding_methods,
-                      [&](auto& it) { return is_abstract(*it); });
+                      [&](auto* m) { return is_abstract(m); });
       if (overriding_methods.empty()) {
         // There is no override for this method
         add_monomorphic_call_site(method, insn, callee);
@@ -488,8 +489,8 @@ void gather_true_virtual_methods(const mog::Graph& method_override_graph,
                             "be castable to %s.",
                             SHOW(callee->get_class()), SHOW(type_demand));
           if (type_demands->insert(type_demand).second) {
-            std20::erase_if(formal_callee_types, [&](auto it) {
-              return !type::check_cast(*it, type_demand);
+            std20::erase_if(formal_callee_types, [&](auto* t) {
+              return !type::check_cast(t, type_demand);
             });
           }
         }
@@ -533,7 +534,7 @@ void gather_true_virtual_methods(const mog::Graph& method_override_graph,
           }
         }
         std20::erase_if(caller_to_invocations.caller_insns,
-                        [&](auto it) { return it->second.empty(); });
+                        [&](auto& p) { return p.second.empty(); });
       },
       true_virtual_callees);
   for (auto& pair : concurrent_true_virtual_callers) {
@@ -591,8 +592,8 @@ void run_inliner(DexStoresVector& stores,
     method_override_graph = mog::build_graph(scope);
   }
 
-  auto candidates =
-      gather_non_virtual_methods(scope, method_override_graph.get(), conf.get_do_not_devirt_anon());
+  auto candidates = gather_non_virtual_methods(
+      scope, method_override_graph.get(), conf.get_do_not_devirt_anon());
 
   // The candidates list computed above includes all constructors, regardless of
   // whether it's safe to inline them or not. We'll let the inliner decide

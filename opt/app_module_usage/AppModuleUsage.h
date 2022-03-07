@@ -68,6 +68,8 @@ class AppModuleUsagePass : public Pass {
  private:
   void load_preexisting_violations(
       DexStoresVector&, const std::unordered_map<std::string, DexStore*>&);
+  void load_allow_list(DexStoresVector&,
+                       const std::unordered_map<std::string, DexStore*>&);
   void analyze_direct_app_module_usage(const Scope&);
   void analyze_reflective_app_module_usage(const Scope&);
   // Outputs report of violations, returns the number of violations

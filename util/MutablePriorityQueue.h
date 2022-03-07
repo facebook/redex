@@ -23,11 +23,12 @@
  */
 template <class Value,
           class Priority,
+          class ValueHash = std::hash<Value>,
           class PriorityCompare = std::less<Priority>>
 class MutablePriorityQueue {
  private:
   std::map<Priority, Value, PriorityCompare> m_values;
-  std::unordered_map<Value, Priority> m_priorities;
+  std::unordered_map<Value, Priority, ValueHash> m_priorities;
 
  public:
   // Inserts a value with a priority; neither value or priority can already be
@@ -66,4 +67,7 @@ class MutablePriorityQueue {
 
   // Returns element with highest priority.
   Value front() const { return m_values.rbegin()->second; }
+
+  // Returns element with lowest priority.
+  Value back() const { return m_values.begin()->second; }
 };

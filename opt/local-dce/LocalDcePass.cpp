@@ -77,9 +77,8 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
     // compute_no_side_effects_methods might have found methods that have no
     // implementors. Let's not silently remove invocations to those in LocalDce,
     // as invoking them *will* unconditionally cause an exception.
-    std20::erase_if(pure_methods, [&](auto it) {
-      return (*it)->is_def() &&
-             !has_implementor(override_graph.get(), (*it)->as_def());
+    std20::erase_if(pure_methods, [&](auto* m) {
+      return m->is_def() && !has_implementor(override_graph.get(), m->as_def());
     });
   }
 

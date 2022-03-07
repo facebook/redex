@@ -13,7 +13,7 @@ AM_LOG_FLAGS = -c 'dexfile=$0-class.dex $0'
 
 check_PROGRAMS = \
     ab_experiment_context_test \
-    app_module_usage_test \
+	app_module_usage_test \
     call_graph_test \
     clinit_side_effect_test \
     constant_propagation_test \
@@ -31,6 +31,7 @@ check_PROGRAMS = \
     max_depth_test \
     method_override_graph_test \
     monotonic_fixpoint_test \
+    partial_application_test \
     peephole_test \
     points_to_semantics_test \
     propagation_test \
@@ -43,7 +44,7 @@ check_PROGRAMS = \
     synth_test \
     type_analysis_transform_test \
     type_inference_test \
-    uses_app_module_annotation_test \
+	uses_app_module_annotation_test \
     verifier_artifacts_test
 
 TESTS = $(check_PROGRAMS)
@@ -107,6 +108,9 @@ EXTRA_method_override_graph_test_DEPENDENCIES = method_override_graph_test-class
 
 monotonic_fixpoint_test_SOURCES = MonotonicFixpointTest.cpp
 EXTRA_monotonic_fixpoint_test_DEPENDENCIES = monotonic_fixpoint_test-class.dex
+
+partial_application_test_SOURCES = PartialApplicationTest.cpp
+EXTRA_partial_application_test_DEPENDENCIES = partial_application_test-class.dex
 
 peephole_test_SOURCES = PeepholeTest.cpp
 EXTRA_peephole_test_DEPENDENCIES = peephole_test-class.dex
@@ -176,6 +180,7 @@ app_module_usage_test_other-class.jar: AppModuleUsageOtherClass.java
 app_module_usage_test_third-class.jar: AppModuleUsageThirdClass.java
 	$(create_jar)
 
+
 call_graph_test-class.jar: CallGraphTest.java
 	$(create_jar)
 
@@ -225,6 +230,9 @@ method_override_graph_test-class.jar: MethodOverrideGraphTest.java
 	$(create_jar)
 
 monotonic_fixpoint_test-class.jar: MonotonicFixpoint.java
+	$(create_jar)
+
+partial_application_test-class.jar: PartialApplication.java
 	$(create_jar)
 
 peephole_test-class.jar: Peephole.java

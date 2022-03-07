@@ -2658,30 +2658,6 @@ using LoadParamMutationVirtualTest = LoadParamMutationTest<true>;
 TEST_F(LoadParamMutationStaticTest, mutate) { run(); }
 TEST_F(LoadParamMutationVirtualTest, mutate) { run(); }
 
-TEST_F(IRTypeCheckerTest, synchronizedThrowOutsideCatchAllInTry) {
-  auto method = DexMethod::make_method("LFoo;.bar:()V;")
-                    ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
-  method->set_code(assembler::ircode_from_string(R"(
-    (
-      (load-param-object v0)
-      (monitor-enter v0)
-
-      (.try_start a)
-      (check-cast v0 "LFoo;")
-      (move-result-pseudo-object v1)
-      (.try_end a)
-
-      (.catch (a) "LMyThrowable;")
-      (monitor-exit v0)
-
-      (return-void)
-    )
-  )"));
-  IRTypeChecker checker(method);
-  checker.run();
-  EXPECT_TRUE(checker.fail());
-}
-
 TEST_F(IRTypeCheckerTest, invokeSuperInterfaceMethod) {
   // Construct type hierarchy.
   const auto interface_type = DexType::make_type("LI;");
@@ -2706,4 +2682,28 @@ TEST_F(IRTypeCheckerTest, invokeSuperInterfaceMethod) {
   EXPECT_FALSE(checker.good());
   EXPECT_THAT(checker.what(),
               MatchesRegex(".*\nillegal invoke-super to interface method.*"));
+}
+
+TEST_F(IRTypeCheckerTest, synchronizedThrowOutsideCatchAllInTry) {
+  auto method = DexMethod::make_method("LFoo;.bar:()V;")
+                    ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+  method->set_code(assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (monitor-enter v0)
+
+      (.try_start a)
+      (check-cast v0 "LFoo;")
+      (move-result-pseudo-object v1)
+      (.try_end a)
+
+      (.catch (a) "LMyThrowable;")
+      (monitor-exit v0)
+
+      (return-void)
+    )
+  )"));
+  IRTypeChecker checker(method);
+  checker.run();
+  EXPECT_TRUE(checker.fail());
 }

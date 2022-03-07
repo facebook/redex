@@ -44,9 +44,13 @@ RedexContext::~RedexContext() {
   for (auto const& t : delete_types) {
     delete t;
   }
-  // Delete DexFields.
+  // Delete DexFields. Use set to prevent double freeing aliases
+  std::unordered_set<DexField*> delete_fields;
   for (auto const& it : s_field_map) {
-    delete static_cast<DexField*>(it.second);
+    delete_fields.emplace(static_cast<DexField*>(it.second));
+  }
+  for (auto const& f : delete_fields) {
+    delete f;
   }
   // Delete DexTypeLists.
   for (auto const& p : s_typelist_map) {
@@ -56,9 +60,13 @@ RedexContext::~RedexContext() {
   for (auto const& p : s_proto_map) {
     delete p.second;
   }
-  // Delete DexMethods.
+  // Delete DexMethods. Use set to prevent double freeing aliases
+  std::unordered_set<DexMethod*> delete_methods;
   for (auto const& it : s_method_map) {
-    delete static_cast<DexMethod*>(it.second);
+    delete_methods.emplace(static_cast<DexMethod*>(it.second));
+  }
+  for (auto const& m : delete_methods) {
+    delete m;
   }
   // Delete DexClasses.
   for (auto const& it : m_type_to_class) {
@@ -188,8 +196,34 @@ DexFieldRef* RedexContext::get_field(const DexType* container,
   return s_field_map.get(r, nullptr);
 }
 
+void RedexContext::alias_field_name(DexFieldRef* field, DexString* new_name) {
+  DexFieldSpec r(field->m_spec.cls, new_name, field->m_spec.type);
+  always_assert_log(
+      !s_field_map.count(r),
+      "Bailing, attempting to alias a symbol that already exists! '%s'\n",
+      new_name->c_str());
+  s_field_map.emplace(r, field);
+}
+
 void RedexContext::erase_field(DexFieldRef* field) {
   s_field_map.erase(field->m_spec);
+  // Also remove the alias from the map
+  if (field->is_def()) {
+    DexFieldSpec r(field->m_spec.cls,
+                   DexString::make_string(
+                       field->DexFieldRef::as_def()->get_deobfuscated_name()),
+                   field->m_spec.type);
+    s_field_map.erase(r);
+  }
+}
+
+void RedexContext::erase_field(const DexType* container,
+                               const DexString* name,
+                               const DexType* type) {
+  DexFieldSpec r(const_cast<DexType*>(container),
+                 const_cast<DexString*>(name),
+                 const_cast<DexType*>(type));
+  s_field_map.erase(r);
 }
 
 void RedexContext::mutate_field(DexFieldRef* field,
@@ -285,8 +319,34 @@ DexMethodRef* RedexContext::get_method(const DexType* type,
   return s_method_map.get(r, nullptr);
 }
 
+void RedexContext::alias_method_name(DexMethodRef* method,
+                                     DexString* new_name) {
+  DexMethodSpec r(method->m_spec.cls, new_name, method->m_spec.proto);
+  always_assert_log(
+      !s_method_map.count(r),
+      "Bailing, attempting to alias a symbol that already exists! '%s'\n",
+      new_name->c_str());
+  s_method_map.emplace(r, method);
+}
+
 void RedexContext::erase_method(DexMethodRef* method) {
   s_method_map.erase(method->m_spec);
+  // Also remove the alias from the map
+  if (method->is_def()) {
+    DexMethodSpec r(method->m_spec.cls,
+                    DexString::make_string(
+                        method->DexMethodRef::as_def()->m_deobfuscated_name),
+                    method->m_spec.proto);
+    s_method_map.erase(r);
+  }
+}
+
+void RedexContext::erase_method(const DexType* type,
+                                const DexString* name,
+                                const DexProto* proto) {
+  DexMethodSpec r(const_cast<DexType*>(type), const_cast<DexString*>(name),
+                  const_cast<DexProto*>(proto));
+  s_method_map.erase(r);
 }
 
 // TODO: Need a better interface.

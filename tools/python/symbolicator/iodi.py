@@ -5,6 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import json
+import logging
 import struct
 import sys
 
@@ -38,18 +39,22 @@ class IODIMetadata(object):
         layer = (
             input_lineno & IODIMetadata.IODI_LAYER_MASK
         ) >> IODIMetadata.IODI_LAYER_SHIFT
+        logging.debug("IODI layer %d", layer)
         adjusted_lineno = input_lineno
         if layer > 0:
             qualified_name += "@" + str(layer)
             adjusted_lineno = input_lineno & IODIMetadata.IODI_DATA_MASK
+        logging.debug("IODI adjusted line no %d", layer)
         res_lineno = None if input_lineno == adjusted_lineno else adjusted_lineno
 
         if qualified_name in self._entries:
+            logging.debug("Found %s in entries", qualified_name)
             method_id = self._entries[qualified_name]
             mapped = debug_line_map.find_line_number(method_id, adjusted_lineno)
             if mapped is not None:
                 return (mapped, method_id)
             return (res_lineno, method_id)
+
         return (res_lineno, None)
 
     def map_iodi_no_debug_to_mappings(self, debug_line_map, class_name, method_name):

@@ -29,6 +29,7 @@ struct ModelSpec;
  * - Only leaf classes: not interface, not abstract, and has no subclasses.
  * - No throwable classes. ClassMerging service doesn't analyze throw edges and
  *   merging throwable classes has an chance to change the control flow.
+ * - Only anonymous classes now but will change in the future.
  */
 void find_all_mergeables_and_roots(const TypeSystem& type_system,
                                    const Scope& scope,
@@ -38,6 +39,8 @@ void find_all_mergeables_and_roots(const TypeSystem& type_system,
 /**
  * Analyze type hierarchy to find anonymous classes to merge.
  * Fill the merging_spec with roots and merging_targets.
+ *
+ * TODO: Deprecate this method and use the new version instead.
  */
 void discover_mergeable_anonymous_classes(
     const DexStoresVector& stores,

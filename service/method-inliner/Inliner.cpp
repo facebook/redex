@@ -276,7 +276,7 @@ void MultiMethodInliner::inline_methods(bool methods_need_deconstruct) {
                  m_true_virtual_callees_with_other_call_sites.count(callee) ||
                  m_speed_excluded_callees.count(callee);
         },
-        &info.call_site_summary_stats);
+        /* filter_fn */ nullptr, &info.call_site_summary_stats);
     m_call_site_summarizer->summarize();
   }
 

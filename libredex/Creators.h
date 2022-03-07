@@ -216,6 +216,12 @@ struct MethodBlock {
   void load_const(Location& loc, int32_t value);
 
   /**
+   * Load an int32 or int64 constant into the given Location.
+   * The Location must be compatible with the given type.
+   */
+  void load_const(Location& loc, int64_t value, DexType* type);
+
+  /**
    * Load the double value into the given Location.
    * The Location must be compatible with the given type.
    */

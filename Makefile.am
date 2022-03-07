@@ -335,6 +335,7 @@ libopt_la_SOURCES = \
 	opt/optimize_enums/OptimizeEnumsAnalysis.cpp \
 	opt/optimize_enums/OptimizeEnums.cpp \
 	opt/original_name/OriginalNamePass.cpp \
+	opt/partial-application/PartialApplication.cpp \
 	opt/peephole/Peephole.cpp \
 	opt/peephole/RedundantCheckCastRemover.cpp \
 	opt/print-kotlin-stats/PrintKotlinStats.cpp \
