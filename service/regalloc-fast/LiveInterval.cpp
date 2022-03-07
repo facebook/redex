@@ -13,68 +13,56 @@
 
 #include "DexUtil.h"
 #include "LinearScan.h"
-#include "ScopedCFG.h"
 
 namespace fastregalloc {
 
 LiveIntervals init_live_intervals(
-    IRCode* code, std::vector<LiveIntervalPoint>* live_interval_points) {
+    cfg::ControlFlowGraph& cfg,
+    std::vector<LiveIntervalPoint>* live_interval_points) {
   LiveIntervals live_intervals;
   VRegAliveInsns vreg_alive_insns;
+  auto add_live_range = [&vreg_alive_insns](const auto& vreg_block_range) {
+    for (auto& [vreg, range] : vreg_block_range) {
+      vreg_alive_insns[vreg].push_back(range);
+    }
+  };
 
-  cfg::ScopedCFG cfg(code);
-  cfg->simplify(); // in particular, remove empty blocks
-  cfg->calculate_exit_block();
-  LivenessFixpointIterator liveness_fixpoint_iter(*cfg);
+  LivenessFixpointIterator liveness_fixpoint_iter(cfg);
   liveness_fixpoint_iter.run({});
   std::unordered_map<cfg::Block*, std::unordered_set<vreg_t>>
       check_cast_throw_targets_vregs;
-  for (cfg::Block* block : cfg->blocks()) {
-    auto vreg_block_range = get_live_range_in_block(
-        liveness_fixpoint_iter, block, &check_cast_throw_targets_vregs);
-    for (auto& pair : vreg_block_range) {
-      vreg_t vreg = pair.first;
-      RangeInBlock range = pair.second;
-      vreg_alive_insns[vreg].push_back(range);
-    }
+  for (cfg::Block* block : cfg.blocks()) {
+    add_live_range(get_live_range_in_block(
+        liveness_fixpoint_iter, block, &check_cast_throw_targets_vregs));
   }
   for (auto& [block, vregs] : check_cast_throw_targets_vregs) {
-    auto vreg_block_range = get_check_cast_throw_targets_live_range(
-        liveness_fixpoint_iter, block, vregs);
-    for (auto& pair : vreg_block_range) {
-      vreg_t vreg = pair.first;
-      RangeInBlock range = pair.second;
-      vreg_alive_insns[vreg].push_back(range);
-    }
+    add_live_range(get_check_cast_throw_targets_live_range(
+        liveness_fixpoint_iter, block, vregs));
   }
 
   // number the instructions to get sortable live intervals
   LiveIntervalPointIndices indices;
-  auto ordered_blocks = get_ordered_blocks(*cfg, liveness_fixpoint_iter);
+  auto add_lip = [&indices, live_interval_points](const auto& lip) {
+    auto success = indices.emplace(lip, indices.size()).second;
+    always_assert(success);
+    live_interval_points->push_back(lip);
+  };
+  auto ordered_blocks = get_ordered_blocks(cfg, liveness_fixpoint_iter);
   for (auto block : ordered_blocks) {
     for (auto& mie : InstructionIterable(block)) {
-      auto lip = LiveIntervalPoint::get(mie.insn);
-      auto success = indices.emplace(lip, indices.size()).second;
-      always_assert(success);
-      live_interval_points->push_back(lip);
+      add_lip(LiveIntervalPoint::get(mie.insn));
     }
-    if (cfg->get_succ_edge_if(
+    if (cfg.get_succ_edge_if(
             block, [](cfg::Edge* e) { return e->type() != cfg::EDGE_GHOST; })) {
       // Any block with continuing control-flow could have a live-out registers,
       // and thus we allocate a block-end point for it.
-      auto lip = LiveIntervalPoint::get_block_end(block);
-      auto success = indices.emplace(lip, indices.size()).second;
-      always_assert(success);
-      live_interval_points->push_back(lip);
+      add_lip(LiveIntervalPoint::get_block_end(block));
     }
   }
 
-  for (const auto& pair : vreg_alive_insns) {
-    vreg_t vreg = pair.first;
-    auto insn_ranges = pair.second;
-    auto interval = calculate_live_interval(insn_ranges, indices);
-    live_intervals.push_back(
-        VRegLiveInterval{interval.first, interval.second, vreg, std::nullopt});
+  for (const auto& [vreg, ranges] : vreg_alive_insns) {
+    auto [start_point, end_point] = calculate_live_interval(ranges, indices);
+    live_intervals.push_back(VRegLiveInterval{start_point, end_point, vreg});
   }
   std::sort(live_intervals.begin(), live_intervals.end());
 
@@ -82,9 +70,8 @@ LiveIntervals init_live_intervals(
 }
 
 IntervalEndPoints calculate_live_interval(
-    std::vector<RangeInBlock>& ranges,
+    const std::vector<RangeInBlock>& ranges,
     const LiveIntervalPointIndices& indices) {
-  VRegBlockRanges numbered_ranges;
   always_assert(!indices.empty());
   uint32_t max_index = indices.size() - 1;
   uint32_t interval_start = max_index;
@@ -124,29 +111,32 @@ VRegAliveRangeInBlock get_live_range_in_block(
   auto ii = InstructionIterable(block);
   for (auto it = ii.begin(); it != ii.end(); it++) {
     auto insn = it->insn;
-    if (insn->has_dest()) {
-      vreg_t vreg = insn->dest();
-      auto next = std::next(it) == ii.end()
-                      ? LiveIntervalPoint::get_block_end(block)
-                      : LiveIntervalPoint::get(std::next(it)->insn);
-      auto range = std::make_pair(next, LiveIntervalPoint::get());
-      vreg_block_range.emplace(vreg, range);
-      // emplace might silently fail if we already had an entry
+    if (!insn->has_dest()) {
+      continue;
+    }
+    vreg_t vreg = insn->dest();
+    auto next = std::next(it) == ii.end()
+                    ? LiveIntervalPoint::get_block_end(block)
+                    : LiveIntervalPoint::get(std::next(it)->insn);
+    auto range = std::make_pair(next, LiveIntervalPoint::get());
+    vreg_block_range.emplace(vreg, range);
+    // emplace might silently fail if we already had an entry
 
-      if (insn->opcode() == IOPCODE_MOVE_RESULT_PSEUDO_OBJECT) {
-        auto& cfg = block->cfg();
-        auto primary_insn_it = cfg.primary_instruction_of_move_result(
-            block->to_cfg_instruction_iterator(it.unwrap()));
-        if (primary_insn_it->insn->opcode() == OPCODE_CHECK_CAST) {
-          // We need to remember for all catch handlers which check-cast
-          // move-result-pseudo-object dest registers should be kept alive to
-          // deal with a special quirk of our check-cast instruction lowering.
-          for (auto e : cfg.get_succ_edges_of_type(primary_insn_it.block(),
-                                                   cfg::EDGE_THROW)) {
-            (*check_cast_throw_targets_vregs)[e->target()].insert(vreg);
-          }
-        }
-      }
+    if (insn->opcode() != IOPCODE_MOVE_RESULT_PSEUDO_OBJECT) {
+      continue;
+    }
+    auto& cfg = block->cfg();
+    auto primary_insn_it = cfg.primary_instruction_of_move_result(
+        block->to_cfg_instruction_iterator(it.unwrap()));
+    if (primary_insn_it->insn->opcode() != OPCODE_CHECK_CAST) {
+      continue;
+    }
+    // We need to remember for all catch handlers which check-cast
+    // move-result-pseudo-object dest registers should be kept alive to
+    // deal with a special quirk of our check-cast instruction lowering.
+    auto src_block = primary_insn_it.block();
+    for (auto e : cfg.get_succ_edges_of_type(src_block, cfg::EDGE_THROW)) {
+      (*check_cast_throw_targets_vregs)[e->target()].insert(vreg);
     }
   }
 

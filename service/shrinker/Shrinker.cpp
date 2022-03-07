@@ -143,25 +143,19 @@ constant_propagation::Transform::Stats Shrinker::constant_propagation(
     IRCode* code,
     const ConstantEnvironment& initial_env,
     const constant_propagation::Transform::Config& config) {
-  if (!code->editable_cfg_built()) {
-    code->build_cfg(/* editable */ true);
-  }
-  {
-    constant_propagation::intraprocedural::FixpointIterator fp_iter(
-        code->cfg(),
-        constant_propagation::ConstantPrimitiveAndBoxedAnalyzer(
-            &m_immut_analyzer_state, &m_immut_analyzer_state,
-            constant_propagation::EnumFieldAnalyzerState::get(),
-            constant_propagation::BoxedBooleanAnalyzerState::get(),
-            constant_propagation::ApiLevelAnalyzerState::get(m_min_sdk),
-            nullptr),
-        /* imprecise_switches */ true);
-    fp_iter.run(initial_env);
-    constant_propagation::Transform tf(config);
-    tf.apply(fp_iter, constant_propagation::WholeProgramState(), code->cfg(),
-             &m_xstores, is_static, declaring_type, proto);
-    return tf.get_stats();
-  }
+  constant_propagation::intraprocedural::FixpointIterator fp_iter(
+      code->cfg(),
+      constant_propagation::ConstantPrimitiveAndBoxedAnalyzer(
+          &m_immut_analyzer_state, &m_immut_analyzer_state,
+          constant_propagation::EnumFieldAnalyzerState::get(),
+          constant_propagation::BoxedBooleanAnalyzerState::get(),
+          constant_propagation::ApiLevelAnalyzerState::get(m_min_sdk), nullptr),
+      /* imprecise_switches */ true);
+  fp_iter.run(initial_env);
+  constant_propagation::Transform tf(config);
+  tf.apply(fp_iter, constant_propagation::WholeProgramState(), code->cfg(),
+           &m_xstores, is_static, declaring_type, proto);
+  return tf.get_stats();
 }
 
 LocalDce::Stats Shrinker::local_dce(IRCode* code,
@@ -223,6 +217,10 @@ void Shrinker::shrink_code(
 
   if (m_config.run_const_prop) {
     auto timer = m_const_prop_timer.scope();
+    if (!code->editable_cfg_built()) {
+      code->build_cfg(/* editable */ true);
+    }
+
     const_prop_stats =
         constant_propagation(is_static, declaring_type, proto, code, {}, {});
   }
@@ -242,6 +240,10 @@ void Shrinker::shrink_code(
 
   if (m_config.run_copy_prop) {
     auto timer = m_copy_prop_timer.scope();
+    if (!code->editable_cfg_built()) {
+      code->build_cfg(/* editable */ true);
+    }
+
     copy_prop_stats =
         copy_propagation(code, is_static, declaring_type, proto->get_rtype(),
                          proto->get_args(), method_describer);
@@ -249,6 +251,10 @@ void Shrinker::shrink_code(
 
   if (m_config.run_local_dce) {
     auto timer = m_local_dce_timer.scope();
+    if (!code->editable_cfg_built()) {
+      code->build_cfg(/* editable */ true);
+    }
+
     local_dce_stats =
         local_dce(code, /* normalize_new_instances */ true, declaring_type);
   }
@@ -304,6 +310,10 @@ void Shrinker::shrink_code(
 
   if (m_config.run_fast_reg_alloc) {
     auto timer = m_reg_alloc_timer.scope();
+    if (!code->editable_cfg_built()) {
+      code->build_cfg(/* editable= */ true);
+    }
+
     auto allocator =
         fastregalloc::LinearScanAllocator(code, is_static, method_describer);
     allocator.allocate();

@@ -29,7 +29,7 @@ struct VRegLiveInterval {
   uint32_t start_point;
   uint32_t end_point;
   vreg_t vreg;
-  std::optional<reg_t> reg;
+  std::optional<reg_t> reg{std::nullopt};
   bool operator<(const VRegLiveInterval& vreg_live_interval) const {
     if (end_point != vreg_live_interval.end_point) {
       return end_point < vreg_live_interval.end_point;

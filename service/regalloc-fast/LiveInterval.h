@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "ControlFlow.h"
 #include "IRInstruction.h"
 #include "LinearScan.h"
 #include "Liveness.h"
@@ -64,10 +65,12 @@ VRegAliveRangeInBlock get_check_cast_throw_targets_live_range(
  * info into the result vector and sort before return.
  */
 LiveIntervals init_live_intervals(
-    IRCode* code, std::vector<LiveIntervalPoint>* live_interval_points);
+    cfg::ControlFlowGraph& cfg,
+    std::vector<LiveIntervalPoint>* live_interval_points);
 
 IntervalEndPoints calculate_live_interval(
-    std::vector<RangeInBlock>& ranges, const LiveIntervalPointIndices& indices);
+    const std::vector<RangeInBlock>& ranges,
+    const LiveIntervalPointIndices& indices);
 
 std::vector<cfg::Block*> get_ordered_blocks(
     cfg::ControlFlowGraph& cfg,
