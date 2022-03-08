@@ -544,40 +544,63 @@ size_t chain_hot_one_violations(
                                    [](auto val) { return val > 0 ? 1 : 0; });
 }
 
-size_t chain_and_dom_violations(
-    Block* block,
+struct ChainAndDomState {
+  const SourceBlock* last{nullptr};
+  cfg::Block* dom_block{nullptr};
+  size_t violations{0};
+};
+
+void chain_and_dom_update(
+    cfg::Block* block,
+    const SourceBlock* sb,
+    bool first_in_block,
+    ChainAndDomState& state,
     const dominators::SimpleFastDominators<cfg::GraphInterface>& dom) {
-  const SourceBlock* last = nullptr;
-  for (auto* b = dom.get_idom(block); last == nullptr && b != nullptr;
-       b = dom.get_idom(b)) {
-    last = get_last_source_block(b);
-    if (b == b->cfg().entry_block()) {
-      break;
+  if (first_in_block) {
+    state.last = nullptr;
+    for (auto* b = dom.get_idom(block); state.last == nullptr && b != nullptr;
+         b = dom.get_idom(b)) {
+      state.last = get_last_source_block(b);
+      if (b == b->cfg().entry_block()) {
+        state.dom_block = b;
+        break;
+      }
+    }
+  } else {
+    state.dom_block = nullptr;
+  }
+
+  if (state.last != nullptr) {
+    for (size_t i = 0; i != sb->vals.size(); ++i) {
+      auto last_val = state.last->get_val(i);
+      auto sb_val = sb->get_val(i);
+      if (last_val) {
+        if (sb_val && *last_val < *sb_val) {
+          state.violations++;
+          break;
+        }
+      } else if (sb_val) {
+        state.violations++;
+        break;
+      }
     }
   }
 
-  size_t sum{0};
-  foreach_source_block(block, [&sum, &last](const auto* sb) {
-    if (last != nullptr) {
-      for (size_t i = 0; i != sb->vals.size(); ++i) {
-        auto last_val = last->get_val(i);
-        auto sb_val = sb->get_val(i);
-        if (last_val) {
-          if (sb_val && *last_val < *sb_val) {
-            sum++;
-            break;
-          }
-        } else if (sb_val) {
-          sum++;
-          break;
-        }
-      }
-    }
+  state.last = sb;
+}
 
-    last = sb;
+size_t chain_and_dom_violations(
+    Block* block,
+    const dominators::SimpleFastDominators<cfg::GraphInterface>& dom) {
+  ChainAndDomState state{};
+
+  bool first = true;
+  foreach_source_block(block, [block, &state, &first, &dom](const auto* sb) {
+    chain_and_dom_update(block, sb, first, state, dom);
+    first = false;
   });
 
-  return sum;
+  return state.violations;
 }
 
 // Ugly but necessary for constexpr below.
@@ -782,6 +805,8 @@ struct ViolationsHelper::ViolationsHelperImpl {
     switch (v) {
     case Violation::kHotImmediateDomNotHot:
       return hot_immediate_dom_not_hot_cfg(cfg);
+    case Violation::kChainAndDom:
+      return chain_and_dom_violations_cfg(cfg);
     }
     not_reached();
   }
@@ -861,6 +886,15 @@ struct ViolationsHelper::ViolationsHelperImpl {
     dominators::SimpleFastDominators<cfg::GraphInterface> dom{cfg};
     for (auto* b : cfg.blocks()) {
       sum += hot_immediate_dom_not_hot(b, dom);
+    }
+    return sum;
+  }
+
+  static size_t chain_and_dom_violations_cfg(cfg::ControlFlowGraph& cfg) {
+    size_t sum{0};
+    dominators::SimpleFastDominators<cfg::GraphInterface> dom{cfg};
+    for (auto* b : cfg.blocks()) {
+      sum += chain_and_dom_violations(b, dom);
     }
     return sum;
   }
@@ -945,6 +979,63 @@ struct ViolationsHelper::ViolationsHelperImpl {
         void end_block(std::ostream&, cfg::Block*) { cur = nullptr; }
       };
       print_cfg_with_violations<HotImmediateSpecial>(m);
+      return;
+    }
+    case Violation::kChainAndDom: {
+      struct ChainAndDom {
+        cfg::Block* cur{nullptr};
+        ChainAndDomState state{};
+        bool first_in_block{false};
+
+        dominators::SimpleFastDominators<cfg::GraphInterface> dom;
+
+        explicit ChainAndDom(cfg::ControlFlowGraph& cfg)
+            : dom(dominators::SimpleFastDominators<cfg::GraphInterface>(cfg)) {}
+
+        void mie_before(std::ostream&, const MethodItemEntry&) {}
+        void mie_after(std::ostream& os, const MethodItemEntry& mie) {
+          if (mie.type != MFLOW_SOURCE_BLOCK) {
+            return;
+          }
+
+          size_t old_count = state.violations;
+
+          auto* sb = mie.src_block.get();
+
+          chain_and_dom_update(cur, sb, first_in_block, state, dom);
+          first_in_block = false;
+
+          const bool head_error = state.violations > old_count;
+          const auto* dom_block = state.dom_block;
+
+          for (auto* cur_sb = sb->next.get(); cur_sb != nullptr;
+               cur_sb = cur_sb->next.get()) {
+            chain_and_dom_update(cur, cur_sb, false, state, dom);
+          }
+
+          if (state.violations > old_count) {
+            os << " !!!";
+            if (head_error) {
+              os << " HEAD";
+              if (dom_block != nullptr) {
+                os << " (B" << dom_block->id() << ")";
+              }
+            }
+            auto other = state.violations - old_count - (head_error ? 1 : 0);
+            if (other > 0) {
+              os << " IN_CHAIN " << other;
+            }
+            os << "\n";
+          }
+        }
+
+        void start_block(std::ostream&, cfg::Block* b) {
+          cur = b;
+          first_in_block = true;
+        }
+        void end_block(std::ostream&, cfg::Block*) { cur = nullptr; }
+      };
+      print_cfg_with_violations<ChainAndDom>(m);
       return;
     }
     }
