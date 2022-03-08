@@ -586,6 +586,7 @@ void Transform::remove_dead_switch(
   // Prune infeasible or unnecessary branches
   cfg::Edge* goto_edge = cfg.get_succ_edge_of_type(block, cfg::EDGE_GOTO);
   std::unordered_map<cfg::Block*, uint32_t> remaining_branch_targets;
+  std::map<int32_t, cfg::Block*> remaining_branch_keys;
   std::vector<cfg::Edge*> remaining_branch_edges;
   for (auto branch_edge : cfg.get_succ_edges_of_type(block, cfg::EDGE_BRANCH)) {
     auto branch_is_feasible =
@@ -593,6 +594,8 @@ void Transform::remove_dead_switch(
     if (branch_is_feasible) {
       remaining_branch_edges.push_back(branch_edge);
       remaining_branch_targets[branch_edge->target()]++;
+      remaining_branch_keys.emplace(*branch_edge->case_key(),
+                                    branch_edge->target());
       continue;
     }
     m_edge_deletes.push_back(branch_edge);
@@ -601,17 +604,16 @@ void Transform::remove_dead_switch(
   bool goto_is_feasible = !intra_cp.analyze_edge(goto_edge, env).is_bottom();
   if (!goto_is_feasible && !remaining_branch_targets.empty()) {
     // Rewire infeasible goto to absorb all cases to most common target
-    int32_t most_common_case_key{0};
     cfg::Block* most_common_target{nullptr};
     uint32_t most_common_target_count{0};
-    for (cfg::Edge* e : remaining_branch_edges) {
-      auto case_key = *e->case_key();
-      auto target = e->target();
+    std::unordered_set<cfg::Block*> visited;
+    for (auto& p : remaining_branch_keys) {
+      auto target = p.second;
+      if (!visited.insert(target).second) {
+        continue;
+      }
       auto count = remaining_branch_targets.at(target);
-      if (count > most_common_target_count ||
-          (count == most_common_target_count &&
-           case_key > most_common_case_key)) {
-        most_common_case_key = case_key;
+      if (count > most_common_target_count) {
         most_common_target = target;
         most_common_target_count = count;
       }
