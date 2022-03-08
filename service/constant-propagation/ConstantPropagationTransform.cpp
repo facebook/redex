@@ -585,6 +585,7 @@ void Transform::remove_dead_switch(
 
   // Prune infeasible or unnecessary branches
   cfg::Edge* goto_edge = cfg.get_succ_edge_of_type(block, cfg::EDGE_GOTO);
+  cfg::Block* goto_target = goto_edge->target();
   std::unordered_map<cfg::Block*, uint32_t> remaining_branch_targets;
   std::map<int32_t, cfg::Block*> remaining_branch_keys;
   std::vector<cfg::Edge*> remaining_branch_edges;
@@ -619,9 +620,11 @@ void Transform::remove_dead_switch(
       }
     }
     always_assert(most_common_target != nullptr);
-    if (most_common_target != goto_edge->target()) {
+    if (most_common_target != goto_target) {
       m_edge_deletes.push_back(goto_edge);
-      m_edge_adds.emplace_back(block, most_common_target, cfg::EDGE_GOTO);
+      goto_target = most_common_target;
+      m_edge_adds.emplace_back(block, goto_target, cfg::EDGE_GOTO);
+      goto_edge = nullptr;
     }
     auto removed = std20::erase_if(remaining_branch_edges, [&](auto* e) {
       if (e->target() == most_common_target) {
@@ -644,7 +647,7 @@ void Transform::remove_dead_switch(
   }
   always_assert(!remaining_branch_edges.empty());
 
-  remaining_branch_targets[goto_edge->target()]++;
+  remaining_branch_targets[goto_target]++;
   if (remaining_branch_targets.size() > 1) {
     return;
   }
