@@ -579,7 +579,8 @@ void chain_and_dom_update(
           state.violations++;
           break;
         }
-      } else if (sb_val) {
+      } else if (sb_val && *sb_val > 0) {
+        // Treat 'x' and '0' the same for violations for now.
         state.violations++;
         break;
       }
@@ -812,6 +813,8 @@ struct ViolationsHelper::ViolationsHelperImpl {
   }
 
   ~ViolationsHelperImpl() {
+    std::atomic<size_t> change_sum{0};
+
     {
       std::mutex lock;
 
@@ -838,6 +841,7 @@ struct ViolationsHelper::ViolationsHelperImpl {
             if (val <= p.second) {
               return;
             }
+            change_sum.fetch_add(val - p.second);
 
             auto m_delta = val - p.second;
             size_t s = m->get_code()->sum_opcode_sizes();
@@ -879,6 +883,8 @@ struct ViolationsHelper::ViolationsHelperImpl {
     }
 
     print_all();
+
+    TRACE(MMINL, 0, "Introduced %zu violations.", change_sum.load());
   }
 
   static size_t hot_immediate_dom_not_hot_cfg(cfg::ControlFlowGraph& cfg) {
