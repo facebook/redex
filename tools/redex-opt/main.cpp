@@ -13,6 +13,7 @@
 #include "DexClass.h"
 #include "DexLoader.h"
 #include "PassRegistry.h"
+#include "RedexContext.h"
 #include "Timer.h"
 #include "ToolsCommon.h"
 
