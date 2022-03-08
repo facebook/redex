@@ -753,25 +753,37 @@ struct ViolationsHelper::ViolationsHelperImpl {
   std::unordered_map<DexMethod*, size_t> violations_start;
   std::vector<std::string> print;
 
-  ViolationsHelperImpl(const Scope& scope, std::vector<std::string> to_vis)
-      : print(std::move(to_vis)) {
+  using Violation = ViolationsHelper::Violation;
+  const Violation v;
+
+  ViolationsHelperImpl(Violation v,
+                       const Scope& scope,
+                       std::vector<std::string> to_vis)
+      : print(std::move(to_vis)), v(v) {
     {
       std::mutex lock;
-      walk::parallel::methods(scope, [this, &lock](DexMethod* m) {
+      walk::parallel::methods(scope, [this, &lock, v](DexMethod* m) {
         if (m->get_code() == nullptr) {
           return;
         }
-        m->get_code()->build_cfg();
-        auto val = hot_immediate_dom_not_hot_cfg(m->get_code()->cfg());
+        cfg::ScopedCFG cfg(m->get_code());
+        auto val = compute(v, *cfg);
         {
           std::unique_lock<std::mutex> ulock{lock};
           violations_start[m] = val;
         }
-        m->get_code()->clear_cfg();
       });
     }
 
     print_all();
+  }
+
+  static size_t compute(Violation v, cfg::ControlFlowGraph& cfg) {
+    switch (v) {
+    case Violation::kHotImmediateDomNotHot:
+      return hot_immediate_dom_not_hot_cfg(cfg);
+    }
+    not_reached();
   }
 
   ~ViolationsHelperImpl() {
@@ -797,7 +809,7 @@ struct ViolationsHelper::ViolationsHelperImpl {
               return;
             }
             cfg::ScopedCFG cfg(m->get_code());
-            auto val = hot_immediate_dom_not_hot_cfg(*cfg);
+            auto val = compute(v, *cfg);
             if (val <= p.second) {
               return;
             }
@@ -859,84 +871,92 @@ struct ViolationsHelper::ViolationsHelperImpl {
       if (m != nullptr) {
         redex_assert(m != nullptr && m->is_def());
         auto* m_def = m->as_def();
-        print_cfg_with_violations(m_def);
+        print_cfg_with_violations(v, m_def);
       }
     }
   }
 
+  template <typename SpecialT>
   static void print_cfg_with_violations(DexMethod* m) {
-    struct SBSpecial {
-      cfg::Block* cur{nullptr};
-      dominators::SimpleFastDominators<cfg::GraphInterface> dom;
-
-      explicit SBSpecial(cfg::ControlFlowGraph& cfg)
-          : dom(dominators::SimpleFastDominators<cfg::GraphInterface>(cfg)) {}
-
-      void mie_before(std::ostream&, const MethodItemEntry&) {}
-      void mie_after(std::ostream& os, const MethodItemEntry& mie) {
-        if (mie.type != MFLOW_SOURCE_BLOCK) {
-          return;
-        }
-
-        auto immediate_dominator = dom.get_idom(cur);
-        if (!immediate_dominator) {
-          os << " NO DOMINATOR\n";
-          return;
-        }
-
-        if (!source_blocks::has_source_block_positive_val(
-                mie.src_block.get())) {
-          os << " NOT HOT\n";
-          return;
-        }
-
-        auto* first_sb_immediate_dominator =
-            source_blocks::get_first_source_block(immediate_dominator);
-        if (!first_sb_immediate_dominator) {
-          os << " NO DOMINATOR SOURCE BLOCK B" << immediate_dominator->id()
-             << "\n";
-          return;
-        }
-
-        bool is_idom_hot = source_blocks::has_source_block_positive_val(
-            first_sb_immediate_dominator);
-        if (is_idom_hot) {
-          os << " DOMINATOR HOT\n";
-          return;
-        }
-
-        os << " !!! B" << immediate_dominator->id() << ": ";
-        auto sb = first_sb_immediate_dominator;
-        os << " \"" << show(sb->src) << "\"@" << sb->id;
-        for (const auto& val : sb->vals) {
-          os << " ";
-          if (val) {
-            os << val->val << "/" << val->appear100;
-          } else {
-            os << "N/A";
-          }
-        }
-        os << "\n";
-      }
-
-      void start_block(std::ostream&, cfg::Block* b) { cur = b; }
-      void end_block(std::ostream&, cfg::Block*) { cur = nullptr; }
-    };
-
-    m->get_code()->build_cfg();
-    auto& cfg = m->get_code()->cfg();
-
-    SBSpecial special{cfg};
+    cfg::ScopedCFG cfg(m->get_code());
+    SpecialT special{*cfg};
     TRACE(MMINL, 0, "=== %s ===\n%s\n", SHOW(m),
-          show<SBSpecial>(cfg, special).c_str());
+          show<SpecialT>(*cfg, special).c_str());
+  }
 
-    m->get_code()->clear_cfg();
+  static void print_cfg_with_violations(Violation v, DexMethod* m) {
+    switch (v) {
+    case Violation::kHotImmediateDomNotHot: {
+      struct HotImmediateSpecial {
+        cfg::Block* cur{nullptr};
+        dominators::SimpleFastDominators<cfg::GraphInterface> dom;
+
+        explicit HotImmediateSpecial(cfg::ControlFlowGraph& cfg)
+            : dom(dominators::SimpleFastDominators<cfg::GraphInterface>(cfg)) {}
+
+        void mie_before(std::ostream&, const MethodItemEntry&) {}
+        void mie_after(std::ostream& os, const MethodItemEntry& mie) {
+          if (mie.type != MFLOW_SOURCE_BLOCK) {
+            return;
+          }
+
+          auto immediate_dominator = dom.get_idom(cur);
+          if (!immediate_dominator) {
+            os << " NO DOMINATOR\n";
+            return;
+          }
+
+          if (!source_blocks::has_source_block_positive_val(
+                  mie.src_block.get())) {
+            os << " NOT HOT\n";
+            return;
+          }
+
+          auto* first_sb_immediate_dominator =
+              source_blocks::get_first_source_block(immediate_dominator);
+          if (!first_sb_immediate_dominator) {
+            os << " NO DOMINATOR SOURCE BLOCK B" << immediate_dominator->id()
+               << "\n";
+            return;
+          }
+
+          bool is_idom_hot = source_blocks::has_source_block_positive_val(
+              first_sb_immediate_dominator);
+          if (is_idom_hot) {
+            os << " DOMINATOR HOT\n";
+            return;
+          }
+
+          os << " !!! B" << immediate_dominator->id() << ": ";
+          auto sb = first_sb_immediate_dominator;
+          os << " \"" << show(sb->src) << "\"@" << sb->id;
+          for (const auto& val : sb->vals) {
+            os << " ";
+            if (val) {
+              os << val->val << "/" << val->appear100;
+            } else {
+              os << "N/A";
+            }
+          }
+          os << "\n";
+        }
+
+        void start_block(std::ostream&, cfg::Block* b) { cur = b; }
+        void end_block(std::ostream&, cfg::Block*) { cur = nullptr; }
+      };
+      print_cfg_with_violations<HotImmediateSpecial>(m);
+      return;
+    }
+    }
+    not_reached();
   }
 };
 
-ViolationsHelper::ViolationsHelper(const Scope& scope,
+ViolationsHelper::ViolationsHelper(Violation v,
+                                   const Scope& scope,
                                    std::vector<std::string> to_vis)
-    : impl(std::make_unique<ViolationsHelperImpl>(scope, std::move(to_vis))) {}
+    : impl(std::make_unique<ViolationsHelperImpl>(
+          v, scope, std::move(to_vis))) {}
 ViolationsHelper::~ViolationsHelper() {}
 
 } // namespace source_blocks

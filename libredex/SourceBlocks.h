@@ -294,7 +294,13 @@ struct ViolationsHelper {
   struct ViolationsHelperImpl;
   std::unique_ptr<ViolationsHelperImpl> impl;
 
-  ViolationsHelper(const Scope& scope, std::vector<std::string> to_vis);
+  enum class Violation {
+    kHotImmediateDomNotHot,
+  };
+
+  ViolationsHelper(Violation v,
+                   const Scope& scope,
+                   std::vector<std::string> to_vis);
   ~ViolationsHelper();
 };
 
