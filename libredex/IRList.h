@@ -216,6 +216,21 @@ struct SourceBlock {
     last->next = std::move(sb);
   }
 
+  SourceBlock* get_last_in_chain() {
+    auto* last = this;
+    while (last->next != nullptr) {
+      last = last->next.get();
+    }
+    return last;
+  }
+  const SourceBlock* get_last_in_chain() const {
+    auto* last = this;
+    while (last->next != nullptr) {
+      last = last->next.get();
+    }
+    return last;
+  }
+
   std::string show(bool quoted_src = false) const;
 };
 
