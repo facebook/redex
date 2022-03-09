@@ -1651,9 +1651,20 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
   }
 
   if (can_delete_callee) {
-    // We can't eliminate the method entirely if it's not inlinable
+    // We are going to call is_inlinable for all callers, and we are going to
+    // short circuit as those calls are potentially expensive. However,
+    // is_inlinable is recording some metrics around how often certain things
+    // occur, so we are creating an ordered list of callers here to make sure we
+    // always call is_inlinable in the same way.
+    std::vector<DexMethod*> ordered_callers;
     for (auto& p : callers) {
-      auto caller = p.first;
+      ordered_callers.push_back(p.first);
+    }
+    std::sort(ordered_callers.begin(), ordered_callers.end(),
+              compare_dexmethods);
+
+    // We can't eliminate the method entirely if it's not inlinable
+    for (auto caller : ordered_callers) {
       // We can't account here in detail for the caller and callee size. We hope
       // for the best, and assume that the caller is empty, and we'll use the
       // (maximum) insn_size for all inlined-costs. We'll check later again at
