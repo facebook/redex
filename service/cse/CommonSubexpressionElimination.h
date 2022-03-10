@@ -151,6 +151,7 @@ class CommonSubexpressionElimination {
   bool patch(bool runtime_assertions = false);
 
  private:
+  std::unordered_map<const IRInstruction*, size_t> m_earlier_insn_ids;
   // CSE is finding instances where the result (in the dest register) of an
   // earlier instruction can be forwarded to replace the result of another
   // (later) instruction.
@@ -173,6 +174,8 @@ class CommonSubexpressionElimination {
 
   void insert_runtime_assertions(
       const std::vector<std::pair<Forward, IRInstruction*>>& to_check);
+
+  size_t get_earlier_insn_id(const IRInstruction*);
 };
 
 } // namespace cse_impl

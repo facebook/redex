@@ -1365,13 +1365,6 @@ CommonSubexpressionElimination::CommonSubexpressionElimination(
     m_stats.methods_using_other_tracked_location_bit = 1;
   }
 
-  // We need some helper state/functions to build the list m_earlier_insns
-  // of unique earlier-instruction sets. To make that deterministic, we use
-  // instruction ids that represent the position of an instruction in the cfg.
-  std::unordered_map<const IRInstruction*, size_t> insn_ids;
-  for (const auto& mie : InstructionIterable(cfg)) {
-    insn_ids.emplace(mie.insn, insn_ids.size());
-  }
   std::unordered_map<std::vector<size_t>, size_t,
                      boost::hash<std::vector<size_t>>>
       insns_ids;
@@ -1379,7 +1372,7 @@ CommonSubexpressionElimination::CommonSubexpressionElimination(
       [&](const PatriciaTreeSet<const IRInstruction*>& insns) {
         std::vector<size_t> ordered_ids;
         for (auto insn : insns) {
-          ordered_ids.push_back(insn_ids.at(insn));
+          ordered_ids.push_back(get_earlier_insn_id(insn));
         }
         std::sort(ordered_ids.begin(), ordered_ids.end());
         auto it = insns_ids.find(ordered_ids);
@@ -1446,6 +1439,19 @@ CommonSubexpressionElimination::CommonSubexpressionElimination(
       m_forward.push_back({earlier_insns_index, insn});
     }
   }
+}
+
+size_t CommonSubexpressionElimination::get_earlier_insn_id(
+    const IRInstruction* insn) {
+  // We need some helper state/functions to build the list m_earlier_insns
+  // of unique earlier-instruction sets. To make that deterministic, we use
+  // instruction ids that represent the position of an instruction in the cfg.
+  if (m_earlier_insn_ids.empty()) {
+    for (const auto& mie : InstructionIterable(m_cfg)) {
+      m_earlier_insn_ids.emplace(mie.insn, m_earlier_insn_ids.size());
+    }
+  }
+  return m_earlier_insn_ids.at(insn);
 }
 
 static IROpcode get_move_opcode(const IRInstruction* earlier_insn) {
@@ -1598,10 +1604,8 @@ bool CommonSubexpressionElimination::patch(bool runtime_assertions) {
               SHOW(earlier_insn), SHOW(insn), literal);
       }
     } else {
-      auto& q = temp_it->second;
-      auto move_opcode = q.first;
+      auto [move_opcode, temp_reg] = temp_it->second;
       always_assert(opcode::is_a_move(move_opcode));
-      reg_t temp_reg = q.second;
 
       IRInstruction* move_insn = new IRInstruction(move_opcode);
       move_insn->set_src(0, temp_reg)->set_dest(insn->dest());
@@ -1627,16 +1631,31 @@ bool CommonSubexpressionElimination::patch(bool runtime_assertions) {
     m_stats.eliminated_opcodes[insn->opcode()]++;
   }
 
-  // insert moves to define the forwarded value. For const values, the inserted
-  // moves are pointless. We just keep the unified implementation here since
-  // those moves are harmless and will be finally eliminated later by LocalDce.
+  // Insert moves to define the forwarded value.
+  // We are going to call ControlFlow::insert_after, which may introduce new
+  // blocks when inserting after the last instruction of a block with
+  // throws-edges. To make that deterministic, we need to make sure that we
+  // insert in a deterministic order. To this end, we follow the deterministic
+  // m_forward order, and we order earlier instructions by their ids.
+  for (const auto& f : m_forward) {
+    auto temp_it = temps.find(f.earlier_insns_index);
+    if (temp_it == temps.end()) {
+      continue;
+    }
+    auto [move_opcode, temp_reg] = temp_it->second;
+    always_assert(opcode::is_a_move(move_opcode));
+    temps.erase(temp_it);
 
-  for (const auto& r : temps) {
-    size_t earlier_insns_index = r.first;
-    IROpcode move_opcode = r.second.first;
-    reg_t temp_reg = r.second.second;
-    auto& earlier_insns = m_earlier_insns.at(earlier_insns_index);
-    for (auto earlier_insn : earlier_insns) {
+    auto& earlier_insns_unordered = m_earlier_insns.at(f.earlier_insns_index);
+    std::vector<const IRInstruction*> earlier_insns_ordered(
+        earlier_insns_unordered.begin(), earlier_insns_unordered.end());
+    always_assert(!m_earlier_insn_ids.empty());
+    std::sort(earlier_insns_ordered.begin(), earlier_insns_ordered.end(),
+              [&](const auto* a, const auto* b) {
+                return get_earlier_insn_id(a) < get_earlier_insn_id(b);
+              });
+
+    for (auto earlier_insn : earlier_insns_ordered) {
       auto& it = iterators.at(const_cast<IRInstruction*>(earlier_insn));
       IRInstruction* move_insn = new IRInstruction(move_opcode);
       auto src_reg = earlier_insn->has_dest() ? earlier_insn->dest()
@@ -1654,6 +1673,7 @@ bool CommonSubexpressionElimination::patch(bool runtime_assertions) {
       }
     }
   }
+  always_assert(temps.empty());
 
   if (runtime_assertions) {
     insert_runtime_assertions(to_check);
