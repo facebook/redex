@@ -169,7 +169,7 @@ class CommonSubexpressionElimination {
   DexTypeList* m_args;
 
   std::vector<IRInstruction*> m_unboxing;
-  std::unordered_map<const DexMethodRef*, const DexMethodRef*> m_abs_map;
+  const std::unordered_map<const DexMethodRef*, const DexMethodRef*>& m_abs_map;
 
   void insert_runtime_assertions(
       const std::vector<std::pair<Forward, IRInstruction*>>& to_check);
