@@ -1071,11 +1071,11 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
                                     /* validate_access */ false,
                                     checker_conf.validate_invoke_super);
       }
-      if (i >= min_pass_idx_for_dex_ref_check) {
-        CheckerConfig::ref_validation(stores, pass->name());
-      }
       auto timer = m_check_unique_deobfuscateds_timer.scope();
       check_unique_deobfuscated.run_after_pass(pass, scope);
+    }
+    if (i >= min_pass_idx_for_dex_ref_check) {
+      CheckerConfig::ref_validation(stores, pass->name());
     }
   };
 
