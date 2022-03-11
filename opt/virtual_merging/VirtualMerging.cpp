@@ -1455,9 +1455,9 @@ void VirtualMergingPass::run_pass(DexStoresVector& stores,
                     m_max_overriding_method_instructions, min_sdk_api);
   vm.run(conf.get_method_profiles(),
          m_strategy,
-         VirtualMerging::InsertionStrategy::kJumpTo,
+         m_insertion_strategy,
          m_ab_strategy,
-         VirtualMerging::InsertionStrategy::kJumpTo,
+         m_ab_insertion_strategy,
          ab_experiment_context.get());
   auto stats = vm.get_stats();
 
