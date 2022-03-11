@@ -743,6 +743,89 @@ TEST_F(ConstantPropagationTest,
             assembler::to_s_expr(expected_code.get()));
 }
 
+// Constant-propagation rewrites switches with dead default cases to use the
+// most popular branch target instead, preferring to keep the smallest case
+// keys.
+TEST_F(ConstantPropagationTest,
+       SwitchInfeasibleDefaultManyFeasibleBranchesKeepSmallCaseKeys) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+
+      (const v1 0)
+      (if-eq v0 v1 :selected)
+      (const v1 1)
+      (if-eq v0 v1 :selected)
+      (const v1 2)
+      (if-eq v0 v1 :selected)
+      (const v1 3)
+      (if-eq v0 v1 :selected)
+      (const v1 4)
+      (if-eq v0 v1 :selected)
+      (const v0 100)
+      (return v0)
+
+      (:selected)
+      (switch v0 (:a :b :c :d :e))
+      ; unreachable
+      (const v0 200)
+      (return v0)
+
+      (:a 0) ; reachable
+      (const v0 300)
+      (return v0)
+
+      (:b 1) ; reachable
+      (:c 2) ; reachable
+      (const v0 400)
+      (return v0)
+
+      (:d 3) ; reachable
+      (:e 4) ; reachable
+      (const v0 450)
+      (return v0)
+    )
+  )");
+  do_const_prop(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+
+      (const v1 0)
+      (if-eq v0 v1 :selected)
+      (const v1 1)
+      (if-eq v0 v1 :selected)
+      (const v1 2)
+      (if-eq v0 v1 :selected)
+      (const v1 3)
+      (if-eq v0 v1 :selected)
+      (const v1 4)
+      (if-eq v0 v1 :selected)
+      (const v0 100)
+      (return v0)
+
+      (:selected)
+      (switch v0 (:a :b :c))
+      ; reachable, combined d,e
+      (const v0 450)
+      (return v0)
+
+      (:c 2) ; reachable
+      (:b 1) ; reachable
+      (const v0 400)
+      (return v0)
+
+      (:a 0) ; reachable
+      (const v0 300)
+      (return v0)
+    )
+  )");
+
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
 TEST_F(ConstantPropagationTest, WhiteBox1) {
   auto code = assembler::ircode_from_string(R"( (
      (load-param v0)
