@@ -32,6 +32,14 @@ constexpr const char* METRIC_REMOVED_INTERFACES = "num_removed_interfaces";
 constexpr const char* METRIC_INVOKE_INT_TO_VIRT = "num_invoke_intf_to_virt";
 constexpr const char* METRIC_INSERTED_CHECK_CASTS = "num_inserted_check_casts";
 constexpr const char* METRIC_RETAINED_CHECK_CASTS = "num_retained_check_casts";
+constexpr const char* METRIC_POST_PROCESS_REMOVED_CASTS =
+    "num_post_process_removed_casts";
+constexpr const char* METRIC_POST_PROCESS_REPLACED_CASTS =
+    "num_post_process_replaced_casts";
+constexpr const char* METRIC_POST_PROCESS_WEAKENED_CASTS =
+    "num_post_process_weakened_casts";
+constexpr const char* METRIC_DELETED_REMOVED_INSTRUCTIONS =
+    "num_deleted_removed_instructions";
 
 /**
  * Build a map from interface to the type implementing that
@@ -139,7 +147,15 @@ void SingleImplPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_INVOKE_INT_TO_VIRT,
                   s_invoke_intf_count - previous_invoke_intf_count);
   mgr.set_metric(METRIC_INSERTED_CHECK_CASTS, stats.inserted_check_casts);
+  mgr.set_metric(METRIC_DELETED_REMOVED_INSTRUCTIONS,
+                 stats.deleted_removed_instructions);
   mgr.set_metric(METRIC_RETAINED_CHECK_CASTS, stats.retained_check_casts);
+  mgr.set_metric(METRIC_POST_PROCESS_REMOVED_CASTS,
+                 stats.post_process.removed_casts);
+  mgr.set_metric(METRIC_POST_PROCESS_REPLACED_CASTS,
+                 stats.post_process.replaced_casts);
+  mgr.set_metric(METRIC_POST_PROCESS_WEAKENED_CASTS,
+                 stats.post_process.weakened_casts);
 
   post_dexen_changes(scope, stores);
 }

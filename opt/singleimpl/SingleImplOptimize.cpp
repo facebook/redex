@@ -203,7 +203,9 @@ struct OptimizationImpl {
   void rename_possible_collisions(const DexType* intf,
                                   const SingleImplData& data);
 
-  void post_process(const std::unordered_set<DexMethod*>& methods);
+  check_casts::impl::Stats post_process(
+      const std::unordered_set<DexMethod*>& methods,
+      std::vector<IRInstruction*>* removed_instruction);
 
  private:
   std::unique_ptr<SingleImplAnalysis> single_impls;
@@ -751,7 +753,9 @@ OptimizeStats OptimizationImpl::optimize(Scope& scope,
     rewrite_annotations(scope, config);
   }
 
-  post_process(for_post_processing);
+  std::vector<IRInstruction*> removed_instructions;
+  auto post_process_stats =
+      post_process(for_post_processing, &removed_instructions);
   std::atomic<size_t> retained{0};
   {
     for_all_methods(for_post_processing, [&](const DexMethod* m) {
@@ -766,32 +770,45 @@ OptimizeStats OptimizationImpl::optimize(Scope& scope,
     });
   }
 
+  for (auto* insn : removed_instructions) {
+    delete insn;
+  }
+
   OptimizeStats ret;
   ret.removed_interfaces = optimized.size();
   ret.inserted_check_casts = inserted_check_casts.size();
   ret.retained_check_casts = retained.load();
+  ret.post_process = post_process_stats;
+  ret.deleted_removed_instructions = removed_instructions.size();
   return ret;
 }
 
-void OptimizationImpl::post_process(
-    const std::unordered_set<DexMethod*>& methods) {
+check_casts::impl::Stats OptimizationImpl::post_process(
+    const std::unordered_set<DexMethod*>& methods,
+    std::vector<IRInstruction*>* removed_instructions) {
   // The analysis times the number of methods is easily expensive, run in
   // parallel.
+  check_casts::impl::Stats stats;
+  std::mutex mutex;
   for_all_methods(
       methods,
-      [](const DexMethod* m_const) {
+      [&stats, &mutex, removed_instructions](const DexMethod* m_const) {
         auto m = const_cast<DexMethod*>(m_const);
         auto code = m->get_code();
-        if (code->cfg_built()) {
-          code->clear_cfg();
-        }
+        always_assert(!code->editable_cfg_built());
         cfg::ScopedCFG cfg(code);
         check_casts::CheckCastConfig config;
         check_casts::impl::CheckCastAnalysis analysis(config, m);
         auto casts = analysis.collect_redundant_checks_replacement();
-        check_casts::impl::apply(m, casts);
+        auto local_stats = check_casts::impl::apply(m, casts);
+        std::lock_guard<std::mutex> lock_guard(mutex);
+        stats += local_stats;
+        auto insns = cfg->release_removed_instructions();
+        removed_instructions->insert(removed_instructions->end(), insns.begin(),
+                                     insns.end());
       },
       /*parallel=*/true);
+  return stats;
 }
 
 } // namespace
