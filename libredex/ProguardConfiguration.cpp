@@ -33,7 +33,7 @@ size_t hash_value(const MemberSpecification& spec) {
 }
 
 bool operator==(const ClassSpecification& lhs, const ClassSpecification& rhs) {
-  return lhs.className == rhs.className &&
+  return lhs.classNames == rhs.classNames &&
          lhs.annotationType == rhs.annotationType &&
          lhs.extendsClassName == rhs.extendsClassName &&
          lhs.extendsAnnotationType == rhs.extendsAnnotationType &&
@@ -45,7 +45,7 @@ bool operator==(const ClassSpecification& lhs, const ClassSpecification& rhs) {
 
 size_t hash_value(const ClassSpecification& spec) {
   size_t seed{0};
-  boost::hash_combine(seed, spec.className);
+  boost::hash_combine(seed, spec.classNames);
   boost::hash_combine(seed, spec.annotationType);
   boost::hash_combine(seed, spec.extendsClassName);
   boost::hash_combine(seed, spec.extendsAnnotationType);

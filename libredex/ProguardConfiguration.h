@@ -46,7 +46,7 @@ struct ClassSpecification {
   DexAccessFlags setAccessFlags = DexAccessFlags(0);
   DexAccessFlags unsetAccessFlags = DexAccessFlags(0);
   std::string annotationType;
-  std::string className;
+  std::vector<std::string> classNames;
   std::string extendsAnnotationType; // An optional annotation for the
                                      // extends/implements type.
   std::string extendsClassName; // An optional class specification which this
@@ -56,6 +56,14 @@ struct ClassSpecification {
 
   friend bool operator==(const ClassSpecification& lhs,
                          const ClassSpecification& rhs);
+
+  std::string class_names_str() const {
+    std::string s;
+    for (const auto& className : classNames) {
+      s += className;
+    }
+    return s;
+  }
 };
 
 size_t hash_value(const ClassSpecification&);

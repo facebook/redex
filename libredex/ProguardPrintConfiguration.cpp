@@ -166,7 +166,10 @@ std::string keep_rules::show_keep(const KeepSpec& keep_rule, bool show_source) {
       }
     }
   }
-  text << class_spec.className << " ";
+  for (std::size_t i = 0; i < class_spec.classNames.size(); i++) {
+    text << class_spec.classNames[i];
+    text << (i == class_spec.classNames.size() - 1 ? " " : ", ");
+  }
   if (!class_spec.extendsClassName.empty()) {
     text << "extends ";
     if (!(class_spec.extendsAnnotationType.empty())) {
