@@ -95,7 +95,7 @@ struct TestValueType {
  */
 void field_incompatible_fail_helper(const TestValueType& a_type,
                                     const TestValueType& b_type,
-                                    const internal::string& exp_fail_str,
+                                    const std::string& exp_fail_str,
                                     IROpcode opcode_to_test,
                                     bool is_put,
                                     OperandType ir_suffix,
@@ -181,7 +181,7 @@ void field_incompatible_fail_helper(const TestValueType& a_type,
   IRTypeChecker checker(method);
   checker.run();
   EXPECT_TRUE(checker.fail());
-  EXPECT_THAT(checker.what(), MatchesRegex(exp_fail_str));
+  EXPECT_THAT(checker.what(), MatchesRegex(exp_fail_str.c_str()));
 }
 
 /**
