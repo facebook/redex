@@ -14,6 +14,8 @@
 #include <unordered_set>
 #include <vector>
 
+#include "ConcurrentContainers.h"
+
 class DexAnnotation;
 class DexAnnotationSet;
 
@@ -39,6 +41,24 @@ class AnnoKill {
     size_t signatures_killed;
 
     AnnoKillStats() { memset(this, 0, sizeof(AnnoKillStats)); }
+
+    AnnoKillStats& operator+=(const AnnoKillStats& rhs) {
+      annotations += rhs.annotations;
+      annotations_killed += rhs.annotations_killed;
+      class_asets += rhs.class_asets;
+      class_asets_cleared += rhs.class_asets_cleared;
+      method_asets += rhs.method_asets;
+      method_asets_cleared += rhs.method_asets_cleared;
+      method_param_asets += rhs.method_param_asets;
+      method_param_asets_cleared += rhs.method_param_asets_cleared;
+      field_asets += rhs.field_asets;
+      field_asets_cleared += rhs.field_asets_cleared;
+      visibility_build_count += rhs.visibility_build_count;
+      visibility_runtime_count += rhs.visibility_runtime_count;
+      visibility_system_count += rhs.visibility_system_count;
+      signatures_killed += rhs.signatures_killed;
+      return *this;
+    }
   };
 
   AnnoKill(Scope& scope,
@@ -53,8 +73,9 @@ class AnnoKill {
                annotated_keep_annos);
 
   bool kill_annotations();
-  std::unordered_set<const DexType*> build_anno_keep(DexAnnotationSet* aset);
-  bool should_kill_bad_signature(DexAnnotation* da);
+  std::unordered_set<const DexType*> build_anno_keep(
+      DexAnnotationSet* aset) const;
+  bool should_kill_bad_signature(DexAnnotation* da) const;
   AnnoKillStats get_stats() const { return m_stats; }
 
  private:
@@ -69,9 +90,10 @@ class AnnoKill {
 
   void cleanup_aset(DexAnnotationSet* aset,
                     const AnnoSet& referenced_annos,
+                    AnnoKillStats& stats,
                     const std::unordered_set<const DexType*>& keep_annos =
-                        std::unordered_set<const DexType*>{});
-  void count_annotation(const DexAnnotation* da);
+                        std::unordered_set<const DexType*>{}) const;
+  void count_annotation(const DexAnnotation* da, AnnoKillStats& stats) const;
 
   Scope& m_scope;
   const bool m_only_force_kill;
@@ -81,9 +103,9 @@ class AnnoKill {
   AnnoSet m_keep;
   AnnoKillStats m_stats;
 
-  std::map<std::string, size_t> m_build_anno_map;
-  std::map<std::string, size_t> m_runtime_anno_map;
-  std::map<std::string, size_t> m_system_anno_map;
+  mutable ConcurrentMap<std::string, size_t> m_build_anno_map;
+  mutable ConcurrentMap<std::string, size_t> m_runtime_anno_map;
+  mutable ConcurrentMap<std::string, size_t> m_system_anno_map;
   std::unordered_map<const DexType*, std::unordered_set<const DexType*>>
       m_anno_class_hierarchy_keep;
   std::unordered_map<const DexType*, std::unordered_set<const DexType*>>
