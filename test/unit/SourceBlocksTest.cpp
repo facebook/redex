@@ -700,3 +700,88 @@ B3: LFoo;.bar:()V@4(5:0))");
   EXPECT_EQ(coalesced.first, 1);
   EXPECT_EQ(coalesced.second, 4);
 }
+
+TEST_F(SourceBlocksTest, get_last_source_block_before) {
+  auto foo_method = create_method("LFoo");
+
+  constexpr const char* kCode = R"(
+    (
+      (.src_block "LFoo;.bar:()V" 0)
+      (const v0 0)
+      (.src_block "LFoo;.bar:()V" 1)
+      (const v1 1)
+      (.src_block "LFoo;.bar:()V" 2)
+      (const v2 2)
+      (.src_block "LFoo;.bar:()V" 3)
+      (const v3 3)
+
+      (.src_block "LFoo;.bar:()V" 4)
+
+      (return-void)
+    )
+  )";
+
+  foo_method->set_code(assembler::ircode_from_string(kCode));
+
+  foo_method->get_code()->build_cfg();
+
+  auto* b = foo_method->get_code()->cfg().entry_block();
+
+  for (auto it = b->begin(); it != b->end(); ++it) {
+    if (it->type != MFLOW_OPCODE) {
+      continue;
+    }
+    if (it->insn->opcode() == OPCODE_CONST) {
+      auto num = static_cast<uint32_t>(it->insn->get_literal());
+      auto sb = source_blocks::get_last_source_block_before(b, it);
+      EXPECT_NE(sb, nullptr);
+      if (sb != nullptr) {
+        EXPECT_EQ(sb->id, num);
+      }
+    }
+  }
+}
+
+TEST_F(SourceBlocksTest, get_last_source_block_before_non_entry) {
+  auto foo_method = create_method("LFoo");
+
+  constexpr const char* kCode = R"(
+    (
+      (const v0 0)
+      (.src_block "LFoo;.bar:()V" 1)
+      (const v1 1)
+      (.src_block "LFoo;.bar:()V" 2)
+      (const v2 2)
+      (.src_block "LFoo;.bar:()V" 3)
+      (const v3 3)
+
+      (.src_block "LFoo;.bar:()V" 4)
+
+      (return-void)
+    )
+  )";
+
+  foo_method->set_code(assembler::ircode_from_string(kCode));
+
+  foo_method->get_code()->build_cfg();
+
+  auto* b = foo_method->get_code()->cfg().entry_block();
+
+  for (auto it = b->begin(); it != b->end(); ++it) {
+    if (it->type != MFLOW_OPCODE) {
+      continue;
+    }
+    if (it->insn->opcode() == OPCODE_CONST) {
+      auto num = static_cast<uint32_t>(it->insn->get_literal());
+      auto sb = source_blocks::get_last_source_block_before(b, it);
+      if (num == 0) {
+        EXPECT_EQ(sb, nullptr);
+      } else {
+        EXPECT_NE(sb, nullptr);
+        if (sb != nullptr) {
+          EXPECT_EQ(sb->id, num);
+        }
+      }
+    }
+  }
+}

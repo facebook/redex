@@ -246,29 +246,21 @@ inline const SourceBlock* get_first_source_block(const cfg::Block* b) {
 
 inline SourceBlock* get_last_source_block_before(cfg::Block* b,
                                                  IRList::iterator it) {
-  if (it == b->begin()) {
-    return nullptr;
-  }
-  it--;
   while (it != b->begin()) {
+    it--;
     if (it->type == MFLOW_SOURCE_BLOCK) {
       return it->src_block->get_last_in_chain();
     }
-    it--;
   }
   return nullptr;
 }
 inline const SourceBlock* get_last_source_block_before(
     const cfg::Block* b, IRList::const_iterator it) {
-  if (it == b->begin()) {
-    return nullptr;
-  }
-  it--;
   while (it != b->begin()) {
+    it--;
     if (it->type == MFLOW_SOURCE_BLOCK) {
       return it->src_block->get_last_in_chain();
     }
-    it--;
   }
   return nullptr;
 }
