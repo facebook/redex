@@ -792,9 +792,14 @@ DexMethod* DexMethod::make_method_from(DexMethod* that,
   m->m_concrete = that->m_concrete;
   m->m_virtual = that->m_virtual;
   m->m_external = that->m_external;
-  for (auto& pair : that->m_param_anno) {
-    // note: DexAnnotation's copy ctor only does a shallow copy
-    m->m_param_anno.emplace(pair.first, new DexAnnotationSet(*pair.second));
+  if (that->m_param_anno != nullptr) {
+    if (m->m_param_anno == nullptr) {
+      m->m_param_anno = std::make_unique<ParamAnnotations>();
+    }
+    for (auto& pair : *that->m_param_anno) {
+      // note: DexAnnotation's copy ctor only does a shallow copy
+      m->m_param_anno->emplace(pair.first, new DexAnnotationSet(*pair.second));
+    }
   }
 
   return m;
@@ -883,17 +888,26 @@ void DexMethod::combine_annotations_with(DexMethod* other) {
       m_anno->combine_with(*other->m_anno);
     }
   }
-  for (auto& pair : other->m_param_anno) {
-    if (m_param_anno.count(pair.first) == 0 ||
-        m_param_anno[pair.first] == nullptr) {
-      m_param_anno.emplace(pair.first, new DexAnnotationSet(*pair.second));
-    } else {
-      m_param_anno[pair.first]->combine_with(*pair.second);
+  if (other->m_param_anno != nullptr) {
+    if (m_param_anno == nullptr) {
+      m_param_anno = std::make_unique<ParamAnnotations>();
+    }
+    for (auto& pair : *other->m_param_anno) {
+      if (m_param_anno->count(pair.first) == 0 ||
+          m_param_anno->at(pair.first) == nullptr) {
+        m_param_anno->emplace(pair.first, new DexAnnotationSet(*pair.second));
+      } else {
+        (*m_param_anno)[pair.first]->combine_with(*pair.second);
+      }
     }
   }
 }
 
 void DexMethod::clear_annotations() { m_anno.reset(); }
+
+std::unique_ptr<ParamAnnotations> DexMethod::release_param_anno() {
+  return std::move(m_param_anno);
+}
 
 void DexMethod::attach_annotation_set(std::unique_ptr<DexAnnotationSet> aset) {
   always_assert_type_log(!m_concrete, RedexError::BAD_ANNOTATION,
@@ -906,11 +920,14 @@ void DexMethod::attach_param_annotation_set(
     int paramno, std::unique_ptr<DexAnnotationSet> aset) {
   always_assert_type_log(!m_concrete, RedexError::BAD_ANNOTATION,
                          "method %s is concrete\n", self_show().c_str());
-  always_assert_type_log(m_param_anno.count(paramno) == 0,
-                         RedexError::BAD_ANNOTATION,
-                         "param %d annotation to method %s exists\n", paramno,
-                         self_show().c_str());
-  m_param_anno[paramno] = std::move(aset);
+  always_assert_type_log(
+      m_param_anno == nullptr || m_param_anno->count(paramno) == 0,
+      RedexError::BAD_ANNOTATION, "param %d annotation to method %s exists\n",
+      paramno, self_show().c_str());
+  if (m_param_anno == nullptr) {
+    m_param_anno = std::make_unique<ParamAnnotations>();
+  }
+  (*m_param_anno)[paramno] = std::move(aset);
 }
 
 std::unique_ptr<DexAnnotationSet> DexMethod::release_annotations() {
@@ -1042,7 +1059,7 @@ void DexMethod::make_non_concrete() {
   m_concrete = false;
   m_code.reset();
   m_virtual = false;
-  m_param_anno.clear();
+  m_param_anno.reset();
 }
 
 void DexMethod::set_deobfuscated_name(const std::string& name) {

@@ -627,7 +627,7 @@ bool AnnoKill::kill_annotations() {
                 SHOW(method->get_name()),
                 SHOW(method->get_proto()));
           local_stats.method_param_asets_cleared += param_annos->size();
-          param_annos->clear();
+          method->release_param_anno();
         }
       }
 

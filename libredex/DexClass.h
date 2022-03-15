@@ -846,7 +846,7 @@ class DexMethod : public DexMethodRef {
   std::unique_ptr<DexAnnotationSet> m_anno;
   std::unique_ptr<DexCode> m_dex_code;
   std::unique_ptr<IRCode> m_code;
-  ParamAnnotations m_param_anno;
+  std::unique_ptr<ParamAnnotations> m_param_anno;
   const DexString* m_deobfuscated_name{nullptr};
 
   // See UNIQUENESS above for the rationale for the private constructor pattern.
@@ -961,14 +961,9 @@ class DexMethod : public DexMethodRef {
     always_assert(is_def());
     return m_access;
   }
-  const ParamAnnotations* get_param_anno() const {
-    if (m_param_anno.empty()) return nullptr;
-    return &m_param_anno;
-  }
-  ParamAnnotations* get_param_anno() {
-    if (m_param_anno.empty()) return nullptr;
-    return &m_param_anno;
-  }
+  const ParamAnnotations* get_param_anno() const { return m_param_anno.get(); }
+  ParamAnnotations* get_param_anno() { return m_param_anno.get(); }
+  std::unique_ptr<ParamAnnotations> release_param_anno();
 
   void set_deobfuscated_name(const std::string& name);
   void set_deobfuscated_name(const DexString* name);
