@@ -63,7 +63,8 @@ float get_source_blocks_factor(const InstructionIterator& inline_site,
   auto caller_block = inline_site.block();
   float caller_val;
   {
-    auto* sb = source_blocks::get_first_source_block(caller_block);
+    auto* sb = source_blocks::get_last_source_block_before(
+        caller_block, inline_site.unwrap());
     if (sb == nullptr) {
       return NAN;
     }
