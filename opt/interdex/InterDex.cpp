@@ -534,9 +534,9 @@ void InterDex::emit_interdex_classes(
               dex_info.coldstart = false;
             }
           } else {
-            // if (end_marker == cold_start_end_marker) {
-            //   dex_info.coldstart = false;
             reset_coldstart_on_overflow = true;
+            TRACE(IDEX, 2, "Not flushing out marker %s to fill dex.",
+                  SHOW(type));
           }
         }
       }
@@ -558,11 +558,14 @@ void InterDex::emit_interdex_classes(
       if (res.overflowed && reset_coldstart_on_overflow) {
         dex_info.coldstart = false;
         reset_coldstart_on_overflow = false;
+        TRACE(IDEX, 2, "Flushing cold-start after non-flushed end marker.");
       }
     }
   }
 
   // Now emit the classes we omitted from the original coldstart set.
+  TRACE(IDEX, 2, "Emitting %zu interdex types (reset_coldstart_on_overflow=%d)",
+        interdex_types.size(), reset_coldstart_on_overflow);
   for (DexType* type : interdex_types) {
     DexClass* cls = type_class(type);
 
@@ -573,6 +576,7 @@ void InterDex::emit_interdex_classes(
       if (res.overflowed && reset_coldstart_on_overflow) {
         dex_info.coldstart = false;
         reset_coldstart_on_overflow = false;
+        TRACE(IDEX, 2, "Flushing cold-start after non-flushed end marker.");
       }
     }
   }
@@ -587,6 +591,13 @@ void InterDex::emit_interdex_classes(
   always_assert_log(!m_emitting_bg_set, "Unterminated background set marker");
 
   m_emitting_extended = false;
+
+  if (reset_coldstart_on_overflow) {
+    TRACE(IDEX, 2, "No overflow after cold-start dex, flushing now.");
+    flush_out_dex(dex_info, *canary_cls);
+    *canary_cls = get_canary_cls(dex_info);
+    dex_info.coldstart = false;
+  }
 }
 
 namespace {
