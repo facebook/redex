@@ -20,6 +20,7 @@
 #include "IRAssembler.h"
 #include "Inliner.h"
 #include "InlinerConfig.h"
+#include "RedexContext.h"
 #include "RedexTest.h"
 #include "Show.h"
 
@@ -28,6 +29,8 @@ using namespace source_blocks;
 
 class SourceBlocksTest : public RedexTest {
  public:
+  void SetUp() override { g_redex->set_sb_interaction_index({{"Fake", 0}}); }
+
   static DexMethod* create_method(const std::string& class_name = "LFoo",
                                   const std::string& code = "((return-void))") {
     // Create a totally new class.

@@ -17,6 +17,7 @@
 #include "DexLoader.h"
 #include "Inliner.h"
 #include "InlinerConfig.h"
+#include "RedexContext.h"
 #include "RedexTest.h"
 #include "ScopedCFG.h"
 #include "Show.h"
@@ -324,6 +325,8 @@ TEST_F(SourceBlocksTest, source_blocks_insert_after_exc) {
 }
 
 TEST_F(SourceBlocksTest, scaling) {
+  g_redex->set_sb_interaction_index({{"Fake", 0}});
+
   auto type =
       DexType::get_type("Lcom/facebook/redextest/SourceBlocksTest$Scaling;");
   ASSERT_NE(type, nullptr);
