@@ -887,11 +887,22 @@ void redex_frontend(ConfigFiles& conf, /* input */
 
   g_redex->load_pointers_cache();
 
+  keep_rules::proguard_parser::Stats parser_stats{};
   for (const auto& pg_config_path : args.proguard_config_paths) {
     Timer time_pg_parsing("Parsed ProGuard config file");
-    keep_rules::proguard_parser::parse_file(pg_config_path, &pg_config);
+    parser_stats +=
+        keep_rules::proguard_parser::parse_file(pg_config_path, &pg_config);
   }
   keep_rules::proguard_parser::remove_blocklisted_rules(&pg_config);
+
+  {
+    Json::Value d;
+    d["parse_errors"] = parser_stats.parse_errors;
+    d["unknown_tokens"] = parser_stats.unknown_tokens;
+    d["unimplemented"] = parser_stats.unimplemented;
+    d["ok"] = (uint64_t)(pg_config.ok ? 1 : 0);
+    stats["proguard"] = d;
+  }
 
   const auto& pg_libs = pg_config.libraryjars;
   args.jar_paths.insert(pg_libs.begin(), pg_libs.end());
@@ -1281,6 +1292,39 @@ void maybe_dump_jemalloc_profile(const char* env_name) {
   }
 }
 
+void copy_proguard_stats(Json::Value& stats) {
+  if (!stats.isMember("proguard")) {
+    return;
+  }
+  if (!stats.isMember("output_stats")) {
+    return;
+  }
+  auto& output = stats["output_stats"];
+  if (!output.isMember("pass_stats")) {
+    return;
+  }
+  auto& passes = output["pass_stats"];
+
+  Json::Value* first_pass = nullptr;
+  for (const auto& name : passes.getMemberNames()) {
+    auto& pass = passes[name];
+    if (first_pass == nullptr || pass["pass_order"].asUInt64() <
+                                     (*first_pass)["pass_order"].asUInt64()) {
+      first_pass = &pass;
+    }
+  }
+
+  if (first_pass == nullptr) {
+    return;
+  }
+
+  auto& pr = stats["proguard"];
+  for (const auto& name : pr.getMemberNames()) {
+    std::string compound_name = "proguard_" + name;
+    (*first_pass)[compound_name] = pr[name];
+  }
+}
+
 } // namespace
 
 int main(int argc, char* argv[]) {
@@ -1403,6 +1447,9 @@ int main(int argc, char* argv[]) {
   stats["output_stats"]["mem_stats"]["vm_hwm"] = (Json::UInt64)vm_stats.vm_peak;
 
   stats["output_stats"]["threads"] = get_threads_stats();
+
+  // For the time being, copy proguard stats, if any, to the first pass.
+  copy_proguard_stats(stats);
 
   {
     std::ofstream out(stats_output_path);
