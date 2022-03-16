@@ -54,9 +54,9 @@ void test(const std::string& code_str,
   if (full_validation) {
     code->clear_cfg();
     expected_ptr->clear_cfg();
-  }
 
-  EXPECT_EQ(assembler::to_s_expr(code), assembler::to_s_expr(expected.get()));
+    EXPECT_EQ(assembler::to_s_expr(code), assembler::to_s_expr(expected.get()));
+  }
 }
 
 TEST_F(BranchPrefixHoistingTest, simple_insn_hoisting) {
