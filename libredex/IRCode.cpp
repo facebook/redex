@@ -575,6 +575,11 @@ IRList* deep_copy_ir_list(IRList* old_ir_list) {
 IRCode::IRCode() : m_ir_list(new IRList()) {}
 
 IRCode::~IRCode() {
+  // Let the CFG clean itself up.
+  if (m_cfg != nullptr && m_cfg->editable() && m_owns_insns) {
+    m_cfg->set_insn_ownership(true);
+  }
+
   if (m_owns_insns) {
     m_ir_list->insn_clear_and_dispose();
   } else {
