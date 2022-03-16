@@ -429,7 +429,7 @@ Graph::Graph(const BuildStrategy& strat)
   const auto& roots = root_and_dynamic.roots;
   m_dynamic_methods = std::move(root_and_dynamic.dynamic_methods);
   for (const DexMethod* root : roots) {
-    auto edge = std::make_shared<Edge>(m_entry, make_node(root), nullptr);
+    auto edge = std::make_shared<Edge>(this->entry(), make_node(root), nullptr);
     m_entry->m_successors.emplace_back(edge);
     make_node(root)->m_predecessors.emplace_back(edge);
   }
@@ -445,7 +445,7 @@ Graph::Graph(const BuildStrategy& strat)
       visited.emplace(caller);
       auto callsites = strat.get_callsites(caller);
       if (callsites.empty()) {
-        this->add_edge(make_node(caller), m_exit, nullptr);
+        this->add_edge(make_node(caller), this->exit(), nullptr);
       }
       for (const auto& callsite : callsites) {
         this->add_edge(make_node(caller), make_node(callsite.callee),
@@ -463,12 +463,12 @@ Graph::Graph(const BuildStrategy& strat)
 }
 
 NodeId Graph::make_node(const DexMethod* m) {
-  auto it = m_nodes.find(m);
-  if (it != m_nodes.end()) {
-    return it->second;
+  auto [it, inserted] = m_nodes.emplace(m, nullptr);
+  if (inserted) {
+    it->second = std::make_shared<Node>(m);
   }
-  m_nodes.emplace(m, std::make_shared<Node>(m));
-  return m_nodes.at(m);
+
+  return it->second.get();
 }
 
 void Graph::add_edge(const NodeId& caller,

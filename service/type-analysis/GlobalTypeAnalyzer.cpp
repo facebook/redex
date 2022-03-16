@@ -416,7 +416,7 @@ std::unique_ptr<GlobalTypeAnalyzer> GlobalTypeAnalysis::analyze(
   // Run the bootstrap. All field value and method return values are
   // represented by Top.
   TRACE(TYPE, 2, "[global] Bootstrap run");
-  auto gta = std::make_unique<GlobalTypeAnalyzer>(cg);
+  auto gta = std::make_unique<GlobalTypeAnalyzer>(std::move(cg));
   gta->run({{CURRENT_PARTITION_LABEL, ArgumentTypeEnvironment()}});
   auto non_true_virtuals =
       mog::get_non_true_virtuals(*method_override_graph, scope);
