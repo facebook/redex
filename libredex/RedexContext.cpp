@@ -209,16 +209,6 @@ void RedexContext::alias_field_name(DexFieldRef* field,
 
 void RedexContext::erase_field(DexFieldRef* field) {
   s_field_map.erase(field->m_spec);
-  // Also remove the alias from the map
-  if (field->is_def()) {
-    if (field->DexFieldRef::as_def()->get_deobfuscated_name_or_null() !=
-        nullptr) {
-      DexFieldSpec r(field->m_spec.cls,
-                     &field->DexFieldRef::as_def()->get_deobfuscated_name(),
-                     field->m_spec.type);
-      s_field_map.erase(r);
-    }
-  }
 }
 
 void RedexContext::erase_field(const DexType* container,

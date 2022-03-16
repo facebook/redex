@@ -314,7 +314,7 @@ class DexField : public DexFieldRef {
   DexAccessFlags m_access;
   std::unique_ptr<DexAnnotationSet> m_anno;
   std::unique_ptr<DexEncodedValue> m_value; /* Static Only */
-  const DexString* m_deobfuscated_name{nullptr};
+  std::string m_deobfuscated_name;
 
   // See UNIQUENESS above for the rationale for the private constructor pattern.
   DexField(DexType* container, const DexString* name, DexType* type);
@@ -377,22 +377,14 @@ class DexField : public DexFieldRef {
 
   void set_external();
 
-  void set_deobfuscated_name(const std::string& name);
-  void set_deobfuscated_name(const DexString* name);
-  void set_deobfuscated_name(const DexString& name);
-
-  const DexString& get_deobfuscated_name() const {
-    redex_assert(m_deobfuscated_name != nullptr);
-    return *m_deobfuscated_name;
+  void set_deobfuscated_name(std::string name) {
+    m_deobfuscated_name = std::move(name);
   }
-  const DexString* get_deobfuscated_name_or_null() const {
+  const std::string& get_deobfuscated_name() const {
     return m_deobfuscated_name;
   }
   const std::string& get_deobfuscated_name_or_empty() const {
-    if (m_deobfuscated_name == nullptr) {
-      return DexString::EMPTY;
-    }
-    return m_deobfuscated_name->str();
+    return m_deobfuscated_name;
   }
 
   // Return just the name of the field.

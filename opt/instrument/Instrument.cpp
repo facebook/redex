@@ -789,8 +789,7 @@ InstrumentPass::patch_sharded_arrays(
               suggested_names.count(i)
                   ? suggested_names.at(i)
                   : InstrumentPass::STATS_FIELD_NAME + std::to_string(i);
-          auto deobfuscated_name =
-              template_field->get_deobfuscated_name().str();
+          auto deobfuscated_name = template_field->get_deobfuscated_name();
           boost::replace_first(deobfuscated_name,
                                InstrumentPass::STATS_FIELD_NAME, new_name);
 

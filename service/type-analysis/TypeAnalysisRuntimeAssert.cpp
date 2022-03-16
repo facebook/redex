@@ -54,6 +54,24 @@ static IRList::iterator insert_type_check(IRCode* code,
   return it;
 }
 
+namespace {
+
+template <typename DexMember>
+const DexString* get_deobfuscated_name_dex_string(const DexMember* member) {
+  return member->get_deobfuscated_name_or_null();
+}
+
+template <>
+const DexString* get_deobfuscated_name_dex_string(const DexField* member) {
+  const auto& str = member->get_deobfuscated_name();
+  if (str.empty()) {
+    return nullptr;
+  }
+  return DexString::make_string(str);
+}
+
+} // namespace
+
 template <typename DexMember>
 static IRList::iterator insert_throw_error(IRCode* code,
                                            IRList::iterator it,
@@ -63,7 +81,7 @@ static IRList::iterator insert_throw_error(IRCode* code,
   it = code->insert_after(
       it,
       ((new IRInstruction(OPCODE_CONST_STRING))
-           ->set_string(member->get_deobfuscated_name_or_null())));
+           ->set_string(get_deobfuscated_name_dex_string(member))));
   it =
       code->insert_after(it,
                          ((new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))

@@ -503,8 +503,7 @@ bool KeepRuleMatcher::field_level_match(
     return false;
   }
   // Match field name against regex.
-  auto dequalified_name =
-      extract_field_name(field->get_deobfuscated_name().str());
+  auto dequalified_name = extract_field_name(field->get_deobfuscated_name());
   return boost::regex_match(dequalified_name, fieldname_regex);
 }
 

@@ -408,15 +408,15 @@ class CheckUniqueDeobfuscatedNames {
       }
       method_names.emplace(deob, dex_method);
     });
-    std::unordered_map<const DexString*, DexField*> field_names;
+    std::unordered_map<std::string, DexField*> field_names;
     walk::fields(scope, [&field_names, pass_name](DexField* dex_field) {
-      auto deob = dex_field->get_deobfuscated_name_or_null();
+      auto deob = dex_field->get_deobfuscated_name();
       auto it = field_names.find(deob);
       if (it != field_names.end()) {
         fprintf(stderr,
                 "ABORT! [%s] Duplicate deobfuscated field name: %s\nfor %s\n "
                 "vs %s\n",
-                pass_name, it->first->c_str(), SHOW(dex_field),
+                pass_name, it->first.c_str(), SHOW(dex_field),
                 SHOW(it->second));
         exit(EXIT_FAILURE);
       }

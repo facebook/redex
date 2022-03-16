@@ -263,7 +263,7 @@ DexFieldRef* DexField::make_field(std::string_view full_descriptor) {
 void DexField::set_external() {
   always_assert_log(!m_concrete, "Unexpected concrete field %s\n",
                     self_show().c_str());
-  m_deobfuscated_name = DexString::make_string(self_show());
+  m_deobfuscated_name = self_show();
   m_external = true;
 }
 
@@ -1880,68 +1880,6 @@ void DexField::gather_methods(C& lmethod) const {
   c_append_all(lmethod, method_vec.begin(), method_vec.end());
 }
 INSTANTIATE(DexField::gather_methods, DexMethodRef*)
-
-void DexField::set_deobfuscated_name(const std::string& name) {
-  // If the field has an old deobfuscated_name which is not equal to the name,
-  // erase the mapping using the old (and now invalid) deobfuscated_name from
-  // the global type map.
-  if (kInsertDeobfuscatedNameLinks && m_deobfuscated_name != nullptr) {
-    if (m_deobfuscated_name != this->get_name()) {
-      g_redex->erase_field(this->get_class(), m_deobfuscated_name,
-                           this->get_type());
-    }
-  }
-  m_deobfuscated_name = DexString::make_string(name);
-  if (!kInsertDeobfuscatedNameLinks) {
-    return;
-  }
-  if (m_deobfuscated_name == this->get_name()) {
-    return;
-  }
-  auto existing_field = g_redex->get_field(
-      this->get_class(), m_deobfuscated_name, this->get_type());
-  if (existing_field != nullptr) {
-    TRACE(DC, 5,
-          "Unable to alias field '%s' to deobfuscated name '%s' because "
-          "field '%s' already exists.\n ",
-          this->c_str(), m_deobfuscated_name->c_str(), existing_field->c_str());
-    return;
-  }
-  g_redex->alias_field_name(this, m_deobfuscated_name);
-}
-
-void DexField::set_deobfuscated_name(const DexString* name) {
-  // If the field has an old deobfuscated_name which is not equal to the name,
-  // erase the mapping using the old (and now invalid) deobfuscated_name from
-  // the global type map.
-  if (kInsertDeobfuscatedNameLinks && m_deobfuscated_name != nullptr) {
-    if (m_deobfuscated_name != this->get_name()) {
-      g_redex->erase_field(this->get_class(), m_deobfuscated_name,
-                           this->get_type());
-    }
-  }
-  m_deobfuscated_name = name;
-  if (!kInsertDeobfuscatedNameLinks) {
-    return;
-  }
-  if (m_deobfuscated_name == this->get_name()) {
-    return;
-  }
-  auto existing_field = g_redex->get_field(
-      this->get_class(), m_deobfuscated_name, this->get_type());
-  if (existing_field != nullptr) {
-    TRACE(DC, 5,
-          "Unable to alias field '%s' to deobfuscated name '%s' because "
-          "field '%s' already exists.\n ",
-          this->c_str(), m_deobfuscated_name->c_str(), existing_field->c_str());
-    return;
-  }
-  g_redex->alias_field_name(this, m_deobfuscated_name);
-}
-
-void DexField::set_deobfuscated_name(const DexString& name) {
-  set_deobfuscated_name(&name);
-}
 
 std::string DexField::get_simple_deobfuscated_name() const {
   return get_simple_deobf_name(this);

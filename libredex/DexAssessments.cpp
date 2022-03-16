@@ -305,7 +305,7 @@ DexAssessment DexScopeAssessor::run() {
   std::atomic<size_t> fields_without_deobfuscated_name{0};
   walk::parallel::fields(m_scope,
                          [&fields_without_deobfuscated_name](DexField* f) {
-                           if (f->get_deobfuscated_name_or_null() == nullptr) {
+                           if (f->get_deobfuscated_name().empty()) {
                              fields_without_deobfuscated_name.fetch_add(1);
                            }
                          });
