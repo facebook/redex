@@ -349,6 +349,11 @@ static std::vector<DexDebugEntry> eval_debug_instructions(
     const uint8_t** encdata_ptr,
     uint32_t absolute_line) {
   std::vector<DexDebugEntry> entries;
+  // Likely overallocate and then shrink down in an effort to avoid the
+  // resize overhead.
+  constexpr size_t kReserveSize = 10000;
+  entries.reserve(kReserveSize);
+
   uint32_t pc = 0;
   while (true) {
     std::unique_ptr<DexDebugInstruction> opcode(
@@ -386,6 +391,8 @@ static std::vector<DexDebugEntry> eval_debug_instructions(
     }
     }
   }
+
+  entries.shrink_to_fit();
   return entries;
 }
 
