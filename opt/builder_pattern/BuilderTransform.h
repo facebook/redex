@@ -32,7 +32,11 @@ class BuilderTransform {
 
   bool inline_super_calls_and_ctors(const DexType* type);
 
-  std::unordered_set<const IRInstruction*> get_not_inlined_insns(
+  /**
+   * Try to inline the given calls (`insns`) in the caller, and return the set
+   * of call instructions that were not abled to be inlined.
+   */
+  std::unordered_set<const IRInstruction*> try_inline_calls(
       DexMethod* caller,
       const std::unordered_set<IRInstruction*>& insns,
       std::vector<IRInstruction*>* deleted_insns);

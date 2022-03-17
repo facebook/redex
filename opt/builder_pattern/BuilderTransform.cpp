@@ -44,8 +44,7 @@ BuilderTransform::BuilderTransform(
       MultiMethodInlinerMode::None));
 }
 
-std::unordered_set<const IRInstruction*>
-BuilderTransform::get_not_inlined_insns(
+std::unordered_set<const IRInstruction*> BuilderTransform::try_inline_calls(
     DexMethod* caller,
     const std::unordered_set<IRInstruction*>& insns,
     std::vector<IRInstruction*>* deleted_insns) {
@@ -111,7 +110,7 @@ bool BuilderTransform::inline_super_calls_and_ctors(const DexType* type) {
       m_method_copy[method] = method_copy;
 
       size_t num_insns_not_inlined =
-          get_not_inlined_insns(method, inlinable_insns, nullptr).size();
+          try_inline_calls(method, inlinable_insns, nullptr).size();
       if (num_insns_not_inlined > 0) {
         return false;
       }
@@ -186,7 +185,6 @@ void BuilderTransform::replace_fields(const InstantiationToUsage& usage,
                                       DexMethod* method) {
   auto code = method->get_code();
 
-  std::unordered_set<const IRInstruction*> deletes;
   std::unordered_map<IRInstruction*, IRInstruction*> replacement;
 
   for (const auto& mie : InstructionIterable(code)) {
@@ -267,16 +265,16 @@ void BuilderTransform::replace_fields(const InstantiationToUsage& usage,
           always_assert(invoked->get_class() == type::java_lang_Object() &&
                         method::is_init(invoked));
         } else {
-          deletes.emplace(insn);
+          // Remove the reference to the removed Builder class from the
+          // check-cast. But keep the cast itself, since the following
+          // move-result might move it to a different register. The current
+          // structure makes it hard to properly update the instruction pair.
+          const_cast<IRInstruction*>(insn)->set_type(type::java_lang_Object());
         }
       }
     }
 
     initialize_regs(field_to_reg, code);
-  }
-
-  for (const auto* insn : deletes) {
-    code->remove_opcode(const_cast<IRInstruction*>(insn));
   }
 
   for (const auto& pair : replacement) {

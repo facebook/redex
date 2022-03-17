@@ -299,7 +299,7 @@ class RemoveClasses {
       }
 
       auto not_inlined_insns =
-          m_transform.get_not_inlined_insns(method, to_inline, &deleted_insns);
+          m_transform.try_inline_calls(method, to_inline, &deleted_insns);
 
       if (!not_inlined_insns.empty()) {
         auto to_eliminate =
