@@ -27,7 +27,7 @@
 
 static size_t num_opcodes_bb(cfg::Block* block) {
   size_t result = 0;
-  for (auto i : InstructionIterable(block)) {
+  for (auto& i : InstructionIterable(block)) {
     ++result;
   }
   return result;
