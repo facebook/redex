@@ -1085,7 +1085,7 @@ void DexMethod::set_deobfuscated_name(const std::string& name) {
   if (existing_method != nullptr) {
     TRACE(DC, 5,
           "Unable to alias method '%s' to deobfuscated name '%s' because "
-          "field '%s' already exists.\n ",
+          "method '%s' already exists.\n ",
           this->c_str(), m_deobfuscated_name->c_str(),
           existing_method->c_str());
     return;
