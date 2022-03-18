@@ -536,8 +536,8 @@ void update_references(const Scope& scope,
           } else {
             always_assert_log(
                 !update_map.count(insn_method->get_class()),
-                "Vertical Merging: Method reference still exists %s",
-                SHOW(insn));
+                "Vertical Merging: Method reference still exists %s in %s",
+                SHOW(insn), SHOW(method));
           }
         }
       });
@@ -589,37 +589,73 @@ void remove_merged(Scope& scope, const ClassMap& mergeable_to_merger) {
 }
 
 /**
- * Before changing the super calls, resolve invoke-virtual v0 Parent.v down to
- * invoke-virtual v0 Child.v if the Child overrides the parent method. Note that
- * v0 is always the merger child type.
+ * Try to resolve the virtual calls on a mergeable type to be a method ref on
+ * its merger. If fail, we remove the mergeable-merger pair.
  */
-void resolve_virtual_calls_to_childref(const Scope& scope,
-                                       const ClassMap& mergeable_to_merger) {
-  walk::parallel::code(scope, [&mergeable_to_merger](DexMethod* /* method */,
-                                                     IRCode& code) {
-    editable_cfg_adapter::iterate(
-        &code, [&mergeable_to_merger](MethodItemEntry& mie) {
-          auto insn = mie.insn;
-          if (opcode::is_invoke_virtual(insn->opcode())) {
-            auto method_ref = insn->get_method();
-            auto container = method_ref->get_class();
-            auto find_merger = mergeable_to_merger.find(type_class(container));
-            if (find_merger != mergeable_to_merger.end() &&
-                find_merger->second->get_super_class() == container) {
-              auto child_method = DexMethod ::get_method(
-                  find_merger->second->get_type(), method_ref->get_name(),
-                  method_ref->get_proto());
-              // XXX(fengliu): The possible overriding from subclasses of the
-              // child class is not checked because the case is excluded earlier
-              // in collect_can_merge.
-              if (child_method && is_internal_def(child_method)) {
-                insn->set_method(child_method);
-              }
+void resolve_virtual_calls_to_merger(const Scope& scope,
+                                     ClassMap& mergeable_to_merger) {
+  ConcurrentSet<DexClass*> excluded_mergeables;
+  ConcurrentMap<IRInstruction*, DexMethodRef*> resolved_virtual_calls;
+  walk::parallel::code(scope, [&](DexMethod* /* method */, IRCode& code) {
+    editable_cfg_adapter::iterate(&code, [&](MethodItemEntry& mie) {
+      auto insn = mie.insn;
+      if (opcode::is_invoke_virtual(insn->opcode())) {
+        auto mergeable_method_ref = insn->get_method();
+        auto container = type_class(mergeable_method_ref->get_class());
+        if (!container) {
+          return editable_cfg_adapter::LOOP_CONTINUE;
+        }
+        auto find_merger = mergeable_to_merger.find(container);
+        if (find_merger != mergeable_to_merger.end() &&
+            !excluded_mergeables.count(container)) {
+          auto merger_method_ref = DexMethod::get_method(
+              find_merger->second->get_type(), mergeable_method_ref->get_name(),
+              mergeable_method_ref->get_proto());
+          // Merger is the subclass.
+          if (find_merger->second->get_super_class() == container->get_type()) {
+            // XXX(fengliu): The possible overriding from subclasses of the
+            // merger class is not checked because the case is excluded earlier
+            // in collect_can_merge.
+            if (merger_method_ref && is_internal_def(merger_method_ref)) {
+              resolved_virtual_calls.insert({insn, merger_method_ref});
+            }
+          } else { // Merger is the superclass.
+            if (resolve_virtual(find_merger->second,
+                                mergeable_method_ref->get_name(),
+                                mergeable_method_ref->get_proto())) {
+              merger_method_ref =
+                  DexMethod::make_method(find_merger->second->get_type(),
+                                         mergeable_method_ref->get_name(),
+                                         mergeable_method_ref->get_proto());
+              resolved_virtual_calls.insert({insn, merger_method_ref});
+            } else {
+              // There is no instance of the mergeable class. So virtual calls
+              // on the mergeable class should be invalid or unreachable. To
+              // handle the "impossible" case, we can remove the virtual call or
+              // simply not do the merging. Here we exclude the mergeable for
+              // simplicity.
+              excluded_mergeables.insert(container);
+              TRACE(VMERGE, 5,
+                    "Exclude a pair: virtual call %s is not resolvable to the "
+                    "superclass %s",
+                    SHOW(insn), SHOW(find_merger->second));
             }
           }
-          return editable_cfg_adapter::LOOP_CONTINUE;
-        });
+        }
+      }
+      return editable_cfg_adapter::LOOP_CONTINUE;
+    });
   });
+  for (auto cls : excluded_mergeables) {
+    mergeable_to_merger.erase(cls);
+  }
+  for (auto& pair : resolved_virtual_calls) {
+    auto insn = pair.first;
+    auto container = type_class(insn->get_method()->get_class());
+    if (mergeable_to_merger.count(container)) {
+      insn->set_method(pair.second);
+    }
+  }
 }
 
 } // namespace
@@ -765,7 +801,6 @@ void VerticalMergingPass::merge_classes(const Scope& scope,
   // To store the needed changes from `Mergeable.method` to `Merger.method`.
   MethodRefMap methodref_update_map;
 
-  resolve_virtual_calls_to_childref(scope, mergeable_to_merger);
   change_super_calls(mergeable_to_merger);
 
   for (const auto& pair : mergeable_to_merger) {
@@ -804,6 +839,7 @@ void VerticalMergingPass::run_pass(DexStoresVector& stores,
       collect_can_merge(scope, xstores, dont_merge_status, &num_single_extend);
 
   remove_both_have_clinit(&mergeable_to_merger);
+  resolve_virtual_calls_to_merger(scope, mergeable_to_merger);
 
   merge_classes(scope, mergeable_to_merger);
   remove_merged(scope, mergeable_to_merger);
