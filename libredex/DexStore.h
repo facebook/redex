@@ -187,11 +187,33 @@ class XStoreRefs {
    */
   DexStoresDependencies m_transitive_resolved_dependencies;
 
+  /**
+   * Inbound dependencies for stores. Allows for special treatment of shared
+   * modules, as created by Buck's APKModuleGraph which may not be spelling out
+   * all of their conceptual dependencies.
+   */
+  DexStoresDependencies m_reverse_dependencies;
+
+  /**
+   * Identifies the naming convention of a shared module, as created by Buck. By
+   * default this is empty and is not factored into any decisions. Used only for
+   * permissive allowing of cross store references when not enough dependency
+   * information is actually given.
+   */
+  std::string m_shared_module_prefix;
+
   static std::string show_type(const DexType* type); // To avoid "Show.h" in the
                                                      // header.
 
+  bool is_store_shared_module(const DexStore* store) const {
+    return !m_shared_module_prefix.empty() &&
+           store->get_name().find(m_shared_module_prefix) == 0;
+  }
+
  public:
   explicit XStoreRefs(const DexStoresVector& stores);
+  XStoreRefs(const DexStoresVector& stores,
+             const std::string& shared_module_prefix);
 
   /**
    * Gets transitive dependencies. Includes dependencies on root store, but
@@ -304,6 +326,23 @@ class XStoreRefs {
           get_transitive_resolved_dependencies(caller_store);
       if (caller_dependencies.count(callee_store)) {
         return false;
+      }
+      // Check to support impartial dependencies for Buck's shared modules.
+      // A shared module is never explicitly loaded, so we check stores that
+      // depend on it, and verify that all transitively depend on the callee
+      // store.
+      if (is_store_shared_module(caller_store)) {
+        auto& inbound_deps = m_reverse_dependencies.at(caller_store);
+        bool all_stores_depend_on_callee = true;
+        for (auto& dep_store : inbound_deps) {
+          if (!get_transitive_resolved_dependencies(dep_store).count(
+                  callee_store)) {
+            all_stores_depend_on_callee = false;
+          }
+        }
+        if (all_stores_depend_on_callee) {
+          return false;
+        }
       }
     }
 
