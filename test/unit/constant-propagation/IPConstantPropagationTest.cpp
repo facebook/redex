@@ -188,14 +188,14 @@ TEST_F(InterproceduralConstantPropagationTest, constantArgumentClassXStore) {
   creator.add_method(m2);
 
   auto cls = creator.create();
-  auto store1 = DexStore("store1");
+  auto store1 = DexStore("classes");
   store1.add_classes({cls});
 
   auto cls_ty2 = DexType::make_type("LBar;");
   ClassCreator creator2(cls_ty2);
   creator2.set_super(type::java_lang_Object());
   auto cls2 = creator2.create();
-  auto store2 = DexStore("store2");
+  auto store2 = DexStore("other_store");
   store2.add_classes({cls2});
   DexStoresVector stores({store1, store2});
   InterproceduralConstantPropagationPass().run(stores);

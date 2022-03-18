@@ -36,6 +36,7 @@ class CheckBreadcrumbsPass : public Pass {
     bind("only_verify_primary_dex", false, only_verify_primary_dex);
     bind("verify_type_hierarchies", false, verify_type_hierarchies);
     bind("verify_proto_cross_dex", false, verify_proto_cross_dex);
+    bind("shared_module_prefix", "", shared_module_prefix);
     bind("allowed_violations", "", allowed_violations_file_path);
     bind("enforce_allowed_violations_file",
          false,
@@ -52,6 +53,7 @@ class CheckBreadcrumbsPass : public Pass {
   bool only_verify_primary_dex;
   bool verify_type_hierarchies;
   bool verify_proto_cross_dex;
+  std::string shared_module_prefix;
   // Path to file with types or type prefixes to permit cross store violations.
   std::string allowed_violations_file_path;
   bool enforce_allowed_violations_file;
@@ -73,6 +75,7 @@ class Breadcrumbs {
   explicit Breadcrumbs(const Scope& scope,
                        const std::string& allowed_violations_file_path,
                        DexStoresVector& stores,
+                       const std::string& shared_module_prefix,
                        bool reject_illegal_refs_root_store,
                        bool only_verify_primary_dex,
                        bool verify_type_hierarchies,
@@ -83,6 +86,7 @@ class Breadcrumbs {
   std::string get_methods_with_bad_refs();
   void report_illegal_refs(bool fail_if_illegal_refs, PassManager& mgr);
   bool has_illegal_access(const DexMethod* input_method);
+  bool is_illegal_cross_store(const DexType* caller, const DexType* callee);
 
  private:
   const Scope& m_scope;
@@ -120,7 +124,6 @@ class Breadcrumbs {
                                   const char* desc,
                                   MethodInsns& allowed,
                                   std::ostream& ss);
-  bool is_illegal_cross_store(const DexType* caller, const DexType* callee);
   const DexType* check_type(const DexType* type);
   const DexType* check_method(const DexMethodRef* method);
   const DexType* check_anno(const DexAnnotationSet* anno);

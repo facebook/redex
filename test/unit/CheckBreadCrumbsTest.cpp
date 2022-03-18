@@ -216,6 +216,7 @@ TEST_F(CheckBreadcrumbsTest, AccessValidityTest) {
   Breadcrumbs bc(scope,
                  "",
                  stores,
+                 "",
                  /* reject_illegal_refs_root_store= */ false,
                  /* only_verify_primary_dex= */ false,
                  /* verify_type_hierarchies= */ false,
@@ -234,6 +235,101 @@ TEST_F(CheckBreadcrumbsTest, AccessValidityTest) {
            << "Bad field refs in method LB;.call_a_pri_field\n"
            << "\ta_pri_field\n\n";
   EXPECT_EQ(expected.str(), bc.get_methods_with_bad_refs());
+}
+
+
+TEST_F(CheckBreadcrumbsTest, CrossStoreValidityTest) {
+  std::vector<DexMethod*> empty_method_vec;
+  std::vector<DexField*> empty_field_vecc;
+
+  DexMetadata dm_root;
+  dm_root.set_id("classes");
+  std::vector<std::string> root_deps;
+  DexStore store_root(dm_root);
+  store_root.add_classes(
+      {create_class(DexType::make_type("LClass1;"), type::java_lang_Object(),
+                    empty_method_vec, empty_field_vecc)});
+
+  DexMetadata dm_A;
+  dm_A.set_id("A");
+  std::vector<std::string> A_deps;
+  dm_A.set_dependencies({"s_A_B", "s_A_B_C"});
+  DexStore store_A(dm_A);
+  store_A.add_classes(
+      {create_class(DexType::make_type("LClass2;"), type::java_lang_Object(),
+                    empty_method_vec, empty_field_vecc)});
+
+  DexMetadata dm_B;
+  dm_B.set_id("B");
+  dm_B.set_dependencies({"s_A_B", "s_A_B_C", "s_B_C"});
+  DexStore store_B(dm_B);
+  store_B.add_classes(
+      {create_class(DexType::make_type("LClass3;"), type::java_lang_Object(),
+                    empty_method_vec, empty_field_vecc)});
+
+  DexMetadata dm_C;
+  dm_C.set_id("C");
+  dm_C.set_dependencies({"s_A_B_C", "s_B_C"});
+  DexStore store_C(dm_C);
+  store_C.add_classes(
+      {create_class(DexType::make_type("LClass4;"), type::java_lang_Object(),
+                    empty_method_vec, empty_field_vecc)});
+
+  DexMetadata dm_s_A_B_C;
+  dm_s_A_B_C.set_id("s_A_B_C");
+  DexStore store_s_A_B_C(dm_s_A_B_C);
+  auto type_s_A_B_C = DexType::make_type("LSABC;");
+  store_s_A_B_C.add_classes(
+      {create_class(type_s_A_B_C, type::java_lang_Object(), empty_method_vec,
+                    empty_field_vecc)});
+
+  DexMetadata dm_s_A_B;
+  dm_s_A_B.set_id("s_A_B");
+  DexStore store_s_A_B(dm_s_A_B);
+  auto type_s_A_B = DexType::make_type("LSAB;");
+  store_s_A_B.add_classes({create_class(type_s_A_B, type_s_A_B_C,
+                                        empty_method_vec, empty_field_vecc)});
+
+  DexMetadata dm_s_B_C;
+  dm_s_B_C.set_id("s_B_C");
+  DexStore store_s_B_C(dm_s_B_C);
+  auto type_s_B_C = DexType::make_type("LSBC;");
+  store_s_B_C.add_classes({create_class(type_s_B_C, type_s_A_B,
+                                        empty_method_vec, empty_field_vecc)});
+
+  std::vector<DexStore> stores;
+  stores.emplace_back(std::move(store_root));
+  stores.emplace_back(std::move(store_A));
+  stores.emplace_back(std::move(store_B));
+  stores.emplace_back(std::move(store_C));
+  stores.emplace_back(std::move(store_s_A_B));
+  stores.emplace_back(std::move(store_s_A_B_C));
+  stores.emplace_back(std::move(store_s_B_C));
+
+  auto scope = build_class_scope(stores);
+  Breadcrumbs bc_shared(scope,
+                        "",
+                        stores,
+                        "s_",
+                        /* reject_illegal_refs_root_store= */ false,
+                        /* only_verify_primary_dex= */ false,
+                        /* verify_type_hierarchies= */ false,
+                        /* verify_proto_cross_dex= */ false,
+                        /* enforce_allowed_violations_file= */ false);
+  EXPECT_EQ(bc_shared.is_illegal_cross_store(type_s_A_B, type_s_A_B_C), false);
+  EXPECT_EQ(bc_shared.is_illegal_cross_store(type_s_B_C, type_s_A_B), true);
+
+  // standard behavior
+  Breadcrumbs bc_standard(scope,
+                          "",
+                          stores,
+                          "",
+                          /* reject_illegal_refs_root_store= */ false,
+                          /* only_verify_primary_dex= */ false,
+                          /* verify_type_hierarchies= */ false,
+                          /* verify_proto_cross_dex= */ false,
+                          /* enforce_allowed_violations_file= */ false);
+  EXPECT_EQ(bc_standard.is_illegal_cross_store(type_s_A_B, type_s_A_B_C), true);
 }
 
 } // namespace

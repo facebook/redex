@@ -269,13 +269,14 @@ void gather_unnessary_allows(const std::unordered_set<T>& expected_violations,
 Breadcrumbs::Breadcrumbs(const Scope& scope,
                          const std::string& allowed_violations_file_path,
                          DexStoresVector& stores,
+                         const std::string& shared_module_prefix,
                          bool reject_illegal_refs_root_store,
                          bool only_verify_primary_dex,
                          bool verify_type_hierarchies,
                          bool verify_proto_cross_dex,
                          bool enforce_allowed_violations_file)
     : m_scope(scope),
-      m_xstores(stores),
+      m_xstores(stores, shared_module_prefix),
       m_reject_illegal_refs_root_store(reject_illegal_refs_root_store),
       m_verify_type_hierarchies(verify_type_hierarchies),
       m_verify_proto_cross_dex(verify_proto_cross_dex),
@@ -919,9 +920,9 @@ void CheckBreadcrumbsPass::run_pass(DexStoresVector& stores,
                                     PassManager& mgr) {
   auto scope = build_class_scope(stores);
   Breadcrumbs bc(scope, allowed_violations_file_path, stores,
-                 reject_illegal_refs_root_store, only_verify_primary_dex,
-                 verify_type_hierarchies, verify_proto_cross_dex,
-                 enforce_allowed_violations_file);
+                 shared_module_prefix, reject_illegal_refs_root_store,
+                 only_verify_primary_dex, verify_type_hierarchies,
+                 verify_proto_cross_dex, enforce_allowed_violations_file);
   bc.check_breadcrumbs();
   bc.report_deleted_types(!fail, mgr);
   bc.report_illegal_refs(fail_if_illegal_refs, mgr);
