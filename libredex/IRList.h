@@ -559,6 +559,8 @@ class IRList {
   IRList::iterator erase_and_dispose(const IRList::iterator& it) {
     return m_list.erase_and_dispose(it, disposer);
   }
+  IRList::iterator insn_erase_and_dispose(const IRList::iterator& it);
+
   void clear_and_dispose() { m_list.clear_and_dispose(disposer); }
   void insn_clear_and_dispose();
 

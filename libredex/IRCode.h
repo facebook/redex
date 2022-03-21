@@ -313,7 +313,11 @@ class IRCode {
     return m_ir_list->erase(it);
   }
   IRList::iterator erase_and_dispose(const IRList::iterator& it) {
-    return m_ir_list->erase_and_dispose(it);
+    if (m_owns_insns) {
+      return m_ir_list->insn_erase_and_dispose(it);
+    } else {
+      return m_ir_list->erase_and_dispose(it);
+    }
   }
 
   IRList::iterator iterator_to(MethodItemEntry& mie) {

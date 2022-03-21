@@ -904,6 +904,15 @@ IRInstruction* move_result_pseudo_of(IRList::iterator it) {
 
 } // namespace ir_list
 
+IRList::iterator IRList::insn_erase_and_dispose(const IRList::iterator& it) {
+  return m_list.erase_and_dispose(it, [](auto* mie) {
+    if (mie->type == MFLOW_OPCODE) {
+      delete mie->insn;
+    }
+    delete mie;
+  });
+}
+
 void IRList::insn_clear_and_dispose() {
   m_list.clear_and_dispose([](auto* mie) {
     if (mie->type == MFLOW_OPCODE) {
