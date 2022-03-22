@@ -46,7 +46,17 @@ struct ClassSpecification {
   DexAccessFlags setAccessFlags = DexAccessFlags(0);
   DexAccessFlags unsetAccessFlags = DexAccessFlags(0);
   std::string annotationType;
-  std::vector<std::string> classNames;
+  struct ClassNameSpec {
+    std::string name;
+    bool negated{false};
+    ClassNameSpec(std::string name, bool neg)
+        : name(std::move(name)), negated(neg) {}
+
+    friend bool operator==(const ClassNameSpec& lhs, const ClassNameSpec& rhs) {
+      return lhs.negated == rhs.negated && lhs.name == rhs.name;
+    }
+  };
+  std::vector<ClassNameSpec> classNames;
   std::string extendsAnnotationType; // An optional annotation for the
                                      // extends/implements type.
   std::string extendsClassName; // An optional class specification which this
@@ -60,7 +70,10 @@ struct ClassSpecification {
   std::string class_names_str() const {
     std::string s;
     for (const auto& className : classNames) {
-      s += className;
+      if (className.negated) {
+        s += "!";
+      }
+      s += className.name;
     }
     return s;
   }

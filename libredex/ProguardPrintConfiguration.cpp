@@ -167,7 +167,8 @@ std::string keep_rules::show_keep(const KeepSpec& keep_rule, bool show_source) {
     }
   }
   for (std::size_t i = 0; i < class_spec.classNames.size(); i++) {
-    text << class_spec.classNames[i];
+    text << (class_spec.classNames[i].negated ? "!" : "")
+         << class_spec.classNames[i].name;
     text << (i == class_spec.classNames.size() - 1 ? " " : ", ");
   }
   if (!class_spec.extendsClassName.empty()) {

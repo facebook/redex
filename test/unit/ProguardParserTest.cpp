@@ -174,7 +174,9 @@ TEST(ProguardParserTest, keep) {
   ASSERT_EQ(config1.keep_rules.size(), 1);
   const auto* k = *config1.keep_rules.begin();
   ClassSpecification cs = k->class_spec;
-  EXPECT_THAT(cs.classNames, ::testing::ElementsAre("Alpha"));
+  EXPECT_THAT(cs.classNames,
+              ::testing::ElementsAre(
+                  ClassSpecification::ClassNameSpec("Alpha", false)));
   ASSERT_EQ(cs.setAccessFlags, 0);
   ASSERT_EQ(cs.unsetAccessFlags, 0);
   ASSERT_EQ(cs.extendsAnnotationType, "");
@@ -189,7 +191,9 @@ TEST(ProguardParserTest, keep) {
   ASSERT_EQ(config2.keep_rules.size(), 1);
   k = *config2.keep_rules.begin();
   cs = k->class_spec;
-  EXPECT_THAT(cs.classNames, ::testing::ElementsAre("Alpha.Beta"));
+  EXPECT_THAT(cs.classNames,
+              ::testing::ElementsAre(
+                  ClassSpecification::ClassNameSpec("Alpha.Beta", false)));
   ASSERT_EQ(cs.setAccessFlags, 0);
   ASSERT_EQ(cs.unsetAccessFlags, 0);
   ASSERT_EQ(cs.extendsAnnotationType, "");
@@ -206,7 +210,9 @@ TEST(ProguardParserTest, keep) {
   ASSERT_EQ(config3.keep_rules.size(), 1);
   k = *config3.keep_rules.begin();
   cs = k->class_spec;
-  EXPECT_THAT(cs.classNames, ::testing::ElementsAre("Alpha.Beta"));
+  EXPECT_THAT(cs.classNames,
+              ::testing::ElementsAre(
+                  ClassSpecification::ClassNameSpec("Alpha.Beta", false)));
   ASSERT_EQ(cs.setAccessFlags, 0);
   ASSERT_EQ(cs.unsetAccessFlags, 0);
   ASSERT_EQ(cs.extendsAnnotationType, "");
@@ -222,7 +228,9 @@ TEST(ProguardParserTest, keep) {
   ASSERT_EQ(config4.keep_rules.size(), 1);
   k = *config4.keep_rules.begin();
   cs = k->class_spec;
-  EXPECT_THAT(cs.classNames, ::testing::ElementsAre("Alpha.Beta"));
+  EXPECT_THAT(cs.classNames,
+              ::testing::ElementsAre(
+                  ClassSpecification::ClassNameSpec("Alpha.Beta", false)));
   ASSERT_EQ(cs.setAccessFlags, ACC_ENUM);
   ASSERT_EQ(cs.unsetAccessFlags, 0);
   ASSERT_EQ(cs.extendsAnnotationType, "");
@@ -237,7 +245,9 @@ TEST(ProguardParserTest, keep) {
   ASSERT_EQ(config5.keep_rules.size(), 1);
   k = *config5.keep_rules.begin();
   cs = k->class_spec;
-  EXPECT_THAT(cs.classNames, ::testing::ElementsAre("Alpha.Beta"));
+  EXPECT_THAT(cs.classNames,
+              ::testing::ElementsAre(
+                  ClassSpecification::ClassNameSpec("Alpha.Beta", false)));
   ASSERT_EQ(cs.setAccessFlags, ACC_INTERFACE);
   ASSERT_EQ(cs.unsetAccessFlags, 0);
   ASSERT_EQ(cs.extendsAnnotationType, "");
@@ -252,7 +262,9 @@ TEST(ProguardParserTest, keep) {
   ASSERT_EQ(config6.keep_rules.size(), 1);
   k = *config6.keep_rules.begin();
   cs = k->class_spec;
-  EXPECT_THAT(cs.classNames, ::testing::ElementsAre("Alpha.Beta"));
+  EXPECT_THAT(cs.classNames,
+              ::testing::ElementsAre(
+                  ClassSpecification::ClassNameSpec("Alpha.Beta", false)));
   ASSERT_EQ(cs.setAccessFlags, ACC_PUBLIC);
   ASSERT_EQ(cs.unsetAccessFlags, 0);
   ASSERT_EQ(cs.extendsAnnotationType, "");
@@ -267,7 +279,9 @@ TEST(ProguardParserTest, keep) {
   ASSERT_EQ(config7.keep_rules.size(), 1);
   k = *config7.keep_rules.begin();
   cs = k->class_spec;
-  EXPECT_THAT(cs.classNames, ::testing::ElementsAre("Alpha.Beta"));
+  EXPECT_THAT(cs.classNames,
+              ::testing::ElementsAre(
+                  ClassSpecification::ClassNameSpec("Alpha.Beta", false)));
   ASSERT_EQ(cs.setAccessFlags, 0);
   ASSERT_EQ(cs.unsetAccessFlags, ACC_PUBLIC);
   ASSERT_EQ(cs.extendsAnnotationType, "");
@@ -282,7 +296,9 @@ TEST(ProguardParserTest, keep) {
   ASSERT_EQ(config8.keep_rules.size(), 1);
   k = *config8.keep_rules.begin();
   cs = k->class_spec;
-  EXPECT_THAT(cs.classNames, ::testing::ElementsAre("Alpha.Beta"));
+  EXPECT_THAT(cs.classNames,
+              ::testing::ElementsAre(
+                  ClassSpecification::ClassNameSpec("Alpha.Beta", false)));
   ASSERT_EQ(cs.setAccessFlags, ACC_FINAL);
   ASSERT_EQ(cs.unsetAccessFlags, ACC_PUBLIC);
   ASSERT_EQ(cs.extendsAnnotationType, "");
@@ -297,7 +313,9 @@ TEST(ProguardParserTest, keep) {
   ASSERT_EQ(config9.keep_rules.size(), 1);
   k = *config9.keep_rules.begin();
   cs = k->class_spec;
-  EXPECT_THAT(cs.classNames, ::testing::ElementsAre("Alpha.Beta"));
+  EXPECT_THAT(cs.classNames,
+              ::testing::ElementsAre(
+                  ClassSpecification::ClassNameSpec("Alpha.Beta", false)));
   ASSERT_EQ(cs.setAccessFlags, ACC_ABSTRACT);
   ASSERT_EQ(cs.unsetAccessFlags, 0);
   ASSERT_EQ(cs.extendsAnnotationType, "");
@@ -315,7 +333,9 @@ TEST(ProguardParserTest, negated_keep) {
     proguard_parser::parse(ss, &config);
     ASSERT_EQ(config.keep_rules.size(), 1);
     auto cs = (*config.keep_rules.begin())->class_spec;
-    EXPECT_THAT(cs.classNames, ::testing::ElementsAre("Alpha.Beta"));
+    EXPECT_THAT(cs.classNames,
+                ::testing::ElementsAre(
+                    ClassSpecification::ClassNameSpec("Alpha.Beta", false)));
     EXPECT_EQ(cs.setAccessFlags, 0);
     EXPECT_EQ(cs.unsetAccessFlags, ACC_ENUM);
     EXPECT_EQ(cs.extendsAnnotationType, "");
@@ -331,7 +351,9 @@ TEST(ProguardParserTest, negated_keep) {
     proguard_parser::parse(ss, &config);
     ASSERT_EQ(config.keep_rules.size(), 1);
     auto cs = (*config.keep_rules.begin())->class_spec;
-    EXPECT_THAT(cs.classNames, ::testing::ElementsAre("Alpha.Beta"));
+    EXPECT_THAT(cs.classNames,
+                ::testing::ElementsAre(
+                    ClassSpecification::ClassNameSpec("Alpha.Beta", false)));
     EXPECT_EQ(cs.setAccessFlags, 0);
     EXPECT_EQ(cs.unsetAccessFlags, ACC_ENUM | ACC_PUBLIC);
     EXPECT_EQ(cs.extendsAnnotationType, "");
@@ -347,7 +369,9 @@ TEST(ProguardParserTest, negated_keep) {
     proguard_parser::parse(ss, &config);
     ASSERT_EQ(config.keep_rules.size(), 1);
     auto cs = (*config.keep_rules.begin())->class_spec;
-    EXPECT_THAT(cs.classNames, ::testing::ElementsAre("Alpha.Beta"));
+    EXPECT_THAT(cs.classNames,
+                ::testing::ElementsAre(
+                    ClassSpecification::ClassNameSpec("Alpha.Beta", false)));
     EXPECT_EQ(cs.setAccessFlags, 0);
     EXPECT_EQ(cs.unsetAccessFlags, ACC_INTERFACE);
     EXPECT_EQ(cs.extendsAnnotationType, "");
@@ -363,7 +387,9 @@ TEST(ProguardParserTest, negated_keep) {
     proguard_parser::parse(ss, &config);
     ASSERT_EQ(config.keep_rules.size(), 1);
     auto cs = (*config.keep_rules.begin())->class_spec;
-    EXPECT_THAT(cs.classNames, ::testing::ElementsAre("Alpha.Beta"));
+    EXPECT_THAT(cs.classNames,
+                ::testing::ElementsAre(
+                    ClassSpecification::ClassNameSpec("Alpha.Beta", false)));
     EXPECT_EQ(cs.setAccessFlags, 0);
     EXPECT_EQ(cs.unsetAccessFlags, ACC_ANNOTATION);
     EXPECT_EQ(cs.extendsAnnotationType, "");
@@ -380,7 +406,9 @@ TEST(ProguardParserTest, negated_keep) {
     proguard_parser::parse(ss, &config);
     ASSERT_EQ(config.keep_rules.size(), 1);
     auto cs = (*config.keep_rules.begin())->class_spec;
-    EXPECT_THAT(cs.classNames, ::testing::ElementsAre("Alpha.Beta"));
+    EXPECT_THAT(cs.classNames,
+                ::testing::ElementsAre(
+                    ClassSpecification::ClassNameSpec("Alpha.Beta", false)));
     EXPECT_EQ(cs.setAccessFlags, 0);
     EXPECT_EQ(cs.unsetAccessFlags, 0);
     EXPECT_EQ(cs.extendsAnnotationType, "");
@@ -485,7 +513,9 @@ TEST(ProguardParserTest, annotationclass) {
   ASSERT_TRUE(config.ok);
   ASSERT_EQ(config.keep_rules.size(), 1);
   const auto& k = *config.keep_rules.begin();
-  EXPECT_THAT(k->class_spec.classNames, ::testing::ElementsAre("*"));
+  EXPECT_THAT(
+      k->class_spec.classNames,
+      ::testing::ElementsAre(ClassSpecification::ClassNameSpec("*", false)));
   ASSERT_EQ(k->class_spec.setAccessFlags, ACC_ANNOTATION);
 }
 
@@ -510,7 +540,10 @@ TEST(ProguardParserTest, member_specification) {
     ASSERT_EQ(config.keep_rules.size(), 1);
     const auto& k = *config.keep_rules.begin();
     EXPECT_THAT(k->class_spec.classNames,
-                ::testing::ElementsAre("Alpha", "Beta", "Gamma"));
+                ::testing::ElementsAre(
+                    ClassSpecification::ClassNameSpec("Alpha", false),
+                    ClassSpecification::ClassNameSpec("Beta", false),
+                    ClassSpecification::ClassNameSpec("Gamma", false)));
   }
 
   {
@@ -788,10 +821,14 @@ TEST(ProguardParserTest, remove_blocklisted_rules) {
     auto it = config.keep_rules.begin();
     const auto& k1 = *it++;
     EXPECT_FALSE(k1->allowshrinking);
-    EXPECT_THAT(k1->class_spec.classNames, ::testing::ElementsAre("Foo"));
+    EXPECT_THAT(k1->class_spec.classNames,
+                ::testing::ElementsAre(
+                    ClassSpecification::ClassNameSpec("Foo", false)));
     const auto& k2 = *it++;
     EXPECT_FALSE(k2->allowshrinking);
-    EXPECT_THAT(k2->class_spec.classNames, ::testing::ElementsAre("Bar"));
+    EXPECT_THAT(k2->class_spec.classNames,
+                ::testing::ElementsAre(
+                    ClassSpecification::ClassNameSpec("Bar", false)));
   }
 
   {
@@ -846,7 +883,9 @@ TEST(ProguardParserTest, assumenosideeffects_with_value) {
     const auto& k1 = *it++;
     EXPECT_EQ(k1->class_spec.methodSpecifications[0].return_value.value_type,
               keep_rules::AssumeReturnValue::ValueNone);
-    EXPECT_THAT(k1->class_spec.classNames, ::testing::ElementsAre("Foo"));
+    EXPECT_THAT(k1->class_spec.classNames,
+                ::testing::ElementsAre(
+                    ClassSpecification::ClassNameSpec("Foo", false)));
 
     const auto& k2 = *it++;
     EXPECT_EQ(k2->class_spec.methodSpecifications[0].return_value.value_type,
@@ -867,18 +906,24 @@ TEST(ProguardParserTest, assumenosideeffects_with_value) {
               keep_rules::AssumeReturnValue::ValueNone);
     EXPECT_EQ(k2->class_spec.methodSpecifications[3].name, "foo4");
 
-    EXPECT_THAT(k2->class_spec.classNames, ::testing::ElementsAre("Foo"));
+    EXPECT_THAT(k2->class_spec.classNames,
+                ::testing::ElementsAre(
+                    ClassSpecification::ClassNameSpec("Foo", false)));
 
     const auto& k3 = *it++;
     EXPECT_EQ(k3->class_spec.methodSpecifications[0].return_value.value_type,
               keep_rules::AssumeReturnValue::ValueBool);
     EXPECT_EQ(k3->class_spec.methodSpecifications[0].return_value.value.v, 0);
     EXPECT_EQ(k3->class_spec.methodSpecifications[0].name, "foo");
-    EXPECT_THAT(k3->class_spec.classNames, ::testing::ElementsAre("Foo"));
+    EXPECT_THAT(k3->class_spec.classNames,
+                ::testing::ElementsAre(
+                    ClassSpecification::ClassNameSpec("Foo", false)));
     const auto& k4 = *it++;
     EXPECT_EQ(k4->class_spec.methodSpecifications[0].return_value.value_type,
               keep_rules::AssumeReturnValue::ValueNone);
-    EXPECT_THAT(k4->class_spec.classNames, ::testing::ElementsAre("Foo"));
+    EXPECT_THAT(k4->class_spec.classNames,
+                ::testing::ElementsAre(
+                    ClassSpecification::ClassNameSpec("Foo", false)));
   }
 }
 
@@ -912,5 +957,47 @@ TEST(ProguardParserTest, assumenosideeffects_with_field_value) {
     EXPECT_EQ(k2->class_spec.fieldSpecifications[1].return_value.value.v, 0);
     EXPECT_EQ(k2->class_spec.fieldSpecifications[2].return_value.value_type,
               keep_rules::AssumeReturnValue::ValueNone);
+  }
+}
+
+TEST(ProguardParserTest, class_spec_negated) {
+  {
+    ProguardConfiguration config1;
+    std::istringstream ss1("-keep class !Alpha, Beta");
+    proguard_parser::parse(ss1, &config1);
+    ASSERT_EQ(config1.keep_rules.size(), 1);
+    const auto* k = *config1.keep_rules.begin();
+    ClassSpecification cs = k->class_spec;
+    EXPECT_THAT(cs.classNames,
+                ::testing::ElementsAre(
+                    ClassSpecification::ClassNameSpec("Alpha", true),
+                    ClassSpecification::ClassNameSpec("Beta", false)));
+    EXPECT_EQ(cs.setAccessFlags, 0);
+    EXPECT_EQ(cs.unsetAccessFlags, 0);
+    EXPECT_EQ(cs.extendsAnnotationType, "");
+    EXPECT_EQ(cs.extendsClassName, "");
+    EXPECT_EQ(cs.annotationType, "");
+    EXPECT_EQ(cs.fieldSpecifications.size(), 0);
+    EXPECT_EQ(cs.methodSpecifications.size(), 0);
+  }
+
+  {
+    ProguardConfiguration config1;
+    std::istringstream ss1("-keep class Alpha.*, !Alpha.Beta");
+    proguard_parser::parse(ss1, &config1);
+    ASSERT_EQ(config1.keep_rules.size(), 1);
+    const auto* k = *config1.keep_rules.begin();
+    ClassSpecification cs = k->class_spec;
+    EXPECT_THAT(cs.classNames,
+                ::testing::ElementsAre(
+                    ClassSpecification::ClassNameSpec("Alpha.*", false),
+                    ClassSpecification::ClassNameSpec("Alpha.Beta", true)));
+    EXPECT_EQ(cs.setAccessFlags, 0);
+    EXPECT_EQ(cs.unsetAccessFlags, 0);
+    EXPECT_EQ(cs.extendsAnnotationType, "");
+    EXPECT_EQ(cs.extendsClassName, "");
+    EXPECT_EQ(cs.annotationType, "");
+    EXPECT_EQ(cs.fieldSpecifications.size(), 0);
+    EXPECT_EQ(cs.methodSpecifications.size(), 0);
   }
 }

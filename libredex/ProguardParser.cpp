@@ -768,27 +768,39 @@ std::string parse_class_name(TokenIndex& idx, bool* ok) {
   return name;
 }
 
-std::vector<std::string> parse_class_names(TokenIndex& idx, bool* ok) {
-  std::vector<std::string> class_names;
+void parse_class_names(
+    TokenIndex& idx,
+    bool* ok,
+    std::vector<ClassSpecification::ClassNameSpec>& class_names) {
+  bool negated{false};
+  auto maybe_negated = [&]() {
+    if (idx.type() == TokenType::notToken) {
+      negated = true;
+      idx.next();
+    }
+  };
+  auto push_to = [&](std::string&& s) {
+    class_names.emplace_back(s, negated);
+    negated = false;
+  };
 
-  auto class_name = parse_class_name(idx, ok);
+  maybe_negated();
+  push_to(parse_class_name(idx, ok));
   if (!*ok) {
-    return class_names;
+    return;
   }
-  class_names.push_back(class_name);
 
   // Maybe consume comma delimited list
   while (idx.type() == TokenType::comma) {
     // Consume comma
     idx.next();
 
-    class_name = parse_class_name(idx, ok);
+    maybe_negated();
+    push_to(parse_class_name(idx, ok));
     if (!*ok) {
-      return class_names;
+      return;
     }
-    class_names.push_back(class_name);
   }
-  return class_names;
 }
 
 ClassSpecification parse_class_specification(TokenIndex& idx, bool* ok) {
@@ -809,7 +821,7 @@ ClassSpecification parse_class_specification(TokenIndex& idx, bool* ok) {
     return class_spec;
   }
   // Parse the class name(s).
-  class_spec.classNames = parse_class_names(idx, ok);
+  parse_class_names(idx, ok, class_spec.classNames);
   if (!*ok) {
     return class_spec;
   }
