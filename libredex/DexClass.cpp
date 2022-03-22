@@ -136,7 +136,7 @@ uint32_t DexString::length() const {
   if (is_simple()) {
     return size();
   }
-  return length_of_utf8_string(c_str());
+  return m_utfsize;
 }
 
 int32_t DexString::java_hashcode() const {
