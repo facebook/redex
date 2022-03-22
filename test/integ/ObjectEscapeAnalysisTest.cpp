@@ -72,6 +72,20 @@ class ObjectEscapeAnalysisTest : public RedexIntegrationTest {
     }
     return assembler::to_s_expr(code);
   }
+
+  bool contains_invoke(const char* method_name) {
+    auto method = DexMethod::get_method(method_name);
+    always_assert(method);
+    always_assert(method->is_def());
+    auto code = method->as_def()->get_code();
+    always_assert(code);
+    for (auto& mie : InstructionIterable(code)) {
+      if (opcode::is_an_invoke(mie.insn->opcode())) {
+        return true;
+      }
+    }
+    return false;
+  }
 };
 
 TEST_F(ObjectEscapeAnalysisTest, reduceTo42A) {
@@ -235,4 +249,18 @@ TEST_F(ObjectEscapeAnalysisTest, reduceTo42WithMonitors) {
     )
 )");
   ASSERT_EQ(actual.str(), assembler::to_s_expr(expected.get()).str());
+}
+
+TEST_F(ObjectEscapeAnalysisTest, reduceTo42WithMultiples) {
+  run();
+
+  auto actual1_contains_invoke = contains_invoke(
+      "Lcom/facebook/redextest/"
+      "ObjectEscapeAnalysisTest;.reduceTo42WithMultiples1:(I)I");
+  ASSERT_FALSE(actual1_contains_invoke);
+
+  auto actual2_contains_invoke = contains_invoke(
+      "Lcom/facebook/redextest/"
+      "ObjectEscapeAnalysisTest;.reduceTo42WithMultiples2:(I)I");
+  ASSERT_FALSE(actual2_contains_invoke);
 }

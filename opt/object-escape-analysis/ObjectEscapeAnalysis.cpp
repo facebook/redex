@@ -51,8 +51,6 @@
  * Ideas for future work:
  * - Support check-cast instructions for singleton-allocations
  * - Support conditional branches over either zero or single allocations
- * - Refine the net-savings computation to not just make decisions per
- *   root-method, but across all root-methods
  * - Refine the tracing of object allocations in root methods to ignore
  *   unanchored object allocations
  * - Instead of inlining all invoked methods, consider transforming those which
@@ -542,43 +540,37 @@ size_t get_code_size(DexMethod* method) {
 struct Stats {
   std::atomic<size_t> total_savings{0};
   std::atomic<size_t> reduced_methods{0};
+  std::atomic<size_t> selected_reduced_methods{0};
   std::atomic<size_t> invokes_not_inlinable_callee_is_init{0};
   std::atomic<size_t> invokes_not_inlinable_inlining{0};
   std::atomic<size_t> invokes_not_inlinable_too_many_iterations{0};
   std::atomic<size_t> anchors_not_inlinable_inlining{0};
   std::atomic<size_t> stackify_returns_objects{0};
-  std::atomic<size_t> too_costly{0};
+  std::atomic<size_t> too_costly_multiple_conditional_classes{0};
+  std::atomic<size_t> too_costly_irreducible_classes{0};
+  std::atomic<size_t> too_costly_globally{0};
 };
 
-struct ReducedMethod {
-  DexMethod* method;
-  size_t initial_code_size;
-  std::unordered_map<DexMethod*, std::unordered_set<DexType*>> inlined_methods;
+// Data structure to derive local or accumulated global net savings
+struct NetSavings {
+  int local{0};
+  std::unordered_set<DexType*> classes;
+  std::unordered_set<DexMethod*> methods;
 
-  int get_net_savings(const std::unordered_map<DexType*, bool>& types) const {
-    auto final_code_size = get_code_size(method);
-    int net_savings = initial_code_size - final_code_size;
+  NetSavings& operator+=(const NetSavings& other) {
+    local += other.local;
+    classes.insert(other.classes.begin(), other.classes.end());
+    methods.insert(other.methods.begin(), other.methods.end());
+    return *this;
+  }
 
-    std::unordered_set<DexType*> remaining;
-    for (auto& [inlined_method, inlined_types] : inlined_methods) {
-      auto code_size = get_code_size(inlined_method);
-      net_savings += 4 + (inlined_method->get_proto()->is_void() ? 0 : 3);
-      bool any_remaining = false;
-      for (auto t : inlined_types) {
-        if (types.at(t) || !can_delete(inlined_method)) {
-          remaining.insert(t);
-          any_remaining = true;
-        }
-      }
-      if (!any_remaining) {
-        net_savings += 16 + code_size;
-      }
+  int get_value() const {
+    int net_savings{local};
+    for (auto method : methods) {
+      auto code_size = get_code_size(method);
+      net_savings += 20 + code_size;
     }
-
-    for (auto [type, multiples] : types) {
-      if (remaining.count(type) || multiples) {
-        continue;
-      }
+    for (auto type : classes) {
       auto cls = type_class(type);
       always_assert(cls);
       if (can_delete(cls) && !cls->get_clinit()) {
@@ -590,6 +582,53 @@ struct ReducedMethod {
         }
       }
     }
+    return net_savings;
+  }
+};
+
+// Data structure that represents a (cloned) reduced method, together with some
+// auxiliary information that allows to derive net savings.
+struct ReducedMethod {
+  DexMethod* method;
+  size_t initial_code_size;
+  std::unordered_map<DexMethod*, std::unordered_set<DexType*>> inlined_methods;
+
+  NetSavings get_net_savings(
+      const std::unordered_map<DexType*, bool>& types,
+      const std::unordered_set<DexType*>& irreducible_types,
+      NetSavings* conditional_net_savings) const {
+    auto final_code_size = get_code_size(method);
+    NetSavings net_savings;
+    net_savings.local = (int)initial_code_size - (int)final_code_size;
+
+    std::unordered_set<DexType*> remaining;
+    for (auto& [inlined_method, inlined_types] : inlined_methods) {
+      if (!can_delete(inlined_method)) {
+        remaining.insert(inlined_types.begin(), inlined_types.end());
+        continue;
+      }
+      bool any_remaining = false;
+      for (auto type : inlined_types) {
+        if (types.at(type) || irreducible_types.count(type)) {
+          remaining.insert(type);
+          any_remaining = true;
+        }
+      }
+      if (any_remaining) {
+        conditional_net_savings->methods.insert(inlined_method);
+        continue;
+      }
+      net_savings.methods.insert(inlined_method);
+    }
+
+    for (auto [type, multiples] : types) {
+      if (remaining.count(type) || multiples || irreducible_types.count(type)) {
+        conditional_net_savings->classes.insert(type);
+        continue;
+      }
+      net_savings.classes.insert(type);
+    }
+
     return net_savings;
   }
 };
@@ -890,6 +929,140 @@ class RootMethodReducer {
       m_inlined_methods;
 };
 
+// Reduce all root methods
+std::unordered_map<DexMethod*, ReducedMethod> compute_reduced_methods(
+    MultiMethodInliner& inliner,
+    const std::unordered_map<DexMethod*, MethodSummary>& method_summaries,
+    const std::unordered_map<DexMethod*, std::unordered_map<DexType*, bool>>&
+        root_methods,
+    std::unordered_set<DexType*>* irreducible_types,
+    Stats* stats) {
+  // We make a copy before we start reducing a root method, in case we run
+  // into issues, or negative net savings.
+  ConcurrentMap<DexMethod*, ReducedMethod> concurrent_reduced_methods;
+  ConcurrentSet<DexType*> concurrent_irreducible_types;
+  workqueue_run<std::pair<DexMethod*, std::unordered_map<DexType*, bool>>>(
+      [&](const std::pair<DexMethod*, std::unordered_map<DexType*, bool>>& p) {
+        auto& [method, types] = p;
+        const std::string& name_str = method->get_name()->str();
+        DexMethod* copy = DexMethod::make_method_from(
+            method,
+            method->get_class(),
+            DexString::make_string(name_str + "$redex_stack_allocated"));
+        RootMethodReducer root_method_reducer{
+            inliner, method_summaries,
+            stats,   method::is_init(method) || method::is_clinit(method),
+            copy,    types};
+        auto reduced_method = root_method_reducer.reduce();
+        if (!reduced_method) {
+          DexMethod::erase_method(copy);
+          DexMethod::delete_method_DO_NOT_USE(copy);
+          for (auto [type, multiples] : types) {
+            concurrent_irreducible_types.insert(type);
+          }
+          return;
+        }
+
+        concurrent_reduced_methods.emplace(method, std::move(*reduced_method));
+      },
+      root_methods);
+
+  irreducible_types->insert(concurrent_irreducible_types.begin(),
+                            concurrent_irreducible_types.end());
+  std::unordered_map<DexMethod*, ReducedMethod> res;
+  for (auto& [method, reduced_method] : concurrent_reduced_methods) {
+    res.emplace(method, std::move(reduced_method));
+  }
+  return res;
+}
+
+// Select all those reduced methods which will result in overall size savings,
+// either by looking at local net savings for just a single reduced method, or
+// by considering families of reduced methods that affect the same classes.
+std::unordered_set<DexMethod*> select_reduced_methods(
+    const std::unordered_map<DexMethod*, std::unordered_map<DexType*, bool>>&
+        root_methods,
+    const std::unordered_map<DexMethod*, ReducedMethod>& reduced_methods,
+    std::unordered_set<DexType*>* irreducible_types,
+    Stats* stats) {
+  // First, we are going to identify all reduced methods which will result in
+  // local net savings, considering just a single reduced method at a time.
+  // We'll also build up families of reduced methods for which can later do a
+  // global net savings analysis.
+
+  ConcurrentSet<DexType*> concurrent_irreducible_types;
+  ConcurrentSet<DexMethod*> concurrent_selected_reduced_methods;
+
+  // A family of reduced methods for which we'll look at the combined global net
+  // savings
+  struct Family {
+    std::unordered_map<DexMethod*, ReducedMethod> reduced_methods;
+    NetSavings global_net_savings;
+  };
+  ConcurrentMap<DexType*, Family> concurrent_families;
+  workqueue_run<std::pair<DexMethod*, ReducedMethod>>(
+      [&](const std::pair<DexMethod*, ReducedMethod>& p) {
+        auto method = p.first;
+        auto& reduced_method = p.second;
+        auto& types = root_methods.at(method);
+
+        NetSavings conditional_net_savings;
+        auto local_net_savings = reduced_method.get_net_savings(
+            types, *irreducible_types, &conditional_net_savings);
+        if (local_net_savings.get_value() >= 0) {
+          stats->total_savings += local_net_savings.get_value();
+          concurrent_selected_reduced_methods.insert(method);
+        } else {
+          auto& classes = conditional_net_savings.classes;
+          if (std::any_of(classes.begin(), classes.end(), [&](DexType* type) {
+                return irreducible_types->count(type);
+              })) {
+            stats->too_costly_irreducible_classes++;
+          } else if (classes.size() > 1) {
+            stats->too_costly_multiple_conditional_classes++;
+          } else if (classes.empty()) {
+            stats->too_costly_globally++;
+          } else {
+            always_assert(classes.size() == 1);
+            auto conditional_type = *classes.begin();
+            concurrent_families.update(
+                conditional_type, [&](auto*, Family& family, bool) {
+                  family.global_net_savings += local_net_savings;
+                  family.global_net_savings += conditional_net_savings;
+                  family.reduced_methods.emplace(method, reduced_method);
+                });
+            return;
+          }
+          for (auto [type, multiples] : types) {
+            concurrent_irreducible_types.insert(type);
+          }
+        }
+      },
+      reduced_methods);
+  irreducible_types->insert(concurrent_irreducible_types.begin(),
+                            concurrent_irreducible_types.end());
+
+  // Second, perform global net savings analysis
+  workqueue_run<std::pair<DexType*, Family>>(
+      [&](const std::pair<DexType*, Family>& p) {
+        auto& [type, family] = p;
+        if (irreducible_types->count(type) ||
+            family.global_net_savings.get_value() < 0) {
+          stats->too_costly_globally += family.reduced_methods.size();
+          return;
+        }
+        stats->total_savings += family.global_net_savings.get_value();
+        for (auto& [method, reduced_method] : family.reduced_methods) {
+          concurrent_selected_reduced_methods.insert(method);
+        }
+      },
+      concurrent_families);
+
+  return std::unordered_set<DexMethod*>(
+      concurrent_selected_reduced_methods.begin(),
+      concurrent_selected_reduced_methods.end());
+}
+
 void reduce(
     DexStoresVector& stores,
     const Scope& scope,
@@ -922,51 +1095,30 @@ void reduce(
                              inliner_config, min_sdk,
                              MultiMethodInlinerMode::None);
 
-  // We make a copy before we start reducing a root method, in case we run
-  // into issues, or negative net savings.
-  ConcurrentMap<DexMethod*, ReducedMethod> reduced_methods;
-  workqueue_run<std::pair<DexMethod*, std::unordered_map<DexType*, bool>>>(
-      [&](const std::pair<DexMethod*, std::unordered_map<DexType*, bool>>& p) {
-        auto& [method, types] = p;
-        const std::string& name_str = method->get_name()->str();
-        DexMethod* copy = DexMethod::make_method_from(
-            method,
-            method->get_class(),
-            DexString::make_string(name_str + "$redex_stack_allocated"));
-        RootMethodReducer root_method_reducer{
-            inliner, method_summaries,
-            stats,   method::is_init(method) || method::is_clinit(method),
-            copy,    types};
-        auto reduced_method = root_method_reducer.reduce();
-        if (!reduced_method) {
-          DexMethod::erase_method(copy);
-          DexMethod::delete_method_DO_NOT_USE(copy);
-          return;
-        }
+  // First, we compute all reduced methods
 
-        reduced_methods.emplace(method, std::move(*reduced_method));
-      },
-      root_methods);
+  std::unordered_set<DexType*> irreducible_types;
+  auto reduced_methods = compute_reduced_methods(
+      inliner, method_summaries, root_methods, &irreducible_types, stats);
+  stats->reduced_methods = reduced_methods.size();
 
+  // Second, we select reduced methods that will result in net savings
+  auto selected_reduced_methods = select_reduced_methods(
+      root_methods, reduced_methods, &irreducible_types, stats);
+  stats->selected_reduced_methods = selected_reduced_methods.size();
+
+  // Finally, we are going to apply those selected methods, and clean up all
+  // reduced method clones
   workqueue_run<std::pair<DexMethod*, ReducedMethod>>(
       [&](const std::pair<DexMethod*, ReducedMethod>& p) {
         auto& [method, reduced_method] = p;
-        auto& types = root_methods.at(method);
-
-        auto net_savings = reduced_method.get_net_savings(types);
-        if (net_savings >= 0) {
-          stats->total_savings += net_savings;
+        if (selected_reduced_methods.count(method)) {
           method->set_code(reduced_method.method->release_code());
-        } else {
-          stats->too_costly++;
         }
-
         DexMethod::erase_method(reduced_method.method);
         DexMethod::delete_method_DO_NOT_USE(reduced_method.method);
       },
       reduced_methods);
-
-  stats->reduced_methods = reduced_methods.size();
 }
 } // namespace
 
@@ -1002,23 +1154,30 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
 
   TRACE(OEA, 1, "[object escape analysis] total savings: %zu",
         (size_t)stats.total_savings);
-  TRACE(
-      OEA, 1,
-      "[object escape analysis] %zu root methods lead to %zu reduced methods "
-      "and %zu anchors not inlinable because inlining failed, %zu invokes not "
-      "inlinable because callee is init, %zu invokes not inlinable because "
-      "inlining failed, %zu invokes not inlinable after too many iterations, "
-      "%zu stackify returned objects, %zu too costly",
-      root_methods.size(), (size_t)stats.reduced_methods,
-      (size_t)stats.anchors_not_inlinable_inlining,
-      (size_t)stats.invokes_not_inlinable_callee_is_init,
-      (size_t)stats.invokes_not_inlinable_inlining,
-      (size_t)stats.invokes_not_inlinable_too_many_iterations,
-      (size_t)stats.stackify_returns_objects, (size_t)stats.too_costly);
+  TRACE(OEA, 1,
+        "[object escape analysis] %zu root methods lead to %zu reduced methods "
+        "of which %zu were selected and %zu anchors not inlinable because "
+        "inlining failed, %zu invokes not inlinable because callee is init, "
+        "%zu invokes not inlinable because inlining failed, %zu invokes not "
+        "inlinable after too many iterations, %zu stackify returned objects, "
+        "%zu too costly with irreducible classes, %zu too costly with multiple "
+        "conditional classes, %zu too costly globally",
+        root_methods.size(), (size_t)stats.reduced_methods,
+        (size_t)stats.selected_reduced_methods,
+        (size_t)stats.anchors_not_inlinable_inlining,
+        (size_t)stats.invokes_not_inlinable_callee_is_init,
+        (size_t)stats.invokes_not_inlinable_inlining,
+        (size_t)stats.invokes_not_inlinable_too_many_iterations,
+        (size_t)stats.stackify_returns_objects,
+        (size_t)stats.too_costly_irreducible_classes,
+        (size_t)stats.too_costly_multiple_conditional_classes,
+        (size_t)stats.too_costly_globally);
 
   mgr.incr_metric("total_savings", stats.total_savings);
   mgr.incr_metric("root_methods", root_methods.size());
   mgr.incr_metric("reduced_methods", (size_t)stats.reduced_methods);
+  mgr.incr_metric("selected_reduced_methods",
+                  (size_t)stats.selected_reduced_methods);
   mgr.incr_metric("root_method_anchors_not_inlinable_inlining",
                   (size_t)stats.anchors_not_inlinable_inlining);
   mgr.incr_metric("root_method_invokes_not_inlinable_callee_is_init",
@@ -1029,7 +1188,12 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
                   (size_t)stats.invokes_not_inlinable_too_many_iterations);
   mgr.incr_metric("root_method_stackify_returns_objects",
                   (size_t)stats.stackify_returns_objects);
-  mgr.incr_metric("root_method_too_costly", (size_t)stats.too_costly);
+  mgr.incr_metric("root_method_too_costly_globally",
+                  (size_t)stats.too_costly_globally);
+  mgr.incr_metric("root_method_too_costly_multiple_conditional_classes",
+                  (size_t)stats.too_costly_multiple_conditional_classes);
+  mgr.incr_metric("root_method_too_costly_irreducible_classes",
+                  (size_t)stats.too_costly_irreducible_classes);
 }
 
 static ObjectEscapeAnalysisPass s_pass;

@@ -196,4 +196,36 @@ public class ObjectEscapeAnalysisTest {
       return l.getX();
     }
   }
+
+
+  static class M {
+    int x;
+    public M(int x) {
+      this.x = x;
+    }
+    public void add(int other) {
+      this.x += this.x * other;
+      this.x += this.x * other;
+      this.x += this.x * other;
+    }
+    public int get() {
+      return this.x;
+    }
+  }
+
+  public static int reduceTo42WithMultiples1(int x) {
+    M m = new M(x);
+    m.add(1);
+    m.add(2);
+    m.add(3);
+    return m.get();
+  }
+
+  public static int reduceTo42WithMultiples2(int x) {
+    M m = new M(x);
+    m.add(1);
+    m.add(2);
+    m.add(3);
+    return m.get();
+  }
 }
