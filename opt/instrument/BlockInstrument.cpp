@@ -495,7 +495,8 @@ DexMethod* load_onMethodBegin(const DexClass& cls,
 auto insert_prologue_insts(cfg::ControlFlowGraph& cfg,
                            DexMethod* onMethodBegin,
                            const size_t num_vectors,
-                           const size_t method_offset) {
+                           const size_t method_offset,
+                           std::vector<BlockInfo>& blocks) {
   std::vector<reg_t> reg_vectors(num_vectors);
   std::vector<IRInstruction*> prologues(num_vectors + 2);
 
@@ -521,11 +522,46 @@ auto insert_prologue_insts(cfg::ControlFlowGraph& cfg,
   invoke_inst->set_src(0, reg_method_offset);
   prologues.at(num_vectors + 1) = invoke_inst;
 
+  auto eb = cfg.entry_block();
+  IRInstruction* eb_insn = nullptr;
+  if (!blocks.empty()) {
+    auto& b = blocks.front();
+    if (b.block == eb && b.it != b.block->end()) {
+      eb_insn = b.it->insn;
+    }
+  }
+
   // Insert all prologue opcodes to the entry block (right after param loading).
   cfg.entry_block()->insert_before(
       cfg.entry_block()->to_cfg_instruction_iterator(
           cfg.entry_block()->get_first_non_param_loading_insn()),
       prologues);
+
+  // If the entry block was to be instrumented, the iterator is invalid now.
+  if (eb_insn != nullptr) {
+    auto& b = blocks.front();
+    auto it = cfg.find_insn(eb_insn);
+    b.block = it.block();
+    b.it = it.unwrap();
+  }
+
+  if (slow_invariants_debug) {
+    for (const auto& b : blocks) {
+      if (b.block == eb) {
+        continue;
+      }
+      auto is_in_block = [&]() {
+        for (auto it = b.block->begin(); it != b.block->end(); ++it) {
+          if (it == b.it) {
+            return true;
+          }
+        }
+        return false;
+      };
+      assert_log(b.block->end() == b.it || is_in_block(), "%s\n%s",
+                 SHOW(b.block), SHOW(*b.it));
+    }
+  }
 
   return std::make_tuple(reg_vectors, reg_method_offset);
 }
@@ -980,8 +1016,8 @@ MethodInfo instrument_basic_blocks(IRCode& code,
       std::ceil(num_to_instrument / double(BIT_VECTOR_SIZE));
   std::vector<reg_t> reg_vectors;
   reg_t reg_method_offset;
-  std::tie(reg_vectors, reg_method_offset) =
-      insert_prologue_insts(cfg, onMethodBegin, num_vectors, method_offset);
+  std::tie(reg_vectors, reg_method_offset) = insert_prologue_insts(
+      cfg, onMethodBegin, num_vectors, method_offset, blocks);
   const size_t after_prologue_num_non_entry_blocks = cfg.blocks().size() - 1;
 
   // Step 4: Insert block coverage update instructions to each blocks.
