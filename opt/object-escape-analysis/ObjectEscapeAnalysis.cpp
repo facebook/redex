@@ -67,6 +67,7 @@
 #include "ObjectEscapeAnalysis.h"
 
 #include <algorithm>
+#include <optional>
 
 #include "BaseIRAnalyzer.h"
 #include "CFGMutation.h"
@@ -549,6 +550,50 @@ struct Stats {
   std::atomic<size_t> too_costly{0};
 };
 
+struct ReducedMethod {
+  DexMethod* method;
+  size_t initial_code_size;
+  std::unordered_map<DexMethod*, std::unordered_set<DexType*>> inlined_methods;
+
+  int get_net_savings(const std::unordered_map<DexType*, bool>& types) const {
+    auto final_code_size = get_code_size(method);
+    int net_savings = initial_code_size - final_code_size;
+
+    std::unordered_set<DexType*> remaining;
+    for (auto& [inlined_method, inlined_types] : inlined_methods) {
+      auto code_size = get_code_size(inlined_method);
+      net_savings += 4 + (inlined_method->get_proto()->is_void() ? 0 : 3);
+      bool any_remaining = false;
+      for (auto t : inlined_types) {
+        if (types.at(t) || !can_delete(inlined_method)) {
+          remaining.insert(t);
+          any_remaining = true;
+        }
+      }
+      if (!any_remaining) {
+        net_savings += 16 + code_size;
+      }
+    }
+
+    for (auto [type, multiples] : types) {
+      if (remaining.count(type) || multiples) {
+        continue;
+      }
+      auto cls = type_class(type);
+      always_assert(cls);
+      if (can_delete(cls) && !cls->get_clinit()) {
+        net_savings += 48;
+      }
+      for (auto field : cls->get_ifields()) {
+        if (can_delete(field)) {
+          net_savings += 8;
+        }
+      }
+    }
+    return net_savings;
+  }
+};
+
 class RootMethodReducer {
  private:
   MultiMethodInliner& m_inliner;
@@ -573,33 +618,23 @@ class RootMethodReducer {
         m_method(method),
         m_types(types) {}
 
-  bool reduce() {
+  std::optional<ReducedMethod> reduce() {
     shrink();
     auto initial_code_size{get_code_size(m_method)};
 
     if (!inline_anchors() || !inline_invokes()) {
-      return false;
+      return std::nullopt;
     }
 
     while (auto* insn = find_inlinable_new_instance()) {
       if (!stackify(insn)) {
-        return false;
+        return std::nullopt;
       }
     }
 
     shrink();
-    auto net_savings = get_net_savings(initial_code_size);
-    if (net_savings < 0) {
-      m_stats->too_costly++;
-      return false;
-    }
-
-    if (net_savings >= 0) {
-      m_stats->total_savings += net_savings;
-      return true;
-    }
-
-    return false;
+    return (ReducedMethod){m_method, initial_code_size,
+                           std::move(m_inlined_methods)};
   }
 
  private:
@@ -851,44 +886,6 @@ class RootMethodReducer {
     return true;
   }
 
-  int get_net_savings(size_t initial_code_size) {
-    auto final_code_size = get_code_size(m_method);
-    int net_savings = initial_code_size - final_code_size;
-
-    std::unordered_set<DexType*> remaining;
-    for (auto& [inlined_method, types] : m_inlined_methods) {
-      auto code_size = get_code_size(inlined_method);
-      net_savings += 4 + (inlined_method->get_proto()->is_void() ? 0 : 3);
-      bool any_remaining = false;
-      for (auto t : types) {
-        if (m_types.at(t) || !can_delete(inlined_method)) {
-          remaining.insert(t);
-          any_remaining = true;
-        }
-      }
-      if (!any_remaining) {
-        net_savings += 16 + code_size;
-      }
-    }
-
-    for (auto [type, multiples] : m_types) {
-      if (remaining.count(type) || multiples) {
-        continue;
-      }
-      auto cls = type_class(type);
-      always_assert(cls);
-      if (can_delete(cls) && !cls->get_clinit()) {
-        net_savings += 48;
-      }
-      for (auto field : cls->get_ifields()) {
-        if (can_delete(field)) {
-          net_savings += 8;
-        }
-      }
-    }
-    return net_savings;
-  }
-
   std::unordered_map<DexMethod*, std::unordered_set<DexType*>>
       m_inlined_methods;
 };
@@ -925,9 +922,9 @@ void reduce(
                              inliner_config, min_sdk,
                              MultiMethodInlinerMode::None);
 
-  // We make a copy before we start reducing a root method, in case we run into
-  // issues, or negative net savings.
-  ConcurrentMap<DexMethod*, DexMethod*> reduced_methods;
+  // We make a copy before we start reducing a root method, in case we run
+  // into issues, or negative net savings.
+  ConcurrentMap<DexMethod*, ReducedMethod> reduced_methods;
   workqueue_run<std::pair<DexMethod*, std::unordered_map<DexType*, bool>>>(
       [&](const std::pair<DexMethod*, std::unordered_map<DexType*, bool>>& p) {
         auto& [method, types] = p;
@@ -940,21 +937,32 @@ void reduce(
             inliner, method_summaries,
             stats,   method::is_init(method) || method::is_clinit(method),
             copy,    types};
-        if (root_method_reducer.reduce()) {
-          reduced_methods.emplace(method, copy);
-        } else {
+        auto reduced_method = root_method_reducer.reduce();
+        if (!reduced_method) {
           DexMethod::erase_method(copy);
           DexMethod::delete_method_DO_NOT_USE(copy);
+          return;
         }
+
+        reduced_methods.emplace(method, std::move(*reduced_method));
       },
       root_methods);
 
-  workqueue_run<std::pair<DexMethod*, DexMethod*>>(
-      [&](const std::pair<DexMethod*, DexMethod*>& p) {
-        auto& [method, copy] = p;
-        method->set_code(copy->release_code());
-        DexMethod::erase_method(copy);
-        DexMethod::delete_method_DO_NOT_USE(copy);
+  workqueue_run<std::pair<DexMethod*, ReducedMethod>>(
+      [&](const std::pair<DexMethod*, ReducedMethod>& p) {
+        auto& [method, reduced_method] = p;
+        auto& types = root_methods.at(method);
+
+        auto net_savings = reduced_method.get_net_savings(types);
+        if (net_savings >= 0) {
+          stats->total_savings += net_savings;
+          method->set_code(reduced_method.method->release_code());
+        } else {
+          stats->too_costly++;
+        }
+
+        DexMethod::erase_method(reduced_method.method);
+        DexMethod::delete_method_DO_NOT_USE(reduced_method.method);
       },
       reduced_methods);
 
