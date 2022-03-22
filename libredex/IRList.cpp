@@ -141,6 +141,13 @@ MethodItemEntry::~MethodItemEntry() {
   }
 }
 
+void MethodItemEntry::replace_ir_with_dex(DexInstruction* dex_insn) {
+  always_assert(type == MFLOW_OPCODE);
+  delete this->insn;
+  this->type = MFLOW_DEX_OPCODE;
+  this->dex_insn = dex_insn;
+}
+
 void MethodItemEntry::gather_strings(
     std::vector<const DexString*>& lstring) const {
   switch (type) {

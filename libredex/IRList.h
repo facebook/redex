@@ -322,11 +322,7 @@ struct MethodItemEntry {
    * This should only ever be used by the instruction lowering step. Do NOT use
    * it in passes!
    */
-  void replace_ir_with_dex(DexInstruction* dex_insn) {
-    always_assert(type == MFLOW_OPCODE);
-    this->type = MFLOW_DEX_OPCODE;
-    this->dex_insn = dex_insn;
-  }
+  void replace_ir_with_dex(DexInstruction* dex_insn);
 
   void gather_strings(std::vector<const DexString*>& lstring) const;
   void gather_types(std::vector<DexType*>& ltype) const;
