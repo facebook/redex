@@ -893,7 +893,26 @@ void redex_frontend(ConfigFiles& conf, /* input */
     parser_stats +=
         keep_rules::proguard_parser::parse_file(pg_config_path, &pg_config);
   }
-  keep_rules::proguard_parser::remove_blocklisted_rules(&pg_config);
+
+  size_t blocklisted_rules{0};
+  {
+    // We cannot use GlobalConfig here, it is too early.
+    ProguardConfig pg_conf{};
+    if (conf.get_json_config().contains("proguard")) {
+      pg_conf.parse_config(
+          JsonWrapper(conf.get_json_config().get("proguard", Json::Value())));
+    }
+    for (const auto& block_rules : pg_conf.blocklist) {
+      blocklisted_rules +=
+          keep_rules::proguard_parser::remove_blocklisted_rules(block_rules,
+                                                                &pg_config);
+    }
+    if (!pg_conf.disable_default_blocklist) {
+      blocklisted_rules +=
+          keep_rules::proguard_parser::remove_default_blocklisted_rules(
+              &pg_config);
+    }
+  }
 
   {
     Json::Value d;
@@ -901,6 +920,7 @@ void redex_frontend(ConfigFiles& conf, /* input */
     d["unknown_tokens"] = parser_stats.unknown_tokens;
     d["unimplemented"] = parser_stats.unimplemented;
     d["ok"] = (uint64_t)(pg_config.ok ? 1 : 0);
+    d["blocklisted_rules"] = blocklisted_rules;
     stats["proguard"] = d;
   }
 

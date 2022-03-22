@@ -114,6 +114,19 @@ struct MethodProfileOrderingConfig : public Configurable {
   float second_min_appear_percent{10.0f};
 };
 
+struct ProguardConfig : public Configurable {
+  void bind_config() override;
+
+  std::string get_config_name() override { return "ProguardConfig"; }
+  std::string get_config_doc() override {
+    return "This configuration holds values that switch proguard parsing "
+           "behavior.";
+  }
+
+  std::vector<std::string> blocklist;
+  bool disable_default_blocklist{false};
+};
+
 class GlobalConfig;
 
 using BindOperationFn = std::function<std::unique_ptr<Configurable>(

@@ -782,7 +782,7 @@ TEST(ProguardParserTest, remove_blocklisted_rules) {
     proguard_parser::parse(ss, &config);
     ASSERT_TRUE(config.ok);
     EXPECT_EQ(config.keep_rules.size(), 4);
-    proguard_parser::remove_blocklisted_rules(&config);
+    proguard_parser::remove_default_blocklisted_rules(&config);
     EXPECT_EQ(config.keep_rules.size(), 2);
     // Check that we preserve the contents / order of the remaining rules.
     auto it = config.keep_rules.begin();
@@ -803,8 +803,24 @@ TEST(ProguardParserTest, remove_blocklisted_rules) {
     proguard_parser::parse(ss, &config);
     ASSERT_TRUE(config.ok);
     EXPECT_EQ(config.keep_rules.size(), 2);
-    proguard_parser::remove_blocklisted_rules(&config);
+    proguard_parser::remove_default_blocklisted_rules(&config);
     EXPECT_EQ(config.keep_rules.size(), 2);
+  }
+
+  {
+    ProguardConfiguration config;
+    std::istringstream ss(R"(
+    -keep class Foo {}
+    -keep class Bar {}
+)");
+    proguard_parser::parse(ss, &config);
+    ASSERT_TRUE(config.ok);
+    EXPECT_EQ(config.keep_rules.size(), 2);
+    const char* remove = R"(
+    -keep class Foo {}
+)";
+    proguard_parser::remove_blocklisted_rules(remove, &config);
+    EXPECT_EQ(config.keep_rules.size(), 1);
   }
 }
 

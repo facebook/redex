@@ -1214,7 +1214,7 @@ Stats parse_file(const std::string& filename,
   return ret;
 }
 
-void remove_blocklisted_rules(ProguardConfiguration* pg_config) {
+size_t remove_default_blocklisted_rules(ProguardConfiguration* pg_config) {
   // TODO: Make the set of excluded rules configurable.
   auto blocklisted_rules = R"(
   # The proguard-android-optimize.txt file that is bundled with the Android SDK
@@ -1233,17 +1233,24 @@ void remove_blocklisted_rules(ProguardConfiguration* pg_config) {
   # See keepclassnames.pro, or T1890454.
   -keepnames class *
 )";
-  // std::stringstream ss(blocklisted_rules);
+  return remove_blocklisted_rules(blocklisted_rules, pg_config);
+}
+
+size_t remove_blocklisted_rules(const std::string& rules,
+                                ProguardConfiguration* pg_config) {
   ProguardConfiguration pg_config_blocklist;
-  parse(blocklisted_rules, &pg_config_blocklist, "<internal blocklist>");
+  parse(rules, &pg_config_blocklist, "<internal blocklist>");
+  size_t removed{0};
   pg_config->keep_rules.erase_if([&](const KeepSpec& ks) {
     for (const auto& blocklisted_ks : pg_config_blocklist.keep_rules) {
       if (ks == *blocklisted_ks) {
+        removed++;
         return true;
       }
     }
     return false;
   });
+  return removed;
 }
 
 } // namespace proguard_parser
