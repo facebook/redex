@@ -264,3 +264,38 @@ TEST_F(ObjectEscapeAnalysisTest, reduceTo42WithMultiples) {
       "ObjectEscapeAnalysisTest;.reduceTo42WithMultiples2:(I)I");
   ASSERT_FALSE(actual2_contains_invoke);
 }
+
+TEST_F(ObjectEscapeAnalysisTest, reduceTo42WithExpandedCtor) {
+  run();
+
+  auto actual = get_s_expr(
+      "Lcom/facebook/redextest/"
+      "ObjectEscapeAnalysisTest;.reduceTo42WithExpandedCtor:()Lcom/facebook/"
+      "redextest/ObjectEscapeAnalysisTest$N;");
+  auto expected = assembler::ircode_from_string(R"(
+   (
+      (const v3 42)
+      (new-instance "Lcom/facebook/redextest/ObjectEscapeAnalysisTest$N;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0 v3) "Lcom/facebook/redextest/ObjectEscapeAnalysisTest$N;.<init>:(I)V")
+      (return-object v0)
+    )
+)");
+  ASSERT_EQ(actual.str(), assembler::to_s_expr(expected.get()).str());
+
+  auto actual_expanded_ctor = get_s_expr(
+      "Lcom/facebook/redextest/ObjectEscapeAnalysisTest$N;.<init>:(I)V");
+  auto expected_expanded_ctor = assembler::ircode_from_string(R"(
+   (
+      (load-param-object v1)
+      (load-param v3)
+      (const v2 0)
+      (invoke-direct (v1) "Ljava/lang/Object;.<init>:()V")
+      (move v0 v3)
+      (iput v0 v1 "Lcom/facebook/redextest/ObjectEscapeAnalysisTest$N;.x:I")
+      (return-void)
+    )
+)");
+  ASSERT_EQ(actual_expanded_ctor.str(),
+            assembler::to_s_expr(expected_expanded_ctor.get()).str());
+}

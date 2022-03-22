@@ -57,9 +57,8 @@
  *   do not mutate or compare the allocated object as follows: instead of
  *   passing in the allocated object via an argument, pass in all read fields
  *   are passed in as separate arguments. This could reduce the size increase
- *   due to multiple inlined method body copies, and it could enable continuing
- *   when the allocated object is passed into another constructor, where we
- *   currently give up.
+ *   due to multiple inlined method body copies. We already do something similar
+ *   for constructors.
  */
 
 #include "ObjectEscapeAnalysis.h"
@@ -67,6 +66,7 @@
 #include <algorithm>
 #include <optional>
 
+#include "ApiLevelChecker.h"
 #include "BaseIRAnalyzer.h"
 #include "CFGMutation.h"
 #include "ConfigFiles.h"
@@ -86,6 +86,7 @@
 #include "PatriciaTreeSetAbstractDomain.h"
 #include "Resolver.h"
 #include "Show.h"
+#include "StringBuilder.h"
 #include "Walkers.h"
 
 using namespace sparta;
@@ -541,7 +542,10 @@ struct Stats {
   std::atomic<size_t> total_savings{0};
   std::atomic<size_t> reduced_methods{0};
   std::atomic<size_t> selected_reduced_methods{0};
-  std::atomic<size_t> invokes_not_inlinable_callee_is_init{0};
+  std::atomic<size_t> invokes_not_inlinable_callee_is_init_unexpandable{0};
+  std::atomic<size_t> invokes_not_inlinable_callee_inconcrete{0};
+  std::atomic<size_t>
+      invokes_not_inlinable_callee_is_init_too_many_params_to_expand{0};
   std::atomic<size_t> invokes_not_inlinable_inlining{0};
   std::atomic<size_t> invokes_not_inlinable_too_many_iterations{0};
   std::atomic<size_t> anchors_not_inlinable_inlining{0};
@@ -549,6 +553,334 @@ struct Stats {
   std::atomic<size_t> too_costly_multiple_conditional_classes{0};
   std::atomic<size_t> too_costly_irreducible_classes{0};
   std::atomic<size_t> too_costly_globally{0};
+  std::atomic<size_t> expanded_ctors{0};
+};
+
+// Predict what a method's deobfuscated name would be.
+std::string show_deobfuscated(const DexType* type,
+                              const DexString* name,
+                              const DexProto* proto) {
+  string_builders::StaticStringBuilder<5> b;
+  b << show_deobfuscated(type) << "." << show(name) << ":"
+    << show_deobfuscated(proto);
+  return b.str();
+}
+
+// Helper class to deal with (otherwise uninlinable) constructors that take a
+// (newly created) object, and only use it to read ifields. For those
+// constructors, we identify when we can replace the (newly created) object
+// parameter with a sequence of field value parameters.
+class ExpandableConstructorParams {
+ private:
+  // For each class, and each constructor, and each parameter, we record the
+  // (ordered) list of ifields that are read from the parameter, if the
+  // parameter doesn't otherwise escape, and the implied expanded constructor
+  // arg list is not in conflict with any other constructor arg list.
+  using ClassInfo = std::unordered_map<
+      DexMethod*,
+      std::unordered_map<param_index_t, std::vector<DexField*>>>;
+  mutable ConcurrentMap<DexType*, std::shared_ptr<ClassInfo>> m_class_infos;
+  // For each requested expanded constructor method ref, we remember the
+  // original and ctor, and which parameter was expanded.
+  using MethodParam = std::pair<DexMethod*, param_index_t>;
+  mutable std::unordered_map<DexMethodRef*, MethodParam> m_candidates;
+  mutable std::mutex m_candidates_mutex;
+  // We keep track of deobfuscated ctor names already in use before the pass, to
+  // avoid reusing them.
+  std::unordered_set<const DexString*> m_deobfuscated_ctor_names;
+
+  static std::vector<DexType*> get_expanded_args_vector(
+      DexMethod* ctor,
+      param_index_t param_index,
+      const std::vector<DexField*>& fields) {
+    always_assert(param_index > 0);
+    auto args = ctor->get_proto()->get_args();
+    always_assert(param_index <= args->size());
+    std::vector<DexType*> args_vector;
+    args_vector.reserve(args->size() - 1 + fields.size());
+    for (param_index_t i = 0; i < args->size(); i++) {
+      if (i != param_index - 1) {
+        args_vector.push_back(args->at(i));
+        continue;
+      }
+      for (auto f : fields) {
+        args_vector.push_back(f->get_type());
+      }
+    }
+    return args_vector;
+  }
+
+  // Get or create the class-info for a given type.
+  ClassInfo* get_class_info(DexType* type) const {
+    auto res = m_class_infos.get(type, nullptr);
+    if (res) {
+      return res.get();
+    }
+    res = std::make_shared<ClassInfo>();
+    std::set<std::vector<DexType*>> args_vectors;
+    auto cls = type_class(type);
+    if (cls) {
+      // First, collect all of the (guaranteed to be distinct) args of the
+      // existing constructors.
+      for (auto* ctor : cls->get_ctors()) {
+        auto args = ctor->get_proto()->get_args();
+        std::vector<DexType*> args_vector(args->begin(), args->end());
+        auto inserted = args_vectors.insert(std::move(args_vector)).second;
+        always_assert(inserted);
+      }
+      // Second, for each ctor, and each (non-first) parameter that is only used
+      // in igets, compute the expanded constructor args and record them if they
+      // don't create a conflict.
+      for (auto* ctor : cls->get_ctors()) {
+        auto code = ctor->get_code();
+        if (!code || ctor->rstate.no_optimizations()) {
+          continue;
+        }
+        live_range::MoveAwareChains chains(code->cfg());
+        auto du_chains = chains.get_def_use_chains();
+        param_index_t param_index{1};
+        auto ii = code->cfg().get_param_instructions();
+        for (auto it = std::next(ii.begin()); it != ii.end();
+             it++, param_index++) {
+          bool expandable{true};
+          std::vector<DexField*> fields;
+          for (auto& use : du_chains[it->insn]) {
+            if (opcode::is_an_iget(use.insn->opcode())) {
+              auto* field =
+                  resolve_field(use.insn->get_field(), FieldSearch::Instance);
+              if (field) {
+                fields.push_back(field);
+                continue;
+              }
+            }
+            expandable = false;
+            break;
+          }
+          if (!expandable) {
+            continue;
+          }
+          std::sort(fields.begin(), fields.end(), compare_dexfields);
+          // remove duplicates
+          fields.erase(std::unique(fields.begin(), fields.end()), fields.end());
+          auto expanded_args_vector =
+              get_expanded_args_vector(ctor, param_index, fields);
+          // We need to check if we don't have too many args that won't fit into
+          // an invoke/range instruction.
+          uint32_t range_size = 1;
+          for (auto arg_type : expanded_args_vector) {
+            range_size += type::is_wide_type(arg_type) ? 2 : 1;
+          }
+          if (range_size <= 0xff) {
+            auto inserted =
+                args_vectors.insert(std::move(expanded_args_vector)).second;
+            if (inserted) {
+              (*res)[ctor].emplace(param_index, std::move(fields));
+            }
+          }
+        }
+      }
+    }
+    m_class_infos.update(type, [&](auto*, auto& value, bool exists) {
+      if (exists) {
+        // Oh well, we wasted some racing with another thread.
+        res = value;
+        return;
+      }
+      value = res;
+    });
+    return res.get();
+  }
+
+  // Given an earlier created expanded constructor method ref, fill in the code.
+  DexMethod* make_expanded_ctor_concrete(DexMethodRef* expanded_ctor_ref) {
+    auto [ctor, param_index] = m_candidates.at(expanded_ctor_ref);
+
+    // We start from the original ctor method body, and mutate a copy.
+    std::unique_ptr<IRCode> cloned_code =
+        std::make_unique<IRCode>(std::make_unique<cfg::ControlFlowGraph>());
+    ctor->get_code()->cfg().deep_copy(&cloned_code->cfg());
+    auto& cfg = cloned_code->cfg();
+    cfg::CFGMutation mutation(cfg);
+
+    // Replace load-param of (newly created) object with a sequence of
+    // load-params for the field values used by the ctor; initialize the (newly
+    // created) object register with a const-0, so that any remaining
+    // move-object instructions are still valid.
+    auto block = cfg.entry_block();
+    auto load_param_it =
+        block->to_cfg_instruction_iterator(block->get_first_insn());
+    always_assert(!load_param_it.is_end());
+    for (param_index_t i = 0; i < param_index; i++) {
+      load_param_it++;
+      always_assert(!load_param_it.is_end());
+    }
+    auto last_load_params_it = block->to_cfg_instruction_iterator(
+        block->get_last_param_loading_insn());
+    auto null_insn = (new IRInstruction(OPCODE_CONST))
+                         ->set_dest(load_param_it->insn->dest())
+                         ->set_literal(0);
+    mutation.insert_after(last_load_params_it, {null_insn});
+
+    std::vector<IRInstruction*> new_load_param_insns;
+    std::unordered_map<DexField*, reg_t> field_regs;
+    auto& fields =
+        m_class_infos.at_unsafe(ctor->get_class())->at(ctor).at(param_index);
+    for (auto field : fields) {
+      auto reg = type::is_wide_type(field->get_type())
+                     ? cfg.allocate_wide_temp()
+                     : cfg.allocate_temp();
+      auto inserted = field_regs.emplace(field, reg).second;
+      always_assert(inserted);
+      auto load_param_insn =
+          (new IRInstruction(opcode::load_opcode(field->get_type())))
+              ->set_dest(reg);
+      new_load_param_insns.push_back(load_param_insn);
+    }
+    mutation.replace(load_param_it, new_load_param_insns);
+
+    // Replace all igets on the (newly created) object with moves from the new
+    // field value load-params. No other (non-move) uses of the (newly created)
+    // object can exist.
+    live_range::MoveAwareChains chains(cfg);
+    auto du_chains = chains.get_def_use_chains();
+    std::unordered_set<IRInstruction*> use_insns;
+    for (auto& use : du_chains[load_param_it->insn]) {
+      use_insns.insert(use.insn);
+    }
+    auto ii = InstructionIterable(cfg);
+    for (auto it = ii.begin(); it != ii.end(); it++) {
+      if (!use_insns.count(it->insn)) {
+        continue;
+      }
+      auto insn = it->insn;
+      always_assert(opcode::is_an_iget(insn->opcode()));
+      auto* field = resolve_field(insn->get_field(), FieldSearch::Instance);
+      always_assert(field);
+      auto move_result_pseudo_it = cfg.move_result_of(it);
+      always_assert(!move_result_pseudo_it.is_end());
+      auto reg = field_regs.at(field);
+      auto dest = move_result_pseudo_it->insn->dest();
+      auto move_insn =
+          (new IRInstruction(opcode::move_opcode(field->get_type())))
+              ->set_src(0, reg)
+              ->set_dest(dest);
+      mutation.replace(it, {move_insn});
+    }
+
+    // Use the mutated copied ctor code to conretize the expanded ctor.
+    mutation.flush();
+    expanded_ctor_ref->make_concrete(ACC_CONSTRUCTOR | ACC_PUBLIC,
+                                     std::move(cloned_code), false);
+    auto expanded_ctor = expanded_ctor_ref->as_def();
+    always_assert(expanded_ctor);
+    expanded_ctor->rstate.set_generated();
+    int api_level = api::LevelChecker::get_method_level(ctor);
+    expanded_ctor->rstate.set_api_level(api_level);
+    expanded_ctor->set_deobfuscated_name(show_deobfuscated(expanded_ctor));
+    return expanded_ctor;
+  }
+
+ public:
+  explicit ExpandableConstructorParams(const Scope& scope) {
+    walk::classes(scope, [&](DexClass* cls) {
+      for (auto ctor : cls->get_ctors()) {
+        auto deob = ctor->get_deobfuscated_name_or_null();
+        if (deob) {
+          m_deobfuscated_ctor_names.insert(deob);
+        }
+      }
+    });
+  }
+
+  // Try to create a method-ref that represents an expanded ctor, where a
+  // particular parameter representing a (newly created) object gets replaced by
+  // a sequence of field values used by the ctor.
+  DexMethodRef* get_expanded_ctor_ref(DexMethod* ctor,
+                                      param_index_t param_index,
+                                      std::vector<DexField*>** fields) const {
+    auto type = ctor->get_class();
+    auto class_info = get_class_info(type);
+    auto it = class_info->find(ctor);
+    if (it == class_info->end()) {
+      return nullptr;
+    }
+    auto it2 = it->second.find(param_index);
+    if (it2 == it->second.end()) {
+      return nullptr;
+    }
+
+    auto name = ctor->get_name();
+    auto args_vector = get_expanded_args_vector(ctor, param_index, it2->second);
+    auto type_list = DexTypeList::make_type_list(std::move(args_vector));
+    auto proto = DexProto::make_proto(type::_void(), type_list);
+
+    auto deob = show_deobfuscated(type, name, proto);
+    if (m_deobfuscated_ctor_names.count(DexString::make_string(deob))) {
+      // Some other method ref already has the synthetic deobfuscated name that
+      // we'd later want to give to the new generated ctor.
+      return nullptr;
+    }
+
+    std::lock_guard<std::mutex> lock_guard(m_candidates_mutex);
+    auto expanded_ctor_ref = DexMethod::get_method(type, name, proto);
+    if (expanded_ctor_ref) {
+      if (!m_candidates.count(expanded_ctor_ref)) {
+        // There's already a pre-existing method registered, maybe a method that
+        // became unreachable. As other Redex optimizations might have persisted
+        // this method-ref, we don't want to interact with it.
+        return nullptr;
+      }
+    } else {
+      expanded_ctor_ref = DexMethod::make_method(type, name, proto);
+      always_assert(show_deobfuscated(expanded_ctor_ref) == deob);
+      auto emplaced =
+          m_candidates
+              .emplace(expanded_ctor_ref, std::make_pair(ctor, param_index))
+              .second;
+      always_assert(emplaced);
+    }
+    *fields = &it2->second;
+    return expanded_ctor_ref;
+  }
+
+  // Make sure that all newly used expanded ctors actually exist as concrete
+  // methods.
+  void flush(const Scope& scope, Stats* stats) {
+    // First, find all expanded_ctor_ref that made it into the updated code.
+    ConcurrentSet<DexMethodRef*> used_expanded_ctor_refs;
+    walk::parallel::opcodes(scope, [&](DexMethod*, IRInstruction* insn) {
+      if (opcode::is_invoke_direct(insn->opcode()) &&
+          m_candidates.count(insn->get_method())) {
+        used_expanded_ctor_refs.insert(insn->get_method());
+      }
+    });
+
+    // Second, make them all concrete.
+    ConcurrentSet<DexMethod*> expanded_ctors;
+    workqueue_run<DexMethodRef*>(
+        [&](DexMethodRef* expanded_ctor_ref) {
+          expanded_ctors.insert(make_expanded_ctor_concrete(expanded_ctor_ref));
+        },
+        used_expanded_ctor_refs);
+
+    // Add the newly concretized ctors to their classes.
+    std::vector<DexMethod*> ordered(expanded_ctors.begin(),
+                                    expanded_ctors.end());
+    std::sort(ordered.begin(), ordered.end(), compare_dexmethods);
+    for (auto expanded_ctor : ordered) {
+      type_class(expanded_ctor->get_class())->add_method(expanded_ctor);
+    }
+
+    // Finally, erase the unused ctor method refs.
+    for (auto [ctor, param_index] : m_candidates) {
+      if (!used_expanded_ctor_refs.count(ctor)) {
+        DexMethod::erase_method(ctor);
+        DexMethod::delete_method_DO_NOT_USE(static_cast<DexMethod*>(ctor));
+      }
+    }
+
+    stats->expanded_ctors += expanded_ctors.size();
+  }
 };
 
 // Data structure to derive local or accumulated global net savings
@@ -635,6 +967,7 @@ struct ReducedMethod {
 
 class RootMethodReducer {
  private:
+  const ExpandableConstructorParams& m_expandable_constructor_params;
   MultiMethodInliner& m_inliner;
   const std::unordered_map<DexMethod*, MethodSummary>& m_method_summaries;
   Stats* m_stats;
@@ -644,13 +977,15 @@ class RootMethodReducer {
 
  public:
   RootMethodReducer(
+      const ExpandableConstructorParams& expandable_constructor_params,
       MultiMethodInliner& inliner,
       const std::unordered_map<DexMethod*, MethodSummary>& method_summaries,
       Stats* stats,
       bool is_init_or_clinit,
       DexMethod* method,
       const std::unordered_map<DexType*, bool>& types)
-      : m_inliner(inliner),
+      : m_expandable_constructor_params(expandable_constructor_params),
+        m_inliner(inliner),
         m_method_summaries(method_summaries),
         m_stats(stats),
         m_is_init_or_clinit(is_init_or_clinit),
@@ -661,7 +996,7 @@ class RootMethodReducer {
     shrink();
     auto initial_code_size{get_code_size(m_method)};
 
-    if (!inline_anchors() || !inline_invokes()) {
+    if (!inline_anchors() || !expand_or_inline_invokes()) {
       return std::nullopt;
     }
 
@@ -689,6 +1024,78 @@ class RootMethodReducer {
   bool inline_insns(const std::unordered_set<IRInstruction*>& insns) {
     auto inlined = m_inliner.inline_callees(m_method, insns);
     return inlined == insns.size();
+  }
+
+  // Given a constructor invocation, replace a particular argument with the
+  // sequence of the argument's field values to flow into an expanded
+  // constructor.
+  DexMethodRef* expand_invoke(cfg::CFGMutation& mutation,
+                              const cfg::InstructionIterator& it,
+                              param_index_t param_index) {
+    auto insn = it->insn;
+    auto callee = resolve_method(insn->get_method(), opcode_to_search(insn));
+    always_assert(callee);
+    always_assert(callee->is_concrete());
+    std::vector<DexField*>* fields;
+    auto expanded_ctor_ref =
+        m_expandable_constructor_params.get_expanded_ctor_ref(
+            callee, param_index, &fields);
+    if (!expanded_ctor_ref) {
+      return nullptr;
+    }
+
+    insn->set_method(expanded_ctor_ref);
+    auto obj_reg = insn->src(param_index);
+    auto srcs_range = insn->srcs();
+    std::vector<reg_t> srcs_copy(srcs_range.begin(), srcs_range.end());
+    insn->set_srcs_size(srcs_copy.size() - 1 + fields->size());
+    for (param_index_t i = param_index; i < srcs_copy.size() - 1; i++) {
+      insn->set_src(i + fields->size(), srcs_copy.at(i + 1));
+    }
+    std::vector<IRInstruction*> instructions_to_insert;
+    auto& cfg = m_method->get_code()->cfg();
+    for (auto field : *fields) {
+      auto reg = type::is_wide_type(field->get_type())
+                     ? cfg.allocate_wide_temp()
+                     : cfg.allocate_temp();
+      insn->set_src(param_index++, reg);
+      auto iget_opcode = opcode::iget_opcode_for_field(field);
+      instructions_to_insert.push_back((new IRInstruction(iget_opcode))
+                                           ->set_src(0, obj_reg)
+                                           ->set_field(field));
+      auto move_result_pseudo_opcode =
+          opcode::move_result_pseudo_for_iget(iget_opcode);
+      instructions_to_insert.push_back(
+          (new IRInstruction(move_result_pseudo_opcode))->set_dest(reg));
+    }
+    mutation.insert_before(it, std::move(instructions_to_insert));
+    return expanded_ctor_ref;
+  }
+
+  bool expand_invokes(const std::unordered_map<IRInstruction*, param_index_t>&
+                          invokes_to_expand,
+                      std::unordered_set<DexMethodRef*>* expanded_ctor_refs) {
+    if (invokes_to_expand.empty()) {
+      return true;
+    }
+    auto& cfg = m_method->get_code()->cfg();
+    cfg::CFGMutation mutation(cfg);
+    auto ii = InstructionIterable(cfg);
+    for (auto it = ii.begin(); it != ii.end(); it++) {
+      auto insn = it->insn;
+      auto it2 = invokes_to_expand.find(insn);
+      if (it2 == invokes_to_expand.end()) {
+        continue;
+      }
+      auto param_index = it2->second;
+      auto expanded_ctor_ref = expand_invoke(mutation, it, param_index);
+      if (!expanded_ctor_ref) {
+        return false;
+      }
+      expanded_ctor_refs->insert(expanded_ctor_ref);
+    }
+    mutation.flush();
+    return true;
   }
 
   // Inline all "anchors" until all relevant allocations are new-instance
@@ -741,43 +1148,71 @@ class RootMethodReducer {
     return nullptr;
   }
 
-  // Inline all uses of all relevant new-instance instructions that involve
-  // invoke- instructions, until there are no more such uses.
-  bool inline_invokes() {
+  // Expand or inline all uses of all relevant new-instance instructions that
+  // involve invoke- instructions, until there are no more such uses.
+  bool expand_or_inline_invokes() {
     auto& cfg = m_method->get_code()->cfg();
+    std::unordered_set<DexMethodRef*> expanded_ctor_refs;
     for (int iteration = 0; iteration < MAX_INLINE_INVOKES_ITERATIONS;
          iteration++) {
       std::unordered_set<IRInstruction*> invokes_to_inline;
+      std::unordered_map<IRInstruction*, param_index_t> invokes_to_expand;
 
       live_range::MoveAwareChains chains(cfg);
       auto du_chains = chains.get_def_use_chains();
+      std::unordered_map<IRInstruction*,
+                         std::unordered_map<src_index_t, DexType*>>
+          aggregated_uses;
       for (auto& [insn, uses] : du_chains) {
         if (!is_inlinable_new_instance(insn)) {
           continue;
         }
-        std::unordered_map<IRInstruction*, bool> aggregated_uses;
+        auto type = insn->get_type();
         for (auto& use : uses) {
-          aggregated_uses[use.insn] |= (use.src_index == 0);
+          auto emplaced =
+              aggregated_uses[use.insn].emplace(use.src_index, type).second;
+          always_assert(emplaced);
         }
-        for (auto& [uses_insn, uses_src_index_zero] : aggregated_uses) {
-          if (opcode::is_an_invoke(uses_insn->opcode())) {
-            if (!is_benign(uses_insn->get_method())) {
-              auto callee = resolve_method(uses_insn->get_method(),
-                                           opcode_to_search(uses_insn));
-              always_assert(callee);
-              if (method::is_init(callee) && !uses_src_index_zero) {
-                m_stats->invokes_not_inlinable_callee_is_init++;
-                return false;
-              }
-
-              invokes_to_inline.insert(uses_insn);
-              m_inlined_methods[callee].insert(insn->get_type());
-            }
+      }
+      for (auto& [uses_insn, src_indices] : aggregated_uses) {
+        if (!opcode::is_an_invoke(uses_insn->opcode()) ||
+            is_benign(uses_insn->get_method())) {
+          continue;
+        }
+        if (expanded_ctor_refs.count(uses_insn->get_method())) {
+          m_stats->invokes_not_inlinable_callee_inconcrete++;
+          return false;
+        }
+        if (method::is_init(uses_insn->get_method()) && !src_indices.empty() &&
+            !src_indices.count(0)) {
+          if (src_indices.size() > 1) {
+            m_stats
+                ->invokes_not_inlinable_callee_is_init_too_many_params_to_expand++;
+            return false;
           }
+          always_assert(src_indices.size() == 1);
+          auto src_index = src_indices.begin()->first;
+          invokes_to_expand.emplace(uses_insn, src_index);
+          continue;
+        }
+
+        auto callee = resolve_method(uses_insn->get_method(),
+                                     opcode_to_search(uses_insn));
+        always_assert(callee);
+        always_assert(callee->is_concrete());
+        invokes_to_inline.insert(uses_insn);
+        for (auto [src_index, type] : src_indices) {
+          m_inlined_methods[callee].insert(type);
         }
       }
 
+      if (!expand_invokes(invokes_to_expand, &expanded_ctor_refs)) {
+        m_stats->invokes_not_inlinable_callee_is_init_unexpandable++;
+        return false;
+      }
+
       if (invokes_to_inline.empty()) {
+        // Nothing else to do
         return true;
       }
       if (!inline_insns(invokes_to_inline)) {
@@ -931,6 +1366,7 @@ class RootMethodReducer {
 
 // Reduce all root methods
 std::unordered_map<DexMethod*, ReducedMethod> compute_reduced_methods(
+    ExpandableConstructorParams& expandable_constructor_params,
     MultiMethodInliner& inliner,
     const std::unordered_map<DexMethod*, MethodSummary>& method_summaries,
     const std::unordered_map<DexMethod*, std::unordered_map<DexType*, bool>>&
@@ -949,10 +1385,14 @@ std::unordered_map<DexMethod*, ReducedMethod> compute_reduced_methods(
             method,
             method->get_class(),
             DexString::make_string(name_str + "$redex_stack_allocated"));
-        RootMethodReducer root_method_reducer{
-            inliner, method_summaries,
-            stats,   method::is_init(method) || method::is_clinit(method),
-            copy,    types};
+        RootMethodReducer root_method_reducer{expandable_constructor_params,
+                                              inliner,
+                                              method_summaries,
+                                              stats,
+                                              method::is_init(method) ||
+                                                  method::is_clinit(method),
+                                              copy,
+                                              types};
         auto reduced_method = root_method_reducer.reduce();
         if (!reduced_method) {
           DexMethod::erase_method(copy);
@@ -1097,9 +1537,11 @@ void reduce(
 
   // First, we compute all reduced methods
 
+  ExpandableConstructorParams expandable_constructor_params(scope);
   std::unordered_set<DexType*> irreducible_types;
   auto reduced_methods = compute_reduced_methods(
-      inliner, method_summaries, root_methods, &irreducible_types, stats);
+      expandable_constructor_params, inliner, method_summaries, root_methods,
+      &irreducible_types, stats);
   stats->reduced_methods = reduced_methods.size();
 
   // Second, we select reduced methods that will result in net savings
@@ -1119,6 +1561,8 @@ void reduce(
         DexMethod::delete_method_DO_NOT_USE(reduced_method.method);
       },
       reduced_methods);
+
+  expandable_constructor_params.flush(scope, stats);
 }
 } // namespace
 
@@ -1157,21 +1601,25 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
   TRACE(OEA, 1,
         "[object escape analysis] %zu root methods lead to %zu reduced methods "
         "of which %zu were selected and %zu anchors not inlinable because "
-        "inlining failed, %zu invokes not inlinable because callee is init, "
+        "inlining failed, %zu/%zu invokes not inlinable because callee is "
+        "init, %zu invokes not inlinable because callee is not concrete,"
         "%zu invokes not inlinable because inlining failed, %zu invokes not "
         "inlinable after too many iterations, %zu stackify returned objects, "
         "%zu too costly with irreducible classes, %zu too costly with multiple "
-        "conditional classes, %zu too costly globally",
+        "conditional classes, %zu too costly globally; %zu expanded ctors",
         root_methods.size(), (size_t)stats.reduced_methods,
         (size_t)stats.selected_reduced_methods,
         (size_t)stats.anchors_not_inlinable_inlining,
-        (size_t)stats.invokes_not_inlinable_callee_is_init,
+        (size_t)stats.invokes_not_inlinable_callee_is_init_unexpandable,
+        (size_t)stats
+            .invokes_not_inlinable_callee_is_init_too_many_params_to_expand,
+        (size_t)stats.invokes_not_inlinable_callee_inconcrete,
         (size_t)stats.invokes_not_inlinable_inlining,
         (size_t)stats.invokes_not_inlinable_too_many_iterations,
         (size_t)stats.stackify_returns_objects,
         (size_t)stats.too_costly_irreducible_classes,
         (size_t)stats.too_costly_multiple_conditional_classes,
-        (size_t)stats.too_costly_globally);
+        (size_t)stats.too_costly_globally, (size_t)stats.expanded_ctors);
 
   mgr.incr_metric("total_savings", stats.total_savings);
   mgr.incr_metric("root_methods", root_methods.size());
@@ -1180,8 +1628,16 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
                   (size_t)stats.selected_reduced_methods);
   mgr.incr_metric("root_method_anchors_not_inlinable_inlining",
                   (size_t)stats.anchors_not_inlinable_inlining);
-  mgr.incr_metric("root_method_invokes_not_inlinable_callee_is_init",
-                  (size_t)stats.invokes_not_inlinable_callee_is_init);
+  mgr.incr_metric(
+      "root_method_invokes_not_inlinable_callee_is_init_unexpandable",
+      (size_t)stats.invokes_not_inlinable_callee_is_init_unexpandable);
+  mgr.incr_metric(
+      "root_method_invokes_not_inlinable_callee_is_init_too_many_params_to_"
+      "expand",
+      (size_t)
+          stats.invokes_not_inlinable_callee_is_init_too_many_params_to_expand);
+  mgr.incr_metric("root_method_invokes_not_inlinable_callee_inconcrete",
+                  (size_t)stats.invokes_not_inlinable_callee_inconcrete);
   mgr.incr_metric("root_method_invokes_not_inlinable_inlining",
                   (size_t)stats.invokes_not_inlinable_inlining);
   mgr.incr_metric("root_method_invokes_not_inlinable_too_many_iterations",
@@ -1194,6 +1650,7 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
                   (size_t)stats.too_costly_multiple_conditional_classes);
   mgr.incr_metric("root_method_too_costly_irreducible_classes",
                   (size_t)stats.too_costly_irreducible_classes);
+  mgr.incr_metric("expanded_ctors", (size_t)stats.expanded_ctors);
 }
 
 static ObjectEscapeAnalysisPass s_pass;

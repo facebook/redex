@@ -228,4 +228,25 @@ public class ObjectEscapeAnalysisTest {
     m.add(3);
     return m.get();
   }
+
+
+  public static class N {
+    int x;
+    public N(Builder builder) {
+      this.x = builder.x;
+    }
+    public static class Builder {
+      public int x;
+      public Builder(int x) {
+        this.x = x;
+      }
+    }
+    public int get() {
+      return this.x;
+    }
+  }
+
+  public static N reduceTo42WithExpandedCtor() {
+    return new N(new N.Builder(42));
+  }
 }

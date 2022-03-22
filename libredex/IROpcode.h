@@ -184,6 +184,8 @@ IROpcode move_result_to_pseudo(IROpcode op);
 
 IROpcode pseudo_to_move_result(IROpcode op);
 
+IROpcode iget_opcode_for_field(const DexField* field);
+
 IROpcode sget_opcode_for_field(const DexField* field);
 
 enum Branchingness : uint8_t {
