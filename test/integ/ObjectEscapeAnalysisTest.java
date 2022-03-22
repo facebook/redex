@@ -178,4 +178,22 @@ public class ObjectEscapeAnalysisTest {
     K k = new K(42);
     return k.getX();
   }
+
+
+  static class L {
+    int x;
+    public L(int x) {
+      this.x = x;
+    }
+    public synchronized int getX() {
+      return this.x;
+    }
+  }
+
+  public static int reduceTo42WithMonitors() {
+    L l = new L(42);
+    synchronized (l) {
+      return l.getX();
+    }
+  }
 }

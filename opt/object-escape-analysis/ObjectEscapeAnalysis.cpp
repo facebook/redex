@@ -49,7 +49,6 @@
  *   remove that remaining code in most cases.
  *
  * Ideas for future work:
- * - Ignore monitor- instructions on singleton-allocations
  * - Support check-cast instructions for singleton-allocations
  * - Support conditional branches over either zero or single allocations
  * - Refine the net-savings computation to not just make decisions per
@@ -253,7 +252,8 @@ class Analyzer final : public BaseIRAnalyzer<Environment> {
         current_state->set(RESULT_REGISTER, Domain(NO_ALLOCATION));
         return;
       }
-    } else if (insn->opcode() == OPCODE_IF_EQZ ||
+    } else if (opcode::is_a_monitor(insn->opcode()) ||
+               insn->opcode() == OPCODE_IF_EQZ ||
                insn->opcode() == OPCODE_IF_NEZ) {
       if (get_singleton_allocation(current_state->get(insn->src(0)))) {
         return;
@@ -748,7 +748,7 @@ class RootMethodReducer {
       auto opcode = use.insn->opcode();
       if (opcode::is_an_iput(opcode)) {
         always_assert(use.src_index == 1);
-      } else if (opcode::is_an_invoke(opcode)) {
+      } else if (opcode::is_an_invoke(opcode) || opcode::is_a_monitor(opcode)) {
         always_assert(use.src_index == 0);
       } else if (opcode == OPCODE_IF_EQZ || opcode == OPCODE_IF_NEZ) {
         identity_matters = true;
@@ -803,6 +803,8 @@ class RootMethodReducer {
                                                 new_instance_insn->get_type()))
                 ->set_dest(move_result_it->insn->dest());
         mutation.replace(it, {new_insn});
+      } else if (opcode::is_a_monitor(opcode)) {
+        mutation.remove(it);
       } else {
         not_reached();
       }

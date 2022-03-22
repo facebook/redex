@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <gtest/gtest.h>
+#include <json/json.h>
 #include <memory>
 #include <string>
 #include <unistd.h>
@@ -39,6 +40,23 @@ class ObjectEscapeAnalysisTest : public RedexIntegrationTest {
     type_class(type::java_lang_Object())->set_external();
   }
 
+  void run() {
+    auto config_file_env = std::getenv("config_file");
+    always_assert_log(
+        config_file_env,
+        "Config file must be specified to ObjectEscapeAnalysisTest.\n");
+
+    std::ifstream config_file(config_file_env, std::ifstream::binary);
+    Json::Value cfg;
+    config_file >> cfg;
+
+    std::vector<Pass*> passes = {
+        new ObjectEscapeAnalysisPass(),
+    };
+
+    run_passes(passes, nullptr, cfg);
+  }
+
   sparta::s_expr get_s_expr(const char* method_name) {
     auto method = DexMethod::get_method(method_name);
     always_assert(method);
@@ -57,11 +75,7 @@ class ObjectEscapeAnalysisTest : public RedexIntegrationTest {
 };
 
 TEST_F(ObjectEscapeAnalysisTest, reduceTo42A) {
-  std::vector<Pass*> passes = {
-      new ObjectEscapeAnalysisPass(),
-  };
-
-  run_passes(passes);
+  run();
 
   auto actual = get_s_expr(
       "Lcom/facebook/redextest/ObjectEscapeAnalysisTest;.reduceTo42A:()I");
@@ -87,11 +101,7 @@ TEST_F(ObjectEscapeAnalysisTest, reduceTo42A) {
 }
 
 TEST_F(ObjectEscapeAnalysisTest, reduceTo42B) {
-  std::vector<Pass*> passes = {
-      new ObjectEscapeAnalysisPass(),
-  };
-
-  run_passes(passes);
+  run();
 
   auto actual = get_s_expr(
       "Lcom/facebook/redextest/ObjectEscapeAnalysisTest;.reduceTo42B:()I");
@@ -105,11 +115,7 @@ TEST_F(ObjectEscapeAnalysisTest, reduceTo42B) {
 }
 
 TEST_F(ObjectEscapeAnalysisTest, reduceTo42C) {
-  std::vector<Pass*> passes = {
-      new ObjectEscapeAnalysisPass(),
-  };
-
-  run_passes(passes);
+  run();
 
   auto actual = get_s_expr(
       "Lcom/facebook/redextest/ObjectEscapeAnalysisTest;.reduceTo42C:()I");
@@ -123,11 +129,7 @@ TEST_F(ObjectEscapeAnalysisTest, reduceTo42C) {
 }
 
 TEST_F(ObjectEscapeAnalysisTest, doNotReduceTo42A) {
-  std::vector<Pass*> passes = {
-      new ObjectEscapeAnalysisPass(),
-  };
-
-  run_passes(passes);
+  run();
 
   auto actual = get_s_expr(
       "Lcom/facebook/redextest/ObjectEscapeAnalysisTest;.doNotReduceTo42A:()I");
@@ -145,11 +147,7 @@ TEST_F(ObjectEscapeAnalysisTest, doNotReduceTo42A) {
 }
 
 TEST_F(ObjectEscapeAnalysisTest, doNotReduceTo42B) {
-  std::vector<Pass*> passes = {
-      new ObjectEscapeAnalysisPass(),
-  };
-
-  run_passes(passes);
+  run();
 
   auto actual = get_s_expr(
       "Lcom/facebook/redextest/ObjectEscapeAnalysisTest;.doNotReduceTo42B:()I");
@@ -170,11 +168,7 @@ TEST_F(ObjectEscapeAnalysisTest, doNotReduceTo42B) {
 }
 
 TEST_F(ObjectEscapeAnalysisTest, reduceTo42IdentityMatters) {
-  std::vector<Pass*> passes = {
-      new ObjectEscapeAnalysisPass(),
-  };
-
-  run_passes(passes);
+  run();
 
   auto actual = get_s_expr(
       "Lcom/facebook/redextest/"
@@ -193,11 +187,7 @@ TEST_F(ObjectEscapeAnalysisTest, reduceTo42IdentityMatters) {
 }
 
 TEST_F(ObjectEscapeAnalysisTest, DontOptimizeFinalInInit) {
-  std::vector<Pass*> passes = {
-      new ObjectEscapeAnalysisPass(),
-  };
-
-  run_passes(passes);
+  run();
 
   auto actual = get_s_expr(
       "Lcom/facebook/redextest/"
@@ -216,11 +206,7 @@ TEST_F(ObjectEscapeAnalysisTest, DontOptimizeFinalInInit) {
 }
 
 TEST_F(ObjectEscapeAnalysisTest, reduceTo42WithInitClass) {
-  std::vector<Pass*> passes = {
-      new ObjectEscapeAnalysisPass(),
-  };
-
-  run_passes(passes);
+  run();
 
   auto actual = get_s_expr(
       "Lcom/facebook/redextest/"
@@ -229,6 +215,21 @@ TEST_F(ObjectEscapeAnalysisTest, reduceTo42WithInitClass) {
    (
       (init-class "Lcom/facebook/redextest/ObjectEscapeAnalysisTest$K;")
 
+      (const v1 42)
+      (return v1)
+    )
+)");
+  ASSERT_EQ(actual.str(), assembler::to_s_expr(expected.get()).str());
+}
+
+TEST_F(ObjectEscapeAnalysisTest, reduceTo42WithMonitors) {
+  run();
+
+  auto actual = get_s_expr(
+      "Lcom/facebook/redextest/"
+      "ObjectEscapeAnalysisTest;.reduceTo42WithMonitors:()I");
+  auto expected = assembler::ircode_from_string(R"(
+   (
       (const v1 42)
       (return v1)
     )
