@@ -1089,7 +1089,7 @@ struct SBHelper {
   };
 
   std::optional<ScopedSplitHelper> handle_split(cfg::Block* block,
-                                                IRList::iterator it,
+                                                const IRList::iterator& it,
                                                 DexMethod* overriding) {
     if (!create_source_blocks) {
       return std::nullopt;

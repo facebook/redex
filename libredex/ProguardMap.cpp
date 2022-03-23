@@ -655,7 +655,7 @@ void apply_deobfuscated_names(const std::vector<DexClasses>& dexen,
   wq.run_all();
 }
 
-std::string convert_type(std::string type) {
+std::string convert_type(const std::string& type) {
   return convert_type(std::string_view(type));
 }
 

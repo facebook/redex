@@ -15,7 +15,7 @@ RecursionPruner::RecursionPruner(
     std::function<bool(DexMethod*, DexMethod*)> exclude_fn)
     : m_callee_caller(callee_caller),
       m_caller_callee(caller_callee),
-      m_exclude_fn(exclude_fn) {}
+      m_exclude_fn(std::move(exclude_fn)) {}
 
 void RecursionPruner::run() {
   Timer t("compute_caller_nonrecursive_callees_by_stack_depth");
