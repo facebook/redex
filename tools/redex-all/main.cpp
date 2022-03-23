@@ -916,11 +916,12 @@ void redex_frontend(ConfigFiles& conf, /* input */
 
   {
     Json::Value d;
-    d["parse_errors"] = parser_stats.parse_errors;
-    d["unknown_tokens"] = parser_stats.unknown_tokens;
-    d["unimplemented"] = parser_stats.unimplemented;
-    d["ok"] = (uint64_t)(pg_config.ok ? 1 : 0);
-    d["blocklisted_rules"] = blocklisted_rules;
+    using u64 = Json::Value::UInt64;
+    d["parse_errors"] = (u64)parser_stats.parse_errors;
+    d["unknown_tokens"] = (u64)parser_stats.unknown_tokens;
+    d["unimplemented"] = (u64)parser_stats.unimplemented;
+    d["ok"] = (u64)(pg_config.ok ? 1 : 0);
+    d["blocklisted_rules"] = (u64)blocklisted_rules;
     stats["proguard"] = d;
   }
 
