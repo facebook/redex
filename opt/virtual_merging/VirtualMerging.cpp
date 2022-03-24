@@ -1067,7 +1067,7 @@ struct SBHelper {
     }
 
     ScopedSplitHelper(const ScopedSplitHelper&) = delete;
-    ScopedSplitHelper(ScopedSplitHelper&& rhs)
+    ScopedSplitHelper(ScopedSplitHelper&& rhs) noexcept
         : block(rhs.block),
           first_sb(rhs.first_sb),
           overriding(rhs.overriding),
@@ -1076,7 +1076,7 @@ struct SBHelper {
     }
 
     ScopedSplitHelper& operator=(const ScopedSplitHelper&) = delete;
-    ScopedSplitHelper& operator=(ScopedSplitHelper&& rhs) {
+    ScopedSplitHelper& operator=(ScopedSplitHelper&& rhs) noexcept {
       block = rhs.block;
       first_sb = rhs.first_sb;
       overriding = rhs.overriding;
