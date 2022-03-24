@@ -1465,7 +1465,7 @@ int main(int argc, char* argv[]) {
   auto vm_stats = get_mem_stats();
   stats["output_stats"]["mem_stats"]["vm_peak"] =
       (Json::UInt64)vm_stats.vm_peak;
-  stats["output_stats"]["mem_stats"]["vm_hwm"] = (Json::UInt64)vm_stats.vm_peak;
+  stats["output_stats"]["mem_stats"]["vm_hwm"] = (Json::UInt64)vm_stats.vm_hwm;
 
   stats["output_stats"]["threads"] = get_threads_stats();
 
