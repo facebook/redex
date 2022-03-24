@@ -11,6 +11,8 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include <boost/dynamic_bitset.hpp>
+
 #include "DexClass.h"
 #include "Timer.h"
 
@@ -62,7 +64,7 @@ class MethodSimilarityOrderer {
   // Vector to contain similarity score among all Methods for the given
   // buffer indexed Method. ThreadPool accesses this vector concurrently.
   std::vector<
-      std::map<ScoreValue, std::vector<MethodId>, std::greater<ScoreValue>>>
+      std::map<ScoreValue, boost::dynamic_bitset<>, std::greater<ScoreValue>>>
       m_score_map;
 
   // Last Method Id that is ordered.

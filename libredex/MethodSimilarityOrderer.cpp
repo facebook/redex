@@ -153,7 +153,7 @@ void MethodSimilarityOrderer::compute_score() {
       [&](uint32_t i) {
         MethodId method_i = method_ids[i];
         const auto& code_hash_ids_i = m_method_id_to_code_hash_ids[method_i];
-        std::unordered_map<ScoreValue, std::vector<MethodId>> score_map;
+        std::unordered_map<ScoreValue, boost::dynamic_bitset<>> score_map;
 
         for (uint32_t j = 0; j < (uint32_t)method_ids.size(); j++) {
           if (i == j) {
@@ -164,14 +164,18 @@ void MethodSimilarityOrderer::compute_score() {
           const auto& code_hash_ids_j = m_method_id_to_code_hash_ids[method_j];
           auto score = get_score(code_hash_ids_i, code_hash_ids_j);
           if (score.value() >= 0) {
-            score_map[score.value()].push_back(method_j);
+            auto& method_id_bitset = score_map[score.value()];
+            if (method_id_bitset.size() <= method_j) {
+              method_id_bitset.resize(method_j + 1);
+            }
+            method_id_bitset.set(static_cast<size_t>(method_j));
           }
         }
 
         // Mapping from score value (key) to Method Ids. The key is in a
         // decreasing score order. Becuase it iterates Method Id in order,
         // the vector is already sorted by Method index (source order).
-        std::map<ScoreValue, std::vector<MethodId>, std::greater<ScoreValue>>
+        std::map<ScoreValue, boost::dynamic_bitset<>, std::greater<ScoreValue>>
             map(score_map.begin(), score_map.end());
         m_score_map[i] = std::move(map);
       },
@@ -211,15 +215,18 @@ MethodSimilarityOrderer::get_next() {
 
   if (!is_next_perf_sensitive && m_last_method_id != boost::none) {
     // Iterate m_score_map from the highest score..
-    for (auto& p : m_score_map[m_method_id_to_buffer_id[*m_last_method_id]]) {
-      for (auto& m_id : p.second) {
+    for (const auto& [score, method_id_bitset] :
+         m_score_map[m_method_id_to_buffer_id[*m_last_method_id]]) {
+      for (auto meth_id = method_id_bitset.find_first();
+           meth_id != boost::dynamic_bitset<>::npos;
+           meth_id = method_id_bitset.find_next(meth_id)) {
         // The first match is the one with the highest score
         // at the smallest index in the source order.
-        if (m_id_to_method.count(m_id)) {
+        if (m_id_to_method.count(static_cast<MethodId>(meth_id))) {
           TRACE(OPUT, 3,
                 "[method-similarity-orderer] selected %s with score %d",
-                SHOW(m_id_to_method[m_id]), p.first);
-          return m_id;
+                SHOW(m_id_to_method[static_cast<MethodId>(meth_id)]), score);
+          return meth_id;
         }
       }
     }
