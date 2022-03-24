@@ -138,7 +138,7 @@ std::vector<DexField*> create_merger_fields(
       }
     }
 
-    name = name + std::to_string(cnt);
+    name += std::to_string(cnt);
     auto field = DexField::make_field(owner, DexString::make_string(name), type)
                      ->make_concrete(ACC_PUBLIC);
     res.push_back(field);

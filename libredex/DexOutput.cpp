@@ -2646,8 +2646,9 @@ void write_pg_mapping(
         } else {
           result = java_names::internal_to_external(&type_str[dim]);
         }
+        result.reserve(result.size() + 2 * dim);
         for (int i = 0; i < dim; ++i) {
-          result = result + "[]";
+          result += "[]";
         }
         return result;
       } else {
