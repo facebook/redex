@@ -97,7 +97,7 @@ class DexString {
   uint32_t size() const { return static_cast<uint32_t>(m_storage.size()); }
 
   // UTF-aware length
-  uint32_t length() const;
+  uint32_t length() const { return m_utfsize; }
 
   int32_t java_hashcode() const;
 

@@ -132,13 +132,6 @@ const DexString* DexString::get_string(std::string_view s) {
   return g_redex->get_string(s);
 }
 
-uint32_t DexString::length() const {
-  if (is_simple()) {
-    return size();
-  }
-  return m_utfsize;
-}
-
 int32_t DexString::java_hashcode() const {
   return java_hashcode_of_utf8_string(c_str());
 }
