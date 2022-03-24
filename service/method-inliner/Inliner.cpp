@@ -1657,6 +1657,7 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
     // occur, so we are creating an ordered list of callers here to make sure we
     // always call is_inlinable in the same way.
     std::vector<DexMethod*> ordered_callers;
+    ordered_callers.reserve(callers.size());
     for (auto& p : callers) {
       ordered_callers.push_back(p.first);
     }
