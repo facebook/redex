@@ -94,6 +94,10 @@ class DexString {
         m_utfsize(length_of_utf8_string(m_storage.c_str())) {}
 
  public:
+  DexString() = delete;
+  DexString(DexString&&) = delete;
+  DexString(const DexString&) = delete;
+
   uint32_t size() const { return static_cast<uint32_t>(m_storage.size()); }
 
   // UTF-aware length
@@ -187,6 +191,10 @@ class DexType {
   explicit DexType(const DexString* dstring) { m_name = dstring; }
 
  public:
+  DexType() = delete;
+  DexType(DexType&&) = delete;
+  DexType(const DexType&) = delete;
+
   // DexType retrieval/creation
 
   // If the DexType exists, return it, otherwise create it and return it.
@@ -269,6 +277,10 @@ class DexFieldRef {
   }
 
  public:
+  DexFieldRef() = delete;
+  DexFieldRef(DexFieldRef&&) = delete;
+  DexFieldRef(const DexFieldRef&) = delete;
+
   bool is_concrete() const { return m_concrete; }
   bool is_external() const { return m_external; }
   bool is_def() const { return is_concrete() || is_external(); }
@@ -322,6 +334,9 @@ class DexField : public DexFieldRef {
   std::string self_show() const; // To avoid "Show.h" in the header.
 
  public:
+  DexField() = delete;
+  DexField(DexField&&) = delete;
+  DexField(const DexField&) = delete;
   ~DexField();
 
   ReferencedState rstate; // Tracks whether this field can be deleted or renamed
@@ -538,6 +553,10 @@ class DexProto {
   }
 
  public:
+  DexProto() = delete;
+  DexProto(DexProto&&) = delete;
+  DexProto(const DexProto&) = delete;
+
   // DexProto retrieval/creation
 
   // If the DexProto exists, return it, otherwise create it and return it.
@@ -790,6 +809,10 @@ class DexMethodRef {
   }
 
  public:
+  DexMethodRef() = delete;
+  DexMethodRef(DexMethodRef&&) = delete;
+  DexMethodRef(const DexMethodRef&) = delete;
+
   bool is_concrete() const { return m_concrete; }
   bool is_external() const { return m_external; }
   bool is_def() const { return is_concrete() || is_external(); }
@@ -853,6 +876,10 @@ class DexMethod : public DexMethodRef {
   std::string self_show() const; // To avoid "Show.h" in the header.
 
  public:
+  DexMethod() = delete;
+  DexMethod(DexMethodRef&&) = delete;
+  DexMethod(const DexMethodRef&) = delete;
+
   // Tracks whether this method can be deleted or renamed
   ReferencedState rstate;
 
