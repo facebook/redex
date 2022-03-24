@@ -28,6 +28,7 @@
 #include "AnalysisUsage.h"
 #include "ApiLevelChecker.h"
 #include "AssetManager.h"
+#include "CFGMutation.h"
 #include "CommandProfiling.h"
 #include "ConfigFiles.h"
 #include "Debug.h"
@@ -1287,6 +1288,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   Timer::add_timer("PassManager.Hashers", m_hashers_timer.get_seconds());
   Timer::add_timer("PassManager.CheckUniqueDeobfuscateds",
                    m_check_unique_deobfuscateds_timer.get_seconds());
+  Timer::add_timer("CFGMutation", cfg::CFGMutation::get_seconds());
 }
 
 void PassManager::activate_pass(const std::string& name,

@@ -6,8 +6,13 @@
  */
 
 #include "CFGMutation.h"
+#include "Timer.h"
 
 namespace cfg {
+
+static AccumulatingTimer s_timer;
+
+double CFGMutation::get_seconds() { return s_timer.get_seconds(); }
 
 void CFGMutation::clear() {
   for (auto& change : m_changes) {
@@ -18,6 +23,8 @@ void CFGMutation::clear() {
 }
 
 void CFGMutation::flush() {
+  auto timer_scope = s_timer.scope();
+
   if (m_changes.empty()) {
     return;
   }
