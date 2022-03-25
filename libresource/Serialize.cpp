@@ -57,6 +57,21 @@ void push_u8_length(size_t len, android::Vector<char>* vec) {
 }
 
 namespace {
+
+// Just a random thing to make it easy to see (when dumping bytes) if we forgot
+// to go back and correct a chunk size.
+constexpr uint32_t FILL_IN_LATER = 0xEEEEEEEE;
+
+void write_long_at_pos(size_t index,
+                       uint32_t data,
+                       android::Vector<char>* vec) {
+  auto swapped = htodl(data);
+  vec->replaceAt((char)swapped, index);
+  vec->replaceAt((char)(swapped >> 8), index + 1);
+  vec->replaceAt((char)(swapped >> 16), index + 2);
+  vec->replaceAt((char)(swapped >> 24), index + 3);
+}
+
 void encode_string8(const char* string,
                     size_t& len,
                     android::Vector<char>* vec) {
@@ -326,25 +341,25 @@ void ResPackageBuilder::serialize(android::Vector<char>* out) {
 }
 
 void ResTableBuilder::serialize(android::Vector<char>* out) {
-  android::Vector<char> temp;
-  // Global strings
-  write_string_pool(m_global_strings, &temp);
-  // Packages
-  for (auto& pair : m_packages) {
-    if (pair.first != nullptr) {
-      pair.first->serialize(&temp);
-    } else {
-      push_chunk((android::ResChunk_header*)pair.second, &temp);
-    }
-  }
+  auto initial_size = out->size();
   // ResTable_header
   auto header_size = sizeof(android::ResTable_header);
   push_short(android::RES_TABLE_TYPE, out);
   push_short(header_size, out);
-  auto total_size = header_size + temp.size();
-  push_long(total_size, out);
+  auto total_size_pos = out->size() - initial_size;
+  push_long(FILL_IN_LATER, out);
   push_long((uint32_t)m_packages.size(), out);
-  out->appendVector(temp);
+  // Global strings
+  write_string_pool(m_global_strings, out);
+  // Packages
+  for (auto& pair : m_packages) {
+    if (pair.first != nullptr) {
+      pair.first->serialize(out);
+    } else {
+      push_chunk((android::ResChunk_header*)pair.second, out);
+    }
+  }
+  write_long_at_pos(total_size_pos, out->size(), out);
 }
 
 } // namespace arsc
