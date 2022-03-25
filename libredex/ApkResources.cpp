@@ -101,6 +101,7 @@ size_t write_serialized_data(const android::Vector<char>& cVec,
                              RedexMappedFile f) {
   size_t vec_size = cVec.size();
   size_t f_size = f.size();
+  always_assert_log(vec_size <= f_size, "Growing file not supported");
   if (vec_size > 0) {
     memcpy(f.data(), &(cVec[0]), vec_size);
   }
