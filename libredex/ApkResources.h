@@ -119,9 +119,6 @@ class ApkResources : public AndroidResources {
       android::Vector<char>* out_data,
       size_t* out_num_renamed);
 
-  int inline_xml_reference_attributes(
-      const std::string& filename,
-      const std::map<uint32_t, android::Res_value>& id_to_inline_value);
   size_t remap_xml_reference_attributes(
       const std::string& filename,
       const std::map<uint32_t, uint32_t>& kept_to_remapped_ids) override;

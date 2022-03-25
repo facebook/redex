@@ -783,10 +783,6 @@ public:
     int32_t getAttributeDataType(size_t idx) const;
     int32_t getAttributeData(size_t idx) const;
 
-    // Replaces an entire XML attribute (data and type).
-    // This function assumes that the size of the attribute is not changing.
-    void setAttribute(size_t idx, Res_value newAttribute);
-
     // Replaces the data of an XML attribute.
     void setAttributeData(size_t idx, uint32_t newData);
 
@@ -1893,14 +1889,6 @@ public:
         uint32_t resID,
         SortedVector<uint32_t> originalIds,
         Vector<uint32_t> newIds);
-
-    // For the given resource ID, looks across all configurations and inlines
-    // all reference Res_value entries based on the given keys -> inline_values
-    // mapping. The entries in the inputs are expected to align based on index.
-    void inlineReferenceValuesForResource(
-        uint32_t resID,
-        SortedVector<uint32_t> inlineable_ids,
-        Vector<Res_value> inline_values);
 
     // For the given resource ID, looks across all configurations and returns all
     // the corresponding Res_value entries. This is much more reliable than

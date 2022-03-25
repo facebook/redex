@@ -1413,16 +1413,6 @@ ResXMLTree_attribute* ResXMLParser::getAttributePointer(size_t idx) const
     return nullptr;
 }
 
-// Replaces an entire XML attribute (data and type).
-// This function assumes that the size of the attribute is not changing.
-void ResXMLParser::setAttribute(size_t idx, Res_value newAttribute)
-{
-    ResXMLTree_attribute* attr = getAttributePointer(idx);
-    if (attr != nullptr) {
-        attr->typedValue = newAttribute;
-    }
-}
-
 // Replaces the data of an XML attribute.
 void ResXMLParser::setAttributeData(size_t idx, uint32_t newData)
 {
@@ -7388,79 +7378,6 @@ void ResTable::defineNewType(
   type_list.push_back(type);
   const TypeList x = type_list;
   pg->types.set(type_id - 1, x);
-}
-
-void ResTable::inlineReferenceValuesForResource(
-    uint32_t resID,
-    SortedVector<uint32_t> inlineable_ids,
-    Vector<Res_value> inline_values)
-{
-    resource_name resName;
-    if (!this->getResourceName(resID, true, &resName)) {
-        return;
-    }
-
-    const ssize_t pgIndex = getResourcePackageIndex(resID);
-    const int typeIndex = Res_GETTYPE(resID);
-    const int entryIndex = Res_GETENTRY(resID);
-    const PackageGroup* pg = mPackageGroups[pgIndex];
-    const TypeList& typeList = pg->types[typeIndex];
-    if (typeList.isEmpty()) {
-        return;
-    }
-    const Type* typeConfigs = typeList[0];
-    const size_t NTC = typeConfigs->configs.size();
-    for (size_t configIndex = 0; configIndex < NTC; configIndex++) {
-        const ResTable_type* type = typeConfigs->configs[configIndex];
-        const ResTable_entry* ent;
-        if (!tryGetConfigEntry(entryIndex, type, &ent)) {
-            continue;
-        }
-
-        uintptr_t esize = dtohs(ent->size);
-        uint32_t typeSize = dtohl(type->header.size);
-
-        Res_value* valuePtr = nullptr;
-        ResTable_map_entry* bagPtr = nullptr;
-        if ((dtohs(ent->flags) & ResTable_entry::FLAG_COMPLEX) != 0) {
-            bagPtr = (ResTable_map_entry*)ent;
-        } else {
-            valuePtr = (Res_value*)
-                (((const uint8_t*)ent) + esize);
-        }
-
-        if (valuePtr != nullptr &&
-               (valuePtr->dataType == Res_value::TYPE_REFERENCE)) {
-            uint32_t valueData = valuePtr->data;
-            ssize_t idx = inlineable_ids.indexOf(valueData);
-            if (idx >= 0) {
-                Res_value inline_value = inline_values[idx];
-                valuePtr->data = inline_value.data;
-                valuePtr->dataType = inline_value.dataType;
-            }
-        } else if (bagPtr != nullptr) {
-            const int N = dtohl(bagPtr->count);
-            const uint8_t* baseMapPtr = (const uint8_t*)ent;
-            size_t mapOffset = esize;
-            ResTable_map* mapPtr = (ResTable_map*)(baseMapPtr + mapOffset);
-
-            for (int i = 0; i < N && mapOffset < (typeSize - sizeof(ResTable_map)); i++) {
-                Res_value mapValue = mapPtr->value;
-                if (mapValue.dataType == Res_value::TYPE_REFERENCE) {
-                    uint32_t valueData = mapValue.data;
-                    ssize_t idx = inlineable_ids.indexOf(valueData);
-                    if (idx >= 0) {
-                        Res_value inline_value = inline_values[idx];
-                        mapPtr->value = inline_value;
-                    }
-                }
-
-                const size_t size = dtohs(mapValue.size);
-                mapOffset += size + sizeof(*mapPtr)-sizeof(mapValue);
-                mapPtr = (ResTable_map*)(baseMapPtr + mapOffset);
-            }
-        }
-    }
 }
 
 // For the given resource ID, looks across all configurations and returns all
