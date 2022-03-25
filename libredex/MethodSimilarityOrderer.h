@@ -13,7 +13,9 @@
 
 #include <boost/dynamic_bitset.hpp>
 
+#include "ConfigFiles.h"
 #include "DexClass.h"
+#include "MethodProfiles.h"
 #include "Timer.h"
 
 class DexInstruction;
@@ -74,7 +76,9 @@ class MethodSimilarityOrderer {
   // space.
   std::unordered_map<StableHash, CodeHashId> m_stable_hash_to_code_hash_id;
 
-  void insert(DexMethod* meth);
+  void insert(
+      DexMethod* method,
+      method_profiles::dexmethods_profiled_comparator* comparator = nullptr);
 
   void remove_method(DexMethod* meth);
 
@@ -88,5 +92,5 @@ class MethodSimilarityOrderer {
   void compute_score();
 
  public:
-  void order(std::vector<DexMethod*>& methods);
+  void order(std::vector<DexMethod*>& methods, ConfigFiles* conf_files);
 };

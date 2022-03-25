@@ -8,6 +8,7 @@
 #include "MethodSimilarityOrderer.h"
 
 #include "DexInstruction.h"
+#include "MethodProfiles.h"
 #include "Show.h"
 #include "Trace.h"
 #include "WorkQueue.h"
@@ -182,7 +183,9 @@ void MethodSimilarityOrderer::compute_score() {
       indices);
 }
 
-void MethodSimilarityOrderer::insert(DexMethod* method) {
+void MethodSimilarityOrderer::insert(
+    DexMethod* method,
+    method_profiles::dexmethods_profiled_comparator* comparator) {
   always_assert(m_method_to_id.count(method) == 0);
   uint32_t index = m_id_to_method.size();
   m_id_to_method.emplace(index, method);
@@ -191,6 +194,12 @@ void MethodSimilarityOrderer::insert(DexMethod* method) {
   auto& code_hash_ids = m_method_id_to_code_hash_ids[index];
 
   if (type_class(method->get_class())->is_perf_sensitive()) {
+    return;
+  }
+
+  if (comparator != nullptr &&
+      comparator->get_overall_method_sort_num(method) <
+          method_profiles::dexmethods_profiled_comparator::VERY_END) {
     return;
   }
 
@@ -247,10 +256,30 @@ void MethodSimilarityOrderer::remove_method(DexMethod* meth) {
   m_method_to_id.erase(meth);
 }
 
-void MethodSimilarityOrderer::order(std::vector<DexMethod*>& methods) {
+void MethodSimilarityOrderer::order(std::vector<DexMethod*>& methods,
+                                    ConfigFiles* conf_files) {
   Timer t("Reordering methods by similarity");
+
+  std::unique_ptr<MethodProfileOrderingConfig> mpoc{nullptr};
+  std::unique_ptr<method_profiles::dexmethods_profiled_comparator> comparator{
+      nullptr};
+
+  if (conf_files != nullptr) {
+    // Copy intended!
+    mpoc = std::make_unique<MethodProfileOrderingConfig>(
+        *conf_files->get_global_config()
+             .get_config_by_name<MethodProfileOrderingConfig>(
+                 "method_profile_order"));
+    mpoc->legacy_order = false;
+    mpoc->min_appear_percent = 1.0f;
+    comparator =
+        std::make_unique<method_profiles::dexmethods_profiled_comparator>(
+            std::vector<DexMethod*>(), &conf_files->get_method_profiles(),
+            mpoc.get());
+  }
+
   for (auto* method : methods) {
-    insert(method);
+    insert(method, comparator.get());
   }
 
   methods.clear();
