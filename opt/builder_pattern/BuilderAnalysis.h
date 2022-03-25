@@ -46,6 +46,8 @@ class BuilderAnalysis final {
   const InstantiationToUsage& get_usage() { return m_usage; }
   size_t get_num_usages() const { return m_usage.size(); }
   size_t get_total_num_usages() const { return m_total_usages; }
+  void set_num_inline_iterations(size_t num) { m_num_inline_iterations = num; }
+  size_t get_num_inline_iterations() const { return m_num_inline_iterations; }
 
   std::unordered_map<IRInstruction*, DexType*>
   get_vinvokes_to_this_infered_type();
@@ -66,6 +68,7 @@ class BuilderAnalysis final {
 
   DexMethod* m_method;
   size_t m_total_usages;
+  size_t m_num_inline_iterations{0};
   bool m_accept_excluded;
 
   void update_stats();

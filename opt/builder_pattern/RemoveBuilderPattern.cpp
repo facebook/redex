@@ -23,6 +23,9 @@
 
 namespace builder_pattern {
 
+constexpr size_t MAX_NUM_INLINE_ITERATION = 10;
+constexpr size_t MAX_NUM_INLINE_ITERATION_FOR_SIMPLE_BUILDERS = 4;
+
 namespace {
 
 /**
@@ -64,6 +67,7 @@ class RemoveClasses {
                 const inliner::InlinerConfig& inliner_config,
                 const std::vector<DexType*>& blocklist,
                 bool propagate_escape_results,
+                const size_t max_num_inline_iteration,
                 DexStoresVector& stores)
       : m_root(super_cls),
         m_scope(scope),
@@ -76,6 +80,7 @@ class RemoveClasses {
                     init_classes_with_side_effects,
                     inliner_config,
                     stores),
+        m_max_num_inline_iteration(max_num_inline_iteration),
         m_stores(stores) {
     gather_classes();
   }
@@ -117,6 +122,13 @@ class RemoveClasses {
     mgr.set_metric(root_name + "_num_classes_removed", m_removed_types.size());
     for (const auto& type : m_removed_types) {
       TRACE(BLD_PATTERN, 2, "Removed type: %s", SHOW(type));
+    }
+    for (const auto& pair : m_num_inline_iterations) {
+      std::stringstream metric;
+      metric << "_num_inline_iteration_" << pair.first;
+      mgr.incr_metric(root_name + metric.str(), pair.second);
+      TRACE(BLD_PATTERN, 4, "%s_num_inline_iteration %ld %ld",
+            root_name.c_str(), pair.first, pair.second);
     }
   }
 
@@ -172,6 +184,7 @@ class RemoveClasses {
       bool have_builders_to_remove =
           inline_builders_and_check_method(method, &analysis);
       m_num_usages += analysis.get_total_num_usages();
+      m_num_inline_iterations[analysis.get_num_inline_iterations()]++;
 
       if (!have_builders_to_remove) {
         continue;
@@ -236,8 +249,9 @@ class RemoveClasses {
     std::unordered_set<const DexType*> local_excludes;
 
     std::unique_ptr<IRCode> original_code = nullptr;
+    size_t num_iterations = 1;
 
-    do {
+    for (; num_iterations < m_max_num_inline_iteration; num_iterations++) {
       analysis->run_analysis();
 
       std::vector<IRInstruction*> deleted_insns;
@@ -336,7 +350,7 @@ class RemoveClasses {
       // If we inlined everything, we still need to make sure we don't have
       // new methods to inline (for example from something that was inlined
       // in this step).
-    } while (true);
+    }
 
     for (const DexType* type : local_excludes) {
       m_excluded_types.erase(type);
@@ -344,6 +358,8 @@ class RemoveClasses {
     if (!builders_to_remove && original_code != nullptr) {
       method->set_code(std::move(original_code));
     }
+
+    analysis->set_num_inline_iterations(num_iterations);
     return builders_to_remove;
   }
 
@@ -358,6 +374,8 @@ class RemoveClasses {
   std::unordered_set<const DexType*> m_removed_types;
   size_t m_num_usages{0};
   size_t m_num_removed_usages{0};
+  size_t m_max_num_inline_iteration{0};
+  std::map<size_t, size_t> m_num_inline_iterations;
   const DexStoresVector& m_stores;
 };
 
@@ -399,9 +417,14 @@ void RemoveBuilderPatternPass::run_pass(DexStoresVector& stores,
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, conf.create_init_class_insns());
   for (const auto& root : m_roots) {
+    size_t max_num_inline_iteration = MAX_NUM_INLINE_ITERATION;
+    if (root == type::java_lang_Object()) {
+      max_num_inline_iteration = MAX_NUM_INLINE_ITERATION_FOR_SIMPLE_BUILDERS;
+    }
     RemoveClasses rm_builder_pattern(
         root, scope, init_classes_with_side_effects, conf.get_inliner_config(),
-        m_blocklist, m_propagate_escape_results, stores);
+        m_blocklist, m_propagate_escape_results, max_num_inline_iteration,
+        stores);
     rm_builder_pattern.optimize();
     rm_builder_pattern.print_stats(mgr);
     rm_builder_pattern.cleanup();
