@@ -376,7 +376,7 @@ bool ResourceTableVisitor::visit_type(android::ResTable_package* package,
     if (!entry) {
       continue;
     }
-    if (entry->flags & android::ResTable_entry::FLAG_COMPLEX) {
+    if (dtohs(entry->flags) & android::ResTable_entry::FLAG_COMPLEX) {
       auto map_entry = static_cast<android::ResTable_map_entry*>(entry);
       auto entry_count = dtohl(map_entry->count);
       if (!visit_map_entry(package, type_spec, type, map_entry)) {
