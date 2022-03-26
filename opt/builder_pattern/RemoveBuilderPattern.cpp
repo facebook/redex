@@ -58,6 +58,18 @@ std::unordered_set<DexType*> get_associated_buildees(
   return buildees;
 }
 
+bool has_statics(const DexClass* cls) {
+  always_assert(cls);
+  auto& dmethods = cls->get_dmethods();
+  for (const auto* m : dmethods) {
+    if (is_static(m)) {
+      return true;
+    }
+  }
+
+  return !cls->get_sfields().empty();
+}
+
 class RemoveClasses {
  public:
   RemoveClasses(const DexType* super_cls,
@@ -138,12 +150,24 @@ class RemoveClasses {
     auto* object_type = type::java_lang_Object();
     boost::regex re("\\$Builder;$");
 
-    // We are only tackling leaf classes.
     for (const DexType* type : subclasses) {
-      if (m_type_system.get_children(type).empty()) {
-        if (m_root != object_type || boost::regex_search(type->c_str(), re)) {
-          m_classes.emplace(type);
-        }
+      if (!m_type_system.get_children(type).empty()) {
+        // Only leaf classes
+        continue;
+      }
+
+      auto cls = type_class(type);
+      if (!cls || cls->is_external()) {
+        continue;
+      }
+
+      if (m_root == object_type && has_statics(cls)) {
+        // Only simple builders with no static methods or fields.
+        continue;
+      }
+      // For Builders extending j/l/Object;, we filter by name.
+      if (m_root != object_type || boost::regex_search(type->c_str(), re)) {
+        m_classes.emplace(type);
       }
     }
   }
