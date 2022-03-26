@@ -440,6 +440,13 @@ void RemoveBuilderPatternPass::run_pass(DexStoresVector& stores,
   auto scope = build_class_scope(stores);
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, conf.create_init_class_insns());
+  // For 2nd instance or later instances of the pass, fall back the roots to
+  // have only j/l/Object;.
+  if (mgr.get_current_pass_info()->repeat > 0) {
+    m_roots.clear();
+    m_roots.push_back(type::java_lang_Object());
+  }
+
   for (const auto& root : m_roots) {
     size_t max_num_inline_iteration = MAX_NUM_INLINE_ITERATION;
     if (root == type::java_lang_Object()) {
