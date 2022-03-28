@@ -122,7 +122,7 @@ struct ClassMatcher {
  private:
   bool match_name(const DexClass* cls, int index) const {
     const auto& deob_name = cls->get_deobfuscated_name();
-    auto rx = *m_cls[index];
+    const auto& rx = *m_cls[index];
     return boost::regex_match(deob_name.str(), rx);
   }
 
@@ -317,11 +317,12 @@ class KeepRuleMatcher {
   bool has_annotation(const DexMember* member,
                       const std::string& annotation) const;
 
-  boost::regex register_matcher(const std::string& regex) const {
-    if (!m_regex_map.count(regex)) {
-      m_regex_map.emplace(regex, boost::regex{regex});
+  const boost::regex& register_matcher(const std::string& regex) const {
+    auto it = m_regex_map.find(regex);
+    if (it == m_regex_map.end()) {
+      it = m_regex_map.emplace(regex, boost::regex{regex}).first;
     }
-    return m_regex_map.at(regex);
+    return it->second;
   }
 
   bool is_unused() const {
