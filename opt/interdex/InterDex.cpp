@@ -1257,12 +1257,14 @@ void InterDex::flush_out_dex(DexInfo& dex_info, DexClass* canary_cls) {
       std::vector<DexClassWithSortNum> classes_with_sort_num;
       std::vector<DexClass*> remaining_classes;
       using namespace method_profiles;
+      // Copy intended!
+      auto mpoc = *m_conf.get_global_config()
+                       .get_config_by_name<MethodProfileOrderingConfig>(
+                           "method_profile_order");
+      mpoc.legacy_order = false;
+      mpoc.min_appear_percent = 1.0f;
       dexmethods_profiled_comparator comparator(
-          {},
-          &m_conf.get_method_profiles(),
-          &m_conf.get_method_sorting_allowlisted_substrings(),
-          /* legacy_order */ false,
-          /* min_appear_percent */ 1.0);
+          {}, &m_conf.get_method_profiles(), &mpoc);
       for (auto cls : classes) {
         if (cls->is_perf_sensitive()) {
           perf_sensitive_classes.push_back(cls);

@@ -8,6 +8,7 @@
 #pragma once
 
 #include <functional>
+#include <unordered_set>
 
 #include "Configurable.h"
 #include "InlinerConfig.h"
@@ -88,11 +89,27 @@ struct OptDecisionsConfig : public Configurable {
   void bind_config() override;
   std::string get_config_name() override { return "OptDecisionsConfig"; }
   std::string get_config_doc() override {
+    return "This configuration is used to direct Redex about ordering methods "
+           "with profiling data.";
+  }
+
+  bool enable_logs;
+};
+
+struct MethodProfileOrderingConfig : public Configurable {
+  void bind_config() override;
+
+  std::string get_config_name() override {
+    return "MethodProfileOrderingConfig";
+  }
+  std::string get_config_doc() override {
     return "This configuration is used to direct Redex if it should leave a "
            "log that explains the optimizations it has performed.";
   }
 
-  bool enable_logs;
+  std::unordered_set<std::string> method_sorting_allowlisted_substrings{};
+  bool legacy_order{true};
+  float min_appear_percent{10.0f};
 };
 
 class GlobalConfig;

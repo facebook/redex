@@ -37,7 +37,6 @@ ConfigFiles::ConfigFiles(const Json::Value& config, const std::string& outdir)
         config.get("default_coldstart_classes", "").asString();
   }
 
-  load_method_sorting_allowlisted_substrings();
   uint32_t instruction_size_bitwidth_limit =
       config.get("instruction_size_bitwidth_limit", 0).asUInt();
   always_assert_log(
@@ -220,18 +219,6 @@ const std::vector<std::string>& ConfigFiles::get_dead_class_list() {
     }
   }
   return m_dead_class_list;
-}
-
-void ConfigFiles::load_method_sorting_allowlisted_substrings() {
-  const auto& json_cfg = get_json_config();
-  Json::Value json_result;
-  json_cfg.get("method_sorting_allowlisted_substrings", Json::nullValue,
-               json_result);
-  if (!json_result.empty()) {
-    for (auto const& json_element : json_result) {
-      m_method_sorting_allowlisted_substrings.insert(json_element.asString());
-    }
-  }
 }
 
 void ConfigFiles::ensure_agg_method_stats_loaded() {

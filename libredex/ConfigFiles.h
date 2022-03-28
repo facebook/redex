@@ -97,11 +97,6 @@ struct ConfigFiles {
   const std::unordered_set<DexString*>& get_finalish_field_names();
   const std::unordered_set<DexType*>& get_do_not_devirt_anon();
 
-  const std::unordered_set<std::string>&
-  get_method_sorting_allowlisted_substrings() const {
-    return m_method_sorting_allowlisted_substrings;
-  }
-
   std::string metafile(const std::string& basename) const {
     if (basename.empty()) {
       return std::string();
@@ -161,7 +156,6 @@ struct ConfigFiles {
 
   std::vector<std::string> load_coldstart_classes();
   std::unordered_map<std::string, std::vector<std::string>> load_class_lists();
-  void load_method_sorting_allowlisted_substrings();
   void ensure_agg_method_stats_loaded();
   void load_inliner_config(inliner::InlinerConfig*);
 
@@ -172,7 +166,6 @@ struct ConfigFiles {
   std::unordered_map<std::string, std::vector<std::string>> m_class_lists;
   std::vector<std::string> m_dead_class_list;
   bool m_dead_class_list_attempted{false};
-  std::unordered_set<std::string> m_method_sorting_allowlisted_substrings;
   std::string m_printseeds; // Filename to dump computed seeds.
   std::unique_ptr<method_profiles::MethodProfiles> m_method_profiles;
 
