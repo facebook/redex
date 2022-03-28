@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -7,10 +7,12 @@
 
 #pragma once
 
+#include <set>
 #include <unordered_map>
 #include <unordered_set>
 
 #include "DexClass.h"
+#include "Timer.h"
 
 /**
  * Method ordering based on code similarity. Methods are selected one after
@@ -31,6 +33,8 @@ class MethodSimilarityOrderer {
 
   // Set of hash ids belonging to the previously chosen method code
   std::unordered_set<CodeHashId> m_last_code_hash_ids;
+
+  std::set<size_t> m_best_candidate_ids;
 
   // Mirrors the order in each the methods have been added to the orderer
   std::map<size_t, DexMethod*> m_methods;
@@ -57,22 +61,8 @@ class MethodSimilarityOrderer {
   void gather_code_hash_ids(const DexCode* code,
                             std::unordered_set<CodeHashId>& code_hash_ids);
 
+  void get_next();
+
  public:
-  explicit MethodSimilarityOrderer(const std::vector<DexMethod*>& methods) {
-    for (auto* method : methods) {
-      insert(method);
-    }
-  }
-
-  DexMethod* get_next();
-
-  static void order(std::vector<DexMethod*>& methods) {
-    MethodSimilarityOrderer mso(methods);
-    methods.clear();
-
-    DexMethod* next_method;
-    while ((next_method = mso.get_next()) != nullptr) {
-      methods.push_back(next_method);
-    }
-  }
+  void order(std::vector<DexMethod*>& methods);
 };

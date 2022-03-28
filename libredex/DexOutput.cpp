@@ -156,7 +156,8 @@ std::vector<DexMethod*> GatheredTypes::get_dexmethod_emitlist() {
 
 void GatheredTypes::sort_dexmethod_emitlist_method_ref_order(
     std::vector<DexMethod*>& lmeth) {
-  MethodSimilarityOrderer::order(lmeth);
+  MethodSimilarityOrderer similarity_orderer;
+  similarity_orderer.order(lmeth);
 }
 
 void GatheredTypes::sort_dexmethod_emitlist_default_order(
