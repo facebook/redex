@@ -346,7 +346,7 @@ void ResTableBuilder::serialize(android::Vector<char>* out) {
   auto header_size = sizeof(android::ResTable_header);
   push_short(android::RES_TABLE_TYPE, out);
   push_short(header_size, out);
-  auto total_size_pos = out->size() - initial_size;
+  auto total_size_pos = out->size();
   push_long(FILL_IN_LATER, out);
   push_long((uint32_t)m_packages.size(), out);
   // Global strings
@@ -359,7 +359,7 @@ void ResTableBuilder::serialize(android::Vector<char>* out) {
       push_chunk((android::ResChunk_header*)pair.second, out);
     }
   }
-  write_long_at_pos(total_size_pos, out->size(), out);
+  write_long_at_pos(total_size_pos, out->size() - initial_size, out);
 }
 
 } // namespace arsc
