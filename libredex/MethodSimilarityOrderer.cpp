@@ -8,7 +8,6 @@
 #include "MethodSimilarityOrderer.h"
 
 #include "DexInstruction.h"
-#include "MethodProfiles.h"
 #include "Show.h"
 #include "Trace.h"
 #include "WorkQueue.h"
@@ -183,26 +182,13 @@ void MethodSimilarityOrderer::compute_score() {
       indices);
 }
 
-void MethodSimilarityOrderer::insert(
-    DexMethod* method,
-    method_profiles::dexmethods_profiled_comparator* comparator) {
+void MethodSimilarityOrderer::insert(DexMethod* method) {
   always_assert(m_method_to_id.count(method) == 0);
   uint32_t index = m_id_to_method.size();
   m_id_to_method.emplace(index, method);
   m_method_to_id.emplace(method, index);
 
   auto& code_hash_ids = m_method_id_to_code_hash_ids[index];
-
-  if (type_class(method->get_class())->is_perf_sensitive()) {
-    return;
-  }
-
-  if (comparator != nullptr &&
-      comparator->get_overall_method_sort_num(method) <
-          method_profiles::dexmethods_profiled_comparator::VERY_END) {
-    return;
-  }
-
   auto* code = method->get_dex_code();
   if (code) {
     gather_code_hash_ids(code->get_instructions(), code_hash_ids);
@@ -216,13 +202,7 @@ MethodSimilarityOrderer::get_next() {
     return {};
   }
 
-  // If the next method is part of a perf sensitive class,
-  // then do not look for a candidate, just preserve the
-  // original order.
-  auto method_id = m_id_to_method.begin()->first;
-  bool is_next_perf_sensitive = m_method_id_to_code_hash_ids[method_id].empty();
-
-  if (!is_next_perf_sensitive && m_last_method_id != boost::none) {
+  if (m_last_method_id != boost::none) {
     // Iterate m_score_map from the highest score..
     for (const auto& [score, method_id_bitset] :
          m_score_map[m_method_id_to_buffer_id[*m_last_method_id]]) {
@@ -256,30 +236,11 @@ void MethodSimilarityOrderer::remove_method(DexMethod* meth) {
   m_method_to_id.erase(meth);
 }
 
-void MethodSimilarityOrderer::order(std::vector<DexMethod*>& methods,
-                                    ConfigFiles* conf_files) {
+void MethodSimilarityOrderer::order(std::vector<DexMethod*>& methods) {
   Timer t("Reordering methods by similarity");
 
-  std::unique_ptr<MethodProfileOrderingConfig> mpoc{nullptr};
-  std::unique_ptr<method_profiles::dexmethods_profiled_comparator> comparator{
-      nullptr};
-
-  if (conf_files != nullptr) {
-    // Copy intended!
-    mpoc = std::make_unique<MethodProfileOrderingConfig>(
-        *conf_files->get_global_config()
-             .get_config_by_name<MethodProfileOrderingConfig>(
-                 "method_profile_order"));
-    mpoc->legacy_order = false;
-    mpoc->min_appear_percent = 1.0f;
-    comparator =
-        std::make_unique<method_profiles::dexmethods_profiled_comparator>(
-            std::vector<DexMethod*>(), &conf_files->get_method_profiles(),
-            mpoc.get());
-  }
-
   for (auto* method : methods) {
-    insert(method, comparator.get());
+    insert(method);
   }
 
   methods.clear();
