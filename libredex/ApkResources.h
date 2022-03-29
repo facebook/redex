@@ -15,6 +15,8 @@
 #include <vector>
 
 #include "androidfw/ResourceTypes.h"
+#include "utils/Serialize.h"
+#include "utils/Visitor.h"
 
 #include "RedexMappedFile.h"
 #include "RedexResources.h"
@@ -49,6 +51,83 @@ struct TypeDefinition {
   android::String16 name16;
   std::vector<android::ResTable_config*> configs;
   std::vector<uint32_t> source_res_ids;
+};
+
+// Read the ResTable data structures and store a convenient organization of the
+// data pointers and the packages.
+// NOTE: Visitor super classes simply follow pointers, so all subclasses which
+// make use of/change data need to be aware of the potential for "canonical"
+// data offsets (hence the use of sets).
+class TableParser : public arsc::StringPoolRefVisitor {
+ public:
+  ~TableParser() override {}
+
+  bool visit_global_strings(android::ResStringPool_header* pool) override;
+  bool visit_package(android::ResTable_package* package) override;
+  bool visit_key_strings(android::ResTable_package* package,
+                         android::ResStringPool_header* pool) override;
+  bool visit_type_strings(android::ResTable_package* package,
+                          android::ResStringPool_header* pool) override;
+  bool visit_type_spec(android::ResTable_package* package,
+                       android::ResTable_typeSpec* type_spec) override;
+  bool visit_type(android::ResTable_package* package,
+                  android::ResTable_typeSpec* type_spec,
+                  android::ResTable_type* type) override;
+  bool visit_unknown_chunk(android::ResTable_package* package,
+                           android::ResChunk_header* header) override;
+
+  android::ResStringPool_header* m_global_pool_header;
+  std::map<android::ResTable_package*, android::ResStringPool_header*>
+      m_package_key_string_headers;
+  std::map<android::ResTable_package*, android::ResStringPool_header*>
+      m_package_type_string_headers;
+  // Simple organization of each ResTable_typeSpec in the package, and each
+  // spec's types/configs.
+  std::map<android::ResTable_package*, std::vector<arsc::TypeInfo>>
+      m_package_types;
+  std::set<android::ResTable_package*> m_packages;
+  // Chunks belonging to a package that we do not parse/edit. Meant to be
+  // preserved as-is when preparing output file.
+  std::map<android::ResTable_package*, std::vector<android::ResChunk_header*>>
+      m_package_unknown_chunks;
+};
+
+using TypeToEntries =
+    std::map<android::ResTable_type*, std::vector<arsc::EntryValueData>>;
+using ConfigToEntry = std::map<android::ResTable_config*, arsc::EntryValueData>;
+
+class TableEntryParser : public TableParser {
+ public:
+  ~TableEntryParser() override {}
+
+  bool visit_type_spec(android::ResTable_package* package,
+                       android::ResTable_typeSpec* type_spec) override;
+  bool visit_type(android::ResTable_package* package,
+                  android::ResTable_typeSpec* type_spec,
+                  android::ResTable_type* type) override;
+
+  // For a package, the mapping from each type within all type specs to all the
+  // entries/values.
+  std::unordered_map<android::ResTable_package*, TypeToEntries>
+      m_types_to_entries;
+  // Package and type ID to spec
+  std::map<uint16_t, android::ResTable_typeSpec*> m_types;
+  // Package and type ID to all configs in that type
+  std::map<uint16_t, std::vector<android::ResTable_type*>> m_types_to_configs;
+  // Resource ID to the corresponding entries (in all configs).
+  std::map<uint32_t, ConfigToEntry> m_res_id_to_entries;
+  std::map<uint32_t, uint32_t> m_res_id_to_flags;
+
+ private:
+  // Convenience function to make it easy to uniquely refer to a type.
+  uint16_t make_package_type_id(android::ResTable_package* package,
+                                uint8_t type_id) {
+    return ((dtohl(package->id) & 0xFF) << 8) | type_id;
+  }
+  void put_entry_data(uint32_t res_id,
+                      android::ResTable_package* package,
+                      android::ResTable_type* type,
+                      arsc::EntryValueData& data);
 };
 } // namespace apk
 
