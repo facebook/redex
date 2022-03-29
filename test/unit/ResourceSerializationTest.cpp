@@ -88,6 +88,16 @@ bool are_files_equal(const std::string& p1, const std::string& p2) {
                     std::istreambuf_iterator<char>(),
                     std::istreambuf_iterator<char>(f2.rdbuf()));
 }
+
+void write_to_file(const std::string& output_path,
+                   android::Vector<char>& data) {
+  std::ofstream fout(output_path,
+                     std::ios::out | std::ios::binary | std::ios::trunc);
+  always_assert_log(fout.is_open(), "Could not open path %s for writing",
+                    output_path.c_str());
+  fout.write(data.array(), data.size());
+  fout.close();
+}
 } // namespace
 
 TEST(ResStringPool, ReplaceStringsInXmlLayout) {
@@ -397,13 +407,16 @@ TEST(ResTable, ComputeSizes) {
 }
 
 namespace {
-// A simple arsc file that many tests can get written against.
+// Data for a simple arsc file that many tests can get written against.
 EntryAndValue e0(0, android::Res_value::TYPE_DIMENSION, 1000);
 EntryAndValue e0_land(0, android::Res_value::TYPE_DIMENSION, 1001);
 EntryAndValue e1(1, android::Res_value::TYPE_DIMENSION, 2000);
 EntryAndValue e2(2, android::Res_value::TYPE_REFERENCE, 0x7f010001);
 MapEntryAndValues style(3, 0);
 
+// The package that all tests to follow will be in
+android::ResTable_package package_header{.id = 0x7f,
+                                         .name = {'f', 'o', 'o', '\0'}};
 // Create a default ResTable_config
 android::ResTable_config default_config = {
     .size = sizeof(android::ResTable_config)};
@@ -439,13 +452,6 @@ void build_arsc_file_and_validate(
     type_strings_builder->add_string(type_names[i], strlen(type_names[i]));
   }
 
-  android::ResTable_package package_header{};
-  package_header.id = 0x7f;
-  memset(&package_header.name, 0, 128); // do I need this??
-  package_header.name[0] = 'f';
-  package_header.name[1] = 'o';
-  package_header.name[2] = 'o';
-  package_header.name[3] = '\0';
   auto package_builder =
       std::make_shared<arsc::ResPackageBuilder>(&package_header);
   package_builder->set_key_strings(key_strings_builder);
@@ -504,85 +510,279 @@ void build_arsc_file_and_validate(
   auto tmp_dir = redex::make_tmp_dir("ResTable_BuildNewTable%%%%%%%%");
   auto dest_file_path = tmp_dir.path + "/resources.arsc";
   std::cerr << "Writing new table to " << dest_file_path.c_str() << std::endl;
-  std::ofstream fout(dest_file_path,
-                     std::ios::out | std::ios::binary | std::ios::trunc);
-  always_assert_log(fout.is_open(), "Could not open path %s for writing",
-                    dest_file_path.c_str());
-  fout.write(out.array(), out.size());
-  fout.close();
+  write_to_file(dest_file_path, out);
   callback(tmp_dir.path, dest_file_path);
 }
 
+// Look up a string like "com.facebook.foo:dimen/whatever" and return the ID.
+uint32_t get_identifier(const android::ResTable& table,
+                        const char* fully_qualified_entry) {
+  android::String16 e(fully_qualified_entry);
+  return table.identifierForName(e.string(), e.size());
+}
+
+// Look up resource IDs by the package, type and entry names, even though we
+// could just compute them ourselves (battle test the type, key strings being
+// accurate).
+ssize_t get_value_by_name(const android::ResTable& table,
+                          const char* fully_qualified_entry,
+                          android::Res_value* out) {
+  return table.getResource(get_identifier(table, fully_qualified_entry), out);
+}
+
+void delete_resources(const std::string& arsc_file_path,
+                      const std::vector<uint32_t>& ids_to_delete) {
+  ResourcesArscFile arsc_file(arsc_file_path);
+  // Should delete all of the style entries and omit that typeSpec and
+  // type entirely during serialization.
+  for (const auto& id : ids_to_delete) {
+    arsc_file.delete_resource(id);
+  }
+  arsc_file.serialize();
+  // We actually have to reload the table, since all modifications are
+  // meant to be written directly to disk afterwards.
+  ResourcesArscFile reloaded_file(arsc_file_path);
+  reloaded_file.remove_unreferenced_strings();
+}
+
+UNUSED int32_t load_global_strings(const RedexMappedFile& arsc_file,
+                                   android::ResStringPool* pool) {
+  apk::TableParser parser;
+  parser.visit((void*)arsc_file.const_data(), arsc_file.size());
+  auto pool_header = parser.m_global_pool_header;
+  return pool->setTo(pool_header, pool_header->header.size);
+}
+
+int32_t load_key_strings(const RedexMappedFile& arsc_file,
+                         android::ResStringPool* pool) {
+  apk::TableParser parser;
+  parser.visit((void*)arsc_file.const_data(), arsc_file.size());
+  // Only 1 package in our test arsc file.
+  auto pool_header = parser.m_package_key_string_headers.begin()->second;
+  return pool->setTo(pool_header, pool_header->header.size);
+}
+
+int32_t load_type_strings(const RedexMappedFile& arsc_file,
+                          android::ResStringPool* pool) {
+  apk::TableParser parser;
+  parser.visit((void*)arsc_file.const_data(), arsc_file.size());
+  // Only 1 package in our test arsc file.
+  auto pool_header = parser.m_package_type_string_headers.begin()->second;
+  return pool->setTo(pool_header, pool_header->header.size);
+}
+
+std::vector<arsc::TypeInfo> load_types(const RedexMappedFile& arsc_file) {
+  apk::TableParser parser;
+  parser.visit((void*)arsc_file.const_data(), arsc_file.size());
+  return parser.m_package_types.begin()->second;
+}
+
+// Assert values in the table match the expected "EntryAndValue"
+#define ASSERT_ENTRY_VALUES(table, entry_str, expected)                     \
+  ({                                                                        \
+    android::Res_value __actual_value;                                      \
+    EXPECT_EQ(get_value_by_name((table), (entry_str), &__actual_value), 0); \
+    EXPECT_EQ((expected).value.size, __actual_value.size);                  \
+    EXPECT_EQ((expected).value.dataType, __actual_value.dataType);          \
+    EXPECT_EQ((expected).value.data, __actual_value.data);                  \
+  })
+// Assert values in the table match the two items expecrted in the
+// "MapEntryAndValues"
+#define ASSERT_MAP_ENTRY_VALUES(table, entry_str, expected)                  \
+  ({                                                                         \
+    const android::ResTable::bag_entry* __bag_entry;                         \
+    EXPECT_EQ(                                                               \
+        (table).lockBag(get_identifier((table), (entry_str)), &__bag_entry), \
+        2);                                                                  \
+    EXPECT_EQ(__bag_entry->map.name.ident, (expected).item0.name.ident);     \
+    EXPECT_EQ(__bag_entry->map.value.dataType,                               \
+              (expected).item0.value.dataType);                              \
+    EXPECT_EQ(__bag_entry->map.value.data, (expected).item0.value.data);     \
+    __bag_entry++;                                                           \
+    EXPECT_EQ(__bag_entry->map.name.ident, (expected).item1.name.ident);     \
+    EXPECT_EQ(__bag_entry->map.value.dataType,                               \
+              (expected).item1.value.dataType);                              \
+    EXPECT_EQ(__bag_entry->map.value.data, (expected).item1.value.data);     \
+    __bag_entry--;                                                           \
+    (table).unlockBag(__bag_entry);                                          \
+  })
 } // namespace
 
 TEST(ResTable, BuildNewTable) {
-  build_arsc_file_and_validate([&](const std::string& temp_dir,
-                                   const std::string& arsc_path) {
-    // Now, use unforked AOSP APIs to read out the data to make sure it matches
-    // the stuff we put in.
-    auto built_arsc_file = RedexMappedFile::open(arsc_path);
-    android::ResTable built_arsc_table;
-    EXPECT_EQ(built_arsc_table.add(built_arsc_file.const_data(),
-                                   built_arsc_file.size()),
-              0)
-        << "Could not read built data!";
+  build_arsc_file_and_validate(
+      [&](const std::string& /* unused */, const std::string& arsc_path) {
+        // Now, use unforked AOSP APIs to read out the data to make sure it
+        // matches the stuff we put in.
+        auto built_arsc_file = RedexMappedFile::open(arsc_path);
+        android::ResTable built_arsc_table;
+        EXPECT_EQ(built_arsc_table.add(built_arsc_file.const_data(),
+                                       built_arsc_file.size()),
+                  0)
+            << "Could not read built data!";
+        // 0x7f010000
+        ASSERT_ENTRY_VALUES(built_arsc_table, "foo:dimen/first", e0);
+        // 0x7f010001
+        ASSERT_ENTRY_VALUES(built_arsc_table, "foo:dimen/second", e1);
+        // 0x7f010002
+        ASSERT_ENTRY_VALUES(built_arsc_table, "foo:dimen/third", e2);
+        // Rotate to landscape should get different values for entry 0x7f010000
+        built_arsc_table.setParameters(&land_config);
+        ASSERT_ENTRY_VALUES(built_arsc_table, "foo:dimen/first", e0_land);
+        // This one should resolve to same value as 0x7f010001 before, even in
+        // landscape mode
+        ASSERT_ENTRY_VALUES(built_arsc_table, "foo:dimen/second", e1);
+        // Use the crazy APIs for reading plurals, styles, etc.
+        ASSERT_MAP_ENTRY_VALUES(built_arsc_table, "foo:style/fourth", style);
+      });
+}
 
-    // Look up resource IDs by the package, type and entry names, even though we
-    // could just compute them ourselves (battle test the type, key strings
-    // being accurate).
-    auto get_id = [&](const char* fully_qualified_entry) {
-      android::String16 e(fully_qualified_entry);
-      return built_arsc_table.identifierForName(e.string(), e.size());
-    };
+TEST(ResTable, DeleteAllEntriesInType) {
+  build_arsc_file_and_validate(
+      [&](const std::string& /* unused */, const std::string& arsc_path) {
+        // Delete everything in the style type.
+        delete_resources(arsc_path, {0x7f020000});
+        // Use AOSP API to make sure the table is still valid after deletion.
+        auto built_arsc_file = RedexMappedFile::open(arsc_path);
+        android::ResTable built_arsc_table;
+        EXPECT_EQ(built_arsc_table.add(built_arsc_file.const_data(),
+                                       built_arsc_file.size()),
+                  0)
+            << "Could not read built data!";
+        // 0x7f010000
+        ASSERT_ENTRY_VALUES(built_arsc_table, "foo:dimen/first", e0);
+        // 0x7f010001
+        ASSERT_ENTRY_VALUES(built_arsc_table, "foo:dimen/second", e1);
+        // 0x7f010002
+        ASSERT_ENTRY_VALUES(built_arsc_table, "foo:dimen/third", e2);
+        // Rotate to landscape should get different values for entry 0x7f010000
+        built_arsc_table.setParameters(&land_config);
+        ASSERT_ENTRY_VALUES(built_arsc_table, "foo:dimen/first", e0_land);
 
-    android::Res_value value;
-    // 0x7f010000
-    EXPECT_EQ(built_arsc_table.getResource(get_id("foo:dimen/first"), &value),
-              0);
-    EXPECT_EQ(e0.value.size, value.size);
-    EXPECT_EQ(e0.value.dataType, value.dataType);
-    EXPECT_EQ(e0.value.data, value.data);
+        // This one should have been deleted!!
+        EXPECT_EQ(get_identifier(built_arsc_table, "foo:style/fourth"), 0)
+            << "Style was not properly deleted!";
 
-    // 0x7f010001
-    EXPECT_EQ(built_arsc_table.getResource(get_id("foo:dimen/second"), &value),
-              0);
-    EXPECT_EQ(e1.value.size, value.size);
-    EXPECT_EQ(e1.value.dataType, value.dataType);
-    EXPECT_EQ(e1.value.data, value.data);
+        // Check the validity of the string pools and ensure data is getting
+        // fully cleaned up.
+        {
+          // Make sure the key for "fourth" got deleted.
+          android::ResStringPool pool;
+          EXPECT_EQ(load_key_strings(built_arsc_file, &pool), 0);
+          EXPECT_EQ(pool.size(), 3);
+          std::unordered_set<std::string> string_values;
+          for (size_t i = 0; i < pool.size(); i++) {
+            string_values.emplace(apk::get_string_from_pool(pool, i));
+          }
+          EXPECT_EQ(string_values.count("fourth"), 0);
+          EXPECT_EQ(string_values.count("first"), 1);
+          EXPECT_EQ(string_values.count("second"), 1);
+          EXPECT_EQ(string_values.count("third"), 1);
+        }
+        {
+          // We do not yet delete the type names, for now just validate that
+          // dimen is still here.
+          android::ResStringPool pool;
+          EXPECT_EQ(load_type_strings(built_arsc_file, &pool), 0);
+          std::unordered_set<std::string> string_values;
+          for (size_t i = 0; i < pool.size(); i++) {
+            string_values.emplace(apk::get_string_from_pool(pool, i));
+          }
+          EXPECT_EQ(string_values.count("dimen"), 1);
+        }
 
-    // 0x7f010002
-    EXPECT_EQ(built_arsc_table.getResource(get_id("foo:dimen/third"), &value),
-              0);
-    EXPECT_EQ(e2.value.size, value.size);
-    EXPECT_EQ(e2.value.dataType, value.dataType);
-    EXPECT_EQ(e2.value.data, value.data);
+        // Ensure that we have only 1 ResTable_typeSpec, but two configs within.
+        auto type_infos = load_types(built_arsc_file);
+        EXPECT_EQ(type_infos.size(), 1) << "ResTable_typeSpec not cleaned up!";
+        EXPECT_EQ(type_infos.at(0).configs.size(), 2);
+      });
+}
 
-    built_arsc_table.setParameters(&land_config);
-    // Rotate to landscape should get different values for entry 0x7f010000
-    built_arsc_table.getResource(get_id("foo:dimen/first"), &value);
-    EXPECT_EQ(e0_land.value.size, value.size);
-    EXPECT_EQ(e0_land.value.dataType, value.dataType);
-    EXPECT_EQ(e0_land.value.data, value.data);
+TEST(ResTable, DeleteAllLandscapeEntries) {
+  build_arsc_file_and_validate(
+      [&](const std::string& /* unused */, const std::string& arsc_path) {
+        // Delete the lone dimen entry that has a landscape override.
+        delete_resources(arsc_path, {0x7f010000});
+        // Use AOSP API to make sure the table is still valid after deletion.
+        auto built_arsc_file = RedexMappedFile::open(arsc_path);
+        android::ResTable built_arsc_table;
+        EXPECT_EQ(built_arsc_table.add(built_arsc_file.const_data(),
+                                       built_arsc_file.size()),
+                  0)
+            << "Could not read built data!";
 
-    // This one should resolve to same value as 0x7f010001 before
-    EXPECT_EQ(built_arsc_table.getResource(get_id("foo:dimen/second"), &value),
-              0);
-    EXPECT_EQ(e1.value.size, value.size);
-    EXPECT_EQ(e1.value.dataType, value.dataType);
-    EXPECT_EQ(e1.value.data, value.data);
+        // This one should have been deleted!!
+        EXPECT_EQ(get_identifier(built_arsc_table, "foo:dimen/first"), 0)
+            << "Entry was not properly deleted!";
 
-    // Crazy APIs for reading plurals, styles, etc.
-    const android::ResTable::bag_entry* bag_entry;
-    EXPECT_EQ(built_arsc_table.lockBag(get_id("foo:style/fourth"), &bag_entry),
-              2);
-    EXPECT_EQ(bag_entry->map.name.ident, style.item0.name.ident);
-    EXPECT_EQ(bag_entry->map.value.dataType, style.item0.value.dataType);
-    EXPECT_EQ(bag_entry->map.value.data, style.item0.value.data);
-    bag_entry++;
-    EXPECT_EQ(bag_entry->map.name.ident, style.item1.name.ident);
-    EXPECT_EQ(bag_entry->map.value.dataType, style.item1.value.dataType);
-    EXPECT_EQ(bag_entry->map.value.data, style.item1.value.data);
-    bag_entry--;
-    built_arsc_table.unlockBag(bag_entry);
-  });
+        ASSERT_ENTRY_VALUES(built_arsc_table, "foo:dimen/second", e1);
+        ASSERT_ENTRY_VALUES(built_arsc_table, "foo:dimen/third", e2);
+        ASSERT_MAP_ENTRY_VALUES(built_arsc_table, "foo:style/fourth", style);
+
+        // Deleting the resource should ensure that no ResTable_type for
+        // landscape config was emitted. We should still have two
+        // ResTable_typeSpec structs though.
+        auto type_infos = load_types(built_arsc_file);
+        EXPECT_EQ(type_infos.size(), 2);
+        EXPECT_EQ(type_infos.at(0).configs.size(), 1)
+            << "ResTable_type not cleaned up!";
+        EXPECT_EQ(type_infos.at(1).configs.size(), 1);
+      });
+}
+
+TEST(ResTable, SerializeTypeWithAllEmpty) {
+  auto pool_flags = android::ResStringPool_header::UTF8_FLAG;
+  auto global_strings_builder =
+      std::make_shared<arsc::ResStringPoolBuilder>(pool_flags);
+  auto key_strings_builder =
+      std::make_shared<arsc::ResStringPoolBuilder>(pool_flags);
+  auto type_strings_builder =
+      std::make_shared<arsc::ResStringPoolBuilder>(pool_flags);
+  std::string type_name("dimen");
+  type_strings_builder->add_string(type_name.c_str(), type_name.size());
+
+  auto package_builder =
+      std::make_shared<arsc::ResPackageBuilder>(&package_header);
+  package_builder->set_key_strings(key_strings_builder);
+  package_builder->set_type_strings(type_strings_builder);
+
+  auto table_builder = std::make_shared<arsc::ResTableBuilder>();
+  table_builder->set_global_strings(global_strings_builder);
+  table_builder->add_package(package_builder);
+
+  // Make a dimen type that is entirely full of empty things
+  std::vector<android::ResTable_config*> dimen_configs = {&default_config};
+  std::vector<uint32_t> dimen_flags = {0, 0, 0};
+  auto dimen_type_definer = std::make_shared<arsc::ResTableTypeDefiner>(
+      package_header.id, 1, dimen_configs, dimen_flags);
+  package_builder->add_type(dimen_type_definer);
+  dimen_type_definer->add_empty(&default_config);
+  dimen_type_definer->add_empty(&default_config);
+  dimen_type_definer->add_empty(&default_config);
+
+  // Write to a file, which should be omitting the ResTable_typeSpec and
+  // ResTable_type!
+  android::Vector<char> out;
+  table_builder->serialize(&out);
+
+  auto tmp_dir =
+      redex::make_tmp_dir("ResTable_SerializeTypeWithAllEmpty%%%%%%%%");
+  auto dest_file_path = tmp_dir.path + "/resources.arsc";
+  write_to_file(dest_file_path, out);
+
+  auto build_arsc_file = RedexMappedFile::open(dest_file_path);
+  apk::TableParser parser;
+  parser.visit((void*)build_arsc_file.const_data(), build_arsc_file.size());
+  // Make sure there are no type structures (actual assert is a little wishy
+  // washy here cause representing empty data could sensibly be done in
+  // different ways).
+  EXPECT_TRUE(parser.m_package_types.empty() ||
+              parser.m_package_types.begin()->second.empty())
+      << "Should not emit type headers for empty data";
+
+  // Final check, make sure Android APIs can parse the table with no types.
+  android::ResTable built_arsc_table;
+  EXPECT_EQ(built_arsc_table.add(build_arsc_file.const_data(),
+                                 build_arsc_file.size()),
+            0)
+      << "Could not read table!";
 }
