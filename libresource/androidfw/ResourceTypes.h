@@ -1609,8 +1609,6 @@ public:
 
     status_t getError() const;
 
-    status_t serialize(Vector<char>& cVec, size_t resTableIndex);
-
     void uninit();
 
     struct resource_name
@@ -1898,28 +1896,6 @@ public:
     void print(bool inclValues) const;
     void getResourceIds(SortedVector<uint32_t>* sVec) const;
 
-    // Marks the entries (across each config) for the given resource ID as deleted.
-    // Only takes effect during serialization (any deleted rows will be skipped).
-    void deleteResource(uint32_t resID);
-
-    // Defines a ResTable::Type containing the entry data for the given ids.
-    // This adds a new ResTable_typeSpec, followed by 1 ResTable_type for each
-    // given config.
-    void defineNewType(
-      String8 type_name,
-      uint8_t type_id,
-      const Vector<ResTable_config>& configs,
-      const Vector<uint32_t>& source_ids);
-
-    // For the given resource ID, looks across all configurations and remaps all
-    // reference and attribute Res_value entries based on the given
-    // originalIds -> newIds mapping. The entries in the inputs are expected to
-    // align based on index.
-    void remapReferenceValuesForResource(
-        uint32_t resID,
-        SortedVector<uint32_t> originalIds,
-        Vector<uint32_t> newIds);
-
     // For the given resource ID, looks across all configurations and returns all
     // the corresponding Res_value entries. This is much more reliable than
     // ResTable::getResource, which fails for roughly 20% of resources and does not
@@ -1991,13 +1967,6 @@ private:
         const ResTable_package* const pkg, const Header* const header);
 
     void print_value(const Package* pkg, const Res_value& value) const;
-
-    void serializeSingleResType(
-      Vector<char>& output,
-      const uint8_t type_id,
-      const PackageGroup* pg,
-      const ResTable_config& config,
-      const Vector<uint32_t>& source_ids);
 
 #if !defined(_MSC_VER) && !defined(__MINGW64__) && !defined(__MINGW32__)
     mutable Mutex               mLock;

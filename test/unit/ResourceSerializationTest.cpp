@@ -230,16 +230,6 @@ TEST(ResStringPool, ReplaceStringsInXmlLayout) {
   EXPECT_EQ(tag_count, 5);
 }
 
-TEST(ResTable, TestRoundTrip) {
-  auto f = RedexMappedFile::open(std::getenv("test_arsc_path"));
-  android::ResTable table;
-  ASSERT_EQ(table.add(f.const_data(), f.size()), 0);
-  // Just invoke the serialize method to ensure the same data comes back
-  android::Vector<char> serialized;
-  table.serialize(serialized, 0);
-  assert_serialized_data(f.const_data(), f.size(), serialized);
-}
-
 TEST(ResTable, AppendNewType) {
   auto src_file_path = std::getenv("test_arsc_path");
   auto tmp_dir = redex::make_tmp_dir("ResTable_AppendNewType%%%%%%%%");
