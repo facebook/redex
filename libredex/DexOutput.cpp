@@ -155,10 +155,79 @@ std::vector<DexMethod*> GatheredTypes::get_dexmethod_emitlist() {
   return methlist;
 }
 
-void GatheredTypes::sort_dexmethod_emitlist_method_ref_order(
+void GatheredTypes::sort_dexmethod_emitlist_method_similarity_order(
     std::vector<DexMethod*>& lmeth) {
-  MethodSimilarityOrderer similarity_orderer;
-  similarity_orderer.order(lmeth);
+  // We keep "perf sensitive methods" together in front, and only order by
+  // similarity the remaining methods. Here, we consider as "perf sensitive
+  // methods" any methods in a class that...
+  // - is perf sensitive, which in particular includes all classes that are
+  //   ordered by beta maps
+  // - contains methods that contain any profiled methods with a very
+  //   conservative min-appear cut-off.
+  //
+  // This is similar to the exclusions that the InterDex pass applies when
+  // sorting remaining classes for better compression.
+  std::unordered_set<DexType*> perf_sensitive_classes;
+
+  std::unique_ptr<method_profiles::dexmethods_profiled_comparator> comparator{
+      nullptr};
+
+  // Some builds might not have method profiles information.
+  if (m_config != nullptr) {
+    MethodProfileOrderingConfig* config =
+        m_config->get_global_config()
+            .get_config_by_name<MethodProfileOrderingConfig>(
+                "method_profile_order");
+
+    auto& method_profiles = m_config->get_method_profiles();
+
+    if (config != nullptr && method_profiles.is_initialized()) {
+      comparator =
+          std::make_unique<method_profiles::dexmethods_profiled_comparator>(
+              lmeth,
+              /*method_profiles=*/&method_profiles,
+              config);
+    }
+  }
+
+  for (auto meth : lmeth) {
+    auto cls = type_class(meth->get_class());
+    if (cls->is_perf_sensitive()) {
+      perf_sensitive_classes.insert(meth->get_class());
+      continue;
+    }
+
+    if (comparator == nullptr) {
+      continue;
+    }
+    auto method_sort_num = comparator->get_overall_method_sort_num(meth);
+    if (method_sort_num <
+        method_profiles::dexmethods_profiled_comparator::VERY_END) {
+      perf_sensitive_classes.insert(meth->get_class());
+    }
+  }
+
+  std::vector<DexMethod*> perf_sensitive_methods;
+  std::vector<DexMethod*> remaining_methods;
+  for (auto meth : lmeth) {
+    if (perf_sensitive_classes.count(meth->get_class())) {
+      perf_sensitive_methods.push_back(meth);
+    } else {
+      remaining_methods.push_back(meth);
+    }
+  }
+
+  TRACE(
+      OPUT, 2,
+      "Skipping %zu perf sensitive methods, ordering %zu methods by similarity",
+      perf_sensitive_methods.size(), remaining_methods.size());
+  MethodSimilarityOrderer method_similarity_orderer;
+  method_similarity_orderer.order(remaining_methods);
+
+  lmeth.clear();
+  lmeth.insert(lmeth.end(), perf_sensitive_methods.begin(),
+               perf_sensitive_methods.end());
+  lmeth.insert(lmeth.end(), remaining_methods.begin(), remaining_methods.end());
 }
 
 void GatheredTypes::sort_dexmethod_emitlist_default_order(
@@ -985,8 +1054,8 @@ void DexOutput::generate_code_items(const std::vector<SortMode>& mode) {
             "Unsupport bytecode sorting method SortMode::CLASS_STRINGS");
       break;
     case SortMode::METHOD_SIMILARITY:
-      TRACE(CUSTOMSORT, 2, "using method refs order");
-      m_gtypes->sort_dexmethod_emitlist_method_ref_order(lmeth);
+      TRACE(CUSTOMSORT, 2, "using method similarity order");
+      m_gtypes->sort_dexmethod_emitlist_method_similarity_order(lmeth);
       break;
     case SortMode::DEFAULT:
       TRACE(CUSTOMSORT, 2, "using default sorting order");

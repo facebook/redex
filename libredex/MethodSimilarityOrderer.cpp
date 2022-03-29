@@ -84,10 +84,6 @@ void MethodSimilarityOrderer::insert(DexMethod* method) {
 
   auto& code_hash_ids = m_method_code_hash_ids[method];
 
-  if (type_class(method->get_class())->is_perf_sensitive()) {
-    return;
-  }
-
   auto* code = method->get_dex_code();
   if (code) {
     gather_code_hash_ids(code, code_hash_ids);
