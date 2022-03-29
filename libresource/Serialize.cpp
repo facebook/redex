@@ -300,6 +300,14 @@ void write_string_pool(
 }
 } // namespace
 
+ResPackageBuilder::ResPackageBuilder(android::ResTable_package* package) {
+  set_id(dtohl(package->id));
+  copy_package_name(package);
+  set_last_public_key(dtohl(package->lastPublicKey));
+  set_last_public_type(dtohl(package->lastPublicType));
+  set_type_id_offset(dtohl(package->typeIdOffset));
+}
+
 void ResPackageBuilder::serialize(android::Vector<char>* out) {
   android::Vector<char> temp;
   // Type strings

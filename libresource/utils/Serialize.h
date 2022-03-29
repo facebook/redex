@@ -91,6 +91,9 @@ struct TypeInfo {
 class ResPackageBuilder {
  public:
   ResPackageBuilder() : m_package_name{0} {}
+  // Copies fields from the source package that will remain unchanged in the
+  // output (i.e. id, package name, etc).
+  ResPackageBuilder(android::ResTable_package* package);
   void set_id(uint32_t id) { m_id = id; };
   void set_last_public_type(uint32_t last_public_type) {
     m_last_public_type = last_public_type;

@@ -1144,14 +1144,8 @@ void ResourcesArscFile::remove_unreferenced_strings() {
     //    chunks that had all their entries deleted.
     //
     auto& package = package_entries.first;
-    // Copy standard fields which will be unchanged in the output.
     std::shared_ptr<arsc::ResPackageBuilder> package_builder =
-        std::make_shared<arsc::ResPackageBuilder>();
-    package_builder->set_id(dtohl(package->id));
-    package_builder->copy_package_name(package);
-    package_builder->set_last_public_key(dtohl(package->lastPublicKey));
-    package_builder->set_last_public_type(dtohl(package->lastPublicType));
-    package_builder->set_type_id_offset(dtohl(package->typeIdOffset));
+        std::make_shared<arsc::ResPackageBuilder>(package);
 
     // Build new key string pool indicies.
     auto refs = package_entries.second;
