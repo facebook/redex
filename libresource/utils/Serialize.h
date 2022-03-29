@@ -33,6 +33,11 @@ void push_u8_length(size_t len, android::Vector<char>* vec);
 void encode_string8(const android::String8& s, android::Vector<char>* vec);
 void encode_string16(const android::String16& s, android::Vector<char>* vec);
 
+// Returns the size of the entry and the value data structure(s) that follow it.
+size_t compute_entry_value_length(android::ResTable_entry* entry);
+// Return in device order the flags for the entry in the type
+uint32_t get_spec_flags(android::ResTable_typeSpec* spec, uint16_t entry_id);
+
 using SpanVector = std::vector<android::ResStringPool_span*>;
 
 template <typename T>
@@ -77,6 +82,8 @@ class ResStringPoolBuilder {
   android::Vector<StyleInfo<char>> m_styles8;
 };
 
+
+using EntryValueData = PtrLen<uint8_t>;
 // Struct for defining an existing type and the collection of entries in all
 // configs.
 struct TypeInfo {

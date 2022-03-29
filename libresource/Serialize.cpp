@@ -130,6 +130,29 @@ void encode_string16(const android::String16& s, android::Vector<char>* vec) {
   encode_string16(s.string(), s.size(), vec);
 }
 
+size_t compute_entry_value_length(android::ResTable_entry* entry) {
+  if (entry == nullptr) {
+    return 0;
+  }
+  auto entry_size = dtohs(entry->size);
+  bool entry_is_complex =
+      (dtohs(entry->flags) & android::ResTable_entry::FLAG_COMPLEX) != 0;
+  if (entry_is_complex) {
+    auto map_entry_ptr = (android::ResTable_map_entry*)entry;
+    return entry_size +
+           dtohl(map_entry_ptr->count) * sizeof(android::ResTable_map);
+  } else {
+    auto value = (android::Res_value*)((uint8_t*)entry + entry_size);
+    return entry_size + dtohs(value->size);
+  }
+}
+
+uint32_t get_spec_flags(android::ResTable_typeSpec* spec, uint16_t entry_id) {
+  uint32_t* spec_flags =
+      (uint32_t*)((uint8_t*)spec + dtohs(spec->header.headerSize));
+  return *(spec_flags + entry_id);
+}
+
 void ResStringPoolBuilder::add_string(const char* s, size_t len) {
   LOG_ALWAYS_FATAL_IF(!is_utf8(), "Pool is not UTF-8");
   PtrLen<char> pair((char*)s, len);

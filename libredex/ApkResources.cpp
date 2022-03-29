@@ -25,6 +25,7 @@
 #endif
 
 #include "androidfw/ResourceTypes.h"
+#include "androidfw/TypeWrappers.h"
 #include "utils/ByteOrder.h"
 #include "utils/Errors.h"
 #include "utils/Log.h"
@@ -869,18 +870,23 @@ class StringPoolRefRemappingVisitor : public arsc::StringPoolRefVisitor {
   const std::unordered_map<uint32_t, uint32_t>& m_old_to_new;
 };
 
-// Collects string references into the global string pool from values and styles
-// and per package, the entries into the key string pool.
-class PackageStringRefCollector : public arsc::StringPoolRefVisitor {
+// Read the ResTable data structures and store a convenient organization of the
+// data pointers and the packages.
+// NOTE: Visitor super classes simply follow pointers, so all subclasses which
+// make use of/change data need to be aware of the potential for "canonical"
+// data offsets (hence the use of sets).
+class TableParser : public arsc::StringPoolRefVisitor {
  public:
-  ~PackageStringRefCollector() override {}
+  ~TableParser() override {}
+
+  bool visit_global_strings(android::ResStringPool_header* pool) override {
+    m_global_pool_header = pool;
+    arsc::StringPoolRefVisitor::visit_global_strings(pool);
+    return true;
+  }
 
   bool visit_package(android::ResTable_package* package) override {
-    std::set<android::ResStringPool_ref*> entries;
-    m_package_entries.emplace(package, std::move(entries));
-    std::shared_ptr<android::ResStringPool> key_strings =
-        std::make_shared<android::ResStringPool>();
-    m_package_key_strings.emplace(package, std::move(key_strings));
+    m_packages.emplace(package);
     std::vector<android::ResChunk_header*> headers;
     m_package_unknown_chunks.emplace(package, std::move(headers));
     StringPoolRefVisitor::visit_package(package);
@@ -889,13 +895,15 @@ class PackageStringRefCollector : public arsc::StringPoolRefVisitor {
 
   bool visit_key_strings(android::ResTable_package* package,
                          android::ResStringPool_header* pool) override {
-    auto& key_strings = m_package_key_strings.at(package);
-    always_assert_log(key_strings->getError() == android::NO_INIT,
-                      "Key strings re-init!");
-    always_assert_log(key_strings->setTo(pool, dtohl(pool->header.size)) ==
-                          android::NO_ERROR,
-                      "Failed to parse key strings!");
+    m_package_key_string_headers.emplace(package, pool);
     StringPoolRefVisitor::visit_key_strings(package, pool);
+    return true;
+  }
+
+  bool visit_type_strings(android::ResTable_package* package,
+                          android::ResStringPool_header* pool) override {
+    m_package_type_string_headers.emplace(package, pool);
+    StringPoolRefVisitor::visit_type_strings(package, pool);
     return true;
   }
 
@@ -927,10 +935,145 @@ class PackageStringRefCollector : public arsc::StringPoolRefVisitor {
     return true;
   }
 
-  bool visit_type_strings(android::ResTable_package* package,
-                          android::ResStringPool_header* pool) override {
-    m_package_type_strings.emplace(package, pool);
-    StringPoolRefVisitor::visit_type_strings(package, pool);
+  bool visit_unknown_chunk(android::ResTable_package* package,
+                           android::ResChunk_header* header) override {
+    auto& chunks = m_package_unknown_chunks.at(package);
+    chunks.emplace_back(header);
+    return true;
+  }
+
+  android::ResStringPool_header* m_global_pool_header;
+  std::map<android::ResTable_package*, android::ResStringPool_header*>
+      m_package_key_string_headers;
+  std::map<android::ResTable_package*, android::ResStringPool_header*>
+      m_package_type_string_headers;
+  // Simple organization of each ResTable_typeSpec in the package, and each
+  // spec's types/configs.
+  std::map<android::ResTable_package*, std::vector<arsc::TypeInfo>>
+      m_package_types;
+  std::set<android::ResTable_package*> m_packages;
+  // Chunks belonging to a package that we do not parse/edit. Meant to be
+  // preserved as-is when preparing output file.
+  std::map<android::ResTable_package*, std::vector<android::ResChunk_header*>>
+      m_package_unknown_chunks;
+};
+
+using TypeToEntries =
+    std::map<android::ResTable_type*, std::vector<arsc::EntryValueData>>;
+using ConfigToEntry = std::map<android::ResTable_config*, arsc::EntryValueData>;
+
+class TableEntryParser : public TableParser {
+ public:
+  ~TableEntryParser() override {}
+
+  // Convenience function to make it easy to uniquely refer to a type.
+  uint16_t make_package_type_id(android::ResTable_package* package,
+                                uint8_t type_id) {
+    return ((dtohl(package->id) & 0xFF) << 8) | type_id;
+  }
+
+  bool visit_type_spec(android::ResTable_package* package,
+                       android::ResTable_typeSpec* type_spec) override {
+    TableParser::visit_type_spec(package, type_spec);
+    auto package_type_id = make_package_type_id(package, type_spec->id);
+    m_types.emplace(package_type_id, type_spec);
+    TypeToEntries map;
+    m_types_to_entries.emplace(package, std::move(map));
+    std::vector<android::ResTable_type*> vec;
+    m_types_to_configs.emplace(package_type_id, std::move(vec));
+    return true;
+  }
+
+  void put_entry_data(uint32_t res_id,
+                      android::ResTable_package* package,
+                      android::ResTable_type* type,
+                      arsc::EntryValueData& data) {
+    {
+      auto search = m_res_id_to_entries.find(res_id);
+      if (search == m_res_id_to_entries.end()) {
+        ConfigToEntry c;
+        m_res_id_to_entries.emplace(res_id, std::move(c));
+      }
+      auto& c = m_res_id_to_entries.at(res_id);
+      c.emplace(&type->config, data);
+    }
+    {
+      auto& map = m_types_to_entries.at(package);
+      auto search = map.find(type);
+      if (search == map.end()) {
+        std::vector<arsc::EntryValueData> vec;
+        map.emplace(type, std::move(vec));
+      }
+      auto& vec = map.at(type);
+      vec.emplace_back(data);
+    }
+  }
+
+  bool visit_type(android::ResTable_package* package,
+                  android::ResTable_typeSpec* type_spec,
+                  android::ResTable_type* type) override {
+    TableParser::visit_type(package, type_spec, type);
+    auto package_type_id = make_package_type_id(package, type_spec->id);
+    auto& types = m_types_to_configs.at(package_type_id);
+    types.emplace_back(type);
+    android::TypeVariant tv(type);
+    uint16_t entry_id = 0;
+    for (auto it = tv.beginEntries(); it != tv.endEntries(); ++it, ++entry_id) {
+      android::ResTable_entry* entry =
+          const_cast<android::ResTable_entry*>(*it);
+      uint32_t res_id = package_type_id << 16 | entry_id;
+      if (entry == nullptr) {
+        arsc::EntryValueData data(nullptr, 0);
+        put_entry_data(res_id, package, type, data);
+      } else {
+        auto size = arsc::compute_entry_value_length(entry);
+        arsc::EntryValueData data((uint8_t*)entry, size);
+        put_entry_data(res_id, package, type, data);
+      }
+      m_res_id_to_flags.emplace(res_id,
+                                arsc::get_spec_flags(type_spec, entry_id));
+    }
+    return true;
+  }
+
+  // For a package, the mapping from each type within all type specs to all the
+  // entries/values.
+  std::unordered_map<android::ResTable_package*, TypeToEntries>
+      m_types_to_entries;
+  // Package and type ID to spec
+  std::map<uint16_t, android::ResTable_typeSpec*> m_types;
+  // Package and type ID to all configs in that type
+  std::map<uint16_t, std::vector<android::ResTable_type*>> m_types_to_configs;
+  // Resource ID to the corresponding entries (in all configs).
+  std::map<uint32_t, ConfigToEntry> m_res_id_to_entries;
+  std::map<uint32_t, uint32_t> m_res_id_to_flags;
+};
+
+// Collects string references into the global string pool from values and styles
+// and per package, the entries into the key string pool.
+class PackageStringRefCollector : public TableParser {
+ public:
+  ~PackageStringRefCollector() override {}
+
+  bool visit_package(android::ResTable_package* package) override {
+    std::set<android::ResStringPool_ref*> entries;
+    m_package_entries.emplace(package, std::move(entries));
+    std::shared_ptr<android::ResStringPool> key_strings =
+        std::make_shared<android::ResStringPool>();
+    m_package_key_strings.emplace(package, std::move(key_strings));
+    TableParser::visit_package(package);
+    return true;
+  }
+
+  bool visit_key_strings(android::ResTable_package* package,
+                         android::ResStringPool_header* pool) override {
+    auto& key_strings = m_package_key_strings.at(package);
+    always_assert_log(key_strings->getError() == android::NO_INIT,
+                      "Key strings re-init!");
+    always_assert_log(key_strings->setTo(pool, dtohl(pool->header.size)) ==
+                          android::NO_ERROR,
+                      "Failed to parse key strings!");
+    TableParser::visit_key_strings(package, pool);
     return true;
   }
 
@@ -951,13 +1094,6 @@ class PackageStringRefCollector : public arsc::StringPoolRefVisitor {
     return true;
   }
 
-  bool visit_unknown_chunk(android::ResTable_package* package,
-                           android::ResChunk_header* header) override {
-    auto& chunks = m_package_unknown_chunks.at(package);
-    chunks.emplace_back(header);
-    return true;
-  }
-
   // Values that are references into the global string pool.
   std::set<android::Res_value*> m_values;
   // References into the global string pool from a ResStringPool_span.
@@ -967,16 +1103,6 @@ class PackageStringRefCollector : public arsc::StringPoolRefVisitor {
       m_package_entries;
   std::map<android::ResTable_package*, std::shared_ptr<android::ResStringPool>>
       m_package_key_strings;
-  // TODO: Parse and rebuild the type strings. For now, just copy it.
-  std::map<android::ResTable_package*, android::ResStringPool_header*>
-      m_package_type_strings;
-  // Representation of types/configs within a package.
-  std::map<android::ResTable_package*, std::vector<arsc::TypeInfo>>
-      m_package_types;
-  // Chunks belonging to a package that we do not parse/edit. Will be preserved
-  // as-is.
-  std::map<android::ResTable_package*, std::vector<android::ResChunk_header*>>
-      m_package_unknown_chunks;
 };
 } // namespace
 
@@ -1174,7 +1300,7 @@ void ResourcesArscFile::remove_unreferenced_strings() {
         key_strings_builder.get());
     package_builder->set_key_strings(key_strings_builder);
     package_builder->set_type_strings(
-        collector.m_package_type_strings.at(package));
+        collector.m_package_type_string_headers.at(package));
 
     // Copy over all existing type data, which has been remapped by the step
     // above.
