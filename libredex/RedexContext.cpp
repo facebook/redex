@@ -50,14 +50,8 @@ RedexContext::~RedexContext() {
       },
       [&] {
         Timer timer("DexTypeLists", /* indent */ false);
-        std::vector<const DexTypeListContainerType*> keys;
-        keys.reserve(s_typelist_map.size());
         for (auto const& p : s_typelist_map) {
           delete p.second;
-          keys.push_back(p.first);
-        }
-        for (auto* p : keys) {
-          delete p;
         }
         s_typelist_map.clear();
       },
@@ -304,18 +298,12 @@ void RedexContext::mutate_field(DexFieldRef* field,
 
 DexTypeList* RedexContext::make_type_list(
     RedexContext::DexTypeListContainerType&& p) {
-  auto on_heap = std::make_unique<DexTypeListContainerType>(p);
-
-  auto rv = s_typelist_map.get(on_heap.get(), nullptr);
+  auto rv = s_typelist_map.get(&p, nullptr);
   if (rv != nullptr) {
     return rv;
   }
-  auto typelist = new DexTypeList(on_heap.get());
-  auto ret = try_insert(typelist->m_list, typelist, &s_typelist_map);
-  if (ret == typelist) {
-    (void)on_heap.release();
-  }
-  return ret;
+  auto typelist = new DexTypeList(std::move(p));
+  return try_insert(&typelist->m_list, typelist, &s_typelist_map);
 }
 
 DexTypeList* RedexContext::get_type_list(
