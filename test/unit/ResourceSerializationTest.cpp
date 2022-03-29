@@ -62,7 +62,7 @@ void assert_serialized_data(const void* original,
   ASSERT_EQ(length, serialized.size());
   for (size_t i = 0; i < length; i++) {
     auto actual = *((const char*)original + i);
-    ASSERT_EQ(actual, serialized[i]);
+    ASSERT_EQ(actual, serialized[i]) << "Mismatch at offset " << i;
   }
 }
 
@@ -241,16 +241,21 @@ TEST(ResTable, TestRoundTrip) {
 }
 
 TEST(ResTable, AppendNewType) {
-  auto f = RedexMappedFile::open(std::getenv("test_arsc_path"));
+  auto src_file_path = std::getenv("test_arsc_path");
+  auto tmp_dir = redex::make_tmp_dir("ResTable_AppendNewType%%%%%%%%");
+  auto dest_file_path = tmp_dir.path + "/resources.arsc";
+  copy_file(src_file_path, dest_file_path);
+
+  auto src = RedexMappedFile::open(src_file_path);
   android::ResTable table;
-  ASSERT_EQ(table.add(f.const_data(), f.size()), 0);
+  ASSERT_EQ(table.add(src.const_data(), src.size()), 0);
   // Read the number of original types.
   android::Vector<android::String8> original_type_names;
   table.getTypeNamesForPackage(0, &original_type_names);
 
-  // Copy some existing entries to a different table, verify serialization
+  // Set up existing entry data to copy into a different type
   const uint8_t dest_type = 3;
-  android::Vector<uint32_t> source_ids;
+  std::vector<uint32_t> source_ids;
   source_ids.push_back(0x7f010000);
   size_t num_ids = source_ids.size();
   android::Vector<android::Res_value> values;
@@ -260,21 +265,23 @@ TEST(ResTable, AppendNewType) {
     values.push_back(val);
   }
 
-  // Initializing the ResTable_config is a pain.
-  android::ResTable_config config;
-  memset(&config, 0, sizeof(android::ResTable_config));
-  config.size = sizeof(android::ResTable_config);
+  // Create a default looking ResTable_config
+  android::ResTable_config default_config;
+  memset(&default_config, 0, sizeof(android::ResTable_config));
+  default_config.size = sizeof(android::ResTable_config);
 
-  android::Vector<android::ResTable_config> config_vec;
-  config_vec.push(config);
-  table.defineNewType(
-      android::String8("foo"), dest_type, config_vec, source_ids);
+  // Write a new .arsc file
+  {
+    ResourcesArscFile arsc_file(dest_file_path);
+    std::vector<android::ResTable_config*> config_ptrs;
+    config_ptrs.emplace_back(&default_config);
+    arsc_file.define_type(0x7f, 3, "foo", config_ptrs, source_ids);
+    arsc_file.serialize();
+  }
 
-  android::Vector<char> serialized;
-  table.serialize(serialized, 0);
-
+  auto dest = RedexMappedFile::open(dest_file_path);
   android::ResTable round_trip;
-  ASSERT_EQ(round_trip.add((void*)serialized.array(), serialized.size()), 0);
+  ASSERT_EQ(round_trip.add(dest.const_data(), dest.size()), 0);
   // Make sure entries exist in 0x7f03xxxx range
   for (size_t i = 0; i < num_ids; i++) {
     auto old_id = source_ids[i];
@@ -402,6 +409,53 @@ TEST(ResTableParse, TestUnknownPackageChunks) {
   res_table.remove_unreferenced_strings();
   EXPECT_TRUE(
       are_files_equal(std::getenv("resources_unknown_chunk"), res_path));
+}
+
+TEST(Configs, TestConfigEquivalence) {
+  android::ResTable_config default_config{};
+  default_config.size = sizeof(android::ResTable_config);
+  EXPECT_TRUE(arsc::are_configs_equivalent(&default_config, &default_config));
+  android::ResTable_config land_config{};
+  land_config.size = sizeof(android::ResTable_config);
+  land_config.orientation = android::ResTable_config::ORIENTATION_LAND;
+  EXPECT_FALSE(arsc::are_configs_equivalent(&default_config, &land_config));
+  // Configs of different sizes (simulate some of our snapshots of older files)
+  {
+    struct SmallConfig {
+      uint32_t a;
+      uint32_t b;
+      uint32_t c;
+      uint32_t d;
+    };
+    SmallConfig small_config{};
+    small_config.a = sizeof(SmallConfig);
+    EXPECT_TRUE(arsc::are_configs_equivalent(
+        &default_config, (android::ResTable_config*)&small_config));
+  }
+  {
+    PACKED(struct BiggerConfig {
+      android::ResTable_config config{};
+      uint32_t a;
+      uint32_t b;
+      uint32_t c;
+      uint32_t d;
+    });
+    BiggerConfig big_config{};
+    big_config.config = default_config;
+    big_config.config.size = sizeof(BiggerConfig);
+    // Can't determine default values of newer versions we don't know about.
+    EXPECT_FALSE(arsc::are_configs_equivalent(
+        &default_config, (android::ResTable_config*)&big_config));
+  }
+}
+
+TEST(ResTable, TestBuilderRoundTrip) {
+  auto tmp_dir = redex::make_tmp_dir("ResTable%%%%%%%%");
+  auto res_path = tmp_dir.path + "/resources.arsc";
+  copy_file(std::getenv("test_arsc_path"), res_path);
+  ResourcesArscFile res_table(res_path);
+  res_table.serialize();
+  EXPECT_TRUE(are_files_equal(std::getenv("test_arsc_path"), res_path));
 }
 
 namespace {

@@ -1197,6 +1197,36 @@ void project_string_mapping(
   (((pool)->isUTF8() ? android::ResStringPool_header::UTF8_FLAG : 0) | \
    ((pool)->isSorted() ? android::ResStringPool_header::SORTED_FLAG : 0))
 
+void rebuild_type_strings(const uint32_t& package_id,
+                          const android::ResStringPool& string_pool,
+                          const std::vector<apk::TypeDefinition>& added_types,
+                          arsc::ResStringPoolBuilder* builder) {
+  always_assert_log(string_pool.styleCount() == 0,
+                    "type strings should not have styles");
+  const auto original_string_count = string_pool.size();
+  const auto is_utf8 = string_pool.isUTF8();
+  for (size_t idx = 0; idx < original_string_count; idx++) {
+    size_t length;
+    if (is_utf8) {
+      auto s = string_pool.string8At(idx, &length);
+      size_t actual_length = apk::read_utf8_length_from_string_pool_data(s);
+      builder->add_string(s, actual_length);
+    } else {
+      auto s = string_pool.stringAt(idx, &length);
+      builder->add_string(s, length);
+    }
+  }
+  for (auto& type_def : added_types) {
+    if (type_def.package_id != package_id) {
+      continue;
+    }
+    if (is_utf8) {
+      builder->add_string(type_def.name8.string(), type_def.name8.size());
+    } else {
+      builder->add_string(type_def.name16.string(), type_def.name16.size());
+    }
+  }
+}
 } // namespace
 
 void ResourcesArscFile::remove_unreferenced_strings() {
@@ -1403,7 +1433,7 @@ void ResourcesArscFile::walk_references_for_resource(
 }
 
 void ResourcesArscFile::delete_resource(uint32_t res_id) {
-  res_table.deleteResource(res_id);
+  m_ids_to_remove.emplace(res_id);
 }
 
 void ResourcesArscFile::collect_resid_values_and_hashes(
@@ -1428,6 +1458,7 @@ bool ResourcesArscFile::resource_value_identical(uint32_t a_id, uint32_t b_id) {
 
 ResourcesArscFile::ResourcesArscFile(const std::string& path)
     : m_f(RedexMappedFile::open(path, /* read_only= */ false)) {
+  m_path = path;
   m_arsc_len = m_f.size();
   int error = res_table.add(m_f.const_data(), m_f.size(), /* cookie */ -1,
                             /* copyData*/ true);
@@ -1452,26 +1483,182 @@ ResourcesArscFile::ResourcesArscFile(const std::string& path)
 
 size_t ResourcesArscFile::get_length() const { return m_arsc_len; }
 
+namespace {
+// For a map keyed on ResTable_config instances, find the first key (if any)
+// that is equivalent to the given config.
+template <typename ValueType>
+android::ResTable_config* find_equivalent_config_key(
+    android::ResTable_config* to_find,
+    const std::map<android::ResTable_config*, ValueType>& map) {
+  for (const auto& pair : map) {
+    if (arsc::are_configs_equivalent(to_find, pair.first)) {
+      return pair.first;
+    }
+  }
+  return nullptr;
+}
+} // namespace
+
 size_t ResourcesArscFile::serialize() {
-  android::Vector<char> cVec;
-  res_table.serialize(cVec, 0);
-  m_arsc_len = write_serialized_data(cVec, std::move(m_f));
+  // Serializing will apply pending deletions. This may greatly alter the
+  // ResTable_typeSpec and ResTable_type structures emitted in the resulting
+  // file. To do this, reparse the chunks, forward them on to ResTableBuilder
+  // and let that class make sense of what is to be omitted/retained in the
+  // serialized output.
+  TableEntryParser table_parser;
+  table_parser.visit(m_f.data(), m_arsc_len);
+  // Re-assemble
+  arsc::ResTableBuilder table_builder;
+  table_builder.set_global_strings(table_parser.m_global_pool_header);
+  for (auto& package : table_parser.m_packages) {
+    auto package_id = dtohl(package->id);
+    auto package_builder = std::make_shared<arsc::ResPackageBuilder>(package);
+    package_builder->set_key_strings(
+        table_parser.m_package_key_string_headers.at(package));
+    // Append names of any new types
+    auto type_strings_header =
+        table_parser.m_package_type_string_headers.at(package);
+    android::ResStringPool type_strings(
+        type_strings_header, dtohl(type_strings_header->header.size));
+    auto type_strings_builder =
+        std::make_shared<arsc::ResStringPoolBuilder>(POOL_FLAGS(&type_strings));
+    rebuild_type_strings(package_id, type_strings, m_added_types,
+                         type_strings_builder.get());
+    package_builder->set_type_strings(type_strings_builder);
+    // Copy existing types
+    auto& type_infos = table_parser.m_package_types.at(package);
+    for (auto& type_info : type_infos) {
+      auto type_builder = std::make_shared<arsc::ResTableTypeProjector>(
+          package_id, type_info.spec, type_info.configs);
+      type_builder->remove_ids(m_ids_to_remove);
+      package_builder->add_type(type_builder);
+    }
+    // Append any new types
+    for (auto& type_def : m_added_types) {
+      // Refer to the re-parsed data at initial step to get full details of the
+      // entries, flags and values for the new type.
+      std::vector<uint32_t> flags;
+      for (auto& id : type_def.source_res_ids) {
+        flags.emplace_back(table_parser.m_res_id_to_flags.at(id));
+      }
+      auto type_definer = std::make_shared<arsc::ResTableTypeDefiner>(
+          package_id, type_def.type_id, type_def.configs, flags);
+      for (auto& id : type_def.source_res_ids) {
+        auto& config_entries = table_parser.m_res_id_to_entries.at(id);
+        for (auto& config : type_def.configs) {
+          auto key = find_equivalent_config_key(config, config_entries);
+          always_assert_log(key != nullptr,
+                            "TypeDefinition %d is misconfigured; no equivalent "
+                            "config found in table",
+                            type_def.type_id);
+          auto& data = config_entries.at(key);
+          type_definer->add(config, data);
+        }
+      }
+      package_builder->add_type(type_definer);
+    }
+    // Copy unknown chunks that we did not parse
+    auto& unknown_chunks = table_parser.m_package_unknown_chunks.at(package);
+    for (auto& header : unknown_chunks) {
+      package_builder->add_chunk(header);
+    }
+    table_builder.add_package(package_builder);
+  }
+  android::Vector<char> out;
+  table_builder.serialize(&out);
+  m_f.file.reset(); // Close the map.
+  std::ofstream fout(m_path,
+                     std::ios::out | std::ios::binary | std::ios::trunc);
+  always_assert_log(fout.is_open(), "Could not open path %s for writing",
+                    m_path.c_str());
+  fout.write(out.array(), out.size());
+  fout.close();
+  m_arsc_len = out.size();
   m_file_closed = true;
   return m_arsc_len;
 }
 
-void ResourcesArscFile::remap_ids(
-    const std::map<uint32_t, uint32_t>& old_to_remapped_ids) {
-  android::SortedVector<uint32_t> old;
-  android::Vector<uint32_t> remapped;
-  for (const auto& pair : old_to_remapped_ids) {
-    old.add(pair.first);
-    remapped.add(pair.second);
+namespace {
+// Given an old -> new ID mapping, change all relevant values in entries/values:
+// 1) Find all Res_value (whether in complex or non-complex) entries, remap the
+//    data if it's a TYPE_REFERENCE or TYPE_ATTRIBUTE.
+// 2) For complex entries, remap:
+//    a) ResTable_map_entry's parent
+//    b) For each ResTable_map, the name
+class EntryRemapper : public arsc::ResourceTableVisitor {
+ public:
+  ~EntryRemapper() override {}
+
+  explicit EntryRemapper(const std::map<uint32_t, uint32_t>& old_to_new)
+      : m_old_to_new(old_to_new) {}
+
+  void remap_value_impl(android::Res_value* value) {
+    if (m_seen_values.count(value) > 0) {
+      return;
+    }
+    m_seen_values.emplace(value);
+    if (value->dataType == android::Res_value::TYPE_REFERENCE ||
+        value->dataType == android::Res_value::TYPE_ATTRIBUTE) {
+      auto search = m_old_to_new.find(dtohl(value->data));
+      if (search != m_old_to_new.end()) {
+        value->data = htodl(search->second);
+      }
+    }
   }
 
-  for (const auto& pair : old_to_remapped_ids) {
-    res_table.remapReferenceValuesForResource(pair.first, old, remapped);
+  void remap_ref_impl(android::ResTable_ref* ref) {
+    if (m_seen_refs.count(ref) > 0) {
+      return;
+    }
+    m_seen_refs.emplace(ref);
+    auto search = m_old_to_new.find(dtohl(ref->ident));
+    if (search != m_old_to_new.end()) {
+      ref->ident = htodl(search->second);
+    }
   }
+
+  bool visit_entry(android::ResTable_package* /* unused */,
+                   android::ResTable_typeSpec* /* unused */,
+                   android::ResTable_type* /* unused */,
+                   android::ResTable_entry* /* unused */,
+                   android::Res_value* value) override {
+    remap_value_impl(value);
+    return true;
+  }
+
+  bool visit_map_entry(android::ResTable_package* /* unused */,
+                       android::ResTable_typeSpec* /* unused */,
+                       android::ResTable_type* /* unused */,
+                       android::ResTable_map_entry* entry) override {
+    remap_ref_impl(&entry->parent);
+    return true;
+  }
+
+  bool visit_map_value(android::ResTable_package* /* unused */,
+                       android::ResTable_typeSpec* /* unused */,
+                       android::ResTable_type* /* unused */,
+                       android::ResTable_map_entry* /* unused */,
+                       android::ResTable_map* value) override {
+    remap_value_impl(&value->value);
+    remap_ref_impl(&value->name);
+    return true;
+  }
+
+ private:
+  const std::map<uint32_t, uint32_t>& m_old_to_new;
+  // Tolerate a "canonicalized" version of a type, to make sure we don't double
+  // remap.
+  std::unordered_set<android::Res_value*> m_seen_values;
+  std::unordered_set<android::ResTable_ref*> m_seen_refs;
+};
+} // namespace
+
+void ResourcesArscFile::remap_ids(
+    const std::map<uint32_t, uint32_t>& old_to_remapped_ids) {
+  EntryRemapper remapper(old_to_remapped_ids);
+  // Note: file is opened for writing. Visitor will in place change the data
+  // (without altering any data sizes).
+  remapper.visit(m_f.data(), m_arsc_len);
 }
 
 std::unordered_set<uint32_t> ResourcesArscFile::get_types_by_name(

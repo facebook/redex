@@ -41,6 +41,15 @@ bool get_bool_attribute_value(const android::ResXMLTree& parser,
 namespace apk {
 std::string get_string_from_pool(const android::ResStringPool& pool,
                                  size_t idx);
+
+struct TypeDefinition {
+  uint32_t package_id;
+  uint8_t type_id;
+  android::String8 name8;
+  android::String16 name16;
+  std::vector<android::ResTable_config*> configs;
+  std::vector<uint32_t> source_res_ids;
+};
 } // namespace apk
 
 class ResourcesArscFile : public ResourceTableFile {
@@ -77,16 +86,36 @@ class ResourcesArscFile : public ResourceTableFile {
       uint32_t resID,
       std::unordered_set<uint32_t>* nodes_visited,
       std::unordered_set<std::string>* potential_file_paths) override;
-
+  // Takes effect during serialization, in which new type spec, type data
+  // structures will be appended to the package, with entry/value data copied
+  // from the given ids. Actual type data in the resulting file will be emitted
+  // in the order as the given configs.
+  void define_type(uint32_t package_id,
+                   uint8_t type_id,
+                   const std::string& name,
+                   const std::vector<android::ResTable_config*>& configs,
+                   const std::vector<uint32_t>& source_res_ids) {
+    LOG_ALWAYS_FATAL_IF((package_id & 0xFFFFFF00) != 0,
+                        "package_id expected to have low byte set; got 0x%x",
+                        package_id);
+    android::String8 name8(name.data());
+    android::String16 name16(name8);
+    apk::TypeDefinition def{package_id, type_id, name8,
+                            name16,     configs, source_res_ids};
+    m_added_types.emplace_back(std::move(def));
+  }
   ~ResourcesArscFile() override;
 
   size_t get_length() const;
 
  private:
+  std::string m_path;
   RedexMappedFile m_f;
   size_t m_arsc_len;
   std::map<uint32_t, android::Vector<android::Res_value>> tmp_id_to_values;
   bool m_file_closed = false;
+  std::unordered_set<uint32_t> m_ids_to_remove;
+  std::vector<apk::TypeDefinition> m_added_types;
 };
 
 class ApkResources : public AndroidResources {
