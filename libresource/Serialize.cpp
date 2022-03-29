@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <iostream>
+
 #include "utils/Serialize.h"
 #include "utils/ByteOrder.h"
 #include "utils/Debug.h"
@@ -109,14 +111,11 @@ void encode_string16(const char16_t* s,
 
 // Does not swap byte order, just copy data as-is
 void push_data_no_swap(void* data, size_t length, android::Vector<char>* out) {
-  for (size_t i = 0; i < length; ++i) {
-    out->push_back(*((uint8_t*)(data) + i));
-  }
+  out->appendArray((const char*)data, length);
 }
 
 // Does not swap byte order, just copy data as-is
-void push_chunk(android::ResChunk_header* header,
-                android::Vector<char>* out) {
+void push_chunk(android::ResChunk_header* header, android::Vector<char>* out) {
   push_data_no_swap(header, dtohl(header->size), out);
 }
 } // namespace
@@ -151,6 +150,216 @@ uint32_t get_spec_flags(android::ResTable_typeSpec* spec, uint16_t entry_id) {
   uint32_t* spec_flags =
       (uint32_t*)((uint8_t*)spec + dtohs(spec->header.headerSize));
   return *(spec_flags + entry_id);
+}
+
+void ResTableTypeProjector::serialize_type(android::ResTable_type* type,
+                                           android::Vector<char>* out) {
+  auto original_entries = dtohl(type->entryCount);
+  auto original_entries_start = dtohs(type->entriesStart);
+  if (original_entries == 0 || original_entries_start == 0) {
+    // Wonky input data, omit this config.
+    ALOGD("Wonky config for type %d, dropping!", type->id);
+    return;
+  }
+  // Check if this config has all of its entries deleted. If a non-default
+  // config has everything deleted, skip emitting data.
+  {
+    size_t num_non_deleted_entries = 0;
+    size_t num_non_deleted_non_empty_entries = 0;
+    uint32_t* entry_offsets =
+        (uint32_t*)((uint8_t*)type + dtohs(type->header.headerSize));
+    for (size_t i = 0; i < original_entries; i++) {
+      auto id = make_id(i);
+      auto is_deleted = m_ids_to_remove.count(id) != 0;
+      uint32_t offset = dtohl(entry_offsets[i]);
+      if (!is_deleted) {
+        num_non_deleted_entries++;
+      }
+      if (!is_deleted && offset != android::ResTable_type::NO_ENTRY) {
+        num_non_deleted_non_empty_entries++;
+      }
+    }
+    if (num_non_deleted_non_empty_entries == 0) {
+      // No meaningful values for this config, don't emit the struct.
+      return;
+    }
+  }
+  // Write entry/value data by iterating the existing offset data again, and
+  // copying all non-deleted data to the temp vec.
+  android::Vector<char> temp;
+  android::Vector<uint32_t> offsets;
+  uint32_t* entry_offsets =
+      (uint32_t*)((uint8_t*)type + dtohs(type->header.headerSize));
+  // Pointer to the first Res_entry
+  // TODO: option for canonical offsets for identical entry/values
+  for (size_t i = 0; i < original_entries; i++) {
+    auto id = make_id(i);
+    if (m_ids_to_remove.count(id) == 0) {
+      uint32_t offset = dtohl(entry_offsets[i]);
+      if (offset == android::ResTable_type::NO_ENTRY) {
+        offsets.push_back(htodl(android::ResTable_type::NO_ENTRY));
+      } else {
+        auto entry_ptr = (uint8_t*)type + dtohs(type->entriesStart) + offset;
+        offsets.push_back(temp.size());
+        uint32_t total_size =
+            compute_entry_value_length((android::ResTable_entry*)entry_ptr);
+        // Copy the entry/value
+        push_data_no_swap(entry_ptr, total_size, &temp);
+      }
+    }
+  }
+  // Header and actual data structure
+  push_short(android::RES_TABLE_TYPE_TYPE, out);
+  // Derive the header size from the input data (guard against inputs generated
+  // by older tool versions). Following code should not rely on either
+  // sizeof(android::ResTable_type) or sizeof(android::ResTable_config)
+  auto config_size = dtohs(type->config.size);
+  auto type_header_size =
+      sizeof(android::ResChunk_header) + sizeof(uint32_t) * 3 + config_size;
+  push_short(type_header_size, out);
+  auto num_entries = offsets.size();
+  auto entries_start = type_header_size + num_entries * sizeof(uint32_t);
+  auto total_size = entries_start + temp.size();
+  push_long(total_size, out);
+  out->push_back(m_type);
+  out->push_back(0); // pad to 4 bytes
+  out->push_back(0);
+  out->push_back(0);
+  push_long(num_entries, out);
+  push_long(entries_start, out);
+  auto cp = &type->config;
+  push_data_no_swap(cp, config_size, out);
+  for (size_t i = 0; i < num_entries; i++) {
+    push_long(offsets[i], out);
+  }
+  out->appendVector(temp);
+}
+
+void ResTableTypeProjector::serialize(android::Vector<char>* out) {
+  // Basic validation of the inputs given.
+  LOG_ALWAYS_FATAL_IF(
+      m_configs.size() == 0, "No configs given for type %d", m_type);
+  // Check if all entries in this type have been marked for deletion. If so, no
+  // data is emitted.
+  auto original_entries = dtohl(m_spec->entryCount);
+  size_t num_deletions = 0;
+  for (size_t i = 0; i < original_entries; i++) {
+    auto id = make_id(i);
+    if (m_ids_to_remove.count(id) != 0) {
+      num_deletions++;
+    }
+  }
+  if (num_deletions == original_entries) {
+    // Nothing to do here.
+    return;
+  }
+  // Write the ResTable_typeSpec header
+  auto entries = original_entries - num_deletions;
+  push_short(android::RES_TABLE_TYPE_SPEC_TYPE, out);
+  auto header_size = sizeof(android::ResTable_typeSpec);
+  push_short(header_size, out);
+  auto total_size = header_size + sizeof(uint32_t) * entries;
+  push_long(total_size, out);
+  out->push_back(m_type);
+  out->push_back(0);
+  out->push_back(0);
+  out->push_back(0);
+  push_long(entries, out);
+  // Copy all existing spec flags for non-deleted entries
+  for (uint16_t i = 0; i < original_entries; i++) {
+    auto id = make_id(i);
+    if (m_ids_to_remove.count(id) == 0) {
+      push_long(dtohl(get_spec_flags(m_spec, i)), out);
+    }
+  }
+  // Write all applicable ResTable_type structures (and their corresponding
+  // entries/values).
+  for (size_t i = 0; i < m_configs.size(); i++) {
+    serialize_type(m_configs.at(i), out);
+  }
+}
+
+void ResTableTypeDefiner::serialize(android::Vector<char>* out) {
+  // Validation
+  LOG_ALWAYS_FATAL_IF(m_configs.size() != m_data.size(),
+                      "Entry data not supplied for all configs");
+  auto entries = m_flags.size();
+  // Check whether or not we need to emit any data.
+  std::unordered_set<android::ResTable_config*> empty_configs;
+  for (auto& config : m_configs) {
+    auto& data = m_data.at(config);
+    LOG_FATAL_IF(data.size() != entries,
+                 "Wrong number of entries for config, expected %zu",
+                 entries);
+    bool is_empty = true;
+    for (auto& pair : data) {
+      if (pair.key != nullptr && pair.value > 0) {
+        is_empty = false;
+        break;
+      }
+    }
+    if (is_empty) {
+      empty_configs.emplace(config);
+    }
+  }
+  if (empty_configs.size() == m_configs.size()) {
+    return;
+  }
+
+  // Write the ResTable_typeSpec header
+  push_short(android::RES_TABLE_TYPE_SPEC_TYPE, out);
+  auto header_size = sizeof(android::ResTable_typeSpec);
+  push_short(header_size, out);
+  auto total_size = header_size + sizeof(uint32_t) * entries;
+  push_long(total_size, out);
+  out->push_back(m_type);
+  out->push_back(0);
+  out->push_back(0);
+  out->push_back(0);
+  push_long(entries, out);
+  // Write all given spec flags
+  for (uint16_t i = 0; i < entries; i++) {
+    push_long(dtohl(m_flags.at(i)), out);
+  }
+  // Write the N configs given and all their entries/values
+  for (auto& config : m_configs) {
+    if (empty_configs.count(config) > 0) {
+      continue;
+    }
+    auto& data = m_data.at(config);
+    // Write the type header
+    push_short(android::RES_TABLE_TYPE_TYPE, out);
+    auto config_size = dtohs(config->size);
+    auto type_header_size =
+        sizeof(android::ResChunk_header) + sizeof(uint32_t) * 3 + config_size;
+    push_short(type_header_size, out);
+    auto entries_start = type_header_size + data.size() * sizeof(uint32_t);
+    auto total_size = entries_start + m_data_size.at(config);
+    push_long(total_size, out);
+    out->push_back(m_type);
+    out->push_back(0); // pad to 4 bytes
+    out->push_back(0);
+    out->push_back(0);
+    push_long(data.size(), out);
+    push_long(entries_start, out);
+    push_data_no_swap(config, config_size, out);
+    // Compute and write offsets.
+    uint32_t offset = 0;
+    for (auto& pair : data) {
+      if (pair.key == nullptr && pair.value == 0) {
+        push_long(dtohl(android::ResTable_type::NO_ENTRY), out);
+      } else {
+        push_long(offset, out);
+        offset += pair.value;
+      }
+    }
+    // Actual data.
+    for (auto& pair : data) {
+      if (pair.key != nullptr && pair.value > 0) {
+        push_data_no_swap(pair.key, pair.value, out);
+      }
+    }
+  }
 }
 
 void ResStringPoolBuilder::add_string(const char* s, size_t len) {
@@ -312,9 +521,9 @@ void ResStringPoolBuilder::serialize(android::Vector<char>* out) {
 }
 
 namespace {
-void write_string_pool(
-  std::pair<std::shared_ptr<ResStringPoolBuilder>, android::ResStringPool_header*>& pair,
-  android::Vector<char>* out) {
+void write_string_pool(std::pair<std::shared_ptr<ResStringPoolBuilder>,
+                                 android::ResStringPool_header*>& pair,
+                       android::Vector<char>* out) {
   if (pair.first != nullptr) {
     pair.first->serialize(out);
   } else {
@@ -338,11 +547,16 @@ void ResPackageBuilder::serialize(android::Vector<char>* out) {
   auto type_strings_size = temp.size();
   write_string_pool(m_key_strings, &temp);
   // Types
-  for (auto pair : m_id_to_type) {
-    auto type_info = pair.second;
-    push_chunk((android::ResChunk_header*)type_info.spec, &temp);
-    for (auto type : type_info.configs) {
-      push_chunk((android::ResChunk_header*)type, &temp);
+  for (auto& entry : m_id_to_type) {
+    auto pair = entry.second;
+    if (pair.first != nullptr) {
+      pair.first->serialize(&temp);
+    } else {
+      auto type_info = pair.second;
+      push_chunk((android::ResChunk_header*)type_info.spec, &temp);
+      for (auto type : type_info.configs) {
+        push_chunk((android::ResChunk_header*)type, &temp);
+      }
     }
   }
   // All other chunks

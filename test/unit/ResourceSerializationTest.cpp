@@ -15,6 +15,7 @@
 #include "RedexResources.h"
 #include "RedexTestUtils.h"
 #include "SanitizersConfig.h"
+#include "Util.h"
 #include "androidfw/ResourceTypes.h"
 #include "utils/Serialize.h"
 #include "utils/Visitor.h"
@@ -401,4 +402,234 @@ TEST(ResTableParse, TestUnknownPackageChunks) {
   res_table.remove_unreferenced_strings();
   EXPECT_TRUE(
       are_files_equal(std::getenv("resources_unknown_chunk"), res_path));
+}
+
+namespace {
+PACKED(struct EntryAndValue {
+  android::ResTable_entry entry{};
+  android::Res_value value{};
+  EntryAndValue(uint32_t key_string_idx, uint8_t data_type, uint32_t data) {
+    entry.size = sizeof(android::ResTable_entry);
+    entry.key.index = key_string_idx;
+    value.size = sizeof(android::Res_value);
+    value.dataType = data_type;
+    value.data = data;
+  }
+});
+
+// For testing simplicity, a map that has two items in it.
+PACKED(struct MapEntryAndValues {
+  android::ResTable_map_entry entry{};
+  android::ResTable_map item0{};
+  android::ResTable_map item1{};
+  MapEntryAndValues(uint32_t key_string_idx, uint32_t parent_ident) {
+    entry.size = sizeof(android::ResTable_map_entry);
+    entry.count = 2;
+    entry.flags = android::ResTable_entry::FLAG_COMPLEX;
+    entry.key.index = key_string_idx;
+    entry.parent.ident = parent_ident;
+    item0.value.size = sizeof(android::Res_value);
+    item1.value.size = sizeof(android::Res_value);
+  }
+});
+} // namespace
+
+TEST(ResTable, ComputeSizes) {
+  EntryAndValue simple(0, android::Res_value::TYPE_DIMENSION, 1000);
+  EXPECT_EQ(arsc::compute_entry_value_length(&simple.entry),
+            sizeof(EntryAndValue));
+  MapEntryAndValues complex(1, 0);
+  EXPECT_EQ(arsc::compute_entry_value_length(&complex.entry),
+            sizeof(MapEntryAndValues));
+}
+
+namespace {
+// A simple arsc file that many tests can get written against.
+EntryAndValue e0(0, android::Res_value::TYPE_DIMENSION, 1000);
+EntryAndValue e0_land(0, android::Res_value::TYPE_DIMENSION, 1001);
+EntryAndValue e1(1, android::Res_value::TYPE_DIMENSION, 2000);
+EntryAndValue e2(2, android::Res_value::TYPE_REFERENCE, 0x7f010001);
+MapEntryAndValues style(3, 0);
+
+// Create a default ResTable_config
+android::ResTable_config default_config = {
+    .size = sizeof(android::ResTable_config)};
+// Create a landscape config
+android::ResTable_config land_config = {
+    .size = sizeof(android::ResTable_config),
+    .orientation = android::ResTable_config::ORIENTATION_LAND};
+// And a xxhdpi config
+android::ResTable_config xxhdpi_config = {
+    .size = sizeof(android::ResTable_config),
+    .density = android::ResTable_config::DENSITY_XXHIGH};
+
+void build_arsc_file_and_validate(
+    const std::function<void(const std::string& temp_dir,
+                             const std::string& arsc_path)>& callback) {
+  auto pool_flags = android::ResStringPool_header::UTF8_FLAG;
+  auto global_strings_builder =
+      std::make_shared<arsc::ResStringPoolBuilder>(pool_flags);
+
+  auto key_strings_builder =
+      std::make_shared<arsc::ResStringPoolBuilder>(pool_flags);
+  constexpr uint16_t ENTRY_COUNT = 4;
+  const char* entry_names[ENTRY_COUNT] = {"first", "second", "third", "fourth"};
+  for (uint16_t i = 0; i < ENTRY_COUNT; i++) {
+    key_strings_builder->add_string(entry_names[i], strlen(entry_names[i]));
+  }
+
+  auto type_strings_builder =
+      std::make_shared<arsc::ResStringPoolBuilder>(pool_flags);
+  constexpr uint8_t TYPE_COUNT = 2;
+  const char* type_names[2] = {"dimen", "style"};
+  for (uint16_t i = 0; i < TYPE_COUNT; i++) {
+    type_strings_builder->add_string(type_names[i], strlen(type_names[i]));
+  }
+
+  android::ResTable_package package_header{};
+  package_header.id = 0x7f;
+  memset(&package_header.name, 0, 128); // do I need this??
+  package_header.name[0] = 'f';
+  package_header.name[1] = 'o';
+  package_header.name[2] = 'o';
+  package_header.name[3] = '\0';
+  auto package_builder =
+      std::make_shared<arsc::ResPackageBuilder>(&package_header);
+  package_builder->set_key_strings(key_strings_builder);
+  package_builder->set_type_strings(type_strings_builder);
+
+  auto table_builder = std::make_shared<arsc::ResTableBuilder>();
+  table_builder->set_global_strings(global_strings_builder);
+  table_builder->add_package(package_builder);
+
+  // dimen
+  std::vector<android::ResTable_config*> dimen_configs = {&default_config,
+                                                          &land_config};
+  // First res ID has entries in two different configs (this flag denotes that).
+  // Subsequent two entries only have default config entries (hence zero).
+  std::vector<uint32_t> dimen_flags = {
+      android::ResTable_config::CONFIG_ORIENTATION, 0, 0};
+  auto dimen_type_definer = std::make_shared<arsc::ResTableTypeDefiner>(
+      package_header.id, 1, dimen_configs, dimen_flags);
+  package_builder->add_type(dimen_type_definer);
+
+  dimen_type_definer->add(&default_config,
+                          {(uint8_t*)&e0, sizeof(EntryAndValue)});
+  dimen_type_definer->add(&land_config,
+                          {(uint8_t*)&e0_land, sizeof(EntryAndValue)});
+  dimen_type_definer->add(&default_config,
+                          {(uint8_t*)&e1, sizeof(EntryAndValue)});
+  dimen_type_definer->add_empty(&land_config);
+  dimen_type_definer->add(&default_config,
+                          {(uint8_t*)&e2, sizeof(EntryAndValue)});
+  dimen_type_definer->add_empty(&land_config);
+
+  // style
+  std::vector<android::ResTable_config*> style_configs = {&xxhdpi_config};
+  std::vector<uint32_t> style_flags = {
+      android::ResTable_config::CONFIG_DENSITY};
+  auto style_type_definer = std::make_shared<arsc::ResTableTypeDefiner>(
+      package_header.id, 2, style_configs, style_flags);
+  package_builder->add_type(style_type_definer);
+
+  style.item0.name.ident = 0x01010098; // android:textColor
+  style.item0.value.dataType = android::Res_value::TYPE_INT_COLOR_RGB8;
+  style.item0.value.data = 0xFF0000FF;
+
+  style.item1.name.ident = 0x010100d4; // android:background
+  style.item1.value.dataType = android::Res_value::TYPE_INT_COLOR_RGB8;
+  style.item1.value.data = 0xFF00FF00;
+
+  style_type_definer->add(&xxhdpi_config,
+                          {(uint8_t*)&style, sizeof(MapEntryAndValues)});
+
+  // Write to a file, give the callback the temp dir and file to validate
+  // against.
+  android::Vector<char> out;
+  table_builder->serialize(&out);
+
+  auto tmp_dir = redex::make_tmp_dir("ResTable_BuildNewTable%%%%%%%%");
+  auto dest_file_path = tmp_dir.path + "/resources.arsc";
+  std::cerr << "Writing new table to " << dest_file_path.c_str() << std::endl;
+  std::ofstream fout(dest_file_path,
+                     std::ios::out | std::ios::binary | std::ios::trunc);
+  always_assert_log(fout.is_open(), "Could not open path %s for writing",
+                    dest_file_path.c_str());
+  fout.write(out.array(), out.size());
+  fout.close();
+  callback(tmp_dir.path, dest_file_path);
+}
+
+} // namespace
+
+TEST(ResTable, BuildNewTable) {
+  build_arsc_file_and_validate([&](const std::string& temp_dir,
+                                   const std::string& arsc_path) {
+    // Now, use unforked AOSP APIs to read out the data to make sure it matches
+    // the stuff we put in.
+    auto built_arsc_file = RedexMappedFile::open(arsc_path);
+    android::ResTable built_arsc_table;
+    EXPECT_EQ(built_arsc_table.add(built_arsc_file.const_data(),
+                                   built_arsc_file.size()),
+              0)
+        << "Could not read built data!";
+
+    // Look up resource IDs by the package, type and entry names, even though we
+    // could just compute them ourselves (battle test the type, key strings
+    // being accurate).
+    auto get_id = [&](const char* fully_qualified_entry) {
+      android::String16 e(fully_qualified_entry);
+      return built_arsc_table.identifierForName(e.string(), e.size());
+    };
+
+    android::Res_value value;
+    // 0x7f010000
+    EXPECT_EQ(built_arsc_table.getResource(get_id("foo:dimen/first"), &value),
+              0);
+    EXPECT_EQ(e0.value.size, value.size);
+    EXPECT_EQ(e0.value.dataType, value.dataType);
+    EXPECT_EQ(e0.value.data, value.data);
+
+    // 0x7f010001
+    EXPECT_EQ(built_arsc_table.getResource(get_id("foo:dimen/second"), &value),
+              0);
+    EXPECT_EQ(e1.value.size, value.size);
+    EXPECT_EQ(e1.value.dataType, value.dataType);
+    EXPECT_EQ(e1.value.data, value.data);
+
+    // 0x7f010002
+    EXPECT_EQ(built_arsc_table.getResource(get_id("foo:dimen/third"), &value),
+              0);
+    EXPECT_EQ(e2.value.size, value.size);
+    EXPECT_EQ(e2.value.dataType, value.dataType);
+    EXPECT_EQ(e2.value.data, value.data);
+
+    built_arsc_table.setParameters(&land_config);
+    // Rotate to landscape should get different values for entry 0x7f010000
+    built_arsc_table.getResource(get_id("foo:dimen/first"), &value);
+    EXPECT_EQ(e0_land.value.size, value.size);
+    EXPECT_EQ(e0_land.value.dataType, value.dataType);
+    EXPECT_EQ(e0_land.value.data, value.data);
+
+    // This one should resolve to same value as 0x7f010001 before
+    EXPECT_EQ(built_arsc_table.getResource(get_id("foo:dimen/second"), &value),
+              0);
+    EXPECT_EQ(e1.value.size, value.size);
+    EXPECT_EQ(e1.value.dataType, value.dataType);
+    EXPECT_EQ(e1.value.data, value.data);
+
+    // Crazy APIs for reading plurals, styles, etc.
+    const android::ResTable::bag_entry* bag_entry;
+    EXPECT_EQ(built_arsc_table.lockBag(get_id("foo:style/fourth"), &bag_entry),
+              2);
+    EXPECT_EQ(bag_entry->map.name.ident, style.item0.name.ident);
+    EXPECT_EQ(bag_entry->map.value.dataType, style.item0.value.dataType);
+    EXPECT_EQ(bag_entry->map.value.data, style.item0.value.data);
+    bag_entry++;
+    EXPECT_EQ(bag_entry->map.name.ident, style.item1.name.ident);
+    EXPECT_EQ(bag_entry->map.value.dataType, style.item1.value.dataType);
+    EXPECT_EQ(bag_entry->map.value.data, style.item1.value.data);
+    bag_entry--;
+    built_arsc_table.unlockBag(bag_entry);
+  });
 }
