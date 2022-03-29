@@ -677,7 +677,7 @@ void change_resource_id_in_value_reference(
 }
 
 void remove_or_change_resource_ids(
-    const std::set<uint32_t>& ids_to_remove,
+    const std::unordered_set<uint32_t>& ids_to_remove,
     const std::map<uint32_t, uint32_t>& old_to_new,
     uint32_t package_id,
     aapt::pb::Type* type) {
