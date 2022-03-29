@@ -43,7 +43,7 @@ size_t num_interactions(const InstructionIterator& inline_site,
                         const ControlFlowGraph& callee_cfg) {
   auto nums = [](auto* b) -> std::optional<size_t> {
     auto sb = source_blocks::get_first_source_block(b);
-    return (sb != nullptr) ? std::optional<size_t>(sb->vals.size())
+    return (sb != nullptr) ? std::optional<size_t>(sb->vals_size)
                            : std::nullopt;
   };
 

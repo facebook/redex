@@ -65,10 +65,11 @@ class SourceBlocksTest : public RedexIntegrationTest {
       auto vec = source_blocks::gather_source_blocks(block);
       for (auto* sb : vec) {
         oss << " " << sb->id;
-        if (!sb->vals.empty()) {
+        if (sb->vals_size > 0) {
           oss << "(";
           bool first_val = true;
-          for (const auto& val : sb->vals) {
+          for (size_t i = 0; i < sb->vals_size; i++) {
+            auto& val = sb->vals[i];
             if (!first_val) {
               oss << "|";
             }

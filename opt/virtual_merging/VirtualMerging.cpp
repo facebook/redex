@@ -917,8 +917,8 @@ void check_remap(
 void reset_sb(SourceBlock& sb, DexMethod* ref, uint32_t id) {
   sb.src = ref->get_deobfuscated_name_or_null();
   sb.id = id;
-  for (auto& v : sb.vals) {
-    v = SourceBlock::Val{0, 0};
+  for (size_t i = 0; i < sb.vals_size; i++) {
+    sb.vals[i] = SourceBlock::Val{0, 0};
   }
 }
 
@@ -1052,7 +1052,7 @@ struct SBHelper {
         new_sb->src = parent->overridden->get_deobfuscated_name_or_null();
         new_sb->id = SourceBlock::kSyntheticId;
         if (overriding_sb != nullptr && first_sb != nullptr) {
-          for (size_t i = 0; i != new_sb->vals.size(); ++i) {
+          for (size_t i = 0; i != new_sb->vals_size; ++i) {
             if (!new_sb->get_val(i)) {
               new_sb->vals[i] = first_sb->vals[i];
             } else if (first_sb->get_val(i)) {

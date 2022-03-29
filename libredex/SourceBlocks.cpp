@@ -513,7 +513,7 @@ size_t chain_hot_violations_tmpl(Block* block, const Fn& fn) {
       // next SourceBlock.
       auto* next = sb->next.get();
       size_t local_sum{0};
-      for (size_t i = 0; i != sb->vals.size(); ++i) {
+      for (size_t i = 0; i != sb->vals_size; ++i) {
         auto sb_val = sb->get_val(i);
         auto next_val = next->get_val(i);
         if (sb_val) {
@@ -571,7 +571,7 @@ void chain_and_dom_update(
   }
 
   if (state.last != nullptr) {
-    for (size_t i = 0; i != sb->vals.size(); ++i) {
+    for (size_t i = 0; i != sb->vals_size; ++i) {
       auto last_val = state.last->get_val(i);
       auto sb_val = sb->get_val(i);
       if (last_val) {
@@ -970,7 +970,8 @@ struct ViolationsHelper::ViolationsHelperImpl {
           os << " !!! B" << immediate_dominator->id() << ": ";
           auto sb = first_sb_immediate_dominator;
           os << " \"" << show(sb->src) << "\"@" << sb->id;
-          for (const auto& val : sb->vals) {
+          for (size_t i = 0; i < sb->vals_size; i++) {
+            auto& val = sb->vals[i];
             os << " ";
             if (val) {
               os << val->val << "/" << val->appear100;

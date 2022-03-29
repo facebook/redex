@@ -945,7 +945,8 @@ std::string SourceBlock::show(bool quoted_src) const {
     }
     o << "@" << cur->id;
     o << "(";
-    for (const auto& val : cur->vals) {
+    for (size_t i = 0; i != cur->vals_size; ++i) {
+      auto& val = cur->vals[i];
       if (val) {
         o << val->val << ":" << val->appear100;
       } else {
