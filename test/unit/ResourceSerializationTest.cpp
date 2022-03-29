@@ -44,14 +44,14 @@ const std::array<uint8_t, 116> example_data_16{
      0x74, 0x00, 0x00, 0x00, 0x06, 0x00, 0x73, 0x00, 0x74, 0x00, 0x72, 0x00,
      0x69, 0x00, 0x6E, 0x00, 0x67, 0x00, 0x00, 0x00}};
 
-std::string make_big_string(size_t len) {
+UNUSED std::string make_big_string(size_t len) {
   always_assert(len > 4);
   std::string result = "aa" + std::string(len - 4, 'x') + "zz";
   return result;
 }
 
-void assert_u16_string(const std::u16string& actual_str,
-                       const std::string& expected) {
+UNUSED void assert_u16_string(const std::u16string& actual_str,
+                              const std::string& expected) {
   std::u16string expected_str(expected.begin(), expected.end());
   ASSERT_EQ(actual_str, expected_str);
 }
@@ -89,97 +89,6 @@ bool are_files_equal(const std::string& p1, const std::string& p2) {
                     std::istreambuf_iterator<char>(f2.rdbuf()));
 }
 } // namespace
-
-TEST(ResStringPool, AppendToEmptyTable) {
-  const size_t header_size = sizeof(android::ResStringPool_header);
-  android::ResStringPool_header header = {
-      {htods(android::RES_STRING_POOL_TYPE), htods(header_size),
-       htodl(header_size)},
-      0,
-      0,
-      htodl(android::ResStringPool_header::UTF8_FLAG |
-            android::ResStringPool_header::SORTED_FLAG),
-      0,
-      0};
-  android::ResStringPool pool((void*)&header, header_size, false);
-
-  pool.appendString(android::String8("Hello, world"));
-  auto big_string = make_big_string(300);
-  auto big_chars = big_string.c_str();
-  pool.appendString(android::String8(big_chars));
-  pool.appendString(android::String8("€666"));
-  pool.appendString(android::String8("banana banana"));
-  android::Vector<char> v;
-  pool.serialize(v);
-
-  auto data = (void*)v.array();
-  android::ResStringPool after(data, v.size(), false);
-
-  // Ensure sort bit was cleared.
-  auto flags = dtohl(((android::ResStringPool_header*)data)->flags);
-  ASSERT_FALSE(flags & android::ResStringPool_header::SORTED_FLAG);
-
-  size_t out_len;
-  ASSERT_STREQ(after.string8At(0, &out_len), "Hello, world");
-  ASSERT_EQ(out_len, 12);
-  ASSERT_STREQ(after.string8At(1, &out_len), big_chars);
-  ASSERT_EQ(out_len, 300);
-  ASSERT_STREQ(after.string8At(2, &out_len), "€666");
-  ASSERT_STREQ(after.string8At(3, &out_len), "banana banana");
-}
-
-TEST(ResStringPool, AppendToExistingUTF8) {
-  android::ResStringPool pool(&example_data_8, example_data_8.size(), false);
-  size_t out_len;
-  ASSERT_STREQ(pool.string8At(0, &out_len), "Hello, world");
-
-  pool.appendString(android::String8("this is another string"));
-  android::Vector<char> v;
-  pool.serialize(v);
-  android::ResStringPool after((void*)v.array(), v.size(), false);
-
-  // Make sure we still have the original two strings
-  ASSERT_STREQ(after.string8At(0, &out_len), "Hello, world");
-  ASSERT_EQ(out_len, 12);
-  ASSERT_STREQ(after.string8At(1, &out_len), "res/layout/simple_layout.xml");
-  ASSERT_EQ(out_len, 28);
-  // And the one appended
-  ASSERT_STREQ(after.string8At(2, &out_len), "this is another string");
-  ASSERT_EQ(out_len, 22);
-}
-
-TEST(ResStringPool, AppendToExistingUTF16) {
-  android::ResStringPool pool(&example_data_16, example_data_16.size(), false);
-  ASSERT_TRUE(!pool.isUTF8());
-  size_t out_len;
-  auto s = pool.stringAt(0, &out_len);
-  assert_u16_string(s, "color");
-  ASSERT_EQ(out_len, 5);
-
-  // Make sure the size encoding works for large values.
-  auto big_string = make_big_string(35000);
-  auto big_chars = big_string.c_str();
-  pool.appendString(android::String8(big_chars));
-  pool.appendString(android::String8("more more more"));
-  android::Vector<char> v;
-  pool.serialize(v);
-  android::ResStringPool after((void*)v.array(), v.size(), false);
-
-  assert_u16_string(after.stringAt(0, &out_len), "color");
-  ASSERT_EQ(out_len, 5);
-  assert_u16_string(after.stringAt(1, &out_len), "dimen");
-  ASSERT_EQ(out_len, 5);
-  assert_u16_string(after.stringAt(2, &out_len), "id");
-  ASSERT_EQ(out_len, 2);
-  assert_u16_string(after.stringAt(3, &out_len), "layout");
-  ASSERT_EQ(out_len, 6);
-  assert_u16_string(after.stringAt(4, &out_len), "string");
-  ASSERT_EQ(out_len, 6);
-  assert_u16_string(after.stringAt(5, &out_len), big_chars);
-  ASSERT_EQ(out_len, 35000);
-  assert_u16_string(after.stringAt(6, &out_len), "more more more");
-  ASSERT_EQ(out_len, 14);
-}
 
 TEST(ResStringPool, ReplaceStringsInXmlLayout) {
   // Given layout file should have a series of View subclasses in the XML, which

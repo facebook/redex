@@ -496,7 +496,6 @@ public:
     ~ResStringPool();
 
     void setToEmpty();
-    void serialize(Vector<char>& cVec);
     status_t setTo(const void* data, size_t size, bool copyData=true);
 
     status_t getError() const;
@@ -529,16 +528,7 @@ public:
     bool isSorted() const;
     bool isUTF8() const;
 
-    // Adds a new string to the end of the pool. This only takes effect during
-    // serialization, and has several caveats (doesn't support sorting, assumes
-    // there are no styles.)
-    void appendString(String8 s);
-    size_t appendedStringCount();
-
 private:
-    // Saves the changes made via appendString(). Will fatal if any of the
-    // unsupported conditions are detected.
-    void serializeWithAdditionalStrings(Vector<char>& cVec);
     status_t                    mError;
     void*                       mOwnedData;
     const ResStringPool_header* mHeader;
@@ -555,7 +545,6 @@ private:
     uint32_t                    mStringPoolSize;    // number of uint16_t
     const uint32_t*             mStyles;
     uint32_t                    mStylePoolSize;    // number of uint32_t
-    Vector<String8>             mAppendedStrings;
 };
 
 /**

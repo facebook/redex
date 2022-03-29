@@ -88,6 +88,39 @@ class ResStringPoolBuilder {
   android::Vector<StyleInfo<char>> m_styles8;
 };
 
+// Helper to work around the under-abstracted ResStringPoolBuilder which expects
+// callers to know exactly what the output format should be for string data.
+class StringStorage {
+ public:
+  StringStorage(bool is_utf8) : m_utf8(is_utf8) {}
+  size_t store(const std::string& s) {
+    size_t result_idx = m_utf8 ? m_strings8.size() : m_strings16.size();
+    if (m_utf8) {
+      android::String8 to_append(s.c_str(), s.size());
+      m_strings8.emplace_back(std::move(to_append));
+    } else {
+      android::String16 to_append(s.c_str(), s.size());
+      m_strings16.emplace_back(std::move(to_append));
+    }
+    return result_idx;
+  }
+
+  void add_string_to_builder(ResStringPoolBuilder* builder, size_t idx) {
+    if (m_utf8) {
+      auto& s = m_strings8.at(idx);
+      builder->add_string(s.string(), s.size());
+    } else {
+      auto& s = m_strings16.at(idx);
+      builder->add_string(s.string(), s.size());
+    }
+  }
+
+ private:
+  bool m_utf8;
+  std::vector<android::String8> m_strings8;
+  std::vector<android::String16> m_strings16;
+};
+
 // Builder for serializing a ResTable_typeSpec structure with N ResTable_type
 // structures (and entries). As with other Builder classes, this can be used two
 // ways:

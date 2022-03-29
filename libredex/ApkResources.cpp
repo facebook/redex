@@ -582,6 +582,23 @@ std::unordered_set<uint32_t> ApkResources::get_xml_reference_attributes(
   return result;
 }
 
+namespace {
+// Insert string data from the given pool at the given index to the builder.
+void add_existing_string_to_builder(const android::ResStringPool& string_pool,
+                                    arsc::ResStringPoolBuilder* builder,
+                                    size_t idx) {
+  size_t length;
+  if (string_pool.isUTF8()) {
+    auto s = string_pool.string8At(idx, &length);
+    size_t actual_length = apk::read_utf8_length_from_string_pool_data(s);
+    builder->add_string(s, actual_length);
+  } else {
+    auto s = string_pool.stringAt(idx, &length);
+    builder->add_string(s, length);
+  }
+}
+} // namespace
+
 int ApkResources::replace_in_xml_string_pool(
     const void* data,
     const size_t len,
@@ -611,58 +628,32 @@ int ApkResources::replace_in_xml_string_pool(
 
   // Straight copy of everything after the string pool.
   android::Vector<char> serialized_nodes;
-  auto start = chunk_size + pool_ptr->header.size;
+  auto start = chunk_size + dtohl(pool_ptr->header.size);
   auto remaining = len - start;
   serialized_nodes.resize(remaining);
   void* start_ptr = ((char*)data) + start;
   memcpy((void*)&serialized_nodes[0], start_ptr, remaining);
 
   // Rewrite the strings
-  android::Vector<char> serialized_pool;
-  auto num_strings = pool_ptr->stringCount;
-
-  // Make an empty pool.
-  auto new_pool_header = android::ResStringPool_header{
-      {// Chunk type
-       htods(android::RES_STRING_POOL_TYPE),
-       // Header size
-       htods(pool_header_size),
-       // Total size (no items yet, equal to the header size)
-       htodl(pool_header_size)},
-      // String count
-      0,
-      // Style count
-      0,
-      // Flags (valid combinations of UTF8_FLAG, SORTED_FLAG)
-      pool.isUTF8() ? htodl(android::ResStringPool_header::UTF8_FLAG)
-                    : (uint32_t)0,
-      // Offset from header to string data
-      0,
-      // Offset from header to style data
-      0};
-  android::ResStringPool new_pool(&new_pool_header, pool_header_size);
-
-  for (size_t i = 0; i < num_strings; i++) {
-    // Public accessors for strings are a bit of a foot gun. string8ObjectAt
-    // does not reliably return lengths with chars outside the BMP. Work around
-    // to get a proper String8.
-    size_t u16_len;
-    auto wide_chars = pool.stringAt(i, &u16_len);
-    android::String16 s16(wide_chars, u16_len);
-    android::String8 string8(s16);
-    std::string existing_str(string8.string());
-
+  auto is_utf8 = pool.isUTF8();
+  auto flags =
+      is_utf8 ? htodl(android::ResStringPool_header::UTF8_FLAG) : (uint32_t)0;
+  arsc::StringStorage temp_storage(is_utf8);
+  arsc::ResStringPoolBuilder pool_builder(flags);
+  for (size_t i = 0; i < dtohl(pool_ptr->stringCount); i++) {
+    auto existing_str = apk::get_string_from_pool(pool, i);
     auto replacement = rename_map.find(existing_str);
     if (replacement == rename_map.end()) {
-      new_pool.appendString(string8);
+      add_existing_string_to_builder(pool, &pool_builder, i);
     } else {
-      android::String8 replacement8(replacement->second.c_str());
-      new_pool.appendString(replacement8);
+      temp_storage.add_string_to_builder(
+          &pool_builder, temp_storage.store(replacement->second));
       num_replaced++;
     }
   }
 
-  new_pool.serialize(serialized_pool);
+  android::Vector<char> serialized_pool;
+  pool_builder.serialize(&serialized_pool);
 
   // Assemble
   arsc::push_short(android::RES_XML_TYPE, out_data);
@@ -1206,15 +1197,7 @@ void rebuild_type_strings(const uint32_t& package_id,
   const auto original_string_count = string_pool.size();
   const auto is_utf8 = string_pool.isUTF8();
   for (size_t idx = 0; idx < original_string_count; idx++) {
-    size_t length;
-    if (is_utf8) {
-      auto s = string_pool.string8At(idx, &length);
-      size_t actual_length = apk::read_utf8_length_from_string_pool_data(s);
-      builder->add_string(s, actual_length);
-    } else {
-      auto s = string_pool.stringAt(idx, &length);
-      builder->add_string(s, length);
-    }
+    add_existing_string_to_builder(string_pool, builder, idx);
   }
   for (auto& type_def : added_types) {
     if (type_def.package_id != package_id) {
