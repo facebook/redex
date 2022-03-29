@@ -730,6 +730,8 @@ DexMethod::DexMethod(DexType* type, const DexString* name, DexProto* proto)
 
 DexMethod::~DexMethod() = default;
 
+void DexMethod::delete_method(DexMethod* m) { m->make_non_concrete(); }
+
 std::string DexMethod::get_fully_deobfuscated_name() const {
   if (m_deobfuscated_name != nullptr &&
       get_deobfuscated_name().str() == show(this)) {
@@ -1060,6 +1062,7 @@ void DexMethod::make_non_concrete() {
   m_code.reset();
   m_virtual = false;
   m_param_anno.reset();
+  m_anno.reset();
 }
 
 void DexMethod::set_deobfuscated_name(const std::string& name) {

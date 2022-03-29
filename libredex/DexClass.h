@@ -1086,6 +1086,11 @@ class DexMethod : public DexMethodRef {
   // `MethodProfiles` which maps `DexMethodRef`s to data.
   static void delete_method_DO_NOT_USE(DexMethod* method) { delete method; }
 
+  // This method currently does *NOT* free the `DexMethod`, as there may still
+  // be references. This may will free most resources associated with the
+  // DexMethod, though. Eventually this will become a full delete.
+  static void delete_method(DexMethod* method);
+
  private:
   template <typename C>
   void gather_strings_internal(C& lstring, bool exclude_loads) const;
