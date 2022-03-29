@@ -172,12 +172,18 @@ void MethodSimilarityOrderer::compute_score() {
           }
         }
 
-        // Mapping from score value (key) to Method Ids. The key is in a
-        // decreasing score order. Becuase it iterates Method Id in order,
-        // the vector is already sorted by Method index (source order).
-        std::map<ScoreValue, boost::dynamic_bitset<>, std::greater<ScoreValue>>
-            map(score_map.begin(), score_map.end());
-        m_score_map[i] = std::move(map);
+        if (!score_map.empty()) {
+          std::map<ScoreValue, boost::dynamic_bitset<>,
+                   std::greater<ScoreValue>>
+              map;
+          // Mapping from score value (key) to Method Ids. The key is in a
+          // decreasing score order. Becuase it iterates Method Id in order,
+          // the vector is already sorted by Method index (source order).
+          for (auto&& [score_value, method_ids] : score_map) {
+            map[score_value] = std::move(method_ids);
+          }
+          m_score_map[i] = std::move(map);
+        }
       },
       indices);
 }
