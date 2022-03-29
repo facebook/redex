@@ -5,12 +5,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <boost/functional/hash.hpp>
 #include <iostream>
 
-#include "utils/Serialize.h"
 #include "utils/ByteOrder.h"
 #include "utils/Debug.h"
 #include "utils/Log.h"
+#include "utils/Serialize.h"
 #include "utils/String16.h"
 #include "utils/String8.h"
 #include "utils/Unicode.h"
@@ -185,6 +186,48 @@ bool are_configs_equivalent(android::ResTable_config* a,
   return false;
 }
 
+size_t CanonicalEntries::hash(const EntryValueData& data) {
+  size_t seed = 0;
+  uint8_t* ptr = data.getKey();
+  for (size_t i = 0; i < data.value; i++, ptr++) {
+    boost::hash_combine(seed, *ptr);
+  }
+  return seed;
+}
+
+bool CanonicalEntries::find(const EntryValueData& data,
+                            size_t* out_hash,
+                            uint32_t* out_offset) {
+  auto h = hash(data);
+  *out_hash = h;
+  auto search = m_canonical_entries.find(h);
+  if (search != m_canonical_entries.end()) {
+    auto data_size = data.value;
+    auto& vec = search->second;
+    for (const auto& pair : vec) {
+      auto emitted_data = pair.first;
+      if (data_size == emitted_data.value &&
+          memcmp(data.key, emitted_data.key, data_size) == 0) {
+        *out_offset = pair.second;
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+void CanonicalEntries::record(EntryValueData data,
+                              size_t hash,
+                              uint32_t offset) {
+  auto search = m_canonical_entries.find(hash);
+  if (search == m_canonical_entries.end()) {
+    std::vector<EntryOffsetData> vec;
+    search = m_canonical_entries.emplace(hash, std::move(vec)).first;
+  }
+  auto p = std::make_pair(std::move(data), offset);
+  search->second.emplace_back(p);
+}
+
 void ResTableTypeProjector::serialize_type(android::ResTable_type* type,
                                            android::Vector<char>* out) {
   auto original_entries = dtohl(type->entryCount);
@@ -221,10 +264,10 @@ void ResTableTypeProjector::serialize_type(android::ResTable_type* type,
   // copying all non-deleted data to the temp vec.
   android::Vector<char> temp;
   android::Vector<uint32_t> offsets;
+  CanonicalEntries canonical_entries;
+  // Pointer to the first Res_entry
   uint32_t* entry_offsets =
       (uint32_t*)((uint8_t*)type + dtohs(type->header.headerSize));
-  // Pointer to the first Res_entry
-  // TODO: option for canonical offsets for identical entry/values
   for (size_t i = 0; i < original_entries; i++) {
     auto id = make_id(i);
     if (m_ids_to_remove.count(id) == 0) {
@@ -233,11 +276,30 @@ void ResTableTypeProjector::serialize_type(android::ResTable_type* type,
         offsets.push_back(htodl(android::ResTable_type::NO_ENTRY));
       } else {
         auto entry_ptr = (uint8_t*)type + dtohs(type->entriesStart) + offset;
-        offsets.push_back(temp.size());
         uint32_t total_size =
             compute_entry_value_length((android::ResTable_entry*)entry_ptr);
-        // Copy the entry/value
-        push_data_no_swap(entry_ptr, total_size, &temp);
+        if (!m_enable_canonical_entries) {
+          offsets.push_back(temp.size());
+          // Copy the entry/value
+          push_data_no_swap(entry_ptr, total_size, &temp);
+        } else {
+          // Check if we have already emitted identical data.
+          EntryValueData ev(entry_ptr, total_size);
+          size_t hash;
+          uint32_t prev_offset;
+          if (canonical_entries.find(ev, &hash, &prev_offset)) {
+            // No need to copy identical data, just emit the previous offset
+            // again.
+            offsets.push_back(prev_offset);
+          } else {
+            uint32_t this_offset = temp.size();
+            canonical_entries.record(ev, hash, this_offset);
+            offsets.push_back(this_offset);
+            // Copy the entry/value just like we'd do if canonical offsets were
+            // not enabled.
+            push_data_no_swap(entry_ptr, total_size, &temp);
+          }
+        }
       }
     }
   }
@@ -367,8 +429,9 @@ void ResTableTypeDefiner::serialize(android::Vector<char>* out) {
         sizeof(android::ResChunk_header) + sizeof(uint32_t) * 3 + config_size;
     push_short(type_header_size, out);
     auto entries_start = type_header_size + data.size() * sizeof(uint32_t);
-    auto total_size = entries_start + m_data_size.at(config);
-    push_long(total_size, out);
+    // Write the final size later
+    auto total_size_pos = out->size();
+    push_long(FILL_IN_LATER, out);
     out->push_back(m_type);
     out->push_back(0); // pad to 4 bytes
     out->push_back(0);
@@ -377,21 +440,32 @@ void ResTableTypeDefiner::serialize(android::Vector<char>* out) {
     push_long(entries_start, out);
     push_data_no_swap(config, config_size, out);
     // Compute and write offsets.
+    CanonicalEntries canonical_entries;
+    android::Vector<char> entry_data;
     uint32_t offset = 0;
-    for (auto& pair : data) {
-      if (pair.key == nullptr && pair.value == 0) {
+    for (auto& ev : data) {
+      if (ev.key == nullptr && ev.value == 0) {
         push_long(dtohl(android::ResTable_type::NO_ENTRY), out);
-      } else {
+      } else if (!m_enable_canonical_entries) {
         push_long(offset, out);
-        offset += pair.value;
+        offset += ev.value;
+        push_data_no_swap(ev.key, ev.value, &entry_data);
+      } else {
+        size_t hash;
+        uint32_t prev_offset;
+        if (canonical_entries.find(ev, &hash, &prev_offset)) {
+          push_long(prev_offset, out);
+        } else {
+          canonical_entries.record(ev, hash, offset);
+          push_long(offset, out);
+          offset += ev.value;
+          push_data_no_swap(ev.key, ev.value, &entry_data);
+        }
       }
     }
     // Actual data.
-    for (auto& pair : data) {
-      if (pair.key != nullptr && pair.value > 0) {
-        push_data_no_swap(pair.key, pair.value, out);
-      }
-    }
+    out->appendVector(entry_data);
+    write_long_at_pos(total_size_pos, entries_start + entry_data.size(), out);
   }
 }
 

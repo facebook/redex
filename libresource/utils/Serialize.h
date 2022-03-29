@@ -121,6 +121,26 @@ class StringStorage {
   std::vector<android::String16> m_strings16;
 };
 
+using EntryValueData = PtrLen<uint8_t>;
+using EntryOffsetData = std::pair<EntryValueData, uint32_t>;
+
+// Helper to record identical entry/value data that has already been emitted for
+// a certain type.
+class CanonicalEntries {
+ public:
+  CanonicalEntries() {}
+  // Returns true and sets the offset output parameter if identical data has
+  // already been noted. Sets the hash output param regardless.
+  bool find(const EntryValueData& data, size_t* out_hash, uint32_t* out_offset);
+  void record(EntryValueData data, size_t hash, uint32_t offset);
+
+ private:
+  size_t hash(const EntryValueData& data);
+  // Hash to pair of the entry/value bytes with the hash code, and the offset to
+  // the serialized data.
+  std::unordered_map<size_t, std::vector<EntryOffsetData>> m_canonical_entries;
+};
+
 // Builder for serializing a ResTable_typeSpec structure with N ResTable_type
 // structures (and entries). As with other Builder classes, this can be used two
 // ways:
@@ -128,8 +148,12 @@ class StringStorage {
 // 2) Project deletions over existing data structures.
 class ResTableTypeBuilder {
  public:
-  ResTableTypeBuilder(uint32_t package_id, uint8_t type)
-      : m_package_id(package_id), m_type(type) {
+  ResTableTypeBuilder(uint32_t package_id,
+                      uint8_t type,
+                      bool enable_canonical_entries)
+      : m_package_id(package_id),
+        m_type(type),
+        m_enable_canonical_entries(enable_canonical_entries) {
     LOG_ALWAYS_FATAL_IF((package_id & 0xFFFFFF00) != 0,
                         "package_id expected to have low byte set; got 0x%x",
                         package_id);
@@ -146,6 +170,8 @@ class ResTableTypeBuilder {
   uint32_t m_package_id;
   // The non-zero ID of this type
   uint8_t m_type;
+  // Whether or not to check for redundant entry/value data.
+  bool m_enable_canonical_entries;
 };
 
 // Builder for projecting deletions over existing data ResTable_typeSpec and its
@@ -154,8 +180,9 @@ class ResTableTypeProjector : public ResTableTypeBuilder {
  public:
   ResTableTypeProjector(uint32_t package_id,
                         android::ResTable_typeSpec* spec,
-                        std::vector<android::ResTable_type*> configs)
-      : ResTableTypeBuilder(package_id, spec->id),
+                        std::vector<android::ResTable_type*> configs,
+                        bool enable_canonical_entries = false)
+      : ResTableTypeBuilder(package_id, spec->id, enable_canonical_entries),
         m_spec(spec),
         m_configs(std::move(configs)) {}
   void remove_ids(std::unordered_set<uint32_t>& ids_to_remove) {
@@ -172,8 +199,6 @@ class ResTableTypeProjector : public ResTableTypeBuilder {
   std::unordered_set<uint32_t> m_ids_to_remove;
 };
 
-using EntryValueData = PtrLen<uint8_t>;
-
 // Builder for defining a new ResTable_typeSpec along with its ResTable_type
 // structures, entries, values. In all cases, given data should be in device
 // order.
@@ -182,8 +207,9 @@ class ResTableTypeDefiner : public ResTableTypeBuilder {
   ResTableTypeDefiner(uint32_t package_id,
                       uint8_t id,
                       std::vector<android::ResTable_config*> configs,
-                      std::vector<uint32_t> flags)
-      : ResTableTypeBuilder(package_id, id),
+                      std::vector<uint32_t> flags,
+                      bool enable_canonical_entries = false)
+      : ResTableTypeBuilder(package_id, id, enable_canonical_entries),
         m_configs(std::move(configs)),
         m_flags(std::move(flags)) {}
   // Adds a chunk of data representing an entry and value to the given config.
@@ -195,9 +221,6 @@ class ResTableTypeDefiner : public ResTableTypeBuilder {
     }
     auto& vec = m_data.at(config);
     vec.emplace_back(data);
-    // Keep a running tally of the size of all entry/value data to lessen the
-    // need to recompute at serialization time.
-    m_data_size[config] += data.value;
   }
   // Convenience method to add empty entry/value to the given config.
   void add_empty(android::ResTable_config* config) {
@@ -213,10 +236,6 @@ class ResTableTypeDefiner : public ResTableTypeBuilder {
   // m_flag's size.
   std::unordered_map<android::ResTable_config*, std::vector<EntryValueData>>
       m_data;
-  // For each config, number of bytes needed to represent the entry/value data
-  // structures. This DOES NOT count the number of bytes needed to encode
-  // offsets.
-  std::unordered_map<android::ResTable_config*, uint32_t> m_data_size;
   const std::vector<android::ResTable_config*> m_configs;
   const std::vector<uint32_t> m_flags;
 };

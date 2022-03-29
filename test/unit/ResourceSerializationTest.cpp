@@ -412,6 +412,9 @@ EntryAndValue e0(0, android::Res_value::TYPE_DIMENSION, 1000);
 EntryAndValue e0_land(0, android::Res_value::TYPE_DIMENSION, 1001);
 EntryAndValue e1(1, android::Res_value::TYPE_DIMENSION, 2000);
 EntryAndValue e2(2, android::Res_value::TYPE_REFERENCE, 0x7f010001);
+EntryAndValue id_0(0, android::Res_value::TYPE_INT_BOOLEAN, 0);
+EntryAndValue id_1(1, android::Res_value::TYPE_INT_BOOLEAN, 0);
+EntryAndValue id_2(2, android::Res_value::TYPE_INT_BOOLEAN, 0);
 MapEntryAndValues style(3, 0);
 
 // The package that all tests to follow will be in
@@ -606,6 +609,15 @@ std::vector<arsc::TypeInfo> load_types(const RedexMappedFile& arsc_file) {
     __bag_entry--;                                                           \
     (table).unlockBag(__bag_entry);                                          \
   })
+// As above, but look up via resource ID instead of string
+#define ASSERT_ID_VALUES(table, id, expected)                      \
+  ({                                                               \
+    android::Res_value __actual_value;                             \
+    EXPECT_EQ((table).getResource((id), &__actual_value), 0);      \
+    EXPECT_EQ((expected).value.size, __actual_value.size);         \
+    EXPECT_EQ((expected).value.dataType, __actual_value.dataType); \
+    EXPECT_EQ((expected).value.data, __actual_value.data);         \
+  })
 } // namespace
 
 TEST(ResTable, BuildNewTable) {
@@ -785,4 +797,125 @@ TEST(ResTable, SerializeTypeWithAllEmpty) {
                                  build_arsc_file.size()),
             0)
       << "Could not read table!";
+}
+
+namespace {
+
+void build_table_with_ids(const std::string& dest_file_path,
+                          bool canonical_entries) {
+  auto pool_flags = android::ResStringPool_header::UTF8_FLAG;
+  auto global_strings_builder =
+      std::make_shared<arsc::ResStringPoolBuilder>(pool_flags);
+  auto key_strings_builder =
+      std::make_shared<arsc::ResStringPoolBuilder>(pool_flags);
+  std::vector<std::string> key_strings = {"foo", "name_removed", "bar"};
+  for (const auto& s : key_strings) {
+    key_strings_builder->add_string(s.c_str(), s.size());
+  }
+  auto type_strings_builder =
+      std::make_shared<arsc::ResStringPoolBuilder>(pool_flags);
+  std::string type_name("id");
+  type_strings_builder->add_string(type_name.c_str(), type_name.size());
+
+  auto package_builder =
+      std::make_shared<arsc::ResPackageBuilder>(&package_header);
+  package_builder->set_key_strings(key_strings_builder);
+  package_builder->set_type_strings(type_strings_builder);
+
+  auto table_builder = std::make_shared<arsc::ResTableBuilder>();
+  table_builder->set_global_strings(global_strings_builder);
+  table_builder->add_package(package_builder);
+
+  // Make a dimen type that is entirely full of empty things
+  std::vector<android::ResTable_config*> id_configs = {&default_config};
+  std::vector<uint32_t> flags = {0, 0, 0, 0, 0, 0};
+  auto type_definer = std::make_shared<arsc::ResTableTypeDefiner>(
+      package_header.id, 1, id_configs, flags, canonical_entries);
+  package_builder->add_type(type_definer);
+  type_definer->add(&default_config, {(uint8_t*)&id_0, sizeof(EntryAndValue)});
+  // When canonical_entries is true, following three items will generate three
+  // offsets that point to just a single copy of the 16 entry/value bytes.
+  type_definer->add(&default_config, {(uint8_t*)&id_1, sizeof(EntryAndValue)});
+  type_definer->add(&default_config, {(uint8_t*)&id_1, sizeof(EntryAndValue)});
+  type_definer->add(&default_config, {(uint8_t*)&id_1, sizeof(EntryAndValue)});
+  // When canonical_entries is true, following two items will generate two
+  // offsets that point to just a single copy of the 16 entry/value bytes.
+  type_definer->add(&default_config, {(uint8_t*)&id_2, sizeof(EntryAndValue)});
+  type_definer->add(&default_config, {(uint8_t*)&id_2, sizeof(EntryAndValue)});
+
+  android::Vector<char> out;
+  table_builder->serialize(&out);
+  write_to_file(dest_file_path, out);
+}
+
+} // namespace
+
+TEST(ResTable, CanonicalEntryData) {
+  auto do_validation = [&](const std::string& file_path,
+                           uint32_t type_expected_size) {
+    auto file = RedexMappedFile::open(file_path);
+    android::ResTable arsc_table;
+    EXPECT_EQ(arsc_table.add(file.const_data(), file.size()), 0)
+        << "Could not read table!";
+    ASSERT_ID_VALUES(arsc_table, 0x7f010000, id_0);
+    ASSERT_ID_VALUES(arsc_table, 0x7f010001, id_1);
+    ASSERT_ID_VALUES(arsc_table, 0x7f010002, id_1);
+    ASSERT_ID_VALUES(arsc_table, 0x7f010003, id_1);
+    ASSERT_ID_VALUES(arsc_table, 0x7f010004, id_2);
+    ASSERT_ID_VALUES(arsc_table, 0x7f010005, id_2);
+
+    // Assert the size of the ResTable_type for the id table
+    apk::TableParser parser;
+    parser.visit((void*)file.const_data(), file.size());
+    auto type_info = parser.m_package_types.begin()->second.at(0);
+    EXPECT_EQ(type_info.configs.at(0)->header.size, type_expected_size)
+        << "ResTable_type was not expected size!";
+  };
+
+  uint32_t num_entries = 6;
+  uint32_t expected_size_no_canon = sizeof(android::ResTable_type) +
+                                    num_entries * sizeof(uint32_t) +
+                                    num_entries * sizeof(EntryAndValue);
+  // Three of these things are duplicated, but the offsets will remain.
+  uint32_t expected_size_canon =
+      expected_size_no_canon - 3 * sizeof(EntryAndValue);
+
+  auto tmp_dir = redex::make_tmp_dir("ResTable_CanonicalEntryData%%%%%%%%");
+
+  auto no_canonical_path = tmp_dir.path + "/no_canon.arsc";
+  build_table_with_ids(no_canonical_path, false);
+  do_validation(no_canonical_path, expected_size_no_canon);
+
+  auto canonical_path = tmp_dir.path + "/canon.arsc";
+  build_table_with_ids(canonical_path, true);
+  do_validation(canonical_path, expected_size_canon);
+
+  // Make sure the Projector also emits the data properly in canonical form. Do
+  // this by taking the non-canonical table, as prepared by the Definer, and
+  // copy it all into a new builder using the Projector with the
+  // "enable_canonical_entries" flag flipped to true.
+  auto no_canon_file = RedexMappedFile::open(no_canonical_path);
+  apk::TableParser parsed_table;
+  parsed_table.visit((void*)no_canon_file.const_data(), no_canon_file.size());
+  auto package_builder =
+      std::make_shared<arsc::ResPackageBuilder>(&package_header);
+  package_builder->set_key_strings(
+      parsed_table.m_package_key_string_headers.begin()->second);
+  package_builder->set_type_strings(
+      parsed_table.m_package_type_string_headers.begin()->second);
+
+  auto& id_type = parsed_table.m_package_types.begin()->second.at(0);
+  auto type_projector = std::make_shared<arsc::ResTableTypeProjector>(
+      package_header.id, id_type.spec, id_type.configs, true);
+  package_builder->add_type(type_projector);
+
+  auto table_builder = std::make_shared<arsc::ResTableBuilder>();
+  table_builder->set_global_strings(parsed_table.m_global_pool_header);
+  table_builder->add_package(package_builder);
+  android::Vector<char> out;
+  table_builder->serialize(&out);
+
+  auto projector_canon_path = tmp_dir.path + "/projector_canon.arsc";
+  write_to_file(projector_canon_path, out);
+  do_validation(projector_canon_path, expected_size_canon);
 }
