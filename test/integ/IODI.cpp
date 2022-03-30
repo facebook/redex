@@ -83,6 +83,7 @@ class IODITest : public ::testing::Test {
                      nullptr, /* locator_index */
                      false, /* normal_primary_dex */
                      0,
+                     nullptr, /* store name */
                      0,
                      iodi_layers ? DebugInfoKind::InstructionOffsetsLayered
                                  : DebugInfoKind::InstructionOffsets,

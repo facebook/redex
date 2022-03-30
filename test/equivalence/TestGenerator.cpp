@@ -107,6 +107,7 @@ int main(int argc, char* argv[]) {
                        std::move(gtypes),
                        nullptr /* LocatorIndex* */,
                        0,
+                       nullptr /* store_name */,
                        0,
                        conf,
                        pos_mapper.get(),

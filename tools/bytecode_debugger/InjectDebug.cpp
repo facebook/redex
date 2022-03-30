@@ -177,6 +177,7 @@ void InjectDebug::write_dex() {
           nullptr, // locator_index
           false, // normal_primary_dex
           store_num,
+          nullptr, // store name
           i, // dex_number,
           DebugInfoKind::BytecodeDebugger,
           nullptr, // iodi_metadata

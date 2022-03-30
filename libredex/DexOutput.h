@@ -137,6 +137,7 @@ dex_stats_t write_classes_to_dex(
     std::shared_ptr<GatheredTypes> gtypes,
     LocatorIndex* locator_index /* nullable */,
     size_t store_number,
+    const std::string* store_name,
     size_t dex_number,
     ConfigFiles& conf,
     PositionMapper* pos_mapper,
@@ -316,6 +317,7 @@ class DexOutput {
   uint32_t m_offset;
   const char* m_filename;
   size_t m_store_number;
+  const std::string* m_store_name;
   size_t m_dex_number;
   DebugInfoKind m_debug_info_kind;
   IODIMetadata* m_iodi_metadata;
@@ -398,6 +400,7 @@ class DexOutput {
             LocatorIndex* locator_index,
             bool normal_primary_dex,
             size_t store_number,
+            const std::string* store_name,
             size_t dex_number,
             DebugInfoKind debug_info_kind,
             IODIMetadata* iodi_metadata,

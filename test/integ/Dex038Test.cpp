@@ -359,6 +359,7 @@ TEST(Dex038Test, ReadWriteDex038) {
                        std::move(gtypes),
                        nullptr,
                        0,
+                       nullptr,
                        0,
                        dummy_cfg,
                        pos_mapper.get(),
