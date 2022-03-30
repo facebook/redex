@@ -135,7 +135,7 @@ struct ModelSpec {
   strategy::Strategy strategy{strategy::BY_CLASS_COUNT};
   // Group splitting. This is looser than the per dex split and takes into
   // account the interdex order (if any provided).
-  InterDexGroupingType merge_per_interdex_set{InterDexGroupingType::DISABLED};
+  InterDexGroupingType interdex_grouping{InterDexGroupingType::DISABLED};
   // whether to perform class merging on the primary dex.
   bool include_primary_dex{false};
   // Process @MethodMeta annotations
@@ -273,8 +273,8 @@ class Model {
     return m_spec.class_name_prefix;
   }
 
-  bool is_merge_per_interdex_set_enabled() const {
-    return m_spec.merge_per_interdex_set != InterDexGroupingType::DISABLED;
+  bool is_interdex_grouping_enabled() const {
+    return m_spec.interdex_grouping != InterDexGroupingType::DISABLED;
   }
 
   const ModelSpec& get_model_spec() const { return m_spec; }
@@ -492,7 +492,7 @@ class Model {
 };
 
 InterDexGroupingType get_merge_per_interdex_type(
-    const std::string& merge_per_interdex_set);
+    const std::string& interdex_grouping);
 
 std::ostream& operator<<(std::ostream& os,
                          ModelSpec::InterDexGroupingInferringMode mode);

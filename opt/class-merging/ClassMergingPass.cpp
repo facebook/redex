@@ -201,13 +201,11 @@ void ClassMergingPass::bind_config() {
       model.strategy = get_merging_strategy(merging_strategy);
 
       // InterDex grouping option is by default `non-ordered-set`.
-      std::string merge_per_interdex_set;
-      model_spec.get("merge_per_interdex_set", "non-ordered-set",
-                     merge_per_interdex_set);
-      model.merge_per_interdex_set =
-          get_merge_per_interdex_type(merge_per_interdex_set);
+      std::string interdex_grouping;
+      model_spec.get("interdex_grouping", "non-ordered-set", interdex_grouping);
+      model.interdex_grouping = get_merge_per_interdex_type(interdex_grouping);
 
-      always_assert_log(!model.merge_per_interdex_set ||
+      always_assert_log(!model.interdex_grouping ||
                             (model.type_tag_config != TypeTagConfig::NONE),
                         "Cannot group %s when type tag is not needed.",
                         model.name.c_str());

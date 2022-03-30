@@ -41,10 +41,10 @@ void AnonymousClassMergingPass::bind_config() {
        2,
        m_min_count,
        "Minimum mergeable class count per merging group");
-  std::string merge_per_interdex_set;
-  bind("merge_per_interdex_set", "non-ordered-set", merge_per_interdex_set);
-  m_merging_spec.merge_per_interdex_set =
-      get_merge_per_interdex_type(merge_per_interdex_set);
+  std::string interdex_grouping;
+  bind("interdex_grouping", "non-ordered-set", interdex_grouping);
+  m_merging_spec.interdex_grouping =
+      get_merge_per_interdex_type(interdex_grouping);
 }
 
 void AnonymousClassMergingPass::run_pass(DexStoresVector& stores,

@@ -757,7 +757,7 @@ size_t get_interdex_group(
 namespace class_merging {
 
 InterDexGroupingType get_merge_per_interdex_type(
-    const std::string& merge_per_interdex_set) {
+    const std::string& interdex_grouping) {
 
   const static std::unordered_map<std::string, InterDexGroupingType>
       string_to_grouping = {
@@ -766,11 +766,11 @@ InterDexGroupingType get_merge_per_interdex_type(
           {"non-ordered-set", InterDexGroupingType::NON_ORDERED_SET},
           {"full", InterDexGroupingType::FULL}};
 
-  always_assert_log(string_to_grouping.count(merge_per_interdex_set) > 0,
+  always_assert_log(string_to_grouping.count(interdex_grouping) > 0,
                     "InterDex Grouping Type %s not found. Please check the list"
                     " of accepted values.",
-                    merge_per_interdex_set.c_str());
-  return string_to_grouping.at(merge_per_interdex_set);
+                    interdex_grouping.c_str());
+  return string_to_grouping.at(interdex_grouping);
 }
 
 std::ostream& operator<<(std::ostream& os,
@@ -832,7 +832,7 @@ TypeSet Model::get_types_in_current_interdex_group(
 std::vector<ConstTypeHashSet> Model::group_by_interdex_set(
     const ConstTypeHashSet& types) {
   size_t num_group = 1;
-  if (is_merge_per_interdex_set_enabled() && s_num_interdex_groups > 1) {
+  if (is_interdex_grouping_enabled() && s_num_interdex_groups > 1) {
     num_group = s_num_interdex_groups;
   }
   std::vector<ConstTypeHashSet> new_groups(num_group);
@@ -845,12 +845,12 @@ std::vector<ConstTypeHashSet> Model::group_by_interdex_set(
   for (const auto& pair : type_to_usages) {
     auto index = get_interdex_group(pair.second, s_cls_to_interdex_group,
                                     s_num_interdex_groups);
-    if (m_spec.merge_per_interdex_set == InterDexGroupingType::NON_HOT_SET) {
+    if (m_spec.interdex_grouping == InterDexGroupingType::NON_HOT_SET) {
       if (index == 0) {
         // Drop mergeables that are in the hot set.
         continue;
       }
-    } else if (m_spec.merge_per_interdex_set ==
+    } else if (m_spec.interdex_grouping ==
                InterDexGroupingType::NON_ORDERED_SET) {
       if (index < s_num_interdex_groups - 1) {
         // Only merge the last group which are not in ordered set, drop other
