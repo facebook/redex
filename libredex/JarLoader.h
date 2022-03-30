@@ -7,6 +7,7 @@
 
 #pragma once
 
+class DexLocation;
 class DexField;
 class DexMethod;
 
@@ -26,14 +27,14 @@ using attribute_hook_t =
                        const char* attribute_name,
                        uint8_t* attribute_pointer)>;
 
-bool load_jar_file(const char* location,
+bool load_jar_file(const DexLocation* location,
                    Scope* classes = nullptr,
                    const attribute_hook_t& = nullptr);
 
 bool load_class_file(const std::string& filename, Scope* classes = nullptr);
 
 void init_basic_types();
-bool process_jar(const char* location,
+bool process_jar(const DexLocation* location,
                  const uint8_t* mapping,
                  ssize_t size,
                  Scope* classes,
@@ -42,4 +43,4 @@ bool process_jar(const char* location,
 bool parse_class(uint8_t* buffer,
                  Scope* classes,
                  attribute_hook_t attr_hook,
-                 const std::string& jar_location = "");
+                 const DexLocation* jar_location);

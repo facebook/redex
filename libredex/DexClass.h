@@ -1095,6 +1095,29 @@ class DexMethod : public DexMethodRef {
 
 using dexcode_to_offset = std::unordered_map<DexCode*, uint32_t>;
 
+class DexLocation {
+  friend struct RedexContext;
+
+ private:
+  std::string m_store_name;
+  std::string m_file_name;
+  DexLocation(std::string m_store_name, std::string m_file_name);
+
+ public:
+  // If the DexLocation exists, return it, otherwise create it and return
+  // it. See also get_()
+  static const DexLocation* make_location(std::string_view store_name,
+                                          std::string_view file_name);
+
+  // Return an existing DexLocation or nullptr if one does not exist.
+  static const DexLocation* get_location(std::string_view store_name,
+                                         std::string_view file_name);
+
+  const std::string& get_store_name() const { return m_store_name; }
+  // Returns the location of this class - can be dex/jar file.
+  const std::string& get_file_name() const { return m_file_name; }
+};
+
 class DexClass {
  private:
   DexType* m_super_class;
@@ -1103,7 +1126,7 @@ class DexClass {
   const DexString* m_source_file;
   std::unique_ptr<DexAnnotationSet> m_anno;
   const DexString* m_deobfuscated_name{nullptr};
-  const std::string m_location; // TODO: string interning
+  const DexLocation* m_location{nullptr};
   std::vector<DexField*> m_sfields;
   std::vector<DexField*> m_ifields;
   std::vector<DexMethod*> m_dmethods;
@@ -1112,7 +1135,7 @@ class DexClass {
   bool m_external;
   bool m_perf_sensitive;
 
-  explicit DexClass(const std::string& location);
+  explicit DexClass(const DexLocation* location);
   void load_class_annotations(DexIdx* idx, uint32_t anno_off);
   void load_class_data_item(DexIdx* idx,
                             uint32_t cdi_off,
@@ -1121,7 +1144,7 @@ class DexClass {
   friend struct ClassCreator;
 
   // This constructor is private on purpose, use DexClass::create instead
-  DexClass(DexIdx* idx, const dex_class_def* cdef, const std::string& location);
+  DexClass(DexIdx* idx, const dex_class_def* cdef, const DexLocation* location);
 
   std::string self_show() const; // To avoid "Show.h" in the header.
 
@@ -1133,7 +1156,7 @@ class DexClass {
   // May return nullptr on benign duplicate class
   static DexClass* create(DexIdx* idx,
                           const dex_class_def* cdef,
-                          const std::string& location);
+                          const DexLocation* location);
 
   const std::vector<DexMethod*>& get_dmethods() const { return m_dmethods; }
   std::vector<DexMethod*>& get_dmethods() {
@@ -1246,8 +1269,8 @@ class DexClass {
     return m_deobfuscated_name->str();
   }
 
-  // Returns the location of this class - can be dex/jar file.
-  const std::string& get_location() const { return m_location; }
+  // Retrieves the (original) location.
+  const DexLocation* get_location() const { return m_location; }
 
   void set_access(DexAccessFlags access) {
     always_assert_log(!m_external, "Unexpected external class %s\n",

@@ -30,10 +30,11 @@ void load_store_dexen(DexStore& store,
     if (verbose) {
       std::cout << "Loading " << file_path << std::endl;
     }
-    DexClasses classes = load_classes_from_dex(file_path.c_str(),
-                                               balloon,
-                                               throw_on_balloon_error,
-                                               support_dex_version);
+    DexClasses classes =
+        load_classes_from_dex(DexLocation::make_location("", file_path),
+                              balloon,
+                              throw_on_balloon_error,
+                              support_dex_version);
     store.add_classes(std::move(classes));
   }
 }
@@ -138,7 +139,7 @@ DexStoresVector Tool::init(const std::string& system_jar_paths,
       if (m_verbose) {
         std::cout << "Loading " << system_jar << std::endl;
       }
-      if (!load_jar_file(system_jar.c_str())) {
+      if (!load_jar_file(DexLocation::make_location("", system_jar))) {
         throw std::runtime_error("Could not load system jar file '" +
                                  system_jar + "'");
       }

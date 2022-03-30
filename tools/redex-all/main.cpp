@@ -819,7 +819,8 @@ std::string get_dex_magic(std::vector<std::string>& dex_files) {
   always_assert_log(!dex_files.empty(), "APK contains no dex file\n");
   // Get dex magic from the first dex file since all dex magic
   // should be consistent within one APK.
-  return load_dex_magic_from_dex(dex_files[0].c_str());
+  return load_dex_magic_from_dex(
+      DexLocation::make_location("dex", dex_files[0]));
 }
 
 void dump_keep_reasons(const ConfigFiles& conf,
@@ -972,10 +973,11 @@ void redex_frontend(ConfigFiles& conf, /* input */
 
     for (const auto& library_jar : library_jars) {
       TRACE(MAIN, 1, "LIBRARY JAR: %s", library_jar.c_str());
-      if (!load_jar_file(library_jar.c_str(), &external_classes)) {
+      if (!load_jar_file(DexLocation::make_location("", library_jar),
+                         &external_classes)) {
         // Try again with the basedir
         std::string basedir_path = pg_config.basedirectory + "/" + library_jar;
-        if (!load_jar_file(basedir_path.c_str())) {
+        if (!load_jar_file(DexLocation::make_location("", basedir_path))) {
           std::cerr << "error: library jar could not be loaded: " << library_jar
                     << std::endl;
           exit(EXIT_FAILURE);
@@ -1284,7 +1286,7 @@ void dump_class_method_info_map(const std::string& file_path,
   std::unordered_map<std::string /*location*/, int /*index*/> dexloc_map;
 
   walk::classes(build_class_scope(stores), [&](const DexClass* cls) {
-    const auto& dexloc = cls->get_location();
+    const auto& dexloc = cls->get_location()->get_file_name();
     if (!dexloc_map.count(dexloc)) {
       dexloc_map[dexloc] = dexloc_map.size();
       ofs << "I,DEXLOC," << dexloc_map[dexloc] << "," << dexloc << std::endl;

@@ -77,7 +77,9 @@ class InjectDebugTest : public ::testing::Test {
   DexClasses load_classes(const std::string& path) {
     reset_redex();
     DexStore store("classes");
-    store.add_classes(load_classes_from_dex(path.c_str(), /* balloon */ false));
+    store.add_classes(
+        load_classes_from_dex(DexLocation::make_location("dex", path),
+                              /* balloon */ false));
     return store.get_dexen()[0];
   }
 

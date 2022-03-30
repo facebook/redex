@@ -122,7 +122,8 @@ TEST_F(ProguardTest, assortment) {
   ASSERT_NE(nullptr, dexfile);
 
   std::vector<DexClasses> dexen;
-  dexen.emplace_back(load_classes_from_dex(dexfile));
+  dexen.emplace_back(
+      load_classes_from_dex(DexLocation::make_location("", dexfile)));
   DexClasses& classes = dexen.back();
 
   // Load the Proguard map
@@ -151,7 +152,8 @@ TEST_F(ProguardTest, assortment) {
   std::string sdk_jar = std::string(android_sdk) + "/platforms/" +
                         android_version + "/android.jar";
   Scope external_classes;
-  EXPECT_TRUE(load_jar_file(sdk_jar.c_str(), &external_classes));
+  EXPECT_TRUE(load_jar_file(DexLocation::make_location("", sdk_jar),
+                            &external_classes));
 
   Scope scope = build_class_scope(dexen);
   apply_deobfuscated_names(dexen, proguard_map);

@@ -28,6 +28,7 @@
 
 class DexCallSite;
 class DexClass;
+class DexLocation;
 class DexDebugInstruction;
 class DexField;
 class DexFieldRef;
@@ -130,6 +131,11 @@ struct RedexContext {
   void mutate_method(DexMethodRef* method,
                      const DexMethodSpec& new_spec,
                      bool rename_on_collision);
+
+  DexLocation* make_location(std::string_view store_name,
+                             std::string_view file_name);
+  DexLocation* get_location(std::string_view store_name,
+                            std::string_view file_name);
 
   PositionPatternSwitchManager* get_position_pattern_switch_manager();
 
@@ -311,6 +317,16 @@ struct RedexContext {
   // DexMethod
   ConcurrentMap<DexMethodSpec, DexMethodRef*> s_method_map;
   std::mutex s_method_lock;
+
+  // DexLocation
+  using ClassLocationKey = std::pair<std::string_view, std::string_view>;
+  struct ClassLocationKeyHash {
+    size_t operator()(const ClassLocationKey& k) const {
+      return std::hash<std::string_view>()(k.second);
+    }
+  };
+  ConcurrentMap<ClassLocationKey, DexLocation*, ClassLocationKeyHash>
+      s_location_map;
 
   // DexPositionSwitch and DexPositionPattern
   PositionPatternSwitchManager* m_position_pattern_switch_manager{nullptr};

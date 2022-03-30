@@ -39,7 +39,8 @@ void InjectDebug::run() {
 
 void InjectDebug::load_dex() {
   DexStore root_store("classes");
-  root_store.set_dex_magic(load_dex_magic_from_dex(m_dex_files[0].c_str()));
+  root_store.set_dex_magic(load_dex_magic_from_dex(
+      DexLocation::make_location("dex", m_dex_files[0])));
   m_stores.emplace_back(std::move(root_store));
 
   dex_stats_t input_totals;

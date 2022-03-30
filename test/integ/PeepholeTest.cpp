@@ -141,7 +141,8 @@ class PeepholeTest : public ::testing::Test {
     DexMetadata dm;
     dm.set_id("classes");
     DexStore root_store(dm);
-    root_store.add_classes(load_classes_from_dex(dexfile));
+    root_store.add_classes(
+        load_classes_from_dex(DexLocation::make_location("dex", dexfile)));
     DexClasses& classes = root_store.get_dexen().back();
     stores.emplace_back(std::move(root_store));
     ASSERT_EQ(classes.size(), 1) << "Expected exactly one class in " << dexfile;

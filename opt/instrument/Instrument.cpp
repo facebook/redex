@@ -945,7 +945,7 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
 
   // Check whether the analysis class is in the primary dex. We use a heuristic
   // that looks the last 12 characters of the location of the given dex.
-  auto dex_loc = analysis_cls->get_location();
+  auto dex_loc = analysis_cls->get_location()->get_file_name();
   if (dex_loc.size() < 12 /* strlen("/classes.dex") == 12 */ ||
       dex_loc.substr(dex_loc.size() - 12) != "/classes.dex") {
     std::cerr << "[InstrumentPass] Analysis class must be in the primary dex. "
@@ -960,7 +960,7 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
         3,
         "Loaded analysis class: %s (%s)",
         SHOW(m_options.analysis_class_name),
-        SHOW(analysis_cls->get_location()));
+        SHOW(analysis_cls->get_location()->get_file_name()));
 
   if (m_options.instrumentation_strategy == SIMPLE_METHOD_TRACING) {
     do_simple_method_tracing(analysis_cls, stores, cfg, pm, m_options);

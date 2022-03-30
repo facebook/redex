@@ -481,6 +481,24 @@ void RedexContext::mutate_method(DexMethodRef* method,
   s_method_map.emplace(r, method);
 }
 
+DexLocation* RedexContext::make_location(std::string_view store_name,
+                                         std::string_view file_name) {
+  auto key = std::make_pair(store_name, file_name);
+  auto rv = s_location_map.get(key, nullptr);
+  if (rv != nullptr) {
+    return rv;
+  }
+  auto value = new DexLocation(std::string(store_name), std::string(file_name));
+  key = std::make_pair(value->get_store_name(), value->get_file_name());
+  return try_insert(key, value, &s_location_map);
+}
+
+DexLocation* RedexContext::get_location(std::string_view store_name,
+                                        std::string_view file_name) {
+  auto key = std::make_pair(store_name, file_name);
+  return s_location_map.get(key, nullptr);
+}
+
 PositionPatternSwitchManager*
 RedexContext::get_position_pattern_switch_manager() {
   if (!m_position_pattern_switch_manager) {
@@ -499,8 +517,8 @@ bool RedexContext::class_already_loaded(DexClass* cls) {
   if (it == m_type_to_class.end()) {
     return false;
   } else {
-    const auto& prev_loc = it->second->get_location();
-    const auto& cur_loc = cls->get_location();
+    const auto& prev_loc = it->second->get_location()->get_file_name();
+    const auto& cur_loc = cls->get_location()->get_file_name();
     if (prev_loc == cur_loc || dup_classes::is_known_dup(cls)) {
       // benign duplicates
       TRACE(MAIN, 1, "Warning: found a duplicate class: %s", SHOW(cls));

@@ -936,6 +936,19 @@ std::unique_ptr<DexAnnotationSet> DexMethod::release_annotations() {
   return std::move(m_anno);
 }
 
+DexLocation::DexLocation(std::string store_name, std::string file_name)
+    : m_store_name(std::move(store_name)), m_file_name(std::move(file_name)) {}
+
+const DexLocation* DexLocation::make_location(std::string_view store_name,
+                                              std::string_view file_name) {
+  return g_redex->make_location(store_name, file_name);
+}
+
+const DexLocation* DexLocation::get_location(std::string_view store_name,
+                                             std::string_view file_name) {
+  return g_redex->get_location(store_name, file_name);
+}
+
 void DexClass::set_deobfuscated_name(const std::string& name) {
   // If the class has an old deobfuscated_name which is not equal to
   // `show(self)`, erase the name mapping from the global type map.
@@ -1503,7 +1516,7 @@ DexAnnotationDirectory* DexClass::get_annotation_directory() {
 
 DexClass* DexClass::create(DexIdx* idx,
                            const dex_class_def* cdef,
-                           const std::string& location) {
+                           const DexLocation* location) {
   DexClass* cls = new DexClass(idx, cdef, location);
   if (g_redex->class_already_loaded(cls)) {
     // FIXME: This isn't deterministic. We're keeping whichever class we loaded
@@ -1520,11 +1533,11 @@ DexClass* DexClass::create(DexIdx* idx,
   return cls;
 }
 
-DexClass::DexClass(const std::string& location) : m_location(location) {}
+DexClass::DexClass(const DexLocation* location) : m_location(location) {}
 
 DexClass::DexClass(DexIdx* idx,
                    const dex_class_def* cdef,
-                   const std::string& location)
+                   const DexLocation* location)
     : m_super_class(idx->get_typeidx(cdef->super_idx)),
       m_self(idx->get_typeidx(cdef->typeidx)),
       m_interfaces(idx->get_type_list(cdef->interfaces_off)),

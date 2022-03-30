@@ -55,7 +55,8 @@ class IODITest : public ::testing::Test {
     DexMetadata dm;
     dm.set_id("classes");
     DexStore root_store(dm);
-    root_store.add_classes(load_classes_from_dex(dexfile));
+    root_store.add_classes(
+        load_classes_from_dex(DexLocation::make_location("dex", dexfile)));
     stores.emplace_back(std::move(root_store));
 
     instruction_lowering::run(stores, true);
@@ -107,8 +108,10 @@ class IODITest : public ::testing::Test {
     }
     reset_redex();
     auto data = DexOutputTestHelper::steal_output(output);
-    auto result = load_classes_from_dex(
-        reinterpret_cast<dex_header*>(data.get()), "tmp.dex", false);
+    auto result =
+        load_classes_from_dex(reinterpret_cast<dex_header*>(data.get()),
+                              DexLocation::make_location("", "tmp.dex"),
+                              false);
     return result;
   }
 
@@ -234,7 +237,8 @@ void log_debug_to_methods(const std::map<void*, DexMethods>& result) {
     std::unordered_map<std::string, uint32_t> result;
     const char* dexfile = std::getenv("dexfile");
     redex_assert(dexfile);
-    auto pre_classes = load_classes_from_dex(dexfile, false);
+    auto pre_classes =
+        load_classes_from_dex(DexLocation::make_location("", dexfile), false);
     auto pre_debug_data = debug_to_methods(pre_classes);
     for (auto& data : pre_debug_data) {
       EXPECT_EQ(data.second.size(), 1);

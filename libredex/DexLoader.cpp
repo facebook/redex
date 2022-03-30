@@ -23,10 +23,10 @@
 #include <stdexcept>
 #include <vector>
 
-DexLoader::DexLoader(const char* location)
+DexLoader::DexLoader(const DexLocation* location)
     : m_idx(nullptr),
       m_file(new boost::iostreams::mapped_file()),
-      m_dex_location(location) {}
+      m_location(location) {}
 
 static void validate_dex_header(const dex_header* dh,
                                 size_t dexsize,
@@ -449,7 +449,7 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
 
 void DexLoader::load_dex_class(int num) {
   const dex_class_def* cdef = m_class_defs + num;
-  DexClass* dc = DexClass::create(m_idx.get(), cdef, m_dex_location);
+  DexClass* dc = DexClass::create(m_idx.get(), cdef, m_location);
   // We may be inserting a nullptr here. Need to remove them later
   //
   // We're inserting nullptr because we can't mess up the indices of the other
@@ -457,19 +457,19 @@ void DexLoader::load_dex_class(int num) {
   m_classes->at(num) = dc;
 }
 
-const dex_header* DexLoader::get_dex_header(const char* location) {
-  m_file->open(location, boost::iostreams::mapped_file::readonly);
+const dex_header* DexLoader::get_dex_header(const char* file_name) {
+  m_file->open(file_name, boost::iostreams::mapped_file::readonly);
   if (!m_file->is_open()) {
-    fprintf(stderr, "error: cannot create memory-mapped file: %s\n", location);
+    fprintf(stderr, "error: cannot create memory-mapped file: %s\n", file_name);
     exit(EXIT_FAILURE);
   }
   return reinterpret_cast<const dex_header*>(m_file->const_data());
 }
 
-DexClasses DexLoader::load_dex(const char* location,
+DexClasses DexLoader::load_dex(const char* file_name,
                                dex_stats_t* stats,
                                int support_dex_version) {
-  const dex_header* dh = get_dex_header(location);
+  const dex_header* dh = get_dex_header(file_name);
   validate_dex_header(dh, m_file->size(), support_dex_version);
   return load_dex(dh, stats);
 }
@@ -554,7 +554,7 @@ static void balloon_all(const Scope& scope, bool throw_on_error) {
   }
 }
 
-DexClasses load_classes_from_dex(const char* location,
+DexClasses load_classes_from_dex(const DexLocation* location,
                                  bool balloon,
                                  bool throw_on_balloon_error,
                                  int support_dex_version) {
@@ -563,14 +563,16 @@ DexClasses load_classes_from_dex(const char* location,
                                throw_on_balloon_error, support_dex_version);
 }
 
-DexClasses load_classes_from_dex(const char* location,
+DexClasses load_classes_from_dex(const DexLocation* location,
                                  dex_stats_t* stats,
                                  bool balloon,
                                  bool throw_on_balloon_error,
                                  int support_dex_version) {
-  TRACE(MAIN, 1, "Loading classes from dex from %s", location);
+  TRACE(MAIN, 1, "Loading classes from dex from %s",
+        location->get_file_name().c_str());
   DexLoader dl(location);
-  auto classes = dl.load_dex(location, stats, support_dex_version);
+  auto classes = dl.load_dex(location->get_file_name().c_str(), stats,
+                             support_dex_version);
   if (balloon) {
     balloon_all(classes, throw_on_balloon_error);
   }
@@ -578,7 +580,7 @@ DexClasses load_classes_from_dex(const char* location,
 }
 
 DexClasses load_classes_from_dex(const dex_header* dh,
-                                 const char* location,
+                                 const DexLocation* location,
                                  bool balloon,
                                  bool throw_on_balloon_error) {
   DexLoader dl(location);
@@ -589,9 +591,9 @@ DexClasses load_classes_from_dex(const dex_header* dh,
   return classes;
 }
 
-std::string load_dex_magic_from_dex(const char* location) {
+std::string load_dex_magic_from_dex(const DexLocation* location) {
   DexLoader dl(location);
-  auto dh = dl.get_dex_header(location);
+  auto dh = dl.get_dex_header(location->get_file_name().c_str());
   return dh->magic;
 }
 

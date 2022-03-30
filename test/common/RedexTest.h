@@ -58,9 +58,11 @@ struct RedexIntegrationTest : public RedexTest {
 
     dex_metadata.set_id("classes");
     DexStore root_store(dex_metadata);
-    root_store.add_classes(load_classes_from_dex(dex_file));
+    root_store.add_classes(
+        load_classes_from_dex(DexLocation::make_location("dex", dex_file)));
     if (secondary_dex_file) {
-      root_store.add_classes(load_classes_from_dex(secondary_dex_file));
+      root_store.add_classes(load_classes_from_dex(
+          DexLocation::make_location("dex", secondary_dex_file)));
     }
     classes = root_store.get_dexen().back();
     stores.emplace_back(std::move(root_store));
