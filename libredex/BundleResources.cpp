@@ -1223,6 +1223,7 @@ std::vector<std::string> ResourcesPbFile::get_files_by_rid(
 
 void ResourcesPbFile::walk_references_for_resource(
     uint32_t resID,
+    ResourcePathType path_type,
     std::unordered_set<uint32_t>* nodes_visited,
     std::unordered_set<std::string>* potential_file_paths) {
   if (nodes_visited->find(resID) != nodes_visited->end()) {
@@ -1261,12 +1262,16 @@ void ResourcesPbFile::walk_references_for_resource(
     for (size_t i = 0; i < items.size(); i++) {
       const auto& item = items[i];
       if (item.has_file()) {
-        // NOTE: We are mapping original given resource ID to a module name,
-        // when in reality resource ID for current item from the stack could be
-        // several references away. This should work for all our expected inputs
-        // but is shaky nonetheless.
-        auto item_path = module_name + "/" + item.file().path();
-        potential_file_paths->insert(item_path);
+        if (path_type == ResourcePathType::ZipPath) {
+          // NOTE: We are mapping original given resource ID to a module name,
+          // when in reality resource ID for current item from the stack could
+          // be several references away. This should work for all our expected
+          // inputs but is shaky nonetheless.
+          auto item_path = module_name + "/" + item.file().path();
+          potential_file_paths->insert(item_path);
+        } else {
+          potential_file_paths->insert(item.file().path());
+        }
         continue;
       }
     }

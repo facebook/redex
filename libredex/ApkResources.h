@@ -163,6 +163,7 @@ class ResourcesArscFile : public ResourceTableFile {
       ResourcePathType path_type = ResourcePathType::DevicePath) override;
   void walk_references_for_resource(
       uint32_t resID,
+      ResourcePathType path_type,
       std::unordered_set<uint32_t>* nodes_visited,
       std::unordered_set<std::string>* potential_file_paths) override;
   // Takes effect during serialization, in which new type spec, type data

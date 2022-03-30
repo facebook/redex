@@ -1320,6 +1320,7 @@ std::vector<std::string> ResourcesArscFile::get_files_by_rid(
 
 void ResourcesArscFile::walk_references_for_resource(
     uint32_t resID,
+    ResourcePathType path_type,
     std::unordered_set<uint32_t>* nodes_visited,
     std::unordered_set<std::string>* potential_file_paths) {
   if (nodes_visited->find(resID) != nodes_visited->end()) {

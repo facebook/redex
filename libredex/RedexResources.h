@@ -129,6 +129,7 @@ class ResourceTableFile {
   // file paths.
   virtual void walk_references_for_resource(
       uint32_t resID,
+      ResourcePathType path_type,
       std::unordered_set<uint32_t>* nodes_visited,
       std::unordered_set<std::string>* potential_file_paths) = 0;
 
