@@ -409,7 +409,9 @@ void Model::create_mergers_helper(
 void Model::exclude_types(const ConstTypeHashSet& exclude_types) {
   for (const auto& type : exclude_types) {
     const auto& cls = type_class(type);
-    redex_assert(cls != nullptr);
+    if (cls == nullptr) {
+      continue;
+    }
     if (is_interface(cls)) {
       const auto& impls = m_type_system.get_implementors(type);
       m_excluded.insert(impls.begin(), impls.end());
