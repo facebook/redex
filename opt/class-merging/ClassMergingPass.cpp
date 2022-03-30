@@ -200,13 +200,13 @@ void ClassMergingPass::bind_config() {
       model_spec.get("merging_strategy", "by_cls_count", merging_strategy);
       model.strategy = get_merging_strategy(merging_strategy);
 
-      std::string merge_per_interdex_set;
-      model_spec.get("merge_per_interdex_set", "disabled",
-                     merge_per_interdex_set);
-      model.merge_per_interdex_set =
-          get_merge_per_interdex_type(merge_per_interdex_set);
+      std::string interdex_grouping;
+      model_spec.get("interdex_grouping", "disabled",
+                     interdex_grouping);
+      model.interdex_grouping =
+          get_merge_per_interdex_type(interdex_grouping);
 
-      always_assert_log(!model.merge_per_interdex_set ||
+      always_assert_log(!model.interdex_grouping ||
                             (model.type_tag_config != TypeTagConfig::NONE),
                         "Cannot group when type tag is not needed.");
 
