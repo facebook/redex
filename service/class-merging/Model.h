@@ -491,6 +491,9 @@ class Model {
   }
 };
 
+InterDexGroupingType get_merge_per_interdex_type(
+    const std::string& merge_per_interdex_set);
+
 std::ostream& operator<<(std::ostream& os,
                          ModelSpec::InterDexGroupingInferringMode mode);
 

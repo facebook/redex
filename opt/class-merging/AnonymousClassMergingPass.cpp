@@ -41,6 +41,10 @@ void AnonymousClassMergingPass::bind_config() {
        2,
        m_min_count,
        "Minimum mergeable class count per merging group");
+  std::string merge_per_interdex_set;
+  bind("merge_per_interdex_set", "non-ordered-set", merge_per_interdex_set);
+  m_merging_spec.merge_per_interdex_set =
+      get_merge_per_interdex_type(merge_per_interdex_set);
 }
 
 void AnonymousClassMergingPass::run_pass(DexStoresVector& stores,
@@ -50,7 +54,6 @@ void AnonymousClassMergingPass::run_pass(DexStoresVector& stores,
   m_merging_spec.name = "Anonymous Classes";
   m_merging_spec.class_name_prefix = "Anon";
   m_merging_spec.strategy = strategy::BY_REFS;
-  m_merging_spec.merge_per_interdex_set = InterDexGroupingType::NON_ORDERED_SET;
   if (conf.force_single_dex() ||
       (!stores.empty() && stores[0].num_dexes() == 1)) {
     m_merging_spec.include_primary_dex = true;

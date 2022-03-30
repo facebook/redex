@@ -31,6 +31,10 @@ void IntraDexClassMergingPass::bind_config() {
        m_global_min_count,
        "Ignore interface or class hierarchies with less than global_mint_count "
        "implementors or subclasses");
+  std::string merge_per_interdex_set;
+  bind("merge_per_interdex_set", "non-ordered-set", merge_per_interdex_set);
+  m_merging_spec.merge_per_interdex_set =
+      get_merge_per_interdex_type(merge_per_interdex_set);
 }
 
 void IntraDexClassMergingPass::run_pass(DexStoresVector& stores,
@@ -49,7 +53,6 @@ void IntraDexClassMergingPass::run_pass(DexStoresVector& stores,
   // The merging strategy can be tuned.
   m_merging_spec.strategy = strategy::BY_CODE_SIZE;
   // Can merge FULL interdex groups.
-  m_merging_spec.merge_per_interdex_set = InterDexGroupingType::NON_ORDERED_SET;
   m_merging_spec.dedup_throw_blocks = false;
   m_merging_spec.per_dex_grouping = true;
   auto scope = build_class_scope(stores);
