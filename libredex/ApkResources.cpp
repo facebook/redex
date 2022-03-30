@@ -1296,6 +1296,23 @@ void ResourcesArscFile::remove_unreferenced_strings() {
   m_file_closed = true;
 }
 
+namespace {
+const std::array<std::string, 2> KNOWN_RES_DIRS = {
+    std::string(RES_DIRECTORY) + "/",
+    std::string(OBFUSCATED_RES_DIRECTORY) + "/"};
+
+// Checks relative paths that start with known resource file directories
+// (supporting obfuscation).
+bool is_resource_file(const std::string& str) {
+  for (const auto& dir : KNOWN_RES_DIRS) {
+    if (boost::algorithm::starts_with(str, dir)) {
+      return true;
+    }
+  }
+  return false;
+}
+} // namespace
+
 std::vector<std::string> ResourcesArscFile::get_files_by_rid(
     uint32_t res_id, ResourcePathType /* unused */) {
   std::vector<std::string> ret;

@@ -1184,6 +1184,14 @@ void ResourcesPbFile::delete_resource(uint32_t res_id) {
   m_ids_to_remove.emplace(res_id);
 }
 
+namespace {
+const std::string KNOWN_RES_DIR = std::string(RES_DIRECTORY) + "/";
+
+bool is_resource_file(const std::string& str) {
+  return boost::algorithm::starts_with(str, KNOWN_RES_DIR);
+}
+} // namespace
+
 std::vector<std::string> ResourcesPbFile::get_files_by_rid(
     uint32_t res_id, ResourcePathType path_type) {
   std::vector<std::string> ret;

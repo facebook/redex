@@ -26,6 +26,8 @@
 #include "RedexMappedFile.h"
 
 const char* const ONCLICK_ATTRIBUTE = "android:onClick";
+const char* const RES_DIRECTORY = "res";
+const char* const OBFUSCATED_RES_DIRECTORY = "r";
 
 const uint32_t PACKAGE_RESID_START = 0x7f000000;
 
@@ -212,17 +214,6 @@ class AndroidResources {
 
 std::unique_ptr<AndroidResources> create_resource_reader(
     const std::string& directory);
-
-// Return true if a file str is in res folder.
-inline bool is_resource_file(const std::string& str) {
-  return boost::algorithm::starts_with(str, "res/") ||
-         str.find("/res/") != std::string::npos;
-}
-
-// Return true if a file str is in res folder and also a xml file.
-inline bool is_resource_xml(const std::string& str) {
-  return is_resource_file(str) && boost::algorithm::ends_with(str, ".xml");
-}
 
 // For testing only!
 std::unordered_set<std::string> extract_classes_from_native_lib(
