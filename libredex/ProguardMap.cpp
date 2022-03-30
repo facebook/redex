@@ -321,6 +321,9 @@ void ProguardMap::parse_full_map(std::istream& fp) {
     if (parse_class_full_format(line)) {
       continue;
     }
+    if (parse_store_full_format(line)) {
+      continue;
+    }
     if (parse_field_full_format(line)) {
       continue;
     }
@@ -348,6 +351,17 @@ bool ProguardMap::parse_class_full_format(const std::string& line) {
   m_currNewClass = new_class_name;
   m_classMap[m_currClass] = m_currNewClass;
   m_obfClassMap[m_currNewClass] = m_currClass;
+  return true;
+}
+
+bool ProguardMap::parse_store_full_format(const std::string& line) {
+  auto p = line.c_str();
+  if (!literal(p, "store` ")) {
+    return false;
+  }
+
+  // We don't care about stores here yet
+
   return true;
 }
 

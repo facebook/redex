@@ -120,6 +120,7 @@ struct ProguardMap {
   bool parse_method(const std::string& line);
 
   bool parse_class_full_format(const std::string& line);
+  bool parse_store_full_format(const std::string& line);
   bool parse_field_full_format(const std::string& line);
   bool parse_method_full_format(const std::string& line);
 
