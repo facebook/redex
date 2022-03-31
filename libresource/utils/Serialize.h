@@ -45,12 +45,24 @@ uint32_t get_spec_flags(android::ResTable_typeSpec* spec, uint16_t entry_id);
 bool are_configs_equivalent(android::ResTable_config* a,
                             android::ResTable_config* b);
 
+enum StringKind {
+  STD_STRING,
+  STRING_8,
+  STRING_16
+};
+
+struct StringHolder {
+  StringKind kind;
+  const char* string8;
+  const char16_t* string16;
+  const std::string str;
+  size_t length;
+};
+
 using SpanVector = std::vector<android::ResStringPool_span*>;
 
-template <typename T>
 struct StyleInfo {
-  T* string;
-  size_t len;
+  StringHolder str;
   SpanVector spans;
 };
 
@@ -60,8 +72,12 @@ using PtrLen = android::key_value_pair_t<T*, size_t>;
 class ResStringPoolBuilder {
  public:
   ResStringPoolBuilder(uint32_t flags) : m_flags(flags) {}
+  // Note: in all cases, callers must be encoding string data properly, per
+  // https://source.android.com/devices/tech/dalvik/dex-format#mutf-8
+  void add_string(std::string);
   void add_string(const char*, size_t);
   void add_string(const char16_t*, size_t);
+  void add_style(std::string, SpanVector);
   void add_style(const char*, size_t, SpanVector);
   void add_style(const char16_t*, size_t, SpanVector);
   void serialize(android::Vector<char>* out);
@@ -76,50 +92,15 @@ class ResStringPoolBuilder {
   }
 
   size_t non_style_string_count() {
-    return is_utf8() ? m_strings8.size() : m_strings16.size();
+    return m_strings.size();
   }
 
   size_t style_count() {
-    return is_utf8() ? m_styles8.size() : m_styles16.size();
+    return m_styles.size();
   }
 
-  android::Vector<PtrLen<char16_t>> m_strings16;
-  android::Vector<PtrLen<char>> m_strings8;
-  android::Vector<StyleInfo<char16_t>> m_styles16;
-  android::Vector<StyleInfo<char>> m_styles8;
-};
-
-// Helper to work around the under-abstracted ResStringPoolBuilder which expects
-// callers to know exactly what the output format should be for string data.
-class StringStorage {
- public:
-  StringStorage(bool is_utf8) : m_utf8(is_utf8) {}
-  size_t store(const std::string& s) {
-    size_t result_idx = m_utf8 ? m_strings8.size() : m_strings16.size();
-    if (m_utf8) {
-      android::String8 to_append(s.c_str(), s.size());
-      m_strings8.emplace_back(std::move(to_append));
-    } else {
-      android::String16 to_append(s.c_str(), s.size());
-      m_strings16.emplace_back(std::move(to_append));
-    }
-    return result_idx;
-  }
-
-  void add_string_to_builder(ResStringPoolBuilder* builder, size_t idx) {
-    if (m_utf8) {
-      auto& s = m_strings8.at(idx);
-      builder->add_string(s.string(), s.size());
-    } else {
-      auto& s = m_strings16.at(idx);
-      builder->add_string(s.string(), s.size());
-    }
-  }
-
- private:
-  bool m_utf8;
-  std::vector<android::String8> m_strings8;
-  std::vector<android::String16> m_strings16;
+  std::vector<StringHolder> m_strings;
+  std::vector<StyleInfo> m_styles;
 };
 
 using EntryValueData = PtrLen<uint8_t>;

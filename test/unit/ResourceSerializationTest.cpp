@@ -44,7 +44,7 @@ const std::array<uint8_t, 116> example_data_16{
      0x74, 0x00, 0x00, 0x00, 0x06, 0x00, 0x73, 0x00, 0x74, 0x00, 0x72, 0x00,
      0x69, 0x00, 0x6E, 0x00, 0x67, 0x00, 0x00, 0x00}};
 
-UNUSED std::string make_big_string(size_t len) {
+std::string make_big_string(size_t len) {
   always_assert(len > 4);
   std::string result = "aa" + std::string(len - 4, 'x') + "zz";
   return result;
@@ -306,6 +306,58 @@ TEST(ResStringPoolBuilder, TestPoolRebuildStyle8) {
   android::Vector<char> serialized;
   builder.serialize(&serialized);
   assert_serialized_data(&data, data.size(), serialized);
+}
+
+TEST(ResStringPoolBuilder, TestAllTheOptions) {
+  std::string hello_world("Hello world!");
+  android::String16 hello_world16("Hello world!");
+  android::String8 foo("foo");
+  android::String16 bar("bar");
+  auto big_std_string = make_big_string(1000);
+  std::string em("em");
+
+  android::ResStringPool_span span{
+      .name = {.index = 4}, .firstChar = 6, .lastChar = 10};
+  std::vector<android::ResStringPool_span*> spans = {&span};
+
+  auto do_validation = [&](void* data, size_t size) {
+    android::ResStringPool pool;
+    EXPECT_EQ(pool.setTo(data, size), 0);
+    EXPECT_EQ(pool.styleCount(), 1);
+    EXPECT_EQ(pool.size(), 5);
+    EXPECT_STREQ(apk::get_string_from_pool(pool, 0).c_str(), "Hello world!");
+    EXPECT_STREQ(apk::get_string_from_pool(pool, 1).c_str(), "foo");
+    EXPECT_STREQ(apk::get_string_from_pool(pool, 2).c_str(), "bar");
+    EXPECT_STREQ(apk::get_string_from_pool(pool, 3).c_str(),
+                 big_std_string.c_str());
+    EXPECT_STREQ(apk::get_string_from_pool(pool, 4).c_str(), "em");
+  };
+
+  {
+    arsc::ResStringPoolBuilder builder(0);
+    builder.add_style(hello_world, spans);
+    builder.add_string(foo.string(), foo.size());
+    builder.add_string(bar.string(), bar.size());
+    builder.add_string(big_std_string);
+    builder.add_string(em);
+
+    android::Vector<char> out;
+    builder.serialize(&out);
+    do_validation((void*)out.array(), out.size());
+  }
+  {
+    arsc::ResStringPoolBuilder builder(
+        android::ResStringPool_header::UTF8_FLAG);
+    builder.add_style(hello_world16.string(), hello_world16.size(), spans);
+    builder.add_string(foo.string(), foo.size());
+    builder.add_string(bar.string(), bar.size());
+    builder.add_string(big_std_string);
+    builder.add_string(em);
+
+    android::Vector<char> out;
+    builder.serialize(&out);
+    do_validation((void*)out.array(), out.size());
+  }
 }
 
 TEST(ResTableParse, TestUnknownPackageChunks) {

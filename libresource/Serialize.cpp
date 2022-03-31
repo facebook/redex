@@ -470,34 +470,116 @@ void ResTableTypeDefiner::serialize(android::Vector<char>* out) {
 }
 
 void ResStringPoolBuilder::add_string(const char* s, size_t len) {
-  LOG_ALWAYS_FATAL_IF(!is_utf8(), "Pool is not UTF-8");
-  PtrLen<char> pair((char*)s, len);
-  m_strings8.add(pair);
+  StringHolder holder{
+    .kind = StringKind::STRING_8,
+    .string8 = s,
+    .length = len
+  };
+  m_strings.emplace_back(std::move(holder));
+}
+
+void ResStringPoolBuilder::add_string(const char16_t* s, size_t len) {
+  StringHolder holder{
+    .kind = StringKind::STRING_16,
+    .string16 = s,
+    .length = len
+  };
+  m_strings.emplace_back(std::move(holder));
+}
+
+void ResStringPoolBuilder::add_string(std::string s) {
+  auto len = s.length();
+  StringHolder holder{
+    .kind = StringKind::STD_STRING,
+    .str = std::move(s),
+    .length = len
+  };
+  m_strings.emplace_back(std::move(holder));
 }
 
 void ResStringPoolBuilder::add_style(const char* s,
                                      size_t len,
                                      SpanVector spans) {
-  LOG_ALWAYS_FATAL_IF(!is_utf8(), "Pool is not UTF-8");
-  LOG_ALWAYS_FATAL_IF(spans.empty(), "spans should be non-empty");
-  StyleInfo<char> style = {(char*)s, len, spans};
-  m_styles8.add(style);
-}
-
-void ResStringPoolBuilder::add_string(const char16_t* s, size_t len) {
-  LOG_ALWAYS_FATAL_IF(is_utf8(), "Pool is not UTF-16");
-  PtrLen<char16_t> pair((char16_t*)s, len);
-  m_strings16.add(pair);
+  StringHolder holder{
+    .kind = StringKind::STRING_8,
+    .string8 = s,
+    .length = len
+  };
+  StyleInfo info{
+    .str = std::move(holder),
+    .spans = std::move(spans)
+  };
+  m_styles.emplace_back(std::move(info));
 }
 
 void ResStringPoolBuilder::add_style(const char16_t* s,
                                      size_t len,
                                      SpanVector spans) {
-  LOG_ALWAYS_FATAL_IF(is_utf8(), "Pool is not UTF-16");
-  LOG_ALWAYS_FATAL_IF(spans.empty(), "spans should be non-empty");
-  StyleInfo<char16_t> style = {(char16_t*)s, len, spans};
-  m_styles16.add(style);
+  StringHolder holder{
+    .kind = StringKind::STRING_16,
+    .string16 = s,
+    .length = len
+  };
+  StyleInfo info{
+    .str = std::move(holder),
+    .spans = std::move(spans)
+  };
+  m_styles.emplace_back(std::move(info));
 }
+
+void ResStringPoolBuilder::add_style(std::string s,
+                                     SpanVector spans) {
+  auto len = s.length();
+  StringHolder holder{
+    .kind = StringKind::STD_STRING,
+    .str = std::move(s),
+    .length = len
+  };
+  StyleInfo info{
+    .str = std::move(holder),
+    .spans = std::move(spans)
+  };
+  m_styles.emplace_back(std::move(info));
+}
+
+namespace {
+void write_string8(StringHolder& holder, android::Vector<char>* out) {
+  if (holder.kind == StringKind::STRING_8) {
+    encode_string8(holder.string8, holder.length, out);
+  } else if (holder.kind == StringKind::STRING_16) {
+    android::String8 s8(holder.string16, holder.length);
+    size_t len = s8.length();
+    encode_string8(s8.string(), len, out);
+  } else if (holder.kind == StringKind::STD_STRING) {
+    android::String8 s8(holder.str.c_str());
+    size_t len = s8.length();
+    encode_string8(s8.string(), len, out);
+  }
+}
+
+void write_string16(StringHolder& holder, android::Vector<char>* out) {
+  if (holder.kind == StringKind::STRING_8) {
+    android::String8 s8(holder.string8, holder.length);
+    android::String16 s16(s8);
+    size_t len = s16.size();
+    encode_string16(s16.string(), len, out);
+  } else if (holder.kind == StringKind::STRING_16) {
+    encode_string16(holder.string16, holder.length, out);
+  } else if (holder.kind == StringKind::STD_STRING) {
+    android::String16 s16(holder.str.c_str());
+    size_t len = s16.size();
+    encode_string16(s16.string(), len, out);
+  }
+}
+
+void write_string(bool utf8, StringHolder& holder, android::Vector<char>* out) {
+  if (utf8) {
+    write_string8(holder, out);
+  } else {
+    write_string16(holder, out);
+  }
+}
+} // namespace
 
 void ResStringPoolBuilder::serialize(android::Vector<char>* out) {
   // NOTES ON DATA FORMAT: "styles" in this context are strings themselves with
@@ -549,34 +631,20 @@ void ResStringPoolBuilder::serialize(android::Vector<char>* out) {
   auto num_styles = style_count();
   // Write styles first!
   auto spans_size = 0;
-  for (size_t i = 0; i < num_styles; i++) {
+  for (auto& info : m_styles) {
     string_idx.push_back(serialized_strings.size());
     span_off.push_back(spans_size);
-    if (utf8) {
-      auto info = m_styles8[i];
-      encode_string8(info.string, info.len, &serialized_strings);
-      spans_size += info.spans.size() * sizeof(android::ResStringPool_span) +
+    write_string(utf8, info.str, &serialized_strings);
+    spans_size += info.spans.size() * sizeof(android::ResStringPool_span) +
                     sizeof(android::ResStringPool_span::END);
-    } else {
-      auto info = m_styles16[i];
-      encode_string16(info.string, info.len, &serialized_strings);
-      spans_size += info.spans.size() * sizeof(android::ResStringPool_span) +
-                    sizeof(android::ResStringPool_span::END);
-    }
   }
   if (spans_size > 0) {
     spans_size += 2 * sizeof(android::ResStringPool_span::END);
   }
   // Rest of the strings
-  for (size_t i = 0; i < non_style_string_count(); i++) {
+  for (auto& string_holder : m_strings) {
     string_idx.push_back(serialized_strings.size());
-    if (utf8) {
-      auto pair = m_strings8[i];
-      encode_string8(pair.key, pair.value, &serialized_strings);
-    } else {
-      auto pair = m_strings16[i];
-      encode_string16(pair.key, pair.value, &serialized_strings);
-    }
+    write_string(utf8, string_holder, &serialized_strings);
   }
   align_vec(4, &serialized_strings);
   auto string_data_size = serialized_strings.size() * sizeof(char);
@@ -611,10 +679,10 @@ void ResStringPoolBuilder::serialize(android::Vector<char>* out) {
   }
   out->appendVector(serialized_strings);
   // Append spans
-  for (size_t i = 0; i < num_styles; i++) {
-    auto spans = utf8 ? m_styles8[i].spans : m_styles16[i].spans;
-    for (size_t j = 0; j < spans.size(); j++) {
-      auto span = spans[j];
+  for (auto& info : m_styles) {
+    auto& spans = info.spans;
+    for (size_t i = 0; i < spans.size(); i++) {
+      auto& span = spans[i];
       // Any struct that is copied directly to output is assumed to be in device
       // order. Not swapping.
       push_data_no_swap(span, sizeof(android::ResStringPool_span), out);

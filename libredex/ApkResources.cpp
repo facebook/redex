@@ -765,7 +765,6 @@ int ApkResources::replace_in_xml_string_pool(
   auto is_utf8 = pool.isUTF8();
   auto flags =
       is_utf8 ? htodl(android::ResStringPool_header::UTF8_FLAG) : (uint32_t)0;
-  arsc::StringStorage temp_storage(is_utf8);
   arsc::ResStringPoolBuilder pool_builder(flags);
   for (size_t i = 0; i < dtohl(pool_ptr->stringCount); i++) {
     auto existing_str = apk::get_string_from_pool(pool, i);
@@ -773,8 +772,7 @@ int ApkResources::replace_in_xml_string_pool(
     if (replacement == rename_map.end()) {
       add_existing_string_to_builder(pool, &pool_builder, i);
     } else {
-      temp_storage.add_string_to_builder(
-          &pool_builder, temp_storage.store(replacement->second));
+      pool_builder.add_string(replacement->second);
       num_replaced++;
     }
   }
@@ -1143,7 +1141,6 @@ void rebuild_type_strings(const uint32_t& package_id,
   always_assert_log(string_pool.styleCount() == 0,
                     "type strings should not have styles");
   const auto original_string_count = string_pool.size();
-  const auto is_utf8 = string_pool.isUTF8();
   for (size_t idx = 0; idx < original_string_count; idx++) {
     add_existing_string_to_builder(string_pool, builder, idx);
   }
@@ -1151,11 +1148,7 @@ void rebuild_type_strings(const uint32_t& package_id,
     if (type_def.package_id != package_id) {
       continue;
     }
-    if (is_utf8) {
-      builder->add_string(type_def.name8.string(), type_def.name8.size());
-    } else {
-      builder->add_string(type_def.name16.string(), type_def.name16.size());
-    }
+    builder->add_string(type_def.name);
   }
 }
 } // namespace

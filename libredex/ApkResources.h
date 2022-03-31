@@ -47,8 +47,7 @@ std::string get_string_from_pool(const android::ResStringPool& pool,
 struct TypeDefinition {
   uint32_t package_id;
   uint8_t type_id;
-  android::String8 name8;
-  android::String16 name16;
+  std::string name;
   std::vector<android::ResTable_config*> configs;
   std::vector<uint32_t> source_res_ids;
 };
@@ -180,8 +179,7 @@ class ResourcesArscFile : public ResourceTableFile {
                         package_id);
     android::String8 name8(name.data());
     android::String16 name16(name8);
-    apk::TypeDefinition def{package_id, type_id, name8,
-                            name16,     configs, source_res_ids};
+    apk::TypeDefinition def{package_id, type_id, name, configs, source_res_ids};
     m_added_types.emplace_back(std::move(def));
   }
   ~ResourcesArscFile() override;
