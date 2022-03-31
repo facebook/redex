@@ -1172,13 +1172,33 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   };
 
   auto post_pass_verifiers = [&](Pass* pass, size_t i, size_t size) {
-    walk::parallel::code(build_class_scope(stores), [](DexMethod* m,
-                                                       IRCode& code) {
+    ConcurrentSet<const DexMethodRef*> all_code_referenced_methods;
+    walk::parallel::code(build_class_scope(stores), [&](DexMethod* m,
+                                                        IRCode& code) {
       // Ensure that pass authors deconstructed the editable CFG at the end of
       // their pass. Currently, passes assume the incoming code will be in
       // IRCode form
       always_assert_log(!code.editable_cfg_built(), "%s has a cfg!", SHOW(m));
+      if (slow_invariants_debug) {
+        std::vector<DexMethodRef*> methods;
+        methods.reserve(1000);
+        methods.push_back(m);
+        code.gather_methods(methods);
+        for (auto* mref : methods) {
+          always_assert_log(
+              DexMethod::get_method(mref->get_class(), mref->get_name(),
+                                    mref->get_proto()) != nullptr,
+              "Did not find %s in the context, referenced from %s!", SHOW(mref),
+              SHOW(m));
+          all_code_referenced_methods.insert(mref);
+        }
+      }
     });
+    if (slow_invariants_debug) {
+      ScopedMetrics sm(*this);
+      sm.set_metric("num_code_referenced_methods",
+                    all_code_referenced_methods.size());
+    }
 
     bool run_hasher = run_hasher_after_each_pass;
     bool run_assessor = assessor_config.run_after_each_pass ||
