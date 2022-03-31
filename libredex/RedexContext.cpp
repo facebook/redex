@@ -70,6 +70,13 @@ RedexContext::~RedexContext() {
         m_type_to_class.clear();
       },
       [&] {
+        Timer timer("Delete DexLocations", /* indent */ false);
+        for (auto const& p : s_location_map) {
+          delete p.second;
+        }
+        s_location_map.clear();
+      },
+      [&] {
         Timer timer("release_keep_reasons", /* indent */ false);
         keep_reason::Reason::release_keep_reasons();
       },
