@@ -9,6 +9,7 @@
 
 #include <boost/regex.hpp>
 
+#include "BuilderAnalysis.h"
 #include "BuilderTransform.h"
 #include "ConfigFiles.h"
 #include "CppUtil.h"
