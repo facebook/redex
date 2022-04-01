@@ -470,41 +470,25 @@ void ResTableTypeDefiner::serialize(android::Vector<char>* out) {
 }
 
 void ResStringPoolBuilder::add_string(const char* s, size_t len) {
-  StringHolder holder{
-    .kind = StringKind::STRING_8,
-    .string8 = s,
-    .length = len
-  };
+  StringHolder holder(s, len);
   m_strings.emplace_back(std::move(holder));
 }
 
 void ResStringPoolBuilder::add_string(const char16_t* s, size_t len) {
-  StringHolder holder{
-    .kind = StringKind::STRING_16,
-    .string16 = s,
-    .length = len
-  };
+  StringHolder holder(s, len);
   m_strings.emplace_back(std::move(holder));
 }
 
 void ResStringPoolBuilder::add_string(std::string s) {
   auto len = s.length();
-  StringHolder holder{
-    .kind = StringKind::STD_STRING,
-    .str = std::move(s),
-    .length = len
-  };
+  StringHolder holder(std::move(s), len);
   m_strings.emplace_back(std::move(holder));
 }
 
 void ResStringPoolBuilder::add_style(const char* s,
                                      size_t len,
                                      SpanVector spans) {
-  StringHolder holder{
-    .kind = StringKind::STRING_8,
-    .string8 = s,
-    .length = len
-  };
+  StringHolder holder(s, len);
   StyleInfo info{
     .str = std::move(holder),
     .spans = std::move(spans)
@@ -515,11 +499,7 @@ void ResStringPoolBuilder::add_style(const char* s,
 void ResStringPoolBuilder::add_style(const char16_t* s,
                                      size_t len,
                                      SpanVector spans) {
-  StringHolder holder{
-    .kind = StringKind::STRING_16,
-    .string16 = s,
-    .length = len
-  };
+  StringHolder holder(s, len);
   StyleInfo info{
     .str = std::move(holder),
     .spans = std::move(spans)
@@ -530,11 +510,7 @@ void ResStringPoolBuilder::add_style(const char16_t* s,
 void ResStringPoolBuilder::add_style(std::string s,
                                      SpanVector spans) {
   auto len = s.length();
-  StringHolder holder{
-    .kind = StringKind::STD_STRING,
-    .str = std::move(s),
-    .length = len
-  };
+  StringHolder holder(std::move(s), len);
   StyleInfo info{
     .str = std::move(holder),
     .spans = std::move(spans)

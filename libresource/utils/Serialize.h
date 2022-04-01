@@ -45,11 +45,7 @@ uint32_t get_spec_flags(android::ResTable_typeSpec* spec, uint16_t entry_id);
 bool are_configs_equivalent(android::ResTable_config* a,
                             android::ResTable_config* b);
 
-enum StringKind {
-  STD_STRING,
-  STRING_8,
-  STRING_16
-};
+enum StringKind { STD_STRING, STRING_8, STRING_16 };
 
 struct StringHolder {
   StringKind kind;
@@ -57,6 +53,22 @@ struct StringHolder {
   const char16_t* string16;
   const std::string str;
   size_t length;
+  StringHolder(const char* s, size_t len)
+      : kind(StringKind::STRING_8),
+        string8(s),
+        string16(nullptr),
+        length(len) {}
+  StringHolder(const char16_t* s, size_t len)
+      : kind(StringKind::STRING_16),
+        string8(nullptr),
+        string16(s),
+        length(len) {}
+  StringHolder(std::string s, size_t len)
+      : kind(StringKind::STD_STRING),
+        string8(nullptr),
+        string16(nullptr),
+        str(std::move(s)),
+        length(len) {}
 };
 
 using SpanVector = std::vector<android::ResStringPool_span*>;
