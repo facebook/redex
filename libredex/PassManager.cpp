@@ -1173,6 +1173,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
 
   auto post_pass_verifiers = [&](Pass* pass, size_t i, size_t size) {
     ConcurrentSet<const DexMethodRef*> all_code_referenced_methods;
+    ConcurrentSet<DexMethod*> unique_methods;
     walk::parallel::code(build_class_scope(stores), [&](DexMethod* m,
                                                         IRCode& code) {
       // Ensure that pass authors deconstructed the editable CFG at the end of
@@ -1191,6 +1192,9 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
               "Did not find %s in the context, referenced from %s!", SHOW(mref),
               SHOW(m));
           all_code_referenced_methods.insert(mref);
+        }
+        if (!unique_methods.insert(m)) {
+          not_reached_log("Duplicate method: %s", SHOW(m));
         }
       }
     });
