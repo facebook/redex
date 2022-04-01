@@ -8,9 +8,6 @@
 #include "BuilderTransform.h"
 
 #include "DexClass.h"
-#include "IRCode.h"
-#include "Inliner.h"
-#include "RemoveBuilderPattern.h"
 
 namespace builder_pattern {
 
@@ -185,7 +182,7 @@ void BuilderTransform::replace_fields(const InstantiationToUsage& usage,
                                       DexMethod* method) {
   auto code = method->get_code();
 
-  std::unordered_map<IRInstruction*, IRInstruction*> replacement;
+  std::vector<std::pair<IRList::iterator, IRInstruction*>> to_replace;
 
   for (const auto& mie : InstructionIterable(code)) {
     auto instantiation_insn = mie.insn;
@@ -203,7 +200,8 @@ void BuilderTransform::replace_fields(const InstantiationToUsage& usage,
     instantiation_insn->set_type(type::java_lang_Object());
 
     std::map<DexField*, size_t, dexfields_comparator> field_to_reg;
-    for (const auto& insn : usage.at(instantiation_insn)) {
+    for (const auto& it : usage.at(instantiation_insn)) {
+      auto* insn = it->insn;
 
       if (opcode::is_an_iput(insn->opcode()) ||
           opcode::is_an_iget(insn->opcode())) {
@@ -230,19 +228,10 @@ void BuilderTransform::replace_fields(const InstantiationToUsage& usage,
           new_insn->set_dest(field_to_reg[field]);
           new_insn->set_src(0, insn->src(0));
         } else {
-          // Get the destination register from the next instruction.
-          // TODO(emmasevastian): Keep track of the iterator instead of
-          //                      the instruction.
-          auto ii = InstructionIterable(*code);
-          for (auto it = ii.begin(); it != ii.end(); ++it) {
-            if (it->insn == insn) {
-              new_insn->set_dest(std::next(it)->insn->dest());
-              break;
-            }
-          }
+          new_insn->set_dest(std::next(it)->insn->dest());
           new_insn->set_src(0, field_to_reg[field]);
         }
-        replacement[const_cast<IRInstruction*>(insn)] = new_insn;
+        to_replace.emplace_back(it, new_insn);
       } else if (insn->opcode() == OPCODE_MOVE_OBJECT ||
                  insn->opcode() == IOPCODE_MOVE_RESULT_PSEUDO_OBJECT ||
                  opcode::is_a_conditional_branch(insn->opcode())) {
@@ -265,11 +254,11 @@ void BuilderTransform::replace_fields(const InstantiationToUsage& usage,
           always_assert(invoked->get_class() == type::java_lang_Object() &&
                         method::is_init(invoked));
         } else {
-          // Remove the reference to the removed Builder class from the
-          // check-cast. But keep the cast itself, since the following
-          // move-result might move it to a different register. The current
-          // structure makes it hard to properly update the instruction pair.
-          const_cast<IRInstruction*>(insn)->set_type(type::java_lang_Object());
+          // Replace check-cast with move.
+          IRInstruction* new_move = new IRInstruction(OPCODE_MOVE_OBJECT);
+          new_move->set_src(0, insn->src(0));
+          new_move->set_dest(std::next(it)->insn->dest());
+          to_replace.emplace_back(it, new_move);
         }
       }
     }
@@ -277,8 +266,8 @@ void BuilderTransform::replace_fields(const InstantiationToUsage& usage,
     initialize_regs(field_to_reg, code);
   }
 
-  for (const auto& pair : replacement) {
-    code->replace_opcode(pair.first, pair.second);
+  for (const auto& pair : to_replace) {
+    code->replace_opcode(pair.first, {pair.second});
   }
 }
 
