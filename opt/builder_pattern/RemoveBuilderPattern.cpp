@@ -452,6 +452,8 @@ void RemoveBuilderPatternPass::run_pass(DexStoresVector& stores,
     if (root == type::java_lang_Object()) {
       max_num_inline_iteration = MAX_NUM_INLINE_ITERATION_FOR_SIMPLE_BUILDERS;
     }
+    TRACE(BLD_PATTERN, 1, "removing root %s", SHOW(root));
+    Timer t("root_iteration");
     RemoveClasses rm_builder_pattern(
         root, scope, init_classes_with_side_effects, conf.get_inliner_config(),
         m_blocklist, m_propagate_escape_results, max_num_inline_iteration,
