@@ -41,6 +41,7 @@ struct Config {
    * than max_enum_size values before the transformation.
    */
   uint32_t max_enum_size;
+  bool skip_sanity_check{false};
   /**
    * Will try to optimize the enums in the allowlist without considering
    * reference equality of the enum objects.
@@ -51,8 +52,11 @@ struct Config {
 
   explicit Config(uint32_t max_size) : max_enum_size(max_size) {}
 
-  explicit Config(uint32_t max_size, const std::vector<DexType*>& allowlist)
+  explicit Config(uint32_t max_size,
+                  bool skip_sanity_check,
+                  const std::vector<DexType*>& allowlist)
       : max_enum_size(max_size),
+        skip_sanity_check(skip_sanity_check),
         breaking_reference_equality_allowlist(allowlist.begin(),
                                               allowlist.end()) {}
 };

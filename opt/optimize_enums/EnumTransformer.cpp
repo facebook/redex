@@ -1144,7 +1144,9 @@ class EnumTransformer final {
     }
     type_reference::TypeRefUpdater updater(type_mapping);
     updater.update_methods_fields(scope);
-    sanity_check(scope);
+    if (!m_enum_util->m_config.skip_sanity_check) {
+      sanity_check(scope);
+    }
   }
 
   uint32_t get_int_objs_count() { return m_int_objs; }
