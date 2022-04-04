@@ -294,7 +294,8 @@ void WholeProgramState::collect_return_values(
 void WholeProgramState::collect_static_finals(const DexClass* cls,
                                               FieldEnvironment field_env) {
   for (auto* field : cls->get_sfields()) {
-    if (is_static(field) && is_final(field) && !field->is_external() &&
+    if (is_static(field) && !root(field) && is_final(field) &&
+        !field->is_external() &&
         m_field_blocklist.count(field->get_class()) == 0) {
       m_known_fields.emplace(field);
     } else {
