@@ -7,17 +7,12 @@
 
 #pragma once
 
+#include "BuilderAnalysis.h"
 #include "DexClass.h"
 #include "Inliner.h"
-#include "InlinerConfig.h"
-#include "RemoveBuilderPattern.h"
-#include "Resolver.h"
 #include "TypeSystem.h"
 
 namespace builder_pattern {
-
-using InstantiationToUsage =
-    std::unordered_map<const IRInstruction*, std::vector<const IRInstruction*>>;
 
 class BuilderTransform {
  public:

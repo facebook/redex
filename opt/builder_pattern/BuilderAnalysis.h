@@ -10,6 +10,7 @@
 #include <unordered_set>
 
 #include "DexClass.h"
+#include "IRCode.h"
 
 using ConstTypeHashSet = std::unordered_set<const DexType*>;
 
@@ -26,7 +27,7 @@ class InstructionToEnvMap;
 } // namespace impl
 
 using InstantiationToUsage =
-    std::unordered_map<const IRInstruction*, std::vector<const IRInstruction*>>;
+    std::unordered_map<const IRInstruction*, std::vector<IRList::iterator>>;
 
 class BuilderAnalysis final {
  public:
