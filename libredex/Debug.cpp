@@ -188,8 +188,8 @@ void assert_fail(const char* expr,
                  ...) {
   va_list ap;
   va_start(ap, fmt);
-  std::string msg = format2string(
-      "%s:%u: %s: assertion `%s' failed.\n", file, line, func, expr);
+  std::string msg = format2string("%s:%u: %s: assertion `%s' failed.\n", file,
+                                  line, func, expr);
 
   if (strcmp(fmt, " ") != 0) {
     msg += v_format2string(fmt, ap);
@@ -243,12 +243,22 @@ VmStats get_mem_stats() {
   if (ifs.fail()) {
     return res;
   }
+  const std::array<std::pair<const char*, uint64_t*>, 3> relevant_stats = {{
+      {"VmPeak:", &res.vm_peak},
+      {"VmHWM:", &res.vm_hwm},
+      {"VmRSS:", &res.vm_rss},
+  }};
+
   std::string line;
   std::regex re("[^:]*:\\s*([0-9]*)\\s*(.)B");
   while (std::getline(ifs, line)) {
-    bool is_vm_peak = boost::starts_with(line, "VmPeak:");
-    bool is_vm_hwm = boost::starts_with(line, "VmHWM:");
-    if (is_vm_peak || is_vm_hwm) {
+    auto it_relevant_stat = std::find_if(
+        relevant_stats.begin(), relevant_stats.end(),
+        [&line](const auto& rs) { return boost::starts_with(line, rs.first); });
+
+    if (it_relevant_stat != relevant_stats.end()) {
+      auto& [stat_name, stat_field_ptr] = *it_relevant_stat;
+
       std::smatch match;
       bool matched = std::regex_match(line, match, re);
       if (!matched) {
@@ -278,12 +288,9 @@ VmStats get_mem_stats() {
         continue;
       }
 
-      if (is_vm_peak) {
-        res.vm_peak = val;
-      } else {
-        res.vm_hwm = val;
-      }
-      if (res.vm_peak != 0 && res.vm_hwm != 0) {
+      *stat_field_ptr = val;
+      if (std::all_of(relevant_stats.begin(), relevant_stats.end(),
+                      [](const auto& rs) { return *rs.second != 0; })) {
         break;
       }
     }

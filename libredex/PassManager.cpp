@@ -331,31 +331,52 @@ class CheckerConfig {
   bool m_annotated_cfg_on_error_reduced{true};
 };
 
-class ScopedVmHWM {
+class ScopedMemStats {
  public:
-  explicit ScopedVmHWM(bool enabled, bool reset) : m_enabled(enabled) {
+  explicit ScopedMemStats(bool enabled, bool reset) : m_enabled(enabled) {
     if (enabled) {
       if (reset) {
         try_reset_hwm_mem_stat();
       }
-      m_before = get_mem_stats().vm_hwm;
+      auto mem_stats = get_mem_stats();
+      m_before = mem_stats.vm_hwm;
+      m_rss_before = mem_stats.vm_rss;
     }
   }
 
   void trace_log(PassManager* mgr, const Pass* pass) {
     if (m_enabled) {
-      uint64_t after = get_mem_stats().vm_hwm;
+      auto mem_stats = get_mem_stats();
+      uint64_t after = mem_stats.vm_hwm;
+      uint64_t rss_after = mem_stats.vm_rss;
       if (mgr != nullptr) {
         mgr->set_metric("vm_hwm_after", after);
         mgr->set_metric("vm_hwm_delta", after - m_before);
+        mgr->set_metric("vm_rss_after", rss_after);
+        mgr->set_metric("vm_rss_delta", rss_after - m_rss_before);
       }
       TRACE(STATS, 1, "VmHWM for %s was %s (%s over start).",
             pass->name().c_str(), pretty_bytes(after).c_str(),
             pretty_bytes(after - m_before).c_str());
+
+      int64_t rss_delta =
+          static_cast<int64_t>(rss_after) - static_cast<int64_t>(m_rss_before);
+      const char* rss_delta_sign = "+";
+      uint64_t rss_delta_abs = rss_delta;
+      if (rss_delta < 0) {
+        rss_delta_abs = -rss_delta;
+        rss_delta_sign = "-";
+      }
+
+      TRACE(STATS, 1, "VmRSS for %s went from %s to %s (%s%s).",
+            pass->name().c_str(), pretty_bytes(m_rss_before).c_str(),
+            pretty_bytes(rss_after).c_str(), rss_delta_sign,
+            pretty_bytes(rss_delta_abs).c_str());
     }
   }
 
  private:
+  uint64_t m_rss_before;
   uint64_t m_before;
   bool m_enabled;
 };
@@ -1150,7 +1171,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
 
   sanitizers::lsan_do_recoverable_leak_check();
 
-  const bool hwm_pass_stats =
+  const bool mem_pass_stats =
       traceEnabled(STATS, 1) || conf.get_json_config().get("mem_stats", true);
   const bool hwm_per_pass =
       conf.get_json_config().get("mem_stats_per_pass", true);
@@ -1252,7 +1273,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
     analysis_usage_helper.pre_pass(pass);
 
     TRACE(PM, 1, "Running %s...", pass->name().c_str());
-    ScopedVmHWM vm_hwm{hwm_pass_stats, hwm_per_pass};
+    ScopedMemStats scoped_mem_stats{mem_pass_stats, hwm_per_pass};
     Timer t(pass->name() + " " + std::to_string(pass_run) + " (run)");
     m_current_pass_info = &m_pass_info[i];
 
@@ -1270,7 +1291,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       trace_cls.dump(pass->name());
     }
 
-    vm_hwm.trace_log(this, pass);
+    scoped_mem_stats.trace_log(this, pass);
 
     sanitizers::lsan_do_recoverable_leak_check();
 
