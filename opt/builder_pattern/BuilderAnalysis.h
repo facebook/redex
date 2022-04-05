@@ -53,10 +53,12 @@ class BuilderAnalysis final {
   get_vinvokes_to_this_infered_type();
   std::unordered_set<IRInstruction*> get_all_inlinable_insns();
 
-  ConstTypeHashSet get_instantiated_types(
-      std::unordered_set<const IRInstruction*>* insns = nullptr);
+  ConstTypeHashSet get_instantiated_types();
 
   ConstTypeHashSet non_removable_types();
+
+  ConstTypeHashSet get_escaped_types_from_invokes(
+      const std::unordered_set<const IRInstruction*>& insns) const;
 
  private:
   std::unique_ptr<impl::Analyzer> m_analyzer;
@@ -65,6 +67,8 @@ class BuilderAnalysis final {
   const ConstTypeHashSet& m_builder_types;
   const ConstTypeHashSet& m_excluded_builder_types;
   std::unique_ptr<impl::InstructionToEnvMap> m_insn_to_env;
+  std::unordered_map<const IRInstruction*, const DexType*>
+      m_invoke_to_builder_instance;
 
   DexMethod* m_method;
   size_t m_total_usages;

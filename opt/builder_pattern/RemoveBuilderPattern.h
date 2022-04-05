@@ -23,7 +23,6 @@ class RemoveBuilderPatternPass : public Pass {
  private:
   std::vector<DexType*> m_roots;
   std::vector<DexType*> m_blocklist;
-  bool m_propagate_escape_results;
 };
 
 } // namespace builder_pattern

@@ -11,6 +11,7 @@
 #include "ConstantAbstractDomain.h"
 #include "ControlFlow.h"
 #include "IRCode.h"
+#include "IROpcode.h"
 #include "Liveness.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "Resolver.h"
@@ -304,6 +305,10 @@ void BuilderAnalysis::populate_usage() {
     if (auto referenced_type = get_instantiated_type(val)) {
       if (m_excluded_builder_types.count(referenced_type) == 0) {
         m_usage[val].push_back(insn);
+
+        if (opcode::is_an_invoke(insn->opcode())) {
+          m_invoke_to_builder_instance[insn] = referenced_type;
+        }
       }
 
       m_excluded_instantiation.emplace(val);
@@ -408,28 +413,24 @@ std::unordered_set<IRInstruction*> BuilderAnalysis::get_all_inlinable_insns() {
   return result;
 }
 
-ConstTypeHashSet BuilderAnalysis::get_instantiated_types(
-    std::unordered_set<const IRInstruction*>* insns) {
+ConstTypeHashSet BuilderAnalysis::get_escaped_types_from_invokes(
+    const std::unordered_set<const IRInstruction*>& invoke_insns) const {
   ConstTypeHashSet result;
-  bool check_specific_insn = insns != nullptr;
+
+  for (const auto* invoke : invoke_insns) {
+    if (m_invoke_to_builder_instance.count(invoke)) {
+      result.emplace(m_invoke_to_builder_instance.at(invoke));
+    }
+  }
+  return result;
+}
+
+ConstTypeHashSet BuilderAnalysis::get_instantiated_types() {
+  ConstTypeHashSet result;
 
   for (const auto& pair : m_usage) {
     auto type = get_instantiated_type(pair.first);
-
-    if (!check_specific_insn) {
-      result.emplace(type);
-      continue;
-    } else if (insns->count(const_cast<IRInstruction*>(pair.first))) {
-      result.emplace(type);
-      continue;
-    }
-
-    for (const auto& insn : pair.second) {
-      if (insns->count(const_cast<IRInstruction*>(insn))) {
-        result.emplace(type);
-        break;
-      }
-    }
+    result.emplace(type);
   }
 
   return result;

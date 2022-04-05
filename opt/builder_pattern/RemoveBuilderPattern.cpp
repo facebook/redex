@@ -78,14 +78,12 @@ class RemoveClasses {
                     init_classes_with_side_effects,
                 const inliner::InlinerConfig& inliner_config,
                 const std::vector<DexType*>& blocklist,
-                bool propagate_escape_results,
                 const size_t max_num_inline_iteration,
                 DexStoresVector& stores)
       : m_root(super_cls),
         m_scope(scope),
         m_blocklist(blocklist),
         m_type_system(scope),
-        m_propagate_escape_results(propagate_escape_results),
         m_transform(scope,
                     m_type_system,
                     super_cls,
@@ -269,9 +267,6 @@ class RemoveClasses {
                                         BuilderAnalysis* analysis) {
     bool builders_to_remove = false;
 
-    // To be used for local excludes. We cleanup m_excluded_types at the end.
-    std::unordered_set<const DexType*> local_excludes;
-
     std::unique_ptr<IRCode> original_code = nullptr;
     size_t num_iterations = 1;
 
@@ -313,11 +308,6 @@ class RemoveClasses {
         auto non_removable_types = analysis->non_removable_types();
         if (!non_removable_types.empty()) {
           for (const auto* type : non_removable_types) {
-            if (m_excluded_types.count(type) == 0 &&
-                !m_propagate_escape_results) {
-              local_excludes.emplace(type);
-            }
-
             m_excluded_types.emplace(type);
           }
 
@@ -340,15 +330,10 @@ class RemoveClasses {
           m_transform.try_inline_calls(method, to_inline, &deleted_insns);
 
       if (!not_inlined_insns.empty()) {
-        auto to_eliminate =
-            analysis->get_instantiated_types(&not_inlined_insns);
-        for (const DexType* type : to_eliminate) {
-          if (m_excluded_types.count(type) == 0 &&
-              !m_propagate_escape_results) {
-            local_excludes.emplace(type);
-          }
-
-          m_excluded_types.emplace(type);
+        auto escaped_builders =
+            analysis->get_escaped_types_from_invokes(not_inlined_insns);
+        for (auto* escaped_builder : escaped_builders) {
+          m_excluded_types.emplace(escaped_builder);
         }
 
         if (not_inlined_insns.size() == to_inline.size()) {
@@ -376,9 +361,6 @@ class RemoveClasses {
       // in this step).
     }
 
-    for (const DexType* type : local_excludes) {
-      m_excluded_types.erase(type);
-    }
     if (!builders_to_remove && original_code != nullptr) {
       method->set_code(std::move(original_code));
     }
@@ -391,7 +373,6 @@ class RemoveClasses {
   const Scope& m_scope;
   const std::vector<DexType*>& m_blocklist;
   TypeSystem m_type_system;
-  bool m_propagate_escape_results;
   BuilderTransform m_transform;
   std::unordered_set<const DexType*> m_classes;
   std::unordered_set<const DexType*> m_excluded_types;
@@ -411,7 +392,6 @@ void RemoveBuilderPatternPass::bind_config() {
        Configurable::bindflags::types::warn_if_unresolvable);
   bind("blocklist", {}, m_blocklist, Configurable::default_doc(),
        Configurable::bindflags::types::warn_if_unresolvable);
-  bind("propagate_escape_results", true, m_propagate_escape_results);
 
   // TODO(T44502473): if we could pass a binding filter lambda instead of
   // bindflags, this could be more simply expressed
@@ -456,8 +436,7 @@ void RemoveBuilderPatternPass::run_pass(DexStoresVector& stores,
     Timer t("root_iteration");
     RemoveClasses rm_builder_pattern(
         root, scope, init_classes_with_side_effects, conf.get_inliner_config(),
-        m_blocklist, m_propagate_escape_results, max_num_inline_iteration,
-        stores);
+        m_blocklist, max_num_inline_iteration, stores);
     rm_builder_pattern.optimize();
     rm_builder_pattern.print_stats(mgr);
     rm_builder_pattern.cleanup();
