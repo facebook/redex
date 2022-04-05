@@ -109,7 +109,6 @@ class IODIMetadata {
       m_iodi_method_layers;
 
   // These exists for can_safely_use_iodi
-  std::unordered_map<const DexMethod*, std::string> m_method_to_name;
   std::unordered_set<const DexMethod*> m_huge_methods;
 
   bool m_marked{false};
