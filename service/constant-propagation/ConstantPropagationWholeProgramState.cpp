@@ -109,6 +109,14 @@ void initialize_ifields(const Scope& scope,
   });
 }
 
+/**
+ * Return if a field is a root field that is not in a resource class.
+ */
+bool is_non_resource_root(DexField* field) {
+  const auto& field_cls_name = field->get_class()->get_name()->str();
+  return (field_cls_name.find("/R$") == std::string::npos) && root(field);
+}
+
 } // namespace
 
 namespace constant_propagation {
@@ -279,7 +287,8 @@ void WholeProgramState::collect_return_values(
 void WholeProgramState::collect_static_finals(const DexClass* cls,
                                               FieldEnvironment field_env) {
   for (auto* field : cls->get_sfields()) {
-    if (is_static(field) && is_final(field) && !field->is_external() &&
+    if (is_static(field) && !is_non_resource_root(field) && is_final(field) &&
+        !field->is_external() &&
         m_field_blocklist.count(field->get_class()) == 0) {
       m_known_fields.emplace(field);
     } else {
