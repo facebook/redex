@@ -182,13 +182,14 @@ const DexString* RedexContext::make_string(std::string_view str) {
   if (rv != nullptr) {
     return rv;
   }
-  // Note that DexStrings are keyed by the string_view of the underlying
-  // std::string. The string_view is valid until a the string is destroyed, or
-  // until a non-const function is called on the string (but note the
-  // std::string itself is const)
-  auto dexstring = new DexString(std::string(str));
-  auto p2 = std::string_view(dexstring->c_str(), str.size());
-  return try_insert<DexString, const DexString>(p2, dexstring, &segment);
+  // Note that DexStrings are keyed by a string_view created from the actual
+  // storage. The string_view is valid until the storage is destroyed.
+  auto storage = std::make_unique<char[]>(str.length() + 1);
+  memcpy(storage.get(), str.data(), str.length());
+  storage[str.length()] = 0;
+  auto key = std::string_view(storage.get(), str.size());
+  auto value = new DexString(std::move(storage), str.length());
+  return try_insert<DexString, const DexString>(key, value, &segment);
 }
 
 const DexString* RedexContext::get_string(std::string_view str) {
