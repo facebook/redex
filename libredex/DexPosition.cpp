@@ -298,14 +298,15 @@ void RealPositionMapper::write_map_v2() {
    * char[string_length]
    */
   std::ostringstream pos_out;
-  std::unordered_map<std::string, uint32_t> string_ids;
-  std::vector<std::string> string_pool;
+  std::unordered_map<std::string_view, uint32_t> string_ids;
+  std::vector<std::unique_ptr<std::string>> string_pool;
 
-  auto id_of_string = [&](const std::string& s) -> uint32_t {
+  auto id_of_string = [&](const std::string_view s) -> uint32_t {
     auto it = string_ids.find(s);
     if (it == string_ids.end()) {
-      it = string_ids.emplace(s, string_pool.size()).first;
-      string_pool.push_back(s);
+      auto p = std::make_unique<std::string>(s);
+      it = string_ids.emplace(*p, string_pool.size()).first;
+      string_pool.push_back(std::move(p));
     }
     return it->second;
   };
@@ -322,9 +323,9 @@ void RealPositionMapper::write_map_v2() {
             SHOW(pos->parent), SHOW(pos));
     }
     // of the form "class_name.method_name:(arg_types)return_type"
-    const auto& full_method_name = pos->method->str();
+    const auto full_method_name = pos->method->str();
     // strip out the args and return type
-    auto qualified_method_name =
+    const auto qualified_method_name =
         full_method_name.substr(0, full_method_name.find(':'));
     auto class_name = java_names::internal_to_external(
         qualified_method_name.substr(0, qualified_method_name.rfind('.')));
@@ -356,9 +357,9 @@ void RealPositionMapper::write_map_v2() {
   uint32_t spool_count = string_pool.size();
   ofs.write((const char*)&spool_count, sizeof(spool_count));
   for (const auto& s : string_pool) {
-    uint32_t ssize = s.size();
+    uint32_t ssize = s->size();
     ofs.write((const char*)&ssize, sizeof(ssize));
-    ofs << s;
+    ofs << *s;
   }
   uint32_t pos_count = m_positions.size();
   ofs.write((const char*)&pos_count, sizeof(pos_count));

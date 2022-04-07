@@ -89,7 +89,7 @@ class s_expr final {
   /*
    * Constructs a string atom.
    */
-  explicit s_expr(const std::string& s);
+  explicit s_expr(const std::string_view s);
 
   /*
    * Various constructors for a list. The empty list (nil) can be constructed
@@ -258,7 +258,7 @@ class s_expr_istream final {
 
   void skip_white_spaces();
 
-  void set_status(Status status, const std::string& what_arg);
+  void set_status(Status status, const std::string_view what_arg);
 
   std::stack<s_expr> m_stack;
   std::istream& m_input;
@@ -321,7 +321,7 @@ class s_patn {
   /*
    * Matches a string atom with the given value.
    */
-  explicit s_patn(const std::string& s);
+  explicit s_patn(const std::string_view s);
 
   /*
    * Matches any string atom and stores its value into the given placeholder.
@@ -360,7 +360,7 @@ class s_patn {
    */
   bool match_with(const s_expr& expr);
 
-  void must_match(const s_expr& expr, const std::string& msg);
+  void must_match(const s_expr& expr, const std::string_view msg);
 
  private:
   // By construction, m_pattern can never be null.
@@ -429,7 +429,7 @@ class Int32Atom final : public Component {
 
 class StringAtom final : public Component {
  public:
-  explicit StringAtom(const std::string& s)
+  explicit StringAtom(const std::string_view s)
       : Component(ComponentKind::StringAtom), m_string(s) {}
 
   const std::string& get_string() const { return m_string; }
@@ -597,7 +597,7 @@ class Int32Pattern final : public Pattern {
 
 class StringPattern final : public Pattern {
  public:
-  explicit StringPattern(const std::string& s) : m_string(s) {}
+  explicit StringPattern(const std::string_view s) : m_string(s) {}
 
   explicit StringPattern(std::string* placeholder)
       : m_placeholder(placeholder) {}
@@ -655,7 +655,7 @@ inline s_expr::s_expr() : m_component(std::make_shared<s_expr_impl::List>()) {}
 inline s_expr::s_expr(int32_t n)
     : m_component(std::make_shared<s_expr_impl::Int32Atom>(n)) {}
 
-inline s_expr::s_expr(const std::string& s)
+inline s_expr::s_expr(const std::string_view s)
     : m_component(std::make_shared<s_expr_impl::StringAtom>(s)) {}
 
 inline s_expr::s_expr(std::initializer_list<s_expr> l)
@@ -850,7 +850,7 @@ inline void s_expr_istream::skip_white_spaces() {
 }
 
 inline void s_expr_istream::set_status(Status status,
-                                       const std::string& what_arg) {
+                                       std::string_view what_arg) {
   m_status = status;
   std::ostringstream ss;
   ss << "On line " << m_line_number << ": " << what_arg;
@@ -870,7 +870,7 @@ inline s_patn::s_patn(int32_t n)
 inline s_patn::s_patn(int32_t* placeholder)
     : m_pattern(std::make_shared<s_expr_impl::Int32Pattern>(placeholder)) {}
 
-inline s_patn::s_patn(const std::string& s)
+inline s_patn::s_patn(const std::string_view s)
     : m_pattern(std::make_shared<s_expr_impl::StringPattern>(s)) {}
 
 inline s_patn::s_patn(std::string* placeholder)
@@ -886,10 +886,11 @@ inline bool s_patn::match_with(const s_expr& expr) {
   return m_pattern->match_with(expr);
 }
 
-inline void s_patn::must_match(const s_expr& expr, const std::string& msg) {
+inline void s_patn::must_match(const s_expr& expr, const std::string_view msg) {
   RUNTIME_CHECK(m_pattern->match_with(expr),
-                pattern_matching_error() << error_msg(
-                    "Could not find match against " + expr.str() + ": " + msg));
+                pattern_matching_error()
+                    << error_msg("Could not find match against " + expr.str() +
+                                 ": " + std::string(msg)));
 }
 
 } // namespace sparta

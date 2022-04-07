@@ -57,7 +57,7 @@ std::ostream& operator<<(std::ostream& out,
   }
   case reflection::STRING: {
     if (x.dex_string != nullptr) {
-      const std::string& str = x.dex_string->str();
+      const auto str = x.dex_string->str();
       if (str.empty()) {
         out << "\"\"";
       } else {

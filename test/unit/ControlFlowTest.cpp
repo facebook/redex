@@ -881,7 +881,7 @@ TEST_F(ControlFlowTest, branchingness) {
   auto& cfg = code->cfg();
   uint16_t blocks_checked = 0;
   for (Block* b : cfg.blocks()) {
-    std::string str = b->get_first_insn()->insn->get_string()->str();
+    const auto str = b->get_first_insn()->insn->get_string()->str();
     if (str == "one") {
       EXPECT_EQ(opcode::BRANCH_IF, b->branchingness());
       ++blocks_checked;

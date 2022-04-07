@@ -115,9 +115,9 @@ std::string get_simple_deobf_name(const T* ref) {
   auto dot_pos = full_name.find('.');
   auto colon_pos = full_name.find(':');
   if (dot_pos == std::string::npos || colon_pos == std::string::npos) {
-    return full_name;
+    return str_copy(full_name);
   }
-  return full_name.substr(dot_pos + 1, colon_pos - dot_pos - 1);
+  return str_copy(full_name.substr(dot_pos + 1, colon_pos - dot_pos - 1));
 }
 } // namespace
 
@@ -735,7 +735,7 @@ void DexMethod::delete_method(DexMethod* m) { m->make_non_concrete(); }
 std::string DexMethod::get_fully_deobfuscated_name() const {
   if (m_deobfuscated_name != nullptr &&
       get_deobfuscated_name().str() == show(this)) {
-    return get_deobfuscated_name().str();
+    return get_deobfuscated_name().str_copy();
   }
   return build_fully_deobfuscated_name(this);
 }

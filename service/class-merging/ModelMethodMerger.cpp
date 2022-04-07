@@ -602,19 +602,14 @@ void ModelMethodMerger::merge_virtual_methods(
       staticize_with_new_arg_head(m, target_type);
       type_tags[m] = m_type_tags->get_type_tag(m->get_class());
     }
-    auto name = front_meth->get_name()->str();
+    const auto name = front_meth->get_name()->str();
 
     // Create dispatch.
-    dispatch::Spec spec{target_type,
-                        dispatch::Type::VIRTUAL,
-                        name,
-                        dispatch_proto,
-                        access,
-                        type_tag_field,
-                        overridden_meth,
-                        m_max_num_dispatch_target,
-                        boost::none,
-                        m_model_spec.keep_debug_info};
+    dispatch::Spec spec{target_type,     dispatch::Type::VIRTUAL,
+                        str_copy(name),  dispatch_proto,
+                        access,          type_tag_field,
+                        overridden_meth, m_max_num_dispatch_target,
+                        boost::none,     m_model_spec.keep_debug_info};
     dispatch::DispatchMethod dispatch = create_dispatch_method(spec, meth_lst);
     dispatch_methods.emplace_back(target_cls, dispatch.main_dispatch);
     for (const auto sub_dispatch : dispatch.sub_dispatches) {

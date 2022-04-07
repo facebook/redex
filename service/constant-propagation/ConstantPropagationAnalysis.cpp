@@ -1122,8 +1122,8 @@ bool EnumUtilsFieldAnalyzer::analyze_sget(
   const auto& initializer = initializers.front();
   always_assert(initializer->insn_src_id_of_attr == 0);
 
-  const auto& name = field->str();
-  auto value = std::stoi(name.substr(1));
+  const auto name = field->str();
+  auto value = std::stoi(str_copy(name.substr(1)));
   ObjectWithImmutAttr object(integer_type, 1);
   object.write_value(initializer->attr, SignedConstantDomain(value));
   object.jvm_cached_singleton = state->is_jvm_cached_object(valueOf, value);

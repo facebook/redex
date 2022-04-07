@@ -177,19 +177,17 @@ bool is_trivial_clinit(const IRCode& code) {
 }
 
 bool is_clinit_invoked_method_benign(const DexMethodRef* method_ref) {
-  const auto& type_name = method_ref->get_class()->str();
-  if (strcmp(type_name.c_str(), "Lcom/redex/OutlinedStringBuilders;") == 0) {
+  const auto type_name = method_ref->get_class()->str();
+  if (type_name == "Lcom/redex/OutlinedStringBuilders;") {
     return true;
   }
 
-  const auto& name = method_ref->get_name()->str();
-  if (strcmp(name.c_str(), "clone") == 0 ||
-      strcmp(name.c_str(), "concat") == 0 ||
-      strcmp(name.c_str(), "append") == 0) {
+  const auto name = method_ref->get_name()->str();
+  if (name == "clone" || name == "concat" || name == "append") {
     return true;
   }
 
-  static const std::unordered_set<std::string> methods = {
+  static const std::unordered_set<std::string_view> methods = {
       // clang-format off
       "Landroid/content/Context;.getApplicationContext:()Landroid/content/Context;",
       "Landroid/content/Context;.getApplicationInfo:()Landroid/content/pm/ApplicationInfo;",

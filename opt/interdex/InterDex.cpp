@@ -1236,7 +1236,7 @@ void InterDex::flush_out_dex(DexInfo& dex_info, DexClass* canary_cls) {
     always_assert(canary_added);
 
     m_dex_infos.emplace_back(
-        std::make_tuple(canary_cls->get_name()->str(), dex_info));
+        std::make_tuple(canary_cls->get_name()->str_copy(), dex_info));
   }
 
   std::unordered_set<DexClass*> additional_classes;

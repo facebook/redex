@@ -7,6 +7,7 @@
 
 #include "RedexResources.h"
 
+#include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/operations.hpp>
 #include <map>
@@ -145,7 +146,7 @@ std::unordered_set<std::string> get_files_by_suffix(
       const path_t& entry_path = entry.path();
 
       if (is_regular_file(entry_path) &&
-          ends_with(entry_path.string().c_str(), suffix.c_str())) {
+          boost::ends_with(entry_path.string(), suffix)) {
         files.emplace(entry_path.string());
       }
 
@@ -198,7 +199,7 @@ void find_resource_xml_files(const std::string& dir,
              ++lit) {
           const path_t& resource_path = lit->path();
           if (is_regular_file(resource_path) &&
-              ends_with(resource_path.string().c_str(), ".xml")) {
+              boost::ends_with(resource_path.string(), ".xml")) {
             handler(resource_path.string());
           }
         }
@@ -340,8 +341,7 @@ void find_native_library_files(const std::string& lib_root, Fn handler) {
       auto const& entry = *it;
       const path_t& entry_path = entry.path();
       if (is_regular_file(entry_path) &&
-          ends_with(entry_path.filename().string().c_str(),
-                    library_extension.c_str())) {
+          boost::ends_with(entry_path.filename().string(), library_extension)) {
         TRACE(RES, 9, "Checking lib: %s", entry_path.string().c_str());
         handler(entry_path.string());
       }

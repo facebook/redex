@@ -429,7 +429,7 @@ OnMethodExitMap build_onMethodExit_map(const DexClass& cls,
                                        const std::string& onMethodExit_name) {
   OnMethodExitMap onMethodExit_map;
   for (const auto& m : cls.get_dmethods()) {
-    const auto& name = m->get_name()->str();
+    const auto name = m->get_name()->str();
     if (onMethodExit_name != name) {
       continue;
     }
@@ -469,7 +469,7 @@ OnMethodExitMap build_onMethodExit_map(const DexClass& cls,
 DexMethod* load_onMethodBegin(const DexClass& cls,
                               const std::string& method_name) {
   for (const auto& m : cls.get_dmethods()) {
-    const auto& name = m->get_name()->str();
+    const auto name = m->get_name()->str();
     if (method_name != name) {
       continue;
     }

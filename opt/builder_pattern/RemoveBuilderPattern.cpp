@@ -44,7 +44,7 @@ std::unordered_set<DexType*> get_associated_buildees(
 
   std::unordered_set<DexType*> buildees;
   for (const auto& builder : builders) {
-    const std::string& builder_name = builder->str();
+    const auto builder_name = builder->str();
     std::string buildee_name =
         builder_name.substr(0, builder_name.size() - 9) + ";";
 

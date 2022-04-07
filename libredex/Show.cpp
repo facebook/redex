@@ -133,21 +133,21 @@ std::string show_type(const DexType* t, bool deobfuscated) {
         }
         auto name = t->get_name()->str();
         if (!deobfuscated) {
-          return name;
+          return str_copy(name);
         }
         if (name[0] == 'L') {
           auto cls = type_class(t);
           if (cls != nullptr &&
               !cls->get_deobfuscated_name_or_empty().empty()) {
-            return cls->get_deobfuscated_name_or_empty();
+            return cls->get_deobfuscated_name_or_empty_copy();
           }
-          return name;
+          return str_copy(name);
         } else if (name[0] == '[') {
           std::ostringstream ss;
           ss << '[' << self(self, DexType::get_type(name.substr(1)));
           return ss.str();
         }
-        return name;
+        return str_copy(name);
       },
       t);
 }
@@ -158,9 +158,9 @@ std::string show_field(const DexFieldRef* ref, bool deobfuscated) {
   }
 
   if (deobfuscated && ref->is_def()) {
-    const auto& name = ref->as_def()->get_deobfuscated_name_or_empty();
+    const auto name = ref->as_def()->get_deobfuscated_name_or_empty();
     if (!name.empty()) {
-      return name;
+      return str_copy(name);
     }
   }
   string_builders::StaticStringBuilder<5> b;
@@ -197,9 +197,9 @@ std::string show_method(const DexMethodRef* ref, bool deobfuscated) {
   }
 
   if (deobfuscated && ref->is_def()) {
-    const auto& name = ref->as_def()->get_deobfuscated_name_or_empty();
+    const auto name = ref->as_def()->get_deobfuscated_name_or_empty();
     if (!name.empty()) {
-      return name;
+      return str_copy(name);
     }
   }
 
@@ -991,7 +991,7 @@ std::ostream& operator<<(std::ostream& o, const DexType& type) {
 
 inline std::string show(const DexString* p) {
   if (!p) return "";
-  return p->str();
+  return p->str_copy();
 }
 
 inline std::string show(const DexType* t) { return show_type(t, false); }
@@ -1606,9 +1606,9 @@ std::string show_deobfuscated(const DexClass* cls) {
   }
   const auto& deob = cls->get_deobfuscated_name_or_empty();
   if (!deob.empty()) {
-    return deob;
+    return str_copy(deob);
   }
-  return cls->get_name() ? cls->get_name()->str() : show(cls);
+  return cls->get_name() ? cls->get_name()->str_copy() : show(cls);
 }
 
 std::string show_deobfuscated(const DexFieldRef* ref) {

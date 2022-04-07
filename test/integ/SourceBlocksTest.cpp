@@ -219,7 +219,8 @@ TEST_F(SourceBlocksTest, source_blocks) {
             continue;
           }
           ASSERT_TRUE(mie.src_block != nullptr);
-          seen_methods.insert(DexMethod::get_method(mie.src_block->src->str()));
+          seen_methods.insert(
+              DexMethod::get_method(mie.src_block->src->str_copy()));
         }
       }
     }

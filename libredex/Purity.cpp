@@ -144,7 +144,7 @@ CseLocation get_read_location(const IRInstruction* insn) {
   }
 }
 
-static const char* pure_method_names[] = {
+static const std::string_view pure_method_names[] = {
     "Ljava/lang/Boolean;.booleanValue:()Z",
     "Ljava/lang/Boolean;.equals:(Ljava/lang/Object;)Z",
     "Ljava/lang/Boolean;.getBoolean:(Ljava/lang/String;)Z",
@@ -331,10 +331,10 @@ static const char* pure_method_names[] = {
 std::unordered_set<DexMethodRef*> get_pure_methods() {
   std::unordered_set<DexMethodRef*> pure_methods;
   for (auto const pure_method_name : pure_method_names) {
-    auto method_ref = DexMethod::get_method(std::string(pure_method_name));
+    auto method_ref = DexMethod::get_method(pure_method_name);
     if (method_ref == nullptr) {
       TRACE(CSE, 1, "[get_pure_methods]: Could not find pure method %s",
-            pure_method_name);
+            str_copy(pure_method_name).c_str());
       continue;
     }
 

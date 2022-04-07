@@ -24,6 +24,7 @@
 #include "DexMemberRefs.h"
 #include "NoDefaultComparator.h"
 #include "ReferencedState.h"
+#include "StringUtil.h"
 
 /*
  * The structures defined here are literal representations
@@ -120,7 +121,8 @@ class DexString {
   bool is_simple() const { return size() == m_utfsize; }
 
   const char* c_str() const { return m_storage.c_str(); }
-  const std::string& str() const { return m_storage; }
+  std::string_view str() const { return m_storage; }
+  std::string str_copy() const { return std::string(m_storage); }
 
   uint32_t get_entry_size() const {
     uint32_t len = uleb128_encoding_size(m_utfsize);
@@ -206,7 +208,7 @@ class DexType {
   }
 
   // Always makes a new type that is unique.
-  static DexType* make_unique_type(const std::string& type_name) {
+  static DexType* make_unique_type(const std::string_view type_name) {
     auto ret = DexString::make_string(type_name);
     for (uint32_t i = 0; get_type(ret); i++) {
       ret = DexString::make_string(type_name.substr(0, type_name.size() - 1) +
@@ -227,7 +229,8 @@ class DexType {
 
   const DexString* get_name() const { return m_name; }
   const char* c_str() const { return get_name()->c_str(); }
-  const std::string& str() const { return get_name()->str(); }
+  std::string_view str() const { return get_name()->str(); }
+  std::string str_copy() const { return get_name()->str_copy(); }
   DexProto* get_non_overlapping_proto(const DexString*, DexProto*);
 };
 
@@ -290,7 +293,8 @@ class DexFieldRef {
   DexType* get_class() const { return m_spec.cls; }
   const DexString* get_name() const { return m_spec.name; }
   const char* c_str() const { return get_name()->c_str(); }
-  const std::string& str() const { return get_name()->str(); }
+  std::string_view str() const { return get_name()->str(); }
+  std::string str_copy() const { return get_name()->str_copy(); }
   DexType* get_type() const { return m_spec.type; }
 
   template <typename C>
@@ -819,7 +823,8 @@ class DexMethodRef {
   DexType* get_class() const { return m_spec.cls; }
   const DexString* get_name() const { return m_spec.name; }
   const char* c_str() const { return get_name()->c_str(); }
-  const std::string& str() const { return get_name()->str(); }
+  std::string_view str() const { return get_name()->str(); }
+  std::string str_copy() const { return get_name()->str_copy(); }
   DexProto* get_proto() const { return m_spec.proto; }
 
   template <typename C>
@@ -992,12 +997,15 @@ class DexMethod : public DexMethodRef {
   const DexString* get_deobfuscated_name_or_null() const {
     return m_deobfuscated_name;
   }
-  const std::string& get_deobfuscated_name_or_empty() const {
+  std::string_view get_deobfuscated_name_or_empty() const {
     if (m_deobfuscated_name == nullptr) {
       return DexString::EMPTY;
       ;
     }
     return m_deobfuscated_name->str();
+  }
+  std::string get_deobfuscated_name_or_empty_copy() const {
+    return ::str_copy(get_deobfuscated_name_or_empty());
   }
 
   // Return just the name of the method.
@@ -1233,7 +1241,8 @@ class DexClass {
   DexType* get_type() const { return m_self; }
   const DexString* get_name() const { return m_self->get_name(); }
   const char* c_str() const { return get_name()->c_str(); }
-  const std::string& str() const { return get_name()->str(); }
+  std::string_view str() const { return get_name()->str(); }
+  std::string str_copy() const { return get_name()->str_copy(); }
   DexTypeList* get_interfaces() const { return m_interfaces; }
   const DexString* get_source_file() const { return m_source_file; }
   bool has_class_data() const;
@@ -1262,11 +1271,14 @@ class DexClass {
   const DexString* get_deobfuscated_name_or_null() const {
     return m_deobfuscated_name;
   }
-  const std::string& get_deobfuscated_name_or_empty() const {
+  std::string_view get_deobfuscated_name_or_empty() const {
     if (m_deobfuscated_name == nullptr) {
       return DexString::EMPTY;
     }
     return m_deobfuscated_name->str();
+  }
+  std::string get_deobfuscated_name_or_empty_copy() const {
+    return ::str_copy(get_deobfuscated_name_or_empty());
   }
 
   // Retrieves the (original) location.

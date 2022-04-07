@@ -29,7 +29,7 @@ const DexString* lookup_signature_annotation(
     const rewriter::TypeStringMap& mapping, const DexString* anno) {
   bool has_bracket = false;
   bool added_semicolon = false;
-  std::string anno_str = anno->str();
+  std::string anno_str = anno->str_copy();
 
   // anno_str is some arbitrary segment of a full signature. We rely on standard
   // dexer behavior that keeps types mostly-intact.
@@ -87,7 +87,7 @@ const DexString* lookup_signature_annotation(
     return obfu;
   }
   // We need to transform back to the old_name format of the input
-  std::string obfu_str = obfu->str();
+  std::string obfu_str = obfu->str_copy();
   if (added_semicolon) {
     always_assert(obfu_str.back() == ';');
     obfu_str.pop_back();

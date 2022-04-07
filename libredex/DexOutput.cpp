@@ -2584,7 +2584,7 @@ void write_method_mapping(const std::string& filename,
     auto deobf_class = [&] {
       if (cls) {
         auto deobname = cls->get_deobfuscated_name_or_empty();
-        if (!deobname.empty()) return deobname;
+        if (!deobname.empty()) return str_copy(deobname);
       }
       return show(typecls);
     }();
@@ -2608,7 +2608,7 @@ void write_method_mapping(const std::string& filename,
         const auto& deobfname =
             resolved_method->as_def()->get_deobfuscated_name_or_empty();
         if (!deobfname.empty()) {
-          return deobfname;
+          return str_copy(deobfname);
         }
       }
       return show(resolved_method);
@@ -2644,7 +2644,7 @@ void write_class_mapping(const std::string& filename,
     auto deobf_class = [&] {
       if (cls) {
         auto deobname = cls->get_deobfuscated_name_or_empty();
-        if (!deobname.empty()) return deobname;
+        if (!deobname.empty()) return str_copy(deobname);
       }
       return show(cls);
     }();
@@ -2694,7 +2694,7 @@ void write_pg_mapping(
   auto deobf_class = [&](DexClass* cls) {
     if (cls) {
       auto deobname = cls->get_deobfuscated_name_or_empty();
-      if (!deobname.empty()) return deobname;
+      if (!deobname.empty()) return str_copy(deobname);
     }
     return show(cls);
   };
@@ -3123,8 +3123,9 @@ LocatorIndex make_locator_index(DexStoresVector& stores) {
                                 clsname, Locator::make(strnr, dexnr, clsnr)))
                             .second;
         // We shouldn't see the same class defined in two dexen
-        always_assert_log(inserted, "This was already inserted %s\n",
-                          (*clsit)->get_deobfuscated_name_or_empty().c_str());
+        always_assert_log(
+            inserted, "This was already inserted %s\n",
+            (*clsit)->get_deobfuscated_name_or_empty_copy().c_str());
         (void)inserted; // Shut up compiler when defined(NDEBUG)
       }
     }

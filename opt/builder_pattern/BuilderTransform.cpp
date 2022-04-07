@@ -99,7 +99,7 @@ bool BuilderTransform::inline_super_calls_and_ctors(const DexType* type) {
     if (!inlinable_insns.empty()) {
       TRACE(BLD_PATTERN, 8, "Creating a copy of %s", SHOW(method));
 
-      const std::string& name_str = method->get_name()->str();
+      const auto name_str = method->get_name()->str();
       DexMethod* method_copy = DexMethod::make_method_from(
           method,
           method->get_class(),

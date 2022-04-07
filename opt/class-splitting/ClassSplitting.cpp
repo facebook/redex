@@ -132,7 +132,7 @@ class ClassSplittingImpl {
   DexMethod* create_trampoline_method(DexMethod* method,
                                       DexClass* target_cls,
                                       uint32_t api_level) {
-    std::string name = method->get_name()->str();
+    std::string name = method->get_name()->str_copy();
     // We are merging two "namespaces" here, so we make it clear what kind of
     // method a trampoline came from. We don't support combining target classes
     // by api-level here, as we'd have to do more uniquing.
@@ -235,7 +235,7 @@ class ClassSplittingImpl {
         if (it != m_target_classes_by_source_classes.end()) {
           target_cls = it->second;
         } else {
-          auto& source_name = source_cls->str();
+          auto source_name = source_cls->str();
           target_cls = create_target_class(
               source_name.substr(0, source_name.size() - 1) + RELOCATED_SUFFIX);
           m_target_classes_by_source_classes.emplace(source_cls, target_cls);

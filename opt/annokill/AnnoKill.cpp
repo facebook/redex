@@ -464,8 +464,10 @@ bool AnnoKill::should_kill_bad_signature(DexAnnotation* da) const {
     auto const& evs = arrayev->evalues();
     for (auto& strev : *evs) {
       if (strev->evtype() != DEVT_STRING) continue;
-      const auto& sigstr =
-          static_cast<DexEncodedValueString*>(strev.get())->string()->str();
+      const std::string sigstr =
+          static_cast<DexEncodedValueString*>(strev.get())
+              ->string()
+              ->str_copy();
       always_assert(sigstr.length() > 0);
       const auto* sigcstr = sigstr.c_str();
       // @Signature grammar is non-trivial[1], nevermind the fact that
@@ -485,7 +487,7 @@ bool AnnoKill::should_kill_bad_signature(DexAnnotation* da) const {
       // [1] androidxref.com/8.0.0_r4/xref/libcore/luni/src/main/java/libcore/
       //     reflect/GenericSignatureParser.java
       if (sigstr[0] == 'L' && strchr(sigcstr, '/') && !strchr(sigcstr, ':')) {
-        auto* sigtype = DexType::get_type(sigstr.c_str());
+        auto* sigtype = DexType::get_type(sigstr);
         if (!sigtype) {
           // Try with semicolon.
           sigtype = DexType::get_type(sigstr + ';');
@@ -493,7 +495,7 @@ bool AnnoKill::should_kill_bad_signature(DexAnnotation* da) const {
         if (!sigtype && sigstr.back() == '<') {
           // Try replacing angle bracket with semicolon
           // d8 often encodes signature annotations this way
-          std::string copy = sigstr;
+          std::string copy = str_copy(sigstr);
           copy.pop_back();
           copy.push_back(';');
           sigtype = DexType::get_type(copy);
@@ -689,15 +691,21 @@ bool AnnoKill::kill_annotations() {
 
   if (traceEnabled(ANNO, 3)) {
     for (const auto& p : m_build_anno_map) {
-      TRACE(ANNO, 3, "Build anno: %lu, %s", p.second, p.first.c_str());
+      TRACE(
+          ANNO, 3, "Build anno: %lu, %s", p.second, str_copy(p.first).c_str());
     }
 
     for (const auto& p : m_runtime_anno_map) {
-      TRACE(ANNO, 3, "Runtime anno: %lu, %s", p.second, p.first.c_str());
+      TRACE(ANNO,
+            3,
+            "Runtime anno: %lu, %s",
+            p.second,
+            str_copy(p.first).c_str());
     }
 
     for (const auto& p : m_system_anno_map) {
-      TRACE(ANNO, 3, "System anno: %lu, %s", p.second, p.first.c_str());
+      TRACE(
+          ANNO, 3, "System anno: %lu, %s", p.second, str_copy(p.first).c_str());
     }
   }
 

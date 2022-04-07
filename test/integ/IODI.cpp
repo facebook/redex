@@ -395,7 +395,7 @@ TEST_F(IODITest, sameNameDontUseIODI) {
   auto classes = run_redex(nullptr, nullptr, /*iodi_layers=*/false);
   size_t same_name_count = 0;
   for (DexClass* cls : classes) {
-    std::unordered_map<std::string, DexMethods> name_to_methods;
+    std::unordered_map<std::string_view, DexMethods> name_to_methods;
     for (DexMethod* method : cls->get_dmethods()) {
       name_to_methods[method->str()].push_back(method);
     }
@@ -429,7 +429,7 @@ TEST_F(IODITest, sameNameIODILayered) {
   auto classes = run_redex(nullptr, nullptr, /*iodi_layers=*/true);
   size_t same_name_count = 0;
   for (DexClass* cls : classes) {
-    std::unordered_map<std::string, DexMethods> name_to_methods;
+    std::unordered_map<std::string_view, DexMethods> name_to_methods;
     for (DexMethod* method : cls->get_dmethods()) {
       name_to_methods[method->str()].push_back(method);
     }
@@ -483,7 +483,7 @@ TEST_F(IODITest, iodiLayers) {
   auto classes = run_redex(nullptr, nullptr, /*iodi_layers=*/true);
   size_t cluster_count{0};
   for (DexClass* cls : classes) {
-    std::unordered_map<std::string, DexMethods> name_to_methods;
+    std::unordered_map<std::string_view, DexMethods> name_to_methods;
     for (DexMethod* method : cls->get_dmethods()) {
       name_to_methods[method->str()].push_back(method);
     }

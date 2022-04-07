@@ -25,18 +25,6 @@ std::string find_or_same(
   return it->second;
 }
 
-std::string convert_scalar_type(const std::string& type) {
-  static const std::unordered_map<std::string, std::string> prim_map = {
-      {"void", "V"},  {"boolean", "Z"}, {"byte", "B"},
-      {"short", "S"}, {"char", "C"},    {"int", "I"},
-      {"long", "J"},  {"float", "F"},   {"double", "D"}};
-  auto it = prim_map.find(type);
-  if (it != prim_map.end()) {
-    return it->second;
-  }
-  return java_names::external_to_internal(type);
-}
-
 std::string convert_scalar_type(std::string_view type) {
   static const std::unordered_map<std::string_view, std::string> prim_map = {
       {"void", "V"},  {"boolean", "Z"}, {"byte", "B"},
@@ -269,8 +257,8 @@ std::string ProguardMap::deobfuscate_method(const std::string& method) const {
 std::vector<ProguardMap::Frame> ProguardMap::deobfuscate_frame(
     const DexString* method_name, uint32_t line) const {
   std::vector<Frame> frames;
-  auto ranges_it =
-      m_obfMethodLinesMap.find(pg_impl::lines_key(method_name->str()));
+  auto ranges_it = m_obfMethodLinesMap.find(
+      str_copy(pg_impl::lines_key(method_name->str())));
   if (ranges_it != m_obfMethodLinesMap.end()) {
     for (const auto& range : ranges_it->second) {
       if (!range->matches(line)) {
@@ -295,7 +283,8 @@ std::vector<ProguardMap::Frame> ProguardMap::deobfuscate_frame(
 
 ProguardLineRangeVector& ProguardMap::method_lines(
     const std::string& obfuscated_method) {
-  return m_obfMethodLinesMap.at(pg_impl::lines_key(obfuscated_method));
+  return m_obfMethodLinesMap.at(
+      str_copy(pg_impl::lines_key(obfuscated_method)));
 }
 
 void ProguardMap::parse_proguard_map(std::istream& fp) {
@@ -533,7 +522,8 @@ bool ProguardMap::parse_method(const std::string& line) {
   m_obfMethodMap[pgnew] = pgold;
   m_obfUntypedMethodMap[pgnew_no_rtype] = pgold;
   lines->original_name = pgold;
-  m_obfMethodLinesMap[pg_impl::lines_key(pgnew)].push_back(std::move(lines));
+  m_obfMethodLinesMap[str_copy(pg_impl::lines_key(pgnew))].push_back(
+      std::move(lines));
   return true;
 }
 
@@ -545,7 +535,7 @@ namespace pg_impl {
  * source file name -- in this case we would return "Baz.java".
  */
 const DexString* file_name_from_method_string(const DexString* method) {
-  const auto& s = method->str();
+  const auto s = method->str();
   auto end = s.rfind(";.");
   auto innercls_pos = s.rfind('$', end);
   if (innercls_pos != std::string::npos) {
@@ -603,7 +593,7 @@ void apply_deobfuscated_positions(IRCode* code, const ProguardMap& pm) {
 /**
  * method_name should be a method as returned from convert_method
  */
-std::string lines_key(const std::string& method_name) {
+std::string_view lines_key(const std::string_view method_name) {
   std::size_t end = method_name.rfind(':');
   always_assert(end != std::string::npos);
   return method_name.substr(0, end);
@@ -667,10 +657,6 @@ void apply_deobfuscated_names(const std::vector<DexClasses>& dexen,
   }
 
   wq.run_all();
-}
-
-std::string convert_type(const std::string& type) {
-  return convert_type(std::string_view(type));
 }
 
 std::string convert_type(std::string_view type) {

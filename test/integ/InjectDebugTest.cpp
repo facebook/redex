@@ -141,7 +141,7 @@ TEST_F(InjectDebugTest, TestClasses) {
       [](const DexClasses& classes) -> std::vector<std::string> {
         std::vector<std::string> class_names;
         for (DexClass* dex_class : classes) {
-          class_names.push_back(dex_class->str());
+          class_names.push_back(dex_class->str_copy());
         }
         return class_names;
       });
@@ -155,9 +155,9 @@ TEST_F(InjectDebugTest, TestMethods) {
         std::vector<std::string> method_names;
         for (DexClass* dex_class : classes) {
           for (DexMethod* dex_method : dex_class->get_dmethods())
-            method_names.push_back(dex_method->str());
+            method_names.push_back(dex_method->str_copy());
           for (DexMethod* dex_method : dex_class->get_vmethods())
-            method_names.push_back(dex_method->str());
+            method_names.push_back(dex_method->str_copy());
         }
         return method_names;
       });

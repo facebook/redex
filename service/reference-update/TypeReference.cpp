@@ -30,10 +30,10 @@ void assert_old_types_have_definitions(
   }
 }
 
-const DexString* gen_new_name(const std::string& org_name, size_t seed) {
+const DexString* gen_new_name(const std::string_view org_name, size_t seed) {
   constexpr const char* mangling_affix = "$REDEX$";
   auto end = org_name.find(mangling_affix);
-  std::string new_name = org_name.substr(0, end);
+  std::string new_name = str_copy(org_name.substr(0, end));
   new_name.append(mangling_affix);
   while (seed) {
     int d = seed % 62;

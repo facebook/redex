@@ -193,7 +193,7 @@ void do_simple_method_tracing(DexClass* analysis_cls,
   std::vector<DexMethod*> to_instrument;
 
   auto worker = [&](DexMethod* method, size_t& total_size) -> int {
-    const auto& name = method->get_deobfuscated_name_or_empty();
+    std::string name = method->get_deobfuscated_name_or_empty_copy();
     always_assert_log(
         !name.empty(),
         "Deobfuscated method name can't be empty: obfuscated "
@@ -217,7 +217,7 @@ void do_simple_method_tracing(DexClass* analysis_cls,
     total_size += sum_opcode_sizes;
 
     // Excluding analysis methods myselves.
-    if (analysis_method_names.count(method->get_name()->str()) ||
+    if (analysis_method_names.count(method->get_name()->str_copy()) ||
         method == analysis_cls->get_clinit()) {
       ++excluded;
       TRACE(INSTRUMENT, 2, "Excluding analysis method: %s", SHOW(method));
@@ -284,7 +284,7 @@ void do_simple_method_tracing(DexClass* analysis_cls,
   //  1) For all methods, collect (method id, method) pairs and write meta data.
   //  2) Do actual instrumentation.
   for (const auto& cls : scope) {
-    const auto& cls_name = cls->get_deobfuscated_name_or_empty();
+    std::string cls_name = cls->get_deobfuscated_name_or_empty_copy();
     always_assert_log(
         !method_names.count(cls_name),
         "Deobfuscated class names must be unique, but found duplicate: %s",
@@ -442,7 +442,7 @@ constexpr const char* InstrumentPass::STATS_FIELD_NAME;
 
 // Find a sequence of opcode that creates a static array. Patch the array size.
 void InstrumentPass::patch_array_size(DexClass* analysis_cls,
-                                      const std::string& array_name,
+                                      const std::string_view array_name,
                                       const int array_size) {
   DexMethod* clinit = analysis_cls->get_clinit();
   always_assert(clinit != nullptr);
@@ -493,7 +493,7 @@ void InstrumentPass::patch_array_size(DexClass* analysis_cls,
 }
 
 void InstrumentPass::patch_static_field(DexClass* analysis_cls,
-                                        const std::string& field_name,
+                                        const std::string_view field_name,
                                         const int new_number) {
   DexMethod* clinit = analysis_cls->get_clinit();
   always_assert(clinit != nullptr);
@@ -654,7 +654,7 @@ bool InstrumentPass::is_included(const DexMethod* method,
   }
 
   // Try to check for method by its full name.
-  const auto& full_method_name = method->get_deobfuscated_name_or_empty();
+  std::string full_method_name = method->get_deobfuscated_name_or_empty_copy();
   if (set.count(full_method_name)) {
     return true;
   }
@@ -692,7 +692,7 @@ InstrumentPass::generate_sharded_analysis_methods(
     exit(1);
   }
 
-  const std::string& template_method_name = template_method->get_name()->str();
+  const auto template_method_name = template_method->get_name()->str();
 
   std::unordered_map<int /*shard_num*/, DexMethod*> new_analysis_methods;
   std::unordered_set<std::string> method_names;
@@ -701,14 +701,14 @@ InstrumentPass::generate_sharded_analysis_methods(
   for (size_t i = 1; i <= num_shards; ++i) {
     const auto new_name = template_method_name + std::to_string(i);
     std::string deobfuscated_name =
-        template_method->get_deobfuscated_name_or_empty();
+        template_method->get_deobfuscated_name_or_empty_copy();
     boost::replace_first(deobfuscated_name, template_method_name, new_name);
 
     DexMethod* new_method =
         DexMethod::make_method_from(template_method,
                                     template_method->get_class(),
                                     DexString::make_string(new_name));
-    new_method->set_deobfuscated_name(deobfuscated_name);
+    new_method->set_deobfuscated_name(str_copy(deobfuscated_name));
     cls->add_method(new_method);
 
     // Patch the array name in newly created method.

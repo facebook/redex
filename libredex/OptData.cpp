@@ -77,7 +77,7 @@ bool get_line_num(const DexMethod* method,
  * "some/package/class_name;" -> "class_name"
  */
 std::string get_deobfuscated_name_substr(const DexClass* cls) {
-  auto name = cls->get_deobfuscated_name_or_empty();
+  std::string name = cls->get_deobfuscated_name_or_empty_copy();
   if (name.empty()) {
     name = SHOW(cls);
   }
@@ -90,7 +90,7 @@ std::string get_deobfuscated_name_substr(const DexClass* cls) {
  * Returns the deobfuscated name for the given method.
  */
 std::string get_deobfuscated_name(const DexMethod* method) {
-  auto name = method->get_deobfuscated_name_or_empty();
+  std::string name = method->get_deobfuscated_name_or_empty_copy();
   if (name.empty()) {
     name = SHOW(method);
   }
@@ -363,13 +363,13 @@ void OptDataMapper::serialize_class(
     Json::Value* arr,
     Json::Value* opt_arr,
     Json::Value* nopt_arr) {
-  const auto& name = get_deobfuscated_name_substr(cls_opt_data->m_cls);
+  std::string name = get_deobfuscated_name_substr(cls_opt_data->m_cls);
   Json::Value cls_data;
   cls_data["id"] = (uint32_t)cls_id;
-  cls_data["package"] = cls_opt_data->m_package;
+  cls_data["package"] = str_copy(cls_opt_data->m_package);
   cls_data["source_file"] =
-      cls_opt_data->m_has_srcfile ? cls_opt_data->m_filename : "";
-  cls_data["name"] = name.c_str();
+      cls_opt_data->m_has_srcfile ? str_copy(cls_opt_data->m_filename) : "";
+  cls_data["name"] = std::move(name);
   arr->append(cls_data);
   serialize_opt_nopt_helper(cls_opt_data->m_opts, cls_opt_data->m_nopts, cls_id,
                             opt_arr, nopt_arr);

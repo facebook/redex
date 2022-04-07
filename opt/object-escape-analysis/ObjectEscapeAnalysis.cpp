@@ -159,7 +159,8 @@ bool is_benign(const DexMethodRef* method_ref) {
   };
 
   return method_ref->is_def() &&
-         methods.count(method_ref->as_def()->get_deobfuscated_name_or_empty());
+         methods.count(
+             method_ref->as_def()->get_deobfuscated_name_or_empty_copy());
 }
 
 constexpr const IRInstruction* NO_ALLOCATION = nullptr;
@@ -1380,7 +1381,7 @@ std::unordered_map<DexMethod*, ReducedMethod> compute_reduced_methods(
   workqueue_run<std::pair<DexMethod*, std::unordered_map<DexType*, bool>>>(
       [&](const std::pair<DexMethod*, std::unordered_map<DexType*, bool>>& p) {
         auto& [method, types] = p;
-        const std::string& name_str = method->get_name()->str();
+        const auto name_str = method->get_name()->str();
         DexMethod* copy = DexMethod::make_method_from(
             method,
             method->get_class(),
