@@ -7,6 +7,7 @@
 
 #include "RedexContext.h"
 
+#include <boost/thread/thread.hpp>
 #include <exception>
 #include <mutex>
 #include <regex>
@@ -31,7 +32,12 @@ static_assert(std::is_same<DexTypeList::ContainerType,
 RedexContext* g_redex;
 
 RedexContext::RedexContext(bool allow_class_duplicates)
-    : m_allow_class_duplicates(allow_class_duplicates) {}
+    : s_small_string_storage{16384, 111,
+                             boost::thread::hardware_concurrency() / 2},
+      s_medium_string_storage{65536, 2000,
+                              boost::thread::hardware_concurrency() / 4},
+      s_large_string_storage{0, 0, boost::thread::hardware_concurrency()},
+      m_allow_class_duplicates(allow_class_duplicates) {}
 
 RedexContext::~RedexContext() {
   std::vector<std::function<void()>> fns{
@@ -149,6 +155,22 @@ RedexContext::~RedexContext() {
   workqueue_run<std::function<void()>>([](std::function<void()>& fn) { fn(); },
                                        fns);
   s_method_map.clear();
+
+  std::ostringstream oss;
+  auto log_stats = [&oss](auto* name, ConcurrentStringStorage& storage) {
+    auto stats = storage.get_stats();
+    oss << "\n  " << name << ": " << stats.containers << " containers with "
+        << stats.buffers << " buffers, " << stats.used << " / "
+        << stats.allocated << " bytes used / allocated ("
+        << (stats.allocated == 0 ? 100 : (100 * stats.used / stats.allocated))
+        << "%%), " << stats.waited << " / " << stats.contention
+        << " times waited / contended, " << stats.sorted << " times sorted";
+  };
+  log_stats("small", s_small_string_storage);
+  log_stats("medium", s_medium_string_storage);
+  log_stats("large", s_large_string_storage);
+  TRACE(PM, 1, "String storage @ %u hardware concurrency:%s",
+        boost::thread::hardware_concurrency(), oss.str().c_str());
 }
 
 /*
@@ -175,6 +197,113 @@ static StoredValue* try_insert(Key key,
   return container->at(key);
 }
 
+RedexContext::ConcurrentStringStorage::Container::~Container() {
+  for (const auto* p = buffer; p;) {
+    auto next = p->next;
+    delete p;
+    p = next;
+  }
+}
+
+char* RedexContext::ConcurrentStringStorage::Container::allocate(
+    size_t length) {
+  if (buffer == nullptr || buffer->used + length > buffer->allocated) {
+    buffer = new Buffer(default_size == 0 ? length : default_size, buffer);
+  }
+  auto storage = buffer->chars.get() + buffer->used;
+  buffer->used += length;
+  return storage;
+}
+
+RedexContext::ConcurrentStringStorage::Context
+RedexContext::ConcurrentStringStorage::get_context() {
+#if !IS_WINDOWS
+  static std::atomic<size_t> next_index = 0;
+  thread_local size_t index_plus_1 = 0;
+  if (index_plus_1 == 0) {
+    index_plus_1 = (next_index++ % n_slots) + 1;
+  }
+  size_t index = index_plus_1 - 1;
+#else
+  size_t index = 0;
+#endif
+
+  while (true) {
+    auto* string_storage = slots[index].container.exchange(nullptr);
+    if (string_storage) {
+      std::atomic_thread_fence(std::memory_order_acquire);
+      return {this, index, string_storage};
+    }
+    contention++;
+    std::lock_guard<std::mutex> mutex(pool_lock);
+    if (!pool.empty()) {
+      string_storage = pool.back().release();
+      pool.pop_back();
+      return {this, index, string_storage};
+    }
+    if (created.fetch_add(1) < max_containers) {
+      contention--;
+      // add one more
+      return {this, index, new Container(default_buffer_size)};
+    }
+    created.fetch_sub(1);
+    // we know we just have to wait, so spin until we get something
+    waited++;
+#if !IS_WINDOWS
+    // Apparently we are fighting against some other thread; move on to next
+    // slot to reduce fighting odds
+    index_plus_1 = (next_index++ % n_slots) + 1;
+    index = index_plus_1 - 1;
+#else
+    index = (index + 1) % n_slots;
+#endif
+  }
+}
+
+RedexContext::ConcurrentStringStorage::Stats
+RedexContext::ConcurrentStringStorage::get_stats() const {
+  Stats stats;
+  stats.waited = waited.load();
+  stats.contention = contention.load();
+  stats.sorted = sorted.load();
+  auto add = [&stats](auto* storage) {
+    if (!storage) {
+      return;
+    }
+    for (const auto* p = storage->buffer; p; p = p->next) {
+      stats.allocated += p->allocated;
+      stats.used += p->used;
+      stats.buffers++;
+    }
+    stats.containers++;
+  };
+  for (auto& slot : slots) {
+    add(slot.container.load());
+  }
+  for (auto& storage : pool) {
+    add(storage.get());
+  }
+  return stats;
+}
+
+RedexContext::ConcurrentStringStorage::Context::~Context() {
+  auto* other_container = owner->slots[index].container.exchange(container);
+  if (other_container == nullptr) {
+    std::atomic_thread_fence(std::memory_order_release);
+    return;
+  }
+  std::lock_guard<std::mutex> mutex(owner->pool_lock);
+  auto& owner_pool = owner->pool;
+  owner_pool.emplace_back(other_container);
+  if (other_container->buffer->remaining() < owner->max_allocation &&
+      owner_pool.size() >= 2) {
+    owner->sorted++;
+    std::sort(owner_pool.begin(), owner_pool.end(), [](auto& a, auto& b) {
+      return a->buffer->remaining() < b->buffer->remaining();
+    });
+  }
+}
+
 const DexString* RedexContext::make_string(std::string_view str) {
   auto& segment = s_string_map.at(str);
 
@@ -182,14 +311,32 @@ const DexString* RedexContext::make_string(std::string_view str) {
   if (rv != nullptr) {
     return rv;
   }
-  // Note that DexStrings are keyed by a string_view created from the actual
-  // storage. The string_view is valid until the storage is destroyed.
-  auto storage = std::make_unique<char[]>(str.length() + 1);
-  memcpy(storage.get(), str.data(), str.length());
+
+  ConcurrentStringStorage& concurrent_string_storage =
+      str.length() < s_small_string_storage.max_allocation
+          ? s_small_string_storage
+      : str.length() < s_medium_string_storage.max_allocation
+          ? s_medium_string_storage
+          : s_large_string_storage;
+
+  char* storage;
+  {
+    auto storage_context = concurrent_string_storage.get_context();
+
+    // Note that DexStrings are keyed by a string_view created from the actual
+    // storage. The string_view is valid until the storage is destroyed.
+    storage = storage_context.container->allocate(str.length() + 1);
+  }
+  memcpy(storage, str.data(), str.length());
   storage[str.length()] = 0;
-  auto key = std::string_view(storage.get(), str.size());
-  auto value = new DexString(std::move(storage), str.length());
-  return try_insert<DexString, const DexString>(key, value, &segment);
+
+  auto key = std::string_view(storage, str.size());
+  auto value = new DexString(storage, str.length());
+  auto res = try_insert<DexString, const DexString>(key, value, &segment);
+
+  // If unsuccessful, we have wasted a bit of string storage. Oh well...
+
+  return res;
 }
 
 const DexString* RedexContext::get_string(std::string_view str) {

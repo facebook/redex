@@ -213,6 +213,79 @@ struct RedexContext {
   struct Strcmp;
   struct TruncatedStringHash;
 
+  // A thread-safe container for raw string storage
+  struct ConcurrentStringStorage {
+    static constexpr size_t n_slots = 11;
+    // A not thread-safe container, holding individually allocated buffers
+    struct Container {
+      struct Buffer {
+        const size_t allocated;
+        size_t used{0};
+        size_t remaining() const { return allocated - used; }
+        const std::unique_ptr<char[]> chars;
+        const Buffer* next;
+        Buffer(size_t size, Buffer* next)
+            : allocated(size),
+              chars(std::make_unique<char[]>(size)),
+              next(next) {}
+      };
+      // Default size for buffers, or 0 to create one perfectly sized buffer per
+      // allocation
+      const size_t default_size;
+      Buffer* buffer{nullptr};
+      explicit Container(size_t default_size) : default_size(default_size) {}
+      ~Container();
+      char* allocate(size_t length);
+    };
+    // A context for a temporarily acquired container that will be released to
+    // its owner when the context is destructed
+    struct Context {
+      ConcurrentStringStorage* owner;
+      size_t index;
+      Container* container;
+      ~Context();
+    };
+    struct Stats {
+      size_t allocated{0};
+      size_t used{0};
+      size_t containers{0};
+      size_t buffers{0};
+      size_t waited{0};
+      size_t contention{0};
+      size_t sorted{0};
+    };
+    const size_t default_buffer_size;
+    // Largest allowed individual allocation, or 0 to create arbitrarily
+    // perfectly sized buffers
+    const size_t max_allocation;
+    // How many containers can be active concurrently
+    const size_t max_containers;
+    std::atomic<size_t> created{0};
+    std::atomic<size_t> waited{0};
+    std::atomic<size_t> contention{0};
+    std::atomic<size_t> sorted{0};
+    struct Slot {
+      std::atomic<Container*> container{nullptr};
+      uint8_t padding[64 - sizeof(std::atomic<Container*>)];
+    };
+    std::array<Slot, n_slots> slots;
+    std::mutex pool_lock;
+    std::vector<std::unique_ptr<Container>> pool;
+    ConcurrentStringStorage(size_t default_buffer_size,
+                            size_t max_allocation,
+                            size_t max_containers)
+        : default_buffer_size(default_buffer_size),
+          max_allocation(max_allocation),
+          max_containers(std::max(max_containers, n_slots)) {}
+    Context get_context();
+    Stats get_stats() const;
+    ~ConcurrentStringStorage() {
+      for (auto& slot : slots) {
+        delete slot.container.load();
+      }
+    }
+  };
+
   // Hashing is expensive on large strings (long Java type names, string
   // literals), so we avoid using `std::unordered_map` directly.
   //
@@ -284,6 +357,11 @@ struct RedexContext {
 
   // DexString
   LargeStringMap<31, 127> s_string_map;
+
+  // We maintain three kinds of raw string storage
+  ConcurrentStringStorage s_small_string_storage;
+  ConcurrentStringStorage s_medium_string_storage;
+  ConcurrentStringStorage s_large_string_storage;
 
   // DexType
   ConcurrentMap<const DexString*, DexType*> s_type_map;

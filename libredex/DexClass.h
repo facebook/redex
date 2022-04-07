@@ -86,15 +86,15 @@ extern "C" bool strcmp_less(const char* str1, const char* str2);
 class DexString {
   friend struct RedexContext;
 
-  std::unique_ptr<char[]> m_storage;
-  uint32_t m_length;
-  uint32_t m_utfsize;
+  const char* m_storage;
+  const uint32_t m_length;
+  const uint32_t m_utfsize;
 
   // See UNIQUENESS above for the rationale for the private constructor pattern.
-  explicit DexString(std::unique_ptr<char[]> storage, uint32_t length)
-      : m_storage(std::move(storage)),
+  explicit DexString(const char* storage, uint32_t length)
+      : m_storage(storage),
         m_length(length),
-        m_utfsize(length_of_utf8_string(m_storage.get())) {}
+        m_utfsize(length_of_utf8_string(m_storage)) {}
 
  public:
   DexString() = delete;
@@ -122,13 +122,9 @@ class DexString {
  public:
   bool is_simple() const { return size() == m_utfsize; }
 
-  const char* c_str() const { return m_storage.get(); }
-  std::string_view str() const {
-    return std::string_view(m_storage.get(), m_length);
-  }
-  std::string str_copy() const {
-    return std::string(m_storage.get(), m_length);
-  }
+  const char* c_str() const { return m_storage; }
+  std::string_view str() const { return std::string_view(m_storage, m_length); }
+  std::string str_copy() const { return std::string(m_storage, m_length); }
 
   uint32_t get_entry_size() const {
     uint32_t len = uleb128_encoding_size(m_utfsize);
