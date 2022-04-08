@@ -99,7 +99,7 @@ class InterDexPass : public Pass {
   bool m_expect_order_list;
   bool m_sort_remaining_classes;
   std::vector<std::string> m_methods_for_canary_clinit_reference;
-  bool m_transitively_close_interdex_order{true};
+  bool m_transitively_close_interdex_order{false};
 
   size_t m_run{0}; // Which iteration of `run_pass`.
   size_t m_eval{0}; // How many `eval_pass` iterations.
