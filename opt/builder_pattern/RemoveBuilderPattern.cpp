@@ -24,6 +24,7 @@ namespace builder_pattern {
 
 constexpr size_t MAX_NUM_INLINE_ITERATION = 10;
 constexpr size_t MAX_NUM_INLINE_ITERATION_FOR_SIMPLE_BUILDERS = 4;
+constexpr size_t ESCAPING_CALLEE_SIZE_THRESHOLD = 140;
 
 namespace {
 
@@ -67,6 +68,19 @@ bool has_statics(const DexClass* cls) {
   }
 
   return !cls->get_sfields().empty();
+}
+
+bool has_large_escaping_calls(
+    const std::unordered_set<IRInstruction*>& to_inline) {
+  for (const auto* invoke : to_inline) {
+    always_assert(invoke->has_method());
+    auto callee = invoke->get_method()->as_def();
+    size_t callee_size = callee->get_code()->sum_opcode_sizes();
+    if (callee_size > ESCAPING_CALLEE_SIZE_THRESHOLD) {
+      return true;
+    }
+  }
+  return false;
 }
 
 class RemoveClasses {
@@ -325,8 +339,17 @@ class RemoveClasses {
         }
       }
 
-      auto not_inlined_insns =
-          m_transform.try_inline_calls(method, to_inline, &deleted_insns);
+      // For Simple Builders (the ones exntending j/l/Object;), if the escaping
+      // callee is too large, we give up on inlining them. Instead, we treat all
+      // `to_inline` calls as `not_inlined` and mark escaping types as excluded.
+      std::unordered_set<IRInstruction*> not_inlined_insns;
+      if (m_root != type::java_lang_Object() ||
+          !has_large_escaping_calls(to_inline)) {
+        not_inlined_insns =
+            m_transform.try_inline_calls(method, to_inline, &deleted_insns);
+      } else {
+        not_inlined_insns = to_inline;
+      }
 
       if (!not_inlined_insns.empty()) {
         auto escaped_builders =

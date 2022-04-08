@@ -417,7 +417,7 @@ std::unordered_set<IRInstruction*> BuilderAnalysis::get_all_inlinable_insns() {
 }
 
 ConstTypeHashSet BuilderAnalysis::get_escaped_types_from_invokes(
-    const std::unordered_set<const IRInstruction*>& invoke_insns) const {
+    const std::unordered_set<IRInstruction*>& invoke_insns) const {
   ConstTypeHashSet result;
 
   for (const auto* invoke : invoke_insns) {

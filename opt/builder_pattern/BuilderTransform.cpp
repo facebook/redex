@@ -41,13 +41,13 @@ BuilderTransform::BuilderTransform(
       MultiMethodInlinerMode::None));
 }
 
-std::unordered_set<const IRInstruction*> BuilderTransform::try_inline_calls(
+std::unordered_set<IRInstruction*> BuilderTransform::try_inline_calls(
     DexMethod* caller,
     const std::unordered_set<IRInstruction*>& insns,
     std::vector<IRInstruction*>* deleted_insns) {
   always_assert(caller && caller->get_code());
   m_inliner->inline_callees(caller, insns, deleted_insns);
-  std::unordered_set<const IRInstruction*> not_inlined_insns;
+  std::unordered_set<IRInstruction*> not_inlined_insns;
   // Check if everything was inlined.
   auto* code = caller->get_code();
   for (const auto& mie : InstructionIterable(code)) {

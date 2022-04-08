@@ -59,7 +59,7 @@ class BuilderAnalysis final {
   ConstTypeHashSet non_removable_types();
 
   ConstTypeHashSet get_escaped_types_from_invokes(
-      const std::unordered_set<const IRInstruction*>& insns) const;
+      const std::unordered_set<IRInstruction*>& insns) const;
 
  private:
   std::unique_ptr<impl::Analyzer> m_analyzer;
