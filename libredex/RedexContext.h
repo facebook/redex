@@ -8,6 +8,7 @@
 #pragma once
 
 #include <array>
+#include <atomic>
 #include <boost/functional/hash.hpp>
 #include <cstring>
 #include <deque>
