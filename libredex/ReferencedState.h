@@ -63,6 +63,9 @@ class ReferencedState {
     bool m_set_allowobfuscation : 1;
     bool m_unset_allowobfuscation : 1;
 
+    // For keep modifier: -keep,includedescriptorclasses
+    bool m_includedescriptorclasses : 1;
+
     bool m_no_optimizations : 1;
 
     bool m_generated : 1;
@@ -113,6 +116,8 @@ class ReferencedState {
       m_unset_allowshrinking = false;
       m_set_allowobfuscation = false;
       m_unset_allowobfuscation = false;
+
+      m_includedescriptorclasses = false;
 
       m_no_optimizations = false;
 
@@ -193,6 +198,10 @@ class ReferencedState {
       this->inner_struct.m_unset_allowobfuscation =
           this->inner_struct.m_unset_allowobfuscation |
           other.inner_struct.m_unset_allowobfuscation;
+
+      this->inner_struct.m_includedescriptorclasses =
+          this->inner_struct.m_includedescriptorclasses |
+          other.inner_struct.m_includedescriptorclasses;
 
       this->inner_struct.m_no_optimizations =
           this->inner_struct.m_no_optimizations |
@@ -437,6 +446,14 @@ class ReferencedState {
 
   void unset_allowobfuscation() {
     inner_struct.m_unset_allowobfuscation = true;
+  }
+
+  bool includedescriptorclasses() const {
+    return inner_struct.m_includedescriptorclasses;
+  }
+
+  void set_includedescriptorclasses() {
+    inner_struct.m_includedescriptorclasses = true;
   }
 
   KeepReasons& ensure_keep_reasons() const {
