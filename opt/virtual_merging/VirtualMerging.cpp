@@ -98,13 +98,15 @@ constexpr size_t kAppear100Buckets = 10;
 VirtualMerging::VirtualMerging(DexStoresVector& stores,
                                const inliner::InlinerConfig& inliner_config,
                                size_t max_overriding_method_instructions,
-                               const api::AndroidSDK* min_sdk_api)
+                               const api::AndroidSDK* min_sdk_api,
+                               PerfConfig perf_config)
     : m_scope(build_class_scope(stores)),
       m_xstores(stores),
       m_xdexes(stores),
       m_type_system(m_scope),
       m_max_overriding_method_instructions(max_overriding_method_instructions),
-      m_inliner_config(inliner_config) {
+      m_inliner_config(inliner_config),
+      m_perf_config(perf_config) {
   auto concurrent_resolver = [&](DexMethodRef* method, MethodSearch search) {
     return resolve_method(method, search, m_concurrent_resolved_refs);
   };
@@ -219,6 +221,7 @@ struct LocalStats {
   size_t cross_store_refs{0};
   size_t cross_dex_refs{0};
   size_t inconcrete_overridden_methods{0};
+  size_t perf_skipped{0};
 };
 
 struct SimpleOrdering {
@@ -308,8 +311,11 @@ class MergePairsBuilder {
   using PairSeq = std::vector<std::pair<const DexMethod*, const DexMethod*>>;
 
   MergePairsBuilder(const VirtualScope* virtual_scope,
-                    const OrderingProvider& ordering_provider)
-      : virtual_scope(virtual_scope), m_ordering_provider(ordering_provider) {}
+                    const OrderingProvider& ordering_provider,
+                    const VirtualMerging::PerfConfig& perf_config)
+      : virtual_scope(virtual_scope),
+        m_ordering_provider(ordering_provider),
+        m_perf_config(perf_config) {}
 
   boost::optional<std::pair<LocalStats, PairSeq>> build(
       const std::unordered_set<const DexMethod*>& mergeable_methods,
@@ -440,6 +446,7 @@ class MergePairsBuilder {
                        std::vector<std::pair<const DexMethod*, double>>>
         override_map;
 
+    size_t perf_skipped{0};
     self_recursive_fn(
         [&](auto self, const DexType* t) {
           if (visited.count(t)) {
@@ -517,59 +524,112 @@ class MergePairsBuilder {
           }
           }
 
-          {
-            // If there are overrides for this type's implementation, order the
-            // overrides by their weight (and otherwise retain the original
-            // order), then insert the overrides into the global merge
-            // structure.
+          const bool should_keep = [&]() {
+            if (!profiles.has_stats()) {
+              return false;
+            }
+            auto opt_stat = profiles.get_method_stat("ColdStart", t_method);
+            if (!opt_stat) {
+              return false;
+            }
+            if (opt_stat->appear_percent < m_perf_config.appear100_threshold ||
+                opt_stat->call_count < m_perf_config.call_count_threshold) {
+              return false;
+            }
+            return true;
+          }();
+
+          if (should_keep) {
             auto it = override_map.find(t_method);
             if (it != override_map.end()) {
               auto& t_overrides = it->second;
               redex_assert(!t_overrides.empty());
-              // Use stable sort to retain order if other ordering is
-              // unavailable. As insertion is pushing to front, sort low to
-              // high.
-              std::stable_sort(t_overrides.begin(), t_overrides.end(),
-                               [](const auto& lhs, const auto& rhs) {
-                                 return lhs.second < rhs.second;
-                               });
-              for (const auto& p : t_overrides) {
-                auto assert_it = mergeable_pairs_map.find(p.first);
-                redex_assert(assert_it != mergeable_pairs_map.end() &&
-                             assert_it->second == t_method);
-                mergeable_pairs.emplace_back(t_method, p.first);
-                switch (order_mix) {
-                case OrderMix::kSum:
-                  order_value += p.second;
-                  break;
-                case OrderMix::kMax:
-                  order_value = std::max(order_value, p.second);
-                  break;
-                }
-              }
+              perf_skipped += t_overrides.size();
+
               // Clear the vector. Leave it empty for the assert above
               // (to ensure things are not handled twice).
               t_overrides.clear();
               t_overrides.shrink_to_fit();
             }
-          }
+            auto overridden_method_it = mergeable_pairs_map.find(t_method);
+            if (overridden_method_it != mergeable_pairs_map.end()) {
+              perf_skipped++;
+            }
+          } else {
+            {
+              // If there are overrides for this type's implementation, order
+              // the overrides by their weight (and otherwise retain the
+              // original order), then insert the overrides into the global
+              // merge structure.
+              auto it = override_map.find(t_method);
+              if (it != override_map.end()) {
+                auto& t_overrides = it->second;
+                redex_assert(!t_overrides.empty());
+                // Use stable sort to retain order if other ordering is
+                // unavailable. As insertion is pushing to front, sort low to
+                // high.
+                std::stable_sort(t_overrides.begin(), t_overrides.end(),
+                                 [](const auto& lhs, const auto& rhs) {
+                                   return lhs.second < rhs.second;
+                                 });
+                for (const auto& p : t_overrides) {
+                  auto assert_it = mergeable_pairs_map.find(p.first);
+                  redex_assert(assert_it != mergeable_pairs_map.end());
+                  if (perf_skipped == 0) {
+                    redex_assert(assert_it->second == t_method);
+                  } else if (assert_it->second != t_method) {
+                    // When skipped for perf, we should find the elements as
+                    // "descendants."
+                    auto* cur_m = assert_it->second;
+                    while (cur_m != nullptr && cur_m != t_method) {
+                      auto cur_it = mergeable_pairs_map.find(cur_m);
+                      cur_m = (cur_it != mergeable_pairs_map.end())
+                                  ? cur_it->second
+                                  : nullptr;
+                    }
+                    redex_assert(cur_m == t_method);
+                  }
 
-          auto overridden_method_it = mergeable_pairs_map.find(t_method);
-          if (overridden_method_it == mergeable_pairs_map.end()) {
-            return;
+                  mergeable_pairs.emplace_back(t_method, p.first);
+                  switch (order_mix) {
+                  case OrderMix::kSum:
+                    order_value += p.second;
+                    break;
+                  case OrderMix::kMax:
+                    order_value = std::max(order_value, p.second);
+                    break;
+                  }
+                }
+                // Clear the vector. Leave it empty for the assert above
+                // (to ensure things are not handled twice).
+                t_overrides.clear();
+                t_overrides.shrink_to_fit();
+              }
+            }
+
+            auto overridden_method_it = mergeable_pairs_map.find(t_method);
+            if (overridden_method_it == mergeable_pairs_map.end()) {
+              return;
+            }
+
+            override_map[overridden_method_it->second].emplace_back(
+                t_method, order_value);
           }
-          override_map[overridden_method_it->second].emplace_back(t_method,
-                                                                  order_value);
         },
         virtual_scope->type);
     for (const auto& p : override_map) {
       redex_assert(p.second.empty());
     }
-    always_assert(mergeable_pairs_map.size() == mergeable_pairs.size());
+    always_assert_log(mergeable_pairs_map.size() ==
+                          mergeable_pairs.size() + perf_skipped,
+                      "%zu != %zu = %zu + %zu", mergeable_pairs_map.size(),
+                      mergeable_pairs.size() + perf_skipped,
+                      mergeable_pairs.size(), perf_skipped);
+    stats.perf_skipped = perf_skipped;
     always_assert(stats.overriding_methods ==
                   mergeable_pairs.size() + stats.cross_store_refs +
                       stats.cross_dex_refs +
-                      stats.inconcrete_overridden_methods);
+                      stats.inconcrete_overridden_methods + stats.perf_skipped);
     return mergeable_pairs;
   }
 
@@ -579,6 +639,7 @@ class MergePairsBuilder {
   std::unordered_map<const DexType*, DexMethod*> types_to_methods;
   std::unordered_map<const DexType*, std::vector<DexType*>> subtypes;
   LocalStats stats;
+  const VirtualMerging::PerfConfig& m_perf_config;
 };
 
 } // namespace
@@ -602,7 +663,7 @@ VirtualMerging::compute_mergeable_pairs_by_virtual_scopes(
   SimpleOrderingProvider ordering_provider{profiles};
   walk::parallel::virtual_scopes(
       virtual_scopes, [&](const VirtualScope* virtual_scope) {
-        MergePairsBuilder mpb(virtual_scope, ordering_provider);
+        MergePairsBuilder mpb(virtual_scope, ordering_provider, m_perf_config);
         auto res = mpb.build(m_mergeable_scope_methods.at(virtual_scope),
                              m_xstores, m_xdexes, profiles, strategy);
         if (!res) {
@@ -625,6 +686,7 @@ VirtualMerging::compute_mergeable_pairs_by_virtual_scopes(
     stats.cross_dex_refs += p.second.cross_dex_refs;
     stats.inconcrete_overridden_methods +=
         p.second.inconcrete_overridden_methods;
+    stats.perf_skipped += p.second.perf_skipped;
   }
 
   always_assert(overriding_methods <= stats.mergeable_virtual_methods);
@@ -641,7 +703,7 @@ VirtualMerging::compute_mergeable_pairs_by_virtual_scopes(
   always_assert(stats.mergeable_pairs ==
                 stats.mergeable_virtual_methods - stats.annotated_methods -
                     stats.cross_store_refs - stats.cross_dex_refs -
-                    stats.inconcrete_overridden_methods);
+                    stats.inconcrete_overridden_methods - stats.perf_skipped);
 
   return out;
 }
@@ -1386,6 +1448,11 @@ void VirtualMergingPass::bind_config() {
   std::string ab_insertion_strategy;
   bind("ab_insertion_strategy", "jump-to", ab_insertion_strategy);
 
+  bind("perf_appear100_threshold", m_perf_config.appear100_threshold,
+       m_perf_config.appear100_threshold);
+  bind("perf_call_count_threshold", m_perf_config.call_count_threshold,
+       m_perf_config.call_count_threshold);
+
   after_configuration([this, strategy, ab_strategy, insertion_strategy,
                        ab_insertion_strategy] {
     always_assert(m_max_overriding_method_instructions >= 0);
@@ -1452,7 +1519,8 @@ void VirtualMergingPass::run_pass(DexStoresVector& stores,
   auto ab_experiment_context =
       ab_test::ABExperimentContext::create("virtual_merging");
   VirtualMerging vm(stores, inliner_config,
-                    m_max_overriding_method_instructions, min_sdk_api);
+                    m_max_overriding_method_instructions, min_sdk_api,
+                    m_perf_config);
   vm.run(conf.get_method_profiles(),
          m_strategy,
          m_insertion_strategy,
@@ -1489,6 +1557,8 @@ void VirtualMergingPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_REMOVED_VIRTUAL_METHODS,
                   stats.removed_virtual_methods);
   mgr.incr_metric(METRIC_EXPERIMENT_METHODS, stats.experiment_methods);
+
+  mgr.incr_metric("num_mergeable.perf_skipped", stats.perf_skipped);
 }
 
 static VirtualMergingPass s_pass;

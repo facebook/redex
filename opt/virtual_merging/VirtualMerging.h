@@ -41,6 +41,7 @@ struct VirtualMergingStats {
   size_t caller_size_removed_methods{0};
   size_t removed_virtual_methods{0};
   size_t experiment_methods{0};
+  size_t perf_skipped{0};
 
   VirtualMergingStats& operator+=(const VirtualMergingStats& rhs) {
     invoke_super_methods += rhs.invoke_super_methods;
@@ -54,6 +55,7 @@ struct VirtualMergingStats {
     unavailable_overridden_methods += rhs.unavailable_overridden_methods;
     inconcrete_overridden_methods += rhs.inconcrete_overridden_methods;
     abstract_overridden_methods += rhs.abstract_overridden_methods;
+    perf_skipped += rhs.perf_skipped;
     mergeable_scope_methods += rhs.mergeable_scope_methods;
     mergeable_pairs += rhs.mergeable_pairs;
     virtual_scopes_with_mergeable_pairs +=
@@ -89,7 +91,8 @@ struct VirtualMergingStats {
            huge_methods == rhs.huge_methods &&
            caller_size_removed_methods == rhs.caller_size_removed_methods &&
            removed_virtual_methods == rhs.removed_virtual_methods &&
-           experiment_methods == rhs.experiment_methods;
+           experiment_methods == rhs.experiment_methods &&
+           perf_skipped == rhs.perf_skipped;
   }
 };
 
@@ -106,10 +109,21 @@ class VirtualMerging {
     kFallthrough,
   };
 
+  struct PerfConfig {
+    float appear100_threshold;
+    float call_count_threshold;
+
+    PerfConfig()
+        : appear100_threshold(101.0), call_count_threshold(0) {} // Default: off
+    PerfConfig(float a, float c)
+        : appear100_threshold(a), call_count_threshold(c) {}
+  };
+
   VirtualMerging(DexStoresVector&,
                  const inliner::InlinerConfig&,
                  size_t,
-                 const api::AndroidSDK* min_sdk_api = nullptr);
+                 const api::AndroidSDK* min_sdk_api = nullptr,
+                 PerfConfig perf_config = PerfConfig());
   ~VirtualMerging();
   void run(const method_profiles::MethodProfiles&,
            Strategy strategy,
@@ -159,6 +173,7 @@ class VirtualMerging {
   std::unordered_map<DexClass*, std::vector<const DexMethod*>>
       m_virtual_methods_to_remove;
   std::unordered_map<DexMethod*, DexMethod*> m_virtual_methods_to_remap;
+  PerfConfig m_perf_config;
 
   void remove_methods();
 
@@ -182,4 +197,5 @@ class VirtualMergingPass : public Pass {
       VirtualMerging::Strategy::kLexicographical};
   VirtualMerging::InsertionStrategy m_ab_insertion_strategy{
       VirtualMerging::InsertionStrategy::kJumpTo};
+  VirtualMerging::PerfConfig m_perf_config;
 };

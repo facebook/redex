@@ -508,3 +508,55 @@ TEST_F(VirtualMergingTest, MergedFooNoProfilesFallthrough) {
       }));
   EXPECT_TRUE(test_if_direction(a_foo, OPCODE_IF_EQZ));
 }
+
+TEST_F(VirtualMergingTest, PerfConfig) {
+  auto scope = build_class_scope(stores);
+
+  api::LevelChecker::init(19, scope);
+  inliner::InlinerConfig inliner_config;
+  inliner_config.populate(scope);
+
+  std::unordered_map<const DexMethodRef*, method_profiles::Stats> profile_data;
+  auto make_call_count_stat = [](double appear100, double call_count) {
+    method_profiles::Stats stats{};
+    stats.appear_percent = appear100;
+    stats.call_count = call_count;
+    return stats;
+  };
+
+  //                          LA;
+  //        LA1;              LA2;               LA3;
+  // LA11; LA12; LA13;  LA21; LA22; LA23;  LA31; LA32; LA33;
+  //
+  // Block LA12 & LA2.
+
+  profile_data.emplace(get_method(12, "foo"), make_call_count_stat(100, 100));
+  profile_data.emplace(get_method(2, "foo"), make_call_count_stat(95, 100));
+  profile_data.emplace(get_method(1, "foo"), make_call_count_stat(89, 100));
+
+  VirtualMerging::PerfConfig pc{90, 1};
+
+  VirtualMerging vm{stores, inliner_config, 100, nullptr, pc};
+  vm.run(method_profiles::MethodProfiles::initialize(
+             method_profiles::COLD_START, std::move(profile_data)),
+         VirtualMerging::Strategy::kProfileCallCount,
+         VirtualMerging::InsertionStrategy::kJumpTo);
+
+  EXPECT_NE(get_method(0, "foo"), nullptr);
+
+  EXPECT_EQ(get_method(1, "foo"), nullptr);
+  EXPECT_NE(get_method(2, "foo"), nullptr);
+  EXPECT_EQ(get_method(3, "foo"), nullptr);
+
+  EXPECT_EQ(get_method(11, "foo"), nullptr);
+  EXPECT_NE(get_method(12, "foo"), nullptr);
+  EXPECT_EQ(get_method(13, "foo"), nullptr);
+
+  EXPECT_NE(get_method(21, "foo"), nullptr);
+  EXPECT_NE(get_method(22, "foo"), nullptr);
+  EXPECT_NE(get_method(23, "foo"), nullptr);
+
+  EXPECT_EQ(get_method(31, "foo"), nullptr);
+  EXPECT_EQ(get_method(32, "foo"), nullptr);
+  EXPECT_EQ(get_method(33, "foo"), nullptr);
+}
