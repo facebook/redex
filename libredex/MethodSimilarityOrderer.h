@@ -39,13 +39,14 @@ class MethodSimilarityOrderer {
 
   using StableHash = uint64_t;
 
-  // This is a synthetic 64 bit id, representing a method's index in the
-  // original ordering.
-  using MethodId = uint64_t;
+  // This is a synthetic 16 bit id, representing a method's index in the
+  // original ordering. There should always be less than 65536 code items
+  // to be ordered in a DEX.
+  using MethodId = uint16_t;
 
   using ScoreValue = int32_t;
 
-  using BufferId = uint32_t;
+  using BufferId = uint16_t;
 
  private:
   // Mirrors the order in each the methods have been added to the orderer
@@ -62,7 +63,7 @@ class MethodSimilarityOrderer {
   std::unordered_map<MethodId, BufferId> m_method_id_to_buffer_id;
 
   // Vector to contain similarity score among all Methods for the given
-  // buffer indexed Method. ThreadPool accesses this vector concurrently.
+  // buffer indexed Method. WorkQueue accesses this vector concurrently.
   std::vector<
       std::map<ScoreValue, boost::dynamic_bitset<>, std::greater<ScoreValue>>>
       m_score_map;

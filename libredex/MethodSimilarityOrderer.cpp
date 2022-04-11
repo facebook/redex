@@ -147,10 +147,13 @@ void MethodSimilarityOrderer::compute_score() {
     method_ids.push_back(method_id);
   }
 
-  std::vector<uint32_t> indices(method_ids.size());
+  // Maximum number of code items can be 65536.
+  redex_assert(method_ids.size() <= (1 << 16));
+
+  std::vector<MethodId> indices(method_ids.size());
   std::iota(indices.begin(), indices.end(), 0);
-  workqueue_run<uint32_t>(
-      [&](uint32_t i) {
+  workqueue_run<MethodId>(
+      [&](MethodId i) {
         MethodId method_i = method_ids[i];
         const auto& code_hash_ids_i = m_method_id_to_code_hash_ids[method_i];
         std::unordered_map<ScoreValue, boost::dynamic_bitset<>> score_map;
@@ -190,7 +193,11 @@ void MethodSimilarityOrderer::compute_score() {
 
 void MethodSimilarityOrderer::insert(DexMethod* method) {
   always_assert(m_method_to_id.count(method) == 0);
-  uint32_t index = m_id_to_method.size();
+  // While the number of methods can reach 65536 (2^16), at
+  // this stage not all methods have been added, so we assert that
+  // the number can fit on 16 bits and safely be assigned to a MethodId index.
+  redex_assert(m_id_to_method.size() < (1 << 16));
+  MethodId index = m_id_to_method.size();
   m_id_to_method.emplace(index, method);
   m_method_to_id.emplace(method, index);
 
