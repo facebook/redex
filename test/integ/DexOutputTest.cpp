@@ -67,6 +67,7 @@ TEST_F(DexOutputTest, testSimilarityOrderer) {
       "LDexOutputTest$NonPerfSensitiveClass;.<init>:(LDexOutputTest;)V",
       "LDexOutputTest$PerfSensitiveClass;.<init>:(LDexOutputTest;)V",
       "LDexOutputTest$SecondPerfSensitiveClass;.<init>:(LDexOutputTest;)V",
+      "LDexOutputTest;.<init>:()V",
       "LDexOutputTest$NonPerfSensitiveClass;.EjustReturnFive:()I",
       "LDexOutputTest$PerfSensitiveClass;.EjustReturnFive:()I",
       "LDexOutputTest$SecondPerfSensitiveClass;.EjustReturnFive:()I",
@@ -78,7 +79,6 @@ TEST_F(DexOutputTest, testSimilarityOrderer) {
       "LDexOutputTest;.CsomeLogic:(I)I",
       "LDexOutputTest;.FsomeLogic:(I)I",
       "LDexOutputTest;.HsomeLogic:(I)I",
-      "LDexOutputTest;.<init>:()V",
       "LDexOutputTest;.BjustCallSixpublic:()I",
       "LDexOutputTest;.GjustCallSixpublic:()I",
       "LDexOutputTest;.DgetSixpublic:()I"};
@@ -127,6 +127,7 @@ TEST_F(DexOutputTest, testPerfSensitive) {
       "LDexOutputTest$SecondPerfSensitiveClass;.EjustReturnFive:()I",
       "LDexOutputTest$SecondPerfSensitiveClass;.FsomeLogic:(I)I",
       "LDexOutputTest$NonPerfSensitiveClass;.<init>:(LDexOutputTest;)V",
+      "LDexOutputTest;.<init>:()V",
       "LDexOutputTest$NonPerfSensitiveClass;.EjustReturnFive:()I",
       "LDexOutputTest;.AjustReturnFive:()I",
       "LDexOutputTest;.EjustReturnFive:()I",
@@ -134,7 +135,6 @@ TEST_F(DexOutputTest, testPerfSensitive) {
       "LDexOutputTest;.CsomeLogic:(I)I",
       "LDexOutputTest;.FsomeLogic:(I)I",
       "LDexOutputTest;.HsomeLogic:(I)I",
-      "LDexOutputTest;.<init>:()V",
       "LDexOutputTest;.BjustCallSixpublic:()I",
       "LDexOutputTest;.GjustCallSixpublic:()I",
       "LDexOutputTest;.DgetSixpublic:()I"};
