@@ -57,11 +57,11 @@ std::ostream& operator<<(std::ostream& out,
   }
   case reflection::STRING: {
     if (x.dex_string != nullptr) {
-      const auto str = x.dex_string->str();
+      auto str = x.dex_string->str();
       if (str.empty()) {
         out << "\"\"";
       } else {
-        out << std::quoted(str);
+        out << std::quoted(str_copy(str));
       }
     }
     break;
