@@ -1048,7 +1048,6 @@ void DexOutput::generate_code_items(const std::vector<SortMode>& mode) {
             "sorting <clinit> sections before all other bytecode");
       m_gtypes->sort_dexmethod_emitlist_clinit_order(lmeth);
       break;
-
     case SortMode::CLASS_STRINGS:
       TRACE(CUSTOMSORT, 2,
             "Unsupport bytecode sorting method SortMode::CLASS_STRINGS");
@@ -3025,8 +3024,7 @@ dex_stats_t write_classes_to_dex(
     IODIMetadata* iodi_metadata,
     const std::string& dex_magic,
     PostLowering* post_lowering,
-    int min_sdk,
-    bool disable_method_similarity_order) {
+    int min_sdk) {
   const JsonWrapper& json_cfg = conf.get_json_config();
   bool force_single_dex = json_cfg.get("force_single_dex", false);
   if (force_single_dex) {
@@ -3053,6 +3051,8 @@ dex_stats_t write_classes_to_dex(
       code_sort_mode.push_back(make_sort_bytecode(val.asString()));
     }
   }
+  auto disable_method_similarity_order =
+      json_cfg.get("disable_method_similarity_order", false);
   if (disable_method_similarity_order) {
     TRACE(OPUT, 3, "[write_classes_to_dex] disable_method_similarity_order");
     code_sort_mode.erase(

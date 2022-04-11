@@ -144,8 +144,7 @@ dex_stats_t write_classes_to_dex(
     IODIMetadata* iodi_metadata,
     const std::string& dex_magic,
     PostLowering* post_lowering = nullptr,
-    int min_sdk = 0,
-    bool disable_method_similarity_order = false);
+    int min_sdk = 0);
 
 using cmp_dstring = bool (*)(const DexString*, const DexString*);
 using cmp_dtype = bool (*)(const DexType*, const DexType*);
