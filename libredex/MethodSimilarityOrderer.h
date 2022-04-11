@@ -46,8 +46,6 @@ class MethodSimilarityOrderer {
 
   using ScoreValue = int32_t;
 
-  using BufferId = uint16_t;
-
  private:
   // Mirrors the order in each the methods have been added to the orderer
   std::map<MethodId, DexMethod*> m_id_to_method;
@@ -58,9 +56,6 @@ class MethodSimilarityOrderer {
   // Mapping from each method to a vector of hash ids
   std::unordered_map<MethodId, std::vector<CodeHashId>>
       m_method_id_to_code_hash_ids;
-
-  // Mapping from Method Id to buffer index to m_score_map.
-  std::unordered_map<MethodId, BufferId> m_method_id_to_buffer_id;
 
   // Vector to contain similarity score among all Methods for the given
   // buffer indexed Method. WorkQueue accesses this vector concurrently.
