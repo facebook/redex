@@ -629,6 +629,36 @@ void maybe_unset_dynamic_analysis(DexStoresVector& stores,
   }
 }
 
+void set_no_opt_flag_on_analysis_methods(
+    bool value,
+    const std::string& analysis_class_name,
+    const std::vector<std::string>& analysis_method_names) {
+
+  // Set the 'no_optimizations' flag for analysis methods (onMethodBeginGated,
+  // onMethodExit). Primarily so we do not outline from them.
+
+  auto analysis_type = DexType::get_type(analysis_class_name);
+  if (analysis_type == nullptr) {
+    return;
+  }
+
+  auto analysis_cls = type_class(analysis_type);
+  if (analysis_cls == nullptr) {
+    return;
+  }
+
+  for (auto* m : analysis_cls->get_all_methods()) {
+    if (std::find(analysis_method_names.begin(), analysis_method_names.end(),
+                  m->get_name()->str()) != analysis_method_names.end()) {
+      if (value) {
+        m->rstate.set_no_optimizations();
+      } else {
+        m->rstate.reset_no_optimizations();
+      }
+    }
+  }
+}
+
 } // namespace
 
 void InstrumentPass::eval_pass(DexStoresVector& stores,
@@ -641,6 +671,9 @@ void InstrumentPass::eval_pass(DexStoresVector& stores,
   }
 
   // Note: Could do the inverse and protect necessary members here.
+
+  set_no_opt_flag_on_analysis_methods(true, m_options.analysis_class_name,
+                                      m_options.analysis_method_names);
 }
 
 // Check for inclusion in allow/block lists of methods/classes. It supports:
@@ -980,6 +1013,10 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
 
   auto scope = build_class_scope(stores);
 
+  // Allow optimizations in analysis methods while the Shrinker runs
+  set_no_opt_flag_on_analysis_methods(false, m_options.analysis_class_name,
+                                      m_options.analysis_method_names);
+
   // Simple config.
   shrinker::ShrinkerConfig shrinker_config;
   shrinker_config.run_const_prop = true;
@@ -1001,6 +1038,12 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
 
     shrinker.shrink_method(m);
   });
+
+  // Probably shouldn't need to do this, as the outliner shouldn't run after
+  // InstrumentPass, but let's be defensive, in case pass order changes in
+  // future.
+  set_no_opt_flag_on_analysis_methods(true, m_options.analysis_class_name,
+                                      m_options.analysis_method_names);
 }
 
 static InstrumentPass s_pass;

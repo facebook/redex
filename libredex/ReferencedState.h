@@ -374,6 +374,7 @@ class ReferencedState {
 
   bool no_optimizations() const { return inner_struct.m_no_optimizations; }
   void set_no_optimizations() { inner_struct.m_no_optimizations = true; }
+  void reset_no_optimizations() { inner_struct.m_no_optimizations = false; }
 
   // Methods and classes marked as "generated" tend to not have stable names,
   // and don't properly participate in coldstart tracking.
