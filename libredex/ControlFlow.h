@@ -1429,6 +1429,18 @@ class InstructionIteratorImpl {
            m_it == ir_list::InstructionIteratorImpl<is_const>();
   }
 
+  // \returns true if current iterator is at the end of current block.
+  bool is_end_in_block() const {
+    return m_it.unwrap() == m_block->second->m_entries.end();
+  }
+
+  // Move the current iterator and this move must be in the same block.
+  InstructionIteratorImpl<is_const>& move_next_in_block() {
+    always_assert(!is_end_in_block());
+    ++m_it;
+    return *this;
+  }
+
   Iterator unwrap() const { return m_it.unwrap(); }
 
   Block* block() const {
