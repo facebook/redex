@@ -185,7 +185,8 @@ void PassImpl::optimize(
     const ImmutableAttributeAnalyzerState* immut_analyzer_state) {
   m_transform_stats =
       walk::parallel::methods<Transform::Stats>(scope, [&](DexMethod* method) {
-        if (method->get_code() == nullptr) {
+        if (method->get_code() == nullptr ||
+            method->rstate.no_optimizations()) {
           return Transform::Stats();
         }
         auto& code = *method->get_code();
