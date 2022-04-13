@@ -119,6 +119,11 @@ RootAndDynamic MultipleCalleeBaseStrategy::get_roots() const {
       emplaced_methods.emplace(method);
       return;
     }
+    // For methods marked with DoNotInline, we also add to dynamic methods set
+    // to avoid propagating return value.
+    if (method->rstate.dont_inline()) {
+      dynamic_methods.emplace(method);
+    }
     if (!root(method) && !(method->is_virtual() &&
                            is_interface(type_class(method->get_class())) &&
                            !can_rename(method))) {
