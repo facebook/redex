@@ -220,12 +220,23 @@ void TypeRefUpdater::update_methods_fields(const Scope& scope) {
   ConcurrentSet<DexMethodRef*> methods;
   ConcurrentSet<DexFieldRef*> fields;
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
-    for (auto& mie : InstructionIterable(code)) {
-      auto insn = mie.insn;
-      if (insn->has_field()) {
-        fields.insert(insn->get_field());
-      } else if (insn->has_method()) {
-        methods.insert(insn->get_method());
+    if (code.editable_cfg_built()) {
+      for (auto& mie : InstructionIterable(code.cfg())) {
+        auto insn = mie.insn;
+        if (insn->has_field()) {
+          fields.insert(insn->get_field());
+        } else if (insn->has_method()) {
+          methods.insert(insn->get_method());
+        }
+      }
+    } else {
+      for (auto& mie : InstructionIterable(code)) {
+        auto insn = mie.insn;
+        if (insn->has_field()) {
+          fields.insert(insn->get_field());
+        } else if (insn->has_method()) {
+          methods.insert(insn->get_method());
+        }
       }
     }
   });
