@@ -50,9 +50,8 @@
 
 #include "DexPosition.h"
 #include "Lazy.h"
-#include "Liveness.h"
+#include "LiveRange.h"
 #include "PassManager.h"
-#include "ReachingDefinitions.h"
 #include "RedexContext.h"
 #include "Show.h"
 #include "StlUtil.h"
@@ -305,6 +304,14 @@ class DedupBlocksImpl {
   const Config* m_config;
   Stats& m_stats;
 
+  struct LiveRanges {
+    live_range::UseDefChains use_def_chains;
+    explicit LiveRanges(cfg::ControlFlowGraph& cfg) {
+      live_range::MoveAwareChains chains(cfg);
+      use_def_chains = chains.get_use_def_chains();
+    }
+  };
+
   // Find blocks with the same exact code
   Duplicates collect_duplicates(
       bool is_static,
@@ -334,22 +341,16 @@ class DedupBlocksImpl {
       }
     }
 
-    Lazy<reaching_defs::MoveAwareFixpointIterator> reaching_defs_fixpoint_iter(
-        [&]() {
-          auto res =
-              std::make_unique<reaching_defs::MoveAwareFixpointIterator>(cfg);
-          res->run({});
-          return res;
-        });
+    Lazy<LiveRanges> live_ranges(
+        [&]() { return std::make_unique<LiveRanges>(cfg); });
     Lazy<type_inference::TypeInference> type_inference([&]() {
       auto res = std::make_unique<type_inference::TypeInference>(cfg);
       res->run(is_static, declaring_type, args);
       return res;
     });
     remove_if(duplicates, [&](auto& blocks) {
-      return is_singleton_or_inconsistent(blocks, reaching_defs_fixpoint_iter,
-                                          liveness_fixpoint_iter,
-                                          type_inference);
+      return is_singleton_or_inconsistent(
+          blocks, live_ranges, liveness_fixpoint_iter, type_inference);
     });
     return duplicates;
   }
@@ -866,12 +867,10 @@ class DedupBlocksImpl {
   // to an object that didn't come from a unique instruction.
   static boost::optional<std::vector<IRInstruction*>>
   get_init_receiver_instructions_defined_outside_of_block(
-      cfg::Block* block,
-      Lazy<reaching_defs::MoveAwareFixpointIterator>& fixpoint_iter) {
+      cfg::Block* block, Lazy<LiveRanges>& live_ranges) {
     std::vector<IRInstruction*> res;
     boost::optional<reaching_defs::Environment> defs_in;
     auto iterable = InstructionIterable(block);
-    auto defs_in_it = iterable.begin();
     std::unordered_set<IRInstruction*> block_insns;
     for (auto it = iterable.begin(); it != iterable.end(); it++) {
       auto insn = it->insn;
@@ -879,25 +878,15 @@ class DedupBlocksImpl {
           method::is_init(insn->get_method())) {
         TRACE(DEDUP_BLOCKS, 5, "[dedup blocks] found init invocation: %s",
               SHOW(insn));
-        if (!defs_in) {
-          defs_in = fixpoint_iter->get_entry_state_at(block);
-        }
-        for (; defs_in_it != it; defs_in_it++) {
-          fixpoint_iter->analyze_instruction(defs_in_it->insn, &*defs_in);
-        }
-        auto defs = defs_in->get(insn->src(0));
-        if (defs.is_top()) {
+        auto& defs = live_ranges->use_def_chains[live_range::Use{insn, 0}];
+        always_assert(defs.size() > 0);
+        if (defs.size() > 1) {
           // should never happen, but we are not going to fight that here
-          TRACE(DEDUP_BLOCKS, 5, "[dedup blocks] is_top");
+          TRACE(DEDUP_BLOCKS, 5, "[dedup blocks] defs.size() = %zu",
+                defs.size());
           return boost::none;
         }
-        if (defs.elements().size() > 1) {
-          // should never happen, but we are not going to fight that here
-          TRACE(DEDUP_BLOCKS, 5, "[dedup blocks] defs.elements().size() = %zu",
-                defs.elements().size());
-          return boost::none;
-        }
-        auto def = *defs.elements().begin();
+        auto def = *defs.begin();
         auto def_opcode = def->opcode();
         always_assert(opcode::is_new_instance(def_opcode) ||
                       opcode::is_a_load_param(def_opcode));
@@ -960,8 +949,7 @@ class DedupBlocksImpl {
 
   static bool is_singleton_or_inconsistent(
       const BlockSet& blocks,
-      Lazy<reaching_defs::MoveAwareFixpointIterator>&
-          reaching_defs_fixpoint_iter,
+      Lazy<LiveRanges>& live_ranges,
       LivenessFixpointIterator& liveness_fixpoint_iter,
       Lazy<type_inference::TypeInference>& type_inference) {
     if (blocks.size() <= 1) {
@@ -974,8 +962,8 @@ class DedupBlocksImpl {
     boost::optional<std::vector<IRInstruction*>> insns;
     for (cfg::Block* block : blocks) {
       auto other_insns =
-          get_init_receiver_instructions_defined_outside_of_block(
-              block, reaching_defs_fixpoint_iter);
+          get_init_receiver_instructions_defined_outside_of_block(block,
+                                                                  live_ranges);
       if (!other_insns) {
         return true;
       } else if (!insns) {
