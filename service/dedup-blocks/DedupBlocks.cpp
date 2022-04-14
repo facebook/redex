@@ -305,9 +305,11 @@ class DedupBlocksImpl {
   Stats& m_stats;
 
   struct LiveRanges {
+    live_range::DefUseChains def_use_chains;
     live_range::UseDefChains use_def_chains;
     explicit LiveRanges(cfg::ControlFlowGraph& cfg) {
       live_range::MoveAwareChains chains(cfg);
+      def_use_chains = chains.get_def_use_chains();
       use_def_chains = chains.get_use_def_chains();
     }
   };
@@ -323,8 +325,11 @@ class DedupBlocksImpl {
     const auto& blocks = cfg.blocks();
     Duplicates duplicates;
 
+    Lazy<LiveRanges> live_ranges(
+        [&]() { return std::make_unique<LiveRanges>(cfg); });
+
     for (cfg::Block* block : blocks) {
-      if (is_eligible(block, cfg)) {
+      if (is_eligible(block, cfg, live_ranges)) {
         // Find a group that matches this one. The key equality function of this
         // map is actually a check that they are duplicates, not that they're
         // the same block.
@@ -341,8 +346,6 @@ class DedupBlocksImpl {
       }
     }
 
-    Lazy<LiveRanges> live_ranges(
-        [&]() { return std::make_unique<LiveRanges>(cfg); });
     Lazy<type_inference::TypeInference> type_inference([&]() {
       auto res = std::make_unique<type_inference::TypeInference>(cfg);
       res->run(is_static, declaring_type, args);
@@ -774,14 +777,17 @@ class DedupBlocksImpl {
     }
   }
 
-  bool is_eligible(cfg::Block* block, cfg::ControlFlowGraph& cfg) {
+  bool is_eligible(cfg::Block* block,
+                   cfg::ControlFlowGraph& cfg,
+                   Lazy<LiveRanges>& live_ranges) {
     // We can't split up move-result(-pseudo) instruction pairs
     if (begins_with_move_result(block)) {
       return false;
     }
 
-    // For debugability, we don't want to dedup blocks that end with a throw
-    if (!m_config->dedup_throws && ends_with_throw(block)) {
+    // For debugability, we don't want to dedup blocks that end with a throw,
+    // except for a few benign cases
+    if (is_ineligible_because_of_throw(block, live_ranges)) {
       return false;
     }
 
@@ -819,13 +825,53 @@ class DedupBlocksImpl {
     return opcode::is_move_result_any(first_op);
   }
 
-  static bool ends_with_throw(cfg::Block* block) {
+  bool is_ineligible_because_of_throw(cfg::Block* block,
+                                      Lazy<LiveRanges>& live_ranges) {
+    if (m_config->dedup_throws) {
+      return false;
+    }
     const auto last_mie_it = block->get_last_insn();
     if (last_mie_it == block->end()) {
       return false;
     }
     auto last_op = last_mie_it->insn->opcode();
-    return opcode::is_throw(last_op);
+    if (!opcode::is_throw(last_op)) {
+      return false;
+    }
+    // So we have a block that ends with a throw. But is it benign?
+    if (!m_config->dedup_benign_throws) {
+      return true;
+    }
+
+    // The stack-trace of an exception object is captured by fillInStackTrace(),
+    // which is either called indirectly by a constructor of a class deriving
+    // from Throwable, or possibly via an explicit call. The reason we are
+    // careful not to dedup all throws is because we don't want to affect the
+    // captured associated source position, especially from the top frame.
+    // However, a throw is in fact benign and can be deduped as long as we don't
+    // dedup such a direct or indirect invocation of fillInStackTrace() on the
+    // exception object flowing into the throw. That's difficult to determine in
+    // general, so we carve out a exception for an obviously benign case:
+    // If the object comes from a non-escaping move-exception.
+    auto& defs =
+        live_ranges->use_def_chains[live_range::Use{last_mie_it->insn, 0}];
+    always_assert(defs.size() > 0);
+    for (auto def : defs) {
+      if (opcode::is_move_exception(def->opcode())) {
+        auto& uses = live_ranges->def_use_chains[def];
+        if (uses.size() == 1 && uses.begin()->insn == last_mie_it->insn) {
+          // This value flowing into the throw comes from a move-exception, and
+          // hasn't escaped otherwise. In particular, that means that
+          // fillInStackTrace() cannot have been called, and the stack-trace
+          // remains unchanged. (Except possibly if the exception object is also
+          // accessible through some other means, but that is very unlikely.)
+          continue;
+        }
+      }
+      return true;
+    }
+
+    return false;
   }
 
   // Deal with a verification error like this

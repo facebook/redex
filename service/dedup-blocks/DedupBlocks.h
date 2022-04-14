@@ -19,6 +19,7 @@ struct Config {
   bool split_postfix = true;
   bool debug = false;
   bool dedup_throws = false;
+  bool dedup_benign_throws = true;
 };
 
 struct Stats {

@@ -24,6 +24,7 @@ class DedupBlocksPass : public Pass {
     bind("split_postfix", true, m_config.split_postfix);
     bind("debug", false, m_config.debug);
     bind("dedup_throws", false, m_config.dedup_throws);
+    bind("dedup_benign_throws", true, m_config.dedup_benign_throws);
   }
 
  private:

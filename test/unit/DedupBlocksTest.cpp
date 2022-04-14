@@ -50,13 +50,15 @@ struct DedupBlocksTest : public RedexTest {
     return method;
   }
 
-  void run_dedup_blocks(bool dedup_throws = true) {
+  void run_dedup_blocks(bool dedup_throws = true,
+                        bool dedup_benign_throws = true) {
     walk::code(std::vector<DexClass*>{m_class},
                [&](DexMethod* method, IRCode& code) {
                  code.build_cfg(/* editable */ true);
                  auto& cfg = code.cfg();
                  dedup_blocks_impl::Config config;
                  config.dedup_throws = dedup_throws;
+                 config.dedup_benign_throws = dedup_benign_throws;
                  dedup_blocks_impl::DedupBlocks impl(&config, method);
                  impl.run();
                  code.clear_cfg();
@@ -1151,7 +1153,7 @@ TEST_F(DedupBlocksTest, dont_dedup_throws) {
   method->set_code(std::move(input_code));
   auto code = method->get_code();
 
-  run_dedup_blocks(/* dedup_throws */ false);
+  run_dedup_blocks(/* dedup_throws */ false, /* dedup_benign_throws */ false);
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -1159,6 +1161,156 @@ TEST_F(DedupBlocksTest, dont_dedup_throws) {
       (if-eqz v0 :a)
       (throw v0)
       (:a)
+      (throw v0)
+    )
+  )");
+
+  EXPECT_CODE_EQ(expected_code.get(), code);
+}
+
+// When dedup-throws option is off, dedup benign rethrows when
+// dedup-benign-throws option is on
+TEST_F(DedupBlocksTest, dedup_benign_rethrows) {
+  auto input_code = assembler::ircode_from_string(R"(
+    (
+      (.try_start t)
+      (new-instance "LTestClass")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "LTestClass;.<init>:()V")
+      (throw v0)
+      (.try_end t)
+
+      (.catch (u) "LException2;")
+      (move-exception v0)
+      (throw v0)
+
+      (.catch (t u) "LException1;")
+      (move-exception v0)
+      (throw v0)
+    )
+  )");
+  auto method = get_fresh_method("dont_dedup_throws_unless_rethrows");
+  method->set_code(std::move(input_code));
+  auto code = method->get_code();
+
+  run_dedup_blocks(/* dedup_throws */ false, /* dedup_benign_throws */ true);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (.try_start t)
+      (new-instance "LTestClass")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "LTestClass;.<init>:()V")
+      (throw v0)
+      (.try_end t)
+
+      (.catch (t u) "LException1;")
+      (.catch (u) "LException2;")
+      (move-exception v0)
+      (throw v0)
+    )
+  )");
+
+  EXPECT_CODE_EQ(expected_code.get(), code);
+}
+
+// When dedup-throws option is off and dedup_benign_throws is on, don't dedup
+// rethrows where the caught exception object escapes, e.g. as part of a
+// fillInStackTrace invocation
+TEST_F(DedupBlocksTest, dont_dedup_rethrows_where_exception_object_escapes) {
+  auto input_code = assembler::ircode_from_string(R"(
+    (
+      (.try_start t)
+      (new-instance "LTestClass")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "LTestClass;.<init>:()V")
+      (throw v0)
+      (.try_end t)
+
+      (.catch (u) "LException2;")
+      (move-exception v0)
+      (invoke-virtual (v0) "Ljava/lang/Throwable;.fillInStackTrace:()Ljava/lang/Throwable;")
+      (throw v0)
+
+      (.catch (t u) "LException1;")
+      (move-exception v0)
+      (invoke-virtual (v0) "Ljava/lang/Throwable;.fillInStackTrace:()Ljava/lang/Throwable;")
+      (throw v0)
+    )
+  )");
+  auto method =
+      get_fresh_method("dont_dedup_throws_unless_rethrows_unless_escapes");
+  method->set_code(std::move(input_code));
+  auto code = method->get_code();
+
+  run_dedup_blocks(/* dedup_throws */ false, /* dedup_benign_throws */ true);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (.try_start t)
+      (new-instance "LTestClass")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "LTestClass;.<init>:()V")
+      (throw v0)
+      (.try_end t)
+
+      (.catch (u) "LException2;")
+      (move-exception v0)
+      (invoke-virtual (v0) "Ljava/lang/Throwable;.fillInStackTrace:()Ljava/lang/Throwable;")
+      (throw v0)
+
+      (.catch (t u) "LException1;")
+      (move-exception v0)
+      (invoke-virtual (v0) "Ljava/lang/Throwable;.fillInStackTrace:()Ljava/lang/Throwable;")
+      (throw v0)
+    )
+  )");
+
+  EXPECT_CODE_EQ(expected_code.get(), code);
+}
+
+// When dedup-throws and dedup-rethrows option is off, don't dedup throws, even
+// if they are benign rethrows
+TEST_F(DedupBlocksTest, dont_dedup_benign_throws) {
+  auto input_code = assembler::ircode_from_string(R"(
+    (
+      (.try_start t)
+      (new-instance "LTestClass")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "LTestClass;.<init>:()V")
+      (throw v0)
+      (.try_end t)
+
+      (.catch (u) "LException2;")
+      (move-exception v0)
+      (throw v0)
+
+      (.catch (t u) "LException1;")
+      (move-exception v0)
+      (throw v0)
+    )
+  )");
+  auto method = get_fresh_method("dont_dedup_throws");
+  method->set_code(std::move(input_code));
+  auto code = method->get_code();
+
+  run_dedup_blocks(/* dedup_throws */ false, /* dedup_benign_throws */ false);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (.try_start t)
+      (new-instance "LTestClass")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "LTestClass;.<init>:()V")
+      (throw v0)
+      (.try_end t)
+
+      (.catch (u) "LException2;")
+      (move-exception v0)
+      (throw v0)
+
+      (.catch (t u) "LException1;")
+      (move-exception v0)
       (throw v0)
     )
   )");
