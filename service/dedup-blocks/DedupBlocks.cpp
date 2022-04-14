@@ -49,6 +49,7 @@
 #include "DedupBlockValueNumbering.h"
 
 #include "DexPosition.h"
+#include "Lazy.h"
 #include "Liveness.h"
 #include "PassManager.h"
 #include "ReachingDefinitions.h"
@@ -333,13 +334,22 @@ class DedupBlocksImpl {
       }
     }
 
-    std::unique_ptr<reaching_defs::MoveAwareFixpointIterator>
-        reaching_defs_fixpoint_iter;
-    std::unique_ptr<type_inference::TypeInference> type_inference;
+    Lazy<reaching_defs::MoveAwareFixpointIterator> reaching_defs_fixpoint_iter(
+        [&]() {
+          auto res =
+              std::make_unique<reaching_defs::MoveAwareFixpointIterator>(cfg);
+          res->run({});
+          return res;
+        });
+    Lazy<type_inference::TypeInference> type_inference([&]() {
+      auto res = std::make_unique<type_inference::TypeInference>(cfg);
+      res->run(is_static, declaring_type, args);
+      return res;
+    });
     remove_if(duplicates, [&](auto& blocks) {
-      return is_singleton_or_inconsistent(
-          is_static, declaring_type, args, blocks, cfg,
-          reaching_defs_fixpoint_iter, liveness_fixpoint_iter, type_inference);
+      return is_singleton_or_inconsistent(blocks, reaching_defs_fixpoint_iter,
+                                          liveness_fixpoint_iter,
+                                          type_inference);
     });
     return duplicates;
   }
@@ -857,9 +867,7 @@ class DedupBlocksImpl {
   static boost::optional<std::vector<IRInstruction*>>
   get_init_receiver_instructions_defined_outside_of_block(
       cfg::Block* block,
-      const cfg::ControlFlowGraph& cfg,
-      std::unique_ptr<reaching_defs::MoveAwareFixpointIterator>&
-          fixpoint_iter) {
+      Lazy<reaching_defs::MoveAwareFixpointIterator>& fixpoint_iter) {
     std::vector<IRInstruction*> res;
     boost::optional<reaching_defs::Environment> defs_in;
     auto iterable = InstructionIterable(block);
@@ -871,11 +879,6 @@ class DedupBlocksImpl {
           method::is_init(insn->get_method())) {
         TRACE(DEDUP_BLOCKS, 5, "[dedup blocks] found init invocation: %s",
               SHOW(insn));
-        if (!fixpoint_iter) {
-          fixpoint_iter.reset(
-              new reaching_defs::MoveAwareFixpointIterator(cfg));
-          fixpoint_iter->run(reaching_defs::Environment());
-        }
         if (!defs_in) {
           defs_in = fixpoint_iter->get_entry_state_at(block);
         }
@@ -956,15 +959,11 @@ class DedupBlocksImpl {
   }
 
   static bool is_singleton_or_inconsistent(
-      bool is_static,
-      DexType* declaring_type,
-      DexTypeList* args,
       const BlockSet& blocks,
-      cfg::ControlFlowGraph& cfg,
-      std::unique_ptr<reaching_defs::MoveAwareFixpointIterator>&
+      Lazy<reaching_defs::MoveAwareFixpointIterator>&
           reaching_defs_fixpoint_iter,
       LivenessFixpointIterator& liveness_fixpoint_iter,
-      std::unique_ptr<type_inference::TypeInference>& type_inference) {
+      Lazy<type_inference::TypeInference>& type_inference) {
     if (blocks.size() <= 1) {
       return true;
     }
@@ -976,7 +975,7 @@ class DedupBlocksImpl {
     for (cfg::Block* block : blocks) {
       auto other_insns =
           get_init_receiver_instructions_defined_outside_of_block(
-              block, cfg, reaching_defs_fixpoint_iter);
+              block, reaching_defs_fixpoint_iter);
       if (!other_insns) {
         return true;
       } else if (!insns) {
@@ -996,10 +995,6 @@ class DedupBlocksImpl {
     // partitioning.
 
     // Initializing stuff...
-    if (!type_inference) {
-      type_inference.reset(new type_inference::TypeInference(cfg));
-      type_inference->run(is_static, declaring_type, args);
-    }
     auto live_in_vars =
         liveness_fixpoint_iter.get_live_in_vars_at(*blocks.begin());
     if (!(live_in_vars.is_value())) {
