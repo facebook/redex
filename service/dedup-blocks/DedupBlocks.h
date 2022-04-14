@@ -18,8 +18,6 @@ struct Config {
       DEFAULT_BLOCK_SPLIT_MIN_OPCODE_COUNT;
   bool split_postfix = true;
   bool debug = false;
-  bool dedup_throws = false;
-  bool dedup_benign_throws = true;
   bool dedup_fill_in_stack_trace = false;
 };
 

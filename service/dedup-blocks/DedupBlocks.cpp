@@ -331,7 +331,7 @@ class DedupBlocksImpl {
         [&]() { return std::make_unique<LiveRanges>(cfg); });
 
     for (cfg::Block* block : blocks) {
-      if (is_eligible(block, cfg, live_ranges)) {
+      if (is_eligible(block, cfg)) {
         // Find a group that matches this one. The key equality function of this
         // map is actually a check that they are duplicates, not that they're
         // the same block.
@@ -779,17 +779,15 @@ class DedupBlocksImpl {
     }
   }
 
-  bool is_eligible(cfg::Block* block,
-                   cfg::ControlFlowGraph& cfg,
-                   Lazy<LiveRanges>& live_ranges) {
+  bool is_eligible(cfg::Block* block, cfg::ControlFlowGraph& cfg) {
     // We can't split up move-result(-pseudo) instruction pairs
     if (begins_with_move_result(block)) {
       return false;
     }
 
-    // For debugability, we don't want to dedup blocks involved in non-benign
-    // explicit exception throwing
-    if (is_ineligible_because_of_throw(block, live_ranges)) {
+    // For debugability, we don't want to dedup blocks involved direct or
+    // indirect calls to Throwable.fillInStackTrace
+    if (is_ineligible_because_of_fill_in_stack_trace(block)) {
       return false;
     }
 
@@ -827,83 +825,36 @@ class DedupBlocksImpl {
     return opcode::is_move_result_any(first_op);
   }
 
-  bool is_ineligible_because_of_throw(cfg::Block* block,
-                                      Lazy<LiveRanges>& live_ranges) {
-    if (!m_config->dedup_fill_in_stack_trace) {
-      auto ii = InstructionIterable(block);
-      if (std::any_of(ii.begin(), ii.end(), [](auto& mie) {
-            auto op = mie.insn->opcode();
-            // Direct call to a constructor whose class derives from Throwable?
-            // (It would indirectly call java.lang.Throwable.fillInStackTrace.)
-            if (opcode::is_invoke_direct(op) &&
-                method::is_init(mie.insn->get_method()) &&
-                type::is_subclass(type::java_lang_Throwable(),
-                                  mie.insn->get_method()->get_class())) {
-              return true;
-            }
-            // Explicit virtual call to the java.lang.Throwable.fillInStackTrace
-            // method?
-            if (opcode::is_invoke_virtual(op) &&
-                resolve_method(mie.insn->get_method(), MethodSearch::Virtual) ==
-                    method::java_lang_Throwable_fillInStackTrace()) {
-              return true;
-            }
-            // An outlined method might invoke one of the above, so we are being
-            // conservative here.
-            if (opcode::is_invoke_static(op) &&
-                outliner::is_outlined_method(mie.insn->get_method())) {
-              return true;
-            }
-            return false;
-          })) {
+  bool is_ineligible_because_of_fill_in_stack_trace(cfg::Block* block) {
+    if (m_config->dedup_fill_in_stack_trace) {
+      return false;
+    }
+    auto ii = InstructionIterable(block);
+    return std::any_of(ii.begin(), ii.end(), [](auto& mie) {
+      auto op = mie.insn->opcode();
+      // Direct call to a constructor whose class derives from Throwable?
+      // (It would indirectly call java.lang.Throwable.fillInStackTrace.)
+      if (opcode::is_invoke_direct(op) &&
+          method::is_init(mie.insn->get_method()) &&
+          type::is_subclass(type::java_lang_Throwable(),
+                            mie.insn->get_method()->get_class())) {
         return true;
       }
-    }
-    if (m_config->dedup_throws) {
-      return false;
-    }
-    const auto last_mie_it = block->get_last_insn();
-    if (last_mie_it == block->end()) {
-      return false;
-    }
-    auto last_op = last_mie_it->insn->opcode();
-    if (!opcode::is_throw(last_op)) {
-      return false;
-    }
-    // So we have a block that ends with a throw. But is it benign?
-    if (!m_config->dedup_benign_throws) {
-      return true;
-    }
-
-    // The stack-trace of an exception object is captured by fillInStackTrace(),
-    // which is either called indirectly by a constructor of a class deriving
-    // from Throwable, or possibly via an explicit call. The reason we are
-    // careful not to dedup all throws is because we don't want to affect the
-    // captured associated source position, especially from the top frame.
-    // However, a throw is in fact benign and can be deduped as long as we don't
-    // dedup such a direct or indirect invocation of fillInStackTrace() on the
-    // exception object flowing into the throw. That's difficult to determine in
-    // general, so we carve out a exception for an obviously benign case:
-    // If the object comes from a non-escaping move-exception.
-    auto& defs =
-        live_ranges->use_def_chains[live_range::Use{last_mie_it->insn, 0}];
-    always_assert(defs.size() > 0);
-    for (auto def : defs) {
-      if (opcode::is_move_exception(def->opcode())) {
-        auto& uses = live_ranges->def_use_chains[def];
-        if (uses.size() == 1 && uses.begin()->insn == last_mie_it->insn) {
-          // This value flowing into the throw comes from a move-exception, and
-          // hasn't escaped otherwise. In particular, that means that
-          // fillInStackTrace() cannot have been called, and the stack-trace
-          // remains unchanged. (Except possibly if the exception object is also
-          // accessible through some other means, but that is very unlikely.)
-          continue;
-        }
+      // Explicit virtual call to the java.lang.Throwable.fillInStackTrace
+      // method?
+      if (opcode::is_invoke_virtual(op) &&
+          resolve_method(mie.insn->get_method(), MethodSearch::Virtual) ==
+              method::java_lang_Throwable_fillInStackTrace()) {
+        return true;
       }
-      return true;
-    }
-
-    return false;
+      // An outlined method might invoke one of the above, so we are being
+      // conservative here.
+      if (opcode::is_invoke_static(op) &&
+          outliner::is_outlined_method(mie.insn->get_method())) {
+        return true;
+      }
+      return false;
+    });
   }
 
   // Deal with a verification error like this
