@@ -20,6 +20,7 @@ struct Config {
   bool debug = false;
   bool dedup_throws = false;
   bool dedup_benign_throws = true;
+  bool dedup_fill_in_stack_trace = false;
 };
 
 struct Stats {

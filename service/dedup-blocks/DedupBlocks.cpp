@@ -51,8 +51,10 @@
 #include "DexPosition.h"
 #include "Lazy.h"
 #include "LiveRange.h"
+#include "OutlinedMethods.h"
 #include "PassManager.h"
 #include "RedexContext.h"
+#include "Resolver.h"
 #include "Show.h"
 #include "StlUtil.h"
 #include "Trace.h"
@@ -785,8 +787,8 @@ class DedupBlocksImpl {
       return false;
     }
 
-    // For debugability, we don't want to dedup blocks that end with a throw,
-    // except for a few benign cases
+    // For debugability, we don't want to dedup blocks involved in non-benign
+    // explicit exception throwing
     if (is_ineligible_because_of_throw(block, live_ranges)) {
       return false;
     }
@@ -827,6 +829,36 @@ class DedupBlocksImpl {
 
   bool is_ineligible_because_of_throw(cfg::Block* block,
                                       Lazy<LiveRanges>& live_ranges) {
+    if (!m_config->dedup_fill_in_stack_trace) {
+      auto ii = InstructionIterable(block);
+      if (std::any_of(ii.begin(), ii.end(), [](auto& mie) {
+            auto op = mie.insn->opcode();
+            // Direct call to a constructor whose class derives from Throwable?
+            // (It would indirectly call java.lang.Throwable.fillInStackTrace.)
+            if (opcode::is_invoke_direct(op) &&
+                method::is_init(mie.insn->get_method()) &&
+                type::is_subclass(type::java_lang_Throwable(),
+                                  mie.insn->get_method()->get_class())) {
+              return true;
+            }
+            // Explicit virtual call to the java.lang.Throwable.fillInStackTrace
+            // method?
+            if (opcode::is_invoke_virtual(op) &&
+                resolve_method(mie.insn->get_method(), MethodSearch::Virtual) ==
+                    method::java_lang_Throwable_fillInStackTrace()) {
+              return true;
+            }
+            // An outlined method might invoke one of the above, so we are being
+            // conservative here.
+            if (opcode::is_invoke_static(op) &&
+                outliner::is_outlined_method(mie.insn->get_method())) {
+              return true;
+            }
+            return false;
+          })) {
+        return true;
+      }
+    }
     if (m_config->dedup_throws) {
       return false;
     }

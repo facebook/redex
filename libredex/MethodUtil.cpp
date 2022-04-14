@@ -532,6 +532,11 @@ DexMethod* java_lang_Integer_intValue() {
       DexMethod::make_method("Ljava/lang/Integer;.intValue:()I"));
 }
 
+DexMethod* java_lang_Throwable_fillInStackTrace() {
+  return static_cast<DexMethod*>(DexMethod::make_method(
+      "Ljava/lang/Throwable;.fillInStackTrace:()Ljava/lang/Throwable;"));
+}
+
 DexMethod* kotlin_jvm_internal_Intrinsics_checkParameterIsNotNull() {
   return static_cast<DexMethod*>(DexMethod::get_method(
       "Lkotlin/jvm/internal/Intrinsics;.checkParameterIsNotNull:(Ljava/lang/"

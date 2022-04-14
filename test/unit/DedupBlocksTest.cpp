@@ -51,7 +51,8 @@ struct DedupBlocksTest : public RedexTest {
   }
 
   void run_dedup_blocks(bool dedup_throws = true,
-                        bool dedup_benign_throws = true) {
+                        bool dedup_benign_throws = true,
+                        bool dedup_fill_in_stack_trace = false) {
     walk::code(std::vector<DexClass*>{m_class},
                [&](DexMethod* method, IRCode& code) {
                  code.build_cfg(/* editable */ true);
@@ -59,6 +60,7 @@ struct DedupBlocksTest : public RedexTest {
                  dedup_blocks_impl::Config config;
                  config.dedup_throws = dedup_throws;
                  config.dedup_benign_throws = dedup_benign_throws;
+                 config.dedup_fill_in_stack_trace = dedup_fill_in_stack_trace;
                  dedup_blocks_impl::DedupBlocks impl(&config, method);
                  impl.run();
                  code.clear_cfg();
@@ -1312,6 +1314,112 @@ TEST_F(DedupBlocksTest, dont_dedup_benign_throws) {
       (.catch (t u) "LException1;")
       (move-exception v0)
       (throw v0)
+    )
+  )");
+
+  EXPECT_CODE_EQ(expected_code.get(), code);
+}
+
+// Don't dedup direct calls to fillInStackTrace
+TEST_F(DedupBlocksTest, dont_dedup_fill_in_stack_trace) {
+  ClassCreator throwable_creator(type::java_lang_Throwable());
+  throwable_creator.set_super(type::java_lang_Object());
+  auto fillInStackeTrace_method =
+      method::java_lang_Throwable_fillInStackTrace();
+  fillInStackeTrace_method->set_virtual(true);
+  fillInStackeTrace_method->set_external();
+  throwable_creator.add_method(method::java_lang_Throwable_fillInStackTrace());
+  throwable_creator.create()->set_external();
+
+  auto input_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (const v1 1)
+      (if-eqz v1 :lbl)
+
+      (invoke-virtual (v0) "Ljava/lang/Throwable;.fillInStackTrace:()Ljava/lang/Throwable;")
+      (return-object v0)
+
+      (:lbl)
+      (invoke-virtual (v0) "Ljava/lang/Throwable;.fillInStackTrace:()Ljava/lang/Throwable;")
+      (return-object v0)
+    )
+  )");
+  auto method = get_fresh_method("dont_dedup_fill_in_stack_trace");
+  method->set_code(std::move(input_code));
+  auto code = method->get_code();
+
+  run_dedup_blocks();
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (const v1 1)
+      (if-eqz v1 :lbl)
+
+      (invoke-virtual (v0) "Ljava/lang/Throwable;.fillInStackTrace:()Ljava/lang/Throwable;")
+      (return-object v0)
+
+      (:lbl)
+      (invoke-virtual (v0) "Ljava/lang/Throwable;.fillInStackTrace:()Ljava/lang/Throwable;")
+      (return-object v0)
+    )
+  )");
+
+  EXPECT_CODE_EQ(expected_code.get(), code);
+}
+
+// Don't dedup indirect calls to fillInStackTrace via Throwable constructors
+TEST_F(DedupBlocksTest, dont_dedup_indirect_fill_in_stack_trace) {
+  ClassCreator throwable_creator(type::java_lang_Throwable());
+  throwable_creator.set_super(type::java_lang_Object());
+  auto throwable_cls = throwable_creator.create();
+  throwable_cls->set_external();
+
+  ClassCreator throwable2_creator(DexType::make_type("LThrowable2;"));
+  throwable2_creator.set_super(throwable_cls->get_type());
+  throwable2_creator.create()->set_external();
+
+  auto input_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (const v1 1)
+      (if-eqz v1 :lbl)
+
+      (new-instance "LThrowable2;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "LThrowable2;.<init>:()V")
+      (return-object v0)
+
+      (:lbl)
+      (new-instance "LThrowable2;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "LThrowable2;.<init>:()V")
+      (return-object v0)
+    )
+  )");
+  auto method = get_fresh_method("dont_dedup_indirect_fill_in_stack_trace");
+  method->set_code(std::move(input_code));
+  auto code = method->get_code();
+
+  run_dedup_blocks();
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (const v1 1)
+      (if-eqz v1 :lbl)
+
+      (new-instance "LThrowable2;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "LThrowable2;.<init>:()V")
+      (return-object v0)
+
+      (:lbl)
+      (new-instance "LThrowable2;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "LThrowable2;.<init>:()V")
+      (return-object v0)
     )
   )");
 

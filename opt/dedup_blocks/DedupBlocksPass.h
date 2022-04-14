@@ -25,6 +25,8 @@ class DedupBlocksPass : public Pass {
     bind("debug", false, m_config.debug);
     bind("dedup_throws", false, m_config.dedup_throws);
     bind("dedup_benign_throws", true, m_config.dedup_benign_throws);
+    bind(
+        "dedup_fill_in_stack_trace", false, m_config.dedup_fill_in_stack_trace);
   }
 
  private:
