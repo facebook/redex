@@ -45,6 +45,8 @@ bool empty_column(std::string_view sv) { return sv.empty() || sv == "\n"; }
 
 } // namespace
 
+AccumulatingTimer MethodProfiles::s_process_unresolved_lines_timer;
+
 const StatsMap& MethodProfiles::method_stats(
     const std::string& interaction_id) const {
   const auto& search1 = m_method_stats.find(interaction_id);
@@ -267,7 +269,13 @@ boost::optional<uint32_t> MethodProfiles::get_interaction_count(
   }
 }
 
+double MethodProfiles::get_process_unresolved_lines_seconds() {
+  return s_process_unresolved_lines_timer.get_seconds();
+}
+
 void MethodProfiles::process_unresolved_lines() {
+  auto timer_scope = s_process_unresolved_lines_timer.scope();
+
   auto unresolved_lines = std::move(m_unresolved_lines);
   m_unresolved_lines.clear();
   for (auto& pair : unresolved_lines) {

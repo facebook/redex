@@ -131,7 +131,10 @@ class MethodProfiles {
   // Try to resolve previously unresolved lines
   void process_unresolved_lines();
 
+  static double get_process_unresolved_lines_seconds();
+
  private:
+  static AccumulatingTimer s_process_unresolved_lines_timer;
   AllInteractions m_method_stats;
   // Resolution may fail because of renaming or generated methods. Store the
   // unresolved lines here (per interaction) so we can update after passes run
