@@ -16,6 +16,8 @@
 #include "CppUtil.h"
 #include "GlobalConfig.h"
 #include "Show.h"
+#include "StlUtil.h"
+#include "WorkQueue.h"
 
 using namespace method_profiles;
 
@@ -175,11 +177,10 @@ bool MethodProfiles::parse_metadata(std::string_view line) {
   return true;
 }
 
-bool MethodProfiles::parse_main(std::string line) {
+std::optional<MethodProfiles::ParseMainInternalResult>
+MethodProfiles::parse_main_internal(std::string_view line) {
   always_assert(m_mode == MAIN);
-  Stats stats;
-  std::unique_ptr<std::string> line_interaction_id;
-  DexMethodRef* ref = nullptr;
+  ParseMainInternalResult result;
   auto parse_cell = [&](std::string_view cell, uint32_t col) -> bool {
     switch (col) {
     case INDEX:
@@ -187,37 +188,37 @@ bool MethodProfiles::parse_main(std::string line) {
       // the file)
       return true;
     case NAME:
-      ref = DexMethod::get_method</*kCheckFormat=*/true>(cell);
-      if (ref == nullptr) {
+      result.ref = DexMethod::get_method</*kCheckFormat=*/true>(cell);
+      if (result.ref == nullptr) {
         TRACE(METH_PROF, 6, "failed to resolve %s", SHOW(cell));
       }
       return true;
     case APPEAR100:
-      stats.appear_percent = parse_double(cell);
+      result.stats.appear_percent = parse_double(cell);
       return true;
     case APPEAR_NUMBER:
       // Don't need this raw data. appear_percent is the same thing but
       // normalized
       return true;
     case AVG_CALL:
-      stats.call_count = parse_double(cell);
+      result.stats.call_count = parse_double(cell);
       return true;
     case AVG_ORDER:
       // Don't need this raw data. order_percent is the same thing but
       // normalized
       return true;
     case AVG_RANK100:
-      stats.order_percent = parse_double(cell);
+      result.stats.order_percent = parse_double(cell);
       return true;
     case MIN_API_LEVEL: {
-      stats.min_api_level = parse_int<int16_t>(cell);
+      result.stats.min_api_level = parse_int<int16_t>(cell);
       return true;
     }
     default:
       const auto& search = m_optional_columns.find(col);
       if (search != m_optional_columns.end()) {
         if (search->second == "interaction") {
-          line_interaction_id = std::make_unique<std::string>(cell);
+          result.line_interaction_id = std::make_unique<std::string>(cell);
           return true;
         }
       }
@@ -228,28 +229,48 @@ bool MethodProfiles::parse_main(std::string line) {
 
   bool success = parse_cells(line, parse_cell);
   if (!success) {
-    return false;
+    return std::nullopt;
   }
-  // Interaction IDs from the current row have priority over the interaction
-  // id from the top of the file. This shouldn't happen in practice, but this
-  // is the conservative approach.
-  auto interaction_id =
-      line_interaction_id ? line_interaction_id.get() : &m_interaction_id;
-  if (ref != nullptr) {
-    TRACE(METH_PROF, 6, "(%s, %s) -> {%f, %f, %f, %d}", SHOW(ref),
-          interaction_id->c_str(), stats.appear_percent, stats.call_count,
-          stats.order_percent, stats.min_api_level);
-    m_method_stats[*interaction_id].emplace(ref, stats);
+  return std::move(result);
+}
+
+bool MethodProfiles::apply_main_internal_result(ParseMainInternalResult v,
+                                                std::string line,
+                                                std::string* interaction_id) {
+  if (v.ref != nullptr) {
+    if (v.line_interaction_id) {
+      // Interaction IDs from the current row have priority over the interaction
+      // id from the top of the file. This shouldn't happen in practice, but
+      // this is the conservative approach.
+      interaction_id = v.line_interaction_id.get();
+    }
+    always_assert(interaction_id);
+    TRACE(METH_PROF, 6, "(%s, %s) -> {%f, %f, %f, %d}", SHOW(v.ref),
+          interaction_id->c_str(), v.stats.appear_percent, v.stats.call_count,
+          v.stats.order_percent, v.stats.min_api_level);
+    m_method_stats[*interaction_id].emplace(v.ref, v.stats);
+    return true;
   } else {
     TRACE(METH_PROF, 6, "unresolved: %s", line.c_str());
-    m_unresolved_lines[*interaction_id].push_back(std::move(line));
+    always_assert(interaction_id);
+    m_unresolved_lines.emplace_back(*interaction_id, std::move(line));
+    return false;
   }
+}
+
+bool MethodProfiles::parse_main(std::string line, std::string* interaction_id) {
+  auto result = parse_main_internal(line);
+  if (!result) {
+    return false;
+  }
+  (void)apply_main_internal_result(std::move(result.value()), std::move(line),
+                                   interaction_id);
   return true;
 }
 
 bool MethodProfiles::parse_line(std::string line) {
   if (m_mode == MAIN) {
-    return parse_main(std::move(line));
+    return parse_main(std::move(line), &m_interaction_id);
   } else if (m_mode == METADATA) {
     return parse_metadata(line);
   } else {
@@ -274,15 +295,34 @@ double MethodProfiles::get_process_unresolved_lines_seconds() {
 void MethodProfiles::process_unresolved_lines() {
   auto timer_scope = s_process_unresolved_lines_timer.scope();
 
-  auto unresolved_lines = std::move(m_unresolved_lines);
-  m_unresolved_lines.clear();
-  for (auto& pair : unresolved_lines) {
-    m_interaction_id = pair.first;
-    for (auto& line : pair.second) {
-      bool success = parse_main(std::move(line));
-      always_assert(success);
+  std::map<UnresolvedLine*, ParseMainInternalResult> resolved;
+  std::mutex resolved_mutex;
+  workqueue_run_for<size_t>(0, m_unresolved_lines.size(), [&](size_t index) {
+    auto& unresolved_line = m_unresolved_lines.at(index);
+    auto& [interaction_id, line] = unresolved_line;
+    auto result = parse_main_internal(line);
+    always_assert(result);
+    auto& v = result.value();
+    if (v.ref) {
+      std::lock_guard<std::mutex> lock_guard(resolved_mutex);
+      resolved.emplace(&unresolved_line, std::move(v));
     }
+  });
+  auto unresolved_lines = m_unresolved_lines.size();
+  // Note that resolved is ordered by the (addresses of the) unresolved lines,
+  // to ensure determinism
+  for (auto& [unresolved_line_ptr, v] : resolved) {
+    auto& [interaction_id, line] = *unresolved_line_ptr;
+    bool success = apply_main_internal_result(std::move(v), std::move(line),
+                                              &interaction_id);
+    always_assert(success);
   }
+  always_assert(unresolved_lines == m_unresolved_lines.size());
+  std20::erase_if(m_unresolved_lines, [&](auto& unresolved_line) {
+    return resolved.count(&unresolved_line);
+  });
+  always_assert(unresolved_lines - resolved.size() ==
+                m_unresolved_lines.size());
 
   size_t total_rows = 0;
   for (const auto& pair : m_method_stats) {
