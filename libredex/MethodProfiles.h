@@ -156,10 +156,10 @@ class MethodProfiles {
   bool parse_stats_file(const std::string& csv_filename);
 
   // Read a line of data (not a header)
-  bool parse_line(std::string_view line);
+  bool parse_line(std::string line);
   // Read a line from the main section of the aggregated stats file and put an
   // entry into m_method_stats
-  bool parse_main(std::string_view line);
+  bool parse_main(std::string line);
   // Read a line of data from the metadata section (at the top of the file)
   bool parse_metadata(std::string_view line);
 

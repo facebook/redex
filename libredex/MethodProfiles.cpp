@@ -89,7 +89,7 @@ bool MethodProfiles::parse_stats_file(const std::string& csv_filename) {
     if (m_mode == NONE) {
       success = parse_header(line);
     } else {
-      success = parse_line(line);
+      success = parse_line(std::move(line));
     }
     if (!success) {
       return false;
@@ -175,10 +175,10 @@ bool MethodProfiles::parse_metadata(std::string_view line) {
   return true;
 }
 
-bool MethodProfiles::parse_main(std::string_view line) {
+bool MethodProfiles::parse_main(std::string line) {
   always_assert(m_mode == MAIN);
   Stats stats;
-  std::string interaction_id;
+  std::unique_ptr<std::string> line_interaction_id;
   DexMethodRef* ref = nullptr;
   auto parse_cell = [&](std::string_view cell, uint32_t col) -> bool {
     switch (col) {
@@ -187,7 +187,7 @@ bool MethodProfiles::parse_main(std::string_view line) {
       // the file)
       return true;
     case NAME:
-      ref = DexMethod::get_method</*kCheckFormat=*/true>(std::string(cell));
+      ref = DexMethod::get_method</*kCheckFormat=*/true>(cell);
       if (ref == nullptr) {
         TRACE(METH_PROF, 6, "failed to resolve %s", SHOW(cell));
       }
@@ -217,7 +217,7 @@ bool MethodProfiles::parse_main(std::string_view line) {
       const auto& search = m_optional_columns.find(col);
       if (search != m_optional_columns.end()) {
         if (search->second == "interaction") {
-          interaction_id = cell;
+          line_interaction_id = std::make_unique<std::string>(cell);
           return true;
         }
       }
@@ -230,28 +230,26 @@ bool MethodProfiles::parse_main(std::string_view line) {
   if (!success) {
     return false;
   }
-  if (interaction_id.empty()) {
-    // Interaction IDs from the current row have priority over the interaction
-    // id from the top of the file. This shouldn't happen in practice, but this
-    // is the conservative approach.
-    interaction_id = m_interaction_id;
-  }
+  // Interaction IDs from the current row have priority over the interaction
+  // id from the top of the file. This shouldn't happen in practice, but this
+  // is the conservative approach.
+  auto interaction_id =
+      line_interaction_id ? line_interaction_id.get() : &m_interaction_id;
   if (ref != nullptr) {
     TRACE(METH_PROF, 6, "(%s, %s) -> {%f, %f, %f, %d}", SHOW(ref),
-          interaction_id.c_str(), stats.appear_percent, stats.call_count,
+          interaction_id->c_str(), stats.appear_percent, stats.call_count,
           stats.order_percent, stats.min_api_level);
-    m_method_stats[interaction_id].emplace(ref, stats);
+    m_method_stats[*interaction_id].emplace(ref, stats);
   } else {
-    std::string copy(line);
-    m_unresolved_lines[interaction_id].push_back(copy);
-    TRACE(METH_PROF, 6, "unresolved: %s", copy.c_str());
+    TRACE(METH_PROF, 6, "unresolved: %s", line.c_str());
+    m_unresolved_lines[*interaction_id].push_back(std::move(line));
   }
   return true;
 }
 
-bool MethodProfiles::parse_line(std::string_view line) {
+bool MethodProfiles::parse_line(std::string line) {
   if (m_mode == MAIN) {
-    return parse_main(line);
+    return parse_main(std::move(line));
   } else if (m_mode == METADATA) {
     return parse_metadata(line);
   } else {
@@ -281,7 +279,7 @@ void MethodProfiles::process_unresolved_lines() {
   for (auto& pair : unresolved_lines) {
     m_interaction_id = pair.first;
     for (auto& line : pair.second) {
-      bool success = parse_main(line);
+      bool success = parse_main(std::move(line));
       always_assert(success);
     }
   }
