@@ -2513,6 +2513,30 @@ void ControlFlowGraph::merge_blocks(Block* pred, Block* succ) {
   delete succ;
 }
 
+void ControlFlowGraph::insert_block(Block* pred,
+                                    Block* succ,
+                                    Block* inserted_block) {
+  // Collected all edges between block pred and succ. All those edges should be
+  // either EDGE_GOTO or EDGE_BRANCH.
+  std::vector<Edge*> to_move;
+  for (Edge* e : pred->succs()) {
+    if (e->target() != succ) {
+      continue;
+    }
+    always_assert_log(e->type() == EDGE_GOTO || e->type() == EDGE_BRANCH,
+                      "invalid block insertion\n");
+    to_move.push_back(e);
+  }
+  always_assert_log(to_move.size() >= 1,
+                    "Can't insert a block between 2 disconnected blocks\n");
+  // Redirect the edges from succ to inserted_block.
+  for (auto e : to_move) {
+    set_edge_target(e, inserted_block);
+  }
+  // Add a GOTO
+  add_edge(inserted_block, succ, EDGE_GOTO);
+}
+
 void ControlFlowGraph::set_edge_target(Edge* edge, Block* new_target) {
   move_edge(edge, nullptr, new_target);
 }
