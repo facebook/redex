@@ -74,7 +74,6 @@ def _find_biggest_build_tools_version(base: str) -> typing.Optional[str]:
             "0.0.1",
             *[d for d in os.listdir(build_tools) if re.match(VERSION_REGEXP, d)],
         ),
-        # pyre-fixme[6]
         key=distutils.version.StrictVersion,
     )
     if version == "0.0.1":
