@@ -769,9 +769,6 @@ def _check_android_sdk(args: argparse.Namespace) -> None:
             raise RuntimeError("platforms directory does not exist")
         VERSION_REGEXP = r"android-(\d+)"
         version = max(
-            # pyre-fixme[6]: Expected `Iterable[Variable[_typeshed.SupportsLessThanT
-            #  (bound to _typeshed.SupportsLessThan)]]` for 1st param but got
-            #  `Tuple[int, *Tuple[int, ...]]`.
             (
                 -1,
                 *[
