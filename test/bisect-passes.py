@@ -40,7 +40,7 @@ def bisect(passes, config, config_path, cmd):
     while lower < upper - 1:
         m = (lower + upper) / 2
         testpasses = slice_passes(passes, lower, m)
-        print("Testing passes: " + str(testpasses))
+        print(("Testing passes: " + str(testpasses)))
         config["redex"]["passes"] = testpasses
         with open(config_path, "w") as config_file:
             json.dump(config, config_file)
@@ -64,7 +64,7 @@ if __name__ == "__main__":
 
     try:
         bad_passes = bisect(config["redex"]["passes"], config, args.config, args.cmd)
-        print("FAILING PASSES:" + str(bad_passes))
+        print(("FAILING PASSES:" + str(bad_passes)))
     finally:
         with open(args.config, "w") as config_file:
             config_file.write(contents)

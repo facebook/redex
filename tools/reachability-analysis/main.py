@@ -36,7 +36,7 @@ Once a graph is loaded, the interface supports 3 operations:
 
 
 def get_user_input():
-    return input(PROMPT_MSG)
+    return eval(input(PROMPT_MSG))
 
 
 def main(argv):
@@ -45,23 +45,23 @@ def main(argv):
     print("Loading graph. This might take a couple of minutes")
     graph.load(args.input)
 
-    input_str = input(PROMPT_MSG)
+    input_str = eval(input(PROMPT_MSG))
     while input_str != "x":
         if not input_str.strip():
-            input_str = input(PROMPT_MSG)
+            input_str = eval(input(PROMPT_MSG))
             continue
         if input_str.startswith("s "):
             graph.list_nodes(input_str[2:])
-            input_str = input(PROMPT_MSG)
+            input_str = eval(input(PROMPT_MSG))
             continue
 
         # Search for the node and print it
         try:
             node = graph.get_node(input_str)
-            print(repr(node))
+            print((repr(node)))
         except KeyError:
             print(f"Cannot find a node named '{input_str}'")
-        input_str = input(PROMPT_MSG)
+        input_str = eval(input(PROMPT_MSG))
 
 
 if __name__ == "__main__":

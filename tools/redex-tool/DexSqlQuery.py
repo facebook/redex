@@ -190,7 +190,7 @@ open(HISTORY_FILE, "a")
 readline.read_history_file(HISTORY_FILE)
 readline.set_history_length(1000)
 while True:
-    line = input("> ")
+    line = eval(input("> "))
     readline.write_history_file(HISTORY_FILE)
     try:
         rows = 0

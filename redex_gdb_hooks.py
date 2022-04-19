@@ -159,7 +159,7 @@ class pp(gdb.Command):
         val = get_gdb_val_for_str(arg)
         printer = lookup_function(val)
         if printer is None:
-            print('No symbol "{0}" in current context'.format(arg))
+            print(('No symbol "{0}" in current context'.format(arg)))
             return
         printer.to_string()
 

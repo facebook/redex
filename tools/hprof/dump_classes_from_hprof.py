@@ -497,14 +497,14 @@ class HprofInstance(HprofObject):
                 merged_fields_builder[name][clazz.name] = value
             clazz = clazz.super_class
 
-        for key, value in merged_fields_builder.items():
+        for key, value in list(merged_fields_builder.items()):
             # Avoid over-writing python internals, like __dict__
             if key in self.fields.__dict__:
                 key = "__hprof_" + key
                 assert key not in self.fields.__dict__
 
             if len(value) == 1:
-                setattr(self.fields, key, next(iter(value.values())))
+                setattr(self.fields, key, next(iter(list(value.values()))))
             else:
                 # There is a conflict in the class hierarchy (e.g. privates with the
                 # same name), so we need to store a dictionary.
@@ -522,8 +522,8 @@ class HprofInstance(HprofObject):
         # and attribute weight the wrong way.
         # Classes should be walked explicitly
         refs = []
-        for class_name, fields in self.class_fields.items():
-            for name, value in fields.items():
+        for class_name, fields in list(self.class_fields.items()):
+            for name, value in list(fields.items()):
                 if isinstance(value, HprofObject) and filter_function(value):
                     refs.append(FieldReference(self, value, class_name, name))
         return refs
@@ -959,11 +959,11 @@ class HprofData(object):
 
     def resolve(self):
         # First resolve heaps
-        for heap in self.heap_dict.values():
+        for heap in list(self.heap_dict.values()):
             heap.resolve(self)
 
         # Then resolve classes
-        for obj in self.object_id_dict.values():
+        for obj in list(self.object_id_dict.values()):
             if isinstance(obj, HprofClass):
                 clazz = obj
                 clazz.resolve(self)
@@ -976,18 +976,18 @@ class HprofData(object):
                             self.class_name_dict[clazz.name]
                         )
                     self.dupe_class_dict[clazz.name].append(clazz)
-                    print("Warning: duplicate class: %s" % clazz.name)
+                    print(("Warning: duplicate class: %s" % clazz.name))
                 else:
                     self.class_name_dict[clazz.name] = clazz
         # Fix up all classes to derive from java.lang.Class
         # at the time we create every HprofClass 'java.lang.Class' may have
         # not be parsed yet and thus unavailable
         clsCls = self.class_name_dict["java.lang.Class"]
-        for cls in self.class_name_dict.values():
+        for cls in list(self.class_name_dict.values()):
             cls.clazz = clsCls
 
         # Then other objects
-        for obj in self.object_id_dict.values():
+        for obj in list(self.object_id_dict.values()):
             if not isinstance(obj, HprofClass):
                 obj.resolve(self)
             obj.is_root = False  # Fixed up for root objects below
@@ -1019,7 +1019,7 @@ class HprofData(object):
     def lookup_instances_of_class(self, class_name):
         return [
             obj
-            for obj in self.object_id_dict.values()
+            for obj in list(self.object_id_dict.values())
             if isinstance(obj, HprofInstance) and obj.clazz.name == class_name
         ]
 
@@ -1027,7 +1027,7 @@ class HprofData(object):
         if self.inverted_references is None:
             # Will be much faster for later invocations
             self.inverted_references = defaultdict(list)
-            for heap_obj in self.object_id_dict.values():
+            for heap_obj in list(self.object_id_dict.values()):
                 for ref in heap_obj.outgoing_references():
                     self.inverted_references[ref.referee].append(ref)
 
@@ -1121,7 +1121,7 @@ def roots_of_obj(hprof_data, obj):
 
 def zygote_references_to_app_objects(hprof_data):
     references = []
-    for obj in hprof_data.object_id_dict.values():
+    for obj in list(hprof_data.object_id_dict.values()):
         if obj.heap.name == "zygote":
             for reference in obj.outgoing_references():
                 if reference.referee.heap.name != "zygote":
@@ -1154,7 +1154,7 @@ def write_bitmap(bitmap_instance, filename):
 def open_bitmaps(bitmap_instances):
     tmp_dir = tempfile.mkdtemp(suffix="bitmaps")
     subprocess.call(["open", tmp_dir])  # this only works in Mac - sorry!
-    print("Writing %d bitmaps to %s." % (len(bitmap_instances), tmp_dir))
+    print(("Writing %d bitmaps to %s." % (len(bitmap_instances), tmp_dir)))
     for i, bitmap in enumerate(bitmap_instances):
         write_bitmap(bitmap, os.path.join(tmp_dir, "bitmap_%s.png" % bitmap.object_id))
         sys.stdout.write("\r%d of %d complete" % (i + 1, len(bitmap_instances)))
@@ -1174,12 +1174,12 @@ def print_view_tree(view_root=None):
         else:
             view_root = all_view_roots[0]
     else:
-        print("not an hprofdata: %s" % view_root.__class__)
+        print(("not an hprofdata: %s" % view_root.__class__))
 
-    print("%s" % view_root)
+    print(("%s" % view_root))
 
     def print_view_node(view_node, indent):
-        print("%s%s" % (indent, view_node))
+        print(("%s%s" % (indent, view_node)))
         if "android.view.ViewGroup" in view_node.class_fields:
             children = view_node.class_fields["android.view.ViewGroup"]["mChildren"]
             for child in children.array_values:
@@ -1364,25 +1364,25 @@ def wasted_segments(char_array):
 # substring can result in wasted char arrays
 # This isn't exact - need to figure out way of determining unused chars in the middle
 def wasted_string_char_arrays(hprof_data):
-    char_arrays = filter(
+    char_arrays = list(filter(
         lambda v: isinstance(v, HprofPrimitiveArray) and v.prim_type is HprofBasic.CHAR,
-        hprof_data.object_id_dict.values(),
-    )
-    with_wasted = map(lambda x: (x, wasted_segments(x)), char_arrays)
-    return filter(lambda x: len(x[1]) > 0, with_wasted)
+        list(hprof_data.object_id_dict.values()),
+    ))
+    with_wasted = [(x, wasted_segments(x)) for x in char_arrays]
+    return [x for x in with_wasted if len(x[1]) > 0]
 
 
 def wasted_string_char_count(hprof_data):
     wasted_char_array_info = wasted_string_char_arrays(hprof_data)
 
     def segment_length(segments):
-        return sum(map(lambda x: x[1] - x[0], segments))
+        return sum([x[1] - x[0] for x in segments])
 
-    return sum(map(lambda x: segment_length(x[1]), wasted_char_array_info))
+    return sum([segment_length(x[1]) for x in wasted_char_array_info])
 
 
 def app_heap_objects(hprof_data):
-    return [o for o in hprof_data.object_id_dict.values() if o.heap.name != "zygote"]
+    return [o for o in list(hprof_data.object_id_dict.values()) if o.heap.name != "zygote"]
 
 
 # return a set of containing 'clazz' and all its subclasses
@@ -1410,7 +1410,7 @@ def instances_in(hprof_data, classes):
             classes = set(classes)
         else:
             classes = {classes}
-    return {obj for obj in hprof_data.object_id_dict.values() if obj.clazz in classes}
+    return {obj for obj in list(hprof_data.object_id_dict.values()) if obj.clazz in classes}
 
 
 # return a map of class => {instances} for the given sequence of instances
@@ -1436,7 +1436,7 @@ def java_locals(hprof_data):
         for root in hprof_data.roots
         if root.heap_tag == HeapTag.ROOT_THREAD_OBJECT
     }
-    thread_locals = {thread: set() for thread in threads.values()}
+    thread_locals = {thread: set() for thread in list(threads.values())}
     for loc in locs:
         thread_locals[threads[loc.thread_serial]].add(loc.obj)
     return thread_locals
@@ -1458,7 +1458,7 @@ if __name__ == "__main__":
     allow_missing_ids = args.allow_missing_ids
     hp = parse_filename(args.hprof)
     classes = []
-    for cls_name, cls in hp.class_name_dict.items():
+    for cls_name, cls in list(hp.class_name_dict.items()):
         classes.append(
             (
                 cls_name,
