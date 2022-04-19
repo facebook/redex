@@ -58,7 +58,7 @@ void AnonymousClassMergingPass::run_pass(DexStoresVector& stores,
       (!stores.empty() && stores[0].num_dexes() == 1)) {
     m_merging_spec.include_primary_dex = true;
   }
-  m_merging_spec.dedup_throw_blocks = false;
+  m_merging_spec.dedup_fill_in_stack_trace = false;
   m_merging_spec.min_count = m_min_count;
 
   discover_mergeable_anonymous_classes(

@@ -222,6 +222,31 @@ bool needs_pos(const IRList::iterator& begin, const IRList::iterator& end) {
 
 namespace dedup_blocks_impl {
 
+bool is_ineligible_because_of_fill_in_stack_trace(const IRInstruction* insn) {
+  auto op = insn->opcode();
+  // Direct call to a constructor whose class derives from Throwable?
+  // (It would indirectly call java.lang.Throwable.fillInStackTrace.)
+  if (opcode::is_invoke_direct(op) && method::is_init(insn->get_method()) &&
+      type::is_subclass(type::java_lang_Throwable(),
+                        insn->get_method()->get_class())) {
+    return true;
+  }
+  // Explicit virtual call to the java.lang.Throwable.fillInStackTrace
+  // method?
+  if (opcode::is_invoke_virtual(op) &&
+      resolve_method(insn->get_method(), MethodSearch::Virtual) ==
+          method::java_lang_Throwable_fillInStackTrace()) {
+    return true;
+  }
+  // An outlined method might invoke one of the above, so we are being
+  // conservative here.
+  if (opcode::is_invoke_static(op) &&
+      outliner::is_outlined_method(insn->get_method())) {
+    return true;
+  }
+  return false;
+}
+
 class DedupBlocksImpl {
  public:
   DedupBlocksImpl(const Config* config, Stats& stats)
@@ -831,29 +856,8 @@ class DedupBlocksImpl {
     }
     auto ii = InstructionIterable(block);
     return std::any_of(ii.begin(), ii.end(), [](auto& mie) {
-      auto op = mie.insn->opcode();
-      // Direct call to a constructor whose class derives from Throwable?
-      // (It would indirectly call java.lang.Throwable.fillInStackTrace.)
-      if (opcode::is_invoke_direct(op) &&
-          method::is_init(mie.insn->get_method()) &&
-          type::is_subclass(type::java_lang_Throwable(),
-                            mie.insn->get_method()->get_class())) {
-        return true;
-      }
-      // Explicit virtual call to the java.lang.Throwable.fillInStackTrace
-      // method?
-      if (opcode::is_invoke_virtual(op) &&
-          resolve_method(mie.insn->get_method(), MethodSearch::Virtual) ==
-              method::java_lang_Throwable_fillInStackTrace()) {
-        return true;
-      }
-      // An outlined method might invoke one of the above, so we are being
-      // conservative here.
-      if (opcode::is_invoke_static(op) &&
-          outliner::is_outlined_method(mie.insn->get_method())) {
-        return true;
-      }
-      return false;
+      return dedup_blocks_impl::is_ineligible_because_of_fill_in_stack_trace(
+          mie.insn);
     });
   }
 
@@ -892,8 +896,8 @@ class DedupBlocksImpl {
   // }
   // (a or b) = new Foo();
   //
-  // We avoid this situation by skipping blocks that contain an init invocation
-  // to an object that didn't come from a unique instruction.
+  // We avoid this situation by skipping blocks that contain an init
+  // invocation to an object that didn't come from a unique instruction.
   static boost::optional<std::vector<IRInstruction*>>
   get_init_receiver_instructions_defined_outside_of_block(
       cfg::Block* block, Lazy<LiveRanges>& live_ranges) {
@@ -986,8 +990,8 @@ class DedupBlocksImpl {
     }
 
     // Next we check if there are disagreeing init-receiver instructions.
-    // TODO: Instead of just dropping all blocks in this case, do finer-grained
-    // partitioning.
+    // TODO: Instead of just dropping all blocks in this case, do
+    // finer-grained partitioning.
     boost::optional<std::vector<IRInstruction*>> insns;
     for (cfg::Block* block : blocks) {
       auto other_insns =
@@ -1008,8 +1012,8 @@ class DedupBlocksImpl {
     }
 
     // Next we check if there are inconsistently typed incoming registers.
-    // TODO: Instead of just dropping all blocks in this case, do finer-grained
-    // partitioning.
+    // TODO: Instead of just dropping all blocks in this case, do
+    // finer-grained partitioning.
 
     // Initializing stuff...
     auto live_in_vars =
@@ -1030,9 +1034,9 @@ class DedupBlocksImpl {
       }
     }
     always_assert(joined_env);
-    // Let's see if any of the type environments of the existing blocks matches,
-    // considering live-in registers. If so, we know that things will verify
-    // after deduping.
+    // Let's see if any of the type environments of the existing blocks
+    // matches, considering live-in registers. If so, we know that things will
+    // verify after deduping.
     // TODO: Can we be even more lenient without actually deduping and
     // re-type-inferring?
     for (cfg::Block* block : blocks) {

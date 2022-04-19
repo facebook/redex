@@ -53,7 +53,7 @@ void IntraDexClassMergingPass::run_pass(DexStoresVector& stores,
   // The merging strategy can be tuned.
   m_merging_spec.strategy = strategy::BY_CODE_SIZE;
   // Can merge FULL interdex groups.
-  m_merging_spec.dedup_throw_blocks = false;
+  m_merging_spec.dedup_fill_in_stack_trace = false;
   m_merging_spec.per_dex_grouping = true;
   auto scope = build_class_scope(stores);
   TypeSystem type_system(scope);
