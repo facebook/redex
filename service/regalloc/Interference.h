@@ -252,7 +252,7 @@ class Graph {
  * the given IROpcode when it is converted to a DexInstruction in the
  * instruction lowering process.
  */
-size_t dest_bit_width(const IRList::iterator& it);
+size_t dest_bit_width(const cfg::InstructionIterator& it);
 
 /*
  * The largest valid register that we can map the symreg in insn->src(src_index)
@@ -272,7 +272,7 @@ inline uint32_t div_ceil(uint32_t a, uint32_t b) { return (a + b - 1) / b; }
  * limited public interface.
  */
 class GraphBuilder {
-  static void update_node_constraints(const IRList::iterator&,
+  static void update_node_constraints(const cfg::InstructionIterator&,
                                       const RangeSet&,
                                       Graph*);
 

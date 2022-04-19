@@ -11,7 +11,7 @@
 #include <boost/pending/disjoint_sets.hpp>
 #include <boost/property_map/property_map.hpp>
 
-#include "ControlFlow.h"
+#include "CFGMutation.h"
 #include "Debug.h"
 #include "DexOpcode.h"
 #include "DexUtil.h"
@@ -92,7 +92,7 @@ static size_t sum_src_sizes(const IRInstruction* insn) {
  */
 RangeSet init_range_set(IRCode* code) {
   RangeSet range_set;
-  for (const auto& mie : InstructionIterable(code)) {
+  for (const auto& mie : InstructionIterable(code->cfg())) {
     const auto* insn = mie.insn;
     auto op = insn->opcode();
     bool is_range{false};
@@ -358,14 +358,14 @@ bool Allocator::coalesce(interference::Graph* ig, IRCode* code) {
   Rank rank_map;
   Parent parent_map;
   RegisterAliasSets aliases((RankPMap(rank_map)), (ParentPMap(parent_map)));
-  for (reg_t i = 0; i < code->get_registers_size(); ++i) {
+  for (reg_t i = 0; i < code->cfg().get_registers_size(); ++i) {
     aliases.make_set(i);
   }
 
-  auto ii = InstructionIterable(code);
-  auto end = ii.end();
+  auto ii = InstructionIterable(code->cfg());
   auto old_coalesce_count = m_stats.moves_coalesced;
-  for (auto it = ii.begin(); it != end; ++it) {
+  cfg::CFGMutation m(code->cfg());
+  for (auto it = ii.begin(); it != ii.end(); ++it) {
     auto insn = it->insn;
     auto op = insn->opcode();
     if (!opcode::is_a_move(op) && !has_2addr_form(op) &&
@@ -374,7 +374,9 @@ bool Allocator::coalesce(interference::Graph* ig, IRCode* code) {
     }
     reg_t dest;
     if (insn->has_move_result_pseudo()) {
-      dest = ir_list::move_result_pseudo_of(it.unwrap())->dest();
+      auto move_result = code->cfg().move_result_of(it);
+      always_assert(!move_result.is_end());
+      dest = move_result->insn->dest();
     } else {
       dest = insn->dest();
     }
@@ -383,7 +385,7 @@ bool Allocator::coalesce(interference::Graph* ig, IRCode* code) {
     if (dest == src) {
       if (opcode::is_a_move(op)) {
         ++m_stats.moves_coalesced;
-        code->remove_opcode(it.unwrap());
+        m.remove(it);
       }
     } else if (ig->is_coalesceable(dest, src)) {
       // This unifies the two trees represented by dest and src
@@ -401,13 +403,15 @@ bool Allocator::coalesce(interference::Graph* ig, IRCode* code) {
             SHOW(insn));
       if (opcode::is_a_move(op)) {
         ++m_stats.moves_coalesced;
-        code->remove_opcode(it.unwrap());
+        m.remove(it);
       }
     }
   }
 
+  m.flush();
+
   transform::RegMap reg_map;
-  for (reg_t i = 0; i < code->get_registers_size(); ++i) {
+  for (reg_t i = 0; i < code->cfg().get_registers_size(); ++i) {
     reg_map.emplace(i, aliases.find_set(i));
   }
   transform::remap_registers(code, reg_map);
@@ -592,7 +596,7 @@ void Allocator::select_params(const IRCode* code,
                               SpillPlan* spill_plan) {
   std::unordered_map<reg_t, VirtualRegistersFile> vreg_files;
   std::vector<reg_t> param_regs;
-  auto param_insns = code->get_param_instructions();
+  auto param_insns = code->cfg().get_param_instructions();
   size_t params_size{0};
   for (auto& mie : InstructionIterable(param_insns)) {
     auto dest = mie.insn->dest();
@@ -751,19 +755,21 @@ void Allocator::find_split(const interference::Graph& ig,
   }
 }
 
-std::unordered_map<reg_t, IRList::iterator> Allocator::find_param_splits(
-    const std::unordered_set<reg_t>& orig_params, IRCode* code) {
-  std::unordered_map<reg_t, IRList::iterator> load_locations;
+std::unordered_map<reg_t, cfg::InstructionIterator>
+Allocator::find_param_splits(const std::unordered_set<reg_t>& orig_params,
+                             IRCode* code) {
+  std::unordered_map<reg_t, cfg::InstructionIterator> load_locations;
   if (orig_params.empty()) {
     return load_locations;
   }
   // Erase parameter from list if there exist instructions overwriting the
   // symreg.
-  auto pend = code->get_param_instructions().end();
+  auto& cfg = code->cfg();
+  cfg::Block* first_block_with_insns = cfg.get_first_block_with_insns();
+  auto pend = first_block_with_insns->get_first_non_param_loading_insn();
   std::unordered_set<reg_t> params = orig_params;
-  auto ii = InstructionIterable(code);
-  auto end = ii.end();
-  for (auto it = ii.begin(); it != end; ++it) {
+  auto ii = InstructionIterable(cfg);
+  for (auto it = ii.begin(); it != ii.end(); ++it) {
     auto* insn = it->insn;
     if (opcode::is_a_load_param(insn->opcode())) {
       continue;
@@ -772,7 +778,13 @@ std::unordered_map<reg_t, IRList::iterator> Allocator::find_param_splits(
       auto dest = insn->dest();
       if (params.find(dest) != params.end()) {
         params.erase(dest);
-        load_locations[dest] = pend;
+        auto emplaced =
+            load_locations
+                .emplace(
+                    dest,
+                    first_block_with_insns->to_cfg_instruction_iterator(pend))
+                .second;
+        always_assert(emplaced);
         ++m_stats.params_spill_early;
       }
     }
@@ -781,7 +793,6 @@ std::unordered_map<reg_t, IRList::iterator> Allocator::find_param_splits(
     return load_locations;
   }
 
-  auto& cfg = code->cfg();
   cfg::Block* start_block = cfg.entry_block();
   auto doms = dominators::SimpleFastDominators<cfg::GraphInterface>(cfg);
   for (auto param : params) {
@@ -805,12 +816,23 @@ std::unordered_map<reg_t, IRList::iterator> Allocator::find_param_splits(
           !opcode::is_branch(insn_it->insn->opcode()) &&
           !opcode::may_throw(insn_it->insn->opcode())) {
         ++insn_it;
+        always_assert(insn_it == idom->end());
       }
-      load_locations[param] = insn_it;
+      auto emplaced =
+          load_locations
+              .emplace(param, idom->to_cfg_instruction_iterator(insn_it))
+              .second;
+      always_assert(emplaced);
     } else {
       TRACE(REG, 5, "Inserting param load of v%u in B%zu", param,
             block_uses[0]->id());
-      load_locations[param] = find_first_use_in_block(param, block_uses[0]);
+      auto first_use_it = find_first_use_in_block(param, block_uses[0]);
+      auto emplaced =
+          load_locations
+              .emplace(param,
+                       block_uses[0]->to_cfg_instruction_iterator(first_use_it))
+              .second;
+      always_assert(emplaced);
     }
   }
   return load_locations;
@@ -837,15 +859,16 @@ void Allocator::split_params(const interference::Graph& ig,
     return;
   }
 
+  auto& cfg = code->cfg();
   // Remap the operands of the load-param opcodes
-  auto params = code->get_param_instructions();
+  auto params = cfg.get_param_instructions();
   auto param_insns = InstructionIterable(params);
   std::unordered_map<reg_t, reg_t> param_to_temp;
   for (auto& mie : param_insns) {
     auto insn = mie.insn;
     auto dest = insn->dest();
     if (load_locations.find(dest) != load_locations.end()) {
-      auto temp = code->allocate_temp();
+      auto temp = cfg.allocate_temp();
       insn->set_dest(temp);
       param_to_temp[dest] = temp;
     }
@@ -854,7 +877,7 @@ void Allocator::split_params(const interference::Graph& ig,
   for (const auto& param_pair : load_locations) {
     auto dest = param_pair.first;
     auto first_use_it = param_pair.second;
-    code->insert_before(
+    cfg.insert_before(
         first_use_it,
         gen_move(ig.get_node(dest).type(), dest, param_to_temp.at(dest)));
     ++m_stats.param_spill_moves;
@@ -880,10 +903,10 @@ void Allocator::spill(const interference::Graph& ig,
                       const RangeSet& range_set,
                       IRCode* code) {
   // TODO: account for "close" defs and uses. See [Briggs92], section 8.7
-
-  auto ii = InstructionIterable(code);
-  auto end = ii.end();
-  for (auto it = ii.begin(); it != end; ++it) {
+  auto& cfg = code->cfg();
+  cfg::CFGMutation m(cfg);
+  auto ii = cfg::InstructionIterable(cfg);
+  for (auto it = ii.begin(); it != ii.end(); ++it) {
     auto* insn = it->insn;
     if (range_set.contains(insn)) {
       // Spill range symregs
@@ -893,11 +916,11 @@ void Allocator::spill(const interference::Graph& ig,
         for (auto idx : to_spill) {
           auto src = insn->src(idx);
           auto& node = ig.get_node(src);
-          auto temp = code->allocate_temp();
+          auto temp = cfg.allocate_temp();
           insn->set_src(idx, temp);
           auto mov = gen_move(node.type(), temp, src);
+          m.insert_before(it, {mov});
           ++m_stats.range_spill_moves;
-          code->insert_before(it.unwrap(), mov);
         }
       }
     } else {
@@ -915,27 +938,27 @@ void Allocator::spill(const interference::Graph& ig,
         auto max_value = max_value_for_src(insn, i, node.width() == 2);
         if (sp_it != spill_plan.global_spills.end() &&
             sp_it->second > max_value) {
-          auto temp = code->allocate_temp();
+          auto temp = cfg.allocate_temp();
           insn->set_src(i, temp);
           auto mov = gen_move(node.type(), temp, src);
+          m.insert_before(it, {mov});
           ++m_stats.global_spill_moves;
-          code->insert_before(it.unwrap(), mov);
         }
       }
       if (insn->has_dest()) {
         auto dest = insn->dest();
         auto sp_it = spill_plan.global_spills.find(dest);
         if (sp_it != spill_plan.global_spills.end() &&
-            sp_it->second > max_unsigned_value(dest_bit_width(it.unwrap()))) {
-          auto temp = code->allocate_temp();
+            sp_it->second > max_unsigned_value(dest_bit_width(it))) {
+          auto temp = cfg.allocate_temp();
           insn->set_dest(temp);
-          it.reset(code->insert_after(
-              it.unwrap(), gen_move(ig.get_node(dest).type(), dest, temp)));
+          m.insert_after(it, {gen_move(ig.get_node(dest).type(), dest, temp)});
           ++m_stats.global_spill_moves;
         }
       }
     }
   }
+  m.flush();
 }
 
 /*
@@ -962,11 +985,12 @@ void Allocator::spill(const interference::Graph& ig,
  */
 static void dedicate_this_register(IRCode* code, bool is_static) {
   always_assert(!is_static);
-  auto param_insns = code->get_param_instructions();
+  auto& cfg = code->cfg();
+  auto param_insns = cfg.get_param_instructions();
   auto this_insn = param_insns.begin()->insn;
 
   bool this_needs_split{false};
-  for (const auto& mie : InstructionIterable(code)) {
+  for (const auto& mie : InstructionIterable(cfg)) {
     auto insn = mie.insn;
     if (insn->has_dest() && insn->dest() == this_insn->dest() &&
         insn != this_insn) {
@@ -977,11 +1001,14 @@ static void dedicate_this_register(IRCode* code, bool is_static) {
 
   if (this_needs_split) {
     auto old_reg = this_insn->dest();
-    this_insn->set_dest(code->allocate_temp());
-    auto insert_it = param_insns.end();
-    code->insert_before(insert_it, (new IRInstruction(OPCODE_MOVE_OBJECT))
-                                       ->set_dest(old_reg)
-                                       ->set_src(0, this_insn->dest()));
+    this_insn->set_dest(cfg.allocate_temp());
+    cfg::Block* first_block_with_insns = cfg.get_first_block_with_insns();
+    auto insert_it = first_block_with_insns->get_first_non_param_loading_insn();
+    cfg.insert_before(
+        first_block_with_insns->to_cfg_instruction_iterator(insert_it),
+        (new IRInstruction(OPCODE_MOVE_OBJECT))
+            ->set_dest(old_reg)
+            ->set_src(0, this_insn->dest()));
   }
 }
 
@@ -1037,7 +1064,7 @@ void Allocator::allocate(IRCode* code, bool is_static) {
     // gets overwritten in the method. See check_no_overwrite_this in
     // IRTypeChecker.h for the rationale.
     if (no_overwrite_this) {
-      auto this_insn = code->get_param_instructions().begin()->insn;
+      auto this_insn = code->cfg().get_param_instructions().begin()->insn;
       for (const auto& pair : ig.nodes()) {
         ig.add_edge(this_insn->dest(), pair.first);
       }
@@ -1094,10 +1121,6 @@ void Allocator::allocate(IRCode* code, bool is_static) {
         m_stats.split_moves +=
             split(fixpoint_iter, split_plan, split_costs, ig, code);
       }
-
-      // Since we have inserted instructions, we need to rebuild the CFG to
-      // ensure that block boundaries remain correct
-      code->build_cfg(/* editable */ false);
     } else {
       transform::remap_registers(code, reg_transform.map);
       code->set_registers_size(reg_transform.size);

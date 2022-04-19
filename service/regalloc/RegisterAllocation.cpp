@@ -50,11 +50,12 @@ Allocator::Stats allocate(
     live_range::renumber_registers(code, /* width_aware */ true);
     // The transformations below all require a CFG. Build it once
     // here instead of requiring each transform to build it.
-    code->build_cfg(/* editable */ false);
+    code->build_cfg();
     Allocator allocator(allocator_config);
     allocator.allocate(code, is_static);
-    TRACE(REG, 5, "After alloc: regs:%d code:\n%s", code->get_registers_size(),
-          SHOW(code));
+    code->cfg().recompute_registers_size();
+    TRACE(REG, 5, "After alloc: regs:%d code:\n%s",
+          code->cfg().get_registers_size(), SHOW(code->cfg()));
     return allocator.get_stats();
   } catch (const std::exception& e) {
     std::cerr << "Failed to allocate " << method_describer() << ": " << e.what()

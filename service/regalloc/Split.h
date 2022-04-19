@@ -15,7 +15,7 @@ namespace regalloc {
 
 using vreg_t = uint16_t;
 
-enum BlockMode { FALLTHROUGH, BRANCH, TRYCATCH };
+enum BlockMode { BRANCH, TRYCATCH };
 
 struct SplitConstraints {
   // Map of catch blocks and number of incoming control flow edges on
@@ -107,12 +107,6 @@ struct BlockLoadInfo {
   // instructions we should inserted for these edges.
   // This is an ordered map because we iterate through it.
   std::map<BlockEdge, BlockModeInsn, block_edge_comparator> mode_and_insn;
-  // Map of branch edges between two blocks and pairs of MethodItemEntry of
-  // BRANCH instruction and branch target.
-  std::unordered_map<BlockEdge,
-                     std::pair<MethodItemEntry*, MethodItemEntry*>,
-                     boost::hash<BlockEdge>>
-      target_branch;
 };
 
 using namespace interference;
