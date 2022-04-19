@@ -35,10 +35,10 @@ class TestDex(unittest.TestCase):
 
         for i, s_data_item in enumerate(strings):
             idx = dex_file.find_string_idx(s_data_item)
-            self.assertEquals(i, idx, f'Different index for "{s_data_item.data}"')
+            self.assertEqual(i, idx, f'Different index for "{s_data_item.data}"')
 
             idx = dex_file.find_string_idx(s_data_item.data)
-            self.assertEquals(i, idx, f'Different index for "{s_data_item.data}"')
+            self.assertEqual(i, idx, f'Different index for "{s_data_item.data}"')
 
         # Synthesize some strings.
         for s_data_item in strings:
@@ -46,8 +46,8 @@ class TestDex(unittest.TestCase):
                 input = s_data_item.data
                 before = chr(ord(input[0]) - 1) + input[1:]
                 idx = dex_file.find_string_idx(before)
-                self.assertEquals(idx, -1, f'Found "{before}"')
+                self.assertEqual(idx, -1, f'Found "{before}"')
 
             after = s_data_item.data + "X"
             idx = dex_file.find_string_idx(after)
-            self.assertEquals(idx, -1, f'Found "{after}"')
+            self.assertEqual(idx, -1, f'Found "{after}"')

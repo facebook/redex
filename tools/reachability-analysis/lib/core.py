@@ -94,7 +94,7 @@ class ReachableMethod(ReachableObject):
         self.overriding = []
         self.overriden_by = []
 
-        if self.name in mog.nodes.keys():
+        if self.name in list(mog.nodes.keys()):
             n = mog.nodes[self.name]
             self.overriding = n.parents
             self.overriden_by = n.children
@@ -103,11 +103,11 @@ class ReachableMethod(ReachableObject):
         ret = super(ReachableMethod, self).__repr__()
         if len(self.overriding) != 0:
             ret += "Overriding %s methods:\n" % len(self.overriding)
-            ret += show_list_with_idx(list(map(lambda n: n.name, self.overriding)))
+            ret += show_list_with_idx(list([n.name for n in self.overriding]))
 
         if len(self.overriden_by) != 0:
             ret += "Overriden by %s methods:\n" % len(self.overriden_by)
-            ret += show_list_with_idx(list(map(lambda n: n.name, self.overriden_by)))
+            ret += show_list_with_idx(list([n.name for n in self.overriden_by]))
         return ret
 
 
@@ -185,11 +185,11 @@ class ReachabilityGraph(AbstractGraph):
         self.nodes[(node.type, node.name)] = node
 
     def list_nodes(self, search_str=None):
-        for key in self.nodes.keys():
+        for key in list(self.nodes.keys()):
             type = ReachableObjectType.to_string(key[0])
             name = key[1]
             if search_str is None or search_str in name:
-                print('(ReachableObjectType.%s, "%s")' % (type, name))
+                print(('(ReachableObjectType.%s, "%s")' % (type, name)))
 
     @staticmethod
     def add_edge(n1, n2):
@@ -242,9 +242,9 @@ class MethodOverrideGraph(AbstractGraph):
         self.nodes[node.name] = node
 
     def list_nodes(self, search_str=None):
-        for key in self.nodes.keys():
+        for key in list(self.nodes.keys()):
             if search_str is None or search_str in key:
-                print('"%s"' % key)
+                print(('"%s"' % key))
 
     @staticmethod
     def add_edge(method, child):
@@ -267,7 +267,7 @@ class CombinedGraph(object):
                     self.method_override_graph,
                 )
 
-        for method in self.method_override_graph.nodes.keys():
+        for method in list(self.method_override_graph.nodes.keys()):
             method_node = self.reachability_graph.get_node(method)
             for child in method_node.overriden_by:
                 # find child in reachability graph, then build edge
@@ -292,7 +292,7 @@ class CombinedGraph(object):
     def node(self, search_str=None, search_type=None):
         node = None
         known_names = []
-        for (type, name) in self.nodes.keys():
+        for (type, name) in list(self.nodes.keys()):
             if search_type is not None and type != search_type:
                 # Classes and Annotations may have naming collisions
                 # if that happens, use the search_type argument to filter
@@ -313,12 +313,14 @@ class CombinedGraph(object):
         # if after all we still can't get which one does the user want,
         # print all options
         if node is None:
-            print("Found %s matching names:" % len(known_names))
+            print(("Found %s matching names:" % len(known_names)))
             idx = 0
             for (type, name) in known_names:
                 print(
-                    '%d: (ReachableObjectType.%s, "%s")'
-                    % (idx, ReachableObjectType.to_string(type), name)
+                    (
+                        '%d: (ReachableObjectType.%s, "%s")'
+                        % (idx, ReachableObjectType.to_string(type), name)
+                    )
                 )
                 idx += 1
 

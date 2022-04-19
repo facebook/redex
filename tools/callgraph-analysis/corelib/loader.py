@@ -72,7 +72,7 @@ class CallGraph(object):
             print("class not exist in callgraph")
             return None
         return_val = []
-        for value in self.node_classes[class_name].values():
+        for value in list(self.node_classes[class_name].values()):
             return_val.extend(value)
         return return_val
 

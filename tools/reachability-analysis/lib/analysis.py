@@ -43,12 +43,12 @@ def group_by_common_keys(d):
     matched classes.
     """
     value_to_keys = defaultdict(set)
-    for k, values in d.items():
+    for k, values in list(d.items()):
         for v in values:
             value_to_keys[v].add(k)
 
     grouped_keys = defaultdict(set)
-    for value, keys in value_to_keys.items():
+    for value, keys in list(value_to_keys.items()):
         grouped_keys[frozenset(keys)].add(value)
 
     return grouped_keys
@@ -59,7 +59,7 @@ def find_nodes(graph, filter_fn):
     Find all nodes whose names pass the predicate :filter_fn.
     """
     nodes = set()
-    for node in graph.nodes.values():
+    for node in list(graph.nodes.values()):
         if filter_fn(node.name):
             nodes.add(node)
     return nodes
@@ -70,7 +70,7 @@ def find_nodes_in_packages(graph, pkg_prefixes):
     Find all nodes that fall under the list of :pkg_prefixes.
     """
     nodes = set()
-    for node in graph.nodes.values():
+    for node in list(graph.nodes.values()):
         for pkg_prefix in pkg_prefixes:
             # If we have an array, use its base type
             base_type = node.name.lstrip("[")
@@ -121,7 +121,7 @@ def group_members_by_class(graph):
     Return a map of class -> set of members in that class.
     """
     grouped_members = defaultdict(set)
-    for (ty, name), node in graph.nodes.items():
+    for (ty, name), node in list(graph.nodes.items()):
         if ty in [ReachableObjectType.FIELD, ReachableObjectType.METHOD]:
             cls, sep, _ = name.partition(";")
             cls += ";"
@@ -157,13 +157,13 @@ def get_dominated(graph, query_set):
         for succ in node.succs:
             mark(succ)
 
-    seeds = [node for node in graph.nodes.values() if len(node.preds) == 0]
+    seeds = [node for node in list(graph.nodes.values()) if len(node.preds) == 0]
 
     for seed in seeds:
         mark(seed)
 
     closure = set()
-    for node in graph.nodes.values():
+    for node in list(graph.nodes.values()):
         if node not in visited:
             closure.add(node)
 

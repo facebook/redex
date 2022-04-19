@@ -645,7 +645,7 @@ class XZSDexMode(BaseDexMode):
                 with open(jarpath, "wb") as jar:
                     jar.write(cj.read(jar_sizes[i]))
 
-        for j in jar_sizes.keys():
+        for j in list(jar_sizes.keys()):
             jar_size = getsize(
                 dex_dir + "/" + self._store_name + "-" + str(j) + ".dex.jar"
             )
