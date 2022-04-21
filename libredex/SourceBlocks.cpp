@@ -42,30 +42,40 @@ constexpr SourceBlock::Val kXVal = SourceBlock::Val::none();
 static SourceBlockConsistencyCheck s_sbcc;
 
 struct InsertHelper {
+  std::ostringstream oss;
   const DexString* method;
   uint32_t id{0};
-  std::ostringstream oss;
   bool serialize;
   bool insert_after_excs;
 
   struct ProfileParserState {
-    s_expr root_expr;
     std::vector<s_expr> expr_stack;
     bool had_profile_failure{false};
-    boost::optional<SourceBlock::Val> default_val;
-    boost::optional<SourceBlock::Val> error_val;
-    ProfileParserState(s_expr root_expr,
-                       std::vector<s_expr> expr_stack,
-                       bool had_profile_failure,
-                       const boost::optional<SourceBlock::Val>& default_val,
-                       const boost::optional<SourceBlock::Val>& error_val)
-        : root_expr(std::move(root_expr)),
-          expr_stack(std::move(expr_stack)),
-          had_profile_failure(had_profile_failure),
+    bool root_expr_is_nil;
+    const SourceBlock::Val* default_val;
+    const SourceBlock::Val* error_val;
+    ProfileParserState(std::vector<s_expr> expr_stack,
+                       bool root_expr_is_nil,
+                       const SourceBlock::Val* default_val,
+                       const SourceBlock::Val* error_val)
+        : expr_stack(std::move(expr_stack)),
+          root_expr_is_nil(root_expr_is_nil),
           default_val(default_val),
           error_val(error_val) {}
   };
   std::vector<ProfileParserState> parser_state;
+  struct MatcherState {
+    const std::string* val_str_ptr;
+    s_expr tail;
+    s_expr inner_tail;
+    s_patn val_str_inner_tail_tail_pattern;
+    s_patn val_str_tail_pattern;
+    MatcherState()
+        : val_str_inner_tail_tail_pattern(
+              {s_patn({s_patn(&val_str_ptr)}, inner_tail)}, tail),
+          val_str_tail_pattern({s_patn(&val_str_ptr)}, tail) {}
+  };
+  MatcherState matcher_state;
 
   InsertHelper(const DexString* method,
                const std::vector<ProfileData>& profiles,
@@ -74,19 +84,21 @@ struct InsertHelper {
       : method(method),
         serialize(serialize),
         insert_after_excs(insert_after_excs) {
+    parser_state.reserve(profiles.size());
     for (const auto& p : profiles) {
       switch (p.index()) {
       case 0:
         // Nothing.
-        parser_state.emplace_back(s_expr(), std::vector<s_expr>(), false,
-                                  boost::none, boost::none);
+        parser_state.emplace_back(std::vector<s_expr>(),
+                                  /* root_expr_is_nil */ true,
+                                  /* default_val */ nullptr,
+                                  /* error_val */ nullptr);
         break;
 
       case 1:
         // Profile string.
         {
-          const auto& pair = std::get<1>(p);
-          const std::string& profile = pair.first;
+          const auto& [profile, error_val_opt] = std::get<1>(p);
           std::istringstream iss{profile};
           s_expr_istream s_expr_input(iss);
           s_expr root_expr;
@@ -96,18 +108,22 @@ struct InsertHelper {
                             profile.c_str(),
                             SHOW(method),
                             s_expr_input.what().c_str());
-          std::vector<s_expr> expr_stack;
-          expr_stack.push_back(s_expr({root_expr}));
-          parser_state.emplace_back(std::move(root_expr), std::move(expr_stack),
-                                    false, boost::none, pair.second);
+          bool root_expr_is_nil = root_expr.is_nil();
+          std::vector<s_expr> expr_stack{s_expr({std::move(root_expr)})};
+          auto* error_val = error_val_opt ? &*error_val_opt : nullptr;
+          parser_state.emplace_back(std::move(expr_stack), root_expr_is_nil,
+                                    /* default_val */ nullptr, error_val);
           break;
         }
 
-      case 2:
+      case 2: {
         // A default Val.
-        parser_state.emplace_back(s_expr(), std::vector<s_expr>(), false,
-                                  std::get<2>(p), boost::none);
+        auto* default_val = &std::get<2>(p);
+        parser_state.emplace_back(std::vector<s_expr>(),
+                                  /* root_expr_is_nil */ true, default_val,
+                                  /* error_val */ nullptr);
         break;
+      }
 
       default:
         not_reached();
@@ -202,6 +218,7 @@ struct InsertHelper {
   std::vector<SourceBlock::Val> start_profile(Block* cur,
                                               bool empty_inner_tail = false) {
     std::vector<SourceBlock::Val> ret;
+    ret.reserve(parser_state.size());
     for (auto& p_state : parser_state) {
       ret.emplace_back(start_profile_one(cur, empty_inner_tail, p_state));
     }
@@ -214,7 +231,7 @@ struct InsertHelper {
     if (p_state.had_profile_failure) {
       return kFailVal;
     }
-    if (p_state.root_expr.is_nil()) {
+    if (p_state.root_expr_is_nil) {
       if (p_state.default_val) {
         return *p_state.default_val;
       }
@@ -227,32 +244,29 @@ struct InsertHelper {
             SHOW(method), cur->id());
       return kFailVal;
     }
-    std::string val_str;
-    const s_expr& e = p_state.expr_stack.back();
-    s_expr tail, inner_tail;
-    if (!s_patn({s_patn({s_patn(&val_str)}, inner_tail)}, tail).match_with(e)) {
+    s_expr& top_expr = p_state.expr_stack.back();
+    if (!matcher_state.val_str_inner_tail_tail_pattern.match_with(top_expr)) {
       p_state.had_profile_failure = true;
       TRACE(MMINL, 3,
             "Failed profile matching for %s: cannot match string for %s",
-            SHOW(method), e.str().c_str());
+            SHOW(method), top_expr.str().c_str());
       return kFailVal;
     }
     if (empty_inner_tail) {
-      redex_assert(inner_tail.is_nil());
+      redex_assert(matcher_state.inner_tail.is_nil());
     }
-    auto val = parse_val(val_str);
+    auto val = parse_val(*matcher_state.val_str_ptr);
     TRACE(MMINL,
           5,
           "Started block with val=%f/%f. Popping %s, pushing %s + %s",
           val ? val->val : std::numeric_limits<float>::quiet_NaN(),
           val ? val->appear100 : std::numeric_limits<float>::quiet_NaN(),
-          e.str().c_str(),
-          tail.str().c_str(),
-          inner_tail.str().c_str());
-    p_state.expr_stack.pop_back();
-    p_state.expr_stack.push_back(tail);
+          top_expr.str().c_str(),
+          matcher_state.tail.str().c_str(),
+          matcher_state.inner_tail.str().c_str());
+    top_expr = std::move(matcher_state.tail);
     if (!empty_inner_tail) {
-      p_state.expr_stack.push_back(inner_tail);
+      p_state.expr_stack.push_back(std::move(matcher_state.inner_tail));
     }
     return val;
   }
@@ -292,33 +306,32 @@ struct InsertHelper {
     if (p_state.had_profile_failure || p_state.expr_stack.empty()) {
       return;
     }
-    std::string val;
-    s_expr& expr = p_state.expr_stack.back();
-    s_expr tail;
-    if (!s_patn({s_patn(&val)}, tail).match_with(expr)) {
+    s_expr& top_expr = p_state.expr_stack.back();
+    if (!matcher_state.val_str_tail_pattern.match_with(top_expr)) {
       p_state.had_profile_failure = true;
       TRACE(MMINL, 3,
             "Failed profile matching for %s: cannot match string for %s",
-            SHOW(method), expr.str().c_str());
+            SHOW(method), top_expr.str().c_str());
       return;
     }
-    std::string expected(1, get_edge_char(e));
-    if (expected != val) {
+    char edge_char = get_edge_char(e);
+    std::string_view expected(&edge_char, 1);
+    if (expected != *matcher_state.val_str_ptr) {
       p_state.had_profile_failure = true;
       TRACE(MMINL, 3,
             "Failed profile matching for %s: edge type \"%s\" did not match "
             "expectation \"%s\"",
-            SHOW(method), val.c_str(), expected.c_str());
+            SHOW(method), matcher_state.val_str_ptr->c_str(),
+            str_copy(expected).c_str());
       return;
     }
     TRACE(MMINL,
           5,
           "Matched edge %s. Popping %s, pushing %s",
-          val.c_str(),
-          expr.str().c_str(),
-          tail.str().c_str());
-    p_state.expr_stack.pop_back();
-    p_state.expr_stack.push_back(tail);
+          matcher_state.val_str_ptr->c_str(),
+          top_expr.str().c_str(),
+          matcher_state.tail.str().c_str());
+    top_expr = std::move(matcher_state.tail);
   }
 
   void end(Block* cur) {
@@ -338,7 +351,7 @@ struct InsertHelper {
     if (p_state.had_profile_failure) {
       return;
     }
-    if (p_state.root_expr.is_nil()) {
+    if (p_state.root_expr_is_nil) {
       return;
     }
     if (p_state.expr_stack.empty()) {
@@ -349,7 +362,8 @@ struct InsertHelper {
       p_state.had_profile_failure = true;
       return;
     }
-    if (!p_state.expr_stack.back().is_nil()) {
+    s_expr& top_expr = p_state.expr_stack.back();
+    if (!top_expr.is_nil()) {
       TRACE(MMINL,
             3,
             "Failed profile matching for %s: edge sentinel not NIL",
@@ -357,7 +371,7 @@ struct InsertHelper {
       p_state.had_profile_failure = true;
       return;
     }
-    TRACE(MMINL, 5, "Popping %s", p_state.expr_stack.back().str().c_str());
+    TRACE(MMINL, 5, "Popping %s", top_expr.str().c_str());
     p_state.expr_stack.pop_back(); // Remove sentinel nil.
   }
 
@@ -365,7 +379,7 @@ struct InsertHelper {
     bool ret = false;
     for (size_t i = 0; i != parser_state.size(); ++i) {
       auto& p_state = parser_state[i];
-      if (p_state.root_expr.is_nil()) {
+      if (p_state.root_expr_is_nil) {
         continue;
       }
       if (!p_state.had_profile_failure) {
