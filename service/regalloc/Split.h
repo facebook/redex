@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include "IRCode.h"
+#include "ControlFlow.h"
 #include "Interference.h"
 #include "Liveness.h"
 
@@ -112,12 +112,14 @@ struct BlockLoadInfo {
 using namespace interference;
 
 // Count load and store for possible split
-void calc_split_costs(const LivenessFixpointIterator&, IRCode*, SplitCosts*);
+void calc_split_costs(const LivenessFixpointIterator&,
+                      cfg::ControlFlowGraph&,
+                      SplitCosts*);
 
 size_t split(const LivenessFixpointIterator&,
              const SplitPlan&,
              const SplitCosts&,
              const Graph&,
-             IRCode*);
+             cfg::ControlFlowGraph&);
 
 } // namespace regalloc

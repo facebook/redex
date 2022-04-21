@@ -14,9 +14,8 @@ namespace regalloc {
 // Calculate potential split costs for each live range. Also store information
 // of catch block and move-result for later use.
 void calc_split_costs(const LivenessFixpointIterator& fixpoint_iter,
-                      IRCode* code,
+                      cfg::ControlFlowGraph& cfg,
                       SplitCosts* split_costs) {
-  auto& cfg = code->cfg();
   for (cfg::Block* block : cfg.blocks()) {
     LivenessDomain live_out = fixpoint_iter.get_live_out_vars_at(block);
     // Incrementing load number for each death in
@@ -74,10 +73,10 @@ IRInstruction* gen_load_for_split(
     const Graph& ig,
     vreg_t l,
     std::unordered_map<vreg_t, vreg_t>* load_store_reg,
-    IRCode* code) {
+    cfg::ControlFlowGraph& cfg) {
   auto load_reg_it = load_store_reg->find(l);
   if (load_reg_it == load_store_reg->end()) {
-    auto temp = code->cfg().allocate_temp();
+    auto temp = cfg.allocate_temp();
     load_store_reg->emplace(l, temp);
     return gen_move(ig.get_node(l).type(), l, temp);
   } else {
@@ -89,10 +88,10 @@ IRInstruction* gen_store_for_split(
     const Graph& ig,
     vreg_t l,
     std::unordered_map<vreg_t, vreg_t>* load_store_reg,
-    IRCode* code) {
+    cfg::ControlFlowGraph& cfg) {
   auto store_reg_it = load_store_reg->find(l);
   if (store_reg_it == load_store_reg->end()) {
-    auto temp = code->cfg().allocate_temp();
+    auto temp = cfg.allocate_temp();
     load_store_reg->emplace(l, temp);
     return gen_move(ig.get_node(l).type(), temp, l);
   } else {
@@ -124,9 +123,8 @@ size_t split_for_block(const SplitPlan& split_plan,
                        const Graph& ig,
                        cfg::Block* block,
                        std::unordered_map<vreg_t, vreg_t>* load_store_reg,
-                       IRCode* code,
+                       cfg::ControlFlowGraph& cfg,
                        BlockLoadInfo* block_load_info) {
-  auto& cfg = code->cfg();
   size_t split_move = 0;
   for (auto& succ : block->succs()) {
     LivenessDomain live_in = fixpoint_iter.get_live_in_vars_at(succ->target());
@@ -143,7 +141,7 @@ size_t split_for_block(const SplitPlan& split_plan,
         if (!live_in.contains(l)) {
           continue;
         }
-        IRInstruction* mov = gen_load_for_split(ig, l, load_store_reg, code);
+        IRInstruction* mov = gen_load_for_split(ig, l, load_store_reg, cfg);
         // Storing the mov needed to be inserted between blocks and
         // insert them together later.
         // If all of blocks's preds have reg died on the edge
@@ -212,10 +210,9 @@ size_t split_for_define(const SplitPlan& split_plan,
                         const Graph& ig,
                         const IRInstruction* insn,
                         const LivenessDomain& live_out,
-                        IRCode* code,
+                        cfg::ControlFlowGraph& cfg,
                         std::unordered_map<vreg_t, vreg_t>* load_store_reg,
                         cfg::InstructionIterator it) {
-  auto& cfg = code->cfg();
   size_t split_move = 0;
   if (insn->has_dest()) {
     auto dest = insn->dest();
@@ -242,7 +239,7 @@ size_t split_for_define(const SplitPlan& split_plan,
         if (!live_out.contains(l)) {
           continue;
         }
-        IRInstruction* mov = gen_store_for_split(ig, l, load_store_reg, code);
+        IRInstruction* mov = gen_store_for_split(ig, l, load_store_reg, cfg);
         cfg.insert_before(it, mov);
         ++split_move;
       }
@@ -259,11 +256,10 @@ size_t split_for_last_use(const SplitPlan& split_plan,
                           const IRInstruction* insn,
                           const LivenessDomain& live_out,
                           cfg::Block* block,
-                          IRCode* code,
+                          cfg::ControlFlowGraph& cfg,
                           std::unordered_map<vreg_t, vreg_t>* load_store_reg,
                           IRList::reverse_iterator& it,
                           BlockLoadInfo* block_load_info) {
-  auto& cfg = code->cfg();
   size_t split_move = 0;
   for (size_t i = 0; i < insn->srcs_size(); ++i) {
     auto src = insn->src(i);
@@ -289,8 +285,7 @@ size_t split_for_last_use(const SplitPlan& split_plan,
         // live_out(block) - live_in(succ_block).
         if (opcode::is_branch(insn->opcode()) && it == block->rbegin()) {
           for (auto& succ : block->succs()) {
-            IRInstruction* mov =
-                gen_load_for_split(ig, l, load_store_reg, code);
+            IRInstruction* mov = gen_load_for_split(ig, l, load_store_reg, cfg);
             auto block_edge =
                 std::pair<cfg::Block*, cfg::Block*>(block, succ->target());
             if (succ->type() == cfg::EDGE_BRANCH ||
@@ -303,7 +298,7 @@ size_t split_for_last_use(const SplitPlan& split_plan,
           continue;
         }
 
-        IRInstruction* mov = gen_load_for_split(ig, l, load_store_reg, code);
+        IRInstruction* mov = gen_load_for_split(ig, l, load_store_reg, cfg);
         if (opcode::writes_result_register(insn->opcode()) &&
             it.base()->type == MFLOW_OPCODE &&
             opcode::is_a_move_result(it.base()->insn->opcode())) {
@@ -326,8 +321,7 @@ size_t split_for_last_use(const SplitPlan& split_plan,
 //    1. Inserting a new block with the insn between two blocks.
 // or 2. Just inserting at beginning of a block.
 size_t insert_insn_between_blocks(const BlockLoadInfo& block_load_info,
-                                  IRCode* code) {
-  auto& cfg = code->cfg();
+                                  cfg::ControlFlowGraph& cfg) {
   size_t split_move = 0;
   for (auto& pair : block_load_info.mode_and_insn) {
     auto block = pair.first.first;
@@ -378,13 +372,12 @@ size_t split(const LivenessFixpointIterator& fixpoint_iter,
              const SplitPlan& split_plan,
              const SplitCosts& split_costs,
              const Graph& ig,
-             IRCode* code) {
+             cfg::ControlFlowGraph& cfg) {
   // Keep track of which reg is stored or loaded to which temp
   // so that we can get the right reg loaded or stored.
   std::unordered_map<vreg_t, vreg_t> load_store_reg;
   BlockLoadInfo block_load_info;
   size_t split_move = 0;
-  auto& cfg = code->cfg();
 
   for (cfg::Block* block : cfg.blocks()) {
     LivenessDomain live_out = fixpoint_iter.get_live_out_vars_at(block);
@@ -396,7 +389,7 @@ size_t split(const LivenessFixpointIterator& fixpoint_iter,
                                   ig,
                                   block,
                                   &load_store_reg,
-                                  code,
+                                  cfg,
                                   &block_load_info);
     // For each instruction in block in reverse order
     for (auto it = block->rbegin(); it != block->rend(); ++it) {
@@ -406,7 +399,7 @@ size_t split(const LivenessFixpointIterator& fixpoint_iter,
       // Split for define and last use of reg.
       auto insn = it->insn;
       auto cfg_it = block->to_cfg_instruction_iterator(--(it.base()));
-      split_move += split_for_define(split_plan, ig, insn, live_out, code,
+      split_move += split_for_define(split_plan, ig, insn, live_out, cfg,
                                      &load_store_reg, cfg_it);
 
       split_move += split_for_last_use(split_plan,
@@ -414,7 +407,7 @@ size_t split(const LivenessFixpointIterator& fixpoint_iter,
                                        insn,
                                        live_out,
                                        block,
-                                       code,
+                                       cfg,
                                        &load_store_reg,
                                        it,
                                        &block_load_info);
@@ -424,7 +417,7 @@ size_t split(const LivenessFixpointIterator& fixpoint_iter,
   }
 
   // Insert new blocks or instructions for live range dead on edge.
-  split_move += insert_insn_between_blocks(block_load_info, code);
+  split_move += insert_insn_between_blocks(block_load_info, cfg);
   return split_move;
 }
 

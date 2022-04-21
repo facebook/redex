@@ -10,7 +10,6 @@
 #include <stack>
 
 #include "ControlFlow.h"
-#include "IRCode.h"
 #include "Interference.h"
 #include "Liveness.h"
 #include "Split.h"
@@ -20,7 +19,7 @@ namespace regalloc {
 
 using vreg_t = uint16_t;
 
-RangeSet init_range_set(IRCode*);
+RangeSet init_range_set(cfg::ControlFlowGraph&);
 
 namespace graph_coloring {
 
@@ -106,25 +105,25 @@ class Allocator {
 
   explicit Allocator(const Config& config) : m_config(config) {}
 
-  bool coalesce(interference::Graph*, IRCode*);
+  bool coalesce(interference::Graph*, cfg::ControlFlowGraph&);
 
   void simplify(interference::Graph*,
                 std::stack<reg_t>* select_stack,
                 std::stack<reg_t>* spilled_select_stack);
 
-  void select(const IRCode*,
+  void select(const cfg::ControlFlowGraph&,
               const interference::Graph&,
               std::stack<reg_t>* select_stack,
               RegisterTransform*,
               SpillPlan*);
 
-  void select_ranges(const IRCode*,
+  void select_ranges(const cfg::ControlFlowGraph&,
                      const interference::Graph&,
                      const RangeSet&,
                      RegisterTransform*,
                      SpillPlan*);
 
-  void select_params(const IRCode*,
+  void select_params(const cfg::ControlFlowGraph&,
                      const interference::Graph&,
                      RegisterTransform*,
                      SpillPlan*);
@@ -136,19 +135,18 @@ class Allocator {
                   SplitPlan*);
 
   std::unordered_map<reg_t, cfg::InstructionIterator> find_param_splits(
-      const std::unordered_set<reg_t>&, IRCode*);
+      const std::unordered_set<reg_t>&, cfg::ControlFlowGraph&);
 
   void split_params(const interference::Graph&,
                     const std::unordered_set<reg_t>& param_spills,
-                    IRCode*);
+                    cfg::ControlFlowGraph&);
 
   void spill(const interference::Graph&,
              const SpillPlan&,
              const RangeSet&,
-             IRCode*);
+             cfg::ControlFlowGraph&);
 
-  void allocate(DexMethod*);
-  void allocate(IRCode*, bool);
+  void allocate(cfg::ControlFlowGraph& cfg, bool);
 
   const Stats& get_stats() const { return m_stats; }
 

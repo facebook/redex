@@ -13,7 +13,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include "IRCode.h"
+#include "ControlFlow.h"
 #include "Liveness.h"
 #include "RegisterType.h"
 
@@ -278,7 +278,7 @@ class GraphBuilder {
 
  public:
   static Graph build(const LivenessFixpointIterator&,
-                     IRCode*,
+                     cfg::ControlFlowGraph&,
                      reg_t initial_regs,
                      const RangeSet&);
 
@@ -293,11 +293,10 @@ uint32_t edge_weight_helper(uint8_t, uint8_t);
 } // namespace impl
 
 inline Graph build_graph(const LivenessFixpointIterator& fixpoint_iter,
-                         IRCode* code,
+                         cfg::ControlFlowGraph& cfg,
                          reg_t initial_regs,
                          const RangeSet& range_set) {
-  return impl::GraphBuilder::build(
-      fixpoint_iter, code, initial_regs, range_set);
+  return impl::GraphBuilder::build(fixpoint_iter, cfg, initial_regs, range_set);
 }
 
 } // namespace interference

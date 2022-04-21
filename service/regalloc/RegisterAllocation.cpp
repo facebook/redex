@@ -18,6 +18,7 @@
 #include "IRCode.h"
 #include "LiveRange.h"
 #include "PassManager.h"
+#include "ScopedCFG.h"
 #include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"
@@ -44,18 +45,17 @@ Allocator::Stats allocate(
     return Stats();
   }
 
-  auto scoped = at_scope_exit([code]() { code->clear_cfg(); });
   TRACE(REG, 5, "regs:%d code:\n%s", code->get_registers_size(), SHOW(code));
   try {
     live_range::renumber_registers(code, /* width_aware */ true);
     // The transformations below all require a CFG. Build it once
     // here instead of requiring each transform to build it.
-    code->build_cfg();
+    cfg::ScopedCFG cfg(code);
     Allocator allocator(allocator_config);
-    allocator.allocate(code, is_static);
-    code->cfg().recompute_registers_size();
-    TRACE(REG, 5, "After alloc: regs:%d code:\n%s",
-          code->cfg().get_registers_size(), SHOW(code->cfg()));
+    allocator.allocate(*cfg, is_static);
+    cfg->recompute_registers_size();
+    TRACE(REG, 5, "After alloc: regs:%d code:\n%s", cfg->get_registers_size(),
+          ::SHOW(*cfg));
     return allocator.get_stats();
   } catch (const std::exception& e) {
     std::cerr << "Failed to allocate " << method_describer() << ": " << e.what()

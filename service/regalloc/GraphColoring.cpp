@@ -16,7 +16,6 @@
 #include "DexOpcode.h"
 #include "DexUtil.h"
 #include "Dominators.h"
-#include "IRCode.h"
 #include "Show.h"
 #include "Trace.h"
 #include "Transform.h"
@@ -90,9 +89,9 @@ static size_t sum_src_sizes(const IRInstruction* insn) {
 /*
  * Gathers all the instructions that must be encoded in range form.
  */
-RangeSet init_range_set(IRCode* code) {
+RangeSet init_range_set(cfg::ControlFlowGraph& cfg) {
   RangeSet range_set;
-  for (const auto& mie : InstructionIterable(code->cfg())) {
+  for (const auto& mie : InstructionIterable(cfg)) {
     const auto* insn = mie.insn;
     auto op = insn->opcode();
     bool is_range{false};
@@ -344,7 +343,7 @@ static bool has_2addr_form(IROpcode op) {
  *
  * This is fairly similar to the implementation in [Briggs92] section 8.6.
  */
-bool Allocator::coalesce(interference::Graph* ig, IRCode* code) {
+bool Allocator::coalesce(interference::Graph* ig, cfg::ControlFlowGraph& cfg) {
   // XXX We could use something more compact than an unordered_map?
   using Rank = std::unordered_map<reg_t, size_t>;
   using Parent = std::unordered_map<reg_t, reg_t>;
@@ -358,13 +357,13 @@ bool Allocator::coalesce(interference::Graph* ig, IRCode* code) {
   Rank rank_map;
   Parent parent_map;
   RegisterAliasSets aliases((RankPMap(rank_map)), (ParentPMap(parent_map)));
-  for (reg_t i = 0; i < code->cfg().get_registers_size(); ++i) {
+  for (reg_t i = 0; i < cfg.get_registers_size(); ++i) {
     aliases.make_set(i);
   }
 
-  auto ii = InstructionIterable(code->cfg());
+  auto ii = InstructionIterable(cfg);
   auto old_coalesce_count = m_stats.moves_coalesced;
-  cfg::CFGMutation m(code->cfg());
+  cfg::CFGMutation m(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
     auto insn = it->insn;
     auto op = insn->opcode();
@@ -374,7 +373,7 @@ bool Allocator::coalesce(interference::Graph* ig, IRCode* code) {
     }
     reg_t dest;
     if (insn->has_move_result_pseudo()) {
-      auto move_result = code->cfg().move_result_of(it);
+      auto move_result = cfg.move_result_of(it);
       always_assert(!move_result.is_end());
       dest = move_result->insn->dest();
     } else {
@@ -411,10 +410,10 @@ bool Allocator::coalesce(interference::Graph* ig, IRCode* code) {
   m.flush();
 
   transform::RegMap reg_map;
-  for (reg_t i = 0; i < code->cfg().get_registers_size(); ++i) {
+  for (reg_t i = 0; i < cfg.get_registers_size(); ++i) {
     reg_map.emplace(i, aliases.find_set(i));
   }
-  transform::remap_registers(code, reg_map);
+  transform::remap_registers(cfg, reg_map);
 
   return m_stats.moves_coalesced != old_coalesce_count;
 }
@@ -532,7 +531,7 @@ void Allocator::simplify(interference::Graph* ig,
  *
  * Range- and param-related symregs are not handled here.
  */
-void Allocator::select(const IRCode* code,
+void Allocator::select(const cfg::ControlFlowGraph& cfg,
                        const interference::Graph& ig,
                        std::stack<reg_t>* select_stack,
                        RegisterTransform* reg_transform,
@@ -563,7 +562,7 @@ void Allocator::select(const IRCode* code,
  * allocating non-range-related nodes, so that the non-range ones have priority
  * in consuming the low vregs.
  */
-void Allocator::select_ranges(const IRCode* code,
+void Allocator::select_ranges(const cfg::ControlFlowGraph& cfg,
                               const interference::Graph& ig,
                               const RangeSet& range_set,
                               RegisterTransform* reg_transform,
@@ -590,13 +589,13 @@ void Allocator::select_ranges(const IRCode* code,
  * Assign virtual registers to our symbolic param-related registers, spilling
  * where necessary.
  */
-void Allocator::select_params(const IRCode* code,
+void Allocator::select_params(const cfg::ControlFlowGraph& cfg,
                               const interference::Graph& ig,
                               RegisterTransform* reg_transform,
                               SpillPlan* spill_plan) {
   std::unordered_map<reg_t, VirtualRegistersFile> vreg_files;
   std::vector<reg_t> param_regs;
-  auto param_insns = code->cfg().get_param_instructions();
+  auto param_insns = cfg.get_param_instructions();
   size_t params_size{0};
   for (auto& mie : InstructionIterable(param_insns)) {
     auto dest = mie.insn->dest();
@@ -757,14 +756,13 @@ void Allocator::find_split(const interference::Graph& ig,
 
 std::unordered_map<reg_t, cfg::InstructionIterator>
 Allocator::find_param_splits(const std::unordered_set<reg_t>& orig_params,
-                             IRCode* code) {
+                             cfg::ControlFlowGraph& cfg) {
   std::unordered_map<reg_t, cfg::InstructionIterator> load_locations;
   if (orig_params.empty()) {
     return load_locations;
   }
   // Erase parameter from list if there exist instructions overwriting the
   // symreg.
-  auto& cfg = code->cfg();
   cfg::Block* first_block_with_insns = cfg.get_first_block_with_insns();
   auto pend = first_block_with_insns->get_first_non_param_loading_insn();
   std::unordered_set<reg_t> params = orig_params;
@@ -853,13 +851,12 @@ Allocator::find_param_splits(const std::unordered_set<reg_t>& orig_params,
  */
 void Allocator::split_params(const interference::Graph& ig,
                              const std::unordered_set<reg_t>& param_spills,
-                             IRCode* code) {
-  auto load_locations = find_param_splits(param_spills, code);
+                             cfg::ControlFlowGraph& cfg) {
+  auto load_locations = find_param_splits(param_spills, cfg);
   if (load_locations.empty()) {
     return;
   }
 
-  auto& cfg = code->cfg();
   // Remap the operands of the load-param opcodes
   auto params = cfg.get_param_instructions();
   auto param_insns = InstructionIterable(params);
@@ -901,9 +898,8 @@ void Allocator::split_params(const interference::Graph& ig,
 void Allocator::spill(const interference::Graph& ig,
                       const SpillPlan& spill_plan,
                       const RangeSet& range_set,
-                      IRCode* code) {
+                      cfg::ControlFlowGraph& cfg) {
   // TODO: account for "close" defs and uses. See [Briggs92], section 8.7
-  auto& cfg = code->cfg();
   cfg::CFGMutation m(cfg);
   auto ii = cfg::InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
@@ -983,9 +979,8 @@ void Allocator::spill(const interference::Graph& ig,
  *   :true-label
  *   return-object v0
  */
-static void dedicate_this_register(IRCode* code, bool is_static) {
+static void dedicate_this_register(cfg::ControlFlowGraph& cfg, bool is_static) {
   always_assert(!is_static);
-  auto& cfg = code->cfg();
   auto param_insns = cfg.get_param_instructions();
   auto this_insn = param_insns.begin()->insn;
 
@@ -1012,10 +1007,6 @@ static void dedicate_this_register(IRCode* code, bool is_static) {
   }
 }
 
-void Allocator::allocate(DexMethod* method) {
-  allocate(method->get_code(), is_static(method));
-}
-
 /*
  * Main differences from the standard Chaitin-Briggs
  * build-coalesce-simplify-spill loop:
@@ -1031,18 +1022,18 @@ void Allocator::allocate(DexMethod* method) {
  *     account for. These are handled in select_ranges and select_params
  *     respectively.
  */
-void Allocator::allocate(IRCode* code, bool is_static) {
+void Allocator::allocate(cfg::ControlFlowGraph& cfg, bool is_static) {
   // Any temp larger than this is the result of the spilling process
-  auto initial_regs = code->get_registers_size();
+  auto initial_regs = cfg.get_registers_size();
 
   // The set of instructions that will be encoded in range form. This is a
   // monotonically increasing set, i.e. we only add and never remove from it
   // in the allocation loop below.
-  auto range_set = init_range_set(code);
+  auto range_set = init_range_set(cfg);
 
   bool no_overwrite_this = m_config.no_overwrite_this && !is_static;
   if (no_overwrite_this) {
-    dedicate_this_register(code, is_static);
+    dedicate_this_register(cfg, is_static);
   }
   bool first{true};
   while (true) {
@@ -1051,20 +1042,19 @@ void Allocator::allocate(IRCode* code, bool is_static) {
     SplitPlan split_plan;
     RegisterTransform reg_transform;
 
-    auto& cfg = code->cfg();
     cfg.calculate_exit_block();
     LivenessFixpointIterator fixpoint_iter(cfg);
     fixpoint_iter.run(LivenessDomain());
 
-    TRACE(REG, 5, "Allocating:\n%s", ::SHOW(code->cfg()));
+    TRACE(REG, 5, "Allocating:\n%s", ::SHOW(cfg));
     auto ig =
-        interference::build_graph(fixpoint_iter, code, initial_regs, range_set);
+        interference::build_graph(fixpoint_iter, cfg, initial_regs, range_set);
 
     // Make the `this` symreg conflict with every other one so that it never
     // gets overwritten in the method. See check_no_overwrite_this in
     // IRTypeChecker.h for the rationale.
     if (no_overwrite_this) {
-      auto this_insn = code->cfg().get_param_instructions().begin()->insn;
+      auto this_insn = cfg.get_param_instructions().begin()->insn;
       for (const auto& pair : ig.nodes()) {
         ig.add_edge(this_insn->dest(), pair.first);
       }
@@ -1072,12 +1062,12 @@ void Allocator::allocate(IRCode* code, bool is_static) {
 
     TRACE(REG, 7, "IG:\n%s", SHOW(ig));
     if (first) {
-      coalesce(&ig, code);
+      coalesce(&ig, cfg);
       first = false;
       // After coalesce the live_out and live_in of blocks may change, so run
       // LivenessFixpointIterator again.
       fixpoint_iter.run(LivenessDomain());
-      TRACE(REG, 5, "Post-coalesce:\n%s", ::SHOW(code->cfg()));
+      TRACE(REG, 5, "Post-coalesce:\n%s", ::SHOW(cfg));
     } else {
       // TODO we should coalesce here too, but we'll need to avoid removing
       // moves that were inserted by spilling
@@ -1091,11 +1081,11 @@ void Allocator::allocate(IRCode* code, bool is_static) {
     std::stack<reg_t> select_stack;
     std::stack<reg_t> spilled_select_stack;
     simplify(&ig, &select_stack, &spilled_select_stack);
-    select(code, ig, &select_stack, &reg_transform, &spill_plan);
+    select(cfg, ig, &select_stack, &reg_transform, &spill_plan);
 
     TRACE(REG, 5, "Transform before range alloc:\n%s", SHOW(reg_transform));
     range_set.prioritize();
-    select_ranges(code, ig, range_set, &reg_transform, &spill_plan);
+    select_ranges(cfg, ig, range_set, &reg_transform, &spill_plan);
     // Select registers for symregs that can be addressed using all 16 bits.
     // These symregs are typically generated during the spilling and splitting
     // steps. We want to process them after the range-related symregs because
@@ -1103,27 +1093,27 @@ void Allocator::allocate(IRCode* code, bool is_static) {
     // Basically, the registers in `spilled_select_stack` are in the least
     // constrained category of registers, so it makes sense to allocate them
     // last.
-    select(code, ig, &spilled_select_stack, &reg_transform, &spill_plan);
-    select_params(code, ig, &reg_transform, &spill_plan);
+    select(cfg, ig, &spilled_select_stack, &reg_transform, &spill_plan);
+    select_params(cfg, ig, &reg_transform, &spill_plan);
     TRACE(REG, 5, "Transform after range alloc:\n%s", SHOW(reg_transform));
 
     if (!spill_plan.empty()) {
       TRACE(REG, 5, "Spill plan:\n%s", SHOW(spill_plan));
       if (m_config.use_splitting) {
-        calc_split_costs(fixpoint_iter, code, &split_costs);
+        calc_split_costs(fixpoint_iter, cfg, &split_costs);
         find_split(ig, split_costs, &reg_transform, &spill_plan, &split_plan);
       }
-      split_params(ig, spill_plan.param_spills, code);
-      spill(ig, spill_plan, range_set, code);
+      split_params(ig, spill_plan.param_spills, cfg);
+      spill(ig, spill_plan, range_set, cfg);
 
       if (!split_plan.split_around.empty()) {
         TRACE(REG, 5, "Split plan:\n%s", SHOW(split_plan));
         m_stats.split_moves +=
-            split(fixpoint_iter, split_plan, split_costs, ig, code);
+            split(fixpoint_iter, split_plan, split_costs, ig, cfg);
       }
     } else {
-      transform::remap_registers(code, reg_transform.map);
-      code->set_registers_size(reg_transform.size);
+      transform::remap_registers(cfg, reg_transform.map);
+      cfg.set_registers_size(reg_transform.size);
       break;
     }
   }

@@ -7,10 +7,8 @@
 
 #include "Interference.h"
 
-#include "ControlFlow.h"
 #include "DexOpcode.h"
 #include "DexUtil.h"
-#include "IRCode.h"
 #include "MonotonicFixpointIterator.h"
 #include "Show.h"
 
@@ -268,16 +266,15 @@ void GraphBuilder::update_node_constraints(const cfg::InstructionIterator& it,
  * the move gets inserted, it does not clobber any live registers.
  */
 Graph GraphBuilder::build(const LivenessFixpointIterator& fixpoint_iter,
-                          IRCode* code,
+                          cfg::ControlFlowGraph& cfg,
                           reg_t initial_regs,
                           const RangeSet& range_set) {
   Graph graph;
-  auto ii = cfg::InstructionIterable(code->cfg());
+  auto ii = cfg::InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
     GraphBuilder::update_node_constraints(it, range_set, &graph);
   }
 
-  auto& cfg = code->cfg();
   for (cfg::Block* block : cfg.blocks()) {
     LivenessDomain live_out = fixpoint_iter.get_live_out_vars_at(block);
     for (auto it = block->rbegin(); it != block->rend(); ++it) {
