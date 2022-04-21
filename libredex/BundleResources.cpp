@@ -912,6 +912,13 @@ void ResourcesPbFile::remap_res_ids_and_serialize(
   }
 }
 
+void ResourcesPbFile::remap_reorder_and_serialize(
+    const std::vector<std::string>& resource_files,
+    const std::map<uint32_t, uint32_t>& old_to_new) {
+  // This actually has identical implementation for .pb files.
+  remap_res_ids_and_serialize(resource_files, old_to_new);
+}
+
 namespace {
 void remap_entry_file_paths(
     const std::unordered_map<std::string, std::string>& old_to_new,

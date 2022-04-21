@@ -35,6 +35,9 @@ class ResourcesPbFile : public ResourceTableFile {
   void remap_res_ids_and_serialize(
       const std::vector<std::string>& resource_files,
       const std::map<uint32_t, uint32_t>& old_to_new) override;
+  void remap_reorder_and_serialize(
+      const std::vector<std::string>& resource_files,
+      const std::map<uint32_t, uint32_t>& old_to_new) override;
   bool resource_value_identical(uint32_t a_id, uint32_t b_id) override;
   std::unordered_set<uint32_t> get_types_by_name(
       const std::unordered_set<std::string>& type_names) override;

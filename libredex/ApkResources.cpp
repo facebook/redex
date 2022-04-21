@@ -205,6 +205,11 @@ bool TableEntryParser::visit_type(android::ResTable_package* package,
 
 namespace {
 
+#define MAKE_RES_ID(package, type, entry)                        \
+  ((PACKAGE_MASK_BIT & ((package) << PACKAGE_INDEX_BIT_SHIFT)) | \
+   (TYPE_MASK_BIT & ((type) << TYPE_INDEX_BIT_SHIFT)) |          \
+   (ENTRY_MASK_BIT & (entry)))
+
 void ensure_file_contents(const std::string& file_contents,
                           const std::string& filename) {
   if (file_contents.empty()) {
@@ -911,6 +916,106 @@ void ResourcesArscFile::remap_res_ids_and_serialize(
     const std::map<uint32_t, uint32_t>& old_to_new) {
   remap_ids(old_to_new);
   serialize();
+}
+
+namespace {
+// For the given package and type id, check if the type has any needed changes
+// based on the old to new map. Output vector will contain the exhaustive
+// mapping from new entry id (the index in the vec) to old entry id.
+bool create_type_reordering(uint32_t package_id,
+                            uint8_t type_id,
+                            size_t entry_count,
+                            const std::map<uint32_t, uint32_t>& old_to_new,
+                            std::vector<uint32_t>* type_reordering) {
+  always_assert_log(type_reordering->empty(),
+                    "Expected to fill empty output vec");
+  for (uint32_t i = 0; i < entry_count; i++) {
+    type_reordering->emplace_back(i);
+  }
+  bool has_change = false;
+  for (const auto& pair : old_to_new) {
+    uint32_t p = (pair.first & PACKAGE_MASK_BIT) >> PACKAGE_INDEX_BIT_SHIFT;
+    uint8_t t = (pair.first & TYPE_MASK_BIT) >> TYPE_INDEX_BIT_SHIFT;
+    if (p == package_id && t == type_id) {
+      uint32_t old_entry = pair.first & ENTRY_MASK_BIT;
+      uint32_t new_entry = pair.second & ENTRY_MASK_BIT;
+      if ((*type_reordering)[new_entry] != old_entry) {
+        has_change = true;
+        (*type_reordering)[new_entry] = old_entry;
+      }
+    }
+  }
+  return has_change;
+}
+} // namespace
+
+void ResourcesArscFile::remap_reorder_and_serialize(
+    const std::vector<std::string>& /* resource_files */,
+    const std::map<uint32_t, uint32_t>& old_to_new) {
+  remap_ids(old_to_new);
+  apk::TableEntryParser table_parser;
+  table_parser.visit(m_f.data(), m_arsc_len);
+  arsc::ResTableBuilder table_builder;
+  table_builder.set_global_strings(table_parser.m_global_pool_header);
+  for (auto& package : table_parser.m_packages) {
+    auto package_id = dtohl(package->id);
+    auto package_builder = std::make_shared<arsc::ResPackageBuilder>(package);
+    package_builder->set_key_strings(
+        table_parser.m_package_key_string_headers.at(package));
+    package_builder->set_type_strings(
+        table_parser.m_package_type_string_headers.at(package));
+    auto& type_infos = table_parser.m_package_types.at(package);
+    for (auto& type_info : type_infos) {
+      // Check if this type needs re-ordering. If so, rebuild it via the
+      // ResTableTypeDefiner. Otherwise, copy the TypeInfo as-is.
+      uint8_t type_id = type_info.spec->id;
+      auto entry_count = dtohl(type_info.spec->entryCount);
+      std::vector<uint32_t> type_entries_new_to_old;
+      type_entries_new_to_old.reserve(entry_count);
+      if (create_type_reordering(package_id, type_id, entry_count, old_to_new,
+                                 &type_entries_new_to_old)) {
+        TRACE(RES, 9, "Type ID 0x%x will be rebuilt with new order", type_id);
+        std::vector<uint32_t> flags;
+        flags.reserve(entry_count);
+        // Set up the new ordering of the flags, based on the projected
+        // reordering.
+        for (uint32_t new_entry_id = 0; new_entry_id < entry_count;
+             new_entry_id++) {
+          uint32_t old_id = MAKE_RES_ID(package_id, type_id,
+                                        type_entries_new_to_old[new_entry_id]);
+          flags.emplace_back(table_parser.m_res_id_to_flags.at(old_id));
+        }
+
+        auto configs = table_parser.get_configs(package_id, type_id);
+        auto type_definer = std::make_shared<arsc::ResTableTypeDefiner>(
+            package_id, type_id, configs, flags);
+
+        for (auto& config : configs) {
+          for (uint32_t new_entry_id = 0; new_entry_id < entry_count;
+               new_entry_id++) {
+            uint32_t old_id = MAKE_RES_ID(
+                package_id, type_id, type_entries_new_to_old[new_entry_id]);
+            auto ev = table_parser.get_entry_for_config(old_id, config);
+            type_definer->add(config, ev);
+          }
+        }
+        package_builder->add_type(type_definer);
+      } else {
+        TRACE(RES, 9, "No ordering change for type ID 0x%x", type_id);
+        package_builder->add_type(type_info);
+      }
+    }
+    // Copy unknown chunks that we did not parse
+    auto& unknown_chunks = table_parser.m_package_unknown_chunks.at(package);
+    for (auto& header : unknown_chunks) {
+      package_builder->add_chunk(header);
+    }
+    table_builder.add_package(package_builder);
+  }
+  android::Vector<char> out;
+  table_builder.serialize(&out);
+  m_arsc_len = write_serialized_data(out, std::move(m_f));
+  m_file_closed = true;
 }
 
 namespace {

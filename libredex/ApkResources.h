@@ -105,6 +105,25 @@ class TableEntryParser : public TableParser {
                   android::ResTable_typeSpec* type_spec,
                   android::ResTable_type* type) override;
 
+  // Convenience methods to look up data about a type in a package
+  std::vector<android::ResTable_config*> get_configs(uint32_t package_id,
+                                                     uint8_t type_id) {
+    std::vector<android::ResTable_config*> vec;
+    auto& types =
+        m_types_to_configs.at(make_package_type_id(package_id, type_id));
+    vec.reserve(types.size());
+    for (auto& t : types) {
+      vec.emplace_back(&t->config);
+    }
+    return vec;
+  }
+
+  arsc::EntryValueData get_entry_for_config(uint32_t res_id,
+                                            android::ResTable_config* config) {
+    auto& config_to_entry = m_res_id_to_entries.at(res_id);
+    return config_to_entry.at(config);
+  }
+
   // For a package, the mapping from each type within all type specs to all the
   // entries/values.
   std::unordered_map<android::ResTable_package*, TypeToEntries>
@@ -119,9 +138,12 @@ class TableEntryParser : public TableParser {
 
  private:
   // Convenience function to make it easy to uniquely refer to a type.
+  uint16_t make_package_type_id(uint32_t package_id, uint8_t type_id) {
+    return ((package_id & 0xFF) << 8) | type_id;
+  }
   uint16_t make_package_type_id(android::ResTable_package* package,
                                 uint8_t type_id) {
-    return ((dtohl(package->id) & 0xFF) << 8) | type_id;
+    return make_package_type_id(dtohl(package->id), type_id);
   }
   void put_entry_data(uint32_t res_id,
                       android::ResTable_package* package,
@@ -151,6 +173,9 @@ class ResourcesArscFile : public ResourceTableFile {
       const std::unordered_set<std::string>& type_names) override;
   void delete_resource(uint32_t res_id) override;
   void remap_res_ids_and_serialize(
+      const std::vector<std::string>& resource_files,
+      const std::map<uint32_t, uint32_t>& old_to_new) override;
+  void remap_reorder_and_serialize(
       const std::vector<std::string>& resource_files,
       const std::map<uint32_t, uint32_t>& old_to_new) override;
   void remap_file_paths_and_serialize(

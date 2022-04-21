@@ -110,6 +110,12 @@ class ResourceTableFile {
       const std::vector<std::string>& resource_files,
       const std::map<uint32_t, uint32_t>& old_to_new) = 0;
 
+  // Similar to above function, but reorder flags/entry/value data according to
+  // old_to_new, as well as remapping references.
+  virtual void remap_reorder_and_serialize(
+      const std::vector<std::string>& resource_files,
+      const std::map<uint32_t, uint32_t>& old_to_new) = 0;
+
   virtual void remap_file_paths_and_serialize(
       const std::vector<std::string>& resource_files,
       const std::unordered_map<std::string, std::string>& old_to_new) = 0;
