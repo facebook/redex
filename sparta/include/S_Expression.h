@@ -24,6 +24,7 @@
 
 #include <boost/functional/hash.hpp>
 #include <boost/functional/hash_fwd.hpp>
+#include <boost/intrusive_ptr.hpp>
 #include <boost/optional.hpp>
 
 #include "Exceptions.h"
@@ -89,7 +90,17 @@ class s_expr final {
   /*
    * Constructs a string atom.
    */
-  explicit s_expr(const std::string_view s);
+  explicit s_expr(const char* s);
+
+  /*
+   * Constructs a string atom.
+   */
+  explicit s_expr(std::string_view s);
+
+  /*
+   * Constructs a string atom.
+   */
+  explicit s_expr(std::string s);
 
   /*
    * Various constructors for a list. The empty list (nil) can be constructed
@@ -184,10 +195,10 @@ class s_expr final {
 
  private:
   // Appends an element to a list. This operation is used during parsing.
-  void add_element(const s_expr& element);
+  void add_element(s_expr element);
 
   // By construction, m_component can never be null.
-  std::shared_ptr<s_expr_impl::Component> m_component;
+  boost::intrusive_ptr<s_expr_impl::Component> m_component;
 
   friend class s_expr_istream;
 };
@@ -225,10 +236,7 @@ class s_expr_istream final {
   s_expr_istream& operator=(const s_expr_istream&) = delete;
 
   s_expr_istream(std::istream& input)
-      : m_input(input),
-        m_line_number(1),
-        m_status(Status::Good),
-        m_what("OK") {}
+      : m_input(input), m_line_number(1), m_status(Status::Good) {}
 
   s_expr_istream& operator>>(s_expr& expr);
 
@@ -251,20 +259,22 @@ class s_expr_istream final {
    * When failing to read an S-expression from the input stream, we can use this
    * function to obtain a description of the error.
    */
-  const std::string& what() const { return m_what; }
+  const std::string& what() const;
 
  private:
   enum class Status { EOI, Good, Fail };
 
   void skip_white_spaces();
 
-  void set_status(Status status, const std::string_view what_arg);
+  void set_status_eoi();
+  void set_status_fail(std::string what_arg);
 
   std::stack<s_expr> m_stack;
   std::istream& m_input;
   size_t m_line_number;
   Status m_status;
-  std::string m_what;
+  mutable bool m_what_expanded{false};
+  mutable std::unique_ptr<std::string> m_what;
 };
 
 /*
@@ -321,12 +331,28 @@ class s_patn {
   /*
    * Matches a string atom with the given value.
    */
-  explicit s_patn(const std::string_view s);
+  explicit s_patn(const char* s);
+
+  /*
+   * Matches a string atom with the given value.
+   */
+  explicit s_patn(std::string_view s);
+
+  /*
+   * Matches a string atom with the given value.
+   */
+  explicit s_patn(std::string s);
 
   /*
    * Matches any string atom and stores its value into the given placeholder.
    */
   explicit s_patn(std::string* placeholder);
+
+  /*
+   * Matches any string atom and stores a pointer to its value into the given
+   * placeholder pointer.
+   */
+  explicit s_patn(const std::string** placeholder_ptr);
 
   /*
    * Matches each element in a list with the given sequence of patterns.
@@ -360,11 +386,11 @@ class s_patn {
    */
   bool match_with(const s_expr& expr);
 
-  void must_match(const s_expr& expr, const std::string_view msg);
+  void must_match(const s_expr& expr, std::string_view msg);
 
  private:
   // By construction, m_pattern can never be null.
-  std::shared_ptr<s_expr_impl::Pattern> m_pattern;
+  boost::intrusive_ptr<s_expr_impl::Pattern> m_pattern;
 };
 
 namespace s_expr_impl {
@@ -378,6 +404,7 @@ inline bool is_symbol_char(char c) {
          c == '.';
 }
 
+using IntrusiveSharedComponent = boost::intrusive_ptr<Component>;
 class Component {
  public:
   virtual ~Component() {}
@@ -386,13 +413,24 @@ class Component {
 
   ComponentKind kind() const { return m_kind; }
 
-  virtual bool equals(const std::shared_ptr<Component>& other) const = 0;
+  virtual bool equals(const IntrusiveSharedComponent& other) const = 0;
 
   virtual size_t hash_value() const = 0;
 
   virtual void print(std::ostream& o) const = 0;
 
+  friend void intrusive_ptr_add_ref(const Component* p) {
+    p->m_reference_count++;
+  }
+
+  friend void intrusive_ptr_release(const Component* p) {
+    if (p->m_reference_count-- == 1) {
+      delete p;
+    }
+  }
+
  protected:
+  mutable size_t m_reference_count{0};
   ComponentKind m_kind;
 };
 
@@ -403,7 +441,7 @@ class Int32Atom final : public Component {
 
   int32_t get_value() const { return m_value; }
 
-  bool equals(const std::shared_ptr<Component>& other) const {
+  bool equals(const IntrusiveSharedComponent& other) const {
     if (this == other.get()) {
       // Since S-expressions can share structure, checking for pointer equality
       // prevents unnecessary computations.
@@ -412,7 +450,7 @@ class Int32Atom final : public Component {
     if (other->kind() != ComponentKind::Int32Atom) {
       return false;
     }
-    auto n = std::static_pointer_cast<Int32Atom>(other);
+    auto n = boost::static_pointer_cast<Int32Atom>(other);
     return m_value == n->m_value;
   }
 
@@ -429,12 +467,12 @@ class Int32Atom final : public Component {
 
 class StringAtom final : public Component {
  public:
-  explicit StringAtom(const std::string_view s)
-      : Component(ComponentKind::StringAtom), m_string(s) {}
+  explicit StringAtom(std::string s)
+      : Component(ComponentKind::StringAtom), m_string(std::move(s)) {}
 
   const std::string& get_string() const { return m_string; }
 
-  bool equals(const std::shared_ptr<Component>& other) const {
+  bool equals(const IntrusiveSharedComponent& other) const {
     if (this == other.get()) {
       // Since S-expressions can share structure, checking for pointer equality
       // prevents unnecessary computations.
@@ -443,7 +481,7 @@ class StringAtom final : public Component {
     if (other->kind() != ComponentKind::StringAtom) {
       return false;
     }
-    auto s = std::static_pointer_cast<StringAtom>(other);
+    auto s = boost::static_pointer_cast<StringAtom>(other);
     return m_string == s->m_string;
   }
 
@@ -504,9 +542,9 @@ class List final : public Component {
     return s_expr(std::next(m_list.begin(), index), m_list.end());
   }
 
-  void add_element(const s_expr& element) { m_list.push_back(element); }
+  void add_element(s_expr element) { m_list.push_back(std::move(element)); }
 
-  bool equals(const std::shared_ptr<Component>& other) const {
+  bool equals(const IntrusiveSharedComponent& other) const {
     if (this == other.get()) {
       // Since S-expressions can share structure, checking for pointer equality
       // prevents unnecessary computations.
@@ -515,7 +553,7 @@ class List final : public Component {
     if (other->kind() != ComponentKind::List) {
       return false;
     }
-    auto l = std::static_pointer_cast<List>(other);
+    auto l = boost::static_pointer_cast<List>(other);
     if (l->m_list.size() != m_list.size()) {
       return false;
     }
@@ -545,11 +583,25 @@ class List final : public Component {
   std::vector<s_expr> m_list;
 };
 
+using IntrusiveSharedPattern = boost::intrusive_ptr<Pattern>;
 class Pattern {
  public:
   virtual ~Pattern() {}
 
   virtual bool match_with(const s_expr& expr) = 0;
+
+  friend void intrusive_ptr_add_ref(const Pattern* p) {
+    p->m_reference_count++;
+  }
+
+  friend void intrusive_ptr_release(const Pattern* p) {
+    if (p->m_reference_count-- == 1) {
+      delete p;
+    }
+  }
+
+ protected:
+  mutable size_t m_reference_count{0};
 };
 
 class WildcardPattern final : public Pattern {
@@ -597,7 +649,7 @@ class Int32Pattern final : public Pattern {
 
 class StringPattern final : public Pattern {
  public:
-  explicit StringPattern(const std::string_view s) : m_string(s) {}
+  explicit StringPattern(std::string s) : m_string(std::move(s)) {}
 
   explicit StringPattern(std::string* placeholder)
       : m_placeholder(placeholder) {}
@@ -616,6 +668,23 @@ class StringPattern final : public Pattern {
  private:
   std::string m_string;
   boost::optional<std::string*> m_placeholder;
+};
+
+class StringPattern2 final : public Pattern {
+ public:
+  explicit StringPattern2(const std::string** placeholder_ptr)
+      : m_placeholder_ptr(placeholder_ptr) {}
+
+  bool match_with(const s_expr& expr) {
+    if (!expr.is_string()) {
+      return false;
+    }
+    *m_placeholder_ptr = &expr.get_string();
+    return true;
+  }
+
+ private:
+  const std::string** m_placeholder_ptr;
 };
 
 class ListPattern final : public Pattern {
@@ -650,23 +719,28 @@ class ListPattern final : public Pattern {
 
 } // namespace s_expr_impl
 
-inline s_expr::s_expr() : m_component(std::make_shared<s_expr_impl::List>()) {}
+inline s_expr::s_expr() : m_component(new s_expr_impl::List()) {}
 
-inline s_expr::s_expr(int32_t n)
-    : m_component(std::make_shared<s_expr_impl::Int32Atom>(n)) {}
+inline s_expr::s_expr(int32_t n) : m_component(new s_expr_impl::Int32Atom(n)) {}
 
-inline s_expr::s_expr(const std::string_view s)
-    : m_component(std::make_shared<s_expr_impl::StringAtom>(s)) {}
+inline s_expr::s_expr(const char* s)
+    : m_component(new s_expr_impl::StringAtom(std::string(s))) {}
+
+inline s_expr::s_expr(std::string_view s)
+    : m_component(new s_expr_impl::StringAtom(std::string(s))) {}
+
+inline s_expr::s_expr(std::string s)
+    : m_component(new s_expr_impl::StringAtom(std::move(s))) {}
 
 inline s_expr::s_expr(std::initializer_list<s_expr> l)
-    : m_component(std::make_shared<s_expr_impl::List>(l.begin(), l.end())) {}
+    : m_component(new s_expr_impl::List(l.begin(), l.end())) {}
 
 inline s_expr::s_expr(const std::vector<s_expr>& l)
-    : m_component(std::make_shared<s_expr_impl::List>(l.begin(), l.end())) {}
+    : m_component(new s_expr_impl::List(l.begin(), l.end())) {}
 
 template <typename InputIterator>
 inline s_expr::s_expr(InputIterator first, InputIterator last)
-    : m_component(std::make_shared<s_expr_impl::List>(first, last)) {}
+    : m_component(new s_expr_impl::List(first, last)) {}
 
 inline bool s_expr::is_nil() const { return is_list() && (size() == 0); }
 
@@ -686,30 +760,31 @@ inline bool s_expr::is_list() const {
 
 inline int32_t s_expr::get_int32() const {
   RUNTIME_CHECK(is_int32(), undefined_operation());
-  return std::static_pointer_cast<s_expr_impl::Int32Atom>(m_component)
+  return boost::static_pointer_cast<s_expr_impl::Int32Atom>(m_component)
       ->get_value();
 }
 
 inline const std::string& s_expr::get_string() const {
   RUNTIME_CHECK(is_string(), undefined_operation());
-  return std::static_pointer_cast<s_expr_impl::StringAtom>(m_component)
+  return boost::static_pointer_cast<s_expr_impl::StringAtom>(m_component)
       ->get_string();
 }
 
 inline size_t s_expr::size() const {
   RUNTIME_CHECK(is_list(), undefined_operation());
-  return std::static_pointer_cast<s_expr_impl::List>(m_component)->size();
+  return boost::static_pointer_cast<s_expr_impl::List>(m_component)->size();
 }
 
 inline s_expr s_expr::operator[](size_t index) const {
   RUNTIME_CHECK(is_list(), undefined_operation());
-  return std::static_pointer_cast<s_expr_impl::List>(m_component)
+  return boost::static_pointer_cast<s_expr_impl::List>(m_component)
       ->get_element(index);
 }
 
 inline s_expr s_expr::tail(size_t index) const {
   RUNTIME_CHECK(is_list(), undefined_operation());
-  return std::static_pointer_cast<s_expr_impl::List>(m_component)->tail(index);
+  return boost::static_pointer_cast<s_expr_impl::List>(m_component)
+      ->tail(index);
 }
 
 inline bool s_expr::equals(const s_expr& other) const {
@@ -733,22 +808,23 @@ inline std::string s_expr::str() const {
   return out.str();
 }
 
-inline void s_expr::add_element(const s_expr& element) {
+inline void s_expr::add_element(s_expr element) {
   RUNTIME_CHECK(m_component->kind() == s_expr_impl::ComponentKind::List,
                 invalid_argument() << argument_name("element")
                                    << operation_name("s_expr::add_element()"));
-  auto list = std::static_pointer_cast<s_expr_impl::List>(m_component);
-  list->add_element(element);
+  auto list = boost::static_pointer_cast<s_expr_impl::List>(m_component);
+  list->add_element(std::move(element));
 }
 
 inline s_expr_istream& s_expr_istream::operator>>(s_expr& expr) {
+  std::string s;
   for (;;) {
     skip_white_spaces();
     if (!m_input.good()) {
       if (!m_stack.empty()) {
-        set_status(Status::Fail, "Incomplete S-expression");
+        set_status_fail("Incomplete S-expression");
       } else {
-        set_status(Status::EOI, "End of input");
+        set_status_eoi();
       }
       return *this;
     }
@@ -761,17 +837,17 @@ inline s_expr_istream& s_expr_istream::operator>>(s_expr& expr) {
     }
     case ')': {
       if (m_stack.empty()) {
-        set_status(Status::Fail, "Extra ')' encountered");
+        set_status_fail("Extra ')' encountered");
         return *this;
       }
       m_input.get();
-      s_expr list = m_stack.top();
+      s_expr list = std::move(m_stack.top());
       m_stack.pop();
       if (m_stack.empty()) {
-        expr = list;
+        expr = std::move(list);
         return *this;
       }
-      m_stack.top().add_element(list);
+      m_stack.top().add_element(std::move(list));
       break;
     }
     case '#': {
@@ -779,30 +855,27 @@ inline s_expr_istream& s_expr_istream::operator>>(s_expr& expr) {
       int32_t n;
       m_input >> n;
       if (m_input.fail()) {
-        set_status(Status::Fail, "Error parsing int32_t literal");
+        set_status_fail("Error parsing int32_t literal");
         return *this;
       }
-      s_expr atom(n);
       if (m_stack.empty()) {
-        expr = atom;
+        expr = s_expr(n);
         return *this;
       }
-      m_stack.top().add_element(atom);
+      m_stack.top().add_element(s_expr(n));
       break;
     }
     case '"': {
-      std::string s;
       m_input >> std::quoted(s);
       if (m_input.fail()) {
-        set_status(Status::Fail, "Error parsing string literal");
+        set_status_fail("Error parsing string literal");
         return *this;
       }
-      s_expr atom(s);
       if (m_stack.empty()) {
-        expr = atom;
+        expr = s_expr(std::move(s));
         return *this;
       }
-      m_stack.top().add_element(atom);
+      m_stack.top().add_element(s_expr(std::move(s)));
       break;
     }
     case ';': {
@@ -815,7 +888,7 @@ inline s_expr_istream& s_expr_istream::operator>>(s_expr& expr) {
       if (!s_expr_impl::is_symbol_char(next_char)) {
         std::ostringstream out;
         out << "Unexpected character encountered: '" << next_char << "'";
-        set_status(Status::Fail, out.str());
+        set_status_fail(out.str());
         return *this;
       }
       std::ostringstream symbol;
@@ -824,12 +897,11 @@ inline s_expr_istream& s_expr_istream::operator>>(s_expr& expr) {
         m_input.get();
         next_char = m_input.peek();
       }
-      s_expr atom(symbol.str());
       if (m_stack.empty()) {
-        expr = atom;
+        expr = s_expr(symbol.str());
         return *this;
       }
-      m_stack.top().add_element(atom);
+      m_stack.top().add_element(s_expr(symbol.str()));
     }
     }
   }
@@ -849,44 +921,77 @@ inline void s_expr_istream::skip_white_spaces() {
   }
 }
 
-inline void s_expr_istream::set_status(Status status,
-                                       std::string_view what_arg) {
-  m_status = status;
-  std::ostringstream ss;
-  ss << "On line " << m_line_number << ": " << what_arg;
-  m_what = ss.str();
+inline void s_expr_istream::set_status_eoi() {
+  m_status = Status::EOI;
+  m_what = nullptr;
+  m_what_expanded = false;
 }
 
-inline s_patn::s_patn()
-    : m_pattern(std::make_shared<s_expr_impl::WildcardPattern>()) {}
+inline void s_expr_istream::set_status_fail(std::string what_arg) {
+  m_status = Status::Fail;
+  m_what = std::make_unique<std::string>(std::move(what_arg));
+  m_what_expanded = false;
+}
+
+inline const std::string& s_expr_istream::what() const {
+  if (m_what_expanded) {
+    return *m_what;
+  }
+  std::ostringstream ss;
+  ss << "On line " << m_line_number << ": ";
+  switch (m_status) {
+  case Status::EOI:
+    ss << "End of input";
+    break;
+  case Status::Good:
+    ss << "OK";
+    break;
+  default:
+    ss << *m_what;
+    break;
+  }
+  m_what = std::make_unique<std::string>(ss.str());
+  m_what_expanded = true;
+  return *m_what;
+}
+
+inline s_patn::s_patn() : m_pattern(new s_expr_impl::WildcardPattern()) {}
 
 inline s_patn::s_patn(s_expr& placeholder)
-    : m_pattern(
-          std::make_shared<s_expr_impl::PlaceholderPattern>(placeholder)) {}
+    : m_pattern(new s_expr_impl::PlaceholderPattern(placeholder)) {}
 
 inline s_patn::s_patn(int32_t n)
-    : m_pattern(std::make_shared<s_expr_impl::Int32Pattern>(n)) {}
+    : m_pattern(new s_expr_impl::Int32Pattern(n)) {}
 
 inline s_patn::s_patn(int32_t* placeholder)
-    : m_pattern(std::make_shared<s_expr_impl::Int32Pattern>(placeholder)) {}
+    : m_pattern(new s_expr_impl::Int32Pattern(placeholder)) {}
 
-inline s_patn::s_patn(const std::string_view s)
-    : m_pattern(std::make_shared<s_expr_impl::StringPattern>(s)) {}
+inline s_patn::s_patn(const char* s)
+    : m_pattern(new s_expr_impl::StringPattern(std::string(s))) {}
+
+inline s_patn::s_patn(std::string_view s)
+    : m_pattern(new s_expr_impl::StringPattern(std::string(s))) {}
+
+inline s_patn::s_patn(std::string s)
+    : m_pattern(new s_expr_impl::StringPattern(std::move(s))) {}
 
 inline s_patn::s_patn(std::string* placeholder)
-    : m_pattern(std::make_shared<s_expr_impl::StringPattern>(placeholder)) {}
+    : m_pattern(new s_expr_impl::StringPattern(placeholder)) {}
+
+inline s_patn::s_patn(const std::string** placeholder_ptr)
+    : m_pattern(new s_expr_impl::StringPattern2(placeholder_ptr)) {}
 
 inline s_patn::s_patn(std::initializer_list<s_patn> heads)
-    : m_pattern(std::make_shared<s_expr_impl::ListPattern>(heads)) {}
+    : m_pattern(new s_expr_impl::ListPattern(heads)) {}
 
 inline s_patn::s_patn(std::initializer_list<s_patn> heads, s_expr& tail)
-    : m_pattern(std::make_shared<s_expr_impl::ListPattern>(heads, tail)) {}
+    : m_pattern(new s_expr_impl::ListPattern(heads, tail)) {}
 
 inline bool s_patn::match_with(const s_expr& expr) {
   return m_pattern->match_with(expr);
 }
 
-inline void s_patn::must_match(const s_expr& expr, const std::string_view msg) {
+inline void s_patn::must_match(const s_expr& expr, std::string_view msg) {
   RUNTIME_CHECK(m_pattern->match_with(expr),
                 pattern_matching_error()
                     << error_msg("Could not find match against " + expr.str() +
