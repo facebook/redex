@@ -211,6 +211,16 @@ class KeepState {
   static void unset_allowobfuscation(DexMember* member) {
     member->rstate.unset_allowobfuscation();
   }
+
+  template <class DexMember>
+  static bool includedescriptorclasses(DexMember* member) {
+    return member->rstate.includedescriptorclasses();
+  }
+
+  template <class DexMember>
+  static void set_includedescriptorclasses(DexMember* member) {
+    member->rstate.set_includedescriptorclasses();
+  }
 };
 
 } // namespace impl

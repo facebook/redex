@@ -391,7 +391,7 @@ void apply_assume_method_return_value(const KeepSpec& k, DexMember* member) {
 }
 
 // Updates a class, field or method to add keep modifiers.
-// Note: includedescriptorclasses and allowoptimization are not implemented.
+// Note: allowoptimization is not implemented.
 template <class DexMember>
 void apply_keep_modifiers(const KeepSpec& k, DexMember* member) {
   // We only set allowshrinking when no other keep rule has been applied to this
@@ -421,6 +421,11 @@ void apply_keep_modifiers(const KeepSpec& k, DexMember* member) {
     }
   } else {
     impl::KeepState::unset_allowobfuscation(member);
+  }
+
+  // Always apply `includedescriptorclasses` if it was set by a keep rule.
+  if (k.includedescriptorclasses) {
+    impl::KeepState::set_includedescriptorclasses(member);
   }
 }
 
@@ -670,14 +675,6 @@ void KeepRuleMatcher::mark_class_and_members_for_keep(DexClass* cls) {
       return;
     }
   }
-  // Mark descriptor classes
-  if (m_keep_rule.includedescriptorclasses) {
-    std::ostringstream oss;
-    oss << "WARNING: 'includedescriptorclasses' keep modifier is NOT "
-           "implemented: "
-        << show_keep(m_keep_rule);
-    maybe_warn(oss.str());
-  }
   if (m_keep_rule.allowoptimization) {
     std::ostringstream oss;
     oss << "WARNING: 'allowoptimization' keep modifier is NOT implemented: "
@@ -738,6 +735,19 @@ void KeepRuleMatcher::apply_rule(DexMember* member) {
     if (member->rstate.report_whyareyoukeeping()) {
       TRACE(PGR, 2, "whyareyoukeeping %s kept by %s", SHOW(member),
             show_keep(m_keep_rule).c_str());
+    }
+    if (impl::KeepState::includedescriptorclasses(member)) {
+      std::vector<DexType*> types;
+      member->gather_types_shallow(types);
+      for (auto* type : types) {
+        if (auto* cls = type_class(type)) {
+          impl::KeepState::set_has_keep(cls, &m_keep_rule);
+          if (cls->rstate.report_whyareyoukeeping()) {
+            TRACE(PGR, 2, "whyareyoukeeping %s kept by %s", SHOW(cls),
+                  show_keep(m_keep_rule).c_str());
+          }
+        }
+      }
     }
     break;
   }
