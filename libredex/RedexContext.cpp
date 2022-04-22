@@ -188,11 +188,10 @@ template <class InsertValue,
           class Key,
           class Container>
 static StoredValue* try_insert(Key key,
-                               InsertValue* value,
+                               std::unique_ptr<InsertValue, Deleter> value,
                                Container* container) {
-  std::unique_ptr<InsertValue, Deleter> to_insert(value);
-  if (container->emplace(key, to_insert.get())) {
-    return to_insert.release();
+  if (container->emplace(key, value.get())) {
+    return value.release();
   }
   return container->at(key);
 }
@@ -384,7 +383,8 @@ DexType* RedexContext::make_type(const DexString* dstring) {
   if (rv != nullptr) {
     return rv;
   }
-  return try_insert(dstring, new DexType(dstring), &s_type_map);
+  std::unique_ptr<DexType> type(new DexType(dstring));
+  return try_insert(dstring, std::move(type), &s_type_map);
 }
 
 DexType* RedexContext::get_type(const DexString* dstring) {
@@ -421,9 +421,9 @@ DexFieldRef* RedexContext::make_field(const DexType* container,
   if (rv != nullptr) {
     return rv;
   }
-  auto field = new DexField(const_cast<DexType*>(container), name,
-                            const_cast<DexType*>(type));
-  return try_insert<DexField, DexFieldRef>(r, field, &s_field_map);
+  std::unique_ptr<DexField> field(new DexField(
+      const_cast<DexType*>(container), name, const_cast<DexType*>(type)));
+  return try_insert<DexField, DexFieldRef>(r, std::move(field), &s_field_map);
 }
 
 DexFieldRef* RedexContext::get_field(const DexType* container,
@@ -491,8 +491,9 @@ DexTypeList* RedexContext::make_type_list(
   if (rv != nullptr) {
     return rv;
   }
-  auto typelist = new DexTypeList(std::move(p));
-  return try_insert(&typelist->m_list, typelist, &s_typelist_map);
+  std::unique_ptr<DexTypeList> typelist(new DexTypeList(std::move(p)));
+  auto key = &typelist->m_list;
+  return try_insert(key, std::move(typelist), &s_typelist_map);
 }
 
 DexTypeList* RedexContext::get_type_list(
@@ -509,11 +510,9 @@ DexProto* RedexContext::make_proto(const DexType* rtype,
   if (rv != nullptr) {
     return rv;
   }
-  return try_insert(key,
-                    new DexProto(const_cast<DexType*>(rtype),
-                                 const_cast<DexTypeList*>(args),
-                                 shorty),
-                    &s_proto_map);
+  std::unique_ptr<DexProto> proto(new DexProto(
+      const_cast<DexType*>(rtype), const_cast<DexTypeList*>(args), shorty));
+  return try_insert(key, std::move(proto), &s_proto_map);
 }
 
 DexProto* RedexContext::get_proto(const DexType* rtype,
@@ -539,8 +538,10 @@ DexMethodRef* RedexContext::make_method(const DexType* type_,
   if (rv != nullptr) {
     return rv;
   }
-  return try_insert<DexMethod, DexMethodRef, DexMethod::Deleter>(
-      r, new DexMethod(type, name, proto), &s_method_map);
+  std::unique_ptr<DexMethod, DexMethod::Deleter> method(
+      new DexMethod(type, name, proto));
+  return try_insert<DexMethod, DexMethodRef>(r, std::move(method),
+                                             &s_method_map);
 }
 
 DexMethodRef* RedexContext::get_method(const DexType* type,
@@ -677,9 +678,10 @@ DexLocation* RedexContext::make_location(std::string_view store_name,
   if (rv != nullptr) {
     return rv;
   }
-  auto value = new DexLocation(std::string(store_name), std::string(file_name));
+  std::unique_ptr<DexLocation> value(
+      new DexLocation(std::string(store_name), std::string(file_name)));
   key = std::make_pair(value->get_store_name(), value->get_file_name());
-  return try_insert(key, value, &s_location_map);
+  return try_insert(key, std::move(value), &s_location_map);
 }
 
 DexLocation* RedexContext::get_location(std::string_view store_name,
