@@ -92,10 +92,8 @@ class DexString {
   const uint32_t m_utfsize;
 
   // See UNIQUENESS above for the rationale for the private constructor pattern.
-  explicit DexString(const char* storage, uint32_t length)
-      : m_storage(storage),
-        m_length(length),
-        m_utfsize(length_of_utf8_string(m_storage)) {}
+  explicit DexString(const char* storage, uint32_t length, uint32_t utfsize)
+      : m_storage(storage), m_length(length), m_utfsize(utfsize) {}
 
  public:
   DexString() = delete;

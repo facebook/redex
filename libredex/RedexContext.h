@@ -290,7 +290,7 @@ struct RedexContext {
   // Hashing is expensive on large strings (long Java type names, string
   // literals), so we avoid using `std::unordered_map` directly.
   //
-  // For leaf-level storage we use `std::map` (i.e., a tree). In a sparse
+  // For leaf-level storage we use `std::set` (i.e., a tree). In a sparse
   // string keyset with large keys this performs better as only the suffix
   // until first change needs to be compared.
   //
@@ -303,38 +303,41 @@ struct RedexContext {
   // data besides the string data pointer, namely the UTF size. We can
   // avoid comparisons for different string lengths. The second layer
   // thus shards over it. We use the `ConcurrentContainer` sharding for
-  // this (see `ConcurrentProjectedStringMap`).
+  // this (see `ConcurrentProjectedStringSet`).
   //
   // The two layers give infrastructure overhead, however, the base size
-  // of a `std::map` and `ConcurrentContainer` is quite small.
-
-  using StringMapKey = std::string_view;
-  struct StringMapKeyHash {
-    size_t operator()(const StringMapKey& k) const { return k.size(); }
+  // of a `std::set` and `ConcurrentContainer` is quite small.
+  //
+  // We use `const DexString*` for the keys, however, we have to be careful not
+  // to assume that the referenced `const char*` data is zero-terminated.
+  using StringSetKey = const DexString*;
+  struct StringSetKeyHash {
+    size_t operator()(StringSetKey k) const;
+  };
+  struct StringSetKeyCompare {
+    bool operator()(StringSetKey a, StringSetKey b) const;
   };
 
   template <size_t n_slots = 31>
-  using ConcurrentProjectedStringMap =
-      ConcurrentMapContainer<std::map<std::string_view, const DexString*>,
-                             StringMapKey,
-                             const DexString*,
-                             StringMapKeyHash,
-                             Identity,
-                             n_slots>;
+  using ConcurrentProjectedStringSet = InsertOnlyConcurrentSetContainer<
+      std::set<StringSetKey, StringSetKeyCompare>,
+      StringSetKey,
+      StringSetKeyHash,
+      n_slots>;
 
   template <size_t n_slots, size_t m_slots>
-  struct LargeStringMap {
-    using AType = std::array<ConcurrentProjectedStringMap<n_slots>, m_slots>;
+  struct LargeStringSet {
+    using AType = std::array<ConcurrentProjectedStringSet<n_slots>, m_slots>;
 
-    AType map;
+    AType sets;
 
-    ConcurrentProjectedStringMap<n_slots>& at(const StringMapKey& k) {
-      size_t hashed = TruncatedStringHash()(k.data(), k.size()) % m_slots;
-      return map[hashed];
+    ConcurrentProjectedStringSet<n_slots>& at(StringSetKey k) {
+      size_t hashed = TruncatedStringHash()(k) % m_slots;
+      return sets[hashed];
     }
 
-    typename AType::iterator begin() { return map.begin(); }
-    typename AType::iterator end() { return map.end(); }
+    typename AType::iterator begin() { return sets.begin(); }
+    typename AType::iterator end() { return sets.end(); }
   };
 
   // Hash a 32-byte subsequence of a given string, offset by 32 bytes from the
@@ -347,17 +350,11 @@ struct RedexContext {
   // cache line (offset + hash_prefix_len <= 64) and hash enough of the string
   // to minimize the chance of duplicate sections
   struct TruncatedStringHash {
-    size_t operator()(const char* s, uint32_t string_size) {
-      constexpr size_t hash_prefix_len = 32;
-      constexpr size_t offset = 32;
-      size_t len = std::min<size_t>(string_size, offset + hash_prefix_len);
-      size_t start = std::max<int64_t>(0, int64_t(len - hash_prefix_len));
-      return boost::hash_range(s + start, s + len);
-    }
+    size_t operator()(StringSetKey k);
   };
 
   // DexString
-  LargeStringMap<31, 127> s_string_map;
+  LargeStringSet<31, 127> s_string_set;
 
   // We maintain three kinds of raw string storage
   ConcurrentStringStorage s_small_string_storage;

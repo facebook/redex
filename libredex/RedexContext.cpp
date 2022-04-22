@@ -141,12 +141,12 @@ RedexContext::~RedexContext() {
     });
   }
   size_t segment_index{0};
-  for (auto& segment : s_string_map) {
+  for (auto& segment : s_string_set) {
     fns.push_back([&segment, index = segment_index++]() {
       Timer timer("Delete DexStrings segment/" + std::to_string(index),
                   /* indent */ false);
-      for (auto const& p : segment) {
-        delete p.second;
+      for (auto* v : segment) {
+        delete v;
       }
       segment.clear();
     });
@@ -305,11 +305,17 @@ RedexContext::ConcurrentStringStorage::Context::~Context() {
 }
 
 const DexString* RedexContext::make_string(std::string_view str) {
-  auto& segment = s_string_map.at(str);
+  // We are creating a DexString key that is just "defined enough" to be used as
+  // a key into our string set. The provided string does not have to be zero
+  // terminated, and we won't compute the utf size, as neither is needed for
+  // this purpose.
+  uint32_t dummy_utfsize{0};
+  const DexString key(str.data(), str.size(), dummy_utfsize);
+  auto& segment = s_string_set.at(&key);
 
-  auto rv = segment.get(str, nullptr);
-  if (rv != nullptr) {
-    return rv;
+  auto rv_ptr = segment.get(&key);
+  if (rv_ptr != nullptr) {
+    return *rv_ptr;
   }
 
   ConcurrentStringStorage& concurrent_string_storage =
@@ -330,18 +336,46 @@ const DexString* RedexContext::make_string(std::string_view str) {
   memcpy(storage, str.data(), str.length());
   storage[str.length()] = 0;
 
-  auto key = std::string_view(storage, str.size());
-  auto value = new DexString(storage, str.length());
-  auto res = try_insert<DexString, const DexString>(key, value, &segment);
-
+  uint32_t utfsize = length_of_utf8_string(storage);
+  std::unique_ptr<DexString> value(
+      new DexString(storage, str.length(), utfsize));
+  auto [rv_ptr2, inserted] = segment.insert(value.get());
+  if (inserted) {
+    (void)value.release();
+  }
   // If unsuccessful, we have wasted a bit of string storage. Oh well...
 
-  return res;
+  return *rv_ptr2;
+}
+
+size_t RedexContext::StringSetKeyHash::operator()(StringSetKey k) const {
+  return k->size();
+}
+
+bool RedexContext::StringSetKeyCompare::operator()(StringSetKey a,
+                                                   StringSetKey b) const {
+  if (a->size() != b->size()) {
+    return a->size() < b->size();
+  }
+  return memcmp(a->c_str(), b->c_str(), a->size()) < 0;
+}
+
+size_t RedexContext::TruncatedStringHash::operator()(StringSetKey k) {
+  const char* s = k->c_str();
+  uint32_t string_size = k->size();
+  constexpr size_t hash_prefix_len = 32;
+  constexpr size_t offset = 32;
+  size_t len = std::min<size_t>(string_size, offset + hash_prefix_len);
+  size_t start = std::max<int64_t>(0, int64_t(len - hash_prefix_len));
+  return boost::hash_range(s + start, s + len);
 }
 
 const DexString* RedexContext::get_string(std::string_view str) {
-  auto& segment = s_string_map.at(str);
-  return segment.get(str, nullptr);
+  uint32_t dummy_utfsize{0};
+  const DexString key(str.data(), str.size(), dummy_utfsize);
+  const auto& segment = s_string_set.at(&key);
+  auto rv_ptr = segment.get(&key);
+  return rv_ptr == nullptr ? nullptr : *rv_ptr;
 }
 
 DexType* RedexContext::make_type(const DexString* dstring) {
