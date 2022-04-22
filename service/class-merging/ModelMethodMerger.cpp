@@ -414,24 +414,6 @@ DexType* ModelMethodMerger::get_merger_type(DexType* mergeable) {
   return merger_ctor->get_class();
 }
 
-DexMethod* ModelMethodMerger::create_instantiation_factory(
-    DexType* owner_type,
-    const std::string& name,
-    DexProto* proto,
-    const DexAccessFlags access,
-    DexMethod* ctor) {
-  auto mc = new MethodCreator(owner_type, DexString::make_string(name), proto,
-                              access);
-  auto type_tag_loc = mc->get_local(0);
-  auto ret_loc = mc->make_local(proto->get_rtype());
-  auto mb = mc->get_main_block();
-  mb->new_instance(ctor->get_class(), ret_loc);
-  std::vector<Location> args = {ret_loc, type_tag_loc};
-  mb->invoke(OPCODE_INVOKE_DIRECT, ctor, args);
-  mb->ret(proto->get_rtype(), ret_loc);
-  return mc->create();
-}
-
 /**
  * For a merged constructor, if every switch statement ends up calling the same
  * super constructor, we sink them to one invocation at the return block right
