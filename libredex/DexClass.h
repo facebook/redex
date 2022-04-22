@@ -576,7 +576,7 @@ class DexProto {
   DexType* get_rtype() const { return m_rtype; }
   DexTypeList* get_args() const { return m_args; }
   const DexString* get_shorty() const { return m_shorty; }
-  bool is_void() const { return get_rtype() == DexType::make_type("V"); }
+  bool is_void() const;
 
   template <typename C>
   void gather_types(C& ltype) const;

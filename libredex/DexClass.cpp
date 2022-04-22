@@ -1583,6 +1583,8 @@ DexProto* DexProto::get_proto(const DexType* rtype, const DexTypeList* args) {
   return g_redex->get_proto(rtype, args);
 }
 
+bool DexProto::is_void() const { return get_rtype() == type::_void(); }
+
 template <typename C>
 void DexProto::gather_types(C& ltype) const {
   if (m_args) {
