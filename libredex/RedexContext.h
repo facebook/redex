@@ -387,8 +387,14 @@ struct RedexContext {
       s_typelist_map;
 
   // DexProto
-  using ProtoKey = std::pair<const DexType*, const DexTypeList*>;
-  ConcurrentMap<ProtoKey, DexProto*, boost::hash<ProtoKey>> s_proto_map;
+  struct DexProtoKeyHash {
+    size_t operator()(DexProto* k) const;
+  };
+  struct DexProtoKeyEqual {
+    bool operator()(DexProto* a, DexProto* b) const;
+  };
+  InsertOnlyConcurrentSet<DexProto*, DexProtoKeyHash, DexProtoKeyEqual>
+      s_proto_set;
 
   // DexMethod
   ConcurrentMap<DexMethodSpec, DexMethodRef*> s_method_map;

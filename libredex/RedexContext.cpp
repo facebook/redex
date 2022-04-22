@@ -63,10 +63,10 @@ RedexContext::~RedexContext() {
       },
       [&] {
         Timer timer("Delete DexProtos.", /* indent */ false);
-        for (auto const& p : s_proto_map) {
-          delete p.second;
+        for (auto* proto : s_proto_set) {
+          delete proto;
         }
-        s_proto_map.clear();
+        s_proto_set.clear();
       },
       [&] {
         Timer timer("Delete DexClasses", /* indent */ false);
@@ -171,6 +171,21 @@ RedexContext::~RedexContext() {
   log_stats("large", s_large_string_storage);
   TRACE(PM, 1, "String storage @ %u hardware concurrency:%s",
         boost::thread::hardware_concurrency(), oss.str().c_str());
+}
+
+/*
+ * Try and insert :key into :container. This insertion may fail if
+ * another thread has already inserted that key. In that case, return the
+ * existing value and discard the one we were trying to insert.
+ */
+template <class Key, class Deleter = std::default_delete<Key>, class Container>
+static const Key* const* try_insert(std::unique_ptr<Key, Deleter> key,
+                                    Container* container) {
+  auto [rv_ptr, inserted] = container->insert(key.get());
+  if (inserted) {
+    (void)key.release();
+  }
+  return rv_ptr;
 }
 
 /*
@@ -336,15 +351,10 @@ const DexString* RedexContext::make_string(std::string_view str) {
   storage[str.length()] = 0;
 
   uint32_t utfsize = length_of_utf8_string(storage);
-  std::unique_ptr<DexString> value(
+  std::unique_ptr<DexString> string(
       new DexString(storage, str.length(), utfsize));
-  auto [rv_ptr2, inserted] = segment.insert(value.get());
-  if (inserted) {
-    (void)value.release();
-  }
+  return *try_insert(std::move(string), &segment);
   // If unsuccessful, we have wasted a bit of string storage. Oh well...
-
-  return *rv_ptr2;
 }
 
 size_t RedexContext::StringSetKeyHash::operator()(StringSetKey k) const {
@@ -501,18 +511,27 @@ DexTypeList* RedexContext::get_type_list(
   return s_typelist_map.get(&p, nullptr);
 }
 
+size_t RedexContext::DexProtoKeyHash::operator()(DexProto* k) const {
+  return (size_t)k->get_rtype() ^ (size_t)k->get_args();
+}
+bool RedexContext::DexProtoKeyEqual::operator()(DexProto* a,
+                                                DexProto* b) const {
+  return a->get_rtype() == b->get_rtype() && a->get_args() == b->get_args();
+}
+
 DexProto* RedexContext::make_proto(const DexType* rtype,
                                    const DexTypeList* args,
                                    const DexString* shorty) {
   always_assert(rtype != nullptr && args != nullptr && shorty != nullptr);
-  ProtoKey key(rtype, args);
-  auto rv = s_proto_map.get(key, nullptr);
-  if (rv != nullptr) {
-    return rv;
+  DexProto key(const_cast<DexType*>(rtype), const_cast<DexTypeList*>(args),
+               nullptr);
+  auto rv_ptr = s_proto_set.get(&key);
+  if (rv_ptr != nullptr) {
+    return const_cast<DexProto*>(*rv_ptr);
   }
   std::unique_ptr<DexProto> proto(new DexProto(
       const_cast<DexType*>(rtype), const_cast<DexTypeList*>(args), shorty));
-  return try_insert(key, std::move(proto), &s_proto_map);
+  return const_cast<DexProto*>(*try_insert(std::move(proto), &s_proto_set));
 }
 
 DexProto* RedexContext::get_proto(const DexType* rtype,
@@ -520,7 +539,10 @@ DexProto* RedexContext::get_proto(const DexType* rtype,
   if (rtype == nullptr || args == nullptr) {
     return nullptr;
   }
-  return s_proto_map.get(ProtoKey(rtype, args), nullptr);
+  DexProto key(const_cast<DexType*>(rtype), const_cast<DexTypeList*>(args),
+               nullptr);
+  auto rv_ptr = s_proto_set.get(&key);
+  return rv_ptr == nullptr ? nullptr : const_cast<DexProto*>(*rv_ptr);
 }
 
 DexMethodRef* RedexContext::make_method(const DexType* type_,
