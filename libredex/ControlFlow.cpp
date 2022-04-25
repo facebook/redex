@@ -1423,10 +1423,12 @@ void ControlFlowGraph::gather_catch_types(std::vector<DexType*>& types) const {
       for (const cfg::Edge* e : b->preds()) {
         if (e->type() == cfg::EDGE_THROW) {
           DexType* t = e->throw_info()->catch_type;
-          const auto pair = seen.insert(t);
-          bool insertion_occured = pair.second;
-          if (insertion_occured) {
-            types.push_back(t);
+          if (t) {
+            const auto pair = seen.insert(t);
+            bool insertion_occured = pair.second;
+            if (insertion_occured) {
+              types.push_back(t);
+            }
           }
         }
       }
