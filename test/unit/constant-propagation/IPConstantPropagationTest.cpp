@@ -1977,6 +1977,72 @@ TEST_F(InterproceduralConstantPropagationTest,
 }
 
 TEST_F(InterproceduralConstantPropagationTest,
+       constantFieldAfterInit_nontrivial_external_base_ctor) {
+  auto cls_ty = DexType::make_type("LFoo;");
+  ClassCreator creator(cls_ty);
+  creator.set_super(type::java_lang_Throwable());
+
+  auto field_f = DexField::make_field("LFoo;.f:I")->make_concrete(ACC_PUBLIC);
+  creator.add_field(field_f);
+
+  auto init = assembler::method_from_string(R"(
+    (method (public constructor) "LFoo;.<init>:()V"
+     (
+      (load-param-object v0)
+      (invoke-direct (v0) "Ljava/lang/Throwable;.<init>:()V") ; 'this' escapes here
+      (const v1 42)
+      (iput v1 v0 "LFoo;.f:I")
+      (return-void)
+     )
+    )
+  )");
+  init->rstate.set_root(); // Make this an entry point
+  creator.add_method(init);
+
+  auto m = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.baz:(LFoo;)I"
+     (
+      (load-param-object v0)
+      (iget v0 "LFoo;.f:I")
+      (move-result-pseudo v0)
+      (return v0)
+     )
+    )
+  )");
+  m->rstate.set_root(); // Make this an entry point
+  creator.add_method(m);
+
+  Scope scope{creator.create()};
+  walk::code(scope, [](DexMethod*, IRCode& code) {
+    code.build_cfg(/* editable */ false);
+    code.cfg().calculate_exit_block();
+  });
+
+  InterproceduralConstantPropagationPass::Config config;
+  config.max_heap_analysis_iterations = 2;
+
+  auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(
+      scope, &m_immut_analyzer_state, &m_api_level_analyzer_state);
+  auto& wps = fp_iter->get_whole_program_state();
+  // 0 is included in the numeric interval as 'this' escaped before the
+  // assignment
+  EXPECT_EQ(wps.get_field_value(field_f), SignedConstantDomain(0, 42));
+
+  InterproceduralConstantPropagationPass(config).run(make_simple_stores(scope));
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (iget v0 "LFoo;.f:I")
+      (move-result-pseudo v0)
+      (return v0)
+    )
+  )");
+
+  EXPECT_CODE_EQ(m->get_code(), expected_code.get());
+}
+
+TEST_F(InterproceduralConstantPropagationTest,
        constantFieldAfterInit_read_before_write) {
   auto cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);

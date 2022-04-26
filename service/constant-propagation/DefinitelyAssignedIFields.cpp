@@ -290,7 +290,6 @@ class Analyzer final : public BaseIRAnalyzer<ConstructorAnalysisEnvironment> {
 namespace constant_propagation {
 namespace definitely_assigned_ifields {
 std::unordered_set<const DexField*> get_definitely_assigned_ifields(
-    const std::unordered_set<const DexType*>& basetype_blocklist,
     const Scope& scope) {
   Timer t("get_definitely_assigned_ifields");
   ConcurrentMap<DexMethod*, std::shared_ptr<AnalysisResult>> analysis_results;
@@ -300,26 +299,21 @@ std::unordered_set<const DexField*> get_definitely_assigned_ifields(
     if (res) {
       return res.get();
     }
-    if (ctor->get_code()) {
+    if (!ctor->is_external() && ctor->get_code()) {
       auto& cfg = ctor->get_code()->cfg();
       Analyzer analyzer(cfg, ctor->get_class(), get_analysis_result);
       auto env = analyzer.get_exit_state_at(cfg.exit_block());
       auto cls = type_class(ctor->get_class());
       res = std::make_shared<AnalysisResult>(env.get_analysis_result(cls));
     } else {
-      // Slightly optimistic assumptions: external ctor (without code)
-      // invocations won't read or write own fields; this is certainly true for
-      // the most common case, Object::<init>.
       res = std::make_shared<AnalysisResult>();
-      // ... except for ctors of types on the blocklist.
-      // TODO: Consider using the SummaryGenerator to analyze AOSP classes to
-      // find external constructors where this may escape.
-      for (auto basetype : basetype_blocklist) {
-        if (type::is_subclass(basetype, ctor->get_class())) {
-          TRACE(CSE, 1, "=== !!! excluded %s", SHOW(ctor));
-          res->may_this_have_escaped = true;
-          break;
-        }
+      // Conservative assumption: All external ctors (without code)
+      // except Object::<init> may directly or indirectly read and write own
+      // fields.
+      if (ctor->get_class() != type::java_lang_Object()) {
+        // TODO: Consider using the SummaryGenerator to analyze AOSP classes to
+        // find other external constructors where this does not escape.
+        res->may_this_have_escaped = true;
       }
     }
     analysis_results.update(
