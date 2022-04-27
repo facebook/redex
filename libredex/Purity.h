@@ -123,25 +123,6 @@ enum class MethodOverrideAction {
   INCLUDE,
 };
 
-namespace purity {
-
-struct CacheConfig {
-  // How many *vector* entries in sum to cache overall.
-  size_t max_entries{4 * 1024 * 1024};
-
-  // Amount of iterations needed to cache.
-  size_t fill_entry_threshold{2};
-
-  // Minimum vector size to cache.
-  size_t fill_size_threshold{5};
-
-  static CacheConfig& get_default();
-  static void set_default(const CacheConfig& def) { get_default() = def; }
-  static void parse_default(const ConfigFiles& conf);
-};
-
-} // namespace purity
-
 // Determine what action to take for a method while traversing a base method
 // and its overriding methods.
 MethodOverrideAction get_base_or_overriding_method_action(
@@ -177,9 +158,7 @@ size_t compute_locations_closure(
     const method_override_graph::Graph* method_override_graph,
     std::function<boost::optional<LocationsAndDependencies>(DexMethod*)>
         init_func,
-    std::unordered_map<const DexMethod*, CseUnorderedLocationSet>* result,
-    const purity::CacheConfig& cache_config =
-        purity::CacheConfig::get_default());
+    std::unordered_map<const DexMethod*, CseUnorderedLocationSet>* result);
 
 // Compute all "conditionally pure" methods, i.e. methods which are pure except
 // that they may read from a set of well-known locations (not including
@@ -192,9 +171,7 @@ size_t compute_conditionally_pure_methods(
     const method_override_graph::Graph* method_override_graph,
     const method::ClInitHasNoSideEffectsPredicate& clinit_has_no_side_effects,
     const std::unordered_set<DexMethodRef*>& pure_methods,
-    std::unordered_map<const DexMethod*, CseUnorderedLocationSet>* result,
-    const purity::CacheConfig& cache_config =
-        purity::CacheConfig::get_default());
+    std::unordered_map<const DexMethod*, CseUnorderedLocationSet>* result);
 
 // Compute all methods with no side effects, i.e. methods which do not mutate
 // state and only call other methods which do not have side effects.
@@ -207,9 +184,7 @@ size_t compute_no_side_effects_methods(
     const method_override_graph::Graph* method_override_graph,
     const method::ClInitHasNoSideEffectsPredicate& clinit_has_no_side_effects,
     const std::unordered_set<DexMethodRef*>& pure_methods,
-    std::unordered_set<const DexMethod*>* result,
-    const purity::CacheConfig& cache_config =
-        purity::CacheConfig::get_default());
+    std::unordered_set<const DexMethod*>* result);
 
 // Determines whether for a given (possibly abstract) method, there may be a
 // method that effectively implements it. (If not, then that implies that no
