@@ -437,6 +437,11 @@ bool process_base_and_overriding_methods(
   return true;
 }
 
+static AccumulatingTimer s_wto_timer;
+double get_compute_locations_closure_wto_seconds() {
+  return s_wto_timer.get_seconds();
+}
+
 size_t compute_locations_closure(
     const Scope& scope,
     const method_override_graph::Graph* method_override_graph,
@@ -496,6 +501,8 @@ size_t compute_locations_closure(
     std::vector<const DexMethod*> ordered_impacted_methods;
 
     {
+      auto wto_timer_scope = s_wto_timer.scope();
+
       constexpr bool kCacheDebug = false;
 
       struct Cache {

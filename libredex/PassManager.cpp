@@ -48,6 +48,7 @@
 #include "PrintSeeds.h"
 #include "ProguardPrintConfiguration.h"
 #include "ProguardReporting.h"
+#include "Purity.h"
 #include "ReachableClasses.h"
 #include "Sanitizers.h"
 #include "ScopedCFG.h"
@@ -1337,6 +1338,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   Timer::add_timer(
       "MethodProfiles::process_unresolved_lines",
       method_profiles::MethodProfiles::get_process_unresolved_lines_seconds());
+  Timer::add_timer("compute_locations_closure_wto",
+                   get_compute_locations_closure_wto_seconds());
 }
 
 void PassManager::activate_pass(const std::string& name,
