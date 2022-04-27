@@ -64,94 +64,84 @@ namespace {
 constexpr const char* METRIC_INSTRUCTIONS_HOISTED = "num_instructions_hoisted";
 
 // Record critical registers that will be clobbered by the hoisted insns.
-void setup_side_effect_on_vregs(const IRInstruction& insn,
+void setup_side_effect_on_vregs(const IRInstruction* insn,
                                 std::unordered_map<reg_t, bool>& vregs) {
-  if (!insn.has_dest()) {
+  if (!insn->has_dest()) {
     // insn has no destination, can not have a side effect
     return; // we need to return here, otherwise dest() will throw
   }
 
-  auto dest_reg = insn.dest();
+  auto dest_reg = insn->dest();
   auto it = vregs.find(dest_reg);
   if (it != vregs.end()) {
     it->second = true;
   }
-  if (insn.dest_is_wide() && vregs.find(dest_reg + 1) != vregs.end()) {
+  if (insn->dest_is_wide() && vregs.find(dest_reg + 1) != vregs.end()) {
     vregs.find(dest_reg + 1)->second = true;
   }
 }
 
 // takes a list of iterators of the corresponding blocks, find if the
 // instruction is common across different blocks at it + iterator_offset
-boost::optional<IRInstruction> get_next_common_insn(
+IRInstruction* get_next_common_insn(
     const std::vector<IRList::iterator>& block_iters,
     const std::vector<cfg::Block*>& blocks,
     Lazy<const constant_uses::ConstantUses>& constant_uses) {
-  const static auto irinsn_hash = [](const IRInstruction& insn) {
-    return insn.hash();
-  };
   always_assert(block_iters.size() == blocks.size());
   if (block_iters.empty()) {
     // the common of nothing is not defined
-    return boost::none;
+    return nullptr;
   }
 
-  std::unordered_set<IRInstruction, decltype(irinsn_hash)> insns_at_iters(
-      3, irinsn_hash);
-  // record the (const val) uses and make sure theey are the same
-  std::unordered_set<constant_uses::TypeDemand, EnumClassHash>
-      const_zero_use_types;
-
-  bool type_analysis_failed = false;
+  IRInstruction* representative_insn_opt = nullptr;
 
   for (size_t i = 0; i < block_iters.size(); i++) {
-    if (block_iters[i] == blocks[i]->end()) {
-      return boost::none;
+    auto& it = block_iters[i];
+    if (it == blocks[i]->end()) {
+      return nullptr;
     }
-    if (block_iters[i]->type != MFLOW_OPCODE) {
-      return boost::none;
+    if (it->type != MFLOW_OPCODE) {
+      return nullptr;
     }
 
-    auto insn = block_iters[i]->insn;
-    auto op = insn->opcode();
-    if (op == OPCODE_CONST && insn->has_literal()) {
-      // Makesure all the constant uses are of same type before hoisting.
+    auto insn = it->insn;
+    if (!representative_insn_opt) {
+      representative_insn_opt = insn;
+    } else if (*representative_insn_opt != *insn) {
+      return nullptr;
+    }
+  }
+  always_assert(representative_insn_opt);
+
+  auto op = representative_insn_opt->opcode();
+  if (op == OPCODE_CONST) {
+    // record the (const val) uses and make sure they are the same
+    std::optional<constant_uses::TypeDemand> type_demand_opt;
+    for (auto& it : block_iters) {
+      auto insn = it->insn;
+      // Make sure all the constant uses are of same type before hoisting.
       auto type_demand = constant_uses->get_constant_type_demand(insn);
       if (type_demand == constant_uses::TypeDemand::Error) {
-        type_analysis_failed = true;
-      } else {
-        const_zero_use_types.insert(type_demand);
+        return nullptr;
+      } else if (!type_demand_opt) {
+        type_demand_opt = type_demand;
+      } else if (*type_demand_opt != type_demand) {
+        return nullptr;
       }
     }
-    insns_at_iters.insert(*insn);
   }
 
-  if (insns_at_iters.size() != 1 || type_analysis_failed ||
-      const_zero_use_types.size() > 1) {
-    return boost::none;
-  }
-
-  return *(insns_at_iters.begin());
+  return representative_insn_opt;
 }
 
-std::vector<cfg::Block*> get_succ_blocks(cfg::Block* block) {
-  std::vector<cfg::Edge*> succ_edges = block->succs();
-  std::vector<cfg::Block*> succ_blocks;
-  succ_blocks.reserve(succ_edges.size());
-  for (auto edge : succ_edges) {
-    succ_blocks.push_back(edge->target());
-  }
-  return succ_blocks;
-}
-
-bool is_block_eligible(cfg::Block* block) {
+bool is_block_eligible(IRInstruction* last_insn) {
   // only do the optimization in this pass for if and switches
-  auto br = block->branchingness();
-  return br == opcode::BRANCH_IF || br == opcode::BRANCH_SWITCH;
+  auto op = last_insn->opcode();
+  return opcode::is_branch(op);
 }
 
-bool is_insn_eligible(const IRInstruction& insn) {
-  auto op = insn.opcode();
+bool is_insn_eligible(const IRInstruction* insn) {
+  auto op = insn->opcode();
   return !opcode::is_branch(op) && !opcode::is_throw(op);
 }
 
@@ -169,7 +159,7 @@ void skip_handled_method_item_entries(IRList::iterator& it,
 
 std::vector<IRInstruction> get_insns_to_hoist(
     const std::vector<cfg::Block*>& succ_blocks,
-    std::unordered_map<reg_t, bool>& crit_regs,
+    Lazy<std::unordered_map<reg_t, bool>>& crit_regs,
     Lazy<const constant_uses::ConstantUses>& constant_uses) {
   // get iterators that points to the beginning of each block
   std::vector<IRList::iterator> block_iters;
@@ -220,15 +210,14 @@ std::vector<IRInstruction> get_insns_to_hoist(
       return insns_to_hoist;
     }
 
-    boost::optional<IRInstruction> common_insn =
+    auto* common_insn =
         get_next_common_insn(block_iters, succ_blocks, constant_uses);
     if (common_insn) {
-      TRACE(BPH, 5, "Next common instruction: %s", SHOW(*common_insn));
+      TRACE(BPH, 5, "Next common instruction: %s", SHOW(common_insn));
     }
 
-    if (common_insn && is_insn_eligible(*common_insn)) {
-      IRInstruction only_insn = *common_insn;
-      if (only_insn.has_move_result_any()) {
+    if (common_insn && is_insn_eligible(common_insn)) {
+      if (common_insn->has_move_result_any()) {
         // need to check, for all succ blocks, the associated move-result must:
         // 1. be in the same block
         // 2. be identical
@@ -252,7 +241,7 @@ std::vector<IRInstruction> get_insns_to_hoist(
           proceed = false;
           break;
         case kAllOngoing: {
-          boost::optional<IRInstruction> next_common_insn =
+          IRInstruction* next_common_insn =
               get_next_common_insn(copy, succ_blocks, constant_uses);
           if (!next_common_insn) {
             TRACE(BPH, 5, "No common successor for move-result-any opcode.");
@@ -260,19 +249,19 @@ std::vector<IRInstruction> get_insns_to_hoist(
             break;
           }
           // This is OK, but should really only be done for a move-result.
-          setup_side_effect_on_vregs(*next_common_insn, crit_regs);
+          setup_side_effect_on_vregs(next_common_insn, *crit_regs);
         } break;
         }
       }
 
-      setup_side_effect_on_vregs(only_insn, crit_regs);
+      setup_side_effect_on_vregs(common_insn, *crit_regs);
       if (proceed) {
         // all conditions satisfied
-        insns_to_hoist.push_back(only_insn);
+        insns_to_hoist.push_back(*common_insn);
         for (size_t i = 0; i != block_iters.size(); ++i) {
           redex_assert(block_iters[i] != succ_blocks[i]->end());
           redex_assert(block_iters[i]->type == MFLOW_OPCODE);
-          redex_assert(*block_iters[i]->insn == only_insn);
+          redex_assert(*block_iters[i]->insn == *common_insn);
           ++block_iters[i];
         }
       }
@@ -300,18 +289,16 @@ bool create_move_and_fix_clobbered(
   std::unordered_map<reg_t, reg_t> reg_map;
   auto it = block->to_cfg_instruction_iterator(pos);
   auto cond_insn = it->insn;
-  auto& type_envs =
-      constant_uses->get_type_inference()->get_type_environments();
-  auto& env = type_envs.at(cond_insn);
 
   // Go over the critical regs and make a copy before hoisted insns.
   for (size_t i = 0; i < cond_insn->srcs_size(); i++) {
     auto reg = cond_insn->src(i);
+    always_assert(!cond_insn->src_is_wide(i));
     auto it_reg = crit_regs.find(reg);
-    if ((it_reg != crit_regs.end() && it_reg->second) ||
-        (cond_insn->src_is_wide(i) &&
-         crit_regs.find(reg + 1) != crit_regs.end() &&
-         crit_regs.find(reg + 1)->second)) {
+    if (it_reg != crit_regs.end() && it_reg->second) {
+      auto& type_envs =
+          constant_uses->get_type_inference()->get_type_environments();
+      auto& env = type_envs.at(cond_insn);
       auto type = env.get_type(reg);
 
       // If type_inference cannot infer type, give-up.
@@ -321,23 +308,16 @@ bool create_move_and_fix_clobbered(
         }
         return false;
       }
-      reg_t tmp_reg;
-      if (cond_insn->src_is_wide(i)) {
-        tmp_reg = cfg.allocate_wide_temp();
-      } else {
-        tmp_reg = cfg.allocate_temp();
-      }
+      reg_t tmp_reg = cfg.allocate_temp();
 
       // Make a copy.
       IRInstruction* copy_insn;
       if (type.equals(type_inference::TypeDomain(REFERENCE))) {
         copy_insn = new IRInstruction(OPCODE_MOVE_OBJECT);
-      } else if (cond_insn->src_is_wide(i)) {
-        copy_insn = new IRInstruction(OPCODE_MOVE_WIDE);
       } else {
         copy_insn = new IRInstruction(OPCODE_MOVE);
       }
-      reg_map.insert(std::make_pair(reg, tmp_reg));
+      reg_map.emplace(reg, tmp_reg);
       copy_insn->set_dest(tmp_reg)->set_src(0, reg);
       heap_insn_objs.push_back(copy_insn);
     }
@@ -512,76 +492,98 @@ size_t process_hoisting_for_block(
     cfg::Block* block,
     cfg::ControlFlowGraph& cfg,
     Lazy<const constant_uses::ConstantUses>& constant_uses) {
-
-  auto all_preds_are_same = [](const std::vector<cfg::Edge*>& edges) {
-    std::unordered_set<cfg::Block*> count;
-    for (auto e : edges) {
-      count.insert(e->src());
-    }
-    return count.size() == 1;
-  };
-
-  if (!is_block_eligible(block)) {
-    return 0;
-  }
-
-  // find critical registers that relates to branch taking decisions
   IRList::iterator last_insn_it = block->get_last_insn();
   if (last_insn_it == block->end()) {
     // block is empty
     return 0;
   }
   IRInstruction* last_insn = last_insn_it->insn;
+  if (!is_block_eligible(last_insn)) {
+    return 0;
+  }
+
+  auto all_preds_are_same = [](const std::vector<cfg::Edge*>& edges) {
+    auto it = edges.begin();
+    always_assert(it != edges.end());
+    auto first_src = (*it++)->src();
+    for (; it != edges.end(); it++) {
+      if ((*it)->src() != first_src) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  // make sure every successor has same predecessor and none will have to throw.
+  auto get_succ_blocks_if_same_preds_and_no_throw =
+      [&cfg, &all_preds_are_same](
+          cfg::Block* block) -> std::optional<std::vector<cfg::Block*>> {
+    const std::vector<cfg::Edge*>& succ_edges = block->succs();
+    std::vector<cfg::Block*> succ_blocks;
+    succ_blocks.reserve(succ_edges.size());
+    for (auto* edge : succ_edges) {
+      auto succ_block = edge->target();
+      const auto& preds_of_succ_block = succ_block->preds();
+      if (!all_preds_are_same(preds_of_succ_block)) {
+        // we can only hoist the prefix if the block has only one incoming edge
+        return std::nullopt;
+      }
+
+      if (cfg.get_succ_edge_of_type(succ_block, cfg::EDGE_THROW)) {
+        return std::nullopt;
+      }
+
+      succ_blocks.push_back(succ_block);
+    }
+    return std::make_optional(std::move(succ_blocks));
+  };
+
+  auto succ_blocks = get_succ_blocks_if_same_preds_and_no_throw(block);
+  if (!succ_blocks) {
+    return 0;
+  }
+
+  // find critical registers that relates to branch taking decisions
   // critical registers for hoisting and if they are clobbered.
   // they all start as non-clobbered but if any hoisted insn clobbers it, it
   // will be changed to true.
-  std::unordered_map<reg_t, bool> crit_regs;
-  for (size_t i = 0; i < last_insn->srcs_size(); i++) {
-    crit_regs.insert(std::make_pair(last_insn->src(i), false));
-    if (last_insn->src_is_wide(i)) {
-      crit_regs.insert(std::make_pair(last_insn->src(i) + 1, false));
+  Lazy<std::unordered_map<reg_t, bool>> crit_regs([last_insn]() {
+    auto res = std::make_unique<std::unordered_map<reg_t, bool>>();
+    for (size_t i = 0; i < last_insn->srcs_size(); i++) {
+      res->emplace(last_insn->src(i), false);
+      if (last_insn->src_is_wide(i)) {
+        res->emplace(last_insn->src(i) + 1, false);
+      }
     }
-  }
+    return res;
+  });
 
-  std::vector<cfg::Block*> succ_blocks = get_succ_blocks(block);
-  // make sure every successor has same predecessor and none will have to throw.
-  for (auto succ_block : succ_blocks) {
-    const auto& preds_of_succ_block = succ_block->preds();
-    if (!all_preds_are_same(preds_of_succ_block)) {
-      // we can only hoist the prefix if the block has only one incoming edge
-      return 0;
-    }
-
-    if (cfg.get_succ_edge_of_type(succ_block, cfg::EDGE_THROW)) {
-      return 0;
-    }
-  }
   auto insns_to_hoist =
-      get_insns_to_hoist(succ_blocks, crit_regs, constant_uses);
-  if (!insns_to_hoist.empty()) {
-    // do the mutation
-    auto hoisted = hoist_insns_for_block(block,
-                                         last_insn_it,
-                                         succ_blocks,
-                                         cfg,
-                                         insns_to_hoist,
-                                         crit_regs,
-                                         constant_uses);
-    TRACE(
-        BPH, 5, "Hoisted %zu/%zu instruction from %s into B%zu", hoisted,
-        insns_to_hoist.size(),
-        [&]() {
-          std::ostringstream oss;
-          for (auto& insn : insns_to_hoist) {
-            oss << show(insn) << " | ";
-          }
-          return oss.str();
-        }()
-            .c_str(),
-        block->id());
-    return hoisted;
+      get_insns_to_hoist(*succ_blocks, crit_regs, constant_uses);
+  if (insns_to_hoist.empty()) {
+    return 0;
   }
-  return 0;
+  // do the mutation
+  auto hoisted = hoist_insns_for_block(block,
+                                       last_insn_it,
+                                       *succ_blocks,
+                                       cfg,
+                                       insns_to_hoist,
+                                       *crit_regs,
+                                       constant_uses);
+  TRACE(
+      BPH, 5, "Hoisted %zu/%zu instruction from %s into B%zu", hoisted,
+      insns_to_hoist.size(),
+      [&]() {
+        std::ostringstream oss;
+        for (auto& insn : insns_to_hoist) {
+          oss << show(insn) << " | ";
+        }
+        return oss.str();
+      }()
+          .c_str(),
+      block->id());
+  return hoisted;
 }
 
 } // namespace
@@ -605,10 +607,10 @@ size_t BranchPrefixHoistingPass::process_cfg(
   bool performed_transformation = false;
   do {
     performed_transformation = false;
-    const std::vector<cfg::Block*>& blocks =
+    std::vector<cfg::Block*> blocks =
         graph::postorder_sort<cfg::GraphInterface>(cfg);
     // iterate from the back, may get to the optimal state quicker
-    for (auto block : blocks) {
+    for (auto* block : blocks) {
       // when we are processing hoist for one block, other blocks may be changed
       size_t n_insn_hoisted =
           process_hoisting_for_block(block, cfg, constant_uses);
