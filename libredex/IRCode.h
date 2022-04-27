@@ -324,6 +324,10 @@ class IRCode {
     return m_ir_list->iterator_to(mie);
   }
 
+  void chain_consecutive_source_blocks() {
+    m_ir_list->chain_consecutive_source_blocks();
+  }
+
   friend std::string show(const IRCode*);
 
   friend class MethodSplicer;

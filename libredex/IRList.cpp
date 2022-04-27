@@ -958,3 +958,26 @@ std::string SourceBlock::show(bool quoted_src) const {
   }
   return o.str();
 }
+
+void IRList::chain_consecutive_source_blocks() {
+  boost::optional<IRList::iterator> last_it = boost::none;
+  for (auto it = begin(); it != end(); ++it) {
+    if (it->type == MFLOW_POSITION || it->type == MFLOW_DEBUG) {
+      // We can move over debug info. Otherwise, reset.
+      continue;
+    }
+    if (it->type != MFLOW_SOURCE_BLOCK) {
+      last_it = boost::none;
+      continue;
+    }
+
+    if (last_it) {
+      auto prev = std::prev(it);
+      (*last_it)->src_block->append(std::move(it->src_block));
+      erase_and_dispose(it);
+      it = prev;
+    } else {
+      last_it = it;
+    }
+  }
+}

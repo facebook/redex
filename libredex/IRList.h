@@ -594,6 +594,8 @@ class IRList {
     return m_list.iterator_to(mie);
   }
 
+  void chain_consecutive_source_blocks();
+
   friend std::string show(const IRCode*);
 };
 
