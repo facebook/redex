@@ -639,6 +639,26 @@ TEST_F(BranchPrefixHoistingTest, branch_with_const_zero_2) {
   test(code_str, code_str, 0);
 }
 
+TEST_F(BranchPrefixHoistingTest,
+       branch_with_const_wide_with_different_type_demands) {
+
+  const auto& code_str = R"(
+    (
+      (load-param v0)
+      (if-eqz v0 :true)
+      (const-wide v1 123)
+      (add-long v2 v1 v1)
+      (goto :end)
+      (:true)
+      (const-wide v1 123)
+      (add-double v2 v1 v1)
+      (:end)
+      (return-void)
+    )
+  )";
+  test(code_str, code_str, 0);
+}
+
 TEST_F(BranchPrefixHoistingTest, positions_no_throw) {
   const auto& code_str = R"(
     (

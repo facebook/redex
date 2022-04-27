@@ -114,7 +114,7 @@ IRInstruction* get_next_common_insn(
   always_assert(representative_insn_opt);
 
   auto op = representative_insn_opt->opcode();
-  if (op == OPCODE_CONST) {
+  if (opcode::is_a_literal_const(op)) {
     // record the (const val) uses and make sure they are the same
     std::optional<constant_uses::TypeDemand> type_demand_opt;
     for (auto& it : block_iters) {
