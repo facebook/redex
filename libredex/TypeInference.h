@@ -219,6 +219,11 @@ class TypeInference final
 
   void traceState(TypeEnvironment* state) const;
 
+  const std::unordered_map<const IRInstruction*, TypeEnvironment>&
+  get_type_environments() const {
+    return m_type_envs;
+  }
+
   std::unordered_map<const IRInstruction*, TypeEnvironment>&
   get_type_environments() {
     return m_type_envs;

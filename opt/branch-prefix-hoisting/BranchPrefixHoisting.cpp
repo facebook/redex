@@ -20,6 +20,7 @@
 #include "IRList.h"
 #include "IROpcode.h"
 #include "PassManager.h"
+#include "ScopedCFG.h"
 #include "Show.h"
 #include "Trace.h"
 #include "Util.h"
@@ -85,7 +86,7 @@ void setup_side_effect_on_vregs(const IRInstruction& insn,
 boost::optional<IRInstruction> get_next_common_insn(
     const std::vector<IRList::iterator>& block_iters,
     const std::vector<cfg::Block*>& blocks,
-    constant_uses::ConstantUses& constant_uses) {
+    Lazy<const constant_uses::ConstantUses>& constant_uses) {
   const static auto irinsn_hash = [](const IRInstruction& insn) {
     return insn.hash();
   };
@@ -115,7 +116,7 @@ boost::optional<IRInstruction> get_next_common_insn(
     auto op = insn->opcode();
     if (op == OPCODE_CONST && insn->has_literal()) {
       // Makesure all the constant uses are of same type before hoisting.
-      auto type_demand = constant_uses.get_constant_type_demand(insn);
+      auto type_demand = constant_uses->get_constant_type_demand(insn);
       if (type_demand == constant_uses::TypeDemand::Error) {
         type_analysis_failed = true;
       } else {
@@ -169,7 +170,7 @@ void skip_handled_method_item_entries(IRList::iterator& it,
 std::vector<IRInstruction> get_insns_to_hoist(
     const std::vector<cfg::Block*>& succ_blocks,
     std::unordered_map<reg_t, bool>& crit_regs,
-    constant_uses::ConstantUses& constant_uses) {
+    Lazy<const constant_uses::ConstantUses>& constant_uses) {
   // get iterators that points to the beginning of each block
   std::vector<IRList::iterator> block_iters;
   block_iters.reserve(succ_blocks.size());
@@ -295,11 +296,12 @@ bool create_move_and_fix_clobbered(
     cfg::Block* block,
     cfg::ControlFlowGraph& cfg,
     const std::unordered_map<reg_t, bool>& crit_regs,
-    type_inference::TypeInference& type_inference) {
+    Lazy<const constant_uses::ConstantUses>& constant_uses) {
   std::unordered_map<reg_t, reg_t> reg_map;
   auto it = block->to_cfg_instruction_iterator(pos);
   auto cond_insn = it->insn;
-  auto& type_envs = type_inference.get_type_environments();
+  auto& type_envs =
+      constant_uses->get_type_inference()->get_type_environments();
   auto& env = type_envs.at(cond_insn);
 
   // Go over the critical regs and make a copy before hoisted insns.
@@ -352,19 +354,20 @@ bool create_move_and_fix_clobbered(
 }
 
 // This function is where the pass mutates the IR
-size_t hoist_insns_for_block(cfg::Block* block,
-                             const IRList::iterator& pos,
-                             const std::vector<cfg::Block*>& succ_blocks,
-                             cfg::ControlFlowGraph& cfg,
-                             const std::vector<IRInstruction>& insns_to_hoist,
-                             const std::unordered_map<reg_t, bool>& crit_regs,
-                             type_inference::TypeInference& type_inference) {
+size_t hoist_insns_for_block(
+    cfg::Block* block,
+    const IRList::iterator& pos,
+    const std::vector<cfg::Block*>& succ_blocks,
+    cfg::ControlFlowGraph& cfg,
+    const std::vector<IRInstruction>& insns_to_hoist,
+    const std::unordered_map<reg_t, bool>& crit_regs,
+    Lazy<const constant_uses::ConstantUses>& constant_uses) {
   auto insert_it = block->to_cfg_instruction_iterator(pos);
 
   {
     std::vector<IRInstruction*> heap_insn_objs;
     if (!create_move_and_fix_clobbered(pos, heap_insn_objs, block, cfg,
-                                       crit_regs, type_inference)) {
+                                       crit_regs, constant_uses)) {
       return 0;
     }
 
@@ -505,10 +508,10 @@ size_t hoist_insns_for_block(cfg::Block* block,
 }
 
 // returns number of hoisted instructions
-size_t process_hoisting_for_block(cfg::Block* block,
-                                  cfg::ControlFlowGraph& cfg,
-                                  type_inference::TypeInference& type_inference,
-                                  constant_uses::ConstantUses& constant_uses) {
+size_t process_hoisting_for_block(
+    cfg::Block* block,
+    cfg::ControlFlowGraph& cfg,
+    Lazy<const constant_uses::ConstantUses>& constant_uses) {
 
   auto all_preds_are_same = [](const std::vector<cfg::Edge*>& edges) {
     std::unordered_set<cfg::Block*> count;
@@ -563,7 +566,7 @@ size_t process_hoisting_for_block(cfg::Block* block,
                                          cfg,
                                          insns_to_hoist,
                                          crit_regs,
-                                         type_inference);
+                                         constant_uses);
     TRACE(
         BPH, 5, "Hoisted %zu/%zu instruction from %s into B%zu", hoisted,
         insns_to_hoist.size(),
@@ -584,22 +587,20 @@ size_t process_hoisting_for_block(cfg::Block* block,
 } // namespace
 
 size_t BranchPrefixHoistingPass::process_code(IRCode* code, DexMethod* method) {
-  code->build_cfg(true);
-  auto& cfg = code->cfg();
-  TRACE(BPH, 5, "%s", SHOW(cfg));
-  type_inference::TypeInference type_inference(cfg);
-  type_inference.run(method);
-  constant_uses::ConstantUses constant_uses(cfg, method);
-
-  size_t ret = process_cfg(cfg, type_inference, constant_uses);
-  code->clear_cfg();
+  cfg::ScopedCFG cfg(code);
+  TRACE(BPH, 5, "%s", SHOW(*cfg));
+  Lazy<const constant_uses::ConstantUses> constant_uses([&] {
+    return std::make_unique<const constant_uses::ConstantUses>(
+        *cfg, method,
+        /* force_type_inference */ true);
+  });
+  size_t ret = process_cfg(*cfg, constant_uses);
   return ret;
 }
 
 size_t BranchPrefixHoistingPass::process_cfg(
     cfg::ControlFlowGraph& cfg,
-    type_inference::TypeInference& type_inference,
-    constant_uses::ConstantUses& constant_uses) {
+    Lazy<const constant_uses::ConstantUses>& constant_uses) {
   size_t ret_insns_hoisted = 0;
   bool performed_transformation = false;
   do {
@@ -610,7 +611,7 @@ size_t BranchPrefixHoistingPass::process_cfg(
     for (auto block : blocks) {
       // when we are processing hoist for one block, other blocks may be changed
       size_t n_insn_hoisted =
-          process_hoisting_for_block(block, cfg, type_inference, constant_uses);
+          process_hoisting_for_block(block, cfg, constant_uses);
       if (n_insn_hoisted) {
         performed_transformation = true;
         ret_insns_hoisted += n_insn_hoisted;

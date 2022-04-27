@@ -38,11 +38,13 @@ void test(const std::string& code_str,
   auto& cfg = code->cfg();
   std::cerr << "before:" << std::endl << SHOW(cfg);
 
-  type_inference::TypeInference type_inference(cfg);
-  type_inference.run(method);
-  constant_uses::ConstantUses constant_uses(cfg, method);
+  Lazy<const constant_uses::ConstantUses> constant_uses([&] {
+    return std::make_unique<const constant_uses::ConstantUses>(
+        cfg, method,
+        /* force_type_inference */ true);
+  });
   int actual_insns_hoisted =
-      BranchPrefixHoistingPass::process_cfg(cfg, type_inference, constant_uses);
+      BranchPrefixHoistingPass::process_cfg(cfg, constant_uses);
 
   std::cerr << "after:" << std::endl << SHOW(code->cfg());
   EXPECT_EQ(expected_instructions_hoisted, actual_insns_hoisted);
