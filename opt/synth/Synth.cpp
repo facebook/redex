@@ -8,6 +8,7 @@
 #include "Synth.h"
 
 #include <memory>
+#include <optional>
 #include <signal.h>
 #include <stdio.h>
 #include <string>
@@ -66,15 +67,41 @@ bool can_remove(DexMethod* meth, const SynthConfig& synthConfig) {
   return synthConfig.remove_pub || !is_public(meth);
 }
 
+using SourceBlocks = std::pair<SourceBlock*, SourceBlock*>;
+using TrivialFieldWrapper = std::optional<std::pair<DexField*, SourceBlocks>>;
+
+SourceBlocks find_surrounding_sb(IRList::iterator src_it, IRCode* code) {
+  // Find source blocks.
+  auto before_sb = [&]() {
+    SourceBlock* last = nullptr;
+    for (auto it = code->begin(); it != src_it; ++it) {
+      if (it->type == MFLOW_SOURCE_BLOCK) {
+        last = it->src_block.get();
+      }
+    }
+    return last;
+  }();
+  auto after_sb = [&]() -> SourceBlock* {
+    auto it = std::find_if(src_it, code->end(), [](const auto& m) {
+      return m.type == MFLOW_SOURCE_BLOCK;
+    });
+    if (it != code->end()) {
+      return it->src_block.get();
+    }
+    return nullptr;
+  }();
+  return SourceBlocks(before_sb, after_sb);
+}
+
 /*
  * Matches the pattern:
  *   iget-TYPE vB, FIELD
  *   move-result-pseudo-object vA
  *   return-TYPE vA
  */
-DexField* trivial_get_field_wrapper(DexMethod* m) {
+TrivialFieldWrapper trivial_get_field_wrapper(DexMethod* m) {
   auto code = m->get_code();
-  if (code == nullptr) return nullptr;
+  if (code == nullptr) return std::nullopt;
 
   auto ii = InstructionIterable(code);
   auto it = ii.begin();
@@ -83,28 +110,29 @@ DexField* trivial_get_field_wrapper(DexMethod* m) {
     ++it;
   }
 
-  if (!opcode::is_an_iget(it->insn->opcode())) return nullptr;
+  if (!opcode::is_an_iget(it->insn->opcode())) return std::nullopt;
+  auto iget_it = it.unwrap();
 
   auto iget = it->insn;
   reg_t iget_dest = ir_list::move_result_pseudo_of(it.unwrap())->dest();
   std::advance(it, 2);
 
-  if (!opcode::is_a_return_value(it->insn->opcode())) return nullptr;
+  if (!opcode::is_a_return_value(it->insn->opcode())) return std::nullopt;
 
   reg_t ret_reg = it->insn->src(0);
-  if (ret_reg != iget_dest) return nullptr;
+  if (ret_reg != iget_dest) return std::nullopt;
   ++it;
 
-  if (it != end) return nullptr;
+  if (it != end) return std::nullopt;
 
   // Check to make sure we have a concrete field reference.
   auto def = resolve_field(iget->get_field(), FieldSearch::Instance);
-  if (def == nullptr) return nullptr;
+  if (def == nullptr) return std::nullopt;
   if (!def->is_concrete()) {
-    return nullptr;
+    return std::nullopt;
   }
 
-  return def;
+  return std::make_pair(def, find_surrounding_sb(iget_it, code));
 }
 
 /*
@@ -113,9 +141,9 @@ DexField* trivial_get_field_wrapper(DexMethod* m) {
  *   move-result-pseudo-object vA
  *   return-TYPE vA
  */
-DexField* trivial_get_static_field_wrapper(DexMethod* m) {
+TrivialFieldWrapper trivial_get_static_field_wrapper(DexMethod* m) {
   auto code = m->get_code();
-  if (code == nullptr) return nullptr;
+  if (code == nullptr) return std::nullopt;
 
   auto ii = InstructionIterable(code);
   auto it = ii.begin();
@@ -124,29 +152,31 @@ DexField* trivial_get_static_field_wrapper(DexMethod* m) {
     ++it;
   }
 
-  if (!opcode::is_an_sget(it->insn->opcode())) return nullptr;
-
+  if (!opcode::is_an_sget(it->insn->opcode())) return std::nullopt;
+  auto sget_it = it.unwrap();
   auto sget = it->insn;
   reg_t sget_dest = ir_list::move_result_pseudo_of(it.unwrap())->dest();
   std::advance(it, 2);
 
-  if (!opcode::is_a_return_value(it->insn->opcode())) return nullptr;
+  if (!opcode::is_a_return_value(it->insn->opcode())) return std::nullopt;
 
   reg_t ret_reg = it->insn->src(0);
-  if (ret_reg != sget_dest) return nullptr;
+  if (ret_reg != sget_dest) return std::nullopt;
   ++it;
 
-  if (it != end) return nullptr;
+  if (it != end) return std::nullopt;
 
   // Check to make sure we have a concrete field reference.
   auto def = resolve_field(sget->get_field(), FieldSearch::Static);
-  if (def == nullptr) return nullptr;
+  if (def == nullptr) return std::nullopt;
   if (!def->is_concrete()) {
-    return nullptr;
+    return std::nullopt;
   }
 
-  return def;
+  return std::make_pair(def, find_surrounding_sb(sget_it, code));
 }
+
+using TrivialMethodWrapper = std::optional<std::pair<DexMethod*, SourceBlocks>>;
 
 /*
  * Matches the pattern:
@@ -155,9 +185,10 @@ DexField* trivial_get_static_field_wrapper(DexMethod* m) {
  *      return-TYPE v0
  *    | return-void )
  */
-DexMethod* trivial_method_wrapper(DexMethod* m, const ClassHierarchy& ch) {
+TrivialMethodWrapper trivial_method_wrapper(DexMethod* m,
+                                            const ClassHierarchy& ch) {
   auto code = m->get_code();
-  if (code == nullptr) return nullptr;
+  if (code == nullptr) return std::nullopt;
   auto ii = InstructionIterable(code);
   auto it = ii.begin();
   auto end = ii.end();
@@ -167,7 +198,8 @@ DexMethod* trivial_method_wrapper(DexMethod* m, const ClassHierarchy& ch) {
 
   bool is_direct = it->insn->opcode() == OPCODE_INVOKE_DIRECT;
   bool is_static = it->insn->opcode() == OPCODE_INVOKE_STATIC;
-  if (!is_direct && !is_static) return nullptr;
+  if (!is_direct && !is_static) return std::nullopt;
+  auto invoke_it = it.unwrap();
 
   auto invoke = it->insn;
   auto method = invoke->get_method();
@@ -175,10 +207,10 @@ DexMethod* trivial_method_wrapper(DexMethod* m, const ClassHierarchy& ch) {
     method = resolve_static(type_class(method->get_class()), method->get_name(),
                             method->get_proto());
   }
-  if (!method) return nullptr;
-  if (!method->is_concrete()) return nullptr;
+  if (!method) return std::nullopt;
+  if (!method->is_concrete()) return std::nullopt;
 
-  const auto method_def = static_cast<DexMethod*>(method);
+  auto method_def = static_cast<DexMethod*>(method);
   auto collision = find_collision_excepting(ch,
                                             method_def,
                                             method_def->get_name(),
@@ -193,27 +225,28 @@ DexMethod* trivial_method_wrapper(DexMethod* m, const ClassHierarchy& ch) {
           SHOW(m),
           SHOW(method_def),
           SHOW(collision));
-    return nullptr;
+    return std::nullopt;
   }
-  if (!passes_args_through(invoke, *code)) return nullptr;
+  if (!passes_args_through(invoke, *code)) return std::nullopt;
   ++it;
-  if (it == end) return nullptr;
+  if (it == end) return std::nullopt;
 
   if (opcode::is_a_move_result(it->insn->opcode())) {
     ++it;
-    if (it == end) return nullptr;
-    if (!opcode::is_a_return_value(it->insn->opcode())) return nullptr;
+    if (it == end) return std::nullopt;
+    if (!opcode::is_a_return_value(it->insn->opcode())) return std::nullopt;
     ++it;
-    if (it != end) return nullptr; // exception handling code
+    if (it != end) return std::nullopt; // exception handling code
   } else if (it->insn->opcode() == OPCODE_RETURN_VOID) {
     ++it;
-    if (it != end) return nullptr; // exception handling code
+    if (it != end) return std::nullopt; // exception handling code
   } else {
-    return nullptr;
+    return std::nullopt;
   }
   // The wrapper method may have a trivial exception handler.
-  if (code->has_try_blocks()) return nullptr;
-  return method_def;
+  if (code->has_try_blocks()) return std::nullopt;
+
+  return std::make_pair(method_def, find_surrounding_sb(invoke_it, code));
 }
 
 /*
@@ -221,9 +254,9 @@ DexMethod* trivial_method_wrapper(DexMethod* m, const ClassHierarchy& ch) {
  *   invoke-direct {v0...} Lclass;.<init>
  *   return-void
  */
-DexMethod* trivial_ctor_wrapper(DexMethod* m) {
+TrivialMethodWrapper trivial_ctor_wrapper(DexMethod* m) {
   auto code = m->get_code();
-  if (code == nullptr) return nullptr;
+  if (code == nullptr) return std::nullopt;
   auto ii = InstructionIterable(code);
   auto it = ii.begin();
   auto end = ii.end();
@@ -233,28 +266,31 @@ DexMethod* trivial_ctor_wrapper(DexMethod* m) {
 
   if (it->insn->opcode() != OPCODE_INVOKE_DIRECT) {
     TRACE(SYNT, 5, "Rejecting, not direct: %s", SHOW(m));
-    return nullptr;
+    return std::nullopt;
   }
+  auto invoke_it = it.unwrap();
   auto invoke = it->insn;
   if (!passes_args_through(invoke, *code, 1)) {
     TRACE(SYNT, 5, "Rejecting, not passthrough: %s", SHOW(m));
-    return nullptr;
+    return std::nullopt;
   }
   ++it;
-  if (it == end) return nullptr;
-  if (it->insn->opcode() != OPCODE_RETURN_VOID) return nullptr;
+  if (it == end) return std::nullopt;
+  if (it->insn->opcode() != OPCODE_RETURN_VOID) return std::nullopt;
   auto method = invoke->get_method();
   if (!method->is_concrete() ||
       !method::is_constructor(static_cast<DexMethod*>(method))) {
-    return nullptr;
+    return std::nullopt;
   }
-  return static_cast<DexMethod*>(method);
+
+  return std::make_pair(static_cast<DexMethod*>(method),
+                        find_surrounding_sb(invoke_it, code));
 }
 
 struct WrapperMethods {
-  ConcurrentMap<DexMethod*, DexField*> getters;
-  ConcurrentMap<DexMethod*, DexMethod*> wrappers;
-  ConcurrentMap<DexMethod*, DexMethod*> ctors;
+  ConcurrentMap<DexMethod*, std::pair<DexField*, SourceBlocks>> getters;
+  ConcurrentMap<DexMethod*, std::pair<DexMethod*, SourceBlocks>> wrappers;
+  ConcurrentMap<DexMethod*, std::pair<DexMethod*, SourceBlocks>> ctors;
   ConcurrentMap<DexMethod*, std::pair<DexMethod*, int>> wrapped;
   ConcurrentSet<DexMethod*> keepers;
   std::unordered_set<DexMethod*> promoted_to_static;
@@ -268,14 +304,14 @@ struct WrapperMethods {
 void purge_wrapped_wrappers(WrapperMethods& ssms) {
   std::vector<DexMethod*> remove;
   for (auto& p : ssms.wrappers) {
-    if (ssms.wrappers.count_unsafe(p.second)) {
-      remove.emplace_back(p.second);
+    if (ssms.wrappers.count_unsafe(p.second.first)) {
+      remove.emplace_back(p.second.first);
     }
-    if (ssms.getters.count_unsafe(p.second)) {
+    if (ssms.getters.count_unsafe(p.second.first)) {
       // a getter is a leaf so we remove it and we'll likely pick
       // it up next pass
-      TRACE(SYNT, 5, "Removing wrapped getter: %s", SHOW(p.second));
-      ssms.getters.erase(p.second);
+      TRACE(SYNT, 5, "Removing wrapped getter: %s", SHOW(p.second.first));
+      ssms.getters.erase(p.second.first);
       ssms.next_pass = true;
     }
   }
@@ -285,11 +321,11 @@ void purge_wrapped_wrappers(WrapperMethods& ssms) {
       // Might have been a duplidate we already erased
       continue;
     }
-    auto wrapped = ssms.wrapped.find(wrapper->second);
+    auto wrapped = ssms.wrapped.find(wrapper->second.first);
     if (wrapped != ssms.wrapped.end()) {
       if (--wrapped->second.second == 0) {
-        TRACE(SYNT, 5, "Removing wrapped: %s", SHOW(wrapper->second));
-        ssms.wrapped.erase(wrapper->second);
+        TRACE(SYNT, 5, "Removing wrapped: %s", SHOW(wrapper->second.first));
+        ssms.wrapped.erase(wrapper->second.first);
       }
     }
     TRACE(SYNT, 5, "Removing wrapper: %s", SHOW(meth));
@@ -334,8 +370,9 @@ WrapperMethods analyze(const api::AndroidSDK* min_sdk_api,
       // constructors are special and all we can remove are synthetic ones
       if (synthConfig.remove_constructors && is_synthetic(dmethod) &&
           method::is_constructor(dmethod)) {
-        auto ctor = trivial_ctor_wrapper(dmethod);
-        if (ctor) {
+        auto ctor_opt = trivial_ctor_wrapper(dmethod);
+        if (ctor_opt) {
+          auto ctor = ctor_opt->first;
           if (!check_api_level_and_refs(ctor)) {
             illegal_refs++;
             continue;
@@ -343,15 +380,16 @@ WrapperMethods analyze(const api::AndroidSDK* min_sdk_api,
 
           TRACE(SYNT, 2, "Trivial constructor wrapper: %s", SHOW(dmethod));
           TRACE(SYNT, 2, "  Calls constructor: %s", SHOW(ctor));
-          ssms.ctors.emplace(dmethod, ctor);
+          ssms.ctors.emplace(dmethod, std::make_pair(ctor, ctor_opt->second));
         }
         continue;
       }
       if (method::is_constructor(dmethod)) continue;
 
       if (is_static_synthetic(dmethod)) {
-        auto field = trivial_get_field_wrapper(dmethod);
-        if (field) {
+        auto field_opt = trivial_get_field_wrapper(dmethod);
+        if (field_opt) {
+          auto field = field_opt->first;
           if (!ref_checker.check_field(field)) {
             illegal_refs++;
             continue;
@@ -359,11 +397,13 @@ WrapperMethods analyze(const api::AndroidSDK* min_sdk_api,
 
           TRACE(SYNT, 2, "Static trivial getter: %s", SHOW(dmethod));
           TRACE(SYNT, 2, "  Gets field: %s", SHOW(field));
-          ssms.getters.emplace(dmethod, field);
+          ssms.getters.emplace(dmethod,
+                               std::make_pair(field, field_opt->second));
           continue;
         }
-        auto sfield = trivial_get_static_field_wrapper(dmethod);
-        if (sfield) {
+        auto sfield_opt = trivial_get_static_field_wrapper(dmethod);
+        if (sfield_opt) {
+          auto sfield = sfield_opt->first;
           if (!ref_checker.check_field(sfield)) {
             illegal_refs++;
             continue;
@@ -372,14 +412,16 @@ WrapperMethods analyze(const api::AndroidSDK* min_sdk_api,
           TRACE(SYNT, 2, "Static trivial static field getter: %s",
                 SHOW(dmethod));
           TRACE(SYNT, 2, "  Gets static field: %s", SHOW(sfield));
-          ssms.getters.emplace(dmethod, sfield);
+          ssms.getters.emplace(dmethod,
+                               std::make_pair(sfield, sfield_opt->second));
           continue;
         }
       }
 
       if (can_optimize(dmethod, synthConfig)) {
-        auto method = trivial_method_wrapper(dmethod, ch);
-        if (method) {
+        auto method_opt = trivial_method_wrapper(dmethod, ch);
+        if (method_opt) {
+          auto method = method_opt->first;
           // this is not strictly needed but to avoid changing visibility of
           // virtuals we are skipping a wrapper to a virtual.
           // Incidentally we have no single method falling in that bucket
@@ -392,7 +434,8 @@ WrapperMethods analyze(const api::AndroidSDK* min_sdk_api,
 
           TRACE(SYNT, 2, "Static trivial method wrapper: %s", SHOW(dmethod));
           TRACE(SYNT, 2, "  Calls method: %s", SHOW(method));
-          ssms.wrappers.emplace(dmethod, method);
+          ssms.wrappers.emplace(dmethod,
+                                std::make_pair(method, method_opt->second));
           if (!is_static(method)) {
             ssms.wrapped.update(
                 method,
@@ -460,10 +503,37 @@ void replace_getter_wrapper_sequential(IRInstruction* insn, DexField* field) {
   always_assert(is_public(field));
 }
 
+void surround_with(IRCode* c, IRInstruction* insn, const SourceBlocks& sb) {
+  if (sb.first != nullptr || sb.second != nullptr) {
+    auto it = std::find_if(c->begin(), c->end(), [&](const auto& mie) {
+      return mie.type == MFLOW_OPCODE && mie.insn == insn;
+    });
+    redex_assert(it != c->end());
+    if (sb.first != nullptr) {
+      c->insert_before(it, std::make_unique<SourceBlock>(*sb.first));
+    }
+    if (sb.second != nullptr) {
+      if (insn->has_move_result_any()) {
+        auto it_next = std::next(it);
+        if (it_next->type == MFLOW_OPCODE &&
+            (opcode::is_a_move_result(it_next->insn->opcode()) ||
+             opcode::is_a_move_result_pseudo(it_next->insn->opcode()))) {
+          it = it_next;
+        }
+      }
+      c->insert_after(it, std::make_unique<SourceBlock>(*sb.second));
+    }
+    // Flatten source blocks, so that the simple search for one will copy
+    // chains, if necessary.
+    c->chain_consecutive_source_blocks();
+  }
+}
+
 void replace_getter_wrapper_concurrent(IRCode* transform,
                                        IRInstruction* insn,
                                        IRInstruction* move_result,
-                                       DexField* field) {
+                                       DexField* field,
+                                       const SourceBlocks& sb) {
   TRACE(SYNT, 2, "Optimizing getter wrapper call (concurrent): %s", SHOW(insn));
   redex_assert(field->is_concrete());
   always_assert(is_public(field));
@@ -477,11 +547,13 @@ void replace_getter_wrapper_concurrent(IRCode* transform,
 
   transform->replace_opcode(insn, {new_get, move_result_pseudo});
   transform->remove_opcode(move_result);
+  surround_with(transform, new_get, sb);
 }
 
 void replace_method_wrapper_concurrent(IRCode* transform,
                                        IRInstruction* insn,
-                                       DexMethod* method) {
+                                       DexMethod* method,
+                                       const SourceBlocks& sb) {
   TRACE(SYNT, 2, "Optimizing method wrapper (sequential): %s", SHOW(insn));
   auto op = insn->opcode();
   auto new_invoke = [&] {
@@ -498,6 +570,7 @@ void replace_method_wrapper_concurrent(IRCode* transform,
 
   TRACE(SYNT, 2, "new instruction: %s", SHOW(new_invoke));
   transform->replace_opcode(insn, new_invoke);
+  surround_with(transform, new_invoke, sb);
 }
 
 bool can_update_wrappee(const ClassHierarchy& ch,
@@ -564,7 +637,8 @@ void replace_ctor_wrapper_sequential(IRInstruction* ctor_insn,
 
 void replace_ctor_wrapper_concurrent(IRCode* transform,
                                      IRInstruction* ctor_insn,
-                                     DexMethod* ctor) {
+                                     DexMethod* ctor,
+                                     const SourceBlocks& sb) {
   TRACE(SYNT, 2, "Optimizing static ctor (concurrent): %s", SHOW(ctor_insn));
   redex_assert(ctor->is_concrete());
   always_assert(is_public(ctor));
@@ -582,14 +656,17 @@ void replace_ctor_wrapper_concurrent(IRCode* transform,
 
   TRACE(SYNT, 2, "new instruction: %s", SHOW(new_ctor_call));
   transform->replace_opcode(ctor_insn, new_ctor_call);
+  surround_with(transform, new_ctor_call, sb);
 }
 
 struct MethodAnalysisResult {
-  std::vector<std::tuple<IRInstruction*, IRInstruction*, DexField*>>
+  std::vector<
+      std::tuple<IRInstruction*, IRInstruction*, DexField*, SourceBlocks>>
       getter_calls;
-  std::vector<std::tuple<IRInstruction*, DexMethod*, DexMethod*>> wrapper_calls;
+  std::vector<std::tuple<IRInstruction*, DexMethod*, DexMethod*, SourceBlocks>>
+      wrapper_calls;
   std::vector<std::tuple<IRInstruction*, DexMethod*, DexMethod*>> wrapped_calls;
-  std::vector<std::pair<IRInstruction*, DexMethod*>> ctor_calls;
+  std::vector<std::tuple<IRInstruction*, DexMethod*, SourceBlocks>> ctor_calls;
 };
 
 std::unique_ptr<MethodAnalysisResult> analyze_method_concurrent(
@@ -613,15 +690,17 @@ std::unique_ptr<MethodAnalysisResult> analyze_method_concurrent(
           ssms.keepers.emplace(callee);
           continue;
         }
-        auto field = found_get->second;
-        mar->getter_calls.emplace_back(insn, move_result, field);
+        auto field = found_get->second.first;
+        mar->getter_calls.emplace_back(insn, move_result, field,
+                                       found_get->second.second);
         continue;
       }
 
       auto const found_wrap = ssms.wrappers.find(callee);
       if (found_wrap != ssms.wrappers.end()) {
-        auto method = found_wrap->second;
-        mar->wrapper_calls.emplace_back(insn, callee, method);
+        auto method = found_wrap->second.first;
+        mar->wrapper_calls.emplace_back(insn, callee, method,
+                                        found_wrap->second.second);
         continue;
       }
       always_assert_log(ssms.wrapped.find(callee) == ssms.wrapped.end(),
@@ -642,15 +721,17 @@ std::unique_ptr<MethodAnalysisResult> analyze_method_concurrent(
           ssms.keepers.emplace(callee);
           continue;
         }
-        auto field = found_get->second;
-        mar->getter_calls.emplace_back(insn, move_result, field);
+        auto field = found_get->second.first;
+        mar->getter_calls.emplace_back(insn, move_result, field,
+                                       found_get->second.second);
         continue;
       }
 
       auto const found_wrap = ssms.wrappers.find(callee);
       if (found_wrap != ssms.wrappers.end()) {
-        auto method = found_wrap->second;
-        mar->wrapper_calls.emplace_back(insn, callee, method);
+        auto method = found_wrap->second.first;
+        mar->wrapper_calls.emplace_back(insn, callee, method,
+                                        found_wrap->second.second);
         continue;
       }
 
@@ -663,8 +744,8 @@ std::unique_ptr<MethodAnalysisResult> analyze_method_concurrent(
 
       auto const found_ctor = ssms.ctors.find(callee);
       if (found_ctor != ssms.ctors.end()) {
-        auto ctor = found_ctor->second;
-        mar->ctor_calls.emplace_back(insn, ctor);
+        auto ctor = found_ctor->second.first;
+        mar->ctor_calls.emplace_back(insn, ctor, found_ctor->second.second);
         continue;
       }
     }
@@ -706,17 +787,16 @@ void replace_wrappers_sequential(const ClassHierarchy& ch,
     }
   }
   mar->wrapper_calls.erase(
-      std::remove_if(
-          mar->wrapper_calls.begin(),
-          mar->wrapper_calls.end(),
-          [&](const std::tuple<IRInstruction*, DexMethod*, DexMethod*>&
-                  wtriple) { return bad_wrappees.count(get<2>(wtriple)); }),
+      std::remove_if(mar->wrapper_calls.begin(),
+                     mar->wrapper_calls.end(),
+                     [&](const auto& wtriple) {
+                       return bad_wrappees.count(get<2>(wtriple));
+                     }),
       mar->wrapper_calls.end());
   mar->wrapped_calls.erase(
       std::remove_if(mar->wrapped_calls.begin(),
                      mar->wrapped_calls.end(),
-                     [&](const std::tuple<IRInstruction*, DexMethod*,
-                                          DexMethod*>& wtriple) {
+                     [&](const auto& wtriple) {
                        auto call_inst = get<0>(wtriple);
                        return bad_wrappees.count(
                            static_cast<DexMethod*>(call_inst->get_method()));
@@ -739,7 +819,7 @@ void replace_wrappers_sequential(const ClassHierarchy& ch,
     replace_method_wrapper_sequential(ch, call_inst, wrapper, wrappee, ssms);
   }
   for (const auto& cpair : mar->ctor_calls) {
-    replace_ctor_wrapper_sequential(cpair.first, cpair.second);
+    replace_ctor_wrapper_sequential(get<0>(cpair), get<1>(cpair));
   }
 }
 
@@ -748,20 +828,24 @@ void replace_wrappers_concurrent(DexMethod* caller_method,
   using std::get;
   auto code = caller_method->get_code();
   for (const auto& g : mar->getter_calls) {
-    replace_getter_wrapper_concurrent(code, get<0>(g), get<1>(g), get<2>(g));
+    replace_getter_wrapper_concurrent(code, get<0>(g), get<1>(g), get<2>(g),
+                                      get<3>(g));
   }
   for (const auto& wtriple : mar->wrapper_calls) {
     auto call_inst = get<0>(wtriple);
     auto wrappee = get<2>(wtriple);
-    replace_method_wrapper_concurrent(code, call_inst, wrappee);
+    replace_method_wrapper_concurrent(code, call_inst, wrappee,
+                                      get<3>(wtriple));
   }
   for (const auto& wtriple : mar->wrapped_calls) {
     auto call_inst = get<0>(wtriple);
     auto wrappee = get<1>(wtriple);
-    replace_method_wrapper_concurrent(code, call_inst, wrappee);
+    replace_method_wrapper_concurrent(code, call_inst, wrappee,
+                                      SourceBlocks(nullptr, nullptr));
   }
   for (const auto& cpair : mar->ctor_calls) {
-    replace_ctor_wrapper_concurrent(code, cpair.first, cpair.second);
+    replace_ctor_wrapper_concurrent(code, get<0>(cpair), get<1>(cpair),
+                                    get<2>(cpair));
   }
 }
 
@@ -933,7 +1017,7 @@ bool trace_analysis(WrapperMethods& ssms) {
 
   synth = 0;
   others = 0;
-  for (auto it : ssms.ctors) {
+  for (auto& it : ssms.ctors) {
     auto meth = it.first;
     if (is_synthetic(meth)) {
       synth++;
