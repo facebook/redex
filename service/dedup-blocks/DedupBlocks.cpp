@@ -937,7 +937,6 @@ class DedupBlocksImpl {
   }
 
   void check_inits(cfg::ControlFlowGraph& cfg) {
-    reaching_defs::Environment defs_in;
     reaching_defs::MoveAwareFixpointIterator fixpoint_iter(cfg);
     fixpoint_iter.run(reaching_defs::Environment());
     for (cfg::Block* block : cfg.blocks()) {
@@ -946,11 +945,11 @@ class DedupBlocksImpl {
         IRInstruction* insn = mie.insn;
         if (opcode::is_invoke_direct(insn->opcode()) &&
             method::is_init(insn->get_method())) {
-          auto defs = defs_in.get(insn->src(0));
+          auto defs = env.get(insn->src(0));
           always_assert(!defs.is_top());
           always_assert(defs.elements().size() == 1);
         }
-        fixpoint_iter.analyze_instruction(insn, &defs_in);
+        fixpoint_iter.analyze_instruction(insn, &env);
       }
     }
   }
