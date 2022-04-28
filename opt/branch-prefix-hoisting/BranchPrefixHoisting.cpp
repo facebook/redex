@@ -285,7 +285,8 @@ bool create_move_and_fix_clobbered(
     cfg::Block* block,
     cfg::ControlFlowGraph& cfg,
     const std::unordered_map<reg_t, bool>& crit_regs,
-    Lazy<const constant_uses::ConstantUses>& constant_uses) {
+    Lazy<const constant_uses::ConstantUses>& constant_uses,
+    bool can_allocate_regs) {
   std::unordered_map<reg_t, reg_t> reg_map;
   auto it = block->to_cfg_instruction_iterator(pos);
   auto cond_insn = it->insn;
@@ -296,6 +297,9 @@ bool create_move_and_fix_clobbered(
     always_assert(!cond_insn->src_is_wide(i));
     auto it_reg = crit_regs.find(reg);
     if (it_reg != crit_regs.end() && it_reg->second) {
+      if (!can_allocate_regs) {
+        return false;
+      }
       auto& type_envs =
           constant_uses->get_type_inference()->get_type_environments();
       auto& env = type_envs.at(cond_insn);
@@ -341,13 +345,15 @@ size_t hoist_insns_for_block(
     cfg::ControlFlowGraph& cfg,
     const std::vector<IRInstruction>& insns_to_hoist,
     const std::unordered_map<reg_t, bool>& crit_regs,
-    Lazy<const constant_uses::ConstantUses>& constant_uses) {
+    Lazy<const constant_uses::ConstantUses>& constant_uses,
+    bool can_allocate_regs) {
   auto insert_it = block->to_cfg_instruction_iterator(pos);
 
   {
     std::vector<IRInstruction*> heap_insn_objs;
     if (!create_move_and_fix_clobbered(pos, heap_insn_objs, block, cfg,
-                                       crit_regs, constant_uses)) {
+                                       crit_regs, constant_uses,
+                                       can_allocate_regs)) {
       return 0;
     }
 
@@ -491,7 +497,8 @@ size_t hoist_insns_for_block(
 size_t process_hoisting_for_block(
     cfg::Block* block,
     cfg::ControlFlowGraph& cfg,
-    Lazy<const constant_uses::ConstantUses>& constant_uses) {
+    Lazy<const constant_uses::ConstantUses>& constant_uses,
+    bool can_allocate_regs) {
   IRList::iterator last_insn_it = block->get_last_insn();
   if (last_insn_it == block->end()) {
     // block is empty
@@ -564,13 +571,9 @@ size_t process_hoisting_for_block(
     return 0;
   }
   // do the mutation
-  auto hoisted = hoist_insns_for_block(block,
-                                       last_insn_it,
-                                       *succ_blocks,
-                                       cfg,
-                                       insns_to_hoist,
-                                       *crit_regs,
-                                       constant_uses);
+  auto hoisted = hoist_insns_for_block(block, last_insn_it, *succ_blocks, cfg,
+                                       insns_to_hoist, *crit_regs,
+                                       constant_uses, can_allocate_regs);
   TRACE(
       BPH, 5, "Hoisted %zu/%zu instruction from %s into B%zu", hoisted,
       insns_to_hoist.size(),
@@ -588,7 +591,9 @@ size_t process_hoisting_for_block(
 
 } // namespace
 
-size_t BranchPrefixHoistingPass::process_code(IRCode* code, DexMethod* method) {
+size_t BranchPrefixHoistingPass::process_code(IRCode* code,
+                                              DexMethod* method,
+                                              bool can_allocate_regs) {
   cfg::ScopedCFG cfg(code);
   TRACE(BPH, 5, "%s", SHOW(*cfg));
   Lazy<const constant_uses::ConstantUses> constant_uses([&] {
@@ -596,13 +601,14 @@ size_t BranchPrefixHoistingPass::process_code(IRCode* code, DexMethod* method) {
         *cfg, method,
         /* force_type_inference */ true);
   });
-  size_t ret = process_cfg(*cfg, constant_uses);
+  size_t ret = process_cfg(*cfg, constant_uses, can_allocate_regs);
   return ret;
 }
 
 size_t BranchPrefixHoistingPass::process_cfg(
     cfg::ControlFlowGraph& cfg,
-    Lazy<const constant_uses::ConstantUses>& constant_uses) {
+    Lazy<const constant_uses::ConstantUses>& constant_uses,
+    bool can_allocate_regs) {
   size_t ret_insns_hoisted = 0;
   bool performed_transformation = false;
   do {
@@ -612,8 +618,8 @@ size_t BranchPrefixHoistingPass::process_cfg(
     // iterate from the back, may get to the optimal state quicker
     for (auto* block : blocks) {
       // when we are processing hoist for one block, other blocks may be changed
-      size_t n_insn_hoisted =
-          process_hoisting_for_block(block, cfg, constant_uses);
+      size_t n_insn_hoisted = process_hoisting_for_block(
+          block, cfg, constant_uses, can_allocate_regs);
       if (n_insn_hoisted) {
         performed_transformation = true;
         ret_insns_hoisted += n_insn_hoisted;
@@ -629,16 +635,17 @@ void BranchPrefixHoistingPass::run_pass(DexStoresVector& stores,
                                         PassManager& mgr) {
   auto scope = build_class_scope(stores);
 
-  int total_insns_hoisted =
-      walk::parallel::methods<int>(scope, [](DexMethod* method) -> int {
+  bool can_allocate_regs = !mgr.regalloc_has_run();
+  int total_insns_hoisted = walk::parallel::methods<int>(
+      scope, [can_allocate_regs](DexMethod* method) -> int {
         const auto code = method->get_code();
         if (!code) {
           return 0;
         }
         TraceContext context{method};
 
-        int insns_hoisted =
-            BranchPrefixHoistingPass::process_code(code, method);
+        int insns_hoisted = BranchPrefixHoistingPass::process_code(
+            code, method, can_allocate_regs);
         if (insns_hoisted) {
           TRACE(BPH, 3,
                 "[branch prefix hoisting] Moved %u insns in method {%s}",

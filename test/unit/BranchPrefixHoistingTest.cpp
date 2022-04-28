@@ -22,7 +22,8 @@ class BranchPrefixHoistingTest : public RedexTest {};
 void test(const std::string& code_str,
           const std::string& expected_str,
           size_t expected_instructions_hoisted,
-          bool full_validation = false) {
+          bool full_validation = false,
+          bool can_allocate_regs = true) {
 
   DexType* type = DexType::make_type("testClass");
   auto cls = create_class(type, type::java_lang_Object(), {}, ACC_PUBLIC);
@@ -43,8 +44,8 @@ void test(const std::string& code_str,
         cfg, method,
         /* force_type_inference */ true);
   });
-  int actual_insns_hoisted =
-      BranchPrefixHoistingPass::process_cfg(cfg, constant_uses);
+  int actual_insns_hoisted = BranchPrefixHoistingPass::process_cfg(
+      cfg, constant_uses, can_allocate_regs);
 
   std::cerr << "after:" << std::endl << SHOW(code->cfg());
   EXPECT_EQ(expected_instructions_hoisted, actual_insns_hoisted);
@@ -582,6 +583,28 @@ TEST_F(BranchPrefixHoistingTest, branch_with_clber_wide) {
     )
   )";
   test(code_str, expected_str, 2);
+}
+
+TEST_F(BranchPrefixHoistingTest, branch_with_clber_wide_cannot_alloc) {
+
+  const auto& code_str = R"(
+    (
+      (load-param v0)
+      (if-eqz v0 :true)
+      (const-wide v0 1)
+      (add-int v2 v0 v1)
+      (add-int v2 v1 v1)
+      (goto :end)
+      (:true)
+      (const-wide v0 1)
+      (add-int v2 v0 v1)
+      (add-int v2 v2 v1)
+      (:end)
+      (return-void)
+    )
+  )";
+  test(code_str, code_str, 0, /* full_validation */ true,
+       /*can_allocate_regs */ false);
 }
 
 TEST_F(BranchPrefixHoistingTest, branch_with_const_zero) {
