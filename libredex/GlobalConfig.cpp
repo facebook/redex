@@ -134,6 +134,7 @@ void GlobalConfig::bind_config() {
   bind("legacy_reflection_reachability", false, bool_param);
   bind("lower_with_cfg", {}, bool_param);
   bind("no_optimizations_annotations", {}, string_vector_param);
+  bind("no_optimizations_blocklist", {}, string_vector_param);
   // TODO: Remove unused profiled_methods_file option and all build system
   // references
   bind("profiled_methods_file", "", string_param);
