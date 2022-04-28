@@ -201,6 +201,60 @@ bool TableEntryParser::visit_type(android::ResTable_package* package,
   return true;
 }
 
+bool XmlFileEditor::visit_global_strings(android::ResStringPool_header* pool) {
+  m_string_pool_header = pool;
+  return true;
+}
+
+bool XmlFileEditor::visit_attribute_ids(uint32_t* id, size_t count) {
+  arsc::XmlFileVisitor::visit_attribute_ids(id, count);
+  m_attribute_ids_start = id;
+  m_attribute_id_count = count;
+  return true;
+}
+
+bool XmlFileEditor::visit_typed_data(android::Res_value* value) {
+  m_typed_data.emplace_back(value);
+  return true;
+}
+
+size_t XmlFileEditor::remap(const std::map<uint32_t, uint32_t>& old_to_new) {
+  size_t changes = 0;
+  if (m_attribute_id_count > 0 && m_attribute_ids_start != nullptr) {
+    uint32_t* id = m_attribute_ids_start;
+    for (size_t i = 0; i < m_attribute_id_count; i++, id++) {
+      uint32_t old_value = dtohl(*id);
+      auto search = old_to_new.find(old_value);
+      if (search != old_to_new.end()) {
+        auto new_value = htodl(search->second);
+        if (old_value != new_value) {
+          TRACE(RES, 9, "Remapping attribute ID 0x%x -> 0x%x at offset %ld",
+                old_value, new_value, get_file_offset(id));
+          *id = new_value;
+          changes++;
+        }
+      }
+    }
+  }
+  for (auto& value : m_typed_data) {
+    if (value->dataType == android::Res_value::TYPE_REFERENCE ||
+        value->dataType == android::Res_value::TYPE_ATTRIBUTE) {
+      auto old_value = dtohl(value->data);
+      auto search = old_to_new.find(old_value);
+      if (search != old_to_new.end()) {
+        auto new_value = htodl(search->second);
+        if (old_value != new_value) {
+          TRACE(RES, 9, "Remapping attribute value 0x%x -> 0x%x at offset %ld",
+                old_value, new_value, get_file_offset(value));
+          value->data = new_value;
+          changes++;
+        }
+      }
+    }
+  }
+  return changes;
+}
+
 } // namespace apk
 
 namespace {
@@ -209,26 +263,6 @@ namespace {
   ((PACKAGE_MASK_BIT & ((package) << PACKAGE_INDEX_BIT_SHIFT)) | \
    (TYPE_MASK_BIT & ((type) << TYPE_INDEX_BIT_SHIFT)) |          \
    (ENTRY_MASK_BIT & (entry)))
-
-void ensure_file_contents(const std::string& file_contents,
-                          const std::string& filename) {
-  if (file_contents.empty()) {
-    fprintf(stderr, "Unable to read file: %s\n", filename.data());
-    throw std::runtime_error("Unable to read file: " + filename);
-  }
-}
-
-/*
- * Reads an entire file into a std::string. Returns an empty string if
- * anything went wrong (e.g. file not found).
- */
-std::string read_entire_file(const std::string& filename) {
-  std::ifstream in(filename, std::ios::in | std::ios::binary);
-  std::ostringstream sstr;
-  sstr << in.rdbuf();
-  redex_assert(!in.bad());
-  return sstr.str();
-}
 
 size_t write_serialized_data(const android::Vector<char>& cVec,
                              RedexMappedFile f) {
@@ -847,57 +881,11 @@ size_t ApkResources::remap_xml_reference_attributes(
   if (is_raw_resource(filename)) {
     return 0;
   }
-  std::string file_contents = read_entire_file(filename);
-  ensure_file_contents(file_contents, filename);
-  bool made_change = false;
-
-  android::ResXMLTree parser;
-  parser.setTo(file_contents.data(), file_contents.size());
-  if (parser.getError() != android::NO_ERROR) {
-    throw std::runtime_error("Unable to read file: " + filename);
-  }
-
-  // Update embedded resource ID array
-  size_t resIdCount = 0;
-  uint32_t* resourceIds = parser.getResourceIds(&resIdCount);
-  for (size_t i = 0; i < resIdCount; ++i) {
-    auto id_search = kept_to_remapped_ids.find(resourceIds[i]);
-    if (id_search != kept_to_remapped_ids.end()) {
-      resourceIds[i] = id_search->second;
-      made_change = true;
-    }
-  }
-
-  android::ResXMLParser::event_code_t type;
-  do {
-    type = parser.next();
-    if (type == android::ResXMLParser::START_TAG) {
-      const size_t attr_count = parser.getAttributeCount();
-      for (size_t i = 0; i < attr_count; ++i) {
-        if (parser.getAttributeDataType(i) ==
-                android::Res_value::TYPE_REFERENCE ||
-            parser.getAttributeDataType(i) ==
-                android::Res_value::TYPE_ATTRIBUTE) {
-          android::Res_value outValue;
-          parser.getAttributeValue(i, &outValue);
-          if (outValue.data > PACKAGE_RESID_START &&
-              kept_to_remapped_ids.count(outValue.data)) {
-            uint32_t new_value = kept_to_remapped_ids.at(outValue.data);
-            if (new_value != outValue.data) {
-              parser.setAttributeData(i, new_value);
-              made_change = true;
-            }
-          }
-        }
-      }
-    }
-  } while (type != android::ResXMLParser::BAD_DOCUMENT &&
-           type != android::ResXMLParser::END_DOCUMENT);
-
-  if (made_change) {
-    write_string_to_file(filename, file_contents);
-  }
-  return made_change;
+  auto file = RedexMappedFile::open(filename, false);
+  apk::XmlFileEditor editor;
+  always_assert_log(editor.visit((void*)file.data(), file.size()),
+                    "Failed to parse resource xml file %s", filename.c_str());
+  return editor.remap(kept_to_remapped_ids) > 0;
 }
 
 std::unique_ptr<ResourceTableFile> ApkResources::load_res_table() {

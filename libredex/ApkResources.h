@@ -52,6 +52,24 @@ struct TypeDefinition {
   std::vector<uint32_t> source_res_ids;
 };
 
+class XmlFileEditor : public arsc::XmlFileVisitor {
+ public:
+  ~XmlFileEditor() override {}
+
+  bool visit_global_strings(android::ResStringPool_header* pool) override;
+  bool visit_attribute_ids(uint32_t* id, size_t count) override;
+  bool visit_typed_data(android::Res_value* value) override;
+  // Remaps attribute IDs and reference data, according to the map and returns
+  // the number of changes made.
+  size_t remap(const std::map<uint32_t, uint32_t>& old_to_new);
+
+  android::ResStringPool_header* m_string_pool_header = nullptr;
+  size_t m_attribute_id_count = 0;
+  uint32_t* m_attribute_ids_start = nullptr;
+  std::vector<android::ResXMLTree_attribute*> m_attributes;
+  std::vector<android::Res_value*> m_typed_data;
+};
+
 // Read the ResTable data structures and store a convenient organization of the
 // data pointers and the packages.
 // NOTE: Visitor super classes simply follow pointers, so all subclasses which

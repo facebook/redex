@@ -19,12 +19,32 @@ namespace arsc {
 void collect_spans(android::ResStringPool_span* ptr,
                    std::vector<android::ResStringPool_span*>* out);
 
+class VisitorBase {
+ public:
+  // Returns how far into the file this pointer is.
+  long get_file_offset(const void* ptr) {
+    auto delta = (const uint8_t*)ptr - (const uint8_t*)m_data;
+    LOG_FATAL_IF(delta < 0, "Chunk %p is smaller than file start %p.", ptr,
+                 m_data);
+    LOG_FATAL_IF(delta >= (long)m_length,
+                 "Chunk %p is beyond file end. Start = %p, Length = %zu", ptr,
+                 m_data, m_length);
+    return delta;
+  }
+
+  virtual ~VisitorBase() {}
+
+ protected:
+  void* m_data;
+  size_t m_length;
+};
+
 // Class to traverse various structures in resources.arsc file. Callers should
 // override various methods that are relevant for their use case. Mutating data
 // is allowed, though traversal logic will not expect anything data to change
 // its size (so only use this to make simple edits like changing IDs, changing
 // string pool references, etc).
-class ResourceTableVisitor {
+class ResourceTableVisitor : public VisitorBase {
  public:
   virtual bool visit(void* data, size_t len);
   virtual bool visit_table(android::ResTable_header* table);
@@ -65,24 +85,11 @@ class ResourceTableVisitor {
   virtual bool visit_unknown_chunk(android::ResTable_package* package,
                                    android::ResChunk_header* header);
   virtual ~ResourceTableVisitor() {}
-  // Returns how far into the file this pointer is.
-  long get_file_offset(const void* ptr) {
-    auto delta = (const uint8_t*)ptr - (const uint8_t*)m_data;
-    LOG_FATAL_IF(delta < 0, "Chunk %p is smaller than file start %p.", ptr,
-                 m_data);
-    LOG_FATAL_IF(delta >= (long)m_length,
-                 "Chunk %p is beyond file end. Start = %p, Length = %zu", ptr,
-                 m_data, m_length);
-    return delta;
-  }
 
  private:
   bool valid(const android::ResTable_package*);
   bool valid(const android::ResTable_typeSpec*);
   bool valid(const android::ResTable_type*);
-
-  void* m_data;
-  size_t m_length;
 };
 
 // A visitor that can find string pool references into multiple different pools!
@@ -119,6 +126,30 @@ class StringPoolRefVisitor : public ResourceTableVisitor {
                        android::ResTable_map_entry* entry,
                        android::ResTable_map* value);
   virtual ~StringPoolRefVisitor() {}
+};
+
+class XmlFileVisitor : public VisitorBase {
+ public:
+  virtual bool visit(void* data, size_t len);
+  virtual bool visit_global_strings(android::ResStringPool_header* pool);
+  virtual bool visit_attribute_ids(uint32_t* id, size_t count);
+  virtual bool visit_node(android::ResXMLTree_node* node);
+  virtual bool visit_start_namespace(
+      android::ResXMLTree_node* node,
+      android::ResXMLTree_namespaceExt* extension);
+  virtual bool visit_end_namespace(android::ResXMLTree_node* node,
+                                   android::ResXMLTree_namespaceExt* extension);
+  virtual bool visit_start_tag(android::ResXMLTree_node* node,
+                               android::ResXMLTree_attrExt* extension);
+  virtual bool visit_end_tag(android::ResXMLTree_node* node,
+                             android::ResXMLTree_endElementExt* extension);
+  virtual bool visit_attribute(android::ResXMLTree_node* node,
+                               android::ResXMLTree_attrExt* extension,
+                               android::ResXMLTree_attribute* attribute);
+  virtual bool visit_cdata(android::ResXMLTree_node* node,
+                           android::ResXMLTree_cdataExt* extension);
+  virtual bool visit_typed_data(android::Res_value* value);
+  virtual ~XmlFileVisitor() {}
 };
 } // namespace arsc
 #endif

@@ -1318,15 +1318,6 @@ ResXMLTree_attribute* ResXMLParser::getAttributePointer(size_t idx) const
     return nullptr;
 }
 
-// Replaces the data of an XML attribute.
-void ResXMLParser::setAttributeData(size_t idx, uint32_t newData)
-{
-    ResXMLTree_attribute* attr = getAttributePointer(idx);
-    if (attr != nullptr) {
-        attr->typedValue.data = newData;
-    }
-}
-
 ssize_t ResXMLParser::getAttributeValue(size_t idx, Res_value* outValue) const
 {
     const ResXMLTree_attribute* attr = getAttributePointer(idx);
@@ -1576,12 +1567,6 @@ ResXMLTree::~ResXMLTree()
         ALOGI("Destroying ResXMLTree in %p #%d\n", this, android_atomic_dec(&gCount)-1);
     }
     uninit();
-}
-
-uint32_t* ResXMLTree::getResourceIds(size_t* numberOfIds)
-{
-    *numberOfIds = mNumResIds;
-    return mResIds;
 }
 
 status_t ResXMLTree::setTo(const void* data, size_t size, bool copyData)

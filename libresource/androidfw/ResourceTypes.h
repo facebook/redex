@@ -772,9 +772,6 @@ public:
     int32_t getAttributeDataType(size_t idx) const;
     int32_t getAttributeData(size_t idx) const;
 
-    // Replaces the data of an XML attribute.
-    void setAttributeData(size_t idx, uint32_t newData);
-
     ssize_t getAttributeValue(size_t idx, Res_value* outValue) const;
 
     ssize_t indexOfAttribute(const char* ns, const char* attr) const;
@@ -812,8 +809,6 @@ public:
     ResXMLTree(const DynamicRefTable* dynamicRefTable);
     ResXMLTree();
     ~ResXMLTree();
-
-    uint32_t* getResourceIds(size_t* numberOfIds);
 
     status_t setTo(const void* data, size_t size, bool copyData=false);
 
