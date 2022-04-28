@@ -71,6 +71,21 @@ const std::unordered_set<DexType*>& ConfigFiles::get_no_optimizations_annos() {
   return m_no_optimizations_annos;
 }
 
+const std::unordered_set<std::string>&
+ConfigFiles::get_no_optimizations_blocklist() {
+  if (m_no_optimizations_blocklist.empty()) {
+    Json::Value no_optimizations_blocklist;
+    m_json.get("no_optimizations_blocklist", Json::nullValue,
+               no_optimizations_blocklist);
+    if (!no_optimizations_blocklist.empty()) {
+      for (auto const& name : no_optimizations_blocklist) {
+        m_no_optimizations_blocklist.insert(name.asString());
+      }
+    }
+  }
+  return m_no_optimizations_blocklist;
+}
+
 /**
  * This function relies on the g_redex.
  */

@@ -93,6 +93,7 @@ struct ConfigFiles {
   void process_unresolved_method_profile_lines();
 
   const std::unordered_set<DexType*>& get_no_optimizations_annos();
+  const std::unordered_set<std::string>& get_no_optimizations_blocklist();
   const std::unordered_set<DexMethodRef*>& get_pure_methods();
   const std::unordered_set<DexString*>& get_finalish_field_names();
   const std::unordered_set<DexType*>& get_do_not_devirt_anon();
@@ -176,6 +177,8 @@ struct ConfigFiles {
   std::unordered_set<DexType*> m_no_devirtualize_annos;
   // global no optimizations annotations
   std::unordered_set<DexType*> m_no_optimizations_annos;
+  // global no optimizations blocklist (type prefixes)
+  std::unordered_set<std::string> m_no_optimizations_blocklist;
   // global pure methods
   std::unordered_set<DexMethodRef*> m_pure_methods;
   // names of fields that behave similar to final fields, i.e. written once
