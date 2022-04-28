@@ -115,6 +115,13 @@ class ResStringPoolBuilder {
   std::vector<StyleInfo> m_styles;
 };
 
+// From the given pointer to XML data (and the size of the data), write to `out`
+// an equivalent XML doc, but with a string pool specified by the builder.
+void replace_xml_string_pool(android::ResChunk_header* data,
+                             size_t len,
+                             ResStringPoolBuilder& builder,
+                             android::Vector<char>* out);
+
 using EntryValueData = PtrLen<uint8_t>;
 using EntryOffsetData = std::pair<EntryValueData, uint32_t>;
 

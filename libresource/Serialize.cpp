@@ -758,4 +758,25 @@ void ResTableBuilder::serialize(android::Vector<char>* out) {
   write_long_at_pos(total_size_pos, out->size() - initial_size, out);
 }
 
+void replace_xml_string_pool(android::ResChunk_header* data,
+                             size_t len,
+                             ResStringPoolBuilder& builder,
+                             android::Vector<char>* out) {
+  // Find boundaries for the various pieces of the file.
+  auto chunk_size = dtohs(data->headerSize);
+  auto pool_ptr = (android::ResStringPool_header*)((char*)data + chunk_size);
+  // Build the new file.
+  auto initial_vec_size = out->size();
+  arsc::push_short(android::RES_XML_TYPE, out);
+  arsc::push_short(chunk_size, out);
+  auto total_size_pos = out->size();
+  arsc::push_long(FILL_IN_LATER, out);
+  builder.serialize(out);
+  // Straight copy of everything after the original data's string pool.
+  auto start = chunk_size + dtohl(pool_ptr->header.size);
+  auto remaining = len - start;
+  void* start_ptr = ((char*)data) + start;
+  push_data_no_swap(start_ptr, remaining, out);
+  write_long_at_pos(total_size_pos, out->size() - initial_vec_size, out);
+}
 } // namespace arsc

@@ -791,19 +791,8 @@ int ApkResources::replace_in_xml_string_pool(
 
   size_t num_replaced = 0;
   android::ResStringPool pool(pool_ptr, dtohl(pool_ptr->header.size));
-
-  // Straight copy of everything after the string pool.
-  android::Vector<char> serialized_nodes;
-  auto start = chunk_size + dtohl(pool_ptr->header.size);
-  auto remaining = len - start;
-  serialized_nodes.resize(remaining);
-  void* start_ptr = ((char*)data) + start;
-  memcpy((void*)&serialized_nodes[0], start_ptr, remaining);
-
-  // Rewrite the strings
-  auto is_utf8 = pool.isUTF8();
-  auto flags =
-      is_utf8 ? htodl(android::ResStringPool_header::UTF8_FLAG) : (uint32_t)0;
+  auto flags = pool.isUTF8() ? htodl(android::ResStringPool_header::UTF8_FLAG)
+                             : (uint32_t)0;
   arsc::ResStringPoolBuilder pool_builder(flags);
   for (size_t i = 0; i < dtohl(pool_ptr->stringCount); i++) {
     auto existing_str = apk::get_string_from_pool(pool, i);
@@ -816,20 +805,11 @@ int ApkResources::replace_in_xml_string_pool(
     }
   }
 
-  android::Vector<char> serialized_pool;
-  pool_builder.serialize(&serialized_pool);
-
-  // Assemble
-  arsc::push_short(android::RES_XML_TYPE, out_data);
-  arsc::push_short(chunk_size, out_data);
-  auto total_size =
-      chunk_size + serialized_nodes.size() + serialized_pool.size();
-  arsc::push_long(total_size, out_data);
-
-  out_data->appendVector(serialized_pool);
-  out_data->appendVector(serialized_nodes);
-
   *out_num_renamed = num_replaced;
+  if (num_replaced > 0) {
+    arsc::replace_xml_string_pool((android::ResChunk_header*)data, len,
+                                  pool_builder, out_data);
+  }
   return android::OK;
 }
 
