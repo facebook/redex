@@ -125,7 +125,26 @@ void do_inlining(DexMethod* bridge, DexMethod* bridgee) {
         return mie.type == MFLOW_OPCODE &&
                opcode::is_an_invoke(mie.insn->opcode());
       });
+  // Find the last source block.
+  auto last_sb_it =
+      std::find_if(invoke, code->end(), [](const MethodItemEntry& mie) {
+        return mie.type == MFLOW_SOURCE_BLOCK;
+      });
+  auto last_sb = last_sb_it != code->end() ? last_sb_it->src_block.get()
+                                           : nullptr;
+
   legacy_inliner::inline_tail_call(bridge, bridgee, invoke);
+
+  // Re-insert the source block so it does not get lost.
+  if (last_sb != nullptr) {
+    for (auto it = code->begin(); it != code->end(); ++it) {
+      if (it->type != MFLOW_OPCODE ||
+          !opcode::is_a_return(it->insn->opcode())) {
+        continue;
+      }
+      code->insert_before(it, std::make_unique<SourceBlock>(*last_sb));
+    }
+  }
 }
 } // namespace
 
