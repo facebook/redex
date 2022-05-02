@@ -220,7 +220,6 @@ class GatheredTypes {
   std::vector<DexType*> m_ltype;
   std::vector<DexFieldRef*> m_lfield;
   std::vector<DexMethodRef*> m_lmethod;
-  std::vector<DexTypeList*> m_additional_ltypelists;
   std::vector<DexCallSite*> m_lcallsite;
   std::vector<DexMethodHandle*> m_lmethodhandle;
   DexClasses* m_classes;

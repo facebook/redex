@@ -366,8 +366,7 @@ std::vector<DexTypeList*>* GatheredTypes::get_typelist_list(
     dexproto_to_idx* protos, cmp_dtypelist cmp) {
   std::vector<DexTypeList*>* typel = new std::vector<DexTypeList*>();
   auto class_defs_size = (uint32_t)m_classes->size();
-  typel->reserve(protos->size() + class_defs_size +
-                 m_additional_ltypelists.size());
+  typel->reserve(protos->size() + class_defs_size);
 
   for (auto& it : *protos) {
     auto proto = it.first;
@@ -377,9 +376,6 @@ std::vector<DexTypeList*>* GatheredTypes::get_typelist_list(
     DexClass* clz = m_classes->at(i);
     typel->push_back(clz->get_interfaces());
   }
-  typel->insert(typel->end(),
-                m_additional_ltypelists.begin(),
-                m_additional_ltypelists.end());
   sort_unique(*typel, compare_dextypelists);
   return typel;
 }
