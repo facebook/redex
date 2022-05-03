@@ -456,12 +456,24 @@ TEST(BundleResources, ObfuscateResourcesName) {
     auto dimen1_ids = res_table->get_res_ids_by_name("unused_dimen_2");
     EXPECT_EQ(dimen1_ids.size(), 1);
     auto dimen1_id = dimen1_ids[0];
+
+    auto icon_ids = res_table->get_res_ids_by_name("icon");
+    EXPECT_EQ(icon_ids.size(), 1);
+    auto files = res_table->get_files_by_rid(icon_ids[0]);
+    EXPECT_EQ(files.size(), 1);
+    EXPECT_EQ(*files.begin(), "res/drawable-mdpi-v4/icon.png");
+    files = res_table->get_files_by_rid(icon_ids[0], ResourcePathType::ZipPath);
+    EXPECT_EQ(files.size(), 1);
+    EXPECT_EQ(*files.begin(), "base/res/drawable-mdpi-v4/icon.png");
+
     auto type_ids = res_table->get_types_by_name({"color"});
     std::unordered_set<uint32_t> shifted_allow_type_ids;
     for (auto& type_id : type_ids) {
       shifted_allow_type_ids.emplace(type_id >> TYPE_INDEX_BIT_SHIFT);
     }
     std::map<std::string, std::string> filepath_old_to_new;
+    filepath_old_to_new["base/res/drawable-mdpi-v4/icon.png"] =
+        "base/res/a.png";
     res_table->obfuscate_resource_and_serialize(
         resources->find_resources_files(),
         filepath_old_to_new,
@@ -487,5 +499,15 @@ TEST(BundleResources, ObfuscateResourcesName) {
     EXPECT_EQ(id_to_name.at(hex_or_file_id), RESOURCE_NAME_REMOVED);
     EXPECT_EQ(id_to_name.at(color2_id), "keep_me_unused_color");
     EXPECT_EQ(id_to_name.at(dimen1_id), "unused_dimen_2");
+
+    icon_ids = res_table_new->get_res_ids_by_name("icon");
+    EXPECT_EQ(icon_ids.size(), 1);
+    files = res_table_new->get_files_by_rid(icon_ids[0]);
+    EXPECT_EQ(files.size(), 1);
+    EXPECT_EQ(*files.begin(), "res/a.png");
+    files =
+        res_table_new->get_files_by_rid(icon_ids[0], ResourcePathType::ZipPath);
+    EXPECT_EQ(files.size(), 1);
+    EXPECT_EQ(*files.begin(), "base/res/a.png");
   });
 }

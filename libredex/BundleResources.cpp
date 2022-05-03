@@ -921,12 +921,10 @@ void ResourcesPbFile::remap_reorder_and_serialize(
 }
 
 namespace {
-void remap_entry_file_paths(
-    const std::unordered_map<std::string, std::string>& old_to_new,
-    uint32_t package_id,
-    uint32_t type_id,
-    aapt::pb::Entry* entry) {
-  uint32_t res_id = MAKE_RES_ID(package_id, type_id, entry->entry_id().id());
+void remap_entry_file_paths(const std::function<void(aapt::pb::FileReference*,
+                                                     uint32_t)>& file_remapper,
+                            uint32_t res_id,
+                            aapt::pb::Entry* entry) {
   auto config_size = entry->config_value_size();
   for (int i = 0; i < config_size; i++) {
     auto value = entry->mutable_config_value(i)->mutable_value();
@@ -934,12 +932,7 @@ void remap_entry_file_paths(
       auto item = value->mutable_item();
       if (item->has_file()) {
         auto file = item->mutable_file();
-        auto search = old_to_new.find(file->path());
-        if (search != old_to_new.end()) {
-          TRACE(RES, 8, "Writing file path %s to ID 0x%x",
-                search->second.c_str(), res_id);
-          file->set_path(search->second);
-        }
+        file_remapper(file, res_id);
       }
     }
   }
@@ -949,6 +942,15 @@ void remap_entry_file_paths(
 void ResourcesPbFile::remap_file_paths_and_serialize(
     const std::vector<std::string>& resource_files,
     const std::unordered_map<std::string, std::string>& old_to_new) {
+  auto remap_filepaths = [&old_to_new](aapt::pb::FileReference* file,
+                                       uint32_t res_id) {
+    auto search = old_to_new.find(file->path());
+    if (search != old_to_new.end()) {
+      TRACE(RES, 8, "Writing file path %s to ID 0x%x", search->second.c_str(),
+            res_id);
+      file->set_path(search->second);
+    }
+  };
   for (const auto& resources_pb_path : resource_files) {
     TRACE(RES,
           9,
@@ -973,8 +975,11 @@ void ResourcesPbFile::remap_file_paths_and_serialize(
               auto current_type_id = type->type_id().id();
               int entry_size = type->entry_size();
               for (int k = 0; k < entry_size; k++) {
-                remap_entry_file_paths(old_to_new, current_package_id,
-                                       current_type_id, type->mutable_entry(k));
+                auto entry = type->mutable_entry(k);
+                uint32_t res_id =
+                    MAKE_RES_ID(current_package_id, current_type_id,
+                                entry->entry_id().id());
+                remap_entry_file_paths(remap_filepaths, res_id, entry);
               }
             }
           }
@@ -997,7 +1002,7 @@ size_t ResourcesPbFile::obfuscate_resource_and_serialize(
     const std::map<std::string, std::string>& filepath_old_to_new,
     const std::unordered_set<uint32_t>& allowed_types,
     const std::unordered_set<std::string>& keep_resource_prefixes) {
-  if (allowed_types.empty()) {
+  if (allowed_types.empty() && filepath_old_to_new.empty()) {
     TRACE(RES, 9, "BundleResources: Nothing to change, returning");
     return 0;
   }
@@ -1019,11 +1024,28 @@ size_t ResourcesPbFile::obfuscate_resource_and_serialize(
           int package_size = pb_restable.package_size();
           for (int i = 0; i < package_size; i++) {
             auto package = pb_restable.mutable_package(i);
+            auto current_package_id = package->package_id().id();
+            auto cur_module_name =
+                resolve_module_name_for_package_id(current_package_id) + "/";
+            auto remap_filepaths = [&filepath_old_to_new, &cur_module_name](
+                                       aapt::pb::FileReference* file,
+                                       uint32_t res_id) {
+              auto search_path = cur_module_name + file->path();
+              auto search = filepath_old_to_new.find(search_path);
+              if (search != filepath_old_to_new.end()) {
+                auto found_path = search->second;
+                auto new_path = found_path.substr(cur_module_name.length());
+                TRACE(RES, 8, "Writing file path %s to ID 0x%x",
+                      new_path.c_str(), res_id);
+                file->set_path(new_path);
+              }
+            };
             int type_size = package->type_size();
             for (int j = 0; j < type_size; j++) {
               auto type = package->mutable_type(j);
               auto current_type_id = type->type_id().id();
-              if (!allowed_types.count(current_type_id)) {
+              auto is_allow_type = allowed_types.count(current_type_id) > 0;
+              if (!is_allow_type && filepath_old_to_new.empty()) {
                 TRACE(RES, 9,
                       "BundleResources: skipping annonymize type %X: %s",
                       current_type_id, type->name().c_str());
@@ -1033,7 +1055,13 @@ size_t ResourcesPbFile::obfuscate_resource_and_serialize(
               for (int k = 0; k < entry_size; k++) {
                 auto entry = type->mutable_entry(k);
                 const auto& entry_name = entry->name();
-                if (find_prefix_match(keep_resource_prefixes, entry_name)) {
+                uint32_t res_id =
+                    MAKE_RES_ID(current_package_id, current_type_id,
+                                entry->entry_id().id());
+                remap_entry_file_paths(remap_filepaths, res_id,
+                                       type->mutable_entry(k));
+                if (!is_allow_type ||
+                    find_prefix_match(keep_resource_prefixes, entry_name)) {
                   TRACE(RES,
                         9,
                         "BundleResources: skipping annonymize entry %s",
@@ -1060,6 +1088,13 @@ std::string module_name_from_pb_path(const std::string& resources_pb_path) {
 }
 
 } // namespace
+
+std::string ResourcesPbFile::resolve_module_name_for_package_id(
+    uint32_t package_id) {
+  always_assert_log(m_package_id_to_module_name.count(package_id) > 0,
+                    "Unknown package for package id %X", package_id);
+  return m_package_id_to_module_name.at(package_id);
+}
 
 std::string ResourcesPbFile::resolve_module_name_for_resource_id(
     uint32_t res_id) {

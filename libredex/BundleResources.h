@@ -65,6 +65,7 @@ class ResourcesPbFile : public ResourceTableFile {
     return m_res_id_to_configvalue;
   }
   std::string resolve_module_name_for_resource_id(uint32_t res_id);
+  std::string resolve_module_name_for_package_id(uint32_t package_id);
 
  private:
   uint32_t m_package_id = 0xFFFFFFFF;
