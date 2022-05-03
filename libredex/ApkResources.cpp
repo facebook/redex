@@ -264,6 +264,25 @@ namespace {
    (TYPE_MASK_BIT & ((type) << TYPE_INDEX_BIT_SHIFT)) |          \
    (ENTRY_MASK_BIT & (entry)))
 
+/**
+ * write_serialized_data don't support growing arsc file, so use
+ * ofstream to write to arsc file for input bigger than original
+ * file size.
+ */
+size_t write_serialized_data_with_expansion(const android::Vector<char>& cVec,
+                                            RedexMappedFile f) {
+  size_t vec_size = cVec.size();
+  auto filename = f.filename.c_str();
+  // Close current opened file.
+  f.file.reset();
+  // Write to arsc through ofstream
+  std::ofstream ofs(filename,
+                    std::ofstream::out | std::ofstream::trunc |
+                        std::ofstream::binary);
+  ofs.write(&(cVec[0]), vec_size);
+  return vec_size;
+}
+
 size_t write_serialized_data(const android::Vector<char>& cVec,
                              RedexMappedFile f) {
   size_t vec_size = cVec.size();
@@ -1006,6 +1025,7 @@ class GlobalStringPoolReader : public arsc::ResourceTableVisitor {
         m_global_strings->setTo(header, dtohl(header->header.size)) ==
             android::NO_ERROR,
         "Failed to parse global strings!");
+    m_global_strings_header = header;
     auto size = m_global_strings->size();
     for (uint32_t i = 0; i < size; i++) {
       auto value = apk::get_string_from_pool(*m_global_strings, i);
@@ -1023,9 +1043,14 @@ class GlobalStringPoolReader : public arsc::ResourceTableVisitor {
     return m_global_strings;
   }
 
+  android::ResStringPool_header* global_string_header() {
+    return m_global_strings_header;
+  }
+
  private:
   std::shared_ptr<android::ResStringPool> m_global_strings =
       std::make_shared<android::ResStringPool>();
+  android::ResStringPool_header* m_global_strings_header = nullptr;
   std::unordered_map<std::string, uint32_t> m_string_to_idx;
 };
 
@@ -1066,7 +1091,8 @@ class PackageStringRefCollector : public apk::TableParser {
   ~PackageStringRefCollector() override {}
 
   bool visit_package(android::ResTable_package* package) override {
-    std::set<android::ResStringPool_ref*> entries;
+    std::map<android::ResTable_type*, std::set<android::ResStringPool_ref*>>
+        entries;
     m_package_entries.emplace(package, std::move(entries));
     std::shared_ptr<android::ResStringPool> key_strings =
         std::make_shared<android::ResStringPool>();
@@ -1098,9 +1124,10 @@ class PackageStringRefCollector : public apk::TableParser {
   }
 
   bool visit_key_strings_ref(android::ResTable_package* package,
+                             android::ResTable_type* type,
                              android::ResStringPool_ref* value) override {
     auto& entry_set = m_package_entries.at(package);
-    entry_set.emplace(value);
+    entry_set[type].emplace(value);
     return true;
   }
 
@@ -1109,7 +1136,9 @@ class PackageStringRefCollector : public apk::TableParser {
   // References into the global string pool from a ResStringPool_span.
   std::set<android::ResStringPool_ref*> m_span_refs;
   // References into the key string pool from entries;
-  std::map<android::ResTable_package*, std::set<android::ResStringPool_ref*>>
+  std::map<
+      android::ResTable_package*,
+      std::map<android::ResTable_type*, std::set<android::ResStringPool_ref*>>>
       m_package_entries;
   std::map<android::ResTable_package*, std::shared_ptr<android::ResStringPool>>
       m_package_key_strings;
@@ -1207,6 +1236,9 @@ void project_string_mapping(
   (((pool)->isUTF8() ? android::ResStringPool_header::UTF8_FLAG : 0) | \
    ((pool)->isSorted() ? android::ResStringPool_header::SORTED_FLAG : 0))
 
+#define POOL_FLAGS_CLEAR_SORT(pool) \
+  ((pool)->isUTF8() ? android::ResStringPool_header::UTF8_FLAG : 0)
+
 void rebuild_type_strings(const uint32_t& package_id,
                           const android::ResStringPool& string_pool,
                           const std::vector<apk::TypeDefinition>& added_types,
@@ -1301,7 +1333,11 @@ void ResourcesArscFile::remove_unreferenced_strings() {
         std::make_shared<arsc::ResPackageBuilder>(package);
 
     // Build new key string pool indicies.
-    auto refs = package_entries.second;
+    std::set<android::ResStringPool_ref*> refs;
+    for (const auto& package_entry_pairs : package_entries.second) {
+      const auto& package_type_entries = package_entry_pairs.second;
+      refs.insert(package_type_entries.begin(), package_type_entries.end());
+    }
     auto key_string_pool = collector.m_package_key_strings.at(package);
     std::unordered_set<uint32_t> used_key_strings;
     for (auto& ref : refs) {
@@ -1378,6 +1414,193 @@ bool is_resource_file(const std::string& str) {
   return false;
 }
 } // namespace
+
+namespace {
+
+// Copies the string data from the given pool to the builder and add additional
+// strings. If needed, a remapper function can be run against the spans.
+void rebuild_string_pool_with_addition(
+    const android::ResStringPool& string_pool,
+    const std::map<uint32_t, std::string>& id_to_new_strings,
+    arsc::ResStringPoolBuilder* builder) {
+  const auto original_string_count = string_pool.size();
+  // Add all existing strings in original string pool to builder.
+  for (size_t idx = 0; idx < original_string_count; idx++) {
+    add_existing_string_to_builder(string_pool, builder, idx);
+  }
+  // Add additional strings to builder.
+  for (size_t idx = 0; idx < id_to_new_strings.size(); idx++) {
+    size_t additional_idx = original_string_count + idx;
+    builder->add_string(id_to_new_strings.at(additional_idx));
+  }
+}
+
+} // namespace
+
+size_t ResourcesArscFile::obfuscate_resource_and_serialize(
+    const std::vector<std::string>& /* unused */,
+    const std::map<std::string, std::string>& filepath_old_to_new,
+    const std::unordered_set<uint32_t>& allowed_types,
+    const std::unordered_set<std::string>& keep_resource_prefixes) {
+  arsc::ResTableBuilder table_builder;
+
+  // Find the global string pool and read its settings.
+  GlobalStringPoolReader string_reader;
+  string_reader.visit(m_f.data(), m_arsc_len);
+
+  PackageStringRefCollector collector;
+  collector.visit(m_f.data(), m_arsc_len);
+
+  // 1) If filepath_old_to_new is not empty, we add new strings to global
+  //    string pool and remap all string pool references. Otherwise we
+  //    Just copy global string header as it is.
+  if (filepath_old_to_new.empty()) {
+    // Nothing to add/remap, just copy header as it is.
+    table_builder.set_global_strings(string_reader.global_string_header());
+  } else {
+    auto string_pool = string_reader.global_strings();
+    TRACE(RES, 9, "Global string pool has %zu styles and %zu total strings",
+          string_pool->styleCount(), string_pool->size());
+    auto flags = POOL_FLAGS_CLEAR_SORT(string_pool);
+    // Build global old string to new string mapping and collect
+    // new strings to add to global string pool
+    std::map<std::string, uint32_t> global_new_strings_to_id;
+    std::map<uint32_t, std::string> global_id_to_new_strings;
+    std::map<uint32_t, uint32_t> global_old_to_new_id;
+    uint32_t total_num_strings = string_pool->size();
+    for (const auto& pair : filepath_old_to_new) {
+      const auto& cur_new_string = pair.second;
+      auto old_id = string_reader.get_string_idx(pair.first);
+      always_assert_log(old_id >= string_pool->styleCount(),
+                        "Don't support remapping of style.");
+      if (!global_new_strings_to_id.count(cur_new_string)) {
+        global_new_strings_to_id[cur_new_string] = total_num_strings;
+        global_id_to_new_strings[total_num_strings] = cur_new_string;
+        ++total_num_strings;
+      }
+      global_old_to_new_id[old_id] =
+          global_new_strings_to_id.at(cur_new_string);
+    }
+
+    // Remap all Res_value structs
+    auto remap_value = [&global_old_to_new_id](android::Res_value* value) {
+      always_assert_log(value->dataType == android::Res_value::TYPE_STRING,
+                        "Wrong data type for string remapping");
+      auto old = dtohl(value->data);
+      if (!global_old_to_new_id.count(old)) {
+        return;
+      }
+      TRACE(RES, 9, "REMAP OLD %u", old);
+      auto remapped_data = global_old_to_new_id.at(old);
+      value->data = htodl(remapped_data);
+    };
+    for (const auto& value : collector.m_values) {
+      remap_value(value);
+    }
+
+    // Actually build the new global ResStringPool.
+    std::shared_ptr<arsc::ResStringPoolBuilder> global_strings_builder =
+        std::make_shared<arsc::ResStringPoolBuilder>(flags);
+    rebuild_string_pool_with_addition(*string_pool, global_id_to_new_strings,
+                                      global_strings_builder.get());
+    table_builder.set_global_strings(global_strings_builder);
+  }
+
+  // 2) Copy package settings as it is, anonymize resource name for application
+  //    package (0x7fxxxxxx).
+  auto start_package_id = PACKAGE_RESID_START >> PACKAGE_INDEX_BIT_SHIFT;
+  size_t changed_resource_name = 0;
+  for (auto& package_entries : collector.m_package_entries) {
+    auto& package = package_entries.first;
+    // Copy standard fields which will be unchanged in the output.
+    std::shared_ptr<arsc::ResPackageBuilder> package_builder =
+        std::make_shared<arsc::ResPackageBuilder>(package);
+
+    if (start_package_id == package->id && !allowed_types.empty()) {
+      // Set new string to be added to key string pool.
+      auto key_string_pool = collector.m_package_key_strings.at(package);
+      uint32_t new_key_string_index = key_string_pool->size();
+      std::map<uint32_t, std::string> key_id_to_new_strings;
+      key_id_to_new_strings[new_key_string_index] = RESOURCE_NAME_REMOVED;
+
+      // Remap the entries.
+      std::set<android::ResStringPool_ref*> refs;
+      for (const auto& package_entry_pairs : package_entries.second) {
+        // Only collect entries in allowed_types.
+        if (!allowed_types.count(package_entry_pairs.first->id)) {
+          continue;
+        }
+        const auto& package_type_entries = package_entry_pairs.second;
+        refs.insert(package_type_entries.begin(), package_type_entries.end());
+      }
+
+      for (auto& ref : refs) {
+        auto old = dtohl(ref->index);
+        std::string old_string =
+            apk::get_string_from_pool(*key_string_pool, old);
+        if (std::find_if(keep_resource_prefixes.begin(),
+                         keep_resource_prefixes.end(),
+                         [&](const std::string& v) {
+                           return old_string.find(v) == 0;
+                         }) != keep_resource_prefixes.end()) {
+          // Resource name matches one of the block prefix - Don't change the
+          // name
+          continue;
+        }
+        TRACE(RES, 9, "REMAP OLD KEY %u", old);
+        ref->index = htodl(new_key_string_index);
+        ++changed_resource_name;
+      }
+
+      // Actually build the key strings pool.
+      std::shared_ptr<arsc::ResStringPoolBuilder> key_strings_builder =
+          std::make_shared<arsc::ResStringPoolBuilder>(
+              POOL_FLAGS_CLEAR_SORT(key_string_pool));
+      rebuild_string_pool_with_addition(*key_string_pool, key_id_to_new_strings,
+                                        key_strings_builder.get());
+      package_builder->set_key_strings(key_strings_builder);
+    } else {
+      // We are not in application package or there is no allowed type for
+      // anonymizing, just use old key string pool header.
+      package_builder->set_key_strings(
+          collector.m_package_key_string_headers.at(package));
+    }
+    package_builder->set_type_strings(
+        collector.m_package_type_string_headers.at(package));
+
+    // Copy over all existing type data, which has been remapped by the step
+    // above.
+    auto search = collector.m_package_types.find(package);
+    if (search != collector.m_package_types.end()) {
+      auto types = search->second;
+      for (auto& info : types) {
+        package_builder->add_type(info);
+      }
+    }
+
+    // Finally, preserve any chunks that we are not parsing.
+    auto& unknown_chunks = collector.m_package_unknown_chunks.at(package);
+    for (auto& header : unknown_chunks) {
+      package_builder->add_chunk(header);
+    }
+    table_builder.add_package(package_builder);
+  }
+  android::Vector<char> serialized;
+  table_builder.serialize(&serialized);
+
+  // 3) Actually write the table to disk so changes take effect.
+  TRACE(RES, 9, "Writing resources.arsc file, total size = %zu",
+        serialized.size());
+  // NOTE: ResourcesArscFile now has two ways to read/manipulate the underlying
+  // data. This is not good, but a necessary intermediate step while we work on
+  // moving away from the forked methods in ResTable class to stand alone APIs.
+  // Eventually, we should stop constructing ResTable instance automatically in
+  // the constructor so we don't have to worry about it having invalid
+  // underlying data as a result of this call.
+  m_arsc_len = write_serialized_data_with_expansion(serialized, std::move(m_f));
+  m_file_closed = true;
+  return changed_resource_name;
+}
 
 std::vector<std::string> ResourcesArscFile::get_files_by_rid(
     uint32_t res_id, ResourcePathType /* unused */) {
@@ -1686,6 +1909,25 @@ std::unordered_set<uint32_t> ResourcesArscFile::get_types_by_name(
   for (size_t i = 0; i < typeNames.size(); ++i) {
     std::string typeStr(typeNames[i].string());
     if (type_names.count(typeStr) == 1) {
+      type_ids.emplace((i + 1) << TYPE_INDEX_BIT_SHIFT);
+    }
+  }
+  return type_ids;
+}
+
+std::unordered_set<uint32_t> ResourcesArscFile::get_types_by_name_prefixes(
+    const std::unordered_set<std::string>& type_name_prefixes) {
+
+  android::Vector<android::String8> typeNames;
+  res_table.getTypeNamesForPackage(0, &typeNames);
+
+  std::unordered_set<uint32_t> type_ids;
+  for (size_t i = 0; i < typeNames.size(); ++i) {
+    std::string typeStr(typeNames[i].string());
+    if (std::find_if(type_name_prefixes.begin(), type_name_prefixes.end(),
+                     [&](const std::string& prefix) {
+                       return typeStr.find(prefix) != std::string::npos;
+                     }) != type_name_prefixes.end()) {
       type_ids.emplace((i + 1) << TYPE_INDEX_BIT_SHIFT);
     }
   }

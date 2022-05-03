@@ -7,6 +7,7 @@
 
 // TODO (T91001948): Integrate protobuf dependency in supported platforms for
 // open source
+#include <cstddef>
 #include <memory>
 #ifdef HAS_PROTOBUF
 #include "BundleResources.h"
@@ -983,6 +984,74 @@ void ResourcesPbFile::remap_file_paths_and_serialize(
   }
 }
 
+bool find_prefix_match(const std::unordered_set<std::string>& prefixes,
+                       const std::string& name) {
+  return std::find_if(prefixes.begin(), prefixes.end(),
+                      [&](const std::string& v) {
+                        return name.find(v) == 0;
+                      }) != prefixes.end();
+}
+
+size_t ResourcesPbFile::obfuscate_resource_and_serialize(
+    const std::vector<std::string>& resource_files,
+    const std::map<std::string, std::string>& filepath_old_to_new,
+    const std::unordered_set<uint32_t>& allowed_types,
+    const std::unordered_set<std::string>& keep_resource_prefixes) {
+  if (allowed_types.empty()) {
+    TRACE(RES, 9, "BundleResources: Nothing to change, returning");
+    return 0;
+  }
+  size_t num_changed = 0;
+  for (const auto& resources_pb_path : resource_files) {
+    TRACE(RES,
+          9,
+          "BundleResources changing resource data for file: %s",
+          resources_pb_path.c_str());
+    read_protobuf_file_contents(
+        resources_pb_path,
+        [&](google::protobuf::io::CodedInputStream& input,
+            size_t /* unused */) {
+          aapt::pb::ResourceTable pb_restable;
+          bool read_finish = pb_restable.ParseFromCodedStream(&input);
+          always_assert_log(read_finish,
+                            "BundleResoource failed to read %s",
+                            resources_pb_path.c_str());
+          int package_size = pb_restable.package_size();
+          for (int i = 0; i < package_size; i++) {
+            auto package = pb_restable.mutable_package(i);
+            int type_size = package->type_size();
+            for (int j = 0; j < type_size; j++) {
+              auto type = package->mutable_type(j);
+              auto current_type_id = type->type_id().id();
+              if (!allowed_types.count(current_type_id)) {
+                TRACE(RES, 9,
+                      "BundleResources: skipping annonymize type %X: %s",
+                      current_type_id, type->name().c_str());
+                continue;
+              }
+              int entry_size = type->entry_size();
+              for (int k = 0; k < entry_size; k++) {
+                auto entry = type->mutable_entry(k);
+                const auto& entry_name = entry->name();
+                if (find_prefix_match(keep_resource_prefixes, entry_name)) {
+                  TRACE(RES,
+                        9,
+                        "BundleResources: skipping annonymize entry %s",
+                        entry_name.c_str());
+                  continue;
+                }
+                ++num_changed;
+                entry->set_name(RESOURCE_NAME_REMOVED);
+              }
+            }
+          }
+          std::ofstream out(resources_pb_path, std::ofstream::binary);
+          always_assert(pb_restable.SerializeToOstream(&out));
+        });
+  }
+  return num_changed;
+}
+
 namespace {
 
 std::string module_name_from_pb_path(const std::string& resources_pb_path) {
@@ -1180,6 +1249,22 @@ std::unordered_set<uint32_t> ResourcesPbFile::get_types_by_name(
   std::unordered_set<uint32_t> type_ids;
   for (const auto& pair : m_type_id_to_names) {
     if (type_names.count(pair.second) == 1) {
+      type_ids.emplace((pair.first) << TYPE_INDEX_BIT_SHIFT);
+    }
+  }
+  return type_ids;
+}
+
+std::unordered_set<uint32_t> ResourcesPbFile::get_types_by_name_prefixes(
+    const std::unordered_set<std::string>& type_name_prefixes) {
+  always_assert(m_type_id_to_names.size() > 0);
+  std::unordered_set<uint32_t> type_ids;
+  for (const auto& pair : m_type_id_to_names) {
+    const auto& type_name = pair.second;
+    if (std::find_if(type_name_prefixes.begin(), type_name_prefixes.end(),
+                     [&](const std::string& prefix) {
+                       return type_name.find(prefix) != std::string::npos;
+                     }) != type_name_prefixes.end()) {
       type_ids.emplace((pair.first) << TYPE_INDEX_BIT_SHIFT);
     }
   }

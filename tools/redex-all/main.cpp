@@ -5,7 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <boost/format.hpp>
 #include <boost/thread/thread.hpp>
 #include <cinttypes>
 #include <cstring>
@@ -49,7 +48,6 @@
 #include "DuplicateClasses.h"
 #include "GlobalConfig.h"
 #include "IODIMetadata.h"
-#include "IOUtil.h"
 #include "InstructionLowering.h"
 #include "JarLoader.h"
 #include "JemallocUtil.h"
@@ -83,7 +81,6 @@ constexpr const char* DEBUG_LINE_MAP = "redex-debug-line-map-v2";
 constexpr const char* IODI_METADATA = "iodi-metadata";
 constexpr const char* OPT_DECISIONS = "redex-opt-decisions.json";
 constexpr const char* CLASS_METHOD_INFO_MAP = "redex-class-method-info-map.txt";
-constexpr const char* RESID_TO_NAME = "resid_to_name.json";
 
 const std::string k_usage_header = "usage: redex-all [options...] dex-files...";
 
@@ -1049,23 +1046,6 @@ void redex_frontend(ConfigFiles& conf, /* input */
   }
 }
 
-void write_out_resid_to_name(ConfigFiles& conf) {
-  std::string apk_dir;
-  conf.get_json_config().get("apk_dir", "", apk_dir);
-  if (!apk_dir.size()) {
-    return;
-  }
-  auto resources = create_resource_reader(apk_dir);
-  auto res_table = resources->load_res_table();
-  Json::Value resid_to_name_json;
-  boost::format hex_format("0x%08x");
-  for (const auto& pair : res_table->id_to_name) {
-    resid_to_name_json[(hex_format % pair.first).str()] = pair.second;
-  }
-  write_string_to_file(conf.metafile(RESID_TO_NAME),
-                       resid_to_name_json.toStyledString());
-}
-
 // Performa final wave of cleanup (i.e. garbage collect unreferenced strings,
 // etc) so that this only needs to happen once and not after every resource
 // modification.
@@ -1095,7 +1075,6 @@ void redex_backend(ConfigFiles& conf,
   const RedexOptions& redex_options = manager.get_redex_options();
   const auto& output_dir = conf.get_outdir();
 
-  write_out_resid_to_name(conf);
   finalize_resource_table(conf);
 
   instruction_lowering::Stats instruction_lowering_stats;

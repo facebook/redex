@@ -118,6 +118,7 @@ class StringTestVisitor : public arsc::StringPoolRefVisitor {
   ~StringTestVisitor() override {}
 
   bool visit_key_strings_ref(android::ResTable_package* /* unused */,
+                             android::ResTable_type* /* unused */,
                              android::ResStringPool_ref* ref) override {
     m_key_strings_seen.emplace(dtohl(ref->index));
     return true;

@@ -99,7 +99,9 @@ class StringPoolRefVisitor : public ResourceTableVisitor {
  public:
   // Meant to be overridden by sub classes if they need to access/edit key
   // strings.
-  virtual bool visit_key_strings_ref(android::ResTable_package* package, android::ResStringPool_ref* ref);
+  virtual bool visit_key_strings_ref(android::ResTable_package* package,
+                                     android::ResTable_type* type,
+                                     android::ResStringPool_ref* ref);
   // Meant to be overridden by sub class if they need to access/edit global key
   // strings.
   virtual bool visit_global_strings_ref(android::Res_value* ref);

@@ -41,6 +41,8 @@ class ResourcesPbFile : public ResourceTableFile {
   bool resource_value_identical(uint32_t a_id, uint32_t b_id) override;
   std::unordered_set<uint32_t> get_types_by_name(
       const std::unordered_set<std::string>& type_names) override;
+  std::unordered_set<uint32_t> get_types_by_name_prefixes(
+      const std::unordered_set<std::string>& type_name_prefixes) override;
   std::vector<std::string> get_files_by_rid(
       uint32_t res_id,
       ResourcePathType path_type = ResourcePathType::DevicePath) override;
@@ -52,6 +54,11 @@ class ResourcesPbFile : public ResourceTableFile {
   void delete_resource(uint32_t res_id) override;
   void collect_resource_data_for_file(const std::string& resources_pb_path);
   size_t get_hash_from_values(const ConfigValues& config_values);
+  size_t obfuscate_resource_and_serialize(
+      const std::vector<std::string>& resource_files,
+      const std::map<std::string, std::string>& filepath_old_to_new,
+      const std::unordered_set<uint32_t>& allowed_types,
+      const std::unordered_set<std::string>& keep_resource_prefixes) override;
 
   const std::map<uint32_t, const ConfigValues>& get_res_id_to_configvalue()
       const {

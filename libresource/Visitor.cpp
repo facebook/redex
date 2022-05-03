@@ -433,7 +433,9 @@ bool ResourceTableVisitor::visit_map_value(
 // BEGIN StringPoolRefVisitor
 
 bool StringPoolRefVisitor::visit_key_strings_ref(
-    android::ResTable_package* package, android::ResStringPool_ref* ref) {
+    android::ResTable_package* package,
+    android::ResTable_type* type,
+    android::ResStringPool_ref* ref) {
   LOGVV("visit key ResStringPool_ref, offset = %ld", get_file_offset(ref));
   // Subclasses meant to override.
   return true;
@@ -487,7 +489,7 @@ bool StringPoolRefVisitor::visit_entry(android::ResTable_package* package,
   LOGVV("visit entry offset = %ld, value offset = %ld",
         get_file_offset(entry),
         get_file_offset(value));
-  if (!visit_key_strings_ref(package, &entry->key)) {
+  if (!visit_key_strings_ref(package, type, &entry->key)) {
     return false;
   }
   if (value->dataType == android::Res_value::TYPE_STRING) {
@@ -504,7 +506,7 @@ bool StringPoolRefVisitor::visit_map_entry(
     android::ResTable_type* type,
     android::ResTable_map_entry* entry) {
   LOGVV("visit map entry offset = %ld", get_file_offset(entry));
-  if (!visit_key_strings_ref(package, &entry->key)) {
+  if (!visit_key_strings_ref(package, type, &entry->key)) {
     return false;
   }
   return true;
