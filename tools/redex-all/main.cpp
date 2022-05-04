@@ -1444,6 +1444,7 @@ int main(int argc, char* argv[]) {
 
   stats["output_stats"]["threads"] = get_threads_stats();
 
+  stats["output_stats"]["build_cfg_counter"] = (Json::UInt64)build_cfg_counter;
   // For the time being, copy proguard stats, if any, to the first pass.
   copy_proguard_stats(stats);
 

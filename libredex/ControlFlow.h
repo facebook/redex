@@ -62,6 +62,8 @@
  * TODO?: make MethodItemEntry's fields private?
  */
 
+extern std::atomic<size_t> build_cfg_counter;
+
 namespace source_blocks {
 namespace impl {
 struct BlockAccessor;

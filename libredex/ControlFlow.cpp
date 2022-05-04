@@ -25,6 +25,7 @@
 #include "Trace.h"
 #include "Transform.h"
 
+std::atomic<size_t> build_cfg_counter{0};
 namespace {
 
 // return true if `it` should be the last instruction of this block
@@ -634,6 +635,7 @@ ControlFlowGraph::ControlFlowGraph(IRList* ir,
       m_registers_size(registers_size),
       m_editable(editable) {
   always_assert_log(!ir->empty(), "IRList contains no instructions");
+  build_cfg_counter++;
 
   BranchToTargets branch_to_targets;
   TryEnds try_ends;
