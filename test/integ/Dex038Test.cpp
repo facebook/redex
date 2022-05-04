@@ -111,7 +111,7 @@ void testReadDex(const char* dexfile) {
   //   target_type : ()Ljava/lang/String;
   int lambdaRun2MethodHandleIdx = ensureMethodHandle(idx, [](DexMethodHandle* mh) {
     return
-      mh->type(), METHOD_HANDLE_TYPE_INVOKE_STATIC &&
+      mh->type() == METHOD_HANDLE_TYPE_INVOKE_STATIC &&
       !strcmp(mh->methodref()->get_name()->c_str(), "lambda$run$2") &&
       !strcmp(mh->methodref()->get_class()->get_name()->c_str(), DEX038_CLASS_NAME) &&
       !strcmp(SHOW(mh->methodref()->get_proto()), VOID_RETURN_STRING_PROTO);
