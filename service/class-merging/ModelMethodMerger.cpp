@@ -13,7 +13,7 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
-#include "LegacyInliner.h"
+#include "Inliner.h"
 #include "MethodDedup.h"
 #include "MethodReference.h"
 #include "Mutators.h"
@@ -521,9 +521,17 @@ void ModelMethodMerger::sink_common_ctor_to_return_block(DexMethod* dispatch) {
  * dispatch are indeed inlined in the final output.
  */
 void ModelMethodMerger::inline_dispatch_entries(DexMethod* dispatch) {
-  auto dispatch_code = dispatch->get_code();
-  std::vector<std::pair<IRCode*, IRList::iterator>> callsites;
-  auto insns = InstructionIterable(dispatch_code);
+  // TODO:The clear_cfg flag is used to make sure that using editable cfg in
+  // this function won't affect other parts which use non-editable cfg. Once the
+  // pass is updated to editable cfg, this flag and check can be removed.
+  bool clear_cfg = false;
+  if (!dispatch->get_code()->editable_cfg_built()) {
+    dispatch->get_code()->build_cfg();
+    clear_cfg = true;
+  }
+  auto& dispatch_cfg = dispatch->get_code()->cfg();
+  std::vector<std::pair<DexMethod*, IRInstruction*>> callsites;
+  auto insns = InstructionIterable(dispatch_cfg);
   for (auto it = insns.begin(); it != insns.end(); ++it) {
     auto insn = it->insn;
     if (insn->opcode() != OPCODE_INVOKE_STATIC) {
@@ -531,20 +539,33 @@ void ModelMethodMerger::inline_dispatch_entries(DexMethod* dispatch) {
     }
     DexMethod* meth = resolve_method(insn->get_method(), MethodSearch::Static);
     if (meth != nullptr) {
-      callsites.emplace_back(meth->get_code(), it.unwrap());
+      callsites.emplace_back(meth, insn);
     }
   }
 
-  for (auto& pair : callsites) {
-    auto callee_code = pair.first;
-    auto& call_pos = pair.second;
-    legacy_inliner::inline_method(dispatch, callee_code, call_pos);
+  for (auto&& [callee, callsite] : callsites) {
+    // TODO: same as clear_cfg flag.
+    bool to_clear = false;
+    if (!callee->get_code()->editable_cfg_built()) {
+      callee->get_code()->build_cfg();
+      to_clear = true;
+    }
+    inliner::inline_with_cfg(dispatch, callee, callsite,
+                             /* needs_receiver_cast */ nullptr,
+                             /* needs_init_class */ nullptr,
+                             dispatch_cfg.get_registers_size());
+    if (to_clear) {
+      callee->get_code()->clear_cfg();
+    }
   }
   TRACE(CLMG,
         9,
         "inlined ctor dispatch %s\n%s",
         SHOW(dispatch),
-        SHOW(dispatch->get_code()));
+        SHOW(dispatch_cfg));
+  if (clear_cfg) {
+    dispatch->get_code()->clear_cfg();
+  }
 }
 
 std::string ModelMethodMerger::get_method_signature_string(DexMethod* meth) {
