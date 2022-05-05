@@ -1196,12 +1196,12 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   auto post_pass_verifiers = [&](Pass* pass, size_t i, size_t size) {
     ConcurrentSet<const DexMethodRef*> all_code_referenced_methods;
     ConcurrentSet<DexMethod*> unique_methods;
+    bool is_editable_cfg_friendly = pass->is_editable_cfg_friendly();
     walk::parallel::code(build_class_scope(stores), [&](DexMethod* m,
                                                         IRCode& code) {
-      // Ensure that pass authors deconstructed the editable CFG at the end of
-      // their pass. Currently, passes assume the incoming code will be in
-      // IRCode form
-      always_assert_log(!code.editable_cfg_built(), "%s has a cfg!", SHOW(m));
+      if (is_editable_cfg_friendly) {
+        always_assert_log(code.editable_cfg_built(), "%s has a cfg!", SHOW(m));
+      }
       if (slow_invariants_debug) {
         std::vector<DexMethodRef*> methods;
         methods.reserve(1000);
@@ -1288,6 +1288,25 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       auto scoped_command_all_prof = ScopedCommandProfiling::maybe_from_info(
           profiler_all_info, &pass->name());
       jemalloc_util::ScopedProfiling malloc_prof(m_malloc_profile_pass == pass);
+      if (!pass->is_editable_cfg_friendly()) {
+        // if this pass hasn't been updated to editable_cfg yet, clear_cfg. In
+        // the future, once all editable cfg updates are done, this branch will
+        // be removed.
+        auto temp_scope = build_class_scope(stores);
+        walk::parallel::code(
+            temp_scope, [&](DexMethod*, IRCode& code) { code.clear_cfg(); });
+        TRACE(PM, 2, "%s Pass has not been updated to editable cfg.\n",
+              SHOW(pass->name()));
+      } else {
+        // Run build_cfg() in case any newly added methods by previous passes
+        // are not built as editable cfg. But if editable cfg is already built,
+        // no need to rebuild it.
+        auto temp_scope = build_class_scope(stores);
+        walk::parallel::code(temp_scope, [&](DexMethod*, IRCode& code) {
+          code.build_cfg(/* editable */ true, /*fresh_editable_build*/ false);
+        });
+        TRACE(PM, 2, "%s Pass uses editable cfg.\n", SHOW(pass->name()));
+      }
       pass->run_pass(stores, conf, *this);
       trace_cls.dump(pass->name());
     }
@@ -1314,8 +1333,12 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
 
   after_pass_size.wait();
 
-  // Always run the type checker before generating the optimized dex code.
+  // Always clear cfg and run the type checker before generating the optimized
+  // dex code.
   scope = build_class_scope(it);
+  walk::parallel::code(scope,
+                       [&](DexMethod*, IRCode& code) { code.clear_cfg(); });
+  TRACE(PM, 1, "All opt passes are done, clear cfg\n");
   checker_conf.check_no_overwrite_this(get_redex_options().no_overwrite_this())
       .validate_access(true)
       .run_verifier(scope);
