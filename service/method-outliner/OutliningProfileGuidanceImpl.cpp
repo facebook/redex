@@ -208,27 +208,6 @@ CanOutlineBlockDecider::can_outline_from_big_block(
       }
     }
   }
-  // Let's also look back at dominators. It's beneficial if we can tighten the
-  // minimum.
-  auto block = big_block.get_first_block();
-  auto& cfg = block->cfg();
-  auto entry_block = cfg.entry_block();
-  if (block != entry_block && (!min_val || *min_val != 0)) {
-    if (!m_dominators) {
-      m_dominators.reset(
-          new dominators::SimpleFastDominators<cfg::GraphInterface>(cfg));
-    }
-    do {
-      block = m_dominators->get_idom(block);
-      auto val = (*m_max_vals)[block];
-      if (!min_val || (val && *val < *min_val)) {
-        min_val = val;
-        if (min_val && *min_val == 0) {
-          break;
-        }
-      }
-    } while (block != entry_block);
-  }
   if (!min_val) {
     return m_sufficiently_hot ? Result::HotNoSourceBlocks
                               : Result::WarmLoopNoSourceBlocks;
