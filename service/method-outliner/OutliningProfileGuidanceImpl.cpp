@@ -197,22 +197,19 @@ CanOutlineBlockDecider::can_outline_from_big_block(
         }));
   }
   // Via m_max_vals, we consider the maximum hit number for each block.
-  // Across all blocks, we are gathering the *minimum* of those hit numbers.
-  boost::optional<float> min_val;
+  // Across all blocks, we are also computing the maximum value.
+  boost::optional<float> val;
   for (auto block : big_block.get_blocks()) {
-    auto val = (*m_max_vals)[block];
-    if (!min_val || (val && *val < *min_val)) {
-      min_val = val;
-      if (min_val && *min_val == 0) {
-        break;
-      }
+    auto block_val = (*m_max_vals)[block];
+    if (!val || (block_val && *block_val > *val)) {
+      val = block_val;
     }
   }
-  if (!min_val) {
+  if (!val) {
     return m_sufficiently_hot ? Result::HotNoSourceBlocks
                               : Result::WarmLoopNoSourceBlocks;
   }
-  if (*min_val > m_config.block_profiles_hits) {
+  if (*val > m_config.block_profiles_hits) {
     return m_sufficiently_hot ? Result::HotExceedsThresholds
                               : Result::WarmLoopExceedsThresholds;
   }
