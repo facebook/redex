@@ -1097,6 +1097,10 @@ class DexMethod : public DexMethodRef {
   // DexMethod, though. Eventually this will become a full delete.
   static void delete_method(DexMethod* method);
 
+  // Estimated in number of code units. Not representative of switch statements,
+  // or references.
+  size_t estimated_size() const;
+
  private:
   template <typename C>
   void gather_strings_internal(C& lstring, bool exclude_loads) const;
@@ -1341,6 +1345,11 @@ class DexClass {
       const std::string& field_name);
   DexMethod* find_method_from_simple_deobfuscated_name(
       const std::string& method_name);
+
+  // In code units. Estimated by accounting 48 code units for the class
+  // metadata, 8 for each field and sum up all methods with
+  // DexMethod::estimated_size().
+  size_t estimated_size() const;
 
  private:
   void sort_methods();
