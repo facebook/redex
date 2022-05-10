@@ -63,6 +63,10 @@ class Pass : public Configurable {
 
   Configurable::Reflection reflect() override;
 
+  virtual std::unique_ptr<Pass> clone(const std::string& /*new_name*/) const {
+    return nullptr;
+  }
+
  private:
   const std::string m_name;
   Kind m_kind;

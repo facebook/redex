@@ -1398,8 +1398,7 @@ int main(int argc, char* argv[]) {
     }
 
     auto const& passes = PassRegistry::get().get_passes();
-    PassManager manager(passes, std::move(pg_config), args.config,
-                        args.redex_options);
+    PassManager manager(passes, std::move(pg_config), conf, args.redex_options);
 
     ab_test::ABExperimentContext::parse_experiments_states(
         conf, !manager.get_redex_options().redacted);

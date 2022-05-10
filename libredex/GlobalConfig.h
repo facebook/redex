@@ -127,6 +127,17 @@ struct ProguardConfig : public Configurable {
   bool disable_default_blocklist{false};
 };
 
+struct PassManagerConfig : public Configurable {
+  void bind_config() override;
+
+  std::string get_config_name() override { return "PassManagerConfig"; }
+  std::string get_config_doc() override {
+    return "This configuration holds values that influence the PassManager.";
+  }
+
+  std::unordered_map<std::string, std::string> pass_aliases;
+};
+
 class GlobalConfig;
 
 using BindOperationFn = std::function<std::unique_ptr<Configurable>(
@@ -156,6 +167,10 @@ class GlobalConfig : public Configurable {
   ConfigType* get_config_by_name(const std::string& name) const {
     auto& type = m_global_configs.at(name);
     return static_cast<ConfigType*>(type.get());
+  }
+
+  bool has_config_by_name(const std::string& name) const {
+    return m_global_configs.count(name) != 0;
   }
 
   template <typename ConfigType>
