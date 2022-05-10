@@ -719,7 +719,7 @@ void AnnoKillPass::run_pass(DexStoresVector& stores,
   auto scope = build_class_scope(stores);
 
   AnnoKill ak(scope,
-              only_force_kill(),
+              m_only_force_kill,
               m_kill_bad_signatures,
               m_keep_annos,
               m_kill_annos,

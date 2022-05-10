@@ -115,7 +115,7 @@ class AnnoKill {
 class AnnoKillPass : public Pass {
  public:
   AnnoKillPass() : Pass("AnnoKillPass") {}
-  explicit AnnoKillPass(const char* name) : Pass(name) {}
+  explicit AnnoKillPass(const std::string& name) : Pass(name) {}
 
   void bind_config() override {
     bind("keep_annos", {}, m_keep_annos);
@@ -124,11 +124,14 @@ class AnnoKillPass : public Pass {
     bind("kill_bad_signatures", false, m_kill_bad_signatures);
     bind("class_hierarchy_keep_annos", {}, m_class_hierarchy_keep_annos);
     bind("annotated_keep_annos", {}, m_annotated_keep_annos);
+    bind("only_force_kill", false, m_only_force_kill);
   }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
-  virtual bool only_force_kill() const { return false; }
+  std::unique_ptr<Pass> clone(const std::string& new_name) const override {
+    return std::make_unique<AnnoKillPass>(new_name);
+  }
 
  private:
   std::vector<std::string> m_keep_annos;
@@ -139,4 +142,7 @@ class AnnoKillPass : public Pass {
   std::unordered_map<std::string, std::vector<std::string>>
       m_annotated_keep_annos;
   bool m_kill_bad_signatures;
+
+ protected:
+  bool m_only_force_kill;
 };
