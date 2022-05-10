@@ -177,10 +177,10 @@ bool MethodProfiles::parse_metadata(std::string_view line) {
   return true;
 }
 
-std::optional<MethodProfiles::ParseMainInternalResult>
-MethodProfiles::parse_main_internal(std::string_view line) {
+std::optional<MethodProfiles::ParsedMain> MethodProfiles::parse_main_internal(
+    std::string_view line) {
   always_assert(m_mode == MAIN);
-  ParseMainInternalResult result;
+  ParsedMain result;
   auto parse_cell = [&](std::string_view cell, uint32_t col) -> bool {
     switch (col) {
     case INDEX:
@@ -188,7 +188,12 @@ MethodProfiles::parse_main_internal(std::string_view line) {
       // the file)
       return true;
     case NAME:
-      result.ref = DexMethod::get_method</*kCheckFormat=*/true>(cell);
+      // We move the string to a unique_ptr, so that its location is pinned, and
+      // the string_views of the mdt are defined.
+      result.ref_str = std::make_unique<std::string>(cell);
+      result.mdt =
+          dex_member_refs::parse_method</*kCheckFormat=*/true>(*result.ref_str);
+      result.ref = DexMethod::get_method(*result.mdt);
       if (result.ref == nullptr) {
         TRACE(METH_PROF, 6, "failed to resolve %s", SHOW(cell));
       }
@@ -234,8 +239,7 @@ MethodProfiles::parse_main_internal(std::string_view line) {
   return std::move(result);
 }
 
-bool MethodProfiles::apply_main_internal_result(ParseMainInternalResult v,
-                                                std::string line,
+bool MethodProfiles::apply_main_internal_result(ParsedMain v,
                                                 std::string* interaction_id) {
   if (v.ref != nullptr) {
     if (v.line_interaction_id) {
@@ -250,10 +254,15 @@ bool MethodProfiles::apply_main_internal_result(ParseMainInternalResult v,
           v.stats.order_percent, v.stats.min_api_level);
     m_method_stats[*interaction_id].emplace(v.ref, v.stats);
     return true;
+  } else if (v.ref_str == nullptr) {
+    std::cerr << "FAILED to parse line. Missing name column\n";
+    return false;
   } else {
-    TRACE(METH_PROF, 6, "unresolved: %s", line.c_str());
     always_assert(interaction_id);
-    m_unresolved_lines.emplace_back(*interaction_id, std::move(line));
+    if (!v.line_interaction_id) {
+      v.line_interaction_id = std::make_unique<std::string>(*interaction_id);
+    }
+    m_unresolved_lines.emplace_back(std::move(v));
     return false;
   }
 }
@@ -263,8 +272,7 @@ bool MethodProfiles::parse_main(std::string line, std::string* interaction_id) {
   if (!result) {
     return false;
   }
-  (void)apply_main_internal_result(std::move(result.value()), std::move(line),
-                                   interaction_id);
+  (void)apply_main_internal_result(std::move(result.value()), interaction_id);
   return true;
 }
 
@@ -295,26 +303,28 @@ double MethodProfiles::get_process_unresolved_lines_seconds() {
 void MethodProfiles::process_unresolved_lines() {
   auto timer_scope = s_process_unresolved_lines_timer.scope();
 
-  std::map<UnresolvedLine*, ParseMainInternalResult> resolved;
+  std::set<ParsedMain*> resolved;
   std::mutex resolved_mutex;
   workqueue_run_for<size_t>(0, m_unresolved_lines.size(), [&](size_t index) {
-    auto& unresolved_line = m_unresolved_lines.at(index);
-    auto& [interaction_id, line] = unresolved_line;
-    auto result = parse_main_internal(line);
-    always_assert(result);
-    auto& v = result.value();
-    if (v.ref) {
+    auto& parsed_main = m_unresolved_lines.at(index);
+    always_assert(parsed_main.ref_str != nullptr);
+    always_assert(parsed_main.mdt);
+    parsed_main.ref = DexMethod::get_method(*parsed_main.mdt);
+    if (parsed_main.ref == nullptr) {
+      TRACE(METH_PROF, 6, "failed to resolve %s", SHOW(*parsed_main.ref_str));
+    } else {
       std::lock_guard<std::mutex> lock_guard(resolved_mutex);
-      resolved.emplace(&unresolved_line, std::move(v));
+      resolved.emplace(&parsed_main);
     }
   });
   auto unresolved_lines = m_unresolved_lines.size();
   // Note that resolved is ordered by the (addresses of the) unresolved lines,
   // to ensure determinism
-  for (auto& [unresolved_line_ptr, v] : resolved) {
-    auto& [interaction_id, line] = *unresolved_line_ptr;
-    bool success = apply_main_internal_result(std::move(v), std::move(line),
-                                              &interaction_id);
+  for (auto& parsed_main_ptr : resolved) {
+    auto interaction_id_ptr = &*parsed_main_ptr->line_interaction_id;
+    always_assert(parsed_main_ptr->ref != nullptr);
+    bool success = apply_main_internal_result(std::move(*parsed_main_ptr),
+                                              interaction_id_ptr);
     always_assert(success);
   }
   always_assert(unresolved_lines == m_unresolved_lines.size());
