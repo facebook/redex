@@ -312,6 +312,8 @@ class DexFieldRef {
 
   static void erase_field(DexFieldRef* f);
 
+  dex_member_refs::FieldDescriptorTokens get_descriptor_tokens() const;
+
   // This method frees the given `DexFieldRed` - different from `erase_field`,
   // which removes the field from the `RedexContext`.
   //
@@ -849,6 +851,8 @@ class DexMethodRef {
   // This only removes the given method reference from the `RedexContext`, but
   // does not free the method.
   static void erase_method(DexMethodRef* mref);
+
+  dex_member_refs::MethodDescriptorTokens get_descriptor_tokens() const;
 };
 
 class DexMethod : public DexMethodRef {

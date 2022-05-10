@@ -127,6 +127,13 @@ class MethodProfiles {
 
   static double get_process_unresolved_lines_seconds();
 
+  std::unordered_set<dex_member_refs::MethodDescriptorTokens>
+  get_unresolved_method_descriptor_tokens() const;
+
+  void resolve_method_descriptor_tokens(
+      const std::unordered_map<dex_member_refs::MethodDescriptorTokens,
+                               std::vector<DexMethodRef*>>& map);
+
  private:
   static AccumulatingTimer s_process_unresolved_lines_timer;
   AllInteractions m_method_stats;

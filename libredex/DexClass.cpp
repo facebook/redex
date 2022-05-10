@@ -221,6 +221,15 @@ void DexFieldRef::erase_field(DexFieldRef* f) {
   return g_redex->erase_field(f);
 }
 
+dex_member_refs::FieldDescriptorTokens DexFieldRef::get_descriptor_tokens()
+    const {
+  dex_member_refs::FieldDescriptorTokens res;
+  res.cls = get_class()->str();
+  res.name = get_name()->str();
+  res.type = get_type()->str();
+  return res;
+}
+
 DexFieldRef* DexField::get_field(
     const dex_member_refs::FieldDescriptorTokens& fdt) {
   auto cls = DexType::get_type(fdt.cls);
@@ -2210,6 +2219,18 @@ void DexMethodRef::erase_method(DexMethodRef* mref) {
                             m->get_proto());
     }
   }
+}
+
+dex_member_refs::MethodDescriptorTokens DexMethodRef::get_descriptor_tokens()
+    const {
+  dex_member_refs::MethodDescriptorTokens res;
+  res.cls = get_class()->str();
+  res.name = get_name()->str();
+  for (auto t : *get_proto()->get_args()) {
+    res.args.push_back(t->str());
+  }
+  res.rtype = get_proto()->get_rtype()->str();
+  return res;
 }
 
 DexClass* type_class(const DexType* t) { return g_redex->type_class(t); }

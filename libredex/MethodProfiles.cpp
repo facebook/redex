@@ -344,6 +344,48 @@ void MethodProfiles::process_unresolved_lines() {
         total_rows, unresolved_size());
 }
 
+std::unordered_set<dex_member_refs::MethodDescriptorTokens>
+MethodProfiles::get_unresolved_method_descriptor_tokens() const {
+  std::unordered_set<dex_member_refs::MethodDescriptorTokens> result;
+  for (auto& parsed_main : m_unresolved_lines) {
+    always_assert(parsed_main.mdt);
+    result.insert(*parsed_main.mdt);
+  }
+  return result;
+}
+
+void MethodProfiles::resolve_method_descriptor_tokens(
+    const std::unordered_map<dex_member_refs::MethodDescriptorTokens,
+                             std::vector<DexMethodRef*>>& map) {
+  size_t removed{0};
+  size_t added{0};
+  std20::erase_if(m_unresolved_lines, [&](auto& parsed_main) {
+    always_assert(parsed_main.mdt);
+    auto it = map.find(*parsed_main.mdt);
+    if (it == map.end()) {
+      return false;
+    }
+    removed++;
+    for (auto method_ref : it->second) {
+      ParsedMain resolved_parsed_main{
+          std::make_unique<std::string>(*parsed_main.line_interaction_id),
+          /* ref_str */ nullptr,
+          /* mdt */ std::nullopt, method_ref, parsed_main.stats};
+      auto interaction_id_ptr = &*resolved_parsed_main.line_interaction_id;
+      always_assert(resolved_parsed_main.ref != nullptr);
+      bool success = apply_main_internal_result(std::move(resolved_parsed_main),
+                                                interaction_id_ptr);
+      always_assert(success);
+      added++;
+    }
+    return true;
+  });
+  TRACE(METH_PROF, 1,
+        "After resolving unresolved lines: %zu unresolved lines removed, %zu "
+        "rows added",
+        removed, added);
+}
+
 bool MethodProfiles::parse_header(std::string_view line) {
   always_assert(m_mode == NONE);
   auto check_cell = [](std::string_view expected, std::string_view cell,
