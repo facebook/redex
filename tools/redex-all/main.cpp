@@ -1367,6 +1367,27 @@ int main(int argc, char* argv[]) {
 
     // For convenience.
     g_redex->instrument_mode = args.redex_options.instrument_pass_enabled;
+    if (g_redex->instrument_mode) {
+      IRList::CONSECUTIVE_STYLE = IRList::ConsecutiveStyle::kChain;
+    }
+    {
+      auto consecutive_val =
+          args.config.get("sb_consecutive_style", Json::nullValue);
+      if (consecutive_val.isString()) {
+        auto str = consecutive_val.asString();
+        IRList::CONSECUTIVE_STYLE = [&]() {
+          if (str == "drop") {
+            return IRList::ConsecutiveStyle::kDrop;
+          } else if (str == "chain") {
+            return IRList::ConsecutiveStyle::kChain;
+          } else if (str == "max") {
+            return IRList::ConsecutiveStyle::kMax;
+          } else {
+            not_reached_log("Unknown sb_consecutive_style %s", str.c_str());
+          }
+        }();
+      }
+    }
 
     slow_invariants_debug =
         args.config.get("slow_invariants_debug", false).asBool();

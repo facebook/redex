@@ -256,6 +256,19 @@ struct SourceBlock {
   }
 
   std::string show(bool quoted_src = false) const;
+
+  void max(const SourceBlock& other) {
+    size_t len = std::min(vals_size, other.vals_size);
+    for (size_t i = 0; i != len; ++i) {
+      if (!vals[i]) {
+        vals[i] = other.vals[i];
+      } else if (other.vals[i]) {
+        vals[i]->val = std::max(vals[i]->val, other.vals[i]->val);
+        vals[i]->appear100 =
+            std::max(vals[i]->appear100, other.vals[i]->appear100);
+      }
+    }
+  }
 };
 
 static_assert(sizeof(void*) != 8 || sizeof(SourceBlock) == 32);
@@ -594,7 +607,16 @@ class IRList {
     return m_list.iterator_to(mie);
   }
 
-  void chain_consecutive_source_blocks();
+  enum class ConsecutiveStyle {
+    kChain,
+    kDrop,
+    kMax, // This is for as long as kDrop is not correct because of profile
+          // issues.
+  };
+  static ConsecutiveStyle CONSECUTIVE_STYLE;
+
+  void chain_consecutive_source_blocks(
+      ConsecutiveStyle style = CONSECUTIVE_STYLE);
 
   friend std::string show(const IRCode*);
 };

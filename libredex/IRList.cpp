@@ -959,7 +959,10 @@ std::string SourceBlock::show(bool quoted_src) const {
   return o.str();
 }
 
-void IRList::chain_consecutive_source_blocks() {
+IRList::ConsecutiveStyle IRList::CONSECUTIVE_STYLE =
+    IRList::ConsecutiveStyle::kMax;
+
+void IRList::chain_consecutive_source_blocks(ConsecutiveStyle style) {
   boost::optional<IRList::iterator> last_it = boost::none;
   for (auto it = begin(); it != end(); ++it) {
     if (it->type == MFLOW_POSITION || it->type == MFLOW_DEBUG) {
@@ -972,8 +975,18 @@ void IRList::chain_consecutive_source_blocks() {
     }
 
     if (last_it) {
+      switch (style) {
+      case ConsecutiveStyle::kChain:
+        (*last_it)->src_block->append(std::move(it->src_block));
+        break;
+      case ConsecutiveStyle::kDrop:
+        break;
+      case ConsecutiveStyle::kMax:
+        (*last_it)->src_block->max(*it->src_block);
+        break;
+      }
+
       auto prev = std::prev(it);
-      (*last_it)->src_block->append(std::move(it->src_block));
       erase_and_dispose(it);
       it = prev;
     } else {

@@ -609,6 +609,8 @@ B4: LFoo;.bar:()V@3(0.4:0.2))");
 }
 
 TEST_F(SourceBlocksTest, coalesce) {
+  IRList::CONSECUTIVE_STYLE = IRList::ConsecutiveStyle::kChain;
+
   auto foo_method = create_method("LFoo");
 
   constexpr const char* kCode = R"(
