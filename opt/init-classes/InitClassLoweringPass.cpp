@@ -288,11 +288,17 @@ void InitClassLoweringPass::run_pass(DexStoresVector& stores,
   std::atomic<size_t> sget_instructions_added{0};
   std::atomic<size_t> methods_with_init_class{0};
   InitClassFields init_class_fields;
+  ConcurrentSet<DexMethod*> clinits;
   const auto stats =
       walk::parallel::methods<Stats>(scope, [&](DexMethod* method) {
         auto code = method->get_code();
-        if (!code ||
-            !method::count_opcode_of_types(code, {IOPCODE_INIT_CLASS})) {
+        if (!code) {
+          return Stats();
+        }
+        if (method::is_clinit(method)) {
+          clinits.insert(method);
+        }
+        if (!method::count_opcode_of_types(code, {IOPCODE_INIT_CLASS})) {
           return Stats();
         }
         cfg::ScopedCFG cfg(code);
@@ -355,6 +361,13 @@ void InitClassLoweringPass::run_pass(DexStoresVector& stores,
         }
         return local_stats;
       });
+
+  // Remove clinits that are now trivial.
+  for (auto clinit : clinits) {
+    if (method::is_trivial_clinit(*clinit->get_code())) {
+      type_class(clinit->get_class())->remove_method(clinit);
+    }
+  }
 
   TRACE(ICL, 1,
         "[InitClassLowering] %zu methods have %zu sget instructions; %zu "
