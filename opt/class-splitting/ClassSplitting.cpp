@@ -181,7 +181,8 @@ class ClassSplittingImpl {
     if (!can_relocate(cls) || should_not_relocate_methods_of_class) {
       return;
     }
-    auto cls_has_problematic_clinit = method::clinit_may_have_side_effects(cls);
+    auto cls_has_problematic_clinit = method::clinit_may_have_side_effects(
+        cls, /* allow_benign_method_invocations */ false);
 
     SplitClass& sc = m_split_classes[cls];
     always_assert(sc.relocatable_methods.empty());
@@ -292,8 +293,8 @@ class ClassSplittingImpl {
               SHOW(cls));
         continue;
       }
-      auto cls_has_problematic_clinit =
-          method::clinit_may_have_side_effects(cls);
+      auto cls_has_problematic_clinit = method::clinit_may_have_side_effects(
+          cls, /* allow_benign_method_invocations */ false);
       std::vector<DexMethod*> methods_to_relocate;
       // We iterate over the actually existing set of methods at this time
       // (other InterDex plug-ins might have added or removed or relocated

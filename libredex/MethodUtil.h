@@ -50,6 +50,7 @@ using ClInitHasNoSideEffectsPredicate = std::function<bool(const DexType*)>;
  */
 const DexClass* clinit_may_have_side_effects(
     const DexClass* cls,
+    bool allow_benign_method_invocations,
     const ClInitHasNoSideEffectsPredicate* clinit_has_no_side_effects = nullptr,
     const std::unordered_set<DexMethod*>* non_true_virtuals = nullptr);
 

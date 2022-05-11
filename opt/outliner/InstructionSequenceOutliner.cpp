@@ -2279,7 +2279,8 @@ class HostClassSelector {
             return false;
           }
           // We don't want any common base class with a scary clinit
-          return !method::clinit_may_have_side_effects(cls);
+          return !method::clinit_may_have_side_effects(
+              cls, /* allow_benign_method_invocations */ false);
         });
     if (host_class) {
       m_hosted_at_refs_count++;

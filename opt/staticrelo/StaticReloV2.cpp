@@ -246,7 +246,8 @@ std::vector<DexClass*> StaticReloPassV2::gen_candidates(const Scope& scope) {
           return;
         }
       }
-      if (method::clinit_may_have_side_effects(cls)) {
+      if (method::clinit_may_have_side_effects(
+              cls, /* allow_benign_method_invocations */ false)) {
         TRACE(STATIC_RELO, 9, "%s class initializer may have side effects",
               SHOW(cls));
         return;

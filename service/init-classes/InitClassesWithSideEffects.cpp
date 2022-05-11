@@ -26,7 +26,8 @@ const InitClasses* InitClassesWithSideEffects::compute(
 
   InitClasses classes;
   const auto* refined_cls = method::clinit_may_have_side_effects(
-      cls, &clinit_has_no_side_effects, non_true_virtuals);
+      cls, /* allow_benign_method_invocations */ true,
+      &clinit_has_no_side_effects, non_true_virtuals);
   if (refined_cls == nullptr) {
   } else if (refined_cls != cls) {
     classes =

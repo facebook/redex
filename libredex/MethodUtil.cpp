@@ -16,6 +16,7 @@ namespace {
 
 class ClInitSideEffectsAnalysis {
  private:
+  bool m_allow_benign_method_invocations;
   const method::ClInitHasNoSideEffectsPredicate* m_clinit_has_no_side_effects;
   const std::unordered_set<DexMethod*>* m_non_true_virtuals;
   std::unordered_set<DexMethodRef*> m_active;
@@ -23,9 +24,11 @@ class ClInitSideEffectsAnalysis {
 
  public:
   explicit ClInitSideEffectsAnalysis(
+      bool allow_benign_method_invocations,
       const method::ClInitHasNoSideEffectsPredicate* clinit_has_no_side_effects,
       const std::unordered_set<DexMethod*>* non_true_virtuals)
-      : m_clinit_has_no_side_effects(clinit_has_no_side_effects),
+      : m_allow_benign_method_invocations(allow_benign_method_invocations),
+        m_clinit_has_no_side_effects(clinit_has_no_side_effects),
         m_non_true_virtuals(non_true_virtuals) {}
 
   const DexClass* run(const DexClass* cls) {
@@ -87,7 +90,8 @@ class ClInitSideEffectsAnalysis {
   bool invoke_may_have_side_effects(DexMethod* effective_caller,
                                     IRInstruction* insn) {
     auto method_ref = insn->get_method();
-    if (method::is_clinit_invoked_method_benign(method_ref)) {
+    if (m_allow_benign_method_invocations &&
+        method::is_clinit_invoked_method_benign(method_ref)) {
       return false;
     }
     if (opcode::is_invoke_interface(insn->opcode()) ||
@@ -478,9 +482,11 @@ bool is_clinit_invoked_method_benign(const DexMethodRef* method_ref) {
 
 const DexClass* clinit_may_have_side_effects(
     const DexClass* cls,
+    bool allow_benign_method_invocations,
     const ClInitHasNoSideEffectsPredicate* clinit_has_no_side_effects,
     const std::unordered_set<DexMethod*>* non_true_virtuals) {
-  ClInitSideEffectsAnalysis analysis(clinit_has_no_side_effects,
+  ClInitSideEffectsAnalysis analysis(allow_benign_method_invocations,
+                                     clinit_has_no_side_effects,
                                      non_true_virtuals);
   return analysis.run(cls);
 }
