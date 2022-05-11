@@ -1,8 +1,17 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (C) 2017 The Android Open Source Project
  *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 syntax = "proto3";
@@ -67,6 +76,23 @@ message Compression {
   // asset modules; the content of on-demand and fast-follow asset modules is
   // always kept uncompressed.
   AssetModuleCompression install_time_asset_module_default_compression = 2;
+
+  enum ApkCompressionAlgorithm {
+    // Default in the current version of bundletool is zlib deflate algorithm
+    // with compression level 9 for the application's resources and compression
+    // level 6 for other entries.
+    //
+    // This is a good trade-off between size of final APK and size of patches
+    // which are used to update the application from previous to next version.
+    DEFAULT_APK_COMPRESSION_ALGORITHM = 0;
+
+    // 7zip implementation of deflate algorithm which gives smaller APK size
+    // but size of patches required to update the application are larger.
+    P7ZIP = 1;
+  }
+
+  // Compression algorithm which is used to compress entries in final APKs.
+  ApkCompressionAlgorithm apk_compression_algorithm = 3;
 }
 
 // Resources to keep in the master split.
@@ -91,6 +117,9 @@ message Optimizations {
 
   // Optimizations that are applied to resources.
   ResourceOptimizations resource_optimizations = 5;
+
+  // Configuration for archiving the app.
+  StoreArchive store_archive = 6;
 }
 
 message ResourceOptimizations {
@@ -112,6 +141,15 @@ message ResourceOptimizations {
 message UncompressNativeLibraries { bool enabled = 1; }
 
 message UncompressDexFiles { bool enabled = 1; }
+
+message StoreArchive {
+  // Archive is an app state that allows an official app store to reclaim device
+  // storage and disable app functionality temporarily until the user interacts
+  // with the app again. Upon interaction the latest available version of the
+  // app will be restored while leaving user data unaffected. Disabled by
+  // default.
+  bool enabled = 1;
+}
 
 // Optimization configuration used to generate Split APKs.
 message SplitsConfig { repeated SplitDimension split_dimension = 1; }
