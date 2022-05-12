@@ -401,6 +401,7 @@ class SubdirDexMode(BaseDexMode):
 
     def detect(self, extracted_apk_dir: str) -> bool:
         secondary_dex_dir = join(extracted_apk_dir, self._secondary_dir)
+        # pyre-fixme[7]: Expected `bool` but got `int`.
         return isdir(secondary_dex_dir) and len(
             list(abs_glob(secondary_dex_dir, "*.dex.jar"))
         )
