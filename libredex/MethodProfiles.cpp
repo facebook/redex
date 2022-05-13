@@ -359,12 +359,16 @@ void MethodProfiles::resolve_method_descriptor_tokens(
                              std::vector<DexMethodRef*>>& map) {
   size_t removed{0};
   size_t added{0};
-  std20::erase_if(m_unresolved_lines, [&](auto& parsed_main) {
+  // Note that we don't remove m_unresolved_lines as we go, as the given map
+  // might reference its mdts.
+  std::unordered_set<std::string*> to_remove;
+  for (auto& parsed_main : m_unresolved_lines) {
     always_assert(parsed_main.mdt);
     auto it = map.find(*parsed_main.mdt);
     if (it == map.end()) {
-      return false;
+      continue;
     }
+    to_remove.insert(parsed_main.ref_str.get());
     removed++;
     for (auto method_ref : it->second) {
       ParsedMain resolved_parsed_main{
@@ -378,7 +382,9 @@ void MethodProfiles::resolve_method_descriptor_tokens(
       always_assert(success);
       added++;
     }
-    return true;
+  }
+  std20::erase_if(m_unresolved_lines, [&to_remove](auto& parsed_main) {
+    return to_remove.count(parsed_main.ref_str.get());
   });
   TRACE(METH_PROF, 1,
         "After resolving unresolved lines: %zu unresolved lines removed, %zu "
