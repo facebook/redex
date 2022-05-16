@@ -23,6 +23,7 @@ struct Config {
   bool full_dbg_positions{false};
   bool debug_make_crashing{false};
   ProfileGuidanceConfig profile_guidance;
+  bool outline_control_flow{true};
 };
 
 } // namespace outliner

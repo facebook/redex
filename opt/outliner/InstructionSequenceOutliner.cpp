@@ -557,7 +557,7 @@ static bool ranges_overlap(const Ranges& a, const Ranges& b) {
   return false;
 }
 
-static bool can_outline_opcode(IROpcode opcode) {
+static bool can_outline_opcode(IROpcode opcode, bool outline_control_flow) {
   switch (opcode) {
   case IOPCODE_LOAD_PARAM:
   case IOPCODE_LOAD_PARAM_OBJECT:
@@ -586,6 +586,11 @@ static bool can_outline_opcode(IROpcode opcode) {
     return false;
 
   default:
+    if (!outline_control_flow && (opcode::is_a_conditional_branch(opcode) ||
+                                  opcode::is_switch(opcode))) {
+      return false;
+    }
+
     return true;
   }
 }
@@ -653,8 +658,9 @@ static bool append_to_partial_candidate(
 static bool can_outline_insn(const RefChecker& ref_checker,
                              const OptionalReachingInitializedsEnvironments&
                                  reaching_initialized_init_first_param,
-                             IRInstruction* insn) {
-  if (!can_outline_opcode(insn->opcode())) {
+                             IRInstruction* insn,
+                             bool outline_control_flow) {
+  if (!can_outline_opcode(insn->opcode(), outline_control_flow)) {
     return false;
   }
   if (insn->has_method()) {
@@ -822,7 +828,7 @@ static bool explore_candidates_from(
     auto insn = it->insn;
     if (pcn->insns.size() + 1 < MIN_INSNS_SIZE &&
         !can_outline_insn(ref_checker, reaching_initialized_init_first_param,
-                          insn)) {
+                          insn, config.outline_control_flow)) {
       return false;
     }
     cores_builder.push_back(insn);
@@ -1236,8 +1242,9 @@ static void get_recurring_cores(
           CandidateInstructionCoresBuilder cores_builder;
           for (auto& mie : big_blocks::InstructionIterable(big_block)) {
             auto insn = mie.insn;
-            if (!can_outline_insn(
-                    ref_checker, reaching_initialized_init_first_param, insn)) {
+            if (!can_outline_insn(ref_checker,
+                                  reaching_initialized_init_first_param, insn,
+                                  config.outline_control_flow)) {
               cores_builder.clear();
               continue;
             }
@@ -3010,6 +3017,10 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
           min_sdk);
   } else {
     min_sdk_api = &config.get_android_sdk_api(min_sdk);
+  }
+
+  if (g_redex->instrument_mode) {
+    m_config.outline_control_flow = false;
   }
 
   auto scope = build_class_scope(stores);
