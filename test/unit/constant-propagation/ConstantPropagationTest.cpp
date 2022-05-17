@@ -1060,8 +1060,6 @@ TEST_F(ConstantPropagationTest, RedundantNullCheck) {
     )
   )");
 
-  DexMethod::make_method(
-      kotlin_nullcheck_wrapper::NEW_CHECK_EXPR_NULL_SIGNATURE_V1_4);
   do_const_prop(code.get(), cp::ConstantPrimitiveAnalyzer(),
                 cp::Transform::Config(),
                 /* editable_cfg */ false);
@@ -1090,8 +1088,6 @@ TEST_F(ConstantPropagationTest, RedundantNullCheckCmp) {
     )
   )");
 
-  DexMethod::make_method(
-      kotlin_nullcheck_wrapper::NEW_CHECK_EXPR_NULL_SIGNATURE_V1_4);
   do_const_prop(code.get(), cp::ConstantPrimitiveAnalyzer(),
                 cp::Transform::Config(),
                 /* editable_cfg */ false);
