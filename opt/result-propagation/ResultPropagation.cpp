@@ -79,7 +79,7 @@ ParamDomain makeHigh(const ParamDomain& domain) {
 class Analyzer final : public BaseIRAnalyzer<ParamDomainEnvironment> {
 
  public:
-  Analyzer(cfg::ControlFlowGraph& cfg,
+  Analyzer(const cfg::ControlFlowGraph& cfg,
            const ReturnParamResolver& resolver,
            const std::unordered_map<const DexMethod*, ParamIndex>&
                methods_which_return_parameter)
@@ -232,7 +232,7 @@ class Analyzer final : public BaseIRAnalyzer<ParamDomainEnvironment> {
 ////////////////////////////////////////////////////////////////////////////////
 
 std::unordered_map<const IRInstruction*, ParamIndex> get_load_param_map(
-    cfg::ControlFlowGraph& cfg) {
+    const cfg::ControlFlowGraph& cfg) {
   std::unordered_map<const IRInstruction*, ParamIndex> map;
   const auto param_insns = InstructionIterable(cfg.get_param_instructions());
   ParamIndex index = 0;
@@ -407,7 +407,7 @@ bool ReturnParamResolver::returns_receiver(const DexMethodRef* method) const {
 }
 
 boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
-    cfg::ControlFlowGraph& cfg,
+    const cfg::ControlFlowGraph& cfg,
     const std::unordered_map<const DexMethod*, ParamIndex>&
         methods_which_return_parameter) const {
   Analyzer analyzer(cfg, *this, methods_which_return_parameter);
@@ -556,11 +556,11 @@ ResultPropagationPass::find_methods_which_return_parameter(
             scope, [&](DexMethod* method) {
               std::unordered_map<const DexMethod*, ParamIndex> res;
 
-              const auto code = method->get_code();
+              const auto* code = method->get_code();
               if (code == nullptr) {
                 return res;
               }
-              const auto proto = method->get_proto();
+              const auto* proto = method->get_proto();
               if (proto->is_void()) {
                 // void methods cannot return a parameter, skip expensive
                 // analysis
@@ -574,8 +574,7 @@ ResultPropagationPass::find_methods_which_return_parameter(
                 return res;
               }
 
-              // TODO(T35815704): Make the cfg const
-              cfg::ControlFlowGraph& cfg = code->cfg();
+              const cfg::ControlFlowGraph& cfg = code->cfg();
               const auto return_param_index = resolver.get_return_param_index(
                   cfg, methods_which_return_parameter);
               if (return_param_index) {
