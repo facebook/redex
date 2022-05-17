@@ -26,17 +26,17 @@ void AnonymousClassMergingPass::bind_config() {
        "Do not merge the classes or its implementors");
   utils::load_types_and_prefixes(excl_names, m_merging_spec.exclude_types,
                                  m_merging_spec.exclude_prefixes);
-  bind("global_min_count",
-       500,
-       m_global_min_count,
-       "Ignore interface or class hierarchies with less than "
-       "global_min_count implementors or subclasses");
   bind("include_primary_dex", false, m_merging_spec.include_primary_dex);
   bind("allowed_packages",
        {},
        allowed_packages,
        "Packages of types that are allowed to be merged, default is all "
        "pakcages");
+  bind("global_min_count",
+       500,
+       m_global_min_count,
+       "Ignore interface or class hierarchies with less than "
+       "global_min_count implementors or subclasses");
   bind("min_count",
        2,
        m_min_count,

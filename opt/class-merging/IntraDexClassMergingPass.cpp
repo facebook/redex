@@ -22,15 +22,15 @@ void IntraDexClassMergingPass::bind_config() {
        "Do not merge the classes or its implementors");
   utils::load_types_and_prefixes(excl_names, m_merging_spec.exclude_types,
                                  m_merging_spec.exclude_prefixes);
-  bind("min_count",
-       10,
-       m_merging_spec.min_count,
-       "Minimal number of mergeables to be merged together");
   bind("global_min_count",
        50,
        m_global_min_count,
        "Ignore interface or class hierarchies with less than global_mint_count "
        "implementors or subclasses");
+  bind("min_count",
+       10,
+       m_merging_spec.min_count,
+       "Minimal number of mergeables to be merged together");
   std::string interdex_grouping;
   bind("interdex_grouping", "non-ordered-set", interdex_grouping);
   m_merging_spec.interdex_grouping =
