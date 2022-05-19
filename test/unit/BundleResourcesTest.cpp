@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -7,6 +7,7 @@
 
 #include <boost/filesystem.hpp>
 #include <gtest/gtest.h>
+#include <unordered_set>
 
 #include "BundleResources.h"
 #include "Debug.h"
@@ -246,9 +247,11 @@ TEST(BundleResources, ReadResource) {
         drawable_res_names.emplace(pair.second);
       }
     }
-    EXPECT_EQ(drawable_res_names.size(), 2);
+    EXPECT_EQ(drawable_res_names.size(), 4);
     EXPECT_EQ(drawable_res_names.count("icon"), 1);
     EXPECT_EQ(drawable_res_names.count("prickly"), 1);
+    EXPECT_EQ(drawable_res_names.count("x_icon"), 1);
+    EXPECT_EQ(drawable_res_names.count("x_prickly"), 1);
 
     auto padding_right_ids = res_table->get_res_ids_by_name("padding_right");
     EXPECT_EQ(padding_right_ids.size(), 1);
@@ -426,5 +429,85 @@ TEST(BundleResources, ChangeResourceIdInLayout) {
         extract_dir + "/base/res/layout/activity_main.xml",
         kept_to_remapped_ids);
     EXPECT_EQ(changed, 4);
+  });
+}
+
+TEST(BundleResources, ObfuscateResourcesName) {
+  setup_resources_and_run([&](const std::string& /* unused */,
+                              BundleResources* resources) {
+    auto res_table = resources->load_res_table();
+    auto color1_ids = res_table->get_res_ids_by_name("bg_grey");
+    EXPECT_EQ(color1_ids.size(), 1);
+    auto color1_id = color1_ids[0];
+    auto color2_ids = res_table->get_res_ids_by_name("keep_me_unused_color");
+    EXPECT_EQ(color2_ids.size(), 1);
+    auto color2_id = color2_ids[0];
+    auto color3_ids = res_table->get_res_ids_by_name("prickly_green");
+    EXPECT_EQ(color3_ids.size(), 1);
+    auto color3_id = color3_ids[0];
+    auto hex_or_file2_ids = res_table->get_res_ids_by_name("hex_or_file2");
+    EXPECT_EQ(hex_or_file2_ids.size(), 1);
+    auto hex_or_file2_id = hex_or_file2_ids[0];
+    auto hex_or_file_ids = res_table->get_res_ids_by_name("hex_or_file");
+    EXPECT_EQ(hex_or_file_ids.size(), 1);
+    auto hex_or_file_id = hex_or_file_ids[0];
+    auto duplicate_name_ids = res_table->get_res_ids_by_name("duplicate_name");
+    EXPECT_EQ(duplicate_name_ids.size(), 3);
+    auto dimen1_ids = res_table->get_res_ids_by_name("unused_dimen_2");
+    EXPECT_EQ(dimen1_ids.size(), 1);
+    auto dimen1_id = dimen1_ids[0];
+
+    auto icon_ids = res_table->get_res_ids_by_name("icon");
+    EXPECT_EQ(icon_ids.size(), 1);
+    auto files = res_table->get_files_by_rid(icon_ids[0]);
+    EXPECT_EQ(files.size(), 1);
+    EXPECT_EQ(*files.begin(), "res/drawable-mdpi-v4/icon.png");
+    files = res_table->get_files_by_rid(icon_ids[0], ResourcePathType::ZipPath);
+    EXPECT_EQ(files.size(), 1);
+    EXPECT_EQ(*files.begin(), "base/res/drawable-mdpi-v4/icon.png");
+
+    auto type_ids = res_table->get_types_by_name({"color"});
+    std::unordered_set<uint32_t> shifted_allow_type_ids;
+    for (auto& type_id : type_ids) {
+      shifted_allow_type_ids.emplace(type_id >> TYPE_INDEX_BIT_SHIFT);
+    }
+    std::map<std::string, std::string> filepath_old_to_new;
+    filepath_old_to_new["base/res/drawable-mdpi-v4/icon.png"] =
+        "base/res/a.png";
+    res_table->obfuscate_resource_and_serialize(
+        resources->find_resources_files(),
+        filepath_old_to_new,
+        shifted_allow_type_ids,
+        {"keep_me_unused_"});
+
+    auto res_table_new = resources->load_res_table();
+
+    EXPECT_EQ(res_table_new->get_res_ids_by_name("bg_grey").size(), 0);
+    EXPECT_EQ(res_table_new->get_res_ids_by_name("prickly_green").size(), 0);
+    EXPECT_EQ(res_table_new->get_res_ids_by_name("keep_me_unused_color").size(),
+              1);
+    EXPECT_EQ(res_table_new->get_res_ids_by_name("unused_dimen_2").size(), 1);
+    EXPECT_EQ(res_table_new->get_res_ids_by_name("hex_or_file").size(), 0);
+    EXPECT_EQ(res_table_new->get_res_ids_by_name("hex_or_file2").size(), 0);
+    EXPECT_EQ(res_table_new->get_res_ids_by_name("duplicate_name").size(), 2);
+    EXPECT_EQ(res_table_new->get_res_ids_by_name(RESOURCE_NAME_REMOVED).size(),
+              5);
+    const auto& id_to_name = res_table_new->id_to_name;
+    EXPECT_EQ(id_to_name.at(color1_id), RESOURCE_NAME_REMOVED);
+    EXPECT_EQ(id_to_name.at(color3_id), RESOURCE_NAME_REMOVED);
+    EXPECT_EQ(id_to_name.at(hex_or_file2_id), RESOURCE_NAME_REMOVED);
+    EXPECT_EQ(id_to_name.at(hex_or_file_id), RESOURCE_NAME_REMOVED);
+    EXPECT_EQ(id_to_name.at(color2_id), "keep_me_unused_color");
+    EXPECT_EQ(id_to_name.at(dimen1_id), "unused_dimen_2");
+
+    icon_ids = res_table_new->get_res_ids_by_name("icon");
+    EXPECT_EQ(icon_ids.size(), 1);
+    files = res_table_new->get_files_by_rid(icon_ids[0]);
+    EXPECT_EQ(files.size(), 1);
+    EXPECT_EQ(*files.begin(), "res/a.png");
+    files =
+        res_table_new->get_files_by_rid(icon_ids[0], ResourcePathType::ZipPath);
+    EXPECT_EQ(files.size(), 1);
+    EXPECT_EQ(*files.begin(), "base/res/a.png");
   });
 }

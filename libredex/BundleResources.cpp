@@ -35,6 +35,11 @@
 
 namespace {
 
+#define MAKE_RES_ID(package, type, entry)                        \
+  ((PACKAGE_MASK_BIT & ((package) << PACKAGE_INDEX_BIT_SHIFT)) | \
+   (TYPE_MASK_BIT & ((type) << TYPE_INDEX_BIT_SHIFT)) |          \
+   (ENTRY_MASK_BIT & (entry)))
+
 void read_protobuf_file_contents(
     const std::string& file,
     const std::function<void(google::protobuf::io::CodedInputStream&, size_t)>&
@@ -911,6 +916,116 @@ void ResourcesPbFile::remap_res_ids_and_serialize(
 }
 
 namespace {
+void remap_entry_file_paths(const std::function<void(aapt::pb::FileReference*,
+                                                     uint32_t)>& file_remapper,
+                            uint32_t res_id,
+                            aapt::pb::Entry* entry) {
+  auto config_size = entry->config_value_size();
+  for (int i = 0; i < config_size; i++) {
+    auto value = entry->mutable_config_value(i)->mutable_value();
+    if (value->has_item()) {
+      auto item = value->mutable_item();
+      if (item->has_file()) {
+        auto file = item->mutable_file();
+        file_remapper(file, res_id);
+      }
+    }
+  }
+}
+} // namespace
+
+bool find_prefix_match(const std::unordered_set<std::string>& prefixes,
+                       const std::string& name) {
+  return std::find_if(prefixes.begin(), prefixes.end(),
+                      [&](const std::string& v) {
+                        return name.find(v) == 0;
+                      }) != prefixes.end();
+}
+
+size_t ResourcesPbFile::obfuscate_resource_and_serialize(
+    const std::vector<std::string>& resource_files,
+    const std::map<std::string, std::string>& filepath_old_to_new,
+    const std::unordered_set<uint32_t>& allowed_types,
+    const std::unordered_set<std::string>& keep_resource_prefixes) {
+  if (allowed_types.empty() && filepath_old_to_new.empty()) {
+    TRACE(RES, 9, "BundleResources: Nothing to change, returning");
+    return 0;
+  }
+  size_t num_changed = 0;
+  for (const auto& resources_pb_path : resource_files) {
+    TRACE(RES,
+          9,
+          "BundleResources changing resource data for file: %s",
+          resources_pb_path.c_str());
+    read_protobuf_file_contents(
+        resources_pb_path,
+        [&](google::protobuf::io::CodedInputStream& input,
+            size_t /* unused */) {
+          aapt::pb::ResourceTable pb_restable;
+          bool read_finish = pb_restable.ParseFromCodedStream(&input);
+          always_assert_log(read_finish,
+                            "BundleResoource failed to read %s",
+                            resources_pb_path.c_str());
+          int package_size = pb_restable.package_size();
+          for (int i = 0; i < package_size; i++) {
+            auto package = pb_restable.mutable_package(i);
+            auto current_package_id = package->package_id().id();
+            auto cur_module_name =
+                resolve_module_name_for_package_id(current_package_id) + "/";
+            auto remap_filepaths = [&filepath_old_to_new, &cur_module_name](
+                                       aapt::pb::FileReference* file,
+                                       uint32_t res_id) {
+              auto search_path = cur_module_name + file->path();
+              auto search = filepath_old_to_new.find(search_path);
+              if (search != filepath_old_to_new.end()) {
+                auto found_path = search->second;
+                auto new_path = found_path.substr(cur_module_name.length());
+                TRACE(RES, 8, "Writing file path %s to ID 0x%x",
+                      new_path.c_str(), res_id);
+                file->set_path(new_path);
+              }
+            };
+            int type_size = package->type_size();
+            for (int j = 0; j < type_size; j++) {
+              auto type = package->mutable_type(j);
+              auto current_type_id = type->type_id().id();
+              auto is_allow_type = allowed_types.count(current_type_id) > 0;
+              if (!is_allow_type && filepath_old_to_new.empty()) {
+                TRACE(RES, 9,
+                      "BundleResources: skipping annonymize type %X: %s",
+                      current_type_id, type->name().c_str());
+                continue;
+              }
+              int entry_size = type->entry_size();
+              for (int k = 0; k < entry_size; k++) {
+                auto entry = type->mutable_entry(k);
+                const auto& entry_name = entry->name();
+                uint32_t res_id =
+                    MAKE_RES_ID(current_package_id, current_type_id,
+                                entry->entry_id().id());
+                remap_entry_file_paths(remap_filepaths, res_id,
+                                       type->mutable_entry(k));
+                if (!is_allow_type ||
+                    find_prefix_match(keep_resource_prefixes, entry_name)) {
+                  TRACE(RES,
+                        9,
+                        "BundleResources: skipping annonymize entry %s",
+                        entry_name.c_str());
+                  continue;
+                }
+                ++num_changed;
+                entry->set_name(RESOURCE_NAME_REMOVED);
+              }
+            }
+          }
+          std::ofstream out(resources_pb_path, std::ofstream::binary);
+          always_assert(pb_restable.SerializeToOstream(&out));
+        });
+  }
+  return num_changed;
+}
+
+namespace {
 
 std::string module_name_from_pb_path(const std::string& resources_pb_path) {
   auto p = boost::filesystem::path(resources_pb_path);
@@ -918,6 +1033,13 @@ std::string module_name_from_pb_path(const std::string& resources_pb_path) {
 }
 
 } // namespace
+
+std::string ResourcesPbFile::resolve_module_name_for_package_id(
+    uint32_t package_id) {
+  always_assert_log(m_package_id_to_module_name.count(package_id) > 0,
+                    "Unknown package for package id %X", package_id);
+  return m_package_id_to_module_name.at(package_id);
+}
 
 std::string ResourcesPbFile::resolve_module_name_for_resource_id(
     uint32_t res_id) {
@@ -1116,10 +1238,34 @@ std::unordered_set<uint32_t> ResourcesPbFile::get_types_by_name(
   return type_ids;
 }
 
+std::unordered_set<uint32_t> ResourcesPbFile::get_types_by_name_prefixes(
+    const std::unordered_set<std::string>& type_name_prefixes) {
+  always_assert(m_type_id_to_names.size() > 0);
+  std::unordered_set<uint32_t> type_ids;
+  for (const auto& pair : m_type_id_to_names) {
+    const auto& type_name = pair.second;
+    if (std::find_if(type_name_prefixes.begin(), type_name_prefixes.end(),
+                     [&](const std::string& prefix) {
+                       return type_name.find(prefix) != std::string::npos;
+                     }) != type_name_prefixes.end()) {
+      type_ids.emplace((pair.first) << TYPE_INDEX_BIT_SHIFT);
+    }
+  }
+  return type_ids;
+}
+
 void ResourcesPbFile::delete_resource(uint32_t res_id) {
   // Keep track of res_id and delete later in remap_res_ids_and_serialize.
   m_ids_to_remove.emplace(res_id);
 }
+
+namespace {
+const std::string KNOWN_RES_DIR = std::string(RES_DIRECTORY) + "/";
+
+bool is_resource_file(const std::string& str) {
+  return boost::algorithm::starts_with(str, KNOWN_RES_DIR);
+}
+} // namespace
 
 std::unordered_set<std::string> ResourcesPbFile::get_files_by_rid(
     uint32_t res_id, ResourcePathType path_type) {

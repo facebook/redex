@@ -5,6 +5,7 @@
   <dimen name="medium2">8dp</dimen>
   <dimen name="unused_dimen_1">8sp</dimen>
   <dimen name="unused_dimen_2">16dp</dimen>
+  <dimen name="duplicate_name">20dp</dimen>
   <dimen name="margin_top">24dp</dimen>
   <dimen name="padding_left">16dp</dimen>
   <dimen name="padding_right">16dp</dimen>
