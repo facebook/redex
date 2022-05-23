@@ -1272,7 +1272,6 @@ void InterDex::flush_out_dex(DexInfo& dex_info, DexClass* canary_cls) {
       auto mpoc = *m_conf.get_global_config()
                        .get_config_by_name<MethodProfileOrderingConfig>(
                            "method_profile_order");
-      mpoc.legacy_order = false;
       mpoc.min_appear_percent = 1.0f;
       dexmethods_profiled_comparator comparator(
           {}, &m_conf.get_method_profiles(), &mpoc);

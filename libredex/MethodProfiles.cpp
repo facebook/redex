@@ -457,7 +457,6 @@ dexmethods_profiled_comparator::dexmethods_profiled_comparator(
     const MethodProfileOrderingConfig* config)
     : m_method_profiles(method_profiles),
       m_allowlisted_substrings(&config->method_sorting_allowlisted_substrings),
-      m_legacy_order(config->legacy_order),
       m_min_appear_percent(config->min_appear_percent),
       m_second_min_appear_percent(config->second_min_appear_percent) {
   always_assert(m_method_profiles != nullptr);
@@ -481,9 +480,7 @@ dexmethods_profiled_comparator::dexmethods_profiled_comparator(
       // only have cold start (and no interaction_id column)
       interaction_id = COLD_START;
     }
-    if (!m_legacy_order || interaction_id == COLD_START) {
-      m_interactions.push_back(interaction_id);
-    }
+    m_interactions.push_back(interaction_id);
   }
   std::sort(m_interactions.begin(), m_interactions.end(),
             [this](const std::string& a, const std::string& b) {
@@ -537,13 +534,6 @@ double dexmethods_profiled_comparator::get_method_sort_num(
     auto it = stats_map.find(method);
     if (it != stats_map.end()) {
       const auto& stat = it->second;
-      if (m_legacy_order) {
-        if (stat.appear_percent >= 95.0) {
-          return range_begin + RANGE_SIZE / 2;
-        } else {
-          continue;
-        }
-      }
 
       auto mixed_ordering = [](double appear_percent, double appear_bias,
                                double order_percent, double order_multiplier) {

@@ -109,7 +109,6 @@ struct MethodProfileOrderingConfig : public Configurable {
   }
 
   std::unordered_set<std::string> method_sorting_allowlisted_substrings{};
-  bool legacy_order{true};
   float min_appear_percent{10.0f};
   float second_min_appear_percent{10.0f};
 };
