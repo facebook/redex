@@ -170,7 +170,6 @@ class dexmethods_profiled_comparator {
   const MethodProfiles* m_method_profiles;
   const std::unordered_set<std::string>* m_allowlisted_substrings;
   std::unordered_map<DexMethod*, double> m_cache;
-  bool m_legacy_order;
   double m_min_appear_percent;
   std::vector<std::string> m_interactions;
 

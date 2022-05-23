@@ -73,7 +73,6 @@ void MethodProfileOrderingConfig::bind_config() {
   bind("method_sorting_allowlisted_substrings",
        method_sorting_allowlisted_substrings,
        method_sorting_allowlisted_substrings);
-  bind("legacy_profiled_code_item_sort_order", legacy_order, legacy_order);
   bind("min_appear_percent", min_appear_percent, min_appear_percent);
 }
 

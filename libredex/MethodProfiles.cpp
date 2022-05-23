@@ -348,7 +348,6 @@ dexmethods_profiled_comparator::dexmethods_profiled_comparator(
     const MethodProfileOrderingConfig* config)
     : m_method_profiles(method_profiles),
       m_allowlisted_substrings(&config->method_sorting_allowlisted_substrings),
-      m_legacy_order(config->legacy_order),
       m_min_appear_percent(config->min_appear_percent) {
   always_assert(m_method_profiles != nullptr);
   always_assert(m_allowlisted_substrings != nullptr);
@@ -371,9 +370,7 @@ dexmethods_profiled_comparator::dexmethods_profiled_comparator(
       // only have cold start (and no interaction_id column)
       interaction_id = COLD_START;
     }
-    if (!m_legacy_order || interaction_id == COLD_START) {
-      m_interactions.push_back(interaction_id);
-    }
+    m_interactions.push_back(interaction_id);
   }
   std::sort(m_interactions.begin(), m_interactions.end(),
             [this](const std::string& a, const std::string& b) {
@@ -424,10 +421,7 @@ double dexmethods_profiled_comparator::get_method_sort_num(
     auto it = stats_map.find(method);
     if (it != stats_map.end()) {
       const auto& stat = it->second;
-      if (m_legacy_order && stat.appear_percent >= 95.0) {
-        return range_begin + RANGE_SIZE / 2;
-      } else if (!m_legacy_order &&
-                 stat.appear_percent >= m_min_appear_percent) {
+      if (stat.appear_percent >= m_min_appear_percent) {
         // Prefer high appearance percents and low order percents. This
         // intentionally doesn't strictly order methods by appear_percent then
         // order_percent, rather both values are used and with greater weight
