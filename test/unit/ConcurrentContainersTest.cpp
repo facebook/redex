@@ -37,7 +37,7 @@ class ConcurrentContainersTest : public ::testing::Test {
       for (size_t i = t; i < m_data.size(); i += kThreads) {
         m_samples[t].push_back(m_data[i]);
       }
-      for (size_t i = t; i < m_data.size(); i += kThreads) {
+      for (size_t i = t; i < m_subset_data.size(); i += kThreads) {
         m_subset_samples[t].push_back(m_subset_data[i]);
       }
     }
