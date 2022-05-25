@@ -98,6 +98,9 @@ struct InlinedCost {
   bool no_return;
   // Average or call-site specific value indicating whether result is used
   float result_used;
+  // Average or call-site specific value indicating how many callee arguments
+  // are unused
+  float unused_args;
   // For a specific call-site, reduced cfg template after applying call-site
   // summary
   std::shared_ptr<cfg::ControlFlowGraph> reduced_cfg;
