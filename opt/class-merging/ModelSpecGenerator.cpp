@@ -100,6 +100,7 @@ namespace class_merging {
 void find_all_mergeables_and_roots(const TypeSystem& type_system,
                                    const Scope& scope,
                                    size_t global_min_count,
+                                   PassManager& mgr,
                                    ModelSpec* merging_spec) {
   std::unordered_map<const DexTypeList*, std::vector<const DexType*>>
       intfs_implementors;
@@ -148,21 +149,23 @@ void find_all_mergeables_and_roots(const TypeSystem& type_system,
             children.size());
       merging_spec->roots.insert(parent);
       merging_spec->merging_targets.insert(children.begin(), children.end());
+      mgr.incr_metric("cls_" + show(parent), children.size());
     }
   }
   for (const auto& pair : intfs_implementors) {
-    auto intfs = pair.first;
+    auto intf = pair.first;
     auto& implementors = pair.second;
     if (implementors.size() >= global_min_count) {
       TRACE(CLMG,
             9,
             "Discover interface root %s with %zu implementors",
-            SHOW(intfs),
+            SHOW(intf),
             pair.second.size());
       auto first_implementor = type_class(implementors[0]);
       merging_spec->roots.insert(first_implementor->get_super_class());
       merging_spec->merging_targets.insert(implementors.begin(),
                                            implementors.end());
+      mgr.incr_metric("intf_" + show(intf), implementors.size());
     }
   }
   TRACE(CLMG, 9, "Discover %zu mergeables from %zu roots",

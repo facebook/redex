@@ -34,6 +34,7 @@ struct ModelSpec;
 void find_all_mergeables_and_roots(const TypeSystem& type_system,
                                    const Scope& scope,
                                    size_t global_min_count,
+                                   PassManager& mgr,
                                    ModelSpec* merging_spec);
 
 /**
