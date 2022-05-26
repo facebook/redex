@@ -433,7 +433,7 @@ void DeadRefs::track_callers(Scope& scope) {
     MethodSet vmethods;
     FieldSet ifields;
   };
-  ConcurrentMap<DexType*, ToErase> to_erase;
+  ConcurrentMap<DexClass*, ToErase> to_erase;
   walk::parallel::opcodes(
       scope,
       [](DexMethod*) { return true; },
@@ -442,11 +442,10 @@ void DeadRefs::track_callers(Scope& scope) {
           auto callee =
               resolve_method(insn->get_method(), opcode_to_search(insn), m);
           if (callee == nullptr || !callee->is_concrete()) return;
-          to_erase.update(
-              callee->get_class(),
-              [callee](const DexType*, ToErase& te, bool /* exists */) {
-                te.vmethods.insert(callee);
-              });
+          to_erase.update(type_class(callee->get_class()),
+                          [callee](auto*, ToErase& te, bool /* exists */) {
+                            te.vmethods.insert(callee);
+                          });
           called.insert(callee);
           return;
         }
@@ -457,39 +456,33 @@ void DeadRefs::track_callers(Scope& scope) {
               : opcode::is_an_sfield_op(insn->opcode()) ? FieldSearch::Static
                                                         : FieldSearch::Any);
           if (field == nullptr || !field->is_concrete()) return;
-          to_erase.update(
-              field->get_class(),
-              [field](const DexType*, ToErase& te, bool /* exists */) {
-                te.ifields.insert(field);
-              });
+          to_erase.update(type_class(field->get_class()),
+                          [field](auto*, ToErase& te, bool /* exists */) {
+                            te.ifields.insert(field);
+                          });
           return;
         }
       });
   std::vector<DexClass*> classes_to_erase;
   size_t vmethods = 0;
   size_t ifields = 0;
-  for (auto& p : to_erase) {
-    auto cls = type_class(p.first);
+  for (auto&& [cls, te] : to_erase) {
     always_assert(cls);
     classes_to_erase.push_back(cls);
-    vmethods += p.second.vmethods.size();
-    ifields += p.second.ifields.size();
+    vmethods += te.vmethods.size();
+    ifields += te.ifields.size();
   }
   walk::parallel::classes(classes_to_erase, [&](DexClass* cls) {
     if (!classes.count(cls)) {
       return;
     }
     auto& ci = class_infos.at(cls);
-    auto& te = to_erase.at_unsafe(cls->get_type());
+    auto& te = to_erase.at_unsafe(cls);
     for (DexMethod* vmethod : te.vmethods) {
-      if (ci.vmethods.count(vmethod)) {
-        ci.vmethods.erase(vmethod);
-      }
+      ci.vmethods.erase(vmethod);
     }
     for (DexField* ifield : te.ifields) {
-      if (ci.ifields.count(ifield)) {
-        ci.ifields.erase(ifield);
-      }
+      ci.ifields.erase(ifield);
     }
   });
   TRACE(DELINIT, 3, "Unreachable (not called) %ld vmethods and %ld ifields",
