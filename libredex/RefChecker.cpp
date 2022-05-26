@@ -27,6 +27,10 @@ CodeRefs::CodeRefs(const DexMethod* method) {
           auto callee_ref = insn->get_method();
           auto callee =
               resolve_method(callee_ref, opcode_to_search(insn), method);
+          if (!callee && opcode_to_search(insn) == MethodSearch::Virtual) {
+            callee = resolve_method(callee_ref, MethodSearch::InterfaceVirtual,
+                                    method);
+          }
           if (!callee) {
             invalid_refs = true;
             return editable_cfg_adapter::LOOP_BREAK;
