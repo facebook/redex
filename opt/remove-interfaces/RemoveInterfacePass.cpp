@@ -38,9 +38,9 @@ std::vector<Location> get_args_for(DexProto* proto, MethodCreator* mc) {
   return args;
 }
 
-DexAnnotationSet* get_anno_set(DexType* anno_type) {
+std::unique_ptr<DexAnnotationSet> get_anno_set(DexType* anno_type) {
   auto anno = new DexAnnotation(anno_type, DexAnnotationVisibility::DAV_BUILD);
-  DexAnnotationSet* anno_set = new DexAnnotationSet();
+  auto anno_set = std::make_unique<DexAnnotationSet>();
   anno_set->add_annotation(anno);
   return anno_set;
 }
@@ -94,9 +94,9 @@ DexMethod* generate_dispatch(const DexType* base_type,
   TRACE(RM_INTF, 9, "generating dispatch %s.%s for targets of size %zu",
         SHOW(dispatch_owner), dispatch_name->c_str(), targets.size());
   auto anno_set = get_anno_set(dispatch_anno);
-  auto mc =
-      new MethodCreator(dispatch_owner, dispatch_name, new_proto,
-                        ACC_STATIC | ACC_PUBLIC, anno_set, keep_debug_info);
+  auto mc = new MethodCreator(dispatch_owner, dispatch_name, new_proto,
+                              ACC_STATIC | ACC_PUBLIC, std::move(anno_set),
+                              keep_debug_info);
   // Variable setup
   auto self_loc = mc->get_local(0);
   auto type_test_loc = mc->make_local(type::_boolean());

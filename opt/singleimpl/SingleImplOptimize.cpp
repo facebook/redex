@@ -76,13 +76,15 @@ DexProto* get_or_make_proto(const DexType* intf,
 void setup_method(DexMethod* orig_method, DexMethod* new_method) {
   auto method_anno = orig_method->get_anno_set();
   if (method_anno) {
-    new_method->attach_annotation_set(method_anno);
+    new_method->attach_annotation_set(
+        std::make_unique<DexAnnotationSet>(*method_anno));
   }
   const auto& params_anno = orig_method->get_param_anno();
   if (params_anno) {
     for (auto const& param_anno : *params_anno) {
-      new_method->attach_param_annotation_set(param_anno.first,
-                                              param_anno.second);
+      new_method->attach_param_annotation_set(
+          param_anno.first,
+          std::make_unique<DexAnnotationSet>(*param_anno.second));
     }
   }
   new_method->make_concrete(orig_method->get_access(),
@@ -232,9 +234,9 @@ void OptimizationImpl::set_field_defs(const DexType* intf,
     TRACE(INTF, 3, "(FDEF) %s", SHOW(field));
     f->set_deobfuscated_name(field->get_deobfuscated_name());
     f->rstate = field->rstate;
-    auto field_anno = field->get_anno_set();
+    auto field_anno = field->release_annotations();
     if (field_anno) {
-      f->attach_annotation_set(field_anno);
+      f->attach_annotation_set(std::move(field_anno));
     }
     f->make_concrete(field->get_access(), field->get_static_value());
     auto cls = type_class(field->get_class());

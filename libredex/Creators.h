@@ -393,13 +393,13 @@ struct MethodCreator {
   explicit MethodCreator(DexMethod* meth);
   MethodCreator(DexMethodRef* ref,
                 DexAccessFlags access,
-                DexAnnotationSet* anno = nullptr,
+                std::unique_ptr<DexAnnotationSet> anno = nullptr,
                 bool with_debug_item = false);
   MethodCreator(DexType* cls,
                 DexString* name,
                 DexProto* proto,
                 DexAccessFlags access,
-                DexAnnotationSet* anno = nullptr,
+                std::unique_ptr<DexAnnotationSet> anno = nullptr,
                 bool with_debug_item = false);
 
   /**

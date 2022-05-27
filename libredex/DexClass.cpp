@@ -638,7 +638,7 @@ DexMethod* DexMethod::make_method_from(DexMethod* that,
       DexMethod::make_method(target_cls, name, that->get_proto()));
   redex_assert(m != that);
   if (that->m_anno) {
-    m->m_anno = new DexAnnotationSet(*that->m_anno);
+    m->m_anno = std::make_unique<DexAnnotationSet>(*that->m_anno);
   }
 
   if (!is_abstract(that)) {
@@ -1091,15 +1091,15 @@ void DexClass::load_class_annotations(DexIdx* idx, uint32_t anno_off) {
     uint32_t fidx = *annodata++;
     uint32_t off = *annodata++;
     DexField* field = static_cast<DexField*>(idx->get_fieldidx(fidx));
-    DexAnnotationSet* aset = DexAnnotationSet::get_annotation_set(idx, off);
-    field->attach_annotation_set(aset);
+    auto aset = DexAnnotationSet::get_annotation_set(idx, off);
+    field->attach_annotation_set(std::move(aset));
   }
   for (uint32_t i = 0; i < annodir->methods_size; i++) {
     uint32_t midx = *annodata++;
     uint32_t off = *annodata++;
     DexMethod* method = static_cast<DexMethod*>(idx->get_methodidx(midx));
-    DexAnnotationSet* aset = DexAnnotationSet::get_annotation_set(idx, off);
-    method->attach_annotation_set(aset);
+    auto aset = DexAnnotationSet::get_annotation_set(idx, off);
+    method->attach_annotation_set(std::move(aset));
   }
   for (uint32_t i = 0; i < annodir->parameters_size; i++) {
     uint32_t midx = *annodata++;
@@ -1110,9 +1110,9 @@ void DexClass::load_class_annotations(DexIdx* idx, uint32_t anno_off) {
       uint32_t count = *annoxref++;
       for (uint32_t j = 0; j < count; j++) {
         uint32_t off = annoxref[j];
-        DexAnnotationSet* aset = DexAnnotationSet::get_annotation_set(idx, off);
+        auto aset = DexAnnotationSet::get_annotation_set(idx, off);
         if (aset != nullptr) {
-          method->attach_param_annotation_set(j, aset);
+          method->attach_param_annotation_set(j, std::move(aset));
           redex_assert(method->get_param_anno());
         }
       }
@@ -1193,7 +1193,7 @@ DexAnnotationDirectory* DexClass::get_annotation_directory() {
     }
   }
   if (m_anno || fanno || manno || mpanno) {
-    return new DexAnnotationDirectory(m_anno, std::move(fanno),
+    return new DexAnnotationDirectory(m_anno.get(), std::move(fanno),
                                       std::move(manno), std::move(mpanno));
   }
   return nullptr;
@@ -1577,8 +1577,8 @@ void DexMethod::gather_types(C& ltype) const {
   if (m_anno) m_anno->gather_types(type_vec);
   auto param_anno = get_param_anno();
   if (param_anno) {
-    for (auto pair : *param_anno) {
-      auto anno_set = pair.second;
+    for (auto& pair : *param_anno) {
+      auto& anno_set = pair.second;
       anno_set->gather_types(type_vec);
     }
   }
@@ -1613,8 +1613,8 @@ void DexMethod::gather_strings(C& lstring, bool exclude_loads) const {
   if (m_anno) m_anno->gather_strings(strings_vec);
   auto param_anno = get_param_anno();
   if (param_anno) {
-    for (auto pair : *param_anno) {
-      auto anno_set = pair.second;
+    for (auto& pair : *param_anno) {
+      auto& anno_set = pair.second;
       anno_set->gather_strings(strings_vec);
     }
   }
@@ -1628,8 +1628,8 @@ void DexMethod::gather_fields(C& lfield) const {
   if (m_anno) m_anno->gather_fields(fields_vec);
   auto param_anno = get_param_anno();
   if (param_anno) {
-    for (auto pair : *param_anno) {
-      auto anno_set = pair.second;
+    for (auto& pair : *param_anno) {
+      auto& anno_set = pair.second;
       anno_set->gather_fields(fields_vec);
     }
   }
@@ -1654,8 +1654,8 @@ void DexMethod::gather_methods_from_annos(C& lmethod) const {
   if (m_anno) m_anno->gather_methods(method_vec);
   auto param_anno = get_param_anno();
   if (param_anno) {
-    for (auto pair : *param_anno) {
-      auto anno_set = pair.second;
+    for (auto& pair : *param_anno) {
+      auto& anno_set = pair.second;
       anno_set->gather_methods(method_vec);
     }
   }

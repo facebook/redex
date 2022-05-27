@@ -435,7 +435,8 @@ class DexAnnotationSet : public Gatherable {
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const override;
   void gather_strings(std::vector<DexString*>& lstring) const override;
 
-  static DexAnnotationSet* get_annotation_set(DexIdx* idx, uint32_t aset_off);
+  static std::unique_ptr<DexAnnotationSet> get_annotation_set(
+      DexIdx* idx, uint32_t aset_off);
   unsigned long size() const { return m_annotations.size(); }
   void viz_counts(unsigned long& cntanno, unsigned long& cntviz) {
     cntanno = m_annotations.size();
@@ -472,7 +473,7 @@ class DexAnnotationSet : public Gatherable {
   void gather_annotations(std::vector<DexAnnotation*>& alist);
 };
 
-using ParamAnnotations = std::map<int, DexAnnotationSet*>;
+using ParamAnnotations = std::map<int, std::unique_ptr<DexAnnotationSet>>;
 using DexFieldAnnotations =
     std::vector<std::pair<DexFieldRef*, DexAnnotationSet*>>;
 using DexMethodAnnotations =

@@ -131,14 +131,15 @@ class UsesNamesMarker {
     }
     for (auto const& pair : *meth->get_param_anno()) {
       int num = pair.first;
-      const DexAnnotationSet* annos = pair.second;
+      const auto& annos = pair.second;
       if (!annos) {
         continue;
       }
 
-      bool has_uses_names = match_uses_names_annotation(annos, uses_names_anno);
+      bool has_uses_names =
+          match_uses_names_annotation(annos.get(), uses_names_anno);
       bool has_uses_name_trans =
-          match_uses_names_annotation(annos, uses_names_trans_anno);
+          match_uses_names_annotation(annos.get(), uses_names_trans_anno);
 
       if (has_uses_names || has_uses_name_trans) {
         DexType* matched_anno;
