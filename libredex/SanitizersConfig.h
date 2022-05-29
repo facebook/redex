@@ -28,7 +28,11 @@ const char* kAsanDefaultOptions =
     ":"
     "print_suppressions=0"
     ":"
-    "strict_init_order=1";
+    "strict_init_order=1"
+    ":"
+    "detect_container_overflow=1"
+    ":"
+    "detect_stack_use_after_scope=1";
 
 #if defined(__clang__)
 #define NO_SANITIZE \
