@@ -230,7 +230,7 @@ int main(int argc, char* argv[]) {
   ConfigFiles conf(config_data, args.output_ir_dir);
 
   const auto& passes = PassRegistry::get().get_passes();
-  PassManager manager(passes, config_data, args.redex_options);
+  PassManager manager(passes, conf, args.redex_options);
   manager.set_testing_mode();
   manager.run_passes(stores, conf);
 

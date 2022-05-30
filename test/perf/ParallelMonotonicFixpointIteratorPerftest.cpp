@@ -11,6 +11,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
