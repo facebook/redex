@@ -45,7 +45,10 @@ bool operator==(const ClassSpecification& lhs, const ClassSpecification& rhs) {
 
 size_t hash_value(const ClassSpecification& spec) {
   size_t seed{0};
-  boost::hash_combine(seed, spec.classNames);
+  for (const auto& v : spec.classNames) {
+    boost::hash_combine(seed, v.negated);
+    boost::hash_combine(seed, v.name);
+  }
   boost::hash_combine(seed, spec.annotationType);
   boost::hash_combine(seed, spec.extendsClassName);
   boost::hash_combine(seed, spec.extendsAnnotationType);

@@ -668,29 +668,40 @@ std::string parse_class_name(std::vector<Token>::iterator* it, bool* ok) {
   return name;
 }
 
-std::vector<std::string> parse_class_names(std::vector<Token>::iterator* it, bool* ok) {
-  std::vector<std::string> class_names;
+void parse_class_names(
+    std::vector<Token>::iterator* it,
+    bool* ok,
+    std::vector<ClassSpecification::ClassNameSpec>& class_names) {
+  bool negated{false};
+  auto maybe_negated = [&]() {
+    if ((*it)->type == TokenType::notToken) {
+      negated = true;
+      ++(*it);
+    }
+  };
+  auto push_to = [&](std::string&& s) {
+    class_names.emplace_back(s, negated);
+    negated = false;
+  };
 
-  auto class_name = parse_class_name(it, ok);
+  maybe_negated();
+  push_to(parse_class_name(it, ok));
   if (!*ok) {
-    return class_names;
+    return;
   }
-  class_names.push_back(class_name);
 
   // Maybe consume comma delimited list
   while ((*it)->type == TokenType::comma) {
     // Consume comma
     ++(*it);
 
-    class_name = parse_class_name(it, ok);
+    maybe_negated();
+    push_to(parse_class_name(it, ok));
     if (!*ok) {
-      return class_names;
+      return;
     }
-    class_names.push_back(class_name);
   }
-  return class_names;
 }
-
 
 ClassSpecification parse_class_specification(std::vector<Token>::iterator* it,
                                              bool* ok) {
@@ -711,7 +722,7 @@ ClassSpecification parse_class_specification(std::vector<Token>::iterator* it,
     return class_spec;
   }
   // Parse the class name(s).
-  class_spec.classNames = parse_class_names(it, ok);
+  parse_class_names(it, ok, class_spec.classNames);
   if (!*ok) {
     return class_spec;
   }

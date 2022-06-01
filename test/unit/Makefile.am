@@ -91,6 +91,7 @@ check_PROGRAMS = \
     print_kotlin_stats_test \
     proguard_lexer_test \
     proguard_map_test \
+    proguard_matcher_test \
     proguard_parser_test \
     proguard_regex_test \
     pure_analysis_test \
@@ -314,6 +315,8 @@ proguard_lexer_test_SOURCES = ProguardLexerTest.cpp
 
 proguard_map_test_SOURCES = ProguardMapTest.cpp
 proguard_map_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
+
+proguard_matcher_test_SOURCES = ProguardMatcherTest.cpp
 
 proguard_parser_test_SOURCES = ProguardParserTest.cpp
 proguard_parser_test_LDADD = $(COMMON_MOCK_TEST_LIBS)

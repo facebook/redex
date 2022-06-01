@@ -43,11 +43,11 @@ std::unique_ptr<boost::regex> make_rx(const std::string& s,
 }
 
 std::vector<std::unique_ptr<boost::regex>> make_rxs(
-    const std::vector<std::string>& strs) {
+    const std::vector<ClassSpecification::ClassNameSpec>& strs) {
   std::vector<std::unique_ptr<boost::regex>> rxs;
   rxs.reserve(strs.size());
   for (const auto& str : strs) {
-    rxs.push_back(make_rx(str));
+    rxs.push_back(make_rx(str.name));
   }
   return rxs;
 }
@@ -87,24 +87,30 @@ struct ClassMatcher {
 
   bool match(const DexClass* cls) {
     for (std::size_t i = 0; i < m_class_names.size(); i++) {
-      auto class_name = m_class_names[i];
-      // Check for class name match
-      // `match_name` is really slow; let's short-circuit it for wildcard-only
-      // matches
-      if (class_name != "*" && class_name != "**" && !match_name(cls, i)) {
+      const auto& class_name = m_class_names[i];
+
+      // Check for class name match `match_name` is really slow; let's
+      // short-circuit it for wildcard-only matches.
+      if (class_name.name != "*" && class_name.name != "**" &&
+          !match_name(cls, i)) {
         continue;
       }
+
+      if (class_name.negated) {
+        return false;
+      }
+
       // Check for access match
       if (!match_access(cls)) {
-        continue;
+        return false;
       }
       // Check to see if an annotation guard needs to be matched.
       if (!match_annotation(cls)) {
-        continue;
+        return false;
       }
       // Check to see if an extends clause needs to be matched.
       if (!match_extends(cls)) {
-        continue;
+        return false;
       }
       return true;
     }
@@ -189,7 +195,7 @@ struct ClassMatcher {
 
   DexAccessFlags setFlags_;
   DexAccessFlags unsetFlags_;
-  std::vector<std::string> m_class_names;
+  std::vector<ClassSpecification::ClassNameSpec> m_class_names;
   std::vector<std::unique_ptr<boost::regex>> m_cls;
   std::unique_ptr<boost::regex> m_anno;
   std::unique_ptr<boost::regex> m_extends;
@@ -854,41 +860,47 @@ void ProguardMatcher::process_keep(const KeepSpecSet& keep_rules,
     const auto& keep_rule = *keep_rule_ptr;
     ClassMatcher class_match(keep_rule);
 
-    // This case is very fast. Just process it immediately in the main thread.
-    bool class_with_wildcard = false;
-    for (const auto& className : keep_rule.class_spec.classNames) {
-      if (!classname_contains_wildcard(className)) {
-        DexClass* cls = find_single_class(className);
-        KeepRuleMatcher rule_matcher(rule_type, keep_rule, regex_map);
-        process_single_keep(class_match, rule_matcher, cls);
-        if (rule_matcher.is_unused()) {
-          m_unused_rules.insert(&keep_rule);
-        }
-      } else {
-        class_with_wildcard = true;
-      }
-    }
-    if (!class_with_wildcard) {
-      continue;
-    }
+    bool has_negation = std::any_of(keep_rule.class_spec.classNames.begin(),
+                                    keep_rule.class_spec.classNames.end(),
+                                    [](const auto& v) { return v.negated; });
 
-    // This is also very fast. Process it in the main thread, too.
-    const auto& extendsClassName = keep_rule.class_spec.extendsClassName;
-    if (!extendsClassName.empty() &&
-        !classname_contains_wildcard(extendsClassName)) {
-      DexClass* super = find_single_class(extendsClassName);
-      if (super != nullptr) {
-        KeepRuleMatcher rule_matcher(rule_type, keep_rule, regex_map);
-        auto children = get_all_children(m_hierarchy, super->get_type());
-        process_single_keep(class_match, rule_matcher, super);
-        for (auto const* type : children) {
-          process_single_keep(class_match, rule_matcher, type_class(type));
-        }
-        if (rule_matcher.is_unused()) {
-          m_unused_rules.insert(&keep_rule);
+    if (!has_negation) {
+      // This case is very fast. Just process it immediately in the main thread.
+      bool class_with_wildcard = false;
+      for (const auto& className : keep_rule.class_spec.classNames) {
+        if (!classname_contains_wildcard(className.name)) {
+          DexClass* cls = find_single_class(className.name);
+          KeepRuleMatcher rule_matcher(rule_type, keep_rule, regex_map);
+          process_single_keep(class_match, rule_matcher, cls);
+          if (rule_matcher.is_unused()) {
+            m_unused_rules.insert(&keep_rule);
+          }
+        } else {
+          class_with_wildcard = true;
         }
       }
-      continue;
+      if (!class_with_wildcard) {
+        continue;
+      }
+
+      // This is also very fast. Process it in the main thread, too.
+      const auto& extendsClassName = keep_rule.class_spec.extendsClassName;
+      if (!extendsClassName.empty() &&
+          !classname_contains_wildcard(extendsClassName)) {
+        DexClass* super = find_single_class(extendsClassName);
+        if (super != nullptr) {
+          KeepRuleMatcher rule_matcher(rule_type, keep_rule, regex_map);
+          auto children = get_all_children(m_hierarchy, super->get_type());
+          process_single_keep(class_match, rule_matcher, super);
+          for (auto const* type : children) {
+            process_single_keep(class_match, rule_matcher, type_class(type));
+          }
+          if (rule_matcher.is_unused()) {
+            m_unused_rules.insert(&keep_rule);
+          }
+        }
+        continue;
+      }
     }
 
     TRACE(PGR, 2, "Slow rule: %s", show_keep(keep_rule).c_str());
@@ -943,5 +955,14 @@ ConcurrentSet<const KeepSpec*> process_proguard_rules(
   }
   return pg_matcher.get_unused_rules();
 }
+
+namespace testing {
+
+bool matches(const KeepSpec& ks, const DexClass* c) {
+  ClassMatcher cm{ks};
+  return cm.match(c);
+}
+
+} // namespace testing
 
 } // namespace keep_rules

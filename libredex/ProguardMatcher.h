@@ -21,4 +21,12 @@ ConcurrentSet<const KeepSpec*> process_proguard_rules(
     const Scope& external_classes,
     const ProguardConfiguration& pg_config,
     bool keep_all_annotation_classes);
+
+// Exposed for testing purposes.
+namespace testing {
+
+bool matches(const KeepSpec& ks, const DexClass* c);
+
+} // namespace testing
+
 } // namespace keep_rules
