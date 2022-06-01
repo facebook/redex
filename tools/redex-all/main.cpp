@@ -885,7 +885,26 @@ void redex_frontend(ConfigFiles& conf, /* input */
     Timer time_pg_parsing("Parsed ProGuard config file");
     keep_rules::proguard_parser::parse_file(pg_config_path, &pg_config);
   }
-  keep_rules::proguard_parser::remove_blocklisted_rules(&pg_config);
+
+  size_t blocklisted_rules{0};
+  {
+    // We cannot use GlobalConfig here, it is too early.
+    ProguardConfig pg_conf{};
+    if (conf.get_json_config().contains("proguard")) {
+      pg_conf.parse_config(
+          JsonWrapper(conf.get_json_config().get("proguard", Json::Value())));
+    }
+    for (const auto& block_rules : pg_conf.blocklist) {
+      blocklisted_rules +=
+          keep_rules::proguard_parser::remove_blocklisted_rules(block_rules,
+                                                                &pg_config);
+    }
+    if (!pg_conf.disable_default_blocklist) {
+      blocklisted_rules +=
+          keep_rules::proguard_parser::remove_default_blocklisted_rules(
+              &pg_config);
+    }
+  }
 
   const auto& pg_libs = pg_config.libraryjars;
   args.jar_paths.insert(pg_libs.begin(), pg_libs.end());

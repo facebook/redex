@@ -76,6 +76,12 @@ void MethodProfileOrderingConfig::bind_config() {
   bind("min_appear_percent", min_appear_percent, min_appear_percent);
 }
 
+void ProguardConfig::bind_config() {
+  bind("blocklist", blocklist, blocklist);
+  bind("disable_default_blocklist", disable_default_blocklist,
+       disable_default_blocklist);
+}
+
 void GlobalConfig::bind_config() {
   bool bool_param;
   std::string string_param;
@@ -159,6 +165,7 @@ GlobalConfigRegistry& GlobalConfig::default_registry() {
           "check_unique_deobfuscated_names"),
       register_as<OptDecisionsConfig>("opt_decisions"),
       register_as<MethodProfileOrderingConfig>("method_profile_order"),
+      register_as<ProguardConfig>("proguard"),
   };
   return registry;
 }
