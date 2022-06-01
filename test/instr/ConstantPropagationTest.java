@@ -413,17 +413,19 @@ public class ConstantPropagationTest {
   @Test
   public void if_div_by_zero() {
     int x = one();
+    int y = 0;
     int z = 3;
     try {
       if (x == 1) {
         // PRECHECK: div-int/2addr {{.*}}
         // POSTCHECK: div-int/2addr {{.*}}
-        int y = x / 0;
+        y = x / 0;
         z = 0;
       }
     } catch (Exception e) {
       z = 1;
     }
+    assertThat(y).isEqualTo(0);
     assertThat(z).isEqualTo(1);
     // CHECK: return-void
   }
