@@ -316,6 +316,7 @@ proguard_map_test_SOURCES = ProguardMapTest.cpp
 proguard_map_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 proguard_parser_test_SOURCES = ProguardParserTest.cpp
+proguard_parser_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 proguard_regex_test_SOURCES = ProguardRegexTest.cpp
 

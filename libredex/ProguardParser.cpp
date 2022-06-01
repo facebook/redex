@@ -656,6 +656,42 @@ bool member_comparison(const MemberSpecification& m1,
   return m1.name < m2.name;
 }
 
+std::string parse_class_name(std::vector<Token>::iterator* it, bool* ok) {
+  if ((*it)->type != TokenType::identifier) {
+    std::cerr << "Expected class name but got " << (*it)->show() << " at line "
+              << (*it)->line << std::endl;
+    *ok = false;
+    return "";
+  }
+  auto name = (*it)->data.to_string();
+  ++(*it);
+  return name;
+}
+
+std::vector<std::string> parse_class_names(std::vector<Token>::iterator* it, bool* ok) {
+  std::vector<std::string> class_names;
+
+  auto class_name = parse_class_name(it, ok);
+  if (!*ok) {
+    return class_names;
+  }
+  class_names.push_back(class_name);
+
+  // Maybe consume comma delimited list
+  while ((*it)->type == TokenType::comma) {
+    // Consume comma
+    ++(*it);
+
+    class_name = parse_class_name(it, ok);
+    if (!*ok) {
+      return class_names;
+    }
+    class_names.push_back(class_name);
+  }
+  return class_names;
+}
+
+
 ClassSpecification parse_class_specification(std::vector<Token>::iterator* it,
                                              bool* ok) {
   ClassSpecification class_spec;
@@ -674,15 +710,11 @@ ClassSpecification parse_class_specification(std::vector<Token>::iterator* it,
     *ok = false;
     return class_spec;
   }
-  // Parse the class name.
-  if ((*it)->type != TokenType::identifier) {
-    std::cerr << "Expected class name but got " << (*it)->show() << " at line "
-              << (*it)->line << std::endl;
-    *ok = false;
+  // Parse the class name(s).
+  class_spec.classNames = parse_class_names(it, ok);
+  if (!*ok) {
     return class_spec;
   }
-  class_spec.className = (*it)->data.to_string();
-  ++(*it);
   // Parse extends/implements if present, treating implements like extends.
   if (((*it)->type == TokenType::extends) ||
       ((*it)->type == TokenType::implements)) {

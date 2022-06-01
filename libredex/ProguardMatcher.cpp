@@ -42,6 +42,16 @@ std::unique_ptr<boost::regex> make_rx(const std::string& s,
   return std::make_unique<boost::regex>(rx);
 }
 
+std::vector<std::unique_ptr<boost::regex>> make_rxs(
+    const std::vector<std::string>& strs) {
+  std::vector<std::unique_ptr<boost::regex>> rxs;
+  rxs.reserve(strs.size());
+  for (const auto& str : strs) {
+    rxs.push_back(make_rx(str));
+  }
+  return rxs;
+}
+
 std::string get_deobfuscated_name(const DexType* type) {
   auto cls = type_class(type);
   if (cls == nullptr) {
@@ -69,35 +79,43 @@ struct ClassMatcher {
   explicit ClassMatcher(const KeepSpec& ks)
       : setFlags_(ks.class_spec.setAccessFlags),
         unsetFlags_(ks.class_spec.unsetAccessFlags),
-        m_class_name(ks.class_spec.className),
-        m_cls(make_rx(ks.class_spec.className)),
+        m_class_names(ks.class_spec.classNames),
+        m_cls(make_rxs(ks.class_spec.classNames)),
         m_anno(make_rx(ks.class_spec.annotationType, false)),
         m_extends(make_rx(ks.class_spec.extendsClassName)),
         m_extends_anno(make_rx(ks.class_spec.extendsAnnotationType, false)) {}
 
   bool match(const DexClass* cls) {
-    // Check for class name match
-    // `match_name` is really slow; let's short-circuit it for wildcard-only
-    // matches
-    if (m_class_name != "*" && m_class_name != "**" && !match_name(cls)) {
-      return false;
+    for (std::size_t i = 0; i < m_class_names.size(); i++) {
+      auto class_name = m_class_names[i];
+      // Check for class name match
+      // `match_name` is really slow; let's short-circuit it for wildcard-only
+      // matches
+      if (class_name != "*" && class_name != "**" && !match_name(cls, i)) {
+        continue;
+      }
+      // Check for access match
+      if (!match_access(cls)) {
+        continue;
+      }
+      // Check to see if an annotation guard needs to be matched.
+      if (!match_annotation(cls)) {
+        continue;
+      }
+      // Check to see if an extends clause needs to be matched.
+      if (!match_extends(cls)) {
+        continue;
+      }
+      return true;
     }
-    // Check for access match
-    if (!match_access(cls)) {
-      return false;
-    }
-    // Check to see if an annotation guard needs to be matched.
-    if (!match_annotation(cls)) {
-      return false;
-    }
-    // Check to see if an extends clause needs to be matched.
-    return match_extends(cls);
+    return false;
   }
 
  private:
-  bool match_name(const DexClass* cls) const {
+  bool match_name(const DexClass* cls, int index) const {
     const auto& deob_name = cls->get_deobfuscated_name();
-    return boost::regex_match(deob_name, *m_cls);
+    auto rx = *m_cls[index];
+    return boost::regex_match(deob_name, rx);
   }
 
   bool match_access(const DexClass* cls) const {
@@ -171,8 +189,8 @@ struct ClassMatcher {
 
   DexAccessFlags setFlags_;
   DexAccessFlags unsetFlags_;
-  std::string m_class_name;
-  std::unique_ptr<boost::regex> m_cls;
+  std::vector<std::string> m_class_names;
+  std::vector<std::unique_ptr<boost::regex>> m_cls;
   std::unique_ptr<boost::regex> m_anno;
   std::unique_ptr<boost::regex> m_extends;
   std::unique_ptr<boost::regex> m_extends_anno;
@@ -646,7 +664,7 @@ bool KeepRuleMatcher::process_mark_conditionally(const DexClass* cls) {
   if (class_spec.fieldSpecifications.empty() &&
       class_spec.methodSpecifications.empty()) {
     std::cerr << "WARNING: A keepclasseswithmembers rule for class "
-              << class_spec.className
+              << class_spec.class_names_str()
               << " has no field or member specifications.\n";
   }
   return all_field_keeps_match(class_spec.fieldSpecifications, cls) &&
@@ -837,14 +855,20 @@ void ProguardMatcher::process_keep(const KeepSpecSet& keep_rules,
     ClassMatcher class_match(keep_rule);
 
     // This case is very fast. Just process it immediately in the main thread.
-    const auto& className = keep_rule.class_spec.className;
-    if (!classname_contains_wildcard(className)) {
-      DexClass* cls = find_single_class(className);
-      KeepRuleMatcher rule_matcher(rule_type, keep_rule, regex_map);
-      process_single_keep(class_match, rule_matcher, cls);
-      if (rule_matcher.is_unused()) {
-        m_unused_rules.insert(&keep_rule);
+    bool class_with_wildcard = false;
+    for (const auto& className : keep_rule.class_spec.classNames) {
+      if (!classname_contains_wildcard(className)) {
+        DexClass* cls = find_single_class(className);
+        KeepRuleMatcher rule_matcher(rule_type, keep_rule, regex_map);
+        process_single_keep(class_match, rule_matcher, cls);
+        if (rule_matcher.is_unused()) {
+          m_unused_rules.insert(&keep_rule);
+        }
+      } else {
+        class_with_wildcard = true;
       }
+    }
+    if (!class_with_wildcard) {
       continue;
     }
 
