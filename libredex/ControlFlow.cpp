@@ -2091,61 +2091,6 @@ Block* ControlFlowGraph::duplicate_block(Block* original) {
   return copy;
 }
 
-// We create a small class here (instead of a recursive lambda) so we can
-// label visit with NO_SANITIZE_ADDRESS
-class ExitBlocks {
- private:
-  uint32_t next_dfn{0};
-  std::stack<const Block*> stack;
-  // Depth-first number. Special values:
-  //   0 - unvisited
-  //   UINT32_MAX - visited and determined to be in a separate SCC
-  std::unordered_map<const Block*, uint32_t> dfns;
-  static constexpr uint32_t VISITED = std::numeric_limits<uint32_t>::max();
-  // This is basically Tarjan's algorithm for finding SCCs. I pass around an
-  // extra has_exit value to determine if a given SCC has any successors.
-  using t = std::pair<uint32_t, bool>;
-
- public:
-  std::vector<Block*> exit_blocks;
-
-  NO_SANITIZE_ADDRESS // because of deep recursion. ASAN uses too much memory.
-      t
-      visit(const Block* b) {
-    stack.push(b);
-    uint32_t head = dfns[b] = ++next_dfn;
-    // whether any vertex in the current SCC has a successor edge that points
-    // outside itself
-    bool has_exit{false};
-    for (auto& succ : b->succs()) {
-      uint32_t succ_dfn = dfns[succ->target()];
-      uint32_t min;
-      if (succ_dfn == 0) {
-        bool succ_has_exit;
-        std::tie(min, succ_has_exit) = visit(succ->target());
-        has_exit |= succ_has_exit;
-      } else {
-        has_exit |= succ_dfn == VISITED;
-        min = succ_dfn;
-      }
-      head = std::min(min, head);
-    }
-    if (head == dfns[b]) {
-      const Block* top{nullptr};
-      if (!has_exit) {
-        exit_blocks.push_back(const_cast<Block*>(b));
-        has_exit = true;
-      }
-      do {
-        top = stack.top();
-        stack.pop();
-        dfns[top] = VISITED;
-      } while (top != b);
-    }
-    return t(head, has_exit);
-  }
-};
-
 std::vector<Block*> ControlFlowGraph::real_exit_blocks(
     bool include_infinite_loops) {
   std::vector<Block*> result;
@@ -2204,13 +2149,111 @@ void ControlFlowGraph::calculate_exit_block() {
     return;
   }
   always_assert(m_exit_block == nullptr);
-  ExitBlocks eb;
-  eb.visit(entry_block());
-  if (eb.exit_blocks.size() == 1) {
-    m_exit_block = eb.exit_blocks[0];
+
+  // The below code is iterative implementation of the
+  // Tarjan algorithm for finding SCCs.
+
+  uint32_t next_dfn{0};
+  std::stack<const Block*> stack;
+
+  // Depth-first number. Special values:
+  //   0 - unvisited
+  //   UINT32_MAX - visited and determined to be in a separate SCC
+  std::unordered_map<const Block*, uint32_t> dfns;
+  static constexpr uint32_t VISITED = std::numeric_limits<uint32_t>::max();
+
+  auto collectExitBlocks = [&](Block* b) -> std::vector<Block*> {
+    // This class stores the algorithm state between iterations.
+    // Stack is used to push such objects in order to implement
+    // algorithm iteratively.
+    struct State {
+      const Block* b{nullptr};
+      const std::vector<Edge*>& succs;
+      uint32_t element{0};
+      uint32_t head{0};
+      bool has_exit{false};
+    };
+
+    stack.push(b);
+
+    uint32_t head = dfns[b] = ++next_dfn;
+    // The head member (initialized with next_dfn tell us whether any
+    // vertex in the current SCC has a successor edge that points
+    // outside itself. reffer to the Tarjan algorithm for explanation.
+    std::stack<State> state_stack;
+    State new_state{b, b->succs(), 0, head};
+    state_stack.push(new_state);
+    std::vector<Block*> exit_blocks;
+
+  continue_while:
+    while (!state_stack.empty()) {
+      State& top_state = state_stack.top();
+      for (uint32_t i = top_state.element; i < top_state.succs.size(); i++) {
+        Edge* e = top_state.succs[i];
+        uint32_t& succ_dfn = dfns[e->target()];
+        uint32_t min{std::numeric_limits<uint32_t>::max()};
+        if (succ_dfn == 0) {
+          stack.push(e->target());
+
+          succ_dfn = ++next_dfn;
+          State succState{e->target(), e->target()->succs(), 0, succ_dfn};
+          top_state.element = i + 1;
+          state_stack.push(succState);
+          goto continue_while; // Recurse into the next child.
+        }
+
+        // Done recursing all the children
+        top_state.has_exit |= succ_dfn == VISITED;
+        min = succ_dfn;
+        top_state.head = std::min(min, top_state.head);
+      }
+      if (top_state.head == dfns[top_state.b]) {
+        const Block* top{nullptr};
+        if (!top_state.has_exit) {
+          exit_blocks.push_back(const_cast<Block*>(top_state.b));
+          top_state.has_exit = true;
+        }
+        do {
+          top = stack.top();
+          stack.pop();
+          dfns[top] = VISITED;
+        } while (top != top_state.b);
+      }
+
+      // Save this "recursive call's" (from the recursive Tarjan
+      // algorithm) state into local vars.
+      uint32_t succ_head = top_state.head;
+      uint32_t succ_has_exit = top_state.has_exit;
+
+      // Pops a state in essence ending a recursive call in the
+      // recursive Tarjan algrithm.
+      state_stack.pop();
+      // Now the topState is invalid.
+
+      // After unwinding one of the recursive calls (see the recursive Tarjan
+      // algorithm) and we have not unwinded the full recursion update the
+      // "current recursive state" with data from the previous "recursion". The
+      // recursion state is the original recursive Tarjan algorithm. The State
+      // struct keeps the recursive local state, so it can be implemented
+      // iteratively.
+      if (!state_stack.empty()) {
+        State& parent_top_state = state_stack.top();
+        parent_top_state.head = std::min(parent_top_state.head, succ_head);
+        parent_top_state.has_exit |= succ_has_exit;
+      }
+      // This is the end of a recursive call from the original algorithm.
+    }
+
+    return exit_blocks;
+  };
+
+  std::vector<Block*> exit_blocks = collectExitBlocks(entry_block());
+
+  if (exit_blocks.size() == 1) {
+    m_exit_block = exit_blocks[0];
   } else {
     m_exit_block = create_block();
-    for (Block* b : eb.exit_blocks) {
+    for (Block* b : exit_blocks) {
       add_edge(b, m_exit_block, EDGE_GHOST);
     }
   }
