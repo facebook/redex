@@ -372,7 +372,7 @@ TEST_F(RegAllocTest, NoOverlapWideSrcs) {
     )
 )");
   method->get_code()->set_registers_size(4);
-
+  method->get_code()->build_cfg();
   graph_coloring::Allocator::Config config;
   graph_coloring::allocate(config, method);
 
@@ -386,6 +386,7 @@ TEST_F(RegAllocTest, NoOverlapWideSrcs) {
     )
 )");
 
+  method->get_code()->clear_cfg();
   EXPECT_CODE_EQ(expected_code.get(), method->get_code());
 }
 
@@ -892,7 +893,7 @@ TEST_F(RegAllocTest, NoOverwriteThis) {
     )
 )");
   method->get_code()->set_registers_size(2);
-
+  method->get_code()->build_cfg();
   graph_coloring::Allocator::Config config;
   config.no_overwrite_this = true;
   graph_coloring::allocate(config, method);
@@ -909,5 +910,6 @@ TEST_F(RegAllocTest, NoOverwriteThis) {
      (return-object v0)
     )
 )");
+  method->get_code()->clear_cfg();
   EXPECT_CODE_EQ(expected_code.get(), method->get_code());
 }

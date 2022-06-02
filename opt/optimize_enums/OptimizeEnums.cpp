@@ -1008,21 +1008,12 @@ void OptimizeEnumsPass::bind_config() {
 void OptimizeEnumsPass::run_pass(DexStoresVector& stores,
                                  ConfigFiles& conf,
                                  PassManager& mgr) {
-  // Build all the CFGs.
-  auto scope = build_class_scope(stores);
-  walk::parallel::code(scope,
-                       [&](DexMethod*, IRCode& code) { code.build_cfg(); });
   OptimizeEnums opt_enums(stores, conf);
   opt_enums.remove_redundant_generated_classes();
   opt_enums.replace_enum_with_int(m_max_enum_size, m_skip_sanity_check,
                                   m_enum_to_integer_allowlist);
   opt_enums.remove_enum_generated_methods();
   opt_enums.stats(mgr);
-
-  // Clear all the CFGs.
-  scope = build_class_scope(stores);
-  walk::parallel::code(scope,
-                       [&](DexMethod*, IRCode& code) { code.clear_cfg(); });
 }
 
 static OptimizeEnumsPass s_pass;
