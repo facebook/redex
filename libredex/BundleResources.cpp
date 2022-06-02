@@ -1025,6 +1025,13 @@ size_t ResourcesPbFile::obfuscate_resource_and_serialize(
   return num_changed;
 }
 
+void ResourcesPbFile::remap_reorder_and_serialize(
+    const std::vector<std::string>& resource_files,
+    const std::map<uint32_t, uint32_t>& old_to_new) {
+  // This actually has identical implementation for .pb files.
+  remap_res_ids_and_serialize(resource_files, old_to_new);
+}
+
 namespace {
 
 std::string module_name_from_pb_path(const std::string& resources_pb_path) {
