@@ -612,6 +612,26 @@ class ClassSplittingImpl {
                         }) == m_config.blocklist_types.end();
   }
 
+  bool has_unresolvable_or_external_field_ref(const DexMethod* m) {
+    auto code = m->get_code();
+    always_assert(code);
+    for (const auto& mie : InstructionIterable(code)) {
+      auto insn = mie.insn;
+      if (insn->has_field()) {
+        auto field = resolve_field(insn->get_field(),
+                                   opcode::is_an_sfield_op(insn->opcode())
+                                       ? FieldSearch::Static
+                                       : FieldSearch::Instance);
+
+        if (!field || (!is_public(field) && field->is_external())) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
   bool can_relocate(bool cls_has_problematic_clinit,
                     const DexMethod* m,
                     bool log,
@@ -647,6 +667,13 @@ class ClassSplittingImpl {
       return false;
     }
     if (!get_visibility_changes(m).empty()) {
+      if (log) {
+        m_mgr.incr_metric(
+            "num_class_splitting_limitation_cannot_change_visibility", 1);
+      }
+      return false;
+    }
+    if (has_unresolvable_or_external_field_ref(m)) {
       if (log) {
         m_mgr.incr_metric(
             "num_class_splitting_limitation_cannot_change_visibility", 1);
