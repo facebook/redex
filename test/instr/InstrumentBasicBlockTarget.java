@@ -7,8 +7,12 @@
 
 package com.facebook.redextest;
 
+
+import static org.fest.assertions.api.Assertions.assertThat;
+
 import java.io.*;
 import java.util.*;
+import org.junit.Test;
 
 import com.facebook.proguard.annotations.DoNotStrip;
 
@@ -37,34 +41,37 @@ public class InstrumentBasicBlockTarget {
   }
 
   @DoNotStrip
+  @SuppressWarnings({"EmptyCatchBlock", "CatchGeneralException"})
   public static int testFunc4(int a, int b) {
-    Random rand = new Random();
     try {
       int[] arr = new int[10];
       arr[10] = a;
     } catch (Exception e) {
-      throw e;
+       throw e;
     }
-    return (rand.nextInt(a) % 2);
+    return (b % 2);
   }
 
   @DoNotStrip
-  public static void testFunc5(int flag) {
-    Random rand = new Random();
-    int temp_var = rand.nextInt(10);
+  public static int testFunc5(int flag, int temp_var) {
+    int z = 0;
     if (flag != 0) {
       System.out.println("It's True!!");
+      z += 1;
       if (temp_var > 4) {
         System.out.println("Greater than 4");
+        z += 1;
       } else {
         System.out.println("Couldnt make it to 4!, early return");
-        return;
+        z -= 1;
+        return z;
       }
     } else {
       System.out.println("Not True :(");
+      z -= 1;
     }
     System.out.println("After Test: " + temp_var);
-    InstrumentBasicBlockTarget.testFunc1(2);
+    return z;
   }
 
   @DoNotStrip
@@ -105,6 +112,7 @@ public class InstrumentBasicBlockTarget {
       }
     } catch (ArrayIndexOutOfBoundsException e) {
       System.out.println("ArrayIndexOutOfBoundsException");
+      return 7;
     } catch (ArithmeticException e) {
       System.out.println("ArithmeticException");
       return 13;
@@ -241,9 +249,71 @@ public class InstrumentBasicBlockTarget {
     }
   }
 
+  @Test
   @DoNotStrip
-  public static void main(String args[]) {
-    Random rand = new Random();
-    System.out.println(testFunc9(rand.nextInt(100)));
+  public void test1() {
+    assertThat(testFunc1(0)).isEqualTo(42);
+  }
+
+  @Test
+  @DoNotStrip
+  public void test2() {
+    assertThat(testFunc2(21,7)).isEqualTo(3);
+  }
+
+  @Test
+  @DoNotStrip
+  public void test3() {
+    assertThat(testFunc3(8,9)).isEqualTo(9);
+  }
+
+  @Test
+  @DoNotStrip
+  @SuppressWarnings("CatchGeneralException")
+  public void test4() {
+    boolean thrown = false;
+    try {
+      testFunc4(10,16);
+    } catch (Exception e) {
+      System.out.println("Exeception Thrown");
+      thrown = true;
+    }
+    assertThat(thrown).isTrue();
+  }
+
+  @Test
+  @DoNotStrip
+  public void test5() {
+    assertThat(testFunc5(0,1)).isEqualTo(-1);
+  }
+
+  @Test
+  @DoNotStrip
+  public void test6() {
+    assertThat(testFunc6(9,1)).isEqualTo(9);
+  }
+
+  @Test
+  @DoNotStrip
+  public void test7() {
+    assertThat(testFunc7(8,2)).isEqualTo(4);
+  }
+
+  @Test
+  @DoNotStrip
+  public void test8() {
+    assertThat(testFunc8(5,2,8)).isEqualTo(7);
+  }
+
+  @Test
+  @DoNotStrip
+  public void test9() {
+    assertThat(testFunc9(16)).isEqualTo("purge");
+  }
+
+  @Test
+  @DoNotStrip
+  public void test10() {
+    assertThat(testFunc10()).isFalse();
   }
 }
