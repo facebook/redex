@@ -54,7 +54,9 @@ class IODIMetadata {
   // Android builds with min_sdk >= 26 don't need IODI to emit debug info
   explicit IODIMetadata(uint32_t min_sdk,
                         IODILayerMode layer_mode = IODILayerMode::kFull)
-      : min_sdk{min_sdk}, layer_mode{layer_mode} {}
+      : min_sdk{min_sdk} {
+    this->layer_mode = min_sdk <= 19 ? IODILayerMode::kFull : layer_mode;
+  }
 
   // This fills the internal map of stack trace name -> method. This must be
   // called after the last pass and before anything starts to get lowered.
