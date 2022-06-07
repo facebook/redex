@@ -19,12 +19,12 @@ import com.facebook.proguard.annotations.DoNotStrip;
 @DoNotStrip
 public class InstrumentBasicBlockTarget {
   @DoNotStrip
-  public static int testFunc1(int foo) {
+  public static int testFunc01(int foo) {
     return 42;
   }
 
   @DoNotStrip
-  public static int testFunc2(int a, int b) {
+  public static int testFunc02(int a, int b) {
     if (a > 0) {
       return a / b;
     } else {
@@ -33,7 +33,7 @@ public class InstrumentBasicBlockTarget {
   }
 
   @DoNotStrip
-  public static int testFunc3(int a, int b) {
+  public static int testFunc03(int a, int b) {
     if (a > 0) {
       a++;
     }
@@ -42,7 +42,7 @@ public class InstrumentBasicBlockTarget {
 
   @DoNotStrip
   @SuppressWarnings({"EmptyCatchBlock", "CatchGeneralException"})
-  public static int testFunc4(int a, int b) {
+  public static int testFunc04(int a, int b) {
     try {
       int[] arr = new int[10];
       arr[10] = a;
@@ -53,7 +53,7 @@ public class InstrumentBasicBlockTarget {
   }
 
   @DoNotStrip
-  public static int testFunc5(int flag, int temp_var) {
+  public static int testFunc05(int flag, int temp_var) {
     int z = 0;
     if (flag != 0) {
       System.out.println("It's True!!");
@@ -75,7 +75,7 @@ public class InstrumentBasicBlockTarget {
   }
 
   @DoNotStrip
-  public static int testFunc6(int a, int b) {
+  public static int testFunc06(int a, int b) {
     try {
       return a / b;
     } catch (ArithmeticException e) {
@@ -85,7 +85,7 @@ public class InstrumentBasicBlockTarget {
   }
 
   @DoNotStrip
-  public static int testFunc7(int a, int b) {
+  public static int testFunc07(int a, int b) {
     if (a % 2 == 0) {
       try {
         return a / b;
@@ -102,7 +102,7 @@ public class InstrumentBasicBlockTarget {
   }
 
   @DoNotStrip
-  public static int testFunc8(int size, int index, int num) {
+  public static int testFunc08(int size, int index, int num) {
     try {
       int[] arr = new int[size];
       arr[index] = num / index;
@@ -125,7 +125,7 @@ public class InstrumentBasicBlockTarget {
 
   // This is added to test cases with more than 16 basic blocks.
   @DoNotStrip
-  public static String testFunc9(int test_var) {
+  public static String testFunc09(int test_var) {
     if (test_var < 0) {
       test_var = test_var * -1;
     }
@@ -251,29 +251,29 @@ public class InstrumentBasicBlockTarget {
 
   @Test
   @DoNotStrip
-  public void test1() {
-    assertThat(testFunc1(0)).isEqualTo(42);
+  public void test01() {
+    assertThat(testFunc01(0)).isEqualTo(42);
   }
 
   @Test
   @DoNotStrip
-  public void test2() {
-    assertThat(testFunc2(21,7)).isEqualTo(3);
+  public void test02() {
+    assertThat(testFunc02(21,7)).isEqualTo(3);
   }
 
   @Test
   @DoNotStrip
-  public void test3() {
-    assertThat(testFunc3(8,9)).isEqualTo(9);
+  public void test03() {
+    assertThat(testFunc03(8,9)).isEqualTo(9);
   }
 
   @Test
   @DoNotStrip
   @SuppressWarnings("CatchGeneralException")
-  public void test4() {
+  public void test04() {
     boolean thrown = false;
     try {
-      testFunc4(10,16);
+      testFunc04(10,16);
     } catch (Exception e) {
       System.out.println("Exeception Thrown");
       thrown = true;
@@ -283,32 +283,32 @@ public class InstrumentBasicBlockTarget {
 
   @Test
   @DoNotStrip
-  public void test5() {
-    assertThat(testFunc5(0,1)).isEqualTo(-1);
+  public void test05() {
+    assertThat(testFunc05(0,1)).isEqualTo(-1);
   }
 
   @Test
   @DoNotStrip
-  public void test6() {
-    assertThat(testFunc6(9,1)).isEqualTo(9);
+  public void test06() {
+    assertThat(testFunc06(9,1)).isEqualTo(9);
   }
 
   @Test
   @DoNotStrip
-  public void test7() {
-    assertThat(testFunc7(8,2)).isEqualTo(4);
+  public void test07() {
+    assertThat(testFunc07(8,2)).isEqualTo(4);
   }
 
   @Test
   @DoNotStrip
-  public void test8() {
-    assertThat(testFunc8(5,2,8)).isEqualTo(7);
+  public void test08() {
+    assertThat(testFunc08(5,2,8)).isEqualTo(7);
   }
 
   @Test
   @DoNotStrip
-  public void test9() {
-    assertThat(testFunc9(16)).isEqualTo("purge");
+  public void test09() {
+    assertThat(testFunc09(16)).isEqualTo("purge");
   }
 
   @Test
