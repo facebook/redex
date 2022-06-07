@@ -28,6 +28,7 @@ enum class PerfSensitivity : char {
 
 struct ProfileGuidanceConfig {
   bool use_method_profiles{true};
+  bool enable_hotness_propagation{false};
   float method_profiles_appear_percent{1};
   float method_profiles_hot_call_count{10};
   float method_profiles_warm_call_count{1};
