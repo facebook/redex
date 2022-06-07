@@ -3008,6 +3008,10 @@ void InstructionSequenceOutliner::bind_config() {
   bind("use_method_profiles", pg.use_method_profiles, pg.use_method_profiles,
        "Whether to use provided method-profiles configuration data to "
        "determine if certain code should not be outlined from a method");
+  bind("enable_hotness_propagation", pg.enable_hotness_propagation,
+       pg.enable_hotness_propagation,
+       "Whether to propagate method hotness (and warmness) to cold callees "
+       "if the call site blocks were executed.");
   bind("method_profiles_appear_percent",
        pg.method_profiles_appear_percent,
        pg.method_profiles_appear_percent,

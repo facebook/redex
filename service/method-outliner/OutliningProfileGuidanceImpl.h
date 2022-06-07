@@ -46,6 +46,13 @@ void gather_sufficiently_warm_and_hot_methods(
     std::unordered_set<DexMethod*>* sufficiently_warm_methods,
     std::unordered_set<DexMethod*>* sufficiently_hot_methods);
 
+void propagate_hotness(
+    const Scope& scope,
+    ConfigFiles& config_files,
+    std::unordered_set<DexMethod*>* sufficiently_warm_methods,
+    std::unordered_set<DexMethod*>* sufficiently_hot_methods,
+    float block_profiles_hits);
+
 outliner::PerfSensitivity parse_perf_sensitivity(const std::string& str);
 
 class CanOutlineBlockDecider {

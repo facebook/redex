@@ -7,9 +7,13 @@
 
 #include "OutliningProfileGuidanceImpl.h"
 
+#include "CallGraph.h"
 #include "ConfigFiles.h"
+#include "MethodOverrideGraph.h"
 #include "MethodProfiles.h"
 #include "PassManager.h"
+#include "ScopedCFG.h"
+#include "Show.h"
 #include "SourceBlocks.h"
 #include "Walkers.h"
 
@@ -32,10 +36,8 @@ void gather_sufficiently_warm_and_hot_methods(
       for (auto& p : method_profiles.all_interactions()) {
         auto& method_stats = p.second;
         walk::methods(scope,
-                      [sufficiently_warm_methods,
-                       sufficiently_hot_methods,
-                       &method_stats,
-                       &config](DexMethod* method) {
+                      [sufficiently_warm_methods, sufficiently_hot_methods,
+                       &method_stats, &config](DexMethod* method) {
                         auto it = method_stats.find(method);
                         if (it == method_stats.end()) {
                           return;
@@ -105,6 +107,221 @@ void gather_sufficiently_warm_and_hot_methods(
         });
     break;
   }
+
+  if (has_method_profiles && config.enable_hotness_propagation) {
+    propagate_hotness(scope,
+                      config_files,
+                      sufficiently_warm_methods,
+                      sufficiently_hot_methods,
+                      config.block_profiles_hits);
+  }
+}
+
+std::vector<DexMethod*> get_possibly_warm_or_hot_methods(
+    const Scope& scope,
+    ConfigFiles& config_files,
+    std::unordered_set<DexMethod*>* sufficiently_warm_methods,
+    std::unordered_set<DexMethod*>* sufficiently_hot_methods,
+    float block_profiles_hits) {
+
+  // This function will identify all methods, m, which were not called
+  // according to method profiles, but whose entry blocks were executed
+  // according to block profiles (i.e. with first source blocks in their entry
+  // blocks which were executed).
+  //
+  // This scenario likely occurs due to inlining later on. Note that we track
+  // method call counts for physical methods in the emitted dex, but block
+  // coverage for blocks in pre-optimized input IR (i.e. "source blocks").
+  //
+  // We consider these methods "possibly warm or hot". Later, we may mark them
+  // warm or hot if they have a caller which is warm or hot respectively.
+
+  auto& method_profiles = config_files.get_method_profiles();
+
+  struct plus_assign_vector {
+    void operator()(const std::vector<DexMethod*>& addend,
+                    std::vector<DexMethod*>* accumulator) {
+      accumulator->insert(accumulator->end(), addend.begin(), addend.end());
+    }
+  };
+
+  std::vector<DexMethod*> possibly_warm_or_hot =
+      walk::parallel::methods<std::vector<DexMethod*>, plus_assign_vector>(
+          scope,
+          [&method_profiles, sufficiently_hot_methods,
+           sufficiently_warm_methods,
+           block_profiles_hits](DexMethod* m, std::vector<DexMethod*>* acc) {
+            auto code = m->get_code();
+            if (!code) {
+              return;
+            }
+
+            if (sufficiently_hot_methods->count(m) ||
+                sufficiently_warm_methods->count(m)) {
+              return;
+            }
+
+            const auto& all_interactions = method_profiles.all_interactions();
+            bool in_method_profiles =
+                std::any_of(all_interactions.begin(), all_interactions.end(),
+                            [m](const auto& p) {
+                              auto& method_stats = p.second;
+                              auto it = method_stats.find(m);
+                              return it != method_stats.end();
+                            });
+
+            if (in_method_profiles) {
+              return;
+            }
+
+            // This method was not warm or hot, and was not called
+            // according to method profiles.  See if its entry block
+            // has source blocks which were executed.
+            //
+            // Note: from now on we can just return and process the
+            // next method on success/failure, as there's no point
+            // checking the same fixed condition for other
+            // interactions.
+            cfg::ScopedCFG scopedCFG(code);
+            auto& cfg = code->cfg();
+            auto entry_block = cfg.entry_block();
+            auto entry_sb = source_blocks::get_first_source_block(entry_block);
+            if (!entry_sb) {
+              return;
+            }
+
+            bool entry_hit = false;
+            entry_sb->foreach_val([&entry_hit,
+                                   block_profiles_hits](const auto& val_pair) {
+              entry_hit |= (val_pair && val_pair->val > block_profiles_hits);
+            });
+
+            if (!entry_hit) {
+              return;
+            }
+
+            acc->push_back(m);
+          });
+
+  return possibly_warm_or_hot;
+}
+
+void mark_callees_warm_or_hot(
+    const Scope& scope,
+    std::vector<DexMethod*>& possibly_warm_or_hot,
+    std::unordered_set<DexMethod*>* sufficiently_warm_methods,
+    std::unordered_set<DexMethod*>* sufficiently_hot_methods) {
+  // This function will mark methods from the possibly_warm_or_hot list hot or
+  // warm if they have a caller which was warm or hot. Note that if a method
+  // had a hot and a warm caller, it will be considered hot.
+  //
+  // Since possibly warm or hot methods could be called by other possibly hot
+  // or warm methods, the code also iterates until a fixpoint is hit.
+  //
+  // NOTE: A refinement to this would be to check if the callsite blocks were
+  // executed. This isn't done yet, as getting the cfg::Block from an Edge in
+  // the call graph isn't straightforward at present.
+
+  auto mog = method_override_graph::build_graph(scope);
+  call_graph::Graph cg = call_graph::multiple_callee_graph(*mog, scope, 5);
+
+  // Defensively include a max iterations count, to avoid infinite loops if
+  // there are bugs in this code.
+  constexpr size_t max_iterations = 1000;
+  size_t num_iterations = 0;
+  size_t num_new_hot = 0;
+  bool changed = true;
+  while (changed && num_iterations < max_iterations) {
+    num_iterations++;
+    changed = false;
+
+    for (auto it = possibly_warm_or_hot.begin();
+         it != possibly_warm_or_hot.end();) {
+      DexMethod* m = *it;
+
+      if (!cg.has_node(m)) {
+        it = possibly_warm_or_hot.erase(it);
+        continue;
+      }
+
+      bool curr_is_warm = sufficiently_warm_methods->count(m);
+
+      bool erase_elem = false;
+
+      auto node = cg.node(m);
+      const auto& callerEdges = node->callers();
+      for (const auto& callerEdge : callerEdges) {
+        auto callerNode = callerEdge->caller();
+        // call_graph::Node probably should not be holding a const DexMethod*
+        auto caller = const_cast<DexMethod*>(callerNode->method());
+        if (sufficiently_hot_methods->count(caller)) {
+          sufficiently_hot_methods->insert(m);
+          changed = true;
+          num_new_hot++;
+          erase_elem = true;
+          break;
+        }
+
+        if (!curr_is_warm && sufficiently_warm_methods->count(caller)) {
+          sufficiently_warm_methods->insert(m);
+          curr_is_warm = true;
+          changed = true;
+        }
+      }
+      if (erase_elem) {
+        it = possibly_warm_or_hot.erase(it);
+      } else {
+        ++it;
+      }
+    }
+  }
+
+  always_assert(num_iterations < max_iterations);
+
+  TRACE(ISO,
+        2,
+        "propagate_hotness: num_iterations: %zu, num_new_hot: %zu",
+        num_iterations,
+        num_new_hot);
+}
+
+void propagate_hotness(
+    const Scope& scope,
+    ConfigFiles& config_files,
+    std::unordered_set<DexMethod*>* sufficiently_warm_methods,
+    std::unordered_set<DexMethod*>* sufficiently_hot_methods,
+    float block_profiles_hits) {
+  // When enabled in the config, this function will propagate sufficient
+  // "hotness" or "warmness" to callees of sufficiently hot and warm methods
+  // whose entry blocks were executed according to block profiles.
+  //
+  // This is to mitigate the fact that method profiles track appearances and
+  // call counts for physical methods which exist at the end of a dyna build of
+  // an app, and we have no precise means of attributing these appearances/call
+  // counts to methods which exist earlier in the IR, and which are later
+  // inlined and only "executed" via their inlined blocks.
+  //
+  // For example, if, in a dyna build, foo is inlined into bar, we will only
+  // have method profile info for foo in a resulting profile if it's executed,
+  // and bar will appear to not be executed. In a regular/optimized build using
+  // this profile, the outliner may then outline from bar, which will later be
+  // inlined into foo, causing an outlined method call to appear in a
+  // sufficiently hot method.
+
+  std::vector<DexMethod*> possibly_warm_or_hot =
+      get_possibly_warm_or_hot_methods(
+          scope, config_files, sufficiently_warm_methods,
+          sufficiently_hot_methods, block_profiles_hits);
+
+  TRACE(ISO, 2, "propagate_hotness: possibly_warm_or_hot size=%zu",
+        possibly_warm_or_hot.size());
+
+  if (possibly_warm_or_hot.empty()) {
+    return;
+  }
+
+  mark_callees_warm_or_hot(scope, possibly_warm_or_hot,
+                           sufficiently_warm_methods, sufficiently_hot_methods);
 }
 
 PerfSensitivity parse_perf_sensitivity(const std::string& str) {
