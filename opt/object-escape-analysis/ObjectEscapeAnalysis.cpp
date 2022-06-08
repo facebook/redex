@@ -97,6 +97,7 @@ namespace {
 const int MAX_INLINE_INVOKES_ITERATIONS = 8;
 
 using Locations = std::vector<std::pair<DexMethod*, const IRInstruction*>>;
+
 // Collect all allocation and invoke instructions, as well as non-virtual
 // invocation dependencies.
 void analyze_scope(
@@ -167,8 +168,14 @@ constexpr const IRInstruction* NO_ALLOCATION = nullptr;
 
 using namespace ir_analyzer;
 
+// For each allocating instruction that escapes (not including returns), all
+// uses by which it escapes.
+using Escapes = std::unordered_map<const IRInstruction*,
+                                   std::unordered_set<live_range::Use>>;
+
 // For each object, we track which instruction might have allocated it:
-// - new-instance and invoke- instruction might represent allocation points
+// - new-instance, invoke-, and load-param-object instructions might represent
+//   allocation points
 // - NO_ALLOCATION is a value for which the allocation instruction is not known,
 //   or it is not an object
 using Domain = sparta::PatriciaTreeSetAbstractDomain<const IRInstruction*>;
@@ -184,15 +191,16 @@ struct MethodSummary {
   const IRInstruction* allocation_insn{nullptr};
 };
 
+using MethodSummaries = std::unordered_map<DexMethod*, MethodSummary>;
+
 // The analyzer computes...
 // - which instructions allocate (new-instance, invoke-)
 // - which allocations escape (and how)
 // - which allocations return
 class Analyzer final : public BaseIRAnalyzer<Environment> {
  public:
-  explicit Analyzer(
-      const std::unordered_map<DexMethod*, MethodSummary>& method_summaries,
-      cfg::ControlFlowGraph& cfg)
+  explicit Analyzer(const MethodSummaries& method_summaries,
+                    cfg::ControlFlowGraph& cfg)
       : BaseIRAnalyzer(cfg), m_method_summaries(method_summaries) {
     MonotonicFixpointIterator::run(Environment::top());
   }
@@ -303,36 +311,32 @@ class Analyzer final : public BaseIRAnalyzer<Environment> {
     }
   }
 
-  const std::unordered_map<const IRInstruction*,
-                           std::unordered_set<live_range::Use>>&
-  get_escapes() {
-    return m_escapes;
-  }
+  const Escapes& get_escapes() { return m_escapes; }
 
   const std::unordered_set<const IRInstruction*>& get_returns() {
     return m_returns;
   }
 
+  // Returns set of new-instance and invoke- allocating instructions that do not
+  // escape (or return).
   std::unordered_set<IRInstruction*> get_inlinables() {
     std::unordered_set<IRInstruction*> inlinables;
-    for (auto& p : m_escapes) {
-      if (p.second.empty() && p.first->opcode() != IOPCODE_LOAD_PARAM_OBJECT &&
-          !m_returns.count(p.first)) {
-        inlinables.insert(const_cast<IRInstruction*>(p.first));
+    for (auto&& [insn, uses] : m_escapes) {
+      if (uses.empty() && insn->opcode() != IOPCODE_LOAD_PARAM_OBJECT &&
+          !m_returns.count(insn)) {
+        inlinables.insert(const_cast<IRInstruction*>(insn));
       }
     }
     return inlinables;
   }
 
  private:
-  const std::unordered_map<DexMethod*, MethodSummary>& m_method_summaries;
-  mutable std::unordered_map<const IRInstruction*,
-                             std::unordered_set<live_range::Use>>
-      m_escapes;
+  const MethodSummaries& m_method_summaries;
+  mutable Escapes m_escapes;
   mutable std::unordered_set<const IRInstruction*> m_returns;
 };
 
-std::unordered_map<DexMethod*, MethodSummary> compute_method_summaries(
+MethodSummaries compute_method_summaries(
     PassManager& mgr,
     const Scope& scope,
     const std::unordered_map<DexMethod*, std::unordered_set<DexMethod*>>&
@@ -347,12 +351,12 @@ std::unordered_map<DexMethod*, MethodSummary> compute_method_summaries(
     }
   });
 
-  std::unordered_map<DexMethod*, MethodSummary> method_summaries;
+  MethodSummaries method_summaries;
   size_t analysis_iterations = 0;
   while (!impacted_methods.empty()) {
     Timer t2("analysis iteration");
     analysis_iterations++;
-    TRACE(OEA, 1, "[object escape analysis] analysis_iteration %zu",
+    TRACE(OEA, 2, "[object escape analysis] analysis_iteration %zu",
           analysis_iterations);
     ConcurrentMap<DexMethod*, MethodSummary> recomputed_method_summaries;
     workqueue_run<DexMethod*>(
@@ -386,16 +390,28 @@ std::unordered_map<DexMethod*, MethodSummary> compute_method_summaries(
         impacted_methods);
 
     std::unordered_set<DexMethod*> changed_methods;
-    for (auto& p : recomputed_method_summaries) {
-      auto& ms = method_summaries[p.first];
-      for (auto src_index : p.second.benign_params) {
-        if (ms.benign_params.insert(src_index).second) {
-          changed_methods.insert(p.first);
-        }
+    // (Recomputed) summaries can only grow; assert that, update summaries when
+    // necessary, and remember for which methods the summaries actually changed.
+    for (auto&& [method, recomputed_summary] : recomputed_method_summaries) {
+      auto& summary = method_summaries[method];
+      for (auto src_index : summary.benign_params) {
+        always_assert(recomputed_summary.benign_params.count(src_index));
       }
-      if (p.second.allocation_insn && !ms.allocation_insn) {
-        ms.allocation_insn = p.second.allocation_insn;
-        changed_methods.insert(p.first);
+      if (recomputed_summary.benign_params.size() >
+          summary.benign_params.size()) {
+        summary.benign_params = std::move(recomputed_summary.benign_params);
+        changed_methods.insert(method);
+      }
+      if (recomputed_summary.allocation_insn) {
+        if (summary.allocation_insn) {
+          always_assert(summary.allocation_insn ==
+                        recomputed_summary.allocation_insn);
+        } else {
+          summary.allocation_insn = recomputed_summary.allocation_insn;
+          changed_methods.insert(method);
+        }
+      } else {
+        always_assert(summary.allocation_insn == nullptr);
       }
     }
     impacted_methods.clear();
@@ -410,41 +426,35 @@ std::unordered_map<DexMethod*, MethodSummary> compute_method_summaries(
   return method_summaries;
 }
 
-DexType* get_allocated_type(
-    const std::unordered_map<DexMethod*, MethodSummary>& method_summaries,
-    DexMethod* method) {
-  auto insn = method_summaries.at(method).allocation_insn;
+// For an inlinable new-instance or invoke- instruction, determine first
+// resolved callee (if any), and (eventually) allocated type
+std::pair<DexMethod*, DexType*> resolve_inlinable(
+    const MethodSummaries& method_summaries, const IRInstruction* insn) {
+  always_assert(insn->opcode() == OPCODE_NEW_INSTANCE ||
+                opcode::is_an_invoke(insn->opcode()));
+  DexMethod* first_callee{nullptr};
   while (insn->opcode() != OPCODE_NEW_INSTANCE) {
     always_assert(opcode::is_an_invoke(insn->opcode()));
     auto callee = resolve_method(insn->get_method(), opcode_to_search(insn));
+    if (!first_callee) {
+      first_callee = callee;
+    }
     insn = method_summaries.at(callee).allocation_insn;
   }
-  return insn->get_type();
+  return std::make_pair(first_callee, insn->get_type());
 }
 
 using InlineAnchorsOfType =
     std::unordered_map<DexMethod*, std::unordered_set<IRInstruction*>>;
 std::unordered_map<DexType*, InlineAnchorsOfType> compute_inline_anchors(
-    const Scope& scope,
-    const std::unordered_map<DexMethod*, MethodSummary>& method_summaries) {
+    const Scope& scope, const MethodSummaries& method_summaries) {
   Timer t("compute_inline_anchors");
   ConcurrentMap<DexType*, InlineAnchorsOfType> concurrent_inline_anchors;
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
     Analyzer analyzer(method_summaries, code.cfg());
     auto inlinables = analyzer.get_inlinables();
     for (auto insn : inlinables) {
-      if (insn->opcode() == OPCODE_NEW_INSTANCE) {
-        TRACE(OEA, 3, "[object escape analysis] inline anchor [%s] %s",
-              SHOW(method), SHOW(insn));
-        concurrent_inline_anchors.update(
-            insn->get_type(),
-            [&](auto*, auto& map, bool) { map[method].insert(insn); });
-        continue;
-      }
-      always_assert(opcode::is_an_invoke(insn->opcode()));
-      auto callee = resolve_method(insn->get_method(), opcode_to_search(insn));
-      always_assert(method_summaries.at(callee).allocation_insn);
-      auto type = get_allocated_type(method_summaries, callee);
+      auto [callee, type] = resolve_inlinable(method_summaries, insn);
       TRACE(OEA, 3, "[object escape analysis] inline anchor [%s] %s",
             SHOW(method), SHOW(insn));
       concurrent_inline_anchors.update(
@@ -463,7 +473,7 @@ compute_root_methods(
     PassManager& mgr,
     const std::unordered_map<DexType*, Locations>& new_instances,
     const std::unordered_map<DexMethod*, Locations>& invokes,
-    const std::unordered_map<DexMethod*, MethodSummary>& method_summaries,
+    const MethodSummaries& method_summaries,
     const std::unordered_map<DexType*, InlineAnchorsOfType>& inline_anchors) {
   Timer t("compute_root_methods");
   std::unordered_set<DexType*> candidate_types;
@@ -768,7 +778,7 @@ class ExpandableConstructorParams {
       mutation.replace(it, {move_insn});
     }
 
-    // Use the mutated copied ctor code to conretize the expanded ctor.
+    // Use the mutated copied ctor code to concretize the expanded ctor.
     mutation.flush();
     expanded_ctor_ref->make_concrete(ACC_CONSTRUCTOR | ACC_PUBLIC,
                                      std::move(cloned_code), false);
@@ -970,7 +980,7 @@ class RootMethodReducer {
  private:
   const ExpandableConstructorParams& m_expandable_constructor_params;
   MultiMethodInliner& m_inliner;
-  const std::unordered_map<DexMethod*, MethodSummary>& m_method_summaries;
+  const MethodSummaries& m_method_summaries;
   Stats* m_stats;
   bool m_is_init_or_clinit;
   DexMethod* m_method;
@@ -980,7 +990,7 @@ class RootMethodReducer {
   RootMethodReducer(
       const ExpandableConstructorParams& expandable_constructor_params,
       MultiMethodInliner& inliner,
-      const std::unordered_map<DexMethod*, MethodSummary>& method_summaries,
+      const MethodSummaries& method_summaries,
       Stats* stats,
       bool is_init_or_clinit,
       DexMethod* method,
@@ -1108,13 +1118,10 @@ class RootMethodReducer {
       std::unordered_set<IRInstruction*> invokes_to_inline;
       auto inlinables = analyzer.get_inlinables();
       for (auto insn : inlinables) {
-        if (insn->opcode() == OPCODE_NEW_INSTANCE) {
+        auto [callee, type] = resolve_inlinable(m_method_summaries, insn);
+        if (!callee) {
           continue;
         }
-        always_assert(opcode::is_an_invoke(insn->opcode()));
-        auto callee =
-            resolve_method(insn->get_method(), opcode_to_search(insn));
-        auto type = get_allocated_type(m_method_summaries, callee);
         if (m_types.count(type)) {
           invokes_to_inline.insert(insn);
           m_inlined_methods[callee].insert(type);
@@ -1369,7 +1376,7 @@ class RootMethodReducer {
 std::unordered_map<DexMethod*, ReducedMethod> compute_reduced_methods(
     ExpandableConstructorParams& expandable_constructor_params,
     MultiMethodInliner& inliner,
-    const std::unordered_map<DexMethod*, MethodSummary>& method_summaries,
+    const MethodSummaries& method_summaries,
     const std::unordered_map<DexMethod*, std::unordered_map<DexType*, bool>>&
         root_methods,
     std::unordered_set<DexType*>* irreducible_types,
@@ -1453,30 +1460,30 @@ std::unordered_set<DexMethod*> select_reduced_methods(
         if (local_net_savings.get_value() >= 0) {
           stats->total_savings += local_net_savings.get_value();
           concurrent_selected_reduced_methods.insert(method);
+          return;
+        }
+        auto& classes = conditional_net_savings.classes;
+        if (std::any_of(classes.begin(), classes.end(), [&](DexType* type) {
+              return irreducible_types->count(type);
+            })) {
+          stats->too_costly_irreducible_classes++;
+        } else if (classes.size() > 1) {
+          stats->too_costly_multiple_conditional_classes++;
+        } else if (classes.empty()) {
+          stats->too_costly_globally++;
         } else {
-          auto& classes = conditional_net_savings.classes;
-          if (std::any_of(classes.begin(), classes.end(), [&](DexType* type) {
-                return irreducible_types->count(type);
-              })) {
-            stats->too_costly_irreducible_classes++;
-          } else if (classes.size() > 1) {
-            stats->too_costly_multiple_conditional_classes++;
-          } else if (classes.empty()) {
-            stats->too_costly_globally++;
-          } else {
-            always_assert(classes.size() == 1);
-            auto conditional_type = *classes.begin();
-            concurrent_families.update(
-                conditional_type, [&](auto*, Family& family, bool) {
-                  family.global_net_savings += local_net_savings;
-                  family.global_net_savings += conditional_net_savings;
-                  family.reduced_methods.emplace(method, reduced_method);
-                });
-            return;
-          }
-          for (auto [type, multiples] : types) {
-            concurrent_irreducible_types.insert(type);
-          }
+          always_assert(classes.size() == 1);
+          auto conditional_type = *classes.begin();
+          concurrent_families.update(
+              conditional_type, [&](auto*, Family& family, bool) {
+                family.global_net_savings += local_net_savings;
+                family.global_net_savings += conditional_net_savings;
+                family.reduced_methods.emplace(method, reduced_method);
+              });
+          return;
+        }
+        for (auto [type, multiples] : types) {
+          concurrent_irreducible_types.insert(type);
         }
       },
       reduced_methods);
@@ -1508,7 +1515,7 @@ void reduce(
     DexStoresVector& stores,
     const Scope& scope,
     ConfigFiles& conf,
-    const std::unordered_map<DexMethod*, MethodSummary>& method_summaries,
+    const MethodSummaries& method_summaries,
     const std::unordered_map<DexMethod*, std::unordered_map<DexType*, bool>>&
         root_methods,
     Stats* stats) {
