@@ -9,6 +9,7 @@ package com.facebook.redextest;
 
 import com.facebook.proguard.annotations.DoNotStrip;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.Arrays;
 
 @DoNotStrip
 public class InstrumentBasicBlockAnalysis {
@@ -21,6 +22,37 @@ public class InstrumentBasicBlockAnalysis {
 
   @DoNotStrip private static boolean sIsEnabled = true;
   @DoNotStrip private static AtomicInteger sMethodCounter = new AtomicInteger(0);
+
+  @DoNotStrip
+  public static void cleanup() {
+    sMethodCounter.set(0);
+
+    // Clearing up sMethodStatsArray.
+    for (int i = 0; i < sMethodStats.length; ++i) {
+      sMethodStats[i] = 0;
+    }
+  }
+
+  @DoNotStrip
+  public static void startTracing() {
+    InstrumentBasicBlockAnalysis.cleanup();
+    sIsEnabled = true;
+  }
+
+  @DoNotStrip
+  public static void stopTracing() {
+    sIsEnabled = false;
+  }
+
+  @DoNotStrip
+  public static void dumpStats() {
+    System.out.println("Vector " + Arrays.toString(sMethodStats));
+  }
+
+  @DoNotStrip
+  public static short[] getStats() {
+    return sMethodStats;
+  }
 
   @DoNotStrip
   public static void onMethodBegin(int offset) {
