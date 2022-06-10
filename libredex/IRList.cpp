@@ -141,7 +141,8 @@ MethodItemEntry::~MethodItemEntry() {
   }
 }
 
-void MethodItemEntry::gather_strings(std::vector<DexString*>& lstring) const {
+void MethodItemEntry::gather_strings(
+    std::vector<const DexString*>& lstring) const {
   switch (type) {
   case MFLOW_TRY:
     break;
@@ -758,7 +759,7 @@ void IRList::gather_types(std::vector<DexType*>& ltype) const {
   }
 }
 
-void IRList::gather_strings(std::vector<DexString*>& lstring) const {
+void IRList::gather_strings(std::vector<const DexString*>& lstring) const {
   for (auto& mie : m_list) {
     mie.gather_strings(lstring);
   }

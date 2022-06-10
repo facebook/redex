@@ -52,12 +52,12 @@ std::vector<std::unique_ptr<boost::regex>> make_rxs(
   return rxs;
 }
 
-std::string get_deobfuscated_name(const DexType* type) {
+const std::string& get_deobfuscated_name(const DexType* type) {
   auto cls = type_class(type);
   if (cls == nullptr) {
-    return type->c_str();
+    return type->str();
   }
-  return cls->get_deobfuscated_name();
+  return cls->get_deobfuscated_name().str();
 }
 
 bool match_annotation_rx(const DexClass* cls, const boost::regex& annorx) {
@@ -121,7 +121,7 @@ struct ClassMatcher {
   bool match_name(const DexClass* cls, int index) const {
     const auto& deob_name = cls->get_deobfuscated_name();
     auto rx = *m_cls[index];
-    return boost::regex_match(deob_name, rx);
+    return boost::regex_match(deob_name.str(), rx);
   }
 
   bool match_access(const DexClass* cls) const {
@@ -148,7 +148,7 @@ struct ClassMatcher {
       }
     }
     const auto& deob_name = cls->get_deobfuscated_name();
-    return boost::regex_match(deob_name, *m_extends);
+    return boost::regex_match(deob_name.str(), *m_extends);
   }
 
   bool search_interfaces(const DexClass* cls) {
@@ -567,7 +567,7 @@ bool KeepRuleMatcher::method_level_match(
     return false;
   }
   auto dequalified_name =
-      extract_method_name_and_type(method->get_deobfuscated_name());
+      extract_method_name_and_type(method->get_deobfuscated_name().str());
   return boost::regex_match(dequalified_name.c_str(), method_regex);
 }
 
@@ -711,7 +711,7 @@ void KeepRuleMatcher::mark_class_and_members_for_keep(DexClass* cls) {
     ++m_class_matches;
     if (cls->rstate.report_whyareyoukeeping()) {
       TRACE(PGR, 2, "whyareyoukeeping Class %s kept by %s",
-            java_names::internal_to_external(cls->get_deobfuscated_name())
+            java_names::internal_to_external(cls->get_deobfuscated_name().str())
                 .c_str(),
             show_keep(m_keep_rule).c_str());
     }
@@ -931,7 +931,8 @@ void ProguardMatcher::mark_all_annotation_classes_as_keep() {
               2,
               "whyareyoukeeping Class %s kept because it is an annotation "
               "class\n",
-              java_names::internal_to_external(cls->get_deobfuscated_name())
+              java_names::internal_to_external(
+                  cls->get_deobfuscated_name_or_empty())
                   .c_str());
       }
     }

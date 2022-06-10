@@ -321,16 +321,16 @@ std::unique_ptr<DexDebugInstruction> debug_info_from_s_expr(const s_expr& e) {
   } else if (opcode == "DBG_START_LOCAL") {
     check_arg_num(tail, 3);
     uint32_t register_num = integer_from_s_expr<uint32_t>(tail[0]);
-    DexString* name_idx = DexString::make_string(string_from_s_expr(tail[1]));
+    auto name_idx = DexString::make_string(string_from_s_expr(tail[1]));
     DexType* type_idx = DexType::make_type(string_from_s_expr(tail[2]).c_str());
     return std::make_unique<DexDebugOpcodeStartLocal>(register_num, name_idx,
                                                       type_idx);
   } else if (opcode == "DBG_START_LOCAL_EXTENDED") {
     check_arg_num(tail, 4);
     uint32_t register_num = integer_from_s_expr<uint32_t>(tail[0]);
-    DexString* name_idx = DexString::make_string(string_from_s_expr(tail[1]));
+    auto name_idx = DexString::make_string(string_from_s_expr(tail[1]));
     DexType* type_idx = DexType::make_type(string_from_s_expr(tail[2]).c_str());
-    DexString* sig_idx = DexString::make_string(string_from_s_expr(tail[3]));
+    auto sig_idx = DexString::make_string(string_from_s_expr(tail[3]));
     return std::make_unique<DexDebugOpcodeStartLocal>(register_num, name_idx,
                                                       type_idx, sig_idx);
   } else if (opcode == "DBG_END_LOCAL") {
@@ -350,7 +350,7 @@ std::unique_ptr<DexDebugInstruction> debug_info_from_s_expr(const s_expr& e) {
     return std::make_unique<DexDebugInstruction>(DBG_SET_EPILOGUE_BEGIN);
   } else if (opcode == "DBG_SET_FILE") {
     check_arg_num(tail, 1);
-    DexString* name_idx = DexString::make_string(string_from_s_expr(tail[0]));
+    auto name_idx = DexString::make_string(string_from_s_expr(tail[0]));
     return std::make_unique<DexDebugOpcodeSetFile>(name_idx);
   } else {
     always_assert_log(opcode == "EMIT", "Unknown opcode: %s", opcode.c_str());

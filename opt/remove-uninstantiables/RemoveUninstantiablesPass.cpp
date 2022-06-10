@@ -59,7 +59,7 @@ IRInstruction* ir_move_result_pseudo_object(uint32_t dest) {
 }
 
 struct VirtualScopeId {
-  DexString* name;
+  const DexString* name;
   DexProto* proto;
   static VirtualScopeId make(DexMethodRef* method) {
     return VirtualScopeId{method->get_name(), method->get_proto()};

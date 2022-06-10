@@ -119,7 +119,7 @@ bool passes_args_through(IRInstruction* insn,
  * by transformations for substituting instructions which throw an exception
  * at runtime. Currently, used for substituting switch case instructions.
  */
-void create_runtime_exception_block(DexString* except_str,
+void create_runtime_exception_block(const DexString* except_str,
                                     std::vector<IRInstruction*>& block);
 
 /**

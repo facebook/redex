@@ -140,8 +140,8 @@ class MultiMethodInliner {
       bool analyze_and_prune_inits = false,
       const std::unordered_set<DexMethodRef*>& configured_pure_methods = {},
       const api::AndroidSDK* min_sdk_api = nullptr,
-      const std::unordered_set<DexString*>& configured_finalish_field_names =
-          {});
+      const std::unordered_set<const DexString*>&
+          configured_finalish_field_names = {});
 
   ~MultiMethodInliner() { delayed_invoke_direct_to_static(); }
 

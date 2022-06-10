@@ -443,7 +443,7 @@ double dexmethods_profiled_comparator::get_method_sort_num(
 
 double dexmethods_profiled_comparator::get_method_sort_num_override(
     const DexMethod* method) {
-  const std::string& deobfname = method->get_deobfuscated_name();
+  const std::string& deobfname = method->get_deobfuscated_name_or_empty();
   for (const std::string& substr : *m_allowlisted_substrings) {
     if (deobfname.find(substr) != std::string::npos) {
       return COLD_START_RANGE_BEGIN + RANGE_SIZE / 2;

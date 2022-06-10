@@ -30,7 +30,7 @@ std::string get_simple_deobfuscated_name(const DexType* type) {
   auto* cls = type_class(type);
   std::string full_name;
   if (cls) {
-    full_name = cls->get_deobfuscated_name();
+    full_name = cls->get_deobfuscated_name_or_empty();
   }
   if (full_name.empty()) {
     full_name = type->str();
@@ -419,7 +419,7 @@ void ApiLevelsUtils::load_framework_api(const Scope& scope) {
       continue;
     }
 
-    const auto& cls_str = cls->get_deobfuscated_name();
+    const auto& cls_str = cls->get_deobfuscated_name_or_empty();
 
     // TODO(emmasevastian): Better way of detecting release libraries ...
     if (boost::starts_with(cls_str, "Landroidx")) {

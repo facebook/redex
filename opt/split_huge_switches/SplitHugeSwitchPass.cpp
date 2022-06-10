@@ -229,7 +229,7 @@ SwitchRange get_switch_range(const cfg::ControlFlowGraph& cfg,
 }
 
 DexMethod* create_dex_method(DexMethod* m, std::unique_ptr<IRCode>&& code) {
-  DexString* clone_name = DexMethod::get_unique_name(
+  auto* clone_name = DexMethod::get_unique_name(
       m->get_class(),
       DexString::make_string(m->str() + "$split_switch_clone"),
       m->get_proto());

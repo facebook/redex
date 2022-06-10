@@ -50,7 +50,8 @@ class PointsToSemanticsUtils final {
       type::java_lang_Float(),     type::java_lang_Integer(),
       type::java_lang_Long(),      type::java_lang_Short(),
       type::java_lang_Void()};
-  DexString* m_wrapper_class_type_field_name{DexString::make_string("TYPE")};
+  const DexString* m_wrapper_class_type_field_name{
+      DexString::make_string("TYPE")};
   DexMethodRef* m_java_lang_object_get_class{DexMethod::make_method(
       DexType::make_type("Ljava/lang/Object;"),
       DexString::make_string("getClass"),

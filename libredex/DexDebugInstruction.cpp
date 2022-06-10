@@ -15,7 +15,7 @@
 #include "DexOutput.h"
 
 void DexDebugOpcodeSetFile::gather_strings(
-    std::vector<DexString*>& lstring) const {
+    std::vector<const DexString*>& lstring) const {
   if (m_str) lstring.push_back(m_str);
 }
 
@@ -29,7 +29,7 @@ void DexDebugOpcodeSetFile::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
 }
 
 void DexDebugOpcodeStartLocal::gather_strings(
-    std::vector<DexString*>& lstring) const {
+    std::vector<const DexString*>& lstring) const {
   if (m_name) lstring.push_back(m_name);
   if (m_sig) lstring.push_back(m_sig);
 }
@@ -85,19 +85,19 @@ DexDebugInstruction* DexDebugInstruction::make_instruction(
   }
   case DBG_START_LOCAL: {
     uint32_t rnum = read_uleb128(&encdata);
-    DexString* name = decode_noindexable_string(idx, encdata);
+    auto name = decode_noindexable_string(idx, encdata);
     DexType* type = decode_noindexable_type(idx, encdata);
     return new DexDebugOpcodeStartLocal(rnum, name, type);
   }
   case DBG_START_LOCAL_EXTENDED: {
     uint32_t rnum = read_uleb128(&encdata);
-    DexString* name = decode_noindexable_string(idx, encdata);
+    auto name = decode_noindexable_string(idx, encdata);
     DexType* type = decode_noindexable_type(idx, encdata);
-    DexString* sig = decode_noindexable_string(idx, encdata);
+    auto sig = decode_noindexable_string(idx, encdata);
     return new DexDebugOpcodeStartLocal(rnum, name, type, sig);
   }
   case DBG_SET_FILE: {
-    DexString* str = decode_noindexable_string(idx, encdata);
+    auto str = decode_noindexable_string(idx, encdata);
     return new DexDebugOpcodeSetFile(str);
   }
   default:

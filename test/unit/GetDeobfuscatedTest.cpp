@@ -25,7 +25,9 @@ TEST_F(GetDeobfuscatedTest, testField) {
   EXPECT_EQ(field, get_result_original);
   EXPECT_EQ(nullptr, get_result_old_deobfuscated);
   EXPECT_EQ("bar", field->get_deobfuscated_name());
-  EXPECT_EQ(field, get_result_deobfuscated);
+  if (kInsertDeobfuscatedNameLinks) {
+    EXPECT_EQ(field, get_result_deobfuscated);
+  }
 }
 
 TEST_F(GetDeobfuscatedTest, testFieldDuplicate) {
@@ -50,8 +52,10 @@ TEST_F(GetDeobfuscatedTest, testMethod) {
   auto get_result_deobfuscated = DexMethod::get_method("Lbaz;.bar:()I");
   EXPECT_EQ(method, get_result_original);
   EXPECT_EQ(nullptr, get_result_old_deobfuscated);
-  EXPECT_EQ("bar", method->get_deobfuscated_name());
-  EXPECT_EQ(method, get_result_deobfuscated);
+  EXPECT_EQ("bar", method->get_deobfuscated_name_or_empty());
+  if (kInsertDeobfuscatedNameLinks) {
+    EXPECT_EQ(method, get_result_deobfuscated);
+  }
 }
 
 TEST_F(GetDeobfuscatedTest, testMethodDuplicate) {
@@ -59,6 +63,6 @@ TEST_F(GetDeobfuscatedTest, testMethodDuplicate) {
       DexMethod::make_method("Lbaz;.foo:()I")->make_concrete(ACC_PUBLIC, true);
   method->set_deobfuscated_name("foo");
   auto get_result = DexMethod::get_method("Lbaz;.foo:()I");
-  EXPECT_EQ("foo", method->get_deobfuscated_name());
+  EXPECT_EQ("foo", method->get_deobfuscated_name_or_empty());
   EXPECT_EQ(method, get_result);
 }

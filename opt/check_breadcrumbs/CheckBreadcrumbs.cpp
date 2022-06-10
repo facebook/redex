@@ -146,7 +146,7 @@ void build_allowed_violations(const Scope& scope,
     }
   }
   for (const auto& cls : scope) {
-    auto& dname = cls->get_deobfuscated_name();
+    auto& dname = cls->get_deobfuscated_name_or_empty();
     if (allowed_class_names.count(dname) != 0) {
       types->emplace(cls->get_type());
       allowed_class_names[dname] = true;
@@ -177,7 +177,7 @@ void print_allowed_violations_per_class(
     auto fields = illegal_fields.find(type);
     if (fields != illegal_fields.end()) {
       for (const auto f : fields->second) {
-        fields_detail << "    " << f->get_deobfuscated_name() << " ("
+        fields_detail << "    " << f->get_deobfuscated_name_or_empty() << " ("
                       << get_store_name(xstores, f->get_type()) << ")"
                       << std::endl;
       }
@@ -436,9 +436,9 @@ size_t Breadcrumbs::process_illegal_elements(const XStoreRefs& xstores,
       allowed.emplace(method, insns);
       continue;
     }
-    ss << "Illegal " << desc << " in method " << method->get_deobfuscated_name()
-       << " (" << get_store_name(xstores, method->get_class()) << ")"
-       << std::endl;
+    ss << "Illegal " << desc << " in method "
+       << method->get_deobfuscated_name_or_empty() << " ("
+       << get_store_name(xstores, method->get_class()) << ")" << std::endl;
     num_illegal_cross_store_refs += insns.size();
     for (const auto insn : insns) {
       ss << "\t" << show_deobfuscated(insn) << " ("
@@ -467,10 +467,10 @@ void Breadcrumbs::report_illegal_refs(bool fail_if_illegal_refs,
     num_illegal_fields += fields.size();
 
     ss << "Illegal fields in class "
-       << type_class(type)->get_deobfuscated_name() << " ("
+       << type_class(type)->get_deobfuscated_name_or_empty() << " ("
        << get_store_name(m_xstores, type) << ")" << std::endl;
     for (const auto field : fields) {
-      ss << "\t" << field->get_deobfuscated_name() << " ("
+      ss << "\t" << field->get_deobfuscated_name_or_empty() << " ("
          << get_store_name(m_xstores, field->get_type()) << ")" << std::endl;
     }
   }

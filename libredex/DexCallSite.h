@@ -26,7 +26,7 @@ class DexCallSite {
 
  public:
   DexCallSite(DexMethodHandle* linker_method_handle,
-              DexString* linker_method_name,
+              const DexString* linker_method_name,
               DexProto* linker_method_type,
               const std::vector<DexEncodedValue*>& linker_args) {
     m_linker_method_handle = linker_method_handle;
@@ -37,13 +37,13 @@ class DexCallSite {
 
  public:
   DexMethodHandle* method_handle() const { return m_linker_method_handle; }
-  DexString* method_name() const { return m_linker_method_name; }
+  const DexString* method_name() const { return m_linker_method_name; }
   DexProto* method_type() const { return m_linker_method_type; }
   const std::vector<DexEncodedValue*>& args() const {
     return m_linker_method_args;
   }
 
-  void gather_strings(std::vector<DexString*>& lstring) const;
+  void gather_strings(std::vector<const DexString*>& lstring) const;
   void gather_methodhandles(std::vector<DexMethodHandle*>& lmethodhandle) const;
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const;
   void gather_fields(std::vector<DexFieldRef*>& lfield) const;
@@ -52,7 +52,7 @@ class DexCallSite {
 
  private:
   DexMethodHandle* m_linker_method_handle;
-  DexString* m_linker_method_name;
+  const DexString* m_linker_method_name;
   DexProto* m_linker_method_type;
   std::vector<DexEncodedValue*> m_linker_method_args;
 };

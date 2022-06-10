@@ -43,16 +43,16 @@ class DexIdx {
   dex_methodhandle_id* m_methodhandle_ids;
   uint32_t m_methodhandle_ids_size;
 
-  DexString** m_string_cache;
-  DexType** m_type_cache;
-  DexFieldRef** m_field_cache;
-  DexMethodRef** m_method_cache;
-  DexProto** m_proto_cache;
-  DexCallSite** m_callsite_cache = nullptr;
-  DexMethodHandle** m_methodhandle_cache = nullptr;
+  std::vector<const DexString*> m_string_cache;
+  std::vector<DexType*> m_type_cache;
+  std::vector<DexFieldRef*> m_field_cache;
+  std::vector<DexMethodRef*> m_method_cache;
+  std::vector<DexProto*> m_proto_cache;
+  std::vector<DexCallSite*> m_callsite_cache;
+  std::vector<DexMethodHandle*> m_methodhandle_cache;
 
   DexType* get_typeidx_fromdex(uint32_t typeidx);
-  DexString* get_stringidx_fromdex(uint32_t stridx);
+  const DexString* get_stringidx_fromdex(uint32_t stridx);
   DexFieldRef* get_fieldidx_fromdex(uint32_t fidx);
   DexMethodRef* get_methodidx_fromdex(uint32_t midx);
   DexProto* get_protoidx_fromdex(uint32_t pidx);
@@ -61,9 +61,8 @@ class DexIdx {
 
  public:
   explicit DexIdx(const dex_header* dh);
-  ~DexIdx();
 
-  DexString* get_stringidx(uint32_t stridx) {
+  const DexString* get_stringidx(uint32_t stridx) {
     if (m_string_cache[stridx] == nullptr) {
       m_string_cache[stridx] = get_stringidx_fromdex(stridx);
     }
@@ -71,7 +70,7 @@ class DexIdx {
     return m_string_cache[stridx];
   }
 
-  DexString* get_nullable_stringidx(uint32_t stridx) {
+  const DexString* get_nullable_stringidx(uint32_t stridx) {
     if (stridx == DEX_NO_INDEX) return nullptr;
     return get_stringidx(stridx);
   }
@@ -181,9 +180,9 @@ class DexIdx {
   friend std::string show(DexIdx*);
 };
 
-inline DexString* decode_noindexable_string(DexIdx* idx,
-                                            const uint8_t*& encdata) {
-  DexString* str = nullptr;
+inline const DexString* decode_noindexable_string(DexIdx* idx,
+                                                  const uint8_t*& encdata) {
+  const DexString* str = nullptr;
   uint32_t sidx = read_uleb128p1(&encdata);
   if (sidx != DEX_NO_INDEX) {
     str = idx->get_stringidx(sidx);

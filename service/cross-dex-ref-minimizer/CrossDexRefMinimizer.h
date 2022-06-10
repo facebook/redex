@@ -78,13 +78,13 @@ struct CrossDexRefMinimizerConfig {
 // be the end of the world if an overflow ever happens.
 class CrossDexRefMinimizer {
   PrioritizedDexClasses m_prioritized_classes;
-  std::unordered_set<void*> m_applied_refs;
+  std::unordered_set<const void*> m_applied_refs;
   struct ClassInfo {
     uint32_t index;
     // This array stores (the weights of) how many of the *refs of this class
     // have only one, two, ... classes left that reference them.
     std::array<uint32_t, INFREQUENT_REFS_COUNT> infrequent_refs_weight;
-    std::vector<std::pair<void*, uint32_t>> refs;
+    std::vector<std::pair<const void*, uint32_t>> refs;
     uint64_t refs_weight;
     uint64_t applied_refs_weight;
     uint64_t seed_weight{0};
@@ -98,7 +98,7 @@ class CrossDexRefMinimizer {
   };
   std::unordered_map<DexClass*, ClassInfo> m_class_infos;
   uint32_t m_next_index{0};
-  std::unordered_map<void*, std::unordered_set<DexClass*>> m_ref_classes;
+  std::unordered_map<const void*, std::unordered_set<DexClass*>> m_ref_classes;
   CrossDexRefMinimizerStats m_stats;
   const CrossDexRefMinimizerConfig m_config;
 
@@ -111,14 +111,14 @@ class CrossDexRefMinimizer {
       const std::unordered_map<DexClass*, ClassInfoDelta>& affected_classes);
   DexClass* worst(bool generated);
 
-  std::unordered_map<void*, size_t> m_ref_counts;
+  std::unordered_map<const void*, size_t> m_ref_counts;
   size_t m_max_ref_count{0};
 
   void gather_refs(DexClass* cls,
                    std::vector<DexMethodRef*>& method_refs,
                    std::vector<DexFieldRef*>& field_refs,
                    std::vector<DexType*>& types,
-                   std::vector<DexString*>& strings);
+                   std::vector<const DexString*>& strings);
 
  public:
   explicit CrossDexRefMinimizer(const CrossDexRefMinimizerConfig& config)

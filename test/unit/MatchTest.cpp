@@ -48,7 +48,7 @@ TEST_F(MatchTest, In) {
 
 TEST_F(MatchTest, IputBasic) {
   DexType* ty = DexType::make_type("Lfoo;");
-  DexString* str = DexString::make_string("foo");
+  auto str = DexString::make_string("foo");
   DexFieldRef* field = DexField::make_field(ty, str, ty);
 
   auto iput = std::make_unique<IRInstruction>(OPCODE_IPUT);
@@ -65,7 +65,7 @@ TEST_F(MatchTest, IputBasic) {
 
 TEST_F(MatchTest, IgetBasic) {
   DexType* ty = DexType::make_type("Lfoo;");
-  DexString* str = DexString::make_string("foo");
+  auto str = DexString::make_string("foo");
   DexFieldRef* field = DexField::make_field(ty, str, ty);
 
   auto iget = std::make_unique<IRInstruction>(OPCODE_IGET);
@@ -81,7 +81,7 @@ TEST_F(MatchTest, IgetBasic) {
 
 TEST_F(MatchTest, InvokeBasic) {
   DexType* ty = DexType::make_type("Lfoo;");
-  DexString* str = DexString::make_string("foo");
+  auto str = DexString::make_string("foo");
   DexProto* proto = DexProto::make_proto(ty, DexTypeList::make_type_list({}));
   DexMethodRef* method = DexMethod::make_method(ty, str, proto);
 
@@ -96,7 +96,7 @@ TEST_F(MatchTest, InvokeBasic) {
 }
 
 TEST_F(MatchTest, opcode_string) {
-  DexString* str = DexString::make_string("foo");
+  auto str = DexString::make_string("foo");
 
   IRInstruction* load_str = new IRInstruction(OPCODE_CONST_STRING);
   load_str->set_string(str);
@@ -126,7 +126,7 @@ TEST_F(MatchTest, has_literal) {
 
 TEST_F(MatchTest, NotAllMatch) {
   DexType* ty = DexType::make_type("Lfoo;");
-  DexString* str = DexString::make_string("foo");
+  auto str = DexString::make_string("foo");
   DexFieldRef* field = DexField::make_field(ty, str, ty);
 
   auto iput = std::make_unique<IRInstruction>(OPCODE_IPUT);
@@ -157,7 +157,7 @@ TEST_F(MatchTest, NotAllMatch) {
 
 TEST_F(MatchTest, SameFieldMatch) {
   DexType* ty = DexType::make_type("Lfoo;");
-  DexString* str = DexString::make_string("foo");
+  auto str = DexString::make_string("foo");
   DexFieldRef* field = DexField::make_field(ty, str, ty);
 
   auto iput = std::make_unique<IRInstruction>(OPCODE_IPUT);
@@ -187,7 +187,7 @@ TEST_F(MatchTest, SameFieldMatch) {
 
 TEST_F(MatchTest, SameMethodMatch) {
   DexType* ty = DexType::make_type("Lfoo;");
-  DexString* str = DexString::make_string("foo");
+  auto str = DexString::make_string("foo");
   DexFieldRef* field = DexField::make_field(ty, str, ty);
 
   auto iput = std::make_unique<IRInstruction>(OPCODE_IPUT);

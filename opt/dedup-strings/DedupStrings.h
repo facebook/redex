@@ -36,7 +36,7 @@ class DedupStrings {
   DedupStrings(size_t max_factory_methods,
                float method_profiles_appear_percent_threshold,
                const method_profiles::MethodProfiles& method_profiles,
-               std::unordered_set<DexString*> ignore_strings = {})
+               std::unordered_set<const DexString*> ignore_strings = {})
       : m_max_factory_methods(max_factory_methods),
         m_method_profiles_appear_percent_threshold(
             method_profiles_appear_percent_threshold),
@@ -63,17 +63,20 @@ class DedupStrings {
   std::unordered_set<const DexMethod*> get_perf_sensitive_methods(
       const DexClassesVector& dexen);
   DexMethod* make_const_string_loader_method(
-      DexClasses& dex, size_t dex_id, const std::vector<DexString*>& strings);
+      DexClasses& dex,
+      size_t dex_id,
+      const std::vector<const DexString*>& strings);
   void gather_non_load_strings(DexClasses& classes,
                                std::unordered_set<const DexString*>* strings);
-  ConcurrentMap<DexString*, std::unordered_map<size_t, size_t>> get_occurrences(
+  ConcurrentMap<const DexString*, std::unordered_map<size_t, size_t>>
+  get_occurrences(
       const Scope& scope,
       const std::unordered_map<const DexMethod*, size_t>& methods_to_dex,
       const std::unordered_set<const DexMethod*>& perf_sensitive_methods,
       std::unordered_set<const DexString*> non_load_strings[]);
-  std::unordered_map<DexString*, DedupStringInfo> get_strings_to_dedup(
+  std::unordered_map<const DexString*, DedupStringInfo> get_strings_to_dedup(
       DexClassesVector& dexen,
-      const ConcurrentMap<DexString*, std::unordered_map<size_t, size_t>>&
+      const ConcurrentMap<const DexString*, std::unordered_map<size_t, size_t>>&
           occurrences,
       std::unordered_map<const DexMethod*, size_t>& methods_to_dex,
       std::unordered_set<const DexMethod*>& perf_sensitive_methods,
@@ -82,14 +85,15 @@ class DedupStrings {
       const Scope& scope,
       const std::unordered_map<const DexMethod*, size_t>& methods_to_dex,
       const std::unordered_set<const DexMethod*>& perf_sensitive_methods,
-      const std::unordered_map<DexString*, DedupStringInfo>& strings_to_dedup,
+      const std::unordered_map<const DexString*, DedupStringInfo>&
+          strings_to_dedup,
       std::unique_ptr<ab_test::ABExperimentContext>& ab_experiment_context);
 
   mutable Stats m_stats;
   size_t m_max_factory_methods;
   float m_method_profiles_appear_percent_threshold;
   const method_profiles::MethodProfiles& m_method_profiles;
-  std::unordered_set<DexString*> m_ignore_strings;
+  std::unordered_set<const DexString*> m_ignore_strings;
 };
 
 /**

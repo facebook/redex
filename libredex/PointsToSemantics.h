@@ -210,7 +210,7 @@ struct PointsToOperation {
   union {
     DexMethodRef* dex_method;
     DexFieldRef* dex_field;
-    DexString* dex_string;
+    const DexString* dex_string;
     DexType* dex_type;
     size_t parameter;
     SpecialPointsToEdge special_edge;
@@ -226,7 +226,7 @@ struct PointsToOperation {
   PointsToOperation(PointsToOperationKind k, DexFieldRef* f)
       : kind(k), dex_field(f) {}
 
-  PointsToOperation(PointsToOperationKind k, DexString* s)
+  PointsToOperation(PointsToOperationKind k, const DexString* s)
       : kind(k), dex_string(s) {}
 
   PointsToOperation(PointsToOperationKind k, DexType* t)

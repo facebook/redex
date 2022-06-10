@@ -14,7 +14,7 @@
 
 #include <sstream>
 
-void DexCallSite::gather_strings(std::vector<DexString*>& lstring) const {
+void DexCallSite::gather_strings(std::vector<const DexString*>& lstring) const {
   lstring.emplace_back(m_linker_method_name);
   m_linker_method_type->gather_strings(lstring);
   for (auto ev : m_linker_method_args) {

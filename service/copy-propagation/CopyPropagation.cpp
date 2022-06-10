@@ -379,7 +379,7 @@ class AliasFixpointIterator final
       break;
     case OPCODE_CONST_STRING: {
       if (m_config.eliminate_const_strings) {
-        DexString* str = insn->get_string();
+        auto* str = insn->get_string();
         source.lower = Value{str};
       }
       break;

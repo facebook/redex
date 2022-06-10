@@ -67,37 +67,37 @@ class DexDebugInstruction : public Gatherable {
 
 class DexDebugOpcodeSetFile : public DexDebugInstruction {
  private:
-  DexString* m_str;
+  const DexString* m_str;
 
  public:
-  explicit DexDebugOpcodeSetFile(DexString* str)
+  explicit DexDebugOpcodeSetFile(const DexString* str)
       : DexDebugInstruction(DBG_SET_FILE) {
     m_str = str;
   }
 
   void encode(DexOutputIdx* dodx, uint8_t*& encdata) override;
-  void gather_strings(std::vector<DexString*>& lstring) const override;
+  void gather_strings(std::vector<const DexString*>& lstring) const override;
 
   std::unique_ptr<DexDebugInstruction> clone() const override {
     return std::make_unique<DexDebugOpcodeSetFile>(*this);
   }
 
-  DexString* file() const { return m_str; }
+  const DexString* file() const { return m_str; }
 
-  void set_file(DexString* file) { m_str = file; }
+  void set_file(const DexString* file) { m_str = file; }
 };
 
 class DexDebugOpcodeStartLocal : public DexDebugInstruction {
  private:
-  DexString* m_name;
+  const DexString* m_name;
   DexType* m_type;
-  DexString* m_sig;
+  const DexString* m_sig;
 
  public:
   DexDebugOpcodeStartLocal(uint32_t rnum,
-                           DexString* name,
+                           const DexString* name,
                            DexType* type,
-                           DexString* sig = nullptr)
+                           const DexString* sig = nullptr)
       : DexDebugInstruction(DBG_START_LOCAL, rnum) {
     m_name = name;
     m_type = type;
@@ -106,16 +106,16 @@ class DexDebugOpcodeStartLocal : public DexDebugInstruction {
   }
 
   void encode(DexOutputIdx* dodx, uint8_t*& encdata) override;
-  void gather_strings(std::vector<DexString*>& lstring) const override;
+  void gather_strings(std::vector<const DexString*>& lstring) const override;
   void gather_types(std::vector<DexType*>& ltype) const override;
 
   std::unique_ptr<DexDebugInstruction> clone() const override {
     return std::make_unique<DexDebugOpcodeStartLocal>(*this);
   }
 
-  DexString* name() const { return m_name; }
+  const DexString* name() const { return m_name; }
 
   DexType* type() const { return m_type; }
 
-  DexString* sig() const { return m_sig; }
+  const DexString* sig() const { return m_sig; }
 };

@@ -123,7 +123,7 @@ void AnalysisImpl::filter_list(const std::vector<std::string>& list,
   for (const auto& intf_it : single_impls) {
     const auto intf = intf_it.first;
     const auto intf_cls = type_class(intf);
-    const std::string& intf_name = intf_cls->get_deobfuscated_name();
+    const std::string& intf_name = intf_cls->get_deobfuscated_name_or_empty();
     bool match = find_in_list(intf_name);
     if (match && keep_match) continue;
     if (!match && !keep_match) continue;
@@ -135,7 +135,7 @@ void AnalysisImpl::filter_proguard_special_interface() {
   for (const auto& intf_it : single_impls) {
     const auto intf = intf_it.first;
     const auto intf_cls = type_class(intf);
-    const std::string& intf_name = intf_cls->get_deobfuscated_name();
+    const std::string& intf_name = intf_cls->get_deobfuscated_name_or_empty();
     if (pg_map.is_special_interface(intf_name)) {
       escape_interface(intf, FILTERED);
     }

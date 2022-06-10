@@ -112,7 +112,7 @@ void assert_old_types_have_definitions(
   }
 }
 
-DexString* gen_new_name(const std::string& org_name, size_t seed) {
+const DexString* gen_new_name(const std::string& org_name, size_t seed) {
   constexpr const char* mangling_affix = "$REDEX$";
   auto end = org_name.find(mangling_affix);
   std::string new_name = org_name.substr(0, end);
@@ -154,7 +154,7 @@ size_t hash_signature(const DexMethodRef* method) {
 struct VMethodGroup {
   // The possible new name. We may not need it if the later updating would not
   // lead any collision or shadowing.
-  DexString* possible_new_name{nullptr};
+  const DexString* possible_new_name{nullptr};
   DexType* old_type_ref{nullptr};
   DexType* new_type_ref{nullptr};
   std::unordered_set<DexMethod*> methods;
@@ -177,7 +177,7 @@ using VMethodsGroups = std::map<VMethodGroupKey, VMethodGroup>;
 
 void add_vmethod_to_group(DexType* old_type_ref,
                           DexType* new_type_ref,
-                          DexString* possible_new_name,
+                          const DexString* possible_new_name,
                           DexMethod* method,
                           VMethodGroup* group) {
   if (group->possible_new_name) {
@@ -428,11 +428,11 @@ TypeRefUpdater::TypeRefUpdater(
   assert_old_types_have_definitions(old_to_new);
 }
 
-DexString* new_name(const DexMethodRef* method) {
+const DexString* new_name(const DexMethodRef* method) {
   return gen_new_name(method->str(), hash_signature(method));
 }
 
-DexString* new_name(const DexFieldRef* field) {
+const DexString* new_name(const DexFieldRef* field) {
   size_t seed = 0;
   boost::hash_combine(seed, field->str());
   boost::hash_combine(seed, field->get_type()->str());

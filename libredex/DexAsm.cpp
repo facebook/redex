@@ -74,7 +74,7 @@ IRInstruction* dasm(IROpcode opcode, std::initializer_list<Operand> args) {
 }
 
 IRInstruction* dasm(IROpcode opcode,
-                    DexString* string,
+                    const DexString* string,
                     std::initializer_list<Operand> args) {
   auto insn = new IRInstruction(opcode);
   insn->set_string(string);

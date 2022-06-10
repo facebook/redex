@@ -28,7 +28,7 @@ FixpointIterator::FixpointIterator(
     const cfg::ControlFlowGraph& cfg,
     std::unordered_set<const IRInstruction*> allocators,
     std::unordered_set<DexMethodRef*> safe_method_refs,
-    std::unordered_set<DexString*> safe_method_names)
+    std::unordered_set<const DexString*> safe_method_names)
     : ir_analyzer::BaseIRAnalyzer<Environment>(cfg),
       m_allocators(std::move(allocators)),
       m_safe_method_refs(std::move(safe_method_refs)),
@@ -63,7 +63,7 @@ BlameMap analyze_escapes(cfg::ControlFlowGraph& cfg,
                          std::initializer_list<SafeMethod> safe_methods) {
 
   std::unordered_set<DexMethodRef*> safe_method_refs;
-  std::unordered_set<DexString*> safe_method_names;
+  std::unordered_set<const DexString*> safe_method_names;
   for (const auto& safe : safe_methods) {
     switch (safe.type) {
     case SafeMethod::ByRef:

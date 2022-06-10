@@ -259,7 +259,7 @@ void DexClassHasher::hash(const DexMethod* m) {
   hash(static_cast<const DexMethodRef*>(m));
   hash(m->get_anno_set());
   hash(m->get_access());
-  hash(m->get_deobfuscated_name());
+  hash(m->get_deobfuscated_name_or_empty());
   hash(m->get_param_anno());
   hash(m->get_code());
 }
@@ -357,7 +357,7 @@ void DexClassHasher::hash(const DexField* f) {
   hash(f->get_anno_set());
   hash(f->get_static_value());
   hash(f->get_access());
-  hash(f->get_deobfuscated_name());
+  hash(f->get_deobfuscated_name_or_empty());
 }
 
 DexHash DexClassHasher::run() {

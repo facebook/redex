@@ -200,7 +200,7 @@ class value_to_instruction_visitor final
       return {};
     }
     IRInstruction* insn = new IRInstruction(OPCODE_CONST_STRING);
-    insn->set_string(const_cast<DexString*>(*cst));
+    insn->set_string(*cst);
     return {insn, (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
                       ->set_dest(m_original->dest())};
   }

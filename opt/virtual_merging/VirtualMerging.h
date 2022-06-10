@@ -146,7 +146,7 @@ class VirtualMerging {
 
   void find_unsupported_virtual_scopes();
   std::unordered_set<const VirtualScope*> m_unsupported_virtual_scopes;
-  std::unordered_map<DexString*, std::unordered_set<DexProto*>>
+  std::unordered_map<const DexString*, std::unordered_set<DexProto*>>
       m_unsupported_named_protos;
 
   void compute_mergeable_scope_methods();

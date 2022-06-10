@@ -13,20 +13,20 @@
 #include "DexClass.h"
 #include "DexMethodHandle.h"
 
-#define INIT_DMAP_ID(TYPE, CACHETYPE)                                  \
+#define INIT_DMAP_ID(TYPE)                                             \
   always_assert_log(dh->TYPE##_ids_off < dh->file_size,                \
                     #TYPE " section offset out of range");             \
   m_##TYPE##_ids = (dex_##TYPE##_id*)(m_dexbase + dh->TYPE##_ids_off); \
   m_##TYPE##_ids_size = dh->TYPE##_ids_size;                           \
-  m_##TYPE##_cache = (CACHETYPE*)calloc(dh->TYPE##_ids_size, sizeof(CACHETYPE))
+  m_##TYPE##_cache.resize(dh->TYPE##_ids_size)
 
 DexIdx::DexIdx(const dex_header* dh) {
   m_dexbase = (const uint8_t*)dh;
-  INIT_DMAP_ID(string, DexString*);
-  INIT_DMAP_ID(type, DexType*);
-  INIT_DMAP_ID(field, DexFieldRef*);
-  INIT_DMAP_ID(method, DexMethodRef*);
-  INIT_DMAP_ID(proto, DexProto*);
+  INIT_DMAP_ID(string);
+  INIT_DMAP_ID(type);
+  INIT_DMAP_ID(field);
+  INIT_DMAP_ID(method);
+  INIT_DMAP_ID(proto);
 
   dex_map_list* map_list = (dex_map_list*)(m_dexbase + dh->map_off);
   for (uint32_t i = 0; i < map_list->size; i++) {
@@ -37,32 +37,16 @@ DexIdx::DexIdx(const dex_header* dh) {
           (dex_callsite_id*)((uint8_t*)dh + item.offset);
       m_callsite_ids = callsite_ids;
       m_callsite_ids_size = item.size;
-      m_callsite_cache =
-          (DexCallSite**)calloc(m_callsite_ids_size, sizeof(DexCallSite*));
+      m_callsite_cache.resize(m_callsite_ids_size);
     } break;
     case TYPE_METHOD_HANDLE_ITEM: {
       dex_methodhandle_id* methodhandle_ids =
           (dex_methodhandle_id*)((uint8_t*)dh + item.offset);
       m_methodhandle_ids = methodhandle_ids;
       m_methodhandle_ids_size = item.size;
-      m_methodhandle_cache = (DexMethodHandle**)calloc(
-          m_methodhandle_ids_size, sizeof(DexMethodHandle*));
+      m_methodhandle_cache.resize(m_methodhandle_ids_size);
     } break;
     }
-  }
-}
-
-DexIdx::~DexIdx() {
-  free(m_string_cache);
-  free(m_type_cache);
-  free(m_field_cache);
-  free(m_method_cache);
-  free(m_proto_cache);
-  if (m_callsite_cache) {
-    free(m_callsite_cache);
-  }
-  if (m_methodhandle_cache) {
-    free(m_methodhandle_cache);
   }
 }
 
@@ -88,7 +72,7 @@ DexCallSite* DexIdx::get_callsiteidx_fromdex(uint32_t csidx) {
                     ev_linker_method_type->evtype());
   DexMethodHandle* linker_method_handle =
       ((DexEncodedValueMethodHandle*)ev_linker_method_handle)->methodhandle();
-  DexString* linker_method_name =
+  auto linker_method_name =
       ((DexEncodedValueString*)ev_linker_method_name)->string();
   DexProto* linker_method_proto =
       ((DexEncodedValueMethodType*)ev_linker_method_type)->proto();
@@ -119,7 +103,7 @@ DexMethodHandle* DexIdx::get_methodhandleidx_fromdex(uint32_t mhidx) {
   }
 }
 
-DexString* DexIdx::get_stringidx_fromdex(uint32_t stridx) {
+const DexString* DexIdx::get_stringidx_fromdex(uint32_t stridx) {
   redex_assert(stridx < m_string_ids_size);
   uint32_t stroff = m_string_ids[stridx].offset;
   always_assert_log(stroff < ((dex_header*)m_dexbase)->file_size,
@@ -133,7 +117,7 @@ DexString* DexIdx::get_stringidx_fromdex(uint32_t stridx) {
 DexType* DexIdx::get_typeidx_fromdex(uint32_t typeidx) {
   redex_assert(typeidx < m_type_ids_size);
   uint32_t stridx = m_type_ids[typeidx].string_idx;
-  DexString* dexstr = get_stringidx(stridx);
+  auto dexstr = get_stringidx(stridx);
   return DexType::make_type(dexstr);
 }
 
@@ -141,7 +125,7 @@ DexFieldRef* DexIdx::get_fieldidx_fromdex(uint32_t fidx) {
   redex_assert(fidx < m_field_ids_size);
   DexType* container = get_typeidx(m_field_ids[fidx].classidx);
   DexType* ftype = get_typeidx(m_field_ids[fidx].typeidx);
-  DexString* name = get_stringidx(m_field_ids[fidx].nameidx);
+  auto name = get_stringidx(m_field_ids[fidx].nameidx);
   return DexField::make_field(container, name, ftype);
 }
 
@@ -149,14 +133,14 @@ DexMethodRef* DexIdx::get_methodidx_fromdex(uint32_t midx) {
   redex_assert(midx < m_method_ids_size);
   DexType* container = get_typeidx(m_method_ids[midx].classidx);
   DexProto* proto = get_protoidx(m_method_ids[midx].protoidx);
-  DexString* name = get_stringidx(m_method_ids[midx].nameidx);
+  auto name = get_stringidx(m_method_ids[midx].nameidx);
   return DexMethod::make_method(container, name, proto);
 }
 
 DexProto* DexIdx::get_protoidx_fromdex(uint32_t pidx) {
   redex_assert(pidx < m_proto_ids_size);
   DexType* rtype = get_typeidx(m_proto_ids[pidx].rtypeidx);
-  DexString* shorty = get_stringidx(m_proto_ids[pidx].shortyidx);
+  auto shorty = get_stringidx(m_proto_ids[pidx].shortyidx);
   DexTypeList* args = get_type_list(m_proto_ids[pidx].param_off);
   return DexProto::make_proto(rtype, args, shorty);
 }

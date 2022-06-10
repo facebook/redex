@@ -79,8 +79,8 @@ DexMethod* find_method(const DexClass* cls, const std::string& name_and_proto) {
  */
 template <typename T>
 void serialize_name_and_rstate(const T* obj, std::ofstream& ostrm) {
-  if (show(obj) != obj->get_deobfuscated_name()) {
-    serialize_str(obj->get_deobfuscated_name(), ostrm);
+  if (show(obj) != obj->get_deobfuscated_name_or_empty()) {
+    serialize_str(obj->get_deobfuscated_name_or_empty(), ostrm);
   } else {
     serialize_str("", ostrm);
   }

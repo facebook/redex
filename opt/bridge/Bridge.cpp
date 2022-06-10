@@ -172,7 +172,8 @@ void do_inlining(DexMethod* bridge, DexMethod* bridgee) {
  * args/return of generics, but it's the same concept.
  */
 class BridgeRemover {
-  using MethodRef = std::tuple<const DexType*, DexString*, DexProto*>;
+  using MethodRef =
+      std::tuple<const DexType*, const DexString*, const DexProto*>;
 
   struct MethodRefHash {
     size_t operator()(const MethodRef& m) const {

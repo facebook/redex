@@ -22,10 +22,10 @@ class DexProto;
 struct DexMethodSpec {
   /* Method related members */
   DexType* cls = nullptr;
-  DexString* name = nullptr;
+  const DexString* name = nullptr;
   DexProto* proto = nullptr;
   DexMethodSpec() = default;
-  DexMethodSpec(DexType* c, DexString* n, DexProto* p)
+  DexMethodSpec(DexType* c, const DexString* n, DexProto* p)
       : cls(c), name(n), proto(p) {}
 
   bool operator==(const DexMethodSpec& r) const {
@@ -40,11 +40,11 @@ struct DexMethodSpec {
 struct DexFieldSpec {
   /* Field related members */
   DexType* cls = nullptr;
-  DexString* name = nullptr;
+  const DexString* name = nullptr;
   DexType* type = nullptr;
 
   DexFieldSpec() = default;
-  DexFieldSpec(DexType* c, DexString* n, DexType* t)
+  DexFieldSpec(DexType* c, const DexString* n, DexType* t)
       : cls(c), name(n), type(t) {}
 
   bool operator==(const DexFieldSpec& r) const {

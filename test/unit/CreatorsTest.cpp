@@ -129,5 +129,7 @@ TEST_F(CreatorsTest, ClassCreator) {
   auto foo_type = DexType::get_type(foo);
   auto bar_type = DexType::get_type(bar);
   EXPECT_EQ(foo_type, cls->get_type());
-  EXPECT_EQ(bar_type, cls->get_type());
+  if (kInsertDeobfuscatedNameLinks) {
+    EXPECT_EQ(bar_type, cls->get_type());
+  }
 }

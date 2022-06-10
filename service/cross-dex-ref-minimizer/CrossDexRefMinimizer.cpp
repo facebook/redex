@@ -108,7 +108,7 @@ void CrossDexRefMinimizer::gather_refs(DexClass* cls,
                                        std::vector<DexMethodRef*>& method_refs,
                                        std::vector<DexFieldRef*>& field_refs,
                                        std::vector<DexType*>& types,
-                                       std::vector<DexString*>& strings) {
+                                       std::vector<const DexString*>& strings) {
   cls->gather_methods(method_refs);
   cls->gather_fields(field_refs);
   cls->gather_types(types);
@@ -138,10 +138,10 @@ void CrossDexRefMinimizer::sample(DexClass* cls) {
   std::vector<DexMethodRef*> method_refs;
   std::vector<DexFieldRef*> field_refs;
   std::vector<DexType*> types;
-  std::vector<DexString*> strings;
+  std::vector<const DexString*> strings;
   gather_refs(cls, method_refs, field_refs, types, strings);
   auto increment = [&ref_counts = m_ref_counts,
-                    &max_ref_count = m_max_ref_count](void* ref) {
+                    &max_ref_count = m_max_ref_count](const void* ref) {
     size_t& count = ref_counts[ref];
     if (count < std::numeric_limits<size_t>::max() && ++count > max_ref_count) {
       max_ref_count = count;
@@ -176,7 +176,7 @@ void CrossDexRefMinimizer::insert(DexClass* cls) {
   std::vector<DexMethodRef*> method_refs;
   std::vector<DexFieldRef*> field_refs;
   std::vector<DexType*> types;
-  std::vector<DexString*> strings;
+  std::vector<const DexString*> strings;
   gather_refs(cls, method_refs, field_refs, types, strings);
 
   auto& refs = class_info.refs;
@@ -187,7 +187,7 @@ void CrossDexRefMinimizer::insert(DexClass* cls) {
 
   auto add_weight = [&ref_counts = m_ref_counts,
                      max_ref_count = m_max_ref_count, &refs, &refs_weight,
-                     &seed_weight](void* ref, size_t item_weight,
+                     &seed_weight](const void* ref, size_t item_weight,
                                    size_t item_seed_weight) {
     auto it = ref_counts.find(ref);
     auto ref_count = it == ref_counts.end() ? 1 : it->second;
@@ -226,8 +226,8 @@ void CrossDexRefMinimizer::insert(DexClass* cls) {
 
   std::unordered_map<DexClass*, CrossDexRefMinimizer::ClassInfoDelta>
       affected_classes;
-  for (const std::pair<void*, uint32_t>& p : refs) {
-    void* ref = p.first;
+  for (const auto& p : refs) {
+    auto ref = p.first;
     uint32_t weight = p.second;
     auto& classes = m_ref_classes[ref];
     size_t frequency = classes.size();
@@ -362,8 +362,8 @@ size_t CrossDexRefMinimizer::erase(DexClass* cls, bool emitted, bool reset) {
       affected_classes;
   const auto& refs = class_info.refs;
   size_t old_applied_refs = m_applied_refs.size();
-  for (const std::pair<void*, uint32_t>& p : refs) {
-    void* ref = p.first;
+  for (const std::pair<const void*, uint32_t>& p : refs) {
+    auto* ref = p.first;
     uint32_t weight = p.second;
     auto& classes = m_ref_classes.at(ref);
     size_t frequency = classes.size();

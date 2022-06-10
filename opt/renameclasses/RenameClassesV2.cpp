@@ -125,7 +125,7 @@ bool is_allowed_layout_class(
 std::unordered_set<std::string>
 RenameClassesPassV2::build_dont_rename_class_name_literals(Scope& scope) {
   using namespace boost::algorithm;
-  std::vector<DexString*> all_strings;
+  std::vector<const DexString*> all_strings;
   for (auto clazz : scope) {
     clazz->gather_strings(all_strings);
   }
@@ -383,7 +383,7 @@ static void sanity_check(const Scope& scope,
   for (const auto& it : name_mapping.get_class_map()) {
     external_names.emplace(java_names::internal_to_external(it.first->c_str()));
   }
-  std::vector<DexString*> all_strings;
+  std::vector<const DexString*> all_strings;
   for (auto clazz : scope) {
     clazz->gather_strings(all_strings);
   }

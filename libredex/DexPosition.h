@@ -23,16 +23,16 @@ class DexString;
 class DexDebugItem;
 
 struct DexPosition final {
-  DexString* method{nullptr};
-  DexString* file{nullptr};
+  const DexString* method{nullptr};
+  const DexString* file{nullptr};
   uint32_t line;
   // when a function gets inlined for the first time, all its DexPositions will
   // have the DexPosition of the callsite as their parent.
   DexPosition* parent{nullptr};
   explicit DexPosition(uint32_t line);
-  DexPosition(DexString* method, DexString* file, uint32_t line);
+  DexPosition(const DexString* method, const DexString* file, uint32_t line);
 
-  void bind(DexString* method_, DexString* file_);
+  void bind(const DexString* method_, const DexString* file_);
   bool operator==(const DexPosition&) const;
 
   static std::unique_ptr<DexPosition> make_synthetic_entry_position(
@@ -129,15 +129,15 @@ class PositionPatternSwitchManager {
       m_switches_map;
   std::vector<PositionSwitch> m_switches;
 
-  DexString* m_pattern_string;
-  DexString* m_switch_string;
-  DexString* m_unknown_source_string;
+  const DexString* m_pattern_string;
+  const DexString* m_switch_string;
+  const DexString* m_unknown_source_string;
 };
 
 class PositionMapper {
  public:
   virtual ~PositionMapper(){};
-  virtual DexString* get_source_file(const DexClass*) = 0;
+  virtual const DexString* get_source_file(const DexClass*) = 0;
   virtual uint32_t position_to_line(DexPosition*) = 0;
   virtual void register_position(DexPosition* pos) = 0;
   virtual void write_map() = 0;
@@ -167,7 +167,7 @@ class RealPositionMapper : public PositionMapper {
  public:
   explicit RealPositionMapper(const std::string& filename_v2)
       : m_filename_v2(filename_v2) {}
-  DexString* get_source_file(const DexClass*) override;
+  const DexString* get_source_file(const DexClass*) override;
   uint32_t position_to_line(DexPosition*) override;
   void register_position(DexPosition* pos) override;
   void write_map() override;
@@ -176,7 +176,7 @@ class RealPositionMapper : public PositionMapper {
 
 class NoopPositionMapper : public PositionMapper {
  public:
-  DexString* get_source_file(const DexClass*) override;
+  const DexString* get_source_file(const DexClass*) override;
   uint32_t position_to_line(DexPosition* pos) override { return pos->line; }
   void register_position(DexPosition* pos) override {}
   void write_map() override {}

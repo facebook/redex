@@ -89,12 +89,12 @@ struct EnumUtil {
 
   const Config& m_config;
 
-  DexString* CLINIT_METHOD_STR = DexString::make_string("<clinit>");
-  DexString* REDEX_NAME = DexString::make_string("redex$OE$name");
-  DexString* REDEX_HASHCODE = DexString::make_string("redex$OE$hashCode");
-  DexString* REDEX_STRING_VALUEOF =
+  const DexString* CLINIT_METHOD_STR = DexString::make_string("<clinit>");
+  const DexString* REDEX_NAME = DexString::make_string("redex$OE$name");
+  const DexString* REDEX_HASHCODE = DexString::make_string("redex$OE$hashCode");
+  const DexString* REDEX_STRING_VALUEOF =
       DexString::make_string("redex$OE$String_valueOf");
-  DexString* REDEX_VALUEOF = DexString::make_string("redex$OE$valueOf");
+  const DexString* REDEX_VALUEOF = DexString::make_string("redex$OE$valueOf");
   const DexString* INIT_METHOD_STR = DexString::make_string("<init>");
   const DexString* VALUES_METHOD_STR = DexString::make_string("values");
   const DexString* VALUEOF_METHOD_STR = DexString::make_string("valueOf");
@@ -448,7 +448,7 @@ struct EnumUtil {
   DexMethodRef* make_values_method(DexClass* cls,
                                    DexFieldRef* values_field,
                                    uint32_t total_integer_fields) {
-    DexString* name = DexString::make_string("values");
+    auto name = DexString::make_string("values");
     auto integer_array_type = type::make_array_type(INTEGER_TYPE);
     DexProto* proto = DexProto::make_proto(
         integer_array_type, DexTypeList::make_type_list({type::_int()}));
@@ -1264,12 +1264,11 @@ class EnumTransformer final {
     auto prev_block = cfg.entry_block();
     for (auto& pair :
          m_enum_attributes_map[ref->get_class()].get_ordered_names()) {
-      prev_block->push_back(
-          {dasm(OPCODE_CONST_STRING, const_cast<DexString*>(pair.second)),
-           dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {1_v}),
-           dasm(OPCODE_INVOKE_VIRTUAL, m_enum_util->STRING_EQ_METHOD,
-                {0_v, 1_v}),
-           dasm(OPCODE_MOVE_RESULT, {3_v})});
+      prev_block->push_back({dasm(OPCODE_CONST_STRING, pair.second),
+                             dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {1_v}),
+                             dasm(OPCODE_INVOKE_VIRTUAL,
+                                  m_enum_util->STRING_EQ_METHOD, {0_v, 1_v}),
+                             dasm(OPCODE_MOVE_RESULT, {3_v})});
 
       auto equal_block = cfg.create_block();
       {
@@ -1323,10 +1322,9 @@ class EnumTransformer final {
          m_enum_attributes_map[ref->get_class()].get_ordered_names()) {
       auto block = cfg.create_block();
       cases.emplace_back(pair.first, block);
-      block->push_back(
-          {dasm(OPCODE_CONST_STRING, const_cast<DexString*>(pair.second)),
-           dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {1_v}),
-           dasm(OPCODE_RETURN_OBJECT, {1_v})});
+      block->push_back({dasm(OPCODE_CONST_STRING, pair.second),
+                        dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {1_v}),
+                        dasm(OPCODE_RETURN_OBJECT, {1_v})});
     }
     // This goto edge should never be taken, but we need a goto edge because the
     // switch is not a valid way to end a method. A switch cannot end a block
@@ -1414,10 +1412,9 @@ class EnumTransformer final {
       if (ifield_type == type::java_lang_String()) {
         const DexString* value = pair.second.string_value;
         if (value) {
-          block->push_back(
-              {dasm(OPCODE_CONST_STRING, const_cast<DexString*>(value)),
-               dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {1_v}),
-               dasm(OPCODE_RETURN_OBJECT, {1_v})});
+          block->push_back({dasm(OPCODE_CONST_STRING, value),
+                            dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {1_v}),
+                            dasm(OPCODE_RETURN_OBJECT, {1_v})});
         } else {
           // The `Ljava/lang/String` value is a `null` constant.
           block->push_back({dasm(OPCODE_CONST, {1_v, 0_L}),

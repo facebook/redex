@@ -16,10 +16,12 @@
 
 DexPosition::DexPosition(uint32_t line) : line(line) {}
 
-DexPosition::DexPosition(DexString* method, DexString* file, uint32_t line)
+DexPosition::DexPosition(const DexString* method,
+                         const DexString* file,
+                         uint32_t line)
     : method(method), file(file), line(line) {}
 
-void DexPosition::bind(DexString* method_, DexString* file_) {
+void DexPosition::bind(const DexString* method_, const DexString* file_) {
   this->method = method_;
   this->file = file_;
 }
@@ -36,7 +38,7 @@ std::unique_ptr<DexPosition> DexPosition::make_synthetic_entry_position(
   auto method_str = DexString::make_string(show_deobfuscated(method));
 
   // For source, see if the class has a source.
-  DexString* source = nullptr;
+  const DexString* source = nullptr;
   auto cls = type_class(method->get_class());
   if (cls != nullptr) {
     source = cls->get_source_file();
@@ -373,7 +375,7 @@ PositionMapper* PositionMapper::make(const std::string& map_filename_v2) {
   }
 }
 
-DexString* RealPositionMapper::get_source_file(const DexClass*) {
+const DexString* RealPositionMapper::get_source_file(const DexClass*) {
   // Note: When remapping line numbers, we don't simply emit DEX_NO_INDEX for
   // the source_file_idx because that would cause stack traces to print
   // "at com.foo.bar (Unknown source)" even when line number data is
@@ -382,6 +384,6 @@ DexString* RealPositionMapper::get_source_file(const DexClass*) {
   return DexString::make_string("");
 }
 
-DexString* NoopPositionMapper::get_source_file(const DexClass* clz) {
+const DexString* NoopPositionMapper::get_source_file(const DexClass* clz) {
   return clz->get_source_file();
 }

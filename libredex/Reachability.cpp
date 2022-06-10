@@ -433,7 +433,7 @@ void TransitiveClosureMarker::gather_and_push(T t) {
 
 template <class Parent>
 void TransitiveClosureMarker::push_typelike_strings(
-    const Parent* parent, const std::vector<DexString*>& strings) {
+    const Parent* parent, const std::vector<const DexString*>& strings) {
   for (auto const& str : strings) {
     auto internal = java_names::external_to_internal(str->c_str());
     auto type = DexType::get_type(internal.c_str());

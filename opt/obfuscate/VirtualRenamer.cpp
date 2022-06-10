@@ -111,7 +111,7 @@ using RefsMap =
 // const std::string prefix = __Redex__";
 const std::string prefix;
 
-DexString* get_name(int seed) {
+const DexString* get_name(int seed) {
   std::string name;
   obfuscate_utils::compute_identifier(seed, &name);
   if (!prefix.empty()) {
@@ -178,20 +178,21 @@ struct VirtualRenamer {
     return seed;
   }
 
-  void rename(DexMethodRef* meth, DexString* name);
-  int rename_scope_ref(DexMethod* meth, DexString* name);
-  int rename_scope(const VirtualScope* scope, DexString* name);
+  void rename(DexMethodRef* meth, const DexString* name);
+  int rename_scope_ref(DexMethod* meth, const DexString* name);
+  int rename_scope(const VirtualScope* scope, const DexString* name);
 
-  DexString* get_unescaped_name(const std::vector<const VirtualScope*>& scopes,
-                                int& seed) const;
-  DexString* get_unescaped_name(const VirtualScope* scope, int& seed) const;
-  bool usable_name(DexString* name, const VirtualScope* scope) const;
+  const DexString* get_unescaped_name(
+      const std::vector<const VirtualScope*>& scopes, int& seed) const;
+  const DexString* get_unescaped_name(const VirtualScope* scope,
+                                      int& seed) const;
+  bool usable_name(const DexString* name, const VirtualScope* scope) const;
 };
 
 /**
  * Rename a given method with the given name.
  */
-void VirtualRenamer::rename(DexMethodRef* meth, DexString* name) {
+void VirtualRenamer::rename(DexMethodRef* meth, const DexString* name) {
   // redex_assert(meth->is_concrete() && !meth->is_external());
   DexMethodSpec spec;
   spec.cls = meth->get_class();
@@ -226,7 +227,7 @@ void VirtualRenamer::rename(DexMethodRef* meth, DexString* name) {
 /**
  * Rename all refs to the given method.
  */
-int VirtualRenamer::rename_scope_ref(DexMethod* meth, DexString* name) {
+int VirtualRenamer::rename_scope_ref(DexMethod* meth, const DexString* name) {
   int renamed = 0;
   const auto& refs = def_refs.find(meth);
   if (refs == def_refs.end()) return renamed;
@@ -240,7 +241,8 @@ int VirtualRenamer::rename_scope_ref(DexMethod* meth, DexString* name) {
 /**
  * Rename an entire virtual scope.
  */
-int VirtualRenamer::rename_scope(const VirtualScope* scope, DexString* name) {
+int VirtualRenamer::rename_scope(const VirtualScope* scope,
+                                 const DexString* name) {
   int renamed = 0;
   for (auto& vmeth : scope->methods) {
     rename(vmeth.first, name);
@@ -259,7 +261,7 @@ int VirtualRenamer::rename_scope(const VirtualScope* scope, DexString* name) {
  * A name is usable if it does not collide with an existing
  * one in the def and ref space.
  */
-bool VirtualRenamer::usable_name(DexString* name,
+bool VirtualRenamer::usable_name(const DexString* name,
                                  const VirtualScope* scope) const {
   const auto root = scope->type;
   const auto proto = scope->methods[0].first->get_proto();
@@ -286,8 +288,8 @@ bool VirtualRenamer::usable_name(DexString* name,
  * lead to any collision for all defs or refs.
  * * Update 'seed' *
  */
-DexString* VirtualRenamer::get_unescaped_name(const VirtualScope* scope,
-                                              int& seed) const {
+const DexString* VirtualRenamer::get_unescaped_name(const VirtualScope* scope,
+                                                    int& seed) const {
   seed = std::max(seed, get_next_virtualscope_seeds(scope));
   auto name = get_name(seed++);
   while (!usable_name(name, scope)) {
@@ -301,7 +303,7 @@ DexString* VirtualRenamer::get_unescaped_name(const VirtualScope* scope,
  * lead to any collision for all defs or refs.
  * * Update 'seed' *
  */
-DexString* VirtualRenamer::get_unescaped_name(
+const DexString* VirtualRenamer::get_unescaped_name(
     const std::vector<const VirtualScope*>& scopes, int& seed) const {
   // advance seed as necessary, skipping over dmethods
   for (const auto& scope : scopes) {
@@ -309,11 +311,16 @@ DexString* VirtualRenamer::get_unescaped_name(
   }
   while (true) {
     auto name = get_name(seed++);
-    for (const auto& scope : scopes) {
-      if (!usable_name(name, scope)) goto next_name;
+    auto is_usable = [&]() {
+      for (const auto& scope : scopes) {
+        if (!usable_name(name, scope)) return false;
+      }
+      return true;
+    }();
+    if (!is_usable) {
+      continue;
     }
     return name;
-  next_name:;
   }
 }
 

@@ -61,7 +61,7 @@ void InjectDebug::inject_register(
     reg_type = type::_int();
   }
 
-  DexString* reg_string = DexString::make_string("v" + std::to_string(reg));
+  auto reg_string = DexString::make_string("v" + std::to_string(reg));
   ir_code->insert_before(
       ir_it,
       std::make_unique<DexDebugOpcodeStartLocal>(reg, reg_string, reg_type));

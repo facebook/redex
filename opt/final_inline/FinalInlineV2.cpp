@@ -198,7 +198,7 @@ class encoding_visitor : public boost::static_visitor<DexEncodedValue*> {
     // "sput-object Ljava/lang/CharSequence;" pair. Such pair can cause a
     // libdvm.so abort with "Bogus static initialization".
     if (cst && m_field->get_type() == type::java_lang_String()) {
-      return new DexEncodedValueString(const_cast<DexString*>(*cst));
+      return new DexEncodedValueString(*cst);
     } else {
       return nullptr;
     }

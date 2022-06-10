@@ -33,8 +33,8 @@ class Shrinker {
       const Scope& scope,
       const ShrinkerConfig& config,
       const std::unordered_set<DexMethodRef*>& configured_pure_methods = {},
-      const std::unordered_set<DexString*>& configured_finalish_field_names =
-          {});
+      const std::unordered_set<const DexString*>&
+          configured_finalish_field_names = {});
 
   constant_propagation::Transform::Stats constant_propagation(
       bool is_static,
@@ -120,7 +120,7 @@ class Shrinker {
   std::unique_ptr<cse_impl::SharedState> m_cse_shared_state;
 
   std::unordered_set<DexMethodRef*> m_pure_methods;
-  std::unordered_set<DexString*> m_finalish_field_names;
+  std::unordered_set<const DexString*> m_finalish_field_names;
 
   constant_propagation::ImmutableAttributeAnalyzerState m_immut_analyzer_state;
 

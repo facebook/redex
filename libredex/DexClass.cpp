@@ -92,9 +92,9 @@ std::string build_fully_deobfuscated_name(const DexMethod* m) {
     // Well, just for safety.
     b << "<null>";
   } else {
-    b << std::string(cls->get_deobfuscated_name().empty()
+    b << std::string(cls->get_deobfuscated_name_or_empty().empty()
                          ? cls->get_name()->str()
-                         : cls->get_deobfuscated_name());
+                         : cls->get_deobfuscated_name_or_empty());
   }
 
   b << "." << m->get_simple_deobfuscated_name() << ":"
@@ -105,7 +105,7 @@ std::string build_fully_deobfuscated_name(const DexMethod* m) {
 // Return just the name of the method/field.
 template <typename T>
 std::string get_simple_deobf_name(const T* ref) {
-  auto full_name = ref->get_deobfuscated_name();
+  const auto& full_name = ref->get_deobfuscated_name_or_empty();
   if (full_name.empty()) {
     // This comes up for redex-created methods/fields.
     return std::string(ref->c_str());
@@ -118,6 +118,8 @@ std::string get_simple_deobf_name(const T* ref) {
   return full_name.substr(dot_pos + 1, colon_pos - dot_pos - 1);
 }
 } // namespace
+
+const std::string DexString::EMPTY;
 
 uint32_t DexString::length() const {
   if (is_simple()) {
@@ -173,6 +175,13 @@ DexFieldRef* DexField::make_field(const std::string& full_descriptor) {
   return DexField::make_field(cls, name, type);
 }
 
+void DexField::set_external() {
+  always_assert_log(!m_concrete, "Unexpected concrete field %s\n",
+                    self_show().c_str());
+  m_deobfuscated_name = self_show();
+  m_external = true;
+}
+
 DexDebugEntry::DexDebugEntry(uint32_t addr,
                              std::unique_ptr<DexDebugInstruction> insn)
     : type(DexDebugEntryType::Instruction), addr(addr), insn(std::move(insn)) {}
@@ -203,7 +212,8 @@ DexDebugEntry::~DexDebugEntry() {
   }
 }
 
-void DexDebugEntry::gather_strings(std::vector<DexString*>& lstring) const {
+void DexDebugEntry::gather_strings(
+    std::vector<const DexString*>& lstring) const {
   if (type == DexDebugEntryType::Instruction) {
     insn->gather_strings(lstring);
   }
@@ -420,7 +430,7 @@ int DexDebugItem::encode(
   return (int)(encdata - output);
 }
 
-void DexDebugItem::bind_positions(DexMethod* method, DexString* file) {
+void DexDebugItem::bind_positions(DexMethod* method, const DexString* file) {
   auto* method_str = DexString::make_string(show(method));
   for (auto& entry : m_dbg_entries) {
     switch (entry.type) {
@@ -439,7 +449,8 @@ void DexDebugItem::gather_types(std::vector<DexType*>& ltype) const {
   }
 }
 
-void DexDebugItem::gather_strings(std::vector<DexString*>& lstring) const {
+void DexDebugItem::gather_strings(
+    std::vector<const DexString*>& lstring) const {
   for (auto& entry : m_dbg_entries) {
     entry.gather_strings(lstring);
   }
@@ -590,7 +601,7 @@ int DexCode::encode(DexOutputIdx* dodx, uint32_t* output) {
   return (int)(hemit - ((uint8_t*)output));
 }
 
-DexMethod::DexMethod(DexType* type, DexString* name, DexProto* proto)
+DexMethod::DexMethod(DexType* type, const DexString* name, DexProto* proto)
     : DexMethodRef(type, name, proto) {
   m_virtual = false;
   m_anno = nullptr;
@@ -602,8 +613,9 @@ DexMethod::DexMethod(DexType* type, DexString* name, DexProto* proto)
 DexMethod::~DexMethod() = default;
 
 std::string DexMethod::get_fully_deobfuscated_name() const {
-  if (get_deobfuscated_name() == show(this)) {
-    return get_deobfuscated_name();
+  if (m_deobfuscated_name != nullptr &&
+      get_deobfuscated_name().str() == show(this)) {
+    return get_deobfuscated_name().str();
   }
   return build_fully_deobfuscated_name(this);
 }
@@ -633,7 +645,7 @@ size_t hash_value(const DexMethodSpec& r) {
 
 DexMethod* DexMethod::make_method_from(DexMethod* that,
                                        DexType* target_cls,
-                                       DexString* name) {
+                                       const DexString* name) {
   auto m = static_cast<DexMethod*>(
       DexMethod::make_method(target_cls, name, that->get_proto()));
   redex_assert(m != that);
@@ -662,7 +674,7 @@ DexMethod* DexMethod::make_method_from(DexMethod* that,
 
 DexMethod* DexMethod::make_full_method_from(DexMethod* that,
                                             DexType* target_cls,
-                                            DexString* name) {
+                                            const DexString* name) {
   auto m = make_method_from(that, target_cls, name);
   m->rstate = that->rstate;
   return m;
@@ -721,26 +733,58 @@ DexMethodRef* DexMethod::make_method(
 void DexClass::set_deobfuscated_name(const std::string& name) {
   // If the class has an old deobfuscated_name which is not equal to
   // `show(self)`, erase the name mapping from the global type map.
-  if (!m_deobfuscated_name.empty()) {
-    auto old_name = DexString::make_string(m_deobfuscated_name);
-    if (old_name != m_self->get_name()) {
-      g_redex->remove_type_name(old_name);
+  if (kInsertDeobfuscatedNameLinks && m_deobfuscated_name != nullptr) {
+    if (m_deobfuscated_name != m_self->get_name()) {
+      g_redex->remove_type_name(m_deobfuscated_name);
     }
   }
-  m_deobfuscated_name = name;
-  auto new_name = DexString::make_string(m_deobfuscated_name);
-  if (new_name == m_self->get_name()) {
+  m_deobfuscated_name = DexString::make_string(name);
+  if (!kInsertDeobfuscatedNameLinks) {
     return;
   }
-  auto existing_type = g_redex->get_type(new_name);
+  if (m_deobfuscated_name == m_self->get_name()) {
+    return;
+  }
+  auto existing_type = g_redex->get_type(m_deobfuscated_name);
   if (existing_type != nullptr) {
     TRACE(DC, 5,
           "Unable to alias type '%s' to deobfuscated name '%s' because type "
           "'%s' already exists.\n",
-          m_self->c_str(), new_name->c_str(), existing_type->c_str());
+          m_self->c_str(), m_deobfuscated_name->c_str(),
+          existing_type->c_str());
     return;
   }
-  g_redex->alias_type_name(m_self, new_name);
+  g_redex->alias_type_name(m_self, m_deobfuscated_name);
+}
+
+void DexClass::set_deobfuscated_name(const DexString* name) {
+  // If the class has an old deobfuscated_name which is not equal to
+  // `show(self)`, erase the name mapping from the global type map.
+  if (kInsertDeobfuscatedNameLinks && m_deobfuscated_name != nullptr) {
+    if (m_deobfuscated_name != m_self->get_name()) {
+      g_redex->remove_type_name(m_deobfuscated_name);
+    }
+  }
+  m_deobfuscated_name = name;
+  if (!kInsertDeobfuscatedNameLinks) {
+    return;
+  }
+  if (m_deobfuscated_name == m_self->get_name()) {
+    return;
+  }
+  auto existing_type = g_redex->get_type(m_deobfuscated_name);
+  if (existing_type != nullptr) {
+    TRACE(DC, 5,
+          "Unable to alias type '%s' to deobfuscated name '%s' because type "
+          "'%s' already exists.\n",
+          m_self->c_str(), m_deobfuscated_name->c_str(),
+          existing_type->c_str());
+    return;
+  }
+  g_redex->alias_type_name(m_self, m_deobfuscated_name);
+}
+void DexClass::set_deobfuscated_name(const DexString& name) {
+  set_deobfuscated_name(&name);
 }
 
 void DexClass::remove_method(const DexMethod* m) {
@@ -808,27 +852,31 @@ void DexMethod::set_deobfuscated_name(const std::string& name) {
   // If the method has an old deobfuscated_name which is not equal to the name,
   // erase the mapping using the old (and now invalid) deobfuscated_name from
   // the global type map.
-  if (!m_deobfuscated_name.empty()) {
-    auto old_name = DexString::make_string(m_deobfuscated_name);
-    if (old_name != this->get_name()) {
-      g_redex->erase_method(this->get_class(), old_name, this->get_proto());
+  if (kInsertDeobfuscatedNameLinks && m_deobfuscated_name != nullptr &&
+      !m_deobfuscated_name->str().empty()) {
+    if (m_deobfuscated_name != this->get_name()) {
+      g_redex->erase_method(this->get_class(), m_deobfuscated_name,
+                            this->get_proto());
     }
   }
-  m_deobfuscated_name = name;
-  auto new_name = DexString::make_string(m_deobfuscated_name);
-  if (new_name == this->get_name()) {
+  m_deobfuscated_name = DexString::make_string(name);
+  if (!kInsertDeobfuscatedNameLinks) {
     return;
   }
-  auto existing_method =
-      g_redex->get_method(this->get_class(), new_name, this->get_proto());
+  if (m_deobfuscated_name == this->get_name()) {
+    return;
+  }
+  auto existing_method = g_redex->get_method(
+      this->get_class(), m_deobfuscated_name, this->get_proto());
   if (existing_method != nullptr) {
     TRACE(DC, 5,
           "Unable to alias method '%s' to deobfuscated name '%s' because "
           "method '%s' already exists.\n ",
-          this->c_str(), new_name->c_str(), existing_method->c_str());
+          this->c_str(), m_deobfuscated_name->c_str(),
+          existing_method->c_str());
     return;
   }
-  g_redex->alias_method_name(this, new_name);
+  g_redex->alias_method_name(this, m_deobfuscated_name);
 }
 
 std::string DexMethod::get_simple_deobfuscated_name() const {
@@ -1237,7 +1285,8 @@ void DexTypeList::gather_types(C& ltype) const {
 }
 INSTANTIATE(DexTypeList::gather_types, DexType*)
 
-static DexString* make_shorty(const DexType* rtype, const DexTypeList* args) {
+static const DexString* make_shorty(const DexType* rtype,
+                                    const DexTypeList* args) {
   std::string s;
   s.push_back(type::type_shorty(rtype));
   if (args != nullptr) {
@@ -1264,13 +1313,17 @@ void DexProto::gather_types(C& ltype) const {
 }
 INSTANTIATE(DexProto::gather_types, DexType*)
 
-template <typename C>
-void DexProto::gather_strings(C& lstring) const {
+void DexProto::gather_strings(std::vector<const DexString*>& lstring) const {
   if (m_shorty) {
     c_append(lstring, m_shorty);
   }
 }
-INSTANTIATE(DexProto::gather_strings, DexString*)
+void DexProto::gather_strings(
+    std::unordered_set<const DexString*>& lstring) const {
+  if (m_shorty) {
+    c_append(lstring, m_shorty);
+  }
+}
 
 namespace {
 
@@ -1350,7 +1403,7 @@ void DexClass::gather_load_types(std::unordered_set<DexType*>& ltype) const {
 }
 
 template <typename C>
-void DexClass::gather_strings(C& lstring, bool exclude_loads) const {
+void DexClass::gather_strings_internal(C& lstring, bool exclude_loads) const {
   for (auto const& m : m_dmethods) {
     m->gather_strings(lstring, exclude_loads);
   }
@@ -1365,12 +1418,19 @@ void DexClass::gather_strings(C& lstring, bool exclude_loads) const {
   }
   if (m_source_file) c_append(lstring, m_source_file);
   if (m_anno) {
-    std::vector<DexString*> strings;
+    std::vector<const DexString*> strings;
     m_anno->gather_strings(strings);
     c_append_all(lstring, strings.begin(), strings.end());
   }
 }
-INSTANTIATE2(DexClass::gather_strings, DexString*, bool)
+void DexClass::gather_strings(std::vector<const DexString*>& lstring,
+                              bool exclude_loads) const {
+  gather_strings_internal(lstring, exclude_loads);
+}
+void DexClass::gather_strings(std::unordered_set<const DexString*>& lstring,
+                              bool exclude_loads) const {
+  gather_strings_internal(lstring, exclude_loads);
+}
 
 template <typename C>
 void DexClass::gather_fields(C& lfield) const {
@@ -1496,11 +1556,14 @@ void DexFieldRef::gather_types_shallow(C& ltype) const {
 }
 INSTANTIATE(DexFieldRef::gather_types_shallow, DexType*)
 
-template <typename C>
-void DexFieldRef::gather_strings_shallow(C& lstring) const {
+void DexFieldRef::gather_strings_shallow(
+    std::vector<const DexString*>& lstring) const {
   c_append(lstring, m_spec.name);
 }
-INSTANTIATE(DexFieldRef::gather_strings_shallow, DexString*)
+void DexFieldRef::gather_strings_shallow(
+    std::unordered_set<const DexString*>& lstring) const {
+  c_append(lstring, m_spec.name);
+}
 
 template <typename C>
 void DexField::gather_types(C& ltype) const {
@@ -1512,13 +1575,19 @@ void DexField::gather_types(C& ltype) const {
 INSTANTIATE(DexField::gather_types, DexType*)
 
 template <typename C>
-void DexField::gather_strings(C& lstring) const {
-  std::vector<DexString*> string_vec;
+void DexField::gather_strings_internal(C& lstring) const {
+  std::vector<const DexString*> string_vec;
   if (m_value) m_value->gather_strings(string_vec);
   if (m_anno) m_anno->gather_strings(string_vec);
   c_append_all(lstring, string_vec.begin(), string_vec.end());
 }
-INSTANTIATE(DexField::gather_strings, DexString*)
+void DexField::gather_strings(std::vector<const DexString*>& lstring) const {
+  gather_strings_internal(lstring);
+}
+void DexField::gather_strings(
+    std::unordered_set<const DexString*>& lstring) const {
+  gather_strings_internal(lstring);
+}
 
 template <typename C>
 void DexField::gather_fields(C& lfield) const {
@@ -1538,35 +1607,15 @@ void DexField::gather_methods(C& lmethod) const {
 }
 INSTANTIATE(DexField::gather_methods, DexMethodRef*)
 
-void DexField::set_deobfuscated_name(const std::string& name) {
-  // If the field has an old deobfuscated_name which is not equal to the name,
-  // erase the mapping using the old (and now invalid) deobfuscated_name from
-  // the global type map.
-  if (!m_deobfuscated_name.empty()) {
-    auto old_name = DexString::make_string(m_deobfuscated_name);
-    if (old_name != this->get_name()) {
-      g_redex->erase_field(this->get_class(), old_name, this->get_type());
-    }
-  }
-  m_deobfuscated_name = name;
-  auto new_name = DexString::make_string(m_deobfuscated_name);
-  if (new_name == this->get_name()) {
-    return;
-  }
-  auto existing_field =
-      g_redex->get_field(this->get_class(), new_name, this->get_type());
-  if (existing_field != nullptr) {
-    TRACE(DC, 5,
-          "Unable to alias field '%s' to deobfuscated name '%s' because "
-          "field '%s' already exists.\n ",
-          this->c_str(), new_name->c_str(), existing_field->c_str());
-    return;
-  }
-  g_redex->alias_field_name(this, new_name);
-}
-
 std::string DexField::get_simple_deobfuscated_name() const {
   return get_simple_deobf_name(this);
+}
+
+void DexMethod::set_external() {
+  always_assert_log(!m_concrete, "Unexpected concrete method %s\n",
+                    self_show().c_str());
+  m_deobfuscated_name = DexString::make_string(self_show());
+  m_external = true;
 }
 
 template <typename C>
@@ -1606,9 +1655,9 @@ void DexMethod::gather_methodhandles(C& lmethodhandle) const {
 }
 INSTANTIATE(DexMethod::gather_methodhandles, DexMethodHandle*)
 template <typename C>
-void DexMethod::gather_strings(C& lstring, bool exclude_loads) const {
+void DexMethod::gather_strings_internal(C& lstring, bool exclude_loads) const {
   // We handle m_name and proto in the first-layer gather.
-  std::vector<DexString*> strings_vec; // Simplify refactor.
+  std::vector<const DexString*> strings_vec; // Simplify refactor.
   if (m_code && !exclude_loads) m_code->gather_strings(strings_vec);
   if (m_anno) m_anno->gather_strings(strings_vec);
   auto param_anno = get_param_anno();
@@ -1620,7 +1669,15 @@ void DexMethod::gather_strings(C& lstring, bool exclude_loads) const {
   }
   c_append_all(lstring, strings_vec.begin(), strings_vec.end());
 }
-INSTANTIATE2(DexMethod::gather_strings, DexString*, bool)
+void DexMethod::gather_strings(std::vector<const DexString*>& lstring,
+                               bool exclude_loads) const {
+  gather_strings_internal(lstring, exclude_loads);
+}
+void DexMethod::gather_strings(std::unordered_set<const DexString*>& lstring,
+                               bool exclude_loads) const {
+  gather_strings_internal(lstring, exclude_loads);
+}
+
 template <typename C>
 void DexMethod::gather_fields(C& lfield) const {
   std::vector<DexFieldRef*> fields_vec; // Simplify refactor.
@@ -1686,12 +1743,16 @@ void DexMethodRef::gather_types_shallow(C& ltype) const {
 }
 INSTANTIATE(DexMethodRef::gather_types_shallow, DexType*)
 
-template <typename C>
-void DexMethodRef::gather_strings_shallow(C& lstring) const {
+void DexMethodRef::gather_strings_shallow(
+    std::vector<const DexString*>& lstring) const {
   lstring.insert(lstring.end(), m_spec.name);
   m_spec.proto->gather_strings(lstring);
 }
-INSTANTIATE(DexMethodRef::gather_strings_shallow, DexString*)
+void DexMethodRef::gather_strings_shallow(
+    std::unordered_set<const DexString*>& lstring) const {
+  lstring.insert(lstring.end(), m_spec.name);
+  m_spec.proto->gather_strings(lstring);
+}
 
 uint32_t DexCode::size() const {
   uint32_t size = 0;
@@ -1703,7 +1764,7 @@ uint32_t DexCode::size() const {
   return size;
 }
 
-DexProto* DexType::get_non_overlapping_proto(DexString* method_name,
+DexProto* DexType::get_non_overlapping_proto(const DexString* method_name,
                                              DexProto* orig_proto) {
   auto methodref_in_context =
       DexMethod::get_method(this, method_name, orig_proto);
@@ -1744,7 +1805,7 @@ void DexMethod::add_load_params(size_t num_add_loads) {
   }
 }
 
-void gather_components(std::vector<DexString*>& lstring,
+void gather_components(std::vector<const DexString*>& lstring,
                        std::vector<DexType*>& ltype,
                        std::vector<DexFieldRef*>& lfield,
                        std::vector<DexMethodRef*>& lmethod,
@@ -1753,7 +1814,7 @@ void gather_components(std::vector<DexString*>& lstring,
                        const DexClasses& classes,
                        bool exclude_loads) {
   // Gather references reachable from each class.
-  std::unordered_set<DexString*> strings;
+  std::unordered_set<const DexString*> strings;
   std::unordered_set<DexType*> types;
   std::unordered_set<DexFieldRef*> fields;
   std::unordered_set<DexMethodRef*> methods;
@@ -1808,3 +1869,14 @@ void gather_components(std::vector<DexString*>& lstring,
 std::string DexField::self_show() const { return show(this); }
 std::string DexMethod::self_show() const { return show(this); }
 std::string DexClass::self_show() const { return show(m_self); }
+
+void DexMethodRef::erase_method(DexMethodRef* mref) {
+  g_redex->erase_method(mref);
+  if (mref->is_def()) {
+    auto m = mref->as_def();
+    if (m->get_name() != m->get_deobfuscated_name_or_null()) {
+      g_redex->erase_method(m->get_class(), m->get_deobfuscated_name_or_null(),
+                            m->get_proto());
+    }
+  }
+}

@@ -45,7 +45,7 @@ class Value {
   union {
     reg_t m_reg;
     int64_t m_literal;
-    DexString* m_str;
+    const DexString* m_str;
     DexType* m_type;
     DexField* m_field;
     std::nullptr_t m_dummy;
@@ -93,7 +93,7 @@ class Value {
     return Value{Kind::STATIC_FINAL_UPPER, f};
   }
 
-  explicit Value(DexString* s) : m_kind(Kind::CONST_STRING), m_str(s) {}
+  explicit Value(const DexString* s) : m_kind(Kind::CONST_STRING), m_str(s) {}
   explicit Value(DexType* t) : m_kind(Kind::CONST_TYPE), m_type(t) {}
   explicit Value(DexField* f) : m_kind(Kind::STATIC_FINAL), m_field(f) {}
   explicit Value() : m_kind(Kind::NONE), m_dummy() {}

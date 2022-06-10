@@ -72,9 +72,9 @@ class TypeRefUpdater final {
 /**
  * original_name + "$RDX$" + hash_of_signature
  */
-DexString* new_name(const DexMethodRef* method);
+const DexString* new_name(const DexMethodRef* method);
 
-DexString* new_name(const DexFieldRef* field);
+const DexString* new_name(const DexFieldRef* field);
 
 // A helper to stringify method signature for the method dedup mapping file.
 std::string get_method_signature(const DexMethod* method);

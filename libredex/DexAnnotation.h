@@ -103,17 +103,17 @@ class DexEncodedValueBit : public DexEncodedValue {
 };
 
 class DexEncodedValueString : public DexEncodedValue {
-  DexString* m_string;
+  const DexString* m_string;
 
  public:
-  explicit DexEncodedValueString(DexString* string)
+  explicit DexEncodedValueString(const DexString* string)
       : DexEncodedValue(DEVT_STRING) {
     m_string = string;
   }
 
-  DexString* string() const { return m_string; }
-  void string(DexString* string) { m_string = string; }
-  void gather_strings(std::vector<DexString*>& lstring) const override;
+  const DexString* string() const { return m_string; }
+  void string(const DexString* string) { m_string = string; }
+  void gather_strings(std::vector<const DexString*>& lstring) const override;
   void encode(DexOutputIdx* dodx, uint8_t*& encdata) override;
 
   std::string show() const override;
@@ -226,7 +226,7 @@ class DexEncodedValueMethodType : public DexEncodedValue {
     m_proto = proto;
   }
 
-  void gather_strings(std::vector<DexString*>& lstring) const override;
+  void gather_strings(std::vector<const DexString*>& lstring) const override;
   void encode(DexOutputIdx* dodx, uint8_t*& encdata) override;
 
   DexProto* proto() const { return m_proto; }
@@ -311,7 +311,7 @@ class DexEncodedValueArray : public DexEncodedValue {
   void gather_types(std::vector<DexType*>& ltype) const override;
   void gather_fields(std::vector<DexFieldRef*>& lfield) const override;
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const override;
-  void gather_strings(std::vector<DexString*>& lstring) const override;
+  void gather_strings(std::vector<const DexString*>& lstring) const override;
   void encode(DexOutputIdx* dodx, uint8_t*& encdata) override;
 
   std::string show() const override;
@@ -355,10 +355,10 @@ DexEncodedValueArray* get_encoded_value_array(DexIdx* idx,
  */
 class DexAnnotationElement {
  public:
-  DexAnnotationElement(DexString* s, DexEncodedValue* ev)
+  DexAnnotationElement(const DexString* s, DexEncodedValue* ev)
       : string(s), encoded_value(ev) {}
 
-  DexString* string;
+  const DexString* string;
   DexEncodedValue* encoded_value;
 };
 
@@ -385,7 +385,7 @@ class DexEncodedValueAnnotation : public DexEncodedValue {
   void gather_types(std::vector<DexType*>& ltype) const override;
   void gather_fields(std::vector<DexFieldRef*>& lfield) const override;
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const override;
-  void gather_strings(std::vector<DexString*>& lstring) const override;
+  void gather_strings(std::vector<const DexString*>& lstring) const override;
   void encode(DexOutputIdx* dodx, uint8_t*& encdata) override;
 
   std::string show() const override;
@@ -405,7 +405,7 @@ class DexAnnotation : public Gatherable {
   void gather_types(std::vector<DexType*>& ltype) const override;
   void gather_fields(std::vector<DexFieldRef*>& lfield) const override;
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const override;
-  void gather_strings(std::vector<DexString*>& lstring) const override;
+  void gather_strings(std::vector<const DexString*>& lstring) const override;
 
   const EncodedAnnotations& anno_elems() const { return m_anno_elems; }
   void set_type(DexType* type) { m_type = type; }
@@ -433,7 +433,7 @@ class DexAnnotationSet : public Gatherable {
   void gather_types(std::vector<DexType*>& ltype) const override;
   void gather_fields(std::vector<DexFieldRef*>& lfield) const override;
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const override;
-  void gather_strings(std::vector<DexString*>& lstring) const override;
+  void gather_strings(std::vector<const DexString*>& lstring) const override;
 
   static std::unique_ptr<DexAnnotationSet> get_annotation_set(
       DexIdx* idx, uint32_t aset_off);

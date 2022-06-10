@@ -25,7 +25,7 @@ class Gatherable {
   virtual ~Gatherable(){};
 
  public:
-  virtual void gather_strings(std::vector<DexString*>& lstring) const {}
+  virtual void gather_strings(std::vector<const DexString*>& lstring) const {}
   virtual void gather_types(std::vector<DexType*>& ltype) const {}
   virtual void gather_fields(std::vector<DexFieldRef*>& lfield) const {}
   virtual void gather_methods(std::vector<DexMethodRef*>& lmethod) const {}

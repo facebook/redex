@@ -17,12 +17,12 @@
 #include "Show.h"
 
 void DexEncodedValueMethodType::gather_strings(
-    std::vector<DexString*>& lstring) const {
+    std::vector<const DexString*>& lstring) const {
   m_proto->gather_strings(lstring);
 }
 
 void DexEncodedValueString::gather_strings(
-    std::vector<DexString*>& lstring) const {
+    std::vector<const DexString*>& lstring) const {
   lstring.push_back(m_string);
 }
 
@@ -56,7 +56,7 @@ void DexEncodedValueMethodHandle::gather_methodhandles(
 }
 
 void DexEncodedValueArray::gather_strings(
-    std::vector<DexString*>& lstring) const {
+    std::vector<const DexString*>& lstring) const {
   for (auto ev : *m_evalues) {
     ev->gather_strings(lstring);
   }
@@ -83,7 +83,7 @@ void DexEncodedValueArray::gather_methods(
 }
 
 void DexEncodedValueAnnotation::gather_strings(
-    std::vector<DexString*>& lstring) const {
+    std::vector<const DexString*>& lstring) const {
   for (auto const& elem : *m_annotations) {
     lstring.push_back(elem.string);
     elem.encoded_value->gather_strings(lstring);
@@ -112,7 +112,8 @@ void DexEncodedValueAnnotation::gather_methods(
   }
 }
 
-void DexAnnotation::gather_strings(std::vector<DexString*>& lstring) const {
+void DexAnnotation::gather_strings(
+    std::vector<const DexString*>& lstring) const {
   for (auto const& anno : m_anno_elems) {
     lstring.push_back(anno.string);
     anno.encoded_value->gather_strings(lstring);
@@ -138,7 +139,8 @@ void DexAnnotation::gather_methods(std::vector<DexMethodRef*>& lmethod) const {
   }
 }
 
-void DexAnnotationSet::gather_strings(std::vector<DexString*>& lstring) const {
+void DexAnnotationSet::gather_strings(
+    std::vector<const DexString*>& lstring) const {
   for (auto const& anno : m_annotations) {
     anno->gather_strings(lstring);
   }
@@ -339,7 +341,7 @@ void DexEncodedValueAnnotation::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
   encdata = write_uleb128(encdata, tidx);
   encdata = write_uleb128(encdata, (uint32_t)m_annotations->size());
   for (auto const& dae : *m_annotations) {
-    DexString* str = dae.string;
+    auto str = dae.string;
     DexEncodedValue* dev = dae.encoded_value;
     uint32_t sidx = dodx->stringidx(str);
     encdata = write_uleb128(encdata, sidx);
@@ -350,7 +352,7 @@ void DexEncodedValueAnnotation::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
 static DexAnnotationElement get_annotation_element(DexIdx* idx,
                                                    const uint8_t*& encdata) {
   uint32_t sidx = read_uleb128(&encdata);
-  DexString* name = idx->get_stringidx(sidx);
+  auto name = idx->get_stringidx(sidx);
   always_assert_log(name != nullptr,
                     "Invalid string idx in annotation element");
   DexEncodedValue* dev = DexEncodedValue::get_encoded_value(idx, encdata);
@@ -475,7 +477,7 @@ DexEncodedValue* DexEncodedValue::get_encoded_value(DexIdx* idx,
     return new DexEncodedValueBit(evt, evarg > 0);
   case DEVT_STRING: {
     uint32_t evidx = (uint32_t)read_evarg(encdata, evarg);
-    DexString* evstring = idx->get_stringidx(evidx);
+    auto evstring = idx->get_stringidx(evidx);
     always_assert_log(evstring != nullptr,
                       "Invalid string idx in annotation element");
     return new DexEncodedValueString(evstring);
@@ -779,7 +781,7 @@ void DexAnnotation::vencode(DexOutputIdx* dodx, std::vector<uint8_t>& bytes) {
   uleb_append(bytes, dodx->typeidx(m_type));
   uleb_append(bytes, (uint32_t)m_anno_elems.size());
   for (auto elem : m_anno_elems) {
-    DexString* string = elem.string;
+    auto string = elem.string;
     DexEncodedValue* ev = elem.encoded_value;
     uleb_append(bytes, dodx->stringidx(string));
     ev->vencode(dodx, bytes);

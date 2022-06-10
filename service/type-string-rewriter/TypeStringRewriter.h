@@ -18,7 +18,8 @@
 namespace rewriter {
 
 class TypeStringMap {
-  std::map<DexString*, DexString*, dexstrings_comparator> m_type_name_map;
+  std::map<const DexString*, const DexString*, dexstrings_comparator>
+      m_type_name_map;
 
  public:
   TypeStringMap() {}
@@ -27,14 +28,14 @@ class TypeStringMap {
   /**
    * Add type mapping from old_name to new_name.
    */
-  void add_type_name(DexString* old_name, DexString* new_name);
+  void add_type_name(const DexString* old_name, const DexString* new_name);
   /**
    * Get a new type name for the old type name, return null if the old type name
    * does not exist in the mapping. Array types are supported properly.
    */
-  DexString* get_new_type_name(DexString* old_name) const;
-  const std::map<DexString*, DexString*, dexstrings_comparator>& get_class_map()
-      const {
+  const DexString* get_new_type_name(const DexString* old_name) const;
+  const std::map<const DexString*, const DexString*, dexstrings_comparator>&
+  get_class_map() const {
     return m_type_name_map;
   }
 };

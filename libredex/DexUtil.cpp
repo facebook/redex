@@ -30,7 +30,7 @@ DexAccessFlags merge_visibility(uint32_t vis1, uint32_t vis2) {
   return ACC_PRIVATE;
 }
 
-void create_runtime_exception_block(DexString* except_str,
+void create_runtime_exception_block(const DexString* except_str,
                                     std::vector<IRInstruction*>& block) {
   // clang-format off
   // new-instance v0, Ljava/lang/RuntimeException; // type@3852
@@ -87,19 +87,26 @@ Scope build_class_scope(const DexStoresVector& stores) {
   return build_class_scope(DexStoreClassesIterator(stores));
 }
 
+namespace {
+
 template <typename PrefixIt>
-bool starts_with_any_prefix(const std::string& str,
+bool starts_with_any_prefix(const DexString* str,
                             const PrefixIt& begin,
                             const PrefixIt& end) {
+  if (str == nullptr) {
+    return false;
+  }
   auto it = begin;
   while (it != end) {
-    if (boost::algorithm::starts_with(str, *it)) {
+    if (boost::algorithm::starts_with(str->str(), *it)) {
       return true;
     }
     it++;
   }
   return false;
 }
+
+} // namespace
 
 Scope build_class_scope_for_packages(
     const DexStoresVector& stores,
@@ -108,7 +115,7 @@ Scope build_class_scope_for_packages(
   for (auto const& store : stores) {
     for (auto& dex : store.get_dexen()) {
       for (auto& clazz : dex) {
-        if (starts_with_any_prefix(clazz->get_deobfuscated_name(),
+        if (starts_with_any_prefix(clazz->get_deobfuscated_name_or_null(),
                                    package_names.begin(),
                                    package_names.end())) {
           v.push_back(clazz);

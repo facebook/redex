@@ -210,13 +210,13 @@ void do_simple_method_tracing(DexClass* analysis_cls,
   std::vector<DexMethod*> to_instrument;
 
   auto worker = [&](DexMethod* method, size_t& total_size) -> int {
-    const auto& name = method->get_deobfuscated_name();
+    const auto& name = method->get_deobfuscated_name_or_empty();
     always_assert_log(
         !name.empty(),
         "Deobfuscated method name can't be empty: obfuscated "
         "name: %s, class: \'%s\'(%s)",
         SHOW(method->get_name()),
-        SHOW(type_class(method->get_class())->get_deobfuscated_name()),
+        type_class(method->get_class())->get_deobfuscated_name().c_str(),
         SHOW(method->get_class()->get_name()));
     always_assert_log(
         !method_names.count(name),
@@ -301,7 +301,7 @@ void do_simple_method_tracing(DexClass* analysis_cls,
   //  1) For all methods, collect (method id, method) pairs and write meta data.
   //  2) Do actual instrumentation.
   for (const auto& cls : scope) {
-    const auto& cls_name = cls->get_deobfuscated_name();
+    const auto& cls_name = cls->get_deobfuscated_name_or_empty();
     always_assert_log(
         !method_names.count(cls_name),
         "Deobfuscated class names must be unique, but found duplicate: %s",
@@ -701,7 +701,7 @@ bool InstrumentPass::is_included(const DexMethod* method,
   }
 
   // Try to check for method by its full name.
-  const auto& full_method_name = method->get_deobfuscated_name();
+  const auto& full_method_name = method->get_deobfuscated_name_or_empty();
   if (set.count(full_method_name)) {
     return true;
   }
@@ -747,7 +747,8 @@ InstrumentPass::generate_sharded_analysis_methods(
   // Even if one shard, we create a new method from the template method.
   for (size_t i = 1; i <= num_shards; ++i) {
     const auto new_name = template_method_name + std::to_string(i);
-    std::string deobfuscated_name = template_method->get_deobfuscated_name();
+    std::string deobfuscated_name =
+        template_method->get_deobfuscated_name_or_empty();
     boost::replace_first(deobfuscated_name, template_method_name, new_name);
 
     DexMethod* new_method =

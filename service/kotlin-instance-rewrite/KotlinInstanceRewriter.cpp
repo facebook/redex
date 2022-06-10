@@ -13,7 +13,7 @@
 #include "Walkers.h"
 
 namespace {
-DexField* has_instance_field(DexClass* cls, DexString* instance) {
+DexField* has_instance_field(DexClass* cls, const DexString* instance) {
   for (auto* filed : cls->get_sfields()) {
     if (filed->get_name() == instance && filed->get_type() == cls->get_type()) {
       return filed;

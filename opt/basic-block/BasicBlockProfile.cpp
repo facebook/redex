@@ -49,7 +49,7 @@ void BasicBlockProfilePass::run_pass(DexStoresVector& stores,
     const auto& blocks = code->cfg().blocks();
 
     TRACE(BBPROFILE, 5, "M,%s,%zu,%zu,%d",
-          method->get_deobfuscated_name().c_str(), blocks.size(),
+          method->get_deobfuscated_name_or_empty().c_str(), blocks.size(),
           code->count_opcodes(), method->is_virtual());
 
     for (cfg::Block* block : blocks) {

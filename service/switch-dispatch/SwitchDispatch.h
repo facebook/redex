@@ -146,9 +146,9 @@ DexMethod* create_simple_dispatch(
 /**
  * Generate a new dispatch method name.
  */
-DexString* gen_dispatch_name(DexType* owner,
-                             DexProto* proto,
-                             const std::string& orig_name);
+const DexString* gen_dispatch_name(DexType* owner,
+                                   DexProto* proto,
+                                   const std::string& orig_name);
 
 /**
  * If the method's name starts with DISPATH_PREFIX and contains a switch

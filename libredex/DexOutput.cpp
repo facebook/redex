@@ -109,20 +109,22 @@ GatheredTypes::GatheredTypes(DexClasses* classes) : m_classes(classes) {
                     m_lmethodhandle, *m_classes);
 }
 
-std::unordered_set<DexString*> GatheredTypes::index_type_names() {
-  std::unordered_set<DexString*> type_names;
+std::unordered_set<const DexString*> GatheredTypes::index_type_names() {
+  std::unordered_set<const DexString*> type_names;
   for (auto it = m_ltype.begin(); it != m_ltype.end(); ++it) {
     type_names.insert((*it)->get_name());
   }
   return type_names;
 }
 
-std::vector<DexString*> GatheredTypes::get_cls_order_dexstring_emitlist() {
+std::vector<const DexString*>
+GatheredTypes::get_cls_order_dexstring_emitlist() {
   return get_dexstring_emitlist(CustomSort<DexString, cmp_dstring>(
       m_cls_load_strings, compare_dexstrings));
 }
 
-std::vector<DexString*> GatheredTypes::keep_cls_strings_together_emitlist() {
+std::vector<const DexString*>
+GatheredTypes::keep_cls_strings_together_emitlist() {
   return get_dexstring_emitlist(
       CustomSort<DexString, cmp_dstring>(m_cls_strings, compare_dexstrings));
 }
@@ -425,7 +427,7 @@ void GatheredTypes::build_cls_load_map() {
     // since they are likely to be accessed during class load
     for (const auto& m : cls->get_dmethods()) {
       if (method::is_clinit(m)) {
-        std::vector<DexString*> method_strings;
+        std::vector<const DexString*> method_strings;
         m->gather_strings(method_strings);
         for (const auto& s : method_strings) {
           if (!m_cls_load_strings.count(s)) {
@@ -445,7 +447,7 @@ void GatheredTypes::build_cls_load_map() {
     std::vector<const DexClass*> v;
     v.push_back(cls);
     walk::methods(v, [&](DexMethod* m) {
-      std::vector<DexString*> method_strings;
+      std::vector<const DexString*> method_strings;
       m->gather_strings(method_strings);
       for (const auto& s : method_strings) {
         if (!m_cls_load_strings.count(s)) {
@@ -690,7 +692,8 @@ void DexOutput::emit_locator(Locator locator) {
 }
 
 std::unique_ptr<Locator> DexOutput::locator_for_descriptor(
-    const std::unordered_set<DexString*>& type_names, DexString* descriptor) {
+    const std::unordered_set<const DexString*>& type_names,
+    const DexString* descriptor) {
   LocatorIndex* locator_index = m_locator_index;
   if (locator_index != nullptr) {
     const char* s = descriptor->c_str();
@@ -715,7 +718,7 @@ std::unique_ptr<Locator> DexOutput::locator_for_descriptor(
         while (*s == '[') {
           ++s;
         }
-        DexString* elementDescriptor = DexString::get_string(s);
+        auto elementDescriptor = DexString::get_string(s);
         if (elementDescriptor != nullptr) {
           locator_it = locator_index->find(elementDescriptor);
           if (locator_it != locator_index->end()) {
@@ -743,7 +746,7 @@ void DexOutput::generate_string_data(SortMode mode) {
    * for strings that are used by the opcode const-string.  Whereas
    * this should be ordered by access for page-cache efficiency.
    */
-  std::vector<DexString*> string_order;
+  std::vector<const DexString*> string_order;
   if (mode == SortMode::CLASS_ORDER) {
     TRACE(CUSTOMSORT, 2, "using class order for string pool sorting");
     string_order = m_gtypes->get_cls_order_dexstring_emitlist();
@@ -757,13 +760,14 @@ void DexOutput::generate_string_data(SortMode mode) {
   dex_string_id* stringids =
       (dex_string_id*)(m_output.get() + hdr.string_ids_off);
 
-  std::unordered_set<DexString*> type_names = m_gtypes->index_type_names();
+  std::unordered_set<const DexString*> type_names =
+      m_gtypes->index_type_names();
   unsigned locator_size = 0;
 
   // If we're generating locator strings, we need to include them in
   // the total count of strings in this section.
   size_t locators = 0;
-  for (DexString* str : string_order) {
+  for (auto* str : string_order) {
     if (locator_for_descriptor(type_names, str)) {
       ++locators;
     }
@@ -777,7 +781,7 @@ void DexOutput::generate_string_data(SortMode mode) {
   size_t nrstr = string_order.size() + locators;
   const uint32_t str_data_start = m_offset;
 
-  for (DexString* str : string_order) {
+  for (auto* str : string_order) {
     // Emit lookup acceleration string if requested
     std::unique_ptr<Locator> locator = locator_for_descriptor(type_names, str);
     if (locator) {
@@ -2576,7 +2580,7 @@ void write_method_mapping(const std::string& filename,
     }
     auto deobf_class = [&] {
       if (cls) {
-        auto deobname = cls->get_deobfuscated_name();
+        auto deobname = cls->get_deobfuscated_name_or_empty();
         if (!deobname.empty()) return deobname;
       }
       return show(typecls);
@@ -2598,9 +2602,11 @@ void write_method_mapping(const std::string& filename,
     // Consult the cached method names, or just give it back verbatim.
     auto deobf_method = [&] {
       if (resolved_method->is_def()) {
-        auto deobfname =
-            static_cast<DexMethod*>(resolved_method)->get_deobfuscated_name();
-        if (!deobfname.empty()) return deobfname;
+        const auto& deobfname =
+            resolved_method->as_def()->get_deobfuscated_name_or_empty();
+        if (!deobfname.empty()) {
+          return deobfname;
+        }
       }
       return show(resolved_method);
     }();
@@ -2634,7 +2640,7 @@ void write_class_mapping(const std::string& filename,
     DexClass* cls = classes->at(idx);
     auto deobf_class = [&] {
       if (cls) {
-        auto deobname = cls->get_deobfuscated_name();
+        auto deobname = cls->get_deobfuscated_name_or_empty();
         if (!deobname.empty()) return deobname;
       }
       return show(cls);
@@ -2684,7 +2690,7 @@ void write_pg_mapping(
 
   auto deobf_class = [&](DexClass* cls) {
     if (cls) {
-      auto deobname = cls->get_deobfuscated_name();
+      auto deobname = cls->get_deobfuscated_name_or_empty();
       if (!deobname.empty()) return deobname;
     }
     return show(cls);
@@ -2826,22 +2832,22 @@ void write_full_mapping(const std::string& filename, DexClasses* classes) {
 
   std::ofstream ofs(filename.c_str(), std::ofstream::out | std::ofstream::app);
   for (auto cls : *classes) {
-    ofs << "type " << cls->get_deobfuscated_name() << " -> " << show(cls)
-        << std::endl;
+    ofs << "type " << cls->get_deobfuscated_name_or_empty() << " -> "
+        << show(cls) << std::endl;
     for (auto field : cls->get_ifields()) {
-      ofs << "ifield " << field->get_deobfuscated_name() << " -> "
+      ofs << "ifield " << field->get_deobfuscated_name_or_empty() << " -> "
           << show(field) << std::endl;
     }
     for (auto field : cls->get_sfields()) {
-      ofs << "sfield " << field->get_deobfuscated_name() << " -> "
+      ofs << "sfield " << field->get_deobfuscated_name_or_empty() << " -> "
           << show(field) << std::endl;
     }
     for (auto method : cls->get_dmethods()) {
-      ofs << "dmethod " << method->get_deobfuscated_name() << " -> "
+      ofs << "dmethod " << method->get_deobfuscated_name_or_empty() << " -> "
           << show(method) << std::endl;
     }
     for (auto method : cls->get_vmethods()) {
-      ofs << "vmethod " << method->get_deobfuscated_name() << " -> "
+      ofs << "vmethod " << method->get_deobfuscated_name_or_empty() << " -> "
           << show(method) << std::endl;
     }
   }
@@ -2929,11 +2935,11 @@ void DexOutput::write() {
 
 class UniqueReferences {
  public:
-  std::unordered_set<DexString*> strings;
-  std::unordered_set<DexType*> types;
-  std::unordered_set<DexProto*> protos;
-  std::unordered_set<DexFieldRef*> fields;
-  std::unordered_set<DexMethodRef*> methods;
+  std::unordered_set<const DexString*> strings;
+  std::unordered_set<const DexType*> types;
+  std::unordered_set<const DexProto*> protos;
+  std::unordered_set<const DexFieldRef*> fields;
+  std::unordered_set<const DexMethodRef*> methods;
   int total_strings_size{0};
   int total_types_size{0};
   int total_protos_size{0};
@@ -3089,7 +3095,7 @@ LocatorIndex make_locator_index(DexStoresVector& stores) {
       uint32_t clsnr = 0;
       for (auto clsit = classes.begin(); clsit != classes.end();
            ++clsit, ++clsnr) {
-        DexString* clsname = (*clsit)->get_type()->get_name();
+        auto clsname = (*clsit)->get_type()->get_name();
         const auto cstr = clsname->c_str();
         uint32_t global_clsnr = Locator::decodeGlobalClassIndex(cstr);
         if (global_clsnr != Locator::invalid_global_class_index) {
@@ -3107,7 +3113,7 @@ LocatorIndex make_locator_index(DexStoresVector& stores) {
                             .second;
         // We shouldn't see the same class defined in two dexen
         always_assert_log(inserted, "This was already inserted %s\n",
-                          (*clsit)->get_deobfuscated_name().c_str());
+                          (*clsit)->get_deobfuscated_name_or_empty().c_str());
         (void)inserted; // Shut up compiler when defined(NDEBUG)
       }
     }

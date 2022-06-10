@@ -768,7 +768,7 @@ namespace cse_impl {
 
 SharedState::SharedState(
     const std::unordered_set<DexMethodRef*>& pure_methods,
-    const std::unordered_set<DexString*>& finalish_field_names)
+    const std::unordered_set<const DexString*>& finalish_field_names)
     : m_pure_methods(pure_methods),
       m_safe_methods(pure_methods),
       m_finalish_field_names(finalish_field_names) {

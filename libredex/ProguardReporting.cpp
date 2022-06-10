@@ -122,7 +122,7 @@ void redex::print_method(std::ostream& output,
                          const ProguardMap& pg_map,
                          const std::string& class_name,
                          const DexMethod* method) {
-  std::string method_name = extract_member_name(method->get_name()->c_str());
+  std::string method_name = extract_member_name(method->get_name()->str());
   // Record if this is a constructor to supress return value printing
   // before the method name.
   bool is_constructor = method::is_init(method);
@@ -130,7 +130,7 @@ void redex::print_method(std::ostream& output,
     method_name = extract_suffix(class_name);
     is_constructor = true;
   } else {
-    const auto& deob = method->get_deobfuscated_name();
+    const auto& deob = method->get_deobfuscated_name_or_empty();
     if (deob.empty()) {
       std::cerr << "WARNING: method has no deobfu: " << method_name
                 << std::endl;
@@ -169,7 +169,7 @@ void redex::print_field(std::ostream& output,
   std::string deobfu_field_type =
       deobfuscate_type_descriptor(pg_map, field_type);
   output << class_name << ": " << type_descriptor_to_java(deobfu_field_type)
-         << " " << extract_member_name(field->get_deobfuscated_name())
+         << " " << extract_member_name(field->get_deobfuscated_name_or_empty())
          << std::endl;
 }
 
@@ -186,13 +186,16 @@ void redex::print_fields(std::ostream& output,
 void redex::print_class(std::ostream& output,
                         const ProguardMap& pg_map,
                         const DexClass* cls) {
-  auto deob = cls->get_deobfuscated_name();
-  if (deob.empty()) {
+  const auto& deob_name = [&]() {
+    const auto& deob = cls->get_deobfuscated_name_or_empty();
+    if (!deob.empty()) {
+      return deob;
+    }
     std::cerr << "WARNING: this class has no deobu name: "
               << cls->get_name()->c_str() << std::endl;
-    deob = cls->get_name()->c_str();
-  }
-  std::string name = java_names::internal_to_external(deob);
+    return cls->get_name()->str();
+  }();
+  std::string name = java_names::internal_to_external(deob_name);
   output << name << std::endl;
   print_fields(output, pg_map, name, cls->get_ifields());
   print_fields(output, pg_map, name, cls->get_sfields());

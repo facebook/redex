@@ -1103,7 +1103,8 @@ bool has_builder_name(DexType* type) {
 
   static boost::regex re{"\\$Builder;$"};
 
-  const auto& deobfuscated_name = type_class(type)->get_deobfuscated_name();
+  const auto& deobfuscated_name =
+      type_class(type)->get_deobfuscated_name_or_empty();
   if (!deobfuscated_name.empty()) {
     return boost::regex_search(deobfuscated_name.c_str(), re);
   }
@@ -1113,7 +1114,8 @@ bool has_builder_name(DexType* type) {
 DexType* get_buildee(DexType* builder) {
   always_assert(builder != nullptr);
 
-  const auto& deobfuscated_name = type_class(builder)->get_deobfuscated_name();
+  const auto& deobfuscated_name =
+      type_class(builder)->get_deobfuscated_name_or_empty();
   const auto& builder_name =
       !deobfuscated_name.empty() ? deobfuscated_name : builder->str();
 

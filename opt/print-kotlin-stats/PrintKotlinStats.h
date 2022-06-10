@@ -67,7 +67,7 @@ class PrintKotlinStats : public Pass {
   std::unordered_set<DexMethodRef*> m_kotlin_null_assertions;
   DexType* m_kotlin_lambdas_base = nullptr;
   DexType* m_kotlin_coroutin_continuation_base = nullptr;
-  DexString* m_instance = nullptr;
+  const DexString* m_instance = nullptr;
   DexType* m_di_base = nullptr;
   Stats m_stats;
 };

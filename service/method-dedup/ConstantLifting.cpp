@@ -25,7 +25,7 @@ constexpr const char* CONST_TYPE_ANNO_ATTR_NAME = "constantTypes";
 constexpr const char* CONST_VALUE_ANNO_ATTR_NAME = "constantValues";
 
 bool overlaps_with_an_existing_virtual_scope(DexType* type,
-                                             DexString* name,
+                                             const DexString* name,
                                              DexProto* proto) {
   if (DexMethod::get_method(type, name, proto)) {
     return true;

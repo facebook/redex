@@ -136,12 +136,12 @@ std::string show_type(const DexType* t, bool deobfuscated) {
           return name;
         }
         if (name[0] == 'L') {
-          auto deobf_name = name;
           auto cls = type_class(t);
-          if (cls != nullptr && !cls->get_deobfuscated_name().empty()) {
-            deobf_name = cls->get_deobfuscated_name();
+          if (cls != nullptr &&
+              !cls->get_deobfuscated_name_or_empty().empty()) {
+            return cls->get_deobfuscated_name_or_empty();
           }
-          return deobf_name;
+          return name;
         } else if (name[0] == '[') {
           std::ostringstream ss;
           ss << '[' << self(self, DexType::get_type(name.substr(1)));
@@ -158,7 +158,7 @@ std::string show_field(const DexFieldRef* ref, bool deobfuscated) {
   }
 
   if (deobfuscated && ref->is_def()) {
-    auto name = ref->as_def()->get_deobfuscated_name();
+    const auto& name = ref->as_def()->get_deobfuscated_name_or_empty();
     if (!name.empty()) {
       return name;
     }
@@ -198,7 +198,7 @@ std::string show_method(const DexMethodRef* ref, bool deobfuscated) {
   }
 
   if (deobfuscated && ref->is_def()) {
-    auto name = ref->as_def()->get_deobfuscated_name();
+    const auto& name = ref->as_def()->get_deobfuscated_name_or_empty();
     if (!name.empty()) {
       return name;
     }
@@ -990,7 +990,7 @@ std::ostream& operator<<(std::ostream& o, const DexType& type) {
   return o;
 }
 
-inline std::string show(DexString* p) {
+inline std::string show(const DexString* p) {
   if (!p) return "";
   return p->str();
 }
@@ -1605,10 +1605,11 @@ std::string show_deobfuscated(const DexClass* cls) {
   if (!cls) {
     return "";
   }
-  if (cls->get_deobfuscated_name().empty()) {
-    return cls->get_name() ? cls->get_name()->str() : show(cls);
+  const auto& deob = cls->get_deobfuscated_name_or_empty();
+  if (!deob.empty()) {
+    return deob;
   }
-  return cls->get_deobfuscated_name();
+  return cls->get_name() ? cls->get_name()->str() : show(cls);
 }
 
 std::string show_deobfuscated(const DexFieldRef* ref) {

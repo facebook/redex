@@ -275,7 +275,7 @@ struct Matcher {
   std::vector<IRInstruction*> matched_instructions;
 
   std::unordered_map<Register, reg_t, EnumClassHash> matched_regs;
-  std::unordered_map<String, DexString*, EnumClassHash> matched_strings;
+  std::unordered_map<String, const DexString*, EnumClassHash> matched_strings;
   std::unordered_map<Literal, int64_t, EnumClassHash> matched_literals;
   std::unordered_map<Type, DexType*, EnumClassHash> matched_types;
   std::unordered_map<Field, DexFieldRef*, EnumClassHash> matched_fields;
@@ -314,7 +314,7 @@ struct Matcher {
       return true;
     };
 
-    auto match_string = [&](String str_pattern, DexString* insn_str) {
+    auto match_string = [&](String str_pattern, const DexString* insn_str) {
       if (str_pattern == String::empty) {
         return (insn_str->is_simple() && insn_str->size() == 0);
       }

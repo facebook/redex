@@ -108,7 +108,7 @@ static StoredValue* try_insert(Key key,
   return container->at(key);
 }
 
-DexString* RedexContext::make_string(const char* nstr, uint32_t utfsize) {
+const DexString* RedexContext::make_string(const char* nstr, uint32_t utfsize) {
   always_assert(nstr != nullptr);
   auto p = std::make_pair(nstr, utfsize);
   auto& segment = s_string_map.at(p);
@@ -123,10 +123,10 @@ DexString* RedexContext::make_string(const char* nstr, uint32_t utfsize) {
   // is const)
   auto dexstring = new DexString(nstr, utfsize);
   auto p2 = std::make_pair(dexstring->c_str(), utfsize);
-  return try_insert(p2, dexstring, &segment);
+  return try_insert<DexString, const DexString>(p2, dexstring, &segment);
 }
 
-DexString* RedexContext::get_string(const char* nstr, uint32_t utfsize) {
+const DexString* RedexContext::get_string(const char* nstr, uint32_t utfsize) {
   if (nstr == nullptr) {
     return nullptr;
   }
@@ -141,8 +141,7 @@ DexType* RedexContext::make_type(const DexString* dstring) {
   if (rv != nullptr) {
     return rv;
   }
-  return try_insert(dstring, new DexType(const_cast<DexString*>(dstring)),
-                    &s_type_map);
+  return try_insert(dstring, new DexType(dstring), &s_type_map);
 }
 
 DexType* RedexContext::get_type(const DexString* dstring) {
@@ -152,12 +151,12 @@ DexType* RedexContext::get_type(const DexString* dstring) {
   return s_type_map.get(dstring, nullptr);
 }
 
-void RedexContext::set_type_name(DexType* type, DexString* new_name) {
+void RedexContext::set_type_name(DexType* type, const DexString* new_name) {
   alias_type_name(type, new_name);
   type->m_name = new_name;
 }
 
-void RedexContext::alias_type_name(DexType* type, DexString* new_name) {
+void RedexContext::alias_type_name(DexType* type, const DexString* new_name) {
   always_assert_log(
       !s_type_map.count(new_name),
       "Bailing, attempting to alias a symbol that already exists! '%s'\n",
@@ -165,21 +164,21 @@ void RedexContext::alias_type_name(DexType* type, DexString* new_name) {
   s_type_map.emplace(new_name, type);
 }
 
-void RedexContext::remove_type_name(DexString* name) { s_type_map.erase(name); }
+void RedexContext::remove_type_name(const DexString* name) {
+  s_type_map.erase(name);
+}
 
 DexFieldRef* RedexContext::make_field(const DexType* container,
                                       const DexString* name,
                                       const DexType* type) {
   always_assert(container != nullptr && name != nullptr && type != nullptr);
-  DexFieldSpec r(const_cast<DexType*>(container),
-                 const_cast<DexString*>(name),
+  DexFieldSpec r(const_cast<DexType*>(container), name,
                  const_cast<DexType*>(type));
   auto rv = s_field_map.get(r, nullptr);
   if (rv != nullptr) {
     return rv;
   }
-  auto field = new DexField(const_cast<DexType*>(container),
-                            const_cast<DexString*>(name),
+  auto field = new DexField(const_cast<DexType*>(container), name,
                             const_cast<DexType*>(type));
   return try_insert<DexField, DexFieldRef>(r, field, &s_field_map);
 }
@@ -190,13 +189,13 @@ DexFieldRef* RedexContext::get_field(const DexType* container,
   if (container == nullptr || name == nullptr || type == nullptr) {
     return nullptr;
   }
-  DexFieldSpec r(const_cast<DexType*>(container),
-                 const_cast<DexString*>(name),
+  DexFieldSpec r(const_cast<DexType*>(container), name,
                  const_cast<DexType*>(type));
   return s_field_map.get(r, nullptr);
 }
 
-void RedexContext::alias_field_name(DexFieldRef* field, DexString* new_name) {
+void RedexContext::alias_field_name(DexFieldRef* field,
+                                    const DexString* new_name) {
   DexFieldSpec r(field->m_spec.cls, new_name, field->m_spec.type);
   always_assert_log(
       !s_field_map.count(r),
@@ -207,21 +206,12 @@ void RedexContext::alias_field_name(DexFieldRef* field, DexString* new_name) {
 
 void RedexContext::erase_field(DexFieldRef* field) {
   s_field_map.erase(field->m_spec);
-  // Also remove the alias from the map
-  if (field->is_def()) {
-    DexFieldSpec r(field->m_spec.cls,
-                   DexString::make_string(
-                       field->DexFieldRef::as_def()->get_deobfuscated_name()),
-                   field->m_spec.type);
-    s_field_map.erase(r);
-  }
 }
 
 void RedexContext::erase_field(const DexType* container,
                                const DexString* name,
                                const DexType* type) {
-  DexFieldSpec r(const_cast<DexType*>(container),
-                 const_cast<DexString*>(name),
+  DexFieldSpec r(const_cast<DexType*>(container), name,
                  const_cast<DexType*>(type));
   s_field_map.erase(r);
 }
@@ -277,7 +267,7 @@ DexProto* RedexContext::make_proto(const DexType* rtype,
   return try_insert(key,
                     new DexProto(const_cast<DexType*>(rtype),
                                  const_cast<DexTypeList*>(args),
-                                 const_cast<DexString*>(shorty)),
+                                 shorty),
                     &s_proto_map);
 }
 
@@ -296,7 +286,7 @@ DexMethodRef* RedexContext::make_method(const DexType* type_,
   // be necessary, but that would involve cleaning up quite a bit of existing
   // code.
   auto type = const_cast<DexType*>(type_);
-  auto name = const_cast<DexString*>(name_);
+  auto name = name_;
   auto proto = const_cast<DexProto*>(proto_);
   always_assert(type != nullptr && name != nullptr && proto != nullptr);
   DexMethodSpec r(type, name, proto);
@@ -314,13 +304,13 @@ DexMethodRef* RedexContext::get_method(const DexType* type,
   if (type == nullptr || name == nullptr || proto == nullptr) {
     return nullptr;
   }
-  DexMethodSpec r(const_cast<DexType*>(type), const_cast<DexString*>(name),
+  DexMethodSpec r(const_cast<DexType*>(type), name,
                   const_cast<DexProto*>(proto));
   return s_method_map.get(r, nullptr);
 }
 
 void RedexContext::alias_method_name(DexMethodRef* method,
-                                     DexString* new_name) {
+                                     const DexString* new_name) {
   DexMethodSpec r(method->m_spec.cls, new_name, method->m_spec.proto);
   always_assert_log(
       !s_method_map.count(r),
@@ -333,18 +323,20 @@ void RedexContext::erase_method(DexMethodRef* method) {
   s_method_map.erase(method->m_spec);
   // Also remove the alias from the map
   if (method->is_def()) {
-    DexMethodSpec r(method->m_spec.cls,
-                    DexString::make_string(
-                        method->DexMethodRef::as_def()->m_deobfuscated_name),
-                    method->m_spec.proto);
-    s_method_map.erase(r);
+    if (method->DexMethodRef::as_def()->get_deobfuscated_name_or_null() !=
+        nullptr) {
+      DexMethodSpec r(method->m_spec.cls,
+                      &method->DexMethodRef::as_def()->get_deobfuscated_name(),
+                      method->m_spec.proto);
+      s_method_map.erase(r);
+    }
   }
 }
 
 void RedexContext::erase_method(const DexType* type,
                                 const DexString* name,
                                 const DexProto* proto) {
-  DexMethodSpec r(const_cast<DexType*>(type), const_cast<DexString*>(name),
+  DexMethodSpec r(const_cast<DexType*>(type), name,
                   const_cast<DexProto*>(proto));
   s_method_map.erase(r);
 }

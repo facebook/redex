@@ -52,7 +52,6 @@ DexMethod* get_or_create_clinit(DexClass* cls) {
       DexMethod::make_method(cls->get_type(), clinit_name, clinit_proto)
           ->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_CONSTRUCTOR, false);
 
-  std::string cls_deobfuscated_name = cls->get_deobfuscated_name();
   clinit->set_deobfuscated_name(show_deobfuscated(clinit));
 
   auto ir_code = std::make_unique<IRCode>(clinit, 1);

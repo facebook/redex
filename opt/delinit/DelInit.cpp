@@ -73,7 +73,7 @@ bool find_package(const char* name) {
   return false;
 };
 
-void process_signature_anno(DexString* dstring) {
+void process_signature_anno(const DexString* dstring) {
   const char* cstr = dstring->c_str();
   size_t len = strlen(cstr);
   if (len < 3) return;
@@ -136,7 +136,7 @@ void find_referenced_classes(const Scope& scope) {
           auto opcode = mie.insn;
           // Matches any stringref that name-aliases a type.
           if (opcode->has_string()) {
-            DexString* dsclzref = opcode->get_string();
+            const DexString* dsclzref = opcode->get_string();
             DexType* dtexclude = get_dextype_from_dotname(dsclzref->c_str());
             if (dtexclude == nullptr) continue;
             TRACE(PGR, 3, "string_ref: %s", SHOW(dtexclude));
