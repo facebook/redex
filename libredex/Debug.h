@@ -108,6 +108,7 @@ void set_abort_if_not_this_thread();
 struct VmStats {
   uint64_t vm_peak = 0; // "Peak virtual memory size."
   uint64_t vm_hwm = 0; // "Peak resident set size ("high water mark")."
+  uint64_t vm_rss = 0; // "Resident set size"
 };
 VmStats get_mem_stats();
 bool try_reset_hwm_mem_stat(); // Attempt to reset the vm_hwm value.
