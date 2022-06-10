@@ -112,7 +112,7 @@ class Node {
   friend class Graph;
 };
 
-using NodeId = std::shared_ptr<Node>;
+using NodeId = Node*;
 
 class Edge {
  public:
@@ -131,8 +131,8 @@ class Graph final {
  public:
   explicit Graph(const BuildStrategy&);
 
-  NodeId entry() const { return m_entry; }
-  NodeId exit() const { return m_exit; }
+  NodeId entry() const { return m_entry.get(); }
+  NodeId exit() const { return m_exit.get(); }
 
   bool has_node(const DexMethod* m) const {
     return m_nodes.count(const_cast<DexMethod*>(m)) != 0;
@@ -140,9 +140,9 @@ class Graph final {
 
   NodeId node(const DexMethod* m) const {
     if (m == nullptr) {
-      return m_entry;
+      return this->entry();
     }
-    return m_nodes.at(m);
+    return m_nodes.at(m).get();
   }
 
   const std::unordered_map<const IRInstruction*,
@@ -164,7 +164,7 @@ class Graph final {
 
   std::shared_ptr<Node> m_entry;
   std::shared_ptr<Node> m_exit;
-  std::unordered_map<const DexMethod*, NodeId> m_nodes;
+  std::unordered_map<const DexMethod*, std::shared_ptr<Node>> m_nodes;
   std::unordered_map<const IRInstruction*, std::unordered_set<const DexMethod*>>
       m_insn_to_callee;
   // Methods that might have unknown inputs/outputs that we need special handle.
@@ -238,7 +238,7 @@ class MultipleCalleeStrategy : public MultipleCalleeBaseStrategy {
 class GraphInterface {
  public:
   using Graph = call_graph::Graph;
-  using NodeId = std::shared_ptr<Node>;
+  using NodeId = Node*;
   using EdgeId = std::shared_ptr<Edge>;
 
   static NodeId entry(const Graph& graph) { return graph.entry(); }
