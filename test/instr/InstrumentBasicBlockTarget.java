@@ -425,6 +425,224 @@ public class InstrumentBasicBlockTarget {
     return sum;
   }
 
+  @DoNotStrip
+  // Index: 18
+  // Offset: 64
+  // Vector 0: [19,20,21,22,23,24,28,27,26,25,31,30,29,3,2,1]
+  // Vector 1: [32,6,5,4,8,7,9,10,11,12,13,14,15,16,17,18]
+  public static String testFunc19(int[] arr) {
+    int i = 0;
+    String output = "";
+    for (i = 0; i < arr.length; i++) {
+      switch (arr[i]) {
+        case 1:
+          output = output + "apple";
+          break;
+        case 2:
+          output = output + "banana";
+          // fallthrough
+        case 3:
+          output = output + "cat";
+          // fallthrough
+        case 4:
+          output = output + "dog";
+          // fallthrough
+        case 5:
+          output = output + "eat";
+          break;
+        case 6:
+          output = output + "fat";
+          break;
+        case 7:
+          output = output + "go";
+          // fallthrough
+        case 8:
+          // fallthrough
+        case 9:
+          // fallthrough
+        case 10:
+          continue;
+        case 11:
+          output = output + "kim";
+          break;
+        case 12:
+          output = output + "love";
+          break;
+        case 13:
+          output = output + "mmm";
+          break;
+        case 14:
+          output = output + "ninja";
+          break;
+        case 15:
+          output = output + "orange";
+          break;
+        case 16:
+          output = output + "random";
+          // fallthrough
+        case 17:
+          // fallthrough
+        case 18:
+          break;
+        case 19:
+          output = output + "star";
+          break;
+        case 20:
+          output = output + "tar";
+          break;
+        case 21:
+          output = output + "ufo";
+          break;
+        case 22:
+          output = output + "void";
+          break;
+        case 23:
+          output = output + "woman";
+          break;
+        case 24:
+          // fallthrough
+        case 25:
+          // fallthrough
+        case 26:
+          // fallthrough
+        case 27:
+          // fallthrough
+        case 28:
+          output = output + "five";
+          break;
+        case 29:
+          output = output + "ccat";
+          break;
+        case 30:
+          return "ddog";
+        case 31:
+          output = output + "eeat";
+          // fallthrough
+        case 32:
+          return "ffat";
+        case 33:
+          output = output + "ggo";
+          // fallthrough
+        case 34:
+          output = output + "hhi";
+          // fallthrough
+        case 35:
+          output = output + "iice";
+          break;
+        default:
+          return output;
+      }
+
+      output = output + " ";
+    }
+
+    return output;
+  }
+
+  @DoNotStrip
+  @SuppressWarnings({"EmptyCatchBlock", "CatchGeneralException"})
+  // Index: 19
+  // Offset: 68
+  // Vector 0: [17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2]
+  // Vector 1: [19,32,31,30,29,35,34,33,43,41,39,38,37,36,26,18]
+  // Vector 2: [42,24,23,22,21,20]
+  public static int testFunc20(int[][] arr, int[] arr2) {
+    int i, j;
+    int sum = 0;
+    try {
+      for (i = 0; i < arr.length; i++) {
+          for (j = 0; j < arr[i].length; j++) {
+            int val = 0;
+            int size = arr[i].length;
+            try {
+              if (j % 2 == 0) {
+                val = val + Math.max(arr[i][j], size % arr2[j]);
+              }
+              else {
+                val = val +  Math.min(arr[i][j], size % arr2[j]);
+              }
+
+              if (val == 1031) {
+                break;
+              }
+            } catch (ArrayIndexOutOfBoundsException e) {
+              throw e;
+            } catch (ArithmeticException e) {
+              continue;
+            } catch (Exception e) {
+              System.out.println("Last Exception");
+            }
+            sum += val;
+          }
+
+          if(sum == 27023) {
+            sum = sum / arr.length;
+          }
+      }
+    } catch (ArrayIndexOutOfBoundsException e) {
+      return 0;
+    }
+
+    return sum;
+  }
+
+  @DoNotStrip
+  @SuppressWarnings({"EmptyCatchBlock", "CatchGeneralException"})
+  // Index: 20
+  // Offset: 73
+  // Vector 0: [18,17,15,11,10,9,8,6,5,4,25,24,23,3,2,1]
+  // Vector 1: [14,13,12,22,21,20,19]
+  public static int testFunc21(int[] arr, int magic) {
+    int i = 0;
+    int sum = 0;
+    switch (magic % 3) {
+      case 0:
+        for (i = 0; i < arr.length; i++) {
+          sum = sum * arr[i];
+        }
+
+        // fallthrough
+      case 1:
+        try {
+          for (i = 0; i < arr.length; i++) {
+            sum = sum + (sum % arr[i]);
+          }
+        } catch (ArithmeticException e) {
+          sum = 0;
+        }
+
+        break;
+
+      case 2:
+
+        for (i = 0; i < arr.length; i++) {
+          sum = sum + arr[i];
+          if(sum % 7 == 0) {
+            break;
+          }
+
+          if(sum % 13 == 0) {
+            return sum;
+          }
+
+          if(sum % 17 == 0) {
+            continue;
+          }
+        }
+
+        break;
+
+      default:
+        break;
+    }
+
+    for (i = 0; i < arr.length; i++) {
+      sum -= arr[i];
+    }
+
+    return sum;
+  }
+
   @Test
   @DoNotStrip
   public void test01() {
@@ -887,4 +1105,272 @@ public class InstrumentBasicBlockTarget {
     assertThat(stats[63]).isEqualTo((short)0b01111111);
     assertThat(stats[63]).isEqualTo(stats[51]);
   }
+
+  @Test
+  @DoNotStrip
+  public void test21() {
+    int []array = {1,3,21,16,11,15};
+
+    // Start Tracing Information and run Function before stopping
+    // TestFunc19 is equivalent to testFunc14 with only difference
+    // being while loop being replace with for loop
+    InstrumentBasicBlockAnalysis.startTracing();
+    assertThat(testFunc19(array)).isEqualTo("apple catdogeat ufo random kim orange ");
+    InstrumentBasicBlockAnalysis.stopTracing();
+
+    // Get Stats from Instrument Analysis
+    short[] stats = InstrumentBasicBlockAnalysis.getStats();
+
+    // Assert that only one function was executed at all
+    // because we cleanup stats array before every tracing
+    assertThat(stats[65]).isEqualTo((short)1);
+
+    // Assert that TestFunc19 excuted only BasicBlocks (1,2,15,17,18,22,24,25,28,27,30,31,32) skipping
+    // everything else because it only had to go to particular switch blocks.
+    // As this test case has numerous basicblocks (32),
+    // it needs two bitvectors so we need to make sure it is [0,0,0,1,0,0,1,1,1,0,1,1,1,0,1,1] in
+    // Bit-Vector 1 and [1,0,0,0,0,0,0,0,0,0,0,1,0,0,1,1] in Bit-Vector 2
+    assertThat(stats[66]).isEqualTo((short)0b0001001110111011);
+    assertThat(stats[67]).isEqualTo((short)0b1000000000010011);
+  }
+
+  @Test
+  @DoNotStrip
+  public void test22() {
+    int []array = {22,13,16,9,5,55};
+
+    // Start Tracing Information and run Function before stopping
+    // TestFunc19 is equivalent to testFunc14 with only difference
+    // being while loop being replace with for loop
+    InstrumentBasicBlockAnalysis.startTracing();
+    assertThat(testFunc19(array)).isEqualTo("void mmm random eat ");
+    InstrumentBasicBlockAnalysis.stopTracing();
+
+    // Get Stats from Instrument Analysis
+    short[] stats = InstrumentBasicBlockAnalysis.getStats();
+
+    // Assert that only one function was executed at all
+    // because we cleanup stats array before every tracing
+    assertThat(stats[65]).isEqualTo((short)1);
+
+    // Assert that TestFunc19 excuted only BasicBlocks (1,2,3,13,17,20,28,30,31) skipping
+    // everything else because it only had to go to particular switch blocks.
+    // As this test case has numerous basicblocks (32),
+    // it needs two bitvectors so we need to make sure it is [0,1,0,0,0,0,1,0,0,0,1,1,0,1,1,1] in
+    // Bit-Vector 1 and [0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0] in Bit-Vector 2
+    assertThat(stats[66]).isEqualTo((short)0b0100001000110111);
+    assertThat(stats[67]).isEqualTo((short)0b0000000000100010);
+  }
+
+  @Test
+  @DoNotStrip
+  public void test23() {
+    int []array = {31,16,12,7,28,21};
+
+    // Start Tracing Information and run Function before stopping
+    // TestFunc19 is equivalent to testFunc14 with only difference
+    // being while loop being replace with for loop
+    InstrumentBasicBlockAnalysis.startTracing();
+    assertThat(testFunc19(array)).isEqualTo("ffat");
+    InstrumentBasicBlockAnalysis.stopTracing();
+
+    // Get Stats from Instrument Analysis
+    short[] stats = InstrumentBasicBlockAnalysis.getStats();
+
+    // Assert that only one function was executed at all
+    // because we cleanup stats array before every tracing
+    assertThat(stats[65]).isEqualTo((short)1);
+
+    // Assert that TestFunc19 excuted only BasicBlocks (1,2,7,8) skipping
+    // everything else because it only had to go to particular switch blocks.
+    // As this test case has numerous basicblocks (32),
+    // it needs two bitvectors so we need to make sure it is [0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1] in
+    // Bit-Vector 1 and [0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0] in Bit-Vector 2
+    assertThat(stats[66]).isEqualTo((short)0b0000000000000011);
+    assertThat(stats[67]).isEqualTo((short)0b0000110000000000);
+  }
+
+  @Test
+  @DoNotStrip
+  public void test24() {
+    int [][]array = {{5,10,15},{6,12,18},{7,14,21}};
+    int []array2 = {21,56,11};
+
+    // Start Tracing Information and run Function before stopping
+    // TestFunc20 is equivalent to testFunc14 with only difference
+    // being while loop being replace with for loop
+    InstrumentBasicBlockAnalysis.startTracing();
+    assertThat(testFunc20(array,array2)).isEqualTo(81);
+    InstrumentBasicBlockAnalysis.stopTracing();
+
+    // Get Stats from Instrument Analysis
+    short[] stats = InstrumentBasicBlockAnalysis.getStats();
+
+    // Assert that only one function was executed at all
+    // because we cleanup stats array before every tracing
+    assertThat(stats[69]).isEqualTo((short)1);
+
+    // Assert that TestFunc19 excuted some BasicBlocks skipping
+    // everything else because it only had to go to particular switch blocks.
+    // As this test case has numerous basicblocks (38),
+    // it needs three bitvectors so we need to make sure it is :
+    // [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1] in Bit-Vector 1,
+    // [1,0,0,0,0,0,1,1,0,1,0,0,0,1,1,1] in Bit-Vector 2,
+    // [1,1,1,1,1,1] in Bit-Vector 3,
+    assertThat(stats[70]).isEqualTo((short)0b1111111111111111);
+    assertThat(stats[71]).isEqualTo((short)0b1000001101000111);
+    assertThat(stats[72]).isEqualTo((short)0b0000000000111111);
+  }
+
+  @Test
+  @DoNotStrip
+  public void test25() {
+    int [][]array = {{5,10,15},{6,12,18},{7,14,21}};
+    int []array2 = {21};
+
+    // Start Tracing Information and run Function before stopping
+    // TestFunc20 is equivalent to testFunc14 with only difference
+    // being while loop being replace with for loop
+    InstrumentBasicBlockAnalysis.startTracing();
+    assertThat(testFunc20(array,array2)).isEqualTo(0);
+    InstrumentBasicBlockAnalysis.stopTracing();
+
+    // Get Stats from Instrument Analysis
+    short[] stats = InstrumentBasicBlockAnalysis.getStats();
+
+    // Assert that only one function was executed at all
+    // because we cleanup stats array before every tracing
+    assertThat(stats[69]).isEqualTo((short)1);
+
+    // Assert that TestFunc19 excuted some BasicBlocks skipping
+    // everything else because it only had to go to particular switch blocks.
+    // As this test case has numerous basicblocks (38),
+    // it needs three bitvectors so we need to make sure it is :
+    // [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1] in Bit-Vector 1,
+    // [1,0,0,0,0,1,1,1,1,0,0,0,0,0,1,1] in Bit-Vector 2,
+    // [1,1,1,1,1,1] in Bit-Vector 3,
+    assertThat(stats[70]).isEqualTo((short)0b1111111111111111);
+    assertThat(stats[71]).isEqualTo((short)0b1000011110000011);
+    assertThat(stats[72]).isEqualTo((short)0b0000000000000011);
+  }
+
+  @Test
+  @DoNotStrip
+  public void test26() {
+    int [][]array = {{5,10,15},{6,12,18},{7,14,21}};
+    int []array2 = {21,56,0};
+
+    // Start Tracing Information and run Function before stopping
+    // TestFunc20 is equivalent to testFunc14 with only difference
+    // being while loop being replace with for loop
+    InstrumentBasicBlockAnalysis.startTracing();
+    assertThat(testFunc20(array,array2)).isEqualTo(27);
+    InstrumentBasicBlockAnalysis.stopTracing();
+
+    // Get Stats from Instrument Analysis
+    short[] stats = InstrumentBasicBlockAnalysis.getStats();
+
+    // Assert that only one function was executed at all
+    // because we cleanup stats array before every tracing
+    assertThat(stats[69]).isEqualTo((short)1);
+
+    // Assert that TestFunc19 excuted some BasicBlocks skipping
+    // everything else because it only had to go to particular switch blocks.
+    // As this test case has numerous basicblocks (38),
+    // it needs three bitvectors so we need to make sure it is :
+    // [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1] in Bit-Vector 1,
+    // [1,0,0,0,0,1,1,1,1,0,0,0,0,0,1,1] in Bit-Vector 2,
+    // [0,0,0,0,1,1] in Bit-Vector 3,
+    assertThat(stats[70]).isEqualTo((short)0b1111111111111111);
+    assertThat(stats[71]).isEqualTo((short)0b1000001101000111);
+    assertThat(stats[72]).isEqualTo((short)0b0000000000111111);
+  }
+
+  @Test
+  @DoNotStrip
+  public void test27() {
+    int []array = {21,56,0};
+
+    // Start Tracing Information and run Function before stopping
+    // TestFunc21 is equivalent to testFunc14 with only difference
+    // being while loop being replace with for loop
+    InstrumentBasicBlockAnalysis.startTracing();
+    assertThat(testFunc21(array,0)).isEqualTo(-77);
+    InstrumentBasicBlockAnalysis.stopTracing();
+
+    // Get Stats from Instrument Analysis
+    short[] stats = InstrumentBasicBlockAnalysis.getStats();
+
+    // Assert that only one function was executed at all
+    // because we cleanup stats array before every tracing
+    assertThat(stats[74]).isEqualTo((short)1);
+
+    // Assert that TestFunc19 excuted some BasicBlocks skipping
+    // everything else because it only had to go to particular switch blocks.
+    // As this test case has numerous basicblocks (23),
+    // it needs two bitvectors so we need to make sure it is :
+    // [1,1,1,0,0,0,0,0,0,0,1,1,1,1,0,0] in Bit-Vector 1,
+    // [1,1,1,1,1,1,1] in Bit-Vector 2,
+    assertThat(stats[75]).isEqualTo((short)0b1110000000111100);
+    assertThat(stats[76]).isEqualTo((short)0b0000000001111111);
+  }
+
+  @Test
+  @DoNotStrip
+  public void test28() {
+    int []array = {21,56,11,12};
+
+    // Start Tracing Information and run Function before stopping
+    // TestFunc21 is equivalent to testFunc14 with only difference
+    // being while loop being replace with for loop
+    InstrumentBasicBlockAnalysis.startTracing();
+    assertThat(testFunc21(array,1)).isEqualTo(-100);
+    InstrumentBasicBlockAnalysis.stopTracing();
+
+    // Get Stats from Instrument Analysis
+    short[] stats = InstrumentBasicBlockAnalysis.getStats();
+
+    // Assert that only one function was executed at all
+    // because we cleanup stats array before every tracing
+    assertThat(stats[74]).isEqualTo((short)1);
+
+    // Assert that TestFunc19 excuted some BasicBlocks skipping
+    // everything else because it only had to go to particular switch blocks.
+    // As this test case has numerous basicblocks (23),
+    // it needs two bitvectors so we need to make sure it is :
+    // [1,1,1,1,0,0,0,0,0,0,1,1,1,0,0,1] in Bit-Vector 1,
+    // [0,0,0,1,1,1,1] in Bit-Vector 2,
+    assertThat(stats[75]).isEqualTo((short)0b1111000000111001);
+    assertThat(stats[76]).isEqualTo((short)0b0000000000001111);
+  }
+
+  @Test
+  @DoNotStrip
+  public void test29() {
+    int []array = {55,13,97,111,213};
+
+    // Start Tracing Information and run Function before stopping
+    // TestFunc21 is equivalent to testFunc14 with only difference
+    // being while loop being replace with for loop
+    InstrumentBasicBlockAnalysis.startTracing();
+    assertThat(testFunc21(array,2)).isEqualTo(0);
+    InstrumentBasicBlockAnalysis.stopTracing();
+
+    // Get Stats from Instrument Analysis
+    short[] stats = InstrumentBasicBlockAnalysis.getStats();
+
+    // Assert that only one function was executed at all
+    // because we cleanup stats array before every tracing
+    assertThat(stats[74]).isEqualTo((short)1);
+
+    // Assert that TestFunc19 excuted some BasicBlocks skipping
+    // everything else because it only had to go to particular switch blocks.
+    // As this test case has numerous basicblocks (23),
+    // it needs two bitvectors so we need to make sure it is :
+    // [0,0,0,0,1,0,1,1,1,1,1,1,1,0,1,1] in Bit-Vector 1,
+    // [0,0,0,0,0,0,0] in Bit-Vector 2,
+    assertThat(stats[75]).isEqualTo((short)0b0000101111111011);
+    assertThat(stats[76]).isEqualTo((short)0b0000000000000000);
+  }
+
 }
