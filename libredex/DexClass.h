@@ -287,7 +287,7 @@ class DexFieldRef {
   bool m_concrete;
   bool m_external;
 
-  ~DexFieldRef() {}
+  virtual ~DexFieldRef() {}
   DexFieldRef(DexType* container, const DexString* name, DexType* type) {
     m_spec.cls = container;
     m_spec.name = name;
@@ -323,6 +323,16 @@ class DexFieldRef {
                           DexEncodedValue* v = nullptr);
 
   static void erase_field(DexFieldRef* f) { return g_redex->erase_field(f); }
+
+  // This method frees the given `DexFieldRed` - different from `erase_field`,
+  // which removes the field from the `RedexContext`.
+  //
+  // BE SURE YOU REALLY WANT TO DO THIS! Many Redex passes and structures
+  // currently cache references and do not clean up, including global ones.
+  static void delete_field_DO_NOT_USE(DexFieldRef* f) {
+    erase_field(f);
+    delete f;
+  }
 };
 
 class DexField : public DexFieldRef {

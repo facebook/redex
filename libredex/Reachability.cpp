@@ -688,17 +688,14 @@ void ReachableObjects::record_is_seed(Seed* seed) {
  * Remove unmarked classes / methods / fields. and add all swept objects to
  * :removed_symbols.
  */
-template <class Container, class FnPtr>
+template <class Container, typename EraseHookFn>
 static void sweep_if_unmarked(const ReachableObjects& reachables,
-                              FnPtr erase_hook,
+                              EraseHookFn erase_hook,
                               Container* c,
                               ConcurrentSet<std::string>* removed_symbols) {
   auto p = [&](const auto& m) {
     if (reachables.marked_unsafe(m) == 0) {
       TRACE(RMU, 2, "Removing %s", SHOW(m));
-      if (erase_hook) {
-        erase_hook(m);
-      }
       return false;
     }
     return true;
@@ -707,6 +704,11 @@ static void sweep_if_unmarked(const ReachableObjects& reachables,
   if (removed_symbols) {
     for (auto i = it; i != c->end(); i++) {
       removed_symbols->insert(show_deobfuscated(*i));
+      erase_hook(*i);
+    }
+  } else {
+    for (auto i = it; i != c->end(); i++) {
+      erase_hook(*i);
     }
   }
   c->erase(it, c->end());
@@ -716,20 +718,45 @@ void sweep(DexStoresVector& stores,
            const ReachableObjects& reachables,
            ConcurrentSet<std::string>* removed_symbols) {
   Timer t("Sweep");
+  auto scope = build_class_scope(stores);
+
+  std::unordered_set<DexClass*> sweeped_classes;
   for (auto& dex : DexStoreClassesIterator(stores)) {
-    sweep_if_unmarked(reachables, (void (*)(DexClass*))(nullptr), &dex,
-                      removed_symbols);
-    walk::parallel::classes(dex, [&](DexClass* cls) {
-      sweep_if_unmarked(reachables, DexField::erase_field, &cls->get_ifields(),
-                        removed_symbols);
-      sweep_if_unmarked(reachables, DexField::erase_field, &cls->get_sfields(),
-                        removed_symbols);
-      sweep_if_unmarked(reachables, DexMethod::erase_method,
-                        &cls->get_dmethods(), removed_symbols);
-      sweep_if_unmarked(reachables, DexMethod::erase_method,
-                        &cls->get_vmethods(), removed_symbols);
-    });
+    sweep_if_unmarked(
+        reachables, [&](auto cls) { sweeped_classes.insert(cls); }, &dex,
+        removed_symbols);
   }
+
+  auto sweep_method = [&](DexMethodRef* m) {
+    if (m->is_def()) {
+      m->as_def()->release_code(); // Free code.
+    }
+    DexMethod::erase_method(m);
+  };
+
+  walk::parallel::classes(scope, [&](DexClass* cls) {
+    if (sweeped_classes.count(cls)) {
+      for (auto field : cls->get_all_fields()) {
+        DexField::delete_field_DO_NOT_USE(field);
+      }
+      cls->get_ifields().clear();
+      cls->get_sfields().clear();
+      for (auto method : cls->get_all_methods()) {
+        sweep_method(method);
+      }
+      cls->get_dmethods().clear();
+      cls->get_vmethods().clear();
+      return;
+    }
+    sweep_if_unmarked(reachables, DexField::delete_field_DO_NOT_USE,
+                      &cls->get_ifields(), removed_symbols);
+    sweep_if_unmarked(reachables, DexField::delete_field_DO_NOT_USE,
+                      &cls->get_sfields(), removed_symbols);
+    sweep_if_unmarked(reachables, sweep_method, &cls->get_dmethods(),
+                      removed_symbols);
+    sweep_if_unmarked(reachables, sweep_method, &cls->get_vmethods(),
+                      removed_symbols);
+  });
 }
 
 std::unordered_set<DexMethod*> compute_reachable_methods(
