@@ -10,7 +10,6 @@ package com.facebook.redextest;
 import com.facebook.proguard.annotations.DoNotStrip;
 import java.util.concurrent.atomic.AtomicInteger;
 
-@DoNotStrip
 public class InstrumentBasicBlockAnalysis {
 
   // InstrumentPass will patch.
@@ -32,7 +31,6 @@ public class InstrumentBasicBlockAnalysis {
     }
   }
 
-  @DoNotStrip
   public static void onMethodExit(int offset, short bitvec) {
     if (sIsEnabled) {
       sMethodStats[offset + 2] |= bitvec;
