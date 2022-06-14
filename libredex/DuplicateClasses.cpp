@@ -22,6 +22,8 @@ std::vector<std::string> g_dup_class_allowlist{
     "L$r8$java8methods$utility", "Ljava/util/stream/Stream$-",
     "Ljava/util/stream/IntStream$-", "Landroid/os/IBinder$-"};
 
+std::string lambda_class_prefix = "-$$Lambda$";
+
 // Read allowed duplicate class list from config.
 void read_dup_class_allowlist(const JsonWrapper& json_cfg) {
   std::vector<std::string> dups;
@@ -44,7 +46,8 @@ bool is_known_dup(DexClass* cls) {
                       g_dup_class_allowlist.end(),
                       [cls](const std::string& name) {
                         return boost::starts_with(cls->get_name()->str(), name);
-                      }) != g_dup_class_allowlist.end();
+                      }) != g_dup_class_allowlist.end() ||
+         cls->get_name()->str().find(lambda_class_prefix) != std::string::npos;
 }
 
 } // namespace dup_classes
