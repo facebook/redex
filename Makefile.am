@@ -241,6 +241,7 @@ libredex_la_SOURCES = \
 	service/regalloc/VirtualRegistersFile.cpp \
 	service/regalloc-fast/LinearScan.cpp \
 	service/regalloc-fast/LiveInterval.cpp \
+	service/resources/StaticIds.cpp \
 	service/shrinker/Shrinker.cpp \
 	service/switch-dispatch/SwitchDispatch.cpp \
 	service/switch-partitioning/SwitchEquivFinder.cpp \
