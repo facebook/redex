@@ -1975,10 +1975,6 @@ private:
     uint8_t                     mNextPackageId;
 };
 
-float complex_value(uint32_t complex);
-
-uint32_t complex_unit(uint32_t complex, bool isFraction);
-
 }   // namespace android
 
 #endif // _LIBS_UTILS_RESOURCE_TYPES_H

@@ -6452,33 +6452,23 @@ bool ResTable::getIdmapInfo(const void* idmap, size_t sizeBytes,
 #define CHAR16_ARRAY_EQ(constant, var, len) \
         ((len == (sizeof(constant)/sizeof(constant[0]))) && (0 == memcmp((var), (constant), (len))))
 
-float complex_value(uint32_t complex) {
-  const float MANTISSA_MULT =
-      1.0f / (1<<Res_value::COMPLEX_MANTISSA_SHIFT);
-  const float RADIX_MULTS[] = {
-      1.0f*MANTISSA_MULT, 1.0f/(1<<7)*MANTISSA_MULT,
-      1.0f/(1<<15)*MANTISSA_MULT, 1.0f/(1<<23)*MANTISSA_MULT
-  };
-
-  float value = (complex&(Res_value::COMPLEX_MANTISSA_MASK
-                 <<Res_value::COMPLEX_MANTISSA_SHIFT))
-          * RADIX_MULTS[(complex>>Res_value::COMPLEX_RADIX_SHIFT)
-                          & Res_value::COMPLEX_RADIX_MASK];
-  return value;
-}
-
-uint32_t complex_unit(uint32_t complex, bool isFraction) {
-  return (complex>>Res_value::COMPLEX_UNIT_SHIFT)&Res_value::COMPLEX_UNIT_MASK;
-}
-
 static void print_complex(uint32_t complex, bool isFraction)
 {
-    auto value = complex_value(complex);
-    auto unit = complex_unit(complex, isFraction);
+    const float MANTISSA_MULT =
+        1.0f / (1<<Res_value::COMPLEX_MANTISSA_SHIFT);
+    const float RADIX_MULTS[] = {
+        1.0f*MANTISSA_MULT, 1.0f/(1<<7)*MANTISSA_MULT,
+        1.0f/(1<<15)*MANTISSA_MULT, 1.0f/(1<<23)*MANTISSA_MULT
+    };
+
+    float value = (complex&(Res_value::COMPLEX_MANTISSA_MASK
+                   <<Res_value::COMPLEX_MANTISSA_SHIFT))
+            * RADIX_MULTS[(complex>>Res_value::COMPLEX_RADIX_SHIFT)
+                            & Res_value::COMPLEX_RADIX_MASK];
     printf("%f", value);
 
     if (!isFraction) {
-        switch (unit) {
+        switch ((complex>>Res_value::COMPLEX_UNIT_SHIFT)&Res_value::COMPLEX_UNIT_MASK) {
             case Res_value::COMPLEX_UNIT_PX: printf("px"); break;
             case Res_value::COMPLEX_UNIT_DIP: printf("dp"); break;
             case Res_value::COMPLEX_UNIT_SP: printf("sp"); break;
@@ -6488,7 +6478,7 @@ static void print_complex(uint32_t complex, bool isFraction)
             default: printf(" (unknown unit)"); break;
         }
     } else {
-        switch (unit) {
+        switch ((complex>>Res_value::COMPLEX_UNIT_SHIFT)&Res_value::COMPLEX_UNIT_MASK) {
             case Res_value::COMPLEX_UNIT_FRACTION: printf("%%"); break;
             case Res_value::COMPLEX_UNIT_FRACTION_PARENT: printf("%%p"); break;
             default: printf(" (unknown unit)"); break;

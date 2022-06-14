@@ -206,16 +206,16 @@ TEST(ResTable, AppendNewType) {
   {
     android::Res_value out_value;
     round_trip.getResource(0x7f010000, &out_value);
-    float val = android::complex_value(out_value.data);
-    uint32_t unit = android::complex_unit(out_value.data, false);
+    float val = arsc::complex_value(out_value.data);
+    uint32_t unit = arsc::complex_unit(out_value.data, false);
     ASSERT_EQ((int)val, 10);
     ASSERT_EQ(unit, android::Res_value::COMPLEX_UNIT_DIP);
   }
   {
     android::Res_value out_value;
     round_trip.getResource(0x7f010001, &out_value);
-    float val = android::complex_value(out_value.data);
-    uint32_t unit = android::complex_unit(out_value.data, false);
+    float val = arsc::complex_value(out_value.data);
+    uint32_t unit = arsc::complex_unit(out_value.data, false);
     ASSERT_EQ((int)val, 20);
     ASSERT_EQ(unit, android::Res_value::COMPLEX_UNIT_DIP);
   }

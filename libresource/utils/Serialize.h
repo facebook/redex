@@ -45,6 +45,11 @@ uint32_t get_spec_flags(android::ResTable_typeSpec* spec, uint16_t entry_id);
 bool are_configs_equivalent(android::ResTable_config* a,
                             android::ResTable_config* b);
 
+// For a Res_value marked with FLAG_COMPLEX, return the value part.
+float complex_value(uint32_t complex);
+// For a Res_value marked with FLAG_COMPLEX, return the unit part.
+uint32_t complex_unit(uint32_t complex, bool isFraction);
+
 enum StringKind { STD_STRING, STRING_8, STRING_16 };
 
 struct StringHolder {

@@ -186,6 +186,26 @@ bool are_configs_equivalent(android::ResTable_config* a,
   return false;
 }
 
+float complex_value(uint32_t complex) {
+  const float MANTISSA_MULT =
+      1.0f / (1 << android::Res_value::COMPLEX_MANTISSA_SHIFT);
+  const float RADIX_MULTS[] = {
+      1.0f * MANTISSA_MULT, 1.0f / (1 << 7) * MANTISSA_MULT,
+      1.0f / (1 << 15) * MANTISSA_MULT, 1.0f / (1 << 23) * MANTISSA_MULT};
+
+  float value =
+      (complex & (android::Res_value::COMPLEX_MANTISSA_MASK
+                  << android::Res_value::COMPLEX_MANTISSA_SHIFT)) *
+      RADIX_MULTS[(complex >> android::Res_value::COMPLEX_RADIX_SHIFT) &
+                  android::Res_value::COMPLEX_RADIX_MASK];
+  return value;
+}
+
+uint32_t complex_unit(uint32_t complex, bool isFraction) {
+  return (complex >> android::Res_value::COMPLEX_UNIT_SHIFT) &
+         android::Res_value::COMPLEX_UNIT_MASK;
+}
+
 size_t CanonicalEntries::hash(const EntryValueData& data) {
   size_t seed = 0;
   uint8_t* ptr = data.getKey();
