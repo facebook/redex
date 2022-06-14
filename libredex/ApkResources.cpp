@@ -1745,19 +1745,16 @@ size_t ResourcesArscFile::obfuscate_resource_and_serialize(
 std::vector<std::string> ResourcesArscFile::get_files_by_rid(
     uint32_t res_id, ResourcePathType /* unused */) {
   std::vector<std::string> ret;
+  auto& table_snapshot = get_table_snapshot();
   android::Vector<android::Res_value> out_values;
   res_table.getAllValuesForResource(res_id, out_values);
   for (size_t i = 0; i < out_values.size(); i++) {
     auto val = out_values[i];
     if (val.dataType == android::Res_value::TYPE_STRING) {
       // data is an index into string pool.
-      auto file_path = res_table.getString8FromIndex(0, val.data);
-      auto file_chars = file_path.string();
-      if (file_chars != nullptr) {
-        auto file_str = std::string(file_chars);
-        if (is_resource_file(file_str)) {
-          ret.emplace_back(file_str);
-        }
+      auto s = table_snapshot.get_global_string(dtohl(val.data));
+      if (is_resource_file(s)) {
+        ret.emplace_back(s);
       }
     }
   }
@@ -1774,8 +1771,6 @@ void ResourcesArscFile::walk_references_for_resource(
   }
   nodes_visited->emplace(resID);
 
-  ssize_t pkg_index = res_table.getResourcePackageIndex(resID);
-
   android::Vector<android::Res_value> initial_values;
   res_table.getAllValuesForResource(resID, initial_values);
 
@@ -1784,12 +1779,13 @@ void ResourcesArscFile::walk_references_for_resource(
     nodes_to_explore.push(initial_values[index]);
   }
 
+  auto& table_snapshot = get_table_snapshot();
   while (!nodes_to_explore.empty()) {
     android::Res_value r = nodes_to_explore.top();
     nodes_to_explore.pop();
     if (r.dataType == android::Res_value::TYPE_STRING) {
-      android::String8 str = res_table.getString8FromIndex(pkg_index, r.data);
-      potential_file_paths->insert(std::string(str.string()));
+      potential_file_paths->insert(
+          table_snapshot.get_global_string(dtohl(r.data)));
       continue;
     }
 

@@ -1899,8 +1899,6 @@ public:
     // the same entries in the same configurations.
     bool areResourceValuesIdentical(uint32_t resourceId1, uint32_t resourceId2) const;
 
-    String8 getString8FromIndex(ssize_t packageIndex, uint32_t stringIndex) const;
-
     void getTypeNamesForPackage(
         ssize_t packageIndex,
         Vector<String8>* typeNames) const;

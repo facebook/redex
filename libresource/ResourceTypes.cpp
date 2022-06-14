@@ -6499,17 +6499,6 @@ String8 ResTable::normalizeForOutput( const char *input )
     return ret;
 }
 
-String8 ResTable::getString8FromIndex(
-    ssize_t packageIndex,
-    uint32_t stringIndex) const
-{
-    const PackageGroup* pg = mPackageGroups[packageIndex];
-    const TypeList& typeList = pg->types[0];
-    const Type* typeConfigs = typeList[0];
-    const Package* pkg = typeConfigs->package;
-    return pkg->header->values.string8ObjectAt(stringIndex);
-}
-
 void ResTable::getTypeNamesForPackage(
     ssize_t packageIndex,
     Vector<String8>* typeNames) const
