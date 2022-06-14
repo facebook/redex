@@ -1874,27 +1874,6 @@ public:
 
     void print(bool inclValues) const;
 
-    // For the given resource ID, looks across all configurations and returns all
-    // the corresponding Res_value entries. This is much more reliable than
-    // ResTable::getResource, which fails for roughly 20% of resources and does not
-    // handle complex (bag) values well. Note that we also return the parent of
-    // bag values as a virtual TYPE_REFERENCE Res_value to reflect the relationship,
-    // along with a virtual TYPE_ATTRIBUTE for the 'key' of each bag entry value.
-    void getAllValuesForResource(uint32_t resourceId, Vector<Res_value>& values) const;
-
-    // As above, but if onlyDefault is true, only considers the 'default' column.
-    void getAllValuesForResource(
-        uint32_t resourceId,
-        Vector<Res_value>& values,
-        bool onlyDefault) const;
-
-    // As above, but restrict return values to only values in the given config.
-    // Null pointer means return all values in all configs.
-    void getAllValuesForResource(
-        uint32_t resourceId,
-        Vector<Res_value>& values,
-        const ResTable_config* allowed_config) const;
-
     static String8 normalizeForOutput(const char* input);
 
     ssize_t getResourcePackageIndex(uint32_t resID) const;
@@ -1907,11 +1886,6 @@ private:
     struct PackageGroup;
     struct bag_set;
     typedef Vector<Type*> TypeList;
-
-    void collectValuesInConfig(
-        Vector<Res_value>& values,
-        const ResTable_entry* ent,
-        uint32_t typeSize) const;
 
     void collectAllConfigs(Vector<ResTable_config>* configs, const Type* type) const;
 

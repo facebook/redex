@@ -191,8 +191,21 @@ class TableSnapshot {
   // Returns true if the given ids are from the same type, and all
   // entries/values in all configurations are byte for byte identical.
   bool are_values_identical(uint32_t a, uint32_t b);
+  // For every non-empty entry in all configs, coalesce the entry into a list of
+  // values. For complex entries, this emits Res_value structures representing
+  // the entry's parent (which is useful for reachability purposes).
+  // NOTE: refactor to use std::vector eventually
+  void collect_resource_values(uint32_t id,
+                               android::Vector<android::Res_value>* out);
+  // Same as above, but if given list of "include_configs" is non-empty, results
+  // written to out will be restricted to only these configs.
+  void collect_resource_values(
+      uint32_t id,
+      std::vector<android::ResTable_config> include_configs,
+      android::Vector<android::Res_value>* out);
   // Reads a string from the global string pool.
   std::string get_global_string(size_t idx) const;
+
  private:
   TableEntryParser m_table_parser;
   android::ResStringPool m_global_strings;
@@ -273,7 +286,6 @@ class ResourcesArscFile : public ResourceTableFile {
   std::string m_path;
   RedexMappedFile m_f;
   size_t m_arsc_len;
-  std::map<uint32_t, android::Vector<android::Res_value>> tmp_id_to_values;
   bool m_file_closed = false;
   std::unique_ptr<apk::TableSnapshot> m_table_snapshot;
   std::unordered_set<uint32_t> m_ids_to_remove;

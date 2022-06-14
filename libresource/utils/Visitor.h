@@ -63,6 +63,12 @@ class ResourceTableVisitor : public VisitorBase {
   virtual bool visit_type(android::ResTable_package* package,
                           android::ResTable_typeSpec* type_spec,
                           android::ResTable_type* type);
+  // Visit an entry pointer, figure out what type it is and dispatch to more
+  // specific visit methods. Subclasses won't need to reimplement this.
+  bool begin_visit_entry(android::ResTable_package* package,
+                         android::ResTable_typeSpec* type_spec,
+                         android::ResTable_type* type,
+                         android::ResTable_entry* entry);
   // Visit a basic entry and its value.
   virtual bool visit_entry(android::ResTable_package* package,
                            android::ResTable_typeSpec* type_spec,

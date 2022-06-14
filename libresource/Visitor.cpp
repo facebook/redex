@@ -372,29 +372,39 @@ bool ResourceTableVisitor::visit_type(android::ResTable_package* package,
   android::TypeVariant tv(type);
   for (auto it = tv.beginEntries(); it != tv.endEntries(); ++it) {
     android::ResTable_entry* entry = const_cast<android::ResTable_entry*>(*it);
-    if (!entry) {
-      continue;
+    if (!begin_visit_entry(package, type_spec, type, entry)) {
+      return false;
     }
-    if (dtohs(entry->flags) & android::ResTable_entry::FLAG_COMPLEX) {
-      auto map_entry = static_cast<android::ResTable_map_entry*>(entry);
-      auto entry_count = dtohl(map_entry->count);
-      if (!visit_map_entry(package, type_spec, type, map_entry)) {
+  }
+  return true;
+}
+
+bool ResourceTableVisitor::begin_visit_entry(android::ResTable_package* package,
+                                            android::ResTable_typeSpec* type_spec,
+                                            android::ResTable_type* type,
+                                            android::ResTable_entry* entry) {
+  if (!entry) {
+    return true;
+  }
+  if (dtohs(entry->flags) & android::ResTable_entry::FLAG_COMPLEX) {
+    auto map_entry = static_cast<android::ResTable_map_entry*>(entry);
+    auto entry_count = dtohl(map_entry->count);
+    if (!visit_map_entry(package, type_spec, type, map_entry)) {
+      return false;
+    }
+    for (size_t i = 0; i < entry_count; i++) {
+      android::ResTable_map* value =
+          (android::ResTable_map*)((uint8_t*)entry + dtohl(entry->size) +
+                                    i * sizeof(android::ResTable_map));
+      if (!visit_map_value(package, type_spec, type, map_entry, value)) {
         return false;
       }
-      for (size_t i = 0; i < entry_count; i++) {
-        android::ResTable_map* value =
-            (android::ResTable_map*)((uint8_t*)entry + dtohl(entry->size) +
-                                     i * sizeof(android::ResTable_map));
-        if (!visit_map_value(package, type_spec, type, map_entry, value)) {
-          return false;
-        }
-      }
-    } else {
-      android::Res_value* value =
-          (android::Res_value*)((uint8_t*)entry + dtohl(entry->size));
-      if (!visit_entry(package, type_spec, type, entry, value)) {
-        return false;
-      }
+    }
+  } else {
+    android::Res_value* value =
+        (android::Res_value*)((uint8_t*)entry + dtohl(entry->size));
+    if (!visit_entry(package, type_spec, type, entry, value)) {
+      return false;
     }
   }
   return true;

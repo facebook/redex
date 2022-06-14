@@ -404,6 +404,98 @@ bool TableSnapshot::are_values_identical(uint32_t a, uint32_t b) {
   return true;
 }
 
+namespace {
+// Parse the entry data (which could be in many forms) and emit a flattened list
+// of Res_value objects for callers to easily consume (by legacy convention,
+// this will do byte swapping).
+class EntryFlattener : public arsc::ResourceTableVisitor {
+ public:
+  void emit(android::Res_value* source) {
+    android::Res_value value;
+    value.size = dtohs(source->size);
+    value.res0 = source->res0;
+    value.dataType = source->dataType;
+    value.data = dtohl(source->data);
+    m_values.emplace_back(value);
+  }
+
+  void emit_shim(uint8_t data_type, uint32_t data) {
+    android::Res_value shim;
+    shim.dataType = data_type;
+    shim.data = data;
+    m_values.emplace_back(shim);
+  }
+
+  bool visit_entry(android::ResTable_package* /* unused */,
+                   android::ResTable_typeSpec* /* unused */,
+                   android::ResTable_type* /* unused */,
+                   android::ResTable_entry* /* unused */,
+                   android::Res_value* value) override {
+    emit(value);
+    return true;
+  }
+
+  bool visit_map_entry(android::ResTable_package* /* unused */,
+                       android::ResTable_typeSpec* /* unused */,
+                       android::ResTable_type* /* unused */,
+                       android::ResTable_map_entry* entry) override {
+    // API QUIRK: Old code that served this purpose left size intentionally as 0
+    // to denote this is a "conceptual" value that is encompassed by the
+    // resource ID we are being asked to traverse. This is useful for
+    // reachability purposes but a bit misleading otherwise.
+    emit_shim(android::Res_value::TYPE_REFERENCE, dtohl(entry->parent.ident));
+    return true;
+  }
+
+  bool visit_map_value(android::ResTable_package* /* unused */,
+                       android::ResTable_typeSpec* /* unused */,
+                       android::ResTable_type* /* unused */,
+                       android::ResTable_map_entry* /* unused */,
+                       android::ResTable_map* value) override {
+    emit(&value->value);
+    // API QUIRK: Same rationale as above.
+    emit_shim(android::Res_value::TYPE_ATTRIBUTE, dtohl(value->name.ident));
+    return true;
+  }
+
+  std::vector<android::Res_value> m_values;
+};
+} // namespace
+
+void TableSnapshot::collect_resource_values(
+    uint32_t id, android::Vector<android::Res_value>* out) {
+  collect_resource_values(id, {}, out);
+}
+
+void TableSnapshot::collect_resource_values(
+    uint32_t id,
+    std::vector<android::ResTable_config> include_configs,
+    android::Vector<android::Res_value>* out) {
+  auto should_include_config = [&](android::ResTable_config* maybe) {
+    if (include_configs.empty()) {
+      return true;
+    }
+    for (auto& c : include_configs) {
+      if (arsc::are_configs_equivalent(maybe, &c)) {
+        return true;
+      }
+    }
+    return false;
+  };
+  auto& config_entries = m_table_parser.m_res_id_to_entries.at(id);
+  for (auto& pair : config_entries) {
+    if (should_include_config(pair.first)) {
+      auto ev = pair.second;
+      auto entry = (android::ResTable_entry*)ev.getKey();
+      EntryFlattener flattener;
+      flattener.begin_visit_entry(nullptr, nullptr, nullptr, entry);
+      for (auto& v : flattener.m_values) {
+        out->add(v);
+      }
+    }
+  }
+}
+
 std::string TableSnapshot::get_global_string(size_t idx) const {
   return get_string_from_pool(m_global_strings, idx);
 }
@@ -1793,7 +1885,7 @@ std::vector<std::string> ResourcesArscFile::get_files_by_rid(
   std::vector<std::string> ret;
   auto& table_snapshot = get_table_snapshot();
   android::Vector<android::Res_value> out_values;
-  res_table.getAllValuesForResource(res_id, out_values);
+  table_snapshot.collect_resource_values(res_id, &out_values);
   for (size_t i = 0; i < out_values.size(); i++) {
     auto val = out_values[i];
     if (val.dataType == android::Res_value::TYPE_STRING) {
@@ -1817,15 +1909,15 @@ void ResourcesArscFile::walk_references_for_resource(
   }
   nodes_visited->emplace(resID);
 
+  auto& table_snapshot = get_table_snapshot();
   android::Vector<android::Res_value> initial_values;
-  res_table.getAllValuesForResource(resID, initial_values);
+  table_snapshot.collect_resource_values(resID, &initial_values);
 
   std::stack<android::Res_value> nodes_to_explore;
   for (size_t index = 0; index < initial_values.size(); ++index) {
     nodes_to_explore.push(initial_values[index]);
   }
 
-  auto& table_snapshot = get_table_snapshot();
   while (!nodes_to_explore.empty()) {
     android::Res_value r = nodes_to_explore.top();
     nodes_to_explore.pop();
@@ -1845,7 +1937,7 @@ void ResourcesArscFile::walk_references_for_resource(
 
     nodes_visited->insert(r.data);
     android::Vector<android::Res_value> inner_values;
-    res_table.getAllValuesForResource(r.data, inner_values);
+    table_snapshot.collect_resource_values(r.data, &inner_values);
     for (size_t index = 0; index < inner_values.size(); ++index) {
       nodes_to_explore.push(inner_values[index]);
     }
@@ -1859,20 +1951,15 @@ void ResourcesArscFile::delete_resource(uint32_t res_id) {
 void ResourcesArscFile::collect_resid_values_and_hashes(
     const std::vector<uint32_t>& ids,
     std::map<size_t, std::vector<uint32_t>>* res_by_hash) {
-  tmp_id_to_values.clear();
+  auto& table_snapshot = get_table_snapshot();
   for (uint32_t id : ids) {
     android::Vector<android::Res_value> row_values;
-    res_table.getAllValuesForResource(id, row_values);
+    table_snapshot.collect_resource_values(id, &row_values);
     (*res_by_hash)[getHashFromValues(row_values)].push_back(id);
-    tmp_id_to_values[id] = row_values;
   }
 }
 
 bool ResourcesArscFile::resource_value_identical(uint32_t a_id, uint32_t b_id) {
-  if (tmp_id_to_values[a_id].size() != tmp_id_to_values[b_id].size()) {
-    return false;
-  }
-
   auto& table_snapshot = get_table_snapshot();
   return table_snapshot.are_values_identical(a_id, b_id);
 }
