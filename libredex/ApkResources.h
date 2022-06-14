@@ -169,6 +169,33 @@ class TableEntryParser : public TableParser {
                       android::ResTable_type* type,
                       arsc::EntryValueData& data);
 };
+
+// Holds parsed details of the .arsc file. Make sure to disregarded/regenerate
+// this when the backing file on disk gets modified.
+class TableSnapshot {
+ public:
+  TableSnapshot(RedexMappedFile&, size_t);
+  // Gather all resource identifiers that have some non-empty value in a config.
+  void gather_non_empty_resource_ids(std::vector<uint32_t>* ids);
+  std::string get_resource_name(uint32_t id);
+  // The number of packages in the table.
+  size_t package_count();
+  // Given a package id (shifted to low bits) emit the values from the type
+  // strings pool.
+  void get_type_names(uint32_t package_id, std::vector<std::string>* out);
+  // Fills the output vec with ResTable_config objects for the given type in the
+  // package
+  void get_configurations(uint32_t package_id,
+                          const std::string& type_name,
+                          std::vector<android::ResTable_config>* out);
+  // Reads a string from the global string pool.
+  std::string get_global_string(size_t idx) const;
+ private:
+  TableEntryParser m_table_parser;
+  android::ResStringPool m_global_strings;
+  std::map<uint32_t, android::ResStringPool> m_key_strings;
+  std::map<uint32_t, android::ResStringPool> m_type_strings;
+};
 } // namespace apk
 
 class ResourcesArscFile : public ResourceTableFile {
@@ -237,12 +264,15 @@ class ResourcesArscFile : public ResourceTableFile {
 
   size_t get_length() const;
 
+  apk::TableSnapshot& get_table_snapshot();
+
  private:
   std::string m_path;
   RedexMappedFile m_f;
   size_t m_arsc_len;
   std::map<uint32_t, android::Vector<android::Res_value>> tmp_id_to_values;
   bool m_file_closed = false;
+  std::unique_ptr<apk::TableSnapshot> m_table_snapshot;
   std::unordered_set<uint32_t> m_ids_to_remove;
   std::vector<apk::TypeDefinition> m_added_types;
 };

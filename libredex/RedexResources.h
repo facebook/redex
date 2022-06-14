@@ -160,7 +160,7 @@ class ResourceTableFile {
     return std::vector<uint32_t>{};
   }
 
-  android::SortedVector<uint32_t> sorted_res_ids;
+  std::vector<uint32_t> sorted_res_ids;
   std::map<uint32_t, std::string> id_to_name;
   std::map<std::string, std::vector<uint32_t>> name_to_ids;
 

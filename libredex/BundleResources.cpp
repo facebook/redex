@@ -1265,7 +1265,7 @@ void ResourcesPbFile::collect_resource_data_for_file(
                   current_package_id, current_type_id, current_entry_id);
               TRACE(RES, 9, "    Entry: %s %X %X", pb_entry.name().c_str(),
                     current_entry_id, current_resource_id);
-              sorted_res_ids.add(current_resource_id);
+              sorted_res_ids.emplace_back(current_resource_id);
               always_assert(m_existed_res_ids.count(current_resource_id) == 0);
               m_existed_res_ids.emplace(current_resource_id);
               id_to_name.emplace(current_resource_id, name_string);
@@ -1275,6 +1275,7 @@ void ResourcesPbFile::collect_resource_data_for_file(
             }
           }
         }
+        std::sort(sorted_res_ids.begin(), sorted_res_ids.end());
       });
 }
 

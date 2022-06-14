@@ -1878,7 +1878,6 @@ public:
             String8* pTargetPath, String8* pOverlayPath);
 
     void print(bool inclValues) const;
-    void getResourceIds(SortedVector<uint32_t>* sVec) const;
 
     // For the given resource ID, looks across all configurations and returns all
     // the corresponding Res_value entries. This is much more reliable than

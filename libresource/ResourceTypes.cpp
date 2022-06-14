@@ -6615,49 +6615,6 @@ void ResTable::print_value(const Package* pkg, const Res_value& value) const
     }
 }
 
-// Allows SortedVector to be used as a poor man's substitute for std::unordered_set;
-// internally searches for value using a binary search (order of log n).
-template <typename T>
-static void addIfUnique(SortedVector<T>* sVec, T value)
-{
-    if (sVec->indexOf(value) < 0) {
-        sVec->add(value);
-    }
-}
-
-void ResTable::getResourceIds(SortedVector<uint32_t>* sVec) const
-{
-    size_t pgCount = mPackageGroups.size();
-    for (size_t pgIndex=0; pgIndex < pgCount; pgIndex++) {
-        const PackageGroup* pg = mPackageGroups[pgIndex];
-        int packageId = pg->id;
-
-        for (size_t typeIndex=0; typeIndex < pg->types.size(); typeIndex++) {
-            const TypeList& typeList = pg->types[typeIndex];
-            if (typeList.isEmpty()) {
-                continue;
-            }
-            const Type* typeConfigs = typeList[0];
-
-            if (typeConfigs->typeSpecFlags != nullptr) {
-                for (size_t entryIndex=0; entryIndex < typeConfigs->entryCount; entryIndex++) {
-                    uint32_t resID = (0xff000000 & ((packageId)<<24))
-                                | (0x00ff0000 & ((typeIndex+1)<<16))
-                                | (0x0000ffff & (entryIndex));
-                    if (packageId == 0) {
-                        pg->dynamicRefTable.lookupResourceId(&resID);
-                    }
-
-                    resource_name resName;
-                    if (this->getResourceName(resID, true, &resName)) {
-                        addIfUnique(sVec, resID);
-                    }
-                }
-            }
-        }
-    }
-}
-
 static uint32_t getRemappedEntry(
     uint32_t reference,
     SortedVector<uint32_t> originalIds,
