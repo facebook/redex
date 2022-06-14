@@ -775,16 +775,24 @@ void ApkResources::collect_layout_classes_and_attributes_for_file(
   });
 }
 
-boost::optional<int32_t> ApkResources::get_min_sdk() {
-  if (!boost::filesystem::exists(m_manifest)) {
+namespace {
+template <typename ValueType>
+boost::optional<ValueType> read_xml_value(
+    const std::string& file_path,
+    const std::string& tag_name,
+    const uint8_t& data_type,
+    const std::string& attribute,
+    const std::function<boost::optional<ValueType>(android::ResXMLTree&,
+                                                   size_t)>& attribute_reader) {
+  if (!boost::filesystem::exists(file_path)) {
     return boost::none;
   }
 
-  auto file = RedexMappedFile::open(m_manifest);
+  auto file = RedexMappedFile::open(file_path);
 
   if (file.size() == 0) {
-    fprintf(stderr, "WARNING: Cannot find/read the manifest file %s\n",
-            m_manifest.c_str());
+    fprintf(stderr, "WARNING: Cannot find/read the xml file %s\n",
+            file_path.c_str());
     return boost::none;
   }
 
@@ -792,32 +800,43 @@ boost::optional<int32_t> ApkResources::get_min_sdk() {
   parser.setTo(file.const_data(), file.size());
 
   if (parser.getError() != android::NO_ERROR) {
-    fprintf(stderr, "WARNING: Failed to parse the manifest file %s\n",
-            m_manifest.c_str());
+    fprintf(stderr, "WARNING: Failed to parse the xml file %s\n",
+            file_path.c_str());
     return boost::none;
   }
 
-  const android::String16 uses_sdk("uses-sdk");
-  const android::String16 min_sdk("minSdkVersion");
+  const android::String16 tag(tag_name.c_str());
+  const android::String16 attr(attribute.c_str());
   android::ResXMLParser::event_code_t event_code;
   do {
     event_code = parser.next();
     if (event_code == android::ResXMLParser::START_TAG) {
       size_t outLen;
       auto el_name = android::String16(parser.getElementName(&outLen));
-      if (el_name == uses_sdk) {
-        android::Res_value raw_value;
-        if (has_raw_attribute_value(parser, min_sdk, raw_value) &&
-            (raw_value.dataType & android::Res_value::TYPE_INT_DEC)) {
-          return boost::optional<int32_t>(static_cast<int32_t>(raw_value.data));
-        } else {
-          return boost::none;
+      if (el_name == tag) {
+        const size_t attr_count = parser.getAttributeCount();
+        for (size_t i = 0; i < attr_count; ++i) {
+          size_t len;
+          android::String16 key(parser.getAttributeName(i, &len));
+          if (key == attr && parser.getAttributeDataType(i) == data_type) {
+            return attribute_reader(parser, i);
+          }
         }
       }
     }
   } while ((event_code != android::ResXMLParser::END_DOCUMENT) &&
            (event_code != android::ResXMLParser::BAD_DOCUMENT));
   return boost::none;
+}
+} // namespace
+
+boost::optional<int32_t> ApkResources::get_min_sdk() {
+  return read_xml_value<int32_t>(
+      m_manifest, "uses-sdk", android::Res_value::TYPE_INT_DEC, "minSdkVersion",
+      [](android::ResXMLTree& parser, size_t idx) {
+        return boost::optional<int32_t>(
+            static_cast<int32_t>(parser.getAttributeData(idx)));
+      });
 }
 
 ManifestClassInfo ApkResources::get_manifest_class_info() {
@@ -835,6 +854,20 @@ ManifestClassInfo ApkResources::get_manifest_class_info() {
     });
   }
   return classes;
+}
+
+boost::optional<std::string> ApkResources::get_manifest_package_name() {
+  return read_xml_value<std::string>(
+      m_manifest, "manifest", android::Res_value::TYPE_STRING, "package",
+      [](android::ResXMLTree& parser, size_t idx) {
+        size_t len;
+        auto chars = parser.getAttributeStringValue(idx, &len);
+        if (chars == nullptr) {
+          return boost::optional<std::string>{};
+        }
+        android::String16 s16(chars, len);
+        return boost::optional<std::string>(convert_from_string16(s16));
+      });
 }
 
 std::unordered_set<uint32_t> ApkResources::get_xml_reference_attributes(

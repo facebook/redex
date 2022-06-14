@@ -173,6 +173,7 @@ class AndroidResources {
   virtual boost::optional<int32_t> get_min_sdk() = 0;
 
   virtual ManifestClassInfo get_manifest_class_info() = 0;
+  virtual boost::optional<std::string> get_manifest_package_name() = 0;
 
   // Given the xml file name, return the list of resource ids referred in xml
   // attributes.

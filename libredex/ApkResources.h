@@ -286,6 +286,7 @@ class ApkResources : public AndroidResources {
 
   boost::optional<int32_t> get_min_sdk() override;
   ManifestClassInfo get_manifest_class_info() override;
+  boost::optional<std::string> get_manifest_package_name() override;
   std::unordered_set<uint32_t> get_xml_reference_attributes(
       const std::string& filename) override;
 
