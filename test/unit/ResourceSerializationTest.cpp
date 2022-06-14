@@ -1055,3 +1055,92 @@ TEST(ResTable, CanonicalEntryData) {
   write_to_file(projector_canon_path, out);
   do_validation(projector_canon_path, expected_size_canon);
 }
+
+TEST(ResTable, GetStringsByName) {
+  // Make the strangest hypothetical table that could exist (string with values
+  // in multiple configs, references with cycles, etc).
+  auto pool_flags = android::ResStringPool_header::UTF8_FLAG;
+  auto global_strings_builder =
+      std::make_shared<arsc::ResStringPoolBuilder>(pool_flags);
+  global_strings_builder->add_string("a");
+  global_strings_builder->add_string("b");
+  global_strings_builder->add_string("c");
+  global_strings_builder->add_string("d");
+  global_strings_builder->add_string("e");
+  auto key_strings_builder =
+      std::make_shared<arsc::ResStringPoolBuilder>(pool_flags);
+  key_strings_builder->add_string("first");
+  key_strings_builder->add_string("second");
+  key_strings_builder->add_string("third");
+  key_strings_builder->add_string("fourth");
+  auto type_strings_builder =
+      std::make_shared<arsc::ResStringPoolBuilder>(pool_flags);
+  type_strings_builder->add_string("string");
+
+  auto package_builder =
+      std::make_shared<arsc::ResPackageBuilder>(&package_header);
+  package_builder->set_key_strings(key_strings_builder);
+  package_builder->set_type_strings(type_strings_builder);
+
+  auto table_builder = std::make_shared<arsc::ResTableBuilder>();
+  table_builder->set_global_strings(global_strings_builder);
+  table_builder->add_package(package_builder);
+
+  std::vector<android::ResTable_config*> string_configs = {&default_config,
+                                                           &land_config};
+  std::vector<uint32_t> string_flags = {
+      0, android::ResTable_config::CONFIG_ORIENTATION,
+      android::ResTable_config::CONFIG_ORIENTATION,
+      android::ResTable_config::CONFIG_ORIENTATION};
+  auto type_definer = std::make_shared<arsc::ResTableTypeDefiner>(
+      package_header.id, 1, string_configs, string_flags);
+  package_builder->add_type(type_definer);
+
+  EntryAndValue first(0, android::Res_value::TYPE_STRING, 0);
+  type_definer->add(&default_config, {(uint8_t*)&first, sizeof(EntryAndValue)});
+  type_definer->add_empty(&land_config);
+
+  EntryAndValue second(1, android::Res_value::TYPE_STRING, 1);
+  EntryAndValue second_land(1, android::Res_value::TYPE_STRING, 2);
+  type_definer->add(&default_config,
+                    {(uint8_t*)&second, sizeof(EntryAndValue)});
+  type_definer->add(&land_config,
+                    {(uint8_t*)&second_land, sizeof(EntryAndValue)});
+
+  // These next two entries are diabolical as some of their entries will be
+  // cyclic.
+  EntryAndValue third(2, android::Res_value::TYPE_STRING, 3);
+  EntryAndValue third_land(2, android::Res_value::TYPE_REFERENCE, 0x7f010003);
+  type_definer->add(&default_config, {(uint8_t*)&third, sizeof(EntryAndValue)});
+  type_definer->add(&land_config,
+                    {(uint8_t*)&third_land, sizeof(EntryAndValue)});
+
+  EntryAndValue fourth(3, android::Res_value::TYPE_REFERENCE, 0x7f010002);
+  EntryAndValue fourth_land(3, android::Res_value::TYPE_STRING, 4);
+  type_definer->add(&default_config,
+                    {(uint8_t*)&fourth, sizeof(EntryAndValue)});
+  type_definer->add(&land_config,
+                    {(uint8_t*)&fourth_land, sizeof(EntryAndValue)});
+
+  android::Vector<char> out;
+  table_builder->serialize(&out);
+
+  auto tmp_dir = redex::make_tmp_dir("ResTable_GetStringsByName%%%%%%%%");
+  auto arsc_path = tmp_dir.path + "/resources.arsc";
+  write_to_file(arsc_path, out);
+
+  ResourcesArscFile arsc_file(arsc_path);
+  auto vec = arsc_file.get_resource_strings_by_name("first");
+  EXPECT_EQ(vec.size(), 1);
+  EXPECT_STREQ(vec[0].c_str(), "a");
+  vec = arsc_file.get_resource_strings_by_name("second");
+  EXPECT_EQ(vec.size(), 2);
+  EXPECT_STREQ(vec[0].c_str(), "b");
+  EXPECT_STREQ(vec[1].c_str(), "c");
+  vec = arsc_file.get_resource_strings_by_name("third");
+  EXPECT_EQ(vec.size(), 2);
+  EXPECT_STREQ(vec[0].c_str(), "d");
+  EXPECT_STREQ(vec[1].c_str(), "e");
+  vec = arsc_file.get_resource_strings_by_name("blah");
+  EXPECT_EQ(vec.size(), 0);
+}

@@ -203,6 +203,7 @@ class TableSnapshot {
       uint32_t id,
       std::vector<android::ResTable_config> include_configs,
       android::Vector<android::Res_value>* out);
+  bool is_valid_global_string_idx(size_t idx) const;
   // Reads a string from the global string pool.
   std::string get_global_string(size_t idx) const;
 

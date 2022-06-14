@@ -51,6 +51,11 @@
 #endif
 
 namespace apk {
+bool is_valid_global_string(const android::ResStringPool& pool, size_t idx) {
+  size_t u16_len;
+  return pool.stringAt(idx, &u16_len) != nullptr;
+}
+
 std::string get_string_from_pool(const android::ResStringPool& pool,
                                  size_t idx) {
   size_t u16_len;
@@ -494,6 +499,10 @@ void TableSnapshot::collect_resource_values(
       }
     }
   }
+}
+
+bool TableSnapshot::is_valid_global_string_idx(size_t idx) const {
+  return is_valid_global_string(m_global_strings, idx);
 }
 
 std::string TableSnapshot::get_global_string(size_t idx) const {
@@ -2207,25 +2216,51 @@ std::unordered_set<uint32_t> ResourcesArscFile::get_types_by_name_prefixes(
   return type_ids;
 }
 
+namespace {
+
+// For the given ID, look up values in all configs for string data. Any
+// references encountered will be resolved and handled recursively.
+void resolve_string_index_for_id(apk::TableSnapshot& table_snapshot,
+                                 uint32_t id,
+                                 std::unordered_set<uint32_t>* seen,
+                                 std::set<uint32_t>* out_idx) {
+  // Annoyingly, Android build tools allow references to have cycles in them
+  // without failing at build time. At runtime, such a situation would just loop
+  // a fixed number of times (https://fburl.com/xmckadjk) but we'll keep track
+  // of a seen list.
+  if (seen->count(id) > 0) {
+    return;
+  }
+  seen->insert(id);
+  android::Vector<android::Res_value> values;
+  table_snapshot.collect_resource_values(id, &values);
+  for (size_t i = 0; i < values.size(); i++) {
+    auto value = values[i];
+    if (value.dataType == android::Res_value::TYPE_STRING) {
+      out_idx->insert(value.data);
+    } else if (value.dataType == android::Res_value::TYPE_REFERENCE) {
+      resolve_string_index_for_id(table_snapshot, value.data, seen, out_idx);
+    }
+  }
+}
+
+} // namespace
+
 std::vector<std::string> ResourcesArscFile::get_resource_strings_by_name(
     const std::string& res_name) {
   std::vector<std::string> ret;
+  auto& table_snapshot = get_table_snapshot();
   auto it = name_to_ids.find(res_name);
   if (it != name_to_ids.end()) {
-    ret.reserve(it->second.size());
+    std::unordered_set<uint32_t> seen;
+    std::set<uint32_t> string_idx;
     for (uint32_t id : it->second) {
-      android::Res_value res_value;
-      res_table.getResource(id, &res_value);
-
-      // just in case there's a reference
-      res_table.resolveReference(&res_value, 0);
-      size_t len = 0;
-
-      // aapt is using 0, so why not?
-      const char16_t* str =
-          res_table.getTableStringBlock(0)->stringAt(res_value.data, &len);
-      if (str) {
-        ret.push_back(android::String8(str, len).string());
+      resolve_string_index_for_id(table_snapshot, id, &seen, &string_idx);
+    }
+    ret.reserve(string_idx.size());
+    for (const auto& i : string_idx) {
+      if (table_snapshot.is_valid_global_string_idx(i)) {
+        ret.push_back(table_snapshot.get_global_string(i));
       }
     }
   }
