@@ -172,6 +172,8 @@ class TableEntryParser : public TableParser {
 
 // Holds parsed details of the .arsc file. Make sure to disregarded/regenerate
 // this when the backing file on disk gets modified.
+// NOTE: this class should ideally not leak out into any optimization passes,
+// but may be useful directly from test cases.
 class TableSnapshot {
  public:
   TableSnapshot(RedexMappedFile&, size_t);
@@ -206,6 +208,9 @@ class TableSnapshot {
   bool is_valid_global_string_idx(size_t idx) const;
   // Reads a string from the global string pool.
   std::string get_global_string(size_t idx) const;
+  // Get a representation of the underlying parsed file.
+  TableEntryParser& get_parsed_table() { return m_table_parser; }
+  android::ResStringPool& get_global_strings() { return m_global_strings; }
 
  private:
   TableEntryParser m_table_parser;
@@ -219,8 +224,6 @@ class ResourcesArscFile : public ResourceTableFile {
  public:
   ResourcesArscFile(const ResourcesArscFile&) = delete;
   ResourcesArscFile& operator=(const ResourcesArscFile&) = delete;
-
-  android::ResTable res_table;
 
   explicit ResourcesArscFile(const std::string& path);
   std::vector<std::string> get_resource_strings_by_name(
@@ -284,6 +287,8 @@ class ResourcesArscFile : public ResourceTableFile {
   apk::TableSnapshot& get_table_snapshot();
 
  private:
+  void mark_file_closed();
+
   std::string m_path;
   RedexMappedFile m_f;
   size_t m_arsc_len;

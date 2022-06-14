@@ -1227,8 +1227,7 @@ void ResourcesArscFile::remap_reorder_and_serialize(
     const std::vector<std::string>& /* resource_files */,
     const std::map<uint32_t, uint32_t>& old_to_new) {
   remap_ids(old_to_new);
-  apk::TableEntryParser table_parser;
-  table_parser.visit(m_f.data(), m_arsc_len);
+  apk::TableEntryParser table_parser = get_table_snapshot().get_parsed_table();
   arsc::ResTableBuilder table_builder;
   table_builder.set_global_strings(table_parser.m_global_pool_header);
   for (auto& package : table_parser.m_packages) {
@@ -1289,7 +1288,7 @@ void ResourcesArscFile::remap_reorder_and_serialize(
   android::Vector<char> out;
   table_builder.serialize(&out);
   m_arsc_len = write_serialized_data(out, std::move(m_f));
-  m_file_closed = true;
+  mark_file_closed();
 }
 
 namespace {
@@ -1675,14 +1674,8 @@ void ResourcesArscFile::remove_unreferenced_strings() {
   // 6) Actually write the table to disk so changes take effect.
   TRACE(RES, 9, "Writing resources.arsc file, total size = %zu",
         serialized.size());
-  // NOTE: ResourcesArscFile now has two ways to read/manipulate the underlying
-  // data. This is not good, but a necessary intermediate step while we work on
-  // moving away from the forked methods in ResTable class to stand alone APIs.
-  // Eventually, we should stop constructing ResTable instance automatically in
-  // the constructor so we don't have to worry about it having invalid
-  // underlying data as a result of this call.
   m_arsc_len = write_serialized_data(serialized, std::move(m_f));
-  m_file_closed = true;
+  mark_file_closed();
 }
 
 namespace {
@@ -1878,14 +1871,8 @@ size_t ResourcesArscFile::obfuscate_resource_and_serialize(
   // 3) Actually write the table to disk so changes take effect.
   TRACE(RES, 9, "Writing resources.arsc file, total size = %zu",
         serialized.size());
-  // NOTE: ResourcesArscFile now has two ways to read/manipulate the underlying
-  // data. This is not good, but a necessary intermediate step while we work on
-  // moving away from the forked methods in ResTable class to stand alone APIs.
-  // Eventually, we should stop constructing ResTable instance automatically in
-  // the constructor so we don't have to worry about it having invalid
-  // underlying data as a result of this call.
   m_arsc_len = write_serialized_data_with_expansion(serialized, std::move(m_f));
-  m_file_closed = true;
+  mark_file_closed();
   return changed_resource_name;
 }
 
@@ -1978,12 +1965,6 @@ ResourcesArscFile::ResourcesArscFile(const std::string& path)
   m_path = path;
   m_arsc_len = m_f.size();
 
-  // TODO: replace res_table with m_table_snapshot everywhere
-  int error = res_table.add(m_f.const_data(), m_f.size(), /* cookie */ -1,
-                            /* copyData*/ true);
-  always_assert_log(error == 0, "Reading arsc failed with error code: %d",
-                    error);
-
   m_table_snapshot = std::make_unique<apk::TableSnapshot>(m_f, m_arsc_len);
   m_table_snapshot->gather_non_empty_resource_ids(&sorted_res_ids);
 
@@ -1994,6 +1975,11 @@ ResourcesArscFile::ResourcesArscFile(const std::string& path)
     id_to_name.emplace(id, name);
     name_to_ids[name].push_back(id);
   }
+}
+
+void ResourcesArscFile::mark_file_closed() {
+  m_file_closed = true;
+  m_table_snapshot.reset();
 }
 
 size_t ResourcesArscFile::get_length() const { return m_arsc_len; }
@@ -2023,11 +2009,10 @@ android::ResTable_config* find_equivalent_config_key(
 size_t ResourcesArscFile::serialize() {
   // Serializing will apply pending deletions. This may greatly alter the
   // ResTable_typeSpec and ResTable_type structures emitted in the resulting
-  // file. To do this, reparse the chunks, forward them on to ResTableBuilder
+  // file. To do this, forward chunks from the parsed file to ResTableBuilder
   // and let that class make sense of what is to be omitted/retained in the
   // serialized output.
-  apk::TableEntryParser table_parser;
-  table_parser.visit(m_f.data(), m_arsc_len);
+  apk::TableEntryParser table_parser = get_table_snapshot().get_parsed_table();
   // Re-assemble
   arsc::ResTableBuilder table_builder;
   table_builder.set_global_strings(table_parser.m_global_pool_header);
@@ -2085,17 +2070,11 @@ size_t ResourcesArscFile::serialize() {
     }
     table_builder.add_package(package_builder);
   }
-  android::Vector<char> out;
-  table_builder.serialize(&out);
-  m_f.file.reset(); // Close the map.
-  std::ofstream fout(m_path,
-                     std::ios::out | std::ios::binary | std::ios::trunc);
-  always_assert_log(fout.is_open(), "Could not open path %s for writing",
-                    m_path.c_str());
-  fout.write(out.array(), out.size());
-  fout.close();
-  m_arsc_len = out.size();
-  m_file_closed = true;
+  android::Vector<char> serialized;
+  table_builder.serialize(&serialized);
+
+  m_arsc_len = write_serialized_data_with_expansion(serialized, std::move(m_f));
+  mark_file_closed();
   return m_arsc_len;
 }
 
