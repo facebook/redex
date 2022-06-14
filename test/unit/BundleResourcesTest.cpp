@@ -20,12 +20,6 @@ using namespace boost::filesystem;
 
 namespace {
 
-void copy_file(const std::string& from, const std::string& to) {
-  std::ifstream src_stream(from, std::ios::binary);
-  std::ofstream dest_stream(to, std::ios::binary);
-  dest_stream << src_stream.rdbuf();
-}
-
 void setup_resources_and_run(
     const std::function<void(const std::string& extract_dir, BundleResources*)>&
         callback) {
@@ -34,17 +28,18 @@ void setup_resources_and_run(
 
   auto res_dir = p / "base";
   create_directories(res_dir);
-  copy_file(std::getenv("test_res_path"), res_dir.string() + "/resources.pb");
+  redex::copy_file(std::getenv("test_res_path"),
+                   res_dir.string() + "/resources.pb");
 
   auto manifest_dir = p / "base/manifest";
   create_directories(manifest_dir);
-  copy_file(std::getenv("test_manifest_path"),
-            manifest_dir.string() + "/AndroidManifest.xml");
+  redex::copy_file(std::getenv("test_manifest_path"),
+                   manifest_dir.string() + "/AndroidManifest.xml");
 
   auto layout_dir = p / "base/res/layout";
   create_directories(layout_dir);
   auto layout_dest = layout_dir.string() + "/activity_main.xml";
-  copy_file(std::getenv("test_layout_path"), layout_dest);
+  redex::copy_file(std::getenv("test_layout_path"), layout_dest);
 
   BundleResources resources(tmp_dir.path);
   callback(tmp_dir.path, &resources);
@@ -61,11 +56,14 @@ ComponentTagInfo find_component_info(const std::vector<ComponentTagInfo>& list,
 }
 } // namespace
 
-TEST(BundleResources, TestReadMinSdk) {
+TEST(BundleResources, TestReadManifest) {
   setup_resources_and_run(
       [&](const std::string& extract_dir, BundleResources* resources) {
         auto result = resources->get_min_sdk();
         EXPECT_EQ(*result, 21);
+
+        auto package_name = resources->get_manifest_package_name();
+        EXPECT_STREQ(package_name->c_str(), "com.fb.bundles");
       });
 }
 

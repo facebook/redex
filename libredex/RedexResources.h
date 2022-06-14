@@ -31,6 +31,7 @@ const char* const OBFUSCATED_RES_DIRECTORY = "r";
 const char* const RESOURCE_NAME_REMOVED = "(name removed)";
 
 const uint32_t PACKAGE_RESID_START = 0x7f000000;
+const uint32_t APPLICATION_PACKAGE = 0x7f;
 
 /*
  * These are all the components which may contain references to Java classes in
@@ -160,7 +161,7 @@ class ResourceTableFile {
     return std::vector<uint32_t>{};
   }
 
-  android::SortedVector<uint32_t> sorted_res_ids;
+  std::vector<uint32_t> sorted_res_ids;
   std::map<uint32_t, std::string> id_to_name;
   std::map<std::string, std::vector<uint32_t>> name_to_ids;
 
@@ -173,6 +174,7 @@ class AndroidResources {
   virtual boost::optional<int32_t> get_min_sdk() = 0;
 
   virtual ManifestClassInfo get_manifest_class_info() = 0;
+  virtual boost::optional<std::string> get_manifest_package_name() = 0;
 
   // Given the xml file name, return the list of resource ids referred in xml
   // attributes.

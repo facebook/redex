@@ -45,6 +45,11 @@ uint32_t get_spec_flags(android::ResTable_typeSpec* spec, uint16_t entry_id);
 bool are_configs_equivalent(android::ResTable_config* a,
                             android::ResTable_config* b);
 
+// For a Res_value marked with FLAG_COMPLEX, return the value part.
+float complex_value(uint32_t complex);
+// For a Res_value marked with FLAG_COMPLEX, return the unit part.
+uint32_t complex_unit(uint32_t complex, bool isFraction);
+
 enum StringKind { STD_STRING, STRING_8, STRING_16 };
 
 struct StringHolder {
@@ -124,6 +129,14 @@ void replace_xml_string_pool(android::ResChunk_header* data,
 
 using EntryValueData = PtrLen<uint8_t>;
 using EntryOffsetData = std::pair<EntryValueData, uint32_t>;
+
+bool is_empty(const EntryValueData& ev);
+
+// Return a pointer to the start of values beyond the entry struct at the given
+// pointer. Length returned will indicate how many more bytes there are that
+// constiture the values. Callers MUST always check the length, since it could
+// be zero (thus making the pointer not meaningful).
+PtrLen<uint8_t> get_value_data(const EntryValueData& ev);
 
 // Helper to record identical entry/value data that has already been emitted for
 // a certain type.

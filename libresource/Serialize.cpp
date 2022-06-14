@@ -186,6 +186,26 @@ bool are_configs_equivalent(android::ResTable_config* a,
   return false;
 }
 
+float complex_value(uint32_t complex) {
+  const float MANTISSA_MULT =
+      1.0f / (1 << android::Res_value::COMPLEX_MANTISSA_SHIFT);
+  const float RADIX_MULTS[] = {
+      1.0f * MANTISSA_MULT, 1.0f / (1 << 7) * MANTISSA_MULT,
+      1.0f / (1 << 15) * MANTISSA_MULT, 1.0f / (1 << 23) * MANTISSA_MULT};
+
+  float value =
+      (complex & (android::Res_value::COMPLEX_MANTISSA_MASK
+                  << android::Res_value::COMPLEX_MANTISSA_SHIFT)) *
+      RADIX_MULTS[(complex >> android::Res_value::COMPLEX_RADIX_SHIFT) &
+                  android::Res_value::COMPLEX_RADIX_MASK];
+  return value;
+}
+
+uint32_t complex_unit(uint32_t complex, bool isFraction) {
+  return (complex >> android::Res_value::COMPLEX_UNIT_SHIFT) &
+         android::Res_value::COMPLEX_UNIT_MASK;
+}
+
 size_t CanonicalEntries::hash(const EntryValueData& data) {
   size_t seed = 0;
   uint8_t* ptr = data.getKey();
@@ -444,7 +464,7 @@ void ResTableTypeDefiner::serialize(android::Vector<char>* out) {
     android::Vector<char> entry_data;
     uint32_t offset = 0;
     for (auto& ev : data) {
-      if (ev.key == nullptr && ev.value == 0) {
+      if (is_empty(ev)) {
         push_long(dtohl(android::ResTable_type::NO_ENTRY), out);
       } else if (!m_enable_canonical_entries) {
         push_long(offset, out);
@@ -489,10 +509,7 @@ void ResStringPoolBuilder::add_style(const char* s,
                                      size_t len,
                                      SpanVector spans) {
   StringHolder holder(s, len);
-  StyleInfo info{
-    .str = std::move(holder),
-    .spans = std::move(spans)
-  };
+  StyleInfo info{.str = std::move(holder), .spans = std::move(spans)};
   m_styles.emplace_back(std::move(info));
 }
 
@@ -500,21 +517,14 @@ void ResStringPoolBuilder::add_style(const char16_t* s,
                                      size_t len,
                                      SpanVector spans) {
   StringHolder holder(s, len);
-  StyleInfo info{
-    .str = std::move(holder),
-    .spans = std::move(spans)
-  };
+  StyleInfo info{.str = std::move(holder), .spans = std::move(spans)};
   m_styles.emplace_back(std::move(info));
 }
 
-void ResStringPoolBuilder::add_style(std::string s,
-                                     SpanVector spans) {
+void ResStringPoolBuilder::add_style(std::string s, SpanVector spans) {
   auto len = s.length();
   StringHolder holder(std::move(s), len);
-  StyleInfo info{
-    .str = std::move(holder),
-    .spans = std::move(spans)
-  };
+  StyleInfo info{.str = std::move(holder), .spans = std::move(spans)};
   m_styles.emplace_back(std::move(info));
 }
 
@@ -612,7 +622,7 @@ void ResStringPoolBuilder::serialize(android::Vector<char>* out) {
     span_off.push_back(spans_size);
     write_string(utf8, info.str, &serialized_strings);
     spans_size += info.spans.size() * sizeof(android::ResStringPool_span) +
-                    sizeof(android::ResStringPool_span::END);
+                  sizeof(android::ResStringPool_span::END);
   }
   if (spans_size > 0) {
     spans_size += 2 * sizeof(android::ResStringPool_span::END);
@@ -778,5 +788,29 @@ void replace_xml_string_pool(android::ResChunk_header* data,
   void* start_ptr = ((char*)data) + start;
   push_data_no_swap(start_ptr, remaining, out);
   write_long_at_pos(total_size_pos, out->size() - initial_vec_size, out);
+}
+
+bool is_empty(const EntryValueData& ev) {
+  if (ev.getKey() == nullptr) {
+    LOG_ALWAYS_FATAL_IF(ev.getValue() != 0, "Invalid pointer, length pair");
+    return true;
+  }
+  return false;
+}
+
+PtrLen<uint8_t> get_value_data(const EntryValueData& ev) {
+  if (is_empty(ev)) {
+    return {nullptr, 0};
+  }
+  auto entry_and_value_len = ev.getValue();
+  auto entry = (android::ResTable_entry*)ev.getKey();
+  auto entry_size = dtohs(entry->size);
+  LOG_ALWAYS_FATAL_IF(entry_size > entry_and_value_len,
+                      "Malformed entry size at %p", entry);
+  if (entry_size == entry_and_value_len) {
+    return {nullptr, 0};
+  }
+  auto ptr = (uint8_t*)entry + entry_size;
+  return {ptr, entry_and_value_len - entry_size};
 }
 } // namespace arsc

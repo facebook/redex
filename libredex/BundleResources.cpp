@@ -414,6 +414,35 @@ ManifestClassInfo BundleResources::get_manifest_class_info() {
   return manifest_classes;
 }
 
+boost::optional<std::string> BundleResources::get_manifest_package_name() {
+  std::string base_manifest = (boost::filesystem::path(m_directory) /
+                               "base/manifest/AndroidManifest.xml")
+                                  .string();
+  boost::optional<std::string> result = boost::none;
+  if (!boost::filesystem::exists(base_manifest)) {
+    return result;
+  }
+  TRACE(RES, 1, "Reading proto xml at %s", base_manifest.c_str());
+  read_protobuf_file_contents(
+      base_manifest,
+      [&](google::protobuf::io::CodedInputStream& input, size_t size) {
+        aapt::pb::XmlNode pb_node;
+        bool read_finish = pb_node.ParseFromCodedStream(&input);
+        always_assert_log(read_finish, "BundleResoource failed to read %s",
+                          base_manifest.c_str());
+        if (pb_node.has_element()) {
+          const auto& manifest_element = pb_node.element();
+          for (const aapt::pb::XmlAttribute& pb_attr :
+               manifest_element.attribute()) {
+            if (pb_attr.name() == "package") {
+              result = pb_attr.value();
+            }
+          }
+        }
+      });
+  return result;
+}
+
 namespace {
 void apply_rename_map(const std::map<std::string, std::string>& rename_map,
                       aapt::pb::XmlNode* node,
@@ -1265,7 +1294,7 @@ void ResourcesPbFile::collect_resource_data_for_file(
                   current_package_id, current_type_id, current_entry_id);
               TRACE(RES, 9, "    Entry: %s %X %X", pb_entry.name().c_str(),
                     current_entry_id, current_resource_id);
-              sorted_res_ids.add(current_resource_id);
+              sorted_res_ids.emplace_back(current_resource_id);
               always_assert(m_existed_res_ids.count(current_resource_id) == 0);
               m_existed_res_ids.emplace(current_resource_id);
               id_to_name.emplace(current_resource_id, name_string);
@@ -1275,6 +1304,7 @@ void ResourcesPbFile::collect_resource_data_for_file(
             }
           }
         }
+        std::sort(sorted_res_ids.begin(), sorted_res_ids.end());
       });
 }
 

@@ -5589,25 +5589,6 @@ void ResTable::getConfigurations(Vector<ResTable_config>* configs, bool ignoreMi
     }
 }
 
-void ResTable::getConfigurationsByType(
-  size_t base_package_idx,
-  String8 type_name,
-  Vector<ResTable_config>* configs) const {
-  const PackageGroup* package_group = mPackageGroups[base_package_idx];
-  const size_t type_count = package_group->types.size();
-  for (size_t i = 0; i < type_count; i++) {
-    const TypeList& type_list = package_group->types[i];
-    const size_t list_size = type_list.size();
-    for (size_t j = 0; j < list_size; j++) {
-      const Type* type = type_list[j];
-      const ResStringPool& type_strings = type->package->typeStrings;
-      if (type_strings.string8ObjectAt(type->typeSpec->id - 1) == type_name) {
-        collectAllConfigs(configs, type);
-      }
-    }
-  }
-}
-
 void ResTable::getLocales(Vector<String8>* locales) const
 {
     Vector<ResTable_config> configs;
@@ -6452,33 +6433,23 @@ bool ResTable::getIdmapInfo(const void* idmap, size_t sizeBytes,
 #define CHAR16_ARRAY_EQ(constant, var, len) \
         ((len == (sizeof(constant)/sizeof(constant[0]))) && (0 == memcmp((var), (constant), (len))))
 
-float complex_value(uint32_t complex) {
-  const float MANTISSA_MULT =
-      1.0f / (1<<Res_value::COMPLEX_MANTISSA_SHIFT);
-  const float RADIX_MULTS[] = {
-      1.0f*MANTISSA_MULT, 1.0f/(1<<7)*MANTISSA_MULT,
-      1.0f/(1<<15)*MANTISSA_MULT, 1.0f/(1<<23)*MANTISSA_MULT
-  };
-
-  float value = (complex&(Res_value::COMPLEX_MANTISSA_MASK
-                 <<Res_value::COMPLEX_MANTISSA_SHIFT))
-          * RADIX_MULTS[(complex>>Res_value::COMPLEX_RADIX_SHIFT)
-                          & Res_value::COMPLEX_RADIX_MASK];
-  return value;
-}
-
-uint32_t complex_unit(uint32_t complex, bool isFraction) {
-  return (complex>>Res_value::COMPLEX_UNIT_SHIFT)&Res_value::COMPLEX_UNIT_MASK;
-}
-
 static void print_complex(uint32_t complex, bool isFraction)
 {
-    auto value = complex_value(complex);
-    auto unit = complex_unit(complex, isFraction);
+    const float MANTISSA_MULT =
+        1.0f / (1<<Res_value::COMPLEX_MANTISSA_SHIFT);
+    const float RADIX_MULTS[] = {
+        1.0f*MANTISSA_MULT, 1.0f/(1<<7)*MANTISSA_MULT,
+        1.0f/(1<<15)*MANTISSA_MULT, 1.0f/(1<<23)*MANTISSA_MULT
+    };
+
+    float value = (complex&(Res_value::COMPLEX_MANTISSA_MASK
+                   <<Res_value::COMPLEX_MANTISSA_SHIFT))
+            * RADIX_MULTS[(complex>>Res_value::COMPLEX_RADIX_SHIFT)
+                            & Res_value::COMPLEX_RADIX_MASK];
     printf("%f", value);
 
     if (!isFraction) {
-        switch (unit) {
+        switch ((complex>>Res_value::COMPLEX_UNIT_SHIFT)&Res_value::COMPLEX_UNIT_MASK) {
             case Res_value::COMPLEX_UNIT_PX: printf("px"); break;
             case Res_value::COMPLEX_UNIT_DIP: printf("dp"); break;
             case Res_value::COMPLEX_UNIT_SP: printf("sp"); break;
@@ -6488,7 +6459,7 @@ static void print_complex(uint32_t complex, bool isFraction)
             default: printf(" (unknown unit)"); break;
         }
     } else {
-        switch (unit) {
+        switch ((complex>>Res_value::COMPLEX_UNIT_SHIFT)&Res_value::COMPLEX_UNIT_MASK) {
             case Res_value::COMPLEX_UNIT_FRACTION: printf("%%"); break;
             case Res_value::COMPLEX_UNIT_FRACTION_PARENT: printf("%%p"); break;
             default: printf(" (unknown unit)"); break;
@@ -6526,45 +6497,6 @@ String8 ResTable::normalizeForOutput( const char *input )
     }
 
     return ret;
-}
-
-String8 ResTable::getString8FromIndex(
-    ssize_t packageIndex,
-    uint32_t stringIndex) const
-{
-    const PackageGroup* pg = mPackageGroups[packageIndex];
-    const TypeList& typeList = pg->types[0];
-    const Type* typeConfigs = typeList[0];
-    const Package* pkg = typeConfigs->package;
-    return pkg->header->values.string8ObjectAt(stringIndex);
-}
-
-void ResTable::getTypeNamesForPackage(
-    ssize_t packageIndex,
-    Vector<String8>* typeNames) const
-{
-    const PackageGroup* pg = mPackageGroups[packageIndex];
-    Type* typeConfigs = nullptr;
-    // Find the first non-empty TypeList in the bucket array. Note that some
-    // intermediate states of the file might have some odd configurations.
-    for (size_t i = 0; i < pg->types.size(); ++i) {
-      const TypeList& typeList = pg->types[i];
-      if (typeList.size() > 0) {
-        typeConfigs = typeList[0];
-        break;
-      }
-    }
-    if (typeConfigs == nullptr) {
-      ALOGE("Unable to find any type names in the package.");
-      return;
-    }
-    const Package* pkg = typeConfigs->package;
-    for (size_t index = 0; index < pkg->typeStrings.size(); ++index) {
-        String8 str8 = pkg->typeStrings.string8ObjectAt(index);
-        if (str8.size() != 0) {
-            typeNames->add(str8);
-        }
-    }
 }
 
 void ResTable::print_value(const Package* pkg, const Res_value& value) const
@@ -6622,49 +6554,6 @@ void ResTable::print_value(const Package* pkg, const Res_value& value) const
         printf("(unknown type) t=0x%02x d=0x%08x (s=0x%04x r=0x%02x)\n",
                (int)value.dataType, (int)value.data,
                (int)value.size, (int)value.res0);
-    }
-}
-
-// Allows SortedVector to be used as a poor man's substitute for std::unordered_set;
-// internally searches for value using a binary search (order of log n).
-template <typename T>
-static void addIfUnique(SortedVector<T>* sVec, T value)
-{
-    if (sVec->indexOf(value) < 0) {
-        sVec->add(value);
-    }
-}
-
-void ResTable::getResourceIds(SortedVector<uint32_t>* sVec) const
-{
-    size_t pgCount = mPackageGroups.size();
-    for (size_t pgIndex=0; pgIndex < pgCount; pgIndex++) {
-        const PackageGroup* pg = mPackageGroups[pgIndex];
-        int packageId = pg->id;
-
-        for (size_t typeIndex=0; typeIndex < pg->types.size(); typeIndex++) {
-            const TypeList& typeList = pg->types[typeIndex];
-            if (typeList.isEmpty()) {
-                continue;
-            }
-            const Type* typeConfigs = typeList[0];
-
-            if (typeConfigs->typeSpecFlags != nullptr) {
-                for (size_t entryIndex=0; entryIndex < typeConfigs->entryCount; entryIndex++) {
-                    uint32_t resID = (0xff000000 & ((packageId)<<24))
-                                | (0x00ff0000 & ((typeIndex+1)<<16))
-                                | (0x0000ffff & (entryIndex));
-                    if (packageId == 0) {
-                        pg->dynamicRefTable.lookupResourceId(&resID);
-                    }
-
-                    resource_name resName;
-                    if (this->getResourceName(resID, true, &resName)) {
-                        addIfUnique(sVec, resID);
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -6727,194 +6616,6 @@ bool ResTable::tryGetConfigEntry(
     }
 
     *entPtr = ent;
-
-    return true;
-}
-
-// For the given resource ID, looks across all configurations and returns all
-// the corresponding Res_value entries. This is much more reliable than
-// ResTable::getResource, which fails for roughly 20% of resources and does not
-// handle complex (bag) values well. Note that we also return the parent of
-// bag values as a virtual TYPE_REFERENCE Res_value to reflect the relationship,
-// along with a virtual TYPE_ATTRIBUTE for the 'key' of each bag entry value.
-void ResTable::getAllValuesForResource(
-    uint32_t resID,
-    Vector<Res_value>& values) const
-{
-    this->getAllValuesForResource(resID, values, /* onlyDefault */ false);
-}
-
-void ResTable::collectValuesInConfig(
-    Vector<Res_value>& values,
-    const ResTable_entry* ent,
-    uint32_t typeSize) const
-{
-    uintptr_t esize = dtohs(ent->size);
-    const Res_value* valuePtr = nullptr;
-    const ResTable_map_entry* bagPtr = nullptr;
-    Res_value value;
-    Res_value virtualValue;
-    if ((dtohs(ent->flags) & ResTable_entry::FLAG_COMPLEX) != 0) {
-        bagPtr = (const ResTable_map_entry*)ent;
-    } else {
-        valuePtr = (const Res_value*)
-            (((const uint8_t*)ent) + esize);
-        value.copyFrom_dtoh(*valuePtr);
-    }
-
-    if (valuePtr != nullptr) {
-        values.add(value);
-    } else if (bagPtr != nullptr) {
-        const int N = dtohl(bagPtr->count);
-        const uint8_t* baseMapPtr = (const uint8_t*)ent;
-        size_t mapOffset = esize;
-        const ResTable_map* mapPtr = (ResTable_map*)(baseMapPtr + mapOffset);
-        const uint32_t parent = dtohl(bagPtr->parent.ident);
-
-        // Convert parent to virtual Res_value.
-        // Leave size as 0 to indicate this is not a 'real' Res_value.
-        virtualValue.dataType = Res_value::TYPE_REFERENCE;
-        virtualValue.data = parent;
-        values.add(virtualValue);
-
-        for (int i = 0; i < N && mapOffset < (typeSize - sizeof(ResTable_map)); i++) {
-            value.copyFrom_dtoh(mapPtr->value);
-            values.add(value);
-            virtualValue.dataType = Res_value::TYPE_ATTRIBUTE;
-            virtualValue.data = mapPtr->name.ident;
-            values.add(virtualValue);
-            const size_t size = dtohs(mapPtr->value.size);
-            mapOffset += size + sizeof(*mapPtr)-sizeof(mapPtr->value);
-            mapPtr = (ResTable_map*)(baseMapPtr + mapOffset);
-        }
-    }
-}
-
-// As above, but if onlyDefault is true, only considers the 'default' column.
-void ResTable::getAllValuesForResource(
-    uint32_t resID,
-    Vector<Res_value>& values,
-    bool onlyDefault) const {
-  Vector<ResTable_config> allowed;
-  if (onlyDefault) {
-    ResTable_config def = {
-      sizeof(ResTable_config)
-    };
-    getAllValuesForResource(resID, values, (ResTable_config*)&def);
-  } else {
-    getAllValuesForResource(resID, values, (ResTable_config*)nullptr);
-  }
-}
-
-// As above, but if allowed_config is non null, only consider values in that
-// config.
-void ResTable::getAllValuesForResource(
-    uint32_t resID,
-    Vector<Res_value>& values,
-    const ResTable_config* allowed_config) const
-{
-    resource_name resName;
-    if (!this->getResourceName(resID, /* allowUtf8 */ true, &resName)) {
-        return;
-    }
-
-    const ssize_t pgIndex = getResourcePackageIndex(resID);
-    const int typeIndex = Res_GETTYPE(resID);
-    const int entryIndex = Res_GETENTRY(resID);
-
-    const PackageGroup* pg = mPackageGroups[pgIndex];
-
-    const TypeList& typeList = pg->types[typeIndex];
-    if (typeList.isEmpty()) {
-        return;
-    }
-    const Type* typeConfigs = typeList[0];
-    const size_t NTC = typeConfigs->configs.size();
-
-    for (size_t configIndex = 0; configIndex < NTC; configIndex++) {
-        const ResTable_type* type = typeConfigs->configs[configIndex];
-
-        if (allowed_config != nullptr &&
-            type->config.compare(*allowed_config) != 0) {
-          continue;
-        }
-
-        const ResTable_entry* ent;
-        if (!tryGetConfigEntry(entryIndex, type, &ent)) {
-            continue;
-        }
-
-        uint32_t typeSize = dtohl(type->header.size);
-        collectValuesInConfig(values, ent, typeSize);
-    }
-}
-
-// Returns true if the given resource ID's are of the same type and have
-// the same entries in the same configurations.
-bool ResTable::areResourceValuesIdentical(
-    uint32_t resourceId1,
-    uint32_t resourceId2) const
-{
-    resource_name resName;
-    if (!this->getResourceName(resourceId1, /* allowUtf8 */ true, &resName)
-          || !this->getResourceName(resourceId2, /* allowUtf8 */ true, &resName)) {
-        return false;
-    }
-
-    const ssize_t pgIndex = getResourcePackageIndex(resourceId1);
-    if (pgIndex != getResourcePackageIndex(resourceId2)) {
-      return false;
-    }
-
-    const int typeIndex = Res_GETTYPE(resourceId1);
-    if (typeIndex != Res_GETTYPE(resourceId2)) {
-      return false;
-    }
-
-    const int entryIndex1 = Res_GETENTRY(resourceId1);
-    const int entryIndex2 = Res_GETENTRY(resourceId2);
-
-    const PackageGroup* pg = mPackageGroups[pgIndex];
-
-    const TypeList& typeList = pg->types[typeIndex];
-    if (typeList.isEmpty()) {
-        return false;
-    }
-    const Type* typeConfigs = typeList[0];
-    const size_t NTC = typeConfigs->configs.size();
-
-    for (size_t configIndex = 0; configIndex < NTC; configIndex++) {
-        const ResTable_type* type = typeConfigs->configs[configIndex];
-        const ResTable_entry* ent1;
-        const ResTable_entry* ent2;
-        bool ent1Exists = tryGetConfigEntry(entryIndex1, type, &ent1);
-        bool ent2Exists = tryGetConfigEntry(entryIndex2, type, &ent2);
-        if (!ent1Exists && !ent2Exists) {
-          continue;
-        }
-
-        if (ent1Exists ^ ent2Exists) {
-          return false;
-        }
-
-        uint32_t typeSize = dtohl(type->header.size);
-
-        Vector<Res_value> values1;
-        Vector<Res_value> values2;
-        collectValuesInConfig(values1, ent1, typeSize);
-        collectValuesInConfig(values2, ent2, typeSize);
-        if (values1.size() != values2.size()) {
-          return false;
-        }
-
-        for (size_t i = 0; i < values1.size(); ++i) {
-          Res_value a = values1[i];
-          Res_value b = values2[i];
-          if (a.dataType != b.dataType || a.data != b.data) {
-            return false;
-          }
-        }
-    }
 
     return true;
 }

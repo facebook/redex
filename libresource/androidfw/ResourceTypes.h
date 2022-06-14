@@ -1849,11 +1849,6 @@ public:
     // Return the configurations (ResTable_config) that we know about
     void getConfigurations(Vector<ResTable_config>* configs, bool ignoreMipmap=false) const;
 
-    // Return the configurations for a specific type (i.e. drawable, dimen, etc)
-    void getConfigurationsByType(size_t base_package_idx,
-                                 String8 type_name,
-                                 Vector<ResTable_config>* configs) const;
-
     void getLocales(Vector<String8>* locales) const;
 
     // Generate an idmap.
@@ -1878,38 +1873,6 @@ public:
             String8* pTargetPath, String8* pOverlayPath);
 
     void print(bool inclValues) const;
-    void getResourceIds(SortedVector<uint32_t>* sVec) const;
-
-    // For the given resource ID, looks across all configurations and returns all
-    // the corresponding Res_value entries. This is much more reliable than
-    // ResTable::getResource, which fails for roughly 20% of resources and does not
-    // handle complex (bag) values well. Note that we also return the parent of
-    // bag values as a virtual TYPE_REFERENCE Res_value to reflect the relationship,
-    // along with a virtual TYPE_ATTRIBUTE for the 'key' of each bag entry value.
-    void getAllValuesForResource(uint32_t resourceId, Vector<Res_value>& values) const;
-
-    // As above, but if onlyDefault is true, only considers the 'default' column.
-    void getAllValuesForResource(
-        uint32_t resourceId,
-        Vector<Res_value>& values,
-        bool onlyDefault) const;
-
-    // As above, but restrict return values to only values in the given config.
-    // Null pointer means return all values in all configs.
-    void getAllValuesForResource(
-        uint32_t resourceId,
-        Vector<Res_value>& values,
-        const ResTable_config* allowed_config) const;
-
-    // Returns true if the given resource ID's are of the same type and have
-    // the same entries in the same configurations.
-    bool areResourceValuesIdentical(uint32_t resourceId1, uint32_t resourceId2) const;
-
-    String8 getString8FromIndex(ssize_t packageIndex, uint32_t stringIndex) const;
-
-    void getTypeNamesForPackage(
-        ssize_t packageIndex,
-        Vector<String8>* typeNames) const;
 
     static String8 normalizeForOutput(const char* input);
 
@@ -1923,11 +1886,6 @@ private:
     struct PackageGroup;
     struct bag_set;
     typedef Vector<Type*> TypeList;
-
-    void collectValuesInConfig(
-        Vector<Res_value>& values,
-        const ResTable_entry* ent,
-        uint32_t typeSize) const;
 
     void collectAllConfigs(Vector<ResTable_config>* configs, const Type* type) const;
 
@@ -1974,10 +1932,6 @@ private:
 
     uint8_t                     mNextPackageId;
 };
-
-float complex_value(uint32_t complex);
-
-uint32_t complex_unit(uint32_t complex, bool isFraction);
 
 }   // namespace android
 

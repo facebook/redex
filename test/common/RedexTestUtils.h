@@ -9,6 +9,8 @@
 
 #include <boost/filesystem.hpp>
 
+#include <fstream>
+
 namespace redex {
 
 using namespace boost::filesystem;
@@ -48,6 +50,12 @@ inline TempDir make_tmp_dir(const char* boost_template_str) {
   path += unique_path(boost_template_str);
   create_directories(path);
   return TempDir(path.string());
+}
+
+inline void copy_file(const std::string& from, const std::string& to) {
+  std::ifstream src_stream(from, std::ios::binary);
+  std::ofstream dest_stream(to, std::ios::binary);
+  dest_stream << src_stream.rdbuf();
 }
 
 } // namespace redex

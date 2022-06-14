@@ -51,6 +51,11 @@
 #endif
 
 namespace apk {
+bool is_valid_global_string(const android::ResStringPool& pool, size_t idx) {
+  size_t u16_len;
+  return pool.stringAt(idx, &u16_len) != nullptr;
+}
+
 std::string get_string_from_pool(const android::ResStringPool& pool,
                                  size_t idx) {
   size_t u16_len;
@@ -253,6 +258,255 @@ size_t XmlFileEditor::remap(const std::map<uint32_t, uint32_t>& old_to_new) {
     }
   }
   return changes;
+}
+
+#define GET_ID(ptr) (dtohl((ptr)->id))
+#define CHUNK_SIZE(chunk) (dtohl((chunk)->header.size))
+
+TableSnapshot::TableSnapshot(RedexMappedFile& mapped_file, size_t len) {
+  auto data = mapped_file.read_only ? (void*)mapped_file.const_data()
+                                    : mapped_file.data();
+  always_assert_log(m_table_parser.visit(data, len),
+                    "Failed to parse .arsc file");
+  always_assert_log(
+      m_global_strings.setTo(m_table_parser.m_global_pool_header,
+                             CHUNK_SIZE(m_table_parser.m_global_pool_header)) ==
+          android::NO_ERROR,
+      "Failed to parse global strings!");
+  for (const auto& pair : m_table_parser.m_package_key_string_headers) {
+    auto package_id = GET_ID(pair.first);
+    always_assert_log(
+        m_key_strings[package_id].setTo(pair.second, CHUNK_SIZE(pair.second)) ==
+            android::NO_ERROR,
+        "Failed to parse key strings for package 0x%x", package_id);
+  }
+  for (const auto& pair : m_table_parser.m_package_type_string_headers) {
+    auto package_id = GET_ID(pair.first);
+    always_assert_log(
+        m_type_strings[package_id].setTo(
+            pair.second, CHUNK_SIZE(pair.second)) == android::NO_ERROR,
+        "Failed to parse type strings for package 0x%x", package_id);
+  }
+}
+
+void TableSnapshot::gather_non_empty_resource_ids(std::vector<uint32_t>* ids) {
+  for (const auto& pair : m_table_parser.m_res_id_to_entries) {
+    auto id = pair.first;
+    for (const auto& config_entry : pair.second) {
+      if (!arsc::is_empty(config_entry.second)) {
+        ids->emplace_back(id);
+        break;
+      }
+    }
+  }
+}
+
+std::string TableSnapshot::get_resource_name(uint32_t id) {
+  uint32_t package_id = (id >> PACKAGE_INDEX_BIT_SHIFT) & 0xFF;
+  auto search = m_table_parser.m_res_id_to_entries.find(id);
+  if (search == m_table_parser.m_res_id_to_entries.end()) {
+    return "";
+  }
+  auto& entries = search->second;
+  ssize_t result = -1;
+  for (const auto& pair : entries) {
+    auto entry_data = pair.second.getKey();
+    if (entry_data != nullptr) {
+      auto entry = (android::ResTable_entry*)entry_data;
+      auto index = dtohl(entry->key.index);
+      always_assert_log(result < 0 || result == index,
+                        "Malformed entry data for ID 0x%x", id);
+      result = index;
+    }
+  }
+  if (result < 0) {
+    return "";
+  }
+  auto& pool = m_key_strings.at(package_id);
+  return get_string_from_pool(pool, result);
+}
+
+size_t TableSnapshot::package_count() {
+  return m_table_parser.m_packages.size();
+}
+
+void TableSnapshot::get_type_names(uint32_t package_id,
+                                   std::vector<std::string>* out) {
+  auto& pool = m_type_strings.at(package_id);
+  for (size_t i = 0; i < pool.size(); i++) {
+    out->emplace_back(get_string_from_pool(pool, i));
+  }
+}
+
+void TableSnapshot::get_configurations(
+    uint32_t package_id,
+    const std::string& type_name,
+    std::vector<android::ResTable_config>* out) {
+  uint8_t type_id = 0;
+  auto& pool = m_type_strings.at(package_id);
+  for (size_t i = 0; i < pool.size(); i++) {
+    if (type_name == get_string_from_pool(pool, i)) {
+      type_id = i + 1;
+      break;
+    }
+  }
+  if (type_id > 0) {
+    auto configs = m_table_parser.get_configs(package_id, type_id);
+    for (const auto& c : configs) {
+      always_assert_log(sizeof(android::ResTable_config) >= dtohl(c->size),
+                        "Config at %p has unexpected size %d", c,
+                        dtohl(c->size));
+      android::ResTable_config swapped;
+      swapped.copyFromDtoH(*c);
+      out->emplace_back(std::move(swapped));
+    }
+  }
+}
+
+bool TableSnapshot::are_values_identical(uint32_t a, uint32_t b) {
+  uint32_t upper = PACKAGE_MASK_BIT | TYPE_MASK_BIT;
+  if ((a & upper) != (b & upper)) {
+    return false;
+  }
+  if (m_table_parser.m_res_id_to_flags.at(a) !=
+      m_table_parser.m_res_id_to_flags.at(b)) {
+    return false;
+  }
+  auto a_entries = m_table_parser.m_res_id_to_entries.at(a);
+  auto b_entries = m_table_parser.m_res_id_to_entries.at(b);
+  always_assert_log(a_entries.size() == b_entries.size(),
+                    "Parsed table representation does not have the same set of "
+                    "configs for ids 0x%x, 0x%x",
+                    a, b);
+  for (auto& pair : a_entries) {
+    auto& a_entry = pair.second;
+    auto& b_entry = b_entries.at(pair.first);
+    auto empty_entry = arsc::is_empty(a_entry);
+    if (empty_entry != arsc::is_empty(b_entry)) {
+      return false;
+    }
+    // Total length of entry + value data
+    if (a_entry.getValue() != b_entry.getValue()) {
+      return false;
+    }
+    if (!empty_entry) {
+      auto a_data = arsc::get_value_data(a_entry);
+      auto b_data = arsc::get_value_data(b_entry);
+      auto empty_data = arsc::is_empty(a_data);
+      auto data_len = a_data.getValue();
+      if (data_len != b_data.getValue()) {
+        return false;
+      }
+      if (empty_data != arsc::is_empty(b_data)) {
+        return false;
+      }
+      if (!empty_data &&
+          memcmp(a_data.getKey(), b_data.getKey(), data_len) != 0) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+namespace {
+// Parse the entry data (which could be in many forms) and emit a flattened list
+// of Res_value objects for callers to easily consume (by legacy convention,
+// this will do byte swapping).
+class EntryFlattener : public arsc::ResourceTableVisitor {
+ public:
+  void emit(android::Res_value* source) {
+    android::Res_value value;
+    value.size = dtohs(source->size);
+    value.res0 = source->res0;
+    value.dataType = source->dataType;
+    value.data = dtohl(source->data);
+    m_values.emplace_back(value);
+  }
+
+  void emit_shim(uint8_t data_type, uint32_t data) {
+    android::Res_value shim;
+    shim.dataType = data_type;
+    shim.data = data;
+    m_values.emplace_back(shim);
+  }
+
+  bool visit_entry(android::ResTable_package* /* unused */,
+                   android::ResTable_typeSpec* /* unused */,
+                   android::ResTable_type* /* unused */,
+                   android::ResTable_entry* /* unused */,
+                   android::Res_value* value) override {
+    emit(value);
+    return true;
+  }
+
+  bool visit_map_entry(android::ResTable_package* /* unused */,
+                       android::ResTable_typeSpec* /* unused */,
+                       android::ResTable_type* /* unused */,
+                       android::ResTable_map_entry* entry) override {
+    // API QUIRK: Old code that served this purpose left size intentionally as 0
+    // to denote this is a "conceptual" value that is encompassed by the
+    // resource ID we are being asked to traverse. This is useful for
+    // reachability purposes but a bit misleading otherwise.
+    emit_shim(android::Res_value::TYPE_REFERENCE, dtohl(entry->parent.ident));
+    return true;
+  }
+
+  bool visit_map_value(android::ResTable_package* /* unused */,
+                       android::ResTable_typeSpec* /* unused */,
+                       android::ResTable_type* /* unused */,
+                       android::ResTable_map_entry* /* unused */,
+                       android::ResTable_map* value) override {
+    emit(&value->value);
+    // API QUIRK: Same rationale as above.
+    emit_shim(android::Res_value::TYPE_ATTRIBUTE, dtohl(value->name.ident));
+    return true;
+  }
+
+  std::vector<android::Res_value> m_values;
+};
+} // namespace
+
+void TableSnapshot::collect_resource_values(
+    uint32_t id, android::Vector<android::Res_value>* out) {
+  collect_resource_values(id, {}, out);
+}
+
+void TableSnapshot::collect_resource_values(
+    uint32_t id,
+    std::vector<android::ResTable_config> include_configs,
+    android::Vector<android::Res_value>* out) {
+  auto should_include_config = [&](android::ResTable_config* maybe) {
+    if (include_configs.empty()) {
+      return true;
+    }
+    for (auto& c : include_configs) {
+      if (arsc::are_configs_equivalent(maybe, &c)) {
+        return true;
+      }
+    }
+    return false;
+  };
+  auto& config_entries = m_table_parser.m_res_id_to_entries.at(id);
+  for (auto& pair : config_entries) {
+    if (should_include_config(pair.first)) {
+      auto ev = pair.second;
+      auto entry = (android::ResTable_entry*)ev.getKey();
+      EntryFlattener flattener;
+      flattener.begin_visit_entry(nullptr, nullptr, nullptr, entry);
+      for (auto& v : flattener.m_values) {
+        out->add(v);
+      }
+    }
+  }
+}
+
+bool TableSnapshot::is_valid_global_string_idx(size_t idx) const {
+  return is_valid_global_string(m_global_strings, idx);
+}
+
+std::string TableSnapshot::get_global_string(size_t idx) const {
+  return get_string_from_pool(m_global_strings, idx);
 }
 
 } // namespace apk
@@ -668,16 +922,24 @@ void ApkResources::collect_layout_classes_and_attributes_for_file(
   });
 }
 
-boost::optional<int32_t> ApkResources::get_min_sdk() {
-  if (!boost::filesystem::exists(m_manifest)) {
+namespace {
+template <typename ValueType>
+boost::optional<ValueType> read_xml_value(
+    const std::string& file_path,
+    const std::string& tag_name,
+    const uint8_t& data_type,
+    const std::string& attribute,
+    const std::function<boost::optional<ValueType>(android::ResXMLTree&,
+                                                   size_t)>& attribute_reader) {
+  if (!boost::filesystem::exists(file_path)) {
     return boost::none;
   }
 
-  auto file = RedexMappedFile::open(m_manifest);
+  auto file = RedexMappedFile::open(file_path);
 
   if (file.size() == 0) {
-    fprintf(stderr, "WARNING: Cannot find/read the manifest file %s\n",
-            m_manifest.c_str());
+    fprintf(stderr, "WARNING: Cannot find/read the xml file %s\n",
+            file_path.c_str());
     return boost::none;
   }
 
@@ -685,32 +947,43 @@ boost::optional<int32_t> ApkResources::get_min_sdk() {
   parser.setTo(file.const_data(), file.size());
 
   if (parser.getError() != android::NO_ERROR) {
-    fprintf(stderr, "WARNING: Failed to parse the manifest file %s\n",
-            m_manifest.c_str());
+    fprintf(stderr, "WARNING: Failed to parse the xml file %s\n",
+            file_path.c_str());
     return boost::none;
   }
 
-  const android::String16 uses_sdk("uses-sdk");
-  const android::String16 min_sdk("minSdkVersion");
+  const android::String16 tag(tag_name.c_str());
+  const android::String16 attr(attribute.c_str());
   android::ResXMLParser::event_code_t event_code;
   do {
     event_code = parser.next();
     if (event_code == android::ResXMLParser::START_TAG) {
       size_t outLen;
       auto el_name = android::String16(parser.getElementName(&outLen));
-      if (el_name == uses_sdk) {
-        android::Res_value raw_value;
-        if (has_raw_attribute_value(parser, min_sdk, raw_value) &&
-            (raw_value.dataType & android::Res_value::TYPE_INT_DEC)) {
-          return boost::optional<int32_t>(static_cast<int32_t>(raw_value.data));
-        } else {
-          return boost::none;
+      if (el_name == tag) {
+        const size_t attr_count = parser.getAttributeCount();
+        for (size_t i = 0; i < attr_count; ++i) {
+          size_t len;
+          android::String16 key(parser.getAttributeName(i, &len));
+          if (key == attr && parser.getAttributeDataType(i) == data_type) {
+            return attribute_reader(parser, i);
+          }
         }
       }
     }
   } while ((event_code != android::ResXMLParser::END_DOCUMENT) &&
            (event_code != android::ResXMLParser::BAD_DOCUMENT));
   return boost::none;
+}
+} // namespace
+
+boost::optional<int32_t> ApkResources::get_min_sdk() {
+  return read_xml_value<int32_t>(
+      m_manifest, "uses-sdk", android::Res_value::TYPE_INT_DEC, "minSdkVersion",
+      [](android::ResXMLTree& parser, size_t idx) {
+        return boost::optional<int32_t>(
+            static_cast<int32_t>(parser.getAttributeData(idx)));
+      });
 }
 
 ManifestClassInfo ApkResources::get_manifest_class_info() {
@@ -728,6 +1001,20 @@ ManifestClassInfo ApkResources::get_manifest_class_info() {
     });
   }
   return classes;
+}
+
+boost::optional<std::string> ApkResources::get_manifest_package_name() {
+  return read_xml_value<std::string>(
+      m_manifest, "manifest", android::Res_value::TYPE_STRING, "package",
+      [](android::ResXMLTree& parser, size_t idx) {
+        size_t len;
+        auto chars = parser.getAttributeStringValue(idx, &len);
+        if (chars == nullptr) {
+          return boost::optional<std::string>{};
+        }
+        android::String16 s16(chars, len);
+        return boost::optional<std::string>(convert_from_string16(s16));
+      });
 }
 
 std::unordered_set<uint32_t> ApkResources::get_xml_reference_attributes(
@@ -940,8 +1227,7 @@ void ResourcesArscFile::remap_reorder_and_serialize(
     const std::vector<std::string>& /* resource_files */,
     const std::map<uint32_t, uint32_t>& old_to_new) {
   remap_ids(old_to_new);
-  apk::TableEntryParser table_parser;
-  table_parser.visit(m_f.data(), m_arsc_len);
+  apk::TableEntryParser table_parser = get_table_snapshot().get_parsed_table();
   arsc::ResTableBuilder table_builder;
   table_builder.set_global_strings(table_parser.m_global_pool_header);
   for (auto& package : table_parser.m_packages) {
@@ -1002,7 +1288,7 @@ void ResourcesArscFile::remap_reorder_and_serialize(
   android::Vector<char> out;
   table_builder.serialize(&out);
   m_arsc_len = write_serialized_data(out, std::move(m_f));
-  m_file_closed = true;
+  mark_file_closed();
 }
 
 namespace {
@@ -1388,14 +1674,8 @@ void ResourcesArscFile::remove_unreferenced_strings() {
   // 6) Actually write the table to disk so changes take effect.
   TRACE(RES, 9, "Writing resources.arsc file, total size = %zu",
         serialized.size());
-  // NOTE: ResourcesArscFile now has two ways to read/manipulate the underlying
-  // data. This is not good, but a necessary intermediate step while we work on
-  // moving away from the forked methods in ResTable class to stand alone APIs.
-  // Eventually, we should stop constructing ResTable instance automatically in
-  // the constructor so we don't have to worry about it having invalid
-  // underlying data as a result of this call.
   m_arsc_len = write_serialized_data(serialized, std::move(m_f));
-  m_file_closed = true;
+  mark_file_closed();
 }
 
 namespace {
@@ -1591,33 +1871,24 @@ size_t ResourcesArscFile::obfuscate_resource_and_serialize(
   // 3) Actually write the table to disk so changes take effect.
   TRACE(RES, 9, "Writing resources.arsc file, total size = %zu",
         serialized.size());
-  // NOTE: ResourcesArscFile now has two ways to read/manipulate the underlying
-  // data. This is not good, but a necessary intermediate step while we work on
-  // moving away from the forked methods in ResTable class to stand alone APIs.
-  // Eventually, we should stop constructing ResTable instance automatically in
-  // the constructor so we don't have to worry about it having invalid
-  // underlying data as a result of this call.
   m_arsc_len = write_serialized_data_with_expansion(serialized, std::move(m_f));
-  m_file_closed = true;
+  mark_file_closed();
   return changed_resource_name;
 }
 
 std::vector<std::string> ResourcesArscFile::get_files_by_rid(
     uint32_t res_id, ResourcePathType /* unused */) {
   std::vector<std::string> ret;
+  auto& table_snapshot = get_table_snapshot();
   android::Vector<android::Res_value> out_values;
-  res_table.getAllValuesForResource(res_id, out_values);
+  table_snapshot.collect_resource_values(res_id, &out_values);
   for (size_t i = 0; i < out_values.size(); i++) {
     auto val = out_values[i];
     if (val.dataType == android::Res_value::TYPE_STRING) {
       // data is an index into string pool.
-      auto file_path = res_table.getString8FromIndex(0, val.data);
-      auto file_chars = file_path.string();
-      if (file_chars != nullptr) {
-        auto file_str = std::string(file_chars);
-        if (is_resource_file(file_str)) {
-          ret.emplace_back(file_str);
-        }
+      auto s = table_snapshot.get_global_string(dtohl(val.data));
+      if (is_resource_file(s)) {
+        ret.emplace_back(s);
       }
     }
   }
@@ -1634,10 +1905,9 @@ void ResourcesArscFile::walk_references_for_resource(
   }
   nodes_visited->emplace(resID);
 
-  ssize_t pkg_index = res_table.getResourcePackageIndex(resID);
-
+  auto& table_snapshot = get_table_snapshot();
   android::Vector<android::Res_value> initial_values;
-  res_table.getAllValuesForResource(resID, initial_values);
+  table_snapshot.collect_resource_values(resID, &initial_values);
 
   std::stack<android::Res_value> nodes_to_explore;
   for (size_t index = 0; index < initial_values.size(); ++index) {
@@ -1648,8 +1918,8 @@ void ResourcesArscFile::walk_references_for_resource(
     android::Res_value r = nodes_to_explore.top();
     nodes_to_explore.pop();
     if (r.dataType == android::Res_value::TYPE_STRING) {
-      android::String8 str = res_table.getString8FromIndex(pkg_index, r.data);
-      potential_file_paths->insert(std::string(str.string()));
+      potential_file_paths->insert(
+          table_snapshot.get_global_string(dtohl(r.data)));
       continue;
     }
 
@@ -1663,7 +1933,7 @@ void ResourcesArscFile::walk_references_for_resource(
 
     nodes_visited->insert(r.data);
     android::Vector<android::Res_value> inner_values;
-    res_table.getAllValuesForResource(r.data, inner_values);
+    table_snapshot.collect_resource_values(r.data, &inner_values);
     for (size_t index = 0; index < inner_values.size(); ++index) {
       nodes_to_explore.push(inner_values[index]);
     }
@@ -1677,49 +1947,48 @@ void ResourcesArscFile::delete_resource(uint32_t res_id) {
 void ResourcesArscFile::collect_resid_values_and_hashes(
     const std::vector<uint32_t>& ids,
     std::map<size_t, std::vector<uint32_t>>* res_by_hash) {
-  tmp_id_to_values.clear();
+  auto& table_snapshot = get_table_snapshot();
   for (uint32_t id : ids) {
     android::Vector<android::Res_value> row_values;
-    res_table.getAllValuesForResource(id, row_values);
+    table_snapshot.collect_resource_values(id, &row_values);
     (*res_by_hash)[getHashFromValues(row_values)].push_back(id);
-    tmp_id_to_values[id] = row_values;
   }
 }
 
 bool ResourcesArscFile::resource_value_identical(uint32_t a_id, uint32_t b_id) {
-  if (tmp_id_to_values[a_id].size() != tmp_id_to_values[b_id].size()) {
-    return false;
-  }
-
-  return res_table.areResourceValuesIdentical(a_id, b_id);
+  auto& table_snapshot = get_table_snapshot();
+  return table_snapshot.are_values_identical(a_id, b_id);
 }
 
 ResourcesArscFile::ResourcesArscFile(const std::string& path)
     : m_f(RedexMappedFile::open(path, /* read_only= */ false)) {
   m_path = path;
   m_arsc_len = m_f.size();
-  int error = res_table.add(m_f.const_data(), m_f.size(), /* cookie */ -1,
-                            /* copyData*/ true);
-  always_assert_log(error == 0, "Reading arsc failed with error code: %d",
-                    error);
 
-  res_table.getResourceIds(&sorted_res_ids);
+  m_table_snapshot = std::make_unique<apk::TableSnapshot>(m_f, m_arsc_len);
+  m_table_snapshot->gather_non_empty_resource_ids(&sorted_res_ids);
 
   // Build up maps to/from resource ID's and names
   for (size_t index = 0; index < sorted_res_ids.size(); ++index) {
     uint32_t id = sorted_res_ids[index];
-    android::ResTable::resource_name name;
-    res_table.getResourceName(id, true, &name);
-    if (name.name8 != nullptr) {
-      std::string name_string(
-          android::String8(name.name8, name.nameLen).string());
-      id_to_name.emplace(id, name_string);
-      name_to_ids[name_string].push_back(id);
-    }
+    auto name = m_table_snapshot->get_resource_name(id);
+    id_to_name.emplace(id, name);
+    name_to_ids[name].push_back(id);
   }
 }
 
+void ResourcesArscFile::mark_file_closed() {
+  m_file_closed = true;
+  m_table_snapshot.reset();
+}
+
 size_t ResourcesArscFile::get_length() const { return m_arsc_len; }
+
+apk::TableSnapshot& ResourcesArscFile::get_table_snapshot() {
+  always_assert_log(!m_file_closed && m_table_snapshot != nullptr,
+                    "Backing file not opened");
+  return *m_table_snapshot;
+}
 
 namespace {
 // For a map keyed on ResTable_config instances, find the first key (if any)
@@ -1740,11 +2009,10 @@ android::ResTable_config* find_equivalent_config_key(
 size_t ResourcesArscFile::serialize() {
   // Serializing will apply pending deletions. This may greatly alter the
   // ResTable_typeSpec and ResTable_type structures emitted in the resulting
-  // file. To do this, reparse the chunks, forward them on to ResTableBuilder
+  // file. To do this, forward chunks from the parsed file to ResTableBuilder
   // and let that class make sense of what is to be omitted/retained in the
   // serialized output.
-  apk::TableEntryParser table_parser;
-  table_parser.visit(m_f.data(), m_arsc_len);
+  apk::TableEntryParser table_parser = get_table_snapshot().get_parsed_table();
   // Re-assemble
   arsc::ResTableBuilder table_builder;
   table_builder.set_global_strings(table_parser.m_global_pool_header);
@@ -1802,17 +2070,11 @@ size_t ResourcesArscFile::serialize() {
     }
     table_builder.add_package(package_builder);
   }
-  android::Vector<char> out;
-  table_builder.serialize(&out);
-  m_f.file.reset(); // Close the map.
-  std::ofstream fout(m_path,
-                     std::ios::out | std::ios::binary | std::ios::trunc);
-  always_assert_log(fout.is_open(), "Could not open path %s for writing",
-                    m_path.c_str());
-  fout.write(out.array(), out.size());
-  fout.close();
-  m_arsc_len = out.size();
-  m_file_closed = true;
+  android::Vector<char> serialized;
+  table_builder.serialize(&serialized);
+
+  m_arsc_len = write_serialized_data_with_expansion(serialized, std::move(m_f));
+  mark_file_closed();
   return m_arsc_len;
 }
 
@@ -1901,14 +2163,13 @@ void ResourcesArscFile::remap_ids(
 
 std::unordered_set<uint32_t> ResourcesArscFile::get_types_by_name(
     const std::unordered_set<std::string>& type_names) {
-
-  android::Vector<android::String8> typeNames;
-  res_table.getTypeNamesForPackage(0, &typeNames);
+  auto& table_snapshot = get_table_snapshot();
+  std::vector<std::string> all_types;
+  table_snapshot.get_type_names(APPLICATION_PACKAGE, &all_types);
 
   std::unordered_set<uint32_t> type_ids;
-  for (size_t i = 0; i < typeNames.size(); ++i) {
-    std::string typeStr(typeNames[i].string());
-    if (type_names.count(typeStr) == 1) {
+  for (size_t i = 0; i < all_types.size(); ++i) {
+    if (type_names.count(all_types.at(i)) == 1) {
       type_ids.emplace((i + 1) << TYPE_INDEX_BIT_SHIFT);
     }
   }
@@ -1917,16 +2178,16 @@ std::unordered_set<uint32_t> ResourcesArscFile::get_types_by_name(
 
 std::unordered_set<uint32_t> ResourcesArscFile::get_types_by_name_prefixes(
     const std::unordered_set<std::string>& type_name_prefixes) {
-
-  android::Vector<android::String8> typeNames;
-  res_table.getTypeNamesForPackage(0, &typeNames);
+  auto& table_snapshot = get_table_snapshot();
+  std::vector<std::string> all_types;
+  table_snapshot.get_type_names(APPLICATION_PACKAGE, &all_types);
 
   std::unordered_set<uint32_t> type_ids;
-  for (size_t i = 0; i < typeNames.size(); ++i) {
-    std::string typeStr(typeNames[i].string());
+  for (size_t i = 0; i < all_types.size(); ++i) {
+    const auto& type_name = all_types.at(i);
     if (std::find_if(type_name_prefixes.begin(), type_name_prefixes.end(),
                      [&](const std::string& prefix) {
-                       return typeStr.find(prefix) != std::string::npos;
+                       return type_name.find(prefix) != std::string::npos;
                      }) != type_name_prefixes.end()) {
       type_ids.emplace((i + 1) << TYPE_INDEX_BIT_SHIFT);
     }
@@ -1934,25 +2195,51 @@ std::unordered_set<uint32_t> ResourcesArscFile::get_types_by_name_prefixes(
   return type_ids;
 }
 
+namespace {
+
+// For the given ID, look up values in all configs for string data. Any
+// references encountered will be resolved and handled recursively.
+void resolve_string_index_for_id(apk::TableSnapshot& table_snapshot,
+                                 uint32_t id,
+                                 std::unordered_set<uint32_t>* seen,
+                                 std::set<uint32_t>* out_idx) {
+  // Annoyingly, Android build tools allow references to have cycles in them
+  // without failing at build time. At runtime, such a situation would just loop
+  // a fixed number of times (https://fburl.com/xmckadjk) but we'll keep track
+  // of a seen list.
+  if (seen->count(id) > 0) {
+    return;
+  }
+  seen->insert(id);
+  android::Vector<android::Res_value> values;
+  table_snapshot.collect_resource_values(id, &values);
+  for (size_t i = 0; i < values.size(); i++) {
+    auto value = values[i];
+    if (value.dataType == android::Res_value::TYPE_STRING) {
+      out_idx->insert(value.data);
+    } else if (value.dataType == android::Res_value::TYPE_REFERENCE) {
+      resolve_string_index_for_id(table_snapshot, value.data, seen, out_idx);
+    }
+  }
+}
+
+} // namespace
+
 std::vector<std::string> ResourcesArscFile::get_resource_strings_by_name(
     const std::string& res_name) {
   std::vector<std::string> ret;
+  auto& table_snapshot = get_table_snapshot();
   auto it = name_to_ids.find(res_name);
   if (it != name_to_ids.end()) {
-    ret.reserve(it->second.size());
+    std::unordered_set<uint32_t> seen;
+    std::set<uint32_t> string_idx;
     for (uint32_t id : it->second) {
-      android::Res_value res_value;
-      res_table.getResource(id, &res_value);
-
-      // just in case there's a reference
-      res_table.resolveReference(&res_value, 0);
-      size_t len = 0;
-
-      // aapt is using 0, so why not?
-      const char16_t* str =
-          res_table.getTableStringBlock(0)->stringAt(res_value.data, &len);
-      if (str) {
-        ret.push_back(android::String8(str, len).string());
+      resolve_string_index_for_id(table_snapshot, id, &seen, &string_idx);
+    }
+    ret.reserve(string_idx.size());
+    for (const auto& i : string_idx) {
+      if (table_snapshot.is_valid_global_string_idx(i)) {
+        ret.push_back(table_snapshot.get_global_string(i));
       }
     }
   }

@@ -169,14 +169,61 @@ class TableEntryParser : public TableParser {
                       android::ResTable_type* type,
                       arsc::EntryValueData& data);
 };
+
+// Holds parsed details of the .arsc file. Make sure to disregarded/regenerate
+// this when the backing file on disk gets modified.
+// NOTE: this class should ideally not leak out into any optimization passes,
+// but may be useful directly from test cases.
+class TableSnapshot {
+ public:
+  TableSnapshot(RedexMappedFile&, size_t);
+  // Gather all resource identifiers that have some non-empty value in a config.
+  void gather_non_empty_resource_ids(std::vector<uint32_t>* ids);
+  std::string get_resource_name(uint32_t id);
+  // The number of packages in the table.
+  size_t package_count();
+  // Given a package id (shifted to low bits) emit the values from the type
+  // strings pool.
+  void get_type_names(uint32_t package_id, std::vector<std::string>* out);
+  // Fills the output vec with ResTable_config objects for the given type in the
+  // package
+  void get_configurations(uint32_t package_id,
+                          const std::string& type_name,
+                          std::vector<android::ResTable_config>* out);
+  // Returns true if the given ids are from the same type, and all
+  // entries/values in all configurations are byte for byte identical.
+  bool are_values_identical(uint32_t a, uint32_t b);
+  // For every non-empty entry in all configs, coalesce the entry into a list of
+  // values. For complex entries, this emits Res_value structures representing
+  // the entry's parent (which is useful for reachability purposes).
+  // NOTE: refactor to use std::vector eventually
+  void collect_resource_values(uint32_t id,
+                               android::Vector<android::Res_value>* out);
+  // Same as above, but if given list of "include_configs" is non-empty, results
+  // written to out will be restricted to only these configs.
+  void collect_resource_values(
+      uint32_t id,
+      std::vector<android::ResTable_config> include_configs,
+      android::Vector<android::Res_value>* out);
+  bool is_valid_global_string_idx(size_t idx) const;
+  // Reads a string from the global string pool.
+  std::string get_global_string(size_t idx) const;
+  // Get a representation of the underlying parsed file.
+  TableEntryParser& get_parsed_table() { return m_table_parser; }
+  android::ResStringPool& get_global_strings() { return m_global_strings; }
+
+ private:
+  TableEntryParser m_table_parser;
+  android::ResStringPool m_global_strings;
+  std::map<uint32_t, android::ResStringPool> m_key_strings;
+  std::map<uint32_t, android::ResStringPool> m_type_strings;
+};
 } // namespace apk
 
 class ResourcesArscFile : public ResourceTableFile {
  public:
   ResourcesArscFile(const ResourcesArscFile&) = delete;
   ResourcesArscFile& operator=(const ResourcesArscFile&) = delete;
-
-  android::ResTable res_table;
 
   explicit ResourcesArscFile(const std::string& path);
   std::vector<std::string> get_resource_strings_by_name(
@@ -237,12 +284,16 @@ class ResourcesArscFile : public ResourceTableFile {
 
   size_t get_length() const;
 
+  apk::TableSnapshot& get_table_snapshot();
+
  private:
+  void mark_file_closed();
+
   std::string m_path;
   RedexMappedFile m_f;
   size_t m_arsc_len;
-  std::map<uint32_t, android::Vector<android::Res_value>> tmp_id_to_values;
   bool m_file_closed = false;
+  std::unique_ptr<apk::TableSnapshot> m_table_snapshot;
   std::unordered_set<uint32_t> m_ids_to_remove;
   std::vector<apk::TypeDefinition> m_added_types;
 };
@@ -256,6 +307,7 @@ class ApkResources : public AndroidResources {
 
   boost::optional<int32_t> get_min_sdk() override;
   ManifestClassInfo get_manifest_class_info() override;
+  boost::optional<std::string> get_manifest_package_name() override;
   std::unordered_set<uint32_t> get_xml_reference_attributes(
       const std::string& filename) override;
 
