@@ -464,7 +464,7 @@ void ResTableTypeDefiner::serialize(android::Vector<char>* out) {
     android::Vector<char> entry_data;
     uint32_t offset = 0;
     for (auto& ev : data) {
-      if (ev.key == nullptr && ev.value == 0) {
+      if (is_empty(ev)) {
         push_long(dtohl(android::ResTable_type::NO_ENTRY), out);
       } else if (!m_enable_canonical_entries) {
         push_long(offset, out);
@@ -788,5 +788,29 @@ void replace_xml_string_pool(android::ResChunk_header* data,
   void* start_ptr = ((char*)data) + start;
   push_data_no_swap(start_ptr, remaining, out);
   write_long_at_pos(total_size_pos, out->size() - initial_vec_size, out);
+}
+
+bool is_empty(const EntryValueData& ev) {
+  if (ev.getKey() == nullptr) {
+    LOG_ALWAYS_FATAL_IF(ev.getValue() != 0, "Invalid pointer, length pair");
+    return true;
+  }
+  return false;
+}
+
+PtrLen<uint8_t> get_value_data(const EntryValueData& ev) {
+  if (is_empty(ev)) {
+    return {nullptr, 0};
+  }
+  auto entry_and_value_len = ev.getValue();
+  auto entry = (android::ResTable_entry*)ev.getKey();
+  auto entry_size = dtohs(entry->size);
+  LOG_ALWAYS_FATAL_IF(entry_size > entry_and_value_len,
+                      "Malformed entry size at %p", entry);
+  if (entry_size == entry_and_value_len) {
+    return {nullptr, 0};
+  }
+  auto ptr = (uint8_t*)entry + entry_size;
+  return {ptr, entry_and_value_len - entry_size};
 }
 } // namespace arsc

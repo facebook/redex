@@ -907,6 +907,85 @@ void build_table_with_ids(const std::string& dest_file_path,
 
 } // namespace
 
+TEST(ResTable, ValueEquality) {
+  auto pool_flags = android::ResStringPool_header::UTF8_FLAG;
+  auto global_strings_builder =
+      std::make_shared<arsc::ResStringPoolBuilder>(pool_flags);
+  auto key_strings_builder =
+      std::make_shared<arsc::ResStringPoolBuilder>(pool_flags);
+  auto type_strings_builder =
+      std::make_shared<arsc::ResStringPoolBuilder>(pool_flags);
+  key_strings_builder->add_string("foo");
+  type_strings_builder->add_string("dimen");
+
+  auto package_builder =
+      std::make_shared<arsc::ResPackageBuilder>(&package_header);
+  package_builder->set_key_strings(key_strings_builder);
+  package_builder->set_type_strings(type_strings_builder);
+
+  auto table_builder = std::make_shared<arsc::ResTableBuilder>();
+  table_builder->set_global_strings(global_strings_builder);
+  table_builder->add_package(package_builder);
+
+  std::vector<android::ResTable_config*> dimen_configs = {
+      &default_config, &land_config, &xxhdpi_config};
+  std::vector<uint32_t> dimen_flags = {0, 0, 0, 0, 0};
+  auto type_definer = std::make_shared<arsc::ResTableTypeDefiner>(
+      package_header.id, 1, dimen_configs, dimen_flags);
+  package_builder->add_type(type_definer);
+
+  EntryAndValue a(0, android::Res_value::TYPE_INT_COLOR_RGB8, 123456);
+  EntryAndValue b(0, android::Res_value::TYPE_INT_COLOR_ARGB8, 123456);
+
+  EntryAndValue x(0, android::Res_value::TYPE_DIMENSION, 100);
+  EntryAndValue y(0, android::Res_value::TYPE_FRACTION, 200);
+  EntryAndValue z(0, android::Res_value::TYPE_INT_DEC, 666);
+
+  // 0x7f010000
+  type_definer->add_empty(&default_config);
+  type_definer->add(&land_config, {(uint8_t*)&a, sizeof(EntryAndValue)});
+  type_definer->add(&xxhdpi_config, {(uint8_t*)&b, sizeof(EntryAndValue)});
+  // 0x7f010001, make it the reverse of the above (not equal)
+  type_definer->add_empty(&default_config);
+  type_definer->add(&land_config, {(uint8_t*)&b, sizeof(EntryAndValue)});
+  type_definer->add(&xxhdpi_config, {(uint8_t*)&a, sizeof(EntryAndValue)});
+  // 0x7f010002
+  type_definer->add(&default_config, {(uint8_t*)&x, sizeof(EntryAndValue)});
+  type_definer->add(&land_config, {(uint8_t*)&y, sizeof(EntryAndValue)});
+  type_definer->add(&xxhdpi_config, {(uint8_t*)&z, sizeof(EntryAndValue)});
+  // 0x7f010003
+  type_definer->add_empty(&default_config);
+  type_definer->add(&land_config, {(uint8_t*)&b, sizeof(EntryAndValue)});
+  type_definer->add_empty(&xxhdpi_config);
+  // 0x7f010004, should be equal to 0x7f010002
+  type_definer->add(&default_config, {(uint8_t*)&x, sizeof(EntryAndValue)});
+  type_definer->add(&land_config, {(uint8_t*)&y, sizeof(EntryAndValue)});
+  type_definer->add(&xxhdpi_config, {(uint8_t*)&z, sizeof(EntryAndValue)});
+
+  android::Vector<char> out;
+  table_builder->serialize(&out);
+
+  auto tmp_dir = redex::make_tmp_dir("ResTable_ValueEquality%%%%%%%%");
+  auto dest_file_path = tmp_dir.path + "/resources.arsc";
+  write_to_file(dest_file_path, out);
+  ResourcesArscFile arsc_file(dest_file_path);
+
+  // Obvious sanity checks
+  EXPECT_TRUE(arsc_file.resource_value_identical(0x7f010000, 0x7f010000));
+  EXPECT_TRUE(arsc_file.resource_value_identical(0x7f010001, 0x7f010001));
+  EXPECT_TRUE(arsc_file.resource_value_identical(0x7f010002, 0x7f010002));
+  EXPECT_TRUE(arsc_file.resource_value_identical(0x7f010003, 0x7f010003));
+  EXPECT_TRUE(arsc_file.resource_value_identical(0x7f010004, 0x7f010004));
+
+  // Real checks
+  EXPECT_TRUE(arsc_file.resource_value_identical(0x7f010002, 0x7f010004));
+
+  EXPECT_FALSE(arsc_file.resource_value_identical(0x7f010000, 0x7f010001));
+  EXPECT_FALSE(arsc_file.resource_value_identical(0x7f010000, 0x7f010002));
+  EXPECT_FALSE(arsc_file.resource_value_identical(0x7f010001, 0x7f010002));
+  EXPECT_FALSE(arsc_file.resource_value_identical(0x7f010002, 0x7f010003));
+}
+
 TEST(ResTable, CanonicalEntryData) {
   auto do_validation = [&](const std::string& file_path,
                            uint32_t type_expected_size) {

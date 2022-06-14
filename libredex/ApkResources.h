@@ -188,6 +188,9 @@ class TableSnapshot {
   void get_configurations(uint32_t package_id,
                           const std::string& type_name,
                           std::vector<android::ResTable_config>* out);
+  // Returns true if the given ids are from the same type, and all
+  // entries/values in all configurations are byte for byte identical.
+  bool are_values_identical(uint32_t a, uint32_t b);
   // Reads a string from the global string pool.
   std::string get_global_string(size_t idx) const;
  private:

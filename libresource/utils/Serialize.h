@@ -130,6 +130,14 @@ void replace_xml_string_pool(android::ResChunk_header* data,
 using EntryValueData = PtrLen<uint8_t>;
 using EntryOffsetData = std::pair<EntryValueData, uint32_t>;
 
+bool is_empty(const EntryValueData& ev);
+
+// Return a pointer to the start of values beyond the entry struct at the given
+// pointer. Length returned will indicate how many more bytes there are that
+// constiture the values. Callers MUST always check the length, since it could
+// be zero (thus making the pointer not meaningful).
+PtrLen<uint8_t> get_value_data(const EntryValueData& ev);
+
 // Helper to record identical entry/value data that has already been emitted for
 // a certain type.
 class CanonicalEntries {

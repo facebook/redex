@@ -288,7 +288,7 @@ void TableSnapshot::gather_non_empty_resource_ids(std::vector<uint32_t>* ids) {
   for (const auto& pair : m_table_parser.m_res_id_to_entries) {
     auto id = pair.first;
     for (const auto& config_entry : pair.second) {
-      if (config_entry.second.getKey() != nullptr) {
+      if (!arsc::is_empty(config_entry.second)) {
         ids->emplace_back(id);
         break;
       }
@@ -356,6 +356,52 @@ void TableSnapshot::get_configurations(
       out->emplace_back(std::move(swapped));
     }
   }
+}
+
+bool TableSnapshot::are_values_identical(uint32_t a, uint32_t b) {
+  uint32_t upper = PACKAGE_MASK_BIT | TYPE_MASK_BIT;
+  if ((a & upper) != (b & upper)) {
+    return false;
+  }
+  if (m_table_parser.m_res_id_to_flags.at(a) !=
+      m_table_parser.m_res_id_to_flags.at(b)) {
+    return false;
+  }
+  auto a_entries = m_table_parser.m_res_id_to_entries.at(a);
+  auto b_entries = m_table_parser.m_res_id_to_entries.at(b);
+  always_assert_log(a_entries.size() == b_entries.size(),
+                    "Parsed table representation does not have the same set of "
+                    "configs for ids 0x%x, 0x%x",
+                    a, b);
+  for (auto& pair : a_entries) {
+    auto& a_entry = pair.second;
+    auto& b_entry = b_entries.at(pair.first);
+    auto empty_entry = arsc::is_empty(a_entry);
+    if (empty_entry != arsc::is_empty(b_entry)) {
+      return false;
+    }
+    // Total length of entry + value data
+    if (a_entry.getValue() != b_entry.getValue()) {
+      return false;
+    }
+    if (!empty_entry) {
+      auto a_data = arsc::get_value_data(a_entry);
+      auto b_data = arsc::get_value_data(b_entry);
+      auto empty_data = arsc::is_empty(a_data);
+      auto data_len = a_data.getValue();
+      if (data_len != b_data.getValue()) {
+        return false;
+      }
+      if (empty_data != arsc::is_empty(b_data)) {
+        return false;
+      }
+      if (!empty_data &&
+          memcmp(a_data.getKey(), b_data.getKey(), data_len) != 0) {
+        return false;
+      }
+    }
+  }
+  return true;
 }
 
 std::string TableSnapshot::get_global_string(size_t idx) const {
@@ -1827,7 +1873,8 @@ bool ResourcesArscFile::resource_value_identical(uint32_t a_id, uint32_t b_id) {
     return false;
   }
 
-  return res_table.areResourceValuesIdentical(a_id, b_id);
+  auto& table_snapshot = get_table_snapshot();
+  return table_snapshot.are_values_identical(a_id, b_id);
 }
 
 ResourcesArscFile::ResourcesArscFile(const std::string& path)

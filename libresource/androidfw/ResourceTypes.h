@@ -1895,10 +1895,6 @@ public:
         Vector<Res_value>& values,
         const ResTable_config* allowed_config) const;
 
-    // Returns true if the given resource ID's are of the same type and have
-    // the same entries in the same configurations.
-    bool areResourceValuesIdentical(uint32_t resourceId1, uint32_t resourceId2) const;
-
     static String8 normalizeForOutput(const char* input);
 
     ssize_t getResourcePackageIndex(uint32_t resID) const;
