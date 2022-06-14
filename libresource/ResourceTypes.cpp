@@ -5589,25 +5589,6 @@ void ResTable::getConfigurations(Vector<ResTable_config>* configs, bool ignoreMi
     }
 }
 
-void ResTable::getConfigurationsByType(
-  size_t base_package_idx,
-  String8 type_name,
-  Vector<ResTable_config>* configs) const {
-  const PackageGroup* package_group = mPackageGroups[base_package_idx];
-  const size_t type_count = package_group->types.size();
-  for (size_t i = 0; i < type_count; i++) {
-    const TypeList& type_list = package_group->types[i];
-    const size_t list_size = type_list.size();
-    for (size_t j = 0; j < list_size; j++) {
-      const Type* type = type_list[j];
-      const ResStringPool& type_strings = type->package->typeStrings;
-      if (type_strings.string8ObjectAt(type->typeSpec->id - 1) == type_name) {
-        collectAllConfigs(configs, type);
-      }
-    }
-  }
-}
-
 void ResTable::getLocales(Vector<String8>* locales) const
 {
     Vector<ResTable_config> configs;
