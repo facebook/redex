@@ -156,11 +156,15 @@ TEST(ResTable, AppendNewType) {
   copy_file(src_file_path, dest_file_path);
 
   auto src = RedexMappedFile::open(src_file_path);
+  // TODO: replace use of android::ResTable throughout this file.
   android::ResTable table;
   ASSERT_EQ(table.add(src.const_data(), src.size()), 0);
   // Read the number of original types.
-  android::Vector<android::String8> original_type_names;
-  table.getTypeNamesForPackage(0, &original_type_names);
+  std::vector<std::string> original_type_names;
+  {
+    apk::TableSnapshot table_snapshot(src, src.size());
+    table_snapshot.get_type_names(APPLICATION_PACKAGE, &original_type_names);
+  }
 
   // Set up existing entry data to copy into a different type
   const uint8_t dest_type = 3;
@@ -191,6 +195,7 @@ TEST(ResTable, AppendNewType) {
   auto dest = RedexMappedFile::open(dest_file_path);
   android::ResTable round_trip;
   ASSERT_EQ(round_trip.add(dest.const_data(), dest.size()), 0);
+  apk::TableSnapshot round_trip_snapshot(dest, dest.size());
   // Make sure entries exist in 0x7f03xxxx range
   for (size_t i = 0; i < num_ids; i++) {
     auto old_id = source_ids[i];
@@ -220,8 +225,8 @@ TEST(ResTable, AppendNewType) {
     ASSERT_EQ(unit, android::Res_value::COMPLEX_UNIT_DIP);
   }
 
-  android::Vector<android::String8> type_names;
-  round_trip.getTypeNamesForPackage(0, &type_names);
+  std::vector<std::string> type_names;
+  round_trip_snapshot.get_type_names(APPLICATION_PACKAGE, &type_names);
   ASSERT_EQ(type_names.size(), original_type_names.size() + 1);
 }
 

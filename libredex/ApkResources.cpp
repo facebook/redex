@@ -2041,14 +2041,13 @@ void ResourcesArscFile::remap_ids(
 
 std::unordered_set<uint32_t> ResourcesArscFile::get_types_by_name(
     const std::unordered_set<std::string>& type_names) {
-
-  android::Vector<android::String8> typeNames;
-  res_table.getTypeNamesForPackage(0, &typeNames);
+  auto& table_snapshot = get_table_snapshot();
+  std::vector<std::string> all_types;
+  table_snapshot.get_type_names(APPLICATION_PACKAGE, &all_types);
 
   std::unordered_set<uint32_t> type_ids;
-  for (size_t i = 0; i < typeNames.size(); ++i) {
-    std::string typeStr(typeNames[i].string());
-    if (type_names.count(typeStr) == 1) {
+  for (size_t i = 0; i < all_types.size(); ++i) {
+    if (type_names.count(all_types.at(i)) == 1) {
       type_ids.emplace((i + 1) << TYPE_INDEX_BIT_SHIFT);
     }
   }
@@ -2057,16 +2056,16 @@ std::unordered_set<uint32_t> ResourcesArscFile::get_types_by_name(
 
 std::unordered_set<uint32_t> ResourcesArscFile::get_types_by_name_prefixes(
     const std::unordered_set<std::string>& type_name_prefixes) {
-
-  android::Vector<android::String8> typeNames;
-  res_table.getTypeNamesForPackage(0, &typeNames);
+  auto& table_snapshot = get_table_snapshot();
+  std::vector<std::string> all_types;
+  table_snapshot.get_type_names(APPLICATION_PACKAGE, &all_types);
 
   std::unordered_set<uint32_t> type_ids;
-  for (size_t i = 0; i < typeNames.size(); ++i) {
-    std::string typeStr(typeNames[i].string());
+  for (size_t i = 0; i < all_types.size(); ++i) {
+    const auto& type_name = all_types.at(i);
     if (std::find_if(type_name_prefixes.begin(), type_name_prefixes.end(),
                      [&](const std::string& prefix) {
-                       return typeStr.find(prefix) != std::string::npos;
+                       return type_name.find(prefix) != std::string::npos;
                      }) != type_name_prefixes.end()) {
       type_ids.emplace((i + 1) << TYPE_INDEX_BIT_SHIFT);
     }

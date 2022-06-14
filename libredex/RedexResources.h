@@ -31,6 +31,7 @@ const char* const OBFUSCATED_RES_DIRECTORY = "r";
 const char* const RESOURCE_NAME_REMOVED = "(name removed)";
 
 const uint32_t PACKAGE_RESID_START = 0x7f000000;
+const uint32_t APPLICATION_PACKAGE = 0x7f;
 
 /*
  * These are all the components which may contain references to Java classes in

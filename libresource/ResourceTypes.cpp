@@ -6499,34 +6499,6 @@ String8 ResTable::normalizeForOutput( const char *input )
     return ret;
 }
 
-void ResTable::getTypeNamesForPackage(
-    ssize_t packageIndex,
-    Vector<String8>* typeNames) const
-{
-    const PackageGroup* pg = mPackageGroups[packageIndex];
-    Type* typeConfigs = nullptr;
-    // Find the first non-empty TypeList in the bucket array. Note that some
-    // intermediate states of the file might have some odd configurations.
-    for (size_t i = 0; i < pg->types.size(); ++i) {
-      const TypeList& typeList = pg->types[i];
-      if (typeList.size() > 0) {
-        typeConfigs = typeList[0];
-        break;
-      }
-    }
-    if (typeConfigs == nullptr) {
-      ALOGE("Unable to find any type names in the package.");
-      return;
-    }
-    const Package* pkg = typeConfigs->package;
-    for (size_t index = 0; index < pkg->typeStrings.size(); ++index) {
-        String8 str8 = pkg->typeStrings.string8ObjectAt(index);
-        if (str8.size() != 0) {
-            typeNames->add(str8);
-        }
-    }
-}
-
 void ResTable::print_value(const Package* pkg, const Res_value& value) const
 {
     if (value.dataType == Res_value::TYPE_NULL) {
