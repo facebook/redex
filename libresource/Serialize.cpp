@@ -489,10 +489,7 @@ void ResStringPoolBuilder::add_style(const char* s,
                                      size_t len,
                                      SpanVector spans) {
   StringHolder holder(s, len);
-  StyleInfo info{
-    .str = std::move(holder),
-    .spans = std::move(spans)
-  };
+  StyleInfo info{.str = std::move(holder), .spans = std::move(spans)};
   m_styles.emplace_back(std::move(info));
 }
 
@@ -500,21 +497,14 @@ void ResStringPoolBuilder::add_style(const char16_t* s,
                                      size_t len,
                                      SpanVector spans) {
   StringHolder holder(s, len);
-  StyleInfo info{
-    .str = std::move(holder),
-    .spans = std::move(spans)
-  };
+  StyleInfo info{.str = std::move(holder), .spans = std::move(spans)};
   m_styles.emplace_back(std::move(info));
 }
 
-void ResStringPoolBuilder::add_style(std::string s,
-                                     SpanVector spans) {
+void ResStringPoolBuilder::add_style(std::string s, SpanVector spans) {
   auto len = s.length();
   StringHolder holder(std::move(s), len);
-  StyleInfo info{
-    .str = std::move(holder),
-    .spans = std::move(spans)
-  };
+  StyleInfo info{.str = std::move(holder), .spans = std::move(spans)};
   m_styles.emplace_back(std::move(info));
 }
 
@@ -612,7 +602,7 @@ void ResStringPoolBuilder::serialize(android::Vector<char>* out) {
     span_off.push_back(spans_size);
     write_string(utf8, info.str, &serialized_strings);
     spans_size += info.spans.size() * sizeof(android::ResStringPool_span) +
-                    sizeof(android::ResStringPool_span::END);
+                  sizeof(android::ResStringPool_span::END);
   }
   if (spans_size > 0) {
     spans_size += 2 * sizeof(android::ResStringPool_span::END);
