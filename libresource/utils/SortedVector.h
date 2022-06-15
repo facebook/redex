@@ -21,19 +21,16 @@
 #include <stdint.h>
 #include <sys/types.h>
 
-#ifdef _MSC_VER
-#include "CompatWindows.h"
-#endif
-
-#include "cutils/log.h"
-
+#include "utils/Log.h"
+#include "utils/TypeHelpers.h"
 #include "utils/Vector.h"
 #include "utils/VectorImpl.h"
-#include "utils/TypeHelpers.h"
 
 // ---------------------------------------------------------------------------
 
 namespace android {
+
+// DO NOT USE: please use std::set
 
 template <class TYPE>
 class SortedVector : private SortedVectorImpl
@@ -127,6 +124,23 @@ public:
     //! remove one item
     inline  ssize_t         removeAt(size_t index)  { return removeItemsAt(index); }
 
+    /*
+     * these inlines add some level of compatibility with STL.
+     */
+    typedef TYPE* iterator;
+    typedef TYPE const* const_iterator;
+
+    inline iterator begin() { return editArray(); }
+    inline iterator end()   { return editArray() + size(); }
+    inline const_iterator begin() const { return array(); }
+    inline const_iterator end() const   { return array() + size(); }
+    inline void reserve(size_t n) { setCapacity(n); }
+    inline bool empty() const{ return isEmpty(); }
+    inline iterator erase(iterator pos) {
+        ssize_t index = removeItemsAt(pos-array());
+        return begin() + index;
+    }
+
 protected:
     virtual void    do_construct(void* storage, size_t num) const;
     virtual void    do_destroy(void* storage, size_t num) const;
@@ -136,10 +150,6 @@ protected:
     virtual void    do_move_backward(void* dest, const void* from, size_t num) const;
     virtual int     do_compare(const void* lhs, const void* rhs) const;
 };
-
-// SortedVector<T> can be trivially moved using memcpy() because moving does not
-// require any change to the underlying SharedBuffer contents or reference count.
-template<typename T> struct trait_trivial_move<SortedVector<T> > { enum { value = true }; };
 
 // ---------------------------------------------------------------------------
 // No user serviceable parts from here...
@@ -244,7 +254,7 @@ ssize_t SortedVector<TYPE>::removeItemsAt(size_t index, size_t count) {
 // ---------------------------------------------------------------------------
 
 template<class TYPE>
-void SortedVector<TYPE>::do_construct(void* storage, size_t num) const {
+UTILS_VECTOR_NO_CFI void SortedVector<TYPE>::do_construct(void* storage, size_t num) const {
     construct_type( reinterpret_cast<TYPE*>(storage), num );
 }
 
@@ -254,22 +264,22 @@ void SortedVector<TYPE>::do_destroy(void* storage, size_t num) const {
 }
 
 template<class TYPE>
-void SortedVector<TYPE>::do_copy(void* dest, const void* from, size_t num) const {
+UTILS_VECTOR_NO_CFI void SortedVector<TYPE>::do_copy(void* dest, const void* from, size_t num) const {
     copy_type( reinterpret_cast<TYPE*>(dest), reinterpret_cast<const TYPE*>(from), num );
 }
 
 template<class TYPE>
-void SortedVector<TYPE>::do_splat(void* dest, const void* item, size_t num) const {
+UTILS_VECTOR_NO_CFI void SortedVector<TYPE>::do_splat(void* dest, const void* item, size_t num) const {
     splat_type( reinterpret_cast<TYPE*>(dest), reinterpret_cast<const TYPE*>(item), num );
 }
 
 template<class TYPE>
-void SortedVector<TYPE>::do_move_forward(void* dest, const void* from, size_t num) const {
+UTILS_VECTOR_NO_CFI void SortedVector<TYPE>::do_move_forward(void* dest, const void* from, size_t num) const {
     move_forward_type( reinterpret_cast<TYPE*>(dest), reinterpret_cast<const TYPE*>(from), num );
 }
 
 template<class TYPE>
-void SortedVector<TYPE>::do_move_backward(void* dest, const void* from, size_t num) const {
+UTILS_VECTOR_NO_CFI void SortedVector<TYPE>::do_move_backward(void* dest, const void* from, size_t num) const {
     move_backward_type( reinterpret_cast<TYPE*>(dest), reinterpret_cast<const TYPE*>(from), num );
 }
 
@@ -278,8 +288,7 @@ int SortedVector<TYPE>::do_compare(const void* lhs, const void* rhs) const {
     return compare_type( *reinterpret_cast<const TYPE*>(lhs), *reinterpret_cast<const TYPE*>(rhs) );
 }
 
-}; // namespace android
-
+}  // namespace android
 
 // ---------------------------------------------------------------------------
 

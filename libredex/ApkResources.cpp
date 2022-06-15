@@ -270,21 +270,21 @@ TableSnapshot::TableSnapshot(RedexMappedFile& mapped_file, size_t len) {
                     "Failed to parse .arsc file");
   always_assert_log(
       m_global_strings.setTo(m_table_parser.m_global_pool_header,
-                             CHUNK_SIZE(m_table_parser.m_global_pool_header)) ==
-          android::NO_ERROR,
+                             CHUNK_SIZE(m_table_parser.m_global_pool_header),
+                             true) == android::NO_ERROR,
       "Failed to parse global strings!");
   for (const auto& pair : m_table_parser.m_package_key_string_headers) {
     auto package_id = GET_ID(pair.first);
     always_assert_log(
-        m_key_strings[package_id].setTo(pair.second, CHUNK_SIZE(pair.second)) ==
-            android::NO_ERROR,
+        m_key_strings[package_id].setTo(pair.second, CHUNK_SIZE(pair.second),
+                                        true) == android::NO_ERROR,
         "Failed to parse key strings for package 0x%x", package_id);
   }
   for (const auto& pair : m_table_parser.m_package_type_string_headers) {
     auto package_id = GET_ID(pair.first);
     always_assert_log(
-        m_type_strings[package_id].setTo(
-            pair.second, CHUNK_SIZE(pair.second)) == android::NO_ERROR,
+        m_type_strings[package_id].setTo(pair.second, CHUNK_SIZE(pair.second),
+                                         true) == android::NO_ERROR,
         "Failed to parse type strings for package 0x%x", package_id);
   }
 }
@@ -1308,7 +1308,7 @@ class GlobalStringPoolReader : public arsc::ResourceTableVisitor {
 
   bool visit_global_strings(android::ResStringPool_header* header) override {
     always_assert_log(
-        m_global_strings->setTo(header, dtohl(header->header.size)) ==
+        m_global_strings->setTo(header, dtohl(header->header.size), true) ==
             android::NO_ERROR,
         "Failed to parse global strings!");
     m_global_strings_header = header;
@@ -1392,8 +1392,8 @@ class PackageStringRefCollector : public apk::TableParser {
     auto& key_strings = m_package_key_strings.at(package);
     always_assert_log(key_strings->getError() == android::NO_INIT,
                       "Key strings re-init!");
-    always_assert_log(key_strings->setTo(pool, dtohl(pool->header.size)) ==
-                          android::NO_ERROR,
+    always_assert_log(key_strings->setTo(pool, dtohl(pool->header.size),
+                                         true) == android::NO_ERROR,
                       "Failed to parse key strings!");
     apk::TableParser::visit_key_strings(package, pool);
     return true;
