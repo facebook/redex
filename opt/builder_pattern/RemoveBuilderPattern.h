@@ -16,13 +16,19 @@ namespace builder_pattern {
 class RemoveBuilderPatternPass : public Pass {
  public:
   RemoveBuilderPatternPass() : Pass("RemoveBuilderPatternPass") {}
+  explicit RemoveBuilderPatternPass(const std::string& name) : Pass(name) {}
 
   void bind_config() override;
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
+  std::unique_ptr<Pass> clone(const std::string& new_name) const override {
+    return std::make_unique<RemoveBuilderPatternPass>(new_name);
+  }
+
  private:
   std::vector<DexType*> m_roots;
   std::vector<DexType*> m_blocklist;
+  size_t m_max_num_inline_iteration;
 };
 
 } // namespace builder_pattern

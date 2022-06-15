@@ -22,8 +22,7 @@
 
 namespace builder_pattern {
 
-constexpr size_t MAX_NUM_INLINE_ITERATION = 10;
-constexpr size_t MAX_NUM_INLINE_ITERATION_FOR_SIMPLE_BUILDERS = 4;
+constexpr size_t MAX_NUM_INLINE_ITERATION = 4;
 constexpr size_t ESCAPING_CALLEE_SIZE_THRESHOLD = 140;
 
 namespace {
@@ -414,6 +413,8 @@ void RemoveBuilderPatternPass::bind_config() {
        Configurable::bindflags::types::warn_if_unresolvable);
   bind("blocklist", {}, m_blocklist, Configurable::default_doc(),
        Configurable::bindflags::types::warn_if_unresolvable);
+  bind("max_num_iteration", MAX_NUM_INLINE_ITERATION,
+       m_max_num_inline_iteration);
 
   // TODO(T44502473): if we could pass a binding filter lambda instead of
   // bindflags, this could be more simply expressed
@@ -442,23 +443,14 @@ void RemoveBuilderPatternPass::run_pass(DexStoresVector& stores,
   auto scope = build_class_scope(stores);
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, conf.create_init_class_insns());
-  // For 2nd instance or later instances of the pass, fall back the roots to
-  // have only j/l/Object;.
-  if (mgr.get_current_pass_info()->repeat > 0) {
-    m_roots.clear();
-    m_roots.push_back(type::java_lang_Object());
-  }
 
   for (const auto& root : m_roots) {
-    size_t max_num_inline_iteration = MAX_NUM_INLINE_ITERATION;
-    if (root == type::java_lang_Object()) {
-      max_num_inline_iteration = MAX_NUM_INLINE_ITERATION_FOR_SIMPLE_BUILDERS;
-    }
-    TRACE(BLD_PATTERN, 1, "removing root %s", SHOW(root));
+    TRACE(BLD_PATTERN, 1, "removing root %s w/ %ld iterations", SHOW(root),
+          m_max_num_inline_iteration);
     Timer t("root_iteration");
     RemoveClasses rm_builder_pattern(
         root, scope, init_classes_with_side_effects, conf.get_inliner_config(),
-        m_blocklist, max_num_inline_iteration, stores);
+        m_blocklist, m_max_num_inline_iteration, stores);
     rm_builder_pattern.optimize();
     rm_builder_pattern.print_stats(mgr);
     rm_builder_pattern.cleanup();
