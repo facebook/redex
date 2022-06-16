@@ -71,35 +71,24 @@ public class MetadataParser{
 
     @DoNotStrip
     public static int getOffset (String funcName) {
-        int completed = -1;
-        if (indexMap.size() == 0) {
-            populateIndexMap();
-        }
-
-        if (metadataMap.size() == 0) {
-            populateMetadataMap();
-        }
-
+        int output = -1;
         if (indexMap.containsKey(funcName)) {
             int index = indexMap.get(funcName);
 
             if (metadataMap.containsKey(index)) {
                 MetadataInfo mi = metadataMap.get(index);
 
-                completed = mi.getOffset();
+                output = mi.getOffset();
             }
         }
-        return completed;
+        return output;
     }
 
     @DoNotStrip
     public static int checkBlockHit (String funcName, short[] stats, int block) {
         int completed = -1;
         int blockIndex = -1;
-        int offset = getOffset(funcName);
-        if (offset == -1) {
-            return completed;
-        }
+        int offset = -1;
 
         if (indexMap.containsKey(funcName)) {
             int index = indexMap.get(funcName);
@@ -108,10 +97,12 @@ public class MetadataParser{
                 MetadataInfo mi = metadataMap.get(index);
 
                 blockIndex = mi.getBlockBit(block);
+                offset = mi.getOffset();
             }
         }
 
-        if (blockIndex == -1) {
+
+        if (blockIndex == -1 || offset == -1) {
             return completed;
         }
 
