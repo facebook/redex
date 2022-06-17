@@ -34,6 +34,9 @@ template <typename IntegerType>
 class PatriciaTree;
 
 template <typename IntegerType>
+class PatriciaTreeBranch;
+
+template <typename IntegerType>
 class PatriciaTreeLeaf;
 
 template <typename IntegerType>
@@ -323,7 +326,7 @@ class PatriciaTree {
   // A Patricia tree is an immutable structure.
   PatriciaTree& operator=(const PatriciaTree& other) = delete;
 
-  virtual ~PatriciaTree() {
+  ~PatriciaTree() {
     // The destructor is the only method that is guaranteed to be created when
     // a class template is instantiated. This is a good place to perform all
     // the sanity checks on the template parameters.
@@ -331,28 +334,46 @@ class PatriciaTree {
                   "IntegerType is not an unsigned arihmetic type");
   }
 
-  virtual bool is_leaf() const = 0;
+  bool is_leaf() const {
+    return m_reference_count.load(std::memory_order_relaxed) & LEAF_MASK;
+  }
 
   bool is_branch() const { return !is_leaf(); }
 
-  size_t hash() const { return m_hash; }
-
-  void set_hash(size_t h) { m_hash = h; }
+  size_t hash() const {
+    if (is_leaf()) {
+      return static_cast<const PatriciaTreeLeaf<IntegerType>*>(this)->hash();
+    } else {
+      return static_cast<const PatriciaTreeBranch<IntegerType>*>(this)->hash();
+    }
+  }
 
   friend void intrusive_ptr_add_ref(const PatriciaTree<IntegerType>* p) {
     p->m_reference_count.fetch_add(1, std::memory_order_relaxed);
   }
 
   friend void intrusive_ptr_release(const PatriciaTree<IntegerType>* p) {
-    if (p->m_reference_count.fetch_sub(1, std::memory_order_release) == 1) {
+    size_t prev_reference_count =
+        p->m_reference_count.fetch_sub(1, std::memory_order_release);
+    if ((prev_reference_count & ~LEAF_MASK) == 1) {
       std::atomic_thread_fence(std::memory_order_acquire);
-      delete p;
+      if (prev_reference_count & LEAF_MASK) {
+        delete static_cast<const PatriciaTreeLeaf<IntegerType>*>(p);
+      } else {
+        delete static_cast<const PatriciaTreeBranch<IntegerType>*>(p);
+      }
     }
   }
 
+ protected:
+  PatriciaTree(bool is_leaf) : m_reference_count(is_leaf ? LEAF_MASK : 0) {}
+
  private:
-  mutable std::atomic<size_t> m_reference_count{0};
-  size_t m_hash;
+  // We are stealing the highest bit of our reference counter to indicate
+  // whether this tree is a leaf (or, otherwise, branch).
+  static constexpr size_t LEAF_MASK = (static_cast<size_t>(1))
+                                      << (sizeof(size_t) * 8 - 1);
+  mutable std::atomic<size_t> m_reference_count;
 };
 
 // This defines an internal node of a Patricia tree. Patricia trees are
@@ -370,7 +391,9 @@ class PatriciaTreeBranch final : public PatriciaTree<IntegerType> {
                      IntegerType branching_bit,
                      boost::intrusive_ptr<PatriciaTree<IntegerType>> left_tree,
                      boost::intrusive_ptr<PatriciaTree<IntegerType>> right_tree)
-      : m_prefix(prefix),
+      : PatriciaTree<IntegerType>(
+            /* is_leaf */ false),
+        m_prefix(prefix),
         m_branching_bit(branching_bit),
         m_left_tree(std::move(left_tree)),
         m_right_tree(std::move(right_tree)) {
@@ -379,10 +402,10 @@ class PatriciaTreeBranch final : public PatriciaTree<IntegerType> {
     boost::hash_combine(seed, m_branching_bit);
     boost::hash_combine(seed, m_left_tree->hash());
     boost::hash_combine(seed, m_right_tree->hash());
-    this->set_hash(seed);
+    m_hash = seed;
   }
 
-  bool is_leaf() const override { return false; }
+  size_t hash() const { return m_hash; }
 
   IntegerType prefix() const { return m_prefix; }
 
@@ -406,6 +429,7 @@ class PatriciaTreeBranch final : public PatriciaTree<IntegerType> {
   }
 
  private:
+  size_t m_hash;
   IntegerType m_prefix;
   IntegerType m_branching_bit;
   boost::intrusive_ptr<PatriciaTree<IntegerType>> m_left_tree;
@@ -415,12 +439,13 @@ class PatriciaTreeBranch final : public PatriciaTree<IntegerType> {
 template <typename IntegerType>
 class PatriciaTreeLeaf final : public PatriciaTree<IntegerType> {
  public:
-  explicit PatriciaTreeLeaf(IntegerType key) : m_key(key) {
-    boost::hash<IntegerType> hasher;
-    this->set_hash(hasher(key));
-  }
+  explicit PatriciaTreeLeaf(IntegerType key)
+      : PatriciaTree<IntegerType>(/* is_leaf */ true), m_key(key) {}
 
-  bool is_leaf() const override { return true; }
+  size_t hash() const {
+    boost::hash<IntegerType> hasher;
+    return hasher(m_key);
+  }
 
   const IntegerType& key() const { return m_key; }
 
