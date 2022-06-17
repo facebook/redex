@@ -45,6 +45,9 @@ template <typename IntegerType, typename Value>
 class PatriciaTree;
 
 template <typename IntegerType, typename Value>
+class PatriciaTreeBranch;
+
+template <typename IntegerType, typename Value>
 class PatriciaTreeLeaf;
 
 template <typename IntegerType, typename Value>
@@ -447,7 +450,7 @@ class PatriciaTree {
   // A Patricia tree is an immutable structure.
   PatriciaTree& operator=(const PatriciaTree& other) = delete;
 
-  virtual ~PatriciaTree() {
+  ~PatriciaTree() {
     // The destructor is the only method that is guaranteed to be created when
     // a class template is instantiated. This is a good place to perform all
     // the sanity checks on the template parameters.
@@ -455,7 +458,9 @@ class PatriciaTree {
                   "IntegerType is not an unsigned arihmetic type");
   }
 
-  virtual bool is_leaf() const = 0;
+  bool is_leaf() const {
+    return m_reference_count.load(std::memory_order_relaxed) & LEAF_MASK;
+  }
 
   bool is_branch() const { return !is_leaf(); }
 
@@ -464,14 +469,27 @@ class PatriciaTree {
   }
 
   friend void intrusive_ptr_release(const PatriciaTree<IntegerType, Value>* p) {
-    if (p->m_reference_count.fetch_sub(1, std::memory_order_release) == 1) {
+    size_t prev_reference_count =
+        p->m_reference_count.fetch_sub(1, std::memory_order_release);
+    if ((prev_reference_count & ~LEAF_MASK) == 1) {
       std::atomic_thread_fence(std::memory_order_acquire);
-      delete p;
+      if (prev_reference_count & LEAF_MASK) {
+        delete static_cast<const PatriciaTreeLeaf<IntegerType, Value>*>(p);
+      } else {
+        delete static_cast<const PatriciaTreeBranch<IntegerType, Value>*>(p);
+      }
     }
   }
 
+ protected:
+  PatriciaTree(bool is_leaf) : m_reference_count(is_leaf ? LEAF_MASK : 0) {}
+
  private:
-  mutable std::atomic<size_t> m_reference_count{0};
+  // We are stealing the highest bit of our reference counter to indicate
+  // whether this tree is a leaf (or, otherwise, branch).
+  static constexpr size_t LEAF_MASK = (static_cast<size_t>(1))
+                                      << (sizeof(size_t) * 8 - 1);
+  mutable std::atomic<size_t> m_reference_count;
 };
 
 template <typename IntegerType, typename Value>
@@ -482,12 +500,11 @@ class PatriciaTreeBranch final : public PatriciaTree<IntegerType, Value> {
       IntegerType branching_bit,
       boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> left_tree,
       boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> right_tree)
-      : m_prefix(prefix),
+      : PatriciaTree<IntegerType, Value>(/* is_leaf */ false),
+        m_prefix(prefix),
         m_stacking_bit(branching_bit),
         m_left_tree(std::move(left_tree)),
         m_right_tree(std::move(right_tree)) {}
-
-  bool is_leaf() const override { return false; }
 
   IntegerType prefix() const { return m_prefix; }
 
@@ -525,9 +542,8 @@ class PatriciaTreeLeaf final : public PatriciaTree<IntegerType, Value> {
   using mapped_type = typename Value::type;
 
   explicit PatriciaTreeLeaf(IntegerType key, const mapped_type& value)
-      : m_pair(key, value) {}
-
-  bool is_leaf() const override { return true; }
+      : PatriciaTree<IntegerType, Value>(/* is_leaf */ true),
+        m_pair(key, value) {}
 
   const IntegerType& key() const { return m_pair.first; }
 
