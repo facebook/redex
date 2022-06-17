@@ -224,12 +224,13 @@ void discover_mergeable_anonymous_classes(
         // java.lang.Object.
         continue;
       }
-      mgr->incr_metric("cls_" + show(parent), pair.second.size());
       if (is_interface(type_class(parent))) {
         auto first_mergeable = type_class(pair.second[0]);
         merging_spec->roots.insert(first_mergeable->get_super_class());
+        mgr->incr_metric("intf_" + show(parent), pair.second.size());
       } else {
         merging_spec->roots.insert(parent);
+        mgr->incr_metric("cls_" + show(parent), pair.second.size());
       }
       merging_spec->merging_targets.insert(pair.second.begin(),
                                            pair.second.end());
