@@ -593,7 +593,7 @@ TEST(ResStringPoolBuilder, TestAllTheOptions) {
 
   auto do_validation = [&](void* data, size_t size) {
     android::ResStringPool pool;
-    EXPECT_EQ(pool.setTo(data, size), 0);
+    EXPECT_EQ(pool.setTo(data, size, true), 0);
     EXPECT_EQ(pool.styleCount(), 1);
     EXPECT_EQ(pool.size(), 5);
     EXPECT_STREQ(apk::get_string_from_pool(pool, 0).c_str(), "Hello world!");
@@ -860,7 +860,7 @@ UNUSED int32_t load_global_strings(const RedexMappedFile& arsc_file,
   apk::TableParser parser;
   parser.visit((void*)arsc_file.const_data(), arsc_file.size());
   auto pool_header = parser.m_global_pool_header;
-  return pool->setTo(pool_header, pool_header->header.size);
+  return pool->setTo(pool_header, pool_header->header.size, true);
 }
 
 int32_t load_key_strings(const RedexMappedFile& arsc_file,
@@ -869,7 +869,7 @@ int32_t load_key_strings(const RedexMappedFile& arsc_file,
   parser.visit((void*)arsc_file.const_data(), arsc_file.size());
   // Only 1 package in our test arsc file.
   auto pool_header = parser.m_package_key_string_headers.begin()->second;
-  return pool->setTo(pool_header, pool_header->header.size);
+  return pool->setTo(pool_header, pool_header->header.size, true);
 }
 
 int32_t load_type_strings(const RedexMappedFile& arsc_file,
@@ -878,7 +878,7 @@ int32_t load_type_strings(const RedexMappedFile& arsc_file,
   parser.visit((void*)arsc_file.const_data(), arsc_file.size());
   // Only 1 package in our test arsc file.
   auto pool_header = parser.m_package_type_string_headers.begin()->second;
-  return pool->setTo(pool_header, pool_header->header.size);
+  return pool->setTo(pool_header, pool_header->header.size, true);
 }
 
 std::vector<arsc::TypeInfo> load_types(const RedexMappedFile& arsc_file) {
