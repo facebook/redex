@@ -126,8 +126,11 @@ static bool parse_cp_entry(uint8_t*& buffer, cp_entry& cpe) {
   case CP_CONST_METHOD:
   case CP_CONST_INTERFACE:
   case CP_CONST_NAMEANDTYPE:
-  case CP_CONST_METHHANDLE:
     cpe.s0 = read16(buffer);
+    cpe.s1 = read16(buffer);
+    return true;
+  case CP_CONST_METHHANDLE:
+    cpe.s0 = *buffer++;
     cpe.s1 = read16(buffer);
     return true;
   case CP_CONST_INT:
