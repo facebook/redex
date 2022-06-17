@@ -978,11 +978,12 @@ class PatriciaTreeIterator final {
   PatriciaTreeIterator() {}
 
   explicit PatriciaTreeIterator(
-      const boost::intrusive_ptr<PatriciaTree<IntegerType>>& tree) {
-    if (tree == nullptr) {
+      boost::intrusive_ptr<PatriciaTree<IntegerType>> tree)
+      : m_root(std::move(tree)) {
+    if (m_root == nullptr) {
       return;
     }
-    go_to_next_leaf(tree);
+    go_to_next_leaf(m_root);
   }
 
   PatriciaTreeIterator& operator++() {
@@ -1026,23 +1027,25 @@ class PatriciaTreeIterator final {
   // The argument is never null.
   void go_to_next_leaf(
       const boost::intrusive_ptr<PatriciaTree<IntegerType>>& tree) {
-    auto t = tree;
+    auto* t = tree.get();
     // We go to the leftmost leaf, storing the branches that we're traversing
     // on the stack. By definition of a Patricia tree, a branch node always
     // has two children, hence the leftmost leaf always exists.
     while (t->is_branch()) {
-      auto branch =
-          boost::static_pointer_cast<PatriciaTreeBranch<IntegerType>>(t);
+      auto branch = static_cast<PatriciaTreeBranch<IntegerType>*>(t);
       m_stack.push(branch);
-      t = branch->left_tree();
+      t = branch->left_tree().get();
       // A branch node always has two children.
       RUNTIME_CHECK(t != nullptr, internal_error());
     }
-    m_leaf = boost::static_pointer_cast<PatriciaTreeLeaf<IntegerType>>(t);
+    m_leaf = static_cast<PatriciaTreeLeaf<IntegerType>*>(t);
   }
 
-  std::stack<boost::intrusive_ptr<PatriciaTreeBranch<IntegerType>>> m_stack;
-  boost::intrusive_ptr<PatriciaTreeLeaf<IntegerType>> m_leaf;
+  // We are holding on to the root of the tree to ensure that all its nested
+  // branches and leaves stay alive for as long as the iterator stays alive.
+  boost::intrusive_ptr<PatriciaTree<IntegerType>> m_root;
+  std::stack<PatriciaTreeBranch<IntegerType>*> m_stack;
+  PatriciaTreeLeaf<IntegerType>* m_leaf{nullptr};
 };
 
 } // namespace pt_impl
