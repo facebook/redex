@@ -119,6 +119,12 @@ void push_data_no_swap(void* data, size_t length, android::Vector<char>* out) {
 void push_chunk(android::ResChunk_header* header, android::Vector<char>* out) {
   push_data_no_swap(header, dtohl(header->size), out);
 }
+
+void push_vec(android::Vector<char>& vec, android::Vector<char>* out) {
+  if (vec.size() > 0) {
+    out->appendVector(vec);
+  }
+}
 } // namespace
 
 void encode_string8(const android::String8& s, android::Vector<char>* vec) {
@@ -347,7 +353,7 @@ void ResTableTypeProjector::serialize_type(android::ResTable_type* type,
   for (size_t i = 0; i < num_entries; i++) {
     push_long(offsets[i], out);
   }
-  out->appendVector(temp);
+  push_vec(temp, out);
 }
 
 void ResTableTypeProjector::serialize(android::Vector<char>* out) {
@@ -484,7 +490,7 @@ void ResTableTypeDefiner::serialize(android::Vector<char>* out) {
       }
     }
     // Actual data.
-    out->appendVector(entry_data);
+    push_vec(entry_data, out);
     write_long_at_pos(total_size_pos, entries_start + entry_data.size(), out);
   }
 }
@@ -663,7 +669,7 @@ void ResStringPoolBuilder::serialize(android::Vector<char>* out) {
   for (const uint32_t& i : span_off) {
     push_long(i, out);
   }
-  out->appendVector(serialized_strings);
+  push_vec(serialized_strings, out);
   // Append spans
   for (auto& info : m_styles) {
     auto& spans = info.spans;
@@ -743,7 +749,7 @@ void ResPackageBuilder::serialize(android::Vector<char>* out) {
   push_long(header_size + type_strings_size, out);
   push_long(m_last_public_key, out);
   push_long(m_type_id_offset, out);
-  out->appendVector(temp);
+  push_vec(temp, out);
 }
 
 void ResTableBuilder::serialize(android::Vector<char>* out) {
