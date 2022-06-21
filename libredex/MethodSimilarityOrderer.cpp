@@ -140,35 +140,30 @@ void MethodSimilarityOrderer::compute_score() {
   m_score_map.clear();
   m_score_map.resize(m_id_to_method.size());
 
-  std::vector<MethodId> method_ids;
-  for (auto& p : m_id_to_method) {
-    auto method_id = p.first;
-    m_method_id_to_buffer_id[method_id] = method_ids.size();
-    method_ids.push_back(method_id);
-  }
+  // Maximum number of code items can be 65536.
+  redex_assert(m_id_to_method.size() <= (1 << 16));
 
-  std::vector<uint32_t> indices(method_ids.size());
+  std::vector<MethodId> indices(m_id_to_method.size());
   std::iota(indices.begin(), indices.end(), 0);
-  workqueue_run<uint32_t>(
-      [&](uint32_t i) {
-        MethodId method_i = method_ids[i];
-        const auto& code_hash_ids_i = m_method_id_to_code_hash_ids[method_i];
+  workqueue_run<MethodId>(
+      [&](MethodId i_id) {
+        const auto& code_hash_ids_i = m_method_id_to_code_hash_ids[i_id];
         std::unordered_map<ScoreValue, boost::dynamic_bitset<>> score_map;
 
-        for (uint32_t j = 0; j < (uint32_t)method_ids.size(); j++) {
-          if (i == j) {
+        for (uint32_t j_id = 0; j_id < (uint32_t)m_id_to_method.size();
+             j_id++) {
+          if (i_id == j_id) {
             continue;
           }
 
-          MethodId method_j = method_ids[j];
-          const auto& code_hash_ids_j = m_method_id_to_code_hash_ids[method_j];
+          const auto& code_hash_ids_j = m_method_id_to_code_hash_ids[j_id];
           auto score = get_score(code_hash_ids_i, code_hash_ids_j);
           if (score.value() >= 0) {
             auto& method_id_bitset = score_map[score.value()];
-            if (method_id_bitset.size() <= method_j) {
-              method_id_bitset.resize(method_j + 1);
+            if (method_id_bitset.size() <= j_id) {
+              method_id_bitset.resize(j_id + 1);
             }
-            method_id_bitset.set(static_cast<size_t>(method_j));
+            method_id_bitset.set(static_cast<size_t>(j_id));
           }
         }
 
@@ -182,7 +177,7 @@ void MethodSimilarityOrderer::compute_score() {
           for (auto&& [score_value, method_ids] : score_map) {
             map[score_value] = std::move(method_ids);
           }
-          m_score_map[i] = std::move(map);
+          m_score_map[i_id] = std::move(map);
         }
       },
       indices);
@@ -190,7 +185,11 @@ void MethodSimilarityOrderer::compute_score() {
 
 void MethodSimilarityOrderer::insert(DexMethod* method) {
   always_assert(m_method_to_id.count(method) == 0);
-  uint32_t index = m_id_to_method.size();
+  // While the number of methods can reach 65536 (2^16), at
+  // this stage not all methods have been added, so we assert that
+  // the number can fit on 16 bits and safely be assigned to a MethodId index.
+  redex_assert(m_id_to_method.size() < (1 << 16));
+  MethodId index = m_id_to_method.size();
   m_id_to_method.emplace(index, method);
   m_method_to_id.emplace(method, index);
 
@@ -211,7 +210,7 @@ MethodSimilarityOrderer::get_next() {
   if (m_last_method_id != boost::none) {
     // Iterate m_score_map from the highest score..
     for (const auto& [score, method_id_bitset] :
-         m_score_map[m_method_id_to_buffer_id[*m_last_method_id]]) {
+         m_score_map[*m_last_method_id]) {
       for (auto meth_id = method_id_bitset.find_first();
            meth_id != boost::dynamic_bitset<>::npos;
            meth_id = method_id_bitset.find_next(meth_id)) {
