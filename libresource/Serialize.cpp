@@ -7,6 +7,7 @@
 
 #include <boost/functional/hash.hpp>
 #include <iostream>
+#include <vector>
 
 #include "utils/ByteOrder.h"
 #include "utils/Debug.h"
@@ -289,7 +290,7 @@ void ResTableTypeProjector::serialize_type(android::ResTable_type* type,
   // Write entry/value data by iterating the existing offset data again, and
   // copying all non-deleted data to the temp vec.
   android::Vector<char> temp;
-  android::Vector<uint32_t> offsets;
+  std::vector<uint32_t> offsets;
   CanonicalEntries canonical_entries;
   // Pointer to the first Res_entry
   uint32_t* entry_offsets =
@@ -616,8 +617,8 @@ void ResStringPoolBuilder::serialize(android::Vector<char>* out) {
   // will be used to calculate offsets, and later copied to final output. While
   // we're iterating styles emitting their string data, we'll also compute the
   // size emitting the span tags will take up.
-  android::Vector<uint32_t> string_idx;
-  android::Vector<uint32_t> span_off;
+  std::vector<uint32_t> string_idx;
+  std::vector<uint32_t> span_off;
   android::Vector<char> serialized_strings;
   auto utf8 = is_utf8();
   auto num_styles = style_count();
