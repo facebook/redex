@@ -468,14 +468,14 @@ class EntryFlattener : public arsc::ResourceTableVisitor {
 } // namespace
 
 void TableSnapshot::collect_resource_values(
-    uint32_t id, android::Vector<android::Res_value>* out) {
+    uint32_t id, std::vector<android::Res_value>* out) {
   collect_resource_values(id, {}, out);
 }
 
 void TableSnapshot::collect_resource_values(
     uint32_t id,
     std::vector<android::ResTable_config> include_configs,
-    android::Vector<android::Res_value>* out) {
+    std::vector<android::Res_value>* out) {
   auto should_include_config = [&](android::ResTable_config* maybe) {
     if (include_configs.empty()) {
       return true;
@@ -495,7 +495,7 @@ void TableSnapshot::collect_resource_values(
       EntryFlattener flattener;
       flattener.begin_visit_entry(nullptr, nullptr, nullptr, entry);
       for (auto& v : flattener.m_values) {
-        out->add(v);
+        out->push_back(v);
       }
     }
   }
@@ -1151,7 +1151,7 @@ std::unordered_set<std::string> ApkResources::find_all_xml_files() {
 }
 
 namespace {
-size_t getHashFromValues(const android::Vector<android::Res_value>& values) {
+size_t getHashFromValues(const std::vector<android::Res_value>& values) {
   size_t hash = 0;
   for (size_t i = 0; i < values.size(); ++i) {
     boost::hash_combine(hash, values[i].data);
@@ -1880,7 +1880,7 @@ std::vector<std::string> ResourcesArscFile::get_files_by_rid(
     uint32_t res_id, ResourcePathType /* unused */) {
   std::vector<std::string> ret;
   auto& table_snapshot = get_table_snapshot();
-  android::Vector<android::Res_value> out_values;
+  std::vector<android::Res_value> out_values;
   table_snapshot.collect_resource_values(res_id, &out_values);
   for (size_t i = 0; i < out_values.size(); i++) {
     auto val = out_values[i];
@@ -1906,7 +1906,7 @@ void ResourcesArscFile::walk_references_for_resource(
   nodes_visited->emplace(resID);
 
   auto& table_snapshot = get_table_snapshot();
-  android::Vector<android::Res_value> initial_values;
+  std::vector<android::Res_value> initial_values;
   table_snapshot.collect_resource_values(resID, &initial_values);
 
   std::stack<android::Res_value> nodes_to_explore;
@@ -1932,7 +1932,7 @@ void ResourcesArscFile::walk_references_for_resource(
     }
 
     nodes_visited->insert(r.data);
-    android::Vector<android::Res_value> inner_values;
+    std::vector<android::Res_value> inner_values;
     table_snapshot.collect_resource_values(r.data, &inner_values);
     for (size_t index = 0; index < inner_values.size(); ++index) {
       nodes_to_explore.push(inner_values[index]);
@@ -1949,7 +1949,7 @@ void ResourcesArscFile::collect_resid_values_and_hashes(
     std::map<size_t, std::vector<uint32_t>>* res_by_hash) {
   auto& table_snapshot = get_table_snapshot();
   for (uint32_t id : ids) {
-    android::Vector<android::Res_value> row_values;
+    std::vector<android::Res_value> row_values;
     table_snapshot.collect_resource_values(id, &row_values);
     (*res_by_hash)[getHashFromValues(row_values)].push_back(id);
   }
@@ -2211,7 +2211,7 @@ void resolve_string_index_for_id(apk::TableSnapshot& table_snapshot,
     return;
   }
   seen->insert(id);
-  android::Vector<android::Res_value> values;
+  std::vector<android::Res_value> values;
   table_snapshot.collect_resource_values(id, &values);
   for (size_t i = 0; i < values.size(); i++) {
     auto value = values[i];

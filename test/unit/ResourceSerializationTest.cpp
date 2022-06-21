@@ -437,7 +437,7 @@ TEST(ResTable, AppendNewType) {
   std::vector<uint32_t> source_ids;
   source_ids.push_back(0x7f010000);
   size_t num_ids = source_ids.size();
-  android::Vector<android::Res_value> values;
+  std::vector<android::Res_value> values;
   // Read the number of original types.
   std::vector<std::string> original_type_names;
   {
