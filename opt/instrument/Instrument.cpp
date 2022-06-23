@@ -29,6 +29,7 @@
 #include <cmath>
 #include <fstream>
 #include <iostream>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -561,6 +562,8 @@ void InstrumentPass::bind_config() {
   bind("instrument_only_root_store", false,
        m_options.instrument_only_root_store);
 
+  bind("shrink_defer_reg_threshold", 0, m_options.shrink_defer_reg_threshold);
+
   size_t max_analysis_methods;
   if (m_options.instrumentation_strategy == SIMPLE_METHOD_TRACING) {
     max_analysis_methods = m_options.num_shards;
@@ -1005,13 +1008,12 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
     exit(1);
   }
 
-  Timer cleanup{"Cleanup"};
-  // We're done and have inserted our instrumentation. Allow further cleanup.
-  g_redex->instrument_mode = false;
-
   // Be nice and immediately destruct some painful block overhead.
 
   auto scope = build_class_scope(stores);
+
+  // We're done and have inserted our instrumentation. Allow further cleanup.
+  g_redex->instrument_mode = false;
 
   // Allow optimizations in analysis methods while the Shrinker runs
   set_no_opt_flag_on_analysis_methods(false, m_options.analysis_class_name,
@@ -1031,13 +1033,38 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
   shrinker::Shrinker shrinker(stores, scope, init_classes_with_side_effects,
                               shrinker_config, min_sdk);
 
-  walk::parallel::methods(scope, [&](auto* m) {
-    if (m->get_code() == nullptr) {
-      return;
-    }
+  std::mutex defer_mutex;
+  std::vector<DexMethod*> deferred_methods;
 
-    shrinker.shrink_method(m);
-  });
+  {
+    Timer cleanup{"Parallel Cleanup"};
+
+    walk::parallel::methods(scope, [&](auto* m) {
+      if (m->get_code() == nullptr) {
+        return;
+      }
+
+      if (m_options.shrink_defer_reg_threshold > 0 &&
+          m->get_code()->get_registers_size() >=
+              m_options.shrink_defer_reg_threshold) {
+        std::unique_lock<std::mutex> lock{defer_mutex};
+        deferred_methods.push_back(m);
+        return;
+      }
+
+      shrinker.shrink_method(m);
+    });
+  }
+
+  {
+    Timer timer{"Serial Cleanup"};
+    TRACE(INSTRUMENT, 1, "Have %zu methods to clean up serially",
+          deferred_methods.size());
+
+    for (auto* m : deferred_methods) {
+      shrinker.shrink_method(m);
+    }
+  }
 
   // Probably shouldn't need to do this, as the outliner shouldn't run after
   // InstrumentPass, but let's be defensive, in case pass order changes in
