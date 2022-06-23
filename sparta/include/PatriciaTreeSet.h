@@ -943,7 +943,7 @@ class PatriciaTreeIterator final {
   using iterator_category = std::forward_iterator_tag;
   using value_type = Element;
   using difference_type = std::ptrdiff_t;
-  using pointer = Element*;
+  using pointer = const Element*;
   using reference = const Element&;
 
   using IntegerType = typename Codec::IntegerType;
@@ -992,7 +992,9 @@ class PatriciaTreeIterator final {
     return !(*this == other);
   }
 
-  Element operator*() { return Codec::decode(m_leaf->key()); }
+  reference operator*() const { return Codec::decode(m_leaf->key()); }
+
+  pointer operator->() const { return &(**this); }
 
  private:
   // The argument is never null.

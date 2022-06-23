@@ -1138,7 +1138,7 @@ class PatriciaTreeIterator final {
   using mapped_type = typename Value::type;
   using value_type = std::pair<Key, mapped_type>;
   using difference_type = std::ptrdiff_t;
-  using pointer = value_type*;
+  using pointer = const value_type*;
   using reference = const value_type&;
 
   using IntegerType = typename Codec::IntegerType;
@@ -1187,11 +1187,9 @@ class PatriciaTreeIterator final {
     return !(*this == other);
   }
 
-  const std::pair<Key, mapped_type>& operator*() const {
-    return Codec::decode(m_leaf->m_pair);
-  }
+  reference operator*() const { return Codec::decode(m_leaf->m_pair); }
 
-  const std::pair<Key, mapped_type>* operator->() const { return &(**this); }
+  pointer operator->() const { return &(**this); }
 
  private:
   // The argument is never null.

@@ -29,8 +29,13 @@ struct Codec {
     return reinterpret_cast<IntegerType>(key);
   }
 
-  static Key decode(IntegerType integer_key) {
-    return reinterpret_cast<Key>(integer_key);
+  // To correctly conform to the forward iterator concept, these must
+  // return reinterpreted references to storage - not copies.
+  template <typename T>
+  static std::enable_if_t<!std::is_lvalue_reference_v<T>> decode(T&&) = delete;
+
+  static const Key& decode(const IntegerType& integer_key) {
+    return reinterpret_cast<const Key&>(integer_key);
   }
 
   template <typename Value>
