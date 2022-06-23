@@ -327,3 +327,34 @@ TEST_F(GlobalTypeAnalysisTest, ArrayNullnessEscapeTest) {
                 get_type_simple("Lcom/facebook/redextest/TestM$A;")));
   EXPECT_TRUE(rtype.get_array_nullness().is_top());
 }
+
+TEST_F(GlobalTypeAnalysisTest, ArrayNullnessEscape2Test) {
+  auto scope = build_class_scope(stores);
+  set_root_method("Lcom/facebook/redextest/TestN;.main:()V");
+  GlobalTypeAnalysis analysis;
+
+  auto gta = analysis.analyze(scope);
+  auto wps = gta->get_whole_program_state();
+
+  auto dance1 = get_method("TestN;.danceWithArray1", "",
+                           "Lcom/facebook/redextest/TestN$A;");
+  auto rtype = wps.get_return_type(dance1);
+  EXPECT_FALSE(rtype.is_top());
+  EXPECT_FALSE(rtype.is_not_null());
+  EXPECT_TRUE(rtype.is_nullable());
+  EXPECT_EQ(rtype.get_single_domain(),
+            SingletonDexTypeDomain(
+                get_type_simple("Lcom/facebook/redextest/TestN$A;")));
+  EXPECT_TRUE(rtype.get_array_nullness().is_top());
+
+  auto dance2 = get_method("TestN;.danceWithArray2", "",
+                           "Lcom/facebook/redextest/TestN$A;");
+  rtype = wps.get_return_type(dance2);
+  EXPECT_FALSE(rtype.is_top());
+  EXPECT_FALSE(rtype.is_not_null());
+  EXPECT_TRUE(rtype.is_nullable());
+  EXPECT_EQ(rtype.get_single_domain(),
+            SingletonDexTypeDomain(
+                get_type_simple("Lcom/facebook/redextest/TestN$A;")));
+  EXPECT_TRUE(rtype.get_array_nullness().is_top());
+}

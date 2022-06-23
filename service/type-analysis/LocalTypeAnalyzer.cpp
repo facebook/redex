@@ -348,14 +348,17 @@ bool RegisterTypeAnalyzer::analyze_invoke(const IRInstruction* insn,
   // Note we don't need to take care of the RESULT_REGISTER update from this
   // point. The remaining cases are already taken care by the
   // WholeProgramAwareAnalyzer::analyze_invoke.
-  if (!method->is_external() && !is_native(method)) {
-    return false;
-  }
-
-  // If an ArrayNullnessDomain is passed to an external or native call, it
-  // escape the analyzable domain. We have to rewrite all the nullness of its
-  // elements to top, since we don't know how it will be manipulated externally.
-  // Reference: T107422148
+  //
+  // When passed through a call, we need to reset the elements of an
+  // ArrayNullnessDomain. The domain passed to the callee is a copy and can be
+  // written over there. That means that the local ArrayNullnessDomain stored in
+  // the caller environment might be out of date.
+  //
+  // E.g., a newly allocated array in a caller environment has its elements
+  // initially as UNINITIALIED. The array elements can be updated by a callee
+  // which has access to the array. At that point, the updated element is no
+  // longer UNINITIALIED. However, the change is not propagated to the caller
+  // environment. Reference: T107422148, T123970364
   for (auto src : insn->srcs()) {
     auto type_domain = env->get(src);
     auto array_nullness = type_domain.get_array_nullness();

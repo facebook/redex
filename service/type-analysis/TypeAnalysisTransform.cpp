@@ -191,9 +191,19 @@ void Transform::apply_changes(DexMethod* method) {
     } else {
       code->replace_opcode(old_op, p.second);
     }
+    TRACE(TYPE_TRANSFORM,
+          9,
+          "Replacing instruction %s with %s in %s",
+          SHOW(old_op),
+          SHOW(p.second),
+          SHOW(method));
   }
   for (const auto& it : m_deletes) {
-    TRACE(TYPE_TRANSFORM, 9, "Removing instruction %s", SHOW(it->insn));
+    TRACE(TYPE_TRANSFORM,
+          9,
+          "Removing instruction %s in %s",
+          SHOW(it->insn),
+          SHOW(method));
     code->remove_opcode(it);
   }
 }

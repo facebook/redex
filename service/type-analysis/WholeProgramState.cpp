@@ -313,6 +313,12 @@ void WholeProgramState::collect_return_types(
     return;
   }
   auto type = env.get(insn->src(0));
+  if (traceEnabled(TYPE, 5)) {
+    std::ostringstream ss;
+    ss << type;
+    TRACE(TYPE, 5, "collecting method %s -> %s", SHOW(method),
+          ss.str().c_str());
+  }
   method_tmp->update(method,
                      [type](const DexMethod*,
                             std::vector<DexTypeDomain>& s,
