@@ -8,6 +8,7 @@
 #include "CopyPropagation.h"
 
 #include <boost/optional.hpp>
+#include <mutex>
 
 #include "AliasedRegisters.h"
 #include "CFGMutation.h"
@@ -450,38 +451,59 @@ Stats& Stats::operator+=(const Stats& that) {
 }
 
 Stats CopyPropagation::run(const Scope& scope) {
-  return walk::parallel::methods<Stats>(
+  std::mutex defer_mutex;
+  std::vector<DexMethod*> deferred_methods;
+
+  auto handle_method = [&](DexMethod* m, IRCode* code) {
+    const std::string& before_code = m_config.debug ? show(m->get_code()) : "";
+    const auto& result = run(code, m);
+
+    if (m_config.debug) {
+      // Run the IR type checker
+      IRTypeChecker checker(m);
+      checker.run();
+      if (!checker.good()) {
+        const std::string& msg = checker.what();
+        TRACE(
+            RME, 1, "%s: Inconsistency in Dex code. %s", SHOW(m), msg.c_str());
+        TRACE(RME, 1, "before code:\n%s", before_code.c_str());
+        TRACE(RME, 1, "after  code:\n%s", SHOW(m->get_code()));
+        always_assert(checker.good());
+      }
+    }
+
+    return result;
+  };
+
+  auto stats = walk::parallel::methods<Stats>(
       scope,
-      [this](DexMethod* m) {
+      [&](DexMethod* m) {
         IRCode* code = m->get_code();
         if (code == nullptr) {
           return Stats();
         }
 
-        const std::string& before_code =
-            m_config.debug ? show(m->get_code()) : "";
-        const auto& result = run(code, m);
-
-        if (m_config.debug) {
-          // Run the IR type checker
-          IRTypeChecker checker(m);
-          checker.run();
-          if (!checker.good()) {
-            const std::string& msg = checker.what();
-            TRACE(RME,
-                  1,
-                  "%s: Inconsistency in Dex code. %s",
-                  SHOW(m),
-                  msg.c_str());
-            TRACE(RME, 1, "before code:\n%s", before_code.c_str());
-            TRACE(RME, 1, "after  code:\n%s", SHOW(m->get_code()));
-            always_assert(checker.good());
-          }
+        if (!m_config.debug && m_config.defer_reg_threshold != 0 &&
+            code->get_registers_size() >= m_config.defer_reg_threshold) {
+          std::unique_lock<std::mutex> lock{defer_mutex};
+          deferred_methods.push_back(m);
+          return Stats();
         }
 
-        return result;
+        return handle_method(m, code);
       },
       m_config.debug ? 1 : redex_parallel::default_num_threads());
+
+  if (!deferred_methods.empty()) {
+    Timer timer{"Serial treatment"};
+
+    for (auto* m : deferred_methods) {
+      auto result = handle_method(m, m->get_code());
+      stats += result;
+    }
+  }
+
+  return stats;
 }
 
 Stats CopyPropagation::run(IRCode* code, DexMethod* method) {

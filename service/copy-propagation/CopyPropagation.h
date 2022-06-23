@@ -13,6 +13,7 @@
 namespace copy_propagation_impl {
 
 struct Config {
+  size_t defer_reg_threshold{0}; // 0 = off
   bool eliminate_const_literals{false};
   bool eliminate_const_literals_with_same_type_demands{true};
   bool eliminate_const_strings{true};
