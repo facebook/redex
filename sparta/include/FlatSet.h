@@ -212,7 +212,7 @@ class FlatSet final {
   friend std::ostream& operator<<(std::ostream& o, const FlatSet<Element>& s) {
     o << "{";
     for (auto it = s.begin(), end = s.end(); it != end;) {
-      o << pt_util::Dereference<Element>()(*it);
+      o << pt_util::deref(*it);
       ++it;
       if (it != end) {
         o << ", ";

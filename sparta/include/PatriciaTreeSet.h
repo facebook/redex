@@ -122,6 +122,8 @@ inline boost::intrusive_ptr<PatriciaTree<IntegerType>> diff(
  */
 template <typename Element>
 class PatriciaTreeSet final {
+  using Codec = pt_util::Codec<Element>;
+
  public:
   // C++ container concept member types
   using iterator = pt_impl::PatriciaTreeIterator<Element>;
@@ -132,8 +134,7 @@ class PatriciaTreeSet final {
   using const_reference = const Element&;
   using const_pointer = const Element*;
 
-  using IntegerType = typename std::
-      conditional_t<std::is_pointer<Element>::value, uintptr_t, Element>;
+  using IntegerType = typename Codec::IntegerType;
 
   PatriciaTreeSet() = default;
 
@@ -168,7 +169,7 @@ class PatriciaTreeSet final {
     if (m_tree == nullptr) {
       return false;
     }
-    return pt_impl::contains<IntegerType>(encode(key), m_tree);
+    return pt_impl::contains<IntegerType>(Codec::encode(key), m_tree);
   }
 
   bool is_subset_of(const PatriciaTreeSet& other) const {
@@ -210,19 +211,19 @@ class PatriciaTreeSet final {
   }
 
   PatriciaTreeSet& insert(Element key) {
-    m_tree = pt_impl::insert<IntegerType>(encode(key), m_tree);
+    m_tree = pt_impl::insert<IntegerType>(Codec::encode(key), m_tree);
     return *this;
   }
 
   PatriciaTreeSet& remove(Element key) {
-    m_tree = pt_impl::remove<IntegerType>(encode(key), m_tree);
+    m_tree = pt_impl::remove<IntegerType>(Codec::encode(key), m_tree);
     return *this;
   }
 
   PatriciaTreeSet& filter(
       const std::function<bool(const Element&)>& predicate) {
     auto encoded_predicate = [&predicate](IntegerType key) {
-      return predicate(decode(key));
+      return predicate(Codec::decode(key));
     };
     m_tree = pt_impl::filter<IntegerType>(encoded_predicate, m_tree);
     return *this;
@@ -273,7 +274,7 @@ class PatriciaTreeSet final {
                                   const PatriciaTreeSet<Element>& s) {
     o << "{";
     for (auto it = s.begin(); it != s.end(); ++it) {
-      o << pt_util::Dereference<Element>()(*it);
+      o << pt_util::deref(*it);
       if (std::next(it) != s.end()) {
         o << ", ";
       }
@@ -283,37 +284,7 @@ class PatriciaTreeSet final {
   }
 
  private:
-  // These functions are used to handle the type conversions required when
-  // manipulating sets of pointers. The first parameter is necessary to make
-  // template deduction work.
-  template <typename T = Element,
-            typename std::enable_if_t<std::is_pointer<T>::value, int> = 0>
-  static uintptr_t encode(Element x) {
-    return reinterpret_cast<uintptr_t>(x);
-  }
-
-  template <typename T = Element,
-            typename std::enable_if_t<!std::is_pointer<T>::value, int> = 0>
-  static Element encode(Element x) {
-    return x;
-  }
-
-  template <typename T = Element,
-            typename std::enable_if_t<std::is_pointer<T>::value, int> = 0>
-  static Element decode(uintptr_t x) {
-    return reinterpret_cast<Element>(x);
-  }
-
-  template <typename T = Element,
-            typename std::enable_if_t<!std::is_pointer<T>::value, int> = 0>
-  static Element decode(Element x) {
-    return x;
-  }
-
   boost::intrusive_ptr<pt_impl::PatriciaTree<IntegerType>> m_tree;
-
-  template <typename T>
-  friend class pt_impl::PatriciaTreeIterator;
 };
 
 namespace pt_impl {
@@ -965,6 +936,8 @@ inline boost::intrusive_ptr<PatriciaTree<IntegerType>> diff(
 // at each leaf.
 template <typename Element>
 class PatriciaTreeIterator final {
+  using Codec = pt_util::Codec<Element>;
+
  public:
   // C++ iterator concept member types
   using iterator_category = std::forward_iterator_tag;
@@ -973,7 +946,7 @@ class PatriciaTreeIterator final {
   using pointer = Element*;
   using reference = const Element&;
 
-  using IntegerType = typename PatriciaTreeSet<Element>::IntegerType;
+  using IntegerType = typename Codec::IntegerType;
 
   PatriciaTreeIterator() {}
 
@@ -1019,9 +992,7 @@ class PatriciaTreeIterator final {
     return !(*this == other);
   }
 
-  Element operator*() {
-    return PatriciaTreeSet<Element>::decode(m_leaf->key());
-  }
+  Element operator*() { return Codec::decode(m_leaf->key()); }
 
  private:
   // The argument is never null.
