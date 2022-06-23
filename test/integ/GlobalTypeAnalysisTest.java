@@ -356,3 +356,40 @@ class TestM {
     callNative();
   }
 }
+
+interface Callback { void invoke(int tag); }
+
+class TestN {
+  static class A {}
+
+  static A danceWithArray1() {
+    final A[] array = new A[1];
+    Callback cb = new Callback() {
+      @Override
+      public void invoke(int tag) {
+        if (tag > 0) {
+          array[0] = new A();
+        }
+      }
+    };
+    cb.invoke(1);
+    return array[0];
+  }
+
+  static void updateArray(A[] ar, int tag) {
+    if (tag > 1) {
+      ar[0] = new A();
+    }
+  }
+
+  static A danceWithArray2() {
+    final A[] array = new A[1];
+    updateArray(array, 2);
+    return array[0];
+  }
+
+  static void main() {
+    danceWithArray1();
+    danceWithArray2();
+  }
+}
