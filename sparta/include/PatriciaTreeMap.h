@@ -184,6 +184,8 @@ template <typename Key,
           typename ValueType,
           typename Value = ptmap_impl::SimpleValue<ValueType>>
 class PatriciaTreeMap final {
+  using Codec = pt_util::Codec<Key>;
+
  public:
   // C++ container concept member types
   using key_type = Key;
@@ -196,8 +198,7 @@ class PatriciaTreeMap final {
   using const_reference = const mapped_type&;
   using const_pointer = const mapped_type*;
 
-  using IntegerType =
-      typename std::conditional_t<std::is_pointer<Key>::value, uintptr_t, Key>;
+  using IntegerType = typename Codec::IntegerType;
   using combining_function = ptmap_impl::CombiningFunction<mapped_type>;
   using mapping_function = ptmap_impl::MappingFunction<mapped_type>;
 
@@ -236,7 +237,8 @@ class PatriciaTreeMap final {
   iterator end() const { return iterator(); }
 
   const mapped_type& at(Key key) const {
-    const mapped_type* value = ptmap_impl::find_value(encode(key), m_tree);
+    const mapped_type* value =
+        ptmap_impl::find_value(Codec::encode(key), m_tree);
     if (value == nullptr) {
       static const mapped_type default_value = Value::default_value();
       return default_value;
@@ -297,7 +299,7 @@ class PatriciaTreeMap final {
         [&operation](const mapped_type& x, const mapped_type&) {
           return operation(x);
         },
-        encode(key),
+        Codec::encode(key),
         Value::default_value(),
         m_tree);
     return *this;
@@ -312,7 +314,7 @@ class PatriciaTreeMap final {
 
   bool erase_all_matching(Key key_mask) {
     auto new_tree = ptmap_impl::erase_all_matching<IntegerType, Value>(
-        encode(key_mask), m_tree);
+        Codec::encode(key_mask), m_tree);
     bool res = new_tree != m_tree;
     m_tree = new_tree;
     return res;
@@ -320,7 +322,7 @@ class PatriciaTreeMap final {
 
   PatriciaTreeMap& insert_or_assign(Key key, const mapped_type& value) {
     m_tree = ptmap_impl::update<IntegerType, Value>(
-        ptmap_impl::snd<mapped_type>, encode(key), value, m_tree);
+        ptmap_impl::snd<mapped_type>, Codec::encode(key), value, m_tree);
     return *this;
   }
 
@@ -370,53 +372,11 @@ class PatriciaTreeMap final {
   void clear() { m_tree.reset(); }
 
  private:
-  // These functions are used to handle the type conversions required when
-  // manipulating maps with pointer keys. The first parameter is necessary to
-  // make template deduction work.
-  template <typename T = Key,
-            typename std::enable_if_t<std::is_pointer<T>::value, int> = 0>
-  static uintptr_t encode(Key x) {
-    return reinterpret_cast<uintptr_t>(x);
-  }
-
-  template <typename T = Key,
-            typename std::enable_if_t<!std::is_pointer<T>::value, int> = 0>
-  static Key encode(Key x) {
-    return x;
-  }
-
-  template <typename T = Key,
-            typename std::enable_if_t<std::is_pointer<T>::value, int> = 0>
-  static Key decode(uintptr_t x) {
-    return reinterpret_cast<Key>(x);
-  }
-
-  template <typename T = Key,
-            typename std::enable_if_t<!std::is_pointer<T>::value, int> = 0>
-  static Key decode(Key x) {
-    return x;
-  }
-
-  template <typename T = Key,
-            typename std::enable_if_t<std::is_pointer<T>::value, int> = 0>
-  static const typename std::remove_pointer<T>::type& deref(Key x) {
-    return *x;
-  }
-
-  template <typename T = Key,
-            typename std::enable_if_t<!std::is_pointer<T>::value, int> = 0>
-  static Key deref(Key x) {
-    return x;
-  }
-
   boost::intrusive_ptr<ptmap_impl::PatriciaTree<IntegerType, Value>> m_tree;
 
   template <typename T, typename VT, typename V>
   friend std::ostream& ::operator<<(std::ostream&,
                                     const PatriciaTreeMap<T, VT, V>&);
-
-  template <typename T, typename V>
-  friend class ptmap_impl::PatriciaTreeIterator;
 };
 
 } // namespace sparta
@@ -428,8 +388,7 @@ inline std::ostream& operator<<(
   using namespace sparta;
   o << "{";
   for (auto it = s.begin(); it != s.end(); ++it) {
-    o << PatriciaTreeMap<Key, ValueType, Value>::deref(it->first) << " -> "
-      << it->second;
+    o << pt_util::deref(it->first) << " -> " << it->second;
     if (std::next(it) != s.end()) {
       o << ", ";
     }
@@ -1171,6 +1130,8 @@ inline boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> diff(
 // at each leaf.
 template <typename Key, typename Value>
 class PatriciaTreeIterator final {
+  using Codec = pt_util::Codec<Key>;
+
  public:
   // C++ iterator concept member types
   using iterator_category = std::forward_iterator_tag;
@@ -1180,8 +1141,7 @@ class PatriciaTreeIterator final {
   using pointer = value_type*;
   using reference = const value_type&;
 
-  using IntegerType =
-      typename std::conditional_t<std::is_pointer<Key>::value, uintptr_t, Key>;
+  using IntegerType = typename Codec::IntegerType;
 
   PatriciaTreeIterator() {}
 
@@ -1228,14 +1188,10 @@ class PatriciaTreeIterator final {
   }
 
   const std::pair<Key, mapped_type>& operator*() const {
-    return *reinterpret_cast<const std::pair<Key, mapped_type>*>(
-        &m_leaf->m_pair);
+    return Codec::decode(m_leaf->m_pair);
   }
 
-  const std::pair<Key, mapped_type>* operator->() const {
-    return reinterpret_cast<const std::pair<Key, mapped_type>*>(
-        &m_leaf->m_pair);
-  }
+  const std::pair<Key, mapped_type>* operator->() const { return &(**this); }
 
  private:
   // The argument is never null.
