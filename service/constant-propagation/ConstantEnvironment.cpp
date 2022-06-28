@@ -7,28 +7,6 @@
 
 #include "ConstantEnvironment.h"
 
-int64_t SignedConstantDomain::max_element() const {
-  if (constant_domain().is_value()) {
-    return *constant_domain().get_constant();
-  }
-  auto max = numeric_interval_domain().upper_bound();
-  if (max < NumericIntervalDomain::MAX) {
-    return max;
-  }
-  return sign_domain::max_int(interval());
-}
-
-int64_t SignedConstantDomain::min_element() const {
-  if (constant_domain().is_value()) {
-    return *constant_domain().get_constant();
-  }
-  auto min = numeric_interval_domain().lower_bound();
-  if (min > NumericIntervalDomain::MIN) {
-    return min;
-  }
-  return sign_domain::min_int(interval());
-}
-
 // TODO: Instead of this custom meet function, the ConstantValue should get a
 // custom meet AND JOIN that knows about the relationship of NEZ and certain
 // non-null custom object domains.
