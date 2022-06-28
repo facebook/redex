@@ -9,6 +9,7 @@
 
 #include <cstddef>
 #include <initializer_list>
+#include <memory>
 #include <unordered_set>
 
 #include "PowersetAbstractDomain.h"
@@ -30,68 +31,112 @@ class SetValue final : public PowersetImplementation<
                            const std::unordered_set<Element, Hash, Equal>&,
                            SetValue<Element, Hash, Equal>> {
  public:
+  using SetImplType = std::unordered_set<Element, Hash, Equal>;
+
   SetValue() = default;
 
-  SetValue(const Element& e) { m_set.insert(e); }
+  SetValue(const Element& e) { set().insert(e); }
 
-  SetValue(std::initializer_list<Element> l) : m_set(l.begin(), l.end()) {}
-
-  const std::unordered_set<Element, Hash, Equal>& elements() const override {
-    return m_set;
+  SetValue(std::initializer_list<Element> l) {
+    if (l.begin() != l.end()) {
+      m_set = std::make_unique<SetImplType>(l.begin(), l.end());
+    }
   }
 
-  size_t size() const override { return m_set.size(); }
+  SetValue(const SetValue& other) {
+    if (other.m_set) {
+      m_set = std::make_unique<SetImplType>(*other.m_set);
+    }
+  }
 
-  bool contains(const Element& e) const override { return m_set.count(e) > 0; }
+  SetValue(SetValue&& other) noexcept = default;
 
-  void add(const Element& e) override { m_set.insert(e); }
+  SetValue& operator=(const SetValue& other) {
+    if (other.m_set) {
+      m_set = std::make_unique<SetImplType>(*other.m_set);
+    }
+    return *this;
+  }
 
-  void remove(const Element& e) override { m_set.erase(e); }
+  SetValue& operator=(SetValue&& other) noexcept = default;
 
-  void clear() override { m_set.clear(); }
+  const SetImplType& elements() const override {
+    if (m_set) {
+      return *m_set;
+    } else {
+      return s_empty_set;
+    }
+  }
+
+  size_t size() const override { return m_set ? m_set->size() : 0; }
+
+  bool contains(const Element& e) const override {
+    return m_set && m_set->count(e) > 0;
+  }
+
+  void add(const Element& e) override { set().insert(e); }
+
+  void remove(const Element& e) override {
+    if (m_set) {
+      if (m_set->erase(e) && m_set->empty()) {
+        m_set = nullptr;
+      }
+    }
+  }
+
+  void clear() override { m_set = nullptr; }
 
   AbstractValueKind kind() const override { return AbstractValueKind::Value; }
 
   bool leq(const SetValue& other) const override {
-    if (m_set.size() > other.m_set.size()) {
+    if (size() > other.size()) {
       return false;
     }
-    for (const Element& e : m_set) {
-      if (other.m_set.count(e) == 0) {
-        return false;
+    if (m_set) {
+      for (const Element& e : *m_set) {
+        if (other.contains(e) == 0) {
+          return false;
+        }
       }
     }
     return true;
   }
 
   bool equals(const SetValue& other) const override {
-    return (m_set.size() == other.m_set.size()) && leq(other);
+    return (size() == other.size()) && leq(other);
   }
 
   AbstractValueKind join_with(const SetValue& other) override {
-    for (const Element& e : other.m_set) {
-      m_set.insert(e);
+    if (other.m_set) {
+      auto& this_set = set();
+      for (const Element& e : *other.m_set) {
+        this_set.insert(e);
+      }
     }
     return AbstractValueKind::Value;
   }
 
   AbstractValueKind meet_with(const SetValue& other) override {
-    for (auto it = m_set.begin(); it != m_set.end();) {
-      if (other.m_set.count(*it) == 0) {
-        it = m_set.erase(it);
-      } else {
-        ++it;
+    if (m_set) {
+      for (auto it = m_set->begin(); it != m_set->end();) {
+        if (other.contains(*it) == 0) {
+          it = m_set->erase(it);
+        } else {
+          ++it;
+        }
       }
     }
     return AbstractValueKind::Value;
   }
 
   AbstractValueKind difference_with(const SetValue& other) override {
-    for (auto it = m_set.begin(); it != m_set.end();) {
-      if (other.m_set.count(*it) != 0) {
-        it = m_set.erase(it);
-      } else {
-        ++it;
+    if (m_set) {
+      for (auto it = m_set->begin(); it != m_set->end();) {
+        if (other.contains(*it) != 0) {
+          it = m_set->erase(it);
+        } else {
+          ++it;
+        }
       }
     }
     return AbstractValueKind::Value;
@@ -112,7 +157,14 @@ class SetValue final : public PowersetImplementation<
   }
 
  private:
-  std::unordered_set<Element, Hash, Equal> m_set;
+  static inline const SetImplType s_empty_set{};
+  std::unique_ptr<SetImplType> m_set;
+  SetImplType& set() {
+    if (!m_set) {
+      m_set = std::make_unique<SetImplType>();
+    }
+    return *m_set;
+  }
 
   template <typename T1, typename T2, typename T3>
   friend class sparta::HashedSetAbstractDomain;
