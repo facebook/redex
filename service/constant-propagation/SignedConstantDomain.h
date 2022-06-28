@@ -13,7 +13,7 @@
 #include "SignDomain.h"
 
 using ConstantDomain = sparta::ConstantAbstractDomain<int64_t>;
-using NumericIntervalType = int32_t;
+using NumericIntervalType = int64_t;
 using NumericIntervalDomain = sparta::IntervalDomain<NumericIntervalType>;
 
 // input interval must not be empty
@@ -194,4 +194,26 @@ class SignedConstantDomain
 
   /* Return the smallest element within the interval. */
   int64_t min_element() const;
+
+  /* Return the largest element within the interval, clamped to int32_t. */
+  int32_t max_element_int() const { return clamp_int(max_element()); }
+
+  /* Return the smallest element within the interval, clamped to int32_t. */
+  int32_t min_element_int() const { return clamp_int(min_element()); }
+
+  // Meet with int32_t bounds.
+  SignedConstantDomain clamp_int() const {
+    auto res = *this;
+    res.meet_with(SignedConstantDomain(std::numeric_limits<int32_t>::min(),
+                                       std::numeric_limits<int32_t>::max()));
+    return res;
+  }
+
+ private:
+  static int32_t clamp_int(int64_t value) {
+    return std::max(
+        std::min(value,
+                 static_cast<int64_t>(std::numeric_limits<int32_t>::max())),
+        static_cast<int64_t>(std::numeric_limits<int32_t>::min()));
+  }
 };

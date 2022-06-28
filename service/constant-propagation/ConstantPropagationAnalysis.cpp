@@ -1275,33 +1275,42 @@ static const std::unordered_map<IROpcode, IfZeroMeetWith, boost::hash<IROpcode>>
 
 static std::pair<SignedConstantDomain, SignedConstantDomain> refine_lt(
     const SignedConstantDomain& left, const SignedConstantDomain& right) {
-  always_assert(left.min_element() < std::numeric_limits<int64_t>::max());
-  always_assert(right.max_element() > std::numeric_limits<int64_t>::min());
-  return {left.meet(SignedConstantDomain(std::numeric_limits<int64_t>::min(),
-                                         right.max_element() - 1)),
-          right.meet(SignedConstantDomain(
-              left.min_element() + 1, std::numeric_limits<int64_t>::max()))};
+  if (right.max_element_int() == std::numeric_limits<int32_t>::min() ||
+      left.min_element_int() == std::numeric_limits<int32_t>::max()) {
+    return {SignedConstantDomain::bottom(), SignedConstantDomain::bottom()};
+  }
+  return {
+      left.meet(SignedConstantDomain(std::numeric_limits<int32_t>::min(),
+                                     right.max_element_int() - 1)),
+      right.meet(SignedConstantDomain(left.min_element_int() + 1,
+                                      std::numeric_limits<int32_t>::max()))};
 }
 
 static std::pair<SignedConstantDomain, SignedConstantDomain> refine_le(
     const SignedConstantDomain& left, const SignedConstantDomain& right) {
-  return {left.meet(SignedConstantDomain(std::numeric_limits<int64_t>::min(),
-                                         right.max_element())),
+  return {left.meet(SignedConstantDomain(std::numeric_limits<int32_t>::min(),
+                                         right.max_element_int())),
           right.meet(SignedConstantDomain(
-              left.min_element(), std::numeric_limits<int64_t>::max()))};
+              left.min_element_int(), std::numeric_limits<int32_t>::max()))};
 }
 
 static SignedConstantDomain refine_ne_left(const SignedConstantDomain& left,
                                            const SignedConstantDomain& right) {
-  auto c = right.get_constant();
+  auto c = right.clamp_int().get_constant();
   if (c) {
-    if (*c == left.min_element()) {
-      always_assert(*c < left.max_element());
-      return SignedConstantDomain(*c + 1, left.max_element());
+    always_assert(*c >= std::numeric_limits<int32_t>::min());
+    always_assert(*c <= std::numeric_limits<int32_t>::max());
+    if (*c == left.min_element_int()) {
+      if (*c >= left.max_element_int()) {
+        return SignedConstantDomain::bottom();
+      }
+      return SignedConstantDomain(*c + 1, left.max_element_int());
     }
-    if (*c == left.max_element()) {
-      always_assert(*c > left.min_element());
-      return SignedConstantDomain(left.min_element(), *c - 1);
+    if (*c == left.max_element_int()) {
+      if (*c <= left.min_element_int()) {
+        return SignedConstantDomain::bottom();
+      }
+      return SignedConstantDomain(left.min_element_int(), *c - 1);
     }
   }
   return left;
