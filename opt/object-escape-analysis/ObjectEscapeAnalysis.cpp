@@ -1401,25 +1401,10 @@ compute_reduced_methods(
     }
   }
 
-  struct Preshrunken {
-    DexMethod* copy;
-    size_t refs;
-  };
-  ConcurrentMap<DexMethod*, Preshrunken> preshrunken_copies;
   workqueue_run<std::pair<DexMethod*, InlinableTypes>>(
       [&](const std::pair<DexMethod*, InlinableTypes>& p) {
         const auto& [method, types] = p;
-        auto copy_name_str = method->get_name()->str() + "$oea$pre";
-        DexMethod* copy = DexMethod::make_method_from(
-            method, method->get_class(), DexString::make_string(copy_name_str));
-        inliner.get_shrinker().shrink_code(copy->get_code(),
-                                           is_static(copy),
-                                           method::is_init(method) ||
-                                               method::is_clinit(method),
-                                           copy->get_class(),
-                                           copy->get_proto(),
-                                           [&]() { return show(copy); });
-        preshrunken_copies.emplace(method, (Preshrunken){copy, types.size()});
+        inliner.get_shrinker().shrink_method(method);
       },
       root_methods);
 
@@ -1469,28 +1454,17 @@ compute_reduced_methods(
       [&](const std::pair<DexMethod*, InlinableTypes>& p) {
         auto* method = p.first;
         const auto& types = p.second;
-        DexMethod* preshrunken_copy{nullptr};
-        preshrunken_copies.update(
-            method, [&](auto*, auto& preshrunken, bool exists) {
-              always_assert(exists);
-              if (preshrunken.refs-- > 1) {
-                auto copy_name_str = method->get_name()->str() + "$oea$" +
-                                     std::to_string(types.size());
-                preshrunken_copy = DexMethod::make_method_from(
-                    preshrunken.copy, method->get_class(),
-                    DexString::make_string(copy_name_str));
-              } else {
-                preshrunken_copy = preshrunken.copy;
-              }
-            });
-        always_assert(preshrunken_copy != nullptr);
+        auto copy_name_str =
+            method->get_name()->str() + "$oea$" + std::to_string(types.size());
+        auto copy = DexMethod::make_method_from(
+            method, method->get_class(), DexString::make_string(copy_name_str));
         RootMethodReducer root_method_reducer{expandable_constructor_params,
                                               inliner,
                                               method_summaries,
                                               stats,
                                               method::is_init(method) ||
                                                   method::is_clinit(method),
-                                              preshrunken_copy,
+                                              copy,
                                               types};
         auto reduced_method = root_method_reducer.reduce();
         if (reduced_method) {
@@ -1501,8 +1475,8 @@ compute_reduced_methods(
               });
           return;
         }
-        DexMethod::erase_method(preshrunken_copy);
-        DexMethod::delete_method_DO_NOT_USE(preshrunken_copy);
+        DexMethod::erase_method(copy);
+        DexMethod::delete_method_DO_NOT_USE(copy);
       },
       ordered_root_methods_variants);
 
