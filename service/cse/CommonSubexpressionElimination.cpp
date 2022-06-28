@@ -58,7 +58,6 @@
 #include "ConstantAbstractDomain.h"
 #include "ControlFlow.h"
 #include "FieldOpTracker.h"
-#include "HashedSetAbstractDomain.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"

@@ -16,7 +16,6 @@
 #include "BaseIRAnalyzer.h"
 #include "ControlFlow.h"
 #include "FiniteAbstractDomain.h"
-#include "HashedSetAbstractDomain.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "IROpcode.h"
