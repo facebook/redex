@@ -12,6 +12,7 @@
 #include <type_traits>
 #include <utility>
 
+#include <boost/intrusive/pointer_plus_bits.hpp>
 #include <boost/optional.hpp>
 
 #include "AbstractDomain.h"
@@ -100,29 +101,91 @@ class ConstantAbstractValue final
   Constant m_constant;
 };
 
+template <typename Constant, typename = void>
+class ConstantAbstractValueRepr {
+ private:
+  Constant m_constant;
+  AbstractValueKind m_kind;
+
+ public:
+  AbstractValueKind kind() const { return m_kind; }
+  const Constant& constant() const { return m_constant; }
+
+  void set(AbstractValueKind kind, Constant constant) {
+    m_kind = kind;
+    m_constant = std::move(constant);
+  }
+  void set(AbstractValueKind kind) { m_kind = kind; }
+};
+
+template <typename Constant>
+class ConstantAbstractValueRepr<
+    Constant,
+    std::enable_if_t<std::is_pointer<Constant>::value &&
+                     boost::intrusive::max_pointer_plus_bits<
+                         void*,
+                         std::alignment_of<typename std::remove_pointer<
+                             Constant>::type>::value>::value >= 2>> {
+ private:
+  using pointer_plus_bits = boost::intrusive::pointer_plus_bits<Constant, 2>;
+  Constant m_constant;
+
+ public:
+  ~ConstantAbstractValueRepr() {
+    static_assert(static_cast<size_t>(AbstractValueKind::Bottom) < 4,
+                  "AbstractValueKind doesn't fit into 2 bits");
+    static_assert(static_cast<size_t>(AbstractValueKind::Value) < 4,
+                  "AbstractValueKind doesn't fit into 2 bits");
+    static_assert(static_cast<size_t>(AbstractValueKind::Top) < 4,
+                  "AbstractValueKind doesn't fit into 2 bits");
+  }
+
+  AbstractValueKind kind() const {
+    return static_cast<AbstractValueKind>(
+        pointer_plus_bits::get_bits(m_constant));
+  }
+  Constant constant() const {
+    return pointer_plus_bits::get_pointer(m_constant);
+  }
+
+  void set(AbstractValueKind kind, Constant constant) {
+    m_constant = constant;
+    pointer_plus_bits::set_bits(m_constant, static_cast<size_t>(kind));
+  }
+  void set(AbstractValueKind kind) {
+    pointer_plus_bits::set_bits(m_constant, static_cast<size_t>(kind));
+  }
+};
+
 } // namespace acd_impl
 
 template <typename Constant>
 class ConstantAbstractDomain final
-    : public AbstractDomainScaffolding<
-          acd_impl::ConstantAbstractValue<Constant>,
-          ConstantAbstractDomain<Constant>> {
+    : public AbstractDomain<ConstantAbstractDomain<Constant>> {
  public:
+  using ReprType = acd_impl::ConstantAbstractValueRepr<Constant>;
   using ConstantType = Constant;
 
-  ConstantAbstractDomain() { this->set_to_top(); }
+  virtual ~ConstantAbstractDomain() {}
 
-  explicit ConstantAbstractDomain(const Constant& cst) {
-    this->set_to_value(acd_impl::ConstantAbstractValue<Constant>(cst));
+  ConstantAbstractDomain() { m_repr.set(AbstractValueKind::Top); }
+
+  explicit ConstantAbstractDomain(Constant cst) {
+    m_repr.set(AbstractValueKind::Value, std::move(cst));
   }
 
-  explicit ConstantAbstractDomain(AbstractValueKind kind)
-      : AbstractDomainScaffolding<acd_impl::ConstantAbstractValue<Constant>,
-                                  ConstantAbstractDomain<Constant>>(kind) {}
+  /*
+   * A convenience constructor for creating Bottom and Top.
+   */
+  explicit ConstantAbstractDomain(AbstractValueKind kind) {
+    m_repr.set(kind);
+    RUNTIME_CHECK(kind != AbstractValueKind::Value,
+                  invalid_abstract_value() << actual_kind(kind));
+  }
 
   boost::optional<Constant> get_constant() const {
-    return (this->kind() == AbstractValueKind::Value)
-               ? boost::optional<Constant>(this->get_value()->get_constant())
+    return (m_repr.kind() == AbstractValueKind::Value)
+               ? boost::optional<Constant>(m_repr.constant())
                : boost::none;
   }
 
@@ -154,6 +217,96 @@ class ConstantAbstractDomain final
     }
     return out;
   }
+
+  AbstractValueKind kind() const { return m_repr.kind(); }
+
+  bool is_bottom() const override {
+    return m_repr.kind() == AbstractValueKind::Bottom;
+  }
+
+  bool is_top() const override {
+    return m_repr.kind() == AbstractValueKind::Top;
+  }
+
+  bool is_value() const { return m_repr.kind() == AbstractValueKind::Value; }
+
+  void set_to_bottom() override { m_repr.set(AbstractValueKind::Bottom); }
+
+  void set_to_top() override { m_repr.set(AbstractValueKind::Top); }
+
+  bool leq(const ConstantAbstractDomain<Constant>& other) const override {
+    if (is_bottom()) {
+      return true;
+    }
+    if (other.is_bottom()) {
+      return false;
+    }
+    if (other.is_top()) {
+      return true;
+    }
+    if (is_top()) {
+      return false;
+    }
+    return m_repr.constant() == other.m_repr.constant();
+  }
+
+  bool equals(const ConstantAbstractDomain<Constant>& other) const override {
+    if (is_bottom()) {
+      return other.is_bottom();
+    }
+    if (is_top()) {
+      return other.is_top();
+    }
+    if (!other.is_value()) {
+      return false;
+    }
+    return m_repr.constant() == other.m_repr.constant();
+  }
+
+  void join_with(const ConstantAbstractDomain<Constant>& other) override {
+    if (is_top() || other.is_bottom()) {
+      return;
+    }
+    if (other.is_top()) {
+      set_to_top();
+      return;
+    }
+    if (is_bottom()) {
+      m_repr = other.m_repr;
+      return;
+    }
+    m_repr.set(m_repr.constant() == other.m_repr.constant()
+                   ? AbstractValueKind::Value
+                   : AbstractValueKind::Top);
+  }
+
+  void widen_with(const ConstantAbstractDomain<Constant>& other) override {
+    return join_with(other);
+  }
+
+  void meet_with(const ConstantAbstractDomain<Constant>& other) override {
+    if (is_bottom() || other.is_top()) {
+      return;
+    }
+    if (other.is_bottom()) {
+      set_to_bottom();
+      return;
+    }
+    if (is_top()) {
+      m_repr = other.m_repr;
+      return;
+    }
+    m_repr.set(m_repr.constant() == other.m_repr.constant()
+                   ? AbstractValueKind::Value
+                   : AbstractValueKind::Bottom);
+  }
+
+  void narrow_with(const ConstantAbstractDomain<Constant>& other) override {
+    return meet_with(other);
+  }
+
+ private:
+  ReprType m_repr;
 };
 
 } // namespace sparta
