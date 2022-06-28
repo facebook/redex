@@ -83,6 +83,25 @@ public class ObjectEscapeAnalysisTest {
     return e.getX() + f.getX();
   }
 
+  static abstract class Base {
+    public Base() {}
+    public abstract int getX();
+  }
+  static class Derived extends Base {
+    int x;
+    public Derived(int x) {
+      this.x = x;
+    }
+    public /* override */ int getX() {
+      return this.x;
+    }
+  }
+
+  public static int reduceTo42D() {
+    Derived d = new Derived(42);
+    return d.getX();
+  }
+
 
   static class G {
     static Object leak;

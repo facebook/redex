@@ -73,6 +73,7 @@
 #include "ConstantAbstractDomain.h"
 #include "ControlFlow.h"
 #include "DexClass.h"
+#include "HierarchyUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "IROpcode.h"
@@ -91,6 +92,7 @@
 
 using namespace sparta;
 namespace mog = method_override_graph;
+namespace hier = hierarchy_util;
 
 namespace {
 
@@ -102,7 +104,7 @@ using Locations = std::vector<std::pair<DexMethod*, const IRInstruction*>>;
 // invocation dependencies.
 void analyze_scope(
     const Scope& scope,
-    const std::unordered_set<DexMethod*>& non_true_virtual,
+    const std::unordered_set<const DexMethod*>& non_overridden_virtuals,
     std::unordered_map<DexType*, Locations>* new_instances,
     std::unordered_map<DexMethod*, Locations>* invokes,
     std::unordered_map<DexMethod*, std::unordered_set<DexMethod*>>*
@@ -127,11 +129,11 @@ void analyze_scope(
         auto callee =
             resolve_method(insn->get_method(), opcode_to_search(insn));
         if (callee &&
-            (!callee->is_virtual() || non_true_virtual.count(callee))) {
+            (!callee->is_virtual() || non_overridden_virtuals.count(callee))) {
           concurrent_invokes.update(callee, [&](auto*, auto& vec, bool) {
             vec.emplace_back(method, insn);
           });
-          if (!method->is_virtual() || non_true_virtual.count(method)) {
+          if (!method->is_virtual() || non_overridden_virtuals.count(method)) {
             concurrent_dependencies.update(
                 callee,
                 [method](auto, auto& set, auto) { set.insert(method); });
@@ -341,12 +343,12 @@ MethodSummaries compute_method_summaries(
     const Scope& scope,
     const std::unordered_map<DexMethod*, std::unordered_set<DexMethod*>>&
         dependencies,
-    const std::unordered_set<DexMethod*>& non_true_virtual) {
+    const std::unordered_set<const DexMethod*>& non_overridden_virtuals) {
   Timer t("compute_method_summaries");
 
   std::unordered_set<DexMethod*> impacted_methods;
   walk::code(scope, [&](DexMethod* method, IRCode&) {
-    if (!method->is_virtual() || non_true_virtual.count(method)) {
+    if (!method->is_virtual() || non_overridden_virtuals.count(method)) {
       impacted_methods.insert(method);
     }
   });
@@ -1581,17 +1583,17 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
   auto method_override_graph = mog::build_graph(scope);
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, conf.create_init_class_insns(), method_override_graph.get());
-  auto non_true_virtual =
-      mog::get_non_true_virtuals(*method_override_graph, scope);
+  auto non_overridden_virtuals =
+      hier::find_non_overridden_virtuals(*method_override_graph);
 
   std::unordered_map<DexType*, Locations> new_instances;
   std::unordered_map<DexMethod*, Locations> invokes;
   std::unordered_map<DexMethod*, std::unordered_set<DexMethod*>> dependencies;
-  analyze_scope(scope, non_true_virtual, &new_instances, &invokes,
+  analyze_scope(scope, non_overridden_virtuals, &new_instances, &invokes,
                 &dependencies);
 
-  auto method_summaries =
-      compute_method_summaries(mgr, scope, dependencies, non_true_virtual);
+  auto method_summaries = compute_method_summaries(mgr, scope, dependencies,
+                                                   non_overridden_virtuals);
 
   auto inline_anchors = compute_inline_anchors(scope, method_summaries);
 
