@@ -947,6 +947,257 @@ inline intrusive_ptr<PatriciaTreeNode<IntegerType, Value>> combine_leafs_by_key(
       [&](const auto& leaf) { return leaf_combine(leaf, other); }, key, tree);
 }
 
+template <typename IntegerType, typename Value, typename LeafCombine>
+inline intrusive_ptr<PatriciaTreeNode<IntegerType, Value>> merge(
+    LeafCombine&& leaf_combine,
+    const intrusive_ptr<PatriciaTreeNode<IntegerType, Value>>& s,
+    const intrusive_ptr<PatriciaTreeNode<IntegerType, Value>>& t) {
+  if (s == t) {
+    // This conditional is what allows the union operation to complete in
+    // sublinear time when the operands share some structure.
+    return s;
+  } else if (s == nullptr) {
+    return t;
+  } else if (t == nullptr) {
+    return s;
+  }
+  // We need to check whether t is a leaf before we do the same for s.
+  // Otherwise, if s and t are both leaves, we would end up inserting s into t.
+  // This would violate the assumptions required by `reference_equals()`.
+  if (t->is_leaf()) {
+    const auto& t_leaf =
+        boost::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(t);
+    return combine_leafs_by_key(leaf_combine, t_leaf, t_leaf->key(), s);
+  } else if (s->is_leaf()) {
+    const auto& s_leaf =
+        boost::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(s);
+    return combine_leafs_by_key(leaf_combine, s_leaf, s_leaf->key(), t);
+  }
+  const auto& s_branch =
+      boost::static_pointer_cast<PatriciaTreeBranch<IntegerType, Value>>(s);
+  const auto& t_branch =
+      boost::static_pointer_cast<PatriciaTreeBranch<IntegerType, Value>>(t);
+  IntegerType m = s_branch->branching_bit();
+  IntegerType n = t_branch->branching_bit();
+  IntegerType p = s_branch->prefix();
+  IntegerType q = t_branch->prefix();
+  const auto& s0 = s_branch->left_tree();
+  const auto& s1 = s_branch->right_tree();
+  const auto& t0 = t_branch->left_tree();
+  const auto& t1 = t_branch->right_tree();
+  if (m == n && p == q) {
+    // The two trees have the same prefix. We just merge the subtrees.
+    auto new_left = merge(leaf_combine, s0, t0);
+    auto new_right = merge(leaf_combine, s1, t1);
+    if (new_left == s0 && new_right == s1) {
+      return s;
+    } else if (new_left == t0 && new_right == t1) {
+      return t;
+    } else {
+      return PatriciaTreeBranch<IntegerType, Value>::make(p, m, new_left,
+                                                          new_right);
+    }
+  } else if (m < n && match_prefix(q, p, m)) {
+    // q contains p. Merge t with a subtree of s.
+    if (is_zero_bit(q, m)) {
+      auto new_left = merge(leaf_combine, s0, t);
+      if (s0 == new_left) {
+        return s;
+      } else {
+        return PatriciaTreeBranch<IntegerType, Value>::make(p, m, new_left, s1);
+      }
+    } else {
+      auto new_right = merge(leaf_combine, s1, t);
+      if (s1 == new_right) {
+        return s;
+      } else {
+        return PatriciaTreeBranch<IntegerType, Value>::make(p, m, s0,
+                                                            new_right);
+      }
+    }
+  } else if (m > n && match_prefix(p, q, n)) {
+    // p contains q. Merge s with a subtree of t.
+    if (is_zero_bit(p, n)) {
+      auto new_left = merge(leaf_combine, s, t0);
+      if (t0 == new_left) {
+        return t;
+      } else {
+        return PatriciaTreeBranch<IntegerType, Value>::make(q, n, new_left, t1);
+      }
+    } else {
+      auto new_right = merge(leaf_combine, s, t1);
+      if (t1 == new_right) {
+        return t;
+      } else {
+        return PatriciaTreeBranch<IntegerType, Value>::make(q, n, t0,
+                                                            new_right);
+      }
+    }
+  }
+  // The prefixes disagree.
+  return join(p, s, q, t);
+}
+
+template <typename IntegerType, typename Value>
+inline intrusive_ptr<PatriciaTreeLeaf<IntegerType, Value>> use_available_value(
+    const intrusive_ptr<PatriciaTreeLeaf<IntegerType, Value>>& x,
+    const intrusive_ptr<PatriciaTreeLeaf<IntegerType, Value>>& y) {
+  if (x) {
+    return x;
+  } else if (y) {
+    return y;
+  } else {
+    BOOST_THROW_EXCEPTION(internal_error()
+                          << error_msg("Malformed Patricia tree"));
+  }
+}
+
+template <typename IntegerType, typename Value, typename LeafCombine>
+inline intrusive_ptr<PatriciaTreeNode<IntegerType, Value>> intersect(
+    LeafCombine&& leaf_combine,
+    const intrusive_ptr<PatriciaTreeNode<IntegerType, Value>>& s,
+    const intrusive_ptr<PatriciaTreeNode<IntegerType, Value>>& t) {
+  if (s == t) {
+    // This conditional is what allows the intersection operation to complete in
+    // sublinear time when the operands share some structure.
+    return s;
+  } else if (s == nullptr || t == nullptr) {
+    return nullptr;
+  }
+  if (s->is_leaf()) {
+    const auto& s_leaf =
+        boost::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(s);
+    auto t_leaf = find_leaf(s_leaf->key(), t);
+    if (t_leaf == nullptr) {
+      return nullptr;
+    } else {
+      return combine_leafs(leaf_combine, t_leaf, s_leaf);
+    }
+  } else if (t->is_leaf()) {
+    const auto& t_leaf =
+        boost::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(t);
+    auto s_leaf = find_leaf(t_leaf->key(), s);
+    if (s_leaf == nullptr) {
+      return nullptr;
+    } else {
+      return combine_leafs(leaf_combine, s_leaf, t_leaf);
+    }
+  }
+  const auto& s_branch =
+      boost::static_pointer_cast<PatriciaTreeBranch<IntegerType, Value>>(s);
+  const auto& t_branch =
+      boost::static_pointer_cast<PatriciaTreeBranch<IntegerType, Value>>(t);
+  IntegerType m = s_branch->branching_bit();
+  IntegerType n = t_branch->branching_bit();
+  IntegerType p = s_branch->prefix();
+  IntegerType q = t_branch->prefix();
+  const auto& s0 = s_branch->left_tree();
+  const auto& s1 = s_branch->right_tree();
+  const auto& t0 = t_branch->left_tree();
+  const auto& t1 = t_branch->right_tree();
+  if (m == n && p == q) {
+    // The two trees have the same prefix. We merge the intersection of the
+    // corresponding subtrees.
+    //
+    // The subtrees don't have overlapping explicit values, but the combining
+    // function will still be called to merge the elements in one tree with the
+    // implicit default values in the other.
+    return merge<IntegerType, Value>(use_available_value<IntegerType, Value>,
+                                     intersect(leaf_combine, s0, t0),
+                                     intersect(leaf_combine, s1, t1));
+  } else if (m < n && match_prefix(q, p, m)) {
+    // q contains p. Intersect t with a subtree of s.
+    return intersect(leaf_combine, is_zero_bit(q, m) ? s0 : s1, t);
+  } else if (m > n && match_prefix(p, q, n)) {
+    // p contains q. Intersect s with a subtree of t.
+    return intersect(leaf_combine, s, is_zero_bit(p, n) ? t0 : t1);
+  }
+  // The prefixes disagree.
+  return nullptr;
+}
+
+template <typename IntegerType, typename Value, typename LeafCombine>
+inline intrusive_ptr<PatriciaTreeNode<IntegerType, Value>> diff(
+    LeafCombine&& leaf_combine,
+    const intrusive_ptr<PatriciaTreeNode<IntegerType, Value>>& s,
+    const intrusive_ptr<PatriciaTreeNode<IntegerType, Value>>& t) {
+  if (s == t) {
+    // This conditional is what allows the intersection operation to complete in
+    // sublinear time when the operands share some structure.
+    return nullptr;
+  } else if (s == nullptr) {
+    return nullptr;
+  } else if (t == nullptr) {
+    return s;
+  }
+  if (s->is_leaf()) {
+    const auto& s_leaf =
+        boost::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(s);
+    auto t_leaf = find_leaf(s_leaf->key(), t);
+    if (t_leaf == nullptr) {
+      return s;
+    } else {
+      return combine_leafs(leaf_combine, t_leaf, s_leaf);
+    }
+  } else if (t->is_leaf()) {
+    const auto& t_leaf =
+        boost::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(t);
+    return combine_leafs_by_key(leaf_combine, t_leaf, t_leaf->key(), s);
+  }
+  const auto& s_branch =
+      boost::static_pointer_cast<PatriciaTreeBranch<IntegerType, Value>>(s);
+  const auto& t_branch =
+      boost::static_pointer_cast<PatriciaTreeBranch<IntegerType, Value>>(t);
+  IntegerType m = s_branch->branching_bit();
+  IntegerType n = t_branch->branching_bit();
+  IntegerType p = s_branch->prefix();
+  IntegerType q = t_branch->prefix();
+  const auto& s0 = s_branch->left_tree();
+  const auto& s1 = s_branch->right_tree();
+  const auto& t0 = t_branch->left_tree();
+  const auto& t1 = t_branch->right_tree();
+  if (m == n && p == q) {
+    // The two trees have the same prefix. We merge the difference of the
+    // corresponding subtrees.
+    auto new_left = diff(leaf_combine, s0, t0);
+    auto new_right = diff(leaf_combine, s1, t1);
+    if (new_left == s0 && new_right == s1) {
+      return s;
+    } else {
+      return merge<IntegerType, Value>(use_available_value<IntegerType, Value>,
+                                       new_left, new_right);
+    }
+  } else if (m < n && match_prefix(q, p, m)) {
+    // q contains p. Diff t with a subtree of s.
+    if (is_zero_bit(q, m)) {
+      auto new_left = diff(leaf_combine, s0, t);
+      if (new_left == s0) {
+        return s;
+      } else {
+        return merge<IntegerType, Value>(
+            use_available_value<IntegerType, Value>, new_left, s1);
+      }
+    } else {
+      auto new_right = diff(leaf_combine, s1, t);
+      if (new_right == s1) {
+        return s;
+      } else {
+        return merge<IntegerType, Value>(
+            use_available_value<IntegerType, Value>, s0, new_right);
+      }
+    }
+  } else if (m > n && match_prefix(p, q, n)) {
+    // p contains q. Diff s with a subtree of t.
+    if (is_zero_bit(p, n)) {
+      return diff(leaf_combine, s, t0);
+    } else {
+      return diff(leaf_combine, s, t1);
+    }
+  }
+  // The prefixes disagree.
+  return s;
+}
+
 template <typename IntegerType, typename Value>
 inline intrusive_ptr<PatriciaTreeNode<IntegerType, Value>> remove(
     IntegerType key,
@@ -1073,6 +1324,25 @@ class PatriciaTreeCore {
     auto old_tree = std::exchange(m_tree, std::move(new_tree));
 
     return m_tree != old_tree;
+  }
+
+  template <typename LeafCombine>
+  inline void merge(LeafCombine&& leaf_combine, const PatriciaTreeCore& other) {
+    m_tree = pt_core::merge(std::forward<LeafCombine>(leaf_combine), m_tree,
+                            other.m_tree);
+  }
+
+  template <typename LeafCombine>
+  inline void intersect(LeafCombine&& leaf_combine,
+                        const PatriciaTreeCore& other) {
+    m_tree = pt_core::intersect(std::forward<LeafCombine>(leaf_combine), m_tree,
+                                other.m_tree);
+  }
+
+  template <typename LeafCombine>
+  inline void diff(LeafCombine&& leaf_combine, const PatriciaTreeCore& other) {
+    m_tree = pt_core::diff(std::forward<LeafCombine>(leaf_combine), m_tree,
+                           other.m_tree);
   }
 
   inline void remove(Key key) {

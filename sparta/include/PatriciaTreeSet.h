@@ -40,21 +40,6 @@ inline boost::intrusive_ptr<PatriciaTree<IntegerType>> filter(
     const std::function<bool(IntegerType)>& predicate,
     const boost::intrusive_ptr<PatriciaTree<IntegerType>>& tree);
 
-template <typename IntegerType>
-inline boost::intrusive_ptr<PatriciaTree<IntegerType>> merge(
-    const boost::intrusive_ptr<PatriciaTree<IntegerType>>& s,
-    const boost::intrusive_ptr<PatriciaTree<IntegerType>>& t);
-
-template <typename IntegerType>
-inline boost::intrusive_ptr<PatriciaTree<IntegerType>> intersect(
-    const boost::intrusive_ptr<PatriciaTree<IntegerType>>& s,
-    const boost::intrusive_ptr<PatriciaTree<IntegerType>>& t);
-
-template <typename IntegerType>
-inline boost::intrusive_ptr<PatriciaTree<IntegerType>> diff(
-    const boost::intrusive_ptr<PatriciaTree<IntegerType>>& s,
-    const boost::intrusive_ptr<PatriciaTree<IntegerType>>& t);
-
 } // namespace pt_impl
 
 /*
@@ -186,20 +171,22 @@ class PatriciaTreeSet final {
   }
 
   PatriciaTreeSet& union_with(const PatriciaTreeSet& other) {
-    m_core.m_tree =
-        pt_impl::merge<IntegerType>(m_core.m_tree, other.m_core.m_tree);
+    // For union, empty value or empty value is empty value.
+    m_core.merge(pt_core::use_available_value<IntegerType, pt_impl::Empty>,
+                 other.m_core);
     return *this;
   }
 
   PatriciaTreeSet& intersection_with(const PatriciaTreeSet& other) {
-    m_core.m_tree =
-        pt_impl::intersect<IntegerType>(m_core.m_tree, other.m_core.m_tree);
+    // For intersect, empty value and empty value is empty value.
+    m_core.intersect(pt_core::use_available_value<IntegerType, pt_impl::Empty>,
+                     other.m_core);
     return *this;
   }
 
   PatriciaTreeSet& difference_with(const PatriciaTreeSet& other) {
-    m_core.m_tree =
-        pt_impl::diff<IntegerType>(m_core.m_tree, other.m_core.m_tree);
+    // For diff, empty value without empty value is no value.
+    m_core.diff([](const auto&...) { return nullptr; }, other.m_core);
     return *this;
   }
 
@@ -275,209 +262,6 @@ inline boost::intrusive_ptr<PatriciaTree<IntegerType>> filter(
                                 new_left_tree,
                                 new_right_tree);
   }
-}
-
-// We keep the notations of the paper so as to make the implementation easier
-// to follow.
-template <typename IntegerType>
-inline boost::intrusive_ptr<PatriciaTree<IntegerType>> merge(
-    const boost::intrusive_ptr<PatriciaTree<IntegerType>>& s,
-    const boost::intrusive_ptr<PatriciaTree<IntegerType>>& t) {
-  if (s == t) {
-    // This conditional is what allows the union operation to complete in
-    // sublinear time when the operands share some structure.
-    return s;
-  }
-  if (s == nullptr) {
-    return t;
-  }
-  if (t == nullptr) {
-    return s;
-  }
-  // We need to check whether t is a leaf before we do the same for s.
-  // Otherwise, if s and t are both leaves, we would end up inserting s into t.
-  // This would violate the assumptions required by `reference_equals()`.
-  if (t->is_leaf()) {
-    const auto& leaf =
-        boost::static_pointer_cast<PatriciaTreeLeaf<IntegerType>>(t);
-    return pt_core::upsert(leaf->key(), leaf, s);
-  }
-  if (s->is_leaf()) {
-    const auto& leaf =
-        boost::static_pointer_cast<PatriciaTreeLeaf<IntegerType>>(s);
-    return pt_core::upsert(leaf->key(), leaf, t);
-  }
-  const auto& s_branch =
-      boost::static_pointer_cast<PatriciaTreeBranch<IntegerType>>(s);
-  const auto& t_branch =
-      boost::static_pointer_cast<PatriciaTreeBranch<IntegerType>>(t);
-  IntegerType m = s_branch->branching_bit();
-  IntegerType n = t_branch->branching_bit();
-  IntegerType p = s_branch->prefix();
-  IntegerType q = t_branch->prefix();
-  const auto& s0 = s_branch->left_tree();
-  const auto& s1 = s_branch->right_tree();
-  const auto& t0 = t_branch->left_tree();
-  const auto& t1 = t_branch->right_tree();
-  if (m == n && p == q) {
-    // The two trees have the same prefix. We just merge the subtrees.
-    auto new_left = merge(s0, t0);
-    auto new_right = merge(s1, t1);
-    if (new_left == s0 && new_right == s1) {
-      return s;
-    }
-    if (new_left == t0 && new_right == t1) {
-      return t;
-    }
-    return PatriciaTreeBranch<IntegerType>::make(p, m, new_left, new_right);
-  }
-  if (m < n && match_prefix(q, p, m)) {
-    // q contains p. Merge t with a subtree of s.
-    if (is_zero_bit(q, m)) {
-      auto new_left = merge(s0, t);
-      if (s0 == new_left) {
-        return s;
-      }
-      return PatriciaTreeBranch<IntegerType>::make(p, m, new_left, s1);
-    } else {
-      auto new_right = merge(s1, t);
-      if (s1 == new_right) {
-        return s;
-      }
-      return PatriciaTreeBranch<IntegerType>::make(p, m, s0, new_right);
-    }
-  }
-  if (m > n && match_prefix(p, q, n)) {
-    // p contains q. Merge s with a subtree of t.
-    if (is_zero_bit(p, n)) {
-      auto new_left = merge(s, t0);
-      if (t0 == new_left) {
-        return t;
-      }
-      return PatriciaTreeBranch<IntegerType>::make(q, n, new_left, t1);
-    } else {
-      auto new_right = merge(s, t1);
-      if (t1 == new_right) {
-        return t;
-      }
-      return PatriciaTreeBranch<IntegerType>::make(q, n, t0, new_right);
-    }
-  }
-  // The prefixes disagree.
-  return pt_core::join(p, s, q, t);
-}
-
-template <typename IntegerType>
-inline boost::intrusive_ptr<PatriciaTree<IntegerType>> intersect(
-    const boost::intrusive_ptr<PatriciaTree<IntegerType>>& s,
-    const boost::intrusive_ptr<PatriciaTree<IntegerType>>& t) {
-  if (s == t) {
-    // This conditional is what allows the intersection operation to complete in
-    // sublinear time when the operands share some structure.
-    return s;
-  }
-  if (s == nullptr || t == nullptr) {
-    return nullptr;
-  }
-  if (s->is_leaf()) {
-    const auto& leaf =
-        boost::static_pointer_cast<PatriciaTreeLeaf<IntegerType>>(s);
-    return pt_core::contains_key(leaf->key(), t) ? leaf : nullptr;
-  }
-  if (t->is_leaf()) {
-    const auto& leaf =
-        boost::static_pointer_cast<PatriciaTreeLeaf<IntegerType>>(t);
-    return pt_core::contains_key(leaf->key(), s) ? leaf : nullptr;
-  }
-  const auto& s_branch =
-      boost::static_pointer_cast<PatriciaTreeBranch<IntegerType>>(s);
-  const auto& t_branch =
-      boost::static_pointer_cast<PatriciaTreeBranch<IntegerType>>(t);
-  IntegerType m = s_branch->branching_bit();
-  IntegerType n = t_branch->branching_bit();
-  IntegerType p = s_branch->prefix();
-  IntegerType q = t_branch->prefix();
-  const auto& s0 = s_branch->left_tree();
-  const auto& s1 = s_branch->right_tree();
-  const auto& t0 = t_branch->left_tree();
-  const auto& t1 = t_branch->right_tree();
-  if (m == n && p == q) {
-    // The two trees have the same prefix. We merge the intersection of the
-    // corresponding subtrees.
-    return merge(intersect(s0, t0), intersect(s1, t1));
-  }
-  if (m < n && match_prefix(q, p, m)) {
-    // q contains p. Intersect t with a subtree of s.
-    return intersect(is_zero_bit(q, m) ? s0 : s1, t);
-  }
-  if (m > n && match_prefix(p, q, n)) {
-    // p contains q. Intersect s with a subtree of t.
-    return intersect(s, is_zero_bit(p, n) ? t0 : t1);
-  }
-  // The prefixes disagree.
-  return nullptr;
-}
-
-template <typename IntegerType>
-inline boost::intrusive_ptr<PatriciaTree<IntegerType>> diff(
-    const boost::intrusive_ptr<PatriciaTree<IntegerType>>& s,
-    const boost::intrusive_ptr<PatriciaTree<IntegerType>>& t) {
-  if (s == t) {
-    // This conditional is what allows the intersection operation to complete in
-    // sublinear time when the operands share some structure.
-    return nullptr;
-  }
-  if (s == nullptr) {
-    return nullptr;
-  }
-  if (t == nullptr) {
-    return s;
-  }
-  if (s->is_leaf()) {
-    const auto& leaf =
-        boost::static_pointer_cast<PatriciaTreeLeaf<IntegerType>>(s);
-    return pt_core::contains_key(leaf->key(), t) ? nullptr : leaf;
-  }
-  if (t->is_leaf()) {
-    const auto& leaf =
-        boost::static_pointer_cast<PatriciaTreeLeaf<IntegerType>>(t);
-    return pt_core::remove(leaf->key(), s);
-  }
-  const auto& s_branch =
-      boost::static_pointer_cast<PatriciaTreeBranch<IntegerType>>(s);
-  const auto& t_branch =
-      boost::static_pointer_cast<PatriciaTreeBranch<IntegerType>>(t);
-  IntegerType m = s_branch->branching_bit();
-  IntegerType n = t_branch->branching_bit();
-  IntegerType p = s_branch->prefix();
-  IntegerType q = t_branch->prefix();
-  const auto& s0 = s_branch->left_tree();
-  const auto& s1 = s_branch->right_tree();
-  const auto& t0 = t_branch->left_tree();
-  const auto& t1 = t_branch->right_tree();
-  if (m == n && p == q) {
-    // The two trees have the same prefix. We merge the difference of the
-    // corresponding subtrees.
-    return merge(diff(s0, t0), diff(s1, t1));
-  }
-  if (m < n && match_prefix(q, p, m)) {
-    // q contains p. Diff t with a subtree of s.
-    if (is_zero_bit(q, m)) {
-      return merge(diff(s0, t), s1);
-    } else {
-      return merge(s0, diff(s1, t));
-    }
-  }
-  if (m > n && match_prefix(p, q, n)) {
-    // p contains q. Diff s with a subtree of t.
-    if (is_zero_bit(p, n)) {
-      return diff(s, t0);
-    } else {
-      return diff(s, t1);
-    }
-  }
-  // The prefixes disagree.
-  return s;
 }
 
 } // namespace pt_impl
