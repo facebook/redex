@@ -8,21 +8,17 @@
 #pragma once
 
 #include <algorithm>
-#include <atomic>
 #include <cstdint>
 #include <functional>
 #include <initializer_list>
 #include <iterator>
-#include <limits>
 #include <ostream>
 #include <stack>
 #include <type_traits>
 #include <utility>
 
-#include <boost/functional/hash.hpp>
-#include <boost/intrusive_ptr.hpp>
-
 #include "Exceptions.h"
+#include "PatriciaTreeCore.h"
 #include "PatriciaTreeUtil.h"
 
 namespace sparta {
@@ -30,14 +26,16 @@ namespace sparta {
 // Forward declarations.
 namespace pt_impl {
 
-template <typename IntegerType>
-class PatriciaTree;
+using Empty = pt_core::EmptyValue;
 
 template <typename IntegerType>
-class PatriciaTreeBranch;
+using PatriciaTree = pt_core::PatriciaTreeNode<IntegerType, Empty>;
 
 template <typename IntegerType>
-class PatriciaTreeLeaf;
+using PatriciaTreeLeaf = pt_core::PatriciaTreeLeaf<IntegerType, Empty>;
+
+template <typename IntegerType>
+using PatriciaTreeBranch = pt_core::PatriciaTreeBranch<IntegerType, Empty>;
 
 template <typename IntegerType>
 class PatriciaTreeIterator;
@@ -122,7 +120,8 @@ inline boost::intrusive_ptr<PatriciaTree<IntegerType>> diff(
  */
 template <typename Element>
 class PatriciaTreeSet final {
-  using Codec = pt_util::Codec<Element>;
+  using Core = pt_core::PatriciaTreeCore<Element, pt_impl::Empty>;
+  using Codec = typename Core::Codec;
 
  public:
   // C++ container concept member types
@@ -151,7 +150,7 @@ class PatriciaTreeSet final {
     }
   }
 
-  bool empty() const { return m_tree == nullptr; }
+  bool empty() const { return m_core.empty(); }
 
   size_t size() const {
     size_t s = 0;
@@ -159,25 +158,26 @@ class PatriciaTreeSet final {
     return s;
   }
 
-  size_t max_size() const { return std::numeric_limits<IntegerType>::max(); }
+  size_t max_size() const { return m_core.max_size(); }
 
-  iterator begin() const { return iterator(m_tree); }
+  iterator begin() const { return iterator(m_core.m_tree); }
 
   iterator end() const { return iterator(); }
 
   bool contains(Element key) const {
-    if (m_tree == nullptr) {
+    if (empty()) {
       return false;
     }
-    return pt_impl::contains<IntegerType>(Codec::encode(key), m_tree);
+    return pt_impl::contains<IntegerType>(Codec::encode(key), m_core.m_tree);
   }
 
   bool is_subset_of(const PatriciaTreeSet& other) const {
-    return pt_impl::is_subset_of<IntegerType>(m_tree, other.m_tree);
+    return pt_impl::is_subset_of<IntegerType>(m_core.m_tree,
+                                              other.m_core.m_tree);
   }
 
   bool equals(const PatriciaTreeSet& other) const {
-    return pt_impl::equals<IntegerType>(m_tree, other.m_tree);
+    return pt_impl::equals<IntegerType>(m_core.m_tree, other.m_core.m_tree);
   }
 
   friend bool operator==(const PatriciaTreeSet& s1, const PatriciaTreeSet& s2) {
@@ -207,16 +207,18 @@ class PatriciaTreeSet final {
    *   }
    */
   bool reference_equals(const PatriciaTreeSet& other) const {
-    return m_tree == other.m_tree;
+    return m_core.reference_equals(other.m_core);
   }
 
   PatriciaTreeSet& insert(Element key) {
-    m_tree = pt_impl::insert<IntegerType>(Codec::encode(key), m_tree);
+    m_core.m_tree =
+        pt_impl::insert<IntegerType>(Codec::encode(key), m_core.m_tree);
     return *this;
   }
 
   PatriciaTreeSet& remove(Element key) {
-    m_tree = pt_impl::remove<IntegerType>(Codec::encode(key), m_tree);
+    m_core.m_tree =
+        pt_impl::remove<IntegerType>(Codec::encode(key), m_core.m_tree);
     return *this;
   }
 
@@ -225,22 +227,26 @@ class PatriciaTreeSet final {
     auto encoded_predicate = [&predicate](IntegerType key) {
       return predicate(Codec::decode(key));
     };
-    m_tree = pt_impl::filter<IntegerType>(encoded_predicate, m_tree);
+    m_core.m_tree =
+        pt_impl::filter<IntegerType>(encoded_predicate, m_core.m_tree);
     return *this;
   }
 
   PatriciaTreeSet& union_with(const PatriciaTreeSet& other) {
-    m_tree = pt_impl::merge<IntegerType>(m_tree, other.m_tree);
+    m_core.m_tree =
+        pt_impl::merge<IntegerType>(m_core.m_tree, other.m_core.m_tree);
     return *this;
   }
 
   PatriciaTreeSet& intersection_with(const PatriciaTreeSet& other) {
-    m_tree = pt_impl::intersect<IntegerType>(m_tree, other.m_tree);
+    m_core.m_tree =
+        pt_impl::intersect<IntegerType>(m_core.m_tree, other.m_core.m_tree);
     return *this;
   }
 
   PatriciaTreeSet& difference_with(const PatriciaTreeSet& other) {
-    m_tree = pt_impl::diff<IntegerType>(m_tree, other.m_tree);
+    m_core.m_tree =
+        pt_impl::diff<IntegerType>(m_core.m_tree, other.m_core.m_tree);
     return *this;
   }
 
@@ -266,9 +272,9 @@ class PatriciaTreeSet final {
    * The hash codes are computed incrementally when the Patricia trees are
    * constructed. Hence, this method has complexity O(1).
    */
-  size_t hash() const { return m_tree == nullptr ? 0 : m_tree->hash(); }
+  size_t hash() const { return m_core.hash(); }
 
-  void clear() { m_tree.reset(); }
+  void clear() { m_core.clear(); }
 
   friend std::ostream& operator<<(std::ostream& o,
                                   const PatriciaTreeSet<Element>& s) {
@@ -284,150 +290,12 @@ class PatriciaTreeSet final {
   }
 
  private:
-  boost::intrusive_ptr<pt_impl::PatriciaTree<IntegerType>> m_tree;
+  Core m_core;
 };
 
 namespace pt_impl {
 
 using namespace pt_util;
-
-template <typename IntegerType>
-class PatriciaTree {
- public:
-  // A Patricia tree is an immutable structure.
-  PatriciaTree& operator=(const PatriciaTree& other) = delete;
-
-  ~PatriciaTree() {
-    // The destructor is the only method that is guaranteed to be created when
-    // a class template is instantiated. This is a good place to perform all
-    // the sanity checks on the template parameters.
-    static_assert(std::is_unsigned<IntegerType>::value,
-                  "IntegerType is not an unsigned arihmetic type");
-  }
-
-  bool is_leaf() const {
-    return m_reference_count.load(std::memory_order_relaxed) & LEAF_MASK;
-  }
-
-  bool is_branch() const { return !is_leaf(); }
-
-  size_t hash() const {
-    if (is_leaf()) {
-      return static_cast<const PatriciaTreeLeaf<IntegerType>*>(this)->hash();
-    } else {
-      return static_cast<const PatriciaTreeBranch<IntegerType>*>(this)->hash();
-    }
-  }
-
-  friend void intrusive_ptr_add_ref(const PatriciaTree<IntegerType>* p) {
-    p->m_reference_count.fetch_add(1, std::memory_order_relaxed);
-  }
-
-  friend void intrusive_ptr_release(const PatriciaTree<IntegerType>* p) {
-    size_t prev_reference_count =
-        p->m_reference_count.fetch_sub(1, std::memory_order_release);
-    if ((prev_reference_count & ~LEAF_MASK) == 1) {
-      std::atomic_thread_fence(std::memory_order_acquire);
-      if (prev_reference_count & LEAF_MASK) {
-        delete static_cast<const PatriciaTreeLeaf<IntegerType>*>(p);
-      } else {
-        delete static_cast<const PatriciaTreeBranch<IntegerType>*>(p);
-      }
-    }
-  }
-
- protected:
-  PatriciaTree(bool is_leaf) : m_reference_count(is_leaf ? LEAF_MASK : 0) {}
-
- private:
-  // We are stealing the highest bit of our reference counter to indicate
-  // whether this tree is a leaf (or, otherwise, branch).
-  static constexpr size_t LEAF_MASK = (static_cast<size_t>(1))
-                                      << (sizeof(size_t) * 8 - 1);
-  mutable std::atomic<size_t> m_reference_count;
-};
-
-// This defines an internal node of a Patricia tree. Patricia trees are
-// compressed binary tries, where a path in the tree represents a sequence of
-// branchings based on the value of some bits at certain positions in the binary
-// decomposition of the key. The position of the bit in the key which determines
-// the branching at a given node is represented in m_branching_bit as a bit mask
-// (i.e., all bits are 0 except for the branching bit). All keys in the subtree
-// originating from a given node share the same bit prefix (in the little endian
-// ordering), which is stored in m_prefix.
-template <typename IntegerType>
-class PatriciaTreeBranch final : public PatriciaTree<IntegerType> {
- public:
-  PatriciaTreeBranch(IntegerType prefix,
-                     IntegerType branching_bit,
-                     boost::intrusive_ptr<PatriciaTree<IntegerType>> left_tree,
-                     boost::intrusive_ptr<PatriciaTree<IntegerType>> right_tree)
-      : PatriciaTree<IntegerType>(
-            /* is_leaf */ false),
-        m_prefix(prefix),
-        m_branching_bit(branching_bit),
-        m_left_tree(std::move(left_tree)),
-        m_right_tree(std::move(right_tree)) {
-    size_t seed = 0;
-    boost::hash_combine(seed, m_prefix);
-    boost::hash_combine(seed, m_branching_bit);
-    boost::hash_combine(seed, m_left_tree->hash());
-    boost::hash_combine(seed, m_right_tree->hash());
-    m_hash = seed;
-  }
-
-  size_t hash() const { return m_hash; }
-
-  IntegerType prefix() const { return m_prefix; }
-
-  IntegerType branching_bit() const { return m_branching_bit; }
-
-  const boost::intrusive_ptr<PatriciaTree<IntegerType>>& left_tree() const {
-    return m_left_tree;
-  }
-
-  const boost::intrusive_ptr<PatriciaTree<IntegerType>>& right_tree() const {
-    return m_right_tree;
-  }
-
-  static boost::intrusive_ptr<PatriciaTreeBranch<IntegerType>> make(
-      IntegerType prefix,
-      IntegerType branching_bit,
-      boost::intrusive_ptr<PatriciaTree<IntegerType>> left_tree,
-      boost::intrusive_ptr<PatriciaTree<IntegerType>> right_tree) {
-    return new PatriciaTreeBranch<IntegerType>(
-        prefix, branching_bit, std::move(left_tree), std::move(right_tree));
-  }
-
- private:
-  size_t m_hash;
-  IntegerType m_prefix;
-  IntegerType m_branching_bit;
-  boost::intrusive_ptr<PatriciaTree<IntegerType>> m_left_tree;
-  boost::intrusive_ptr<PatriciaTree<IntegerType>> m_right_tree;
-};
-
-template <typename IntegerType>
-class PatriciaTreeLeaf final : public PatriciaTree<IntegerType> {
- public:
-  explicit PatriciaTreeLeaf(IntegerType key)
-      : PatriciaTree<IntegerType>(/* is_leaf */ true), m_key(key) {}
-
-  size_t hash() const {
-    boost::hash<IntegerType> hasher;
-    return hasher(m_key);
-  }
-
-  const IntegerType& key() const { return m_key; }
-
-  static boost::intrusive_ptr<PatriciaTreeLeaf<IntegerType>> make(
-      IntegerType key) {
-    return new PatriciaTreeLeaf<IntegerType>(key);
-  }
-
- private:
-  IntegerType m_key;
-};
 
 template <typename IntegerType>
 boost::intrusive_ptr<PatriciaTreeBranch<IntegerType>> join(
@@ -580,7 +448,7 @@ inline boost::intrusive_ptr<PatriciaTree<IntegerType>> insert(
     IntegerType key,
     const boost::intrusive_ptr<PatriciaTree<IntegerType>>& tree) {
   if (tree == nullptr) {
-    return PatriciaTreeLeaf<IntegerType>::make(key);
+    return PatriciaTreeLeaf<IntegerType>::make(key, Empty{});
   }
   if (tree->is_leaf()) {
     const auto& leaf =
@@ -589,7 +457,10 @@ inline boost::intrusive_ptr<PatriciaTree<IntegerType>> insert(
       return leaf;
     }
     return pt_impl::join<IntegerType>(
-        key, PatriciaTreeLeaf<IntegerType>::make(key), leaf->key(), leaf);
+        key,
+        PatriciaTreeLeaf<IntegerType>::make(key, Empty{}),
+        leaf->key(),
+        leaf);
   }
   const auto& branch =
       boost::static_pointer_cast<PatriciaTreeBranch<IntegerType>>(tree);
@@ -615,7 +486,10 @@ inline boost::intrusive_ptr<PatriciaTree<IntegerType>> insert(
     }
   }
   return pt_impl::join<IntegerType>(
-      key, PatriciaTreeLeaf<IntegerType>::make(key), branch->prefix(), branch);
+      key,
+      PatriciaTreeLeaf<IntegerType>::make(key, Empty{}),
+      branch->prefix(),
+      branch);
 }
 
 template <typename IntegerType>
@@ -992,7 +866,7 @@ class PatriciaTreeIterator final {
     return !(*this == other);
   }
 
-  reference operator*() const { return Codec::decode(m_leaf->key()); }
+  reference operator*() const { return Codec::decode(m_leaf->data()); }
 
   pointer operator->() const { return &(**this); }
 
