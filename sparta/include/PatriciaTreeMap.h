@@ -23,17 +23,6 @@
 // Forward declarations
 namespace sparta {
 
-template <typename Key, typename ValueType, typename Value>
-class PatriciaTreeMap;
-
-} // namespace sparta
-
-template <typename Key, typename ValueType, typename Value>
-std::ostream& operator<<(
-    std::ostream&,
-    const typename sparta::PatriciaTreeMap<Key, ValueType, Value>&);
-
-namespace sparta {
 /*
  * This structure implements a map of integer/pointer keys and AbstractDomain
  * values. It's based on the following paper:
@@ -153,6 +142,11 @@ class PatriciaTreeMap final {
     return m_core.reference_equals(other.m_core);
   }
 
+  PatriciaTreeMap& insert_or_assign(Key key, mapped_type value) {
+    m_core.upsert(key, keep_if_non_default(std::move(value)));
+    return *this;
+  }
+
   PatriciaTreeMap& update(
       const std::function<mapped_type(const mapped_type&)>& operation,
       Key key) {
@@ -164,13 +158,19 @@ class PatriciaTreeMap final {
     return m_core.update_all_leafs(apply_leafs(f));
   }
 
-  bool erase_all_matching(Key key_mask) {
-    return m_core.erase_all_matching(key_mask);
+  PatriciaTreeMap& remove(Key key) {
+    m_core.remove(key);
+    return *this;
   }
 
-  PatriciaTreeMap& insert_or_assign(Key key, mapped_type value) {
-    m_core.upsert(key, keep_if_non_default(std::move(value)));
+  PatriciaTreeMap& filter(
+      const std::function<bool(const Key&, const ValueType&)>& predicate) {
+    m_core.filter(predicate);
     return *this;
+  }
+
+  bool erase_all_matching(Key key_mask) {
+    return m_core.erase_all_matching(key_mask);
   }
 
   PatriciaTreeMap& union_with(const combining_function& combine,
@@ -215,6 +215,19 @@ class PatriciaTreeMap final {
 
   void clear() { m_core.clear(); }
 
+  friend std::ostream& operator<<(std::ostream& o, const PatriciaTreeMap& s) {
+    using namespace sparta;
+    o << "{";
+    for (auto it = s.begin(); it != s.end(); ++it) {
+      o << pt_util::deref(it->first) << " -> " << it->second;
+      if (std::next(it) != s.end()) {
+        o << ", ";
+      }
+    }
+    o << "}";
+    return o;
+  }
+
  private:
   // The map implicitly stores default at every node. If a leaf is absent the
   // operation will see a default value instead. Likewise, if the result of an
@@ -242,26 +255,6 @@ class PatriciaTreeMap final {
   }
 
   Core m_core;
-
-  template <typename T, typename VT, typename V>
-  friend std::ostream& ::operator<<(std::ostream&,
-                                    const PatriciaTreeMap<T, VT, V>&);
 };
 
 } // namespace sparta
-
-template <typename Key, typename ValueType, typename Value>
-inline std::ostream& operator<<(
-    std::ostream& o,
-    const typename sparta::PatriciaTreeMap<Key, ValueType, Value>& s) {
-  using namespace sparta;
-  o << "{";
-  for (auto it = s.begin(); it != s.end(); ++it) {
-    o << pt_util::deref(it->first) << " -> " << it->second;
-    if (std::next(it) != s.end()) {
-      o << ", ";
-    }
-  }
-  o << "}";
-  return o;
-}

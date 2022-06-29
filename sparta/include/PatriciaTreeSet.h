@@ -146,6 +146,10 @@ class PatriciaTreeSet final {
     return *this;
   }
 
+  bool erase_all_matching(Element element_mask) {
+    return m_core.erase_all_matching(element_mask);
+  }
+
   PatriciaTreeSet& union_with(const PatriciaTreeSet& other) {
     // For union, empty value or empty value is empty value.
     m_core.merge(pt_core::use_available_value<IntegerType, Empty>,
@@ -192,8 +196,7 @@ class PatriciaTreeSet final {
 
   void clear() { m_core.clear(); }
 
-  friend std::ostream& operator<<(std::ostream& o,
-                                  const PatriciaTreeSet<Element>& s) {
+  friend std::ostream& operator<<(std::ostream& o, const PatriciaTreeSet& s) {
     o << "{";
     for (auto it = s.begin(); it != s.end(); ++it) {
       o << pt_util::deref(*it);
