@@ -348,6 +348,20 @@ void TableSnapshot::get_configurations(
   }
 }
 
+std::set<android::ResTable_config> TableSnapshot::get_configs_with_values(
+    uint32_t id) {
+  std::set<android::ResTable_config> configs;
+  auto& config_entries = m_table_parser.m_res_id_to_entries.at(id);
+  for (auto& pair : config_entries) {
+    if (!arsc::is_empty(pair.second)) {
+      android::ResTable_config swapped;
+      swapped.copyFromDtoH(*(pair.first));
+      configs.emplace(swapped);
+    }
+  }
+  return configs;
+}
+
 bool TableSnapshot::are_values_identical(uint32_t a, uint32_t b) {
   uint32_t upper = PACKAGE_MASK_BIT | TYPE_MASK_BIT;
   if ((a & upper) != (b & upper)) {
