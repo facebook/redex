@@ -8,19 +8,17 @@
 #pragma once
 
 #include <algorithm>
-#include <atomic>
 #include <cstdint>
 #include <functional>
 #include <iterator>
-#include <limits>
 #include <ostream>
 #include <stack>
 #include <type_traits>
 #include <utility>
 
-#include <boost/intrusive_ptr.hpp>
-
 #include "AbstractDomain.h"
+#include "Exceptions.h"
+#include "PatriciaTreeCore.h"
 #include "PatriciaTreeUtil.h"
 
 // Forward declarations
@@ -42,13 +40,13 @@ namespace sparta {
 namespace ptmap_impl {
 
 template <typename IntegerType, typename Value>
-class PatriciaTree;
+using PatriciaTree = pt_core::PatriciaTreeNode<IntegerType, Value>;
 
 template <typename IntegerType, typename Value>
-class PatriciaTreeBranch;
+using PatriciaTreeLeaf = pt_core::PatriciaTreeLeaf<IntegerType, Value>;
 
 template <typename IntegerType, typename Value>
-class PatriciaTreeLeaf;
+using PatriciaTreeBranch = pt_core::PatriciaTreeBranch<IntegerType, Value>;
 
 template <typename IntegerType, typename Value>
 class PatriciaTreeIterator;
@@ -73,6 +71,12 @@ template <typename IntegerType, typename Value>
 inline bool equals(
     const boost::intrusive_ptr<PatriciaTree<IntegerType, Value>>& tree1,
     const boost::intrusive_ptr<PatriciaTree<IntegerType, Value>>& tree2);
+
+template <typename IntegerType, typename Value>
+inline boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> combine_leaf(
+    const ptmap_impl::CombiningFunction<typename Value::type>& combine,
+    const typename Value::type& value,
+    const boost::intrusive_ptr<PatriciaTreeLeaf<IntegerType, Value>>& leaf);
 
 template <typename IntegerType, typename Value>
 inline boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> combine_new_leaf(
@@ -121,21 +125,6 @@ T snd(const T&, const T& second) {
   return second;
 }
 
-/*
- * Convenience interface that makes it easy to define maps for value types that
- * are default-constructible and equality-comparable.
- */
-template <typename T>
-struct SimpleValue {
-  using type = T;
-
-  static T default_value() { return T(); }
-
-  static bool is_default_value(const T& t) { return t == T(); }
-
-  static bool equals(const T& a, const T& b) { return a == b; }
-};
-
 } // namespace ptmap_impl
 
 /*
@@ -182,14 +171,15 @@ struct SimpleValue {
  */
 template <typename Key,
           typename ValueType,
-          typename Value = ptmap_impl::SimpleValue<ValueType>>
+          typename Value = pt_core::SimpleValue<ValueType>>
 class PatriciaTreeMap final {
-  using Codec = pt_util::Codec<Key>;
+  using Core = pt_core::PatriciaTreeCore<Key, Value>;
+  using Codec = typename Core::Codec;
 
  public:
   // C++ container concept member types
   using key_type = Key;
-  using mapped_type = typename Value::type;
+  using mapped_type = typename Core::ValueType;
   using value_type = std::pair<const Key, mapped_type>;
   using iterator = ptmap_impl::PatriciaTreeIterator<Key, Value>;
   using const_iterator = iterator;
@@ -202,27 +192,10 @@ class PatriciaTreeMap final {
   using combining_function = ptmap_impl::CombiningFunction<mapped_type>;
   using mapping_function = ptmap_impl::MappingFunction<mapped_type>;
 
-  ~PatriciaTreeMap() {
-    // The destructor is the only method that is guaranteed to be created when a
-    // class template is instantiated. This is a good place to perform all the
-    // sanity checks on the template parameters.
-    static_assert(std::is_same<ValueType, typename Value::type>::value,
-                  "ValueType must be equal to Value::type");
-    static_assert(
-        std::is_same<decltype(Value::default_value()), mapped_type>::value,
-        "Value::default_value() does not exist");
-    static_assert(std::is_same<decltype(Value::is_default_value(
-                                   std::declval<mapped_type>())),
-                               bool>::value,
-                  "Value::is_default_value() does not exist");
-    static_assert(
-        std::is_same<decltype(Value::equals(std::declval<mapped_type>(),
-                                            std::declval<mapped_type>())),
-                     bool>::value,
-        "Value::equals() does not exist");
-  }
+  static_assert(std::is_same_v<ValueType, mapped_type>,
+                "ValueType must be equal to Value::type");
 
-  bool empty() const { return m_tree == nullptr; }
+  bool empty() const { return m_core.empty(); }
 
   size_t size() const {
     size_t s = 0;
@@ -230,15 +203,15 @@ class PatriciaTreeMap final {
     return s;
   }
 
-  size_t max_size() const { return std::numeric_limits<IntegerType>::max(); }
+  size_t max_size() const { return m_core.max_size(); }
 
-  iterator begin() const { return iterator(m_tree); }
+  iterator begin() const { return iterator(m_core.m_tree); }
 
   iterator end() const { return iterator(); }
 
   const mapped_type& at(Key key) const {
     const mapped_type* value =
-        ptmap_impl::find_value(Codec::encode(key), m_tree);
+        ptmap_impl::find_value(Codec::encode(key), m_core.m_tree);
     if (value == nullptr) {
       static const mapped_type default_value = Value::default_value();
       return default_value;
@@ -255,11 +228,11 @@ class PatriciaTreeMap final {
                                       typename Value::type>::value,
                   "Value::leq() is defined, but Value::type is not an "
                   "implementation of AbstractDomain");
-    return ptmap_impl::leq<IntegerType>(m_tree, other.m_tree);
+    return ptmap_impl::leq<IntegerType>(m_core.m_tree, other.m_core.m_tree);
   }
 
   bool equals(const PatriciaTreeMap& other) const {
-    return ptmap_impl::equals<IntegerType>(m_tree, other.m_tree);
+    return ptmap_impl::equals<IntegerType>(m_core.m_tree, other.m_core.m_tree);
   }
 
   friend bool operator==(const PatriciaTreeMap& m1, const PatriciaTreeMap& m2) {
@@ -289,62 +262,62 @@ class PatriciaTreeMap final {
    *   }
    */
   bool reference_equals(const PatriciaTreeMap& other) const {
-    return m_tree == other.m_tree;
+    return m_core.reference_equals(other.m_core);
   }
 
   PatriciaTreeMap& update(
       const std::function<mapped_type(const mapped_type&)>& operation,
       Key key) {
-    m_tree = ptmap_impl::update<IntegerType, Value>(
+    m_core.m_tree = ptmap_impl::update<IntegerType, Value>(
         [&operation](const mapped_type& x, const mapped_type&) {
           return operation(x);
         },
         Codec::encode(key),
         Value::default_value(),
-        m_tree);
+        m_core.m_tree);
     return *this;
   }
 
   bool map(const mapping_function& f) {
-    auto new_tree = ptmap_impl::map<IntegerType, Value>(f, m_tree);
-    bool res = new_tree != m_tree;
-    m_tree = new_tree;
+    auto new_tree = ptmap_impl::map<IntegerType, Value>(f, m_core.m_tree);
+    bool res = new_tree != m_core.m_tree;
+    m_core.m_tree = new_tree;
     return res;
   }
 
   bool erase_all_matching(Key key_mask) {
     auto new_tree = ptmap_impl::erase_all_matching<IntegerType, Value>(
-        Codec::encode(key_mask), m_tree);
-    bool res = new_tree != m_tree;
-    m_tree = new_tree;
+        Codec::encode(key_mask), m_core.m_tree);
+    bool res = new_tree != m_core.m_tree;
+    m_core.m_tree = new_tree;
     return res;
   }
 
   PatriciaTreeMap& insert_or_assign(Key key, const mapped_type& value) {
-    m_tree = ptmap_impl::update<IntegerType, Value>(
-        ptmap_impl::snd<mapped_type>, Codec::encode(key), value, m_tree);
+    m_core.m_tree = ptmap_impl::update<IntegerType, Value>(
+        ptmap_impl::snd<mapped_type>, Codec::encode(key), value, m_core.m_tree);
     return *this;
   }
 
   PatriciaTreeMap& union_with(const combining_function& combine,
                               const PatriciaTreeMap& other) {
-    m_tree =
-        ptmap_impl::merge<IntegerType, Value>(combine, m_tree, other.m_tree);
+    m_core.m_tree = ptmap_impl::merge<IntegerType, Value>(
+        combine, m_core.m_tree, other.m_core.m_tree);
     return *this;
   }
 
   PatriciaTreeMap& intersection_with(const combining_function& combine,
                                      const PatriciaTreeMap& other) {
-    m_tree = ptmap_impl::intersect<IntegerType, Value>(
-        combine, m_tree, other.m_tree);
+    m_core.m_tree = ptmap_impl::intersect<IntegerType, Value>(
+        combine, m_core.m_tree, other.m_core.m_tree);
     return *this;
   }
 
   // Requires that `combine(bottom, ...) = bottom`.
   PatriciaTreeMap& difference_with(const combining_function& combine,
                                    const PatriciaTreeMap& other) {
-    m_tree =
-        ptmap_impl::diff<IntegerType, Value>(combine, m_tree, other.m_tree);
+    m_core.m_tree = ptmap_impl::diff<IntegerType, Value>(
+        combine, m_core.m_tree, other.m_core.m_tree);
     return *this;
   }
 
@@ -369,10 +342,10 @@ class PatriciaTreeMap final {
     return result;
   }
 
-  void clear() { m_tree.reset(); }
+  void clear() { m_core.clear(); }
 
  private:
-  boost::intrusive_ptr<ptmap_impl::PatriciaTree<IntegerType, Value>> m_tree;
+  Core m_core;
 
   template <typename T, typename VT, typename V>
   friend std::ostream& ::operator<<(std::ostream&,
@@ -402,123 +375,6 @@ namespace sparta {
 namespace ptmap_impl {
 
 using namespace pt_util;
-
-template <typename IntegerType, typename Value>
-class PatriciaTree {
- public:
-  // A Patricia tree is an immutable structure.
-  PatriciaTree& operator=(const PatriciaTree& other) = delete;
-
-  ~PatriciaTree() {
-    // The destructor is the only method that is guaranteed to be created when
-    // a class template is instantiated. This is a good place to perform all
-    // the sanity checks on the template parameters.
-    static_assert(std::is_unsigned<IntegerType>::value,
-                  "IntegerType is not an unsigned arihmetic type");
-  }
-
-  bool is_leaf() const {
-    return m_reference_count.load(std::memory_order_relaxed) & LEAF_MASK;
-  }
-
-  bool is_branch() const { return !is_leaf(); }
-
-  friend void intrusive_ptr_add_ref(const PatriciaTree<IntegerType, Value>* p) {
-    p->m_reference_count.fetch_add(1, std::memory_order_relaxed);
-  }
-
-  friend void intrusive_ptr_release(const PatriciaTree<IntegerType, Value>* p) {
-    size_t prev_reference_count =
-        p->m_reference_count.fetch_sub(1, std::memory_order_release);
-    if ((prev_reference_count & ~LEAF_MASK) == 1) {
-      std::atomic_thread_fence(std::memory_order_acquire);
-      if (prev_reference_count & LEAF_MASK) {
-        delete static_cast<const PatriciaTreeLeaf<IntegerType, Value>*>(p);
-      } else {
-        delete static_cast<const PatriciaTreeBranch<IntegerType, Value>*>(p);
-      }
-    }
-  }
-
- protected:
-  PatriciaTree(bool is_leaf) : m_reference_count(is_leaf ? LEAF_MASK : 0) {}
-
- private:
-  // We are stealing the highest bit of our reference counter to indicate
-  // whether this tree is a leaf (or, otherwise, branch).
-  static constexpr size_t LEAF_MASK = (static_cast<size_t>(1))
-                                      << (sizeof(size_t) * 8 - 1);
-  mutable std::atomic<size_t> m_reference_count;
-};
-
-template <typename IntegerType, typename Value>
-class PatriciaTreeBranch final : public PatriciaTree<IntegerType, Value> {
- public:
-  PatriciaTreeBranch(
-      IntegerType prefix,
-      IntegerType branching_bit,
-      boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> left_tree,
-      boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> right_tree)
-      : PatriciaTree<IntegerType, Value>(/* is_leaf */ false),
-        m_prefix(prefix),
-        m_stacking_bit(branching_bit),
-        m_left_tree(std::move(left_tree)),
-        m_right_tree(std::move(right_tree)) {}
-
-  IntegerType prefix() const { return m_prefix; }
-
-  IntegerType branching_bit() const { return m_stacking_bit; }
-
-  const boost::intrusive_ptr<PatriciaTree<IntegerType, Value>>& left_tree()
-      const {
-    return m_left_tree;
-  }
-
-  const boost::intrusive_ptr<PatriciaTree<IntegerType, Value>>& right_tree()
-      const {
-    return m_right_tree;
-  }
-
-  static boost::intrusive_ptr<PatriciaTreeBranch<IntegerType, Value>> make(
-      IntegerType prefix,
-      IntegerType branching_bit,
-      boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> left_tree,
-      boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> right_tree) {
-    return new PatriciaTreeBranch<IntegerType, Value>(
-        prefix, branching_bit, std::move(left_tree), std::move(right_tree));
-  }
-
- private:
-  IntegerType m_prefix;
-  IntegerType m_stacking_bit;
-  boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> m_left_tree;
-  boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> m_right_tree;
-};
-
-template <typename IntegerType, typename Value>
-class PatriciaTreeLeaf final : public PatriciaTree<IntegerType, Value> {
- public:
-  using mapped_type = typename Value::type;
-
-  explicit PatriciaTreeLeaf(IntegerType key, const mapped_type& value)
-      : PatriciaTree<IntegerType, Value>(/* is_leaf */ true),
-        m_pair(key, value) {}
-
-  const IntegerType& key() const { return m_pair.first; }
-
-  const mapped_type& value() const { return m_pair.second; }
-
-  static boost::intrusive_ptr<PatriciaTreeLeaf<IntegerType, Value>> make(
-      IntegerType key, const mapped_type& value) {
-    return new PatriciaTreeLeaf<IntegerType, Value>(key, value);
-  }
-
- private:
-  std::pair<IntegerType, mapped_type> m_pair;
-
-  template <typename T, typename V>
-  friend class ptmap_impl::PatriciaTreeIterator;
-};
 
 template <typename IntegerType, typename Value>
 boost::intrusive_ptr<PatriciaTreeBranch<IntegerType, Value>> join(
@@ -1187,7 +1043,7 @@ class PatriciaTreeIterator final {
     return !(*this == other);
   }
 
-  reference operator*() const { return Codec::decode(m_leaf->m_pair); }
+  reference operator*() const { return Codec::decode(m_leaf->data()); }
 
   pointer operator->() const { return &(**this); }
 
