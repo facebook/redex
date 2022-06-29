@@ -20,22 +20,21 @@
 #ifndef _LIBS_UTILS_RESOURCE_TYPES_H
 #define _LIBS_UTILS_RESOURCE_TYPES_H
 
-#include "utils/ByteOrder.h"
+#include "androidfw/LocaleData.h"
 #include "utils/Errors.h"
 #include "utils/String16.h"
 #include "utils/Vector.h"
 #include "utils/KeyedVector.h"
 
-#include <utils/threads.h>
+#include "utils/threads.h"
 
 #include <stdint.h>
 #include <sys/types.h>
 
-#if defined(_MSC_VER) || defined(__MINGW64__) || defined(__MINGW32__)
-#include <mutex>
-#endif
-
 #include "android/configuration.h"
+
+#include <array>
+#include <memory>
 
 namespace android {
 
@@ -102,7 +101,9 @@ enum {
     RES_TABLE_PACKAGE_TYPE      = 0x0200,
     RES_TABLE_TYPE_TYPE         = 0x0201,
     RES_TABLE_TYPE_SPEC_TYPE    = 0x0202,
-    RES_TABLE_LIBRARY_TYPE      = 0x0203
+    RES_TABLE_LIBRARY_TYPE      = 0x0203,
+    RES_TABLE_OVERLAYABLE_TYPE  = 0x0204,
+    RES_TABLE_OVERLAYABLE_POLICY_TYPE = 0x0205,
 };
 
 /**
@@ -136,7 +137,7 @@ struct Res_value
     uint8_t res0;
 
     // Type of the data value.
-    enum {
+    enum : uint8_t {
         // The 'data' is either 0 or 1, specifying this resource is either
         // undefined or empty, respectively.
         TYPE_NULL = 0x00,
@@ -159,6 +160,9 @@ struct Res_value
         // The 'data' holds a dynamic ResTable_ref, which needs to be
         // resolved before it can be used like a TYPE_REFERENCE.
         TYPE_DYNAMIC_REFERENCE = 0x07,
+        // The 'data' holds an attribute resource identifier, which needs to be resolved
+        // before it can be used like a TYPE_ATTRIBUTE.
+        TYPE_DYNAMIC_ATTRIBUTE = 0x08,
 
         // Beginning of integer flavors...
         TYPE_FIRST_INT = 0x10,
@@ -246,10 +250,7 @@ struct Res_value
 
     // The data for this item, as interpreted according to dataType.
     typedef uint32_t data_type;
-    union {
-      data_type data;
-      float floatData;
-    };
+    data_type data;
 
     void copyFrom_dtoh(const Res_value& src);
 };
@@ -337,7 +338,7 @@ struct ResStringPool_header
  */
 struct ResStringPool_span
 {
-    enum : uint32_t {
+    enum {
         END = 0xFFFFFFFF
     };
 
@@ -358,10 +359,10 @@ class ResStringPool
 public:
     ResStringPool();
     ResStringPool(const void* data, size_t size, bool copyData=false);
-    ~ResStringPool();
+    virtual ~ResStringPool();
 
     void setToEmpty();
-    status_t setTo(const void* data, size_t size, bool copyData=true);
+    status_t setTo(const void* data, size_t size, bool copyData=false);
 
     status_t getError() const;
 
@@ -372,10 +373,10 @@ public:
     inline const char16_t* stringAt(const ResStringPool_ref& ref, size_t* outLen) const {
         return stringAt(ref.index, outLen);
     }
-    const char16_t* stringAt(size_t idx, size_t* outLen) const;
+    virtual const char16_t* stringAt(size_t idx, size_t* outLen) const;
 
     // Note: returns null if the string pool is not UTF8.
-    const char* string8At(size_t idx, size_t* outLen) const;
+    virtual const char* string8At(size_t idx, size_t* outLen) const;
 
     // Return string whether the pool is UTF8 or UTF16.  Does not allow you
     // to distinguish null.
@@ -386,9 +387,11 @@ public:
 
     ssize_t indexOfString(const char16_t* str, size_t strLen) const;
 
-    size_t size() const;
+    virtual size_t size() const;
     size_t styleCount() const;
     size_t bytes() const;
+    const void* data() const;
+
 
     bool isSorted() const;
     bool isUTF8() const;
@@ -398,11 +401,7 @@ private:
     void*                       mOwnedData;
     const ResStringPool_header* mHeader;
     size_t                      mSize;
-#if !defined(_MSC_VER) && !defined(__MINGW64__) && !defined(__MINGW32__)
     mutable Mutex               mDecodeLock;
-#else
-    mutable std::mutex          mDecodeLock;
-#endif
     const uint32_t*             mEntries;
     const uint32_t*             mEntryStyles;
     const void*                 mStrings;
@@ -410,6 +409,26 @@ private:
     uint32_t                    mStringPoolSize;    // number of uint16_t
     const uint32_t*             mStyles;
     uint32_t                    mStylePoolSize;    // number of uint32_t
+
+    const char* stringDecodeAt(size_t idx, const uint8_t* str, const size_t encLen,
+                               size_t* outLen) const;
+};
+
+/**
+ * Wrapper class that allows the caller to retrieve a string from
+ * a string pool without knowing which string pool to look.
+ */
+class StringPoolRef {
+public:
+ StringPoolRef() = default;
+ StringPoolRef(const ResStringPool* pool, uint32_t index);
+
+ const char* string8(size_t* outLen) const;
+ const char16_t* string16(size_t* outLen) const;
+
+private:
+ const ResStringPool* mPool = nullptr;
+ uint32_t mIndex = 0u;
 };
 
 /** ********************************************************************
@@ -543,7 +562,7 @@ class ResXMLTree;
 class ResXMLParser
 {
 public:
-    ResXMLParser(const ResXMLTree& tree);
+    explicit ResXMLParser(const ResXMLTree& tree);
 
     enum event_code_t {
         BAD_DOCUMENT = -1,
@@ -619,7 +638,6 @@ public:
 
     int32_t getAttributeDataType(size_t idx) const;
     int32_t getAttributeData(size_t idx) const;
-
     ssize_t getAttributeValue(size_t idx, Res_value* outValue) const;
 
     ssize_t indexOfAttribute(const char* ns, const char* attr) const;
@@ -633,17 +651,19 @@ public:
     void getPosition(ResXMLPosition* pos) const;
     void setPosition(const ResXMLPosition& pos);
 
+    void setSourceResourceId(const uint32_t resId);
+    uint32_t getSourceResourceId() const;
+
 private:
     friend class ResXMLTree;
 
     event_code_t nextNode();
 
-    ResXMLTree_attribute* getAttributePointer(size_t idx) const;
-
     const ResXMLTree&           mTree;
     event_code_t                mEventCode;
     const ResXMLTree_node*      mCurNode;
     const void*                 mCurExt;
+    uint32_t                    mSourceResourceId;
 };
 
 class DynamicRefTable;
@@ -654,7 +674,12 @@ class DynamicRefTable;
 class ResXMLTree : public ResXMLParser
 {
 public:
-    ResXMLTree(const DynamicRefTable* dynamicRefTable);
+    /**
+     * Creates a ResXMLTree with the specified DynamicRefTable for run-time package id translation.
+     * The tree stores a clone of the specified DynamicRefTable, so any changes to the original
+     * DynamicRefTable will not affect this tree after instantiation.
+     **/
+    explicit ResXMLTree(std::shared_ptr<const DynamicRefTable> dynamicRefTable);
     ResXMLTree();
     ~ResXMLTree();
 
@@ -669,7 +694,7 @@ private:
 
     status_t validateNode(const ResXMLTree_node* node) const;
 
-    const DynamicRefTable* const mDynamicRefTable;
+    std::shared_ptr<const DynamicRefTable> mDynamicRefTable;
 
     status_t                    mError;
     void*                       mOwnedData;
@@ -677,7 +702,7 @@ private:
     size_t                      mSize;
     const uint8_t*              mDataEnd;
     ResStringPool               mStrings;
-    uint32_t*                   mResIds;
+    const uint32_t*             mResIds;
     size_t                      mNumResIds;
     const ResXMLTree_node*      mRootNode;
     const void*                 mRootExt;
@@ -752,9 +777,10 @@ struct ResTable_package
 // - a 8 char variant code prefixed by a 'v'
 //
 // each separated by a single char separator, which sums up to a total of 24
-// chars, (25 include the string terminator) rounded up to 28 to be 4 byte
-// aligned.
-#define RESTABLE_MAX_LOCALE_LEN 28
+// chars, (25 include the string terminator). Numbering system specificator,
+// if present, can add up to 14 bytes (-u-nu-xxxxxxxx), giving 39 bytes,
+// or 40 bytes to make it 4 bytes aligned.
+#define RESTABLE_MAX_LOCALE_LEN 40
 
 
 /**
@@ -915,7 +941,7 @@ struct ResTable_config
         SDKVERSION_ANY = 0
     };
 
-    enum {
+  enum {
         MINORVERSION_ANY = 0
     };
 
@@ -995,7 +1021,7 @@ struct ResTable_config
     // the locale field.
     char localeScript[4];
 
-    // A single BCP-47 variant subtag. Will vary in length between 5 and 8
+    // A single BCP-47 variant subtag. Will vary in length between 4 and 8
     // chars. Interpreted in conjunction with the locale field.
     char localeVariant[8];
 
@@ -1031,6 +1057,7 @@ struct ResTable_config
         };
         uint32_t screenConfig2;
     };
+
     // If false and localeScript is set, it means that the script of the locale
     // was explicitly provided.
     //
@@ -1051,6 +1078,8 @@ struct ResTable_config
 
     int compare(const ResTable_config& o) const;
     int compareLogical(const ResTable_config& o) const;
+
+    inline bool operator<(const ResTable_config& o) const { return compare(o) < 0; }
 
     // Flags indicating a set of config values.  These flag constants must
     // match the corresponding ones in android.content.pm.ActivityInfo and
@@ -1107,17 +1136,32 @@ struct ResTable_config
     // |RESTABLE_MAX_LOCALE_LEN| (including a terminating '\0').
     //
     // Example: en-US, en-Latn-US, en-POSIX.
-    void getBcp47Locale(char* out) const;
+    //
+    // If canonicalize is set, Tagalog (tl) locales get converted
+    // to Filipino (fil).
+    void getBcp47Locale(char* out, bool canonicalize=false) const;
 
-    // Sets the values of language, region, script and variant to the
-    // well formed BCP-47 locale contained in |in|. The input locale is
-    // assumed to be valid and no validation is performed.
+    // Append to str the resource-qualifer string representation of the
+    // locale component of this Config. If the locale is only country
+    // and language, it will look like en-rUS. If it has scripts and
+    // variants, it will be a modified bcp47 tag: b+en+Latn+US.
+    void appendDirLocale(String8& str) const;
+
+    // Sets the values of language, region, script, variant and numbering
+    // system to the well formed BCP 47 locale contained in |in|.
+    // The input locale is assumed to be valid and no validation is performed.
     void setBcp47Locale(const char* in);
 
     inline void clearLocale() {
         locale = 0;
+        localeScriptWasComputed = false;
         memset(localeScript, 0, sizeof(localeScript));
         memset(localeVariant, 0, sizeof(localeVariant));
+        memset(localeNumberingSystem, 0, sizeof(localeNumberingSystem));
+    }
+
+    inline void computeScript() {
+        localeDataComputeScript(localeScript, language, country);
     }
 
     // Get the 2 or 3 letter language code of this configuration. Trailing
@@ -1142,6 +1186,15 @@ struct ResTable_config
     // with respect to their locales, a negative integer if |o| is more specific
     // and 0 if they're equally specific.
     int isLocaleMoreSpecificThan(const ResTable_config &o) const;
+
+    // Returns an integer representng the imporance score of the configuration locale.
+    int getImportanceScoreOfLocale() const;
+
+    // Return true if 'this' is a better locale match than 'o' for the
+    // 'requested' configuration. Similar to isBetterThan(), this assumes that
+    // match() has already been used to remove any configurations that don't
+    // match the requested configuration at all.
+    bool isLocaleBetterThan(const ResTable_config& o, const ResTable_config* requested) const;
 
     String8 toString() const;
 };
@@ -1173,19 +1226,28 @@ struct ResTable_typeSpec
     // Number of uint32_t entry configuration masks that follow.
     uint32_t entryCount;
 
-    enum {
+    enum : uint32_t {
         // Additional flag indicating an entry is public.
-        SPEC_PUBLIC = 0x40000000
+        SPEC_PUBLIC = 0x40000000u,
     };
 };
 
 /**
  * A collection of resource entries for a particular resource data
- * type. Followed by an array of uint32_t defining the resource
+ * type.
+ *
+ * If the flag FLAG_SPARSE is not set in `flags`, then this struct is
+ * followed by an array of uint32_t defining the resource
  * values, corresponding to the array of type strings in the
  * ResTable_package::typeStrings string block. Each of these hold an
  * index from entriesStart; a value of NO_ENTRY means that entry is
  * not defined.
+ *
+ * If the flag FLAG_SPARSE is set in `flags`, then this struct is followed
+ * by an array of ResTable_sparseTypeEntry defining only the entries that
+ * have values for this type. Each entry is sorted by their entry ID such
+ * that a binary search can be performed over the entries. The ID and offset
+ * are encoded in a uint32_t. See ResTabe_sparseTypeEntry.
  *
  * There may be multiple of these chunks for a particular resource type,
  * supply different configuration variations for the resource values of
@@ -1198,7 +1260,7 @@ struct ResTable_type
 {
     struct ResChunk_header header;
 
-    enum : uint32_t {
+    enum {
         NO_ENTRY = 0xFFFFFFFF
     };
 
@@ -1207,10 +1269,17 @@ struct ResTable_type
     // resource identifier).  0 is invalid.
     uint8_t id;
 
+    enum {
+        // If set, the entry is sparse, and encodes both the entry ID and offset into each entry,
+        // and a binary search is used to find the key. Only available on platforms >= O.
+        // Mark any types that use this with a v26 qualifier to prevent runtime issues on older
+        // platforms.
+        FLAG_SPARSE = 0x01,
+    };
+    uint8_t flags;
+
     // Must be 0.
-    uint8_t res0;
-    // Must be 0.
-    uint16_t res1;
+    uint16_t reserved;
 
     // Number of uint32_t entry indices that follow.
     uint32_t entryCount;
@@ -1218,9 +1287,36 @@ struct ResTable_type
     // Offset from header where ResTable_entry data starts.
     uint32_t entriesStart;
 
-    // Configuration this collection of entries is designed for.
+    // Configuration this collection of entries is designed for. This must always be last.
     ResTable_config config;
 };
+
+// The minimum size required to read any version of ResTable_type.
+constexpr size_t kResTableTypeMinSize =
+    sizeof(ResTable_type) - sizeof(ResTable_config) + sizeof(ResTable_config::size);
+
+// Assert that the ResTable_config is always the last field. This poses a problem for extending
+// ResTable_type in the future, as ResTable_config is variable (over different releases).
+static_assert(sizeof(ResTable_type) == offsetof(ResTable_type, config) + sizeof(ResTable_config),
+              "ResTable_config must be last field in ResTable_type");
+
+/**
+ * An entry in a ResTable_type with the flag `FLAG_SPARSE` set.
+ */
+union ResTable_sparseTypeEntry {
+    // Holds the raw uint32_t encoded value. Do not read this.
+    uint32_t entry;
+    struct {
+        // The index of the entry.
+        uint16_t idx;
+
+        // The offset from ResTable_type::entriesStart, divided by 4.
+        uint16_t offset;
+    };
+};
+
+static_assert(sizeof(ResTable_sparseTypeEntry) == sizeof(uint32_t),
+        "ResTable_sparseTypeEntry must be 4 bytes in size");
 
 /**
  * This is the beginning of information about an entry in the resource
@@ -1241,7 +1337,11 @@ struct ResTable_entry
         FLAG_COMPLEX = 0x0001,
         // If set, this resource has been declared public, so libraries
         // are allowed to reference it.
-        FLAG_PUBLIC = 0x0002
+        FLAG_PUBLIC = 0x0002,
+        // If set, this is a weak resource and may be overriden by strong
+        // resources of the same name/type. This is only useful during
+        // linking with other resource tables.
+        FLAG_WEAK = 0x0004
     };
     uint16_t flags;
 
@@ -1379,6 +1479,87 @@ struct ResTable_lib_entry
 };
 
 /**
+ * Specifies the set of resources that are explicitly allowed to be overlaid by RROs.
+ */
+struct ResTable_overlayable_header
+{
+  struct ResChunk_header header;
+
+  // The name of the overlayable set of resources that overlays target.
+  uint16_t name[256];
+
+ // The component responsible for enabling and disabling overlays targeting this chunk.
+  uint16_t actor[256];
+};
+
+/**
+ * Holds a list of resource ids that are protected from being overlaid by a set of policies. If
+ * the overlay fulfils at least one of the policies, then the overlay can overlay the list of
+ * resources.
+ */
+struct ResTable_overlayable_policy_header
+{
+  /**
+   * Flags for a bitmask for all possible overlayable policy options.
+   *
+   * Any changes to this set should also update aidl/android/os/OverlayablePolicy.aidl
+   */
+  enum PolicyFlags : uint32_t {
+    // Base
+    NONE = 0x00000000,
+
+    // Any overlay can overlay these resources.
+    PUBLIC = 0x00000001,
+
+    // The overlay must reside of the system partition or must have existed on the system partition
+    // before an upgrade to overlay these resources.
+    SYSTEM_PARTITION = 0x00000002,
+
+    // The overlay must reside of the vendor partition or must have existed on the vendor partition
+    // before an upgrade to overlay these resources.
+    VENDOR_PARTITION = 0x00000004,
+
+    // The overlay must reside of the product partition or must have existed on the product
+    // partition before an upgrade to overlay these resources.
+    PRODUCT_PARTITION = 0x00000008,
+
+    // The overlay must be signed with the same signature as the package containing the target
+    // resource
+    SIGNATURE = 0x00000010,
+
+    // The overlay must reside of the odm partition or must have existed on the odm
+    // partition before an upgrade to overlay these resources.
+    ODM_PARTITION = 0x00000020,
+
+    // The overlay must reside of the oem partition or must have existed on the oem
+    // partition before an upgrade to overlay these resources.
+    OEM_PARTITION = 0x00000040,
+
+    // The overlay must be signed with the same signature as the actor declared for the target
+    // resource
+    ACTOR_SIGNATURE = 0x00000080,
+  };
+
+  using PolicyBitmask = uint32_t;
+
+  struct ResChunk_header header;
+
+  PolicyFlags policy_flags;
+
+  // The number of ResTable_ref that follow this header.
+  uint32_t entry_count;
+};
+
+inline ResTable_overlayable_policy_header::PolicyFlags& operator |=(
+    ResTable_overlayable_policy_header::PolicyFlags& first,
+    ResTable_overlayable_policy_header::PolicyFlags second) {
+  first = static_cast<ResTable_overlayable_policy_header::PolicyFlags>(first | second);
+  return first;
+}
+
+class AssetManager2;
+
+/**
  * Holds the shared library ID table. Shared libraries are assigned package IDs at
  * build time, but they may be loaded in a different order, so we need to maintain
  * a mapping of build-time package ID to run-time assigned package ID.
@@ -1388,8 +1569,11 @@ struct ResTable_lib_entry
  */
 class DynamicRefTable
 {
+    friend class AssetManager2;
 public:
-    DynamicRefTable(uint8_t packageId);
+    DynamicRefTable();
+    DynamicRefTable(uint8_t packageId, bool appAsLib);
+    virtual ~DynamicRefTable() = default;
 
     // Loads an unmapped reference table from the package.
     status_t load(const ResTable_lib_header* const header);
@@ -1401,22 +1585,26 @@ public:
     // the given package.
     status_t addMapping(const String16& packageName, uint8_t packageId);
 
+    void addMapping(uint8_t buildPackageId, uint8_t runtimePackageId);
+
+    // Returns whether or not the value must be looked up.
+    bool requiresLookup(const Res_value* value) const;
+
     // Performs the actual conversion of build-time resource ID to run-time
     // resource ID.
-    inline status_t lookupResourceId(uint32_t* resId) const;
-    inline status_t lookupResourceValue(Res_value* value) const;
+    virtual status_t lookupResourceId(uint32_t* resId) const;
+    status_t lookupResourceValue(Res_value* value) const;
 
     inline const KeyedVector<String16, uint8_t>& entries() const {
         return mEntries;
     }
 
 private:
-    const uint8_t                   mAssignedPackageId;
+    uint8_t                         mAssignedPackageId;
     uint8_t                         mLookupTable[256];
     KeyedVector<String16, uint8_t>  mEntries;
+    bool                            mAppAsLib;
 };
-
-bool U16StringToInt(const char16_t* s, size_t len, Res_value* outValue);
 
 }   // namespace android
 

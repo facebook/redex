@@ -24,21 +24,20 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <algorithm>
 #include <limits>
+#include <map>
+#include <memory>
+#include <set>
 #include <type_traits>
 
-#if defined(_MSC_VER) || defined(__MINGW64__) || defined(__MINGW32__)
-#include "CompatWindows.h"
-#include <mutex>
-#endif
-
+#include "android-base/macros.h"
 #include "androidfw/ResourceTypes.h"
 #include "androidfw/TypeWrappers.h"
 #include "utils/Atomic.h"
 #include "utils/ByteOrder.h"
 #include "utils/Debug.h"
 #include "utils/Log.h"
-#include "utils/Serialize.h"
 #include "utils/String16.h"
 #include "utils/String8.h"
 
@@ -61,9 +60,6 @@ namespace android {
 #define htons(x)    ntohs(x)
 #endif
 
-#define IDMAP_MAGIC             0x504D4449
-#define IDMAP_CURRENT_VERSION   0x00000001
-
 #define APP_PACKAGE_ID      0x7f
 #define SYS_PACKAGE_ID      0x01
 
@@ -77,20 +73,6 @@ static const bool kDebugLoadTableSuperNoisy = false;
 static const bool kDebugTableTheme = false;
 static const bool kDebugResXMLTree = false;
 static const bool kDebugLibNoisy = false;
-
-// TODO: This code uses 0xFFFFFFFF converted to bag_set* as a sentinel value. This is bad practice.
-
-// Standard C isspace() is only required to look at the low byte of its input, so
-// produces incorrect results for UTF-16 characters.  For safety's sake, assume that
-// any high-byte UTF-16 code point is not whitespace.
-inline int isspace16(char16_t c) {
-    return (c < 0x0080 && isspace(c));
-}
-
-template<typename T>
-inline static T max(T a, T b) {
-    return a > b ? a : b;
-}
 
 // range checked; guaranteed to NUL-terminate within the stated number of available slots
 // NOTE: if this truncates the dst string due to running out of space, no attempt is
@@ -137,7 +119,7 @@ static status_t validate_chunk(const ResChunk_header* chunk,
     return BAD_TYPE;
 }
 
-inline void Res_value::copyFrom_dtoh(const Res_value& src)
+void Res_value::copyFrom_dtoh(const Res_value& src)
 {
     size = dtohs(src.size);
     res0 = src.res0;
@@ -189,6 +171,22 @@ status_t ResStringPool::setTo(const void* data, size_t size, bool copyData)
 
     uninit();
 
+    // The chunk must be at least the size of the string pool header.
+    if (size < sizeof(ResStringPool_header)) {
+        ALOGW("Bad string block: data size %zu is too small to be a string block", size);
+        return (mError=BAD_TYPE);
+    }
+
+    // The data is at least as big as a ResChunk_header, so we can safely validate the other
+    // header fields.
+    // `data + size` is safe because the source of `size` comes from the kernel/filesystem.
+    if (validate_chunk(reinterpret_cast<const ResChunk_header*>(data), sizeof(ResStringPool_header),
+                       reinterpret_cast<const uint8_t*>(data) + size,
+                       "ResStringPool_header") != NO_ERROR) {
+        ALOGW("Bad string block: malformed block dimensions");
+        return (mError=BAD_TYPE);
+    }
+
     const bool notDeviceEndian = htods(0xf0) != 0xf0;
 
     if (copyData || notDeviceEndian) {
@@ -200,6 +198,8 @@ status_t ResStringPool::setTo(const void* data, size_t size, bool copyData)
         data = mOwnedData;
     }
 
+    // The size has been checked, so it is safe to read the data in the ResStringPool_header
+    // data structure.
     mHeader = (const ResStringPool_header*)data;
 
     if (notDeviceEndian) {
@@ -253,7 +253,7 @@ status_t ResStringPool::setTo(const void* data, size_t size, bool copyData)
             (((const uint8_t*)data) + mHeader->stringsStart);
 
         if (mHeader->styleCount == 0) {
-            mStringPoolSize = (uint32_t) ((mSize - mHeader->stringsStart) / charSize);
+            mStringPoolSize = (mSize - mHeader->stringsStart) / charSize;
         } else {
             // check invariant: styles starts before end of data
             if (mHeader->stylesStart >= (mSize - sizeof(uint16_t))) {
@@ -292,12 +292,12 @@ status_t ResStringPool::setTo(const void* data, size_t size, bool copyData)
             }
         }
 
-        if ((mHeader->flags & ResStringPool_header::UTF8_FLAG &&
-             ((uint8_t*)mStrings)[mStringPoolSize - 1] != 0) ||
-            (!(mHeader->flags & ResStringPool_header::UTF8_FLAG) &&
-             ((uint16_t*)mStrings)[mStringPoolSize - 1] != 0)) {
-          ALOGW("Bad string block: last string is not 0-terminated\n");
-          return (mError = BAD_TYPE);
+        if ((mHeader->flags&ResStringPool_header::UTF8_FLAG &&
+                ((uint8_t*)mStrings)[mStringPoolSize-1] != 0) ||
+                (!(mHeader->flags&ResStringPool_header::UTF8_FLAG) &&
+                ((uint16_t*)mStrings)[mStringPoolSize-1] != 0)) {
+            ALOGW("Bad string block: last string is not 0-terminated\n");
+            return (mError=BAD_TYPE);
         }
     } else {
         mStrings = NULL;
@@ -438,6 +438,12 @@ const char16_t* ResStringPool::stringAt(size_t idx, size_t* u16len) const
 
                 *u16len = decodeLength(&str);
                 if ((uint32_t)(str+*u16len-strings) < mStringPoolSize) {
+                    // Reject malformed (non null-terminated) strings
+                    if (str[*u16len] != 0x0000) {
+                        ALOGW("Bad string block: string #%d is not null-terminated",
+                              (int)idx);
+                        return NULL;
+                    }
                     return reinterpret_cast<const char16_t*>(str);
                 } else {
                     ALOGW("Bad string block: string #%d extends to %d, past end at %d\n",
@@ -452,43 +458,30 @@ const char16_t* ResStringPool::stringAt(size_t idx, size_t* u16len) const
 
                 // encLen must be less than 0x7FFF due to encoding.
                 if ((uint32_t)(u8str+u8len-strings) < mStringPoolSize) {
-#if !defined(_MSC_VER) && !defined(__MINGW64__) && !defined(__MINGW32__)
                     AutoMutex lock(mDecodeLock);
-#else
-                    std::lock_guard<std::mutex> lock(mDecodeLock);
-#endif
 
-                    if (mCache == NULL) {
-#ifndef __ANDROID__
-                        if (kDebugStringPoolNoisy) {
-                            ALOGI("CREATING STRING CACHE OF %zu bytes",
-                                    mHeader->stringCount*sizeof(char16_t**));
-                        }
-#else
-                        // We do not want to be in this case when actually running Android.
-                        ALOGW("CREATING STRING CACHE OF %zu bytes",
-                                static_cast<size_t>(mHeader->stringCount*sizeof(char16_t**)));
-#endif
-                        mCache = (char16_t**)calloc(mHeader->stringCount, sizeof(char16_t**));
-                        if (mCache == NULL) {
-                            ALOGW("No memory trying to allocate decode cache table of %d bytes\n",
-                                    (int)(mHeader->stringCount*sizeof(char16_t**)));
-                            return NULL;
-                        }
-                    }
-
-                    if (mCache[idx] != NULL) {
+                    if (mCache != NULL && mCache[idx] != NULL) {
                         return mCache[idx];
                     }
 
+                    // Retrieve the actual length of the utf8 string if the
+                    // encoded length was truncated
+                    if (stringDecodeAt(idx, u8str, u8len, &u8len) == NULL) {
+                        return NULL;
+                    }
+
+                    // Since AAPT truncated lengths longer than 0x7FFF, check
+                    // that the bits that remain after truncation at least match
+                    // the bits of the actual length
                     ssize_t actualLen = utf8_to_utf16_length(u8str, u8len);
-                    if (actualLen < 0 || (size_t)actualLen != *u16len) {
+                    if (actualLen < 0 || ((size_t)actualLen & 0x7FFF) != *u16len) {
                         ALOGW("Bad string block: string #%lld decoded length is not correct "
                                 "%lld vs %llu\n",
                                 (long long)idx, (long long)actualLen, (long long)*u16len);
                         return NULL;
                     }
 
+                    *u16len = (size_t) actualLen;
                     char16_t *u16str = (char16_t *)calloc(*u16len+1, sizeof(char16_t));
                     if (!u16str) {
                         ALOGW("No memory when trying to allocate decode cache for string #%d\n",
@@ -496,10 +489,31 @@ const char16_t* ResStringPool::stringAt(size_t idx, size_t* u16len) const
                         return NULL;
                     }
 
-                    if (kDebugStringPoolNoisy) {
-                        ALOGI("Caching UTF8 string: %s", u8str);
+                    utf8_to_utf16(u8str, u8len, u16str, *u16len + 1);
+
+                    if (mCache == NULL) {
+#ifndef __ANDROID__
+                        if (kDebugStringPoolNoisy) {
+                            ALOGI("CREATING STRING CACHE OF %zu bytes",
+                                  mHeader->stringCount*sizeof(char16_t**));
+                        }
+#else
+                        // We do not want to be in this case when actually running Android.
+                        ALOGW("CREATING STRING CACHE OF %zu bytes",
+                                static_cast<size_t>(mHeader->stringCount*sizeof(char16_t**)));
+#endif
+                        mCache = (char16_t**)calloc(mHeader->stringCount, sizeof(char16_t*));
+                        if (mCache == NULL) {
+                            ALOGW("No memory trying to allocate decode cache table of %d bytes\n",
+                                  (int)(mHeader->stringCount*sizeof(char16_t**)));
+                            return NULL;
+                        }
                     }
-                    utf8_to_utf16(u8str, u8len, u16str);
+
+                    if (kDebugStringPoolNoisy) {
+                      ALOGI("Caching UTF8 string: %s", u8str);
+                    }
+
                     mCache[idx] = u16str;
                     return u16str;
                 } else {
@@ -527,10 +541,17 @@ const char* ResStringPool::string8At(size_t idx, size_t* outLen) const
         if (off < (mStringPoolSize-1)) {
             const uint8_t* strings = (uint8_t*)mStrings;
             const uint8_t* str = strings+off;
-            *outLen = decodeLength(&str);
-            size_t encLen = decodeLength(&str);
+
+            // Decode the UTF-16 length. This is not used if we're not
+            // converting to UTF-16 from UTF-8.
+            decodeLength(&str);
+
+            const size_t encLen = decodeLength(&str);
+            *outLen = encLen;
+
             if ((uint32_t)(str+encLen-strings) < mStringPoolSize) {
-                return (const char*)str;
+                return stringDecodeAt(idx, str, encLen, outLen);
+
             } else {
                 ALOGW("Bad string block: string #%d extends to %d, past end at %d\n",
                         (int)idx, (int)(str+encLen-strings), (int)mStringPoolSize);
@@ -541,6 +562,38 @@ const char* ResStringPool::string8At(size_t idx, size_t* outLen) const
                     (int)(mStringPoolSize*sizeof(uint16_t)));
         }
     }
+    return NULL;
+}
+
+/**
+ * AAPT incorrectly writes a truncated string length when the string size
+ * exceeded the maximum possible encode length value (0x7FFF). To decode a
+ * truncated length, iterate through length values that end in the encode length
+ * bits. Strings that exceed the maximum encode length are not placed into
+ * StringPools in AAPT2.
+ **/
+const char* ResStringPool::stringDecodeAt(size_t idx, const uint8_t* str,
+                                          const size_t encLen, size_t* outLen) const {
+    const uint8_t* strings = (uint8_t*)mStrings;
+
+    size_t i = 0, end = encLen;
+    while ((uint32_t)(str+end-strings) < mStringPoolSize) {
+        if (str[end] == 0x00) {
+            if (i != 0) {
+                ALOGW("Bad string block: string #%d is truncated (actual length is %d)",
+                      (int)idx, (int)end);
+            }
+
+            *outLen = end;
+            return (const char*)str;
+        }
+
+        end = (++i << (sizeof(uint8_t) * 8 * 2 - 1)) | encLen;
+    }
+
+    // Reject malformed (non null-terminated) strings
+    ALOGW("Bad string block: string #%d is not null-terminated",
+          (int)idx);
     return NULL;
 }
 
@@ -600,7 +653,8 @@ ssize_t ResStringPool::indexOfString(const char16_t* str, size_t strLen) const
             // the ordering, we need to convert strings in the pool to UTF-16.
             // But we don't want to hit the cache, so instead we will have a
             // local temporary allocation for the conversions.
-            char16_t* convBuffer = (char16_t*)malloc(strLen+4);
+            size_t convBufferLen = strLen + 4;
+            char16_t* convBuffer = (char16_t*)calloc(convBufferLen, sizeof(char16_t));
             ssize_t l = 0;
             ssize_t h = mHeader->stringCount-1;
 
@@ -610,8 +664,7 @@ ssize_t ResStringPool::indexOfString(const char16_t* str, size_t strLen) const
                 const uint8_t* s = (const uint8_t*)string8At(mid, &len);
                 int c;
                 if (s != NULL) {
-                    char16_t* end = utf8_to_utf16_n(s, len, convBuffer, strLen+3);
-                    *end = 0;
+                    char16_t* end = utf8_to_utf16(s, len, convBuffer, convBufferLen);
                     c = strzcmp16(convBuffer, end-convBuffer, str, strLen);
                 } else {
                     c = -1;
@@ -720,6 +773,11 @@ size_t ResStringPool::styleCount() const
 size_t ResStringPool::bytes() const
 {
     return (mError == NO_ERROR) ? mHeader->header.size : 0;
+}
+
+const void* ResStringPool::data() const
+{
+    return mHeader;
 }
 
 bool ResStringPool::isSorted() const
@@ -1017,11 +1075,10 @@ int32_t ResXMLParser::getAttributeData(size_t idx) const
                 (((const uint8_t*)tag)
                  + dtohs(tag->attributeStart)
                  + (dtohs(tag->attributeSize)*idx));
-            if (attr->typedValue.dataType != Res_value::TYPE_DYNAMIC_REFERENCE ||
-                    mTree.mDynamicRefTable == NULL) {
+            if (mTree.mDynamicRefTable == NULL ||
+                    !mTree.mDynamicRefTable->requiresLookup(&attr->typedValue)) {
                 return dtohl(attr->typedValue.data);
             }
-
             uint32_t data = dtohl(attr->typedValue.data);
             if (mTree.mDynamicRefTable->lookupResourceId(&data) == NO_ERROR) {
                 return data;
@@ -1031,34 +1088,24 @@ int32_t ResXMLParser::getAttributeData(size_t idx) const
     return 0;
 }
 
-ResXMLTree_attribute* ResXMLParser::getAttributePointer(size_t idx) const
+ssize_t ResXMLParser::getAttributeValue(size_t idx, Res_value* outValue) const
 {
     if (mEventCode == START_TAG) {
         const ResXMLTree_attrExt* tag = (const ResXMLTree_attrExt*)mCurExt;
         if (idx < dtohs(tag->attributeCount)) {
-            return (ResXMLTree_attribute*)
+            const ResXMLTree_attribute* attr = (const ResXMLTree_attribute*)
                 (((const uint8_t*)tag)
                  + dtohs(tag->attributeStart)
                  + (dtohs(tag->attributeSize)*idx));
+            outValue->copyFrom_dtoh(attr->typedValue);
+            if (mTree.mDynamicRefTable != NULL &&
+                    mTree.mDynamicRefTable->lookupResourceValue(outValue) != NO_ERROR) {
+                return BAD_TYPE;
+            }
+            return sizeof(Res_value);
         }
     }
-
-    return nullptr;
-}
-
-ssize_t ResXMLParser::getAttributeValue(size_t idx, Res_value* outValue) const
-{
-    const ResXMLTree_attribute* attr = getAttributePointer(idx);
-    if (attr == nullptr) {
-        return BAD_TYPE;
-    }
-
-    outValue->copyFrom_dtoh(attr->typedValue);
-    if (mTree.mDynamicRefTable != NULL &&
-            mTree.mDynamicRefTable->lookupResourceValue(outValue) != NO_ERROR) {
-        return BAD_TYPE;
-    }
-    return sizeof(Res_value);
+    return BAD_TYPE;
 }
 
 ssize_t ResXMLParser::indexOfAttribute(const char* ns, const char* attr) const
@@ -1263,13 +1310,23 @@ void ResXMLParser::setPosition(const ResXMLParser::ResXMLPosition& pos)
     mCurExt = pos.curExt;
 }
 
+void ResXMLParser::setSourceResourceId(const uint32_t resId)
+{
+    mSourceResourceId = resId;
+}
+
+uint32_t ResXMLParser::getSourceResourceId() const
+{
+    return mSourceResourceId;
+}
+
 // --------------------------------------------------------------------
 
 static volatile int32_t gCount = 0;
 
-ResXMLTree::ResXMLTree(const DynamicRefTable* dynamicRefTable)
+ResXMLTree::ResXMLTree(std::shared_ptr<const DynamicRefTable> dynamicRefTable)
     : ResXMLParser(*this)
-    , mDynamicRefTable(dynamicRefTable)
+    , mDynamicRefTable(std::move(dynamicRefTable))
     , mError(NO_INIT), mOwnedData(NULL)
 {
     if (kDebugResXMLTree) {
@@ -1280,7 +1337,7 @@ ResXMLTree::ResXMLTree(const DynamicRefTable* dynamicRefTable)
 
 ResXMLTree::ResXMLTree()
     : ResXMLParser(*this)
-    , mDynamicRefTable(NULL)
+    , mDynamicRefTable(nullptr)
     , mError(NO_INIT), mOwnedData(NULL)
 {
     if (kDebugResXMLTree) {
@@ -1353,7 +1410,7 @@ status_t ResXMLTree::setTo(const void* data, size_t size, bool copyData)
         if (type == RES_STRING_POOL_TYPE) {
             mStrings.setTo(chunk, size);
         } else if (type == RES_XML_RESOURCE_MAP_TYPE) {
-            mResIds = (uint32_t*)
+            mResIds = (const uint32_t*)
                 (((const uint8_t*)chunk)+dtohs(chunk->headerSize));
             mNumResIds = (dtohl(chunk->size)-dtohs(chunk->headerSize))/sizeof(uint32_t);
         } else if (type >= RES_XML_FIRST_CHUNK_TYPE
@@ -1596,49 +1653,76 @@ void ResTable_config::swapHtoD() {
 
 /* static */ inline int compareLocales(const ResTable_config &l, const ResTable_config &r) {
     if (l.locale != r.locale) {
-        // NOTE: This is the old behaviour with respect to comparison orders.
-        // The diff value here doesn't make much sense (given our bit packing scheme)
-        // but it's stable, and that's all we need.
-        return l.locale - r.locale;
+        return (l.locale > r.locale) ? 1 : -1;
     }
 
-    // The language & region are equal, so compare the scripts and variants.
-    int script = memcmp(l.localeScript, r.localeScript, sizeof(l.localeScript));
+    // The language & region are equal, so compare the scripts, variants and
+    // numbering systms in this order. Comparison of variants and numbering
+    // systems should happen very infrequently (if at all.)
+    // The comparison code relies on memcmp low-level optimizations that make it
+    // more efficient than strncmp.
+    const char emptyScript[sizeof(l.localeScript)] = {'\0', '\0', '\0', '\0'};
+    const char *lScript = l.localeScriptWasComputed ? emptyScript : l.localeScript;
+    const char *rScript = r.localeScriptWasComputed ? emptyScript : r.localeScript;
+
+    int script = memcmp(lScript, rScript, sizeof(l.localeScript));
     if (script) {
         return script;
     }
 
-    // The language, region and script are equal, so compare variants.
-    //
-    // This should happen very infrequently (if at all.)
-    return memcmp(l.localeVariant, r.localeVariant, sizeof(l.localeVariant));
+    int variant = memcmp(l.localeVariant, r.localeVariant, sizeof(l.localeVariant));
+    if (variant) {
+        return variant;
+    }
+
+    return memcmp(l.localeNumberingSystem, r.localeNumberingSystem,
+                  sizeof(l.localeNumberingSystem));
 }
 
 int ResTable_config::compare(const ResTable_config& o) const {
-    int32_t diff = (int32_t)(imsi - o.imsi);
-    if (diff != 0) return diff;
-    diff = compareLocales(*this, o);
-    if (diff != 0) return diff;
-    diff = (int32_t)(screenType - o.screenType);
-    if (diff != 0) return diff;
-    diff = (int32_t)(input - o.input);
-    if (diff != 0) return diff;
-    diff = (int32_t)(screenSize - o.screenSize);
-    if (diff != 0) return diff;
-    diff = (int32_t)(version - o.version);
-    if (diff != 0) return diff;
-    diff = (int32_t)(screenLayout - o.screenLayout);
-    if (diff != 0) return diff;
-    diff = (int32_t)(screenLayout2 - o.screenLayout2);
-    if (diff != 0) return diff;
-    diff = (int32_t)(colorMode - o.colorMode);
-    if (diff != 0) return diff;
-    diff = (int32_t)(uiMode - o.uiMode);
-    if (diff != 0) return diff;
-    diff = (int32_t)(smallestScreenWidthDp - o.smallestScreenWidthDp);
-    if (diff != 0) return diff;
-    diff = (int32_t)(screenSizeDp - o.screenSizeDp);
-    return (int)diff;
+    if (imsi != o.imsi) {
+        return (imsi > o.imsi) ? 1 : -1;
+    }
+
+    int32_t diff = compareLocales(*this, o);
+    if (diff < 0) {
+        return -1;
+    }
+    if (diff > 0) {
+        return 1;
+    }
+
+    if (screenType != o.screenType) {
+        return (screenType > o.screenType) ? 1 : -1;
+    }
+    if (input != o.input) {
+        return (input > o.input) ? 1 : -1;
+    }
+    if (screenSize != o.screenSize) {
+        return (screenSize > o.screenSize) ? 1 : -1;
+    }
+    if (version != o.version) {
+        return (version > o.version) ? 1 : -1;
+    }
+    if (screenLayout != o.screenLayout) {
+        return (screenLayout > o.screenLayout) ? 1 : -1;
+    }
+    if (screenLayout2 != o.screenLayout2) {
+        return (screenLayout2 > o.screenLayout2) ? 1 : -1;
+    }
+    if (colorMode != o.colorMode) {
+        return (colorMode > o.colorMode) ? 1 : -1;
+    }
+    if (uiMode != o.uiMode) {
+        return (uiMode > o.uiMode) ? 1 : -1;
+    }
+    if (smallestScreenWidthDp != o.smallestScreenWidthDp) {
+        return (smallestScreenWidthDp > o.smallestScreenWidthDp) ? 1 : -1;
+    }
+    if (screenSizeDp != o.screenSizeDp) {
+        return (screenSizeDp > o.screenSizeDp) ? 1 : -1;
+    }
+    return 0;
 }
 
 int ResTable_config::compareLogical(const ResTable_config& o) const {
@@ -1690,6 +1774,12 @@ int ResTable_config::compareLogical(const ResTable_config& o) const {
     if (screenLayout != o.screenLayout) {
         return screenLayout < o.screenLayout ? -1 : 1;
     }
+    if (screenLayout2 != o.screenLayout2) {
+        return screenLayout2 < o.screenLayout2 ? -1 : 1;
+    }
+    if (colorMode != o.colorMode) {
+        return colorMode < o.colorMode ? -1 : 1;
+    }
     if (uiMode != o.uiMode) {
         return uiMode < o.uiMode ? -1 : 1;
     }
@@ -1714,6 +1804,9 @@ int ResTable_config::diff(const ResTable_config& o) const {
     if (version != o.version) diffs |= CONFIG_VERSION;
     if ((screenLayout & MASK_LAYOUTDIR) != (o.screenLayout & MASK_LAYOUTDIR)) diffs |= CONFIG_LAYOUTDIR;
     if ((screenLayout & ~MASK_LAYOUTDIR) != (o.screenLayout & ~MASK_LAYOUTDIR)) diffs |= CONFIG_SCREEN_LAYOUT;
+    if ((screenLayout2 & MASK_SCREENROUND) != (o.screenLayout2 & MASK_SCREENROUND)) diffs |= CONFIG_SCREEN_ROUND;
+    if ((colorMode & MASK_WIDE_COLOR_GAMUT) != (o.colorMode & MASK_WIDE_COLOR_GAMUT)) diffs |= CONFIG_COLOR_MODE;
+    if ((colorMode & MASK_HDR) != (o.colorMode & MASK_HDR)) diffs |= CONFIG_COLOR_MODE;
     if (uiMode != o.uiMode) diffs |= CONFIG_UI_MODE;
     if (smallestScreenWidthDp != o.smallestScreenWidthDp) diffs |= CONFIG_SMALLEST_SCREEN_SIZE;
     if (screenSizeDp != o.screenSizeDp) diffs |= CONFIG_SCREEN_SIZE;
@@ -1722,6 +1815,22 @@ int ResTable_config::diff(const ResTable_config& o) const {
     if (diff) diffs |= CONFIG_LOCALE;
 
     return diffs;
+}
+
+// There isn't a well specified "importance" order between variants and
+// scripts. We can't easily tell whether, say "en-Latn-US" is more or less
+// specific than "en-US-POSIX".
+//
+// We therefore arbitrarily decide to give priority to variants over
+// scripts since it seems more useful to do so. We will consider
+// "en-US-POSIX" to be more specific than "en-Latn-US".
+//
+// Unicode extension keywords are considered to be less important than
+// scripts and variants.
+inline int ResTable_config::getImportanceScoreOfLocale() const {
+  return (localeVariant[0] ? 4 : 0)
+      + (localeScript[0] && !localeScriptWasComputed ? 2: 0)
+      + (localeNumberingSystem[0] ? 1: 0);
 }
 
 int ResTable_config::isLocaleMoreSpecificThan(const ResTable_config& o) const {
@@ -1737,22 +1846,7 @@ int ResTable_config::isLocaleMoreSpecificThan(const ResTable_config& o) const {
         }
     }
 
-    // There isn't a well specified "importance" order between variants and
-    // scripts. We can't easily tell whether, say "en-Latn-US" is more or less
-    // specific than "en-US-POSIX".
-    //
-    // We therefore arbitrarily decide to give priority to variants over
-    // scripts since it seems more useful to do so. We will consider
-    // "en-US-POSIX" to be more specific than "en-Latn-US".
-
-    const int score = ((localeScript[0] != 0) ? 1 : 0) +
-        ((localeVariant[0] != 0) ? 2 : 0);
-
-    const int oScore = ((o.localeScript[0] != 0) ? 1 : 0) +
-        ((o.localeVariant[0] != 0) ? 2 : 0);
-
-    return score - oScore;
-
+    return getImportanceScoreOfLocale() - o.getImportanceScoreOfLocale();
 }
 
 bool ResTable_config::isMoreSpecificThan(const ResTable_config& o) const {
@@ -1816,6 +1910,24 @@ bool ResTable_config::isMoreSpecificThan(const ResTable_config& o) const {
         if (((screenLayout^o.screenLayout) & MASK_SCREENLONG) != 0) {
             if (!(screenLayout & MASK_SCREENLONG)) return false;
             if (!(o.screenLayout & MASK_SCREENLONG)) return true;
+        }
+    }
+
+    if (screenLayout2 || o.screenLayout2) {
+        if (((screenLayout2^o.screenLayout2) & MASK_SCREENROUND) != 0) {
+            if (!(screenLayout2 & MASK_SCREENROUND)) return false;
+            if (!(o.screenLayout2 & MASK_SCREENROUND)) return true;
+        }
+    }
+
+    if (colorMode || o.colorMode) {
+        if (((colorMode^o.colorMode) & MASK_HDR) != 0) {
+            if (!(colorMode & MASK_HDR)) return false;
+            if (!(o.colorMode & MASK_HDR)) return true;
+        }
+        if (((colorMode^o.colorMode) & MASK_WIDE_COLOR_GAMUT) != 0) {
+            if (!(colorMode & MASK_WIDE_COLOR_GAMUT)) return false;
+            if (!(o.colorMode & MASK_WIDE_COLOR_GAMUT)) return true;
         }
     }
 
@@ -1891,6 +2003,128 @@ bool ResTable_config::isMoreSpecificThan(const ResTable_config& o) const {
     return false;
 }
 
+// Codes for specially handled languages and regions
+static const char kEnglish[2] = {'e', 'n'};  // packed version of "en"
+static const char kUnitedStates[2] = {'U', 'S'};  // packed version of "US"
+static const char kFilipino[2] = {'\xAD', '\x05'};  // packed version of "fil"
+static const char kTagalog[2] = {'t', 'l'};  // packed version of "tl"
+
+// Checks if two language or region codes are identical
+inline bool areIdentical(const char code1[2], const char code2[2]) {
+    return code1[0] == code2[0] && code1[1] == code2[1];
+}
+
+inline bool langsAreEquivalent(const char lang1[2], const char lang2[2]) {
+    return areIdentical(lang1, lang2) ||
+            (areIdentical(lang1, kTagalog) && areIdentical(lang2, kFilipino)) ||
+            (areIdentical(lang1, kFilipino) && areIdentical(lang2, kTagalog));
+}
+
+bool ResTable_config::isLocaleBetterThan(const ResTable_config& o,
+        const ResTable_config* requested) const {
+    if (requested->locale == 0) {
+        // The request doesn't have a locale, so no resource is better
+        // than the other.
+        return false;
+    }
+
+    if (locale == 0 && o.locale == 0) {
+        // The locale part of both resources is empty, so none is better
+        // than the other.
+        return false;
+    }
+
+    // Non-matching locales have been filtered out, so both resources
+    // match the requested locale.
+    //
+    // Because of the locale-related checks in match() and the checks, we know
+    // that:
+    // 1) The resource languages are either empty or match the request;
+    // and
+    // 2) If the request's script is known, the resource scripts are either
+    //    unknown or match the request.
+
+    if (!langsAreEquivalent(language, o.language)) {
+        // The languages of the two resources are not equivalent. If we are
+        // here, we can only assume that the two resources matched the request
+        // because one doesn't have a language and the other has a matching
+        // language.
+        //
+        // We consider the one that has the language specified a better match.
+        //
+        // The exception is that we consider no-language resources a better match
+        // for US English and similar locales than locales that are a descendant
+        // of Internatinal English (en-001), since no-language resources are
+        // where the US English resource have traditionally lived for most apps.
+        if (areIdentical(requested->language, kEnglish)) {
+            if (areIdentical(requested->country, kUnitedStates)) {
+                // For US English itself, we consider a no-locale resource a
+                // better match if the other resource has a country other than
+                // US specified.
+                if (language[0] != '\0') {
+                    return country[0] == '\0' || areIdentical(country, kUnitedStates);
+                } else {
+                    return !(o.country[0] == '\0' || areIdentical(o.country, kUnitedStates));
+                }
+            } else if (localeDataIsCloseToUsEnglish(requested->country)) {
+                if (language[0] != '\0') {
+                    return localeDataIsCloseToUsEnglish(country);
+                } else {
+                    return !localeDataIsCloseToUsEnglish(o.country);
+                }
+            }
+        }
+        return (language[0] != '\0');
+    }
+
+    // If we are here, both the resources have an equivalent non-empty language
+    // to the request.
+    //
+    // Because the languages are equivalent, computeScript() always returns a
+    // non-empty script for languages it knows about, and we have passed the
+    // script checks in match(), the scripts are either all unknown or are all
+    // the same. So we can't gain anything by checking the scripts. We need to
+    // check the region and variant.
+
+    // See if any of the regions is better than the other.
+    const int region_comparison = localeDataCompareRegions(
+            country, o.country,
+            requested->language, requested->localeScript, requested->country);
+    if (region_comparison != 0) {
+        return (region_comparison > 0);
+    }
+
+    // The regions are the same. Try the variant.
+    const bool localeMatches = strncmp(
+            localeVariant, requested->localeVariant, sizeof(localeVariant)) == 0;
+    const bool otherMatches = strncmp(
+            o.localeVariant, requested->localeVariant, sizeof(localeVariant)) == 0;
+    if (localeMatches != otherMatches) {
+        return localeMatches;
+    }
+
+    // The variants are the same, try numbering system.
+    const bool localeNumsysMatches = strncmp(localeNumberingSystem,
+                                             requested->localeNumberingSystem,
+                                             sizeof(localeNumberingSystem)) == 0;
+    const bool otherNumsysMatches = strncmp(o.localeNumberingSystem,
+                                            requested->localeNumberingSystem,
+                                            sizeof(localeNumberingSystem)) == 0;
+    if (localeNumsysMatches != otherNumsysMatches) {
+        return localeNumsysMatches;
+    }
+
+    // Finally, the languages, although equivalent, may still be different
+    // (like for Tagalog and Filipino). Identical is better than just
+    // equivalent.
+    if (areIdentical(language, requested->language)
+            && !areIdentical(o.language, requested->language)) {
+        return true;
+    }
+
+    return false;
+}
+
 bool ResTable_config::isBetterThan(const ResTable_config& o,
         const ResTable_config* requested) const {
     if (requested) {
@@ -1904,26 +2138,8 @@ bool ResTable_config::isBetterThan(const ResTable_config& o,
             }
         }
 
-        if (locale || o.locale) {
-            if ((language[0] != o.language[0]) && requested->language[0]) {
-                return (language[0]);
-            }
-
-            if ((country[0] != o.country[0]) && requested->country[0]) {
-                return (country[0]);
-            }
-        }
-
-        if (localeScript[0] || o.localeScript[0]) {
-            if (localeScript[0] != o.localeScript[0] && requested->localeScript[0]) {
-                return localeScript[0];
-            }
-        }
-
-        if (localeVariant[0] || o.localeVariant[0]) {
-            if (localeVariant[0] != o.localeVariant[0] && requested->localeVariant[0]) {
-                return localeVariant[0];
-            }
+        if (isLocaleBetterThan(o, requested)) {
+            return true;
         }
 
         if (screenLayout || o.screenLayout) {
@@ -2003,6 +2219,24 @@ bool ResTable_config::isBetterThan(const ResTable_config& o,
             if (((screenLayout^o.screenLayout) & MASK_SCREENLONG) != 0
                     && (requested->screenLayout & MASK_SCREENLONG)) {
                 return (screenLayout & MASK_SCREENLONG);
+            }
+        }
+
+        if (screenLayout2 || o.screenLayout2) {
+            if (((screenLayout2^o.screenLayout2) & MASK_SCREENROUND) != 0 &&
+                    (requested->screenLayout2 & MASK_SCREENROUND)) {
+                return screenLayout2 & MASK_SCREENROUND;
+            }
+        }
+
+        if (colorMode || o.colorMode) {
+            if (((colorMode^o.colorMode) & MASK_WIDE_COLOR_GAMUT) != 0 &&
+                    (requested->colorMode & MASK_WIDE_COLOR_GAMUT)) {
+                return colorMode & MASK_WIDE_COLOR_GAMUT;
+            }
+            if (((colorMode^o.colorMode) & MASK_HDR) != 0 &&
+                    (requested->colorMode & MASK_HDR)) {
+                return colorMode & MASK_HDR;
             }
         }
 
@@ -2164,20 +2398,49 @@ bool ResTable_config::match(const ResTable_config& settings) const {
         }
     }
     if (locale != 0) {
-        // Don't consider the script & variants when deciding matches.
+        // Don't consider country and variants when deciding matches.
+        // (Theoretically, the variant can also affect the script. For
+        // example, "ar-alalc97" probably implies the Latin script, but since
+        // CLDR doesn't support getting likely scripts for that, we'll assume
+        // the variant doesn't change the script.)
         //
-        // If we two configs differ only in their script or language, they
-        // can be weeded out in the isMoreSpecificThan test.
-        if (language[0] != 0
-            && (language[0] != settings.language[0]
-                || language[1] != settings.language[1])) {
+        // If two configs differ only in their country and variant,
+        // they can be weeded out in the isMoreSpecificThan test.
+        if (!langsAreEquivalent(language, settings.language)) {
             return false;
         }
 
-        if (country[0] != 0
-            && (country[0] != settings.country[0]
-                || country[1] != settings.country[1])) {
-            return false;
+        // For backward compatibility and supporting private-use locales, we
+        // fall back to old behavior if we couldn't determine the script for
+        // either of the desired locale or the provided locale. But if we could determine
+        // the scripts, they should be the same for the locales to match.
+        bool countriesMustMatch = false;
+        char computed_script[4];
+        const char* script;
+        if (settings.localeScript[0] == '\0') { // could not determine the request's script
+            countriesMustMatch = true;
+        } else {
+            if (localeScript[0] == '\0' && !localeScriptWasComputed) {
+                // script was not provided or computed, so we try to compute it
+                localeDataComputeScript(computed_script, language, country);
+                if (computed_script[0] == '\0') { // we could not compute the script
+                    countriesMustMatch = true;
+                } else {
+                    script = computed_script;
+                }
+            } else { // script was provided, so just use it
+                script = localeScript;
+            }
+        }
+
+        if (countriesMustMatch) {
+            if (country[0] != '\0' && !areIdentical(country, settings.country)) {
+                return false;
+            }
+        } else {
+            if (memcmp(script, settings.localeScript, sizeof(settings.localeScript)) != 0) {
+                return false;
+            }
         }
     }
 
@@ -2219,6 +2482,27 @@ bool ResTable_config::match(const ResTable_config& settings) const {
             return false;
         }
     }
+
+    if (screenConfig2 != 0) {
+        const int screenRound = screenLayout2 & MASK_SCREENROUND;
+        const int setScreenRound = settings.screenLayout2 & MASK_SCREENROUND;
+        if (screenRound != 0 && screenRound != setScreenRound) {
+            return false;
+        }
+
+        const int hdr = colorMode & MASK_HDR;
+        const int setHdr = settings.colorMode & MASK_HDR;
+        if (hdr != 0 && hdr != setHdr) {
+            return false;
+        }
+
+        const int wideColorGamut = colorMode & MASK_WIDE_COLOR_GAMUT;
+        const int setWideColorGamut = settings.colorMode & MASK_WIDE_COLOR_GAMUT;
+        if (wideColorGamut != 0 && wideColorGamut != setWideColorGamut) {
+            return false;
+        }
+    }
+
     if (screenSizeDp != 0) {
         if (screenWidthDp != 0 && screenWidthDp > settings.screenWidthDp) {
             if (kDebugTableSuperNoisy) {
@@ -2292,59 +2576,232 @@ bool ResTable_config::match(const ResTable_config& settings) const {
     return true;
 }
 
-void ResTable_config::getBcp47Locale(char str[RESTABLE_MAX_LOCALE_LEN]) const {
+void ResTable_config::appendDirLocale(String8& out) const {
+    if (!language[0]) {
+        return;
+    }
+    const bool scriptWasProvided = localeScript[0] != '\0' && !localeScriptWasComputed;
+    if (!scriptWasProvided && !localeVariant[0] && !localeNumberingSystem[0]) {
+        // Legacy format.
+        if (out.size() > 0) {
+            out.append("-");
+        }
+
+        char buf[4];
+        size_t len = unpackLanguage(buf);
+        out.append(buf, len);
+
+        if (country[0]) {
+            out.append("-r");
+            len = unpackRegion(buf);
+            out.append(buf, len);
+        }
+        return;
+    }
+
+    // We are writing the modified BCP 47 tag.
+    // It starts with 'b+' and uses '+' as a separator.
+
+    if (out.size() > 0) {
+        out.append("-");
+    }
+    out.append("b+");
+
+    char buf[4];
+    size_t len = unpackLanguage(buf);
+    out.append(buf, len);
+
+    if (scriptWasProvided) {
+        out.append("+");
+        out.append(localeScript, sizeof(localeScript));
+    }
+
+    if (country[0]) {
+        out.append("+");
+        len = unpackRegion(buf);
+        out.append(buf, len);
+    }
+
+    if (localeVariant[0]) {
+        out.append("+");
+        out.append(localeVariant, strnlen(localeVariant, sizeof(localeVariant)));
+    }
+
+    if (localeNumberingSystem[0]) {
+        out.append("+u+nu+");
+        out.append(localeNumberingSystem,
+                   strnlen(localeNumberingSystem, sizeof(localeNumberingSystem)));
+    }
+}
+
+void ResTable_config::getBcp47Locale(char str[RESTABLE_MAX_LOCALE_LEN], bool canonicalize) const {
     memset(str, 0, RESTABLE_MAX_LOCALE_LEN);
 
     // This represents the "any" locale value, which has traditionally been
     // represented by the empty string.
-    if (!language[0] && !country[0]) {
+    if (language[0] == '\0' && country[0] == '\0') {
         return;
     }
 
     size_t charsWritten = 0;
-    if (language[0]) {
-        charsWritten += unpackLanguage(str);
+    if (language[0] != '\0') {
+        if (canonicalize && areIdentical(language, kTagalog)) {
+            // Replace Tagalog with Filipino if we are canonicalizing
+            str[0] = 'f'; str[1] = 'i'; str[2] = 'l'; str[3] = '\0';  // 3-letter code for Filipino
+            charsWritten += 3;
+        } else {
+            charsWritten += unpackLanguage(str);
+        }
     }
 
-    if (localeScript[0]) {
-        if (charsWritten) {
+    if (localeScript[0] != '\0' && !localeScriptWasComputed) {
+        if (charsWritten > 0) {
             str[charsWritten++] = '-';
         }
         memcpy(str + charsWritten, localeScript, sizeof(localeScript));
         charsWritten += sizeof(localeScript);
     }
 
-    if (country[0]) {
-        if (charsWritten) {
+    if (country[0] != '\0') {
+        if (charsWritten > 0) {
             str[charsWritten++] = '-';
         }
         charsWritten += unpackRegion(str + charsWritten);
     }
 
-    if (localeVariant[0]) {
-        if (charsWritten) {
+    if (localeVariant[0] != '\0') {
+        if (charsWritten > 0) {
             str[charsWritten++] = '-';
         }
         memcpy(str + charsWritten, localeVariant, sizeof(localeVariant));
+        charsWritten += strnlen(str + charsWritten, sizeof(localeVariant));
+    }
+
+    // Add Unicode extension only if at least one other locale component is present
+    if (localeNumberingSystem[0] != '\0' && charsWritten > 0) {
+        static constexpr char NU_PREFIX[] = "-u-nu-";
+        static constexpr size_t NU_PREFIX_LEN = sizeof(NU_PREFIX) - 1;
+        memcpy(str + charsWritten, NU_PREFIX, NU_PREFIX_LEN);
+        charsWritten += NU_PREFIX_LEN;
+        memcpy(str + charsWritten, localeNumberingSystem, sizeof(localeNumberingSystem));
     }
 }
 
-/* static */ inline bool assignLocaleComponent(ResTable_config* config,
-        const char* start, size_t size) {
+struct LocaleParserState {
+    enum State : uint8_t {
+        BASE, UNICODE_EXTENSION, IGNORE_THE_REST
+    } parserState;
+    enum UnicodeState : uint8_t {
+        /* Initial state after the Unicode singleton is detected. Either a keyword
+         * or an attribute is expected. */
+        NO_KEY,
+        /* Unicode extension key (but not attribute) is expected. Next states:
+         * NO_KEY, IGNORE_KEY or NUMBERING_SYSTEM. */
+        EXPECT_KEY,
+        /* A key is detected, however it is not supported for now. Ignore its
+         * value. Next states: IGNORE_KEY or NUMBERING_SYSTEM. */
+        IGNORE_KEY,
+        /* Numbering system key was detected. Store its value in the configuration
+         * localeNumberingSystem field. Next state: EXPECT_KEY */
+        NUMBERING_SYSTEM
+    } unicodeState;
+
+    LocaleParserState(): parserState(BASE), unicodeState(NO_KEY) {}
+};
+
+/* static */ inline LocaleParserState assignLocaleComponent(ResTable_config* config,
+        const char* start, size_t size, LocaleParserState state) {
+
+    /* It is assumed that this function is not invoked with state.parserState
+     * set to IGNORE_THE_REST. The condition is checked by setBcp47Locale
+     * function. */
+
+    if (state.parserState == LocaleParserState::UNICODE_EXTENSION) {
+        switch (size) {
+            case 1:
+                /* Other BCP 47 extensions are not supported at the moment */
+                state.parserState = LocaleParserState::IGNORE_THE_REST;
+                break;
+            case 2:
+                if (state.unicodeState == LocaleParserState::NO_KEY ||
+                    state.unicodeState == LocaleParserState::EXPECT_KEY) {
+                    /* Analyze Unicode extension key. Currently only 'nu'
+                     * (numbering system) is supported.*/
+                    if ((start[0] == 'n' || start[0] == 'N') &&
+                        (start[1] == 'u' || start[1] == 'U')) {
+                        state.unicodeState = LocaleParserState::NUMBERING_SYSTEM;
+                    } else {
+                        state.unicodeState = LocaleParserState::IGNORE_KEY;
+                    }
+                } else {
+                    /* Keys are not allowed in other state allowed, ignore the rest. */
+                    state.parserState = LocaleParserState::IGNORE_THE_REST;
+                }
+                break;
+            case 3:
+            case 4:
+            case 5:
+            case 6:
+            case 7:
+            case 8:
+                switch (state.unicodeState) {
+                    case LocaleParserState::NUMBERING_SYSTEM:
+                        /* Accept only the first occurrence of the numbering system. */
+                        if (config->localeNumberingSystem[0] == '\0') {
+                            for (size_t i = 0; i < size; ++i) {
+                               config->localeNumberingSystem[i] = tolower(start[i]);
+                            }
+                            state.unicodeState = LocaleParserState::EXPECT_KEY;
+                        } else {
+                            state.parserState = LocaleParserState::IGNORE_THE_REST;
+                        }
+                        break;
+                    case LocaleParserState::IGNORE_KEY:
+                        /* Unsupported Unicode keyword. Ignore. */
+                        state.unicodeState = LocaleParserState::EXPECT_KEY;
+                        break;
+                    case LocaleParserState::EXPECT_KEY:
+                        /* A keyword followed by an attribute is not allowed. */
+                        state.parserState = LocaleParserState::IGNORE_THE_REST;
+                        break;
+                    case LocaleParserState::NO_KEY:
+                        /* Extension attribute. Do nothing. */
+                        break;
+                    default:
+                        break;
+                }
+                break;
+            default:
+                /* Unexpected field length - ignore the rest and treat as an error */
+                state.parserState = LocaleParserState::IGNORE_THE_REST;
+        }
+        return state;
+    }
 
   switch (size) {
        case 0:
-           return false;
+           state.parserState = LocaleParserState::IGNORE_THE_REST;
+           break;
+       case 1:
+           state.parserState = (start[0] == 'u' || start[0] == 'U')
+                   ? LocaleParserState::UNICODE_EXTENSION
+                   : LocaleParserState::IGNORE_THE_REST;
+           break;
        case 2:
        case 3:
            config->language[0] ? config->packRegion(start) : config->packLanguage(start);
            break;
        case 4:
-           config->localeScript[0] = toupper(start[0]);
-           for (size_t i = 1; i < 4; ++i) {
-               config->localeScript[i] = tolower(start[i]);
+           if ('0' <= start[0] && start[0] <= '9') {
+               // this is a variant, so fall through
+           } else {
+               config->localeScript[0] = toupper(start[0]);
+               for (size_t i = 1; i < 4; ++i) {
+                   config->localeScript[i] = tolower(start[i]);
+               }
+               break;
            }
-           break;
+           FALLTHROUGH_INTENDED;
        case 5:
        case 6:
        case 7:
@@ -2354,30 +2811,36 @@ void ResTable_config::getBcp47Locale(char str[RESTABLE_MAX_LOCALE_LEN]) const {
            }
            break;
        default:
-           return false;
+           state.parserState = LocaleParserState::IGNORE_THE_REST;
   }
 
-  return true;
+  return state;
 }
 
 void ResTable_config::setBcp47Locale(const char* in) {
-    locale = 0;
-    memset(localeScript, 0, sizeof(localeScript));
-    memset(localeVariant, 0, sizeof(localeVariant));
+    clearLocale();
 
-    const char* separator = in;
     const char* start = in;
-    while ((separator = strchr(start, '-')) != NULL) {
+    LocaleParserState state;
+    while (const char* separator = strchr(start, '-')) {
         const size_t size = separator - start;
-        if (!assignLocaleComponent(this, start, size)) {
-            fprintf(stderr, "Invalid BCP-47 locale string: %s", in);
+        state = assignLocaleComponent(this, start, size, state);
+        if (state.parserState == LocaleParserState::IGNORE_THE_REST) {
+            fprintf(stderr, "Invalid BCP-47 locale string: %s\n", in);
+            break;
         }
-
         start = (separator + 1);
     }
 
-    const size_t size = in + strlen(in) - start;
-    assignLocaleComponent(this, start, size);
+    if (state.parserState != LocaleParserState::IGNORE_THE_REST) {
+        const size_t size = strlen(start);
+        assignLocaleComponent(this, start, size, state);
+    }
+
+    localeScriptWasComputed = (localeScript[0] == '\0');
+    if (localeScriptWasComputed) {
+        computeScript();
+    }
 }
 
 String8 ResTable_config::toString() const {
@@ -2392,12 +2855,7 @@ String8 ResTable_config::toString() const {
         res.appendFormat("mnc%d", dtohs(mnc));
     }
 
-    char localeStr[RESTABLE_MAX_LOCALE_LEN];
-    getBcp47Locale(localeStr);
-    if (strlen(localeStr) > 0) {
-        if (res.size() > 0) res.append("-");
-        res.append(localeStr);
-    }
+    appendDirLocale(res);
 
     if ((screenLayout&MASK_LAYOUTDIR) != 0) {
         if (res.size() > 0) res.append("-");
@@ -2462,6 +2920,48 @@ String8 ResTable_config::toString() const {
                 break;
         }
     }
+    if ((screenLayout2&MASK_SCREENROUND) != 0) {
+        if (res.size() > 0) res.append("-");
+        switch (screenLayout2&MASK_SCREENROUND) {
+            case SCREENROUND_NO:
+                res.append("notround");
+                break;
+            case SCREENROUND_YES:
+                res.append("round");
+                break;
+            default:
+                res.appendFormat("screenRound=%d", dtohs(screenLayout2&MASK_SCREENROUND));
+                break;
+        }
+    }
+    if ((colorMode&MASK_WIDE_COLOR_GAMUT) != 0) {
+        if (res.size() > 0) res.append("-");
+        switch (colorMode&MASK_WIDE_COLOR_GAMUT) {
+            case ResTable_config::WIDE_COLOR_GAMUT_NO:
+                res.append("nowidecg");
+                break;
+            case ResTable_config::WIDE_COLOR_GAMUT_YES:
+                res.append("widecg");
+                break;
+            default:
+                res.appendFormat("wideColorGamut=%d", dtohs(colorMode&MASK_WIDE_COLOR_GAMUT));
+                break;
+        }
+    }
+    if ((colorMode&MASK_HDR) != 0) {
+        if (res.size() > 0) res.append("-");
+        switch (colorMode&MASK_HDR) {
+            case ResTable_config::HDR_NO:
+                res.append("lowdr");
+                break;
+            case ResTable_config::HDR_YES:
+                res.append("highdr");
+                break;
+            default:
+                res.appendFormat("hdr=%d", dtohs(colorMode&MASK_HDR));
+                break;
+        }
+    }
     if (orientation != ORIENTATION_ANY) {
         if (res.size() > 0) res.append("-");
         switch (orientation) {
@@ -2496,6 +2996,9 @@ String8 ResTable_config::toString() const {
                 break;
             case ResTable_config::UI_MODE_TYPE_WATCH:
                 res.append("watch");
+                break;
+            case ResTable_config::UI_MODE_TYPE_VR_HEADSET:
+                res.append("vrheadset");
                 break;
             default:
                 res.appendFormat("uiModeType=%d",
@@ -2655,9 +3158,11 @@ String8 ResTable_config::toString() const {
 // --------------------------------------------------------------------
 // --------------------------------------------------------------------
 
+DynamicRefTable::DynamicRefTable() : DynamicRefTable(0, false) {}
 
-DynamicRefTable::DynamicRefTable(uint8_t packageId)
+DynamicRefTable::DynamicRefTable(uint8_t packageId, bool appAsLib)
     : mAssignedPackageId(packageId)
+    , mAppAsLib(appAsLib)
 {
     memset(mLookupTable, 0, sizeof(mLookupTable));
 
@@ -2669,9 +3174,8 @@ DynamicRefTable::DynamicRefTable(uint8_t packageId)
 status_t DynamicRefTable::load(const ResTable_lib_header* const header)
 {
     const uint32_t entryCount = dtohl(header->count);
-    const uint32_t sizeOfEntries = sizeof(ResTable_lib_entry) * entryCount;
     const uint32_t expectedSize = dtohl(header->header.size) - dtohl(header->header.headerSize);
-    if (sizeOfEntries > expectedSize) {
+    if (entryCount > (expectedSize / sizeof(ResTable_lib_entry))) {
         ALOGE("ResTable_lib_header size %u is too small to fit %u entries (x %u).",
                 expectedSize, entryCount, (uint32_t)sizeof(ResTable_lib_entry));
         return UNKNOWN_ERROR;
@@ -2706,7 +3210,7 @@ status_t DynamicRefTable::addMappings(const DynamicRefTable& other) {
     for (size_t i = 0; i < entryCount; i++) {
         ssize_t index = mEntries.indexOfKey(other.mEntries.keyAt(i));
         if (index < 0) {
-            mEntries.add(other.mEntries.keyAt(i), other.mEntries[i]);
+            mEntries.add(String16(other.mEntries.keyAt(i)), other.mEntries[i]);
         } else {
             if (other.mEntries[i] != mEntries[index]) {
                 return UNKNOWN_ERROR;
@@ -2738,31 +3242,42 @@ status_t DynamicRefTable::addMapping(const String16& packageName, uint8_t packag
     return NO_ERROR;
 }
 
+void DynamicRefTable::addMapping(uint8_t buildPackageId, uint8_t runtimePackageId) {
+    mLookupTable[buildPackageId] = runtimePackageId;
+}
+
 status_t DynamicRefTable::lookupResourceId(uint32_t* resId) const {
     uint32_t res = *resId;
     size_t packageId = Res_GETPACKAGE(res) + 1;
 
-    if (packageId == APP_PACKAGE_ID) {
+    if (!Res_VALIDID(res)) {
+        // Cannot look up a null or invalid id, so no lookup needs to be done.
+        return NO_ERROR;
+    }
+
+    if (packageId == APP_PACKAGE_ID && !mAppAsLib) {
         // No lookup needs to be done, app package IDs are absolute.
         return NO_ERROR;
     }
 
-    if (packageId == 0) {
+    if (packageId == 0 || (packageId == APP_PACKAGE_ID && mAppAsLib)) {
         // The package ID is 0x00. That means that a shared library is accessing
-        // its own local resource, so we fix up the resource with the calling
-        // package ID.
-        *resId |= ((uint32_t) mAssignedPackageId) << 24;
+        // its own local resource.
+        // Or if app resource is loaded as shared library, the resource which has
+        // app package Id is local resources.
+        // so we fix up those resources with the calling package ID.
+        *resId = (0xFFFFFF & (*resId)) | (((uint32_t) mAssignedPackageId) << 24);
         return NO_ERROR;
     }
 
     // Do a proper lookup.
     uint8_t translatedId = mLookupTable[packageId];
     if (translatedId == 0) {
-        ALOGV("DynamicRefTable(0x%02x): No mapping for build-time package ID 0x%02x.",
+        ALOGW("DynamicRefTable(0x%02x): No mapping for build-time package ID 0x%02x.",
                 (uint8_t)mAssignedPackageId, (uint8_t)packageId);
         for (size_t i = 0; i < 256; i++) {
             if (mLookupTable[i] != 0) {
-                ALOGV("e[0x%02x] -> 0x%02x", (uint8_t)i, mLookupTable[i]);
+                ALOGW("e[0x%02x] -> 0x%02x", (uint8_t)i, mLookupTable[i]);
             }
         }
         return UNKNOWN_ERROR;
@@ -2772,9 +3287,37 @@ status_t DynamicRefTable::lookupResourceId(uint32_t* resId) const {
     return NO_ERROR;
 }
 
+bool DynamicRefTable::requiresLookup(const Res_value* value) const {
+    // Only resolve non-dynamic references and attributes if the package is loaded as a
+    // library or if a shared library is attempting to retrieve its own resource
+    if ((value->dataType == Res_value::TYPE_REFERENCE ||
+         value->dataType == Res_value::TYPE_ATTRIBUTE) &&
+        (mAppAsLib || (Res_GETPACKAGE(value->data) + 1) == 0)) {
+        return true;
+    }
+    return value->dataType == Res_value::TYPE_DYNAMIC_ATTRIBUTE ||
+           value->dataType == Res_value::TYPE_DYNAMIC_REFERENCE;
+}
+
 status_t DynamicRefTable::lookupResourceValue(Res_value* value) const {
-    if (value->dataType != Res_value::TYPE_DYNAMIC_REFERENCE) {
-        return NO_ERROR;
+    if (!requiresLookup(value)) {
+      return NO_ERROR;
+    }
+
+    uint8_t resolvedType = Res_value::TYPE_REFERENCE;
+    switch (value->dataType) {
+        case Res_value::TYPE_ATTRIBUTE:
+            resolvedType = Res_value::TYPE_ATTRIBUTE;
+            FALLTHROUGH_INTENDED;
+        case Res_value::TYPE_REFERENCE:
+        break;
+        case Res_value::TYPE_DYNAMIC_ATTRIBUTE:
+            resolvedType = Res_value::TYPE_ATTRIBUTE;
+            FALLTHROUGH_INTENDED;
+        case Res_value::TYPE_DYNAMIC_REFERENCE:
+            break;
+        default:
+            return NO_ERROR;
     }
 
     status_t err = lookupResourceId(&value->data);
@@ -2782,7 +3325,7 @@ status_t DynamicRefTable::lookupResourceValue(Res_value* value) const {
         return err;
     }
 
-    value->dataType = Res_value::TYPE_REFERENCE;
+    value->dataType = resolvedType;
     return NO_ERROR;
 }
 
