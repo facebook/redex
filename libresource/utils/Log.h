@@ -44,5 +44,8 @@
 #define ALOG_ASSERT(cond, ...) \
     do { if (!(cond)) {ALOGF("Assertion failed"); ALOGF(#cond); ALOGF(__VA_ARGS__); abort();}} while(0)
 
+#ifndef android_errorWriteLog
+#define android_errorWriteLog(tag, subTag) ALOGE("ERROR tag: 0x%x, sub_tag: %s", tag, subTag)
+#endif
 
 #endif // _FB_LOG_H_REIMPLEMENTATION
