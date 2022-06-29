@@ -9,6 +9,7 @@
 #include <unordered_set>
 
 #include "androidfw/ResourceTypes.h"
+#include "utils/ByteOrder.h"
 #include "utils/Visitor.h"
 
 #include "RedexMappedFile.h"
