@@ -14,7 +14,6 @@
 #include <type_traits>
 #include <utility>
 
-#include "AbstractDomain.h"
 #include "Exceptions.h"
 #include "PatriciaTreeCore.h"
 #include "PatriciaTreeUtil.h"
@@ -53,31 +52,16 @@ template <typename Value>
 using MappingFunction = std::function<Value(const Value&)>;
 
 template <typename IntegerType, typename Value>
-inline const typename Value::type* find_value(
-    IntegerType key,
-    const boost::intrusive_ptr<PatriciaTree<IntegerType, Value>>& tree);
-
-template <typename IntegerType, typename Value>
-inline bool leq(
-    const boost::intrusive_ptr<PatriciaTree<IntegerType, Value>>& tree1,
-    const boost::intrusive_ptr<PatriciaTree<IntegerType, Value>>& tree2);
-
-template <typename IntegerType, typename Value>
-inline bool equals(
-    const boost::intrusive_ptr<PatriciaTree<IntegerType, Value>>& tree1,
-    const boost::intrusive_ptr<PatriciaTree<IntegerType, Value>>& tree2);
-
-template <typename IntegerType, typename Value>
-inline boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> combine_leaf(
+inline boost::intrusive_ptr<PatriciaTreeLeaf<IntegerType, Value>> combine_leaf(
     const ptmap_impl::CombiningFunction<typename Value::type>& combine,
     const typename Value::type& value,
     const boost::intrusive_ptr<PatriciaTreeLeaf<IntegerType, Value>>& leaf);
 
 template <typename IntegerType, typename Value>
-inline boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> combine_new_leaf(
-    const CombiningFunction<typename Value::type>& combine,
-    IntegerType key,
-    const typename Value::type& value);
+inline boost::intrusive_ptr<PatriciaTreeLeaf<IntegerType, Value>>
+combine_new_leaf(const CombiningFunction<typename Value::type>& combine,
+                 IntegerType key,
+                 const typename Value::type& value);
 
 template <typename IntegerType, typename Value>
 inline boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> update(
@@ -89,12 +73,6 @@ inline boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> update(
 template <typename IntegerType, typename Value>
 inline boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> map(
     const MappingFunction<typename Value::type>& f,
-    const boost::intrusive_ptr<PatriciaTree<IntegerType, Value>>& tree);
-
-template <typename IntegerType, typename Value>
-inline boost::intrusive_ptr<PatriciaTree<IntegerType, Value>>
-erase_all_matching(
-    IntegerType key_mask,
     const boost::intrusive_ptr<PatriciaTree<IntegerType, Value>>& tree);
 
 template <typename IntegerType, typename Value>
@@ -200,30 +178,14 @@ class PatriciaTreeMap final {
 
   iterator end() const { return m_core.end(); }
 
-  const mapped_type& at(Key key) const {
-    const mapped_type* value =
-        ptmap_impl::find_value(Codec::encode(key), m_core.m_tree);
-    if (value == nullptr) {
-      static const mapped_type default_value = Value::default_value();
-      return default_value;
-    }
-    return *value;
-  }
+  const mapped_type& at(Key key) const { return m_core.at(key); }
 
   bool leq(const PatriciaTreeMap& other) const {
-    static_assert(!std::is_same<decltype(Value::leq(
-                                    std::declval<typename Value::type>(),
-                                    std::declval<typename Value::type>())),
-                                bool>::value ||
-                      std::is_base_of<AbstractDomain<typename Value::type>,
-                                      typename Value::type>::value,
-                  "Value::leq() is defined, but Value::type is not an "
-                  "implementation of AbstractDomain");
-    return ptmap_impl::leq<IntegerType>(m_core.m_tree, other.m_core.m_tree);
+    return m_core.leq(other.m_core);
   }
 
   bool equals(const PatriciaTreeMap& other) const {
-    return ptmap_impl::equals<IntegerType>(m_core.m_tree, other.m_core.m_tree);
+    return m_core.equals(other.m_core);
   }
 
   friend bool operator==(const PatriciaTreeMap& m1, const PatriciaTreeMap& m2) {
@@ -277,11 +239,7 @@ class PatriciaTreeMap final {
   }
 
   bool erase_all_matching(Key key_mask) {
-    auto new_tree = ptmap_impl::erase_all_matching<IntegerType, Value>(
-        Codec::encode(key_mask), m_core.m_tree);
-    bool res = new_tree != m_core.m_tree;
-    m_core.m_tree = new_tree;
-    return res;
+    return m_core.erase_all_matching(key_mask);
   }
 
   PatriciaTreeMap& insert_or_assign(Key key, const mapped_type& value) {
@@ -367,208 +325,6 @@ namespace ptmap_impl {
 
 using namespace pt_util;
 
-template <typename IntegerType, typename Value>
-boost::intrusive_ptr<PatriciaTreeBranch<IntegerType, Value>> join(
-    IntegerType prefix0,
-    const boost::intrusive_ptr<PatriciaTree<IntegerType, Value>>& tree0,
-    IntegerType prefix1,
-    const boost::intrusive_ptr<PatriciaTree<IntegerType, Value>>& tree1) {
-  IntegerType m = get_branching_bit(prefix0, prefix1);
-  if (is_zero_bit(prefix0, m)) {
-    return PatriciaTreeBranch<IntegerType, Value>::make(
-        mask(prefix0, m), m, tree0, tree1);
-  } else {
-    return PatriciaTreeBranch<IntegerType, Value>::make(
-        mask(prefix0, m), m, tree1, tree0);
-  }
-}
-
-// This function is used to prevent the creation of branch nodes with only one
-// child.
-template <typename IntegerType, typename Value>
-boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> make_branch(
-    IntegerType prefix,
-    IntegerType branching_bit,
-    const boost::intrusive_ptr<PatriciaTree<IntegerType, Value>>& left_tree,
-    const boost::intrusive_ptr<PatriciaTree<IntegerType, Value>>& right_tree) {
-  if (left_tree == nullptr) {
-    return right_tree;
-  }
-  if (right_tree == nullptr) {
-    return left_tree;
-  }
-  return PatriciaTreeBranch<IntegerType, Value>::make(
-      prefix, branching_bit, left_tree, right_tree);
-}
-
-// Tries to find the value corresponding to :key. Returns null if the key is
-// not present in :tree.
-template <typename IntegerType, typename Value>
-inline const typename Value::type* find_value(
-    IntegerType key,
-    const boost::intrusive_ptr<PatriciaTree<IntegerType, Value>>& tree) {
-  if (tree == nullptr) {
-    return nullptr;
-  }
-  if (tree->is_leaf()) {
-    const auto& leaf =
-        boost::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(tree);
-    if (key == leaf->key()) {
-      return &leaf->value();
-    }
-    return nullptr;
-  }
-  const auto& branch =
-      boost::static_pointer_cast<PatriciaTreeBranch<IntegerType, Value>>(tree);
-  if (is_zero_bit(key, branch->branching_bit())) {
-    return find_value(key, branch->left_tree());
-  } else {
-    return find_value(key, branch->right_tree());
-  }
-}
-
-/* Assumes Value::default_value() is either Top or Bottom */
-template <typename IntegerType, typename Value>
-inline bool leq(
-    const boost::intrusive_ptr<PatriciaTree<IntegerType, Value>>& s,
-    const boost::intrusive_ptr<PatriciaTree<IntegerType, Value>>& t) {
-
-  RUNTIME_CHECK(Value::default_value().is_top() ||
-                    Value::default_value().is_bottom(),
-                undefined_operation());
-
-  if (s == t) {
-    // This condition allows the leq operation to run in sublinear time when
-    // comparing Patricia trees that share some structure.
-    return true;
-  }
-  if (s == nullptr) {
-    return Value::default_value().is_bottom();
-  }
-  if (t == nullptr) {
-    return Value::default_value().is_top();
-  }
-  if (s->is_leaf()) {
-    const auto& s_leaf =
-        boost::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(s);
-
-    if (t->is_branch()) {
-      // t has at least one non-default binding that s doesn't have.
-      if (Value::default_value().is_top()) {
-        // The non-default binding in t can never be <= Top.
-        return false;
-      }
-
-      // Otherwise, find if t contains s.
-      // The missing bindings in s are bound to Bottom in this case. Even if we
-      // know t contains strictly more bindings than s, they all satisfy the leq
-      // condition. For each key k in t but not in s, s[k] == Bottom <= t[k]
-      // always hold.
-      auto* t_value = find_value(s_leaf->key(), t);
-      if (t_value == nullptr) {
-        // Always false if default_value is Bottom, which we already assume.
-        return false;
-      }
-      return Value::leq(s_leaf->value(), *t_value);
-    }
-
-    // Both nodes are leaves. s leq to t iff
-    // key(s) == key(t) && value(s) <= value(t).
-    const auto& t_leaf =
-        boost::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(t);
-    return s_leaf->key() == t_leaf->key() &&
-           Value::leq(s_leaf->value(), t_leaf->value());
-  } else if (t->is_leaf()) {
-    // s has at least one non-default binding that t doesn't have.
-    if (Value::default_value().is_bottom()) {
-      // There exists a key such that s[key] != Bottom and t[key] == Bottom.
-      return false;
-    }
-
-    const auto& t_leaf =
-        boost::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(t);
-    auto* s_value = find_value(t_leaf->key(), s);
-    if (s_value == nullptr) {
-      // Always false if default_value is Top, which we already assume.
-      return false;
-    }
-    return Value::leq(*s_value, t_leaf->value());
-  }
-
-  // Neither s nor t is a leaf.
-  const auto& s_branch =
-      boost::static_pointer_cast<PatriciaTreeBranch<IntegerType, Value>>(s);
-  const auto& t_branch =
-      boost::static_pointer_cast<PatriciaTreeBranch<IntegerType, Value>>(t);
-  IntegerType m = s_branch->branching_bit();
-  IntegerType n = t_branch->branching_bit();
-  IntegerType p = s_branch->prefix();
-  IntegerType q = t_branch->prefix();
-  const auto& s0 = s_branch->left_tree();
-  const auto& s1 = s_branch->right_tree();
-  const auto& t0 = t_branch->left_tree();
-  const auto& t1 = t_branch->right_tree();
-  if (m == n && p == q) {
-    // The two trees have the same prefix, compare each subtrees.
-    return leq(s0, t0) && leq(s1, t1);
-  }
-  if (m < n && match_prefix(q, p, m)) {
-    // The tree t only contains bindings present in a subtree of s, and s has
-    // bindings not present in t.
-    return Value::default_value().is_top() &&
-           leq(is_zero_bit(q, m) ? s0 : s1, t);
-  }
-  if (m > n && match_prefix(p, q, n)) {
-    // The tree s only contains bindings present in a subtree of t, and t has
-    // bindings not present in s.
-    return Value::default_value().is_bottom() &&
-           leq(s, is_zero_bit(p, n) ? t0 : t1);
-  }
-  // s and t both have bindings that are not present in the other tree.
-  return false;
-}
-
-// A Patricia tree is a canonical representation of the set of keys it contains.
-// Hence, set equality is equivalent to structural equality of Patricia trees.
-template <typename IntegerType, typename Value>
-inline bool equals(
-    const boost::intrusive_ptr<PatriciaTree<IntegerType, Value>>& tree1,
-    const boost::intrusive_ptr<PatriciaTree<IntegerType, Value>>& tree2) {
-  if (tree1 == tree2) {
-    // This conditions allows the equality test to run in sublinear time when
-    // comparing Patricia trees that share some structure.
-    return true;
-  }
-  if (tree1 == nullptr) {
-    return tree2 == nullptr;
-  }
-  if (tree2 == nullptr) {
-    return false;
-  }
-  if (tree1->is_leaf()) {
-    if (tree2->is_branch()) {
-      return false;
-    }
-    const auto& leaf1 =
-        boost::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(tree1);
-    const auto& leaf2 =
-        boost::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(tree2);
-    return leaf1->key() == leaf2->key() &&
-           Value::equals(leaf1->value(), leaf2->value());
-  }
-  if (tree2->is_leaf()) {
-    return false;
-  }
-  const auto& branch1 =
-      boost::static_pointer_cast<PatriciaTreeBranch<IntegerType, Value>>(tree1);
-  const auto& branch2 =
-      boost::static_pointer_cast<PatriciaTreeBranch<IntegerType, Value>>(tree2);
-  return branch1->prefix() == branch2->prefix() &&
-         branch1->branching_bit() == branch2->branching_bit() &&
-         equals(branch1->left_tree(), branch2->left_tree()) &&
-         equals(branch1->right_tree(), branch2->right_tree());
-}
-
 // Finds the value corresponding to :key in the tree and replaces its bound
 // value with combine(bound_value, :value). Note that the existing value is
 // always the first parameter to :combine and the new value is the second.
@@ -591,8 +347,7 @@ inline boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> update(
     if (new_leaf == nullptr) {
       return leaf;
     }
-    return ptmap_impl::join<IntegerType, Value>(
-        key, new_leaf, leaf->key(), leaf);
+    return pt_core::join<IntegerType, Value>(key, new_leaf, leaf->key(), leaf);
   }
   const auto& branch =
       boost::static_pointer_cast<PatriciaTreeBranch<IntegerType, Value>>(tree);
@@ -602,26 +357,26 @@ inline boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> update(
       if (new_left_tree == branch->left_tree()) {
         return branch;
       }
-      return make_branch(branch->prefix(),
-                         branch->branching_bit(),
-                         new_left_tree,
-                         branch->right_tree());
+      return pt_core::make_branch(branch->prefix(),
+                                  branch->branching_bit(),
+                                  new_left_tree,
+                                  branch->right_tree());
     } else {
       auto new_right_tree = update(combine, key, value, branch->right_tree());
       if (new_right_tree == branch->right_tree()) {
         return branch;
       }
-      return make_branch(branch->prefix(),
-                         branch->branching_bit(),
-                         branch->left_tree(),
-                         new_right_tree);
+      return pt_core::make_branch(branch->prefix(),
+                                  branch->branching_bit(),
+                                  branch->left_tree(),
+                                  new_right_tree);
     }
   }
   auto new_leaf = combine_new_leaf<IntegerType, Value>(combine, key, value);
   if (new_leaf == nullptr) {
     return branch;
   }
-  return ptmap_impl::join<IntegerType, Value>(
+  return pt_core::join<IntegerType, Value>(
       key, new_leaf, branch->prefix(), branch);
 }
 
@@ -647,42 +402,7 @@ inline boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> map(
       new_right_tree == branch->right_tree()) {
     return branch;
   }
-  return make_branch(
-      branch->prefix(), branch->branching_bit(), new_left_tree, new_right_tree);
-}
-
-// Erases all entries where keys and :key_mask share common bits.
-template <typename IntegerType, typename Value>
-inline boost::intrusive_ptr<PatriciaTree<IntegerType, Value>>
-erase_all_matching(
-    IntegerType key_mask,
-    const boost::intrusive_ptr<PatriciaTree<IntegerType, Value>>& tree) {
-  if (tree == nullptr) {
-    return nullptr;
-  }
-  if (tree->is_leaf()) {
-    const auto& leaf =
-        boost::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(tree);
-    if (key_mask & leaf->key()) {
-      return nullptr;
-    }
-    return tree;
-  }
-  const auto& branch =
-      boost::static_pointer_cast<PatriciaTreeBranch<IntegerType, Value>>(tree);
-  if (key_mask & branch->prefix()) {
-    return nullptr;
-  }
-  if (key_mask < branch->branching_bit()) {
-    return branch;
-  }
-  auto new_left_tree = erase_all_matching(key_mask, branch->left_tree());
-  auto new_right_tree = erase_all_matching(key_mask, branch->right_tree());
-  if (new_left_tree == branch->left_tree() &&
-      new_right_tree == branch->right_tree()) {
-    return branch;
-  }
-  return make_branch(
+  return pt_core::make_branch(
       branch->prefix(), branch->branching_bit(), new_left_tree, new_right_tree);
 }
 
@@ -772,12 +492,12 @@ inline boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> merge(
     }
   }
   // The prefixes disagree.
-  return ptmap_impl::join(p, s, q, t);
+  return pt_core::join(p, s, q, t);
 }
 
 // Combine :value with the value in :leaf with combine(:leaf, :value).
 template <typename IntegerType, typename Value>
-inline boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> combine_leaf(
+inline boost::intrusive_ptr<PatriciaTreeLeaf<IntegerType, Value>> combine_leaf(
     const ptmap_impl::CombiningFunction<typename Value::type>& combine,
     const typename Value::type& value,
     const boost::intrusive_ptr<PatriciaTreeLeaf<IntegerType, Value>>& leaf) {
@@ -794,13 +514,27 @@ inline boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> combine_leaf(
 
 // Create a new leaf with the default value and combine :value into it.
 template <typename IntegerType, typename Value>
-inline boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> combine_new_leaf(
+inline boost::intrusive_ptr<PatriciaTreeLeaf<IntegerType, Value>>
+combine_new_leaf(
     const ptmap_impl::CombiningFunction<typename Value::type>& combine,
     IntegerType key,
     const typename Value::type& value) {
   auto new_leaf = boost::intrusive_ptr<PatriciaTreeLeaf<IntegerType, Value>>(
       PatriciaTreeLeaf<IntegerType, Value>::make(key, Value::default_value()));
   return combine_leaf(combine, value, new_leaf);
+}
+
+template <typename IntegerType, typename Value>
+typename Value::type use_available_value(const typename Value::type& x,
+                                         const typename Value::type& y) {
+  if (Value::is_default_value(x)) {
+    return y;
+  } else if (Value::is_default_value(y)) {
+    return x;
+  } else {
+    BOOST_THROW_EXCEPTION(internal_error()
+                          << error_msg("Malformed Patricia tree"));
+  }
 }
 
 template <typename IntegerType, typename Value>
@@ -819,7 +553,7 @@ inline boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> intersect(
   if (s->is_leaf()) {
     const auto& leaf =
         boost::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(s);
-    auto* value = find_value(leaf->key(), t);
+    auto* value = pt_core::find_key_value(leaf->key(), t);
     if (value == nullptr) {
       return nullptr;
     }
@@ -828,7 +562,7 @@ inline boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> intersect(
   if (t->is_leaf()) {
     const auto& leaf =
         boost::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(t);
-    auto* value = find_value(leaf->key(), s);
+    auto* value = pt_core::find_key_value(leaf->key(), s);
     if (value == nullptr) {
       return nullptr;
     }
@@ -853,20 +587,9 @@ inline boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> intersect(
     // The subtrees don't have overlapping explicit values, but the combining
     // function will still be called to merge the elements in one tree with the
     // implicit default values in the other.
-    return merge<IntegerType, Value>(
-        [](const typename Value::type& x, const typename Value::type& y) ->
-        typename Value::type {
-          if (Value::is_default_value(x)) {
-            return y;
-          }
-          if (Value::is_default_value(y)) {
-            return x;
-          }
-          BOOST_THROW_EXCEPTION(internal_error()
-                                << error_msg("Malformed Patricia tree"));
-        },
-        intersect(combine, s0, t0),
-        intersect(combine, s1, t1));
+    return merge<IntegerType, Value>(use_available_value<IntegerType, Value>,
+                                     intersect(combine, s0, t0),
+                                     intersect(combine, s1, t1));
   }
   if (m < n && match_prefix(q, p, m)) {
     // q contains p. Intersect t with a subtree of s.
@@ -899,7 +622,7 @@ inline boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> diff(
   if (s->is_leaf()) {
     const auto& leaf =
         boost::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(s);
-    auto* value = find_value(leaf->key(), t);
+    auto* value = pt_core::find_key_value(leaf->key(), t);
     if (value == nullptr) {
       return s;
     }
@@ -922,18 +645,6 @@ inline boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> diff(
   const auto& s1 = s_branch->right_tree();
   const auto& t0 = t_branch->left_tree();
   const auto& t1 = t_branch->right_tree();
-  auto combine_separate_trees = [](const typename Value::type& x,
-                                   const typename Value::type& y) ->
-      typename Value::type {
-        if (Value::is_default_value(x)) {
-          return y;
-        }
-        if (Value::is_default_value(y)) {
-          return x;
-        }
-        BOOST_THROW_EXCEPTION(internal_error()
-                              << error_msg("Malformed Patricia tree"));
-      };
   if (m == n && p == q) {
     // The two trees have the same prefix. We merge the difference of the
     // corresponding subtrees.
@@ -943,7 +654,7 @@ inline boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> diff(
       return s;
     }
     return merge<IntegerType, Value>(
-        combine_separate_trees, new_left, new_right);
+        use_available_value<IntegerType, Value>, new_left, new_right);
   }
   if (m < n && match_prefix(q, p, m)) {
     // q contains p. Diff t with a subtree of s.
@@ -952,13 +663,15 @@ inline boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> diff(
       if (new_left == s0) {
         return s;
       }
-      return merge<IntegerType, Value>(combine_separate_trees, new_left, s1);
+      return merge<IntegerType, Value>(
+          use_available_value<IntegerType, Value>, new_left, s1);
     } else {
       auto new_right = diff(combine, s1, t);
       if (new_right == s1) {
         return s;
       }
-      return merge<IntegerType, Value>(combine_separate_trees, s0, new_right);
+      return merge<IntegerType, Value>(
+          use_available_value<IntegerType, Value>, s0, new_right);
     }
   }
   if (m > n && match_prefix(p, q, n)) {
