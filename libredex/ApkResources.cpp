@@ -65,21 +65,6 @@ std::string get_string_from_pool(const android::ResStringPool& pool,
   return std::string(string8.string());
 }
 
-// The import of AOSP code that Redex has right now predates
-// https://cs.android.com/android/_/android/platform/frameworks/base/+/d0f116b619feede0cfdb647157ce5ab4d50a1c46
-// which properly returns UTF-8 lengths when reading UTF-8 string data. We have
-// the bugged version which returns UTF-16 lengths for the UTF-8 data! Find the
-// correct length by walking back from the pointer (being mindful that it might
-// take two bytes to encode the length for long lengths).
-size_t read_utf8_length_from_string_pool_data(const char* s) {
-  uint8_t maybe = *((uint8_t*)s - 2);
-  uint8_t len = *((uint8_t*)s - 1);
-  if ((maybe & 0x80) != 0) {
-    return ((maybe & 0x7F) << 8) | len;
-  }
-  return len;
-}
-
 bool TableParser::visit_global_strings(android::ResStringPool_header* pool) {
   m_global_pool_header = pool;
   arsc::StringPoolRefVisitor::visit_global_strings(pool);
@@ -1062,8 +1047,7 @@ void add_existing_string_to_builder(const android::ResStringPool& string_pool,
   size_t length;
   if (string_pool.isUTF8()) {
     auto s = string_pool.string8At(idx, &length);
-    size_t actual_length = apk::read_utf8_length_from_string_pool_data(s);
-    builder->add_string(s, actual_length);
+    builder->add_string(s, length);
   } else {
     auto s = string_pool.stringAt(idx, &length);
     builder->add_string(s, length);
@@ -1492,8 +1476,7 @@ void rebuild_string_pool(
     size_t length;
     if (is_utf8) {
       auto s = string_pool.string8At(idx, &length);
-      size_t actual_length = apk::read_utf8_length_from_string_pool_data(s);
-      add_string_idx_to_builder<char>(string_pool, idx, s, actual_length,
+      add_string_idx_to_builder<char>(string_pool, idx, s, length,
                                       span_remapper, builder);
     } else {
       auto s = string_pool.stringAt(idx, &length);
