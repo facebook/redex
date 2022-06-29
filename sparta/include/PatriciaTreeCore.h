@@ -1205,6 +1205,33 @@ inline intrusive_ptr<PatriciaTreeNode<IntegerType, Value>> remove(
   return upsert<IntegerType, Value>(key, nullptr, tree);
 }
 
+template <typename IntegerType, typename Value, typename Predicate>
+inline intrusive_ptr<PatriciaTreeNode<IntegerType, Value>> filter(
+    Predicate&& predicate,
+    const intrusive_ptr<PatriciaTreeNode<IntegerType, Value>>& tree) {
+  if (tree == nullptr) {
+    return nullptr;
+  }
+  if (tree->is_leaf()) {
+    const auto& leaf =
+        boost::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(tree);
+    return predicate(leaf->key(), leaf->value()) ? leaf : nullptr;
+  }
+  const auto& branch =
+      boost::static_pointer_cast<PatriciaTreeBranch<IntegerType, Value>>(tree);
+  auto new_left_tree = filter(predicate, branch->left_tree());
+  auto new_right_tree = filter(predicate, branch->right_tree());
+  if (new_left_tree == branch->left_tree() &&
+      new_right_tree == branch->right_tree()) {
+    return branch;
+  } else {
+    return make_branch(branch->prefix(),
+                       branch->branching_bit(),
+                       new_left_tree,
+                       new_right_tree);
+  }
+}
+
 template <typename IntegerType, typename Value>
 inline intrusive_ptr<PatriciaTreeNode<IntegerType, Value>> erase_all_matching(
     IntegerType key_mask,
@@ -1349,6 +1376,15 @@ class PatriciaTreeCore {
     m_tree = pt_core::remove(Codec::encode(key), m_tree);
   }
 
+  template <typename Predicate>
+  inline void filter(Predicate&& predicate) {
+    m_tree = pt_core::filter(
+        [&](IntegerType key, const ValueType& value) {
+          return predicate(Codec::decode(key), value);
+        },
+        m_tree);
+  }
+
   // Erases all entries where keys and :key_mask share common bits.
   inline bool erase_all_matching(Key key_mask) {
     auto new_tree =
@@ -1362,7 +1398,7 @@ class PatriciaTreeCore {
 
   inline void clear() { m_tree.reset(); }
 
-  // Public for now, until more of the implementation is merged into one.
+ private:
   boost::intrusive_ptr<PatriciaTreeNode<IntegerType, Value>> m_tree;
 };
 

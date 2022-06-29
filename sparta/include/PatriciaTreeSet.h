@@ -21,27 +21,6 @@
 
 namespace sparta {
 
-// Forward declarations.
-namespace pt_impl {
-
-using Empty = pt_core::EmptyValue;
-
-template <typename IntegerType>
-using PatriciaTree = pt_core::PatriciaTreeNode<IntegerType, Empty>;
-
-template <typename IntegerType>
-using PatriciaTreeLeaf = pt_core::PatriciaTreeLeaf<IntegerType, Empty>;
-
-template <typename IntegerType>
-using PatriciaTreeBranch = pt_core::PatriciaTreeBranch<IntegerType, Empty>;
-
-template <typename IntegerType>
-inline boost::intrusive_ptr<PatriciaTree<IntegerType>> filter(
-    const std::function<bool(IntegerType)>& predicate,
-    const boost::intrusive_ptr<PatriciaTree<IntegerType>>& tree);
-
-} // namespace pt_impl
-
 /*
  * This implementation of sets of integers using Patricia trees is based on the
  * following paper:
@@ -70,7 +49,8 @@ inline boost::intrusive_ptr<PatriciaTree<IntegerType>> filter(
  */
 template <typename Element>
 class PatriciaTreeSet final {
-  using Core = pt_core::PatriciaTreeCore<Element, pt_impl::Empty>;
+  using Empty = pt_core::EmptyValue;
+  using Core = pt_core::PatriciaTreeCore<Element, Empty>;
   using Codec = typename Core::Codec;
 
  public:
@@ -151,7 +131,7 @@ class PatriciaTreeSet final {
   }
 
   PatriciaTreeSet& insert(Element key) {
-    m_core.upsert(key, pt_impl::Empty{});
+    m_core.upsert(key, Empty{});
     return *this;
   }
 
@@ -162,24 +142,20 @@ class PatriciaTreeSet final {
 
   PatriciaTreeSet& filter(
       const std::function<bool(const Element&)>& predicate) {
-    auto encoded_predicate = [&predicate](IntegerType key) {
-      return predicate(Codec::decode(key));
-    };
-    m_core.m_tree =
-        pt_impl::filter<IntegerType>(encoded_predicate, m_core.m_tree);
+    m_core.filter([&](Element key, const Empty&) { return predicate(key); });
     return *this;
   }
 
   PatriciaTreeSet& union_with(const PatriciaTreeSet& other) {
     // For union, empty value or empty value is empty value.
-    m_core.merge(pt_core::use_available_value<IntegerType, pt_impl::Empty>,
+    m_core.merge(pt_core::use_available_value<IntegerType, Empty>,
                  other.m_core);
     return *this;
   }
 
   PatriciaTreeSet& intersection_with(const PatriciaTreeSet& other) {
     // For intersect, empty value and empty value is empty value.
-    m_core.intersect(pt_core::use_available_value<IntegerType, pt_impl::Empty>,
+    m_core.intersect(pt_core::use_available_value<IntegerType, Empty>,
                      other.m_core);
     return *this;
   }
@@ -232,38 +208,5 @@ class PatriciaTreeSet final {
  private:
   Core m_core;
 };
-
-namespace pt_impl {
-
-using namespace pt_util;
-
-template <typename IntegerType>
-inline boost::intrusive_ptr<PatriciaTree<IntegerType>> filter(
-    const std::function<bool(IntegerType key)>& predicate,
-    const boost::intrusive_ptr<PatriciaTree<IntegerType>>& tree) {
-  if (tree == nullptr) {
-    return nullptr;
-  }
-  if (tree->is_leaf()) {
-    const auto& leaf =
-        boost::static_pointer_cast<PatriciaTreeLeaf<IntegerType>>(tree);
-    return predicate(leaf->key()) ? leaf : nullptr;
-  }
-  const auto& branch =
-      boost::static_pointer_cast<PatriciaTreeBranch<IntegerType>>(tree);
-  auto new_left_tree = filter(predicate, branch->left_tree());
-  auto new_right_tree = filter(predicate, branch->right_tree());
-  if (new_left_tree == branch->left_tree() &&
-      new_right_tree == branch->right_tree()) {
-    return branch;
-  } else {
-    return pt_core::make_branch(branch->prefix(),
-                                branch->branching_bit(),
-                                new_left_tree,
-                                new_right_tree);
-  }
-}
-
-} // namespace pt_impl
 
 } // namespace sparta
