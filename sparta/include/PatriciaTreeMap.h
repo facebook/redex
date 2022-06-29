@@ -10,9 +10,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <functional>
-#include <iterator>
 #include <ostream>
-#include <stack>
 #include <type_traits>
 #include <utility>
 
@@ -47,9 +45,6 @@ using PatriciaTreeLeaf = pt_core::PatriciaTreeLeaf<IntegerType, Value>;
 
 template <typename IntegerType, typename Value>
 using PatriciaTreeBranch = pt_core::PatriciaTreeBranch<IntegerType, Value>;
-
-template <typename IntegerType, typename Value>
-class PatriciaTreeIterator;
 
 template <typename T>
 using CombiningFunction = std::function<T(const T&, const T&)>;
@@ -181,7 +176,7 @@ class PatriciaTreeMap final {
   using key_type = Key;
   using mapped_type = typename Core::ValueType;
   using value_type = std::pair<const Key, mapped_type>;
-  using iterator = ptmap_impl::PatriciaTreeIterator<Key, Value>;
+  using iterator = typename Core::IteratorType;
   using const_iterator = iterator;
   using difference_type = std::ptrdiff_t;
   using size_type = size_t;
@@ -197,17 +192,13 @@ class PatriciaTreeMap final {
 
   bool empty() const { return m_core.empty(); }
 
-  size_t size() const {
-    size_t s = 0;
-    std::for_each(begin(), end(), [&s](const auto&) { ++s; });
-    return s;
-  }
+  size_t size() const { return m_core.size(); }
 
   size_t max_size() const { return m_core.max_size(); }
 
-  iterator begin() const { return iterator(m_core.m_tree); }
+  iterator begin() const { return m_core.begin(); }
 
-  iterator end() const { return iterator(); }
+  iterator end() const { return m_core.end(); }
 
   const mapped_type& at(Key key) const {
     const mapped_type* value =
@@ -981,96 +972,6 @@ inline boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> diff(
   // The prefixes disagree.
   return s;
 }
-
-// The iterator basically performs a post-order traversal of the tree, pausing
-// at each leaf.
-template <typename Key, typename Value>
-class PatriciaTreeIterator final {
-  using Codec = pt_util::Codec<Key>;
-
- public:
-  // C++ iterator concept member types
-  using iterator_category = std::forward_iterator_tag;
-  using mapped_type = typename Value::type;
-  using value_type = std::pair<Key, mapped_type>;
-  using difference_type = std::ptrdiff_t;
-  using pointer = const value_type*;
-  using reference = const value_type&;
-
-  using IntegerType = typename Codec::IntegerType;
-
-  PatriciaTreeIterator() {}
-
-  explicit PatriciaTreeIterator(
-      boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> tree)
-      : m_root(std::move(tree)) {
-    if (m_root == nullptr) {
-      return;
-    }
-    go_to_next_leaf(m_root);
-  }
-
-  PatriciaTreeIterator& operator++() {
-    // We disallow incrementing the end iterator.
-    RUNTIME_CHECK(m_leaf != nullptr, undefined_operation());
-    if (m_stack.empty()) {
-      // This means that we were on the rightmost leaf. We've reached the end of
-      // the iteration.
-      m_leaf = nullptr;
-      return *this;
-    }
-    // Otherwise, we pop out a branch from the stack and move to the leftmost
-    // leaf in its right-hand subtree.
-    auto branch = m_stack.top();
-    m_stack.pop();
-    go_to_next_leaf(branch->right_tree());
-    return *this;
-  }
-
-  PatriciaTreeIterator operator++(int) {
-    PatriciaTreeIterator retval = *this;
-    ++(*this);
-    return retval;
-  }
-
-  bool operator==(const PatriciaTreeIterator& other) const {
-    // Note that there's no need to check the stack (it's just used to traverse
-    // the tree).
-    return m_leaf == other.m_leaf;
-  }
-
-  bool operator!=(const PatriciaTreeIterator& other) const {
-    return !(*this == other);
-  }
-
-  reference operator*() const { return Codec::decode(m_leaf->data()); }
-
-  pointer operator->() const { return &(**this); }
-
- private:
-  // The argument is never null.
-  void go_to_next_leaf(
-      const boost::intrusive_ptr<PatriciaTree<IntegerType, Value>>& tree) {
-    auto* t = tree.get();
-    // We go to the leftmost leaf, storing the branches that we're traversing
-    // on the stack. By definition of a Patricia tree, a branch node always
-    // has two children, hence the leftmost leaf always exists.
-    while (t->is_branch()) {
-      auto branch = static_cast<PatriciaTreeBranch<IntegerType, Value>*>(t);
-      m_stack.push(branch);
-      t = branch->left_tree().get();
-      // A branch node always has two children.
-      RUNTIME_CHECK(t != nullptr, internal_error());
-    }
-    m_leaf = static_cast<PatriciaTreeLeaf<IntegerType, Value>*>(t);
-  }
-
-  // We are holding on to the root of the tree to ensure that all its nested
-  // branches and leaves stay alive for as long as the iterator stays alive.
-  boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> m_root;
-  std::stack<PatriciaTreeBranch<IntegerType, Value>*> m_stack;
-  PatriciaTreeLeaf<IntegerType, Value>* m_leaf{nullptr};
-};
 
 } // namespace ptmap_impl
 

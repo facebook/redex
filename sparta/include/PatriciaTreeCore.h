@@ -10,7 +10,9 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <limits>
+#include <stack>
 #include <tuple>
 #include <type_traits>
 #include <utility>
@@ -47,6 +49,9 @@ namespace pt_core {
  */
 template <typename Key, typename Value>
 class PatriciaTreeCore;
+
+template <typename Key, typename Value>
+class PatriciaTreeIterator;
 
 /*
  * Convenience interface that makes it easy to define maps for value types that
@@ -298,12 +303,150 @@ class PatriciaTreeBranch final
   boost::intrusive_ptr<Base> m_left_tree, m_right_tree;
 };
 
+// Advances over each leaf in the tree in post-order.
+//
+// This is the central core that iterators use to iterate,
+// but without all the C++ iterator interface noise.
+template <typename IntegerType, typename Value>
+class PatriciaTreePostOrder final {
+ public:
+  using NodeType = PatriciaTreeNode<IntegerType, Value>;
+  using LeafType = typename NodeType::LeafType;
+  using BranchType = typename NodeType::BranchType;
+
+  // Depending on the specialization of leaf node base, either a
+  // single (encoded) key type, or a pair of (encoded) key and value.
+  using StorageType = typename LeafType::StorageType;
+
+  void advance() {
+    // We disallow incrementing beyond the end.
+    RUNTIME_CHECK(m_leaf != nullptr, undefined_operation());
+
+    if (m_stack.empty()) {
+      // This means that we were on the rightmost leaf. We've reached the end
+      // of the iteration.
+      m_leaf = nullptr;
+      return;
+    }
+
+    // Otherwise, we pop out a branch from the stack and move to the leftmost
+    // leaf in its right-hand subtree.
+    auto branch = m_stack.top();
+    m_stack.pop();
+    go_to_next_leaf(branch->right_tree());
+  }
+
+  bool equals(const PatriciaTreePostOrder& other) const {
+    // Note that there's no need to check the stack (it's just used to
+    // traverse the tree).
+    return m_leaf == other.m_leaf;
+  }
+
+  const StorageType& data() const { return m_leaf->data(); }
+
+ private:
+  PatriciaTreePostOrder() = default;
+
+  explicit PatriciaTreePostOrder(boost::intrusive_ptr<NodeType> tree)
+      : m_root(std::move(tree)) {
+    if (m_root != nullptr) {
+      go_to_next_leaf(m_root);
+    }
+  }
+
+  // The argument is never null.
+  void go_to_next_leaf(const boost::intrusive_ptr<NodeType>& tree) {
+    const NodeType* t = tree.get();
+
+    // We go to the leftmost leaf, storing the branches that we're traversing
+    // on the stack. By definition of a Patricia tree, a branch node always
+    // has two children, hence the leftmost leaf always exists.
+    while (t->is_branch()) {
+      const auto* branch = static_cast<const BranchType*>(t);
+      m_stack.push(branch);
+
+      t = branch->left_tree().get();
+      // A branch node always has two children.
+      RUNTIME_CHECK(t != nullptr, internal_error());
+    }
+
+    m_leaf = static_cast<const LeafType*>(t);
+  }
+
+  // We are holding on to the root of the tree to ensure that all its nested
+  // branches and leaves stay alive for as long as the iterator stays alive.
+  boost::intrusive_ptr<NodeType> m_root;
+  std::stack<const BranchType*> m_stack;
+  const LeafType* m_leaf{nullptr};
+
+  template <typename K, typename V>
+  friend class PatriciaTreeIterator;
+};
+
+// The iterator performs a post-order traversal of the tree,
+// pausing at each leaf.
+template <typename Key, typename Value>
+class PatriciaTreeIterator final {
+  using Codec = pt_util::Codec<Key>;
+  using IntegerType = typename Codec::IntegerType;
+
+  using IteratorImpl = PatriciaTreePostOrder<IntegerType, Value>;
+  using NodeType = typename IteratorImpl::NodeType;
+  using StorageType = typename IteratorImpl::StorageType;
+  using DecodedType =
+      decltype(Codec::decode(std::declval<const StorageType&>()));
+
+ public:
+  // C++ iterator concept member types
+  using iterator_category = std::forward_iterator_tag;
+  using value_type = std::decay_t<DecodedType>;
+  using mapped_type = typename IteratorImpl::LeafType::ValueType;
+  using difference_type = std::ptrdiff_t;
+  using pointer = const value_type*;
+  using reference = const value_type&;
+
+  PatriciaTreeIterator() = default;
+
+  PatriciaTreeIterator& operator++() {
+    m_impl.advance();
+    return *this;
+  }
+
+  PatriciaTreeIterator operator++(int) {
+    auto retval = *this;
+    ++(*this);
+    return retval;
+  }
+
+  bool operator==(const PatriciaTreeIterator& other) const {
+    return m_impl.equals(other.m_impl);
+  }
+
+  bool operator!=(const PatriciaTreeIterator& other) const {
+    return !(*this == other);
+  }
+
+  reference operator*() const { return Codec::decode(m_impl.data()); }
+
+  pointer operator->() const { return &(**this); }
+
+ private:
+  explicit PatriciaTreeIterator(boost::intrusive_ptr<NodeType> tree)
+      : m_impl(std::move(tree)) {}
+
+  IteratorImpl m_impl;
+
+  template <typename K, typename V>
+  friend class PatriciaTreeCore;
+};
+
 template <typename Key, typename Value>
 class PatriciaTreeCore {
  public:
   using Codec = pt_util::Codec<Key>;
   using IntegerType = typename Codec::IntegerType;
   using ValueType = typename Value::type;
+  using IteratorType = PatriciaTreeIterator<Key, Value>;
 
   static_assert(std::is_same_v<decltype(Value::default_value()), ValueType>,
                 "Value::default_value() does not exist");
@@ -319,9 +462,19 @@ class PatriciaTreeCore {
 
   inline bool empty() const { return m_tree == nullptr; }
 
+  inline size_t size() const {
+    size_t s = 0;
+    std::for_each(begin(), end(), [&s](const auto&) { ++s; });
+    return s;
+  }
+
   inline size_t max_size() const {
     return std::numeric_limits<IntegerType>::max();
   }
+
+  inline IteratorType begin() const { return IteratorType(m_tree); }
+
+  inline IteratorType end() const { return IteratorType(); }
 
   inline bool reference_equals(const PatriciaTreeCore& other) const {
     return m_tree == other.m_tree;
