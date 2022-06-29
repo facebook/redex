@@ -19,6 +19,7 @@
 
 #include <boost/functional/hash.hpp>
 #include <boost/intrusive_ptr.hpp>
+#include <boost/optional.hpp>
 
 #include "AbstractDomain.h"
 #include "Exceptions.h"
@@ -719,21 +720,137 @@ inline intrusive_ptr<PatriciaTreeNode<IntegerType, Value>> make_branch(
   }
 }
 
-template <typename IntegerType, typename Value>
-inline intrusive_ptr<PatriciaTreeNode<IntegerType, Value>> remove(
+/*
+ * All of the callback functions below, like update/combine/map/etc, will
+ * operate directly on leaf node intrusive pointer arguments. This allows
+ * e.g. one to copy an intrusive pointer rather than copy the value to a
+ * new leaf.
+ *
+ * If the leaf does not exist, the callback is called with a nullptr; the
+ * operation must handle this (e.g., by treating it as a default_value).
+ *
+ * The callback may return a value, an optional value, a leaf node intrusive
+ * pointer, or a nullptr. If the optional value is nullopt or if the return
+ * value is nullptr, the result is nullptr. Otherwise, a leaf node pointer
+ * is returned holding the value (which may be a pre-existing leaf node).
+ */
+
+// **Do not call directly.**  Use update_leaf or update_new_leaf instead.
+//
+// Assumes `!leaf || key == leaf->key()`.
+template <typename IntegerType, typename Value, typename LeafOperation>
+inline intrusive_ptr<PatriciaTreeLeaf<IntegerType, Value>> update_leaf_internal(
+    LeafOperation&& leaf_operation,
+    IntegerType key,
+    const intrusive_ptr<PatriciaTreeLeaf<IntegerType, Value>>& leaf) {
+  auto value_or_leaf = leaf_operation(leaf);
+
+  // Being able to return different static types from the operation
+  // is significantly more convenient, and is what helps the inliner
+  // eliminate all redundant paths (rather than a dynamic dispatch).
+  using ValueOrLeaf = decltype(value_or_leaf);
+  using ValueType = typename Value::type;
+  using OptValueType = boost::optional<ValueType>;
+  using LeafType = PatriciaTreeLeaf<IntegerType, Value>;
+  using LeafIntrusivePtr = intrusive_ptr<LeafType>;
+
+  constexpr bool kIsValue = std::is_same_v<ValueOrLeaf, ValueType>;
+  constexpr bool kIsOptValue = std::is_same_v<ValueOrLeaf, OptValueType>;
+  constexpr bool kIsLeaf = std::is_same_v<ValueOrLeaf, LeafIntrusivePtr>;
+  constexpr bool kIsNullOpt = std::is_same_v<ValueOrLeaf, boost::none_t>;
+  constexpr bool kIsNullptr = std::is_same_v<ValueOrLeaf, std::nullptr_t>;
+  static_assert(kIsValue || kIsOptValue || kIsLeaf || kIsNullOpt || kIsNullptr,
+                "ValueOrLeaf must hold a Value::type or be nullable");
+
+  ValueType* value_ptr;
+  if constexpr (kIsValue) {
+    value_ptr = &value_or_leaf;
+  } else if constexpr (kIsOptValue) {
+    value_ptr = value_or_leaf ? &(*value_or_leaf) : nullptr;
+  } else if constexpr (kIsLeaf) {
+    return std::move(value_or_leaf);
+  } else {
+    value_ptr = nullptr;
+  }
+
+  if (!value_ptr) {
+    return nullptr;
+  } else if (leaf && Value::equals(*value_ptr, leaf->value())) {
+    return leaf;
+  } else {
+    return LeafType::make(key, std::move(*value_ptr));
+  }
+}
+
+// Modify a leaf by invoking the given operation on the current value,
+// which will return a proposed updated value.
+//
+// LeafOperation may return a value, an optional value, a leaf node intrusive
+// pointer, or a nullptr. If nullopt or nullptr is returned, then nullptr is
+// returned. Otherwise, a leaf node pointer is returned holding the value.
+//
+// If a leaf node pointer was returned, it is returned directly. Otherwise if
+// the returned value is equal to the existing leaf value, the existing leaf
+// is preferred and returned.
+template <typename IntegerType, typename Value, typename LeafOperation>
+inline intrusive_ptr<PatriciaTreeLeaf<IntegerType, Value>> update_leaf(
+    LeafOperation&& leaf_operation,
+    const intrusive_ptr<PatriciaTreeLeaf<IntegerType, Value>>& leaf) {
+  return update_leaf_internal<IntegerType, Value>(
+      std::forward<LeafOperation>(leaf_operation), leaf->key(), leaf);
+}
+
+// Update a new leaf by invoking the given operation on the default value,
+// which will return a proposed updated value.
+//
+// LeafOperation may return a value, an optional value, a leaf node intrusive
+// pointer, or a nullptr. If nullopt or nullptr is returned, then nullptr is
+// returned. Otherwise, a leaf node pointer is returned holding the value.
+//
+// If a leaf node pointer was returned, it is returned directly. Otherwise if
+// the returned value is equal to the existing leaf value, the existing leaf
+// is preferred and returned.
+template <typename IntegerType, typename Value, typename LeafOperation>
+inline intrusive_ptr<PatriciaTreeLeaf<IntegerType, Value>> update_new_leaf(
+    LeafOperation&& leaf_operation, IntegerType key) {
+  return update_leaf_internal<IntegerType, Value>(
+      std::forward<LeafOperation>(leaf_operation), key, nullptr);
+}
+
+// Modify a key value by invoking the given operation on the current value,
+// which will return a proposed updated value.
+//
+// LeafOperation may return a value, an optional value, a leaf node intrusive
+// pointer, or a nullptr. If nullopt or nullptr is returned, then nullptr is
+// returned. Otherwise, a leaf node pointer is returned holding the value.
+//
+// If a leaf node pointer was returned, it is returned directly. Otherwise if
+// the returned value is equal to the existing leaf value, the existing leaf
+// is preferred and returned.
+template <typename IntegerType, typename Value, typename LeafOperation>
+inline intrusive_ptr<PatriciaTreeNode<IntegerType, Value>> update_leaf_by_key(
+    LeafOperation&& leaf_operation,
     IntegerType key,
     const intrusive_ptr<PatriciaTreeNode<IntegerType, Value>>& tree) {
+  const auto make_new_leaf = [&] {
+    return update_new_leaf<IntegerType, Value>(
+        std::forward<LeafOperation>(leaf_operation), key);
+  };
   if (tree == nullptr) {
-    return nullptr;
+    return make_new_leaf();
   }
 
   if (tree->is_leaf()) {
     const auto& leaf =
         boost::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(tree);
     if (key == leaf->key()) {
-      return nullptr;
-    } else {
+      return update_leaf(std::forward<LeafOperation>(leaf_operation), leaf);
+    }
+    auto new_leaf = make_new_leaf();
+    if (new_leaf == nullptr) {
       return leaf;
+    } else {
+      return join<IntegerType, Value>(key, new_leaf, leaf->key(), leaf);
     }
   }
 
@@ -741,7 +858,9 @@ inline intrusive_ptr<PatriciaTreeNode<IntegerType, Value>> remove(
       boost::static_pointer_cast<PatriciaTreeBranch<IntegerType, Value>>(tree);
   if (match_prefix(key, branch->prefix(), branch->branching_bit())) {
     if (is_zero_bit(key, branch->branching_bit())) {
-      auto new_left_tree = remove(key, branch->left_tree());
+      auto new_left_tree =
+          update_leaf_by_key(std::forward<LeafOperation>(leaf_operation), key,
+                             branch->left_tree());
       if (new_left_tree == branch->left_tree()) {
         return branch;
       }
@@ -750,7 +869,9 @@ inline intrusive_ptr<PatriciaTreeNode<IntegerType, Value>> remove(
                          new_left_tree,
                          branch->right_tree());
     } else {
-      auto new_right_tree = remove(key, branch->right_tree());
+      auto new_right_tree =
+          update_leaf_by_key(std::forward<LeafOperation>(leaf_operation), key,
+                             branch->right_tree());
       if (new_right_tree == branch->right_tree()) {
         return branch;
       }
@@ -760,7 +881,77 @@ inline intrusive_ptr<PatriciaTreeNode<IntegerType, Value>> remove(
                          new_right_tree);
     }
   }
-  return branch;
+  auto new_leaf = make_new_leaf();
+  if (new_leaf == nullptr) {
+    return branch;
+  } else {
+    return join<IntegerType, Value>(key, new_leaf, branch->prefix(), branch);
+  }
+}
+
+// Update or insert a key value.
+//
+// Accepts a value, an optional value, a leaf node intrusive pointer, or a
+// nullptr. If nullopt or nullptr is provided, then the leaf is removed.
+// Otherwise, it is inserted or updated to hold the given value.
+template <typename IntegerType, typename Value, typename ValueOrLeaf>
+inline intrusive_ptr<PatriciaTreeNode<IntegerType, Value>> upsert(
+    IntegerType key,
+    ValueOrLeaf value_or_leaf,
+    const intrusive_ptr<PatriciaTreeNode<IntegerType, Value>>& tree) {
+  return update_leaf_by_key(
+      [&](const auto&) { return std::move(value_or_leaf); }, key, tree);
+}
+
+template <typename IntegerType, typename Value, typename LeafOperation>
+inline intrusive_ptr<PatriciaTreeNode<IntegerType, Value>> update_all_leafs(
+    LeafOperation&& leaf_operation,
+    const intrusive_ptr<PatriciaTreeNode<IntegerType, Value>>& tree) {
+  if (tree == nullptr) {
+    return nullptr;
+  }
+  if (tree->is_leaf()) {
+    const auto& leaf =
+        boost::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(tree);
+    return update_leaf(leaf_operation, leaf);
+  }
+  const auto& branch =
+      boost::static_pointer_cast<PatriciaTreeBranch<IntegerType, Value>>(tree);
+  auto new_left_tree = update_all_leafs(leaf_operation, branch->left_tree());
+  auto new_right_tree = update_all_leafs(leaf_operation, branch->right_tree());
+  if (new_left_tree == branch->left_tree() &&
+      new_right_tree == branch->right_tree()) {
+    return branch;
+  } else {
+    return make_branch(branch->prefix(), branch->branching_bit(), new_left_tree,
+                       new_right_tree);
+  }
+}
+
+template <typename IntegerType, typename Value, typename LeafCombine>
+inline intrusive_ptr<PatriciaTreeLeaf<IntegerType, Value>> combine_leafs(
+    LeafCombine&& leaf_combine,
+    const intrusive_ptr<PatriciaTreeLeaf<IntegerType, Value>>& other,
+    const intrusive_ptr<PatriciaTreeLeaf<IntegerType, Value>>& leaf) {
+  return update_leaf(
+      [&](const auto& leaf) { return leaf_combine(leaf, other); }, leaf);
+}
+
+template <typename IntegerType, typename Value, typename LeafCombine>
+inline intrusive_ptr<PatriciaTreeNode<IntegerType, Value>> combine_leafs_by_key(
+    LeafCombine&& leaf_combine,
+    const intrusive_ptr<PatriciaTreeLeaf<IntegerType, Value>>& other,
+    IntegerType key,
+    const intrusive_ptr<PatriciaTreeNode<IntegerType, Value>>& tree) {
+  return update_leaf_by_key(
+      [&](const auto& leaf) { return leaf_combine(leaf, other); }, key, tree);
+}
+
+template <typename IntegerType, typename Value>
+inline intrusive_ptr<PatriciaTreeNode<IntegerType, Value>> remove(
+    IntegerType key,
+    const intrusive_ptr<PatriciaTreeNode<IntegerType, Value>>& tree) {
+  return upsert<IntegerType, Value>(key, nullptr, tree);
 }
 
 template <typename IntegerType, typename Value>
@@ -860,6 +1051,28 @@ class PatriciaTreeCore {
 
   inline bool reference_equals(const PatriciaTreeCore& other) const {
     return m_tree == other.m_tree;
+  }
+
+  template <typename ValueOrLeaf>
+  inline void upsert(Key key, ValueOrLeaf value_or_leaf) {
+    m_tree =
+        pt_core::upsert(Codec::encode(key), std::move(value_or_leaf), m_tree);
+  }
+
+  template <typename LeafOperation>
+  inline void update(LeafOperation&& leaf_operation, Key key) {
+    m_tree =
+        pt_core::update_leaf_by_key(std::forward<LeafOperation>(leaf_operation),
+                                    Codec::encode(key), m_tree);
+  }
+
+  template <typename LeafOperation>
+  inline bool update_all_leafs(LeafOperation&& leaf_operation) {
+    auto new_tree = pt_core::update_all_leafs(
+        std::forward<LeafOperation>(leaf_operation), m_tree);
+    auto old_tree = std::exchange(m_tree, std::move(new_tree));
+
+    return m_tree != old_tree;
   }
 
   inline void remove(Key key) {

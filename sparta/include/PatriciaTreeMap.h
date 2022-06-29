@@ -14,6 +14,8 @@
 #include <type_traits>
 #include <utility>
 
+#include <boost/optional.hpp>
+
 #include "Exceptions.h"
 #include "PatriciaTreeCore.h"
 #include "PatriciaTreeUtil.h"
@@ -45,58 +47,23 @@ using PatriciaTreeLeaf = pt_core::PatriciaTreeLeaf<IntegerType, Value>;
 template <typename IntegerType, typename Value>
 using PatriciaTreeBranch = pt_core::PatriciaTreeBranch<IntegerType, Value>;
 
-template <typename T>
-using CombiningFunction = std::function<T(const T&, const T&)>;
-
-template <typename Value>
-using MappingFunction = std::function<Value(const Value&)>;
-
-template <typename IntegerType, typename Value>
-inline boost::intrusive_ptr<PatriciaTreeLeaf<IntegerType, Value>> combine_leaf(
-    const ptmap_impl::CombiningFunction<typename Value::type>& combine,
-    const typename Value::type& value,
-    const boost::intrusive_ptr<PatriciaTreeLeaf<IntegerType, Value>>& leaf);
-
-template <typename IntegerType, typename Value>
-inline boost::intrusive_ptr<PatriciaTreeLeaf<IntegerType, Value>>
-combine_new_leaf(const CombiningFunction<typename Value::type>& combine,
-                 IntegerType key,
-                 const typename Value::type& value);
-
-template <typename IntegerType, typename Value>
-inline boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> update(
-    const CombiningFunction<typename Value::type>& combine,
-    IntegerType key,
-    const typename Value::type& value,
-    const boost::intrusive_ptr<PatriciaTree<IntegerType, Value>>& tree);
-
-template <typename IntegerType, typename Value>
-inline boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> map(
-    const MappingFunction<typename Value::type>& f,
-    const boost::intrusive_ptr<PatriciaTree<IntegerType, Value>>& tree);
-
-template <typename IntegerType, typename Value>
+template <typename IntegerType, typename Value, typename Combine>
 inline boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> merge(
-    const CombiningFunction<typename Value::type>& combine,
+    const Combine& combine,
     const boost::intrusive_ptr<PatriciaTree<IntegerType, Value>>& s,
     const boost::intrusive_ptr<PatriciaTree<IntegerType, Value>>& t);
 
-template <typename IntegerType, typename Value>
+template <typename IntegerType, typename Value, typename Combine>
 inline boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> intersect(
-    const ptmap_impl::CombiningFunction<typename Value::type>& combine,
+    const Combine& combine,
     const boost::intrusive_ptr<PatriciaTree<IntegerType, Value>>& s,
     const boost::intrusive_ptr<PatriciaTree<IntegerType, Value>>& t);
 
-template <typename IntegerType, typename Value>
+template <typename IntegerType, typename Value, typename Combine>
 inline boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> diff(
-    const ptmap_impl::CombiningFunction<typename Value::type>& combine,
+    const Combine& combine,
     const boost::intrusive_ptr<PatriciaTree<IntegerType, Value>>& s,
     const boost::intrusive_ptr<PatriciaTree<IntegerType, Value>>& t);
-
-template <typename T>
-T snd(const T&, const T& second) {
-  return second;
-}
 
 } // namespace ptmap_impl
 
@@ -162,8 +129,9 @@ class PatriciaTreeMap final {
   using const_pointer = const mapped_type*;
 
   using IntegerType = typename Codec::IntegerType;
-  using combining_function = ptmap_impl::CombiningFunction<mapped_type>;
-  using mapping_function = ptmap_impl::MappingFunction<mapped_type>;
+  using combining_function =
+      std::function<mapped_type(const mapped_type&, const mapped_type&)>;
+  using mapping_function = std::function<mapped_type(const mapped_type&)>;
 
   static_assert(std::is_same_v<ValueType, mapped_type>,
                 "ValueType must be equal to Value::type");
@@ -221,44 +189,34 @@ class PatriciaTreeMap final {
   PatriciaTreeMap& update(
       const std::function<mapped_type(const mapped_type&)>& operation,
       Key key) {
-    m_core.m_tree = ptmap_impl::update<IntegerType, Value>(
-        [&operation](const mapped_type& x, const mapped_type&) {
-          return operation(x);
-        },
-        Codec::encode(key),
-        Value::default_value(),
-        m_core.m_tree);
+    m_core.update(apply_leafs(operation), key);
     return *this;
   }
 
   bool map(const mapping_function& f) {
-    auto new_tree = ptmap_impl::map<IntegerType, Value>(f, m_core.m_tree);
-    bool res = new_tree != m_core.m_tree;
-    m_core.m_tree = new_tree;
-    return res;
+    return m_core.update_all_leafs(apply_leafs(f));
   }
 
   bool erase_all_matching(Key key_mask) {
     return m_core.erase_all_matching(key_mask);
   }
 
-  PatriciaTreeMap& insert_or_assign(Key key, const mapped_type& value) {
-    m_core.m_tree = ptmap_impl::update<IntegerType, Value>(
-        ptmap_impl::snd<mapped_type>, Codec::encode(key), value, m_core.m_tree);
+  PatriciaTreeMap& insert_or_assign(Key key, mapped_type value) {
+    m_core.upsert(key, keep_if_non_default(std::move(value)));
     return *this;
   }
 
   PatriciaTreeMap& union_with(const combining_function& combine,
                               const PatriciaTreeMap& other) {
     m_core.m_tree = ptmap_impl::merge<IntegerType, Value>(
-        combine, m_core.m_tree, other.m_core.m_tree);
+        apply_leafs(combine), m_core.m_tree, other.m_core.m_tree);
     return *this;
   }
 
   PatriciaTreeMap& intersection_with(const combining_function& combine,
                                      const PatriciaTreeMap& other) {
     m_core.m_tree = ptmap_impl::intersect<IntegerType, Value>(
-        combine, m_core.m_tree, other.m_core.m_tree);
+        apply_leafs(combine), m_core.m_tree, other.m_core.m_tree);
     return *this;
   }
 
@@ -266,7 +224,7 @@ class PatriciaTreeMap final {
   PatriciaTreeMap& difference_with(const combining_function& combine,
                                    const PatriciaTreeMap& other) {
     m_core.m_tree = ptmap_impl::diff<IntegerType, Value>(
-        combine, m_core.m_tree, other.m_core.m_tree);
+        apply_leafs(combine), m_core.m_tree, other.m_core.m_tree);
     return *this;
   }
 
@@ -294,6 +252,31 @@ class PatriciaTreeMap final {
   void clear() { m_core.clear(); }
 
  private:
+  // The map implicitly stores default at every node. If a leaf is absent the
+  // operation will see a default value instead. Likewise, if the result of an
+  // operation is a default value we remove the leaf rather than store it.
+  //
+  // This wraps the given function to apply these transformations.
+  template <typename Func>
+  inline static auto apply_leafs(Func&& func) {
+    return [func = std::forward<Func>(func)](const auto&... leaf_ptrs) {
+      auto default_value = Value::default_value();
+      auto return_value =
+          func((leaf_ptrs ? leaf_ptrs->value() : default_value)...);
+
+      return keep_if_non_default(std::move(return_value));
+    };
+  }
+
+  inline static boost::optional<mapped_type> keep_if_non_default(
+      mapped_type value) {
+    if (Value::is_default_value(value)) {
+      return boost::none;
+    } else {
+      return value;
+    }
+  }
+
   Core m_core;
 
   template <typename T, typename VT, typename V>
@@ -325,92 +308,11 @@ namespace ptmap_impl {
 
 using namespace pt_util;
 
-// Finds the value corresponding to :key in the tree and replaces its bound
-// value with combine(bound_value, :value). Note that the existing value is
-// always the first parameter to :combine and the new value is the second.
-template <typename IntegerType, typename Value>
-inline boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> update(
-    const ptmap_impl::CombiningFunction<typename Value::type>& combine,
-    IntegerType key,
-    const typename Value::type& value,
-    const boost::intrusive_ptr<PatriciaTree<IntegerType, Value>>& tree) {
-  if (tree == nullptr) {
-    return combine_new_leaf<IntegerType, Value>(combine, key, value);
-  }
-  if (tree->is_leaf()) {
-    const auto& leaf =
-        boost::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(tree);
-    if (key == leaf->key()) {
-      return combine_leaf(combine, value, leaf);
-    }
-    auto new_leaf = combine_new_leaf<IntegerType, Value>(combine, key, value);
-    if (new_leaf == nullptr) {
-      return leaf;
-    }
-    return pt_core::join<IntegerType, Value>(key, new_leaf, leaf->key(), leaf);
-  }
-  const auto& branch =
-      boost::static_pointer_cast<PatriciaTreeBranch<IntegerType, Value>>(tree);
-  if (match_prefix(key, branch->prefix(), branch->branching_bit())) {
-    if (is_zero_bit(key, branch->branching_bit())) {
-      auto new_left_tree = update(combine, key, value, branch->left_tree());
-      if (new_left_tree == branch->left_tree()) {
-        return branch;
-      }
-      return pt_core::make_branch(branch->prefix(),
-                                  branch->branching_bit(),
-                                  new_left_tree,
-                                  branch->right_tree());
-    } else {
-      auto new_right_tree = update(combine, key, value, branch->right_tree());
-      if (new_right_tree == branch->right_tree()) {
-        return branch;
-      }
-      return pt_core::make_branch(branch->prefix(),
-                                  branch->branching_bit(),
-                                  branch->left_tree(),
-                                  new_right_tree);
-    }
-  }
-  auto new_leaf = combine_new_leaf<IntegerType, Value>(combine, key, value);
-  if (new_leaf == nullptr) {
-    return branch;
-  }
-  return pt_core::join<IntegerType, Value>(
-      key, new_leaf, branch->prefix(), branch);
-}
-
-// Maps all entries with non-default values, applying a given function.
-template <typename IntegerType, typename Value>
-inline boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> map(
-    const MappingFunction<typename Value::type>& f,
-    const boost::intrusive_ptr<PatriciaTree<IntegerType, Value>>& tree) {
-  if (tree == nullptr) {
-    return nullptr;
-  }
-  if (tree->is_leaf()) {
-    const auto& leaf =
-        boost::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(tree);
-    auto new_value = f(leaf->value());
-    return combine_leaf(ptmap_impl::snd<typename Value::type>, new_value, leaf);
-  }
-  const auto& branch =
-      boost::static_pointer_cast<PatriciaTreeBranch<IntegerType, Value>>(tree);
-  auto new_left_tree = map(f, branch->left_tree());
-  auto new_right_tree = map(f, branch->right_tree());
-  if (new_left_tree == branch->left_tree() &&
-      new_right_tree == branch->right_tree()) {
-    return branch;
-  }
-  return pt_core::make_branch(
-      branch->prefix(), branch->branching_bit(), new_left_tree, new_right_tree);
-}
-
 // We keep the notations of the paper so as to make the implementation easier
 // to follow.
-template <typename IntegerType, typename Value>
+template <typename IntegerType, typename Value, typename Combine>
 inline boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> merge(
-    const ptmap_impl::CombiningFunction<typename Value::type>& combine,
+    const Combine& combine,
     const boost::intrusive_ptr<PatriciaTree<IntegerType, Value>>& s,
     const boost::intrusive_ptr<PatriciaTree<IntegerType, Value>>& t) {
   if (s == t) {
@@ -425,14 +327,14 @@ inline boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> merge(
     return s;
   }
   if (s->is_leaf()) {
-    const auto& leaf =
+    const auto& s_leaf =
         boost::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(s);
-    return update(combine, leaf->key(), leaf->value(), t);
+    return pt_core::combine_leafs_by_key(combine, s_leaf, s_leaf->key(), t);
   }
   if (t->is_leaf()) {
-    const auto& leaf =
+    const auto& t_leaf =
         boost::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(t);
-    return update(combine, leaf->key(), leaf->value(), s);
+    return pt_core::combine_leafs_by_key(combine, t_leaf, t_leaf->key(), s);
   }
   const auto& s_branch =
       boost::static_pointer_cast<PatriciaTreeBranch<IntegerType, Value>>(s);
@@ -456,8 +358,8 @@ inline boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> merge(
     if (new_left == t0 && new_right == t1) {
       return t;
     }
-    return PatriciaTreeBranch<IntegerType, Value>::make(
-        p, m, new_left, new_right);
+    return PatriciaTreeBranch<IntegerType, Value>::make(p, m, new_left,
+                                                        new_right);
   }
   if (m < n && match_prefix(q, p, m)) {
     // q contains p. Merge t with a subtree of s.
@@ -495,51 +397,23 @@ inline boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> merge(
   return pt_core::join(p, s, q, t);
 }
 
-// Combine :value with the value in :leaf with combine(:leaf, :value).
 template <typename IntegerType, typename Value>
-inline boost::intrusive_ptr<PatriciaTreeLeaf<IntegerType, Value>> combine_leaf(
-    const ptmap_impl::CombiningFunction<typename Value::type>& combine,
-    const typename Value::type& value,
-    const boost::intrusive_ptr<PatriciaTreeLeaf<IntegerType, Value>>& leaf) {
-  auto combined_value = combine(leaf->value(), value);
-  if (Value::is_default_value(combined_value)) {
-    return nullptr;
-  }
-  if (!Value::equals(combined_value, leaf->value())) {
-    return PatriciaTreeLeaf<IntegerType, Value>::make(leaf->key(),
-                                                      combined_value);
-  }
-  return leaf;
-}
-
-// Create a new leaf with the default value and combine :value into it.
-template <typename IntegerType, typename Value>
-inline boost::intrusive_ptr<PatriciaTreeLeaf<IntegerType, Value>>
-combine_new_leaf(
-    const ptmap_impl::CombiningFunction<typename Value::type>& combine,
-    IntegerType key,
-    const typename Value::type& value) {
-  auto new_leaf = boost::intrusive_ptr<PatriciaTreeLeaf<IntegerType, Value>>(
-      PatriciaTreeLeaf<IntegerType, Value>::make(key, Value::default_value()));
-  return combine_leaf(combine, value, new_leaf);
-}
-
-template <typename IntegerType, typename Value>
-typename Value::type use_available_value(const typename Value::type& x,
-                                         const typename Value::type& y) {
-  if (Value::is_default_value(x)) {
-    return y;
-  } else if (Value::is_default_value(y)) {
+boost::intrusive_ptr<PatriciaTreeLeaf<IntegerType, Value>> use_available_value(
+    const boost::intrusive_ptr<PatriciaTreeLeaf<IntegerType, Value>>& x,
+    const boost::intrusive_ptr<PatriciaTreeLeaf<IntegerType, Value>>& y) {
+  if (x) {
     return x;
+  } else if (y) {
+    return y;
   } else {
     BOOST_THROW_EXCEPTION(internal_error()
                           << error_msg("Malformed Patricia tree"));
   }
 }
 
-template <typename IntegerType, typename Value>
+template <typename IntegerType, typename Value, typename Combine>
 inline boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> intersect(
-    const ptmap_impl::CombiningFunction<typename Value::type>& combine,
+    const Combine& combine,
     const boost::intrusive_ptr<PatriciaTree<IntegerType, Value>>& s,
     const boost::intrusive_ptr<PatriciaTree<IntegerType, Value>>& t) {
   if (s == t) {
@@ -551,22 +425,22 @@ inline boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> intersect(
     return nullptr;
   }
   if (s->is_leaf()) {
-    const auto& leaf =
+    const auto& s_leaf =
         boost::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(s);
-    auto* value = pt_core::find_key_value(leaf->key(), t);
-    if (value == nullptr) {
+    auto t_leaf = pt_core::find_leaf(s_leaf->key(), t);
+    if (t_leaf == nullptr) {
       return nullptr;
     }
-    return combine_leaf(combine, *value, leaf);
+    return pt_core::combine_leafs(combine, t_leaf, s_leaf);
   }
   if (t->is_leaf()) {
-    const auto& leaf =
+    const auto& t_leaf =
         boost::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(t);
-    auto* value = pt_core::find_key_value(leaf->key(), s);
-    if (value == nullptr) {
+    auto s_leaf = pt_core::find_leaf(t_leaf->key(), s);
+    if (s_leaf == nullptr) {
       return nullptr;
     }
-    return combine_leaf(combine, *value, leaf);
+    return pt_core::combine_leafs(combine, s_leaf, t_leaf);
   }
   const auto& s_branch =
       boost::static_pointer_cast<PatriciaTreeBranch<IntegerType, Value>>(s);
@@ -603,9 +477,9 @@ inline boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> intersect(
   return nullptr;
 }
 
-template <typename IntegerType, typename Value>
+template <typename IntegerType, typename Value, typename Combine>
 inline boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> diff(
-    const ptmap_impl::CombiningFunction<typename Value::type>& combine,
+    const Combine& combine,
     const boost::intrusive_ptr<PatriciaTree<IntegerType, Value>>& s,
     const boost::intrusive_ptr<PatriciaTree<IntegerType, Value>>& t) {
   if (s == t) {
@@ -620,18 +494,18 @@ inline boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> diff(
     return s;
   }
   if (s->is_leaf()) {
-    const auto& leaf =
+    const auto& s_leaf =
         boost::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(s);
-    auto* value = pt_core::find_key_value(leaf->key(), t);
-    if (value == nullptr) {
+    auto t_leaf = pt_core::find_leaf(s_leaf->key(), t);
+    if (t_leaf == nullptr) {
       return s;
     }
-    return combine_leaf(combine, *value, leaf);
+    return pt_core::combine_leafs(combine, t_leaf, s_leaf);
   }
   if (t->is_leaf()) {
-    const auto& leaf =
+    const auto& t_leaf =
         boost::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(t);
-    return update(combine, leaf->key(), leaf->value(), s);
+    return pt_core::combine_leafs_by_key(combine, t_leaf, t_leaf->key(), s);
   }
   const auto& s_branch =
       boost::static_pointer_cast<PatriciaTreeBranch<IntegerType, Value>>(s);
@@ -653,8 +527,8 @@ inline boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> diff(
     if (new_left == s0 && new_right == s1) {
       return s;
     }
-    return merge<IntegerType, Value>(
-        use_available_value<IntegerType, Value>, new_left, new_right);
+    return merge<IntegerType, Value>(use_available_value<IntegerType, Value>,
+                                     new_left, new_right);
   }
   if (m < n && match_prefix(q, p, m)) {
     // q contains p. Diff t with a subtree of s.
@@ -663,15 +537,15 @@ inline boost::intrusive_ptr<PatriciaTree<IntegerType, Value>> diff(
       if (new_left == s0) {
         return s;
       }
-      return merge<IntegerType, Value>(
-          use_available_value<IntegerType, Value>, new_left, s1);
+      return merge<IntegerType, Value>(use_available_value<IntegerType, Value>,
+                                       new_left, s1);
     } else {
       auto new_right = diff(combine, s1, t);
       if (new_right == s1) {
         return s;
       }
-      return merge<IntegerType, Value>(
-          use_available_value<IntegerType, Value>, s0, new_right);
+      return merge<IntegerType, Value>(use_available_value<IntegerType, Value>,
+                                       s0, new_right);
     }
   }
   if (m > n && match_prefix(p, q, n)) {
