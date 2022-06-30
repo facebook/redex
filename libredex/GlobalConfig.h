@@ -111,6 +111,22 @@ struct MethodProfileOrderingConfig : public Configurable {
   std::unordered_set<std::string> method_sorting_allowlisted_substrings{};
   float min_appear_percent{10.0f};
   float second_min_appear_percent{10.0f};
+  bool skip_similarity_reordering{false};
+};
+
+struct MethodSimilarityOrderingConfig : public Configurable {
+  void bind_config() override;
+
+  std::string get_config_name() override {
+    return "MethodSimilarityOrderingConfig";
+  }
+  std::string get_config_doc() override {
+    return "This configuration is used to direct Redex about ordering methods "
+           "by similarity.";
+  }
+
+  bool disable{true};
+  bool use_class_level_perf_sensitivity{false};
 };
 
 struct ProguardConfig : public Configurable {

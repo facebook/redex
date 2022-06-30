@@ -92,6 +92,11 @@ TEST_F(DexOutputTest, testPerfSensitive) {
                                    SortMode::METHOD_SIMILARITY};
 
   Json::Value cfg;
+  std::istringstream temp_json(
+      "{\"method_similarity_order\":{\"use_class_level_perf_sensitivity\":true}"
+      "}");
+  temp_json >> cfg;
+
   ConfigFiles config_files(cfg);
   config_files.parse_global_config();
   std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make(""));

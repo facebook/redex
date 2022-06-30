@@ -78,6 +78,14 @@ void MethodProfileOrderingConfig::bind_config() {
   bind("min_appear_percent", min_appear_percent, min_appear_percent);
   bind("second_min_appear_percent", second_min_appear_percent,
        second_min_appear_percent);
+  bind("skip_similarity_reordering", skip_similarity_reordering,
+       skip_similarity_reordering);
+}
+
+void MethodSimilarityOrderingConfig::bind_config() {
+  bind("use_class_level_perf_sensitivity", use_class_level_perf_sensitivity,
+       use_class_level_perf_sensitivity);
+  bind("disable", disable, disable);
 }
 
 void ProguardConfig::bind_config() {
@@ -177,6 +185,7 @@ GlobalConfigRegistry& GlobalConfig::default_registry() {
           "check_unique_deobfuscated_names"),
       register_as<OptDecisionsConfig>("opt_decisions"),
       register_as<MethodProfileOrderingConfig>("method_profile_order"),
+      register_as<MethodSimilarityOrderingConfig>("method_similarity_order"),
       register_as<ProguardConfig>("proguard"),
       register_as<PassManagerConfig>("pass_manager"),
   };
