@@ -152,14 +152,13 @@ class PatriciaTreeSet final {
 
   PatriciaTreeSet& union_with(const PatriciaTreeSet& other) {
     // For union, empty value or empty value is empty value.
-    m_core.merge(pt_core::use_available_value<IntegerType, Empty>,
-                 other.m_core);
+    m_core.merge(pt_core::use_available_leaf<IntegerType, Empty>, other.m_core);
     return *this;
   }
 
   PatriciaTreeSet& intersection_with(const PatriciaTreeSet& other) {
     // For intersect, empty value and empty value is empty value.
-    m_core.intersect(pt_core::use_available_value<IntegerType, Empty>,
+    m_core.intersect(pt_core::use_available_leaf<IntegerType, Empty>,
                      other.m_core);
     return *this;
   }
