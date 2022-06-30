@@ -109,6 +109,22 @@ struct MethodProfileOrderingConfig : public Configurable {
 
   std::unordered_set<std::string> method_sorting_allowlisted_substrings{};
   float min_appear_percent{10.0f};
+  bool skip_similarity_reordering{false};
+};
+
+struct MethodSimilarityOrderingConfig : public Configurable {
+  void bind_config() override;
+
+  std::string get_config_name() override {
+    return "MethodSimilarityOrderingConfig";
+  }
+  std::string get_config_doc() override {
+    return "This configuration is used to direct Redex about ordering methods "
+           "by similarity.";
+  }
+
+  bool disable{true};
+  bool use_class_level_perf_sensitivity{false};
 };
 
 struct ProguardConfig : public Configurable {
@@ -153,6 +169,10 @@ class GlobalConfig : public Configurable {
   ConfigType* get_config_by_name(const std::string& name) const {
     auto& type = m_global_configs.at(name);
     return static_cast<ConfigType*>(type.get());
+  }
+
+  bool has_config_by_name(const std::string& name) const {
+    return m_global_configs.count(name) != 0;
   }
 
   template <typename ConfigType>

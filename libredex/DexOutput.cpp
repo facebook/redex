@@ -169,42 +169,50 @@ void GatheredTypes::sort_dexmethod_emitlist_method_similarity_order(
   //
   // This is similar to the exclusions that the InterDex pass applies when
   // sorting remaining classes for better compression.
+  redex_assert(m_config != nullptr);
   std::unordered_set<DexType*> perf_sensitive_classes;
 
-  std::unique_ptr<method_profiles::dexmethods_profiled_comparator> comparator{
-      nullptr};
+  auto& global_config = m_config->get_global_config();
+  MethodProfileOrderingConfig* profiles_config{nullptr};
+  if (global_config.has_config_by_name("method_profile_order")) {
+    profiles_config =
+        global_config.get_config_by_name<MethodProfileOrderingConfig>(
+            "method_profile_order");
+  }
 
-  // Some builds might not have method profiles information.
-  if (m_config != nullptr) {
-    MethodProfileOrderingConfig* config =
-        m_config->get_global_config()
-            .get_config_by_name<MethodProfileOrderingConfig>(
-                "method_profile_order");
-
+  if (profiles_config != nullptr &&
+      profiles_config->skip_similarity_reordering) {
     auto& method_profiles = m_config->get_method_profiles();
+    // Some builds might not have method profiles information.
+    if (method_profiles.is_initialized()) {
+      method_profiles::dexmethods_profiled_comparator comparator(
+          lmeth,
+          /*method_profiles=*/&method_profiles,
+          profiles_config);
 
-    if (config != nullptr && method_profiles.is_initialized()) {
-      comparator =
-          std::make_unique<method_profiles::dexmethods_profiled_comparator>(
-              lmeth,
-              /*method_profiles=*/&method_profiles,
-              config);
+      for (auto meth : lmeth) {
+        auto method_sort_num = comparator.get_overall_method_sort_num(meth);
+        if (method_sort_num <
+            method_profiles::dexmethods_profiled_comparator::VERY_END) {
+          perf_sensitive_classes.insert(meth->get_class());
+        }
+      }
     }
   }
 
-  for (auto meth : lmeth) {
-    auto cls = type_class(meth->get_class());
-    if (cls->is_perf_sensitive()) {
-      perf_sensitive_classes.insert(meth->get_class());
-      continue;
-    }
-
-    if (comparator == nullptr) {
-      continue;
-    }
-    auto method_sort_num = comparator->get_overall_method_sort_num(meth);
-    if (method_sort_num <
-        method_profiles::dexmethods_profiled_comparator::VERY_END) {
+  MethodSimilarityOrderingConfig* similarity_config{nullptr};
+  if (global_config.has_config_by_name("method_similarity_order")) {
+    similarity_config =
+        global_config.get_config_by_name<MethodSimilarityOrderingConfig>(
+            "method_similarity_order");
+  }
+  if (similarity_config != nullptr &&
+      similarity_config->use_class_level_perf_sensitivity) {
+    for (auto meth : lmeth) {
+      auto cls = type_class(meth->get_class());
+      if (!cls->is_perf_sensitive()) {
+        continue;
+      }
       perf_sensitive_classes.insert(meth->get_class());
     }
   }
@@ -3057,9 +3065,15 @@ dex_stats_t write_classes_to_dex(
       code_sort_mode.push_back(make_sort_bytecode(val.asString()));
     }
   }
-  auto disable_method_similarity_order =
-      json_cfg.get("disable_method_similarity_order", false);
-  if (disable_method_similarity_order) {
+
+  MethodSimilarityOrderingConfig* similarity_config{nullptr};
+  auto& global_config = conf.get_global_config();
+  if (global_config.has_config_by_name("method_similarity_order")) {
+    similarity_config =
+        global_config.get_config_by_name<MethodSimilarityOrderingConfig>(
+            "method_similarity_order");
+  }
+  if (similarity_config == nullptr || similarity_config->disable) {
     TRACE(OPUT, 3, "[write_classes_to_dex] disable_method_similarity_order");
     code_sort_mode.erase(
         std::remove_if(
