@@ -115,17 +115,17 @@ void AliasedRegisters::track_insert_order(const Value& moving,
   if (grp.size() == 1 && group.is_register()) {
     // We're creating a new group from a singleton. The `group`
     // register is the oldest, followed by `moving`.
-    m_insert_order.emplace(v_group, 0);
+    m_insert_order.insert_or_assign(v_group, 0);
   }
 
   if (moving.is_register()) {
-    size_t moving_index =
-        1 + std::accumulate(
-                grp.begin(), grp.end(), 0, [this](size_t acc, vertex_t v) {
-                  // use operator[] to ignore non-register group members
-                  return std::max(acc, m_insert_order[v]);
-                });
-    m_insert_order.emplace(v_moving, moving_index);
+    uint32_t moving_index =
+        1U + std::accumulate(
+                 grp.begin(), grp.end(), 0U, [this](uint32_t acc, vertex_t v) {
+                   // use operator[] to ignore non-register group members
+                   return std::max(acc, m_insert_order.at(v));
+                 });
+    m_insert_order.insert_or_assign(v_moving, moving_index);
   }
 }
 
@@ -149,7 +149,7 @@ void AliasedRegisters::break_alias(const Value& r) {
 // Call this when `v` should no longer have an insertion number (because it does
 // not belong to a group).
 void AliasedRegisters::clear_insert_number(vertex_t v) {
-  m_insert_order.erase(v);
+  m_insert_order.remove(v);
 }
 
 // Two Values are aliased when they are in the same tree
@@ -575,9 +575,9 @@ void AliasedRegisters::renumber_insert_order(
 
   // Assign new insertion numbers based on sorting.
   std::sort(group.begin(), group.end(), less_than);
-  size_t i = 0;
+  uint32_t i = 0;
   for (vertex_t v : group) {
-    this->m_insert_order[v] = i;
+    this->m_insert_order.insert_or_assign(v, i);
     ++i;
   }
 }
@@ -622,7 +622,7 @@ std::string AliasedRegisters::dump() const {
   for (const auto& entry : m_insert_order) {
     vertex_t v = entry.first;
     const Value& r = m_graph[v];
-    size_t i = entry.second;
+    uint32_t i = entry.second;
     oss << r.str().c_str() << " has index " << i << std::endl;
   }
   oss << "]" << std::endl;
