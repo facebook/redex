@@ -146,9 +146,6 @@ void GlobalConfig::bind_config() {
   bind("lower_with_cfg", {}, bool_param);
   bind("no_optimizations_annotations", {}, string_vector_param);
   bind("no_optimizations_blocklist", {}, string_vector_param);
-  // TODO: Remove unused profiled_methods_file option and all build system
-  // references
-  bind("profiled_methods_file", "", string_param);
   bind("proguard_map", "", string_param);
   bind("prune_unexported_components", {}, string_vector_param);
   bind("pure_methods", {}, string_vector_param);
