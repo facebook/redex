@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -329,7 +329,7 @@ RemoveUninstantiablesPass::compute_scoped_uninstantiable_types(
       (*instantiable_children)[cls->get_super_class()].insert(cls->get_type());
     }
     uninstantiable_types.erase(cls->get_type());
-    for (auto interface : *cls->get_interfaces()) {
+    for (auto interface : cls->get_interfaces()->get_type_list()) {
       visit(type_class(interface));
     }
     return true;

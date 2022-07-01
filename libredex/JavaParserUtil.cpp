@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -17,68 +17,55 @@ static bool is_separator(const char c) {
          c == '(' || c == ')' || c == ';';
 }
 
-std::string_view next_token(std::string_view& line) {
-  auto first_non_space = line.find_first_not_of(" ");
-  if (first_non_space == std::string_view::npos) {
-    first_non_space = line.size();
-  }
-  line.remove_prefix(first_non_space);
-
-  if (!line.empty() && is_separator(line.front())) {
-    auto ret = line.substr(0, 1);
-    line.remove_prefix(1);
-    return ret;
+std::string next_token(const char** p) {
+  while (**p == ' ') {
+    (*p)++;
   }
 
-  size_t next_token_size{0};
-  for (char c : line) {
-    if (is_separator(c)) {
-      break;
-    } else {
-      next_token_size++;
-    }
+  if (is_separator(**p)) {
+    return std::string(1, *(*p)++);
   }
-  std::string_view ret = line.substr(0, next_token_size);
-  line.remove_prefix(next_token_size);
-  return ret;
+
+  const char* begin = *p;
+  while (**p && !is_separator(**p)) {
+    (*p)++;
+  }
+  // TODO: Make this more efficient
+  return std::string(begin, *p);
 }
 
-const std::unordered_set<std::string_view> JAVA_ACCESS_MODIFIERS = {
+const std::unordered_set<std::string> JAVA_ACCESS_MODIFIERS = {
     "public", "protected", "private"};
-const std::string_view JAVA_STATIC_MODIFIER = "static";
-const std::string_view JAVA_FINAL_MODIFIER = "final";
-const std::string_view JAVA_TRANSIENT_MODIFIER = "transient";
-const std::string_view JAVA_VOLATILE_MODIFIER = "volatile";
-const std::string_view JAVA_ABSTRACT_MODIFIER = "abstract";
-const std::string_view JAVA_SYNCHRONIZED_MODIFIER = "synchronized";
-const std::string_view JAVA_NATIVE_MODIFIER = "native";
-const std::string_view JAVA_STRICTFP_MODIFIER = "strictfp";
+const std::string JAVA_STATIC_MODIFIER = "static";
+const std::string JAVA_FINAL_MODIFIER = "final";
+const std::string JAVA_TRANSIENT_MODIFIER = "transient";
+const std::string JAVA_VOLATILE_MODIFIER = "volatile";
+const std::string JAVA_ABSTRACT_MODIFIER = "abstract";
+const std::string JAVA_SYNCHRONIZED_MODIFIER = "synchronized";
+const std::string JAVA_NATIVE_MODIFIER = "native";
+const std::string JAVA_STRICTFP_MODIFIER = "strictfp";
 
-bool is_field_modifier(std::string_view token) {
-  const static std::unordered_set<std::string_view> field_modifiers{
-      JAVA_STATIC_MODIFIER,
-      JAVA_FINAL_MODIFIER,
-      JAVA_TRANSIENT_MODIFIER,
-      JAVA_VOLATILE_MODIFIER,
-  };
-  return JAVA_ACCESS_MODIFIERS.count(token) || field_modifiers.count(token);
+bool is_field_modifier(const std::string& token) {
+  return JAVA_ACCESS_MODIFIERS.count(token) || token == JAVA_STATIC_MODIFIER ||
+         token == JAVA_FINAL_MODIFIER || token == JAVA_TRANSIENT_MODIFIER ||
+         token == JAVA_VOLATILE_MODIFIER;
 }
 
-bool is_method_modifier(std::string_view token) {
-  const static std::unordered_set<std::string_view> method_modifiers{
-      JAVA_STATIC_MODIFIER,       JAVA_FINAL_MODIFIER,  JAVA_ABSTRACT_MODIFIER,
-      JAVA_SYNCHRONIZED_MODIFIER, JAVA_NATIVE_MODIFIER, JAVA_STRICTFP_MODIFIER,
-  };
-  return JAVA_ACCESS_MODIFIERS.count(token) || method_modifiers.count(token);
+bool is_method_modifier(const std::string& token) {
+  return JAVA_ACCESS_MODIFIERS.count(token) || token == JAVA_STATIC_MODIFIER ||
+         token == JAVA_FINAL_MODIFIER || token == JAVA_ABSTRACT_MODIFIER ||
+         token == JAVA_SYNCHRONIZED_MODIFIER || token == JAVA_NATIVE_MODIFIER ||
+         token == JAVA_STRICTFP_MODIFIER;
 }
 
 dex_member_refs::FieldDescriptorTokens parse_field_declaration(
-    std::string_view line) {
+    const std::string& line) {
   bool parsed_type = false;
   dex_member_refs::FieldDescriptorTokens fdt;
 
-  while (!line.empty() && line.front() != ';') {
-    std::string_view token = next_token(line);
+  auto p = line.c_str();
+  while (*p != '\0' && *p != ';') {
+    std::string token = next_token(&p);
     if (is_field_modifier(token)) {
       continue;
     }
@@ -94,11 +81,12 @@ dex_member_refs::FieldDescriptorTokens parse_field_declaration(
   return fdt;
 }
 
-std::vector<std::string_view> parse_arguments(std::string_view line) {
-  std::vector<std::string_view> args;
+std::vector<std::string> parse_arguments(const std::string& line) {
+  std::vector<std::string> args;
   bool parsed_type = false;
-  while (!line.empty() && line.front() != ';') {
-    auto token = next_token(line);
+  auto p = line.c_str();
+  while (*p != '\0' && *p != ';') {
+    std::string token = next_token(&p);
     if (token == ",") {
       parsed_type = false;
     } else {
@@ -112,13 +100,14 @@ std::vector<std::string_view> parse_arguments(std::string_view line) {
 }
 
 dex_member_refs::MethodDescriptorTokens parse_method_declaration(
-    std::string_view line) {
+    const std::string& line) {
   bool parsed_type = false;
   dex_member_refs::MethodDescriptorTokens mdt;
 
-  std::string_view subline = line.substr(0, line.find('('));
-  while (!subline.empty() && subline.front() != ';') {
-    auto token = next_token(subline);
+  std::string subline = line.substr(0, line.find('('));
+  auto p = subline.c_str();
+  while (*p != '\0' && *p != ';') {
+    std::string token = next_token(&p);
     if (is_method_modifier(token)) {
       continue;
     }
@@ -133,11 +122,11 @@ dex_member_refs::MethodDescriptorTokens parse_method_declaration(
   // it is constructor
   if (mdt.name.empty()) {
     mdt.name = mdt.rtype;
-    mdt.rtype = std::string_view();
+    mdt.rtype = std::string();
   }
   always_assert_log(!mdt.name.empty(), "Could not find function name");
 
-  std::string_view args_str =
+  std::string args_str =
       line.substr(line.find('(') + 1, line.find(')') - line.find('(') - 1);
   mdt.args = parse_arguments(args_str);
 

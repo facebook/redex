@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -45,11 +45,6 @@ class IRCode {
 
   reg_t m_registers_size{0};
   bool m_cfg_serialized_with_custom_strategy = false;
-
-  // Hack: in general the IRCode is not handled as owning instructions, as they
-  //       might be shared. Toggle to true via `set_insn_ownership` to destruct
-  //       instructions on delete.
-  bool m_owns_insns{true};
 
   // TODO(jezng): we shouldn't be storing / exposing the DexDebugItem... just
   // exposing the param names should be enough
@@ -102,8 +97,6 @@ class IRCode {
 
   ~IRCode();
 
-  void set_insn_ownership(bool owns_insns) { m_owns_insns = owns_insns; }
-
   bool structural_equals(const IRCode& other) const {
     return m_ir_list->structural_equals(*other.m_ir_list,
                                         std::equal_to<const IRInstruction&>());
@@ -153,8 +146,6 @@ class IRCode {
   void gather_callsites(std::vector<DexCallSite*>& lcallsite) const;
   void gather_methodhandles(std::vector<DexMethodHandle*>& lmethodhandle) const;
 
-  void gather_init_classes(std::vector<DexType*>& ltype) const;
-
   /* Return the control flow graph of this method as a vector of blocks. */
   cfg::ControlFlowGraph& cfg() { return *m_cfg; }
 
@@ -171,13 +162,8 @@ class IRCode {
 
   // if the cfg was editable, linearize it back into m_ir_list
   // custom_strategy controls the linearization of the CFG.
-  //
-  // The CFG may have stored instructions that were removed. If deleted_insns is
-  // not null, the instructions are moved into the given vector. It is then the
-  // caller's responsibility to free them.
   void clear_cfg(const std::unique_ptr<cfg::LinearizationStrategy>&
-                     custom_strategy = nullptr,
-                 std::vector<IRInstruction*>* deleted_insns = nullptr);
+                     custom_strategy = nullptr);
 
   bool cfg_built() const;
   bool editable_cfg_built() const;
@@ -185,25 +171,15 @@ class IRCode {
   /* Generate DexCode from IRCode */
   std::unique_ptr<DexCode> sync(const DexMethod*);
 
-  /* DEPRECATED! Use the version below that passes in the iterator instead,
-   * which is O(1) instead of O(n). */
   /* Passes memory ownership of "from" to callee.  It will delete it. */
   void replace_opcode(IRInstruction* from, IRInstruction* to) {
     m_ir_list->replace_opcode(from, to);
   }
 
-  /* DEPRECATED! Use the version below that passes in the iterator instead,
-   * which is O(1) instead of O(n). */
   /* Passes memory ownership of "from" to callee.  It will delete it. */
   void replace_opcode(IRInstruction* to_delete,
                       const std::vector<IRInstruction*>& replacements) {
     m_ir_list->replace_opcode(to_delete, replacements);
-  }
-
-  /* Passes memory ownership of "from" to callee.  It will delete it. */
-  void replace_opcode(const IRList::iterator& it,
-                      const std::vector<IRInstruction*>& replacements) {
-    m_ir_list->replace_opcode(it, replacements);
   }
 
   /*

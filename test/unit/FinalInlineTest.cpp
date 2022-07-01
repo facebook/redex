@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -120,8 +120,8 @@ DexField* add_concrete_field(DexClass* cls,
   auto field_name = DexString::make_string(name);
   auto field =
       static_cast<DexField*>(DexField::make_field(container, field_name, type));
-  field->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL,
-                       DexUnitTestRunner::make_ev(type, val));
+  auto ev = DexUnitTestRunner::make_ev(type, val);
+  field->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL, ev);
   cls->add_field(field);
   return field;
 }

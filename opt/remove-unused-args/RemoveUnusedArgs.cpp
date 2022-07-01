@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -49,6 +49,11 @@ constexpr const char* METRIC_DEAD_INSTRUCTION_COUNT =
 constexpr const char* METRIC_UNREACHABLE_INSTRUCTION_COUNT =
     "num_local_dce_unreachable_instruction_count";
 constexpr const char* METRIC_ITERATIONS = "iterations";
+
+static LocalDce::Stats add_dce_stats(LocalDce::Stats a, LocalDce::Stats b) {
+  return {a.dead_instruction_count + b.dead_instruction_count,
+          a.unreachable_instruction_count + b.unreachable_instruction_count};
+};
 
 /**
  * Returns metrics as listed above from running RemoveArgs:
@@ -117,8 +122,7 @@ static bool compare_dextypes_for_normalization(const DexType* a,
 }
 
 static DexProto* normalize_proto(DexProto* proto) {
-  DexTypeList::ContainerType args_copy(proto->get_args()->begin(),
-                                       proto->get_args()->end());
+  auto args_copy = proto->get_args()->get_type_list();
   std::stable_sort(args_copy.begin(), args_copy.end(),
                    compare_dextypes_for_normalization);
   DexType* rtype = proto->get_rtype();
@@ -296,10 +300,10 @@ std::deque<uint16_t> compute_live_args(
  * Returns an updated argument type list for the given method with the given
  * live argument indices.
  */
-DexTypeList::ContainerType RemoveArgs::get_live_arg_type_list(
+std::deque<DexType*> RemoveArgs::get_live_arg_type_list(
     DexMethod* method, const std::deque<uint16_t>& live_arg_idxs) {
-  DexTypeList::ContainerType live_args;
-  auto args_list = method->get_proto()->get_args();
+  std::deque<DexType*> live_args;
+  auto args_list = method->get_proto()->get_args()->get_type_list();
 
   for (uint16_t arg_num : live_arg_idxs) {
     if (!is_static(method)) {
@@ -308,7 +312,7 @@ DexTypeList::ContainerType RemoveArgs::get_live_arg_type_list(
       }
       arg_num--;
     }
-    live_args.push_back(args_list->at(arg_num));
+    live_args.push_back(args_list.at(arg_num));
   }
   return live_args;
 }
@@ -325,9 +329,9 @@ bool RemoveArgs::update_method_signature(
   always_assert_log(method->is_def(),
                     "We don't treat virtuals, so methods must be defined\n");
 
-  const auto& full_name = method->get_deobfuscated_name_or_empty();
+  const auto& full_name = method->get_deobfuscated_name();
   for (const auto& s : m_blocklist) {
-    if (full_name.find(s) != std::string::npos) {
+    if (full_name.str().find(s) != std::string::npos) {
       TRACE(ARGS, 3,
             "Skipping {%s} due to black list match of {%s} against {%s}",
             SHOW(method), full_name.c_str(), s.c_str());
@@ -490,11 +494,11 @@ static std::deque<uint16_t> update_method_body_for_reordered_proto(
       (*load_param_infos_it)++;
     }
   }
-  for (auto t : *original_proto->get_args()) {
+  for (auto t : original_proto->get_args()->get_type_list()) {
     idxs_by_type[t].push_back(idx++);
   }
 
-  for (auto t : *reordered_proto->get_args()) {
+  for (auto t : reordered_proto->get_args()->get_type_list()) {
     auto& deque = idxs_by_type.find(t)->second;
     auto new_idx = deque.front();
     deque.pop_front();
@@ -622,15 +626,13 @@ RemoveArgs::MethodStats RemoveArgs::update_method_protos(
         }
 
         std::unordered_set<DexMethodRef*> pure_methods;
-        auto local_dce =
-            LocalDce(&m_init_classes_with_side_effects, pure_methods);
-        local_dce.dce(method->get_code(), /* normalize_new_instances */ true,
-                      method->get_class());
+        auto local_dce = LocalDce(pure_methods);
+        local_dce.dce(method->get_code());
         const auto& stats = local_dce.get_stats();
         if (stats.dead_instruction_count |
             stats.unreachable_instruction_count) {
           std::lock_guard<std::mutex> lock(local_dce_stats_mutex);
-          local_dce_stats += stats;
+          local_dce_stats = add_dce_stats(local_dce_stats, stats);
         }
       }
 
@@ -707,8 +709,6 @@ void RemoveUnusedArgsPass::run_pass(DexStoresVector& stores,
                                     ConfigFiles& conf,
                                     PassManager& mgr) {
   auto scope = build_class_scope(stores);
-  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
-      scope, conf.create_init_class_insns());
 
   size_t num_callsite_args_removed = 0;
   size_t num_method_params_removed = 0;
@@ -716,11 +716,10 @@ void RemoveUnusedArgsPass::run_pass(DexStoresVector& stores,
   size_t num_method_results_removed_count = 0;
   size_t num_method_protos_reordered_count = 0;
   size_t num_iterations = 0;
-  LocalDce::Stats local_dce_stats;
+  LocalDce::Stats local_dce_stats{0, 0};
   while (true) {
     num_iterations++;
-    RemoveArgs rm_args(scope, init_classes_with_side_effects, m_blocklist,
-                       m_total_iterations++);
+    RemoveArgs rm_args(scope, m_blocklist, m_total_iterations++);
     auto pass_stats = rm_args.run(conf);
     if (pass_stats.methods_updated_count == 0) {
       break;
@@ -731,7 +730,8 @@ void RemoveUnusedArgsPass::run_pass(DexStoresVector& stores,
     num_method_results_removed_count += pass_stats.method_results_removed_count;
     num_method_protos_reordered_count +=
         pass_stats.method_protos_reordered_count;
-    local_dce_stats += pass_stats.local_dce_stats;
+    local_dce_stats =
+        add_dce_stats(local_dce_stats, pass_stats.local_dce_stats);
   }
 
   TRACE(ARGS,

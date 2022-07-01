@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -17,7 +17,6 @@
 #include "ReachableClasses.h"
 #include "ReducedProductAbstractDomain.h"
 #include "Resolver.h"
-#include "ScopedCFG.h"
 #include "Walkers.h"
 
 // Analyze a constructor to learn how the instance fields are initialized.
@@ -136,16 +135,16 @@ class InitFixpointIterator final
         auto it = m_state.method_initializers.find(method);
         if (it != m_state.method_initializers.end()) {
           for (auto& initializer : it->second) {
-            if (initializer->attr.is_method()) {
-              env->set(initializer->attr.val.method,
-                       env->get(insn->src(initializer->insn_src_id_of_attr)));
+            if (initializer.attr.is_method()) {
+              env->set(initializer.attr.method,
+                       env->get(insn->src(initializer.insn_src_id_of_attr)));
             } else { // is_field
-              env->set(initializer->attr.val.field,
-                       env->get(insn->src(initializer->insn_src_id_of_attr)));
+              env->set(initializer.attr.field,
+                       env->get(insn->src(initializer.insn_src_id_of_attr)));
             }
           }
           auto& first_initializer = *it->second.begin();
-          if (first_initializer->obj_is_dest()) {
+          if (first_initializer.obj_is_dest()) {
             env->set(RESULT_REGISTER, obj_domain);
             return;
           }
@@ -170,14 +169,18 @@ std::vector<std::pair<ImmutableAttr::Attr, size_t>> analyze_initializer(
   std::vector<std::pair<ImmutableAttr::Attr, size_t>> usage;
   Environment init_env;
   size_t param_id = 0;
-  cfg::ScopedCFG cfg(const_cast<IRCode*>(method->get_code()));
-  for (const auto& mie : cfg->get_param_instructions()) {
+  auto code = method->get_code();
+  auto& cfg = code->cfg();
+  boost::sub_range<IRList> param_instruction =
+      code->editable_cfg_built() ? cfg.get_param_instructions()
+                                 : code->get_param_instructions();
+  for (const auto& mie : param_instruction) {
     init_env.set(mie.insn->dest(), ParamIdxDomain(param_id++));
   }
-  InitFixpointIterator fp_iter(*cfg, method->get_class(), state);
+  InitFixpointIterator fp_iter(cfg, method->get_class(), state);
   fp_iter.run(init_env);
   auto return_env = Environment::bottom();
-  for (cfg::Block* block : cfg->blocks()) {
+  for (cfg::Block* block : cfg.blocks()) {
     auto env = fp_iter.get_entry_state_at(block);
     for (auto& mie : InstructionIterable(block)) {
       auto* insn = mie.insn;

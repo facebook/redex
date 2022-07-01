@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -52,7 +52,6 @@
 #include "Liveness.h"
 #include "PassManager.h"
 #include "ReachingDefinitions.h"
-#include "RedexContext.h"
 #include "Show.h"
 #include "StlUtil.h"
 #include "Trace.h"
@@ -228,16 +227,13 @@ class DedupBlocksImpl {
   }
 
   // Dedup blocks that are exactly the same
-  bool dedup(bool is_static,
-             DexType* declaring_type,
-             DexTypeList* args,
-             cfg::ControlFlowGraph& cfg) {
+  bool dedup(DexMethod* method, cfg::ControlFlowGraph& cfg) {
     cfg.calculate_exit_block();
     LivenessFixpointIterator liveness_fixpoint_iter(cfg);
     liveness_fixpoint_iter.run({});
     DedupBlkValueNumbering::BlockValues block_values(liveness_fixpoint_iter);
-    Duplicates dups = collect_duplicates(is_static, declaring_type, args, cfg,
-                                         block_values, liveness_fixpoint_iter);
+    Duplicates dups =
+        collect_duplicates(method, cfg, block_values, liveness_fixpoint_iter);
     if (!dups.empty()) {
       if (m_config->debug) {
         check_inits(cfg);
@@ -263,8 +259,8 @@ class DedupBlocksImpl {
    * that they agree), or re-merge left-over block pairs, either explicitly,
    * or by running another RemoveGotos pass.
    */
-  void split_postfix(cfg::ControlFlowGraph& cfg) {
-    PostfixSplitGroupMap dups = collect_postfix_duplicates(cfg);
+  void split_postfix(DexMethod* method, cfg::ControlFlowGraph& cfg) {
+    PostfixSplitGroupMap dups = collect_postfix_duplicates(method, cfg);
     if (!dups.empty()) {
       if (m_config->debug) {
         check_inits(cfg);
@@ -306,9 +302,7 @@ class DedupBlocksImpl {
 
   // Find blocks with the same exact code
   Duplicates collect_duplicates(
-      bool is_static,
-      DexType* declaring_type,
-      DexTypeList* args,
+      DexMethod* method,
       cfg::ControlFlowGraph& cfg,
       DedupBlkValueNumbering::BlockValues& block_values,
       LivenessFixpointIterator& liveness_fixpoint_iter) {
@@ -338,8 +332,8 @@ class DedupBlocksImpl {
     std::unique_ptr<type_inference::TypeInference> type_inference;
     remove_if(duplicates, [&](auto& blocks) {
       return is_singleton_or_inconsistent(
-          is_static, declaring_type, args, blocks, cfg,
-          reaching_defs_fixpoint_iter, liveness_fixpoint_iter, type_inference);
+          method, blocks, cfg, reaching_defs_fixpoint_iter,
+          liveness_fixpoint_iter, type_inference);
     });
     return duplicates;
   }
@@ -534,7 +528,8 @@ class DedupBlocksImpl {
   // (1, 1, 1).
   // @TODO - Instead of keeping track of just one group, in the future we can
   // consider maintaining multiple groups and split them.
-  PostfixSplitGroupMap collect_postfix_duplicates(cfg::ControlFlowGraph& cfg) {
+  PostfixSplitGroupMap collect_postfix_duplicates(DexMethod* method,
+                                                  cfg::ControlFlowGraph& cfg) {
     const auto& blocks = cfg.blocks();
     PostfixSplitGroupMap splitGroupMap;
 
@@ -956,9 +951,7 @@ class DedupBlocksImpl {
   }
 
   static bool is_singleton_or_inconsistent(
-      bool is_static,
-      DexType* declaring_type,
-      DexTypeList* args,
+      DexMethod* method,
       const BlockSet& blocks,
       cfg::ControlFlowGraph& cfg,
       std::unique_ptr<reaching_defs::MoveAwareFixpointIterator>&
@@ -998,7 +991,7 @@ class DedupBlocksImpl {
     // Initializing stuff...
     if (!type_inference) {
       type_inference.reset(new type_inference::TypeInference(cfg));
-      type_inference->run(is_static, declaring_type, args);
+      type_inference->run(method);
     }
     auto live_in_vars =
         liveness_fixpoint_iter.get_live_in_vars_at(*blocks.begin());
@@ -1086,33 +1079,18 @@ class DedupBlocksImpl {
 };
 
 DedupBlocks::DedupBlocks(const Config* config, DexMethod* method)
-    : DedupBlocks(config,
-                  method->get_code(),
-                  is_static(method),
-                  method->get_class(),
-                  method->get_proto()->get_args()) {}
-
-DedupBlocks::DedupBlocks(const Config* config,
-                         IRCode* code,
-                         bool is_static,
-                         DexType* declaring_type,
-                         DexTypeList* args)
-    : m_config(config),
-      m_code(code),
-      m_is_static(is_static),
-      m_declaring_type(declaring_type),
-      m_args(args) {
+    : m_config(config), m_method(method) {
   always_assert(m_config);
 }
 
 void DedupBlocks::run() {
   DedupBlocksImpl impl(m_config, m_stats);
-  auto& cfg = m_code->cfg();
+  auto& cfg = m_method->get_code()->cfg();
   do {
     if (m_config->split_postfix) {
-      impl.split_postfix(cfg);
+      impl.split_postfix(m_method, cfg);
     }
-  } while (impl.dedup(m_is_static, m_declaring_type, m_args, cfg));
+  } while (impl.dedup(m_method, cfg));
 }
 
 Stats& Stats::operator+=(const Stats& that) {

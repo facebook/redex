@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -8,12 +8,9 @@
 #include "FinalInlineV2.h"
 
 #include <boost/variant.hpp>
-#include <iostream>
 #include <unordered_set>
 #include <vector>
 
-#include "CFGMutation.h"
-#include "ConfigFiles.h"
 #include "Debug.h"
 #include "DexAccess.h"
 #include "DexClass.h"
@@ -175,16 +172,14 @@ using CombinedInitAnalyzer =
  * Converts a ConstantValue into its equivalent encoded_value. Returns null if
  * no such encoding is known.
  */
-class encoding_visitor
-    : public boost::static_visitor<std::unique_ptr<DexEncodedValue>> {
+class encoding_visitor : public boost::static_visitor<DexEncodedValue*> {
  public:
   explicit encoding_visitor(const DexField* field,
                             const XStoreRefs* xstores,
                             const DexType* declaring_type)
       : m_field(field), m_xstores(xstores), m_declaring_type(declaring_type) {}
 
-  std::unique_ptr<DexEncodedValue> operator()(
-      const SignedConstantDomain& dom) const {
+  DexEncodedValue* operator()(const SignedConstantDomain& dom) const {
     auto cst = dom.get_constant();
     if (!cst) {
       return nullptr;
@@ -194,7 +189,7 @@ class encoding_visitor
     return ev;
   }
 
-  std::unique_ptr<DexEncodedValue> operator()(const StringDomain& dom) const {
+  DexEncodedValue* operator()(const StringDomain& dom) const {
     auto cst = dom.get_constant();
 
     // Older DalvikVM handles only two types of classes:
@@ -203,14 +198,13 @@ class encoding_visitor
     // "sput-object Ljava/lang/CharSequence;" pair. Such pair can cause a
     // libdvm.so abort with "Bogus static initialization".
     if (cst && m_field->get_type() == type::java_lang_String()) {
-      return std::unique_ptr<DexEncodedValue>(new DexEncodedValueString(*cst));
+      return new DexEncodedValueString(*cst);
     } else {
       return nullptr;
     }
   }
 
-  std::unique_ptr<DexEncodedValue> operator()(
-      const ConstantClassObjectDomain& dom) const {
+  DexEncodedValue* operator()(const ConstantClassObjectDomain& dom) const {
     auto cst = dom.get_constant();
     if (!cst) {
       return nullptr;
@@ -223,11 +217,11 @@ class encoding_visitor
     if (!m_xstores || m_xstores->illegal_ref(m_declaring_type, type)) {
       return nullptr;
     }
-    return std::unique_ptr<DexEncodedValue>(new DexEncodedValueType(type));
+    return new DexEncodedValueType(type);
   }
 
   template <typename Domain>
-  std::unique_ptr<DexEncodedValue> operator()(const Domain&) const {
+  DexEncodedValue* operator()(const Domain&) const {
     return nullptr;
   }
 
@@ -271,7 +265,7 @@ void encode_values(DexClass* cls,
     if (encoded_value == nullptr) {
       continue;
     }
-    field->set_value(std::move(encoded_value));
+    field->set_value(encoded_value);
     TRACE(FINALINLINE, 2, "Found encodable field: %s %s", SHOW(field),
           SHOW(value));
   }
@@ -423,8 +417,6 @@ StaticFieldReadAnalysis::Result StaticFieldReadAnalysis::analyze(
  */
 cp::WholeProgramState analyze_and_simplify_clinits(
     const Scope& scope,
-    const init_classes::InitClassesWithSideEffects&
-        init_classes_with_side_effects,
     const XStoreRefs* xstores,
     const std::unordered_set<const DexType*>& blocklist_types,
     const std::unordered_set<std::string>& allowed_opaque_callee_names) {
@@ -472,8 +464,7 @@ cp::WholeProgramState analyze_and_simplify_clinits(
             .legacy_apply_constants_and_prune_unreachable(
                 intra_cp, wps, *cfg, xstores, cls->get_type());
         // Delete the instructions rendered dead by the removal of those sputs.
-        LocalDce(&init_classes_with_side_effects, pure_methods)
-            .dce(*cfg, /* normalize_new_instances */ true, clinit->get_class());
+        LocalDce(pure_methods).dce(*cfg);
       }
       // If the clinit is empty now, delete it.
       if (method::is_trivial_clinit(*code)) {
@@ -498,8 +489,6 @@ cp::WholeProgramState analyze_and_simplify_clinits(
  */
 cp::WholeProgramState analyze_and_simplify_inits(
     const Scope& scope,
-    const init_classes::InitClassesWithSideEffects&
-        init_classes_with_side_effects,
     const XStoreRefs* xstores,
     const std::unordered_set<const DexType*>& blocklist_types,
     const cp::EligibleIfields& eligible_ifields) {
@@ -546,8 +535,7 @@ cp::WholeProgramState analyze_and_simplify_inits(
             .legacy_apply_constants_and_prune_unreachable(
                 intra_cp, wps, *cfg, xstores, cls->get_type());
         // Delete the instructions rendered dead by the removal of those iputs.
-        LocalDce(&init_classes_with_side_effects, pure_methods)
-            .dce(*cfg, /* normalize_new_instances */ true, ctor->get_class());
+        LocalDce(pure_methods).dce(code);
       }
     }
     wps.collect_instance_finals(cls, eligible_ifields,
@@ -755,14 +743,16 @@ bool get_ifields_read(
             // superclass or interface of ifield_cls.
             if (callee != nullptr &&
                 !parent_intf_set.count(callee->get_class())) {
-              for (const auto& type : *callee->get_proto()->get_args()) {
+              for (const auto& type :
+                   callee->get_proto()->get_args()->get_type_list()) {
                 if (parent_intf_set.count(type)) {
                   no_current_type = false;
                 }
               }
             } else if (callee == nullptr &&
                        !parent_intf_set.count(insn_method->get_class())) {
-              for (const auto& type : *insn_method->get_proto()->get_args()) {
+              for (const auto& type :
+                   insn_method->get_proto()->get_args()->get_type_list()) {
                 if (parent_intf_set.count(type)) {
                   no_current_type = false;
                 }
@@ -946,18 +936,14 @@ cp::EligibleIfields gather_ifield_candidates(
   return eligible_ifields;
 }
 
-FinalInlinePassV2::Stats inline_final_gets(
+size_t inline_final_gets(
     std::optional<DexStoresVector*> stores,
     const Scope& scope,
-    int min_sdk,
-    const init_classes::InitClassesWithSideEffects&
-        init_classes_with_side_effects,
     const XStoreRefs* xstores,
     const cp::WholeProgramState& wps,
     const std::unordered_set<const DexType*>& blocklist_types,
     cp::FieldType field_type) {
   std::atomic<size_t> inlined_count{0};
-  std::atomic<size_t> init_classes{0};
   using namespace shrinker;
 
   ShrinkerConfig shrinker_config;
@@ -968,118 +954,90 @@ FinalInlinePassV2::Stats inline_final_gets(
   shrinker_config.compute_pure_methods = false;
 
   auto maybe_shrinker =
-      stores ? std::make_optional<Shrinker>(**stores, scope,
-                                            init_classes_with_side_effects,
-                                            shrinker_config, min_sdk)
+      stores ? std::make_optional<Shrinker>(**stores, scope, shrinker_config)
              : std::nullopt;
 
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
     if (field_type == cp::FieldType::STATIC && method::is_clinit(method)) {
       return;
     }
-    code.build_cfg(/* editable */);
-    cfg::CFGMutation mutation(code.cfg());
-    size_t replacements = 0;
-    for (auto block : code.cfg().blocks()) {
-      auto ii = InstructionIterable(block);
-      for (auto it = ii.begin(); it != ii.end(); it++) {
-        auto insn = it->insn;
-        auto op = insn->opcode();
-        if (opcode::is_an_iget(op) || opcode::is_an_sget(op)) {
-          auto field = resolve_field(insn->get_field());
-          if (field == nullptr || blocklist_types.count(field->get_class())) {
-            continue;
+    std::vector<std::pair<IRInstruction*, std::vector<IRInstruction*>>>
+        replacements;
+    editable_cfg_adapter::iterate_with_iterator(
+        &code, [&](const IRList::iterator& it) {
+          auto insn = it->insn;
+          auto op = insn->opcode();
+          if (opcode::is_an_iget(op) || opcode::is_an_sget(op)) {
+            auto field = resolve_field(insn->get_field());
+            if (field == nullptr || blocklist_types.count(field->get_class())) {
+              return editable_cfg_adapter::LOOP_CONTINUE;
+            }
+            if (field_type == cp::FieldType::INSTANCE &&
+                method::is_init(method) &&
+                method->get_class() == field->get_class()) {
+              // Don't propagate a field's value in ctors of its class with
+              // value after ctor finished.
+              return editable_cfg_adapter::LOOP_CONTINUE;
+            }
+            auto replacement = ConstantValue::apply_visitor(
+                cp::value_to_instruction_visitor(
+                    ir_list::move_result_pseudo_of(it),
+                    xstores,
+                    method->get_class()),
+                wps.get_field_value(field));
+            if (replacement.empty()) {
+              return editable_cfg_adapter::LOOP_CONTINUE;
+            }
+            replacements.emplace_back(insn, replacement);
           }
-          if (field_type == cp::FieldType::INSTANCE &&
-              method::is_init(method) &&
-              method->get_class() == field->get_class()) {
-            // Don't propagate a field's value in ctors of its class with
-            // value after ctor finished.
-            continue;
-          }
-          auto cfg_it = block->to_cfg_instruction_iterator(it);
-          auto replacement = ConstantValue::apply_visitor(
-              cp::value_to_instruction_visitor(
-                  code.cfg().move_result_of(cfg_it)->insn,
-                  xstores,
-                  method->get_class()),
-              wps.get_field_value(field));
-          if (replacement.empty()) {
-            continue;
-          }
-          auto init_class_insn =
-              opcode::is_an_sget(op)
-                  ? init_classes_with_side_effects.create_init_class_insn(
-                        field->get_class())
-                  : nullptr;
-          if (init_class_insn) {
-            replacement.insert(replacement.begin(), init_class_insn);
-            init_classes++;
-          }
-          mutation.replace(cfg_it, replacement);
-          replacements++;
-        }
-      }
+          return editable_cfg_adapter::LOOP_CONTINUE;
+        });
+    for (auto const& p : replacements) {
+      code.replace_opcode(p.first, p.second);
     }
-    mutation.flush();
-    code.clear_cfg();
-    if (replacements > 0 && maybe_shrinker) {
+    if (!replacements.empty() && maybe_shrinker) {
       // We need to rebuild the cfg.
       code.build_cfg(/* editable */);
       code.clear_cfg();
       maybe_shrinker->shrink_method(method);
     }
-    inlined_count.fetch_add(replacements);
+    inlined_count.fetch_add(replacements.size());
   });
-  return {(size_t)inlined_count, (size_t)init_classes};
+  return inlined_count;
 }
 
 } // namespace
 
-FinalInlinePassV2::Stats FinalInlinePassV2::run(
-    const Scope& scope,
-    int min_sdk,
-    const init_classes::InitClassesWithSideEffects&
-        init_classes_with_side_effects,
-    const XStoreRefs* xstores,
-    const Config& config,
-    std::optional<DexStoresVector*> stores) {
+size_t FinalInlinePassV2::run(const Scope& scope,
+                              const XStoreRefs* xstores,
+                              const Config& config,
+                              std::optional<DexStoresVector*> stores) {
   try {
     auto wps = final_inline::analyze_and_simplify_clinits(
-        scope, init_classes_with_side_effects, xstores, config.blocklist_types);
-    return inline_final_gets(stores, scope, min_sdk,
-                             init_classes_with_side_effects, xstores, wps,
+        scope, xstores, config.blocklist_types);
+    return inline_final_gets(stores, scope, xstores, wps,
                              config.blocklist_types, cp::FieldType::STATIC);
   } catch (final_inline::class_initialization_cycle& e) {
     std::cerr << e.what();
-    return {0, 0};
+    return 0;
   }
 }
 
-FinalInlinePassV2::Stats FinalInlinePassV2::run_inline_ifields(
+size_t FinalInlinePassV2::run_inline_ifields(
     const Scope& scope,
-    int min_sdk,
-    const init_classes::InitClassesWithSideEffects&
-        init_classes_with_side_effects,
     const XStoreRefs* xstores,
     const cp::EligibleIfields& eligible_ifields,
     const Config& config,
     std::optional<DexStoresVector*> stores) {
   auto wps = final_inline::analyze_and_simplify_inits(
-      scope, init_classes_with_side_effects, xstores, config.blocklist_types,
-      eligible_ifields);
-  return inline_final_gets(stores, scope, min_sdk,
-                           init_classes_with_side_effects, xstores, wps,
-                           config.blocklist_types, cp::FieldType::INSTANCE);
+      scope, xstores, config.blocklist_types, eligible_ifields);
+  return inline_final_gets(stores, scope, xstores, wps, config.blocklist_types,
+                           cp::FieldType::INSTANCE);
 }
 
 void FinalInlinePassV2::run_pass(DexStoresVector& stores,
-                                 ConfigFiles& conf,
+                                 ConfigFiles& /* conf */,
                                  PassManager& mgr) {
-  always_assert_log(
-      !mgr.init_class_lowering_has_run(),
-      "Implementation limitation: FinalInlinePassV2 could introduce new "
-      "init-class instructions.");
   if (mgr.no_proguard_rules()) {
     TRACE(FINALINLINE,
           1,
@@ -1088,24 +1046,17 @@ void FinalInlinePassV2::run_pass(DexStoresVector& stores,
     return;
   }
   auto scope = build_class_scope(stores);
-  auto min_sdk = mgr.get_redex_options().min_sdk;
-  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
-      scope, conf.create_init_class_insns());
   XStoreRefs xstores(stores);
-  auto sfield_stats = run(scope, min_sdk, init_classes_with_side_effects,
-                          &xstores, m_config, &stores);
-  FinalInlinePassV2::Stats ifield_stats{0, 0};
+  auto inlined_sfields_count = run(scope, &xstores, m_config, &stores);
+  size_t inlined_ifields_count{0};
   if (m_config.inline_instance_field) {
     cp::EligibleIfields eligible_ifields =
         gather_ifield_candidates(scope, m_config.allowlist_method_names);
-    ifield_stats =
-        run_inline_ifields(scope, min_sdk, init_classes_with_side_effects,
-                           &xstores, eligible_ifields, m_config, &stores);
-    always_assert(ifield_stats.init_classes == 0);
+    inlined_ifields_count = run_inline_ifields(
+        scope, &xstores, eligible_ifields, m_config, &stores);
   }
-  mgr.incr_metric("num_static_finals_inlined", sfield_stats.inlined_count);
-  mgr.incr_metric("num_instance_finals_inlined", ifield_stats.inlined_count);
-  mgr.incr_metric("num_init_classes", sfield_stats.init_classes);
+  mgr.incr_metric("num_static_finals_inlined", inlined_sfields_count);
+  mgr.incr_metric("num_instance_finals_inlined", inlined_ifields_count);
 }
 
 static FinalInlinePassV2 s_pass;

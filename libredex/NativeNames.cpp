@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -92,7 +92,7 @@ void get_native_long_name_for_method_impl(std::ostringstream& out,
   get_native_short_name_for_method_impl(out, method);
   out << "__";
   DexTypeList* types = method->get_proto()->get_args();
-  for (DexType* type : *types) {
+  for (DexType* type : types->get_type_list()) {
     mangle_type_name_in_signature(out, type->get_name()->str());
   }
 }

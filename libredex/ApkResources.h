@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -43,14 +43,6 @@ bool get_bool_attribute_value(const android::ResXMLTree& parser,
 namespace apk {
 std::string get_string_from_pool(const android::ResStringPool& pool,
                                  size_t idx);
-
-struct TypeDefinition {
-  uint32_t package_id;
-  uint8_t type_id;
-  std::string name;
-  std::vector<android::ResTable_config*> configs;
-  std::vector<uint32_t> source_res_ids;
-};
 
 // Read the ResTable data structures and store a convenient organization of the
 // data pointers and the packages.
@@ -163,6 +155,11 @@ class ResourcesArscFile : public ResourceTableFile {
   std::vector<std::string> get_resource_strings_by_name(
       const std::string& res_name);
   void remap_ids(const std::map<uint32_t, uint32_t>& old_to_remapped_ids);
+  size_t obfuscate_resource_and_serialize(
+      const std::vector<std::string>& resource_files,
+      const std::map<std::string, std::string>& filepath_old_to_new,
+      const std::unordered_set<uint32_t>& allowed_types,
+      const std::unordered_set<std::string>& keep_resource_prefixes) override;
   size_t serialize();
 
   void collect_resid_values_and_hashes(
@@ -171,6 +168,8 @@ class ResourcesArscFile : public ResourceTableFile {
   bool resource_value_identical(uint32_t a_id, uint32_t b_id) override;
   std::unordered_set<uint32_t> get_types_by_name(
       const std::unordered_set<std::string>& type_names) override;
+  std::unordered_set<uint32_t> get_types_by_name_prefixes(
+      const std::unordered_set<std::string>& type_name_prefixes) override;
   void delete_resource(uint32_t res_id) override;
   void remap_res_ids_and_serialize(
       const std::vector<std::string>& resource_files,
@@ -178,47 +177,23 @@ class ResourcesArscFile : public ResourceTableFile {
   void remap_reorder_and_serialize(
       const std::vector<std::string>& resource_files,
       const std::map<uint32_t, uint32_t>& old_to_new) override;
-  void remap_file_paths_and_serialize(
-      const std::vector<std::string>& resource_files,
-      const std::unordered_map<std::string, std::string>& old_to_new) override;
-  void remove_unreferenced_strings() override;
-  std::vector<std::string> get_files_by_rid(
+  std::unordered_set<std::string> get_files_by_rid(
       uint32_t res_id,
       ResourcePathType path_type = ResourcePathType::DevicePath) override;
   void walk_references_for_resource(
       uint32_t resID,
-      ResourcePathType path_type,
       std::unordered_set<uint32_t>* nodes_visited,
       std::unordered_set<std::string>* potential_file_paths) override;
-  // Takes effect during serialization, in which new type spec, type data
-  // structures will be appended to the package, with entry/value data copied
-  // from the given ids. Actual type data in the resulting file will be emitted
-  // in the order as the given configs.
-  void define_type(uint32_t package_id,
-                   uint8_t type_id,
-                   const std::string& name,
-                   const std::vector<android::ResTable_config*>& configs,
-                   const std::vector<uint32_t>& source_res_ids) {
-    LOG_ALWAYS_FATAL_IF((package_id & 0xFFFFFF00) != 0,
-                        "package_id expected to have low byte set; got 0x%x",
-                        package_id);
-    android::String8 name8(name.data());
-    android::String16 name16(name8);
-    apk::TypeDefinition def{package_id, type_id, name, configs, source_res_ids};
-    m_added_types.emplace_back(std::move(def));
-  }
+
   ~ResourcesArscFile() override;
 
   size_t get_length() const;
 
  private:
-  std::string m_path;
   RedexMappedFile m_f;
   size_t m_arsc_len;
   std::map<uint32_t, android::Vector<android::Res_value>> tmp_id_to_values;
   bool m_file_closed = false;
-  std::unordered_set<uint32_t> m_ids_to_remove;
-  std::vector<apk::TypeDefinition> m_added_types;
 };
 
 class ApkResources : public AndroidResources {
@@ -251,6 +226,9 @@ class ApkResources : public AndroidResources {
       android::Vector<char>* out_data,
       size_t* out_num_renamed);
 
+  int inline_xml_reference_attributes(
+      const std::string& filename,
+      const std::map<uint32_t, android::Res_value>& id_to_inline_value);
   size_t remap_xml_reference_attributes(
       const std::string& filename,
       const std::map<uint32_t, uint32_t>& kept_to_remapped_ids) override;

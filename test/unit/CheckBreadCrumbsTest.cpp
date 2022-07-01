@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -178,8 +178,8 @@ DexClass* create_class_A() {
   auto a_pri_fun = DexMethod::make_method("LA;", "a_pri_fun", "V", {})
                        ->make_concrete(ACC_PRIVATE | ACC_STATIC, false);
   std::vector<DexMethod*> a_methods{a_pub_fun, a_pro_fun, a_pri_fun};
-  return create_class(a_t, type::java_lang_Object(), a_methods, a_fields,
-                      ACC_PUBLIC);
+  return create_class(
+      a_t, type::java_lang_Object(), a_methods, a_fields, ACC_PUBLIC);
 }
 
 DexClass* create_class_B(DexType* super) {
@@ -236,6 +236,7 @@ TEST_F(CheckBreadcrumbsTest, AccessValidityTest) {
            << "\ta_pri_field\n\n";
   EXPECT_EQ(expected.str(), bc.get_methods_with_bad_refs());
 }
+
 
 TEST_F(CheckBreadcrumbsTest, CrossStoreValidityTest) {
   std::vector<DexMethod*> empty_method_vec;
@@ -330,4 +331,5 @@ TEST_F(CheckBreadcrumbsTest, CrossStoreValidityTest) {
                           /* enforce_allowed_violations_file= */ false);
   EXPECT_EQ(bc_standard.is_illegal_cross_store(type_s_A_B, type_s_A_B_C), true);
 }
+
 } // namespace

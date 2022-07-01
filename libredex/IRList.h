@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -116,11 +116,9 @@ struct BranchTarget {
  * which will be used for profiling information.
  */
 struct SourceBlock {
-  const DexString* src{nullptr};
+  DexMethodRef* src{nullptr};
   std::unique_ptr<SourceBlock> next;
   // Large methods exist, but a 32-bit integer is safe.
-  // Use the maximum for things that we do not want to emit at this point.
-  static constexpr uint32_t kSyntheticId = std::numeric_limits<uint32_t>::max();
   uint32_t id{0};
   // Float has enough precision.
   class Val {
@@ -171,8 +169,8 @@ struct SourceBlock {
   std::vector<Val> vals;
 
   SourceBlock() = default;
-  SourceBlock(const DexString* src, size_t id) : src(src), id(id) {}
-  SourceBlock(const DexString* src, size_t id, std::vector<Val> v)
+  SourceBlock(DexMethodRef* src, size_t id) : src(src), id(id) {}
+  SourceBlock(DexMethodRef* src, size_t id, std::vector<Val> v)
       : src(src), id(id), vals(std::move(v)) {}
   SourceBlock(const SourceBlock& other)
       : src(other.src),
@@ -315,7 +313,6 @@ struct MethodItemEntry {
 
   void gather_strings(std::vector<const DexString*>& lstring) const;
   void gather_types(std::vector<DexType*>& ltype) const;
-  void gather_init_classes(std::vector<DexType*>& ltype) const;
   void gather_fields(std::vector<DexFieldRef*>& lfield) const;
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const;
   void gather_callsites(std::vector<DexCallSite*>& lcallsite) const;
@@ -400,19 +397,11 @@ class IRList {
    */
   void cleanup_debug(std::unordered_set<reg_t>& valid_regs);
 
-  /* DEPRECATED! Use the version below that passes in the iterator instead,
-   * which is O(1) instead of O(n). */
   /* Passes memory ownership of "from" to callee.  It will delete it. */
   void replace_opcode(IRInstruction* from, IRInstruction* to);
 
-  /* DEPRECATED! Use the version below that passes in the iterator instead,
-   * which is O(1) instead of O(n). */
   /* Passes memory ownership of "from" to callee.  It will delete it. */
   void replace_opcode(IRInstruction* to_delete,
-                      const std::vector<IRInstruction*>& replacements);
-
-  /* Passes memory ownership of "from" to callee.  It will delete it. */
-  void replace_opcode(const IRList::iterator& it,
                       const std::vector<IRInstruction*>& replacements);
 
   /*
@@ -532,7 +521,6 @@ class IRList {
   void gather_catch_types(std::vector<DexType*>& ltype) const;
   void gather_strings(std::vector<const DexString*>& lstring) const;
   void gather_types(std::vector<DexType*>& ltype) const;
-  void gather_init_classes(std::vector<DexType*>& ltype) const;
   void gather_fields(std::vector<DexFieldRef*>& lfield) const;
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const;
   void gather_callsites(std::vector<DexCallSite*>& lcallsite) const;
@@ -545,7 +533,6 @@ class IRList {
     return m_list.erase_and_dispose(it, disposer);
   }
   void clear_and_dispose() { m_list.clear_and_dispose(disposer); }
-  void insn_clear_and_dispose();
 
   IRList::iterator iterator_to(MethodItemEntry& mie) {
     return m_list.iterator_to(mie);

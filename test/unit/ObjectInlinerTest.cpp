@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -126,21 +126,19 @@ void test_object_inliner(
           field_map, field_swap_refs, {0}, result_reg, 0, callee_type);
       cfg::CFGInliner::inline_cfg(caller.get(), it,
                                   /* needs_receiver_cast */ nullptr,
-                                  /* needs_init_class */ nullptr, *callee_ctor,
-                                  caller->get_registers_size(), plugin);
+                                  *callee_ctor, caller->get_registers_size(),
+                                  plugin);
       insn = instr_code->begin()->insn;
       it = find_instruction_matching(caller.get(), insn);
       cfg::CFGInliner::inline_cfg(caller.get(), it,
-                                  /* needs_receiver_cast */ nullptr,
-                                  /* needs_init_class */ nullptr, callee,
+                                  /* needs_receiver_cast */ nullptr, callee,
                                   caller->get_registers_size(), plugin);
     } else {
       object_inliner_plugin::ObjectInlinePlugin plugin =
           object_inliner_plugin::ObjectInlinePlugin(
               field_map, field_swap_refs, {0}, result_reg, 0, callee_type);
       cfg::CFGInliner::inline_cfg(caller.get(), it,
-                                  /* needs_receiver_cast */ nullptr,
-                                  /* needs_init_class */ nullptr, callee,
+                                  /* needs_receiver_cast */ nullptr, callee,
                                   caller->get_registers_size(), plugin);
     }
 

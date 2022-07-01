@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -28,6 +28,7 @@
 const char* const ONCLICK_ATTRIBUTE = "android:onClick";
 const char* const RES_DIRECTORY = "res";
 const char* const OBFUSCATED_RES_DIRECTORY = "r";
+const char* const RESOURCE_NAME_REMOVED = "(name removed)";
 
 const uint32_t PACKAGE_RESID_START = 0x7f000000;
 
@@ -104,11 +105,21 @@ class ResourceTableFile {
   virtual bool resource_value_identical(uint32_t a_id, uint32_t b_id) = 0;
   virtual std::unordered_set<uint32_t> get_types_by_name(
       const std::unordered_set<std::string>& type_names) = 0;
+  virtual std::unordered_set<uint32_t> get_types_by_name_prefixes(
+      const std::unordered_set<std::string>& type_name_prefixes) = 0;
   virtual void delete_resource(uint32_t red_id) = 0;
 
   virtual void remap_res_ids_and_serialize(
       const std::vector<std::string>& resource_files,
       const std::map<uint32_t, uint32_t>& old_to_new) = 0;
+  // Rename qualified resource names that are in allowed type and don't have
+  // keep_resource_prefixes to "(name removed)". Also rename filepaths
+  // according to filepath_old_to_new.
+  virtual size_t obfuscate_resource_and_serialize(
+      const std::vector<std::string>& resource_files,
+      const std::map<std::string, std::string>& filepath_old_to_new,
+      const std::unordered_set<uint32_t>& allowed_types,
+      const std::unordered_set<std::string>& keep_resource_prefixes) = 0;
 
   // Similar to above function, but reorder flags/entry/value data according to
   // old_to_new, as well as remapping references.
@@ -116,19 +127,9 @@ class ResourceTableFile {
       const std::vector<std::string>& resource_files,
       const std::map<uint32_t, uint32_t>& old_to_new) = 0;
 
-  virtual void remap_file_paths_and_serialize(
-      const std::vector<std::string>& resource_files,
-      const std::unordered_map<std::string, std::string>& old_to_new) = 0;
-
-  // Removes entries from string pool structures that are not referenced by
-  // entries/values in the resource table
-  virtual void remove_unreferenced_strings();
-
-  // Returns any file paths from entries in the given ID. A non-existent ID or
-  // an for which all values are not files will return an empty vector.
-  // NOTE: callers should be resilient against duplicate file paths being
-  // returned, which could concievably exist.
-  virtual std::vector<std::string> get_files_by_rid(
+  // Return the set of files' name(include the path) represented by res_id if
+  // there is. Otherwise, return NULL.
+  virtual std::unordered_set<std::string> get_files_by_rid(
       uint32_t res_id,
       ResourcePathType path_type = ResourcePathType::DevicePath) = 0;
 
@@ -137,7 +138,6 @@ class ResourceTableFile {
   // file paths.
   virtual void walk_references_for_resource(
       uint32_t resID,
-      ResourcePathType path_type,
       std::unordered_set<uint32_t>* nodes_visited,
       std::unordered_set<std::string>* potential_file_paths) = 0;
 
@@ -194,10 +194,9 @@ class AndroidResources {
   virtual std::unordered_set<std::string> find_all_xml_files() = 0;
   virtual std::vector<std::string> find_resources_files() = 0;
   virtual std::string get_base_assets_dir() = 0;
+
   // Classnames present in native libraries (lib/*/*.so)
   std::unordered_set<std::string> get_native_classes();
-
-  const std::string& get_directory() { return m_directory; }
 
   virtual ~AndroidResources() {}
 

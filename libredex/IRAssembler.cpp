@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -420,7 +420,7 @@ std::unique_ptr<SourceBlock> source_block_from_s_expr(const s_expr& e) {
       },
       val_expr)
       .must_match(e, "Expected 2+ args for src_block directive");
-  auto* method = DexString::make_string(method_str);
+  auto* method = DexMethod::make_method(method_str);
   uint32_t id;
   {
     std::istringstream in(id_str);
@@ -957,8 +957,7 @@ DexMethod* method_from_s_expr(const s_expr& e) {
   s_expr code_expr;
   s_patn({s_patn(code_expr)}, tail).match_with(tail);
   always_assert_log(code_expr.is_list(), "Expecting code listing");
-  bool is_virtual = !is_static(access_flags) && !is_private(access_flags) &&
-                    !is_constructor(access_flags);
+  bool is_virtual = !is_static(access_flags) && !is_private(access_flags);
   return method->make_concrete(access_flags, ircode_from_s_expr(code_expr),
                                is_virtual);
 }

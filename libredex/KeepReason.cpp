@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -7,10 +7,8 @@
 
 #include "KeepReason.h"
 
-#include <ostream>
-
-#include "ConcurrentContainers.h"
 #include "ProguardPrintConfiguration.h"
+#include "RedexContext.h"
 #include "Show.h"
 
 namespace keep_reason {
@@ -48,37 +46,5 @@ size_t hash_value(const Reason& reason) {
   boost::hash_combine(seed, reason.keep_rule);
   return seed;
 }
-
-namespace {
-
-// Lint will complain about this, but it is better than having to
-// forward-declare all of concurrent containers.
-std::unique_ptr<ConcurrentMap<keep_reason::Reason*,
-                              keep_reason::Reason*,
-                              keep_reason::ReasonPtrHash,
-                              keep_reason::ReasonPtrEqual>>
-    s_keep_reasons{nullptr};
-
-} // namespace
-
-bool Reason::s_record_keep_reasons = false;
-
-void Reason::set_record_keep_reasons(bool v) {
-  s_record_keep_reasons = v;
-  if (v && s_keep_reasons == nullptr) {
-    s_keep_reasons = std::make_unique<ConcurrentMap<
-        keep_reason::Reason*, keep_reason::Reason*, keep_reason::ReasonPtrHash,
-        keep_reason::ReasonPtrEqual>>();
-  }
-}
-
-Reason* Reason::try_insert(std::unique_ptr<Reason> to_insert) {
-  if (s_keep_reasons->emplace(to_insert.get(), to_insert.get())) {
-    return to_insert.release();
-  }
-  return s_keep_reasons->at(to_insert.get());
-}
-
-void Reason::release_keep_reasons() { s_keep_reasons.reset(); }
 
 } // namespace keep_reason

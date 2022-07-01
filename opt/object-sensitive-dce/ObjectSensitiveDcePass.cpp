@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -11,14 +11,10 @@
 #include <functional>
 
 #include "ConcurrentContainers.h"
-#include "ConfigFiles.h"
 #include "DexUtil.h"
 #include "HierarchyUtil.h"
-#include "InitClassPruner.h"
-#include "InitClassesWithSideEffects.h"
 #include "LocalPointersAnalysis.h"
 #include "PassManager.h"
-#include "ScopedCFG.h"
 #include "SummarySerialization.h"
 #include "Transform.h"
 #include "Walkers.h"
@@ -117,16 +113,9 @@ static side_effects::InvokeToSummaryMap build_summary_map(
 }
 
 void ObjectSensitiveDcePass::run_pass(DexStoresVector& stores,
-                                      ConfigFiles& conf,
+                                      ConfigFiles&,
                                       PassManager& mgr) {
-  always_assert_log(
-      !mgr.init_class_lowering_has_run(),
-      "Implementation limitation: ObjectSensitiveDcePass could introduce new "
-      "init-class instructions.");
-
   auto scope = build_class_scope(stores);
-  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
-      scope, conf.create_init_class_insns());
 
   walk::parallel::code(scope, [&](const DexMethod* method, IRCode& code) {
     code.build_cfg(/* editable */ false);
@@ -151,66 +140,41 @@ void ObjectSensitiveDcePass::run_pass(DexStoresVector& stores,
     std::ifstream file_input(*m_external_side_effect_summaries_file);
     summary_serialization::read(file_input, &effect_summaries);
   }
-  side_effects::analyze_scope(init_classes_with_side_effects, scope, call_graph,
-                              *ptrs_fp_iter_map, &effect_summaries);
+  side_effects::analyze_scope(scope, call_graph, *ptrs_fp_iter_map,
+                              &effect_summaries);
 
-  std::atomic<size_t> removed{0};
-  std::atomic<size_t> init_class_instructions_added{0};
-  init_classes::Stats init_class_stats;
-  std::mutex init_class_stats_mutex;
-  walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
-    if (method->rstate.no_optimizations()) {
-      return;
-    }
+  auto removed =
+      walk::parallel::methods<size_t>(scope, [&](DexMethod* method) -> size_t {
+        if (method->rstate.no_optimizations()) {
+          return 0;
+        }
+        auto* code = method->get_code();
+        if (code == nullptr) {
+          return 0;
+        }
 
-    uv::FixpointIterator used_vars_fp_iter(
-        *ptrs_fp_iter_map->find(method)->second,
-        build_summary_map(effect_summaries, call_graph, method),
-        code.cfg());
-    used_vars_fp_iter.run(uv::UsedVarsSet());
+        uv::FixpointIterator used_vars_fp_iter(
+            *ptrs_fp_iter_map->find(method)->second,
+            build_summary_map(effect_summaries, call_graph, method),
+            code->cfg());
+        used_vars_fp_iter.run(uv::UsedVarsSet());
 
-    TRACE(OSDCE, 5, "Transforming %s", SHOW(method));
-    TRACE(OSDCE, 5, "Before:\n%s", SHOW(code.cfg()));
-    auto dead_instructions =
-        used_vars::get_dead_instructions(code, used_vars_fp_iter);
-    auto local_init_class_instructions_added = 0;
-    for (const auto& dead : dead_instructions) {
-      // This logging is useful for quantifying what gets removed. E.g. to
-      // see all the removed callsites: grep "^DEAD.*INVOKE[^ ]*" log |
-      // grep " L.*$" -Po | sort | uniq -c
-      TRACE(OSDCE, 3, "DEAD: %s", SHOW(dead->insn));
-      auto init_class_insn =
-          init_classes_with_side_effects.create_init_class_insn(
-              get_init_class_type_demand(dead->insn));
-      if (init_class_insn) {
-        code.replace_opcode(dead, {init_class_insn});
-        local_init_class_instructions_added++;
-      } else {
-        code.remove_opcode(dead);
-      }
-    }
-    transform::remove_unreachable_blocks(&code);
-    TRACE(OSDCE, 5, "After:\n%s", SHOW(&code));
-    if (!dead_instructions.empty()) {
-      removed += dead_instructions.size();
-      if (local_init_class_instructions_added > 0) {
-        init_class_instructions_added += local_init_class_instructions_added;
-        cfg::ScopedCFG cfg(&code);
-        init_classes::InitClassPruner init_class_pruner(
-            init_classes_with_side_effects, method->get_class(), *cfg);
-        init_class_pruner.apply();
-        std::lock_guard lock_guard(init_class_stats_mutex);
-        init_class_stats += init_class_pruner.get_stats();
-      }
-    }
-  });
+        TRACE(OSDCE, 5, "Transforming %s", SHOW(method));
+        TRACE(OSDCE, 5, "Before:\n%s", SHOW(code->cfg()));
+        auto dead_instructions =
+            used_vars::get_dead_instructions(*code, used_vars_fp_iter);
+        for (const auto& dead : dead_instructions) {
+          // This logging is useful for quantifying what gets removed. E.g. to
+          // see all the removed callsites: grep "^DEAD.*INVOKE[^ ]*" log |
+          // grep " L.*$" -Po | sort | uniq -c
+          TRACE(OSDCE, 3, "DEAD: %s", SHOW(dead->insn));
+          code->remove_opcode(dead);
+        }
+        transform::remove_unreachable_blocks(code);
+        TRACE(OSDCE, 5, "After:\n%s", SHOW(&code));
+        return dead_instructions.size();
+      });
   mgr.set_metric("removed_instructions", removed);
-  mgr.set_metric("init_class_instructions_added",
-                 init_class_instructions_added);
-  mgr.incr_metric("init_class_instructions_removed",
-                  init_class_stats.init_class_instructions_removed);
-  mgr.incr_metric("init_class_instructions_refined",
-                  init_class_stats.init_class_instructions_refined);
 }
 
 static ObjectSensitiveDcePass s_pass;

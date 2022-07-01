@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -44,12 +44,11 @@ class ReflectionAnalysisTest : public RedexTest {
     m_method->set_code(std::make_unique<IRCode>(m_method, /* temp_regs */ 5));
   }
 
-  void add_code(std::unique_ptr<IRCode> insns) {
+  void add_code(const std::unique_ptr<IRCode>& insns) {
     IRCode* code = m_method->get_code();
     for (const auto& insn : *insns) {
       code->push_back(insn);
     }
-    insns->set_insn_ownership(false);
   }
 
   std::string to_string(const ReflectionSites& reflection_sites) {
@@ -81,7 +80,7 @@ TEST_F(ReflectionAnalysisTest, noReflection) {
       (move-result-object v0)
     )
   )");
-  add_code(std::move(insns));
+  add_code(insns);
   ReflectionAnalysis analysis(m_method);
   EXPECT_FALSE(analysis.has_found_reflection());
 }
@@ -95,7 +94,7 @@ TEST_F(ReflectionAnalysisTest, constClass) {
       (move-result-pseudo-object v1)
     )
   )");
-  add_code(std::move(insns));
+  add_code(insns);
   ReflectionAnalysis analysis(m_method);
   EXPECT_TRUE(analysis.has_found_reflection());
   EXPECT_EQ(to_string(analysis.get_reflection_sites()),
@@ -110,7 +109,7 @@ TEST_F(ReflectionAnalysisTest, getClassOnParam) {
       (move-result-object v1)
     )
   )");
-  add_code(std::move(insns));
+  add_code(insns);
   ReflectionAnalysis analysis(m_method);
   EXPECT_TRUE(analysis.has_found_reflection());
   EXPECT_EQ(to_string(analysis.get_reflection_sites()),
@@ -127,7 +126,7 @@ TEST_F(ReflectionAnalysisTest, classForName) {
       (move-result-object v0)
     )
   )");
-  add_code(std::move(insns));
+  add_code(insns);
   ReflectionAnalysis analysis(m_method);
   EXPECT_TRUE(analysis.has_found_reflection());
   EXPECT_EQ(to_string(analysis.get_reflection_sites()),
@@ -143,7 +142,7 @@ TEST_F(ReflectionAnalysisTest, getClassOnField) {
       (move-result-object v1)
     )
   )");
-  add_code(std::move(insns));
+  add_code(insns);
   ReflectionAnalysis analysis(m_method);
   EXPECT_TRUE(analysis.has_found_reflection());
   EXPECT_EQ(to_string(analysis.get_reflection_sites()),
@@ -164,7 +163,7 @@ TEST_F(ReflectionAnalysisTest, getMethod) {
       (move-result-object v4)
     )
   )");
-  add_code(std::move(insns));
+  add_code(insns);
   ReflectionAnalysis analysis(m_method);
   EXPECT_TRUE(analysis.has_found_reflection());
   EXPECT_EQ(
@@ -189,7 +188,7 @@ TEST_F(ReflectionAnalysisTest, getField) {
       (move-result-object v4)
     )
   )");
-  add_code(std::move(insns));
+  add_code(insns);
   ReflectionAnalysis analysis(m_method);
   EXPECT_TRUE(analysis.has_found_reflection());
   EXPECT_EQ(
@@ -214,7 +213,7 @@ TEST_F(ReflectionAnalysisTest, instanceOf) {
       (move-result-object v4)
     )
   )");
-  add_code(std::move(insns));
+  add_code(insns);
   ReflectionAnalysis analysis(m_method);
   EXPECT_TRUE(analysis.has_found_reflection());
   std::cout << "reflection sites: "

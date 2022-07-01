@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -9,7 +9,6 @@
 
 #include "Debug.h"
 #include "DexUtil.h"
-#include "Show.h"
 #include "TypeUtil.h"
 
 #include <sstream>
@@ -17,7 +16,7 @@
 namespace dex_member_refs {
 
 template <typename T>
-static size_t expect(std::string_view s,
+static size_t expect(const std::string& s,
                      const T& needle,
                      size_t start_pos = 0) {
   auto pos = s.find(needle, start_pos);
@@ -30,7 +29,7 @@ static size_t expect(std::string_view s,
   return pos;
 }
 
-FieldDescriptorTokens parse_field(std::string_view s) {
+FieldDescriptorTokens parse_field(const std::string& s) {
   auto cls_end = expect(s, '.');
   auto name_start = cls_end + 1;
   auto name_end = expect(s, ':', name_start);
@@ -46,8 +45,8 @@ FieldDescriptorTokens parse_field(std::string_view s) {
 
 namespace {
 
-std::vector<std::string_view> split_args(std::string_view args) {
-  std::vector<std::string_view> ret;
+std::vector<std::string> split_args(std::string args) {
+  std::vector<std::string> ret;
   auto begin = size_t{0};
   while (begin < args.length()) {
     auto ch = args[begin];
@@ -73,7 +72,7 @@ std::vector<std::string_view> split_args(std::string_view args) {
 } // namespace
 
 template <bool kCheckFormat>
-MethodDescriptorTokens parse_method(std::string_view s) {
+MethodDescriptorTokens parse_method(const std::string& s) {
   auto cls_end = expect(s, '.');
   auto name_start = cls_end + 1;
   auto name_end = expect(s, ":(", name_start);
@@ -91,7 +90,7 @@ MethodDescriptorTokens parse_method(std::string_view s) {
   if (kCheckFormat) {
     // Macros are ugly, but it will print nicer since asserts are macros, too.
 #define context_assert(e, local_ctx) \
-  always_assert_log(e, "Invalid: %s (%s)", SHOW(local_ctx), SHOW(s));
+  always_assert_log(e, "Invalid: %s (%s)", (local_ctx).c_str(), s.c_str());
 
     context_assert(type::is_valid(mdt.cls), mdt.cls);
     // Class must not be a primitive.
@@ -101,14 +100,14 @@ MethodDescriptorTokens parse_method(std::string_view s) {
     // Name must be a valid identifier.
     context_assert(is_valid_identifier(mdt.name), mdt.name);
 
-    for (std::string_view t : mdt.args) {
+    for (const std::string& t : mdt.args) {
       context_assert(type::is_valid(t), t);
     }
     context_assert(type::is_valid(mdt.rtype), mdt.rtype);
   }
   return mdt;
 }
-template MethodDescriptorTokens parse_method<false>(std::string_view);
-template MethodDescriptorTokens parse_method<true>(std::string_view);
+template MethodDescriptorTokens parse_method<false>(const std::string&);
+template MethodDescriptorTokens parse_method<true>(const std::string&);
 
 } // namespace dex_member_refs

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -73,32 +73,21 @@ bool should_shrink(IRCode* code, const Shrinker::ShrinkerForest& forest) {
 Shrinker::Shrinker(
     DexStoresVector& stores,
     const Scope& scope,
-    const init_classes::InitClassesWithSideEffects&
-        init_classes_with_side_effects,
     const ShrinkerConfig& config,
-    int min_sdk,
     const std::unordered_set<DexMethodRef*>& configured_pure_methods,
     const std::unordered_set<const DexString*>& configured_finalish_field_names)
     : m_forest(load(config.reg_alloc_random_forest)),
       m_xstores(stores),
       m_config(config),
-      m_min_sdk(min_sdk),
       m_enabled(config.run_const_prop || config.run_cse ||
                 config.run_copy_prop || config.run_local_dce ||
                 config.run_reg_alloc || config.run_fast_reg_alloc ||
                 config.run_dedup_blocks),
-      m_init_classes_with_side_effects(init_classes_with_side_effects),
       m_pure_methods(configured_pure_methods),
       m_finalish_field_names(configured_finalish_field_names) {
-  // Initialize the singletons that `operator()` needs ahead of time to
-  // avoid a data race.
-  static_cast<void>(constant_propagation::EnumFieldAnalyzerState::get());
-  static_cast<void>(constant_propagation::BoxedBooleanAnalyzerState::get());
-  static_cast<void>(constant_propagation::ApiLevelAnalyzerState::get());
-
   if (config.run_cse || config.run_local_dce) {
     if (config.compute_pure_methods) {
-      const auto& pure_methods = ::get_pure_methods();
+      const auto& pure_methods = get_pure_methods();
       m_pure_methods.insert(pure_methods.begin(), pure_methods.end());
       auto immutable_getters = get_immutable_getters(scope);
       m_pure_methods.insert(immutable_getters.begin(), immutable_getters.end());
@@ -118,13 +107,8 @@ Shrinker::Shrinker(
       }
       std::unordered_set<const DexMethod*> computed_no_side_effects_methods;
       /* Returns computed_no_side_effects_methods_iterations */
-      method::ClInitHasNoSideEffectsPredicate clinit_has_no_side_effects =
-          [&](const DexType* type) {
-            return !init_classes_with_side_effects.refine(type);
-          };
-      compute_no_side_effects_methods(
-          scope, override_graph, clinit_has_no_side_effects, m_pure_methods,
-          &computed_no_side_effects_methods);
+      compute_no_side_effects_methods(scope, override_graph, m_pure_methods,
+                                      &computed_no_side_effects_methods);
       for (auto m : computed_no_side_effects_methods) {
         m_pure_methods.insert(const_cast<DexMethod*>(m));
       }
@@ -143,67 +127,41 @@ constant_propagation::Transform::Stats Shrinker::constant_propagation(
     IRCode* code,
     const ConstantEnvironment& initial_env,
     const constant_propagation::Transform::Config& config) {
-  constant_propagation::intraprocedural::FixpointIterator fp_iter(
-      code->cfg(),
-      constant_propagation::ConstantPrimitiveAndBoxedAnalyzer(
-          &m_immut_analyzer_state, &m_immut_analyzer_state,
-          constant_propagation::EnumFieldAnalyzerState::get(),
-          constant_propagation::BoxedBooleanAnalyzerState::get(),
-          constant_propagation::ApiLevelAnalyzerState::get(m_min_sdk), nullptr),
-      /* imprecise_switches */ true);
-  fp_iter.run(initial_env);
-  constant_propagation::Transform tf(config);
-  tf.apply(fp_iter, constant_propagation::WholeProgramState(), code->cfg(),
-           &m_xstores, is_static, declaring_type, proto);
-  return tf.get_stats();
+  if (!code->editable_cfg_built()) {
+    code->build_cfg(/* editable */ true);
+  }
+  {
+    constant_propagation::intraprocedural::FixpointIterator fp_iter(
+        code->cfg(),
+        constant_propagation::ConstantPrimitiveAndBoxedAnalyzer(
+            &m_immut_analyzer_state, &m_immut_analyzer_state,
+            constant_propagation::EnumFieldAnalyzerState::get(),
+            constant_propagation::BoxedBooleanAnalyzerState::get(), nullptr),
+        /* imprecise_switches */ true);
+    fp_iter.run(initial_env);
+    constant_propagation::Transform tf(config);
+    tf.apply(fp_iter, constant_propagation::WholeProgramState(), code->cfg(),
+             &m_xstores, is_static, declaring_type, proto);
+    return tf.get_stats();
+  }
 }
 
 LocalDce::Stats Shrinker::local_dce(IRCode* code,
-                                    bool normalize_new_instances,
-                                    DexType* declaring_type) {
+                                    bool normalize_new_instances) {
   // LocalDce doesn't care if editable_cfg_built
-  auto local_dce = LocalDce(&m_init_classes_with_side_effects, m_pure_methods);
-  local_dce.dce(code, normalize_new_instances, declaring_type);
+  auto local_dce = LocalDce(m_pure_methods);
+  local_dce.dce(code, normalize_new_instances);
   return local_dce.get_stats();
 }
 
 copy_propagation_impl::Stats Shrinker::copy_propagation(DexMethod* method) {
-  return copy_propagation(method->get_code(),
-                          is_static(method),
-                          method->get_class(),
-                          method->get_proto()->get_rtype(),
-                          method->get_proto()->get_args(),
-                          [method]() { return show(method); });
-}
-
-copy_propagation_impl::Stats Shrinker::copy_propagation(
-    IRCode* code,
-    bool is_static,
-    DexType* declaring_type,
-    DexType* rtype,
-    DexTypeList* args,
-    std::function<std::string()> method_describer) {
   copy_propagation_impl::Config config;
   copy_propagation_impl::CopyPropagation copy_propagation(config);
-  return copy_propagation.run(code, is_static, declaring_type, rtype, args,
-                              std::move(method_describer));
-}
-void Shrinker::shrink_method(DexMethod* method) {
-  shrink_code(method->get_code(),
-              is_static(method),
-              method::is_init(method) || method::is_clinit(method),
-              method->get_class(),
-              method->get_proto(),
-              [method]() { return show(method); });
+  return copy_propagation.run(method->get_code(), method);
 }
 
-void Shrinker::shrink_code(
-    IRCode* code,
-    bool is_static,
-    bool is_init_or_clinit,
-    DexType* declaring_type,
-    DexProto* proto,
-    const std::function<std::string()>& method_describer) {
+void Shrinker::shrink_method(DexMethod* method) {
+  auto code = method->get_code();
   bool editable_cfg_built = code->editable_cfg_built();
   // force simplification/linearization of any existing editable cfg once, and
   // forget existing cfg for a clean start
@@ -217,12 +175,9 @@ void Shrinker::shrink_code(
 
   if (m_config.run_const_prop) {
     auto timer = m_const_prop_timer.scope();
-    if (!code->editable_cfg_built()) {
-      code->build_cfg(/* editable */ true);
-    }
-
     const_prop_stats =
-        constant_propagation(is_static, declaring_type, proto, code, {}, {});
+        constant_propagation(is_static(method), method->get_class(),
+                             method->get_proto(), code, {}, {});
   }
 
   if (m_config.run_cse) {
@@ -232,31 +187,21 @@ void Shrinker::shrink_code(
     }
 
     cse_impl::CommonSubexpressionElimination cse(
-        m_cse_shared_state.get(), code->cfg(), is_static, is_init_or_clinit,
-        declaring_type, proto->get_args());
+        m_cse_shared_state.get(), code->cfg(), is_static(method),
+        method::is_init(method) || method::is_clinit(method),
+        method->get_class(), method->get_proto()->get_args());
     cse.patch();
     cse_stats = cse.get_stats();
   }
 
   if (m_config.run_copy_prop) {
     auto timer = m_copy_prop_timer.scope();
-    if (!code->editable_cfg_built()) {
-      code->build_cfg(/* editable */ true);
-    }
-
-    copy_prop_stats =
-        copy_propagation(code, is_static, declaring_type, proto->get_rtype(),
-                         proto->get_args(), method_describer);
+    copy_prop_stats = copy_propagation(method);
   }
 
   if (m_config.run_local_dce) {
     auto timer = m_local_dce_timer.scope();
-    if (!code->editable_cfg_built()) {
-      code->build_cfg(/* editable */ true);
-    }
-
-    local_dce_stats =
-        local_dce(code, /* normalize_new_instances */ true, declaring_type);
+    local_dce_stats = local_dce(code);
   }
 
   using stats_t = std::tuple<size_t, size_t, size_t, size_t>;
@@ -291,15 +236,14 @@ void Shrinker::shrink_code(
 
       auto config = regalloc::graph_coloring::Allocator::Config{};
       config.no_overwrite_this = true; // Downstream passes may rely on this.
-      regalloc::graph_coloring::allocate(config, code, is_static,
-                                         method_describer);
+      regalloc::graph_coloring::allocate(config, method);
       // After this, any CFG is gone.
 
       // Assume that dedup will run, so building CFG is OK.
       auto after_features = get_features(4);
       TRACE(MMINL, 4,
             "Inliner.RegAlloc: %s: (%zu, %zu, %zu) -> (%zu, %zu, %zu)",
-            method_describer().c_str(), std::get<0>(before_features),
+            SHOW(method), std::get<0>(before_features),
             std::get<1>(before_features), std::get<2>(before_features),
             std::get<0>(after_features), std::get<1>(after_features),
             std::get<2>(after_features));
@@ -309,13 +253,8 @@ void Shrinker::shrink_code(
   }
 
   if (m_config.run_fast_reg_alloc) {
-    auto timer = m_reg_alloc_timer.scope();
-    if (!code->editable_cfg_built()) {
-      code->build_cfg(/* editable= */ true);
-    }
-
-    auto allocator =
-        fastregalloc::LinearScanAllocator(code, is_static, method_describer);
+    auto timer = m_fast_reg_alloc_timer.scope();
+    auto allocator = fastregalloc::LinearScanAllocator(method);
     allocator.allocate();
   }
 
@@ -326,8 +265,7 @@ void Shrinker::shrink_code(
     }
 
     dedup_blocks_impl::Config config;
-    dedup_blocks_impl::DedupBlocks dedup_blocks(
-        &config, code, is_static, declaring_type, proto->get_args());
+    dedup_blocks_impl::DedupBlocks dedup_blocks(&config, method);
     dedup_blocks.run();
     dedup_blocks_stats = dedup_blocks.get_stats();
   }

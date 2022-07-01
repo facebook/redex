@@ -1,68 +1,60 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
 
 #include "LiveInterval.h"
-
+#include "Show.h"
+#include "Trace.h"
+// #include <cassert>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
 
-#include "DexUtil.h"
-#include "LinearScan.h"
-
 namespace fastregalloc {
 
-LiveIntervals init_live_intervals(
-    cfg::ControlFlowGraph& cfg,
-    std::vector<LiveIntervalPoint>* live_interval_points) {
+LiveIntervals init_live_intervals(IRCode* code) {
   LiveIntervals live_intervals;
   VRegAliveInsns vreg_alive_insns;
-  auto add_live_range = [&vreg_alive_insns](const auto& vreg_block_range) {
-    for (auto& [vreg, range] : vreg_block_range) {
-      vreg_alive_insns[vreg].push_back(range);
-    }
-  };
 
-  LivenessFixpointIterator liveness_fixpoint_iter(cfg);
-  liveness_fixpoint_iter.run({});
-  std::unordered_map<cfg::Block*, std::unordered_set<vreg_t>>
-      check_cast_throw_targets_vregs;
+  code->build_cfg(/* editable */ true);
+  auto& cfg = code->cfg();
+  cfg.calculate_exit_block();
+  LivenessFixpointIterator fixpoint_iter(cfg);
+  fixpoint_iter.run(LivenessDomain());
   for (cfg::Block* block : cfg.blocks()) {
-    add_live_range(get_live_range_in_block(
-        liveness_fixpoint_iter, block, &check_cast_throw_targets_vregs));
+    auto vreg_block_range = get_live_range_in_block(fixpoint_iter, block);
+    for (auto pair : vreg_block_range) {
+      vreg_t vreg = pair.first;
+      RangeInBlock range = pair.second;
+      if (vreg_alive_insns.count(vreg)) {
+        vreg_alive_insns[vreg].push_back(range);
+      } else {
+        vreg_alive_insns[vreg] = std::vector({range});
+      }
+    }
   }
-  for (auto& [block, vregs] : check_cast_throw_targets_vregs) {
-    add_live_range(get_check_cast_throw_targets_live_range(
-        liveness_fixpoint_iter, block, vregs));
-  }
+
+  code->clear_cfg();
 
   // number the instructions to get sortable live intervals
-  LiveIntervalPointIndices indices;
-  auto add_lip = [&indices, live_interval_points](const auto& lip) {
-    auto success = indices.emplace(lip, indices.size()).second;
-    always_assert(success);
-    live_interval_points->push_back(lip);
-  };
-  auto ordered_blocks = get_ordered_blocks(cfg, liveness_fixpoint_iter);
-  for (auto block : ordered_blocks) {
-    for (auto& mie : InstructionIterable(block)) {
-      add_lip(LiveIntervalPoint::get(mie.insn));
-    }
-    if (cfg.get_succ_edge_if(
-            block, [](cfg::Edge* e) { return e->type() != cfg::EDGE_GHOST; })) {
-      // Any block with continuing control-flow could have a live-out registers,
-      // and thus we allocate a block-end point for it.
-      add_lip(LiveIntervalPoint::get_block_end(block));
-    }
+  InsnIdx insn_idx;
+  uint32_t idx_count = 0;
+  code->build_cfg(/*editable*/ false);
+  for (auto& mie : InstructionIterable(code)) {
+    insn_idx[mie.insn] = idx_count;
+    idx_count++;
   }
 
-  for (const auto& [vreg, ranges] : vreg_alive_insns) {
-    auto [start_point, end_point] = calculate_live_interval(ranges, indices);
-    live_intervals.push_back(VRegLiveInterval{start_point, end_point, vreg});
+  for (const auto& pair : vreg_alive_insns) {
+    vreg_t vreg = pair.first;
+    auto insn_ranges = pair.second;
+    auto interval =
+        calculate_live_interval(insn_ranges, insn_idx, idx_count - 1);
+    live_intervals.push_back(
+        VRegLiveInterval{interval.first, interval.second, vreg, std::nullopt});
   }
   std::sort(live_intervals.begin(), live_intervals.end());
 
@@ -70,23 +62,24 @@ LiveIntervals init_live_intervals(
 }
 
 IntervalEndPoints calculate_live_interval(
-    const std::vector<RangeInBlock>& ranges,
-    const LiveIntervalPointIndices& indices) {
-  always_assert(!indices.empty());
-  uint32_t max_index = indices.size() - 1;
-  uint32_t interval_start = max_index;
+    std::vector<RangeInBlock>& insn_ranges,
+    const InsnIdx& insn_idx,
+    const uint32_t max_idx) {
+  VRegBlockRanges numbered_ranges;
+  uint32_t interval_start = max_idx;
   uint32_t interval_end = 0;
-  for (auto& range : ranges) {
-    always_assert(!range.first.is_missing());
-    auto range_start = indices.at(range.first);
-    interval_start = std::min(interval_start, range_start);
+  for (auto range : insn_ranges) {
+    if (insn_idx.at(range.first) < interval_start) {
+      interval_start = insn_idx.at(range.first);
+    }
     // if there is deadcode (def no use), we assume the live interval lasts
     // until end of code
-    if (range.second.is_missing()) {
-      interval_end = max_index;
+    if (range.second == nullptr) {
+      interval_end = max_idx;
     } else {
-      auto range_end = indices.at(range.second);
-      interval_end = std::max(interval_end, range_end);
+      if (insn_idx.at(range.second) > interval_end) {
+        interval_end = insn_idx.at(range.second);
+      }
     }
   }
   redex_assert(interval_start <= interval_end);
@@ -94,163 +87,46 @@ IntervalEndPoints calculate_live_interval(
 }
 
 VRegAliveRangeInBlock get_live_range_in_block(
-    const LivenessFixpointIterator& fixpoint_iter,
-    cfg::Block* block,
-    std::unordered_map<cfg::Block*, std::unordered_set<vreg_t>>*
-        check_cast_throw_targets_vregs) {
+    const LivenessFixpointIterator& fixpoint_iter, cfg::Block* block) {
   VRegAliveRangeInBlock vreg_block_range;
   LivenessDomain live_in = fixpoint_iter.get_live_in_vars_at(block);
   LivenessDomain live_out = fixpoint_iter.get_live_out_vars_at(block);
 
-  LiveIntervalPoint first = LiveIntervalPoint::get_block_begin(block);
+  std::unordered_set<vreg_t> start_recorded;
+
   for (auto vreg : live_in.elements()) {
-    auto range = std::make_pair(first, LiveIntervalPoint::get());
-    bool emplaced = vreg_block_range.emplace(vreg, range).second;
-    always_assert(emplaced);
+    vreg_block_range[vreg] =
+        std::make_pair(block->get_first_insn()->insn, nullptr);
+    start_recorded.insert(vreg);
   }
-  auto ii = InstructionIterable(block);
-  for (auto it = ii.begin(); it != ii.end(); it++) {
-    auto insn = it->insn;
-    if (!insn->has_dest()) {
-      continue;
-    }
-    vreg_t vreg = insn->dest();
-    auto next = std::next(it) == ii.end()
-                    ? LiveIntervalPoint::get_block_end(block)
-                    : LiveIntervalPoint::get(std::next(it)->insn);
-    auto range = std::make_pair(next, LiveIntervalPoint::get());
-    vreg_block_range.emplace(vreg, range);
-    // emplace might silently fail if we already had an entry
-
-    if (insn->opcode() != IOPCODE_MOVE_RESULT_PSEUDO_OBJECT) {
-      continue;
-    }
-    auto& cfg = block->cfg();
-    auto primary_insn_it = cfg.primary_instruction_of_move_result(
-        block->to_cfg_instruction_iterator(it.unwrap()));
-    if (primary_insn_it->insn->opcode() != OPCODE_CHECK_CAST) {
-      continue;
-    }
-    // We need to remember for all catch handlers which check-cast
-    // move-result-pseudo-object dest registers should be kept alive to
-    // deal with a special quirk of our check-cast instruction lowering.
-    auto src_block = primary_insn_it.block();
-    for (auto e : cfg.get_succ_edges_of_type(src_block, cfg::EDGE_THROW)) {
-      (*check_cast_throw_targets_vregs)[e->target()].insert(vreg);
+  for (auto& mie : InstructionIterable(block)) {
+    auto insn = mie.insn;
+    if (insn->has_dest()) {
+      vreg_t vreg = insn->dest();
+      if (!start_recorded.count(vreg)) {
+        vreg_block_range[vreg].first = insn;
+        start_recorded.insert(vreg);
+      }
     }
   }
 
-  LiveIntervalPoint last = LiveIntervalPoint::get_block_end(block);
   for (auto vreg : live_out.elements()) {
-    vreg_block_range.at(vreg).second = last;
+    redex_assert(start_recorded.count(vreg) == 1);
+    vreg_block_range[vreg].second = block->get_last_insn()->insn;
+    start_recorded.erase(vreg);
   }
   for (auto it = block->rbegin(); it != block->rend(); ++it) {
     if (it->type != MFLOW_OPCODE) continue;
     auto insn = it->insn;
     for (vreg_t vreg : insn->srcs()) {
-      auto it2 = vreg_block_range.find(vreg);
-      if (it2 != vreg_block_range.end() && it2->second.second.is_missing()) {
-        it2->second.second = LiveIntervalPoint::get(insn);
+      if (start_recorded.count(vreg)) {
+        vreg_block_range[vreg].second = insn;
+        start_recorded.erase(vreg);
       }
     }
   }
 
   return vreg_block_range;
-}
-
-VRegAliveRangeInBlock get_check_cast_throw_targets_live_range(
-    const LivenessFixpointIterator& fixpoint_iter,
-    cfg::Block* block,
-    const std::unordered_set<vreg_t>& vregs) {
-  VRegAliveRangeInBlock vreg_block_range;
-  LivenessDomain live_in = fixpoint_iter.get_live_in_vars_at(block);
-  auto elements = live_in.elements();
-  for (auto vreg : vregs) {
-    if (!elements.contains(vreg)) {
-      LiveIntervalPoint first = LiveIntervalPoint::get_block_begin(block);
-      auto range = std::make_pair(first, first);
-      bool emplaced = vreg_block_range.emplace(vreg, range).second;
-      always_assert(emplaced);
-    }
-  }
-  return vreg_block_range;
-}
-
-std::vector<cfg::Block*> get_ordered_blocks(
-    cfg::ControlFlowGraph& cfg,
-    const LivenessFixpointIterator& liveness_fixpoint_iter) {
-  // For each block, compute distance (in number of blocks) from exit-block.
-  std::unordered_map<cfg::Block*, size_t> block_depths;
-  std::queue<std::pair<cfg::Block*, size_t>> work_queue;
-  work_queue.emplace(cfg.exit_block(), 1);
-  while (!work_queue.empty()) {
-    auto [block, depth] = work_queue.front();
-    work_queue.pop();
-    if (!block_depths.emplace(block, depth).second) {
-      continue;
-    }
-    for (auto e : block->preds()) {
-      work_queue.emplace(e->src(), depth + 1);
-    }
-  }
-
-  // Compute (maximum) depth (in number of blocks, from exit-block) of each
-  // assigned register
-  std::unordered_map<vreg_t, size_t> vreg_defs_depths;
-  for (auto block : cfg.blocks()) {
-    for (auto& mie : InstructionIterable(block)) {
-      if (mie.insn->has_dest()) {
-        auto& depth = vreg_defs_depths[mie.insn->dest()];
-        depth = std::max(depth, block_depths.at(block));
-      }
-    }
-  }
-
-  // For each block, compute the maximum distance (in number of blocks, from
-  // exit-block) over all live-in registers
-  std::unordered_map<cfg::Block*, size_t> live_in_def_depths;
-  for (cfg::Block* block : cfg.blocks()) {
-    auto live_in = liveness_fixpoint_iter.get_live_in_vars_at(block);
-    size_t depth = 0;
-    for (auto vreg : live_in.elements()) {
-      auto vreg_defs_depth = vreg_defs_depths.at(vreg);
-      depth = std::max(depth, vreg_defs_depth);
-    }
-    live_in_def_depths.emplace(block, depth);
-  }
-
-  // Collect blocks by doing a post-order traversal, processing predecessors in
-  // their live-in-def-depths order, smallest depths goes last
-  std::unordered_set<cfg::Block*> visited;
-  std::vector<cfg::Block*> ordered_blocks;
-  std::function<void(cfg::Block*)> visit;
-  visit = [&](cfg::Block* block) {
-    if (!visited.insert(block).second) {
-      return;
-    }
-    std::vector<cfg::Block*> pred_blocks;
-    for (auto e : block->preds()) {
-      pred_blocks.push_back(e->src());
-    }
-    // We might have duplicates, but that's okay.
-    std::sort(pred_blocks.begin(),
-              pred_blocks.end(),
-              [&live_in_def_depths](cfg::Block* a, cfg::Block* b) {
-                auto a_depth = live_in_def_depths.at(a);
-                auto b_depth = live_in_def_depths.at(b);
-                if (a_depth != b_depth) {
-                  return a_depth > b_depth;
-                }
-                return a->id() < b->id();
-              });
-    for (auto pred_block : pred_blocks) {
-      visit(pred_block);
-    }
-    ordered_blocks.push_back(block);
-  };
-  visit(cfg.exit_block());
-  always_assert(ordered_blocks.size() == cfg.blocks().size());
-  return ordered_blocks;
 }
 
 } // namespace fastregalloc

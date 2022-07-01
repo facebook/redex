@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -67,6 +67,17 @@ public class AppModuleUsageClass {
     try {
       other_class.getClass().getDeclaredMethod("doSomethingToMe");
     } catch (NoSuchMethodException | SecurityException ignoreException) {
+      /* okay to ignore in test*/
+    }
+  }
+
+  @UsesAppModule({"AppModule"})
+  public void method10() {
+    try {
+      Field field = AppModuleUsageClass.class.getDeclaredField("other_class");
+      field.get(this);
+    } catch (IllegalAccessException | IllegalArgumentException |
+             NoSuchFieldException ignoreException) {
       /* okay to ignore in test*/
     }
   }

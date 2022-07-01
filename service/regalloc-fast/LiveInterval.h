@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include "ControlFlow.h"
 #include "IRInstruction.h"
 #include "LinearScan.h"
 #include "Liveness.h"
@@ -17,10 +16,9 @@
 
 namespace fastregalloc {
 
-using LiveIntervalPointIndices =
-    std::unordered_map<LiveIntervalPoint, uint32_t, LiveIntervalPoint::Hasher>;
+using InsnIdx = std::unordered_map<IRInstruction*, uint32_t>;
 
-using RangeInBlock = std::pair<LiveIntervalPoint, LiveIntervalPoint>;
+using RangeInBlock = std::pair<IRInstruction*, IRInstruction*>;
 using VRegAliveRangeInBlock = std::unordered_map<vreg_t, RangeInBlock>;
 using VRegAliveInsns = std::unordered_map<vreg_t, std::vector<RangeInBlock>>;
 
@@ -39,24 +37,7 @@ using VRegBlockRanges = std::vector<IntervalEndPoints>;
  * Use of this vreg within the basic block.
  */
 VRegAliveRangeInBlock get_live_range_in_block(
-    const LivenessFixpointIterator& fixpoint_iter,
-    cfg::Block* block,
-    std::unordered_map<cfg::Block*, std::unordered_set<vreg_t>>*
-        check_cast_throw_targets_vregs);
-
-/*
- * The move-result-pseudo-object associated with a check-cast must not have
- * the same dest register as the src(0) of the check cast, if that dest
- * register is live-in to any catch handler of the check-cast. This function
- * produces auxiliary live-ranges that make the check-casts
- * move-result-pseudo-object's dest register appear live-in to catch handler
- * target blocks (if it isn't already live). See Interference.cpp /
- * GraphBuilder::build for the long explanation.
- */
-VRegAliveRangeInBlock get_check_cast_throw_targets_live_range(
-    const LivenessFixpointIterator& fixpoint_iter,
-    cfg::Block* block,
-    const std::unordered_set<vreg_t>& vregs);
+    const LivenessFixpointIterator& fixpoint_iter, cfg::Block* block);
 
 /*
  * Order the instruction list. Then for each vreg, turn each instruction range
@@ -64,16 +45,11 @@ VRegAliveRangeInBlock get_check_cast_throw_targets_live_range(
  * ranges, which is the live interval of this vreg. Put live interval and vreg
  * info into the result vector and sort before return.
  */
-LiveIntervals init_live_intervals(
-    cfg::ControlFlowGraph& cfg,
-    std::vector<LiveIntervalPoint>* live_interval_points);
+LiveIntervals init_live_intervals(IRCode* code);
 
 IntervalEndPoints calculate_live_interval(
-    const std::vector<RangeInBlock>& ranges,
-    const LiveIntervalPointIndices& indices);
-
-std::vector<cfg::Block*> get_ordered_blocks(
-    cfg::ControlFlowGraph& cfg,
-    const LivenessFixpointIterator& liveness_fixpoint_iter);
+    std::vector<RangeInBlock>& insn_ranges,
+    const InsnIdx& insn_idx,
+    const uint32_t max_idx);
 
 } // namespace fastregalloc

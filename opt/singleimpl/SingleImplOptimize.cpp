@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -60,8 +60,9 @@ DexProto* get_or_make_proto(const DexType* intf,
   if (rtype == intf) rtype = impl;
   DexTypeList* new_args = nullptr;
   const auto args = proto->get_args();
-  DexTypeList::ContainerType new_arg_list;
-  for (const auto arg : *args) {
+  std::deque<DexType*> new_arg_list;
+  const auto& arg_list = args->get_type_list();
+  for (const auto arg : arg_list) {
     new_arg_list.push_back(arg == intf ? impl : arg);
   }
   new_args = DexTypeList::make_type_list(std::move(new_arg_list));
@@ -111,7 +112,8 @@ void remove_interface(const DexType* intf, const SingleImplData& data) {
   std::unordered_set<DexType*> new_intfs;
   auto collect_interfaces = [&](DexClass* impl) {
     auto intfs = impl->get_interfaces();
-    for (auto type : *intfs) {
+    auto intf_types = intfs->get_type_list();
+    for (auto type : intf_types) {
       if (intf != type) {
         // make interface public if it was not already. It may happen
         // the parent interface is package protected (a type cannot be
@@ -134,8 +136,9 @@ void remove_interface(const DexType* intf, const SingleImplData& data) {
   auto intf_cls = type_class(intf);
   collect_interfaces(intf_cls);
 
-  DexTypeList::ContainerType revisited_intfs{new_intfs.begin(),
-                                             new_intfs.end()};
+  std::deque<DexType*> revisited_intfs;
+  std::copy(new_intfs.begin(), new_intfs.end(),
+            std::back_inserter(revisited_intfs));
   std::sort(revisited_intfs.begin(), revisited_intfs.end(), compare_dextypes);
   cls->set_interfaces(DexTypeList::make_type_list(std::move(revisited_intfs)));
   cls->combine_annotations_with(intf_cls);
@@ -203,9 +206,7 @@ struct OptimizationImpl {
   void rename_possible_collisions(const DexType* intf,
                                   const SingleImplData& data);
 
-  check_casts::impl::Stats post_process(
-      const std::unordered_set<DexMethod*>& methods,
-      std::vector<IRInstruction*>* removed_instruction);
+  void post_process(const std::unordered_set<DexMethod*>& methods);
 
  private:
   std::unique_ptr<SingleImplAnalysis> single_impls;
@@ -237,10 +238,7 @@ void OptimizationImpl::set_field_defs(const DexType* intf,
     if (field_anno) {
       f->attach_annotation_set(std::move(field_anno));
     }
-    f->make_concrete(field->get_access(),
-                     field->get_static_value() == nullptr
-                         ? std::unique_ptr<DexEncodedValue>()
-                         : field->get_static_value()->clone());
+    f->make_concrete(field->get_access(), field->get_static_value());
     auto cls = type_class(field->get_class());
     cls->remove_field(field);
     cls->add_field(f);
@@ -387,9 +385,10 @@ CheckCastSet OptimizationImpl::fix_instructions(const DexType* intf,
             }
 
             // Parameters.
-            const auto* arg_list = mref->get_proto()->get_args();
+            const auto& arg_list =
+                mref->get_proto()->get_args()->get_type_list();
             size_t idx = insn->opcode() == OPCODE_INVOKE_STATIC ? 0 : 1;
-            for (const auto arg : *arg_list) {
+            for (const auto arg : arg_list) {
               if (arg != intf) {
                 idx++;
                 continue;
@@ -535,9 +534,9 @@ void OptimizationImpl::rewrite_annotations(Scope& scope,
       if (anno->type() != enclosingMethod) continue;
       const auto& elems = anno->anno_elems();
       for (auto& elem : elems) {
-        auto& value = elem.encoded_value;
+        auto value = elem.encoded_value;
         if (value->evtype() == DexEncodedValueTypes::DEVT_METHOD) {
-          auto method_value = static_cast<DexEncodedValueMethod*>(value.get());
+          auto method_value = static_cast<DexEncodedValueMethod*>(value);
           const auto& meth_it =
               m_intf_meth_to_impl_meth.find(method_value->method());
           if (meth_it == m_intf_meth_to_impl_meth.end()) {
@@ -627,7 +626,7 @@ void OptimizationImpl::drop_single_impl_collision(const DexType* intf,
   auto proto = method->get_proto();
   check_type(proto->get_rtype());
   auto args_list = proto->get_args();
-  for (auto arg : *args_list) {
+  for (auto arg : args_list->get_type_list()) {
     check_type(arg);
   }
 }
@@ -753,9 +752,7 @@ OptimizeStats OptimizationImpl::optimize(Scope& scope,
     rewrite_annotations(scope, config);
   }
 
-  std::vector<IRInstruction*> removed_instructions;
-  auto post_process_stats =
-      post_process(for_post_processing, &removed_instructions);
+  post_process(for_post_processing);
   std::atomic<size_t> retained{0};
   {
     for_all_methods(for_post_processing, [&](const DexMethod* m) {
@@ -770,45 +767,32 @@ OptimizeStats OptimizationImpl::optimize(Scope& scope,
     });
   }
 
-  for (auto* insn : removed_instructions) {
-    delete insn;
-  }
-
   OptimizeStats ret;
   ret.removed_interfaces = optimized.size();
   ret.inserted_check_casts = inserted_check_casts.size();
   ret.retained_check_casts = retained.load();
-  ret.post_process = post_process_stats;
-  ret.deleted_removed_instructions = removed_instructions.size();
   return ret;
 }
 
-check_casts::impl::Stats OptimizationImpl::post_process(
-    const std::unordered_set<DexMethod*>& methods,
-    std::vector<IRInstruction*>* removed_instructions) {
+void OptimizationImpl::post_process(
+    const std::unordered_set<DexMethod*>& methods) {
   // The analysis times the number of methods is easily expensive, run in
   // parallel.
-  check_casts::impl::Stats stats;
-  std::mutex mutex;
   for_all_methods(
       methods,
-      [&stats, &mutex, removed_instructions](const DexMethod* m_const) {
+      [](const DexMethod* m_const) {
         auto m = const_cast<DexMethod*>(m_const);
         auto code = m->get_code();
-        always_assert(!code->editable_cfg_built());
+        if (code->cfg_built()) {
+          code->clear_cfg();
+        }
         cfg::ScopedCFG cfg(code);
         check_casts::CheckCastConfig config;
         check_casts::impl::CheckCastAnalysis analysis(config, m);
         auto casts = analysis.collect_redundant_checks_replacement();
-        auto local_stats = check_casts::impl::apply(m, casts);
-        std::lock_guard<std::mutex> lock_guard(mutex);
-        stats += local_stats;
-        auto insns = cfg->release_removed_instructions();
-        removed_instructions->insert(removed_instructions->end(), insns.begin(),
-                                     insns.end());
+        check_casts::impl::apply(m, casts);
       },
       /*parallel=*/true);
-  return stats;
 }
 
 } // namespace

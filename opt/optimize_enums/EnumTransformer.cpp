@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -342,7 +342,6 @@ struct EnumUtil {
     cc.set_super(type::java_lang_Object());
     DexClass* cls = cc.create();
     cls->rstate.set_generated();
-    cls->rstate.set_clinit_has_no_side_effects();
 
     auto values_field = make_values_field(cls);
     auto clinit_method = make_clinit_method(cls, fields_count);
@@ -684,7 +683,7 @@ class CodeTransformer final {
       }
     } break;
     default: {
-      if (insn->has_type() && insn->opcode() != IOPCODE_INIT_CLASS) {
+      if (insn->has_type()) {
         auto type = insn->get_type();
         always_assert_log(try_convert_to_int_type(type) == nullptr,
                           "Unhandled type in %s method %s\n", SHOW(insn),
@@ -1175,7 +1174,7 @@ class EnumTransformer final {
             always_assert_log(field_ref->is_def(), "Invalid insn %s in %s\n",
                               SHOW(insn), SHOW(method));
           }
-        } else if (insn->has_type() && insn->opcode() != IOPCODE_INIT_CLASS) {
+        } else if (insn->has_type()) {
           auto type_ref = insn->get_type();
           always_assert_log(!try_convert_to_int_type(type_ref),
                             "Invalid insn %s in %s\n", SHOW(insn),

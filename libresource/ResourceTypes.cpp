@@ -417,6 +417,18 @@ Res_png_9patch* Res_png_9patch::deserialize(void* inData)
     return patch;
 }
 
+void rewriteSize(Vector<char>& cVec, size_t initSize)
+{
+    size_t finalSize = cVec.size();
+    size_t sizeIndex =
+      initSize // Header begins here
+      + 2 // Size of the chunk type identifier
+      + 2; // Size of the chunk header size field
+
+    uint32_t newSize = finalSize - initSize;
+    memcpy((char *)&(cVec[sizeIndex]), (char *)(&newSize), 4);
+}
+
 // --------------------------------------------------------------------
 // --------------------------------------------------------------------
 // --------------------------------------------------------------------
@@ -451,6 +463,89 @@ void ResStringPool::setToEmpty()
     mStyles = NULL;
     mStylePoolSize = 0;
     mHeader = (const ResStringPool_header*) header;
+    mAppendedStrings.clear();
+}
+void ResStringPool::appendString(String8 s) {
+  mAppendedStrings.push_back(s);
+}
+
+size_t ResStringPool::appendedStringCount() {
+  return mAppendedStrings.size();
+}
+
+void ResStringPool::serializeWithAdditionalStrings(Vector<char>& cVec) {
+  LOG_FATAL_IF(
+    mHeader->styleCount > 0,
+    "Appending to a StringPool with styles is not supported");
+  // Write string data into intermediate vector. Use this to calculate offsets,
+  // then copy to cVec.
+  Vector<uint32_t> string_idx;
+  Vector<char> serialized_strings;
+  auto num_strings = mHeader->stringCount;
+  auto utf8 = isUTF8();
+  for (size_t i = 0; i < num_strings; i++) {
+    string_idx.push_back(serialized_strings.size());
+    if (utf8) {
+      auto s = string8ObjectAt(i);
+      arsc::encode_string8(s, &serialized_strings);
+    } else {
+      size_t out_len;
+      auto s = stringAt(i, &out_len);
+      auto u16 = String16(s);
+      arsc::encode_string16(u16, &serialized_strings);
+    }
+  }
+  // Add any more Strings
+  auto more = mAppendedStrings.size();
+  for (size_t i = 0; i < more; i++) {
+    string_idx.push_back(serialized_strings.size());
+    auto s = mAppendedStrings[i];
+    if (utf8) {
+      arsc::encode_string8(s, &serialized_strings);
+    } else {
+      auto u16 = String16(s);
+      arsc::encode_string16(u16, &serialized_strings);
+    }
+  }
+  arsc::align_vec(4, &serialized_strings);
+  // ResChunk_header
+  auto header_size = dtohs(mHeader->header.headerSize);
+  arsc::push_short(RES_STRING_POOL_TYPE, &cVec);
+  arsc::push_short(header_size, &cVec);
+  // Sum of header size, plus the size of all the String/style data.
+  auto total_size = header_size + string_idx.size() * sizeof(uint32_t) +
+                    serialized_strings.size() * sizeof(char);
+  arsc::push_long(total_size, &cVec);
+  // ResStringPool_header
+  auto string_count = string_idx.size();
+  arsc::push_long(string_count, &cVec);
+  arsc::push_long(0, &cVec); // style count
+  // May have wrecked the sort order (not supporting resort right now), so clear
+  // the bit.
+  auto flags = dtohl(mHeader->flags) & ~ResStringPool_header::SORTED_FLAG;
+  arsc::push_long(flags, &cVec);
+  // strings start
+  arsc::push_long(header_size + sizeof(uint32_t) * string_count, &cVec);
+  // styles start
+  arsc::push_long(0, &cVec);
+  for (const uint32_t &i : string_idx) {
+    arsc::push_long(i, &cVec);
+  }
+  cVec.appendVector(serialized_strings);
+}
+
+void ResStringPool::serialize(Vector<char>& cVec)
+{
+  // Perform opaque serialization, unless new strings have been added.
+  // See method serializeWithAdditionalStrings for caveats on adding new strings
+  if (mAppendedStrings.size() == 0) {
+    size_t dataSize = mHeader->header.size;
+    for (size_t i = 0; i < dataSize; ++i) {
+        cVec.push_back(*((unsigned char*)(mHeader) + i));
+    }
+  } else {
+    serializeWithAdditionalStrings(cVec);
+  }
 }
 
 status_t ResStringPool::setTo(const void* data, size_t size, bool copyData)
@@ -1316,6 +1411,16 @@ ResXMLTree_attribute* ResXMLParser::getAttributePointer(size_t idx) const
     }
 
     return nullptr;
+}
+
+// Replaces an entire XML attribute (data and type).
+// This function assumes that the size of the attribute is not changing.
+void ResXMLParser::setAttribute(size_t idx, Res_value newAttribute)
+{
+    ResXMLTree_attribute* attr = getAttributePointer(idx);
+    if (attr != nullptr) {
+        attr->typedValue = newAttribute;
+    }
 }
 
 // Replaces the data of an XML attribute.
@@ -2988,6 +3093,163 @@ struct ResTable::Type
     const uint32_t*                 typeSpecFlags;
     IdmapEntries                    idmapEntries;
     Vector<const ResTable_type*>    configs;
+    SortedVector<int>               deletedEntries;
+
+    void serialize(Vector<char>& cVec)
+    {
+        size_t initSize = cVec.size();
+
+        // Serialize ResourceTableTypeSpec
+        // First, we perform opaque serialization of the header
+        uint32_t tHeaderSize = typeSpec->header.headerSize;
+        for (size_t i = 0; i < tHeaderSize; ++i) {
+            cVec.push_back(*((unsigned char*)(typeSpec) + i));
+        }
+
+        // Fixup count of rows in header
+        uint32_t newRowCount = entryCount - deletedEntries.size();
+        memcpy((char *)&(cVec[cVec.size() - 4]), (char *)(&newRowCount), 4);
+
+        size_t deletedSpecEntryIndex = 0;
+        unsigned char specFlagChars[4];
+        for (size_t i = 0; i < entryCount; ++i) {
+            while (deletedSpecEntryIndex < deletedEntries.size()
+                  && deletedEntries[deletedSpecEntryIndex] < i) {
+                ++deletedSpecEntryIndex;
+            }
+
+            if (deletedSpecEntryIndex < deletedEntries.size()
+                  && deletedEntries[deletedSpecEntryIndex] == i) {
+                continue;
+            }
+
+            uint32_t flags = dtohl(typeSpecFlags[i]);
+            memcpy(specFlagChars, &flags, 4);
+            for (int a = 0; a < 4; ++a) {
+                cVec.push_back(specFlagChars[a]);
+            }
+        }
+
+        rewriteSize(cVec, initSize);
+
+        // Serialize each ResourceTableType
+        for (size_t k = 0; k < configs.size(); k++) {
+            initSize = cVec.size();
+            const ResTable_type* type = configs[k];
+
+            // Opaque serialization of header
+            uint32_t headSize = type->header.headerSize;
+            for (size_t i = 0; i < headSize; ++i) {
+                cVec.push_back(*((unsigned char*)(type) + i));
+            }
+
+            // Fixup entry count and offset to start of entries
+            size_t skippedHeaderFields =
+              2 // type
+              + 2 // header size
+              + 4 // chunk size
+              + 1 // id
+              + 1 // unused field, always 0
+              + 2; // unused field, always 0
+
+            memcpy(
+                (char *)&(cVec[initSize + skippedHeaderFields]),
+                (char *)(&newRowCount),
+                4);
+            uint32_t newOffsetToEntries =
+                (4 * newRowCount)
+                + type->header.headerSize;
+            memcpy(
+                (char *)&(cVec[initSize + skippedHeaderFields + 4]),
+                (char *)(&newOffsetToEntries),
+                4);
+
+            Vector<char> entryData;
+
+            // Serialize offsets and collect entries
+            const uint32_t* const offsets = reinterpret_cast<const uint32_t*>(
+                    reinterpret_cast<const uint8_t*>(type) + headSize);
+
+            uint32_t lastRealOffset = ResTable_type::NO_ENTRY;
+
+            // Calculate (original) entry sizes
+            Vector<size_t> entrySizes;
+            for (size_t i = 0; i < entryCount; ++i) {
+                uint32_t offset = dtohl(offsets[i]);
+
+                if (offset != ResTable_type::NO_ENTRY) {
+                    if (lastRealOffset == ResTable_type::NO_ENTRY) {
+                        lastRealOffset = offset;
+                        continue;
+                    }
+
+                    size_t entrySize = offset - lastRealOffset;
+                    entrySizes.push_back(entrySize);
+                    lastRealOffset = offset;
+                }
+            }
+
+            if (lastRealOffset != ResTable_type::NO_ENTRY) {
+                size_t entrySize = type->header.size - type->entriesStart - lastRealOffset;
+                entrySizes.push_back(entrySize);
+            }
+
+            unsigned char offsetChars[4];
+            size_t sumOfDeletedSizes = 0;
+            size_t deletedEntryIndex = 0;
+            size_t sizeIndex = 0;
+            for (size_t i = 0; i < entryCount; ++i) {
+                uint32_t offset = dtohl(offsets[i]);
+                while (deletedEntryIndex < deletedEntries.size()
+                      && deletedEntries[deletedEntryIndex] < i) {
+                    ++deletedEntryIndex;
+                }
+
+                bool wasDeleted = deletedEntryIndex < deletedEntries.size()
+                      && deletedEntries[deletedEntryIndex] == i;
+
+                if (offset != ResTable_type::NO_ENTRY) {
+                    size_t entrySize = entrySizes[sizeIndex++];
+                    if (wasDeleted) {
+                        sumOfDeletedSizes += entrySize;
+                    } else {
+                        const ResTable_entry* const entry = reinterpret_cast<const ResTable_entry*>(
+                                reinterpret_cast<const uint8_t*>(type) + offset + type->entriesStart);
+
+                        // Opaque serialization of entry
+                        for (size_t j = 0; j < entrySize; ++j) {
+                            entryData.push_back(*((unsigned char*)(entry) + j));
+                        }
+
+                        // Fix offset for serialization
+                        offset -= sumOfDeletedSizes;
+                    }
+                }
+
+                if (!wasDeleted) {
+                    // Serialize offset
+                    memcpy(offsetChars, &offset, 4);
+                    for (int a = 0; a < 4; ++a) {
+                        cVec.push_back(offsetChars[a]);
+                    }
+                }
+            }
+
+            // Copy serialized data for the entries we kept
+            for (size_t i = 0; i < entryData.size(); ++i) {
+                cVec.push_back(entryData[i]);
+            }
+
+            if (entryData.size() == 0) {
+              // We wrote an entirely dead column- let's erase it.
+              for (size_t d = cVec.size() - 1; d >= initSize; --d) {
+                  cVec.removeAt(d);
+              }
+            } else {
+                rewriteSize(cVec, initSize);
+            }
+        }
+    }
 };
 
 struct ResTable::Package
@@ -2999,6 +3261,38 @@ struct ResTable::Package
             // This means it contains the typeIdOffset field.
             typeIdOffset = package->typeIdOffset;
         }
+    }
+
+    void serialize(Vector<char>& cVec)
+    {
+        // Write strings into intermediate vec, to calculate sizes.
+        Vector<char> serialized_strings;
+        typeStrings.serialize(serialized_strings);
+        auto typestr_size = serialized_strings.size();
+        keyStrings.serialize(serialized_strings);
+
+        auto header_size = sizeof(ResTable_package); // should be 288
+        auto total_size = header_size + serialized_strings.size();
+        arsc::push_short(RES_TABLE_PACKAGE_TYPE, &cVec);
+        arsc::push_short(header_size, &cVec);
+        arsc::push_long(total_size, &cVec);
+        arsc::push_long(dtohl(package->id), &cVec);
+        auto num_elements = sizeof(package->name) / sizeof(package->name[0]);
+        for (size_t i = 0; i < num_elements; i++) {
+          arsc::push_short(dtohs(package->name[i]), &cVec);
+        }
+        arsc::push_long(header_size, &cVec); // type strings start (skip over header)
+        auto last_public_type = dtohl(package->lastPublicType);
+        // If 0 types are marked as public, keep the count at 0 regardless of
+        // any appended types.
+        if (last_public_type > 0) {
+          last_public_type += typeStrings.appendedStringCount();
+        }
+        arsc::push_long(last_public_type, &cVec);
+        arsc::push_long(header_size + typestr_size, &cVec); // key strings start
+        arsc::push_long(dtohl(package->lastPublicKey), &cVec);
+        arsc::push_long(dtohl(package->typeIdOffset), &cVec);
+        cVec.appendVector(serialized_strings);
     }
 
     const ResTable* const           owner;
@@ -3045,6 +3339,28 @@ struct ResTable::PackageGroup
                 delete pkg;
             }
         }
+    }
+
+    void serialize(Vector<char>& cVec)
+    {
+        size_t initSize = cVec.size();
+        const size_t n = packages.size();
+        for (size_t i = 0; i < n; i++) {
+            Package* pkg = packages[i];
+            pkg->serialize(cVec);
+        }
+
+        const size_t numTypes = types.size();
+        for (size_t i = 0; i < numTypes; i++) {
+            const TypeList& typeList = types[i];
+            const size_t numInnerTypes = typeList.size();
+            for (size_t j = 0; j < numInnerTypes; j++) {
+                typeList[j]->serialize(cVec);
+            }
+        }
+
+        // Rewrite size of 'root' package
+        rewriteSize(cVec, initSize);
     }
 
     void clearBagCache() {
@@ -3677,6 +3993,39 @@ status_t ResTable::addInternal(const void* data, size_t dataSize, const void* id
 status_t ResTable::getError() const
 {
     return mError;
+}
+
+status_t ResTable::serialize(Vector<char>& cVec, size_t resTableIndex)
+{
+    if (mError != NO_ERROR) {
+        return mError;
+    }
+
+    Header* header = mHeaders[resTableIndex];
+    size_t dataSize = header->size;
+    const ResTable_header* tableHeader = header->header;
+    cVec.reserve(dataSize);
+
+    size_t initSize = cVec.size();
+
+    // 1. Write header
+    for (size_t i = 0; i < tableHeader->header.headerSize; ++i) {
+        cVec.push_back(*((unsigned char*)(tableHeader) + i));
+    }
+
+    // 2. Write global strings (ResStringPool)
+    header->values.serialize(cVec);
+
+    // 3. Serialize package groups
+    size_t n = mPackageGroups.size();
+    for (size_t i = 0; i < n; i++) {
+        PackageGroup* g = mPackageGroups[i];
+        g->serialize(cVec);
+    }
+
+    rewriteSize(cVec, initSize);
+
+    return NO_ERROR;
 }
 
 void ResTable::uninit()
@@ -6683,6 +7032,26 @@ void ResTable::getResourceIds(SortedVector<uint32_t>* sVec) const
     }
 }
 
+// Marks the entries (across each config) for the given resource ID as deleted.
+// Only takes effect during serialization (any deleted rows will be skipped).
+void ResTable::deleteResource(uint32_t resID)
+{
+    const ssize_t pgIndex = getResourcePackageIndex(resID);
+    const int typeIndex = Res_GETTYPE(resID);
+    const int entryIndex = Res_GETENTRY(resID);
+
+    const PackageGroup* pg = mPackageGroups[pgIndex];
+
+    const TypeList& typeList = pg->types[typeIndex];
+    if (typeList.isEmpty()) {
+        return;
+    }
+
+    const Type* typeConfigs = typeList[0];
+    auto deleted = const_cast <SortedVector<int>*> (&(typeConfigs->deletedEntries));
+    addIfUnique(deleted, entryIndex);
+}
+
 static uint32_t getRemappedEntry(
     uint32_t reference,
     SortedVector<uint32_t> originalIds,
@@ -6694,6 +7063,93 @@ static uint32_t getRemappedEntry(
     }
 
     return newIds[index];
+}
+
+// For the given resource ID, looks across all configurations and remaps all
+// reference and attribute Res_value entries based on the given
+// originalIds -> newIds mapping. The entries in the inputs are expected to
+// align based on index.
+void ResTable::remapReferenceValuesForResource(
+    uint32_t resID,
+    SortedVector<uint32_t> originalIds,
+    Vector<uint32_t> newIds)
+{
+    resource_name resName;
+    if (!this->getResourceName(resID, /* allowUtf8 */ true, &resName)) {
+        return;
+    }
+
+    const ssize_t pgIndex = getResourcePackageIndex(resID);
+    const int typeIndex = Res_GETTYPE(resID);
+    const int entryIndex = Res_GETENTRY(resID);
+    const PackageGroup* pg = mPackageGroups[pgIndex];
+    const TypeList& typeList = pg->types[typeIndex];
+    if (typeList.isEmpty()) {
+        return;
+    }
+    const Type* typeConfigs = typeList[0];
+    const size_t NTC = typeConfigs->configs.size();
+    for (size_t configIndex = 0; configIndex < NTC; configIndex++) {
+        const ResTable_type* type = typeConfigs->configs[configIndex];
+        const ResTable_entry* ent;
+        if (!tryGetConfigEntry(entryIndex, type, &ent)) {
+            continue;
+        }
+
+        uintptr_t esize = dtohs(ent->size);
+        uint32_t typeSize = dtohl(type->header.size);
+
+        Res_value* valuePtr = nullptr;
+        ResTable_map_entry* bagPtr = nullptr;
+        if ((dtohs(ent->flags) & ResTable_entry::FLAG_COMPLEX) != 0) {
+            bagPtr = (ResTable_map_entry*)ent;
+        } else {
+            valuePtr = (Res_value*)
+                (((const uint8_t*)ent) + esize);
+        }
+
+        if (valuePtr != nullptr &&
+               (valuePtr->dataType == Res_value::TYPE_REFERENCE ||
+                valuePtr->dataType == Res_value::TYPE_ATTRIBUTE)) {
+            uint32_t valueData = valuePtr->data;
+            uint32_t remapped = getRemappedEntry(valueData, originalIds, newIds);
+            if (valueData != remapped) {
+                valuePtr->data = remapped;
+            }
+        } else if (bagPtr != nullptr) {
+            const int N = dtohl(bagPtr->count);
+            const uint8_t* baseMapPtr = (const uint8_t*)ent;
+            size_t mapOffset = esize;
+            ResTable_map* mapPtr = (ResTable_map*)(baseMapPtr + mapOffset);
+            const uint32_t parent = dtohl(bagPtr->parent.ident);
+            uint32_t remapped = getRemappedEntry(parent, originalIds, newIds);
+            if (parent != remapped) {
+                bagPtr->parent.ident = remapped;
+            }
+
+            for (int i = 0; i < N && mapOffset < (typeSize - sizeof(ResTable_map)); i++) {
+                Res_value& mapValue = mapPtr->value;
+                if (mapValue.dataType == Res_value::TYPE_REFERENCE ||
+                    mapValue.dataType == Res_value::TYPE_ATTRIBUTE) {
+                    uint32_t valueData = mapValue.data;
+                    remapped = getRemappedEntry(valueData, originalIds, newIds);
+                    if (valueData != remapped) {
+                        mapValue.data = remapped;
+                    }
+                }
+
+                uint32_t key = mapPtr->name.ident;
+                remapped = getRemappedEntry(key, originalIds, newIds);
+                if (key != remapped) {
+                    mapPtr->name.ident = remapped;
+                }
+
+                const size_t size = dtohs(mapValue.size);
+                mapOffset += size + sizeof(*mapPtr)-sizeof(mapValue);
+                mapPtr = (ResTable_map*)(baseMapPtr + mapOffset);
+            }
+        }
+    }
 }
 
 bool ResTable::tryGetConfigEntry(
@@ -6744,6 +7200,267 @@ bool ResTable::tryGetConfigEntry(
     *entPtr = ent;
 
     return true;
+}
+
+// Helper method for defineNewType. This copies data from source entries into
+// the serialized format for a ResTable_type.
+void ResTable::serializeSingleResType(
+  Vector<char>& output,
+  const uint8_t type_id,
+  const PackageGroup* pg,
+  const ResTable_config& config,
+  const Vector<uint32_t>& source_ids) {
+  auto num_ids = source_ids.size();
+  // Push serialized value data into intermediate vec. This will make
+  // calculating offsets convenient. Note that not all given ids will have a
+  // value in the given config.
+  Vector<uint32_t> offsets;
+  Vector<char> serialized_entries;
+  for (size_t i = 0; i < num_ids; i++) {
+    auto id = source_ids[i];
+
+    Entry out_entry;
+    status_t err =
+      getEntry(pg, Res_GETTYPE(id), Res_GETENTRY(id), &config, &out_entry);
+    // getEntry lookup will find a "best match" instead of an entry in exactly
+    // the config we specified. Here we want to know if a value literally exists
+    // in the given config, so as a proxy just check if it came back with a
+    // non-equal config.
+    // Similarly, asking for a value for default config which only has a higher
+    // API variant for example will return an error status. Check both.
+    if (err != NO_ERROR || config.compare(out_entry.config) != 0) {
+      offsets.push(ResTable_type::NO_ENTRY);
+      continue;
+    }
+
+    offsets.push(serialized_entries.size());
+    auto ep = out_entry.entry;
+    bool entry_is_complex =
+      (dtohs(ep->flags) & ResTable_entry::FLAG_COMPLEX) != 0;
+
+    if (entry_is_complex) {
+      auto map_entry_ptr = (ResTable_map_entry*) ep;
+      auto total_size =
+        dtohs(map_entry_ptr->size) +
+        dtohl(map_entry_ptr->count) * sizeof(ResTable_map);
+      // Slurp all the bytes up, all the values should be aligned contiguously.
+      for (size_t j = 0; j < total_size; j++) {
+        serialized_entries.push_back(*((unsigned char*)(map_entry_ptr) + j));
+      }
+    } else {
+      Vector<Res_value> lookup;
+      getAllValuesForResource(id, lookup, &config);
+      LOG_FATAL_IF(
+        lookup.size() != 1,
+        "Non-complex entry 0x%x should only have 1 value. Got: %zu",
+        id,
+        lookup.size());
+      auto vp = &lookup[0];
+      for (size_t j = 0; j < ep->size; j++) {
+        serialized_entries.push_back(*((unsigned char*)(ep) + j));
+      }
+      for (size_t j = 0; j < vp->size; j++) {
+        serialized_entries.push_back(*((unsigned char*)(vp) + j));
+      }
+    }
+  }
+  // Write out the header struct, followed by each offset uint32_t, followed by
+  // all the entry bytes we already serialized.
+  arsc::push_short(RES_TABLE_TYPE_TYPE, &output);
+  auto type_header_size = sizeof(ResTable_type);
+  arsc::push_short(type_header_size, &output);
+  auto entries_start = type_header_size + offsets.size() * sizeof(uint32_t);
+  auto total_size = entries_start + serialized_entries.size();
+  arsc::push_long(total_size, &output);
+  output.push_back(type_id);
+  output.push_back(0); // pad to 4 bytes
+  output.push_back(0);
+  output.push_back(0);
+  arsc::push_long(num_ids, &output);
+  arsc::push_long(entries_start, &output);
+  auto cp = &config;
+  for (size_t i = 0; i < cp->size; i++) {
+    output.push_back(*((unsigned char*)(cp) + i));
+  }
+  for (size_t i = 0; i < num_ids; i++) {
+    arsc::push_long(offsets[i], &output);
+  }
+  output.appendVector(serialized_entries);
+}
+
+void ResTable::defineNewType(
+  String8 type_name,
+  uint8_t type_id,
+  const Vector<ResTable_config>& configs,
+  const Vector<uint32_t>& source_ids) {
+  auto num_ids = source_ids.size();
+  auto num_configs = configs.size();
+  LOG_FATAL_IF(num_ids == 0, "Must provide ids to relocate");
+  LOG_FATAL_IF(num_configs == 0, "Must provide one or more configs");
+  Vector<char> output;
+  const ssize_t pkg_index = getResourcePackageIndex(source_ids[0]);
+  const auto old_type_id = Res_GETTYPE(source_ids[0]);
+  PackageGroup* pg = mPackageGroups[pkg_index];
+
+  // For each res id, we need to lookup the spec flags. This spells out which
+  // configs the id has values in.
+  Vector<uint32_t> spec_flags;
+  for (size_t i = 0; i < num_ids; i++) {
+    auto id = source_ids[i];
+    // For simplicity, assert that all ids are from the same package/type.
+    LOG_FATAL_IF(
+      Res_GETTYPE(id) != old_type_id,
+      "Given ids must be in the same type");
+    LOG_FATAL_IF(
+      getResourcePackageIndex(id) != pkg_index,
+      "Given ids must be in the same package");
+
+    Entry entry;
+    status_t err = getEntry(pg, old_type_id, Res_GETENTRY(id), nullptr, &entry);
+    LOG_FATAL_IF(
+      err != NO_ERROR,
+      "Entry 0x%x not found [err %d]",
+      id,
+      err);
+    spec_flags.push(entry.specFlags);
+  }
+
+  // Write out the serialized form of a ResTable::Table.
+  // This is a ResTable_typeSpec followed by a ResTable_type.
+  const auto typespec_header_size = sizeof(ResTable_typeSpec);
+  const auto typespec_total_size =
+      typespec_header_size + sizeof(uint32_t) * num_ids;
+  arsc::push_short(RES_TABLE_TYPE_SPEC_TYPE, &output);
+  arsc::push_short(typespec_header_size, &output); // header size
+  arsc::push_long(typespec_total_size, &output);
+  output.push_back(type_id);
+  output.push_back(0); // pad to 4 bytes
+  output.push_back(0);
+  output.push_back(0);
+  arsc::push_long(num_ids, &output);
+  for (size_t i = 0; i < num_ids; i++) {
+    arsc::push_long(spec_flags[i], &output);
+  }
+  // Basic sanity check :)
+  LOG_FATAL_IF(
+    typespec_total_size != output.size(),
+    "Bad serialized size for ResTable_typeSpec. Expected: %zu, actual: %zu",
+    typespec_total_size,
+    output.size());
+
+  // For each ResTable_config, write the bytes for a ResTable_type. Keep track
+  // of the offsets to each of these ResTable_types.
+  Vector<size_t> res_type_offsets;
+  for (size_t i = 0; i < num_configs; i++) {
+    res_type_offsets.push(output.size());
+    serializeSingleResType(output, type_id, pg, configs[i], source_ids);
+  }
+
+  // Append the name of this split type to the typeString pool.
+  auto package = pg->packages[0];
+  package->typeStrings.appendString(type_name);
+
+  // Jam in a new ResTable::Type into the PackageGroup. Note that by setting the
+  // second arg (owner), this should get properly destroyed when the
+  // PackageGroup is deleted.
+  // Note that a single ResTable::Type encapsulates multiple ResTable_type
+  // structs, confusingly in a list called "configs".
+  ResTable::Type* type = new ResTable::Type(nullptr, package, num_ids);
+  auto final_size = output.size();
+  char* serialized_chars = (char*) malloc(final_size);
+  LOG_FATAL_IF(
+    serialized_chars == nullptr,
+    "Could not allocate %zu bytes for ResTable_typeSpec",
+    final_size);
+  memcpy(serialized_chars, output.array(), final_size);
+
+  auto flag_ptr = (uint32_t*) (serialized_chars + typespec_header_size);
+  type->typeSpecFlags = flag_ptr;
+  type->typeSpec = (ResTable_typeSpec*) serialized_chars;
+
+  // Point to each ResTable_type from the Type
+  for (size_t i = 0; i < num_configs; i++) {
+    auto tp = (ResTable_type*) (serialized_chars + res_type_offsets[i]);
+    type->configs.push_back(tp);
+  }
+
+  TypeList type_list;
+  type_list.push_back(type);
+  const TypeList x = type_list;
+  pg->types.set(type_id - 1, x);
+}
+
+void ResTable::inlineReferenceValuesForResource(
+    uint32_t resID,
+    SortedVector<uint32_t> inlineable_ids,
+    Vector<Res_value> inline_values)
+{
+    resource_name resName;
+    if (!this->getResourceName(resID, true, &resName)) {
+        return;
+    }
+
+    const ssize_t pgIndex = getResourcePackageIndex(resID);
+    const int typeIndex = Res_GETTYPE(resID);
+    const int entryIndex = Res_GETENTRY(resID);
+    const PackageGroup* pg = mPackageGroups[pgIndex];
+    const TypeList& typeList = pg->types[typeIndex];
+    if (typeList.isEmpty()) {
+        return;
+    }
+    const Type* typeConfigs = typeList[0];
+    const size_t NTC = typeConfigs->configs.size();
+    for (size_t configIndex = 0; configIndex < NTC; configIndex++) {
+        const ResTable_type* type = typeConfigs->configs[configIndex];
+        const ResTable_entry* ent;
+        if (!tryGetConfigEntry(entryIndex, type, &ent)) {
+            continue;
+        }
+
+        uintptr_t esize = dtohs(ent->size);
+        uint32_t typeSize = dtohl(type->header.size);
+
+        Res_value* valuePtr = nullptr;
+        ResTable_map_entry* bagPtr = nullptr;
+        if ((dtohs(ent->flags) & ResTable_entry::FLAG_COMPLEX) != 0) {
+            bagPtr = (ResTable_map_entry*)ent;
+        } else {
+            valuePtr = (Res_value*)
+                (((const uint8_t*)ent) + esize);
+        }
+
+        if (valuePtr != nullptr &&
+               (valuePtr->dataType == Res_value::TYPE_REFERENCE)) {
+            uint32_t valueData = valuePtr->data;
+            ssize_t idx = inlineable_ids.indexOf(valueData);
+            if (idx >= 0) {
+                Res_value inline_value = inline_values[idx];
+                valuePtr->data = inline_value.data;
+                valuePtr->dataType = inline_value.dataType;
+            }
+        } else if (bagPtr != nullptr) {
+            const int N = dtohl(bagPtr->count);
+            const uint8_t* baseMapPtr = (const uint8_t*)ent;
+            size_t mapOffset = esize;
+            ResTable_map* mapPtr = (ResTable_map*)(baseMapPtr + mapOffset);
+
+            for (int i = 0; i < N && mapOffset < (typeSize - sizeof(ResTable_map)); i++) {
+                Res_value mapValue = mapPtr->value;
+                if (mapValue.dataType == Res_value::TYPE_REFERENCE) {
+                    uint32_t valueData = mapValue.data;
+                    ssize_t idx = inlineable_ids.indexOf(valueData);
+                    if (idx >= 0) {
+                        Res_value inline_value = inline_values[idx];
+                        mapPtr->value = inline_value;
+                    }
+                }
+
+                const size_t size = dtohs(mapValue.size);
+                mapOffset += size + sizeof(*mapPtr)-sizeof(mapValue);
+                mapPtr = (ResTable_map*)(baseMapPtr + mapOffset);
+            }
+        }
+    }
 }
 
 // For the given resource ID, looks across all configurations and returns all

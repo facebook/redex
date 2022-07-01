@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -14,7 +14,7 @@ bool is_assignable_to_interface(const DexType* type, const DexType* iface) {
   if (type == iface) return true;
   auto cls = type_class(type);
   if (cls) {
-    for (auto extends : *cls->get_interfaces()) {
+    for (auto extends : cls->get_interfaces()->get_type_list()) {
       if (is_assignable_to_interface(extends, iface)) {
         return true;
       }

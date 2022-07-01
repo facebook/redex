@@ -180,6 +180,7 @@ app_module_usage_test_other-class.jar: AppModuleUsageOtherClass.java
 app_module_usage_test_third-class.jar: AppModuleUsageThirdClass.java
 	$(create_jar)
 
+
 call_graph_test-class.jar: CallGraphTest.java
 	$(create_jar)
 
@@ -270,7 +271,7 @@ type_analysis_transform_test-class.jar: TypeAnalysisTransformTest.java
 type_inference_test-class.jar: TypeInferenceTest.java
 	$(create_jar)
 
-uses_app_module_annotation-class.jar: UsesAppModule.java
+uses_app_module_annotation-class.dex: UsesAppModule.java
 	$(create_jar)
 
 uses_app_module_annotation_test-class.jar: UsesAppModuleAnnotated.java

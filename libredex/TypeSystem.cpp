@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -8,7 +8,6 @@
 #include "TypeSystem.h"
 
 #include "DexUtil.h"
-#include "RedexContext.h"
 #include "Resolver.h"
 #include "Show.h"
 #include "Timer.h"
@@ -43,7 +42,7 @@ void make_instanceof_table(InstanceOfTable& instance_of_table,
 }
 
 void load_interface_children(ClassHierarchy& children, const DexClass* intf) {
-  for (const auto& super_intf : *intf->get_interfaces()) {
+  for (const auto& super_intf : intf->get_interfaces()->get_type_list()) {
     children[super_intf].insert(intf->get_type());
     const auto super_intf_cls = type_class(super_intf);
     if (super_intf_cls != nullptr) {
@@ -81,7 +80,7 @@ void TypeSystem::get_all_super_interfaces(const DexType* intf,
                                           TypeSet& supers) const {
   const auto cls = type_class(intf);
   if (cls == nullptr) return;
-  for (const auto& super : *cls->get_interfaces()) {
+  for (const auto& super : cls->get_interfaces()->get_type_list()) {
     supers.insert(super);
     get_all_super_interfaces(super, supers);
   }
@@ -200,7 +199,7 @@ void TypeSystem::make_interfaces_table(const DexType* type) {
                                   parent_intfs->second.end());
       }
     }
-    for (const auto& intf : *cls->get_interfaces()) {
+    for (const auto& intf : cls->get_interfaces()->get_type_list()) {
       m_interfaces[type].insert(intf);
       get_all_super_interfaces(intf, m_interfaces[type]);
     }

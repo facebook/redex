@@ -1,13 +1,12 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
 
 #include <fstream>
-#include <sstream>
-
+#include <iostream>
 #include <json/json.h>
 
 #include "CppUtil.h"
@@ -123,12 +122,9 @@ DexStoresDependencies build_reverse_dependencies(
 
 } // namespace
 
-DexStore::DexStore(std::string name, std::vector<std::string> deps) {
-  m_metadata.set_id(std::move(name));
-  m_metadata.set_dependencies(std::move(deps));
-}
+DexStore::DexStore(const std::string& name) { m_metadata.set_id(name); }
 
-const std::string& DexStore::get_name() const { return m_metadata.get_id(); }
+std::string DexStore::get_name() const { return m_metadata.get_id(); }
 
 bool DexStore::is_root_store() const {
   return m_metadata.get_id() == ROOT_STORE_NAME;
@@ -208,6 +204,8 @@ std::unordered_set<const DexType*> get_root_store_types(
   return types;
 }
 
+
+
 XStoreRefs::XStoreRefs(const DexStoresVector& stores)
     : XStoreRefs(stores, "") {}
 
@@ -217,7 +215,6 @@ XStoreRefs::XStoreRefs(const DexStoresVector& stores,
           build_transitive_resolved_dependencies(stores)),
       m_reverse_dependencies(build_reverse_dependencies(stores)),
       m_shared_module_prefix(shared_module_prefix) {
-
   m_xstores.push_back(std::unordered_set<const DexType*>());
   m_stores.push_back(&stores[0]);
   for (const auto& cls : stores[0].get_dexen()[0]) {
@@ -274,8 +271,8 @@ XDexRefs::XDexRefs(const DexStoresVector& stores) {
 
 size_t XDexRefs::get_dex_idx(const DexType* type) const {
   auto it = m_dexes.find(type);
-  always_assert_log(it != m_dexes.end(), "type %s not in the current APK",
-                    SHOW(type));
+  always_assert_log(
+      it != m_dexes.end(), "type %s not in the current APK", SHOW(type));
   return it->second;
 }
 

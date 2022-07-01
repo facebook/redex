@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -19,11 +19,12 @@
 
 #include "Debug.h"
 #include "DexAccess.h"
+#include "DexAnnotation.h"
 #include "DexDefs.h"
 #include "DexEncoding.h"
-#include "DexMemberRefs.h"
-#include "NoDefaultComparator.h"
+#include "RedexContext.h"
 #include "ReferencedState.h"
+#include "Util.h"
 
 /*
  * The structures defined here are literal representations
@@ -53,26 +54,16 @@
  * imports.
  */
 
-class DexAnnotationDirectory;
-class DexAnnotationSet;
-class DexCallSite;
 class DexClass;
 class DexDebugInstruction;
-class DexEncodedValue;
-class DexEncodedValueArray;
 class DexField;
 class DexIdx;
 class DexInstruction;
-class DexMethodHandle;
 class DexOutputIdx;
 struct DexPosition;
-class DexProto;
 class DexString;
 class DexType;
 class PositionMapper;
-
-// Must be same as in DexAnnotations.h!
-using ParamAnnotations = std::map<int, std::unique_ptr<DexAnnotationSet>>;
 
 constexpr bool kInsertDeobfuscatedNameLinks = false;
 
@@ -89,9 +80,8 @@ class DexString {
   uint32_t m_utfsize;
 
   // See UNIQUENESS above for the rationale for the private constructor pattern.
-  explicit DexString(std::string nstr)
-      : m_storage(std::move(nstr)),
-        m_utfsize(length_of_utf8_string(m_storage.c_str())) {}
+  DexString(std::string nstr, uint32_t utfsize)
+      : m_storage(std::move(nstr)), m_utfsize(utfsize) {}
 
  public:
   uint32_t size() const { return static_cast<uint32_t>(m_storage.size()); }
@@ -105,10 +95,30 @@ class DexString {
 
   // If the DexString exists, return it, otherwise create it and return it.
   // See also get_string()
-  static const DexString* make_string(std::string_view nstr);
+  static const DexString* make_string(const char* nstr, uint32_t utfsize) {
+    return g_redex->make_string(nstr, utfsize);
+  }
+
+  static const DexString* make_string(const char* nstr) {
+    return make_string(nstr, length_of_utf8_string(nstr));
+  }
+
+  static const DexString* make_string(const std::string& nstr) {
+    return make_string(nstr.c_str());
+  }
 
   // Return an existing DexString or nullptr if one does not exist.
-  static const DexString* get_string(std::string_view s);
+  static const DexString* get_string(const char* nstr, uint32_t utfsize) {
+    return g_redex->get_string(nstr, utfsize);
+  }
+
+  static const DexString* get_string(const char* nstr) {
+    return get_string(nstr, (uint32_t)strlen(nstr));
+  }
+
+  static const DexString* get_string(const std::string& str) {
+    return get_string(str.c_str(), (uint32_t)strlen(str.c_str()));
+  }
 
   static const std::string EMPTY;
 
@@ -191,10 +201,16 @@ class DexType {
 
   // If the DexType exists, return it, otherwise create it and return it.
   // See also get_type()
-  static DexType* make_type(const DexString* dstring);
+  static DexType* make_type(const DexString* dstring) {
+    return g_redex->make_type(dstring);
+  }
 
-  static DexType* make_type(std::string_view str) {
-    return make_type(DexString::make_string(str));
+  static DexType* make_type(const char* type_string) {
+    return make_type(DexString::make_string(type_string));
+  }
+
+  static DexType* make_type(const char* type_string, int utfsize) {
+    return make_type(DexString::make_string(type_string, utfsize));
   }
 
   // Always makes a new type that is unique.
@@ -208,14 +224,26 @@ class DexType {
   }
 
   // Return an existing DexType or nullptr if one does not exist.
-  static DexType* get_type(const DexString* dstring);
+  static DexType* get_type(const DexString* dstring) {
+    return g_redex->get_type(dstring);
+  }
 
-  static DexType* get_type(std::string_view str) {
+  static DexType* get_type(const char* type_string) {
+    return get_type(DexString::get_string(type_string));
+  }
+
+  static DexType* get_type(const std::string& str) {
     return get_type(DexString::get_string(str));
   }
 
+  static DexType* get_type(const char* type_string, int utfsize) {
+    return get_type(DexString::get_string(type_string, utfsize));
+  }
+
  public:
-  void set_name(const DexString* new_name);
+  void set_name(const DexString* new_name) {
+    g_redex->set_type_name(this, new_name);
+  }
 
   const DexString* get_name() const { return m_name; }
   const char* c_str() const { return get_name()->c_str(); }
@@ -259,7 +287,7 @@ class DexFieldRef {
   bool m_concrete;
   bool m_external;
 
-  virtual ~DexFieldRef() {}
+  ~DexFieldRef() {}
   DexFieldRef(DexType* container, const DexString* name, DexType* type) {
     m_spec.cls = container;
     m_spec.name = name;
@@ -287,23 +315,14 @@ class DexFieldRef {
   void gather_strings_shallow(
       std::unordered_set<const DexString*>& lstring) const;
 
-  void change(const DexFieldSpec& ref, bool rename_on_collision = false);
-
-  DexField* make_concrete(DexAccessFlags access_flags);
-  DexField* make_concrete(DexAccessFlags access_flags,
-                          std::unique_ptr<DexEncodedValue> v);
-
-  static void erase_field(DexFieldRef* f);
-
-  // This method frees the given `DexFieldRed` - different from `erase_field`,
-  // which removes the field from the `RedexContext`.
-  //
-  // BE SURE YOU REALLY WANT TO DO THIS! Many Redex passes and structures
-  // currently cache references and do not clean up, including global ones.
-  static void delete_field_DO_NOT_USE(DexFieldRef* f) {
-    erase_field(f);
-    delete f;
+  void change(const DexFieldSpec& ref, bool rename_on_collision = false) {
+    g_redex->mutate_field(this, ref, rename_on_collision);
   }
+
+  DexField* make_concrete(DexAccessFlags access_flags,
+                          DexEncodedValue* v = nullptr);
+
+  static void erase_field(DexFieldRef* f) { return g_redex->erase_field(f); }
 };
 
 class DexField : public DexFieldRef {
@@ -313,17 +332,20 @@ class DexField : public DexFieldRef {
   /* Concrete method members */
   DexAccessFlags m_access;
   std::unique_ptr<DexAnnotationSet> m_anno;
-  std::unique_ptr<DexEncodedValue> m_value; /* Static Only */
+  DexEncodedValue* m_value; /* Static Only */
   std::string m_deobfuscated_name;
 
   // See UNIQUENESS above for the rationale for the private constructor pattern.
-  DexField(DexType* container, const DexString* name, DexType* type);
+  DexField(DexType* container, const DexString* name, DexType* type)
+      : DexFieldRef(container, name, type) {
+    m_access = static_cast<DexAccessFlags>(0);
+    m_anno = nullptr;
+    m_value = nullptr;
+  }
 
   std::string self_show() const; // To avoid "Show.h" in the header.
 
  public:
-  ~DexField();
-
   ReferencedState rstate; // Tracks whether this field can be deleted or renamed
 
   // DexField retrieval/creation
@@ -332,25 +354,28 @@ class DexField : public DexFieldRef {
   // See also get_field()
   static DexFieldRef* make_field(const DexType* container,
                                  const DexString* name,
-                                 const DexType* type);
+                                 const DexType* type) {
+    return g_redex->make_field(container, name, type);
+  }
 
   // Return an existing DexField or nullptr if one does not exist.
   static DexFieldRef* get_field(const DexType* container,
                                 const DexString* name,
-                                const DexType* type);
+                                const DexType* type) {
+    return g_redex->get_field(container, name, type);
+  }
 
   static DexFieldRef* get_field(const dex_member_refs::FieldDescriptorTokens&);
 
   /**
    * Get a field using a full descriptor: Lcls;.name:type
    */
-  static DexFieldRef* get_field(std::string_view);
+  static DexFieldRef* get_field(const std::string&);
 
   /**
    * Make a field using a full descriptor: Lcls;.name:type
    */
-  static DexFieldRef* make_field(std::string_view);
-
+  static DexFieldRef* make_field(const std::string&);
   static const DexString* get_unique_name(DexType* container,
                                           const DexString* name,
                                           DexType* type) {
@@ -363,7 +388,7 @@ class DexField : public DexFieldRef {
 
  public:
   DexAnnotationSet* get_anno_set() const { return m_anno.get(); }
-  DexEncodedValue* get_static_value() const { return m_value.get(); }
+  DexEncodedValue* get_static_value() const { return m_value; }
   DexAccessFlags get_access() const {
     always_assert(is_def());
     return m_access;
@@ -390,12 +415,33 @@ class DexField : public DexFieldRef {
   // Return just the name of the field.
   std::string get_simple_deobfuscated_name() const;
 
-  void set_value(std::unique_ptr<DexEncodedValue> v);
+  void set_value(DexEncodedValue* v) {
+    always_assert_log(
+        m_concrete,
+        "Field needs to be concrete to be attached an encoded value.");
+    always_assert(is_static(m_access));
+    // The last contiguous block of static fields with null values are not
+    // represented in the encoded value array. OTOH null-initialized static
+    // fields that appear earlier in the static field list have explicit values.
+    // Let's standardize things here.
+    m_value = v != nullptr ? v : DexEncodedValue::zero_for_type(get_type());
+  }
 
-  std::unique_ptr<DexAnnotationSet> release_annotations();
-  void clear_annotations();
+  std::unique_ptr<DexAnnotationSet> release_annotations() {
+    return std::move(m_anno);
+  }
+  void clear_annotations() { m_anno.reset(); }
 
-  void attach_annotation_set(std::unique_ptr<DexAnnotationSet> aset);
+  void attach_annotation_set(std::unique_ptr<DexAnnotationSet> aset) {
+    always_assert_type_log(
+        !m_concrete, RedexError::BAD_ANNOTATION, "field %s.%s is concrete\n",
+        m_spec.cls->get_name()->c_str(), m_spec.name->c_str());
+    always_assert_type_log(
+        !m_anno, RedexError::BAD_ANNOTATION, "field %s.%s annotation exists\n",
+        m_spec.cls->get_name()->c_str(), m_spec.name->c_str());
+
+    m_anno = std::move(aset);
+  }
 
   template <typename C>
   void gather_types(C& ltype) const;
@@ -434,32 +480,35 @@ struct dexfields_comparator {
 };
 
 class DexTypeList {
+  friend struct RedexContext;
+
+  std::deque<DexType*> m_list;
+
+  // See UNIQUENESS above for the rationale for the private constructor pattern.
+  explicit DexTypeList(std::deque<DexType*>&& p) { m_list = std::move(p); }
+
  public:
-  using ContainerType = std::vector<DexType*>;
-
-  using value_type = DexType*;
-  using iterator = typename ContainerType::iterator;
-  using const_iterator = typename ContainerType::const_iterator;
-
-  iterator begin() { return m_list->begin(); }
-  iterator end() { return m_list->end(); }
-
-  const_iterator begin() const { return m_list->begin(); }
-  const_iterator end() const { return m_list->end(); }
-
-  size_t size() const { return m_list->size(); }
-  bool empty() const { return m_list->empty(); }
-
-  DexType* at(size_t i) const { return m_list->at(i); }
-
+  std::deque<DexType*>::iterator begin() { return m_list.begin(); }
+  std::deque<DexType*>::iterator end() { return m_list.end(); }
   // DexTypeList retrieval/creation
 
   // If the DexTypeList exists, return it, otherwise create it and return it.
   // See also get_type_list()
-  static DexTypeList* make_type_list(ContainerType&& p);
+  static DexTypeList* make_type_list(std::deque<DexType*>&& p) {
+    return g_redex->make_type_list(std::move(p));
+  }
 
   // Return an existing DexTypeList or nullptr if one does not exist.
-  static DexTypeList* get_type_list(const ContainerType& p);
+  static DexTypeList* get_type_list(std::deque<DexType*>&& p) {
+    return g_redex->get_type_list(std::move(p));
+  }
+
+ public:
+  const std::deque<DexType*>& get_type_list() const { return m_list; }
+
+  size_t size() const { return get_type_list().size(); }
+
+  DexType* at(size_t i) const { return get_type_list().at(i); }
 
   /**
    * Returns size of the encoded typelist in bytes, input
@@ -468,11 +517,11 @@ class DexTypeList {
   int encode(DexOutputIdx* dodx, uint32_t* output) const;
 
   friend bool operator<(const DexTypeList& a, const DexTypeList& b) {
-    auto ita = a.m_list->begin();
-    auto itb = b.m_list->begin();
+    auto ita = a.m_list.begin();
+    auto itb = b.m_list.begin();
     while (1) {
-      if (itb == b.m_list->end()) return false;
-      if (ita == a.m_list->end()) return true;
+      if (itb == b.m_list.end()) return false;
+      if (ita == a.m_list.end()) return true;
       if (*ita != *itb) {
         const DexType* ta = *ita;
         const DexType* tb = *itb;
@@ -487,25 +536,8 @@ class DexTypeList {
   void gather_types(C& ltype) const;
 
   bool equals(const std::vector<DexType*>& vec) const {
-    return std::equal(m_list->begin(), m_list->end(), vec.begin(), vec.end());
+    return std::equal(m_list.begin(), m_list.end(), vec.begin(), vec.end());
   }
-
-  DexTypeList* push_front(DexType* t) const;
-  DexTypeList* pop_front() const;
-  DexTypeList* pop_front(size_t n) const;
-
-  DexTypeList* push_back(DexType* t) const;
-  DexTypeList* push_back(const std::vector<DexType*>& t) const;
-
-  DexTypeList* replace_head(DexType* new_head) const;
-
- private:
-  // See UNIQUENESS above for the rationale for the private constructor pattern.
-  explicit DexTypeList(ContainerType* p) : m_list(p) {}
-
-  ContainerType* m_list; // This should really be const.
-
-  friend struct RedexContext;
 };
 
 inline bool compare_dextypelists(const DexTypeList* a, const DexTypeList* b) {
@@ -544,12 +576,16 @@ class DexProto {
   // See also get_proto()
   static DexProto* make_proto(const DexType* rtype,
                               const DexTypeList* args,
-                              const DexString* shorty);
+                              const DexString* shorty) {
+    return g_redex->make_proto(rtype, args, shorty);
+  }
 
   static DexProto* make_proto(const DexType* rtype, const DexTypeList* args);
 
   // Return an existing DexProto or nullptr if one does not exist.
-  static DexProto* get_proto(const DexType* rtype, const DexTypeList* args);
+  static DexProto* get_proto(const DexType* rtype, const DexTypeList* args) {
+    return g_redex->get_proto(rtype, args);
+  }
 
  public:
   DexType* get_rtype() const { return m_rtype; }
@@ -680,7 +716,7 @@ class DexCode {
   uint16_t m_registers_size;
   uint16_t m_ins_size;
   uint16_t m_outs_size;
-  std::optional<std::vector<DexInstruction*>> m_insns{std::nullopt};
+  std::unique_ptr<std::vector<DexInstruction*>> m_insns;
   std::vector<std::unique_ptr<DexTryItem>> m_tries;
   std::unique_ptr<DexDebugItem> m_dbg;
 
@@ -692,7 +728,7 @@ class DexCode {
       : m_registers_size(0),
         m_ins_size(0),
         m_outs_size(0),
-        m_insns(std::vector<DexInstruction*>()),
+        m_insns(std::make_unique<std::vector<DexInstruction*>>()),
         m_dbg(nullptr) {}
 
   DexCode(const DexCode&);
@@ -708,14 +744,11 @@ class DexCode {
   std::unique_ptr<DexDebugItem> release_debug_item() {
     return std::move(m_dbg);
   }
-  std::vector<DexInstruction*> release_instructions() {
-    redex_assert(m_insns);
-    auto ret = std::move(*m_insns);
-    m_insns = std::nullopt;
-    return ret;
+  std::unique_ptr<std::vector<DexInstruction*>> release_instructions() {
+    return std::move(m_insns);
   }
   std::vector<DexInstruction*>& reset_instructions() {
-    m_insns = std::vector<DexInstruction*>{};
+    m_insns.reset(new std::vector<DexInstruction*>());
     return *m_insns;
   }
   std::vector<DexInstruction*>& get_instructions() {
@@ -726,8 +759,8 @@ class DexCode {
     redex_assert(m_insns);
     return *m_insns;
   }
-  void set_instructions(std::vector<DexInstruction*> insns) {
-    m_insns.emplace(std::move(insns));
+  void set_instructions(std::vector<DexInstruction*>* insns) {
+    m_insns.reset(insns);
   }
   std::vector<std::unique_ptr<DexTryItem>>& get_tries() { return m_tries; }
   const std::vector<std::unique_ptr<DexTryItem>>& get_tries() const {
@@ -808,7 +841,9 @@ class DexMethodRef {
   void gather_strings_shallow(
       std::unordered_set<const DexString*>& lstring) const;
 
-  void change(const DexMethodSpec& ref, bool rename_on_collision);
+  void change(const DexMethodSpec& ref, bool rename_on_collision) {
+    g_redex->mutate_method(this, ref, rename_on_collision);
+  }
 
   DexMethod* make_concrete(DexAccessFlags,
                            std::unique_ptr<DexCode>,
@@ -862,9 +897,13 @@ class DexMethod : public DexMethodRef {
   // See also get_method()
   static DexMethodRef* make_method(const DexType* type,
                                    const DexString* name,
-                                   const DexProto* proto);
+                                   const DexProto* proto) {
+    return g_redex->make_method(type, name, proto);
+  }
 
-  static DexMethodRef* make_method(const DexMethodSpec& spec);
+  static DexMethodRef* make_method(const DexMethodSpec& spec) {
+    return g_redex->make_method(spec.cls, spec.name, spec.proto);
+  }
 
   /**
    * Create a copy of method `that`. This excludes `rstate`.
@@ -888,7 +927,7 @@ class DexMethod : public DexMethodRef {
     DexType* cls = DexType::make_type(cls_name);
     auto* name = DexString::make_string(meth_name);
     DexType* rtype = DexType::make_type(rtype_str);
-    DexTypeList::ContainerType args;
+    std::deque<DexType*> args;
     for (auto const arg_str : arg_strs) {
       DexType* arg = DexType::make_type(arg_str);
       args.push_back(arg);
@@ -916,19 +955,23 @@ class DexMethod : public DexMethodRef {
    * will lead to asserts, i.e., throws.
    */
   template <bool kCheckFormat = false>
-  static DexMethodRef* get_method(std::string_view);
+  static DexMethodRef* get_method(const std::string&);
 
   /**
    * Make a method using a full descriptor: Lcls;.name:(args)rtype
    */
-  static DexMethodRef* make_method(std::string_view);
+  static DexMethodRef* make_method(const std::string&);
 
   // Return an existing DexMethod or nullptr if one does not exist.
   static DexMethodRef* get_method(const DexType* type,
                                   const DexString* name,
-                                  const DexProto* proto);
+                                  const DexProto* proto) {
+    return g_redex->get_method(type, name, proto);
+  }
 
-  static DexMethodRef* get_method(const DexMethodSpec& spec);
+  static DexMethodRef* get_method(const DexMethodSpec& spec) {
+    return g_redex->get_method(spec.cls, spec.name, spec.proto);
+  }
 
   static const DexString* get_unique_name(DexType* type,
                                           const DexString* name,
@@ -1009,8 +1052,10 @@ class DexMethod : public DexMethodRef {
   void make_non_concrete();
 
   void become_virtual();
-  std::unique_ptr<DexAnnotationSet> release_annotations();
-  void clear_annotations();
+  std::unique_ptr<DexAnnotationSet> release_annotations() {
+    return std::move(m_anno);
+  }
+  void clear_annotations() { m_anno.reset(); }
 
   /**
    * Note that this is to combine annotation for two methods that should
@@ -1018,12 +1063,44 @@ class DexMethod : public DexMethodRef {
    * merging parent and child's inherited method. If you want to use this
    * method you should check if their protos are the same before using this.
    */
-  void combine_annotations_with(DexMethod* other);
+  void combine_annotations_with(DexMethod* other) {
+    auto other_anno_set = other->get_anno_set();
+    if (other_anno_set != nullptr) {
+      if (m_anno == nullptr) {
+        m_anno = std::make_unique<DexAnnotationSet>(*other->m_anno);
+      } else {
+        m_anno->combine_with(*other->m_anno);
+      }
+    }
+    for (auto& pair : other->m_param_anno) {
+      if (m_param_anno.count(pair.first) == 0 ||
+          m_param_anno[pair.first] == nullptr) {
+        m_param_anno.emplace(pair.first, new DexAnnotationSet(*pair.second));
+      } else {
+        m_param_anno[pair.first]->combine_with(*pair.second);
+      }
+    }
+  }
 
   void add_load_params(size_t num_add_loads);
-  void attach_annotation_set(std::unique_ptr<DexAnnotationSet> aset);
+  void attach_annotation_set(std::unique_ptr<DexAnnotationSet> aset) {
+    always_assert_type_log(!m_concrete, RedexError::BAD_ANNOTATION,
+                           "method %s is concrete\n", self_show().c_str());
+    always_assert_type_log(!m_anno, RedexError::BAD_ANNOTATION,
+                           "method %s annotation exists\n",
+                           self_show().c_str());
+    m_anno = std::move(aset);
+  }
   void attach_param_annotation_set(int paramno,
-                                   std::unique_ptr<DexAnnotationSet> aset);
+                                   std::unique_ptr<DexAnnotationSet> aset) {
+    always_assert_type_log(!m_concrete, RedexError::BAD_ANNOTATION,
+                           "method %s is concrete\n", self_show().c_str());
+    always_assert_type_log(m_param_anno.count(paramno) == 0,
+                           RedexError::BAD_ANNOTATION,
+                           "param %d annotation to method %s exists\n", paramno,
+                           self_show().c_str());
+    m_param_anno[paramno] = std::move(aset);
+  }
 
   template <typename C>
   void gather_types(C& ltype) const;
@@ -1041,8 +1118,6 @@ class DexMethod : public DexMethodRef {
   void gather_callsites(C& lcallsite) const;
   template <typename C>
   void gather_methodhandles(C& lmethodhandle) const;
-
-  void gather_init_classes(std::vector<DexType*>& ltype) const;
 
   /*
    * DexCode <-> IRCode conversion methods.
@@ -1088,11 +1163,11 @@ class DexClass {
   bool m_external;
   bool m_perf_sensitive;
 
-  explicit DexClass(const std::string& location);
+  explicit DexClass(const std::string& location) : m_location(location){};
   void load_class_annotations(DexIdx* idx, uint32_t anno_off);
   void load_class_data_item(DexIdx* idx,
                             uint32_t cdi_off,
-                            std::unique_ptr<DexEncodedValueArray> svalues);
+                            DexEncodedValueArray* svalues);
 
   friend struct ClassCreator;
 
@@ -1103,8 +1178,6 @@ class DexClass {
 
  public:
   ReferencedState rstate;
-
-  ~DexClass();
 
   // May return nullptr on benign duplicate class
   static DexClass* create(DexIdx* idx,
@@ -1192,10 +1265,12 @@ class DexClass {
   bool has_class_data() const;
   bool is_def() const { return true; }
   bool is_external() const { return m_external; }
-  std::unique_ptr<DexEncodedValueArray> get_static_values();
+  DexEncodedValueArray* get_static_values();
   const DexAnnotationSet* get_anno_set() const { return m_anno.get(); }
   DexAnnotationSet* get_anno_set() { return m_anno.get(); }
-  void attach_annotation_set(std::unique_ptr<DexAnnotationSet> anno);
+  void attach_annotation_set(std::unique_ptr<DexAnnotationSet> anno) {
+    m_anno = std::move(anno);
+  }
   void set_source_file(const DexString* source_file) {
     m_source_file = source_file;
   }
@@ -1231,15 +1306,22 @@ class DexClass {
     m_access_flags = access;
   }
 
-  void set_external();
-
   void set_super_class(DexType* super_class) {
     always_assert_log(!m_external, "Unexpected external class %s\n",
                       self_show().c_str());
     m_super_class = super_class;
   }
 
-  void combine_annotations_with(DexClass* other);
+  void combine_annotations_with(DexClass* other) {
+    auto other_anno_set = other->get_anno_set();
+    if (other_anno_set != nullptr) {
+      if (m_anno == nullptr) {
+        m_anno = std::make_unique<DexAnnotationSet>(*other->m_anno);
+      } else {
+        m_anno->combine_with(*other->m_anno);
+      }
+    }
+  }
 
   void set_interfaces(DexTypeList* intfs) {
     always_assert_log(!m_external, "Unexpected external class %s\n",
@@ -1247,7 +1329,7 @@ class DexClass {
     m_interfaces = intfs;
   }
 
-  void clear_annotations();
+  void clear_annotations() { m_anno.reset(); }
   /* Encodes class_data_item, returns size in bytes.  No
    * alignment requirements on *output
    */
@@ -1269,7 +1351,6 @@ class DexClass {
   void gather_methodhandles(C& lmethodhandle) const;
 
   void gather_load_types(std::unordered_set<DexType*>& ltype) const;
-  void gather_init_classes(std::vector<DexType*>& ltype) const;
 
   // Whether to optimize for perf, instead of space.
   // This bit is only set by the InterDex pass and not available earlier.
@@ -1329,7 +1410,7 @@ struct dexmethods_comparator {
  * Return the DexClass that represents the DexType in input or nullptr if
  * no such DexClass exists.
  */
-DexClass* type_class(const DexType* t);
+inline DexClass* type_class(const DexType* t) { return g_redex->type_class(t); }
 
 /**
  * Return the DexClass that represents an internal DexType or nullptr if

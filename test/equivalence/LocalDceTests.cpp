@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -15,8 +15,7 @@
 class DceTest : public EquivalenceTest {
   void transform_method(DexMethod* m) override {
     const std::unordered_set<DexMethodRef*> pure_methods = get_pure_methods();
-    LocalDce(/* init_classes_with_side_effects */ nullptr, pure_methods)
-        .dce(m->get_code());
+    LocalDce(pure_methods).dce(m->get_code());
   }
 };
 

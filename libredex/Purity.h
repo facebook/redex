@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -9,7 +9,6 @@
 
 #include "DexClass.h"
 #include "MethodOverrideGraph.h"
-#include "MethodUtil.h"
 
 struct ConfigFiles;
 class IRInstruction;
@@ -186,7 +185,6 @@ size_t compute_locations_closure(
 size_t compute_conditionally_pure_methods(
     const Scope& scope,
     const method_override_graph::Graph* method_override_graph,
-    const method::ClInitHasNoSideEffectsPredicate& clinit_has_no_side_effects,
     const std::unordered_set<DexMethodRef*>& pure_methods,
     std::unordered_map<const DexMethod*, CseUnorderedLocationSet>* result,
     const purity::CacheConfig& cache_config =
@@ -201,7 +199,6 @@ size_t compute_conditionally_pure_methods(
 size_t compute_no_side_effects_methods(
     const Scope& scope,
     const method_override_graph::Graph* method_override_graph,
-    const method::ClInitHasNoSideEffectsPredicate& clinit_has_no_side_effects,
     const std::unordered_set<DexMethodRef*>& pure_methods,
     std::unordered_set<const DexMethod*>* result,
     const purity::CacheConfig& cache_config =

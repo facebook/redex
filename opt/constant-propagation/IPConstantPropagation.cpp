@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -11,7 +11,6 @@
 #include "ConstantEnvironment.h"
 #include "ConstantPropagationAnalysis.h"
 #include "ConstructorParams.h"
-#include "DefinitelyAssignedIFields.h"
 #include "IPConstantPropagationAnalysis.h"
 #include "MethodOverrideGraph.h"
 #include "PassManager.h"
@@ -21,22 +20,6 @@
 #include "Walkers.h"
 
 namespace mog = method_override_graph;
-
-namespace {
-
-// Whether, for a given type, a non-top value represents useful information.
-bool is_useful(DexType* type, const ConstantValue& value) {
-  always_assert(!value.is_top());
-  if (type::is_boolean(type)) {
-    // Since a boolean value can only have 1 and 0 as values, "GEZ" tells us
-    // nothing useful.
-    return !value.equals(SignedConstantDomain(sign_domain::Interval::GEZ)) &&
-           !value.equals(SignedConstantDomain(0, 1));
-  }
-  return true;
-}
-
-} // namespace
 
 namespace constant_propagation {
 
@@ -50,24 +33,19 @@ using CombinedAnalyzer =
                                 BoxedBooleanAnalyzer,
                                 StringAnalyzer,
                                 ConstantClassObjectAnalyzer,
-                                ApiLevelAnalyzer,
                                 PrimitiveAnalyzer>;
 
 class AnalyzerGenerator {
   const ImmutableAttributeAnalyzerState* m_immut_analyzer_state;
-  const ApiLevelAnalyzerState* m_api_level_analyzer_state;
 
  public:
   explicit AnalyzerGenerator(
-      const ImmutableAttributeAnalyzerState* immut_analyzer_state,
-      const ApiLevelAnalyzerState* api_level_analyzer_state)
-      : m_immut_analyzer_state(immut_analyzer_state),
-        m_api_level_analyzer_state(api_level_analyzer_state) {
+      const ImmutableAttributeAnalyzerState* immut_analyzer_state)
+      : m_immut_analyzer_state(immut_analyzer_state) {
     // Initialize the singletons that `operator()` needs ahead of time to
     // avoid a data race.
     static_cast<void>(EnumFieldAnalyzerState::get());
     static_cast<void>(BoxedBooleanAnalyzerState::get());
-    static_cast<void>(ApiLevelAnalyzerState::get());
   }
 
   std::unique_ptr<intraprocedural::FixpointIterator> operator()(
@@ -95,14 +73,12 @@ class AnalyzerGenerator {
 
     auto intra_cp = std::make_unique<intraprocedural::FixpointIterator>(
         code.cfg(),
-        CombinedAnalyzer(
-            class_under_init,
-            const_cast<ImmutableAttributeAnalyzerState*>(
-                m_immut_analyzer_state),
-            &wps, EnumFieldAnalyzerState::get(),
-            BoxedBooleanAnalyzerState::get(), nullptr, nullptr,
-            *const_cast<ApiLevelAnalyzerState*>(m_api_level_analyzer_state),
-            nullptr));
+        CombinedAnalyzer(class_under_init,
+                         const_cast<ImmutableAttributeAnalyzerState*>(
+                             m_immut_analyzer_state),
+                         &wps, EnumFieldAnalyzerState::get(),
+                         BoxedBooleanAnalyzerState::get(), nullptr, nullptr,
+                         nullptr));
     intra_cp->run(env);
 
     return intra_cp;
@@ -124,8 +100,7 @@ class AnalyzerGenerator {
  */
 std::unique_ptr<FixpointIterator> PassImpl::analyze(
     const Scope& scope,
-    const ImmutableAttributeAnalyzerState* immut_analyzer_state,
-    const ApiLevelAnalyzerState* api_level_analyzer_state) {
+    const ImmutableAttributeAnalyzerState* immut_analyzer_state) {
   auto method_override_graph = mog::build_graph(scope);
   call_graph::Graph cg =
       m_config.use_multiple_callee_callgraph
@@ -137,29 +112,21 @@ std::unique_ptr<FixpointIterator> PassImpl::analyze(
   m_stats.callgraph_edges = cg_stats.num_edges;
   m_stats.callgraph_callsites = cg_stats.num_callsites;
   auto fp_iter = std::make_unique<FixpointIterator>(
-      cg, AnalyzerGenerator(immut_analyzer_state, api_level_analyzer_state));
+      cg, AnalyzerGenerator(immut_analyzer_state));
   // Run the bootstrap. All field value and method return values are
   // represented by Top.
   fp_iter->run({{CURRENT_PARTITION_LABEL, ArgumentDomain()}});
   auto non_true_virtuals =
       mog::get_non_true_virtuals(*method_override_graph, scope);
-  std::unordered_set<const DexField*> definitely_assigned_ifields;
-  if (m_config.compute_definitely_assigned_ifields) {
-    definitely_assigned_ifields =
-        definitely_assigned_ifields::get_definitely_assigned_ifields(
-            scope);
-  }
-  m_stats.definitely_assigned_ifields = definitely_assigned_ifields.size();
   for (size_t i = 0; i < m_config.max_heap_analysis_iterations; ++i) {
     // Build an approximation of all the field values and method return values.
     auto wps =
         m_config.use_multiple_callee_callgraph
-            ? std::make_unique<WholeProgramState>(
-                  scope, *fp_iter, non_true_virtuals, m_config.field_blocklist,
-                  definitely_assigned_ifields, cg)
+            ? std::make_unique<WholeProgramState>(scope, *fp_iter,
+                                                  non_true_virtuals,
+                                                  m_config.field_blocklist, cg)
             : std::make_unique<WholeProgramState>(
-                  scope, *fp_iter, non_true_virtuals, m_config.field_blocklist,
-                  definitely_assigned_ifields);
+                  scope, *fp_iter, non_true_virtuals, m_config.field_blocklist);
     // If this approximation is not better than the previous one, we are done.
     if (fp_iter->get_whole_program_state().leq(*wps)) {
       break;
@@ -169,29 +136,24 @@ std::unique_ptr<FixpointIterator> PassImpl::analyze(
     fp_iter->set_whole_program_state(std::move(wps));
     fp_iter->run({{CURRENT_PARTITION_LABEL, ArgumentDomain()}});
   }
-  compute_analysis_stats(fp_iter->get_whole_program_state(),
-                         definitely_assigned_ifields);
+  compute_analysis_stats(fp_iter->get_whole_program_state());
 
   return fp_iter;
 }
 
-void PassImpl::compute_analysis_stats(
-    const WholeProgramState& wps,
-    const std::unordered_set<const DexField*>& definitely_assigned_ifields) {
+void PassImpl::compute_analysis_stats(const WholeProgramState& wps) {
   if (!wps.get_field_partition().is_top()) {
     for (auto& pair : wps.get_field_partition().bindings()) {
       auto* field = pair.first;
       auto& value = pair.second;
-      if (value.is_top() || !is_useful(field->get_type(), value)) {
+      if (value.is_top()) {
         continue;
       }
-      if (definitely_assigned_ifields.count(field)) {
-        ++m_stats.constant_definitely_assigned_ifields;
-        TRACE(ICONSTP, 4, "definitely assigned field partition for %s: %s",
-              SHOW(field), SHOW(value));
-      } else {
-        TRACE(ICONSTP, 4, "field partition for %s: %s", SHOW(field),
-              SHOW(value));
+      // Since a boolean value can only have 1 and 0 as values, "GEZ" tells us
+      // nothing useful about this field.
+      if (type::is_boolean(field->get_type()) &&
+          value.equals(SignedConstantDomain(sign_domain::Interval::GEZ))) {
+        continue;
       }
       ++m_stats.constant_fields;
     }
@@ -200,12 +162,13 @@ void PassImpl::compute_analysis_stats(
     for (auto& pair : wps.get_method_partition().bindings()) {
       auto* method = pair.first;
       auto& value = pair.second;
-      if (value.is_top() ||
-          !is_useful(method->get_proto()->get_rtype(), value)) {
+      if (value.is_top()) {
         continue;
       }
-      TRACE(ICONSTP, 4, "method partition for %s: %s", SHOW(method),
-            SHOW(value));
+      if (type::is_boolean(method->get_proto()->get_rtype()) &&
+          value.equals(SignedConstantDomain(sign_domain::Interval::GEZ))) {
+        continue;
+      }
       ++m_stats.constant_methods;
     }
   }
@@ -251,11 +214,7 @@ void PassImpl::optimize(
       });
 }
 
-void PassImpl::run(const DexStoresVector& stores, int min_sdk) {
-  // reset statistics, to be meaningful when pass runs multiple times
-  m_stats = Stats();
-  m_transform_stats = Transform::Stats();
-
+void PassImpl::run(const DexStoresVector& stores) {
   auto scope = build_class_scope(stores);
   XStoreRefs xstores(stores);
   // Rebuild all CFGs here -- this should be more efficient than doing them
@@ -266,13 +225,11 @@ void PassImpl::run(const DexStoresVector& stores, int min_sdk) {
     code.cfg().calculate_exit_block();
   });
   // Hold the analyzer state of ImmutableAttributeAnalyzer.
-  ImmutableAttributeAnalyzerState immut_analyzer_state;
-  immutable_state::analyze_constructors(scope, &immut_analyzer_state);
-  ApiLevelAnalyzerState api_level_analyzer_state =
-      ApiLevelAnalyzerState::get(min_sdk);
-  auto fp_iter =
-      analyze(scope, &immut_analyzer_state, &api_level_analyzer_state);
-  optimize(scope, xstores, *fp_iter, &immut_analyzer_state);
+  std::unique_ptr<ImmutableAttributeAnalyzerState> immut_analyzer_state =
+      std::make_unique<ImmutableAttributeAnalyzerState>();
+  immutable_state::analyze_constructors(scope, immut_analyzer_state.get());
+  auto fp_iter = analyze(scope, immut_analyzer_state.get());
+  optimize(scope, xstores, *fp_iter, immut_analyzer_state.get());
   walk::parallel::code(scope,
                        [](DexMethod*, IRCode& code) { code.clear_cfg(); });
 }
@@ -285,16 +242,11 @@ void PassImpl::run_pass(DexStoresVector& stores,
         RuntimeAssertTransform::Config(config.get_proguard_map());
   }
 
-  int min_sdk = mgr.get_redex_options().min_sdk;
-  run(stores, min_sdk);
+  run(stores);
 
   ScopedMetrics sm(mgr);
   m_transform_stats.log_metrics(sm, /* with_scope= */ false);
 
-  mgr.incr_metric("definitely_assigned_ifields",
-                  m_stats.definitely_assigned_ifields);
-  mgr.incr_metric("constant_definitely_assigned_ifields",
-                  m_stats.constant_definitely_assigned_ifields);
   mgr.incr_metric("constant_fields", m_stats.constant_fields);
   mgr.incr_metric("constant_methods", m_stats.constant_methods);
   mgr.incr_metric("callgraph_edges", m_stats.callgraph_edges);

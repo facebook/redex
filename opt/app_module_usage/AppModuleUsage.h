@@ -1,28 +1,21 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <cstddef>
-#include <map>
-#include <set>
-#include <string>
-
-#include "ConcurrentContainers.h"
 #include "DexClass.h"
 #include "Pass.h"
-#include "ReflectionAnalysis.h"
+#include <cstddef>
+#include <string>
 
-namespace app_module_usage {
-using StoresReferenced =
-    std::unordered_map<DexStore*, bool /* used_only_reflectively */>;
-using MethodStoresReferenced = ConcurrentMap<DexMethod*, StoresReferenced>;
-
-using Violations = std::map<std::string /* entrypoint */,
-                            std::set<std::string /* module name */>>;
-} // namespace app_module_usage
+namespace AppModuleUsage {
+struct UseCount {
+  unsigned int direct_count{0};
+  unsigned int reflective_count{0};
+};
+} // namespace AppModuleUsage
 
 /**
  * `AppModuleUsagePass` generates a report of violations of unannotated app
@@ -36,23 +29,32 @@ using Violations = std::map<std::string /* entrypoint */,
  * report is the full descriptor of the unannotated entrypoint to a module,
  * followed by the name of the module.
  *
- * By enabling `output_module_use` the pass also generates
+ * By default when the pass does it fail it also generates
  * "redex-app-module-usage.csv" mapping methods to all the app modules used by
  * each method, and "redex-app-module-count.csv" mapping app modules to the
  * number of places it's referenced.
+ *
+ * Each line of "redex-app-module-usage.csv" is the source module name, followed
+ * by the full descriptor of a method, followed by a list of the names of all
+ * modules used by the method (each prefixed with "(r)" is used reflectively or
+ * "(d&r)" if referenced both directed and reflectively). Each line of
+ * "redex-app-module-count.csv" is the name of a module followed by its count of
+ * direct references, then its count of reflective references.
  */
 class AppModuleUsagePass : public Pass {
  public:
   AppModuleUsagePass() : Pass("AppModuleUsagePass") {}
 
   void bind_config() override {
+    bind("output_entrypoints_to_modules", true,
+         m_output_entrypoints_to_modules);
+    bind("output_module_use_count", true, m_output_module_use_count);
+    bind("crash_with_violations", false, m_crash_with_violations);
     bind("uses_app_module_annotation_descriptor",
-         DexType::get_type("Lcom/facebook/redex/annotations/UsesAppModule;"),
-         m_uses_app_module_annotation);
+         "Lcom/facebook/redex/annotations/UsesAppModule;",
+         m_uses_app_module_annotation_descriptor);
     bind("preexisting_violations_filepath", "",
          m_preexisting_violations_filepath);
-    bind("output_module_use", true, m_output_module_use);
-    bind("crash_with_violations", false, m_crash_with_violations);
   }
 
   // Entrypoint for the AppModuleUsagePass pass
@@ -64,26 +66,41 @@ class AppModuleUsagePass : public Pass {
       T* entrypoint, DexType* annotation_type);
 
  private:
-  void load_preexisting_violations(DexStoresVector&);
-
-  app_module_usage::MethodStoresReferenced analyze_method_xstore_references(
-      const Scope& scope);
-
-  ConcurrentMap<DexField*, DexStore*> analyze_field_xstore_references(
-      const Scope& scope);
-
-  // Returns number of violations.
-  unsigned gather_violations(
-      const app_module_usage::MethodStoresReferenced& method_store_refs,
-      const ConcurrentMap<DexField*, DexStore*>& field_store_refs,
-      app_module_usage::Violations& violations) const;
+  void load_preexisting_violations(
+      DexStoresVector&, const std::unordered_map<std::string, DexStore*>&);
+  void load_allow_list(DexStoresVector&,
+                       const std::unordered_map<std::string, DexStore*>&);
+  void analyze_direct_app_module_usage(const Scope&);
+  void analyze_reflective_app_module_usage(const Scope&);
+  // Outputs report of violations, returns the number of violations
+  size_t generate_report(const Scope&, const std::string&, PassManager&);
 
   // returns true if the given entrypoint name is allowed to use the given store
-  bool access_excused_due_to_preexisting(const std::string& entrypoint_name,
-                                         DexStore* store_used) const;
-  bool access_granted_by_annotation(DexMethod* method, DexStore* target) const;
-  bool access_granted_by_annotation(DexField* field, DexStore* target) const;
-  bool access_granted_by_annotation(DexClass* cls, DexStore* target) const;
+  bool preexisting_access_permitted(const std::string&, DexStore*);
+
+  // Handle a violation of `entrypoint` using `module` unannotated
+  template <typename T>
+  void violation(T* entrypoint,
+                 const std::string& from_module,
+                 const std::string& to_module,
+                 std::ofstream& ofs,
+                 bool print_name);
+  // Outputs methods to store mapping to meta file
+  void output_usages(const DexStoresVector&, const std::string&);
+  // Outputs stores to number of uses mapping to meta file
+  void output_use_count(const DexStoresVector&, const std::string&);
+  // Map of count of app modules to the count of times they're used directly
+  // and reflectively
+  ConcurrentMap<DexStore*, AppModuleUsage::UseCount> m_stores_use_count;
+
+  // Map of all methods to the stores of the modules used by the method
+  ConcurrentMap<DexMethod*, std::unordered_set<DexStore*>>
+      m_stores_method_uses_map;
+
+  // Map of all methods to the stores of the modules used reflectively by the
+  // method
+  ConcurrentMap<DexMethod*, std::unordered_set<DexStore*>>
+      m_stores_method_uses_reflectively_map;
 
   // Map of violations from entrypoint names to the names of stores used
   // by the entrypoint
@@ -93,8 +110,9 @@ class AppModuleUsagePass : public Pass {
   // To quickly look up wich DexStore ("module") a DexType is from
   ConcurrentMap<DexType*, DexStore*> m_type_store_map;
 
-  bool m_output_module_use;
+  bool m_output_entrypoints_to_modules;
+  bool m_output_module_use_count;
   bool m_crash_with_violations;
-  DexType* m_uses_app_module_annotation;
+  std::string m_uses_app_module_annotation_descriptor;
   std::string m_preexisting_violations_filepath;
 };

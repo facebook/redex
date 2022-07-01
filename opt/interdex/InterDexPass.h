@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -106,8 +106,6 @@ class InterDexPass : public Pass {
 
   virtual void run_pass(const Scope&,
                         const XStoreRefs&,
-                        const init_classes::InitClassesWithSideEffects&
-                            init_classes_with_side_effects,
                         DexStoresVector&,
                         DexClassesVector&,
                         std::vector<std::unique_ptr<InterDexPassPlugin>>&,
@@ -117,8 +115,6 @@ class InterDexPass : public Pass {
 
   void run_pass_on_nonroot_store(const Scope&,
                                  const XStoreRefs&,
-                                 const init_classes::InitClassesWithSideEffects&
-                                     init_classes_with_side_effects,
                                  DexClassesVector&,
                                  ConfigFiles&,
                                  PassManager&,

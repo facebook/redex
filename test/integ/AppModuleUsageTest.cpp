@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -51,19 +51,13 @@ void split_three_stores(std::vector<DexStore>& stores) {
   DexStore third_store(third_dex_metadata);
   auto third_class =
       type_class(DexType::get_type("LAppModuleUsageThirdClass;"));
-  auto third_class_inner_class = type_class(
-      DexType::get_type("LAppModuleUsageThirdClass$InnerClass$123;"));
-  third_store.add_classes(
-      std::vector<DexClass*>{third_class, third_class_inner_class});
+  third_store.add_classes(std::vector<DexClass*>{third_class});
   stores.emplace_back(third_store);
   // remove OtherClass & ThirdClass from root store classes
   root_dex_classes.erase(
       std::find(root_dex_classes.begin(), root_dex_classes.end(), other_class));
   root_dex_classes.erase(
       std::find(root_dex_classes.begin(), root_dex_classes.end(), third_class));
-  root_dex_classes.erase(std::find(root_dex_classes.begin(),
-                                   root_dex_classes.end(),
-                                   third_class_inner_class));
 }
 } // namespace
 
@@ -73,9 +67,7 @@ TEST_F(AppModuleUsageTest, testOneStore) {
   // AppModuleUsageClass and AppModuleUsageOtherClass are in the root store
   auto config_file_env = std::getenv("default_config_file");
   std::ifstream config_file(config_file_env, std::ifstream::binary);
-  Json::Value cfg;
-  config_file >> cfg;
-  run_passes({new AppModuleUsagePass}, nullptr, cfg);
+  run_passes({new AppModuleUsagePass});
   EXPECT_EQ(pass_manager->get_pass_info()[0].metrics.at(
                 "num_methods_access_app_module"),
             0);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -26,15 +26,12 @@ using PointersFixpointIteratorMap =
 using SummaryConcurrentMap = ConcurrentMap<const DexMethodRef*, Summary>;
 
 SummaryBuilder::SummaryBuilder(
-    const init_classes::InitClassesWithSideEffects&
-        init_classes_with_side_effects,
     const InvokeToSummaryMap& invoke_to_summary_cmap,
     const ptrs::FixpointIterator& ptrs_fp_iter,
     const IRCode* code,
     reaching_defs::MoveAwareFixpointIterator* reaching_defs_fixpoint_iter,
     bool analyze_external_reads)
-    : m_init_classes_with_side_effects(init_classes_with_side_effects),
-      m_invoke_to_summary_cmap(invoke_to_summary_cmap),
+    : m_invoke_to_summary_cmap(invoke_to_summary_cmap),
       m_ptrs_fp_iter(ptrs_fp_iter),
       m_code(code),
       m_analyze_external_reads(analyze_external_reads),
@@ -80,12 +77,6 @@ void SummaryBuilder::analyze_instruction_effects(
     const reaching_defs::Environment& reaching_def_env,
     const IRInstruction* insn,
     Summary* summary) {
-  auto init_class = !!m_init_classes_with_side_effects.refine(
-      get_init_class_type_demand(insn));
-  if (init_class) {
-    summary->effects |= EFF_INIT_CLASS;
-  }
-
   auto op = insn->opcode();
   switch (op) {
   case OPCODE_THROW: {
@@ -230,9 +221,7 @@ void SummaryBuilder::classify_heap_write(const ptrs::Environment& env,
  * Analyze :method and insert its summary into :summary_cmap. Recursively
  * analyze the callees if necessary. This method is thread-safe.
  */
-void analyze_method_recursive(const init_classes::InitClassesWithSideEffects&
-                                  init_classes_with_side_effects,
-                              const DexMethod* method,
+void analyze_method_recursive(const DexMethod* method,
                               const call_graph::Graph& call_graph,
                               const ptrs::FixpointIteratorMap& ptrs_fp_iter_map,
                               PatriciaTreeSet<const DexMethodRef*> visiting,
@@ -248,8 +237,7 @@ void analyze_method_recursive(const init_classes::InitClassesWithSideEffects&
     const auto& callee_edges = call_graph.node(method)->callees();
     for (const auto& edge : callee_edges) {
       auto* callee = edge->callee()->method();
-      analyze_method_recursive(init_classes_with_side_effects, callee,
-                               call_graph, ptrs_fp_iter_map, visiting,
+      analyze_method_recursive(callee, call_graph, ptrs_fp_iter_map, visiting,
                                summary_cmap);
       if (summary_cmap->count(callee) != 0) {
         invoke_to_summary_cmap.emplace(edge->invoke_insn(),
@@ -260,8 +248,7 @@ void analyze_method_recursive(const init_classes::InitClassesWithSideEffects&
 
   const auto* ptrs_fp_iter = ptrs_fp_iter_map.find(method)->second;
   auto summary =
-      SummaryBuilder(init_classes_with_side_effects, invoke_to_summary_cmap,
-                     *ptrs_fp_iter, method->get_code())
+      SummaryBuilder(invoke_to_summary_cmap, *ptrs_fp_iter, method->get_code())
           .build();
   if (method->rstate.no_optimizations()) {
     summary.effects |= EFF_NO_OPTIMIZE;
@@ -282,19 +269,13 @@ void analyze_method_recursive(const init_classes::InitClassesWithSideEffects&
   }
 }
 
-Summary analyze_code(const init_classes::InitClassesWithSideEffects&
-                         init_classes_with_side_effects,
-                     const InvokeToSummaryMap& invoke_to_summary_cmap,
+Summary analyze_code(const InvokeToSummaryMap& invoke_to_summary_cmap,
                      const ptrs::FixpointIterator& ptrs_fp_iter,
                      const IRCode* code) {
-  return SummaryBuilder(init_classes_with_side_effects, invoke_to_summary_cmap,
-                        ptrs_fp_iter, code)
-      .build();
+  return SummaryBuilder(invoke_to_summary_cmap, ptrs_fp_iter, code).build();
 }
 
 void analyze_scope(
-    const init_classes::InitClassesWithSideEffects&
-        init_classes_with_side_effects,
     const Scope& scope,
     const call_graph::Graph& call_graph,
     const ConcurrentMap<const DexMethodRef*, ptrs::FixpointIterator*>&
@@ -314,8 +295,8 @@ void analyze_scope(
 
   walk::parallel::code(scope, [&](const DexMethod* method, IRCode& code) {
     PatriciaTreeSet<const DexMethodRef*> visiting;
-    analyze_method_recursive(init_classes_with_side_effects, method, call_graph,
-                             ptrs_fp_iter_map, visiting, &summary_cmap);
+    analyze_method_recursive(method, call_graph, ptrs_fp_iter_map, visiting,
+                             &summary_cmap);
   });
 
   for (auto& pair : summary_cmap) {

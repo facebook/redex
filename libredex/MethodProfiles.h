@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -8,7 +8,6 @@
 #pragma once
 
 #include <boost/optional.hpp>
-#include <string_view>
 
 #include "DexClass.h"
 #include "Timer.h"
@@ -153,15 +152,15 @@ class MethodProfiles {
   bool parse_stats_file(const std::string& csv_filename);
 
   // Read a line of data (not a header)
-  bool parse_line(std::string_view line);
+  bool parse_line(std::string& line);
   // Read a line from the main section of the aggregated stats file and put an
   // entry into m_method_stats
-  bool parse_main(std::string_view line);
+  bool parse_main(std::string& line);
   // Read a line of data from the metadata section (at the top of the file)
-  bool parse_metadata(std::string_view line);
+  bool parse_metadata(std::string& line);
 
   // Parse the first line and make sure it matches our expectations
-  bool parse_header(std::string_view line);
+  bool parse_header(std::string& line);
 };
 
 // NOTE: Do not use this comparator directly in `std::sort` calls, as it is
@@ -172,7 +171,6 @@ class dexmethods_profiled_comparator {
   const std::unordered_set<std::string>* m_allowlisted_substrings;
   std::unordered_map<DexMethod*, double> m_cache;
   double m_min_appear_percent;
-  double m_second_min_appear_percent;
   std::vector<std::string> m_interactions;
 
   const DexMethod* m_coldstart_start_marker;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -13,10 +13,12 @@
 #include "IRInstruction.h"
 #include "IRList.h"
 #include "LiveInterval.h"
+#include "ScopedCFG.h"
 #include "Show.h"
 #include "Trace.h"
 #include <algorithm>
 #include <cmath>
+#include <iostream>
 #include <optional>
 #include <unordered_set>
 #include <utility>
@@ -36,130 +38,113 @@ static void TRACE_live_intervals(const LiveIntervals& live_intervals) {
   TRACE(FREG, 9, "\n");
 }
 
-LinearScanAllocator::LinearScanAllocator(DexMethod* method)
-    : LinearScanAllocator(method->get_code(), is_static(method), [method]() {
-        return show(method);
-      }) {}
-
-LinearScanAllocator::LinearScanAllocator(
-    IRCode* code,
-    bool is_static,
-    const std::function<std::string()>& method_describer)
-    : m_cfg(code), m_is_static(is_static) {
-  TRACE(FREG,
-        9,
-        "Running FastRegAlloc for method {%s}",
-        method_describer().c_str());
-  TRACE(FREG, 9, "[Original Code]\n%s", SHOW(*m_cfg));
-
-  m_cfg->simplify(); // in particular, remove empty blocks
-  m_cfg->calculate_exit_block();
-
-  live_range::renumber_registers(code, /* width_aware */ true);
-  m_live_intervals = init_live_intervals(*m_cfg, &m_live_interval_points);
-  init_vreg_occurences();
+LinearScanAllocator::LinearScanAllocator(DexMethod* method) {
+  TRACE(FREG, 9, "Running FastRegAlloc for method {%s}", SHOW(method));
+  if (method->get_code() == nullptr) {
+    return;
+  }
+  auto& code = *method->get_code();
+  TRACE(FREG, 9, "[Original Code]\n%s", SHOW(&code));
+  {
+    // clear_cfg() called by ScopedCFG destructor will linearize the
+    // instructions in the code
+    cfg::ScopedCFG cfg_for_linearize = cfg::ScopedCFG(&code);
+  }
+  m_live_intervals = init_live_intervals(&code);
+  init_vreg_occurences(&code);
   TRACE_live_intervals(m_live_intervals);
 }
 
 void LinearScanAllocator::allocate() {
-  if (m_live_intervals.empty()) {
-    return;
-  }
-  for (int32_t idx = m_live_intervals.size() - 1; idx >= 0; --idx) {
-    auto& live_interval = m_live_intervals[idx];
-    expire_old_intervals(live_interval.end_point);
+  for (size_t idx = 0; idx < m_live_intervals.size(); ++idx) {
+    expire_old_intervals(m_live_intervals[idx].start_point);
+    reg_t alloc_reg;
     // TODO: (in the future) add spill here given dex constraints
-    vreg_t cur_vreg = live_interval.vreg;
-    reg_t alloc_reg = allocate_register(cur_vreg, live_interval.end_point);
-    always_assert(!live_interval.reg);
-    live_interval.reg = alloc_reg;
-    m_active_intervals.push({idx, live_interval.start_point});
+    vreg_t cur_vreg = m_live_intervals[idx].vreg;
+    if (m_wide_vregs.count(cur_vreg)) {
+      alloc_reg = m_reg_count;
+      m_reg_count += 2;
+    } else {
+      if (m_free_regs.empty()) {
+        alloc_reg = m_reg_count;
+        m_reg_count++;
+      } else {
+        alloc_reg = m_free_regs.front();
+        m_free_regs.pop();
+      }
+    }
+    m_live_intervals[idx].reg = alloc_reg;
+    m_active_intervals.push(
+        std::make_pair(idx, m_live_intervals[idx].end_point));
   }
+  reverse_registers();
   for (auto& interval : m_live_intervals) {
-    auto& [defs, uses] = m_vreg_defs_uses.at(interval.vreg);
-    for (auto def : defs) {
+    for (auto def : m_vreg_defs_uses[interval.vreg].first) {
       def->set_dest(interval.reg.value());
     }
-    for (auto use : uses) {
+    for (auto use : m_vreg_defs_uses[interval.vreg].second) {
       use.insn->set_src(use.src_index, interval.reg.value());
     }
   }
-  m_cfg->set_registers_size(m_reg_count);
-  TRACE(FREG, 9, "FastRegAlloc pass complete! [Final Code]\n%s", SHOW(*m_cfg));
+  TRACE(FREG, 9, "FastRegAlloc pass complete!");
 }
 
-void LinearScanAllocator::init_vreg_occurences() {
-  for (auto& mie : InstructionIterable(*m_cfg)) {
+void LinearScanAllocator::init_vreg_occurences(IRCode* code) {
+  code->build_cfg(/*editable*/ false);
+  for (auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
-    if (!insn->has_dest()) {
-      continue;
+    if (insn->has_dest()) {
+      vreg_t dest_reg = insn->dest();
+      if (insn->dest_is_wide()) {
+        m_wide_vregs.insert(dest_reg);
+      }
+      if (!m_vreg_defs_uses.count(dest_reg)) {
+        m_vreg_defs_uses[dest_reg] =
+            std::make_pair(std::vector<Def>({insn}), std::vector<Use>());
+      } else {
+        m_vreg_defs_uses[dest_reg].first.push_back(insn);
+      }
     }
-    vreg_t dest_reg = insn->dest();
-    if (insn->dest_is_wide()) {
-      m_wide_vregs.insert(dest_reg);
-    }
-    m_vreg_defs_uses[dest_reg].first.push_back(insn);
-    if (insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT && !m_is_static &&
-        !m_this_vreg) {
-      m_this_vreg = dest_reg;
-    }
-  }
-  for (auto& mie : InstructionIterable(*m_cfg)) {
-    auto insn = mie.insn;
-    for (src_index_t i = 0; i < insn->srcs_size(); ++i) {
-      vreg_t src_reg = insn->src(i);
-      always_assert(insn->src_is_wide(i) == m_wide_vregs.count(src_reg));
-      m_vreg_defs_uses.at(src_reg).second.push_back(live_range::Use{insn, i});
+    auto srcs = insn->srcs_vec();
+    for (src_index_t i = 0; i < srcs.size(); ++i) {
+      vreg_t src_reg = srcs[i];
+      if (insn->src_is_wide(i)) {
+        m_wide_vregs.insert(src_reg);
+      }
+      if (!m_vreg_defs_uses.count(src_reg)) {
+        m_vreg_defs_uses[src_reg] = std::make_pair(
+            std::vector<Def>(), std::vector<Use>({live_range::Use{insn, i}}));
+      } else {
+        m_vreg_defs_uses[src_reg].second.push_back(live_range::Use{insn, i});
+      }
     }
   }
 }
 
-reg_t LinearScanAllocator::allocate_register(reg_t for_vreg,
-                                             uint32_t end_point) {
-  bool wide = m_wide_vregs.count(for_vreg);
-  if (!m_this_vreg || *m_this_vreg != for_vreg) {
-    auto shape = IRInstructionShape::get(m_live_interval_points.at(end_point));
-    auto& free_regs = m_free_regs[shape];
-    for (auto it = free_regs.begin(); it != free_regs.end(); it++) {
-      auto reg = *it;
-      if (wide) {
-        auto nit = std::next(it);
-        if (nit == free_regs.end() || *nit != reg + 1) {
-          continue;
-        }
-      }
-      it = free_regs.erase(it);
-      if (wide) {
-        always_assert(*it == reg + 1);
-        free_regs.erase(it);
-      }
-      return reg;
-    }
-  }
-
-  auto alloc_reg = m_reg_count;
-  m_reg_count += (wide ? 2 : 1);
-  return alloc_reg;
-}
-
-void LinearScanAllocator::expire_old_intervals(uint32_t end_point) {
+void LinearScanAllocator::expire_old_intervals(uint32_t cur_def_idx) {
   while (!m_active_intervals.empty() &&
-         m_active_intervals.top().start_point > end_point) {
-    auto& interval_to_free =
-        m_live_intervals.at(m_active_intervals.top().live_interval_idx);
+         m_active_intervals.top().second < cur_def_idx) {
+    auto interval_to_free = m_live_intervals[m_active_intervals.top().first];
     m_active_intervals.pop();
-    if (m_this_vreg && *m_this_vreg == interval_to_free.vreg) {
-      continue;
+    try {
+      reg_t freed_reg = interval_to_free.reg.value();
+      m_free_regs.push(freed_reg);
+      if (m_wide_vregs.count(interval_to_free.vreg)) {
+        m_free_regs.push(freed_reg + 1);
+      }
+    } catch (const std::bad_optional_access& e) {
+      std::cerr << "Active interval ends with no register allocated: "
+                << e.what() << std::endl;
     }
-    reg_t freed_reg = interval_to_free.reg.value();
-    auto shape = IRInstructionShape::get(
-        m_live_interval_points.at(interval_to_free.end_point));
-    auto& free_regs = m_free_regs[shape];
-    bool success = free_regs.insert(freed_reg).second;
-    always_assert(success);
-    if (m_wide_vregs.count(interval_to_free.vreg)) {
-      success = free_regs.insert(freed_reg + 1).second;
-      always_assert(success);
+  }
+}
+
+void LinearScanAllocator::reverse_registers() {
+  for (auto& interval : m_live_intervals) {
+    if (m_wide_vregs.count(interval.vreg)) {
+      interval.reg = m_reg_count - 2 - interval.reg.value();
+    } else {
+      interval.reg = m_reg_count - 1 - interval.reg.value();
     }
   }
 }

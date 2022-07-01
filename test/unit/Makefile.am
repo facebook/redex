@@ -29,13 +29,11 @@ check_PROGRAMS = \
     constructor_analysis_test \
     control_flow_test \
     copy_propagation_test \
-    cpp_util_test \
     cse_test \
     creators_test \
     debug_info_test \
     debug_test \
     dedup_blocks_test \
-    deobfuscated_alias_test \
     dex_class_test \
     dex_instruction_test \
     dex_loader_test \
@@ -56,11 +54,9 @@ check_PROGRAMS = \
     final_inline_v2_test \
     fp_ev_test \
     global_type_analysis_test \
+    get_deobfuscated_test \
     graph_util_test \
     hierarchy_util_test \
-    init_class_test \
-    init_class_pruner_test \
-    init_class_lowering_pass_test \
     instruction_sequence_outliner_test \
     interprocedural_constant_propagation_test \
     intraprocedural_constant_propagation_test \
@@ -182,9 +178,6 @@ control_flow_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 copy_propagation_test_SOURCES = CopyPropagationTest.cpp
 
-cpp_util_test_SOURCES = CppUtilTest.cpp
-cpp_util_test_LDADD = $(COMMON_MOCK_TEST_LIBS) -lpthread
-
 cse_test_SOURCES = CommonSubexpressionEliminationTest.cpp
 cse_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
@@ -195,8 +188,6 @@ debug_info_test_SOURCES = DebugInfoTest.cpp
 debug_test_SOURCES = DebugTest.cpp
 
 dedup_blocks_test_SOURCES = DedupBlocksTest.cpp VirtScopeHelper.cpp ScopeHelper.cpp
-
-deobfuscated_alias_test_SOURCES = DeobfuscatedAliasTest.cpp
 
 dex_class_test_SOURCES = DexClassTest.cpp
 
@@ -238,16 +229,12 @@ fp_ev_test_SOURCES = FpEvTest.cpp
 
 global_type_analysis_test_SOURCES = type-analysis/GlobalTypeAnalysisTest.cpp
 
+get_deobfuscated_test_SOURCES = GetDeobfuscatedTest.cpp
+
 graph_util_test_SOURCES = GraphUtilTest.cpp
 
 hierarchy_util_test_SOURCES = HierarchyUtilTest.cpp
 hierarchy_util_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
-
-init_class_test_SOURCES = InitClassTest.cpp
-
-init_class_pruner_test_SOURCES = InitClassPrunerTest.cpp
-
-init_class_lowering_pass_test_SOURCES = InitClassLoweringPassTest.cpp
 
 instruction_sequence_outliner_test_SOURCES = InstructionSequenceOutlinerTest.cpp ScopeHelper.cpp
 
@@ -466,13 +453,11 @@ TESTS = \
     constructor_analysis_test \
     control_flow_test \
     copy_propagation_test \
-    cpp_util_test \
     cse_test \
     creators_test \
     debug_info_test \
     debug_test \
     dedup_blocks_test \
-    deobfuscated_alias_test \
     dex_class_test \
     dex_instruction_test \
     dex_loader_test \
@@ -492,11 +477,9 @@ TESTS = \
     final_inline_v2_test \
     fp_ev_test \
     global_type_analysis_test \
+    get_deobfuscated_test \
     graph_util_test \
     hierarchy_util_test \
-    init_class_test \
-    init_class_pruner_test \
-    init_class_lowering_pass_test \
     instruction_sequence_outliner_test \
     interprocedural_constant_propagation_test \
     intraprocedural_constant_propagation_test \

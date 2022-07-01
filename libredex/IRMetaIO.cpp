@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -29,9 +29,9 @@ PACKED(struct ir_meta_header_t {
 
 void serialize_str(const std::string& str, std::ofstream& ostrm) {
   char data[5];
-  write_uleb128((uint8_t*)data, str.size());
-  ostrm.write(data, uleb128_encoding_size(str.size()));
-  ostrm.write(str.c_str(), str.size());
+  write_uleb128((uint8_t*)data, str.length());
+  ostrm.write(data, uleb128_encoding_size(str.length()));
+  ostrm.write(str.c_str(), str.length());
   ostrm.put('\0');
 }
 
@@ -56,7 +56,7 @@ DexMethod* find_method(const DexClass* cls, const std::string& name_and_proto) {
   const DexString* method_name =
       DexString::make_string(name_and_proto.substr(0, colon));
   std::string proto =
-      name_and_proto.substr(colon + 1, name_and_proto.size() - colon - 1);
+      name_and_proto.substr(colon + 1, name_and_proto.length() - colon - 1);
   auto result = std::find_if(
       cls->get_dmethods().begin(), cls->get_dmethods().end(),
       [&](const DexMethod* m) {
@@ -89,14 +89,13 @@ void serialize_name_and_rstate(const T* obj, std::ofstream& ostrm) {
 
 template <typename T>
 void deserialize_name_and_rstate(const char** _ptr, T* obj) {
-  auto size = read_uleb128((const uint8_t**)_ptr);
-  if (size) {
-    // In a corrupted input *_ptr may not be null terminated.
-    obj->set_deobfuscated_name(std::string(*_ptr, size));
+  int utfsize = read_uleb128((const uint8_t**)_ptr);
+  if (utfsize) {
+    obj->set_deobfuscated_name(std::string(*_ptr));
   } else {
     obj->set_deobfuscated_name(show(obj));
   }
-  (*_ptr) += size + 1;
+  (*_ptr) += utfsize + 1;
   ir_meta_io::IRMetaIO::deserialize_rstate(_ptr, obj->rstate);
 }
 
@@ -179,26 +178,25 @@ void deserialize_class_data(std::ifstream& istrm, uint32_t data_size) {
   while (ptr - data.get() < data_size) {
     BlockType btype = (BlockType)*ptr++;
     always_assert(btype >= 0 && btype < BlockType::EndOfBlock);
-    int strsize = read_uleb128((const uint8_t**)&ptr);
+    int utfsize = read_uleb128((const uint8_t**)&ptr);
     switch (btype) {
     case BlockType::ClassBlock: {
-      // Create a std::string for null termination
-      DexType* type = DexType::get_type(std::string(ptr, strsize));
+      DexType* type = DexType::get_type(ptr, utfsize);
       cls = type_class(type);
       always_assert(cls != nullptr);
-      ptr += strsize + 1;
+      ptr += utfsize + 1;
       deserialize_name_and_rstate((const char**)&ptr, cls);
       break;
     }
     case BlockType::FieldBlock: {
-      DexField* field = find_field(cls, std::string(ptr, strsize));
-      ptr += strsize + 1;
+      DexField* field = find_field(cls, std::string(ptr, utfsize));
+      ptr += utfsize + 1;
       deserialize_name_and_rstate((const char**)&ptr, field);
       break;
     }
     case BlockType::MethodBlock: {
-      DexMethod* method = find_method(cls, std::string(ptr, strsize));
-      ptr += strsize + 1;
+      DexMethod* method = find_method(cls, std::string(ptr, utfsize));
+      ptr += utfsize + 1;
       deserialize_name_and_rstate((const char**)&ptr, method);
       break;
     }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -42,7 +42,7 @@ constexpr SourceBlock::Val kXVal = SourceBlock::Val::none();
 static SourceBlockConsistencyCheck s_sbcc;
 
 struct InsertHelper {
-  const DexString* method;
+  DexMethod* method;
   uint32_t id{0};
   std::ostringstream oss;
   bool serialize;
@@ -67,7 +67,7 @@ struct InsertHelper {
   };
   std::vector<ProfileParserState> parser_state;
 
-  InsertHelper(const DexString* method,
+  InsertHelper(DexMethod* method,
                const std::vector<ProfileData>& profiles,
                bool serialize,
                bool insert_after_excs)
@@ -398,8 +398,7 @@ InsertResult insert_source_blocks(DexMethod* method,
                                   const std::vector<ProfileData>& profiles,
                                   bool serialize,
                                   bool insert_after_excs) {
-  InsertHelper helper(&method->get_deobfuscated_name(), profiles, serialize,
-                      insert_after_excs);
+  InsertHelper helper(method, profiles, serialize, insert_after_excs);
 
   impl::visit_in_order(
       cfg, [&](Block* cur) { helper.start(cur); },
@@ -411,18 +410,18 @@ InsertResult insert_source_blocks(DexMethod* method,
   return {helper.id, helper.oss.str(), !had_failures};
 }
 
-bool has_source_block_positive_val(const SourceBlock* sb) {
-  bool any_positive_val = false;
+namespace {
+
+bool is_source_block_hot(SourceBlock* sb) {
+  bool is_hot = false;
   if (sb != nullptr) {
-    sb->foreach_val_early([&any_positive_val](const auto& val) {
-      any_positive_val = val && val->val > 0.0f;
-      return any_positive_val;
+    sb->foreach_val_early([&is_hot](const auto& val) {
+      is_hot = val && val->val > 0.0f;
+      return is_hot;
     });
   }
-  return any_positive_val;
+  return is_hot;
 }
-
-namespace {
 
 size_t count_blocks(
     Block*, const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
@@ -446,7 +445,7 @@ size_t hot_immediate_dom_not_hot(
     Block* block,
     const dominators::SimpleFastDominators<cfg::GraphInterface>& dominators) {
   auto* first_sb_current_b = source_blocks::get_first_source_block(block);
-  if (!has_source_block_positive_val(first_sb_current_b)) {
+  if (!is_source_block_hot(first_sb_current_b)) {
     return 0;
   }
 
@@ -456,8 +455,7 @@ size_t hot_immediate_dom_not_hot(
   }
   auto* first_sb_immediate_dominator =
       source_blocks::get_first_source_block(immediate_dominator);
-  bool is_idom_hot =
-      has_source_block_positive_val(first_sb_immediate_dominator);
+  bool is_idom_hot = is_source_block_hot(first_sb_immediate_dominator);
   return is_idom_hot ? 0 : 1;
 }
 
@@ -466,14 +464,14 @@ size_t hot_no_hot_pred(
     Block* block,
     const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
   auto* first_sb_current_b = source_blocks::get_first_source_block(block);
-  if (!has_source_block_positive_val(first_sb_current_b)) {
+  if (!is_source_block_hot(first_sb_current_b)) {
     return 0;
   }
 
   for (auto predecessor : block->preds()) {
     auto* first_sb_pred =
         source_blocks::get_first_source_block(predecessor->src());
-    if (has_source_block_positive_val(first_sb_pred)) {
+    if (is_source_block_hot(first_sb_pred)) {
       return 0;
     }
   }
@@ -485,113 +483,29 @@ size_t hot_all_pred_cold(
     Block* block,
     const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
   auto* first_sb_current_b = source_blocks::get_first_source_block(block);
-  if (!has_source_block_positive_val(first_sb_current_b)) {
+  if (!is_source_block_hot(first_sb_current_b)) {
     return 0;
   }
 
   for (auto predecessor : block->preds()) {
     auto* first_sb_pred =
         source_blocks::get_first_source_block(predecessor->src());
-    if (has_source_block_positive_val(first_sb_pred)) {
+    if (is_source_block_hot(first_sb_pred)) {
       return 0;
     }
   }
   return 1;
 }
 
-template <typename Fn>
-size_t chain_hot_violations_tmpl(Block* block, const Fn& fn) {
-  size_t sum{0};
-  for (auto& mie : *block) {
-    if (mie.type != MFLOW_SOURCE_BLOCK) {
-      continue;
-    }
-
-    for (auto* sb = mie.src_block.get(); sb->next != nullptr;
-         sb = sb->next.get()) {
-      // Check that each interaction has at least as high a hit value as the
-      // next SourceBlock.
-      auto* next = sb->next.get();
-      size_t local_sum{0};
-      for (size_t i = 0; i != sb->vals.size(); ++i) {
-        auto sb_val = sb->get_val(i);
-        auto next_val = next->get_val(i);
-        if (sb_val) {
-          if (next_val && *sb_val < *next_val) {
-            ++local_sum;
-          }
-        } else if (next_val) {
-          ++local_sum;
-        }
-      }
-      sum += fn(local_sum);
-    }
-  }
-
-  return sum;
-}
-
-size_t chain_hot_violations(
-    Block* block,
-    const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
-  return chain_hot_violations_tmpl(block, [](auto val) { return val; });
-}
-
-size_t chain_hot_one_violations(
-    Block* block,
-    const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
-  return chain_hot_violations_tmpl(block,
-                                   [](auto val) { return val > 0 ? 1 : 0; });
-}
-
-size_t chain_and_dom_violations(
-    Block* block,
-    const dominators::SimpleFastDominators<cfg::GraphInterface>& dom) {
-  const SourceBlock* last = nullptr;
-  for (auto* b = dom.get_idom(block); last == nullptr && b != nullptr;
-       b = dom.get_idom(b)) {
-    last = get_last_source_block(b);
-    if (b == b->cfg().entry_block()) {
-      break;
-    }
-  }
-
-  size_t sum{0};
-  foreach_source_block(block, [&sum, &last](const auto* sb) {
-    if (last != nullptr) {
-      for (size_t i = 0; i != sb->vals.size(); ++i) {
-        auto last_val = last->get_val(i);
-        auto sb_val = sb->get_val(i);
-        if (last_val) {
-          if (sb_val && *last_val < *sb_val) {
-            sum++;
-            break;
-          }
-        } else if (sb_val) {
-          sum++;
-          break;
-        }
-      }
-    }
-
-    last = sb;
-  });
-
-  return sum;
-}
-
 // Ugly but necessary for constexpr below.
 using CounterFnPtr = size_t (*)(
     Block*, const dominators::SimpleFastDominators<cfg::GraphInterface>&);
 
-constexpr std::array<std::pair<std::string_view, CounterFnPtr>, 6> gCounters = {
+constexpr std::array<std::pair<std::string_view, CounterFnPtr>, 3> gCounters = {
     {
         {"~blocks~count", &count_blocks},
         {"~blocks~with~source~blocks", &count_block_has_sbs},
         {"~assessment~source~blocks~total", &count_all_sbs},
-        {"~flow~violation~in~chain", &chain_hot_violations},
-        {"~flow~violation~in~chain~one", &chain_hot_one_violations},
-        {"~flow~violation~chain~and~dom", &chain_and_dom_violations},
     }};
 
 constexpr std::array<std::pair<std::string_view, CounterFnPtr>, 3>
@@ -602,6 +516,7 @@ constexpr std::array<std::pair<std::string_view, CounterFnPtr>, 3>
     }};
 
 struct SourceBlocksStats {
+  size_t methods_with_code{0};
   size_t methods_with_sbs{0};
 
   std::array<size_t, gCounters.size()> global{};
@@ -615,6 +530,7 @@ struct SourceBlocksStats {
       non_entry_min_max_methods{};
 
   SourceBlocksStats& operator+=(const SourceBlocksStats& that) {
+    methods_with_code += that.methods_with_code;
     methods_with_sbs += that.methods_with_sbs;
 
     for (size_t i = 0; i != global.size(); ++i) {
@@ -664,6 +580,8 @@ struct SourceBlocksStats {
   }
 
   void fill_derived(const DexMethod* m) {
+    methods_with_code = 1;
+
     static_assert(gCounters[1].first == "~blocks~with~source~blocks");
     methods_with_sbs = global[1] > 0 ? 1 : 0;
 
@@ -724,6 +642,7 @@ void track_source_block_coverage(ScopedMetrics& sm,
 
   sm.set_metric("~consistency~check~violations", consistency_check_violations);
 
+  sm.set_metric("~assessment~methods~with~code", stats.methods_with_code);
   sm.set_metric("~assessment~methods~with~sbs", stats.methods_with_sbs);
 
   for (size_t i = 0; i != gCounters.size(); ++i) {
@@ -747,6 +666,17 @@ void track_source_block_coverage(ScopedMetrics& sm,
     min_max(stats.non_entry_min_max_methods[i].first, "min_method");
     min_max(stats.non_entry_min_max_methods[i].second, "max_method");
   }
+}
+
+bool has_source_block_positive_val(const SourceBlock* sb) {
+  bool any_positive_val = false;
+  if (sb != nullptr) {
+    sb->foreach_val_early([&any_positive_val](const auto& val) {
+      any_positive_val = val && val->val > 0.0f;
+      return any_positive_val;
+    });
+  }
+  return any_positive_val;
 }
 
 struct ViolationsHelper::ViolationsHelperImpl {
@@ -938,5 +868,6 @@ ViolationsHelper::ViolationsHelper(const Scope& scope,
                                    std::vector<std::string> to_vis)
     : impl(std::make_unique<ViolationsHelperImpl>(scope, std::move(to_vis))) {}
 ViolationsHelper::~ViolationsHelper() {}
+
 
 } // namespace source_blocks

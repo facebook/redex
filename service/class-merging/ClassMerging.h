@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -11,17 +11,17 @@
 
 namespace class_merging {
 
-const ModelStats merge_model(Scope& scope,
-                             ConfigFiles& conf,
-                             PassManager& mgr,
-                             DexStoresVector& stores,
-                             ModelSpec& spec);
+void merge_model(Scope& scope,
+                 ConfigFiles& conf,
+                 PassManager& mgr,
+                 DexStoresVector& stores,
+                 ModelSpec& spec);
 
-const ModelStats merge_model(const TypeSystem&,
-                             Scope& scope,
-                             ConfigFiles& conf,
-                             PassManager& mgr,
-                             DexStoresVector& stores,
-                             ModelSpec& spec);
+void merge_model(const TypeSystem&,
+                 Scope& scope,
+                 ConfigFiles& conf,
+                 PassManager& mgr,
+                 DexStoresVector& stores,
+                 ModelSpec& spec);
 
 } // namespace class_merging

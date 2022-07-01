@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -26,7 +26,7 @@ namespace java_declarations {
  * TODO: have more robust support for above 1 and 2
  */
 dex_member_refs::FieldDescriptorTokens parse_field_declaration(
-    std::string_view line);
+    const std::string& line);
 
 /*
  * @param line Java method declaration
@@ -44,5 +44,5 @@ dex_member_refs::FieldDescriptorTokens parse_field_declaration(
  * TODO: have more robust support for above 1 and 2
  */
 dex_member_refs::MethodDescriptorTokens parse_method_declaration(
-    std::string_view line);
+    const std::string& line);
 } // namespace java_declarations

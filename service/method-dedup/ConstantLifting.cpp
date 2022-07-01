@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -102,7 +102,8 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
     // Add constant to arg list.
     auto old_proto = method->get_proto();
     auto const_types = const_vals.get_constant_types();
-    auto arg_list = old_proto->get_args()->push_back(const_types);
+    auto arg_list =
+        type_reference::append_and_make(old_proto->get_args(), const_types);
     auto new_proto = DexProto::make_proto(old_proto->get_rtype(), arg_list);
 
     // Find a non-conflicting name

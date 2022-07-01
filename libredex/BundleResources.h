@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -29,9 +29,6 @@ class ResourcesPbFile : public ResourceTableFile {
   void collect_resid_values_and_hashes(
       const std::vector<uint32_t>& ids,
       std::map<size_t, std::vector<uint32_t>>* res_by_hash) override;
-  void remap_file_paths_and_serialize(
-      const std::vector<std::string>& resource_files,
-      const std::unordered_map<std::string, std::string>& old_to_new) override;
   void remap_res_ids_and_serialize(
       const std::vector<std::string>& resource_files,
       const std::map<uint32_t, uint32_t>& old_to_new) override;
@@ -41,23 +38,30 @@ class ResourcesPbFile : public ResourceTableFile {
   bool resource_value_identical(uint32_t a_id, uint32_t b_id) override;
   std::unordered_set<uint32_t> get_types_by_name(
       const std::unordered_set<std::string>& type_names) override;
-  std::vector<std::string> get_files_by_rid(
+  std::unordered_set<std::string> get_files_by_rid(
       uint32_t res_id,
       ResourcePathType path_type = ResourcePathType::DevicePath) override;
   void walk_references_for_resource(
       uint32_t resID,
-      ResourcePathType path_type,
       std::unordered_set<uint32_t>* nodes_visited,
       std::unordered_set<std::string>* potential_file_paths) override;
+  std::unordered_set<uint32_t> get_types_by_name_prefixes(
+      const std::unordered_set<std::string>& type_name_prefixes) override;
   void delete_resource(uint32_t res_id) override;
   void collect_resource_data_for_file(const std::string& resources_pb_path);
   size_t get_hash_from_values(const ConfigValues& config_values);
+  size_t obfuscate_resource_and_serialize(
+      const std::vector<std::string>& resource_files,
+      const std::map<std::string, std::string>& filepath_old_to_new,
+      const std::unordered_set<uint32_t>& allowed_types,
+      const std::unordered_set<std::string>& keep_resource_prefixes) override;
 
   const std::map<uint32_t, const ConfigValues>& get_res_id_to_configvalue()
       const {
     return m_res_id_to_configvalue;
   }
   std::string resolve_module_name_for_resource_id(uint32_t res_id);
+  std::string resolve_module_name_for_package_id(uint32_t package_id);
 
  private:
   uint32_t m_package_id = 0xFFFFFFFF;

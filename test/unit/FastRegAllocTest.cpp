@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -9,9 +9,7 @@
 #include "LinearScan.h"
 #include "RedexTest.h"
 
-struct FastRegAllocTest : public RedexTest {
-  FastRegAllocTest() { g_redex->instrument_mode = false; }
-};
+struct FastRegAllocTest : public RedexTest {};
 
 /*
  * Check function: allocate() in class: LinearScanAllocator
@@ -35,21 +33,19 @@ TEST_F(FastRegAllocTest, RegAlloc) {
     )
 )");
 
-  {
-    fastregalloc::LinearScanAllocator allocator(method);
-    allocator.allocate();
-  }
+  fastregalloc::LinearScanAllocator allocator(method);
+  allocator.allocate();
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
-      (const v4 1)
-      (const v3 0)
-      (add-int v2 v4 v3)
-      (const v3 -1)
-      (add-int v3 v4 v3)
-      (add-int v1 v4 v3)
-      (const v3 2)
-      (add-int v0 v4 v3)
+      (const v2 1)
+      (const v1 0)
+      (add-int v0 v2 v1)
+      (const v1 -1)
+      (add-int v1 v2 v1)
+      (add-int v0 v2 v1)
+      (const v1 2)
+      (add-int v0 v2 v1)
       (return v0)
     )
 )");
@@ -72,10 +68,8 @@ TEST_F(FastRegAllocTest, NoUseVReg) {
     )
 )");
 
-  {
-    fastregalloc::LinearScanAllocator allocator(method);
-    allocator.allocate();
-  }
+  fastregalloc::LinearScanAllocator allocator(method);
+  allocator.allocate();
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -106,21 +100,19 @@ TEST_F(FastRegAllocTest, ControlFlow) {
     )
 )");
 
-  {
-    fastregalloc::LinearScanAllocator allocator(method);
-    allocator.allocate();
-  }
+  fastregalloc::LinearScanAllocator allocator(method);
+  allocator.allocate();
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
-      (const v2 1)
       (const v1 1)
-      (if-eqz v2 :branch)
-      (return v2)
+      (const v0 1)
+      (if-eqz v1 :branch)
+      (return v1)
 
       (:branch)
-      (add-int v0 v2 v1)
-      (return v0)
+      (add-int v1 v1 v0)
+      (return v1)
     )
 )");
   EXPECT_CODE_EQ(method->get_code(), expected_code.get());
@@ -147,10 +139,8 @@ TEST_F(FastRegAllocTest, CheckCodeFlow) {
     )
 )");
 
-  {
-    fastregalloc::LinearScanAllocator allocator(method);
-    allocator.allocate();
-  }
+  fastregalloc::LinearScanAllocator allocator(method);
+  allocator.allocate();
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -183,22 +173,20 @@ TEST_F(FastRegAllocTest, CheckVRegInLoop) {
     )
 )");
 
-  {
-    fastregalloc::LinearScanAllocator allocator(method);
-    allocator.allocate();
-  }
+  fastregalloc::LinearScanAllocator allocator(method);
+  allocator.allocate();
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
-      (const v2 10)
-      (const v3 1)
+      (const v3 10)
+      (const v2 1)
       (:LHead)
-      (if-gt v2 v3 :Loop)
-      (add-int/lit8 v1 v2 1)
+      (if-gt v3 v2 :Loop)
+      (add-int/lit8 v1 v3 1)
       (move v0 v1)
       (return v0)
       (:Loop)
-      (add-int/lit8 v2 v2 -1)
+      (add-int/lit8 v3 v3 -1)
       (goto :LHead)
     )
 )");
@@ -220,17 +208,15 @@ TEST_F(FastRegAllocTest, WideVReg) {
     )
 )");
 
-  {
-    fastregalloc::LinearScanAllocator allocator(method);
-    allocator.allocate();
-  }
+  fastregalloc::LinearScanAllocator allocator(method);
+  allocator.allocate();
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
-        (const v3 1)
-        (add-int/lit8 v2 v3 1)
-        (const-wide v0 9223372036854775807)
-        (return v2)
+        (const v1 1)
+        (add-int/lit8 v0 v1 1)
+        (const-wide v1 9223372036854775807)
+        (return v0)
     )
 )");
   EXPECT_CODE_EQ(method->get_code(), expected_code.get());
@@ -276,205 +262,37 @@ TEST_F(FastRegAllocTest, ParamAlloc) {
     )
 )");
 
-  {
-    fastregalloc::LinearScanAllocator allocator(method);
-    allocator.allocate();
-  }
+  fastregalloc::LinearScanAllocator allocator(method);
+  allocator.allocate();
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
-      (load-param-object v1)
-      (load-param-object v7)
-      (invoke-virtual (v7) "LLacrimaConfig;.getSessionManager:()LSessionManager;")
-      (move-result-object v9)
-      (invoke-virtual (v7) "LLacrimaConfig;.getSessionManager:()LSessionManager;")
-      (move-result-object v10)
-      (iget-object v10 "LSessionManager;.mProcessName:Ljava/lang/String;")
-      (move-result-pseudo-object v8)
-      (invoke-virtual (v9 v8) "LSessionManager;.getPreviousSessionDir:(Ljava/lang/String;)Ljava/io/File;")
-      (move-result-object v4)
-      (if-nez v4 :B2)
-      (const v0 0)
-      (return-object v0)
-      (:B2)
-      (invoke-virtual (v7) "LLacrimaConfig;.getSessionManager:()LSessionManager;")
-      (move-result-object v3)
-      (invoke-virtual (v7) "LLacrimaConfig;.getForegroundEntityMapperProvider:()LProvider;")
-      (move-result-object v6)
-      (invoke-interface (v6) "LProvider;.get:()Ljava/lang/Object;")
-      (move-result-object v5)
-      (check-cast v5 "LForegroundEntityMapper;")
-      (move-result-pseudo-object v2)
-      (new-instance "LAppStateCollector;")
+      (load-param-object v4)
+      (load-param-object v3)
+      (invoke-virtual (v3) "LLacrimaConfig;.getSessionManager:()LSessionManager;")
+      (move-result-object v2)
+      (invoke-virtual (v3) "LLacrimaConfig;.getSessionManager:()LSessionManager;")
+      (move-result-object v1)
+      (iget-object v1 "LSessionManager;.mProcessName:Ljava/lang/String;")
       (move-result-pseudo-object v0)
-      (invoke-direct (v0 v4 v3 v2) "LAppStateCollector;.<init>:(Ljava/io/File;LSessionManager;LForegroundEntityMapper;)V")
-      (return-object v0)
-    )
-)");
-  EXPECT_CODE_EQ(method->get_code(), expected_code.get());
-}
-
-TEST_F(FastRegAllocTest, EmptyBlocks) {
-  // In "instrument_mode", empty blocks with source-block information are not
-  // always merged into with their successor blocks, leaving behind blocks with
-  // no instructions that need to be dealt with properly
-  g_redex->instrument_mode = true;
-  auto method = assembler::method_from_string(R"(
-    (method (public static) "LFoo;.bar:()Z"
-      (
-        (const v999 0)
-        (switch v999 (:empty_block :successor_block))
-
-        (:empty_block 1)
-        (.src_block "LFoo;.bar:()V" 0)
-
-        (:successor_block 2)
-        (return v999)
-      )
-    )
-)");
-
-  {
-    fastregalloc::LinearScanAllocator allocator(method);
-    allocator.allocate();
-  }
-
-  auto expected_code = assembler::ircode_from_string(R"(
-    (
-        (const v0 0)
-        (switch v0 (:empty_block :successor_block))
-
-        (:empty_block 1)
-        (.src_block "LFoo;.bar:()V" 0)
-
-        (:successor_block 2)
-        (return v0)
-    )
-)");
-  EXPECT_CODE_EQ(method->get_code(), expected_code.get());
-}
-
-TEST_F(FastRegAllocTest, DefUseIntervalBoundaries) {
-  auto method = assembler::method_from_string(R"(
-    (method (public static) "LFoo;.bar:()Z"
-      (
-        (const v0 0)
-        (move v1 v0)
-        (move v2 v1)
-        (return v2)
-      )
-    )
-)");
-
-  {
-    fastregalloc::LinearScanAllocator allocator(method);
-    allocator.allocate();
-  }
-
-  auto expected_code = assembler::ircode_from_string(R"(
-    (
-        (const v1 0)
-        (move v1 v1)
-        (move v0 v1)
-        (return v0)
-    )
-)");
-  EXPECT_CODE_EQ(method->get_code(), expected_code.get());
-}
-
-TEST_F(FastRegAllocTest, CheckCast) {
-  // The move-result-pseudo-object associated with a check-cast must not have
-  // the same dest register as the src(0) of the check cast, if that dest
-  // register is live-in to any catch handler of the check-cast. See
-  // Interference.cpp / GraphBuilder::build for the long explanation. This is a
-  // regression test to ensure that the two registers do *NOT* the unified, even
-  // though they don't have overlapping live ranges.
-  auto method = assembler::method_from_string(R"(
-    (method (public static) "LFoo;.bar:(Ljava/lang/Object;)Ljava/lang/Object;"
-      (
-        (load-param-object v111)
-
-        (.try_start a)
-        (check-cast v111 "LX;")
-        (move-result-pseudo-object v999)
-        (return v999)
-        (.try_end a)
-
-        (.catch (a))
-        (return v111)
-      )
-    )
-)");
-
-  {
-    fastregalloc::LinearScanAllocator allocator(method);
-    allocator.allocate();
-  }
-
-  auto expected_code = assembler::ircode_from_string(R"(
-    (
-        (load-param-object v1)
-
-        (.try_start a)
-        (check-cast v1 "LX;")
-        (move-result-pseudo-object v0)
-        (return v0)
-        (.try_end a)
-
-        (.catch (a))
-        (return v1)
-    )
-)");
-  EXPECT_CODE_EQ(method->get_code(), expected_code.get());
-}
-
-TEST_F(FastRegAllocTest, CheckCast2) {
-  // Don't unify v0 and v1!
-  auto method = assembler::method_from_string(R"(
-    (method (public) "LFoo;.bar:(LBaseType;Z)LSubType;"
-     (
-        (load-param-object v2)
-        (load-param v3)
-        (const v1 0)
-        (if-eqz v3 :L0)
-        (return-object v1)
-
-        (.try_start c0)
-        (:L0)
-        (check-cast v2 "LSubType;")
-        (move-result-pseudo-object v0)
-        (return-object v0)
-
-        (.try_end c0)
-        (.catch (c0))
-        (return-object v1)
-     )
-    )
-)");
-  method->get_code()->set_registers_size(2);
-
-  {
-    fastregalloc::LinearScanAllocator allocator(method);
-    allocator.allocate();
-  }
-
-  auto expected_code = assembler::ircode_from_string(R"(
-    (
-        (load-param-object v2)
-        (load-param v3)
-        (const v1 0)
-        (if-eqz v3 :L0)
-        (return-object v1)
-
-        (.try_start c0)
-        (:L0)
-        (check-cast v2 "LSubType;")
-        (move-result-pseudo-object v0)
-        (return-object v0)
-
-        (.try_end c0)
-        (.catch (c0))
-        (return-object v1)
+      (invoke-virtual (v2 v0) "LSessionManager;.getPreviousSessionDir:(Ljava/lang/String;)Ljava/io/File;")
+      (move-result-object v2)
+      (if-nez v2 :B2)
+      (const v3 0)
+      (return-object v3)
+      (:B2)
+      (invoke-virtual (v3) "LLacrimaConfig;.getSessionManager:()LSessionManager;")
+      (move-result-object v0)
+      (invoke-virtual (v3) "LLacrimaConfig;.getForegroundEntityMapperProvider:()LProvider;")
+      (move-result-object v3)
+      (invoke-interface (v3) "LProvider;.get:()Ljava/lang/Object;")
+      (move-result-object v3)
+      (check-cast v3 "LForegroundEntityMapper;")
+      (move-result-pseudo-object v3)
+      (new-instance "LAppStateCollector;")
+      (move-result-pseudo-object v1)
+      (invoke-direct (v1 v2 v0 v3) "LAppStateCollector;.<init>:(Ljava/io/File;LSessionManager;LForegroundEntityMapper;)V")
+      (return-object v1)
     )
 )");
   EXPECT_CODE_EQ(method->get_code(), expected_code.get());

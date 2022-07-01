@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -19,8 +19,8 @@
 
 #pragma once
 
+#include <boost/utility/string_view.hpp>
 #include <string>
-#include <string_view>
 #include <vector>
 
 namespace keep_rules {
@@ -64,7 +64,6 @@ enum class TokenType {
   target_version_token,
   filter_pattern,
   eof_token,
-  comment,
 
   // Input/Output Options
   include,
@@ -128,10 +127,10 @@ enum class TokenType {
 struct Token {
   TokenType type;
   size_t line;
-  std::string_view data;
+  boost::string_view data;
 
   Token(TokenType type, size_t line_number) : type{type}, line{line_number} {}
-  Token(TokenType type, size_t line_number, const std::string_view& data_in)
+  Token(TokenType type, size_t line_number, const boost::string_view& data_in)
       : type{type}, line{line_number}, data(data_in) {}
 
   Token(Token&&) noexcept = default;
@@ -141,7 +140,7 @@ struct Token {
   bool is_command() const;
 };
 
-std::vector<Token> lex(const std::string_view& in);
+std::vector<Token> lex(const boost::string_view& in);
 
 } // namespace proguard_parser
 } // namespace keep_rules

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -39,21 +39,15 @@ std::string CallSiteSummary::get_key() const {
   return oss.str();
 }
 
-static void append_signed_constant(std::ostringstream& oss,
-                                   const SignedConstantDomain& signed_value) {
-  auto c = signed_value.get_constant();
-  if (c) {
-    // prefer compact pretty value
-    oss << *c;
-  } else {
-    oss << signed_value;
-  }
-}
-
 void CallSiteSummary::append_key_value(std::ostringstream& oss,
                                        const ConstantValue& value) {
   if (const auto& signed_value = value.maybe_get<SignedConstantDomain>()) {
-    append_signed_constant(oss, *signed_value);
+    auto c = signed_value->get_constant();
+    if (c) {
+      oss << *c;
+    } else {
+      oss << show(*signed_value);
+    }
   } else if (const auto& singleton_value =
                  value.maybe_get<SingletonObjectDomain>()) {
     auto field = *singleton_value->get_constant();
@@ -74,17 +68,20 @@ void CallSiteSummary::append_key_value(std::ostringstream& oss,
         oss << ",";
       }
       if (attr.attr.is_field()) {
-        oss << show(attr.attr.val.field);
+        oss << show(attr.attr.field);
       } else {
         always_assert(attr.attr.is_method());
-        oss << show(attr.attr.val.method);
+        oss << show(attr.attr.method);
       }
       oss << "=";
       if (const auto& signed_value2 =
               attr.value.maybe_get<SignedConstantDomain>()) {
-        append_signed_constant(oss, *signed_value2);
-      } else {
-        not_reached_log("unexpected attr value: %s", SHOW(attr.value));
+        auto c = signed_value2->get_constant();
+        if (c) {
+          oss << *c;
+        } else {
+          oss << show(*signed_value2);
+        }
       }
     }
     oss << "}";
@@ -266,8 +263,7 @@ CallSiteSummarizer::get_invoke_call_site_summaries(
           m_shrinker.get_immut_analyzer_state(),
           m_shrinker.get_immut_analyzer_state(),
           constant_propagation::EnumFieldAnalyzerState::get(),
-          constant_propagation::BoxedBooleanAnalyzerState::get(),
-          constant_propagation::ApiLevelAnalyzerState::get(), nullptr));
+          constant_propagation::BoxedBooleanAnalyzerState::get(), nullptr));
   intra_cp.run(initial_env);
   for (const auto& block : cfg.blocks()) {
     auto env = intra_cp.get_entry_state_at(block);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -9,7 +9,6 @@
 
 #include "ReachingDefinitions.h"
 #include "TypeInference.h"
-#include <functional>
 
 namespace constant_uses {
 
@@ -30,12 +29,6 @@ enum TypeDemand : uint8_t {
 class ConstantUses {
  public:
   ConstantUses(const cfg::ControlFlowGraph& cfg, DexMethod* method);
-  ConstantUses(const cfg::ControlFlowGraph& cfg,
-               bool is_static,
-               DexType* declaring_type,
-               DexType* rtype,
-               DexTypeList* args,
-               const std::function<std::string()>& method_describer);
 
   // Given a const or const-wide instruction, retrieve all instructions that
   // use it.

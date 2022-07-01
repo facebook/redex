@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -32,7 +32,6 @@ bool inline_with_cfg(
     DexMethod* callee_method,
     IRInstruction* callsite,
     DexType* needs_receiver_cast,
-    DexType* needs_init_class,
     size_t next_caller_reg,
     const std::shared_ptr<cfg::ControlFlowGraph>& reduced_cfg = nullptr);
 
@@ -130,21 +129,17 @@ class MultiMethodInliner {
    */
   MultiMethodInliner(
       const std::vector<DexClass*>& scope,
-      const init_classes::InitClassesWithSideEffects&
-          init_classes_with_side_effects,
       DexStoresVector& stores,
       const std::unordered_set<DexMethod*>& candidates,
       std::function<DexMethod*(DexMethodRef*, MethodSearch)>
           concurrent_resolve_fn,
       const inliner::InlinerConfig& config,
-      int min_sdk,
       MultiMethodInlinerMode mode = InterDex,
       const CalleeCallerInsns& true_virtual_callers = {},
       InlineForSpeed* inline_for_speed = nullptr,
       bool analyze_and_prune_inits = false,
       const std::unordered_set<DexMethodRef*>& configured_pure_methods = {},
       const api::AndroidSDK* min_sdk_api = nullptr,
-      bool cross_dex_penalty = false,
       const std::unordered_set<const DexString*>&
           configured_finalish_field_names = {});
 
@@ -176,9 +171,9 @@ class MultiMethodInliner {
    * Inline callees in the given instructions in the caller, if is_inlinable
    * below returns true.
    */
-  size_t inline_callees(DexMethod* caller,
-                        const std::unordered_set<IRInstruction*>& insns,
-                        std::vector<IRInstruction*>* deleted_insns = nullptr);
+  void inline_callees(DexMethod* caller,
+                      const std::unordered_set<IRInstruction*>& insns,
+                      bool delete_removed_insns = true);
 
   /**
    * Return true if the callee is inlinable into the caller.
@@ -198,14 +193,11 @@ class MultiMethodInliner {
   shrinker::Shrinker& get_shrinker() { return m_shrinker; }
 
  private:
-  DexType* get_needs_init_class(DexMethod* callee) const;
-
   DexMethod* get_callee(DexMethod* caller, IRInstruction* insn);
 
-  size_t inline_inlinables(
-      DexMethod* caller,
-      const std::vector<Inlinable>& inlinables,
-      std::vector<IRInstruction*>* deleted_insns = nullptr);
+  void inline_inlinables(DexMethod* caller,
+                         const std::vector<Inlinable>& inlinables,
+                         bool delete_removed_insns = true);
 
   /**
    * Return true if the method is related to enum (java.lang.Enum and derived).
@@ -567,9 +559,7 @@ class MultiMethodInliner {
     int critical_path_length{0};
 
     // statistics that may be incremented concurrently
-    std::atomic<size_t> kotlin_lambda_inlined{0};
     std::atomic<size_t> calls_inlined{0};
-    std::atomic<size_t> init_classes{0};
     std::atomic<size_t> calls_not_inlinable{0};
     std::atomic<size_t> calls_not_inlined{0};
     std::atomic<size_t> no_returns{0};
@@ -612,8 +602,6 @@ class MultiMethodInliner {
   // Whether to do some deep analysis to determine if constructor candidates
   // can be safely inlined, and don't inline them otherwise.
   bool m_analyze_and_prune_inits;
-
-  bool m_cross_dex_penalty;
 
   shrinker::Shrinker m_shrinker;
 

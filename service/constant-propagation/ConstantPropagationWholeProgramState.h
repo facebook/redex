@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -51,14 +51,12 @@ class WholeProgramState {
   WholeProgramState(const Scope&,
                     const interprocedural::FixpointIterator&,
                     const std::unordered_set<DexMethod*>&,
-                    const std::unordered_set<const DexType*>&,
-                    const std::unordered_set<const DexField*>&);
+                    const std::unordered_set<const DexType*>&);
 
   WholeProgramState(const Scope&,
                     const interprocedural::FixpointIterator&,
                     const std::unordered_set<DexMethod*>&,
                     const std::unordered_set<const DexType*>&,
-                    const std::unordered_set<const DexField*>&,
                     const call_graph::Graph& call_graph);
 
   /*
@@ -144,10 +142,8 @@ class WholeProgramState {
   }
 
  private:
-  void collect(
-      const Scope& scope,
-      const interprocedural::FixpointIterator& fp_iter,
-      const std::unordered_set<const DexField*>& definitely_assigned_ifields);
+  void collect(const Scope& scope,
+               const interprocedural::FixpointIterator& fp_iter);
 
   void collect_field_values(
       const IRInstruction* insn,

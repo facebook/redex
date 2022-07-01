@@ -1,10 +1,11 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <iostream>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -214,7 +215,8 @@ void AnalysisImpl::filter_do_not_strip() {
  */
 void AnalysisImpl::collect_children(const TypeSet& intfs) {
   for (auto& intf : intfs) {
-    for (auto super : *type_class(intf)->get_interfaces()) {
+    auto supers = type_class(intf)->get_interfaces();
+    for (auto super : supers->get_type_list()) {
       auto super_it = single_impls.find(super);
       if (super_it != single_impls.end()) {
         super_it->second.children.insert(intf);
@@ -349,7 +351,8 @@ void AnalysisImpl::collect_method_defs() {
     auto proto = method->get_proto();
     bool native = is_native(method);
     check_method_arg(proto->get_rtype(), method, native);
-    for (const auto it : *proto->get_args()) {
+    auto args = proto->get_args();
+    for (const auto it : args->get_type_list()) {
       check_method_arg(it, method, native);
     }
   });
@@ -382,7 +385,8 @@ void AnalysisImpl::analyze_opcodes() {
     // check the sig for single implemented interface
     const auto proto = meth->get_proto();
     check_arg(referrer, insn_it, proto->get_rtype(), meth, insn);
-    for (const auto arg : *proto->get_args()) {
+    const auto args = proto->get_args();
+    for (const auto arg : args->get_type_list()) {
       check_arg(referrer, insn_it, arg, meth, insn);
     }
   };
@@ -527,7 +531,8 @@ void SingleImplAnalysis::escape_interface(DexType* intf, EscapeReason reason) {
   TRACE(INTF, 5, "(ESC) Escape %s => 0x%X", SHOW(intf), reason);
   const auto intf_cls = type_class(intf);
   if (intf_cls) {
-    for (auto super_intf : *intf_cls->get_interfaces()) {
+    const auto super_intfs = intf_cls->get_interfaces();
+    for (auto super_intf : super_intfs->get_type_list()) {
       escape_interface(super_intf, reason);
     }
   }

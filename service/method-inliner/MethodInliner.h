@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -20,6 +20,5 @@ void run_inliner(DexStoresVector& stores,
                  PassManager& mgr,
                  ConfigFiles& conf,
                  bool intra_dex = false,
-                 InlineForSpeed* inline_for_speed = nullptr,
-                 bool inline_bridge_synth_only = false);
+                 InlineForSpeed* inline_for_speed = nullptr);
 } // namespace inliner

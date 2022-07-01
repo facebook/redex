@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -10,38 +10,35 @@
 #include <cstdint>
 #include <vector>
 
+// clang-format off
 /**
- * A simple constructor only initializes some or all of the instance fields with
- * the arguments and calls the super constructor. Normalize these constructors
- * and deduplicate the ones that have the same normal form. Also, reorder the
- * arguments of these constructors by their associated instance fields
- * order.
+ * Simple constructor only initializes the instance fields with the arguments
+ * and call the super constructor. Reorder the arguments of the simple
+ * constructors by their associated instance fields order.
  *
  * Example:
- * void <init>(E e, B b, A a, D d, C c) {
+ * void <init>(B b, A a, D d, C c) {
+ *   this.f2 = b;
  *   this.f1 = a;
  *   this.f3 = c;
- *   this.f4 = e;
- *   const x 5
- *   const y 10
- *   super.<init>(this, b, y, d, x);
+ *   super.<init>(this, d);
  * }
  *
  * is logically equal to
  *
- * void <init>(A a, B b, C c, D d, E e) {
- *   this.f3 = c;
- *   this.f4 = e;
+ * void <init>(A a, B b, C c, D d) {
  *   this.f1 = a;
- *   const x 5
- *   const y 10
- *   super.<init>(this, b, y, d, x);
+ *   this.f2 = b;
+ *   this.f3 = c;
+ *   super.<init>(this, d);
  * }
  *
- * Summarize the logic of simple constructors and use the information to
- * help dedup the constructors. It's especially useful when merging anonymous
- * classes together to dedup as many constructors as possible.
+ * We summarize the logic of simple constructors and use the information to
+ * help dedup the constructors, it's especially useful
+ * when we merge anonymous classees together and want dedup the constructors as
+ * many as possible.
  */
+// clang-format on
 
 class DexClass;
 

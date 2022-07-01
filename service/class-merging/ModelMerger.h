@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -36,11 +36,11 @@ class ModelMerger {
                                      const ConfigFiles& conf,
                                      Model& model);
 
+  void update_redex_stats(const std::string& prefix, PassManager& mgr) const;
+
   void increase_ctor_dedupped_stats(int64_t value) {
     m_stats.m_num_ctor_dedupped += value;
   }
-
-  const ModelStats& get_model_stats() const { return m_stats; }
 
  protected:
   virtual void post_process(

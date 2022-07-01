@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -8,7 +8,7 @@
 #pragma once
 
 #include <boost/functional/hash.hpp>
-#include <iosfwd>
+#include <ostream>
 #include <unordered_set>
 
 #include "Debug.h"
@@ -57,24 +57,6 @@ struct Reason {
     // but we may have more in the future.
     always_assert(type == REFLECTION);
   }
-
-  /*
-   * This returns true if we want to preserve keep reasons for better
-   * diagnostics.
-   */
-  static bool record_keep_reasons() { return s_record_keep_reasons; }
-  static void set_record_keep_reasons(bool v);
-  static void release_keep_reasons();
-
-  template <class... Args>
-  static Reason* make_keep_reason(Args&&... args) {
-    auto to_insert = std::make_unique<Reason>(std::forward<Args>(args)...);
-    return try_insert(std::move(to_insert));
-  }
-
-  static Reason* try_insert(std::unique_ptr<Reason> to_insert);
-
-  static bool s_record_keep_reasons;
 
   friend bool operator==(const Reason&, const Reason&);
 

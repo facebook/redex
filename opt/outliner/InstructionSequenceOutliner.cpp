@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -101,7 +101,6 @@
 #include "PartialCandidates.h"
 #include "PassManager.h"
 #include "ReachingInitializeds.h"
-#include "RedexContext.h"
 #include "RefChecker.h"
 #include "Resolver.h"
 #include "Show.h"
@@ -651,11 +650,7 @@ static bool append_to_partial_candidate(
   pc->insns_size++;
   if (!opcode::is_a_move(opcode)) {
     // Moves are likely still eliminated by reg-alloc or other opts
-    if (insn->opcode() == IOPCODE_INIT_CLASS) {
-      pc->size += 2;
-    } else {
-      pc->size += insn->size();
-    }
+    pc->size += insn->size();
   }
   return true;
 }
@@ -1750,7 +1745,7 @@ class OutlinedMethodCreator {
                                     const DexType* host_class,
                                     std::set<uint32_t>* pattern_ids) {
     auto name = m_method_name_generator.get_name(c);
-    DexTypeList::ContainerType arg_types;
+    std::deque<DexType*> arg_types;
     for (auto t : c.arg_types) {
       arg_types.push_back(const_cast<DexType*>(t));
     }
@@ -2021,19 +2016,15 @@ class DexState {
   DexState(const DexState&) = delete;
   DexState& operator=(const DexState&) = delete;
   DexState(PassManager& mgr,
-           const init_classes::InitClassesWithSideEffects&
-               init_classes_with_side_effects,
            DexClasses& dex,
            size_t dex_id,
            size_t reserved_trefs,
            size_t reserved_mrefs)
       : m_mgr(mgr), m_dex(dex), m_dex_id(dex_id) {
     std::unordered_set<DexMethodRef*> method_refs;
-    std::vector<DexType*> init_classes;
     for (auto cls : dex) {
       cls->gather_methods(method_refs);
       cls->gather_types(m_type_refs);
-      cls->gather_init_classes(init_classes);
     }
     m_method_refs_count = method_refs.size() + reserved_mrefs;
 
@@ -2041,13 +2032,6 @@ class DexState {
       class_ids.emplace(cls->get_type(), class_ids.size());
     });
 
-    std::unordered_set<DexType*> refined_types;
-    for (auto type : init_classes) {
-      auto refined_type = init_classes_with_side_effects.refine(type);
-      if (refined_type) {
-        m_type_refs.insert(const_cast<DexType*>(refined_type));
-      }
-    }
     max_type_refs =
         get_max_type_refs(m_mgr.get_redex_options().min_sdk) - reserved_trefs;
   }
@@ -2286,8 +2270,7 @@ class HostClassSelector {
             return false;
           }
           // We don't want any common base class with a scary clinit
-          return !method::clinit_may_have_side_effects(
-              cls, /* allow_benign_method_invocations */ false);
+          return !method::clinit_may_have_side_effects(cls);
         });
     if (host_class) {
       m_hosted_at_refs_count++;
@@ -3045,8 +3028,6 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
   }
 
   auto scope = build_class_scope(stores);
-  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
-      scope, config.create_init_class_insns());
   std::unordered_set<DexMethod*> sufficiently_warm_methods;
   std::unordered_set<DexMethod*> sufficiently_hot_methods;
   gather_sufficiently_warm_and_hot_methods(
@@ -3124,8 +3105,7 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
 
       // TODO: Merge candidates that are equivalent except that one returns
       // something and the other doesn't. Affects around 1.5% of candidates.
-      DexState dex_state(mgr, init_classes_with_side_effects, dex, dex_id++,
-                         reserved_trefs, reserved_mrefs);
+      DexState dex_state(mgr, dex, dex_id++, reserved_trefs, reserved_mrefs);
       auto newly_outlined_methods =
           outline(m_config, mgr, dex_state, min_sdk, &candidates_with_infos,
                   &candidate_ids_by_methods, &outlined_methods, iteration,

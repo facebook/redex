@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -40,7 +40,6 @@ class SourceBlocksTest : public RedexTest {
     auto m = DexMethod::make_method(name + ".bar:()V")
                  ->make_concrete(ACC_PUBLIC | ACC_STATIC,
                                  assembler::ircode_from_string(code), false);
-    m->set_deobfuscated_name(show(m));
     cc.add_method(m);
 
     cc.create();
@@ -474,8 +473,7 @@ TEST_F(SourceBlocksTest, inline_normalization) {
   }
   ASSERT_NE(invoke_insn, nullptr);
   inliner::inline_with_cfg(foo_method, bar_method, invoke_insn,
-                           /* needs_receiver_cast */ nullptr,
-                           /* needs_init_class */ nullptr, 1);
+                           /* needs_receiver_cast */ nullptr, 1);
 
   // Values of LBar; should be halved.
 

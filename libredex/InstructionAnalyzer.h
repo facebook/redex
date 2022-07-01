@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -56,8 +56,7 @@
   X(invoke)           \
   X(unop)             \
   X(binop)            \
-  X(binop_lit)        \
-  X(init_class)
+  X(binop_lit)
 
 /* clang-format on */
 
@@ -397,9 +396,6 @@ class InstructionAnalyzerCombiner final {
           std::index_sequence_for<Analyzers...>{}, insn, env);
     case OPCODE_FILLED_NEW_ARRAY:
       return analyze_filled_new_array(
-          std::index_sequence_for<Analyzers...>{}, insn, env);
-    case IOPCODE_INIT_CLASS:
-      return analyze_init_class(
           std::index_sequence_for<Analyzers...>{}, insn, env);
     }
   }

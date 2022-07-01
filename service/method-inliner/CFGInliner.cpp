@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -27,12 +27,11 @@ namespace cfg {
 void CFGInliner::inline_cfg(ControlFlowGraph* caller,
                             const InstructionIterator& callsite,
                             DexType* needs_receiver_cast,
-                            DexType* needs_init_class,
                             const ControlFlowGraph& callee_orig,
                             size_t next_caller_reg) {
   CFGInlinerPlugin base_plugin;
-  inline_cfg(caller, callsite, needs_receiver_cast, needs_init_class,
-             callee_orig, next_caller_reg, base_plugin);
+  inline_cfg(caller, callsite, needs_receiver_cast, callee_orig,
+             next_caller_reg, base_plugin);
 }
 
 namespace {
@@ -57,19 +56,20 @@ size_t num_interactions(const InstructionIterator& inline_site,
   return 0;
 }
 
-float get_source_blocks_factor(const InstructionIterator& inline_site,
-                               const ControlFlowGraph& callee_cfg,
-                               size_t idx) {
+boost::optional<float> get_source_blocks_factor(
+    const InstructionIterator& inline_site,
+    const ControlFlowGraph& callee_cfg,
+    size_t idx) {
   auto caller_block = inline_site.block();
   float caller_val;
   {
     auto* sb = source_blocks::get_first_source_block(caller_block);
     if (sb == nullptr) {
-      return NAN;
+      return boost::none;
     }
     auto val = sb->get_val(idx);
     if (!val) {
-      return NAN;
+      return boost::none;
     }
     caller_val = *val;
   }
@@ -83,11 +83,11 @@ float get_source_blocks_factor(const InstructionIterator& inline_site,
   {
     auto sb = source_blocks::get_first_source_block(callee_cfg.entry_block());
     if (sb == nullptr) {
-      return NAN;
+      return boost::none;
     }
     auto val = sb->get_val(idx);
     if (!val) {
-      return NAN;
+      return boost::none;
     }
     callee_val = *val;
   }
@@ -117,7 +117,6 @@ void normalize_source_blocks(ControlFlowGraph& cfg, float factor, size_t idx) {
 void CFGInliner::inline_cfg(ControlFlowGraph* caller,
                             const InstructionIterator& inline_site,
                             DexType* needs_receiver_cast,
-                            DexType* needs_init_class,
                             const ControlFlowGraph& callee_orig,
                             size_t next_caller_reg,
                             CFGInlinerPlugin& plugin) {
@@ -132,41 +131,27 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
     auto num = num_interactions(inline_site, callee_orig);
     for (size_t i = 0; i < num; ++i) {
       auto sb_factor = get_source_blocks_factor(inline_site, callee_orig, i);
-      normalize_source_blocks(callee, sb_factor, i);
+      if (sb_factor) {
+        normalize_source_blocks(callee, *sb_factor, i);
+      }
     }
   }
 
   cleanup_callee_debug(&callee);
-  if (needs_receiver_cast || needs_init_class) {
-    std::vector<IRInstruction*> new_insns;
-    if (needs_receiver_cast) {
-      always_assert(!needs_init_class);
-      auto param_insns = callee.get_param_instructions();
-      auto first_load_param_insn = param_insns.front().insn;
-      auto first_param_reg = first_load_param_insn->dest();
-      auto check_cast_insn = (new IRInstruction(OPCODE_CHECK_CAST))
-                                 ->set_type(needs_receiver_cast)
-                                 ->set_src(0, first_param_reg);
-      auto move_result_insn =
-          (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
-              ->set_dest(first_param_reg);
-      new_insns.push_back(check_cast_insn);
-      new_insns.push_back(move_result_insn);
-    } else {
-      always_assert(needs_init_class);
-      auto init_class_insn =
-          (new IRInstruction(IOPCODE_INIT_CLASS))->set_type(needs_init_class);
-      new_insns.push_back(init_class_insn);
-    }
-    auto entry_block = callee.entry_block();
-    auto last_param_insn_it = entry_block->get_last_param_loading_insn();
-    if (last_param_insn_it == entry_block->end()) {
-      entry_block->push_front(new_insns);
-    } else {
-      callee.insert_after(
-          entry_block->to_cfg_instruction_iterator(last_param_insn_it),
-          new_insns);
-    }
+  if (needs_receiver_cast) {
+    auto param_insns = callee.get_param_instructions();
+    auto first_load_param_insn = param_insns.front().insn;
+    auto first_param_reg = first_load_param_insn->dest();
+    auto last_param_insn_it =
+        callee.find_insn(param_insns.back().insn, callee.entry_block());
+    auto check_cast_insn = (new IRInstruction(OPCODE_CHECK_CAST))
+                               ->set_type(needs_receiver_cast)
+                               ->set_src(0, first_param_reg);
+    auto move_result_insn =
+        (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
+            ->set_dest(first_param_reg);
+    callee.insert_after(last_param_insn_it,
+                        {check_cast_insn, move_result_insn});
   }
 
   TRACE(CFG, 3, "caller %s", SHOW(*caller));

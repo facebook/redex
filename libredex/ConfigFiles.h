@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -149,14 +149,6 @@ struct ConfigFiles {
   void load(const Scope& scope);
 
   bool force_single_dex() const;
-
-  bool emit_incoming_hashes() const;
-
-  bool emit_outgoing_hashes() const;
-
-  bool create_init_class_insns() const;
-
-  bool finalize_resource_table() const;
 
  private:
   JsonWrapper m_json;

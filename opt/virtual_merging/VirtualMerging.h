@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -10,7 +10,6 @@
 #include "ABExperimentContext.h"
 #include "DexStore.h"
 #include "FrameworkApi.h"
-#include "InitClassesWithSideEffects.h"
 #include "InlinerConfig.h"
 #include "Pass.h"
 #include "Resolver.h"
@@ -142,8 +141,6 @@ class VirtualMerging {
   size_t m_max_overriding_method_instructions;
   ConcurrentMethodRefCache m_concurrent_resolved_refs;
   inliner::InlinerConfig m_inliner_config;
-  init_classes::InitClassesWithSideEffects m_init_classes_with_side_effects;
-
   std::unique_ptr<MultiMethodInliner> m_inliner;
   VirtualMergingStats m_stats;
 

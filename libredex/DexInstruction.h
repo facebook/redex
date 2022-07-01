@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -155,8 +155,7 @@ class DexOpcodeString : public DexInstruction {
   void gather_strings(std::vector<const DexString*>& lstring) const override;
   DexOpcodeString* clone() const override { return new DexOpcodeString(*this); }
 
-  DexOpcodeString(DexOpcode opcode, const DexString* str)
-      : DexInstruction(opcode) {
+  DexOpcodeString(DexOpcode opcode, const DexString* str) : DexInstruction(opcode) {
     m_string = str;
     m_ref_type = REF_STRING;
   }

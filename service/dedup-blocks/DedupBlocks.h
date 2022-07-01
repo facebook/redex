@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -35,11 +35,6 @@ struct Stats {
 class DedupBlocks {
  public:
   DedupBlocks(const Config* config, DexMethod* method);
-  DedupBlocks(const Config* config,
-              IRCode* code,
-              bool is_static,
-              DexType* declaring_type,
-              DexTypeList* args);
 
   const Stats& get_stats() const { return m_stats; }
 
@@ -47,10 +42,7 @@ class DedupBlocks {
 
  private:
   const Config* m_config;
-  IRCode* m_code;
-  bool m_is_static;
-  DexType* m_declaring_type;
-  DexTypeList* m_args;
+  DexMethod* m_method;
   Stats m_stats;
 };
 

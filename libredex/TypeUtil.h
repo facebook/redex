@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -46,7 +46,7 @@ PRIMITIVE_PSEUDO_TYPE_FIELDS
 
 // Do some simple checks to ascertain whether the descriptor looks valid.
 // NOTE: may fail for UTF strings.
-bool is_valid(std::string_view descriptor);
+bool is_valid(const std::string& descriptor);
 
 /**
  * Return true if the type is a primitive.
@@ -184,14 +184,6 @@ DexType* make_array_type(const DexType* type, uint32_t level);
 DexType* get_boxed_reference_type(const DexType* type);
 
 DexMethodRef* get_unboxing_method_for_type(const DexType* type);
-
-/* Takes a reference type, returns the Number(i.e. abstract) method of its
- * corresponding unboxing method. Notes: this is only used for detecting
- * boxing/unboxing pattern in CSE. Once we can resolve Ljava/lang/Number;.* to
- * its proper impls in each callsite, this function can be removed.
- */
-DexMethodRef* get_Number_unboxing_method_for_type(const DexType* type);
-
 DexMethodRef* get_value_of_method_for_type(const DexType* type);
 
 /**
@@ -222,15 +214,5 @@ bool is_uninstantiable_class(DexType* type);
  */
 boost::optional<int32_t> evaluate_type_check(const DexType* src_type,
                                              const DexType* test_type);
-
-/**
- * Return true if the cls is derived from Kotlin lambda.
- */
-bool is_kotlin_lambda(const DexClass* cls);
-
-/*
- * Return true if the cls is kotlin non capturing lambda.
- */
-bool is_kotlin_non_capturing_lambda(const DexClass* cls);
 
 }; // namespace type

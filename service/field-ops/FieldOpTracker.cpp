@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -174,7 +174,8 @@ class WritesAnalyzer {
           continue;
         }
         if (insn->has_method()) {
-          const auto* type_list = insn->get_method()->get_proto()->get_args();
+          const auto& type_list =
+              insn->get_method()->get_proto()->get_args()->get_type_list();
           bool is_instance = op != OPCODE_INVOKE_STATIC;
           for (size_t src_idx = 0; src_idx < insn->srcs_size(); src_idx++) {
             auto non_zero_value_defs = get_non_zero_defs(insn->src(src_idx));
@@ -185,7 +186,7 @@ class WritesAnalyzer {
             if (src_idx == 0 && is_instance) {
               arg_type = insn->get_method()->get_class();
             } else {
-              arg_type = type_list->at(src_idx - is_instance);
+              arg_type = type_list.at(src_idx - is_instance);
             }
             if (!has_lifetime(insn->src(src_idx), arg_type)) {
               continue;

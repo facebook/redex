@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -11,7 +11,6 @@
 #include <vector>
 
 #include "DexClass.h"
-#include "InitClassesWithSideEffects.h"
 #include "Pass.h"
 #include "Util.h"
 
@@ -52,8 +51,6 @@ class DexStructure {
   bool add_class_if_fits(const MethodRefs& clazz_mrefs,
                          const FieldRefs& clazz_frefs,
                          const TypeRefs& clazz_trefs,
-                         const interdex::TypeRefs& pending_init_class_fields,
-                         const interdex::TypeRefs& pending_init_class_types,
                          size_t linear_alloc_limit,
                          size_t field_refs_limit,
                          size_t method_refs_limit,
@@ -63,24 +60,12 @@ class DexStructure {
   void add_class_no_checks(const MethodRefs& clazz_mrefs,
                            const FieldRefs& clazz_frefs,
                            const TypeRefs& clazz_trefs,
-                           const interdex::TypeRefs& pending_init_class_fields,
-                           const interdex::TypeRefs& pending_init_class_types,
                            unsigned laclazz,
                            DexClass* clazz);
 
   void add_refs_no_checks(const MethodRefs& clazz_mrefs,
                           const FieldRefs& clazz_frefs,
-                          const TypeRefs& clazz_trefs,
-                          const interdex::TypeRefs& pending_init_class_fields,
-                          const interdex::TypeRefs& pending_init_class_types);
-
-  void resolve_init_classes(const init_classes::InitClassesWithSideEffects*
-                                init_classes_with_side_effects,
-                            const interdex::FieldRefs& frefs,
-                            const interdex::TypeRefs& trefs,
-                            const interdex::TypeRefs& itrefs,
-                            interdex::TypeRefs* pending_init_class_fields,
-                            interdex::TypeRefs* pending_init_class_types);
+                          const TypeRefs& clazz_trefs);
 
   bool has_tref(DexType* type) const { return m_trefs.count(type); }
 
@@ -93,8 +78,6 @@ class DexStructure {
   TypeRefs m_trefs;
   MethodRefs m_mrefs;
   FieldRefs m_frefs;
-  interdex::TypeRefs m_pending_init_class_fields;
-  interdex::TypeRefs m_pending_init_class_types;
   std::vector<DexClass*> m_classes;
   std::vector<DexClass*> m_squashed_classes;
 };
@@ -155,12 +138,6 @@ class DexesStructure {
 
   void set_min_sdk(int min_sdk) { m_min_sdk = min_sdk; }
 
-  void set_init_classes_with_side_effects(
-      const init_classes::InitClassesWithSideEffects*
-          init_classes_with_side_effects) {
-    m_init_classes_with_side_effects = init_classes_with_side_effects;
-  }
-
   /**
    * Tries to add the class to the current dex. If it can't, it returns false.
    * Throws if the class already exists in the dexes.
@@ -168,7 +145,6 @@ class DexesStructure {
   bool add_class_to_current_dex(const MethodRefs& clazz_mrefs,
                                 const FieldRefs& clazz_frefs,
                                 const TypeRefs& clazz_trefs,
-                                const TypeRefs& clazz_itrefs,
                                 DexClass* clazz);
 
   /*
@@ -178,22 +154,13 @@ class DexesStructure {
   void add_class_no_checks(const MethodRefs& clazz_mrefs,
                            const FieldRefs& clazz_frefs,
                            const TypeRefs& clazz_trefs,
-                           const TypeRefs& clazz_itrefs,
                            DexClass* clazz);
   void add_class_no_checks(DexClass* clazz) {
-    add_class_no_checks(
-        MethodRefs(), FieldRefs(), TypeRefs(), TypeRefs(), clazz);
+    add_class_no_checks(MethodRefs(), FieldRefs(), TypeRefs(), clazz);
   }
   void add_refs_no_checks(const MethodRefs& clazz_mrefs,
                           const FieldRefs& clazz_frefs,
-                          const TypeRefs& clazz_trefs,
-                          const TypeRefs& clazz_itrefs);
-
-  void resolve_init_classes(const interdex::FieldRefs& frefs,
-                            const interdex::TypeRefs& trefs,
-                            const interdex::TypeRefs& itrefs,
-                            interdex::TypeRefs* pending_init_class_fields,
-                            interdex::TypeRefs* pending_init_class_types);
+                          const TypeRefs& clazz_trefs);
 
   void squash_empty_last_class(DexClass* clazz) {
     m_current_dex.squash_empty_last_class(clazz);
@@ -222,8 +189,7 @@ class DexesStructure {
   size_t m_reserve_trefs;
   size_t m_reserve_mrefs;
   int m_min_sdk;
-  const init_classes::InitClassesWithSideEffects*
-      m_init_classes_with_side_effects{nullptr};
+
   struct DexesInfo {
     size_t num_dexes{0};
 

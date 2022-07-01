@@ -3,7 +3,8 @@
 
 AC_PREREQ([2.69])
 AC_INIT([redex], [1.0], [not-valid-yet@fb.com])
-AM_INIT_AUTOMAKE([subdir-objects])
+AM_INIT_AUTOMAKE(redex, 1.0)
+
 # clear out default cxx flags (was "-O2 -g") so that they don't override
 # the flags defined in AM_CXXFLAGS
 : ${CXXFLAGS=""}
@@ -13,6 +14,8 @@ AC_PROG_CXX
 AC_PROG_CC
 
 LT_INIT
+
+AM_INIT_AUTOMAKE([subdir-objects])
 
 AC_CONFIG_MACRO_DIR([m4])
 

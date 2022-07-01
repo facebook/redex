@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -29,7 +29,6 @@
 #include "MethodProfiles.h"
 #include "ReachableClasses.h"
 #include "Show.h"
-#include "StlUtil.h"
 #include "StringUtil.h"
 #include "Walkers.h"
 #include "file-utils.h"
@@ -159,25 +158,23 @@ void gather_refs(
     interdex::MethodRefs* mrefs,
     interdex::FieldRefs* frefs,
     interdex::TypeRefs* trefs,
-    interdex::TypeRefs* itrefs) {
+    std::vector<DexClass*>* erased_classes,
+    bool should_not_relocate_methods_of_class) {
   std::vector<DexMethodRef*> method_refs;
   std::vector<DexFieldRef*> field_refs;
   std::vector<DexType*> type_refs;
-  std::vector<DexType*> init_type_refs;
   cls->gather_methods(method_refs);
   cls->gather_fields(field_refs);
   cls->gather_types(type_refs);
-  cls->gather_init_classes(init_type_refs);
 
   for (const auto& plugin : plugins) {
     plugin->gather_refs(dex_info, cls, method_refs, field_refs, type_refs,
-                        init_type_refs);
+                        erased_classes, should_not_relocate_methods_of_class);
   }
 
   mrefs->insert(method_refs.begin(), method_refs.end());
   frefs->insert(field_refs.begin(), field_refs.end());
   trefs->insert(type_refs.begin(), type_refs.end());
-  itrefs->insert(init_type_refs.begin(), init_type_refs.end());
 }
 
 void print_stats(interdex::DexesStructure* dexes_structure) {
@@ -331,12 +328,13 @@ bool InterDex::should_not_relocate_methods_of_class(const DexClass* clazz) {
   return false;
 }
 
-InterDex::EmitResult InterDex::emit_class(DexInfo& dex_info,
-                                          DexClass* clazz,
-                                          bool check_if_skip,
-                                          bool perf_sensitive,
-                                          DexClass** canary_cls,
-                                          bool* overflowed) {
+InterDex::EmitResult InterDex::emit_class(
+    DexInfo& dex_info,
+    DexClass* clazz,
+    bool check_if_skip,
+    bool perf_sensitive,
+    DexClass** canary_cls,
+    std::vector<DexClass*>* erased_classes) {
   if (is_canary(clazz)) {
     // Nothing to do here.
     return {false, false};
@@ -360,20 +358,15 @@ InterDex::EmitResult InterDex::emit_class(DexInfo& dex_info,
   MethodRefs clazz_mrefs;
   FieldRefs clazz_frefs;
   TypeRefs clazz_trefs;
-  TypeRefs clazz_itrefs;
   gather_refs(m_plugins, dex_info, clazz, &clazz_mrefs, &clazz_frefs,
-              &clazz_trefs, &clazz_itrefs);
+              &clazz_trefs, erased_classes,
+              should_not_relocate_methods_of_class(clazz));
 
   bool fits_current_dex = m_dexes_structure.add_class_to_current_dex(
-      clazz_mrefs, clazz_frefs, clazz_trefs, clazz_itrefs, clazz);
+      clazz_mrefs, clazz_frefs, clazz_trefs, clazz);
   if (!fits_current_dex) {
     flush_out_dex(dex_info, *canary_cls);
     *canary_cls = get_canary_cls(dex_info);
-
-    if (overflowed) {
-      *overflowed = true;
-      return {false, true};
-    }
 
     // Plugins may maintain internal state after gathering refs, and
     // then they tend to forget that state after flushing out (class
@@ -382,12 +375,13 @@ InterDex::EmitResult InterDex::emit_class(DexInfo& dex_info,
     clazz_mrefs.clear();
     clazz_frefs.clear();
     clazz_trefs.clear();
-    clazz_itrefs.clear();
+    if (erased_classes) erased_classes->clear();
     gather_refs(m_plugins, dex_info, clazz, &clazz_mrefs, &clazz_frefs,
-                &clazz_trefs, &clazz_itrefs);
+                &clazz_trefs, erased_classes,
+                should_not_relocate_methods_of_class(clazz));
 
     m_dexes_structure.add_class_no_checks(clazz_mrefs, clazz_frefs, clazz_trefs,
-                                          clazz_itrefs, clazz);
+                                          clazz);
   }
   return {true, !fits_current_dex};
 }
@@ -839,8 +833,9 @@ void InterDex::init_cross_dex_ref_minimizer_and_relocate_methods() {
     // Don't bother with classes that emit_class will skip anyway
     if (should_skip_class_due_to_plugin(cls)) {
       // Skipping a class due to a plugin might mean that (members of) of the
-      // class will get emitted later via the additional-class mechanism.
-      // So we'll also sample those classes here.
+      // class will get emitted later via the additional-class mechanism,
+      // which is accounted for via the erased_classes reported through the
+      // plugin's gather_refs callback. So we'll also sample those classes here.
       m_cross_dex_ref_minimizer.sample(cls);
       continue;
     }
@@ -885,6 +880,7 @@ void InterDex::emit_remaining_classes(DexInfo& dex_info,
 
   init_cross_dex_ref_minimizer_and_relocate_methods();
 
+  int dexnum = m_dexes_structure.get_num_dexes();
   // Strategy for picking the next class to emit:
   // - at the beginning of a new dex, pick the "worst" class, i.e. the class
   //   with the most (adjusted) unapplied refs
@@ -909,28 +905,34 @@ void InterDex::emit_remaining_classes(DexInfo& dex_info,
       cls = m_cross_dex_ref_minimizer.front();
     }
 
-    bool overflowed = false;
+    std::vector<DexClass*> erased_classes;
     bool emitted =
         emit_class(dex_info, cls, /* check_if_skip */ false,
-                   /* perf_sensitive */ false, canary_cls, &overflowed);
-    if (overflowed) {
-      always_assert(!emitted);
-      m_cross_dex_ref_minimizer.reset();
-      pick_worst = true;
-      if (m_cross_dex_relocator != nullptr) {
-        m_cross_dex_relocator->current_dex_overflowed();
-      }
-      continue;
-    }
-
+                   /* perf_sensitive */ false, canary_cls, &erased_classes);
+    int new_dexnum = m_dexes_structure.get_num_dexes();
+    bool overflowed = dexnum != new_dexnum;
     m_cross_dex_ref_minimizer.erase(cls, emitted, overflowed);
 
     if (m_cross_dex_relocator != nullptr) {
       // Let's merge relocated helper classes
+      if (overflowed) {
+        m_cross_dex_relocator->current_dex_overflowed();
+      }
       m_cross_dex_relocator->add_to_current_dex(cls);
     }
 
-    pick_worst = pick_worst && !emitted;
+    // We can treat *refs owned by "erased classes" as effectively being emitted
+    for (DexClass* erased_cls : erased_classes) {
+      TRACE(IDEX, 3, "[dex ordering] Applying erased class {%s}",
+            SHOW(erased_cls));
+      always_assert(should_skip_class_due_to_plugin(erased_cls));
+      m_cross_dex_ref_minimizer.insert(erased_cls);
+      m_cross_dex_ref_minimizer.erase(erased_cls, /* emitted */ true,
+                                      /* overflowed */ false);
+    }
+
+    pick_worst = (pick_worst && !emitted) || overflowed;
+    dexnum = new_dexnum;
   }
 }
 
@@ -961,12 +963,14 @@ void InterDex::run_in_force_single_dex_mode() {
     MethodRefs clazz_mrefs;
     FieldRefs clazz_frefs;
     TypeRefs clazz_trefs;
-    TypeRefs clazz_itrefs;
+    std::vector<DexClass*> erased_classes;
+
     gather_refs(m_plugins, dex_info, cls, &clazz_mrefs, &clazz_frefs,
-                &clazz_trefs, &clazz_itrefs);
+                &clazz_trefs, &erased_classes,
+                should_not_relocate_methods_of_class(cls));
 
     m_dexes_structure.add_class_no_checks(clazz_mrefs, clazz_frefs, clazz_trefs,
-                                          clazz_itrefs, cls);
+                                          cls);
   }
 
   // Emit all no matter what it is.
@@ -1173,14 +1177,10 @@ DexClass* InterDex::get_canary_cls(DexInfo& dex_info) {
   MethodRefs clazz_mrefs;
   FieldRefs clazz_frefs;
   TypeRefs clazz_trefs;
-  std::vector<DexType*> clazz_itrefs;
   canary_cls->gather_methods(clazz_mrefs);
   canary_cls->gather_fields(clazz_frefs);
   canary_cls->gather_types(clazz_trefs);
-  canary_cls->gather_init_classes(clazz_itrefs);
-  m_dexes_structure.add_refs_no_checks(
-      clazz_mrefs, clazz_frefs, clazz_trefs,
-      TypeRefs(clazz_itrefs.begin(), clazz_itrefs.end()));
+  m_dexes_structure.add_refs_no_checks(clazz_mrefs, clazz_frefs, clazz_trefs);
   return canary_cls;
 }
 
@@ -1216,12 +1216,12 @@ void InterDex::flush_out_dex(DexInfo& dex_info, DexClass* canary_cls) {
     MethodRefs clazz_mrefs;
     FieldRefs clazz_frefs;
     TypeRefs clazz_trefs;
-    TypeRefs clazz_itrefs;
+    std::vector<DexClass*> erased_classes;
     gather_refs(m_plugins, dex_info, canary_cls, &clazz_mrefs, &clazz_frefs,
-                &clazz_trefs, &clazz_itrefs);
+                &clazz_trefs, &erased_classes, true);
 
     bool canary_added = m_dexes_structure.add_class_to_current_dex(
-        clazz_mrefs, clazz_frefs, clazz_trefs, clazz_itrefs, canary_cls);
+        clazz_mrefs, clazz_frefs, clazz_trefs, canary_cls);
     always_assert(canary_added);
 
     m_dex_infos.emplace_back(
@@ -1298,7 +1298,7 @@ void InterDex::flush_out_dex(DexInfo& dex_info, DexClass* canary_cls) {
             return a.second < b.second;
           });
       std::sort(remaining_classes.begin(), remaining_classes.end(),
-                compare_dexclasses_for_compressed_size);
+                interdex::compare_dexclasses_for_compressed_size);
       // Rearrange classes so that...
       // - perf_sensitive_classes go first, then
       // - classes_with_sort_num that got ordered by the method profiles, and

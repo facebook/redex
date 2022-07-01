@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -185,8 +185,8 @@ TEST_F(ResolveProguardAssumeValuesTest, simple_method_not_known) {
 TEST_F(ResolveProguardAssumeValuesTest, field_simple_bool) {
   DexClass* classA = create_class_local("LCls;");
   auto field = static_cast<DexField*>(DexField::make_field("LCls;.f:J"));
-  field->make_concrete(ACC_PUBLIC | ACC_STATIC,
-                       DexEncodedValue::zero_for_type(field->get_type()));
+  auto encoded_value = DexEncodedValue::zero_for_type(field->get_type());
+  field->make_concrete(ACC_PUBLIC | ACC_STATIC, encoded_value);
   classA->add_field(field);
   keep_rules::AssumeReturnValue val;
   val.value_type = keep_rules::AssumeReturnValue::ValueType::ValueBool;
@@ -228,8 +228,8 @@ TEST_F(ResolveProguardAssumeValuesTest, field_simple_bool) {
 TEST_F(ResolveProguardAssumeValuesTest, field_simple_bool_with_no_rule) {
   DexClass* classA = create_class_local("LCls;");
   auto field = static_cast<DexField*>(DexField::make_field("LCls;.f:J"));
-  field->make_concrete(ACC_PUBLIC | ACC_STATIC,
-                       DexEncodedValue::zero_for_type(field->get_type()));
+  auto encoded_value = DexEncodedValue::zero_for_type(field->get_type());
+  field->make_concrete(ACC_PUBLIC | ACC_STATIC, encoded_value);
   classA->add_field(field);
   const auto& code_str = R"(
     (

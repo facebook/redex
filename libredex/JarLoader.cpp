@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -309,7 +309,7 @@ static DexTypeList* extract_arguments(const char*& buf) {
     buf++;
     return DexTypeList::make_type_list({});
   }
-  DexTypeList::ContainerType args;
+  std::deque<DexType*> args;
   while (*buf != ')') {
     DexType* dtype = parse_type(buf);
     if (dtype == nullptr) return nullptr;
@@ -803,7 +803,9 @@ static bool decompress_class(jar_entry& file,
     return false;
   }
   if (dlen != pkf.ucomp_size) {
-    fprintf(stderr, "mis-match on uncompressed size, Bailing\n");
+    std::cerr << (char*)file.filename
+              << ": mis-match on uncompressed size: " << dlen << " vs "
+              << pkf.ucomp_size << "! Bailing." << std::endl;
     return false;
   }
   return true;

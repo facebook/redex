@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -14,14 +14,11 @@
 
 namespace builder_pattern {
 
-BuilderTransform::BuilderTransform(
-    const Scope& scope,
-    const TypeSystem& type_system,
-    const DexType* root,
-    const init_classes::InitClassesWithSideEffects&
-        init_classes_with_side_effects,
-    const inliner::InlinerConfig& inliner_config,
-    DexStoresVector& stores)
+BuilderTransform::BuilderTransform(const Scope& scope,
+                                   const TypeSystem& type_system,
+                                   const DexType* root,
+                                   const inliner::InlinerConfig& inliner_config,
+                                   DexStoresVector& stores)
     : m_type_system(type_system),
       m_root(root),
       m_inliner_config(inliner_config) {
@@ -37,20 +34,19 @@ BuilderTransform::BuilderTransform(
   m_inliner_config.shrinker.run_copy_prop = true;
   m_inliner_config.shrinker.run_local_dce = true;
   m_inliner_config.shrinker.compute_pure_methods = false;
-  int min_sdk = 0;
   m_inliner = std::unique_ptr<MultiMethodInliner>(new MultiMethodInliner(
-      scope, init_classes_with_side_effects, stores, no_default_inlinables,
-      concurrent_resolver, m_inliner_config, min_sdk,
-      MultiMethodInlinerMode::None));
+      scope, stores, no_default_inlinables, concurrent_resolver,
+      m_inliner_config, MultiMethodInlinerMode::None));
 }
 
 std::unordered_set<const IRInstruction*>
 BuilderTransform::get_not_inlined_insns(
-    DexMethod* caller,
-    const std::unordered_set<IRInstruction*>& insns,
-    std::vector<IRInstruction*>* deleted_insns) {
+    DexMethod* caller, const std::unordered_set<IRInstruction*>& insns) {
   always_assert(caller && caller->get_code());
-  m_inliner->inline_callees(caller, insns, deleted_insns);
+  // TODO: We are going to leak instructions when we are successful. Change this
+  // to true after making the pass aware of memory ownership.
+  bool delete_removed_insns = false;
+  m_inliner->inline_callees(caller, insns, delete_removed_insns);
   std::unordered_set<const IRInstruction*> not_inlined_insns;
   // Check if everything was inlined.
   auto* code = caller->get_code();
@@ -111,7 +107,7 @@ bool BuilderTransform::inline_super_calls_and_ctors(const DexType* type) {
       m_method_copy[method] = method_copy;
 
       size_t num_insns_not_inlined =
-          get_not_inlined_insns(method, inlinable_insns, nullptr).size();
+          get_not_inlined_insns(method, inlinable_insns).size();
       if (num_insns_not_inlined > 0) {
         return false;
       }
@@ -261,9 +257,7 @@ void BuilderTransform::replace_fields(const InstantiationToUsage& usage,
               resolve_method(insn->get_method(), MethodSearch::Direct);
 
           // We only accept `Object.<init>()` here, since we can't inline it
-          // any further. Keep Object.<init> in place to avoid confusing
-          // dex2oat.
-
+          // any further. Keep Object.<init> inplace to avoid confusing dex2oat.
           always_assert(invoked->get_class() == type::java_lang_Object() &&
                         method::is_init(invoked));
         } else {
@@ -295,7 +289,6 @@ void BuilderTransform::cleanup() {
           SHOW(method));
     method->set_code(copy->release_code());
     DexMethod::erase_method(copy);
-    DexMethod::delete_method_DO_NOT_USE(copy);
   }
 }
 

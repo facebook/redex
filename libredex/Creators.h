@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -10,7 +10,6 @@
 #include <unordered_map>
 #include <vector>
 
-#include "DexAnnotation.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRCode.h"
@@ -395,13 +394,13 @@ struct MethodCreator {
   MethodCreator(DexMethodRef* ref,
                 DexAccessFlags access,
                 std::unique_ptr<DexAnnotationSet> anno = nullptr,
-                bool with_debug_item = true);
+                bool with_debug_item = false);
   MethodCreator(DexType* cls,
                 const DexString* name,
                 DexProto* proto,
                 DexAccessFlags access,
                 std::unique_ptr<DexAnnotationSet> anno = nullptr,
-                bool with_debug_item = true);
+                bool with_debug_item = false);
 
   /**
    * Get an existing local.
@@ -493,8 +492,7 @@ struct MethodCreator {
   DexMethod* method;
   IRCode* meth_code;
   std::vector<Location> locals;
-  std::vector<std::unique_ptr<MethodBlock>> blocks;
-  // The main block should also be in `blocks` and is owned there.
+  std::vector<MethodBlock*> blocks;
   MethodBlock* main_block;
   bool m_with_debug_item;
 
@@ -578,7 +576,18 @@ struct ClassCreator {
   /**
    * Create the DexClass. The creator should not be used after this call.
    */
-  DexClass* create();
+  DexClass* create() {
+    always_assert_log(m_cls->m_self, "Self cannot be null in a DexClass");
+    if (m_cls->m_super_class == NULL) {
+      if (m_cls->m_self != type::java_lang_Object()) {
+        always_assert_log(m_cls->m_super_class, "No supertype found for %s",
+                          show_type(m_cls->m_self).c_str());
+      }
+    }
+    m_cls->m_interfaces = DexTypeList::make_type_list(std::move(m_interfaces));
+    g_redex->publish_class(m_cls);
+    return m_cls;
+  }
 
  private:
   // To avoid "Show.h" in the header.
@@ -586,5 +595,5 @@ struct ClassCreator {
   static std::string show_type(const DexType* type);
 
   DexClass* m_cls;
-  DexTypeList::ContainerType m_interfaces;
+  std::deque<DexType*> m_interfaces;
 };

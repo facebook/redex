@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -18,10 +18,6 @@ void CFGMutation::clear() {
 }
 
 void CFGMutation::flush() {
-  if (m_changes.empty()) {
-    return;
-  }
-
   auto ii = InstructionIterable(m_cfg);
   for (auto it = ii.begin(); !m_changes.empty() && !it.is_end();) {
     auto c = m_changes.find(it->insn);
@@ -44,8 +40,6 @@ void CFGMutation::flush() {
   clear();
 }
 
-CFGMutation::ChangeSet::~ChangeSet() {}
-
 void CFGMutation::ChangeSet::apply(ControlFlowGraph& cfg,
                                    InstructionIterator& it) {
   always_assert_log(
@@ -66,32 +60,7 @@ void CFGMutation::ChangeSet::apply(ControlFlowGraph& cfg,
     cfg.insert_after(it, std::move(pos));
   }
 
-  for (auto&& sb : m_insert_sb_before) {
-    cfg.insert_before(it, std::move(sb));
-  }
-  for (auto&& sb : m_insert_sb_after) {
-    cfg.insert_after(it, std::move(sb));
-  }
-
-  // Sequencing of the many options is really hard. We want to retain the
-  // optimized variants, so exclude some combinations.
-  redex_assert(!(m_replace.has_value() && (!m_insert_after_var.empty() ||
-                                           !m_insert_before_var.empty())));
-  redex_assert(!(!m_insert_after.empty() && (!m_insert_after_var.empty() ||
-                                             !m_insert_before_var.empty())));
-  redex_assert(!(!m_insert_before.empty() && (!m_insert_after_var.empty() ||
-                                              !m_insert_before_var.empty())));
-  redex_assert(!(!m_insert_after_var.empty() && !m_insert_before_var.empty()));
-
-  if (!m_insert_after_var.empty() || !m_insert_before_var.empty()) {
-    if (!m_insert_before_var.empty()) {
-      invalidated = cfg.insert_before(
-          it, m_insert_before_var.begin(), m_insert_before_var.end());
-    } else {
-      invalidated = cfg.insert_after(
-          it, m_insert_after_var.begin(), m_insert_after_var.end());
-    }
-  } else if (!m_replace.has_value() && m_insert_after.empty()) {
+  if (!m_replace.has_value() && m_insert_after.empty()) {
     invalidated = cfg.insert_before(it, m_insert_before);
   } else if (!m_replace.has_value() && m_insert_before.empty()) {
     invalidated = cfg.insert_after(it, m_insert_after);

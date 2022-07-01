@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -15,7 +15,6 @@
 #include <boost/optional.hpp>
 
 #include "CFGMutation.h"
-#include "ConfigFiles.h"
 #include "CppUtil.h"
 #include "DexClass.h"
 #include "DexStore.h"
@@ -488,20 +487,16 @@ void EvaluateTypeChecksPass::optimize(DexMethod* method,
 }
 
 void EvaluateTypeChecksPass::run_pass(DexStoresVector& stores,
-                                      ConfigFiles& conf,
+                                      ConfigFiles&,
                                       PassManager& mgr) {
   auto scope = build_class_scope(stores);
-  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
-      scope, conf.create_init_class_insns());
 
   shrinker::ShrinkerConfig shrinker_config;
   shrinker_config.run_const_prop = true;
   shrinker_config.run_copy_prop = true;
   shrinker_config.run_local_dce = true;
   shrinker_config.compute_pure_methods = false;
-  int min_sdk = mgr.get_redex_options().min_sdk;
-  shrinker::Shrinker shrinker(
-      stores, scope, init_classes_with_side_effects, shrinker_config, min_sdk);
+  shrinker::Shrinker shrinker(stores, scope, shrinker_config);
 
   auto stats = walk::parallel::methods<RemoveResult>(
       scope, [&shrinker](DexMethod* method) {
@@ -547,7 +542,7 @@ void EvaluateTypeChecksPass::run_pass(DexStoresVector& stores,
   mgr.set_metric("num_class_always_fail", stats.class_always_fail);
   mgr.set_metric("num_def_use_loop", stats.def_use_loop);
   mgr.set_metric("num_multi_use", stats.multi_use);
-  mgr.set_metric("num_multi_def", stats.multi_def);
+  mgr.set_metric("num_multi_use", stats.multi_def);
   mgr.set_metric("num_non_branch", stats.non_branch);
   mgr.set_metric("num_not_supported_branch", stats.non_supported_branch);
 }

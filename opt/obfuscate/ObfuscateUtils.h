@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -9,7 +9,6 @@
 
 #include "ClassHierarchy.h"
 #include "DexAccess.h"
-#include "DexAnnotation.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "ReachableClasses.h"
@@ -615,7 +614,7 @@ class DexElemManager {
     if (cls == nullptr) return nullptr;
     auto found_def = find_def(ref, cls->get_type());
     if (found_def != nullptr) return found_def;
-    for (auto& intf : *cls->get_interfaces()) {
+    for (auto& intf : cls->get_interfaces()->get_type_list()) {
       auto found = find_def_in_class_and_intf(ref, type_class(intf));
       if (found != nullptr) return found;
     }

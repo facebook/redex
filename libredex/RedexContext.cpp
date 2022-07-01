@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -8,9 +8,9 @@
 #include "RedexContext.h"
 
 #include <exception>
+#include <iostream>
 #include <mutex>
 #include <regex>
-#include <sstream>
 #include <unordered_set>
 
 #include "Debug.h"
@@ -18,13 +18,9 @@
 #include "DexClass.h"
 #include "DexPosition.h"
 #include "DuplicateClasses.h"
-#include "KeepReason.h"
 #include "ProguardConfiguration.h"
 #include "Show.h"
 #include "Trace.h"
-
-static_assert(std::is_same<DexTypeList::ContainerType,
-                           RedexContext::DexTypeListContainerType>::value);
 
 RedexContext* g_redex;
 
@@ -57,14 +53,8 @@ RedexContext::~RedexContext() {
     delete f;
   }
   // Delete DexTypeLists.
-  std::vector<const DexTypeListContainerType*> keys;
-  keys.reserve(s_typelist_map.size());
   for (auto const& p : s_typelist_map) {
     delete p.second;
-    keys.push_back(p.first);
-  }
-  for (auto* p : keys) {
-    delete p;
   }
   // Delete DexProtos.
   for (auto const& p : s_proto_map) {
@@ -83,8 +73,9 @@ RedexContext::~RedexContext() {
     delete it.second;
   }
 
-  // Also free Keep Reasons.
-  keep_reason::Reason::release_keep_reasons();
+  for (const auto& p : s_keep_reasons) {
+    delete p.second;
+  }
 
   for (const Task& t : m_destruction_tasks) {
     t();
@@ -117,25 +108,31 @@ static StoredValue* try_insert(Key key,
   return container->at(key);
 }
 
-const DexString* RedexContext::make_string(std::string_view str) {
-  auto& segment = s_string_map.at(str);
+const DexString* RedexContext::make_string(const char* nstr, uint32_t utfsize) {
+  always_assert(nstr != nullptr);
+  auto p = std::make_pair(nstr, utfsize);
+  auto& segment = s_string_map.at(p);
 
-  auto rv = segment.get(str, nullptr);
+  auto rv = segment.get(p, nullptr);
   if (rv != nullptr) {
     return rv;
   }
-  // Note that DexStrings are keyed by the string_view of the underlying
-  // std::string. The string_view is valid until a the string is destroyed, or
-  // until a non-const function is called on the string (but note the
-  // std::string itself is const)
-  auto dexstring = new DexString(std::string(str));
-  auto p2 = std::string_view(dexstring->c_str(), str.size());
+  // Note that DexStrings are keyed by the c_str() of the underlying
+  // std::string. The c_str is valid until a the string is destroyed, or until a
+  // non-const function is called on the string (but note the std::string itself
+  // is const)
+  auto dexstring = new DexString(nstr, utfsize);
+  auto p2 = std::make_pair(dexstring->c_str(), utfsize);
   return try_insert<DexString, const DexString>(p2, dexstring, &segment);
 }
 
-const DexString* RedexContext::get_string(std::string_view str) {
-  auto& segment = s_string_map.at(str);
-  return segment.get(str, nullptr);
+const DexString* RedexContext::get_string(const char* nstr, uint32_t utfsize) {
+  if (nstr == nullptr) {
+    return nullptr;
+  }
+  auto p = std::make_pair(nstr, utfsize);
+  auto& segment = s_string_map.at(p);
+  return segment.get(p, nullptr);
 }
 
 DexType* RedexContext::make_type(const DexString* dstring) {
@@ -245,25 +242,17 @@ void RedexContext::mutate_field(DexFieldRef* field,
   s_field_map.emplace(r, field);
 }
 
-DexTypeList* RedexContext::make_type_list(
-    RedexContext::DexTypeListContainerType&& p) {
-  auto on_heap = std::make_unique<DexTypeListContainerType>(p);
-
-  auto rv = s_typelist_map.get(on_heap.get(), nullptr);
+DexTypeList* RedexContext::make_type_list(std::deque<DexType*>&& p) {
+  auto rv = s_typelist_map.get(p, nullptr);
   if (rv != nullptr) {
     return rv;
   }
-  auto typelist = new DexTypeList(on_heap.get());
-  auto ret = try_insert(typelist->m_list, typelist, &s_typelist_map);
-  if (ret == typelist) {
-    (void)on_heap.release();
-  }
-  return ret;
+  auto typelist = new DexTypeList(std::move(p));
+  return try_insert(typelist->m_list, typelist, &s_typelist_map);
 }
 
-DexTypeList* RedexContext::get_type_list(
-    const RedexContext::DexTypeListContainerType& p) {
-  return s_typelist_map.get(&p, nullptr);
+DexTypeList* RedexContext::get_type_list(std::deque<DexType*>&& p) {
+  return s_typelist_map.get(p, nullptr);
 }
 
 DexProto* RedexContext::make_proto(const DexType* rtype,
@@ -485,10 +474,7 @@ void RedexContext::publish_class(DexClass* cls) {
   const DexType* type = cls->get_type();
   const auto& pair = m_type_to_class.emplace(type, cls);
   bool insertion_took_place = pair.second;
-  always_assert_log(insertion_took_place,
-                    "No insertion for class: %s with deobfuscated name: %s",
-                    cls->get_name()->c_str(),
-                    cls->get_deobfuscated_name().c_str());
+  always_assert(insertion_took_place);
   if (cls->is_external()) {
     m_external_classes.emplace_back(cls);
   }
@@ -497,6 +483,29 @@ void RedexContext::publish_class(DexClass* cls) {
 DexClass* RedexContext::type_class(const DexType* t) {
   auto it = m_type_to_class.find(t);
   return it != m_type_to_class.end() ? it->second : nullptr;
+}
+
+void run_rethrow_first_aggregate(const std::function<void()>& f) {
+  try {
+    f();
+  } catch (const aggregate_exception& ae) {
+    if (ae.m_exceptions.size() > 1) {
+      // We cannot modify exceptions. Log the other messages to stderr.
+      std::cerr << "Too many exceptions. Other exceptions: " << std::endl;
+      for (auto it = ae.m_exceptions.begin() + 1; it != ae.m_exceptions.end();
+           ++it) {
+        try {
+          std::rethrow_exception(*it);
+        } catch (const std::exception& e) {
+          std::cerr << " " << e.what() << std::endl;
+        } catch (...) {
+          std::cerr << " (Not a std::exception)" << std::endl;
+        }
+      }
+    }
+    // Rethrow the first one.
+    std::rethrow_exception(ae.m_exceptions.at(0));
+  }
 }
 
 void RedexContext::set_field_value(DexField* field,

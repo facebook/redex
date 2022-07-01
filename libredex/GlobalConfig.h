@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -38,7 +38,6 @@ struct IRTypeCheckerConfig : public Configurable {
   bool check_num_of_refs;
   std::unordered_set<std::string> run_after_passes;
   bool check_no_overwrite_this;
-  bool annotated_cfg_on_error{false};
 };
 
 struct HasherConfig : public Configurable {
@@ -110,7 +109,6 @@ struct MethodProfileOrderingConfig : public Configurable {
 
   std::unordered_set<std::string> method_sorting_allowlisted_substrings{};
   float min_appear_percent{10.0f};
-  float second_min_appear_percent{10.0f};
   bool skip_similarity_reordering{false};
 };
 

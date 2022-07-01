@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -208,7 +208,7 @@ void strip_out_collision(const Scope& scope,
     if (mergeables.count(rtype) > 0) {
       to_delete.emplace(rtype);
     }
-    for (const auto arg_type : *proto->get_args()) {
+    for (const auto arg_type : proto->get_args()->get_type_list()) {
       const DexType* extracted_arg_type =
           type::get_element_type_if_array(arg_type);
       if (mergeables.count(extracted_arg_type) > 0) {
@@ -406,8 +406,9 @@ std::unordered_map<const DexType*, DexType*> merge_interfaces(
     // Get original interfaces of target interface and use that as the start
     // point of its new interfaces.
     std::unordered_set<DexType*> new_intfs;
-    const auto* original_intf = merge_to_intf->get_interfaces();
-    new_intfs.insert(original_intf->begin(), original_intf->end());
+    const auto& original_intf =
+        merge_to_intf->get_interfaces()->get_type_list();
+    new_intfs.insert(original_intf.begin(), original_intf.end());
 
     ++set_start;
     // Merge other interfaces into the interface we chose.
@@ -423,14 +424,18 @@ std::unordered_map<const DexType*, DexType*> merge_interfaces(
       // copy the sfield
       move_fields_to_interface(interface_to_copy, merge_to_intf);
       // add the interfaces
-      const auto* super_intfs = interface_to_copy->get_interfaces();
-      new_intfs.insert(super_intfs->begin(), super_intfs->end());
+      const auto& super_intfs =
+          interface_to_copy->get_interfaces()->get_type_list();
+      new_intfs.insert(super_intfs.begin(), super_intfs.end());
     }
 
     // Get rid of merge target in new interfaces set if it was added in.
     new_intfs.erase(merge_to_intf->get_type());
     // Set super interfaces to merged super interfaces.
-    DexTypeList::ContainerType deque{new_intfs.begin(), new_intfs.end()};
+    std::deque<DexType*> deque;
+    for (const auto& intf : new_intfs) {
+      deque.emplace_back(intf);
+    }
     DexTypeList* implements = DexTypeList::make_type_list(std::move(deque));
     merge_to_intf->set_interfaces(implements);
   }
@@ -512,7 +517,7 @@ void remove_implements(
   // implementors and interface children and only update those.
   for (const auto& cls : scope) {
     bool got_one = false;
-    for (const auto& cls_intf : *cls->get_interfaces()) {
+    for (const auto& cls_intf : cls->get_interfaces()->get_type_list()) {
       if (intf_merge_map.find(cls_intf) != intf_merge_map.end()) {
         got_one = true;
         break;
@@ -524,7 +529,7 @@ void remove_implements(
     TRACE(MEINT, 9, "Updating interface for %p", cls->get_type());
     std::unordered_set<DexType*> new_intfs;
     TRACE_NO_LINE(MEINT, 9, "Original was:");
-    for (DexType* cls_intf : *cls->get_interfaces()) {
+    for (DexType* cls_intf : cls->get_interfaces()->get_type_list()) {
       TRACE_NO_LINE(MEINT, 9, "%p ", cls_intf);
       const auto& find_intf = intf_merge_map.find(cls_intf);
       if (find_intf != intf_merge_map.end()) {
@@ -537,7 +542,7 @@ void remove_implements(
         new_intfs.emplace(cls_intf);
       }
     }
-    DexTypeList::ContainerType deque;
+    std::deque<DexType*> deque;
     TRACE_NO_LINE(MEINT, 9, "\nAfter is:");
     for (DexType* intf : new_intfs) {
       TRACE_NO_LINE(MEINT, 9, "%p ", intf);

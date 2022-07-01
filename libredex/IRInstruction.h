@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -367,8 +367,6 @@ class IRInstruction final {
   }
 
   void gather_types(std::vector<DexType*>& ltype) const;
-
-  void gather_init_classes(std::vector<DexType*>& ltype) const;
 
   void gather_fields(std::vector<DexFieldRef*>& lfield) const;
 

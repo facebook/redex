@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -106,7 +106,8 @@ class Analyzer {
         if (!m_is_static && param_index-- == 0) {
           result = result | AnalysisResult::Object;
         } else {
-          result = result | analyze(m_args->at(param_index));
+          auto& args_list = m_args->get_type_list();
+          result = result | analyze(args_list.at(param_index));
         }
         break;
       }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -37,17 +37,14 @@ class DexLoader {
 
 DexClasses load_classes_from_dex(const char* location,
                                  bool balloon = true,
-                                 bool throw_on_balloon_error = true,
                                  int support_dex_version = 35);
 DexClasses load_classes_from_dex(const char* location,
                                  dex_stats_t* stats,
                                  bool balloon = true,
-                                 bool throw_on_balloon_error = true,
                                  int support_dex_version = 35);
 DexClasses load_classes_from_dex(const dex_header* dh,
                                  const char* location,
-                                 bool balloon = true,
-                                 bool throw_on_balloon_error = true);
+                                 bool balloon = true);
 std::string load_dex_magic_from_dex(const char* location);
 void balloon_for_test(const Scope& scope);
 

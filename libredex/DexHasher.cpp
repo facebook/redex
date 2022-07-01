@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -8,144 +8,84 @@
 #include "DexHasher.h"
 
 #include <cinttypes>
-#include <ostream>
 
-#include "Debug.h"
 #include "DexAccess.h"
-#include "DexAnnotation.h"
 #include "DexClass.h"
 #include "DexInstruction.h"
 #include "DexPosition.h"
 #include "DexUtil.h"
 #include "IRCode.h"
-#include "IRInstruction.h"
 #include "IROpcode.h"
-#include "Sha1.h"
 #include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"
 
 namespace hashing {
 
-// A local implementation. Avoids heap allocation for the scope version.
+std::string hash_to_string(size_t hash) {
+  std::ostringstream result;
+  result << std::hex << std::setfill('0') << std::setw(sizeof(size_t) * 2)
+         << hash;
+  return result.str();
+}
 
-namespace {
+DexHash DexScopeHasher::run() {
+  std::unordered_map<DexClass*, size_t> class_indices;
+  walk::classes(m_scope, [&](DexClass* cls) {
+    class_indices.emplace(cls, class_indices.size());
+  });
+  std::vector<size_t> class_positions_hashes(class_indices.size());
+  std::vector<size_t> class_registers_hashes(class_indices.size());
+  std::vector<size_t> class_code_hashes(class_indices.size());
+  std::vector<size_t> class_signature_hashes(class_indices.size());
+  walk::parallel::classes(m_scope, [&](DexClass* cls) {
+    DexClassHasher class_hasher(cls);
+    DexHash class_hash = class_hasher.run();
+    auto index = class_indices.at(cls);
+    class_positions_hashes.at(index) = class_hash.positions_hash;
+    class_registers_hashes.at(index) = class_hash.registers_hash;
+    class_code_hashes.at(index) = class_hash.code_hash;
+    class_signature_hashes.at(index) = class_hash.signature_hash;
+  });
 
-class Impl final {
- public:
-  explicit Impl(DexClass* cls) : m_cls(cls) {}
-  DexHash run();
-  void print(std::ostream&);
+  return DexHash{boost::hash_value(class_positions_hashes),
+                 boost::hash_value(class_registers_hashes),
+                 boost::hash_value(class_code_hashes),
+                 boost::hash_value(class_signature_hashes)};
+}
 
- private:
-  DexHash get_hash() const;
-  void hash_metadata();
-  void hash(const std::string& str);
-  void hash(int value);
-  void hash(uint64_t value);
-  void hash(uint32_t value);
-  void hash(uint16_t value);
-  void hash(uint8_t value);
-  void hash(bool value);
-  void hash(const IRCode* c);
-  void hash(const IRInstruction* insn);
-  void hash(const EncodedAnnotations* a);
-  void hash(const ParamAnnotations* m);
-  void hash(const DexAnnotation* a);
-  void hash(const DexAnnotationSet* s);
-  void hash(const DexAnnotationElement& elem);
-  void hash(const DexEncodedValue* v);
-  void hash(const DexProto* p);
-  void hash(const DexMethodRef* m);
-  void hash(const DexMethod* m);
-  void hash(const DexFieldRef* f);
-  void hash(const DexField* f);
-  void hash(const DexType* t);
-  void hash(const DexTypeList* l);
-  void hash(const DexString* s);
-  template <class T>
-  void hash(const std::vector<T>& l) {
-    hash((uint64_t)l.size());
-    for (const auto& elem : l) {
-      hash(elem);
-    }
-  }
-  template <class T>
-  void hash(const std::deque<T>& l) {
-    hash((uint64_t)l.size());
-    for (const auto& elem : l) {
-      hash(elem);
-    }
-  }
-  template <typename T>
-  void hash(const std::unique_ptr<T>& uptr) {
-    hash(uptr.get());
-  }
-  template <class K, class V>
-  void hash(const std::map<K, V>& l) {
-    hash((uint64_t)l.size());
-    for (const auto& p : l) {
-      hash(p.first);
-      hash(p.second);
-    }
-  }
-
-  // Template magic.
-  template <typename, typename = void>
-  struct has_size : std::false_type {};
-  template <typename T>
-  struct has_size<T, std::void_t<decltype(&T::size)>> : std::true_type {};
-
-  // Not applying to map-like things (like unordered_map) should be done by
-  // failures to hash the elements.
-  template <typename T,
-            typename std::enable_if<has_size<T>::value, T>::type* = nullptr>
-  void hash(const T& c) {
-    hash((uint64_t)c.size());
-    for (const auto& elem : c) {
-      hash(elem);
-    }
-  }
-
-  DexClass* m_cls;
-  size_t m_hash{0};
-  size_t m_code_hash{0};
-  size_t m_registers_hash{0};
-  size_t m_positions_hash{0};
-};
-
-void Impl::hash(const std::string& str) {
+void DexClassHasher::hash(const std::string& str) {
   TRACE(HASHER, 4, "[hasher] %s", str.c_str());
   boost::hash_combine(m_hash, str);
 }
 
-void Impl::hash(const DexString* s) { hash(s->str()); }
+void DexClassHasher::hash(const DexString* s) { hash(s->str()); }
 
-void Impl::hash(bool value) {
+void DexClassHasher::hash(bool value) {
   TRACE(HASHER, 4, "[hasher] %u", value);
   boost::hash_combine(m_hash, value);
 }
-void Impl::hash(uint8_t value) {
+void DexClassHasher::hash(uint8_t value) {
   TRACE(HASHER, 4, "[hasher] %" PRIu8, value);
   boost::hash_combine(m_hash, value);
 }
 
-void Impl::hash(uint16_t value) {
+void DexClassHasher::hash(uint16_t value) {
   TRACE(HASHER, 4, "[hasher] %" PRIu16, value);
   boost::hash_combine(m_hash, value);
 }
 
-void Impl::hash(uint32_t value) {
+void DexClassHasher::hash(uint32_t value) {
   TRACE(HASHER, 4, "[hasher] %" PRIu32, value);
   boost::hash_combine(m_hash, value);
 }
 
-void Impl::hash(uint64_t value) {
+void DexClassHasher::hash(uint64_t value) {
   TRACE(HASHER, 4, "[hasher] %" PRIu64, value);
   boost::hash_combine(m_hash, value);
 }
 
-void Impl::hash(int value) {
+void DexClassHasher::hash(int value) {
   if (sizeof(int) == 8) {
     hash((uint64_t)value);
   } else {
@@ -153,7 +93,7 @@ void Impl::hash(int value) {
   }
 }
 
-void Impl::hash(const IRInstruction* insn) {
+void DexClassHasher::hash(const IRInstruction* insn) {
   hash((uint16_t)insn->opcode());
 
   auto old_hash = m_hash;
@@ -188,7 +128,7 @@ void Impl::hash(const IRInstruction* insn) {
   }
 }
 
-void Impl::hash(const IRCode* c) {
+void DexClassHasher::hash(const IRCode* c) {
   if (!c) {
     return;
   }
@@ -301,13 +241,13 @@ void Impl::hash(const IRCode* c) {
   m_hash = old_hash;
 }
 
-void Impl::hash(const DexProto* p) {
+void DexClassHasher::hash(const DexProto* p) {
   hash(p->get_rtype());
   hash(p->get_args());
   hash(p->get_shorty());
 }
 
-void Impl::hash(const DexMethodRef* m) {
+void DexClassHasher::hash(const DexMethodRef* m) {
   hash(m->get_class());
   hash(m->get_name());
   hash(m->get_proto());
@@ -315,7 +255,7 @@ void Impl::hash(const DexMethodRef* m) {
   hash(m->is_external());
 }
 
-void Impl::hash(const DexMethod* m) {
+void DexClassHasher::hash(const DexMethod* m) {
   hash(static_cast<const DexMethodRef*>(m));
   hash(m->get_anno_set());
   hash(m->get_access());
@@ -324,35 +264,35 @@ void Impl::hash(const DexMethod* m) {
   hash(m->get_code());
 }
 
-void Impl::hash(const DexFieldRef* f) {
+void DexClassHasher::hash(const DexFieldRef* f) {
   hash(f->get_name());
   hash(f->is_concrete());
   hash(f->is_external());
   hash(f->get_type());
 }
 
-void Impl::hash(const DexType* t) { hash(t->get_name()); }
+void DexClassHasher::hash(const DexType* t) { hash(t->get_name()); }
 
-void Impl::hash(const DexTypeList* l) { hash(*l); }
+void DexClassHasher::hash(const DexTypeList* l) { hash(l->get_type_list()); }
 
-void Impl::hash(const ParamAnnotations* m) {
+void DexClassHasher::hash(const ParamAnnotations* m) {
   if (m) {
     hash(*m);
   }
 }
 
-void Impl::hash(const DexAnnotationElement& elem) {
+void DexClassHasher::hash(const DexAnnotationElement& elem) {
   hash(elem.string);
   hash(elem.encoded_value);
 }
 
-void Impl::hash(const EncodedAnnotations* a) {
+void DexClassHasher::hash(const EncodedAnnotations* a) {
   if (a) {
     hash(*a);
   }
 }
 
-void Impl::hash(const DexAnnotation* a) {
+void DexClassHasher::hash(const DexAnnotation* a) {
   if (a) {
     hash(&a->anno_elems());
     hash(a->type());
@@ -360,13 +300,13 @@ void Impl::hash(const DexAnnotation* a) {
   }
 }
 
-void Impl::hash(const DexAnnotationSet* s) {
+void DexClassHasher::hash(const DexAnnotationSet* s) {
   if (s) {
     hash(s->get_annotations());
   }
 }
 
-void Impl::hash(const DexEncodedValue* v) {
+void DexClassHasher::hash(const DexEncodedValue* v) {
   if (!v) {
     return;
   }
@@ -412,7 +352,7 @@ void Impl::hash(const DexEncodedValue* v) {
   }
 }
 
-void Impl::hash(const DexField* f) {
+void DexClassHasher::hash(const DexField* f) {
   hash(static_cast<const DexFieldRef*>(f));
   hash(f->get_anno_set());
   hash(f->get_static_value());
@@ -420,7 +360,9 @@ void Impl::hash(const DexField* f) {
   hash(f->get_deobfuscated_name_or_empty());
 }
 
-void Impl::hash_metadata() {
+DexHash DexClassHasher::run() {
+  TRACE(HASHER, 2, "[hasher] ==== hashing class %s", SHOW(m_cls->get_type()));
+
   hash(m_cls->get_access());
   hash(m_cls->get_type());
   if (m_cls->get_super_class()) {
@@ -428,16 +370,6 @@ void Impl::hash_metadata() {
   }
   hash(m_cls->get_interfaces());
   hash(m_cls->get_anno_set());
-}
-
-DexHash Impl::get_hash() const {
-  return DexHash{m_positions_hash, m_registers_hash, m_code_hash, m_hash};
-}
-
-DexHash Impl::run() {
-  TRACE(HASHER, 2, "[hasher] ==== hashing class %s", SHOW(m_cls->get_type()));
-
-  hash_metadata();
 
   TRACE(HASHER, 3, "[hasher] === dmethods: %zu", m_cls->get_dmethods().size());
   hash(m_cls->get_dmethods());
@@ -451,106 +383,7 @@ DexHash Impl::run() {
   TRACE(HASHER, 3, "[hasher] === ifields: %zu", m_cls->get_ifields().size());
   hash(m_cls->get_ifields());
 
-  return get_hash();
-}
-
-void Impl::print(std::ostream& ofs) {
-  hash_metadata();
-  ofs << "type " << show(m_cls) << " #" << hash_to_string(m_hash) << std::endl;
-  for (auto field : m_cls->get_ifields()) {
-    m_hash = 0;
-    hash(field);
-    ofs << "ifield " << show(field) << " #" << hash_to_string(m_hash)
-        << std::endl;
-  }
-  for (auto field : m_cls->get_sfields()) {
-    m_hash = 0;
-    hash(field);
-    ofs << "sfield " << show(field) << " #" << hash_to_string(m_hash)
-        << std::endl;
-  }
-
-  for (auto method : m_cls->get_dmethods()) {
-    m_hash = 0;
-    hash(method);
-    ofs << "dmethod " << show(method) << " " << get_hash() << std::endl;
-  }
-  for (auto method : m_cls->get_vmethods()) {
-    m_hash = 0;
-    hash(method);
-    ofs << "vmethod " << show(method) << " " << get_hash() << std::endl;
-  }
-}
-
-} // namespace
-
-std::string hash_to_string(size_t hash) {
-  std::ostringstream result;
-  result << std::hex << std::setfill('0') << std::setw(sizeof(size_t) * 2)
-         << hash;
-  return result.str();
-}
-
-DexHash DexScopeHasher::run() {
-  std::unordered_map<DexClass*, size_t> class_indices;
-  walk::classes(m_scope, [&](DexClass* cls) {
-    class_indices.emplace(cls, class_indices.size());
-  });
-  std::vector<size_t> class_positions_hashes(class_indices.size());
-  std::vector<size_t> class_registers_hashes(class_indices.size());
-  std::vector<size_t> class_code_hashes(class_indices.size());
-  std::vector<size_t> class_signature_hashes(class_indices.size());
-  walk::parallel::classes(m_scope, [&](DexClass* cls) {
-    Impl class_hasher(cls);
-    DexHash class_hash = class_hasher.run();
-    auto index = class_indices.at(cls);
-    class_positions_hashes.at(index) = class_hash.positions_hash;
-    class_registers_hashes.at(index) = class_hash.registers_hash;
-    class_code_hashes.at(index) = class_hash.code_hash;
-    class_signature_hashes.at(index) = class_hash.signature_hash;
-  });
-
-  return DexHash{boost::hash_value(class_positions_hashes),
-                 boost::hash_value(class_registers_hashes),
-                 boost::hash_value(class_code_hashes),
-                 boost::hash_value(class_signature_hashes)};
-}
-
-struct DexClassHasher::Fwd final {
-  Impl impl;
-
-  explicit Fwd(DexClass* cls) : impl(cls) {}
-
-  DexHash run() { return impl.run(); }
-  void print(std::ostream& os) { impl.print(os); }
-};
-
-DexClassHasher::DexClassHasher(DexClass* cls)
-    : m_fwd(std::make_unique<Fwd>(cls)) {}
-DexClassHasher::~DexClassHasher() = default; // For forwarding.
-
-DexHash DexClassHasher::run() { return m_fwd->run(); }
-
-void DexClassHasher::print(std::ostream& os) { m_fwd->print(os); }
-
-void print_classes(std::ostream& output, const Scope& classes) {
-  std::unordered_map<DexClass*, std::stringstream> class_strs;
-  walk::classes(classes, [&](DexClass* cls) {
-    class_strs.emplace(cls, std::stringstream());
-  });
-  walk::parallel::classes(classes, [&](DexClass* cls) {
-    DexClassHasher(cls).print(class_strs.at(cls));
-  });
-  walk::classes(classes,
-                [&](DexClass* cls) { output << class_strs.at(cls).rdbuf(); });
+  return DexHash{m_positions_hash, m_registers_hash, m_code_hash, m_hash};
 }
 
 } // namespace hashing
-
-std::ostream& operator<<(std::ostream& os, const hashing::DexHash& hash) {
-  os << "(P#" << hashing::hash_to_string(hash.positions_hash) << ", R#"
-     << hashing::hash_to_string(hash.registers_hash) << ", C#"
-     << hashing::hash_to_string(hash.code_hash) << ", S#"
-     << hashing::hash_to_string(hash.signature_hash) << ")";
-  return os;
-}

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -26,9 +26,7 @@ cfg::InstructionIterator get_invoke(cfg::ControlFlowGraph* cfg) {
 
 void test_inliner(const std::string& caller_str,
                   const std::string& callee_str,
-                  const std::string& expected_str,
-                  DexType* needs_receiver_cast = nullptr,
-                  DexType* needs_init_class = nullptr) {
+                  const std::string& expected_str) {
   auto caller_code = assembler::ircode_from_string(caller_str);
   caller_code->build_cfg(true);
   auto& caller = caller_code->cfg();
@@ -39,8 +37,7 @@ void test_inliner(const std::string& caller_str,
 
   cfg::CFGInliner::inline_cfg(&caller,
                               get_invoke(&caller),
-                              needs_receiver_cast,
-                              needs_init_class,
+                              /* needs_receiver_cast */ nullptr,
                               callee,
                               caller.get_registers_size());
 
@@ -830,56 +827,4 @@ TEST_F(CFGInlinerTest, cleanup_debug) {
     )
   )";
   test_inliner(caller_str, callee_str, expected_str);
-}
-
-TEST_F(CFGInlinerTest, needs_receiver_cast) {
-  const auto caller_str = R"(
-    (
-      (invoke-static (v0) "LCls;.foo:(LCls;)V")
-      (return-void)
-    )
-  )";
-  const auto callee_str = R"(
-    (
-      (load-param-object v0)
-      (return-void)
-    )
-  )";
-  const auto expected_str = R"(
-    (
-      (move-object v0 v0)
-      (check-cast v0 "LCls;")
-      (move-result-pseudo-object v0)
-      (return-void)
-    )
-  )";
-  DexType* needs_receiver_cast = DexType::make_type("LCls;");
-  test_inliner(caller_str, callee_str, expected_str, needs_receiver_cast);
-}
-
-TEST_F(CFGInlinerTest, needs_init_class) {
-  const auto caller_str = R"(
-    (
-      (invoke-static () "LCls;.foo:()V")
-      (return-void)
-    )
-  )";
-  const auto callee_str = R"(
-    (
-      (return-void)
-    )
-  )";
-  const auto expected_str = R"(
-    (
-      (init-class "LCls;")
-      (return-void)
-    )
-  )";
-  DexType* needs_receiver_cast = nullptr;
-  DexType* needs_init_class = DexType::make_type("LCls;");
-  test_inliner(caller_str,
-               callee_str,
-               expected_str,
-               needs_receiver_cast,
-               needs_init_class);
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -53,5 +53,9 @@ void add_class(DexClass* new_cls,
                Scope& scope,
                DexStoresVector& stores,
                boost::optional<size_t> dex_id);
+
+void handle_interface_as_root(ModelSpec& spec,
+                              Scope& scope,
+                              DexStoresVector& stores);
 
 } // namespace class_merging

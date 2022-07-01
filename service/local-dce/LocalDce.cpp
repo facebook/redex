@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -8,6 +8,7 @@
 #include "LocalDce.h"
 
 #include <array>
+#include <iostream>
 #include <unordered_set>
 #include <vector>
 
@@ -66,37 +67,13 @@ void update_liveness(const IRInstruction* inst,
   }
 }
 
-bool has_normalizable_new_instance(cfg::ControlFlowGraph& cfg) {
-  auto ii = InstructionIterable(cfg);
-  for (auto it = ii.begin(); it != ii.end(); it++) {
-    if (!opcode::is_new_instance(it->insn->opcode())) {
-      continue;
-    }
-    auto next_it = cfg.next_following_gotos(it);
-    always_assert(!next_it.is_end());
-    always_assert(opcode::is_a_move_result_pseudo(next_it->insn->opcode()));
-    if (next_it.block() != it.block()) {
-      // implementation limitation
-      return true;
-    }
-    auto reg = next_it->insn->dest();
-    auto next_next_it = cfg.next_following_gotos(next_it);
-    if (!opcode::is_invoke_direct(next_next_it->insn->opcode()) ||
-        !method::is_init(next_next_it->insn->get_method()) ||
-        next_next_it->insn->src(0) != reg) {
-      return true;
-    }
-  }
-  return false;
-}
 } // namespace
 
 ////////////////////////////////////////////////////////////////////////////////
 
 std::vector<std::pair<cfg::Block*, IRList::iterator>>
 LocalDce::get_dead_instructions(const cfg::ControlFlowGraph& cfg,
-                                const std::vector<cfg::Block*>& blocks,
-                                bool* any_init_class_insns) {
+                                const std::vector<cfg::Block*>& blocks) {
   auto regs = cfg.get_registers_size();
   std::unordered_map<cfg::BlockId, boost::dynamic_bitset<>> liveness;
   for (cfg::Block* b : cfg.blocks()) {
@@ -137,9 +114,6 @@ LocalDce::get_dead_instructions(const cfg::ControlFlowGraph& cfg,
         bool required = is_required(cfg, b, it->insn, bliveness);
         if (required) {
           update_liveness(it->insn, bliveness);
-          if (it->insn->opcode() == IOPCODE_INIT_CLASS) {
-            *any_init_class_insns = true;
-          }
         } else {
           // move-result-pseudo instructions will be automatically removed
           // when their primary instruction is deleted.
@@ -159,28 +133,26 @@ LocalDce::get_dead_instructions(const cfg::ControlFlowGraph& cfg,
   return dead_instructions;
 }
 
-void LocalDce::dce(cfg::ControlFlowGraph& cfg,
-                   bool normalize_new_instances,
-                   DexType* declaring_type) {
+void LocalDce::dce(cfg::ControlFlowGraph& cfg, bool normalize_new_instances) {
   if (normalize_new_instances) {
     this->normalize_new_instances(cfg);
   }
   TRACE(DCE, 5, "%s", SHOW(cfg));
   const auto& blocks = graph::postorder_sort<cfg::GraphInterface>(cfg);
-  bool any_init_class_insns = false;
   std::vector<std::pair<cfg::Block*, IRList::iterator>> dead_instructions =
-      get_dead_instructions(cfg, blocks, &any_init_class_insns);
+      get_dead_instructions(cfg, blocks);
 
   // Remove dead instructions.
-  cfg::CFGMutation mutation(cfg);
-  std::unique_ptr<npe::NullPointerExceptionCreator> npe_creator;
-  size_t npe_instructions = 0;
-  size_t init_class_instructions_added = 0;
+  std::unordered_set<IRInstruction*> seen;
+  std::vector<std::pair<IRInstruction*, cfg::Block*>> npe_instructions;
   for (const auto& pair : dead_instructions) {
     cfg::Block* b = pair.first;
-    const IRList::iterator& it = pair.second;
+    IRList::iterator it = pair.second;
     auto insn = it->insn;
-    auto cfg_it = b->to_cfg_instruction_iterator(it);
+    if (seen.count(insn)) {
+      continue;
+    }
+    seen.emplace(insn);
     DexMethod* method;
     if (m_may_allocate_registers && m_method_override_graph &&
         (insn->opcode() == OPCODE_INVOKE_VIRTUAL ||
@@ -189,39 +161,29 @@ void LocalDce::dce(cfg::ControlFlowGraph& cfg,
             nullptr &&
         !has_implementor(m_method_override_graph, method)) {
       TRACE(DCE, 2, "DEAD NPE: %s", SHOW(insn));
-      if (!npe_creator) {
-        npe_creator = std::make_unique<npe::NullPointerExceptionCreator>(&cfg);
-      }
-      cfg.replace_insns(cfg_it, npe_creator->get_insns(insn));
-      npe_instructions++;
+      npe_instructions.emplace_back(insn, b);
     } else {
       TRACE(DCE, 2, "DEAD: %s", SHOW(insn));
-      auto init_class_insn =
-          m_init_classes_with_side_effects
-              ? m_init_classes_with_side_effects->create_init_class_insn(
-                    get_init_class_type_demand(insn))
-              : nullptr;
-      if (init_class_insn) {
-        init_class_instructions_added++;
-        mutation.replace(cfg_it, {init_class_insn});
-        any_init_class_insns = true;
-      } else {
-        mutation.remove(cfg_it);
-      }
+      b->remove_insn(it);
     }
   }
-  mutation.flush();
-
-  if (any_init_class_insns && m_init_classes_with_side_effects &&
-      declaring_type) {
-    prune_init_classes(cfg, declaring_type);
+  if (!npe_instructions.empty()) {
+    npe::NullPointerExceptionCreator npe_creator(&cfg);
+    for (auto pair : npe_instructions) {
+      auto invoke_insn = pair.first;
+      auto block = pair.second;
+      auto it = cfg.find_insn(invoke_insn, block);
+      if (it.is_end()) {
+        // can happen if we removed an earlier invocation.
+        continue;
+      }
+      cfg.replace_insns(it, npe_creator.get_insns(invoke_insn));
+    }
   }
-
   auto unreachable_insn_count = cfg.remove_unreachable_blocks().first;
   cfg.recompute_registers_size();
 
-  m_stats.npe_instruction_count += npe_instructions;
-  m_stats.init_class_instructions_added += init_class_instructions_added;
+  m_stats.npe_instruction_count += npe_instructions.size();
   m_stats.dead_instruction_count += dead_instructions.size();
   m_stats.unreachable_instruction_count += unreachable_insn_count;
 
@@ -229,11 +191,9 @@ void LocalDce::dce(cfg::ControlFlowGraph& cfg,
   TRACE(DCE, 5, "%s", SHOW(cfg));
 }
 
-void LocalDce::dce(IRCode* code,
-                   bool normalize_new_instances,
-                   DexType* declaring_type) {
+void LocalDce::dce(IRCode* code, bool normalize_new_instances) {
   cfg::ScopedCFG cfg(code);
-  dce(*cfg, normalize_new_instances, declaring_type);
+  dce(*cfg, normalize_new_instances);
 }
 
 /*
@@ -253,13 +213,6 @@ bool LocalDce::is_required(const cfg::ControlFlowGraph& cfg,
       }
       if (!assumenosideeffects(inst->get_method(), meth)) {
         return true;
-      }
-      if (!m_init_classes_with_side_effects &&
-          inst->opcode() == OPCODE_INVOKE_STATIC) {
-        if (!m_ignore_pure_method_init_classes ||
-            !m_pure_methods.count(inst->get_method())) {
-          return true;
-        }
       }
       return bliveness.test(bliveness.size() - 1);
     } else if (opcode::is_a_conditional_branch(inst->opcode())) {
@@ -284,17 +237,6 @@ bool LocalDce::is_required(const cfg::ControlFlowGraph& cfg,
     return bliveness.test(inst->dest());
   } else if (opcode::is_filled_new_array(inst->opcode()) ||
              inst->has_move_result_pseudo()) {
-    if (opcode::is_an_sget(inst->opcode())) {
-      auto field = resolve_field(inst->get_field(), FieldSearch::Static);
-      if (field && field->rstate.init_class()) {
-        return true;
-      }
-    }
-    if (!m_init_classes_with_side_effects &&
-        (inst->opcode() == OPCODE_NEW_INSTANCE ||
-         opcode::is_an_sfield_op(inst->opcode()))) {
-      return true;
-    }
     // These instructions pass their dests via the return-value slot, but
     // aren't inherently live like the invoke-* instructions.
     return bliveness.test(bliveness.size() - 1);
@@ -313,16 +255,6 @@ void LocalDce::normalize_new_instances(cfg::ControlFlowGraph& cfg) {
   // TODO: This normalization optimization doesn't really belong to local-dce,
   // but it combines nicely as local-dce will clean-up redundant new-instance
   // instructions and moves afterwards.
-
-  // Let's not do the transformation if there's a chance that it could leave
-  // behind dangling new-instance instructions that LocalDce couldn't remove.
-  if (!m_init_classes_with_side_effects) {
-    return;
-  }
-  if (!has_normalizable_new_instance(cfg)) {
-    return;
-  }
-
   cfg::CFGMutation mutation(cfg);
   reaching_defs::MoveAwareFixpointIterator fp_iter(cfg);
   fp_iter.run({});
@@ -387,28 +319,6 @@ void LocalDce::normalize_new_instances(cfg::ControlFlowGraph& cfg) {
         continue;
       }
 
-      // Scan for the move-result-pseudo and a source block afterwards.
-      std::unique_ptr<SourceBlock> sb_move;
-      {
-        auto original_move_cfg_it =
-            cfg.move_result_of(cfg.find_insn(old_new_instance_insn, block));
-        redex_assert(!original_move_cfg_it.is_end());
-        auto* move_block = original_move_cfg_it.block();
-        auto original_move_it = original_move_cfg_it.unwrap();
-        ++original_move_it;
-        while (original_move_it != move_block->end()) {
-          if (original_move_it->type == MFLOW_OPCODE) {
-            break;
-          }
-          if (original_move_it->type == MFLOW_SOURCE_BLOCK) {
-            sb_move = std::move(original_move_it->src_block);
-            block->remove_mie(original_move_it);
-            break;
-          }
-          ++original_move_it;
-        }
-      }
-
       // We don't bother removing the old new-instance instruction (or other
       // intermediate move-object instructions) here, as LocalDce will do that
       // as part of its normal operation.
@@ -417,28 +327,11 @@ void LocalDce::normalize_new_instances(cfg::ControlFlowGraph& cfg) {
       auto move_result_pseudo_object_insn =
           new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
       move_result_pseudo_object_insn->set_dest(reg);
-      if (sb_move == nullptr) {
-        mutation.insert_before(
-            block->to_cfg_instruction_iterator(it),
-            {new_instance_insn, move_result_pseudo_object_insn});
-      } else {
-        std::vector<cfg::ControlFlowGraph::InsertVariant> tmp;
-        tmp.emplace_back(new_instance_insn);
-        tmp.emplace_back(move_result_pseudo_object_insn);
-        tmp.emplace_back(std::move(sb_move));
-        mutation.insert_before_var(block->to_cfg_instruction_iterator(it),
-                                   std::move(tmp));
-      }
+      mutation.insert_before(
+          block->to_cfg_instruction_iterator(it),
+          {new_instance_insn, move_result_pseudo_object_insn});
       m_stats.normalized_new_instances++;
     }
   }
   mutation.flush();
-}
-
-void LocalDce::prune_init_classes(cfg::ControlFlowGraph& cfg,
-                                  DexType* declaring_type) {
-  init_classes::InitClassPruner init_class_pruner(
-      *m_init_classes_with_side_effects, declaring_type, cfg);
-  init_class_pruner.apply();
-  m_stats.init_classes = init_class_pruner.get_stats();
 }

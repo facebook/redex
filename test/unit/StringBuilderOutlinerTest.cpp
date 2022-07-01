@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -114,13 +114,13 @@ class StringBuilderOutlinerTest : public RedexTest {
     auto& cfg = code->cfg();
     ptrs::InvokeToSummaryMap invoke_to_esc_summary_map;
     side_effects::InvokeToSummaryMap invoke_to_eff_summary_map;
-    populate_summary_maps(*code, &invoke_to_esc_summary_map,
-                          &invoke_to_eff_summary_map);
+    populate_summary_maps(
+        *code, &invoke_to_esc_summary_map, &invoke_to_eff_summary_map);
 
     ptrs::FixpointIterator fp_iter(cfg, invoke_to_esc_summary_map);
     fp_iter.run(ptrs::Environment());
-    uv::FixpointIterator used_vars_fp_iter(fp_iter, invoke_to_eff_summary_map,
-                                           cfg);
+    uv::FixpointIterator used_vars_fp_iter(
+        fp_iter, invoke_to_eff_summary_map, cfg);
     used_vars_fp_iter.run(uv::UsedVarsSet());
 
     for (const auto& it : uv::get_dead_instructions(*code, used_vars_fp_iter)) {
@@ -320,11 +320,8 @@ TEST_F(StringBuilderOutlinerTest, outlineThree) {
       ptrs_fp_iter, invoke_to_eff_summary_map, outline_helper_cfg);
   used_vars_fp_iter.run(uv::UsedVarsSet());
 
-  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
-      {}, /* create_init_class_insns */ false);
   auto eff_summary = side_effects::analyze_code(
-      init_classes_with_side_effects, invoke_to_eff_summary_map, ptrs_fp_iter,
-      outline_helper_code);
+      invoke_to_eff_summary_map, ptrs_fp_iter, outline_helper_code);
   EXPECT_EQ(eff_summary, side_effects::Summary(side_effects::EFF_NONE, {}));
 }
 

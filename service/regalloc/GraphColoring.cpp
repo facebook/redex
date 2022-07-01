@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -81,7 +81,8 @@ static size_t sum_src_sizes(const IRInstruction* insn) {
     // Account for the implicit `this` parameter
     ++size;
   }
-  for (auto* type : *insn->get_method()->get_proto()->get_args()) {
+  auto& types = insn->get_method()->get_proto()->get_args()->get_type_list();
+  for (auto* type : types) {
     size += type::is_wide_type(type) ? 2 : 1;
   }
   return size;
@@ -586,12 +587,13 @@ void Allocator::select_ranges(const IRCode* code,
  * Assign virtual registers to our symbolic param-related registers, spilling
  * where necessary.
  */
-void Allocator::select_params(const IRCode* code,
+void Allocator::select_params(const DexMethod* method,
                               const interference::Graph& ig,
                               RegisterTransform* reg_transform,
                               SpillPlan* spill_plan) {
   std::unordered_map<reg_t, VirtualRegistersFile> vreg_files;
   std::vector<reg_t> param_regs;
+  const IRCode* code = method->get_code();
   auto param_insns = code->get_param_instructions();
   size_t params_size{0};
   for (auto& mie : InstructionIterable(param_insns)) {
@@ -960,8 +962,9 @@ void Allocator::spill(const interference::Graph& ig,
  *   :true-label
  *   return-object v0
  */
-static void dedicate_this_register(IRCode* code, bool is_static) {
-  always_assert(!is_static);
+static void dedicate_this_register(DexMethod* method) {
+  always_assert(!is_static(method));
+  IRCode* code = method->get_code();
   auto param_insns = code->get_param_instructions();
   auto this_insn = param_insns.begin()->insn;
 
@@ -985,10 +988,6 @@ static void dedicate_this_register(IRCode* code, bool is_static) {
   }
 }
 
-void Allocator::allocate(DexMethod* method) {
-  allocate(method->get_code(), is_static(method));
-}
-
 /*
  * Main differences from the standard Chaitin-Briggs
  * build-coalesce-simplify-spill loop:
@@ -1004,7 +1003,9 @@ void Allocator::allocate(DexMethod* method) {
  *     account for. These are handled in select_ranges and select_params
  *     respectively.
  */
-void Allocator::allocate(IRCode* code, bool is_static) {
+void Allocator::allocate(DexMethod* method) {
+  IRCode* code = method->get_code();
+
   // Any temp larger than this is the result of the spilling process
   auto initial_regs = code->get_registers_size();
 
@@ -1013,9 +1014,9 @@ void Allocator::allocate(IRCode* code, bool is_static) {
   // in the allocation loop below.
   auto range_set = init_range_set(code);
 
-  bool no_overwrite_this = m_config.no_overwrite_this && !is_static;
+  bool no_overwrite_this = m_config.no_overwrite_this && !is_static(method);
   if (no_overwrite_this) {
-    dedicate_this_register(code, is_static);
+    dedicate_this_register(method);
   }
   bool first{true};
   while (true) {
@@ -1077,7 +1078,7 @@ void Allocator::allocate(IRCode* code, bool is_static) {
     // constrained category of registers, so it makes sense to allocate them
     // last.
     select(code, ig, &spilled_select_stack, &reg_transform, &spill_plan);
-    select_params(code, ig, &reg_transform, &spill_plan);
+    select_params(method, ig, &reg_transform, &spill_plan);
     TRACE(REG, 5, "Transform after range alloc:\n%s", SHOW(reg_transform));
 
     if (!spill_plan.empty()) {

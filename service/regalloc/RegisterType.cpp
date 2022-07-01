@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -328,12 +328,12 @@ static RegisterType invoke_src_type(const IRInstruction* insn, vreg_t i) {
       --i;
     }
   }
-  const auto* types = method->get_proto()->get_args();
-  always_assert_log(types->size() > i, "Invalid invoke insn %s\n", SHOW(insn));
-  auto* type = types->at(i);
+  const auto& types = method->get_proto()->get_args()->get_type_list();
+  always_assert_log(types.size() > i, "Invalid invoke insn %s\n", SHOW(insn));
+  auto* type = types.at(i);
   if (type::is_wide_type(type)) {
     return RegisterType::WIDE;
-  } else if (type::is_primitive(type)) {
+  } else if (type::is_primitive(types.at(i))) {
     return RegisterType::NORMAL;
   } else {
     return RegisterType::OBJECT;

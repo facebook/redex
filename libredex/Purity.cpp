@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -451,14 +451,12 @@ size_t compute_locations_closure(
   walk::parallel::methods(scope, [&](DexMethod* method) {
     auto lads = init_func(method);
     if (lads) {
-      concurrent_method_lads.emplace(method, std::move(*lads));
+      concurrent_method_lads.emplace(method, *lads);
     }
   });
 
-  std::unordered_map<const DexMethod*, LocationsAndDependencies> method_lads;
-  for (auto& p : concurrent_method_lads) {
-    method_lads.insert(std::move(p));
-  }
+  std::unordered_map<const DexMethod*, LocationsAndDependencies> method_lads(
+      concurrent_method_lads.begin(), concurrent_method_lads.end());
 
   // 2. Compute inverse dependencies so that we know what needs to be recomputed
   // during the fixpoint computation, and determine set of methods that are
@@ -688,7 +686,7 @@ size_t compute_locations_closure(
   // For all methods which have a known set of locations at this point,
   // persist that information
   for (auto& p : method_lads) {
-    result->emplace(p.first, std::move(p.second.locations));
+    result->emplace(p.first, p.second.locations);
   }
 
   return iterations;
@@ -710,7 +708,6 @@ size_t compute_locations_closure(
 static size_t analyze_read_locations(
     const Scope& scope,
     const method_override_graph::Graph* method_override_graph,
-    const method::ClInitHasNoSideEffectsPredicate& clinit_has_no_side_effects,
     const std::unordered_set<DexMethodRef*>& pure_methods,
     bool ignore_methods_with_assumenosideeffects,
     bool for_conditional_purity,
@@ -773,16 +770,8 @@ static size_t analyze_read_locations(
               case OPCODE_THROW:
                 unknown = true;
                 break;
-              case IOPCODE_INIT_CLASS:
-                unknown = true;
-                break;
-              case OPCODE_NEW_INSTANCE:
-                if (for_conditional_purity ||
-                    !clinit_has_no_side_effects(insn->get_type())) {
-                  unknown = true;
-                }
-                break;
               case OPCODE_NEW_ARRAY:
+              case OPCODE_NEW_INSTANCE:
               case OPCODE_FILLED_NEW_ARRAY:
                 if (for_conditional_purity) {
                   unknown = true;
@@ -804,22 +793,13 @@ static size_t analyze_read_locations(
                       CseLocation(
                           CseSpecialLocations::GENERAL_MEMORY_BARRIER)) {
                     unknown = true;
-                  } else {
-                    if (opcode::is_an_sget(opcode) &&
-                        (!clinit_has_no_side_effects(
-                            location.get_field()->get_class()))) {
-                      unknown = true;
-                    } else if (compute_locations) {
-                      lads.locations.insert(location);
-                    }
+                  } else if (compute_locations) {
+                    lads.locations.insert(location);
                   }
                 } else if (opcode::is_an_invoke(opcode)) {
                   auto invoke_method = resolve_method(
                       insn->get_method(), opcode_to_search(opcode), method);
-                  if ((invoke_method && opcode::is_invoke_static(opcode) &&
-                       (!clinit_has_no_side_effects(
-                           invoke_method->get_class()))) ||
-                      !process_base_and_overriding_methods(
+                  if (!process_base_and_overriding_methods(
                           method_override_graph, invoke_method,
                           &pure_methods_closure,
                           ignore_methods_with_assumenosideeffects,
@@ -851,13 +831,12 @@ static size_t analyze_read_locations(
 size_t compute_conditionally_pure_methods(
     const Scope& scope,
     const method_override_graph::Graph* method_override_graph,
-    const method::ClInitHasNoSideEffectsPredicate& clinit_has_no_side_effects,
     const std::unordered_set<DexMethodRef*>& pure_methods,
     std::unordered_map<const DexMethod*, CseUnorderedLocationSet>* result,
     const purity::CacheConfig& cache_config) {
   Timer t("compute_conditionally_pure_methods");
   auto iterations = analyze_read_locations(
-      scope, method_override_graph, clinit_has_no_side_effects, pure_methods,
+      scope, method_override_graph, pure_methods,
       /* ignore_methods_with_assumenosideeffects */ false,
       /* for_conditional_purity */ true,
       /* compute_locations */ true, result, cache_config);
@@ -871,7 +850,6 @@ size_t compute_conditionally_pure_methods(
 size_t compute_no_side_effects_methods(
     const Scope& scope,
     const method_override_graph::Graph* method_override_graph,
-    const method::ClInitHasNoSideEffectsPredicate& clinit_has_no_side_effects,
     const std::unordered_set<DexMethodRef*>& pure_methods,
     std::unordered_set<const DexMethod*>* result,
     const purity::CacheConfig& cache_config) {
@@ -879,7 +857,7 @@ size_t compute_no_side_effects_methods(
   std::unordered_map<const DexMethod*, CseUnorderedLocationSet>
       method_locations;
   auto iterations = analyze_read_locations(
-      scope, method_override_graph, clinit_has_no_side_effects, pure_methods,
+      scope, method_override_graph, pure_methods,
       /* ignore_methods_with_assumenosideeffects */ true,
       /* for_conditional_purity */ false,
       /* compute_locations */ false, &method_locations, cache_config);

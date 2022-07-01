@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -71,20 +71,8 @@
 namespace constant_uses {
 
 ConstantUses::ConstantUses(const cfg::ControlFlowGraph& cfg, DexMethod* method)
-    : ConstantUses(cfg,
-                   method ? is_static(method) : true,
-                   method ? method->get_class() : nullptr,
-                   method ? method->get_proto()->get_rtype() : nullptr,
-                   method ? method->get_proto()->get_args() : nullptr,
-                   [method]() { return show(method); }) {}
-
-ConstantUses::ConstantUses(const cfg::ControlFlowGraph& cfg,
-                           bool is_static,
-                           DexType* declaring_type,
-                           DexType* rtype,
-                           DexTypeList* args,
-                           const std::function<std::string()>& method_describer)
-    : m_reaching_definitions(cfg), m_rtype(rtype) {
+    : m_reaching_definitions(cfg),
+      m_rtype(method ? method->get_proto()->get_rtype() : nullptr) {
   m_reaching_definitions.run(reaching_defs::Environment());
 
   bool need_type_inference = false;
@@ -130,11 +118,11 @@ ConstantUses::ConstantUses(const cfg::ControlFlowGraph& cfg,
     }
   }
 
-  TRACE(CU, 2, "[CU] ConstantUses(%s) need_type_inference:%u",
-        method_describer().c_str(), need_type_inference);
-  if (need_type_inference && args) {
+  TRACE(CU, 2, "[CU] ConstantUses(%s) need_type_inference:%u", SHOW(method),
+        need_type_inference);
+  if (need_type_inference && method) {
     m_type_inference.reset(new type_inference::TypeInference(cfg));
-    m_type_inference->run(is_static, declaring_type, args);
+    m_type_inference->run(method);
   }
 }
 
@@ -227,7 +215,6 @@ TypeDemand ConstantUses::get_type_demand(IRInstruction* insn,
   case OPCODE_SGET_SHORT:
   case OPCODE_SGET_WIDE:
   case OPCODE_SGET_OBJECT:
-  case IOPCODE_INIT_CLASS:
     not_reached();
 
   case OPCODE_RETURN:
@@ -513,9 +500,10 @@ TypeDemand ConstantUses::get_type_demand(IRInstruction* insn,
   case OPCODE_INVOKE_STATIC:
   case OPCODE_INVOKE_INTERFACE: {
     DexMethodRef* dex_method = insn->get_method();
-    const auto* arg_types = dex_method->get_proto()->get_args();
+    const auto& arg_types =
+        dex_method->get_proto()->get_args()->get_type_list();
     size_t expected_args =
-        (insn->opcode() != OPCODE_INVOKE_STATIC ? 1 : 0) + arg_types->size();
+        (insn->opcode() != OPCODE_INVOKE_STATIC ? 1 : 0) + arg_types.size();
     always_assert(insn->srcs_size() == expected_args);
 
     if (insn->opcode() != OPCODE_INVOKE_STATIC) {
@@ -523,7 +511,7 @@ TypeDemand ConstantUses::get_type_demand(IRInstruction* insn,
       // method is invoked.
       if (src_index-- == 0) return TypeDemand::Object;
     }
-    return get_type_demand(arg_types->at(src_index));
+    return get_type_demand(arg_types.at(src_index));
   }
   case OPCODE_INVOKE_CUSTOM:
   case OPCODE_INVOKE_POLYMORPHIC:

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -99,20 +99,13 @@ bool not_eligible_ifield(DexField* field) {
 /**
  * Initialize non-external, can be deleted instance fields' value to be 0.
  */
-void initialize_ifields(
-    const Scope& scope,
-    ConstantFieldPartition* field_partition,
-    const std::unordered_set<const DexField*>& definitely_assigned_ifields) {
+void initialize_ifields(const Scope& scope,
+                        ConstantFieldPartition* field_partition) {
   walk::fields(scope, [&](DexField* field) {
     if (not_eligible_ifield(field)) {
       return;
     }
-    // For instance fields that are always written to before they are read, the
-    // initial 0 value is not observable, so we don't even have to include it.
-    auto value = definitely_assigned_ifields.count(field)
-                     ? SignedConstantDomain::bottom()
-                     : SignedConstantDomain(0);
-    field_partition->set(field, value);
+    field_partition->set(field, SignedConstantDomain(0));
   });
 }
 
@@ -132,8 +125,7 @@ WholeProgramState::WholeProgramState(
     const Scope& scope,
     const interprocedural::FixpointIterator& fp_iter,
     const std::unordered_set<DexMethod*>& non_true_virtuals,
-    const std::unordered_set<const DexType*>& field_blocklist,
-    const std::unordered_set<const DexField*>& definitely_assigned_ifields)
+    const std::unordered_set<const DexType*>& field_blocklist)
     : m_field_blocklist(field_blocklist) {
 
   walk::fields(scope, [&](DexField* field) {
@@ -164,7 +156,7 @@ WholeProgramState::WholeProgramState(
     }
   });
   analyze_clinits(scope, fp_iter, &m_field_partition);
-  collect(scope, fp_iter, definitely_assigned_ifields);
+  collect(scope, fp_iter);
 }
 
 WholeProgramState::WholeProgramState(
@@ -172,13 +164,8 @@ WholeProgramState::WholeProgramState(
     const interprocedural::FixpointIterator& fp_iter,
     const std::unordered_set<DexMethod*>& non_true_virtuals,
     const std::unordered_set<const DexType*>& field_blocklist,
-    const std::unordered_set<const DexField*>& definitely_assigned_ifields,
     const call_graph::Graph& call_graph)
-    : WholeProgramState(scope,
-                        fp_iter,
-                        non_true_virtuals,
-                        field_blocklist,
-                        definitely_assigned_ifields) {
+    : WholeProgramState(scope, fp_iter, non_true_virtuals, field_blocklist) {
   m_call_graph = call_graph;
 }
 /*
@@ -186,10 +173,8 @@ WholeProgramState::WholeProgramState(
  * field, as well as a join over the values returned by each method.
  */
 void WholeProgramState::collect(
-    const Scope& scope,
-    const interprocedural::FixpointIterator& fp_iter,
-    const std::unordered_set<const DexField*>& definitely_assigned_ifields) {
-  initialize_ifields(scope, &m_field_partition, definitely_assigned_ifields);
+    const Scope& scope, const interprocedural::FixpointIterator& fp_iter) {
+  initialize_ifields(scope, &m_field_partition);
   ConcurrentMap<const DexField*, std::vector<ConstantValue>> fields_value_tmp;
   ConcurrentMap<const DexMethod*, std::vector<ConstantValue>> methods_value_tmp;
   walk::parallel::methods(scope, [&](DexMethod* method) {

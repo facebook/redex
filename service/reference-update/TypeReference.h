@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -91,6 +91,21 @@ DexProto* get_new_proto(
     const std::unordered_map<const DexType*, DexType*>& old_to_new);
 
 /**
+ * Helper functions building a modified DexTypeList by appending or prepending
+ * elements.
+ */
+DexTypeList* prepend_and_make(const DexTypeList* list, DexType* new_type);
+
+DexTypeList* append_and_make(const DexTypeList* list, DexType* new_type);
+
+DexTypeList* append_and_make(const DexTypeList* list,
+                             const std::vector<DexType*>& new_types);
+
+DexTypeList* replace_head_and_make(const DexTypeList* list, DexType* new_head);
+
+DexTypeList* drop_and_make(const DexTypeList* list, size_t num_types_to_drop);
+
+/**
  * Update all method signature type references in-place using the old_to_new
  * map. We update all references to an old type to the provided new type.
  *
@@ -108,7 +123,4 @@ void update_field_type_references(
     const Scope& scope,
     const std::unordered_map<const DexType*, DexType*>& old_to_new);
 
-void fix_colliding_dmethods(
-    const Scope& scope,
-    const std::vector<std::pair<DexMethod*, DexProto*>>& colliding_methods);
 } // namespace type_reference

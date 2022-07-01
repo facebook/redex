@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -16,7 +16,7 @@
 
 class XStoreRefsTest : public RedexTest {
   static DexClass* make_simple_class(const std::string& name) {
-    ClassCreator cc(DexType::make_type(name));
+    ClassCreator cc(DexType::make_type(name.c_str()));
     cc.set_super(type::java_lang_Object());
     return cc.create();
   }
@@ -39,9 +39,17 @@ class XStoreRefsTest : public RedexTest {
 
     auto store0 = DexStore("classes");
     store0.add_classes({m_foo, m_bar, m_qux, m_quuz, m_store0_cls});
-    auto store1 = DexStore("some_store", {"dex"});
+
+    DexMetadata store1_metadata;
+    store1_metadata.set_id("some_store");
+    store1_metadata.set_dependencies({"dex"});
+    auto store1 = DexStore(store1_metadata);
     store1.add_classes({m_baz, m_iquux, m_xyzzy, m_store1_cls});
-    auto store2 = DexStore("some_store2", {"some_store"});
+
+    DexMetadata store2_metadata;
+    store2_metadata.set_id("some_store2");
+    store2_metadata.set_dependencies({"some_store"});
+    auto store2 = DexStore(store2_metadata);
     store2.add_classes({m_store2_cls});
 
     stores = DexStoresVector{store0, store1, store2};

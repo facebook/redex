@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -71,20 +71,6 @@ const PromoSection = props => (
   </div>
 );
 
-function SocialBanner() {
-  return (
-    <div className="SocialBanner">
-      <div>
-        Support Ukraine 🇺🇦{' '}
-        <a href="https://opensource.fb.com/support-ukraine">
-          Help Provide Humanitarian Aid to Ukraine
-        </a>
-        .
-      </div>
-    </div>
-  );
-}
-
 class HomeSplash extends React.Component {
   render() {
     let language = this.props.language || '';
@@ -118,7 +104,6 @@ class Index extends React.Component {
 
     return (
       <div>
-        <SocialBanner />
         <HomeSplash language={language} />
         <div className="mainContainer">
           <Container padding={['bottom', 'top']}>

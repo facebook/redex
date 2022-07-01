@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -380,15 +380,14 @@ class FinalInlineImpl {
       auto const_op = pair.first;
       auto sput_op = pair.second;
       auto field = resolve_field(sput_op->get_field(), FieldSearch::Static);
-      std::unique_ptr<DexEncodedValue> ev;
+      DexEncodedValue* ev;
       if (const_op->opcode() == OPCODE_CONST_STRING) {
         TRACE(FINALINLINE,
               8,
               "- String Field: %s, \"%s\"",
               SHOW(field),
               SHOW(const_op->get_string()));
-        ev = std::unique_ptr<DexEncodedValue>(
-            new DexEncodedValueString(const_op->get_string()));
+        ev = new DexEncodedValueString(const_op->get_string());
       } else {
         TRACE(FINALINLINE,
               9,
@@ -398,7 +397,7 @@ class FinalInlineImpl {
         ev = DexEncodedValue::zero_for_type(field->get_type());
         ev->value(static_cast<uint64_t>(const_op->get_literal()));
       }
-      field->set_value(std::move(ev));
+      field->set_value(ev);
     }
     clazz->remove_method(clinit);
 
@@ -515,7 +514,7 @@ class FinalInlineImpl {
       }
       auto val = cur->get_static_value();
       for (const auto& dep : deps[cur]) {
-        dep.field->set_value(val->clone());
+        dep.field->set_value(val);
         auto code = dep.clinit->get_code();
         TRACE(FINALINLINE, 5, "Removing %s", SHOW(dep.sget->insn));
         TRACE(FINALINLINE, 5, "Removing %s", SHOW(dep.sput->insn));

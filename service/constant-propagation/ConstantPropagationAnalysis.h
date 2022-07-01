@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -7,11 +7,9 @@
 
 #pragma once
 
-#include <limits>
 #include <unordered_set>
 #include <utility>
 
-#include "ConcurrentContainers.h"
 #include "ConstantEnvironment.h"
 #include "IRCode.h"
 #include "InstructionAnalyzer.h"
@@ -55,52 +53,27 @@ class FixpointIterator final
   void analyze_node(const NodeId& block,
                     ConstantEnvironment* state_at_entry) const override;
 
-  void clear_switch_succ_cache() const { m_switch_succs.clear(); }
-
  private:
-  using SwitchSuccs = std::unordered_map<int32_t, uint32_t>;
+  using SwitchSuccs = std::unordered_map<int32_t, cfg::Edge*>;
   mutable std::unordered_map<cfg::Block*, SwitchSuccs> m_switch_succs;
   InstructionAnalyzer<ConstantEnvironment> m_insn_analyzer;
   const std::unordered_set<DexMethodRef*>& m_kotlin_null_check_assertions;
   const bool m_imprecise_switches;
 
-  const SwitchSuccs& find_switch_succs(cfg::Block* block) const {
+  cfg::Edge* get_switch_succ(cfg::Block* block, int case_key) const {
     auto it = m_switch_succs.find(block);
     if (it == m_switch_succs.end()) {
-      std::vector<int32_t> keys;
+      SwitchSuccs switch_succs;
       for (auto succ : block->succs()) {
         if (succ->type() == cfg::EDGE_BRANCH) {
-          keys.push_back(*succ->case_key());
+          switch_succs.emplace(*succ->case_key(), succ);
         }
-      }
-      std::sort(keys.begin(), keys.end());
-      SwitchSuccs switch_succs;
-      for (auto key : keys) {
-        switch_succs.emplace(key, switch_succs.size());
       }
       it = m_switch_succs.emplace(block, std::move(switch_succs)).first;
     }
-    return it->second;
-  }
-
-  bool has_switch_consecutive_case_keys(cfg::Block* block,
-                                        int32_t min_case_key,
-                                        int32_t max_case_key) const {
-    always_assert(min_case_key <= max_case_key);
-    const auto& succs = find_switch_succs(block);
-    auto min_it = succs.find(min_case_key);
-    if (min_it == succs.end()) {
-      return false;
-    }
-    auto max_it = succs.find(max_case_key);
-    if (max_it == succs.end()) {
-      return false;
-    }
-    always_assert(min_it->second <= max_it->second);
-    uint32_t cases_keys = max_it->second - min_it->second;
-    int64_t n = (int64_t)max_case_key - min_case_key;
-    always_assert(n >= 0 && n < std::numeric_limits<uint32_t>::max());
-    return cases_keys == (uint32_t)n;
+    auto& switch_succs = it->second;
+    auto it2 = switch_succs.find(case_key);
+    return it2 == switch_succs.end() ? nullptr : it2->second;
   }
 };
 
@@ -302,8 +275,7 @@ struct ImmutableAttributeAnalyzerState {
     long end;
   };
 
-  ConcurrentMap<DexMethod*, std::vector<std::unique_ptr<Initializer>>>
-      method_initializers;
+  ConcurrentMap<DexMethod*, std::vector<Initializer>> method_initializers;
   ConcurrentSet<DexMethod*> attribute_methods;
   ConcurrentSet<DexField*> attribute_fields;
   std::unordered_map<DexMethod*, CachedBoxedObjects> cached_boxed_objects;
@@ -394,25 +366,6 @@ class ConstantClassObjectAnalyzer
     env->set(RESULT_REGISTER, ConstantClassObjectDomain(insn->get_type()));
     return true;
   }
-};
-
-struct ApiLevelAnalyzerState {
-  // Construction of this object is expensive because get_method acquires a
-  // global lock. `get` caches those lookups.
-  static ApiLevelAnalyzerState get(int32_t min_sdk = 0);
-
-  const DexFieldRef* sdk_int_field;
-  int32_t min_sdk;
-};
-
-class ApiLevelAnalyzer final
-    : public InstructionAnalyzerBase<ApiLevelAnalyzer,
-                                     ConstantEnvironment,
-                                     ApiLevelAnalyzerState> {
- public:
-  static bool analyze_sget(const ApiLevelAnalyzerState& state,
-                           const IRInstruction* insn,
-                           ConstantEnvironment* env);
 };
 
 /*
@@ -556,7 +509,6 @@ using ConstantPrimitiveAndBoxedAnalyzer =
                                 ImmutableAttributeAnalyzer,
                                 EnumFieldAnalyzer,
                                 BoxedBooleanAnalyzer,
-                                ApiLevelAnalyzer,
                                 PrimitiveAnalyzer>;
 
 } // namespace constant_propagation

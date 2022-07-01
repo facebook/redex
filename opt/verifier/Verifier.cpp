@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -18,7 +18,6 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"
-#include "PassManager.h"
 #include "ReachableClasses.h"
 #include "Show.h"
 #include "Trace.h"
@@ -28,12 +27,11 @@ namespace {
 
 const std::string CLASS_DEPENDENCY_FILENAME = "redex-class-dependencies.txt";
 
-using refs_t = std::unordered_map<
-    const DexStore*,
-    ConcurrentMap<const DexClass*, std::unordered_set<DexClass*>>>;
+using refs_t = std::unordered_map<const DexClass*,
+                                  std::set<DexClass*, dexclasses_comparator>>;
 using class_to_store_map_t = std::unordered_map<const DexClass*, DexStore*>;
 using allowed_store_map_t =
-    std::unordered_map<std::string, std::unordered_set<std::string>>;
+    std::unordered_map<std::string, std::set<std::string>>;
 
 /**
  * Helper function that scans all the opcodes in the application and produces a
@@ -45,55 +43,46 @@ using allowed_store_map_t =
  * @param class_refs [out] all refs to classes in the application
  *
  */
-void build_refs(const Scope& scope,
-                const class_to_store_map_t& map,
-                refs_t& class_refs) {
+void build_refs(const Scope& scope, refs_t& class_refs) {
   // TODO: walk through annotations
-  walk::parallel::classes(scope, [&](DexClass* cls) {
-    auto& store_class_refs = class_refs.at(map.at(cls));
-    auto add_ref = [&](DexClass* target) {
-      if (target) {
-        store_class_refs.update(
-            target, [cls](auto, auto& set, auto) { set.insert(cls); });
-      }
-    };
+  walk::opcodes(
+      scope,
+      [](const DexMethod*) { return true; },
+      [&](const DexMethod* meth, IRInstruction* insn) {
+        if (insn->has_type()) {
+          const auto tref = type_class(insn->get_type());
+          if (tref) class_refs[tref].emplace(type_class(meth->get_class()));
+          return;
+        }
+        if (insn->has_field()) {
+          const auto tref = type_class(insn->get_field()->get_class());
+          if (tref) class_refs[tref].emplace(type_class(meth->get_class()));
+          return;
+        }
+        if (insn->has_method()) {
+          // log methods class type, for virtual methods, this may not actually
+          // exist and true verification would require that the binding refers
+          // to a class that is valid.
+          const auto mref = type_class(insn->get_method()->get_class());
+          if (mref) class_refs[mref].emplace(type_class(meth->get_class()));
 
-    walk::opcodes(
-        std::vector{cls}, [&](const DexMethod*, const IRInstruction* insn) {
-          if (insn->has_type()) {
-            const auto tref = type_class(insn->get_type());
-            add_ref(tref);
-            return;
-          }
-          if (insn->has_field()) {
-            const auto tref = type_class(insn->get_field()->get_class());
-            add_ref(tref);
-            return;
-          }
-          if (insn->has_method()) {
-            // log methods class type, for virtual methods, this may not
-            // actually exist and true verification would require that the
-            // binding refers to a class that is valid.
-            const auto mref = type_class(insn->get_method()->get_class());
-            add_ref(mref);
+          // don't log return type or types of parameters for now, but this is
+          // how you might do it.
+          // const auto proto = insn->get_method()->get_proto();
+          // const auto rref = type_class(proto->get_rtype());
+          // if (rref) class_refs[rref].emplace(type_class(meth->get_class()));
+          // for (const auto arg : proto->get_args()->get_type_list()) {
+          //   const auto aref = type_class(arg);
+          //   if (aref)
+          //   class_refs[aref].emplace(type_class(meth->get_class()));
+          // }
 
-            // don't log return type or types of parameters for now, but this is
-            // how you might do it.
-            // const auto proto = insn->get_method()->get_proto();
-            // const auto rref = type_class(proto->get_rtype());
-            // if (rref) add_ref(rref);
-            // for (const auto arg : proto->get_args()->get_type_list()) {
-            //   const auto aref = type_class(arg);
-            //   add_ref(aref);
-            // }
-
-            return;
-          }
-        });
-  });
+          return;
+        }
+      });
 }
 
-const DexStore& findStore(std::string& name, const DexStoresVector& stores) {
+DexStore& findStore(std::string& name, DexStoresVector& stores) {
   for (auto& store : stores) {
     if (name == store.get_name()) {
       return store;
@@ -102,63 +91,57 @@ const DexStore& findStore(std::string& name, const DexStoresVector& stores) {
   return stores[0];
 }
 
-const std::unordered_set<std::string>& getAllowedStores(
-    const DexStoresVector& stores,
-    const DexStore& store,
-    allowed_store_map_t& store_map) {
-  const auto& name = store.get_name();
-  auto search = store_map.find(name);
+std::set<std::string> getAllowedStores(DexStoresVector& stores,
+                                       DexStore& store,
+                                       allowed_store_map_t store_map) {
+  auto search = store_map.find(store.get_name());
   if (search != store_map.end()) {
     return search->second;
   }
-  std::unordered_set<std::string> map;
-  map.emplace(name);
-  map.emplace(stores[0].get_name());
+  store_map[store.get_name()].emplace(store.get_name());
+  store_map[store.get_name()].emplace(stores[0].get_name());
   for (auto parent : store.get_dependencies()) {
-    map.emplace(parent);
+    store_map[store.get_name()].emplace(parent);
     for (const auto& grandparent :
          getAllowedStores(stores, findStore(parent, stores), store_map)) {
-      map.emplace(grandparent);
+      store_map[store.get_name()].emplace(grandparent);
     }
   }
-  auto [it, emplaced] = store_map.emplace(name, std::move(map));
-  always_assert(emplaced);
-  return it->second;
+  return store_map[store.get_name()];
 }
 
-uint64_t verifyStore(const DexStoresVector& stores,
-                     const DexStore& store,
-                     const class_to_store_map_t& map,
-                     const refs_t& class_refs,
-                     allowed_store_map_t& store_map,
-                     FILE* fd) {
-  const auto& allowed_stores = getAllowedStores(stores, store, store_map);
-  uint64_t dependencies{0};
-  for (auto& [target, sources] : class_refs.at(&store)) {
-    always_assert(!sources.empty());
-    auto find = map.find(target);
-    static const std::string external_store_name = "external";
-    const std::string& target_store_name =
-        find != map.end() ? find->second->get_name() : external_store_name;
-
-    if (!allowed_stores.count(target_store_name)) {
-      for (const auto& source : sources) {
+void verifyStore(DexStoresVector& stores,
+                 DexStore& store,
+                 class_to_store_map_t map,
+                 const allowed_store_map_t& store_map,
+                 FILE* fd) {
+  refs_t class_refs;
+  auto scope = build_class_scope(store.get_dexen());
+  build_refs(scope, class_refs);
+  for (auto& ref : class_refs) {
+    const auto target = ref.first;
+    for (const auto& source : ref.second) {
+      std::string target_store_name;
+      auto find = map.find(target);
+      if (find != map.end()) {
+        target_store_name = find->second->get_name();
+      } else {
+        target_store_name = "external";
+      }
+      std::set<std::string> allowed_stores =
+          getAllowedStores(stores, store, store_map);
+      if (allowed_stores.find(target_store_name) == allowed_stores.end()) {
         TRACE(VERIFY, 5, "BAD REFERENCE from %s %s to %s %s",
               store.get_name().c_str(), show_deobfuscated(source).c_str(),
               target_store_name.c_str(), show_deobfuscated(target).c_str());
       }
-    }
-    if (fd != nullptr) {
-      std::string target_deobfuscated = show_deobfuscated(target);
-      for (const auto& source : sources) {
+      if (fd != nullptr) {
         fprintf(fd, "%s:%s->%s:%s\n", store.get_name().c_str(),
                 show_deobfuscated(source).c_str(), target_store_name.c_str(),
-                target_deobfuscated.c_str());
+                show_deobfuscated(target).c_str());
       }
     }
-    dependencies += sources.size();
   }
-  return dependencies;
 }
 
 } // namespace
@@ -176,29 +159,19 @@ void VerifierPass::run_pass(DexStoresVector& stores,
 
   allowed_store_map_t store_map;
   class_to_store_map_t map;
-  refs_t class_refs;
   for (auto& store : stores) {
     auto scope = build_class_scope(store.get_dexen());
     for (const auto& cls : scope) {
       map[cls] = &store;
     }
-    class_refs[&store];
   }
-
-  auto scope = build_class_scope(stores);
-  build_refs(scope, map, class_refs);
-
-  uint64_t dependencies{0};
   for (auto& store : stores) {
-    dependencies += verifyStore(stores, store, map, class_refs, store_map, fd);
+    verifyStore(stores, store, map, store_map, fd);
   }
 
   if (fd != nullptr) {
     fclose(fd);
   }
-
-  TRACE(VERIFY, 1, "%lu dependencies found", dependencies);
-  mgr.incr_metric("dependencies", dependencies);
 }
 
 static VerifierPass s_pass;

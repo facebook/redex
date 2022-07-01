@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -12,7 +12,6 @@
 #include "ConstantPropagationWholeProgramState.h"
 #include "DexClass.h"
 #include "IRCode.h"
-#include "InitClassesWithSideEffects.h"
 #include "Pass.h"
 #include "PatriciaTreeSetAbstractDomain.h"
 
@@ -40,22 +39,12 @@ class FinalInlinePassV2 : public Pass {
          "field read in methods invoked by <init>");
   }
 
-  struct Stats {
-    size_t inlined_count;
-    size_t init_classes;
-  };
-  static Stats run(const Scope&,
-                   int min_sdk,
-                   const init_classes::InitClassesWithSideEffects&
-                       init_classes_with_side_effects,
-                   const XStoreRefs*,
-                   const Config& config = Config(),
-                   std::optional<DexStoresVector*> stores = std::nullopt);
-  static Stats run_inline_ifields(
+  static size_t run(const Scope&,
+                    const XStoreRefs*,
+                    const Config& config = Config(),
+                    std::optional<DexStoresVector*> stores = std::nullopt);
+  static size_t run_inline_ifields(
       const Scope&,
-      int min_sdk,
-      const init_classes::InitClassesWithSideEffects&
-          init_classes_with_side_effects,
       const XStoreRefs*,
       const constant_propagation::EligibleIfields& eligible_ifields,
       const Config& config = Config(),
@@ -82,8 +71,6 @@ class class_initialization_cycle : public std::exception {
 
 constant_propagation::WholeProgramState analyze_and_simplify_clinits(
     const Scope& scope,
-    const init_classes::InitClassesWithSideEffects&
-        init_classes_with_side_effects,
     const XStoreRefs* xstores,
     const std::unordered_set<const DexType*>& blocklist_types = {},
     const std::unordered_set<std::string>& allowed_opaque_callee_names = {});

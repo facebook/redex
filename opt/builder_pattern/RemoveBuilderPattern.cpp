@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -12,7 +12,6 @@
 #include "BuilderAnalysis.h"
 #include "BuilderTransform.h"
 #include "ConfigFiles.h"
-#include "CppUtil.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "PassManager.h"
@@ -59,8 +58,6 @@ class RemoveClasses {
  public:
   RemoveClasses(const DexType* super_cls,
                 const Scope& scope,
-                const init_classes::InitClassesWithSideEffects&
-                    init_classes_with_side_effects,
                 const inliner::InlinerConfig& inliner_config,
                 const std::vector<DexType*>& blocklist,
                 bool propagate_escape_results,
@@ -70,12 +67,7 @@ class RemoveClasses {
         m_blocklist(blocklist),
         m_type_system(scope),
         m_propagate_escape_results(propagate_escape_results),
-        m_transform(scope,
-                    m_type_system,
-                    super_cls,
-                    init_classes_with_side_effects,
-                    inliner_config,
-                    stores),
+        m_transform(scope, m_type_system, super_cls, inliner_config, stores),
         m_stores(stores) {
     gather_classes();
   }
@@ -108,9 +100,6 @@ class RemoveClasses {
                    m_excluded_types.size());
     mgr.set_metric(root_name + "_num_total_usages", m_num_usages);
     mgr.set_metric(root_name + "_num_removed_usages", m_num_removed_usages);
-
-    TRACE(BLD_PATTERN, 1, "num_classes_excluded %lu", m_excluded_types.size());
-    TRACE(BLD_PATTERN, 1, "num_classes_removed %lu", m_removed_types.size());
     for (const auto& type : m_excluded_types) {
       TRACE(BLD_PATTERN, 2, "Excluded type: %s", SHOW(type));
     }
@@ -169,11 +158,11 @@ class RemoveClasses {
     for (auto method : methods) {
       BuilderAnalysis analysis(m_classes, m_excluded_types, method);
 
-      bool have_builders_to_remove =
+      bool are_builders_to_remove =
           inline_builders_and_check_method(method, &analysis);
       m_num_usages += analysis.get_total_num_usages();
 
-      if (!have_builders_to_remove) {
+      if (!are_builders_to_remove) {
         continue;
       }
 
@@ -239,15 +228,6 @@ class RemoveClasses {
 
     do {
       analysis->run_analysis();
-
-      std::vector<IRInstruction*> deleted_insns;
-      // When ending the scope, free the instructions.
-      auto deleted_guard = at_scope_exit([&deleted_insns]() {
-        for (auto* insn : deleted_insns) {
-          delete insn;
-        }
-      });
-
       if (!analysis->has_usage()) {
         TRACE(BLD_PATTERN, 6, "No builder to remove from %s", SHOW(method));
         break;
@@ -274,7 +254,7 @@ class RemoveClasses {
         // Check if any of the instance builder types cannot be removed.
         auto non_removable_types = analysis->non_removable_types();
         if (!non_removable_types.empty()) {
-          for (const auto* type : non_removable_types) {
+          for (DexType* type : non_removable_types) {
             if (m_excluded_types.count(type) == 0 &&
                 !m_propagate_escape_results) {
               local_excludes.emplace(type);
@@ -299,7 +279,7 @@ class RemoveClasses {
       }
 
       auto not_inlined_insns =
-          m_transform.get_not_inlined_insns(method, to_inline, &deleted_insns);
+          m_transform.get_not_inlined_insns(method, to_inline);
 
       if (!not_inlined_insns.empty()) {
         auto to_eliminate =
@@ -334,7 +314,7 @@ class RemoveClasses {
       }
 
       // If we inlined everything, we still need to make sure we don't have
-      // new methods to inline (for example from something that was inlined
+      // new  methods to inlined (for example from something that was inlined
       // in this step).
     } while (true);
 
@@ -396,12 +376,10 @@ void RemoveBuilderPatternPass::run_pass(DexStoresVector& stores,
                                         ConfigFiles& conf,
                                         PassManager& mgr) {
   auto scope = build_class_scope(stores);
-  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
-      scope, conf.create_init_class_insns());
   for (const auto& root : m_roots) {
-    RemoveClasses rm_builder_pattern(
-        root, scope, init_classes_with_side_effects, conf.get_inliner_config(),
-        m_blocklist, m_propagate_escape_results, stores);
+    RemoveClasses rm_builder_pattern(root, scope, conf.get_inliner_config(),
+                                     m_blocklist, m_propagate_escape_results,
+                                     stores);
     rm_builder_pattern.optimize();
     rm_builder_pattern.print_stats(mgr);
     rm_builder_pattern.cleanup();

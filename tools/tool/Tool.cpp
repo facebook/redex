@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -24,16 +24,13 @@ void load_store_dexen(DexStore& store,
                       const DexMetadata& store_metadata,
                       bool verbose,
                       bool balloon,
-                      bool throw_on_balloon_error,
                       int support_dex_version = 35) {
   for (const auto& file_path : store_metadata.get_files()) {
     if (verbose) {
       std::cout << "Loading " << file_path << std::endl;
     }
-    DexClasses classes = load_classes_from_dex(file_path.c_str(),
-                                               balloon,
-                                               throw_on_balloon_error,
-                                               support_dex_version);
+    DexClasses classes =
+        load_classes_from_dex(file_path.c_str(), balloon, support_dex_version);
     store.add_classes(std::move(classes));
   }
 }
@@ -120,7 +117,6 @@ DexStoresVector Tool::init(const std::string& system_jar_paths,
                            const std::string& apk_dir_str,
                            const std::string& dexen_dir_str,
                            bool balloon,
-                           bool throw_on_balloon_error,
                            int support_dex_version) {
   if (!fs::is_directory(fs::path(apk_dir_str))) {
     throw std::invalid_argument("'" + apk_dir_str + "' is not a directory");
@@ -150,24 +146,15 @@ DexStoresVector Tool::init(const std::string& system_jar_paths,
   DexStoresVector stores;
 
   // Load root dexen
-  load_root_dexen(root_store,
-                  dexen_dir_str,
-                  balloon,
-                  throw_on_balloon_error,
-                  m_verbose,
-                  support_dex_version);
+  load_root_dexen(
+      root_store, dexen_dir_str, balloon, m_verbose, support_dex_version);
   stores.emplace_back(std::move(root_store));
 
   // Load module dexen
   for (const auto& metadata : find_stores(apk_dir_str, dexen_dir_str)) {
     DexStore store(metadata);
 
-    load_store_dexen(store,
-                     metadata,
-                     m_verbose,
-                     balloon,
-                     throw_on_balloon_error,
-                     support_dex_version);
+    load_store_dexen(store, metadata, m_verbose, balloon, support_dex_version);
     stores.emplace_back(std::move(store));
   }
 

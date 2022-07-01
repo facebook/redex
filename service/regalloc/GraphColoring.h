@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -123,7 +123,7 @@ class Allocator {
                      RegisterTransform*,
                      SpillPlan*);
 
-  void select_params(const IRCode*,
+  void select_params(const DexMethod*,
                      const interference::Graph&,
                      RegisterTransform*,
                      SpillPlan*);
@@ -147,7 +147,6 @@ class Allocator {
              IRCode*);
 
   void allocate(DexMethod*);
-  void allocate(IRCode*, bool);
 
   const Stats& get_stats() const { return m_stats; }
 

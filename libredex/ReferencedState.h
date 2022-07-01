@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -15,6 +15,7 @@
 
 #include "Debug.h"
 #include "KeepReason.h"
+#include "RedexContext.h"
 
 namespace ir_meta_io {
 class IRMetaIO;
@@ -93,15 +94,6 @@ class ReferencedState {
     bool m_is_kotlin : 1;
 
     bool m_name_used : 1;
-
-    // Whether a field is used to indicate that an sget cannot be removed
-    // because it signals that the class must be initialized at this point.
-    bool m_init_class : 1;
-
-    // This may be set on classes, indicating that its static initializer has no
-    // side effects.
-    bool m_clinit_has_no_side_effects : 1;
-
     InnerStruct() {
       // Initializers in bit fields are C++20...
       m_by_string = false;
@@ -132,9 +124,6 @@ class ReferencedState {
       m_is_kotlin = false;
 
       m_name_used = false;
-
-      m_init_class = false;
-      m_clinit_has_no_side_effects = false;
     }
   } inner_struct;
 
@@ -160,10 +149,6 @@ class ReferencedState {
   ReferencedState& operator=(const ReferencedState& other) {
     if (this != &other) {
       this->inner_struct = other.inner_struct;
-      if (other.m_keep_reasons.load() != nullptr) {
-        auto& k = ensure_keep_reasons();
-        k.m_keep_reasons = other.m_keep_reasons.load()->m_keep_reasons;
-      }
     }
     return *this;
   }
@@ -220,9 +205,6 @@ class ReferencedState {
           this->inner_struct.m_is_kotlin & other.inner_struct.m_is_kotlin;
       this->inner_struct.m_outlined =
           this->inner_struct.m_outlined & other.inner_struct.m_outlined;
-
-      this->inner_struct.m_init_class =
-          this->inner_struct.m_init_class | other.inner_struct.m_init_class;
     }
   }
 
@@ -275,8 +257,8 @@ class ReferencedState {
   // these string references, and potentially eliminate dead resource .xml files
   void set_referenced_by_resource_xml() {
     inner_struct.m_by_resources = true;
-    if (keep_reason::Reason::record_keep_reasons()) {
-      add_keep_reason(keep_reason::Reason::make_keep_reason(keep_reason::XML));
+    if (RedexContext::record_keep_reasons()) {
+      add_keep_reason(RedexContext::make_keep_reason(keep_reason::XML));
     }
   }
 
@@ -310,9 +292,9 @@ class ReferencedState {
     inner_struct.m_keep = true;
     unset_allowshrinking();
     unset_allowobfuscation();
-    if (keep_reason::Reason::record_keep_reasons()) {
+    if (RedexContext::record_keep_reasons()) {
       add_keep_reason(
-          keep_reason::Reason::make_keep_reason(std::forward<Args>(args)...));
+          RedexContext::make_keep_reason(std::forward<Args>(args)...));
     }
   }
 
@@ -323,7 +305,7 @@ class ReferencedState {
   }
 
   const keep_reason::ReasonPtrSet& keep_reasons() const {
-    if (!keep_reason::Reason::record_keep_reasons()) {
+    if (!RedexContext::record_keep_reasons()) {
       // We really should not allow this.
       static keep_reason::ReasonPtrSet SINGLETON;
       return SINGLETON;
@@ -401,15 +383,6 @@ class ReferencedState {
   void set_name_used() { inner_struct.m_name_used = true; }
   bool name_used() { return inner_struct.m_name_used; }
 
-  bool init_class() const { return inner_struct.m_init_class; }
-  void set_init_class() { inner_struct.m_init_class = true; }
-  void set_clinit_has_no_side_effects() {
-    inner_struct.m_clinit_has_no_side_effects = true;
-  }
-  bool clinit_has_no_side_effects() const {
-    return inner_struct.m_clinit_has_no_side_effects;
-  }
-
  private:
   // Does any keep rule (whether -keep or -keepnames) match this DexMember?
   bool has_keep() const { return inner_struct.m_keep; }
@@ -421,9 +394,9 @@ class ReferencedState {
   template <class... Args>
   void set_has_keep(Args&&... args) {
     inner_struct.m_keep = true;
-    if (keep_reason::Reason::record_keep_reasons()) {
+    if (RedexContext::record_keep_reasons()) {
       add_keep_reason(
-          keep_reason::Reason::make_keep_reason(std::forward<Args>(args)...));
+          RedexContext::make_keep_reason(std::forward<Args>(args)...));
     }
   }
 
@@ -458,7 +431,7 @@ class ReferencedState {
   }
 
   KeepReasons& ensure_keep_reasons() const {
-    always_assert(keep_reason::Reason::record_keep_reasons());
+    always_assert(RedexContext::record_keep_reasons());
     // First see whether it's already done to avoid allocating.
     auto attempt = m_keep_reasons.load();
     if (attempt != nullptr) {
@@ -474,7 +447,7 @@ class ReferencedState {
   }
 
   void add_keep_reason(const keep_reason::Reason* reason) {
-    always_assert(keep_reason::Reason::record_keep_reasons());
+    always_assert(RedexContext::record_keep_reasons());
     auto& keep_reasons = ensure_keep_reasons();
     std::lock_guard<std::mutex> lock(keep_reasons.m_keep_reasons_mtx);
     keep_reasons.m_keep_reasons.emplace(reason);

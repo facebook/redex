@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -90,12 +90,12 @@ class Analyzer final : public BaseIRAnalyzer<IRInstructionConstantEnvironment> {
 
  public:
   Analyzer(const cfg::ControlFlowGraph& cfg,
-           const ConstTypeHashSet& builder_types,
-           const ConstTypeHashSet& excluded_builder_types,
+           const std::unordered_set<const DexType*>& types,
+           const std::unordered_set<const DexType*>& exclude,
            bool accept_excluded)
       : BaseIRAnalyzer<IRInstructionConstantEnvironment>(cfg),
-        m_builder_types(builder_types),
-        m_excluded_builder_types(excluded_builder_types),
+        m_types(types),
+        m_exclude(exclude),
         m_accept_excluded(accept_excluded) {
     MonotonicFixpointIterator::run(IRInstructionConstantEnvironment::top());
   }
@@ -143,7 +143,9 @@ class Analyzer final : public BaseIRAnalyzer<IRInstructionConstantEnvironment> {
       break;
 
     case OPCODE_NEW_INSTANCE: {
-      if (is_builder(insn->get_type())) {
+      DexType* type = insn->get_type();
+      if (m_types.count(type) > 0 &&
+          (m_accept_excluded || m_exclude.count(type) == 0)) {
         // Keep track of the instantiation.
         current_state->set(RESULT_REGISTER, IRInstructionConstantDomain(insn));
       } else {
@@ -172,7 +174,8 @@ class Analyzer final : public BaseIRAnalyzer<IRInstructionConstantEnvironment> {
         // NOTE: We expect that the method actually operates on the same
         //       instance and returns it. We are going to verify that later.
         current_state->set(RESULT_REGISTER, current_state->get(insn->src(0)));
-      } else if (is_builder(rtype)) {
+      } else if (m_types.count(rtype) &&
+                 (m_accept_excluded || m_exclude.count(rtype) == 0)) {
         // Keep track of the callsite that created / got the instance..
         current_state->set(RESULT_REGISTER, IRInstructionConstantDomain(insn));
       } else {
@@ -189,26 +192,21 @@ class Analyzer final : public BaseIRAnalyzer<IRInstructionConstantEnvironment> {
   }
 
  private:
-  const ConstTypeHashSet& m_builder_types;
-  const ConstTypeHashSet& m_excluded_builder_types;
-  const bool m_accept_excluded;
-
-  bool is_builder(const DexType* type) const {
-    const bool is_not_excluded =
-        m_accept_excluded || m_excluded_builder_types.count(type) == 0;
-    return m_builder_types.count(type) && is_not_excluded;
-  }
+  const std::unordered_set<const DexType*>& m_types;
+  const std::unordered_set<const DexType*>& m_exclude;
+  bool m_accept_excluded;
 };
 
 } // namespace impl
 
 BuilderAnalysis::~BuilderAnalysis() {}
 
-BuilderAnalysis::BuilderAnalysis(const ConstTypeHashSet& builder_types,
-                                 const ConstTypeHashSet& excluded_builder_types,
-                                 DexMethod* method)
-    : m_builder_types(builder_types),
-      m_excluded_builder_types(excluded_builder_types),
+BuilderAnalysis::BuilderAnalysis(
+    const std::unordered_set<const DexType*>& types,
+    const std::unordered_set<const DexType*>& exclude,
+    DexMethod* method)
+    : m_types(types),
+      m_exclude(exclude),
       m_insn_to_env(new impl::InstructionToEnvMap),
       m_method(method),
       m_accept_excluded(true) {}
@@ -222,8 +220,8 @@ void BuilderAnalysis::run_analysis() {
   code->build_cfg(/* editable */ false);
   cfg::ControlFlowGraph& cfg = code->cfg();
   cfg.calculate_exit_block();
-  m_analyzer.reset(new impl::Analyzer(
-      cfg, m_builder_types, m_excluded_builder_types, m_accept_excluded));
+  m_analyzer.reset(
+      new impl::Analyzer(cfg, m_types, m_exclude, m_accept_excluded));
 
   populate_usage();
   update_stats();
@@ -252,7 +250,7 @@ void BuilderAnalysis::print_usage() {
 void BuilderAnalysis::update_stats() {
   // We only keep track of total usages once per method, to avoid redundant
   // computation. At the same time, we switch m_accept_excluded to false,
-  // which will ignore the excluded builder types in the analysis.
+  // which will ignore the excluded types in the analysis.
   //
   // TODO(emmasevastian): maybe move this to the caller instead?
   if (m_accept_excluded) {
@@ -299,10 +297,10 @@ void BuilderAnalysis::populate_usage() {
   auto& cfg = code->cfg();
 
   // If the instantiated type is not excluded, updates the usages map.
-  // Otherwise, update the excluded instantiation list.
+  // Otherise, updating the excluded instantiation list.
   auto update_usages = [&](const IRInstruction* val, IRInstruction* insn) {
     if (auto referenced_type = get_instantiated_type(val)) {
-      if (m_excluded_builder_types.count(referenced_type) == 0) {
+      if (m_exclude.count(referenced_type) == 0) {
         m_usage[val].push_back(insn);
       }
 
@@ -408,9 +406,9 @@ std::unordered_set<IRInstruction*> BuilderAnalysis::get_all_inlinable_insns() {
   return result;
 }
 
-ConstTypeHashSet BuilderAnalysis::get_instantiated_types(
+std::unordered_set<const DexType*> BuilderAnalysis::get_instantiated_types(
     std::unordered_set<const IRInstruction*>* insns) {
-  ConstTypeHashSet result;
+  std::unordered_set<const DexType*> result;
   bool check_specific_insn = insns != nullptr;
 
   for (const auto& pair : m_usage) {
@@ -450,7 +448,7 @@ DexMethodRef* get_obj_default_ctor() {
 
 } // namespace
 
-ConstTypeHashSet BuilderAnalysis::non_removable_types() {
+std::unordered_set<DexType*> BuilderAnalysis::non_removable_types() {
   auto non_removable_types = escape_types();
 
   // Consider other non-removable usages (for example synchronization usage).
@@ -473,14 +471,14 @@ ConstTypeHashSet BuilderAnalysis::non_removable_types() {
   return non_removable_types;
 }
 
-ConstTypeHashSet BuilderAnalysis::escape_types() {
+std::unordered_set<DexType*> BuilderAnalysis::escape_types() {
   auto* code = m_method->get_code();
   auto& cfg = code->cfg();
 
   // Don't treat as escaping a builder passed to Object.<init>().
   auto acceptable_method = get_obj_default_ctor();
 
-  ConstTypeHashSet escape_types;
+  std::unordered_set<DexType*> escape_types;
   for (const auto& pair : m_usage) {
     auto instantiation_insn = pair.first;
     auto current_instance = get_instantiated_type(instantiation_insn);

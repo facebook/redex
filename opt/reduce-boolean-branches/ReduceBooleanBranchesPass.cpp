@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -63,8 +63,7 @@ void ReduceBooleanBranchesPass::run_pass(DexStoresVector& stores,
           copy_propagation_impl::CopyPropagation copy_propagation(
               copy_prop_config);
           copy_propagation.run(code, method);
-          LocalDce(/* init_classes_with_side_effects */ nullptr, pure_methods)
-              .dce(code);
+          LocalDce(pure_methods).dce(code);
         }
 
         code->clear_cfg();

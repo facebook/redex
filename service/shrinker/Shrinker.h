@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -16,7 +16,6 @@
 #include "DexStore.h"
 #include "IPConstantPropagationAnalysis.h"
 #include "IRCode.h"
-#include "InitClassesWithSideEffects.h"
 #include "LocalDce.h"
 #include "MethodProfiles.h"
 #include "RandomForest.h"
@@ -32,10 +31,7 @@ class Shrinker {
   Shrinker(
       DexStoresVector& stores,
       const Scope& scope,
-      const init_classes::InitClassesWithSideEffects&
-          init_classes_with_side_effects,
       const ShrinkerConfig& config,
-      int min_sdk,
       const std::unordered_set<DexMethodRef*>& configured_pure_methods = {},
       const std::unordered_set<const DexString*>&
           configured_finalish_field_names = {});
@@ -47,25 +43,10 @@ class Shrinker {
       IRCode* code,
       const ConstantEnvironment&,
       const constant_propagation::Transform::Config& config);
-  LocalDce::Stats local_dce(IRCode* code,
-                            bool normalize_new_instances = true,
-                            DexType* declaring_type = nullptr);
+  LocalDce::Stats local_dce(IRCode* code, bool normalize_new_instances = true);
   copy_propagation_impl::Stats copy_propagation(DexMethod* method);
-  copy_propagation_impl::Stats copy_propagation(
-      IRCode*,
-      bool is_static,
-      DexType* declaring_type,
-      DexType* rtype,
-      DexTypeList* args,
-      std::function<std::string()> method_describer);
 
   void shrink_method(DexMethod* method);
-  void shrink_code(IRCode* code,
-                   bool is_static,
-                   bool is_init_or_clinit,
-                   DexType* declaring_type,
-                   DexProto* proto,
-                   const std::function<std::string()>& method_describer);
   const constant_propagation::Transform::Stats& get_const_prop_stats() const {
     return m_const_prop_stats;
   }
@@ -107,6 +88,9 @@ class Shrinker {
   double get_reg_alloc_seconds() const {
     return m_reg_alloc_timer.get_seconds();
   }
+  double get_fast_reg_alloc_seconds() const {
+    return m_fast_reg_alloc_timer.get_seconds();
+  }
 
   struct MethodContext {
     uint32_t m_regs{0};
@@ -128,21 +112,13 @@ class Shrinker {
 
   void log_metrics(ScopedMetrics& sm) const;
 
-  const init_classes::InitClassesWithSideEffects&
-  get_init_classes_with_side_effects() const {
-    return m_init_classes_with_side_effects;
-  }
-
  private:
   ShrinkerForest m_forest;
   const XStoreRefs m_xstores;
   const ShrinkerConfig m_config;
-  const int m_min_sdk;
   const bool m_enabled;
   std::unique_ptr<cse_impl::SharedState> m_cse_shared_state;
 
-  const init_classes::InitClassesWithSideEffects&
-      m_init_classes_with_side_effects;
   std::unordered_set<DexMethodRef*> m_pure_methods;
   std::unordered_set<const DexString*> m_finalish_field_names;
 
@@ -161,6 +137,7 @@ class Shrinker {
   AccumulatingTimer m_dedup_blocks_timer;
   dedup_blocks_impl::Stats m_dedup_blocks_stats;
   AccumulatingTimer m_reg_alloc_timer;
+  AccumulatingTimer m_fast_reg_alloc_timer;
   size_t m_methods_shrunk{0};
   size_t m_methods_reg_alloced{0};
 };

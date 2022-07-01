@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -128,9 +128,6 @@ class IRTypeChecker final {
 
   boost::optional<const DexType*> get_dex_type(IRInstruction* insn,
                                                reg_t reg) const;
-
-  std::string dump_annotated_cfg(DexMethod* method) const;
-  std::string dump_annotated_cfg_reduced(DexMethod* method) const;
 
  private:
   void check_completion() const;

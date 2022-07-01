@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -11,7 +11,6 @@
 #include "DexUtil.h"
 #include "GlobalTypeAnalyzer.h"
 #include "KotlinNullCheckMethods.h"
-#include "ResolveMethodRefs.h"
 #include "Show.h"
 #include "Trace.h"
 #include "TypeAnalysisTransform.h"
@@ -149,7 +148,6 @@ void GlobalTypeAnalysisPass::optimize(
     if (m_config.trace_global_local_diff) {
       trace_analysis_diff(method, *lta);
     }
-
     if (m_config.insert_runtime_asserts) {
       RuntimeAssertTransform rat(m_config.runtime_assert);
       Stats ra_stats;
@@ -161,8 +159,8 @@ void GlobalTypeAnalysisPass::optimize(
 
     Transform tf(m_config.transform);
     Stats tr_stats;
-    tr_stats.transform_stats = tf.apply(*lta, gta.get_whole_program_state(),
-                                        method, null_assertion_set);
+    tr_stats.transform_stats = tf.apply(
+        *lta, gta.get_whole_program_state(), method, null_assertion_set);
     if (!tr_stats.transform_stats.is_empty()) {
       TRACE(TYPE,
             9,
@@ -173,13 +171,7 @@ void GlobalTypeAnalysisPass::optimize(
     code->clear_cfg();
     return tr_stats;
   });
-
   stats.report(mgr);
-
-  if (m_config.resolve_method_refs) {
-    ResolveMethodRefs intf_trans(scope, gta);
-    intf_trans.report(mgr);
-  }
 }
 
 static GlobalTypeAnalysisPass s_pass;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -8,7 +8,6 @@
 #pragma once
 
 #include <boost/functional/hash.hpp>
-#include <cstring>
 #include <deque>
 #include <map>
 #include <unordered_set>
@@ -57,76 +56,40 @@ enum DexAnnotationVisibility : uint8_t {
 
 class DexEncodedValue : public Gatherable {
  protected:
-  union Val {
-    explicit Val(uint64_t v) { m_value = v; }
-    explicit Val(void* v) { m_value_ptr = v; }
-    explicit Val(const void* v) { m_value_ptr_const = v; }
-
-    uint64_t m_value;
-    void* m_value_ptr;
-    const void* m_value_ptr_const;
-  } m_val;
   DexEncodedValueTypes m_evtype;
+  uint64_t m_value;
 
   explicit DexEncodedValue(DexEncodedValueTypes type, uint64_t value = 0)
-      : m_val(value), m_evtype(type) {}
-
-  DexEncodedValue(DexEncodedValueTypes type, void* value_ptr)
-      : m_val(value_ptr), m_evtype(type) {}
-
-  DexEncodedValue(DexEncodedValueTypes type, const void* value_ptr)
-      : m_val(value_ptr), m_evtype(type) {}
+      : m_evtype(type), m_value(value) {}
 
  public:
-  virtual ~DexEncodedValue() = default;
-
   DexEncodedValueTypes evtype() const { return m_evtype; }
   bool is_evtype_primitive() const;
-  void value(uint64_t value) { m_val = Val(value); }
-  uint64_t value() const { return m_val.m_value; }
-  static std::unique_ptr<DexEncodedValue> get_encoded_value(
-      DexIdx* idx, const uint8_t*& encdata);
+  void value(uint64_t value) { m_value = value; }
+  uint64_t value() const { return m_value; }
+  static DexEncodedValue* get_encoded_value(DexIdx* idx,
+                                            const uint8_t*& encdata);
   DexEncodedValueTypes evtype() { return m_evtype; }
   virtual void encode(DexOutputIdx* dodx, uint8_t*& encdata);
   void vencode(DexOutputIdx* dodx, std::vector<uint8_t>& bytes);
 
-  // Deal with undefined behavior of reading the inactive member of a struct.
-  uint64_t as_value() const {
-    uint64_t tmp;
-    memcpy(&tmp, &m_val, sizeof(uint64_t));
-    return tmp;
-  }
-
   virtual std::string show() const;
   virtual std::string show_deobfuscated() const { return show(); }
   virtual bool operator==(const DexEncodedValue& that) const {
-    return m_evtype == that.m_evtype && as_value() == that.as_value();
+    return m_evtype == that.m_evtype && m_value == that.m_value;
   }
   virtual bool operator!=(const DexEncodedValue& that) const {
     return !(*this == that);
   }
   virtual size_t hash_value() const {
     size_t seed = boost::hash<uint8_t>()(m_evtype);
-    boost::hash_combine(seed, as_value());
+    boost::hash_combine(seed, m_value);
     return seed;
   }
 
-  virtual std::unique_ptr<DexEncodedValue> clone() const = 0;
-
   bool is_zero() const;
   bool is_wide() const;
-  static std::unique_ptr<DexEncodedValue> zero_for_type(DexType* type);
-};
-
-class DexEncodedValuePrimitive final : public DexEncodedValue {
- public:
-  explicit DexEncodedValuePrimitive(DexEncodedValueTypes type,
-                                    uint64_t value = 0)
-      : DexEncodedValue(type, value) {}
-
-  std::unique_ptr<DexEncodedValue> clone() const override {
-    return std::make_unique<DexEncodedValuePrimitive>(*this);
-  }
+  static DexEncodedValue* zero_for_type(DexType* type);
 };
 
 inline size_t hash_value(const DexEncodedValue& v) { return v.hash_value(); }
@@ -137,21 +100,19 @@ class DexEncodedValueBit : public DexEncodedValue {
       : DexEncodedValue(type, bit) {}
 
   void encode(DexOutputIdx* dodx, uint8_t*& encdata) override;
-
-  std::unique_ptr<DexEncodedValue> clone() const override {
-    return std::unique_ptr<DexEncodedValue>(new DexEncodedValueBit(*this));
-  }
 };
 
 class DexEncodedValueString : public DexEncodedValue {
+  const DexString* m_string;
+
  public:
   explicit DexEncodedValueString(const DexString* string)
-      : DexEncodedValue(DEVT_STRING, string) {}
-
-  const DexString* string() const {
-    return (const DexString*)m_val.m_value_ptr_const;
+      : DexEncodedValue(DEVT_STRING) {
+    m_string = string;
   }
-  void string(const DexString* string) { m_val.m_value_ptr_const = string; }
+
+  const DexString* string() const { return m_string; }
+  void string(const DexString* string) { m_string = string; }
   void gather_strings(std::vector<const DexString*>& lstring) const override;
   void encode(DexOutputIdx* dodx, uint8_t*& encdata) override;
 
@@ -160,121 +121,140 @@ class DexEncodedValueString : public DexEncodedValue {
     if (m_evtype != that.evtype()) {
       return false;
     }
-    return m_val.m_value_ptr_const ==
-           static_cast<const DexEncodedValueString*>(&that)
-               ->m_val.m_value_ptr_const;
+    return m_string ==
+           static_cast<const DexEncodedValueString*>(&that)->m_string;
   }
   size_t hash_value() const override {
     size_t seed = boost::hash<uint8_t>()(m_evtype);
-    boost::hash_combine(seed, (uintptr_t)m_val.m_value_ptr_const);
+    boost::hash_combine(seed, (uintptr_t)m_string);
     return seed;
-  }
-
-  std::unique_ptr<DexEncodedValue> clone() const override {
-    return std::unique_ptr<DexEncodedValue>(new DexEncodedValueString(*this));
   }
 };
 
-class DexEncodedValuePtr : public DexEncodedValue {
- protected:
-  DexEncodedValuePtr(DexEncodedValueTypes type, void* data)
-      : DexEncodedValue(type, data) {}
+class DexEncodedValueType : public DexEncodedValue {
+  DexType* m_type;
 
  public:
-  bool operator==(const DexEncodedValue& that) const override {
-    if (m_evtype != that.evtype()) {
-      return false;
-    }
-    return m_val.m_value_ptr_const ==
-           static_cast<const DexEncodedValuePtr*>(&that)->m_val.m_value_ptr;
+  explicit DexEncodedValueType(DexType* type) : DexEncodedValue(DEVT_TYPE) {
+    m_type = type;
   }
-  size_t hash_value() const override {
-    size_t seed = boost::hash<uint8_t>()(m_evtype);
-    boost::hash_combine(seed, (uintptr_t)m_val.m_value_ptr);
-    return seed;
-  }
-
-  std::unique_ptr<DexEncodedValue> clone() const override {
-    return std::unique_ptr<DexEncodedValue>(new DexEncodedValuePtr(*this));
-  }
-};
-
-class DexEncodedValueType : public DexEncodedValuePtr {
- public:
-  explicit DexEncodedValueType(DexType* type)
-      : DexEncodedValuePtr(DEVT_TYPE, type) {}
 
   void gather_types(std::vector<DexType*>& ltype) const override;
   void encode(DexOutputIdx* dodx, uint8_t*& encdata) override;
 
-  DexType* type() const { return (DexType*)m_val.m_value_ptr; }
-  void set_type(DexType* type) { m_val.m_value_ptr = type; }
+  DexType* type() const { return m_type; }
+  void set_type(DexType* type) { m_type = type; }
   std::string show() const override;
-
-  std::unique_ptr<DexEncodedValue> clone() const override {
-    return std::unique_ptr<DexEncodedValue>(new DexEncodedValueType(*this));
+  bool operator==(const DexEncodedValue& that) const override {
+    if (m_evtype != that.evtype()) {
+      return false;
+    }
+    return m_type == static_cast<const DexEncodedValueType*>(&that)->m_type;
+  }
+  size_t hash_value() const override {
+    size_t seed = boost::hash<uint8_t>()(m_evtype);
+    boost::hash_combine(seed, (uintptr_t)m_type);
+    return seed;
   }
 };
 
-class DexEncodedValueField : public DexEncodedValuePtr {
+class DexEncodedValueField : public DexEncodedValue {
+  DexFieldRef* m_field;
+
  public:
   DexEncodedValueField(DexEncodedValueTypes type, DexFieldRef* field)
-      : DexEncodedValuePtr(type, field) {}
+      : DexEncodedValue(type) {
+    m_field = field;
+  }
 
   void gather_fields(std::vector<DexFieldRef*>& lfield) const override;
   void encode(DexOutputIdx* dodx, uint8_t*& encdata) override;
 
-  DexFieldRef* field() const { return (DexFieldRef*)m_val.m_value_ptr; }
-  void set_field(DexFieldRef* field) { m_val.m_value_ptr = field; }
+  DexFieldRef* field() const { return m_field; }
+  void set_field(DexFieldRef* field) { m_field = field; }
   std::string show() const override;
   std::string show_deobfuscated() const override;
-
-  std::unique_ptr<DexEncodedValue> clone() const override {
-    return std::unique_ptr<DexEncodedValue>(new DexEncodedValueField(*this));
+  bool operator==(const DexEncodedValue& that) const override {
+    if (m_evtype != that.evtype()) {
+      return false;
+    }
+    return m_field == static_cast<const DexEncodedValueField*>(&that)->m_field;
+  }
+  size_t hash_value() const override {
+    size_t seed = boost::hash<uint8_t>()(m_evtype);
+    boost::hash_combine(seed, (uintptr_t)m_field);
+    return seed;
   }
 };
 
-class DexEncodedValueMethod : public DexEncodedValuePtr {
+class DexEncodedValueMethod : public DexEncodedValue {
+  DexMethodRef* m_method;
+
  public:
   explicit DexEncodedValueMethod(DexMethodRef* method)
-      : DexEncodedValuePtr(DEVT_METHOD, method) {}
+      : DexEncodedValue(DEVT_METHOD) {
+    m_method = method;
+  }
 
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const override;
   void encode(DexOutputIdx* dodx, uint8_t*& encdata) override;
 
-  DexMethodRef* method() const { return (DexMethodRef*)m_val.m_value_ptr; }
-  void set_method(DexMethodRef* method) { m_val.m_value_ptr = method; }
+  DexMethodRef* method() const { return m_method; }
+  void set_method(DexMethodRef* method) { m_method = method; }
   std::string show() const override;
   std::string show_deobfuscated() const override;
-
-  std::unique_ptr<DexEncodedValue> clone() const override {
-    return std::unique_ptr<DexEncodedValue>(new DexEncodedValueMethod(*this));
+  bool operator==(const DexEncodedValue& that) const override {
+    if (m_evtype != that.evtype()) {
+      return false;
+    }
+    return m_method ==
+           static_cast<const DexEncodedValueMethod*>(&that)->m_method;
+  }
+  size_t hash_value() const override {
+    size_t seed = boost::hash<uint8_t>()(m_evtype);
+    boost::hash_combine(seed, (uintptr_t)m_method);
+    return seed;
   }
 };
 
-class DexEncodedValueMethodType : public DexEncodedValuePtr {
+class DexEncodedValueMethodType : public DexEncodedValue {
+  DexProto* m_proto;
+
  public:
   explicit DexEncodedValueMethodType(DexProto* proto)
-      : DexEncodedValuePtr(DEVT_METHOD_TYPE, proto) {}
+      : DexEncodedValue(DEVT_METHOD_TYPE) {
+    m_proto = proto;
+  }
 
   void gather_strings(std::vector<const DexString*>& lstring) const override;
   void encode(DexOutputIdx* dodx, uint8_t*& encdata) override;
 
-  DexProto* proto() const { return (DexProto*)m_val.m_value_ptr; }
-  void set_proto(DexProto* proto) { m_val.m_value_ptr = proto; }
+  DexProto* proto() const { return m_proto; }
+  void set_proto(DexProto* proto) { m_proto = proto; }
   std::string show() const override;
   std::string show_deobfuscated() const override;
-
-  std::unique_ptr<DexEncodedValue> clone() const override {
-    return std::unique_ptr<DexEncodedValue>(
-        new DexEncodedValueMethodType(*this));
+  bool operator==(const DexEncodedValue& that) const override {
+    if (m_evtype != that.evtype()) {
+      return false;
+    }
+    return m_proto ==
+           static_cast<const DexEncodedValueMethodType*>(&that)->m_proto;
+  }
+  size_t hash_value() const override {
+    size_t seed = boost::hash<uint8_t>()(m_evtype);
+    boost::hash_combine(seed, (uintptr_t)m_proto);
+    return seed;
   }
 };
 
-class DexEncodedValueMethodHandle : public DexEncodedValuePtr {
+class DexEncodedValueMethodHandle : public DexEncodedValue {
+  DexMethodHandle* m_methodhandle;
+
  public:
   explicit DexEncodedValueMethodHandle(DexMethodHandle* methodhandle)
-      : DexEncodedValuePtr(DEVT_METHOD_HANDLE, methodhandle) {}
+      : DexEncodedValue(DEVT_METHOD_HANDLE) {
+    m_methodhandle = methodhandle;
+  }
 
   void gather_fields(std::vector<DexFieldRef*>& lfield) const override;
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const override;
@@ -282,61 +262,51 @@ class DexEncodedValueMethodHandle : public DexEncodedValuePtr {
       std::vector<DexMethodHandle*>& lhandles) const override;
   void encode(DexOutputIdx* dodx, uint8_t*& encdata) override;
 
-  DexMethodHandle* methodhandle() const {
-    return (DexMethodHandle*)m_val.m_value_ptr;
-  }
+  DexMethodHandle* methodhandle() const { return m_methodhandle; }
   void set_methodhandle(DexMethodHandle* methodhandle) {
-    m_val.m_value_ptr = methodhandle;
+    m_methodhandle = methodhandle;
   }
   std::string show() const override;
   std::string show_deobfuscated() const override;
-
-  std::unique_ptr<DexEncodedValue> clone() const override {
-    return std::unique_ptr<DexEncodedValue>(
-        new DexEncodedValueMethodHandle(*this));
+  bool operator==(const DexEncodedValue& that) const override {
+    if (m_evtype != that.evtype()) {
+      return false;
+    }
+    return m_methodhandle ==
+           static_cast<const DexEncodedValueMethodHandle*>(&that)
+               ->m_methodhandle;
+  }
+  size_t hash_value() const override {
+    size_t seed = boost::hash<uint8_t>()(m_evtype);
+    boost::hash_combine(seed, (uintptr_t)m_methodhandle);
+    return seed;
   }
 };
 
-// NOTE: Different from the other values, this one owns the given vector.
 class DexEncodedValueArray : public DexEncodedValue {
+  std::unique_ptr<std::deque<DexEncodedValue*>> m_evalues;
   bool m_static_val;
 
  public:
-  using Storage = std::vector<std::unique_ptr<DexEncodedValue>>;
-
   /*
    * Static values are encoded without a DEVT_ARRAY header byte
    * so we differentiate that here.
    */
-  explicit DexEncodedValueArray(Storage* evalues, bool static_val = false)
-      : DexEncodedValue(DEVT_ARRAY, evalues), m_static_val(static_val) {}
-  ~DexEncodedValueArray() { delete (Storage*)m_val.m_value_ptr; }
-
-  // May not copy or assign, as the element is owned.
-  DexEncodedValueArray(const DexEncodedValueArray&) = delete;
-  DexEncodedValueArray& operator=(const DexEncodedValueArray&) = delete;
-
-  // May move.
-  DexEncodedValueArray(DexEncodedValueArray&& rhs) noexcept
-      : DexEncodedValue(DEVT_ARRAY, rhs.m_val.m_value_ptr),
-        m_static_val(rhs.m_static_val) {
-    rhs.m_val.m_value_ptr = nullptr;
-  }
-  DexEncodedValueArray& operator=(DexEncodedValueArray&& rhs) noexcept {
-    if (this == &rhs) {
-      return *this;
-    }
-    delete (Storage*)m_val.m_value_ptr;
-    m_val.m_value_ptr = rhs.m_val.m_value_ptr;
-    m_static_val = rhs.m_static_val;
-    rhs.m_val.m_value_ptr = nullptr;
-    return *this;
+  explicit DexEncodedValueArray(std::deque<DexEncodedValue*>* evalues,
+                                bool static_val = false)
+      : DexEncodedValue(DEVT_ARRAY), m_evalues(evalues) {
+    m_static_val = static_val;
   }
 
-  std::vector<std::unique_ptr<DexEncodedValue>>* evalues() const {
-    return (Storage*)m_val.m_value_ptr;
-  }
+  std::deque<DexEncodedValue*>* evalues() const { return m_evalues.get(); }
   bool is_static_val() const { return m_static_val; }
+
+  DexEncodedValue* pop_next() {
+    if (m_evalues->empty()) return nullptr;
+    DexEncodedValue* rv = m_evalues->front();
+    m_evalues->pop_front();
+    return rv;
+  }
 
   void gather_types(std::vector<DexType*>& ltype) const override;
   void gather_fields(std::vector<DexFieldRef*>& lfield) const override;
@@ -348,11 +318,11 @@ class DexEncodedValueArray : public DexEncodedValue {
   std::string show_deobfuscated() const override;
 
   bool operator==(const DexEncodedValueArray& that) const {
-    if (evalues()->size() != that.evalues()->size()) {
+    if (m_evalues->size() != that.m_evalues->size()) {
       return false;
     }
-    auto it = that.evalues()->begin();
-    for (const auto& elem : *evalues()) {
+    auto it = that.m_evalues->begin();
+    for (const auto& elem : *m_evalues) {
       if (*elem != **it) {
         return false;
       }
@@ -364,33 +334,16 @@ class DexEncodedValueArray : public DexEncodedValue {
   size_t hash_value() const override {
     size_t seed = boost::hash<uint8_t>()(m_evtype);
     boost::hash_combine(seed, m_static_val);
-    for (const auto& elem : *evalues()) {
+    for (const auto& elem : *m_evalues) {
       boost::hash_combine(seed, *elem);
     }
     return seed;
   }
-
-  std::unique_ptr<DexEncodedValue> clone() const override {
-    // Need to copy the array, if any.
-    Storage* evalues_copy;
-    if (m_val.m_value_ptr == nullptr) {
-      evalues_copy = nullptr;
-    } else {
-      auto* old = (Storage*)m_val.m_value_ptr;
-      evalues_copy = new Storage();
-      evalues_copy->reserve(old->size());
-      for (auto& orig : *old) {
-        evalues_copy->emplace_back(orig->clone());
-      }
-    }
-    return std::unique_ptr<DexEncodedValue>(
-        new DexEncodedValueArray(evalues_copy, m_static_val));
-  }
 };
 
 /* For loading static values */
-std::unique_ptr<DexEncodedValueArray> get_encoded_value_array(
-    DexIdx* idx, const uint8_t*& encdata);
+DexEncodedValueArray* get_encoded_value_array(DexIdx* idx,
+                                              const uint8_t*& encdata);
 
 /*
  * These are not "full blown" annotations, they are
@@ -400,28 +353,13 @@ std::unique_ptr<DexEncodedValueArray> get_encoded_value_array(
  * InnerClass annotations things like access flags
  * or defining method/class.
  */
-class DexAnnotationElement final {
+class DexAnnotationElement {
  public:
-  DexAnnotationElement(const DexString* s, std::unique_ptr<DexEncodedValue> ev)
-      : string(s), encoded_value(std::move(ev)) {}
-
-  DexAnnotationElement(const DexAnnotationElement&) = delete;
-  DexAnnotationElement& operator=(const DexAnnotationElement&) = delete;
-
-  DexAnnotationElement(DexAnnotationElement&& other) noexcept
-      : string(other.string), encoded_value(std::move(other.encoded_value)) {}
-  DexAnnotationElement& operator=(DexAnnotationElement&& other) noexcept {
-    string = other.string;
-    encoded_value = std::move(other.encoded_value);
-    return *this;
-  }
-
-  DexAnnotationElement clone() const {
-    return DexAnnotationElement(string, encoded_value->clone());
-  }
+  DexAnnotationElement(const DexString* s, DexEncodedValue* ev)
+      : string(s), encoded_value(ev) {}
 
   const DexString* string;
-  std::unique_ptr<DexEncodedValue> encoded_value;
+  DexEncodedValue* encoded_value;
 };
 
 using EncodedAnnotations = std::vector<DexAnnotationElement>;
@@ -429,22 +367,20 @@ using EncodedAnnotations = std::vector<DexAnnotationElement>;
 std::string show(const EncodedAnnotations*);
 std::string show_deobfuscated(const EncodedAnnotations*);
 
-std::string show(const EncodedAnnotations&);
-std::string show_deobfuscated(const EncodedAnnotations&);
-
 class DexEncodedValueAnnotation : public DexEncodedValue {
   DexType* m_type;
-  EncodedAnnotations m_annotations;
+  EncodedAnnotations* m_annotations;
 
  public:
-  DexEncodedValueAnnotation(DexType* type, EncodedAnnotations annotations)
-      : DexEncodedValue(DEVT_ANNOTATION),
-        m_type(type),
-        m_annotations(std::move(annotations)) {}
+  DexEncodedValueAnnotation(DexType* type, EncodedAnnotations* annotations)
+      : DexEncodedValue(DEVT_ANNOTATION) {
+    m_type = type;
+    m_annotations = annotations;
+  }
 
   DexType* type() const { return m_type; }
   void set_type(DexType* type) { m_type = type; }
-  const EncodedAnnotations& annotations() const { return m_annotations; }
+  const EncodedAnnotations* annotations() const { return m_annotations; }
 
   void gather_types(std::vector<DexType*>& ltype) const override;
   void gather_fields(std::vector<DexFieldRef*>& lfield) const override;
@@ -454,15 +390,6 @@ class DexEncodedValueAnnotation : public DexEncodedValue {
 
   std::string show() const override;
   std::string show_deobfuscated() const override;
-
-  std::unique_ptr<DexEncodedValue> clone() const override {
-    EncodedAnnotations copy;
-    std::transform(m_annotations.begin(),
-                   m_annotations.end(),
-                   std::back_inserter(copy),
-                   [](const auto& a) { return a.clone(); });
-    return std::make_unique<DexEncodedValueAnnotation>(m_type, std::move(copy));
-  }
 };
 
 class DexAnnotation : public Gatherable {
@@ -474,11 +401,7 @@ class DexAnnotation : public Gatherable {
   DexAnnotation(DexType* type, DexAnnotationVisibility viz)
       : m_type(type), m_viz(viz) {}
 
-  DexAnnotation(const DexAnnotation&) = delete;
-  DexAnnotation(DexAnnotation&&) = default;
-
-  static std::unique_ptr<DexAnnotation> get_annotation(DexIdx* idx,
-                                                       uint32_t anno_off);
+  static DexAnnotation* get_annotation(DexIdx* idx, uint32_t anno_off);
   void gather_types(std::vector<DexType*>& ltype) const override;
   void gather_fields(std::vector<DexFieldRef*>& lfield) const override;
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const override;
@@ -493,33 +416,17 @@ class DexAnnotation : public Gatherable {
   bool system_visible() const { return m_viz == DAV_SYSTEM; }
 
   void vencode(DexOutputIdx* dodx, std::vector<uint8_t>& bytes);
-  void add_element(const char* key, std::unique_ptr<DexEncodedValue> value);
-  void add_element(DexAnnotationElement elem);
-
-  DexAnnotation clone() const {
-    EncodedAnnotations copy;
-    std::transform(m_anno_elems.begin(),
-                   m_anno_elems.end(),
-                   std::back_inserter(copy),
-                   [](const auto& a) { return a.clone(); });
-    return DexAnnotation(std::move(copy), m_type, m_viz);
-  }
-
- private:
-  DexAnnotation(EncodedAnnotations anno_elems,
-                DexType* type,
-                DexAnnotationVisibility viz)
-      : m_anno_elems(std::move(anno_elems)), m_type(type), m_viz(viz) {}
+  void add_element(const char* key, DexEncodedValue* value);
 };
 
 class DexAnnotationSet : public Gatherable {
-  std::vector<std::unique_ptr<DexAnnotation>> m_annotations;
+  std::vector<DexAnnotation*> m_annotations;
 
  public:
   DexAnnotationSet() = default;
   DexAnnotationSet(const DexAnnotationSet& that) {
     for (const auto& anno : that.m_annotations) {
-      m_annotations.emplace_back(new DexAnnotation(anno->clone()));
+      m_annotations.push_back(new DexAnnotation(*anno));
     }
   }
 
@@ -544,26 +451,22 @@ class DexAnnotationSet : public Gatherable {
    */
   void combine_with(const DexAnnotationSet& other) {
     std::unordered_set<DexType*> existing_annos_type;
-    for (const auto& existing_anno : m_annotations) {
+    for (const auto existing_anno : m_annotations) {
       existing_annos_type.emplace(existing_anno->type());
     }
     auto const& other_annos = other.m_annotations;
     for (auto const& anno : other_annos) {
       if (existing_annos_type.count(anno->type()) == 0) {
-        m_annotations.emplace_back(new DexAnnotation(anno->clone()));
+        m_annotations.emplace_back(new DexAnnotation(*anno));
       }
     }
   }
 
-  const std::vector<std::unique_ptr<DexAnnotation>>& get_annotations() const {
+  const std::vector<DexAnnotation*>& get_annotations() const {
     return m_annotations;
   }
-  std::vector<std::unique_ptr<DexAnnotation>>& get_annotations() {
-    return m_annotations;
-  }
-  void add_annotation(std::unique_ptr<DexAnnotation> anno) {
-    m_annotations.emplace_back(std::move(anno));
-  }
+  std::vector<DexAnnotation*>& get_annotations() { return m_annotations; }
+  void add_annotation(DexAnnotation* anno) { m_annotations.emplace_back(anno); }
   void vencode(DexOutputIdx* dodx,
                std::vector<uint32_t>& asetout,
                std::map<DexAnnotation*, uint32_t>& annoout);

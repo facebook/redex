@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -9,7 +9,6 @@
 
 #include "ClassHierarchy.h"
 #include "Debug.h"
-#include "DexAnnotation.h"
 #include "DexClass.h"
 #include "DexLoader.h"
 #include "DexOutput.h"
@@ -219,7 +218,7 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
 
     const auto proto = meth->get_proto();
     has_anno(proto->get_rtype());
-    for (const auto& arg : *proto->get_args()) {
+    for (const auto& arg : proto->get_args()->get_type_list()) {
       has_anno(arg);
     }
   });
@@ -306,7 +305,7 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
             add_concurrent_referenced_anno(rtype);
           }
           auto arg_list = proto->get_args();
-          for (const auto& arg : *arg_list) {
+          for (const auto& arg : arg_list->get_type_list()) {
             if (all_annos.count(arg) > 0) {
               referenced = true;
               add_concurrent_referenced_anno(arg);
@@ -336,13 +335,13 @@ AnnoKill::AnnoSet AnnoKill::get_removable_annotation_instances() {
       continue;
     }
 
-    auto* aset = clazz->get_anno_set();
+    auto aset = clazz->get_anno_set();
     if (!aset) {
       continue;
     }
 
     auto& annos = aset->get_annotations();
-    for (auto& anno : annos) {
+    for (auto anno : annos) {
       if (m_kill.count(anno->type())) {
         bannotations.insert(clazz->get_type());
         TRACE(
@@ -373,9 +372,9 @@ void AnnoKill::cleanup_aset(
     const std::unordered_set<const DexType*>& keep_annos) {
   m_stats.annotations += aset->size();
   auto& annos = aset->get_annotations();
-  auto fn = [&](const auto& da) {
+  auto fn = [&](DexAnnotation* da) {
     auto anno_type = da->type();
-    count_annotation(da.get());
+    count_annotation(da);
 
     if (referenced_annos.count(anno_type) > 0) {
       TRACE(ANNO,
@@ -383,12 +382,12 @@ void AnnoKill::cleanup_aset(
             "Annotation type %s with type referenced in "
             "code, skipping...\n\tannotation: %s",
             SHOW(anno_type),
-            SHOW(da.get()));
+            SHOW(da));
       return false;
     }
 
     if (keep_annos.count(anno_type) > 0) {
-      TRACE(ANNO, 4, "Prohibited from removing annotation %s", SHOW(da.get()));
+      TRACE(ANNO, 4, "Prohibited from removing annotation %s", SHOW(da));
       return false;
     }
 
@@ -398,7 +397,7 @@ void AnnoKill::cleanup_aset(
             "Exclude annotation type %s, "
             "skipping...\n\tannotation: %s",
             SHOW(anno_type),
-            SHOW(da.get()));
+            SHOW(da));
       return false;
     }
 
@@ -408,8 +407,9 @@ void AnnoKill::cleanup_aset(
             "Annotation instance (type: %s) marked for removal, "
             "annotation: %s",
             SHOW(anno_type),
-            SHOW(da.get()));
+            SHOW(da));
       m_stats.annotations_killed++;
+      delete da;
       return true;
     }
 
@@ -419,20 +419,23 @@ void AnnoKill::cleanup_aset(
             "Annotation instance (type: %s) marked for forced removal, "
             "annotation: %s",
             SHOW(anno_type),
-            SHOW(da.get()));
+            SHOW(da));
       m_stats.annotations_killed++;
+      delete da;
       return true;
     }
 
     if (!m_only_force_kill && !da->system_visible()) {
-      TRACE(ANNO, 3, "Killing annotation instance %s", SHOW(da.get()));
+      TRACE(ANNO, 3, "Killing annotation instance %s", SHOW(da));
       m_stats.annotations_killed++;
+      delete da;
       return true;
     }
 
     if (anno_type == DexType::get_type("Ldalvik/annotation/Signature;")) {
-      if (should_kill_bad_signature(da.get())) {
+      if (should_kill_bad_signature(da)) {
         m_stats.signatures_killed++;
+        delete da;
         return true;
       }
     }
@@ -445,16 +448,16 @@ void AnnoKill::cleanup_aset(
 bool AnnoKill::should_kill_bad_signature(DexAnnotation* da) {
   if (!m_kill_bad_signatures) return false;
   TRACE(ANNO, 3, "Examining @Signature instance %s", SHOW(da));
-  auto& elems = da->anno_elems();
-  for (auto& elem : elems) {
-    auto& ev = elem.encoded_value;
+  auto elems = da->anno_elems();
+  for (auto elem : elems) {
+    auto ev = elem.encoded_value;
     if (ev->evtype() != DEVT_ARRAY) continue;
-    auto arrayev = static_cast<DexEncodedValueArray*>(ev.get());
+    auto arrayev = static_cast<DexEncodedValueArray*>(ev);
     auto const& evs = arrayev->evalues();
-    for (auto& strev : *evs) {
+    for (auto strev : *evs) {
       if (strev->evtype() != DEVT_STRING) continue;
       const auto& sigstr =
-          static_cast<DexEncodedValueString*>(strev.get())->string()->str();
+          static_cast<DexEncodedValueString*>(strev)->string()->str();
       always_assert(sigstr.length() > 0);
       const auto* sigcstr = sigstr.c_str();
       // @Signature grammar is non-trivial[1], nevermind the fact that

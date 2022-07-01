@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -882,7 +882,6 @@ bool may_throw(IROpcode op) {
   switch (op) {
   case OPCODE_CONST_STRING:
   case OPCODE_CONST_CLASS:
-  case IOPCODE_INIT_CLASS:
   case OPCODE_MONITOR_ENTER:
   case OPCODE_MONITOR_EXIT:
   case OPCODE_CHECK_CAST:
@@ -1357,7 +1356,6 @@ bool has_side_effects(IROpcode opc) {
   case IOPCODE_LOAD_PARAM:
   case IOPCODE_LOAD_PARAM_OBJECT:
   case IOPCODE_LOAD_PARAM_WIDE:
-  case IOPCODE_INIT_CLASS:
     return true;
   default:
     return false;
@@ -1371,7 +1369,7 @@ namespace opcode_impl {
 
 bool has_dest(IROpcode op) {
   if (opcode::is_an_internal(op)) {
-    return op != IOPCODE_INIT_CLASS;
+    return true;
   } else {
     auto dex_op = opcode::to_dex_opcode(op);
     return !opcode::may_throw(op) && dex_opcode::has_dest(dex_op);

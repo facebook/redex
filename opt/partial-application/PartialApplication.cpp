@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -184,13 +184,13 @@ DexField* try_get_enum_utils_f_field(EnumUtilsCache& cache,
 // Identify how many argument slots an invocation needs after expansion of wide
 // types, and thus whether a range instruction will be needed.
 std::pair<param_index_t, bool> analyze_args(const DexMethod* callee) {
-  const auto* args = callee->get_proto()->get_args();
-  param_index_t src_regs = args->size();
+  const auto& args = callee->get_proto()->get_args()->get_type_list();
+  param_index_t src_regs = args.size();
   if (!is_static(callee)) {
     src_regs++;
   }
   param_index_t expanded_src_regs{!is_static(callee)};
-  for (auto t : *args) {
+  for (auto t : args) {
     expanded_src_regs += type::is_wide_type(t) ? 2 : 1;
   }
   auto needs_range = expanded_src_regs > 5;
@@ -322,20 +322,16 @@ void gather_caller_callees(
     }
   });
 
-  for (auto& p : concurrent_callee_caller) {
-    callee_caller->insert(std::move(p));
-  }
-  for (auto& p : concurrent_caller_callee) {
-    caller_callee->insert(std::move(p));
-  }
+  callee_caller->insert(concurrent_callee_caller.begin(),
+                        concurrent_callee_caller.end());
+  caller_callee->insert(concurrent_caller_callee.begin(),
+                        concurrent_caller_callee.end());
   excluded_invoke_insns->insert(concurrent_excluded_invoke_insns.begin(),
                                 concurrent_excluded_invoke_insns.end());
-  for (auto& p : concurrent_arg_exclusivity) {
-    arg_exclusivity->insert(std::move(p));
-  }
-  for (auto& p : concurrent_callee_caller_classes) {
-    callee_caller_classes->insert(std::move(p));
-  }
+  arg_exclusivity->insert(concurrent_arg_exclusivity.begin(),
+                          concurrent_arg_exclusivity.end());
+  callee_caller_classes->insert(concurrent_callee_caller_classes.begin(),
+                                concurrent_callee_caller_classes.end());
 }
 
 using InvokeCallSiteSummaries =
@@ -375,17 +371,6 @@ bool filter(const RefChecker& ref_checker,
   }
 }
 
-using CallSiteSummarySet = std::unordered_set<const CallSiteSummary*>;
-using CallSiteSummaryVector = std::vector<const CallSiteSummary*>;
-CallSiteSummaryVector order_csses(const CallSiteSummarySet& csses) {
-  CallSiteSummaryVector ordered_csses(csses.begin(), csses.end());
-  std::sort(ordered_csses.begin(), ordered_csses.end(),
-            [](const CallSiteSummary* a, const CallSiteSummary* b) {
-              return a->get_key() < b->get_key();
-            });
-  return ordered_csses;
-}
-
 // Priority-queue based algorithm to select which invocations and which constant
 // arguments are beneficial to transform.
 class CalleeInvocationSelector {
@@ -414,6 +399,7 @@ class CalleeInvocationSelector {
   Parent m_parent;
   CallSiteSummarySets m_css_sets;
 
+  using CallSiteSummarySet = std::unordered_set<const CallSiteSummary*>;
   CallSiteSummarySet m_call_site_summaries;
   using ArgumentCosts = std::unordered_map<src_index_t, int32_t>;
   std::unordered_map<const CallSiteSummary*, ArgumentCosts>
@@ -634,8 +620,16 @@ class CalleeInvocationSelector {
 
   // Fill priority queue with raw data.
   void fill_pq() {
+    std::vector<const CallSiteSummary*> ordered_call_site_summaries(
+        m_call_site_summaries.begin(), m_call_site_summaries.end());
+    std::sort(ordered_call_site_summaries.begin(),
+              ordered_call_site_summaries.end(),
+              [](const CallSiteSummary* a, const CallSiteSummary* b) {
+                return a->get_key() < b->get_key();
+              });
+
     // Populate priority queue
-    for (auto css : order_csses(m_call_site_summaries)) {
+    for (auto css : ordered_call_site_summaries) {
       auto priority = make_priority(css);
       TRACE(PA, 4,
             "[PartialApplication] Considering %s(%s): net savings %d, priority "
@@ -706,8 +700,7 @@ class CalleeInvocationSelector {
               reduced_css->get_key().c_str(), least_cost, src_idx,
               get_net_savings(reduced_css));
       }
-      const auto& csses = m_dependencies.at(src_idx).at(key);
-      for (auto dependent_css : order_csses(csses)) {
+      for (auto dependent_css : m_dependencies.at(src_idx).at(key)) {
         TRACE(PA, 4, "[PartialApplication] Reprioritizing %s(%s)",
               SHOW(m_callee), dependent_css->get_key().c_str());
         m_pq.update_priority(dependent_css, make_priority(dependent_css));
@@ -776,16 +769,16 @@ class CalleeInvocationSelector {
 DexTypeList* get_partial_application_args(bool callee_is_static,
                                           const DexProto* callee_proto,
                                           const CallSiteSummary* css) {
-  const auto* args = callee_proto->get_args();
-  DexTypeList::ContainerType new_args;
+  const auto& args = callee_proto->get_args()->get_type_list();
+  std::deque<DexType*> new_args;
   param_index_t offset = 0;
   if (!callee_is_static) {
     always_assert(css->arguments.get(0).is_top());
     offset++;
   }
-  for (param_index_t i = 0; i < args->size(); i++) {
+  for (param_index_t i = 0; i < args.size(); i++) {
     if (css->arguments.get(offset + i).is_top()) {
-      new_args.push_back(args->at(i));
+      new_args.push_back(args.at(i));
     }
   }
   return DexTypeList::make_type_list(std::move(new_args));
@@ -861,8 +854,7 @@ void select_invokes_and_callers(
             continue;
           }
           auto callee_stable_hash = get_stable_hash(show(callee));
-          std::map<const DexTypeList*,
-                   std::unordered_set<const CallSiteSummary*>,
+          std::map<const DexTypeList*, std::vector<const CallSiteSummary*>,
                    dextypelists_comparator>
               ordered_pa_args_csses;
           auto callee_is_static = is_static(callee);
@@ -871,13 +863,16 @@ void select_invokes_and_callers(
             auto css = p.second;
             auto pa_args = get_partial_application_args(callee_is_static,
                                                         callee_proto, css);
-            auto inserted = ordered_pa_args_csses[pa_args].insert(css).second;
-            always_assert(true);
+            ordered_pa_args_csses[pa_args].push_back(css);
           }
           for (auto& p : ordered_pa_args_csses) {
             auto pa_args = p.first;
             auto& csses = p.second;
-            for (auto css : order_csses(csses)) {
+            std::sort(csses.begin(), csses.end(),
+                      [](const CallSiteSummary* a, const CallSiteSummary* b) {
+                        return a->get_key() < b->get_key();
+                      });
+            for (auto css : csses) {
               auto css_stable_hash = get_stable_hash(css->get_key());
               auto stable_hash =
                   get_stable_hash(callee_stable_hash, css_stable_hash);
@@ -1025,7 +1020,8 @@ void push_callee_arg(EnumUtilsCache& enum_utils_cache,
       always_assert(object->jvm_cached_singleton);
       always_assert(object->attributes.size() == 1);
       auto valueOf = type::get_value_of_method_for_type(object->type);
-      auto valueOf_arg_type = valueOf->get_proto()->get_args()->at(0);
+      auto valueOf_arg_type =
+          valueOf->get_proto()->get_args()->get_type_list().at(0);
       auto tmp = method_creator->make_local(valueOf_arg_type);
       const auto& signed_value2 =
           object->attributes.front().value.maybe_get<SignedConstantDomain>();
@@ -1075,13 +1071,13 @@ void create_partial_application_methods(EnumUtilsCache& enum_utils_cache,
       callee_args.push_back(method_creator.get_local(next_arg_idx++));
     }
     auto proto = callee->get_proto();
-    const auto* args = proto->get_args();
-    for (param_index_t i = 0; i < args->size(); i++) {
+    const auto& args = proto->get_args()->get_type_list();
+    for (param_index_t i = 0; i < args.size(); i++) {
       const auto& value = css->arguments.get(offset + i);
       if (value.is_top()) {
         callee_args.push_back(method_creator.get_local(next_arg_idx++));
       } else {
-        push_callee_arg(enum_utils_cache, args->at(i), value, &method_creator,
+        push_callee_arg(enum_utils_cache, args.at(i), value, &method_creator,
                         main_block, &callee_args);
       }
     }
@@ -1147,12 +1143,9 @@ void PartialApplicationPass::run_pass(DexStoresVector& stores,
                                       ConfigFiles& conf,
                                       PassManager& mgr) {
   const auto scope = build_class_scope(stores);
-  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
-      scope, conf.create_init_class_insns());
 
   auto excluded_classes = get_excluded_classes(stores);
 
-  int min_sdk = mgr.get_redex_options().min_sdk;
   auto min_sdk_api = get_min_sdk_api(conf, mgr);
   XStoreRefs xstores(stores);
   // RefChecker store_idx is initialized with `largest_root_store_id()`, so that
@@ -1174,8 +1167,7 @@ void PartialApplicationPass::run_pass(DexStoresVector& stores,
   ShrinkerConfig shrinker_config;
   shrinker_config.run_local_dce = true;
   shrinker_config.compute_pure_methods = false;
-  Shrinker shrinker(stores, scope, init_classes_with_side_effects,
-                    shrinker_config, min_sdk);
+  Shrinker shrinker(stores, scope, shrinker_config);
 
   std::unordered_set<const IRInstruction*> excluded_invoke_insns;
   auto get_callee_fn = [&excluded_classes, &excluded_invoke_insns](

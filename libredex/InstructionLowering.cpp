@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -228,7 +228,7 @@ void check_load_params(DexMethod* method) {
   if (param_ops.empty()) {
     return;
   }
-  auto* args_list = method->get_proto()->get_args();
+  auto& args_list = method->get_proto()->get_args()->get_type_list();
   auto it = param_ops.begin();
   auto end = param_ops.end();
   reg_t next_ins = it->insn->dest();
@@ -238,20 +238,20 @@ void check_load_params(DexMethod* method) {
     it.reset(code->erase(it.unwrap()));
     ++next_ins;
   }
-  auto args_it = args_list->begin();
+  auto args_it = args_list.begin();
   for (; it != end; ++it) {
     auto op = it->insn->opcode();
     // check that the param registers are contiguous
     always_assert(next_ins == it->insn->dest());
     // TODO: have load param opcodes store the actual type of the param and
     // check that they match the method prototype here
-    always_assert(args_it != args_list->end());
+    always_assert(args_it != args_list.end());
     auto expected_op = opcode::load_opcode(*args_it);
     always_assert(op == expected_op);
     ++args_it;
     next_ins += it->insn->dest_is_wide() ? 2 : 1;
   }
-  always_assert(args_it == args_list->end());
+  always_assert(args_it == args_list.end());
   // check that the params are at the end of the frame
   for (auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
@@ -277,12 +277,6 @@ void check_load_params(DexMethod* method) {
 }
 
 DexInstruction* create_dex_instruction(const IRInstruction* insn) {
-  // TODO: Assert that this never happens. IOPCODE_INIT_CLASS should never make
-  // it here.
-  if (insn->opcode() == IOPCODE_INIT_CLASS) {
-    return new DexInstruction(DOPCODE_NOP);
-  }
-
   auto op = opcode::to_dex_opcode(insn->opcode());
   switch (opcode::ref(insn->opcode())) {
   case opcode::Ref::None:

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -55,8 +55,6 @@ class EvaluateTypeChecksTest : public RedexTest {
         {type_class(m_foo), type_class(m_bar), type_class(m_baz)});
     DexStoresVector stores{store};
     auto scope = build_class_scope(stores);
-    init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
-        scope, /* create_init_class_insns */ false);
 
     using namespace shrinker;
     ShrinkerConfig shrinker_config;
@@ -64,12 +62,7 @@ class EvaluateTypeChecksTest : public RedexTest {
     shrinker_config.run_copy_prop = true;
     shrinker_config.run_local_dce = true;
     shrinker_config.compute_pure_methods = false;
-    int min_sdk = 0;
-    Shrinker shrinker(stores,
-                      scope,
-                      init_classes_with_side_effects,
-                      shrinker_config,
-                      min_sdk);
+    Shrinker shrinker(stores, scope, shrinker_config);
 
     auto method_str = std::string("(") + method_line + " " + in + " )";
     auto method = assembler::class_with_method(type, method_str);

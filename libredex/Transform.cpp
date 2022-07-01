@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -69,14 +69,8 @@ void remap_registers(MethodItemEntry& mei, const RegMap& reg_map) {
 }
 
 void remap_registers(IRCode* code, const RegMap& reg_map) {
-  if (!code->editable_cfg_built()) {
-    for (auto& mei : *code) {
-      remap_registers(mei, reg_map);
-    }
-  } else {
-    for (auto& mei : cfg::InstructionIterable(code->cfg())) {
-      remap_registers(mei, reg_map);
-    }
+  for (auto& mei : *code) {
+    remap_registers(mei, reg_map);
   }
 }
 

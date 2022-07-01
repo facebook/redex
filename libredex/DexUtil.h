@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -10,7 +10,6 @@
 #include <algorithm>
 #include <boost/algorithm/string/predicate.hpp>
 #include <functional>
-#include <string_view>
 #include <unordered_set>
 #include <vector>
 
@@ -21,11 +20,6 @@
 #include "IRInstruction.h"
 #include "MethodUtil.h"
 #include "TypeUtil.h"
-
-/**
- * Given an instruction, determine which class' would get initialized, if any.
- */
-const DexType* get_init_class_type_demand(const IRInstruction* insn);
 
 /**
  * Data structure to represent requested but unapplied visibility changes.
@@ -74,7 +68,6 @@ VisibilityChanges get_visibility_changes(
  *       new type.
  */
 void relocate_method(DexMethod* method, DexType* to_type);
-void relocate_field(DexField* field, DexType* to_type);
 
 /**
  * Checks if a method can be relocated, i.e. if it doesn't require any changes
@@ -181,7 +174,6 @@ void post_dexen_changes(const Scope& v, DexStoresVector& stores);
 void load_root_dexen(DexStore& store,
                      const std::string& dexen_dir_str,
                      bool balloon = false,
-                     bool throw_on_balloon_error = true,
                      bool verbose = true,
                      int support_dex_version = 35);
 
@@ -228,7 +220,8 @@ bool has_anno(const T* t, const std::unordered_set<DexType*>& anno_types) {
 // Check whether the given string is a valid identifier. This does
 // not handle UTF. Checks against the Java bytecode specification,
 // which is a bit more relaxed than Dex's.
-bool is_valid_identifier(std::string_view s);
+bool is_valid_identifier(const std::string& s, size_t start, size_t len);
+bool is_valid_identifier(const std::string& s);
 
 namespace java_names {
 
@@ -246,8 +239,8 @@ inline boost::optional<std::string> primitive_desc_to_name(char desc) {
   }
 }
 
-inline boost::optional<char> primitive_name_to_desc(std::string_view name) {
-  const static std::unordered_map<std::string_view, char> conversion_table{
+inline boost::optional<char> primitive_name_to_desc(const std::string& name) {
+  const static std::unordered_map<std::string, char> conversion_table{
       {"void", 'V'},    {"byte", 'B'},  {"char", 'C'},
       {"short", 'S'},   {"int", 'I'},   {"long", 'J'},
       {"boolean", 'Z'}, {"float", 'F'}, {"double", 'D'},
@@ -264,26 +257,30 @@ inline boost::optional<char> primitive_name_to_desc(std::string_view name) {
 // Example: "[Ljava/lang/String;" --> "[Ljava.lang.String;"
 // Example: "I" --> "int"
 // Example: "[I" --> "[I"
-inline std::string internal_to_external(std::string_view internal_name) {
+inline std::string internal_to_external(const std::string& internal_name) {
   int array_level = std::count(internal_name.begin(), internal_name.end(), '[');
 
-  std::string_view component_name = internal_name.substr(array_level);
+  std::string component_name = internal_name.substr(array_level);
 
   char type = component_name.at(0);
   if (type == 'L') {
     // For arrays, we need to preserve the semicolon at the end of the name
-    auto external_name = std::string(component_name.substr(
-        1, component_name.size() - (array_level == 0 ? 2 : 1)));
+    auto external_name = component_name.substr(
+        1, component_name.size() - (array_level == 0 ? 2 : 1));
     std::replace(external_name.begin(), external_name.end(), '/', '.');
-    std::string array_name(array_level, '[');
-    if (array_level != 0) {
-      array_name += "L"; // external only uses 'L' for arrays
+    std::string array_prefix;
+    array_prefix.reserve(array_level);
+    for (int i = 0; i < array_level; i++) {
+      array_prefix += '[';
     }
-    return array_name + external_name;
+    if (array_level != 0) {
+      array_prefix += "L"; // external only uses 'L' for arrays
+    }
+    return array_prefix + external_name;
   } else if (array_level) {
     // If the type is an array of primitives, the external format is the same
     // as internal.
-    return std::string(internal_name);
+    return internal_name;
   } else {
     auto maybe_external_name = primitive_desc_to_name(type);
     always_assert_log(
@@ -298,7 +295,7 @@ inline std::string internal_to_external(std::string_view internal_name) {
 // Example: "[I" --> "[I"
 // Example: "I" --> "LI;"
 // Example: "[LI;" --> "[LI;"
-inline std::string external_to_internal(std::string_view external_name) {
+inline std::string external_to_internal(const std::string& external_name) {
   // Primitive types (not including their arrays) are special notations
   auto maybe_primitive_name = primitive_name_to_desc(external_name);
   if (maybe_primitive_name) {
@@ -306,7 +303,7 @@ inline std::string external_to_internal(std::string_view external_name) {
   }
 
   int array_level = std::count(external_name.begin(), external_name.end(), '[');
-  auto component_external_name = external_name.substr(array_level);
+  std::string component_external_name = external_name.substr(array_level);
   /**
    * Note: "I" is a perfectly valid external name denoting a class of "LI;"
    * while "int" is the external name for int type. However, "[I" is an array of
@@ -315,10 +312,10 @@ inline std::string external_to_internal(std::string_view external_name) {
   if (array_level != 0 && component_external_name.size() == 1) {
     // It must be an array of primitives. The internal name is the same as the
     // external name.
-    return std::string(external_name);
+    return external_name;
   }
 
-  std::string component_internal_name(component_external_name);
+  std::string component_internal_name = component_external_name;
   if (array_level == 0) {
     component_internal_name = "L" + component_internal_name;
   }
@@ -344,9 +341,9 @@ inline std::string external_to_internal(std::string_view external_name) {
 // Example: "[LA$B;" --> "B[]"
 // Example: "Ljava/lang$1;" --> ""
 // Note: kotlin anonymous class is not handled properly here.
-inline std::string internal_to_simple(std::string_view internal_name) {
+inline std::string internal_to_simple(const std::string& internal_name) {
   int array_level = std::count(internal_name.begin(), internal_name.end(), '[');
-  auto component_name = internal_name.substr(array_level);
+  std::string component_name = internal_name.substr(array_level);
   std::string component_external_name = internal_to_external(component_name);
   std::size_t last_dot = component_external_name.rfind('.');
   std::size_t last_dollar = component_external_name.rfind('$');
@@ -375,7 +372,7 @@ inline std::string internal_to_simple(std::string_view internal_name) {
   return component_simple_name + array_suffix;
 }
 
-inline std::string package_name(std::string_view type_name) {
+inline std::string package_name(const std::string& type_name) {
   std::string nice_name = internal_to_external(type_name);
   std::size_t last_dot = nice_name.rfind('.');
   if (last_dot != std::string::npos) {

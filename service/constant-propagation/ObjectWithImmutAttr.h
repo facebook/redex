@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -89,44 +89,33 @@ class tristate_runtime_equals_visitor : public boost::static_visitor<TriState> {
 struct ImmutableAttr {
   struct Attr {
     enum Kind { Method, Field } kind;
-    union Val {
-      explicit Val(DexField* f) : field(f) {}
-      explicit Val(DexMethod* m) : method(m) {}
+    union {
       DexField* field;
       DexMethod* method;
-    } val;
+      void* member;
+    };
     // Only used by test cases.
-    Attr() : kind{Method}, val((DexMethod*)nullptr) {}
-    explicit Attr(DexField* f) : kind(Field), val(f) {
-      always_assert(!f->is_def() || (!is_static(f) && is_final(f)));
+    Attr() {}
+    explicit Attr(DexField* f) : kind(Field), field(f) {
+      always_assert(!field->is_def() || (!is_static(field) && is_final(field)));
     }
-    explicit Attr(DexMethod* m) : kind(Method), val(m) {
-      if (m->is_def()) {
-        always_assert(!is_static(m) && !is_constructor(m));
+    explicit Attr(DexMethod* m) : kind(Method), method(m) {
+      if (method->is_def()) {
+        always_assert(!is_static(method) && !is_constructor(method));
       }
     }
 
     bool is_method() const { return kind == Method; }
     bool is_field() const { return kind == Field; }
 
-    // Accessing the non-active union member is undefined behavior.
-    uintptr_t as_uintptr_t() const {
-      uintptr_t tmp;
-      static_assert(sizeof(uintptr_t) == sizeof(Val));
-      memcpy(&tmp, &val, sizeof(uintptr_t));
-      return tmp;
-    }
-
     bool operator==(const Attr& other) const {
-      return kind == other.kind && as_uintptr_t() == other.as_uintptr_t();
+      return kind == other.kind && member == other.member;
     }
     bool operator!=(const Attr& other) const { return !operator==(other); }
     // Compare pointer address for simplicity. The comparison is used
     // for keeping the constructed attributes of an object in order and easy to
     // be compared.
-    bool operator<(const Attr& other) const {
-      return as_uintptr_t() < other.as_uintptr_t();
-    }
+    bool operator<(const Attr& other) const { return member < other.member; }
   } attr;
   AttrDomain value;
 
@@ -142,8 +131,8 @@ struct ImmutableAttr {
       : attr(attr), value(value) {}
 
   TriState runtime_equals(const ImmutableAttr& other) const {
-    return AttrDomain::apply_visitor(tristate_runtime_equals_visitor(), value,
-                                     other.value);
+    return AttrDomain::apply_visitor(
+        tristate_runtime_equals_visitor(), value, other.value);
   }
 
   bool value_is_constant() const {
@@ -157,16 +146,6 @@ struct ImmutableAttr {
   }
 
   bool same_key(const ImmutableAttr& other) const { return attr == other.attr; }
-
-  friend std::ostream& operator<<(std::ostream& out, const ImmutableAttr& x) {
-    if (x.attr.is_field()) {
-      out << "f:" << x.attr.val.field->str();
-    } else {
-      out << "m:" << x.attr.val.method->str();
-    }
-    out << "=" << x.value;
-    return out;
-  }
 };
 
 struct ObjectWithImmutAttr {
@@ -285,19 +264,18 @@ struct ObjectWithImmutAttr {
   template <typename ValueType>
   void write_value(const ImmutableAttr::Attr& attr, ValueType value) {
 #ifndef NDEBUG
-    // Insertions are supposed to be in order. Thus a comparison check against
-    // the last element is enough.
-    always_assert_log(attributes.empty() || attributes.back().attr < attr,
-                      "%s is written before, is it real final attribute?",
-                      [&]() {
-                        auto& att = attributes.back();
-                        if (att.attr.is_method()) {
-                          return show(att.attr.val.method);
-                        } else {
-                          return show(att.attr.val.field);
-                        }
-                      }()
-                          .c_str());
+    for (auto& att : attributes) {
+      always_assert_log(attr.member != att.attr.member,
+                        "%s is written before, is it real final attribute?",
+                        [&att]() {
+                          if (att.attr.is_method()) {
+                            return show(att.attr.method);
+                          } else {
+                            return show(att.attr.field);
+                          }
+                        }()
+                            .c_str());
+    }
 #endif
     attributes.push_back(ImmutableAttr(attr, value));
   }
@@ -306,7 +284,7 @@ struct ObjectWithImmutAttr {
 
   boost::optional<const AttrDomain> get_value(const DexMethod* method) const {
     for (const auto& attr : attributes) {
-      if (attr.attr.is_method() && attr.attr.val.method == method) {
+      if (attr.attr.is_method() && attr.attr.method == method) {
         return attr.value;
       }
     }
@@ -315,22 +293,11 @@ struct ObjectWithImmutAttr {
 
   boost::optional<const AttrDomain> get_value(const DexField* field) const {
     for (const auto& attr : attributes) {
-      if (attr.attr.is_field() && attr.attr.val.field == field) {
+      if (attr.attr.is_field() && attr.attr.field == field) {
         return attr.value;
       }
     }
     return boost::none;
-  }
-
-  friend std::ostream& operator<<(std::ostream& out,
-                                  const ObjectWithImmutAttr& x) {
-    out << (x.jvm_cached_singleton ? "[c]" : "")
-        << type::get_simple_name(x.type) << "{";
-    for (auto& attr : x.attributes) {
-      out << attr << ",";
-    }
-    out << "}";
-    return out;
   }
 };
 
@@ -462,7 +429,17 @@ class ObjectWithImmutAttrDomain final
       break;
     }
     case sparta::AbstractValueKind::Value: {
-      out << *x.m_value;
+      out << (x.m_value->jvm_cached_singleton ? "[c]" : "")
+          << type::get_simple_name(x.m_value->type) << "{";
+      for (auto& attr : x.m_value->attributes) {
+        if (attr.attr.is_field()) {
+          out << attr.attr.field->str();
+        } else {
+          out << attr.attr.method->str();
+        }
+        out << "=" << show(attr.value) << ",";
+      }
+      out << "}";
       break;
     }
     }

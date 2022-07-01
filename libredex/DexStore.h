@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -9,7 +9,6 @@
 
 #include <cstdlib>
 #include <cstring>
-#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -53,9 +52,9 @@ class DexStore {
 
  public:
   explicit DexStore(const DexMetadata& metadata) : m_metadata(metadata){};
-  explicit DexStore(std::string name, std::vector<std::string> deps = {});
+  explicit DexStore(const std::string& name);
 
-  const std::string& get_name() const;
+  std::string get_name() const;
   size_t num_dexes() const { return m_dexen.size(); }
   const std::string& get_dex_magic() const { return dex_magic; }
   void set_dex_magic(const std::string& input_dex_magic) {

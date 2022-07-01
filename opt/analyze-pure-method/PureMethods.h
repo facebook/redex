@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include "InitClassesWithSideEffects.h"
 #include "LocalDce.h"
 #include "Pass.h"
 
@@ -31,11 +30,8 @@ class AnalyzePureMethodsPass : public Pass {
   AnalyzePureMethodsPass() : Pass("AnalyzePureMethodsPass") {}
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
-  Stats analyze_and_set_pure_methods(Scope& scope);
+  Stats analyze_and_set_pure_methods(Scope& scop);
 
  private:
-  bool analyze_and_check_pure_method_helper(
-      const init_classes::InitClassesWithSideEffects&
-          init_classes_with_side_effects,
-      IRCode* code);
+  bool analyze_and_check_pure_method_helper(IRCode* code);
 };
