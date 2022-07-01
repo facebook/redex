@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -7,6 +7,7 @@
 
 #include "OriginalNamePass.h"
 #include "ClassHierarchy.h"
+#include "DexAnnotation.h"
 #include "DexUtil.h"
 #include "PassManager.h"
 #include "Show.h"
@@ -84,9 +85,11 @@ void OriginalNamePass::run_pass(DexStoresVector& stores,
                           nullptr,
                       "field %s already exists!",
                       redex_field_name);
-    DexField* f = DexField::make_field(cls_type, field_name, string_type)
-                      ->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL,
-                                      new DexEncodedValueString(simple_name_s));
+    DexField* f =
+        DexField::make_field(cls_type, field_name, string_type)
+            ->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL,
+                            std::unique_ptr<DexEncodedValue>(
+                                new DexEncodedValueString(simple_name_s)));
     // These fields are accessed reflectively, so make sure we do not remove
     // them.
     f->rstate.set_root();

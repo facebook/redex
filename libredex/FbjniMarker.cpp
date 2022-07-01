@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -24,8 +24,8 @@ static void mark_member_reachable_by_native(DexMember* member) {
 
 static void mark_class_reachable_by_native(const DexType* dtype) {
   auto dclass = type_class_internal(dtype);
-  always_assert_log(
-      dclass != nullptr, "Could not resolve type %s", show(dtype).c_str());
+  always_assert_log(dclass != nullptr, "Could not resolve type %s",
+                    show(dtype).c_str());
 
   mark_member_reachable_by_native(dclass);
 }
@@ -34,8 +34,8 @@ DexType* FbjniMarker::process_class_path(const std::string& class_path) {
   std::string class_name = java_names::external_to_internal(class_path);
 
   auto type = DexType::get_type(class_name.c_str());
-  always_assert_log(
-      type != nullptr, "Could not resolve type %s", class_path.c_str());
+  always_assert_log(type != nullptr, "Could not resolve type %s",
+                    class_path.c_str());
 
   // keep declared type
   types.insert(type);
@@ -51,15 +51,17 @@ DexField* FbjniMarker::process_field(DexType* type,
   auto field_tokens_internal = dex_member_refs::FieldDescriptorTokens();
   field_tokens_internal.cls = type->str();
   field_tokens_internal.name = field_tokens.name;
-  field_tokens_internal.type = to_internal_type(field_tokens.type);
+  // FieldDescriptorTokens contains string_views only.
+  std::string internal_type = to_internal_type(field_tokens.type);
+  field_tokens_internal.type = internal_type;
 
   auto field_ref = DexField::get_field(field_tokens_internal);
-  always_assert_log(
-      field_ref != nullptr, "Could not resolve field %s", field_str.c_str());
+  always_assert_log(field_ref != nullptr, "Could not resolve field %s",
+                    field_str.c_str());
 
   auto field = field_ref->as_def();
-  always_assert_log(
-      field != nullptr, "Field %s is not a definition", field_str.c_str());
+  always_assert_log(field != nullptr, "Field %s is not a definition",
+                    field_str.c_str());
 
   mark_member_reachable_by_native(field);
   return field;
@@ -68,7 +70,6 @@ DexField* FbjniMarker::process_field(DexType* type,
 DexMethod* FbjniMarker::process_method(DexType* type,
                                        const std::string& method_str) {
   auto method_tokens = java_declarations::parse_method_declaration(method_str);
-
   if (method_tokens.rtype.empty()) {
     // is constructor
     method_tokens.rtype = "void";
@@ -78,54 +79,58 @@ DexMethod* FbjniMarker::process_method(DexType* type,
   auto method_tokens_internal = dex_member_refs::MethodDescriptorTokens();
   method_tokens_internal.cls = type->str();
   method_tokens_internal.name = method_tokens.name;
-  method_tokens_internal.rtype = to_internal_type(method_tokens.rtype);
-  for (const auto& str : method_tokens.args) {
-    method_tokens_internal.args.push_back(to_internal_type(str));
+  // MethodDescriptorTokens contains string_views only.
+  auto internal_type = to_internal_type(method_tokens.rtype);
+  method_tokens_internal.rtype = internal_type;
+
+  // MethodDescriptorTokens contains string_views only.
+  std::vector<std::string> internal_type_string_store;
+  for (auto str : method_tokens.args) {
+    auto ty = to_internal_type(str);
+    internal_type_string_store.emplace_back(ty);
+    method_tokens_internal.args.push_back(internal_type_string_store.back());
   }
 
   auto method_ref = DexMethod::get_method(method_tokens_internal);
-  always_assert_log(method_ref != nullptr,
-                    "Could not resolve method: %s",
+  always_assert_log(method_ref != nullptr, "Could not resolve method: %s",
                     method_str.c_str());
 
   auto method = method_ref->as_def();
-  always_assert_log(
-      method != nullptr, "Method %s is not a definition", method_str.c_str());
+  always_assert_log(method != nullptr, "Method %s is not a definition",
+                    method_str.c_str());
 
   mark_member_reachable_by_native(method);
   return method;
 }
 
-std::string FbjniMarker::to_internal_type(const std::string& str) {
+std::string FbjniMarker::to_internal_type(std::string_view str) {
   int array_level = std::count(str.begin(), str.end(), '[');
-  std::string array_prefix;
-  for (int i = 0; i < array_level; i++) {
-    array_prefix += '[';
-  }
+  std::string array_name(array_level, '[');
 
-  std::string type_str = array_level > 0 ? str.substr(0, str.find('[')) : str;
+  auto type_str = array_level > 0 ? str.substr(0, str.find('[')) : str;
   if (java_names::primitive_name_to_desc(type_str)) {
     // is primitive type
     auto internal_name = java_names::external_to_internal(type_str);
-    return array_prefix + internal_name;
+    return array_name + internal_name;
   } else {
     // not primitive, try fully-qualify name first
     auto inter_str = java_names::external_to_internal(type_str);
     for (auto dtype : types) {
       if (dtype->str() == type_str) {
-        return array_prefix + type_str;
+        array_name += type_str;
+        return array_name;
       }
     }
 
     // try to match simple name (more common)
     for (auto dtype : types) {
       if (type::get_simple_name(dtype) == type_str) {
-        return array_prefix + dtype->str();
+        return array_name + dtype->str();
       }
     }
 
     // error: No matching type
-    not_reached_log("Can not resolve type %s", str.c_str());
+    not_reached_log("Can not resolve type %s", SHOW(str));
     return "";
   }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -35,13 +35,24 @@ inline bool is_any_init(const DexMethodRef* method) {
  */
 bool is_trivial_clinit(const IRCode& code);
 
+bool is_clinit_invoked_method_benign(const DexMethodRef*);
+
+using ClInitHasNoSideEffectsPredicate = std::function<bool(const DexType*)>;
 /**
  * Return true if change the exeution time of the <clinit> of the cls may change
  * the program behavior.
+ *
  * TODO: We can assume no side effect for more cases, like if it only accesses
  * other classes whose <clinit> also has no side effect.
+ *
+ * Returns the first type along the chain of super types whose clinit actually
+ * may have side effects.
  */
-bool clinit_may_have_side_effects(const DexClass* cls);
+const DexClass* clinit_may_have_side_effects(
+    const DexClass* cls,
+    bool allow_benign_method_invocations,
+    const ClInitHasNoSideEffectsPredicate* clinit_has_no_side_effects = nullptr,
+    const std::unordered_set<DexMethod*>* non_true_virtuals = nullptr);
 
 /**
  * Check that the method contains no invoke-super instruction; this is a
@@ -69,12 +80,12 @@ inline bool is_constructor(const DexMethodRef* meth) {
 
 /** Determine if the method takes no arguments. */
 inline bool has_no_args(const DexMethodRef* meth) {
-  return meth->get_proto()->get_args()->get_type_list().empty();
+  return meth->get_proto()->get_args()->empty();
 }
 
 /** Determine if the method takes exactly n arguments. */
 inline bool has_n_args(const DexMethodRef* meth, size_t n) {
-  return meth->get_proto()->get_args()->get_type_list().size() == n;
+  return meth->get_proto()->get_args()->size() == n;
 }
 
 /**

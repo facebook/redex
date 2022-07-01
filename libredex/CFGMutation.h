@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -13,6 +13,8 @@
 
 #include <unordered_map>
 #include <vector>
+
+struct SourceBlock;
 
 namespace cfg {
 
@@ -65,6 +67,19 @@ class CFGMutation {
   /// Insert a new change before \p anchor.
   /// Mutation may have multiple changes associated with \c anchor.
   ///     insert_before preserves the anchor instruction and adds the
+  ///     instructions before it.
+  /// \p anchor is the instruction that the change is made relative to. If at
+  ///     the time the change is applied, the anchor does not exist, the change
+  ///     will be ignored.
+  /// \p instructions are the instructions that are inserted as part of the
+  ///     change. This can be an empty list.
+  void insert_before_var(
+      const cfg::InstructionIterator& anchor,
+      std::vector<cfg::ControlFlowGraph::InsertVariant> instructions);
+
+  /// Insert a new change before \p anchor.
+  /// Mutation may have multiple changes associated with \c anchor.
+  ///     insert_before preserves the anchor instruction and adds the
   ///     position before it.
   /// \p anchor is the instruction that the change is made relative to. If at
   ///     the time the change is applied, the anchor does not exist, the change
@@ -73,6 +88,18 @@ class CFGMutation {
   ///     change.
   void insert_before(const cfg::InstructionIterator& anchor,
                      std::unique_ptr<DexPosition> position);
+
+  /// Insert a new change before \p anchor.
+  /// Mutation may have multiple changes associated with \c anchor.
+  ///     insert_before preserves the anchor instruction and adds the
+  ///     position before it.
+  /// \p anchor is the instruction that the change is made relative to. If at
+  ///     the time the change is applied, the anchor does not exist, the change
+  ///     will be ignored.
+  /// \p sb is the source block that is inserted as part of the
+  ///     change.
+  void insert_before(const cfg::InstructionIterator& anchor,
+                     std::unique_ptr<SourceBlock> sb);
 
   /// Insert a new change after \p anchor.
   /// \p anchor is the instruction that the change is made relative to. If at
@@ -91,11 +118,35 @@ class CFGMutation {
   /// \p anchor is the instruction that the change is made relative to. If at
   ///     the time the change is applied, the anchor does not exist, the change
   ///     will be ignored. This preserves the anchor instruction and adds the
+  ///     instructions after it.
+  /// \p instructions are the instructions that are inserted as part of the
+  ///     change.
+  /// Mutation restrictions:
+  ///  - It's not possible to insert_after terminal operation without
+  ///    replacing it. This can be an empty list.
+  void insert_after_var(
+      const cfg::InstructionIterator& anchor,
+      std::vector<cfg::ControlFlowGraph::InsertVariant> instructions);
+
+  /// Insert a new change after \p anchor.
+  /// \p anchor is the instruction that the change is made relative to. If at
+  ///     the time the change is applied, the anchor does not exist, the change
+  ///     will be ignored. This preserves the anchor instruction and adds the
   ///     position after it.
   /// \p position is the debug position that is inserted as part of the
   ///     change.
   void insert_after(const cfg::InstructionIterator& anchor,
                     std::unique_ptr<DexPosition> position);
+
+  /// Insert a new change after \p anchor.
+  /// \p anchor is the instruction that the change is made relative to. If at
+  ///     the time the change is applied, the anchor does not exist, the change
+  ///     will be ignored. This preserves the anchor instruction and adds the
+  ///     position after it.
+  /// \p sb is the source block that is inserted as part of the
+  ///     change.
+  void insert_after(const cfg::InstructionIterator& anchor,
+                    std::unique_ptr<SourceBlock> sb);
 
   /// Replace with a new change at this \p anchor.
   /// replace behaves like either Before or After followed by removing the
@@ -133,6 +184,8 @@ class CFGMutation {
   /// A memento of a change we wish to make to the CFG.
   class ChangeSet {
    public:
+    ~ChangeSet();
+
     enum class Insert { Before, After, Replacing };
     /// Apply this change on the control flow graph \p cfg, using \p it as the
     /// anchoring instruction. Moves \p it if the change invalidates the anchor.
@@ -150,6 +203,13 @@ class CFGMutation {
     /// Accumulates position changes for a specific instruction.
     void add_position(Insert where, std::unique_ptr<DexPosition> pos_change);
 
+    /// Accumulates source block changes for a specific instruction.
+    void add_source_block(Insert where, std::unique_ptr<SourceBlock> sb_change);
+
+    void add_var(Insert where, cfg::ControlFlowGraph::InsertVariant var);
+    void add_var(Insert where,
+                 std::vector<cfg::ControlFlowGraph::InsertVariant> var);
+
     /// Free the instructions owned by this ChangeSet.  Leaves the ChangeSet
     /// empty (so applying it would be a nop).
     void dispose();
@@ -161,6 +221,12 @@ class CFGMutation {
 
     std::vector<std::unique_ptr<DexPosition>> m_insert_pos_before;
     std::vector<std::unique_ptr<DexPosition>> m_insert_pos_after;
+
+    std::vector<std::unique_ptr<SourceBlock>> m_insert_sb_before;
+    std::vector<std::unique_ptr<SourceBlock>> m_insert_sb_after;
+
+    std::vector<cfg::ControlFlowGraph::InsertVariant> m_insert_before_var;
+    std::vector<cfg::ControlFlowGraph::InsertVariant> m_insert_after_var;
   };
 
   cfg::ControlFlowGraph& m_cfg;
@@ -195,13 +261,61 @@ inline void CFGMutation::ChangeSet::add_position(
 
   switch (where) {
   case Insert::Before:
-    m_insert_pos_before.push_back(std::move(pos_change));
+    m_insert_pos_before.emplace_back(std::move(pos_change));
     break;
   case Insert::After:
-    m_insert_pos_after.push_back(std::move(pos_change));
+    m_insert_pos_after.emplace_back(std::move(pos_change));
     break;
   case Insert::Replacing:
     always_assert_log(false, "Cannot replace dex positions.");
+    break;
+  }
+}
+
+inline void CFGMutation::ChangeSet::add_source_block(
+    Insert where, std::unique_ptr<SourceBlock> sb_change) {
+  switch (where) {
+  case Insert::Before:
+    m_insert_sb_before.emplace_back(std::move(sb_change));
+    break;
+  case Insert::After:
+    m_insert_sb_after.emplace_back(std::move(sb_change));
+    break;
+  case Insert::Replacing:
+    always_assert_log(false, "Cannot replace dex positions.");
+    break;
+  }
+}
+
+inline void CFGMutation::ChangeSet::add_var(
+    Insert where, cfg::ControlFlowGraph::InsertVariant var) {
+  switch (where) {
+  case Insert::Before:
+    m_insert_before_var.emplace_back(std::move(var));
+    break;
+  case Insert::After:
+    m_insert_after_var.emplace_back(std::move(var));
+    break;
+  case Insert::Replacing:
+    always_assert_log(false, "Unsupported.");
+    break;
+  }
+}
+inline void CFGMutation::ChangeSet::add_var(
+    Insert where, std::vector<cfg::ControlFlowGraph::InsertVariant> var) {
+  switch (where) {
+  case Insert::Before:
+    for (auto& v : var) {
+      m_insert_before_var.emplace_back(std::move(v));
+    }
+    break;
+  case Insert::After:
+    for (auto& v : var) {
+      m_insert_after_var.emplace_back(std::move(v));
+    }
+    break;
+  case Insert::Replacing:
+    always_assert_log(false, "Unsupported.");
     break;
   }
 }
@@ -222,6 +336,22 @@ inline void CFGMutation::insert_after(
                                      std::move(instructions));
 }
 
+inline void CFGMutation::insert_before_var(
+    const cfg::InstructionIterator& anchor,
+    std::vector<cfg::ControlFlowGraph::InsertVariant> instructions) {
+  always_assert(!anchor.is_end());
+  m_changes[anchor->insn].add_var(ChangeSet::Insert::Before,
+                                  std::move(instructions));
+}
+
+inline void CFGMutation::insert_after_var(
+    const cfg::InstructionIterator& anchor,
+    std::vector<cfg::ControlFlowGraph::InsertVariant> instructions) {
+  always_assert(!anchor.is_end());
+  m_changes[anchor->insn].add_var(ChangeSet::Insert::After,
+                                  std::move(instructions));
+}
+
 inline void CFGMutation::insert_before(const cfg::InstructionIterator& anchor,
                                        std::unique_ptr<DexPosition> position) {
   always_assert(!anchor.is_end());
@@ -234,6 +364,20 @@ inline void CFGMutation::insert_after(const cfg::InstructionIterator& anchor,
   always_assert(!anchor.is_end());
   m_changes[anchor->insn].add_position(ChangeSet::Insert::After,
                                        std::move(position));
+}
+
+inline void CFGMutation::insert_before(const cfg::InstructionIterator& anchor,
+                                       std::unique_ptr<SourceBlock> sb) {
+  always_assert(!anchor.is_end());
+  m_changes[anchor->insn].add_source_block(ChangeSet::Insert::Before,
+                                           std::move(sb));
+}
+
+inline void CFGMutation::insert_after(const cfg::InstructionIterator& anchor,
+                                      std::unique_ptr<SourceBlock> sb) {
+  always_assert(!anchor.is_end());
+  m_changes[anchor->insn].add_source_block(ChangeSet::Insert::After,
+                                           std::move(sb));
 }
 
 inline void CFGMutation::replace(const cfg::InstructionIterator& anchor,

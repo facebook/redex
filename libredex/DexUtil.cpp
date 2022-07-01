@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -11,15 +11,52 @@
 #include <boost/filesystem.hpp>
 #include <boost/regex.hpp>
 #include <deque>
+#include <string_view>
 #include <unordered_set>
 
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexLoader.h"
 #include "EditableCfgAdapter.h"
+#include "ReachableClasses.h"
 #include "Resolver.h"
 #include "Trace.h"
 #include "UnknownVirtuals.h"
+
+const DexType* get_init_class_type_demand(const IRInstruction* insn) {
+  switch (insn->opcode()) {
+  case OPCODE_INVOKE_STATIC: {
+    // It's the resolved method that counts
+    auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
+    return (method && !assumenosideeffects(method)) ? method->get_class()
+                                                    : nullptr;
+  }
+  case OPCODE_SGET:
+  case OPCODE_SGET_WIDE:
+  case OPCODE_SGET_OBJECT:
+  case OPCODE_SGET_BOOLEAN:
+  case OPCODE_SGET_BYTE:
+  case OPCODE_SGET_CHAR:
+  case OPCODE_SGET_SHORT:
+  case OPCODE_SPUT:
+  case OPCODE_SPUT_WIDE:
+  case OPCODE_SPUT_OBJECT:
+  case OPCODE_SPUT_BOOLEAN:
+  case OPCODE_SPUT_BYTE:
+  case OPCODE_SPUT_CHAR:
+  case OPCODE_SPUT_SHORT: {
+    // It's the resolved field that counts
+    auto field = resolve_field(insn->get_field(), FieldSearch::Static);
+    return field ? field->get_class() : nullptr;
+  }
+  case IOPCODE_INIT_CLASS:
+  case OPCODE_NEW_INSTANCE: {
+    return insn->get_type();
+  }
+  default:
+    return nullptr;
+  }
+}
 
 DexAccessFlags merge_visibility(uint32_t vis1, uint32_t vis2) {
   vis1 &= VISIBILITY_MASK;
@@ -134,6 +171,7 @@ void post_dexen_changes(const Scope& v, DexStoresVector& stores) {
 void load_root_dexen(DexStore& store,
                      const std::string& dexen_dir_str,
                      bool balloon,
+                     bool throw_on_balloon_error,
                      bool verbose,
                      int support_dex_version) {
   namespace fs = boost::filesystem;
@@ -188,8 +226,10 @@ void load_root_dexen(DexStore& store,
       TRACE(MAIN, 1, "Loading %s", dex.string().c_str());
     }
     // N.B. throaway stats for now
-    DexClasses classes = load_classes_from_dex(dex.string().c_str(), balloon,
-                                               support_dex_version);
+    DexClasses classes = load_classes_from_dex(
+        dex.string().c_str(), balloon,
+        /* throw_on_balloon_error */ throw_on_balloon_error,
+        support_dex_version);
     store.add_classes(std::move(classes));
   }
 }
@@ -207,6 +247,17 @@ void create_store(const std::string& store_name,
   store.set_generated();
   store.add_classes(std::move(classes));
   stores.emplace_back(std::move(store));
+}
+
+void relocate_field(DexField* field, DexType* to_type) {
+  // change_visibility(field, to_type);
+  auto from_cls = type_class(field->get_class());
+  auto to_cls = type_class(to_type);
+  from_cls->remove_field(field);
+  DexFieldSpec spec;
+  spec.cls = to_type;
+  field->change(spec, true /* rename on collision */);
+  to_cls->add_field(field);
 }
 
 void relocate_method(DexMethod* method, DexType* to_type) {
@@ -398,17 +449,13 @@ bool relocate_method_if_no_changes(DexMethod* method, DexType* to_type) {
   return true;
 }
 
-bool is_valid_identifier(const std::string& s) {
-  return is_valid_identifier(s, 0, s.length());
-}
-
-bool is_valid_identifier(const std::string& s, size_t start, size_t len) {
-  if (len == 0) {
+bool is_valid_identifier(std::string_view s) {
+  if (s.empty()) {
     // Identifiers must not be empty.
     return false;
   }
-  for (size_t i = start; i != start + len; ++i) {
-    switch (s.at(i)) {
+  for (char c : s) {
+    switch (c) {
     // Forbidden characters. This may not work for UTF encodings.
     case '/':
     case ';':

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -7,7 +7,6 @@
 
 #include <atomic>
 #include <fstream>
-#include <iostream>
 
 #include "RemoveUnusedFields.h"
 
@@ -16,13 +15,16 @@
 #include "DexClass.h"
 #include "FieldOpTracker.h"
 #include "IRCode.h"
+#include "InitClassesWithSideEffects.h"
 #include "PassManager.h"
 #include "Resolver.h"
 #include "Show.h"
+#include "Shrinker.h"
 #include "Trace.h"
 #include "Walkers.h"
 
 using namespace remove_unused_fields;
+using namespace shrinker;
 
 namespace {
 
@@ -39,8 +41,20 @@ bool has_non_zero_static_value(DexField* field) {
 
 class RemoveUnusedFields final {
  public:
-  RemoveUnusedFields(const Config& config, const Scope& scope)
-      : m_config(config), m_scope(scope) {
+  RemoveUnusedFields(const Config& config,
+                     bool create_init_class_insns,
+                     const ShrinkerConfig& shrinker_config,
+                     int min_sdk,
+                     DexStoresVector& stores,
+                     const Scope& scope)
+      : m_config(config),
+        m_scope(scope),
+        m_init_classes_with_side_effects(scope, create_init_class_insns),
+        m_shrinker(stores,
+                   scope,
+                   m_init_classes_with_side_effects,
+                   shrinker_config,
+                   min_sdk) {
     analyze();
     transform();
   }
@@ -65,6 +79,8 @@ class RemoveUnusedFields final {
   size_t unremovable_unread_field_puts() const {
     return m_unremovable_unread_field_puts;
   }
+
+  size_t init_classes() const { return m_init_classes; }
 
  private:
   bool is_blocklisted(const DexField* field) const {
@@ -156,10 +172,11 @@ class RemoveUnusedFields final {
   void transform() {
     // Replace reads to unwritten fields with appropriate const-0 instructions,
     // and remove the writes to unread fields.
-    walk::parallel::code(m_scope, [&](const DexMethod*, IRCode& code) {
+    walk::parallel::code(m_scope, [&](const DexMethod* method, IRCode& code) {
       auto& cfg = code.cfg();
       cfg::CFGMutation m(cfg);
       auto iterable = cfg::InstructionIterable(cfg);
+      bool any_changes = false;
       for (auto insn_it = iterable.begin(); insn_it != iterable.end();
            ++insn_it) {
         auto* insn = insn_it->insn;
@@ -195,6 +212,19 @@ class RemoveUnusedFields final {
             replace_insn = true;
           }
         }
+        if (!replace_insn && !remove_insn) {
+          continue;
+        }
+        std::vector<IRInstruction*> new_insns;
+        if (field && is_static(field)) {
+          auto init_class_insn =
+              m_init_classes_with_side_effects.create_init_class_insn(
+                  field->get_class());
+          if (init_class_insn) {
+            new_insns.push_back(init_class_insn);
+            m_init_classes++;
+          }
+        }
         if (replace_insn) {
           auto move_result = cfg.move_result_of(insn_it);
           if (move_result.is_end()) {
@@ -204,24 +234,34 @@ class RemoveUnusedFields final {
           IRInstruction* const0 = new IRInstruction(
               write_insn->dest_is_wide() ? OPCODE_CONST_WIDE : OPCODE_CONST);
           const0->set_dest(write_insn->dest())->set_literal(0);
-          m.replace(insn_it, {const0});
+          new_insns.push_back(const0);
+          any_changes = true;
         } else if (remove_insn) {
-          m.remove(insn_it);
+          any_changes = true;
         }
+        m.replace(insn_it, new_insns);
       }
       m.flush();
+      if (any_changes) {
+        m_shrinker.shrink_method(const_cast<DexMethod*>(method));
+      }
       code.clear_cfg();
     });
   }
 
   const Config& m_config;
   const Scope& m_scope;
+  const init_classes::InitClassesWithSideEffects
+      m_init_classes_with_side_effects;
+  Shrinker m_shrinker;
+
   std::unordered_set<const DexField*> m_unread_fields;
   std::unordered_set<const DexField*> m_unwritten_fields;
   std::unordered_set<const DexField*> m_zero_written_fields;
   std::unordered_set<const DexField*> m_vestigial_objects_written_fields;
   field_op_tracker::TypeLifetimes m_type_lifetimes;
   std::atomic<size_t> m_unremovable_unread_field_puts{0};
+  std::atomic<size_t> m_init_classes{0};
 };
 
 } // namespace
@@ -231,8 +271,22 @@ namespace remove_unused_fields {
 void PassImpl::run_pass(DexStoresVector& stores,
                         ConfigFiles& conf,
                         PassManager& mgr) {
+  always_assert_log(
+      !mgr.init_class_lowering_has_run(),
+      "Implementation limitation: RemoveUnusedFieldsPass could introduce new "
+      "init-class instructions.");
   auto scope = build_class_scope(stores);
-  RemoveUnusedFields rmuf(m_config, scope);
+
+  ShrinkerConfig shrinker_config;
+  shrinker_config.run_const_prop = true;
+  shrinker_config.run_cse = true;
+  shrinker_config.run_copy_prop = true;
+  shrinker_config.run_local_dce = true;
+  shrinker_config.compute_pure_methods = false;
+
+  int min_sdk = mgr.get_redex_options().min_sdk;
+  RemoveUnusedFields rmuf(m_config, conf.create_init_class_insns(),
+                          shrinker_config, min_sdk, stores, scope);
   mgr.set_metric("unread_fields", rmuf.unread_fields().size());
   mgr.set_metric("unwritten_fields", rmuf.unwritten_fields().size());
   mgr.set_metric("zero_written_fields", rmuf.zero_written_fields().size());
@@ -240,6 +294,7 @@ void PassImpl::run_pass(DexStoresVector& stores,
                  rmuf.vestigial_objects_written_fields().size());
   mgr.set_metric("unremovable_unread_field_puts",
                  rmuf.unremovable_unread_field_puts());
+  mgr.set_metric("init_classes", rmuf.init_classes());
 
   if (m_export_removed) {
     std::vector<const DexField*> removed_fields(rmuf.unread_fields().begin(),

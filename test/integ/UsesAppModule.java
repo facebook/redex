@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -16,7 +16,7 @@ import java.lang.annotation.Target;
  * @param value the list of names (as strings) of the voltron modulues used
  */
 @Target({ElementType.METHOD, ElementType.TYPE, ElementType.FIELD})
-@Retention(RetentionPolicy.CLASS)
+@Retention(RetentionPolicy.RUNTIME)
 public @interface UsesAppModule {
   String[] value() default {};
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -54,7 +54,7 @@ class IODIMetadata {
   // Android builds with min_sdk >= 26 don't need IODI to emit debug info
   explicit IODIMetadata(uint32_t min_sdk,
                         IODILayerMode layer_mode = IODILayerMode::kFull)
-      : min_sdk{min_sdk} {
+          : min_sdk{min_sdk} {
     this->layer_mode = min_sdk <= 19 ? IODILayerMode::kFull : layer_mode;
   }
 

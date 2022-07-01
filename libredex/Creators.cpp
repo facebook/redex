@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -11,6 +11,7 @@
 
 #include "DexPosition.h"
 #include "IROpcode.h"
+#include "RedexContext.h"
 #include "Show.h"
 #include "Transform.h"
 
@@ -25,10 +26,10 @@ const DexString* get_name(DexMethod* meth) {
 DexProto* make_static_sig(DexMethod* meth) {
   auto proto = meth->get_proto();
   auto rtype = proto->get_rtype();
-  std::deque<DexType*> arg_list;
+  DexTypeList::ContainerType arg_list;
   arg_list.push_back(meth->get_class());
-  auto args = proto->get_args()->get_type_list();
-  arg_list.insert(arg_list.end(), args.begin(), args.end());
+  auto* args = proto->get_args();
+  arg_list.insert(arg_list.end(), args->begin(), args->end());
   auto new_args = DexTypeList::make_type_list(std::move(arg_list));
   return DexProto::make_proto(rtype, new_args);
 }
@@ -38,10 +39,23 @@ DexProto* make_static_sig(DexMethod* meth) {
 std::string ClassCreator::show_cls(const DexClass* cls) { return show(cls); }
 std::string ClassCreator::show_type(const DexType* type) { return show(type); }
 
+DexClass* ClassCreator::create() {
+  always_assert_log(m_cls->m_self, "Self cannot be null in a DexClass");
+  if (m_cls->m_super_class == nullptr) {
+    if (m_cls->m_self != type::java_lang_Object()) {
+      always_assert_log(m_cls->m_super_class, "No supertype found for %s",
+                        show_type(m_cls->m_self).c_str());
+    }
+  }
+  m_cls->m_interfaces = DexTypeList::make_type_list(std::move(m_interfaces));
+  g_redex->publish_class(m_cls);
+  return m_cls;
+}
+
 MethodBlock::MethodBlock(const IRList::iterator& iterator,
                          MethodCreator* creator)
     : mc(creator), curr(iterator) {
-  mc->blocks.push_back(this);
+  mc->blocks.push_back(std::unique_ptr<MethodBlock>(this));
 }
 
 void MethodBlock::invoke(DexMethod* meth, const std::vector<Location>& args) {
@@ -531,7 +545,7 @@ void MethodCreator::load_locals(DexMethod* meth) {
   auto proto = meth->get_proto();
   auto args = proto->get_args();
   if (args) {
-    for (auto arg : args->get_type_list()) {
+    for (auto arg : *args) {
       make_local_at(arg, it->insn->dest());
       ++it;
     }
@@ -714,8 +728,8 @@ DexMethod* MethodCreator::make_static_from(const DexString* name,
   redex_assert(!method::is_init(meth) && !method::is_clinit(meth));
   auto smeth = static_cast<DexMethod*>(
       DexMethod::make_method(target_cls->get_type(), name, proto));
-  smeth->make_concrete(
-      meth->get_access() | ACC_STATIC, meth->release_code(), false);
+  smeth->make_concrete(meth->get_access() | ACC_STATIC, meth->release_code(),
+                       false);
   target_cls->add_method(smeth);
   return smeth;
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -14,6 +14,7 @@
 #include "CrossDexRelocator.h"
 #include "DexClass.h"
 #include "DexStructure.h"
+#include "InitClassesWithSideEffects.h"
 #include "InterDexPassPlugin.h"
 #include "MixedModeInfo.h"
 
@@ -54,6 +55,8 @@ class InterDex {
            int min_sdk,
            bool sort_remaining_classes,
            std::vector<std::string> methods_for_canary_clinit_reference,
+           const init_classes::InitClassesWithSideEffects&
+               init_classes_with_side_effects,
            bool transitively_close_interdex_order)
       : m_dexen(dexen),
         m_asset_manager(asset_manager),
@@ -84,6 +87,8 @@ class InterDex {
     m_dexes_structure.set_reserve_trefs(reserve_trefs);
     m_dexes_structure.set_reserve_mrefs(reserve_mrefs);
     m_dexes_structure.set_min_sdk(min_sdk);
+    m_dexes_structure.set_init_classes_with_side_effects(
+        &init_classes_with_side_effects);
 
     load_interdex_types();
   }
@@ -156,7 +161,7 @@ class InterDex {
                         bool check_if_skip,
                         bool perf_sensitive,
                         DexClass** canary_cls,
-                        std::vector<DexClass*>* erased_classes = nullptr);
+                        bool* overflowed = nullptr);
   void emit_primary_dex(
       const DexClasses& primary_dex,
       const std::vector<DexType*>& interdex_order,

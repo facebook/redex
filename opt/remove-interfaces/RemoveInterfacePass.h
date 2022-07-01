@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -40,6 +40,7 @@ class RemoveInterfacePass : public Pass {
 
  private:
   std::vector<DexType*> m_interface_roots;
+  std::vector<DexType*> m_excluded_interfaces;
   DexType* m_interface_dispatch_anno;
   size_t m_total_num_interface = 0;
   size_t m_num_interface_removed = 0;

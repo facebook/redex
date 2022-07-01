@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -69,34 +69,69 @@ std::unique_ptr<RefChecker> create_ref_checker(const bool per_dex_grouping,
   return std::make_unique<RefChecker>(xstores, store_id, min_sdk_api);
 }
 
+void load_roots_subtypes_as_merging_targets(const TypeSystem& type_system,
+                                            ModelSpec* spec) {
+  TypeSet merging_targets_set;
+  std::unordered_set<DexType*> new_roots;
+  for (auto root = spec->roots.begin(); root != spec->roots.end();) {
+    if (is_interface(type_class(*root))) {
+      const auto& implementors = type_system.get_implementors(*root);
+      for (auto impl_type : implementors) {
+        auto impl_cls = type_class(impl_type);
+        // Note: Bellow is to simply make the logic unchange after the
+        // refactoring.
+        // Find the first internal class at the top of the type
+        // hierarchy of the impl_cls. if it extends java.lang.Object and
+        // implements only the *root interface, add the `impl_cls` to the
+        // merging target.
+        auto top_super_cls = impl_cls;
+        while (top_super_cls->get_super_class() != type::java_lang_Object()) {
+          auto super_cls = type_class(top_super_cls->get_super_class());
+          if (!super_cls || super_cls->is_external()) {
+            break;
+          }
+          top_super_cls = super_cls;
+        }
+        auto* intfs = top_super_cls->get_interfaces();
+        if (top_super_cls->get_super_class() == type::java_lang_Object() &&
+            (intfs->size() == 1 && *intfs->begin() == *root)) {
+          new_roots.insert(impl_cls->get_super_class());
+          spec->merging_targets.insert(impl_type);
+        }
+      }
+      root = spec->roots.erase(root);
+    } else {
+      type_system.get_all_children(*root, merging_targets_set);
+      root++;
+    }
+  }
+  spec->roots.insert(new_roots.begin(), new_roots.end());
+  spec->merging_targets.insert(merging_targets_set.begin(),
+                               merging_targets_set.end());
+}
+
 } // namespace
 
 namespace class_merging {
 
-void merge_model(Scope& scope,
-                 ConfigFiles& conf,
-                 PassManager& mgr,
-                 DexStoresVector& stores,
-                 ModelSpec& spec) {
+const ModelStats merge_model(Scope& scope,
+                             ConfigFiles& conf,
+                             PassManager& mgr,
+                             DexStoresVector& stores,
+                             ModelSpec& spec) {
   TypeSystem type_system(scope);
   if (spec.merging_targets.empty()) {
-    // TODO: change to unordered set.
-    TypeSet merging_targets_set;
-    for (const auto root : spec.roots) {
-      type_system.get_all_children(root, merging_targets_set);
-    }
-    spec.merging_targets.insert(merging_targets_set.begin(),
-                                merging_targets_set.end());
+    load_roots_subtypes_as_merging_targets(type_system, &spec);
   }
-  merge_model(type_system, scope, conf, mgr, stores, spec);
+  return merge_model(type_system, scope, conf, mgr, stores, spec);
 }
 
-void merge_model(const TypeSystem& type_system,
-                 Scope& scope,
-                 ConfigFiles& conf,
-                 PassManager& mgr,
-                 DexStoresVector& stores,
-                 ModelSpec& spec) {
+const ModelStats merge_model(const TypeSystem& type_system,
+                             Scope& scope,
+                             ConfigFiles& conf,
+                             PassManager& mgr,
+                             DexStoresVector& stores,
+                             ModelSpec& spec) {
   set_up(conf);
   always_assert(s_is_initialized);
   TRACE(CLMG, 2, "[ClassMerging] merging %s model", spec.name.c_str());
@@ -107,13 +142,15 @@ void merge_model(const TypeSystem& type_system,
       create_ref_checker(spec.per_dex_grouping, &xstores, conf, min_sdk);
   auto model =
       Model::build_model(scope, stores, conf, spec, type_system, *refchecker);
-  model.update_redex_stats(mgr);
+  ModelStats stats = model.get_model_stats();
 
   ModelMerger mm;
   auto merger_classes = mm.merge_model(scope, stores, conf, model);
   auto num_dedupped = method_dedup::dedup_constructors(merger_classes, scope);
   mm.increase_ctor_dedupped_stats(num_dedupped);
-  mm.update_redex_stats(spec.class_name_prefix, mgr);
+  stats += mm.get_model_stats();
+  stats.update_redex_stats(spec.class_name_prefix, mgr);
+  return stats;
 }
 
 } // namespace class_merging

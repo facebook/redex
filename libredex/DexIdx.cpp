@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -9,6 +9,7 @@
 
 #include <sstream>
 
+#include "DexAnnotation.h"
 #include "DexCallSite.h"
 #include "DexClass.h"
 #include "DexMethodHandle.h"
@@ -58,15 +59,15 @@ DexCallSite* DexIdx::get_callsiteidx_fromdex(uint32_t csidx) {
   const uint8_t* callsite_data = m_dexbase + m_callsite_ids[csidx].callsite_off;
   auto callsite_eva = get_encoded_value_array(this, callsite_data);
   auto evalues = callsite_eva->evalues();
-  DexEncodedValue* ev_linker_method_handle = evalues->at(0);
+  DexEncodedValue* ev_linker_method_handle = evalues->at(0).get();
   always_assert_log(ev_linker_method_handle->evtype() == DEVT_METHOD_HANDLE,
                     "Unexpected evtype callsite item arg 0: %d",
                     ev_linker_method_handle->evtype());
-  DexEncodedValue* ev_linker_method_name = evalues->at(1);
+  DexEncodedValue* ev_linker_method_name = evalues->at(1).get();
   always_assert_log(ev_linker_method_name->evtype() == DEVT_STRING,
                     "Unexpected evtype callsite item arg 1: %d",
                     ev_linker_method_name->evtype());
-  DexEncodedValue* ev_linker_method_type = evalues->at(2);
+  DexEncodedValue* ev_linker_method_type = evalues->at(2).get();
   always_assert_log(ev_linker_method_type->evtype() == DEVT_METHOD_TYPE,
                     "Unexpected evtype callsite item arg 2: %d",
                     ev_linker_method_type->evtype());
@@ -76,15 +77,15 @@ DexCallSite* DexIdx::get_callsiteidx_fromdex(uint32_t csidx) {
       ((DexEncodedValueString*)ev_linker_method_name)->string();
   DexProto* linker_method_proto =
       ((DexEncodedValueMethodType*)ev_linker_method_type)->proto();
-  std::vector<DexEncodedValue*> linker_args;
+  std::vector<std::unique_ptr<DexEncodedValue>> linker_args;
   for (unsigned long i = 3; i < evalues->size(); ++i) {
-    DexEncodedValue* ev = evalues->at(i);
-    linker_args.emplace_back(ev);
+    auto& ev = evalues->at(i);
+    linker_args.emplace_back(std::move(ev));
   }
   auto callsite = new DexCallSite(linker_method_handle,
                                   linker_method_name,
                                   linker_method_proto,
-                                  linker_args);
+                                  std::move(linker_args));
   return callsite;
 }
 
@@ -110,8 +111,14 @@ const DexString* DexIdx::get_stringidx_fromdex(uint32_t stridx) {
                     "String data offset out of range");
   const uint8_t* dstr = m_dexbase + stroff;
   /* Strip off uleb128 size encoding */
-  int utfsize = read_uleb128(&dstr);
-  return DexString::make_string((const char*)dstr, utfsize);
+  uint32_t utfsize = read_uleb128(&dstr);
+  auto ret = DexString::make_string((const char*)dstr);
+  always_assert_log(
+      ret->length() == utfsize,
+      "Parsed string UTF size is not the same as stringidx size. %u != %u",
+      ret->length(),
+      utfsize);
+  return ret;
 }
 
 DexType* DexIdx::get_typeidx_fromdex(uint32_t typeidx) {
@@ -152,7 +159,8 @@ DexTypeList* DexIdx::get_type_list(uint32_t offset) {
   const uint32_t* tlp = get_uint_data(offset);
   uint32_t size = *tlp++;
   const uint16_t* typep = (const uint16_t*)tlp;
-  std::deque<DexType*> tlist;
+  DexTypeList::ContainerType tlist;
+  tlist.reserve(size);
   for (uint32_t i = 0; i < size; i++) {
     tlist.push_back(get_typeidx(typep[i]));
   }

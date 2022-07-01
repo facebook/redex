@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -151,7 +151,10 @@ ParamSummary calculate_param_summary(DexMethod* method,
     if (returned_elements.size() == 1) {
       auto returned = *returned_elements.begin();
       if (returned != ptrs::FRESH_RETURN && !escaping_params.count(returned)) {
-        if (method->get_proto()->get_rtype() == *(args->begin() + returned)) {
+        DexType* cmp = is_static(method) ? *(args->begin() + returned)
+                       : returned == 0 ? method->get_class() // Implicit `this`
+                                       : *(args->begin() + returned - 1);
+        if (method->get_proto()->get_rtype() == cmp) {
           // Set returned_param to the only one returned parameter index.
           summary.returned_param = returned;
         } else {

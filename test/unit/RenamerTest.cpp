@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -94,9 +94,9 @@ void print_scope(Scope& scope) {
   for (const auto& cls : scope) {
     TRACE_NO_LINE(OBFUSCATE, 2, "** %s extends %s", SHOW(cls),
                   SHOW(cls->get_super_class()));
-    if (!cls->get_interfaces()->get_type_list().empty()) {
+    if (!cls->get_interfaces()->empty()) {
       TRACE_NO_LINE(OBFUSCATE, 2, " implements ");
-      for (const auto& intf : cls->get_interfaces()->get_type_list()) {
+      for (const auto& intf : *cls->get_interfaces()) {
         TRACE_NO_LINE(OBFUSCATE, 2, "%s, ", SHOW(intf));
       }
     }

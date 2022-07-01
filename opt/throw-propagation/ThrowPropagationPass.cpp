@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -139,21 +139,13 @@ ThrowPropagationPass::Stats ThrowPropagationPass::run(
   };
 
   boost::optional<std::pair<reg_t, reg_t>> regs;
-  auto will_throw_or_not_terminate = [](cfg::Block* block,
-                                        cfg::InstructionIterator it) {
-    std::unordered_set<cfg::Block*> visited{block};
-    for (;; it++) {
-      while (it.is_end() || it.block() != block) {
-        block = block->goes_to();
-        if (block == nullptr) {
-          return false;
-        }
-        if (!visited.insert(block).second) {
-          // We found a trivial loop
-          return true;
-        }
-        it = block->to_cfg_instruction_iterator(
-            InstructionIterable(block).begin(), /*next_on_end=*/true);
+  auto will_throw_or_not_terminate = [&cfg](cfg::InstructionIterator it) {
+    std::unordered_set<IRInstruction*> visited{it->insn};
+    while (true) {
+      it = cfg->next_following_gotos(it);
+      if (!visited.insert(it->insn).second) {
+        // We found a loop
+        return true;
       }
       switch (it->insn->opcode()) {
       case OPCODE_CONST:
@@ -189,16 +181,9 @@ ThrowPropagationPass::Stats ThrowPropagationPass::run(
       [&](cfg::Block* block, const ir_list::InstructionIterator& it) -> bool {
     auto insn = it->insn;
     TRACE(TP, 4, "no return: %s", SHOW(insn));
+    auto cfg_it = block->to_cfg_instruction_iterator(it);
     if (insn == block->get_last_insn()->insn) {
-      auto next_block = block->goes_to();
-      always_assert(next_block != nullptr);
-      auto next_ii = InstructionIterable(next_block);
-      auto next_it = next_ii.begin();
-      cfg::InstructionIterator next_cfg_it =
-          next_it == next_ii.end()
-              ? InstructionIterable(*cfg).end()
-              : next_block->to_cfg_instruction_iterator(next_it);
-      if (will_throw_or_not_terminate(next_block, next_cfg_it)) {
+      if (will_throw_or_not_terminate(cfg_it)) {
         // There's already code in place that will immediately and
         // unconditionally throw an exception, and thus we don't need to
         // bother rewriting the code into a throw. The main reason we are
@@ -206,14 +191,13 @@ ThrowPropagationPass::Stats ThrowPropagationPass::run(
         return false;
       }
     } else {
-      auto cfg_it = block->to_cfg_instruction_iterator(it);
       // When the invoke instruction isn't the last in the block, then we'll
       // need to some extra work. (Ideally, we could have just inserted our
       // throwing instructions in the middle of the existing block, but that
       // causes complications due to the possibly following and then dangling
       // move-result instruction, so we'll explicitly split the block here
       // in order to keep all invariant happy.)
-      if (will_throw_or_not_terminate(block, std::next(cfg_it))) {
+      if (will_throw_or_not_terminate(cfg_it)) {
         // As above, nothing to do, since an exception will be thrown anyway.
         return false;
       }

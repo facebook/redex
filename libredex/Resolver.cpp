@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -32,8 +32,7 @@ DexMethod* resolve_intf_method_ref(const DexClass* cls,
 
   auto method = find_method(cls);
   if (method) return method;
-  const auto& super_intfs = cls->get_interfaces()->get_type_list();
-  for (const auto& super_intf : super_intfs) {
+  for (const auto& super_intf : *cls->get_interfaces()) {
     const auto& super_intf_cls = type_class(super_intf);
     if (super_intf_cls == nullptr) continue;
     method = resolve_intf_method_ref(super_intf_cls, name, proto);
@@ -109,8 +108,7 @@ DexMethod* resolve_method_ref(const DexClass* cls,
       return resolved;
     }
   }
-  const auto& super_intfs = cls->get_interfaces()->get_type_list();
-  for (const auto& super_intf : super_intfs) {
+  for (const auto& super_intf : *cls->get_interfaces()) {
     const auto& super_intf_cls = type_class(super_intf);
     if (super_intf_cls == nullptr) continue;
     auto method = resolve_intf_method_ref(super_intf_cls, name, proto);
@@ -144,7 +142,7 @@ DexField* resolve_field(const DexType* owner,
       }
       // static final fields may be coming from interfaces so we
       // have to walk up the interface hierarchy too
-      for (const auto& intf : cls->get_interfaces()->get_type_list()) {
+      for (const auto& intf : *cls->get_interfaces()) {
         auto field = resolve_field(intf, name, type, fs);
         if (field != nullptr) return field;
       }

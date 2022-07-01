@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -324,14 +324,14 @@ static void associate_try_items(IRList* ir,
 void generate_load_params(const DexMethod* method,
                           size_t temp_regs,
                           IRCode* code) {
-  auto args = method->get_proto()->get_args()->get_type_list();
+  auto* args = method->get_proto()->get_args();
   auto param_reg = temp_regs;
   if (!is_static(method)) {
     auto insn = new IRInstruction(IOPCODE_LOAD_PARAM_OBJECT);
     insn->set_dest(param_reg++);
     code->push_back(insn);
   }
-  for (DexType* arg : args) {
+  for (DexType* arg : *args) {
     IROpcode op;
     auto prev_reg = param_reg;
     if (type::is_wide_type(arg)) {
@@ -438,7 +438,8 @@ void balloon(DexMethod* method, IRList* ir_list) {
   std::unordered_map<MethodItemEntry*, DexOpcodeData*> entry_to_data;
 
   uint32_t addr = 0;
-  for (auto insn : *instructions) {
+  std::vector<std::unique_ptr<DexInstruction>> to_delete;
+  for (auto insn : instructions) {
     MethodItemEntry* mei;
     if (insn->opcode() == DOPCODE_NOP ||
         dex_opcode::is_fopcode(insn->opcode())) {
@@ -448,6 +449,8 @@ void balloon(DexMethod* method, IRList* ir_list) {
       mei = new MethodItemEntry();
       if (dex_opcode::is_fopcode(insn->opcode())) {
         entry_to_data.emplace(mei, static_cast<DexOpcodeData*>(insn));
+      } else {
+        to_delete.emplace_back(insn);
       }
     } else {
       mei = new MethodItemEntry(insn);
@@ -572,7 +575,12 @@ IRList* deep_copy_ir_list(IRList* old_ir_list) {
 IRCode::IRCode() : m_ir_list(new IRList()) {}
 
 IRCode::~IRCode() {
-  m_ir_list->clear_and_dispose();
+  if (m_owns_insns) {
+    m_ir_list->insn_clear_and_dispose();
+  } else {
+    m_ir_list->clear_and_dispose();
+  }
+
   delete m_ir_list;
 }
 
@@ -625,7 +633,8 @@ void IRCode::build_cfg(bool editable) {
 }
 
 void IRCode::clear_cfg(
-    const std::unique_ptr<cfg::LinearizationStrategy>& custom_strategy) {
+    const std::unique_ptr<cfg::LinearizationStrategy>& custom_strategy,
+    std::vector<IRInstruction*>* deleted_insns) {
   if (!m_cfg) {
     return;
   }
@@ -646,6 +655,10 @@ void IRCode::clear_cfg(
     m_ir_list = m_cfg->linearize(custom_strategy);
   }
 
+  if (deleted_insns != nullptr) {
+    auto removed = m_cfg->release_removed_instructions();
+    deleted_insns->insert(deleted_insns->end(), removed.begin(), removed.end());
+  }
   m_cfg.reset();
   for (auto it = m_ir_list->begin(); it != m_ir_list->end();) {
     if (it->type == MFLOW_FALLTHROUGH) {
@@ -690,12 +703,12 @@ uint16_t calc_outs_size(const IRCode* code) {
 }
 
 void calculate_ins_size(const DexMethod* method, DexCode* dex_code) {
-  auto& args_list = method->get_proto()->get_args()->get_type_list();
+  auto* args_list = method->get_proto()->get_args();
   uint16_t ins_size{0};
   if (!is_static(method)) {
     ++ins_size;
   }
-  for (auto arg : args_list) {
+  for (auto arg : *args_list) {
     if (type::is_wide_type(arg)) {
       ins_size += 2;
     } else {
@@ -1106,6 +1119,14 @@ void IRCode::gather_types(std::vector<DexType*>& ltype) const {
     m_cfg->gather_types(ltype);
   } else {
     m_ir_list->gather_types(ltype);
+  }
+}
+
+void IRCode::gather_init_classes(std::vector<DexType*>& ltype) const {
+  if (editable_cfg_built()) {
+    m_cfg->gather_init_classes(ltype);
+  } else {
+    m_ir_list->gather_init_classes(ltype);
   }
 }
 

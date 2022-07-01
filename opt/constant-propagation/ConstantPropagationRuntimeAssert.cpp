@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -242,7 +242,7 @@ void RuntimeAssertTransform::insert_param_asserts(
     return;
   }
   auto& code = *method->get_code();
-  auto arg_types = method->get_proto()->get_args()->get_type_list();
+  const auto* arg_types = method->get_proto()->get_args();
   auto param_insns = code.get_param_instructions();
   auto insert_it = param_insns.end();
   auto insn_it = ir_list::InstructionIterable(code).begin();
@@ -253,8 +253,8 @@ void RuntimeAssertTransform::insert_param_asserts(
   // We do not want to iterate over InstructionIterable(param_insns) here
   // because we are inserting MIEs that will move the end iterator of
   // param_insns
-  for (uint32_t i = 0; i < arg_types.size(); ++i, ++insn_it) {
-    auto* arg_type = arg_types.at(i);
+  for (uint32_t i = 0; i < arg_types->size(); ++i, ++insn_it) {
+    auto* arg_type = arg_types->at(i);
     // We don't currently support floating-point or long types...
     if (!(type::is_integer(arg_type) || type::is_object(arg_type))) {
       continue;

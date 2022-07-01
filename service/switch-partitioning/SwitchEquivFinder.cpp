@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -146,9 +146,14 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves() {
   // Traverse the tree in an depth first order so that the extra loads are
   // tracked in the same order that they will be executed at runtime
   std::unordered_set<cfg::Block*> non_leaves;
-  std::function<bool(cfg::Block*, InstructionSet)> recurse;
+  std::function<bool(cfg::Block*, InstructionSet,
+                     const std::vector<SourceBlock*>&)>
+      recurse;
   std::vector<std::pair<cfg::Edge*, cfg::Block*>> edges_to_move;
-  recurse = [&](cfg::Block* b, const InstructionSet& loads) {
+  std::unordered_map<cfg::Block*, std::vector<SourceBlock*>>
+      source_blocks_to_move;
+  recurse = [&](cfg::Block* b, const InstructionSet& loads,
+                const std::vector<SourceBlock*>& source_blocks_in) {
     // `loads` represents the state of the registers after evaluating `b`.
     for (cfg::Edge* succ : b->succs()) {
       cfg::Block* next = succ->target();
@@ -161,8 +166,14 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves() {
         return false;
       }
 
+      auto source_blocks_out = std::ref(source_blocks_in);
+
       if (is_leaf(m_cfg, next, m_switching_reg)) {
         leaves.push_back(succ);
+        auto& source_blocks_vec = source_blocks_to_move[succ->target()];
+        source_blocks_vec.insert(source_blocks_vec.end(),
+                                 source_blocks_in.begin(),
+                                 source_blocks_in.end());
         const auto& pair = m_extra_loads.emplace(next, loads);
         bool already_there = !pair.second;
         if (already_there) {
@@ -189,7 +200,21 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves() {
       } else {
         non_leaves.insert(next);
         boost::optional<InstructionSet> next_loads;
-        for (const auto& mie : InstructionIterable(next)) {
+        std::vector<SourceBlock*> next_source_blocks;
+        for (const auto& mie : *next) {
+          if (mie.type == MFLOW_SOURCE_BLOCK) {
+            if (&source_blocks_out.get() == &source_blocks_in) {
+              next_source_blocks = source_blocks_in;
+              source_blocks_out = next_source_blocks;
+            }
+            next_source_blocks.push_back(mie.src_block.get());
+            continue;
+          }
+
+          if (mie.type != MFLOW_OPCODE) {
+            continue;
+          }
+
           // A chain of if-else blocks loads constants into register to do the
           // comparisons, however, the leaf blocks may also use those registers,
           // so this function finds any loads that occur in non-leaf blocks that
@@ -210,11 +235,12 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves() {
             }
           }
         }
+
         bool success = false;
         if (next_loads != boost::none) {
-          success = recurse(next, *next_loads);
+          success = recurse(next, *next_loads, source_blocks_out.get());
         } else {
-          success = recurse(next, loads);
+          success = recurse(next, loads, source_blocks_out.get());
         }
         if (!success) {
           return false;
@@ -239,7 +265,7 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves() {
     return leaves;
   };
 
-  bool success = recurse(m_root_branch.block(), {});
+  bool success = recurse(m_root_branch.block(), {}, {});
   if (!success) {
     return bail();
   }
@@ -266,6 +292,24 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves() {
   success = move_edges(edges_to_move);
   if (!success) {
     return bail();
+  }
+
+  for (auto& [blk, source_blocks] : source_blocks_to_move) {
+    // Not sure what the best way to insert a source block is.
+    // You need an opcode in the block as an insertion point, it seems?
+    auto it_insert = [](auto b) {
+      for (auto& mie : *b) {
+        if (mie.type == MFLOW_OPCODE) {
+          return b->to_cfg_instruction_iterator(mie);
+        }
+      }
+      return b->to_cfg_instruction_iterator(b->end());
+    }(blk);
+
+    for (auto source_block : source_blocks) {
+      m_cfg->insert_before(it_insert,
+                           std::make_unique<SourceBlock>(*source_block));
+    }
   }
 
   if (leaves.empty()) {

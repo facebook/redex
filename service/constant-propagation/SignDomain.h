@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -48,5 +48,9 @@ std::ostream& operator<<(std::ostream&, const Domain&);
 Domain from_int(int64_t);
 
 bool contains(Interval, int64_t);
+
+int64_t max_int(Interval interval);
+
+int64_t min_int(Interval interval);
 
 } // namespace sign_domain

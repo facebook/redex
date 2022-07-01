@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -18,73 +18,73 @@
 
 void DexEncodedValueMethodType::gather_strings(
     std::vector<const DexString*>& lstring) const {
-  m_proto->gather_strings(lstring);
+  proto()->gather_strings(lstring);
 }
 
 void DexEncodedValueString::gather_strings(
     std::vector<const DexString*>& lstring) const {
-  lstring.push_back(m_string);
+  lstring.push_back(string());
 }
 
 void DexEncodedValueType::gather_types(std::vector<DexType*>& ltype) const {
-  ltype.push_back(m_type);
+  ltype.push_back(type());
 }
 
 void DexEncodedValueField::gather_fields(
     std::vector<DexFieldRef*>& lfield) const {
-  lfield.push_back(m_field);
+  lfield.push_back(field());
 }
 
 void DexEncodedValueMethod::gather_methods(
     std::vector<DexMethodRef*>& lmethod) const {
-  lmethod.push_back(m_method);
+  lmethod.push_back(method());
 }
 
 void DexEncodedValueMethodHandle::gather_methods(
     std::vector<DexMethodRef*>& lmethod) const {
-  m_methodhandle->gather_methods(lmethod);
+  methodhandle()->gather_methods(lmethod);
 }
 
 void DexEncodedValueMethodHandle::gather_fields(
     std::vector<DexFieldRef*>& lfield) const {
-  m_methodhandle->gather_fields(lfield);
+  methodhandle()->gather_fields(lfield);
 }
 
 void DexEncodedValueMethodHandle::gather_methodhandles(
     std::vector<DexMethodHandle*>& lhandles) const {
-  lhandles.push_back(m_methodhandle);
+  lhandles.push_back(methodhandle());
 }
 
 void DexEncodedValueArray::gather_strings(
     std::vector<const DexString*>& lstring) const {
-  for (auto ev : *m_evalues) {
+  for (auto& ev : *evalues()) {
     ev->gather_strings(lstring);
   }
 }
 
 void DexEncodedValueArray::gather_types(std::vector<DexType*>& ltype) const {
-  for (auto ev : *m_evalues) {
+  for (auto& ev : *evalues()) {
     ev->gather_types(ltype);
   }
 }
 
 void DexEncodedValueArray::gather_fields(
     std::vector<DexFieldRef*>& lfield) const {
-  for (auto ev : *m_evalues) {
+  for (auto& ev : *evalues()) {
     ev->gather_fields(lfield);
   }
 }
 
 void DexEncodedValueArray::gather_methods(
     std::vector<DexMethodRef*>& lmethod) const {
-  for (auto ev : *m_evalues) {
+  for (auto& ev : *evalues()) {
     ev->gather_methods(lmethod);
   }
 }
 
 void DexEncodedValueAnnotation::gather_strings(
     std::vector<const DexString*>& lstring) const {
-  for (auto const& elem : *m_annotations) {
+  for (auto const& elem : m_annotations) {
     lstring.push_back(elem.string);
     elem.encoded_value->gather_strings(lstring);
   }
@@ -93,21 +93,21 @@ void DexEncodedValueAnnotation::gather_strings(
 void DexEncodedValueAnnotation::gather_types(
     std::vector<DexType*>& ltype) const {
   ltype.push_back(m_type);
-  for (auto const& anno : *m_annotations) {
+  for (auto const& anno : m_annotations) {
     anno.encoded_value->gather_types(ltype);
   }
 }
 
 void DexEncodedValueAnnotation::gather_fields(
     std::vector<DexFieldRef*>& lfield) const {
-  for (auto const& anno : *m_annotations) {
+  for (auto const& anno : m_annotations) {
     anno.encoded_value->gather_fields(lfield);
   }
 }
 
 void DexEncodedValueAnnotation::gather_methods(
     std::vector<DexMethodRef*>& lmethod) const {
-  for (auto const& anno : *m_annotations) {
+  for (auto const& anno : m_annotations) {
     anno.encoded_value->gather_methods(lmethod);
   }
 }
@@ -254,14 +254,15 @@ void DexEncodedValue::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
   case DEVT_SHORT:
   case DEVT_INT:
   case DEVT_LONG:
-    type_encoder_signext(encdata, m_evtype, m_value);
+    type_encoder_signext(encdata, m_evtype, m_val.m_value);
     return;
   case DEVT_FLOAT:
   case DEVT_DOUBLE:
-    type_encoder_fp(encdata, m_evtype, m_value);
+    type_encoder_fp(encdata, m_evtype, m_val.m_value);
     return;
   default:
-    type_encoder(encdata, m_evtype, m_value);
+    // TOOD: Should this really be here?
+    type_encoder(encdata, m_evtype, as_value());
     return;
   }
 }
@@ -282,40 +283,40 @@ void DexEncodedValue::vencode(DexOutputIdx* dodx, std::vector<uint8_t>& bytes) {
 
 void DexEncodedValueBit::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
   uint8_t devtb = DEVT_HDR_TYPE(m_evtype);
-  if (m_value) {
+  if (m_val.m_value) {
     devtb |= TO_DEVT_HDR_ARG(1);
   }
   *encdata++ = devtb;
 }
 
 void DexEncodedValueString::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
-  uint32_t sidx = dodx->stringidx(m_string);
+  uint32_t sidx = dodx->stringidx(string());
   type_encoder(encdata, m_evtype, sidx);
 }
 
 void DexEncodedValueType::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
-  uint32_t tidx = dodx->typeidx(m_type);
+  uint32_t tidx = dodx->typeidx(type());
   type_encoder(encdata, m_evtype, tidx);
 }
 
 void DexEncodedValueField::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
-  uint32_t fidx = dodx->fieldidx(m_field);
+  uint32_t fidx = dodx->fieldidx(field());
   type_encoder(encdata, m_evtype, fidx);
 }
 
 void DexEncodedValueMethod::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
-  uint32_t midx = dodx->methodidx(m_method);
+  uint32_t midx = dodx->methodidx(method());
   type_encoder(encdata, m_evtype, midx);
 }
 
 void DexEncodedValueMethodType::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
-  uint32_t pidx = dodx->protoidx(m_proto);
+  uint32_t pidx = dodx->protoidx(proto());
   type_encoder(encdata, m_evtype, pidx);
 }
 
 void DexEncodedValueMethodHandle::encode(DexOutputIdx* dodx,
                                          uint8_t*& encdata) {
-  uint32_t mhidx = dodx->methodhandleidx(m_methodhandle);
+  uint32_t mhidx = dodx->methodhandleidx(methodhandle());
   type_encoder(encdata, m_evtype, mhidx);
 }
 
@@ -328,8 +329,8 @@ void DexEncodedValueArray::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
     uint8_t devtb = DEVT_HDR_TYPE(m_evtype);
     *encdata++ = devtb;
   }
-  encdata = write_uleb128(encdata, (uint32_t)m_evalues->size());
-  for (auto const& ev : *m_evalues) {
+  encdata = write_uleb128(encdata, (uint32_t)evalues()->size());
+  for (auto const& ev : *evalues()) {
     ev->encode(dodx, encdata);
   }
 }
@@ -339,10 +340,10 @@ void DexEncodedValueAnnotation::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
   uint32_t tidx = dodx->typeidx(m_type);
   *encdata++ = devtb;
   encdata = write_uleb128(encdata, tidx);
-  encdata = write_uleb128(encdata, (uint32_t)m_annotations->size());
-  for (auto const& dae : *m_annotations) {
+  encdata = write_uleb128(encdata, (uint32_t)m_annotations.size());
+  for (auto const& dae : m_annotations) {
     auto str = dae.string;
-    DexEncodedValue* dev = dae.encoded_value;
+    DexEncodedValue* dev = dae.encoded_value.get();
     uint32_t sidx = dodx->stringidx(str);
     encdata = write_uleb128(encdata, sidx);
     dev->encode(dodx, encdata);
@@ -355,19 +356,19 @@ static DexAnnotationElement get_annotation_element(DexIdx* idx,
   auto name = idx->get_stringidx(sidx);
   always_assert_log(name != nullptr,
                     "Invalid string idx in annotation element");
-  DexEncodedValue* dev = DexEncodedValue::get_encoded_value(idx, encdata);
-  return DexAnnotationElement(name, dev);
+  return DexAnnotationElement(name,
+                              DexEncodedValue::get_encoded_value(idx, encdata));
 }
 
-DexEncodedValueArray* get_encoded_value_array(DexIdx* idx,
-                                              const uint8_t*& encdata) {
+std::unique_ptr<DexEncodedValueArray> get_encoded_value_array(
+    DexIdx* idx, const uint8_t*& encdata) {
   uint32_t size = read_uleb128(&encdata);
-  auto* evlist = new std::deque<DexEncodedValue*>();
+  auto* evlist = new std::vector<std::unique_ptr<DexEncodedValue>>();
+  evlist->reserve(size);
   for (uint32_t i = 0; i < size; i++) {
-    DexEncodedValue* adev = DexEncodedValue::get_encoded_value(idx, encdata);
-    evlist->push_back(adev);
+    evlist->emplace_back(DexEncodedValue::get_encoded_value(idx, encdata));
   }
-  return new DexEncodedValueArray(evlist);
+  return std::make_unique<DexEncodedValueArray>(evlist);
 }
 
 bool DexEncodedValue::is_evtype_primitive() const {
@@ -397,7 +398,7 @@ bool DexEncodedValue::is_zero() const {
   case DEVT_FLOAT:
   case DEVT_DOUBLE:
   case DEVT_BOOLEAN:
-    return m_value == 0;
+    return m_val.m_value == 0;
   case DEVT_NULL:
     return true;
   default:
@@ -409,31 +410,40 @@ bool DexEncodedValue::is_wide() const {
   return m_evtype == DEVT_LONG || m_evtype == DEVT_DOUBLE;
 }
 
-DexEncodedValue* DexEncodedValue::zero_for_type(DexType* type) {
+std::unique_ptr<DexEncodedValue> DexEncodedValue::zero_for_type(DexType* type) {
   if (type == type::_byte()) {
-    return new DexEncodedValue(DEVT_BYTE, 0);
+    return std::unique_ptr<DexEncodedValue>(
+        new DexEncodedValuePrimitive(DEVT_BYTE, (uint64_t)0));
   } else if (type == type::_char()) {
-    return new DexEncodedValue(DEVT_CHAR, 0);
+    return std::unique_ptr<DexEncodedValue>(
+        new DexEncodedValuePrimitive(DEVT_CHAR, (uint64_t)0));
   } else if (type == type::_short()) {
-    return new DexEncodedValue(DEVT_SHORT, 0);
+    return std::unique_ptr<DexEncodedValue>(
+        new DexEncodedValuePrimitive(DEVT_SHORT, (uint64_t)0));
   } else if (type == type::_int()) {
-    return new DexEncodedValue(DEVT_INT, 0);
+    return std::unique_ptr<DexEncodedValue>(
+        new DexEncodedValuePrimitive(DEVT_INT, (uint64_t)0));
   } else if (type == type::_long()) {
-    return new DexEncodedValue(DEVT_LONG, 0);
+    return std::unique_ptr<DexEncodedValue>(
+        new DexEncodedValuePrimitive(DEVT_LONG, (uint64_t)0));
   } else if (type == type::_float()) {
-    return new DexEncodedValue(DEVT_FLOAT, 0);
+    return std::unique_ptr<DexEncodedValue>(
+        new DexEncodedValuePrimitive(DEVT_FLOAT, (uint64_t)0));
   } else if (type == type::_double()) {
-    return new DexEncodedValue(DEVT_DOUBLE, 0);
+    return std::unique_ptr<DexEncodedValue>(
+        new DexEncodedValuePrimitive(DEVT_DOUBLE, (uint64_t)0));
   } else if (type == type::_boolean()) {
-    return new DexEncodedValueBit(DEVT_BOOLEAN, false);
+    return std::unique_ptr<DexEncodedValue>(
+        new DexEncodedValueBit(DEVT_BOOLEAN, false));
   } else {
     // not a primitive
-    return new DexEncodedValueBit(DEVT_NULL, false);
+    return std::unique_ptr<DexEncodedValue>(
+        new DexEncodedValueBit(DEVT_NULL, false));
   }
 }
 
-DexEncodedValue* DexEncodedValue::get_encoded_value(DexIdx* idx,
-                                                    const uint8_t*& encdata) {
+std::unique_ptr<DexEncodedValue> DexEncodedValue::get_encoded_value(
+    DexIdx* idx, const uint8_t*& encdata) {
   uint8_t evhdr = *encdata++;
   DexEncodedValueTypes evt = (DexEncodedValueTypes)DEVT_HDR_TYPE(evhdr);
   uint8_t evarg = DEVT_HDR_ARG(evhdr);
@@ -442,52 +452,60 @@ DexEncodedValue* DexEncodedValue::get_encoded_value(DexIdx* idx,
   case DEVT_INT:
   case DEVT_LONG: {
     uint64_t v = read_evarg(encdata, evarg, true /* sign_extend */);
-    return new DexEncodedValue(evt, v);
+    return std::unique_ptr<DexEncodedValue>(
+        new DexEncodedValuePrimitive(evt, v));
   }
   case DEVT_BYTE:
   case DEVT_CHAR: {
     uint64_t v = read_evarg(encdata, evarg, false /* sign_extend */);
-    return new DexEncodedValue(evt, v);
+    return std::unique_ptr<DexEncodedValue>(
+        new DexEncodedValuePrimitive(evt, v));
   }
   case DEVT_FLOAT: {
     // We sign extend floats so that they can be treated just like signed ints
     uint64_t v = read_evarg(encdata, evarg, true /* sign_extend */)
                  << ((3 - evarg) * 8);
-    return new DexEncodedValue(evt, v);
+    return std::unique_ptr<DexEncodedValue>(
+        new DexEncodedValuePrimitive(evt, v));
   }
   case DEVT_DOUBLE: {
     uint64_t v = read_evarg(encdata, evarg, false /* sign_extend */)
                  << ((7 - evarg) * 8);
-    return new DexEncodedValue(evt, v);
+    return std::unique_ptr<DexEncodedValue>(
+        new DexEncodedValuePrimitive(evt, v));
   }
   case DEVT_METHOD_TYPE: {
     uint32_t evidx = (uint32_t)read_evarg(encdata, evarg);
     DexProto* evproto = idx->get_protoidx(evidx);
-    return new DexEncodedValueMethodType(evproto);
+    return std::unique_ptr<DexEncodedValue>(
+        new DexEncodedValueMethodType(evproto));
   }
   case DEVT_METHOD_HANDLE: {
     uint32_t evidx = (uint32_t)read_evarg(encdata, evarg);
     DexMethodHandle* evmethodhandle = idx->get_methodhandleidx(evidx);
-    return new DexEncodedValueMethodHandle(evmethodhandle);
+    return std::unique_ptr<DexEncodedValue>(
+        new DexEncodedValueMethodHandle(evmethodhandle));
   }
 
   case DEVT_NULL:
-    return new DexEncodedValueBit(evt, false);
+    return std::unique_ptr<DexEncodedValue>(new DexEncodedValueBit(evt, false));
   case DEVT_BOOLEAN:
-    return new DexEncodedValueBit(evt, evarg > 0);
+    return std::unique_ptr<DexEncodedValue>(
+        new DexEncodedValueBit(evt, evarg > 0));
   case DEVT_STRING: {
     uint32_t evidx = (uint32_t)read_evarg(encdata, evarg);
     auto evstring = idx->get_stringidx(evidx);
     always_assert_log(evstring != nullptr,
                       "Invalid string idx in annotation element");
-    return new DexEncodedValueString(evstring);
+    return std::unique_ptr<DexEncodedValue>(
+        new DexEncodedValueString(evstring));
   }
   case DEVT_TYPE: {
     uint32_t evidx = (uint32_t)read_evarg(encdata, evarg);
     DexType* evtype = idx->get_typeidx(evidx);
     always_assert_log(evtype != nullptr,
                       "Invalid type idx in annotation element");
-    return new DexEncodedValueType(evtype);
+    return std::unique_ptr<DexEncodedValue>(new DexEncodedValueType(evtype));
   }
   case DEVT_FIELD:
   case DEVT_ENUM: {
@@ -495,35 +513,39 @@ DexEncodedValue* DexEncodedValue::get_encoded_value(DexIdx* idx,
     DexFieldRef* evfield = idx->get_fieldidx(evidx);
     always_assert_log(evfield != nullptr,
                       "Invalid field idx in annotation element");
-    return new DexEncodedValueField(evt, evfield);
+    return std::unique_ptr<DexEncodedValue>(
+        new DexEncodedValueField(evt, evfield));
   }
   case DEVT_METHOD: {
     uint32_t evidx = (uint32_t)read_evarg(encdata, evarg);
     DexMethodRef* evmethod = idx->get_methodidx(evidx);
     always_assert_log(evmethod != nullptr,
                       "Invalid method idx in annotation element");
-    return new DexEncodedValueMethod(evmethod);
+    return std::unique_ptr<DexEncodedValue>(
+        new DexEncodedValueMethod(evmethod));
   }
   case DEVT_ARRAY:
     return get_encoded_value_array(idx, encdata);
   case DEVT_ANNOTATION: {
-    EncodedAnnotations* eanno = new EncodedAnnotations();
+    EncodedAnnotations eanno{};
     uint32_t tidx = read_uleb128(&encdata);
     uint32_t count = read_uleb128(&encdata);
     DexType* type = idx->get_typeidx(tidx);
     always_assert_log(type != nullptr,
                       "Invalid DEVT_ANNOTATION within annotation type");
+    eanno.reserve(count);
     for (uint32_t i = 0; i < count; i++) {
-      DexAnnotationElement dae = get_annotation_element(idx, encdata);
-      eanno->push_back(dae);
+      eanno.emplace_back(get_annotation_element(idx, encdata));
     }
-    return new DexEncodedValueAnnotation(type, eanno);
+    return std::unique_ptr<DexEncodedValue>(
+        new DexEncodedValueAnnotation(type, std::move(eanno)));
   }
   };
   not_reached_log("Bogus annotation");
 }
 
-DexAnnotation* DexAnnotation::get_annotation(DexIdx* idx, uint32_t anno_off) {
+std::unique_ptr<DexAnnotation> DexAnnotation::get_annotation(
+    DexIdx* idx, uint32_t anno_off) {
   if (anno_off == 0) return nullptr;
   const uint8_t* encdata = idx->get_uleb_data(anno_off);
   uint8_t viz = *encdata++;
@@ -532,16 +554,21 @@ DexAnnotation* DexAnnotation::get_annotation(DexIdx* idx, uint32_t anno_off) {
   uint32_t count = read_uleb128(&encdata);
   DexType* type = idx->get_typeidx(tidx);
   always_assert_log(type != nullptr, "Invalid annotation type");
-  DexAnnotation* anno = new DexAnnotation(type, (DexAnnotationVisibility)viz);
+  auto anno =
+      std::make_unique<DexAnnotation>(type, (DexAnnotationVisibility)viz);
+  anno->m_anno_elems.reserve(count);
   for (uint32_t i = 0; i < count; i++) {
-    DexAnnotationElement dae = get_annotation_element(idx, encdata);
-    anno->m_anno_elems.push_back(dae);
+    anno->m_anno_elems.emplace_back(get_annotation_element(idx, encdata));
   }
   return anno;
 }
 
-void DexAnnotation::add_element(const char* key, DexEncodedValue* value) {
-  m_anno_elems.emplace_back(DexString::make_string(key), value);
+void DexAnnotation::add_element(const char* key,
+                                std::unique_ptr<DexEncodedValue> value) {
+  m_anno_elems.emplace_back(DexString::make_string(key), std::move(value));
+}
+void DexAnnotation::add_element(DexAnnotationElement elem) {
+  m_anno_elems.emplace_back(std::move(elem));
 }
 
 std::unique_ptr<DexAnnotationSet> DexAnnotationSet::get_annotation_set(
@@ -552,9 +579,9 @@ std::unique_ptr<DexAnnotationSet> DexAnnotationSet::get_annotation_set(
   uint32_t count = *adata++;
   for (uint32_t i = 0; i < count; i++) {
     uint32_t off = adata[i];
-    DexAnnotation* anno = DexAnnotation::get_annotation(idx, off);
+    auto anno = DexAnnotation::get_annotation(idx, off);
     if (anno != nullptr) {
-      aset->m_annotations.push_back(anno);
+      aset->m_annotations.emplace_back(std::move(anno));
     }
   }
   return aset;
@@ -615,10 +642,6 @@ bool method_param_annotation_compare(
 bool field_annotation_compare(std::pair<DexFieldRef*, DexAnnotationSet*> a,
                               std::pair<DexFieldRef*, DexAnnotationSet*> b) {
   return compare_dexfields(a.first, b.first);
-}
-
-bool type_annotation_compare(DexAnnotation* a, DexAnnotation* b) {
-  return compare_dextypes(a->type(), b->type());
 }
 
 void DexAnnotationDirectory::gather_asets(
@@ -748,8 +771,8 @@ void DexAnnotationDirectory::vencode(
 }
 
 void DexAnnotationSet::gather_annotations(std::vector<DexAnnotation*>& list) {
-  for (auto annotation : m_annotations) {
-    list.push_back(annotation);
+  for (auto& annotation : m_annotations) {
+    list.push_back(annotation.get());
   }
 }
 
@@ -758,13 +781,15 @@ void DexAnnotationSet::vencode(DexOutputIdx* dodx,
                                std::map<DexAnnotation*, uint32_t>& annoout) {
   asetout.push_back((uint32_t)m_annotations.size());
   std::sort(m_annotations.begin(), m_annotations.end(),
-            type_annotation_compare);
-  for (auto anno : m_annotations) {
-    always_assert_log(annoout.count(anno) != 0,
+            [](const auto& a, const auto& b) {
+              return compare_dextypes(a->type(), b->type());
+            });
+  for (auto& anno : m_annotations) {
+    always_assert_log(annoout.count(anno.get()) != 0,
                       "Uninitialized annotation %p '%s', bailing\n",
-                      anno,
-                      show(anno).c_str());
-    asetout.push_back(annoout[anno]);
+                      anno.get(),
+                      show(anno.get()).c_str());
+    asetout.push_back(annoout[anno.get()]);
   }
 }
 
@@ -780,9 +805,9 @@ void DexAnnotation::vencode(DexOutputIdx* dodx, std::vector<uint8_t>& bytes) {
   bytes.push_back(m_viz);
   uleb_append(bytes, dodx->typeidx(m_type));
   uleb_append(bytes, (uint32_t)m_anno_elems.size());
-  for (auto elem : m_anno_elems) {
+  for (auto& elem : m_anno_elems) {
     auto string = elem.string;
-    DexEncodedValue* ev = elem.encoded_value;
+    DexEncodedValue* ev = elem.encoded_value.get();
     uleb_append(bytes, dodx->stringidx(string));
     ev->vencode(dodx, bytes);
   }
@@ -839,9 +864,17 @@ std::string show_deobfuscated(const EncodedAnnotations* annos) {
   return show_helper(annos, true);
 }
 
+std::string show(const EncodedAnnotations& annos) {
+  return show_helper(&annos, false);
+}
+
+std::string show_deobfuscated(const EncodedAnnotations& annos) {
+  return show_helper(&annos, true);
+}
+
 std::string DexEncodedValue::show() const {
   std::ostringstream ss;
-  ss << m_value;
+  ss << as_value();
   return ss.str();
 }
 
@@ -866,29 +899,29 @@ std::string DexEncodedValueArray::show_deobfuscated() const {
   return show_helper(this, true);
 }
 
-std::string DexEncodedValueString::show() const { return ::show(m_string); }
+std::string DexEncodedValueString::show() const { return ::show(string()); }
 
-std::string DexEncodedValueType::show() const { return ::show(m_type); }
+std::string DexEncodedValueType::show() const { return ::show(type()); }
 
-std::string DexEncodedValueField::show() const { return ::show(m_field); }
+std::string DexEncodedValueField::show() const { return ::show(field()); }
 std::string DexEncodedValueField::show_deobfuscated() const {
-  return ::show_deobfuscated(m_field);
+  return ::show_deobfuscated(field());
 }
 
-std::string DexEncodedValueMethod::show() const { return ::show(m_method); }
+std::string DexEncodedValueMethod::show() const { return ::show(method()); }
 std::string DexEncodedValueMethod::show_deobfuscated() const {
-  return ::show_deobfuscated(m_method);
+  return ::show_deobfuscated(method());
 }
 
-std::string DexEncodedValueMethodType::show() const { return ::show(m_proto); }
+std::string DexEncodedValueMethodType::show() const { return ::show(proto()); }
 std::string DexEncodedValueMethodType::show_deobfuscated() const {
-  return ::show_deobfuscated(m_proto);
+  return ::show_deobfuscated(proto());
 }
 
 std::string DexEncodedValueMethodHandle::show() const {
-  return ::show(m_methodhandle);
+  return ::show(methodhandle());
 }
 std::string DexEncodedValueMethodHandle::show_deobfuscated() const {
   // TODO(T58570881) - fix deobfuscation
-  return ::show(m_methodhandle);
+  return ::show(methodhandle());
 }

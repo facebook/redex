@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -13,6 +13,7 @@
 #include "ConstantPropagationTestUtil.h"
 #include "IRAssembler.h"
 #include "RedexTest.h"
+#include "SignedConstantDomain.h"
 
 struct Constants {
   SignedConstantDomain one{SignedConstantDomain(1)};
@@ -70,6 +71,34 @@ TEST_F(SignedConstantDomainOperationsTest, intervals) {
   EXPECT_EQ(max_val.join(zero).interval(), Interval::GEZ);
   EXPECT_EQ(min_val.join(zero).interval(), Interval::LEZ);
   EXPECT_EQ(min_val.join(max_val).interval(), Interval::NEZ);
+}
+
+TEST_F(SignedConstantDomainOperationsTest, numeric_intervals) {
+  using namespace sign_domain;
+
+  EXPECT_EQ(one.numeric_interval_domain(), NumericIntervalDomain::finite(1, 1));
+  EXPECT_EQ(minus_one.numeric_interval_domain(),
+            NumericIntervalDomain::finite(-1, -1));
+  EXPECT_EQ(zero.numeric_interval_domain(),
+            NumericIntervalDomain::finite(0, 0));
+  EXPECT_EQ(NumericIntervalDomain::finite(0, 0),
+            zero.numeric_interval_domain());
+  EXPECT_EQ(max_val.numeric_interval_domain(), NumericIntervalDomain::high());
+  EXPECT_EQ(min_val.numeric_interval_domain(), NumericIntervalDomain::low());
+  EXPECT_EQ(not_zero.numeric_interval_domain(), NumericIntervalDomain::top());
+
+  EXPECT_EQ(one.join(minus_one).numeric_interval_domain(),
+            NumericIntervalDomain::finite(-1, 1));
+  EXPECT_EQ(one.join(zero).numeric_interval_domain(),
+            NumericIntervalDomain::finite(0, 1));
+  EXPECT_EQ(minus_one.join(zero).numeric_interval_domain(),
+            NumericIntervalDomain::finite(-1, 0));
+  EXPECT_EQ(max_val.join(zero).numeric_interval_domain(),
+            NumericIntervalDomain::bounded_below(0));
+  EXPECT_EQ(min_val.join(zero).numeric_interval_domain(),
+            NumericIntervalDomain::bounded_above(0));
+  EXPECT_EQ(min_val.join(max_val).numeric_interval_domain(),
+            NumericIntervalDomain::top());
 }
 
 TEST_F(SignedConstantDomainOperationsTest, binaryOperations) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -19,7 +19,7 @@ TEST_F(PostVerify, MethodStatic) {
   EXPECT_NE(foo, nullptr);
   auto args = foo->get_proto()->get_args();
   EXPECT_EQ(args->size(), 1);
-  EXPECT_STREQ(args->get_type_list()[0]->c_str(), CLASS_A);
+  EXPECT_STREQ(args->at(0)->c_str(), CLASS_A);
   EXPECT_TRUE(is_static(foo));
 
   auto baz = find_dmethod_named(*a, "baz");
@@ -33,6 +33,6 @@ TEST_F(PostVerify, MethodStatic) {
   // object
   auto b_args = bar->get_proto()->get_args();
   EXPECT_EQ(b_args->size(), 1);
-  EXPECT_STREQ(b_args->get_type_list()[0]->c_str(), CLASS_B);
+  EXPECT_STREQ(b_args->at(0)->c_str(), CLASS_B);
   EXPECT_TRUE(is_static(bar));
 }

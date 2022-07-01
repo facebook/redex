@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -405,7 +405,7 @@ std::string merger_info(const MergerType& merger) {
 
 void set_interfaces(DexClass* cls, const TypeSet& intfs) {
   if (!intfs.empty()) {
-    auto intf_list = std::deque<DexType*>();
+    auto intf_list = DexTypeList::ContainerType();
     for (const auto& intf : intfs) {
       intf_list.emplace_back(const_cast<DexType*>(intf));
     }
@@ -653,20 +653,6 @@ std::vector<DexClass*> ModelMerger::merge_model(Scope& scope,
   TRACE(CLMG, 3, "created %zu merger classes", merger_classes.size());
   m_stats.m_num_generated_classes = merger_classes.size();
   return merger_classes;
-}
-
-void ModelMerger::update_redex_stats(const std::string& prefix,
-                                     PassManager& mgr) const {
-  mgr.incr_metric(prefix + "_merger_class_generated",
-                  m_stats.m_num_generated_classes);
-  mgr.incr_metric(prefix + "_class_merged", m_stats.m_num_classes_merged);
-  mgr.incr_metric(prefix + "_ctor_dedupped", m_stats.m_num_ctor_dedupped);
-  mgr.incr_metric(prefix + "_static_non_virt_dedupped",
-                  m_stats.m_num_static_non_virt_dedupped);
-  mgr.incr_metric(prefix + "_vmethods_dedupped",
-                  m_stats.m_num_vmethods_dedupped);
-  mgr.set_metric(prefix + "_const_lifted_methods",
-                 m_stats.m_num_const_lifted_methods);
 }
 
 } // namespace class_merging

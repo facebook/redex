@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -102,8 +102,7 @@ TypeSet MergeabilityChecker::exclude_unsupported_bytecode_refs_for(
     if (m_spec.type_like_const_strings_unsafe &&
         insn->opcode() == OPCODE_CONST_STRING) {
       const DexString* str = insn->get_string();
-      std::string class_name =
-          java_names::external_to_internal(str->str());
+      std::string class_name = java_names::external_to_internal(str->str());
       DexType* maybe_type = DexType::get_type(class_name);
       if (maybe_type && m_spec.merging_targets.count(maybe_type) > 0) {
         non_mergeables.insert(maybe_type);

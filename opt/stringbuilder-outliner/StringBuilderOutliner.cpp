@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -177,10 +177,10 @@ BuilderStateMap Outliner::gather_builder_states(
  */
 const DexTypeList* Outliner::typelist_from_state(
     const BuilderState& state) const {
-  std::deque<DexType*> args;
+  DexTypeList::ContainerType args;
   for (auto* insn : state) {
     auto method = insn->get_method();
-    args.emplace_back(method->get_proto()->get_args()->get_type_list().at(0));
+    args.emplace_back(method->get_proto()->get_args()->at(0));
   }
   return DexTypeList::make_type_list(std::move(args));
 }

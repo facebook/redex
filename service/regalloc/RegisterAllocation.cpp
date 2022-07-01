@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -28,36 +28,46 @@ namespace graph_coloring {
 using Config = Allocator::Config;
 using Stats = Allocator::Stats;
 
-Stats allocate(const Config& allocator_config, DexMethod* m) {
-  if (m->get_code() == nullptr) {
+Stats allocate(const Config& allocator_config, DexMethod* method) {
+  return allocate(allocator_config,
+                  method->get_code(),
+                  is_static(method),
+                  [method]() { return show(method); });
+}
+
+Allocator::Stats allocate(
+    const Config& allocator_config,
+    IRCode* code,
+    bool is_static,
+    const std::function<std::string()>& method_describer) {
+  if (code == nullptr) {
     return Stats();
   }
-  TraceContext context(m);
-  auto& code = *m->get_code();
-  auto scoped = at_scope_exit([&code]() { code.clear_cfg(); });
-  TRACE(REG, 5, "regs:%d code:\n%s", code.get_registers_size(), SHOW(&code));
+
+  auto scoped = at_scope_exit([code]() { code->clear_cfg(); });
+  TRACE(REG, 5, "regs:%d code:\n%s", code->get_registers_size(), SHOW(code));
   try {
-    live_range::renumber_registers(&code, /* width_aware */ true);
+    live_range::renumber_registers(code, /* width_aware */ true);
     // The transformations below all require a CFG. Build it once
     // here instead of requiring each transform to build it.
-    code.build_cfg(/* editable */ false);
+    code->build_cfg(/* editable */ false);
     Allocator allocator(allocator_config);
-    allocator.allocate(m);
-    TRACE(REG, 5, "After alloc: regs:%d code:\n%s", code.get_registers_size(),
-          SHOW(&code));
+    allocator.allocate(code, is_static);
+    TRACE(REG, 5, "After alloc: regs:%d code:\n%s", code->get_registers_size(),
+          SHOW(code));
     return allocator.get_stats();
   } catch (const std::exception& e) {
-    std::cerr << "Failed to allocate " << SHOW(m) << ": " << e.what()
+    std::cerr << "Failed to allocate " << method_describer() << ": " << e.what()
               << std::endl;
     print_stack_trace(std::cerr, e);
 
     std::string cfg_tmp;
-    if (code.cfg_built()) {
-      cfg_tmp = SHOW(code.cfg());
-      code.clear_cfg();
+    if (code->cfg_built()) {
+      cfg_tmp = SHOW(code->cfg());
+      code->clear_cfg();
     }
     std::cerr << "As s-expr: " << std::endl
-              << assembler::to_s_expr(&code) << std::endl;
+              << assembler::to_s_expr(code) << std::endl;
     std::cerr << "As CFG: " << std::endl << cfg_tmp << std::endl;
 
     throw;

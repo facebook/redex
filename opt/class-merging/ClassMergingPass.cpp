@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -200,15 +200,15 @@ void ClassMergingPass::bind_config() {
       model_spec.get("merging_strategy", "by_cls_count", merging_strategy);
       model.strategy = get_merging_strategy(merging_strategy);
 
+      // InterDex grouping option is by default `non-ordered-set`.
       std::string interdex_grouping;
-      model_spec.get("interdex_grouping", "disabled",
-                     interdex_grouping);
-      model.interdex_grouping =
-          get_merge_per_interdex_type(interdex_grouping);
+      model_spec.get("interdex_grouping", "non-ordered-set", interdex_grouping);
+      model.interdex_grouping = get_merge_per_interdex_type(interdex_grouping);
 
       always_assert_log(!model.interdex_grouping ||
                             (model.type_tag_config != TypeTagConfig::NONE),
-                        "Cannot group when type tag is not needed.");
+                        "Cannot group %s when type tag is not needed.",
+                        model.name.c_str());
 
       size_t max_count;
       model_spec.get("max_count", 0, max_count);
@@ -255,6 +255,7 @@ void ClassMergingPass::run_pass(DexStoresVector& stores,
   }
 
   auto scope = build_class_scope(stores);
+  ModelStats total_stats;
   for (ModelSpec& model_spec : m_model_specs) {
     if (!model_spec.enabled) {
       continue;
@@ -265,15 +266,11 @@ void ClassMergingPass::run_pass(DexStoresVector& stores,
             "dex");
       model_spec.include_primary_dex = true;
     }
-    // TODO: We will move the logic of collecting mergeables outside of Model
-    // building. Then this step can be removed.
-    handle_interface_as_root(model_spec, scope, stores);
-    for (const auto root : model_spec.roots) {
-      always_assert(!is_interface(type_class(root)));
-    }
-    class_merging::merge_model(scope, conf, mgr, stores, model_spec);
+    total_stats +=
+        class_merging::merge_model(scope, conf, mgr, stores, model_spec);
   }
   post_dexen_changes(scope, stores);
+  total_stats.update_redex_stats(" total", mgr);
 }
 
 static ClassMergingPass s_pass;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -27,7 +27,10 @@ Summary analyze_code_effects(const IRCode* code) {
 
   ptrs::FixpointIterator ptrs_fp_iter(cfg);
   ptrs_fp_iter.run(ptrs::Environment());
-  return analyze_code(effect_summaries, ptrs_fp_iter, code);
+  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+      {}, /* create_init_class_insns */ false);
+  return analyze_code(
+      init_classes_with_side_effects, effect_summaries, ptrs_fp_iter, code);
 }
 
 TEST_F(SideEffectSummaryTest, pure) {

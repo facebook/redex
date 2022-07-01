@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -9,9 +9,11 @@
 
 #include <unordered_map>
 
+#include "DexClass.h"
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "Match.h"
+#include "PassManager.h"
 #include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"

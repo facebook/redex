@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -568,7 +568,7 @@ struct Matcher {
         case String::char_A_to_string: {
           int a = matched_literals.at(Literal::A);
           auto achar = encode_utf8_char_to_mutf8_string(a);
-          replace->set_string(DexString::make_string(achar.c_str(), 1));
+          replace->set_string(DexString::make_string(achar));
           break;
         }
         case String::int_A_to_string: {

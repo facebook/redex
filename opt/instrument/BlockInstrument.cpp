@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -238,23 +238,13 @@ InstrumentedType get_instrumented_type(const MethodInfo& i) {
   }
 }
 
-bool compare_dexmethods_by_deobname(const DexMethodRef* a,
-                                    const DexMethodRef* b) {
-  const auto& name_a = show_deobfuscated(a);
-  const auto& name_b = show_deobfuscated(b);
-  always_assert_log(a == b || name_a != name_b,
-                    "Identical deobfuscated names were found: %s == %s",
-                    name_a.c_str(), name_b.c_str());
-  return name_a < name_b;
-}
-
-using MethodDictionary = std::unordered_map<const DexMethodRef*, size_t>;
+using MethodDictionary = std::unordered_map<const DexString*, size_t>;
 
 MethodDictionary create_method_dictionary(
     const std::string& file_name, const std::vector<MethodInfo>& all_info) {
-  std::unordered_set<const DexMethodRef*> methods_set;
+  std::unordered_set<const DexString*> methods_set;
   for (const auto& info : all_info) {
-    methods_set.insert(info.method);
+    methods_set.insert(info.method->get_deobfuscated_name_or_null());
     for (const auto& sb_vec : info.bit_id_2_source_blocks) {
       for (const auto* sb : sb_vec) {
         methods_set.insert(sb->src);
@@ -264,9 +254,8 @@ MethodDictionary create_method_dictionary(
       methods_set.insert(sb->src);
     }
   }
-  std::vector<const DexMethodRef*> methods(methods_set.begin(),
-                                           methods_set.end());
-  std::sort(methods.begin(), methods.end(), compare_dexmethods_by_deobname);
+  std::vector<const DexString*> methods(methods_set.begin(), methods_set.end());
+  std::sort(methods.begin(), methods.end(), compare_dexstrings);
   size_t idx{0};
 
   std::ofstream ofs(file_name, std::ofstream::out | std::ofstream::trunc);
@@ -275,7 +264,7 @@ MethodDictionary create_method_dictionary(
   MethodDictionary method_dictionary;
   for (const auto* m : methods) {
     method_dictionary.emplace(m, idx);
-    ofs << idx << "," << show_deobfuscated(m) << "\n";
+    ofs << idx << "," << m->str() << "\n";
     ++idx;
   }
 
@@ -340,6 +329,10 @@ void write_metadata(const ConfigFiles& cfg,
 
       bool first2 = true;
       for (auto* sb : v) {
+        // Do not list synthetic source blocks.
+        if (sb->id == SourceBlock::kSyntheticId) {
+          continue;
+        }
         if (first2) {
           first2 = false;
         } else {
@@ -361,7 +354,8 @@ void write_metadata(const ConfigFiles& cfg,
   for (const auto& info : all_info) {
     const std::array<std::string, 8> fields = {
         std::to_string(info.offset),
-        std::to_string(method_dict.at(info.method)),
+        std::to_string(
+            method_dict.at(info.method->get_deobfuscated_name_or_null())),
         std::to_string(static_cast<int>(get_instrumented_type(info))),
         std::to_string(info.num_non_entry_blocks),
         std::to_string(info.num_vectors),
@@ -444,12 +438,10 @@ OnMethodExitMap build_onMethodExit_map(const DexClass& cls,
     // - onMethodExit(int offset), or
     // - onMethodExit(int offset, short vec1, ..., short vecN);
     const auto* args = m->get_proto()->get_args();
-    if (args->size() == 0 ||
-        *args->get_type_list().begin() != DexType::make_type("I") ||
-        std::any_of(std::next(args->get_type_list().begin(), 1),
-                    args->get_type_list().end(), [](const auto& type) {
-                      return type != DexType::make_type("S");
-                    })) {
+    if (args->empty() || *args->begin() != DexType::make_type("I") ||
+        std::any_of(
+            std::next(args->begin(), 1), args->end(),
+            [](const auto& type) { return type != DexType::make_type("S"); })) {
       always_assert_log(
           false,
           "[InstrumentPass] error: Proto type of onMethodExit must be "
@@ -482,8 +474,7 @@ DexMethod* load_onMethodBegin(const DexClass& cls,
       continue;
     }
     const auto* args = m->get_proto()->get_args();
-    if (args->size() != 1 ||
-        *args->get_type_list().begin() != DexType::make_type("I")) {
+    if (args->size() != 1 || *args->begin() != DexType::make_type("I")) {
       always_assert_log(
           false,
           "[InstrumentPass] error: Proto type of onMethodBegin must be "

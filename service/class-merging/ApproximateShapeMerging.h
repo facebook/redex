@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -8,6 +8,7 @@
 #pragma once
 
 #include "MergerType.h"
+#include "PassManager.h"
 
 struct ConfigFiles;
 class JsonWrapper;
@@ -16,12 +17,28 @@ namespace class_merging {
 
 struct ApproximateStats {
   // Number of shapes being merged
-  size_t shapes_merged{0};
+  size_t m_shapes_merged{0};
   // Number of mergeable classes being approximated
-  size_t mergeables{0};
+  size_t m_mergeables{0};
   // Number of additional fields added for shape merging. This is part of the
   // overhead of approximate shape merging
-  size_t fields_added{0};
+  size_t m_fields_added{0};
+
+  ApproximateStats& operator+=(const ApproximateStats& stats) {
+    m_shapes_merged += stats.m_shapes_merged;
+    m_mergeables += stats.m_mergeables;
+    m_fields_added += stats.m_fields_added;
+    return *this;
+  }
+
+  void update_redex_stats(const std::string& prefix, PassManager& mgr) const {
+    if (m_shapes_merged == 0) {
+      return;
+    }
+    mgr.incr_metric(prefix + "_approx_shapes_merged", m_shapes_merged);
+    mgr.incr_metric(prefix + "_approx_mergeables", m_mergeables);
+    mgr.incr_metric(prefix + "_approx_fields_added", m_fields_added);
+  }
 };
 
 /**

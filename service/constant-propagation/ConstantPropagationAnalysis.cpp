@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -9,6 +9,7 @@
 
 #include <boost/functional/hash.hpp>
 #include <cinttypes>
+#include <limits>
 #include <mutex>
 #include <set>
 
@@ -784,9 +785,16 @@ ImmutableAttributeAnalyzerState::add_initializer(DexMethod* initialize_method,
   ImmutableAttributeAnalyzerState::Initializer* new_initializer = nullptr;
   method_initializers.update(
       initialize_method,
-      [&](DexMethod*, std::vector<Initializer>& initializers, bool) {
-        initializers.push_back(Initializer(attr));
-        new_initializer = &initializers.back();
+      [&](DexMethod*, std::vector<std::unique_ptr<Initializer>>& initializers,
+          bool) {
+        initializers.emplace_back(
+            std::make_unique<Initializer>(Initializer(attr)));
+        new_initializer = initializers.back().get();
+        // Need to keep this sorted for fast join and runtime_equals.
+        std::sort(initializers.begin(), initializers.end(),
+                  [](const auto& lhs, const auto& rhs) {
+                    return lhs->attr < rhs->attr;
+                  });
       });
   redex_assert(new_initializer);
   return *new_initializer;
@@ -799,9 +807,16 @@ ImmutableAttributeAnalyzerState::add_initializer(DexMethod* initialize_method,
   ImmutableAttributeAnalyzerState::Initializer* new_initializer = nullptr;
   method_initializers.update(
       initialize_method,
-      [&](DexMethod*, std::vector<Initializer>& initializers, bool) {
-        initializers.push_back(Initializer(attr));
-        new_initializer = &initializers.back();
+      [&](DexMethod*, std::vector<std::unique_ptr<Initializer>>& initializers,
+          bool) {
+        initializers.emplace_back(
+            std::make_unique<Initializer>(Initializer(attr)));
+        new_initializer = initializers.back().get();
+        // Need to keep this sorted for fast join and runtime_equals.
+        std::sort(initializers.begin(), initializers.end(),
+                  [](const auto& lhs, const auto& rhs) {
+                    return lhs->attr < rhs->attr;
+                  });
       });
   redex_assert(new_initializer);
   return *new_initializer;
@@ -810,8 +825,8 @@ ImmutableAttributeAnalyzerState::add_initializer(DexMethod* initialize_method,
 ImmutableAttributeAnalyzerState::Initializer&
 ImmutableAttributeAnalyzerState::add_initializer(
     DexMethod* initialize_method, const ImmutableAttr::Attr& attr) {
-  return attr.is_field() ? add_initializer(initialize_method, attr.field)
-                         : add_initializer(initialize_method, attr.method);
+  return attr.is_field() ? add_initializer(initialize_method, attr.val.field)
+                         : add_initializer(initialize_method, attr.val.method);
 }
 
 ImmutableAttributeAnalyzerState::ImmutableAttributeAnalyzerState() {
@@ -989,34 +1004,34 @@ bool ImmutableAttributeAnalyzer::analyze_method_initialization(
   reg_t obj_reg;
   bool has_value = false;
   for (auto& initializer : it->second) {
-    obj_reg = initializer.obj_is_dest()
+    obj_reg = initializer->obj_is_dest()
                   ? RESULT_REGISTER
-                  : insn->src(*initializer.insn_src_id_of_obj);
-    const auto& domain = env->get(insn->src(initializer.insn_src_id_of_attr));
+                  : insn->src(*initializer->insn_src_id_of_obj);
+    const auto& domain = env->get(insn->src(initializer->insn_src_id_of_attr));
     if (const auto& signed_value = domain.maybe_get<SignedConstantDomain>()) {
       auto constant = signed_value->get_constant();
       if (!constant) {
-        object.write_value(initializer.attr, SignedConstantDomain::top());
+        object.write_value(initializer->attr, SignedConstantDomain::top());
         continue;
       }
       object.jvm_cached_singleton =
           state->is_jvm_cached_object(method, *constant);
-      object.write_value(initializer.attr, *signed_value);
+      object.write_value(initializer->attr, *signed_value);
       has_value = true;
     } else if (const auto& string_value = domain.maybe_get<StringDomain>()) {
       if (!string_value->is_value()) {
-        object.write_value(initializer.attr, StringDomain::top());
+        object.write_value(initializer->attr, StringDomain::top());
         continue;
       }
-      object.write_value(initializer.attr, *string_value);
+      object.write_value(initializer->attr, *string_value);
       has_value = true;
     } else if (const auto& type_value =
                    domain.maybe_get<ConstantClassObjectDomain>()) {
       if (!type_value->is_value()) {
-        object.write_value(initializer.attr, ConstantClassObjectDomain::top());
+        object.write_value(initializer->attr, ConstantClassObjectDomain::top());
         continue;
       }
-      object.write_value(initializer.attr, *type_value);
+      object.write_value(initializer->attr, *type_value);
       has_value = true;
     }
   }
@@ -1105,15 +1120,42 @@ bool EnumUtilsFieldAnalyzer::analyze_sget(
   const auto& initializers = it->second;
   always_assert(initializers.size() == 1);
   const auto& initializer = initializers.front();
-  always_assert(initializer.insn_src_id_of_attr == 0);
+  always_assert(initializer->insn_src_id_of_attr == 0);
 
   const auto& name = field->str();
   auto value = std::stoi(name.substr(1));
   ObjectWithImmutAttr object(integer_type, 1);
-  object.write_value(initializer.attr, SignedConstantDomain(value));
+  object.write_value(initializer->attr, SignedConstantDomain(value));
   object.jvm_cached_singleton = state->is_jvm_cached_object(valueOf, value);
   env->set(RESULT_REGISTER, ObjectWithImmutAttrDomain(std::move(object)));
   return true;
+}
+
+boost::optional<DexFieldRef*> g_sdk_int_field{boost::none};
+ApiLevelAnalyzerState ApiLevelAnalyzerState::get(int32_t min_sdk) {
+  if (!g_sdk_int_field) {
+    // Be careful, there could be a data race here if this is called in parallel
+    g_sdk_int_field =
+        DexField::get_field("Landroid/os/Build$VERSION;.SDK_INT:I");
+    // In tests, we create and destroy g_redex repeatedly. So we need to reset
+    // the singleton.
+    g_redex->add_destruction_task([]() { g_sdk_int_field = boost::none; });
+  }
+  return {*g_sdk_int_field, min_sdk};
+}
+
+bool ApiLevelAnalyzer::analyze_sget(const ApiLevelAnalyzerState& state,
+                                    const IRInstruction* insn,
+                                    ConstantEnvironment* env) {
+  auto field = insn->get_field();
+  if (field && field == state.sdk_int_field) {
+    // possible range is [min_sdk, max_int]
+    env->set(RESULT_REGISTER,
+             SignedConstantDomain(state.min_sdk,
+                                  std::numeric_limits<int32_t>::max()));
+    return true;
+  }
+  return false;
 }
 
 namespace intraprocedural {
@@ -1231,6 +1273,40 @@ static const std::unordered_map<IROpcode, IfZeroMeetWith, boost::hash<IROpcode>>
          {sign_domain::Interval::GEZ, sign_domain::Interval::LEZ}},
     };
 
+static std::pair<SignedConstantDomain, SignedConstantDomain> refine_lt(
+    const SignedConstantDomain& left, const SignedConstantDomain& right) {
+  always_assert(left.min_element() < std::numeric_limits<int64_t>::max());
+  always_assert(right.max_element() > std::numeric_limits<int64_t>::min());
+  return {left.meet(SignedConstantDomain(std::numeric_limits<int64_t>::min(),
+                                         right.max_element() - 1)),
+          right.meet(SignedConstantDomain(
+              left.min_element() + 1, std::numeric_limits<int64_t>::max()))};
+}
+
+static std::pair<SignedConstantDomain, SignedConstantDomain> refine_le(
+    const SignedConstantDomain& left, const SignedConstantDomain& right) {
+  return {left.meet(SignedConstantDomain(std::numeric_limits<int64_t>::min(),
+                                         right.max_element())),
+          right.meet(SignedConstantDomain(
+              left.min_element(), std::numeric_limits<int64_t>::max()))};
+}
+
+static SignedConstantDomain refine_ne_left(const SignedConstantDomain& left,
+                                           const SignedConstantDomain& right) {
+  auto c = right.get_constant();
+  if (c) {
+    if (*c == left.min_element()) {
+      always_assert(*c < left.max_element());
+      return SignedConstantDomain(*c + 1, left.max_element());
+    }
+    if (*c == left.max_element()) {
+      always_assert(*c > left.min_element());
+      return SignedConstantDomain(left.min_element(), *c - 1);
+    }
+  }
+  return left;
+}
+
 /*
  * If we can determine that a branch is not taken based on the constants in
  * the environment, set the environment to bottom upon entry into the
@@ -1271,30 +1347,79 @@ static void analyze_if(const IRInstruction* insn,
   case OPCODE_IF_NE: {
     if (ConstantValue::apply_visitor(runtime_equals_visitor(), left, right)) {
       env->set_to_bottom();
+    } else {
+      auto scd_left = left.maybe_get<SignedConstantDomain>();
+      auto scd_right = right.maybe_get<SignedConstantDomain>();
+      if (scd_left && scd_right) {
+        env->set(insn->src(0), refine_ne_left(*scd_left, *scd_right));
+        if (insn->srcs_size() > 1) {
+          env->set(insn->src(1), refine_ne_left(*scd_right, *scd_left));
+        }
+      }
     }
     break;
   }
   case OPCODE_IF_LT: {
     if (ConstantValue::apply_visitor(runtime_leq_visitor(), right, left)) {
       env->set_to_bottom();
+    } else {
+      auto scd_left = left.maybe_get<SignedConstantDomain>();
+      auto scd_right = right.maybe_get<SignedConstantDomain>();
+      if (scd_left && scd_right) {
+        auto p = refine_lt(*scd_left, *scd_right);
+        env->set(insn->src(0), p.first);
+        if (insn->srcs_size() > 1) {
+          env->set(insn->src(1), p.second);
+        }
+      }
     }
     break;
   }
   case OPCODE_IF_GT: {
     if (ConstantValue::apply_visitor(runtime_leq_visitor(), left, right)) {
       env->set_to_bottom();
+    } else {
+      auto scd_left = left.maybe_get<SignedConstantDomain>();
+      auto scd_right = right.maybe_get<SignedConstantDomain>();
+      if (scd_left && scd_right) {
+        auto p = refine_lt(*scd_right, *scd_left);
+        env->set(insn->src(0), p.second);
+        if (insn->srcs_size() > 1) {
+          env->set(insn->src(1), p.first);
+        }
+      }
     }
     break;
   }
   case OPCODE_IF_LE: {
     if (ConstantValue::apply_visitor(runtime_lt_visitor(), right, left)) {
       env->set_to_bottom();
+    } else {
+      auto scd_left = left.maybe_get<SignedConstantDomain>();
+      auto scd_right = right.maybe_get<SignedConstantDomain>();
+      if (scd_left && scd_right) {
+        auto p = refine_le(*scd_left, *scd_right);
+        env->set(insn->src(0), p.first);
+        if (insn->srcs_size() > 1) {
+          env->set(insn->src(1), p.second);
+        }
+      }
     }
     break;
   }
   case OPCODE_IF_GE: {
     if (ConstantValue::apply_visitor(runtime_lt_visitor(), left, right)) {
       env->set_to_bottom();
+    } else {
+      auto scd_left = left.maybe_get<SignedConstantDomain>();
+      auto scd_right = right.maybe_get<SignedConstantDomain>();
+      if (scd_left && scd_right) {
+        auto p = refine_le(*scd_right, *scd_left);
+        env->set(insn->src(0), p.second);
+        if (insn->srcs_size() > 1) {
+          env->set(insn->src(1), p.first);
+        }
+      }
     }
     break;
   }
@@ -1339,15 +1464,26 @@ ConstantEnvironment FixpointIterator::analyze_edge(
       // is a non-fallthrough edge with a case-key that is equal to the actual
       // selector value.
       auto scd = selector_val.maybe_get<SignedConstantDomain>();
-      auto selector_const = scd->get_constant();
-      if (!selector_const) {
+      if (!scd) {
         return env;
       }
-      auto succ = get_switch_succ(edge->src(), *selector_const);
-      if (succ != nullptr) {
-        const auto& succ_case_key = succ->case_key();
-        always_assert(succ_case_key && *selector_const == *succ_case_key);
+      auto selector_const = scd->get_constant();
+      if (selector_const &&
+          has_switch_consecutive_case_keys(edge->src(), *selector_const,
+                                           *selector_const)) {
         env.set_to_bottom();
+        return env;
+      }
+      auto numeric_interval_domain = scd->numeric_interval_domain();
+      if (numeric_interval_domain.is_bottom()) {
+        return env;
+      }
+      auto lb = numeric_interval_domain.lower_bound();
+      auto ub = numeric_interval_domain.upper_bound();
+      if (lb > NumericIntervalDomain::MIN && ub < NumericIntervalDomain::MAX &&
+          has_switch_consecutive_case_keys(edge->src(), lb, ub)) {
+        env.set_to_bottom();
+        return env;
       }
     }
   } else if (edge->type() != cfg::EDGE_THROW) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -11,11 +11,13 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRList.h"
+#include "InitClassesWithSideEffects.h"
 #include "InterDexPass.h"
 #include "InterDexPassPlugin.h"
 #include "Match.h"
 #include "MethodReference.h"
 #include "PassManager.h"
+#include "RedexContext.h"
 #include "Show.h"
 #include "Shrinker.h"
 #include "ShrinkerConfig.h"
@@ -56,18 +58,6 @@ class InstrumentInterDexPlugin : public interdex::InterDexPassPlugin {
   explicit InstrumentInterDexPlugin(size_t max_analysis_methods)
       : m_max_analysis_methods(max_analysis_methods) {}
 
-  void configure(const Scope& scope, ConfigFiles& cfg) override{};
-
-  bool should_skip_class(const DexClass* clazz) override { return false; }
-
-  void gather_refs(const interdex::DexInfo& dex_info,
-                   const DexClass* cls,
-                   std::vector<DexMethodRef*>& mrefs,
-                   std::vector<DexFieldRef*>& frefs,
-                   std::vector<DexType*>& trefs,
-                   std::vector<DexClass*>* erased_classes,
-                   bool should_not_relocate_methods_of_class) override {}
-
   size_t reserve_frefs() override {
     // We may introduce a new field
     return 1;
@@ -83,13 +73,6 @@ class InstrumentInterDexPlugin : public interdex::InterDexPassPlugin {
     // This makes sure that the inter-dex pass keeps space for new method refs.
     return m_max_analysis_methods;
   }
-
-  DexClasses additional_classes(const DexClassesVector& outdex,
-                                const DexClasses& classes) override {
-    return {};
-  }
-
-  void cleanup(const std::vector<DexClass*>& scope) override {}
 
  private:
   const size_t m_max_analysis_methods;
@@ -635,6 +618,9 @@ void maybe_unset_dynamic_analysis(DexStoresVector& stores,
     f->rstate.unset_root();
   }
 
+  // We don't care about running it's clinit
+  analysis_cls->rstate.set_clinit_has_no_side_effects();
+
   auto field = analysis_cls->find_field_from_simple_deobfuscated_name(
       "sNumStaticallyInstrumented");
   if (field != nullptr) {
@@ -846,8 +832,11 @@ InstrumentPass::patch_sharded_arrays(
                                    DexString::make_string(new_name),
                                    template_field->get_type()));
           new_field->set_deobfuscated_name(deobfuscated_name);
-          new_field->make_concrete(template_field->get_access(),
-                                   template_field->get_static_value());
+          new_field->make_concrete(
+              template_field->get_access(),
+              template_field->get_static_value() == nullptr
+                  ? nullptr
+                  : template_field->get_static_value()->clone());
           fields[i] = new_field;
           TRACE(INSTRUMENT, 2, "Created array: %s", SHOW(new_field));
           cls->add_field(new_field);
@@ -1034,7 +1023,12 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
   shrinker_config.run_local_dce = true;
   shrinker_config.compute_pure_methods = false;
 
-  shrinker::Shrinker shrinker(stores, scope, shrinker_config);
+  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+      scope, cfg.create_init_class_insns());
+
+  int min_sdk = pm.get_redex_options().min_sdk;
+  shrinker::Shrinker shrinker(stores, scope, init_classes_with_side_effects,
+                              shrinker_config, min_sdk);
 
   {
     Timer cleanup{"Parallel Cleanup"};

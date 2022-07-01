@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -163,8 +163,7 @@ void propagate_levels(const ClassHierarchy& ch,
 
   auto* intfs = cls->get_interfaces();
   if (intfs) {
-    const auto& interfaces = intfs->get_type_list();
-    for (auto* intf : interfaces) {
+    for (auto* intf : *intfs) {
       auto* intf_cls = type_class(intf);
       if (intf_cls) {
         min_level =

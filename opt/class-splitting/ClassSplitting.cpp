@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -85,15 +85,14 @@ struct ClassSplittingStats {
   size_t source_block_positive_vals{0};
 };
 
-class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
+class ClassSplittingImpl {
  public:
-  ClassSplittingInterDexPlugin(
-      const ClassSplittingConfig& config,
-      PassManager& mgr,
-      const method_profiles::MethodProfiles& method_profiles)
+  ClassSplittingImpl(const ClassSplittingConfig& config,
+                     PassManager& mgr,
+                     const method_profiles::MethodProfiles& method_profiles)
       : m_config(config), m_mgr(mgr), m_method_profiles(method_profiles) {}
 
-  void configure(const Scope& scope, ConfigFiles& conf) override {
+  void configure(const Scope& scope) {
     always_assert(m_method_profiles.has_stats());
 
     for (auto& p : m_method_profiles.all_interactions()) {
@@ -117,28 +116,6 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
           *method_override_graph::build_graph(scope), scope);
     }
   };
-
-  void gather_refs(const interdex::DexInfo& dex_info,
-                   const DexClass* cls,
-                   std::vector<DexMethodRef*>& mrefs,
-                   std::vector<DexFieldRef*>& frefs,
-                   std::vector<DexType*>& trefs,
-                   std::vector<DexClass*>* erased_classes,
-                   bool should_not_relocate_methods_of_class) override {
-    // Here, we are going to check if any methods in the given class should
-    // be relocated. If so, we make sure that we account for possibly needed
-    // extra target classes.
-
-    // We are only going to relocate perf-critical classes that are not in the
-    // primary dex. (Reshuffling methods in the primary dex may cause issues as
-    // it may cause references to secondary dexes to be inspected by the VM too
-    // early.)
-    if (!cls->is_perf_sensitive() || dex_info.primary) {
-      return;
-    }
-
-    prepare(cls, &mrefs, &trefs, should_not_relocate_methods_of_class);
-  }
 
   DexClass* create_target_class(const std::string& target_type_name) {
     DexType* target_type = DexType::make_type(target_type_name.c_str());
@@ -165,11 +142,11 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
     } else {
       name += "$dtramp";
     }
-    std::deque<DexType*> arg_types;
+    DexTypeList::ContainerType arg_types;
     if (!is_static(method)) {
       arg_types.push_back(method->get_class());
     }
-    for (auto t : method->get_proto()->get_args()->get_type_list()) {
+    for (auto t : *method->get_proto()->get_args()) {
       arg_types.push_back(const_cast<DexType*>(t));
     }
     auto type_list = DexTypeList::make_type_list(std::move(arg_types));
@@ -204,7 +181,8 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
     if (!can_relocate(cls) || should_not_relocate_methods_of_class) {
       return;
     }
-    auto cls_has_problematic_clinit = method::clinit_may_have_side_effects(cls);
+    auto cls_has_problematic_clinit = method::clinit_may_have_side_effects(
+        cls, /* allow_benign_method_invocations */ false);
 
     SplitClass& sc = m_split_classes[cls];
     always_assert(sc.relocatable_methods.empty());
@@ -287,7 +265,7 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
   }
 
   DexClasses additional_classes(const DexClassesVector& outdex,
-                                const DexClasses& classes) override {
+                                const DexClasses& classes) {
     // Here, we are going to do the final determination of what to relocate ---
     // After checking if things still look as they did before, and no other
     // interdex pass or feature tinkered with the relocatability...
@@ -315,8 +293,8 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
               SHOW(cls));
         continue;
       }
-      auto cls_has_problematic_clinit =
-          method::clinit_may_have_side_effects(cls);
+      auto cls_has_problematic_clinit = method::clinit_may_have_side_effects(
+          cls, /* allow_benign_method_invocations */ false);
       std::vector<DexMethod*> methods_to_relocate;
       // We iterate over the actually existing set of methods at this time
       // (other InterDex plug-ins might have added or removed or relocated
@@ -430,10 +408,10 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
     auto invoke_insn = new IRInstruction(OPCODE_INVOKE_STATIC);
     invoke_insn->set_method(target);
     auto proto = target->get_proto();
-    auto& type_list = proto->get_args()->get_type_list();
-    invoke_insn->set_srcs_size(type_list.size());
-    for (size_t i = 0; i < type_list.size(); i++) {
-      auto t = type_list.at(i);
+    auto* type_list = proto->get_args();
+    invoke_insn->set_srcs_size(type_list->size());
+    for (size_t i = 0; i < type_list->size(); i++) {
+      auto t = type_list->at(i);
       IRInstruction* load_param_insn;
       if (type::is_wide_type(t)) {
         load_param_insn = new IRInstruction(IOPCODE_LOAD_PARAM_WIDE);
@@ -475,7 +453,7 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
     change_visibility(target);
   }
 
-  void cleanup(const Scope& final_scope) override {
+  void cleanup(const Scope& final_scope) {
     // Here we do the actual relocation.
 
     // Part 1: Upgrade non-static invokes to static invokes
@@ -797,17 +775,29 @@ void update_coldstart_classes_order(
 
 } // namespace
 
-void ClassSplittingPass::run_before_interdex(DexStoresVector& stores,
-                                             ConfigFiles& conf,
-                                             PassManager& mgr) {
+void ClassSplittingPass::run_pass(DexStoresVector& stores,
+                                  ConfigFiles& conf,
+                                  PassManager& mgr) {
+  TRACE(CS, 1, "[class splitting] Enabled: %d", m_config.enabled);
+  if (!m_config.enabled) {
+    return;
+  }
+
+  const auto& method_profiles = conf.get_method_profiles();
+  if (!method_profiles.has_stats()) {
+    TRACE(CS, 1,
+          "[class splitting] Disabled since we don't have method profiles");
+    return;
+  }
+
   // We are going to simulate how the InterDex pass would invoke our plug-in in
   // a way that can run before the actual InterDex pass. Then, the actual
   // InterDex pass run can reshuffle the split-off classes across dexes
   // properly, accounting for all the changes to refs from the beginning.
-  ClassSplittingInterDexPlugin class_splitting_plugin(
-      m_config, mgr, conf.get_method_profiles());
+  ClassSplittingImpl class_splitting_impl(m_config, mgr,
+                                          conf.get_method_profiles());
   auto scope = build_class_scope(stores);
-  class_splitting_plugin.configure(scope, conf);
+  class_splitting_impl.configure(scope);
   std::unordered_set<DexType*> coldstart_types;
   std::vector<std::string> previously_relocated_types;
   for (const auto& str : conf.get_coldstart_classes()) {
@@ -871,48 +861,16 @@ void ClassSplittingPass::run_before_interdex(DexStoresVector& stores,
         continue;
       }
       classes.push_back(cls);
-      class_splitting_plugin.prepare(cls, nullptr /* mrefs */,
-                                     nullptr /* trefs */,
-                                     should_not_relocate_methods_of_class(cls));
+      class_splitting_impl.prepare(cls, nullptr /* mrefs */,
+                                   nullptr /* trefs */,
+                                   should_not_relocate_methods_of_class(cls));
     }
   }
-  auto classes_to_add =
-      class_splitting_plugin.additional_classes(dexen, classes);
+  auto classes_to_add = class_splitting_impl.additional_classes(dexen, classes);
   dexen.push_back(classes_to_add);
   TRACE(CS, 1, "[class splitting] Added %zu classes", classes_to_add.size());
   auto final_scope = build_class_scope(stores);
-  class_splitting_plugin.cleanup(final_scope);
-}
-
-void ClassSplittingPass::run_pass(DexStoresVector& stores,
-                                  ConfigFiles& conf,
-                                  PassManager& mgr) {
-  TRACE(CS, 1, "[class splitting] Enabled: %d", m_config.enabled);
-  if (!m_config.enabled) {
-    return;
-  }
-
-  const auto& method_profiles = conf.get_method_profiles();
-  if (!method_profiles.has_stats()) {
-    TRACE(CS, 1,
-          "[class splitting] Disabled since we don't have method profiles");
-    return;
-  }
-
-  if (m_config.run_before_interdex) {
-    run_before_interdex(stores, conf, mgr);
-    return;
-  }
-
-  interdex::InterDexRegistry* registry =
-      static_cast<interdex::InterDexRegistry*>(
-          PluginRegistry::get().pass_registry(interdex::INTERDEX_PASS_NAME));
-  std::function<interdex::InterDexPassPlugin*()> fn =
-      [this, &mgr, &conf]() -> interdex::InterDexPassPlugin* {
-    return new ClassSplittingInterDexPlugin(m_config, mgr,
-                                            conf.get_method_profiles());
-  };
-  registry->register_plugin("CLASS_SPLITTING_PLUGIN", std::move(fn));
+  class_splitting_impl.cleanup(final_scope);
 }
 
 static ClassSplittingPass s_pass;

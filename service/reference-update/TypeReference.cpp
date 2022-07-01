@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -14,88 +14,6 @@
 #include "Walkers.h"
 
 namespace {
-
-void fix_colliding_dmethods(
-    const Scope& scope,
-    const std::vector<std::pair<DexMethod*, DexProto*>>& colliding_methods) {
-  if (colliding_methods.empty()) {
-    return;
-  }
-  // Fix colliding methods by appending an additional param.
-  TRACE(REFU, 9, "sig: colliding_methods %zu", colliding_methods.size());
-  std::unordered_map<DexMethod*, size_t> num_additional_args;
-  for (auto it : colliding_methods) {
-    auto meth = it.first;
-    auto new_proto = it.second;
-    auto new_arg_list =
-        type_reference::append_and_make(new_proto->get_args(), type::_int());
-    new_proto = DexProto::make_proto(new_proto->get_rtype(), new_arg_list);
-    size_t arg_count = 1;
-    while (DexMethod::get_method(
-               meth->get_class(), meth->get_name(), new_proto) != nullptr) {
-      new_arg_list =
-          type_reference::append_and_make(new_proto->get_args(), type::_int());
-      new_proto = DexProto::make_proto(new_proto->get_rtype(), new_arg_list);
-      ++arg_count;
-    }
-
-    DexMethodSpec spec;
-    spec.proto = new_proto;
-    meth->change(spec, false /* rename on collision */);
-    num_additional_args[meth] = arg_count;
-
-    auto code = meth->get_code();
-    for (size_t i = 0; i < arg_count; ++i) {
-      auto new_param_reg = code->allocate_temp();
-      auto params = code->get_param_instructions();
-      auto new_param_load = new IRInstruction(IOPCODE_LOAD_PARAM);
-      new_param_load->set_dest(new_param_reg);
-      code->insert_before(params.end(), new_param_load);
-    }
-    TRACE(REFU,
-          9,
-          "sig: patching colliding method %s with %zu additional args",
-          SHOW(meth),
-          arg_count);
-  }
-
-  walk::parallel::code(scope, [&](DexMethod* meth, IRCode& code) {
-    method_reference::CallSites callsites;
-    for (auto& mie : InstructionIterable(code)) {
-      auto insn = mie.insn;
-      if (!insn->has_method()) {
-        continue;
-      }
-      const auto callee = resolve_method(
-          insn->get_method(),
-          opcode_to_search(const_cast<IRInstruction*>(insn)), meth);
-      if (callee == nullptr ||
-          num_additional_args.find(callee) == num_additional_args.end()) {
-        continue;
-      }
-      callsites.emplace_back(meth, &mie, callee);
-    }
-
-    for (const auto& callsite : callsites) {
-      auto callee = callsite.callee;
-      always_assert(callee != nullptr);
-      TRACE(REFU,
-            9,
-            "sig: patching colliding method callsite to %s in %s",
-            SHOW(callee),
-            SHOW(meth));
-      // 42 is a dummy int val as the additional argument to the patched
-      // colliding method.
-      std::vector<uint32_t> additional_args;
-      for (size_t i = 0; i < num_additional_args.at(callee); ++i) {
-        additional_args.push_back(42);
-      }
-      method_reference::NewCallee new_callee(callee, additional_args);
-      method_reference::patch_callsite(callsite, new_callee);
-    }
-  });
-}
-
 /**
  * The old types should all have definitions so that it's unlikely that we are
  * trying to update a virtual method that may override any external virtual
@@ -139,7 +57,7 @@ size_t hash_signature(const DexMethodRef* method) {
   auto proto = method->get_proto();
   boost::hash_combine(seed, method->str());
   boost::hash_combine(seed, proto->get_rtype()->str());
-  for (DexType* arg : proto->get_args()->get_type_list()) {
+  for (DexType* arg : *proto->get_args()) {
     boost::hash_combine(seed, arg->str());
   }
   return seed;
@@ -211,7 +129,7 @@ void add_vmethod_to_groups(
     add_vmethod_to_group(
         rtype, old_to_new.at(rtype), possible_new_name, method, &group);
   }
-  for (const auto arg_type : proto->get_args()->get_type_list()) {
+  for (const auto arg_type : *proto->get_args()) {
     auto extracted_arg_type =
         const_cast<DexType*>(type::get_element_type_if_array(arg_type));
     if (old_to_new.count(extracted_arg_type)) {
@@ -374,9 +292,9 @@ bool TypeRefUpdater::mangling(DexMethodRef* method) {
   } else { // Keep unchanged.
     rtype = proto->get_rtype();
   }
-  std::deque<DexType*> new_args;
+  DexTypeList::ContainerType new_args;
   size_t id = 0;
-  for (DexType* arg : proto->get_args()->get_type_list()) {
+  for (DexType* arg : *proto->get_args()) {
     DexType* new_arg = try_convert_to_new_type(arg);
     if (new_arg) {
       boost::hash_combine(seed, id);
@@ -447,8 +365,7 @@ std::string get_method_signature(const DexMethod* method) {
   auto arg_list = proto->get_args();
   if (arg_list->size() > 0) {
     ss << "(";
-    auto que = arg_list->get_type_list();
-    for (auto t : que) {
+    for (auto t : *arg_list) {
       ss << show(t) << ", ";
     }
     ss.seekp(-2, std::ios_base::end);
@@ -464,7 +381,7 @@ bool proto_has_reference_to(const DexProto* proto,
   if (targets.count(rtype)) {
     return true;
   }
-  for (const auto arg_type : proto->get_args()->get_type_list()) {
+  for (const auto arg_type : *proto->get_args()) {
     auto extracted_arg_type = type::get_element_type_if_array(arg_type);
     if (targets.count(extracted_arg_type)) {
       return true;
@@ -484,8 +401,8 @@ DexProto* get_new_proto(
   } else {
     rtype = proto->get_rtype();
   }
-  std::deque<DexType*> lst;
-  for (const auto arg_type : proto->get_args()->get_type_list()) {
+  DexTypeList::ContainerType lst;
+  for (const auto arg_type : *proto->get_args()) {
     auto extracted_arg_type = type::get_element_type_if_array(arg_type);
     if (old_to_new.count(extracted_arg_type) > 0) {
       auto merger_type = old_to_new.at(extracted_arg_type);
@@ -499,46 +416,6 @@ DexProto* get_new_proto(
 
   return DexProto::make_proto(const_cast<DexType*>(rtype),
                               DexTypeList::make_type_list(std::move(lst)));
-}
-
-DexTypeList* prepend_and_make(const DexTypeList* list, DexType* new_type) {
-  auto old_list = list->get_type_list();
-  auto prepended = std::deque<DexType*>(old_list.begin(), old_list.end());
-  prepended.push_front(new_type);
-  return DexTypeList::make_type_list(std::move(prepended));
-}
-
-DexTypeList* append_and_make(const DexTypeList* list, DexType* new_type) {
-  auto old_list = list->get_type_list();
-  auto appended = std::deque<DexType*>(old_list.begin(), old_list.end());
-  appended.push_back(new_type);
-  return DexTypeList::make_type_list(std::move(appended));
-}
-
-DexTypeList* append_and_make(const DexTypeList* list,
-                             const std::vector<DexType*>& new_types) {
-  auto old_list = list->get_type_list();
-  auto appended = std::deque<DexType*>(old_list.begin(), old_list.end());
-  appended.insert(appended.end(), new_types.begin(), new_types.end());
-  return DexTypeList::make_type_list(std::move(appended));
-}
-
-DexTypeList* replace_head_and_make(const DexTypeList* list, DexType* new_head) {
-  auto old_list = list->get_type_list();
-  auto new_list = std::deque<DexType*>(old_list.begin(), old_list.end());
-  always_assert(!new_list.empty());
-  new_list.pop_front();
-  new_list.push_front(new_head);
-  return DexTypeList::make_type_list(std::move(new_list));
-}
-
-DexTypeList* drop_and_make(const DexTypeList* list, size_t num_types_to_drop) {
-  auto old_list = list->get_type_list();
-  auto dropped = std::deque<DexType*>(old_list.begin(), old_list.end());
-  for (size_t i = 0; i < num_types_to_drop; ++i) {
-    dropped.pop_back();
-  }
-  return DexTypeList::make_type_list(std::move(dropped));
 }
 
 void update_method_signature_type_references(
@@ -655,6 +532,85 @@ void update_field_type_references(
             "ReBindRefsPass is enabled before ClassMergingPass\n",
             SHOW(insn));
       }
+    }
+  });
+}
+
+void fix_colliding_dmethods(
+    const Scope& scope,
+    const std::vector<std::pair<DexMethod*, DexProto*>>& colliding_methods) {
+  if (colliding_methods.empty()) {
+    return;
+  }
+  // Fix colliding methods by appending an additional param.
+  TRACE(REFU, 9, "sig: colliding_methods %zu", colliding_methods.size());
+  std::unordered_map<DexMethod*, size_t> num_additional_args;
+  for (auto it : colliding_methods) {
+    auto meth = it.first;
+    auto new_proto = it.second;
+    auto new_arg_list = new_proto->get_args()->push_back(type::_int());
+    new_proto = DexProto::make_proto(new_proto->get_rtype(), new_arg_list);
+    size_t arg_count = 1;
+    while (DexMethod::get_method(
+               meth->get_class(), meth->get_name(), new_proto) != nullptr) {
+      new_arg_list = new_proto->get_args()->push_back(type::_int());
+      new_proto = DexProto::make_proto(new_proto->get_rtype(), new_arg_list);
+      ++arg_count;
+    }
+
+    DexMethodSpec spec;
+    spec.proto = new_proto;
+    meth->change(spec, false /* rename on collision */);
+    num_additional_args[meth] = arg_count;
+
+    auto code = meth->get_code();
+    for (size_t i = 0; i < arg_count; ++i) {
+      auto new_param_reg = code->allocate_temp();
+      auto params = code->get_param_instructions();
+      auto new_param_load = new IRInstruction(IOPCODE_LOAD_PARAM);
+      new_param_load->set_dest(new_param_reg);
+      code->insert_before(params.end(), new_param_load);
+    }
+    TRACE(REFU,
+          9,
+          "sig: patching colliding method %s with %zu additional args",
+          SHOW(meth),
+          arg_count);
+  }
+
+  walk::parallel::code(scope, [&](DexMethod* meth, IRCode& code) {
+    method_reference::CallSites callsites;
+    for (auto& mie : InstructionIterable(code)) {
+      auto insn = mie.insn;
+      if (!insn->has_method()) {
+        continue;
+      }
+      const auto callee = resolve_method(
+          insn->get_method(),
+          opcode_to_search(const_cast<IRInstruction*>(insn)), meth);
+      if (callee == nullptr ||
+          num_additional_args.find(callee) == num_additional_args.end()) {
+        continue;
+      }
+      callsites.emplace_back(meth, &mie, callee);
+    }
+
+    for (const auto& callsite : callsites) {
+      auto callee = callsite.callee;
+      always_assert(callee != nullptr);
+      TRACE(REFU,
+            9,
+            "sig: patching colliding method callsite to %s in %s",
+            SHOW(callee),
+            SHOW(meth));
+      // 42 is a dummy int val as the additional argument to the patched
+      // colliding method.
+      std::vector<uint32_t> additional_args;
+      for (size_t i = 0; i < num_additional_args.at(callee); ++i) {
+        additional_args.push_back(42);
+      }
+      method_reference::NewCallee new_callee(callee, additional_args);
+      method_reference::patch_callsite(callsite, new_callee);
     }
   });
 }

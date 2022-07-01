@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -13,6 +13,7 @@
 #include <utility>
 #include <vector>
 
+#include "CheckCastTransform.h"
 #include "ClassHierarchy.h"
 #include "DexClass.h"
 #include "IRInstruction.h"
@@ -186,10 +187,14 @@ struct OptimizeStats {
   size_t removed_interfaces{0};
   size_t inserted_check_casts{0};
   size_t retained_check_casts{0};
+  check_casts::impl::Stats post_process;
+  size_t deleted_removed_instructions{0};
   OptimizeStats& operator+=(const OptimizeStats& rhs) {
     removed_interfaces += rhs.removed_interfaces;
     inserted_check_casts += rhs.inserted_check_casts;
     retained_check_casts += rhs.retained_check_casts;
+    post_process += rhs.post_process;
+    deleted_removed_instructions += rhs.deleted_removed_instructions;
     return *this;
   }
 };

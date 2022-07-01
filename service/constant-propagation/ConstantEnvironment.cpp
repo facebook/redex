@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -11,44 +11,22 @@ int64_t SignedConstantDomain::max_element() const {
   if (constant_domain().is_value()) {
     return *constant_domain().get_constant();
   }
-  switch (interval()) {
-  case sign_domain::Interval::EMPTY:
-    not_reached_log("Empty interval does not have a max element");
-  case sign_domain::Interval::EQZ:
-  case sign_domain::Interval::LEZ:
-    return 0;
-  case sign_domain::Interval::LTZ:
-    return -1;
-  case sign_domain::Interval::GEZ:
-  case sign_domain::Interval::GTZ:
-  case sign_domain::Interval::ALL:
-  case sign_domain::Interval::NEZ:
-    return std::numeric_limits<int64_t>::max();
-  case sign_domain::Interval::SIZE:
-    not_reached();
+  auto max = numeric_interval_domain().upper_bound();
+  if (max < NumericIntervalDomain::MAX) {
+    return max;
   }
+  return sign_domain::max_int(interval());
 }
 
 int64_t SignedConstantDomain::min_element() const {
   if (constant_domain().is_value()) {
     return *constant_domain().get_constant();
   }
-  switch (interval()) {
-  case sign_domain::Interval::EMPTY:
-    not_reached_log("Empty interval does not have a min element");
-  case sign_domain::Interval::EQZ:
-  case sign_domain::Interval::GEZ:
-    return 0;
-  case sign_domain::Interval::GTZ:
-    return 1;
-  case sign_domain::Interval::LEZ:
-  case sign_domain::Interval::LTZ:
-  case sign_domain::Interval::ALL:
-  case sign_domain::Interval::NEZ:
-    return std::numeric_limits<int64_t>::min();
-  case sign_domain::Interval::SIZE:
-    not_reached();
+  auto min = numeric_interval_domain().lower_bound();
+  if (min > NumericIntervalDomain::MIN) {
+    return min;
   }
+  return sign_domain::min_int(interval());
 }
 
 // TODO: Instead of this custom meet function, the ConstantValue should get a

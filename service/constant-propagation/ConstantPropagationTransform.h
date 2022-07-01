@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -32,6 +32,8 @@ class Transform final {
     bool replace_move_result_with_consts{false};
     bool remove_dead_switch{true};
     bool add_param_const{true};
+    bool to_int_lit8{true};
+    bool to_int_lit16{false}; // Does not seem beneficial by default.
     const DexType* class_under_init{nullptr};
     // These methods are known pure, we can replace their results with constant
     // value.
@@ -49,6 +51,7 @@ class Transform final {
     size_t null_checks{0};
     size_t null_checks_method_calls{0};
     size_t unreachable_instructions_removed{0};
+    size_t redundant_puts_removed{0};
 
     Stats& operator+=(const Stats& that) {
       branches_removed += that.branches_removed;
@@ -59,6 +62,7 @@ class Transform final {
       null_checks += that.null_checks;
       null_checks_method_calls += that.null_checks_method_calls;
       unreachable_instructions_removed += that.unreachable_instructions_removed;
+      redundant_puts_removed += that.redundant_puts_removed;
       return *this;
     }
 
@@ -114,7 +118,7 @@ class Transform final {
                             const XStoreRefs*,
                             const DexType*);
 
-  void replace_with_const(const ConstantEnvironment&,
+  bool replace_with_const(const ConstantEnvironment&,
                           const cfg::InstructionIterator& cfg_it,
                           const XStoreRefs*,
                           const DexType*);
@@ -164,6 +168,7 @@ class Transform final {
   std::vector<IRInstruction*> m_added_param_values;
   std::unordered_set<IRInstruction*> m_redundant_move_results;
   std::vector<cfg::Edge*> m_edge_deletes;
+  std::vector<std::tuple<cfg::Block*, cfg::Block*, cfg::EdgeType>> m_edge_adds;
   Stats m_stats;
   const std::unordered_set<DexMethodRef*> m_kotlin_null_check_assertions;
 };

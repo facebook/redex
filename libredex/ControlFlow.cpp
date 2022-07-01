@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -19,6 +19,7 @@
 #include "DexUtil.h"
 #include "GraphUtil.h"
 #include "IRList.h"
+#include "RedexContext.h"
 #include "Show.h"
 #include "SourceBlocks.h"
 #include "Trace.h"
@@ -1357,12 +1358,8 @@ uint32_t ControlFlowGraph::sum_opcode_sizes() const {
   return result;
 }
 
-boost::sub_range<IRList> ControlFlowGraph::get_param_instructions() const {
-  if (!m_editable) {
-    return m_orig_list->get_param_instructions();
-  }
-
-  // Find the first block that has instructions
+Block* ControlFlowGraph::get_first_block_with_insns() const {
+  always_assert(editable());
   Block* block = entry_block();
   std::unordered_set<Block*> visited{block};
   while (block != nullptr &&
@@ -1374,6 +1371,14 @@ boost::sub_range<IRList> ControlFlowGraph::get_param_instructions() const {
       break;
     }
   }
+  return block;
+}
+
+boost::sub_range<IRList> ControlFlowGraph::get_param_instructions() const {
+  if (!m_editable) {
+    return m_orig_list->get_param_instructions();
+  }
+  Block* block = get_first_block_with_insns();
   if (block == nullptr) {
     // Return an empty sub_range
     return boost::sub_range<IRList>();
@@ -1415,6 +1420,13 @@ void ControlFlowGraph::gather_types(std::vector<DexType*>& types) const {
   gather_catch_types(types);
   for (const auto& entry : m_blocks) {
     entry.second->m_entries.gather_types(types);
+  }
+}
+
+void ControlFlowGraph::gather_init_classes(std::vector<DexType*>& types) const {
+  always_assert(editable());
+  for (const auto& entry : m_blocks) {
+    entry.second->m_entries.gather_init_classes(types);
   }
 }
 
@@ -1472,27 +1484,49 @@ cfg::InstructionIterator ControlFlowGraph::primary_instruction_of_move_result(
   }
 }
 
-cfg::InstructionIterator ControlFlowGraph::move_result_of(
+cfg::InstructionIterator ControlFlowGraph::next_following_gotos(
     const cfg::InstructionIterator& it) {
-  auto next_insn = std::next(it);
-  auto end = cfg::InstructionIterable(*this).end();
-  if (next_insn != end && it.block() == next_insn.block()) {
-    // The easy case where the move result is in the same block
-    auto op = next_insn->insn->opcode();
-    if (opcode::is_move_result_any(op)) {
-      always_assert(primary_instruction_of_move_result(next_insn) == it);
-      return next_insn;
+  auto next_it = std::next(it);
+  if (!next_it.is_end() && next_it.block() == it.block()) {
+    return next_it;
+  }
+  // We reached the end of the current block; let's look at the immediate
+  // goto-target.
+  auto block = it.block()->goes_to();
+  if (!block) {
+    return InstructionIterable(*this).end();
+  }
+  auto first_insn_it = block->get_first_insn();
+  if (first_insn_it != block->end()) {
+    return block->to_cfg_instruction_iterator(first_insn_it);
+  }
+  // The immediate goto-target block was empty, so we have to continue our
+  // chase. We have to check for non-terminating self-loops while doing that.
+  std::unordered_set<cfg::Block*> visited{block};
+  while (true) {
+    block = block->goes_to();
+    if (!block || !visited.insert(block).second) {
+      // non-terminating empty self-loop
+      return InstructionIterable(*this).end();
     }
-  } else {
-    auto next_block = it.block()->goes_to();
-    if (next_block != nullptr && next_block->starts_with_move_result()) {
-      next_insn =
-          next_block->to_cfg_instruction_iterator(next_block->get_first_insn());
-      always_assert(primary_instruction_of_move_result(next_insn) == it);
-      return next_insn;
+    first_insn_it = block->get_first_insn();
+    if (first_insn_it != block->end()) {
+      return block->to_cfg_instruction_iterator(first_insn_it);
     }
   }
-  return end;
+}
+
+cfg::InstructionIterator ControlFlowGraph::move_result_of(
+    const cfg::InstructionIterator& it) {
+  auto next_it = next_following_gotos(it);
+  if (next_it.is_end()) {
+    return next_it;
+  }
+  if (opcode::is_move_result_any(next_it->insn->opcode())) {
+    always_assert(primary_instruction_of_move_result(next_it) == it);
+    return next_it;
+  }
+  return cfg::InstructionIterable(*this).end();
 }
 
 /*
@@ -2248,6 +2282,7 @@ void ControlFlowGraph::free_all_blocks_and_edges_and_removed_insns() {
     for (auto* insn : m_removed_insns) {
       delete insn;
     }
+    m_removed_insns.clear();
   }
 }
 
@@ -2606,6 +2641,16 @@ void ControlFlowGraph::insert_after(Block* block,
                                     std::unique_ptr<DexPosition> pos) {
   always_assert(m_editable);
   block->m_entries.insert_after(it, std::move(pos));
+}
+
+void Block::insert_before(const IRList::iterator& it,
+                          std::unique_ptr<SourceBlock> sb) {
+  m_entries.insert_before(it, std::move(sb));
+}
+
+void Block::insert_after(const IRList::iterator& it,
+                         std::unique_ptr<SourceBlock> sb) {
+  m_entries.insert_after(it, std::move(sb));
 }
 
 void ControlFlowGraph::insert_before(const InstructionIterator& it,

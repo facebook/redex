@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -8,6 +8,8 @@
 #if defined(__unix__) || defined(__APPLE__)
 #include <dlfcn.h>
 #endif
+
+#include <iostream>
 
 #include "Debug.h"
 
@@ -42,5 +44,16 @@ namespace jemalloc_util {
 void enable_profiling() { set_profile_active(true); }
 
 void disable_profiling() { set_profile_active(false); }
+
+void dump(const std::string& file_name) {
+  if (mallctl == nullptr) {
+    return;
+  }
+  auto* c_str = file_name.c_str();
+  int err = mallctl("prof.dump", nullptr, nullptr, &c_str, sizeof(const char*));
+  if (err != 0) {
+    std::cerr << "mallctl failed with: " << err << std::endl;
+  }
+}
 
 } // namespace jemalloc_util

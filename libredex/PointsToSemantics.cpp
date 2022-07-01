@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -158,7 +158,7 @@ boost::optional<SpecialPointsToEdge> string_to_special_edge(
 s_expr dex_method_to_s_expr(DexMethodRef* dex_method) {
   DexProto* proto = dex_method->get_proto();
   std::vector<s_expr> signature;
-  for (DexType* arg : proto->get_args()->get_type_list()) {
+  for (DexType* arg : *proto->get_args()) {
     signature.push_back(s_expr(arg->get_name()->str()));
   }
   return s_expr({s_expr(dex_method->get_class()->get_name()->str()),
@@ -177,7 +177,7 @@ boost::optional<DexMethodRef*> s_expr_to_dex_method(const s_expr& e) {
            .match_with(e)) {
     return {};
   }
-  std::deque<DexType*> types;
+  DexTypeList::ContainerType types;
   for (size_t arg = 0; arg < signature.size(); ++arg) {
     if (!signature[arg].is_string()) {
       return {};
@@ -1147,7 +1147,7 @@ class PointsToActionGenerator final {
                                   const AnchorEnvironment& state) {
     DexMethodRef* dex_method = insn->get_method();
     DexProto* proto = dex_method->get_proto();
-    const auto& signature = proto->get_args()->get_type_list();
+    const auto* signature = proto->get_args();
     std::vector<std::pair<int32_t, PointsToVariable>> args;
     size_t src_idx{0};
 
@@ -1168,7 +1168,7 @@ class PointsToActionGenerator final {
 
     // Process the arguments of the method invocation.
     int32_t arg_pos = 0;
-    for (DexType* dex_type : signature) {
+    for (DexType* dex_type : *signature) {
       if (type::is_object(dex_type)) {
         args.push_back({arg_pos, get_variable_from_anchor_set(
                                      state.get(insn->src(src_idx++)))});

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -169,8 +169,8 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_method(DexMethod* method) {
   }
 
   if (method->get_access() & ACC_PUBLIC) {
-    auto arg_types = method->get_proto()->get_args()->get_type_list();
-    for (auto arg_type : arg_types) {
+    auto* arg_types = method->get_proto()->get_args();
+    for (auto arg_type : *arg_types) {
       if (cls->rstate.is_cls_kotlin()) {
         stats.kotlin_public_param_objects++;
       } else {

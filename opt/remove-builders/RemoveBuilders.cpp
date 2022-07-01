@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -329,7 +329,13 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
   std::unordered_set<DexClass*> kept_builders =
       get_builders_with_subclasses(scope);
 
-  BuilderTransform b_transform(conf.get_inliner_config(), scope, stores, false);
+  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+      scope, conf.create_init_class_insns());
+  BuilderTransform b_transform(init_classes_with_side_effects,
+                               conf.get_inliner_config(),
+                               scope,
+                               stores,
+                               false);
 
   // Inline non init methods.
   std::unordered_set<DexClass*> removed_builders;

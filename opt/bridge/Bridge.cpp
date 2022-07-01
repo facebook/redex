@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -28,6 +28,7 @@
 #include "LegacyInliner.h"
 #include "PassManager.h"
 #include "ReachableClasses.h"
+#include "RefChecker.h"
 #include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"
@@ -35,6 +36,7 @@
 namespace {
 
 constexpr const char* METRIC_BRIDGES_REMOVED = "bridges_removed_count";
+constexpr const char* METRIC_ILLEGAL_REFS = "bridges_illegal_refs";
 constexpr const char* METRIC_BRIDGES_TO_OPTIMIZE = "bridges_to_optimize_count";
 
 DexMethodRef* match_pattern(DexMethod* bridge) {
@@ -185,12 +187,15 @@ class BridgeRemover {
     }
   };
 
+  const XStoreRefs& m_xstores;
+  const std::vector<std::unique_ptr<RefChecker>>& m_ref_checkers;
   const std::vector<DexClass*>* m_scope;
   ClassHierarchy m_ch;
   PassManager& m_mgr;
   std::unordered_map<DexMethod*, DexMethod*> m_bridges_to_bridgees;
   std::unordered_multimap<MethodRef, DexMethod*, MethodRefHash>
       m_potential_bridgee_refs;
+  size_t m_illegal_refs{0};
 
   void find_bridges() {
     walk::methods(*m_scope, [&](DexMethod* m) {
@@ -359,11 +364,23 @@ class BridgeRemover {
   }
 
   void inline_bridges() {
-    for (auto bpair : m_bridges_to_bridgees) {
+    for (auto it = m_bridges_to_bridgees.begin();
+         it != m_bridges_to_bridgees.end();) {
+      auto& bpair = *it;
       auto bridge = bpair.first;
       auto bridgee = bpair.second;
-      TRACE(BRIDGE, 5, "Inlining %s", SHOW(bridge));
-      do_inlining(bridge, bridgee);
+      auto bridge_store_idx = m_xstores.get_store_idx(bridge->get_class());
+      auto& ref_checker = m_ref_checkers.at(bridge_store_idx);
+      if (ref_checker->check_method_and_code(bridgee)) {
+        TRACE(BRIDGE, 5, "Inlining %s", SHOW(bridge));
+        do_inlining(bridge, bridgee);
+        it++;
+        continue;
+      }
+
+      TRACE(BRIDGE, 5, "Not inlining %s due to illegal refs", SHOW(bridge));
+      m_illegal_refs++;
+      it = m_bridges_to_bridgees.erase(it);
     }
   }
 
@@ -385,8 +402,14 @@ class BridgeRemover {
   }
 
  public:
-  BridgeRemover(const std::vector<DexClass*>& scope, PassManager& mgr)
-      : m_scope(&scope), m_mgr(mgr) {
+  BridgeRemover(const XStoreRefs& xstores,
+                const std::vector<std::unique_ptr<RefChecker>>& ref_checkers,
+                const std::vector<DexClass*>& scope,
+                PassManager& mgr)
+      : m_xstores(xstores),
+        m_ref_checkers(ref_checkers),
+        m_scope(&scope),
+        m_mgr(mgr) {
     m_ch = build_type_hierarchy(scope);
   }
 
@@ -401,21 +424,42 @@ class BridgeRemover {
     TRACE(BRIDGE, 1, "Inlined and removed %lu bridges",
           m_bridges_to_bridgees.size());
     m_mgr.incr_metric(METRIC_BRIDGES_REMOVED, m_bridges_to_bridgees.size());
+    m_mgr.incr_metric(METRIC_ILLEGAL_REFS, m_illegal_refs);
   }
 };
 
 ////////////////////////////////////////////////////////////////////////////////
 
 void BridgePass::run_pass(DexStoresVector& stores,
-                          ConfigFiles& /* conf */,
+                          ConfigFiles& conf,
                           PassManager& mgr) {
   if (mgr.no_proguard_rules()) {
     TRACE(BRIDGE, 1,
           "BridgePass not run because no ProGuard configuration was provided.");
     return;
   }
+
+  int32_t min_sdk = mgr.get_redex_options().min_sdk;
+  mgr.incr_metric("min_sdk", min_sdk);
+  TRACE(BRIDGE, 2, "min_sdk: %d", min_sdk);
+  auto min_sdk_api_file = conf.get_android_sdk_api_file(min_sdk);
+  const api::AndroidSDK* min_sdk_api{nullptr};
+  if (!min_sdk_api_file) {
+    mgr.incr_metric("min_sdk_no_file", 1);
+    TRACE(BRIDGE, 2, "Android SDK API %d file cannot be found.", min_sdk);
+  } else {
+    min_sdk_api = &conf.get_android_sdk_api(min_sdk);
+  }
+  XStoreRefs xstores(stores);
+  std::vector<std::unique_ptr<RefChecker>> ref_checkers;
+  ref_checkers.reserve(xstores.size());
+  for (size_t store_idx = 0; store_idx < xstores.size(); store_idx++) {
+    ref_checkers.emplace_back(
+        std::make_unique<RefChecker>(&xstores, store_idx, min_sdk_api));
+  }
+
   Scope scope = build_class_scope(stores);
-  BridgeRemover(scope, mgr).run();
+  BridgeRemover(xstores, ref_checkers, scope, mgr).run();
 }
 
 static BridgePass s_pass;

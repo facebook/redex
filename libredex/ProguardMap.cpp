@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -27,6 +27,18 @@ std::string find_or_same(
 
 std::string convert_scalar_type(const std::string& type) {
   static const std::unordered_map<std::string, std::string> prim_map = {
+      {"void", "V"},  {"boolean", "Z"}, {"byte", "B"},
+      {"short", "S"}, {"char", "C"},    {"int", "I"},
+      {"long", "J"},  {"float", "F"},   {"double", "D"}};
+  auto it = prim_map.find(type);
+  if (it != prim_map.end()) {
+    return it->second;
+  }
+  return java_names::external_to_internal(type);
+}
+
+std::string convert_scalar_type(std::string_view type) {
+  static const std::unordered_map<std::string_view, std::string> prim_map = {
       {"void", "V"},  {"boolean", "Z"}, {"byte", "B"},
       {"short", "S"}, {"char", "C"},    {"int", "I"},
       {"long", "J"},  {"float", "F"},   {"double", "D"}};
@@ -658,6 +670,10 @@ void apply_deobfuscated_names(const std::vector<DexClasses>& dexen,
 }
 
 std::string convert_type(std::string type) {
+  return convert_type(std::string_view(type));
+}
+
+std::string convert_type(std::string_view type) {
   auto dimpos = type.find('[');
   if (dimpos == std::string::npos) {
     return convert_scalar_type(type);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -14,8 +14,11 @@
 #include "DexUtil.h"
 #include "Match.h"
 #include "MonitorCount.h"
+#include "RedexContext.h"
 #include "Resolver.h"
+#include "ScopedCFG.h"
 #include "Show.h"
+#include "ShowCFG.h"
 #include "StlUtil.h"
 #include "Trace.h"
 
@@ -314,8 +317,8 @@ static bool is_move_result_pseudo(const MethodItemEntry& mie) {
 
 Result check_load_params(const DexMethod* method) {
   bool is_static_method = is_static(method);
-  const auto& signature = method->get_proto()->get_args()->get_type_list();
-  auto sig_it = signature.begin();
+  const auto* signature = method->get_proto()->get_args();
+  auto sig_it = signature->begin();
   size_t load_insns_cnt = 0;
 
   auto handle_instance =
@@ -329,7 +332,7 @@ Result check_load_params(const DexMethod* method) {
     return boost::none;
   };
   auto handle_other = [&](IRInstruction* insn) -> boost::optional<std::string> {
-    if (sig_it == signature.end()) {
+    if (sig_it == signature->end()) {
       return std::string("Not enough argument types for ") + show(insn);
     }
     bool ok = false;
@@ -1227,10 +1230,9 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
   case OPCODE_INVOKE_STATIC:
   case OPCODE_INVOKE_INTERFACE: {
     DexMethodRef* dex_method = insn->get_method();
-    const auto& arg_types =
-        dex_method->get_proto()->get_args()->get_type_list();
+    const auto* arg_types = dex_method->get_proto()->get_args();
     size_t expected_args =
-        (insn->opcode() != OPCODE_INVOKE_STATIC ? 1 : 0) + arg_types.size();
+        (insn->opcode() != OPCODE_INVOKE_STATIC ? 1 : 0) + arg_types->size();
     if (insn->srcs_size() != expected_args) {
       std::ostringstream out;
       out << SHOW(insn) << ": argument count mismatch; "
@@ -1247,7 +1249,7 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
       assume_assignable(current_state->get_dex_type(src),
                         dex_method->get_class());
     }
-    for (DexType* arg_type : arg_types) {
+    for (DexType* arg_type : *arg_types) {
       if (type::is_object(arg_type)) {
         auto src = insn->src(src_idx++);
         assume_reference(current_state, src);
@@ -1436,6 +1438,9 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
     assume_integer(current_state, insn->src(0));
     break;
   }
+  case IOPCODE_INIT_CLASS: {
+    break;
+  }
   }
   if (insn->has_field() && m_validate_access) {
     auto search = opcode::is_an_sfield_op(insn->opcode())
@@ -1480,4 +1485,75 @@ void IRTypeChecker::check_completion() const {
   always_assert_log(m_complete,
                     "The type checker did not run on method %s.\n",
                     m_dex_method->get_deobfuscated_name_or_empty().c_str());
+}
+
+std::string IRTypeChecker::dump_annotated_cfg(DexMethod* method) const {
+  cfg::ScopedCFG cfg{method->get_code()};
+
+  TypeInference inf{method->get_code()->cfg()};
+  inf.run(m_dex_method);
+
+  return show_analysis<TypeEnvironment>(method->get_code()->cfg(), inf);
+}
+
+std::string IRTypeChecker::dump_annotated_cfg_reduced(DexMethod* method) const {
+  cfg::ScopedCFG cfg{method->get_code()};
+
+  TypeInference inf{method->get_code()->cfg()};
+  inf.run(m_dex_method);
+
+  struct TypeInferenceReducedSpecial {
+    TypeEnvironment cur;
+    const TypeInference& iter;
+
+    explicit TypeInferenceReducedSpecial(const TypeInference& iter)
+        : iter(iter) {}
+
+    void add_reg(std::ostream& os, reg_t r) const {
+      os << " v" << r << "=";
+      auto type = cur.get_type(r);
+      os << type << "/";
+      auto dtype = cur.get_dex_type(r);
+      if (dtype) {
+        os << show(*dtype);
+      } else {
+        os << "T";
+      }
+    }
+
+    void mie_before(std::ostream& os, const MethodItemEntry& mie) {}
+    void mie_after(std::ostream& os, const MethodItemEntry& mie) {
+      if (mie.type != MFLOW_OPCODE) {
+        return;
+      }
+
+      // Find inputs.
+      if (mie.insn->srcs_size() != 0) {
+        os << "     inputs:";
+        for (reg_t r : mie.insn->srcs()) {
+          add_reg(os, r);
+        }
+        os << "\n";
+      }
+
+      iter.analyze_instruction(mie.insn, &cur);
+      cur.reduce();
+
+      // Find outputs.
+      if (mie.insn->has_dest()) {
+        os << "     output:";
+        add_reg(os, mie.insn->dest());
+        os << "\n";
+      }
+    }
+
+    void start_block(std::ostream& os, cfg::Block* b) {
+      cur = iter.get_entry_state_at(b);
+      os << "entry state: " << cur << "\n";
+    }
+    void end_block(std::ostream& os, cfg::Block* b) {}
+  };
+
+  TypeInferenceReducedSpecial special(inf);
+  return show(method->get_code()->cfg(), special);
 }

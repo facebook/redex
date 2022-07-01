@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!--suppress AndroidLint-XmlHtmlTagOutsideXliff AndroidLint-XmlDifferentXliffContent -->
+  <string name="one">I like a <em>fine</em> glass of H<sub>2</sub>O in the morning!</string>
+  <string name="two">Hello World.</string>
+  <!--suppress AndroidLint-XmlHtmlTagOutsideXliff AndroidLint-XmlDifferentXliffContent -->
+  <string name="three">I <b>love</b> rock and roll!</string>
+</resources>

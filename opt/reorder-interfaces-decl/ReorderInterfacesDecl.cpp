@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -45,8 +45,7 @@ class ReorderInterfacesDeclImpl {
   void compute_call_frequencies(IRInstruction* insn);
   void reorder_interfaces();
   void reorder_interfaces_for_class(DexClass* cls);
-  std::deque<DexType*> sort_interfaces(
-      const std::deque<DexType*>& unsorted_list);
+  DexTypeList* sort_interfaces(const DexTypeList* unsorted_list);
 };
 
 /**
@@ -100,13 +99,13 @@ void ReorderInterfacesDeclImpl::compute_call_frequencies(IRInstruction* insn) {
  * Sort the list of given Interfaces with respect to the number of incoming
  * calls and return the sorted list
  */
-std::deque<DexType*> ReorderInterfacesDeclImpl::sort_interfaces(
-    const std::deque<DexType*>& unsorted_list) {
-  std::deque<DexType*> sorted_list;
+DexTypeList* ReorderInterfacesDeclImpl::sort_interfaces(
+    const DexTypeList* unsorted_list) {
+  DexTypeList::ContainerType sorted_list;
   // Create list of interfaces and store frequencies
   std::vector<std::pair<DexType*, int>> list_with_frequencies;
-  list_with_frequencies.reserve(unsorted_list.size());
-  for (auto interface : unsorted_list) {
+  list_with_frequencies.reserve(unsorted_list->size());
+  for (auto interface : *unsorted_list) {
     list_with_frequencies.emplace_back(interface,
                                        m_call_frequency_map[interface]);
   }
@@ -127,29 +126,26 @@ std::deque<DexType*> ReorderInterfacesDeclImpl::sort_interfaces(
   }
 
   // Return the sorted list
-  return sorted_list;
+  return DexTypeList::make_type_list(std::move(sorted_list));
 }
 
 /**
  * Reorders Interface list for the given Class using the call frequencies
  */
 void ReorderInterfacesDeclImpl::reorder_interfaces_for_class(DexClass* cls) {
-  const auto& cur_interface_list = cls->get_interfaces()->get_type_list();
+  const auto* cur_interface_list = cls->get_interfaces();
 
   // If we have at most one interface implemented by this class,
   // no need to worry about sorting the interface list.
-  if (cur_interface_list.size() <= 1) {
+  if (cur_interface_list->size() <= 1) {
     return;
   }
 
   // Let's sort the Interface list
   auto updated_interface_list = sort_interfaces(cur_interface_list);
 
-  DexTypeList* interfaces =
-      DexTypeList::make_type_list(std::move(updated_interface_list));
-
   // Now that we have the sorted list of Interfaces, write it back.
-  cls->set_interfaces(interfaces);
+  cls->set_interfaces(updated_interface_list);
 }
 
 /**

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -147,7 +147,7 @@ void class_type_stats(SingleImpls& single_impls) {
     if (!anon) nested_cls = is_nested(name);
     const auto& cls = type_class(intf_it.second.cls);
     if (type::is_object(cls->get_super_class()) &&
-        cls->get_interfaces()->get_type_list().empty()) {
+        cls->get_interfaces()->empty()) {
       if (anon) {
         anonymous_no_parent << "+ " << show(cls) << "\n";
         anonymous_no_parent_count++;

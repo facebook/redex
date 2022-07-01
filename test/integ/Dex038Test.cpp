@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -185,7 +185,7 @@ void testReadDex(const char* dexfile) {
       !strcmp(SHOW(cs->method_type()->get_args()), DEX038_CLASS_NAME) &&
       cs->args().size() == 3 &&
       !strcmp(SHOW(cs->args()[0]), VOID_RETURN_OBJECT_PROTO) &&
-      ((DexEncodedValueMethodHandle*)cs->args()[1])->methodhandle() == instanceStringSupplierMethodHandle &&
+      ((DexEncodedValueMethodHandle*)cs->args()[1].get())->methodhandle() == instanceStringSupplierMethodHandle &&
       !strcmp(SHOW(cs->args()[2]), VOID_RETURN_STRING_PROTO);
   }), -1);
 
@@ -204,7 +204,7 @@ void testReadDex(const char* dexfile) {
       !strcmp(SHOW(cs->method_type()->get_args()), DEX038_CLASS_NAME) &&
       cs->args().size() == 3 &&
       !strcmp(SHOW(cs->args()[0]), VOID_RETURN_OBJECT_PROTO) &&
-      ((DexEncodedValueMethodHandle*)cs->args()[1])->methodhandle() == directMethodHandle &&
+      ((DexEncodedValueMethodHandle*)cs->args()[1].get())->methodhandle() == directMethodHandle &&
       !strcmp(SHOW(cs->args()[2]), VOID_RETURN_STRING_PROTO);
   }), -1);
 
@@ -223,7 +223,7 @@ void testReadDex(const char* dexfile) {
       !strcmp(SHOW(cs->method_type()->get_args()), "") &&
       cs->args().size() == 3 &&
       !strcmp(SHOW(cs->args()[0]), VOID_RETURN_OBJECT_PROTO) &&
-      ((DexEncodedValueMethodHandle*)cs->args()[1])->methodhandle() == constructorMethodHandle &&
+      ((DexEncodedValueMethodHandle*)cs->args()[1].get())->methodhandle() == constructorMethodHandle &&
       !strcmp(SHOW(cs->args()[2]), VOID_RETURN_STRING_PROTO);
   }), -1);
 
@@ -242,7 +242,7 @@ void testReadDex(const char* dexfile) {
       !strcmp(SHOW(cs->method_type()->get_args()), "") &&
       cs->args().size() == 3 &&
       !strcmp(SHOW(cs->args()[0]), VOID_RETURN_OBJECT_PROTO) &&
-      ((DexEncodedValueMethodHandle*)cs->args()[1])->methodhandle() == staticStringSupplierMethodHandle &&
+      ((DexEncodedValueMethodHandle*)cs->args()[1].get())->methodhandle() == staticStringSupplierMethodHandle &&
       !strcmp(SHOW(cs->args()[2]), VOID_RETURN_STRING_PROTO);
   }), -1);
 
@@ -261,7 +261,7 @@ void testReadDex(const char* dexfile) {
       !strcmp(SHOW(cs->method_type()->get_args()), "") &&
       cs->args().size() == 3 &&
       !strcmp(SHOW(cs->args()[0]), VOID_RETURN_OBJECT_PROTO) &&
-      ((DexEncodedValueMethodHandle*)cs->args()[1])->methodhandle() == lambdaRun0MethodHandle &&
+      ((DexEncodedValueMethodHandle*)cs->args()[1].get())->methodhandle() == lambdaRun0MethodHandle &&
       !strcmp(SHOW(cs->args()[2]), VOID_RETURN_STRING_PROTO);
   }), -1);
 
@@ -280,7 +280,7 @@ void testReadDex(const char* dexfile) {
       !strcmp(SHOW(cs->method_type()->get_args()), "") &&
       cs->args().size() == 3 &&
       !strcmp(SHOW(cs->args()[0]), VOID_RETURN_OBJECT_PROTO) &&
-      ((DexEncodedValueMethodHandle*)cs->args()[1])->methodhandle() == lambdaRun1MethodHandle &&
+      ((DexEncodedValueMethodHandle*)cs->args()[1].get())->methodhandle() == lambdaRun1MethodHandle &&
       !strcmp(SHOW(cs->args()[2]), VOID_RETURN_STRING_PROTO);
   }), -1);
 
@@ -299,7 +299,7 @@ void testReadDex(const char* dexfile) {
       !strcmp(SHOW(cs->method_type()->get_args()), "") &&
       cs->args().size() == 3 &&
       !strcmp(SHOW(cs->args()[0]), VOID_RETURN_OBJECT_PROTO) &&
-      ((DexEncodedValueMethodHandle*)cs->args()[1])->methodhandle() == lambdaRun2MethodHandle &&
+      ((DexEncodedValueMethodHandle*)cs->args()[1].get())->methodhandle() == lambdaRun2MethodHandle &&
       !strcmp(SHOW(cs->args()[2]), VOID_RETURN_STRING_PROTO);
   }), -1);
 
@@ -324,7 +324,7 @@ TEST(Dex038Test, ReadWriteDex038) {
   DexMetadata dm;
   dm.set_id("classes");
   DexStore root_store(dm);
-  root_store.add_classes(load_classes_from_dex(dexfile, true, 38));
+  root_store.add_classes(load_classes_from_dex(dexfile, true, true, 38));
   DexClasses& classes = root_store.get_dexen().back();
   std::vector<DexStore> stores;
   stores.emplace_back(std::move(root_store));

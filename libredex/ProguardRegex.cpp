@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -161,6 +161,10 @@ bool has_special_char(const std::string& proguard_regex) {
 // Convert a ProGuard Java type type which may use wildcards to
 // an internal JVM type descriptor with the wildcards preserved.
 std::string convert_wildcard_type(const std::string& typ) {
+  return convert_wildcard_type(std::string_view(typ));
+}
+
+std::string convert_wildcard_type(std::string_view typ) {
   redex_assert(!typ.empty());
   const std::string& desc = convert_type(typ);
   // Fix up the descriptor to move Ls that occur before wildcards.

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -8,7 +8,10 @@
 #include "ConstantPropagationTransform.h"
 
 #include "ReachingDefinitions.h"
+#include "RedexContext.h"
 #include "ScopedMetrics.h"
+#include "SignedConstantDomain.h"
+#include "StlUtil.h"
 #include "Trace.h"
 #include "Transform.h"
 #include "TypeInference.h"
@@ -21,7 +24,7 @@ namespace constant_propagation {
  * evaluated. So, `env.get(dest)` holds the _new_ value of the destination
  * register.
  */
-void Transform::replace_with_const(const ConstantEnvironment& env,
+bool Transform::replace_with_const(const ConstantEnvironment& env,
                                    const cfg::InstructionIterator& cfg_it,
                                    const XStoreRefs* xstores,
                                    const DexType* declaring_type) {
@@ -30,7 +33,7 @@ void Transform::replace_with_const(const ConstantEnvironment& env,
   auto replacement = ConstantValue::apply_visitor(
       value_to_instruction_visitor(insn, xstores, declaring_type), value);
   if (replacement.empty()) {
-    return;
+    return false;
   }
   if (opcode::is_a_move_result_pseudo(insn->opcode())) {
     auto primary_it = cfg_it.cfg().primary_instruction_of_move_result(cfg_it);
@@ -39,6 +42,7 @@ void Transform::replace_with_const(const ConstantEnvironment& env,
     m_mutation->replace(cfg_it, replacement);
   }
   ++m_stats.materialized_consts;
+  return true;
 }
 
 /*
@@ -111,13 +115,19 @@ bool Transform::eliminate_redundant_put(
     if (!field) {
       break;
     }
-    // WholeProgramState tells us the abstract value of a field across
-    // all program traces outside their class's <clinit> or <init>; the
-    // ConstantEnvironment tells us the abstract value
-    // of a non-escaping field at this particular program point.
-    auto existing_val = m_config.class_under_init == field->get_class()
-                            ? env.get(field)
-                            : wps.get_field_value(field);
+    // WholeProgramState tells us the observable abstract value of a field
+    // across all program traces outside their class's <clinit> or <init>, so we
+    // need to join with 0 here as we are effectively creating a new observation
+    // point at which the field might still have its default value.
+    // The ConstantEnvironment tells us the abstract value of a non-escaping
+    // field at this particular program point.
+    ConstantValue existing_val;
+    if (m_config.class_under_init == field->get_class()) {
+      existing_val = env.get(field);
+    } else {
+      existing_val = wps.get_field_value(field);
+      existing_val.join_with(SignedConstantDomain(0));
+    }
     auto new_val = env.get(insn->src(0));
     if (ConstantValue::apply_visitor(runtime_equals_visitor(), existing_val,
                                      new_val)) {
@@ -125,6 +135,7 @@ bool Transform::eliminate_redundant_put(
       // This field must already hold this value. We don't need to write to it
       // again.
       m_mutation->remove(cfg_it);
+      ++m_stats.redundant_puts_removed;
       return true;
     }
     break;
@@ -135,6 +146,329 @@ bool Transform::eliminate_redundant_put(
   }
   return false;
 }
+
+namespace {
+
+void try_simplify(const ConstantEnvironment& env,
+                  const cfg::InstructionIterator& cfg_it,
+                  const Transform::Config& config,
+                  cfg::CFGMutation& mutation) {
+  auto* insn = cfg_it->insn;
+
+  auto reg_is_exact = [&env](reg_t reg, int64_t val) {
+    auto value = env.get(reg).maybe_get<SignedConstantDomain>();
+    if (!value || !value->get_constant() || *value->get_constant() != val) {
+      return false;
+    }
+    return true;
+  };
+
+  auto reg_fits_lit8 = [&env](reg_t reg) -> std::optional<int8_t> {
+    auto value = env.get(reg).maybe_get<SignedConstantDomain>();
+    if (!value || !value->get_constant()) {
+      return std::nullopt;
+    }
+    int64_t val = *value->get_constant();
+    if (val < -128 || val > 127) {
+      return std::nullopt;
+    }
+    return (int8_t)val;
+  };
+
+  auto maybe_reduce_lit8 = [&](size_t idx) -> bool {
+    if (!config.to_int_lit8) {
+      return false;
+    }
+
+    auto val = reg_fits_lit8(insn->src(idx));
+    if (!val) {
+      return false;
+    }
+
+    auto new_op = [&]() -> IROpcode {
+      switch (insn->opcode()) {
+      case OPCODE_ADD_INT:
+        return OPCODE_ADD_INT_LIT8;
+      // TODO: SUB to RSUB
+      case OPCODE_MUL_INT:
+        return OPCODE_MUL_INT_LIT8;
+      case OPCODE_AND_INT:
+        return OPCODE_AND_INT_LIT8;
+      case OPCODE_OR_INT:
+        return OPCODE_OR_INT_LIT8;
+      case OPCODE_XOR_INT:
+        return OPCODE_XOR_INT_LIT8;
+      default:
+        always_assert(false);
+      }
+      not_reached();
+    }();
+
+    auto repl = new IRInstruction(new_op);
+    repl->set_src(0, insn->src(idx == 0 ? 1 : 0));
+    repl->set_dest(insn->dest());
+    repl->set_literal(*val);
+    mutation.replace(cfg_it, {repl});
+    return true;
+  };
+
+  auto maybe_reduce_lit8_both = [&]() {
+    if (maybe_reduce_lit8(0)) {
+      return true;
+    }
+    if (maybe_reduce_lit8(1)) {
+      return true;
+    }
+    return false;
+  };
+
+  auto reg_fits_lit16 = [&env](reg_t reg) -> std::optional<int16_t> {
+    auto value = env.get(reg).maybe_get<SignedConstantDomain>();
+    if (!value || !value->get_constant()) {
+      return std::nullopt;
+    }
+    int64_t val = *value->get_constant();
+    if (val < -32768 || val > 32767) {
+      return std::nullopt;
+    }
+    return (int16_t)val;
+  };
+
+  auto maybe_reduce_lit16 = [&](size_t idx) -> bool {
+    if (!config.to_int_lit16) {
+      return false;
+    }
+
+    auto val = reg_fits_lit16(insn->src(idx));
+    if (!val) {
+      return false;
+    }
+
+    auto new_op = [&]() -> IROpcode {
+      switch (insn->opcode()) {
+      case OPCODE_ADD_INT:
+        return OPCODE_ADD_INT_LIT16;
+      // TODO: SUB to RSUB
+      case OPCODE_MUL_INT:
+        return OPCODE_MUL_INT_LIT16;
+      case OPCODE_AND_INT:
+        return OPCODE_AND_INT_LIT16;
+      case OPCODE_OR_INT:
+        return OPCODE_OR_INT_LIT16;
+      case OPCODE_XOR_INT:
+        return OPCODE_XOR_INT_LIT16;
+      default:
+        always_assert(false);
+      }
+      not_reached();
+    }();
+
+    auto repl = new IRInstruction(new_op);
+    repl->set_src(0, insn->src(idx == 0 ? 1 : 0));
+    repl->set_dest(insn->dest());
+    repl->set_literal(*val);
+    mutation.replace(cfg_it, {repl});
+    return true;
+  };
+
+  auto maybe_reduce_lit16_both = [&]() {
+    if (maybe_reduce_lit16(0)) {
+      return true;
+    }
+    if (maybe_reduce_lit16(1)) {
+      return true;
+    }
+    return false;
+  };
+
+  auto replace_with_move = [&](reg_t src_reg) {
+    auto* move = new IRInstruction(OPCODE_MOVE);
+    move->set_src(0, src_reg);
+    move->set_dest(insn->dest());
+    mutation.replace(cfg_it, {move});
+  };
+
+  auto replace_with_const = [&](int64_t val) {
+    auto* c = new IRInstruction(OPCODE_CONST);
+    c->set_dest(insn->dest());
+    c->set_literal(val);
+    mutation.replace(cfg_it, {c});
+  };
+
+  auto replace_with_neg = [&](reg_t src_reg) {
+    auto* neg = new IRInstruction(OPCODE_NEG_INT);
+    neg->set_src(0, src_reg);
+    neg->set_dest(insn->dest());
+    mutation.replace(cfg_it, {neg});
+  };
+
+  switch (insn->opcode()) {
+    // These should have been handled by PeepHole, really.
+
+  case OPCODE_ADD_INT_LIT16:
+  case OPCODE_ADD_INT_LIT8: {
+    if (insn->get_literal() == 0) {
+      replace_with_move(insn->src(0));
+    }
+    break;
+  }
+
+  case OPCODE_RSUB_INT:
+  case OPCODE_RSUB_INT_LIT8: {
+    if (insn->get_literal() == 0) {
+      replace_with_neg(insn->src(0));
+    }
+    break;
+  }
+
+  case OPCODE_MUL_INT_LIT16:
+  case OPCODE_MUL_INT_LIT8: {
+    if (insn->get_literal() == 1) {
+      replace_with_move(insn->src(0));
+      break;
+    }
+    if (insn->get_literal() == 0) {
+      replace_with_const(0);
+      break;
+    }
+    if (insn->get_literal() == -1) {
+      replace_with_neg(insn->src(0));
+      break;
+    }
+    break;
+  }
+  case OPCODE_AND_INT_LIT16:
+  case OPCODE_AND_INT_LIT8: {
+    if (insn->get_literal() == 0) {
+      replace_with_const(0);
+      break;
+    }
+    if (insn->get_literal() == -1) {
+      replace_with_move(insn->src(0));
+      break;
+    }
+    break;
+  }
+  case OPCODE_OR_INT_LIT16:
+  case OPCODE_OR_INT_LIT8: {
+    if (insn->get_literal() == 0) {
+      replace_with_move(insn->src(0));
+      break;
+    }
+    if (insn->get_literal() == -1) {
+      replace_with_const(-1);
+      break;
+    }
+    break;
+  }
+  case OPCODE_XOR_INT_LIT16:
+  case OPCODE_XOR_INT_LIT8: {
+    // TODO
+    break;
+  }
+
+  case OPCODE_SHL_INT_LIT8:
+  case OPCODE_USHR_INT_LIT8:
+  case OPCODE_SHR_INT_LIT8: {
+    // Can at most simplify the operand, but doesn't make much sense.
+    break;
+  }
+
+  case OPCODE_ADD_INT: {
+    if (reg_is_exact(insn->src(0), 0)) {
+      replace_with_move(insn->src(1));
+    } else if (reg_is_exact(insn->src(1), 0)) {
+      replace_with_move(insn->src(0));
+    } else if (maybe_reduce_lit8_both()) {
+      break;
+    } else if (maybe_reduce_lit16_both()) {
+      break;
+    }
+    break;
+  }
+
+  case OPCODE_SUB_INT: {
+    if (reg_is_exact(insn->src(0), 0)) {
+      replace_with_neg(insn->src(1));
+    } else if (reg_is_exact(insn->src(1), 0)) {
+      replace_with_move(insn->src(0));
+    }
+    break;
+  }
+
+  case OPCODE_MUL_INT: {
+    if (reg_is_exact(insn->src(0), 1)) {
+      replace_with_move(insn->src(1));
+    } else if (reg_is_exact(insn->src(1), 1)) {
+      replace_with_move(insn->src(0));
+    } else if (reg_is_exact(insn->src(0), 0) || reg_is_exact(insn->src(1), 0)) {
+      replace_with_const(0);
+    } else if (reg_is_exact(insn->src(0), -1)) {
+      replace_with_neg(insn->src(1));
+    } else if (reg_is_exact(insn->src(1), -1)) {
+      replace_with_neg(insn->src(0));
+    } else if (maybe_reduce_lit8_both()) {
+      break;
+    } else if (maybe_reduce_lit16_both()) {
+      break;
+    }
+    break;
+  }
+
+  case OPCODE_AND_INT: {
+    if (reg_is_exact(insn->src(0), -1)) {
+      replace_with_move(insn->src(1));
+    } else if (reg_is_exact(insn->src(1), -1)) {
+      replace_with_move(insn->src(0));
+    } else if (reg_is_exact(insn->src(0), 0) || reg_is_exact(insn->src(1), 0)) {
+      replace_with_const(0);
+    } else if (maybe_reduce_lit8_both()) {
+      break;
+    } else if (maybe_reduce_lit16_both()) {
+      break;
+    }
+    break;
+  }
+
+  case OPCODE_OR_INT: {
+    if (reg_is_exact(insn->src(0), 0)) {
+      replace_with_move(insn->src(1));
+    } else if (reg_is_exact(insn->src(1), 0)) {
+      replace_with_move(insn->src(0));
+    } else if (reg_is_exact(insn->src(0), -1) ||
+               reg_is_exact(insn->src(1), -1)) {
+      replace_with_const(-1);
+    } else if (maybe_reduce_lit8_both()) {
+      break;
+    } else if (maybe_reduce_lit16_both()) {
+      break;
+    }
+    break;
+  }
+
+  case OPCODE_XOR_INT:
+    if (maybe_reduce_lit8_both()) {
+      break;
+    } else if (maybe_reduce_lit16_both()) {
+      break;
+    }
+    break;
+
+  case OPCODE_ADD_LONG:
+  case OPCODE_SUB_LONG:
+  case OPCODE_MUL_LONG:
+  case OPCODE_AND_LONG:
+  case OPCODE_OR_LONG:
+  case OPCODE_XOR_LONG:
+    // TODO: More complicated version of the above.
+    break;
+
+  default:
+    return;
+  }
+}
+
+} // namespace
 
 void Transform::simplify_instruction(const ConstantEnvironment& env,
                                      const WholeProgramState& wps,
@@ -222,7 +556,10 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
   case OPCODE_AND_LONG:
   case OPCODE_OR_LONG:
   case OPCODE_XOR_LONG: {
-    replace_with_const(env, cfg_it, xstores, declaring_type);
+    if (replace_with_const(env, cfg_it, xstores, declaring_type)) {
+      break;
+    }
+    try_simplify(env, cfg_it, m_config, *m_mutation);
     break;
   }
 
@@ -248,21 +585,56 @@ void Transform::remove_dead_switch(
 
   // Prune infeasible or unnecessary branches
   cfg::Edge* goto_edge = cfg.get_succ_edge_of_type(block, cfg::EDGE_GOTO);
-  std::unordered_set<cfg::Block*> remaining_branch_targets;
+  cfg::Block* goto_target = goto_edge->target();
+  std::unordered_map<cfg::Block*, uint32_t> remaining_branch_targets;
   std::vector<cfg::Edge*> remaining_branch_edges;
-  bool goto_is_feasible = !intra_cp.analyze_edge(goto_edge, env).is_bottom();
   for (auto branch_edge : cfg.get_succ_edges_of_type(block, cfg::EDGE_BRANCH)) {
     auto branch_is_feasible =
         !intra_cp.analyze_edge(branch_edge, env).is_bottom();
-    if (branch_is_feasible && branch_edge->target() != goto_edge->target()) {
+    if (branch_is_feasible) {
       remaining_branch_edges.push_back(branch_edge);
-      remaining_branch_targets.insert(branch_edge->target());
+      remaining_branch_targets[branch_edge->target()]++;
       continue;
     }
-    if (branch_is_feasible && branch_edge->target() == goto_edge->target()) {
-      goto_is_feasible = true;
-    }
     m_edge_deletes.push_back(branch_edge);
+  }
+
+  bool goto_is_feasible = !intra_cp.analyze_edge(goto_edge, env).is_bottom();
+  if (!goto_is_feasible && !remaining_branch_targets.empty()) {
+    // Rewire infeasible goto to absorb all cases to most common target
+    int32_t most_common_case_key{0};
+    cfg::Block* most_common_target{nullptr};
+    uint32_t most_common_target_count{0};
+    for (cfg::Edge* e : remaining_branch_edges) {
+      auto case_key = *e->case_key();
+      auto target = e->target();
+      auto count = remaining_branch_targets.at(target);
+      if (count > most_common_target_count ||
+          (count == most_common_target_count &&
+           case_key > most_common_case_key)) {
+        most_common_case_key = case_key;
+        most_common_target = target;
+        most_common_target_count = count;
+      }
+    }
+    always_assert(most_common_target != nullptr);
+    if (most_common_target != goto_target) {
+      m_edge_deletes.push_back(goto_edge);
+      goto_target = most_common_target;
+      m_edge_adds.emplace_back(block, goto_target, cfg::EDGE_GOTO);
+      goto_edge = nullptr;
+    }
+    auto removed = std20::erase_if(remaining_branch_edges, [&](auto* e) {
+      if (e->target() == most_common_target) {
+        m_edge_deletes.push_back(e);
+        return true;
+      }
+      return false;
+    });
+    always_assert(removed == most_common_target_count);
+    remaining_branch_targets.erase(most_common_target);
+    ++m_stats.branches_removed;
+    // goto is now feasible
   }
 
   // When all remaining branches are infeasible, the cfg will remove the switch
@@ -271,22 +643,21 @@ void Transform::remove_dead_switch(
     ++m_stats.branches_removed;
     return;
   }
+  always_assert(!remaining_branch_edges.empty());
 
-  if (remaining_branch_targets.size() > 1 || goto_is_feasible) {
-    // TODO: When !goto_is_feasible, cut off the goto edge...
+  remaining_branch_targets[goto_target]++;
+  if (remaining_branch_targets.size() > 1) {
     return;
   }
 
   always_assert(remaining_branch_targets.size() == 1);
-  always_assert(!goto_is_feasible);
   ++m_stats.branches_removed;
   // Replace the switch by a goto to the uniquely reachable block
   // We do that by deleting all but one of the remaining branch edges, and then
   // the cfg will rewrite the remaining branch into a goto and remove the switch
   // instruction.
-  m_edge_deletes.push_back(goto_edge);
   m_edge_deletes.insert(m_edge_deletes.end(),
-                        std::next(remaining_branch_edges.begin()),
+                        remaining_branch_edges.begin(),
                         remaining_branch_edges.end());
 }
 
@@ -318,8 +689,9 @@ void Transform::eliminate_dead_branch(
   const auto succs = cfg.get_succ_edges_if(block, [](const auto* e) {
     return e->type() == cfg::EDGE_GOTO || e->type() == cfg::EDGE_BRANCH;
   });
-  always_assert_log(succs.size() == 2, "actually %zu\n%s", succs.size(),
-                    SHOW(InstructionIterable(*block)));
+  always_assert_log(succs.size() == 2, "actually %zu\n%s in B%zu:\n%s",
+                    succs.size(), SHOW(InstructionIterable(*block)),
+                    block->id(), SHOW(cfg));
   for (auto& edge : succs) {
     // Check if the fixpoint analysis has determined the successors to be
     // unreachable
@@ -370,6 +742,12 @@ bool Transform::replace_with_throw(
 }
 
 void Transform::apply_changes(cfg::ControlFlowGraph& cfg) {
+  if (!m_edge_adds.empty()) {
+    for (auto& t : m_edge_adds) {
+      cfg.add_edge(std::get<0>(t), std::get<1>(t), std::get<2>(t));
+    }
+    m_edge_adds.clear();
+  }
   if (!m_edge_deletes.empty()) {
     cfg.delete_edges(m_edge_deletes.begin(), m_edge_deletes.end());
     m_edge_deletes.clear();
@@ -405,6 +783,7 @@ void Transform::apply(const intraprocedural::FixpointIterator& fp_iter,
                                                declaring_type);
   if (xstores && !g_redex->instrument_mode) {
     m_stats.unreachable_instructions_removed += cfg.simplify();
+    fp_iter.clear_switch_succ_cache();
     // legacy_apply_constants_and_prune_unreachable creates some new blocks that
     // fp_iter isn't aware of. As turns out, legacy_apply_forward_targets
     // doesn't care, and will still do the right thing.
@@ -754,6 +1133,7 @@ void Transform::Stats::log_metrics(ScopedMetrics& sm, bool with_scope) const {
   sm.set_metric("null_checks_method_calls", null_checks_method_calls);
   sm.set_metric("unreachable_instructions_removed",
                 unreachable_instructions_removed);
+  sm.set_metric("redundant_puts_removed", redundant_puts_removed);
   TRACE(CONSTP, 3, "Null checks removed: %zu(%zu)", null_checks,
         null_checks_method_calls);
   sm.set_metric("added_param_const", added_param_const);

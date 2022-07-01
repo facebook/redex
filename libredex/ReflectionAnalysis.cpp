@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -8,6 +8,7 @@
 #include "ReflectionAnalysis.h"
 
 #include <iomanip>
+#include <ostream>
 #include <unordered_map>
 
 #include <boost/optional.hpp>
@@ -427,9 +428,8 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     // not available here.
     auto init_state = AbstractObjectEnvironment::top();
     m_return_value.set_to_bottom();
-    const auto& signature =
-        m_dex_method->get_proto()->get_args()->get_type_list();
-    auto sig_it = signature.begin();
+    const auto* signature = m_dex_method->get_proto()->get_args();
+    auto sig_it = signature->begin();
     param_index_t param_position = 0;
 
     for (const auto& mie :
@@ -446,7 +446,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
           AbstractObjectDomain param_abstract_obj;
 
           DexType* type = *sig_it;
-          always_assert(sig_it++ != signature.end());
+          always_assert(sig_it++ != signature->end());
           if (context && (param_abstract_obj = context->get(param_position),
                           param_abstract_obj.is_value())) {
             // Parameter domain is provided with the calling context.

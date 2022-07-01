@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -12,6 +12,7 @@
 #include <cinttypes>
 #include <cstdio>
 #include <cstdlib>
+#include <iostream>
 #include <limits>
 #include <list>
 #include <thread>
@@ -57,6 +58,8 @@
 
 namespace {
 
+constexpr const char* INCOMING_HASHES = "incoming_hashes.txt";
+constexpr const char* OUTGOING_HASHES = "outgoing_hashes.txt";
 constexpr const char* REMOVABLE_NATIVES = "redex-removable-natives.txt";
 const std::string PASS_ORDER_KEY = "pass_order";
 
@@ -76,42 +79,49 @@ std::string get_apk_dir(const Json::Value& config) {
   return apkdir;
 }
 
-struct CheckerConfig {
+class CheckerConfig {
+ public:
   explicit CheckerConfig(const ConfigFiles& conf) {
     const Json::Value& type_checker_args =
         conf.get_json_config()["ir_type_checker"];
-    run_type_checker_on_input =
+    m_run_type_checker_on_input =
         type_checker_args.get("run_on_input", true).asBool();
-    run_type_checker_on_input_ignore_access =
+    m_run_type_checker_on_input_ignore_access =
         type_checker_args.get("run_on_input_ignore_access", false).asBool();
-    run_type_checker_after_each_pass =
+    m_run_type_checker_after_each_pass =
         type_checker_args.get("run_after_each_pass", true).asBool();
-    verify_moves = type_checker_args.get("verify_moves", true).asBool();
-    validate_invoke_super =
+    m_verify_moves = type_checker_args.get("verify_moves", true).asBool();
+    m_validate_invoke_super =
         type_checker_args.get("validate_invoke_super", true).asBool();
-    check_no_overwrite_this =
+    m_check_no_overwrite_this =
         type_checker_args.get("check_no_overwrite_this", false).asBool();
-    check_num_of_refs =
+
+    m_annotated_cfg_on_error =
+        type_checker_args.get("annotated_cfg_on_error", false).asBool();
+    m_annotated_cfg_on_error_reduced =
+        type_checker_args.get("annotated_cfg_on_error_reduced", true).asBool();
+
+    m_check_num_of_refs =
         type_checker_args.get("check_num_of_refs", false).asBool();
 
     for (auto& trigger_pass : type_checker_args["run_after_passes"]) {
-      type_checker_trigger_passes.insert(trigger_pass.asString());
+      m_type_checker_trigger_passes.insert(trigger_pass.asString());
     }
   }
 
   void on_input(const Scope& scope) {
-    if (!run_type_checker_on_input) {
+    if (!m_run_type_checker_on_input) {
       std::cerr << "Note: input type checking is turned off!" << std::endl;
       return;
     }
-    auto res = run_verifier(scope, verify_moves,
-                            /* check_no_overwrite_this= */ false,
-                            /* validate_access= */ true,
-                            /* exit_on_fail= */ false);
+
+    auto res =
+        check_no_overwrite_this(false).validate_access(true).run_verifier(
+            scope, /* exit_on_fail= */ false);
     if (!res) {
       return; // No issues.
     }
-    if (!run_type_checker_on_input_ignore_access) {
+    if (!m_run_type_checker_on_input_ignore_access) {
       std::string msg = *res;
       msg +=
           "\n If you are confident that this does not matter (e.g., because "
@@ -122,10 +132,8 @@ struct CheckerConfig {
       fail_error(msg);
     }
 
-    res = run_verifier(scope, verify_moves,
-                       /* check_no_overwrite_this= */ false,
-                       /* validate_access= */ false,
-                       /* exit_on_fail= */ false);
+    res = check_no_overwrite_this(false).validate_access(false).run_verifier(
+        scope, /* exit_on_fail= */ false);
     if (!res) {
       std::cerr << "Warning: input has accessibility issues. Continuing."
                 << std::endl;
@@ -139,8 +147,8 @@ struct CheckerConfig {
   }
 
   bool run_after_pass(const Pass* pass) {
-    return run_type_checker_after_each_pass ||
-           type_checker_trigger_passes.count(pass->name()) > 0;
+    return m_run_type_checker_after_each_pass ||
+           m_type_checker_trigger_passes.count(pass->name()) > 0;
   }
 
   /**
@@ -149,7 +157,7 @@ struct CheckerConfig {
    */
   size_t min_pass_idx_for_dex_ref_check(
       const std::vector<Pass*>& activated_passes) {
-    if (!check_num_of_refs) {
+    if (!m_check_num_of_refs) {
       return activated_passes.size();
     }
     size_t idx = 0;
@@ -199,13 +207,20 @@ struct CheckerConfig {
     }
   }
 
-  // TODO(fengliu): Kill the `validate_access` flag.
-  static boost::optional<std::string> run_verifier(const Scope& scope,
-                                                   bool verify_moves,
-                                                   bool check_no_overwrite_this,
-                                                   bool validate_access,
-                                                   bool validate_invoke_super,
-                                                   bool exit_on_fail = true) {
+  // Literate style.
+  CheckerConfig check_no_overwrite_this(bool val) const {
+    CheckerConfig ret = *this;
+    ret.m_check_no_overwrite_this = val;
+    return ret;
+  }
+  CheckerConfig validate_access(bool val) const {
+    CheckerConfig ret = *this;
+    ret.m_validate_access = val;
+    return ret;
+  }
+
+  boost::optional<std::string> run_verifier(const Scope& scope,
+                                            bool exit_on_fail = true) {
     TRACE(PM, 1, "Running IRTypeChecker...");
     Timer t("IRTypeChecker");
 
@@ -230,16 +245,34 @@ struct CheckerConfig {
       }
     };
 
-    auto run_checker = [&](DexMethod* dex_method) {
-      IRTypeChecker checker(dex_method, validate_access, validate_invoke_super);
-      if (verify_moves) {
+    auto run_checker_tmpl = [&](DexMethod* dex_method, auto fn) {
+      IRTypeChecker checker(dex_method, m_validate_access,
+                            m_validate_invoke_super);
+      if (m_verify_moves) {
         checker.verify_moves();
       }
-      if (check_no_overwrite_this) {
+      if (m_check_no_overwrite_this) {
         checker.check_no_overwrite_this();
       }
-      checker.run();
-      return checker;
+      return fn(std::move(checker));
+    };
+    auto run_checker = [&](DexMethod* dex_method) {
+      return run_checker_tmpl(dex_method, [](auto checker) {
+        checker.run();
+        return checker;
+      });
+    };
+    auto run_checker_error = [&](DexMethod* dex_method) {
+      if (m_annotated_cfg_on_error) {
+        return run_checker_tmpl(dex_method, [&](auto checker) {
+          if (m_annotated_cfg_on_error_reduced) {
+            return checker.dump_annotated_cfg_reduced(dex_method);
+          } else {
+            return checker.dump_annotated_cfg(dex_method);
+          }
+        });
+      }
+      return show(dex_method->get_code());
     };
 
     auto res =
@@ -264,7 +297,7 @@ struct CheckerConfig {
         << show(res.smallest_error_method) << std::endl
         << " " << checker.what() << std::endl
         << "Code:" << std::endl
-        << show(res.smallest_error_method->get_code());
+        << run_checker_error(res.smallest_error_method);
 
     if (res.errors > 1) {
       oss << "\n(" << (res.errors - 1) << " more issues!)";
@@ -282,14 +315,19 @@ struct CheckerConfig {
     _exit(EXIT_FAILURE);
   }
 
-  std::unordered_set<std::string> type_checker_trigger_passes;
-  bool run_type_checker_on_input;
-  bool run_type_checker_after_each_pass;
-  bool run_type_checker_on_input_ignore_access;
-  bool verify_moves;
-  bool validate_invoke_super;
-  bool check_no_overwrite_this;
-  bool check_num_of_refs;
+ private:
+  std::unordered_set<std::string> m_type_checker_trigger_passes;
+  bool m_run_type_checker_on_input;
+  bool m_run_type_checker_after_each_pass;
+  bool m_run_type_checker_on_input_ignore_access;
+  bool m_verify_moves;
+  bool m_validate_invoke_super;
+  bool m_check_no_overwrite_this;
+  bool m_check_num_of_refs;
+  // TODO(fengliu): Kill the `validate_access` flag.
+  bool m_validate_access{true};
+  bool m_annotated_cfg_on_error{false};
+  bool m_annotated_cfg_on_error_reduced{true};
 };
 
 class ScopedMemStats {
@@ -380,7 +418,6 @@ class CheckUniqueDeobfuscatedNames {
     std::unordered_map<const DexString*, DexMethod*> method_names;
     walk::methods(scope, [&method_names, pass_name](DexMethod* dex_method) {
       auto deob = dex_method->get_deobfuscated_name_or_null();
-      redex_assert(deob);
       auto it = method_names.find(deob);
       if (it != method_names.end()) {
         fprintf(
@@ -556,6 +593,24 @@ void process_method_profiles(PassManager& mgr, ConfigFiles& conf) {
   mgr.set_metric("~result~MethodProfiles~", conf.get_method_profiles().size());
   mgr.set_metric("~result~MethodProfiles~unresolved~",
                  conf.get_method_profiles().unresolved_size());
+}
+
+void maybe_write_hashes_incoming(const ConfigFiles& conf, const Scope& scope) {
+  if (conf.emit_incoming_hashes()) {
+    TRACE(PM, 1, "Writing incoming hashes...");
+    Timer t("Writing incoming hashes");
+    std::ofstream hashes_file(conf.metafile(INCOMING_HASHES));
+    hashing::print_classes(hashes_file, scope);
+  }
+}
+
+void maybe_write_hashes_outgoing(const ConfigFiles& conf, const Scope& scope) {
+  if (conf.emit_outgoing_hashes()) {
+    TRACE(PM, 1, "Writing outgoing hashes...");
+    Timer t("Writing outgoing hashes");
+    std::ofstream hashes_file(conf.metafile(OUTGOING_HASHES));
+    hashing::print_classes(hashes_file, scope);
+  }
 }
 
 void maybe_write_env_seeds_file(const ConfigFiles& conf, const Scope& scope) {
@@ -836,6 +891,81 @@ void run_assessor(PassManager& pm, const Scope& scope, bool initially = false) {
   }
 }
 
+// For debugging purpose allows tracing a class after each pass.
+// Env variable TRACE_CLASS_FILE provides the name of the output file where
+// these data will be written and env variable TRACE_CLASS_NAME would provide
+// the name of the class to be traced.
+class TraceClassAfterEachPass {
+ public:
+  TraceClassAfterEachPass() {
+
+    trace_class_file = getenv("TRACE_CLASS_FILE");
+    trace_class_name = getenv("TRACE_CLASS_NAME");
+    std::cerr << "TRACE_CLASS_FILE="
+              << (trace_class_file == nullptr ? "" : trace_class_file)
+              << std::endl;
+    std::cerr << "TRACE_CLASS_NAME="
+              << (trace_class_name == nullptr ? "" : trace_class_name)
+              << std::endl;
+    if (trace_class_name) {
+      if (trace_class_file) {
+        try {
+          int int_fd = std::stoi(trace_class_file);
+          fd = fdopen(int_fd, "w");
+        } catch (std::invalid_argument&) {
+          // Not an integer file descriptor; real file name.
+          fd = fopen(trace_class_file, "w");
+        }
+        if (!fd) {
+          fprintf(stderr,
+                  "Unable to open TRACE_CLASS_FILE, falling back to stderr\n");
+          fd = stderr;
+        }
+      }
+    }
+  }
+
+  ~TraceClassAfterEachPass() {
+    if (fd != stderr) {
+      fclose(fd);
+    }
+  }
+
+  void dump_cls(DexClass* cls) {
+    fprintf(fd, "Class %s\n", SHOW(cls));
+    std::vector<DexMethod*> methods = cls->get_all_methods();
+    std::vector<DexField*> fields = cls->get_all_fields();
+    for (auto* v : fields) {
+      fprintf(fd, "Field %s\n", SHOW(v));
+    }
+    for (auto* v : methods) {
+      fprintf(fd, "Method %s\n", SHOW(v));
+      if (v->get_code()) {
+        fprintf(fd, "%s\n", SHOW(v->get_code()));
+      }
+    }
+  }
+
+  void dump(const std::string& pass_name) {
+    if (trace_class_name) {
+      fprintf(fd, "After Pass  %s\n", pass_name.c_str());
+      auto* typ = DexType::get_type(trace_class_name);
+      if (typ && type_class(typ)) {
+        dump_cls(type_class(typ));
+      } else {
+        fprintf(fd, "Class = %s not foud\n", trace_class_name);
+      }
+    }
+  }
+
+ private:
+  FILE* fd = stderr;
+  char* trace_class_file;
+  char* trace_class_name;
+};
+
+static TraceClassAfterEachPass trace_cls;
+
 } // namespace
 
 std::unique_ptr<keep_rules::ProguardConfiguration> empty_pg_config() {
@@ -1002,6 +1132,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
 
   maybe_write_env_seeds_file(conf, scope);
   maybe_print_seeds_incoming(conf, scope, m_pg_config);
+  maybe_write_hashes_incoming(conf, scope);
 
   maybe_enable_opt_data(conf);
 
@@ -1090,10 +1221,9 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       if (run_type_checker) {
         // It's OK to overwrite the `this` register if we are not yet at the
         // output phase -- the register allocator can fix it up later.
-        CheckerConfig::run_verifier(scope, checker_conf.verify_moves,
-                                    /* check_no_overwrite_this */ false,
-                                    /* validate_access */ false,
-                                    checker_conf.validate_invoke_super);
+        checker_conf.check_no_overwrite_this(false)
+            .validate_access(false)
+            .run_verifier(scope);
       }
       auto timer = m_check_unique_deobfuscateds_timer.scope();
       check_unique_deobfuscated.run_after_pass(pass, scope);
@@ -1111,7 +1241,6 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   /////////////////////
   // MAIN PASS LOOP. //
   /////////////////////
-
   for (size_t i = 0; i < m_activated_passes.size(); ++i) {
     Pass* pass = m_activated_passes[i];
     const size_t pass_run = ++runs[pass];
@@ -1134,6 +1263,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
           profiler_all_info, &pass->name());
       jemalloc_util::ScopedProfiling malloc_prof(m_malloc_profile_pass == pass);
       pass->run_pass(stores, conf, *this);
+      trace_cls.dump(pass->name());
     }
 
     scoped_mem_stats.trace_log(this, pass);
@@ -1160,9 +1290,9 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
 
   // Always run the type checker before generating the optimized dex code.
   scope = build_class_scope(it);
-  CheckerConfig::run_verifier(
-      scope, checker_conf.verify_moves, get_redex_options().no_overwrite_this(),
-      /* validate_access */ true, checker_conf.validate_invoke_super);
+  checker_conf.check_no_overwrite_this(get_redex_options().no_overwrite_this())
+      .validate_access(true)
+      .run_verifier(scope);
 
   jni_native_context_helper.post_passes(scope, conf);
 
@@ -1171,6 +1301,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   graph_visualizer.finalize();
 
   maybe_print_seeds_outgoing(conf, it);
+  maybe_write_hashes_outgoing(conf, scope);
 
   sanitizers::lsan_do_recoverable_leak_check();
 
