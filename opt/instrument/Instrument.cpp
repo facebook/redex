@@ -579,8 +579,6 @@ void InstrumentPass::bind_config() {
   bind("instrument_only_root_store", false,
        m_options.instrument_only_root_store);
 
-  bind("shrink_defer_reg_threshold", 0, m_options.shrink_defer_reg_threshold);
-
   size_t max_analysis_methods;
   if (m_options.instrumentation_strategy == SIMPLE_METHOD_TRACING) {
     max_analysis_methods = m_options.num_shards;
@@ -1033,14 +1031,10 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
   // Simple config.
   shrinker::ShrinkerConfig shrinker_config;
   shrinker_config.run_const_prop = true;
-  shrinker_config.run_copy_prop = true;
   shrinker_config.run_local_dce = true;
   shrinker_config.compute_pure_methods = false;
 
   shrinker::Shrinker shrinker(stores, scope, shrinker_config);
-
-  std::mutex defer_mutex;
-  std::vector<DexMethod*> deferred_methods;
 
   {
     Timer cleanup{"Parallel Cleanup"};
@@ -1050,26 +1044,8 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
         return;
       }
 
-      if (m_options.shrink_defer_reg_threshold > 0 &&
-          m->get_code()->get_registers_size() >=
-              m_options.shrink_defer_reg_threshold) {
-        std::unique_lock<std::mutex> lock{defer_mutex};
-        deferred_methods.push_back(m);
-        return;
-      }
-
       shrinker.shrink_method(m);
     });
-  }
-
-  {
-    Timer timer{"Serial Cleanup"};
-    TRACE(INSTRUMENT, 1, "Have %zu methods to clean up serially",
-          deferred_methods.size());
-
-    for (auto* m : deferred_methods) {
-      shrinker.shrink_method(m);
-    }
   }
 
   // Probably shouldn't need to do this, as the outliner shouldn't run after
