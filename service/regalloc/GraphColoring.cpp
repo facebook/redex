@@ -1100,6 +1100,9 @@ void Allocator::allocate(cfg::ControlFlowGraph& cfg, bool is_static) {
     if (!spill_plan.empty()) {
       TRACE(REG, 5, "Spill plan:\n%s", SHOW(spill_plan));
       if (m_config.use_splitting) {
+        // TODO (T124893789): Live-range-splitting is known to be broken.
+        fprintf(stderr,
+                "WARNING: Live-range-splitting is known to be broken.\n");
         calc_split_costs(fixpoint_iter, cfg, &split_costs);
         find_split(ig, split_costs, &reg_transform, &spill_plan, &split_plan);
       }
