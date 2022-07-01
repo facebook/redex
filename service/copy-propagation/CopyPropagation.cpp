@@ -495,12 +495,16 @@ Stats CopyPropagation::run(const Scope& scope) {
       m_config.debug ? 1 : redex_parallel::default_num_threads());
 
   if (!deferred_methods.empty()) {
+    // Not really serial, but keeping timer name for comparison purposes
     Timer timer{"Serial treatment"};
 
-    for (auto* m : deferred_methods) {
-      auto result = handle_method(m, m->get_code());
-      stats += result;
-    }
+    workqueue_run<DexMethod*>(
+        [&](DexMethod* m) {
+          auto result = handle_method(m, m->get_code());
+          std::unique_lock<std::mutex> lock{defer_mutex};
+          stats += result;
+        },
+        deferred_methods, std::min(redex_parallel::default_num_threads(), 3UL));
   }
 
   return stats;
