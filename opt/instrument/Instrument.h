@@ -76,7 +76,6 @@ class InstrumentPass : public Pass {
     std::unordered_map<DexMethod*, DexMethod*> methods_replacement;
     std::vector<std::string> analysis_method_names;
     int64_t max_num_blocks;
-    size_t shrink_defer_reg_threshold{0};
     bool instrument_catches;
     bool instrument_blocks_without_source_block;
     bool instrument_only_root_store;
