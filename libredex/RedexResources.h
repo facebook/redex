@@ -28,6 +28,7 @@
 const char* const ONCLICK_ATTRIBUTE = "android:onClick";
 const char* const RES_DIRECTORY = "res";
 const char* const OBFUSCATED_RES_DIRECTORY = "r";
+const char* const RESOURCE_NAME_REMOVED = "(name removed)";
 
 const uint32_t PACKAGE_RESID_START = 0x7f000000;
 
@@ -104,11 +105,22 @@ class ResourceTableFile {
   virtual bool resource_value_identical(uint32_t a_id, uint32_t b_id) = 0;
   virtual std::unordered_set<uint32_t> get_types_by_name(
       const std::unordered_set<std::string>& type_names) = 0;
+  virtual std::unordered_set<uint32_t> get_types_by_name_prefixes(
+      const std::unordered_set<std::string>& type_name_prefixes) = 0;
   virtual void delete_resource(uint32_t red_id) = 0;
 
   virtual void remap_res_ids_and_serialize(
       const std::vector<std::string>& resource_files,
       const std::map<uint32_t, uint32_t>& old_to_new) = 0;
+
+  // Rename qualified resource names that are in allowed type and don't have
+  // keep_resource_prefixes to "(name removed)". Also rename filepaths
+  // according to filepath_old_to_new.
+  virtual size_t obfuscate_resource_and_serialize(
+      const std::vector<std::string>& resource_files,
+      const std::map<std::string, std::string>& filepath_old_to_new,
+      const std::unordered_set<uint32_t>& allowed_types,
+      const std::unordered_set<std::string>& keep_resource_prefixes) = 0;
 
   // Similar to above function, but reorder flags/entry/value data according to
   // old_to_new, as well as remapping references.
