@@ -12,7 +12,6 @@
   <string name="unused_durian">Durian</string>
   <string name="keep_me_unused_str">This should be kept</string>
   <string name="unused_pineapple">Pineapple</string>
-  <string name="duplicate_name">Duplicate name</string>
   <string-array name="some_fruits">
     <item>Fig</item>
     <item>@string/yummy_orange</item>

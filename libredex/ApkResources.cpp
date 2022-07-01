@@ -1394,15 +1394,6 @@ void ResourcesArscFile::remove_unreferenced_strings() {
   m_file_closed = true;
 }
 
-size_t ResourcesArscFile::obfuscate_resource_and_serialize(
-    const std::vector<std::string>& /* unused */,
-    const std::map<std::string, std::string>& filepath_old_to_new,
-    const std::unordered_set<uint32_t>& allowed_types,
-    const std::unordered_set<std::string>& keep_resource_prefixes) {
-  always_assert_log(false, "ApkResource anonymizing not yet supported");
-  return 0;
-}
-
 namespace {
 const std::array<std::string, 2> KNOWN_RES_DIRS = {
     std::string(RES_DIRECTORY) + "/",
@@ -1727,25 +1718,6 @@ std::unordered_set<uint32_t> ResourcesArscFile::get_types_by_name(
   for (size_t i = 0; i < typeNames.size(); ++i) {
     std::string typeStr(typeNames[i].string());
     if (type_names.count(typeStr) == 1) {
-      type_ids.emplace((i + 1) << TYPE_INDEX_BIT_SHIFT);
-    }
-  }
-  return type_ids;
-}
-
-std::unordered_set<uint32_t> ResourcesArscFile::get_types_by_name_prefixes(
-    const std::unordered_set<std::string>& type_name_prefixes) {
-
-  android::Vector<android::String8> typeNames;
-  res_table.getTypeNamesForPackage(0, &typeNames);
-
-  std::unordered_set<uint32_t> type_ids;
-  for (size_t i = 0; i < typeNames.size(); ++i) {
-    std::string typeStr(typeNames[i].string());
-    if (std::find_if(type_name_prefixes.begin(), type_name_prefixes.end(),
-                     [&](const std::string& prefix) {
-                       return typeStr.find(prefix) != std::string::npos;
-                     }) != type_name_prefixes.end()) {
       type_ids.emplace((i + 1) << TYPE_INDEX_BIT_SHIFT);
     }
   }

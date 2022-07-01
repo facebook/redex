@@ -96,7 +96,6 @@ class DexType;
   TM(NATIVE)            \
   TM(NULLCHECK)         \
   TM(OBFUSCATE)         \
-  TM(OBFUS_RES)         \
   TM(OEA)               \
   TM(OPTRES)            \
   TM(OPT_STORES)        \
