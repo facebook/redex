@@ -455,12 +455,21 @@ void remove_both_have_clinit(ClassMap* mergeable_to_merger) {
 
 /**
  * Don't merge a class if it is a field's type and this field can't be
- * renamed.
+ * renamed, of if it appeared in a field value.
  */
 void record_field_reference(
     const Scope& scope,
     std::unordered_map<const DexType*, DontMergeState>* dont_merge_status) {
   walk::fields(scope, [&](DexField* field) {
+    if (is_static(field) && field->get_type() == type::java_lang_Class()) {
+      // Checking type which might be stored as class in field.
+      auto value = field->get_static_value();
+      if (value != nullptr && value->evtype() == DEVT_TYPE) {
+        record_dont_merge_state(
+            static_cast<DexEncodedValueType*>(value)->type(), kStrict,
+            dont_merge_status);
+      }
+    }
     if (!can_rename(field)) {
       record_dont_merge_state(field->get_type(), kConditional,
                               dont_merge_status);
