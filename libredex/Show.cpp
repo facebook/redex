@@ -1223,7 +1223,7 @@ static IntType read(const uint8_t*& data, uint16_t n_bytes) {
                 "Only read into integral values.");
   always_assert_log(sizeof(IntType) >= n_bytes,
                     "Should not read more bytes than sizeof(IntType)");
-  IntType result;
+  IntType result = 0;
   memcpy(&result, data, n_bytes);
   data += n_bytes;
   return result;
