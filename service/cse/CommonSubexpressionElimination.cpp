@@ -51,6 +51,7 @@
 
 #include "CommonSubexpressionElimination.h"
 
+#include <cinttypes>
 #include <utility>
 
 #include "BaseIRAnalyzer.h"
@@ -1599,7 +1600,7 @@ bool CommonSubexpressionElimination::patch(bool runtime_assertions) {
       always_assert(!iterators_invalidated);
 
       for (auto earlier_insn : earlier_insns) {
-        TRACE(CSE, 4, "[CSE] forwarding %s to %s as const %ld",
+        TRACE(CSE, 4, "[CSE] forwarding %s to %s as const %" PRId64,
               SHOW(earlier_insn), SHOW(insn), literal);
       }
     } else {
