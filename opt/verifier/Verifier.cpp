@@ -8,6 +8,7 @@
 #include "Verifier.h"
 
 #include <algorithm>
+#include <cinttypes>
 #include <map>
 #include <string>
 #include <unordered_map>
@@ -197,7 +198,7 @@ void VerifierPass::run_pass(DexStoresVector& stores,
     fclose(fd);
   }
 
-  TRACE(VERIFY, 1, "%lu dependencies found", dependencies);
+  TRACE(VERIFY, 1, "%" PRIu64 " dependencies found", dependencies);
   mgr.incr_metric("dependencies", dependencies);
 }
 
