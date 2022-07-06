@@ -35,6 +35,7 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/opt/delsuper \
 	-I$(top_srcdir)/opt/evaluate_type_checks \
 	-I$(top_srcdir)/opt/final_inline \
+	-I$(top_srcdir)/opt/init-classes \
 	-I$(top_srcdir)/opt/instrument \
 	-I$(top_srcdir)/opt/interdex \
 	-I$(top_srcdir)/opt/layout-reachability \
@@ -73,6 +74,7 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/opt/resolve-proguard-values \
 	-I$(top_srcdir)/opt/resolve-refs \
 	-I$(top_srcdir)/opt/result-propagation \
+	-I$(top_srcdir)/opt/shrinker \
 	-I$(top_srcdir)/opt/shorten-srcstrings \
 	-I$(top_srcdir)/opt/singleimpl \
 	-I$(top_srcdir)/opt/split_huge_switches \
@@ -105,6 +107,7 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/service/dedup-blocks \
 	-I$(top_srcdir)/service/escape-analysis \
 	-I$(top_srcdir)/service/field-ops \
+	-I$(top_srcdir)/service/init-classes \
 	-I$(top_srcdir)/service/local-dce \
 	-I$(top_srcdir)/service/loop-info \
 	-I$(top_srcdir)/service/method-dedup \

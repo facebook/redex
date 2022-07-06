@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -331,8 +331,7 @@ void TypeInference::run(bool is_static,
   // specify the formal parameters of the method. They must be interpreted
   // separately.
   auto init_state = TypeEnvironment::top();
-  const auto& signature = args->get_type_list();
-  auto sig_it = signature.begin();
+  auto sig_it = args->begin();
   bool first_param = true;
   for (const auto& mie : InstructionIterable(m_cfg.get_param_instructions())) {
     IRInstruction* insn = mie.insn;
@@ -345,7 +344,7 @@ void TypeInference::run(bool is_static,
         set_reference(&init_state, insn->dest(), declaring_type);
       } else {
         // This is a regular parameter of the method.
-        always_assert(sig_it != signature.end());
+        always_assert(sig_it != args->end());
         const DexType* type = *sig_it;
         set_reference(&init_state, insn->dest(), type);
         ++sig_it;
@@ -353,7 +352,7 @@ void TypeInference::run(bool is_static,
       break;
     }
     case IOPCODE_LOAD_PARAM: {
-      always_assert(sig_it != signature.end());
+      always_assert(sig_it != args->end());
       if (type::is_float(*sig_it++)) {
         set_float(&init_state, insn->dest());
       } else {
@@ -362,7 +361,7 @@ void TypeInference::run(bool is_static,
       break;
     }
     case IOPCODE_LOAD_PARAM_WIDE: {
-      always_assert(sig_it != signature.end());
+      always_assert(sig_it != args->end());
       if (type::is_double(*sig_it++)) {
         set_double(&init_state, insn->dest());
       } else {
@@ -827,10 +826,9 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   case OPCODE_INVOKE_STATIC:
   case OPCODE_INVOKE_INTERFACE: {
     DexMethodRef* dex_method = insn->get_method();
-    const auto& arg_types =
-        dex_method->get_proto()->get_args()->get_type_list();
+    const auto* arg_types = dex_method->get_proto()->get_args();
     size_t expected_args =
-        (insn->opcode() != OPCODE_INVOKE_STATIC ? 1 : 0) + arg_types.size();
+        (insn->opcode() != OPCODE_INVOKE_STATIC ? 1 : 0) + arg_types->size();
     always_assert_log(insn->srcs_size() == expected_args, "%s", SHOW(insn));
 
     size_t src_idx{0};
@@ -839,7 +837,7 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
       // method is invoked.
       refine_reference(current_state, insn->src(src_idx++));
     }
-    for (DexType* arg_type : arg_types) {
+    for (DexType* arg_type : *arg_types) {
       if (type::is_object(arg_type)) {
         refine_reference(current_state, insn->src(src_idx++));
         continue;
@@ -1064,6 +1062,9 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   case OPCODE_REM_INT_LIT8: {
     refine_integer(current_state, insn->src(0));
     set_integer(current_state, RESULT_REGISTER);
+    break;
+  }
+  case IOPCODE_INIT_CLASS: {
     break;
   }
   }

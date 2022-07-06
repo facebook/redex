@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -301,7 +301,7 @@ class walk {
       for (const auto& it : *param_anno) {
         auto& anno_list = it.second->get_annotations();
         for (auto& anno : anno_list) {
-          walker(anno);
+          walker(anno.get());
         }
       }
     });
@@ -313,7 +313,7 @@ class walk {
     if (!anno_set) return;
     auto& anno_list = anno_set->get_annotations();
     for (auto& anno : anno_list) {
-      walker(anno);
+      walker(anno.get());
     }
   }
 

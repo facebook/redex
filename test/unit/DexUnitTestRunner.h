@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -52,13 +52,15 @@ class DexUnitTestRunner {
     return cls;
   }
 
-  static DexEncodedValue* make_ev(DexType* type, const EvType& val) {
+  static std::unique_ptr<DexEncodedValue> make_ev(DexType* type,
+                                                  const EvType& val) {
     if (val.which() == 0) {
       auto ev = DexEncodedValue::zero_for_type(type);
       ev->value(boost::get<uint64_t>(val));
       return ev;
     } else {
-      return new DexEncodedValueString(boost::get<const DexString*>(val));
+      return std::unique_ptr<DexEncodedValue>(
+          new DexEncodedValueString(boost::get<const DexString*>(val)));
     }
   }
 
@@ -70,8 +72,8 @@ class DexUnitTestRunner {
     auto field_name = DexString::make_string(name);
     auto field = static_cast<DexField*>(
         DexField::make_field(container, field_name, type));
-    auto ev = make_ev(type, val);
-    field->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL, ev);
+    field->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL,
+                         make_ev(type, val));
     cls->add_field(field);
     return field;
   }

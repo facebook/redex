@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -219,8 +219,8 @@ const DexType* OutlinerTypeAnalysis::get_result_type_helper(
     if (!is_static(m_method) && arg_idx-- == 0) {
       return m_method->get_class();
     }
-    const auto& arg_types = m_method->get_proto()->get_args()->get_type_list();
-    return arg_types.at(arg_idx);
+    const auto* arg_types = m_method->get_proto()->get_args();
+    return arg_types->at(arg_idx);
   }
 
   case OPCODE_FILL_ARRAY_DATA:
@@ -267,6 +267,7 @@ const DexType* OutlinerTypeAnalysis::get_result_type_helper(
   case OPCODE_SPUT_WIDE:
   case OPCODE_SPUT_OBJECT:
   case OPCODE_THROW:
+  case IOPCODE_INIT_CLASS:
     not_reached();
 
   case OPCODE_MOVE_EXCEPTION:
@@ -473,6 +474,7 @@ const DexType* OutlinerTypeAnalysis::get_type_demand(IRInstruction* insn,
   case OPCODE_SGET_SHORT:
   case OPCODE_SGET_WIDE:
   case OPCODE_SGET_OBJECT:
+  case IOPCODE_INIT_CLASS:
     not_reached();
 
   case OPCODE_RETURN:
@@ -725,10 +727,9 @@ const DexType* OutlinerTypeAnalysis::get_type_demand(IRInstruction* insn,
   case OPCODE_INVOKE_STATIC:
   case OPCODE_INVOKE_INTERFACE: {
     DexMethodRef* dex_method = insn->get_method();
-    const auto& arg_types =
-        dex_method->get_proto()->get_args()->get_type_list();
+    const auto* arg_types = dex_method->get_proto()->get_args();
     size_t expected_args =
-        (insn->opcode() != OPCODE_INVOKE_STATIC ? 1 : 0) + arg_types.size();
+        (insn->opcode() != OPCODE_INVOKE_STATIC ? 1 : 0) + arg_types->size();
     always_assert(insn->srcs_size() == expected_args);
 
     if (insn->opcode() != OPCODE_INVOKE_STATIC) {
@@ -736,7 +737,7 @@ const DexType* OutlinerTypeAnalysis::get_type_demand(IRInstruction* insn,
       // method is invoked.
       if (src_index-- == 0) return dex_method->get_class();
     }
-    return arg_types.at(src_index);
+    return arg_types->at(src_index);
   }
   case OPCODE_INVOKE_CUSTOM:
   case OPCODE_INVOKE_POLYMORPHIC:

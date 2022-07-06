@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -174,9 +174,8 @@ std::string show_type_list(const DexTypeList* l, bool deobfuscated) {
     return "";
   }
 
-  const auto& type_list = l->get_type_list();
-  string_builders::DynamicStringBuilder b(type_list.size());
-  for (const auto& type : type_list) {
+  string_builders::DynamicStringBuilder b(l->size());
+  for (const auto& type : *l) {
     b << show_type(type, deobfuscated);
   }
   return b.str();
@@ -1021,7 +1020,7 @@ std::string vshow(const DexTypeList* p) {
   if (!p) return "";
   std::ostringstream ss;
   bool first = true;
-  for (auto const& type : p->get_type_list()) {
+  for (auto const& type : *p) {
     if (!first) {
       ss << ", ";
     } else {
@@ -1056,7 +1055,7 @@ std::string show(const DexCode* code) {
   ss << "regs: " << code->get_registers_size()
      << ", ins: " << code->get_ins_size() << ", outs: " << code->get_outs_size()
      << "\n";
-  if (code->m_insns != nullptr) {
+  if (code->m_insns) {
     for (auto const& insn : code->get_instructions()) {
       ss << show(insn) << "\n";
     }
@@ -1116,7 +1115,7 @@ std::string vshow(const DexClass* p) {
   if (p->get_interfaces()) {
     ss << " implements ";
     bool first = true;
-    for (auto const type : p->get_interfaces()->get_type_list()) {
+    for (auto const type : *p->get_interfaces()) {
       if (first)
         first = false;
       else
@@ -1145,9 +1144,9 @@ std::string show(const DexAnnotationSet* p) {
   if (!p) return "";
   std::ostringstream ss;
   bool first = true;
-  for (auto const anno : p->get_annotations()) {
+  for (auto const& anno : p->get_annotations()) {
     if (!first) ss << ", ";
-    ss << show(anno);
+    ss << show(anno.get());
     first = false;
   }
   return ss.str();

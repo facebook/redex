@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -228,7 +228,7 @@ OP(SHR_INT_LIT8      , shr_int_lit8      , Ref::Literal, "shr-int/lit8")
 OP(USHR_INT_LIT8     , ushr_int_lit8     , Ref::Literal, "ushr-int/lit8")
 
 // Internal opcodes cannot be mapped to a corresponding DexOpcode.
-OPRANGE(an_internal , IOPCODE_LOAD_PARAM, IOPCODE_MOVE_RESULT_PSEUDO_WIDE)
+OPRANGE(an_internal , IOPCODE_LOAD_PARAM, IOPCODE_INIT_CLASS)
 OPRANGE(a_load_param, IOPCODE_LOAD_PARAM, IOPCODE_LOAD_PARAM_WIDE)
 IOP(LOAD_PARAM                , load_param                , Ref::None, "load-param")
 IOP(LOAD_PARAM_OBJECT         , load_param_object         , Ref::None, "load-param-object")
@@ -238,6 +238,8 @@ OPRANGE(a_move_result_pseudo, IOPCODE_MOVE_RESULT_PSEUDO, IOPCODE_MOVE_RESULT_PS
 IOP(MOVE_RESULT_PSEUDO        , move_result_pseudo        , Ref::None, "move-result-pseudo")
 IOP(MOVE_RESULT_PSEUDO_OBJECT , move_result_pseudo_object , Ref::None, "move-result-pseudo-object")
 IOP(MOVE_RESULT_PSEUDO_WIDE   , move_result_pseudo_wide   , Ref::None, "move-result-pseudo-wide")
+
+IOP(INIT_CLASS , init_class , Ref::Type, "init-class")
 
 // clang-format on
 

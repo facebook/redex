@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -201,7 +201,7 @@ class GraphBuilder {
 
   SignatureMap unify_super_interface_signatures(const DexClass* cls) {
     SignatureMap super_interface_signatures;
-    for (auto* intf : cls->get_interfaces()->get_type_list()) {
+    for (auto* intf : *cls->get_interfaces()) {
       auto intf_cls = type_class(intf);
       if (intf_cls != nullptr) {
         unify_signature_maps(analyze_interface(intf_cls),

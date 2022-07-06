@@ -1,16 +1,17 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
 
 #include <fstream>
-#include <iostream>
+#include <sstream>
 
 #include "DexClass.h"
 #include "DexPosition.h"
 #include "DexUtil.h"
+#include "RedexContext.h"
 #include "Show.h"
 #include "Trace.h"
 

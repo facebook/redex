@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -24,6 +24,8 @@ class BuilderTransform {
   BuilderTransform(const Scope& scope,
                    const TypeSystem& type_system,
                    const DexType* root,
+                   const init_classes::InitClassesWithSideEffects&
+                       init_classes_with_side_effects,
                    const inliner::InlinerConfig& inliner_config,
                    DexStoresVector& stores);
   ~BuilderTransform();
@@ -31,7 +33,9 @@ class BuilderTransform {
   bool inline_super_calls_and_ctors(const DexType* type);
 
   std::unordered_set<const IRInstruction*> get_not_inlined_insns(
-      DexMethod* caller, const std::unordered_set<IRInstruction*>& insns);
+      DexMethod* caller,
+      const std::unordered_set<IRInstruction*>& insns,
+      std::vector<IRInstruction*>* deleted_insns);
 
   void update_virtual_calls(
       const std::unordered_map<IRInstruction*, DexType*>& insn_to_type);

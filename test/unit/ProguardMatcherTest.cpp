@@ -72,8 +72,8 @@ class ProguardMatcherTest : public RedexTest {
       }
     }
 
-    ClassCreator cc{DexType::make_type(name.c_str())};
-    cc.set_super(super_klass ? DexType::make_type(super_klass->c_str())
+    ClassCreator cc{DexType::make_type(name)};
+    cc.set_super(super_klass ? DexType::make_type(*super_klass)
                              : type::java_lang_Object());
     return cc.create();
   }

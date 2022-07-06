@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -17,6 +17,7 @@
 #include <map>
 #include <mutex>
 #include <sstream>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -24,23 +25,23 @@
 #include "Debug.h"
 #include "DexMemberRefs.h"
 #include "FrequentlyUsedPointersCache.h"
-#include "KeepReason.h"
 
 class DexCallSite;
+class DexClass;
 class DexDebugInstruction;
+class DexField;
+class DexFieldRef;
+class DexMethod;
+class DexMethodHandle;
+class DexMethodRef;
+class DexProto;
 class DexString;
 class DexType;
-class DexFieldRef;
 class DexTypeList;
-class DexProto;
-class DexMethodRef;
-class DexMethodHandle;
-class DexClass;
-class DexField;
-struct DexFieldSpec;
-struct DexDebugEntry;
-struct DexPosition;
 class PositionPatternSwitchManager;
+struct DexDebugEntry;
+struct DexFieldSpec;
+struct DexPosition;
 struct RedexContext;
 namespace keep_rules {
 struct AssumeReturnValue;
@@ -56,8 +57,8 @@ struct RedexContext {
   explicit RedexContext(bool allow_class_duplicates = false);
   ~RedexContext();
 
-  const DexString* make_string(const char* nstr, uint32_t utfsize);
-  const DexString* get_string(const char* nstr, uint32_t utfsize);
+  const DexString* make_string(std::string_view s);
+  const DexString* get_string(std::string_view s);
 
   DexType* make_type(const DexString* dstring);
   DexType* get_type(const DexString* dstring);
@@ -96,8 +97,10 @@ struct RedexContext {
                     const DexFieldSpec& ref,
                     bool rename_on_collision);
 
-  DexTypeList* make_type_list(std::deque<DexType*>&& p);
-  DexTypeList* get_type_list(std::deque<DexType*>&& p);
+  using DexTypeListContainerType = std::vector<DexType*>;
+
+  DexTypeList* make_type_list(DexTypeListContainerType&& p);
+  DexTypeList* get_type_list(const DexTypeListContainerType& p);
 
   DexProto* make_proto(const DexType* rtype,
                        const DexTypeList* args,
@@ -147,25 +150,6 @@ struct RedexContext {
 
   const std::vector<DexClass*>& external_classes() const {
     return m_external_classes;
-  }
-
-  /*
-   * This returns true if we want to preserve keep reasons for better
-   * diagnostics.
-   */
-  static bool record_keep_reasons() { return g_redex->m_record_keep_reasons; }
-  static void set_record_keep_reasons(bool v) {
-    g_redex->m_record_keep_reasons = v;
-  }
-
-  template <class... Args>
-  static keep_reason::Reason* make_keep_reason(Args&&... args) {
-    auto to_insert =
-        std::make_unique<keep_reason::Reason>(std::forward<Args>(args)...);
-    if (g_redex->s_keep_reasons.emplace(to_insert.get(), to_insert.get())) {
-      return to_insert.release();
-    }
-    return g_redex->s_keep_reasons.at(to_insert.get());
   }
 
   // Add a lambda to be called when RedexContext is destructed. This is
@@ -244,21 +228,18 @@ struct RedexContext {
   // The two layers give infrastructure overhead, however, the base size
   // of a `std::map` and `ConcurrentContainer` is quite small.
 
-  using StringMapKey = std::pair<const char*, uint32_t>;
+  using StringMapKey = std::string_view;
   struct StringMapKeyHash {
-    size_t operator()(const StringMapKey& k) const { return k.second; }
-  };
-  struct StringMapKeyProjection {
-    const char* operator()(const StringMapKey& k) const { return k.first; }
+    size_t operator()(const StringMapKey& k) const { return k.size(); }
   };
 
   template <size_t n_slots = 31>
   using ConcurrentProjectedStringMap =
-      ConcurrentMapContainer<std::map<const char*, const DexString*, Strcmp>,
+      ConcurrentMapContainer<std::map<std::string_view, const DexString*>,
                              StringMapKey,
                              const DexString*,
                              StringMapKeyHash,
-                             StringMapKeyProjection,
+                             Identity,
                              n_slots>;
 
   template <size_t n_slots, size_t m_slots>
@@ -268,22 +249,12 @@ struct RedexContext {
     AType map;
 
     ConcurrentProjectedStringMap<n_slots>& at(const StringMapKey& k) {
-      size_t hashed = TruncatedStringHash()(k.first) % m_slots;
+      size_t hashed = TruncatedStringHash()(k.data(), k.size()) % m_slots;
       return map[hashed];
     }
 
     typename AType::iterator begin() { return map.begin(); }
     typename AType::iterator end() { return map.end(); }
-  };
-
-  struct Strcmp {
-    bool operator()(const char* a, const char* b) const {
-#if defined(__SSE4_2__) && defined(__linux__) && defined(__STRCMP_LESS__)
-      return strcmp_less(a, b);
-#else
-      return strcmp(a, b) < 0;
-#endif
-    }
   };
 
   // Hash a 32-byte subsequence of a given string, offset by 32 bytes from the
@@ -296,10 +267,10 @@ struct RedexContext {
   // cache line (offset + hash_prefix_len <= 64) and hash enough of the string
   // to minimize the chance of duplicate sections
   struct TruncatedStringHash {
-    size_t operator()(const char* s) {
+    size_t operator()(const char* s, uint32_t string_size) {
       constexpr size_t hash_prefix_len = 32;
       constexpr size_t offset = 32;
-      size_t len = strnlen(s, offset + hash_prefix_len);
+      size_t len = std::min<size_t>(string_size, offset + hash_prefix_len);
       size_t start = std::max<int64_t>(0, int64_t(len - hash_prefix_len));
       return boost::hash_range(s + start, s + len);
     }
@@ -316,9 +287,21 @@ struct RedexContext {
   std::mutex s_field_lock;
 
   // DexTypeList
-  ConcurrentMap<std::deque<DexType*>,
+  struct DexTypeListContainerTypePtrHash {
+    size_t operator()(const DexTypeListContainerType* d) const {
+      return boost::hash<DexTypeListContainerType>()(*d);
+    }
+  };
+  struct DexTypeListContainerTypePtrEquals {
+    size_t operator()(const DexTypeListContainerType* lhs,
+                      const DexTypeListContainerType* rhs) const {
+      return lhs == rhs || *lhs == *rhs;
+    }
+  };
+  ConcurrentMap<const DexTypeListContainerType*,
                 DexTypeList*,
-                boost::hash<std::deque<DexType*>>>
+                DexTypeListContainerTypePtrHash,
+                DexTypeListContainerTypePtrEquals>
       s_typelist_map;
 
   // DexProto
@@ -339,19 +322,12 @@ struct RedexContext {
 
   const std::vector<const DexType*> m_empty_types;
 
-  ConcurrentMap<keep_reason::Reason*,
-                keep_reason::Reason*,
-                keep_reason::ReasonPtrHash,
-                keep_reason::ReasonPtrEqual>
-      s_keep_reasons;
-
   // These functions will be called when ~RedexContext() is called
   std::mutex m_destruction_tasks_lock;
   std::vector<Task> m_destruction_tasks;
 
   std::unordered_map<std::string, size_t> m_sb_interaction_indices;
 
-  bool m_record_keep_reasons{false};
   bool m_allow_class_duplicates;
 
   bool m_pointers_cache_loaded{false};
@@ -365,17 +341,3 @@ struct RedexContext {
   ConcurrentMap<DexMethod*, std::unique_ptr<keep_rules::AssumeReturnValue>>
       method_return_values;
 };
-
-// One or more exceptions
-class aggregate_exception : public std::exception {
- public:
-  template <class T>
-  explicit aggregate_exception(T container)
-      : m_exceptions(container.begin(), container.end()) {}
-
-  // We do not really want to have this called directly
-  const char* what() const throw() override { return "one or more exception"; }
-
-  const std::vector<std::exception_ptr> m_exceptions;
-};
-void run_rethrow_first_aggregate(const std::function<void()>& f);

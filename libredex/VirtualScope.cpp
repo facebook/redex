@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -477,7 +477,7 @@ DexMethod* make_miranda(const DexType* type,
   return static_cast<DexMethod*>(miranda);
 }
 
-bool load_interfaces_methods(const std::deque<DexType*>&, BaseIntfSigs&);
+bool load_interfaces_methods(const DexTypeList*, BaseIntfSigs&);
 
 /**
  * Load methods for a given interface and its super interfaces.
@@ -486,8 +486,8 @@ bool load_interfaces_methods(const std::deque<DexType*>&, BaseIntfSigs&);
 bool load_interface_methods(const DexClass* intf_cls,
                             BaseIntfSigs& intf_methods) {
   bool escaped = false;
-  const auto& interfaces = intf_cls->get_interfaces()->get_type_list();
-  if (!interfaces.empty()) {
+  const auto* interfaces = intf_cls->get_interfaces();
+  if (!interfaces->empty()) {
     if (load_interfaces_methods(interfaces, intf_methods)) {
       escaped = true;
     }
@@ -503,10 +503,10 @@ bool load_interface_methods(const DexClass* intf_cls,
  * Load methods for a list of interfaces.
  * If any interface escapes (no DexClass*) return true.
  */
-bool load_interfaces_methods(const std::deque<DexType*>& interfaces,
+bool load_interfaces_methods(const DexTypeList* interfaces,
                              BaseIntfSigs& intf_methods) {
   bool escaped = false;
-  for (const auto& intf : interfaces) {
+  for (const auto& intf : *interfaces) {
     auto intf_cls = type_class(intf);
     if (intf_cls == nullptr) {
       TRACE(VIRT, 5, "[Unknown interface: %s]", SHOW(intf));
@@ -531,8 +531,8 @@ bool get_interface_methods(const DexType* type, BaseIntfSigs& intf_methods) {
   always_assert_log(
       cls != nullptr, "DexClass must exist for type %s\n", SHOW(type));
   bool escaped = false;
-  const auto& interfaces = cls->get_interfaces()->get_type_list();
-  if (!interfaces.empty()) {
+  const auto* interfaces = cls->get_interfaces();
+  if (!interfaces->empty()) {
     if (load_interfaces_methods(interfaces, intf_methods)) escaped = true;
   }
   return escaped;
@@ -716,8 +716,7 @@ void get_rooted_interface_scope(const SignatureMap& sig_map,
                                 const DexType* type,
                                 const DexClass* cls,
                                 Scopes& cls_scopes) {
-  const auto& intfs = cls->get_interfaces()->get_type_list();
-  for (const auto& intf : intfs) {
+  for (const auto& intf : *cls->get_interfaces()) {
     const DexClass* intf_cls = type_class(intf);
     if (intf_cls == nullptr) continue;
     for (const auto& meth : intf_cls->get_vmethods()) {

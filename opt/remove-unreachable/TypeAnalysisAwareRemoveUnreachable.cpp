@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -81,7 +81,7 @@ class TypeAnaysisAwareClosureMarker final
     }
     push(method, method->get_class());
     push(method, method->get_proto()->get_rtype());
-    for (auto const& t : method->get_proto()->get_args()->get_type_list()) {
+    for (auto const& t : *method->get_proto()->get_args()) {
       push(method, t);
     }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -32,7 +32,7 @@ PRIMITIVE_PSEUDO_TYPE_FIELDS
 
 } // namespace pseudo
 
-bool is_valid(const std::string& descriptor) {
+bool is_valid(std::string_view descriptor) {
   if (descriptor.empty()) {
     return false;
   }
@@ -81,7 +81,7 @@ bool is_valid(const std::string& descriptor) {
   for (; i != descriptor.length() - 1; ++i) {
     if (descriptor[i] == '/') {
       // Found a segment, do a check.
-      if (!is_valid_identifier(descriptor, start, i - start)) {
+      if (!is_valid_identifier(descriptor.substr(start, i - start))) {
         return false;
       }
       start = i + 1;
@@ -89,7 +89,7 @@ bool is_valid(const std::string& descriptor) {
   }
   if (start != i) {
     // Handle tail.
-    if (!is_valid_identifier(descriptor, start, i - start)) {
+    if (!is_valid_identifier(descriptor.substr(start, i - start))) {
       return false;
     }
   }
@@ -227,7 +227,7 @@ bool check_cast(const DexType* type, const DexType* base_type) {
   if (cls == nullptr) return false;
   if (check_cast(cls->get_super_class(), base_type)) return true;
   auto intfs = cls->get_interfaces();
-  for (auto intf : intfs->get_type_list()) {
+  for (auto intf : *intfs) {
     if (check_cast(intf, base_type)) return true;
   }
   return false;
@@ -306,7 +306,7 @@ DexType* make_array_type(const DexType* type, uint32_t level) {
   name.reserve(size + 1);
   name.append(level, '[');
   name.append(elem_name.begin(), elem_name.end());
-  return DexType::make_type(name.c_str(), name.size());
+  return DexType::make_type(DexString::make_string(name));
 }
 
 DexType* get_boxed_reference_type(const DexType* type) {
@@ -354,6 +354,27 @@ DexMethodRef* get_unboxing_method_for_type(const DexType* type) {
   return nullptr;
 }
 
+DexMethodRef* get_Number_unboxing_method_for_type(const DexType* type) {
+  if (type == type::java_lang_Boolean()) {
+    return DexMethod::make_method("Ljava/lang/Number;.booleanValue:()Z");
+  } else if (type == type::java_lang_Byte()) {
+    return DexMethod::make_method("Ljava/lang/Number;.byteValue:()B");
+  } else if (type == type::java_lang_Short()) {
+    return DexMethod::make_method("Ljava/lang/Number;.shortValue:()S");
+  } else if (type == type::java_lang_Character()) {
+    return DexMethod::make_method("Ljava/lang/Number;.charValue:()C");
+  } else if (type == type::java_lang_Integer()) {
+    return DexMethod::make_method("Ljava/lang/Number;.intValue:()I");
+  } else if (type == type::java_lang_Long()) {
+    return DexMethod::make_method("Ljava/lang/Number;.longValue:()J");
+  } else if (type == type::java_lang_Float()) {
+    return DexMethod::make_method("Ljava/lang/Number;.floatValue:()F");
+  } else if (type == type::java_lang_Double()) {
+    return DexMethod::make_method("Ljava/lang/Number;.doubleValue:()D");
+  }
+  return nullptr;
+}
+
 // Take a reference type, returns its valueOf function
 DexMethodRef* get_value_of_method_for_type(const DexType* type) {
   if (type == type::java_lang_Boolean()) {
@@ -376,7 +397,7 @@ DexMethodRef* get_value_of_method_for_type(const DexType* type) {
         "Ljava/lang/Long;.valueOf:(J)Ljava/lang/Long;");
   } else if (type == type::java_lang_Float()) {
     return DexMethod::make_method(
-        "Ljava/lang/Float;.valueOf:(Z)Ljava/lang/Float;");
+        "Ljava/lang/Float;.valueOf:(F)Ljava/lang/Float;");
   } else if (type == type::java_lang_Double()) {
     return DexMethod::make_method(
         "Ljava/lang/Double;.valueOf:(D)Ljava/lang/Double;");
@@ -478,6 +499,26 @@ boost::optional<int32_t> evaluate_type_check(const DexType* src_type,
   }
 
   return boost::none;
+}
+
+bool is_kotlin_lambda(const DexClass* cls) {
+  DexType* kotlin_type = DexType::make_type("Lkotlin/jvm/internal/Lambda;");
+  if (cls->get_super_class() == kotlin_type) {
+    return true;
+  }
+  return false;
+}
+
+bool is_kotlin_non_capturing_lambda(const DexClass* cls) {
+  if (!is_kotlin_lambda(cls)) {
+    return false;
+  }
+
+  if (cls->get_ifields().empty()) {
+    return true;
+  }
+
+  return false;
 }
 
 }; // namespace type

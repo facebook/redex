@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -32,7 +32,7 @@ const DexEncodedValue* parse_anno_value_helper(const DexAnnotationSet* anno_set,
       always_assert(elem.encoded_value->evtype() == type);
       auto val = elem.encoded_value->value();
       TRACE(ANNO, 9, " parsed annotation value: %" PRIu64, val);
-      return elem.encoded_value;
+      return elem.encoded_value.get();
     }
 
     for (auto& elem : elems) {
@@ -41,7 +41,7 @@ const DexEncodedValue* parse_anno_value_helper(const DexAnnotationSet* anno_set,
       }
       always_assert(elem.encoded_value->evtype() == type);
       TRACE(ANNO, 9, " parsed annotation elem: %s", SHOW(elem.encoded_value));
-      return elem.encoded_value;
+      return elem.encoded_value.get();
     }
 
     const DexEncodedValue* default_value =
@@ -126,17 +126,18 @@ const DexEncodedValue* parse_default_anno_value(
         continue;
       }
       DexEncodedValueAnnotation* default_values =
-          static_cast<DexEncodedValueAnnotation*>(target_elem.encoded_value);
+          static_cast<DexEncodedValueAnnotation*>(
+              target_elem.encoded_value.get());
       TRACE(ANNO, 9, "default values: %s type %d\n", SHOW(default_values),
             target_elem.encoded_value->evtype());
       always_assert(target_elem.encoded_value->evtype() == DEVT_ANNOTATION);
 
-      auto default_value_annos = default_values->annotations();
-      for (const auto& default_value_anno : *default_value_annos) {
+      const auto& default_value_annos = default_values->annotations();
+      for (const auto& default_value_anno : default_value_annos) {
         if (default_value_anno.string->str() != target_anno_element_name) {
           continue;
         }
-        return default_value_anno.encoded_value;
+        return default_value_anno.encoded_value.get();
       }
     }
   }
@@ -172,18 +173,20 @@ std::string parse_str_anno_value(const DexMethod* method,
                               std::move(name));
 }
 
-DexAnnotationSet* create_anno_set(
+std::unique_ptr<DexAnnotationSet> create_anno_set(
     const std::vector<std::pair<std::string, std::string>>& elements,
     DexType* anno_type) {
-  auto anno = new DexAnnotation(anno_type, DexAnnotationVisibility::DAV_BUILD);
+  auto anno = std::make_unique<DexAnnotation>(
+      anno_type, DexAnnotationVisibility::DAV_BUILD);
   for (const auto& pair : elements) {
     auto key = pair.first;
     auto elem_val = pair.second;
     anno->add_element(
         key.c_str(),
-        new DexEncodedValueString(DexString::make_string(elem_val)));
+        std::unique_ptr<DexEncodedValue>(
+            new DexEncodedValueString(DexString::make_string(elem_val))));
   }
-  DexAnnotationSet* anno_set = new DexAnnotationSet();
-  anno_set->add_annotation(anno);
+  auto anno_set = std::make_unique<DexAnnotationSet>();
+  anno_set->add_annotation(std::move(anno));
   return anno_set;
 }

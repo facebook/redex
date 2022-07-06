@@ -40,6 +40,7 @@ libredex_la_SOURCES = \
 	liblocator/locator.cpp \
 	libredex/ABExperimentContext.cpp \
 	libredex/ABExperimentContextImpl.cpp \
+	libredex/AggregateException.cpp \
 	libredex/AnalysisUsage.cpp \
 	libredex/AnnoUtils.cpp \
 	libredex/ApiLevelChecker.cpp \
@@ -89,6 +90,7 @@ libredex_la_SOURCES = \
 	libredex/InitCollisionFinder.cpp \
 	libredex/InlinerConfig.cpp \
 	libredex/InstructionLowering.cpp \
+	libredex/InteractiveDebugging.cpp \
 	libredex/IODIMetadata.cpp \
 	libredex/IRAssembler.cpp \
 	libredex/IRCode.cpp \
@@ -191,6 +193,7 @@ libredex_la_SOURCES = \
 	service/constant-propagation/ConstantPropagationTransform.cpp \
 	service/constant-propagation/ConstantPropagationWholeProgramState.cpp \
 	service/constant-propagation/ConstructorParams.cpp \
+	service/constant-propagation/DefinitelyAssignedIFields.cpp \
 	service/constant-propagation/IPConstantPropagationAnalysis.cpp \
 	service/constant-propagation/ObjectDomain.cpp \
 	service/constant-propagation/SignDomain.cpp \
@@ -206,6 +209,8 @@ libredex_la_SOURCES = \
 	service/escape-analysis/BlamingAnalysis.cpp \
 	service/escape-analysis/LocalPointersAnalysis.cpp \
 	service/field-ops/FieldOpTracker.cpp \
+	service/init-classes/InitClassPruner.cpp \
+	service/init-classes/InitClassesWithSideEffects.cpp \
 	service/kotlin-instance-rewrite/KotlinInstanceRewriter.cpp \
 	service/local-dce/LocalDce.cpp \
 	service/loop-info/LoopInfo.cpp \
@@ -245,6 +250,7 @@ libredex_la_SOURCES = \
 	service/type-analysis/WholeProgramState.cpp \
 	service/type-analysis/TypeAnalysisTransform.cpp \
 	service/type-analysis/TypeAnalysisRuntimeAssert.cpp \
+	service/type-analysis/ResolveMethodRefs.cpp \
 	service/type-string-rewriter/TypeStringRewriter.cpp \
 	shared/DexDefs.cpp \
 	shared/DexEncoding.cpp \
@@ -310,6 +316,7 @@ libopt_la_SOURCES = \
 	opt/evaluate_type_checks/EvaluateTypeChecks.cpp \
 	opt/final_inline/FinalInline.cpp \
 	opt/final_inline/FinalInlineV2.cpp \
+	opt/init-classes/InitClassLoweringPass.cpp \
 	opt/insert-source-blocks/InsertSourceBlocks.cpp \
 	opt/instrument/BlockInstrument.cpp \
 	opt/instrument/Instrument.cpp \
@@ -318,6 +325,7 @@ libopt_la_SOURCES = \
 	opt/interdex/InterDex.cpp \
 	opt/interdex/InterDexPass.cpp \
 	opt/kotlin-lambda/RewriteKotlinSingletonInstance.cpp \
+	opt/kotlin-lambda/KotlinObjectInliner.cpp \
 	opt/layout-reachability/LayoutReachabilityPass.cpp \
 	opt/local-dce/LocalDcePass.cpp \
 	opt/merge_interface/MergeInterface.cpp \
@@ -370,10 +378,12 @@ libopt_la_SOURCES = \
 	opt/result-propagation/ResultPropagation.cpp \
 	opt/resolve-proguard-values/ResolveProguardAssumeValues.cpp \
 	opt/shorten-srcstrings/Shorten.cpp \
+	opt/shrinker/ShrinkerPass.cpp \
 	opt/make-public/MakePublicPass.cpp \
 	opt/methodinline/IntraDexInlinePass.cpp \
 	opt/methodinline/MethodInlinePass.cpp \
 	opt/methodinline/PerfMethodInlinePass.cpp \
+	opt/methodinline/BridgeSynthInlinePass.cpp \
 	opt/outliner/OutlinerTypeAnalysis.cpp \
 	opt/outliner/InstructionSequenceOutliner.cpp \
 	opt/singleimpl/SingleImpl.cpp \
@@ -382,6 +392,7 @@ libopt_la_SOURCES = \
 	opt/singleimpl/SingleImplStats.cpp \
 	opt/simplify_cfg/SimplifyCFG.cpp \
 	opt/split_huge_switches/SplitHugeSwitchPass.cpp \
+	opt/object-escape-analysis/ObjectEscapeAnalysis.cpp \
 	opt/staticrelo/StaticReloV2.cpp \
 	opt/string_concatenator/StringConcatenator.cpp \
 	opt/stringbuilder-outliner/StringBuilderOutliner.cpp \

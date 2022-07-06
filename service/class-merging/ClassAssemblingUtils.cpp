@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -32,50 +32,6 @@ void patch_iget_for_int_like_types(DexMethod* meth,
   insn->set_opcode(OPCODE_IGET);
 }
 
-/**
- * Change the super class of a given class. The assumption is the new super
- * class has only one ctor and it shares the same signature with the old super
- * ctor.
- */
-void change_super_class(DexClass* cls, DexType* super_type) {
-  always_assert(cls);
-  DexClass* super_cls = type_class(super_type);
-  DexClass* old_super_cls = type_class(cls->get_super_class());
-  always_assert(super_cls);
-  always_assert(old_super_cls);
-  auto super_ctors = super_cls->get_ctors();
-  auto old_super_ctors = old_super_cls->get_ctors();
-  // Assume that both the old and the new super only have one ctor
-  always_assert(super_ctors.size() == 1);
-  always_assert(old_super_ctors.size() == 1);
-
-  // Fix calls to super_ctor in its ctors.
-  // NOTE: we are not parallelizing this since the ctor is very short.
-  size_t num_insn_fixed = 0;
-  for (auto ctor : cls->get_ctors()) {
-    TRACE(CLMG, 5, "Fixing ctor: %s", SHOW(ctor));
-    auto code = ctor->get_code();
-    for (auto& mie : InstructionIterable(code)) {
-      auto insn = mie.insn;
-      if (!opcode::is_invoke_direct(insn->opcode()) || !insn->has_method()) {
-        continue;
-      }
-      // Replace "invoke_direct v0, old_super_type;.<init>:()V" with
-      // "invoke_direct v0, super_type;.<init>:()V"
-      if (insn->get_method() == old_super_ctors[0]) {
-        TRACE(CLMG, 9, "  - Replacing call: %s with", SHOW(insn));
-        insn->set_method(super_ctors[0]);
-        TRACE(CLMG, 9, " %s", SHOW(insn));
-        num_insn_fixed++;
-      }
-    }
-  }
-  TRACE(CLMG, 5, "Fixed %ld instructions", num_insn_fixed);
-
-  cls->set_super_class(super_type);
-  TRACE(CLMG, 5, "Added super class %s to %s", SHOW(super_type), SHOW(cls));
-}
-
 std::string get_merger_package_name(const DexType* type) {
   auto pkg_name = type::get_package_name(type);
   // Avoid an Android OS like package name, which might confuse the custom class
@@ -86,51 +42,6 @@ std::string get_merger_package_name(const DexType* type) {
     return "Lcom/facebook/redex/";
   }
   return pkg_name;
-}
-
-/**
- * Filter out the implementors who implement only the interface_root and extend
- * java.lang.Object, and create an empty superclass for them. The new class
- * will be used to represent the interface_root in the later analysis and
- * merging process. Use an eligible_set to filter the implementors.
- */
-DexType* create_empty_base_cls_for_intf_root(
-    const std::string& base_type_name,
-    const DexType* interface_root,
-    const TypeSet& all_implementors,
-    const ConstTypeHashSet& eligible_set) {
-  // Create an empty base class and put the base class in the same
-  // package as the root interface.
-  auto base_type = DexType::make_type(DexString::make_string(base_type_name));
-  create_class(base_type,
-               type::java_lang_Object(),
-               get_merger_package_name(interface_root),
-               std::vector<DexField*>(),
-               TypeSet(),
-               true);
-
-  TRACE(CLMG, 3, "Created an empty base class %s for interface %s.",
-        SHOW(base_type), SHOW(interface_root));
-
-  // Set it as the super class of implementors.
-  size_t num = 0;
-
-  for (auto impl_type : all_implementors) {
-    auto impl_cls = type_class(impl_type);
-    if (impl_cls->is_external() || !can_delete(impl_cls)) {
-      continue;
-    }
-    auto* ifcs = impl_cls->get_interfaces();
-    // Add an empty base class to qualified implementors
-    if (ifcs->size() == 1 && *ifcs->begin() == interface_root &&
-        impl_cls->get_super_class() == type::java_lang_Object() &&
-        eligible_set.count(impl_type)) {
-      change_super_class(impl_cls, base_type);
-      num++;
-    }
-  }
-
-  return num > 0 ? base_type : nullptr;
 }
 
 } // namespace
@@ -343,61 +254,6 @@ void add_class(DexClass* new_cls,
         scope.size());
   scope.push_back(new_cls);
   DexStore::add_class(new_cls, stores, dex_id);
-}
-
-/**
- * In some limited cases we can do class merging on an interface when
- * implementors of the interface only implement that interface and have no
- * parent class other than java.lang.Object. We create a base class for those
- * implementors and use the new base class as root, and proceed with type
- * erasure as usual.
- */
-void handle_interface_as_root(ModelSpec& spec,
-                              Scope& scope,
-                              DexStoresVector& stores) {
-  std::vector<const DexType*> interface_roots;
-  for (const auto root : spec.roots) {
-    auto cls = type_class(root);
-    if (is_interface(cls)) {
-      interface_roots.push_back(root);
-    }
-  }
-  if (interface_roots.empty()) {
-    return;
-  }
-
-  ClassHierarchy ch = build_type_hierarchy(scope);
-  InterfaceMap intf_map = build_interface_map(ch);
-
-  // The created base_type name would be "LEmptyBase" + class_name_prefix +
-  // id + name_tag.
-  std::string prefix = "LEmptyBase" + spec.class_name_prefix;
-  auto root_store_classes =
-      get_root_store_types(stores, spec.include_primary_dex);
-
-  ConstTypeHashSet& eligible_set =
-      spec.merging_targets.empty() ? root_store_classes : spec.merging_targets;
-
-  size_t idx = 0;
-  for (const auto interface_root : interface_roots) {
-    const auto all_implementors =
-        get_all_implementors(intf_map, interface_root);
-    auto type_name_tag = get_type_name_tag(interface_root);
-    auto base_type_name =
-        prefix + std::to_string(idx) +
-        (type_name_tag == spec.class_name_prefix ? "" : type_name_tag) + ";";
-    auto empty_base = create_empty_base_cls_for_intf_root(
-        base_type_name, interface_root, all_implementors, eligible_set);
-    if (empty_base != nullptr) {
-      TRACE(CLMG, 3, "Changing the root from %s to %s.", SHOW(interface_root),
-            SHOW(empty_base));
-      spec.roots.insert(empty_base);
-      add_class(type_class(empty_base), scope, stores, boost::none);
-    }
-    // Remove interface roots regardless of whether an empty base was added.
-    spec.roots.erase(interface_root);
-    ++idx;
-  }
 }
 
 } // namespace class_merging

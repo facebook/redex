@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -8,6 +8,7 @@
 #include "ClassHierarchy.h"
 
 #include "DexUtil.h"
+#include "RedexContext.h"
 #include "Resolver.h"
 #include "Show.h"
 #include "Timer.h"
@@ -73,8 +74,7 @@ bool gather_intf_extenders(const DexType* extender,
   const DexClass* extender_cls = type_class(extender);
   if (!extender_cls) return extends;
   if (is_interface(extender_cls)) {
-    for (const auto& extends_intf :
-         extender_cls->get_interfaces()->get_type_list()) {
+    for (const auto& extends_intf : *extender_cls->get_interfaces()) {
       if (extends_intf == intf ||
           gather_intf_extenders(extends_intf, intf, intf_extenders)) {
         intf_extenders.insert(extender);
@@ -97,7 +97,7 @@ void build_interface_map(InterfaceMap& interfaces,
                          const ClassHierarchy& hierarchy,
                          const DexClass* current,
                          const TypeSet& implementors) {
-  for (const auto& intf : current->get_interfaces()->get_type_list()) {
+  for (const auto& intf : *current->get_interfaces()) {
     interfaces[intf].insert(implementors.begin(), implementors.end());
     const auto intf_cls = type_class(intf);
     if (intf_cls == nullptr) continue;
@@ -169,7 +169,7 @@ void get_all_implementors(const Scope& scope,
     auto cur = cls;
     bool found = false;
     while (!found && cur != nullptr) {
-      for (auto impl : cur->get_interfaces()->get_type_list()) {
+      for (auto impl : *cur->get_interfaces()) {
         if (intfs.count(impl) > 0) {
           impls.insert(cls->get_type());
           found = true;

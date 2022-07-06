@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -8,7 +8,6 @@
 #include "LocalDcePass.h"
 
 #include <array>
-#include <iostream>
 #include <unordered_set>
 #include <vector>
 
@@ -21,6 +20,7 @@
 #include "GraphUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
+#include "InitClassesWithSideEffects.h"
 #include "MethodOverrideGraph.h"
 #include "PassManager.h"
 #include "Purity.h"
@@ -34,6 +34,8 @@
 namespace {
 
 constexpr const char* METRIC_NPE_INSTRUCTIONS = "num_npe_instructions";
+constexpr const char* METRIC_INIT_CLASS_INSTRUCTIONS_ADDED =
+    "num_init_class_instructions_added";
 constexpr const char* METRIC_DEAD_INSTRUCTIONS = "num_dead_instructions";
 constexpr const char* METRIC_UNREACHABLE_INSTRUCTIONS =
     "num_unreachable_instructions";
@@ -45,6 +47,12 @@ constexpr const char* METRIC_COMPUTED_NO_SIDE_EFFECTS_METHODS =
     "num_computed_no_side_effects_methods";
 constexpr const char* METRIC_COMPUTED_NO_SIDE_EFFECTS_METHODS_ITERATIONS =
     "num_computed_no_side_effects_methods_iterations";
+constexpr const char* METRIC_INIT_CLASS_INSTRUCTIONS =
+    "num_init_class_instructions";
+constexpr const char* METRIC_INIT_CLASS_INSTRUCTIONS_REMOVED =
+    "num_init_class_instructions_removed";
+constexpr const char* METRIC_INIT_CLASS_INSTRUCTIONS_REFINED =
+    "num_init_class_instructions_refined";
 
 } // namespace
 
@@ -52,6 +60,7 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
                             ConfigFiles& conf,
                             PassManager& mgr) {
   auto scope = build_class_scope(stores);
+
   auto pure_methods = get_pure_methods();
   auto configured_pure_methods = conf.get_pure_methods();
   pure_methods.insert(configured_pure_methods.begin(),
@@ -59,14 +68,28 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
   auto immutable_getters = get_immutable_getters(scope);
   pure_methods.insert(immutable_getters.begin(), immutable_getters.end());
   std::unique_ptr<const method_override_graph::Graph> override_graph;
+  if (!mgr.unreliable_virtual_scopes()) {
+    override_graph = method_override_graph::build_graph(scope);
+  }
+  std::unique_ptr<init_classes::InitClassesWithSideEffects>
+      init_classes_with_side_effects;
+  if (!mgr.init_class_lowering_has_run()) {
+    init_classes_with_side_effects =
+        std::make_unique<init_classes::InitClassesWithSideEffects>(
+            scope, conf.create_init_class_insns(), override_graph.get());
+  }
   std::unordered_set<const DexMethod*> computed_no_side_effects_methods;
   size_t computed_no_side_effects_methods_iterations = 0;
   if (!mgr.unreliable_virtual_scopes()) {
-    override_graph = method_override_graph::build_graph(scope);
+    method::ClInitHasNoSideEffectsPredicate clinit_has_no_side_effects =
+        [&](const DexType* type) {
+          return !init_classes_with_side_effects ||
+                 !init_classes_with_side_effects->refine(type);
+        };
     computed_no_side_effects_methods_iterations =
-        compute_no_side_effects_methods(scope, override_graph.get(),
-                                        pure_methods,
-                                        &computed_no_side_effects_methods);
+        compute_no_side_effects_methods(
+            scope, override_graph.get(), clinit_has_no_side_effects,
+            pure_methods, &computed_no_side_effects_methods);
     for (auto m : computed_no_side_effects_methods) {
       pure_methods.insert(const_cast<DexMethod*>(m));
     }
@@ -89,12 +112,14 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
           return LocalDce::Stats();
         }
 
-        LocalDce ldce(pure_methods, override_graph.get(),
-                      may_allocate_registers);
-        ldce.dce(code);
+        LocalDce ldce(init_classes_with_side_effects.get(), pure_methods,
+                      override_graph.get(), may_allocate_registers);
+        ldce.dce(code, /* normalize_new_instances */ true, m->get_class());
         return ldce.get_stats();
       });
   mgr.incr_metric(METRIC_NPE_INSTRUCTIONS, stats.npe_instruction_count);
+  mgr.incr_metric(METRIC_INIT_CLASS_INSTRUCTIONS_ADDED,
+                  stats.init_class_instructions_added);
   mgr.incr_metric(METRIC_DEAD_INSTRUCTIONS, stats.dead_instruction_count);
   mgr.incr_metric(METRIC_UNREACHABLE_INSTRUCTIONS,
                   stats.unreachable_instruction_count);
@@ -105,11 +130,18 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
                   computed_no_side_effects_methods.size());
   mgr.incr_metric(METRIC_COMPUTED_NO_SIDE_EFFECTS_METHODS_ITERATIONS,
                   computed_no_side_effects_methods_iterations);
-
+  mgr.incr_metric(METRIC_INIT_CLASS_INSTRUCTIONS,
+                  stats.init_classes.init_class_instructions);
+  mgr.incr_metric(METRIC_INIT_CLASS_INSTRUCTIONS_REMOVED,
+                  stats.init_classes.init_class_instructions_removed);
+  mgr.incr_metric(METRIC_INIT_CLASS_INSTRUCTIONS_REFINED,
+                  stats.init_classes.init_class_instructions_refined);
   TRACE(DCE, 1,
-        "instructions removed -- npe: %zu, dead: %zu, unreachable: %zu; "
+        "instructions removed -- npe: %zu, dead: %zu, init-class added: %zu, "
+        "unreachable: %zu; "
         "normalized %zu new-instance instructions, %zu aliasaed",
         stats.npe_instruction_count, stats.dead_instruction_count,
+        stats.init_class_instructions_added,
         stats.unreachable_instruction_count, stats.normalized_new_instances,
         stats.aliased_new_instances);
 }

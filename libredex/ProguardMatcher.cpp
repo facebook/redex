@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -15,6 +15,7 @@
 
 #include "ClassHierarchy.h"
 #include "ConcurrentContainers.h"
+#include "DexAnnotation.h"
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "ProguardMatcher.h"
@@ -22,6 +23,7 @@
 #include "ProguardRegex.h"
 #include "ProguardReporting.h"
 #include "ReachableClasses.h"
+#include "RedexContext.h"
 #include "Show.h"
 #include "StringBuilder.h"
 #include "Timer.h"
@@ -154,7 +156,7 @@ struct ClassMatcher {
   bool search_interfaces(const DexClass* cls) {
     const auto* interfaces = cls->get_interfaces();
     if (!interfaces) return false;
-    for (const auto& impl : interfaces->get_type_list()) {
+    for (const auto& impl : *interfaces) {
       auto impl_class = type_class(impl);
       if (impl_class) {
         if (type_and_annotation_match(impl_class) ||
@@ -237,7 +239,7 @@ void build_extends_or_implements_hierarchy(const Scope& scope,
     if (super != nullptr) {
       (*hierarchy)[super].insert(type);
     }
-    for (const auto& impl : cls->get_interfaces()->get_type_list()) {
+    for (const auto& impl : *cls->get_interfaces()) {
       (*hierarchy)[impl].insert(type);
     }
   }

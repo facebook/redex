@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -39,7 +39,7 @@ TEST_F(DefaultAnnotationTest, defaultAnnotation) {
       std::string no_such_anno_name = "noSuchVal";
 
       if (set) {
-        for (auto const anno : set->get_annotations()) {
+        for (auto const& anno : set->get_annotations()) {
           // annotation with default value
           if ("foo" == dex_method->str()) {
             // ensure that method foo() has only

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -15,6 +15,7 @@
 #include "DexClass.h"
 #include "MergerType.h"
 #include "MergingStrategies.h"
+#include "PassManager.h"
 #include "Trace.h"
 #include "TypeSystem.h"
 
@@ -191,6 +192,29 @@ struct ModelSpec {
   boost::optional<size_t> max_num_dispatch_target{boost::none};
 };
 
+struct ModelStats {
+  // Model level stats
+  uint32_t m_all_types = 0;
+  uint32_t m_non_mergeables = 0;
+  uint32_t m_excluded = 0;
+  uint32_t m_dropped = 0;
+  // InterDex grouping stats
+  std::map<InterdexSubgroupIdx, size_t> m_interdex_groups{};
+  // Stats for approximate shape merging
+  ApproximateStats m_approx_stats{};
+  // Merging related stats
+  uint32_t m_num_classes_merged = 0;
+  uint32_t m_num_generated_classes = 0;
+  uint32_t m_num_ctor_dedupped = 0;
+  uint32_t m_num_static_non_virt_dedupped = 0;
+  uint32_t m_num_vmethods_dedupped = 0;
+  uint32_t m_num_const_lifted_methods = 0;
+
+  ModelStats& operator+=(const ModelStats& stats);
+
+  void update_redex_stats(const std::string& prefix, PassManager& mgr) const;
+};
+
 /**
  * A Model is a revised hierarchy for the class set under analysis.
  * The purpose is to define a small number of types that can be used to
@@ -202,17 +226,6 @@ struct ModelSpec {
  * Manipulation of the Model is done via calls to the Model public API.
  */
 class Model {
- public:
-  struct Metrics {
-    size_t all_types{0};
-    size_t non_mergeables{0};
-    size_t excluded{0};
-    size_t dropped{0};
-  } m_metric;
-
-  // Stats for approximate shape merging
-  ApproximateStats m_approx_stats;
-
  public:
   /**
    * Build a Model given a scope and a specification.
@@ -266,6 +279,8 @@ class Model {
 
   const ModelSpec& get_model_spec() const { return m_spec; }
 
+  const ModelStats& get_model_stats() const { return m_stats; }
+
   bool process_method_meta() const { return m_spec.process_method_meta; }
   bool keep_debug_info() const { return m_spec.keep_debug_info; }
 
@@ -318,7 +333,8 @@ class Model {
 
   // the spec for this model
   ModelSpec m_spec;
-
+  // stats collection of this model
+  ModelStats m_stats;
   // the roots (base types) for the model
   std::vector<MergerType*> m_roots;
   // the new generated class hierarchy during analysis.
@@ -473,17 +489,6 @@ class Model {
       walk_hierarchy_helper(walker, child);
     }
   }
-};
-
-struct ModelStats {
-  uint32_t m_num_classes_merged = 0;
-  uint32_t m_num_generated_classes = 0;
-  uint32_t m_num_ctor_dedupped = 0;
-  uint32_t m_num_static_non_virt_dedupped = 0;
-  uint32_t m_num_vmethods_dedupped = 0;
-  uint32_t m_num_const_lifted_methods = 0;
-
-  ModelStats& operator+=(const ModelStats& stats);
 };
 
 InterDexGroupingType get_merge_per_interdex_type(

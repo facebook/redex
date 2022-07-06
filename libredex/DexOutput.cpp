@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -351,11 +351,11 @@ dexproto_to_idx* GatheredTypes::get_proto_index(cmp_dproto cmp) {
   }
   for (auto const& c : m_lcallsite) {
     protos.push_back(c->method_type());
-    for (auto arg : c->args()) {
+    for (auto& arg : c->args()) {
       // n.b. how deep could this recursion go? what if there was a method
       // handle here?
       if (arg->evtype() == DEVT_METHOD_TYPE) {
-        protos.push_back(((DexEncodedValueMethodType*)arg)->proto());
+        protos.push_back(((DexEncodedValueMethodType*)arg.get())->proto());
       }
     }
   }
@@ -910,7 +910,7 @@ void DexOutput::generate_typelist_data() {
   uint32_t tl_start = align(m_offset);
   size_t num_tls = 0;
   for (DexTypeList* tl : typel) {
-    if (tl->get_type_list().empty()) {
+    if (tl->empty()) {
       m_tl_emit_offsets[tl] = 0;
       continue;
     }
@@ -2774,12 +2774,12 @@ void write_pg_mapping(
       auto rtype_str = deobf_type(rtype);
       ss << rtype_str;
       ss << " " << method->get_simple_deobfuscated_name() << "(";
-      auto args = proto->get_args()->get_type_list();
-      for (auto iter = args.begin(); iter != args.end(); ++iter) {
+      auto* args = proto->get_args();
+      for (auto iter = args->begin(); iter != args->end(); ++iter) {
         auto* atype = *iter;
         auto atype_str = deobf_type(atype);
         ss << atype_str;
-        if (iter + 1 != args.end()) {
+        if (iter + 1 != args->end()) {
           ss << ",";
         }
       }

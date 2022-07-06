@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -391,6 +391,11 @@ class Block final {
   bool push_back(const std::vector<IRInstruction*>& insns);
   bool push_back(IRInstruction* insn);
 
+  void insert_before(const IRList::iterator& it,
+                     std::unique_ptr<SourceBlock> sb);
+  void insert_after(const IRList::iterator& it,
+                    std::unique_ptr<SourceBlock> sb);
+
   bool structural_equals(const Block* other) const;
 
  private:
@@ -733,6 +738,15 @@ class ControlFlowGraph {
   bool insert_before(const InstructionIterator& position,
                      const std::vector<IRInstruction*>& insns);
 
+  // The iterator variants support iterators of the following types:
+  // * IRInstruction*
+  // * std::unique_ptr<SourceBlock>
+  // * std::unique_ptr<DexPosition>
+  // * InsertVariant, std::variant of the previous types
+  using InsertVariant = std::variant<IRInstruction*,
+                                     std::unique_ptr<SourceBlock>,
+                                     std::unique_ptr<DexPosition>>;
+
   template <class ForwardIt>
   bool insert_before(const InstructionIterator& position,
                      const ForwardIt& begin,
@@ -896,12 +910,17 @@ class ControlFlowGraph {
   // the instructions.
   void recompute_registers_size();
 
+  // Only used in editable cfg. \returns the first block that has instructions
+  // if there is any. Otherwise, \returns null.
+  Block* get_first_block_with_insns() const;
+
   // by default, start at the entry block
   boost::sub_range<IRList> get_param_instructions() const;
 
   void gather_catch_types(std::vector<DexType*>& types) const;
   void gather_strings(std::vector<const DexString*>& strings) const;
   void gather_types(std::vector<DexType*>& types) const;
+  void gather_init_classes(std::vector<DexType*>& types) const;
   void gather_fields(std::vector<DexFieldRef*>& fields) const;
   void gather_methods(std::vector<DexMethodRef*>& methods) const;
   void gather_callsites(std::vector<DexCallSite*>& callsites) const;
@@ -911,6 +930,14 @@ class ControlFlowGraph {
       const cfg::InstructionIterator& it);
 
   cfg::InstructionIterator move_result_of(const cfg::InstructionIterator& it);
+
+  /*
+   * Gets the next instruction, following gotos if the end of blocks are
+   * reached. In case of an infinite loop, `InstructionIterable(*this).end()` is
+   * returned.
+   */
+  cfg::InstructionIterator next_following_gotos(
+      const cfg::InstructionIterator& it);
 
   /*
    * clear and fill `new_cfg` with a copy of `this`. Copies of all instructions
@@ -950,6 +977,10 @@ class ControlFlowGraph {
   DexPosition* get_dbg_pos(const cfg::InstructionIterator& it);
 
   std::size_t opcode_hash() const;
+
+  std::vector<IRInstruction*> release_removed_instructions() {
+    return std::move(m_removed_insns);
+  }
 
  private:
   friend class Block;
@@ -1477,108 +1508,133 @@ bool ControlFlowGraph::insert(const InstructionIterator& position,
 
   bool invalidated_its = false;
   for (auto insns_it = begin_index; insns_it != end_index; insns_it++) {
-    IRInstruction* insn = *insns_it;
-    const auto& throws = get_succ_edges_of_type(b, EDGE_THROW);
-    auto op = insn->opcode();
+    // Coercing everything to a variant allows us to handle the complicated
+    // case easily. The compiler should be able to optimize this back for
+    // a simple type.
+    auto v = InsertVariant(std::move(*insns_it));
 
-    // Certain types of blocks cannot have instructions added to the end.
-    // Disallow that case here.
-    if (pos == b->end()) {
-      auto existing_last = b->get_last_insn();
-      if (existing_last != b->end()) {
-        // This will abort if someone tries to insert after a returning or
-        // throwing instruction.
-        auto existing_last_op = existing_last->insn->opcode();
-        always_assert_log(!opcode::is_branch(existing_last_op) &&
-                              !opcode::is_throw(existing_last_op) &&
-                              !opcode::is_a_return(existing_last_op),
-                          "Can't add instructions after %s in Block %zu in %s",
-                          details::show_insn(existing_last->insn).c_str(),
-                          b->id(), details::show_cfg(*this).c_str());
+    if (std::holds_alternative<IRInstruction*>(v)) {
+      IRInstruction* insn = std::get<IRInstruction*>(v);
+      const auto& throws = get_succ_edges_of_type(b, EDGE_THROW);
+      auto op = insn->opcode();
 
-        // When inserting after an instruction that may throw, we need to start
-        // a new block. We also copy over all throw-edges. See FIXME below for
-        // a discussion about try-regions in general.
-        if (!throws.empty()) {
-          always_assert_log(!existing_last->insn->has_move_result_any(),
-                            "Can't add instructions after throwing instruction "
-                            "%s with move-result in Block %zu in %s",
-                            details::show_insn(existing_last->insn).c_str(),
-                            b->id(), details::show_cfg(*this).c_str());
-          Block* new_block = create_block();
-          if (opcode::may_throw(op)) {
-            copy_succ_edges_of_type(b, new_block, EDGE_THROW);
+      // Certain types of blocks cannot have instructions added to the end.
+      // Disallow that case here.
+      if (pos == b->end()) {
+        auto existing_last = b->get_last_insn();
+        if (existing_last != b->end()) {
+          // This will abort if someone tries to insert after a returning or
+          // throwing instruction.
+          auto existing_last_op = existing_last->insn->opcode();
+          always_assert_log(
+              !opcode::is_branch(existing_last_op) &&
+                  !opcode::is_throw(existing_last_op) &&
+                  !opcode::is_a_return(existing_last_op),
+              "Can't add instructions after %s in Block %zu in %s",
+              details::show_insn(existing_last->insn).c_str(), b->id(),
+              details::show_cfg(*this).c_str());
+
+          // When inserting after an instruction that may throw, we need to
+          // start a new block. We also copy over all throw-edges. See FIXME
+          // below for a discussion about try-regions in general.
+          if (!throws.empty()) {
+            always_assert_log(
+                !existing_last->insn->has_move_result_any(),
+                "Can't add instructions after throwing instruction "
+                "%s with move-result in Block %zu in %s",
+                details::show_insn(existing_last->insn).c_str(), b->id(),
+                details::show_cfg(*this).c_str());
+            Block* new_block = create_block();
+            if (opcode::may_throw(op)) {
+              copy_succ_edges_of_type(b, new_block, EDGE_THROW);
+            }
+            const auto& existing_goto_edge =
+                get_succ_edge_of_type(b, EDGE_GOTO);
+            set_edge_source(existing_goto_edge, new_block);
+            add_edge(b, new_block, EDGE_GOTO);
+            // Continue inserting in the new block.
+            b = new_block;
+            pos = new_block->begin();
           }
-          const auto& existing_goto_edge = get_succ_edge_of_type(b, EDGE_GOTO);
-          set_edge_source(existing_goto_edge, new_block);
-          add_edge(b, new_block, EDGE_GOTO);
-          // Continue inserting in the new block.
-          b = new_block;
-          pos = new_block->begin();
         }
       }
-    }
 
-    always_assert_log(!opcode::is_branch(op),
-                      "insert() does not support branch opcodes. Use "
-                      "create_branch() instead");
+      always_assert_log(!opcode::is_branch(op),
+                        "insert() does not support branch opcodes. Use "
+                        "create_branch() instead");
 
-    IRList::iterator new_inserted_it = b->m_entries.insert_before(pos, insn);
-    if (opcode::is_throw(op) || opcode::is_a_return(op)) {
-      // Stop adding instructions when we understand that op
-      // is the end of the block.
-      insns_it = std::prev(end_index);
-      std::vector<std::unique_ptr<DexPosition>> dangling;
-      for (auto it = pos; it != b->m_entries.end();) {
-        if (it->type == MFLOW_POSITION) {
-          dangling.push_back(std::move(it->pos));
+      IRList::iterator new_inserted_it = b->m_entries.insert_before(pos, insn);
+      if (opcode::is_throw(op) || opcode::is_a_return(op)) {
+        // Stop adding instructions when we understand that op
+        // is the end of the block.
+        insns_it = std::prev(end_index);
+        std::vector<std::unique_ptr<DexPosition>> dangling;
+        for (auto it = pos; it != b->m_entries.end();) {
+          switch (it->type) {
+          case MFLOW_POSITION:
+            dangling.push_back(std::move(it->pos));
+            break;
+          case MFLOW_OPCODE:
+            m_removed_insns.push_back(it->insn);
+            break;
+          default:
+            break;
+          }
+          it = b->m_entries.erase_and_dispose(it);
+          invalidated_its = true;
         }
-        it = b->m_entries.erase_and_dispose(it);
+        fix_dangling_parents(std::move(dangling));
+
+        if (opcode::is_a_return(op)) {
+          // This block now ends in a return, it must have no successors.
+          delete_succ_edge_if(
+              b, [](const Edge* e) { return e->type() != EDGE_GHOST; });
+        } else {
+          always_assert(opcode::is_throw(op));
+          // The only valid way to leave this block is via a throw edge.
+          delete_succ_edge_if(b, [](const Edge* e) {
+            return !(e->type() == EDGE_THROW || e->type() == EDGE_GHOST);
+          });
+        }
+        // If this created unreachable blocks, they will be removed by simplify.
+      } else if (opcode::may_throw(op) && !throws.empty()) {
         invalidated_its = true;
+        // FIXME: Copying the outgoing throw edges isn't enough.
+        // When the editable CFG is constructed, we transform the try regions
+        // into throw edges. We only add these edges to blocks that may throw,
+        // thus losing the knowledge of which blocks were originally inside a
+        // try region. If we add a new throwing instruction here. It may be
+        // added to a block that was originally inside a try region, but we lost
+        // that information already.
+        //
+        // Possible Solutions:
+        // * Rework throw representation to regions instead of duplicated edges?
+        // * User gives a block that we want to copy the throw edges from?
+        // * User specifies which throw edges they want and to which blocks?
+
+        // Split the block after the new instruction.
+        // b has become the predecessor of the new split pair
+        Block* succ =
+            split_block(b->to_cfg_instruction_iterator(new_inserted_it));
+
+        if (!succ->empty()) {
+          // Copy the outgoing throw edges of the new block back into the
+          // original block
+          copy_succ_edges_of_type(succ, b, EDGE_THROW);
+        }
+
+        // Continue inserting in the successor block.
+        b = succ;
+        pos = succ->begin();
       }
-      fix_dangling_parents(std::move(dangling));
-
-      if (opcode::is_a_return(op)) {
-        // This block now ends in a return, it must have no successors.
-        delete_succ_edge_if(
-            b, [](const Edge* e) { return e->type() != EDGE_GHOST; });
-      } else {
-        always_assert(opcode::is_throw(op));
-        // The only valid way to leave this block is via a throw edge.
-        delete_succ_edge_if(b, [](const Edge* e) {
-          return !(e->type() == EDGE_THROW || e->type() == EDGE_GHOST);
-        });
-      }
-      // If this created unreachable blocks, they will be removed by simplify.
-    } else if (opcode::may_throw(op) && !throws.empty()) {
-      invalidated_its = true;
-      // FIXME: Copying the outgoing throw edges isn't enough.
-      // When the editable CFG is constructed, we transform the try regions
-      // into throw edges. We only add these edges to blocks that may throw,
-      // thus losing the knowledge of which blocks were originally inside a
-      // try region. If we add a new throwing instruction here. It may be
-      // added to a block that was originally inside a try region, but we lost
-      // that information already.
-      //
-      // Possible Solutions:
-      // * Rework throw representation to regions instead of duplicated edges?
-      // * User gives a block that we want to copy the throw edges from?
-      // * User specifies which throw edges they want and to which blocks?
-
-      // Split the block after the new instruction.
-      // b has become the predecessor of the new split pair
-      Block* succ =
-          split_block(b->to_cfg_instruction_iterator(new_inserted_it));
-
-      if (!succ->empty()) {
-        // Copy the outgoing throw edges of the new block back into the original
-        // block
-        copy_succ_edges_of_type(succ, b, EDGE_THROW);
-      }
-
-      // Continue inserting in the successor block.
-      b = succ;
-      pos = succ->begin();
+    } else if (std::holds_alternative<std::unique_ptr<SourceBlock>>(v)) {
+      b->m_entries.insert_before(
+          pos, std::get<std::unique_ptr<SourceBlock>>(std::move(v)));
+    } else if (std::holds_alternative<std::unique_ptr<DexPosition>>(v)) {
+      b->m_entries.insert_before(
+          pos, std::get<std::unique_ptr<DexPosition>>(std::move(v)));
+    } else {
+      not_reached();
     }
   }
   return invalidated_its;

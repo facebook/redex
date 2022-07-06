@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -51,6 +51,8 @@ void IRTypeCheckerConfig::bind_config() {
   bind("run_after_passes", {}, run_after_passes);
   bind("check_no_overwrite_this", {}, check_no_overwrite_this);
   bind("check_num_of_refs", {}, check_num_of_refs);
+  bind("annotated_cfg_on_error", annotated_cfg_on_error,
+       annotated_cfg_on_error);
 }
 
 void HasherConfig::bind_config() {
@@ -74,6 +76,8 @@ void MethodProfileOrderingConfig::bind_config() {
        method_sorting_allowlisted_substrings,
        method_sorting_allowlisted_substrings);
   bind("min_appear_percent", min_appear_percent, min_appear_percent);
+  bind("second_min_appear_percent", second_min_appear_percent,
+       second_min_appear_percent);
   bind("skip_similarity_reordering", skip_similarity_reordering,
        skip_similarity_reordering);
 }
@@ -127,6 +131,8 @@ void GlobalConfig::bind_config() {
   bind("ab_experiments_states_override", {}, string_map_param);
   bind("ab_experiments_default", "", string_param);
   bind("force_single_dex", false, bool_param);
+  bind("emit_incoming_hashes", false, bool_param);
+  bind("emit_outgoing_hashes", false, bool_param);
   bind("instruction_size_bitwidth_limit", 0u, uint32_param);
   bind("json_serde_supercls", {}, string_vector_param);
   bind("keep_all_annotation_classes", true, bool_param);
@@ -149,6 +155,8 @@ void GlobalConfig::bind_config() {
   // Enabled for ease of testing, apps expected to opt-out
   bind("enable_bleeding_edge_app_bundle_support", true, bool_param);
   bind("no_devirtualize_annos", {}, string_vector_param);
+  bind("create_init_class_insns", true, bool_param);
+  bind("finalize_resource_table", false, bool_param);
 
   for (const auto& entry : m_registry) {
     m_global_configs.emplace(entry.name,

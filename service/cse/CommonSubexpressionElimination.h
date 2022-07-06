@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -72,12 +72,15 @@ class SharedState {
   explicit SharedState(
       const std::unordered_set<DexMethodRef*>& pure_methods,
       const std::unordered_set<const DexString*>& finalish_field_names);
-  void init_scope(const Scope&);
+  void init_scope(const Scope&,
+                  const method::ClInitHasNoSideEffectsPredicate&
+                      clinit_has_no_side_effects);
   CseUnorderedLocationSet get_relevant_written_locations(
       const IRInstruction* insn,
       DexType* exact_virtual_scope,
       const CseUnorderedLocationSet& read_locations);
   void log_barrier(const Barrier& barrier);
+  bool has_potential_unboxing_method(const IRInstruction* insn) const;
   bool has_pure_method(const IRInstruction* insn) const;
   bool is_finalish(const DexField* field) const;
   void cleanup();
@@ -91,6 +94,16 @@ class SharedState {
   const method_override_graph::Graph* get_method_override_graph() const;
   const std::unordered_set<const DexField*>& get_finalizable_fields() const {
     return m_finalizable_fields;
+  }
+
+  const std::unordered_map<const DexMethodRef*, const DexMethodRef*>&
+  get_boxing_map() const {
+    return m_boxing_map;
+  }
+
+  const std::unordered_map<const DexMethodRef*, const DexMethodRef*>&
+  get_abstract_map() const {
+    return m_abstract_map;
   }
 
  private:
@@ -115,6 +128,10 @@ class SharedState {
       m_conditionally_pure_methods;
   std::unique_ptr<const method_override_graph::Graph> m_method_override_graph;
   SharedStateStats m_stats;
+  // boxing to unboxing mapping
+  std::unordered_map<const DexMethodRef*, const DexMethodRef*> m_boxing_map;
+  // unboxing to its abstract mapping
+  std::unordered_map<const DexMethodRef*, const DexMethodRef*> m_abstract_map;
 };
 
 class CommonSubexpressionElimination {
@@ -134,6 +151,7 @@ class CommonSubexpressionElimination {
   bool patch(bool runtime_assertions = false);
 
  private:
+  std::unordered_map<const IRInstruction*, size_t> m_earlier_insn_ids;
   // CSE is finding instances where the result (in the dest register) of an
   // earlier instruction can be forwarded to replace the result of another
   // (later) instruction.
@@ -151,8 +169,13 @@ class CommonSubexpressionElimination {
   DexType* m_declaring_type;
   DexTypeList* m_args;
 
+  std::vector<IRInstruction*> m_unboxing;
+  const std::unordered_map<const DexMethodRef*, const DexMethodRef*>& m_abs_map;
+
   void insert_runtime_assertions(
       const std::vector<std::pair<Forward, IRInstruction*>>& to_check);
+
+  size_t get_earlier_insn_id(const IRInstruction*);
 };
 
 } // namespace cse_impl

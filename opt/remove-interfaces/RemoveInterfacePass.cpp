@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -39,9 +39,9 @@ std::vector<Location> get_args_for(DexProto* proto, MethodCreator* mc) {
 }
 
 std::unique_ptr<DexAnnotationSet> get_anno_set(DexType* anno_type) {
-  auto anno = new DexAnnotation(anno_type, DexAnnotationVisibility::DAV_BUILD);
   auto anno_set = std::make_unique<DexAnnotationSet>();
-  anno_set->add_annotation(anno);
+  anno_set->add_annotation(std::make_unique<DexAnnotation>(
+      anno_type, DexAnnotationVisibility::DAV_BUILD));
   return anno_set;
 }
 DexMethod* materialized_dispatch(DexType* owner, MethodCreator* mc) {
@@ -84,8 +84,8 @@ DexMethod* generate_dispatch(const DexType* base_type,
   // Owner and proto
   auto orig_name = std::string(intf_method->c_str());
   auto front_meth = targets.front();
-  auto new_arg_list = prepend_and_make(front_meth->get_proto()->get_args(),
-                                       const_cast<DexType*>(base_type));
+  auto new_arg_list = front_meth->get_proto()->get_args()->push_front(
+      const_cast<DexType*>(base_type));
   auto rtype = front_meth->get_proto()->get_rtype();
   auto new_proto = DexProto::make_proto(rtype, new_arg_list);
   auto dispatch_name =
@@ -178,17 +178,17 @@ DexTypeList* get_new_impl_list(const DexType* impl,
                                const DexType* intf_to_remove) {
   std::set<DexType*, dextypes_comparator> new_intfs;
   auto cls = type_class(impl);
-  for (const auto intf : cls->get_interfaces()->get_type_list()) {
+  for (const auto intf : *cls->get_interfaces()) {
     if (intf == intf_to_remove) {
       continue;
     }
     new_intfs.insert(intf);
   }
   auto cls_to_remove = type_class(intf_to_remove);
-  auto& super_intfs = cls_to_remove->get_interfaces()->get_type_list();
-  new_intfs.insert(super_intfs.begin(), super_intfs.end());
-  std::deque<DexType*> deque(new_intfs.begin(), new_intfs.end());
-  return DexTypeList::make_type_list(std::move(deque));
+  auto* super_intfs = cls_to_remove->get_interfaces();
+  new_intfs.insert(super_intfs->begin(), super_intfs->end());
+  return DexTypeList::make_type_list(
+      DexTypeList::ContainerType{new_intfs.begin(), new_intfs.end()});
 }
 
 const DexType* get_replacement_type(const TypeSystem& type_system,
@@ -278,10 +278,19 @@ size_t exclude_unremovables(const Scope& scope,
                             const DexStoresVector& stores,
                             const TypeSystem& type_system,
                             bool include_primary_dex,
+                            const std::vector<DexType*>& excluded_interfaces,
                             TypeSet& candidates) {
   size_t count = 0;
   always_assert(stores.size());
   XStoreRefs xstores(stores);
+
+  // Excluded by config
+  for (auto ex : excluded_interfaces) {
+    if (candidates.count(ex) != 0) {
+      candidates.erase(ex);
+      count++;
+    }
+  }
 
   // Skip intfs with single or none implementor. For some reason, they are
   // not properly removed by either SingleImpl or UnreferencedInterfacesPass.
@@ -388,7 +397,14 @@ MethodOrderedSet find_dispatch_targets(const TypeSystem& type_system,
       if (type_system.is_subtype(virt_scope->type, impl)) {
         auto target =
             find_matching_virtual_method(type_system, impl, virt_scope);
-        always_assert(target != nullptr);
+        TRACE(RM_INTF, 5, "Found target %s on impl %s", SHOW(target),
+              SHOW(impl));
+        // Skip the current impl if no target is found from it. We currently do
+        // not handle this case. Will fall through to the match completeness
+        // check, and bail out subsequently.
+        if (target == nullptr) {
+          continue;
+        }
         targets.insert(target);
         matched.push_back(impl);
       }
@@ -413,8 +429,7 @@ MethodOrderedSet find_dispatch_targets(const TypeSystem& type_system,
 void include_parent_interfaces(const DexType* root, TypeSet& interfaces) {
   TypeSet parent_interfaces;
   for (const auto intf : interfaces) {
-    auto parent_intfs = type_class(intf)->get_interfaces()->get_type_list();
-    for (const auto parent_intf : parent_intfs) {
+    for (const auto parent_intf : *type_class(intf)->get_interfaces()) {
       if (parent_intf != root) {
         parent_interfaces.insert(parent_intf);
       }
@@ -523,8 +538,9 @@ void RemoveInterfacePass::remove_interfaces_for_root(
   include_parent_interfaces(root, interfaces);
 
   m_total_num_interface += interfaces.size();
-  m_num_interface_excluded += exclude_unremovables(
-      scope, stores, type_system, m_include_primary_dex, interfaces);
+  m_num_interface_excluded +=
+      exclude_unremovables(scope, stores, type_system, m_include_primary_dex,
+                           m_excluded_interfaces, interfaces);
 
   TRACE(RM_INTF, 5, "removable interfaces %ld", interfaces.size());
   TypeSet removed =
@@ -557,6 +573,9 @@ void RemoveInterfacePass::remove_interfaces_for_root(
 
 void RemoveInterfacePass::bind_config() {
   bind("interface_roots", {}, m_interface_roots, Configurable::default_doc(),
+       Configurable::bindflags::types::warn_if_unresolvable);
+  bind("excluded_interfaces", {}, m_excluded_interfaces,
+       Configurable::default_doc(),
        Configurable::bindflags::types::warn_if_unresolvable);
   bind("include_primary_dex", false, m_include_primary_dex);
   bind("keep_debug_info", false, m_keep_debug_info);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -7,12 +7,12 @@
 
 #pragma once
 
-#include <ostream>
 #include <unordered_map>
 #include <unordered_set>
 
 #include "ConcurrentContainers.h"
 #include "DexClass.h"
+#include "InitClassesWithSideEffects.h"
 #include "LocalPointersAnalysis.h"
 #include "ReachingDefinitions.h"
 #include "Resolver.h"
@@ -51,6 +51,7 @@ enum Effects : size_t {
   EFF_UNKNOWN_INVOKE = 1 << 3,
   // Marked by @DoNotOptimize
   EFF_NO_OPTIMIZE = 1 << 4,
+  EFF_INIT_CLASS = 1 << 5,
 };
 
 struct Summary {
@@ -92,7 +93,9 @@ using InvokeToSummaryMap = std::unordered_map<const IRInstruction*, Summary>;
 
 class SummaryBuilder final {
  public:
-  explicit SummaryBuilder(const InvokeToSummaryMap& invoke_to_summary_cmap,
+  explicit SummaryBuilder(const init_classes::InitClassesWithSideEffects&
+                              init_classes_with_side_effects,
+                          const InvokeToSummaryMap& invoke_to_summary_cmap,
                           const local_pointers::FixpointIterator& ptrs_fp_iter,
                           const IRCode* code,
                           reaching_defs::MoveAwareFixpointIterator*
@@ -111,6 +114,8 @@ class SummaryBuilder final {
                            Summary* summary);
   // Map of load-param instruction -> parameter index
   ParamInstructionMap m_param_insn_map;
+  const init_classes::InitClassesWithSideEffects&
+      m_init_classes_with_side_effects;
   const InvokeToSummaryMap& m_invoke_to_summary_cmap;
   const local_pointers::FixpointIterator& m_ptrs_fp_iter;
   const IRCode* m_code;
@@ -119,14 +124,18 @@ class SummaryBuilder final {
 };
 
 // For testing.
-Summary analyze_code(const InvokeToSummaryMap& invoke_to_summary_cmap,
+Summary analyze_code(const init_classes::InitClassesWithSideEffects&
+                         init_classes_with_side_effects,
+                     const InvokeToSummaryMap& invoke_to_summary_cmap,
                      const local_pointers::FixpointIterator& ptrs_fp_iter,
                      const IRCode* code);
 
 /*
  * Get the effect summary for all methods in scope.
  */
-void analyze_scope(const Scope& scope,
+void analyze_scope(const init_classes::InitClassesWithSideEffects&
+                       init_classes_with_side_effects,
+                   const Scope& scope,
                    const call_graph::Graph&,
                    const ConcurrentMap<const DexMethodRef*,
                                        local_pointers::FixpointIterator*>&,

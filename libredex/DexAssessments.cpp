@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -15,6 +15,7 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IROpcode.h"
+#include "RedexContext.h"
 #include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"
@@ -293,10 +294,54 @@ DexAssessment DexScopeAssessor::run() {
     }
   };
 
+  std::atomic<size_t> classes_without_deobfuscated_name{0};
+  walk::parallel::classes(m_scope,
+                          [&classes_without_deobfuscated_name](DexClass* c) {
+                            if (c->get_deobfuscated_name_or_null() == nullptr) {
+                              classes_without_deobfuscated_name.fetch_add(1);
+                            }
+                          });
+
+  std::atomic<size_t> fields_without_deobfuscated_name{0};
+  walk::parallel::fields(m_scope,
+                         [&fields_without_deobfuscated_name](DexField* f) {
+                           if (f->get_deobfuscated_name().empty()) {
+                             fields_without_deobfuscated_name.fetch_add(1);
+                           }
+                         });
+
+  std::atomic<size_t> num_methods{0};
+  std::atomic<size_t> methods_with_code{0};
+  std::atomic<size_t> num_instructions{0};
+  std::atomic<size_t> sum_opcodes{0};
+  walk::parallel::methods(
+      m_scope,
+      [&num_methods, &methods_with_code, &num_instructions, &sum_opcodes](
+          auto* m) {
+        num_methods.fetch_add(1, std::memory_order_relaxed);
+        auto code = m->get_code();
+        if (code == nullptr) {
+          return;
+        }
+        methods_with_code.fetch_add(1, std::memory_order_relaxed);
+        num_instructions.fetch_add(code->count_opcodes(),
+                                   std::memory_order_relaxed);
+        sum_opcodes.fetch_add(code->sum_opcode_sizes(),
+                              std::memory_order_relaxed);
+      });
+
   dex_position::Assessor dex_position_assessor;
+  std::atomic<size_t> methods_without_deobfuscated_name{0};
   auto combined_assessment = walk::parallel::methods<Assessment>(
-      m_scope, [&dex_position_assessor](DexMethod* method) {
+      m_scope,
+      [&dex_position_assessor,
+       &methods_without_deobfuscated_name](DexMethod* method) {
         Assessment assessment;
+
+        if (method->get_deobfuscated_name_or_null() == nullptr) {
+          methods_without_deobfuscated_name.fetch_add(1);
+        }
+
         auto code = method->get_code();
         if (!code) {
           return assessment;
@@ -331,6 +376,18 @@ DexAssessment DexScopeAssessor::run() {
       });
 
   auto res = combined_assessment.to_dex_assessment();
+  res["without_deobfuscated_names.methods"] =
+      methods_without_deobfuscated_name.load();
+  res["without_deobfuscated_names.fields"] =
+      fields_without_deobfuscated_name.load();
+  res["without_deobfuscated_names.classes"] =
+      classes_without_deobfuscated_name.load();
+
+  res["num_methods"] = num_methods.load();
+  res["methods~with~code"] = methods_with_code.load();
+  res["num_instructions"] = num_instructions.load();
+  res["sum_opcodes"] = sum_opcodes.load();
+
   if (combined_assessment.has_problems()) {
     TRACE(ASSESSOR, 1, "[scope assessor] %s", to_string(res).c_str());
   }

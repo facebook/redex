@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -119,7 +119,10 @@ DexTypeEnvironment env_with_params(const IRCode* code,
 
   size_t idx = 0;
   DexTypeEnvironment env;
-  for (auto& mie : InstructionIterable(code->get_param_instructions())) {
+  boost::sub_range<IRList> param_instructions =
+      code->editable_cfg_built() ? code->cfg().get_param_instructions()
+                                 : code->get_param_instructions();
+  for (auto& mie : InstructionIterable(param_instructions)) {
     env.set(mie.insn->dest(), args.get(idx++));
   }
   return env;
@@ -240,7 +243,7 @@ std::unique_ptr<local::LocalTypeAnalyzer> GlobalTypeAnalyzer::analyze_method(
 
 bool args_have_type(const DexProto* proto, const DexType* type) {
   always_assert(type);
-  for (const auto arg_type : proto->get_args()->get_type_list()) {
+  for (const auto arg_type : *proto->get_args()) {
     if (arg_type == type) {
       return true;
     }
@@ -284,8 +287,8 @@ bool is_likely_anonymous_class(const DexType* type) {
   }
   const auto* super_type = cls->get_super_class();
   if (super_type == type::java_lang_Object()) {
-    auto intfs = cls->get_interfaces()->get_type_list();
-    return intfs.size() == 1;
+    auto* intfs = cls->get_interfaces();
+    return intfs->size() == 1;
   }
   const auto* super_cls = type_class(super_type);
   if (super_cls && is_abstract(super_cls)) {

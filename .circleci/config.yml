@@ -1,18 +1,18 @@
 version: 2.1
 
-# If you only want circle to run on direct commits to master, you can uncomment this out
-# and uncomment the filters: *filter-only-master down below too
+# If you only want circle to run on direct commits to main, you can uncomment this out
+# and uncomment the filters: *filter-only-main down below too
 #
 aliases:
- - &filter-only-master
+ - &filter-only-main
    branches:
      only:
-       - master
- - &filter-not-gh-pages-not-master
+       - main
+ - &filter-not-gh-pages-not-main
    branches:
      ignore:
        - gh-pages
-       - master
+       - main
 
 orbs:
   win: circleci/windows@2.2.0
@@ -345,38 +345,38 @@ jobs:
 
 workflows:
   version: 2.1
-  build_master:
+  build_main:
     jobs:
       - build-18_04:
-          filters: *filter-only-master
+          filters: *filter-only-main
       - build-windows:
-          filters: *filter-only-master
+          filters: *filter-only-main
 
       - deploy-website:
-          filters: *filter-only-master
+          filters: *filter-only-main
 
   build_other:
     jobs:
       # Note: only filter gh-pages for 'build_other' so that pull
       #       requests/stable get checked.
       - build-18_04:
-          filters: *filter-not-gh-pages-not-master
+          filters: *filter-not-gh-pages-not-main
       - build-20_04:
-          filters: *filter-not-gh-pages-not-master
+          filters: *filter-not-gh-pages-not-main
       - build-deb_stable:
-          filters: *filter-not-gh-pages-not-master
+          filters: *filter-not-gh-pages-not-main
       - build-deb_testing:
-          filters: *filter-not-gh-pages-not-master
+          filters: *filter-not-gh-pages-not-main
       - build-deb_testing-w-clang:
-          filters: *filter-not-gh-pages-not-master
+          filters: *filter-not-gh-pages-not-main
       - build-windows:
-          filters: *filter-not-gh-pages-not-master
+          filters: *filter-not-gh-pages-not-main
 
   nightly:
     triggers:
       - schedule:
           cron: "0 0 * * *"
-          filters: *filter-only-master
+          filters: *filter-only-main
     jobs:
       - build-20_04
       - build-deb_stable

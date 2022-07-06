@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -80,7 +80,7 @@ DexAnnotation* get_annotation(const DexMember* member, DexType* anno_type) {
   }
   for (auto& anno : annos->get_annotations()) {
     if (anno->type() == anno_type) {
-      return anno;
+      return anno.get();
     }
   }
   return nullptr;
@@ -101,6 +101,6 @@ bool has_any_annotation(DexMember* member,
   return false;
 }
 
-DexAnnotationSet* create_anno_set(
+std::unique_ptr<DexAnnotationSet> create_anno_set(
     const std::vector<std::pair<std::string, std::string>>& elements,
     DexType* anno_type);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -11,6 +11,7 @@
 #include "Creators.h"
 #include "DexClass.h"
 #include "DexUtil.h"
+#include "RedexContext.h"
 #include "ScopeHelper.h"
 #include "VirtualScope.h"
 
@@ -202,7 +203,7 @@ std::vector<DexClass*> create_scope_5() {
   // class C extends B implements Intf2
   auto c_t = DexType::get_type("LC;");
   auto c_cls = type_class(c_t);
-  std::deque<DexType*> c_intfs;
+  DexTypeList::ContainerType c_intfs;
   c_intfs.emplace_back(intf2_t);
   c_cls->set_interfaces(DexTypeList::make_type_list(std::move(c_intfs)));
   // class G extends F { void g(int) {} }
@@ -278,7 +279,7 @@ std::vector<DexClass*> create_scope_6() {
   // class C extends B implements Intf2
   auto d_t = DexType::get_type("LD;");
   auto d_cls = type_class(d_t);
-  std::deque<DexType*> d_intfs;
+  DexTypeList::ContainerType d_intfs;
   d_intfs.emplace_back(intf2_t);
   d_cls->set_interfaces(DexTypeList::make_type_list(std::move(d_intfs)));
 
@@ -380,7 +381,7 @@ std::vector<DexClass*> create_scope_9() {
   // class D extends C implements Intf2, Intf3
   auto d_t = DexType::get_type("LD;");
   auto d_cls = type_class(d_t);
-  std::deque<DexType*> d_intfs;
+  DexTypeList::ContainerType d_intfs;
   d_intfs.emplace_back(intf2_t);
   d_intfs.emplace_back(intf3_t);
   d_cls->set_interfaces(DexTypeList::make_type_list(std::move(d_intfs)));
@@ -430,10 +431,10 @@ std::vector<DexClass*> create_scope_10() {
 
   // interface Intf1 implements Intf2 { void f(); }
   type_class(intf1_t)->set_interfaces(
-      DexTypeList::make_type_list(std::deque<DexType*>{intf2_t}));
+      DexTypeList::make_type_list(DexTypeList::ContainerType{intf2_t}));
   // interface Intf3 implements Intf4 { void f()); }
   type_class(intf3_t)->set_interfaces(
-      DexTypeList::make_type_list(std::deque<DexType*>{intf4_t}));
+      DexTypeList::make_type_list(DexTypeList::ContainerType{intf4_t}));
 
   return scope;
 }

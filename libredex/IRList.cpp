@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -295,6 +295,12 @@ void MethodItemEntry::gather_types(std::vector<DexType*>& ltype) const {
   }
 }
 
+void MethodItemEntry::gather_init_classes(std::vector<DexType*>& ltype) const {
+  if (type == MFLOW_OPCODE) {
+    insn->gather_init_classes(ltype);
+  }
+}
+
 opcode::Branchingness MethodItemEntry::branchingness() const {
   switch (type) {
   case MFLOW_OPCODE:
@@ -443,6 +449,12 @@ void IRList::replace_opcode(IRInstruction* to_delete,
   always_assert_log(it != m_list.end(),
                     "No match found while replacing '%s'",
                     SHOW(to_delete));
+  replace_opcode(it, replacements);
+}
+
+void IRList::replace_opcode(const IRList::iterator& it,
+                            const std::vector<IRInstruction*>& replacements) {
+  always_assert(it->type == MFLOW_OPCODE);
   for (auto insn : replacements) {
     insert_before(it, insn);
   }
@@ -759,6 +771,12 @@ void IRList::gather_types(std::vector<DexType*>& ltype) const {
   }
 }
 
+void IRList::gather_init_classes(std::vector<DexType*>& ltype) const {
+  for (auto& mie : m_list) {
+    mie.gather_init_classes(ltype);
+  }
+}
+
 void IRList::gather_strings(std::vector<const DexString*>& lstring) const {
   for (auto& mie : m_list) {
     mie.gather_strings(lstring);
@@ -885,6 +903,15 @@ IRInstruction* move_result_pseudo_of(IRList::iterator it) {
 }
 
 } // namespace ir_list
+
+void IRList::insn_clear_and_dispose() {
+  m_list.clear_and_dispose([](auto* mie) {
+    if (mie->type == MFLOW_OPCODE) {
+      delete mie->insn;
+    }
+    delete mie;
+  });
+}
 
 std::string SourceBlock::show(bool quoted_src) const {
   std::ostringstream o;

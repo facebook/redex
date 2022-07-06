@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -224,8 +224,7 @@ DexMethod* ConstantValues::create_stub_method(DexMethod* callee) {
   // Assuming that callee's proto is already modified by appending the lifted
   // params.
   auto appended_proto = callee->get_proto();
-  auto stub_arg_list =
-      type_reference::drop_and_make(appended_proto->get_args(), size());
+  auto stub_arg_list = appended_proto->get_args()->pop_front(size());
   auto stub_proto =
       DexProto::make_proto(appended_proto->get_rtype(), stub_arg_list);
   auto name = DexString::make_string(callee->get_name()->str() + "$stub");

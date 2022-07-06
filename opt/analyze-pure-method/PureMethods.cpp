@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -15,6 +15,8 @@
 #include "Walkers.h"
 
 bool AnalyzePureMethodsPass::analyze_and_check_pure_method_helper(
+    const init_classes::InitClassesWithSideEffects&
+        init_classes_with_side_effects,
     IRCode* code) {
   auto& cfg = code->cfg();
 
@@ -28,10 +30,8 @@ bool AnalyzePureMethodsPass::analyze_and_check_pure_method_helper(
   fp_iter.run({});
 
   auto side_effect_summary =
-      side_effects::SummaryBuilder({},
-                                   fp_iter,
-                                   code,
-                                   &reaching_defs_iter,
+      side_effects::SummaryBuilder(init_classes_with_side_effects, {}, fp_iter,
+                                   code, &reaching_defs_iter,
                                    /* analyze_external_reads */ true)
           .build();
 
@@ -49,6 +49,8 @@ void AnalyzePureMethodsPass::run_pass(DexStoresVector& stores,
 AnalyzePureMethodsPass::Stats
 AnalyzePureMethodsPass::analyze_and_set_pure_methods(Scope& scope) {
   auto method_override_graph = method_override_graph::build_graph(scope);
+  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+      scope, /* create_init_class_insns */ false, method_override_graph.get());
   // Build all the CFGs
   walk::parallel::code(scope, [&](DexMethod*, IRCode& code) {
     code.build_cfg(/* editable */ false);
@@ -68,10 +70,12 @@ AnalyzePureMethodsPass::analyze_and_set_pure_methods(Scope& scope) {
           /* ignore_methods_with_assumenosideeffects */ true,
           [&](DexMethod* overriding_method) {
             auto method_code = overriding_method->get_code();
-            return analyze_and_check_pure_method_helper(method_code);
+            return analyze_and_check_pure_method_helper(
+                init_classes_with_side_effects, method_code);
           });
     } else {
-      is_method_pure = analyze_and_check_pure_method_helper(code);
+      is_method_pure = analyze_and_check_pure_method_helper(
+          init_classes_with_side_effects, code);
     }
 
     if (!is_method_pure && method->rstate.pure_method()) {

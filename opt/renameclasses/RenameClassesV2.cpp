@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -20,6 +20,7 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"
+#include "KeepReason.h"
 #include "PassManager.h"
 #include "ReachableClasses.h"
 #include "RedexResources.h"
@@ -87,7 +88,7 @@ bool dont_rename_reason_to_metric_per_rule(DontRenameReasonCode reason) {
     // Set to true to add more detailed metrics for renamer if needed
     return false;
   case DontRenameReasonCode::ProguardCantRename:
-    return RedexContext::record_keep_reasons();
+    return keep_reason::Reason::record_keep_reasons();
   default:
     return false;
   }
@@ -340,7 +341,7 @@ RenameClassesPassV2::build_dont_rename_native_bindings(Scope& scope) {
         auto proto = meth->get_proto();
         auto rtype = proto->get_rtype();
         dont_rename_native_bindings.insert(rtype);
-        for (auto ptype : proto->get_args()->get_type_list()) {
+        for (auto ptype : *proto->get_args()) {
           dont_rename_native_bindings.insert(
               type::get_element_type_if_array(ptype));
         }
@@ -352,7 +353,7 @@ RenameClassesPassV2::build_dont_rename_native_bindings(Scope& scope) {
         auto proto = meth->get_proto();
         auto rtype = proto->get_rtype();
         dont_rename_native_bindings.insert(rtype);
-        for (auto ptype : proto->get_args()->get_type_list()) {
+        for (auto ptype : *proto->get_args()) {
           dont_rename_native_bindings.insert(
               type::get_element_type_if_array(ptype));
         }
@@ -404,7 +405,7 @@ static void sanity_check(const Scope& scope,
 }
 
 std::string get_keep_rule(const DexClass* clazz) {
-  if (RedexContext::record_keep_reasons()) {
+  if (keep_reason::Reason::record_keep_reasons()) {
     const auto& keep_reasons = clazz->rstate.keep_reasons();
     for (const auto* reason : keep_reasons) {
       if (reason->type == keep_reason::KEEP_RULE &&

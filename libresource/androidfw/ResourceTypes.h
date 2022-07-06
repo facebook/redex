@@ -496,7 +496,6 @@ public:
     ~ResStringPool();
 
     void setToEmpty();
-    void serialize(Vector<char>& cVec);
     status_t setTo(const void* data, size_t size, bool copyData=true);
 
     status_t getError() const;
@@ -529,16 +528,7 @@ public:
     bool isSorted() const;
     bool isUTF8() const;
 
-    // Adds a new string to the end of the pool. This only takes effect during
-    // serialization, and has several caveats (doesn't support sorting, assumes
-    // there are no styles.)
-    void appendString(String8 s);
-    size_t appendedStringCount();
-
 private:
-    // Saves the changes made via appendString(). Will fatal if any of the
-    // unsupported conditions are detected.
-    void serializeWithAdditionalStrings(Vector<char>& cVec);
     status_t                    mError;
     void*                       mOwnedData;
     const ResStringPool_header* mHeader;
@@ -555,7 +545,6 @@ private:
     uint32_t                    mStringPoolSize;    // number of uint16_t
     const uint32_t*             mStyles;
     uint32_t                    mStylePoolSize;    // number of uint32_t
-    Vector<String8>             mAppendedStrings;
 };
 
 /**
@@ -782,10 +771,6 @@ public:
 
     int32_t getAttributeDataType(size_t idx) const;
     int32_t getAttributeData(size_t idx) const;
-
-    // Replaces an entire XML attribute (data and type).
-    // This function assumes that the size of the attribute is not changing.
-    void setAttribute(size_t idx, Res_value newAttribute);
 
     // Replaces the data of an XML attribute.
     void setAttributeData(size_t idx, uint32_t newData);
@@ -1087,7 +1072,7 @@ struct ResTable_config
         SDKVERSION_ANY = 0
     };
 
-  enum {
+    enum {
         MINORVERSION_ANY = 0
     };
 
@@ -1135,6 +1120,7 @@ struct ResTable_config
         UI_MODE_TYPE_TELEVISION = ACONFIGURATION_UI_MODE_TYPE_TELEVISION,
         UI_MODE_TYPE_APPLIANCE = ACONFIGURATION_UI_MODE_TYPE_APPLIANCE,
         UI_MODE_TYPE_WATCH = ACONFIGURATION_UI_MODE_TYPE_WATCH,
+        UI_MODE_TYPE_VR_HEADSET = ACONFIGURATION_UI_MODE_TYPE_VR_HEADSET,
 
         // uiMode bits for the night switch.
         MASK_UI_MODE_NIGHT = 0x30,
@@ -1170,6 +1156,29 @@ struct ResTable_config
     // chars. Interpreted in conjunction with the locale field.
     char localeVariant[8];
 
+    enum {
+        // screenLayout2 bits for round/notround.
+        MASK_SCREENROUND = 0x03,
+        SCREENROUND_ANY = ACONFIGURATION_SCREENROUND_ANY,
+        SCREENROUND_NO = ACONFIGURATION_SCREENROUND_NO,
+        SCREENROUND_YES = ACONFIGURATION_SCREENROUND_YES,
+    };
+
+    enum {
+        // colorMode bits for wide-color gamut/narrow-color gamut.
+        MASK_WIDE_COLOR_GAMUT = 0x03,
+        WIDE_COLOR_GAMUT_ANY = ACONFIGURATION_WIDE_COLOR_GAMUT_ANY,
+        WIDE_COLOR_GAMUT_NO = ACONFIGURATION_WIDE_COLOR_GAMUT_NO,
+        WIDE_COLOR_GAMUT_YES = ACONFIGURATION_WIDE_COLOR_GAMUT_YES,
+
+        // colorMode bits for HDR/LDR.
+        MASK_HDR = 0x0c,
+        SHIFT_COLOR_MODE_HDR = 2,
+        HDR_ANY = ACONFIGURATION_HDR_ANY << SHIFT_COLOR_MODE_HDR,
+        HDR_NO = ACONFIGURATION_HDR_NO << SHIFT_COLOR_MODE_HDR,
+        HDR_YES = ACONFIGURATION_HDR_YES << SHIFT_COLOR_MODE_HDR,
+    };
+
     // An extension of screenConfig.
     union {
         struct {
@@ -1186,6 +1195,10 @@ struct ResTable_config
     // localeScript may still not be set in this case, which means that we
     // tried but could not compute a script.
     bool localeScriptWasComputed;
+
+    // The value of BCP 47 Unicode extension for key 'nu' (numbering system).
+    // Varies in length from 3 to 8 chars. Zero-filled value.
+    char localeNumberingSystem[8];
 
     void copyFromDeviceNoSwap(const ResTable_config& o);
 
@@ -1215,6 +1228,8 @@ struct ResTable_config
         CONFIG_SCREEN_LAYOUT = ACONFIGURATION_SCREEN_LAYOUT,
         CONFIG_UI_MODE = ACONFIGURATION_UI_MODE,
         CONFIG_LAYOUTDIR = ACONFIGURATION_LAYOUTDIR,
+        CONFIG_SCREEN_ROUND = ACONFIGURATION_SCREEN_ROUND,
+        CONFIG_COLOR_MODE = ACONFIGURATION_COLOR_MODE,
     };
 
     // Compare two configuration, returning CONFIG_* flags set for each value
@@ -1583,8 +1598,6 @@ public:
 
     status_t getError() const;
 
-    status_t serialize(Vector<char>& cVec, size_t resTableIndex);
-
     void uninit();
 
     struct resource_name
@@ -1872,36 +1885,6 @@ public:
     void print(bool inclValues) const;
     void getResourceIds(SortedVector<uint32_t>* sVec) const;
 
-    // Marks the entries (across each config) for the given resource ID as deleted.
-    // Only takes effect during serialization (any deleted rows will be skipped).
-    void deleteResource(uint32_t resID);
-
-    // Defines a ResTable::Type containing the entry data for the given ids.
-    // This adds a new ResTable_typeSpec, followed by 1 ResTable_type for each
-    // given config.
-    void defineNewType(
-      String8 type_name,
-      uint8_t type_id,
-      const Vector<ResTable_config>& configs,
-      const Vector<uint32_t>& source_ids);
-
-    // For the given resource ID, looks across all configurations and remaps all
-    // reference and attribute Res_value entries based on the given
-    // originalIds -> newIds mapping. The entries in the inputs are expected to
-    // align based on index.
-    void remapReferenceValuesForResource(
-        uint32_t resID,
-        SortedVector<uint32_t> originalIds,
-        Vector<uint32_t> newIds);
-
-    // For the given resource ID, looks across all configurations and inlines
-    // all reference Res_value entries based on the given keys -> inline_values
-    // mapping. The entries in the inputs are expected to align based on index.
-    void inlineReferenceValuesForResource(
-        uint32_t resID,
-        SortedVector<uint32_t> inlineable_ids,
-        Vector<Res_value> inline_values);
-
     // For the given resource ID, looks across all configurations and returns all
     // the corresponding Res_value entries. This is much more reliable than
     // ResTable::getResource, which fails for roughly 20% of resources and does not
@@ -1973,13 +1956,6 @@ private:
         const ResTable_package* const pkg, const Header* const header);
 
     void print_value(const Package* pkg, const Res_value& value) const;
-
-    void serializeSingleResType(
-      Vector<char>& output,
-      const uint8_t type_id,
-      const PackageGroup* pg,
-      const ResTable_config& config,
-      const Vector<uint32_t>& source_ids);
 
 #if !defined(_MSC_VER) && !defined(__MINGW64__) && !defined(__MINGW32__)
     mutable Mutex               mLock;

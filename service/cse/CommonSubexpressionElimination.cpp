@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -54,6 +54,7 @@
 #include <utility>
 
 #include "BaseIRAnalyzer.h"
+#include "CFGMutation.h"
 #include "ConstantAbstractDomain.h"
 #include "ControlFlow.h"
 #include "FieldOpTracker.h"
@@ -97,6 +98,10 @@ const IROpcode IOPCODE_PRE_STATE_SRC = IROpcode(0xFFFF);
 
 // Marker opcode for positional values that must not be moved.
 const IROpcode IOPCODE_POSITIONAL = IROpcode(0xFFFE);
+
+// This is only used for an INVOKE-VIRTUAL insn. Marker opocode for a potential
+// unboxing value.
+const IROpcode IOPCODE_POSITIONAL_UNBOXING = IROpcode(0xFFFD);
 
 struct IRValue {
   IROpcode opcode;
@@ -507,7 +512,16 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
     return m_using_other_tracked_location_bit;
   }
 
+  const std::vector<IRInstruction*>& get_unboxing_insns() {
+    return m_unboxing_insns;
+  }
+
  private:
+  // After analysis, the insns in this list should be refined to call its
+  // unboxing implementor.
+  mutable std::vector<IRInstruction*> m_unboxing_insns;
+  mutable std::unordered_set<IRInstruction*> m_unboxing_insns_set;
+
   CseUnorderedLocationSet get_clobbered_locations(
       const IRInstruction* insn, CseEnvironment* current_state) const {
     DexType* exact_virtual_scope = nullptr;
@@ -538,6 +552,54 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
     return *value_id;
   }
 
+  boost::optional<value_id_t> unwrap_value(const IRValue& value,
+                                           const DexMethodRef* unwrap_method,
+                                           const DexMethodRef* wrap_method,
+                                           const DexMethodRef* abs_method,
+                                           bool is_unboxed) const {
+    if (is_unboxed) {
+      // for unboxing in boxing-unboxing pattern, the value could be an invoke
+      // or IOPCODE_POSITIONAL_UNBOXING.
+      if (!opcode::is_an_invoke(value.opcode) &&
+          value.opcode != IOPCODE_POSITIONAL_UNBOXING) {
+        return boost::none;
+      }
+    } else {
+      // for boxing, we only consider invoke value.
+      if (!opcode::is_an_invoke(value.opcode)) {
+        return boost::none;
+      }
+    }
+
+    auto value_method = opcode::is_an_invoke(value.opcode)
+                            ? value.method
+                            : value.positional_insn->get_method();
+    bool has_unwrap_method = is_unboxed ? (value_method == unwrap_method ||
+                                           value_method == abs_method)
+                                        : value_method == unwrap_method;
+    if (!has_unwrap_method) {
+      return boost::none;
+    }
+
+    auto it = m_proper_id_values.find(value.srcs.at(0));
+    if (it == m_proper_id_values.end()) {
+      return boost::none;
+    }
+
+    const auto& inner_value = it->second;
+    // For unboxing-boxing pattern, we don't consider abs-unboxing (i.e.
+    // Ljava/lang/Number;.*value()*) at this time.
+    if (opcode::is_an_invoke(inner_value.opcode) &&
+        inner_value.method == wrap_method) {
+      auto unwrapped_value = inner_value.srcs.at(0);
+      if (!is_pre_state_src(unwrapped_value)) {
+        // TODO: Support capturing pre-state values
+        return boost::optional<value_id_t>(unwrapped_value);
+      }
+    }
+    return boost::none;
+  }
+
   boost::optional<value_id_t> get_value_id(const IRValue& value) const {
     auto it = m_value_ids.find(value);
     if (it != m_value_ids.end()) {
@@ -563,12 +625,49 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
         id |= (src & ValueIdFlags::IS_TRACKED_LOCATION_MASK);
       }
     }
-    m_value_ids.emplace(value, id);
     if (value.opcode == IOPCODE_POSITIONAL) {
       m_positional_insns.emplace(id, value.positional_insn);
     } else if (value.opcode == IOPCODE_PRE_STATE_SRC) {
       m_pre_state_value_ids.insert(id);
+    } else {
+      const auto& abs_map = m_shared_state->get_abstract_map();
+      for (const auto [box_method, unbox_method] :
+           m_shared_state->get_boxing_map()) {
+        const DexMethodRef* abs_method = nullptr;
+        auto abs_it = abs_map.find(unbox_method);
+        if (abs_it != abs_map.end()) {
+          abs_method = abs_it->second;
+        }
+        auto optional_unboxed_value_id = unwrap_value(
+            value, unbox_method, box_method, abs_method, /* unboxed */ true);
+        if (optional_unboxed_value_id) {
+          // boxing-unboxing
+          if (value.opcode == IOPCODE_POSITIONAL_UNBOXING) {
+            // Since value is in boxing-unboxing pattern, we record it in
+            // m_unboxing_insns.
+            auto insn = const_cast<IRInstruction*>(value.positional_insn);
+            if (m_unboxing_insns_set.insert(insn).second) {
+              m_unboxing_insns.emplace_back(insn);
+            }
+          }
+          return optional_unboxed_value_id;
+        }
+        auto optional_boxed_value_id = unwrap_value(
+            value, box_method, unbox_method, abs_method, /* boxed */ false);
+        if (optional_boxed_value_id) {
+          // unboxing-boxing
+          return optional_boxed_value_id;
+        }
+      }
+      if (value.opcode == IOPCODE_POSITIONAL_UNBOXING) {
+        // This means this value is not in a boxing-unboxing pattern. Therefore,
+        // we put it in m_positional_insns list.
+        m_positional_insns.emplace(id, value.positional_insn);
+      } else {
+        m_proper_id_values.emplace(id, value);
+      }
     }
+    m_value_ids.emplace(value, id);
     return boost::optional<value_id_t>(id);
   }
 
@@ -669,6 +768,7 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
       std::sort(value.srcs.begin(), value.srcs.end());
     }
     bool is_positional;
+    bool is_potential_abs_unboxing = false;
     switch (insn->opcode()) {
     case IOPCODE_LOAD_PARAM:
     case IOPCODE_LOAD_PARAM_OBJECT:
@@ -679,7 +779,12 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
     case OPCODE_FILLED_NEW_ARRAY:
       is_positional = true;
       break;
-    case OPCODE_INVOKE_VIRTUAL:
+    case OPCODE_INVOKE_VIRTUAL: {
+      is_potential_abs_unboxing =
+          m_shared_state->has_potential_unboxing_method(insn);
+      is_positional = !m_shared_state->has_pure_method(insn);
+      break;
+    }
     case OPCODE_INVOKE_SUPER:
     case OPCODE_INVOKE_DIRECT:
     case OPCODE_INVOKE_STATIC:
@@ -696,7 +801,11 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
       break;
     }
     if (is_positional) {
-      value.opcode = IOPCODE_POSITIONAL;
+      if (is_potential_abs_unboxing) {
+        value.opcode = IOPCODE_POSITIONAL_UNBOXING;
+      } else {
+        value.opcode = IOPCODE_POSITIONAL;
+      }
       value.positional_insn = insn;
     } else if (insn->has_literal()) {
       value.literal = insn->get_literal();
@@ -758,6 +867,7 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
   mutable std::unordered_set<value_id_t> m_pre_state_value_ids;
   mutable std::unordered_map<value_id_t, const IRInstruction*>
       m_positional_insns;
+  mutable std::unordered_map<value_id_t, IRValue> m_proper_id_values;
 };
 
 } // namespace
@@ -896,6 +1006,20 @@ SharedState::SharedState(
   if (traceEnabled(CSE, 2)) {
     m_barriers.reset(new ConcurrentMap<Barrier, size_t, BarrierHasher>());
   }
+
+  const std::vector<DexType*> boxing_types = {
+      type::java_lang_Boolean(), type::java_lang_Byte(),
+      type::java_lang_Short(),   type::java_lang_Character(),
+      type::java_lang_Integer(), type::java_lang_Long(),
+      type::java_lang_Float(),   type::java_lang_Double()};
+
+  for (const auto* type : boxing_types) {
+    const auto* box_method = type::get_value_of_method_for_type(type);
+    const auto* unbox_method = type::get_unboxing_method_for_type(type);
+    const auto* abs_method = type::get_Number_unboxing_method_for_type(type);
+    m_boxing_map.insert({box_method, unbox_method});
+    m_abstract_map.insert({unbox_method, abs_method});
+  }
 }
 
 const method_override_graph::Graph* SharedState::get_method_override_graph()
@@ -985,13 +1109,15 @@ void SharedState::init_finalizable_fields(const Scope& scope) {
   m_stats.finalizable_fields = m_finalizable_fields.size();
 }
 
-void SharedState::init_scope(const Scope& scope) {
+void SharedState::init_scope(
+    const Scope& scope,
+    const method::ClInitHasNoSideEffectsPredicate& clinit_has_no_side_effects) {
   always_assert(!m_method_override_graph);
   m_method_override_graph = method_override_graph::build_graph(scope);
 
   auto iterations = compute_conditionally_pure_methods(
-      scope, m_method_override_graph.get(), m_pure_methods,
-      &m_conditionally_pure_methods);
+      scope, m_method_override_graph.get(), clinit_has_no_side_effects,
+      m_pure_methods, &m_conditionally_pure_methods);
   m_stats.conditionally_pure_methods = m_conditionally_pure_methods.size();
   m_stats.conditionally_pure_methods_iterations = iterations;
   for (const auto& p : m_conditionally_pure_methods) {
@@ -1151,6 +1277,18 @@ SharedState::get_read_locations_of_conditionally_pure_method(
   }
 }
 
+bool SharedState::has_potential_unboxing_method(
+    const IRInstruction* insn) const {
+  auto method_ref = insn->get_method();
+  for (const auto& abs_pair : get_abstract_map()) {
+    const auto* abs_method = abs_pair.second;
+    if (method_ref == abs_method) {
+      return true;
+    }
+  }
+  return false;
+}
+
 bool SharedState::has_pure_method(const IRInstruction* insn) const {
   auto method_ref = insn->get_method();
   if (m_pure_methods.find(method_ref) != m_pure_methods.end()) {
@@ -1217,21 +1355,16 @@ CommonSubexpressionElimination::CommonSubexpressionElimination(
     : m_cfg(cfg),
       m_is_static(is_static),
       m_declaring_type(declaring_type),
-      m_args(args) {
+      m_args(args),
+      m_abs_map(shared_state->get_abstract_map()) {
   Analyzer analyzer(shared_state, cfg, is_static, is_init_or_clinit,
                     declaring_type);
+  m_unboxing = analyzer.get_unboxing_insns();
   m_stats.max_value_ids = analyzer.get_value_ids_size();
   if (analyzer.using_other_tracked_location_bit()) {
     m_stats.methods_using_other_tracked_location_bit = 1;
   }
 
-  // We need some helper state/functions to build the list m_earlier_insns
-  // of unique earlier-instruction sets. To make that deterministic, we use
-  // instruction ids that represent the position of an instruction in the cfg.
-  std::unordered_map<const IRInstruction*, size_t> insn_ids;
-  for (const auto& mie : InstructionIterable(cfg)) {
-    insn_ids.emplace(mie.insn, insn_ids.size());
-  }
   std::unordered_map<std::vector<size_t>, size_t,
                      boost::hash<std::vector<size_t>>>
       insns_ids;
@@ -1239,7 +1372,7 @@ CommonSubexpressionElimination::CommonSubexpressionElimination(
       [&](const PatriciaTreeSet<const IRInstruction*>& insns) {
         std::vector<size_t> ordered_ids;
         for (auto insn : insns) {
-          ordered_ids.push_back(insn_ids.at(insn));
+          ordered_ids.push_back(get_earlier_insn_id(insn));
         }
         std::sort(ordered_ids.begin(), ordered_ids.end());
         auto it = insns_ids.find(ordered_ids);
@@ -1297,6 +1430,7 @@ CommonSubexpressionElimination::CommonSubexpressionElimination(
           break;
         }
       }
+
       if (skip) {
         continue;
       }
@@ -1307,7 +1441,21 @@ CommonSubexpressionElimination::CommonSubexpressionElimination(
   }
 }
 
+size_t CommonSubexpressionElimination::get_earlier_insn_id(
+    const IRInstruction* insn) {
+  // We need some helper state/functions to build the list m_earlier_insns
+  // of unique earlier-instruction sets. To make that deterministic, we use
+  // instruction ids that represent the position of an instruction in the cfg.
+  if (m_earlier_insn_ids.empty()) {
+    for (const auto& mie : InstructionIterable(m_cfg)) {
+      m_earlier_insn_ids.emplace(mie.insn, m_earlier_insn_ids.size());
+    }
+  }
+  return m_earlier_insn_ids.at(insn);
+}
+
 static IROpcode get_move_opcode(const IRInstruction* earlier_insn) {
+  always_assert(!opcode::is_a_literal_const(earlier_insn->opcode()));
   if (earlier_insn->has_dest()) {
     return earlier_insn->dest_is_wide()     ? OPCODE_MOVE_WIDE
            : earlier_insn->dest_is_object() ? OPCODE_MOVE_OBJECT
@@ -1325,6 +1473,34 @@ static IROpcode get_move_opcode(const IRInstruction* earlier_insn) {
                ? OPCODE_MOVE_OBJECT
                : OPCODE_MOVE;
   }
+}
+
+static std::pair<IROpcode, std::optional<int64_t>> get_move_or_const_literal(
+    const sparta::PatriciaTreeSet<const IRInstruction*>& insns) {
+  std::optional<IROpcode> opcode;
+  std::optional<int64_t> literal;
+  for (auto insn : insns) {
+    if (opcode::is_a_literal_const(insn->opcode())) {
+      if (literal) {
+        always_assert(*literal == insn->get_literal());
+        always_assert(*opcode == insn->opcode());
+      } else {
+        literal = insn->get_literal();
+        opcode = insn->opcode();
+      }
+      continue;
+    }
+    if (opcode) {
+      always_assert(*opcode == get_move_opcode(insn));
+    } else {
+      opcode = get_move_opcode(insn);
+    }
+  }
+  always_assert(opcode);
+  always_assert(opcode::is_a_move(*opcode) ||
+                opcode::is_a_literal_const(*opcode));
+  always_assert(!opcode::is_a_literal_const(*opcode) || literal);
+  return std::make_pair(*opcode, literal);
 }
 
 bool CommonSubexpressionElimination::patch(bool runtime_assertions) {
@@ -1349,12 +1525,15 @@ bool CommonSubexpressionElimination::patch(bool runtime_assertions) {
       continue;
     }
     auto& earlier_insns = m_earlier_insns.at(f.earlier_insns_index);
+    auto move_or_const_literal = get_move_or_const_literal(earlier_insns);
+    auto opcode = move_or_const_literal.first;
+    if (!opcode::is_a_move(opcode)) {
+      continue;
+    }
     combined_earlier_insns.insert(earlier_insns.begin(), earlier_insns.end());
-    IROpcode move_opcode = get_move_opcode(*earlier_insns.begin());
-    reg_t temp_reg = move_opcode == OPCODE_MOVE_WIDE
-                         ? m_cfg.allocate_wide_temp()
-                         : m_cfg.allocate_temp();
-    temps.emplace(f.earlier_insns_index, std::make_pair(move_opcode, temp_reg));
+    reg_t temp_reg = opcode == OPCODE_MOVE_WIDE ? m_cfg.allocate_wide_temp()
+                                                : m_cfg.allocate_temp();
+    temps.emplace(f.earlier_insns_index, std::make_pair(opcode, temp_reg));
   }
   for (auto earlier_insn : combined_earlier_insns) {
     iterator_insns.insert(earlier_insn);
@@ -1368,6 +1547,10 @@ bool CommonSubexpressionElimination::patch(bool runtime_assertions) {
                     opcode::is_an_sput(earlier_insn->opcode()));
       m_stats.stores_captured++;
     }
+  }
+
+  for (auto unboxing_insn : m_unboxing) {
+    iterator_insns.insert(unboxing_insn);
   }
 
   // find all iterators in one sweep
@@ -1386,22 +1569,56 @@ bool CommonSubexpressionElimination::patch(bool runtime_assertions) {
   std::vector<std::pair<Forward, IRInstruction*>> to_check;
   for (const auto& f : m_forward) {
     auto& earlier_insns = m_earlier_insns.at(f.earlier_insns_index);
-    auto& q = temps.at(f.earlier_insns_index);
-    IROpcode move_opcode = q.first;
-    reg_t temp_reg = q.second;
+
     IRInstruction* insn = f.insn;
     auto& it = iterators.at(insn);
-    IRInstruction* move_insn = new IRInstruction(move_opcode);
-    move_insn->set_src(0, temp_reg)->set_dest(insn->dest());
-    m_cfg.insert_after(it, move_insn);
 
-    if (runtime_assertions) {
-      to_check.emplace_back(f, move_insn);
-    }
+    auto temp_it = temps.find(f.earlier_insns_index);
+    if (temp_it == temps.end()) {
+      auto move_or_const_literal = get_move_or_const_literal(earlier_insns);
+      auto const_opcode = move_or_const_literal.first;
+      always_assert(opcode::is_a_literal_const(const_opcode));
+      auto literal = *(move_or_const_literal.second);
 
-    for (auto earlier_insn : earlier_insns) {
-      TRACE(CSE, 4, "[CSE] forwarding %s to %s via v%u", SHOW(earlier_insn),
-            SHOW(insn), temp_reg);
+      // Consider this case:
+      //   1. (const v0 0)
+      //   2. (iput-object v0 v3 "LClass1;.field:Ljava/lang/Object;")
+      //   3. (const v0 0)
+      //   4. boxing-unboxing v0
+      //   5. (move-result v0)
+      //   6. (iput-boolean v0 v4 "LClass2;.field:Z")
+      // We need to make sure that after opt-out "boxing-unboxing v0", v0 used
+      // in insn 6. should not be the one used in insn 2, since in line 2, v0 is
+      // used as null-0 and in line 4, v0 should be int. Therfore, instead of
+      // insert a move, if there is any literal_const load in earlier_insns, we
+      // just clone that const insn and override the dest to current insn's
+      // dest. No need to add this new insn for runtime-assertion since it is
+      // just a clone.
+      IRInstruction* const_insn = new IRInstruction(const_opcode);
+      const_insn->set_literal(literal)->set_dest(insn->dest());
+      auto iterators_invalidated = m_cfg.insert_after(it, const_insn);
+      always_assert(!iterators_invalidated);
+
+      for (auto earlier_insn : earlier_insns) {
+        TRACE(CSE, 4, "[CSE] forwarding %s to %s as const %ld",
+              SHOW(earlier_insn), SHOW(insn), literal);
+      }
+    } else {
+      auto [move_opcode, temp_reg] = temp_it->second;
+      always_assert(opcode::is_a_move(move_opcode));
+
+      IRInstruction* move_insn = new IRInstruction(move_opcode);
+      move_insn->set_src(0, temp_reg)->set_dest(insn->dest());
+      auto iterators_invalidated = m_cfg.insert_after(it, move_insn);
+      always_assert(!iterators_invalidated);
+      if (runtime_assertions) {
+        to_check.emplace_back(f, move_insn);
+      }
+
+      for (auto earlier_insn : earlier_insns) {
+        TRACE(CSE, 4, "[CSE] forwarding %s to %s via v%u", SHOW(earlier_insn),
+              SHOW(insn), temp_reg);
+      }
     }
 
     if (opcode::is_move_result_any(insn->opcode())) {
@@ -1414,14 +1631,31 @@ bool CommonSubexpressionElimination::patch(bool runtime_assertions) {
     m_stats.eliminated_opcodes[insn->opcode()]++;
   }
 
-  // insert moves to define the forwarded value
+  // Insert moves to define the forwarded value.
+  // We are going to call ControlFlow::insert_after, which may introduce new
+  // blocks when inserting after the last instruction of a block with
+  // throws-edges. To make that deterministic, we need to make sure that we
+  // insert in a deterministic order. To this end, we follow the deterministic
+  // m_forward order, and we order earlier instructions by their ids.
+  for (const auto& f : m_forward) {
+    auto temp_it = temps.find(f.earlier_insns_index);
+    if (temp_it == temps.end()) {
+      continue;
+    }
+    auto [move_opcode, temp_reg] = temp_it->second;
+    always_assert(opcode::is_a_move(move_opcode));
+    temps.erase(temp_it);
 
-  for (const auto& r : temps) {
-    size_t earlier_insns_index = r.first;
-    IROpcode move_opcode = r.second.first;
-    reg_t temp_reg = r.second.second;
-    auto& earlier_insns = m_earlier_insns.at(earlier_insns_index);
-    for (auto earlier_insn : earlier_insns) {
+    auto& earlier_insns_unordered = m_earlier_insns.at(f.earlier_insns_index);
+    std::vector<const IRInstruction*> earlier_insns_ordered(
+        earlier_insns_unordered.begin(), earlier_insns_unordered.end());
+    always_assert(!m_earlier_insn_ids.empty());
+    std::sort(earlier_insns_ordered.begin(), earlier_insns_ordered.end(),
+              [&](const auto* a, const auto* b) {
+                return get_earlier_insn_id(a) < get_earlier_insn_id(b);
+              });
+
+    for (auto earlier_insn : earlier_insns_ordered) {
       auto& it = iterators.at(const_cast<IRInstruction*>(earlier_insn));
       IRInstruction* move_insn = new IRInstruction(move_opcode);
       auto src_reg = earlier_insn->has_dest() ? earlier_insn->dest()
@@ -1431,12 +1665,15 @@ bool CommonSubexpressionElimination::patch(bool runtime_assertions) {
         // we need to capture the array-length register of a new-array
         // instruction *before* the instruction, as the dest of the instruction
         // may overwrite the incoming array length value
-        m_cfg.insert_before(it, move_insn);
+        auto iterators_invalidated = m_cfg.insert_before(it, move_insn);
+        always_assert(!iterators_invalidated);
       } else {
-        m_cfg.insert_after(it, move_insn);
+        auto iterators_invalidated = m_cfg.insert_after(it, move_insn);
+        always_assert(!iterators_invalidated);
       }
     }
   }
+  always_assert(temps.empty());
 
   if (runtime_assertions) {
     insert_runtime_assertions(to_check);
@@ -1445,6 +1682,39 @@ bool CommonSubexpressionElimination::patch(bool runtime_assertions) {
   TRACE(CSE, 5, "[CSE] after:\n%s", SHOW(m_cfg));
 
   m_stats.instructions_eliminated += m_forward.size();
+
+  if (!m_unboxing.empty()) {
+    // Inserting check-casts might split blocks and invalidate iterators, thus
+    // we go through the CFGMutation helper class that properly deals with this
+    // complication.
+
+    cfg::CFGMutation mutation(m_cfg);
+    // For the abs methods which are part of boxing-unboxing pattern, we refine
+    // it to its impl, which will be viewed as "pure" method and can be optmized
+    // out later.
+    for (auto unboxing_insn : m_unboxing) {
+      auto& it = iterators.at(unboxing_insn);
+      auto method_ref = unboxing_insn->get_method();
+      auto abs_it = std::find_if(
+          m_abs_map.begin(), m_abs_map.end(),
+          [method_ref](auto& p) { return p.second == method_ref; });
+      always_assert(abs_it != m_abs_map.end());
+      auto impl = abs_it->first;
+      auto src_reg = unboxing_insn->src(0);
+      auto check_cast_insn = (new IRInstruction(OPCODE_CHECK_CAST))
+                                 ->set_src(0, src_reg)
+                                 ->set_type(impl->get_class());
+      auto pseudo_move_result_insn =
+          (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
+              ->set_dest(src_reg);
+      // Add instructions
+      mutation.insert_before(it, {check_cast_insn, pseudo_move_result_insn});
+      // Replace the call method from abs_unboxing method to its impl.
+      unboxing_insn->set_method(const_cast<DexMethodRef*>(impl));
+    }
+    mutation.flush();
+  }
+
   return true;
 }
 

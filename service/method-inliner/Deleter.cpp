@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -13,7 +13,7 @@
 #include "Trace.h"
 #include "Walkers.h"
 
-size_t delete_methods(
+std::vector<DexMethod*> delete_methods(
     std::vector<DexClass*>& scope,
     std::unordered_set<DexMethod*>& removable,
     std::function<DexMethod*(DexMethodRef*, MethodSearch search)>
@@ -38,10 +38,11 @@ size_t delete_methods(
 
   // if a removable candidate is referenced by an annotation do not delete
   walk::annotations(scope, [&](DexAnnotation* anno) {
-    for (auto anno_element : anno->anno_elems()) {
-      auto ev = anno_element.encoded_value;
+    for (auto& anno_element : anno->anno_elems()) {
+      auto& ev = anno_element.encoded_value;
       if (ev->evtype() == DEVT_METHOD) {
-        DexEncodedValueMethod* evm = static_cast<DexEncodedValueMethod*>(ev);
+        DexEncodedValueMethod* evm =
+            static_cast<DexEncodedValueMethod*>(ev.get());
         if (evm->method()->is_def()) {
           removable.erase(evm->method()->as_def());
         }
@@ -49,7 +50,7 @@ size_t delete_methods(
     }
   });
 
-  size_t deleted = 0;
+  std::vector<DexMethod*> deleted;
   for (auto callee : removable) {
     if (!callee->is_concrete()) continue;
     if (!can_delete(callee)) continue;
@@ -59,7 +60,7 @@ size_t delete_methods(
                       SHOW(callee));
     cls->remove_method(callee);
     DexMethod::erase_method(callee);
-    deleted++;
+    deleted.push_back(callee);
     TRACE(DELMET, 4, "removing %s", SHOW(callee));
   }
   return deleted;

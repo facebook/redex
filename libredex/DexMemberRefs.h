@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -9,6 +9,7 @@
 
 #include <boost/functional/hash.hpp>
 #include <string>
+#include <string_view>
 #include <vector>
 
 class DexType;
@@ -55,24 +56,24 @@ struct DexFieldSpec {
 namespace dex_member_refs {
 
 struct FieldDescriptorTokens {
-  std::string cls;
-  std::string name;
-  std::string type;
+  std::string_view cls;
+  std::string_view name;
+  std::string_view type;
 };
 
 struct MethodDescriptorTokens {
-  std::string cls;
-  std::string name;
-  std::vector<std::string> args;
-  std::string rtype;
+  std::string_view cls;
+  std::string_view name;
+  std::vector<std::string_view> args;
+  std::string_view rtype;
 };
 
-FieldDescriptorTokens parse_field(const std::string&);
+FieldDescriptorTokens parse_field(std::string_view);
 
 // When `kCheckFormat` = true, syntactical issues in the string
 // will lead to asserts, i.e., throws.
 template <bool kCheckFormat = false>
-MethodDescriptorTokens parse_method(const std::string&);
+MethodDescriptorTokens parse_method(std::string_view);
 
 } // namespace dex_member_refs
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -72,6 +72,7 @@ TEST_F(PartialApplicationTest, basic) {
 
   expected_code = assembler::ircode_from_string(R"(
     (
+     (.pos:dbg_0 "Lcom/facebook/redextest/PartialApplication$Callees;.foo$spa$0$3b9e1bb0b5617ee4$0:()V" RedexGenerated 0)
      (const v0 0)
      (const v1 1)
      (const v2 2)
@@ -107,6 +108,7 @@ TEST_F(PartialApplicationTest, basic) {
 
   expected_code = assembler::ircode_from_string(R"(
     (
+     (.pos:dbg_0 "Lcom/facebook/redextest/PartialApplication$Callees;.bar$spa$0$8477e08f7d55cc6f$0:()V" RedexGenerated 0)
      (const v0 0)
      (const v1 65)
      (const v2 1)
@@ -152,6 +154,7 @@ TEST_F(PartialApplicationTest, basic) {
      (load-param-object v7)
      (load-param v8)
      (load-param v9)
+     (.pos:dbg_0 "Lcom/facebook/redextest/PartialApplication$MoreCallees;.baz$ipa$0$310a286dd75824f4$0:(II)I" RedexGenerated 0)
      (const v0 1111)
      (const v1 2222)
      (const v2 3333)

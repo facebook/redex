@@ -1,10 +1,11 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <boost/format.hpp>
 #include <boost/thread/thread.hpp>
 #include <cinttypes>
 #include <cstring>
@@ -35,6 +36,7 @@
 #include <json/json.h>
 
 #include "ABExperimentContext.h"
+#include "AggregateException.h"
 #include "CommandProfiling.h"
 #include "CommentFilter.h"
 #include "ControlFlow.h" // To set DEBUG.
@@ -47,8 +49,11 @@
 #include "DuplicateClasses.h"
 #include "GlobalConfig.h"
 #include "IODIMetadata.h"
+#include "IOUtil.h"
 #include "InstructionLowering.h"
 #include "JarLoader.h"
+#include "JemallocUtil.h"
+#include "KeepReason.h"
 #include "Macros.h"
 #include "MonitorCount.h"
 #include "NoOptimizationsMatcher.h"
@@ -79,6 +84,7 @@ constexpr const char* DEBUG_LINE_MAP = "redex-debug-line-map-v2";
 constexpr const char* IODI_METADATA = "iodi-metadata";
 constexpr const char* OPT_DECISIONS = "redex-opt-decisions.json";
 constexpr const char* CLASS_METHOD_INFO_MAP = "redex-class-method-info-map.txt";
+constexpr const char* RESID_TO_NAME = "resid_to_name.json";
 
 const std::string k_usage_header = "usage: redex-all [options...] dex-files...";
 
@@ -1024,9 +1030,44 @@ void redex_frontend(ConfigFiles& conf, /* input */
     init_reachable_classes(scope, ReachableClassesConfig(json_config));
   }
 
-  if (RedexContext::record_keep_reasons()) {
+  if (keep_reason::Reason::record_keep_reasons()) {
     dump_keep_reasons(conf, args, stores);
   }
+}
+
+void write_out_resid_to_name(ConfigFiles& conf) {
+  std::string apk_dir;
+  conf.get_json_config().get("apk_dir", "", apk_dir);
+  if (!apk_dir.size()) {
+    return;
+  }
+  auto resources = create_resource_reader(apk_dir);
+  auto res_table = resources->load_res_table();
+  Json::Value resid_to_name_json;
+  boost::format hex_format("0x%08x");
+  for (const auto& pair : res_table->id_to_name) {
+    resid_to_name_json[(hex_format % pair.first).str()] = pair.second;
+  }
+  write_string_to_file(conf.metafile(RESID_TO_NAME),
+                       resid_to_name_json.toStyledString());
+}
+
+// Performa final wave of cleanup (i.e. garbage collect unreferenced strings,
+// etc) so that this only needs to happen once and not after every resource
+// modification.
+void finalize_resource_table(ConfigFiles& conf) {
+  if (!conf.finalize_resource_table()) {
+    return;
+  }
+  std::string apk_dir;
+  conf.get_json_config().get("apk_dir", "", apk_dir);
+  if (apk_dir.empty()) {
+    return;
+  }
+  TRACE(MAIN, 1, "Finalizing resource table.");
+  auto resources = create_resource_reader(apk_dir);
+  auto res_table = resources->load_res_table();
+  res_table->remove_unreferenced_strings();
 }
 
 /**
@@ -1039,6 +1080,9 @@ void redex_backend(ConfigFiles& conf,
   Timer redex_backend_timer("Redex_backend");
   const RedexOptions& redex_options = manager.get_redex_options();
   const auto& output_dir = conf.get_outdir();
+
+  write_out_resid_to_name(conf);
+  finalize_resource_table(conf);
 
   instruction_lowering::Stats instruction_lowering_stats;
   {
@@ -1246,6 +1290,13 @@ void dump_class_method_info_map(const std::string& file_path,
   });
 }
 
+void maybe_dump_jemalloc_profile(const char* env_name) {
+  auto* dump_path = std::getenv(env_name);
+  if (dump_path != nullptr) {
+    jemalloc_util::dump(dump_path);
+  }
+}
+
 } // namespace
 
 int main(int argc, char* argv[]) {
@@ -1284,7 +1335,7 @@ int main(int argc, char* argv[]) {
     //       list of library JARS.
     Arguments args = parse_args(argc, argv);
 
-    RedexContext::set_record_keep_reasons(
+    keep_reason::Reason::set_record_keep_reasons(
         args.config.get("record_keep_reasons", false).asBool());
 
     // For convenience.
@@ -1316,6 +1367,7 @@ int main(int argc, char* argv[]) {
           ScopedCommandProfiling::maybe_from_env("FRONTEND_", "frontend");
       redex_frontend(conf, args, *pg_config, stores, stats);
       conf.parse_global_config();
+      maybe_dump_jemalloc_profile("MALLOC_PROFILE_DUMP_FRONTEND");
     }
 
     // Initialize purity defaults, if set.
@@ -1331,6 +1383,7 @@ int main(int argc, char* argv[]) {
     {
       Timer t("Running optimization passes");
       manager.run_passes(stores, conf);
+      maybe_dump_jemalloc_profile("MALLOC_PROFILE_DUMP_AFTER_ALL_PASSES");
     }
 
     if (args.stop_pass_idx == boost::none) {
@@ -1346,6 +1399,7 @@ int main(int argc, char* argv[]) {
       redex::write_all_intermediate(conf, args.out_dir, args.redex_options,
                                     stores, args.entry_data);
     }
+    maybe_dump_jemalloc_profile("MALLOC_PROFILE_DUMP_BACKEND");
 
     stats_output_path = conf.metafile(
         args.config.get("stats_output", "redex-stats.txt").asString());

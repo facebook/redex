@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -7,6 +7,7 @@
 
 #include "RewriteKotlinSingletonInstance.h"
 
+#include "ConfigFiles.h"
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "LocalPointersAnalysis.h"
@@ -17,7 +18,10 @@
 
 namespace {
 bool check_inits_has_side_effects(
-    IRCode* code, const std::unordered_set<DexMethodRef*>& safe_base_invoke) {
+    const init_classes::InitClassesWithSideEffects&
+        init_classes_with_side_effects,
+    IRCode* code,
+    const std::unordered_set<DexMethodRef*>& safe_base_invoke) {
   cfg::ScopedCFG cfg(code);
   auto iterable = cfg::InstructionIterable(*cfg);
   side_effects::Summary summary(side_effects::EFF_NONE, {});
@@ -41,17 +45,18 @@ bool check_inits_has_side_effects(
   fp_iter.run({});
 
   auto side_effect_summary =
-      side_effects::SummaryBuilder(summary_map,
-                                   fp_iter,
-                                   code,
-                                   &reaching_defs_iter,
+      side_effects::SummaryBuilder(init_classes_with_side_effects, summary_map,
+                                   fp_iter, code, &reaching_defs_iter,
                                    /* analyze_external_reads */ true)
           .build();
 
   return side_effect_summary.is_pure();
 }
 bool init_for_type_has_side_effects(
-    DexClass* cls, const std::unordered_set<DexMethodRef*>& safe_base_invoke) {
+    const init_classes::InitClassesWithSideEffects&
+        init_classes_with_side_effects,
+    DexClass* cls,
+    const std::unordered_set<DexMethodRef*>& safe_base_invoke) {
   auto ifields = cls->get_ifields();
   if (!is_final(cls) || !ifields.empty()) {
     return true;
@@ -70,14 +75,14 @@ bool init_for_type_has_side_effects(
   if (!init || init->get_proto()->get_args()->size() || !init->get_code()) {
     return true;
   }
-  auto is_pure =
-      check_inits_has_side_effects(init->get_code(), safe_base_invoke);
+  auto is_pure = check_inits_has_side_effects(
+      init_classes_with_side_effects, init->get_code(), safe_base_invoke);
   return !is_pure;
 }
 
 } // namespace
 void RewriteKotlinSingletonInstance::run_pass(DexStoresVector& stores,
-                                              ConfigFiles&,
+                                              ConfigFiles& conf,
                                               PassManager& mgr) {
   auto lamda_base_invoke =
       DexMethod::get_method("Lkotlin/jvm/internal/Lambda;.<init>:(I)V");
@@ -95,8 +100,12 @@ void RewriteKotlinSingletonInstance::run_pass(DexStoresVector& stores,
   ConcurrentMap<DexFieldRef*, std::set<std::pair<IRInstruction*, DexMethod*>>>
       concurrentLambdaMap;
 
-  auto do_not_consider_type = [&safe_base_invoke](DexClass* cls) -> bool {
-    return init_for_type_has_side_effects(cls, safe_base_invoke);
+  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+      scope, conf.create_init_class_insns());
+  auto do_not_consider_type = [&init_classes_with_side_effects,
+                               &safe_base_invoke](DexClass* cls) -> bool {
+    return init_for_type_has_side_effects(init_classes_with_side_effects, cls,
+                                          safe_base_invoke);
   };
   KotlinInstanceRewriter::Stats stats = rewriter.collect_instance_usage(
       scope, concurrentLambdaMap, do_not_consider_type);

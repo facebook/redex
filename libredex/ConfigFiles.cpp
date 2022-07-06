@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -9,7 +9,6 @@
 
 #include <boost/filesystem.hpp>
 #include <fstream>
-#include <iostream>
 #include <json/json.h>
 #include <string>
 #include <vector>
@@ -355,6 +354,22 @@ const ProguardMap& ConfigFiles::get_proguard_map() const {
 
 bool ConfigFiles::force_single_dex() const {
   return m_json.get("force_single_dex", false);
+}
+
+bool ConfigFiles::emit_incoming_hashes() const {
+  return m_json.get("emit_incoming_hashes", false);
+}
+
+bool ConfigFiles::emit_outgoing_hashes() const {
+  return m_json.get("emit_outgoing_hashes", false);
+}
+
+bool ConfigFiles::create_init_class_insns() const {
+  return m_json.get("create_init_class_insns", true);
+}
+
+bool ConfigFiles::finalize_resource_table() const {
+  return m_json.get("finalize_resource_table", false);
 }
 
 void ConfigFiles::set_outdir(const std::string& new_outdir) {

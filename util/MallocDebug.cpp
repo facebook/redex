@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -231,8 +231,23 @@ class MallocDebug {
                     BlockCache& blocks,
                     Fn fn,
                     Args... args) noexcept {
-    constexpr int block_count = 8;
-    auto next_size = std::max(sizeof(uint32_t), next_power_of_two(size));
+    size_t block_count = 8;
+
+    // Size scheme:
+    //   up to 1024, align by 4: this range has the highest alignment overhead
+    //   up to 64k, align by 1024: that may amortize
+    //   powers of 2 from here: not enough overlapping entries
+
+    auto round_up = [](size_t n, size_t r) { return (n + r - 1) & ~(r - 1); };
+
+    auto next_size = size <= 1024        ? round_up(size, 4)
+                     : size <= 64 * 1024 ? round_up(size, 1024)
+                                         : next_power_of_two(size);
+
+    // For sizes >= 1M, reduce the block count.
+    if (next_size >= 1024 * 1024) {
+      block_count = 4;
+    }
 
     auto it = blocks.find(next_size);
     if (it == blocks.end()) {

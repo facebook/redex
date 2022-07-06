@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -18,10 +18,16 @@ bool implements(const DexClass* cls, const DexType* intf) {
   if (is_interface(cls)) {
     return false;
   }
-  for (const auto interface : cls->get_interfaces()->get_type_list()) {
+  for (const auto interface : *cls->get_interfaces()) {
     if (interface == intf) {
       return true;
     }
+  }
+
+  auto* super_type = cls->get_super_class();
+  auto* super_cls = type_class(cls->get_super_class());
+  if (super_cls && super_type != type::java_lang_Object()) {
+    return implements(super_cls, intf);
   }
   return false;
 }
@@ -76,10 +82,10 @@ const DexType* find_common_type(const DexType* l, const DexType* r) {
   }
 
   // One is interface, and the other implements it.
-  if (is_interface(l_cls) && implements(r_cls, l)) {
+  if (is_interface(l_cls) && !is_interface(r_cls) && implements(r_cls, l)) {
     return l;
   }
-  if (is_interface(r_cls) && implements(l_cls, r)) {
+  if (is_interface(r_cls) && !is_interface(l_cls) && implements(l_cls, r)) {
     return r;
   }
 

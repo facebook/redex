@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -11,6 +11,7 @@
 #include "Debug.h"
 #include "DexClass.h"
 #include "IRCode.h"
+#include "InteractiveDebugging.h"
 #include "ScopedCFG.h"
 #include "Show.h"
 #include "SourceBlocks.h"
@@ -30,7 +31,7 @@ namespace source_blocks {
 
 bool operator<(const SourceBlockInfo& l, const SourceBlockInfo& r) {
   if (l.original_dex_method != r.original_dex_method) {
-    return compare_dexmethods(l.original_dex_method, r.original_dex_method);
+    return compare_dexstrings(l.original_dex_method, r.original_dex_method);
   }
 
   return l.id < r.id;
@@ -218,7 +219,7 @@ size_t SourceBlockConsistencyCheck::run(const Scope& scope) {
 
       always_assert(!src_blks.empty());
 
-      std::map<DexMethodRef*, std::vector<uint32_t>, dexmethods_comparator>
+      std::map<const DexString*, std::vector<uint32_t>, dexstrings_comparator>
           methodRefToSrcBlockIds;
       for (const auto& [src, id] : src_blks) {
         methodRefToSrcBlockIds[src].push_back(id);
@@ -228,15 +229,13 @@ size_t SourceBlockConsistencyCheck::run(const Scope& scope) {
             show_deobfuscated(dex_method).c_str());
 
       for (const auto& [src, ids] : methodRefToSrcBlockIds) {
-        auto meth_name = show_deobfuscated(src);
         std::string idListStr = std::accumulate(
             ids.begin() + 1, ids.end(), std::to_string(ids.front()),
             [](const auto& l, const auto& r) {
               return l + ", " + std::to_string(r);
             });
 
-        TRACE(SBCC, 2, "    %s:\n      %s", meth_name.c_str(),
-              idListStr.c_str());
+        TRACE(SBCC, 2, "    %s:\n      %s", src->c_str(), idListStr.c_str());
       }
     }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -48,6 +48,14 @@ struct DexTypeEnvironmentTest : public RedexTest {
    *  Sub1(If1) Sub2(If2)
    *  |           \
    *  Sub3(If1)   Sub4(If1, If2)
+   *
+   *  Ljava/lang/Object;
+   *  |
+   *  AbstractMapEntry(MapEntry)
+   *  |
+   *  ImmutableEntry
+   *  |
+   *  ImmutableMapEntry
    *
    */
   DexTypeEnvironmentTest() {
@@ -175,6 +183,31 @@ struct DexTypeEnvironmentTest : public RedexTest {
     m_sub1_array = type::make_array_type(m_type_sub1);
     m_sub2_array = type::make_array_type(m_type_sub2);
     m_sub3_array = type::make_array_type(m_type_sub3);
+
+    m_map_entry = DexType::make_type("LMapEntry");
+    creator = ClassCreator(m_map_entry);
+    creator.set_super(type::java_lang_Object());
+    creator.set_access(ACC_PUBLIC | ACC_INTERFACE);
+    creator.create();
+
+    m_abs_map_entry = DexType::make_type("LAbstractMapEntry");
+    creator = ClassCreator(m_abs_map_entry);
+    creator.set_super(type::java_lang_Object());
+    creator.add_interface(m_map_entry);
+    creator.create();
+
+    m_im_entry = DexType::make_type("LImmutableEntry");
+    creator = ClassCreator(m_im_entry);
+    creator.set_super(m_abs_map_entry);
+    creator.create();
+
+    m_im_map_entry = DexType::make_type("LImmutableMapEntry");
+    creator = ClassCreator(m_im_map_entry);
+    creator.set_super(m_im_entry);
+    creator.create();
+
+    m_map_entry_array = type::make_array_type(m_map_entry);
+    m_im_map_entry_array = type::make_array_type(m_im_map_entry);
   }
 
   TypeSet get_type_set(std::initializer_list<DexType*> l) {
@@ -219,6 +252,13 @@ struct DexTypeEnvironmentTest : public RedexTest {
   DexType* m_sub1_array;
   DexType* m_sub2_array;
   DexType* m_sub3_array;
+
+  DexType* m_map_entry;
+  DexType* m_abs_map_entry;
+  DexType* m_im_entry;
+  DexType* m_im_map_entry;
+  DexType* m_map_entry_array;
+  DexType* m_im_map_entry_array;
 };
 
 TEST_F(DexTypeEnvironmentTest, BasicTest) {
@@ -883,4 +923,32 @@ TEST_F(DexTypeEnvironmentTest, ArrayConstNullnessDomain) {
   EXPECT_FALSE(
       DexTypeDomain(m_string_array, 3).get_array_nullness().is_bottom());
   EXPECT_TRUE(DexTypeDomain(m_string_array).get_array_nullness().is_top());
+}
+
+TEST_F(DexTypeEnvironmentTest, BaseClassInterfaceJoinTest) {
+  auto abs_me = SingletonDexTypeDomain(m_abs_map_entry);
+  auto intf = SingletonDexTypeDomain(m_map_entry);
+  abs_me.join_with(intf);
+  EXPECT_FALSE(abs_me.is_top());
+  EXPECT_EQ(abs_me, SingletonDexTypeDomain(m_map_entry));
+  EXPECT_FALSE(intf.is_top());
+
+  auto im_e = SingletonDexTypeDomain(m_im_entry);
+  im_e.join_with(intf);
+  EXPECT_FALSE(im_e.is_top());
+  EXPECT_EQ(im_e, SingletonDexTypeDomain(m_map_entry));
+  EXPECT_FALSE(intf.is_top());
+
+  auto im_me = SingletonDexTypeDomain(m_im_map_entry);
+  im_me.join_with(intf);
+  EXPECT_FALSE(im_me.is_top());
+  EXPECT_EQ(im_me, SingletonDexTypeDomain(m_map_entry));
+  EXPECT_FALSE(intf.is_top());
+
+  auto intf_array = SingletonDexTypeDomain(m_map_entry_array);
+  auto im_me_array = SingletonDexTypeDomain(m_im_map_entry_array);
+  im_me_array.join_with(intf_array);
+  EXPECT_FALSE(im_me_array.is_top());
+  EXPECT_EQ(im_me_array, SingletonDexTypeDomain(m_map_entry_array));
+  EXPECT_FALSE(intf_array.is_top());
 }

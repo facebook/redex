@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -169,15 +169,15 @@ void rewrite_dalvik_annotation_signature(const Scope& scope,
       DexType::get_type("Ldalvik/annotation/Signature;");
   walk::parallel::annotations(scope, [&](DexAnnotation* anno) {
     if (anno->type() != dalviksig) return;
-    auto elems = anno->anno_elems();
-    for (auto elem : elems) {
-      auto ev = elem.encoded_value;
+    auto& elems = anno->anno_elems();
+    for (auto& elem : elems) {
+      auto& ev = elem.encoded_value;
       if (ev->evtype() != DEVT_ARRAY) continue;
-      auto arrayev = static_cast<DexEncodedValueArray*>(ev);
+      auto arrayev = static_cast<DexEncodedValueArray*>(ev.get());
       auto const& evs = arrayev->evalues();
-      for (auto strev : *evs) {
+      for (auto& strev : *evs) {
         if (strev->evtype() != DEVT_STRING) continue;
-        auto stringev = static_cast<DexEncodedValueString*>(strev);
+        auto stringev = static_cast<DexEncodedValueString*>(strev.get());
         auto* old_str = stringev->string();
         auto* new_str = lookup_signature_annotation(mapping, old_str);
         if (new_str != nullptr) {

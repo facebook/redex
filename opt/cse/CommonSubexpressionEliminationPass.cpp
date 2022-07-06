@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -51,6 +51,8 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
                                                   ConfigFiles& conf,
                                                   PassManager& mgr) {
   const auto scope = build_class_scope(stores);
+  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+      scope, conf.create_init_class_insns());
 
   walk::parallel::code(scope, [&](DexMethod*, IRCode& code) {
     code.build_cfg(/* editable */ true);
@@ -65,7 +67,11 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
 
   auto shared_state =
       SharedState(pure_methods, conf.get_finalish_field_names());
-  shared_state.init_scope(scope);
+  method::ClInitHasNoSideEffectsPredicate clinit_has_no_side_effects =
+      [&](const DexType* type) {
+        return !init_classes_with_side_effects.refine(type);
+      };
+  shared_state.init_scope(scope, clinit_has_no_side_effects);
 
   // The following default 'features' of copy propagation would only
   // interfere with what CSE is trying to do.
@@ -107,10 +113,12 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
               copy_prop_config);
           copy_propagation.run(code, method);
 
-          auto local_dce = LocalDce(shared_state.get_pure_methods(),
+          auto local_dce = LocalDce(&init_classes_with_side_effects,
+                                    shared_state.get_pure_methods(),
                                     shared_state.get_method_override_graph(),
                                     /* may_allocate_registers */ true);
-          local_dce.dce(code);
+          local_dce.dce(
+              code, /* normalize_new_instances */ true, method->get_class());
 
           if (traceEnabled(CSE, 5)) {
             TRACE(CSE, 5, "[CSE] end of iteration:\n%s", SHOW(code->cfg()));

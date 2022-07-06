@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -27,7 +27,7 @@ void remove_clinit_if_trivial(DexClass* cls) {
 }
 
 bool is_empty_class(DexClass* cls,
-                    std::unordered_set<const DexType*>& class_references) {
+                    ConcurrentSet<const DexType*>& class_references) {
   bool empty_class = cls->get_dmethods().empty() &&
                      cls->get_vmethods().empty() &&
                      cls->get_sfields().empty() && cls->get_ifields().empty();
@@ -47,7 +47,7 @@ bool is_empty_class(DexClass* cls,
   return remove;
 }
 
-void process_annotation(std::unordered_set<const DexType*>* class_references,
+void process_annotation(ConcurrentSet<const DexType*>* class_references,
                         DexAnnotation* annotation) {
   std::vector<DexType*> ltype;
   annotation->gather_types(ltype);
@@ -58,17 +58,17 @@ void process_annotation(std::unordered_set<const DexType*>* class_references,
   }
 }
 
-void process_proto(std::unordered_set<const DexType*>* class_references,
+void process_proto(ConcurrentSet<const DexType*>* class_references,
                    DexMethodRef* meth) {
   // Types referenced in protos.
   auto const& proto = meth->get_proto();
   class_references->insert(type::get_element_type_if_array(proto->get_rtype()));
-  for (auto const& ptype : proto->get_args()->get_type_list()) {
+  for (auto const& ptype : *proto->get_args()) {
     class_references->insert(type::get_element_type_if_array(ptype));
   }
 }
 
-void process_code(std::unordered_set<const DexType*>* class_references,
+void process_code(ConcurrentSet<const DexType*>* class_references,
                   DexMethod* meth,
                   IRCode& code) {
   // Types referenced in code.
@@ -102,36 +102,37 @@ size_t remove_empty_classes(Scope& classes) {
 
   // class_references is a set of type names which represent classes
   // which should not be deleted even if they are deemed to be empty.
-  std::unordered_set<const DexType*> class_references;
+  ConcurrentSet<const DexType*> class_references;
 
-  walk::annotations(classes, [&](DexAnnotation* annotation) {
-    process_annotation(&class_references, annotation);
-  });
+  walk::parallel::classes(classes, [&class_references](DexClass* cls) {
+    std::vector<DexClass*> singleton_cls{cls};
+    walk::annotations(singleton_cls, [&](DexAnnotation* annotation) {
+      process_annotation(&class_references, annotation);
+    });
 
-  // Check the method protos and all the code.
-  walk::methods(classes, [&class_references](DexMethod* meth) {
-    process_proto(&class_references, meth);
-    auto code = meth->get_code();
-    if (!code) {
-      return;
-    }
-    process_code(&class_references, meth, *code);
-  });
+    // Check the method protos and all the code.
+    walk::methods(singleton_cls, [&class_references](DexMethod* meth) {
+      process_proto(&class_references, meth);
+      auto code = meth->get_code();
+      if (!code) {
+        return;
+      }
+      process_code(&class_references, meth, *code);
+    });
 
-  size_t classes_before_size = classes.size();
-
-  // Ennumerate super classes and remove trivial clinit if the class has any.
-  for (auto& cls : classes) {
+    // Ennumerate super classes and remove trivial clinit if the class has any.
     remove_clinit_if_trivial(cls);
     DexType* s = cls->get_super_class();
     class_references.insert(s);
-  }
 
-  // Ennumerate fields.
-  walk::fields(classes, [&class_references](DexField* field) {
-    class_references.insert(type::get_element_type_if_array(field->get_type()));
+    // Ennumerate fields.
+    walk::fields(singleton_cls, [&class_references](DexField* field) {
+      class_references.insert(
+          type::get_element_type_if_array(field->get_type()));
+    });
   });
 
+  size_t classes_before_size = classes.size();
   TRACE(EMPTY, 3, "About to erase classes.");
   classes.erase(remove_if(classes.begin(), classes.end(),
                           [&](DexClass* cls) {

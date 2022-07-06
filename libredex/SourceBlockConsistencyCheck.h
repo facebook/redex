@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -24,6 +24,7 @@
 #pragma clang optimize off
 class DexMethod;
 class DexMethodRef;
+class DexString;
 
 // The SourceBlockConsistencyCheck class implements a simple consistency check
 // which can be run after each phase to ensure that no phase removes source
@@ -79,7 +80,7 @@ class DexMethodRef;
 namespace source_blocks {
 
 struct SourceBlockInfo {
-  DexMethodRef* original_dex_method;
+  const DexString* original_dex_method;
   uint32_t id;
 };
 
@@ -171,10 +172,10 @@ SourceBlockDomTree<Kind>::SourceBlockDomTree(const cfg::ControlFlowGraph& cfg,
   always_assert(first_block);
   auto first_sb = source_blocks::get_first_source_block(first_block);
   always_assert(first_sb);
-  DexMethodRef* dex_method_ref = first_sb->src;
+  auto* dex_method = first_sb->src;
 
   for (uint32_t i = 0; i < num_src_blks; i++) {
-    m_leaves.insert({dex_method_ref, i});
+    m_leaves.insert({dex_method, i});
   }
 
   auto doms = dominators::SimpleFastDominators<GraphInterfaceT>(cfg);
@@ -186,10 +187,10 @@ SourceBlockDomTree<Kind>::SourceBlockDomTree(const cfg::ControlFlowGraph& cfg,
     }
 
     source_blocks::foreach_source_block(
-        block, [num_src_blks, dex_method_ref, this](auto& sb) {
+        block, [num_src_blks, dex_method, this](auto& sb) {
           always_assert(sb);
           always_assert(sb->id < num_src_blks);
-          always_assert(sb->src == dex_method_ref);
+          always_assert(sb->src == dex_method);
 
           auto sb_info = SourceBlockInfo{sb->src, sb->id};
           m_dom_tree_nodes[sb_info] = {};
@@ -254,7 +255,7 @@ SourceBlockDomTree<Kind>::SourceBlockDomTree(const cfg::ControlFlowGraph& cfg,
 
     always_assert(sb_in_idom);
     always_assert(sb_in_idom->id < num_src_blks);
-    always_assert(sb_in_idom->src == dex_method_ref);
+    always_assert(sb_in_idom->src == dex_method);
 
     auto sb_in_idom_info = SourceBlockInfo{sb_in_idom->src, sb_in_idom->id};
 

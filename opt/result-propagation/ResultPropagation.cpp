@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -47,8 +47,8 @@ const DexType* get_param_type(bool is_static,
   if (!is_static && param_index-- == 0) {
     return method->get_class();
   }
-  const auto args = method->get_proto()->get_args()->get_type_list();
-  return args[param_index];
+  const auto* args = method->get_proto()->get_args();
+  return args->at(param_index);
 }
 
 using namespace ir_analyzer;
@@ -330,9 +330,9 @@ bool ReturnParamResolver::returns_compatible_with_receiver(
     // Hm, we don't have framework types available.
     return true;
   }
-  auto& type_list = cls->get_interfaces()->get_type_list();
-  return std::find(type_list.begin(), type_list.end(), rtype) !=
-         type_list.end();
+  auto* type_list = cls->get_interfaces();
+  return std::find(type_list->begin(), type_list->end(), rtype) !=
+         type_list->end();
 }
 
 bool ReturnParamResolver::returns_receiver(const DexMethodRef* method) const {
