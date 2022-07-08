@@ -502,9 +502,6 @@ Stats& Stats::operator+=(const Stats& that) {
 }
 
 Stats CopyPropagation::run(const Scope& scope) {
-  std::mutex defer_mutex;
-  std::vector<DexMethod*> deferred_methods;
-
   auto handle_method = [&](DexMethod* m, IRCode* code) {
     const std::string& before_code = m_config.debug ? show(m->get_code()) : "";
     const auto& result = run(code, m);
@@ -534,31 +531,9 @@ Stats CopyPropagation::run(const Scope& scope) {
           return Stats();
         }
 
-        if (!m_config.debug && m_config.defer_reg_threshold != 0 &&
-            code->get_registers_size() >= m_config.defer_reg_threshold) {
-          std::unique_lock<std::mutex> lock{defer_mutex};
-          deferred_methods.push_back(m);
-          return Stats();
-        }
-
         return handle_method(m, code);
       },
       m_config.debug ? 1 : redex_parallel::default_num_threads());
-
-  if (!deferred_methods.empty()) {
-    // Not really serial, but keeping timer name for comparison purposes
-    Timer timer{"Serial treatment"};
-
-    size_t max_threads = 3;
-    workqueue_run<DexMethod*>(
-        [&](DexMethod* m) {
-          auto result = handle_method(m, m->get_code());
-          std::unique_lock<std::mutex> lock{defer_mutex};
-          stats += result;
-        },
-        deferred_methods,
-        std::min(redex_parallel::default_num_threads(), max_threads));
-  }
 
   return stats;
 }
