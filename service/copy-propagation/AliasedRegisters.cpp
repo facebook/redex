@@ -393,36 +393,32 @@ AbstractValueKind AliasedRegisters::join_with(const AliasedRegisters& other) {
   // also has
   m_graph.clear();
 
-  // Break up each group into some number of new groups.
-  // Intersection can't create any groups larger than what `this` had, only the
-  // same size or smaller.
+  // Break up each group into some number of new groups, such that every vertex
+  // with the same root in this and the other aliased registers are in the same
+  // group. Intersection can't create any groups larger than what `this` had,
+  // only the same size or smaller.
+  static_assert(sizeof(vertex_t) == sizeof(uint32_t));
+  using vertex_pair_t = uint64_t;
+  std::unordered_map<vertex_pair_t, std::vector<vertex_t>> new_groups;
   for (auto& group : this_before_groups) {
-    // Sort so that we only have to scan the nodes after the potential root
-    // (remember that the root node must sort lowest of its tree)
-    std::sort(group.begin(), group.end(), [this](vertex_t v1, vertex_t v2) {
-      return m_graph[v1] < m_graph[v2];
-    });
-    // Starting with the lowest node, grab all the singletons that `other`
-    // agrees are aliased with this potential root.
-    // Repeat with the next potential root.
-    size_t sz = group.size();
-    for (size_t i = 0; i < sz; ++i) {
-      vertex_t new_root = group[i];
-      if (has_outgoing(new_root)) {
-        // This can't be a new root because it's already a leaf
-        continue;
-      }
-      // We can start iterating from i + 1 because everything beneath `i` has
-      // already been considered as a potential root and had all possible nodes
-      // added to its tree.
-      for (size_t j = i + 1; j < sz; ++j) {
-        // If `v` hasn't already been added to another tree and `other` agrees,
-        // then add the edge.
-        vertex_t v = group[j];
-        if (!has_outgoing(v) &&
-            other.are_aliases(this->m_graph[v], this->m_graph[new_root])) {
-          m_graph.add_edge(v, new_root);
-        }
+    always_assert(!group.empty());
+    // Note that group's first element is always its root.
+    auto this_root = group.front();
+    vertex_pair_t shifted_this_root = ((vertex_pair_t)this_root) << 32;
+    for (auto v : group) {
+      auto other_v = other.m_graph.get_vertex(m_graph[v]);
+      auto other_root = other.find_root(other_v);
+      new_groups[shifted_this_root | other_root].push_back(v);
+    }
+  }
+  for (auto& [combined_root, new_group] : new_groups) {
+    auto new_root =
+        *boost::range::min_element(new_group, [this](vertex_t v1, vertex_t v2) {
+          return m_graph[v1] < m_graph[v2];
+        });
+    for (auto v : new_group) {
+      if (v != new_root) {
+        m_graph.add_edge(v, new_root);
       }
     }
   }
