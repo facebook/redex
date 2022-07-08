@@ -520,36 +520,30 @@ void AliasedRegisters::handle_insert_order_at_merge(
     const Value& val_a = this->m_graph[a];
     const Value& val_b = this->m_graph[b];
 
-    bool this_has = this->vertices_are_aliases(a, b);
+    always_assert_log(this->vertices_are_aliases(a, b),
+                      "by construction, vertices in a merged group are aliases "
+                      "in this graph");
     boost::optional<vertex_t> other_a = other.find(val_a);
     boost::optional<vertex_t> other_b =
         (other_a == boost::none ? boost::none
                                 : other.find_in_tree(val_b, *other_a));
-    bool other_has = other_b != boost::none;
+    always_assert_log(other_b != boost::none,
+                      "by construction, vertices in a merged group are aliases "
+                      "in other graph");
 
-    if (this_has && other_has) {
-      // Intersection case should always come here
-      bool this_less_than =
-          this->m_insert_order.at(a) < this->m_insert_order.at(b);
+    // Intersection case should always come here
+    bool this_less_than =
+        this->m_insert_order.at(a) < this->m_insert_order.at(b);
 
-      bool other_less_than =
-          other.m_insert_order.at(*other_a) < other.m_insert_order.at(*other_b);
+    bool other_less_than =
+        other.m_insert_order.at(*other_a) < other.m_insert_order.at(*other_b);
 
-      if (this_less_than == other_less_than) {
-        // The graphs agree on the order of these two vertices.
-        // Preserve that order.
-        return this_less_than;
-      } else {
-        // The graphs do not agree. Choose a deterministic order
-        return val_a.reg() < val_b.reg();
-      }
-    } else if (this_has) {
-      return this->m_insert_order.at(a) < this->m_insert_order.at(b);
-    } else if (other_has) {
-      return other.m_insert_order.at(*other_a) <
-             other.m_insert_order.at(*other_b);
+    if (this_less_than == other_less_than) {
+      // The graphs agree on the order of these two vertices.
+      // Preserve that order.
+      return this_less_than;
     } else {
-      // Neither graph has this relationship. Choose a deterministic order
+      // The graphs do not agree. Choose a deterministic order
       return val_a.reg() < val_b.reg();
     }
   });
