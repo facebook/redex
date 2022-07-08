@@ -132,6 +132,8 @@ class VertexValues {
   const Value& get_value(vertex_t v) const { return m_values.at(v - 1); }
 };
 
+using VertexMapping = std::function<vertex_t(vertex_t)>;
+
 /*
  * Bidirectional graph over Value. Provides exactly those operations needed by
  * AliasedRegisters. In particular, each vertex can have at most one out-edge.
@@ -150,6 +152,10 @@ class AliasGraph {
 
  public:
   AliasGraph();
+
+  bool same_vertices(const AliasGraph& other) const {
+    return m_values == other.m_values;
+  }
 
   vertex_t get_vertex(const Value& value) const {
     always_assert(value != Value());
@@ -255,7 +261,6 @@ class AliasedRegisters final : public sparta::AbstractValue<AliasedRegisters> {
   void change_root_to(vertex_t old_root, vertex_t new_root);
 
   bool has_edge_between(const Value& r1, const Value& r2) const;
-  bool vertices_are_aliases(vertex_t v1, vertex_t v2) const;
 
   // return a vector of all vertices in v's alias group (including v itself)
   std::vector<vertex_t> vertices_in_group(vertex_t v) const;
@@ -269,15 +274,20 @@ class AliasedRegisters final : public sparta::AbstractValue<AliasedRegisters> {
                           vertex_t v_group,
                           const std::vector<vertex_t>& grp);
   void clear_insert_number(vertex_t v);
-  void handle_edge_intersection_insert_order(const AliasedRegisters& other);
+  void handle_edge_intersection_insert_order(
+      const InsertionOrder& other_insert_order,
+      const VertexMapping& vertex_mapping);
   void handle_insert_order_at_merge(const std::vector<vertex_t>& group,
-                                    const AliasedRegisters& other);
+                                    const InsertionOrder& other_insert_order,
+                                    const VertexMapping& vertex_mapping);
   void renumber_insert_order(
       std::vector<vertex_t> registers,
       const std::function<bool(vertex_t, vertex_t)>& less_than);
 
   bool has_incoming(vertex_t v) const;
   bool has_outgoing(vertex_t v) const;
+
+  VertexMapping get_vertex_mapping(const AliasedRegisters& other) const;
 
   std::string dump() const;
 };

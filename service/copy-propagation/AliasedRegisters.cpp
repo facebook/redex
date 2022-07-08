@@ -159,11 +159,6 @@ bool AliasedRegisters::are_aliases(const Value& r1, const Value& r2) const {
   return find_in_tree(r2, v1) != boost::none;
 }
 
-// Two vertices are aliased when they have the same root
-bool AliasedRegisters::vertices_are_aliases(vertex_t v1, vertex_t v2) const {
-  return v1 == v2 || find_root(v1) == find_root(v2);
-}
-
 // Return the vertex of the root node of the tree that `v` belongs to
 // If `v` is not part of a group, then it is a singleton and it is its own root
 // node.
@@ -353,12 +348,15 @@ bool AliasedRegisters::leq(const AliasedRegisters& other) const {
 
   // for all edges in `other` (the potential subset), make sure `this` has that
   // alias relationship
-  for (auto [v2, v2_ins] :
+  auto inv_vertex_mapping = other.get_vertex_mapping(*this);
+  for (auto& [other_v, other_v_ins] :
        other.m_graph.get_vertices_with_inv_adjacent_vertices()) {
-    const Value& r2 = other.m_graph[v2];
-    for (auto v1 : v2_ins) {
-      const Value& r1 = other.m_graph[v1];
-      if (!are_aliases(r1, r2)) {
+    auto v = inv_vertex_mapping(other_v);
+    auto v_root = find_root(v);
+    for (auto other_u : other_v_ins) {
+      auto u = inv_vertex_mapping(other_u);
+      auto u_root = find_root(u);
+      if (v_root != u_root) {
         return false;
       }
     }
@@ -393,6 +391,8 @@ AbstractValueKind AliasedRegisters::join_with(const AliasedRegisters& other) {
   // also has
   m_graph.clear();
 
+  auto vertex_mapping = get_vertex_mapping(other);
+
   // Break up each group into some number of new groups, such that every vertex
   // with the same root in this and the other aliased registers are in the same
   // group. Intersection can't create any groups larger than what `this` had,
@@ -406,7 +406,7 @@ AbstractValueKind AliasedRegisters::join_with(const AliasedRegisters& other) {
     auto this_root = group.front();
     vertex_pair_t shifted_this_root = ((vertex_pair_t)this_root) << 32;
     for (auto v : group) {
-      auto other_v = other.m_graph.get_vertex(m_graph[v]);
+      auto other_v = vertex_mapping(v);
       auto other_root = other.find_root(other_v);
       new_groups[shifted_this_root | other_root].push_back(v);
     }
@@ -423,12 +423,13 @@ AbstractValueKind AliasedRegisters::join_with(const AliasedRegisters& other) {
     }
   }
 
-  handle_edge_intersection_insert_order(other);
+  handle_edge_intersection_insert_order(other.m_insert_order, vertex_mapping);
   return AbstractValueKind::Value;
 }
 
 void AliasedRegisters::handle_edge_intersection_insert_order(
-    const AliasedRegisters& other) {
+    const InsertionOrder& other_insert_order,
+    const VertexMapping& vertex_mapping) {
   // Clear out stale values in `m_insert_order` for vertices removed from
   // groups.
   auto groups = all_groups();
@@ -440,7 +441,7 @@ void AliasedRegisters::handle_edge_intersection_insert_order(
 
   // Assign new insertion numbers while taking into account both insertion maps.
   for (auto& group : groups) {
-    handle_insert_order_at_merge(group, other);
+    handle_insert_order_at_merge(group, other_insert_order, vertex_mapping);
   }
 }
 
@@ -451,7 +452,9 @@ void AliasedRegisters::handle_edge_intersection_insert_order(
 // The new order follows the sum of the individual pointwise orders, using
 // register numbers as tie breakers.
 void AliasedRegisters::handle_insert_order_at_merge(
-    const std::vector<vertex_t>& group, const AliasedRegisters& other) {
+    const std::vector<vertex_t>& group,
+    const InsertionOrder& other_insert_order,
+    const VertexMapping& vertex_mapping) {
   std::unordered_map<vertex_t, uint32_t> insert_order_sums;
   std::vector<vertex_t> registers;
   for (auto v : group) {
@@ -460,8 +463,8 @@ void AliasedRegisters::handle_insert_order_at_merge(
       continue;
     }
     auto this_i = m_insert_order.at(v);
-    auto other_v = other.m_graph.get_vertex(m_graph[v]);
-    auto other_i = other.m_insert_order.at(other_v);
+    auto other_v = vertex_mapping(v);
+    auto other_i = other_insert_order.at(other_v);
     auto emplaced = insert_order_sums.emplace(v, this_i + other_i).second;
     always_assert(emplaced);
     registers.push_back(v);
@@ -525,6 +528,15 @@ std::vector<std::vector<vertex_t>> AliasedRegisters::all_groups() {
     result.emplace_back(std::move(group));
   }
   return result;
+}
+
+VertexMapping AliasedRegisters::get_vertex_mapping(
+    const AliasedRegisters& other) const {
+  if (m_graph.same_vertices(other.m_graph)) {
+    return [](vertex_t v) { return v; };
+  }
+  return [&this_graph = this->m_graph, &other_graph = other.m_graph](
+             vertex_t v) { return other_graph.get_vertex(this_graph[v]); };
 }
 
 // returns a string representation of this data structure. Intended for
