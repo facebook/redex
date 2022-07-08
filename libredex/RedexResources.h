@@ -12,6 +12,7 @@
 #include <boost/filesystem/operations.hpp>
 #include <boost/noncopyable.hpp>
 #include <boost/optional.hpp>
+#include <cstdint>
 #include <map>
 #include <memory>
 #include <set>
@@ -113,6 +114,9 @@ class ResourceTableFile {
   virtual void remap_res_ids_and_serialize(
       const std::vector<std::string>& resource_files,
       const std::map<uint32_t, uint32_t>& old_to_new) = 0;
+  // Instead of remapping deleted resource ids, we nullify them.
+  virtual void nullify_res_ids_and_serialize(
+      const std::vector<std::string>& resource_files) = 0;
 
   // Similar to above function, but reorder flags/entry/value data according to
   // old_to_new, as well as remapping references.
@@ -153,6 +157,9 @@ class ResourceTableFile {
       std::unordered_set<uint32_t>* nodes_visited,
       std::unordered_set<std::string>* potential_file_paths) = 0;
 
+  // Mainly used by test to check if a resource has been nullified
+  virtual uint64_t resource_value_count(uint32_t res_id) = 0;
+
   // Return the resource ids based on the given resource name.
   std::vector<uint32_t> get_res_ids_by_name(const std::string& name) const {
     if (name_to_ids.count(name)) {
@@ -164,6 +171,7 @@ class ResourceTableFile {
   std::vector<uint32_t> sorted_res_ids;
   std::map<uint32_t, std::string> id_to_name;
   std::map<std::string, std::vector<uint32_t>> name_to_ids;
+  bool m_nullify_removed{false};
 
  protected:
   ResourceTableFile() {}

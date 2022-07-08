@@ -249,6 +249,8 @@ class ResourcesArscFile : public ResourceTableFile {
   void remap_res_ids_and_serialize(
       const std::vector<std::string>& resource_files,
       const std::map<uint32_t, uint32_t>& old_to_new) override;
+  void nullify_res_ids_and_serialize(
+      const std::vector<std::string>& resource_files) override;
   void remap_reorder_and_serialize(
       const std::vector<std::string>& resource_files,
       const std::map<uint32_t, uint32_t>& old_to_new) override;
@@ -264,6 +266,7 @@ class ResourcesArscFile : public ResourceTableFile {
       ResourcePathType path_type,
       std::unordered_set<uint32_t>* nodes_visited,
       std::unordered_set<std::string>* potential_file_paths) override;
+  uint64_t resource_value_count(uint32_t res_id) override;
   // Takes effect during serialization, in which new type spec, type data
   // structures will be appended to the package, with entry/value data copied
   // from the given ids. Actual type data in the resulting file will be emitted

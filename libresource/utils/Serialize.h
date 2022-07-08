@@ -199,18 +199,23 @@ class ResTableTypeProjector : public ResTableTypeBuilder {
       : ResTableTypeBuilder(package_id, spec->id, enable_canonical_entries),
         m_spec(spec),
         m_configs(std::move(configs)) {}
-  void remove_ids(std::unordered_set<uint32_t>& ids_to_remove) {
+  void remove_ids(std::unordered_set<uint32_t>& ids_to_remove,
+                  bool nullify_removed) {
     m_ids_to_remove = ids_to_remove;
+    m_nullify_removed = nullify_removed;
   }
   void serialize(android::Vector<char>* out) override;
   virtual ~ResTableTypeProjector() {}
 
  private:
-  void serialize_type(android::ResTable_type*, android::Vector<char>* out);
+  void serialize_type(android::ResTable_type*,
+                      size_t,
+                      android::Vector<char>* out);
   android::ResTable_typeSpec* m_spec;
   std::vector<android::ResTable_type*> m_configs;
   // This takes effect during file serialization
   std::unordered_set<uint32_t> m_ids_to_remove;
+  bool m_nullify_removed{false};
 };
 
 // Builder for defining a new ResTable_typeSpec along with its ResTable_type

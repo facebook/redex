@@ -1190,6 +1190,12 @@ void ResourcesArscFile::remap_res_ids_and_serialize(
   serialize();
 }
 
+void ResourcesArscFile::nullify_res_ids_and_serialize(
+    const std::vector<std::string>& /* resource_files */) {
+  m_nullify_removed = true;
+  serialize();
+}
+
 namespace {
 // For the given package and type id, check if the type has any needed changes
 // based on the old to new map. Output vector will contain the exhaustive
@@ -1892,6 +1898,13 @@ std::vector<std::string> ResourcesArscFile::get_files_by_rid(
   return ret;
 }
 
+uint64_t ResourcesArscFile::resource_value_count(uint32_t res_id) {
+  std::vector<android::Res_value> out_values;
+  auto& table_snapshot = get_table_snapshot();
+  table_snapshot.collect_resource_values(res_id, &out_values);
+  return out_values.size();
+}
+
 void ResourcesArscFile::walk_references_for_resource(
     uint32_t resID,
     ResourcePathType path_type,
@@ -2033,7 +2046,7 @@ size_t ResourcesArscFile::serialize() {
     for (auto& type_info : type_infos) {
       auto type_builder = std::make_shared<arsc::ResTableTypeProjector>(
           package_id, type_info.spec, type_info.configs);
-      type_builder->remove_ids(m_ids_to_remove);
+      type_builder->remove_ids(m_ids_to_remove, m_nullify_removed);
       package_builder->add_type(type_builder);
     }
     // Append any new types

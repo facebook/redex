@@ -744,6 +744,32 @@ void remove_or_change_resource_ids(
   type->mutable_entry()->Swap(&new_entries);
 }
 
+void nullify_resource_ids(const std::unordered_set<uint32_t>& ids_to_remove,
+                          uint32_t package_id,
+                          aapt::pb::Type* type) {
+  int entry_size = type->entry_size();
+  int last_non_deleted = 0;
+  for (int k = 0; k < entry_size; k++) {
+    auto entry = type->mutable_entry(k);
+    uint32_t res_id =
+        MAKE_RES_ID(package_id, type->type_id().id(), entry->entry_id().id());
+    if (ids_to_remove.count(res_id)) {
+      entry->clear_name();
+      entry->clear_visibility();
+      entry->clear_allow_new();
+      entry->clear_overlayable_item();
+      entry->clear_config_value();
+    } else {
+      last_non_deleted = k;
+    }
+  }
+  if (last_non_deleted < entry_size - 1) {
+    // Remove all entries after last_non_deleted
+    type->mutable_entry()->DeleteSubrange(last_non_deleted + 1,
+                                          entry_size - last_non_deleted - 1);
+  }
+}
+
 void change_resource_id_in_xml_references(
     const std::map<uint32_t, uint32_t>& kept_to_remapped_ids,
     aapt::pb::XmlNode* node,
@@ -934,6 +960,38 @@ void ResourcesPbFile::remap_res_ids_and_serialize(
               auto type = package->mutable_type(j);
               remove_or_change_resource_ids(m_ids_to_remove, old_to_new,
                                             current_package_id, type);
+            }
+          }
+          std::ofstream out(resources_pb_path, std::ofstream::binary);
+          always_assert(pb_restable.SerializeToOstream(&out));
+        });
+  }
+}
+
+void ResourcesPbFile::nullify_res_ids_and_serialize(
+    const std::vector<std::string>& resource_files) {
+  for (const auto& resources_pb_path : resource_files) {
+    TRACE(RES,
+          9,
+          "BundleResources changing resource data for file: %s",
+          resources_pb_path.c_str());
+    read_protobuf_file_contents(
+        resources_pb_path,
+        [&](google::protobuf::io::CodedInputStream& input,
+            size_t /* unused */) {
+          aapt::pb::ResourceTable pb_restable;
+          bool read_finish = pb_restable.ParseFromCodedStream(&input);
+          always_assert_log(read_finish,
+                            "BundleResoource failed to read %s",
+                            resources_pb_path.c_str());
+          int package_size = pb_restable.package_size();
+          for (int i = 0; i < package_size; i++) {
+            auto package = pb_restable.mutable_package(i);
+            auto current_package_id = package->package_id().id();
+            int type_size = package->type_size();
+            for (int j = 0; j < type_size; j++) {
+              auto type = package->mutable_type(j);
+              nullify_resource_ids(m_ids_to_remove, current_package_id, type);
             }
           }
           std::ofstream out(resources_pb_path, std::ofstream::binary);
@@ -1352,9 +1410,6 @@ bool is_resource_file(const std::string& str) {
 std::vector<std::string> ResourcesPbFile::get_files_by_rid(
     uint32_t res_id, ResourcePathType path_type) {
   std::vector<std::string> ret;
-  if (m_res_id_to_configvalue.count(res_id) == 0) {
-    return ret;
-  }
   const std::string& module_name = resolve_module_name_for_resource_id(res_id);
   auto handle_path = [&](const std::string& file_path) {
     if (is_resource_file(file_path)) {
@@ -1396,8 +1451,12 @@ void ResourcesPbFile::walk_references_for_resource(
     return;
   }
   nodes_visited->emplace(resID);
+  if (m_res_id_to_configvalue.find(resID) == m_res_id_to_configvalue.end()) {
+    // We might have some potential resource ID that does not actually
+    // exist.
+    return;
+  }
   auto module_name = resolve_module_name_for_resource_id(resID);
-
   auto& initial_values = m_res_id_to_configvalue.at(resID);
   std::stack<const aapt::pb::ConfigValue*> nodes_to_explore;
   auto push_to_stack = [&nodes_to_explore](const aapt::pb::ConfigValue& cv) {
@@ -1466,6 +1525,11 @@ void ResourcesPbFile::walk_references_for_resource(
       }
     }
   }
+}
+
+uint64_t ResourcesPbFile::resource_value_count(uint32_t res_id) {
+  const auto& config_values = m_res_id_to_configvalue.at(res_id);
+  return config_values.size();
 }
 
 std::unique_ptr<ResourceTableFile> BundleResources::load_res_table() {

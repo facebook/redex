@@ -6,6 +6,7 @@
  */
 
 #include <boost/functional/hash.hpp>
+#include <cstddef>
 #include <iostream>
 #include <vector>
 
@@ -256,6 +257,7 @@ void CanonicalEntries::record(EntryValueData data,
 }
 
 void ResTableTypeProjector::serialize_type(android::ResTable_type* type,
+                                           size_t last_non_deleted,
                                            android::Vector<char>* out) {
   auto original_entries = dtohl(type->entryCount);
   auto original_entries_start = dtohs(type->entriesStart);
@@ -267,7 +269,6 @@ void ResTableTypeProjector::serialize_type(android::ResTable_type* type,
   // Check if this config has all of its entries deleted. If a non-default
   // config has everything deleted, skip emitting data.
   {
-    size_t num_non_deleted_entries = 0;
     size_t num_non_deleted_non_empty_entries = 0;
     uint32_t* entry_offsets =
         (uint32_t*)((uint8_t*)type + dtohs(type->header.headerSize));
@@ -275,9 +276,6 @@ void ResTableTypeProjector::serialize_type(android::ResTable_type* type,
       auto id = make_id(i);
       auto is_deleted = m_ids_to_remove.count(id) != 0;
       uint32_t offset = dtohl(entry_offsets[i]);
-      if (!is_deleted) {
-        num_non_deleted_entries++;
-      }
       if (!is_deleted && offset != android::ResTable_type::NO_ENTRY) {
         num_non_deleted_non_empty_entries++;
       }
@@ -328,6 +326,8 @@ void ResTableTypeProjector::serialize_type(android::ResTable_type* type,
           }
         }
       }
+    } else if (m_nullify_removed && i <= last_non_deleted) {
+      offsets.push_back(htodl(android::ResTable_type::NO_ENTRY));
     }
   }
   // Header and actual data structure
@@ -365,10 +365,13 @@ void ResTableTypeProjector::serialize(android::Vector<char>* out) {
   // data is emitted.
   auto original_entries = dtohl(m_spec->entryCount);
   size_t num_deletions = 0;
+  size_t last_non_deleted = 0;
   for (size_t i = 0; i < original_entries; i++) {
     auto id = make_id(i);
     if (m_ids_to_remove.count(id) != 0) {
       num_deletions++;
+    } else {
+      last_non_deleted = i;
     }
   }
   if (num_deletions == original_entries) {
@@ -376,7 +379,8 @@ void ResTableTypeProjector::serialize(android::Vector<char>* out) {
     return;
   }
   // Write the ResTable_typeSpec header
-  auto entries = original_entries - num_deletions;
+  auto entries = m_nullify_removed ? last_non_deleted + 1
+                                   : original_entries - num_deletions;
   push_short(android::RES_TABLE_TYPE_SPEC_TYPE, out);
   auto header_size = sizeof(android::ResTable_typeSpec);
   push_short(header_size, out);
@@ -392,12 +396,14 @@ void ResTableTypeProjector::serialize(android::Vector<char>* out) {
     auto id = make_id(i);
     if (m_ids_to_remove.count(id) == 0) {
       push_long(dtohl(get_spec_flags(m_spec, i)), out);
+    } else if (m_nullify_removed && i <= last_non_deleted) {
+      push_long(dtohl(0), out);
     }
   }
   // Write all applicable ResTable_type structures (and their corresponding
   // entries/values).
   for (size_t i = 0; i < m_configs.size(); i++) {
-    serialize_type(m_configs.at(i), out);
+    serialize_type(m_configs.at(i), last_non_deleted, out);
   }
 }
 
