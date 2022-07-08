@@ -505,72 +505,66 @@ void AliasedRegisters::handle_edge_intersection_insert_order(
 
 // Merge the ordering in `other.m_insert_order` into `this->m_insert_order`.
 //
-// When both graphs know about an edge (and they don't agree about insertion
-// order), use register number.
-// When only one graph knows about an edge, use insertion order from that graph.
-// When neither graph knows about the edge, use register number.
+// Note that by construction of m_insert_order, it gives us a total order of all
+// elements in the merged groups, in this and the other aliased-registers.
+// The new order follows the sum of the individual pointwise orders, using
+// register numbers as tie breakers.
 void AliasedRegisters::handle_insert_order_at_merge(
     const std::vector<vertex_t>& group, const AliasedRegisters& other) {
-  renumber_insert_order(group, [this, &other](vertex_t a, vertex_t b) {
+  std::unordered_map<vertex_t, uint32_t> insert_order_sums;
+  std::vector<vertex_t> registers;
+  always_assert(!group.empty());
+  auto other_front = *other.find(m_graph[group.front()]);
+  for (auto v : group) {
+    const Value& value = this->m_graph[v];
+    if (!value.is_register()) {
+      continue;
+    }
+    auto this_i = m_insert_order.at(v);
+    auto other_v = *other.find_in_tree(m_graph[v], other_front);
+    auto other_i = other.m_insert_order.at(other_v);
+    auto emplaced = insert_order_sums.emplace(v, this_i + other_i).second;
+    always_assert(emplaced);
+    registers.push_back(v);
+  }
+
+  auto less_than = [this, &insert_order_sums](vertex_t a, vertex_t b) {
     // return true if `a` occurs before `b`.
-    // return false if they compare equal or if `b` occurs before `a`.
+    // return false if they compare equal or if `b` occurs
+    // before `a`.
 
     if (a == b) return false;
-    // `a` and `b` only index into this, not other.
+
+    auto i_sum = insert_order_sums.at(a);
+    auto j_sum = insert_order_sums.at(b);
+
+    if (i_sum != j_sum) {
+      return i_sum < j_sum;
+    }
+
+    // Tie-breaker: Register numbers.
     const Value& val_a = this->m_graph[a];
     const Value& val_b = this->m_graph[b];
-
-    always_assert_log(this->vertices_are_aliases(a, b),
-                      "by construction, vertices in a merged group are aliases "
-                      "in this graph");
-    boost::optional<vertex_t> other_a = other.find(val_a);
-    boost::optional<vertex_t> other_b =
-        (other_a == boost::none ? boost::none
-                                : other.find_in_tree(val_b, *other_a));
-    always_assert_log(other_b != boost::none,
-                      "by construction, vertices in a merged group are aliases "
-                      "in other graph");
-
-    // Intersection case should always come here
-    bool this_less_than =
-        this->m_insert_order.at(a) < this->m_insert_order.at(b);
-
-    bool other_less_than =
-        other.m_insert_order.at(*other_a) < other.m_insert_order.at(*other_b);
-
-    if (this_less_than == other_less_than) {
-      // The graphs agree on the order of these two vertices.
-      // Preserve that order.
-      return this_less_than;
-    } else {
-      // The graphs do not agree. Choose a deterministic order
-      return val_a.reg() < val_b.reg();
-    }
-  });
+    return val_a.reg() < val_b.reg();
+  };
+  renumber_insert_order(std::move(registers), less_than);
 }
 
 // Rewrite the insertion number of all registers in `group` in an order defined
 // by `less_than`
 void AliasedRegisters::renumber_insert_order(
-    std::vector<vertex_t> group,
+    std::vector<vertex_t> registers,
     const std::function<bool(vertex_t, vertex_t)>& less_than) {
 
-  // Filter out non registers.
-  group.erase(
-      std::remove_if(group.begin(),
-                     group.end(),
-                     [this](vertex_t v) { return !m_graph[v].is_register(); }),
-      group.end());
-
-  if (group.size() < 2) {
+  if (registers.size() < 2) {
     // No need to assign insert order for singletons
     return;
   }
 
   // Assign new insertion numbers based on sorting.
-  std::sort(group.begin(), group.end(), less_than);
+  std::sort(registers.begin(), registers.end(), less_than);
   uint32_t i = 0;
-  for (vertex_t v : group) {
+  for (vertex_t v : registers) {
     this->m_insert_order.insert_or_assign(v, i);
     ++i;
   }

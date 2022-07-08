@@ -216,7 +216,7 @@ class AliasedRegisters final : public sparta::AbstractValue<AliasedRegisters> {
   void handle_insert_order_at_merge(const std::vector<vertex_t>& group,
                                     const AliasedRegisters& other);
   void renumber_insert_order(
-      std::vector<vertex_t> group,
+      std::vector<vertex_t> registers,
       const std::function<bool(vertex_t, vertex_t)>& less_than);
 
   bool is_singleton(vertex_t v);
