@@ -260,8 +260,6 @@ class AliasedRegisters final : public sparta::AbstractValue<AliasedRegisters> {
   void maybe_change_root(vertex_t old_root);
   void change_root_to(vertex_t old_root, vertex_t new_root);
 
-  bool has_edge_between(const Value& r1, const Value& r2) const;
-
   // return a vector of all vertices in v's alias group (including v itself)
   std::vector<vertex_t> vertices_in_group(vertex_t v) const;
 
