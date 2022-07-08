@@ -75,27 +75,36 @@ void AliasedRegisters::move(const Value& moving, const Value& group) {
                     moving.str().c_str(),
                     group.str().c_str());
   // Only need to do something if they're not already in same group
-  if (!are_aliases(moving, group)) {
-    // remove from the old group
-    break_alias(moving);
-    vertex_t v_moving = find_or_create(moving);
-    vertex_t v_group = find_or_create(group);
+  if (moving == group) {
+    return;
+  }
 
-    const auto& grp = vertices_in_group(v_group);
-    track_insert_order(moving, v_moving, group, v_group, grp);
+  auto v_moving = m_graph.get_vertex(moving);
+  auto v_group = m_graph.get_vertex(group);
 
-    // Add an edge from `moving` to the root of its new group
-    // This maintains a maximum of 2 levels in the tree.
-    // Therefore, root nodes are the only nodes with incoming edges.
-    vertex_t v_group_root = find_root(v_group);
-    m_graph.add_edge(v_moving, v_group_root);
+  vertex_t v_group_root = find_root(v_group);
+  vertex_t v_moving_root = find_root(v_moving);
+  if (v_moving_root == v_group_root) {
+    return;
+  }
 
-    // We want to have a single canonical representation of a tree. Make sure
-    // the root is always the node that sorts lowest of the Values in this tree
-    const Value& group_root = m_graph[v_group_root];
-    if (moving < group_root) {
-      change_root_to(v_group_root, v_moving);
-    }
+  // Remove from the old group by breaking alias
+  maybe_change_root(v_moving);
+  m_graph.clear_vertex(v_moving);
+
+  const auto& grp = vertices_in_group(v_group_root);
+  track_insert_order(moving, v_moving, group, v_group, grp);
+
+  // Add an edge from `moving` to the root of its new group
+  // This maintains a maximum of 2 levels in the tree.
+  // Therefore, root nodes are the only nodes with incoming edges.
+  m_graph.add_edge(v_moving, v_group_root);
+
+  // We want to have a single canonical representation of a tree. Make sure
+  // the root is always the node that sorts lowest of the Values in this tree
+  const Value& group_root = m_graph[v_group_root];
+  if (moving < group_root) {
+    change_root_to(v_group_root, v_moving);
   }
 }
 
@@ -249,9 +258,10 @@ reg_t AliasedRegisters::get_representative(
 
   // if orig is not in the graph, then it has no representative
   auto v = m_graph.get_vertex(orig);
+  auto v_root = find_root(v);
 
   // intentionally copy the vector so we can safely remove from it
-  std::vector<vertex_t> group = vertices_in_group(v);
+  std::vector<vertex_t> group = vertices_in_group(v_root);
   // filter out non registers and other ineligible registers
   group.erase(std::remove_if(group.begin(),
                              group.end(),
@@ -294,16 +304,9 @@ boost::optional<vertex_t> AliasedRegisters::find_in_tree(
   return boost::none;
 }
 
-// returns the vertex holding `r` or creates a new (unconnected)
-// vertex if `r` is not in m_graph
-vertex_t AliasedRegisters::find_or_create(const Value& r) {
-  return m_graph.get_vertex(r);
-}
-
-// return a vector of `v` and all the vertices in the same tree
+// return a vector of `root` and all the vertices in the same group
 // (with the root first)
-std::vector<vertex_t> AliasedRegisters::vertices_in_group(vertex_t v) const {
-  vertex_t root = find_root(v);
+std::vector<vertex_t> AliasedRegisters::vertices_in_group(vertex_t root) const {
   const auto& in_adj = m_graph.inv_adjacent_vertices(root);
   std::vector<vertex_t> result;
   result.reserve(in_adj.size() + 1);

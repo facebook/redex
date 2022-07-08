@@ -208,6 +208,8 @@ class AliasedRegisters final : public sparta::AbstractValue<AliasedRegisters> {
 
   // Are r1 and r2 aliases?
   // (including transitive aliases)
+  // Use for testing only, as this is relatively expensive, scanning all aliases
+  // of r1.
   bool are_aliases(const Value& r1, const Value& r2) const;
 
   // Each alias group has one representative register
@@ -251,7 +253,6 @@ class AliasedRegisters final : public sparta::AbstractValue<AliasedRegisters> {
 
   boost::optional<vertex_t> find_in_tree(const Value& r,
                                          vertex_t in_this_tree) const;
-  vertex_t find_or_create(const Value& r);
   vertex_t find_root(vertex_t v) const;
   vertex_t find_new_root(vertex_t old_root) const;
 
@@ -260,8 +261,9 @@ class AliasedRegisters final : public sparta::AbstractValue<AliasedRegisters> {
   void maybe_change_root(vertex_t old_root);
   void change_root_to(vertex_t old_root, vertex_t new_root);
 
-  // return a vector of all vertices in v's alias group (including v itself)
-  std::vector<vertex_t> vertices_in_group(vertex_t v) const;
+  // return a vector of all vertices in a root's alias group (including root
+  // itself)
+  std::vector<vertex_t> vertices_in_group(vertex_t root) const;
 
   // return all groups (not including singletons)
   std::vector<std::vector<vertex_t>> all_groups();
