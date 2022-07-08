@@ -7,16 +7,7 @@
 
 #pragma once
 
-#ifdef __GNUC__
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wshadow"
-#endif
-#include <boost/graph/adjacency_list.hpp>
-#ifdef __GNUC__
-#pragma GCC diagnostic pop
-#endif
 #include <boost/optional.hpp>
-#include <boost/range/iterator_range.hpp>
 #include <limits>
 
 #include "AbstractDomain.h"
@@ -102,6 +93,7 @@ class Value {
   bool operator==(const Value& other) const;
   bool operator<(const Value& other) const;
   std::string str() const;
+  size_t hash() const;
 
   bool operator!=(const Value& other) const { return !(*this == other); }
 
@@ -120,10 +112,87 @@ class Value {
   }
 };
 
+struct ValueHash {
+  size_t operator()(const Value& value) const;
+};
+
+using vertex_t = uint32_t;
+
+/*
+ * Bidirectional mapping of values to vertex indices with fast look-ups in both
+ * directions.
+ */
+class VertexValues {
+ private:
+  mutable std::vector<Value> m_values;
+  mutable std::unordered_map<Value, vertex_t, ValueHash> m_indices;
+
+ public:
+  vertex_t get_vertex(const Value& value) const;
+  const Value& get_value(vertex_t v) const { return m_values.at(v - 1); }
+};
+
+/*
+ * Bidirectional graph over Value. Provides exactly those operations needed by
+ * AliasedRegisters. In particular, each vertex can have at most one out-edge.
+ * The out-edge points to the representative of a group, and in-edges point to
+ * all other members of a group. The graph and all copies of it will share one
+ * underlying VertexValues mapping.
+ */
+class AliasGraph {
+ private:
+  static const inline std::vector<vertex_t> no_vertices;
+
+  std::shared_ptr<VertexValues> m_values;
+  std::unordered_map<vertex_t, std::vector<vertex_t>> m_vertices_ins;
+  std::unordered_map<vertex_t, vertex_t> m_vertices_outs;
+  size_t m_edges{0};
+
+ public:
+  AliasGraph();
+
+  vertex_t get_vertex(const Value& value) const {
+    always_assert(value != Value());
+    return m_values->get_vertex(value);
+  }
+
+  const Value& operator[](vertex_t v) const { return m_values->get_value(v); }
+
+  void add_edge(vertex_t u, vertex_t v);
+
+  void remove_edge(vertex_t u, vertex_t v);
+
+  size_t edges_count() const { return m_edges; }
+
+  std::optional<vertex_t> adjacent_vertex(vertex_t v) const {
+    auto v_it = m_vertices_outs.find(v);
+    return v_it == m_vertices_outs.end()
+               ? std::nullopt
+               : std::optional<vertex_t>(v_it->second);
+  }
+
+  const std::vector<vertex_t>& inv_adjacent_vertices(vertex_t v) const {
+    auto v_it = m_vertices_ins.find(v);
+    return v_it == m_vertices_ins.end() ? no_vertices : v_it->second;
+  }
+
+  const std::unordered_map<vertex_t, vertex_t>&
+  get_vertices_with_adjacent_vertex() const {
+    return m_vertices_outs;
+  }
+
+  const std::unordered_map<vertex_t, std::vector<vertex_t>>&
+  get_vertices_with_inv_adjacent_vertices() const {
+    return m_vertices_ins;
+  }
+
+  void clear_vertex(vertex_t v);
+
+  void clear();
+};
+
 class AliasedRegisters final : public sparta::AbstractValue<AliasedRegisters> {
  public:
-  AliasedRegisters() {}
-
   // Declare that `moving` is an alias of `group`
   // by adding `moving` into the alias group of `group`
   void move(const Value& moving, const Value& group);
@@ -160,19 +229,8 @@ class AliasedRegisters final : public sparta::AbstractValue<AliasedRegisters> {
 
  private:
   // A directed graph where register Values are vertices
-  using Graph =
-      boost::adjacency_list<boost::vecS, // out edge container
-                            boost::vecS, // vertex container
-                            boost::bidirectionalS, // directed graph with access
-                                                   // to both incoming and
-                                                   // outgoing edges
-                            Value>; // node property
-  Graph m_graph;
+  AliasGraph m_graph;
 
- public:
-  using vertex_t = boost::graph_traits<Graph>::vertex_descriptor;
-
- private:
   // For keeping track of the oldest representative.
   //
   // When adding a vertex to a group, it gets 1 + the max insertion number of
@@ -185,7 +243,6 @@ class AliasedRegisters final : public sparta::AbstractValue<AliasedRegisters> {
   using InsertionOrder = sparta::PatriciaTreeMap<vertex_t, uint32_t>;
   InsertionOrder m_insert_order;
 
-  boost::optional<vertex_t> find(const Value& r) const;
   boost::optional<vertex_t> find_in_tree(const Value& r,
                                          vertex_t in_this_tree) const;
   vertex_t find_or_create(const Value& r);
@@ -219,9 +276,8 @@ class AliasedRegisters final : public sparta::AbstractValue<AliasedRegisters> {
       std::vector<vertex_t> registers,
       const std::function<bool(vertex_t, vertex_t)>& less_than);
 
-  bool is_singleton(vertex_t v);
-  bool has_incoming(vertex_t v);
-  bool has_outgoing(vertex_t v);
+  bool has_incoming(vertex_t v) const;
+  bool has_outgoing(vertex_t v) const;
 
   std::string dump() const;
 };
