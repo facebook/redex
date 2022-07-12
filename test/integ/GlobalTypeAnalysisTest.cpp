@@ -70,15 +70,17 @@ TEST_F(GlobalTypeAnalysisTest, ConstsAndAGETTest) {
   auto meth_array_comp = get_method("TestB;.getStringArrayComponent",
                                     "[Ljava/lang/String;",
                                     "Ljava/lang/String;");
-  EXPECT_EQ(wps.get_return_type(meth_array_comp),
-            get_type_domain_simple("Ljava/lang/String;"));
+  EXPECT_EQ(
+      wps.get_return_type(meth_array_comp),
+      get_type_domain_simple("Ljava/lang/String;").join(DexTypeDomain::null()));
 
   auto meth_nested_array_comp =
       get_method("TestB;.getNestedStringArrayComponent",
                  "[[Ljava/lang/String;",
                  "[Ljava/lang/String;");
   EXPECT_EQ(wps.get_return_type(meth_nested_array_comp),
-            get_type_domain_simple("[Ljava/lang/String;"));
+            get_type_domain_simple("[Ljava/lang/String;")
+                .join(DexTypeDomain::null()));
 }
 
 TEST_F(GlobalTypeAnalysisTest, NullableFieldTypeTest) {
@@ -99,7 +101,8 @@ TEST_F(GlobalTypeAnalysisTest, NullableFieldTypeTest) {
   // Field on the anonymous class referencing the outer class
   auto field_anony =
       get_field("TestC$1;.this$0:Lcom/facebook/redextest/TestC;");
-  EXPECT_EQ(wps.get_field_type(field_anony), get_type_domain("TestC"));
+  EXPECT_EQ(wps.get_field_type(field_anony),
+            get_type_domain("TestC").join(DexTypeDomain::null()));
 }
 
 TEST_F(GlobalTypeAnalysisTest, TrueVirtualFieldTypeTest) {
@@ -169,7 +172,7 @@ TEST_F(GlobalTypeAnalysisTest, ArrayConstNullnessDomainTest) {
       get_method("TestG;.bar", "", "Lcom/facebook/redextest/TestG$Base;");
   rtype = wps.get_return_type(meth_bar);
   EXPECT_FALSE(rtype.is_top());
-  EXPECT_TRUE(rtype.is_not_null());
+  EXPECT_TRUE(rtype.is_nullable());
 }
 
 TEST_F(GlobalTypeAnalysisTest, ClinitFieldAnalyzerTest) {
@@ -183,7 +186,7 @@ TEST_F(GlobalTypeAnalysisTest, ClinitFieldAnalyzerTest) {
       get_field("TestH;.BASE:Lcom/facebook/redextest/TestH$Base;");
   auto ftype = wps.get_field_type(field_sbase);
   EXPECT_FALSE(ftype.is_top());
-  EXPECT_TRUE(ftype.is_not_null());
+  EXPECT_TRUE(ftype.is_nullable());
   EXPECT_EQ(ftype.get_single_domain(),
             SingletonDexTypeDomain(get_type("TestH$Base")));
   EXPECT_EQ(ftype.get_set_domain(), get_small_set_domain({"TestH$Base"}));
@@ -222,7 +225,7 @@ TEST_F(GlobalTypeAnalysisTest, ClinitFieldAnalyzerTest) {
       get_method("TestH;.baz", "", "Lcom/facebook/redextest/TestH$Base;");
   rtype = wps.get_return_type(meth_baz);
   EXPECT_FALSE(rtype.is_top());
-  EXPECT_TRUE(rtype.is_not_null());
+  EXPECT_TRUE(rtype.is_nullable());
   EXPECT_EQ(rtype.get_single_domain(),
             SingletonDexTypeDomain(get_type("TestH$Base")));
   EXPECT_EQ(rtype.get_set_domain(), get_small_set_domain({"TestH$Base"}));
@@ -238,20 +241,20 @@ TEST_F(GlobalTypeAnalysisTest, IFieldsNullnessTest) {
   auto one_m1 = get_field("TestI$One;.m1:Lcom/facebook/redextest/TestI$Foo;");
   auto ftype = wps.get_field_type(one_m1);
   EXPECT_FALSE(ftype.is_top());
-  EXPECT_TRUE(ftype.is_not_null());
+  EXPECT_TRUE(ftype.is_nullable());
   EXPECT_EQ(ftype.get_single_domain(),
             SingletonDexTypeDomain(get_type("TestI$Foo")));
   auto one_m2 = get_field("TestI$One;.m2:Lcom/facebook/redextest/TestI$Foo;");
   ftype = wps.get_field_type(one_m2);
   EXPECT_FALSE(ftype.is_top());
-  EXPECT_TRUE(ftype.is_not_null());
+  EXPECT_TRUE(ftype.is_nullable());
   EXPECT_EQ(ftype.get_single_domain(),
             SingletonDexTypeDomain(get_type("TestI$Foo")));
 
   auto two_m1 = get_field("TestI$Two;.m1:Lcom/facebook/redextest/TestI$Foo;");
   ftype = wps.get_field_type(two_m1);
   EXPECT_FALSE(ftype.is_top());
-  EXPECT_TRUE(ftype.is_not_null());
+  EXPECT_TRUE(ftype.is_nullable());
   EXPECT_EQ(ftype.get_single_domain(),
             SingletonDexTypeDomain(get_type("TestI$Foo")));
 
@@ -289,7 +292,7 @@ TEST_F(GlobalTypeAnalysisTest, InstanceSensitiveCtorTest) {
   auto field_f = get_field("TestK$Foo;.f:Lcom/facebook/redextest/TestK$A;");
   auto ftype = wps.get_field_type(field_f);
   EXPECT_FALSE(ftype.is_top());
-  EXPECT_FALSE(ftype.is_nullable());
+  EXPECT_TRUE(ftype.is_nullable());
   EXPECT_EQ(ftype.get_single_domain(),
             SingletonDexTypeDomain(get_type("TestK$A")));
 }

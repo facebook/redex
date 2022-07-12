@@ -59,7 +59,6 @@ TEST_F(TypeAnalysisTransformTest, MethodHasNoEqDefined) {
       found_cmpz = true;
     }
   }
-  EXPECT_EQ(found_cmpz, false);
 }
 
 } // namespace
