@@ -145,7 +145,6 @@ Transform::Stats Transform::apply(
   auto code = method->get_code();
   TRACE(TYPE_TRANSFORM, 4, "Processing %s", SHOW(method));
   Transform::Stats stats{};
-  bool can_use_nullness_results = wps.can_use_nullness_results(method);
   for (const auto& block : code->cfg().blocks()) {
     auto env = lta.get_entry_state_at(block);
     if (env.is_bottom()) {
@@ -169,12 +168,12 @@ Transform::Stats Transform::apply(
           stats.kotlin_null_check_removed++;
         }
       }
-      if (m_config.remove_redundant_type_checks && can_use_nullness_results &&
+      if (m_config.remove_redundant_type_checks &&
           insn->opcode() == OPCODE_INSTANCE_OF) {
         remove_redundant_type_checks(env, it, stats);
       }
     }
-    if (m_config.remove_redundant_null_checks && can_use_nullness_results) {
+    if (m_config.remove_redundant_null_checks) {
       remove_redundant_null_checks(env, block, stats);
     }
   }

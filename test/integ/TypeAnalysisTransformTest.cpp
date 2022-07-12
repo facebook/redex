@@ -97,15 +97,6 @@ TEST_F(TypeAnalysisTransformTest, RemoveRedundantNullCheckTest) {
     EXPECT_TRUE(found_if_eqz);
   }
   {
-    auto meth_check_base_field =
-        get_method("RenderView;.checkBaseField", "", "I");
-    auto code = meth_check_base_field->get_code();
-    const auto& insns = InstructionIterable(code);
-    for (auto& mie : insns) {
-      EXPECT_NE(mie.insn->opcode(), OPCODE_IF_EQZ);
-    }
-  }
-  {
     auto meth_check_primitive_array_field =
         get_method("ReactNode;.getCool", "I", "Ljava/lang/String;");
     auto code = meth_check_primitive_array_field->get_code();

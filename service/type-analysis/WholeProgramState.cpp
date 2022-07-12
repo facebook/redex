@@ -69,6 +69,8 @@ void set_sfields_in_partition(const DexClass* cls,
     }
     auto domain = env.get(field);
     if (!domain.is_top()) {
+      // Mark sfields as nullable
+      domain.join_with(DexTypeDomain::null());
       TRACE(TYPE, 5, "%s has type %s after <clinit>", SHOW(field),
             SHOW(domain));
       always_assert(field->get_class() == cls->get_type());
@@ -95,6 +97,8 @@ void set_ifields_in_partition(const DexClass* cls,
     }
     auto domain = env.get(field);
     if (!domain.is_top()) {
+      // Mark ifields as nullable
+      domain.join_with(DexTypeDomain::null());
       TRACE(TYPE, 5, "%s has type %s after <init>", SHOW(field), SHOW(domain));
       always_assert(field->get_class() == cls->get_type());
     } else {
