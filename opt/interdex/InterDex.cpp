@@ -23,6 +23,7 @@
 #include "DexLoader.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
+#include "IOUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "InterDexPassPlugin.h"
@@ -1021,7 +1022,15 @@ void InterDex::run() {
   emit_interdex_classes(dex_info, m_interdex_types, unreferenced_classes,
                         &canary_cls);
 
+  auto json_classes = m_cross_dex_ref_minimizer.get_json_classes();
+  Json::Value json_first_dex;
+  if (json_classes) {
+    json_first_dex = m_cross_dex_ref_minimizer.get_json_class_indices(
+        m_dexes_structure.get_current_dex_classes());
+  }
+
   // Now emit the classes that weren't specified in the head or primary list.
+  auto remaining_classes_first_dex_idx = m_outdex.size();
   emit_remaining_classes(dex_info, &canary_cls);
 
   // Add whatever leftovers there are from plugins.
@@ -1040,6 +1049,26 @@ void InterDex::run() {
   if (!m_dexes_structure.get_current_dex_classes().empty()) {
     flush_out_dex(dex_info, canary_cls);
     canary_cls = nullptr;
+  }
+
+  if (json_classes) {
+    Json::Value json_solution = Json::arrayValue;
+    for (size_t dex_idx = remaining_classes_first_dex_idx;
+         dex_idx < m_outdex.size();
+         dex_idx++) {
+      auto& dex = m_outdex.at(dex_idx);
+      if (!dex.empty()) {
+        json_solution.append(
+            m_cross_dex_ref_minimizer.get_json_class_indices(dex));
+      }
+    }
+    Json::Value json_file;
+    json_file["first_dex"] = json_first_dex;
+    json_file["solution"] = json_solution;
+    json_file["classes"] = *json_classes;
+    write_string_to_file(
+        m_conf.metafile("interdex-cross-ref-minimization.json"),
+        json_file.toStyledString());
   }
 
   // Emit dex info manifest
