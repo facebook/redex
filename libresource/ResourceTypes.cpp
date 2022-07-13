@@ -6548,8 +6548,18 @@ String8 ResTable::getString8FromIndex(
     uint32_t stringIndex) const
 {
     const PackageGroup* pg = mPackageGroups[packageIndex];
-    const TypeList& typeList = pg->types[0];
-    const Type* typeConfigs = typeList[0];
+    Type* typeConfigs = nullptr;
+    for (size_t i = 0; i < pg->types.size(); ++i) {
+      const TypeList& typeList = pg->types[i];
+      if (typeList.size() > 0) {
+        typeConfigs = typeList[0];
+        break;
+      }
+    }
+    if (typeConfigs == nullptr) {
+      ALOGE("Unable to find any types in the package.");
+      return String8();
+    }
     const Package* pkg = typeConfigs->package;
     return pkg->header->values.string8ObjectAt(stringIndex);
 }
