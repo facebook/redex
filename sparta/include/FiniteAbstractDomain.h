@@ -12,12 +12,16 @@
 #include <cstddef>
 #include <functional>
 #include <initializer_list>
+#include <numeric>
 #include <ostream>
 #include <sstream>
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
 #include <vector>
+
+#include <boost/integer.hpp>
+#include <boost/multiprecision/cpp_int.hpp>
 
 #include "AbstractDomain.h"
 #include "Exceptions.h"
@@ -219,32 +223,35 @@ class BitVectorLattice final
         m_opposite_semi_lattice(
             elements, hasse_diagram, /* construct_opposite_lattice */ true) {}
 
-  Encoding encode(const Element& element) const override {
+  inline Encoding encode(const Element& element) const override {
     return m_opposite_semi_lattice.encode(element);
   }
 
-  Element decode(const Encoding& encoding) const override {
+  inline Element decode(const Encoding& encoding) const override {
     return m_opposite_semi_lattice.decode(encoding);
   }
 
-  bool is_bottom(const Encoding& x) const override {
-    return m_opposite_semi_lattice.is_top(x);
+  inline constexpr bool is_bottom(const Encoding& x) const override {
+    return SemiLattice::is_top(x);
   }
 
-  bool is_top(const Encoding& x) const override {
-    return m_opposite_semi_lattice.is_bottom(x);
+  inline constexpr bool is_top(const Encoding& x) const override {
+    return SemiLattice::is_bottom(x);
   }
 
-  bool equals(const Encoding& x, const Encoding& y) const override {
-    return m_opposite_semi_lattice.equals(x, y);
+  inline constexpr bool equals(const Encoding& x,
+                               const Encoding& y) const override {
+    return SemiLattice::equals(x, y);
   }
 
-  bool leq(const Encoding& x, const Encoding& y) const override {
-    return m_opposite_semi_lattice.geq(x, y);
+  inline constexpr bool leq(const Encoding& x,
+                            const Encoding& y) const override {
+    return SemiLattice::geq(x, y);
   }
 
-  Encoding join(const Encoding& x, const Encoding& y) const override {
-    return m_opposite_semi_lattice.meet(x, y);
+  inline constexpr Encoding join(const Encoding& x,
+                                 const Encoding& y) const override {
+    return SemiLattice::meet(x, y);
   }
 
   Encoding meet(const Encoding& x, const Encoding& y) const override {
@@ -257,9 +264,13 @@ class BitVectorLattice final
     return get_opposite_encoding(lower_encoding);
   }
 
-  Encoding bottom() const override { return m_opposite_semi_lattice.top(); }
+  inline constexpr Encoding bottom() const override {
+    return SemiLattice::top();
+  }
 
-  Encoding top() const override { return m_opposite_semi_lattice.bottom(); }
+  inline constexpr Encoding top() const override {
+    return SemiLattice::bottom();
+  }
 
  private:
   Element decode_lower(const Encoding& encoding) const {
@@ -309,6 +320,74 @@ bool is_zero_based_integer_range(
   } else {
     return false;
   }
+}
+
+// This is essentially a better std::bitset. It:
+//   a) Uses less memory, so a 4 bit encoding uses 1 byte instead of 8.
+//   b) Supports comparison and all the usual integer operations.
+//   c) Also supports msb/lsb used for decoding, and does so in O(1) time
+//      instead of O(bits) time.
+//
+// Ironically, the only thing it is missing is the only thing std::bitset
+// has, which is count (aka, popcnt). But this is easy to emulate.
+template <size_t Bits>
+using FixedUint =
+    boost::multiprecision::number<boost::multiprecision::cpp_int_backend<
+        /* MinBits */ Bits,
+        /* MaxBits */ Bits,
+        boost::multiprecision::unsigned_magnitude,
+        boost::multiprecision::unchecked,
+        /* Allocator */ void>>;
+
+// N.B.: Prior to Boost 1.79 MinBits and MaxBits were unsigned,
+//       not size_t - using auto here papers over this difference.
+
+template <auto MinBits,
+          auto MaxBits,
+          boost::multiprecision::cpp_integer_type SignType,
+          boost::multiprecision::cpp_int_check_type Checked,
+          class Allocator>
+inline constexpr size_t popcount(
+    const boost::multiprecision::number<
+        boost::multiprecision::
+            cpp_int_backend<MinBits, MaxBits, SignType, Checked, Allocator>>&
+        bits) {
+  const auto& backend = bits.backend();
+
+  // We use std::bitset::count to access a native popcnt. In principle the limb
+  // type could be larger than what a bitset can natively handle, in practice it
+  // likely isn't. This all unrolls anyway.
+  using BitsetNativeType = unsigned long long;
+  constexpr size_t kNativeBits = std::numeric_limits<BitsetNativeType>::digits;
+  using LimbType = std::decay_t<decltype(*backend.limbs())>;
+  constexpr size_t kLimbBits = std::numeric_limits<LimbType>::digits;
+
+  constexpr size_t kNativesToCount =
+      (kLimbBits + kNativeBits - 1) / kNativeBits;
+  constexpr size_t kShiftPerNative = kNativesToCount > 1 ? kNativeBits : 0;
+  static_assert(kNativesToCount > 0, "bad bit counts");
+
+  size_t result = 0;
+  for (size_t i = 0; i != backend.size(); ++i) {
+    auto limb_value = backend.limbs()[i];
+    for (size_t j = 0; j != kNativesToCount; ++j) {
+      const std::bitset<kNativeBits> limb_bitset{BitsetNativeType(limb_value)};
+      result += limb_bitset.count();
+      limb_value >>= kShiftPerNative;
+    }
+  }
+  return result;
+}
+
+template <auto Bits, // Fixed-width only.
+          boost::multiprecision::cpp_integer_type SignType,
+          boost::multiprecision::cpp_int_check_type Checked,
+          class Allocator>
+inline constexpr size_t count_leading_zeros(
+    const boost::multiprecision::number<
+        boost::multiprecision::
+            cpp_int_backend<Bits, Bits, SignType, Checked, Allocator>>& bits) {
+  return Bits - (bits.is_zero() ? 0 : (1 + msb(bits)));
 }
 
 /*
@@ -374,13 +453,59 @@ bool is_zero_based_integer_range(
  * at startup time and finite lattices built this way are usually small, this
  * should not be a problem in practice.
  *
+ * ----------------------------------------------------------------------------
+ *
+ * In the other direction, we must decode a bitvector back to its element. To
+ * do this efficiently, we observe that any poset (and therefore lattice) can
+ * be relabelled so that the resulting bitmatrix is anti-triangular. That is,
+ * where every encoding has a unique number of leading zeros; this gives each
+ * encoding an identity that we can cheaply compute.
+ *
+ * This is a linear extension done by topological sort. Since we already have
+ * the transitive closure, we can simply sort each encoding by popcount to
+ * retrieve a topological ordering. The bottom element is relabelled with a
+ * value of zero and moved to the 1st bit (the LSB). Then the next smallest is
+ * placed at the 2nd bit, and so on until the top element occupies the MSB.
+ *
+ * Since we have a reflexive bit, within such a topological relabelling each
+ * element will be uniquely the only one that sets its own reflexive bit and
+ * sets no other more significant bits (i.e., topologically greater elements).
+ * This establishes a unique leading zeros count.
+ *
+ * For example:
+ *
+ *  Input                                      Relabelled
+ *    0       MSB     LSB      Topo-Sort           4'          MSB     LSB
+ *    |     0: 1 1 1 1 1        2 -> 0'            |        0': 0 0 0 0 1
+ *    1     1: 1 1 1 1 0        3 -> 1'            3'       1': 0 0 0 1 1
+ *   / \    2: 0 0 1 0 0        4 -> 2'           / \       2': 0 0 1 0 1
+ *  3   4   3: 0 1 1 0 0        1 -> 3'          1'  2'     3': 0 1 1 1 1
+ *   \ /    4: 1 0 1 0 0        0 -> 4'           \ /       4': 1 1 1 1 1
+ *    2                                            0'
+ *
+ * To decode, we count the leading zeros and then use this to index a table
+ * tracking which element mapped to that encoding. One could flip this so that
+ * smaller elements go last; the relabelled matrix would be triangular and we
+ * would count trailing zeros - but counting leading zeros is slightly faster.
+ *
+ * If we wanted to be ultra-strict we could require that the elements are
+ * already labelled such that no permutation needs to occur, then we could cast
+ * the clz to the element directly - benchmarks show this is not any faster than
+ * a lookup table, so (thankfully) we don't need to be that annoying.
  */
 template <typename Element, size_t kCardinality>
 class BitVectorSemiLattice final {
  public:
   static_assert(kCardinality >= 2, "Lattice must have at least 2 elements.");
 
-  using Encoding = std::bitset<kCardinality>;
+  using Encoding = FixedUint<kCardinality>;
+
+  // The bottom element is always one because it topologically sorts to the
+  // smallest element, so permutes to the LSB. We do not need to track it.
+  static constexpr Encoding kBottom = Encoding(1);
+
+  // The top element is always all ones, by definition.
+  static constexpr Encoding kTop = Encoding(-1);
 
   // The lattice encoding we're used to implement.
   using LatticeEncoding = ::sparta::LatticeEncoding<Element, Encoding>;
@@ -422,13 +547,13 @@ class BitVectorSemiLattice final {
       // then matrix[y][x] = 1.
       const auto x_idx = element_to_index(pair.first);
       const auto y_idx = element_to_index(pair.second);
-      m_index_to_encoding[y_idx][x_idx] = true;
+      bit_set(m_index_to_encoding[y_idx], x_idx);
     }
 
     // We first compute the reflexive closure of the "immediately greater than"
     // relation in the lattice considered.
     for (size_t i = 0; i < kCardinality; ++i) {
-      m_index_to_encoding[i][i] = true;
+      bit_set(m_index_to_encoding[i], i);
     }
 
     // Then we compute the transitive closure of the "immediately greater than"
@@ -436,26 +561,62 @@ class BitVectorSemiLattice final {
     for (size_t k = 0; k < kCardinality; ++k) {
       for (size_t i = 0; i < kCardinality; ++i) {
         for (size_t j = 0; j < kCardinality; ++j) {
-          m_index_to_encoding[i][j] =
-              m_index_to_encoding[i][j] ||
-              (m_index_to_encoding[i][k] && m_index_to_encoding[k][j]);
+          if (bit_test(m_index_to_encoding[i], k) &&
+              bit_test(m_index_to_encoding[k], j)) {
+            bit_set(m_index_to_encoding[i], j);
+          }
         }
       }
     }
 
-    // The last step is to assign a bit vector representation to each element in
-    // the lattice considered, i.e. the corresponding row in the Boolean matrix.
-    // We also maintain a reverse table for decoding purposes.
-    for (size_t i = 0; i < kCardinality; ++i) {
-      Element element = index_to_element(i);
-      Encoding encoding = m_index_to_encoding[i];
-      m_encoding_to_element[encoding] = element;
-      // We identify the Bottom and Top elements on the fly.
-      if (is_bottom(encoding)) {
-        m_bottom = encoding;
-      }
-      if (is_top(encoding)) {
-        m_top = encoding;
+    // Determine the relabelling for each element. We do this in terms of the
+    // number of leading zeros the relabelled encoding will have, rather than
+    // just in terms of the relabelled value; that way this can be reused for
+    // the final clz to index mapping as-is.
+    //
+    // As such, we place the elements with lower popcount last (i.e., they
+    // relabel to smaller values and so have higher leading zero counts).
+    std::iota(m_clz_to_index.begin(), m_clz_to_index.end(), 0);
+    std::sort(m_clz_to_index.begin(),
+              m_clz_to_index.end(),
+              [&](size_t first_index, size_t second_index) {
+                const auto first_popcount =
+                    popcount(m_index_to_encoding[first_index]);
+                const auto second_popcount =
+                    popcount(m_index_to_encoding[second_index]);
+                // Break ties by element value (i.e., index).
+                return std::tie(first_popcount, first_index) >
+                       std::tie(second_popcount, second_index);
+              });
+
+    // Permute the encodings with the new relabelling so that each element has
+    // an encoding uniquely identified by the number of leading zeros. This
+    // necessarily means that bottom is assigned to the least significant bit
+    // and encodes to all but one leading zero; and top is assigned the most
+    // significant bit and encodes to no leading zeros (all ones).
+    //
+    // We don't permute rows, which would give the matrix as if the element
+    // values had been originally as determined for relabelling. This way we
+    // don't need to perform an input index to permuted index mapping just to
+    // then lookup up permuted index to permuted encoding:
+    //
+    //      MSB     LSB   Relabelling      MSB     LSB    Actual Storage
+    //    0: 1 1 1 1 1       2->0'      0': 0 0 0 0 1      0: 1 1 1 1 1
+    //    1: 1 1 1 1 0       3->1'      1': 0 0 0 1 1      1: 0 1 1 1 1
+    //    2: 0 0 1 0 0       4->2'      2': 0 0 1 0 1      2: 0 0 0 0 1
+    //    3: 0 1 1 0 0       1->3'      3': 0 1 1 1 1      3: 0 0 0 1 1
+    //    4: 1 0 1 0 0       0->4'      4': 1 1 1 1 1      4: 0 0 1 0 1
+    //
+    for (size_t i = 0; i != kCardinality; ++i) {
+      const auto original = m_index_to_encoding[i];
+      for (size_t clz = 0; clz != kCardinality; ++clz) {
+        const auto original_index = m_clz_to_index[clz];
+        const auto relabelled_index = kCardinality - clz - 1;
+        if (bit_test(original, original_index)) {
+          bit_set(m_index_to_encoding[i], relabelled_index);
+        } else {
+          bit_unset(m_index_to_encoding[i], relabelled_index);
+        }
       }
     }
 
@@ -471,78 +632,141 @@ class BitVectorSemiLattice final {
     return static_cast<Element>(element_idx);
   }
 
-  Encoding encode(const Element& element) const {
+  inline const Encoding& encode(const Element& element) const {
     const auto element_idx = element_to_index(element);
     RUNTIME_CHECK(element_idx < m_index_to_encoding.size(),
-                  undefined_operation());
+                  undefined_operation() << error_msg("Invalid element"));
     return m_index_to_encoding[element_idx];
   }
 
-  Element decode(const Encoding& encoding) const {
-    auto it = m_encoding_to_element.find(encoding);
-    RUNTIME_CHECK(it != m_encoding_to_element.end(), undefined_operation());
-    return it->second;
+  inline Element decode(const Encoding& encoding) const {
+    const auto encoding_clz = count_leading_zeros(encoding);
+    RUNTIME_CHECK(encoding_clz < m_clz_to_index.size(),
+                  undefined_operation() << error_msg("Invalid encoding"));
+    return index_to_element(m_clz_to_index[encoding_clz]);
   }
 
-  bool is_bottom(const Encoding& x) const {
-    // In the semi-lattice, the Bottom element is the
-    // unique bit vector that has only one bit set to 1.
-    return x.count() == 1;
+  inline static constexpr bool is_bottom(const Encoding& x) {
+    // The bottom element is the unique element with one bit set. However,
+    // we do not need to do a full popcount or equality compare; checking if it
+    // has the largest leading zero count is O(1) instead of O(bits).
+    return count_leading_zeros(x) == kCardinality - 1;
   }
 
-  bool is_top(const Encoding& x) const {
-    // In the semi-lattice, the Top element is the
-    // unique bit vector that has all bits set to 1.
-    return x.all();
+  inline static constexpr bool is_top(const Encoding& x) {
+    // The top element is the unique element with all bits set. However,
+    // we do not need to do a full popcount or equality compare; checking if it
+    // has no leading zeros is O(1) instead of O(bits).
+    return count_leading_zeros(x) == 0;
   }
 
-  bool equals(const Encoding& x, const Encoding& y) const { return x == y; }
+  inline static constexpr bool equals(const Encoding& x, const Encoding& y) {
+    return x == y;
+  }
 
-  bool geq(const Encoding& x, const Encoding& y) const {
+  inline static constexpr bool geq(const Encoding& x, const Encoding& y) {
     return equals(meet(x, y), y);
   }
 
-  Encoding meet(const Encoding& x, const Encoding& y) const { return x & y; }
+  inline static constexpr Encoding meet(const Encoding& x, const Encoding& y) {
+    return x & y;
+  }
 
-  Encoding bottom() const { return m_bottom; }
+  inline static constexpr const Encoding& bottom() { return kBottom; }
 
-  Encoding top() const { return m_top; }
+  inline static constexpr const Encoding& top() { return kTop; }
 
  private:
+  // We can use a smaller integer type than size_t to store element indices
+  // in the lookup table. This makes both tables often fit in one cache line.
+  using Index = typename boost::uint_value_t<kCardinality - 1>::fast;
+
   // This sanity check verifies that the bitwise And of any two pairs of
   // elements (i.e., the Meet or the Join of those elements depending on the
   // lattice considered) corresponds to an actual element in the lattice.
   // In other words, this procedure makes sure that the input Hasse diagram
   // defines a semi-lattice.
   void sanity_check() {
-    // We count the number of bit vectors that have all their bits set to one.
-    size_t all_bits_are_set = 0;
-    // We count the number of bit vectors that have only one bit set to one.
-    size_t one_bit_is_set = 0;
+    // We verify that only one element has all bits set.
+    bool found_all_bits_are_set = false;
+    // We verify that only one element has one bit set.
+    bool found_one_bit_is_set = false;
+    // We verify each leading zero count appears exactly once.
+    std::bitset<kCardinality> found_clz;
+
     for (size_t i = 0; i < kCardinality; ++i) {
-      Encoding x = m_index_to_encoding[i];
-      if (x.all()) {
-        ++all_bits_are_set;
+      const auto x_element = index_to_element(i);
+      const auto x = encode(x_element);
+
+      const auto x_popcount = popcount(x);
+      if (x_popcount == kCardinality) {
+        RUNTIME_CHECK(!found_all_bits_are_set,
+                      internal_error()
+                          << error_msg("Duplicate top element encoding"));
+        found_all_bits_are_set = true;
+      } else if (x_popcount == 1) {
+        RUNTIME_CHECK(!found_one_bit_is_set,
+                      internal_error()
+                          << error_msg("Duplicate bottom element encoding"));
+        found_one_bit_is_set = true;
       }
-      if (x.count() == 1) {
-        ++one_bit_is_set;
+
+      const auto x_clz = count_leading_zeros(x);
+      RUNTIME_CHECK(x_clz < kCardinality,
+                    internal_error()
+                        << error_msg("Out of range leading zeros count"));
+      RUNTIME_CHECK(!found_clz[x_clz],
+                    internal_error()
+                        << error_msg("Duplicate leading zeros count"));
+      found_clz[x_clz] = true;
+
+      if (x_popcount == kCardinality) {
+        RUNTIME_CHECK(x_clz == 0,
+                      internal_error() << error_msg(
+                          "Top element encoding has leading zeros"));
+      } else if (x_popcount == 1) {
+        RUNTIME_CHECK(x_clz == kCardinality - 1,
+                      internal_error() << error_msg(
+                          "Bottom element encoding missing leading zeros"));
       }
+
+      RUNTIME_CHECK(decode(x) == x_element,
+                    internal_error() << error_msg("Incorrect decoding"));
+
       for (size_t j = 0; j < kCardinality; ++j) {
-        Encoding y = m_index_to_encoding[j];
-        RUNTIME_CHECK(m_encoding_to_element.find(x & y) !=
-                          m_encoding_to_element.end(),
-                      internal_error());
+        const auto y_element = index_to_element(j);
+        const auto y = encode(y_element);
+        RUNTIME_CHECK((x_element == y_element) == equals(x, y),
+                      internal_error()
+                          << error_msg("Incorrect encoding equality"));
+
+        const auto x_meet_y = meet(x, y);
+        const auto x_meet_y_iter = std::find(
+            m_index_to_encoding.begin(), m_index_to_encoding.end(), x_meet_y);
+        RUNTIME_CHECK(x_meet_y_iter != m_index_to_encoding.end(),
+                      internal_error()
+                          << error_msg("Meet element encoding missing"));
+
+        const auto x_meet_y_index = x_meet_y_iter - m_index_to_encoding.begin();
+        const auto x_meet_y_element = index_to_element(x_meet_y_index);
+        RUNTIME_CHECK(decode(x_meet_y) == x_meet_y_element,
+                      internal_error()
+                          << error_msg("Meet encoding invalid decoding"));
       }
     }
-    RUNTIME_CHECK(all_bits_are_set == 1 && one_bit_is_set == 1,
+    RUNTIME_CHECK(found_all_bits_are_set,
                   internal_error()
-                      << error_msg("Missing or duplicate extremal element"));
+                      << error_msg("Missing top element encoding"));
+    RUNTIME_CHECK(found_one_bit_is_set,
+                  internal_error()
+                      << error_msg("Missing bottom element encoding"));
+    RUNTIME_CHECK(found_clz.all(),
+                  internal_error()
+                      << error_msg("Missing leading zeros count encoding"));
   }
 
   std::array<Encoding, kCardinality> m_index_to_encoding;
-  std::unordered_map<Encoding, Element> m_encoding_to_element;
-  Encoding m_bottom;
-  Encoding m_top;
+  std::array<Index, kCardinality> m_clz_to_index;
 };
 
 } // namespace fad_impl
