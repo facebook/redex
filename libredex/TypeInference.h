@@ -124,7 +124,8 @@ namespace type_inference {
 
 using std::placeholders::_1;
 
-using TypeLattice = sparta::BitVectorLattice<IRType, 16, std::hash<int>>;
+using TypeLattice = sparta::BitVectorLattice<IRType,
+                                             /* kCardinality */ 16>;
 
 extern TypeLattice type_lattice;
 

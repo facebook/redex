@@ -14,7 +14,7 @@ using namespace sparta;
 
 enum Elements { BOTTOM, A, B, C, D, E, TOP };
 
-using Lattice = BitVectorLattice<Elements, 7, std::hash<int>>;
+using Lattice = BitVectorLattice<Elements, /* kCardinality */ 7>;
 
 /*
  *              TOP
@@ -108,15 +108,15 @@ TEST(FiniteAbstractDomainTest, destructiveOperations) {
   EXPECT_FALSE(y1.is_bottom());
 }
 
-TEST(FiniteAbstractDomainTest, malformedLattice) {
+TEST(FiniteAbstractDomainTest, malformedLatticePoset) {
   enum MalformedLatticeElements { bottom, a, b, c, d, top };
   using MalformedLattice =
-      BitVectorLattice<MalformedLatticeElements, 6, std::hash<int>>;
+      BitVectorLattice<MalformedLatticeElements, /* kCardinality */ 6>;
   /*
    * This is not a lattice:
    *
    *     top
-   *    /   \						\
+   *    /   \
    *   c     d
    *   |  X  |
    *   a     b
@@ -134,7 +134,16 @@ TEST(FiniteAbstractDomainTest, malformedLattice) {
                                         {c, top},
                                         {d, top}});
   });
+}
 
+TEST(FiniteAbstractDomainTest, malformedLatticeTwoMinimal) {
+  enum MalformedLatticeElements {
+    a,
+    b,
+    top,
+  };
+  using MalformedLattice =
+      BitVectorLattice<MalformedLatticeElements, /* kCardinality */ 3>;
   /*
    * Two minimal elements:
    *
@@ -146,7 +155,12 @@ TEST(FiniteAbstractDomainTest, malformedLattice) {
   EXPECT_ANY_THROW({
     MalformedLattice malformed_lattice({a, b, top}, {{a, top}, {b, top}});
   });
+}
 
+TEST(FiniteAbstractDomainTest, malformedLatticeTwoMaximal) {
+  enum MalformedLatticeElements { bottom, a, b };
+  using MalformedLattice =
+      BitVectorLattice<MalformedLatticeElements, /* kCardinality */ 3>;
   /*
    * Two maximal elements:
    *
@@ -159,4 +173,23 @@ TEST(FiniteAbstractDomainTest, malformedLattice) {
     MalformedLattice malformed_lattice({bottom, a, b},
                                        {{bottom, a}, {bottom, b}});
   });
+}
+
+TEST(FiniteAbstractDomainTest, isZeroBasedIntegerRange) {
+  using fad_impl::is_zero_based_integer_range;
+
+  EXPECT_TRUE(is_zero_based_integer_range({0, 1, 2}))
+      << "integer range can be an integer";
+  EXPECT_TRUE(is_zero_based_integer_range({BOTTOM, A, B}))
+      << "integer range can be an enum";
+  EXPECT_FALSE(is_zero_based_integer_range({4.5}))
+      << "integer range cannot be arbitrary scalar";
+  EXPECT_FALSE(is_zero_based_integer_range({std::string()}))
+      << "integer range cannot be arbitrary type";
+  EXPECT_FALSE(is_zero_based_integer_range({1, 2, 3}))
+      << "integer range must start at zero";
+  EXPECT_FALSE(is_zero_based_integer_range({0, 2, 3}))
+      << "integer range must be continuous";
+  EXPECT_FALSE(is_zero_based_integer_range({1, 2, 2, 3}))
+      << "integer range must cover cardinality";
 }
