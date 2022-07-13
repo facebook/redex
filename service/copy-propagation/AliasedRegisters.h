@@ -22,6 +22,7 @@
 #include "AbstractDomain.h"
 #include "ConstantUses.h"
 #include "DexClass.h"
+#include "PatriciaTreeMap.h"
 
 namespace aliased_registers {
 
@@ -181,7 +182,7 @@ class AliasedRegisters final : public sparta::AbstractValue<AliasedRegisters> {
   //
   // We only track the insertion for registers because they're the only type
   // that could be chosen as a representative.
-  using InsertionOrder = std::unordered_map<vertex_t, size_t>;
+  using InsertionOrder = sparta::PatriciaTreeMap<vertex_t, uint32_t>;
   InsertionOrder m_insert_order;
 
   boost::optional<vertex_t> find(const Value& r) const;
