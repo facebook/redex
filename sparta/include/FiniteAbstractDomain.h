@@ -33,6 +33,9 @@ namespace fad_impl {
 template <typename Element, size_t kCardinality>
 class BitVectorSemiLattice;
 
+template <typename Element, size_t kCardinality>
+class BitVectorSemiLatticeCompletion;
+
 } // namespace fad_impl
 
 /*
@@ -218,10 +221,9 @@ class BitVectorLattice final
   BitVectorLattice(
       std::initializer_list<Element> elements,
       std::initializer_list<std::pair<Element, Element>> hasse_diagram)
-      : m_lower_semi_lattice(
-            elements, hasse_diagram, /* construct_opposite_lattice */ false),
-        m_opposite_semi_lattice(
-            elements, hasse_diagram, /* construct_opposite_lattice */ true) {}
+      : m_opposite_semi_lattice(
+            elements, hasse_diagram, /* construct_opposite_lattice */ true),
+        m_completion(m_opposite_semi_lattice) {}
 
   inline Encoding encode(const Element& element) const override {
     return m_opposite_semi_lattice.encode(element);
@@ -254,14 +256,8 @@ class BitVectorLattice final
     return SemiLattice::meet(x, y);
   }
 
-  Encoding meet(const Encoding& x, const Encoding& y) const override {
-    // In order to perform the Meet, we need to calculate corresponding lower
-    // semi-lattice encoding, and switch back to opposite semi-lattice encoding
-    // before returning.
-    auto x_lower = get_lower_encoding(x);
-    auto y_lower = get_lower_encoding(y);
-    Encoding lower_encoding = m_lower_semi_lattice.meet(x_lower, y_lower);
-    return get_opposite_encoding(lower_encoding);
+  inline Encoding meet(const Encoding& x, const Encoding& y) const override {
+    return m_completion.join(x, y);
   }
 
   inline constexpr Encoding bottom() const override {
@@ -273,22 +269,8 @@ class BitVectorLattice final
   }
 
  private:
-  Element decode_lower(const Encoding& encoding) const {
-    return m_lower_semi_lattice.decode(encoding);
-  }
-
-  Encoding get_lower_encoding(const Encoding& x) const {
-    const Element& element = decode(x);
-    return m_lower_semi_lattice.encode(element);
-  }
-
-  Encoding get_opposite_encoding(const Encoding& x) const {
-    const Element& element = decode_lower(x);
-    return m_opposite_semi_lattice.encode(element);
-  }
-
-  SemiLattice m_lower_semi_lattice;
   SemiLattice m_opposite_semi_lattice;
+  fad_impl::BitVectorSemiLatticeCompletion<Element, kCardinality> m_completion;
 };
 
 namespace fad_impl {
@@ -767,6 +749,153 @@ class BitVectorSemiLattice final {
 
   std::array<Encoding, kCardinality> m_index_to_encoding;
   std::array<Index, kCardinality> m_clz_to_index;
+};
+
+/*
+ * Completes a semi-lattice by providing a join operation.
+ *
+ * We could construct a second BitVectorSemiLattice with the reversed ordering.
+ * Then to join X and Y we could perform the series of transforms:
+ *     - Count leading zeros of Enc(X) and Enc(Y).
+ *     - Use these to lookup the elements X and Y.
+ *     - Look up Enc'(X) and Enc'(Y) in the reversed lattice.
+ *     - Perform the meet, giving Enc'(Z).
+ *     - Count leading zeros of Enc'(Z).
+ *     - Use this to lookup the element Z.
+ *     - Loop up Enc(Z) in the original lattice.
+ *
+ * This can be done faster by observing that after counting leading zeros, we
+ * have identified the element in some relabelled space. We can jump directly
+ * to its reversed encoding without needing to know the original elements:
+ *     - Count leading zeros of Enc(X) and Enc(Y).
+ *     - Use these to lookup Enc'(X) and Enc'(Y) directly.
+ *     - Perform the meet, giving Enc'(Z).
+ *     - Count leading zeros of Enc'(Z).
+ *     - Use this to lookup Enc(Z) directly.
+ */
+template <typename Element, size_t kCardinality>
+class BitVectorSemiLatticeCompletion final {
+  using SemiLattice = BitVectorSemiLattice<Element, kCardinality>;
+  using Encoding = typename SemiLattice::Encoding;
+
+  struct ReversedEncoding { // To prevent mix-ups.
+    Encoding inner;
+  };
+
+ public:
+  explicit BitVectorSemiLatticeCompletion(const SemiLattice& semi) {
+    // We don't need to perform the same from-scratch construction as the
+    // semi-lattice. The transpose of the encoding matrix gives us the
+    // reversed ordering, and the property of having a unique leading zeros
+    // count is preserved:
+    //
+    //    Relabelling      MSB     LSB   Reversed      MSB     LSB
+    //       2->0'      0': 0 0 0 0 1     2->4"     0": 0 0 0 0 1
+    //       3->1'      1': 0 0 0 1 1     3->3"     1": 0 0 0 1 1
+    //       4->2'      2': 0 0 1 0 1     4->2"     2": 0 0 1 1 1
+    //       1->3'      3': 0 1 1 1 1     1->1"     3": 0 1 0 1 1
+    //       0->4'      4': 1 1 1 1 1     0->0"     4": 1 1 1 1 1
+    //
+    // The topological order is simply reversed: the clz of an element in its
+    // (non-reversed) encoding gives the relabelling in the reversed ordering.
+    // E.g., in the above element 2 is bottom, so relabels to 0' and is given
+    // an encoding with clz=4. Therefore, in the reversed encoding it is top
+    // so relabels to 4" and is given an encoding with clz=0.
+    for (size_t element_idx = 0; element_idx < kCardinality; ++element_idx) {
+      const auto element = SemiLattice::index_to_element(element_idx);
+      const auto& encoding = semi.encode(element);
+      const auto encoding_clz = count_leading_zeros(encoding);
+      RUNTIME_CHECK(encoding_clz < kCardinality,
+                    internal_error()
+                        << error_msg("Out of range leading zeros count"));
+
+      // The actual row this encoding would be at in the relabelled matrix.
+      const auto relabelled_index = kCardinality - encoding_clz - 1;
+
+      // To transpose, bit i of the encoding goes in row kCardinality - i - 1,
+      // at column kCardinality - relabelled_index - 1. This column value is
+      // actually just encoding_clz again.
+      for (size_t i = 0; i < kCardinality; ++i) {
+        auto& transpose_row = m_clz_to_reversed_encoding[kCardinality - i - 1];
+        if (bit_test(encoding, i)) {
+          bit_set(transpose_row.inner, encoding_clz);
+        }
+      }
+
+      // What this element was relabelled to is the same as what the reversed
+      // encoding's clz will end up being for this element. This lets us jump
+      // back to the non-reversed encoding given an reversed encoding.
+      m_reversed_clz_to_encoding[relabelled_index] = encoding;
+    }
+
+    sanity_check(semi);
+  }
+
+  inline Encoding join(const Encoding& x, const Encoding& y) const {
+    const auto& x_reversed = to_reversed(x);
+    const auto& y_reversed = to_reversed(y);
+    const ReversedEncoding z_reversed{
+        SemiLattice::meet(x_reversed.inner, y_reversed.inner)};
+    return from_reversed(z_reversed);
+  }
+
+ private:
+  const ReversedEncoding& to_reversed(const Encoding& encoding) const {
+    const auto encoding_clz = count_leading_zeros(encoding);
+    RUNTIME_CHECK(encoding_clz < m_clz_to_reversed_encoding.size(),
+                  undefined_operation() << error_msg("Invalid encoding"));
+    return m_clz_to_reversed_encoding[encoding_clz];
+  }
+
+  const Encoding& from_reversed(const ReversedEncoding& encoding) const {
+    const auto encoding_clz = count_leading_zeros(encoding.inner);
+    RUNTIME_CHECK(encoding_clz < m_reversed_clz_to_encoding.size(),
+                  undefined_operation() << error_msg("Invalid encoding"));
+    return m_reversed_clz_to_encoding[encoding_clz];
+  }
+
+  void sanity_check(const SemiLattice& semi) {
+    // The semi lattice sanity check did most of the heavy lifting. But we can
+    // still verify the new lookup table is correct for all mappings.
+    std::bitset<kCardinality> found_reversed_clz;
+    for (size_t i = 0; i < kCardinality; ++i) {
+      const auto x_element = SemiLattice::index_to_element(i);
+      const auto& x = semi.encode(x_element);
+      const auto& x_reversed = to_reversed(x);
+
+      const auto x_reversed_clz = count_leading_zeros(x_reversed.inner);
+      RUNTIME_CHECK(x_reversed_clz < kCardinality,
+                    internal_error()
+                        << error_msg("Out of range leading zeros count"));
+      RUNTIME_CHECK(!found_reversed_clz[x_reversed_clz],
+                    internal_error()
+                        << error_msg("Duplicate leading zeros count"));
+      found_reversed_clz[x_reversed_clz] = true;
+
+      RUNTIME_CHECK(from_reversed(x_reversed) == x,
+                    internal_error()
+                        << error_msg("Incorrect reverse encoding mapping"));
+
+      for (size_t j = 0; j < kCardinality; ++j) {
+        const auto y_element = SemiLattice::index_to_element(j);
+        const auto& y = semi.encode(y_element);
+
+        const auto x_join_y = join(x, y);
+        RUNTIME_CHECK(semi.geq(x_join_y, x),
+                      internal_error()
+                          << error_msg("Join element out of order"));
+        RUNTIME_CHECK(semi.geq(x_join_y, y),
+                      internal_error()
+                          << error_msg("Join element out of order"));
+      }
+    }
+    RUNTIME_CHECK(found_reversed_clz.all(),
+                  internal_error()
+                      << error_msg("Missing leading zeros count encoding"));
+  }
+
+  std::array<ReversedEncoding, kCardinality> m_clz_to_reversed_encoding;
+  std::array<Encoding, kCardinality> m_reversed_clz_to_encoding;
 };
 
 } // namespace fad_impl
