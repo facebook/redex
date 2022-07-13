@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <array>
 #include <bitset>
 #include <cstddef>
 #include <functional>
@@ -409,7 +410,6 @@ class BitVectorSemiLattice final {
 
     // We populate the Boolean matrix by traversing the Hasse diagram of the
     // partial order.
-    Encoding matrix[kCardinality];
     for (auto pair : hasse_diagram) {
       // The Hasse diagram provided by the user describes the partial order in
       // the original lattice. We need to normalize the representation when the
@@ -422,13 +422,13 @@ class BitVectorSemiLattice final {
       // then matrix[y][x] = 1.
       const auto x_idx = element_to_index(pair.first);
       const auto y_idx = element_to_index(pair.second);
-      matrix[y_idx][x_idx] = true;
+      m_index_to_encoding[y_idx][x_idx] = true;
     }
 
     // We first compute the reflexive closure of the "immediately greater than"
     // relation in the lattice considered.
     for (size_t i = 0; i < kCardinality; ++i) {
-      matrix[i][i] = true;
+      m_index_to_encoding[i][i] = true;
     }
 
     // Then we compute the transitive closure of the "immediately greater than"
@@ -436,7 +436,9 @@ class BitVectorSemiLattice final {
     for (size_t k = 0; k < kCardinality; ++k) {
       for (size_t i = 0; i < kCardinality; ++i) {
         for (size_t j = 0; j < kCardinality; ++j) {
-          matrix[i][j] = matrix[i][j] || (matrix[i][k] && matrix[k][j]);
+          m_index_to_encoding[i][j] =
+              m_index_to_encoding[i][j] ||
+              (m_index_to_encoding[i][k] && m_index_to_encoding[k][j]);
         }
       }
     }
@@ -446,8 +448,7 @@ class BitVectorSemiLattice final {
     // We also maintain a reverse table for decoding purposes.
     for (size_t i = 0; i < kCardinality; ++i) {
       Element element = index_to_element(i);
-      Encoding encoding = matrix[i];
-      m_element_to_encoding[element] = encoding;
+      Encoding encoding = m_index_to_encoding[i];
       m_encoding_to_element[encoding] = element;
       // We identify the Bottom and Top elements on the fly.
       if (is_bottom(encoding)) {
@@ -471,9 +472,10 @@ class BitVectorSemiLattice final {
   }
 
   Encoding encode(const Element& element) const {
-    auto it = m_element_to_encoding.find(element);
-    RUNTIME_CHECK(it != m_element_to_encoding.end(), undefined_operation());
-    return it->second;
+    const auto element_idx = element_to_index(element);
+    RUNTIME_CHECK(element_idx < m_index_to_encoding.size(),
+                  undefined_operation());
+    return m_index_to_encoding[element_idx];
   }
 
   Element decode(const Encoding& encoding) const {
@@ -518,7 +520,7 @@ class BitVectorSemiLattice final {
     // We count the number of bit vectors that have only one bit set to one.
     size_t one_bit_is_set = 0;
     for (size_t i = 0; i < kCardinality; ++i) {
-      Encoding x = m_element_to_encoding[index_to_element(i)];
+      Encoding x = m_index_to_encoding[i];
       if (x.all()) {
         ++all_bits_are_set;
       }
@@ -526,7 +528,7 @@ class BitVectorSemiLattice final {
         ++one_bit_is_set;
       }
       for (size_t j = 0; j < kCardinality; ++j) {
-        Encoding y = m_element_to_encoding[index_to_element(j)];
+        Encoding y = m_index_to_encoding[j];
         RUNTIME_CHECK(m_encoding_to_element.find(x & y) !=
                           m_encoding_to_element.end(),
                       internal_error());
@@ -537,7 +539,7 @@ class BitVectorSemiLattice final {
                       << error_msg("Missing or duplicate extremal element"));
   }
 
-  std::unordered_map<Element, Encoding> m_element_to_encoding;
+  std::array<Encoding, kCardinality> m_index_to_encoding;
   std::unordered_map<Encoding, Element> m_encoding_to_element;
   Encoding m_bottom;
   Encoding m_top;
