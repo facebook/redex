@@ -407,16 +407,6 @@ class BitVectorSemiLattice final {
                       << argument_name("elements")
                       << operation_name("BitVectorSemiLattice()"));
 
-    // We assign each element of the lattice an index, so that we can construct
-    // the Boolean matrix.
-    Element index_to_element[kCardinality];
-    std::unordered_map<Element, size_t> element_to_index;
-
-    std::copy(elements.begin(), elements.end(), index_to_element);
-    for (size_t i = 0; i < kCardinality; ++i) {
-      element_to_index[index_to_element[i]] = i;
-    }
-
     // We populate the Boolean matrix by traversing the Hasse diagram of the
     // partial order.
     Encoding matrix[kCardinality];
@@ -430,12 +420,9 @@ class BitVectorSemiLattice final {
 
       // If y is immediately greater than x in the partial order considered,
       // then matrix[y][x] = 1.
-      auto x_it = element_to_index.find(pair.first);
-      auto y_it = element_to_index.find(pair.second);
-      RUNTIME_CHECK(x_it != element_to_index.end() &&
-                        y_it != element_to_index.end(),
-                    internal_error());
-      matrix[y_it->second][x_it->second] = true;
+      const auto x_idx = element_to_index(pair.first);
+      const auto y_idx = element_to_index(pair.second);
+      matrix[y_idx][x_idx] = true;
     }
 
     // We first compute the reflexive closure of the "immediately greater than"
@@ -458,7 +445,7 @@ class BitVectorSemiLattice final {
     // the lattice considered, i.e. the corresponding row in the Boolean matrix.
     // We also maintain a reverse table for decoding purposes.
     for (size_t i = 0; i < kCardinality; ++i) {
-      Element element = index_to_element[i];
+      Element element = index_to_element(i);
       Encoding encoding = matrix[i];
       m_element_to_encoding[element] = encoding;
       m_encoding_to_element[encoding] = element;
@@ -472,7 +459,15 @@ class BitVectorSemiLattice final {
     }
 
     // Make sure that we obtain a semi-lattice.
-    sanity_check(&index_to_element[0]);
+    sanity_check();
+  }
+
+  inline static constexpr size_t element_to_index(Element element) {
+    return static_cast<size_t>(element);
+  }
+
+  inline static constexpr Element index_to_element(size_t element_idx) {
+    return static_cast<Element>(element_idx);
   }
 
   Encoding encode(const Element& element) const {
@@ -517,13 +512,13 @@ class BitVectorSemiLattice final {
   // lattice considered) corresponds to an actual element in the lattice.
   // In other words, this procedure makes sure that the input Hasse diagram
   // defines a semi-lattice.
-  void sanity_check(Element* index_to_element) {
+  void sanity_check() {
     // We count the number of bit vectors that have all their bits set to one.
     size_t all_bits_are_set = 0;
     // We count the number of bit vectors that have only one bit set to one.
     size_t one_bit_is_set = 0;
     for (size_t i = 0; i < kCardinality; ++i) {
-      Encoding x = m_element_to_encoding[index_to_element[i]];
+      Encoding x = m_element_to_encoding[index_to_element(i)];
       if (x.all()) {
         ++all_bits_are_set;
       }
@@ -531,7 +526,7 @@ class BitVectorSemiLattice final {
         ++one_bit_is_set;
       }
       for (size_t j = 0; j < kCardinality; ++j) {
-        Encoding y = m_element_to_encoding[index_to_element[j]];
+        Encoding y = m_element_to_encoding[index_to_element(j)];
         RUNTIME_CHECK(m_encoding_to_element.find(x & y) !=
                           m_encoding_to_element.end(),
                       internal_error());
