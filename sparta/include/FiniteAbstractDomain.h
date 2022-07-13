@@ -21,6 +21,17 @@
 
 namespace sparta {
 
+namespace fad_impl {
+
+template <typename Element,
+          size_t cardinality,
+          bool construct_opposite_lattice,
+          typename Hash,
+          typename Equal>
+class BitVectorSemiLattice;
+
+} // namespace fad_impl
+
 /*
  * This is the general interface for arbitrary encodings of a lattice. 'Element'
  * is the type of the symbolic names for the lattice elements and 'Encoding' is
@@ -167,6 +178,111 @@ inline std::ostream& operator<<(
 }
 
 namespace sparta {
+
+/*
+ * A lattice maintains two semi-lattices internally, always use opposite
+ * semi-lattice representation and calculate corresponding lower semi-lattice
+ * when needed
+ */
+template <typename Element,
+          size_t cardinality,
+          typename Hash = std::hash<Element>,
+          typename Equal = std::equal_to<Element>>
+class BitVectorLattice final
+    : public LatticeEncoding<Element, std::bitset<cardinality>> {
+ public:
+  using Encoding = std::bitset<cardinality>;
+
+  ~BitVectorLattice() {
+    // The destructor is the only method that is guaranteed to be created when a
+    // class template is instantiated. This is a good place to perform all the
+    // sanity checks on the template parameters.
+    static_assert(std::is_default_constructible<Element>::value,
+                  "Element is not default constructible");
+    static_assert(std::is_copy_constructible<Element>::value,
+                  "Element is not copy constructible");
+    static_assert(std::is_copy_assignable<Element>::value,
+                  "Element is not copy assignable");
+  }
+
+  BitVectorLattice() = delete;
+
+  BitVectorLattice(
+      std::initializer_list<Element> elements,
+      std::initializer_list<std::pair<Element, Element>> hasse_diagram)
+      : m_lower_semi_lattice(elements, hasse_diagram),
+        m_opposite_semi_lattice(elements, hasse_diagram) {}
+
+  Encoding encode(const Element& element) const override {
+    // In a standard fixpoint computation the Join is by far the dominant
+    // operation. Hence, we favor the opposite semi-lattice encoding whenever we
+    // construct a domain element.
+    return m_opposite_semi_lattice.encode(element);
+  }
+
+  // Default use opposite semi-lattice for decoding.
+  Element decode(const Encoding& encoding) const override {
+    return m_opposite_semi_lattice.decode(encoding);
+  }
+
+  Element decode_lower(const Encoding& encoding) const {
+    return m_lower_semi_lattice.decode(encoding);
+  }
+
+  bool is_bottom(const Encoding& x) const override { return x.all(); }
+
+  bool is_top(const Encoding& x) const override { return x.count() == 1; }
+
+  bool equals(const Encoding& x, const Encoding& y) const override {
+    return x == y;
+  }
+
+  bool leq(const Encoding& x, const Encoding& y) const override {
+    return (x & y) == y;
+  }
+
+  Encoding join(const Encoding& x, const Encoding& y) const override {
+    return x & y;
+  }
+
+  Encoding meet(const Encoding& x, const Encoding& y) const override {
+    // In order to perform the Meet, we need to calculate corresponding lower
+    // semi-lattice encoding, and switch back to opposite semi-lattice encoding
+    // before returning.
+    auto x_lower = get_lower_encoding(x);
+    auto y_lower = get_lower_encoding(y);
+    Encoding lower_encoding = x_lower & y_lower;
+    return get_opposite_encoding(lower_encoding);
+  }
+
+  Encoding bottom() const override { return m_opposite_semi_lattice.bottom(); }
+
+  Encoding top() const override { return m_opposite_semi_lattice.top(); }
+
+ private:
+  Encoding get_lower_encoding(const Encoding& x) const {
+    const Element& element = decode(x);
+    return m_lower_semi_lattice.encode(element);
+  }
+
+  Encoding get_opposite_encoding(const Encoding& x) const {
+    const Element& element = decode_lower(x);
+    return m_opposite_semi_lattice.encode(element);
+  }
+
+  fad_impl::BitVectorSemiLattice<Element,
+                                 cardinality,
+                                 /* construct_opposite_lattice */ false,
+                                 Hash,
+                                 Equal>
+      m_lower_semi_lattice;
+  fad_impl::BitVectorSemiLattice<Element,
+                                 cardinality,
+                                 /* construct_opposite_lattice */ true,
+                                 Hash,
+                                 Equal>
+      m_opposite_semi_lattice;
+};
 
 namespace fad_impl {
 
@@ -394,110 +510,5 @@ class BitVectorSemiLattice final {
 };
 
 } // namespace fad_impl
-
-/*
- * A lattice maintains two semi-lattices internally, always use opposite
- * semi-lattice representation and calculate corresponding lower semi-lattice
- * when needed
- */
-template <typename Element,
-          size_t cardinality,
-          typename Hash = std::hash<Element>,
-          typename Equal = std::equal_to<Element>>
-class BitVectorLattice final
-    : public LatticeEncoding<Element, std::bitset<cardinality>> {
- public:
-  using Encoding = std::bitset<cardinality>;
-
-  ~BitVectorLattice() {
-    // The destructor is the only method that is guaranteed to be created when a
-    // class template is instantiated. This is a good place to perform all the
-    // sanity checks on the template parameters.
-    static_assert(std::is_default_constructible<Element>::value,
-                  "Element is not default constructible");
-    static_assert(std::is_copy_constructible<Element>::value,
-                  "Element is not copy constructible");
-    static_assert(std::is_copy_assignable<Element>::value,
-                  "Element is not copy assignable");
-  }
-
-  BitVectorLattice() = delete;
-
-  BitVectorLattice(
-      std::initializer_list<Element> elements,
-      std::initializer_list<std::pair<Element, Element>> hasse_diagram)
-      : m_lower_semi_lattice(elements, hasse_diagram),
-        m_opposite_semi_lattice(elements, hasse_diagram) {}
-
-  Encoding encode(const Element& element) const override {
-    // In a standard fixpoint computation the Join is by far the dominant
-    // operation. Hence, we favor the opposite semi-lattice encoding whenever we
-    // construct a domain element.
-    return m_opposite_semi_lattice.encode(element);
-  }
-
-  // Default use opposite semi-lattice for decoding.
-  Element decode(const Encoding& encoding) const override {
-    return m_opposite_semi_lattice.decode(encoding);
-  }
-
-  Element decode_lower(const Encoding& encoding) const {
-    return m_lower_semi_lattice.decode(encoding);
-  }
-
-  bool is_bottom(const Encoding& x) const override { return x.all(); }
-
-  bool is_top(const Encoding& x) const override { return x.count() == 1; }
-
-  bool equals(const Encoding& x, const Encoding& y) const override {
-    return x == y;
-  }
-
-  bool leq(const Encoding& x, const Encoding& y) const override {
-    return (x & y) == y;
-  }
-
-  Encoding join(const Encoding& x, const Encoding& y) const override {
-    return x & y;
-  }
-
-  Encoding meet(const Encoding& x, const Encoding& y) const override {
-    // In order to perform the Meet, we need to calculate corresponding lower
-    // semi-lattice encoding, and switch back to opposite semi-lattice encoding
-    // before returning.
-    auto x_lower = get_lower_encoding(x);
-    auto y_lower = get_lower_encoding(y);
-    Encoding lower_encoding = x_lower & y_lower;
-    return get_opposite_encoding(lower_encoding);
-  }
-
-  Encoding bottom() const override { return m_opposite_semi_lattice.bottom(); }
-
-  Encoding top() const override { return m_opposite_semi_lattice.top(); }
-
- private:
-  Encoding get_lower_encoding(const Encoding& x) const {
-    const Element& element = decode(x);
-    return m_lower_semi_lattice.encode(element);
-  }
-
-  Encoding get_opposite_encoding(const Encoding& x) const {
-    const Element& element = decode_lower(x);
-    return m_opposite_semi_lattice.encode(element);
-  }
-
-  fad_impl::BitVectorSemiLattice<Element,
-                                 cardinality,
-                                 /* construct_opposite_lattice */ false,
-                                 Hash,
-                                 Equal>
-      m_lower_semi_lattice;
-  fad_impl::BitVectorSemiLattice<Element,
-                                 cardinality,
-                                 /* construct_opposite_lattice */ true,
-                                 Hash,
-                                 Equal>
-      m_opposite_semi_lattice;
-};
 
 } // namespace sparta
