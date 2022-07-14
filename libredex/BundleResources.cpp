@@ -1045,6 +1045,35 @@ void change_resource_id_in_value_reference(
   }
 }
 
+// Copy given entry to a new entry and remap id. Caller will take ownership of
+// the allocated data.
+aapt::pb::Entry* new_remapped_entry(
+    const aapt::pb::Entry& entry,
+    uint32_t res_id,
+    const std::map<uint32_t, uint32_t>& old_to_new) {
+  auto copy_entry = new aapt::pb::Entry(entry);
+  if (old_to_new.count(res_id)) {
+    uint32_t new_res_id = old_to_new.at(res_id);
+    uint32_t new_entry_id = ENTRY_MASK_BIT & new_res_id;
+    always_assert_log(copy_entry->has_entry_id(),
+                      "Entry doesn't have id: %s",
+                      copy_entry->DebugString().c_str());
+    auto entry_id = copy_entry->mutable_entry_id();
+    entry_id->set_id(new_entry_id);
+    auto config_value_size = copy_entry->config_value_size();
+    for (int i = 0; i < config_value_size; ++i) {
+      auto config_value = copy_entry->mutable_config_value(i);
+      always_assert_log(config_value->has_value(),
+                        "ConfigValue doesn't have value: %s\nEntry:\n%s",
+                        config_value->DebugString().c_str(),
+                        copy_entry->DebugString().c_str());
+      auto value = config_value->mutable_value();
+      change_resource_id_in_value_reference(old_to_new, value);
+    }
+  }
+  return copy_entry;
+}
+
 void remove_or_change_resource_ids(
     const std::unordered_set<uint32_t>& ids_to_remove,
     const std::map<uint32_t, uint32_t>& old_to_new,
@@ -1057,26 +1086,7 @@ void remove_or_change_resource_ids(
     if (ids_to_remove.count(res_id)) {
       continue;
     }
-    auto copy_entry = new aapt::pb::Entry(entry);
-    if (old_to_new.count(res_id)) {
-      uint32_t new_res_id = old_to_new.at(res_id);
-      uint32_t new_entry_id = ENTRY_MASK_BIT & new_res_id;
-      always_assert_log(copy_entry->has_entry_id(),
-                        "Entry don't have id %s",
-                        copy_entry->DebugString().c_str());
-      auto entry_id = copy_entry->mutable_entry_id();
-      entry_id->set_id(new_entry_id);
-      auto config_value_size = copy_entry->config_value_size();
-      for (int i = 0; i < config_value_size; ++i) {
-        auto config_value = copy_entry->mutable_config_value(i);
-        always_assert_log(config_value->has_value(),
-                          "ConfigValue don't have value %s\nEntry:\n%s",
-                          config_value->DebugString().c_str(),
-                          copy_entry->DebugString().c_str());
-        auto value = config_value->mutable_value();
-        change_resource_id_in_value_reference(old_to_new, value);
-      }
-    }
+    auto copy_entry = new_remapped_entry(entry, res_id, old_to_new);
     new_entries.AddAllocated(copy_entry);
   }
   type->clear_entry();
@@ -1294,8 +1304,53 @@ void ResourcesPbFile::remap_res_ids_and_serialize(
           for (int i = 0; i < package_size; i++) {
             auto package = pb_restable.mutable_package(i);
             auto current_package_id = package->package_id().id();
-            int type_size = package->type_size();
-            for (int j = 0; j < type_size; j++) {
+            int original_type_size = package->type_size();
+            // Apply newly added types. Source res ids must have their data
+            // remapped, according to the given map, which we will do based off
+            // of the cached "ConfigValues" map.
+            for (auto& type_def : m_added_types) {
+              if (type_def.package_id == current_package_id) {
+                TRACE(RES, 9, "Appending type %s (ID 0x%x) to package 0x%x",
+                      type_def.name.c_str(), type_def.type_id,
+                      type_def.package_id);
+                auto new_type = package->add_type();
+                new_type->set_name(type_def.name);
+                new_type->mutable_type_id()->set_id(type_def.type_id);
+
+                google::protobuf::RepeatedPtrField<aapt::pb::Entry> new_entries;
+                size_t current_entry_id = 0;
+                for (const auto& source_id : type_def.source_res_ids) {
+                  auto& source_name = id_to_name.at(source_id);
+                  auto& source_config_values =
+                      m_res_id_to_configvalue.at(source_id);
+
+                  auto source_entry = std::make_shared<aapt::pb::Entry>();
+                  // Entry id needs to really just be the entry id, i.e. YYYY
+                  // from 0x7fXXYYYY
+                  source_entry->mutable_entry_id()->set_id(source_id & 0xFFFF);
+                  source_entry->set_name(source_name);
+                  source_entry->set_allocated_visibility(
+                      new aapt::pb::Visibility(
+                          m_res_id_to_entry.at(source_id).visibility()));
+                  for (const auto& source_cv : source_config_values) {
+                    auto new_config_value = source_entry->add_config_value();
+                    new_config_value->set_allocated_config(
+                        new aapt::pb::Configuration(source_cv.config()));
+                    new_config_value->set_allocated_value(
+                        new aapt::pb::Value(source_cv.value()));
+                  }
+                  auto remapped_entry =
+                      new_remapped_entry(*source_entry, source_id, old_to_new);
+                  remapped_entry->mutable_entry_id()->set_id(
+                      current_entry_id++);
+                  new_entries.AddAllocated(remapped_entry);
+                }
+                new_type->clear_entry();
+                new_type->mutable_entry()->Swap(&new_entries);
+              }
+            }
+            // Remap and apply deletions for the original types in the table.
+            for (int j = 0; j < original_type_size; j++) {
               auto type = package->mutable_type(j);
               remove_or_change_resource_ids(m_ids_to_remove, old_to_new,
                                             current_package_id, type);
@@ -1700,6 +1755,7 @@ void ResourcesPbFile::collect_resource_data_for_file(
               m_existed_res_ids.emplace(current_resource_id);
               id_to_name.emplace(current_resource_id, name_string);
               name_to_ids[name_string].push_back(current_resource_id);
+              m_res_id_to_entry.emplace(current_resource_id, pb_entry);
               m_res_id_to_configvalue.emplace(current_resource_id,
                                               pb_entry.config_value());
             }

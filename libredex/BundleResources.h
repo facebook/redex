@@ -82,6 +82,7 @@ class ResourcesPbFile : public ResourceTableFile {
  private:
   std::map<uint32_t, std::string> m_type_id_to_names;
   std::unordered_set<uint32_t> m_existed_res_ids;
+  std::map<uint32_t, const aapt::pb::Entry> m_res_id_to_entry;
   std::map<uint32_t, const ConfigValues> m_res_id_to_configvalue;
   std::map<uint32_t, std::string> m_package_id_to_module_name;
   std::set<uint32_t> m_package_ids;
