@@ -217,6 +217,24 @@ class State(object):
         self.zip_manager = zip_manager
 
 
+class RedexRunException(Exception):
+    def __init__(
+        self,
+        msg: str,
+        return_code: int,
+        abort_error: typing.Optional[str],
+        symbolized: typing.Optional[typing.List[str]],
+    ) -> None:
+        super().__init__(msg, return_code, abort_error, symbolized)
+        self.msg = msg
+        self.return_code = return_code
+        self.abort_error = abort_error
+        self.symbolized = symbolized
+
+    def __str__(self) -> str:
+        return self.msg
+
+
 def run_redex_binary(
     state: State,
     exception_formatter: ExceptionMessageFormatter,
@@ -342,15 +360,18 @@ def run_redex_binary(
                 return
 
             # Check for crash traces.
-            bintools.maybe_addr2line(err_out)
+            symbolized = bintools.maybe_addr2line(err_out)
+            if symbolized:
+                sys.stderr.write("\n")
+                sys.stderr.write("\n".join(symbolized))
+                sys.stderr.write("\n")
 
             abort_error = None
             if returncode == -6:  # SIGABRT
                 abort_error = bintools.find_abort_error(err_out)
-            abort_error = "\n" + abort_error if abort_error else ""
 
             default_error_msg = "redex-all crashed with exit code {}!{}".format(
-                returncode, abort_error
+                returncode, "\n" + abort_error if abort_error else ""
             )
             if IS_WINDOWS:
                 raise RuntimeError(default_error_msg)
@@ -362,9 +383,12 @@ def run_redex_binary(
                 "lldb", state.args.debug_source_root, args
             )
             msg = exception_formatter.format_message(
-                err_out, default_error_msg, gdb_script_name, lldb_script_name
+                err_out,
+                default_error_msg,
+                gdb_script_name,
+                lldb_script_name,
             )
-            raise RuntimeError(msg)
+            raise RedexRunException(msg, returncode, abort_error, symbolized)
 
     # Our CI system occasionally fails because it is trying to write the
     # redex-all binary when this tries to run.  This shouldn't happen, and

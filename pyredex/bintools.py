@@ -84,9 +84,7 @@ def _symbolize(filename: str, offset: str) -> typing.List[str]:
         return ["<addr2line error>"]
 
 
-def maybe_addr2line(
-    lines: typing.Iterable[str], out: typing.TextIO = sys.stderr
-) -> None:
+def maybe_addr2line(lines: typing.Iterable[str]) -> typing.Optional[typing.List[str]]:
     global _BACKTRACE_PATTERN
 
     # Generate backtrace lines.
@@ -101,28 +99,28 @@ def maybe_addr2line(
     matches_gen = find_matches()
     first_elem = next(matches_gen, None)
     if first_elem is None:
-        return
+        return None
     matches_gen = itertools.chain([first_elem], matches_gen)
 
     if not _has_addr2line():
-        out.write("Addr2line not found!\n")
-        return
-    out.write("\n")
+        sys.stderr.write("Addr2line not found!\n")
+        return None
+    ret = []
 
     for m in matches_gen:
         if _should_skip_line(m.string):
             continue
 
-        out.write("%s(%s)[%s]\n" % (m.group(1), m.group(2), m.group(3)))
+        ret.append("%s(%s)[%s]" % (m.group(1), m.group(2), m.group(3)))
         decoded = _symbolize(m.group(1), m.group(3))
         for idx, line in enumerate(decoded):
             line = line.strip()
             if _should_skip_line(line):
                 continue
 
-            out.write(f'{"  " * (1 if idx % 2 == 0 else 2)}{line}\n')
+            ret.append(f'{"  " * (1 if idx % 2 == 0 else 2)}{line}')
 
-    out.write("\n")
+    return ret
 
 
 def find_abort_error(lines: typing.Iterable[str]) -> typing.Optional[str]:
