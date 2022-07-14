@@ -163,6 +163,7 @@ libredex_la_SOURCES = \
 	libredex/VirtualScope.cpp \
 	libredex/Warning.cpp \
 	libredex/WorkQueue.cpp \
+	libresource/Locale.cpp \
 	libresource/LocaleData.cpp \
 	libresource/ResourceTypes.cpp \
 	libresource/Serialize.cpp \
