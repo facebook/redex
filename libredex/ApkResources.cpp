@@ -1950,8 +1950,27 @@ void ResourcesArscFile::walk_references_for_resource(
   }
 }
 
+void ResourcesArscFile::get_configurations(
+    uint32_t package_id,
+    const std::string& name,
+    std::vector<android::ResTable_config>* configs) {
+  auto& table_snapshot = get_table_snapshot();
+  table_snapshot.get_configurations(package_id, name, configs);
+}
+
+std::set<android::ResTable_config> ResourcesArscFile::get_configs_with_values(
+    uint32_t id) {
+  auto& table_snapshot = get_table_snapshot();
+  return table_snapshot.get_configs_with_values(id);
+}
+
 void ResourcesArscFile::delete_resource(uint32_t res_id) {
   m_ids_to_remove.emplace(res_id);
+}
+
+size_t ResourcesArscFile::package_count() {
+  auto& table_snapshot = get_table_snapshot();
+  return table_snapshot.package_count();
 }
 
 void ResourcesArscFile::collect_resid_values_and_hashes(
@@ -2169,6 +2188,11 @@ void ResourcesArscFile::remap_ids(
   // Note: file is opened for writing. Visitor will in place change the data
   // (without altering any data sizes).
   remapper.visit(m_f.data(), m_arsc_len);
+}
+
+void ResourcesArscFile::get_type_names(std::vector<std::string>* type_names) {
+  auto& table_snapshot = get_table_snapshot();
+  table_snapshot.get_type_names(APPLICATION_PACKAGE, type_names);
 }
 
 std::unordered_set<uint32_t> ResourcesArscFile::get_types_by_name(

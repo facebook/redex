@@ -237,10 +237,12 @@ class ResourcesArscFile : public ResourceTableFile {
       const std::unordered_set<std::string>& keep_resource_prefixes) override;
   size_t serialize();
 
+  size_t package_count() override;
   void collect_resid_values_and_hashes(
       const std::vector<uint32_t>& ids,
       std::map<size_t, std::vector<uint32_t>>* res_by_hash) override;
   bool resource_value_identical(uint32_t a_id, uint32_t b_id) override;
+  void get_type_names(std::vector<std::string>* type_names) override;
   std::unordered_set<uint32_t> get_types_by_name(
       const std::unordered_set<std::string>& type_names) override;
   std::unordered_set<uint32_t> get_types_by_name_prefixes(
@@ -267,6 +269,12 @@ class ResourcesArscFile : public ResourceTableFile {
       std::unordered_set<uint32_t>* nodes_visited,
       std::unordered_set<std::string>* potential_file_paths) override;
   uint64_t resource_value_count(uint32_t res_id) override;
+  void get_configurations(
+      uint32_t package_id,
+      const std::string& name,
+      std::vector<android::ResTable_config>* configs) override;
+  std::set<android::ResTable_config> get_configs_with_values(
+      uint32_t id) override;
   // Takes effect during serialization, in which new type spec, type data
   // structures will be appended to the package, with entry/value data copied
   // from the given ids. Actual type data in the resulting file will be emitted

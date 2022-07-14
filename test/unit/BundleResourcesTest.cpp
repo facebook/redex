@@ -15,6 +15,7 @@
 #include "RedexResources.h"
 #include "RedexTestUtils.h"
 #include "Trace.h"
+#include "androidfw/ResourceTypes.h"
 
 using namespace boost::filesystem;
 
@@ -508,4 +509,43 @@ TEST(BundleResources, ObfuscateResourcesName) {
     EXPECT_EQ(files.size(), 1);
     EXPECT_EQ(*files.begin(), "base/res/a.png");
   });
+}
+
+TEST(BundleResources, GetConfigurations) {
+  setup_resources_and_run(
+      [&](const std::string& /* unused */, BundleResources* resources) {
+        auto res_table = resources->load_res_table();
+        EXPECT_EQ(res_table->package_count(), 1);
+        std::vector<android::ResTable_config> configs;
+        res_table->get_configurations(0x7f, "color", &configs);
+        EXPECT_EQ(configs.size(), 2);
+        EXPECT_STREQ(configs[0].toString().c_str(), "");
+        EXPECT_STREQ(configs[1].toString().c_str(), "night");
+        configs.clear();
+        res_table->get_configurations(0x7f, "dimen", &configs);
+        EXPECT_EQ(configs.size(), 2);
+        EXPECT_STREQ(configs[0].toString().c_str(), "");
+        EXPECT_STREQ(configs[1].toString().c_str(), "land");
+        configs.clear();
+        res_table->get_configurations(0x7f, "nope", &configs);
+        EXPECT_EQ(configs.size(), 0);
+      });
+}
+
+TEST(BundleResources, GetConfigsWithValue) {
+  setup_resources_and_run(
+      [&](const std::string& /* unused */, BundleResources* resources) {
+        auto res_table = resources->load_res_table();
+        EXPECT_EQ(res_table->package_count(), 1);
+        auto config_set = res_table->get_configs_with_values(0x7f04000f);
+        EXPECT_EQ(config_set.size(), 1);
+        EXPECT_STREQ(config_set.begin()->toString().c_str(), "land");
+
+        auto another_set = res_table->get_configs_with_values(0x7f030002);
+        EXPECT_EQ(another_set.size(), 2);
+        auto it = another_set.begin();
+        EXPECT_STREQ(it->toString().c_str(), "");
+        it++;
+        EXPECT_STREQ(it->toString().c_str(), "night");
+      });
 }

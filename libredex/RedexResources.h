@@ -101,10 +101,19 @@ class ResourceTableFile {
  public:
   virtual ~ResourceTableFile() {}
 
+  virtual size_t package_count() = 0;
   virtual void collect_resid_values_and_hashes(
       const std::vector<uint32_t>& ids,
       std::map<size_t, std::vector<uint32_t>>* res_by_hash) = 0;
   virtual bool resource_value_identical(uint32_t a_id, uint32_t b_id) = 0;
+  // Fill the given vector with the names of types in the resource table, using
+  // .apk conventions for numbering such that the zeroth element of the vector
+  // is the name of type ID 0x1, 1st element of the vector is the name of type
+  // ID 0x2, etc. To make this numbering scheme work, non-contiguous type IDs
+  // will need to put placeholder/empty strings in the output vector.
+  // This API is wonky, but meant to mimic iterating over the .arsc file type
+  // string pool and how that would behave.
+  virtual void get_type_names(std::vector<std::string>* type_names) = 0;
   virtual std::unordered_set<uint32_t> get_types_by_name(
       const std::unordered_set<std::string>& type_names) = 0;
   virtual std::unordered_set<uint32_t> get_types_by_name_prefixes(
@@ -159,6 +168,19 @@ class ResourceTableFile {
 
   // Mainly used by test to check if a resource has been nullified
   virtual uint64_t resource_value_count(uint32_t res_id) = 0;
+
+  // For a given package and type name (i.e. "drawable", "layout", etc) return
+  // the configurations of that type. Data that is outputted may require
+  // conversion, which will happen internally, so do not use reference equality
+  // on the result.
+  virtual void get_configurations(
+      uint32_t package_id,
+      const std::string& name,
+      std::vector<android::ResTable_config>* configs) = 0;
+
+  // For a given resource ID, return the configs for which the value is nonempty
+  virtual std::set<android::ResTable_config> get_configs_with_values(
+      uint32_t id) = 0;
 
   // Return the resource ids based on the given resource name.
   std::vector<uint32_t> get_res_ids_by_name(const std::string& name) const {

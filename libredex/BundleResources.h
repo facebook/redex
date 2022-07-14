@@ -18,6 +18,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "androidfw/ResourceTypes.h"
 #include "protores/Resources.pb.h"
 #include <google/protobuf/repeated_field.h>
 
@@ -26,6 +27,7 @@ using ConfigValues = google::protobuf::RepeatedPtrField<aapt::pb::ConfigValue>;
 class ResourcesPbFile : public ResourceTableFile {
  public:
   ~ResourcesPbFile() override;
+  size_t package_count() override;
   void collect_resid_values_and_hashes(
       const std::vector<uint32_t>& ids,
       std::map<size_t, std::vector<uint32_t>>* res_by_hash) override;
@@ -41,6 +43,7 @@ class ResourcesPbFile : public ResourceTableFile {
       const std::vector<std::string>& resource_files,
       const std::map<uint32_t, uint32_t>& old_to_new) override;
   bool resource_value_identical(uint32_t a_id, uint32_t b_id) override;
+  void get_type_names(std::vector<std::string>* type_names) override;
   std::unordered_set<uint32_t> get_types_by_name(
       const std::unordered_set<std::string>& type_names) override;
   std::unordered_set<uint32_t> get_types_by_name_prefixes(
@@ -62,6 +65,12 @@ class ResourcesPbFile : public ResourceTableFile {
       const std::map<std::string, std::string>& filepath_old_to_new,
       const std::unordered_set<uint32_t>& allowed_types,
       const std::unordered_set<std::string>& keep_resource_prefixes) override;
+  void get_configurations(
+      uint32_t package_id,
+      const std::string& name,
+      std::vector<android::ResTable_config>* configs) override;
+  std::set<android::ResTable_config> get_configs_with_values(
+      uint32_t id) override;
 
   const std::map<uint32_t, const ConfigValues>& get_res_id_to_configvalue()
       const {
@@ -71,12 +80,12 @@ class ResourcesPbFile : public ResourceTableFile {
   std::string resolve_module_name_for_package_id(uint32_t package_id);
 
  private:
-  uint32_t m_package_id = 0xFFFFFFFF;
   std::map<uint32_t, std::string> m_type_id_to_names;
   std::unordered_set<uint32_t> m_existed_res_ids;
   std::map<uint32_t, const ConfigValues> m_res_id_to_configvalue;
   std::map<uint32_t, std::string> m_package_id_to_module_name;
   std::unordered_set<uint32_t> m_ids_to_remove;
+  std::set<uint32_t> m_package_ids;
 };
 
 class BundleResources : public AndroidResources {
