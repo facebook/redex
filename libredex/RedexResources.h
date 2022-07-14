@@ -24,6 +24,7 @@
 
 #include "androidfw/ResourceTypes.h"
 
+#include "Debug.h"
 #include "RedexMappedFile.h"
 
 const char* const ONCLICK_ATTRIBUTE = "android:onClick";
@@ -33,6 +34,17 @@ const char* const RESOURCE_NAME_REMOVED = "(name removed)";
 
 const uint32_t PACKAGE_RESID_START = 0x7f000000;
 const uint32_t APPLICATION_PACKAGE = 0x7f;
+
+namespace resources {
+// Holder object for details about a type that is pending creation.
+struct TypeDefinition {
+  uint32_t package_id;
+  uint8_t type_id;
+  std::string name;
+  std::vector<android::ResTable_config*> configs;
+  std::vector<uint32_t> source_res_ids;
+};
+} // namespace resources
 
 /*
  * These are all the components which may contain references to Java classes in
@@ -182,6 +194,24 @@ class ResourceTableFile {
   virtual std::set<android::ResTable_config> get_configs_with_values(
       uint32_t id) = 0;
 
+  // Takes effect during serialization. Appends a new type with the given
+  // details (id, name) to the package. It will contain types with the given
+  // configs and use existing resource entry/value data of "source_res_ids" to
+  // populate this new type. Actual type data in the resulting file will be
+  // emitted in the order as the given configs.
+  void define_type(uint32_t package_id,
+                   uint8_t type_id,
+                   const std::string& name,
+                   const std::vector<android::ResTable_config*>& configs,
+                   const std::vector<uint32_t>& source_res_ids) {
+    always_assert_log((package_id & 0xFFFFFF00) == 0,
+                      "package_id expected to have low byte set; got 0x%x",
+                      package_id);
+    resources::TypeDefinition def{package_id, type_id, name, configs,
+                                  source_res_ids};
+    m_added_types.emplace_back(std::move(def));
+  }
+
   // Return the resource ids based on the given resource name.
   std::vector<uint32_t> get_res_ids_by_name(const std::string& name) const {
     if (name_to_ids.count(name)) {
@@ -194,6 +224,9 @@ class ResourceTableFile {
   std::map<uint32_t, std::string> id_to_name;
   std::map<std::string, std::vector<uint32_t>> name_to_ids;
   bool m_nullify_removed{false};
+  // Pending changes to take effect during serialization
+  std::unordered_set<uint32_t> m_ids_to_remove;
+  std::vector<resources::TypeDefinition> m_added_types;
 
  protected:
   ResourceTableFile() {}

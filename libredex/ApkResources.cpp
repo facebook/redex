@@ -1528,10 +1528,11 @@ void project_string_mapping(
 #define POOL_FLAGS_CLEAR_SORT(pool) \
   ((pool)->isUTF8() ? android::ResStringPool_header::UTF8_FLAG : 0)
 
-void rebuild_type_strings(const uint32_t& package_id,
-                          const android::ResStringPool& string_pool,
-                          const std::vector<apk::TypeDefinition>& added_types,
-                          arsc::ResStringPoolBuilder* builder) {
+void rebuild_type_strings(
+    const uint32_t& package_id,
+    const android::ResStringPool& string_pool,
+    const std::vector<resources::TypeDefinition>& added_types,
+    arsc::ResStringPoolBuilder* builder) {
   always_assert_log(string_pool.styleCount() == 0,
                     "type strings should not have styles");
   const auto original_string_count = string_pool.size();

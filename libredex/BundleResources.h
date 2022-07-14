@@ -84,7 +84,6 @@ class ResourcesPbFile : public ResourceTableFile {
   std::unordered_set<uint32_t> m_existed_res_ids;
   std::map<uint32_t, const ConfigValues> m_res_id_to_configvalue;
   std::map<uint32_t, std::string> m_package_id_to_module_name;
-  std::unordered_set<uint32_t> m_ids_to_remove;
   std::set<uint32_t> m_package_ids;
 };
 
