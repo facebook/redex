@@ -607,6 +607,7 @@ class OptimizeEnums {
         if (all_sfield_names_contain("$SwitchMap$") ||
             all_sfield_names_contain("$EnumSwitchMapping$")) {
           generated_classes.emplace_back(cls);
+          TRACE(ENUM, 4, "generated cls %s", SHOW(cls));
         }
       }
     }
@@ -741,6 +742,11 @@ class OptimizeEnums {
     // Check the current enum corresponds.
     auto current_enum = lookup_table_to_enum.at(lookup_table);
     if (invoke_type != type::java_lang_Enum() && current_enum != invoke_type) {
+      return false;
+    }
+
+    // Check if the lookup table array field is actually populated with cases.
+    if (!generated_switch_cases.count(info.array_field)) {
       return false;
     }
     return true;
