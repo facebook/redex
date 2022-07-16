@@ -569,6 +569,8 @@ struct Stats {
   std::atomic<size_t> too_costly_irreducible_classes{0};
   std::atomic<size_t> too_costly_globally{0};
   std::atomic<size_t> expanded_ctors{0};
+  std::atomic<size_t> calls_inlined{0};
+  std::atomic<size_t> new_instances_eliminated{0};
 };
 
 // Predict what a method's deobfuscated name would be.
@@ -940,6 +942,8 @@ struct ReducedMethod {
   size_t initial_code_size;
   std::unordered_map<DexMethod*, std::unordered_set<DexType*>> inlined_methods;
   InlinableTypes types;
+  size_t calls_inlined;
+  size_t new_instances_eliminated;
 
   NetSavings get_net_savings(
       const std::unordered_set<DexType*>& irreducible_types,
@@ -993,6 +997,8 @@ class RootMethodReducer {
   bool m_is_init_or_clinit;
   DexMethod* m_method;
   const InlinableTypes& m_types;
+  size_t m_calls_inlined{0};
+  size_t m_new_instances_eliminated{0};
 
  public:
   RootMethodReducer(
@@ -1025,8 +1031,9 @@ class RootMethodReducer {
     }
 
     shrink();
-    return (ReducedMethod){m_method, initial_code_size,
-                           std::move(m_inlined_methods), m_types};
+    return (ReducedMethod){
+        m_method, initial_code_size, std::move(m_inlined_methods),
+        m_types,  m_calls_inlined,   m_new_instances_eliminated};
   }
 
  private:
@@ -1041,6 +1048,7 @@ class RootMethodReducer {
 
   bool inline_insns(const std::unordered_set<IRInstruction*>& insns) {
     auto inlined = m_inliner.inline_callees(m_method, insns);
+    m_calls_inlined += inlined;
     return inlined == insns.size();
   }
 
@@ -1372,6 +1380,7 @@ class RootMethodReducer {
     // simplify to prune now unreachable code, e.g. from removed exception
     // handlers
     cfg.simplify();
+    m_new_instances_eliminated++;
     return true;
   }
 
@@ -1670,6 +1679,9 @@ void reduce(DexStoresVector& stores,
         if (it != selected_reduced_methods.end()) {
           auto& reduced_method = reduced_methods_variants.at(it->second);
           method->set_code(reduced_method.method->release_code());
+          stats->calls_inlined += reduced_method.calls_inlined;
+          stats->new_instances_eliminated +=
+              reduced_method.new_instances_eliminated;
         }
         stats->reduced_methods_variants += reduced_methods_variants.size();
         for (auto& reduced_method : reduced_methods_variants) {
@@ -1724,7 +1736,8 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
         "%zu invokes not inlinable because inlining failed, %zu invokes not "
         "inlinable after too many iterations, %zu stackify returned objects, "
         "%zu too costly with irreducible classes, %zu too costly with multiple "
-        "conditional classes, %zu too costly globally; %zu expanded ctors",
+        "conditional classes, %zu too costly globally; %zu expanded ctors; %zu "
+        "calls inlined; %zu new-instances eliminated",
         root_methods.size(), (size_t)stats.reduced_methods,
         (size_t)stats.reduced_methods_variants,
         (size_t)stats.selected_reduced_methods,
@@ -1738,7 +1751,8 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
         (size_t)stats.stackify_returns_objects,
         (size_t)stats.too_costly_irreducible_classes,
         (size_t)stats.too_costly_multiple_conditional_classes,
-        (size_t)stats.too_costly_globally, (size_t)stats.expanded_ctors);
+        (size_t)stats.too_costly_globally, (size_t)stats.expanded_ctors,
+        (size_t)stats.calls_inlined, (size_t)stats.new_instances_eliminated);
 
   mgr.incr_metric("total_savings", stats.total_savings);
   mgr.incr_metric("root_methods", root_methods.size());
@@ -1772,6 +1786,9 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric("root_method_too_costly_irreducible_classes",
                   (size_t)stats.too_costly_irreducible_classes);
   mgr.incr_metric("expanded_ctors", (size_t)stats.expanded_ctors);
+  mgr.incr_metric("calls_inlined", (size_t)stats.calls_inlined);
+  mgr.incr_metric("new_instances_eliminated",
+                  (size_t)stats.new_instances_eliminated);
 }
 
 static ObjectEscapeAnalysisPass s_pass;
