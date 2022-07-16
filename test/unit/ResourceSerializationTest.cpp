@@ -109,6 +109,7 @@ void write_to_file(const std::string& output_path,
 // with all our shenanigans going on :) ;)
 std::vector<std::string> aapt_dump_helper(const std::string& arsc_path) {
   std::string arsc_dumper_bin(std::getenv("arsc_dumper_bin"));
+  std::cerr << "Using aapt at: " << std::getenv("aapt_path") << std::endl;
   boost::process::ipstream is;
   boost::process::child c(
       arsc_dumper_bin,
@@ -155,13 +156,62 @@ struct ParsedAaptOutput {
       config_to_simple_values;
   std::map<std::string, std::map<uint32_t, ComplexEntry>>
       config_to_complex_values;
+  // Original output data from the dump command. Dumped to stderr when an assert
+  // fails.
+  std::vector<std::string> lines;
+
+  void dump() {
+    std::cerr << std::endl << "Dump command output:" << std::endl;
+    for (const auto& line : lines) {
+      std::cerr << line << std::endl;
+    }
+    std::cerr << std::endl
+              << "Dumping parsed package: " << package_name << std::endl
+              << "IDs (" << id_fully_qualified_names.size()
+              << "):" << std::endl;
+    for (auto& pair : id_fully_qualified_names) {
+      std::cerr << "  0x" << std::hex << pair.first << std::dec << " ("
+                << pair.second << ")" << std::endl;
+    }
+    std::cerr << "Flags (" << flags.size() << "):" << std::endl;
+    for (auto& pair : flags) {
+      std::cerr << "  0x" << std::hex << pair.first << " -> 0x" << pair.second
+                << std::dec << std::endl;
+    }
+    std::cerr << "Simple entries:" << std::endl;
+    for (auto& config_pair : config_to_simple_values) {
+      std::cerr << "  config: " << config_pair.first << std::endl;
+      for (auto& entry_pair : config_pair.second) {
+        auto& e = entry_pair.second;
+        std::cerr << "    0x" << std::hex << entry_pair.first << " (" << e.name
+                  << "): "
+                  << "t=0x" << unsigned(e.value.dataType) << " d=0x"
+                  << e.value.data << std::dec << std::endl;
+      }
+    }
+    std::cerr << "Complex entries:" << std::endl;
+    for (auto& config_pair : config_to_complex_values) {
+      std::cerr << "  config: " << config_pair.first << std::endl;
+      for (auto& entry_pair : config_pair.second) {
+        auto& e = entry_pair.second;
+        std::cerr << "    0x" << std::hex << entry_pair.first << " (" << e.name
+                  << "): Parent = 0x" << e.parent_id << std::dec << std::endl;
+        for (auto& v : e.values) {
+          std::cerr << "      key = 0x" << std::hex << v.key << " (" << v.kind
+                    << "): 0x" << v.data << std::dec << std::endl;
+        }
+      }
+    }
+  }
 
   android::Res_value get_simple_value(const std::string& config, uint32_t id) {
     if (config_to_simple_values.count(config) == 0) {
+      dump();
       throw std::runtime_error("no simple values for config: " + config);
     }
     auto& map = config_to_simple_values.at(config);
     if (map.count(id) == 0) {
+      dump();
       std::stringstream ss;
       ss << "no data for ID 0x" << std::hex << id << " in config: " << config;
       throw std::runtime_error(ss.str());
@@ -173,10 +223,12 @@ struct ParsedAaptOutput {
   std::vector<ComplexValue> get_complex_values(const std::string& config,
                                                uint32_t id) {
     if (config_to_complex_values.count(config) == 0) {
+      dump();
       throw std::runtime_error("no complex values for config: " + config);
     }
     auto& map = config_to_complex_values.at(config);
     if (map.count(id) == 0) {
+      dump();
       std::stringstream ss;
       ss << "no data for ID 0x" << std::hex << id << " in config: " << config;
       throw std::runtime_error(ss.str());
@@ -255,6 +307,7 @@ ParsedAaptOutput aapt_dump_and_parse(const std::string& arsc_path,
       "^[ ]*#[0-9]+ .Key=0x([0-9a-fA-F]+).: .([a-z0-9 ]+). #([0-9a-fA-F]+)$"};
 
   auto lines = aapt_dump_helper(arsc_path);
+  output.lines = lines;
   std::string current_config("");
   enum ComplexState { Unknown, Begin, Values };
   ComplexState state = Unknown;
@@ -270,9 +323,6 @@ ParsedAaptOutput aapt_dump_and_parse(const std::string& arsc_path,
     state = Unknown;
   };
   for (const auto& line : lines) {
-    if (verbose) {
-      std::cerr << line << std::endl;
-    }
     boost::smatch what;
     if (output.package_name.empty() &&
         boost::regex_search(line, what, package_exp)) {
@@ -335,42 +385,7 @@ ParsedAaptOutput aapt_dump_and_parse(const std::string& arsc_path,
 
   // End of parsing, optionally spew our representation to stderr.
   if (verbose) {
-    std::cerr << "Dumping parsed package: " << output.package_name << std::endl
-              << "IDs (" << output.id_fully_qualified_names.size()
-              << "):" << std::endl;
-    for (auto& pair : output.id_fully_qualified_names) {
-      std::cerr << "  0x" << std::hex << pair.first << std::dec << " ("
-                << pair.second << ")" << std::endl;
-    }
-    std::cerr << "Flags (" << output.flags.size() << "):" << std::endl;
-    for (auto& pair : output.flags) {
-      std::cerr << "  0x" << std::hex << pair.first << " -> 0x" << pair.second
-                << std::dec << std::endl;
-    }
-    std::cerr << "Simple entries:" << std::endl;
-    for (auto& config_pair : output.config_to_simple_values) {
-      std::cerr << "  config: " << config_pair.first << std::endl;
-      for (auto& entry_pair : config_pair.second) {
-        auto& e = entry_pair.second;
-        std::cerr << "    0x" << std::hex << entry_pair.first << " (" << e.name
-                  << "): "
-                  << "t=0x" << unsigned(e.value.dataType) << " d=0x"
-                  << e.value.data << std::dec << std::endl;
-      }
-    }
-    std::cerr << "Complex entries:" << std::endl;
-    for (auto& config_pair : output.config_to_complex_values) {
-      std::cerr << "  config: " << config_pair.first << std::endl;
-      for (auto& entry_pair : config_pair.second) {
-        auto& e = entry_pair.second;
-        std::cerr << "    0x" << std::hex << entry_pair.first << " (" << e.name
-                  << "): Parent = 0x" << e.parent_id << std::dec << std::endl;
-        for (auto& v : e.values) {
-          std::cerr << "      key = 0x" << std::hex << v.key << " (" << v.kind
-                    << "): 0x" << v.data << std::dec << std::endl;
-        }
-      }
-    }
+    output.dump();
   }
   return output;
 }
