@@ -1629,13 +1629,12 @@ std::unordered_map<DexMethod*, size_t> select_reduced_methods(
 void reduce(DexStoresVector& stores,
             const Scope& scope,
             ConfigFiles& conf,
+            const init_classes::InitClassesWithSideEffects&
+                init_classes_with_side_effects,
             const MethodSummaries& method_summaries,
             const std::unordered_map<DexMethod*, InlinableTypes>& root_methods,
             Stats* stats) {
   Timer t("reduce");
-  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
-      scope, conf.create_init_class_insns());
-
   ConcurrentMethodRefCache concurrent_resolved_refs;
   auto concurrent_resolver = [&](DexMethodRef* method, MethodSearch search) {
     return resolve_method(method, search, concurrent_resolved_refs);
@@ -1720,7 +1719,8 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
                                            method_summaries, inline_anchors);
 
   Stats stats;
-  reduce(stores, scope, conf, method_summaries, root_methods, &stats);
+  reduce(stores, scope, conf, init_classes_with_side_effects, method_summaries,
+         root_methods, &stats);
 
   walk::parallel::code(scope,
                        [&](DexMethod*, IRCode& code) { code.clear_cfg(); });
