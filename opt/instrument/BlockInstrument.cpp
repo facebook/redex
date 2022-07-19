@@ -1018,9 +1018,15 @@ void insert_hit_count_insts(cfg::ControlFlowGraph& cfg,
     }
 
     const size_t index_id = info.index_id;
-    cfg::Block* block = info.block;
-    const auto& insert_pos = info.it;
+    cfg::Block* prev = info.block;
     const size_t offset = index_id + hit_offset;
+
+    cfg::Block* succ =
+        cfg.split_block(prev, prev->get_first_non_param_loading_insn());
+
+    cfg::Block* block = cfg.create_block();
+    cfg.insert_block(prev, succ, block);
+    const auto& insert_pos = block->end();
 
     // Do onBlockHit instrumentation. We allocate a register that holds the
     // hit offset, which is used for all onBlockHit.

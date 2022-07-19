@@ -13,6 +13,8 @@ import static org.fest.assertions.api.Assertions.assertThat;
 import java.io.InputStream;
 import java.util.Random;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.HashMap;
 import org.junit.Test;
 import org.junit.Before;
 
@@ -750,6 +752,27 @@ public class InstrumentBasicBlockHitCount {
     }
 
     return sum;
+  }
+
+  @DoNotStrip
+  // Index: 21
+  // Stats Array Info:
+  // - Offset within Stats Array: 77
+  // - Number of Bit-Vectors: 1
+  // - Bit-Vector 0: [13,15,14,12,11,10,9,8,7,6,5,4,3,2,1]
+  // Hits Array Info:
+  // - Offset within Hits Array: 120
+  // - Number of Loop Blocks: 7
+  // - Array Order: [6,7,8,9,10,11,12]
+  public synchronized int testFunc22(String id, HashMap<String, HashSet<Integer>> maps) {
+    HashSet<Integer> intSet = maps.get(id);
+    int total = 0;
+    if (intSet != null) {
+      for (int i : intSet) {
+        total += i;
+      }
+    }
+    return total;
   }
 
   @Before
@@ -1700,4 +1723,83 @@ public class InstrumentBasicBlockHitCount {
     }
   }
 
+  @Test
+  @DoNotStrip
+  public void test30() {
+    int i = 0;
+    int j = 0;
+    String inp = "";
+    HashMap<String, HashSet<Integer>> maps = new HashMap<>();
+    for(i = 0; i < 5; i++) {
+      HashSet<Integer> intSet = new HashSet<>();
+      for(j = 0; j < 10; j++) {
+        intSet.add(j);
+      }
+      inp = inp + "a";
+      maps.put(inp, intSet);
+    }
+
+    // Start Tracing Information and run Function before stopping
+    InstrumentBasicBlockAnalysis.startTracing();
+    testFunc22("aaa", maps);
+    InstrumentBasicBlockAnalysis.stopTracing();
+
+    // Get Stats from Instrument Analysis
+    short[] stats = InstrumentBasicBlockAnalysis.getStats();
+    int[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
+
+    // Assert that the offset in the statsArray is 77 and
+    // hit offset in hitsArray is 120
+    assertThat(MetadataParser.getOffset("testFunc22")).isEqualTo(77);
+    assertThat(MetadataParser.getHitOffset("testFunc22")).isEqualTo(120);
+
+    // Assert that TestFunc22 has hit count of [1,0,0,10,10,10,10,10,11,11,1,1,1,1,1]
+    int[] blockList = {13,15,14,12,11,10,9,8,7,6,5,4,3,2,1};
+    int[] blockHitList = {1,0,0,10,10,10,10,10,11,11,1,1,1,1,1};
+
+    for(i = 0; i < blockList.length; i++) {
+      int hitValue = MetadataParser.checkBlockNumHits("testFunc22", stats, hitStats, blockList[i]);
+      assertThat(hitValue).isEqualTo(blockHitList[i]);
+    }
+  }
+
+  @Test
+  @DoNotStrip
+  public void test31() {
+    int i = 0;
+    int j = 0;
+    String inp = "";
+    HashMap<String, HashSet<Integer>> maps = new HashMap<>();
+    for(i = 0; i < 5; i++) {
+      HashSet<Integer> intSet = new HashSet<>();
+      for(j = 0; j < 10; j++) {
+        intSet.add(j);
+      }
+      inp = inp + "a";
+      maps.put(inp, intSet);
+    }
+
+    // Start Tracing Information and run Function before stopping
+    InstrumentBasicBlockAnalysis.startTracing();
+    testFunc22("b", maps);
+    InstrumentBasicBlockAnalysis.stopTracing();
+
+    // Get Stats from Instrument Analysis
+    short[] stats = InstrumentBasicBlockAnalysis.getStats();
+    int[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
+
+    // Assert that the offset in the statsArray is 77 and
+    // hit offset in hitsArray is 120
+    assertThat(MetadataParser.getOffset("testFunc22")).isEqualTo(77);
+    assertThat(MetadataParser.getHitOffset("testFunc22")).isEqualTo(120);
+
+    // Assert that TestFunc22 has hit count of [1,0,0,0,0,0,0,0,0,0,0,0,1,1,1]
+    int[] blockList = {13,15,14,12,11,10,9,8,7,6,5,4,3,2,1};
+    int[] blockHitList = {1,0,0,0,0,0,0,0,0,0,0,0,1,1,1};
+
+    for(i = 0; i < blockList.length; i++) {
+      int hitValue = MetadataParser.checkBlockNumHits("testFunc22", stats, hitStats, blockList[i]);
+      assertThat(hitValue).isEqualTo(blockHitList[i]);
+    }
+  }
 }
