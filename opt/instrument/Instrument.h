@@ -81,6 +81,8 @@ class InstrumentPass : public Pass {
     bool instrument_catches;
     bool instrument_blocks_without_source_block;
     bool instrument_only_root_store;
+    bool inline_onBlockHit;
+    bool inline_onNonLoopBlockHit;
   };
 
  private:

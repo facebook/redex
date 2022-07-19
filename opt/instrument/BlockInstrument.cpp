@@ -11,6 +11,7 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "GraphUtil.h"
+#include "Inliner.h"
 #include "LoopInfo.h"
 #include "MethodReference.h"
 #include "ScopedMetrics.h"
@@ -25,6 +26,7 @@
 #include <map>
 #include <set>
 #include <string>
+#include <tuple>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -622,7 +624,7 @@ auto insert_prologue_insts(cfg::ControlFlowGraph& cfg,
   return std::make_tuple(reg_vectors, reg_method_offset, reg_hit_offset);
 }
 
-size_t insert_onMethodExit_calls(
+std::tuple<size_t, std::vector<IRInstruction*>> insert_onMethodExit_calls(
     cfg::ControlFlowGraph& cfg,
     const std::vector<reg_t>& reg_vectors, // May be empty
     const size_t method_offset,
@@ -631,10 +633,12 @@ size_t insert_onMethodExit_calls(
     const size_t max_vector_arity,
     const std::vector<short>& loop_shorts,
     const InstrumentPass::Options& options) {
+  std::vector<IRInstruction*> invokes;
+  size_t num_exit_blocks = 0;
   // If reg_vectors is emptry (methods with a single entry block), no need to
   // instrument onMethodExit.
   if (reg_vectors.empty()) {
-    return 0;
+    return std::make_tuple(num_exit_blocks, invokes);
   }
 
   // When a method exits, we call onMethodExit to pass all vectors to record.
@@ -677,6 +681,7 @@ size_t insert_onMethodExit_calls(
     // This code works in case of num_invokes == 1.
     std::vector<IRInstruction*> invoke_insts((num_invokes * 2 - 1) +
                                              num_vectors);
+    std::vector<IRInstruction*> invoke_inline(num_invokes);
     for (size_t j = 0; j < num_vectors; ++j) {
       const reg_t& reg = reg_vectors[j];
       short vec = loop_shorts[j];
@@ -704,6 +709,7 @@ size_t insert_onMethodExit_calls(
         inst->set_src(j + 1, reg_vectors[max_vector_arity * i + j]);
       }
       invoke_insts.at(num_vectors + (i * 2)) = inst;
+      invoke_inline.at(i) = inst;
 
       if (i != num_invokes - 1) {
         inst = new IRInstruction(OPCODE_CONST);
@@ -714,7 +720,7 @@ size_t insert_onMethodExit_calls(
         invoke_insts.at(num_vectors + (i * 2 + 1)) = inst;
       }
     }
-    return invoke_insts;
+    return std::make_tuple(invoke_insts, invoke_inline);
   };
 
   // Which blocks should have onMethodExits? Let's ignore infinite loop cases,
@@ -760,7 +766,7 @@ size_t insert_onMethodExit_calls(
   };
 
   auto handle_instrumentation = [&cfg, &create_invoke_insts,
-                                 &create_invoke_insts_hit,
+                                 &create_invoke_insts_hit, &invokes,
                                  &options](DedupeMap& map,
                                            std::optional<reg_t>& tmp_reg,
                                            cfg::Block* b, CatchCoverage& cv,
@@ -799,8 +805,10 @@ size_t insert_onMethodExit_calls(
       // Now instrument the return.
 
       if (options.instrumentation_strategy == "basic_block_hit_count") {
+        std::vector<IRInstruction*> hit_count_insts;
+        std::tie(hit_count_insts, invokes) = create_invoke_insts_hit();
         b->insert_before(b->to_cfg_instruction_iterator(b->get_last_insn()),
-                         create_invoke_insts_hit());
+                         hit_count_insts);
       } else {
         b->insert_before(b->to_cfg_instruction_iterator(b->get_last_insn()),
                          create_invoke_insts());
@@ -852,7 +860,7 @@ size_t insert_onMethodExit_calls(
                              RegType::kObject);
     }
   }
-  return exit_blocks.size();
+  return std::make_tuple(exit_blocks.size(), invokes);
 }
 
 // Very simplistic setup: if we think we can elide putting instrumentation into
@@ -1065,11 +1073,16 @@ void insert_block_coverage_computations(const std::vector<BlockInfo>& blocks,
   }
 }
 
-void insert_hit_count_insts(cfg::ControlFlowGraph& cfg,
-                            DexMethod* onBlockHit,
-                            const size_t hit_offset,
-                            std::vector<BlockInfo>& blocks) {
+std::vector<IRInstruction*> insert_hit_count_insts(
+    cfg::ControlFlowGraph& cfg,
+    DexMethod* onBlockHit,
+    const size_t hit_offset,
+    std::vector<BlockInfo>& blocks,
+    size_t& num_loop_blocks) {
   const reg_t reg_hit_offset = cfg.allocate_temp();
+
+  std::vector<IRInstruction*> invokes(num_loop_blocks);
+  size_t index = 0;
 
   for (const auto& info : blocks) {
     if (!info.is_instrumentable() || info.loop == nullptr) {
@@ -1099,10 +1112,14 @@ void insert_hit_count_insts(cfg::ControlFlowGraph& cfg,
     invoke_inst->set_method(onBlockHit);
     invoke_inst->set_srcs_size(1);
     invoke_inst->set_src(0, reg_hit_offset);
+    invokes.at(index) = invoke_inst;
     block->insert_before(block->to_cfg_instruction_iterator(insert_pos),
                          invoke_inst);
+    index += 1;
     // TRACE(INSTRUMENT, 4, "%s\n", SHOW(info.block));
   }
+
+  return invokes;
 }
 
 MethodInfo instrument_basic_blocks(IRCode& code,
@@ -1116,6 +1133,7 @@ MethodInfo instrument_basic_blocks(IRCode& code,
                                    const size_t method_offset,
                                    const size_t hit_offset,
                                    const size_t max_num_blocks,
+                                   MultiMethodInliner& inliner,
                                    const InstrumentPass::Options& options) {
   MethodInfo info;
   info.method = method;
@@ -1207,6 +1225,7 @@ MethodInfo instrument_basic_blocks(IRCode& code,
   auto num_non_entry_blocks = cfg.blocks().size() - 1;
 
   size_t num_exit_calls;
+  std::vector<IRInstruction*> invokes;
   if (options.instrumentation_strategy == "basic_block_hit_count") {
     // Step 5: Insert block counting instructions to each loop block then
     // insert it at the very end of the function for non-loop blocks for hit
@@ -1231,18 +1250,31 @@ MethodInfo instrument_basic_blocks(IRCode& code,
       }
     }
 
-    insert_hit_count_insts(cfg, onBlockHit, hit_offset, blocks);
-    num_exit_calls = insert_onMethodExit_calls(
+    // onNonLoopBlockHit map
+    invokes = insert_hit_count_insts(cfg, onBlockHit, hit_offset, blocks,
+                                     num_instrument_loop_blocks);
+    if (options.inline_onBlockHit) {
+      TRACE(INSTRUMENT, 4, "Inline onBlockHits\n");
+      std::unordered_set<IRInstruction*> insns(invokes.begin(), invokes.end());
+      inliner.inline_callees(method, insns);
+    }
+
+    std::tie(num_exit_calls, invokes) = insert_onMethodExit_calls(
         cfg, reg_vectors, hit_offset, reg_hit_offset, onNonLoopBlockHit_map,
         max_vector_arity_hit, loop_shorts, options);
+    if (options.inline_onNonLoopBlockHit) {
+      TRACE(INSTRUMENT, 4, "Inline onNonLoopBlockHit\n");
+      std::unordered_set<IRInstruction*> insns(invokes.begin(), invokes.end());
+      inliner.inline_callees(method, insns);
+    }
   } else {
     // Step 5: Insert onMethodExit in exit block(s) if basic block tracing is
     // enabled.
     //
-    // TODO: What about no exit blocks possibly due to infinite loops? Such case
-    // is extremely rare in our apps. In this case, let us do method tracing by
-    // instrumenting prologues.
-    num_exit_calls = insert_onMethodExit_calls(
+    // TODO: What about no exit blocks possibly due to infinite loops? Such
+    // case is extremely rare in our apps. In this case, let us do method
+    // tracing by instrumenting prologues.
+    std::tie(num_exit_calls, invokes) = insert_onMethodExit_calls(
         cfg, reg_vectors, method_offset, reg_method_offset, onMethodExit_map,
         max_vector_arity, loop_shorts, options);
   }
@@ -1724,6 +1756,19 @@ void BlockInstrumentHelper::do_basic_block_tracing(
   auto cold_start_classes = get_cold_start_classes(cfg);
   TRACE(INSTRUMENT, 7, "Cold start classes: %zu", cold_start_classes.size());
 
+  // Create Buildable CFG so we can inline functions correctly.
+  if (options.inline_onBlockHit) {
+    IRCode* blockHit_code = onBlockHit->get_code();
+    blockHit_code->build_cfg(true);
+  }
+
+  if (options.inline_onNonLoopBlockHit) {
+    for (auto& en : onNonLoopBlockHit_map) {
+      IRCode* nonLoopBlockHit_code = en.second->get_code();
+      nonLoopBlockHit_code->build_cfg(true);
+    }
+  }
+
   // This method_offset is used in sMethodStats[] to locate a method profile.
   // We have a small header in the beginning of sMethodStats.
   size_t method_offset = 8;
@@ -1759,6 +1804,24 @@ void BlockInstrumentHelper::do_basic_block_tracing(
   } else {
     scope = build_class_scope(stores);
   }
+
+  // Inlining Code
+  auto method_override_graph = method_override_graph::build_graph(scope);
+  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+      scope, cfg.create_init_class_insns(), method_override_graph.get());
+
+  ConcurrentMethodRefCache concurrent_resolved_refs;
+  auto concurrent_resolver = [&](DexMethodRef* method, MethodSearch search) {
+    return resolve_method(method, search, concurrent_resolved_refs);
+  };
+
+  std::unordered_set<DexMethod*> no_default_inlinables;
+  auto inliner_config = cfg.get_inliner_config();
+  int min_sdk = pm.get_redex_options().min_sdk;
+  MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
+                             no_default_inlinables, concurrent_resolver,
+                             inliner_config, min_sdk,
+                             MultiMethodInlinerMode::None);
 
   walk::code(scope, [&](DexMethod* method, IRCode& code) {
     TraceContext trace_context(method);
@@ -1809,7 +1872,7 @@ void BlockInstrumentHelper::do_basic_block_tracing(
     instrumented_methods.emplace_back(instrument_basic_blocks(
         code, method, onMethodBegin, onMethodExit_map, onBlockHit,
         onNonLoopBlockHit_map, max_vector_arity, max_vector_arity_other,
-        method_offset, hit_offset, max_num_blocks, options));
+        method_offset, hit_offset, max_num_blocks, inliner, options));
 
     const auto& method_info = instrumented_methods.back();
     if (method_info.too_many_blocks) {
@@ -1823,6 +1886,19 @@ void BlockInstrumentHelper::do_basic_block_tracing(
     method_offset += 2 + method_info.num_vectors;
     hit_offset += method_info.num_hit_blocks;
   });
+
+  // Destroy the CFG because we are done Instrumenting
+  if (options.inline_onBlockHit) {
+    IRCode* blockHit_code = onBlockHit->get_code();
+    blockHit_code->clear_cfg();
+  }
+
+  if (options.inline_onNonLoopBlockHit) {
+    for (auto& en : onNonLoopBlockHit_map) {
+      IRCode* nonLoopBlockHit_code = en.second->get_code();
+      nonLoopBlockHit_code->clear_cfg();
+    }
+  }
 
   // Patch static fields.
   const auto field_name = array_fields.at(1)->get_name()->str();

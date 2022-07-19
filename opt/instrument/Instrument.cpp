@@ -562,6 +562,8 @@ void InstrumentPass::bind_config() {
        m_options.instrument_blocks_without_source_block);
   bind("instrument_only_root_store", false,
        m_options.instrument_only_root_store);
+  bind("inline_onBlockHit", false, m_options.inline_onBlockHit);
+  bind("inline_onNonLoopBlockHit", false, m_options.inline_onNonLoopBlockHit);
 
   size_t max_analysis_methods;
   if (m_options.instrumentation_strategy == SIMPLE_METHOD_TRACING) {
@@ -1024,13 +1026,44 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
   shrinker_config.run_const_prop = true;
   shrinker_config.run_local_dce = true;
   shrinker_config.compute_pure_methods = false;
+  if (m_options.inline_onBlockHit || m_options.inline_onNonLoopBlockHit) {
+    shrinker_config.run_cse = true;
+    shrinker_config.run_copy_prop = true;
+  }
+
+  std::unordered_set<const DexString*> field_names;
+  if (m_options.inline_onBlockHit) {
+    auto* field =
+        analysis_cls->find_field_from_simple_deobfuscated_name("sHitStats");
+    field_names.insert(DexString::make_string(field->get_name()->str()));
+    field->rstate.unset_root();
+    always_assert(field->rstate.can_delete() && field->rstate.can_rename());
+
+    field =
+        analysis_cls->find_field_from_simple_deobfuscated_name("sIsEnabled");
+    field_names.insert(DexString::make_string(field->get_name()->str()));
+    field->rstate.unset_root();
+    always_assert(field->rstate.can_delete() && field->rstate.can_rename());
+
+    field = analysis_cls->find_field_from_simple_deobfuscated_name(
+        "sNumStaticallyHitsInstrumented");
+    field_names.insert(DexString::make_string(field->get_name()->str()));
+    field->rstate.unset_root();
+    always_assert(field->rstate.can_delete() && field->rstate.can_rename());
+
+    field = analysis_cls->find_field_from_simple_deobfuscated_name(
+        "sNumStaticallyInstrumented");
+    field_names.insert(DexString::make_string(field->get_name()->str()));
+    field->rstate.unset_root();
+    always_assert(field->rstate.can_delete() && field->rstate.can_rename());
+  }
 
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, cfg.create_init_class_insns());
 
   int min_sdk = pm.get_redex_options().min_sdk;
   shrinker::Shrinker shrinker(stores, scope, init_classes_with_side_effects,
-                              shrinker_config, min_sdk);
+                              shrinker_config, min_sdk, {}, field_names);
 
   {
     Timer cleanup{"Parallel Cleanup"};
