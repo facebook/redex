@@ -110,23 +110,39 @@ void write_to_file(const std::string& output_path,
 std::vector<std::string> aapt_dump_helper(const std::string& arsc_path) {
   std::string arsc_dumper_bin(std::getenv("arsc_dumper_bin"));
   std::cerr << "Using aapt at: " << std::getenv("aapt_path") << std::endl;
-  boost::process::ipstream is;
+
+  auto tmp_dir = redex::make_tmp_dir("aapt_dump_helper%%%%%%%%");
+  auto out = tmp_dir.path + "/out.txt";
+  auto err = tmp_dir.path + "/err.txt";
   boost::process::child c(
       arsc_dumper_bin,
-      boost::process::args(
-          {"--aapt", std::getenv("aapt_path"), "--arsc", arsc_path.c_str()}),
-      boost::process::std_out > is);
-
-  std::vector<std::string> data;
-  std::string line;
-  while (c.running() && std::getline(is, line) && !line.empty()) {
-    data.push_back(line);
-  }
+      boost::process::args({"--aapt", std::getenv("aapt_path"), "--arsc",
+                            arsc_path.c_str(), "--outfile", out, "--errfile",
+                            err}));
   c.wait();
   auto exit_code = c.exit_code();
   if (exit_code != 0) {
+    std::ifstream fs(err);
+    if (fs) {
+      std::string line;
+      while (std::getline(fs, line)) {
+        std::cerr << line << std::endl;
+      }
+    } else {
+      std::cerr << "Could not read dump helper errfile" << std::endl;
+    }
     throw std::runtime_error("aapt dump failed with exit code " +
                              std::to_string(exit_code));
+  }
+  std::vector<std::string> data;
+  std::ifstream fs(out);
+  if (fs) {
+    std::string line;
+    while (std::getline(fs, line)) {
+      data.emplace_back(line);
+    }
+  } else {
+    std::cerr << "Could not read dump helper outfile" << std::endl;
   }
   return data;
 }

@@ -6,8 +6,8 @@
 # pyre-unsafe
 
 import argparse
+import os.path
 import subprocess
-import sys
 import tempfile
 import zipfile
 
@@ -18,11 +18,20 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--aapt", type=str, required=True)
     parser.add_argument("--arsc", type=str, required=True)
+    parser.add_argument("--outfile", type=str, required=True)
+    parser.add_argument("--errfile", type=str, required=True)
     args: argparse.Namespace = parser.parse_args()
 
-    with tempfile.NamedTemporaryFile() as file:
-        with zipfile.ZipFile(file, "w") as temp_zip:
-            temp_zip.write(args.arsc, "resources.arsc")
-        cmd = [args.aapt, "d", "--values", "resources", file.name]
-        result = subprocess.run(cmd, stdout=sys.stdout, stderr=sys.stderr)
-        exit(result.returncode)
+    with open(args.outfile, "w") as fout:
+        with open(args.errfile, "w") as ferr:
+            if not os.path.isfile(args.arsc):
+                ferr.write("arsc file does not exist: %s" % args.arsc)
+                exit(1)
+
+            with tempfile.NamedTemporaryFile() as file:
+                with zipfile.ZipFile(file, "w") as temp_zip:
+                    temp_zip.write(args.arsc, "resources.arsc")
+
+                cmd = [args.aapt, "d", "--values", "resources", file.name]
+                result = subprocess.run(cmd, stdout=fout, stderr=ferr)
+                exit(result.returncode)
