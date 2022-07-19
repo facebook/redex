@@ -175,15 +175,16 @@ public class MetadataParser{
         }
 
 
-        if (blockIndex == -1 || offset == -1 || hitOffset == -1 || blockHitIndex == -1) {
+        if (blockIndex == -1 || offset == -1) {
             return completed;
         }
 
         if (blockHitIndex == -1) {
+            int methodCount = stats[offset];
             offset += 2 + (blockIndex / 16);
             int bit = blockIndex % 16;
             int bitvector = stats[offset];
-            completed = (bitvector >> bit) & 1;
+            completed = ((bitvector >> bit) & 1) * methodCount;
         }
         else {
             hitOffset += blockHitIndex;
