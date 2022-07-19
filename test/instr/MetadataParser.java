@@ -154,7 +154,7 @@ public class MetadataParser{
     }
 
     @DoNotStrip
-    public static int checkBlockNumHits (String funcName, short[] stats, int[] hits, int block) {
+    public static int checkBlockNumHits (String funcName, short[] stats, short[] hits, int block) {
         int completed = -1;
         int blockIndex = -1;
         int blockHitIndex = -1;

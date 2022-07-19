@@ -205,6 +205,7 @@ struct MethodInfo {
   size_t hit_offset = 0;
   size_t num_non_entry_blocks = 0;
   size_t num_vectors = 0;
+  size_t num_hit_blocks = 0;
   size_t num_loop_blocks = 0;
   size_t num_exit_calls = 0;
 
@@ -229,6 +230,7 @@ struct MethodInfo {
   MethodInfo& operator+=(const MethodInfo& rhs) {
     num_non_entry_blocks += rhs.num_non_entry_blocks;
     num_vectors += rhs.num_vectors;
+    num_hit_blocks += rhs.num_hit_blocks;
     num_loop_blocks += rhs.num_loop_blocks;
     num_exit_calls += rhs.num_exit_calls;
     num_empty_blocks += rhs.num_empty_blocks;
@@ -391,7 +393,7 @@ void write_metadata(const ConfigFiles& cfg,
           std::to_string(info.num_vectors),
           write_block_id_map(info.bit_id_2_block_id),
           std::to_string(info.hit_offset),
-          std::to_string(info.num_loop_blocks),
+          std::to_string(info.num_hit_blocks),
           write_block_id_map(info.hit_id_2_block_id),
           rejected_blocks(info.rejected_blocks),
           source_blocks(info.entry_source_blocks, info.bit_id_2_source_blocks),
@@ -971,10 +973,7 @@ auto get_blocks_to_instrument(const DexMethod* m,
                                true /* too many block */);
       }
 
-      if (info->loop != nullptr) {
-        info->index_id = hit_id++;
-      }
-
+      info->index_id = hit_id++;
       info->bit_id = id++;
     }
   }
@@ -1013,7 +1012,7 @@ void insert_hit_count_insts(cfg::ControlFlowGraph& cfg,
   const reg_t reg_method_offset = cfg.allocate_temp();
 
   for (const auto& info : blocks) {
-    if (!info.is_instrumentable() || info.loop == nullptr) {
+    if (!info.is_instrumentable()) {
       continue;
     }
 
@@ -1072,9 +1071,10 @@ MethodInfo instrument_basic_blocks(IRCode& code,
   // blocks, it falls back to empty blocks, which is method tracing.
   std::vector<BlockInfo> blocks;
   size_t num_to_instrument;
-  size_t num_instrument_loop_blocks;
+  size_t num_instrument_hit_blocks;
+  size_t num_instrument_loop_blocks = 0;
   bool too_many_blocks;
-  std::tie(blocks, num_to_instrument, num_instrument_loop_blocks,
+  std::tie(blocks, num_to_instrument, num_instrument_hit_blocks,
            too_many_blocks) =
       get_blocks_to_instrument(method, cfg, max_num_blocks, options);
 
@@ -1085,15 +1085,16 @@ MethodInfo instrument_basic_blocks(IRCode& code,
   //         modifying the CFG.
   info.bit_id_2_block_id.reserve(num_to_instrument);
   info.bit_id_2_source_blocks.reserve(num_to_instrument);
-  info.hit_id_2_block_id.reserve(num_instrument_loop_blocks);
+  info.hit_id_2_block_id.reserve(num_instrument_hit_blocks);
   for (const auto& i : blocks) {
     if (i.is_instrumentable()) {
       info.bit_id_2_block_id.push_back(i.block->id());
-      if (i.loop != nullptr) {
-        info.hit_id_2_block_id.push_back(i.block->id());
-      }
+      info.hit_id_2_block_id.push_back(i.block->id());
       info.bit_id_2_source_blocks.emplace_back(
           source_blocks::gather_source_blocks(i.block));
+      if (i.loop != nullptr) {
+        num_instrument_loop_blocks += 1;
+      }
       for (auto* merged_block : i.merge_in) {
         auto& vec = info.bit_id_2_source_blocks.back();
         auto sb_vec = source_blocks::gather_source_blocks(merged_block);
@@ -1138,12 +1139,12 @@ MethodInfo instrument_basic_blocks(IRCode& code,
   // Gather early as step 4 may modify CFG.
   auto num_non_entry_blocks = cfg.blocks().size() - 1;
 
-  // Step 4.5: Insert block counting instructions to each block only if asked
+  // Step 5: Insert block counting instructions to each block based on strategy
   if (options.instrumentation_strategy == "basic_block_hit_count") {
     insert_hit_count_insts(cfg, onBlockHit, hit_offset, blocks);
   }
 
-  // Step 5: Insert onMethodExit in exit block(s).
+  // Step 6: Insert onMethodExit in exit block(s).
   //
   // TODO: What about no exit blocks possibly due to infinite loops? Such case
   // is extremely rare in our apps. In this case, let us do method tracing by
@@ -1175,6 +1176,7 @@ MethodInfo instrument_basic_blocks(IRCode& code,
   info.hit_offset = hit_offset;
   info.num_non_entry_blocks = num_non_entry_blocks;
   info.num_vectors = num_vectors;
+  info.num_hit_blocks = num_instrument_hit_blocks;
   info.num_loop_blocks = num_instrument_loop_blocks;
   info.num_exit_calls = num_exit_calls;
   info.num_empty_blocks = count(BlockType::Empty);
@@ -1371,6 +1373,32 @@ void print_stats(ScopedMetrics& sm,
   const size_t total_instrumented_catches = std::accumulate(
       instrumented_methods.begin(), instrumented_methods.end(), size_t(0),
       [](int a, auto&& i) { return a + i.num_instrumented_catches; });
+
+  // ----- Instrumented loop block stats
+  TRACE(INSTRUMENT, 4, "Instrumented Loop Block stats:");
+
+  {
+    size_t acc = 0;
+    size_t total_num_loop_blocks = 0;
+    std::map<int /*num_vectors*/, size_t /*num_methods*/> dist;
+    for (const auto& i : instrumented_methods) {
+      if (i.too_many_blocks) {
+        ++dist[-1];
+      } else {
+        ++dist[i.num_loop_blocks];
+        total_num_loop_blocks += i.num_loop_blocks;
+      }
+    }
+    for (const auto& p : dist) {
+      TRACE(INSTRUMENT, 4, " %3d loop blocks: %s", p.first,
+            SHOW(print(p.second, total_instrumented, acc)));
+    }
+    TRACE(INSTRUMENT, 4, "Total/average instrumented loop blocks: %zu, %s",
+          total_num_loop_blocks,
+          SHOW(divide(total_num_loop_blocks, total_block_instrumented)));
+    scope_total_avg("loop_blocks", total_num_loop_blocks,
+                    total_block_instrumented);
+  }
 
   // ----- Instrumented/skipped block stats
   auto print_ratio = [&total](size_t num) {
@@ -1599,7 +1627,7 @@ void BlockInstrumentHelper::do_basic_block_tracing(
   // This method_offset is used in sMethodStats[] to locate a method profile.
   // We have a small header in the beginning of sMethodStats.
   size_t method_offset = 8;
-  size_t hit_offset = 4;
+  size_t hit_offset = 8;
   std::vector<MethodInfo> instrumented_methods;
 
   int all_methods = 0;
@@ -1686,7 +1714,7 @@ void BlockInstrumentHelper::do_basic_block_tracing(
 
     // Update method offset for next method. 2 shorts are for method stats.
     method_offset += 2 + method_info.num_vectors;
-    hit_offset += method_info.num_loop_blocks;
+    hit_offset += method_info.num_hit_blocks;
   });
 
   // Patch static fields.

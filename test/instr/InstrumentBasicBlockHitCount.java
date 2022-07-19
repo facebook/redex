@@ -809,12 +809,12 @@ public class InstrumentBasicBlockHitCount {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
-    int[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
     // Assert that the offset in the statsArray is 10 and
     // hit offset in hitsArray is -1 due to no blocks in loops
     assertThat(MetadataParser.getOffset("testFunc02")).isEqualTo(10);
-    assertThat(MetadataParser.getHitOffset("testFunc02")).isEqualTo(-1);
+    assertThat(MetadataParser.getHitOffset("testFunc02")).isEqualTo(8);
 
     // Assert that TestFunc02 has hit count of [0,1]
     int[] blockList = {2,1};
@@ -837,12 +837,12 @@ public class InstrumentBasicBlockHitCount {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
-    int[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
     // Assert that the offset in the statsArray is 13 and
     // hit offset in hitsArray is -1 due to no blocks in loops
     assertThat(MetadataParser.getOffset("testFunc03")).isEqualTo(13);
-    assertThat(MetadataParser.getHitOffset("testFunc03")).isEqualTo(-1);
+    assertThat(MetadataParser.getHitOffset("testFunc03")).isEqualTo(10);
 
     // Assert that TestFunc03 has hit count of [1,1]
     int[] blockList = {2,1};
@@ -873,12 +873,12 @@ public class InstrumentBasicBlockHitCount {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
-    int[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
     // Assert that the offset in the statsArray is 16 and
     // hit offset in hitsArray is -1 due to no blocks in loops
     assertThat(MetadataParser.getOffset("testFunc04")).isEqualTo(16);
-    assertThat(MetadataParser.getHitOffset("testFunc04")).isEqualTo(-1);
+    assertThat(MetadataParser.getHitOffset("testFunc04")).isEqualTo(12);
 
     // Assert that TestFunc04 has hit count of [1,0,1,1]
     int[] blockList = {5,4,2,1};
@@ -901,12 +901,12 @@ public class InstrumentBasicBlockHitCount {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
-    int[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
     // Assert that the offset in the statsArray is 19 and
     // hit offset in hitsArray is -1 due to no blocks in loops
     assertThat(MetadataParser.getOffset("testFunc05")).isEqualTo(19);
-    assertThat(MetadataParser.getHitOffset("testFunc05")).isEqualTo(-1);
+    assertThat(MetadataParser.getHitOffset("testFunc05")).isEqualTo(16);
 
     // Assert that TestFunc05 has hit count of [1,0,1,0,0]
     int[] blockList = {4,3,5,2,1};
@@ -929,12 +929,12 @@ public class InstrumentBasicBlockHitCount {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
-    int[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
     // Assert that the offset in the statsArray is 22 and
     // hit offset in hitsArray is -1 due to no blocks in loops
     assertThat(MetadataParser.getOffset("testFunc06")).isEqualTo(22);
-    assertThat(MetadataParser.getHitOffset("testFunc06")).isEqualTo(-1);
+    assertThat(MetadataParser.getHitOffset("testFunc06")).isEqualTo(21);
 
     // Assert that TestFunc06 has hit count of [0,1,1,1]
     int[] blockList = {4,3,2,1};
@@ -957,12 +957,12 @@ public class InstrumentBasicBlockHitCount {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
-    int[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
     // Assert that the offset in the statsArray is 25 and
     // hit offset in hitsArray is -1 due to no blocks in loops
     assertThat(MetadataParser.getOffset("testFunc07")).isEqualTo(25);
-    assertThat(MetadataParser.getHitOffset("testFunc07")).isEqualTo(-1);
+    assertThat(MetadataParser.getHitOffset("testFunc07")).isEqualTo(25);
 
     // Assert that TestFunc07 has hit count of [0,0,0,0,0,1,1,1]
     int[] blockList = {9,8,7,6,4,3,2,1};
@@ -992,12 +992,12 @@ public class InstrumentBasicBlockHitCount {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
-    int[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
     // Assert that the offset in the statsArray is 28 and
     // hit offset in hitsArray is -1 due to no blocks in loops
     assertThat(MetadataParser.getOffset("testFunc08")).isEqualTo(28);
-    assertThat(MetadataParser.getHitOffset("testFunc08")).isEqualTo(-1);
+    assertThat(MetadataParser.getHitOffset("testFunc08")).isEqualTo(33);
 
     // Assert that TestFunc08 has hit count of [0,0,1,0,0,0,1,1,1,1,1,1]
     int[] blockList = {9,10,12,11,8,7,6,5,4,3,2,1};
@@ -1022,12 +1022,12 @@ public class InstrumentBasicBlockHitCount {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
-    int[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
     // Assert that the offset in the statsArray is 31 and
     // hit offset in hitsArray is -1 due to no blocks in loops
     assertThat(MetadataParser.getOffset("testFunc09")).isEqualTo(31);
-    assertThat(MetadataParser.getHitOffset("testFunc09")).isEqualTo(-1);
+    assertThat(MetadataParser.getHitOffset("testFunc09")).isEqualTo(45);
 
     // Assert that TestFunc09 only hits block 2 and block 40 once and rest of
     // the blocks got hits 0 times
@@ -1060,12 +1060,12 @@ public class InstrumentBasicBlockHitCount {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
-    int[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
     // Assert that the offset in the statsArray is 37 and
     // hit offset in hitsArray is -1 due to no blocks in loops
     assertThat(MetadataParser.getOffset("testFunc10")).isEqualTo(37);
-    assertThat(MetadataParser.getHitOffset("testFunc10")).isEqualTo(-1);
+    assertThat(MetadataParser.getHitOffset("testFunc10")).isEqualTo(100);
 
     // Assert that TestFunc10 has hit count of [1,0,1,1]
     int[] blockList = {4,3,1,0};
@@ -1088,12 +1088,12 @@ public class InstrumentBasicBlockHitCount {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
-    int[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
     // Assert that the offset in the statsArray is 40 and
     // hit offset in hitsArray is 4
     assertThat(MetadataParser.getOffset("testFunc11")).isEqualTo(40);
-    assertThat(MetadataParser.getHitOffset("testFunc11")).isEqualTo(4);
+    assertThat(MetadataParser.getHitOffset("testFunc11")).isEqualTo(104);
 
     // Assert that TestFunc11 has hit count of [1,14,1,14,15]
     int[] blockList = {5,4,3,2,1};
@@ -1118,12 +1118,12 @@ public class InstrumentBasicBlockHitCount {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
-    int[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
      // Assert that the offset in the statsArray is 43 and
     // hit offset in hitsArray is 8
     assertThat(MetadataParser.getOffset("testFunc12")).isEqualTo(43);
-    assertThat(MetadataParser.getHitOffset("testFunc12")).isEqualTo(8);
+    assertThat(MetadataParser.getHitOffset("testFunc12")).isEqualTo(109);
 
     // Assert that TestFunc12 has hit count of [0,6,1,7,7]
     int[] blockList = {5,4,3,2,1};
@@ -1153,12 +1153,12 @@ public class InstrumentBasicBlockHitCount {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
-    int[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
     // Assert that the offset in the statsArray is 46 and
     // hit offset in hitsArray is 11
     assertThat(MetadataParser.getOffset("testFunc13")).isEqualTo(46);
-    assertThat(MetadataParser.getHitOffset("testFunc13")).isEqualTo(11);
+    assertThat(MetadataParser.getHitOffset("testFunc13")).isEqualTo(114);
 
     // Assert that TestFunc13 has hit count of [0,1,1,5,5,6,6,6,6,6]
     int[] blockList = {10,12,11,9,7,6,5,4,3,2};
@@ -1184,12 +1184,12 @@ public class InstrumentBasicBlockHitCount {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
-    int[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
     // Assert that the offset in the statsArray is 49 and
     // hit offset in hitsArray is 18
     assertThat(MetadataParser.getOffset("testFunc14")).isEqualTo(49);
-    assertThat(MetadataParser.getHitOffset("testFunc14")).isEqualTo(18);
+    assertThat(MetadataParser.getHitOffset("testFunc14")).isEqualTo(124);
 
     // Assert that TestFunc14 has hit count of [0,1,0,0,1,1,1,1]
     int[] blockList = {8,9,7,6,5,4,3,2};
@@ -1212,12 +1212,12 @@ public class InstrumentBasicBlockHitCount {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
-    int[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
     // Assert that the offset in the statsArray is 52 and
     // hit offset in hitsArray is 24
     assertThat(MetadataParser.getOffset("testFunc15")).isEqualTo(52);
-    assertThat(MetadataParser.getHitOffset("testFunc15")).isEqualTo(24);
+    assertThat(MetadataParser.getHitOffset("testFunc15")).isEqualTo(132);
 
     // Assert that TestFunc15 has hit count of [1,14,1,14,15]
     int[] blockList = {5,4,3,2,1};
@@ -1242,12 +1242,12 @@ public class InstrumentBasicBlockHitCount {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
-    int[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
     // Assert that the offset in the statsArray is 55 and
     // hit offset in hitsArray is 28
     assertThat(MetadataParser.getOffset("testFunc16")).isEqualTo(55);
-    assertThat(MetadataParser.getHitOffset("testFunc16")).isEqualTo(28);
+    assertThat(MetadataParser.getHitOffset("testFunc16")).isEqualTo(137);
 
     // Assert that TestFunc16 has hit count of [0,6,1,7,7]
     int[] blockList = {5,4,3,2,1};
@@ -1277,12 +1277,12 @@ public class InstrumentBasicBlockHitCount {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
-    int[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
     // Assert that the offset in the statsArray is 58 and
     // hit offset in hitsArray is 31
     assertThat(MetadataParser.getOffset("testFunc17")).isEqualTo(58);
-    assertThat(MetadataParser.getHitOffset("testFunc17")).isEqualTo(31);
+    assertThat(MetadataParser.getHitOffset("testFunc17")).isEqualTo(142);
 
     // Assert that TestFunc17 has hit count of [0,1,1,5,5,6,6,6,6,6]
     int[] blockList = {10,12,11,9,7,6,5,4,3,2};
@@ -1308,12 +1308,12 @@ public class InstrumentBasicBlockHitCount {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
-    int[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
     // Assert that the offset in the statsArray is 61 and
     // hit offset in hitsArray is 38
     assertThat(MetadataParser.getOffset("testFunc18")).isEqualTo(61);
-    assertThat(MetadataParser.getHitOffset("testFunc18")).isEqualTo(38);
+    assertThat(MetadataParser.getHitOffset("testFunc18")).isEqualTo(152);
 
     // Assert that TestFunc18 has hit count of [0,1,0,0,1,1,1,1]
     int[] blockList = {8,9,7,6,5,4,3,2};
@@ -1336,7 +1336,7 @@ public class InstrumentBasicBlockHitCount {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
-    int[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
     // Assert that TestFunc11 and TestFunc15's hit counts are the same
     // because they are equivalent codes
@@ -1365,7 +1365,7 @@ public class InstrumentBasicBlockHitCount {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
-    int[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
     // Assert that testFunc14 is ran once like testFunc18
     assertThat(stats[61]).isEqualTo((short)1);
@@ -1397,12 +1397,12 @@ public class InstrumentBasicBlockHitCount {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
-    int[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
     // Assert that the offset in the statsArray is 64 and
     // hit offset in hitsArray is 44
     assertThat(MetadataParser.getOffset("testFunc19")).isEqualTo(64);
-    assertThat(MetadataParser.getHitOffset("testFunc19")).isEqualTo(44);
+    assertThat(MetadataParser.getHitOffset("testFunc19")).isEqualTo(160);
 
     // Assert that TestFunc19 has hit count of
     // [0,0,0,1,0,0,1,1,1,0,6,6,1,0,6,7,1,0,0,0,0,0,0,0,0,0,0,1,0,0,1,1]
@@ -1433,12 +1433,12 @@ public class InstrumentBasicBlockHitCount {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
-    int[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
     // Assert that the offset in the statsArray is 64 and
     // hit offset in hitsArray is 44
     assertThat(MetadataParser.getOffset("testFunc19")).isEqualTo(64);
-    assertThat(MetadataParser.getHitOffset("testFunc19")).isEqualTo(44);
+    assertThat(MetadataParser.getHitOffset("testFunc19")).isEqualTo(160);
 
     // Assert that TestFunc19 has hit count of
     // [0,1,0,0,0,0,1,0,0,0,5,4,0,1,6,6,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0]
@@ -1469,12 +1469,12 @@ public class InstrumentBasicBlockHitCount {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
-    int[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
     // Assert that the offset in the statsArray is 64 and
     // hit offset in hitsArray is 44
     assertThat(MetadataParser.getOffset("testFunc19")).isEqualTo(64);
-    assertThat(MetadataParser.getHitOffset("testFunc19")).isEqualTo(44);
+    assertThat(MetadataParser.getHitOffset("testFunc19")).isEqualTo(160);
 
     // Assert that TestFunc19 excuted only BasicBlocks (1,2,7,8) once and the
     // rest of the blocks got hits 0 times
@@ -1511,12 +1511,12 @@ public class InstrumentBasicBlockHitCount {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
-    int[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
     // Assert that the offset in the statsArray is 68 and
     // hit offset in hitsArray is 71
     assertThat(MetadataParser.getOffset("testFunc20")).isEqualTo(68);
-    assertThat(MetadataParser.getHitOffset("testFunc20")).isEqualTo(71);
+    assertThat(MetadataParser.getHitOffset("testFunc20")).isEqualTo(192);
 
     // Assert that TestFunc20 has hit count of
     // [6,6,6,6,6,9,9,9,9,9,12,12,12,3,4,4,3,0,0,0,0,0,9,9,0,3,0,0,0,3,9,6,1,3,3,3,3,3]
@@ -1550,12 +1550,12 @@ public class InstrumentBasicBlockHitCount {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
-    int[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
     // Assert that the offset in the statsArray is 68 and
     // hit offset in hitsArray is 71
     assertThat(MetadataParser.getOffset("testFunc20")).isEqualTo(68);
-    assertThat(MetadataParser.getHitOffset("testFunc20")).isEqualTo(71);
+    assertThat(MetadataParser.getHitOffset("testFunc20")).isEqualTo(192);
 
     // Assert that TestFunc20 has hit count of
     // [1,1,1,1,1,2,2,2,2,2,2,2,2,1,1,1,1,0,0,0,0,1,1,1,1,0,0,0,0,0,1,1,0,0,0,0,1,1]
@@ -1589,12 +1589,12 @@ public class InstrumentBasicBlockHitCount {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
-    int[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
     // Assert that the offset in the statsArray is 68 and
     // hit offset in hitsArray is 71
     assertThat(MetadataParser.getOffset("testFunc20")).isEqualTo(68);
-    assertThat(MetadataParser.getHitOffset("testFunc20")).isEqualTo(71);
+    assertThat(MetadataParser.getHitOffset("testFunc20")).isEqualTo(192);
 
     // Assert that TestFunc20 has hit count of
     // [3,6,6,6,6,9,9,9,9,9,12,12,12,3,4,4,3,0,0,0,0,0,9,6,0,3,0,0,0,3,6,3,1,3,3,3,3,3]
@@ -1627,12 +1627,12 @@ public class InstrumentBasicBlockHitCount {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
-    int[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
     // Assert that the offset in the statsArray is 73 and
     // hit offset in hitsArray is 106
     assertThat(MetadataParser.getOffset("testFunc21")).isEqualTo(73);
-    assertThat(MetadataParser.getHitOffset("testFunc21")).isEqualTo(106);
+    assertThat(MetadataParser.getHitOffset("testFunc21")).isEqualTo(230);
 
     // Assert that TestFunc21 has hit count of
     // [3,3,1,0,0,0,0,0,0,0,1,3,4,1,0,0,3,4,1,2,2,3,3]
@@ -1663,12 +1663,12 @@ public class InstrumentBasicBlockHitCount {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
-    int[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
     // Assert that the offset in the statsArray is 73 and
     // hit offset in hitsArray is 106
     assertThat(MetadataParser.getOffset("testFunc21")).isEqualTo(73);
-    assertThat(MetadataParser.getHitOffset("testFunc21")).isEqualTo(106);
+    assertThat(MetadataParser.getHitOffset("testFunc21")).isEqualTo(230);
 
     // Assert that TestFunc21 has hit count of
     // [5,5,1,1,0,0,0,0,0,0,1,4,5,0,0,1,0,0,0,4,4,4,4]
@@ -1699,12 +1699,12 @@ public class InstrumentBasicBlockHitCount {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
-    int[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
     // Assert that the offset in the statsArray is 73 and
     // hit offset in hitsArray is 106
     assertThat(MetadataParser.getOffset("testFunc21")).isEqualTo(73);
-    assertThat(MetadataParser.getHitOffset("testFunc21")).isEqualTo(106);
+    assertThat(MetadataParser.getHitOffset("testFunc21")).isEqualTo(230);
 
     // Assert that TestFunc21 has hit count of
     // [0,0,0,0,5,0,5,5,6,1,1,5,6,0,1,1,0,0,0,0,0,0,0]
@@ -1746,12 +1746,12 @@ public class InstrumentBasicBlockHitCount {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
-    int[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
     // Assert that the offset in the statsArray is 77 and
     // hit offset in hitsArray is 120
     assertThat(MetadataParser.getOffset("testFunc22")).isEqualTo(77);
-    assertThat(MetadataParser.getHitOffset("testFunc22")).isEqualTo(120);
+    assertThat(MetadataParser.getHitOffset("testFunc22")).isEqualTo(253);
 
     // Assert that TestFunc22 has hit count of [1,0,0,10,10,10,10,10,11,11,1,1,1,1,1]
     int[] blockList = {13,15,14,12,11,10,9,8,7,6,5,4,3,2,1};
@@ -1786,12 +1786,12 @@ public class InstrumentBasicBlockHitCount {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
-    int[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
     // Assert that the offset in the statsArray is 77 and
     // hit offset in hitsArray is 120
     assertThat(MetadataParser.getOffset("testFunc22")).isEqualTo(77);
-    assertThat(MetadataParser.getHitOffset("testFunc22")).isEqualTo(120);
+    assertThat(MetadataParser.getHitOffset("testFunc22")).isEqualTo(253);
 
     // Assert that TestFunc22 has hit count of [1,0,0,0,0,0,0,0,0,0,0,0,1,1,1]
     int[] blockList = {13,15,14,12,11,10,9,8,7,6,5,4,3,2,1};

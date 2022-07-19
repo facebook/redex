@@ -20,7 +20,7 @@ public class InstrumentBasicBlockAnalysis {
   @DoNotStrip private static int sNumStaticallyInstrumented = 0;
   @DoNotStrip private static int sProfileType = 0;
 
-  @DoNotStrip private static int[] sHitStats = new int[0];
+  @DoNotStrip private static short[] sHitStats = new short[0];
   @DoNotStrip private static int sNumStaticallyHitsInstrumented = 0;
 
   @DoNotStrip private static boolean sIsEnabled = true;
@@ -63,7 +63,7 @@ public class InstrumentBasicBlockAnalysis {
   }
 
   @DoNotStrip
-  public static int[] getHitStats() {
+  public static short[] getHitStats() {
     return sHitStats;
   }
 
