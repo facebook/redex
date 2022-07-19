@@ -23,6 +23,7 @@ enum class ProfileTypeFlags {
   BlockCoverage = 4,
   SimpleMethodTracing = 1 | 2,
   BasicBlockTracing = 1 | 2 | 4,
+  BasicBlockHitCount = 1 | 2 | 4 | 8,
 };
 
 class InstrumentPass : public Pass {
@@ -38,6 +39,7 @@ class InstrumentPass : public Pass {
   // Helper functions for both method and block instrumentations.
   //
   constexpr static const char* STATS_FIELD_NAME = "sMethodStats";
+  constexpr static const char* HIT_STATS_FIELD_NAME = "sHitStats";
 
   static void patch_array_size(DexClass* analysis_cls,
                                const std::string_view array_name,

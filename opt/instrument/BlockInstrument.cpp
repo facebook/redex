@@ -11,6 +11,7 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "GraphUtil.h"
+#include "LoopInfo.h"
 #include "MethodReference.h"
 #include "ScopedMetrics.h"
 #include "Show.h"
@@ -20,7 +21,9 @@
 
 #include <boost/algorithm/string/join.hpp>
 #include <fstream>
+#include <limits>
 #include <map>
+#include <set>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -158,13 +161,23 @@ using BitId = size_t;
 
 struct BlockInfo {
   cfg::Block* block;
+  loop_impl::Loop* loop;
   BlockType type;
   IRList::iterator it;
   BitId bit_id;
+  size_t index_id;
   std::vector<cfg::Block*> merge_in;
 
-  BlockInfo(cfg::Block* b, BlockType t, const IRList::iterator& i)
-      : block(b), type(t), it(i), bit_id(std::numeric_limits<BitId>::max()) {}
+  BlockInfo(cfg::Block* b,
+            loop_impl::Loop* l,
+            BlockType t,
+            const IRList::iterator& i)
+      : block(b),
+        loop(l),
+        type(t),
+        it(i),
+        bit_id(std::numeric_limits<BitId>::max()),
+        index_id(std::numeric_limits<size_t>::max()) {}
 
   bool is_instrumentable() const {
     return (type & BlockType::Instrumentable) == BlockType::Instrumentable;
@@ -175,6 +188,7 @@ struct BlockInfo {
     type = rhs.type;
     it = rhs.it;
     bit_id = rhs.bit_id;
+    index_id = rhs.index_id;
     merge_in.insert(merge_in.end(), rhs.merge_in.begin(), rhs.merge_in.end());
   }
 };
@@ -188,8 +202,10 @@ struct MethodInfo {
   // shorts are for method method profiling, and short[num_vectors] are for
   // block coverages.
   size_t offset = 0;
+  size_t hit_offset = 0;
   size_t num_non_entry_blocks = 0;
   size_t num_vectors = 0;
+  size_t num_loop_blocks = 0;
   size_t num_exit_calls = 0;
 
   size_t num_empty_blocks = 0;
@@ -203,6 +219,7 @@ struct MethodInfo {
   size_t num_merged_not_instrumented{0};
 
   std::vector<cfg::BlockId> bit_id_2_block_id;
+  std::vector<cfg::BlockId> hit_id_2_block_id;
   std::vector<std::vector<SourceBlock*>> bit_id_2_source_blocks;
   std::map<cfg::BlockId, BlockType> rejected_blocks;
   std::vector<SourceBlock*> entry_source_blocks;
@@ -212,6 +229,7 @@ struct MethodInfo {
   MethodInfo& operator+=(const MethodInfo& rhs) {
     num_non_entry_blocks += rhs.num_non_entry_blocks;
     num_vectors += rhs.num_vectors;
+    num_loop_blocks += rhs.num_loop_blocks;
     num_exit_calls += rhs.num_exit_calls;
     num_empty_blocks += rhs.num_empty_blocks;
     num_useless_blocks += rhs.num_useless_blocks;
@@ -273,7 +291,8 @@ MethodDictionary create_method_dictionary(
 
 void write_metadata(const ConfigFiles& cfg,
                     const std::string& metadata_base_file_name,
-                    const std::vector<MethodInfo>& all_info) {
+                    const std::vector<MethodInfo>& all_info,
+                    const std::string& strategy) {
   const auto method_dict = create_method_dictionary(
       cfg.metafile("redex-source-block-method-dictionary.csv"), all_info);
 
@@ -281,15 +300,24 @@ void write_metadata(const ConfigFiles& cfg,
   auto file_name = cfg.metafile(metadata_base_file_name);
   std::ofstream ofs(file_name, std::ofstream::out | std::ofstream::trunc);
   ofs << "profile_type,version,num_methods" << std::endl;
-  ofs << "basic-block-tracing," << PROFILING_DATA_VERSION << ","
-      << all_info.size() << std::endl;
+  ofs << strategy << "," << PROFILING_DATA_VERSION << "," << all_info.size()
+      << std::endl;
 
   // The real CSV-style metadata follows.
-  const std::array<std::string, 8> headers = {
-      "offset",           "name",      "instrument",
-      "non_entry_blocks", "vectors",   "bit_id_2_block_id",
-      "rejected_blocks",  "src_blocks"};
-  ofs << boost::algorithm::join(headers, ",") << "\n";
+  if (strategy == "basic_block_hit_count") {
+    const std::array<std::string, 11> headers = {
+        "offset",           "name",        "instrument",
+        "non_entry_blocks", "vectors",     "bit_id_2_block_id",
+        "hit_offset",       "loop_blocks", "hit_id_2_block_id",
+        "rejected_blocks",  "src_blocks"};
+    ofs << boost::algorithm::join(headers, ",") << "\n";
+  } else {
+    const std::array<std::string, 8> headers = {
+        "offset",           "name",      "instrument",
+        "non_entry_blocks", "vectors",   "bit_id_2_block_id",
+        "rejected_blocks",  "src_blocks"};
+    ofs << boost::algorithm::join(headers, ",") << "\n";
+  }
 
   auto write_block_id_map = [](const auto& bit_id_2_block_id) {
     std::vector<std::string> fields;
@@ -352,18 +380,37 @@ void write_metadata(const ConfigFiles& cfg,
   };
 
   for (const auto& info : all_info) {
-    const std::array<std::string, 8> fields = {
-        std::to_string(info.offset),
-        std::to_string(
-            method_dict.at(info.method->get_deobfuscated_name_or_null())),
-        std::to_string(static_cast<int>(get_instrumented_type(info))),
-        std::to_string(info.num_non_entry_blocks),
-        std::to_string(info.num_vectors),
-        write_block_id_map(info.bit_id_2_block_id),
-        rejected_blocks(info.rejected_blocks),
-        source_blocks(info.entry_source_blocks, info.bit_id_2_source_blocks),
-    };
-    ofs << boost::algorithm::join(fields, ",") << "\n";
+
+    if (strategy == "basic_block_hit_count") {
+      const std::array<std::string, 11> fields = {
+          std::to_string(info.offset),
+          std::to_string(
+              method_dict.at(info.method->get_deobfuscated_name_or_null())),
+          std::to_string(static_cast<int>(get_instrumented_type(info))),
+          std::to_string(info.num_non_entry_blocks),
+          std::to_string(info.num_vectors),
+          write_block_id_map(info.bit_id_2_block_id),
+          std::to_string(info.hit_offset),
+          std::to_string(info.num_loop_blocks),
+          write_block_id_map(info.hit_id_2_block_id),
+          rejected_blocks(info.rejected_blocks),
+          source_blocks(info.entry_source_blocks, info.bit_id_2_source_blocks),
+      };
+      ofs << boost::algorithm::join(fields, ",") << "\n";
+    } else {
+      const std::array<std::string, 8> fields = {
+          std::to_string(info.offset),
+          std::to_string(
+              method_dict.at(info.method->get_deobfuscated_name_or_null())),
+          std::to_string(static_cast<int>(get_instrumented_type(info))),
+          std::to_string(info.num_non_entry_blocks),
+          std::to_string(info.num_vectors),
+          write_block_id_map(info.bit_id_2_block_id),
+          rejected_blocks(info.rejected_blocks),
+          source_blocks(info.entry_source_blocks, info.bit_id_2_source_blocks),
+      };
+      ofs << boost::algorithm::join(fields, ",") << "\n";
+    }
   }
 
   TRACE(INSTRUMENT, 2, "Metadata file was written to: %s", SHOW(file_name));
@@ -804,7 +851,8 @@ void create_block_info(
 
   if (!has_opcodes) {
     if (!source_blocks::has_source_blocks(block)) {
-      trg_block_info->update_merge({block, BlockType::Empty, {}});
+      trg_block_info->update_merge(
+          {block, trg_block_info->loop, BlockType::Empty, {}});
       return;
     }
 
@@ -815,7 +863,8 @@ void create_block_info(
       // OK, we can virtually merge the source blocks into the following one.
       TRACE(INSTRUMENT, 9, "Not instrumenting empty block B%zu", block->id());
       block_mapping.at(*next_opt)->merge_in.push_back(block);
-      trg_block_info->update_merge({block, BlockType::Empty, {}});
+      trg_block_info->update_merge(
+          {block, trg_block_info->loop, BlockType::Empty, {}});
       return;
     }
   }
@@ -824,7 +873,8 @@ void create_block_info(
   // extremely large number of basic blocks. We've found a case. So, for now,
   // we don't instrument catch blocks with the hope these blocks are cold.
   if (block->is_catch() && !options.instrument_catches) {
-    trg_block_info->update_merge({block, BlockType::Catch, {}});
+    trg_block_info->update_merge(
+        {block, trg_block_info->loop, BlockType::Catch, {}});
     return;
   }
 
@@ -849,7 +899,8 @@ void create_block_info(
         TRACE(INSTRUMENT, 9, "Not instrumenting useless block B%zu\n%s",
               block->id(), SHOW(block));
         block_mapping.at(*next_opt)->merge_in.push_back(block);
-        trg_block_info->update_merge({block, BlockType::Useless, {}});
+        trg_block_info->update_merge(
+            {block, trg_block_info->loop, BlockType::Useless, {}});
         return;
       }
     }
@@ -860,12 +911,13 @@ void create_block_info(
   // Exit blocks will have onMethodEnd. We still need to instrument anyhow.
   if (!options.instrument_blocks_without_source_block &&
       !source_blocks::has_source_blocks(block) && !block->succs().empty()) {
-    trg_block_info->update_merge({block, BlockType::NoSourceBlock | type, {}});
+    trg_block_info->update_merge(
+        {block, trg_block_info->loop, BlockType::NoSourceBlock | type, {}});
     return;
   }
 
-  trg_block_info->update_merge(
-      {block, BlockType::Instrumentable | type, insert_pos});
+  trg_block_info->update_merge({block, trg_block_info->loop,
+                                BlockType::Instrumentable | type, insert_pos});
 }
 
 auto get_blocks_to_instrument(const DexMethod* m,
@@ -895,25 +947,34 @@ auto get_blocks_to_instrument(const DexMethod* m,
       &cfg, block_start_fn, [](cfg::Block*, const cfg::Edge*) {},
       [](cfg::Block*) {});
 
+  loop_impl::LoopInfo LI(cfg);
+
   // Future work: Pick minimal instrumentation candidates.
   std::vector<BlockInfo> block_info_list;
   block_info_list.reserve(blocks.size());
   std::unordered_map<const cfg::Block*, BlockInfo*> block_mapping;
   for (cfg::Block* b : blocks) {
-    block_info_list.emplace_back(b, BlockType::Unspecified, b->end());
+    block_info_list.emplace_back(b, LI.get_loop_for(b), BlockType::Unspecified,
+                                 b->end());
     block_mapping[b] = &block_info_list.back();
   }
 
   BitId id = 0;
+  size_t hit_id = 0;
   for (cfg::Block* b : blocks) {
     create_block_info(m, b, options, block_mapping);
     auto* info = block_mapping[b];
     if ((info->type & BlockType::Instrumentable) == BlockType::Instrumentable) {
       if (id >= max_num_blocks) {
         // This is effectively rejecting all blocks.
-        return std::make_tuple(std::vector<BlockInfo>{}, BitId(0),
+        return std::make_tuple(std::vector<BlockInfo>{}, BitId(0), size_t(0),
                                true /* too many block */);
       }
+
+      if (info->loop != nullptr) {
+        info->index_id = hit_id++;
+      }
+
       info->bit_id = id++;
     }
   }
@@ -921,7 +982,7 @@ auto get_blocks_to_instrument(const DexMethod* m,
       block_info_list.begin(), block_info_list.end(),
       [](const auto& bi) { return bi.type != BlockType::Unspecified; }));
 
-  return std::make_tuple(block_info_list, id, false);
+  return std::make_tuple(block_info_list, id, hit_id, false);
 }
 
 void insert_block_coverage_computations(const std::vector<BlockInfo>& blocks,
@@ -945,12 +1006,47 @@ void insert_block_coverage_computations(const std::vector<BlockInfo>& blocks,
   }
 }
 
+void insert_hit_count_insts(cfg::ControlFlowGraph& cfg,
+                            DexMethod* onBlockHit,
+                            const size_t hit_offset,
+                            std::vector<BlockInfo>& blocks) {
+  const reg_t reg_method_offset = cfg.allocate_temp();
+
+  for (const auto& info : blocks) {
+    if (!info.is_instrumentable() || info.loop == nullptr) {
+      continue;
+    }
+
+    const size_t index_id = info.index_id;
+    cfg::Block* block = info.block;
+    const auto& insert_pos = info.it;
+    const size_t offset = index_id + hit_offset;
+
+    // Do onBlockHit instrumentation. We allocate a register that holds the
+    // hit offset, which is used for all onBlockHit.
+    IRInstruction* hit_offset_inst = new IRInstruction(OPCODE_CONST);
+    hit_offset_inst->set_literal(offset);
+    hit_offset_inst->set_dest(reg_method_offset);
+    block->insert_before(block->to_cfg_instruction_iterator(insert_pos),
+                         hit_offset_inst);
+
+    IRInstruction* invoke_inst = new IRInstruction(OPCODE_INVOKE_STATIC);
+    invoke_inst->set_method(onBlockHit);
+    invoke_inst->set_srcs_size(1);
+    invoke_inst->set_src(0, reg_method_offset);
+    block->insert_before(block->to_cfg_instruction_iterator(insert_pos),
+                         invoke_inst);
+  }
+}
+
 MethodInfo instrument_basic_blocks(IRCode& code,
                                    DexMethod* method,
                                    DexMethod* onMethodBegin,
                                    const OnMethodExitMap& onMethodExit_map,
+                                   DexMethod* onBlockHit,
                                    const size_t max_vector_arity,
                                    const size_t method_offset,
+                                   const size_t hit_offset,
                                    const size_t max_num_blocks,
                                    const InstrumentPass::Options& options) {
   MethodInfo info;
@@ -970,8 +1066,10 @@ MethodInfo instrument_basic_blocks(IRCode& code,
   // blocks, it falls back to empty blocks, which is method tracing.
   std::vector<BlockInfo> blocks;
   size_t num_to_instrument;
+  size_t num_instrument_loop_blocks;
   bool too_many_blocks;
-  std::tie(blocks, num_to_instrument, too_many_blocks) =
+  std::tie(blocks, num_to_instrument, num_instrument_loop_blocks,
+           too_many_blocks) =
       get_blocks_to_instrument(method, cfg, max_num_blocks, options);
 
   TRACE(INSTRUMENT, DEBUG_CFG ? 0 : 10, "BEFORE: %s, %s\n%s",
@@ -981,9 +1079,13 @@ MethodInfo instrument_basic_blocks(IRCode& code,
   //         modifying the CFG.
   info.bit_id_2_block_id.reserve(num_to_instrument);
   info.bit_id_2_source_blocks.reserve(num_to_instrument);
+  info.hit_id_2_block_id.reserve(num_instrument_loop_blocks);
   for (const auto& i : blocks) {
     if (i.is_instrumentable()) {
       info.bit_id_2_block_id.push_back(i.block->id());
+      if (i.loop != nullptr) {
+        info.hit_id_2_block_id.push_back(i.block->id());
+      }
       info.bit_id_2_source_blocks.emplace_back(
           source_blocks::gather_source_blocks(i.block));
       for (auto* merged_block : i.merge_in) {
@@ -1030,6 +1132,11 @@ MethodInfo instrument_basic_blocks(IRCode& code,
   // Gather early as step 4 may modify CFG.
   auto num_non_entry_blocks = cfg.blocks().size() - 1;
 
+  // Step 4.5: Insert block counting instructions to each block only if asked
+  if (options.instrumentation_strategy == "basic_block_hit_count") {
+    insert_hit_count_insts(cfg, onBlockHit, hit_offset, blocks);
+  }
+
   // Step 5: Insert onMethodExit in exit block(s).
   //
   // TODO: What about no exit blocks possibly due to infinite loops? Such case
@@ -1059,8 +1166,10 @@ MethodInfo instrument_basic_blocks(IRCode& code,
   info.too_many_blocks = too_many_blocks;
   info.num_too_many_blocks = too_many_blocks ? 1 : 0;
   info.offset = method_offset;
+  info.hit_offset = hit_offset;
   info.num_non_entry_blocks = num_non_entry_blocks;
   info.num_vectors = num_vectors;
+  info.num_loop_blocks = num_instrument_loop_blocks;
   info.num_exit_calls = num_exit_calls;
   info.num_empty_blocks = count(BlockType::Empty);
   info.num_useless_blocks = count(BlockType::Useless);
@@ -1448,10 +1557,11 @@ void BlockInstrumentHelper::do_basic_block_tracing(
         "[InstrumentPass] error: basic block profiling currently only "
         "supports num_shard = 1 and num_stats_per_method = 0");
   }
-  if (options.analysis_method_names.size() != 2) {
-    always_assert_log(false,
-                      "[InstrumentPass] error: basic block profiling must have "
-                      "two analysis methods: [onMethodBegin, onMethodExit]");
+  if (options.analysis_method_names.size() < 3) {
+    always_assert_log(
+        false,
+        "[InstrumentPass] error: basic block profiling must have "
+        "two analysis methods: [onMethodBegin, onMethodExit, onBlockHit]");
   }
 
   const size_t max_num_blocks = options.max_num_blocks;
@@ -1473,12 +1583,17 @@ void BlockInstrumentHelper::do_basic_block_tracing(
   const size_t max_vector_arity = onMethodExit_map.rbegin()->first;
   TRACE(INSTRUMENT, 4, "Max arity for onMethodExit: %zu", max_vector_arity);
 
+  DexMethod* onBlockHit =
+      load_onMethodBegin(*analysis_cls, options.analysis_method_names[2]);
+  TRACE(INSTRUMENT, 4, "Loaded onBlockHit: %s", SHOW(onBlockHit));
+
   auto cold_start_classes = get_cold_start_classes(cfg);
   TRACE(INSTRUMENT, 7, "Cold start classes: %zu", cold_start_classes.size());
 
   // This method_offset is used in sMethodStats[] to locate a method profile.
   // We have a small header in the beginning of sMethodStats.
   size_t method_offset = 8;
+  size_t hit_offset = 4;
   std::vector<MethodInfo> instrumented_methods;
 
   int all_methods = 0;
@@ -1515,7 +1630,8 @@ void BlockInstrumentHelper::do_basic_block_tracing(
     TraceContext trace_context(method);
 
     all_methods++;
-    if (method == analysis_cls->get_clinit() || method == onMethodBegin) {
+    if (method == analysis_cls->get_clinit() || method == onMethodBegin ||
+        method == onBlockHit) {
       specials++;
       return;
     }
@@ -1551,8 +1667,8 @@ void BlockInstrumentHelper::do_basic_block_tracing(
     }
 
     instrumented_methods.emplace_back(instrument_basic_blocks(
-        code, method, onMethodBegin, onMethodExit_map, max_vector_arity,
-        method_offset, max_num_blocks, options));
+        code, method, onMethodBegin, onMethodExit_map, onBlockHit,
+        max_vector_arity, method_offset, hit_offset, max_num_blocks, options));
 
     const auto& method_info = instrumented_methods.back();
     if (method_info.too_many_blocks) {
@@ -1564,6 +1680,7 @@ void BlockInstrumentHelper::do_basic_block_tracing(
 
     // Update method offset for next method. 2 shorts are for method stats.
     method_offset += 2 + method_info.num_vectors;
+    hit_offset += method_info.num_loop_blocks;
   });
 
   // Patch static fields.
@@ -1583,7 +1700,27 @@ void BlockInstrumentHelper::do_basic_block_tracing(
       analysis_cls, field->get_name()->str(),
       static_cast<int>(ProfileTypeFlags::BasicBlockTracing));
 
-  write_metadata(cfg, options.metadata_file_name, instrumented_methods);
+  if (options.instrumentation_strategy == "basic_block_hit_count") {
+    field = analysis_cls->find_field_from_simple_deobfuscated_name("sHitStats");
+    InstrumentPass::patch_array_size(analysis_cls, field->get_name()->str(),
+                                     hit_offset);
+
+    field = analysis_cls->find_field_from_simple_deobfuscated_name(
+        "sNumStaticallyHitsInstrumented");
+    always_assert(field != nullptr);
+    InstrumentPass::patch_static_field(analysis_cls, field->get_name()->str(),
+                                       hit_offset);
+
+    field =
+        analysis_cls->find_field_from_simple_deobfuscated_name("sProfileType");
+    always_assert(field != nullptr);
+    InstrumentPass::patch_static_field(
+        analysis_cls, field->get_name()->str(),
+        static_cast<int>(ProfileTypeFlags::BasicBlockHitCount));
+  }
+
+  write_metadata(cfg, options.metadata_file_name, instrumented_methods,
+                 options.instrumentation_strategy);
 
   ScopedMetrics sm(pm);
   auto block_instr_scope = sm.scope("block_instr");

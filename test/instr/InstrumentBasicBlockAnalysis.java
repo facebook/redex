@@ -20,6 +20,9 @@ public class InstrumentBasicBlockAnalysis {
   @DoNotStrip private static int sNumStaticallyInstrumented = 0;
   @DoNotStrip private static int sProfileType = 0;
 
+  @DoNotStrip private static int[] sHitStats = new int[0];
+  @DoNotStrip private static int sNumStaticallyHitsInstrumented = 0;
+
   @DoNotStrip private static boolean sIsEnabled = true;
   @DoNotStrip private static AtomicInteger sMethodCounter = new AtomicInteger(0);
 
@@ -30,6 +33,11 @@ public class InstrumentBasicBlockAnalysis {
     // Clearing up sMethodStatsArray.
     for (int i = 0; i < sMethodStats.length; ++i) {
       sMethodStats[i] = 0;
+    }
+
+    // Clearing up sHitStats.
+    for (int i = 0; i < sHitStats.length; ++i) {
+      sHitStats[i] = 0;
     }
   }
 
@@ -53,6 +61,12 @@ public class InstrumentBasicBlockAnalysis {
   public static short[] getStats() {
     return sMethodStats;
   }
+
+  @DoNotStrip
+  public static int[] getHitStats() {
+    return sHitStats;
+  }
+
 
   @DoNotStrip
   public static void onMethodBegin(int offset) {
@@ -85,6 +99,13 @@ public class InstrumentBasicBlockAnalysis {
       sMethodStats[offset + 2] |= bitvec1;
       sMethodStats[offset + 3] |= bitvec2;
       sMethodStats[offset + 4] |= bitvec3;
+    }
+  }
+
+  @DoNotStrip
+  public static void onBlockHit(int offset) {
+    if (sIsEnabled) {
+      sHitStats[offset] += 1;
     }
   }
 }

@@ -51,6 +51,7 @@ constexpr bool instr_debug = false;
 
 constexpr const char* SIMPLE_METHOD_TRACING = "simple_method_tracing";
 constexpr const char* BASIC_BLOCK_TRACING = "basic_block_tracing";
+constexpr const char* BASIC_BLOCK_HIT_COUNT = "basic_block_hit_count";
 constexpr const char* METHOD_REPLACEMENT = "methods_replacement";
 
 class InstrumentInterDexPlugin : public interdex::InterDexPassPlugin {
@@ -998,7 +999,8 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
 
   if (m_options.instrumentation_strategy == SIMPLE_METHOD_TRACING) {
     do_simple_method_tracing(analysis_cls, stores, cfg, pm, m_options);
-  } else if (m_options.instrumentation_strategy == BASIC_BLOCK_TRACING) {
+  } else if (m_options.instrumentation_strategy == BASIC_BLOCK_TRACING ||
+             m_options.instrumentation_strategy == BASIC_BLOCK_HIT_COUNT) {
     BlockInstrumentHelper::do_basic_block_tracing(analysis_cls, stores, cfg, pm,
                                                   m_options);
   } else {

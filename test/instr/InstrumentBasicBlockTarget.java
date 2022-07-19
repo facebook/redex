@@ -651,7 +651,7 @@ public class InstrumentBasicBlockTarget {
   public void startUp() {
     InputStream iSourceBlock = getClass().getResourceAsStream("/assets/redex-source-block-method-dictionary.csv");
     InputStream iMetadata = getClass().getResourceAsStream("/assets/redex-instrument-metadata.txt");
-    MetadataParser.startUp(iMetadata, iSourceBlock);
+    MetadataParser.startUp(iMetadata, iSourceBlock, true);
   }
 
   @Test
