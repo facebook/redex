@@ -7,8 +7,8 @@
 
 package com.facebook.redextest;
 
-import java.io.*;
-import java.util.*;
+import java.util.HashMap;
+import java.util.ArrayList;
 
 import com.facebook.proguard.annotations.DoNotStrip;
 

@@ -10,8 +10,9 @@ package com.facebook.redextest;
 
 import static org.fest.assertions.api.Assertions.assertThat;
 
-import java.io.*;
-import java.util.*;
+import java.io.InputStream;
+import java.util.Random;
+import java.util.ArrayList;
 import org.junit.Test;
 import org.junit.Before;
 
@@ -660,9 +661,6 @@ public class InstrumentBasicBlockTarget {
     InstrumentBasicBlockAnalysis.startTracing();
     assertThat(testFunc01(0)).isEqualTo(42);
     InstrumentBasicBlockAnalysis.stopTracing();
-
-    // Get Stats from Instrument Analysis
-    short[] stats = InstrumentBasicBlockAnalysis.getStats();
 
     // Assert that the offset in the statsArray is 8
     assertThat(MetadataParser.getOffset("testFunc01")).isEqualTo(8);
