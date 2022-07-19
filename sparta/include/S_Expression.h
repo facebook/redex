@@ -526,12 +526,10 @@ class List final : public Component {
   size_t size() const { return m_list.size(); }
 
   s_expr get_element(size_t index) const {
-    try {
-      return m_list.at(index);
-    } catch (const std::out_of_range& e) {
-      // The `at` function throws an exception if the index doesn't lie within
-      // the bounds of the vector.
-      BOOST_THROW_EXCEPTION(invalid_argument() << argument_name("index"));
+    if (index < m_list.size()) {
+      return m_list[index];
+    } else {
+      SPARTA_THROW_EXCEPTION(invalid_argument() << argument_name("index"));
     }
   }
 
