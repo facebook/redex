@@ -1055,8 +1055,8 @@ inline intrusive_ptr<PatriciaTreeLeaf<IntegerType, Value>> use_available_leaf(
   } else if (y) {
     return y;
   } else {
-    BOOST_THROW_EXCEPTION(internal_error()
-                          << error_msg("Malformed Patricia tree"));
+    SPARTA_THROW_EXCEPTION(internal_error()
+                           << error_msg("Malformed Patricia tree"));
   }
 }
 
