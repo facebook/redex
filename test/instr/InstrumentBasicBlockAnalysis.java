@@ -103,6 +103,40 @@ public class InstrumentBasicBlockAnalysis {
   }
 
   @DoNotStrip
+  public static void onNonLoopBlockHit(int offset, short bitvec1) {
+    if (sIsEnabled && sNumStaticallyHitsInstrumented > 0) {
+      for (int i = 0; (i < 16) && (offset + i < sHitStats.length); i++) {
+        sHitStats[offset + i] += ((bitvec1 >> i) & 1);
+      }
+    }
+  }
+
+  @DoNotStrip
+  public static void onNonLoopBlockHit(int offset, short bitvec1, short bitvec2) {
+    if (sIsEnabled && sNumStaticallyHitsInstrumented > 0) {
+      for (int i = 0; i < 16; i++) {
+        sHitStats[offset + i] += ((bitvec1 >> i) & 1);
+        if(offset + i + 16 < sHitStats.length) {
+          sHitStats[offset + i + 16] += ((bitvec2 >> i) & 1);
+        }
+      }
+    }
+  }
+
+  @DoNotStrip
+  public static void onNonLoopBlockHit(int offset, short bitvec1, short bitvec2, short bitvec3) {
+    if (sIsEnabled && sNumStaticallyHitsInstrumented > 0) {
+      for (int i = 0; i < 16; i++) {
+        sHitStats[offset + i] += ((bitvec1 >> i) & 1);
+        sHitStats[offset + i + 16] += ((bitvec2 >> i) & 1);
+        if(offset + i + 32 < sHitStats.length) {
+          sHitStats[offset + i + 32] += ((bitvec3 >> i) & 1);
+        }
+      }
+    }
+  }
+
+  @DoNotStrip
   public static void onBlockHit(int offset) {
     if (sIsEnabled) {
       sHitStats[offset] += 1;
