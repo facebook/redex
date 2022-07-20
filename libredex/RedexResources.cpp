@@ -393,6 +393,18 @@ std::unordered_set<std::string> AndroidResources::get_native_classes() {
   return all_classes;
 }
 
+bool AndroidResources::can_obfuscate_xml_file(
+    const std::unordered_set<std::string>& allowed_types,
+    const std::string& dirname) {
+  for (const auto& type : allowed_types) {
+    auto path = RES_DIRECTORY + std::string("/") + type;
+    if (dirname.find(path) != std::string::npos) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void ResourceTableFile::remove_unreferenced_strings() {
   // Intentionally left empty, proto resource table will not contain a relevant
   // structure to prune.

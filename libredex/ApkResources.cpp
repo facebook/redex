@@ -1174,6 +1174,74 @@ size_t ApkResources::remap_xml_reference_attributes(
   return editor.remap(kept_to_remapped_ids) > 0;
 }
 
+namespace {
+
+void obfuscate_xml_attributes(
+    const std::string& filename,
+    const std::unordered_set<std::string>& do_not_obfuscate_elements) {
+  auto file = RedexMappedFile::open(filename, false);
+  apk::XmlFileEditor editor;
+  always_assert_log(editor.visit((void*)file.data(), file.size()),
+                    "Failed to parse resource xml file %s", filename.c_str());
+  auto attribute_count = editor.m_attribute_id_count;
+  auto string_count = dtohl(editor.m_string_pool_header->stringCount);
+  if (attribute_count > 0 && string_count > 0) {
+    TRACE(RES, 9, "Considering file %s for obfuscation", filename.c_str());
+    android::ResStringPool pool;
+    always_assert_log(
+        pool.setTo(editor.m_string_pool_header,
+                   dtohl(editor.m_string_pool_header->header.size),
+                   true) == android::NO_ERROR,
+        "Malformed string pool in file %s", filename.c_str());
+    uint32_t flags =
+        pool.isUTF8() ? android::ResStringPool_header::UTF8_FLAG : 0;
+    android::String8 empty_str("");
+    arsc::ResStringPoolBuilder builder(flags);
+    for (size_t i = 0; i < attribute_count; i++) {
+      builder.add_string(empty_str.string(), empty_str.size());
+    }
+    for (size_t i = attribute_count; i < string_count; i++) {
+      auto element = apk::get_string_from_pool(pool, i);
+      if (do_not_obfuscate_elements.count(element) > 0) {
+        TRACE(RES, 9, "NOT obfuscating xml file %s", filename.c_str());
+        return;
+      }
+      builder.add_string(element);
+    }
+    android::Vector<char> out;
+    arsc::replace_xml_string_pool((android::ResChunk_header*)file.data(),
+                                  file.size(), builder, &out);
+    write_serialized_data(out, std::move(file));
+  }
+}
+} // namespace
+
+void ApkResources::obfuscate_xml_files(
+    const std::unordered_set<std::string>& allowed_types,
+    const std::unordered_set<std::string>& do_not_obfuscate_elements) {
+  using path_t = boost::filesystem::path;
+  using dir_iterator = boost::filesystem::directory_iterator;
+
+  std::set<std::string> xml_paths;
+  path_t res(m_directory + "/res");
+  if (exists(res) && is_directory(res)) {
+    for (auto it = dir_iterator(res); it != dir_iterator(); ++it) {
+      auto const& entry = *it;
+      const path_t& entry_path = entry.path();
+      const auto& entry_string = entry_path.string();
+      if (is_directory(entry_path) &&
+          can_obfuscate_xml_file(allowed_types, entry_string)) {
+        for (const std::string& layout : get_xml_files(entry_string)) {
+          xml_paths.emplace(layout);
+        }
+      }
+    }
+  }
+  for (const auto& path : xml_paths) {
+    obfuscate_xml_attributes(path, do_not_obfuscate_elements);
+  }
+}
+
 std::unique_ptr<ResourceTableFile> ApkResources::load_res_table() {
   std::string arsc_path = m_directory + std::string("/resources.arsc");
   return std::make_unique<ResourcesArscFile>(arsc_path);

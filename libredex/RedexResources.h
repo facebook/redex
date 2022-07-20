@@ -270,7 +270,16 @@ class AndroidResources {
   virtual std::unordered_set<std::string> find_all_xml_files() = 0;
   virtual std::vector<std::string> find_resources_files() = 0;
   virtual std::string get_base_assets_dir() = 0;
-
+  // For drawable/layout .xml files, remove/shorten attribute names where
+  // possible. Any file with an element name in the given set will be kept
+  // intact by convention (this method will be overly cautious when applying
+  // keeps).
+  virtual void obfuscate_xml_files(
+      const std::unordered_set<std::string>& allowed_types,
+      const std::unordered_set<std::string>& do_not_obfuscate_elements) = 0;
+  bool can_obfuscate_xml_file(
+      const std::unordered_set<std::string>& allowed_types,
+      const std::string& dirname);
   // Classnames present in native libraries (lib/*/*.so)
   std::unordered_set<std::string> get_native_classes();
 

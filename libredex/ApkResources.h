@@ -321,6 +321,9 @@ class ApkResources : public AndroidResources {
   std::unordered_set<std::string> find_all_xml_files() override;
   std::vector<std::string> find_resources_files() override;
   std::string get_base_assets_dir() override;
+  void obfuscate_xml_files(const std::unordered_set<std::string>& allowed_types,
+                           const std::unordered_set<std::string>&
+                               do_not_obfuscate_elements) override;
 
  protected:
   std::vector<std::string> find_res_directories() override;

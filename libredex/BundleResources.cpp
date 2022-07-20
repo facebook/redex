@@ -2117,6 +2117,88 @@ bool ResourcesPbFile::resource_value_identical(uint32_t a_id, uint32_t b_id) {
   return true;
 }
 
+namespace {
+
+void maybe_obfuscate_element(
+    const std::unordered_set<std::string>& do_not_obfuscate_elements,
+    aapt::pb::XmlElement* pb_element,
+    size_t* change_count) {
+  if (do_not_obfuscate_elements.count(pb_element->name()) > 0) {
+    return;
+  }
+  auto attr_count = pb_element->attribute_size();
+  for (int i = 0; i < attr_count; i++) {
+    auto pb_attr = pb_element->mutable_attribute(i);
+    if (pb_attr->resource_id() > 0) {
+      pb_attr->set_name("");
+      (*change_count)++;
+    }
+  }
+  auto child_size = pb_element->child_size();
+  for (int i = 0; i < child_size; i++) {
+    auto pb_child = pb_element->mutable_child(i);
+    if (pb_child->has_element()) {
+      auto pb_child_element = pb_child->mutable_element();
+      maybe_obfuscate_element(do_not_obfuscate_elements, pb_child_element,
+                              change_count);
+    }
+  }
+}
+
+void obfuscate_xml_attributes(
+    const std::string& filename,
+    const std::unordered_set<std::string>& do_not_obfuscate_elements) {
+  read_protobuf_file_contents(
+      filename,
+      [&](google::protobuf::io::CodedInputStream& input, size_t /* unused */) {
+        aapt::pb::XmlNode pb_node;
+        always_assert_log(pb_node.ParseFromCodedStream(&input),
+                          "BundleResource failed to read %s",
+                          filename.c_str());
+        size_t change_count = 0;
+        if (pb_node.has_element()) {
+          auto pb_element = pb_node.mutable_element();
+          maybe_obfuscate_element(do_not_obfuscate_elements, pb_element,
+                                  &change_count);
+        }
+        if (change_count > 0) {
+          std::ofstream out(filename, std::ofstream::binary);
+          always_assert(pb_node.SerializeToOstream(&out));
+        }
+      });
+}
+} // namespace
+
+void BundleResources::obfuscate_xml_files(
+    const std::unordered_set<std::string>& allowed_types,
+    const std::unordered_set<std::string>& do_not_obfuscate_elements) {
+  using path_t = boost::filesystem::path;
+  using dir_iterator = boost::filesystem::directory_iterator;
+
+  std::set<std::string> xml_paths;
+  path_t dir(m_directory);
+  for (auto& module_entry : boost::make_iterator_range(
+           boost::filesystem::directory_iterator(dir), {})) {
+    path_t res = module_entry.path() / "/res";
+    if (exists(res) && is_directory(res)) {
+      for (auto it = dir_iterator(res); it != dir_iterator(); ++it) {
+        auto const& entry = *it;
+        const path_t& entry_path = entry.path();
+        const auto& entry_string = entry_path.string();
+        if (is_directory(entry_path) &&
+            can_obfuscate_xml_file(allowed_types, entry_string)) {
+          for (const std::string& layout : get_xml_files(entry_string)) {
+            xml_paths.emplace(layout);
+          }
+        }
+      }
+    }
+  }
+  for (const auto& path : xml_paths) {
+    obfuscate_xml_attributes(path, do_not_obfuscate_elements);
+  }
+}
+
 ResourcesPbFile::~ResourcesPbFile() {}
 
 #endif // HAS_PROTOBUF
