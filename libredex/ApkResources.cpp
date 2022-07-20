@@ -811,8 +811,10 @@ bool is_binary_xml(const void* data, size_t size) {
   if (size < sizeof(android::ResChunk_header)) {
     return false;
   }
-  return dtohs(((android::ResChunk_header*)data)->type) ==
-         android::RES_XML_TYPE;
+  auto chunk = (android::ResChunk_header*)data;
+  return dtohs(chunk->type) == android::RES_XML_TYPE &&
+         dtohs(chunk->headerSize) == sizeof(android::ResChunk_header) &&
+         dtohl(chunk->size) == size;
 }
 
 std::string read_attribute_name_at_idx(const android::ResXMLTree& parser,
@@ -1085,9 +1087,9 @@ int ApkResources::replace_in_xml_string_pool(
 
   // Layout XMLs will have a ResChunk_header, followed by ResStringPool
   // representing each XML tag and attribute string.
-  auto chunk = (android::ResChunk_header*)data;
-  LOG_FATAL_IF(dtohl(chunk->size) != len, "Can't read header size");
-
+  if (!is_binary_xml(data, len)) {
+    return android::BAD_TYPE;
+  }
   auto pool_ptr = (android::ResStringPool_header*)((char*)data + chunk_size);
   if (dtohs(pool_ptr->header.type) != android::RES_STRING_POOL_TYPE) {
     return android::BAD_TYPE;
