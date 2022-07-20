@@ -18,6 +18,7 @@
 #include "Debug.h"
 #include "DexInstruction.h"
 #include "IRCode.h"
+#include "SanitizersConfig.h"
 #include "Show.h"
 #include "VerifyUtil.h"
 #include "Walkers.h"
