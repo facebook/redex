@@ -1116,7 +1116,6 @@ std::vector<IRInstruction*> insert_hit_count_insts(
     block->insert_before(block->to_cfg_instruction_iterator(insert_pos),
                          invoke_inst);
     index += 1;
-    // TRACE(INSTRUMENT, 4, "%s\n", SHOW(info.block));
   }
 
   return invokes;

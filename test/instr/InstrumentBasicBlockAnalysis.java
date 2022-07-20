@@ -102,11 +102,27 @@ public class InstrumentBasicBlockAnalysis {
     }
   }
 
+  // Compared to the previous implementation, we shift the bitvector after each iteration.
+  // The shift is an int operator not short so we make the bitvector an int at the
+  // beginning so it does not lead to many casting operations. Through shifting, the
+  // bitvector can become zero meaning no more bits are set and the rest of the blocks
+  // are not hit. Thus, separating each bitvector to its loop allows early loop exits.
   @DoNotStrip
   public static void onNonLoopBlockHit(int offset, short bitvec1) {
     if (sIsEnabled && sNumStaticallyHitsInstrumented > 0) {
-      for (int i = 0; (i < 16) && (offset + i < sHitStats.length); i++) {
-        sHitStats[offset + i] += ((bitvec1 >> i) & 1);
+      int bit1 = 0;
+      int bitvecI1 = bitvec1;
+      for (int i = 0; i < 16; i++) {
+        if (bitvecI1 == 0) {
+          break;
+        }
+        bit1 = bitvecI1 & 1;
+
+        if (bit1 != 0) {
+          sHitStats[offset + i] += 1;
+        }
+
+        bitvecI1 = bitvecI1 >> 1;
       }
     }
   }
@@ -114,11 +130,33 @@ public class InstrumentBasicBlockAnalysis {
   @DoNotStrip
   public static void onNonLoopBlockHit(int offset, short bitvec1, short bitvec2) {
     if (sIsEnabled && sNumStaticallyHitsInstrumented > 0) {
+      int bit1 = 0, bit2 = 0;
+      int bitvecI1 = bitvec1;
+      int bitvecI2 = bitvec2;
       for (int i = 0; i < 16; i++) {
-        sHitStats[offset + i] += ((bitvec1 >> i) & 1);
-        if(offset + i + 16 < sHitStats.length) {
-          sHitStats[offset + i + 16] += ((bitvec2 >> i) & 1);
+        if (bitvecI1 == 0) {
+          break;
         }
+        bit1 = bitvecI1 & 1;
+
+        if (bit1 != 0) {
+          sHitStats[offset + i] += 1;
+        }
+
+        bitvecI1 = bitvecI1 >> 1;
+      }
+
+      for (int i = 0; i < 16; i++) {
+        if (bitvecI2 == 0) {
+          break;
+        }
+        bit2 = bitvecI2 & 1;
+
+        if (bit2 != 0) {
+          sHitStats[offset + i + 16] += 1;
+        }
+
+        bitvecI2 = bitvecI2 >> 1;
       }
     }
   }
@@ -126,12 +164,47 @@ public class InstrumentBasicBlockAnalysis {
   @DoNotStrip
   public static void onNonLoopBlockHit(int offset, short bitvec1, short bitvec2, short bitvec3) {
     if (sIsEnabled && sNumStaticallyHitsInstrumented > 0) {
+      int bit1 = 0, bit2 = 0, bit3 = 0;
+      int bitvecI1 = bitvec1;
+      int bitvecI2 = bitvec2;
+      int bitvecI3 = bitvec3;
       for (int i = 0; i < 16; i++) {
-        sHitStats[offset + i] += ((bitvec1 >> i) & 1);
-        sHitStats[offset + i + 16] += ((bitvec2 >> i) & 1);
-        if(offset + i + 32 < sHitStats.length) {
-          sHitStats[offset + i + 32] += ((bitvec3 >> i) & 1);
+        if (bitvecI1 == 0) {
+          break;
         }
+        bit1 = bitvecI1 & 1;
+
+        if (bit1 != 0) {
+          sHitStats[offset + i] += 1;
+        }
+
+        bitvecI1 = bitvecI1 >> 1;
+      }
+
+      for (int i = 0; i < 16; i++) {
+        if (bitvecI2 == 0) {
+          break;
+        }
+        bit2 = bitvecI2 & 1;
+
+        if (bit2 != 0) {
+          sHitStats[offset + i + 16] += 1;
+        }
+
+        bitvecI2 = bitvecI2 >> 1;
+      }
+
+      for (int i = 0; i < 16; i++) {
+        if (bitvecI3 == 0) {
+          break;
+        }
+        bit3 = bitvecI3 & 1;
+
+        if (bit3 != 0) {
+          sHitStats[offset + i + 32] += 1;
+        }
+
+        bitvecI3 = bitvecI3 >> 1;
       }
     }
   }
