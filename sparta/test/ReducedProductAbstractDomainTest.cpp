@@ -21,9 +21,9 @@ enum Elements0 { BOT0, TOP0 };
 enum Elements1 { BOT1, A, B, TOP1 };
 enum Elements2 { BOT2, C, D, E, F, TOP2 };
 
-using Lattice0 = BitVectorLattice<Elements0, 2, std::hash<int>>;
-using Lattice1 = BitVectorLattice<Elements1, 4, std::hash<int>>;
-using Lattice2 = BitVectorLattice<Elements2, 6, std::hash<int>>;
+using Lattice0 = BitVectorLattice<Elements0, /* kCardinality */ 2>;
+using Lattice1 = BitVectorLattice<Elements1, /* kCardinality */ 4>;
+using Lattice2 = BitVectorLattice<Elements2, /* kCardinality */ 6>;
 
 /*
  *         TOP0
@@ -85,8 +85,8 @@ INSTANTIATE_TYPED_TEST_CASE_P(ReducedProductAbstractDomain,
 template <>
 std::vector<D0xD1xD2>
 AbstractDomainPropertyTest<D0xD1xD2>::non_extremal_values() {
-  D0xD1xD2 tad(make_tuple(D0(TOP0), D1(A), D2(D)));
-  D0xD1xD2 tbe(make_tuple(D0(TOP0), D1(B), D2(E)));
+  D0xD1xD2 tad(std::make_tuple(D0(TOP0), D1(A), D2(D)));
+  D0xD1xD2 tbe(std::make_tuple(D0(TOP0), D1(B), D2(E)));
   return {tad, tbe};
 }
 
@@ -107,8 +107,8 @@ TEST(ReducedProductAbstractDomainTest, latticeOperations) {
     EXPECT_EQ(expected.str(), out.str());
   }
 
-  D0xD1xD2 tad(make_tuple(D0(TOP0), D1(A), D2(D)));
-  D0xD1xD2 tbe(make_tuple(D0(TOP0), D1(B), D2(E)));
+  D0xD1xD2 tad(std::make_tuple(D0(TOP0), D1(A), D2(D)));
+  D0xD1xD2 tbe(std::make_tuple(D0(TOP0), D1(B), D2(E)));
   D0xD1xD2 join = tad.join(tbe);
   EXPECT_TRUE(join.get<0>().is_top());
   EXPECT_TRUE(join.get<1>().is_top());
@@ -121,20 +121,20 @@ TEST(ReducedProductAbstractDomainTest, latticeOperations) {
   EXPECT_TRUE(bottom_meet.get<1>().is_bottom());
   EXPECT_TRUE(bottom_meet.get<2>().is_bottom());
 
-  D0xD1xD2 tte(make_tuple(D0(TOP0), D1(TOP1), D2(E)));
+  D0xD1xD2 tte(std::make_tuple(D0(TOP0), D1(TOP1), D2(E)));
   D0xD1xD2 meet = tad.meet(tte);
   EXPECT_TRUE(meet.get<0>().is_top());
   EXPECT_EQ(A, meet.get<1>().element());
   EXPECT_EQ(C, meet.get<2>().element());
   EXPECT_TRUE(meet.equals(tad.narrowing(tte)));
 
-  D0xD1xD2 bad(make_tuple(D0(BOT0), D1(A), D2(D)));
+  D0xD1xD2 bad(std::make_tuple(D0(BOT0), D1(A), D2(D)));
   EXPECT_TRUE(bad.is_bottom());
   EXPECT_TRUE(bad.get<0>().is_bottom());
   EXPECT_TRUE(bad.get<1>().is_bottom());
   EXPECT_TRUE(bad.get<2>().is_bottom());
 
-  D0xD1xD2 tac_reduced(make_tuple(D0(BOT0), D1(A), D2(C)));
+  D0xD1xD2 tac_reduced(std::make_tuple(D0(BOT0), D1(A), D2(C)));
   EXPECT_TRUE(tac_reduced.is_bottom());
 }
 
@@ -158,9 +158,9 @@ TEST(ReducedProductAbstractDomainTest, normalizedConstruction) {
 }
 
 TEST(ReducedProductAbstractDomainTest, destructiveOperations) {
-  D0xD1xD2 tad(make_tuple(D0(TOP0), D1(A), D2(D)));
-  D0xD1xD2 tbe(make_tuple(D0(TOP0), D1(B), D2(E)));
-  D0xD1xD2 ttf(make_tuple(D0(TOP0), D1(TOP1), D2(F)));
+  D0xD1xD2 tad(std::make_tuple(D0(TOP0), D1(A), D2(D)));
+  D0xD1xD2 tbe(std::make_tuple(D0(TOP0), D1(B), D2(E)));
+  D0xD1xD2 ttf(std::make_tuple(D0(TOP0), D1(TOP1), D2(F)));
   D0xD1xD2 x = tad;
   D0xD1xD2 tbe1 = tbe;
   x.join_with(tbe);
@@ -200,7 +200,7 @@ TEST(ReducedProductAbstractDomainTest, destructiveOperations) {
   x.set_to_top();
   EXPECT_TRUE(x.is_top());
 
-  D0xD1xD2 tae(make_tuple(D0(TOP0), D1(A), D2(E)));
+  D0xD1xD2 tae(std::make_tuple(D0(TOP0), D1(A), D2(E)));
   D0xD1xD2 tac = tad.meet(tae);
   EXPECT_TRUE(tac.get<0>().is_top());
   EXPECT_EQ(A, tac.get<1>().element());
