@@ -379,7 +379,7 @@ struct Summary : public sparta::AbstractDomain<Summary> {
 };
 
 enum Elements { BOTTOM, PURE, IMPURE, TOP };
-using Lattice = sparta::BitVectorLattice<Elements, 4, std::hash<int>>;
+using Lattice = sparta::BitVectorLattice<Elements, /* kCardinality */ 4>;
 Lattice lattice({BOTTOM, PURE, IMPURE, TOP},
                 {{BOTTOM, PURE}, {BOTTOM, IMPURE}, {PURE, TOP}, {IMPURE, TOP}});
 
