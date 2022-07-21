@@ -105,10 +105,13 @@ public class ObjectEscapeAnalysisTest {
 
   static class G {
     static Object leak;
+    static Object leak2;
     public G() {
       leak = this;
     }
     public G(H h) {
+      leak = this;
+      leak2 = h;
     }
     public int getX() {
       return 42;
@@ -267,5 +270,33 @@ public class ObjectEscapeAnalysisTest {
 
   public static N reduceTo42WithExpandedCtor() {
     return new N(new N.Builder(42));
+  }
+
+  static class O {
+    int x;
+    public static O instance;
+    static {
+      // This prevents O from being completely inlinable (everywhere).
+      instance = new O(23);
+    }
+    public O(int x) {
+      this.x = x;
+    }
+    public int getX() {
+      return this.x;
+    }
+  }
+
+  public static int reduceTo42IncompleteInlinableType() {
+    O o = new O(42);
+    return o.getX();
+  }
+
+  public static int reduceTo42IncompleteInlinableTypeB() {
+    // This object creation can be reduced
+    O o = new O(42);
+    // This one not.
+    O.instance = new O(16);
+    return o.getX();
   }
 }

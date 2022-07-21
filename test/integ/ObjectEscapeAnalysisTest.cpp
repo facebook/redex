@@ -313,3 +313,38 @@ TEST_F(ObjectEscapeAnalysisTest, reduceTo42WithExpandedCtor) {
   ASSERT_EQ(actual_expanded_ctor.str(),
             assembler::to_s_expr(expected_expanded_ctor.get()).str());
 }
+
+TEST_F(ObjectEscapeAnalysisTest, reduceTo42IncompleteInlinableType) {
+  run();
+
+  auto actual = get_s_expr(
+      "Lcom/facebook/redextest/"
+      "ObjectEscapeAnalysisTest;.reduceTo42IncompleteInlinableType:()I");
+  auto expected = assembler::ircode_from_string(R"(
+   (
+      (const v1 42)
+      (return v1)
+    )
+)");
+  ASSERT_EQ(actual.str(), assembler::to_s_expr(expected.get()).str());
+}
+
+TEST_F(ObjectEscapeAnalysisTest, reduceTo42IncompleteInlinableTypeB) {
+  run();
+
+  auto actual = get_s_expr(
+      "Lcom/facebook/redextest/"
+      "ObjectEscapeAnalysisTest;.reduceTo42IncompleteInlinableTypeB:()I");
+  auto expected = assembler::ircode_from_string(R"(
+   (
+      (const v2 16)
+      (new-instance "Lcom/facebook/redextest/ObjectEscapeAnalysisTest$O;")
+      (move-result-pseudo-object v1)
+      (invoke-direct (v1 v2) "Lcom/facebook/redextest/ObjectEscapeAnalysisTest$O;.<init>:(I)V")
+      (sput-object v1 "Lcom/facebook/redextest/ObjectEscapeAnalysisTest$O;.instance:Lcom/facebook/redextest/ObjectEscapeAnalysisTest$O;")
+      (const v1 42)
+      (return v1)
+   )
+)");
+  ASSERT_EQ(actual.str(), assembler::to_s_expr(expected.get()).str());
+}
