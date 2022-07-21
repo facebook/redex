@@ -23,11 +23,7 @@ namespace sparta {
 
 namespace fad_impl {
 
-template <typename Element,
-          size_t cardinality,
-          bool construct_opposite_lattice,
-          typename Hash,
-          typename Equal>
+template <typename Element, size_t cardinality, typename Hash, typename Equal>
 class BitVectorSemiLattice;
 
 } // namespace fad_impl
@@ -180,18 +176,24 @@ inline std::ostream& operator<<(
 namespace sparta {
 
 /*
- * A lattice maintains two semi-lattices internally, always use opposite
+ * A lattice with elements encoded as bit vectors.
+ *
+ * This maintains two semi-lattices internally; always use the opposite
  * semi-lattice representation and calculate corresponding lower semi-lattice
- * when needed
+ * encoding when needed.
  */
 template <typename Element,
           size_t cardinality,
           typename Hash = std::hash<Element>,
           typename Equal = std::equal_to<Element>>
 class BitVectorLattice final
-    : public LatticeEncoding<Element, std::bitset<cardinality>> {
+    : public fad_impl::BitVectorSemiLattice<Element, cardinality, Hash, Equal>::
+          LatticeEncoding {
+  using SemiLattice =
+      fad_impl::BitVectorSemiLattice<Element, cardinality, Hash, Equal>;
+
  public:
-  using Encoding = std::bitset<cardinality>;
+  using Encoding = typename SemiLattice::Encoding;
 
   ~BitVectorLattice() {
     // The destructor is the only method that is guaranteed to be created when a
@@ -205,44 +207,52 @@ class BitVectorLattice final
                   "Element is not copy assignable");
   }
 
+  /*
+   * In a standard fixpoint computation the Join is by far the dominant
+   * operation. Hence, we favor the opposite semi-lattice encoding whenever we
+   * construct a domain element.
+   *
+   * However, we give the impression of operating in the given (lower) lattice
+   * so everything below is opposite: top is bottom, join is meet, leq is geq,
+   * etc.
+   */
+
   BitVectorLattice() = delete;
 
   BitVectorLattice(
       std::initializer_list<Element> elements,
       std::initializer_list<std::pair<Element, Element>> hasse_diagram)
-      : m_lower_semi_lattice(elements, hasse_diagram),
-        m_opposite_semi_lattice(elements, hasse_diagram) {}
+      : m_lower_semi_lattice(
+            elements, hasse_diagram, /* construct_opposite_lattice */ false),
+        m_opposite_semi_lattice(
+            elements, hasse_diagram, /* construct_opposite_lattice */ true) {}
 
   Encoding encode(const Element& element) const override {
-    // In a standard fixpoint computation the Join is by far the dominant
-    // operation. Hence, we favor the opposite semi-lattice encoding whenever we
-    // construct a domain element.
     return m_opposite_semi_lattice.encode(element);
   }
 
-  // Default use opposite semi-lattice for decoding.
   Element decode(const Encoding& encoding) const override {
     return m_opposite_semi_lattice.decode(encoding);
   }
 
-  Element decode_lower(const Encoding& encoding) const {
-    return m_lower_semi_lattice.decode(encoding);
+  bool is_bottom(const Encoding& x) const override {
+    return m_opposite_semi_lattice.is_top(x);
   }
 
-  bool is_bottom(const Encoding& x) const override { return x.all(); }
-
-  bool is_top(const Encoding& x) const override { return x.count() == 1; }
+  bool is_top(const Encoding& x) const override {
+    return m_opposite_semi_lattice.is_bottom(x);
+  }
 
   bool equals(const Encoding& x, const Encoding& y) const override {
-    return x == y;
+    return m_opposite_semi_lattice.equals(x, y);
   }
 
   bool leq(const Encoding& x, const Encoding& y) const override {
-    return (x & y) == y;
+    return m_opposite_semi_lattice.geq(x, y);
   }
 
   Encoding join(const Encoding& x, const Encoding& y) const override {
-    return x & y;
+    return m_opposite_semi_lattice.meet(x, y);
   }
 
   Encoding meet(const Encoding& x, const Encoding& y) const override {
@@ -251,15 +261,19 @@ class BitVectorLattice final
     // before returning.
     auto x_lower = get_lower_encoding(x);
     auto y_lower = get_lower_encoding(y);
-    Encoding lower_encoding = x_lower & y_lower;
+    Encoding lower_encoding = m_lower_semi_lattice.meet(x_lower, y_lower);
     return get_opposite_encoding(lower_encoding);
   }
 
-  Encoding bottom() const override { return m_opposite_semi_lattice.bottom(); }
+  Encoding bottom() const override { return m_opposite_semi_lattice.top(); }
 
-  Encoding top() const override { return m_opposite_semi_lattice.top(); }
+  Encoding top() const override { return m_opposite_semi_lattice.bottom(); }
 
  private:
+  Element decode_lower(const Encoding& encoding) const {
+    return m_lower_semi_lattice.decode(encoding);
+  }
+
   Encoding get_lower_encoding(const Encoding& x) const {
     const Element& element = decode(x);
     return m_lower_semi_lattice.encode(element);
@@ -270,18 +284,8 @@ class BitVectorLattice final
     return m_opposite_semi_lattice.encode(element);
   }
 
-  fad_impl::BitVectorSemiLattice<Element,
-                                 cardinality,
-                                 /* construct_opposite_lattice */ false,
-                                 Hash,
-                                 Equal>
-      m_lower_semi_lattice;
-  fad_impl::BitVectorSemiLattice<Element,
-                                 cardinality,
-                                 /* construct_opposite_lattice */ true,
-                                 Hash,
-                                 Equal>
-      m_opposite_semi_lattice;
+  SemiLattice m_lower_semi_lattice;
+  SemiLattice m_opposite_semi_lattice;
 };
 
 namespace fad_impl {
@@ -341,8 +345,8 @@ namespace fad_impl {
  *            c  0  0  1  1                         = b Join c in the original
  *            d  0  0  0  1                           lattice
  *
- * The template parameter 'construct_opposite_lattice' specifies the lattice to
- * consider for the encoding.
+ * The constructor parameter 'construct_opposite_lattice' specifies the lattice
+ * to consider for the encoding.
  *
  * Note that constructing this representation has cubic time complexity in the
  * number of elements of the lattice. Since the construction is done only once
@@ -350,16 +354,15 @@ namespace fad_impl {
  * should not be a problem in practice.
  *
  */
-template <typename Element,
-          size_t cardinality,
-          bool construct_opposite_lattice,
-          typename Hash,
-          typename Equal>
+template <typename Element, size_t cardinality, typename Hash, typename Equal>
 class BitVectorSemiLattice final {
  public:
   // The size of a bitset structure is a compile-time constant, hence the need
   // for the 'cardinality' parameter.
   using Encoding = std::bitset<cardinality>;
+
+  // The lattice encoding we're used to implement.
+  using LatticeEncoding = ::sparta::LatticeEncoding<Element, Encoding>;
 
   BitVectorSemiLattice() = delete;
 
@@ -370,7 +373,8 @@ class BitVectorSemiLattice final {
    */
   BitVectorSemiLattice(
       std::initializer_list<Element> elements,
-      std::initializer_list<std::pair<Element, Element>> hasse_diagram) {
+      std::initializer_list<std::pair<Element, Element>> hasse_diagram,
+      bool construct_opposite_lattice) {
     RUNTIME_CHECK(elements.size() == cardinality,
                   invalid_argument()
                       << argument_name("elements")
@@ -457,16 +461,24 @@ class BitVectorSemiLattice final {
   }
 
   bool is_bottom(const Encoding& x) const {
-    // In the lower semi-lattice representation the Bottom element is the unique
-    // bit vector that has only one bit set to 1, whereas in the opposite
-    // semi-lattice it has all its bits set to 1.
-    return construct_opposite_lattice ? x.all() : (x.count() == 1);
+    // In the semi-lattice, the Bottom element is the
+    // unique bit vector that has only one bit set to 1.
+    return x.count() == 1;
   }
 
   bool is_top(const Encoding& x) const {
-    // The Top element is defined as the the dual of Bottom.
-    return construct_opposite_lattice ? (x.count() == 1) : x.all();
+    // In the semi-lattice, the Top element is the
+    // unique bit vector that has all bits set to 1.
+    return x.all();
   }
+
+  bool equals(const Encoding& x, const Encoding& y) const { return x == y; }
+
+  bool geq(const Encoding& x, const Encoding& y) const {
+    return equals(meet(x, y), y);
+  }
+
+  Encoding meet(const Encoding& x, const Encoding& y) const { return x & y; }
 
   Encoding bottom() const { return m_bottom; }
 
