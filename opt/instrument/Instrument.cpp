@@ -564,6 +564,7 @@ void InstrumentPass::bind_config() {
        m_options.instrument_only_root_store);
   bind("inline_onBlockHit", false, m_options.inline_onBlockHit);
   bind("inline_onNonLoopBlockHit", false, m_options.inline_onNonLoopBlockHit);
+  bind("apply_CSE_CopyProp", false, m_options.apply_CSE_CopyProp);
 
   size_t max_analysis_methods;
   if (m_options.instrumentation_strategy == SIMPLE_METHOD_TRACING) {
@@ -1026,13 +1027,13 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
   shrinker_config.run_const_prop = true;
   shrinker_config.run_local_dce = true;
   shrinker_config.compute_pure_methods = false;
-  if (m_options.inline_onBlockHit || m_options.inline_onNonLoopBlockHit) {
+  if (m_options.apply_CSE_CopyProp) {
     shrinker_config.run_cse = true;
     shrinker_config.run_copy_prop = true;
   }
 
   std::unordered_set<const DexString*> field_names;
-  if (m_options.inline_onBlockHit) {
+  if (m_options.apply_CSE_CopyProp) {
     auto* field =
         analysis_cls->find_field_from_simple_deobfuscated_name("sHitStats");
     field_names.insert(DexString::make_string(field->get_name()->str()));

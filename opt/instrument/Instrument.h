@@ -83,6 +83,7 @@ class InstrumentPass : public Pass {
     bool instrument_only_root_store;
     bool inline_onBlockHit;
     bool inline_onNonLoopBlockHit;
+    bool apply_CSE_CopyProp;
   };
 
  private:
