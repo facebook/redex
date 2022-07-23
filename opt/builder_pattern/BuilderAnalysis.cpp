@@ -455,11 +455,23 @@ ConstTypeHashSet BuilderAnalysis::non_removable_types() {
 
   // Consider other non-removable usages (for example synchronization usage).
   for (const auto& pair : m_usage) {
-    auto current_instance = get_instantiated_type(pair.first);
+    auto instantiation = pair.first;
+    auto current_instance = get_instantiated_type(instantiation);
 
     if (non_removable_types.count(current_instance)) {
       // Already decided it isn't removable.
       continue;
+    }
+
+    // Check if the instantiation is an invoke and non-inlinable.
+    if (opcode::is_an_invoke(instantiation->opcode())) {
+      auto method = resolve_method(instantiation->get_method(),
+                                   opcode_to_search(instantiation));
+      if (!method || !method->get_code()) {
+        non_removable_types.emplace(current_instance);
+        TRACE(BLD_PATTERN, 3, "non removal instantiation %s",
+              SHOW(instantiation));
+      }
     }
 
     for (const IRInstruction* insn : pair.second) {
