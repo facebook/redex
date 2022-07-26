@@ -15,6 +15,7 @@
 #include <iostream>
 #include <limits>
 #include <list>
+#include <mutex>
 #include <thread>
 #include <typeinfo>
 #include <unordered_set>
@@ -974,6 +975,10 @@ std::unique_ptr<keep_rules::ProguardConfiguration> empty_pg_config() {
   return std::make_unique<keep_rules::ProguardConfiguration>();
 }
 
+struct PassManager::InternalFields {
+  std::mutex m_metrics_lock;
+};
+
 PassManager::PassManager(const std::vector<Pass*>& passes)
     : PassManager(
           passes, ConfigFiles(Json::Value(Json::objectValue)), RedexOptions{}) {
@@ -1000,7 +1005,8 @@ PassManager::PassManager(
       m_current_pass_info(nullptr),
       m_pg_config(std::move(pg_config)),
       m_redex_options(options),
-      m_testing_mode(false) {
+      m_testing_mode(false),
+      m_internal_fields(new InternalFields()) {
   init(config);
   if (getenv("MALLOC_PROFILE_PASS")) {
     m_malloc_profile_pass = find_pass(getenv("MALLOC_PROFILE_PASS"));
@@ -1439,15 +1445,18 @@ Pass* PassManager::find_pass(const std::string& pass_name) const {
 
 void PassManager::incr_metric(const std::string& key, int64_t value) {
   always_assert_log(m_current_pass_info != nullptr, "No current pass!");
+  std::unique_lock<std::mutex> lock{m_internal_fields->m_metrics_lock};
   (m_current_pass_info->metrics)[key] += value;
 }
 
 void PassManager::set_metric(const std::string& key, int64_t value) {
   always_assert_log(m_current_pass_info != nullptr, "No current pass!");
+  std::unique_lock<std::mutex> lock{m_internal_fields->m_metrics_lock};
   (m_current_pass_info->metrics)[key] = value;
 }
 
 int64_t PassManager::get_metric(const std::string& key) {
+  std::unique_lock<std::mutex> lock{m_internal_fields->m_metrics_lock};
   return (m_current_pass_info->metrics)[key];
 }
 

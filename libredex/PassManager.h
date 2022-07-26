@@ -160,4 +160,8 @@ class PassManager {
   AssessorConfig m_assessor_config;
 
   std::vector<std::unique_ptr<Pass>> m_cloned_passes;
+
+  // unique_ptr to avoid header include.
+  struct InternalFields;
+  std::unique_ptr<InternalFields> m_internal_fields;
 };
