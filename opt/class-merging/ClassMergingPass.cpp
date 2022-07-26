@@ -37,7 +37,8 @@ void load_types(const std::vector<std::string>& type_names, Types& types) {
 /**
  * Verify model specs are consistent
  */
-bool verify_model_spec(const ModelSpec& model_spec) {
+bool verify_model_spec(const std::vector<ModelSpec>& model_specs,
+                       const ModelSpec& model_spec) {
   always_assert_log(
       !model_spec.name.empty(),
       "[ClassMerging] Wrong specification: model must have \"name\"");
@@ -60,6 +61,13 @@ bool verify_model_spec(const ModelSpec& model_spec) {
         root,
         "[ClassMerging] Wrong specification: model %s must have \"roots\"",
         model_spec.name.c_str());
+  }
+
+  for (const auto& spec : model_specs) {
+    bool duplicated =
+        spec.name == model_spec.name || spec.roots == model_spec.roots;
+    always_assert_log(!duplicated, "Duplicated model spec %s",
+                      model_spec.name.c_str());
   }
   return true;
 }
@@ -235,7 +243,7 @@ void ClassMergingPass::bind_config() {
       model.interdex_grouping_inferring_mode =
           parse_grouping_inferring_mode(usage_mode_str, default_mode);
 
-      if (!verify_model_spec(model)) {
+      if (!verify_model_spec(m_model_specs, model)) {
         continue;
       }
 
