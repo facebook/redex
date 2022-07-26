@@ -156,4 +156,8 @@ class PassManager {
   AccumulatingTimer m_check_unique_deobfuscateds_timer;
 
   AssessorConfig m_assessor_config;
+
+  // unique_ptr to avoid header include.
+  struct InternalFields;
+  std::unique_ptr<InternalFields> m_internal_fields;
 };
