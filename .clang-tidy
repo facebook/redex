@@ -17,6 +17,7 @@ misc-definitions-in-headers,
 modernize-use-override,modernize-use-using,
 google-explicit-constructor,hicpp-explicit-conversions,
 llvm-namespace-comment,
+-facebook-hte-NullableReturn,
 '
 WarningsAsErrors: '*'
 CheckOptions:
