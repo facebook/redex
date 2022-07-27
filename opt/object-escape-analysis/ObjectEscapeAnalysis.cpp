@@ -226,8 +226,11 @@ using MethodSummaries = std::unordered_map<DexMethod*, MethodSummary>;
 class Analyzer final : public BaseIRAnalyzer<Environment> {
  public:
   explicit Analyzer(const MethodSummaries& method_summaries,
+                    DexMethodRef* incomplete_marker_method,
                     cfg::ControlFlowGraph& cfg)
-      : BaseIRAnalyzer(cfg), m_method_summaries(method_summaries) {
+      : BaseIRAnalyzer(cfg),
+        m_method_summaries(method_summaries),
+        m_incomplete_marker_method(incomplete_marker_method) {
     MonotonicFixpointIterator::run(Environment::top());
   }
 
@@ -299,7 +302,7 @@ class Analyzer final : public BaseIRAnalyzer<Environment> {
         return;
       }
     } else if (opcode::is_an_invoke(insn->opcode())) {
-      if (is_benign(insn->get_method())) {
+      if (is_benign(insn->get_method()) || is_incomplete_marker(insn)) {
         current_state->set(RESULT_REGISTER, Domain(NO_ALLOCATION));
         return;
       }
@@ -358,8 +361,14 @@ class Analyzer final : public BaseIRAnalyzer<Environment> {
 
  private:
   const MethodSummaries& m_method_summaries;
+  DexMethodRef* m_incomplete_marker_method;
   mutable Escapes m_escapes;
   mutable std::unordered_set<const IRInstruction*> m_returns;
+
+  bool is_incomplete_marker(const IRInstruction* insn) const {
+    return insn->opcode() == OPCODE_INVOKE_STATIC &&
+           insn->get_method() == m_incomplete_marker_method;
+  }
 };
 
 MethodSummaries compute_method_summaries(
@@ -388,7 +397,8 @@ MethodSummaries compute_method_summaries(
     workqueue_run<DexMethod*>(
         [&](DexMethod* method) {
           auto& cfg = method->get_code()->cfg();
-          Analyzer analyzer(method_summaries, cfg);
+          Analyzer analyzer(method_summaries,
+                            /* incomplete_marker_method */ nullptr, cfg);
           const auto& escapes = analyzer.get_escapes();
           const auto& returns = analyzer.get_returns();
           src_index_t src_index = 0;
@@ -477,7 +487,8 @@ std::unordered_map<DexType*, InlineAnchorsOfType> compute_inline_anchors(
   Timer t("compute_inline_anchors");
   ConcurrentMap<DexType*, InlineAnchorsOfType> concurrent_inline_anchors;
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
-    Analyzer analyzer(method_summaries, code.cfg());
+    Analyzer analyzer(method_summaries, /* incomplete_marker_method */ nullptr,
+                      code.cfg());
     auto inlinables = analyzer.get_inlinables();
     for (auto insn : inlinables) {
       auto [callee, type] = resolve_inlinable(method_summaries, insn);
@@ -1220,6 +1231,11 @@ class RootMethodReducer {
       }
     }
 
+    auto* insn = find_incomplete_marker_methods();
+    always_assert_log(!insn,
+                      "Incomplete marker {%s} present after reduction in\n%s",
+                      SHOW(insn), SHOW(m_method->get_code()->cfg()));
+
     shrink();
     return (ReducedMethod){
         m_method, initial_code_size, std::move(m_inlined_methods),
@@ -1319,9 +1335,13 @@ class RootMethodReducer {
   bool inline_anchors() {
     auto& cfg = m_method->get_code()->cfg();
     for (int iteration = 0; true; iteration++) {
-      Analyzer analyzer(m_method_summaries, cfg);
+      Analyzer analyzer(m_method_summaries, m_incomplete_marker_method, cfg);
       std::unordered_set<IRInstruction*> invokes_to_inline;
       auto inlinables = analyzer.get_inlinables();
+      Lazy<live_range::DefUseChains> du_chains([&]() {
+        live_range::MoveAwareChains chains(cfg);
+        return chains.get_def_use_chains();
+      });
       for (auto insn : inlinables) {
         auto [callee, type] = resolve_inlinable(m_method_summaries, insn);
         auto it = m_types.find(type);
@@ -1332,9 +1352,10 @@ class RootMethodReducer {
           // We are only going to consider incompletely inlinable types when we
           // find them in the first iteration, i.e. in the original method,
           // and not coming from any inlined method. We are then going insert
-          // a special marker invocation so that we can later the originally
-          // matched anchors again. This instruction will get removed later.
-          if (iteration > 0) {
+          // a special marker invocation instruction so that we can later find
+          // the originally matched anchors again. This instruction will get
+          // removed later.
+          if (iteration > 0 && !has_incomplete_marker((*du_chains)[insn])) {
             continue;
           }
           auto insn_it = cfg.find_insn(insn);
@@ -1383,6 +1404,16 @@ class RootMethodReducer {
     return std::any_of(uses.begin(), uses.end(), [&](auto& use) {
       return is_incomplete_marker(use.insn);
     });
+  }
+
+  IRInstruction* find_incomplete_marker_methods() {
+    auto& cfg = m_method->get_code()->cfg();
+    for (auto& mie : InstructionIterable(cfg)) {
+      if (is_incomplete_marker(mie.insn)) {
+        return mie.insn;
+      }
+    }
+    return nullptr;
   }
 
   std::optional<std::pair<live_range::DefUseChains, IRInstruction*>>
