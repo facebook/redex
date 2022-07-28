@@ -633,7 +633,7 @@ bool params_change_regs(DexMethod* method) {
       if (opcode::is_an_iget(op)) {
         DexField* field =
             resolve_field(insn->get_field(), FieldSearch::Instance);
-        if (field->get_class() == arg) {
+        if (field && field->get_class() == arg) {
           continue;
         }
       }
