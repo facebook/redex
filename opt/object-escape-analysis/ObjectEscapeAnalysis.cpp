@@ -1342,6 +1342,7 @@ class RootMethodReducer {
         live_range::MoveAwareChains chains(cfg);
         return chains.get_def_use_chains();
       });
+      cfg::CFGMutation mutation(cfg);
       for (auto insn : inlinables) {
         auto [callee, type] = resolve_inlinable(m_method_summaries, insn);
         auto it = m_types.find(type);
@@ -1355,20 +1356,22 @@ class RootMethodReducer {
           // a special marker invocation instruction so that we can later find
           // the originally matched anchors again. This instruction will get
           // removed later.
-          if (iteration > 0 && !has_incomplete_marker((*du_chains)[insn])) {
-            continue;
+          if (!has_incomplete_marker((*du_chains)[insn])) {
+            if (iteration > 0) {
+              continue;
+            }
+            auto insn_it = cfg.find_insn(insn);
+            always_assert(!insn_it.is_end());
+            auto move_result_it = cfg.move_result_of(insn_it);
+            if (move_result_it.is_end()) {
+              continue;
+            }
+            auto invoke_insn = (new IRInstruction(OPCODE_INVOKE_STATIC))
+                                   ->set_method(m_incomplete_marker_method)
+                                   ->set_srcs_size(1)
+                                   ->set_src(0, move_result_it->insn->dest());
+            mutation.insert_after(move_result_it, {invoke_insn});
           }
-          auto insn_it = cfg.find_insn(insn);
-          always_assert(!insn_it.is_end());
-          auto move_result_it = cfg.move_result_of(insn_it);
-          if (move_result_it.is_end()) {
-            continue;
-          }
-          auto invoke_insn = (new IRInstruction(OPCODE_INVOKE_STATIC))
-                                 ->set_method(m_incomplete_marker_method)
-                                 ->set_srcs_size(1)
-                                 ->set_src(0, move_result_it->insn->dest());
-          cfg.insert_after(move_result_it, invoke_insn);
         }
         if (!callee) {
           continue;
@@ -1376,6 +1379,7 @@ class RootMethodReducer {
         invokes_to_inline.insert(insn);
         m_inlined_methods[callee].insert(type);
       }
+      mutation.flush();
       if (invokes_to_inline.empty()) {
         return true;
       }
