@@ -687,9 +687,6 @@ std::tuple<size_t, std::vector<IRInstruction*>> insert_onMethodExit_calls(
       short vec = loop_shorts[j];
       short inv_vec = ~vec;
       IRInstruction* inst_and = new IRInstruction(OPCODE_AND_INT_LIT16);
-      TRACE(INSTRUMENT, 4,
-            "Normal Vector for Just Loop Blocks (%hu) inverted (%hu)", vec,
-            inv_vec);
       inst_and->set_literal(inv_vec);
       inst_and->set_src(0, reg);
       inst_and->set_dest(reg);
@@ -1761,12 +1758,30 @@ void BlockInstrumentHelper::do_basic_block_tracing(
     blockHit_code->build_cfg(true);
   }
 
-  if (options.inline_onNonLoopBlockHit) {
-    for (auto& en : onNonLoopBlockHit_map) {
-      IRCode* nonLoopBlockHit_code = en.second->get_code();
-      nonLoopBlockHit_code->build_cfg(true);
-    }
+  for (auto& en : onNonLoopBlockHit_map) {
+    IRCode* nonLoopBlockHit_code = en.second->get_code();
+    nonLoopBlockHit_code->build_cfg(true);
   }
+
+  DexMethod* binaryIncrementer;
+  for (const auto& m : analysis_cls->get_dmethods()) {
+    const auto name = m->get_name()->str();
+    if ("binaryIncrementer" != name) {
+      continue;
+    }
+    const auto* args = m->get_proto()->get_args();
+    if (args->size() != 2) {
+      always_assert_log(
+          false,
+          "[InstrumentPass] error: Proto type of binaryIncrementer must be "
+          "binaryIncrementer(int, short), but it was %s",
+          show(m->get_proto()).c_str());
+    }
+    binaryIncrementer = m;
+    break;
+  }
+  IRCode* binaryIncrementer_code = binaryIncrementer->get_code();
+  binaryIncrementer_code->build_cfg(true);
 
   // This method_offset is used in sMethodStats[] to locate a method profile.
   // We have a small header in the beginning of sMethodStats.
@@ -1822,12 +1837,18 @@ void BlockInstrumentHelper::do_basic_block_tracing(
                              inliner_config, min_sdk,
                              MultiMethodInlinerMode::None);
 
+  for (auto& en : onNonLoopBlockHit_map) {
+    std::unordered_set<DexMethod*> insns;
+    insns.insert(binaryIncrementer);
+    inliner.inline_callees(en.second, insns);
+  }
+
   walk::code(scope, [&](DexMethod* method, IRCode& code) {
     TraceContext trace_context(method);
 
     all_methods++;
     if (method == analysis_cls->get_clinit() || method == onMethodBegin ||
-        method == onBlockHit) {
+        method == onBlockHit || method == binaryIncrementer) {
       specials++;
       return;
     }
@@ -1892,12 +1913,12 @@ void BlockInstrumentHelper::do_basic_block_tracing(
     blockHit_code->clear_cfg();
   }
 
-  if (options.inline_onNonLoopBlockHit) {
-    for (auto& en : onNonLoopBlockHit_map) {
-      IRCode* nonLoopBlockHit_code = en.second->get_code();
-      nonLoopBlockHit_code->clear_cfg();
-    }
+  for (auto& en : onNonLoopBlockHit_map) {
+    IRCode* nonLoopBlockHit_code = en.second->get_code();
+    nonLoopBlockHit_code->clear_cfg();
   }
+
+  binaryIncrementer_code->clear_cfg();
 
   // Patch static fields.
   const auto field_name = array_fields.at(1)->get_name()->str();

@@ -26,6 +26,8 @@ public class InstrumentBasicBlockAnalysis {
   @DoNotStrip private static boolean sIsEnabled = true;
   @DoNotStrip private static AtomicInteger sMethodCounter = new AtomicInteger(0);
 
+  private static final boolean sUseBinaryIncrementer = false;
+
   @DoNotStrip
   public static void cleanup() {
     sMethodCounter.set(0);
@@ -102,109 +104,219 @@ public class InstrumentBasicBlockAnalysis {
     }
   }
 
-  // Compared to the previous implementation, we shift the bitvector after each iteration.
-  // The shift is an int operator not short so we make the bitvector an int at the
-  // beginning so it does not lead to many casting operations. Through shifting, the
-  // bitvector can become zero meaning no more bits are set and the rest of the blocks
-  // are not hit. Thus, separating each bitvector to its loop allows early loop exits.
+  // Compared to the previous implementation, we unrolled the loop into a binary tree to
+  // find the bits that are set. Basically, check 8 bits then 4 bits then 2 bits then the
+  // specific bits. If the lower 8 bits are zero then we can completely ignore incrementing
+  // the hit array for the eight blocks with one check rather than doing 8 checks.
+  @DoNotStrip
+  private static void binaryIncrementer(int offset, short bitvec) {
+    short[] hitstats = sHitStats;
+    if ((bitvec & 0b11111111) != 0) {
+      if ((bitvec & 0b1111) != 0) {
+        if ((bitvec & 0b11) != 0) {
+          if ((bitvec & 0b1) != 0) {
+            hitstats[offset] += 1;
+          }
+
+          if ((bitvec & 0b10) != 0) {
+            hitstats[offset + 1] += 1;
+          }
+        }
+
+        if ((bitvec & 0b1100) != 0) {
+          if ((bitvec & 0b100) != 0) {
+            hitstats[offset + 2] += 1;
+          }
+
+          if ((bitvec & 0b1000) != 0) {
+            hitstats[offset + 3] += 1;
+          }
+        }
+      }
+
+      if ((bitvec & 0b11110000) != 0) {
+        if ((bitvec & 0b110000) != 0) {
+          if ((bitvec & 0b10000) != 0) {
+            hitstats[offset + 4] += 1;
+          }
+
+          if ((bitvec & 0b100000) != 0) {
+            hitstats[offset + 5] += 1;
+          }
+        }
+
+        if ((bitvec & 0b11000000) != 0) {
+          if ((bitvec & 0b1000000) != 0) {
+            hitstats[offset + 6] += 1;
+          }
+
+          if ((bitvec & 0b10000000) != 0) {
+            hitstats[offset + 7] += 1;
+          }
+        }
+      }
+    }
+
+    if ((bitvec & 0b1111111100000000) != 0) {
+      if ((bitvec & 0b111100000000) != 0) {
+        if ((bitvec & 0b1100000000) != 0) {
+          if ((bitvec & 0b100000000) != 0) {
+            hitstats[offset + 8] += 1;
+          }
+
+          if ((bitvec & 0b1000000000) != 0) {
+            hitstats[offset + 9] += 1;
+          }
+        }
+
+        if ((bitvec & 0b110000000000) != 0) {
+          if ((bitvec & 0b10000000000) != 0) {
+            hitstats[offset + 10] += 1;
+          }
+
+          if ((bitvec & 0b100000000000) != 0) {
+            hitstats[offset + 11] += 1;
+          }
+        }
+      }
+
+      if ((bitvec & 0b1111000000000000) != 0) {
+        if ((bitvec & 0b11000000000000) != 0) {
+          if ((bitvec & 0b1000000000000) != 0) {
+            hitstats[offset + 12] += 1;
+          }
+
+          if ((bitvec & 0b10000000000000) != 0) {
+            hitstats[offset + 13] += 1;
+          }
+        }
+
+        if ((bitvec & 0b1100000000000000) != 0) {
+          if ((bitvec & 0b100000000000000) != 0) {
+            hitstats[offset + 14] += 1;
+          }
+
+          if ((bitvec & 0b1000000000000000) != 0) {
+            hitstats[offset + 15] += 1;
+          }
+        }
+      }
+    }
+  }
+
   @DoNotStrip
   public static void onNonLoopBlockHit(int offset, short bitvec1) {
-    if (sIsEnabled && sNumStaticallyHitsInstrumented > 0) {
-      int bit1 = 0;
-      int bitvecI1 = bitvec1;
-      for (int i = 0; i < 16; i++) {
-        if (bitvecI1 == 0) {
-          break;
-        }
-        bit1 = bitvecI1 & 1;
+    if (sIsEnabled) {
+      if (sUseBinaryIncrementer) {
+        InstrumentBasicBlockAnalysis.binaryIncrementer(offset, bitvec1);
+      } else {
+        int bit1 = 0;
+        int bitvecI1 = bitvec1;
+        for (int i = 0; i < 16; i++) {
+          if (bitvecI1 == 0) {
+            break;
+          }
+          bit1 = bitvecI1 & 1;
 
-        if (bit1 != 0) {
-          sHitStats[offset + i] += 1;
-        }
+          if (bit1 != 0) {
+            sHitStats[offset + i] += 1;
+          }
 
-        bitvecI1 = bitvecI1 >> 1;
+          bitvecI1 = bitvecI1 >> 1;
+        }
       }
     }
   }
 
   @DoNotStrip
   public static void onNonLoopBlockHit(int offset, short bitvec1, short bitvec2) {
-    if (sIsEnabled && sNumStaticallyHitsInstrumented > 0) {
-      int bit1 = 0, bit2 = 0;
-      int bitvecI1 = bitvec1;
-      int bitvecI2 = bitvec2;
-      for (int i = 0; i < 16; i++) {
-        if (bitvecI1 == 0) {
-          break;
-        }
-        bit1 = bitvecI1 & 1;
+    if (sIsEnabled) {
+      if (sUseBinaryIncrementer) {
+        InstrumentBasicBlockAnalysis.binaryIncrementer(offset, bitvec1);
+        InstrumentBasicBlockAnalysis.binaryIncrementer(offset + 16, bitvec2);
+      } else {
+        int bit1 = 0, bit2 = 0;
+        int bitvecI1 = bitvec1;
+        int bitvecI2 = bitvec2;
+        for (int i = 0; i < 16; i++) {
+          if (bitvecI1 == 0) {
+            break;
+          }
+          bit1 = bitvecI1 & 1;
 
-        if (bit1 != 0) {
-          sHitStats[offset + i] += 1;
-        }
+          if (bit1 != 0) {
+            sHitStats[offset + i] += 1;
+          }
 
-        bitvecI1 = bitvecI1 >> 1;
-      }
-
-      for (int i = 0; i < 16; i++) {
-        if (bitvecI2 == 0) {
-          break;
-        }
-        bit2 = bitvecI2 & 1;
-
-        if (bit2 != 0) {
-          sHitStats[offset + i + 16] += 1;
+          bitvecI1 = bitvecI1 >> 1;
         }
 
-        bitvecI2 = bitvecI2 >> 1;
+        for (int i = 0; i < 16; i++) {
+          if (bitvecI2 == 0) {
+            break;
+          }
+          bit2 = bitvecI2 & 1;
+
+          if (bit2 != 0) {
+            sHitStats[offset + i + 16] += 1;
+          }
+
+          bitvecI2 = bitvecI2 >> 1;
+        }
       }
     }
   }
 
   @DoNotStrip
   public static void onNonLoopBlockHit(int offset, short bitvec1, short bitvec2, short bitvec3) {
-    if (sIsEnabled && sNumStaticallyHitsInstrumented > 0) {
-      int bit1 = 0, bit2 = 0, bit3 = 0;
-      int bitvecI1 = bitvec1;
-      int bitvecI2 = bitvec2;
-      int bitvecI3 = bitvec3;
-      for (int i = 0; i < 16; i++) {
-        if (bitvecI1 == 0) {
-          break;
-        }
-        bit1 = bitvecI1 & 1;
+    if (sIsEnabled) {
+      if (sUseBinaryIncrementer) {
+        InstrumentBasicBlockAnalysis.binaryIncrementer(offset, bitvec1);
+        InstrumentBasicBlockAnalysis.binaryIncrementer(offset + 16, bitvec2);
+        InstrumentBasicBlockAnalysis.binaryIncrementer(offset + 32, bitvec3);
+      } else {
+        int bit1 = 0, bit2 = 0, bit3 = 0;
+        int bitvecI1 = bitvec1;
+        int bitvecI2 = bitvec2;
+        int bitvecI3 = bitvec3;
+        for (int i = 0; i < 16; i++) {
+          if (bitvecI1 == 0) {
+            break;
+          }
+          bit1 = bitvecI1 & 1;
 
-        if (bit1 != 0) {
-          sHitStats[offset + i] += 1;
-        }
+          if (bit1 != 0) {
+            sHitStats[offset + i] += 1;
+          }
 
-        bitvecI1 = bitvecI1 >> 1;
-      }
-
-      for (int i = 0; i < 16; i++) {
-        if (bitvecI2 == 0) {
-          break;
-        }
-        bit2 = bitvecI2 & 1;
-
-        if (bit2 != 0) {
-          sHitStats[offset + i + 16] += 1;
+          bitvecI1 = bitvecI1 >> 1;
         }
 
-        bitvecI2 = bitvecI2 >> 1;
-      }
+        for (int i = 0; i < 16; i++) {
+          if (bitvecI2 == 0) {
+            break;
+          }
+          bit2 = bitvecI2 & 1;
 
-      for (int i = 0; i < 16; i++) {
-        if (bitvecI3 == 0) {
-          break;
+          if (bit2 != 0) {
+            sHitStats[offset + i + 16] += 1;
+          }
+
+          bitvecI2 = bitvecI2 >> 1;
         }
-        bit3 = bitvecI3 & 1;
 
-        if (bit3 != 0) {
-          sHitStats[offset + i + 32] += 1;
+        for (int i = 0; i < 16; i++) {
+          if (bitvecI3 == 0) {
+            break;
+          }
+          bit3 = bitvecI3 & 1;
+
+          if (bit3 != 0) {
+            sHitStats[offset + i + 32] += 1;
+          }
+
+          bitvecI3 = bitvecI3 >> 1;
         }
-
-        bitvecI3 = bitvecI3 >> 1;
       }
     }
   }
