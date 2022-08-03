@@ -140,6 +140,7 @@ struct ProguardConfig : public Configurable {
 
   std::vector<std::string> blocklist;
   bool disable_default_blocklist{false};
+  bool fail_on_unknown_commands{true};
 };
 
 struct PassManagerConfig : public Configurable {

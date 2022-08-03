@@ -92,6 +92,8 @@ void ProguardConfig::bind_config() {
   bind("blocklist", blocklist, blocklist);
   bind("disable_default_blocklist", disable_default_blocklist,
        disable_default_blocklist);
+  bind("fail_on_unknown_commands", fail_on_unknown_commands,
+       fail_on_unknown_commands);
 }
 
 void PassManagerConfig::bind_config() {

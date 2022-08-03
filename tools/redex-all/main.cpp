@@ -909,6 +909,9 @@ void redex_frontend(ConfigFiles& conf, /* input */
           keep_rules::proguard_parser::remove_default_blocklisted_rules(
               &pg_config);
     }
+
+    always_assert(!pg_conf.fail_on_unknown_commands ||
+                  parser_stats.unknown_commands == 0);
   }
 
   {
@@ -917,6 +920,7 @@ void redex_frontend(ConfigFiles& conf, /* input */
     d["parse_errors"] = (u64)parser_stats.parse_errors;
     d["unknown_tokens"] = (u64)parser_stats.unknown_tokens;
     d["unimplemented"] = (u64)parser_stats.unimplemented;
+    d["unknown_commands"] = (u64)parser_stats.unknown_commands;
     d["ok"] = (u64)(pg_config.ok ? 1 : 0);
     d["blocklisted_rules"] = (u64)blocklisted_rules;
     stats["proguard"] = d;

@@ -882,8 +882,7 @@ bool parse_keep(TokenIndex& idx,
 
 void parse(const std::vector<Token>& vec,
            ProguardConfiguration* pg_config,
-           size_t& parse_errors,
-           size_t& unimplemented,
+           Stats& stats,
            const std::string& filename) {
   bool ok;
   TokenIndex idx{vec, vec.begin()};
@@ -903,6 +902,7 @@ void parse(const std::vector<Token>& vec,
                 << idx.show_context(2) << std::endl;
       idx.next();
       skip_to_next_command(idx);
+      ++stats.unknown_commands;
       continue;
     }
 
@@ -964,7 +964,7 @@ void parse(const std::vector<Token>& vec,
                    line,
                    &ok)) {
       if (!ok) {
-        ++parse_errors;
+        ++stats.parse_errors;
       }
       continue;
     }
@@ -978,7 +978,7 @@ void parse(const std::vector<Token>& vec,
                    line,
                    &ok)) {
       if (!ok) {
-        ++parse_errors;
+        ++stats.parse_errors;
       }
       continue;
     }
@@ -992,7 +992,7 @@ void parse(const std::vector<Token>& vec,
                    line,
                    &ok)) {
       if (!ok) {
-        ++parse_errors;
+        ++stats.parse_errors;
       }
       continue;
     }
@@ -1006,7 +1006,7 @@ void parse(const std::vector<Token>& vec,
                    line,
                    &ok)) {
       if (!ok) {
-        ++parse_errors;
+        ++stats.parse_errors;
       }
       continue;
     }
@@ -1020,7 +1020,7 @@ void parse(const std::vector<Token>& vec,
                    line,
                    &ok)) {
       if (!ok) {
-        ++parse_errors;
+        ++stats.parse_errors;
       }
       continue;
     }
@@ -1034,7 +1034,7 @@ void parse(const std::vector<Token>& vec,
                    line,
                    &ok)) {
       if (!ok) {
-        ++parse_errors;
+        ++stats.parse_errors;
       }
       continue;
     }
@@ -1148,13 +1148,13 @@ void parse(const std::vector<Token>& vec,
         std::cerr << "Unimplemented command (skipping): " << idx.show()
                   << " at line " << idx.line() << std::endl
                   << idx.show_context(2) << std::endl;
-        ++unimplemented;
+        ++stats.unimplemented;
       }
     } else {
       std::cerr << "Unexpected TokenType " << idx.show() << " at line "
                 << idx.line() << std::endl
                 << idx.show_context(2) << std::endl;
-      ++parse_errors;
+      ++stats.parse_errors;
     }
     idx.next();
     skip_to_next_command(idx);
@@ -1185,7 +1185,7 @@ Stats parse(const std::string_view& config,
     return ret;
   }
 
-  parse(tokens, pg_config, ret.parse_errors, ret.unimplemented, filename);
+  parse(tokens, pg_config, ret, filename);
   if (ret.parse_errors == 0) {
     pg_config->ok = ok;
   } else {
