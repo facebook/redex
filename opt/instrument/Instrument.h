@@ -21,6 +21,7 @@ enum class ProfileTypeFlags {
   MethodCallCount = 1,
   MethodCallOrder = 2,
   BlockCoverage = 4,
+  BlockCount = 8,
   SimpleMethodTracing = 1 | 2,
   BasicBlockTracing = 1 | 2 | 4,
   BasicBlockHitCount = 1 | 2 | 4 | 8,

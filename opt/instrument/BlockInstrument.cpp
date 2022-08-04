@@ -37,7 +37,7 @@ namespace {
 
 constexpr bool DEBUG_CFG = false;
 constexpr size_t BIT_VECTOR_SIZE = 16;
-constexpr int PROFILING_DATA_VERSION = 3;
+constexpr int PROFILING_DATA_VERSION = 4;
 
 using OnMethodExitMap =
     std::map<size_t, // arity of vector arguments (excluding `int offset`)
@@ -687,6 +687,9 @@ std::tuple<size_t, std::vector<IRInstruction*>> insert_onMethodExit_calls(
       short vec = loop_shorts[j];
       short inv_vec = ~vec;
       IRInstruction* inst_and = new IRInstruction(OPCODE_AND_INT_LIT16);
+      TRACE(INSTRUMENT, 8,
+            "Normal Vector for Just Loop Blocks (%hu) inverted (%hu)", vec,
+            inv_vec);
       inst_and->set_literal(inv_vec);
       inst_and->set_src(0, reg);
       inst_and->set_dest(reg);
@@ -1946,7 +1949,7 @@ void BlockInstrumentHelper::do_basic_block_tracing(
         "sNumStaticallyHitsInstrumented");
     always_assert(field != nullptr);
     InstrumentPass::patch_static_field(analysis_cls, field->get_name()->str(),
-                                       hit_offset);
+                                       hit_offset - 8);
 
     field =
         analysis_cls->find_field_from_simple_deobfuscated_name("sProfileType");
