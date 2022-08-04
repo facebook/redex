@@ -32,14 +32,17 @@ void patch_iget_for_int_like_types(DexMethod* meth,
   insn->set_opcode(OPCODE_IGET);
 }
 
-std::string_view get_merger_package_name(const DexType* type) {
-  auto pkg_name = type::get_package_name(type);
+std::string_view get_merger_package_name(const DexType* root_type) {
+  auto pkg_name = type::get_package_name(root_type);
   // Avoid an Android OS like package name, which might confuse the custom class
-  // loader.
-  if (boost::starts_with(pkg_name, "Landroid") ||
-      boost::starts_with(pkg_name, "Ldalvik") ||
-      boost::starts_with(pkg_name, "Ljava")) {
-    return "Lcom/facebook/redex/";
+  // loader. See T34120391 for details.
+  if (boost::starts_with(pkg_name, "Landroid/") ||
+      boost::starts_with(pkg_name, "Ldalvik/") ||
+      boost::starts_with(pkg_name, "Ljava/")) {
+    auto cls = type_class(root_type);
+    if (cls && cls->is_external()) {
+      return "Lcom/facebook/redex/";
+    }
   }
   return pkg_name;
 }
