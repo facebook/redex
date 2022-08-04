@@ -24,18 +24,26 @@ import com.facebook.redextest.InstrumentBasicBlockAnalysis;
 import com.facebook.redextest.MetadataParser;
 
 @DoNotStrip
-public class InstrumentBasicBlockTarget {
+public class InstrumentBasicBlockHitCount {
   // Information taken from source dictionary and metadata
   // Index: 0
-  // Offset within Stats Array: 8
+  // Stats Array Info:
+  // - Offset within Stats Array: 8
+  // - Number of Vectors: 0
+  // Hits Array Info:
+  // - No blocks within Loops
   @DoNotStrip
   public static int testFunc01(int foo) {
     return 42;
   }
 
   // Index: 1
-  // Offset within Stats Array: 10
-  // Bit-Vector 0: [2,1]
+  // Stats Array Info:
+  // - Offset within Stats Array: 10
+  // - Number of Bit-Vectors: 1
+  // - Bit-Vector 0: [2,1]
+  // Hits Array Info:
+  // - No blocks within Loops
   @DoNotStrip
   public static int testFunc02(int a, int b) {
     if (a > 0) {
@@ -46,8 +54,12 @@ public class InstrumentBasicBlockTarget {
   }
 
   // Index: 2
-  // Offset within Stats Array: 13
-  // Bit-Vector 0: [2,1]
+  // Stats Array Info:
+  // - Offset within Stats Array: 13
+  // - Number of Bit-Vectors: 1
+  // - Bit-Vector 0: [2,1]
+  // Hits Array Info:
+  // - No blocks within Loops
   @DoNotStrip
   public static int testFunc03(int a, int b) {
     if (a > 0) {
@@ -57,8 +69,12 @@ public class InstrumentBasicBlockTarget {
   }
 
   // Index: 3
-  // Offset within Stats Array: 16
-  // Bit-Vector 0: [5,4,2,1]
+  // Stats Array Info:
+  // - Offset within Stats Array: 16
+  // - Number of Bit-Vectors: 1
+  // - Bit-Vector 0: [5,4,2,1]
+  // Hits Array Info:
+  // - No blocks within Loops
   @DoNotStrip
   @SuppressWarnings({"EmptyCatchBlock", "CatchGeneralException"})
   public static int testFunc04(int a, int b) {
@@ -72,8 +88,12 @@ public class InstrumentBasicBlockTarget {
   }
 
   // Index: 4
-  // Offset within Stats Array: 19
-  // Bit-Vector 0: [4,3,5,2,1]
+  // Stats Array Info:
+  // - Offset within Stats Array: 19
+  // - Number of Bit-Vectors: 1
+  // - Bit-Vector 0: [4,3,5,2,1]
+  // Hits Array Info:
+  // - No blocks within Loops
   @DoNotStrip
   public static int testFunc05(int flag, int temp_var) {
     int z = 0;
@@ -97,8 +117,12 @@ public class InstrumentBasicBlockTarget {
   }
 
   // Index: 5
-  // Offset within Stats Array: 22
-  // Bit-Vector 0: [4,3,2,1]
+  // Stats Array Info:
+  // - Offset within Stats Array: 22
+  // - Number of Bit-Vectors: 1
+  // - Bit-Vector 0: [4,3,2,1]
+  // Hits Array Info:
+  // - No blocks within Loops
   @DoNotStrip
   public static int testFunc06(int a, int b) {
     try {
@@ -110,8 +134,12 @@ public class InstrumentBasicBlockTarget {
   }
 
   // Index: 6
-  // Offset within Stats Array: 25
-  // Bit-Vector 0: [9,8,7,6,4,3,2,1]
+  // Stats Array Info:
+  // - Offset within Stats Array: 25
+  // - Number of Bit-Vectors: 1
+  // - Bit-Vector 0: [9,8,7,6,4,3,2,1]
+  // Hits Array Info:
+  // - No blocks within Loops
   @DoNotStrip
   public static int testFunc07(int a, int b) {
     if (a % 2 == 0) {
@@ -130,8 +158,12 @@ public class InstrumentBasicBlockTarget {
   }
 
   // Index: 7
-  // Offset within Stats Array: 28
-  // Bit-Vector 0: [9,10,12,11,8,7,6,5,4,3,2,1]
+  // Stats Array Info:
+  // - Offset within Stats Array: 28
+  // - Number of Bit-Vectors: 1
+  // - Bit-Vector 0: [9,10,12,11,8,7,6,5,4,3,2,1]
+  // Hits Array Info:
+  // - No blocks within Loops
   @DoNotStrip
   @SuppressWarnings("CatchGeneralException")
   public static int testFunc08(int size, int index, int num) {
@@ -156,11 +188,15 @@ public class InstrumentBasicBlockTarget {
   }
 
   // Index: 8
-  // Offset within Stats Array: 31
-  // Bit-Vector 0: [43,44,45,46,47,48,49,50,51,52,53,54,55,3,2,1]
-  // Bit-Vector 1: [27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42]
-  // Bit-Vector 2: [11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26]
-  // Bit-Vector 3: [4,5,6,7,8,9,10]
+  // Stats Array Info:
+  // - Offset within Stats Array: 31
+  // - Number of Bit-Vectors: 4
+  // - Bit-Vector 0: [43,44,45,46,47,48,49,50,51,52,53,54,55,3,2,1]
+  // - Bit-Vector 1: [27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42]
+  // - Bit-Vector 2: [11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26]
+  // - Bit-Vector 3: [4,5,6,7,8,9,10]
+  // Hits Array Info:
+  // - No blocks within Loops
   @DoNotStrip
   public static String testFunc09(int test_var) {
     if (test_var < 0) {
@@ -276,8 +312,12 @@ public class InstrumentBasicBlockTarget {
   }
 
   // Index: 9
-  // Offset within Stats Array: 37
-  // Bit-Vector 0: [4,3,1,0]
+  // Stats Array Info:
+  // - Offset within Stats Array: 37
+  // - Number of Bit-Vectors: 1
+  // - Bit-Vector 0: [4,3,1,0]
+  // Hits Array Info:
+  // - No blocks within Loops
   @DoNotStrip
   public static boolean testFunc10() {
     try {
@@ -291,8 +331,14 @@ public class InstrumentBasicBlockTarget {
 
   @DoNotStrip
   // Index: 10
-  // Offset: 40
-  // Vector 0: [5,4,3,2,1]
+  // Stats Array Info:
+  // - Offset within Stats Array: 40
+  // - Number of Bit-Vectors: 1
+  // - Bit-Vector 0: [5,4,3,2,1]
+  // Hits Array Info:
+  // - Offset within Hits Array: 4
+  // - Number of Loop Blocks: 4
+  // - Array Order: [1,2,3,4]
   public static int testFunc11(int size) {
     int i;
     int sum = 0;
@@ -308,8 +354,14 @@ public class InstrumentBasicBlockTarget {
 
   @DoNotStrip
   // Index: 11
-  // Offset: 43
-  // Vector 0: [5,4,3,2,1]
+  // Stats Array Info:
+  // - Offset within Stats Array: 43
+  // - Number of Bit-Vectors: 1
+  // - Bit-Vector 0: [5,4,3,2,1]
+  // Hits Array Info:
+  // - Offset within Hits Array: 8
+  // - Number of Loop Blocks: 3
+  // - Array Order: [1,2,4]
   public static int testFunc12(int[] array, int value) {
     int i;
     for (i = 0; i < array.length; i++)
@@ -324,8 +376,14 @@ public class InstrumentBasicBlockTarget {
 
   @DoNotStrip
   // Index: 12
-  // Offset: 46
-  // Vector 0: [10,12,11,9,7,6,5,4,3,2]
+  // Stats Array Info:
+  // - Offset within Stats Array: 46
+  // - Number of Bit-Vectors: 1
+  // - Bit-Vector 0: [10,12,11,9,7,6,5,4,3,2]
+  // Hits Array Info:
+  // - Offset within Hits Array: 11
+  // - Number of Loop Blocks: 7
+  // - Array Order: [2,3,4,5,6,7,9]
   public static int testFunc13(int[] array) {
     Random rand = new Random();
     int i;
@@ -342,8 +400,14 @@ public class InstrumentBasicBlockTarget {
 
   @DoNotStrip
   // Index: 13
-  // Offset: 49
-  // Vector 0: [8,9,7,6,5,4,3,2]
+  // Stats Array Info:
+  // - Offset within Stats Array: 49
+  // - Number of Bit-Vectors: 1
+  // - Bit-Vector 0: [8,9,7,6,5,4,3,2]
+  // Hits Array Info:
+  // - Offset within Hits Array: 18
+  // - Number of Loop Blocks: 6
+  // - Array Order: [2,3,4,5,6,7]
   public static int testFunc14(int[] array, int[] array2) {
     int i;
     int sum = 0;
@@ -360,8 +424,14 @@ public class InstrumentBasicBlockTarget {
 
   @DoNotStrip
   // Index: 14
-  // Offset: 52
-  // Vector 0: [5,4,3,2,1]
+  // Stats Array Info:
+  // - Offset within Stats Array: 52
+  // - Number of Bit-Vectors: 1
+  // - Bit-Vector 0: [5,4,3,2,1]
+  // Hits Array Info:
+  // - Offset within Hits Array: 24
+  // - Number of Loop Blocks: 4
+  // - Array Order: [1,2,3,4]
   public static int testFunc15(int size) {
     int i = 1;
     int sum = 0;
@@ -378,8 +448,14 @@ public class InstrumentBasicBlockTarget {
 
   @DoNotStrip
   // Index: 15
-  // Offset: 55
-  // Vector 0: [5,4,3,2,1]
+  // Stats Array Info:
+  // - Offset within Stats Array: 55
+  // - Number of Bit-Vectors: 1
+  // - Bit-Vector 0: [5,4,3,2,1]
+  // Hits Array Info:
+  // - Offset within Hits Array: 28
+  // - Number of Loop Blocks: 3
+  // - Array Order: [1,2,4]
   public static int testFunc16(int[] array, int value) {
     int i = 0;
     while (i < array.length) {
@@ -394,8 +470,14 @@ public class InstrumentBasicBlockTarget {
 
   @DoNotStrip
   // Index: 16
-  // Offset: 58
-  // Vector 0: [10,12,11,9,7,6,5,4,3,2]
+  // Stats Array Info:
+  // - Offset within Stats Array: 58
+  // - Number of Bit-Vectors: 1
+  // - Bit-Vector 0: [10,12,11,9,7,6,5,4,3,2]
+  // Hits Array Info:
+  // - Offset within Hits Array: 31
+  // - Number of Loop Blocks: 7
+  // - Array Order: [2,3,4,5,6,7,9]
   public static int testFunc17(int[] array) {
     Random rand = new Random();
     int i = 0;
@@ -413,8 +495,14 @@ public class InstrumentBasicBlockTarget {
 
   @DoNotStrip
   // Index: 17
-  // Offset: 61
-  // Vector 0: [8,9,7,6,5,4,3,2]
+  // Stats Array Info:
+  // - Offset within Stats Array: 61
+  // - Number of Bit-Vectors: 1
+  // - Bit-Vector 0: [8,9,7,6,5,4,3,2]
+  // Hits Array Info:
+  // - Offset within Hits Array: 38
+  // - Number of Loop Blocks: 6
+  // - Array Order: [2,3,4,5,6,7]
   public static int testFunc18(int[] array, int[] array2) {
     int i = 0;
     int sum = 0;
@@ -432,9 +520,15 @@ public class InstrumentBasicBlockTarget {
 
   @DoNotStrip
   // Index: 18
-  // Offset: 64
-  // Vector 0: [19,20,21,22,23,24,28,27,26,25,31,30,29,3,2,1]
-  // Vector 1: [32,6,5,4,8,7,9,10,11,12,13,14,15,16,17,18]
+  // Stats Array Info:
+  // - Offset within Stats Array: 64
+  // - Number of Bit-Vectors: 2
+  // - Bit-Vector 0: [19,20,21,22,23,24,28,27,26,25,31,30,29,3,2,1]
+  // - Bit-Vector 1: [32,6,5,4,8,7,9,10,11,12,13,14,15,16,17,18]
+  // Hits Array Info:
+  // - Offset within Hits Array: 44
+  // - Number of Loop Blocks: 27
+  // - Array Order: [1,2,29,30,31,25,26,27,28,24,23,22,21,20,19,18,17,16,15,14,13,12,11,10,4,5,6]
   public static String testFunc19(int[] arr) {
     int i = 0;
     String output = "";
@@ -547,10 +641,16 @@ public class InstrumentBasicBlockTarget {
   @DoNotStrip
   @SuppressWarnings({"EmptyCatchBlock", "CatchGeneralException"})
   // Index: 19
-  // Offset: 68
-  // Vector 0: [17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2]
-  // Vector 1: [19,32,31,30,29,35,34,33,43,41,39,38,37,36,26,18]
-  // Vector 2: [42,24,23,22,21,20]
+  // Stats Array Info:
+  // - Offset within Stats Array: 68
+  // - Number of Bit-Vectors: 3
+  // - Bit-Vector 0: [17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2]
+  // - Bit-Vector 1: [19,32,31,30,29,35,34,33,43,41,39,38,37,36,26,18]
+  // - Bit-Vector 2: [42,24,23,22,21,20]
+  // Hits Array Info:
+  // - Offset within Hits Array: 71
+  // - Number of Loop Blocks: 35
+  // - Array Order: [2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,26,36,37,38,39,41,33,34,29,30,31,32,19,20,21,22,23,24]
   public static int testFunc20(int[][] arr, int[] arr2) {
     int i, j;
     int sum = 0;
@@ -594,9 +694,15 @@ public class InstrumentBasicBlockTarget {
   @DoNotStrip
   @SuppressWarnings({"EmptyCatchBlock", "CatchGeneralException"})
   // Index: 20
-  // Offset: 73
-  // Vector 0: [18,17,15,11,10,9,8,6,5,4,25,24,23,3,2,1]
-  // Vector 1: [14,13,12,22,21,20,19]
+  // Stats Array Info:
+  // - Offset within Stats Array: 73
+  // - Number of Bit-Vectors: 2
+  // - Bit-Vector 0: [18,17,15,11,10,9,8,6,5,4,25,24,23,3,2,1]
+  // - Bit-Vector 1: [14,13,12,22,21,20,19]
+  // Hits Array Info:
+  // - Offset within Hits Array: 106
+  // - Number of Loop Blocks: 14
+  // - Array Order: [23,24,5,6,8,10,17,18,19,20,21,22,13,1]
   public static int testFunc21(int[] arr, int magic) {
     int i = 0;
     int sum = 0;
@@ -650,8 +756,14 @@ public class InstrumentBasicBlockTarget {
 
   @DoNotStrip
   // Index: 21
-  // Offset: 77
-  // Vector 0: [13,15,14,12,11,10,9,8,7,6,5,4,3,2,1]
+  // Stats Array Info:
+  // - Offset within Stats Array: 77
+  // - Number of Bit-Vectors: 1
+  // - Bit-Vector 0: [13,15,14,12,11,10,9,8,7,6,5,4,3,2,1]
+  // Hits Array Info:
+  // - Offset within Hits Array: 120
+  // - Number of Loop Blocks: 7
+  // - Array Order: [6,7,8,9,10,11,12]
   public synchronized int testFunc22(String id, HashMap<String, HashSet<Integer>> maps) {
     HashSet<Integer> intSet = maps.get(id);
     int total = 0;
@@ -668,7 +780,7 @@ public class InstrumentBasicBlockTarget {
   public void startUp() {
     InputStream iSourceBlock = getClass().getResourceAsStream("/assets/redex-source-block-method-dictionary.csv");
     InputStream iMetadata = getClass().getResourceAsStream("/assets/redex-instrument-metadata.txt");
-    MetadataParser.startUp(iMetadata, iSourceBlock, true);
+    MetadataParser.startUp(iMetadata, iSourceBlock, false);
   }
 
   @Test
@@ -681,9 +793,10 @@ public class InstrumentBasicBlockTarget {
 
     // Assert that the offset in the statsArray is 8
     assertThat(MetadataParser.getOffset("testFunc01")).isEqualTo(8);
+    assertThat(MetadataParser.getHitOffset("testFunc01")).isEqualTo(-1);
 
-    // TestFunc01 has no bitvector because it only has one basicblock
-    // that always executes so we do not need to assert it
+    // TestFunc01 has no bitvector and no blocks within loops because
+    // it only has one basicblock that always executes so we do not need to assert it
   }
 
   @Test
@@ -696,18 +809,20 @@ public class InstrumentBasicBlockTarget {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
-    // Assert that the offset in the statsArray is 10
+    // Assert that the offset in the statsArray is 10 and
+    // hit offset in hitsArray is -1 due to no blocks in loops
     assertThat(MetadataParser.getOffset("testFunc02")).isEqualTo(10);
+    assertThat(MetadataParser.getHitOffset("testFunc02")).isEqualTo(8);
 
-    // Assert that TestFunc02 excuted only BasicBlocks (1) skipping
-    // 2 which is [0,1] in the Bit-Vector form due to return in the if condition
+    // Assert that TestFunc02 has hit count of [0,1]
     int[] blockList = {2,1};
     int[] blockHitList = {0,1};
     int i = 0;
 
     for(i = 0; i < blockList.length; i++) {
-      int hitValue = MetadataParser.checkBlockHit("testFunc02", stats, blockList[i]);
+      int hitValue = MetadataParser.checkBlockNumHits("testFunc02", stats, hitStats, blockList[i]);
       assertThat(hitValue).isEqualTo(blockHitList[i]);
     }
   }
@@ -722,18 +837,20 @@ public class InstrumentBasicBlockTarget {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
-    // Assert that the offset in the statsArray is 13
+    // Assert that the offset in the statsArray is 13 and
+    // hit offset in hitsArray is -1 due to no blocks in loops
     assertThat(MetadataParser.getOffset("testFunc03")).isEqualTo(13);
+    assertThat(MetadataParser.getHitOffset("testFunc03")).isEqualTo(10);
 
-    // Assert that TestFunc03 excuted all BasicBlocks
-    // which is [1,1] in the Bit-Vector form
+    // Assert that TestFunc03 has hit count of [1,1]
     int[] blockList = {2,1};
     int[] blockHitList = {1,1};
     int i = 0;
 
     for(i = 0; i < blockList.length; i++) {
-      int hitValue = MetadataParser.checkBlockHit("testFunc03", stats, blockList[i]);
+      int hitValue = MetadataParser.checkBlockNumHits("testFunc03", stats, hitStats, blockList[i]);
       assertThat(hitValue).isEqualTo(blockHitList[i]);
     }
   }
@@ -756,18 +873,20 @@ public class InstrumentBasicBlockTarget {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
-    // Assert that the offset in the statsArray is 16
+    // Assert that the offset in the statsArray is 16 and
+    // hit offset in hitsArray is -1 due to no blocks in loops
     assertThat(MetadataParser.getOffset("testFunc04")).isEqualTo(16);
+    assertThat(MetadataParser.getHitOffset("testFunc04")).isEqualTo(12);
 
-    // Assert that TestFunc04 excuted only BasicBlocks (1,2,5) skipping
-    // 5 which is [1,0,1,1] in the Bit-Vector form due to ArrayOutOfBounds exception
+    // Assert that TestFunc04 has hit count of [1,0,1,1]
     int[] blockList = {5,4,2,1};
     int[] blockHitList = {1,0,1,1};
     int i = 0;
 
     for(i = 0; i < blockList.length; i++) {
-      int hitValue = MetadataParser.checkBlockHit("testFunc04", stats, blockList[i]);
+      int hitValue = MetadataParser.checkBlockNumHits("testFunc04", stats, hitStats, blockList[i]);
       assertThat(hitValue).isEqualTo(blockHitList[i]);
     }
   }
@@ -782,18 +901,20 @@ public class InstrumentBasicBlockTarget {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
-    // Assert that the offset in the statsArray is 19
+    // Assert that the offset in the statsArray is 19 and
+    // hit offset in hitsArray is -1 due to no blocks in loops
     assertThat(MetadataParser.getOffset("testFunc05")).isEqualTo(19);
+    assertThat(MetadataParser.getHitOffset("testFunc05")).isEqualTo(16);
 
-    // Assert that TestFunc05 excuted only BasicBlocks (4,5) skipping
-    // 1,2,3 which is [1,0,1,0,0] in the Bit-Vector form due to flag being zero
+    // Assert that TestFunc05 has hit count of [1,0,1,0,0]
     int[] blockList = {4,3,5,2,1};
     int[] blockHitList = {1,0,1,0,0};
     int i = 0;
 
     for(i = 0; i < blockList.length; i++) {
-      int hitValue = MetadataParser.checkBlockHit("testFunc05", stats, blockList[i]);
+      int hitValue = MetadataParser.checkBlockNumHits("testFunc05", stats, hitStats, blockList[i]);
       assertThat(hitValue).isEqualTo(blockHitList[i]);
     }
   }
@@ -808,18 +929,20 @@ public class InstrumentBasicBlockTarget {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
-    // Assert that the offset in the statsArray is 22
+    // Assert that the offset in the statsArray is 22 and
+    // hit offset in hitsArray is -1 due to no blocks in loops
     assertThat(MetadataParser.getOffset("testFunc06")).isEqualTo(22);
+    assertThat(MetadataParser.getHitOffset("testFunc06")).isEqualTo(21);
 
-    // Assert that TestFunc06 excuted only BasicBlocks (1,2,3) skipping
-    // 4 which is [0,1,1,1] in the Bit-Vector form due to early return in exception
+    // Assert that TestFunc06 has hit count of [0,1,1,1]
     int[] blockList = {4,3,2,1};
     int[] blockHitList = {0,1,1,1};
     int i = 0;
 
     for(i = 0; i < blockList.length; i++) {
-      int hitValue = MetadataParser.checkBlockHit("testFunc06", stats, blockList[i]);
+      int hitValue = MetadataParser.checkBlockNumHits("testFunc06", stats, hitStats, blockList[i]);
       assertThat(hitValue).isEqualTo(blockHitList[i]);
     }
   }
@@ -834,19 +957,20 @@ public class InstrumentBasicBlockTarget {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
-    // Assert that the offset in the statsArray is 25
+    // Assert that the offset in the statsArray is 25 and
+    // hit offset in hitsArray is -1 due to no blocks in loops
     assertThat(MetadataParser.getOffset("testFunc07")).isEqualTo(25);
+    assertThat(MetadataParser.getHitOffset("testFunc07")).isEqualTo(25);
 
-    // Assert that TestFunc07 excuted only BasicBlocks (1,2,3) skipping
-    // 4,6,7,8,9 which is [0,0,0,0,0,1,1,1] in the Bit-Vector form due 8 % 2 = 0 and
-    // there was no exception handling needed so it returned early
+    // Assert that TestFunc07 has hit count of [0,0,0,0,0,1,1,1]
     int[] blockList = {9,8,7,6,4,3,2,1};
     int[] blockHitList = {0,0,0,0,0,1,1,1};
     int i = 0;
 
     for(i = 0; i < blockList.length; i++) {
-      int hitValue = MetadataParser.checkBlockHit("testFunc07", stats, blockList[i]);
+      int hitValue = MetadataParser.checkBlockNumHits("testFunc07", stats, hitStats, blockList[i]);
       assertThat(hitValue).isEqualTo(blockHitList[i]);
     }
   }
@@ -868,20 +992,20 @@ public class InstrumentBasicBlockTarget {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
-    // Assert that the offset in the statsArray is 28
+    // Assert that the offset in the statsArray is 28 and
+    // hit offset in hitsArray is -1 due to no blocks in loops
     assertThat(MetadataParser.getOffset("testFunc08")).isEqualTo(28);
+    assertThat(MetadataParser.getHitOffset("testFunc08")).isEqualTo(33);
 
-    // Assert that TestFunc08 excuted only BasicBlocks (1,2,3,4,5,6,12) skipping
-    // 7,8,9,10,11 which is [0,0,1,0,0,0,1,1,1,1,1,1] in the Bit-Vector form due to
-    // index being 2 and 2 % 2 = 0 which causes an Array Index Out of Bounds Exception
-    // before it returns early
+    // Assert that TestFunc08 has hit count of [0,0,1,0,0,0,1,1,1,1,1,1]
     int[] blockList = {9,10,12,11,8,7,6,5,4,3,2,1};
     int[] blockHitList = {0,0,1,0,0,0,1,1,1,1,1,1};
     int i = 0;
 
     for(i = 0; i < blockList.length; i++) {
-      int hitValue = MetadataParser.checkBlockHit("testFunc08", stats, blockList[i]);
+      int hitValue = MetadataParser.checkBlockNumHits("testFunc08", stats, hitStats, blockList[i]);
       assertThat(hitValue).isEqualTo(blockHitList[i]);
     }
 
@@ -898,17 +1022,15 @@ public class InstrumentBasicBlockTarget {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
-    // Assert that the offset in the statsArray is 31
+    // Assert that the offset in the statsArray is 31 and
+    // hit offset in hitsArray is -1 due to no blocks in loops
     assertThat(MetadataParser.getOffset("testFunc09")).isEqualTo(31);
+    assertThat(MetadataParser.getHitOffset("testFunc09")).isEqualTo(45);
 
-    // Assert that TestFunc09 excuted only BasicBlocks (2,40) skipping
-    // everything else because it didn't have to go into the initial if condition
-    // because test-flag > 0 and the switch statement made it jump to exact basicblock
-    // of 16 and returning immediately. As this test case has numerous basicblocks (55),
-    // it needs four bitvectors so we need to make sure it is [0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0] in
-    // Bit-Vector 1 and [0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0] in Bit-Vector 2 while making sure the last
-    // two Bit-Vectors are only zeroes.
+    // Assert that TestFunc09 only hits block 2 and block 40 once and rest of
+    // the blocks got hits 0 times
     int[][] blockList = {{43,44,45,46,47,48,49,50,51,52,53,54,55,3,2,1},
                        {27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42},
                        {11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26},
@@ -922,7 +1044,7 @@ public class InstrumentBasicBlockTarget {
 
     for(i = 0; i < blockList.length; i++) {
       for(j = 0; j < blockList[i].length; j++) {
-        int hitValue = MetadataParser.checkBlockHit("testFunc09", stats, blockList[i][j]);
+        int hitValue = MetadataParser.checkBlockNumHits("testFunc09", stats, hitStats, blockList[i][j]);
         assertThat(hitValue).isEqualTo(blockHitList[i][j]);
       }
     }
@@ -938,18 +1060,20 @@ public class InstrumentBasicBlockTarget {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
-    // Assert that the offset in the statsArray is 37
+    // Assert that the offset in the statsArray is 37 and
+    // hit offset in hitsArray is -1 due to no blocks in loops
     assertThat(MetadataParser.getOffset("testFunc10")).isEqualTo(37);
+    assertThat(MetadataParser.getHitOffset("testFunc10")).isEqualTo(100);
 
-    // Assert that TestFunc10 excuted only BasicBlocks (0,1,4) skipping
-    // 3 which is [1,0,1,1] in the Bit-Vector form due to exception
+    // Assert that TestFunc10 has hit count of [1,0,1,1]
     int[] blockList = {4,3,1,0};
     int[] blockHitList = {1,0,1,1};
     int i = 0;
 
     for(i = 0; i < blockList.length; i++) {
-      int hitValue = MetadataParser.checkBlockHit("testFunc10", stats, blockList[i]);
+      int hitValue = MetadataParser.checkBlockNumHits("testFunc10", stats, hitStats, blockList[i]);
       assertThat(hitValue).isEqualTo(blockHitList[i]);
     }
   }
@@ -964,18 +1088,20 @@ public class InstrumentBasicBlockTarget {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
-    // Assert that the offset in the statsArray is 40
+    // Assert that the offset in the statsArray is 40 and
+    // hit offset in hitsArray is 4
     assertThat(MetadataParser.getOffset("testFunc11")).isEqualTo(40);
+    assertThat(MetadataParser.getHitOffset("testFunc11")).isEqualTo(104);
 
-    // Assert that TestFunc11 excuted all BasicBlocks
-    // which is [1,1,1,1,1] in the Bit-Vector form
+    // Assert that TestFunc11 has hit count of [1,14,1,14,15]
     int[] blockList = {5,4,3,2,1};
-    int[] blockHitList = {1,1,1,1,1};
+    int[] blockHitList = {1,14,1,14,15};
     int i = 0;
 
     for(i = 0; i < blockList.length; i++) {
-      int hitValue = MetadataParser.checkBlockHit("testFunc11", stats, blockList[i]);
+      int hitValue = MetadataParser.checkBlockNumHits("testFunc11", stats, hitStats, blockList[i]);
       assertThat(hitValue).isEqualTo(blockHitList[i]);
     }
   }
@@ -992,18 +1118,20 @@ public class InstrumentBasicBlockTarget {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
-     // Assert that the offset in the statsArray is 43
+     // Assert that the offset in the statsArray is 43 and
+    // hit offset in hitsArray is 8
     assertThat(MetadataParser.getOffset("testFunc12")).isEqualTo(43);
+    assertThat(MetadataParser.getHitOffset("testFunc12")).isEqualTo(109);
 
-    // Assert that TestFunc12 excuted some BasicBlocks (1,2,3,4) skipping
-    // 5 which is [0,1,1,1,1] in the Bit-Vector form due to early return
+    // Assert that TestFunc12 has hit count of [0,6,1,7,7]
     int[] blockList = {5,4,3,2,1};
-    int[] blockHitList = {0,1,1,1,1};
+    int[] blockHitList = {0,6,1,7,7};
     int i = 0;
 
     for(i = 0; i < blockList.length; i++) {
-      int hitValue = MetadataParser.checkBlockHit("testFunc12", stats, blockList[i]);
+      int hitValue = MetadataParser.checkBlockNumHits("testFunc12", stats, hitStats, blockList[i]);
       assertThat(hitValue).isEqualTo(blockHitList[i]);
     }
   }
@@ -1025,18 +1153,20 @@ public class InstrumentBasicBlockTarget {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
-    // Assert that the offset in the statsArray is 46
+    // Assert that the offset in the statsArray is 46 and
+    // hit offset in hitsArray is 11
     assertThat(MetadataParser.getOffset("testFunc13")).isEqualTo(46);
+    assertThat(MetadataParser.getHitOffset("testFunc13")).isEqualTo(114);
 
-    // Assert that TestFunc13 excuted some BasicBlocks (2,3,4,5,6,7,9,11,12) skipping
-    // 10 which is [0,1,1,1,1,1,1,1,1,1] in the Bit-Vector form because of early throw
+    // Assert that TestFunc13 has hit count of [0,1,1,5,5,6,6,6,6,6]
     int[] blockList = {10,12,11,9,7,6,5,4,3,2};
-    int[] blockHitList = {0,1,1,1,1,1,1,1,1,1};
+    int[] blockHitList = {0,1,1,5,5,6,6,6,6,6};
     int i = 0;
 
     for(i = 0; i < blockList.length; i++) {
-      int hitValue = MetadataParser.checkBlockHit("testFunc13", stats, blockList[i]);
+      int hitValue = MetadataParser.checkBlockNumHits("testFunc13", stats, hitStats, blockList[i]);
       assertThat(hitValue).isEqualTo(blockHitList[i]);
     }
   }
@@ -1054,18 +1184,20 @@ public class InstrumentBasicBlockTarget {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
-    // Assert that the offset in the statsArray is 49
+    // Assert that the offset in the statsArray is 49 and
+    // hit offset in hitsArray is 18
     assertThat(MetadataParser.getOffset("testFunc14")).isEqualTo(49);
+    assertThat(MetadataParser.getHitOffset("testFunc14")).isEqualTo(124);
 
-    // Assert that TestFunc14 excuted some BasicBlocks (2,3,4,5,9)
-    // which is [0,1,0,0,1,1,1,1] in the Bit-Vector form
+    // Assert that TestFunc14 has hit count of [0,1,0,0,1,1,1,1]
     int[] blockList = {8,9,7,6,5,4,3,2};
     int[] blockHitList = {0,1,0,0,1,1,1,1};
     int i = 0;
 
     for(i = 0; i < blockList.length; i++) {
-      int hitValue = MetadataParser.checkBlockHit("testFunc14", stats, blockList[i]);
+      int hitValue = MetadataParser.checkBlockNumHits("testFunc14", stats, hitStats, blockList[i]);
       assertThat(hitValue).isEqualTo(blockHitList[i]);
     }
   }
@@ -1080,18 +1212,20 @@ public class InstrumentBasicBlockTarget {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
-    // Assert that the offset in the statsArray is 52
+    // Assert that the offset in the statsArray is 52 and
+    // hit offset in hitsArray is 24
     assertThat(MetadataParser.getOffset("testFunc15")).isEqualTo(52);
+    assertThat(MetadataParser.getHitOffset("testFunc15")).isEqualTo(132);
 
-    // Assert that TestFunc15 excuted all BasicBlocks (1)
-    // which is [1,1,1,1,1] in the Bit-Vector form
+    // Assert that TestFunc15 has hit count of [1,14,1,14,15]
     int[] blockList = {5,4,3,2,1};
-    int[] blockHitList = {1,1,1,1,1};
+    int[] blockHitList = {1,14,1,14,15};
     int i = 0;
 
     for(i = 0; i < blockList.length; i++) {
-      int hitValue = MetadataParser.checkBlockHit("testFunc15", stats, blockList[i]);
+      int hitValue = MetadataParser.checkBlockNumHits("testFunc15", stats, hitStats, blockList[i]);
       assertThat(hitValue).isEqualTo(blockHitList[i]);
     }
   }
@@ -1108,18 +1242,20 @@ public class InstrumentBasicBlockTarget {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
-    // Assert that the offset in the statsArray is 55
+    // Assert that the offset in the statsArray is 55 and
+    // hit offset in hitsArray is 28
     assertThat(MetadataParser.getOffset("testFunc16")).isEqualTo(55);
+    assertThat(MetadataParser.getHitOffset("testFunc16")).isEqualTo(137);
 
-    // Assert that TestFunc16 excuted some BasicBlocks (1,2,3,4) skipping
-    // 5 which is [0,1,1,1,1] in the Bit-Vector form due to early return
+    // Assert that TestFunc16 has hit count of [0,6,1,7,7]
     int[] blockList = {5,4,3,2,1};
-    int[] blockHitList = {0,1,1,1,1};
+    int[] blockHitList = {0,6,1,7,7};
     int i = 0;
 
     for(i = 0; i < blockList.length; i++) {
-      int hitValue = MetadataParser.checkBlockHit("testFunc16", stats, blockList[i]);
+      int hitValue = MetadataParser.checkBlockNumHits("testFunc16", stats, hitStats, blockList[i]);
       assertThat(hitValue).isEqualTo(blockHitList[i]);
     }
   }
@@ -1141,18 +1277,20 @@ public class InstrumentBasicBlockTarget {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
-    // Assert that the offset in the statsArray is 58
+    // Assert that the offset in the statsArray is 58 and
+    // hit offset in hitsArray is 31
     assertThat(MetadataParser.getOffset("testFunc17")).isEqualTo(58);
+    assertThat(MetadataParser.getHitOffset("testFunc17")).isEqualTo(142);
 
-    // Assert that TestFunc17 excuted some BasicBlocks (2,3,4,5,6,7,9,11,12) skipping
-    // 10 which is [0,1,1,1,1,1,1,1,1,1] in the Bit-Vector form because of early throw
+    // Assert that TestFunc17 has hit count of [0,1,1,5,5,6,6,6,6,6]
     int[] blockList = {10,12,11,9,7,6,5,4,3,2};
-    int[] blockHitList = {0,1,1,1,1,1,1,1,1,1};
+    int[] blockHitList = {0,1,1,5,5,6,6,6,6,6};
     int i = 0;
 
     for(i = 0; i < blockList.length; i++) {
-      int hitValue = MetadataParser.checkBlockHit("testFunc17", stats, blockList[i]);
+      int hitValue = MetadataParser.checkBlockNumHits("testFunc17", stats, hitStats, blockList[i]);
       assertThat(hitValue).isEqualTo(blockHitList[i]);
     }
   }
@@ -1170,18 +1308,20 @@ public class InstrumentBasicBlockTarget {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
-    // Assert that the offset in the statsArray is 61
+    // Assert that the offset in the statsArray is 61 and
+    // hit offset in hitsArray is 38
     assertThat(MetadataParser.getOffset("testFunc18")).isEqualTo(61);
+    assertThat(MetadataParser.getHitOffset("testFunc18")).isEqualTo(152);
 
-    // Assert that TestFunc18 executed some BasicBlocks (2,3,4,5,9)
-    // which is [0,1,0,0,1,1,1,1] in the Bit-Vector form
+    // Assert that TestFunc18 has hit count of [0,1,0,0,1,1,1,1]
     int[] blockList = {8,9,7,6,5,4,3,2};
     int[] blockHitList = {0,1,0,0,1,1,1,1};
     int i = 0;
 
     for(i = 0; i < blockList.length; i++) {
-      int hitValue = MetadataParser.checkBlockHit("testFunc18", stats, blockList[i]);
+      int hitValue = MetadataParser.checkBlockNumHits("testFunc18", stats, hitStats, blockList[i]);
       assertThat(hitValue).isEqualTo(blockHitList[i]);
     }
   }
@@ -1196,19 +1336,17 @@ public class InstrumentBasicBlockTarget {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
-    // Assert that TestFunc11 executed some BasicBlocks (1,2,4,5) skipping 3
-    // which is [1,1,0,1,1] in the Bit-Vector form because of the if-condition
-    // always being false
-    // TestFunc15's bit-vector should be the same as testFunc11
+    // Assert that TestFunc11 and TestFunc15's hit counts are the same
     // because they are equivalent codes
     int[] blockList = {5,4,3,2,1};
-    int[] blockHitList = {1,1,0,1,1};
+    int[] blockHitList = {1,8,0,8,9};
     int i = 0;
 
     for(i = 0; i < blockList.length; i++) {
-      int hitValue11 = MetadataParser.checkBlockHit("testFunc11", stats, blockList[i]);
-      int hitValue15 = MetadataParser.checkBlockHit("testFunc15", stats, blockList[i]);
+      int hitValue11 = MetadataParser.checkBlockNumHits("testFunc11", stats, hitStats, blockList[i]);
+      int hitValue15 = MetadataParser.checkBlockNumHits("testFunc15", stats, hitStats, blockList[i]);
       assertThat(hitValue11).isEqualTo(blockHitList[i]);
       assertThat(hitValue11).isEqualTo(hitValue15);
     }
@@ -1227,22 +1365,21 @@ public class InstrumentBasicBlockTarget {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
     // Assert that testFunc14 is ran once like testFunc18
     assertThat(stats[61]).isEqualTo((short)1);
     assertThat(stats[61]).isEqualTo(stats[49]);
 
-    // Assert that TestFunc18 executed some BasicBlocks (2,3,4,5,7,9)
-    // which is [0,1,1,0,1,1,1,1] in the Bit-Vector form
-    // TestFunc18's bit-vector should be the same as testFunc14
+    // Assert that TestFunc18 and TestFunc14's hit counts are the same
     // because they are equivalent codes
     int[] blockList = {8,9,7,6,5,4,3,2};
-    int[] blockHitList = {0,1,1,1,1,1,1,1};
+    int[] blockHitList = {0,1,1,1,2,2,2,2};
     int i = 0;
 
     for(i = 0; i < blockList.length; i++) {
-      int hitValue18 = MetadataParser.checkBlockHit("testFunc18", stats, blockList[i]);
-      int hitValue14 = MetadataParser.checkBlockHit("testFunc14", stats, blockList[i]);
+      int hitValue18 = MetadataParser.checkBlockNumHits("testFunc18", stats, hitStats, blockList[i]);
+      int hitValue14 = MetadataParser.checkBlockNumHits("testFunc14", stats, hitStats, blockList[i]);
       assertThat(hitValue18).isEqualTo(blockHitList[i]);
       assertThat(hitValue18).isEqualTo(hitValue14);
     }
@@ -1260,25 +1397,25 @@ public class InstrumentBasicBlockTarget {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
-    // Assert that the offset in the statsArray is 64
+    // Assert that the offset in the statsArray is 64 and
+    // hit offset in hitsArray is 44
     assertThat(MetadataParser.getOffset("testFunc19")).isEqualTo(64);
+    assertThat(MetadataParser.getHitOffset("testFunc19")).isEqualTo(160);
 
-    // Assert that TestFunc19 excuted only BasicBlocks (1,2,15,17,18,22,24,25,28,27,30,31,32) skipping
-    // everything else because it only had to go to particular switch blocks.
-    // As this test case has numerous basicblocks (32),
-    // it needs two bitvectors so we need to make sure it is [0,0,0,1,0,0,1,1,1,0,1,1,1,0,1,1] in
-    // Bit-Vector 1 and [1,0,0,0,0,0,0,0,0,0,0,1,0,0,1,1] in Bit-Vector 2
+    // Assert that TestFunc19 has hit count of
+    // [0,0,0,1,0,0,1,1,1,0,6,6,1,0,6,7,1,0,0,0,0,0,0,0,0,0,0,1,0,0,1,1]
     int[][] blockList = {{19,20,21,22,23,24,28,27,26,25,31,30,29,3,2,1},
                          {32,6,5,4,8,7,9,10,11,12,13,14,15,16,17,18}};
-    int[][] blockHitList = {{0,0,0,1,0,0,1,1,1,0,1,1,1,0,1,1},
+    int[][] blockHitList = {{0,0,0,1,0,0,1,1,1,0,6,6,1,0,6,7},
                             {1,0,0,0,0,0,0,0,0,0,0,1,0,0,1,1}};
     int i = 0;
     int j = 0;
 
     for(i = 0; i < blockList.length; i++) {
       for(j = 0; j < blockList[i].length; j++) {
-        int hitValue = MetadataParser.checkBlockHit("testFunc19", stats, blockList[i][j]);
+        int hitValue = MetadataParser.checkBlockNumHits("testFunc19", stats, hitStats, blockList[i][j]);
         assertThat(hitValue).isEqualTo(blockHitList[i][j]);
       }
     }
@@ -1296,25 +1433,25 @@ public class InstrumentBasicBlockTarget {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
-    // Assert that the offset in the statsArray is 64
+    // Assert that the offset in the statsArray is 64 and
+    // hit offset in hitsArray is 44
     assertThat(MetadataParser.getOffset("testFunc19")).isEqualTo(64);
+    assertThat(MetadataParser.getHitOffset("testFunc19")).isEqualTo(160);
 
-    // Assert that TestFunc19 excuted only BasicBlocks (1,2,3,13,17,20,28,30,31) skipping
-    // everything else because it only had to go to particular switch blocks.
-    // As this test case has numerous basicblocks (32),
-    // it needs two bitvectors so we need to make sure it is [0,1,0,0,0,0,1,0,0,0,1,1,0,1,1,1] in
-    // Bit-Vector 1 and [0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0] in Bit-Vector 2
+    // Assert that TestFunc19 has hit count of
+    // [0,1,0,0,0,0,1,0,0,0,5,4,0,1,6,6,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0]
     int[][] blockList = {{19,20,21,22,23,24,28,27,26,25,31,30,29,3,2,1},
                        {32,6,5,4,8,7,9,10,11,12,13,14,15,16,17,18}};
-    int[][] blockHitList = {{0,1,0,0,0,0,1,0,0,0,1,1,0,1,1,1},
+    int[][] blockHitList = {{0,1,0,0,0,0,1,0,0,0,5,4,0,1,6,6},
                             {0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0}};
     int i = 0;
     int j = 0;
 
     for(i = 0; i < blockList.length; i++) {
       for(j = 0; j < blockList[i].length; j++) {
-        int hitValue = MetadataParser.checkBlockHit("testFunc19", stats, blockList[i][j]);
+        int hitValue = MetadataParser.checkBlockNumHits("testFunc19", stats, hitStats, blockList[i][j]);
         assertThat(hitValue).isEqualTo(blockHitList[i][j]);
       }
     }
@@ -1332,15 +1469,15 @@ public class InstrumentBasicBlockTarget {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
-    // Assert that the offset in the statsArray is 64
+    // Assert that the offset in the statsArray is 64 and
+    // hit offset in hitsArray is 44
     assertThat(MetadataParser.getOffset("testFunc19")).isEqualTo(64);
+    assertThat(MetadataParser.getHitOffset("testFunc19")).isEqualTo(160);
 
-    // Assert that TestFunc19 excuted only BasicBlocks (1,2,7,8) skipping
-    // everything else because it only had to go to particular switch blocks.
-    // As this test case has numerous basicblocks (32),
-    // it needs two bitvectors so we need to make sure it is [0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1] in
-    // Bit-Vector 1 and [0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0] in Bit-Vector 2
+    // Assert that TestFunc19 excuted only BasicBlocks (1,2,7,8) once and the
+    // rest of the blocks got hits 0 times
     int[][] blockList = {{19,20,21,22,23,24,28,27,26,25,31,30,29,3,2,1},
                        {32,6,5,4,8,7,9,10,11,12,13,14,15,16,17,18}};
     int[][] blockHitList = {{0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1},
@@ -1350,7 +1487,7 @@ public class InstrumentBasicBlockTarget {
 
     for(i = 0; i < blockList.length; i++) {
       for(j = 0; j < blockList[i].length; j++) {
-        int hitValue = MetadataParser.checkBlockHit("testFunc19", stats, blockList[i][j]);
+        int hitValue = MetadataParser.checkBlockNumHits("testFunc19", stats, hitStats, blockList[i][j]);
         assertThat(hitValue).isEqualTo(blockHitList[i][j]);
       }
     }
@@ -1367,31 +1504,34 @@ public class InstrumentBasicBlockTarget {
     assertThat(testFunc20(array,array2)).isEqualTo(81);
     InstrumentBasicBlockAnalysis.stopTracing();
 
+    // Start Tracing Information and run Function before stopping
+    InstrumentBasicBlockAnalysis.startTracing();
+    assertThat(testFunc20(array,array2)).isEqualTo(81);
+    InstrumentBasicBlockAnalysis.stopTracing();
+
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
-    // Assert that the offset in the statsArray is 68
+    // Assert that the offset in the statsArray is 68 and
+    // hit offset in hitsArray is 71
     assertThat(MetadataParser.getOffset("testFunc20")).isEqualTo(68);
+    assertThat(MetadataParser.getHitOffset("testFunc20")).isEqualTo(192);
 
-    // Assert that TestFunc20 excuted some BasicBlocks skipping
-    // everything else because it only had to go to particular switch blocks.
-    // As this test case has numerous basicblocks (38),
-    // it needs three bitvectors so we need to make sure it is :
-    // [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1] in Bit-Vector 1,
-    // [1,0,0,0,0,0,1,1,0,1,0,0,0,1,1,1] in Bit-Vector 2,
-    // [1,1,1,1,1,1] in Bit-Vector 3,
+    // Assert that TestFunc20 has hit count of
+    // [6,6,6,6,6,9,9,9,9,9,12,12,12,3,4,4,3,0,0,0,0,0,9,9,0,3,0,0,0,3,9,6,1,3,3,3,3,3]
     int[][] blockList = {{17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2},
                          {19,32,31,30,29,35,34,33,43,41,39,38,37,36,26,18},
                          {42,24,23,22,21,20}};
-    int[][] blockHitList = {{1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
-                            {1,0,0,0,0,0,1,1,0,1,0,0,0,1,1,1},
-                            {1,1,1,1,1,1}};
+    int[][] blockHitList = {{6,6,6,6,6,9,9,9,9,9,12,12,12,3,4,4},
+                            {3,0,0,0,0,0,9,9,0,3,0,0,0,3,9,6},
+                            {1,3,3,3,3,3}};
     int i = 0;
     int j = 0;
 
     for(i = 0; i < blockList.length; i++) {
       for(j = 0; j < blockList[i].length; j++) {
-        int hitValue = MetadataParser.checkBlockHit("testFunc20", stats, blockList[i][j]);
+        int hitValue = MetadataParser.checkBlockNumHits("testFunc20", stats, hitStats, blockList[i][j]);
         assertThat(hitValue).isEqualTo(blockHitList[i][j]);
       }
     }
@@ -1410,21 +1550,19 @@ public class InstrumentBasicBlockTarget {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
-    // Assert that the offset in the statsArray is 68
+    // Assert that the offset in the statsArray is 68 and
+    // hit offset in hitsArray is 71
     assertThat(MetadataParser.getOffset("testFunc20")).isEqualTo(68);
+    assertThat(MetadataParser.getHitOffset("testFunc20")).isEqualTo(192);
 
-    // Assert that TestFunc20 excuted some BasicBlocks skipping
-    // everything else because it only had to go to particular switch blocks.
-    // As this test case has numerous basicblocks (38),
-    // it needs three bitvectors so we need to make sure it is :
-    // [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1] in Bit-Vector 1,
-    // [1,0,0,0,0,1,1,1,1,0,0,0,0,0,1,1] in Bit-Vector 2,
-    // [0,0,0,0,1,1] in Bit-Vector 3
+    // Assert that TestFunc20 has hit count of
+    // [1,1,1,1,1,2,2,2,2,2,2,2,2,1,1,1,1,0,0,0,0,1,1,1,1,0,0,0,0,0,1,1,0,0,0,0,1,1]
     int[][] blockList = {{17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2},
                          {19,32,31,30,29,35,34,33,43,41,39,38,37,36,26,18},
                          {42,24,23,22,21,20}};
-    int[][] blockHitList = {{1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
+    int[][] blockHitList = {{1,1,1,1,1,2,2,2,2,2,2,2,2,1,1,1},
                             {1,0,0,0,0,1,1,1,1,0,0,0,0,0,1,1},
                             {0,0,0,0,1,1}};
     int i = 0;
@@ -1432,7 +1570,7 @@ public class InstrumentBasicBlockTarget {
 
     for(i = 0; i < blockList.length; i++) {
       for(j = 0; j < blockList[i].length; j++) {
-        int hitValue = MetadataParser.checkBlockHit("testFunc20", stats, blockList[i][j]);
+        int hitValue = MetadataParser.checkBlockNumHits("testFunc20", stats, hitStats, blockList[i][j]);
         assertThat(hitValue).isEqualTo(blockHitList[i][j]);
       }
     }
@@ -1451,28 +1589,27 @@ public class InstrumentBasicBlockTarget {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
-    // Assert that the offset in the statsArray is 68
+    // Assert that the offset in the statsArray is 68 and
+    // hit offset in hitsArray is 71
     assertThat(MetadataParser.getOffset("testFunc20")).isEqualTo(68);
+    assertThat(MetadataParser.getHitOffset("testFunc20")).isEqualTo(192);
 
-    // Assert that TestFunc20 excuted some BasicBlocks skipping
-    // everything else because it only had to go to particular switch blocks.
-    // it needs three bitvectors so we need to make sure it is :
-    // [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1] in Bit-Vector 1,
-    // [1,0,0,0,0,0,1,1,0,1,0,0,0,1,1,1] in Bit-Vector 2,
-    // [1,1,1,1,1,1] in Bit-Vector 3,
+    // Assert that TestFunc20 has hit count of
+    // [3,6,6,6,6,9,9,9,9,9,12,12,12,3,4,4,3,0,0,0,0,0,9,6,0,3,0,0,0,3,6,3,1,3,3,3,3,3]
     int[][] blockList = {{17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2},
                          {19,32,31,30,29,35,34,33,43,41,39,38,37,36,26,18},
                          {42,24,23,22,21,20}};
-    int[][] blockHitList = {{1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
-                            {1,0,0,0,0,0,1,1,0,1,0,0,0,1,1,1},
-                            {1,1,1,1,1,1}};
+    int[][] blockHitList = {{3,6,6,6,6,9,9,9,9,9,12,12,12,3,4,4},
+                            {3,0,0,0,0,0,9,6,0,3,0,0,0,3,6,3},
+                            {1,3,3,3,3,3}};
     int i = 0;
     int j = 0;
 
     for(i = 0; i < blockList.length; i++) {
       for(j = 0; j < blockList[i].length; j++) {
-        int hitValue = MetadataParser.checkBlockHit("testFunc20", stats, blockList[i][j]);
+        int hitValue = MetadataParser.checkBlockNumHits("testFunc20", stats, hitStats, blockList[i][j]);
         assertThat(hitValue).isEqualTo(blockHitList[i][j]);
       }
     }
@@ -1490,26 +1627,25 @@ public class InstrumentBasicBlockTarget {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
-    // Assert that the offset in the statsArray is 73
+    // Assert that the offset in the statsArray is 73 and
+    // hit offset in hitsArray is 106
     assertThat(MetadataParser.getOffset("testFunc21")).isEqualTo(73);
+    assertThat(MetadataParser.getHitOffset("testFunc21")).isEqualTo(230);
 
-    // Assert that TestFunc21 excuted some BasicBlocks skipping
-    // everything else because it only had to go to particular switch blocks.
-    // As this test case has numerous basicblocks (23),
-    // it needs two bitvectors so we need to make sure it is :
-    // [1,1,1,0,0,0,0,0,0,0,1,1,1,1,0,0] in Bit-Vector 1,
-    // [1,1,1,1,1,1,1] in Bit-Vector 2,
+    // Assert that TestFunc21 has hit count of
+    // [3,3,1,0,0,0,0,0,0,0,1,3,4,1,0,0,3,4,1,2,2,3,3]
     int[][] blockList = {{18,17,15,11,10,9,8,6,5,4,25,24,23,3,2,1},
                          {14,13,12,22,21,20,19}};
-    int[][] blockHitList = {{1,1,1,0,0,0,0,0,0,0,1,1,1,1,0,0},
-                            {1,1,1,1,1,1,1}};
+    int[][] blockHitList = {{3,3,1,0,0,0,0,0,0,0,1,3,4,1,0,0},
+                            {3,4,1,2,2,3,3}};
     int i = 0;
     int j = 0;
 
     for(i = 0; i < blockList.length; i++) {
       for(j = 0; j < blockList[i].length; j++) {
-        int hitValue = MetadataParser.checkBlockHit("testFunc21", stats, blockList[i][j]);
+        int hitValue = MetadataParser.checkBlockNumHits("testFunc21", stats, hitStats, blockList[i][j]);
         assertThat(hitValue).isEqualTo(blockHitList[i][j]);
       }
     }
@@ -1527,26 +1663,25 @@ public class InstrumentBasicBlockTarget {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
-    // Assert that the offset in the statsArray is 73
+    // Assert that the offset in the statsArray is 73 and
+    // hit offset in hitsArray is 106
     assertThat(MetadataParser.getOffset("testFunc21")).isEqualTo(73);
+    assertThat(MetadataParser.getHitOffset("testFunc21")).isEqualTo(230);
 
-    // Assert that TestFunc21 excuted some BasicBlocks skipping
-    // everything else because it only had to go to particular switch blocks.
-    // As this test case has numerous basicblocks (23),
-    // it needs two bitvectors so we need to make sure it is :
-    // [1,1,1,1,0,0,0,0,0,0,1,1,1,0,0,1] in Bit-Vector 1,
-    // [0,0,0,1,1,1,1] in Bit-Vector 2,
+    // Assert that TestFunc21 has hit count of
+    // [5,5,1,1,0,0,0,0,0,0,1,4,5,0,0,1,0,0,0,4,4,4,4]
     int[][] blockList = {{18,17,15,11,10,9,8,6,5,4,25,24,23,3,2,1},
                          {14,13,12,22,21,20,19}};
-    int[][] blockHitList = {{1,1,1,1,0,0,0,0,0,0,1,1,1,0,0,1},
-                            {0,0,0,1,1,1,1}};
+    int[][] blockHitList = {{5,5,1,1,0,0,0,0,0,0,1,4,5,0,0,1},
+                            {0,0,0,4,4,4,4}};
     int i = 0;
     int j = 0;
 
     for(i = 0; i < blockList.length; i++) {
       for(j = 0; j < blockList[i].length; j++) {
-        int hitValue = MetadataParser.checkBlockHit("testFunc21", stats, blockList[i][j]);
+        int hitValue = MetadataParser.checkBlockNumHits("testFunc21", stats, hitStats, blockList[i][j]);
         assertThat(hitValue).isEqualTo(blockHitList[i][j]);
       }
     }
@@ -1564,26 +1699,25 @@ public class InstrumentBasicBlockTarget {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
-    // Assert that the offset in the statsArray is 73
+    // Assert that the offset in the statsArray is 73 and
+    // hit offset in hitsArray is 106
     assertThat(MetadataParser.getOffset("testFunc21")).isEqualTo(73);
+    assertThat(MetadataParser.getHitOffset("testFunc21")).isEqualTo(230);
 
-    // Assert that TestFunc21 excuted some BasicBlocks skipping
-    // everything else because it only had to go to particular switch blocks.
-    // As this test case has numerous basicblocks (23),
-    // it needs two bitvectors so we need to make sure it is :
-    // [0,0,0,0,1,0,1,1,1,1,1,1,1,0,1,1] in Bit-Vector 1,
-    // [0,0,0,0,0,0,0] in Bit-Vector 2,
+    // Assert that TestFunc21 has hit count of
+    // [0,0,0,0,5,0,5,5,6,1,1,5,6,0,1,1,0,0,0,0,0,0,0]
     int[][] blockList = {{18,17,15,11,10,9,8,6,5,4,25,24,23,3,2,1},
                          {14,13,12,22,21,20,19}};
-    int[][] blockHitList = {{0,0,0,0,1,0,1,1,1,1,1,1,1,0,1,1},
+    int[][] blockHitList = {{0,0,0,0,5,0,5,5,6,1,1,5,6,0,1,1},
                             {0,0,0,0,0,0,0}};
     int i = 0;
     int j = 0;
 
     for(i = 0; i < blockList.length; i++) {
       for(j = 0; j < blockList[i].length; j++) {
-        int hitValue = MetadataParser.checkBlockHit("testFunc21", stats, blockList[i][j]);
+        int hitValue = MetadataParser.checkBlockNumHits("testFunc21", stats, hitStats, blockList[i][j]);
         assertThat(hitValue).isEqualTo(blockHitList[i][j]);
       }
     }
@@ -1612,18 +1746,19 @@ public class InstrumentBasicBlockTarget {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
     // Assert that the offset in the statsArray is 77 and
     // hit offset in hitsArray is 120
     assertThat(MetadataParser.getOffset("testFunc22")).isEqualTo(77);
+    assertThat(MetadataParser.getHitOffset("testFunc22")).isEqualTo(253);
 
-    // Assert that TestFunc22 excuted some BasicBlocks (1,2,3,4,5,6,7,8,9,10,11,12,13)
-    // which is [1,0,0,1,1,1,1,1,1,1,1,1,1,1,1] in the Bit-Vector form
+    // Assert that TestFunc22 has hit count of [1,0,0,10,10,10,10,10,11,11,1,1,1,1,1]
     int[] blockList = {13,15,14,12,11,10,9,8,7,6,5,4,3,2,1};
-    int[] blockHitList = {1,0,0,1,1,1,1,1,1,1,1,1,1,1,1};
+    int[] blockHitList = {1,0,0,10,10,10,10,10,11,11,1,1,1,1,1};
 
     for(i = 0; i < blockList.length; i++) {
-      int hitValue = MetadataParser.checkBlockHit("testFunc22", stats, blockList[i]);
+      int hitValue = MetadataParser.checkBlockNumHits("testFunc22", stats, hitStats, blockList[i]);
       assertThat(hitValue).isEqualTo(blockHitList[i]);
     }
   }
@@ -1651,19 +1786,19 @@ public class InstrumentBasicBlockTarget {
 
     // Get Stats from Instrument Analysis
     short[] stats = InstrumentBasicBlockAnalysis.getStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
     // Assert that the offset in the statsArray is 77 and
     // hit offset in hitsArray is 120
     assertThat(MetadataParser.getOffset("testFunc22")).isEqualTo(77);
+    assertThat(MetadataParser.getHitOffset("testFunc22")).isEqualTo(253);
 
-    // Assert that TestFunc22 excuted some BasicBlocks (1,2,3,13) skipping
-    // which is [1,0,0,0,0,0,0,0,0,0,0,0,1,1,1] in the Bit-Vector form due to
-    // method returning null
+    // Assert that TestFunc22 has hit count of [1,0,0,0,0,0,0,0,0,0,0,0,1,1,1]
     int[] blockList = {13,15,14,12,11,10,9,8,7,6,5,4,3,2,1};
     int[] blockHitList = {1,0,0,0,0,0,0,0,0,0,0,0,1,1,1};
 
     for(i = 0; i < blockList.length; i++) {
-      int hitValue = MetadataParser.checkBlockHit("testFunc22", stats, blockList[i]);
+      int hitValue = MetadataParser.checkBlockNumHits("testFunc22", stats, hitStats, blockList[i]);
       assertThat(hitValue).isEqualTo(blockHitList[i]);
     }
   }

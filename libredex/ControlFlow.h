@@ -692,6 +692,12 @@ class ControlFlowGraph {
   // `pred` and `succ` must be in the same try region
   void merge_blocks(Block* pred, Block* succ);
 
+  // Insert \p inserted_block between \p pred and \p succ, where there are only
+  // EDGE_GOTO or EDGE_BRANCH between \p pred and \p succ. After insertion, all
+  // edges from \p pred to \p succ will be redirected to \p inserted_block, and
+  // there will be a GOTO edge added from inserted_block to succ.
+  void insert_block(Block* pred, Block* succ, Block* inserted_block);
+
   // remove the IRInstruction that `it` points to.
   //
   // If `it` points to a branch instruction, remove the corresponding outgoing
