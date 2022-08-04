@@ -1,0 +1,7 @@
+[package]
+name = "sparta"
+version = "0.1.0"
+authors = ["Yuxuan Chen <ych@fb.com>"]
+edition = "2018"
+
+[dependencies]
