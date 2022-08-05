@@ -1,5 +1,5 @@
 [package]
-name = "SPARTA"
+name = "sparta"
 license = "MIT"
 description = "SPARTA is a library of software components specially designed for building high-performance static analyzers based on the theory of Abstract Interpretation."
 homepage = "https://github.com/facebook/sparta"
