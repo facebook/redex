@@ -1,7 +1,10 @@
 [package]
-name = "sparta"
+name = "SPARTA"
+license = "MIT"
+description = "SPARTA is a library of software components specially designed for building high-performance static analyzers based on the theory of Abstract Interpretation."
+homepage = "https://github.com/facebook/sparta"
+repository = "https://github.com/facebook/sparta"
 version = "0.1.0"
-authors = ["Yuxuan Chen <ych@fb.com>"]
 edition = "2018"
 
 [dev-dependencies]
