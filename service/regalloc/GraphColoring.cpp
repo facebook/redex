@@ -439,7 +439,7 @@ void Allocator::simplify(interference::Graph* ig,
   // of them here since some of them can have zero weight.
   std::set<reg_t> low;
   // Nodes that may not be colorable
-  std::set<reg_t> high;
+  std::unordered_set<reg_t> high;
 
   for (const auto& pair : ig->active_nodes()) {
     auto reg = pair.first;
@@ -504,12 +504,18 @@ void Allocator::simplify(interference::Graph* ig,
         std::min_element(high.begin(), high.end(), [ig](reg_t a, reg_t b) {
           auto& node_a = ig->get_node(a);
           auto& node_b = ig->get_node(b);
-          if (node_a.is_spilt() == node_b.is_spilt()) {
-            // Note that a / b < c / d <=> a * d < c * b.
-            return node_a.spill_cost() * node_b.weight() <
-                   node_b.spill_cost() * node_a.weight();
+          if (node_a.is_spilt() != node_b.is_spilt()) {
+            return !node_a.is_spilt() && node_b.is_spilt();
           }
-          return !node_a.is_spilt() && node_b.is_spilt();
+          // Note that a / b < c / d <=> a * d < c * b.
+          auto a_value = node_a.spill_cost() * node_b.weight();
+          auto b_value = node_b.spill_cost() * node_a.weight();
+          if (a_value != b_value) {
+            return a_value < b_value;
+          }
+          // Among equivalent options, prefer lowest register number as tie
+          // breaker.
+          return a < b;
         });
     TRACE(REG, 6, "Potentially spilling %u", *spill_candidate_it);
     // Our spill candidate has too many neighbors for us to be certain that we
@@ -574,7 +580,7 @@ void Allocator::select_ranges(const cfg::ControlFlowGraph& cfg,
       VirtualRegistersFile vreg_file;
       auto src = insn->src(i);
       mark_adjacent(ig, src, reg_transform->map, &vreg_file);
-      vreg_files.emplace(src, vreg_file);
+      vreg_files.emplace(src, std::move(vreg_file));
     }
 
     vreg_t range_base =
@@ -604,7 +610,7 @@ void Allocator::select_params(const cfg::ControlFlowGraph& cfg,
     param_regs.emplace_back(dest);
     VirtualRegistersFile vreg_file;
     mark_adjacent(ig, dest, reg_transform->map, &vreg_file);
-    vreg_files.emplace(dest, vreg_file);
+    vreg_files.emplace(dest, std::move(vreg_file));
   }
 
   auto min_param_reg =
