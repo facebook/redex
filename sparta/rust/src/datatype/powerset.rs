@@ -120,17 +120,19 @@ impl<S: SetOps> AbstractDomain for PowersetLattice<S> {
     }
 }
 
+pub type HashSetAbstractDomain<T> = PowersetLattice<HashSet<T>>;
+
 #[cfg(test)]
 mod tests {
     use crate::datatype::AbstractDomain;
-    use crate::datatype::PowersetLattice;
-    use std::collections::HashSet;
+    use crate::datatype::HashSetAbstractDomain;
+
     #[test]
     fn test_powerset() {
-        type IntPowerset = PowersetLattice<HashSet<i64>>;
+        type IntPowerset = HashSetAbstractDomain<i64>;
         let top = IntPowerset::Top;
-        let value1 = IntPowerset::value_from_set(HashSet::from([1, 2, 3, 4, 5]));
-        let value2 = IntPowerset::value_from_set(HashSet::from([3, 4, 5, 6, 7]));
+        let value1 = IntPowerset::value_from_set(vec![1, 2, 3, 4, 5].into_iter().collect());
+        let value2 = IntPowerset::value_from_set(vec![3, 4, 5, 6, 7].into_iter().collect());
 
         assert!(top.is_top());
         assert!(!value1.is_top());
@@ -141,12 +143,13 @@ mod tests {
         assert!(!value2.leq(&value1));
 
         let joined = value1.clone().join(value2.clone());
-        let expected_joined = IntPowerset::value_from_set(HashSet::from([1, 2, 3, 4, 5, 6, 7]));
+        let expected_joined =
+            IntPowerset::value_from_set(vec![1, 2, 3, 4, 5, 6, 7].into_iter().collect());
 
         assert_eq!(joined, expected_joined);
 
         let met = value1.meet(value2);
-        let expected_met = IntPowerset::value_from_set(HashSet::from([3, 4, 5]));
+        let expected_met = IntPowerset::value_from_set(vec![3, 4, 5].into_iter().collect());
         assert_eq!(met, expected_met);
     }
 }

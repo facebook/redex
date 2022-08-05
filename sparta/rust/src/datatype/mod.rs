@@ -6,8 +6,14 @@
  */
 
 mod abstract_domain;
+mod bitvec;
+mod patricia_tree_impl;
+mod patricia_tree_map;
+mod patricia_tree_set;
 mod powerset;
 
 pub use abstract_domain::*;
+pub use patricia_tree_map::*;
+pub use patricia_tree_set::*;
 pub use powerset::PowersetLattice::*;
 pub use powerset::*;
