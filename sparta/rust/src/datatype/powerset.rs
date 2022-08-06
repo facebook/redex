@@ -5,9 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-use super::abstract_domain::AbstractDomain;
 use std::collections::HashSet;
 use std::hash::Hash;
+
+use super::abstract_domain::AbstractDomain;
 
 pub trait SetOps {
     fn is_subset(&self, other: &Self) -> bool;

@@ -93,8 +93,9 @@ impl<K: Into<BitVec>> FromIterator<K> for PatriciaTreeSet<K> {
 mod tests {
     use std::collections::HashSet;
 
-    use crate::datatype::PatriciaTreeSet;
     use rand::Rng;
+
+    use crate::datatype::PatriciaTreeSet;
 
     #[test]
     fn test_set_operations() {
