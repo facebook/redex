@@ -734,6 +734,12 @@ Given an APK, produce a better APK!
     )
 
     parser.add_argument(
+        "--secondary-packed-profiles",
+        type=str,
+        help="Path to packed secondary profiles (expects tar.xz)",
+    )
+
+    parser.add_argument(
         "--jni-summary",
         default=None,
         type=str,
