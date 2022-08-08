@@ -334,7 +334,6 @@ void DexStructure::add_class_no_checks(
     const interdex::TypeRefs& pending_init_class_types,
     unsigned laclazz,
     DexClass* clazz) {
-  TRACE(IDEX, 7, "Adding class: %s", SHOW(clazz));
   add_refs_no_checks(clazz_mrefs, clazz_frefs, clazz_trefs,
                      pending_init_class_fields, pending_init_class_types);
   m_linear_alloc_size += laclazz;

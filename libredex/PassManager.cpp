@@ -598,6 +598,17 @@ void process_method_profiles(PassManager& mgr, ConfigFiles& conf) {
                  conf.get_method_profiles().unresolved_size());
 }
 
+void process_secondary_method_profiles(PassManager& mgr, ConfigFiles& conf) {
+  // New methods might have been introduced by this pass; process previously
+  // unresolved methods to see if we can match them now (so that future passes
+  // using method profiles benefit)
+  conf.process_unresolved_secondary_method_profile_lines();
+  mgr.set_metric("~result~SecondaryMethodProfiles~",
+                 conf.get_secondary_method_profiles().size());
+  mgr.set_metric("~result~SecondaryMethodProfiles~unresolved~",
+                 conf.get_secondary_method_profiles().unresolved_size());
+}
+
 void maybe_write_hashes_incoming(const ConfigFiles& conf, const Scope& scope) {
   if (conf.emit_incoming_hashes()) {
     TRACE(PM, 1, "Writing incoming hashes...");
@@ -1350,6 +1361,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
     analysis_usage_helper.post_pass(pass);
 
     process_method_profiles(*this, conf);
+    process_secondary_method_profiles(*this, conf);
 
     if (after_pass_size.handle(m_current_pass_info, &stores, &conf)) {
       // Measuring child. Return to write things out.

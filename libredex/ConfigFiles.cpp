@@ -28,7 +28,8 @@ ConfigFiles::ConfigFiles(const Json::Value& config, const std::string& outdir)
           new ProguardMap(config.get("proguard_map", "").asString(),
                           config.get("use_new_rename_map", 0).asBool())),
       m_printseeds(config.get("printseeds", "").asString()),
-      m_method_profiles(new method_profiles::MethodProfiles()) {
+      m_method_profiles(new method_profiles::MethodProfiles()),
+      m_secondary_method_profiles(new method_profiles::MethodProfiles()) {
 
   m_coldstart_class_filename = config.get("coldstart_classes", "").asString();
   if (m_coldstart_class_filename.empty()) {
@@ -245,6 +246,15 @@ void ConfigFiles::ensure_agg_method_stats_loaded() const {
   m_method_profiles->initialize(csv_filenames);
 }
 
+void ConfigFiles::ensure_secondary_method_stats_loaded() const {
+  std::vector<std::string> csv_filenames;
+  get_json_config().get("secondary_method_stats_files", {}, csv_filenames);
+  if (csv_filenames.empty() || m_secondary_method_profiles->is_initialized()) {
+    return;
+  }
+  m_secondary_method_profiles->initialize(csv_filenames);
+}
+
 void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   Json::Value config;
   m_json.get("inliner", Json::nullValue, config);
@@ -334,6 +344,11 @@ void ConfigFiles::load(const Scope& scope) {
 void ConfigFiles::process_unresolved_method_profile_lines() {
   ensure_agg_method_stats_loaded();
   m_method_profiles->process_unresolved_lines();
+}
+
+void ConfigFiles::process_unresolved_secondary_method_profile_lines() {
+  ensure_secondary_method_stats_loaded();
+  m_secondary_method_profiles->process_unresolved_lines();
 }
 
 const api::AndroidSDK& ConfigFiles::get_android_sdk_api(int32_t min_sdk_api) {

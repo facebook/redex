@@ -88,6 +88,14 @@ bool MethodProfiles::parse_stats_file(const std::string& csv_filename) {
   std::string line;
   while (std::getline(ifs, line)) {
     bool success = false;
+    if (line.back() == '\n') {
+      line.pop_back();
+    }
+    // Just in case the files were generated on a Windows OS
+    // or with Windows line ending.
+    if (line.back() == '\r') {
+      line.pop_back();
+    }
     if (m_mode == NONE) {
       success = parse_header(line);
     } else {
