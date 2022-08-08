@@ -1307,6 +1307,9 @@ VirtualMergingStats apply_ordering(
           auto last_it = block->end();
           for (auto it = block->begin(); it != block->end(); it++) {
             auto& mie = *it;
+            if (mie.type != MFLOW_OPCODE) {
+              continue;
+            }
             if (!opcode::is_a_load_param(mie.insn->opcode())) {
               break;
             }
