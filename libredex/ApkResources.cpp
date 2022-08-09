@@ -1229,6 +1229,7 @@ void ApkResources::obfuscate_xml_files(
       auto const& entry = *it;
       const path_t& entry_path = entry.path();
       const auto& entry_string = entry_path.string();
+      // TODO(T126661220): support obfuscated input.
       if (is_directory(entry_path) &&
           can_obfuscate_xml_file(allowed_types, entry_string)) {
         for (const std::string& layout : get_xml_files(entry_string)) {
