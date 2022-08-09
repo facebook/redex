@@ -7,4 +7,4 @@
 
 #![allow(dead_code)]
 
-mod datatype;
+pub mod datatype;
