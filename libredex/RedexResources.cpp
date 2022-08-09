@@ -202,6 +202,16 @@ void find_resource_xml_files(const std::string& dir,
             handler(resource_path.string());
           }
         }
+      } else {
+        // In case input APK has resource file path changed and not in usual
+        // format.
+        // TODO(T126661220): this disabled performance improvement to read less
+        // resource files, it would be better if we have mapping file to map
+        // back resource file names.
+        if (is_regular_file(entry_path) &&
+            boost::ends_with(entry_path.string(), ".xml")) {
+          handler(entry_path.string());
+        }
       }
     }
   }
