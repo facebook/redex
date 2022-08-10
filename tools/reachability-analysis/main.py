@@ -35,33 +35,28 @@ Once a graph is loaded, the interface supports 3 operations:
     return parser.parse_args(argv)
 
 
-def get_user_input():
-    return eval(input(PROMPT_MSG))
-
-
 def main(argv):
     args = parse_args(argv)
     graph = ReachabilityGraph()
     print("Loading graph. This might take a couple of minutes")
     graph.load(args.input)
 
-    input_str = eval(input(PROMPT_MSG))
-    while input_str != "x":
+    while True:
+        input_str = input(PROMPT_MSG)
+        if input_str == "x":
+            break
         if not input_str.strip():
-            input_str = eval(input(PROMPT_MSG))
             continue
         if input_str.startswith("s "):
             graph.list_nodes(input_str[2:])
-            input_str = eval(input(PROMPT_MSG))
             continue
 
         # Search for the node and print it
         try:
             node = graph.get_node(input_str)
-            print((repr(node)))
+            print(repr(node))
         except KeyError:
             print(f"Cannot find a node named '{input_str}'")
-        input_str = eval(input(PROMPT_MSG))
 
 
 if __name__ == "__main__":
