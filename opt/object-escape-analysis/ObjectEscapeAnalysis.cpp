@@ -1349,6 +1349,8 @@ compute_reduced_methods(
     const std::unordered_map<DexMethod*, InlinableTypes>& root_methods,
     std::unordered_set<DexType*>* irreducible_types,
     Stats* stats) {
+  Timer t("compute_reduced_methods");
+
   // We are not exploring all possible subsets of types, but only single chain
   // of subsets, guided by the inlinable kind, and by how often
   // they appear as inlinable types in root methods.
@@ -1480,6 +1482,8 @@ std::unordered_map<DexMethod*, size_t> select_reduced_methods(
         reduced_methods,
     std::unordered_set<DexType*>* irreducible_types,
     Stats* stats) {
+  Timer t("select_reduced_methods");
+
   // First, we are going to identify all reduced methods which will result in
   // local net savings, considering just a single reduced method at a time.
   // We'll also build up families of reduced methods for which we can later do a
