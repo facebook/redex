@@ -12,6 +12,7 @@
 #include "ConfigFiles.h"
 #include "ControlFlow.h"
 #include "Creators.h"
+#include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "MethodOverrideGraph.h"
@@ -81,7 +82,11 @@ ClassSplitter::ClassSplitter(
     : m_config(config),
       m_mgr(mgr),
       m_sufficiently_popular_methods(sufficiently_popular_methods),
-      m_insufficiently_popular_methods(insufficiently_popular_methods) {}
+      m_insufficiently_popular_methods(insufficiently_popular_methods) {
+  // Instead of changing visibility as we split, blocking other work on the
+  // critical path, we do it all in parallel at the end.
+  m_delayed_visibility_changes = std::make_unique<VisibilityChanges>();
+}
 
 void ClassSplitter::configure(const Scope& scope) {
   if (m_config.relocate_non_true_virtual_methods) {
@@ -171,6 +176,11 @@ void ClassSplitter::prepare(const DexClass* cls,
     if (!method->get_code()) {
       return;
     }
+    if (get_trampoline_method_cost(method) >=
+        method->get_code()->sum_opcode_sizes()) {
+      m_stats.method_size_too_small++;
+      return;
+    }
     if (m_sufficiently_popular_methods.count(method)) {
       return;
     }
@@ -188,10 +198,6 @@ void ClassSplitter::prepare(const DexClass* cls,
       return;
     }
     if (requires_trampoline && !m_config.trampolines) {
-      return;
-    }
-    if (get_trampoline_method_cost(method) >=
-        method->get_code()->sum_opcode_sizes()) {
       return;
     }
     DexClass* target_cls;
@@ -516,6 +522,10 @@ void ClassSplitter::cleanup(const Scope& final_scope) {
     materialize_trampoline_code(p.first, p.second);
   }
 
+  delayed_visibility_changes_apply();
+  delayed_invoke_direct_to_static(final_scope);
+  m_delayed_make_static.clear();
+
   m_mgr.incr_metric(METRIC_RELOCATION_CLASSES, m_stats.relocation_classes);
   m_mgr.incr_metric(METRIC_RELOCATED_STATIC_METHODS,
                     m_stats.relocated_static_methods);
@@ -532,6 +542,7 @@ void ClassSplitter::cleanup(const Scope& final_scope) {
                     m_stats.source_block_positive_vals);
   m_mgr.incr_metric(METRIC_RELOCATED_METHODS, m_methods_to_relocate.size());
   m_mgr.incr_metric(METRIC_TRAMPOLINES, m_methods_to_trampoline.size());
+  m_mgr.incr_metric(METRIC_TOO_SMALL_METHODS, m_stats.method_size_too_small);
 
   TRACE(CS, 2,
         "[class splitting] Relocated {%zu} methods and created {%zu} "
@@ -617,17 +628,12 @@ bool ClassSplitter::can_relocate(bool cls_has_problematic_clinit,
     }
     return false;
   }
-  if (!get_visibility_changes(m).empty()) {
-    if (log) {
-      m_mgr.incr_metric(
-          "num_class_splitting_limitation_cannot_change_visibility", 1);
-    }
-    return false;
-  }
   if (has_unresolvable_or_external_field_ref(m)) {
     if (log) {
       m_mgr.incr_metric(
-          "num_class_splitting_limitation_cannot_change_visibility", 1);
+          "num_class_splitting_limitation_has_unresolvable_or_external_field_"
+          "ref",
+          1);
     }
     return false;
   }
@@ -672,8 +678,7 @@ bool ClassSplitter::can_relocate(bool cls_has_problematic_clinit,
     }
     if (method::is_init(m)) {
       if (log) {
-        m_mgr.incr_metric(
-            "num_class_splitting_limitation_static_method_is_clinit", 1);
+        m_mgr.incr_metric("num_class_splitting_limitation_method_is_init", 1);
       }
       // TODO: Could be done with trampolines if we remove "final" flag from
       // fields, and carefully deal with super-init calls.
@@ -697,7 +702,66 @@ bool ClassSplitter::can_relocate(bool cls_has_problematic_clinit,
     }
     return false;
   }
+  VisibilityChanges visibility_changes = get_visibility_changes(m);
+  if (!visibility_changes.empty()) {
+    m_delayed_visibility_changes->insert(visibility_changes);
+  }
   return true;
 }
 
+void ClassSplitter::delayed_visibility_changes_apply() {
+  m_delayed_visibility_changes->apply();
+  // any method that was just made public and isn't virtual or a constructor or
+  // static must be made static
+  for (auto method : m_delayed_visibility_changes->methods) {
+    always_assert(is_public(method));
+    if (!method->is_virtual() && !method::is_init(method) &&
+        !is_static(method)) {
+      always_assert(can_rename(method));
+      always_assert(method->is_concrete());
+      m_delayed_make_static.insert(method);
+    }
+  }
+}
+
+void ClassSplitter::delayed_invoke_direct_to_static(const Scope& final_scope) {
+  if (m_delayed_make_static.empty()) {
+    return;
+  }
+  // We sort the methods here because make_static renames methods on
+  // collision, and which collisions occur is order-dependent. E.g. if we have
+  // the following methods in m_delayed_make_static:
+  //
+  //   Foo Foo::bar()
+  //   Foo Foo::bar(Foo f)
+  //
+  // making Foo::bar() static first would make it collide with Foo::bar(Foo
+  // f), causing it to get renamed to bar$redex0(). But if Foo::bar(Foo f)
+  // gets static-ified first, it becomes Foo::bar(Foo f, Foo f), so when bar()
+  // gets made static later there is no collision. So in the interest of
+  // having reproducible binaries, we sort the methods first.
+  //
+  // Also, we didn't use an std::set keyed by method signature here because
+  // make_static is mutating the signatures. The tree that implements the set
+  // would have to be rebalanced after the mutations.
+  std::vector<DexMethod*> methods(m_delayed_make_static.begin(),
+                                  m_delayed_make_static.end());
+  std::sort(methods.begin(), methods.end(), compare_dexmethods);
+  for (auto method : methods) {
+    TRACE(MMINL, 6, "making %s static", method->get_name()->c_str());
+    mutators::make_static(method);
+  }
+  walk::parallel::opcodes(
+      final_scope, [](DexMethod* meth) { return true; },
+      [&](DexMethod*, IRInstruction* insn) {
+        auto op = insn->opcode();
+        if (op == OPCODE_INVOKE_DIRECT) {
+          auto m = insn->get_method()->as_def();
+          if (m && m_delayed_make_static.count(m)) {
+            insn->set_opcode(OPCODE_INVOKE_STATIC);
+          }
+        }
+      });
+  m_delayed_make_static.clear();
+}
 } // namespace class_splitting
