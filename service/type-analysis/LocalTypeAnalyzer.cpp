@@ -142,65 +142,57 @@ bool RegisterTypeAnalyzer::analyze_binop_lit(const IRInstruction* insn,
 
   bool use_result_reg = false;
   switch (op) {
-  case OPCODE_ADD_INT_LIT16:
-  case OPCODE_ADD_INT_LIT8: {
+  case OPCODE_ADD_INT_LIT: {
     result = (*int_val) + lit;
     break;
   }
-  case OPCODE_RSUB_INT:
-  case OPCODE_RSUB_INT_LIT8: {
+  case OPCODE_RSUB_INT_LIT: {
     result = lit - (*int_val);
     break;
   }
-  case OPCODE_MUL_INT_LIT16:
-  case OPCODE_MUL_INT_LIT8: {
+  case OPCODE_MUL_INT_LIT: {
     result = (*int_val) * lit;
     break;
   }
-  case OPCODE_DIV_INT_LIT16:
-  case OPCODE_DIV_INT_LIT8: {
+  case OPCODE_DIV_INT_LIT: {
     if (lit != 0) {
       result = (*int_val) / lit;
     }
     use_result_reg = true;
     break;
   }
-  case OPCODE_REM_INT_LIT16:
-  case OPCODE_REM_INT_LIT8: {
+  case OPCODE_REM_INT_LIT: {
     if (lit != 0) {
       result = (*int_val) % lit;
     }
     use_result_reg = true;
     break;
   }
-  case OPCODE_AND_INT_LIT16:
-  case OPCODE_AND_INT_LIT8: {
+  case OPCODE_AND_INT_LIT: {
     result = (*int_val) & lit;
     break;
   }
-  case OPCODE_OR_INT_LIT16:
-  case OPCODE_OR_INT_LIT8: {
+  case OPCODE_OR_INT_LIT: {
     result = (*int_val) | lit;
     break;
   }
-  case OPCODE_XOR_INT_LIT16:
-  case OPCODE_XOR_INT_LIT8: {
+  case OPCODE_XOR_INT_LIT: {
     result = (*int_val) ^ lit;
     break;
   }
   // as in https://source.android.com/devices/tech/dalvik/dalvik-bytecode
   // the following operations have the second operand masked.
-  case OPCODE_SHL_INT_LIT8: {
+  case OPCODE_SHL_INT_LIT: {
     uint32_t ucst = *int_val;
     uint32_t uresult = ucst << (lit & 0x1f);
     result = (int32_t)uresult;
     break;
   }
-  case OPCODE_SHR_INT_LIT8: {
+  case OPCODE_SHR_INT_LIT: {
     result = (*int_val) >> (lit & 0x1f);
     break;
   }
-  case OPCODE_USHR_INT_LIT8: {
+  case OPCODE_USHR_INT_LIT: {
     uint32_t ucst = *int_val;
     // defined in dalvik spec
     result = ucst >> (lit & 0x1f);

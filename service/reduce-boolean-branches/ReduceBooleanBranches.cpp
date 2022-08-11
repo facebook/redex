@@ -135,7 +135,7 @@ class Analyzer {
                                             size_t* negations) {
     always_assert(
         insn->opcode() == OPCODE_IF_EQZ || insn->opcode() == OPCODE_IF_NEZ ||
-        (insn->opcode() == OPCODE_XOR_INT_LIT8 && insn->get_literal() == 1));
+        (insn->opcode() == OPCODE_XOR_INT_LIT && insn->get_literal() == 1));
 
     *negations = 0;
     auto it = m_cfg.find_insn(insn, block);
@@ -149,7 +149,7 @@ class Analyzer {
         break;
       }
       auto xor_1_insn = *defs.elements().begin();
-      if (xor_1_insn->opcode() != OPCODE_XOR_INT_LIT8 ||
+      if (xor_1_insn->opcode() != OPCODE_XOR_INT_LIT ||
           xor_1_insn->get_literal() != 1) {
         break;
       }
@@ -297,7 +297,7 @@ bool ReduceBooleanBranches::reduce_diamonds() {
       if ((last_insn_opcode == OPCODE_IF_EQZ) == (branch_literal == 0)) {
         replacement_insn = new IRInstruction(OPCODE_MOVE);
       } else {
-        replacement_insn = new IRInstruction(OPCODE_XOR_INT_LIT8);
+        replacement_insn = new IRInstruction(OPCODE_XOR_INT_LIT);
         replacement_insn->set_literal(1);
       }
       replacement_insn->set_dest(dest)->set_src(0, src);
@@ -313,7 +313,7 @@ bool ReduceBooleanBranches::reduce_diamonds() {
       move_result_pseudo_insn->set_dest(dest);
       replacement_insns.push_back(move_result_pseudo_insn);
       if ((last_insn_opcode == OPCODE_IF_EQZ) != (branch_literal == 0)) {
-        auto xor_insn = new IRInstruction(OPCODE_XOR_INT_LIT8);
+        auto xor_insn = new IRInstruction(OPCODE_XOR_INT_LIT);
         xor_insn->set_literal(1)->set_dest(dest)->set_src(0, dest);
         replacement_insns.push_back(xor_insn);
       }
@@ -354,7 +354,7 @@ bool ReduceBooleanBranches::reduce_xors() {
     for (const auto& mie : InstructionIterable(block)) {
       auto insn = mie.insn;
       if (insn->opcode() != OPCODE_IF_EQZ && insn->opcode() != OPCODE_IF_NEZ &&
-          (insn->opcode() != OPCODE_XOR_INT_LIT8 || insn->get_literal() != 1)) {
+          (insn->opcode() != OPCODE_XOR_INT_LIT || insn->get_literal() != 1)) {
         // TOOD: Support more scenarios, e.g. reducing a double-xored value
         // flowing into a Boolean field store.
         continue;
@@ -371,7 +371,7 @@ bool ReduceBooleanBranches::reduce_xors() {
       move_insn->set_dest(temp_reg)->set_src(0, root->insn->src(0));
       mutation.insert_before(root, {move_insn});
       IROpcode new_op = (negations & 1) == 0 ? insn->opcode()
-                        : insn->opcode() == OPCODE_XOR_INT_LIT8
+                        : insn->opcode() == OPCODE_XOR_INT_LIT
                             ? OPCODE_MOVE
                             : opcode::invert_conditional_branch(insn->opcode());
       reductions.push_back({insn, new_op, temp_reg});

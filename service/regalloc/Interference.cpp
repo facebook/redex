@@ -151,23 +151,29 @@ size_t dest_bit_width(const cfg::InstructionIterator& it) {
   } else if (opcode::is_a_literal_const(op)) {
     // const opcodes can always be encoded in a form that addresses 8-bit regs
     return 8;
+  } else if (opcode::is_an_int_lit(op)) {
+    return (int8_t)insn->get_literal() == insn->get_literal() ? 8 : 4;
   } else {
     return dex_opcode::dest_bit_width(opcode::to_dex_opcode(op));
   }
 }
 
-size_t src_bit_width(IROpcode op, int i) {
+size_t src_bit_width(const IRInstruction* insn, int src_i) {
+  auto op = insn->opcode();
   // move-* opcodes can always be encoded as move-*/16
   if (opcode::is_a_move(op)) {
     return 16;
   }
-  return dex_opcode::src_bit_width(opcode::to_dex_opcode(op), i);
+  if (opcode::is_an_int_lit(op)) {
+    return (int8_t)insn->get_literal() == insn->get_literal() ? 8 : 4;
+  }
+  return dex_opcode::src_bit_width(opcode::to_dex_opcode(op), src_i);
 }
 
 vreg_t max_value_for_src(const IRInstruction* insn,
                          size_t src_index,
                          bool src_is_wide) {
-  auto max_value = max_unsigned_value(src_bit_width(insn->opcode(), src_index));
+  auto max_value = max_unsigned_value(src_bit_width(insn, src_index));
   auto op = insn->opcode();
   if (opcode::has_range_form(op) && insn->srcs_size() == 1) {
     // An `invoke {v0}` opcode can always be rewritten as `invoke/range {v0}`

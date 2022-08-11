@@ -211,25 +211,17 @@ RegisterType dest_reg_type(const IRInstruction* insn) {
   case OPCODE_DIV_DOUBLE:
   case OPCODE_REM_DOUBLE:
     return RegisterType::WIDE;
-  case OPCODE_ADD_INT_LIT16:
-  case OPCODE_RSUB_INT:
-  case OPCODE_MUL_INT_LIT16:
-  case OPCODE_DIV_INT_LIT16:
-  case OPCODE_REM_INT_LIT16:
-  case OPCODE_AND_INT_LIT16:
-  case OPCODE_OR_INT_LIT16:
-  case OPCODE_XOR_INT_LIT16:
-  case OPCODE_ADD_INT_LIT8:
-  case OPCODE_RSUB_INT_LIT8:
-  case OPCODE_MUL_INT_LIT8:
-  case OPCODE_DIV_INT_LIT8:
-  case OPCODE_REM_INT_LIT8:
-  case OPCODE_AND_INT_LIT8:
-  case OPCODE_OR_INT_LIT8:
-  case OPCODE_XOR_INT_LIT8:
-  case OPCODE_SHL_INT_LIT8:
-  case OPCODE_SHR_INT_LIT8:
-  case OPCODE_USHR_INT_LIT8:
+  case OPCODE_ADD_INT_LIT:
+  case OPCODE_RSUB_INT_LIT:
+  case OPCODE_MUL_INT_LIT:
+  case OPCODE_DIV_INT_LIT:
+  case OPCODE_REM_INT_LIT:
+  case OPCODE_AND_INT_LIT:
+  case OPCODE_OR_INT_LIT:
+  case OPCODE_XOR_INT_LIT:
+  case OPCODE_SHL_INT_LIT:
+  case OPCODE_SHR_INT_LIT:
+  case OPCODE_USHR_INT_LIT:
     return RegisterType::NORMAL;
   case OPCODE_CONST:
     return const_dest_type(insn);
@@ -480,25 +472,17 @@ RegisterType src_reg_type(const IRInstruction* insn, vreg_t i) {
   case OPCODE_DIV_DOUBLE:
   case OPCODE_REM_DOUBLE:
     return RegisterType::WIDE;
-  case OPCODE_ADD_INT_LIT16:
-  case OPCODE_RSUB_INT:
-  case OPCODE_MUL_INT_LIT16:
-  case OPCODE_DIV_INT_LIT16:
-  case OPCODE_REM_INT_LIT16:
-  case OPCODE_AND_INT_LIT16:
-  case OPCODE_OR_INT_LIT16:
-  case OPCODE_XOR_INT_LIT16:
-  case OPCODE_ADD_INT_LIT8:
-  case OPCODE_RSUB_INT_LIT8:
-  case OPCODE_MUL_INT_LIT8:
-  case OPCODE_DIV_INT_LIT8:
-  case OPCODE_REM_INT_LIT8:
-  case OPCODE_AND_INT_LIT8:
-  case OPCODE_OR_INT_LIT8:
-  case OPCODE_XOR_INT_LIT8:
-  case OPCODE_SHL_INT_LIT8:
-  case OPCODE_SHR_INT_LIT8:
-  case OPCODE_USHR_INT_LIT8:
+  case OPCODE_ADD_INT_LIT:
+  case OPCODE_RSUB_INT_LIT:
+  case OPCODE_MUL_INT_LIT:
+  case OPCODE_DIV_INT_LIT:
+  case OPCODE_REM_INT_LIT:
+  case OPCODE_AND_INT_LIT:
+  case OPCODE_OR_INT_LIT:
+  case OPCODE_XOR_INT_LIT:
+  case OPCODE_SHL_INT_LIT:
+  case OPCODE_SHR_INT_LIT:
+  case OPCODE_USHR_INT_LIT:
     return RegisterType::NORMAL;
   case OPCODE_CONST:
     not_reached_log("No src");

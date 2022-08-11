@@ -686,7 +686,7 @@ std::tuple<size_t, std::vector<IRInstruction*>> insert_onMethodExit_calls(
       const reg_t& reg = reg_vectors[j];
       short vec = loop_shorts[j];
       short inv_vec = ~vec;
-      IRInstruction* inst_and = new IRInstruction(OPCODE_AND_INT_LIT16);
+      IRInstruction* inst_and = new IRInstruction(OPCODE_AND_INT_LIT);
       TRACE(INSTRUMENT, 8,
             "Normal Vector for Just Loop Blocks (%hu) inverted (%hu)", vec,
             inv_vec);
@@ -1065,7 +1065,7 @@ void insert_block_coverage_computations(const std::vector<BlockInfo>& blocks,
     const auto& insert_pos = info.it;
 
     // bit_vectors[vector_id] |= 1 << bit_id'
-    IRInstruction* inst = new IRInstruction(OPCODE_OR_INT_LIT16);
+    IRInstruction* inst = new IRInstruction(OPCODE_OR_INT_LIT);
     inst->set_literal(static_cast<int16_t>(1ULL << (bit_id % BIT_VECTOR_SIZE)));
     inst->set_src(0, reg_vectors.at(vector_id));
     inst->set_dest(reg_vectors.at(vector_id));

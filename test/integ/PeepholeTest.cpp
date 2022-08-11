@@ -289,51 +289,50 @@ class PeepholeTest : public ::testing::Test {
 TEST_F(PeepholeTest, Arithmetic) {
   IRInstructionList move16 = op_unary(OPCODE_MOVE); // move v0, v1
   IRInstructionList negate = op_unary(OPCODE_NEG_INT); // neg v0, v1
-  test_1("add8_0_to_move", op_lit(OPCODE_ADD_INT_LIT8, 0), move16);
-  test_1("add16_0_to_move", op_lit(OPCODE_ADD_INT_LIT16, 0), move16);
+  test_1("add8_0_to_move", op_lit(OPCODE_ADD_INT_LIT, 0), move16);
+  test_1("add16_0_to_move", op_lit(OPCODE_ADD_INT_LIT, 0), move16);
 
-  test_1("mult8_1_to_move", op_lit(OPCODE_MUL_INT_LIT8, 1), move16);
-  test_1("mult16_1_to_move", op_lit(OPCODE_MUL_INT_LIT16, 1), move16);
+  test_1("mult8_1_to_move", op_lit(OPCODE_MUL_INT_LIT, 1), move16);
+  test_1("mult16_1_to_move", op_lit(OPCODE_MUL_INT_LIT, 1), move16);
 
-  test_1("mult8_neg1_to_neg", op_lit(OPCODE_MUL_INT_LIT8, -1), negate);
-  test_1("mult16_neg1_to_neg", op_lit(OPCODE_MUL_INT_LIT16, -1), negate);
+  test_1("mult8_neg1_to_neg", op_lit(OPCODE_MUL_INT_LIT, -1), negate);
+  test_1("mult16_neg1_to_neg", op_lit(OPCODE_MUL_INT_LIT, -1), negate);
 
   test_1("div8_neg1_to_neg",
-         op_lit_move_result_pseudo(OPCODE_DIV_INT_LIT8, -1),
+         op_lit_move_result_pseudo(OPCODE_DIV_INT_LIT, -1),
          negate);
   test_1("div16_neg1_to_neg",
-         op_lit_move_result_pseudo(OPCODE_DIV_INT_LIT16, -1),
+         op_lit_move_result_pseudo(OPCODE_DIV_INT_LIT, -1),
          negate);
   test_1("mul8_4_to_shl8_2",
-         op_lit(OPCODE_MUL_INT_LIT8, 4),
-         op_lit(OPCODE_SHL_INT_LIT8, 2));
+         op_lit(OPCODE_MUL_INT_LIT, 4),
+         op_lit(OPCODE_SHL_INT_LIT, 2));
   test_1("mul16_4_to_shl8_2",
-         op_lit(OPCODE_MUL_INT_LIT16, 4),
-         op_lit(OPCODE_SHL_INT_LIT8, 2));
+         op_lit(OPCODE_MUL_INT_LIT, 4),
+         op_lit(OPCODE_SHL_INT_LIT, 2));
   test_1("mul16_1048576_to_shl8_20",
-         op_lit(OPCODE_MUL_INT_LIT16, 1048576),
-         op_lit(OPCODE_SHL_INT_LIT8, 20));
+         op_lit(OPCODE_MUL_INT_LIT, 1048576),
+         op_lit(OPCODE_SHL_INT_LIT, 20));
   test_1("div8_4_to_shr8_2",
-         op_lit_move_result_pseudo(OPCODE_DIV_INT_LIT8, 4),
-         op_lit(OPCODE_SHR_INT_LIT8, 2));
+         op_lit_move_result_pseudo(OPCODE_DIV_INT_LIT, 4),
+         op_lit(OPCODE_SHR_INT_LIT, 2));
   test_1("div16_4_to_shr8_2",
-         op_lit_move_result_pseudo(OPCODE_DIV_INT_LIT16, 4),
-         op_lit(OPCODE_SHR_INT_LIT8, 2));
+         op_lit_move_result_pseudo(OPCODE_DIV_INT_LIT, 4),
+         op_lit(OPCODE_SHR_INT_LIT, 2));
   test_1("div16_1073741824_to_shr8_30",
-         op_lit_move_result_pseudo(OPCODE_DIV_INT_LIT16, 1073741824),
-         op_lit(OPCODE_SHR_INT_LIT8, 30));
+         op_lit_move_result_pseudo(OPCODE_DIV_INT_LIT, 1073741824),
+         op_lit(OPCODE_SHR_INT_LIT, 30));
 
   // These should result in no changes
-  test_1_nochange("add8_15", op_lit(OPCODE_ADD_INT_LIT8, 15));
-  test_1_nochange("add16_1", op_lit(OPCODE_ADD_INT_LIT16, 1));
-  test_1_nochange("mult8_3", op_lit(OPCODE_MUL_INT_LIT8, 3));
-  test_1_nochange("mult16_12", op_lit(OPCODE_MUL_INT_LIT16, 12));
-  test_1_nochange("mult8_9", op_lit(OPCODE_MUL_INT_LIT8, 9));
-  test_1_nochange("mult8_-512", op_lit(OPCODE_MUL_INT_LIT8, -512));
-  test_1_nochange("div8_81",
-                  op_lit_move_result_pseudo(OPCODE_DIV_INT_LIT8, 81));
+  test_1_nochange("add8_15", op_lit(OPCODE_ADD_INT_LIT, 15));
+  test_1_nochange("add16_1", op_lit(OPCODE_ADD_INT_LIT, 1));
+  test_1_nochange("mult8_3", op_lit(OPCODE_MUL_INT_LIT, 3));
+  test_1_nochange("mult16_12", op_lit(OPCODE_MUL_INT_LIT, 12));
+  test_1_nochange("mult8_9", op_lit(OPCODE_MUL_INT_LIT, 9));
+  test_1_nochange("mult8_-512", op_lit(OPCODE_MUL_INT_LIT, -512));
+  test_1_nochange("div8_81", op_lit_move_result_pseudo(OPCODE_DIV_INT_LIT, 81));
   test_1_nochange("div8_-2147483648",
-                  op_lit_move_result_pseudo(OPCODE_DIV_INT_LIT8, -2147483648));
+                  op_lit_move_result_pseudo(OPCODE_DIV_INT_LIT, -2147483648));
 }
 
 TEST_F(PeepholeTest, RemovePutGetPair) {

@@ -173,11 +173,11 @@ TEST_F(FastRegAllocTest, CheckVRegInLoop) {
         (const v2 1)
         (:LHead)
         (if-gt v1 v2 :Loop)
-        (add-int/lit8 v3 v1 1)
+        (add-int/lit v3 v1 1)
         (move v0 v3)
         (return v0)
         (:Loop)
-        (add-int/lit8 v1 v1 -1)
+        (add-int/lit v1 v1 -1)
         (goto :LHead)
       )
     )
@@ -194,11 +194,11 @@ TEST_F(FastRegAllocTest, CheckVRegInLoop) {
       (const v3 1)
       (:LHead)
       (if-gt v2 v3 :Loop)
-      (add-int/lit8 v1 v2 1)
+      (add-int/lit v1 v2 1)
       (move v0 v1)
       (return v0)
       (:Loop)
-      (add-int/lit8 v2 v2 -1)
+      (add-int/lit v2 v2 -1)
       (goto :LHead)
     )
 )");
@@ -213,7 +213,7 @@ TEST_F(FastRegAllocTest, WideVReg) {
     (method (public static) "LFoo;.bar:()J"
       (
         (const v2 1)
-        (add-int/lit8 v3 v2 1)
+        (add-int/lit v3 v2 1)
         (const-wide v2 9223372036854775807)
         (return v3)
       )
@@ -228,7 +228,7 @@ TEST_F(FastRegAllocTest, WideVReg) {
   auto expected_code = assembler::ircode_from_string(R"(
     (
         (const v3 1)
-        (add-int/lit8 v2 v3 1)
+        (add-int/lit v2 v3 1)
         (const-wide v0 9223372036854775807)
         (return v2)
     )

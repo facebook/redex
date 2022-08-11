@@ -171,10 +171,10 @@ void ReduceGotosPass::process_code_switches(cfg::ControlFlowGraph& cfg,
       } else if (!live_out_vars.contains(reg)) {
         if (reg < 256 && (int8_t)case_key == case_key) {
           // Case 2
-          transform_opcode = OPCODE_RSUB_INT_LIT8;
+          transform_opcode = OPCODE_RSUB_INT_LIT;
         } else if (reg < 16 && (int16_t)case_key == case_key) {
           // Case 3
-          transform_opcode = OPCODE_RSUB_INT;
+          transform_opcode = OPCODE_RSUB_INT_LIT;
         }
       }
 

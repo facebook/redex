@@ -584,10 +584,8 @@ AnalysisData analyze(DexMethod* m,
     for (size_t i = param_chain->size() - 2; i > 0; --i) {
       const IRInstruction* middle = param_chain->at(i);
       switch (middle->opcode()) {
-      case OPCODE_ADD_INT_LIT16:
-      case OPCODE_ADD_INT_LIT8:
-      case OPCODE_AND_INT_LIT16:
-      case OPCODE_AND_INT_LIT8:
+      case OPCODE_ADD_INT_LIT:
+      case OPCODE_AND_INT_LIT:
       case OPCODE_MOVE:
         continue;
 

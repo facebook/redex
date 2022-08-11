@@ -164,10 +164,10 @@ DexMethod* make_silly_precondition_method(DexClass* cls, const char* name) {
                                               R"(:(I)V"
       (
         (load-param v0)
-        (add-int/lit8 v0 v0 0)
-        (add-int/lit8 v0 v0 0)
-        (add-int/lit8 v0 v0 0)
-        (add-int/lit8 v0 v0 0)
+        (add-int/lit v0 v0 0)
+        (add-int/lit v0 v0 0)
+        (add-int/lit v0 v0 0)
+        (add-int/lit v0 v0 0)
         (if-eqz v0 :fail)
         (return-void)
 

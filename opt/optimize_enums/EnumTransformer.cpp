@@ -490,7 +490,7 @@ struct EnumUtil {
         {dasm(OPCODE_INVOKE_STATIC, INTEGER_VALUEOF_METHOD, {5_v}),
          dasm(OPCODE_MOVE_RESULT_OBJECT, {6_v}),
          dasm(OPCODE_APUT_OBJECT, {6_v, 1_v, 5_v}),
-         dasm(OPCODE_ADD_INT_LIT8, {5_v, 5_v, 1_L})});
+         dasm(OPCODE_ADD_INT_LIT, {5_v, 5_v, 1_L})});
 
     auto copy_array_method = DexMethod::make_method(
         "Ljava/lang/System;.arraycopy:(Ljava/lang/Object;ILjava/lang/"

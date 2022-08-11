@@ -904,7 +904,7 @@ TEST_F(ControlFlowTest, empty_first_block) {
       (const v0 0)
       (goto :exit)
 
-      (add-int/lit8 v0 v0 1)
+      (add-int/lit v0 v0 1)
 
       (:exit)
       (return-void)
@@ -1289,7 +1289,7 @@ TEST_F(ControlFlowTest, insertion) {
   )");
   code->build_cfg(/* editable */ true);
   auto& cfg = code->cfg();
-  IRInstruction add{OPCODE_ADD_INT_LIT8};
+  IRInstruction add{OPCODE_ADD_INT_LIT};
   add.set_literal(1);
   auto ii = cfg::InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
@@ -1306,18 +1306,18 @@ TEST_F(ControlFlowTest, insertion) {
   auto expected = assembler::ircode_from_string(R"(
     (
       (const v0 0)
-      (add-int/lit8 v0 v0 1)
+      (add-int/lit v0 v0 1)
       (if-eqz v0 :true)
 
       (const v1 1)
-      (add-int/lit8 v1 v1 1)
+      (add-int/lit v1 v1 1)
 
       (:exit)
       (return-void)
 
       (:true)
       (const v2 2)
-      (add-int/lit8 v2 v2 1)
+      (add-int/lit v2 v2 1)
       (goto :exit)
     )
   )");
@@ -1342,7 +1342,7 @@ TEST_F(ControlFlowTest, insertion_it) {
   )");
   code->build_cfg(/* editable */ true);
   auto& cfg = code->cfg();
-  IRInstruction add{OPCODE_ADD_INT_LIT8};
+  IRInstruction add{OPCODE_ADD_INT_LIT};
   add.set_literal(1);
   auto ii = cfg::InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
@@ -1363,21 +1363,21 @@ TEST_F(ControlFlowTest, insertion_it) {
   auto expected = assembler::ircode_from_string(R"(
     (
       (const v0 0)
-      (add-int/lit8 v0 v0 1)
-      (add-int/lit8 v0 v0 1)
+      (add-int/lit v0 v0 1)
+      (add-int/lit v0 v0 1)
       (if-eqz v0 :true)
 
       (const v1 1)
-      (add-int/lit8 v1 v1 1)
-      (add-int/lit8 v1 v1 1)
+      (add-int/lit v1 v1 1)
+      (add-int/lit v1 v1 1)
 
       (:exit)
       (return-void)
 
       (:true)
       (const v2 2)
-      (add-int/lit8 v2 v2 1)
-      (add-int/lit8 v2 v2 1)
+      (add-int/lit v2 v2 1)
+      (add-int/lit v2 v2 1)
       (goto :exit)
     )
   )");
@@ -1402,7 +1402,7 @@ TEST_F(ControlFlowTest, insertion_it_var) {
   )");
   code->build_cfg(/* editable */ true);
   auto& cfg = code->cfg();
-  IRInstruction add{OPCODE_ADD_INT_LIT8};
+  IRInstruction add{OPCODE_ADD_INT_LIT};
   add.set_literal(1);
   auto ii = cfg::InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
@@ -1427,24 +1427,24 @@ TEST_F(ControlFlowTest, insertion_it_var) {
   auto expected = assembler::ircode_from_string(R"(
     (
       (const v0 0)
-      (add-int/lit8 v0 v0 1)
+      (add-int/lit v0 v0 1)
       (.src_block "LFoo;.bar:()V" 0)
-      (add-int/lit8 v0 v0 1)
+      (add-int/lit v0 v0 1)
       (if-eqz v0 :true)
 
       (const v1 1)
-      (add-int/lit8 v1 v1 1)
+      (add-int/lit v1 v1 1)
       (.src_block "LFoo;.bar:()V" 0)
-      (add-int/lit8 v1 v1 1)
+      (add-int/lit v1 v1 1)
 
       (:exit)
       (return-void)
 
       (:true)
       (const v2 2)
-      (add-int/lit8 v2 v2 1)
+      (add-int/lit v2 v2 1)
       (.src_block "LFoo;.bar:()V" 0)
-      (add-int/lit8 v2 v2 1)
+      (add-int/lit v2 v2 1)
       (goto :exit)
     )
   )");
@@ -2452,7 +2452,7 @@ TEST_F(ControlFlowTest, entry_not_first_block_order_first) {
       (goto :loop)
 
       (:true)
-      (add-int/lit8 v0 v0 1)
+      (add-int/lit v0 v0 1)
 
       (:loop)
       (if-eqz v0 :true)
@@ -2477,7 +2477,7 @@ TEST_F(ControlFlowTest, entry_not_first_block_order_first_linearization) {
       (goto :loop)
 
       (:true)
-      (add-int/lit8 v0 v0 1)
+      (add-int/lit v0 v0 1)
 
       (:loop)
       (if-eqz v0 :true)
@@ -2496,7 +2496,7 @@ TEST_F(ControlFlowTest, entry_not_first_block_order_first_linearization) {
 OPCODE: IF_EQZ v0
 OPCODE: RETURN_VOID
 TARGET: SIMPLE
-OPCODE: ADD_INT_LIT8 v0, v0, 1
+OPCODE: ADD_INT_LIT v0, v0, 1
 OPCODE: GOTO
 )");
 }
@@ -2509,7 +2509,7 @@ TEST_F(ControlFlowTest, empty_block_move_pos) {
       (goto :loop)
 
       (:true)
-      (add-int/lit8 v0 v0 1)
+      (add-int/lit v0 v0 1)
 
       (:loop)
       (if-eqz v0 :true)
@@ -2529,7 +2529,7 @@ POSITION: LFoo;.m:()V(Foo.java:1)
 OPCODE: IF_EQZ v0
 OPCODE: RETURN_VOID
 TARGET: SIMPLE
-OPCODE: ADD_INT_LIT8 v0, v0, 1
+OPCODE: ADD_INT_LIT v0, v0, 1
 OPCODE: GOTO
 )");
 }
@@ -2565,7 +2565,7 @@ TEST_F(ControlFlowTest, empty_block_do_not_move_into_block_with_pos_complex) {
       (goto :loop)
 
       (:true)
-      (add-int/lit8 v0 v0 1)
+      (add-int/lit v0 v0 1)
 
       (:loop)
       (.pos "LFoo;.m:()V" "Foo.java" 2)
@@ -2590,7 +2590,7 @@ OPCODE: IF_EQZ v0
 OPCODE: RETURN_VOID
 TARGET: SIMPLE
 POSITION: LFoo;.m:()V(Foo.java:1)
-OPCODE: ADD_INT_LIT8 v0, v0, 1
+OPCODE: ADD_INT_LIT v0, v0, 1
 OPCODE: GOTO
 )");
 }
@@ -2604,7 +2604,7 @@ TEST_F(ControlFlowTest, empty_block_not_move_source_blocks_complex) {
       (goto :loop)
 
       (:true)
-      (add-int/lit8 v0 v0 1)
+      (add-int/lit v0 v0 1)
 
       (:loop)
       (.src_block "LFoo;.m:()V" 3)
@@ -2625,7 +2625,7 @@ SOURCE-BLOCKS: LFoo;.m:()V@3()
 OPCODE: IF_EQZ v0
 OPCODE: RETURN_VOID
 TARGET: SIMPLE
-OPCODE: ADD_INT_LIT8 v0, v0, 1
+OPCODE: ADD_INT_LIT v0, v0, 1
 OPCODE: GOTO
 )");
 }

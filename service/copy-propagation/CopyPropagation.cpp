@@ -311,8 +311,14 @@ class AliasFixpointIterator final
   // `none` means no limit.
   reg_t get_max_addressable(IRInstruction* insn, size_t src_index) const {
     IROpcode op = insn->opcode();
-    auto src_bit_width =
-        dex_opcode::src_bit_width(opcode::to_dex_opcode(op), src_index);
+    bit_width_t src_bit_width;
+    if (opcode::is_an_int_lit(op)) {
+      src_bit_width =
+          (int8_t)insn->get_literal() == insn->get_literal() ? 8 : 4;
+    } else {
+      src_bit_width =
+          dex_opcode::src_bit_width(opcode::to_dex_opcode(op), src_index);
+    }
     // 2 ** width - 1
     reg_t max_addressable_reg = (1 << src_bit_width) - 1;
     if (m_config.regalloc_has_run) {

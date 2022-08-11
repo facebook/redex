@@ -1413,28 +1413,20 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
     assume_double(current_state, insn->src(1));
     break;
   }
-  case OPCODE_ADD_INT_LIT16:
-  case OPCODE_RSUB_INT:
-  case OPCODE_MUL_INT_LIT16:
-  case OPCODE_AND_INT_LIT16:
-  case OPCODE_OR_INT_LIT16:
-  case OPCODE_XOR_INT_LIT16:
-  case OPCODE_ADD_INT_LIT8:
-  case OPCODE_RSUB_INT_LIT8:
-  case OPCODE_MUL_INT_LIT8:
-  case OPCODE_AND_INT_LIT8:
-  case OPCODE_OR_INT_LIT8:
-  case OPCODE_XOR_INT_LIT8:
-  case OPCODE_SHL_INT_LIT8:
-  case OPCODE_SHR_INT_LIT8:
-  case OPCODE_USHR_INT_LIT8: {
+  case OPCODE_ADD_INT_LIT:
+  case OPCODE_RSUB_INT_LIT:
+  case OPCODE_MUL_INT_LIT:
+  case OPCODE_AND_INT_LIT:
+  case OPCODE_OR_INT_LIT:
+  case OPCODE_XOR_INT_LIT:
+  case OPCODE_SHL_INT_LIT:
+  case OPCODE_SHR_INT_LIT:
+  case OPCODE_USHR_INT_LIT: {
     assume_integer(current_state, insn->src(0));
     break;
   }
-  case OPCODE_DIV_INT_LIT16:
-  case OPCODE_REM_INT_LIT16:
-  case OPCODE_DIV_INT_LIT8:
-  case OPCODE_REM_INT_LIT8: {
+  case OPCODE_DIV_INT_LIT:
+  case OPCODE_REM_INT_LIT: {
     assume_integer(current_state, insn->src(0));
     break;
   }

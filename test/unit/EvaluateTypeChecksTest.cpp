@@ -304,7 +304,7 @@ TEST_F(EvaluateTypeChecksTest,
         (move-result-pseudo v0)
 
         (move v1 v0)
-        (xor-int/lit8 v2 v0 1)
+        (xor-int/lit v2 v0 1)
 
         (if-nez v1 :L1)
         (const v0 0)

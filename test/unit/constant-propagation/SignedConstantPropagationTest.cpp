@@ -304,11 +304,11 @@ TEST_F(ConstantPropagationTest, FoldArithmeticAddLit) {
   auto code = assembler::ircode_from_string(R"(
     (
      (const v0 2147483646)
-     (add-int/lit8 v0 v0 1) ; this should be converted to a const opcode
+     (add-int/lit v0 v0 1) ; this should be converted to a const opcode
      (const v1 2147483647)
      (if-eq v0 v1 :end)
      (const v0 2147483647)
-     (add-int/lit8 v0 v0 1) ; we don't handle overflows, so this should be
+     (add-int/lit v0 v0 1) ; we don't handle overflows, so this should be
                             ; unchanged
      (:end)
      (return-void)
@@ -692,8 +692,8 @@ TEST_F(ConstantPropagationTest, FoldBitwiseAndLit) {
   auto code = assembler::ircode_from_string(R"(
     (
       (const v0 1023)
-      (and-int/lit16 v0 v0 511)
-      (and-int/lit8 v0 v0 255)
+      (and-int/lit v0 v0 511)
+      (and-int/lit v0 v0 255)
       (return-void)
     )
   )");
@@ -713,8 +713,8 @@ TEST_F(ConstantPropagationTest, FoldBitwiseOrLit) {
   auto code = assembler::ircode_from_string(R"(
     (
       (const v0 257)
-      (or-int/lit8 v0 v0 255)
-      (or-int/lit16 v0 v0 1024)
+      (or-int/lit v0 v0 255)
+      (or-int/lit v0 v0 1024)
       (return-void)
     )
   )");
@@ -734,8 +734,8 @@ TEST_F(ConstantPropagationTest, FoldBitwiseXorLit) {
   auto code = assembler::ircode_from_string(R"(
     (
       (const v0 1023)
-      (xor-int/lit16 v0 v0 512)
-      (xor-int/lit8 v0 v0 255)
+      (xor-int/lit v0 v0 512)
+      (xor-int/lit v0 v0 255)
       (return-void)
     )
   )");
@@ -755,7 +755,7 @@ TEST_F(ConstantPropagationTest, FoldBitwiseShiftLeftOverflowLit) {
   auto code = assembler::ircode_from_string(R"(
     (
       (const v0 -16776961)
-      (shl-int/lit8 v0 v0 8)
+      (shl-int/lit v0 v0 8)
       (return-void)
     )
   )");
@@ -774,8 +774,8 @@ TEST_F(ConstantPropagationTest, FoldBitwiseShiftLit) {
   auto code = assembler::ircode_from_string(R"(
     (
       (const v0 1023)
-      (shr-int/lit8 v0 v0 2)
-      (shl-int/lit8 v0 v0 1)
+      (shr-int/lit v0 v0 2)
+      (shl-int/lit v0 v0 1)
       (return-void)
     )
   )");
@@ -795,8 +795,8 @@ TEST_F(ConstantPropagationTest, FoldBitwiseOverShiftLit) {
   auto code = assembler::ircode_from_string(R"(
     (
       (const v0 1023)
-      (shr-int/lit8 v0 v0 34)
-      (shl-int/lit8 v0 v0 33)
+      (shr-int/lit v0 v0 34)
+      (shl-int/lit v0 v0 33)
       (return-void)
     )
   )");
@@ -816,8 +816,8 @@ TEST_F(ConstantPropagationTest, FoldBitwiseArithAndLogicalRightShiftLit) {
   auto code = assembler::ircode_from_string(R"(
     (
       (const v0 -1024)
-      (shr-int/lit8 v0 v0 2)
-      (ushr-int/lit8 v0 v0 12)
+      (shr-int/lit v0 v0 2)
+      (ushr-int/lit v0 v0 12)
       (return-void)
     )
   )");
@@ -837,12 +837,12 @@ TEST_F(ConstantPropagationTest, FoldDivIntLit) {
   auto code = assembler::ircode_from_string(R"(
     (
       (const v0 4096)
-      (div-int/lit16 v0 512)
+      (div-int/lit v0 512)
       (move-result-pseudo v1)
       (const v0 15)
-      (div-int/lit8 v0 2)
+      (div-int/lit v0 2)
       (move-result-pseudo v1)
-      (div-int/lit8 v0 0)
+      (div-int/lit v0 0)
       (move-result-pseudo v2)
       (return-void)
     )
@@ -854,7 +854,7 @@ TEST_F(ConstantPropagationTest, FoldDivIntLit) {
       (const v1 8)
       (const v0 15)
       (const v1 7)
-      (div-int/lit8 v0 0)
+      (div-int/lit v0 0)
       (move-result-pseudo v2)
       (return-void)
     )

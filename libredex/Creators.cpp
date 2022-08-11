@@ -442,25 +442,11 @@ void MethodBlock::init_loc(Location& loc) {
   }
 }
 
-void MethodBlock::binop_lit16(IROpcode op,
-                              const Location& dest,
-                              const Location& src,
-                              int16_t literal) {
-  always_assert(OPCODE_ADD_INT_LIT16 <= op && op <= OPCODE_XOR_INT_LIT16);
-  always_assert(dest.type == src.type);
-  always_assert(dest.type == type::_int());
-  IRInstruction* insn = new IRInstruction(op);
-  insn->set_dest(dest.get_reg());
-  insn->set_src(0, src.get_reg());
-  insn->set_literal(literal);
-  push_instruction(insn);
-}
-
-void MethodBlock::binop_lit8(IROpcode op,
-                             const Location& dest,
-                             const Location& src,
-                             int8_t literal) {
-  always_assert(OPCODE_ADD_INT_LIT8 <= op && op <= OPCODE_USHR_INT_LIT8);
+void MethodBlock::binop_lit(IROpcode op,
+                            const Location& dest,
+                            const Location& src,
+                            int16_t literal) {
+  always_assert(OPCODE_ADD_INT_LIT <= op && op <= OPCODE_USHR_INT_LIT);
   always_assert(dest.type == src.type);
   always_assert(dest.type == type::_int());
   IRInstruction* insn = new IRInstruction(op);
