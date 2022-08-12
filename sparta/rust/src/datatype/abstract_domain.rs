@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-pub trait AbstractDomain {
+pub trait AbstractDomain: Clone {
     fn bottom() -> Self;
     fn top() -> Self;
     fn is_bottom(&self) -> bool;
