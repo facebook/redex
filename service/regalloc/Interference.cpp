@@ -108,6 +108,17 @@ void Graph::combine(reg_t u, reg_t v) {
       continue;
     }
     t_node.m_weight -= edge_weight(t_node, v_node);
+  }
+  u_node.m_max_vreg = std::min(u_node.m_max_vreg, v_node.m_max_vreg);
+  u_node.m_type_domain.meet_with(v_node.m_type_domain);
+  u_node.m_props |= v_node.m_props;
+  u_node.m_spill_cost += v_node.m_spill_cost;
+  v_node.m_props.reset(Node::ACTIVE);
+  for (auto t : v_node.adjacent()) {
+    auto& t_node = m_nodes.at(t);
+    if (!t_node.is_active()) {
+      continue;
+    }
     add_edge(u, t, is_coalesceable(v, t));
     if (has_containment_edge(v, t)) {
       add_containment_edge(u, t);
@@ -116,10 +127,6 @@ void Graph::combine(reg_t u, reg_t v) {
       add_containment_edge(t, u);
     }
   }
-  u_node.m_max_vreg = std::min(u_node.m_max_vreg, v_node.m_max_vreg);
-  u_node.m_type_domain.meet_with(v_node.m_type_domain);
-  u_node.m_props |= v_node.m_props;
-  v_node.m_props.reset(Node::ACTIVE);
 }
 
 void Graph::remove_node(reg_t u) {
