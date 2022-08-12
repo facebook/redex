@@ -10,7 +10,7 @@ use std::hash::Hash;
 
 use super::abstract_domain::AbstractDomain;
 
-pub trait SetOps {
+pub trait SetOps: Clone {
     fn is_subset(&self, other: &Self) -> bool;
     fn intersection_with(&mut self, other: &Self);
     fn union_with(&mut self, other: Self);
