@@ -281,7 +281,8 @@ void GraphBuilder::update_node_constraints(const cfg::InstructionIterator& it,
 Graph GraphBuilder::build(const LivenessFixpointIterator& fixpoint_iter,
                           cfg::ControlFlowGraph& cfg,
                           reg_t initial_regs,
-                          const RangeSet& range_set) {
+                          const RangeSet& range_set,
+                          bool containment_edges) {
   Graph graph;
   auto ii = cfg::InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
@@ -330,7 +331,7 @@ Graph GraphBuilder::build(const LivenessFixpointIterator& fixpoint_iter,
       }
       // adding containment edge between liverange defined in insn and elements
       // in live-out set of insn
-      if (insn->has_dest()) {
+      if (containment_edges && insn->has_dest()) {
         for (auto reg : live_out.elements()) {
           graph.add_containment_edge(insn->dest(), reg);
         }
@@ -338,9 +339,11 @@ Graph GraphBuilder::build(const LivenessFixpointIterator& fixpoint_iter,
       fixpoint_iter.analyze_instruction(it->insn, &live_out);
       // adding containment edge between liverange used in insn and elements
       // in live-in set of insn
-      for (size_t i = 0; i < insn->srcs_size(); ++i) {
-        for (auto reg : live_out.elements()) {
-          graph.add_containment_edge(insn->src(i), reg);
+      if (containment_edges) {
+        for (size_t i = 0; i < insn->srcs_size(); ++i) {
+          for (auto reg : live_out.elements()) {
+            graph.add_containment_edge(insn->src(i), reg);
+          }
         }
       }
     }

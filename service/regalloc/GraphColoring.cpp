@@ -1050,12 +1050,13 @@ void Allocator::allocate(cfg::ControlFlowGraph& cfg, bool is_static) {
     RegisterTransform reg_transform;
 
     cfg.calculate_exit_block();
-    LivenessFixpointIterator fixpoint_iter(cfg);
-    fixpoint_iter.run(LivenessDomain());
+    auto fixpoint_iter = std::make_unique<LivenessFixpointIterator>(cfg);
+    fixpoint_iter->run(LivenessDomain());
 
     TRACE(REG, 5, "Allocating:\n%s", ::SHOW(cfg));
-    auto ig =
-        interference::build_graph(fixpoint_iter, cfg, initial_regs, range_set);
+    auto ig = interference::build_graph(
+        *fixpoint_iter, cfg, initial_regs, range_set,
+        /* containment_edges */ m_config.use_splitting);
 
     // Make the `this` symreg conflict with every other one so that it never
     // gets overwritten in the method. See check_no_overwrite_this in
@@ -1073,7 +1074,11 @@ void Allocator::allocate(cfg::ControlFlowGraph& cfg, bool is_static) {
       first = false;
       // After coalesce the live_out and live_in of blocks may change, so run
       // LivenessFixpointIterator again.
-      fixpoint_iter.run(LivenessDomain());
+      if (m_config.use_splitting) {
+        fixpoint_iter->run(LivenessDomain());
+      } else {
+        fixpoint_iter = nullptr;
+      }
       TRACE(REG, 5, "Post-coalesce:\n%s", ::SHOW(cfg));
     } else {
       // TODO we should coalesce here too, but we'll need to avoid removing
@@ -1109,16 +1114,17 @@ void Allocator::allocate(cfg::ControlFlowGraph& cfg, bool is_static) {
         // TODO (T124893789): Live-range-splitting is known to be broken.
         fprintf(stderr,
                 "WARNING: Live-range-splitting is known to be broken.\n");
-        calc_split_costs(fixpoint_iter, cfg, &split_costs);
+        calc_split_costs(*fixpoint_iter, cfg, &split_costs);
         find_split(ig, split_costs, &reg_transform, &spill_plan, &split_plan);
       }
       split_params(ig, spill_plan.param_spills, cfg);
       spill(ig, spill_plan, range_set, cfg);
 
       if (!split_plan.split_around.empty()) {
+        always_assert(m_config.use_splitting);
         TRACE(REG, 5, "Split plan:\n%s", SHOW(split_plan));
         m_stats.split_moves +=
-            split(fixpoint_iter, split_plan, split_costs, ig, cfg);
+            split(*fixpoint_iter, split_plan, split_costs, ig, cfg);
       }
     } else {
       transform::remap_registers(cfg, reg_transform.map);

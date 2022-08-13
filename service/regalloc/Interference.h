@@ -268,7 +268,8 @@ class GraphBuilder {
   static Graph build(const LivenessFixpointIterator&,
                      cfg::ControlFlowGraph&,
                      reg_t initial_regs,
-                     const RangeSet&);
+                     const RangeSet&,
+                     bool containment_edges = true);
 
   // For unit tests
   static Graph create_empty() { return Graph(); }
@@ -283,8 +284,10 @@ uint32_t edge_weight_helper(uint8_t, uint8_t);
 inline Graph build_graph(const LivenessFixpointIterator& fixpoint_iter,
                          cfg::ControlFlowGraph& cfg,
                          reg_t initial_regs,
-                         const RangeSet& range_set) {
-  return impl::GraphBuilder::build(fixpoint_iter, cfg, initial_regs, range_set);
+                         const RangeSet& range_set,
+                         bool containment_edges = true) {
+  return impl::GraphBuilder::build(
+      fixpoint_iter, cfg, initial_regs, range_set, containment_edges);
 }
 
 } // namespace interference
