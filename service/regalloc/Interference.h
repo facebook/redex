@@ -203,15 +203,6 @@ class Graph {
            m_containment_graph.end();
   }
 
-  /*
-   * Returns the live-out info for a given instruction that has a potential
-   * range encoding. We can use it to make better allocation decisions for
-   * these instructions.
-   */
-  const LivenessDomain& get_liveness(const IRInstruction* insn) const {
-    return m_range_liveness.at(const_cast<IRInstruction*>(insn));
-  }
-
   void remove_node(reg_t);
 
   /*
@@ -240,9 +231,6 @@ class Graph {
   std::unordered_map<reg_t, Node> m_nodes;
   std::unordered_map<reg_pair_t, bool> m_adj_matrix;
   std::unordered_set<reg_pair_t> m_containment_graph;
-  // This map contains the LivenessDomains for all instructions which could
-  // potentialy take on the /range format.
-  std::unordered_map<IRInstruction*, LivenessDomain> m_range_liveness;
 
   friend class impl::GraphBuilder;
 };

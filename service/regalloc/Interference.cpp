@@ -296,9 +296,6 @@ Graph GraphBuilder::build(const LivenessFixpointIterator& fixpoint_iter,
       }
       auto insn = it->insn;
       auto op = insn->opcode();
-      if (opcode::has_range_form(op)) {
-        graph.m_range_liveness.emplace(insn, live_out);
-      }
       if (insn->has_dest()) {
         for (auto reg : live_out.elements()) {
           if (opcode::is_a_move(op) && reg == insn->src(0)) {
