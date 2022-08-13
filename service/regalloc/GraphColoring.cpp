@@ -363,6 +363,7 @@ bool Allocator::coalesce(interference::Graph* ig, cfg::ControlFlowGraph& cfg) {
   auto ii = InstructionIterable(cfg);
   auto old_coalesce_count = m_stats.moves_coalesced;
   cfg::CFGMutation m(cfg);
+  bool any_linked{false};
   for (auto it = ii.begin(); it != ii.end(); ++it) {
     auto insn = it->insn;
     auto op = insn->opcode();
@@ -388,6 +389,7 @@ bool Allocator::coalesce(interference::Graph* ig, cfg::ControlFlowGraph& cfg) {
     } else if (ig->is_coalesceable(dest, src)) {
       // This unifies the two trees represented by dest and src
       aliases.link(dest, src);
+      any_linked = true;
       // Since link() doesn't tell us whether dest or src is the root of the
       // newly merged trees, we have to use find_set() to figure that out.
       auto parent = dest;
@@ -408,11 +410,13 @@ bool Allocator::coalesce(interference::Graph* ig, cfg::ControlFlowGraph& cfg) {
 
   m.flush();
 
-  transform::RegMap reg_map;
-  for (reg_t i = 0; i < cfg.get_registers_size(); ++i) {
-    reg_map.emplace(i, aliases.find_set(i));
+  if (any_linked) {
+    transform::RegMap reg_map;
+    for (reg_t i = 0; i < cfg.get_registers_size(); ++i) {
+      reg_map.emplace(i, aliases.find_set(i));
+    }
+    transform::remap_registers(cfg, reg_map);
   }
-  transform::remap_registers(cfg, reg_map);
 
   return m_stats.moves_coalesced != old_coalesce_count;
 }
