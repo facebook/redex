@@ -10,3 +10,4 @@
 pub mod datatype;
 pub mod fixpoint_iter;
 pub mod graph;
+pub mod wpo;
