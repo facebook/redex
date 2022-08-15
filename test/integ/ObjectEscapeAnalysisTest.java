@@ -282,6 +282,10 @@ public class ObjectEscapeAnalysisTest {
       this.x = builder.x;
     }
 
+    public static void onlyUseInstanceField(Builder builder) {
+      System.out.println(builder.x);
+    }
+
     public static class Builder {
       public int x;
 
@@ -297,6 +301,10 @@ public class ObjectEscapeAnalysisTest {
 
   public static N reduceTo42WithExpandedCtor() {
     return new N(new N.Builder(42));
+  }
+
+  public static void reduceTo42WithExpandedMethod() {
+    N.onlyUseInstanceField(new N.Builder(42));
   }
 
   static class O {

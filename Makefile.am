@@ -394,7 +394,7 @@ libopt_la_SOURCES = \
 	opt/singleimpl/SingleImplStats.cpp \
 	opt/simplify_cfg/SimplifyCFG.cpp \
 	opt/split_huge_switches/SplitHugeSwitchPass.cpp \
-	opt/object-escape-analysis/ExpandableConstructorParams.cpp \
+	opt/object-escape-analysis/ExpandableMethodParams.cpp \
 	opt/object-escape-analysis/ObjectEscapeAnalysis.cpp \
 	opt/staticrelo/StaticReloV2.cpp \
 	opt/string_concatenator/StringConcatenator.cpp \
