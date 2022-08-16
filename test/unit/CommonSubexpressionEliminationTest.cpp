@@ -62,7 +62,9 @@ void test(
   });
 
   auto pure_methods = get_pure_methods();
-  cse_impl::SharedState shared_state(pure_methods, finalish_field_names);
+  std::unordered_set<const DexField*> finalish_fields;
+  cse_impl::SharedState shared_state(pure_methods, finalish_field_names,
+                                     finalish_fields);
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, /* create_init_class_insns */ false);
   method::ClInitHasNoSideEffectsPredicate clinit_has_no_side_effects =

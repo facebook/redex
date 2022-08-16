@@ -78,7 +78,8 @@ Shrinker::Shrinker(
     const ShrinkerConfig& config,
     int min_sdk,
     const std::unordered_set<DexMethodRef*>& configured_pure_methods,
-    const std::unordered_set<const DexString*>& configured_finalish_field_names)
+    const std::unordered_set<const DexString*>& configured_finalish_field_names,
+    const std::unordered_set<const DexField*>& configured_finalish_fields)
     : m_forest(load(config.reg_alloc_random_forest)),
       m_xstores(stores),
       m_config(config),
@@ -89,7 +90,8 @@ Shrinker::Shrinker(
                 config.run_dedup_blocks),
       m_init_classes_with_side_effects(init_classes_with_side_effects),
       m_pure_methods(configured_pure_methods),
-      m_finalish_field_names(configured_finalish_field_names) {
+      m_finalish_field_names(configured_finalish_field_names),
+      m_finalish_fields(configured_finalish_fields) {
   // Initialize the singletons that `operator()` needs ahead of time to
   // avoid a data race.
   static_cast<void>(constant_propagation::EnumFieldAnalyzerState::get());
@@ -105,7 +107,7 @@ Shrinker::Shrinker(
     }
     if (config.run_cse) {
       m_cse_shared_state = std::make_unique<cse_impl::SharedState>(
-          m_pure_methods, m_finalish_field_names);
+          m_pure_methods, m_finalish_field_names, m_finalish_fields);
     }
     if (config.run_local_dce && config.compute_pure_methods) {
       std::unique_ptr<const method_override_graph::Graph> owned_override_graph;

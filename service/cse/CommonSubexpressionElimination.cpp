@@ -879,10 +879,12 @@ namespace cse_impl {
 
 SharedState::SharedState(
     const std::unordered_set<DexMethodRef*>& pure_methods,
-    const std::unordered_set<const DexString*>& finalish_field_names)
+    const std::unordered_set<const DexString*>& finalish_field_names,
+    const std::unordered_set<const DexField*>& finalish_fields)
     : m_pure_methods(pure_methods),
       m_safe_methods(pure_methods),
-      m_finalish_field_names(finalish_field_names) {
+      m_finalish_field_names(finalish_field_names),
+      m_finalish_fields(finalish_fields) {
   // The following methods are...
   // - static, or
   // - direct (constructors), or
@@ -1316,6 +1318,7 @@ bool SharedState::has_pure_method(const IRInstruction* insn) const {
 
 bool SharedState::is_finalish(const DexField* field) const {
   return is_final(field) || !!m_finalizable_fields.count(field) ||
+         !!m_finalish_fields.count(field) ||
          !!m_finalish_field_names.count(field->get_name());
 }
 

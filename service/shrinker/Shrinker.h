@@ -38,7 +38,9 @@ class Shrinker {
       int min_sdk,
       const std::unordered_set<DexMethodRef*>& configured_pure_methods = {},
       const std::unordered_set<const DexString*>&
-          configured_finalish_field_names = {});
+          configured_finalish_field_names = {},
+      const std::unordered_set<const DexField*>& configured_finalish_fields =
+          {});
 
   constant_propagation::Transform::Stats constant_propagation(
       bool is_static,
@@ -145,6 +147,7 @@ class Shrinker {
       m_init_classes_with_side_effects;
   std::unordered_set<DexMethodRef*> m_pure_methods;
   std::unordered_set<const DexString*> m_finalish_field_names;
+  std::unordered_set<const DexField*> m_finalish_fields;
 
   constant_propagation::ImmutableAttributeAnalyzerState m_immut_analyzer_state;
 

@@ -1032,29 +1032,29 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
     shrinker_config.run_copy_prop = true;
   }
 
-  std::unordered_set<const DexString*> field_names;
+  std::unordered_set<const DexField*> finalish_fields;
   if (m_options.apply_CSE_CopyProp) {
     auto* field =
         analysis_cls->find_field_from_simple_deobfuscated_name("sHitStats");
-    field_names.insert(DexString::make_string(field->get_name()->str()));
+    finalish_fields.insert(field);
     field->rstate.unset_root();
     always_assert(field->rstate.can_delete() && field->rstate.can_rename());
 
     field =
         analysis_cls->find_field_from_simple_deobfuscated_name("sIsEnabled");
-    field_names.insert(DexString::make_string(field->get_name()->str()));
+    finalish_fields.insert(field);
     field->rstate.unset_root();
     always_assert(field->rstate.can_delete() && field->rstate.can_rename());
 
     field = analysis_cls->find_field_from_simple_deobfuscated_name(
         "sNumStaticallyHitsInstrumented");
-    field_names.insert(DexString::make_string(field->get_name()->str()));
+    finalish_fields.insert(field);
     field->rstate.unset_root();
     always_assert(field->rstate.can_delete() && field->rstate.can_rename());
 
     field = analysis_cls->find_field_from_simple_deobfuscated_name(
         "sNumStaticallyInstrumented");
-    field_names.insert(DexString::make_string(field->get_name()->str()));
+    finalish_fields.insert(field);
     field->rstate.unset_root();
     always_assert(field->rstate.can_delete() && field->rstate.can_rename());
   }
@@ -1064,7 +1064,8 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
 
   int min_sdk = pm.get_redex_options().min_sdk;
   shrinker::Shrinker shrinker(stores, scope, init_classes_with_side_effects,
-                              shrinker_config, min_sdk, {}, field_names);
+                              shrinker_config, min_sdk, {}, {},
+                              finalish_fields);
 
   {
     Timer cleanup{"Parallel Cleanup"};
