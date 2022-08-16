@@ -130,6 +130,7 @@ class PeepholeTest : public ::testing::Test {
 
  public:
   PeepholeTest() : config(Json::nullValue), manager({&peephole_pass}) {
+    config.parse_global_config();
     manager.set_testing_mode();
   }
 
@@ -440,6 +441,7 @@ static void sputget_peep_hole_test(const std::string& field_desc,
   PeepholePass peephole_pass;
   PassManager manager({&peephole_pass});
   ConfigFiles config(Json::nullValue);
+  config.parse_global_config();
   DexStore store("classes");
   store.add_classes({creator.create()});
   std::vector<DexStore> stores;
@@ -804,6 +806,7 @@ static void aputget_peep_hole_test(const std::string& code_str,
   PeepholePass peephole_pass;
   PassManager manager({&peephole_pass});
   ConfigFiles config(Json::nullValue);
+  config.parse_global_config();
   DexStore store("classes");
   store.add_classes({creator.create()});
   std::vector<DexStore> stores;

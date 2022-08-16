@@ -55,6 +55,7 @@ struct MaxDepthAnalysisTest : public RedexIntegrationTest {
     config["MaxDepthAnalysisPass"] = Json::objectValue;
     config["AnalysisConsumerPass"] = Json::objectValue;
     ConfigFiles conf(config);
+    conf.parse_global_config();
     std::vector<Pass*> passes{analysis_pass.get(), consumer_pass.get()};
     pass_manager = std::make_unique<PassManager>(passes, conf);
     pass_manager->set_testing_mode();

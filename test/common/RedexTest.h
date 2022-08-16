@@ -85,6 +85,8 @@ struct RedexIntegrationTest : public RedexTest {
                   const Json::Value& json_conf,
                   const Fn& fn) {
     conf = std::make_unique<ConfigFiles>(json_conf);
+    conf->parse_global_config();
+
     if (pg_config) {
       pass_manager =
           std::make_unique<PassManager>(passes, std::move(pg_config), *conf);

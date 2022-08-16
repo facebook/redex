@@ -20,6 +20,7 @@
 #include "ConfigFiles.h"
 #include "DexClass.h"
 #include "DexStore.h"
+#include "GlobalConfig.h"
 #include "IRCode.h"
 #include "Macros.h"
 #include "MethodProfiles.h"
@@ -314,7 +315,9 @@ void run_source_blocks(DexStoresVector& stores,
     }
   });
 
-  if (mgr.get_assessor_config().run_sb_consistency) {
+  if (conf.get_global_config()
+          .get_config_by_name<AssessorConfig>("assessor")
+          ->run_sb_consistency) {
     source_blocks::get_sbcc().initialize(scope);
   }
 

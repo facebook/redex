@@ -35,6 +35,7 @@ class PeepholeTest : public RedexTest {
     PeepholePass peephole_pass;
     PassManager manager({&peephole_pass});
     ConfigFiles config(Json::nullValue);
+    config.parse_global_config();
     DexStore store("classes");
     store.add_classes({creator.create()});
     std::vector<DexStore> stores;

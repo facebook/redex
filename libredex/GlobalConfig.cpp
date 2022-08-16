@@ -63,6 +63,7 @@ void AssessorConfig::bind_config() {
   bind("run_after_each_pass", run_after_each_pass, run_after_each_pass);
   bind("run_initially", run_initially, run_initially);
   bind("run_finally", run_finally, run_finally);
+  bind("run_sb_consistency", run_sb_consistency, run_sb_consistency);
 }
 
 void CheckUniqueDeobfuscatedNamesConfig::bind_config() {

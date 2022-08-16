@@ -37,6 +37,7 @@
 #include "DexLoader.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
+#include "GlobalConfig.h"
 #include "GraphVisualizer.h"
 #include "IRCode.h"
 #include "IRTypeChecker.h"
@@ -691,19 +692,6 @@ bool is_run_hasher_after_each_pass(const ConfigFiles& conf,
   return hasher_args.get("run_after_each_pass", false).asBool();
 }
 
-AssessorConfig get_assessor_config(const ConfigFiles& conf,
-                                   const RedexOptions&) {
-  const Json::Value& assessor_args = conf.get_json_config()["assessor"];
-  AssessorConfig res;
-  res.run_after_each_pass =
-      assessor_args.get("run_after_each_pass", false).asBool();
-  res.run_initially = assessor_args.get("run_initially", false).asBool();
-  res.run_finally = assessor_args.get("run_finally", false).asBool();
-  res.run_sb_consistency =
-      assessor_args.get("run_sb_consistency", false).asBool();
-  return res;
-}
-
 class AfterPassSizes {
  private:
   PassManager* m_mgr;
@@ -1189,8 +1177,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       is_run_hasher_after_each_pass(conf, get_redex_options());
 
   // Retrieve the assessor's settings.
-  m_assessor_config = ::get_assessor_config(conf, get_redex_options());
-  const auto& assessor_config = this->get_assessor_config();
+  const auto* assessor_config =
+      conf.get_global_config().get_config_by_name<AssessorConfig>("assessor");
 
   // Retrieve the type checker's settings.
   CheckerConfig checker_conf{conf};
@@ -1227,7 +1215,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   // For core loop legibility, have a lambda here.
 
   auto pre_pass_verifiers = [&](Pass* pass, size_t i) {
-    if (i == 0 && assessor_config.run_initially) {
+    if (i == 0 && assessor_config->run_initially) {
       ::run_assessor(*this, scope, /* initially */ true);
     }
   };
@@ -1266,8 +1254,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
     }
 
     bool run_hasher = run_hasher_after_each_pass;
-    bool run_assessor = assessor_config.run_after_each_pass ||
-                        (assessor_config.run_finally && i == size - 1);
+    bool run_assessor = assessor_config->run_after_each_pass ||
+                        (assessor_config->run_finally && i == size - 1);
     bool run_type_checker = checker_conf.run_after_pass(pass);
 
     if (run_hasher || run_assessor || run_type_checker ||
