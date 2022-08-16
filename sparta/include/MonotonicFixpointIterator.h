@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <functional>
+#include <iterator>
 #include <type_traits>
 #include <unordered_map>
 #include <vector>
@@ -220,6 +221,44 @@ class MonotonicFixpointIteratorBase
   std::unordered_map<NodeId, Domain, NodeHash> m_exit_states;
 };
 
+template <typename GraphInterface, typename NodeHash>
+class SuccessorNodeListBuilder {
+  using Graph = typename GraphInterface::Graph;
+  using NodeId = typename GraphInterface::NodeId;
+
+ public:
+  SuccessorNodeListBuilder(const Graph& graph) : m_graph(graph) {}
+
+  std::vector<NodeId> operator()(const NodeId& x) {
+    const auto& succ_edges = GraphInterface::successors(m_graph, x);
+
+    std::vector<NodeId> succ_nodes;
+    std::transform(succ_edges.begin(),
+                   succ_edges.end(),
+                   std::inserter(succ_nodes, succ_nodes.end()),
+                   std::bind(&GraphInterface::target,
+                             std::ref(m_graph),
+                             std::placeholders::_1));
+
+    // Deduplicate elements
+    std::unordered_set<NodeId, NodeHash> succ_nodes_dedup_set{
+        succ_nodes.begin(), succ_nodes.end()};
+
+    std::vector<NodeId> ret;
+    std::copy_if(std::make_move_iterator(succ_nodes.begin()),
+                 std::make_move_iterator(succ_nodes.end()),
+                 std::back_inserter(ret),
+                 [&succ_nodes_dedup_set](const NodeId& id) {
+                   return succ_nodes_dedup_set.find(id) !=
+                          succ_nodes_dedup_set.end();
+                 });
+    return ret;
+  }
+
+ private:
+  const Graph& m_graph;
+};
+
 } // namespace fp_impl
 
 /*
@@ -351,26 +390,7 @@ class ParallelMonotonicFixpointIterator
                 graph, /*cfg_size_hint*/ 4),
         m_wpo(
             GraphInterface::entry(graph),
-            [=, &graph](const NodeId& x) {
-              const auto& succ_edges = GraphInterface::successors(graph, x);
-              std::vector<NodeId> succ_nodes_tmp;
-              std::transform(succ_edges.begin(),
-                             succ_edges.end(),
-                             std::back_inserter(succ_nodes_tmp),
-                             std::bind(&GraphInterface::target,
-                                       std::ref(graph),
-                                       std::placeholders::_1));
-              // Filter out duplicate succ nodes.
-              std::vector<NodeId> succ_nodes;
-              std::unordered_set<NodeId> succ_nodes_set;
-              for (auto node : succ_nodes_tmp) {
-                if (!succ_nodes_set.count(node)) {
-                  succ_nodes_set.emplace(node);
-                  succ_nodes.emplace_back(node);
-                }
-              }
-              return succ_nodes;
-            },
+            fp_impl::SuccessorNodeListBuilder<GraphInterface, NodeHash>(graph),
             false),
         m_num_thread(num_thread) {
     // Gathering all reachable nodes in graph.
@@ -520,26 +540,7 @@ class MonotonicFixpointIterator
                                                NodeHash>(graph, cfg_size_hint),
         m_wpo(
             GraphInterface::entry(graph),
-            [=, &graph](const NodeId& x) {
-              const auto& succ_edges = GraphInterface::successors(graph, x);
-              std::vector<NodeId> succ_nodes_tmp;
-              std::transform(succ_edges.begin(),
-                             succ_edges.end(),
-                             std::back_inserter(succ_nodes_tmp),
-                             std::bind(&GraphInterface::target,
-                                       std::ref(graph),
-                                       std::placeholders::_1));
-              // Filter out duplicate succ nodes.
-              std::vector<NodeId> succ_nodes;
-              std::unordered_set<NodeId, NodeHash> succ_nodes_set;
-              for (auto node : succ_nodes_tmp) {
-                if (!succ_nodes_set.count(node)) {
-                  succ_nodes_set.emplace(node);
-                  succ_nodes.emplace_back(node);
-                }
-              }
-              return succ_nodes;
-            },
+            fp_impl::SuccessorNodeListBuilder<GraphInterface, NodeHash>(graph),
             false) {}
 
   /*
