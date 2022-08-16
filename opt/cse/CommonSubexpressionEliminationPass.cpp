@@ -65,8 +65,9 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
   auto immutable_getters = get_immutable_getters(scope);
   pure_methods.insert(immutable_getters.begin(), immutable_getters.end());
 
-  auto shared_state =
-      SharedState(pure_methods, conf.get_finalish_field_names());
+  std::unordered_set<const DexField*> finalish_fields;
+  auto shared_state = SharedState(
+      pure_methods, conf.get_finalish_field_names(), finalish_fields);
   method::ClInitHasNoSideEffectsPredicate clinit_has_no_side_effects =
       [&](const DexType* type) {
         return !init_classes_with_side_effects.refine(type);
