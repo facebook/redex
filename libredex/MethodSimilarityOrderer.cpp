@@ -62,6 +62,10 @@ void MethodSimilarityOrderer::gather_code_hash_ids(
     for (unsigned j = 0; j < insn->srcs_size(); j++) {
       code_hash = code_hash * 17 + insn->src(j);
     }
+    if (insn->has_method()) {
+      auto callee = ((DexOpcodeMethod*)insn)->get_method();
+      stable_hashes.insert(std::hash<std::string>{}(show(callee)));
+    }
     stable_hashes.insert(code_hash);
   };
 
