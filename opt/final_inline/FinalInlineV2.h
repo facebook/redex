@@ -41,8 +41,9 @@ class FinalInlinePassV2 : public Pass {
   }
 
   struct Stats {
-    size_t inlined_count;
-    size_t init_classes;
+    size_t inlined_count{0};
+    size_t init_classes{0};
+    size_t possible_cycles{0};
   };
   static Stats run(const Scope&,
                    int min_sdk,
