@@ -49,9 +49,6 @@ void MethodSimilarityOrderer::gather_code_hash_ids(
     auto insn = instructions.at(i);
     auto op = insn->opcode();
     code_hash = code_hash * 23 + op;
-    if (insn->has_literal()) {
-      code_hash = code_hash * 7 + insn->get_literal();
-    }
     if (insn->has_range()) {
       code_hash =
           (code_hash * 11 + insn->range_base()) * 11 + insn->range_size();
