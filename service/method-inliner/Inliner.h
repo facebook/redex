@@ -27,14 +27,13 @@ struct InlinerConfig;
  * Use the editable CFG instead of IRCode to do the inlining. Return true on
  * success. Registers starting with next_caller_reg must be available
  */
-bool inline_with_cfg(
-    DexMethod* caller_method,
-    DexMethod* callee_method,
-    IRInstruction* callsite,
-    DexType* needs_receiver_cast,
-    DexType* needs_init_class,
-    size_t next_caller_reg,
-    const std::shared_ptr<cfg::ControlFlowGraph>& reduced_cfg = nullptr);
+bool inline_with_cfg(DexMethod* caller_method,
+                     DexMethod* callee_method,
+                     IRInstruction* callsite,
+                     DexType* needs_receiver_cast,
+                     DexType* needs_init_class,
+                     size_t next_caller_reg,
+                     const cfg::ControlFlowGraph* reduced_cfg = nullptr);
 
 } // namespace inliner
 
@@ -61,6 +60,16 @@ struct CallerInsns {
 
 using CalleeCallerInsns = std::unordered_map<DexMethod*, CallerInsns>;
 
+class ReducedCode {
+ public:
+  ReducedCode() : m_code(std::make_unique<cfg::ControlFlowGraph>()) {}
+  IRCode& code() { return m_code; }
+  cfg::ControlFlowGraph& cfg() { return m_code.cfg(); }
+
+ private:
+  IRCode m_code;
+};
+
 struct Inlinable {
   DexMethod* callee;
   // Only used when not using cfg; iterator to invoke instruction to callee
@@ -73,7 +82,7 @@ struct Inlinable {
   bool no_return{false};
   // For a specific call-site, reduced cfg template after applying call-site
   // summary
-  std::shared_ptr<cfg::ControlFlowGraph> reduced_cfg;
+  std::shared_ptr<ReducedCode> reduced_code;
   // Estimated size of callee, possibly reduced by call-site specific knowledge
   size_t insn_size;
 };
@@ -103,7 +112,7 @@ struct InlinedCost {
   float unused_args;
   // For a specific call-site, reduced cfg template after applying call-site
   // summary
-  std::shared_ptr<cfg::ControlFlowGraph> reduced_cfg;
+  std::shared_ptr<ReducedCode> reduced_code;
   // Maximum or call-site specific estimated callee size after pruning
   size_t insn_size;
 
@@ -331,7 +340,7 @@ class MultiMethodInliner {
       const IRInstruction* invoke_insn,
       DexMethod* callee,
       bool* no_return = nullptr,
-      std::shared_ptr<cfg::ControlFlowGraph>* reduced_cfg = nullptr,
+      std::shared_ptr<ReducedCode>* reduced_code = nullptr,
       size_t* insn_size = nullptr);
 
   /**
@@ -369,7 +378,7 @@ class MultiMethodInliner {
   bool too_many_callers(const DexMethod* callee);
 
   // Reduce a cfg with a call-site summary, if given.
-  std::shared_ptr<cfg::ControlFlowGraph> apply_call_site_summary(
+  std::shared_ptr<ReducedCode> apply_call_site_summary(
       bool is_static,
       DexType* declaring_type,
       DexProto* proto,

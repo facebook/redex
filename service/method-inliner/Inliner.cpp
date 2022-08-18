@@ -370,7 +370,7 @@ void MultiMethodInliner::inline_callees(
           if (!callee || !callees.count(callee)) {
             return editable_cfg_adapter::LOOP_CONTINUE;
           }
-          std::shared_ptr<cfg::ControlFlowGraph> reduced_cfg;
+          std::shared_ptr<ReducedCode> reduced_code;
           bool no_return{false};
           size_t insn_size{0};
           if (filter_via_should_inline) {
@@ -378,7 +378,7 @@ void MultiMethodInliner::inline_callees(
             // Cost model is based on fully inlining callee everywhere; let's
             // see if we can get more detailed call-site specific information
             if (should_inline_at_call_site(caller, insn, callee, &no_return,
-                                           &reduced_cfg, &insn_size)) {
+                                           &reduced_code, &insn_size)) {
               always_assert(!no_return);
               // Yes, we know might have dead_blocks and a refined insn_size
             } else if (should_inline_always(callee)) {
@@ -387,7 +387,7 @@ void MultiMethodInliner::inline_callees(
               insn_size = get_callee_insn_size(callee);
             } else if (no_return) {
               always_assert(insn_size == 0);
-              always_assert(!reduced_cfg);
+              always_assert(!reduced_code);
             } else {
               return editable_cfg_adapter::LOOP_CONTINUE;
             }
@@ -413,7 +413,7 @@ void MultiMethodInliner::inline_callees(
           }
 
           inlinables.push_back((Inlinable){callee, it, insn, no_return,
-                                           std::move(reduced_cfg), insn_size});
+                                           std::move(reduced_code), insn_size});
           return editable_cfg_adapter::LOOP_CONTINUE;
         });
   }
@@ -749,9 +749,11 @@ size_t MultiMethodInliner::inline_inlinables(
     auto needs_receiver_cast =
         it == m_inlined_invokes_need_cast.end() ? nullptr : it->second;
     auto needs_init_class = get_needs_init_class(callee_method);
+    const auto& reduced_code = inlinable.reduced_code;
+    const auto* reduced_cfg = reduced_code ? &reduced_code->cfg() : nullptr;
     bool success = inliner::inline_with_cfg(
         caller_method, callee_method, callsite_insn, needs_receiver_cast,
-        needs_init_class, *cfg_next_caller_reg, inlinable.reduced_cfg);
+        needs_init_class, *cfg_next_caller_reg, reduced_cfg);
     if (!success) {
       calls_not_inlined++;
       continue;
@@ -760,9 +762,9 @@ size_t MultiMethodInliner::inline_inlinables(
           caller->cfg_built() ? SHOW(caller->cfg()) : SHOW(caller),
           SHOW(callee));
     estimated_caller_size += inlinable.insn_size;
-    if (inlinable.reduced_cfg) {
+    if (reduced_cfg) {
       visibility_changes.insert(get_visibility_changes(
-          *inlinable.reduced_cfg, caller_method->get_class(), callee_method));
+          *reduced_cfg, caller_method->get_class(), callee_method));
     } else {
       visibility_changes_for.insert(callee_method);
     }
@@ -865,17 +867,17 @@ void MultiMethodInliner::compute_callee_costs(DexMethod* method) {
         TraceContext context(method);
         // Populate caches
         auto timer = m_call_site_inlined_cost_timer.scope();
-        bool keep_reduced_cfg = false;
+        bool keep_reduced_code = false;
         for (auto insn : insns) {
           if (should_inline_at_call_site(nullptr, insn, method)) {
-            keep_reduced_cfg = true;
+            keep_reduced_code = true;
           }
         }
-        if (!keep_reduced_cfg) {
+        if (!keep_reduced_code) {
           CalleeCallSiteSummary key{method, call_site_summary};
           auto inlined_cost = m_call_site_inlined_costs.get(key, nullptr);
           if (inlined_cost) {
-            inlined_cost->reduced_cfg.reset();
+            inlined_cost->reduced_code.reset();
           }
         }
       });
@@ -1220,8 +1222,7 @@ static size_t get_inlined_cost(const std::vector<cfg::Block*>& blocks,
   }
 }
 
-std::shared_ptr<cfg::ControlFlowGraph>
-MultiMethodInliner::apply_call_site_summary(
+std::shared_ptr<ReducedCode> MultiMethodInliner::apply_call_site_summary(
     bool is_static,
     DexType* declaring_type,
     DexProto* proto,
@@ -1238,14 +1239,14 @@ MultiMethodInliner::apply_call_site_summary(
   }
 
   // Clone original cfg
-  IRCode cloned_code(std::make_unique<cfg::ControlFlowGraph>());
-  original_cfg.deep_copy(&cloned_code.cfg());
+  auto reduced_code = std::make_shared<ReducedCode>();
+  original_cfg.deep_copy(&reduced_code->cfg());
 
   // If result is not used, change all return-* instructions to return-void (and
   // let local-dce remove the code that leads to it).
   if (!proto->is_void() && !call_site_summary->result_used) {
     proto = DexProto::make_proto(type::_void(), proto->get_args());
-    for (auto& mie : InstructionIterable(cloned_code.cfg())) {
+    for (auto& mie : InstructionIterable(reduced_code->cfg())) {
       if (opcode::is_a_return(mie.insn->opcode())) {
         mie.insn->set_opcode(OPCODE_RETURN_VOID);
         mie.insn->set_srcs_size(0);
@@ -1257,30 +1258,21 @@ MultiMethodInliner::apply_call_site_summary(
   // local-dce
   ConstantEnvironment initial_env =
       constant_propagation::interprocedural::env_with_params(
-          is_static, &cloned_code, call_site_summary->arguments);
+          is_static, &reduced_code->code(), call_site_summary->arguments);
   constant_propagation::Transform::Config config;
   // No need to add extra instructions to load constant params, we'll pass those
   // in anyway
   config.add_param_const = false;
   m_shrinker.constant_propagation(is_static, declaring_type, proto,
-                                  &cloned_code, initial_env, config);
-  m_shrinker.local_dce(&cloned_code, /* normalize_new_instances */ false,
-                       declaring_type);
+                                  &reduced_code->code(), initial_env, config);
+  m_shrinker.local_dce(&reduced_code->code(),
+                       /* normalize_new_instances */ false, declaring_type);
 
   // Re-build cfg once more to get linearized representation, good for
   // predicting fallthrough branches
-  cloned_code.build_cfg(/* editable */ true);
+  reduced_code->code().build_cfg(/* editable */ true);
 
-  // And a final clone to move the cfg into a long-lived shared-ptr.
-  auto res = std::make_shared<cfg::ControlFlowGraph>();
-  cloned_code.cfg().deep_copy(res.get());
-  res->set_insn_ownership(true);
-
-  cloned_code.cfg().set_insn_ownership(true);
-  // Note that we are not clearing the cloned_code.cfg(). It will get destroyed
-  // now, and delete all instruction copies that it now owns.
-
-  return res;
+  return reduced_code;
 }
 
 InlinedCost MultiMethodInliner::get_inlined_cost(
@@ -1290,7 +1282,7 @@ InlinedCost MultiMethodInliner::get_inlined_cost(
     const IRCode* code,
     const CallSiteSummary* call_site_summary) {
   size_t cost{0};
-  std::shared_ptr<cfg::ControlFlowGraph> reduced_cfg;
+  std::shared_ptr<ReducedCode> reduced_code;
   size_t returns{0};
   std::unordered_set<DexMethodRef*> method_refs_set;
   std::unordered_set<const void*> other_refs_set;
@@ -1318,9 +1310,9 @@ InlinedCost MultiMethodInliner::get_inlined_cost(
   size_t insn_size;
   float unused_args{0};
   if (code->editable_cfg_built()) {
-    reduced_cfg = apply_call_site_summary(is_static, declaring_type, proto,
-                                          code->cfg(), call_site_summary);
-    auto cfg = reduced_cfg ? reduced_cfg.get() : &code->cfg();
+    reduced_code = apply_call_site_summary(is_static, declaring_type, proto,
+                                           code->cfg(), call_site_summary);
+    auto cfg = &(reduced_code ? &reduced_code->code() : code)->cfg();
     auto blocks = cfg->blocks();
     for (size_t i = 0; i < blocks.size(); ++i) {
       auto block = blocks.at(i);
@@ -1335,7 +1327,7 @@ InlinedCost MultiMethodInliner::get_inlined_cost(
       }
     }
     live_range::MoveAwareChains chains(*cfg,
-                                       /* ignore_unreachable */ !reduced_cfg);
+                                       /* ignore_unreachable */ !reduced_code);
     auto def_use_chains = chains.get_def_use_chains();
     for (auto& mie : cfg->get_param_instructions()) {
       auto uses = def_use_chains[mie.insn];
@@ -1372,7 +1364,7 @@ InlinedCost MultiMethodInliner::get_inlined_cost(
                        !returns,
                        (float)result_used,
                        unused_args,
-                       std::move(reduced_cfg),
+                       std::move(reduced_code),
                        insn_size};
 }
 
@@ -1389,7 +1381,7 @@ const InlinedCost* MultiMethodInliner::get_fully_inlined_cost(
         SHOW(callee), inlined_cost->full_code, inlined_cost->code,
         inlined_cost->method_refs, inlined_cost->other_refs,
         inlined_cost->no_return ? "no_return" : "return",
-        inlined_cost->result_used, !!inlined_cost->reduced_cfg,
+        inlined_cost->result_used, !!inlined_cost->reduced_code,
         inlined_cost->insn_size);
   m_fully_inlined_costs.update(
       callee,
@@ -1451,10 +1443,10 @@ const InlinedCost* MultiMethodInliner::get_call_site_inlined_cost(
         call_site_summary->get_key().c_str(), inlined_cost->full_code,
         inlined_cost->code, inlined_cost->method_refs, inlined_cost->other_refs,
         inlined_cost->no_return ? "no_return" : "return",
-        inlined_cost->result_used, !!inlined_cost->reduced_cfg,
+        inlined_cost->result_used, !!inlined_cost->reduced_code,
         inlined_cost->insn_size);
   if (inlined_cost->insn_size >= fully_inlined_cost->insn_size) {
-    inlined_cost->reduced_cfg.reset();
+    inlined_cost->reduced_code.reset();
   }
   m_call_site_inlined_costs.update(key,
                                    [&](const CalleeCallSiteSummary&,
@@ -1713,7 +1705,7 @@ bool MultiMethodInliner::should_inline_at_call_site(
     const IRInstruction* invoke_insn,
     DexMethod* callee,
     bool* no_return,
-    std::shared_ptr<cfg::ControlFlowGraph>* reduced_cfg,
+    std::shared_ptr<ReducedCode>* reduced_code,
     size_t* insn_size) {
   auto inlined_cost = get_call_site_inlined_cost(invoke_insn, callee);
   if (!inlined_cost) {
@@ -1741,8 +1733,8 @@ bool MultiMethodInliner::should_inline_at_call_site(
     return false;
   }
 
-  if (reduced_cfg) {
-    *reduced_cfg = inlined_cost->reduced_cfg;
+  if (reduced_code) {
+    *reduced_code = inlined_cost->reduced_code;
   }
   if (insn_size) {
     *insn_size = inlined_cost->insn_size;
@@ -2182,14 +2174,13 @@ void MultiMethodInliner::delayed_invoke_direct_to_static() {
 namespace inliner {
 
 // return true on successful inlining, false otherwise
-bool inline_with_cfg(
-    DexMethod* caller_method,
-    DexMethod* callee_method,
-    IRInstruction* callsite,
-    DexType* needs_receiver_cast,
-    DexType* needs_init_class,
-    size_t next_caller_reg,
-    const std::shared_ptr<cfg::ControlFlowGraph>& reduced_cfg) {
+bool inline_with_cfg(DexMethod* caller_method,
+                     DexMethod* callee_method,
+                     IRInstruction* callsite,
+                     DexType* needs_receiver_cast,
+                     DexType* needs_init_class,
+                     size_t next_caller_reg,
+                     const cfg::ControlFlowGraph* reduced_cfg) {
 
   auto caller_code = caller_method->get_code();
   always_assert(caller_code->editable_cfg_built());
