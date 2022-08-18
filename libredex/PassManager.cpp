@@ -13,9 +13,11 @@
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
+#include <json/json.h>
 #include <limits>
 #include <list>
 #include <mutex>
+#include <sstream>
 #include <thread>
 #include <typeinfo>
 #include <unordered_set>
@@ -968,6 +970,39 @@ class TraceClassAfterEachPass {
 
 static TraceClassAfterEachPass trace_cls;
 
+struct JemallocStats {
+  PassManager* pm;
+  const ConfigFiles& c;
+  bool full_stats{false};
+
+  JemallocStats(PassManager* pm, const ConfigFiles& c) : pm(pm), c(c) {
+    const auto* pmc =
+        c.get_global_config().get_config_by_name<PassManagerConfig>(
+            "pass_manager");
+    redex_assert(pmc != nullptr);
+
+    full_stats = pmc->jemalloc_full_stats;
+  }
+
+  void process_jemalloc_stats_for_pass(const Pass* pass, size_t run) {
+#ifdef USE_JEMALLOC
+    std::string key_base = "~jemalloc.";
+    auto cb = [&](const char* key, uint64_t value) {
+      pm->set_metric(key_base + key, value);
+    };
+    jemalloc_util::some_malloc_stats(cb);
+
+    if (full_stats) {
+      std::string name =
+          "jemalloc." + pass->name() + "." + std::to_string(run) + ".json";
+      auto filename = c.metafile(name);
+      std::ofstream ofs{filename};
+      ofs << jemalloc_util::get_malloc_stats();
+    }
+#endif
+  }
+};
+
 } // namespace
 
 std::unique_ptr<keep_rules::ProguardConfiguration> empty_pg_config() {
@@ -1289,6 +1324,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   JNINativeContextHelper jni_native_context_helper(
       scope, m_redex_options.jni_summary_path);
 
+  JemallocStats jemalloc_stats{this, conf};
+
   std::unordered_map<const Pass*, size_t> runs;
 
   /////////////////////
@@ -1339,6 +1376,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
     }
 
     scoped_mem_stats.trace_log(this, pass);
+
+    jemalloc_stats.process_jemalloc_stats_for_pass(pass, pass_run);
 
     sanitizers::lsan_do_recoverable_leak_check();
 

@@ -152,6 +152,7 @@ struct PassManagerConfig : public Configurable {
   }
 
   std::unordered_map<std::string, std::string> pass_aliases;
+  bool jemalloc_full_stats{false};
 };
 
 class GlobalConfig;
