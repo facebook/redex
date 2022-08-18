@@ -597,6 +597,8 @@ enum class InlinableTypeKind {
   // Not all uses of this type have inlinable anchors. Only attempt to inline
   // anchors present in original identified root methods.
   Incomplete,
+
+  Last = Incomplete
 };
 using InlinableTypes = std::unordered_map<DexType*, InlinableTypeKind>;
 
@@ -607,7 +609,8 @@ std::unordered_map<DexMethod*, InlinableTypes> compute_root_methods(
     const MethodSummaries& method_summaries,
     const std::unordered_map<DexType*, InlineAnchorsOfType>& inline_anchors) {
   Timer t("compute_root_methods");
-  std::unordered_set<DexType*> candidate_types;
+  std::array<size_t, (size_t)(InlinableTypeKind::Last) + 1> candidate_types{
+      0, 0, 0};
   std::unordered_map<DexMethod*, InlinableTypes> root_methods;
   std::unordered_set<DexType*> inline_anchor_types;
 
@@ -649,7 +652,7 @@ std::unordered_map<DexMethod*, InlinableTypes> compute_root_methods(
                          : InlinableTypeKind::Incomplete;
 
     std::lock_guard<std::mutex> lock_guard(mutex);
-    candidate_types.insert(type);
+    candidate_types[(size_t)kind]++;
     for (auto method : methods) {
       TRACE(OEA, 3, "[object escape analysis] root method %s with %s%s",
             SHOW(method), SHOW(type),
@@ -717,7 +720,14 @@ std::unordered_map<DexMethod*, InlinableTypes> compute_root_methods(
         1,
         "[object escape analysis] candidate types: %zu",
         candidate_types.size());
-  mgr.incr_metric("candidate types", candidate_types.size());
+  mgr.incr_metric(
+      "candidate types CompleteSingleRoot",
+      candidate_types[(size_t)InlinableTypeKind::CompleteSingleRoot]);
+  mgr.incr_metric(
+      "candidate types CompleteMultipleRoots",
+      candidate_types[(size_t)InlinableTypeKind::CompleteMultipleRoots]);
+  mgr.incr_metric("candidate types Incomplete",
+                  candidate_types[(size_t)InlinableTypeKind::Incomplete]);
   mgr.incr_metric("incomplete_estimated_delta_threshold_exceeded",
                   (size_t)incomplete_estimated_delta_threshold_exceeded);
   return root_methods;
