@@ -407,7 +407,7 @@ static void analyze_method_recursive(
 
   // The following updates form a critical section.
   {
-    boost::lock_guard<boost::mutex> lock(fp_iter_map->get_lock(method));
+    std::unique_lock<std::mutex> lock(fp_iter_map->get_lock(method));
     fp_iter_map->update_unsafe(method,
                                [&](auto, FixpointIterator*& v, bool exists) {
                                  redex_assert(!(exists ^ (v != nullptr)));
