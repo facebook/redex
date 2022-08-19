@@ -13,6 +13,7 @@
 #include <cassert>
 #include <chrono>
 #include <condition_variable>
+#include <exception>
 #include <mutex>
 #include <numeric>
 #include <queue>
@@ -260,41 +261,67 @@ void SpartaWorkQueue<Input, Executor>::run_all() {
   m_state_counters.num_non_empty = 0;
   m_state_counters.num_running = 0;
   m_state_counters.waiter->take_all();
+  std::mutex exception_mutex;
+  std::exception_ptr exception;
   auto worker = [&](SpartaWorkerState<Input>* state, size_t state_idx) {
-    auto attempts =
-        workqueue_impl::create_permutation(m_num_threads, state_idx);
-    while (true) {
-      auto have_task = false;
-      for (auto idx : attempts) {
+    try {
+      auto attempts =
+          workqueue_impl::create_permutation(m_num_threads, state_idx);
+      while (true) {
+        auto have_task = false;
+        for (auto idx : attempts) {
+          auto other_state = m_states[idx].get();
+          auto task = other_state->pop_task(state);
+          if (task) {
+            have_task = true;
+            consume(state, *task);
+            break;
+          }
+        }
+        if (have_task) {
+          continue;
+        }
+
+        state->set_running(false);
+        if (!m_can_push_task) {
+          // New tasks can't be added. We don't need to wait for the currently
+          // running jobs to finish.
+          return;
+        }
+
+        // Let the thread quit if all the threads are not running and there
+        // is no task in any queue.
+        if (m_state_counters.num_running == 0 &&
+            m_state_counters.num_non_empty == 0) {
+          // Wake up everyone who might be waiting, so they can quit.
+          m_state_counters.waiter->give(m_state_counters.num_all);
+          return;
+        }
+
+        m_state_counters.waiter->take(); // Wait for work.
+      }
+    } catch (...) {
+      {
+        std::unique_lock<std::mutex> lock(exception_mutex);
+        if (exception) {
+          // An exception was already caught.
+          return;
+        }
+        exception = std::current_exception();
+      }
+
+      // Make all other threads stop gracefully, by stealing their tasks.
+      for (unsigned int idx = 0; idx < m_num_threads; idx++) {
         auto other_state = m_states[idx].get();
-        auto task = other_state->pop_task(state);
-        if (task) {
-          have_task = true;
-          consume(state, *task);
-          break;
+        while (true) {
+          auto task = other_state->pop_task(state);
+          if (!task) {
+            break;
+          }
         }
       }
-      if (have_task) {
-        continue;
-      }
-
       state->set_running(false);
-      if (!m_can_push_task) {
-        // New tasks can't be added. We don't need to wait for the currently
-        // running jobs to finish.
-        return;
-      }
-
-      // Let the thread quit if all the threads are not running and there
-      // is no task in any queue.
-      if (m_state_counters.num_running == 0 &&
-          m_state_counters.num_non_empty == 0) {
-        // Wake up everyone who might be waiting, so they can quit.
-        m_state_counters.waiter->give(m_state_counters.num_all);
-        return;
-      }
-
-      m_state_counters.waiter->take(); // Wait for work.
+      m_state_counters.waiter->give(m_state_counters.num_all);
     }
   };
 
@@ -312,6 +339,14 @@ void SpartaWorkQueue<Input, Executor>::run_all() {
 
   for (auto& thread : all_threads) {
     thread.join();
+  }
+
+  for (size_t i = 0; i < m_num_threads; ++i) {
+    assert(!m_states[i]->m_running);
+  }
+
+  if (exception) {
+    std::rethrow_exception(exception);
   }
 
   for (size_t i = 0; i < m_num_threads; ++i) {
