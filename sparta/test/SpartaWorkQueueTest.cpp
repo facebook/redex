@@ -99,3 +99,16 @@ TEST(SpartaWorkQueueTest, preciseScheduling) {
     ASSERT_EQ(1, array[idx]);
   }
 }
+
+TEST(SpartaWorkQueueTest, exceptionPropagation) {
+  auto wq = sparta::work_queue<int>([](int i) {
+    if (i == 666) {
+      throw std::logic_error("exception!");
+    }
+  });
+
+  for (int idx = 0; idx < NUM_INTS; ++idx) {
+    wq.add_item(idx);
+  }
+  ASSERT_THROW(wq.run_all(), std::logic_error);
+}
