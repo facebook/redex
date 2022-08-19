@@ -310,6 +310,8 @@ struct ImmutableAttributeAnalyzerState {
 
   ImmutableAttributeAnalyzerState();
 
+  // Immutable state should not be updated in parallel with analysis!
+
   Initializer& add_initializer(DexMethod* initialize_method, DexMethod* attr);
   Initializer& add_initializer(DexMethod* initialize_method, DexField* attr);
   Initializer& add_initializer(DexMethod* initialize_method,

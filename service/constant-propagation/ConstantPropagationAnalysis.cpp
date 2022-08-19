@@ -896,7 +896,10 @@ bool ImmutableAttributeAnalyzer::analyze_iget(
   if (!field) {
     field = static_cast<DexField*>(field_ref);
   }
-  if (!state->attribute_fields.count(field)) {
+
+  // Immutable state should not be updated in parallel with analysis.
+
+  if (!state->attribute_fields.count_unsafe(field)) {
     return false;
   }
   auto this_domain = env->get(insn->src(0));
@@ -934,9 +937,12 @@ bool ImmutableAttributeAnalyzer::analyze_invoke(
     // Example: Integer.valueOf(I) is an external method.
     method = static_cast<DexMethod*>(method_ref);
   }
-  if (state->method_initializers.count(method)) {
+
+  // Immutable state should not be updated in parallel with analysis.
+
+  if (state->method_initializers.count_unsafe(method)) {
     return analyze_method_initialization(state, insn, env, method);
-  } else if (state->attribute_methods.count(method)) {
+  } else if (state->attribute_methods.count_unsafe(method)) {
     return analyze_method_attr(state, insn, env, method);
   }
   return false;
