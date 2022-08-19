@@ -42,6 +42,11 @@ class Transform final {
     Config() {}
   };
 
+  struct RuntimeCache {
+    const std::unordered_set<DexMethodRef*> kotlin_null_check_assertions{
+        kotlin_nullcheck_wrapper::get_kotlin_null_assertions()};
+  };
+
   struct Stats {
     size_t branches_removed{0};
     size_t branches_forwarded{0};
@@ -69,10 +74,12 @@ class Transform final {
     void log_metrics(ScopedMetrics& sm, bool with_scope = true) const;
   };
 
-  explicit Transform(Config config = Config())
+  explicit Transform(Config config, const RuntimeCache* runtime_cache = nullptr)
       : m_config(config),
-        m_kotlin_null_check_assertions(
-            kotlin_nullcheck_wrapper::get_kotlin_null_assertions()) {}
+        m_runtime_cache_storage(runtime_cache == nullptr ? new RuntimeCache()
+                                                         : nullptr),
+        m_runtime_cache(runtime_cache == nullptr ? *m_runtime_cache_storage
+                                                 : *runtime_cache) {}
 
   // Apply all available transformations on editable cfg
   // May run cfg.calculate_exit_block as a side-effect.
@@ -170,7 +177,9 @@ class Transform final {
   std::vector<cfg::Edge*> m_edge_deletes;
   std::vector<std::tuple<cfg::Block*, cfg::Block*, cfg::EdgeType>> m_edge_adds;
   Stats m_stats;
-  const std::unordered_set<DexMethodRef*> m_kotlin_null_check_assertions;
+
+  std::unique_ptr<RuntimeCache> m_runtime_cache_storage;
+  const RuntimeCache& m_runtime_cache;
 };
 
 /*

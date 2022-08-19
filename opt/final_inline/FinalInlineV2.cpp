@@ -439,6 +439,8 @@ cp::WholeProgramState analyze_and_simplify_clinits(
       call_graph::Graph(ClassInitStrategy(*method_override_graph, scope));
   StaticFieldReadAnalysis analysis(graph, allowed_opaque_callee_names);
 
+  cp::Transform::RuntimeCache runtime_cache{};
+
   for (DexClass* cls : reverse_tsort_by_clinit_deps(scope)) {
     ConstantEnvironment env;
     cp::set_encoded_values(cls, &env);
@@ -471,7 +473,7 @@ cp::WholeProgramState analyze_and_simplify_clinits(
         // remove those sputs.
         cp::Transform::Config transform_config;
         transform_config.class_under_init = cls->get_type();
-        cp::Transform(transform_config)
+        cp::Transform(transform_config, &runtime_cache)
             .legacy_apply_constants_and_prune_unreachable(
                 intra_cp, wps, *cfg, xstores, cls->get_type());
         // Delete the instructions rendered dead by the removal of those sputs.

@@ -16,8 +16,10 @@
 
 namespace constant_propagation {
 
-Transform::Stats ConstantPropagation::run(DexMethod* method,
-                                          XStoreRefs* xstores) {
+Transform::Stats ConstantPropagation::run(
+    DexMethod* method,
+    XStoreRefs* xstores,
+    const Transform::RuntimeCache& runtime_cache) {
   if (method->get_code() == nullptr) {
     return Transform::Stats();
   }
@@ -31,7 +33,7 @@ Transform::Stats ConstantPropagation::run(DexMethod* method,
     intraprocedural::FixpointIterator fp_iter(*cfg,
                                               ConstantPrimitiveAnalyzer());
     fp_iter.run({});
-    constant_propagation::Transform tf(m_config.transform);
+    constant_propagation::Transform tf(m_config.transform, &runtime_cache);
     tf.apply(fp_iter, WholeProgramState(), code->cfg(), xstores,
              is_static(method), method->get_class(), method->get_proto());
     local_stats = tf.get_stats();
@@ -39,9 +41,16 @@ Transform::Stats ConstantPropagation::run(DexMethod* method,
   return local_stats;
 }
 
+Transform::Stats ConstantPropagation::run(DexMethod* method,
+                                          XStoreRefs* xstores) {
+  return run(method, xstores, Transform::RuntimeCache());
+}
+
 Transform::Stats ConstantPropagation::run(const Scope& scope,
                                           XStoreRefs* xstores) {
+  Transform::RuntimeCache runtime_cache{};
   return walk::parallel::methods<Transform::Stats>(
-      scope, [&](DexMethod* method) { return run(method, xstores); });
+      scope,
+      [&](DexMethod* method) { return run(method, xstores, runtime_cache); });
 }
 } // namespace constant_propagation

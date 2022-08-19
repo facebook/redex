@@ -219,6 +219,7 @@ void PassImpl::optimize(
     const XStoreRefs& xstores,
     const FixpointIterator& fp_iter,
     const ImmutableAttributeAnalyzerState* immut_analyzer_state) {
+  Transform::RuntimeCache runtime_cache{};
   m_transform_stats =
       walk::parallel::methods<Transform::Stats>(scope, [&](DexMethod* method) {
         if (method->get_code() == nullptr ||
@@ -238,7 +239,7 @@ void PassImpl::optimize(
               method::is_clinit(method) ? method->get_class() : nullptr;
           config.getter_methods_for_immutable_fields =
               &immut_analyzer_state->attribute_methods;
-          Transform tf(config);
+          Transform tf(config, &runtime_cache);
           tf.legacy_apply_constants_and_prune_unreachable(
               *intra_cp,
               fp_iter.get_whole_program_state(),

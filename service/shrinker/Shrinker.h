@@ -150,6 +150,7 @@ class Shrinker {
   std::unordered_set<const DexField*> m_finalish_fields;
 
   constant_propagation::ImmutableAttributeAnalyzerState m_immut_analyzer_state;
+  constant_propagation::Transform::RuntimeCache m_runtime_cache;
 
   // THe mutex protects all other mutable (stats) fields.
   std::mutex m_stats_mutex;

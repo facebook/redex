@@ -154,7 +154,7 @@ constant_propagation::Transform::Stats Shrinker::constant_propagation(
           constant_propagation::ApiLevelAnalyzerState::get(m_min_sdk), nullptr),
       /* imprecise_switches */ true);
   fp_iter.run(initial_env);
-  constant_propagation::Transform tf(config);
+  constant_propagation::Transform tf(config, &m_runtime_cache);
   tf.apply(fp_iter, constant_propagation::WholeProgramState(), code->cfg(),
            &m_xstores, is_static, declaring_type, proto);
   return tf.get_stats();
