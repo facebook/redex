@@ -143,9 +143,23 @@ class ReachableObjects {
 
   void record_reachability(const DexMethodRef* member, const DexClass* cls);
 
-  ConcurrentSet<const DexClass*> m_marked_classes;
-  ConcurrentSet<const DexFieldRef*> m_marked_fields;
-  ConcurrentSet<const DexMethodRef*> m_marked_methods;
+  static constexpr size_t MARK_SLOTS = 127;
+
+  ConcurrentSet<const DexClass*,
+                std::hash<const DexClass*>,
+                std::equal_to<const DexClass*>,
+                MARK_SLOTS>
+      m_marked_classes;
+  ConcurrentSet<const DexFieldRef*,
+                std::hash<const DexFieldRef*>,
+                std::equal_to<const DexFieldRef*>,
+                MARK_SLOTS>
+      m_marked_fields;
+  ConcurrentSet<const DexMethodRef*,
+                std::hash<const DexMethodRef*>,
+                std::equal_to<const DexMethodRef*>,
+                MARK_SLOTS>
+      m_marked_methods;
   ReachableObjectGraph m_retainers_of;
 
   friend class RootSetMarker;
