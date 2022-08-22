@@ -709,20 +709,32 @@ void reject_unsafe_enums(const std::vector<DexClass*>& classes,
       return;
     }
 
-    if (!can_rename(method)) {
+    auto reject_proto_types = [&](DexMethod* method) {
       std::vector<DexType*> types;
       method->get_proto()->gather_types(types);
       for (auto type : types) {
         auto elem_type =
             const_cast<DexType*>(type::get_element_type_if_array(type));
         if (candidate_enums->count_unsafe(elem_type)) {
+          TRACE(ENUM, 5,
+                "Rejecting %s due to !can_rename or usage from annotation",
+                SHOW(elem_type));
           rejected_enums.insert(elem_type);
         }
       }
+    };
+
+    if (!can_rename(method)) {
+      reject_proto_types(method);
       if (!is_static(method) &&
           candidate_enums->count_unsafe(method->get_class())) {
         rejected_enums.insert(method->get_class());
       }
+    }
+
+    auto method_cls = type_class(method->get_class());
+    if (method_cls != nullptr && is_annotation(method_cls)) {
+      reject_proto_types(method);
     }
 
     if (!need_analyze(method, *candidate_enums, rejected_enums)) {
