@@ -25,7 +25,7 @@ namespace {
 
 using namespace std::chrono_literals;
 
-pid_t spawn(const std::string& cmd) {
+int spawn(const std::string& cmd) {
 #ifdef _POSIX_VERSION
   auto child = fork();
   always_assert_log(child != -1, "Failed to fork");
@@ -47,7 +47,7 @@ pid_t spawn(const std::string& cmd) {
 /*
  * Appends the PID of the current process to :cmd and invokes it.
  */
-pid_t spawn_profiler(const std::string& cmd) {
+int spawn_profiler(const std::string& cmd) {
 #ifdef _POSIX_VERSION
   auto parent = getpid();
   std::ostringstream ss;
@@ -60,7 +60,7 @@ pid_t spawn_profiler(const std::string& cmd) {
 #endif
 }
 
-pid_t kill_and_wait(pid_t pid, int sig) {
+int kill_and_wait(int pid, int sig) {
 #ifdef _POSIX_VERSION
   kill(pid, sig);
   return waitpid(pid, nullptr, 0);
@@ -78,7 +78,7 @@ void run_and_wait(const std::string& cmd) {
   }
 
   int status;
-  pid_t wpid = waitpid(child, &status, 0);
+  auto wpid = waitpid(child, &status, 0);
   always_assert_log(wpid != -1, "Failed to waitpid: %s", strerror(errno));
   if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
     std::cerr << "Failed cmd " << cmd << std::endl;

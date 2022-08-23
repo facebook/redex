@@ -61,7 +61,7 @@ class ScopedCommandProfiling final {
   }
 
  private:
-  pid_t m_profiler{-1};
+  int m_profiler{-1};
   // Run this shutdown command to end the profiling, instead of SIGINT
   boost::optional<std::string> m_shutdown_cmd;
   // After the profiling process has finished, run this command.
