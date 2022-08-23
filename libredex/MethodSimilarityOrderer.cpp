@@ -23,11 +23,6 @@ struct Score {
   int32_t value() const { return 2 * shared - missing - 2 * additional; }
 };
 
-struct Chunk {
-  uint32_t start;
-  uint32_t end;
-};
-
 template <typename T>
 struct CountingFakeOutputIterator {
   uint32_t& counter;
@@ -45,60 +40,31 @@ void MethodSimilarityOrderer::gather_code_hash_ids(
     const std::vector<DexInstruction*>& instructions,
     std::vector<CodeHashId>& code_hash_ids) {
 
-  std::vector<Chunk> chunks;
-  uint32_t start{0};
-
-  // First, we partition the instructions into chunks, where each chunk ends
-  // when an instruction can change control-flow.
-  for (uint32_t i = 0; i < (uint32_t)instructions.size(); i++) {
-    auto op = instructions.at(i)->opcode();
-    if (dex_opcode::is_branch(op) || dex_opcode::is_return(op) ||
-        op == DOPCODE_THROW) {
-      chunks.push_back({start, i + 1});
-      start = i;
-    }
-  }
-
   std::unordered_set<StableHash> stable_hashes;
 
-  // For any instruction-sequence, we can compute a (stable) hash representing
-  // it
-  auto hash_sub_chunk = [&](const Chunk& sub_chunk) {
-    always_assert(sub_chunk.start < sub_chunk.end);
-    StableHash code_hash{0};
-    for (uint32_t i = sub_chunk.start; i < sub_chunk.end; i++) {
-      auto insn = instructions.at(i);
-      auto op = insn->opcode();
-      code_hash = code_hash * 23 + op;
-      if (insn->has_literal()) {
-        code_hash = code_hash * 7 + insn->get_literal();
-      }
-      if (insn->has_range()) {
-        code_hash =
-            (code_hash * 11 + insn->range_base()) * 11 + insn->range_size();
-      }
-      if (insn->has_dest()) {
-        code_hash = code_hash * 13 + insn->dest();
-      }
-      for (unsigned j = 0; j < insn->srcs_size(); j++) {
-        code_hash = code_hash * 17 + insn->src(j);
-      }
+  // For any instruction,we can compute a (stable) hash representing
+  // it.
+  for (size_t i = 0; i < instructions.size(); i++) {
+    uint64_t code_hash{0};
+    auto insn = instructions.at(i);
+    auto op = insn->opcode();
+    code_hash = code_hash * 23 + op;
+    if (insn->has_range()) {
+      code_hash =
+          (code_hash * 11 + insn->range_base()) * 11 + insn->range_size();
+    }
+    if (insn->has_dest()) {
+      code_hash = code_hash * 13 + insn->dest();
+    }
+    for (unsigned j = 0; j < insn->srcs_size(); j++) {
+      code_hash = code_hash * 17 + insn->src(j);
+    }
+    if (insn->has_method()) {
+      auto callee = ((DexOpcodeMethod*)insn)->get_method();
+      stable_hashes.insert(std::hash<std::string>{}(show(callee)));
     }
     stable_hashes.insert(code_hash);
   };
-
-  // We'll further partition chunks into smaller pieces, and then hash those
-  // sub-chunks
-  for (auto& chunk : chunks) {
-    constexpr uint32_t chunk_size = 1;
-    if (chunk.end - chunk.start < chunk_size) {
-      hash_sub_chunk(chunk);
-      continue;
-    }
-    for (uint32_t i = chunk.start; i <= chunk.end - chunk_size; i++) {
-      hash_sub_chunk({i, i + chunk_size});
-    }
-  }
 
   // Initialize the vector for code hash.
   // Publish code hash ids from stable hashes.
