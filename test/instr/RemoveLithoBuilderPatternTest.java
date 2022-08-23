@@ -27,7 +27,7 @@ class LithoComponent extends SpecGeneratedComponent implements Cloneable {
   int prop1;
 
   private LithoComponent(ComponentContext context) {
-
+    super("LithoComponent");
   }
 
   public static Builder create(ComponentContext context) {
@@ -91,7 +91,7 @@ class LithoComponentWithStaticFields extends SpecGeneratedComponent implements C
   int prop1;
 
   private LithoComponentWithStaticFields(ComponentContext context) {
-
+    super("LithoComponentWithStaticFields");
   }
 
   public static Builder create(ComponentContext context) {
@@ -156,7 +156,7 @@ class TestingComponentA extends SpecGeneratedComponent implements Cloneable {
   int prop1;
 
   private TestingComponentA(ComponentContext context) {
-
+    super("TestingComponentA");
   }
 
   public static Builder create(ComponentContext context) {
@@ -220,7 +220,7 @@ class TestingComponentB extends SpecGeneratedComponent implements Cloneable {
   int prop1;
 
   private TestingComponentB(ComponentContext context) {
-
+    super("TestingComponentB");
   }
 
   public static Builder create(ComponentContext context) {
@@ -284,7 +284,7 @@ class TestingComponentC extends SpecGeneratedComponent implements Cloneable {
   int prop1;
 
   private TestingComponentC(ComponentContext context) {
-
+    super("TestingComponentC");
   }
 
   public static Builder create(ComponentContext context) {
@@ -348,7 +348,7 @@ class TestingComponentD extends SpecGeneratedComponent implements Cloneable {
   int prop1;
 
   private TestingComponentD(ComponentContext context) {
-
+    super("TestingComponentD");
   }
 
   public static Builder create(ComponentContext context) {
