@@ -5,18 +5,35 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+use std::collections::hash_set::Iter;
 use std::collections::HashSet;
 use std::hash::Hash;
 
 use super::abstract_domain::AbstractDomain;
 
 pub trait SetOps: Clone {
+    type Element;
+    type ElementIter<'a>: Iterator<Item = &'a Self::Element>
+    where
+        Self: 'a;
+
     fn is_subset(&self, other: &Self) -> bool;
+
     fn intersection_with(&mut self, other: &Self);
+
     fn union_with(&mut self, other: Self);
+
+    fn add_element(&mut self, e: Self::Element);
+
+    fn remove_element(&mut self, e: &Self::Element);
+
+    fn elements(&self) -> Self::ElementIter<'_>;
 }
 
 impl<T: Eq + Hash + Clone> SetOps for HashSet<T> {
+    type Element = T;
+    type ElementIter<'a> = Iter<'a, T> where Self: 'a;
+
     fn is_subset(&self, other: &Self) -> bool {
         self.is_subset(other)
     }
@@ -30,6 +47,18 @@ impl<T: Eq + Hash + Clone> SetOps for HashSet<T> {
             self.insert(elem);
         })
     }
+
+    fn add_element(&mut self, e: T) {
+        self.insert(e);
+    }
+
+    fn remove_element(&mut self, e: &T) {
+        self.remove(e);
+    }
+
+    fn elements(&self) -> Self::ElementIter<'_> {
+        self.iter()
+    }
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -40,8 +69,50 @@ pub enum PowersetLattice<S: SetOps> {
 }
 
 impl<S: SetOps> PowersetLattice<S> {
-    fn value_from_set(set: S) -> Self {
+    pub fn value_from_set(set: S) -> Self {
         PowersetLattice::<S>::Value(set)
+    }
+
+    pub fn add_element(&mut self, e: S::Element) {
+        if let Self::Value(powerset) = self {
+            powerset.add_element(e);
+        }
+    }
+
+    pub fn add_elements<I: IntoIterator<Item = S::Element>>(&mut self, elements: I) {
+        if let Self::Value(powerset) = self {
+            for e in elements {
+                powerset.add_element(e);
+            }
+        }
+    }
+
+    pub fn remove_element(&mut self, e: &S::Element) {
+        if let Self::Value(powerset) = self {
+            powerset.remove_element(e);
+        }
+    }
+
+    pub fn remove_elements<'a, I: IntoIterator<Item = &'a S::Element>>(&mut self, elements: I)
+    where
+        S::Element: 'a,
+    {
+        if let Self::Value(powerset) = self {
+            for e in elements {
+                powerset.remove_element(e);
+            }
+        }
+    }
+
+    pub fn elements(&self) -> impl Iterator<Item = &'_ S::Element> {
+        // NOTE: this is a workaround to make an empty iter, since we don't
+        // know the actual type of S::ElementIter, we cannot create an empty
+        // iter with the same type.
+        let res = match self {
+            Self::Value(powerset) => Some(powerset.elements()),
+            _ => None,
+        };
+        res.into_iter().flatten()
     }
 }
 
@@ -142,6 +213,13 @@ mod tests {
 
         assert!(!value1.leq(&value2));
         assert!(!value2.leq(&value1));
+
+        let mut elements: Vec<i64> = value1.elements().copied().collect();
+        elements.sort();
+        assert_eq!(elements, vec![1, 2, 3, 4, 5]);
+        let mut elements: Vec<i64> = top.elements().copied().collect();
+        elements.sort();
+        assert_eq!(elements, vec![]);
 
         let joined = value1.clone().join(value2.clone());
         let expected_joined =
