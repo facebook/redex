@@ -5,8 +5,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::iter::FromIterator;
 
 use smallvec::SmallVec;
 use sparta::graph::Graph;
@@ -21,8 +24,10 @@ pub struct Edge(NodeId, NodeId);
 // A naive graph for testing.
 #[derive(Default)]
 pub struct SimpleGraph {
-    edges: HashMap<NodeId, HashSet<EdgeId>>,
-    pred_edges: HashMap<NodeId, HashSet<EdgeId>>,
+    // We must use BTreeSet here to make the test consistent (we assumed
+    // the order of successor edges in WPO tests.)
+    edges: HashMap<NodeId, BTreeSet<EdgeId>>,
+    pred_edges: BTreeMap<NodeId, BTreeSet<EdgeId>>,
     edge_interner: Vec<Edge>,
     enter: NodeId,
     exit: NodeId,
@@ -83,6 +88,17 @@ impl Graph for SimpleGraph {
 
     fn target(&self, e: Self::EdgeId) -> Self::NodeId {
         self.edge_interner[e as usize].1
+    }
+
+    fn size(&self) -> usize {
+        // Ideally the graph structure should maintain some stats of nodes and edges,
+        // but for this testing code let's keep it simple. Note that we only provide
+        // function `add_edge` to record edges, we don't keep information of nodes
+        // separately, so this function will not give correct answer for graph with only
+        // nodes but not edges.
+        let mut nodes: HashSet<NodeId> = HashSet::from_iter(self.edges.keys().copied());
+        nodes.extend(self.pred_edges.keys().copied());
+        nodes.len()
     }
 }
 

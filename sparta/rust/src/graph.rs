@@ -44,6 +44,9 @@ pub trait Graph<const S: usize = DEFAULT_GRAPH_SUCCS_NUM> {
 
     /// The target node of e.
     fn target(&self, e: Self::EdgeId) -> Self::NodeId;
+
+    /// The number of all nodes.
+    fn size(&self) -> usize;
 }
 
 /// A limited view of the graph that allows retrieving successor nodes of a given node.
