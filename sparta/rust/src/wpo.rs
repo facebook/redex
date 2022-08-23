@@ -10,6 +10,8 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
 
+use crate::graph::SuccessorNodes;
+
 type WpoIdx = u32;
 
 pub struct WpoNodeData<NodeId: Copy + Hash + Ord> {
@@ -135,9 +137,9 @@ impl<NodeId> WeakPartialOrdering<NodeId>
 where
     NodeId: Copy + Hash + Ord + Debug,
 {
-    pub fn new<F>(root: NodeId, successors_fn: F) -> Self
+    pub fn new<SN>(root: NodeId, successors_nodes: &SN) -> Self
     where
-        F: Fn(NodeId) -> Vec<NodeId>,
+        SN: SuccessorNodes<NodeId = NodeId>,
     {
         let mut wpo = Self {
             nodes: Vec::new(),
@@ -145,7 +147,7 @@ where
             post_dfn: HashMap::new(),
         };
 
-        if successors_fn(root).is_empty() {
+        if successors_nodes.get_succ_nodes(root).is_empty() {
             wpo.nodes.push(WpoNode::plain(root, 1));
             wpo.toplevel.push(0);
             wpo.post_dfn.insert(root, 1);
@@ -153,7 +155,7 @@ where
         }
 
         Self::build(
-            successors_fn,
+            successors_nodes,
             &mut wpo.nodes,
             &mut wpo.toplevel,
             &mut wpo.post_dfn,
@@ -162,15 +164,14 @@ where
         wpo
     }
 
-    fn build<F>(
-        successors: F,
+    fn build<SN>(
+        successors_nodes: &SN,
         wpo_space: &mut Vec<WpoNode<NodeId>>,
         toplevel: &mut Vec<WpoIdx>,
         post_dfn: &mut HashMap<NodeId, u32>,
     ) where
-        F: Fn(NodeId) -> Vec<NodeId>,
+        SN: SuccessorNodes<NodeId = NodeId>,
     {
-        todo!("Construct WPO.");
     }
 
     pub fn size(&self) -> usize {

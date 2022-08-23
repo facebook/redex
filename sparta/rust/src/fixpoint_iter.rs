@@ -159,7 +159,7 @@ where
             entry_state.join_with(context.get_init_value().clone());
         }
 
-        for &e in graph.predecessors(n) {
+        for e in graph.predecessors(n) {
             let d = Self::get_state_at_or_bottom(exit_states, graph.source(e));
             entry_state.join_with(transformer.analyze_edge(e, &d));
         }
