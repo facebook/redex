@@ -43,3 +43,17 @@
   FOR_EACH(Boolean_TYPE, "Ljava/lang/Boolean;.TYPE:Ljava/lang/Class;")     \
   FOR_EACH(Float_TYPE, "Ljava/lang/Float;.TYPE:Ljava/lang/Class;")         \
   FOR_EACH(Double_TYPE, "Ljava/lang/Double;.TYPE:Ljava/lang/Class;")
+
+#define WELL_KNOWN_METHODS                                                    \
+  FOR_EACH(java_lang_Object_ctor, "Ljava/lang/Object;.<init>:()V")            \
+  FOR_EACH(java_lang_Enum_ctor,                                               \
+           "Ljava/lang/Enum;.<init>:(Ljava/lang/String;I)V")                  \
+  FOR_EACH(java_lang_Enum_ordinal, "Ljava/lang/Enum;.ordinal:()I")            \
+  FOR_EACH(java_lang_Enum_name, "Ljava/lang/Enum;.name:()Ljava/lang/String;") \
+  FOR_EACH(java_lang_Enum_equals,                                             \
+           "Ljava/lang/Enum;.equals:(Ljava/lang/Object;)Z")                   \
+  FOR_EACH(java_lang_Integer_valueOf,                                         \
+           "Ljava/lang/Integer;.valueOf:(I)Ljava/lang/Integer;")              \
+  FOR_EACH(java_lang_Integer_intValue, "Ljava/lang/Integer;.intValue:()I")    \
+  FOR_EACH(java_lang_Throwable_fillInStackTrace,                              \
+           "Ljava/lang/Throwable;.fillInStackTrace:()Ljava/lang/Throwable;")

@@ -13,6 +13,7 @@
 
 class DexType;
 class DexFieldRef;
+class DexMethod;
 
 #define STORE_TYPE(func_name, _)         \
  private:                                \
@@ -28,6 +29,13 @@ class DexFieldRef;
  public:                                      \
   DexFieldRef* field_##func_name() const { return m_field_##func_name; }
 
+#define STORE_METHOD(func_name, _)           \
+ private:                                    \
+  DexMethod* m_method_##func_name = nullptr; \
+                                             \
+ public:                                     \
+  DexMethod* method_##func_name() const { return m_method_##func_name; }
+
 // The class is designed to cache frequently used pointers while invalidate them
 // when RedexContext lifetime is over.
 class FrequentlyUsedPointers {
@@ -42,8 +50,13 @@ class FrequentlyUsedPointers {
   PRIMITIVE_PSEUDO_TYPE_FIELDS
 #undef FOR_EACH
 
+#define FOR_EACH STORE_METHOD
+  WELL_KNOWN_METHODS
+#undef FOR_EACH
+
   std::unordered_set<const DexType*> m_well_known_types;
 };
 
 #undef STORE_TYPE
 #undef STORE_FIELDREF
+#undef STORE_METHOD

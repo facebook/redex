@@ -22,4 +22,11 @@ void FrequentlyUsedPointers::load() {
 #define FOR_EACH LOAD_FREQUENTLY_USED_FIELD
   PRIMITIVE_PSEUDO_TYPE_FIELDS
 #undef FOR_EACH
+
+#define LOAD_FREQUENTLY_USED_METHOD(func_name, java_name) \
+  m_method_##func_name =                                  \
+      static_cast<DexMethod*>(DexMethod::make_method(java_name));
+#define FOR_EACH LOAD_FREQUENTLY_USED_METHOD
+  WELL_KNOWN_METHODS
+#undef FOR_EACH
 }
