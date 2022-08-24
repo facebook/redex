@@ -13,7 +13,6 @@ use std::iter::FromIterator;
 
 use smallvec::SmallVec;
 use sparta::graph::Graph;
-use sparta::graph::SuccessorNodes;
 use sparta::graph::DEFAULT_GRAPH_SUCCS_NUM;
 
 type NodeId = u32;
@@ -99,16 +98,5 @@ impl Graph for SimpleGraph {
         let mut nodes: HashSet<NodeId> = HashSet::from_iter(self.edges.keys().copied());
         nodes.extend(self.pred_edges.keys().copied());
         nodes.len()
-    }
-}
-
-impl SuccessorNodes for SimpleGraph {
-    type NodeId = NodeId;
-
-    fn get_succ_nodes(&self, n: NodeId) -> SmallVec<[Self::NodeId; DEFAULT_GRAPH_SUCCS_NUM]> {
-        self.successors(n)
-            .iter()
-            .map(move |&edge_idx| self.edge_interner[edge_idx as usize].1)
-            .collect()
     }
 }
