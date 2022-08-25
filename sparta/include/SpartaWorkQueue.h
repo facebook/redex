@@ -305,6 +305,7 @@ void SpartaWorkQueue<Input, Executor>::run_all() {
         std::unique_lock<std::mutex> lock(exception_mutex);
         if (exception) {
           // An exception was already caught.
+          state->set_running(false);
           return;
         }
         exception = std::current_exception();
