@@ -123,7 +123,7 @@ MultiMethodInliner::MultiMethodInliner(
     }
     for (const auto& caller_insns : callee_callers.second.caller_insns) {
       for (auto insn : caller_insns.second) {
-        caller_virtual_callee[caller_insns.first][insn] = callee;
+        m_caller_virtual_callees[caller_insns.first].insns[insn] = callee;
       }
       auto& iinc = callee_callers.second.inlined_invokes_need_cast;
       m_inlined_invokes_need_cast.insert(iinc.begin(), iinc.end());
@@ -162,7 +162,7 @@ MultiMethodInliner::MultiMethodInliner(
         auto callee =
             m_concurrent_resolver(insn->get_method(), opcode_to_search(insn));
         if (callee == nullptr || !callee->is_concrete() ||
-            !candidates.count(callee) || true_virtual_callers.count(callee)) {
+            !candidates.count(callee)) {
           return;
         }
         if (x_dex && x_dex->cross_dex_ref(caller, callee)) {
@@ -197,7 +197,10 @@ MultiMethodInliner::MultiMethodInliner(
         continue;
       }
       ++callee_caller[callee][caller];
-      ++caller_callee[caller][callee];
+      if (++caller_callee[caller][callee] == 1) {
+        // We added a new callee that is only valid via m_caller_virtual_callees
+        m_caller_virtual_callees[caller].exclusive_callees.insert(callee);
+      }
     }
   }
 }
@@ -337,13 +340,16 @@ DexMethod* MultiMethodInliner::get_callee(DexMethod* caller,
   }
   auto callee =
       m_concurrent_resolver(insn->get_method(), opcode_to_search(insn));
-  auto it = caller_virtual_callee.find(caller);
-  if (it == caller_virtual_callee.end()) {
+  auto it = m_caller_virtual_callees.find(caller);
+  if (it == m_caller_virtual_callees.end()) {
     return callee;
   }
-  auto it2 = it->second.find(insn);
-  if (it2 == it->second.end()) {
-    return callee;
+  const auto& cvc = it->second;
+  auto it2 = cvc.insns.find(insn);
+  if (it2 == cvc.insns.end()) {
+    // We couldn't find a matching true virtual invocation; only allow callee if
+    // it's not exclusive to matching true virtuals.
+    return cvc.exclusive_callees.count(callee) ? nullptr : callee;
   }
   return it2->second;
 }
