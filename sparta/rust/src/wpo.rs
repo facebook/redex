@@ -109,8 +109,8 @@ where
         &self.data.predessors
     }
 
-    pub fn get_num_preds(&self) -> usize {
-        self.get_predecessors().len()
+    pub fn get_num_preds(&self) -> u32 {
+        self.get_predecessors().len() as u32
     }
 
     pub fn get_num_outer_preds(&self) -> &HashMap<WpoIdx, u32> {
@@ -198,7 +198,7 @@ where
         self.nodes[idx as usize].get_predecessors()
     }
 
-    pub fn get_num_preds(&self, idx: WpoIdx) -> usize {
+    pub fn get_num_preds(&self, idx: WpoIdx) -> u32 {
         self.nodes[idx as usize].get_num_preds()
     }
 
