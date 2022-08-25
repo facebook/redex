@@ -712,9 +712,6 @@ void run_inliner(DexStoresVector& stores,
   if (inliner_config.virtual_inline && inliner_config.true_virtual_inline) {
     gather_true_virtual_methods(*method_override_graph, scope,
                                 &true_virtual_callers);
-    for (auto& p : true_virtual_callers) {
-      candidates.insert(p.first);
-    }
   }
   // keep a map from refs to defs or nullptr if no method was found
   ConcurrentMethodRefCache concurrent_resolved_refs;

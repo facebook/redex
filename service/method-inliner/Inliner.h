@@ -488,9 +488,16 @@ class MultiMethodInliner {
 
   MethodToMethodOccurrences caller_callee;
 
-  std::unordered_map<const DexMethod*,
-                     std::unordered_map<IRInstruction*, DexMethod*>>
-      caller_virtual_callee;
+  // Auxiliary data for a caller that contains true virtual callees
+  struct CallerVirtualCallees {
+    // Mapping of instructions to representative
+    std::unordered_map<IRInstruction*, DexMethod*> insns;
+    // Set of callees which must only be inlined via above insns
+    std::unordered_set<DexMethod*> exclusive_callees;
+  };
+  // Mapping from callers to auxiliary data for contained true virtual callees
+  std::unordered_map<const DexMethod*, CallerVirtualCallees>
+      m_caller_virtual_callees;
 
   std::unordered_map<IRInstruction*, DexType*> m_inlined_invokes_need_cast;
 
