@@ -82,17 +82,17 @@ class DexStore {
                         boost::optional<size_t> dex_id);
 };
 
-class DexStoreClassesIterator
-    : public std::iterator<std::input_iterator_tag, DexClasses> {
-
+class DexStoreClassesIterator {
   using classes_iterator = std::vector<DexClasses>::iterator;
   using store_iterator = std::vector<DexStore>::iterator;
 
-  std::vector<DexStore>& m_stores;
-  store_iterator m_current_store;
-  classes_iterator m_current_classes;
-
  public:
+  using iterator_category = std::input_iterator_tag;
+  using difference_type = std::ptrdiff_t;
+  using value_type = DexClasses;
+  using pointer = value_type*;
+  using reference = value_type&;
+
   explicit DexStoreClassesIterator(std::vector<DexStore>& stores)
       : m_stores(stores),
         m_current_store(stores.begin()),
@@ -139,6 +139,10 @@ class DexStoreClassesIterator
   DexClasses& operator*() { return *m_current_classes; }
 
  private:
+  std::vector<DexStore>& m_stores;
+  store_iterator m_current_store;
+  classes_iterator m_current_classes;
+
   void advance_end_classes() {
     while (m_current_store != m_stores.end() &&
            m_current_classes != m_stores.back().get_dexen().end() &&
