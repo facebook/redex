@@ -83,7 +83,7 @@ fn test_wpo_example_from_wto_paper() {
         for &w in wpo.get_successors(v).iter() {
             let c = count.entry(w).or_default();
             *c += 1;
-            if *c as usize == wpo.get_num_preds(w) {
+            if *c == wpo.get_num_preds(w) {
                 worklist.push(w);
             }
         }
@@ -167,7 +167,7 @@ fn test_wpo_example_from_wpo_paper() {
         for &w in wpo.get_successors(v) {
             let c = count.entry(w).or_default();
             *c += 1;
-            if *c as usize == wpo.get_num_preds(w) {
+            if *c == wpo.get_num_preds(w) {
                 worklist.push(w);
             }
         }
@@ -222,7 +222,7 @@ fn test_wpo_single_node() {
         for &w in wpo.get_successors(v) {
             let c = count.entry(w).or_default();
             *c += 1;
-            if *c as usize == wpo.get_num_preds(w) {
+            if *c == wpo.get_num_preds(w) {
                 worklist.push(w);
             }
         }
