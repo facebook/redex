@@ -200,8 +200,10 @@ MultiMethodInliner::MultiMethodInliner(
         m_x_dex_callees.insert(callee);
         continue;
       }
-      ++callee_caller[callee][caller];
-      if (++caller_callee[caller][callee] == 1) {
+      auto count = caller_insns.second.size();
+      always_assert(count > 0);
+      callee_caller[callee][caller] += count;
+      if ((caller_callee[caller][callee] += count) == count) {
         // We added a new callee that is only valid via m_caller_virtual_callees
         m_caller_virtual_callees[caller].exclusive_callees.insert(callee);
       }
