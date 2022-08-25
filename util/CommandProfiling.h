@@ -7,6 +7,7 @@
 
 #include <boost/optional.hpp>
 #include <string>
+#include <unistd.h>
 
 class ScopedCommandProfiling final {
  public:
@@ -61,7 +62,7 @@ class ScopedCommandProfiling final {
   }
 
  private:
-  int m_profiler{-1};
+  pid_t m_profiler{-1};
   // Run this shutdown command to end the profiling, instead of SIGINT
   boost::optional<std::string> m_shutdown_cmd;
   // After the profiling process has finished, run this command.
