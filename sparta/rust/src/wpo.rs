@@ -420,10 +420,11 @@ where
         let mut exit: Vec<u32> = (0..self.next_dfn).collect();
         let mut origin: Vec<Vec<(u32, u32)>> = (0..self.next_dfn)
             .map(|v| {
-                self.non_back_preds.get(&v).map_or_else(
-                    || vec![],
-                    |non_back_preds_v| non_back_preds_v.iter().map(|&p| (p, v)).collect(),
-                )
+                self.non_back_preds
+                    .get(&v)
+                    .map_or_else(std::vec::Vec::new, |non_back_preds_v| {
+                        non_back_preds_v.iter().map(|&p| (p, v)).collect()
+                    })
             })
             .collect();
 
