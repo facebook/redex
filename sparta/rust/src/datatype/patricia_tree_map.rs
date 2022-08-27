@@ -62,6 +62,12 @@ impl<K: Into<BitVec>, V: Sized> PatriciaTreeMap<K, V> {
     }
 }
 
+impl<K: Into<BitVec>, V: Sized> Default for PatriciaTreeMap<K, V> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct PatriciaTreeMapIterator<'a, K: Into<BitVec>, V: Sized> {
     iter_impl: PatriciaTreePostOrderIterator<'a, V>,
     _key_type_phantom: PhantomData<K>,

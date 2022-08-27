@@ -5,74 +5,41 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-use std::collections::hash_set::Iter;
-use std::collections::HashSet;
-use std::hash::Hash;
+use std::iter::FromIterator;
 
 use super::abstract_domain::AbstractDomain;
 
-pub trait SetOps: Clone {
+pub trait SetAbstractDomainOps: Clone {
+    fn is_subset(&self, other: &Self) -> bool;
+    fn intersection_with(&mut self, other: &Self);
+    fn union_with(&mut self, other: Self);
+}
+
+pub trait SetElementOps {
     type Element;
     type ElementIter<'a>: Iterator<Item = &'a Self::Element>
     where
         Self: 'a;
 
-    fn is_subset(&self, other: &Self) -> bool;
-
-    fn intersection_with(&mut self, other: &Self);
-
-    fn union_with(&mut self, other: Self);
-
     fn add_element(&mut self, e: Self::Element);
-
     fn remove_element(&mut self, e: &Self::Element);
-
     fn elements(&self) -> Self::ElementIter<'_>;
 }
 
-impl<T: Eq + Hash + Clone> SetOps for HashSet<T> {
-    type Element = T;
-    type ElementIter<'a> = Iter<'a, T> where Self: 'a;
-
-    fn is_subset(&self, other: &Self) -> bool {
-        self.is_subset(other)
-    }
-
-    fn intersection_with(&mut self, other: &Self) {
-        self.retain(|elem| other.contains(elem));
-    }
-
-    fn union_with(&mut self, other: Self) {
-        other.into_iter().for_each(|elem| {
-            self.insert(elem);
-        })
-    }
-
-    fn add_element(&mut self, e: T) {
-        self.insert(e);
-    }
-
-    fn remove_element(&mut self, e: &T) {
-        self.remove(e);
-    }
-
-    fn elements(&self) -> Self::ElementIter<'_> {
-        self.iter()
-    }
-}
-
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub enum PowersetLattice<S: SetOps> {
+pub enum PowersetLattice<S: SetAbstractDomainOps> {
     Top,
     Value(S),
     Bottom,
 }
 
-impl<S: SetOps> PowersetLattice<S> {
+impl<S: SetAbstractDomainOps> PowersetLattice<S> {
     pub fn value_from_set(set: S) -> Self {
         PowersetLattice::<S>::Value(set)
     }
+}
 
+impl<S: SetAbstractDomainOps + SetElementOps> PowersetLattice<S> {
     pub fn add_element(&mut self, e: S::Element) {
         if let Self::Value(powerset) = self {
             powerset.add_element(e);
@@ -116,27 +83,21 @@ impl<S: SetOps> PowersetLattice<S> {
     }
 }
 
-impl<S: SetOps> AbstractDomain for PowersetLattice<S> {
-    fn bottom() -> PowersetLattice<S> {
-        PowersetLattice::<S>::Bottom
+impl<S: SetAbstractDomainOps> AbstractDomain for PowersetLattice<S> {
+    fn bottom() -> Self {
+        PowersetLattice::Bottom
     }
 
-    fn top() -> PowersetLattice<S> {
-        PowersetLattice::<S>::Top
+    fn top() -> Self {
+        PowersetLattice::Top
     }
 
     fn is_bottom(&self) -> bool {
-        match self {
-            PowersetLattice::Bottom => true,
-            _ => false,
-        }
+        matches!(self, PowersetLattice::Bottom)
     }
 
     fn is_top(&self) -> bool {
-        match self {
-            PowersetLattice::Top => true,
-            _ => false,
-        }
+        matches!(self, PowersetLattice::Top)
     }
 
     fn leq(&self, rhs: &Self) -> bool {
@@ -192,43 +153,11 @@ impl<S: SetOps> AbstractDomain for PowersetLattice<S> {
     }
 }
 
-pub type HashSetAbstractDomain<T> = PowersetLattice<HashSet<T>>;
-
-#[cfg(test)]
-mod tests {
-    use crate::datatype::AbstractDomain;
-    use crate::datatype::HashSetAbstractDomain;
-
-    #[test]
-    fn test_powerset() {
-        type IntPowerset = HashSetAbstractDomain<i64>;
-        let top = IntPowerset::Top;
-        let value1 = IntPowerset::value_from_set(vec![1, 2, 3, 4, 5].into_iter().collect());
-        let value2 = IntPowerset::value_from_set(vec![3, 4, 5, 6, 7].into_iter().collect());
-
-        assert!(top.is_top());
-        assert!(!value1.is_top());
-        assert!(value1.leq(&IntPowerset::Top));
-        assert!(IntPowerset::Bottom.leq(&IntPowerset::Top));
-
-        assert!(!value1.leq(&value2));
-        assert!(!value2.leq(&value1));
-
-        let mut elements: Vec<i64> = value1.elements().copied().collect();
-        elements.sort();
-        assert_eq!(elements, vec![1, 2, 3, 4, 5]);
-        let mut elements: Vec<i64> = top.elements().copied().collect();
-        elements.sort();
-        assert_eq!(elements, vec![]);
-
-        let joined = value1.clone().join(value2.clone());
-        let expected_joined =
-            IntPowerset::value_from_set(vec![1, 2, 3, 4, 5, 6, 7].into_iter().collect());
-
-        assert_eq!(joined, expected_joined);
-
-        let met = value1.meet(value2);
-        let expected_met = IntPowerset::value_from_set(vec![3, 4, 5].into_iter().collect());
-        assert_eq!(met, expected_met);
+impl<S, A> FromIterator<A> for PowersetLattice<S>
+where
+    S: SetAbstractDomainOps + FromIterator<A>,
+{
+    fn from_iter<T: IntoIterator<Item = A>>(iter: T) -> Self {
+        Self::value_from_set(S::from_iter(iter))
     }
 }

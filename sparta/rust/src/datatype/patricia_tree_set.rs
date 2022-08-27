@@ -58,6 +58,12 @@ impl<K: Into<BitVec>> PatriciaTreeSet<K> {
     }
 }
 
+impl<K: Into<BitVec>> Default for PatriciaTreeSet<K> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct PatriciaTreeSetIterator<'a, K: Into<BitVec>> {
     iter_impl: PatriciaTreePostOrderIterator<'a, ()>,
     _key_type_phantom: PhantomData<K>,
