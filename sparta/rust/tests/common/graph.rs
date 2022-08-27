@@ -71,14 +71,14 @@ impl Graph for SimpleGraph {
         self.pred_edges
             .get(&n)
             .map(|v| v.iter().copied().collect())
-            .unwrap_or_else(|| SmallVec::new())
+            .unwrap_or_else(SmallVec::new)
     }
 
     fn successors(&self, n: Self::NodeId) -> SmallVec<[Self::EdgeId; DEFAULT_GRAPH_SUCCS_NUM]> {
         self.edges
             .get(&n)
             .map(|v| v.iter().copied().collect())
-            .unwrap_or_else(|| SmallVec::new())
+            .unwrap_or_else(SmallVec::new)
     }
 
     fn source(&self, e: Self::EdgeId) -> Self::NodeId {

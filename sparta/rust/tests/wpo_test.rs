@@ -99,17 +99,17 @@ fn test_wpo_example_from_wto_paper() {
         if wpo.is_head(v) {
             assert_eq!(wpo.get_node(wpo.get_exit_of_head(v)), wpo.get_node(v));
             if !first {
-                output.push_str(" ");
+                output.push(' ');
             }
-            output.push_str("(");
+            output.push('(');
             output.push_str(&wpo.get_node(v).to_string());
         } else if wpo.is_exit(v) {
             assert_eq!(expected.6, wpo.get_num_outer_preds(v).len());
             assert_eq!(wpo.get_node(wpo.get_head_of_exit(v)), wpo.get_node(v));
-            output.push_str(")");
+            output.push(')');
         } else {
             if !first {
-                output.push_str(" ");
+                output.push(' ');
             }
             output.push_str(&wpo.get_node(v).to_string());
         }
@@ -183,17 +183,17 @@ fn test_wpo_example_from_wpo_paper() {
         if wpo.is_head(v) {
             assert_eq!(wpo.get_node(wpo.get_exit_of_head(v)), wpo.get_node(v));
             if !first {
-                output.push_str(" ");
+                output.push(' ');
             }
-            output.push_str("(");
+            output.push('(');
             output.push_str(&wpo.get_node(v).to_string());
         } else if wpo.is_exit(v) {
             assert_eq!(expected.6, wpo.get_num_outer_preds(v).len());
             assert_eq!(wpo.get_node(wpo.get_head_of_exit(v)), wpo.get_node(v));
-            output.push_str(")");
+            output.push(')');
         } else {
             if !first {
-                output.push_str(" ");
+                output.push(' ');
             }
             output.push_str(&wpo.get_node(v).to_string());
         }
@@ -238,17 +238,17 @@ fn test_wpo_single_node() {
         if wpo.is_head(v) {
             assert_eq!(wpo.get_node(wpo.get_exit_of_head(v)), wpo.get_node(v));
             if !first {
-                output.push_str(" ");
+                output.push(' ');
             }
-            output.push_str("(");
+            output.push('(');
             output.push_str(&wpo.get_node(v).to_string());
         } else if wpo.is_exit(v) {
             assert_eq!(expected.6, wpo.get_num_outer_preds(v).len());
             assert_eq!(wpo.get_node(wpo.get_head_of_exit(v)), wpo.get_node(v));
-            output.push_str(")");
+            output.push(')');
         } else {
             if !first {
-                output.push_str(" ");
+                output.push(' ');
             }
             output.push_str(&wpo.get_node(v).to_string());
         }
