@@ -140,6 +140,25 @@ impl BitVec {
 
         BitVec::from_int_with_len(cmp1, count_prefix)
     }
+
+    pub fn back(&self) -> bool {
+        self.get(self.len() - 1)
+    }
+}
+
+impl Clone for BitVec {
+    fn clone(&self) -> Self {
+        if self.len <= POINTER_SIZE_IN_BITS {
+            Self {
+                actual_storage: PointerOrBits {
+                    bits: unsafe { self.actual_storage.bits },
+                },
+                len: self.len,
+            }
+        } else {
+            todo!("Long bitvec not implemented");
+        }
+    }
 }
 
 impl ToString for BitVec {

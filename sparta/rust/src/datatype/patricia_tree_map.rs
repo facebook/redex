@@ -13,8 +13,8 @@ use crate::datatype::bitvec::BitVec;
 use crate::datatype::patricia_tree_impl::PatriciaTree;
 use crate::datatype::patricia_tree_impl::PatriciaTreePostOrderIterator;
 
-// Interface structs for PatriciaTree
-
+// Interface structs for PatriciaTreeMap. Does not require V to impl Clone.
+#[derive(Clone)]
 pub struct PatriciaTreeMap<K: Into<BitVec>, V: Sized> {
     storage: PatriciaTree<V>,
     _key_type_phantom: PhantomData<K>,
@@ -51,6 +51,10 @@ impl<K: Into<BitVec>, V: Sized> PatriciaTreeMap<K, V> {
 
     pub fn get(&self, key: K) -> Option<&V> {
         self.storage.get(&key.into())
+    }
+
+    pub fn remove(&mut self, key: K) {
+        self.storage.remove(&key.into())
     }
 
     pub fn iter(&self) -> PatriciaTreeMapIterator<'_, K, V> {
