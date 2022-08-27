@@ -14,7 +14,7 @@ use crate::datatype::patricia_tree_impl::PatriciaTree;
 use crate::datatype::patricia_tree_impl::PatriciaTreePostOrderIterator;
 
 // Interface structs for PatriciaTree
-
+#[derive(Clone)]
 pub struct PatriciaTreeSet<K: Into<BitVec>> {
     storage: PatriciaTree<()>,
     _key_type_phantom: PhantomData<K>,
@@ -47,6 +47,10 @@ impl<K: Into<BitVec>> PatriciaTreeSet<K> {
 
     pub fn contains(&self, key: K) -> bool {
         self.storage.contains_key(&key.into())
+    }
+
+    pub fn remove(&mut self, key: K) {
+        self.storage.remove(&key.into())
     }
 
     pub fn iter(&self) -> PatriciaTreeSetIterator<'_, K> {

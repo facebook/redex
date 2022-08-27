@@ -13,7 +13,6 @@ use crate::datatype::bitvec::BitVec;
 // Implementation of the data structure
 
 // TODO items:
-// -- remove algorithm
 // -- intersection/union algorithms
 
 enum Node<V: Sized> {
@@ -50,6 +49,87 @@ impl<V> ToString for Node<V> {
 }
 
 impl<V: Sized> Node<V> {
+    // Core algorithm for node insert, update, and removal.
+    // Returns: updated tree.
+    //
+    // `op` will be called in two separate occasions.
+    // - When node with `key` is found. Then `op` will be called with a `Some` value containing
+    //   the matching node. The entire matching subtree will be replaced by return value of `op`.
+    //   If `op` returned `None`, the entire subtree will be removed.
+    // - When node with `key` is not found. Then `op` will be called with a `None` value. The
+    //   return value of `op` is emplaced to the tree. If the return value of `op` is `None`, a
+    //   value equivalent to the original tree `maybe_node` is returned.
+    fn update_node_by_key<F>(
+        maybe_node: Option<Rc<Node<V>>>,
+        key: &BitVec,
+        op: F,
+    ) -> Option<Rc<Node<V>>>
+    where
+        F: FnOnce(Option<Rc<Node<V>>>) -> Option<Rc<Node<V>>>,
+    {
+        use Node::*;
+
+        if let Some(ref node) = maybe_node {
+            match node.as_ref() {
+                Leaf {
+                    key: node_key,
+                    value: _,
+                } => {
+                    if node_key == key {
+                        op(maybe_node)
+                    } else {
+                        let maybe_new_node = op(None);
+                        match maybe_new_node {
+                            Some(new_node) => {
+                                Some(Rc::new(Node::make_branch(new_node, node.clone())))
+                            }
+                            None => maybe_node,
+                        }
+                    }
+                }
+                Branch {
+                    prefix,
+                    left,
+                    right,
+                } => {
+                    if key.begins_with(prefix) {
+                        let branching_bit = key.get(prefix.len());
+                        if !branching_bit {
+                            let maybe_new_left =
+                                Self::update_node_by_key(Some(left.clone()), key, op);
+                            match maybe_new_left {
+                                Some(new_left) => {
+                                    // Possible optimization: If `new_left` ptr_eq to `left`, do nothing.
+                                    Some(Rc::new(Node::make_branch(new_left, right.clone())))
+                                }
+                                None => Some(right.clone()),
+                            }
+                        } else {
+                            let maybe_new_right =
+                                Self::update_node_by_key(Some(right.clone()), key, op);
+                            match maybe_new_right {
+                                Some(new_right) => {
+                                    Some(Rc::new(Node::make_branch(left.clone(), new_right)))
+                                }
+                                None => Some(left.clone()),
+                            }
+                        }
+                    } else {
+                        // Branch differs, create new branch like how you'd do with another leaf.
+                        match op(None) {
+                            Some(new_node) => {
+                                Some(Rc::new(Node::make_branch(new_node, node.clone())))
+                            }
+                            None => maybe_node,
+                        }
+                    }
+                }
+            }
+        } else {
+            op(None)
+        }
+    }
+
     fn find_node_by_key<'a>(
         maybe_node: Option<&'a Rc<Node<V>>>,
         lookup_key: &BitVec,
@@ -169,48 +249,23 @@ impl<V: Sized> PatriciaTree<V> {
         self.iter().count()
     }
 
-    fn insert_leaf(maybe_node: Option<Rc<Node<V>>>, new_leaf: Rc<Node<V>>) -> Rc<Node<V>> {
-        use Node::*;
-
-        if let Some(node) = maybe_node {
-            match *node {
-                Leaf { ref key, value: _ } => {
-                    if key == new_leaf.key_or_prefix() {
-                        new_leaf
-                    } else {
-                        Rc::new(Node::make_branch(new_leaf, node.clone()))
-                    }
-                }
-                Branch {
-                    ref prefix,
-                    ref left,
-                    ref right,
-                } => {
-                    if new_leaf.key_or_prefix().begins_with(prefix) {
-                        let branching_bit = new_leaf.key_or_prefix().get(prefix.len());
-                        if !branching_bit {
-                            let new_left = Self::insert_leaf(Some(left.clone()), new_leaf);
-                            Rc::new(Node::make_branch(new_left, right.clone()))
-                        } else {
-                            let new_right = Self::insert_leaf(Some(right.clone()), new_leaf);
-                            Rc::new(Node::make_branch(left.clone(), new_right))
-                        }
-                    } else {
-                        // Branch differs, create new branch like how you'd do with another leaf.
-                        Rc::new(Node::make_branch(new_leaf, node))
-                    }
-                }
-            }
-        } else {
-            new_leaf
-        }
+    fn apply_root_operation<F>(&mut self, op: F)
+    where
+        F: FnOnce(Option<Rc<Node<V>>>) -> Option<Rc<Node<V>>>,
+    {
+        let mut temp_root = None;
+        std::mem::swap(&mut self.root, &mut temp_root);
+        self.root = op(temp_root);
     }
 
     pub(crate) fn insert(&mut self, key: BitVec, value: V) {
-        let new_leaf = Rc::new(Node::Leaf { key, value });
-        let mut temp_root = None;
-        std::mem::swap(&mut self.root, &mut temp_root);
-        self.root = Some(Self::insert_leaf(temp_root, new_leaf));
+        let new_leaf = Rc::new(Node::Leaf {
+            key: key.clone(),
+            value,
+        });
+        let node_op = move |_| Some(new_leaf);
+        let root_op = move |root| Node::update_node_by_key(root, &key, node_op);
+        self.apply_root_operation(root_op);
     }
 
     pub(crate) fn contains_key(&self, key: &BitVec) -> bool {
@@ -230,6 +285,11 @@ impl<V: Sized> PatriciaTree<V> {
             },
             None => None,
         }
+    }
+
+    pub(crate) fn remove(&mut self, key: &BitVec) {
+        let root_op = move |root| Node::update_node_by_key(root, key, |_| None);
+        self.apply_root_operation(root_op);
     }
 
     pub(crate) fn iter(&self) -> PatriciaTreePostOrderIterator<V> {
@@ -338,5 +398,28 @@ mod tests {
         map2.insert(55.into(), 555);
         assert_eq!(map.len(), 4);
         assert_eq!(map2.len(), 5);
+
+        map2.remove(&1.into());
+        assert_eq!(map2.len(), 4);
+        assert!(map.contains_key(&1.into()));
+        assert!(!map2.contains_key(&1.into()));
+
+        map2.remove(&1.into());
+        assert_eq!(map2.len(), 4);
+        assert!(!map2.contains_key(&1.into()));
+
+        map2.remove(&22.into());
+        assert_eq!(map2.len(), 3);
+        assert!(!map2.contains_key(&22.into()));
+
+        map2.remove(&13.into());
+        assert_eq!(map2.len(), 2);
+        assert!(!map2.contains_key(&13.into()));
+
+        map2.remove(&42.into());
+        assert_eq!(map2.len(), 1);
+
+        map2.remove(&55.into());
+        assert_eq!(map2.len(), 0);
     }
 }
