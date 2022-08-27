@@ -180,7 +180,7 @@ impl<V: Sized> Node<V> {
         None
     }
 
-    fn key_or_prefix<'a>(&'a self) -> &'a BitVec {
+    fn key_or_prefix(&self) -> &BitVec {
         use Node::*;
         match self {
             Leaf { key, value: _ } => key,
@@ -238,10 +238,7 @@ impl<V: Sized> PatriciaTree<V> {
     }
 
     pub(crate) fn is_empty(&self) -> bool {
-        match self.root {
-            None => true,
-            _ => false,
-        }
+        matches!(self.root, None)
     }
 
     // Not a very fast operation.
@@ -269,10 +266,7 @@ impl<V: Sized> PatriciaTree<V> {
     }
 
     pub(crate) fn contains_key(&self, key: &BitVec) -> bool {
-        match self.get(key) {
-            None => false,
-            _ => true,
-        }
+        !matches!(self.get(key), None)
     }
 
     pub(crate) fn get(&self, key: &BitVec) -> Option<&V> {
@@ -352,7 +346,7 @@ impl<'a, V> PatriciaTreePostOrderIterator<'a, V> {
         ret
     }
 
-    fn into_tuple<'n>(node: Option<&'n Node<V>>) -> Option<(&'n BitVec, &'n V)> {
+    fn into_tuple(node: Option<&Node<V>>) -> Option<(&BitVec, &V)> {
         match node {
             Some(leaf) => match leaf {
                 Node::Leaf { ref key, ref value } => Some((key, value)),

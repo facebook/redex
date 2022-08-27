@@ -146,6 +146,12 @@ impl BitVec {
     }
 }
 
+impl Default for BitVec {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Clone for BitVec {
     fn clone(&self) -> Self {
         if self.len <= POINTER_SIZE_IN_BITS {
