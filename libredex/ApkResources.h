@@ -120,11 +120,13 @@ class TableEntryParser : public TableParser {
   std::vector<android::ResTable_config*> get_configs(uint32_t package_id,
                                                      uint8_t type_id) {
     std::vector<android::ResTable_config*> vec;
-    auto& types =
-        m_types_to_configs.at(make_package_type_id(package_id, type_id));
-    vec.reserve(types.size());
-    for (auto& t : types) {
-      vec.emplace_back(&t->config);
+    auto key = make_package_type_id(package_id, type_id);
+    if (m_types_to_configs.count(key) > 0) {
+      auto& types = m_types_to_configs.at(key);
+      vec.reserve(types.size());
+      for (auto& t : types) {
+        vec.emplace_back(&t->config);
+      }
     }
     return vec;
   }
