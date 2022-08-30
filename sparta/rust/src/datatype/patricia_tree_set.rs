@@ -104,8 +104,8 @@ impl<K> SetAbstractDomainOps for PatriciaTreeSet<K>
 where
     K: Into<BitVec> + Clone,
 {
-    fn is_subset(&self, _other: &Self) -> bool {
-        todo!()
+    fn is_subset(&self, other: &Self) -> bool {
+        self.storage.subset_of(&other.storage)
     }
 
     fn intersection_with(&mut self, _other: &Self) {
@@ -210,5 +210,31 @@ mod tests {
         let expected = HashSet::<u32>::from([1, 2, 3, 4, 5, 6, 7, 8]);
 
         assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_is_subset() {
+        let set1 = PatriciaTreeSet::<u32>::from([]);
+        let set2 = PatriciaTreeSet::<u32>::from([]);
+        assert!(set1.is_subset(&set2));
+        assert!(set2.is_subset(&set1));
+
+        let set1 = PatriciaTreeSet::<u32>::from([1, 2]);
+        let set2 = PatriciaTreeSet::<u32>::from([1, 2, 3]);
+        assert!(set1.is_subset(&set2));
+
+        let set1 = PatriciaTreeSet::<u32>::from([203, 345, 324]);
+        let mut set2 = PatriciaTreeSet::<u32>::from([203, 234]);
+        assert!(!set1.is_subset(&set2));
+
+        set2.union_with(set1.clone());
+        assert!(set1.is_subset(&set2));
+
+        let set1 = PatriciaTreeSet::<u32>::from([10, 20, 30]);
+        let mut set2 = PatriciaTreeSet::<u32>::from([1, 2, 3, 4, 5]);
+        assert!(!set1.is_subset(&set2));
+
+        set2.union_with(set1.clone());
+        assert!(set1.is_subset(&set2));
     }
 }
