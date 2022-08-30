@@ -180,6 +180,10 @@ impl<V: Sized> Node<V> {
         None
     }
 
+    fn contains_leaf_with_key(maybe_node: Option<&Rc<Node<V>>>, lookup_key: &BitVec) -> bool {
+        Self::find_leaf_by_key(maybe_node, lookup_key).is_some()
+    }
+
     fn key_or_prefix(&self) -> &BitVec {
         use Node::*;
         match self {
@@ -339,6 +343,51 @@ impl<V: Sized> Node<V> {
             }
         }
     }
+
+    /// Returns true if s is a subset of t.
+    fn is_tree_subset_of(s: &Rc<Node<V>>, t: &Rc<Node<V>>) -> bool {
+        use Node::*;
+
+        if Rc::ptr_eq(s, t) {
+            // This conditions allows the inclusion test to run in sublinear time
+            // when comparing Patricia trees that share some structure.
+            return true;
+        }
+
+        match (s.as_ref(), t.as_ref()) {
+            (Leaf { key, value: _ }, _) => Self::contains_leaf_with_key(Some(t), key),
+            (_, Leaf { key: _, value: _ }) => false,
+            (
+                Branch {
+                    prefix: s_prefix,
+                    left: s_left,
+                    right: s_right,
+                },
+                Branch {
+                    prefix: t_prefix,
+                    left: t_left,
+                    right: t_right,
+                },
+            ) => {
+                if s_prefix == t_prefix {
+                    Self::is_tree_subset_of(s_left, t_left)
+                        && Self::is_tree_subset_of(s_right, t_right)
+                } else if s_prefix.begins_with(t_prefix) {
+                    assert!(s_prefix.len() > t_prefix.len());
+                    let branching_bit = s_prefix.get(t_prefix.len());
+                    if !branching_bit {
+                        Self::is_tree_subset_of(s_left, t_left)
+                            && Self::is_tree_subset_of(s_right, t_left)
+                    } else {
+                        Self::is_tree_subset_of(s_left, t_right)
+                            && Self::is_tree_subset_of(s_right, t_right)
+                    }
+                } else {
+                    false
+                }
+            }
+        }
+    }
 }
 
 // Yes, the "deep" clone for a PatriciaTree is a shallow copy!
@@ -442,6 +491,14 @@ impl<V: Sized> PatriciaTree<V> {
             (Some(self_node), Some(other_node)) => {
                 self.root = Some(Node::merge_trees(self_node, other_node, &leaf_combine));
             }
+        }
+    }
+
+    pub(crate) fn subset_of(&self, other: &Self) -> bool {
+        match (self.root.as_ref(), other.root.as_ref()) {
+            (None, _) => true,
+            (_, None) => false,
+            (Some(s), Some(t)) => Node::is_tree_subset_of(s, t),
         }
     }
 }
