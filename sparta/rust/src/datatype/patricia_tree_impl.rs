@@ -49,16 +49,16 @@ impl<V> ToString for Node<V> {
 }
 
 impl<V: Sized> Node<V> {
-    // Core algorithm for node insert, update, and removal.
-    // Returns: updated tree.
-    //
-    // `op` will be called in two separate occasions.
-    // - When node with `key` is found. Then `op` will be called with a `Some` value containing
-    //   the matching node. The entire matching subtree will be replaced by return value of `op`.
-    //   If `op` returned `None`, the entire subtree will be removed.
-    // - When node with `key` is not found. Then `op` will be called with a `None` value. The
-    //   return value of `op` is emplaced to the tree. If the return value of `op` is `None`, a
-    //   value equivalent to the original tree `maybe_node` is returned.
+    /// Core algorithm for node insert, update, and removal.
+    /// Returns: updated tree.
+    ///
+    /// `op` will be called in two separate occasions.
+    /// - When node with `key` is found. Then `op` will be called with a `Some` value containing
+    ///   the matching node. The entire matching subtree will be replaced by return value of `op`.
+    ///   If `op` returned `None`, the entire subtree will be removed.
+    /// - When node with `key` is not found. Then `op` will be called with a `None` value. The
+    ///   return value of `op` is emplaced to the tree. If the return value of `op` is `None`, a
+    ///   value equivalent to the original tree `maybe_node` is returned.
     fn update_node_by_key<F>(
         maybe_node: Option<Rc<Node<V>>>,
         key: &BitVec,
@@ -234,9 +234,9 @@ impl<V: Sized> Node<V> {
         updated.unwrap() // Leaf combine should not make deletions.
     }
 
-    // Merge two trees. Combined tree should contain all keys from s and t.
-    // If duplicate keys are found, two nodes are passed to `leaf_combine` shall be called
-    // with values from s on the left hand side and values from t on the right hand side.
+    /// Merge two trees. Combined tree should contain all keys from s and t.
+    /// If duplicate keys are found, two nodes are passed to `leaf_combine` shall be called
+    /// with values from s on the left hand side and values from t on the right hand side.
     fn merge_trees(
         s: &Rc<Node<V>>,
         t: &Rc<Node<V>>,
