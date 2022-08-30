@@ -9,6 +9,7 @@ use std::iter::FromIterator;
 use std::iter::Iterator;
 use std::marker::PhantomData;
 
+use super::powerset::SetAbstractDomainOps;
 use crate::datatype::bitvec::BitVec;
 use crate::datatype::patricia_tree_impl::PatriciaTree;
 use crate::datatype::patricia_tree_impl::PatriciaTreePostOrderIterator;
@@ -99,12 +100,39 @@ impl<K: Into<BitVec>> FromIterator<K> for PatriciaTreeSet<K> {
     }
 }
 
+impl<K> SetAbstractDomainOps for PatriciaTreeSet<K>
+where
+    K: Into<BitVec> + Clone,
+{
+    fn is_subset(&self, _other: &Self) -> bool {
+        todo!()
+    }
+
+    fn intersection_with(&mut self, _other: &Self) {
+        todo!();
+    }
+
+    fn union_with(&mut self, other: Self) {
+        self.storage.union_with(&other.storage, |_, _| ())
+    }
+}
+
+impl<K, const N: usize> From<[K; N]> for PatriciaTreeSet<K>
+where
+    K: Into<BitVec> + Clone,
+{
+    fn from(arr: [K; N]) -> Self {
+        arr.iter().cloned().collect()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
 
     use rand::Rng;
 
+    use crate::datatype::powerset::SetAbstractDomainOps;
     use crate::datatype::PatriciaTreeSet;
 
     #[test]
@@ -112,7 +140,7 @@ mod tests {
         let num_vals: u32 = 10000;
 
         let items: HashSet<u32> = (0..num_vals).collect();
-        let mut set: PatriciaTreeSet<u32> = items.clone().into_iter().collect();
+        let mut set: PatriciaTreeSet<u32> = items.iter().cloned().collect();
         let out_items: HashSet<u32> = set.iter().collect();
 
         assert_eq!(items, out_items);
@@ -146,5 +174,41 @@ mod tests {
         }
 
         assert_eq!(items, out_items);
+    }
+
+    #[test]
+    fn test_union_operation_empty() {
+        let mut set1 = PatriciaTreeSet::<u32>::from([1, 2, 3]);
+        let set2 = PatriciaTreeSet::<u32>::from([]);
+        set1.union_with(set2);
+
+        let actual: HashSet<_> = set1.iter().collect();
+        let expected = HashSet::<u32>::from([1, 2, 3]);
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_simple_union_operation() {
+        let mut set1 = PatriciaTreeSet::<u32>::from([1, 2, 3, 64, 99]);
+        let set2 = PatriciaTreeSet::<u32>::from([4, 5, 6, 65, 102]);
+        set1.union_with(set2);
+
+        let actual: HashSet<_> = set1.iter().collect();
+        let expected = HashSet::<u32>::from([1, 2, 3, 4, 5, 6, 64, 65, 99, 102]);
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_union_operation_with_dup() {
+        let mut set1 = PatriciaTreeSet::<u32>::from([1, 2, 3, 4, 5]);
+        let set2 = PatriciaTreeSet::<u32>::from([4, 5, 6, 7, 8]);
+        set1.union_with(set2);
+
+        let actual: HashSet<_> = set1.iter().collect();
+        let expected = HashSet::<u32>::from([1, 2, 3, 4, 5, 6, 7, 8]);
+
+        assert_eq!(actual, expected);
     }
 }

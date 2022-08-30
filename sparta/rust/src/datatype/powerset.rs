@@ -5,9 +5,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+use std::collections::HashSet;
 use std::iter::FromIterator;
 
 use super::abstract_domain::AbstractDomain;
+use crate::datatype::PatriciaTreeSet;
 
 pub trait SetAbstractDomainOps: Clone {
     fn is_subset(&self, other: &Self) -> bool;
@@ -161,3 +163,6 @@ where
         Self::value_from_set(S::from_iter(iter))
     }
 }
+
+pub type PatriciaTreeSetAbstractDomain<T> = PowersetLattice<PatriciaTreeSet<T>>;
+pub type HashSetAbstractDomain<T> = PowersetLattice<HashSet<T>>;

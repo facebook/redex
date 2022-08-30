@@ -7,14 +7,14 @@
 
 mod abstract_domain;
 mod bitvec;
+mod hash_set_impl;
 mod patricia_tree_impl;
 mod patricia_tree_map;
 mod patricia_tree_set;
 mod powerset;
-mod set_impl;
 
 pub use abstract_domain::*;
+pub use hash_set_impl::*;
 pub use patricia_tree_map::*;
 pub use patricia_tree_set::*;
 pub use powerset::*;
-pub use set_impl::*;

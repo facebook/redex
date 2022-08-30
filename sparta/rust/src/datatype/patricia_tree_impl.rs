@@ -220,6 +220,125 @@ impl<V: Sized> Node<V> {
             right,
         }
     }
+
+    fn combine_leaves_by_key(
+        node: Rc<Node<V>>,
+        key: &BitVec,
+        other: Rc<Node<V>>,
+        leaf_combine: &impl Fn(Rc<Node<V>>, Rc<Node<V>>) -> Option<Rc<Node<V>>>,
+    ) -> Rc<Node<V>> {
+        let updated = Self::update_node_by_key(Some(node), key, move |leaf| match leaf {
+            Some(leaf) => leaf_combine(leaf, other),
+            None => Some(other),
+        });
+        updated.unwrap() // Leaf combine should not make deletions.
+    }
+
+    // Merge two trees. Combined tree should contain all keys from s and t.
+    // If duplicate keys are found, two nodes are passed to `leaf_combine` shall be called
+    // with values from s on the left hand side and values from t on the right hand side.
+    fn merge_trees(
+        s: &Rc<Node<V>>,
+        t: &Rc<Node<V>>,
+        leaf_combine: &impl Fn(Rc<Node<V>>, Rc<Node<V>>) -> Option<Rc<Node<V>>>,
+    ) -> Rc<Node<V>> {
+        use Node::*;
+
+        if Rc::ptr_eq(s, t) {
+            // Quickly checking if the two trees are identical to allow union
+            // operation to complete in sublinear time when operands share some structures.
+            return s.clone();
+        }
+
+        match (s.as_ref(), t.as_ref()) {
+            // We check if t is a leaf first, before s. Because the leaf combine
+            // operator may not be commutative when s and t are both leaves.
+            (
+                _,
+                Leaf {
+                    key: t_key,
+                    value: _,
+                },
+            ) => {
+                // Insert t into s, where s may or may not be a leaf.
+                // If t has the same key as one of the element in s, t is rhs of the combine operator.
+                Self::combine_leaves_by_key(s.clone(), t_key, t.clone(), leaf_combine)
+            }
+            (
+                Leaf {
+                    key: s_key,
+                    value: _,
+                },
+                _,
+            ) => {
+                // Insert s into t
+                Self::combine_leaves_by_key(t.clone(), s_key, s.clone(), leaf_combine)
+            }
+            (
+                Branch {
+                    prefix: s_prefix,
+                    left: s_left,
+                    right: s_right,
+                },
+                Branch {
+                    prefix: t_prefix,
+                    left: t_left,
+                    right: t_right,
+                },
+            ) => {
+                if s_prefix == t_prefix {
+                    // The two trees have the same prefix. We just merge the subtrees.
+                    let new_left = Self::merge_trees(s_left, t_left, leaf_combine);
+                    let new_right = Self::merge_trees(s_right, t_right, leaf_combine);
+
+                    if Rc::ptr_eq(&new_left, s_left) && Rc::ptr_eq(&new_right, s_right) {
+                        s.clone()
+                    } else if Rc::ptr_eq(&new_left, t_left) && Rc::ptr_eq(&new_right, t_right) {
+                        t.clone()
+                    } else {
+                        Rc::new(Node::make_branch(new_left, new_right))
+                    }
+                } else if t_prefix.begins_with(s_prefix) {
+                    let branching_bit = t_prefix.get(s_prefix.len());
+                    if !branching_bit {
+                        let new_left = Self::merge_trees(s_left, t, leaf_combine);
+                        if Rc::ptr_eq(s_left, &new_left) {
+                            s.clone()
+                        } else {
+                            Rc::new(Node::make_branch(new_left, s_right.clone()))
+                        }
+                    } else {
+                        let new_right = Self::merge_trees(s_right, t, leaf_combine);
+                        if Rc::ptr_eq(s_right, &new_right) {
+                            s.clone()
+                        } else {
+                            Rc::new(Node::make_branch(s_left.clone(), new_right))
+                        }
+                    }
+                } else if s_prefix.begins_with(t_prefix) {
+                    let branching_bit = s_prefix.get(t_prefix.len());
+                    if !branching_bit {
+                        let new_left = Self::merge_trees(s, t_left, leaf_combine);
+                        if Rc::ptr_eq(t_left, &new_left) {
+                            t.clone()
+                        } else {
+                            Rc::new(Node::make_branch(new_left, t_right.clone()))
+                        }
+                    } else {
+                        let new_right = Self::merge_trees(s, t_right, leaf_combine);
+                        if Rc::ptr_eq(t_right, &new_right) {
+                            t.clone()
+                        } else {
+                            Rc::new(Node::make_branch(t_left.clone(), new_right))
+                        }
+                    }
+                } else {
+                    // The prefixes disagree.
+                    Rc::new(Node::make_branch(s.clone(), t.clone()))
+                }
+            }
+        }
+    }
 }
 
 // Yes, the "deep" clone for a PatriciaTree is a shallow copy!
@@ -288,6 +407,42 @@ impl<V: Sized> PatriciaTree<V> {
 
     pub(crate) fn iter(&self) -> PatriciaTreePostOrderIterator<V> {
         PatriciaTreePostOrderIterator::<V>::from_tree(self)
+    }
+
+    pub(crate) fn union_with(
+        &mut self,
+        other: &Self,
+        value_op_on_duplicate_key: impl Fn(&V, &V) -> V,
+    ) {
+        use Node::*;
+
+        let leaf_combine = |one_leaf: Rc<Node<V>>, other_leaf: Rc<Node<V>>| match (
+            one_leaf.as_ref(),
+            other_leaf.as_ref(),
+        ) {
+            (
+                Leaf {
+                    key,
+                    value: ref l_value,
+                },
+                Leaf {
+                    key: _,
+                    value: ref r_value,
+                },
+            ) => Some(Rc::new(Leaf {
+                key: key.clone(),
+                value: value_op_on_duplicate_key(l_value, r_value),
+            })),
+            _ => panic!("leaf_combine should only be called on leaves!"),
+        };
+
+        match (self.root.as_ref(), other.root.as_ref()) {
+            (None, _) => self.root = other.root.clone(),
+            (Some(_), None) => {}
+            (Some(self_node), Some(other_node)) => {
+                self.root = Some(Node::merge_trees(self_node, other_node, &leaf_combine));
+            }
+        }
     }
 }
 

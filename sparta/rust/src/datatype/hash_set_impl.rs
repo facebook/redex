@@ -9,11 +9,8 @@ use std::collections::hash_set::Iter;
 use std::collections::HashSet;
 use std::hash::Hash;
 
-use super::bitvec::BitVec;
-use super::powerset::PowersetLattice;
 use super::powerset::SetAbstractDomainOps;
 use super::powerset::SetElementOps;
-use crate::datatype::PatriciaTreeSet;
 
 impl<T: Eq + Hash + Clone> SetAbstractDomainOps for HashSet<T> {
     fn is_subset(&self, other: &Self) -> bool {
@@ -47,28 +44,6 @@ impl<T: Eq + Hash + Clone> SetElementOps for HashSet<T> {
         self.iter()
     }
 }
-
-pub type HashSetAbstractDomain<T> = PowersetLattice<HashSet<T>>;
-
-impl<T> SetAbstractDomainOps for PatriciaTreeSet<T>
-where
-    T: Clone,
-    BitVec: From<T>,
-{
-    fn is_subset(&self, _other: &Self) -> bool {
-        todo!()
-    }
-
-    fn intersection_with(&mut self, _other: &Self) {
-        todo!();
-    }
-
-    fn union_with(&mut self, _other: Self) {
-        todo!();
-    }
-}
-
-pub type PatriciaTreeSetAbstractDomain<T> = PowersetLattice<PatriciaTreeSet<T>>;
 
 #[cfg(test)]
 mod tests {
