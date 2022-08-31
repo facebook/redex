@@ -1091,7 +1091,7 @@ void TypeInference::traceState(TypeEnvironment* state) const {
 void TypeInference::populate_type_environments() {
   // We reserve enough space for the map in order to avoid repeated rehashing
   // during the computation.
-  m_type_envs.reserve(m_cfg.blocks().size() * 16);
+  m_type_envs.reserve(m_cfg.num_blocks() * 16);
   for (cfg::Block* block : m_cfg.blocks()) {
     TypeEnvironment current_state = get_entry_state_at(block);
     for (auto& mie : InstructionIterable(block)) {

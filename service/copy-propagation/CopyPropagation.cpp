@@ -106,7 +106,7 @@ class AliasFixpointIterator final
       Stats& stats,
       const BlockRegs& check_cast_throw_targets_regs)
       : MonotonicFixpointIterator<cfg::GraphInterface, AliasDomain>(
-            cfg, cfg.blocks().size()),
+            cfg, cfg.num_blocks()),
         m_cfg(cfg),
         m_is_static(is_static),
         m_declaring_type(declaring_type),

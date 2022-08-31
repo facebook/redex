@@ -249,7 +249,7 @@ std::vector<cfg::Block*> get_ordered_blocks(
     ordered_blocks.push_back(block);
   };
   visit(cfg.exit_block());
-  always_assert(ordered_blocks.size() == cfg.blocks().size());
+  always_assert(ordered_blocks.size() == cfg.num_blocks());
   return ordered_blocks;
 }
 

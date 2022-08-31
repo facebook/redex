@@ -583,7 +583,7 @@ class ThisObjectAnalysis final
   explicit ThisObjectAnalysis(cfg::ControlFlowGraph* cfg,
                               DexMethod* method,
                               size_t this_param_reg)
-      : MonotonicFixpointIterator(*cfg, cfg->blocks().size()),
+      : MonotonicFixpointIterator(*cfg, cfg->num_blocks()),
         m_method(method),
         m_this_param_reg(this_param_reg) {}
   void analyze_node(const NodeId& node, ThisEnvironment* env) const override {

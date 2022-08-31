@@ -47,7 +47,7 @@ class IRFixpointIterator final
   using NodeId = cfg::Block*;
 
   explicit IRFixpointIterator(const cfg::ControlFlowGraph& cfg)
-      : MonotonicFixpointIterator(cfg, cfg.blocks().size()), m_cfg(cfg) {}
+      : MonotonicFixpointIterator(cfg, cfg.num_blocks()), m_cfg(cfg) {}
 
   void analyze_node(const NodeId& block,
                     LivenessDomain* current_state) const override {

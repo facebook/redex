@@ -1200,7 +1200,7 @@ MethodInfo instrument_basic_blocks(IRCode& code,
   // Step 3: Insert onMethodBegin to track method execution, and bit-vector
   //         allocation code in its method entry point.
   //
-  const size_t origin_num_non_entry_blocks = cfg.blocks().size() - 1;
+  const size_t origin_num_non_entry_blocks = cfg.num_blocks() - 1;
   const size_t num_vectors =
       std::ceil(num_to_instrument / double(BIT_VECTOR_SIZE));
 
@@ -1211,7 +1211,7 @@ MethodInfo instrument_basic_blocks(IRCode& code,
   std::tie(reg_vectors, reg_method_offset, reg_hit_offset) =
       insert_prologue_insts(cfg, onMethodBegin, num_vectors, method_offset,
                             hit_offset, blocks);
-  const size_t after_prologue_num_non_entry_blocks = cfg.blocks().size() - 1;
+  const size_t after_prologue_num_non_entry_blocks = cfg.num_blocks() - 1;
 
   // Step 4: Insert block coverage update instructions to each blocks.
   //
@@ -1221,7 +1221,7 @@ MethodInfo instrument_basic_blocks(IRCode& code,
         show_deobfuscated(method).c_str(), SHOW(method), SHOW(cfg));
 
   // Gather early as step 4 may modify CFG.
-  auto num_non_entry_blocks = cfg.blocks().size() - 1;
+  auto num_non_entry_blocks = cfg.num_blocks() - 1;
 
   size_t num_exit_calls;
   std::vector<IRInstruction*> invokes;

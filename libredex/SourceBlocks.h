@@ -137,7 +137,7 @@ void visit_in_order(const ControlFlowGraph* cfg,
       },
       cfg->entry_block());
 
-  redex_assert(visited.size() == cfg->blocks().size());
+  redex_assert(visited.size() == cfg->num_blocks());
 }
 
 } // namespace impl

@@ -1057,7 +1057,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
   void populate_environments(const cfg::ControlFlowGraph& cfg) {
     // We reserve enough space for the map in order to avoid repeated
     // rehashing during the computation.
-    m_environments.reserve(cfg.blocks().size() * 16);
+    m_environments.reserve(cfg.num_blocks() * 16);
     for (cfg::Block* block : cfg.blocks()) {
       AbstractObjectEnvironment current_state = get_entry_state_at(block);
       for (auto& mie : InstructionIterable(block)) {

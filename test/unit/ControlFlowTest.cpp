@@ -992,13 +992,13 @@ TEST_F(ControlFlowTest, remove_ghost_exit_block) {
 
   code->build_cfg(/* editable */ true);
   auto& cfg = code->cfg();
-  EXPECT_EQ(cfg.blocks().size(), 3);
+  EXPECT_EQ(cfg.num_blocks(), 3);
   EXPECT_EQ(cfg.exit_block(), nullptr);
   cfg.calculate_exit_block();
-  EXPECT_EQ(cfg.blocks().size(), 4);
+  EXPECT_EQ(cfg.num_blocks(), 4);
   EXPECT_NE(cfg.exit_block(), nullptr);
   cfg.remove_block(cfg.exit_block());
-  EXPECT_EQ(cfg.blocks().size(), 3);
+  EXPECT_EQ(cfg.num_blocks(), 3);
   EXPECT_EQ(cfg.exit_block(), nullptr);
   code->clear_cfg();
 }
@@ -1015,13 +1015,13 @@ TEST_F(ControlFlowTest, remove_real_exit_block) {
 
   code->build_cfg(/* editable */ true);
   auto& cfg = code->cfg();
-  EXPECT_EQ(cfg.blocks().size(), 2);
+  EXPECT_EQ(cfg.num_blocks(), 2);
   EXPECT_EQ(cfg.exit_block(), nullptr);
   cfg.calculate_exit_block();
-  EXPECT_EQ(cfg.blocks().size(), 2);
+  EXPECT_EQ(cfg.num_blocks(), 2);
   EXPECT_NE(cfg.exit_block(), nullptr);
   cfg.remove_block(cfg.exit_block());
-  EXPECT_EQ(cfg.blocks().size(), 1);
+  EXPECT_EQ(cfg.num_blocks(), 1);
   EXPECT_EQ(cfg.exit_block(), nullptr);
   code->clear_cfg();
 }
@@ -2236,7 +2236,7 @@ TEST_F(ControlFlowTest, split_block) {
 
   auto& cfg = code->cfg();
 
-  EXPECT_EQ(cfg.blocks().size(), 3);
+  EXPECT_EQ(cfg.num_blocks(), 3);
 
   // Simple split
   Block* s_block = cfg.blocks().back();
@@ -2244,7 +2244,7 @@ TEST_F(ControlFlowTest, split_block) {
 
   cfg.split_block(s_block->to_cfg_instruction_iterator(*s_block->begin()));
 
-  EXPECT_EQ(cfg.blocks().size(), 4);
+  EXPECT_EQ(cfg.num_blocks(), 4);
   EXPECT_EQ(s_block->succs().size(), 1);
   EXPECT_EQ(s_block->preds().size(), 1);
   EXPECT_EQ(s_block->preds()[0]->src()->begin()->insn->opcode(), OPCODE_CONST);
@@ -2253,7 +2253,7 @@ TEST_F(ControlFlowTest, split_block) {
   s_block = cfg.blocks().back();
   cfg.split_block(
       s_block->to_cfg_instruction_iterator(*std::prev(s_block->end())));
-  EXPECT_EQ(cfg.blocks().size(), 5);
+  EXPECT_EQ(cfg.num_blocks(), 5);
 
   EXPECT_EQ(s_block->succs().size(), 1);
   EXPECT_EQ(s_block->begin()->insn->opcode(), OPCODE_ADD_INT);
@@ -2687,7 +2687,7 @@ TEST_F(ControlFlowTest, insert_block_if) {
   )");
   code->build_cfg(/* editable */ true);
   auto& cfg = code->cfg();
-  EXPECT_EQ(cfg.blocks().size(), 3);
+  EXPECT_EQ(cfg.num_blocks(), 3);
 
   auto nb0 = cfg.create_block();
   auto nb1 = cfg.create_block();
@@ -2711,7 +2711,7 @@ TEST_F(ControlFlowTest, insert_block_if) {
   // entry_block --(GOTO)--> nb0 --(GOTO)-->goto_block
   //      |
   //      ----(BRANCH) --> nb1 -- (GOTO) --> branch_block
-  EXPECT_EQ(cfg.blocks().size(), 5);
+  EXPECT_EQ(cfg.num_blocks(), 5);
   EXPECT_TRUE(entry_block->succs().size() == 2);
   EXPECT_TRUE(entry_block->goes_to() != nullptr &&
               entry_block->goes_to() == nb0);
@@ -2743,7 +2743,7 @@ TEST_F(ControlFlowTest, insert_block_switch) {
 
   code->build_cfg(/* editable */ true);
   auto& cfg = code->cfg();
-  EXPECT_EQ(cfg.blocks().size(), 3);
+  EXPECT_EQ(cfg.num_blocks(), 3);
 
   // Now the cfg should be:
   // switch_block --(GOTO)--> default_block
@@ -2771,7 +2771,7 @@ TEST_F(ControlFlowTest, insert_block_switch) {
   //    |   |   ----(BRANCH case_key 1) -->       nb0 --(GOTO)-->branch_block
   //    |   --------(BRANCH case_key 2) -------^  ^
   //    ------------(BRANCH case_key 3)-----------|
-  EXPECT_EQ(cfg.blocks().size(), 4);
+  EXPECT_EQ(cfg.num_blocks(), 4);
   auto new_branch_edges =
       cfg.get_succ_edges_of_type(switch_block, cfg::EDGE_BRANCH);
   EXPECT_EQ(new_branch_edges.size(), 3);

@@ -145,7 +145,7 @@ TEST_F(SourceBlocksTest, minimal_serialize) {
   method->get_code()->build_cfg();
   auto& cfg = method->get_code()->cfg();
 
-  ASSERT_EQ(cfg.blocks().size(), 1u);
+  ASSERT_EQ(cfg.num_blocks(), 1u);
 
   auto res = insert_source_blocks(method, &cfg, {},
                                   /*serialize=*/true);
@@ -159,7 +159,7 @@ TEST_F(SourceBlocksTest, complex_serialize) {
   method->get_code()->build_cfg();
   auto& cfg = method->get_code()->cfg();
 
-  ASSERT_EQ(cfg.blocks().size(), 1u);
+  ASSERT_EQ(cfg.num_blocks(), 1u);
   auto b = cfg.blocks()[0];
 
   // We're gonna just focus on blocks and edges, no instruction constraints.
@@ -192,7 +192,7 @@ TEST_F(SourceBlocksTest, complex_deserialize) {
   method->get_code()->build_cfg();
   auto& cfg = method->get_code()->cfg();
 
-  ASSERT_EQ(cfg.blocks().size(), 1u);
+  ASSERT_EQ(cfg.num_blocks(), 1u);
   auto b = cfg.blocks()[0];
 
   // We're gonna just focus on blocks and edges, no instruction constraints.
@@ -230,7 +230,7 @@ TEST_F(SourceBlocksTest, complex_deserialize_default) {
   method->get_code()->build_cfg();
   auto& cfg = method->get_code()->cfg();
 
-  ASSERT_EQ(cfg.blocks().size(), 1u);
+  ASSERT_EQ(cfg.num_blocks(), 1u);
   auto b = cfg.blocks()[0];
 
   // We're gonna just focus on blocks and edges, no instruction constraints.
@@ -267,7 +267,7 @@ TEST_F(SourceBlocksTest, complex_deserialize_failure) {
   method->get_code()->build_cfg();
   auto& cfg = method->get_code()->cfg();
 
-  ASSERT_EQ(cfg.blocks().size(), 1u);
+  ASSERT_EQ(cfg.num_blocks(), 1u);
   auto b = cfg.blocks()[0];
 
   // We're gonna just focus on blocks and edges, no instruction constraints.
@@ -400,7 +400,7 @@ TEST_F(SourceBlocksTest, complex_deserialize_failure_error_val) {
   method->get_code()->build_cfg();
   auto& cfg = method->get_code()->cfg();
 
-  ASSERT_EQ(cfg.blocks().size(), 1u);
+  ASSERT_EQ(cfg.num_blocks(), 1u);
   auto b = cfg.blocks()[0];
 
   // We're gonna just focus on blocks and edges, no instruction constraints.
@@ -576,7 +576,7 @@ TEST_F(SourceBlocksTest, deserialize_x) {
   method->get_code()->build_cfg();
   auto& cfg = method->get_code()->cfg();
 
-  ASSERT_EQ(cfg.blocks().size(), 1u);
+  ASSERT_EQ(cfg.num_blocks(), 1u);
   auto b = cfg.blocks()[0];
 
   // We're gonna just focus on blocks and edges, no instruction constraints.

@@ -21,7 +21,7 @@ class BaseIRAnalyzer
 
   explicit BaseIRAnalyzer(const cfg::ControlFlowGraph& cfg)
       : sparta::MonotonicFixpointIterator<cfg::GraphInterface, Domain>(
-            cfg, cfg.blocks().size()) {}
+            cfg, cfg.num_blocks()) {}
 
   void analyze_node(const NodeId& node, Domain* current_state) const override {
     for (auto& mie : ir_list::InstructionIterable(node)) {
@@ -49,7 +49,7 @@ class BaseBackwardsIRAnalyzer
   explicit BaseBackwardsIRAnalyzer(const cfg::ControlFlowGraph& cfg)
       : sparta::MonotonicFixpointIterator<
             sparta::BackwardsFixpointIterationAdaptor<cfg::GraphInterface>,
-            Domain>(cfg, cfg.blocks().size()) {}
+            Domain>(cfg, cfg.num_blocks()) {}
 
   void analyze_node(const NodeId& node, Domain* current_state) const override {
     for (auto it = node->rbegin(); it != node->rend(); ++it) {
