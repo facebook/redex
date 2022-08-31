@@ -5,7 +5,7 @@ description = "SPARTA is a library of software components specially designed for
 homepage = "https://github.com/facebook/sparta"
 repository = "https://github.com/facebook/sparta"
 version = "0.1.0"
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 smallvec = { version = "1.9.0", features = ["const_generics"] }
