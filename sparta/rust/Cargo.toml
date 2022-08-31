@@ -11,6 +11,7 @@ edition = "2021"
 smallvec = { version = "1.9.0", features = ["const_generics"] }
 disjoint-sets = "0.4.2"
 petgraph = "0.6.2"
+sparta-proc-macros = { path = "../rust-proc-macros" }
 
 [dev-dependencies]
 rand = "0.8.5"
