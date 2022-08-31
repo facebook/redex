@@ -18,3 +18,6 @@ pub use hash_set_impl::*;
 pub use patricia_tree_map::*;
 pub use patricia_tree_set::*;
 pub use powerset::*;
+
+extern crate sparta_proc_macros;
+pub use sparta_proc_macros::DisjointUnion;
