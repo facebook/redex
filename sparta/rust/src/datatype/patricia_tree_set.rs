@@ -122,7 +122,7 @@ where
     K: Into<BitVec> + Clone,
 {
     fn from(arr: [K; N]) -> Self {
-        arr.iter().cloned().collect()
+        arr.into_iter().collect()
     }
 }
 
