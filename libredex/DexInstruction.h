@@ -359,6 +359,27 @@ DexOpcodeData* encode_fill_array_data_payload(const std::vector<IntType>& vec) {
   return new DexOpcodeData(data);
 }
 
+template <typename IntType>
+std::vector<IntType> get_fill_array_data_payload(const DexOpcodeData* op_data) {
+  static_assert(std::is_integral<IntType>::value,
+                "fill-array-data-payload can only contain integral values.");
+  int width = sizeof(IntType);
+  auto data = op_data->data();
+  always_assert_log(*data++ == width, "Incorrect width");
+  auto count = *((uint32_t*)data);
+  data += 2;
+  std::vector<IntType> vec;
+  vec.reserve(count);
+  auto element_data = (uint8_t*)data;
+  for (size_t i = 0; i < count; i++) {
+    IntType result = 0;
+    memcpy(&result, element_data, width);
+    vec.emplace_back(result);
+    element_data += width;
+  }
+  return vec;
+}
+
 /**
  * Return a copy of the instruction passed in.
  */

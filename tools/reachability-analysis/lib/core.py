@@ -316,10 +316,12 @@ class CombinedGraph(object):
             print(("Found %s matching names:" % len(known_names)))
             idx = 0
             for (type, name) in known_names:
-                print((
-                    '%d: (ReachableObjectType.%s, "%s")'
-                    % (idx, ReachableObjectType.to_string(type), name)
-                ))
+                print(
+                    (
+                        '%d: (ReachableObjectType.%s, "%s")'
+                        % (idx, ReachableObjectType.to_string(type), name)
+                    )
+                )
                 idx += 1
 
             return lambda i: self.nodes[known_names[i]]

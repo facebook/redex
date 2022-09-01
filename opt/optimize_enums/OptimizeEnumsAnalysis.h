@@ -9,8 +9,8 @@
 
 #include <unordered_map>
 
+#include "ControlFlow.h"
 #include "DexClass.h"
-#include "ScopedCFG.h"
 
 namespace optimize_enums {
 
@@ -36,7 +36,6 @@ class OptimizeEnumsAnalysis final {
  private:
   std::unique_ptr<impl::Analyzer> m_analyzer;
   const DexClass* m_cls;
-  cfg::ScopedCFG m_clinit_cfg;
 };
 
 } // namespace optimize_enums

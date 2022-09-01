@@ -109,7 +109,7 @@ bool check_cast(const DexType* type, const DexType* base_type);
 /**
  * Return the package for a valid DexType.
  */
-std::string get_package_name(const DexType* type);
+std::string_view get_package_name(const DexType* type);
 
 /**
  * Check if the two types are from the same package.

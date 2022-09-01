@@ -124,7 +124,8 @@ namespace type_inference {
 
 using std::placeholders::_1;
 
-using TypeLattice = sparta::BitVectorLattice<IRType, 16, std::hash<int>>;
+using TypeLattice = sparta::BitVectorLattice<IRType,
+                                             /* kCardinality */ 16>;
 
 extern TypeLattice type_lattice;
 
@@ -218,6 +219,11 @@ class TypeInference final
   void print(std::ostream& output) const;
 
   void traceState(TypeEnvironment* state) const;
+
+  const std::unordered_map<const IRInstruction*, TypeEnvironment>&
+  get_type_environments() const {
+    return m_type_envs;
+  }
 
   std::unordered_map<const IRInstruction*, TypeEnvironment>&
   get_type_environments() {

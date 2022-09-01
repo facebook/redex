@@ -159,6 +159,15 @@ void CrossDexRefMinimizer::sample(DexClass* cls) {
   for (auto ref : strings) {
     increment(ref);
   }
+
+  if (m_json_classes) {
+    Json::Value json_class;
+    json_class["method_refs"] = m_json_methods.get(method_refs);
+    json_class["field_refs"] = m_json_fields.get(field_refs);
+    json_class["types"] = m_json_types.get(types);
+    json_class["strings"] = m_json_strings.get(strings);
+    (*m_json_classes)[get_json_class_index(cls)] = json_class;
+  }
 }
 
 void CrossDexRefMinimizer::insert(DexClass* cls) {
@@ -443,6 +452,20 @@ size_t CrossDexRefMinimizer::get_unapplied_refs(DexClass* cls) {
     }
   }
   return unapplied_refs;
+}
+
+std::string CrossDexRefMinimizer::get_json_class_index(DexClass* cls) {
+  return m_json_types.get(cls->get_type());
+}
+
+Json::Value CrossDexRefMinimizer::get_json_class_indices(
+    const std::vector<DexClass*>& classes) {
+  std::vector<DexType*> types;
+  types.reserve(classes.size());
+  for (auto* cls : classes) {
+    types.push_back(cls->get_type());
+  }
+  return m_json_types.get(types);
 }
 
 } // namespace cross_dex_ref_minimizer

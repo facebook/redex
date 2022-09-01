@@ -13,7 +13,7 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
-#include "LegacyInliner.h"
+#include "Inliner.h"
 #include "MethodDedup.h"
 #include "MethodReference.h"
 #include "Mutators.h"
@@ -390,8 +390,8 @@ std::map<SwitchIndices, DexMethod*> ModelMethodMerger::get_dedupped_indices_map(
 
   // Find equivalent methods.
   std::vector<MethodOrderedSet> duplicates =
-      method_dedup::group_identical_methods(targets,
-                                            m_model_spec.dedup_throw_blocks);
+      method_dedup::group_identical_methods(
+          targets, m_model_spec.dedup_fill_in_stack_trace);
   for (const auto& duplicate : duplicates) {
     SwitchIndices switch_indices;
     for (auto& meth : duplicate) {
@@ -412,24 +412,6 @@ std::map<SwitchIndices, DexMethod*> ModelMethodMerger::get_dedupped_indices_map(
 DexType* ModelMethodMerger::get_merger_type(DexType* mergeable) {
   auto merger_ctor = m_mergeable_to_merger_ctor.at(mergeable);
   return merger_ctor->get_class();
-}
-
-DexMethod* ModelMethodMerger::create_instantiation_factory(
-    DexType* owner_type,
-    const std::string& name,
-    DexProto* proto,
-    const DexAccessFlags access,
-    DexMethod* ctor) {
-  auto mc = new MethodCreator(owner_type, DexString::make_string(name), proto,
-                              access);
-  auto type_tag_loc = mc->get_local(0);
-  auto ret_loc = mc->make_local(proto->get_rtype());
-  auto mb = mc->get_main_block();
-  mb->new_instance(ctor->get_class(), ret_loc);
-  std::vector<Location> args = {ret_loc, type_tag_loc};
-  mb->invoke(OPCODE_INVOKE_DIRECT, ctor, args);
-  mb->ret(proto->get_rtype(), ret_loc);
-  return mc->create();
 }
 
 /**
@@ -539,9 +521,17 @@ void ModelMethodMerger::sink_common_ctor_to_return_block(DexMethod* dispatch) {
  * dispatch are indeed inlined in the final output.
  */
 void ModelMethodMerger::inline_dispatch_entries(DexMethod* dispatch) {
-  auto dispatch_code = dispatch->get_code();
-  std::vector<std::pair<IRCode*, IRList::iterator>> callsites;
-  auto insns = InstructionIterable(dispatch_code);
+  // TODO:The clear_cfg flag is used to make sure that using editable cfg in
+  // this function won't affect other parts which use non-editable cfg. Once the
+  // pass is updated to editable cfg, this flag and check can be removed.
+  bool clear_cfg = false;
+  if (!dispatch->get_code()->editable_cfg_built()) {
+    dispatch->get_code()->build_cfg();
+    clear_cfg = true;
+  }
+  auto& dispatch_cfg = dispatch->get_code()->cfg();
+  std::vector<std::pair<DexMethod*, IRInstruction*>> callsites;
+  auto insns = InstructionIterable(dispatch_cfg);
   for (auto it = insns.begin(); it != insns.end(); ++it) {
     auto insn = it->insn;
     if (insn->opcode() != OPCODE_INVOKE_STATIC) {
@@ -549,20 +539,33 @@ void ModelMethodMerger::inline_dispatch_entries(DexMethod* dispatch) {
     }
     DexMethod* meth = resolve_method(insn->get_method(), MethodSearch::Static);
     if (meth != nullptr) {
-      callsites.emplace_back(meth->get_code(), it.unwrap());
+      callsites.emplace_back(meth, insn);
     }
   }
 
-  for (auto& pair : callsites) {
-    auto callee_code = pair.first;
-    auto& call_pos = pair.second;
-    legacy_inliner::inline_method(dispatch, callee_code, call_pos);
+  for (auto&& [callee, callsite] : callsites) {
+    // TODO: same as clear_cfg flag.
+    bool to_clear = false;
+    if (!callee->get_code()->editable_cfg_built()) {
+      callee->get_code()->build_cfg();
+      to_clear = true;
+    }
+    inliner::inline_with_cfg(dispatch, callee, callsite,
+                             /* needs_receiver_cast */ nullptr,
+                             /* needs_init_class */ nullptr,
+                             dispatch_cfg.get_registers_size());
+    if (to_clear) {
+      callee->get_code()->clear_cfg();
+    }
   }
   TRACE(CLMG,
         9,
         "inlined ctor dispatch %s\n%s",
         SHOW(dispatch),
-        SHOW(dispatch->get_code()));
+        SHOW(dispatch_cfg));
+  if (clear_cfg) {
+    dispatch->get_code()->clear_cfg();
+  }
 }
 
 std::string ModelMethodMerger::get_method_signature_string(DexMethod* meth) {
@@ -602,19 +605,14 @@ void ModelMethodMerger::merge_virtual_methods(
       staticize_with_new_arg_head(m, target_type);
       type_tags[m] = m_type_tags->get_type_tag(m->get_class());
     }
-    auto name = front_meth->get_name()->str();
+    const auto name = front_meth->get_name()->str();
 
     // Create dispatch.
-    dispatch::Spec spec{target_type,
-                        dispatch::Type::VIRTUAL,
-                        name,
-                        dispatch_proto,
-                        access,
-                        type_tag_field,
-                        overridden_meth,
-                        m_max_num_dispatch_target,
-                        boost::none,
-                        m_model_spec.keep_debug_info};
+    dispatch::Spec spec{target_type,     dispatch::Type::VIRTUAL,
+                        str_copy(name),  dispatch_proto,
+                        access,          type_tag_field,
+                        overridden_meth, m_max_num_dispatch_target,
+                        boost::none,     m_model_spec.keep_debug_info};
     dispatch::DispatchMethod dispatch = create_dispatch_method(spec, meth_lst);
     dispatch_methods.emplace_back(target_cls, dispatch.main_dispatch);
     for (const auto sub_dispatch : dispatch.sub_dispatches) {
@@ -812,7 +810,7 @@ void ModelMethodMerger::dedup_non_ctor_non_virt_methods() {
         boost::optional<std::unordered_map<DexMethod*, MethodOrderedSet>>(
             new_to_old);
     m_stats.m_num_static_non_virt_dedupped += method_dedup::dedup_methods(
-        m_scope, to_dedup, m_model_spec.dedup_throw_blocks, replacements,
+        m_scope, to_dedup, m_model_spec.dedup_fill_in_stack_trace, replacements,
         new_to_old_optional);
 
     // Relocate the remainders.

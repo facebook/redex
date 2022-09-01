@@ -85,7 +85,12 @@ struct ConfigFiles {
 
   const std::vector<std::string>& get_dead_class_list();
 
-  const method_profiles::MethodProfiles& get_method_profiles() {
+  method_profiles::MethodProfiles& get_method_profiles() {
+    ensure_agg_method_stats_loaded();
+    return *m_method_profiles;
+  }
+
+  const method_profiles::MethodProfiles& get_method_profiles() const {
     ensure_agg_method_stats_loaded();
     return *m_method_profiles;
   }
@@ -165,7 +170,7 @@ struct ConfigFiles {
 
   std::vector<std::string> load_coldstart_classes();
   std::unordered_map<std::string, std::vector<std::string>> load_class_lists();
-  void ensure_agg_method_stats_loaded();
+  void ensure_agg_method_stats_loaded() const;
   void load_inliner_config(inliner::InlinerConfig*);
 
   bool m_load_class_lists_attempted{false};
@@ -176,7 +181,7 @@ struct ConfigFiles {
   std::vector<std::string> m_dead_class_list;
   bool m_dead_class_list_attempted{false};
   std::string m_printseeds; // Filename to dump computed seeds.
-  std::unique_ptr<method_profiles::MethodProfiles> m_method_profiles;
+  mutable std::unique_ptr<method_profiles::MethodProfiles> m_method_profiles;
 
   // limits the output instruction size of any DexMethod to 2^n
   // 0 when limit is not present

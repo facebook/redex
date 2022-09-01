@@ -365,9 +365,9 @@ unsigned AppModuleUsagePass::gather_violations(
 }
 
 template <typename T>
-std::unordered_set<std::string> AppModuleUsagePass::get_modules_used(
+std::unordered_set<std::string_view> AppModuleUsagePass::get_modules_used(
     T* entrypoint, DexType* annotation_type) {
-  std::unordered_set<std::string> modules = {};
+  std::unordered_set<std::string_view> modules = {};
   auto anno_set = entrypoint->get_anno_set();
   if (anno_set) {
     for (const auto& annotation : anno_set->get_annotations()) {
@@ -390,13 +390,13 @@ std::unordered_set<std::string> AppModuleUsagePass::get_modules_used(
   return modules;
 }
 
-template std::unordered_set<std::string>
+template std::unordered_set<std::string_view>
 AppModuleUsagePass::get_modules_used<DexMethod>(DexMethod*, DexType*);
 
-template std::unordered_set<std::string>
+template std::unordered_set<std::string_view>
 AppModuleUsagePass::get_modules_used<DexField>(DexField*, DexType*);
 
-template std::unordered_set<std::string>
+template std::unordered_set<std::string_view>
 AppModuleUsagePass::get_modules_used<DexClass>(DexClass*, DexType*);
 
 bool AppModuleUsagePass::access_excused_due_to_preexisting(

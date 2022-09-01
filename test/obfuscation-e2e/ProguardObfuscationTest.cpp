@@ -12,7 +12,8 @@
 ProguardObfuscationTest::ProguardObfuscationTest(const char* dexfile,
                                                  const char* mapping_file)
     : proguard_map(std::string(mapping_file)) {
-  dexen.emplace_back(load_classes_from_dex(dexfile));
+  dexen.emplace_back(
+      load_classes_from_dex(DexLocation::make_location("", dexfile)));
 }
 
 bool ProguardObfuscationTest::configure_proguard(

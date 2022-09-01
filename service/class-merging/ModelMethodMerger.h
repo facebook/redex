@@ -75,12 +75,6 @@ class ModelMethodMerger {
   // Helpers
   dispatch::DispatchMethod create_dispatch_method(
       const dispatch::Spec& spec, const std::vector<DexMethod*>& targets);
-
-  static DexMethod* create_instantiation_factory(DexType* owner_type,
-                                                 const std::string& name,
-                                                 DexProto* proto,
-                                                 const DexAccessFlags access,
-                                                 DexMethod* ctor);
   static void inline_dispatch_entries(DexMethod* dispatch);
   static void sink_common_ctor_to_return_block(DexMethod* dispatch);
   static std::vector<IRInstruction*> make_string_const(reg_t dest,

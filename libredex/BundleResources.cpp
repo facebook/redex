@@ -7,6 +7,7 @@
 
 // TODO (T91001948): Integrate protobuf dependency in supported platforms for
 // open source
+#include <cstddef>
 #include <memory>
 #ifdef HAS_PROTOBUF
 #include "BundleResources.h"
@@ -24,6 +25,7 @@
 #include <google/protobuf/descriptor.h>
 #include <google/protobuf/io/coded_stream.h>
 #include <google/protobuf/message.h>
+#include <google/protobuf/text_format.h>
 
 #include "Debug.h"
 #include "DexUtil.h"
@@ -31,6 +33,8 @@
 #include "RedexMappedFile.h"
 #include "RedexResources.h"
 #include "Trace.h"
+#include "androidfw/Locale.h"
+#include "androidfw/ResourceTypes.h"
 
 namespace {
 
@@ -360,6 +364,342 @@ void read_single_manifest(const std::string& manifest,
         }
       });
 }
+
+//
+// PB TO ARSC CONVERSIONS
+//
+
+// Source:
+// https://cs.android.com/android/platform/superproject/+/android-12.0.0_r1:frameworks/base/tools/aapt2/format/proto/ProtoDeserialize.cpp;l=68
+bool DeserializeConfigFromPb(const aapt::pb::Configuration& pb_config,
+                             android::ResTable_config* out_config,
+                             std::string* out_error) {
+  using namespace aapt;
+  using ConfigDescription = android::ResTable_config;
+  out_config->mcc = static_cast<uint16_t>(pb_config.mcc());
+  out_config->mnc = static_cast<uint16_t>(pb_config.mnc());
+
+  if (!pb_config.locale().empty()) {
+    android::LocaleValue lv;
+    if (!lv.InitFromBcp47Tag(pb_config.locale())) {
+      std::ostringstream error;
+      error << "configuration has invalid locale '" << pb_config.locale()
+            << "'";
+      *out_error = error.str();
+      return false;
+    }
+    lv.WriteTo(out_config);
+  }
+
+  switch (pb_config.layout_direction()) {
+  case pb::Configuration_LayoutDirection_LAYOUT_DIRECTION_LTR:
+    out_config->screenLayout =
+        (out_config->screenLayout & ~ConfigDescription::MASK_LAYOUTDIR) |
+        ConfigDescription::LAYOUTDIR_LTR;
+    break;
+
+  case pb::Configuration_LayoutDirection_LAYOUT_DIRECTION_RTL:
+    out_config->screenLayout =
+        (out_config->screenLayout & ~ConfigDescription::MASK_LAYOUTDIR) |
+        ConfigDescription::LAYOUTDIR_RTL;
+    break;
+
+  default:
+    break;
+  }
+
+  out_config->smallestScreenWidthDp =
+      static_cast<uint16_t>(pb_config.smallest_screen_width_dp());
+  out_config->screenWidthDp =
+      static_cast<uint16_t>(pb_config.screen_width_dp());
+  out_config->screenHeightDp =
+      static_cast<uint16_t>(pb_config.screen_height_dp());
+
+  switch (pb_config.screen_layout_size()) {
+  case pb::Configuration_ScreenLayoutSize_SCREEN_LAYOUT_SIZE_SMALL:
+    out_config->screenLayout =
+        (out_config->screenLayout & ~ConfigDescription::MASK_SCREENSIZE) |
+        ConfigDescription::SCREENSIZE_SMALL;
+    break;
+
+  case pb::Configuration_ScreenLayoutSize_SCREEN_LAYOUT_SIZE_NORMAL:
+    out_config->screenLayout =
+        (out_config->screenLayout & ~ConfigDescription::MASK_SCREENSIZE) |
+        ConfigDescription::SCREENSIZE_NORMAL;
+    break;
+
+  case pb::Configuration_ScreenLayoutSize_SCREEN_LAYOUT_SIZE_LARGE:
+    out_config->screenLayout =
+        (out_config->screenLayout & ~ConfigDescription::MASK_SCREENSIZE) |
+        ConfigDescription::SCREENSIZE_LARGE;
+    break;
+
+  case pb::Configuration_ScreenLayoutSize_SCREEN_LAYOUT_SIZE_XLARGE:
+    out_config->screenLayout =
+        (out_config->screenLayout & ~ConfigDescription::MASK_SCREENSIZE) |
+        ConfigDescription::SCREENSIZE_XLARGE;
+    break;
+
+  default:
+    break;
+  }
+
+  switch (pb_config.screen_layout_long()) {
+  case pb::Configuration_ScreenLayoutLong_SCREEN_LAYOUT_LONG_LONG:
+    out_config->screenLayout =
+        (out_config->screenLayout & ~ConfigDescription::MASK_SCREENLONG) |
+        ConfigDescription::SCREENLONG_YES;
+    break;
+
+  case pb::Configuration_ScreenLayoutLong_SCREEN_LAYOUT_LONG_NOTLONG:
+    out_config->screenLayout =
+        (out_config->screenLayout & ~ConfigDescription::MASK_SCREENLONG) |
+        ConfigDescription::SCREENLONG_NO;
+    break;
+
+  default:
+    break;
+  }
+
+  switch (pb_config.screen_round()) {
+  case pb::Configuration_ScreenRound_SCREEN_ROUND_ROUND:
+    out_config->screenLayout2 =
+        (out_config->screenLayout2 & ~ConfigDescription::MASK_SCREENROUND) |
+        ConfigDescription::SCREENROUND_YES;
+    break;
+
+  case pb::Configuration_ScreenRound_SCREEN_ROUND_NOTROUND:
+    out_config->screenLayout2 =
+        (out_config->screenLayout2 & ~ConfigDescription::MASK_SCREENROUND) |
+        ConfigDescription::SCREENROUND_NO;
+    break;
+
+  default:
+    break;
+  }
+
+  switch (pb_config.wide_color_gamut()) {
+  case pb::Configuration_WideColorGamut_WIDE_COLOR_GAMUT_WIDECG:
+    out_config->colorMode =
+        (out_config->colorMode & ~ConfigDescription::MASK_WIDE_COLOR_GAMUT) |
+        ConfigDescription::WIDE_COLOR_GAMUT_YES;
+    break;
+
+  case pb::Configuration_WideColorGamut_WIDE_COLOR_GAMUT_NOWIDECG:
+    out_config->colorMode =
+        (out_config->colorMode & ~ConfigDescription::MASK_WIDE_COLOR_GAMUT) |
+        ConfigDescription::WIDE_COLOR_GAMUT_NO;
+    break;
+
+  default:
+    break;
+  }
+
+  switch (pb_config.hdr()) {
+  case pb::Configuration_Hdr_HDR_HIGHDR:
+    out_config->colorMode =
+        (out_config->colorMode & ~ConfigDescription::MASK_HDR) |
+        ConfigDescription::HDR_YES;
+    break;
+
+  case pb::Configuration_Hdr_HDR_LOWDR:
+    out_config->colorMode =
+        (out_config->colorMode & ~ConfigDescription::MASK_HDR) |
+        ConfigDescription::HDR_NO;
+    break;
+
+  default:
+    break;
+  }
+
+  switch (pb_config.orientation()) {
+  case pb::Configuration_Orientation_ORIENTATION_PORT:
+    out_config->orientation = ConfigDescription::ORIENTATION_PORT;
+    break;
+
+  case pb::Configuration_Orientation_ORIENTATION_LAND:
+    out_config->orientation = ConfigDescription::ORIENTATION_LAND;
+    break;
+
+  case pb::Configuration_Orientation_ORIENTATION_SQUARE:
+    out_config->orientation = ConfigDescription::ORIENTATION_SQUARE;
+    break;
+
+  default:
+    break;
+  }
+
+  switch (pb_config.ui_mode_type()) {
+  case pb::Configuration_UiModeType_UI_MODE_TYPE_NORMAL:
+    out_config->uiMode =
+        (out_config->uiMode & ~ConfigDescription::MASK_UI_MODE_TYPE) |
+        ConfigDescription::UI_MODE_TYPE_NORMAL;
+    break;
+
+  case pb::Configuration_UiModeType_UI_MODE_TYPE_DESK:
+    out_config->uiMode =
+        (out_config->uiMode & ~ConfigDescription::MASK_UI_MODE_TYPE) |
+        ConfigDescription::UI_MODE_TYPE_DESK;
+    break;
+
+  case pb::Configuration_UiModeType_UI_MODE_TYPE_CAR:
+    out_config->uiMode =
+        (out_config->uiMode & ~ConfigDescription::MASK_UI_MODE_TYPE) |
+        ConfigDescription::UI_MODE_TYPE_CAR;
+    break;
+
+  case pb::Configuration_UiModeType_UI_MODE_TYPE_TELEVISION:
+    out_config->uiMode =
+        (out_config->uiMode & ~ConfigDescription::MASK_UI_MODE_TYPE) |
+        ConfigDescription::UI_MODE_TYPE_TELEVISION;
+    break;
+
+  case pb::Configuration_UiModeType_UI_MODE_TYPE_APPLIANCE:
+    out_config->uiMode =
+        (out_config->uiMode & ~ConfigDescription::MASK_UI_MODE_TYPE) |
+        ConfigDescription::UI_MODE_TYPE_APPLIANCE;
+    break;
+
+  case pb::Configuration_UiModeType_UI_MODE_TYPE_WATCH:
+    out_config->uiMode =
+        (out_config->uiMode & ~ConfigDescription::MASK_UI_MODE_TYPE) |
+        ConfigDescription::UI_MODE_TYPE_WATCH;
+    break;
+
+  case pb::Configuration_UiModeType_UI_MODE_TYPE_VRHEADSET:
+    out_config->uiMode =
+        (out_config->uiMode & ~ConfigDescription::MASK_UI_MODE_TYPE) |
+        ConfigDescription::UI_MODE_TYPE_VR_HEADSET;
+    break;
+
+  default:
+    break;
+  }
+
+  switch (pb_config.ui_mode_night()) {
+  case pb::Configuration_UiModeNight_UI_MODE_NIGHT_NIGHT:
+    out_config->uiMode =
+        (out_config->uiMode & ~ConfigDescription::MASK_UI_MODE_NIGHT) |
+        ConfigDescription::UI_MODE_NIGHT_YES;
+    break;
+
+  case pb::Configuration_UiModeNight_UI_MODE_NIGHT_NOTNIGHT:
+    out_config->uiMode =
+        (out_config->uiMode & ~ConfigDescription::MASK_UI_MODE_NIGHT) |
+        ConfigDescription::UI_MODE_NIGHT_NO;
+    break;
+
+  default:
+    break;
+  }
+
+  out_config->density = static_cast<uint16_t>(pb_config.density());
+
+  switch (pb_config.touchscreen()) {
+  case pb::Configuration_Touchscreen_TOUCHSCREEN_NOTOUCH:
+    out_config->touchscreen = ConfigDescription::TOUCHSCREEN_NOTOUCH;
+    break;
+
+  case pb::Configuration_Touchscreen_TOUCHSCREEN_STYLUS:
+    out_config->touchscreen = ConfigDescription::TOUCHSCREEN_STYLUS;
+    break;
+
+  case pb::Configuration_Touchscreen_TOUCHSCREEN_FINGER:
+    out_config->touchscreen = ConfigDescription::TOUCHSCREEN_FINGER;
+    break;
+
+  default:
+    break;
+  }
+
+  switch (pb_config.keys_hidden()) {
+  case pb::Configuration_KeysHidden_KEYS_HIDDEN_KEYSEXPOSED:
+    out_config->inputFlags =
+        (out_config->inputFlags & ~ConfigDescription::MASK_KEYSHIDDEN) |
+        ConfigDescription::KEYSHIDDEN_NO;
+    break;
+
+  case pb::Configuration_KeysHidden_KEYS_HIDDEN_KEYSHIDDEN:
+    out_config->inputFlags =
+        (out_config->inputFlags & ~ConfigDescription::MASK_KEYSHIDDEN) |
+        ConfigDescription::KEYSHIDDEN_YES;
+    break;
+
+  case pb::Configuration_KeysHidden_KEYS_HIDDEN_KEYSSOFT:
+    out_config->inputFlags =
+        (out_config->inputFlags & ~ConfigDescription::MASK_KEYSHIDDEN) |
+        ConfigDescription::KEYSHIDDEN_SOFT;
+    break;
+
+  default:
+    break;
+  }
+
+  switch (pb_config.keyboard()) {
+  case pb::Configuration_Keyboard_KEYBOARD_NOKEYS:
+    out_config->keyboard = ConfigDescription::KEYBOARD_NOKEYS;
+    break;
+
+  case pb::Configuration_Keyboard_KEYBOARD_QWERTY:
+    out_config->keyboard = ConfigDescription::KEYBOARD_QWERTY;
+    break;
+
+  case pb::Configuration_Keyboard_KEYBOARD_TWELVEKEY:
+    out_config->keyboard = ConfigDescription::KEYBOARD_12KEY;
+    break;
+
+  default:
+    break;
+  }
+
+  switch (pb_config.nav_hidden()) {
+  case pb::Configuration_NavHidden_NAV_HIDDEN_NAVEXPOSED:
+    out_config->inputFlags =
+        (out_config->inputFlags & ~ConfigDescription::MASK_NAVHIDDEN) |
+        ConfigDescription::NAVHIDDEN_NO;
+    break;
+
+  case pb::Configuration_NavHidden_NAV_HIDDEN_NAVHIDDEN:
+    out_config->inputFlags =
+        (out_config->inputFlags & ~ConfigDescription::MASK_NAVHIDDEN) |
+        ConfigDescription::NAVHIDDEN_YES;
+    break;
+
+  default:
+    break;
+  }
+
+  switch (pb_config.navigation()) {
+  case pb::Configuration_Navigation_NAVIGATION_NONAV:
+    out_config->navigation = ConfigDescription::NAVIGATION_NONAV;
+    break;
+
+  case pb::Configuration_Navigation_NAVIGATION_DPAD:
+    out_config->navigation = ConfigDescription::NAVIGATION_DPAD;
+    break;
+
+  case pb::Configuration_Navigation_NAVIGATION_TRACKBALL:
+    out_config->navigation = ConfigDescription::NAVIGATION_TRACKBALL;
+    break;
+
+  case pb::Configuration_Navigation_NAVIGATION_WHEEL:
+    out_config->navigation = ConfigDescription::NAVIGATION_WHEEL;
+    break;
+
+  default:
+    break;
+  }
+
+  out_config->screenWidth = static_cast<uint16_t>(pb_config.screen_width());
+  out_config->screenHeight = static_cast<uint16_t>(pb_config.screen_height());
+  out_config->sdkVersion = static_cast<uint16_t>(pb_config.sdk_version());
+  return true;
+}
+
+//
+// END PB TO ARSC CONVERSIONS
+//
+
 } // namespace
 
 boost::optional<int32_t> BundleResources::get_min_sdk() {
@@ -411,6 +751,35 @@ ManifestClassInfo BundleResources::get_manifest_class_info() {
     }
   }
   return manifest_classes;
+}
+
+boost::optional<std::string> BundleResources::get_manifest_package_name() {
+  std::string base_manifest = (boost::filesystem::path(m_directory) /
+                               "base/manifest/AndroidManifest.xml")
+                                  .string();
+  boost::optional<std::string> result = boost::none;
+  if (!boost::filesystem::exists(base_manifest)) {
+    return result;
+  }
+  TRACE(RES, 1, "Reading proto xml at %s", base_manifest.c_str());
+  read_protobuf_file_contents(
+      base_manifest,
+      [&](google::protobuf::io::CodedInputStream& input, size_t size) {
+        aapt::pb::XmlNode pb_node;
+        bool read_finish = pb_node.ParseFromCodedStream(&input);
+        always_assert_log(read_finish, "BundleResoource failed to read %s",
+                          base_manifest.c_str());
+        if (pb_node.has_element()) {
+          const auto& manifest_element = pb_node.element();
+          for (const aapt::pb::XmlAttribute& pb_attr :
+               manifest_element.attribute()) {
+            if (pb_attr.name() == "package") {
+              result = pb_attr.value();
+            }
+          }
+        }
+      });
+  return result;
 }
 
 namespace {
@@ -676,8 +1045,37 @@ void change_resource_id_in_value_reference(
   }
 }
 
+// Copy given entry to a new entry and remap id. Caller will take ownership of
+// the allocated data.
+aapt::pb::Entry* new_remapped_entry(
+    const aapt::pb::Entry& entry,
+    uint32_t res_id,
+    const std::map<uint32_t, uint32_t>& old_to_new) {
+  auto copy_entry = new aapt::pb::Entry(entry);
+  if (old_to_new.count(res_id)) {
+    uint32_t new_res_id = old_to_new.at(res_id);
+    uint32_t new_entry_id = ENTRY_MASK_BIT & new_res_id;
+    always_assert_log(copy_entry->has_entry_id(),
+                      "Entry doesn't have id: %s",
+                      copy_entry->DebugString().c_str());
+    auto entry_id = copy_entry->mutable_entry_id();
+    entry_id->set_id(new_entry_id);
+    auto config_value_size = copy_entry->config_value_size();
+    for (int i = 0; i < config_value_size; ++i) {
+      auto config_value = copy_entry->mutable_config_value(i);
+      always_assert_log(config_value->has_value(),
+                        "ConfigValue doesn't have value: %s\nEntry:\n%s",
+                        config_value->DebugString().c_str(),
+                        copy_entry->DebugString().c_str());
+      auto value = config_value->mutable_value();
+      change_resource_id_in_value_reference(old_to_new, value);
+    }
+  }
+  return copy_entry;
+}
+
 void remove_or_change_resource_ids(
-    const std::set<uint32_t>& ids_to_remove,
+    const std::unordered_set<uint32_t>& ids_to_remove,
     const std::map<uint32_t, uint32_t>& old_to_new,
     uint32_t package_id,
     aapt::pb::Type* type) {
@@ -688,30 +1086,37 @@ void remove_or_change_resource_ids(
     if (ids_to_remove.count(res_id)) {
       continue;
     }
-    auto copy_entry = new aapt::pb::Entry(entry);
-    if (old_to_new.count(res_id)) {
-      uint32_t new_res_id = old_to_new.at(res_id);
-      uint32_t new_entry_id = ENTRY_MASK_BIT & new_res_id;
-      always_assert_log(copy_entry->has_entry_id(),
-                        "Entry don't have id %s",
-                        copy_entry->DebugString().c_str());
-      auto entry_id = copy_entry->mutable_entry_id();
-      entry_id->set_id(new_entry_id);
-      auto config_value_size = copy_entry->config_value_size();
-      for (int i = 0; i < config_value_size; ++i) {
-        auto config_value = copy_entry->mutable_config_value(i);
-        always_assert_log(config_value->has_value(),
-                          "ConfigValue don't have value %s\nEntry:\n%s",
-                          config_value->DebugString().c_str(),
-                          copy_entry->DebugString().c_str());
-        auto value = config_value->mutable_value();
-        change_resource_id_in_value_reference(old_to_new, value);
-      }
-    }
+    auto copy_entry = new_remapped_entry(entry, res_id, old_to_new);
     new_entries.AddAllocated(copy_entry);
   }
   type->clear_entry();
   type->mutable_entry()->Swap(&new_entries);
+}
+
+void nullify_resource_ids(const std::unordered_set<uint32_t>& ids_to_remove,
+                          uint32_t package_id,
+                          aapt::pb::Type* type) {
+  int entry_size = type->entry_size();
+  int last_non_deleted = 0;
+  for (int k = 0; k < entry_size; k++) {
+    auto entry = type->mutable_entry(k);
+    uint32_t res_id =
+        MAKE_RES_ID(package_id, type->type_id().id(), entry->entry_id().id());
+    if (ids_to_remove.count(res_id)) {
+      entry->clear_name();
+      entry->clear_visibility();
+      entry->clear_allow_new();
+      entry->clear_overlayable_item();
+      entry->clear_config_value();
+    } else {
+      last_non_deleted = k;
+    }
+  }
+  if (last_non_deleted < entry_size - 1) {
+    // Remove all entries after last_non_deleted
+    type->mutable_entry()->DeleteSubrange(last_non_deleted + 1,
+                                          entry_size - last_non_deleted - 1);
+  }
 }
 
 void change_resource_id_in_xml_references(
@@ -899,11 +1304,88 @@ void ResourcesPbFile::remap_res_ids_and_serialize(
           for (int i = 0; i < package_size; i++) {
             auto package = pb_restable.mutable_package(i);
             auto current_package_id = package->package_id().id();
-            int type_size = package->type_size();
-            for (int j = 0; j < type_size; j++) {
+            int original_type_size = package->type_size();
+            // Apply newly added types. Source res ids must have their data
+            // remapped, according to the given map, which we will do based off
+            // of the cached "ConfigValues" map.
+            for (auto& type_def : m_added_types) {
+              if (type_def.package_id == current_package_id) {
+                TRACE(RES, 9, "Appending type %s (ID 0x%x) to package 0x%x",
+                      type_def.name.c_str(), type_def.type_id,
+                      type_def.package_id);
+                auto new_type = package->add_type();
+                new_type->set_name(type_def.name);
+                new_type->mutable_type_id()->set_id(type_def.type_id);
+
+                google::protobuf::RepeatedPtrField<aapt::pb::Entry> new_entries;
+                size_t current_entry_id = 0;
+                for (const auto& source_id : type_def.source_res_ids) {
+                  auto& source_name = id_to_name.at(source_id);
+                  auto& source_config_values =
+                      m_res_id_to_configvalue.at(source_id);
+
+                  auto source_entry = std::make_shared<aapt::pb::Entry>();
+                  // Entry id needs to really just be the entry id, i.e. YYYY
+                  // from 0x7fXXYYYY
+                  source_entry->mutable_entry_id()->set_id(source_id & 0xFFFF);
+                  source_entry->set_name(source_name);
+                  source_entry->set_allocated_visibility(
+                      new aapt::pb::Visibility(
+                          m_res_id_to_entry.at(source_id).visibility()));
+                  for (const auto& source_cv : source_config_values) {
+                    auto new_config_value = source_entry->add_config_value();
+                    new_config_value->set_allocated_config(
+                        new aapt::pb::Configuration(source_cv.config()));
+                    new_config_value->set_allocated_value(
+                        new aapt::pb::Value(source_cv.value()));
+                  }
+                  auto remapped_entry =
+                      new_remapped_entry(*source_entry, source_id, old_to_new);
+                  remapped_entry->mutable_entry_id()->set_id(
+                      current_entry_id++);
+                  new_entries.AddAllocated(remapped_entry);
+                }
+                new_type->clear_entry();
+                new_type->mutable_entry()->Swap(&new_entries);
+              }
+            }
+            // Remap and apply deletions for the original types in the table.
+            for (int j = 0; j < original_type_size; j++) {
               auto type = package->mutable_type(j);
               remove_or_change_resource_ids(m_ids_to_remove, old_to_new,
                                             current_package_id, type);
+            }
+          }
+          std::ofstream out(resources_pb_path, std::ofstream::binary);
+          always_assert(pb_restable.SerializeToOstream(&out));
+        });
+  }
+}
+
+void ResourcesPbFile::nullify_res_ids_and_serialize(
+    const std::vector<std::string>& resource_files) {
+  for (const auto& resources_pb_path : resource_files) {
+    TRACE(RES,
+          9,
+          "BundleResources changing resource data for file: %s",
+          resources_pb_path.c_str());
+    read_protobuf_file_contents(
+        resources_pb_path,
+        [&](google::protobuf::io::CodedInputStream& input,
+            size_t /* unused */) {
+          aapt::pb::ResourceTable pb_restable;
+          bool read_finish = pb_restable.ParseFromCodedStream(&input);
+          always_assert_log(read_finish,
+                            "BundleResoource failed to read %s",
+                            resources_pb_path.c_str());
+          int package_size = pb_restable.package_size();
+          for (int i = 0; i < package_size; i++) {
+            auto package = pb_restable.mutable_package(i);
+            auto current_package_id = package->package_id().id();
+            int type_size = package->type_size();
+            for (int j = 0; j < type_size; j++) {
+              auto type = package->mutable_type(j);
+              nullify_resource_ids(m_ids_to_remove, current_package_id, type);
             }
           }
           std::ofstream out(resources_pb_path, std::ofstream::binary);
@@ -937,6 +1419,57 @@ void remap_entry_file_paths(const std::function<void(aapt::pb::FileReference*,
   }
 }
 } // namespace
+
+void ResourcesPbFile::remap_file_paths_and_serialize(
+    const std::vector<std::string>& resource_files,
+    const std::unordered_map<std::string, std::string>& old_to_new) {
+  auto remap_filepaths = [&old_to_new](aapt::pb::FileReference* file,
+                                       uint32_t res_id) {
+    auto search = old_to_new.find(file->path());
+    if (search != old_to_new.end()) {
+      TRACE(RES, 8, "Writing file path %s to ID 0x%x", search->second.c_str(),
+            res_id);
+      file->set_path(search->second);
+    }
+  };
+  for (const auto& resources_pb_path : resource_files) {
+    TRACE(RES,
+          9,
+          "BundleResources changing file paths for file: %s",
+          resources_pb_path.c_str());
+    read_protobuf_file_contents(
+        resources_pb_path,
+        [&](google::protobuf::io::CodedInputStream& input,
+            size_t /* unused */) {
+          aapt::pb::ResourceTable pb_restable;
+          bool read_finish = pb_restable.ParseFromCodedStream(&input);
+          always_assert_log(read_finish,
+                            "BundleResoource failed to read %s",
+                            resources_pb_path.c_str());
+          int package_size = pb_restable.package_size();
+          for (int i = 0; i < package_size; i++) {
+            auto package = pb_restable.mutable_package(i);
+            auto current_package_id = package->package_id().id();
+            int type_size = package->type_size();
+            for (int j = 0; j < type_size; j++) {
+              auto type = package->mutable_type(j);
+              auto current_type_id = type->type_id().id();
+              int entry_size = type->entry_size();
+              for (int k = 0; k < entry_size; k++) {
+                auto entry = type->mutable_entry(k);
+                uint32_t res_id =
+                    MAKE_RES_ID(current_package_id, current_type_id,
+                                entry->entry_id().id());
+                remap_entry_file_paths(remap_filepaths, res_id, entry);
+              }
+            }
+          }
+          std::ofstream out(resources_pb_path, std::ofstream::binary);
+          always_assert(pb_restable.SerializeToOstream(&out));
+        });
+  }
+}
+
 bool find_prefix_match(const std::unordered_set<std::string>& prefixes,
                        const std::string& name) {
   return std::find_if(prefixes.begin(), prefixes.end(),
@@ -1026,56 +1559,6 @@ size_t ResourcesPbFile::obfuscate_resource_and_serialize(
         });
   }
   return num_changed;
-}
-
-void ResourcesPbFile::remap_file_paths_and_serialize(
-    const std::vector<std::string>& resource_files,
-    const std::unordered_map<std::string, std::string>& old_to_new) {
-  auto remap_filepaths = [&old_to_new](aapt::pb::FileReference* file,
-                                       uint32_t res_id) {
-    auto search = old_to_new.find(file->path());
-    if (search != old_to_new.end()) {
-      TRACE(RES, 8, "Writing file path %s to ID 0x%x", search->second.c_str(),
-            res_id);
-      file->set_path(search->second);
-    }
-  };
-  for (const auto& resources_pb_path : resource_files) {
-    TRACE(RES,
-          9,
-          "BundleResources changing file paths for file: %s",
-          resources_pb_path.c_str());
-    read_protobuf_file_contents(
-        resources_pb_path,
-        [&](google::protobuf::io::CodedInputStream& input,
-            size_t /* unused */) {
-          aapt::pb::ResourceTable pb_restable;
-          bool read_finish = pb_restable.ParseFromCodedStream(&input);
-          always_assert_log(read_finish,
-                            "BundleResoource failed to read %s",
-                            resources_pb_path.c_str());
-          int package_size = pb_restable.package_size();
-          for (int i = 0; i < package_size; i++) {
-            auto package = pb_restable.mutable_package(i);
-            auto current_package_id = package->package_id().id();
-            int type_size = package->type_size();
-            for (int j = 0; j < type_size; j++) {
-              auto type = package->mutable_type(j);
-              auto current_type_id = type->type_id().id();
-              int entry_size = type->entry_size();
-              for (int k = 0; k < entry_size; k++) {
-                auto entry = type->mutable_entry(k);
-                uint32_t res_id =
-                    MAKE_RES_ID(current_package_id, current_type_id,
-                                entry->entry_id().id());
-                remap_entry_file_paths(remap_filepaths, res_id, entry);
-              }
-            }
-          }
-          std::ofstream out(resources_pb_path, std::ofstream::binary);
-          always_assert(pb_restable.SerializeToOstream(&out));
-        });
-  }
 }
 
 namespace {
@@ -1212,6 +1695,8 @@ void reorder_config_value_repeated_field(aapt::pb::ResourceTable* pb_restable) {
 
 void ResourcesPbFile::collect_resource_data_for_file(
     const std::string& resources_pb_path) {
+  uint32_t result = 0;
+  bool empty_package = true;
   TRACE(RES,
         9,
         "BundleResources collecting resource data for file: %s",
@@ -1237,11 +1722,19 @@ void ResourcesPbFile::collect_resource_data_for_file(
         reorder_config_value_repeated_field(&pb_restable);
         for (const aapt::pb::Package& pb_package : pb_restable.package()) {
           auto current_package_id = pb_package.package_id().id();
+          if (result == 0) {
+            result = current_package_id;
+          } else {
+            always_assert_log(
+                result == current_package_id,
+                "Broken assumption for only one package for resources.");
+          }
           TRACE(RES, 9, "Package: %s %X", pb_package.package_name().c_str(),
                 current_package_id);
           m_package_id_to_module_name.emplace(
               current_package_id, module_name_from_pb_path(resources_pb_path));
           for (const aapt::pb::Type& pb_type : pb_package.type()) {
+            empty_package = false;
             auto current_type_id = pb_type.type_id().id();
             const auto& current_type_name = pb_type.name();
             TRACE(RES, 9, "  Type: %s %X", current_type_name.c_str(),
@@ -1251,29 +1744,47 @@ void ResourcesPbFile::collect_resource_data_for_file(
                               current_type_name);
             m_type_id_to_names[current_type_id] = current_type_name;
             for (const aapt::pb::Entry& pb_entry : pb_type.entry()) {
-              if (m_package_id == 0xFFFFFFFF) {
-                m_package_id = current_package_id;
-              }
-              always_assert_log(
-                  m_package_id == current_package_id,
-                  "Broken assumption for only one package for resources.");
               std::string name_string = pb_entry.name();
               auto current_entry_id = pb_entry.entry_id().id();
               auto current_resource_id = MAKE_RES_ID(
                   current_package_id, current_type_id, current_entry_id);
               TRACE(RES, 9, "    Entry: %s %X %X", pb_entry.name().c_str(),
                     current_entry_id, current_resource_id);
-              sorted_res_ids.add(current_resource_id);
+              sorted_res_ids.emplace_back(current_resource_id);
               always_assert(m_existed_res_ids.count(current_resource_id) == 0);
               m_existed_res_ids.emplace(current_resource_id);
               id_to_name.emplace(current_resource_id, name_string);
               name_to_ids[name_string].push_back(current_resource_id);
+              m_res_id_to_entry.emplace(current_resource_id, pb_entry);
               m_res_id_to_configvalue.emplace(current_resource_id,
                                               pb_entry.config_value());
             }
           }
         }
+        std::sort(sorted_res_ids.begin(), sorted_res_ids.end());
       });
+  if (result != 0 && !empty_package) {
+    always_assert_log(m_package_ids.count(result) == 0,
+                      "Redefinition of Package ID 0x%x which is unexpected",
+                      result);
+    m_package_ids.emplace(result);
+  }
+}
+
+void ResourcesPbFile::get_type_names(std::vector<std::string>* type_names) {
+  always_assert(m_type_id_to_names.size() > 0);
+  always_assert_log(type_names->size() == 0,
+                    "Must provide an empty vector, for documented indexing "
+                    "scheme to be valid");
+  auto highest_type_id = m_type_id_to_names.rbegin()->first;
+  for (size_t i = 1; i <= highest_type_id; i++) {
+    auto search = m_type_id_to_names.find(i);
+    if (search != m_type_id_to_names.end()) {
+      type_names->emplace_back(search->second);
+    } else {
+      type_names->emplace_back("");
+    }
+  }
 }
 
 std::unordered_set<uint32_t> ResourcesPbFile::get_types_by_name(
@@ -1320,9 +1831,6 @@ bool is_resource_file(const std::string& str) {
 std::vector<std::string> ResourcesPbFile::get_files_by_rid(
     uint32_t res_id, ResourcePathType path_type) {
   std::vector<std::string> ret;
-  if (m_res_id_to_configvalue.count(res_id) == 0) {
-    return ret;
-  }
   const std::string& module_name = resolve_module_name_for_resource_id(res_id);
   auto handle_path = [&](const std::string& file_path) {
     if (is_resource_file(file_path)) {
@@ -1364,8 +1872,12 @@ void ResourcesPbFile::walk_references_for_resource(
     return;
   }
   nodes_visited->emplace(resID);
+  if (m_res_id_to_configvalue.find(resID) == m_res_id_to_configvalue.end()) {
+    // We might have some potential resource ID that does not actually
+    // exist.
+    return;
+  }
   auto module_name = resolve_module_name_for_resource_id(resID);
-
   auto& initial_values = m_res_id_to_configvalue.at(resID);
   std::stack<const aapt::pb::ConfigValue*> nodes_to_explore;
   auto push_to_stack = [&nodes_to_explore](const aapt::pb::ConfigValue& cv) {
@@ -1436,6 +1948,84 @@ void ResourcesPbFile::walk_references_for_resource(
   }
 }
 
+uint64_t ResourcesPbFile::resource_value_count(uint32_t res_id) {
+  const auto& config_values = m_res_id_to_configvalue.at(res_id);
+  return config_values.size();
+}
+
+namespace {
+android::ResTable_config convert_to_arsc_config(
+    uint32_t res_id, const aapt::pb::Configuration& pb_config) {
+  std::string error_msg;
+  android::ResTable_config arsc_config{};
+  arsc_config.size = sizeof(android::ResTable_config);
+  always_assert_log(
+      DeserializeConfigFromPb(pb_config, &arsc_config, &error_msg) == true,
+      "Could not convert config for ID 0x%x: %s", res_id, error_msg.c_str());
+  return arsc_config;
+}
+
+bool is_value_null_or_empty(const aapt::pb::Value& pb_value) {
+  if (pb_value.has_item()) {
+    const auto& pb_item = pb_value.item();
+    return pb_item.has_prim() && (pb_item.prim().has_empty_value() ||
+                                  pb_item.prim().has_null_value());
+  }
+  return false;
+}
+} // namespace
+
+void ResourcesPbFile::get_configurations(
+    uint32_t package_id,
+    const std::string& name,
+    std::vector<android::ResTable_config>* configs) {
+  std::set<android::ResTable_config> config_set;
+  for (const auto& pair : m_type_id_to_names) {
+    if (pair.second == name) {
+      auto type_id = pair.first;
+      for (const auto& cv_pair : m_res_id_to_configvalue) {
+        auto res_id = cv_pair.first;
+        if (type_id == (res_id >> TYPE_INDEX_BIT_SHIFT & 0xFF) &&
+            package_id == (res_id >> PACKAGE_INDEX_BIT_SHIFT & 0xFF)) {
+          for (const auto& cv : cv_pair.second) {
+            auto& pb_config = cv.config();
+            auto arsc_config = convert_to_arsc_config(res_id, pb_config);
+            if (traceEnabled(RES, 9)) {
+              auto arsc_config_string = arsc_config.toString();
+              TRACE(RES, 9, "Resource ID 0x%x has value in config: %s", res_id,
+                    arsc_config_string.c_str());
+              std::string pb_desc;
+              google::protobuf::TextFormat::PrintToString(pb_config, &pb_desc);
+              TRACE(RES, 9, "  Proto config desc: %s", pb_desc.c_str());
+            }
+            config_set.emplace(arsc_config);
+          }
+        }
+      }
+    }
+  }
+  for (const auto& c : config_set) {
+    configs->emplace_back(c);
+  }
+}
+
+std::set<android::ResTable_config> ResourcesPbFile::get_configs_with_values(
+    uint32_t id) {
+  std::set<android::ResTable_config> config_set;
+  auto& config_values = m_res_id_to_configvalue.at(id);
+  for (const auto& cv : config_values) {
+    if (cv.has_value()) {
+      auto& pb_value = cv.value();
+      if (!is_value_null_or_empty(pb_value)) {
+        auto& pb_config = cv.config();
+        auto arsc_config = convert_to_arsc_config(id, pb_config);
+        config_set.emplace(arsc_config);
+      }
+    }
+  }
+  return config_set;
+}
+
 std::unique_ptr<ResourceTableFile> BundleResources::load_res_table() {
   const auto& res_pb_file_paths = find_resources_files();
   auto to_return = std::make_unique<ResourcesPbFile>(ResourcesPbFile());
@@ -1462,6 +2052,8 @@ size_t ResourcesPbFile::get_hash_from_values(
   }
   return hash;
 }
+
+size_t ResourcesPbFile::package_count() { return m_package_ids.size(); }
 
 void ResourcesPbFile::collect_resid_values_and_hashes(
     const std::vector<uint32_t>& ids,
@@ -1523,6 +2115,88 @@ bool ResourcesPbFile::resource_value_identical(uint32_t a_id, uint32_t b_id) {
     }
   }
   return true;
+}
+
+namespace {
+
+void maybe_obfuscate_element(
+    const std::unordered_set<std::string>& do_not_obfuscate_elements,
+    aapt::pb::XmlElement* pb_element,
+    size_t* change_count) {
+  if (do_not_obfuscate_elements.count(pb_element->name()) > 0) {
+    return;
+  }
+  auto attr_count = pb_element->attribute_size();
+  for (int i = 0; i < attr_count; i++) {
+    auto pb_attr = pb_element->mutable_attribute(i);
+    if (pb_attr->resource_id() > 0) {
+      pb_attr->set_name("");
+      (*change_count)++;
+    }
+  }
+  auto child_size = pb_element->child_size();
+  for (int i = 0; i < child_size; i++) {
+    auto pb_child = pb_element->mutable_child(i);
+    if (pb_child->has_element()) {
+      auto pb_child_element = pb_child->mutable_element();
+      maybe_obfuscate_element(do_not_obfuscate_elements, pb_child_element,
+                              change_count);
+    }
+  }
+}
+
+void obfuscate_xml_attributes(
+    const std::string& filename,
+    const std::unordered_set<std::string>& do_not_obfuscate_elements) {
+  read_protobuf_file_contents(
+      filename,
+      [&](google::protobuf::io::CodedInputStream& input, size_t /* unused */) {
+        aapt::pb::XmlNode pb_node;
+        always_assert_log(pb_node.ParseFromCodedStream(&input),
+                          "BundleResource failed to read %s",
+                          filename.c_str());
+        size_t change_count = 0;
+        if (pb_node.has_element()) {
+          auto pb_element = pb_node.mutable_element();
+          maybe_obfuscate_element(do_not_obfuscate_elements, pb_element,
+                                  &change_count);
+        }
+        if (change_count > 0) {
+          std::ofstream out(filename, std::ofstream::binary);
+          always_assert(pb_node.SerializeToOstream(&out));
+        }
+      });
+}
+} // namespace
+
+void BundleResources::obfuscate_xml_files(
+    const std::unordered_set<std::string>& allowed_types,
+    const std::unordered_set<std::string>& do_not_obfuscate_elements) {
+  using path_t = boost::filesystem::path;
+  using dir_iterator = boost::filesystem::directory_iterator;
+
+  std::set<std::string> xml_paths;
+  path_t dir(m_directory);
+  for (auto& module_entry : boost::make_iterator_range(
+           boost::filesystem::directory_iterator(dir), {})) {
+    path_t res = module_entry.path() / "/res";
+    if (exists(res) && is_directory(res)) {
+      for (auto it = dir_iterator(res); it != dir_iterator(); ++it) {
+        auto const& entry = *it;
+        const path_t& entry_path = entry.path();
+        const auto& entry_string = entry_path.string();
+        if (is_directory(entry_path) &&
+            can_obfuscate_xml_file(allowed_types, entry_string)) {
+          for (const std::string& layout : get_xml_files(entry_string)) {
+            xml_paths.emplace(layout);
+          }
+        }
+      }
+    }
+  }
+  for (const auto& path : xml_paths) {
+    obfuscate_xml_attributes(path, do_not_obfuscate_elements);
+  }
 }
 
 ResourcesPbFile::~ResourcesPbFile() {}

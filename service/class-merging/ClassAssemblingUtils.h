@@ -30,7 +30,7 @@ void cook_merger_fields_lookup(
 
 DexClass* create_class(const DexType* type,
                        const DexType* super_type,
-                       const std::string& pkg_name,
+                       const std::string_view pkg_name,
                        const std::vector<DexField*>& fields,
                        const TypeSet& interfaces,
                        bool with_default_ctor = false,

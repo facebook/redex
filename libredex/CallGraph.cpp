@@ -421,9 +421,7 @@ std::vector<const DexMethod*> MultipleCalleeStrategy::get_additional_roots(
 }
 
 Edge::Edge(NodeId caller, NodeId callee, IRInstruction* invoke_insn)
-    : m_caller(std::move(caller)),
-      m_callee(std::move(callee)),
-      m_invoke_insn(invoke_insn) {}
+    : m_caller(caller), m_callee(callee), m_invoke_insn(invoke_insn) {}
 
 Graph::Graph(const BuildStrategy& strat)
     : m_entry(std::make_shared<Node>(Node::GHOST_ENTRY)),

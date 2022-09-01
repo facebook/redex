@@ -75,18 +75,22 @@ void unify_defs(const UseDefChains& chains, DefSets* def_sets) {
 template <typename Iter, typename Fn>
 void replay_analysis_with_callback(const cfg::ControlFlowGraph& cfg,
                                    const Iter& iter,
+                                   bool ignore_unreachable,
                                    Fn f) {
   for (cfg::Block* block : cfg.blocks()) {
     auto defs_in = iter.get_entry_state_at(block);
+    if (ignore_unreachable && defs_in.is_bottom()) {
+      continue;
+    }
     for (const auto& mie : InstructionIterable(block)) {
       auto insn = mie.insn;
       for (src_index_t i = 0; i < insn->srcs_size(); ++i) {
         Use use{insn, i};
         auto src = insn->src(i);
         const auto& defs = defs_in.get(src);
-        always_assert_log(!defs.is_top() && defs.size() > 0,
-                          "Found use without def when processing [0x%p]%s",
-                          &mie, SHOW(insn));
+        always_assert_log(
+            !defs.is_top() && !defs.is_bottom() && defs.size() > 0,
+            "Found use without def when processing [0x%p]%s", &mie, SHOW(insn));
         f(use, defs);
       }
       iter.analyze_instruction(insn, &defs_in);
@@ -96,10 +100,12 @@ void replay_analysis_with_callback(const cfg::ControlFlowGraph& cfg,
 
 template <typename Iter>
 UseDefChains get_use_def_chains_impl(const cfg::ControlFlowGraph& cfg,
-                                     const Iter& iter) {
+                                     const Iter& iter,
+                                     bool ignore_unreachable) {
   UseDefChains chains;
   replay_analysis_with_callback(
-      cfg, iter, [&chains](const Use& use, const reaching_defs::Domain& defs) {
+      cfg, iter, ignore_unreachable,
+      [&chains](const Use& use, const reaching_defs::Domain& defs) {
         chains[use] = defs.elements();
       });
   return chains;
@@ -107,10 +113,12 @@ UseDefChains get_use_def_chains_impl(const cfg::ControlFlowGraph& cfg,
 
 template <typename Iter>
 DefUseChains get_def_use_chains_impl(const cfg::ControlFlowGraph& cfg,
-                                     const Iter& iter) {
+                                     const Iter& iter,
+                                     bool ignore_unreachable) {
   DefUseChains chains;
   replay_analysis_with_callback(
-      cfg, iter, [&chains](const Use& use, const reaching_defs::Domain& defs) {
+      cfg, iter, ignore_unreachable,
+      [&chains](const Use& use, const reaching_defs::Domain& defs) {
         for (auto def : defs.elements()) {
           chains[def].emplace(use);
         }
@@ -126,29 +134,31 @@ bool Use::operator==(const Use& that) const {
   return insn == that.insn && src_index == that.src_index;
 }
 
-Chains::Chains(const cfg::ControlFlowGraph& cfg) : m_cfg(cfg), m_fp_iter(cfg) {
+Chains::Chains(const cfg::ControlFlowGraph& cfg, bool ignore_unreachable)
+    : m_cfg(cfg), m_fp_iter(cfg), m_ignore_unreachable(ignore_unreachable) {
   m_fp_iter.run(reaching_defs::Environment());
 }
 
 UseDefChains Chains::get_use_def_chains() const {
-  return get_use_def_chains_impl(m_cfg, m_fp_iter);
+  return get_use_def_chains_impl(m_cfg, m_fp_iter, m_ignore_unreachable);
 }
 
 DefUseChains Chains::get_def_use_chains() const {
-  return get_def_use_chains_impl(m_cfg, m_fp_iter);
+  return get_def_use_chains_impl(m_cfg, m_fp_iter, m_ignore_unreachable);
 }
 
-MoveAwareChains::MoveAwareChains(const cfg::ControlFlowGraph& cfg)
-    : m_cfg(cfg), m_fp_iter(cfg) {
+MoveAwareChains::MoveAwareChains(const cfg::ControlFlowGraph& cfg,
+                                 bool ignore_unreachable)
+    : m_cfg(cfg), m_fp_iter(cfg), m_ignore_unreachable(ignore_unreachable) {
   m_fp_iter.run(reaching_defs::Environment());
 }
 
 UseDefChains MoveAwareChains::get_use_def_chains() const {
-  return get_use_def_chains_impl(m_cfg, m_fp_iter);
+  return get_use_def_chains_impl(m_cfg, m_fp_iter, m_ignore_unreachable);
 }
 
 DefUseChains MoveAwareChains::get_def_use_chains() const {
-  return get_def_use_chains_impl(m_cfg, m_fp_iter);
+  return get_def_use_chains_impl(m_cfg, m_fp_iter, m_ignore_unreachable);
 }
 
 void renumber_registers(IRCode* code, bool width_aware) {

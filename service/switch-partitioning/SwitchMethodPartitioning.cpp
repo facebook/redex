@@ -184,6 +184,20 @@ boost::variant<reg_t, bool> compute_prologue_blocks(
   return *determining_reg;
 }
 
+// Check whether, possibly at the end of a chain of gotos, the block will
+// unconditionally throw.
+bool throws(cfg::Block* block) {
+  std::unordered_set<cfg::Block*> visited{block};
+  for (; block->goes_to_only_edge(); block = block->goes_to_only_edge()) {
+    if (!visited.insert(block->goes_to_only_edge()).second) {
+      // non-terminating loop
+      return false;
+    }
+  }
+  auto last_insn_it = block->get_last_insn();
+  return last_insn_it != block->end() &&
+         last_insn_it->insn->opcode() == OPCODE_THROW;
+}
 } // namespace
 
 boost::optional<SwitchMethodPartitioning> SwitchMethodPartitioning::create(
@@ -233,9 +247,7 @@ boost::optional<SwitchMethodPartitioning> SwitchMethodPartitioning::create(
     auto env = fixpoint.get_entry_state_at(case_block);
     auto case_key = env.get<SignedConstantDomain>(determining_reg);
     if (case_key.is_top() && verify_default_case) {
-      auto last_insn_it = case_block->get_last_insn();
-      always_assert_log(last_insn_it != case_block->end() &&
-                            last_insn_it->insn->opcode() == OPCODE_THROW,
+      always_assert_log(throws(case_block),
                         "Could not determine key for block that does not look "
                         "like it throws an IllegalArgumentException: %zu in %s",
                         case_block->id(), SHOW(cfg));
@@ -250,9 +262,7 @@ boost::optional<SwitchMethodPartitioning> SwitchMethodPartitioning::create(
         // that.
         if (edge_case_key == boost::none &&
             case_key.interval() == sign_domain::Interval::NEZ) {
-          auto last_insn_it = case_block->get_last_insn();
-          if (last_insn_it != case_block->end() &&
-              last_insn_it->insn->opcode() == OPCODE_THROW) {
+          if (throws(case_block)) {
             // Looks like a block that throws an IllegalArgumentException
             continue;
           }

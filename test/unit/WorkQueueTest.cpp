@@ -72,6 +72,16 @@ TEST(WorkQueueTest, RunTest) {
   }
 }
 
+TEST(WorkQueueTest, interal) {
+  std::array<int, NUM_INTS> array{};
+
+  workqueue_run_for<int>(0, NUM_INTS, [&array](int i) { array[i]++; });
+
+  for (const auto& e : array) {
+    EXPECT_EQ(1, e);
+  }
+}
+
 TEST(WorkQueueTest, singleThreadTest) {
   int array[NUM_INTS] = {0};
 

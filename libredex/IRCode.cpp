@@ -575,6 +575,11 @@ IRList* deep_copy_ir_list(IRList* old_ir_list) {
 IRCode::IRCode() : m_ir_list(new IRList()) {}
 
 IRCode::~IRCode() {
+  // Let the CFG clean itself up.
+  if (m_cfg != nullptr && m_cfg->editable() && m_owns_insns) {
+    m_cfg->set_insn_ownership(true);
+  }
+
   if (m_owns_insns) {
     m_ir_list->insn_clear_and_dispose();
   } else {
@@ -622,11 +627,18 @@ IRCode::IRCode(std::unique_ptr<cfg::ControlFlowGraph> cfg) {
 
 void IRCode::cleanup_debug() { m_ir_list->cleanup_debug(); }
 
-void IRCode::build_cfg(bool editable) {
+void IRCode::build_cfg(bool editable,
+                       bool rebuild_editable_even_if_already_built) {
   always_assert_log(
       !editable || !m_cfg_serialized_with_custom_strategy,
       "Cannot build editable CFG after being serialized with custom strategy. "
       "Rebuilding CFG will cause problems with basic block ordering.");
+  if (editable && !rebuild_editable_even_if_already_built &&
+      editable_cfg_built()) {
+    // If current code already has editable_cfg, and no need to rebuild a fresh
+    // editable cfg, just keep current cfg and return.
+    return;
+  }
   clear_cfg();
   m_cfg = std::make_unique<cfg::ControlFlowGraph>(m_ir_list, m_registers_size,
                                                   editable);

@@ -59,7 +59,6 @@
 #include "ConstantAbstractDomain.h"
 #include "ControlFlow.h"
 #include "FieldOpTracker.h"
-#include "HashedSetAbstractDomain.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
@@ -896,7 +895,7 @@ SharedState::SharedState(
   // The list of methods is not exhaustive; it was derived by observing the most
   // common barriers encountered in real-life code, and then studying their spec
   // to check whether they are "safe" in the context of CSE barriers.
-  static const char* safe_method_names[] = {
+  static const std::string_view safe_method_names[] = {
       "Landroid/os/SystemClock;.elapsedRealtime:()J",
       "Landroid/os/SystemClock;.uptimeMillis:()J",
       "Landroid/util/SparseArray;.append:(ILjava/lang/Object;)V",
@@ -996,10 +995,10 @@ SharedState::SharedState(
   };
 
   for (auto const safe_method_name : safe_method_names) {
-    const std::string& s(safe_method_name);
-    auto method_ref = DexMethod::get_method(s);
+    auto method_ref = DexMethod::get_method(safe_method_name);
     if (method_ref == nullptr) {
-      TRACE(CSE, 1, "[CSE]: Could not find safe method %s", s.c_str());
+      TRACE(CSE, 1, "[CSE]: Could not find safe method %s",
+            str_copy(safe_method_name).c_str());
       continue;
     }
 

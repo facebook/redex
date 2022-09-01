@@ -139,66 +139,69 @@ std::vector<DexMethod*> get_possibly_warm_or_hot_methods(
   auto& method_profiles = config_files.get_method_profiles();
 
   struct plus_assign_vector {
-    void operator()(const std::vector<DexMethod*>& addend, std::vector<DexMethod*>* accumulator){
+    void operator()(const std::vector<DexMethod*>& addend,
+                    std::vector<DexMethod*>* accumulator) {
       accumulator->insert(accumulator->end(), addend.begin(), addend.end());
     }
   };
 
   std::vector<DexMethod*> possibly_warm_or_hot =
-    walk::parallel::methods<std::vector<DexMethod*>, plus_assign_vector>(
-      scope,
-      [&method_profiles, sufficiently_hot_methods,
-       sufficiently_warm_methods, block_profiles_hits](DexMethod* m, std::vector<DexMethod*>* acc) {
-        auto code = m->get_code();
-        if (!code) {
-          return;
-        }
+      walk::parallel::methods<std::vector<DexMethod*>, plus_assign_vector>(
+          scope,
+          [&method_profiles, sufficiently_hot_methods,
+           sufficiently_warm_methods,
+           block_profiles_hits](DexMethod* m, std::vector<DexMethod*>* acc) {
+            auto code = m->get_code();
+            if (!code) {
+              return;
+            }
 
-        if (sufficiently_hot_methods->count(m) ||
-            sufficiently_warm_methods->count(m)) {
-          return;
-        }
+            if (sufficiently_hot_methods->count(m) ||
+                sufficiently_warm_methods->count(m)) {
+              return;
+            }
 
-        const auto& all_interactions = method_profiles.all_interactions();
-        bool in_method_profiles = std::any_of(all_interactions.begin(), all_interactions.end(),
-            [m](const auto& p) {
-              auto& method_stats = p.second;
-              auto it = method_stats.find(m);
-              return it != method_stats.end();
-            });
+            const auto& all_interactions = method_profiles.all_interactions();
+            bool in_method_profiles =
+                std::any_of(all_interactions.begin(), all_interactions.end(),
+                            [m](const auto& p) {
+                              auto& method_stats = p.second;
+                              auto it = method_stats.find(m);
+                              return it != method_stats.end();
+                            });
 
-        if (in_method_profiles) {
-          return;
-        }
+            if (in_method_profiles) {
+              return;
+            }
 
-        // This method was not warm or hot, and was not called
-        // according to method profiles.  See if its entry block
-        // has source blocks which were executed.
-        //
-        // Note: from now on we can just return and process the
-        // next method on success/failure, as there's no point
-        // checking the same fixed condition for other
-        // interactions.
-        cfg::ScopedCFG scopedCFG(code);
-        auto& cfg = code->cfg();
-        auto entry_block = cfg.entry_block();
-        auto entry_sb = source_blocks::get_first_source_block(entry_block);
-        if (!entry_sb) {
-          return;
-        }
+            // This method was not warm or hot, and was not called
+            // according to method profiles.  See if its entry block
+            // has source blocks which were executed.
+            //
+            // Note: from now on we can just return and process the
+            // next method on success/failure, as there's no point
+            // checking the same fixed condition for other
+            // interactions.
+            cfg::ScopedCFG scopedCFG(code);
+            auto& cfg = code->cfg();
+            auto entry_block = cfg.entry_block();
+            auto entry_sb = source_blocks::get_first_source_block(entry_block);
+            if (!entry_sb) {
+              return;
+            }
 
-        bool entry_hit = false;
-        entry_sb->foreach_val(
-            [&entry_hit, block_profiles_hits](const auto& val_pair) {
+            bool entry_hit = false;
+            entry_sb->foreach_val([&entry_hit,
+                                   block_profiles_hits](const auto& val_pair) {
               entry_hit |= (val_pair && val_pair->val > block_profiles_hits);
             });
 
-        if (!entry_hit) {
-          return;
-        }
+            if (!entry_hit) {
+              return;
+            }
 
-        acc->push_back(m);
-      });
+            acc->push_back(m);
+          });
 
   return possibly_warm_or_hot;
 }
@@ -411,43 +414,19 @@ CanOutlineBlockDecider::can_outline_from_big_block(
         }));
   }
   // Via m_max_vals, we consider the maximum hit number for each block.
-  // Across all blocks, we are gathering the *minimum* of those hit numbers.
-  boost::optional<float> min_val;
+  // Across all blocks, we are also computing the maximum value.
+  boost::optional<float> val;
   for (auto block : big_block.get_blocks()) {
-    auto val = (*m_max_vals)[block];
-    if (!min_val || (val && *val < *min_val)) {
-      min_val = val;
-      if (min_val && *min_val == 0) {
-        break;
-      }
+    auto block_val = (*m_max_vals)[block];
+    if (!val || (block_val && *block_val > *val)) {
+      val = block_val;
     }
   }
-  // Let's also look back at dominators. It's beneficial if we can tighten the
-  // minimum.
-  auto block = big_block.get_first_block();
-  auto& cfg = block->cfg();
-  auto entry_block = cfg.entry_block();
-  if (block != entry_block && (!min_val || *min_val != 0)) {
-    if (!m_dominators) {
-      m_dominators.reset(
-          new dominators::SimpleFastDominators<cfg::GraphInterface>(cfg));
-    }
-    do {
-      block = m_dominators->get_idom(block);
-      auto val = (*m_max_vals)[block];
-      if (!min_val || (val && *val < *min_val)) {
-        min_val = val;
-        if (min_val && *min_val == 0) {
-          break;
-        }
-      }
-    } while (block != entry_block);
-  }
-  if (!min_val) {
+  if (!val) {
     return m_sufficiently_hot ? Result::HotNoSourceBlocks
                               : Result::WarmLoopNoSourceBlocks;
   }
-  if (*min_val > m_config.block_profiles_hits) {
+  if (*val > m_config.block_profiles_hits) {
     return m_sufficiently_hot ? Result::HotExceedsThresholds
                               : Result::WarmLoopExceedsThresholds;
   }

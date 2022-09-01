@@ -149,9 +149,10 @@ struct ModelSpec {
   bool merge_types_with_static_fields{false};
   // Preserve debug info like line numbers.
   bool keep_debug_info{false};
-  // A flag for method deduplication. Deduplicating throw blocks for
-  // human-written code may make java stack trace confusing.
-  bool dedup_throw_blocks{true};
+  // A flag for method deduplication. Deduplicating block that explicitly
+  // capture stack traces for human-written code may make java stack trace
+  // confusing.
+  bool dedup_fill_in_stack_trace{true};
   // Replace string literals matching a merged type.
   bool replace_type_like_const_strings{true};
   // Whether string literals matching class names disqualifies classes from

@@ -6,7 +6,7 @@
 import enum
 import html
 
-from IPython.core.display import HTML, display
+from IPython.core.display import display, HTML
 
 
 def phabricator_link(node):

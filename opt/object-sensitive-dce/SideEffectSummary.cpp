@@ -40,7 +40,10 @@ SummaryBuilder::SummaryBuilder(
       m_analyze_external_reads(analyze_external_reads),
       m_reaching_defs_fixpoint_iter(reaching_defs_fixpoint_iter) {
   auto idx = 0;
-  for (auto& mie : InstructionIterable(code->get_param_instructions())) {
+  auto params = code->editable_cfg_built()
+                    ? code->cfg().get_param_instructions()
+                    : code->get_param_instructions();
+  for (auto& mie : InstructionIterable(params)) {
     auto insn = mie.insn;
     m_param_insn_map.emplace(insn, idx++);
   }

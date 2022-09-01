@@ -64,30 +64,38 @@ def main():
     print("========Summary=========")
     if trace:
         print(("Num of Methods:  %d, Num of Blocks: %d" % (num_methods, num_blocks)))
-        print((
-            "Blocks/Method: %.2f, Instructions/Block: %.2f"
-            % (num_blocks / num_methods, num_instructions / num_blocks)
-        ))
+        print(
+            (
+                "Blocks/Method: %.2f, Instructions/Block: %.2f"
+                % (num_blocks / num_methods, num_instructions / num_blocks)
+            )
+        )
         print(("Average Degree: %.2f" % (fan_in / num_blocks)))
         print(("Number of Virtual Methods: %d" % (num_virtual)))
-        print((
-            "%dth percentile in Method Size: %.2f"
-            % (
-                int(args.percentile),
-                np.percentile(np.array(method_size_array), int(args.percentile)),
+        print(
+            (
+                "%dth percentile in Method Size: %.2f"
+                % (
+                    int(args.percentile),
+                    np.percentile(np.array(method_size_array), int(args.percentile)),
+                )
             )
-        ))
-        print((
-            "%dth percentile in Block Size: %.2f"
-            % (
-                int(args.percentile),
-                np.percentile(np.array(block_size_array), int(args.percentile)),
+        )
+        print(
+            (
+                "%dth percentile in Block Size: %.2f"
+                % (
+                    int(args.percentile),
+                    np.percentile(np.array(block_size_array), int(args.percentile)),
+                )
             )
-        ))
-        print((
-            "Methods of size %d: %d"
-            % (int(args.countSize), method_size_array.count(int(args.countSize)))
-        ))
+        )
+        print(
+            (
+                "Methods of size %d: %d"
+                % (int(args.countSize), method_size_array.count(int(args.countSize)))
+            )
+        )
         # print method_size_array
         # print block_size_array
     else:

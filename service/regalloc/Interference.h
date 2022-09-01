@@ -13,7 +13,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include "IRCode.h"
+#include "ControlFlow.h"
 #include "Liveness.h"
 #include "RegisterType.h"
 
@@ -252,7 +252,7 @@ class Graph {
  * the given IROpcode when it is converted to a DexInstruction in the
  * instruction lowering process.
  */
-size_t dest_bit_width(const IRList::iterator& it);
+size_t dest_bit_width(const cfg::InstructionIterator& it);
 
 /*
  * The largest valid register that we can map the symreg in insn->src(src_index)
@@ -272,13 +272,13 @@ inline uint32_t div_ceil(uint32_t a, uint32_t b) { return (a + b - 1) / b; }
  * limited public interface.
  */
 class GraphBuilder {
-  static void update_node_constraints(const IRList::iterator&,
+  static void update_node_constraints(const cfg::InstructionIterator&,
                                       const RangeSet&,
                                       Graph*);
 
  public:
   static Graph build(const LivenessFixpointIterator&,
-                     IRCode*,
+                     cfg::ControlFlowGraph&,
                      reg_t initial_regs,
                      const RangeSet&);
 
@@ -293,11 +293,10 @@ uint32_t edge_weight_helper(uint8_t, uint8_t);
 } // namespace impl
 
 inline Graph build_graph(const LivenessFixpointIterator& fixpoint_iter,
-                         IRCode* code,
+                         cfg::ControlFlowGraph& cfg,
                          reg_t initial_regs,
                          const RangeSet& range_set) {
-  return impl::GraphBuilder::build(
-      fixpoint_iter, code, initial_regs, range_set);
+  return impl::GraphBuilder::build(fixpoint_iter, cfg, initial_regs, range_set);
 }
 
 } // namespace interference

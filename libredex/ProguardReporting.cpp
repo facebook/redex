@@ -13,7 +13,7 @@
 #include "DexClass.h"
 #include "ReachableClasses.h"
 
-std::string extract_suffix(std::string class_name) {
+std::string_view extract_suffix(std::string_view class_name) {
   auto i = class_name.find_last_of('.');
   if (i == std::string::npos) {
     // This is a class name with no package prefix.
@@ -62,7 +62,7 @@ std::string type_descriptor_to_java(const std::string& descriptor) {
   exit(2);
 }
 
-std::string extract_member_name(const std::string& qualified) {
+std::string_view extract_member_name(const std::string_view qualified) {
   auto dot = qualified.find('.');
   auto colon = qualified.find(':');
   return qualified.substr(dot + 1, colon - dot - 1);
@@ -124,7 +124,7 @@ void redex::print_method(std::ostream& output,
                          const ProguardMap& pg_map,
                          const std::string& class_name,
                          const DexMethod* method) {
-  std::string method_name = extract_member_name(method->get_name()->str());
+  std::string_view method_name = extract_member_name(method->get_name()->str());
   // Record if this is a constructor to supress return value printing
   // before the method name.
   bool is_constructor = method::is_init(method);
@@ -132,7 +132,7 @@ void redex::print_method(std::ostream& output,
     method_name = extract_suffix(class_name);
     is_constructor = true;
   } else {
-    const auto& deob = method->get_deobfuscated_name_or_empty();
+    const auto deob = method->get_deobfuscated_name_or_empty();
     if (deob.empty()) {
       std::cerr << "WARNING: method has no deobfu: " << method_name
                 << std::endl;

@@ -163,11 +163,11 @@ libredex_la_SOURCES = \
 	libredex/VirtualScope.cpp \
 	libredex/Warning.cpp \
 	libredex/WorkQueue.cpp \
-	libresource/FileMap.cpp \
+	libresource/Locale.cpp \
+	libresource/LocaleData.cpp \
 	libresource/ResourceTypes.cpp \
 	libresource/Serialize.cpp \
 	libresource/SharedBuffer.cpp \
-	libresource/Static.cpp \
 	libresource/String16.cpp \
 	libresource/String8.cpp \
 	libresource/TypeWrappers.cpp \
@@ -186,6 +186,7 @@ libredex_la_SOURCES = \
 	service/class-merging/ModelMethodMerger.cpp \
 	service/class-merging/Model.cpp \
 	service/class-merging/TypeTagUtils.cpp \
+	service/class-splitting/ClassSplitting.cpp \
 	service/cross-dex-ref-minimizer/CrossDexRefMinimizer.cpp \
 	service/constant-propagation/ConstantEnvironment.cpp \
 	service/constant-propagation/ConstantPropagationAnalysis.cpp \
@@ -241,6 +242,7 @@ libredex_la_SOURCES = \
 	service/regalloc/VirtualRegistersFile.cpp \
 	service/regalloc-fast/LinearScan.cpp \
 	service/regalloc-fast/LiveInterval.cpp \
+	service/resources/StaticIds.cpp \
 	service/shrinker/Shrinker.cpp \
 	service/switch-dispatch/SwitchDispatch.cpp \
 	service/switch-partitioning/SwitchEquivFinder.cpp \
@@ -303,7 +305,7 @@ libopt_la_SOURCES = \
 	opt/class-merging/ClassMergingPass.cpp \
 	opt/class-merging/IntraDexClassMergingPass.cpp \
 	opt/class-merging/ModelSpecGenerator.cpp \
-	opt/class-splitting/ClassSplitting.cpp \
+	opt/class-splitting/ClassSplittingPass.cpp \
 	opt/constant-propagation/ConstantPropagationPass.cpp \
 	opt/constant-propagation/ConstantPropagationRuntimeAssert.cpp \
 	opt/constant-propagation/IPConstantPropagation.cpp \

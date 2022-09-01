@@ -20,7 +20,6 @@
 #include "PassManager.h"
 #include "ProguardMap.h"
 #include "Resolver.h"
-#include "ScopedCFG.h"
 #include "SwitchEquivFinder.h"
 #include "Trace.h"
 #include "Walkers.h"
@@ -96,11 +95,13 @@ bool analyze_enum_ctors(
 
   struct DelegatingCall {
     DexMethod* ctor;
-    cfg::ScopedCFG cfg;
+    cfg::ControlFlowGraph& cfg;
     IRInstruction* invoke;
 
-    DelegatingCall(DexMethod* ctor, cfg::ScopedCFG cfg, IRInstruction* invoke)
-        : ctor{ctor}, cfg{std::move(cfg)}, invoke{invoke} {}
+    DelegatingCall(DexMethod* ctor,
+                   cfg::ControlFlowGraph& cfg,
+                   IRInstruction* invoke)
+        : ctor{ctor}, cfg{cfg}, invoke{invoke} {}
   };
 
   std::queue<DelegatingCall> delegating_calls;
@@ -120,10 +121,9 @@ bool analyze_enum_ctors(
         return false;
       }
 
-      cfg::ScopedCFG cfg{code};
-      auto res = f.find(*cfg, inv);
+      auto res = f.find(code->cfg(), inv);
       if (auto* inv_insn = res.matching(inv).unique()) {
-        delegating_calls.emplace(ctor, std::move(cfg), inv_insn);
+        delegating_calls.emplace(ctor, code->cfg(), inv_insn);
       } else {
         return false;
       }
@@ -159,7 +159,7 @@ bool analyze_enum_ctors(
         f.insn(m::equals(dc.invoke))
             .src(delegate_ordinal, param, mf::unique | mf::alias);
 
-    auto res = f.find(*dc.cfg, invoke_delegate);
+    auto res = f.find(dc.cfg, invoke_delegate);
 
     auto* load_ordinal = res.matching(param).unique();
     if (!load_ordinal) {
@@ -169,7 +169,7 @@ bool analyze_enum_ctors(
 
     // Figure out which param is being loaded.
     uint32_t ctor_ordinal = 0;
-    auto ii = InstructionIterable(dc.cfg->get_param_instructions());
+    auto ii = InstructionIterable(dc.cfg.get_param_instructions());
     for (auto it = ii.begin(), end = ii.end();; ++it, ++ctor_ordinal) {
       always_assert(it != end && "Unable to locate load_ordinal");
       if (it->insn == load_ordinal) break;
@@ -327,12 +327,12 @@ class OptimizeEnums {
 
     for (const auto& generated_cls : generated_classes) {
       auto generated_clinit = generated_cls->get_clinit();
-      cfg::ScopedCFG clinit_cfg{generated_clinit->get_code()};
+      cfg::ControlFlowGraph& clinit_cfg = generated_clinit->get_code()->cfg();
 
-      associate_lookup_tables_to_enums(generated_cls, *clinit_cfg,
+      associate_lookup_tables_to_enums(generated_cls, clinit_cfg,
                                        collected_enums, lookup_table_to_enum);
-      collect_generated_switch_cases(generated_cls, *clinit_cfg,
-                                     collected_enums, generated_switch_cases);
+      collect_generated_switch_cases(generated_cls, clinit_cfg, collected_enums,
+                                     generated_switch_cases);
 
       // update stats.
       m_stats.num_lookup_tables += generated_cls->get_sfields().size();
@@ -440,8 +440,9 @@ class OptimizeEnums {
 
     ConcurrentSet<const DexType*> types_used_as_instance_fields;
     walk::parallel::classes(m_scope, [&](DexClass* cls) {
-      // We conservatively reject all enums that are instance fields of classes
-      // because we don't know if the classes will be serialized or not.
+      // We conservatively reject all enums that are instance fields of
+      // classes because we don't know if the classes will be serialized or
+      // not.
       for (auto& ifield : cls->get_ifields()) {
         types_used_as_instance_fields.insert(
             type::get_element_type_if_array(ifield->get_type()));
@@ -520,13 +521,13 @@ class OptimizeEnums {
       return false;
     }
 
-    auto code = InstructionIterable(method->get_code());
-    auto it = code.begin();
+    auto ii = InstructionIterable(method->get_code()->cfg());
+    auto it = ii.begin();
     // Load parameter instructions.
-    while (it != code.end() && opcode::is_a_load_param(it->insn->opcode())) {
+    while (it != ii.end() && opcode::is_a_load_param(it->insn->opcode())) {
       ++it;
     }
-    if (it == code.end()) {
+    if (it == ii.end()) {
       return false;
     }
 
@@ -541,7 +542,7 @@ class OptimizeEnums {
         return false;
       }
     }
-    if (++it == code.end()) {
+    if (++it == ii.end()) {
       return false;
     }
 
@@ -551,15 +552,15 @@ class OptimizeEnums {
              opcode == OPCODE_CONST_STRING ||
              opcode == IOPCODE_MOVE_RESULT_PSEUDO_OBJECT;
     };
-    while (it != code.end() && is_iput_or_const(it->insn->opcode())) {
+    while (it != ii.end() && is_iput_or_const(it->insn->opcode())) {
       ++it;
     }
-    if (it == code.end()) {
+    if (it == ii.end()) {
       return false;
     }
 
     // return-void is the last instruction
-    return opcode::is_return_void(it->insn->opcode()) && (++it) == code.end();
+    return opcode::is_return_void(it->insn->opcode()) && (++it) == ii.end();
   }
 
   /**
@@ -583,15 +584,15 @@ class OptimizeEnums {
 
       auto& sfields = cls->get_sfields();
       const auto all_sfield_names_contain = [&sfields](const char* sub) {
-        return std::all_of(sfields.begin(), sfields.end(),
-                           [sub](DexField* sfield) {
-                             const auto& deobfuscated_name =
-                                 sfield->get_deobfuscated_name_or_empty();
-                             const auto& name = deobfuscated_name.empty()
-                                                    ? sfield->get_name()->str()
-                                                    : deobfuscated_name;
-                             return name.find(sub) != std::string::npos;
-                           });
+        return std::all_of(
+            sfields.begin(), sfields.end(), [sub](DexField* sfield) {
+              const auto& deobfuscated_name =
+                  sfield->get_deobfuscated_name_or_empty();
+              const std::string_view name = deobfuscated_name.empty()
+                                                ? sfield->get_name()->str()
+                                                : deobfuscated_name;
+              return name.find(sub) != std::string::npos;
+            });
       };
 
       // We expect the generated classes to ONLY contain the lookup tables
@@ -690,10 +691,11 @@ class OptimizeEnums {
 
     namespace cp = constant_propagation;
     walk::parallel::code(m_scope, [&](DexMethod*, IRCode& code) {
-      cfg::ScopedCFG cfg(&code);
-      cfg->calculate_exit_block();
+      always_assert(code.cfg().editable());
+      cfg::ControlFlowGraph& cfg = code.cfg();
+      cfg.calculate_exit_block();
 
-      optimize_enums::Iterator fixpoint(cfg.get());
+      optimize_enums::Iterator fixpoint(&cfg);
       fixpoint.run(optimize_enums::Environment());
       std::unordered_set<IRInstruction*> switches;
       for (const auto& info : fixpoint.collect()) {

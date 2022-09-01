@@ -6,6 +6,9 @@
  */
 
 #include "ResolveMethodRefs.h"
+
+#include "CFGMutation.h"
+#include "ScopedCFG.h"
 #include "Show.h"
 #include "Trace.h"
 #include "TypeUtil.h"
@@ -18,29 +21,29 @@ ResolveMethodRefs::ResolveMethodRefs(
     if (!code) {
       return;
     }
-    if (!code->cfg_built()) {
-      code->build_cfg(/* editable */ true);
-    }
+    cfg::ScopedCFG cfg(code);
     auto lta = gta.get_local_analysis(method);
     // Using the result of GTA, check if an interface can be resolved to its
     // implementor at certain callsite.
     analyze_method(method, *lta);
-    code->clear_cfg();
   });
 }
 
 void ResolveMethodRefs::analyze_method(
     DexMethod* method, const type_analyzer::local::LocalTypeAnalyzer& lta) {
   IRCode* code = method->get_code();
+  auto& cfg = code->cfg();
 
-  for (const auto& block : code->cfg().blocks()) {
+  cfg::CFGMutation mutation(cfg);
+  for (const auto& block : cfg.blocks()) {
     auto env = lta.get_entry_state_at(block);
     if (env.is_bottom()) {
       continue;
     }
 
-    for (auto& mie : InstructionIterable(block)) {
-      auto* insn = mie.insn;
+    auto ii = InstructionIterable(block);
+    for (auto it = ii.begin(); it != ii.end(); it++) {
+      auto* insn = it->insn;
       lta.analyze_instruction(insn, &env);
       // Since we only consider kotlin non capturing lambda, which orignial
       // derived from an interface.
@@ -79,19 +82,23 @@ void ResolveMethodRefs::analyze_method(
       }
 
       TRACE(TYPE, 5, "Intf %s is resolved to: %s \n", SHOW(intf), SHOW(impl));
+
       // resolve the interface to its implenmentor.
       // 1. add check_cast.
       auto check_cast = new IRInstruction(OPCODE_CHECK_CAST);
       check_cast->set_src(0, insn->src(0));
       check_cast->set_type(impl->get_class());
-      code->insert_before(code->iterator_to(mie), check_cast);
+
       // 2. add move_result_pseudo_object
       reg_t new_receiver;
       new_receiver = check_cast->src(0); // code->allocate_temp();
       auto pseudo_move_result =
           new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
       pseudo_move_result->set_dest(new_receiver);
-      code->insert_before(code->iterator_to(mie), pseudo_move_result);
+
+      auto cfg_it = block->to_cfg_instruction_iterator(it);
+      mutation.insert_before(cfg_it, {check_cast, pseudo_move_result});
+
       // 3. rewrite invoke-interface to invoke-virtual
       insn->set_src(0, new_receiver);
       insn->set_method(impl);
@@ -100,7 +107,8 @@ void ResolveMethodRefs::analyze_method(
       m_num_resolved_kt_non_capturing_lambda_calls++;
     }
   }
-  code->cfg().recompute_registers_size();
+  mutation.flush();
+  cfg.recompute_registers_size();
 }
 
 void ResolveMethodRefs::report(PassManager& mgr) const {

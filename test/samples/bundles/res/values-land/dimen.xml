@@ -1,4 +1,5 @@
 <resources>
   <dimen name="foo">@dimen/medium</dimen>
   <dimen name="bar">@dimen/medium</dimen>
+  <dimen name="width_land_only">36dp</dimen>
 </resources>

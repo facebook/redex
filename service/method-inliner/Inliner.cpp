@@ -20,6 +20,7 @@
 #include "GraphUtil.h"
 #include "InlineForSpeed.h"
 #include "InlinerConfig.h"
+#include "LiveRange.h"
 #include "LocalDce.h"
 #include "LoopInfo.h"
 #include "Macros.h"
@@ -54,6 +55,9 @@ const size_t COST_METHOD = 16;
 // When to consider running constant-propagation to better estimate inlined
 // cost. It just takes too much time to run the analysis for large methods.
 const size_t MAX_COST_FOR_CONSTANT_PROPAGATION = 1000;
+
+// Typical savings in caller when callee doesn't use any argument.
+const float UNUSED_ARGS_DISCOUNT = 1.0f;
 
 /*
  * This is the maximum size of method that Dex bytecode can encode.
@@ -1318,6 +1322,7 @@ InlinedCost MultiMethodInliner::get_inlined_cost(
     }
   };
   size_t insn_size;
+  float unused_args{0};
   if (code->editable_cfg_built()) {
     reduced_cfg = apply_call_site_summary(is_static, declaring_type, proto,
                                           code->cfg(), call_site_summary);
@@ -1333,6 +1338,15 @@ InlinedCost MultiMethodInliner::get_inlined_cost(
       cost += ::get_inlined_cost(blocks, i, block->succs());
       if (block->branchingness() == opcode::Branchingness::BRANCH_RETURN) {
         returns++;
+      }
+    }
+    live_range::MoveAwareChains chains(*cfg,
+                                       /* ignore_unreachable */ !reduced_cfg);
+    auto def_use_chains = chains.get_def_use_chains();
+    for (auto& mie : cfg->get_param_instructions()) {
+      auto uses = def_use_chains[mie.insn];
+      if (uses.empty()) {
+        unused_args++;
       }
     }
     insn_size = cfg->sum_opcode_sizes();
@@ -1363,6 +1377,7 @@ InlinedCost MultiMethodInliner::get_inlined_cost(
                        (float)other_refs_set.size(),
                        !returns,
                        (float)result_used,
+                       unused_args,
                        std::move(reduced_cfg),
                        insn_size};
 }
@@ -1488,8 +1503,16 @@ const InlinedCost* MultiMethodInliner::get_average_inlined_cost(
                 : nullptr)) {
     inlined_cost = std::make_shared<InlinedCost>(*fully_inlined_cost);
   } else {
-    inlined_cost = std::make_shared<InlinedCost>((InlinedCost){
-        fully_inlined_cost->full_code, 0.0f, 0.0f, 0.0f, true, 0.0f, {}, 0});
+    inlined_cost = std::make_shared<InlinedCost>(
+        (InlinedCost){fully_inlined_cost->full_code,
+                      /* code */ 0.0f,
+                      /* method_refs */ 0.0f,
+                      /* other_refs */ 0.0f,
+                      /* no_return */ true,
+                      /* result_used */ 0.0f,
+                      /* unused_args */ 0.0f,
+                      /* reduced_cfg */ nullptr,
+                      /* insn_size */ 0});
     bool callee_has_result = !callee->get_proto()->is_void();
     for (auto& p : *callee_call_site_summary_occurrences) {
       const auto call_site_summary = p.first;
@@ -1504,6 +1527,7 @@ const InlinedCost* MultiMethodInliner::get_average_inlined_cost(
       inlined_cost->method_refs += call_site_inlined_cost->method_refs * count;
       inlined_cost->other_refs += call_site_inlined_cost->other_refs * count;
       inlined_cost->result_used += call_site_inlined_cost->result_used * count;
+      inlined_cost->unused_args += call_site_inlined_cost->unused_args * count;
       if (call_site_inlined_cost->no_return) {
         callees_no_return++;
       } else {
@@ -1521,6 +1545,7 @@ const InlinedCost* MultiMethodInliner::get_average_inlined_cost(
     inlined_cost->method_refs /= callees_analyzed;
     inlined_cost->other_refs /= callees_analyzed;
     inlined_cost->result_used /= callees_analyzed;
+    inlined_cost->unused_args /= callees_analyzed;
   }
   TRACE(INLINE, 4, "get_average_inlined_cost(%s) = {%zu,%f,%f,%f,%s,%f,%zu}",
         SHOW(callee), inlined_cost->full_code, inlined_cost->code,
@@ -1651,7 +1676,9 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
   // If we inline invocations to this method everywhere, we could delete the
   // method. Is this worth it, given the number of callsites and costs
   // involved?
-  if (inlined_cost->code * caller_count + classes * cross_dex_penalty >
+  if ((inlined_cost->code - inlined_cost->unused_args * UNUSED_ARGS_DISCOUNT) *
+              caller_count +
+          classes * cross_dex_penalty >
       invoke_cost * caller_count + method_cost) {
     return true;
   }
@@ -1663,6 +1690,7 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
     // occur, so we are creating an ordered list of callers here to make sure we
     // always call is_inlinable in the same way.
     std::vector<DexMethod*> ordered_callers;
+    ordered_callers.reserve(callers.size());
     for (auto& p : callers) {
       ordered_callers.push_back(p.first);
     }
@@ -1710,7 +1738,9 @@ bool MultiMethodInliner::should_inline_at_call_site(
   }
 
   float invoke_cost = get_invoke_cost(callee, inlined_cost->result_used);
-  if (inlined_cost->code + cross_dex_penalty > invoke_cost) {
+  if (inlined_cost->code - inlined_cost->unused_args * UNUSED_ARGS_DISCOUNT +
+          cross_dex_penalty >
+      invoke_cost) {
     if (no_return) {
       *no_return = inlined_cost->no_return;
     }

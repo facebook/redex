@@ -43,10 +43,10 @@ class InstrumentPass : public Pass {
   constexpr static const char* HIT_STATS_FIELD_NAME = "sHitStats";
 
   static void patch_array_size(DexClass* analysis_cls,
-                               const std::string& array_name,
+                               const std::string_view array_name,
                                const int array_size);
   static void patch_static_field(DexClass* analysis_cls,
-                                 const std::string& field_name,
+                                 const std::string_view field_name,
                                  const int new_number);
   static bool is_included(const DexMethod* method,
                           const std::unordered_set<std::string>& set);

@@ -480,7 +480,7 @@ OnMethodExitMap build_onMethodExit_map(const DexClass& cls,
                                        const std::string& onMethodExit_name) {
   OnMethodExitMap onMethodExit_map;
   for (const auto& m : cls.get_dmethods()) {
-    const auto& name = m->get_name()->str();
+    const auto name = m->get_name()->str();
     if (onMethodExit_name != name) {
       continue;
     }
@@ -520,7 +520,7 @@ OnMethodExitMap build_onMethodExit_map(const DexClass& cls,
 DexMethod* load_onMethodBegin(const DexClass& cls,
                               const std::string& method_name) {
   for (const auto& m : cls.get_dmethods()) {
-    const auto& name = m->get_name()->str();
+    const auto name = m->get_name()->str();
     if (method_name != name) {
       continue;
     }
@@ -687,9 +687,6 @@ std::tuple<size_t, std::vector<IRInstruction*>> insert_onMethodExit_calls(
       short vec = loop_shorts[j];
       short inv_vec = ~vec;
       IRInstruction* inst_and = new IRInstruction(OPCODE_AND_INT_LIT16);
-      TRACE(INSTRUMENT, 8,
-            "Normal Vector for Just Loop Blocks (%hu) inverted (%hu)", vec,
-            inv_vec);
       inst_and->set_literal(inv_vec);
       inst_and->set_src(0, reg);
       inst_and->set_dest(reg);
@@ -1203,6 +1200,7 @@ MethodInfo instrument_basic_blocks(IRCode& code,
   const size_t origin_num_non_entry_blocks = cfg.blocks().size() - 1;
   const size_t num_vectors =
       std::ceil(num_to_instrument / double(BIT_VECTOR_SIZE));
+
   std::vector<reg_t> reg_vectors;
   std::vector<short> loop_shorts(num_vectors);
   reg_t reg_method_offset;
@@ -1948,7 +1946,7 @@ void BlockInstrumentHelper::do_basic_block_tracing(
         "sNumStaticallyHitsInstrumented");
     always_assert(field != nullptr);
     InstrumentPass::patch_static_field(analysis_cls, field->get_name()->str(),
-                                       hit_offset - 8);
+                                       hit_offset);
 
     field =
         analysis_cls->find_field_from_simple_deobfuscated_name("sProfileType");

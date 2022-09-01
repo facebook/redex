@@ -660,28 +660,45 @@ void sweep(DexStoresVector& stores,
            const ReachableObjects& reachables,
            ConcurrentSet<std::string>* removed_symbols) {
   Timer t("Sweep");
+  auto scope = build_class_scope(stores);
+
+  std::unordered_set<DexClass*> sweeped_classes;
   for (auto& dex : DexStoreClassesIterator(stores)) {
     sweep_if_unmarked(
-        reachables, [](auto c) {}, &dex, removed_symbols);
-
-    auto sweep_method = [&](DexMethodRef* m) {
-      if (m->is_def()) {
-        m->as_def()->release_code(); // Free code.
-      }
-      DexMethod::erase_method(m);
-    };
-
-    walk::parallel::classes(dex, [&](DexClass* cls) {
-      sweep_if_unmarked(reachables, DexField::delete_field_DO_NOT_USE,
-                        &cls->get_ifields(), removed_symbols);
-      sweep_if_unmarked(reachables, DexField::delete_field_DO_NOT_USE,
-                        &cls->get_sfields(), removed_symbols);
-      sweep_if_unmarked(reachables, sweep_method, &cls->get_dmethods(),
-                        removed_symbols);
-      sweep_if_unmarked(reachables, sweep_method, &cls->get_vmethods(),
-                        removed_symbols);
-    });
+        reachables, [&](auto cls) { sweeped_classes.insert(cls); }, &dex,
+        removed_symbols);
   }
+
+  auto sweep_method = [&](DexMethodRef* m) {
+    if (m->is_def()) {
+      m->as_def()->release_code(); // Free code.
+    }
+    DexMethod::erase_method(m);
+  };
+
+  walk::parallel::classes(scope, [&](DexClass* cls) {
+    if (sweeped_classes.count(cls)) {
+      for (auto field : cls->get_all_fields()) {
+        DexField::delete_field_DO_NOT_USE(field);
+      }
+      cls->get_ifields().clear();
+      cls->get_sfields().clear();
+      for (auto method : cls->get_all_methods()) {
+        sweep_method(method);
+      }
+      cls->get_dmethods().clear();
+      cls->get_vmethods().clear();
+      return;
+    }
+    sweep_if_unmarked(reachables, DexField::delete_field_DO_NOT_USE,
+                      &cls->get_ifields(), removed_symbols);
+    sweep_if_unmarked(reachables, DexField::delete_field_DO_NOT_USE,
+                      &cls->get_sfields(), removed_symbols);
+    sweep_if_unmarked(reachables, sweep_method, &cls->get_dmethods(),
+                      removed_symbols);
+    sweep_if_unmarked(reachables, sweep_method, &cls->get_vmethods(),
+                      removed_symbols);
+  });
 }
 
 ObjectCounts count_objects(const DexStoresVector& stores) {

@@ -2107,8 +2107,8 @@ TEST_F(IRTypeCheckerTest, putShortFieldIncompatibleClassFail) {
   TestValueType b_type(dex_type_b, type::java_lang_Object(), "LB;.<init>:()V",
                        "LB;.f:S;");
 
-  field_incompatible_fail_helper(a_type, b_type, exp_fail_str, op, true, SHORT,
-                                 m_method);
+  field_incompatible_fail_helper(a_type, b_type, exp_fail_str.c_str(), op, true,
+                                 SHORT, m_method);
 }
 
 /**

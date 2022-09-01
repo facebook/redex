@@ -12,6 +12,7 @@
 
 #include "ConstantUses.h"
 #include "IRList.h"
+#include "Lazy.h"
 #include "Pass.h"
 #include "TypeInference.h"
 
@@ -28,8 +29,10 @@ class BranchPrefixHoistingPass : public Pass {
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
-  static size_t process_code(IRCode*, DexMethod*);
+  static size_t process_code(IRCode*,
+                             DexMethod*,
+                             bool can_allocate_regs = true);
   static size_t process_cfg(cfg::ControlFlowGraph&,
-                            type_inference::TypeInference&,
-                            constant_uses::ConstantUses&);
+                            Lazy<const constant_uses::ConstantUses>&,
+                            bool can_allocate_regs = true);
 };

@@ -30,10 +30,10 @@ import pyredex.logger as logger
 from pyredex.buck import BuckConnectionScope, BuckPartScope
 from pyredex.unpacker import (
     LibraryManager,
+    unpack_tar_xz,
     UnpackManager,
     ZipManager,
     ZipReset,
-    unpack_tar_xz,
 )
 from pyredex.utils import (
     add_android_sdk_path,
