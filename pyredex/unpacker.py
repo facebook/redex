@@ -829,6 +829,7 @@ class ZipManager:
     """
 
     per_file_compression: typing.Dict[str, int] = {}
+    renamed_files_to_original: typing.Dict[str, str] = {}
 
     def __init__(self, input_apk: str, extracted_apk_dir: str, output_apk: str) -> None:
         self.input_apk = input_apk
@@ -841,6 +842,11 @@ class ZipManager:
             for info in z.infolist():
                 self.per_file_compression[info.filename] = info.compress_type
             z.extractall(self.extracted_apk_dir)
+
+    def set_resource_file_mapping(self, path: str) -> None:
+        mapping = json.loads(open(path).read())
+        for k, v in mapping.items():
+            self.renamed_files_to_original[v] = k
 
     def __exit__(self, *args: typing.Any) -> None:
         remove_signature_files(self.extracted_apk_dir)
@@ -859,7 +865,10 @@ class ZipManager:
                     filepath = join(dirpath, filename)
                     archivepath = filepath[len(self.extracted_apk_dir) + 1 :]
                     try:
-                        compress = self.per_file_compression[archivepath]
+                        original_path = self.renamed_files_to_original.get(
+                            archivepath, archivepath
+                        )
+                        compress = self.per_file_compression[original_path]
                     except KeyError:
                         compress = zipfile.ZIP_DEFLATED
                     new_apk.write(filepath, archivepath, compress_type=compress)

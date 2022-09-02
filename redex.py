@@ -1116,6 +1116,13 @@ def finalize_redex(state: State) -> None:
     repack_start_time = timer()
 
     _assert_val(state.unpack_manager).__exit__(*sys.exc_info())
+
+    meta_file_dir = join(state.dex_dir, "meta/")
+    assert os.path.isdir(meta_file_dir), "meta dir %s does not exist" % meta_file_dir
+
+    resource_file_mapping = join(meta_file_dir, "resource-mapping.txt")
+    if os.path.exists(resource_file_mapping):
+        _assert_val(state.zip_manager).set_resource_file_mapping(resource_file_mapping)
     _assert_val(state.zip_manager).__exit__(*sys.exc_info())
 
     align_and_sign_output_apk(
@@ -1136,9 +1143,6 @@ def finalize_redex(state: State) -> None:
             timer() - repack_start_time
         )
     )
-
-    meta_file_dir = join(state.dex_dir, "meta/")
-    assert os.path.isdir(meta_file_dir), "meta dir %s does not exist" % meta_file_dir
 
     copy_all_file_to_out_dir(
         meta_file_dir, state.args.out, "*", "all redex generated artifacts"
