@@ -83,6 +83,20 @@ impl<S: SetAbstractDomainOps + SetElementOps> PowersetLattice<S> {
         };
         res.into_iter().flatten()
     }
+
+    pub fn set(&self) -> &S {
+        match self {
+            Self::Value(powerset) => powerset,
+            _ => panic!("set called on Top or Bottom value!"),
+        }
+    }
+
+    pub fn into_set(self) -> S {
+        match self {
+            Self::Value(powerset) => powerset,
+            _ => panic!("into_set called on Top or Bottom value!"),
+        }
+    }
 }
 
 impl<S: SetAbstractDomainOps> AbstractDomain for PowersetLattice<S> {

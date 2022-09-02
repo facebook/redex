@@ -6,6 +6,7 @@
  */
 
 mod abstract_domain;
+mod abstract_partition;
 mod bitvec;
 mod hash_set_impl;
 mod patricia_tree_impl;
@@ -14,6 +15,7 @@ mod patricia_tree_set;
 mod powerset;
 
 pub use abstract_domain::*;
+pub use abstract_partition::*;
 pub use hash_set_impl::*;
 pub use patricia_tree_map::*;
 pub use patricia_tree_set::*;
