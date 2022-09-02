@@ -108,8 +108,8 @@ where
         self.storage.subset_of(&other.storage)
     }
 
-    fn intersection_with(&mut self, _other: &Self) {
-        todo!();
+    fn intersection_with(&mut self, other: &Self) {
+        self.storage.intersect_with(&other.storage, |_, _| ())
     }
 
     fn union_with(&mut self, other: Self) {
@@ -236,5 +236,47 @@ mod tests {
 
         set2.union_with(set1.clone());
         assert!(set1.is_subset(&set2));
+    }
+
+    #[test]
+    fn test_intersect_operation_empty() {
+        let mut set1 = PatriciaTreeSet::<u32>::from([1, 2, 3]);
+        let set2 = PatriciaTreeSet::<u32>::from([]);
+        set1.intersection_with(&set2);
+
+        let actual: HashSet<_> = set1.iter().collect();
+        let expected = HashSet::<u32>::from([]);
+
+        assert_eq!(actual, expected);
+
+        let mut set1 = PatriciaTreeSet::<u32>::from([]);
+        let set2 = PatriciaTreeSet::<u32>::from([]);
+        set1.intersection_with(&set2);
+
+        let actual: HashSet<_> = set1.iter().collect();
+        let expected = HashSet::<u32>::from([]);
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_simple_intersect_operation() {
+        let mut set1 = PatriciaTreeSet::<u32>::from([0, 1, 2, 3, 4]);
+        let set2 = PatriciaTreeSet::<u32>::from([2, 3, 4, 5, 6]);
+        set1.intersection_with(&set2);
+
+        let actual: HashSet<_> = set1.iter().collect();
+        let expected = HashSet::<u32>::from([2, 3, 4]);
+
+        assert_eq!(actual, expected);
+
+        let mut set1 = PatriciaTreeSet::<u32>::from([0, 1, 2]);
+        let set2 = PatriciaTreeSet::<u32>::from([3, 4, 5, 6]);
+        set1.intersection_with(&set2);
+
+        let actual: HashSet<_> = set1.iter().collect();
+        let expected = HashSet::<u32>::from([]);
+
+        assert_eq!(actual, expected);
     }
 }
