@@ -10,10 +10,10 @@ use std::string::ToString;
 
 use crate::datatype::bitvec::BitVec;
 
-// Implementation of the data structure
-
-// TODO items:
-// -- intersection/union algorithms
+/// This structure implements a map of integer/pointer keys to (possibly empty)
+/// values. It's based on the following paper:
+///
+/// C. Okasaki, A. Gill. Fast Mergeable Integer Maps. In Workshop on ML (1998).
 
 enum Node<V: Sized> {
     Leaf {
@@ -344,6 +344,74 @@ impl<V: Sized> Node<V> {
         }
     }
 
+    /// Intersection of two trees. Combined tree should contain all keys that are found from both
+    /// s and t. If duplicate keys are found, two nodes are passed to `leaf_combine` shall be
+    /// called with values from s on the left hand side and values from t on the right hand side.
+    fn intersect_trees(
+        s: &Rc<Node<V>>,
+        t: &Rc<Node<V>>,
+        leaf_combine: &impl Fn(Rc<Node<V>>, Rc<Node<V>>) -> Option<Rc<Node<V>>>,
+    ) -> Option<Rc<Node<V>>> {
+        use Node::*;
+
+        if Rc::ptr_eq(s, t) {
+            // This conditions allows the inclusion test to run in sublinear time
+            // when comparing Patricia trees that share some structure.
+            return Some(s.clone());
+        }
+
+        match (s.as_ref(), t.as_ref()) {
+            (Leaf { key, value: _ }, _) => match Self::find_leaf_by_key(Some(t), key) {
+                // Keep leaves from s on the left.
+                Some(t_leaf) => leaf_combine(s.clone(), t_leaf.clone()),
+                None => None,
+            },
+            (_, Leaf { key, value: _ }) => match Self::find_leaf_by_key(Some(s), key) {
+                // Keep leaves from s on the left.
+                Some(s_leaf) => leaf_combine(s_leaf.clone(), t.clone()),
+                None => None,
+            },
+            (
+                Branch {
+                    prefix: s_prefix,
+                    left: s_left,
+                    right: s_right,
+                },
+                Branch {
+                    prefix: t_prefix,
+                    left: t_left,
+                    right: t_right,
+                },
+            ) => {
+                if s_prefix == t_prefix {
+                    let new_left = Self::intersect_trees(s_left, t_left, leaf_combine);
+                    let new_right = Self::intersect_trees(s_right, t_right, leaf_combine);
+                    match (new_left, new_right) {
+                        (left, None) => left,
+                        (None, right) => right,
+                        (Some(left), Some(right)) => Some(Rc::new(Self::make_branch(left, right))),
+                    }
+                } else if t_prefix.begins_with(s_prefix) {
+                    let branching_bit = t_prefix.get(s_prefix.len());
+                    Self::intersect_trees(
+                        if !branching_bit { s_left } else { s_right },
+                        t,
+                        leaf_combine,
+                    )
+                } else if s_prefix.begins_with(t_prefix) {
+                    let branching_bit = s_prefix.get(t_prefix.len());
+                    Self::intersect_trees(
+                        s,
+                        if !branching_bit { t_left } else { t_right },
+                        leaf_combine,
+                    )
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
     /// Returns true if s is a subset of t.
     fn is_tree_subset_of(s: &Rc<Node<V>>, t: &Rc<Node<V>>) -> bool {
         use Node::*;
@@ -458,14 +526,12 @@ impl<V: Sized> PatriciaTree<V> {
         PatriciaTreePostOrderIterator::<V>::from_tree(self)
     }
 
-    pub(crate) fn union_with(
-        &mut self,
-        other: &Self,
+    fn get_leaf_combine_with_value_op_semantics(
         value_op_on_duplicate_key: impl Fn(&V, &V) -> V,
-    ) {
+    ) -> impl Fn(Rc<Node<V>>, Rc<Node<V>>) -> Option<Rc<Node<V>>> {
         use Node::*;
 
-        let leaf_combine = |one_leaf: Rc<Node<V>>, other_leaf: Rc<Node<V>>| match (
+        move |one_leaf: Rc<Node<V>>, other_leaf: Rc<Node<V>>| match (
             one_leaf.as_ref(),
             other_leaf.as_ref(),
         ) {
@@ -483,13 +549,43 @@ impl<V: Sized> PatriciaTree<V> {
                 value: value_op_on_duplicate_key(l_value, r_value),
             })),
             _ => panic!("leaf_combine should only be called on leaves!"),
-        };
+        }
+    }
 
+    pub(crate) fn union_with(
+        &mut self,
+        other: &Self,
+        value_op_on_duplicate_key: impl Fn(&V, &V) -> V,
+    ) {
         match (self.root.as_ref(), other.root.as_ref()) {
             (None, _) => self.root = other.root.clone(),
             (Some(_), None) => {}
             (Some(self_node), Some(other_node)) => {
-                self.root = Some(Node::merge_trees(self_node, other_node, &leaf_combine));
+                self.root = Some(Node::merge_trees(
+                    self_node,
+                    other_node,
+                    &Self::get_leaf_combine_with_value_op_semantics(value_op_on_duplicate_key),
+                ));
+            }
+        }
+    }
+
+    pub(crate) fn intersect_with(
+        &mut self,
+        other: &Self,
+        value_op_on_duplicate_key: impl Fn(&V, &V) -> V,
+    ) {
+        match (self.root.as_ref(), other.root.as_ref()) {
+            (None, _) => {}
+            (Some(_), None) => {
+                self.root = None;
+            }
+            (Some(self_node), Some(other_node)) => {
+                self.root = Node::intersect_trees(
+                    self_node,
+                    other_node,
+                    &Self::get_leaf_combine_with_value_op_semantics(value_op_on_duplicate_key),
+                );
             }
         }
     }
