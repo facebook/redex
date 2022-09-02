@@ -7,7 +7,7 @@
 
 #include "NativeNames.h"
 
-#include <boost/algorithm/string.hpp>
+#include <boost/utility/string_view.hpp>
 #include <cctype>
 #include <sstream>
 
@@ -38,15 +38,16 @@ void escape_char(std::ostringstream& out, char c) {
   }
 }
 
-void escape_single_identifier(std::ostringstream& out, std::string_view name) {
+void escape_single_identifier(std::ostringstream& out,
+                              boost::string_view name) {
   for (char c : name) {
     escape_char(out, c);
   }
 }
 
-void mangle_class_name(std::ostringstream& out, std::string_view cls_name) {
-  always_assert(boost::starts_with(cls_name, "L"));
-  always_assert(boost::ends_with(cls_name, ";"));
+void mangle_class_name(std::ostringstream& out, boost::string_view cls_name) {
+  always_assert(cls_name.starts_with('L'));
+  always_assert(cls_name.ends_with(';'));
   cls_name.remove_prefix(1);
   cls_name.remove_suffix(1);
 
@@ -60,7 +61,7 @@ void mangle_class_name(std::ostringstream& out, std::string_view cls_name) {
 }
 
 void mangle_type_name_in_signature(std::ostringstream& out,
-                                   std::string_view type_name) {
+                                   boost::string_view type_name) {
   for (char c : type_name) {
     switch (c) {
     case '/':

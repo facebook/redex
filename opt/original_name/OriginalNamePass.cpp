@@ -24,7 +24,7 @@ void OriginalNamePass::build_hierarchies(
     PassManager& mgr,
     const ClassHierarchy& ch,
     Scope& scope,
-    std::unordered_map<const DexType*, std::string_view>* hierarchies) {
+    std::unordered_map<const DexType*, std::string>* hierarchies) {
   std::vector<DexClass*> base_classes;
   for (const auto& base : m_hierarchy_roots) {
     // skip comments
@@ -57,7 +57,7 @@ void OriginalNamePass::run_pass(DexStoresVector& stores,
                                 PassManager& mgr) {
   auto scope = build_class_scope(stores);
   ClassHierarchy ch = build_type_hierarchy(scope);
-  std::unordered_map<const DexType*, std::string_view> to_annotate;
+  std::unordered_map<const DexType*, std::string> to_annotate;
   build_hierarchies(mgr, ch, scope, &to_annotate);
   auto field_name = DexString::make_string(redex_field_name);
   DexType* string_type = type::java_lang_String();

@@ -8,6 +8,7 @@
 #pragma once
 
 #include "BigBlocks.h"
+#include "Dominators.h"
 #include "Lazy.h"
 #include "OutliningProfileGuidance.h"
 
@@ -63,6 +64,8 @@ class CanOutlineBlockDecider {
   mutable std::unique_ptr<LazyUnorderedMap<cfg::Block*, bool>> m_is_in_loop;
   mutable std::unique_ptr<LazyUnorderedMap<cfg::Block*, boost::optional<float>>>
       m_max_vals;
+  mutable std::unique_ptr<dominators::SimpleFastDominators<cfg::GraphInterface>>
+      m_dominators;
 
  public:
   CanOutlineBlockDecider(const outliner::ProfileGuidanceConfig& config,

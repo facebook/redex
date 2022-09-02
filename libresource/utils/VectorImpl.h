@@ -53,12 +53,12 @@ public:
     /*! must be called from subclasses destructor */
             void            finish_vector();
 
-            VectorImpl&     operator = (const VectorImpl& rhs);    
-            
+            VectorImpl&     operator = (const VectorImpl& rhs);
+
     /*! C-style array access */
     inline  const void*     arrayImpl() const       { return mStorage; }
             void*           editArrayImpl();
-            
+
     /*! vector stats */
     inline  size_t          size() const        { return mCount; }
     inline  bool            isEmpty() const     { return mCount == 0; }
@@ -71,7 +71,7 @@ public:
             ssize_t         appendVector(const VectorImpl& vector);
             ssize_t         insertArrayAt(const void* array, size_t index, size_t length);
             ssize_t         appendArray(const void* array, size_t length);
-            
+
             /*! add/insert/replace items */
             ssize_t         insertAt(size_t where, size_t numItems = 1);
             ssize_t         insertAt(const void* item, size_t where, size_t numItems = 1);
@@ -105,7 +105,7 @@ protected:
     virtual void            do_splat(void* dest, const void* item, size_t num) const = 0;
     virtual void            do_move_forward(void* dest, const void* from, size_t num) const = 0;
     virtual void            do_move_backward(void* dest, const void* from, size_t num) const = 0;
-    
+
 private:
         void* _grow(size_t where, size_t amount);
         void  _shrink(size_t where, size_t amount);
@@ -132,10 +132,10 @@ class SortedVectorImpl : public VectorImpl
 {
 public:
                             SortedVectorImpl(size_t itemSize, uint32_t flags);
-    explicit                SortedVectorImpl(const VectorImpl& rhs);
+                            SortedVectorImpl(const VectorImpl& rhs);
     virtual                 ~SortedVectorImpl();
-    
-    SortedVectorImpl&     operator = (const SortedVectorImpl& rhs);    
+
+    SortedVectorImpl&     operator = (const SortedVectorImpl& rhs);
 
     //! finds the index of an item
             ssize_t         indexOf(const void* item) const;
@@ -149,15 +149,15 @@ public:
     //! merges a vector into this one
             ssize_t         merge(const VectorImpl& vector);
             ssize_t         merge(const SortedVectorImpl& vector);
-             
+
     //! removes an item
             ssize_t         remove(const void* item);
-        
+
 protected:
     virtual int             do_compare(const void* lhs, const void* rhs) const = 0;
 
 private:
-            ssize_t         _indexOrderOf(const void* item, size_t* order = nullptr) const;
+            ssize_t         _indexOrderOf(const void* item, size_t* order = 0) const;
 
             // these are made private, because they can't be used on a SortedVector
             // (they don't have an implementation either)
@@ -175,7 +175,8 @@ private:
             ssize_t         replaceAt(const void* item, size_t index);
 };
 
-}  // namespace android
+}; // namespace android
+
 
 // ---------------------------------------------------------------------------
 

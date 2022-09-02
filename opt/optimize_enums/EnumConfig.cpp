@@ -129,7 +129,7 @@ bool params_contain_object_type(const DexMethod* method,
 ParamSummary calculate_param_summary(DexMethod* method,
                                      const DexType* object_type) {
   auto& code = *method->get_code();
-  always_assert(code.cfg().editable());
+  code.build_cfg(/* editable */ false);
   auto& cfg = code.cfg();
   cfg.calculate_exit_block();
   ParamSummary summary;

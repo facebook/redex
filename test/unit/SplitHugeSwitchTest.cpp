@@ -49,7 +49,7 @@ class SplitHugeSwitchTest : public RedexTest {
 
   static std::string replace_count(const std::string& str, DexMethod* m) {
     const std::string replacement = "LFoo;";
-    const auto needle = m->get_class()->str();
+    const std::string needle = m->get_class()->str();
     std::string res = str;
     for (;;) {
       size_t i = res.find(needle);
@@ -84,7 +84,7 @@ class SplitHugeSwitchTest : public RedexTest {
     }
     expected_map.emplace("", code_str);
     auto compare = [&](DexMethod* m) {
-      const auto name = m->str();
+      const auto& name = m->str();
       size_t index = name.find('$');
       std::string suffix;
       if (index != std::string::npos) {

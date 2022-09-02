@@ -7,12 +7,17 @@
 
 #pragma once
 
-#include "BuilderAnalysis.h"
 #include "DexClass.h"
 #include "Inliner.h"
+#include "InlinerConfig.h"
+#include "RemoveBuilderPattern.h"
+#include "Resolver.h"
 #include "TypeSystem.h"
 
 namespace builder_pattern {
+
+using InstantiationToUsage =
+    std::unordered_map<const IRInstruction*, std::vector<const IRInstruction*>>;
 
 class BuilderTransform {
  public:
@@ -27,11 +32,7 @@ class BuilderTransform {
 
   bool inline_super_calls_and_ctors(const DexType* type);
 
-  /**
-   * Try to inline the given calls (`insns`) in the caller, and return the set
-   * of call instructions that were not abled to be inlined.
-   */
-  std::unordered_set<IRInstruction*> try_inline_calls(
+  std::unordered_set<const IRInstruction*> get_not_inlined_insns(
       DexMethod* caller,
       const std::unordered_set<IRInstruction*>& insns,
       std::vector<IRInstruction*>* deleted_insns);

@@ -424,9 +424,8 @@ void lower_simple_instruction(DexMethod*, IRCode*, IRList::iterator* it_) {
   if (dex_opcode::has_arg_word_count(dex_op)) {
     dex_insn->set_arg_word_count(insn->srcs_size());
   }
-  auto has_move_result_pseudo = insn->has_move_result_pseudo();
   it->replace_ir_with_dex(dex_insn);
-  if (has_move_result_pseudo) {
+  if (insn->has_move_result_pseudo()) {
     remove_move_result_pseudo(++it);
   }
 }

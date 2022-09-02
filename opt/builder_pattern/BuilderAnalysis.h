@@ -10,7 +10,6 @@
 #include <unordered_set>
 
 #include "DexClass.h"
-#include "IRCode.h"
 
 using ConstTypeHashSet = std::unordered_set<const DexType*>;
 
@@ -27,7 +26,7 @@ class InstructionToEnvMap;
 } // namespace impl
 
 using InstantiationToUsage =
-    std::unordered_map<const IRInstruction*, std::vector<IRList::iterator>>;
+    std::unordered_map<const IRInstruction*, std::vector<const IRInstruction*>>;
 
 class BuilderAnalysis final {
  public:
@@ -47,19 +46,15 @@ class BuilderAnalysis final {
   const InstantiationToUsage& get_usage() { return m_usage; }
   size_t get_num_usages() const { return m_usage.size(); }
   size_t get_total_num_usages() const { return m_total_usages; }
-  void set_num_inline_iterations(size_t num) { m_num_inline_iterations = num; }
-  size_t get_num_inline_iterations() const { return m_num_inline_iterations; }
 
   std::unordered_map<IRInstruction*, DexType*>
   get_vinvokes_to_this_infered_type();
   std::unordered_set<IRInstruction*> get_all_inlinable_insns();
 
-  ConstTypeHashSet get_instantiated_types();
+  ConstTypeHashSet get_instantiated_types(
+      std::unordered_set<const IRInstruction*>* insns = nullptr);
 
   ConstTypeHashSet non_removable_types();
-
-  ConstTypeHashSet get_escaped_types_from_invokes(
-      const std::unordered_set<IRInstruction*>& insns) const;
 
  private:
   std::unique_ptr<impl::Analyzer> m_analyzer;
@@ -68,12 +63,9 @@ class BuilderAnalysis final {
   const ConstTypeHashSet& m_builder_types;
   const ConstTypeHashSet& m_excluded_builder_types;
   std::unique_ptr<impl::InstructionToEnvMap> m_insn_to_env;
-  std::unordered_map<const IRInstruction*, const DexType*>
-      m_invoke_to_builder_instance;
 
   DexMethod* m_method;
   size_t m_total_usages;
-  size_t m_num_inline_iterations{0};
   bool m_accept_excluded;
 
   void update_stats();

@@ -17,26 +17,18 @@
 #ifndef ANDROID_VECTOR_H
 #define ANDROID_VECTOR_H
 
+#include <new>
 #include <stdint.h>
 #include <sys/types.h>
 
-#include "utils/Log.h"
-#include "utils/TypeHelpers.h"
+#ifdef _MSC_VER
+#include "CompatWindows.h"
+#endif
+
+#include "cutils/log.h"
+
 #include "utils/VectorImpl.h"
-
-/*
- * Used to blacklist some functions from CFI.
- *
- */
-#ifndef __has_attribute
-#define __has_attribute(x) 0
-#endif
-
-#if __has_attribute(no_sanitize)
-#define UTILS_VECTOR_NO_CFI __attribute__((no_sanitize("cfi")))
-#else
-#define UTILS_VECTOR_NO_CFI
-#endif
+#include "utils/TypeHelpers.h"
 
 // ---------------------------------------------------------------------------
 
@@ -49,8 +41,6 @@ class SortedVector;
  * The main templated vector class ensuring type safety
  * while making use of VectorImpl.
  * This is the class users want to use.
- *
- * DO NOT USE: please use std::vector
  */
 
 template <class TYPE>
@@ -208,7 +198,7 @@ public:
      inline void push_back(const TYPE& item)  { insertAt(item, size(), 1); }
      inline void push_front(const TYPE& item) { insertAt(item, 0, 1); }
      inline iterator erase(iterator pos) {
-         ssize_t index = removeItemsAt(static_cast<size_t>(pos-array()));
+         ssize_t index = removeItemsAt(pos-array());
          return begin() + index;
      }
 
@@ -220,6 +210,10 @@ protected:
     virtual void    do_move_forward(void* dest, const void* from, size_t num) const;
     virtual void    do_move_backward(void* dest, const void* from, size_t num) const;
 };
+
+// Vector<T> can be trivially moved using memcpy() because moving does not
+// require any change to the underlying SharedBuffer contents or reference count.
+template<typename T> struct trait_trivial_move<Vector<T> > { enum { value = true }; };
 
 // ---------------------------------------------------------------------------
 // No user serviceable parts from here...
@@ -378,19 +372,19 @@ ssize_t Vector<TYPE>::removeItemsAt(size_t index, size_t count) {
 }
 
 template<class TYPE> inline
-status_t Vector<TYPE>::sort(Vector<TYPE>::compar_t cmp) {
-    return VectorImpl::sort(reinterpret_cast<VectorImpl::compar_t>(cmp));
+status_t Vector<TYPE>::sort(typename Vector<TYPE>::compar_t cmp) {
+    return VectorImpl::sort((VectorImpl::compar_t)cmp);
 }
 
 template<class TYPE> inline
-status_t Vector<TYPE>::sort(Vector<TYPE>::compar_r_t cmp, void* state) {
-    return VectorImpl::sort(reinterpret_cast<VectorImpl::compar_r_t>(cmp), state);
+status_t Vector<TYPE>::sort(typename Vector<TYPE>::compar_r_t cmp, void* state) {
+    return VectorImpl::sort((VectorImpl::compar_r_t)cmp, state);
 }
 
 // ---------------------------------------------------------------------------
 
 template<class TYPE>
-UTILS_VECTOR_NO_CFI void Vector<TYPE>::do_construct(void* storage, size_t num) const {
+void Vector<TYPE>::do_construct(void* storage, size_t num) const {
     construct_type( reinterpret_cast<TYPE*>(storage), num );
 }
 
@@ -400,26 +394,27 @@ void Vector<TYPE>::do_destroy(void* storage, size_t num) const {
 }
 
 template<class TYPE>
-UTILS_VECTOR_NO_CFI void Vector<TYPE>::do_copy(void* dest, const void* from, size_t num) const {
+void Vector<TYPE>::do_copy(void* dest, const void* from, size_t num) const {
     copy_type( reinterpret_cast<TYPE*>(dest), reinterpret_cast<const TYPE*>(from), num );
 }
 
 template<class TYPE>
-UTILS_VECTOR_NO_CFI void Vector<TYPE>::do_splat(void* dest, const void* item, size_t num) const {
+void Vector<TYPE>::do_splat(void* dest, const void* item, size_t num) const {
     splat_type( reinterpret_cast<TYPE*>(dest), reinterpret_cast<const TYPE*>(item), num );
 }
 
 template<class TYPE>
-UTILS_VECTOR_NO_CFI void Vector<TYPE>::do_move_forward(void* dest, const void* from, size_t num) const {
+void Vector<TYPE>::do_move_forward(void* dest, const void* from, size_t num) const {
     move_forward_type( reinterpret_cast<TYPE*>(dest), reinterpret_cast<const TYPE*>(from), num );
 }
 
 template<class TYPE>
-UTILS_VECTOR_NO_CFI void Vector<TYPE>::do_move_backward(void* dest, const void* from, size_t num) const {
+void Vector<TYPE>::do_move_backward(void* dest, const void* from, size_t num) const {
     move_backward_type( reinterpret_cast<TYPE*>(dest), reinterpret_cast<const TYPE*>(from), num );
 }
 
-}  // namespace android
+}; // namespace android
+
 
 // ---------------------------------------------------------------------------
 

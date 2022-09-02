@@ -126,11 +126,8 @@ static bool parse_cp_entry(uint8_t*& buffer, cp_entry& cpe) {
   case CP_CONST_METHOD:
   case CP_CONST_INTERFACE:
   case CP_CONST_NAMEANDTYPE:
-    cpe.s0 = read16(buffer);
-    cpe.s1 = read16(buffer);
-    return true;
   case CP_CONST_METHHANDLE:
-    cpe.s0 = *buffer++;
+    cpe.s0 = read16(buffer);
     cpe.s1 = read16(buffer);
     return true;
   case CP_CONST_INT:
@@ -367,7 +364,7 @@ static DexMethod* make_dexmethod(std::vector<cp_entry>& cpool,
 bool parse_class(uint8_t* buffer,
                  Scope* classes,
                  attribute_hook_t attr_hook,
-                 const DexLocation* jar_location) {
+                 const std::string& jar_location) {
   uint32_t magic = read32(buffer);
   uint16_t vminor DEBUG_ONLY = read16(buffer);
   uint16_t vmajor DEBUG_ONLY = read16(buffer);
@@ -396,7 +393,7 @@ bool parse_class(uint8_t* buffer,
     // metadata for the module/package system and don't have a superclass.
     // Ignore them for now.
     TRACE(MAIN, 5, "Warning: ignoring module-info class in jar '%s'",
-          jar_location->get_file_name().c_str());
+          jar_location.c_str());
     return true;
   }
 
@@ -411,15 +408,13 @@ bool parse_class(uint8_t* buffer,
             "Warning: Found a duplicate class '%s' in two .jar files:\n "
             "  Current: '%s'\n"
             "  Previous: '%s'",
-            SHOW(self), jar_location->get_file_name().c_str(),
-            cls->get_location()->get_file_name().c_str());
+            SHOW(self), jar_location.c_str(), cls->get_location().c_str());
     } else if (!dup_classes::is_known_dup(cls)) {
       TRACE(MAIN, 1,
             "Warning: Found a duplicate class '%s' in .dex and .jar file."
             "  Current: '%s'\n"
             "  Previous: '%s'\n",
-            SHOW(self), jar_location->get_file_name().c_str(),
-            cls->get_location()->get_file_name().c_str());
+            SHOW(self), jar_location.c_str(), cls->get_location().c_str());
 
       // TODO: There are still blocking issues in instrumentation test that are
       // blocking. We currently only fail for duplicate `android*` classes,
@@ -429,8 +424,8 @@ bool parse_class(uint8_t* buffer,
         throw RedexException(RedexError::DUPLICATE_CLASSES,
                              "Found duplicate class in two different files.",
                              {{"class", SHOW(self)},
-                              {"jar", jar_location->get_file_name()},
-                              {"dex", cls->get_location()->get_file_name()}});
+                              {"jar", jar_location},
+                              {"dex", cls->get_location()}});
       }
     }
     return true;
@@ -551,9 +546,8 @@ bool load_class_file(const std::string& filename, Scope* classes) {
   buf->pubseekpos(0, ifs.in);
   auto buffer = std::make_unique<char[]>(size);
   buf->sgetn(buffer.get(), size);
-  auto jar_location = DexLocation::make_location("", filename);
   return parse_class(reinterpret_cast<uint8_t*>(buffer.get()), classes,
-                     /* attr_hook */ nullptr, jar_location);
+                     /* attr_hook */ nullptr);
 }
 
 /******************
@@ -817,7 +811,7 @@ static bool decompress_class(jar_entry& file,
 
 static const int kStartBufferSize = 128 * 1024;
 
-static bool process_jar_entries(const DexLocation* location,
+static bool process_jar_entries(const char* location,
                                 std::vector<jar_entry>& files,
                                 const uint8_t* mapping,
                                 Scope* classes,
@@ -858,7 +852,7 @@ static bool process_jar_entries(const DexLocation* location,
   return true;
 }
 
-bool process_jar(const DexLocation* location,
+bool process_jar(const char* location,
                  const uint8_t* mapping,
                  ssize_t size,
                  Scope* classes,
@@ -874,23 +868,20 @@ bool process_jar(const DexLocation* location,
   return true;
 }
 
-bool load_jar_file(const DexLocation* location,
+bool load_jar_file(const char* location,
                    Scope* classes,
                    const attribute_hook_t& attr_hook) {
   boost::iostreams::mapped_file file;
   try {
-    file.open(location->get_file_name().c_str(),
-              boost::iostreams::mapped_file::readonly);
+    file.open(location, boost::iostreams::mapped_file::readonly);
   } catch (const std::exception& e) {
-    fprintf(stderr, "error: cannot open jar file: %s\n",
-            location->get_file_name().c_str());
+    fprintf(stderr, "error: cannot open jar file: %s\n", location);
     return false;
   }
 
   auto mapping = reinterpret_cast<const uint8_t*>(file.const_data());
   if (!process_jar(location, mapping, file.size(), classes, attr_hook)) {
-    fprintf(stderr, "error: cannot process jar: %s\n",
-            location->get_file_name().c_str());
+    fprintf(stderr, "error: cannot process jar: %s\n", location);
     return false;
   }
   return true;
@@ -904,7 +895,7 @@ int main(int argc, char* argv[]) {
     return -1;
   }
   for (int jarno = 1; jarno < argc; jarno++) {
-    if (!load_jar_file(DexLocation::make_location("", argv[jarno]))) {
+    if (!load_jar_file(argv[jarno])) {
       fprintf(stderr, "Failed to load jar %s, bailing\n", argv[jarno]);
       return -2;
     }

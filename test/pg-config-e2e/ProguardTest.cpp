@@ -55,12 +55,12 @@ DexMethod* find_method_named(const Container& methods,
                              const std::string& name) {
   TRACE(PGR, 8, "==> Searching for method %s", name.c_str());
   auto it = std::find_if(methods.begin(), methods.end(), [&name](DexMethod* m) {
-    const auto deobfuscated_method = m->get_deobfuscated_name_or_empty();
+    const auto& deobfuscated_method = m->get_deobfuscated_name_or_empty();
     TRACE(PGR,
           8,
           "====> Comparing against method %s [%s]",
           m->c_str(),
-          str_copy(deobfuscated_method).c_str());
+          deobfuscated_method.c_str());
     bool found =
         (name == std::string(m->c_str()) || (name == deobfuscated_method));
     if (found) {
@@ -88,13 +88,13 @@ template <class Container>
 DexField* find_field_named(const Container& fields, const char* name) {
   TRACE(PGR, 8, "==> Searching for field %s", name);
   auto it = std::find_if(fields.begin(), fields.end(), [&name](DexField* f) {
-    const auto deobfuscated_field = f->get_deobfuscated_name_or_empty();
+    const auto& deobfuscated_field = f->get_deobfuscated_name_or_empty();
     TRACE(PGR,
           8,
           "====> Comparing against %s [%s] <%s>",
           f->c_str(),
           SHOW(f),
-          str_copy(deobfuscated_field).c_str());
+          deobfuscated_field.c_str());
     bool found =
         (name == std::string(f->c_str()) || (name == deobfuscated_field));
     if (found) {
@@ -122,8 +122,7 @@ TEST_F(ProguardTest, assortment) {
   ASSERT_NE(nullptr, dexfile);
 
   std::vector<DexClasses> dexen;
-  dexen.emplace_back(
-      load_classes_from_dex(DexLocation::make_location("", dexfile)));
+  dexen.emplace_back(load_classes_from_dex(dexfile));
   DexClasses& classes = dexen.back();
 
   // Load the Proguard map
@@ -152,8 +151,7 @@ TEST_F(ProguardTest, assortment) {
   std::string sdk_jar = std::string(android_sdk) + "/platforms/" +
                         android_version + "/android.jar";
   Scope external_classes;
-  EXPECT_TRUE(load_jar_file(DexLocation::make_location("", sdk_jar),
-                            &external_classes));
+  EXPECT_TRUE(load_jar_file(sdk_jar.c_str(), &external_classes));
 
   Scope scope = build_class_scope(dexen);
   apply_deobfuscated_names(dexen, proguard_map);

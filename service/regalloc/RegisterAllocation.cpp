@@ -44,17 +44,17 @@ Allocator::Stats allocate(
     return Stats();
   }
 
+  auto scoped = at_scope_exit([code]() { code->clear_cfg(); });
   TRACE(REG, 5, "regs:%d code:\n%s", code->get_registers_size(), SHOW(code));
   try {
     live_range::renumber_registers(code, /* width_aware */ true);
-    // The transformations below all require a CFG.
-    always_assert_log(code->editable_cfg_built(), "Need editable cfg here\n");
-    auto& cfg = code->cfg();
+    // The transformations below all require a CFG. Build it once
+    // here instead of requiring each transform to build it.
+    code->build_cfg(/* editable */ false);
     Allocator allocator(allocator_config);
-    allocator.allocate(cfg, is_static);
-    cfg.recompute_registers_size();
-    TRACE(REG, 5, "After alloc: regs:%d code:\n%s", cfg.get_registers_size(),
-          ::SHOW(cfg));
+    allocator.allocate(code, is_static);
+    TRACE(REG, 5, "After alloc: regs:%d code:\n%s", code->get_registers_size(),
+          SHOW(code));
     return allocator.get_stats();
   } catch (const std::exception& e) {
     std::cerr << "Failed to allocate " << method_describer() << ": " << e.what()

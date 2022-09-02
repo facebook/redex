@@ -236,7 +236,7 @@ const std::vector<std::string>& ConfigFiles::get_dead_class_list() {
   return m_dead_class_list;
 }
 
-void ConfigFiles::ensure_agg_method_stats_loaded() const {
+void ConfigFiles::ensure_agg_method_stats_loaded() {
   std::vector<std::string> csv_filenames;
   get_json_config().get("agg_method_stats_files", {}, csv_filenames);
   if (csv_filenames.empty() || m_method_profiles->is_initialized()) {

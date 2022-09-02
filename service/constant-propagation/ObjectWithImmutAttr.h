@@ -357,26 +357,9 @@ class ObjectWithImmutAttrDomain final
   ObjectWithImmutAttrDomain() { this->set_to_top(); }
 
   explicit ObjectWithImmutAttrDomain(ObjectWithImmutAttr&& obj)
-      : m_kind(sparta::AbstractValueKind::Value),
-        m_value(std::make_unique<ObjectWithImmutAttr>(std::move(obj))) {}
+      : m_kind(sparta::AbstractValueKind::Value), m_value(std::move(obj)) {}
 
-  ObjectWithImmutAttrDomain(const ObjectWithImmutAttrDomain& other) {
-    m_kind = other.m_kind;
-    if (other.m_value) {
-      m_value = std::make_unique<ObjectWithImmutAttr>(*other.m_value);
-    }
-  }
-  ObjectWithImmutAttrDomain& operator=(const ObjectWithImmutAttrDomain& other) {
-    m_kind = other.m_kind;
-    if (other.m_value) {
-      m_value = std::make_unique<ObjectWithImmutAttr>(*other.m_value);
-    }
-    return *this;
-  }
-
-  boost::optional<ObjectWithImmutAttr> get_constant() const {
-    return m_value ? boost::make_optional(*m_value) : boost::none;
-  }
+  boost::optional<ObjectWithImmutAttr> get_constant() const { return m_value; }
 
   bool is_bottom() const override {
     return m_kind == sparta::AbstractValueKind::Bottom;
@@ -390,12 +373,12 @@ class ObjectWithImmutAttrDomain final
 
   void set_to_bottom() override {
     m_kind = sparta::AbstractValueKind::Bottom;
-    m_value = nullptr;
+    m_value = boost::none;
   }
 
   void set_to_top() override {
     m_kind = sparta::AbstractValueKind::Top;
-    m_value = nullptr;
+    m_value = boost::none;
   }
 
   bool leq(const ObjectWithImmutAttrDomain& other) const override {
@@ -425,7 +408,7 @@ class ObjectWithImmutAttrDomain final
     }
     if (is_bottom()) {
       m_kind = other.m_kind;
-      m_value = std::make_unique<ObjectWithImmutAttr>(*other.m_value);
+      m_value = other.m_value;
       return;
     }
     if (m_value->same_attrs(*other.m_value)) {
@@ -449,7 +432,7 @@ class ObjectWithImmutAttrDomain final
     }
     if (is_top()) {
       m_kind = other.m_kind;
-      m_value = std::make_unique<ObjectWithImmutAttr>(*other.m_value);
+      m_value = other.m_value;
       return;
     }
     auto equality = m_value->runtime_equals(*other.m_value);
@@ -488,5 +471,5 @@ class ObjectWithImmutAttrDomain final
 
  private:
   sparta::AbstractValueKind m_kind;
-  std::unique_ptr<ObjectWithImmutAttr> m_value;
+  boost::optional<ObjectWithImmutAttr> m_value;
 };

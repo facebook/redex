@@ -64,8 +64,6 @@ class JsonWrapper {
 
   bool contains(const char* name) const;
 
-  const Json::Value& unwrap() const { return *m_config; }
-
  private:
   std::unique_ptr<Json::Value> m_config;
 };

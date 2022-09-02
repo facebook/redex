@@ -23,8 +23,7 @@ enum Nullness {
   NN_TOP // Nullable
 };
 
-using NullnessLattice = sparta::BitVectorLattice<Nullness,
-                                                 /* kCardinality */ 5>;
+using NullnessLattice = sparta::BitVectorLattice<Nullness, 5, std::hash<int>>;
 
 /*
  *         TOP (Nullable)

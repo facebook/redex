@@ -7,7 +7,6 @@
 
 #include "EnumTransformer.h"
 
-#include "CFGMutation.h"
 #include "Creators.h"
 #include "DexAsm.h"
 #include "DexClass.h"
@@ -355,7 +354,6 @@ struct EnumUtil {
 
     clinit_code->push_back(dasm(OPCODE_SPUT_OBJECT, values_field, {2_v}));
     clinit_code->push_back(dasm(OPCODE_RETURN_VOID));
-    clinit_code->build_cfg();
 
     m_values_method_ref = make_values_method(cls, values_field, fields_count);
 
@@ -460,8 +458,9 @@ struct EnumUtil {
     method->set_code(std::make_unique<IRCode>(method, 0));
     cls->add_method(method);
     method->set_deobfuscated_name(show_deobfuscated(method));
-    method->get_code()->build_cfg();
-    auto& cfg = method->get_code()->cfg();
+    auto code = method->get_code();
+    code->build_cfg();
+    auto& cfg = code->cfg();
     auto entry = cfg.entry_block();
     auto small_argument_block = cfg.create_block();
     auto large_argument_block = cfg.create_block();
@@ -502,6 +501,7 @@ struct EnumUtil {
                                       {7_v, 8_v, 1_v, 8_v, 4_v}),
                                  dasm(OPCODE_RETURN_OBJECT, {1_v})});
     cfg.recompute_registers_size();
+    code->clear_cfg();
     return (DexMethodRef*)method;
   }
 };
@@ -572,9 +572,12 @@ class CodeTransformer final {
   void run() {
     optimize_enums::EnumTypeEnvironment start_env =
         optimize_enums::EnumFixpointIterator::gen_env(m_method);
-    cfg::ControlFlowGraph& cfg = m_method->get_code()->cfg();
+    auto* code = m_method->get_code();
+    code->build_cfg();
+    auto& cfg = code->cfg();
     optimize_enums::EnumFixpointIterator engine(cfg, m_enum_util->m_config);
     engine.run(start_env);
+
     for (auto& block : cfg.blocks()) {
       optimize_enums::EnumTypeEnvironment env =
           engine.get_entry_state_at(block);
@@ -594,6 +597,7 @@ class CodeTransformer final {
     for (const auto& info : m_replacements) {
       cfg.replace_insns(info.original_insn, info.replacements);
     }
+    code->clear_cfg();
   }
 
  private:
@@ -683,8 +687,8 @@ class CodeTransformer final {
       if (insn->has_type() && insn->opcode() != IOPCODE_INIT_CLASS) {
         auto type = insn->get_type();
         always_assert_log(try_convert_to_int_type(type) == nullptr,
-                          "Unhandled type %s in %s method %s\n", SHOW(type),
-                          SHOW(insn), SHOW(m_method));
+                          "Unhandled type in %s method %s\n", SHOW(insn),
+                          SHOW(m_method));
       }
     } break;
     }
@@ -1155,13 +1159,7 @@ class EnumTransformer final {
    */
   void sanity_check(Scope& scope) {
     walk::parallel::code(scope, [this](DexMethod* method, IRCode& code) {
-      if (method->get_code() == nullptr) {
-        return;
-      }
-      if (!code.cfg().editable()) {
-        code.build_cfg();
-      }
-      for (auto& mie : InstructionIterable(code.cfg())) {
+      for (auto& mie : InstructionIterable(code)) {
         auto insn = mie.insn;
         if (insn->has_method()) {
           auto method_ref = insn->get_method();
@@ -1237,6 +1235,7 @@ class EnumTransformer final {
     cfg.create_branch(entry, dasm(OPCODE_IF_EQZ, {0_v}), obj_tostring_block,
                       return_null_block);
     cfg.recompute_registers_size();
+    code->clear_cfg();
   }
 
   /**
@@ -1292,6 +1291,7 @@ class EnumTransformer final {
               {1_v, 0_v}),
          dasm(OPCODE_THROW, {1_v})});
     cfg.recompute_registers_size();
+    code->clear_cfg();
   }
 
   /**
@@ -1336,6 +1336,7 @@ class EnumTransformer final {
     cfg.create_branch(entry, dasm(OPCODE_SWITCH, {0_v}), cases.front().second,
                       cases);
     cfg.recompute_registers_size();
+    code->clear_cfg();
   }
 
   /**
@@ -1374,6 +1375,7 @@ class EnumTransformer final {
         dasm(OPCODE_RETURN, {1_v}),
     });
     cfg.recompute_registers_size();
+    code->clear_cfg();
   }
 
   /**
@@ -1435,6 +1437,7 @@ class EnumTransformer final {
     cfg.create_branch(entry, dasm(OPCODE_SWITCH, {0_v}), cases.front().second,
                       cases);
     cfg.recompute_registers_size();
+    code->clear_cfg();
   }
 
   /**
@@ -1506,43 +1509,47 @@ class EnumTransformer final {
     auto code = clinit->get_code();
     auto ctors = enum_cls->get_ctors();
     always_assert(ctors.size() == 1);
-    side_effects::InvokeToSummaryMap summaries;
     auto ctor = ctors[0];
-    auto& cfg = code->cfg();
-    auto ii = InstructionIterable(cfg);
-    cfg::CFGMutation m(cfg);
-    for (auto it = ii.begin(); it != ii.end(); ++it) {
+    side_effects::InvokeToSummaryMap summaries;
+
+    for (auto it = code->begin(); it != code->end();) {
+      if (it->type != MFLOW_OPCODE) {
+        ++it;
+        continue;
+      }
       auto insn = it->insn;
       if (opcode::is_an_sput(insn->opcode())) {
         auto field = resolve_field(insn->get_field());
         if (field && enum_constants.count(field)) {
-          cfg.insert_before(it, dasm(OPCODE_SGET_OBJECT, field));
-          cfg.insert_before(
+          code->insert_before(it, dasm(OPCODE_SGET_OBJECT, field));
+          code->insert_before(
               it,
               dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {{VREG, insn->src(0)}}));
-          m.remove(it);
+          it = code->erase(it);
         } else if (field == values_field) {
-          m.remove(it);
+          it = code->erase(it);
         }
       } else if (opcode::is_invoke_direct(insn->opcode()) &&
                  insn->get_method() == ctor) {
         summaries.emplace(insn, side_effects::Summary());
       }
+      ++it;
     }
-    m.flush();
 
+    code->build_cfg(/* editable */ false);
+    auto& cfg = code->cfg();
     cfg.calculate_exit_block();
     ptrs::FixpointIterator fp_iter(cfg);
     fp_iter.run(ptrs::Environment());
     used_vars::FixpointIterator uv_fpiter(fp_iter, summaries, cfg);
     uv_fpiter.run(used_vars::UsedVarsSet());
-    auto dead_instructions = used_vars::get_dead_instructions(cfg, uv_fpiter);
+    auto dead_instructions = used_vars::get_dead_instructions(*code, uv_fpiter);
+    code->clear_cfg();
     for (const auto& insn : dead_instructions) {
-      cfg.remove_insn(insn);
+      code->remove_opcode(insn);
     }
-
     // Assert no instruction about the $VALUES field.
-    for (auto& mie : cfg::InstructionIterable(cfg)) {
+    for (auto& mie : InstructionIterable(code)) {
       auto insn = mie.insn;
       always_assert_log(!insn->has_field() || insn->get_field() != values_field,
                         "%s can not be deleted", SHOW(insn));
@@ -1553,7 +1560,7 @@ class EnumTransformer final {
    * Only use for <clinit> code.
    */
   static bool empty(IRCode* code) {
-    auto iterable = InstructionIterable(code->cfg());
+    auto iterable = InstructionIterable(code);
     auto begin = iterable.begin();
     return opcode::is_return_void(begin->insn->opcode());
   }

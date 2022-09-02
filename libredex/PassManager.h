@@ -39,14 +39,14 @@ class PassManager {
  public:
   explicit PassManager(const std::vector<Pass*>& passes);
   explicit PassManager(const std::vector<Pass*>& passes,
-                       const ConfigFiles& config,
+                       const Json::Value& config,
                        const RedexOptions& options = RedexOptions{});
 
   PassManager(const std::vector<Pass*>& passes,
               std::unique_ptr<keep_rules::ProguardConfiguration> pg_config);
   PassManager(const std::vector<Pass*>& passes,
               std::unique_ptr<keep_rules::ProguardConfiguration> pg_config,
-              const ConfigFiles& config,
+              const Json::Value& config,
               const RedexOptions& options = RedexOptions{});
 
   ~PassManager();
@@ -124,11 +124,9 @@ class PassManager {
   }
 
  private:
-  void activate_pass(const std::string& name,
-                     const std::string* alias,
-                     const Json::Value& conf);
+  void activate_pass(const std::string& name, const Json::Value& conf);
 
-  void init(const ConfigFiles& config);
+  void init(const Json::Value& config);
 
   hashing::DexHash run_hasher(const char* name, const Scope& scope);
 
@@ -158,8 +156,6 @@ class PassManager {
   AccumulatingTimer m_check_unique_deobfuscateds_timer;
 
   AssessorConfig m_assessor_config;
-
-  std::vector<std::unique_ptr<Pass>> m_cloned_passes;
 
   // unique_ptr to avoid header include.
   struct InternalFields;

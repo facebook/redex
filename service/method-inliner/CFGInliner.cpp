@@ -12,7 +12,6 @@
 #include "DexPosition.h"
 #include "IRList.h"
 #include "IROpcode.h"
-#include "RedexContext.h"
 #include "Show.h"
 #include "SourceBlocks.h"
 #include "Trace.h"
@@ -38,22 +37,21 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
 
 namespace {
 
-// Fallback implementation.
+// Maybe replace this with a RedexContext API.
 size_t num_interactions(const InstructionIterator& inline_site,
                         const ControlFlowGraph& callee_cfg) {
-  auto nums = [](auto* b) -> std::optional<size_t> {
-    auto sb = source_blocks::get_first_source_block(b);
-    return (sb != nullptr) ? std::optional<size_t>(sb->vals_size)
-                           : std::nullopt;
-  };
-
-  auto caller = nums(inline_site.block());
-  if (caller) {
-    return *caller;
+  {
+    auto sb_vec = source_blocks::gather_source_blocks(inline_site.block());
+    if (!sb_vec.empty()) {
+      return sb_vec[0]->vals.size();
+    }
   }
-  auto callee = nums(callee_cfg.entry_block());
-  if (caller) {
-    return *caller;
+
+  {
+    auto sb_vec = source_blocks::gather_source_blocks(callee_cfg.entry_block());
+    if (!sb_vec.empty()) {
+      return sb_vec[0]->vals.size();
+    }
   }
 
   return 0;
@@ -65,8 +63,7 @@ float get_source_blocks_factor(const InstructionIterator& inline_site,
   auto caller_block = inline_site.block();
   float caller_val;
   {
-    auto* sb = source_blocks::get_last_source_block_before(
-        caller_block, inline_site.unwrap());
+    auto* sb = source_blocks::get_first_source_block(caller_block);
     if (sb == nullptr) {
       return NAN;
     }
@@ -132,8 +129,7 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
   remove_ghost_exit_block(&callee);
 
   {
-    auto num = g_redex != nullptr ? g_redex->num_sb_interaction_indices()
-                                  : num_interactions(inline_site, callee_orig);
+    auto num = num_interactions(inline_site, callee_orig);
     for (size_t i = 0; i < num; ++i) {
       auto sb_factor = get_source_blocks_factor(inline_site, callee_orig, i);
       normalize_source_blocks(callee, sb_factor, i);

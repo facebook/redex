@@ -28,7 +28,7 @@ class StringBuilderOutlinerTest : public RedexTest {
                           android_target + "/android.jar";
     // StringBuilderOutliner requires bunch of java.lang.* classes to be
     // defined. Loading the SDK JAR here ensures that.
-    ASSERT_TRUE(load_jar_file(DexLocation::make_location("", sdk_jar)));
+    ASSERT_TRUE(load_jar_file(sdk_jar.c_str()));
 
     m_config.min_outline_count = 1;
 

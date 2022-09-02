@@ -39,8 +39,7 @@ void InjectDebug::run() {
 
 void InjectDebug::load_dex() {
   DexStore root_store("classes");
-  root_store.set_dex_magic(load_dex_magic_from_dex(
-      DexLocation::make_location("dex", m_dex_files[0])));
+  root_store.set_dex_magic(load_dex_magic_from_dex(m_dex_files[0].c_str()));
   m_stores.emplace_back(std::move(root_store));
 
   dex_stats_t input_totals;
@@ -177,7 +176,6 @@ void InjectDebug::write_dex() {
           nullptr, // locator_index
           false, // normal_primary_dex
           store_num,
-          nullptr, // store name
           i, // dex_number,
           DebugInfoKind::BytecodeDebugger,
           nullptr, // iodi_metadata

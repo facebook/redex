@@ -9,8 +9,6 @@
 
 #include "DexClass.h"
 
-class IRInstruction;
-
 namespace dedup_blocks_impl {
 
 struct Config {
@@ -20,7 +18,7 @@ struct Config {
       DEFAULT_BLOCK_SPLIT_MIN_OPCODE_COUNT;
   bool split_postfix = true;
   bool debug = false;
-  bool dedup_fill_in_stack_trace = false;
+  bool dedup_throws = false;
 };
 
 struct Stats {
@@ -33,8 +31,6 @@ struct Stats {
   std::unordered_map<size_t, size_t> dup_sizes;
   Stats& operator+=(const Stats& that);
 };
-
-bool is_ineligible_because_of_fill_in_stack_trace(const IRInstruction*);
 
 class DedupBlocks {
  public:

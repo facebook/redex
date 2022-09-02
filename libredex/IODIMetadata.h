@@ -54,7 +54,7 @@ class IODIMetadata {
   // Android builds with min_sdk >= 26 don't need IODI to emit debug info
   explicit IODIMetadata(uint32_t min_sdk,
                         IODILayerMode layer_mode = IODILayerMode::kFull)
-      : min_sdk{min_sdk} {
+          : min_sdk{min_sdk} {
     this->layer_mode = min_sdk <= 19 ? IODILayerMode::kFull : layer_mode;
   }
 
@@ -111,6 +111,7 @@ class IODIMetadata {
       m_iodi_method_layers;
 
   // These exists for can_safely_use_iodi
+  std::unordered_map<const DexMethod*, std::string> m_method_to_name;
   std::unordered_set<const DexMethod*> m_huge_methods;
 
   bool m_marked{false};

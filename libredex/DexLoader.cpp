@@ -23,10 +23,10 @@
 #include <stdexcept>
 #include <vector>
 
-DexLoader::DexLoader(const DexLocation* location)
+DexLoader::DexLoader(const char* location)
     : m_idx(nullptr),
       m_file(new boost::iostreams::mapped_file()),
-      m_location(location) {}
+      m_dex_location(location) {}
 
 static void validate_dex_header(const dex_header* dh,
                                 size_t dexsize,
@@ -449,7 +449,7 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
 
 void DexLoader::load_dex_class(int num) {
   const dex_class_def* cdef = m_class_defs + num;
-  DexClass* dc = DexClass::create(m_idx.get(), cdef, m_location);
+  DexClass* dc = DexClass::create(m_idx.get(), cdef, m_dex_location);
   // We may be inserting a nullptr here. Need to remove them later
   //
   // We're inserting nullptr because we can't mess up the indices of the other
@@ -457,19 +457,19 @@ void DexLoader::load_dex_class(int num) {
   m_classes->at(num) = dc;
 }
 
-const dex_header* DexLoader::get_dex_header(const char* file_name) {
-  m_file->open(file_name, boost::iostreams::mapped_file::readonly);
+const dex_header* DexLoader::get_dex_header(const char* location) {
+  m_file->open(location, boost::iostreams::mapped_file::readonly);
   if (!m_file->is_open()) {
-    fprintf(stderr, "error: cannot create memory-mapped file: %s\n", file_name);
+    fprintf(stderr, "error: cannot create memory-mapped file: %s\n", location);
     exit(EXIT_FAILURE);
   }
   return reinterpret_cast<const dex_header*>(m_file->const_data());
 }
 
-DexClasses DexLoader::load_dex(const char* file_name,
+DexClasses DexLoader::load_dex(const char* location,
                                dex_stats_t* stats,
                                int support_dex_version) {
-  const dex_header* dh = get_dex_header(file_name);
+  const dex_header* dh = get_dex_header(location);
   validate_dex_header(dh, m_file->size(), support_dex_version);
   return load_dex(dh, stats);
 }
@@ -487,21 +487,28 @@ DexClasses DexLoader::load_dex(const dex_header* dh, dex_stats_t* stats) {
 
   {
     auto num_threads = redex_parallel::default_num_threads();
-    std::vector<std::exception_ptr> all_exceptions;
-    std::mutex all_exceptions_mutex;
-    workqueue_run_for<size_t>(
-        0, dh->class_defs_size,
-        [&all_exceptions, &all_exceptions_mutex, this](uint32_t num) {
+    std::vector<std::vector<std::exception_ptr>> exceptions_vec(num_threads);
+    std::vector<size_t> indices(dh->class_defs_size);
+    std::iota(indices.begin(), indices.end(), 0);
+    workqueue_run<size_t>(
+        [&exceptions_vec, this](sparta::SpartaWorkerState<size_t>* state,
+                                size_t num) {
           try {
             load_dex_class(num);
           } catch (const std::exception& exc) {
             TRACE(MAIN, 1, "Worker throw the exception:%s", exc.what());
-            std::lock_guard<std::mutex> lock_guard(all_exceptions_mutex);
-            all_exceptions.emplace_back(std::current_exception());
+            exceptions_vec[state->worker_id()].emplace_back(
+                std::current_exception());
           }
         },
+        indices,
         num_threads);
 
+    std::vector<std::exception_ptr> all_exceptions;
+    for (auto& exceptions : exceptions_vec) {
+      all_exceptions.insert(all_exceptions.end(), exceptions.begin(),
+                            exceptions.end());
+    }
     if (!all_exceptions.empty()) {
       // At least one of the workers raised an exception
       aggregate_exception ae(all_exceptions);
@@ -547,7 +554,7 @@ static void balloon_all(const Scope& scope, bool throw_on_error) {
   }
 }
 
-DexClasses load_classes_from_dex(const DexLocation* location,
+DexClasses load_classes_from_dex(const char* location,
                                  bool balloon,
                                  bool throw_on_balloon_error,
                                  int support_dex_version) {
@@ -556,16 +563,14 @@ DexClasses load_classes_from_dex(const DexLocation* location,
                                throw_on_balloon_error, support_dex_version);
 }
 
-DexClasses load_classes_from_dex(const DexLocation* location,
+DexClasses load_classes_from_dex(const char* location,
                                  dex_stats_t* stats,
                                  bool balloon,
                                  bool throw_on_balloon_error,
                                  int support_dex_version) {
-  TRACE(MAIN, 1, "Loading classes from dex from %s",
-        location->get_file_name().c_str());
+  TRACE(MAIN, 1, "Loading classes from dex from %s", location);
   DexLoader dl(location);
-  auto classes = dl.load_dex(location->get_file_name().c_str(), stats,
-                             support_dex_version);
+  auto classes = dl.load_dex(location, stats, support_dex_version);
   if (balloon) {
     balloon_all(classes, throw_on_balloon_error);
   }
@@ -573,7 +578,7 @@ DexClasses load_classes_from_dex(const DexLocation* location,
 }
 
 DexClasses load_classes_from_dex(const dex_header* dh,
-                                 const DexLocation* location,
+                                 const char* location,
                                  bool balloon,
                                  bool throw_on_balloon_error) {
   DexLoader dl(location);
@@ -584,9 +589,9 @@ DexClasses load_classes_from_dex(const dex_header* dh,
   return classes;
 }
 
-std::string load_dex_magic_from_dex(const DexLocation* location) {
+std::string load_dex_magic_from_dex(const char* location) {
   DexLoader dl(location);
-  auto dh = dl.get_dex_header(location->get_file_name().c_str());
+  auto dh = dl.get_dex_header(location);
   return dh->magic;
 }
 

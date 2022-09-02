@@ -36,7 +36,7 @@ bool is_kotlin_class(DexClass* cls) {
 
 // Check cls name is in anonymous format
 // Anonymous cls name ends with \$[0-9]*
-bool is_anonymous(std::string_view name) {
+bool is_anonymous(std::string name) {
   auto last = name.find_last_of('$');
   if (last == std::string::npos) {
     return false;

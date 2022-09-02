@@ -602,18 +602,16 @@ void Transform::remove_dead_switch(
   bool goto_is_feasible = !intra_cp.analyze_edge(goto_edge, env).is_bottom();
   if (!goto_is_feasible && !remaining_branch_targets.empty()) {
     // Rewire infeasible goto to absorb all cases to most common target
-    boost::optional<int32_t> most_common_case_key;
+    int32_t most_common_case_key{0};
     cfg::Block* most_common_target{nullptr};
     uint32_t most_common_target_count{0};
-    std::unordered_set<cfg::Block*> visited;
     for (cfg::Edge* e : remaining_branch_edges) {
       auto case_key = *e->case_key();
       auto target = e->target();
       auto count = remaining_branch_targets.at(target);
-      always_assert(count > 0);
       if (count > most_common_target_count ||
           (count == most_common_target_count &&
-           case_key > *most_common_case_key)) {
+           case_key > most_common_case_key)) {
         most_common_case_key = case_key;
         most_common_target = target;
         most_common_target_count = count;

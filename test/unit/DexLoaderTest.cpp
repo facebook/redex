@@ -18,29 +18,28 @@ TEST_F(DexLoaderTest, dex_header_item_size) {
 }
 
 TEST_F(DexLoaderTest, align_ptr) {
-  uint8_t* const ALIGNED_BASE_PTR = (uint8_t*)(1 << 20);
-  EXPECT_EQ(ALIGNED_BASE_PTR, align_ptr(ALIGNED_BASE_PTR + 0, 1));
-  EXPECT_EQ(ALIGNED_BASE_PTR + 1, align_ptr(ALIGNED_BASE_PTR + 1, 1));
-  EXPECT_EQ(ALIGNED_BASE_PTR + 2, align_ptr(ALIGNED_BASE_PTR + 2, 1));
-  EXPECT_EQ(ALIGNED_BASE_PTR + 3, align_ptr(ALIGNED_BASE_PTR + 3, 1));
+  EXPECT_EQ((uint8_t*)0, align_ptr((uint8_t*)0, 1));
+  EXPECT_EQ((uint8_t*)1, align_ptr((uint8_t*)1, 1));
+  EXPECT_EQ((uint8_t*)2, align_ptr((uint8_t*)2, 1));
+  EXPECT_EQ((uint8_t*)3, align_ptr((uint8_t*)3, 1));
 
-  EXPECT_EQ(ALIGNED_BASE_PTR + 0, align_ptr(ALIGNED_BASE_PTR + 0, 2));
-  EXPECT_EQ(ALIGNED_BASE_PTR + 2, align_ptr(ALIGNED_BASE_PTR + 1, 2));
-  EXPECT_EQ(ALIGNED_BASE_PTR + 2, align_ptr(ALIGNED_BASE_PTR + 2, 2));
-  EXPECT_EQ(ALIGNED_BASE_PTR + 4, align_ptr(ALIGNED_BASE_PTR + 3, 2));
+  EXPECT_EQ((uint8_t*)0, align_ptr((uint8_t*)0, 2));
+  EXPECT_EQ((uint8_t*)2, align_ptr((uint8_t*)1, 2));
+  EXPECT_EQ((uint8_t*)2, align_ptr((uint8_t*)2, 2));
+  EXPECT_EQ((uint8_t*)4, align_ptr((uint8_t*)3, 2));
 
-  EXPECT_EQ(ALIGNED_BASE_PTR + 0, align_ptr(ALIGNED_BASE_PTR + 0, 4));
-  EXPECT_EQ(ALIGNED_BASE_PTR + 4, align_ptr(ALIGNED_BASE_PTR + 1, 4));
-  EXPECT_EQ(ALIGNED_BASE_PTR + 4, align_ptr(ALIGNED_BASE_PTR + 2, 4));
-  EXPECT_EQ(ALIGNED_BASE_PTR + 4, align_ptr(ALIGNED_BASE_PTR + 3, 4));
-  EXPECT_EQ(ALIGNED_BASE_PTR + 4, align_ptr(ALIGNED_BASE_PTR + 4, 4));
+  EXPECT_EQ((uint8_t*)0, align_ptr((uint8_t*)0, 4));
+  EXPECT_EQ((uint8_t*)4, align_ptr((uint8_t*)1, 4));
+  EXPECT_EQ((uint8_t*)4, align_ptr((uint8_t*)2, 4));
+  EXPECT_EQ((uint8_t*)4, align_ptr((uint8_t*)3, 4));
+  EXPECT_EQ((uint8_t*)4, align_ptr((uint8_t*)4, 4));
 
-  EXPECT_EQ(ALIGNED_BASE_PTR + 8, align_ptr(ALIGNED_BASE_PTR + 7, 8));
-  EXPECT_EQ(ALIGNED_BASE_PTR + 8, align_ptr(ALIGNED_BASE_PTR + 8, 8));
-  EXPECT_EQ(ALIGNED_BASE_PTR + 16, align_ptr(ALIGNED_BASE_PTR + 9, 8));
-  EXPECT_EQ(ALIGNED_BASE_PTR + 16, align_ptr(ALIGNED_BASE_PTR + 15, 8));
-  EXPECT_EQ(ALIGNED_BASE_PTR + 16, align_ptr(ALIGNED_BASE_PTR + 16, 8));
-  EXPECT_EQ(ALIGNED_BASE_PTR + 24, align_ptr(ALIGNED_BASE_PTR + 17, 8));
+  EXPECT_EQ((uint8_t*)8, align_ptr((uint8_t*)7, 8));
+  EXPECT_EQ((uint8_t*)8, align_ptr((uint8_t*)8, 8));
+  EXPECT_EQ((uint8_t*)16, align_ptr((uint8_t*)9, 8));
+  EXPECT_EQ((uint8_t*)16, align_ptr((uint8_t*)15, 8));
+  EXPECT_EQ((uint8_t*)16, align_ptr((uint8_t*)16, 8));
+  EXPECT_EQ((uint8_t*)24, align_ptr((uint8_t*)17, 8));
 
   uint8_t* const UINTPTR_MAX_ALIGNED = (uint8_t*)((UINTPTR_MAX / 4) * 4);
 

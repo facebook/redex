@@ -95,11 +95,7 @@ class FixpointIterator final
   side_effects::InvokeToSummaryMap m_invoke_to_summary_map;
 };
 
-// Deprecated, will be removed.
 std::vector<IRList::iterator> get_dead_instructions(const IRCode&,
                                                     const FixpointIterator&);
-
-std::vector<cfg::InstructionIterator> get_dead_instructions(
-    const cfg::ControlFlowGraph&, const FixpointIterator&);
 
 } // namespace used_vars

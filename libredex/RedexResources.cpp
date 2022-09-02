@@ -7,7 +7,6 @@
 
 #include "RedexResources.h"
 
-#include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/operations.hpp>
 #include <map>
@@ -146,7 +145,7 @@ std::unordered_set<std::string> get_files_by_suffix(
       const path_t& entry_path = entry.path();
 
       if (is_regular_file(entry_path) &&
-          boost::ends_with(entry_path.string(), suffix)) {
+          ends_with(entry_path.string().c_str(), suffix.c_str())) {
         files.emplace(entry_path.string());
       }
 
@@ -199,7 +198,7 @@ void find_resource_xml_files(const std::string& dir,
              ++lit) {
           const path_t& resource_path = lit->path();
           if (is_regular_file(resource_path) &&
-              boost::ends_with(resource_path.string(), ".xml")) {
+              ends_with(resource_path.string().c_str(), ".xml")) {
             handler(resource_path.string());
           }
         }
@@ -351,7 +350,8 @@ void find_native_library_files(const std::string& lib_root, Fn handler) {
       auto const& entry = *it;
       const path_t& entry_path = entry.path();
       if (is_regular_file(entry_path) &&
-          boost::ends_with(entry_path.filename().string(), library_extension)) {
+          ends_with(entry_path.filename().string().c_str(),
+                    library_extension.c_str())) {
         TRACE(RES, 9, "Checking lib: %s", entry_path.string().c_str());
         handler(entry_path.string());
       }
@@ -401,18 +401,6 @@ std::unordered_set<std::string> AndroidResources::get_native_classes() {
       std::min(redex_parallel::default_num_threads(), kReadNativeThreads),
       /*push_tasks_while_running=*/true);
   return all_classes;
-}
-
-bool AndroidResources::can_obfuscate_xml_file(
-    const std::unordered_set<std::string>& allowed_types,
-    const std::string& dirname) {
-  for (const auto& type : allowed_types) {
-    auto path = RES_DIRECTORY + std::string("/") + type;
-    if (dirname.find(path) != std::string::npos) {
-      return true;
-    }
-  }
-  return false;
 }
 
 void ResourceTableFile::remove_unreferenced_strings() {

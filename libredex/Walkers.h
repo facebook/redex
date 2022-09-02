@@ -429,31 +429,6 @@ class walk {
           num_threads);
     }
 
-    template <class Accumulator,
-              class Reduce = plus_assign<Accumulator>,
-              class Classes,
-              typename WalkerFn>
-    static Accumulator classes(
-        Classes const& classes,
-        const WalkerFn& walker,
-        size_t num_threads = redex_parallel::default_num_threads(),
-        Accumulator init = Accumulator()) {
-      std::vector<CacheAligned<Accumulator>> acc_vec(num_threads, init);
-      auto reduce = Reduce();
-      workqueue_run<DexClass*>( // over-parallelized maybe
-          [&walker, &acc_vec, &reduce](
-              sparta::SpartaWorkerState<DexClass*>* state, DexClass* cls) {
-            Accumulator& acc = acc_vec[state->worker_id()];
-            reduce(walker(cls), &acc);
-          },
-          classes,
-          num_threads);
-      for (Accumulator& acc : acc_vec) {
-        reduce(acc, &init);
-      }
-      return init;
-    }
-
     // Call `walker` on all methods in `classes` in parallel.
     //   WalkerFn should accept a `DexMethod*`.
     template <class Classes, typename WalkerFn>
@@ -549,32 +524,6 @@ class walk {
           [&walker](DexClass* cls) { walk::iterate_fields(cls, walker); },
           classes,
           num_threads);
-    }
-
-    template <class Accumulator,
-              class Reduce = plus_assign<Accumulator>,
-              class Classes,
-              typename WalkerFn>
-    static Accumulator fields(
-        const Classes& classes,
-        const WalkerFn& walker,
-        size_t num_threads = redex_parallel::default_num_threads(),
-        Accumulator init = Accumulator()) {
-      std::vector<CacheAligned<Accumulator>> acc_vec(num_threads, init);
-      auto reduce = Reduce();
-      workqueue_run<DexClass*>(
-          [&walker, &acc_vec, &reduce](
-              sparta::SpartaWorkerState<DexClass*>* state, DexClass* cls) {
-            Accumulator& acc = acc_vec[state->worker_id()];
-            walk::iterate_fields(cls,
-                                 [&](auto arg) { reduce(walker(arg), &acc); });
-          },
-          classes,
-          num_threads);
-      for (Accumulator& acc : acc_vec) {
-        reduce(acc, &init);
-      }
-      return init;
     }
 
     // Call `walker` on all code (of methods approved by `filter`) in `classes`

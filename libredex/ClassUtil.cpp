@@ -14,7 +14,7 @@
 namespace klass {
 
 Serdes get_serdes(const DexClass* cls) {
-  std::string name = cls->get_name()->str_copy();
+  std::string name = cls->get_name()->str();
   name.pop_back();
   std::string flatbuf_name = name;
   std::replace(flatbuf_name.begin(), flatbuf_name.end(), '$', '_');

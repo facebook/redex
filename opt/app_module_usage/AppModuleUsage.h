@@ -60,7 +60,7 @@ class AppModuleUsagePass : public Pass {
 
   // Returns the names of the modules annotated as used by the given entrypoint
   template <typename T>
-  static std::unordered_set<std::string_view> get_modules_used(
+  static std::unordered_set<std::string> get_modules_used(
       T* entrypoint, DexType* annotation_type);
 
  private:

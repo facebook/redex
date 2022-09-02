@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include <json/value.h>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -45,8 +44,6 @@ struct CrossDexRefMinimizerConfig {
   uint64_t field_seed_weight{20};
   uint64_t type_seed_weight{30};
   uint64_t string_seed_weight{20};
-
-  bool emit_json{false};
 };
 
 // Helper class that maintains a set of dex classes with associated priorities
@@ -123,43 +120,9 @@ class CrossDexRefMinimizer {
                    std::vector<DexType*>& types,
                    std::vector<const DexString*>& strings);
 
-  std::unique_ptr<Json::Value> m_json_classes;
-  template <class Ref>
-  class JsonRefIndices {
-   private:
-    std::string m_prefix;
-    std::unordered_map<Ref, uint64_t> m_indices;
-
-   public:
-    explicit JsonRefIndices(std::string prefix) : m_prefix(std::move(prefix)) {}
-    std::string get(Ref ref) {
-      auto& index = m_indices[ref];
-      if (index == 0) {
-        index = m_indices.size();
-      }
-      return m_prefix + std::to_string(index);
-    }
-
-    Json::Value get(const std::vector<Ref>& refs) {
-      Json::Value res = Json::arrayValue;
-      for (auto ref : refs) {
-        res.append(get(ref));
-      }
-      return res;
-    }
-  };
-  JsonRefIndices<DexMethodRef*> m_json_methods{"M"};
-  JsonRefIndices<DexFieldRef*> m_json_fields{"F"};
-  JsonRefIndices<DexType*> m_json_types{"T"};
-  JsonRefIndices<const DexString*> m_json_strings{"S"};
-
  public:
   explicit CrossDexRefMinimizer(const CrossDexRefMinimizerConfig& config)
-      : m_config(config) {
-    if (config.emit_json) {
-      m_json_classes = std::make_unique<Json::Value>(Json::objectValue);
-    }
-  }
+      : m_config(config) {}
   // Gather frequency counts; must be called for relevant classes before
   // inserting them
   void sample(DexClass* cls);
@@ -181,10 +144,6 @@ class CrossDexRefMinimizer {
   const CrossDexRefMinimizerStats& stats() const { return m_stats; }
   size_t get_applied_refs() const { return m_applied_refs.size(); }
   size_t get_unapplied_refs(DexClass* cls);
-
-  std::string get_json_class_index(DexClass* cls);
-  Json::Value get_json_class_indices(const std::vector<DexClass*>& classes);
-  Json::Value* get_json_classes() { return m_json_classes.get(); }
 };
 
 } // namespace cross_dex_ref_minimizer

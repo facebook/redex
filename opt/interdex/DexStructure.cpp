@@ -82,19 +82,16 @@ unsigned estimate_linear_alloc(const DexClass* clazz) {
 }
 
 /**
- * Returns the count of elements present in a but not in b.
+ * Removes the elements of b from a. Runs in O(size(a)), so it works best if
+ * size(a) << size(b).
  */
 template <typename T>
-size_t set_difference_size(const std::unordered_set<T>& a,
-                           const std::unordered_set<T>& b) {
-  size_t result = a.size();
-  if (a.size() <= b.size()) {
-    for (const auto& v : a) {
-      result -= b.count(v);
-    }
-  } else {
-    for (const auto& v : b) {
-      result -= a.count(v);
+std::unordered_set<T> set_difference(const std::unordered_set<T>& a,
+                                     const std::unordered_set<T>& b) {
+  std::unordered_set<T> result;
+  for (auto& v : a) {
+    if (!b.count(v)) {
+      result.emplace(v);
     }
   }
   return result;
@@ -283,21 +280,22 @@ bool DexStructure::add_class_if_fits(
     return false;
   }
 
-  const auto extra_mrefs_size = set_difference_size(clazz_mrefs, m_mrefs);
-  const auto new_method_refs = m_mrefs.size() + extra_mrefs_size;
-  if (new_method_refs >= method_refs_limit) {
+  auto extra_mrefs = set_difference(clazz_mrefs, m_mrefs);
+  auto extra_frefs = set_difference(clazz_frefs, m_frefs);
+  auto extra_trefs = set_difference(clazz_trefs, m_trefs);
+
+  if (m_mrefs.size() + extra_mrefs.size() >= method_refs_limit) {
     TRACE(IDEX, 6,
           "[warning]: Class won't fit current dex since it will go "
           "over the method refs limit: %zu >= %zu: %s",
-          m_mrefs.size() + extra_mrefs_size, method_refs_limit, SHOW(clazz));
+          m_mrefs.size() + extra_mrefs.size(), method_refs_limit, SHOW(clazz));
     trace_details();
     return false;
   }
 
-  const auto extra_frefs_size = set_difference_size(clazz_frefs, m_frefs);
-  const auto new_field_refs = m_frefs.size() + extra_frefs_size +
-                              m_pending_init_class_fields.size() +
-                              pending_init_class_fields.size();
+  auto new_field_refs = m_frefs.size() + extra_frefs.size() +
+                        m_pending_init_class_fields.size() +
+                        pending_init_class_fields.size();
   if (new_field_refs >= field_refs_limit) {
     TRACE(IDEX, 6,
           "[warning]: Class won't fit current dex since it will go "
@@ -307,10 +305,9 @@ bool DexStructure::add_class_if_fits(
     return false;
   }
 
-  const auto extra_trefs_size = set_difference_size(clazz_trefs, m_trefs);
-  const auto new_type_refs = m_trefs.size() + extra_trefs_size +
-                             m_pending_init_class_types.size() +
-                             pending_init_class_types.size();
+  auto new_type_refs = m_trefs.size() + extra_trefs.size() +
+                       m_pending_init_class_types.size() +
+                       pending_init_class_types.size();
   if (new_type_refs >= type_refs_limit) {
     TRACE(IDEX, 6,
           "[warning]: Class won't fit current dex since it will go "

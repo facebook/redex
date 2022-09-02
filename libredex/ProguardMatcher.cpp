@@ -54,7 +54,7 @@ std::vector<std::unique_ptr<boost::regex>> make_rxs(
   return rxs;
 }
 
-std::string_view get_deobfuscated_name(const DexType* type) {
+const std::string& get_deobfuscated_name(const DexType* type) {
   auto cls = type_class(type);
   if (cls == nullptr) {
     return type->str();
@@ -62,19 +62,11 @@ std::string_view get_deobfuscated_name(const DexType* type) {
   return cls->get_deobfuscated_name().str();
 }
 
-const char* get_deobfuscated_name_cstr(const DexType* type) {
-  auto cls = type_class(type);
-  if (cls == nullptr) {
-    return type->c_str();
-  }
-  return cls->get_deobfuscated_name().c_str();
-}
-
 bool match_annotation_rx(const DexClass* cls, const boost::regex& annorx) {
   const auto* annos = cls->get_anno_set();
   if (!annos) return false;
   for (const auto& anno : annos->get_annotations()) {
-    if (boost::regex_match(get_deobfuscated_name_cstr(anno->type()), annorx)) {
+    if (boost::regex_match(get_deobfuscated_name(anno->type()), annorx)) {
       return true;
     }
   }
@@ -129,9 +121,9 @@ struct ClassMatcher {
 
  private:
   bool match_name(const DexClass* cls, int index) const {
-    auto deob_name_cstr = cls->get_deobfuscated_name().c_str();
-    const auto& rx = *m_cls[index];
-    return boost::regex_match(deob_name_cstr, rx);
+    const auto& deob_name = cls->get_deobfuscated_name();
+    auto rx = *m_cls[index];
+    return boost::regex_match(deob_name.str(), rx);
   }
 
   bool match_access(const DexClass* cls) const {
@@ -157,8 +149,8 @@ struct ClassMatcher {
         return false;
       }
     }
-    auto deob_name_cstr = cls->get_deobfuscated_name().c_str();
-    return boost::regex_match(deob_name_cstr, *m_extends);
+    const auto& deob_name = cls->get_deobfuscated_name();
+    return boost::regex_match(deob_name.str(), *m_extends);
   }
 
   bool search_interfaces(const DexClass* cls) {
@@ -325,12 +317,11 @@ class KeepRuleMatcher {
   bool has_annotation(const DexMember* member,
                       const std::string& annotation) const;
 
-  const boost::regex& register_matcher(const std::string& regex) const {
-    auto it = m_regex_map.find(regex);
-    if (it == m_regex_map.end()) {
-      it = m_regex_map.emplace(regex, boost::regex{regex}).first;
+  boost::regex register_matcher(const std::string& regex) const {
+    if (!m_regex_map.count(regex)) {
+      m_regex_map.emplace(regex, boost::regex{regex});
     }
-    return it->second;
+    return m_regex_map.at(regex);
   }
 
   bool is_unused() const {
@@ -481,7 +472,7 @@ bool KeepRuleMatcher::has_annotation(const DexMember* member,
     auto annotation_regex = proguard_parser::form_type_regex(annotation);
     const boost::regex& annotation_matcher = register_matcher(annotation_regex);
     for (const auto& anno : annos->get_annotations()) {
-      if (boost::regex_match(get_deobfuscated_name_cstr(anno->type()),
+      if (boost::regex_match(get_deobfuscated_name(anno->type()),
                              annotation_matcher)) {
         return true;
       }
@@ -490,20 +481,20 @@ bool KeepRuleMatcher::has_annotation(const DexMember* member,
   return false;
 }
 
-// From a fully qualified descriptor for a field, extract just the
+// From a fully qualified descriptor for a field, exract just the
 // name of the field which occurs between the ;. and : characters.
-const char* extract_field_name_cstr(const std::string& qualified_fieldname) {
+std::string extract_field_name(std::string qualified_fieldname) {
   auto p = qualified_fieldname.find(";.");
   if (p == std::string::npos) {
-    return qualified_fieldname.c_str();
+    return qualified_fieldname;
   }
-  return qualified_fieldname.c_str() + p + 2;
+  return qualified_fieldname.substr(p + 2);
 }
 
-const char* extract_method_name_and_type_cstr(
-    const DexString& qualified_fieldname) {
-  auto p = qualified_fieldname.str().find(";.");
-  return qualified_fieldname.c_str() + p + 2;
+std::string extract_method_name_and_type(
+    const std::string& qualified_fieldname) {
+  auto p = qualified_fieldname.find(";.");
+  return qualified_fieldname.substr(p + 2);
 }
 
 bool KeepRuleMatcher::field_level_match(
@@ -523,9 +514,8 @@ bool KeepRuleMatcher::field_level_match(
     return false;
   }
   // Match field name against regex.
-  auto dequalified_name_cstr =
-      extract_field_name_cstr(field->get_deobfuscated_name());
-  return boost::regex_match(dequalified_name_cstr, fieldname_regex);
+  auto dequalified_name = extract_field_name(field->get_deobfuscated_name());
+  return boost::regex_match(dequalified_name, fieldname_regex);
 }
 
 template <class Container>
@@ -578,9 +568,9 @@ bool KeepRuleMatcher::method_level_match(
                       method->get_access())) {
     return false;
   }
-  auto dequalified_name_cstr =
-      extract_method_name_and_type_cstr(method->get_deobfuscated_name());
-  return boost::regex_match(dequalified_name_cstr, method_regex);
+  auto dequalified_name =
+      extract_method_name_and_type(method->get_deobfuscated_name().str());
+  return boost::regex_match(dequalified_name.c_str(), method_regex);
 }
 
 template <class Container>

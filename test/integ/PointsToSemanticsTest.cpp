@@ -318,7 +318,7 @@ TEST_F(PointsToSemanticsTest, semanticActionGeneration) {
   ASSERT_NE("NotFound", android_version);
   std::string sdk_jar = std::string(android_sdk) + "/platforms/" +
                         android_version + "/android.jar";
-  ASSERT_TRUE(load_jar_file(DexLocation::make_location("", sdk_jar)));
+  ASSERT_TRUE(load_jar_file(sdk_jar.c_str()));
 
   DexStoreClassesIterator it(stores);
   Scope scope = build_class_scope(it);

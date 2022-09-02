@@ -20,7 +20,6 @@
 #include "IRAssembler.h"
 #include "Inliner.h"
 #include "InlinerConfig.h"
-#include "RedexContext.h"
 #include "RedexTest.h"
 #include "Show.h"
 
@@ -29,8 +28,6 @@ using namespace source_blocks;
 
 class SourceBlocksTest : public RedexTest {
  public:
-  void SetUp() override { g_redex->set_sb_interaction_index({{"Fake", 0}}); }
-
   static DexMethod* create_method(const std::string& class_name = "LFoo",
                                   const std::string& code = "((return-void))") {
     // Create a totally new class.
@@ -64,11 +61,10 @@ class SourceBlocksTest : public RedexTest {
       auto vec = gather_source_blocks(block);
       for (auto* sb : vec) {
         oss << " " << show(sb->src) << "@" << sb->id;
-        if (sb->vals_size > 0) {
+        if (!sb->vals.empty()) {
           oss << "(";
           bool first_val = true;
-          for (size_t i = 0; i < sb->vals_size; i++) {
-            auto& val = sb->vals[i];
+          for (const auto& val : sb->vals) {
             if (!first_val) {
               oss << "|";
             }
@@ -609,8 +605,6 @@ B4: LFoo;.bar:()V@3(0.4:0.2))");
 }
 
 TEST_F(SourceBlocksTest, coalesce) {
-  IRList::CONSECUTIVE_STYLE = IRList::ConsecutiveStyle::kChain;
-
   auto foo_method = create_method("LFoo");
 
   constexpr const char* kCode = R"(
@@ -705,89 +699,4 @@ B3: LFoo;.bar:()V@4(5:0))");
   auto coalesced = count_coalesced(foo_cfg.entry_block());
   EXPECT_EQ(coalesced.first, 1);
   EXPECT_EQ(coalesced.second, 4);
-}
-
-TEST_F(SourceBlocksTest, get_last_source_block_before) {
-  auto foo_method = create_method("LFoo");
-
-  constexpr const char* kCode = R"(
-    (
-      (.src_block "LFoo;.bar:()V" 0)
-      (const v0 0)
-      (.src_block "LFoo;.bar:()V" 1)
-      (const v1 1)
-      (.src_block "LFoo;.bar:()V" 2)
-      (const v2 2)
-      (.src_block "LFoo;.bar:()V" 3)
-      (const v3 3)
-
-      (.src_block "LFoo;.bar:()V" 4)
-
-      (return-void)
-    )
-  )";
-
-  foo_method->set_code(assembler::ircode_from_string(kCode));
-
-  foo_method->get_code()->build_cfg();
-
-  auto* b = foo_method->get_code()->cfg().entry_block();
-
-  for (auto it = b->begin(); it != b->end(); ++it) {
-    if (it->type != MFLOW_OPCODE) {
-      continue;
-    }
-    if (it->insn->opcode() == OPCODE_CONST) {
-      auto num = static_cast<uint32_t>(it->insn->get_literal());
-      auto sb = source_blocks::get_last_source_block_before(b, it);
-      EXPECT_NE(sb, nullptr);
-      if (sb != nullptr) {
-        EXPECT_EQ(sb->id, num);
-      }
-    }
-  }
-}
-
-TEST_F(SourceBlocksTest, get_last_source_block_before_non_entry) {
-  auto foo_method = create_method("LFoo");
-
-  constexpr const char* kCode = R"(
-    (
-      (const v0 0)
-      (.src_block "LFoo;.bar:()V" 1)
-      (const v1 1)
-      (.src_block "LFoo;.bar:()V" 2)
-      (const v2 2)
-      (.src_block "LFoo;.bar:()V" 3)
-      (const v3 3)
-
-      (.src_block "LFoo;.bar:()V" 4)
-
-      (return-void)
-    )
-  )";
-
-  foo_method->set_code(assembler::ircode_from_string(kCode));
-
-  foo_method->get_code()->build_cfg();
-
-  auto* b = foo_method->get_code()->cfg().entry_block();
-
-  for (auto it = b->begin(); it != b->end(); ++it) {
-    if (it->type != MFLOW_OPCODE) {
-      continue;
-    }
-    if (it->insn->opcode() == OPCODE_CONST) {
-      auto num = static_cast<uint32_t>(it->insn->get_literal());
-      auto sb = source_blocks::get_last_source_block_before(b, it);
-      if (num == 0) {
-        EXPECT_EQ(sb, nullptr);
-      } else {
-        EXPECT_NE(sb, nullptr);
-        if (sb != nullptr) {
-          EXPECT_EQ(sb->id, num);
-        }
-      }
-    }
-  }
 }

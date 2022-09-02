@@ -22,14 +22,12 @@ TEST_F(DexInstructionTest, test_encode_fill_array_data_payload_8) {
 
   // DexOpcodeData constructor ignored the FOPCODE_FILL_ARRAY
   EXPECT_EQ(udata16[0], 1); // width
-
-  auto result = get_fill_array_data_payload<int8_t>(payload);
-  EXPECT_EQ(result.size(), 5);
-  EXPECT_EQ(result[0], 1);
-  EXPECT_EQ(result[1], 2);
-  EXPECT_EQ(result[2], 3);
-  EXPECT_EQ(result[3], 4);
-  EXPECT_EQ(result[4], 5);
+  EXPECT_EQ(*(uint32_t*)(udata16 + 1), 5); // elements
+  EXPECT_EQ(data8[0], 1);
+  EXPECT_EQ(data8[1], 2);
+  EXPECT_EQ(data8[2], 3);
+  EXPECT_EQ(data8[3], 4);
+  EXPECT_EQ(data8[4], 5);
 }
 
 TEST_F(DexInstructionTest, test_encode_fill_array_data_payload_16) {
@@ -40,14 +38,12 @@ TEST_F(DexInstructionTest, test_encode_fill_array_data_payload_16) {
 
   // DexOpcodeData constructor ignored the FOPCODE_FILL_ARRAY
   EXPECT_EQ(udata16[0], 2); // width
-
-  auto result = get_fill_array_data_payload<uint16_t>(payload);
-  EXPECT_EQ(result.size(), 5);
-  EXPECT_EQ(result[0], 1);
-  EXPECT_EQ(result[1], 2);
-  EXPECT_EQ(result[2], 3);
-  EXPECT_EQ(result[3], 4);
-  EXPECT_EQ(result[4], 5);
+  EXPECT_EQ(*(uint32_t*)(udata16 + 1), 5); // elements
+  EXPECT_EQ(data16[0], 1);
+  EXPECT_EQ(data16[1], 2);
+  EXPECT_EQ(data16[2], 3);
+  EXPECT_EQ(data16[3], 4);
+  EXPECT_EQ(data16[4], 5);
 }
 
 TEST_F(DexInstructionTest, test_encode_fill_array_data_payload_32) {
@@ -60,12 +56,10 @@ TEST_F(DexInstructionTest, test_encode_fill_array_data_payload_32) {
 
   // DexOpcodeData constructor ignored the FOPCODE_FILL_ARRAY
   EXPECT_EQ(udata16[0], 4); // width
-
-  auto result = get_fill_array_data_payload<int32_t>(payload);
-  EXPECT_EQ(result.size(), 5);
-  EXPECT_EQ(result[0], 1);
-  EXPECT_EQ(result[1], 2);
-  EXPECT_EQ(result[2], 3);
-  EXPECT_EQ(result[3], 4);
-  EXPECT_EQ(result[4], 5);
+  EXPECT_EQ((uint32_t)data32[0], 5); // elements
+  EXPECT_EQ(data32[1], 1);
+  EXPECT_EQ(data32[2], 2);
+  EXPECT_EQ(data32[3], 3);
+  EXPECT_EQ(data32[4], 4);
+  EXPECT_EQ(data32[5], 5);
 }

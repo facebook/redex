@@ -15,11 +15,8 @@ class OptimizeEnumsPass : public Pass {
 
  public:
   OptimizeEnumsPass() : Pass("OptimizeEnumsPass") {}
-
   void bind_config() override;
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
-
-  bool is_editable_cfg_friendly() override { return true; }
 
  private:
   int m_max_enum_size;

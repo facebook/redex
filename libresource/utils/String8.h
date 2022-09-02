@@ -17,9 +17,8 @@
 #ifndef ANDROID_STRING8_H
 #define ANDROID_STRING8_H
 
-#include <string> // for std::string
-
 #include "utils/Errors.h"
+#include "utils/SharedBuffer.h"
 #include "utils/Unicode.h"
 #include "utils/TypeHelpers.h"
 
@@ -31,8 +30,7 @@
 namespace android {
 
 class String16;
-
-// DO NOT USE: please use std::string
+class TextOutput;
 
 //! This is a string holding UTF-8 characters. Does not allow the value more
 // than 0x10FFFF, which is not valid unicode codepoint.
@@ -62,21 +60,21 @@ public:
 
     static inline const String8 empty();
 
+
+#if defined(__GNUC__)
     static String8              format(const char* fmt, ...) __attribute__((format (printf, 1, 2)));
+#else
+    static String8              format(const char* fmt, ...);
+#endif
     static String8              formatV(const char* fmt, va_list args);
 
-    inline  const char*         c_str() const;
     inline  const char*         string() const;
-
-private:
-    static inline std::string   std_string(const String8& str);
-public:
-
     inline  size_t              size() const;
+    inline  size_t              length() const;
     inline  size_t              bytes() const;
     inline  bool                isEmpty() const;
 
-            size_t              length() const;
+    inline  const SharedBuffer* sharedBuffer() const;
 
             void                clear();
 
@@ -91,9 +89,20 @@ public:
             status_t            append(const char* other);
             status_t            append(const char* other, size_t numChars);
 
-            status_t            appendFormat(const char* fmt, ...)
-                    __attribute__((format (printf, 2, 3)));
+
+#if defined(__GNUC__)
+            status_t            appendFormat(const char* fmt, ...) __attribute__((format(printf, 2, 3)));
+#else
+            status_t            appendFormat(const char* fmt, ...);
+#endif
             status_t            appendFormatV(const char* fmt, va_list args);
+
+            // Note that this function takes O(N) time to calculate the value.
+            // No cache value is stored.
+            size_t              getUtf32Length() const;
+            int32_t             getUtf32At(size_t index,
+                                           size_t *next_index) const;
+            void                getUtf32(char32_t* dst) const;
 
     inline  String8&            operator=(const String8& other);
     inline  String8&            operator=(const char* other);
@@ -180,7 +189,7 @@ public:
      * "/tmp" --> "tmp" (remain = "")
      * "bar.c" --> "bar.c" (remain = "")
      */
-    String8 walkPath(String8* outRemains = nullptr) const;
+    String8 walkPath(String8* outRemains = NULL) const;
 
     /*
      * Return the filename extension.  This is the last '.' and any number
@@ -258,18 +267,14 @@ inline const String8 String8::empty() {
     return String8();
 }
 
-inline const char* String8::c_str() const
-{
-    return mString;
-}
 inline const char* String8::string() const
 {
     return mString;
 }
 
-inline std::string String8::std_string(const String8& str)
+inline size_t String8::length() const
 {
-    return std::string(str.string());
+    return SharedBuffer::sizeFromData(mString)-1;
 }
 
 inline size_t String8::size() const
@@ -284,7 +289,12 @@ inline bool String8::isEmpty() const
 
 inline size_t String8::bytes() const
 {
-    return length();
+    return SharedBuffer::sizeFromData(mString)-1;
+}
+
+inline const SharedBuffer* String8::sharedBuffer() const
+{
+    return SharedBuffer::bufferFromData(mString);
 }
 
 inline bool String8::contains(const char* other) const

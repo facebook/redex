@@ -77,9 +77,7 @@ class InjectDebugTest : public ::testing::Test {
   DexClasses load_classes(const std::string& path) {
     reset_redex();
     DexStore store("classes");
-    store.add_classes(
-        load_classes_from_dex(DexLocation::make_location("dex", path),
-                              /* balloon */ false));
+    store.add_classes(load_classes_from_dex(path.c_str(), /* balloon */ false));
     return store.get_dexen()[0];
   }
 
@@ -141,7 +139,7 @@ TEST_F(InjectDebugTest, TestClasses) {
       [](const DexClasses& classes) -> std::vector<std::string> {
         std::vector<std::string> class_names;
         for (DexClass* dex_class : classes) {
-          class_names.push_back(dex_class->str_copy());
+          class_names.push_back(dex_class->str());
         }
         return class_names;
       });
@@ -155,9 +153,9 @@ TEST_F(InjectDebugTest, TestMethods) {
         std::vector<std::string> method_names;
         for (DexClass* dex_class : classes) {
           for (DexMethod* dex_method : dex_class->get_dmethods())
-            method_names.push_back(dex_method->str_copy());
+            method_names.push_back(dex_method->str());
           for (DexMethod* dex_method : dex_class->get_vmethods())
-            method_names.push_back(dex_method->str_copy());
+            method_names.push_back(dex_method->str());
         }
         return method_names;
       });

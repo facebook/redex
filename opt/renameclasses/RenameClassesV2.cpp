@@ -99,7 +99,7 @@ bool dont_rename_reason_to_metric_per_rule(DontRenameReasonCode reason) {
 // Returns idx of the vector of packages if the given class name matches, or -1
 // if not found.
 ssize_t find_matching_package(
-    const std::string_view classname,
+    const std::string& classname,
     const std::vector<std::string>& allowed_packages) {
   for (size_t i = 0; i < allowed_packages.size(); i++) {
     if (classname.rfind("L" + allowed_packages[i]) == 0) {
@@ -126,25 +126,24 @@ bool is_allowed_layout_class(
 std::unordered_set<std::string>
 RenameClassesPassV2::build_dont_rename_class_name_literals(Scope& scope) {
   using namespace boost::algorithm;
-  std::unordered_set<const DexString*> all_strings;
+  std::vector<const DexString*> all_strings;
   for (auto clazz : scope) {
     clazz->gather_strings(all_strings);
   }
+  sort_unique(all_strings);
   std::unordered_set<std::string> result;
   boost::regex external_name_regex{
       "((org)|(com)|(android(x|\\.support)))\\."
       "([a-zA-Z][a-zA-Z\\d_$]*\\.)*"
       "[a-zA-Z][a-zA-Z\\d_$]*"};
   for (auto dex_str : all_strings) {
-    const std::string_view s = dex_str->str();
-    if (!ends_with(s, ".java") &&
-        boost::regex_match(dex_str->c_str(), external_name_regex)) {
-      std::string internal_name = java_names::external_to_internal(s);
+    const std::string& s = dex_str->str();
+    if (!ends_with(s, ".java") && boost::regex_match(s, external_name_regex)) {
+      const std::string& internal_name = java_names::external_to_internal(s);
       auto cls = type_class(DexType::get_type(internal_name));
       if (cls != nullptr && !cls->is_external()) {
-        result.insert(std::move(internal_name));
-        TRACE(RENAME, 4, "Found %s in string pool before renaming",
-              str_copy(s).c_str());
+        result.insert(internal_name);
+        TRACE(RENAME, 4, "Found %s in string pool before renaming", s.c_str());
       }
     }
   }
@@ -182,12 +181,11 @@ RenameClassesPassV2::build_dont_rename_for_types_with_reflection(
           if (callee == nullptr || !callee->is_concrete()) return;
           auto callee_method_cls = callee->get_class();
           if (refl_map.count(callee_method_cls) == 0) return;
-          std::string classname = m->get_class()->get_name()->str_copy();
+          std::string classname = m->get_class()->get_name()->str();
           TRACE(RENAME, 4,
                 "Found %s with known reflection usage. marking reachable",
                 classname.c_str());
-          dont_rename_class_for_types_with_reflection.insert(
-              std::move(classname));
+          dont_rename_class_for_types_with_reflection.insert(classname);
         }
       });
   return dont_rename_class_for_types_with_reflection;
@@ -199,7 +197,7 @@ std::unordered_set<std::string> RenameClassesPassV2::build_dont_rename_canaries(
   // Gather canaries
   for (auto clazz : scope) {
     if (strstr(clazz->get_name()->c_str(), "/Canary")) {
-      dont_rename_canaries.insert(clazz->get_name()->str_copy());
+      dont_rename_canaries.insert(clazz->get_name()->str());
     }
   }
   return dont_rename_canaries;
@@ -379,22 +377,18 @@ RenameClassesPassV2::build_dont_rename_annotated() {
 
 static void sanity_check(const Scope& scope,
                          const rewriter::TypeStringMap& name_mapping) {
-  std::vector<std::string> external_names_vec;
+  std::unordered_set<std::string> external_names;
   // Class.forName() expects strings of the form "foo.bar.Baz". We should be
   // very suspicious if we see these strings in the string pool that
   // correspond to the old name of a class that we have renamed...
   for (const auto& it : name_mapping.get_class_map()) {
-    external_names_vec.push_back(
-        java_names::internal_to_external(it.first->str()));
+    external_names.emplace(java_names::internal_to_external(it.first->c_str()));
   }
-  std::unordered_set<std::string_view> external_names;
-  for (auto& s : external_names_vec) {
-    external_names.insert(s);
-  }
-  std::unordered_set<const DexString*> all_strings;
+  std::vector<const DexString*> all_strings;
   for (auto clazz : scope) {
     clazz->gather_strings(all_strings);
   }
+  sort_unique(all_strings);
   int sketchy_strings = 0;
   for (auto s : all_strings) {
     if (external_names.find(s->str()) != external_names.end() ||
@@ -489,12 +483,15 @@ void RenameClassesPassV2::eval_classes(Scope& scope,
     for (const auto& anno : dont_rename_annotated) {
       if (has_anno(clazz, anno)) {
         m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Annotated,
-                                        anno->str_copy()};
+                                        anno->str()};
         annotated = true;
         break;
       }
     }
     if (annotated) continue;
+
+    const char* clsname = clazz->get_name()->c_str();
+    std::string strname = std::string(clsname);
 
     // Don't rename anything mentioned in resources. Two variants of checks here
     // to cover both configuration options (either we're relying on aapt to
@@ -505,12 +502,9 @@ void RenameClassesPassV2::eval_classes(Scope& scope,
       continue;
     }
 
-    std::string strname = clazz->get_name()->str_copy();
-
     // Don't rename anythings in the direct name blocklist (hierarchy ignored)
-    if (m_dont_rename_specific.count(strname)) {
-      m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Specific,
-                                      std::move(strname)};
+    if (m_dont_rename_specific.count(clsname)) {
+      m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Specific, strname};
       continue;
     }
 
@@ -518,8 +512,7 @@ void RenameClassesPassV2::eval_classes(Scope& scope,
     bool package_blocklisted = false;
     for (const auto& pkg : m_dont_rename_packages) {
       if (strname.rfind("L" + pkg) == 0) {
-        TRACE(RENAME, 2, "%s excluded by pkg rule %s", strname.c_str(),
-              pkg.c_str());
+        TRACE(RENAME, 2, "%s excluded by pkg rule %s", clsname, pkg.c_str());
         m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Packages, pkg};
         package_blocklisted = true;
         break;
@@ -527,19 +520,19 @@ void RenameClassesPassV2::eval_classes(Scope& scope,
     }
     if (package_blocklisted) continue;
 
-    if (dont_rename_class_name_literals.count(strname)) {
+    if (dont_rename_class_name_literals.count(clsname)) {
       m_dont_rename_reasons[clazz] = {DontRenameReasonCode::ClassNameLiterals,
                                       norule};
       continue;
     }
 
-    if (dont_rename_class_for_types_with_reflection.count(strname)) {
+    if (dont_rename_class_for_types_with_reflection.count(clsname)) {
       m_dont_rename_reasons[clazz] = {
           DontRenameReasonCode::ClassForTypesWithReflection, norule};
       continue;
     }
 
-    if (dont_rename_canaries.count(strname)) {
+    if (dont_rename_canaries.count(clsname)) {
       m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Canaries, norule};
       continue;
     }
@@ -579,7 +572,6 @@ void RenameClassesPassV2::eval_classes(Scope& scope,
  */
 void RenameClassesPassV2::eval_classes_post(
     Scope& scope, const ClassHierarchy& class_hierarchy, PassManager& mgr) {
-  Timer t("eval_classes_post");
   auto dont_rename_hierarchies =
       build_dont_rename_hierarchies(mgr, scope, class_hierarchy);
   for (auto clazz : scope) {
@@ -587,12 +579,12 @@ void RenameClassesPassV2::eval_classes_post(
       continue;
     }
 
-    std::string strname = clazz->get_name()->str_copy();
+    const char* clsname = clazz->get_name()->c_str();
+    std::string strname = std::string(clsname);
 
     // Don't rename anythings in the direct name blocklist (hierarchy ignored)
-    if (m_dont_rename_specific.count(strname)) {
-      m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Specific,
-                                      std::move(strname)};
+    if (m_dont_rename_specific.count(clsname)) {
+      m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Specific, strname};
       continue;
     }
 
@@ -600,8 +592,7 @@ void RenameClassesPassV2::eval_classes_post(
     bool package_blocklisted = false;
     for (const auto& pkg : m_dont_rename_packages) {
       if (strname.rfind("L" + pkg) == 0) {
-        TRACE(RENAME, 2, "%s excluded by pkg rule %s",
-              str_copy(strname).c_str(), pkg.c_str());
+        TRACE(RENAME, 2, "%s excluded by pkg rule %s", clsname, pkg.c_str());
         m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Packages, pkg};
         package_blocklisted = true;
         break;

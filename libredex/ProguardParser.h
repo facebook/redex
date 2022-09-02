@@ -15,23 +15,10 @@
 namespace keep_rules {
 namespace proguard_parser {
 
-struct Stats {
-  size_t unknown_tokens{0};
-  size_t parse_errors{0};
-  size_t unimplemented{0};
-
-  Stats& operator+=(const Stats& rhs) {
-    unknown_tokens += rhs.unknown_tokens;
-    parse_errors += rhs.parse_errors;
-    unimplemented += rhs.unimplemented;
-    return *this;
-  }
-};
-
-Stats parse_file(const std::string& filename, ProguardConfiguration* pg_config);
-Stats parse(std::istream& config,
-            ProguardConfiguration* pg_config,
-            const std::string& filename = "");
+void parse_file(const std::string& filename, ProguardConfiguration* pg_config);
+void parse(std::istream& config,
+           ProguardConfiguration* pg_config,
+           const std::string& filename = "");
 
 /*
  * Typically used to remove keep rules that we wish to apply only to optimizers

@@ -215,7 +215,7 @@ struct OptimizationImpl {
   // list of optimized types
   std::unordered_set<DexType*> optimized;
   const ClassHierarchy& ch;
-  std::unordered_map<std::string_view, size_t> deobfuscated_name_counters;
+  std::unordered_map<std::string, size_t> deobfuscated_name_counters;
 };
 
 /**
@@ -477,7 +477,7 @@ void OptimizationImpl::rewrite_interface_methods(const DexType* intf,
       // have these zombies lying around.
       new_meth->clear_annotations();
       new_meth->make_non_concrete();
-      const auto deoob_impl_name = impl->get_deobfuscated_name_or_empty();
+      auto deoob_impl_name = impl->get_deobfuscated_name_or_empty();
       auto unique = deobfuscated_name_counters[deoob_impl_name]++;
       auto new_deob_name = deoob_impl_name + "." +
                            meth->get_simple_deobfuscated_name() +

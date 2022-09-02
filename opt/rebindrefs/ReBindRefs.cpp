@@ -174,12 +174,12 @@ struct Rebinder {
         if (match(name, proto, cls_meth)) {
           auto curr_vis = get_visibility(cls_meth);
           auto curr_cls_vis = get_visibility(cls);
-          if (is_private(curr_vis) || is_package_private(curr_vis)) {
+          if (is_private(curr_vis) || is_package_private(curr_vis) ||
+              !is_public(curr_cls_vis)) {
             return top_impl;
           }
           bool is_external = cls->is_external() || cls_meth->is_external();
-          if (is_external &&
-              (!is_public(curr_vis) || !is_public(curr_cls_vis))) {
+          if (is_external && !is_public(curr_vis)) {
             return top_impl;
           }
           // We can only rebind PUBLIC to PUBLIC here.
@@ -270,7 +270,6 @@ struct Rebinder {
     rebinder_refs.mrefs.insert(mref, real_ref);
     mop->set_method(real_ref);
     if (cls != nullptr && !is_public(cls)) {
-      always_assert(!is_external);
       set_public(cls);
     }
   }

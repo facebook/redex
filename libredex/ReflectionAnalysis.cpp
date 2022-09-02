@@ -16,6 +16,7 @@
 #include "BaseIRAnalyzer.h"
 #include "ControlFlow.h"
 #include "FiniteAbstractDomain.h"
+#include "HashedSetAbstractDomain.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "IROpcode.h"
@@ -56,11 +57,11 @@ std::ostream& operator<<(std::ostream& out,
   }
   case reflection::STRING: {
     if (x.dex_string != nullptr) {
-      auto str = x.dex_string->str();
+      const std::string& str = x.dex_string->str();
       if (str.empty()) {
         out << "\"\"";
       } else {
-        out << std::quoted(str_copy(str));
+        out << std::quoted(str);
       }
     }
     break;

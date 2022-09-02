@@ -24,9 +24,8 @@ struct PreVerify : public RedexTest {
   DexClasses classes;
   ResourceFiles resources;
   PreVerify()
-      : classes(load_classes_from_dex(
-            DexLocation::make_location("", std::getenv("dex_pre")),
-            /* balloon */ false)),
+      : classes(load_classes_from_dex(std::getenv("dex_pre"),
+                                      /* balloon */ false)),
         resources(
             decode_resource_paths(std::getenv("extracted_resources"), "pre")) {}
 };
@@ -35,9 +34,8 @@ struct PostVerify : public RedexTest {
   DexClasses classes;
   ResourceFiles resources;
   PostVerify()
-      : classes(load_classes_from_dex(
-            DexLocation::make_location("", std::getenv("dex_post")),
-            /* balloon */ false)),
+      : classes(load_classes_from_dex(std::getenv("dex_post"),
+                                      /* balloon */ false)),
         resources(decode_resource_paths(std::getenv("extracted_resources"),
                                         "post")) {}
 };

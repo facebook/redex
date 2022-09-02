@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "unicode"
+#ifdef _MSC_VER
+#include "CompatWindows.h"
+#endif
 
-#include "android-base/macros.h"
-#include <limits.h>
 #include "utils/Unicode.h"
 
-#include "utils/Log.h"
+#include <stddef.h>
 
 #if defined(HAVE_WINSOCK) || defined(_MSC_VER) || defined(__MINGW64__) || defined(__MINGW32__)
 # undef  nhtol
@@ -106,11 +106,8 @@ static inline void utf32_codepoint_to_utf8(uint8_t* dstP, char32_t srcChar, size
     switch (bytes)
     {   /* note: everything falls through. */
         case 4: *--dstP = (uint8_t)((srcChar | kByteMark) & kByteMask); srcChar >>= 6;
-            FALLTHROUGH_INTENDED;
         case 3: *--dstP = (uint8_t)((srcChar | kByteMark) & kByteMask); srcChar >>= 6;
-            FALLTHROUGH_INTENDED;
         case 2: *--dstP = (uint8_t)((srcChar | kByteMark) & kByteMask); srcChar >>= 6;
-            FALLTHROUGH_INTENDED;
         case 1: *--dstP = (uint8_t)(srcChar | kFirstByteMark[bytes]);
     }
 }
@@ -163,7 +160,7 @@ int32_t utf32_from_utf8_at(const char *src, size_t src_len, size_t index, size_t
         return -1;
     }
     size_t dummy_index;
-    if (next_index == nullptr) {
+    if (next_index == NULL) {
         next_index = &dummy_index;
     }
     size_t num_read;
@@ -177,29 +174,21 @@ int32_t utf32_from_utf8_at(const char *src, size_t src_len, size_t index, size_t
 
 ssize_t utf32_to_utf8_length(const char32_t *src, size_t src_len)
 {
-    if (src == nullptr || src_len == 0) {
+    if (src == NULL || src_len == 0) {
         return -1;
     }
 
     size_t ret = 0;
     const char32_t *end = src + src_len;
     while (src < end) {
-        size_t char_len = utf32_codepoint_utf8_length(*src++);
-        if (SSIZE_MAX - char_len < ret) {
-            // If this happens, we would overflow the ssize_t type when
-            // returning from this function, so we cannot express how
-            // long this string is in an ssize_t.
-            android_errorWriteLog(0x534e4554, "37723026");
-            return -1;
-        }
-        ret += char_len;
+        ret += utf32_codepoint_utf8_length(*src++);
     }
     return ret;
 }
 
-void utf32_to_utf8(const char32_t* src, size_t src_len, char* dst, size_t dst_len)
+void utf32_to_utf8(const char32_t* src, size_t src_len, char* dst)
 {
-    if (src == nullptr || src_len == 0 || dst == nullptr) {
+    if (src == NULL || src_len == 0 || dst == NULL) {
         return;
     }
 
@@ -208,12 +197,9 @@ void utf32_to_utf8(const char32_t* src, size_t src_len, char* dst, size_t dst_le
     char *cur = dst;
     while (cur_utf32 < end_utf32) {
         size_t len = utf32_codepoint_utf8_length(*cur_utf32);
-        LOG_ALWAYS_FATAL_IF(dst_len < len, "%zu < %zu", dst_len, len);
         utf32_codepoint_to_utf8((uint8_t *)cur, *cur_utf32++, len);
         cur += len;
-        dst_len -= len;
     }
-    LOG_ALWAYS_FATAL_IF(dst_len < 1, "dst_len < 1: %zu < 1", dst_len);
     *cur = '\0';
 }
 
@@ -240,16 +226,11 @@ int strncmp16(const char16_t *s1, const char16_t *s2, size_t n)
   char16_t ch;
   int d = 0;
 
-  if (n == 0) {
-    return 0;
-  }
-
-  do {
+  while ( n-- ) {
     d = (int)(ch = *s1++) - (int)*s2++;
-    if ( d || !ch ) {
+    if ( d || !ch )
       break;
-    }
-  } while (--n);
+  }
 
   return d;
 }
@@ -275,6 +256,25 @@ size_t strlen16(const char16_t *s)
   return ss-s;
 }
 
+
+char16_t *strncpy16(char16_t *dst, const char16_t *src, size_t n)
+{
+  char16_t *q = dst;
+  const char16_t *p = src;
+  char ch;
+
+  while (n) {
+    n--;
+    *q++ = ch = *p++;
+    if ( !ch )
+      break;
+  }
+
+  *q = 0;
+
+  return dst;
+}
+
 size_t strnlen16(const char16_t *s, size_t maxlen)
 {
   const char16_t *ss = s;
@@ -286,24 +286,6 @@ size_t strnlen16(const char16_t *s, size_t maxlen)
     maxlen--;
   }
   return ss-s;
-}
-
-char16_t* strstr16(const char16_t* src, const char16_t* target)
-{
-    const char16_t needle = *target;
-    if (needle == '\0') return (char16_t*)src;
-
-    const size_t target_len = strlen16(++target);
-    do {
-        do {
-            if (*src == '\0') {
-                return nullptr;
-            }
-        } while (*src++ != needle);
-    } while (strncmp16(src, target, target_len) != 0);
-    src--;
-
-    return (char16_t*)src;
 }
 
 int strzcmp16(const char16_t *s1, size_t n1, const char16_t *s2, size_t n2)
@@ -325,9 +307,30 @@ int strzcmp16(const char16_t *s1, size_t n1, const char16_t *s2, size_t n2)
            : 0);
 }
 
-void utf16_to_utf8(const char16_t* src, size_t src_len, char* dst, size_t dst_len)
+int strzcmp16_h_n(const char16_t *s1H, size_t n1, const char16_t *s2N, size_t n2)
 {
-    if (src == nullptr || src_len == 0 || dst == nullptr) {
+    const char16_t* e1 = s1H+n1;
+    const char16_t* e2 = s2N+n2;
+
+    while (s1H < e1 && s2N < e2) {
+        const char16_t c2 = ntohs(*s2N);
+        const int d = (int)*s1H++ - (int)c2;
+        s2N++;
+        if (d) {
+            return d;
+        }
+    }
+
+    return n1 < n2
+        ? (0 - (int)ntohs(*s2N))
+        : (n1 > n2
+           ? ((int)*s1H - 0)
+           : 0);
+}
+
+void utf16_to_utf8(const char16_t* src, size_t src_len, char* dst)
+{
+    if (src == NULL || src_len == 0 || dst == NULL) {
         return;
     }
 
@@ -346,12 +349,9 @@ void utf16_to_utf8(const char16_t* src, size_t src_len, char* dst, size_t dst_le
             utf32 = (char32_t) *cur_utf16++;
         }
         const size_t len = utf32_codepoint_utf8_length(utf32);
-        LOG_ALWAYS_FATAL_IF(dst_len < len, "%zu < %zu", dst_len, len);
         utf32_codepoint_to_utf8((uint8_t*)cur, utf32, len);
         cur += len;
-        dst_len -= len;
     }
-    LOG_ALWAYS_FATAL_IF(dst_len < 1, "%zu < 1", dst_len);
     *cur = '\0';
 }
 
@@ -404,30 +404,21 @@ ssize_t utf8_length(const char *src)
 
 ssize_t utf16_to_utf8_length(const char16_t *src, size_t src_len)
 {
-    if (src == nullptr || src_len == 0) {
+    if (src == NULL || src_len == 0) {
         return -1;
     }
 
     size_t ret = 0;
     const char16_t* const end = src + src_len;
     while (src < end) {
-        size_t char_len;
         if ((*src & 0xFC00) == 0xD800 && (src + 1) < end
-                && (*(src + 1) & 0xFC00) == 0xDC00) {
+                && (*++src & 0xFC00) == 0xDC00) {
             // surrogate pairs are always 4 bytes.
-            char_len = 4;
-            src += 2;
+            ret += 4;
+            src++;
         } else {
-            char_len = utf32_codepoint_utf8_length((char32_t)*src++);
+            ret += utf32_codepoint_utf8_length((char32_t) *src++);
         }
-        if (SSIZE_MAX - char_len < ret) {
-            // If this happens, we would overflow the ssize_t type when
-            // returning from this function, so we cannot express how
-            // long this string is in an ssize_t.
-            android_errorWriteLog(0x534e4554, "37723026");
-            return -1;
-        }
-        ret += char_len;
     }
     return ret;
 }
@@ -450,6 +441,48 @@ static inline void utf8_shift_and_mask(uint32_t* codePoint, const uint8_t byte)
 {
     *codePoint <<= 6;
     *codePoint |= 0x3F & byte;
+}
+
+size_t utf8_to_utf32_length(const char *src, size_t src_len)
+{
+    if (src == NULL || src_len == 0) {
+        return 0;
+    }
+    size_t ret = 0;
+    const char* cur;
+    const char* end;
+    size_t num_to_skip;
+    for (cur = src, end = src + src_len, num_to_skip = 1;
+         cur < end;
+         cur += num_to_skip, ret++) {
+        const char first_char = *cur;
+        num_to_skip = 1;
+        if ((first_char & 0x80) == 0) {  // ASCII
+            continue;
+        }
+        int32_t mask;
+
+        for (mask = 0x40; (first_char & mask); num_to_skip++, mask >>= 1) {
+        }
+    }
+    return ret;
+}
+
+void utf8_to_utf32(const char* src, size_t src_len, char32_t* dst)
+{
+    if (src == NULL || src_len == 0 || dst == NULL) {
+        return;
+    }
+
+    const char* cur = src;
+    const char* const end = src + src_len;
+    char32_t* cur_utf32 = dst;
+    while (cur < end) {
+        size_t num_read;
+        *cur_utf32++ = static_cast<char32_t>(utf32_at_internal(cur, &num_read));
+        cur += num_read;
+    }
+    *cur_utf32 = 0;
 }
 
 static inline uint32_t utf8_to_utf32_codepoint(const uint8_t *src, size_t length)
@@ -482,7 +515,7 @@ static inline uint32_t utf8_to_utf32_codepoint(const uint8_t *src, size_t length
     //printf("Char at %p: len=%d, utf-16=%p\n", src, length, (void*)result);
 }
 
-ssize_t utf8_to_utf16_length(const uint8_t* u8str, size_t u8len, bool overreadIsFatal)
+ssize_t utf8_to_utf16_length(const uint8_t* u8str, size_t u8len)
 {
     const uint8_t* const u8end = u8str + u8len;
     const uint8_t* u8cur = u8str;
@@ -491,21 +524,7 @@ ssize_t utf8_to_utf16_length(const uint8_t* u8str, size_t u8len, bool overreadIs
     size_t u16measuredLen = 0;
     while (u8cur < u8end) {
         u16measuredLen++;
-        int u8charLen = utf8_codepoint_len(*u8cur);
-        // Malformed utf8, some characters are beyond the end.
-        // Cases:
-        // If u8charLen == 1, this becomes u8cur >= u8end, which cannot happen as u8cur < u8end,
-        // then this condition fail and we continue, as expected.
-        // If u8charLen == 2, this becomes u8cur + 1 >= u8end, which fails only if
-        // u8cur == u8end - 1, that is, there was only one remaining character to read but we need
-        // 2 of them. This condition holds and we return -1, as expected.
-        if (u8cur + u8charLen - 1 >= u8end) {
-            if (overreadIsFatal) {
-                LOG_ALWAYS_FATAL("Attempt to overread computing length of utf8 string");
-            } else {
-                return -1;
-            }
-        }
+        auto u8charLen = utf8_codepoint_len(*u8cur);
         uint32_t codepoint = utf8_to_utf32_codepoint(u8cur, u8charLen);
         if (codepoint > 0xFFFF) u16measuredLen++; // this will be a surrogate pair in utf16
         u8cur += u8charLen;
@@ -522,21 +541,38 @@ ssize_t utf8_to_utf16_length(const uint8_t* u8str, size_t u8len, bool overreadIs
     return u16measuredLen;
 }
 
-char16_t* utf8_to_utf16(const uint8_t* u8str, size_t u8len, char16_t* u16str, size_t u16len) {
-    // A value > SSIZE_MAX is probably a negative value returned as an error and casted.
-    LOG_ALWAYS_FATAL_IF(u16len == 0 || u16len > SSIZE_MAX, "u16len is %zu", u16len);
-    char16_t* end = utf8_to_utf16_no_null_terminator(u8str, u8len, u16str, u16len - 1);
-    *end = 0;
-    return end;
+char16_t* utf8_to_utf16_no_null_terminator(const uint8_t* u8str, size_t u8len, char16_t* u16str)
+{
+    const uint8_t* const u8end = u8str + u8len;
+    const uint8_t* u8cur = u8str;
+    char16_t* u16cur = u16str;
+
+    while (u8cur < u8end) {
+        size_t u8len = utf8_codepoint_len(*u8cur);
+        uint32_t codepoint = utf8_to_utf32_codepoint(u8cur, u8len);
+
+        // Convert the UTF32 codepoint to one or more UTF16 codepoints
+        if (codepoint <= 0xFFFF) {
+            // Single UTF16 character
+            *u16cur++ = (char16_t) codepoint;
+        } else {
+            // Multiple UTF16 characters with surrogates
+            codepoint = codepoint - 0x10000;
+            *u16cur++ = (char16_t) ((codepoint >> 10) + 0xD800);
+            *u16cur++ = (char16_t) ((codepoint & 0x3FF) + 0xDC00);
+        }
+
+        u8cur += u8len;
+    }
+    return u16cur;
 }
 
-char16_t* utf8_to_utf16_no_null_terminator(
-        const uint8_t* src, size_t srcLen, char16_t* dst, size_t dstLen) {
-    if (dstLen == 0) {
-        return dst;
-    }
-    // A value > SSIZE_MAX is probably a negative value returned as an error and casted.
-    LOG_ALWAYS_FATAL_IF(dstLen > SSIZE_MAX, "dstLen is %zu", dstLen);
+void utf8_to_utf16(const uint8_t* u8str, size_t u8len, char16_t* u16str) {
+    char16_t* end = utf8_to_utf16_no_null_terminator(u8str, u8len, u16str);
+    *end = 0;
+}
+
+char16_t* utf8_to_utf16_n(const uint8_t* src, size_t srcLen, char16_t* dst, size_t dstLen) {
     const uint8_t* const u8end = src + srcLen;
     const uint8_t* u8cur = src;
     const char16_t* const u16end = dst + dstLen;

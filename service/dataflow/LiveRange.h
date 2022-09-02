@@ -58,28 +58,24 @@ using DefUseChains = std::unordered_map<Def, std::unordered_set<Use>>;
 
 class Chains {
  public:
-  explicit Chains(const cfg::ControlFlowGraph& cfg,
-                  bool ignore_unreachable = false);
+  explicit Chains(const cfg::ControlFlowGraph& cfg);
   UseDefChains get_use_def_chains() const;
   DefUseChains get_def_use_chains() const;
 
  private:
   const cfg::ControlFlowGraph& m_cfg;
   reaching_defs::FixpointIterator m_fp_iter;
-  bool m_ignore_unreachable;
 };
 
 class MoveAwareChains {
  public:
-  explicit MoveAwareChains(const cfg::ControlFlowGraph& cfg,
-                           bool ignore_unreachable = false);
+  explicit MoveAwareChains(const cfg::ControlFlowGraph& cfg);
   UseDefChains get_use_def_chains() const;
   DefUseChains get_def_use_chains() const;
 
  private:
   const cfg::ControlFlowGraph& m_cfg;
   reaching_defs::MoveAwareFixpointIterator m_fp_iter;
-  bool m_ignore_unreachable;
 };
 
 /*

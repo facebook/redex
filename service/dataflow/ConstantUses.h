@@ -29,16 +29,13 @@ enum TypeDemand : uint8_t {
 
 class ConstantUses {
  public:
-  ConstantUses(const cfg::ControlFlowGraph& cfg,
-               DexMethod* method,
-               bool force_type_inference = false);
+  ConstantUses(const cfg::ControlFlowGraph& cfg, DexMethod* method);
   ConstantUses(const cfg::ControlFlowGraph& cfg,
                bool is_static,
                DexType* declaring_type,
                DexType* rtype,
                DexTypeList* args,
-               const std::function<std::string()>& method_describer,
-               bool force_type_inference = false);
+               const std::function<std::string()>& method_describer);
 
   // Given a const or const-wide instruction, retrieve all instructions that
   // use it.
@@ -51,11 +48,6 @@ class ConstantUses {
 
   // Whether type inference information was required to be computed.
   bool has_type_inference() const;
-
-  // Whether type inference information was required to be computed.
-  const type_inference::TypeInference* get_type_inference() const {
-    return m_type_inference.get();
-  }
 
  private:
   static TypeDemand get_type_demand(DexType* type);

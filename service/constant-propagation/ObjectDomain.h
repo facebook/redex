@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <boost/functional/hash.hpp>
+
 #include "DexClass.h"
 #include "FiniteAbstractDomain.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
@@ -31,7 +33,8 @@ enum class EscapeState {
 namespace escape_domain_impl {
 
 using Lattice = sparta::BitVectorLattice<EscapeState,
-                                         /* kCardinality */ 4>;
+                                         /* cardinality */ 4,
+                                         boost::hash<EscapeState>>;
 
 extern Lattice lattice;
 

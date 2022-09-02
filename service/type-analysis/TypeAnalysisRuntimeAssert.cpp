@@ -140,11 +140,6 @@ RuntimeAssertTransform::Stats RuntimeAssertTransform::apply(
       always_assert(it->insn);
       it = insert_field_assert(wps, method->get_class(), code,
                                in_clinit_or_init, it, stats);
-      // Note that `it` may no longer point to an entry of type MFLOW_OPCODE, as
-      // it maybe of type MFLOW_TARGET
-      if (it->type != MFLOW_OPCODE) {
-        continue;
-      }
       it =
           insert_return_value_assert(wps, method->get_class(), code, it, stats);
     }

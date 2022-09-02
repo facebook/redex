@@ -236,8 +236,8 @@ bool check_cast(const DexType* type, const DexType* base_type) {
 /**
  * Lcom/facebook/ClassA; ==> Lcom/facebook/
  */
-std::string_view get_package_name(const DexType* type) {
-  const auto name = type->get_name()->str();
+std::string get_package_name(const DexType* type) {
+  const auto& name = type->get_name()->str();
   auto pos = name.find_last_of('/');
   if (pos == std::string::npos) {
     return "";

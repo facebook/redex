@@ -130,8 +130,8 @@ void do_inlining(DexMethod* bridge, DexMethod* bridgee) {
       std::find_if(invoke, code->end(), [](const MethodItemEntry& mie) {
         return mie.type == MFLOW_SOURCE_BLOCK;
       });
-  auto last_sb =
-      last_sb_it != code->end() ? last_sb_it->src_block.get() : nullptr;
+  auto last_sb = last_sb_it != code->end() ? last_sb_it->src_block.get()
+                                           : nullptr;
 
   legacy_inliner::inline_tail_call(bridge, bridgee, invoke);
 

@@ -85,7 +85,7 @@ void keep_rules::print_seeds(std::ostream& output,
                              const bool allowobfuscation_filter) {
   for (const auto& cls : classes) {
     const auto& deob = [&]() {
-      const auto s = cls->get_deobfuscated_name_or_empty();
+      const auto& s = cls->get_deobfuscated_name_or_empty();
       if (!s.empty()) {
         return s;
       }

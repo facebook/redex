@@ -13,19 +13,13 @@ unsigned Timer::s_indent = 0;
 std::mutex Timer::s_lock;
 Timer::times_t Timer::s_times;
 
-Timer::Timer(const std::string& msg, bool indent)
-    : m_msg(msg),
-      m_start(std::chrono::high_resolution_clock::now()),
-      m_indent(indent) {
-  if (indent) {
-    ++s_indent;
-  }
+Timer::Timer(const std::string& msg)
+    : m_msg(msg), m_start(std::chrono::high_resolution_clock::now()) {
+  ++s_indent;
 }
 
 Timer::~Timer() {
-  if (m_indent) {
-    --s_indent;
-  }
+  --s_indent;
   auto end = std::chrono::high_resolution_clock::now();
   auto duration_s = std::chrono::duration<double>(end - m_start).count();
   TRACE(TIME, 1, "%*s%s completed in %.1lf seconds", 4 * s_indent, "",

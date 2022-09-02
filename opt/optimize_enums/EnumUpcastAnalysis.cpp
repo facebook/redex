@@ -592,16 +592,16 @@ void EnumFixpointIterator::analyze_instruction(const IRInstruction* insn,
  */
 EnumTypeEnvironment EnumFixpointIterator::gen_env(const DexMethod* method) {
   EnumTypeEnvironment env;
-  const auto params = method->get_code()->cfg().get_param_instructions();
+  const auto code = method->get_code()->get_param_instructions();
   const DexTypeList* args = method->get_proto()->get_args();
   const bool has_this_pointer = !is_static(method);
   size_t load_param_inst_size = 0;
-  for (const auto& mie ATTRIBUTE_UNUSED : InstructionIterable(params)) {
+  for (const auto& mie ATTRIBUTE_UNUSED : InstructionIterable(code)) {
     ++load_param_inst_size;
   }
   always_assert(load_param_inst_size == args->size() + has_this_pointer);
 
-  auto iterable = InstructionIterable(params);
+  auto iterable = InstructionIterable(code);
   auto it = iterable.begin();
   if (has_this_pointer) { // Has this pointer
     env.set(it->insn->dest(), EnumTypes(method->get_class()));
@@ -700,8 +700,8 @@ void reject_unsafe_enums(const std::vector<DexClass*>& classes,
       });
 
   walk::parallel::methods(classes, [&](DexMethod* method) {
-    // When doing static analysis, simply skip some javac-generated enum
-    // methods <init>, values(), and valueOf(String).
+    // When doing static analysis, simply skip some javac-generated enum methods
+    // <init>, values(), and valueOf(String).
     if (candidate_enums->count_unsafe(method->get_class()) &&
         !rejected_enums.count(method->get_class()) &&
         (method::is_init(method) || is_enum_values(method) ||
@@ -741,13 +741,16 @@ void reject_unsafe_enums(const std::vector<DexClass*>& classes,
       return;
     }
 
-    auto& cfg = method->get_code()->cfg();
     EnumTypeEnvironment env = EnumFixpointIterator::gen_env(method);
-    EnumFixpointIterator engine(cfg, *config);
+
+    auto* code = method->get_code();
+    code->build_cfg(/* editable */ false);
+    EnumFixpointIterator engine(code->cfg(), *config);
     engine.run(env);
 
     EnumUpcastDetector detector(method, config);
-    detector.run(engine, cfg, &rejected_enums);
+    detector.run(engine, code->cfg(), &rejected_enums);
+    code->clear_cfg();
   });
 
   for (DexType* type : rejected_enums) {

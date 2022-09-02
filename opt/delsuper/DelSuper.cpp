@@ -311,7 +311,6 @@ class DelSuper {
         always_assert(meth->is_virtual());
         clazz->remove_method(meth);
         DexMethod::erase_method(meth);
-        DexMethod::delete_method(meth);
         TRACE(SUPER, 5, "Deleted trivial return invoke-super: %s", SHOW(meth));
       }
     }

@@ -25,7 +25,7 @@ bool maybe_anonymous_class(const DexClass* cls) {
       // Desugared lambda classes from older versions of D8.
       "$$Lambda$",
   };
-  const auto name = cls->get_deobfuscated_name_or_empty();
+  const auto& name = cls->get_deobfuscated_name_or_empty();
   auto pos = name.rfind('$');
   if (pos == std::string::npos) {
     return false;
@@ -84,7 +84,7 @@ bool is_from_allowed_packages(
   if (allowed_packages.empty()) {
     return true;
   }
-  const auto name = cls->get_deobfuscated_name_or_empty();
+  const auto& name = cls->get_deobfuscated_name_or_empty();
   for (auto& prefix : allowed_packages) {
     if (boost::starts_with(name, prefix)) {
       return true;
@@ -100,7 +100,6 @@ namespace class_merging {
 void find_all_mergeables_and_roots(const TypeSystem& type_system,
                                    const Scope& scope,
                                    size_t global_min_count,
-                                   PassManager& mgr,
                                    ModelSpec* merging_spec) {
   std::unordered_map<const DexTypeList*, std::vector<const DexType*>>
       intfs_implementors;
@@ -149,23 +148,21 @@ void find_all_mergeables_and_roots(const TypeSystem& type_system,
             children.size());
       merging_spec->roots.insert(parent);
       merging_spec->merging_targets.insert(children.begin(), children.end());
-      mgr.incr_metric("cls_" + show(parent), children.size());
     }
   }
   for (const auto& pair : intfs_implementors) {
-    auto intf = pair.first;
+    auto intfs = pair.first;
     auto& implementors = pair.second;
     if (implementors.size() >= global_min_count) {
       TRACE(CLMG,
             9,
             "Discover interface root %s with %zu implementors",
-            SHOW(intf),
+            SHOW(intfs),
             pair.second.size());
       auto first_implementor = type_class(implementors[0]);
       merging_spec->roots.insert(first_implementor->get_super_class());
       merging_spec->merging_targets.insert(implementors.begin(),
                                            implementors.end());
-      mgr.incr_metric("intf_" + show(intf), implementors.size());
     }
   }
   TRACE(CLMG, 9, "Discover %zu mergeables from %zu roots",
@@ -224,13 +221,12 @@ void discover_mergeable_anonymous_classes(
         // java.lang.Object.
         continue;
       }
+      mgr->incr_metric("cls_" + show(parent), pair.second.size());
       if (is_interface(type_class(parent))) {
         auto first_mergeable = type_class(pair.second[0]);
         merging_spec->roots.insert(first_mergeable->get_super_class());
-        mgr->incr_metric("intf_" + show(parent), pair.second.size());
       } else {
         merging_spec->roots.insert(parent);
-        mgr->incr_metric("cls_" + show(parent), pair.second.size());
       }
       merging_spec->merging_targets.insert(pair.second.begin(),
                                            pair.second.end());

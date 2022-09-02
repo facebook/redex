@@ -882,9 +882,9 @@ bool parse_keep(TokenIndex& idx,
 
 void parse(const std::vector<Token>& vec,
            ProguardConfiguration* pg_config,
-           size_t& parse_errors,
-           size_t& unimplemented,
+           unsigned int* parse_errors,
            const std::string& filename) {
+  *parse_errors = 0;
   bool ok;
   TokenIndex idx{vec, vec.begin()};
   while (idx.it != idx.vec.end()) {
@@ -964,7 +964,7 @@ void parse(const std::vector<Token>& vec,
                    line,
                    &ok)) {
       if (!ok) {
-        ++parse_errors;
+        (*parse_errors)++;
       }
       continue;
     }
@@ -978,7 +978,7 @@ void parse(const std::vector<Token>& vec,
                    line,
                    &ok)) {
       if (!ok) {
-        ++parse_errors;
+        (*parse_errors)++;
       }
       continue;
     }
@@ -992,7 +992,7 @@ void parse(const std::vector<Token>& vec,
                    line,
                    &ok)) {
       if (!ok) {
-        ++parse_errors;
+        (*parse_errors)++;
       }
       continue;
     }
@@ -1006,7 +1006,7 @@ void parse(const std::vector<Token>& vec,
                    line,
                    &ok)) {
       if (!ok) {
-        ++parse_errors;
+        (*parse_errors)++;
       }
       continue;
     }
@@ -1020,7 +1020,7 @@ void parse(const std::vector<Token>& vec,
                    line,
                    &ok)) {
       if (!ok) {
-        ++parse_errors;
+        (*parse_errors)++;
       }
       continue;
     }
@@ -1034,7 +1034,7 @@ void parse(const std::vector<Token>& vec,
                    line,
                    &ok)) {
       if (!ok) {
-        ++parse_errors;
+        (*parse_errors)++;
       }
       continue;
     }
@@ -1148,71 +1148,60 @@ void parse(const std::vector<Token>& vec,
         std::cerr << "Unimplemented command (skipping): " << idx.show()
                   << " at line " << idx.line() << std::endl
                   << idx.show_context(2) << std::endl;
-        ++unimplemented;
       }
     } else {
       std::cerr << "Unexpected TokenType " << idx.show() << " at line "
                 << idx.line() << std::endl
                 << idx.show_context(2) << std::endl;
-      ++parse_errors;
+      (*parse_errors)++;
     }
     idx.next();
     skip_to_next_command(idx);
   }
 }
 
-Stats parse(const std::string_view& config,
-            ProguardConfiguration* pg_config,
-            const std::string& filename) {
-  Stats ret{};
-
+void parse(const std::string_view& config,
+           ProguardConfiguration* pg_config,
+           const std::string& filename) {
   std::vector<Token> tokens = lex(config);
   bool ok = true;
   // Check for bad tokens.
   for (auto& tok : tokens) {
     if (tok.type == TokenType::unknownToken) {
       std::string spelling ATTRIBUTE_UNUSED = std::string(tok.data);
-      ++ret.unknown_tokens;
       ok = false;
     }
     // std::cout << tok.show() << " at line " << tok.line << std::endl;
   }
-
-  if (!ok) {
-    std::cerr << "Found " << ret.unknown_tokens << " unkown tokens in "
-              << filename << "\n";
-    pg_config->ok = false;
-    return ret;
+  unsigned int parse_errors = 0;
+  if (ok) {
+    parse(tokens, pg_config, &parse_errors, filename);
+  } else {
+    std::cerr << "Found unkown tokens in " << filename << "\n";
   }
 
-  parse(tokens, pg_config, ret.parse_errors, ret.unimplemented, filename);
-  if (ret.parse_errors == 0) {
+  if (parse_errors == 0) {
     pg_config->ok = ok;
   } else {
     pg_config->ok = false;
-    std::cerr << "Found " << ret.parse_errors << " parse errors in " << filename
-              << "\n";
+    std::cerr << "Found " << parse_errors << " parse errors\n";
   }
-
-  return ret;
 }
 
 } // namespace
 
-Stats parse(std::istream& config,
-            ProguardConfiguration* pg_config,
-            const std::string& filename) {
+void parse(std::istream& config,
+           ProguardConfiguration* pg_config,
+           const std::string& filename) {
   std::stringstream buffer;
   buffer << config.rdbuf();
-  return parse(buffer.str(), pg_config, filename);
+  parse(buffer.str(), pg_config, filename);
 }
 
-Stats parse_file(const std::string& filename,
-                 ProguardConfiguration* pg_config) {
-  Stats ret{};
+void parse_file(const std::string& filename, ProguardConfiguration* pg_config) {
   redex::read_file_with_contents(filename, [&](const char* data, size_t s) {
     std::string_view view(data, s);
-    ret += parse(view, pg_config, filename);
+    parse(view, pg_config, filename);
     // Parse the included files.
     for (const auto& included_filename : pg_config->includes) {
       if (pg_config->already_included.find(included_filename) !=
@@ -1220,10 +1209,9 @@ Stats parse_file(const std::string& filename,
         continue;
       }
       pg_config->already_included.emplace(included_filename);
-      ret += parse_file(included_filename, pg_config);
+      parse_file(included_filename, pg_config);
     }
   });
-  return ret;
 }
 
 size_t remove_default_blocklisted_rules(ProguardConfiguration* pg_config) {

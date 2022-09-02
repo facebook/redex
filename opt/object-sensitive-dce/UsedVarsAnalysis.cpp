@@ -251,31 +251,4 @@ std::vector<IRList::iterator> get_dead_instructions(
   return dead_instructions;
 }
 
-std::vector<cfg::InstructionIterator> get_dead_instructions(
-    const cfg::ControlFlowGraph& cfg, const FixpointIterator& fp_iter) {
-  always_assert(cfg.editable());
-  std::vector<cfg::InstructionIterator> dead_instructions;
-  for (auto* block : cfg.blocks()) {
-    auto used_vars = fp_iter.get_used_vars_at_exit(block);
-    TRACE(OSDCE, 5, "B%zu exit : %s", block->id(), SHOW(used_vars));
-    for (auto it = block->rbegin(); it != block->rend(); ++it) {
-      if (it->type != MFLOW_OPCODE) {
-        continue;
-      }
-      auto* insn = it->insn;
-      if (!fp_iter.is_required(insn, used_vars)) {
-        // move-result-pseudo instructions will be automatically removed
-        // when their primary instruction is deleted.
-        if (!opcode::is_a_move_result_pseudo(insn->opcode())) {
-          dead_instructions.emplace_back(
-              block->to_cfg_instruction_iterator(--(it.base())));
-        }
-      }
-      fp_iter.analyze_instruction(insn, &used_vars);
-    }
-    TRACE(OSDCE, 5, "B%zu entry : %s", block->id(),
-          SHOW(fp_iter.get_used_vars_at_entry(block)));
-  }
-  return dead_instructions;
-}
 } // namespace used_vars

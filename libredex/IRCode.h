@@ -166,11 +166,8 @@ class IRCode {
   //  * An editable CFG's blocks each own a small IRList (with
   //    MethodItemEntries taken from IRCode)
   // Changes to an editable CFG are reflected in IRCode after `clear_cfg` is
-  // called. For editable cfg, it is only rebuilt when the flag
-  // rebuild_editable_even_if_already_built is true. Otherwise, the current
-  // editable cfg will be kept.
-  void build_cfg(bool editable = true,
-                 bool rebuild_editable_even_if_already_built = true);
+  // called
+  void build_cfg(bool editable = true);
 
   // if the cfg was editable, linearize it back into m_ir_list
   // custom_strategy controls the linearization of the CFG.
@@ -316,11 +313,7 @@ class IRCode {
     return m_ir_list->erase(it);
   }
   IRList::iterator erase_and_dispose(const IRList::iterator& it) {
-    if (m_owns_insns) {
-      return m_ir_list->insn_erase_and_dispose(it);
-    } else {
-      return m_ir_list->erase_and_dispose(it);
-    }
+    return m_ir_list->erase_and_dispose(it);
   }
 
   IRList::iterator iterator_to(MethodItemEntry& mie) {

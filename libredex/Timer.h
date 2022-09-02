@@ -15,7 +15,7 @@
 #include <vector>
 
 struct Timer {
-  explicit Timer(const std::string& msg, bool indent = true);
+  explicit Timer(const std::string& msg);
   ~Timer();
 
   using times_t = std::vector<std::pair<std::string, double>>;
@@ -30,7 +30,6 @@ struct Timer {
   static unsigned s_indent;
   std::string m_msg;
   std::chrono::high_resolution_clock::time_point m_start;
-  bool m_indent;
 };
 
 // An accumulating thread-safe timer with a scope-based approach.

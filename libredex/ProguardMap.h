@@ -167,7 +167,7 @@ const DexString* file_name_from_method_string(const DexString* method);
 
 void apply_deobfuscated_positions(IRCode*, const ProguardMap&);
 
-std::string_view lines_key(const std::string_view method_name);
+std::string lines_key(const std::string& method_name);
 
 } // namespace pg_impl
 
@@ -177,4 +177,5 @@ std::string_view lines_key(const std::string_view method_name);
  *   void -> V
  *   java.util.ArrayList[][] -> [[Ljava/util/ArrayList;
  */
+std::string convert_type(std::string);
 std::string convert_type(std::string_view);

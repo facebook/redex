@@ -22,8 +22,7 @@ class BranchPrefixHoistingTest : public RedexTest {};
 void test(const std::string& code_str,
           const std::string& expected_str,
           size_t expected_instructions_hoisted,
-          bool full_validation = false,
-          bool can_allocate_regs = true) {
+          bool full_validation = false) {
 
   DexType* type = DexType::make_type("testClass");
   auto cls = create_class(type, type::java_lang_Object(), {}, ACC_PUBLIC);
@@ -39,13 +38,11 @@ void test(const std::string& code_str,
   auto& cfg = code->cfg();
   std::cerr << "before:" << std::endl << SHOW(cfg);
 
-  Lazy<const constant_uses::ConstantUses> constant_uses([&] {
-    return std::make_unique<const constant_uses::ConstantUses>(
-        cfg, method,
-        /* force_type_inference */ true);
-  });
-  int actual_insns_hoisted = BranchPrefixHoistingPass::process_cfg(
-      cfg, constant_uses, can_allocate_regs);
+  type_inference::TypeInference type_inference(cfg);
+  type_inference.run(method);
+  constant_uses::ConstantUses constant_uses(cfg, method);
+  int actual_insns_hoisted =
+      BranchPrefixHoistingPass::process_cfg(cfg, type_inference, constant_uses);
 
   std::cerr << "after:" << std::endl << SHOW(code->cfg());
   EXPECT_EQ(expected_instructions_hoisted, actual_insns_hoisted);
@@ -57,9 +54,9 @@ void test(const std::string& code_str,
   if (full_validation) {
     code->clear_cfg();
     expected_ptr->clear_cfg();
-
-    EXPECT_EQ(assembler::to_s_expr(code), assembler::to_s_expr(expected.get()));
   }
+
+  EXPECT_EQ(assembler::to_s_expr(code), assembler::to_s_expr(expected.get()));
 }
 
 TEST_F(BranchPrefixHoistingTest, simple_insn_hoisting) {
@@ -585,28 +582,6 @@ TEST_F(BranchPrefixHoistingTest, branch_with_clber_wide) {
   test(code_str, expected_str, 2);
 }
 
-TEST_F(BranchPrefixHoistingTest, branch_with_clber_wide_cannot_alloc) {
-
-  const auto& code_str = R"(
-    (
-      (load-param v0)
-      (if-eqz v0 :true)
-      (const-wide v0 1)
-      (add-int v2 v0 v1)
-      (add-int v2 v1 v1)
-      (goto :end)
-      (:true)
-      (const-wide v0 1)
-      (add-int v2 v0 v1)
-      (add-int v2 v2 v1)
-      (:end)
-      (return-void)
-    )
-  )";
-  test(code_str, code_str, 0, /* full_validation */ true,
-       /*can_allocate_regs */ false);
-}
-
 TEST_F(BranchPrefixHoistingTest, branch_with_const_zero) {
 
   const auto& code_str = R"(
@@ -655,26 +630,6 @@ TEST_F(BranchPrefixHoistingTest, branch_with_const_zero_2) {
       (const v1 0)
       (invoke-static (v1) "Ljava/lang/System;.arraycopy:(Ljava/lang/Object;)V")
       (add-int v2 v2 v1)
-      (:end)
-      (return-void)
-    )
-  )";
-  test(code_str, code_str, 0);
-}
-
-TEST_F(BranchPrefixHoistingTest,
-       branch_with_const_wide_with_different_type_demands) {
-
-  const auto& code_str = R"(
-    (
-      (load-param v0)
-      (if-eqz v0 :true)
-      (const-wide v1 123)
-      (add-long v2 v1 v1)
-      (goto :end)
-      (:true)
-      (const-wide v1 123)
-      (add-double v2 v1 v1)
       (:end)
       (return-void)
     )

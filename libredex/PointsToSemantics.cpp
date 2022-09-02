@@ -539,7 +539,7 @@ std::ostream& operator<<(std::ostream& o, const PointsToAction& a) {
   const PointsToOperation& op = a.operation();
   switch (op.kind) {
   case PTS_CONST_STRING: {
-    o << a.dest() << " = " << std::quoted(op.dex_string->str_copy());
+    o << a.dest() << " = " << std::quoted(op.dex_string->str());
     break;
   }
   case PTS_CONST_CLASS: {

@@ -17,8 +17,6 @@
 #include "PassManager.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "Resolver.h"
-#include "ScopedCFG.h"
-#include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"
 
@@ -81,7 +79,7 @@ ParamDomain makeHigh(const ParamDomain& domain) {
 class Analyzer final : public BaseIRAnalyzer<ParamDomainEnvironment> {
 
  public:
-  Analyzer(const cfg::ControlFlowGraph& cfg,
+  Analyzer(cfg::ControlFlowGraph& cfg,
            const ReturnParamResolver& resolver,
            const std::unordered_map<const DexMethod*, ParamIndex>&
                methods_which_return_parameter)
@@ -234,7 +232,7 @@ class Analyzer final : public BaseIRAnalyzer<ParamDomainEnvironment> {
 ////////////////////////////////////////////////////////////////////////////////
 
 std::unordered_map<const IRInstruction*, ParamIndex> get_load_param_map(
-    const cfg::ControlFlowGraph& cfg) {
+    cfg::ControlFlowGraph& cfg) {
   std::unordered_map<const IRInstruction*, ParamIndex> map;
   const auto param_insns = InstructionIterable(cfg.get_param_instructions());
   ParamIndex index = 0;
@@ -409,7 +407,7 @@ bool ReturnParamResolver::returns_receiver(const DexMethodRef* method) const {
 }
 
 boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
-    const cfg::ControlFlowGraph& cfg,
+    cfg::ControlFlowGraph& cfg,
     const std::unordered_map<const DexMethod*, ParamIndex>&
         methods_which_return_parameter) const {
   Analyzer analyzer(cfg, *this, methods_which_return_parameter);
@@ -432,34 +430,26 @@ boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
 void ResultPropagation::patch(PassManager& mgr, IRCode* code) {
   // turn move-result-... into move instructions if the called method
   // is known to always return a particular parameter
-  std::vector<cfg::InstructionIterator> deletes;
-  cfg::ScopedCFG cfg(code);
-  auto ii = InstructionIterable(*cfg);
+  // TODO(T35815701): use cfg instead of code
+  std::vector<IRInstruction*> deletes;
+  const auto ii = InstructionIterable(code);
   for (auto it = ii.begin(); it != ii.end(); it++) {
     // do we have a sequence of invoke + move-result instruction?
     const auto insn = it->insn;
-    TRACE(RP, 6, "  evaluating instruction  %s", SHOW(insn));
-
-    if (!opcode::is_a_move_result(insn->opcode())) {
-      TRACE(RP, 6, "  not a move_result.");
+    if (!opcode::is_an_invoke(insn->opcode())) {
       continue;
     }
-
-    auto primary_it = cfg->primary_instruction_of_move_result(it);
-    if (primary_it.is_end()) {
+    const auto next = std::next(it);
+    if (next == ii.end()) {
       continue;
     }
-
-    auto primary_insn = primary_it->insn;
-
-    if (!opcode::is_an_invoke(primary_insn->opcode())) {
-      TRACE(RP, 6, "  primary instruction not an invoke.");
+    const auto peek = next->insn;
+    if (!opcode::is_a_move_result(peek->opcode())) {
       continue;
     }
-
     // do we know the invoked method always returns a particular parameter?
     const auto param_index = m_resolver.get_return_param_index(
-        primary_insn, m_methods_which_return_parameter, m_resolved_refs);
+        insn, m_methods_which_return_parameter, m_resolved_refs);
     if (!param_index) {
       continue;
     }
@@ -469,38 +459,37 @@ void ResultPropagation::patch(PassManager& mgr, IRCode* code) {
       // verifiability.
       // TODO(configurability): Introduce a flag whether we care about
       // verifiability.
-      // TODO(effectiveness): We are currently very consersative, only
-      // looking locally at the proto's param type. Instead, track where the
-      // register flowing into the invoke instruction was defined, and what
-      // its statically known type is.
-      const auto is_static = primary_insn->opcode() == OPCODE_INVOKE_STATIC;
+      // TODO(effectiveness): We are currently very consersative, only looking
+      // locally at the proto's param type. Instead, track where the register
+      // flowing into the invoke instruction was defined, and what its
+      // statically known type is.
+      const auto is_static = insn->opcode() == OPCODE_INVOKE_STATIC;
       const auto param_type =
-          get_param_type(is_static, primary_insn->get_method(), *param_index);
-      const auto rtype = primary_insn->get_method()->get_proto()->get_rtype();
+          get_param_type(is_static, insn->get_method(), *param_index);
+      const auto rtype = insn->get_method()->get_proto()->get_rtype();
       if (!type::check_cast(param_type, rtype)) {
         ++m_stats.unverifiable_move_results;
         continue;
       }
     }
 
-    if (m_callee_blocklist.count(resolve_method(primary_insn->get_method(),
-                                                opcode_to_search(primary_insn),
-                                                m_resolved_refs))) {
+    if (m_callee_blocklist.count(resolve_method(
+            insn->get_method(), opcode_to_search(insn), m_resolved_refs))) {
       continue;
     }
 
     // rewrite instruction
-    const auto source_reg = primary_insn->src(*param_index);
-    if (insn->dest() == source_reg) {
-      deletes.push_back(it);
+    const auto source_reg = insn->src(*param_index);
+    if (peek->dest() == source_reg) {
+      deletes.push_back(peek);
       ++m_stats.erased_move_results;
     } else {
-      patch_move_result_to_move(insn, source_reg);
+      patch_move_result_to_move(peek, source_reg);
       ++m_stats.patched_move_results;
     }
   }
-  for (auto const& instr : deletes) {
-    cfg->remove_insn(instr);
+  for (auto const instr : deletes) {
+    code->remove_opcode(instr);
   }
 }
 
@@ -544,6 +533,14 @@ using ParamIndexMap = std::unordered_map<const DexMethod*, ParamIndex>;
 std::unordered_map<const DexMethod*, ParamIndex>
 ResultPropagationPass::find_methods_which_return_parameter(
     PassManager& mgr, const Scope& scope, const ReturnParamResolver& resolver) {
+  walk::parallel::code(scope, [](DexMethod* method, IRCode& code) {
+    const auto proto = method->get_proto();
+    if (!proto->is_void()) {
+      // void methods cannot return a parameter, skip expensive analysis
+      code.build_cfg(/* editable */ true);
+    }
+  });
+
   std::unordered_map<const DexMethod*, ParamIndex>
       methods_which_return_parameter;
   // We iterate a few times to capture chains of method calls that all
@@ -559,11 +556,11 @@ ResultPropagationPass::find_methods_which_return_parameter(
             scope, [&](DexMethod* method) {
               std::unordered_map<const DexMethod*, ParamIndex> res;
 
-              const auto* code = method->get_code();
+              const auto code = method->get_code();
               if (code == nullptr) {
                 return res;
               }
-              const auto* proto = method->get_proto();
+              const auto proto = method->get_proto();
               if (proto->is_void()) {
                 // void methods cannot return a parameter, skip expensive
                 // analysis
@@ -577,9 +574,10 @@ ResultPropagationPass::find_methods_which_return_parameter(
                 return res;
               }
 
-              cfg::ScopedCFG cfg(const_cast<IRCode*>(code));
+              // TODO(T35815704): Make the cfg const
+              cfg::ControlFlowGraph& cfg = code->cfg();
               const auto return_param_index = resolver.get_return_param_index(
-                  *cfg, methods_which_return_parameter);
+                  cfg, methods_which_return_parameter);
               if (return_param_index) {
                 res.insert({method, *return_param_index});
               }
@@ -589,6 +587,13 @@ ResultPropagationPass::find_methods_which_return_parameter(
 
     if (next_methods_which_return_parameter.size() ==
         methods_which_return_parameter.size()) {
+
+      walk::parallel::code(scope, [](DexMethod* method, IRCode& code) {
+        const auto proto = method->get_proto();
+        if (!proto->is_void()) {
+          code.clear_cfg();
+        }
+      });
       return methods_which_return_parameter;
     }
     methods_which_return_parameter = next_methods_which_return_parameter;

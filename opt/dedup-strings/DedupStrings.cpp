@@ -70,10 +70,14 @@ void DedupStrings::run(
 
   // Compute set of non-load strings in each dex
   std::unordered_set<const DexString*> non_load_strings[dexen.size()];
-  workqueue_run_for<size_t>(0, dexen.size(), [&](size_t i) {
-    auto& strings = non_load_strings[i];
-    gather_non_load_strings(dexen[i], &strings);
-  });
+  std::vector<size_t> indices(dexen.size());
+  std::iota(indices.begin(), indices.end(), 0);
+  workqueue_run<size_t>(
+      [&](size_t i) {
+        auto& strings = non_load_strings[i];
+        gather_non_load_strings(dexen[i], &strings);
+      },
+      indices);
 
   // For each string, figure out how many times it's loaded per dex
   ConcurrentMap<const DexString*, std::unordered_map<size_t, size_t>>

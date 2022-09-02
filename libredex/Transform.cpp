@@ -79,11 +79,6 @@ void remap_registers(IRCode* code, const RegMap& reg_map) {
     }
   }
 }
-void remap_registers(cfg::ControlFlowGraph& cfg, const RegMap& reg_map) {
-  for (auto& mei : cfg::InstructionIterable(cfg)) {
-    remap_registers(mei, reg_map);
-  }
-}
 
 static size_t remove_block(IRCode* code, cfg::Block* b) {
   size_t insns_removed{0};

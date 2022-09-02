@@ -180,7 +180,7 @@ void dump_method(FILE* fdout,
   // TODO: annotations?
   // TODO: string usage
   // TODO: size estimate
-  const auto& deobfuscated_name = method->get_deobfuscated_name();
+  auto deobfuscated_name = method->get_deobfuscated_name();
   auto method_name = strchr(deobfuscated_name.c_str(), ';');
   fprintf(fdout,
           "INSERT INTO %smethods VALUES (%d,%d,'%s','%s',%d,%lu);\n",

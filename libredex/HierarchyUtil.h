@@ -10,7 +10,6 @@
 #include <unordered_set>
 
 #include "DexClass.h"
-#include "MethodOverrideGraph.h"
 
 namespace hierarchy_util {
 
@@ -20,18 +19,6 @@ namespace hierarchy_util {
  * in the input Scope parameter.
  */
 std::unordered_set<const DexMethod*> find_non_overridden_virtuals(
-    const method_override_graph::Graph& override_graph);
-
-/*
- * Returns all non-overridden virtual methods in scope, plus methods from
- * external classes. The external classes will be included even if they are not
- * in the input Scope parameter.
- */
-inline std::unordered_set<const DexMethod*> find_non_overridden_virtuals(
-    const Scope& scope) {
-  std::unique_ptr<const method_override_graph::Graph> override_graph =
-      method_override_graph::build_graph(scope);
-  return find_non_overridden_virtuals(*override_graph);
-}
+    const Scope& scope);
 
 } // namespace hierarchy_util

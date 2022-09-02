@@ -62,7 +62,7 @@ class NullPointerExceptionCreator {
       if (resolved_field != nullptr) {
         str = resolved_field->get_simple_deobfuscated_name();
       } else {
-        str = implicitly_throwing_npe_insn->get_field()->get_name()->str_copy();
+        str = implicitly_throwing_npe_insn->get_field()->get_name()->str();
       }
     } else if (implicitly_throwing_npe_insn->has_method()) {
       auto resolved_method =
@@ -71,8 +71,7 @@ class NullPointerExceptionCreator {
       if (resolved_method != nullptr) {
         str = resolved_method->get_simple_deobfuscated_name();
       } else {
-        str =
-            implicitly_throwing_npe_insn->get_method()->get_name()->str_copy();
+        str = implicitly_throwing_npe_insn->get_method()->get_name()->str();
       }
     } else if (opcode::is_an_aput(implicitly_throwing_npe_insn->opcode()) ||
                opcode::is_an_aget(implicitly_throwing_npe_insn->opcode())) {

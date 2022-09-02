@@ -6,8 +6,17 @@
 import subprocess
 import sys
 
-from pyredex.unpacker import LibraryManager, UnpackManager, ZipManager
-from pyredex.utils import dex_glob, make_temp_dir, move_dexen_to_directories, sign_apk
+from pyredex.unpacker import (
+    LibraryManager,
+    UnpackManager,
+    ZipManager,
+)
+from pyredex.utils import (
+    dex_glob,
+    make_temp_dir,
+    move_dexen_to_directories,
+    sign_apk,
+)
 
 
 def run_debug_injector(args):

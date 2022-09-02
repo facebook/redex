@@ -120,8 +120,6 @@ DexMethod* java_lang_Integer_valueOf();
 
 DexMethod* java_lang_Integer_intValue();
 
-DexMethod* java_lang_Throwable_fillInStackTrace();
-
 DexMethod* kotlin_jvm_internal_Intrinsics_checkParameterIsNotNull();
 
 DexMethod* kotlin_jvm_internal_Intrinsics_checkNotNullParameter();

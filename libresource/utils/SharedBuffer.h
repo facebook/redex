@@ -14,14 +14,9 @@
  * limitations under the License.
  */
 
-/*
- * DEPRECATED.  DO NOT USE FOR NEW CODE.
- */
-
 #ifndef ANDROID_SHARED_BUFFER_H
 #define ANDROID_SHARED_BUFFER_H
 
-#include <atomic>
 #include <stdint.h>
 #include <sys/types.h>
 
@@ -48,7 +43,7 @@ public:
      * In other words, the buffer must have been release by all its
      * users.
      */
-    static          void                    dealloc(const SharedBuffer* released);
+    static          ssize_t                 dealloc(const SharedBuffer* released);
 
     //! access the data for read
     inline          const void*             data() const;
@@ -99,20 +94,11 @@ private:
         SharedBuffer(const SharedBuffer&);
         SharedBuffer& operator = (const SharedBuffer&);
  
-        // Must be sized to preserve correct alignment.
-        mutable std::atomic<int32_t>        mRefs;
-                size_t                      mSize;
-                uint32_t                    mReserved;
-public:
-        // mClientMetadata is reserved for client use.  It is initialized to 0
-        // and the clients can do whatever they want with it.  Note that this is
-        // placed last so that it is adjcent to the buffer allocated.
-                uint32_t                    mClientMetadata;
+        // 16 bytes. must be sized to preserve correct alignment.
+        mutable int32_t        mRefs;
+                size_t         mSize;
+                uint32_t       mReserved[2];
 };
-
-static_assert(sizeof(SharedBuffer) % 8 == 0
-        && (sizeof(size_t) > 4 || sizeof(SharedBuffer) == 16),
-        "SharedBuffer has unexpected size");
 
 // ---------------------------------------------------------------------------
 
@@ -129,11 +115,11 @@ size_t SharedBuffer::size() const {
 }
 
 SharedBuffer* SharedBuffer::bufferFromData(void* data) {
-    return data ? static_cast<SharedBuffer *>(data)-1 : nullptr;
+    return data ? static_cast<SharedBuffer *>(data)-1 : 0;
 }
     
 const SharedBuffer* SharedBuffer::bufferFromData(const void* data) {
-    return data ? static_cast<const SharedBuffer *>(data)-1 : nullptr;
+    return data ? static_cast<const SharedBuffer *>(data)-1 : 0;
 }
 
 size_t SharedBuffer::sizeFromData(const void* data) {
@@ -141,10 +127,10 @@ size_t SharedBuffer::sizeFromData(const void* data) {
 }
 
 bool SharedBuffer::onlyOwner() const {
-    return (mRefs.load(std::memory_order_acquire) == 1);
+    return (mRefs == 1);
 }
 
-}  // namespace android
+}; // namespace android
 
 // ---------------------------------------------------------------------------
 

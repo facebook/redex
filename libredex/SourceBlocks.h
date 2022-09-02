@@ -244,27 +244,6 @@ inline const SourceBlock* get_first_source_block(const cfg::Block* b) {
   return nullptr;
 }
 
-inline SourceBlock* get_last_source_block_before(cfg::Block* b,
-                                                 IRList::iterator it) {
-  while (it != b->begin()) {
-    it--;
-    if (it->type == MFLOW_SOURCE_BLOCK) {
-      return it->src_block->get_last_in_chain();
-    }
-  }
-  return nullptr;
-}
-inline const SourceBlock* get_last_source_block_before(
-    const cfg::Block* b, IRList::const_iterator it) {
-  while (it != b->begin()) {
-    it--;
-    if (it->type == MFLOW_SOURCE_BLOCK) {
-      return it->src_block->get_last_in_chain();
-    }
-  }
-  return nullptr;
-}
-
 inline SourceBlock* get_first_source_block(cfg::ControlFlowGraph* cfg) {
   for (auto* b : cfg->blocks()) {
     auto sb = get_first_source_block(b);
@@ -315,14 +294,7 @@ struct ViolationsHelper {
   struct ViolationsHelperImpl;
   std::unique_ptr<ViolationsHelperImpl> impl;
 
-  enum class Violation {
-    kHotImmediateDomNotHot,
-    kChainAndDom,
-  };
-
-  ViolationsHelper(Violation v,
-                   const Scope& scope,
-                   std::vector<std::string> to_vis);
+  ViolationsHelper(const Scope& scope, std::vector<std::string> to_vis);
   ~ViolationsHelper();
 };
 

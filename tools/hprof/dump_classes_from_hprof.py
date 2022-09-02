@@ -1364,13 +1364,10 @@ def wasted_segments(char_array):
 # substring can result in wasted char arrays
 # This isn't exact - need to figure out way of determining unused chars in the middle
 def wasted_string_char_arrays(hprof_data):
-    char_arrays = list(
-        filter(
-            lambda v: isinstance(v, HprofPrimitiveArray)
-            and v.prim_type is HprofBasic.CHAR,
-            list(hprof_data.object_id_dict.values()),
-        )
-    )
+    char_arrays = list(filter(
+        lambda v: isinstance(v, HprofPrimitiveArray) and v.prim_type is HprofBasic.CHAR,
+        list(hprof_data.object_id_dict.values()),
+    ))
     with_wasted = [(x, wasted_segments(x)) for x in char_arrays]
     return [x for x in with_wasted if len(x[1]) > 0]
 
@@ -1385,9 +1382,7 @@ def wasted_string_char_count(hprof_data):
 
 
 def app_heap_objects(hprof_data):
-    return [
-        o for o in list(hprof_data.object_id_dict.values()) if o.heap.name != "zygote"
-    ]
+    return [o for o in list(hprof_data.object_id_dict.values()) if o.heap.name != "zygote"]
 
 
 # return a set of containing 'clazz' and all its subclasses
@@ -1415,9 +1410,7 @@ def instances_in(hprof_data, classes):
             classes = set(classes)
         else:
             classes = {classes}
-    return {
-        obj for obj in list(hprof_data.object_id_dict.values()) if obj.clazz in classes
-    }
+    return {obj for obj in list(hprof_data.object_id_dict.values()) if obj.clazz in classes}
 
 
 # return a map of class => {instances} for the given sequence of instances

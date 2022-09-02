@@ -49,12 +49,10 @@
 #include "DedupBlockValueNumbering.h"
 
 #include "DexPosition.h"
-#include "Lazy.h"
-#include "LiveRange.h"
-#include "OutlinedMethods.h"
+#include "Liveness.h"
 #include "PassManager.h"
+#include "ReachingDefinitions.h"
 #include "RedexContext.h"
-#include "Resolver.h"
 #include "Show.h"
 #include "StlUtil.h"
 #include "Trace.h"
@@ -222,31 +220,6 @@ bool needs_pos(const IRList::iterator& begin, const IRList::iterator& end) {
 
 namespace dedup_blocks_impl {
 
-bool is_ineligible_because_of_fill_in_stack_trace(const IRInstruction* insn) {
-  auto op = insn->opcode();
-  // Direct call to a constructor whose class derives from Throwable?
-  // (It would indirectly call java.lang.Throwable.fillInStackTrace.)
-  if (opcode::is_invoke_direct(op) && method::is_init(insn->get_method()) &&
-      type::is_subclass(type::java_lang_Throwable(),
-                        insn->get_method()->get_class())) {
-    return true;
-  }
-  // Explicit virtual call to the java.lang.Throwable.fillInStackTrace
-  // method?
-  if (opcode::is_invoke_virtual(op) &&
-      resolve_method(insn->get_method(), MethodSearch::Virtual) ==
-          method::java_lang_Throwable_fillInStackTrace()) {
-    return true;
-  }
-  // An outlined method might invoke one of the above, so we are being
-  // conservative here.
-  if (opcode::is_invoke_static(op) &&
-      outliner::is_outlined_method(insn->get_method())) {
-    return true;
-  }
-  return false;
-}
-
 class DedupBlocksImpl {
  public:
   DedupBlocksImpl(const Config* config, Stats& stats)
@@ -331,16 +304,6 @@ class DedupBlocksImpl {
   const Config* m_config;
   Stats& m_stats;
 
-  struct LiveRanges {
-    live_range::DefUseChains def_use_chains;
-    live_range::UseDefChains use_def_chains;
-    explicit LiveRanges(cfg::ControlFlowGraph& cfg) {
-      live_range::MoveAwareChains chains(cfg);
-      def_use_chains = chains.get_def_use_chains();
-      use_def_chains = chains.get_use_def_chains();
-    }
-  };
-
   // Find blocks with the same exact code
   Duplicates collect_duplicates(
       bool is_static,
@@ -351,9 +314,6 @@ class DedupBlocksImpl {
       LivenessFixpointIterator& liveness_fixpoint_iter) {
     const auto& blocks = cfg.blocks();
     Duplicates duplicates;
-
-    Lazy<LiveRanges> live_ranges(
-        [&]() { return std::make_unique<LiveRanges>(cfg); });
 
     for (cfg::Block* block : blocks) {
       if (is_eligible(block, cfg)) {
@@ -373,14 +333,13 @@ class DedupBlocksImpl {
       }
     }
 
-    Lazy<type_inference::TypeInference> type_inference([&]() {
-      auto res = std::make_unique<type_inference::TypeInference>(cfg);
-      res->run(is_static, declaring_type, args);
-      return res;
-    });
+    std::unique_ptr<reaching_defs::MoveAwareFixpointIterator>
+        reaching_defs_fixpoint_iter;
+    std::unique_ptr<type_inference::TypeInference> type_inference;
     remove_if(duplicates, [&](auto& blocks) {
       return is_singleton_or_inconsistent(
-          blocks, live_ranges, liveness_fixpoint_iter, type_inference);
+          is_static, declaring_type, args, blocks, cfg,
+          reaching_defs_fixpoint_iter, liveness_fixpoint_iter, type_inference);
     });
     return duplicates;
   }
@@ -810,9 +769,8 @@ class DedupBlocksImpl {
       return false;
     }
 
-    // For debugability, we don't want to dedup blocks involved direct or
-    // indirect calls to Throwable.fillInStackTrace
-    if (is_ineligible_because_of_fill_in_stack_trace(block)) {
+    // For debugability, we don't want to dedup blocks that end with a throw
+    if (!m_config->dedup_throws && ends_with_throw(block)) {
       return false;
     }
 
@@ -850,15 +808,13 @@ class DedupBlocksImpl {
     return opcode::is_move_result_any(first_op);
   }
 
-  bool is_ineligible_because_of_fill_in_stack_trace(cfg::Block* block) {
-    if (m_config->dedup_fill_in_stack_trace) {
+  static bool ends_with_throw(cfg::Block* block) {
+    const auto last_mie_it = block->get_last_insn();
+    if (last_mie_it == block->end()) {
       return false;
     }
-    auto ii = InstructionIterable(block);
-    return std::any_of(ii.begin(), ii.end(), [](auto& mie) {
-      return dedup_blocks_impl::is_ineligible_because_of_fill_in_stack_trace(
-          mie.insn);
-    });
+    auto last_op = last_mie_it->insn->opcode();
+    return opcode::is_throw(last_op);
   }
 
   // Deal with a verification error like this
@@ -896,14 +852,18 @@ class DedupBlocksImpl {
   // }
   // (a or b) = new Foo();
   //
-  // We avoid this situation by skipping blocks that contain an init
-  // invocation to an object that didn't come from a unique instruction.
+  // We avoid this situation by skipping blocks that contain an init invocation
+  // to an object that didn't come from a unique instruction.
   static boost::optional<std::vector<IRInstruction*>>
   get_init_receiver_instructions_defined_outside_of_block(
-      cfg::Block* block, Lazy<LiveRanges>& live_ranges) {
+      cfg::Block* block,
+      const cfg::ControlFlowGraph& cfg,
+      std::unique_ptr<reaching_defs::MoveAwareFixpointIterator>&
+          fixpoint_iter) {
     std::vector<IRInstruction*> res;
     boost::optional<reaching_defs::Environment> defs_in;
     auto iterable = InstructionIterable(block);
+    auto defs_in_it = iterable.begin();
     std::unordered_set<IRInstruction*> block_insns;
     for (auto it = iterable.begin(); it != iterable.end(); it++) {
       auto insn = it->insn;
@@ -911,15 +871,30 @@ class DedupBlocksImpl {
           method::is_init(insn->get_method())) {
         TRACE(DEDUP_BLOCKS, 5, "[dedup blocks] found init invocation: %s",
               SHOW(insn));
-        auto& defs = live_ranges->use_def_chains[live_range::Use{insn, 0}];
-        always_assert(defs.size() > 0);
-        if (defs.size() > 1) {
+        if (!fixpoint_iter) {
+          fixpoint_iter.reset(
+              new reaching_defs::MoveAwareFixpointIterator(cfg));
+          fixpoint_iter->run(reaching_defs::Environment());
+        }
+        if (!defs_in) {
+          defs_in = fixpoint_iter->get_entry_state_at(block);
+        }
+        for (; defs_in_it != it; defs_in_it++) {
+          fixpoint_iter->analyze_instruction(defs_in_it->insn, &*defs_in);
+        }
+        auto defs = defs_in->get(insn->src(0));
+        if (defs.is_top()) {
           // should never happen, but we are not going to fight that here
-          TRACE(DEDUP_BLOCKS, 5, "[dedup blocks] defs.size() = %zu",
-                defs.size());
+          TRACE(DEDUP_BLOCKS, 5, "[dedup blocks] is_top");
           return boost::none;
         }
-        auto def = *defs.begin();
+        if (defs.elements().size() > 1) {
+          // should never happen, but we are not going to fight that here
+          TRACE(DEDUP_BLOCKS, 5, "[dedup blocks] defs.elements().size() = %zu",
+                defs.elements().size());
+          return boost::none;
+        }
+        auto def = *defs.elements().begin();
         auto def_opcode = def->opcode();
         always_assert(opcode::is_new_instance(def_opcode) ||
                       opcode::is_a_load_param(def_opcode));
@@ -937,6 +912,7 @@ class DedupBlocksImpl {
   }
 
   void check_inits(cfg::ControlFlowGraph& cfg) {
+    reaching_defs::Environment defs_in;
     reaching_defs::MoveAwareFixpointIterator fixpoint_iter(cfg);
     fixpoint_iter.run(reaching_defs::Environment());
     for (cfg::Block* block : cfg.blocks()) {
@@ -945,11 +921,11 @@ class DedupBlocksImpl {
         IRInstruction* insn = mie.insn;
         if (opcode::is_invoke_direct(insn->opcode()) &&
             method::is_init(insn->get_method())) {
-          auto defs = env.get(insn->src(0));
+          auto defs = defs_in.get(insn->src(0));
           always_assert(!defs.is_top());
           always_assert(defs.elements().size() == 1);
         }
-        fixpoint_iter.analyze_instruction(insn, &env);
+        fixpoint_iter.analyze_instruction(insn, &defs_in);
       }
     }
   }
@@ -980,22 +956,27 @@ class DedupBlocksImpl {
   }
 
   static bool is_singleton_or_inconsistent(
+      bool is_static,
+      DexType* declaring_type,
+      DexTypeList* args,
       const BlockSet& blocks,
-      Lazy<LiveRanges>& live_ranges,
+      cfg::ControlFlowGraph& cfg,
+      std::unique_ptr<reaching_defs::MoveAwareFixpointIterator>&
+          reaching_defs_fixpoint_iter,
       LivenessFixpointIterator& liveness_fixpoint_iter,
-      Lazy<type_inference::TypeInference>& type_inference) {
+      std::unique_ptr<type_inference::TypeInference>& type_inference) {
     if (blocks.size() <= 1) {
       return true;
     }
 
     // Next we check if there are disagreeing init-receiver instructions.
-    // TODO: Instead of just dropping all blocks in this case, do
-    // finer-grained partitioning.
+    // TODO: Instead of just dropping all blocks in this case, do finer-grained
+    // partitioning.
     boost::optional<std::vector<IRInstruction*>> insns;
     for (cfg::Block* block : blocks) {
       auto other_insns =
-          get_init_receiver_instructions_defined_outside_of_block(block,
-                                                                  live_ranges);
+          get_init_receiver_instructions_defined_outside_of_block(
+              block, cfg, reaching_defs_fixpoint_iter);
       if (!other_insns) {
         return true;
       } else if (!insns) {
@@ -1011,10 +992,14 @@ class DedupBlocksImpl {
     }
 
     // Next we check if there are inconsistently typed incoming registers.
-    // TODO: Instead of just dropping all blocks in this case, do
-    // finer-grained partitioning.
+    // TODO: Instead of just dropping all blocks in this case, do finer-grained
+    // partitioning.
 
     // Initializing stuff...
+    if (!type_inference) {
+      type_inference.reset(new type_inference::TypeInference(cfg));
+      type_inference->run(is_static, declaring_type, args);
+    }
     auto live_in_vars =
         liveness_fixpoint_iter.get_live_in_vars_at(*blocks.begin());
     if (!(live_in_vars.is_value())) {
@@ -1033,9 +1018,9 @@ class DedupBlocksImpl {
       }
     }
     always_assert(joined_env);
-    // Let's see if any of the type environments of the existing blocks
-    // matches, considering live-in registers. If so, we know that things will
-    // verify after deduping.
+    // Let's see if any of the type environments of the existing blocks matches,
+    // considering live-in registers. If so, we know that things will verify
+    // after deduping.
     // TODO: Can we be even more lenient without actually deduping and
     // re-type-inferring?
     for (cfg::Block* block : blocks) {

@@ -8,59 +8,16 @@
 #pragma once
 
 #include <cstring>
-#include <memory>
-#include <string>
-#include <unordered_set>
-#include <vector>
 
-inline std::string str_copy(std::string_view str) { return std::string(str); }
-
-inline std::string operator+(const std::string_view s,
-                             const std::string_view t) {
-  auto tmp = str_copy(s);
-  tmp.append(t);
-  return tmp;
+inline bool starts_with(const char* test, const char* prefix) {
+  return strncmp(test, prefix, strlen(prefix)) == 0;
 }
 
-inline std::string operator+(const char* s, const std::string_view t) {
-  std::string tmp(s);
-  tmp.append(t);
-  return tmp;
-}
-
-inline std::string operator+(const std::string_view s, const char* t) {
-  auto tmp = str_copy(s);
-  tmp.append(t);
-  return tmp;
-}
-
-inline std::string operator+(char s, const std::string_view t) {
-  std::string tmp(1, s);
-  tmp.append(t);
-  return tmp;
-}
-
-inline std::string operator+(const std::string_view s, char t) {
-  auto tmp = str_copy(s);
-  tmp.append(1, t);
-  return tmp;
-}
-
-class StringStorage {
- private:
-  std::unordered_set<std::string_view> m_set;
-  std::vector<std::unique_ptr<char[]>> m_storage;
-
- public:
-  std::string_view operator[](std::string_view str) {
-    auto it = m_set.find(str);
-    if (it == m_set.end()) {
-      auto data = std::make_unique<char[]>(str.size());
-      auto data_ptr = data.get();
-      memcpy(data_ptr, str.data(), str.size());
-      m_storage.push_back(std::move(data));
-      it = m_set.emplace(std::string_view(data_ptr, str.size())).first;
-    }
-    return *it;
+inline bool ends_with(const char* test, const char* suffix) {
+  auto slen = strlen(suffix);
+  auto tlen = strlen(test);
+  if (slen > tlen) {
+    return false;
   }
-};
+  return strncmp(test + tlen - slen, suffix, slen) == 0;
+}

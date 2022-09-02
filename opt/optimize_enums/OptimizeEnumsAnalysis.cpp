@@ -148,14 +148,13 @@ OptimizeEnumsAnalysis::OptimizeEnumsAnalysis(
     const DexClass* enum_cls,
     const std::unordered_map<const DexMethod*, uint32_t>& ctor_to_arg_ordinal)
     : m_cls(enum_cls) {
-  auto clinit = m_cls->get_clinit();
+  auto clinit = enum_cls->get_clinit();
   always_assert(clinit && clinit->get_code());
-  auto& clinit_cfg = clinit->get_code()->cfg();
-  always_assert(clinit_cfg.editable());
 
-  clinit_cfg.calculate_exit_block();
+  m_clinit_cfg = cfg::ScopedCFG(clinit->get_code());
+  m_clinit_cfg->calculate_exit_block();
   m_analyzer = std::make_unique<impl::Analyzer>(
-      clinit_cfg, ctor_to_arg_ordinal, enum_cls);
+      *m_clinit_cfg, ctor_to_arg_ordinal, enum_cls);
 }
 
 /**
@@ -164,8 +163,7 @@ OptimizeEnumsAnalysis::OptimizeEnumsAnalysis(
  */
 void OptimizeEnumsAnalysis::collect_ordinals(
     std::unordered_map<DexField*, size_t>& enum_field_to_ordinal) {
-  auto& clinit_cfg = m_cls->get_clinit()->get_code()->cfg();
-  auto env = m_analyzer->get_exit_state_at(clinit_cfg.exit_block());
+  auto env = m_analyzer->get_exit_state_at(m_clinit_cfg->exit_block());
 
   bool are_all_ordinals_determined = true;
   for (const auto& sfield : m_cls->get_sfields()) {

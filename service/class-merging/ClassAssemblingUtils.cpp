@@ -32,7 +32,7 @@ void patch_iget_for_int_like_types(DexMethod* meth,
   insn->set_opcode(OPCODE_IGET);
 }
 
-std::string_view get_merger_package_name(const DexType* type) {
+std::string get_merger_package_name(const DexType* type) {
   auto pkg_name = type::get_package_name(type);
   // Avoid an Android OS like package name, which might confuse the custom class
   // loader.
@@ -50,7 +50,7 @@ namespace class_merging {
 
 DexClass* create_class(const DexType* type,
                        const DexType* super_type,
-                       const std::string_view pkg_name,
+                       const std::string& pkg_name,
                        const std::vector<DexField*>& fields,
                        const TypeSet& interfaces,
                        bool with_default_ctor,
@@ -138,7 +138,7 @@ std::vector<DexField*> create_merger_fields(
       }
     }
 
-    name += std::to_string(cnt);
+    name = name + std::to_string(cnt);
     auto field = DexField::make_field(owner, DexString::make_string(name), type)
                      ->make_concrete(ACC_PUBLIC);
     res.push_back(field);

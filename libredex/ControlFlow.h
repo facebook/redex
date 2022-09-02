@@ -62,8 +62,6 @@
  * TODO?: make MethodItemEntry's fields private?
  */
 
-extern std::atomic<size_t> build_cfg_counter;
-
 namespace source_blocks {
 namespace impl {
 struct BlockAccessor;
@@ -878,12 +876,6 @@ class ControlFlowGraph {
 
   cfg::Block* get_block(BlockId id) const { return m_blocks.at(id); }
 
-  // Returns the block with the highest block id.
-  cfg::Block* get_last_block() const {
-    const auto& rbegin = m_blocks.rbegin();
-    return rbegin == m_blocks.rend() ? nullptr : rbegin->second;
-  }
-
   // remove blocks with no predecessors
   // returns pair of 1) the number of instructions removed, and 2) whether an
   // instruction with the destination of the last register was removed, and thus
@@ -1437,18 +1429,6 @@ class InstructionIteratorImpl {
            m_it == ir_list::InstructionIteratorImpl<is_const>();
   }
 
-  // \returns true if current iterator is at the end of current block.
-  bool is_end_in_block() const {
-    return m_it.unwrap() == m_block->second->m_entries.end();
-  }
-
-  // Move the current iterator and this move must be in the same block.
-  InstructionIteratorImpl<is_const>& move_next_in_block() {
-    always_assert(!is_end_in_block());
-    ++m_it;
-    return *this;
-  }
-
   Iterator unwrap() const { return m_it.unwrap(); }
 
   Block* block() const {
@@ -1541,7 +1521,7 @@ bool ControlFlowGraph::insert(const InstructionIterator& position,
 
     if (std::holds_alternative<IRInstruction*>(v)) {
       IRInstruction* insn = std::get<IRInstruction*>(v);
-      bool throws = get_succ_edge_of_type(b, EDGE_THROW) != nullptr;
+      const auto& throws = get_succ_edges_of_type(b, EDGE_THROW);
       auto op = insn->opcode();
 
       // Certain types of blocks cannot have instructions added to the end.
@@ -1563,7 +1543,7 @@ bool ControlFlowGraph::insert(const InstructionIterator& position,
           // When inserting after an instruction that may throw, we need to
           // start a new block. We also copy over all throw-edges. See FIXME
           // below for a discussion about try-regions in general.
-          if (throws) {
+          if (!throws.empty()) {
             always_assert_log(
                 !existing_last->insn->has_move_result_any(),
                 "Can't add instructions after throwing instruction "
@@ -1623,7 +1603,7 @@ bool ControlFlowGraph::insert(const InstructionIterator& position,
           });
         }
         // If this created unreachable blocks, they will be removed by simplify.
-      } else if (opcode::may_throw(op) && throws) {
+      } else if (opcode::may_throw(op) && !throws.empty()) {
         invalidated_its = true;
         // FIXME: Copying the outgoing throw edges isn't enough.
         // When the editable CFG is constructed, we transform the try regions

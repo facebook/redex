@@ -6,10 +6,6 @@
  */
 
 #include <array>
-#include <boost/process/args.hpp>
-#include <boost/process/child.hpp>
-#include <boost/process/io.hpp>
-#include <boost/regex.hpp>
 #include <fstream>
 #include <gtest/gtest.h>
 
@@ -102,309 +98,6 @@ void write_to_file(const std::string& output_path,
   fout.write(data.array(), data.size());
   fout.close();
 }
-
-// Runs `aapt d --values resources <an .apk file>` against a zip file containing
-// the given .arsc file. If successful, stdout will be returned. This ensures
-// that the Android SDK tools can successfully parse our built .arsc files, even
-// with all our shenanigans going on :) ;)
-std::vector<std::string> aapt_dump_helper(const std::string& arsc_path) {
-  std::string arsc_dumper_bin(std::getenv("arsc_dumper_bin"));
-  std::cerr << "Using aapt at: " << std::getenv("aapt_path") << std::endl;
-
-  auto tmp_dir = redex::make_tmp_dir("aapt_dump_helper%%%%%%%%");
-  auto out = tmp_dir.path + "/out.txt";
-  auto err = tmp_dir.path + "/err.txt";
-  boost::process::child c(
-      arsc_dumper_bin,
-      boost::process::args({"--aapt", std::getenv("aapt_path"), "--arsc",
-                            arsc_path.c_str(), "--outfile", out, "--errfile",
-                            err}));
-  c.wait();
-  auto exit_code = c.exit_code();
-  if (exit_code != 0) {
-    std::ifstream fs(err);
-    if (fs) {
-      std::string line;
-      while (std::getline(fs, line)) {
-        std::cerr << line << std::endl;
-      }
-    } else {
-      std::cerr << "Could not read dump helper errfile" << std::endl;
-    }
-    throw std::runtime_error("aapt dump failed with exit code " +
-                             std::to_string(exit_code));
-  }
-  std::vector<std::string> data;
-  std::ifstream fs(out);
-  if (fs) {
-    std::string line;
-    while (std::getline(fs, line)) {
-      data.emplace_back(line);
-    }
-  } else {
-    std::cerr << "Could not read dump helper outfile" << std::endl;
-  }
-  return data;
-}
-
-struct SimpleEntry {
-  uint32_t id;
-  std::string name;
-  android::Res_value value;
-};
-struct ComplexValue {
-  uint32_t key;
-  std::string kind;
-  uint32_t data;
-};
-struct ComplexEntry {
-  uint32_t id;
-  std::string name;
-  uint32_t parent_id;
-  std::vector<ComplexValue> values;
-};
-struct ParsedAaptOutput {
-  std::string package_name;
-  std::map<uint32_t, uint32_t> flags;
-  std::map<uint32_t, std::string> id_fully_qualified_names;
-  std::map<std::string, uint32_t> fully_qualified_name_to_id;
-  std::map<std::string, std::map<uint32_t, SimpleEntry>>
-      config_to_simple_values;
-  std::map<std::string, std::map<uint32_t, ComplexEntry>>
-      config_to_complex_values;
-  // Original output data from the dump command. Dumped to stderr when an assert
-  // fails.
-  std::vector<std::string> lines;
-
-  void dump() {
-    std::cerr << std::endl << "Dump command output:" << std::endl;
-    for (const auto& line : lines) {
-      std::cerr << line << std::endl;
-    }
-    std::cerr << std::endl
-              << "Dumping parsed package: " << package_name << std::endl
-              << "IDs (" << id_fully_qualified_names.size()
-              << "):" << std::endl;
-    for (auto& pair : id_fully_qualified_names) {
-      std::cerr << "  0x" << std::hex << pair.first << std::dec << " ("
-                << pair.second << ")" << std::endl;
-    }
-    std::cerr << "Flags (" << flags.size() << "):" << std::endl;
-    for (auto& pair : flags) {
-      std::cerr << "  0x" << std::hex << pair.first << " -> 0x" << pair.second
-                << std::dec << std::endl;
-    }
-    std::cerr << "Simple entries:" << std::endl;
-    for (auto& config_pair : config_to_simple_values) {
-      std::cerr << "  config: " << config_pair.first << std::endl;
-      for (auto& entry_pair : config_pair.second) {
-        auto& e = entry_pair.second;
-        std::cerr << "    0x" << std::hex << entry_pair.first << " (" << e.name
-                  << "): "
-                  << "t=0x" << unsigned(e.value.dataType) << " d=0x"
-                  << e.value.data << std::dec << std::endl;
-      }
-    }
-    std::cerr << "Complex entries:" << std::endl;
-    for (auto& config_pair : config_to_complex_values) {
-      std::cerr << "  config: " << config_pair.first << std::endl;
-      for (auto& entry_pair : config_pair.second) {
-        auto& e = entry_pair.second;
-        std::cerr << "    0x" << std::hex << entry_pair.first << " (" << e.name
-                  << "): Parent = 0x" << e.parent_id << std::dec << std::endl;
-        for (auto& v : e.values) {
-          std::cerr << "      key = 0x" << std::hex << v.key << " (" << v.kind
-                    << "): 0x" << v.data << std::dec << std::endl;
-        }
-      }
-    }
-  }
-
-  android::Res_value get_simple_value(const std::string& config, uint32_t id) {
-    if (config_to_simple_values.count(config) == 0) {
-      dump();
-      throw std::runtime_error("no simple values for config: " + config);
-    }
-    auto& map = config_to_simple_values.at(config);
-    if (map.count(id) == 0) {
-      dump();
-      std::stringstream ss;
-      ss << "no data for ID 0x" << std::hex << id << " in config: " << config;
-      throw std::runtime_error(ss.str());
-    }
-    auto& entry = map.at(id);
-    return entry.value;
-  }
-
-  std::vector<ComplexValue> get_complex_values(const std::string& config,
-                                               uint32_t id) {
-    if (config_to_complex_values.count(config) == 0) {
-      dump();
-      throw std::runtime_error("no complex values for config: " + config);
-    }
-    auto& map = config_to_complex_values.at(config);
-    if (map.count(id) == 0) {
-      dump();
-      std::stringstream ss;
-      ss << "no data for ID 0x" << std::hex << id << " in config: " << config;
-      throw std::runtime_error(ss.str());
-    }
-    auto& entry = map.at(id);
-    return entry.values;
-  }
-
-  uint32_t get_identifier(const std::string& fully_qualified) {
-    if (fully_qualified_name_to_id.count(fully_qualified) == 0) {
-      std::cerr << "No ID found for " << fully_qualified << std::endl;
-      return 0;
-    }
-    return fully_qualified_name_to_id.at(fully_qualified);
-  }
-};
-
-std::string value_to_type_string(const android::Res_value& value) {
-  if (value.dataType == android::Res_value::TYPE_NULL) {
-    if (value.data == android::Res_value::DATA_NULL_EMPTY) {
-      return "null empty";
-    } else {
-      return "null";
-    }
-  } else if (value.dataType == android::Res_value::TYPE_REFERENCE) {
-    return "reference";
-  } else if (value.dataType == android::Res_value::TYPE_DYNAMIC_REFERENCE) {
-    return "dynamic reference";
-  } else if (value.dataType == android::Res_value::TYPE_ATTRIBUTE) {
-    return "attribute";
-  } else if (value.dataType == android::Res_value::TYPE_STRING) {
-    return "string8"; // this is an assumption but whatever, good enough
-  } else if (value.dataType == android::Res_value::TYPE_FLOAT) {
-    return "float";
-  } else if (value.dataType == android::Res_value::TYPE_DIMENSION) {
-    return "dimension";
-  } else if (value.dataType == android::Res_value::TYPE_FRACTION) {
-    return "fraction";
-  } else if (value.dataType >= android::Res_value::TYPE_FIRST_COLOR_INT &&
-             value.dataType <= android::Res_value::TYPE_LAST_COLOR_INT) {
-    return "color";
-  } else if (value.dataType == android::Res_value::TYPE_INT_BOOLEAN) {
-    return "boolean";
-  } else if (value.dataType >= android::Res_value::TYPE_FIRST_INT &&
-             value.dataType <= android::Res_value::TYPE_LAST_INT) {
-    return "int";
-  } else {
-    return "unknown type";
-  }
-}
-
-// Reads the text output of the form P501204390. aapt d is kind of crappy in
-// that it does not print complex values in a nice form (we have to change
-// representation to string for types, which is annoying).
-// FYI the implementation of the printer is here in case you need to consult it
-// or change this in future sdk versions:
-// https://cs.android.com/android/platform/superproject/+/android-12.0.0_r1:frameworks/base/libs/androidfw/ResourceTypes.cpp;l=7544
-ParsedAaptOutput aapt_dump_and_parse(const std::string& arsc_path,
-                                     bool verbose = false) {
-  ParsedAaptOutput output;
-  boost::regex package_exp{
-      "^Package Group 0 id=0x7f packageCount=1 name=(.*)$"};
-  boost::regex spec_exp{
-      "^[ ]*spec resource 0x([0-9a-fA-F]+)[^=]+=0x([0-9a-fA-F]+)$"};
-  boost::regex config_exp{"^[ ]*config ([^:]+):$"};
-  // Capture the id, package, type/entry, value type, data.
-  // Size and r0 are intentionally not captured as we know their hard coded
-  // value ahead of time. If they differ, we will not match and fail the test.
-  boost::regex simple_exp{
-      "^[ ]*resource 0x([0-9a-fA-F]+) ([^:]+):([^:]+): t=0x([0-9a-fA-F]+) "
-      "d=0x([0-9a-fA-F]+)..s=0x0008 r=0x00.$"};
-  boost::regex bag_exp{
-      "^[ ]*resource 0x([0-9a-fA-F]+) ([^:]+):([^:]+): .bag.$"};
-  boost::regex bag_parent_exp{"^[ ]*Parent=0x([0-9a-fA-F]+).*$"};
-  boost::regex bag_value_exp{
-      "^[ ]*#[0-9]+ .Key=0x([0-9a-fA-F]+).: .([a-z0-9 ]+). #([0-9a-fA-F]+)$"};
-
-  auto lines = aapt_dump_helper(arsc_path);
-  output.lines = lines;
-  std::string current_config("");
-  enum ComplexState { Unknown, Begin, Values };
-  ComplexState state = Unknown;
-  // complex_entries[complex_entries.size() - 1] is the entry we're working on
-  // that takes multiple lines to complete.
-  std::vector<ComplexEntry> complex_entries;
-  auto maybe_handle_complex = [&]() {
-    if (state == Values) {
-      auto& complex_values = output.config_to_complex_values[current_config];
-      auto& entry = complex_entries[complex_entries.size() - 1];
-      complex_values.emplace(entry.id, entry);
-    }
-    state = Unknown;
-  };
-  for (const auto& line : lines) {
-    boost::smatch what;
-    if (output.package_name.empty() &&
-        boost::regex_search(line, what, package_exp)) {
-      output.package_name = what[1];
-    } else if (boost::regex_search(line, what, spec_exp)) {
-      maybe_handle_complex();
-      uint32_t id = std::stoul(what[1], nullptr, 16);
-      uint32_t flags = std::stoul(what[2], nullptr, 16);
-      output.flags.emplace(id, flags);
-    } else if (boost::regex_search(line, what, config_exp)) {
-      maybe_handle_complex();
-      auto name = what[1].str();
-      if (strcmp(name.c_str(), "(default)") == 0) {
-        current_config = "default";
-      } else {
-        current_config = name;
-      }
-    } else if (boost::regex_search(line, what, simple_exp)) {
-      maybe_handle_complex();
-      auto& simple_values = output.config_to_simple_values[current_config];
-      uint32_t id = std::stoul(what[1], nullptr, 16);
-      auto fully_qualified = what[2].str() + ":" + what[3].str();
-      uint32_t type = std::stoul(what[4], nullptr, 16);
-      if (type > android::Res_value::TYPE_LAST_INT) {
-        std::cerr << "Bad type: " << line << std::endl;
-        continue;
-      }
-      uint32_t data = std::stoul(what[5], nullptr, 16);
-      output.id_fully_qualified_names.emplace(id, fully_qualified);
-      output.fully_qualified_name_to_id.emplace(fully_qualified, id);
-      android::Res_value value{
-          sizeof(android::Res_value), 0, (uint8_t)type, {data}};
-      SimpleEntry entry{id, fully_qualified, value};
-      simple_values.emplace(id, std::move(entry));
-    } else if (boost::regex_search(line, what, bag_exp)) {
-      maybe_handle_complex();
-      state = Begin;
-      ComplexEntry entry{};
-      entry.id = std::stoul(what[1], nullptr, 16);
-      entry.name = what[2].str() + ":" + what[3].str();
-      output.id_fully_qualified_names.emplace(entry.id, entry.name);
-      output.fully_qualified_name_to_id.emplace(entry.name, entry.id);
-      complex_entries.emplace_back(std::move(entry));
-    } else if (boost::regex_search(line, what, bag_parent_exp)) {
-      always_assert_log(state == Begin, "Unexpected state at line: %s",
-                        line.c_str());
-      auto& entry = complex_entries[complex_entries.size() - 1];
-      entry.parent_id = std::stoul(what[1], nullptr, 16);
-      state = Values;
-    } else if (boost::regex_search(line, what, bag_value_exp)) {
-      always_assert_log(state == Values, "Unexpected state at line: %s",
-                        line.c_str());
-      ComplexValue value{(uint32_t)std::stoul(what[1], nullptr, 16), what[2],
-                         (uint32_t)std::stoul(what[3], nullptr, 16)};
-      auto& entry = complex_entries[complex_entries.size() - 1];
-      entry.values.emplace_back(std::move(value));
-    }
-  }
-  maybe_handle_complex();
-
-  // End of parsing, optionally spew our representation to stderr.
-  if (verbose) {
-    output.dump();
-  }
-  return output;
-}
 } // namespace
 
 TEST(ResStringPool, ReplaceStringsInXmlLayout) {
@@ -463,20 +156,22 @@ TEST(ResTable, AppendNewType) {
   copy_file(src_file_path, dest_file_path);
 
   auto src = RedexMappedFile::open(src_file_path);
+  android::ResTable table;
+  ASSERT_EQ(table.add(src.const_data(), src.size()), 0);
+  // Read the number of original types.
+  android::Vector<android::String8> original_type_names;
+  table.getTypeNamesForPackage(0, &original_type_names);
+
   // Set up existing entry data to copy into a different type
   const uint8_t dest_type = 3;
   std::vector<uint32_t> source_ids;
   source_ids.push_back(0x7f010000);
   size_t num_ids = source_ids.size();
-  std::vector<android::Res_value> values;
-  // Read the number of original types.
-  std::vector<std::string> original_type_names;
-  {
-    apk::TableSnapshot table_snapshot(src, src.size());
-    table_snapshot.get_type_names(APPLICATION_PACKAGE, &original_type_names);
-    for (size_t i = 0; i < num_ids; i++) {
-      table_snapshot.collect_resource_values(source_ids[i], &values);
-    }
+  android::Vector<android::Res_value> values;
+  for (size_t i = 0; i < num_ids; i++) {
+    android::Res_value val;
+    table.getResource(source_ids[i], &val);
+    values.push_back(val);
   }
 
   // Create a default looking ResTable_config
@@ -493,37 +188,40 @@ TEST(ResTable, AppendNewType) {
     arsc_file.serialize();
   }
 
-  auto round_trip_dump = aapt_dump_and_parse(dest_file_path);
   auto dest = RedexMappedFile::open(dest_file_path);
-  apk::TableSnapshot round_trip_snapshot(dest, dest.size());
+  android::ResTable round_trip;
+  ASSERT_EQ(round_trip.add(dest.const_data(), dest.size()), 0);
   // Make sure entries exist in 0x7f03xxxx range
   for (size_t i = 0; i < num_ids; i++) {
     auto old_id = source_ids[i];
     auto new_id = 0x7f000000 | (dest_type << 16) | (old_id & 0xFFFF);
     android::Res_value expected = values[i];
-    auto actual = round_trip_dump.get_simple_value("default", new_id);
+    android::Res_value actual;
+    round_trip.getResource(new_id, &actual);
     ASSERT_EQ(expected.dataType, actual.dataType);
     ASSERT_EQ(expected.data, actual.data);
   }
 
   // Sanity check values in their original location
   {
-    auto out_value = round_trip_dump.get_simple_value("default", 0x7f010000);
-    float val = arsc::complex_value(out_value.data);
-    uint32_t unit = arsc::complex_unit(out_value.data, false);
+    android::Res_value out_value;
+    round_trip.getResource(0x7f010000, &out_value);
+    float val = android::complex_value(out_value.data);
+    uint32_t unit = android::complex_unit(out_value.data, false);
     ASSERT_EQ((int)val, 10);
     ASSERT_EQ(unit, android::Res_value::COMPLEX_UNIT_DIP);
   }
   {
-    auto out_value = round_trip_dump.get_simple_value("default", 0x7f010001);
-    float val = arsc::complex_value(out_value.data);
-    uint32_t unit = arsc::complex_unit(out_value.data, false);
+    android::Res_value out_value;
+    round_trip.getResource(0x7f010001, &out_value);
+    float val = android::complex_value(out_value.data);
+    uint32_t unit = android::complex_unit(out_value.data, false);
     ASSERT_EQ((int)val, 20);
     ASSERT_EQ(unit, android::Res_value::COMPLEX_UNIT_DIP);
   }
 
-  std::vector<std::string> type_names;
-  round_trip_snapshot.get_type_names(APPLICATION_PACKAGE, &type_names);
+  android::Vector<android::String8> type_names;
+  round_trip.getTypeNamesForPackage(0, &type_names);
   ASSERT_EQ(type_names.size(), original_type_names.size() + 1);
 }
 
@@ -624,7 +322,7 @@ TEST(ResStringPoolBuilder, TestAllTheOptions) {
 
   auto do_validation = [&](void* data, size_t size) {
     android::ResStringPool pool;
-    EXPECT_EQ(pool.setTo(data, size, true), 0);
+    EXPECT_EQ(pool.setTo(data, size), 0);
     EXPECT_EQ(pool.styleCount(), 1);
     EXPECT_EQ(pool.size(), 5);
     EXPECT_STREQ(apk::get_string_from_pool(pool, 0).c_str(), "Hello world!");
@@ -871,6 +569,22 @@ void build_arsc_file_and_validate(
   callback(tmp_dir.path, dest_file_path);
 }
 
+// Look up a string like "com.facebook.foo:dimen/whatever" and return the ID.
+uint32_t get_identifier(const android::ResTable& table,
+                        const char* fully_qualified_entry) {
+  android::String16 e(fully_qualified_entry);
+  return table.identifierForName(e.string(), e.size());
+}
+
+// Look up resource IDs by the package, type and entry names, even though we
+// could just compute them ourselves (battle test the type, key strings being
+// accurate).
+ssize_t get_value_by_name(const android::ResTable& table,
+                          const char* fully_qualified_entry,
+                          android::Res_value* out) {
+  return table.getResource(get_identifier(table, fully_qualified_entry), out);
+}
+
 void delete_resources(const std::string& arsc_file_path,
                       const std::vector<uint32_t>& ids_to_delete) {
   ResourcesArscFile arsc_file(arsc_file_path);
@@ -891,7 +605,7 @@ UNUSED int32_t load_global_strings(const RedexMappedFile& arsc_file,
   apk::TableParser parser;
   parser.visit((void*)arsc_file.const_data(), arsc_file.size());
   auto pool_header = parser.m_global_pool_header;
-  return pool->setTo(pool_header, pool_header->header.size, true);
+  return pool->setTo(pool_header, pool_header->header.size);
 }
 
 int32_t load_key_strings(const RedexMappedFile& arsc_file,
@@ -900,7 +614,7 @@ int32_t load_key_strings(const RedexMappedFile& arsc_file,
   parser.visit((void*)arsc_file.const_data(), arsc_file.size());
   // Only 1 package in our test arsc file.
   auto pool_header = parser.m_package_key_string_headers.begin()->second;
-  return pool->setTo(pool_header, pool_header->header.size, true);
+  return pool->setTo(pool_header, pool_header->header.size);
 }
 
 int32_t load_type_strings(const RedexMappedFile& arsc_file,
@@ -909,7 +623,7 @@ int32_t load_type_strings(const RedexMappedFile& arsc_file,
   parser.visit((void*)arsc_file.const_data(), arsc_file.size());
   // Only 1 package in our test arsc file.
   auto pool_header = parser.m_package_type_string_headers.begin()->second;
-  return pool->setTo(pool_header, pool_header->header.size, true);
+  return pool->setTo(pool_header, pool_header->header.size);
 }
 
 std::vector<arsc::TypeInfo> load_types(const RedexMappedFile& arsc_file) {
@@ -919,38 +633,39 @@ std::vector<arsc::TypeInfo> load_types(const RedexMappedFile& arsc_file) {
 }
 
 // Assert values in the table match the expected "EntryAndValue"
-#define ASSERT_ENTRY_VALUES(table, config_str, entry_str, expected) \
-  ({                                                                \
-    uint32_t __id = (table).get_identifier(entry_str);              \
-    android::Res_value __actual_value =                             \
-        (table).get_simple_value((config_str), __id);               \
-    EXPECT_EQ((expected).value.size, __actual_value.size);          \
-    EXPECT_EQ((expected).value.dataType, __actual_value.dataType);  \
-    EXPECT_EQ((expected).value.data, __actual_value.data);          \
+#define ASSERT_ENTRY_VALUES(table, entry_str, expected)                     \
+  ({                                                                        \
+    android::Res_value __actual_value;                                      \
+    EXPECT_EQ(get_value_by_name((table), (entry_str), &__actual_value), 0); \
+    EXPECT_EQ((expected).value.size, __actual_value.size);                  \
+    EXPECT_EQ((expected).value.dataType, __actual_value.dataType);          \
+    EXPECT_EQ((expected).value.data, __actual_value.data);                  \
   })
 // Assert values in the table match the two items expecrted in the
 // "MapEntryAndValues"
-#define ASSERT_MAP_ENTRY_VALUES(table, config_str, entry_str, expected) \
-  ({                                                                    \
-    uint32_t __id = (table).get_identifier(entry_str);                  \
-    std::vector __vec = (table).get_complex_values((config_str), __id); \
-    EXPECT_EQ(__vec.size(), 2);                                         \
-    auto& __vec0 = __vec[0];                                            \
-    auto& __vec1 = __vec[1];                                            \
-    EXPECT_EQ(__vec0.key, (expected).item0.name.ident);                 \
-    EXPECT_STREQ(__vec0.kind.c_str(),                                   \
-                 value_to_type_string((expected).item0.value).c_str()); \
-    EXPECT_EQ(__vec0.data, (expected).item0.value.data);                \
-    EXPECT_EQ(__vec1.key, (expected).item1.name.ident);                 \
-    EXPECT_STREQ(__vec1.kind.c_str(),                                   \
-                 value_to_type_string((expected).item1.value).c_str()); \
-    EXPECT_EQ(__vec1.data, (expected).item1.value.data);                \
+#define ASSERT_MAP_ENTRY_VALUES(table, entry_str, expected)                  \
+  ({                                                                         \
+    const android::ResTable::bag_entry* __bag_entry;                         \
+    EXPECT_EQ(                                                               \
+        (table).lockBag(get_identifier((table), (entry_str)), &__bag_entry), \
+        2);                                                                  \
+    EXPECT_EQ(__bag_entry->map.name.ident, (expected).item0.name.ident);     \
+    EXPECT_EQ(__bag_entry->map.value.dataType,                               \
+              (expected).item0.value.dataType);                              \
+    EXPECT_EQ(__bag_entry->map.value.data, (expected).item0.value.data);     \
+    __bag_entry++;                                                           \
+    EXPECT_EQ(__bag_entry->map.name.ident, (expected).item1.name.ident);     \
+    EXPECT_EQ(__bag_entry->map.value.dataType,                               \
+              (expected).item1.value.dataType);                              \
+    EXPECT_EQ(__bag_entry->map.value.data, (expected).item1.value.data);     \
+    __bag_entry--;                                                           \
+    (table).unlockBag(__bag_entry);                                          \
   })
 // As above, but look up via resource ID instead of string
-#define ASSERT_ID_VALUES(table, config_str, id, expected)          \
+#define ASSERT_ID_VALUES(table, id, expected)                      \
   ({                                                               \
-    android::Res_value __actual_value =                            \
-        (table).get_simple_value((config_str), (id));              \
+    android::Res_value __actual_value;                             \
+    EXPECT_EQ((table).getResource((id), &__actual_value), 0);      \
     EXPECT_EQ((expected).value.size, __actual_value.size);         \
     EXPECT_EQ((expected).value.dataType, __actual_value.dataType); \
     EXPECT_EQ((expected).value.data, __actual_value.data);         \
@@ -958,22 +673,31 @@ std::vector<arsc::TypeInfo> load_types(const RedexMappedFile& arsc_file) {
 } // namespace
 
 TEST(ResTable, BuildNewTable) {
-  build_arsc_file_and_validate([&](const std::string& /* unused */,
-                                   const std::string& arsc_path) {
-    // Now, use unforked AOSP APIs to read out the data to make sure it
-    // matches the stuff we put in.
-    auto table_dump = aapt_dump_and_parse(arsc_path);
-    // 0x7f010000
-    ASSERT_ENTRY_VALUES(table_dump, "default", "foo:dimen/first", e0);
-    // 0x7f010001
-    ASSERT_ENTRY_VALUES(table_dump, "default", "foo:dimen/second", e1);
-    // 0x7f010002
-    ASSERT_ENTRY_VALUES(table_dump, "default", "foo:dimen/third", e2);
-    // Rotate to landscape should get different values for entry 0x7f010000
-    ASSERT_ENTRY_VALUES(table_dump, "land", "foo:dimen/first", e0_land);
-    // Separate validation for plurals, styles, etc.
-    ASSERT_MAP_ENTRY_VALUES(table_dump, "xxhdpi", "foo:style/fourth", style);
-  });
+  build_arsc_file_and_validate(
+      [&](const std::string& /* unused */, const std::string& arsc_path) {
+        // Now, use unforked AOSP APIs to read out the data to make sure it
+        // matches the stuff we put in.
+        auto built_arsc_file = RedexMappedFile::open(arsc_path);
+        android::ResTable built_arsc_table;
+        EXPECT_EQ(built_arsc_table.add(built_arsc_file.const_data(),
+                                       built_arsc_file.size()),
+                  0)
+            << "Could not read built data!";
+        // 0x7f010000
+        ASSERT_ENTRY_VALUES(built_arsc_table, "foo:dimen/first", e0);
+        // 0x7f010001
+        ASSERT_ENTRY_VALUES(built_arsc_table, "foo:dimen/second", e1);
+        // 0x7f010002
+        ASSERT_ENTRY_VALUES(built_arsc_table, "foo:dimen/third", e2);
+        // Rotate to landscape should get different values for entry 0x7f010000
+        built_arsc_table.setParameters(&land_config);
+        ASSERT_ENTRY_VALUES(built_arsc_table, "foo:dimen/first", e0_land);
+        // This one should resolve to same value as 0x7f010001 before, even in
+        // landscape mode
+        ASSERT_ENTRY_VALUES(built_arsc_table, "foo:dimen/second", e1);
+        // Use the crazy APIs for reading plurals, styles, etc.
+        ASSERT_MAP_ENTRY_VALUES(built_arsc_table, "foo:style/fourth", style);
+      });
 }
 
 TEST(ResTable, DeleteAllEntriesInType) {
@@ -981,22 +705,29 @@ TEST(ResTable, DeleteAllEntriesInType) {
       [&](const std::string& /* unused */, const std::string& arsc_path) {
         // Delete everything in the style type.
         delete_resources(arsc_path, {0x7f020000});
-        // Make sure the table is still valid after deletion.
-        auto table_dump = aapt_dump_and_parse(arsc_path);
+        // Use AOSP API to make sure the table is still valid after deletion.
+        auto built_arsc_file = RedexMappedFile::open(arsc_path);
+        android::ResTable built_arsc_table;
+        EXPECT_EQ(built_arsc_table.add(built_arsc_file.const_data(),
+                                       built_arsc_file.size()),
+                  0)
+            << "Could not read built data!";
         // 0x7f010000
-        ASSERT_ENTRY_VALUES(table_dump, "default", "foo:dimen/first", e0);
+        ASSERT_ENTRY_VALUES(built_arsc_table, "foo:dimen/first", e0);
         // 0x7f010001
-        ASSERT_ENTRY_VALUES(table_dump, "default", "foo:dimen/third", e2);
+        ASSERT_ENTRY_VALUES(built_arsc_table, "foo:dimen/second", e1);
+        // 0x7f010002
+        ASSERT_ENTRY_VALUES(built_arsc_table, "foo:dimen/third", e2);
         // Rotate to landscape should get different values for entry 0x7f010000
-        ASSERT_ENTRY_VALUES(table_dump, "land", "foo:dimen/first", e0_land);
+        built_arsc_table.setParameters(&land_config);
+        ASSERT_ENTRY_VALUES(built_arsc_table, "foo:dimen/first", e0_land);
 
         // This one should have been deleted!!
-        EXPECT_EQ(table_dump.get_identifier("foo:style/fourth"), 0)
+        EXPECT_EQ(get_identifier(built_arsc_table, "foo:style/fourth"), 0)
             << "Style was not properly deleted!";
 
         // Check the validity of the string pools and ensure data is getting
         // fully cleaned up.
-        auto built_arsc_file = RedexMappedFile::open(arsc_path);
         {
           // Make sure the key for "fourth" got deleted.
           android::ResStringPool pool;
@@ -1031,30 +762,35 @@ TEST(ResTable, DeleteAllEntriesInType) {
 }
 
 TEST(ResTable, DeleteAllLandscapeEntries) {
-  build_arsc_file_and_validate([&](const std::string& /* unused */,
-                                   const std::string& arsc_path) {
-    // Delete the lone dimen entry that has a landscape override.
-    delete_resources(arsc_path, {0x7f010000});
-    // Make sure the table is still valid after deletion.
-    auto table_dump = aapt_dump_and_parse(arsc_path);
-    // This one should have been deleted!!
-    EXPECT_EQ(table_dump.get_identifier("foo:dimen/first"), 0)
-        << "Entry was not properly deleted!";
+  build_arsc_file_and_validate(
+      [&](const std::string& /* unused */, const std::string& arsc_path) {
+        // Delete the lone dimen entry that has a landscape override.
+        delete_resources(arsc_path, {0x7f010000});
+        // Use AOSP API to make sure the table is still valid after deletion.
+        auto built_arsc_file = RedexMappedFile::open(arsc_path);
+        android::ResTable built_arsc_table;
+        EXPECT_EQ(built_arsc_table.add(built_arsc_file.const_data(),
+                                       built_arsc_file.size()),
+                  0)
+            << "Could not read built data!";
 
-    ASSERT_ENTRY_VALUES(table_dump, "default", "foo:dimen/second", e1);
-    ASSERT_ENTRY_VALUES(table_dump, "default", "foo:dimen/third", e2);
-    ASSERT_MAP_ENTRY_VALUES(table_dump, "xxhdpi", "foo:style/fourth", style);
+        // This one should have been deleted!!
+        EXPECT_EQ(get_identifier(built_arsc_table, "foo:dimen/first"), 0)
+            << "Entry was not properly deleted!";
 
-    // Deleting the resource should ensure that no ResTable_type for
-    // landscape config was emitted. We should still have two
-    // ResTable_typeSpec structs though.
-    auto built_arsc_file = RedexMappedFile::open(arsc_path);
-    auto type_infos = load_types(built_arsc_file);
-    EXPECT_EQ(type_infos.size(), 2);
-    EXPECT_EQ(type_infos.at(0).configs.size(), 1)
-        << "ResTable_type not cleaned up!";
-    EXPECT_EQ(type_infos.at(1).configs.size(), 1);
-  });
+        ASSERT_ENTRY_VALUES(built_arsc_table, "foo:dimen/second", e1);
+        ASSERT_ENTRY_VALUES(built_arsc_table, "foo:dimen/third", e2);
+        ASSERT_MAP_ENTRY_VALUES(built_arsc_table, "foo:style/fourth", style);
+
+        // Deleting the resource should ensure that no ResTable_type for
+        // landscape config was emitted. We should still have two
+        // ResTable_typeSpec structs though.
+        auto type_infos = load_types(built_arsc_file);
+        EXPECT_EQ(type_infos.size(), 2);
+        EXPECT_EQ(type_infos.at(0).configs.size(), 1)
+            << "ResTable_type not cleaned up!";
+        EXPECT_EQ(type_infos.at(1).configs.size(), 1);
+      });
 }
 
 TEST(ResTable, SerializeTypeWithAllEmpty) {
@@ -1107,9 +843,12 @@ TEST(ResTable, SerializeTypeWithAllEmpty) {
               parser.m_package_types.begin()->second.empty())
       << "Should not emit type headers for empty data";
 
-  // Final check, make sure Android APIs can parse the table with no types (this
-  // will throw with non-zero exit code).
-  aapt_dump_and_parse(dest_file_path);
+  // Final check, make sure Android APIs can parse the table with no types.
+  android::ResTable built_arsc_table;
+  EXPECT_EQ(built_arsc_table.add(build_arsc_file.const_data(),
+                                 build_arsc_file.size()),
+            0)
+      << "Could not read table!";
 }
 
 namespace {
@@ -1163,98 +902,21 @@ void build_table_with_ids(const std::string& dest_file_path,
 
 } // namespace
 
-TEST(ResTable, ValueEquality) {
-  auto pool_flags = android::ResStringPool_header::UTF8_FLAG;
-  auto global_strings_builder =
-      std::make_shared<arsc::ResStringPoolBuilder>(pool_flags);
-  auto key_strings_builder =
-      std::make_shared<arsc::ResStringPoolBuilder>(pool_flags);
-  auto type_strings_builder =
-      std::make_shared<arsc::ResStringPoolBuilder>(pool_flags);
-  key_strings_builder->add_string("foo");
-  type_strings_builder->add_string("dimen");
-
-  auto package_builder =
-      std::make_shared<arsc::ResPackageBuilder>(&package_header);
-  package_builder->set_key_strings(key_strings_builder);
-  package_builder->set_type_strings(type_strings_builder);
-
-  auto table_builder = std::make_shared<arsc::ResTableBuilder>();
-  table_builder->set_global_strings(global_strings_builder);
-  table_builder->add_package(package_builder);
-
-  std::vector<android::ResTable_config*> dimen_configs = {
-      &default_config, &land_config, &xxhdpi_config};
-  std::vector<uint32_t> dimen_flags = {0, 0, 0, 0, 0};
-  auto type_definer = std::make_shared<arsc::ResTableTypeDefiner>(
-      package_header.id, 1, dimen_configs, dimen_flags);
-  package_builder->add_type(type_definer);
-
-  EntryAndValue a(0, android::Res_value::TYPE_INT_COLOR_RGB8, 123456);
-  EntryAndValue b(0, android::Res_value::TYPE_INT_COLOR_ARGB8, 123456);
-
-  EntryAndValue x(0, android::Res_value::TYPE_DIMENSION, 100);
-  EntryAndValue y(0, android::Res_value::TYPE_FRACTION, 200);
-  EntryAndValue z(0, android::Res_value::TYPE_INT_DEC, 666);
-
-  // 0x7f010000
-  type_definer->add_empty(&default_config);
-  type_definer->add(&land_config, {(uint8_t*)&a, sizeof(EntryAndValue)});
-  type_definer->add(&xxhdpi_config, {(uint8_t*)&b, sizeof(EntryAndValue)});
-  // 0x7f010001, make it the reverse of the above (not equal)
-  type_definer->add_empty(&default_config);
-  type_definer->add(&land_config, {(uint8_t*)&b, sizeof(EntryAndValue)});
-  type_definer->add(&xxhdpi_config, {(uint8_t*)&a, sizeof(EntryAndValue)});
-  // 0x7f010002
-  type_definer->add(&default_config, {(uint8_t*)&x, sizeof(EntryAndValue)});
-  type_definer->add(&land_config, {(uint8_t*)&y, sizeof(EntryAndValue)});
-  type_definer->add(&xxhdpi_config, {(uint8_t*)&z, sizeof(EntryAndValue)});
-  // 0x7f010003
-  type_definer->add_empty(&default_config);
-  type_definer->add(&land_config, {(uint8_t*)&b, sizeof(EntryAndValue)});
-  type_definer->add_empty(&xxhdpi_config);
-  // 0x7f010004, should be equal to 0x7f010002
-  type_definer->add(&default_config, {(uint8_t*)&x, sizeof(EntryAndValue)});
-  type_definer->add(&land_config, {(uint8_t*)&y, sizeof(EntryAndValue)});
-  type_definer->add(&xxhdpi_config, {(uint8_t*)&z, sizeof(EntryAndValue)});
-
-  android::Vector<char> out;
-  table_builder->serialize(&out);
-
-  auto tmp_dir = redex::make_tmp_dir("ResTable_ValueEquality%%%%%%%%");
-  auto dest_file_path = tmp_dir.path + "/resources.arsc";
-  write_to_file(dest_file_path, out);
-  ResourcesArscFile arsc_file(dest_file_path);
-
-  // Obvious sanity checks
-  EXPECT_TRUE(arsc_file.resource_value_identical(0x7f010000, 0x7f010000));
-  EXPECT_TRUE(arsc_file.resource_value_identical(0x7f010001, 0x7f010001));
-  EXPECT_TRUE(arsc_file.resource_value_identical(0x7f010002, 0x7f010002));
-  EXPECT_TRUE(arsc_file.resource_value_identical(0x7f010003, 0x7f010003));
-  EXPECT_TRUE(arsc_file.resource_value_identical(0x7f010004, 0x7f010004));
-
-  // Real checks
-  EXPECT_TRUE(arsc_file.resource_value_identical(0x7f010002, 0x7f010004));
-
-  EXPECT_FALSE(arsc_file.resource_value_identical(0x7f010000, 0x7f010001));
-  EXPECT_FALSE(arsc_file.resource_value_identical(0x7f010000, 0x7f010002));
-  EXPECT_FALSE(arsc_file.resource_value_identical(0x7f010001, 0x7f010002));
-  EXPECT_FALSE(arsc_file.resource_value_identical(0x7f010002, 0x7f010003));
-}
-
 TEST(ResTable, CanonicalEntryData) {
   auto do_validation = [&](const std::string& file_path,
                            uint32_t type_expected_size) {
-    auto table_dump = aapt_dump_and_parse(file_path);
-    ASSERT_ID_VALUES(table_dump, "default", 0x7f010000, id_0);
-    ASSERT_ID_VALUES(table_dump, "default", 0x7f010001, id_1);
-    ASSERT_ID_VALUES(table_dump, "default", 0x7f010002, id_1);
-    ASSERT_ID_VALUES(table_dump, "default", 0x7f010003, id_1);
-    ASSERT_ID_VALUES(table_dump, "default", 0x7f010004, id_2);
-    ASSERT_ID_VALUES(table_dump, "default", 0x7f010005, id_2);
+    auto file = RedexMappedFile::open(file_path);
+    android::ResTable arsc_table;
+    EXPECT_EQ(arsc_table.add(file.const_data(), file.size()), 0)
+        << "Could not read table!";
+    ASSERT_ID_VALUES(arsc_table, 0x7f010000, id_0);
+    ASSERT_ID_VALUES(arsc_table, 0x7f010001, id_1);
+    ASSERT_ID_VALUES(arsc_table, 0x7f010002, id_1);
+    ASSERT_ID_VALUES(arsc_table, 0x7f010003, id_1);
+    ASSERT_ID_VALUES(arsc_table, 0x7f010004, id_2);
+    ASSERT_ID_VALUES(arsc_table, 0x7f010005, id_2);
 
     // Assert the size of the ResTable_type for the id table
-    auto file = RedexMappedFile::open(file_path);
     apk::TableParser parser;
     parser.visit((void*)file.const_data(), file.size());
     auto type_info = parser.m_package_types.begin()->second.at(0);
@@ -1308,93 +970,4 @@ TEST(ResTable, CanonicalEntryData) {
   auto projector_canon_path = tmp_dir.path + "/projector_canon.arsc";
   write_to_file(projector_canon_path, out);
   do_validation(projector_canon_path, expected_size_canon);
-}
-
-TEST(ResTable, GetStringsByName) {
-  // Make the strangest hypothetical table that could exist (string with values
-  // in multiple configs, references with cycles, etc).
-  auto pool_flags = android::ResStringPool_header::UTF8_FLAG;
-  auto global_strings_builder =
-      std::make_shared<arsc::ResStringPoolBuilder>(pool_flags);
-  global_strings_builder->add_string("a");
-  global_strings_builder->add_string("b");
-  global_strings_builder->add_string("c");
-  global_strings_builder->add_string("d");
-  global_strings_builder->add_string("e");
-  auto key_strings_builder =
-      std::make_shared<arsc::ResStringPoolBuilder>(pool_flags);
-  key_strings_builder->add_string("first");
-  key_strings_builder->add_string("second");
-  key_strings_builder->add_string("third");
-  key_strings_builder->add_string("fourth");
-  auto type_strings_builder =
-      std::make_shared<arsc::ResStringPoolBuilder>(pool_flags);
-  type_strings_builder->add_string("string");
-
-  auto package_builder =
-      std::make_shared<arsc::ResPackageBuilder>(&package_header);
-  package_builder->set_key_strings(key_strings_builder);
-  package_builder->set_type_strings(type_strings_builder);
-
-  auto table_builder = std::make_shared<arsc::ResTableBuilder>();
-  table_builder->set_global_strings(global_strings_builder);
-  table_builder->add_package(package_builder);
-
-  std::vector<android::ResTable_config*> string_configs = {&default_config,
-                                                           &land_config};
-  std::vector<uint32_t> string_flags = {
-      0, android::ResTable_config::CONFIG_ORIENTATION,
-      android::ResTable_config::CONFIG_ORIENTATION,
-      android::ResTable_config::CONFIG_ORIENTATION};
-  auto type_definer = std::make_shared<arsc::ResTableTypeDefiner>(
-      package_header.id, 1, string_configs, string_flags);
-  package_builder->add_type(type_definer);
-
-  EntryAndValue first(0, android::Res_value::TYPE_STRING, 0);
-  type_definer->add(&default_config, {(uint8_t*)&first, sizeof(EntryAndValue)});
-  type_definer->add_empty(&land_config);
-
-  EntryAndValue second(1, android::Res_value::TYPE_STRING, 1);
-  EntryAndValue second_land(1, android::Res_value::TYPE_STRING, 2);
-  type_definer->add(&default_config,
-                    {(uint8_t*)&second, sizeof(EntryAndValue)});
-  type_definer->add(&land_config,
-                    {(uint8_t*)&second_land, sizeof(EntryAndValue)});
-
-  // These next two entries are diabolical as some of their entries will be
-  // cyclic.
-  EntryAndValue third(2, android::Res_value::TYPE_STRING, 3);
-  EntryAndValue third_land(2, android::Res_value::TYPE_REFERENCE, 0x7f010003);
-  type_definer->add(&default_config, {(uint8_t*)&third, sizeof(EntryAndValue)});
-  type_definer->add(&land_config,
-                    {(uint8_t*)&third_land, sizeof(EntryAndValue)});
-
-  EntryAndValue fourth(3, android::Res_value::TYPE_REFERENCE, 0x7f010002);
-  EntryAndValue fourth_land(3, android::Res_value::TYPE_STRING, 4);
-  type_definer->add(&default_config,
-                    {(uint8_t*)&fourth, sizeof(EntryAndValue)});
-  type_definer->add(&land_config,
-                    {(uint8_t*)&fourth_land, sizeof(EntryAndValue)});
-
-  android::Vector<char> out;
-  table_builder->serialize(&out);
-
-  auto tmp_dir = redex::make_tmp_dir("ResTable_GetStringsByName%%%%%%%%");
-  auto arsc_path = tmp_dir.path + "/resources.arsc";
-  write_to_file(arsc_path, out);
-
-  ResourcesArscFile arsc_file(arsc_path);
-  auto vec = arsc_file.get_resource_strings_by_name("first");
-  EXPECT_EQ(vec.size(), 1);
-  EXPECT_STREQ(vec[0].c_str(), "a");
-  vec = arsc_file.get_resource_strings_by_name("second");
-  EXPECT_EQ(vec.size(), 2);
-  EXPECT_STREQ(vec[0].c_str(), "b");
-  EXPECT_STREQ(vec[1].c_str(), "c");
-  vec = arsc_file.get_resource_strings_by_name("third");
-  EXPECT_EQ(vec.size(), 2);
-  EXPECT_STREQ(vec[0].c_str(), "d");
-  EXPECT_STREQ(vec[1].c_str(), "e");
-  vec = arsc_file.get_resource_strings_by_name("blah");
-  EXPECT_EQ(vec.size(), 0);
 }

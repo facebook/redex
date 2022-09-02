@@ -7,7 +7,6 @@
 
 #include "ReachableClasses.h"
 
-#include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
 #include <chrono>
 #include <fstream>
@@ -144,8 +143,8 @@ void analyze_reflection(const Scope& scope) {
   const auto ATOMIC_REF_FIELD_UPDATER =
       "Ljava/util/concurrent/atomic/AtomicReferenceFieldUpdater;";
 
-  const std::unordered_map<std::string_view,
-                           std::unordered_map<std::string_view, ReflectionType>>
+  const std::unordered_map<std::string,
+                           std::unordered_map<std::string, ReflectionType>>
       refls = {
           {JAVA_LANG_CLASS,
            {
@@ -199,14 +198,14 @@ void analyze_reflection(const Scope& scope) {
       }
 
       // See if it matches something in refls
-      auto method_class_name =
+      auto& method_name = insn->get_method()->get_name()->str();
+      auto& method_class_name =
           insn->get_method()->get_class()->get_name()->str();
       auto method_map = refls.find(method_class_name);
       if (method_map == refls.end()) {
         continue;
       }
 
-      auto method_name = insn->get_method()->get_name()->str();
       auto refl_entry = method_map->second.find(method_name);
       if (refl_entry == method_map->second.end()) {
         continue;
@@ -246,10 +245,10 @@ void analyze_reflection(const Scope& scope) {
       std::lock_guard<std::mutex> l(mutation_mutex);
 
       TRACE(PGR, 4, "SRA ANALYZE: %s: type:%d %s.%s cls: %d %s %s str: %s",
-            str_copy(method_name).c_str(), refl_type,
-            str_copy(method_class_name).c_str(), str_copy(method_name).c_str(),
-            arg_cls->obj_kind, SHOW(arg_cls->dex_type),
-            SHOW(arg_cls->dex_string), SHOW(arg_str_value));
+            insn->get_method()->get_name()->str().c_str(), refl_type,
+            method_class_name.c_str(), method_name.c_str(), arg_cls->obj_kind,
+            SHOW(arg_cls->dex_type), SHOW(arg_cls->dex_string),
+            SHOW(arg_str_value));
 
       switch (refl_type) {
       case GET_FIELD:
@@ -700,9 +699,9 @@ void init_reachable_classes(const Scope& scope,
 
     std::unordered_set<DexClass*> reflected_package_classes;
     for (auto clazz : scope) {
-      const auto name = clazz->get_type()->get_name()->str();
+      const char* cname = clazz->get_type()->get_name()->c_str();
       for (const auto& pkg : config.reflected_package_names) {
-        if (boost::starts_with(name, pkg)) {
+        if (starts_with(cname, pkg.c_str())) {
           reflected_package_classes.insert(clazz);
           continue;
         }

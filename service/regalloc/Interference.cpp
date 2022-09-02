@@ -7,8 +7,10 @@
 
 #include "Interference.h"
 
+#include "ControlFlow.h"
 #include "DexOpcode.h"
 #include "DexUtil.h"
+#include "IRCode.h"
 #include "MonotonicFixpointIterator.h"
 #include "Show.h"
 
@@ -134,12 +136,12 @@ void Graph::remove_node(reg_t u) {
   u_node.m_props.reset(Node::ACTIVE);
 }
 
-size_t dest_bit_width(const cfg::InstructionIterator& it) {
+size_t dest_bit_width(const IRList::iterator& it) {
   auto insn = it->insn;
   auto op = insn->opcode();
   if (opcode::is_a_move_result_pseudo(op)) {
     auto primary_op =
-        it.cfg().primary_instruction_of_move_result(it)->insn->opcode();
+        ir_list::primary_instruction_of_move_result_pseudo(it)->opcode();
     if (primary_op == OPCODE_CHECK_CAST) {
       return 4;
     } else {
@@ -183,7 +185,7 @@ vreg_t max_value_for_src(const IRInstruction* insn,
   return max_value;
 }
 
-void GraphBuilder::update_node_constraints(const cfg::InstructionIterator& it,
+void GraphBuilder::update_node_constraints(const IRList::iterator& it,
                                            const RangeSet& range_set,
                                            Graph* graph) {
   auto insn = it->insn;
@@ -266,15 +268,16 @@ void GraphBuilder::update_node_constraints(const cfg::InstructionIterator& it,
  * the move gets inserted, it does not clobber any live registers.
  */
 Graph GraphBuilder::build(const LivenessFixpointIterator& fixpoint_iter,
-                          cfg::ControlFlowGraph& cfg,
+                          IRCode* code,
                           reg_t initial_regs,
                           const RangeSet& range_set) {
   Graph graph;
-  auto ii = cfg::InstructionIterable(cfg);
+  auto ii = InstructionIterable(code);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
-    GraphBuilder::update_node_constraints(it, range_set, &graph);
+    GraphBuilder::update_node_constraints(it.unwrap(), range_set, &graph);
   }
 
+  auto& cfg = code->cfg();
   for (cfg::Block* block : cfg.blocks()) {
     LivenessDomain live_out = fixpoint_iter.get_live_out_vars_at(block);
     for (auto it = block->rbegin(); it != block->rend(); ++it) {
@@ -310,10 +313,7 @@ Graph GraphBuilder::build(const LivenessFixpointIterator& fixpoint_iter,
         }
       }
       if (op == OPCODE_CHECK_CAST) {
-        auto move_result =
-            cfg.move_result_of(block->to_cfg_instruction_iterator(*it));
-        always_assert(!move_result.is_end());
-        IRInstruction* move_result_pseudo = move_result->insn;
+        auto move_result_pseudo = std::prev(it)->insn;
         for (auto reg : live_out.elements()) {
           graph.add_edge(move_result_pseudo->dest(), reg);
         }
@@ -344,7 +344,7 @@ Graph GraphBuilder::build(const LivenessFixpointIterator& fixpoint_iter,
     assert_log(!node.m_type_domain.is_bottom(),
                "Type violation of v%u in code:\n%s\n",
                reg,
-               SHOW(cfg));
+               SHOW(code));
   }
   return graph;
 }

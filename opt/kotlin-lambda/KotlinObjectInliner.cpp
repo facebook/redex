@@ -39,7 +39,7 @@ void dump_cls(DexClass* cls) {
 // check if CLS is an inner class and return the outer class. Return nullptr if
 // this is not an inner class.
 DexClass* get_outer_class(const DexClass* cls) {
-  const auto cls_name = cls->get_name()->str();
+  const std::string& cls_name = cls->get_name()->str();
   auto cash_idx = cls_name.find_last_of('$');
   if (cash_idx == std::string::npos) {
     // this is not an inner class

@@ -17,7 +17,6 @@
 #include "DexLoader.h"
 #include "Inliner.h"
 #include "InlinerConfig.h"
-#include "RedexContext.h"
 #include "RedexTest.h"
 #include "ScopedCFG.h"
 #include "Show.h"
@@ -65,11 +64,10 @@ class SourceBlocksTest : public RedexIntegrationTest {
       auto vec = source_blocks::gather_source_blocks(block);
       for (auto* sb : vec) {
         oss << " " << sb->id;
-        if (sb->vals_size > 0) {
+        if (!sb->vals.empty()) {
           oss << "(";
           bool first_val = true;
-          for (size_t i = 0; i < sb->vals_size; i++) {
-            auto& val = sb->vals[i];
+          for (const auto& val : sb->vals) {
             if (!first_val) {
               oss << "|";
             }
@@ -219,8 +217,7 @@ TEST_F(SourceBlocksTest, source_blocks) {
             continue;
           }
           ASSERT_TRUE(mie.src_block != nullptr);
-          seen_methods.insert(
-              DexMethod::get_method(mie.src_block->src->str_copy()));
+          seen_methods.insert(DexMethod::get_method(mie.src_block->src->str()));
         }
       }
     }
@@ -327,8 +324,6 @@ TEST_F(SourceBlocksTest, source_blocks_insert_after_exc) {
 }
 
 TEST_F(SourceBlocksTest, scaling) {
-  g_redex->set_sb_interaction_index({{"Fake", 0}});
-
   auto type =
       DexType::get_type("Lcom/facebook/redextest/SourceBlocksTest$Scaling;");
   ASSERT_NE(type, nullptr);

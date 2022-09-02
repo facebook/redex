@@ -28,7 +28,7 @@ class OriginalNamePass : public Pass {
       PassManager& mgr,
       const ClassHierarchy& ch,
       Scope& scope,
-      std::unordered_map<const DexType*, std::string_view>* hierarchies);
+      std::unordered_map<const DexType*, std::string>* hierarchies);
 
   std::vector<std::string> m_hierarchy_roots;
 };

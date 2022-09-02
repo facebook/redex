@@ -51,7 +51,7 @@ TEST_F(LocalPointersTest, domainOperations) {
 
 ptrs::InvokeToSummaryMap mark_all_invokes_as_non_escaping(const IRCode& code) {
   ptrs::InvokeToSummaryMap invoke_to_summary_map;
-  for (const auto& mie : InstructionIterable(code.cfg())) {
+  for (const auto& mie : InstructionIterable(code)) {
     if (opcode::is_an_invoke(mie.insn->opcode())) {
       invoke_to_summary_map.emplace(mie.insn, ptrs::EscapeSummary({}));
     }
@@ -72,7 +72,7 @@ TEST_F(LocalPointersTest, simple) {
     )
   )");
 
-  code->build_cfg();
+  code->build_cfg(/* editable */ false);
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
 
@@ -113,7 +113,7 @@ TEST_F(LocalPointersTest, aliasEscape) {
     )
   )");
 
-  code->build_cfg();
+  code->build_cfg(/* editable */ false);
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
 
@@ -147,7 +147,7 @@ TEST_F(LocalPointersTest, filledNewArrayEscape) {
     )
   )");
 
-  code->build_cfg();
+  code->build_cfg(/* editable */ false);
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
 
@@ -175,7 +175,7 @@ TEST_F(LocalPointersTest, generateEscapeSummary) {
     )
   )");
 
-  code->build_cfg();
+  code->build_cfg(/* editable */ false);
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   ptrs::FixpointIterator fp_iter(cfg);
@@ -207,7 +207,7 @@ TEST_F(LocalPointersTest, generateEscapeSummary2) {
     )
   )");
 
-  code->build_cfg();
+  code->build_cfg(/* editable */ false);
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   ptrs::FixpointIterator fp_iter(cfg);
@@ -238,7 +238,7 @@ TEST_F(LocalPointersTest, collectExitingPointersWithThrow) {
     )
   )");
 
-  code->build_cfg();
+  code->build_cfg(/* editable */ false);
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   ptrs::FixpointIterator fp_iter(cfg);
@@ -284,7 +284,7 @@ TEST_F(LocalPointersTest, returnFreshValue) {
       )
     )");
 
-    code->build_cfg();
+    code->build_cfg(/* editable */ false);
     auto& cfg = code->cfg();
     cfg.calculate_exit_block();
 
@@ -309,13 +309,13 @@ TEST_F(LocalPointersTest, returnFreshValue) {
       )
     )");
 
-    code->build_cfg();
+    code->build_cfg(/* editable */ false);
     auto& cfg = code->cfg();
     cfg.calculate_exit_block();
 
     ptrs::InvokeToSummaryMap invoke_to_summary_map;
     const IRInstruction* invoke_insn{nullptr};
-    for (const auto& mie : InstructionIterable(cfg)) {
+    for (const auto& mie : InstructionIterable(code.get())) {
       auto insn = mie.insn;
       if (opcode::is_an_invoke(insn->opcode())) {
         invoke_insn = insn;
@@ -351,7 +351,7 @@ TEST_F(LocalPointersTest, returnEscapedValue) {
       )
     )");
 
-    code->build_cfg();
+    code->build_cfg(/* editable */ false);
     auto& cfg = code->cfg();
     cfg.calculate_exit_block();
 
@@ -375,13 +375,13 @@ TEST_F(LocalPointersTest, returnEscapedValue) {
       )
     )");
 
-    code->build_cfg();
+    code->build_cfg(/* editable */ false);
     auto& cfg = code->cfg();
     cfg.calculate_exit_block();
 
     ptrs::InvokeToSummaryMap invoke_to_summary_map;
     const IRInstruction* invoke_insn{nullptr};
-    for (const auto& mie : InstructionIterable(cfg)) {
+    for (const auto& mie : InstructionIterable(code.get())) {
       auto insn = mie.insn;
       if (opcode::is_an_invoke(insn->opcode())) {
         invoke_insn = insn;

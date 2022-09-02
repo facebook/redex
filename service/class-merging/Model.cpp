@@ -1042,7 +1042,7 @@ void Model::collect_methods() {
                 8,
                 "non virtual scope %s (%s)",
                 virt_scope->methods[0]
-                    .first->get_deobfuscated_name_or_empty_copy()
+                    .first->get_deobfuscated_name_or_empty()
                     .c_str(),
                 SHOW(virt_scope->methods[0].first->get_name()));
           merger.non_virt_methods.emplace_back(virt_scope->methods[0].first);
@@ -1116,7 +1116,7 @@ void Model::add_interface_scope(MergerType& merger,
       TRACE(CLMG,
             8,
             "add interface method %s (%s)",
-            vmeth.first->get_deobfuscated_name_or_empty_copy().c_str(),
+            vmeth.first->get_deobfuscated_name_or_empty().c_str(),
             SHOW(vmeth.first->get_name()));
       intf_meths.methods.emplace_back(vmeth.first);
     }
@@ -1172,7 +1172,7 @@ void Model::distribute_virtual_methods(
             SHOW(virt_scope->type),
             virt_scope->methods.size(),
             virt_scope->methods[0]
-                .first->get_deobfuscated_name_or_empty_copy()
+                .first->get_deobfuscated_name_or_empty()
                 .c_str(),
             SHOW(virt_scope->methods[0].first->get_name()));
       bool is_interface = !virt_scope->interfaces.empty();
@@ -1192,7 +1192,7 @@ void Model::distribute_virtual_methods(
         TRACE(CLMG,
               9,
               "method %s (%s)",
-              vmeth.first->get_deobfuscated_name_or_empty_copy().c_str(),
+              vmeth.first->get_deobfuscated_name_or_empty().c_str(),
               SHOW(vmeth.first->get_name()));
         if (is_interface) {
           if (insert_list == nullptr) {
@@ -1200,7 +1200,7 @@ void Model::distribute_virtual_methods(
             TRACE(CLMG,
                   8,
                   "add interface method %s (%s) w/ overridden_meth %s",
-                  vmeth.first->get_deobfuscated_name_or_empty_copy().c_str(),
+                  vmeth.first->get_deobfuscated_name_or_empty().c_str(),
                   SHOW(vmeth.first->get_name()),
                   SHOW(overridden_meth));
             merger->second.intfs_methods.push_back(

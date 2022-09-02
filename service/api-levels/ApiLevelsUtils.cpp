@@ -28,7 +28,7 @@ namespace {
  */
 std::string get_simple_deobfuscated_name(const DexType* type) {
   auto* cls = type_class(type);
-  std::string_view full_name;
+  std::string full_name;
   if (cls) {
     full_name = cls->get_deobfuscated_name_or_empty();
   }
@@ -38,8 +38,8 @@ std::string get_simple_deobfuscated_name(const DexType* type) {
 
   size_t simple_name_pos = full_name.rfind('/');
   always_assert(simple_name_pos != std::string::npos);
-  return str_copy(full_name.substr(simple_name_pos + 1,
-                                   full_name.size() - simple_name_pos - 2));
+  return full_name.substr(simple_name_pos + 1,
+                          full_name.size() - simple_name_pos - 2);
 }
 
 /**
@@ -393,10 +393,10 @@ void ApiLevelsUtils::load_framework_api(const Scope& scope) {
 
     // NOTE: We are currently excluding classes outside of
     //       android package. We might reconsider.
-    const auto framework_cls_str = framework_cls->str();
+    const auto& framework_cls_str = framework_cls->str();
     if (!boost::starts_with(framework_cls_str, "Landroid")) {
       TRACE(API_UTILS, 5, "Excluding %s from possible replacement.",
-            str_copy(framework_cls_str).c_str());
+            framework_cls_str.c_str());
       it = framework_cls_to_api.erase(it);
     } else {
       ++it;
@@ -419,7 +419,7 @@ void ApiLevelsUtils::load_framework_api(const Scope& scope) {
       continue;
     }
 
-    const auto cls_str = cls->get_deobfuscated_name_or_empty();
+    const auto& cls_str = cls->get_deobfuscated_name_or_empty();
 
     // TODO(emmasevastian): Better way of detecting release libraries ...
     if (boost::starts_with(cls_str, "Landroidx")) {

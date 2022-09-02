@@ -9,24 +9,20 @@
 
 #include "DexUtil.h"
 #include "IRCode.h"
-#include "ScopedCFG.h"
 #include "Show.h"
 
 namespace {
 void drop_this(DexMethod* method) {
   auto code = method->get_code();
   if (!code) return;
-  cfg::ScopedCFG cfg(code);
   auto nregs = code->get_registers_size();
   assert_log(nregs >= 1, "Too few regs: %s\n", SHOW(method));
   code->set_registers_size(nregs - 1);
-  cfg::Block* first_block_with_insns = cfg->get_first_block_with_insns();
-  auto this_insn = first_block_with_insns->get_first_insn();
-  always_assert(opcode::is_a_load_param(this_insn->insn->opcode()));
-  auto const this_reg = this_insn->insn->dest();
-  first_block_with_insns->remove_insn(this_insn);
-
-  for (auto& mie : InstructionIterable(*cfg)) {
+  auto params = code->get_param_instructions();
+  auto ii = InstructionIterable(params);
+  auto const this_reg = ii.begin()->insn->dest();
+  code->remove_opcode(ii.begin().unwrap());
+  for (auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
     if (insn->has_dest()) {
       auto dest = insn->dest();

@@ -16,8 +16,6 @@
 #include "CppUtil.h"
 #include "GlobalConfig.h"
 #include "Show.h"
-#include "StlUtil.h"
-#include "WorkQueue.h"
 
 using namespace method_profiles;
 
@@ -46,8 +44,6 @@ bool parse_cells(std::string_view line, const Func& parse_cell) {
 bool empty_column(std::string_view sv) { return sv.empty() || sv == "\n"; }
 
 } // namespace
-
-AccumulatingTimer MethodProfiles::s_process_unresolved_lines_timer;
 
 const StatsMap& MethodProfiles::method_stats(
     const std::string& interaction_id) const {
@@ -91,7 +87,7 @@ bool MethodProfiles::parse_stats_file(const std::string& csv_filename) {
     if (m_mode == NONE) {
       success = parse_header(line);
     } else {
-      success = parse_line(std::move(line));
+      success = parse_line(line);
     }
     if (!success) {
       return false;
@@ -177,10 +173,11 @@ bool MethodProfiles::parse_metadata(std::string_view line) {
   return true;
 }
 
-std::optional<MethodProfiles::ParsedMain> MethodProfiles::parse_main_internal(
-    std::string_view line) {
+bool MethodProfiles::parse_main(std::string_view line) {
   always_assert(m_mode == MAIN);
-  ParsedMain result;
+  Stats stats;
+  std::string interaction_id;
+  DexMethodRef* ref = nullptr;
   auto parse_cell = [&](std::string_view cell, uint32_t col) -> bool {
     switch (col) {
     case INDEX:
@@ -188,42 +185,37 @@ std::optional<MethodProfiles::ParsedMain> MethodProfiles::parse_main_internal(
       // the file)
       return true;
     case NAME:
-      // We move the string to a unique_ptr, so that its location is pinned, and
-      // the string_views of the mdt are defined.
-      result.ref_str = std::make_unique<std::string>(cell);
-      result.mdt =
-          dex_member_refs::parse_method</*kCheckFormat=*/true>(*result.ref_str);
-      result.ref = DexMethod::get_method(*result.mdt);
-      if (result.ref == nullptr) {
+      ref = DexMethod::get_method</*kCheckFormat=*/true>(std::string(cell));
+      if (ref == nullptr) {
         TRACE(METH_PROF, 6, "failed to resolve %s", SHOW(cell));
       }
       return true;
     case APPEAR100:
-      result.stats.appear_percent = parse_double(cell);
+      stats.appear_percent = parse_double(cell);
       return true;
     case APPEAR_NUMBER:
       // Don't need this raw data. appear_percent is the same thing but
       // normalized
       return true;
     case AVG_CALL:
-      result.stats.call_count = parse_double(cell);
+      stats.call_count = parse_double(cell);
       return true;
     case AVG_ORDER:
       // Don't need this raw data. order_percent is the same thing but
       // normalized
       return true;
     case AVG_RANK100:
-      result.stats.order_percent = parse_double(cell);
+      stats.order_percent = parse_double(cell);
       return true;
     case MIN_API_LEVEL: {
-      result.stats.min_api_level = parse_int<int16_t>(cell);
+      stats.min_api_level = parse_int<int16_t>(cell);
       return true;
     }
     default:
       const auto& search = m_optional_columns.find(col);
       if (search != m_optional_columns.end()) {
         if (search->second == "interaction") {
-          result.line_interaction_id = std::make_unique<std::string>(cell);
+          interaction_id = cell;
           return true;
         }
       }
@@ -234,51 +226,30 @@ std::optional<MethodProfiles::ParsedMain> MethodProfiles::parse_main_internal(
 
   bool success = parse_cells(line, parse_cell);
   if (!success) {
-    return std::nullopt;
-  }
-  return std::move(result);
-}
-
-bool MethodProfiles::apply_main_internal_result(ParsedMain v,
-                                                std::string* interaction_id) {
-  if (v.ref != nullptr) {
-    if (v.line_interaction_id) {
-      // Interaction IDs from the current row have priority over the interaction
-      // id from the top of the file. This shouldn't happen in practice, but
-      // this is the conservative approach.
-      interaction_id = v.line_interaction_id.get();
-    }
-    always_assert(interaction_id);
-    TRACE(METH_PROF, 6, "(%s, %s) -> {%f, %f, %f, %d}", SHOW(v.ref),
-          interaction_id->c_str(), v.stats.appear_percent, v.stats.call_count,
-          v.stats.order_percent, v.stats.min_api_level);
-    m_method_stats[*interaction_id].emplace(v.ref, v.stats);
-    return true;
-  } else if (v.ref_str == nullptr) {
-    std::cerr << "FAILED to parse line. Missing name column\n";
     return false;
+  }
+  if (interaction_id.empty()) {
+    // Interaction IDs from the current row have priority over the interaction
+    // id from the top of the file. This shouldn't happen in practice, but this
+    // is the conservative approach.
+    interaction_id = m_interaction_id;
+  }
+  if (ref != nullptr) {
+    TRACE(METH_PROF, 6, "(%s, %s) -> {%f, %f, %f, %d}", SHOW(ref),
+          interaction_id.c_str(), stats.appear_percent, stats.call_count,
+          stats.order_percent, stats.min_api_level);
+    m_method_stats[interaction_id].emplace(ref, stats);
   } else {
-    always_assert(interaction_id);
-    if (!v.line_interaction_id) {
-      v.line_interaction_id = std::make_unique<std::string>(*interaction_id);
-    }
-    m_unresolved_lines.emplace_back(std::move(v));
-    return false;
+    std::string copy(line);
+    m_unresolved_lines[interaction_id].push_back(copy);
+    TRACE(METH_PROF, 6, "unresolved: %s", copy.c_str());
   }
-}
-
-bool MethodProfiles::parse_main(std::string line, std::string* interaction_id) {
-  auto result = parse_main_internal(line);
-  if (!result) {
-    return false;
-  }
-  (void)apply_main_internal_result(std::move(result.value()), interaction_id);
   return true;
 }
 
-bool MethodProfiles::parse_line(std::string line) {
+bool MethodProfiles::parse_line(std::string_view line) {
   if (m_mode == MAIN) {
-    return parse_main(std::move(line), &m_interaction_id);
+    return parse_main(line);
   } else if (m_mode == METADATA) {
     return parse_metadata(line);
   } else {
@@ -296,43 +267,16 @@ boost::optional<uint32_t> MethodProfiles::get_interaction_count(
   }
 }
 
-double MethodProfiles::get_process_unresolved_lines_seconds() {
-  return s_process_unresolved_lines_timer.get_seconds();
-}
-
 void MethodProfiles::process_unresolved_lines() {
-  auto timer_scope = s_process_unresolved_lines_timer.scope();
-
-  std::set<ParsedMain*> resolved;
-  std::mutex resolved_mutex;
-  workqueue_run_for<size_t>(0, m_unresolved_lines.size(), [&](size_t index) {
-    auto& parsed_main = m_unresolved_lines.at(index);
-    always_assert(parsed_main.ref_str != nullptr);
-    always_assert(parsed_main.mdt);
-    parsed_main.ref = DexMethod::get_method(*parsed_main.mdt);
-    if (parsed_main.ref == nullptr) {
-      TRACE(METH_PROF, 6, "failed to resolve %s", SHOW(*parsed_main.ref_str));
-    } else {
-      std::lock_guard<std::mutex> lock_guard(resolved_mutex);
-      resolved.emplace(&parsed_main);
+  auto unresolved_lines = std::move(m_unresolved_lines);
+  m_unresolved_lines.clear();
+  for (auto& pair : unresolved_lines) {
+    m_interaction_id = pair.first;
+    for (auto& line : pair.second) {
+      bool success = parse_main(line);
+      always_assert(success);
     }
-  });
-  auto unresolved_lines = m_unresolved_lines.size();
-  // Note that resolved is ordered by the (addresses of the) unresolved lines,
-  // to ensure determinism
-  for (auto& parsed_main_ptr : resolved) {
-    auto interaction_id_ptr = &*parsed_main_ptr->line_interaction_id;
-    always_assert(parsed_main_ptr->ref != nullptr);
-    bool success = apply_main_internal_result(std::move(*parsed_main_ptr),
-                                              interaction_id_ptr);
-    always_assert(success);
   }
-  always_assert(unresolved_lines == m_unresolved_lines.size());
-  std20::erase_if(m_unresolved_lines, [&](auto& unresolved_line) {
-    return resolved.count(&unresolved_line);
-  });
-  always_assert(unresolved_lines - resolved.size() ==
-                m_unresolved_lines.size());
 
   size_t total_rows = 0;
   for (const auto& pair : m_method_stats) {
@@ -342,54 +286,6 @@ void MethodProfiles::process_unresolved_lines() {
         "After processing unresolved lines: MethodProfiles successfully parsed "
         "%zu rows; %zu unresolved lines",
         total_rows, unresolved_size());
-}
-
-std::unordered_set<dex_member_refs::MethodDescriptorTokens>
-MethodProfiles::get_unresolved_method_descriptor_tokens() const {
-  std::unordered_set<dex_member_refs::MethodDescriptorTokens> result;
-  for (auto& parsed_main : m_unresolved_lines) {
-    always_assert(parsed_main.mdt);
-    result.insert(*parsed_main.mdt);
-  }
-  return result;
-}
-
-void MethodProfiles::resolve_method_descriptor_tokens(
-    const std::unordered_map<dex_member_refs::MethodDescriptorTokens,
-                             std::vector<DexMethodRef*>>& map) {
-  size_t removed{0};
-  size_t added{0};
-  // Note that we don't remove m_unresolved_lines as we go, as the given map
-  // might reference its mdts.
-  std::unordered_set<std::string*> to_remove;
-  for (auto& parsed_main : m_unresolved_lines) {
-    always_assert(parsed_main.mdt);
-    auto it = map.find(*parsed_main.mdt);
-    if (it == map.end()) {
-      continue;
-    }
-    to_remove.insert(parsed_main.ref_str.get());
-    removed++;
-    for (auto method_ref : it->second) {
-      ParsedMain resolved_parsed_main{
-          std::make_unique<std::string>(*parsed_main.line_interaction_id),
-          /* ref_str */ nullptr,
-          /* mdt */ std::nullopt, method_ref, parsed_main.stats};
-      auto interaction_id_ptr = &*resolved_parsed_main.line_interaction_id;
-      always_assert(resolved_parsed_main.ref != nullptr);
-      bool success = apply_main_internal_result(std::move(resolved_parsed_main),
-                                                interaction_id_ptr);
-      always_assert(success);
-      added++;
-    }
-  }
-  std20::erase_if(m_unresolved_lines, [&to_remove](auto& parsed_main) {
-    return to_remove.count(parsed_main.ref_str.get());
-  });
-  TRACE(METH_PROF, 1,
-        "After resolving unresolved lines: %zu unresolved lines removed, %zu "
-        "rows added",
-        removed, added);
 }
 
 bool MethodProfiles::parse_header(std::string_view line) {
@@ -579,7 +475,7 @@ double dexmethods_profiled_comparator::get_method_sort_num(
 
 double dexmethods_profiled_comparator::get_method_sort_num_override(
     const DexMethod* method) {
-  const auto deobfname = method->get_deobfuscated_name_or_empty();
+  const std::string& deobfname = method->get_deobfuscated_name_or_empty();
   for (const std::string& substr : *m_allowlisted_substrings) {
     if (deobfname.find(substr) != std::string::npos) {
       return COLD_START_RANGE_BEGIN + RANGE_SIZE / 2;

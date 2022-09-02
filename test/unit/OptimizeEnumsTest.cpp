@@ -677,7 +677,6 @@ TEST_F(OptimizeEnumsTest, with_dead_null_handling) {
 
 optimize_enums::ParamSummary get_summary(const std::string& s_expr) {
   auto method = assembler::method_from_string(s_expr);
-  method->get_code()->build_cfg();
   return optimize_enums::calculate_param_summary(method,
                                                  type::java_lang_Object());
 }

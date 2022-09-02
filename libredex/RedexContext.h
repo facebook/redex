@@ -8,7 +8,6 @@
 #pragma once
 
 #include <array>
-#include <atomic>
 #include <boost/functional/hash.hpp>
 #include <cstring>
 #include <deque>
@@ -29,7 +28,6 @@
 
 class DexCallSite;
 class DexClass;
-class DexLocation;
 class DexDebugInstruction;
 class DexField;
 class DexFieldRef;
@@ -133,11 +131,6 @@ struct RedexContext {
                      const DexMethodSpec& new_spec,
                      bool rename_on_collision);
 
-  DexLocation* make_location(std::string_view store_name,
-                             std::string_view file_name);
-  DexLocation* get_location(std::string_view store_name,
-                            std::string_view file_name);
-
   PositionPatternSwitchManager* get_position_pattern_switch_manager();
 
   // Return false on unique classes
@@ -214,83 +207,10 @@ struct RedexContext {
   struct Strcmp;
   struct TruncatedStringHash;
 
-  // A thread-safe container for raw string storage
-  struct ConcurrentStringStorage {
-    static constexpr size_t n_slots = 11;
-    // A not thread-safe container, holding individually allocated buffers
-    struct Container {
-      struct Buffer {
-        const size_t allocated;
-        size_t used{0};
-        size_t remaining() const { return allocated - used; }
-        const std::unique_ptr<char[]> chars;
-        const Buffer* next;
-        Buffer(size_t size, Buffer* next)
-            : allocated(size),
-              chars(std::make_unique<char[]>(size)),
-              next(next) {}
-      };
-      // Default size for buffers, or 0 to create one perfectly sized buffer per
-      // allocation
-      const size_t default_size;
-      Buffer* buffer{nullptr};
-      explicit Container(size_t default_size) : default_size(default_size) {}
-      ~Container();
-      char* allocate(size_t length);
-    };
-    // A context for a temporarily acquired container that will be released to
-    // its owner when the context is destructed
-    struct Context {
-      ConcurrentStringStorage* owner;
-      size_t index;
-      Container* container;
-      ~Context();
-    };
-    struct Stats {
-      size_t allocated{0};
-      size_t used{0};
-      size_t containers{0};
-      size_t buffers{0};
-      size_t waited{0};
-      size_t contention{0};
-      size_t sorted{0};
-    };
-    const size_t default_buffer_size;
-    // Largest allowed individual allocation, or 0 to create arbitrarily
-    // perfectly sized buffers
-    const size_t max_allocation;
-    // How many containers can be active concurrently
-    const size_t max_containers;
-    std::atomic<size_t> created{0};
-    std::atomic<size_t> waited{0};
-    std::atomic<size_t> contention{0};
-    std::atomic<size_t> sorted{0};
-    struct Slot {
-      std::atomic<Container*> container{nullptr};
-      uint8_t padding[64 - sizeof(std::atomic<Container*>)];
-    };
-    std::array<Slot, n_slots> slots;
-    std::mutex pool_lock;
-    std::vector<std::unique_ptr<Container>> pool;
-    ConcurrentStringStorage(size_t default_buffer_size,
-                            size_t max_allocation,
-                            size_t max_containers)
-        : default_buffer_size(default_buffer_size),
-          max_allocation(max_allocation),
-          max_containers(std::max(max_containers, n_slots)) {}
-    Context get_context();
-    Stats get_stats() const;
-    ~ConcurrentStringStorage() {
-      for (auto& slot : slots) {
-        delete slot.container.load();
-      }
-    }
-  };
-
   // Hashing is expensive on large strings (long Java type names, string
   // literals), so we avoid using `std::unordered_map` directly.
   //
-  // For leaf-level storage we use `std::set` (i.e., a tree). In a sparse
+  // For leaf-level storage we use `std::map` (i.e., a tree). In a sparse
   // string keyset with large keys this performs better as only the suffix
   // until first change needs to be compared.
   //
@@ -303,41 +223,38 @@ struct RedexContext {
   // data besides the string data pointer, namely the UTF size. We can
   // avoid comparisons for different string lengths. The second layer
   // thus shards over it. We use the `ConcurrentContainer` sharding for
-  // this (see `ConcurrentProjectedStringSet`).
+  // this (see `ConcurrentProjectedStringMap`).
   //
   // The two layers give infrastructure overhead, however, the base size
-  // of a `std::set` and `ConcurrentContainer` is quite small.
-  //
-  // We use `const DexString*` for the keys, however, we have to be careful not
-  // to assume that the referenced `const char*` data is zero-terminated.
-  using StringSetKey = const DexString*;
-  struct StringSetKeyHash {
-    size_t operator()(StringSetKey k) const;
-  };
-  struct StringSetKeyCompare {
-    bool operator()(StringSetKey a, StringSetKey b) const;
+  // of a `std::map` and `ConcurrentContainer` is quite small.
+
+  using StringMapKey = std::string_view;
+  struct StringMapKeyHash {
+    size_t operator()(const StringMapKey& k) const { return k.size(); }
   };
 
   template <size_t n_slots = 31>
-  using ConcurrentProjectedStringSet = InsertOnlyConcurrentSetContainer<
-      std::set<StringSetKey, StringSetKeyCompare>,
-      StringSetKey,
-      StringSetKeyHash,
-      n_slots>;
+  using ConcurrentProjectedStringMap =
+      ConcurrentMapContainer<std::map<std::string_view, const DexString*>,
+                             StringMapKey,
+                             const DexString*,
+                             StringMapKeyHash,
+                             Identity,
+                             n_slots>;
 
   template <size_t n_slots, size_t m_slots>
-  struct LargeStringSet {
-    using AType = std::array<ConcurrentProjectedStringSet<n_slots>, m_slots>;
+  struct LargeStringMap {
+    using AType = std::array<ConcurrentProjectedStringMap<n_slots>, m_slots>;
 
-    AType sets;
+    AType map;
 
-    ConcurrentProjectedStringSet<n_slots>& at(StringSetKey k) {
-      size_t hashed = TruncatedStringHash()(k) % m_slots;
-      return sets[hashed];
+    ConcurrentProjectedStringMap<n_slots>& at(const StringMapKey& k) {
+      size_t hashed = TruncatedStringHash()(k.data(), k.size()) % m_slots;
+      return map[hashed];
     }
 
-    typename AType::iterator begin() { return sets.begin(); }
-    typename AType::iterator end() { return sets.end(); }
+    typename AType::iterator begin() { return map.begin(); }
+    typename AType::iterator end() { return map.end(); }
   };
 
   // Hash a 32-byte subsequence of a given string, offset by 32 bytes from the
@@ -350,16 +267,17 @@ struct RedexContext {
   // cache line (offset + hash_prefix_len <= 64) and hash enough of the string
   // to minimize the chance of duplicate sections
   struct TruncatedStringHash {
-    size_t operator()(StringSetKey k);
+    size_t operator()(const char* s, uint32_t string_size) {
+      constexpr size_t hash_prefix_len = 32;
+      constexpr size_t offset = 32;
+      size_t len = std::min<size_t>(string_size, offset + hash_prefix_len);
+      size_t start = std::max<int64_t>(0, int64_t(len - hash_prefix_len));
+      return boost::hash_range(s + start, s + len);
+    }
   };
 
   // DexString
-  LargeStringSet<31, 127> s_string_set;
-
-  // We maintain three kinds of raw string storage
-  ConcurrentStringStorage s_small_string_storage;
-  ConcurrentStringStorage s_medium_string_storage;
-  ConcurrentStringStorage s_large_string_storage;
+  LargeStringMap<31, 127> s_string_map;
 
   // DexType
   ConcurrentMap<const DexString*, DexType*> s_type_map;
@@ -387,28 +305,12 @@ struct RedexContext {
       s_typelist_map;
 
   // DexProto
-  struct DexProtoKeyHash {
-    size_t operator()(DexProto* k) const;
-  };
-  struct DexProtoKeyEqual {
-    bool operator()(DexProto* a, DexProto* b) const;
-  };
-  InsertOnlyConcurrentSet<DexProto*, DexProtoKeyHash, DexProtoKeyEqual>
-      s_proto_set;
+  using ProtoKey = std::pair<const DexType*, const DexTypeList*>;
+  ConcurrentMap<ProtoKey, DexProto*, boost::hash<ProtoKey>> s_proto_map;
 
   // DexMethod
   ConcurrentMap<DexMethodSpec, DexMethodRef*> s_method_map;
   std::mutex s_method_lock;
-
-  // DexLocation
-  using ClassLocationKey = std::pair<std::string_view, std::string_view>;
-  struct ClassLocationKeyHash {
-    size_t operator()(const ClassLocationKey& k) const {
-      return std::hash<std::string_view>()(k.second);
-    }
-  };
-  ConcurrentMap<ClassLocationKey, DexLocation*, ClassLocationKeyHash>
-      s_location_map;
 
   // DexPositionSwitch and DexPositionPattern
   PositionPatternSwitchManager* m_position_pattern_switch_manager{nullptr};

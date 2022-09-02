@@ -23,7 +23,6 @@
 #include "DexLoader.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
-#include "IOUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "InterDexPassPlugin.h"
@@ -535,9 +534,9 @@ void InterDex::emit_interdex_classes(
               dex_info.coldstart = false;
             }
           } else {
+            // if (end_marker == cold_start_end_marker) {
+            //   dex_info.coldstart = false;
             reset_coldstart_on_overflow = true;
-            TRACE(IDEX, 2, "Not flushing out marker %s to fill dex.",
-                  SHOW(type));
           }
         }
       }
@@ -559,14 +558,11 @@ void InterDex::emit_interdex_classes(
       if (res.overflowed && reset_coldstart_on_overflow) {
         dex_info.coldstart = false;
         reset_coldstart_on_overflow = false;
-        TRACE(IDEX, 2, "Flushing cold-start after non-flushed end marker.");
       }
     }
   }
 
   // Now emit the classes we omitted from the original coldstart set.
-  TRACE(IDEX, 2, "Emitting %zu interdex types (reset_coldstart_on_overflow=%d)",
-        interdex_types.size(), reset_coldstart_on_overflow);
   for (DexType* type : interdex_types) {
     DexClass* cls = type_class(type);
 
@@ -577,7 +573,6 @@ void InterDex::emit_interdex_classes(
       if (res.overflowed && reset_coldstart_on_overflow) {
         dex_info.coldstart = false;
         reset_coldstart_on_overflow = false;
-        TRACE(IDEX, 2, "Flushing cold-start after non-flushed end marker.");
       }
     }
   }
@@ -592,13 +587,6 @@ void InterDex::emit_interdex_classes(
   always_assert_log(!m_emitting_bg_set, "Unterminated background set marker");
 
   m_emitting_extended = false;
-
-  if (reset_coldstart_on_overflow) {
-    TRACE(IDEX, 2, "No overflow after cold-start dex, flushing now.");
-    flush_out_dex(dex_info, *canary_cls);
-    *canary_cls = get_canary_cls(dex_info);
-    dex_info.coldstart = false;
-  }
 }
 
 namespace {
@@ -1022,15 +1010,7 @@ void InterDex::run() {
   emit_interdex_classes(dex_info, m_interdex_types, unreferenced_classes,
                         &canary_cls);
 
-  auto json_classes = m_cross_dex_ref_minimizer.get_json_classes();
-  Json::Value json_first_dex;
-  if (json_classes) {
-    json_first_dex = m_cross_dex_ref_minimizer.get_json_class_indices(
-        m_dexes_structure.get_current_dex_classes());
-  }
-
   // Now emit the classes that weren't specified in the head or primary list.
-  auto remaining_classes_first_dex_idx = m_outdex.size();
   emit_remaining_classes(dex_info, &canary_cls);
 
   // Add whatever leftovers there are from plugins.
@@ -1049,26 +1029,6 @@ void InterDex::run() {
   if (!m_dexes_structure.get_current_dex_classes().empty()) {
     flush_out_dex(dex_info, canary_cls);
     canary_cls = nullptr;
-  }
-
-  if (json_classes) {
-    Json::Value json_solution = Json::arrayValue;
-    for (size_t dex_idx = remaining_classes_first_dex_idx;
-         dex_idx < m_outdex.size();
-         dex_idx++) {
-      auto& dex = m_outdex.at(dex_idx);
-      if (!dex.empty()) {
-        json_solution.append(
-            m_cross_dex_ref_minimizer.get_json_class_indices(dex));
-      }
-    }
-    Json::Value json_file;
-    json_file["first_dex"] = json_first_dex;
-    json_file["solution"] = json_solution;
-    json_file["classes"] = *json_classes;
-    write_string_to_file(
-        m_conf.metafile("interdex-cross-ref-minimization.json"),
-        json_file.toStyledString());
   }
 
   // Emit dex info manifest
@@ -1265,7 +1225,7 @@ void InterDex::flush_out_dex(DexInfo& dex_info, DexClass* canary_cls) {
     always_assert(canary_added);
 
     m_dex_infos.emplace_back(
-        std::make_tuple(canary_cls->get_name()->str_copy(), dex_info));
+        std::make_tuple(canary_cls->get_name()->str(), dex_info));
   }
 
   std::unordered_set<DexClass*> additional_classes;

@@ -590,6 +590,31 @@ bool has_only_argument(DexMethod* method, DexType* type) {
   return true;
 }
 
+IROpcode get_iget_type(DexField* field) {
+  switch (type::to_datatype(field->get_type())) {
+  case DataType::Array:
+  case DataType::Object:
+    return OPCODE_IGET_OBJECT;
+  case DataType::Boolean:
+    return OPCODE_IGET_BOOLEAN;
+  case DataType::Byte:
+    return OPCODE_IGET_BYTE;
+  case DataType::Char:
+    return OPCODE_IGET_CHAR;
+  case DataType::Short:
+    return OPCODE_IGET_SHORT;
+  case DataType::Int:
+  case DataType::Float:
+    return OPCODE_IGET;
+  case DataType::Long:
+  case DataType::Double:
+    return OPCODE_IGET_WIDE;
+  case DataType::Void:
+  default:
+    not_reached();
+  }
+}
+
 /**
  * Checks if the registers which hold the arguments for the given method
  * are used as source for any operation except `iget-*`
@@ -864,8 +889,7 @@ bool update_buildee_constructor(DexMethod* method, DexClass* builder) {
       //    invoke_direct {v_class, v_field_1, v_field_2, ...}`
       uint32_t index = 1;
       for (DexField* field : fields) {
-        auto* new_insn =
-            new IRInstruction(opcode::iget_opcode_for_field(field));
+        auto* new_insn = new IRInstruction(get_iget_type(field));
         new_insn->set_src(0, builder_reg);
         new_insn->set_field(field);
         code->insert_before(it, new_insn);
@@ -1079,10 +1103,10 @@ bool has_builder_name(DexType* type) {
 
   static boost::regex re{"\\$Builder;$"};
 
-  const auto deobfuscated_name =
+  const auto& deobfuscated_name =
       type_class(type)->get_deobfuscated_name_or_empty();
   if (!deobfuscated_name.empty()) {
-    return boost::regex_search(str_copy(deobfuscated_name), re);
+    return boost::regex_search(deobfuscated_name.c_str(), re);
   }
   return boost::regex_search(type->c_str(), re);
 }
@@ -1090,9 +1114,9 @@ bool has_builder_name(DexType* type) {
 DexType* get_buildee(DexType* builder) {
   always_assert(builder != nullptr);
 
-  const auto deobfuscated_name =
+  const auto& deobfuscated_name =
       type_class(builder)->get_deobfuscated_name_or_empty();
-  const auto builder_name =
+  const auto& builder_name =
       !deobfuscated_name.empty() ? deobfuscated_name : builder->str();
 
   auto buildee_name = builder_name.substr(0, builder_name.size() - 9) + ";";

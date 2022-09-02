@@ -75,10 +75,6 @@ TEST_F(AppModuleUsageTest, testOneStore) {
   std::ifstream config_file(config_file_env, std::ifstream::binary);
   Json::Value cfg;
   config_file >> cfg;
-  auto preexisting_violation_env =
-      std::getenv("app_module_violation_allowlist");
-  cfg["AppModuleUsagePass"]["preexisting_violations_filepath"] =
-      preexisting_violation_env;
   run_passes({new AppModuleUsagePass}, nullptr, cfg);
   EXPECT_EQ(pass_manager->get_pass_info()[0].metrics.at(
                 "num_methods_access_app_module"),
@@ -94,10 +90,6 @@ TEST_F(AppModuleUsageTest, testTwoStores) {
   std::ifstream config_file(config_file_env, std::ifstream::binary);
   Json::Value cfg;
   config_file >> cfg;
-  auto preexisting_violation_env =
-      std::getenv("app_module_violation_allowlist");
-  cfg["AppModuleUsagePass"]["preexisting_violations_filepath"] =
-      preexisting_violation_env;
   run_passes({new AppModuleUsagePass}, nullptr, cfg);
 
   EXPECT_EQ(pass_manager->get_pass_info()[0].metrics.at(
@@ -131,10 +123,6 @@ TEST_F(AppModuleUsageTest, testThreeStores) {
   std::ifstream config_file(config_file_env, std::ifstream::binary);
   Json::Value cfg;
   config_file >> cfg;
-  auto preexisting_violation_env =
-      std::getenv("app_module_violation_allowlist");
-  cfg["AppModuleUsagePass"]["preexisting_violations_filepath"] =
-      preexisting_violation_env;
   run_passes({new AppModuleUsagePass}, nullptr, cfg);
   // AppModuleUsageOtherClass and AppModuleUsageThirdClass each have a method
   // with a App module access when in different stores

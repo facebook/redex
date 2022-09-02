@@ -42,7 +42,7 @@ void validate_arguments(IRInstruction* insn,
   auto actual = analysis.get_abstract_object(insn->src(1), insn);
   EXPECT_TRUE(label);
   EXPECT_EQ(STRING, label->obj_kind);
-  std::string label_str = label->dex_string->str_copy();
+  std::string label_str = label->dex_string->str();
   std::string actual_str = "?";
   if (actual) {
     std::ostringstream out;

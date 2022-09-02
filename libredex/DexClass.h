@@ -25,7 +25,6 @@
 #include "DexMemberRefs.h"
 #include "NoDefaultComparator.h"
 #include "ReferencedState.h"
-#include "StringUtil.h"
 
 /*
  * The structures defined here are literal representations
@@ -87,23 +86,19 @@ extern "C" bool strcmp_less(const char* str1, const char* str2);
 class DexString {
   friend struct RedexContext;
 
-  const char* m_storage;
-  const uint32_t m_length;
-  const uint32_t m_utfsize;
+  std::string m_storage;
+  uint32_t m_utfsize;
 
   // See UNIQUENESS above for the rationale for the private constructor pattern.
-  explicit DexString(const char* storage, uint32_t length, uint32_t utfsize)
-      : m_storage(storage), m_length(length), m_utfsize(utfsize) {}
+  explicit DexString(std::string nstr)
+      : m_storage(std::move(nstr)),
+        m_utfsize(length_of_utf8_string(m_storage.c_str())) {}
 
  public:
-  DexString() = delete;
-  DexString(DexString&&) = delete;
-  DexString(const DexString&) = delete;
-
-  uint32_t size() const { return m_length; }
+  uint32_t size() const { return static_cast<uint32_t>(m_storage.size()); }
 
   // UTF-aware length
-  uint32_t length() const { return m_utfsize; }
+  uint32_t length() const;
 
   int32_t java_hashcode() const;
 
@@ -121,9 +116,8 @@ class DexString {
  public:
   bool is_simple() const { return size() == m_utfsize; }
 
-  const char* c_str() const { return m_storage; }
-  std::string_view str() const { return std::string_view(m_storage, m_length); }
-  std::string str_copy() const { return std::string(m_storage, m_length); }
+  const char* c_str() const { return m_storage.c_str(); }
+  const std::string& str() const { return m_storage; }
 
   uint32_t get_entry_size() const {
     uint32_t len = uleb128_encoding_size(m_utfsize);
@@ -194,10 +188,6 @@ class DexType {
   explicit DexType(const DexString* dstring) { m_name = dstring; }
 
  public:
-  DexType() = delete;
-  DexType(DexType&&) = delete;
-  DexType(const DexType&) = delete;
-
   // DexType retrieval/creation
 
   // If the DexType exists, return it, otherwise create it and return it.
@@ -209,7 +199,7 @@ class DexType {
   }
 
   // Always makes a new type that is unique.
-  static DexType* make_unique_type(const std::string_view type_name) {
+  static DexType* make_unique_type(const std::string& type_name) {
     auto ret = DexString::make_string(type_name);
     for (uint32_t i = 0; get_type(ret); i++) {
       ret = DexString::make_string(type_name.substr(0, type_name.size() - 1) +
@@ -230,8 +220,7 @@ class DexType {
 
   const DexString* get_name() const { return m_name; }
   const char* c_str() const { return get_name()->c_str(); }
-  std::string_view str() const { return get_name()->str(); }
-  std::string str_copy() const { return get_name()->str_copy(); }
+  const std::string& str() const { return get_name()->str(); }
   DexProto* get_non_overlapping_proto(const DexString*, DexProto*);
 };
 
@@ -281,10 +270,6 @@ class DexFieldRef {
   }
 
  public:
-  DexFieldRef() = delete;
-  DexFieldRef(DexFieldRef&&) = delete;
-  DexFieldRef(const DexFieldRef&) = delete;
-
   bool is_concrete() const { return m_concrete; }
   bool is_external() const { return m_external; }
   bool is_def() const { return is_concrete() || is_external(); }
@@ -294,8 +279,7 @@ class DexFieldRef {
   DexType* get_class() const { return m_spec.cls; }
   const DexString* get_name() const { return m_spec.name; }
   const char* c_str() const { return get_name()->c_str(); }
-  std::string_view str() const { return get_name()->str(); }
-  std::string str_copy() const { return get_name()->str_copy(); }
+  const std::string& str() const { return get_name()->str(); }
   DexType* get_type() const { return m_spec.type; }
 
   template <typename C>
@@ -311,8 +295,6 @@ class DexFieldRef {
                           std::unique_ptr<DexEncodedValue> v);
 
   static void erase_field(DexFieldRef* f);
-
-  dex_member_refs::FieldDescriptorTokens get_descriptor_tokens() const;
 
   // This method frees the given `DexFieldRed` - different from `erase_field`,
   // which removes the field from the `RedexContext`.
@@ -341,9 +323,6 @@ class DexField : public DexFieldRef {
   std::string self_show() const; // To avoid "Show.h" in the header.
 
  public:
-  DexField() = delete;
-  DexField(DexField&&) = delete;
-  DexField(const DexField&) = delete;
   ~DexField();
 
   ReferencedState rstate; // Tracks whether this field can be deleted or renamed
@@ -463,13 +442,16 @@ class DexTypeList {
   using iterator = typename ContainerType::iterator;
   using const_iterator = typename ContainerType::const_iterator;
 
-  const_iterator begin() const { return m_list.begin(); }
-  const_iterator end() const { return m_list.end(); }
+  iterator begin() { return m_list->begin(); }
+  iterator end() { return m_list->end(); }
 
-  size_t size() const { return m_list.size(); }
-  bool empty() const { return m_list.empty(); }
+  const_iterator begin() const { return m_list->begin(); }
+  const_iterator end() const { return m_list->end(); }
 
-  DexType* at(size_t i) const { return m_list.at(i); }
+  size_t size() const { return m_list->size(); }
+  bool empty() const { return m_list->empty(); }
+
+  DexType* at(size_t i) const { return m_list->at(i); }
 
   // DexTypeList retrieval/creation
 
@@ -487,11 +469,11 @@ class DexTypeList {
   int encode(DexOutputIdx* dodx, uint32_t* output) const;
 
   friend bool operator<(const DexTypeList& a, const DexTypeList& b) {
-    auto ita = a.m_list.begin();
-    auto itb = b.m_list.begin();
+    auto ita = a.m_list->begin();
+    auto itb = b.m_list->begin();
     while (1) {
-      if (itb == b.m_list.end()) return false;
-      if (ita == a.m_list.end()) return true;
+      if (itb == b.m_list->end()) return false;
+      if (ita == a.m_list->end()) return true;
       if (*ita != *itb) {
         const DexType* ta = *ita;
         const DexType* tb = *itb;
@@ -506,7 +488,7 @@ class DexTypeList {
   void gather_types(C& ltype) const;
 
   bool equals(const std::vector<DexType*>& vec) const {
-    return std::equal(m_list.begin(), m_list.end(), vec.begin(), vec.end());
+    return std::equal(m_list->begin(), m_list->end(), vec.begin(), vec.end());
   }
 
   DexTypeList* push_front(DexType* t) const;
@@ -520,9 +502,9 @@ class DexTypeList {
 
  private:
   // See UNIQUENESS above for the rationale for the private constructor pattern.
-  explicit DexTypeList(ContainerType list) : m_list(std::move(list)) {}
+  explicit DexTypeList(ContainerType* p) : m_list(p) {}
 
-  const ContainerType m_list;
+  ContainerType* m_list; // This should really be const.
 
   friend struct RedexContext;
 };
@@ -557,10 +539,6 @@ class DexProto {
   }
 
  public:
-  DexProto() = delete;
-  DexProto(DexProto&&) = delete;
-  DexProto(const DexProto&) = delete;
-
   // DexProto retrieval/creation
 
   // If the DexProto exists, return it, otherwise create it and return it.
@@ -578,7 +556,7 @@ class DexProto {
   DexType* get_rtype() const { return m_rtype; }
   DexTypeList* get_args() const { return m_args; }
   const DexString* get_shorty() const { return m_shorty; }
-  bool is_void() const;
+  bool is_void() const { return get_rtype() == DexType::make_type("V"); }
 
   template <typename C>
   void gather_types(C& ltype) const;
@@ -813,10 +791,6 @@ class DexMethodRef {
   }
 
  public:
-  DexMethodRef() = delete;
-  DexMethodRef(DexMethodRef&&) = delete;
-  DexMethodRef(const DexMethodRef&) = delete;
-
   bool is_concrete() const { return m_concrete; }
   bool is_external() const { return m_external; }
   bool is_def() const { return is_concrete() || is_external(); }
@@ -826,8 +800,7 @@ class DexMethodRef {
   DexType* get_class() const { return m_spec.cls; }
   const DexString* get_name() const { return m_spec.name; }
   const char* c_str() const { return get_name()->c_str(); }
-  std::string_view str() const { return get_name()->str(); }
-  std::string str_copy() const { return get_name()->str_copy(); }
+  const std::string& str() const { return get_name()->str(); }
   DexProto* get_proto() const { return m_spec.proto; }
 
   template <typename C>
@@ -851,8 +824,6 @@ class DexMethodRef {
   // This only removes the given method reference from the `RedexContext`, but
   // does not free the method.
   static void erase_method(DexMethodRef* mref);
-
-  dex_member_refs::MethodDescriptorTokens get_descriptor_tokens() const;
 };
 
 class DexMethod : public DexMethodRef {
@@ -868,7 +839,7 @@ class DexMethod : public DexMethodRef {
   std::unique_ptr<DexAnnotationSet> m_anno;
   std::unique_ptr<DexCode> m_dex_code;
   std::unique_ptr<IRCode> m_code;
-  std::unique_ptr<ParamAnnotations> m_param_anno;
+  ParamAnnotations m_param_anno;
   const DexString* m_deobfuscated_name{nullptr};
 
   // See UNIQUENESS above for the rationale for the private constructor pattern.
@@ -883,10 +854,6 @@ class DexMethod : public DexMethodRef {
   std::string self_show() const; // To avoid "Show.h" in the header.
 
  public:
-  DexMethod() = delete;
-  DexMethod(DexMethodRef&&) = delete;
-  DexMethod(const DexMethodRef&) = delete;
-
   // Tracks whether this method can be deleted or renamed
   ReferencedState rstate;
 
@@ -987,9 +954,14 @@ class DexMethod : public DexMethodRef {
     always_assert(is_def());
     return m_access;
   }
-  const ParamAnnotations* get_param_anno() const { return m_param_anno.get(); }
-  ParamAnnotations* get_param_anno() { return m_param_anno.get(); }
-  std::unique_ptr<ParamAnnotations> release_param_anno();
+  const ParamAnnotations* get_param_anno() const {
+    if (m_param_anno.empty()) return nullptr;
+    return &m_param_anno;
+  }
+  ParamAnnotations* get_param_anno() {
+    if (m_param_anno.empty()) return nullptr;
+    return &m_param_anno;
+  }
 
   void set_deobfuscated_name(const std::string& name);
   void set_deobfuscated_name(const DexString* name);
@@ -1002,15 +974,12 @@ class DexMethod : public DexMethodRef {
   const DexString* get_deobfuscated_name_or_null() const {
     return m_deobfuscated_name;
   }
-  std::string_view get_deobfuscated_name_or_empty() const {
+  const std::string& get_deobfuscated_name_or_empty() const {
     if (m_deobfuscated_name == nullptr) {
       return DexString::EMPTY;
       ;
     }
     return m_deobfuscated_name->str();
-  }
-  std::string get_deobfuscated_name_or_empty_copy() const {
-    return ::str_copy(get_deobfuscated_name_or_empty());
   }
 
   // Return just the name of the method.
@@ -1096,44 +1065,12 @@ class DexMethod : public DexMethodRef {
   // `MethodProfiles` which maps `DexMethodRef`s to data.
   static void delete_method_DO_NOT_USE(DexMethod* method) { delete method; }
 
-  // This method currently does *NOT* free the `DexMethod`, as there may still
-  // be references. This may will free most resources associated with the
-  // DexMethod, though. Eventually this will become a full delete.
-  static void delete_method(DexMethod* method);
-
-  // Estimated in number of code units. Not representative of switch statements,
-  // or references.
-  size_t estimated_size() const;
-
  private:
   template <typename C>
   void gather_strings_internal(C& lstring, bool exclude_loads) const;
 };
 
 using dexcode_to_offset = std::unordered_map<DexCode*, uint32_t>;
-
-class DexLocation {
-  friend struct RedexContext;
-
- private:
-  std::string m_store_name;
-  std::string m_file_name;
-  DexLocation(std::string m_store_name, std::string m_file_name);
-
- public:
-  // If the DexLocation exists, return it, otherwise create it and return
-  // it. See also get_()
-  static const DexLocation* make_location(std::string_view store_name,
-                                          std::string_view file_name);
-
-  // Return an existing DexLocation or nullptr if one does not exist.
-  static const DexLocation* get_location(std::string_view store_name,
-                                         std::string_view file_name);
-
-  const std::string& get_store_name() const { return m_store_name; }
-  // Returns the location of this class - can be dex/jar file.
-  const std::string& get_file_name() const { return m_file_name; }
-};
 
 class DexClass {
  private:
@@ -1143,7 +1080,7 @@ class DexClass {
   const DexString* m_source_file;
   std::unique_ptr<DexAnnotationSet> m_anno;
   const DexString* m_deobfuscated_name{nullptr};
-  const DexLocation* m_location{nullptr};
+  const std::string m_location; // TODO: string interning
   std::vector<DexField*> m_sfields;
   std::vector<DexField*> m_ifields;
   std::vector<DexMethod*> m_dmethods;
@@ -1152,7 +1089,7 @@ class DexClass {
   bool m_external;
   bool m_perf_sensitive;
 
-  explicit DexClass(const DexLocation* location);
+  explicit DexClass(const std::string& location);
   void load_class_annotations(DexIdx* idx, uint32_t anno_off);
   void load_class_data_item(DexIdx* idx,
                             uint32_t cdi_off,
@@ -1161,7 +1098,7 @@ class DexClass {
   friend struct ClassCreator;
 
   // This constructor is private on purpose, use DexClass::create instead
-  DexClass(DexIdx* idx, const dex_class_def* cdef, const DexLocation* location);
+  DexClass(DexIdx* idx, const dex_class_def* cdef, const std::string& location);
 
   std::string self_show() const; // To avoid "Show.h" in the header.
 
@@ -1173,7 +1110,7 @@ class DexClass {
   // May return nullptr on benign duplicate class
   static DexClass* create(DexIdx* idx,
                           const dex_class_def* cdef,
-                          const DexLocation* location);
+                          const std::string& location);
 
   const std::vector<DexMethod*>& get_dmethods() const { return m_dmethods; }
   std::vector<DexMethod*>& get_dmethods() {
@@ -1250,8 +1187,7 @@ class DexClass {
   DexType* get_type() const { return m_self; }
   const DexString* get_name() const { return m_self->get_name(); }
   const char* c_str() const { return get_name()->c_str(); }
-  std::string_view str() const { return get_name()->str(); }
-  std::string str_copy() const { return get_name()->str_copy(); }
+  const std::string& str() const { return get_name()->str(); }
   DexTypeList* get_interfaces() const { return m_interfaces; }
   const DexString* get_source_file() const { return m_source_file; }
   bool has_class_data() const;
@@ -1280,18 +1216,15 @@ class DexClass {
   const DexString* get_deobfuscated_name_or_null() const {
     return m_deobfuscated_name;
   }
-  std::string_view get_deobfuscated_name_or_empty() const {
+  const std::string& get_deobfuscated_name_or_empty() const {
     if (m_deobfuscated_name == nullptr) {
       return DexString::EMPTY;
     }
     return m_deobfuscated_name->str();
   }
-  std::string get_deobfuscated_name_or_empty_copy() const {
-    return ::str_copy(get_deobfuscated_name_or_empty());
-  }
 
-  // Retrieves the (original) location.
-  const DexLocation* get_location() const { return m_location; }
+  // Returns the location of this class - can be dex/jar file.
+  const std::string& get_location() const { return m_location; }
 
   void set_access(DexAccessFlags access) {
     always_assert_log(!m_external, "Unexpected external class %s\n",
@@ -1349,11 +1282,6 @@ class DexClass {
       const std::string& field_name);
   DexMethod* find_method_from_simple_deobfuscated_name(
       const std::string& method_name);
-
-  // In code units. Estimated by accounting 48 code units for the class
-  // metadata, 8 for each field and sum up all methods with
-  // DexMethod::estimated_size().
-  size_t estimated_size() const;
 
  private:
   void sort_methods();

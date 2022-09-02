@@ -50,7 +50,7 @@ TEST_F(DexOutputTest, testSimilarityOrderer) {
       scope, [](DexMethod* m) { instruction_lowering::lower(m, true); });
 
   auto gtypes = std::make_shared<GatheredTypes>(&*classes);
-  DexOutput dout("", &*classes, std::move(gtypes), nullptr, true, 0, nullptr, 0,
+  DexOutput dout("", &*classes, std::move(gtypes), nullptr, true, 0, 0,
                  DebugInfoKind::NoCustomSymbolication, nullptr, config_files,
                  pos_mapper.get(), nullptr, nullptr, nullptr, 25);
 
@@ -111,7 +111,7 @@ TEST_F(DexOutputTest, testPerfSensitive) {
       scope, [](DexMethod* m) { instruction_lowering::lower(m, true); });
 
   auto gtypes = std::make_shared<GatheredTypes>(&*classes);
-  DexOutput dout("", &*classes, std::move(gtypes), nullptr, true, 0, nullptr, 0,
+  DexOutput dout("", &*classes, std::move(gtypes), nullptr, true, 0, 0,
                  DebugInfoKind::NoCustomSymbolication, nullptr, config_files,
                  pos_mapper.get(), nullptr, nullptr, nullptr, 25);
 

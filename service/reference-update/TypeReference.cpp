@@ -30,10 +30,10 @@ void assert_old_types_have_definitions(
   }
 }
 
-const DexString* gen_new_name(const std::string_view org_name, size_t seed) {
+const DexString* gen_new_name(const std::string& org_name, size_t seed) {
   constexpr const char* mangling_affix = "$REDEX$";
   auto end = org_name.find(mangling_affix);
-  std::string new_name = str_copy(org_name.substr(0, end));
+  std::string new_name = org_name.substr(0, end);
   new_name.append(mangling_affix);
   while (seed) {
     int d = seed % 62;
@@ -220,23 +220,12 @@ void TypeRefUpdater::update_methods_fields(const Scope& scope) {
   ConcurrentSet<DexMethodRef*> methods;
   ConcurrentSet<DexFieldRef*> fields;
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
-    if (code.editable_cfg_built()) {
-      for (auto& mie : InstructionIterable(code.cfg())) {
-        auto insn = mie.insn;
-        if (insn->has_field()) {
-          fields.insert(insn->get_field());
-        } else if (insn->has_method()) {
-          methods.insert(insn->get_method());
-        }
-      }
-    } else {
-      for (auto& mie : InstructionIterable(code)) {
-        auto insn = mie.insn;
-        if (insn->has_field()) {
-          fields.insert(insn->get_field());
-        } else if (insn->has_method()) {
-          methods.insert(insn->get_method());
-        }
+    for (auto& mie : InstructionIterable(code)) {
+      auto insn = mie.insn;
+      if (insn->has_field()) {
+        fields.insert(insn->get_field());
+      } else if (insn->has_method()) {
+        methods.insert(insn->get_method());
       }
     }
   });

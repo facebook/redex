@@ -62,6 +62,7 @@
 #include "ProguardMatcher.h"
 #include "ProguardParser.h" // New ProGuard Parser
 #include "ProguardPrintConfiguration.h" // New ProGuard configuration
+#include "Purity.h" // For defaults from config.
 #include "ReachableClasses.h"
 #include "RedexContext.h"
 #include "RedexResources.h"
@@ -815,8 +816,7 @@ std::string get_dex_magic(std::vector<std::string>& dex_files) {
   always_assert_log(!dex_files.empty(), "APK contains no dex file\n");
   // Get dex magic from the first dex file since all dex magic
   // should be consistent within one APK.
-  return load_dex_magic_from_dex(
-      DexLocation::make_location("dex", dex_files[0]));
+  return load_dex_magic_from_dex(dex_files[0].c_str());
 }
 
 void dump_keep_reasons(const ConfigFiles& conf,
@@ -884,11 +884,9 @@ void redex_frontend(ConfigFiles& conf, /* input */
 
   g_redex->load_pointers_cache();
 
-  keep_rules::proguard_parser::Stats parser_stats{};
   for (const auto& pg_config_path : args.proguard_config_paths) {
     Timer time_pg_parsing("Parsed ProGuard config file");
-    parser_stats +=
-        keep_rules::proguard_parser::parse_file(pg_config_path, &pg_config);
+    keep_rules::proguard_parser::parse_file(pg_config_path, &pg_config);
   }
 
   size_t blocklisted_rules{0};
@@ -909,17 +907,6 @@ void redex_frontend(ConfigFiles& conf, /* input */
           keep_rules::proguard_parser::remove_default_blocklisted_rules(
               &pg_config);
     }
-  }
-
-  {
-    Json::Value d;
-    using u64 = Json::Value::UInt64;
-    d["parse_errors"] = (u64)parser_stats.parse_errors;
-    d["unknown_tokens"] = (u64)parser_stats.unknown_tokens;
-    d["unimplemented"] = (u64)parser_stats.unimplemented;
-    d["ok"] = (u64)(pg_config.ok ? 1 : 0);
-    d["blocklisted_rules"] = (u64)blocklisted_rules;
-    stats["proguard"] = d;
   }
 
   const auto& pg_libs = pg_config.libraryjars;
@@ -969,11 +956,10 @@ void redex_frontend(ConfigFiles& conf, /* input */
 
     for (const auto& library_jar : library_jars) {
       TRACE(MAIN, 1, "LIBRARY JAR: %s", library_jar.c_str());
-      if (!load_jar_file(DexLocation::make_location("", library_jar),
-                         &external_classes)) {
+      if (!load_jar_file(library_jar.c_str(), &external_classes)) {
         // Try again with the basedir
         std::string basedir_path = pg_config.basedirectory + "/" + library_jar;
-        if (!load_jar_file(DexLocation::make_location("", basedir_path))) {
+        if (!load_jar_file(basedir_path.c_str())) {
           std::cerr << "error: library jar could not be loaded: " << library_jar
                     << std::endl;
           exit(EXIT_FAILURE);
@@ -1053,11 +1039,6 @@ void finalize_resource_table(ConfigFiles& conf) {
   if (!conf.finalize_resource_table()) {
     return;
   }
-  const auto& json = conf.get_json_config();
-  if (json.get("after_pass_size", false)) {
-    return;
-  }
-
   std::string apk_dir;
   conf.get_json_config().get("apk_dir", "", apk_dir);
   if (apk_dir.empty()) {
@@ -1159,7 +1140,6 @@ void redex_backend(ConfigFiles& conf,
           gtypes,
           locator_index,
           store_number,
-          &store.get_name(),
           i,
           conf,
           pos_mapper.get(),
@@ -1267,7 +1247,7 @@ void dump_class_method_info_map(const std::string& file_path,
   std::unordered_map<std::string /*location*/, int /*index*/> dexloc_map;
 
   walk::classes(build_class_scope(stores), [&](const DexClass* cls) {
-    const auto& dexloc = cls->get_location()->get_file_name();
+    const auto& dexloc = cls->get_location();
     if (!dexloc_map.count(dexloc)) {
       dexloc_map[dexloc] = dexloc_map.size();
       ofs << "I,DEXLOC," << dexloc_map[dexloc] << "," << dexloc << std::endl;
@@ -1293,39 +1273,6 @@ void maybe_dump_jemalloc_profile(const char* env_name) {
   auto* dump_path = std::getenv(env_name);
   if (dump_path != nullptr) {
     jemalloc_util::dump(dump_path);
-  }
-}
-
-void copy_proguard_stats(Json::Value& stats) {
-  if (!stats.isMember("proguard")) {
-    return;
-  }
-  if (!stats.isMember("output_stats")) {
-    return;
-  }
-  auto& output = stats["output_stats"];
-  if (!output.isMember("pass_stats")) {
-    return;
-  }
-  auto& passes = output["pass_stats"];
-
-  Json::Value* first_pass = nullptr;
-  for (const auto& name : passes.getMemberNames()) {
-    auto& pass = passes[name];
-    if (first_pass == nullptr || pass["pass_order"].asUInt64() <
-                                     (*first_pass)["pass_order"].asUInt64()) {
-      first_pass = &pass;
-    }
-  }
-
-  if (first_pass == nullptr) {
-    return;
-  }
-
-  auto& pr = stats["proguard"];
-  for (const auto& name : pr.getMemberNames()) {
-    std::string compound_name = "proguard_" + name;
-    (*first_pass)[compound_name] = pr[name];
   }
 }
 
@@ -1372,27 +1319,6 @@ int main(int argc, char* argv[]) {
 
     // For convenience.
     g_redex->instrument_mode = args.redex_options.instrument_pass_enabled;
-    if (g_redex->instrument_mode) {
-      IRList::CONSECUTIVE_STYLE = IRList::ConsecutiveStyle::kChain;
-    }
-    {
-      auto consecutive_val =
-          args.config.get("sb_consecutive_style", Json::nullValue);
-      if (consecutive_val.isString()) {
-        auto str = consecutive_val.asString();
-        IRList::CONSECUTIVE_STYLE = [&]() {
-          if (str == "drop") {
-            return IRList::ConsecutiveStyle::kDrop;
-          } else if (str == "chain") {
-            return IRList::ConsecutiveStyle::kChain;
-          } else if (str == "max") {
-            return IRList::ConsecutiveStyle::kMax;
-          } else {
-            not_reached_log("Unknown sb_consecutive_style %s", str.c_str());
-          }
-        }();
-      }
-    }
 
     slow_invariants_debug =
         args.config.get("slow_invariants_debug", false).asBool();
@@ -1423,8 +1349,12 @@ int main(int argc, char* argv[]) {
       maybe_dump_jemalloc_profile("MALLOC_PROFILE_DUMP_FRONTEND");
     }
 
+    // Initialize purity defaults, if set.
+    purity::CacheConfig::parse_default(conf);
+
     auto const& passes = PassRegistry::get().get_passes();
-    PassManager manager(passes, std::move(pg_config), conf, args.redex_options);
+    PassManager manager(passes, std::move(pg_config), args.config,
+                        args.redex_options);
 
     ab_test::ABExperimentContext::parse_experiments_states(
         conf, !manager.get_redex_options().redacted);
@@ -1468,10 +1398,6 @@ int main(int argc, char* argv[]) {
   stats["output_stats"]["mem_stats"]["vm_hwm"] = (Json::UInt64)vm_stats.vm_hwm;
 
   stats["output_stats"]["threads"] = get_threads_stats();
-
-  stats["output_stats"]["build_cfg_counter"] = (Json::UInt64)build_cfg_counter;
-  // For the time being, copy proguard stats, if any, to the first pass.
-  copy_proguard_stats(stats);
 
   {
     std::ofstream out(stats_output_path);

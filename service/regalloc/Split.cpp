@@ -6,16 +6,15 @@
  */
 
 #include "Split.h"
-#include "Show.h"
-#include "Trace.h"
 
 namespace regalloc {
 
 // Calculate potential split costs for each live range. Also store information
 // of catch block and move-result for later use.
 void calc_split_costs(const LivenessFixpointIterator& fixpoint_iter,
-                      cfg::ControlFlowGraph& cfg,
+                      IRCode* code,
                       SplitCosts* split_costs) {
+  auto& cfg = code->cfg();
   for (cfg::Block* block : cfg.blocks()) {
     LivenessDomain live_out = fixpoint_iter.get_live_out_vars_at(block);
     // Incrementing load number for each death in
@@ -73,10 +72,10 @@ IRInstruction* gen_load_for_split(
     const Graph& ig,
     vreg_t l,
     std::unordered_map<vreg_t, vreg_t>* load_store_reg,
-    cfg::ControlFlowGraph& cfg) {
+    IRCode* code) {
   auto load_reg_it = load_store_reg->find(l);
   if (load_reg_it == load_store_reg->end()) {
-    auto temp = cfg.allocate_temp();
+    auto temp = code->allocate_temp();
     load_store_reg->emplace(l, temp);
     return gen_move(ig.get_node(l).type(), l, temp);
   } else {
@@ -88,15 +87,35 @@ IRInstruction* gen_store_for_split(
     const Graph& ig,
     vreg_t l,
     std::unordered_map<vreg_t, vreg_t>* load_store_reg,
-    cfg::ControlFlowGraph& cfg) {
+    IRCode* code) {
   auto store_reg_it = load_store_reg->find(l);
   if (store_reg_it == load_store_reg->end()) {
-    auto temp = cfg.allocate_temp();
+    auto temp = code->allocate_temp();
     load_store_reg->emplace(l, temp);
     return gen_move(ig.get_node(l).type(), temp, l);
   } else {
     return gen_move(ig.get_node(l).type(), store_reg_it->second, l);
   }
+}
+
+void store_info_for_branch(
+    const std::pair<cfg::Block*, cfg::Block*>& block_edge,
+    cfg::Block* s,
+    IRInstruction* mov,
+    MethodItemEntry* pred_branch,
+    BlockLoadInfo* block_load_info) {
+  block_load_info->mode_and_insn[block_edge].add_insn_mode(mov, BRANCH);
+  MethodItemEntry* succ_target = nullptr;
+  for (auto find_target_it = s->begin(); find_target_it != s->end();
+       ++find_target_it) {
+    if (find_target_it->target->src == pred_branch) {
+      succ_target = &*find_target_it;
+      break;
+    }
+  }
+  always_assert(succ_target != nullptr);
+  block_load_info->target_branch[block_edge] =
+      std::pair<MethodItemEntry*, MethodItemEntry*>(succ_target, pred_branch);
 }
 
 // Store a LOAD instruction in block_load_info for each death in
@@ -123,7 +142,7 @@ size_t split_for_block(const SplitPlan& split_plan,
                        const Graph& ig,
                        cfg::Block* block,
                        std::unordered_map<vreg_t, vreg_t>* load_store_reg,
-                       cfg::ControlFlowGraph& cfg,
+                       IRCode* code,
                        BlockLoadInfo* block_load_info) {
   size_t split_move = 0;
   for (auto& succ : block->succs()) {
@@ -141,12 +160,12 @@ size_t split_for_block(const SplitPlan& split_plan,
         if (!live_in.contains(l)) {
           continue;
         }
-        IRInstruction* mov = gen_load_for_split(ig, l, load_store_reg, cfg);
+        IRInstruction* mov = gen_load_for_split(ig, l, load_store_reg, code);
         // Storing the mov needed to be inserted between blocks and
         // insert them together later.
-        // If all of blocks's preds have reg died on the edge
+        // If all of block s's preds have reg died on the edge
         // pred->s, then no need to insert a block for every edge,
-        // Inserting loads at the beginning of blocks will be fine and
+        // Inserting loads at the beginning of block s will be fine and
         // won't cause problems.
         bool can_insert_directly =
             split_costs.death_at_other(reg).at(succ->target()) ==
@@ -161,12 +180,14 @@ size_t split_for_block(const SplitPlan& split_plan,
           if (other_loaded_it == block_load_info->other_loaded_regs.end() ||
               other_loaded_it->second.find(l) ==
                   other_loaded_it->second.end()) {
-            // Get first opcode instruction and insert move
+            // Iterate to the first opcode instruction and insert move
             // before it.
-            auto succ_block = succ->target();
-            auto pos_it = succ_block->get_first_insn();
-            cfg.insert_before(succ_block->to_cfg_instruction_iterator(pos_it),
-                              mov);
+            auto pos_it = succ->target()->begin();
+            while (pos_it != succ->target()->end() &&
+                   pos_it->type != MFLOW_OPCODE) {
+              ++pos_it;
+            }
+            code->insert_before(pos_it, mov);
             block_load_info->other_loaded_regs[succ->target()].emplace(l);
             ++split_move;
           }
@@ -192,10 +213,21 @@ size_t split_for_block(const SplitPlan& split_plan,
                                                                      TRYCATCH);
             block_load_info->try_loaded_regs[succ->target()].emplace(l);
           }
+        } else if (succ->type() == cfg::EDGE_GOTO) {
+          if (lastmei->type != MFLOW_OPCODE ||
+              lastmei->insn->opcode() != OPCODE_GOTO) {
+            // Fall throughs, don't need to change target.
+            block_load_info->mode_and_insn[block_edge].add_insn_mode(
+                mov, FALLTHROUGH);
+          } else {
+            // Goto, need to change target.
+            store_info_for_branch(
+                block_edge, succ->target(), mov, &*lastmei, block_load_info);
+          }
         } else {
-          always_assert(succ->type() == cfg::EDGE_GOTO ||
-                        succ->type() == cfg::EDGE_BRANCH);
-          block_load_info->mode_and_insn[block_edge].add_insn_mode(mov, BRANCH);
+          // Branches, need to change target.
+          store_info_for_branch(
+              block_edge, succ->target(), mov, &*lastmei, block_load_info);
         }
       }
     }
@@ -210,9 +242,9 @@ size_t split_for_define(const SplitPlan& split_plan,
                         const Graph& ig,
                         const IRInstruction* insn,
                         const LivenessDomain& live_out,
-                        cfg::ControlFlowGraph& cfg,
+                        IRCode* code,
                         std::unordered_map<vreg_t, vreg_t>* load_store_reg,
-                        cfg::InstructionIterator it) {
+                        IRList::iterator it) {
   size_t split_move = 0;
   if (insn->has_dest()) {
     auto dest = insn->dest();
@@ -232,15 +264,17 @@ size_t split_for_define(const SplitPlan& split_plan,
         // Move-result must follow instruction that write
         // result register, so insert before invoke-xxx or
         // filled-new-array instead.
-        it = cfg.primary_instruction_of_move_result(it);
-        always_assert(!it.is_end());
+        --it;
+        while (it->type != MFLOW_OPCODE) {
+          --it;
+        }
       }
       for (auto l : split_it->second) {
         if (!live_out.contains(l)) {
           continue;
         }
-        IRInstruction* mov = gen_store_for_split(ig, l, load_store_reg, cfg);
-        cfg.insert_before(it, mov);
+        IRInstruction* mov = gen_store_for_split(ig, l, load_store_reg, code);
+        code->insert_before(it, mov);
         ++split_move;
       }
     }
@@ -256,7 +290,7 @@ size_t split_for_last_use(const SplitPlan& split_plan,
                           const IRInstruction* insn,
                           const LivenessDomain& live_out,
                           cfg::Block* block,
-                          cfg::ControlFlowGraph& cfg,
+                          IRCode* code,
                           std::unordered_map<vreg_t, vreg_t>* load_store_reg,
                           IRList::reverse_iterator& it,
                           BlockLoadInfo* block_load_info) {
@@ -285,29 +319,35 @@ size_t split_for_last_use(const SplitPlan& split_plan,
         // live_out(block) - live_in(succ_block).
         if (opcode::is_branch(insn->opcode()) && it == block->rbegin()) {
           for (auto& succ : block->succs()) {
-            IRInstruction* mov = gen_load_for_split(ig, l, load_store_reg, cfg);
+            IRInstruction* mov =
+                gen_load_for_split(ig, l, load_store_reg, code);
             auto block_edge =
                 std::pair<cfg::Block*, cfg::Block*>(block, succ->target());
-            if (succ->type() == cfg::EDGE_BRANCH ||
-                succ->type() == cfg::EDGE_GOTO) {
-              // Branches or GOTO, need to change target.
-              block_load_info->mode_and_insn[block_edge].add_insn_mode(mov,
-                                                                       BRANCH);
+            if (succ->type() == cfg::EDGE_BRANCH) {
+              // Branches, need to change target.
+              store_info_for_branch(block_edge,
+                                    succ->target(),
+                                    mov,
+                                    &*(--(it.base())),
+                                    block_load_info);
+            } else if (succ->type() == cfg::EDGE_GOTO) {
+              // Fall throughs, don't need to change target.
+              block_load_info->mode_and_insn[block_edge].add_insn_mode(
+                  mov, FALLTHROUGH);
             }
           }
           continue;
         }
 
-        IRInstruction* mov = gen_load_for_split(ig, l, load_store_reg, cfg);
+        IRInstruction* mov = gen_load_for_split(ig, l, load_store_reg, code);
         if (opcode::writes_result_register(insn->opcode()) &&
             it.base()->type == MFLOW_OPCODE &&
             opcode::is_a_move_result(it.base()->insn->opcode())) {
           // Move-result must follow instruction that write
           // result register, so insert after move-result instead.
-          cfg.insert_after(block->to_cfg_instruction_iterator(it.base()), mov);
+          code->insert_after(it.base(), mov);
         } else {
-          cfg.insert_after(block->to_cfg_instruction_iterator(--(it.base())),
-                           mov);
+          code->insert_after(--(it.base()), mov);
           ++it;
         }
         ++split_move;
@@ -321,11 +361,10 @@ size_t split_for_last_use(const SplitPlan& split_plan,
 //    1. Inserting a new block with the insn between two blocks.
 // or 2. Just inserting at beginning of a block.
 size_t insert_insn_between_blocks(const BlockLoadInfo& block_load_info,
-                                  cfg::ControlFlowGraph& cfg) {
+                                  IRCode* code) {
   size_t split_move = 0;
   for (auto& pair : block_load_info.mode_and_insn) {
-    auto block = pair.first.first;
-    auto s = pair.first.second; // second block
+    auto s = pair.first.second;
     BlockMode block_mode = pair.second.block_mode;
     if (block_mode == TRYCATCH) {
       // Two blocks are connected by TRYCATCH edge.
@@ -333,33 +372,64 @@ size_t insert_insn_between_blocks(const BlockLoadInfo& block_load_info,
       // would understand the load instruction from every TRYCATCH edge to it,
       // So just iterate to the first opcode instruction in catch block and
       // insert move before it.
-      auto pos_it = s->get_first_insn();
-      auto cfg_pos_it = s->to_cfg_instruction_iterator(pos_it);
-      // move-exception should be the first instruction in exception handler.
-      if (!cfg_pos_it.is_end_in_block() &&
-          cfg_pos_it->insn->opcode() == OPCODE_MOVE_EXCEPTION) {
-        cfg_pos_it.move_next_in_block();
+      auto pos_it = s->begin();
+      while (pos_it != s->end() && pos_it->type != MFLOW_OPCODE) {
+        ++pos_it;
       }
-
+      // move-exception should be the first instruction in exception handler.
+      if (pos_it->insn->opcode() == OPCODE_MOVE_EXCEPTION) {
+        ++pos_it;
+      }
       for (auto insn : pair.second.block_insns) {
-        cfg.insert_before(cfg_pos_it, insn);
+        code->insert_before(pos_it, insn);
         ++split_move;
       }
     } else if (block_mode == BRANCH) {
-      // Two blocks are connected by BRANCH/GOTO edge, so we need to insert
-      // another block and redirect edges. suppose previously it was B1->B2
-      // (there could be more than one edges). after split, for each edge
-      // between B1 and B2, it should become
-      //    B1 -> B3 -> B2
-
-      // Create a new block containing all the load instructions.
-      cfg::Block* new_block = cfg.create_block();
+      // Two blocks are connected by BRANCH edge, so we need to redirect target.
+      // suppose previously it was
+      //    B1: ...
+      //        address1 BRANCH
+      //    B2: Target address1
+      //        ...
+      // after it should become
+      //    B1: ...
+      //        address1 BRANCH
+      //    B2: Target address2
+      //        ...
+      //    B3: Target address1
+      //        load insns...
+      //        address2 BRANCH
+      auto succ_target = block_load_info.target_branch.at(pair.first).first;
+      auto pred_branch = block_load_info.target_branch.at(pair.first).second;
+      BranchTarget* bt = new BranchTarget();
+      bt->type = succ_target->target->type;
+      bt->case_key = succ_target->target->case_key;
+      bt->src = pred_branch;
+      MethodItemEntry* mentry = new MethodItemEntry(bt);
+      auto pos_it = code->end();
+      // Insert at end of codes so that it won't cause trouble to fallthrough.
+      code->insert_before(pos_it, *mentry);
       for (auto insn : pair.second.block_insns) {
-        new_block->push_back(insn);
+        code->insert_before(pos_it, insn);
         ++split_move;
       }
-      // Insert 'new_block' between 'block' and 's'.
-      cfg.insert_block(block, s, new_block);
+      auto goto_entry = new MethodItemEntry(new IRInstruction(OPCODE_GOTO));
+      code->insert_before(pos_it, *goto_entry);
+      succ_target->target->src = goto_entry;
+      succ_target->target->type = BRANCH_SIMPLE;
+    } else {
+      // Two blocks are connected by normal fallthrough. So we can insert
+      // load instructions and a goto directly before beginning of succ block.
+      auto pos_it = s->begin();
+      for (auto insn : pair.second.block_insns) {
+        code->insert_before(pos_it, insn);
+        ++split_move;
+      }
+      auto goto_entry = new MethodItemEntry(new IRInstruction(OPCODE_GOTO));
+      code->insert_before(pos_it, *goto_entry);
+      BranchTarget* bt = new BranchTarget(goto_entry);
+      MethodItemEntry* mentry = new MethodItemEntry(bt);
+      code->insert_before(pos_it, *mentry);
     }
   }
   return split_move;
@@ -372,12 +442,13 @@ size_t split(const LivenessFixpointIterator& fixpoint_iter,
              const SplitPlan& split_plan,
              const SplitCosts& split_costs,
              const Graph& ig,
-             cfg::ControlFlowGraph& cfg) {
+             IRCode* code) {
   // Keep track of which reg is stored or loaded to which temp
   // so that we can get the right reg loaded or stored.
   std::unordered_map<vreg_t, vreg_t> load_store_reg;
   BlockLoadInfo block_load_info;
   size_t split_move = 0;
+  auto& cfg = code->cfg();
 
   for (cfg::Block* block : cfg.blocks()) {
     LivenessDomain live_out = fixpoint_iter.get_live_out_vars_at(block);
@@ -389,25 +460,24 @@ size_t split(const LivenessFixpointIterator& fixpoint_iter,
                                   ig,
                                   block,
                                   &load_store_reg,
-                                  cfg,
+                                  code,
                                   &block_load_info);
     // For each instruction in block in reverse order
     for (auto it = block->rbegin(); it != block->rend(); ++it) {
       if (it->type != MFLOW_OPCODE) {
         continue;
       }
+
       // Split for define and last use of reg.
       auto insn = it->insn;
-      auto cfg_it = block->to_cfg_instruction_iterator(--(it.base()));
-      split_move += split_for_define(split_plan, ig, insn, live_out, cfg,
-                                     &load_store_reg, cfg_it);
-
+      split_move += split_for_define(
+          split_plan, ig, insn, live_out, code, &load_store_reg, --(it.base()));
       split_move += split_for_last_use(split_plan,
                                        ig,
                                        insn,
                                        live_out,
                                        block,
-                                       cfg,
+                                       code,
                                        &load_store_reg,
                                        it,
                                        &block_load_info);
@@ -417,7 +487,7 @@ size_t split(const LivenessFixpointIterator& fixpoint_iter,
   }
 
   // Insert new blocks or instructions for live range dead on edge.
-  split_move += insert_insn_between_blocks(block_load_info, cfg);
+  split_move += insert_insn_between_blocks(block_load_info, code);
   return split_move;
 }
 

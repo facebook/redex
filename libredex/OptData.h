@@ -119,8 +119,8 @@ class ClassOptData {
  private:
   const DexClass* m_cls;
   bool m_has_srcfile{false};
-  std::string_view m_package;
-  std::string_view m_filename;
+  std::string m_package;
+  std::string m_filename;
   std::vector<OptReason> m_opts;
   std::vector<NoptReason> m_nopts;
   std::unordered_map<const DexMethod*, std::shared_ptr<MethodOptData>>

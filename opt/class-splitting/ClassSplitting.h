@@ -7,10 +7,26 @@
 
 #pragma once
 
-#include "ClassSplitting.h"
 #include "Pass.h"
 
-namespace class_splitting {
+struct ClassSplittingConfig {
+  bool enabled{true};
+  bool combine_target_classes_by_api_level{false};
+  // Relocated methods per target class when combining by API Level.
+  unsigned int relocated_methods_per_target_class{64};
+  float method_profiles_appear_percent_threshold{0.01f};
+  bool relocate_static_methods{true};
+  bool relocate_non_static_direct_methods{true};
+  bool relocate_non_true_virtual_methods{true};
+  bool relocate_true_virtual_methods{true};
+  bool trampolines{true};
+  unsigned int trampoline_size_threshold{100};
+  std::vector<std::string> blocklist_types;
+  // If true, only consider methods that appear in the profiles for relocation.
+  bool profile_only{false};
+  // If true, also consider source-block info for decision making.
+  bool source_blocks{true};
+};
 
 class ClassSplittingPass : public Pass {
  public:
@@ -57,4 +73,3 @@ class ClassSplittingPass : public Pass {
  private:
   ClassSplittingConfig m_config;
 };
-} // namespace class_splitting

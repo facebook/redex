@@ -55,8 +55,7 @@ class IODITest : public ::testing::Test {
     DexMetadata dm;
     dm.set_id("classes");
     DexStore root_store(dm);
-    root_store.add_classes(
-        load_classes_from_dex(DexLocation::make_location("dex", dexfile)));
+    root_store.add_classes(load_classes_from_dex(dexfile));
     stores.emplace_back(std::move(root_store));
 
     instruction_lowering::run(stores, true);
@@ -83,7 +82,6 @@ class IODITest : public ::testing::Test {
                      nullptr, /* locator_index */
                      false, /* normal_primary_dex */
                      0,
-                     nullptr, /* store name */
                      0,
                      iodi_layers ? DebugInfoKind::InstructionOffsetsLayered
                                  : DebugInfoKind::InstructionOffsets,
@@ -109,10 +107,8 @@ class IODITest : public ::testing::Test {
     }
     reset_redex();
     auto data = DexOutputTestHelper::steal_output(output);
-    auto result =
-        load_classes_from_dex(reinterpret_cast<dex_header*>(data.get()),
-                              DexLocation::make_location("", "tmp.dex"),
-                              false);
+    auto result = load_classes_from_dex(
+        reinterpret_cast<dex_header*>(data.get()), "tmp.dex", false);
     return result;
   }
 
@@ -238,8 +234,7 @@ void log_debug_to_methods(const std::map<void*, DexMethods>& result) {
     std::unordered_map<std::string, uint32_t> result;
     const char* dexfile = std::getenv("dexfile");
     redex_assert(dexfile);
-    auto pre_classes =
-        load_classes_from_dex(DexLocation::make_location("", dexfile), false);
+    auto pre_classes = load_classes_from_dex(dexfile, false);
     auto pre_debug_data = debug_to_methods(pre_classes);
     for (auto& data : pre_debug_data) {
       EXPECT_EQ(data.second.size(), 1);
@@ -395,7 +390,7 @@ TEST_F(IODITest, sameNameDontUseIODI) {
   auto classes = run_redex(nullptr, nullptr, /*iodi_layers=*/false);
   size_t same_name_count = 0;
   for (DexClass* cls : classes) {
-    std::unordered_map<std::string_view, DexMethods> name_to_methods;
+    std::unordered_map<std::string, DexMethods> name_to_methods;
     for (DexMethod* method : cls->get_dmethods()) {
       name_to_methods[method->str()].push_back(method);
     }
@@ -429,7 +424,7 @@ TEST_F(IODITest, sameNameIODILayered) {
   auto classes = run_redex(nullptr, nullptr, /*iodi_layers=*/true);
   size_t same_name_count = 0;
   for (DexClass* cls : classes) {
-    std::unordered_map<std::string_view, DexMethods> name_to_methods;
+    std::unordered_map<std::string, DexMethods> name_to_methods;
     for (DexMethod* method : cls->get_dmethods()) {
       name_to_methods[method->str()].push_back(method);
     }
@@ -483,7 +478,7 @@ TEST_F(IODITest, iodiLayers) {
   auto classes = run_redex(nullptr, nullptr, /*iodi_layers=*/true);
   size_t cluster_count{0};
   for (DexClass* cls : classes) {
-    std::unordered_map<std::string_view, DexMethods> name_to_methods;
+    std::unordered_map<std::string, DexMethods> name_to_methods;
     for (DexMethod* method : cls->get_dmethods()) {
       name_to_methods[method->str()].push_back(method);
     }

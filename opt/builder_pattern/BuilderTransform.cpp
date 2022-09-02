@@ -8,6 +8,9 @@
 #include "BuilderTransform.h"
 
 #include "DexClass.h"
+#include "IRCode.h"
+#include "Inliner.h"
+#include "RemoveBuilderPattern.h"
 
 namespace builder_pattern {
 
@@ -41,13 +44,14 @@ BuilderTransform::BuilderTransform(
       MultiMethodInlinerMode::None));
 }
 
-std::unordered_set<IRInstruction*> BuilderTransform::try_inline_calls(
+std::unordered_set<const IRInstruction*>
+BuilderTransform::get_not_inlined_insns(
     DexMethod* caller,
     const std::unordered_set<IRInstruction*>& insns,
     std::vector<IRInstruction*>* deleted_insns) {
   always_assert(caller && caller->get_code());
   m_inliner->inline_callees(caller, insns, deleted_insns);
-  std::unordered_set<IRInstruction*> not_inlined_insns;
+  std::unordered_set<const IRInstruction*> not_inlined_insns;
   // Check if everything was inlined.
   auto* code = caller->get_code();
   for (const auto& mie : InstructionIterable(code)) {
@@ -99,7 +103,7 @@ bool BuilderTransform::inline_super_calls_and_ctors(const DexType* type) {
     if (!inlinable_insns.empty()) {
       TRACE(BLD_PATTERN, 8, "Creating a copy of %s", SHOW(method));
 
-      const auto name_str = method->get_name()->str();
+      const std::string& name_str = method->get_name()->str();
       DexMethod* method_copy = DexMethod::make_method_from(
           method,
           method->get_class(),
@@ -107,7 +111,7 @@ bool BuilderTransform::inline_super_calls_and_ctors(const DexType* type) {
       m_method_copy[method] = method_copy;
 
       size_t num_insns_not_inlined =
-          try_inline_calls(method, inlinable_insns, nullptr).size();
+          get_not_inlined_insns(method, inlinable_insns, nullptr).size();
       if (num_insns_not_inlined > 0) {
         return false;
       }
@@ -182,7 +186,8 @@ void BuilderTransform::replace_fields(const InstantiationToUsage& usage,
                                       DexMethod* method) {
   auto code = method->get_code();
 
-  std::vector<std::pair<IRList::iterator, IRInstruction*>> to_replace;
+  std::unordered_set<const IRInstruction*> deletes;
+  std::unordered_map<IRInstruction*, IRInstruction*> replacement;
 
   for (const auto& mie : InstructionIterable(code)) {
     auto instantiation_insn = mie.insn;
@@ -200,8 +205,7 @@ void BuilderTransform::replace_fields(const InstantiationToUsage& usage,
     instantiation_insn->set_type(type::java_lang_Object());
 
     std::map<DexField*, size_t, dexfields_comparator> field_to_reg;
-    for (const auto& it : usage.at(instantiation_insn)) {
-      auto* insn = it->insn;
+    for (const auto& insn : usage.at(instantiation_insn)) {
 
       if (opcode::is_an_iput(insn->opcode()) ||
           opcode::is_an_iget(insn->opcode())) {
@@ -228,10 +232,19 @@ void BuilderTransform::replace_fields(const InstantiationToUsage& usage,
           new_insn->set_dest(field_to_reg[field]);
           new_insn->set_src(0, insn->src(0));
         } else {
-          new_insn->set_dest(std::next(it)->insn->dest());
+          // Get the destination register from the next instruction.
+          // TODO(emmasevastian): Keep track of the iterator instead of
+          //                      the instruction.
+          auto ii = InstructionIterable(*code);
+          for (auto it = ii.begin(); it != ii.end(); ++it) {
+            if (it->insn == insn) {
+              new_insn->set_dest(std::next(it)->insn->dest());
+              break;
+            }
+          }
           new_insn->set_src(0, field_to_reg[field]);
         }
-        to_replace.emplace_back(it, new_insn);
+        replacement[const_cast<IRInstruction*>(insn)] = new_insn;
       } else if (insn->opcode() == OPCODE_MOVE_OBJECT ||
                  insn->opcode() == IOPCODE_MOVE_RESULT_PSEUDO_OBJECT ||
                  opcode::is_a_conditional_branch(insn->opcode())) {
@@ -254,11 +267,7 @@ void BuilderTransform::replace_fields(const InstantiationToUsage& usage,
           always_assert(invoked->get_class() == type::java_lang_Object() &&
                         method::is_init(invoked));
         } else {
-          // Replace check-cast with move.
-          IRInstruction* new_move = new IRInstruction(OPCODE_MOVE_OBJECT);
-          new_move->set_src(0, insn->src(0));
-          new_move->set_dest(std::next(it)->insn->dest());
-          to_replace.emplace_back(it, new_move);
+          deletes.emplace(insn);
         }
       }
     }
@@ -266,8 +275,12 @@ void BuilderTransform::replace_fields(const InstantiationToUsage& usage,
     initialize_regs(field_to_reg, code);
   }
 
-  for (const auto& pair : to_replace) {
-    code->replace_opcode(pair.first, {pair.second});
+  for (const auto* insn : deletes) {
+    code->remove_opcode(const_cast<IRInstruction*>(insn));
+  }
+
+  for (const auto& pair : replacement) {
+    code->replace_opcode(pair.first, pair.second);
   }
 }
 

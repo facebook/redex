@@ -7,7 +7,6 @@
 
 #include "MethodDedup.h"
 
-#include "DedupBlocks.h"
 #include "DexOpcode.h"
 #include "IRCode.h"
 #include "MethodReference.h"
@@ -18,23 +17,21 @@ namespace {
 
 struct CodeAsKey {
   const IRCode* code;
-  const bool dedup_fill_in_stack_trace;
+  const bool dedup_throw_blocks;
 
-  CodeAsKey(const IRCode* c, bool dedup_fill_in_stack_trace)
-      : code(c), dedup_fill_in_stack_trace(dedup_fill_in_stack_trace) {}
+  CodeAsKey(const IRCode* c, bool dedup_throw_blocks)
+      : code(c), dedup_throw_blocks(dedup_throw_blocks) {}
 
   static bool non_throw_instruction_equal(const IRInstruction& left,
                                           const IRInstruction& right) {
-    return left == right &&
-           !dedup_blocks_impl::is_ineligible_because_of_fill_in_stack_trace(
-               &left);
+    return left == right && !opcode::is_throw(left.opcode()) &&
+           !opcode::is_throw(right.opcode());
   }
 
   bool operator==(const CodeAsKey& other) const {
-    return dedup_fill_in_stack_trace
-               ? code->structural_equals(*other.code)
-               : code->structural_equals(*other.code,
-                                         non_throw_instruction_equal);
+    return dedup_throw_blocks ? code->structural_equals(*other.code)
+                              : code->structural_equals(
+                                    *other.code, non_throw_instruction_equal);
   }
 };
 
@@ -52,12 +49,12 @@ using DuplicateMethods =
     std::unordered_map<CodeAsKey, MethodOrderedSet, CodeHasher>;
 
 std::vector<MethodOrderedSet> get_duplicate_methods_simple(
-    const MethodOrderedSet& methods, bool dedup_fill_in_stack_trace) {
+    const MethodOrderedSet& methods, bool dedup_throw_blocks) {
   DuplicateMethods duplicates;
   for (DexMethod* method : methods) {
     always_assert(method->get_code());
-    duplicates[CodeAsKey(method->get_code(), dedup_fill_in_stack_trace)]
-        .emplace(method);
+    duplicates[CodeAsKey(method->get_code(), dedup_throw_blocks)].emplace(
+        method);
   }
 
   std::vector<MethodOrderedSet> result;
@@ -102,14 +99,14 @@ std::vector<MethodOrderedSet> group_similar_methods(
 }
 
 std::vector<MethodOrderedSet> group_identical_methods(
-    const std::vector<DexMethod*>& methods, bool dedup_fill_in_stack_trace) {
+    const std::vector<DexMethod*>& methods, bool dedup_throw_blocks) {
   std::vector<MethodOrderedSet> result;
   std::vector<MethodOrderedSet> same_protos = group_similar_methods(methods);
 
   // Find actual duplicates.
   for (const auto& same_proto : same_protos) {
     std::vector<MethodOrderedSet> duplicates =
-        get_duplicate_methods_simple(same_proto, dedup_fill_in_stack_trace);
+        get_duplicate_methods_simple(same_proto, dedup_throw_blocks);
 
     result.insert(result.end(), duplicates.begin(), duplicates.end());
   }
@@ -119,18 +116,17 @@ std::vector<MethodOrderedSet> group_identical_methods(
 
 /**
  * This method is for testing the method deduplicating logic. The
- * dedup_fill_in_stack_trace flag is passed down to the method-deduping.
+ * dedup_throw_blocks flag is passed down to the method-deduping.
  */
 bool are_deduplicatable(const std::vector<DexMethod*>& methods,
-                        bool dedup_fill_in_stack_trace) {
-  return group_identical_methods(methods, dedup_fill_in_stack_trace).size() ==
-         1;
+                        bool dedup_throw_blocks) {
+  return group_identical_methods(methods, dedup_throw_blocks).size() == 1;
 }
 
 size_t dedup_methods_helper(
     const Scope& scope,
     const std::vector<DexMethod*>& to_dedup,
-    bool dedup_fill_in_stack_trace,
+    bool dedup_throw_blocks,
     std::vector<DexMethod*>& replacements,
     boost::optional<std::unordered_map<DexMethod*, MethodOrderedSet>>&
         new_to_old) {
@@ -139,8 +135,7 @@ size_t dedup_methods_helper(
     return 0;
   }
   size_t dedup_count = 0;
-  auto grouped_methods =
-      group_identical_methods(to_dedup, dedup_fill_in_stack_trace);
+  auto grouped_methods = group_identical_methods(to_dedup, dedup_throw_blocks);
   std::unordered_map<DexMethod*, DexMethod*> duplicates_to_replacement;
   for (auto& group : grouped_methods) {
     auto replacement = *group.begin();
@@ -182,7 +177,7 @@ size_t dedup_methods_helper(
 size_t dedup_methods(
     const Scope& scope,
     const std::vector<DexMethod*>& to_dedup,
-    bool dedup_fill_in_stack_trace,
+    bool dedup_throw_blocks,
     std::vector<DexMethod*>& replacements,
     boost::optional<std::unordered_map<DexMethod*, MethodOrderedSet>>&
         new_to_old) {
@@ -193,11 +188,8 @@ size_t dedup_methods(
           8,
           "dedup: static|non_virt input %zu",
           to_dedup_temp.size());
-    size_t dedup_count = dedup_methods_helper(scope,
-                                              to_dedup_temp,
-                                              dedup_fill_in_stack_trace,
-                                              replacements,
-                                              new_to_old);
+    size_t dedup_count = dedup_methods_helper(
+        scope, to_dedup_temp, dedup_throw_blocks, replacements, new_to_old);
     total_dedup_count += dedup_count;
     TRACE(METH_DEDUP, 8, "dedup: static|non_virt dedupped %zu", dedup_count);
     if (dedup_count == 0) {

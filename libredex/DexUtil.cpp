@@ -227,7 +227,7 @@ void load_root_dexen(DexStore& store,
     }
     // N.B. throaway stats for now
     DexClasses classes = load_classes_from_dex(
-        DexLocation::make_location("dex", dex.string()), balloon,
+        dex.string().c_str(), balloon,
         /* throw_on_balloon_error */ throw_on_balloon_error,
         support_dex_version);
     store.add_classes(std::move(classes));

@@ -1482,10 +1482,9 @@ std::ostream& operator<<(std::ostream& output, const IRTypeChecker& checker) {
 }
 
 void IRTypeChecker::check_completion() const {
-  always_assert_log(
-      m_complete,
-      "The type checker did not run on method %s.\n",
-      m_dex_method->get_deobfuscated_name_or_empty_copy().c_str());
+  always_assert_log(m_complete,
+                    "The type checker did not run on method %s.\n",
+                    m_dex_method->get_deobfuscated_name_or_empty().c_str());
 }
 
 std::string IRTypeChecker::dump_annotated_cfg(DexMethod* method) const {

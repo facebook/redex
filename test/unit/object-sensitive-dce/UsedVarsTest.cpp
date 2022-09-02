@@ -25,9 +25,11 @@ namespace ptrs = local_pointers;
 class UsedVarsTest : public RedexTest {};
 
 std::unique_ptr<uv::FixpointIterator> analyze(
-    cfg::ControlFlowGraph& cfg,
+    IRCode& code,
     const ptrs::InvokeToSummaryMap& invoke_to_esc_summary_map,
     const side_effects::InvokeToSummaryMap& invoke_to_eff_summary_map) {
+  code.build_cfg(/* editable */ false);
+  auto& cfg = code.cfg();
   cfg.calculate_exit_block();
 
   ptrs::FixpointIterator pointers_fp_iter(cfg, invoke_to_esc_summary_map);
@@ -39,10 +41,9 @@ std::unique_ptr<uv::FixpointIterator> analyze(
   return used_vars_fp_iter;
 }
 
-void optimize(const uv::FixpointIterator& fp_iter, cfg::ControlFlowGraph& cfg) {
-  auto dead_instructions = uv::get_dead_instructions(cfg, fp_iter);
-  for (const auto& it : dead_instructions) {
-    cfg.remove_insn(it);
+void optimize(const uv::FixpointIterator& fp_iter, IRCode* code) {
+  for (const auto& it : uv::get_dead_instructions(*code, fp_iter)) {
+    code->remove_opcode(it);
   }
 }
 
@@ -82,13 +83,10 @@ TEST_F(UsedVarsTest, simple) {
       invoke_to_esc_summary_map.emplace(insn, ptrs::EscapeSummary{});
     }
   }
-  code->build_cfg();
-  auto& cfg = code->cfg();
   auto fp_iter =
-      analyze(cfg, invoke_to_esc_summary_map, invoke_to_eff_summary_map);
-  optimize(*fp_iter, cfg);
+      analyze(*code, invoke_to_esc_summary_map, invoke_to_eff_summary_map);
+  optimize(*fp_iter, code.get());
 
-  code->clear_cfg();
   auto expected_code = assembler::ircode_from_string(R"(
     (
       (return-void)
@@ -125,9 +123,7 @@ TEST_F(UsedVarsTest, join) {
 
   side_effects::InvokeToSummaryMap invoke_to_eff_summary_map;
   ptrs::InvokeToSummaryMap invoke_to_esc_summary_map;
-  code->build_cfg();
-  auto& cfg = code->cfg();
-  for (auto& mie : InstructionIterable(cfg)) {
+  for (auto& mie : InstructionIterable(*code)) {
     auto insn = mie.insn;
     if (opcode::is_an_invoke(insn->opcode()) &&
         method::is_init(insn->get_method())) {
@@ -136,18 +132,18 @@ TEST_F(UsedVarsTest, join) {
     }
   }
   auto fp_iter =
-      analyze(cfg, invoke_to_esc_summary_map, invoke_to_eff_summary_map);
-  optimize(*fp_iter, cfg);
-  code->clear_cfg();
+      analyze(*code, invoke_to_esc_summary_map, invoke_to_eff_summary_map);
+  optimize(*fp_iter, code.get());
+
   auto expected_code = assembler::ircode_from_string(R"(
     (
       (load-param v0)
       (if-eqz v0 :true)
-      (:join)
-      (return-void)
+      (goto :join)
       (:true)
       (sput v0 "LUnknownClass;.unknownField:I")
-      (goto :join)
+      (:join)
+      (return-void)
     )
   )");
   EXPECT_CODE_EQ(code.get(), expected_code.get());
@@ -166,16 +162,17 @@ TEST_F(UsedVarsTest, noDeleteInit) {
       (new-instance "LFoo;")
       (move-result-pseudo-object v1)
       (invoke-direct (v1) "LFoo;.<init>:()V")
-      (:join)
-      (const v2 0)
-      (iput v2 v1 "LFoo;.bar:I")
-      (return-void)
+      (goto :join)
 
       (:true)
       (sget-object "LBar;.bar:LBar;")
       (move-result-pseudo-object v1)
       (invoke-direct (v1) "LBar;.<init>:()V")
-      (goto :join)
+
+      (:join)
+      (const v2 0)
+      (iput v2 v1 "LFoo;.bar:I")
+      (return-void)
     )
   )");
   auto expected = assembler::to_s_expr(code.get());
@@ -190,12 +187,10 @@ TEST_F(UsedVarsTest, noDeleteInit) {
       invoke_to_esc_summary_map.emplace(insn, ptrs::EscapeSummary{});
     }
   }
-  code->build_cfg();
-  auto& cfg = code->cfg();
   auto fp_iter =
-      analyze(cfg, invoke_to_esc_summary_map, invoke_to_eff_summary_map);
-  optimize(*fp_iter, cfg);
-  code->clear_cfg();
+      analyze(*code, invoke_to_esc_summary_map, invoke_to_eff_summary_map);
+  optimize(*fp_iter, code.get());
+
   EXPECT_EQ(assembler::to_s_expr(code.get()), expected);
 }
 
@@ -226,12 +221,9 @@ TEST_F(UsedVarsTest, noDeleteAliasedInit) {
       invoke_to_esc_summary_map.emplace(insn, ptrs::EscapeSummary{});
     }
   }
-  code->build_cfg();
-  auto& cfg = code->cfg();
   auto fp_iter =
-      analyze(cfg, invoke_to_esc_summary_map, invoke_to_eff_summary_map);
-  optimize(*fp_iter, cfg);
-  code->clear_cfg();
+      analyze(*code, invoke_to_esc_summary_map, invoke_to_eff_summary_map);
+  optimize(*fp_iter, code.get());
 
   EXPECT_EQ(assembler::to_s_expr(code.get()), expected);
 }
@@ -277,12 +269,10 @@ TEST_F(UsedVarsTest, noDeleteInitForUnreadObject) {
       }
     }
   }
-  code->build_cfg();
-  auto& cfg = code->cfg();
   auto fp_iter =
-      analyze(cfg, invoke_to_esc_summary_map, invoke_to_eff_summary_map);
-  optimize(*fp_iter, cfg);
-  code->clear_cfg();
+      analyze(*code, invoke_to_esc_summary_map, invoke_to_eff_summary_map);
+  optimize(*fp_iter, code.get());
+
   EXPECT_EQ(assembler::to_s_expr(code.get()), expected);
 }
 
@@ -326,11 +316,9 @@ TEST_F(UsedVarsTest, noReturn) {
       }
     }
   }
-  code->build_cfg();
-  auto& cfg = code->cfg();
   auto fp_iter =
-      analyze(cfg, invoke_to_esc_summary_map, invoke_to_eff_summary_map);
-  optimize(*fp_iter, cfg);
-  code->clear_cfg();
+      analyze(*code, invoke_to_esc_summary_map, invoke_to_eff_summary_map);
+  optimize(*fp_iter, code.get());
+
   EXPECT_EQ(assembler::to_s_expr(code.get()), expected);
 }

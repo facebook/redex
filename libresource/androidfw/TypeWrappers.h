@@ -18,12 +18,12 @@
 #define __TYPE_WRAPPERS_H
 
 #include "androidfw/ResourceTypes.h"
-#include "utils/ByteOrder.h"
 
 namespace android {
 
 struct TypeVariant {
-    explicit TypeVariant(const ResTable_type* data);
+    TypeVariant(const ResTable_type* data)
+        : data(data) {}
 
     class iterator {
     public:
@@ -71,13 +71,10 @@ struct TypeVariant {
     }
 
     iterator endEntries() const {
-        return iterator(this, mLength);
+        return iterator(this, dtohl(data->entryCount));
     }
 
     const ResTable_type* data;
-
-private:
-    size_t mLength;
 };
 
 } // namespace android

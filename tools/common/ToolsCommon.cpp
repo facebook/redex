@@ -123,7 +123,6 @@ void write_intermediate_dex(const RedexOptions& redex_options,
                            std::move(gtypes),
                            /* locator_index= */ nullptr,
                            store_number,
-                           &store.get_name(),
                            i,
                            conf,
                            pos_mapper.get(),
@@ -146,16 +145,14 @@ void load_intermediate_dex(const std::string& input_ir_dir,
   Timer t("Load intermediate dex");
   dex_stats_t dex_stats;
   for (const Json::Value& store_files : dex_files) {
-    std::string store_name = store_files["name"].asString();
-    DexStore store(store_name);
+    DexStore store(store_files["name"].asString());
     stores.emplace_back(std::move(store));
     for (const Json::Value& file_name : store_files["list"]) {
       auto location = boost::filesystem::path(input_ir_dir);
       location /= file_name.asString();
       // `string().c_str()` to get guaranteed `const char*`.
-      DexClasses classes = load_classes_from_dex(
-          DexLocation::make_location(store_name, location.string()),
-          &dex_stats);
+      DexClasses classes =
+          load_classes_from_dex(location.string().c_str(), &dex_stats);
       stores.back().add_classes(std::move(classes));
     }
   }
@@ -246,8 +243,7 @@ void load_all_intermediate(const std::string& input_ir_dir,
   if (!(*entry_data).get("jars", Json::nullValue).empty()) {
     for (const Json::Value& item : (*entry_data)["jars"]) {
       const std::string jar_path = item.asString();
-      always_assert(load_jar_file(DexLocation::make_location("", jar_path),
-                                  &external_classes));
+      always_assert(load_jar_file(jar_path.c_str(), &external_classes));
     }
   }
 
@@ -276,11 +272,10 @@ void load_classes_from_dexes_and_metadata(
   for (const auto& filename : dex_files) {
     if (filename.size() >= 5 &&
         filename.compare(filename.size() - 4, 4, ".dex") == 0) {
-      auto location = DexLocation::make_location("dex", filename);
       assert_dex_magic_consistency(stores[0].get_dex_magic(),
-                                   load_dex_magic_from_dex(location));
+                                   load_dex_magic_from_dex(filename.c_str()));
       dex_stats_t dex_stats;
-      DexClasses classes = load_classes_from_dex(location, &dex_stats);
+      DexClasses classes = load_classes_from_dex(filename.c_str(), &dex_stats);
       input_totals += dex_stats;
       input_dexes_stats.push_back(dex_stats);
       stores[0].add_classes(std::move(classes));
@@ -297,11 +292,12 @@ void load_classes_from_dexes_and_metadata(
       store_metadata.parse(filename);
       DexStore store(store_metadata);
       for (const auto& file_path : store_metadata.get_files()) {
-        auto location = DexLocation::make_location(store.get_name(), file_path);
-        assert_dex_magic_consistency(stores[0].get_dex_magic(),
-                                     load_dex_magic_from_dex(location));
+        assert_dex_magic_consistency(
+            stores[0].get_dex_magic(),
+            load_dex_magic_from_dex(file_path.c_str()));
         dex_stats_t dex_stats;
-        DexClasses classes = load_classes_from_dex(location, &dex_stats);
+        DexClasses classes =
+            load_classes_from_dex(file_path.c_str(), &dex_stats);
 
         input_totals += dex_stats;
         input_dexes_stats.push_back(dex_stats);

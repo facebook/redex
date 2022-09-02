@@ -147,9 +147,18 @@ class Assessor {
     std::unordered_set<DexPosition*> positions;
     std::unordered_set<DexPosition*> parents;
     bool any_unknown_source_position = false;
+    // We are working with a *non-editable* cfg here. A key difference between
+    // an editable and an uneditable cfg is that the latter has not been
+    // enriched with trailing positions in all blocks
+    // (ControlFlowGraph::find_block_boundaries), while linearlization (via
+    // remove_duplicate_positions) removes redundant positions across block
+    // boundaries. Thus, we keep track of last positions across blocks, just as
+    // the cfg would when building an editable cfg (and just as symbolication
+    // would when going backwards to find the position relevant to an
+    // instruction offset).
+    DexPosition* last_position = nullptr;
     for (auto block : cfg.blocks()) {
       bool block_without_position_reported = false;
-      DexPosition* last_position = nullptr;
       for (auto it = block->begin(); it != block->end(); it++) {
         if (it->type == MFLOW_POSITION) {
           positions.insert(it->pos.get());
@@ -285,103 +294,63 @@ DexAssessment DexScopeAssessor::run() {
     }
   };
 
-  struct ClassStats {
-    std::atomic<size_t> classes_without_deobfuscated_name{0};
-    std::atomic<size_t> with_annotations{0};
-    std::atomic<size_t> sum_annotations{0};
-  };
-  ClassStats class_stats{};
-  walk::parallel::classes(m_scope, [&class_stats](DexClass* c) {
-    if (c->get_deobfuscated_name_or_null() == nullptr) {
-      class_stats.classes_without_deobfuscated_name.fetch_add(1);
-    }
-    auto* aset = c->get_anno_set();
-    if (aset != nullptr && aset->size() > 0) {
-      class_stats.with_annotations.fetch_add(1, std::memory_order_relaxed);
-      class_stats.sum_annotations.fetch_add(aset->size(),
-                                            std::memory_order_relaxed);
-    }
-  });
+  std::atomic<size_t> classes_without_deobfuscated_name{0};
+  walk::parallel::classes(m_scope,
+                          [&classes_without_deobfuscated_name](DexClass* c) {
+                            if (c->get_deobfuscated_name_or_null() == nullptr) {
+                              classes_without_deobfuscated_name.fetch_add(1);
+                            }
+                          });
 
-  struct FieldStats {
-    std::atomic<size_t> fields_without_deobfuscated_name{0};
-    std::atomic<size_t> num_fields{0};
-    std::atomic<size_t> with_annotations{0};
-    std::atomic<size_t> sum_annotations{0};
-  };
-  FieldStats field_stats{};
-  walk::parallel::fields(m_scope, [&field_stats](DexField* f) {
-    field_stats.num_fields.fetch_add(1, std::memory_order_relaxed);
-    auto* aset = f->get_anno_set();
-    if (aset != nullptr && aset->size() > 0) {
-      field_stats.with_annotations.fetch_add(1, std::memory_order_relaxed);
-      field_stats.sum_annotations.fetch_add(aset->size(),
-                                            std::memory_order_relaxed);
-    }
-    if (f->get_deobfuscated_name().empty()) {
-      field_stats.fields_without_deobfuscated_name.fetch_add(1);
-    }
-  });
+  std::atomic<size_t> fields_without_deobfuscated_name{0};
+  walk::parallel::fields(m_scope,
+                         [&fields_without_deobfuscated_name](DexField* f) {
+                           if (f->get_deobfuscated_name().empty()) {
+                             fields_without_deobfuscated_name.fetch_add(1);
+                           }
+                         });
 
-  struct MethodStats {
-    std::atomic<size_t> methods_without_deobfuscated_name{0};
-    std::atomic<size_t> num_methods{0};
-    std::atomic<size_t> methods_with_code{0};
-    std::atomic<size_t> num_instructions{0};
-    std::atomic<size_t> sum_opcodes{0};
-    std::atomic<size_t> with_annotations{0};
-    std::atomic<size_t> sum_annotations{0};
-    std::atomic<size_t> with_param_annotations{0};
-    std::atomic<size_t> sum_param_annotations{0};
-  };
-  MethodStats method_stats{};
-  walk::parallel::methods(m_scope, [&method_stats](auto* m) {
-    method_stats.num_methods.fetch_add(1, std::memory_order_relaxed);
-    {
-      auto* aset = m->get_anno_set();
-      if (aset != nullptr && aset->size() > 0) {
-        method_stats.with_annotations.fetch_add(1, std::memory_order_relaxed);
-        method_stats.sum_annotations.fetch_add(aset->size(),
-                                               std::memory_order_relaxed);
-      }
-    }
-    {
-      auto* panno = m->get_param_anno();
-      if (panno != nullptr && !panno->empty()) {
-        method_stats.with_param_annotations.fetch_add(
-            1, std::memory_order_relaxed);
-        method_stats.sum_param_annotations.fetch_add(panno->size(),
-                                                     std::memory_order_relaxed);
-      }
-    }
-
-    if (m->get_deobfuscated_name_or_null() == nullptr) {
-      method_stats.methods_without_deobfuscated_name.fetch_add(1);
-    }
-
-    auto code = m->get_code();
-    if (code == nullptr) {
-      return;
-    }
-    method_stats.methods_with_code.fetch_add(1, std::memory_order_relaxed);
-    method_stats.num_instructions.fetch_add(code->count_opcodes(),
-                                            std::memory_order_relaxed);
-    method_stats.sum_opcodes.fetch_add(code->sum_opcode_sizes(),
-                                       std::memory_order_relaxed);
-  });
+  std::atomic<size_t> num_methods{0};
+  std::atomic<size_t> methods_with_code{0};
+  std::atomic<size_t> num_instructions{0};
+  std::atomic<size_t> sum_opcodes{0};
+  walk::parallel::methods(
+      m_scope,
+      [&num_methods, &methods_with_code, &num_instructions, &sum_opcodes](
+          auto* m) {
+        num_methods.fetch_add(1, std::memory_order_relaxed);
+        auto code = m->get_code();
+        if (code == nullptr) {
+          return;
+        }
+        methods_with_code.fetch_add(1, std::memory_order_relaxed);
+        num_instructions.fetch_add(code->count_opcodes(),
+                                   std::memory_order_relaxed);
+        sum_opcodes.fetch_add(code->sum_opcode_sizes(),
+                              std::memory_order_relaxed);
+      });
 
   dex_position::Assessor dex_position_assessor;
-
+  std::atomic<size_t> methods_without_deobfuscated_name{0};
   auto combined_assessment = walk::parallel::methods<Assessment>(
-      m_scope, [&dex_position_assessor](DexMethod* method) {
+      m_scope,
+      [&dex_position_assessor,
+       &methods_without_deobfuscated_name](DexMethod* method) {
         Assessment assessment;
+
+        if (method->get_deobfuscated_name_or_null() == nullptr) {
+          methods_without_deobfuscated_name.fetch_add(1);
+        }
 
         auto code = method->get_code();
         if (!code) {
           return assessment;
         }
 
-        code->build_cfg(/*editable*/ true, /*fresh_editable_build*/ false);
+        always_assert(!code->editable_cfg_built());
+        if (!code->cfg_built()) {
+          code->build_cfg(/*editable*/ false);
+        }
 
         assessment.dex_position_assessment =
             dex_position_assessor.analyze_method(method, code->cfg());
@@ -408,31 +377,16 @@ DexAssessment DexScopeAssessor::run() {
 
   auto res = combined_assessment.to_dex_assessment();
   res["without_deobfuscated_names.methods"] =
-      method_stats.methods_without_deobfuscated_name.load();
+      methods_without_deobfuscated_name.load();
   res["without_deobfuscated_names.fields"] =
-      field_stats.fields_without_deobfuscated_name.load();
+      fields_without_deobfuscated_name.load();
   res["without_deobfuscated_names.classes"] =
-      class_stats.classes_without_deobfuscated_name.load();
+      classes_without_deobfuscated_name.load();
 
-  res["num_classes"] = m_scope.size();
-  res["num_methods"] = method_stats.num_methods.load();
-  res["num_fields"] = field_stats.num_fields.load();
-  res["methods~with~code"] = method_stats.methods_with_code.load();
-  res["num_instructions"] = method_stats.num_instructions.load();
-  res["sum_opcodes"] = method_stats.sum_opcodes.load();
-
-  res["methods.with_annotations"] = method_stats.with_annotations.load();
-  res["methods.sum_annotations"] = method_stats.sum_annotations.load();
-  res["methods.with_param_annotations"] =
-      method_stats.with_param_annotations.load();
-  res["methods.sum_param_annotations"] =
-      method_stats.sum_param_annotations.load();
-
-  res["fields.with_annotations"] = field_stats.with_annotations.load();
-  res["fields.sum_annotations"] = field_stats.sum_annotations.load();
-
-  res["classes.with_annotations"] = class_stats.with_annotations.load();
-  res["classes.sum_annotations"] = class_stats.sum_annotations.load();
+  res["num_methods"] = num_methods.load();
+  res["methods~with~code"] = methods_with_code.load();
+  res["num_instructions"] = num_instructions.load();
+  res["sum_opcodes"] = sum_opcodes.load();
 
   if (combined_assessment.has_problems()) {
     TRACE(ASSESSOR, 1, "[scope assessor] %s", to_string(res).c_str());

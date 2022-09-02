@@ -25,7 +25,7 @@ using ParamIndex = uint32_t;
  * to their respective indices.
  */
 std::unordered_map<const IRInstruction*, ParamIndex> get_load_param_map(
-    const cfg::ControlFlowGraph& cfg);
+    cfg::ControlFlowGraph& cfg);
 
 /*
  * A helper class for figuring out whether the regular return value of
@@ -66,7 +66,7 @@ class ReturnParamResolver {
    * instructions would return a particular incoming parameter.
    */
   boost::optional<ParamIndex> get_return_param_index(
-      const cfg::ControlFlowGraph& cfg,
+      cfg::ControlFlowGraph& cfg,
       const std::unordered_map<const DexMethod*, ParamIndex>&
           methods_which_return_parameter) const;
 
@@ -144,8 +144,6 @@ class ResultPropagation {
 class ResultPropagationPass : public Pass {
  public:
   ResultPropagationPass() : Pass("ResultPropagationPass") {}
-
-  bool is_editable_cfg_friendly() override { return true; }
 
   void bind_config() override {
     bind("callee_blocklist",

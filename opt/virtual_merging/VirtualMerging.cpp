@@ -979,8 +979,8 @@ void check_remap(
 void reset_sb(SourceBlock& sb, DexMethod* ref, uint32_t id) {
   sb.src = ref->get_deobfuscated_name_or_null();
   sb.id = id;
-  for (size_t i = 0; i < sb.vals_size; i++) {
-    sb.vals[i] = SourceBlock::Val{0, 0};
+  for (auto& v : sb.vals) {
+    v = SourceBlock::Val{0, 0};
   }
 }
 
@@ -1114,7 +1114,7 @@ struct SBHelper {
         new_sb->src = parent->overridden->get_deobfuscated_name_or_null();
         new_sb->id = SourceBlock::kSyntheticId;
         if (overriding_sb != nullptr && first_sb != nullptr) {
-          for (size_t i = 0; i != new_sb->vals_size; ++i) {
+          for (size_t i = 0; i != new_sb->vals.size(); ++i) {
             if (!new_sb->get_val(i)) {
               new_sb->vals[i] = first_sb->vals[i];
             } else if (first_sb->get_val(i)) {
@@ -1129,7 +1129,7 @@ struct SBHelper {
     }
 
     ScopedSplitHelper(const ScopedSplitHelper&) = delete;
-    ScopedSplitHelper(ScopedSplitHelper&& rhs) noexcept
+    ScopedSplitHelper(ScopedSplitHelper&& rhs)
         : block(rhs.block),
           first_sb(rhs.first_sb),
           overriding(rhs.overriding),
@@ -1138,7 +1138,7 @@ struct SBHelper {
     }
 
     ScopedSplitHelper& operator=(const ScopedSplitHelper&) = delete;
-    ScopedSplitHelper& operator=(ScopedSplitHelper&& rhs) noexcept {
+    ScopedSplitHelper& operator=(ScopedSplitHelper&& rhs) {
       block = rhs.block;
       first_sb = rhs.first_sb;
       overriding = rhs.overriding;
@@ -1151,7 +1151,7 @@ struct SBHelper {
   };
 
   std::optional<ScopedSplitHelper> handle_split(cfg::Block* block,
-                                                const IRList::iterator& it,
+                                                IRList::iterator it,
                                                 DexMethod* overriding) {
     if (!create_source_blocks) {
       return std::nullopt;

@@ -24,8 +24,6 @@ class RegAllocPass : public Pass {
     trait(Traits::Pass::atleast, 1);
   }
 
-  bool is_editable_cfg_friendly() override { return true; }
-
   void eval_pass(DexStoresVector& stores,
                  ConfigFiles& conf,
                  PassManager& mgr) override;

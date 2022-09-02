@@ -14,14 +14,15 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "sharedbuffer"
-
-#include "utils/SharedBuffer.h"
-
 #include <stdlib.h>
 #include <string.h>
 
-#include "utils/Log.h"
+#ifdef _MSC_VER
+#include "CompatWindows.h"
+#endif
+
+#include "utils/SharedBuffer.h"
+#include "utils/Atomic.h"
 
 // ---------------------------------------------------------------------------
 
@@ -29,27 +30,20 @@ namespace android {
 
 SharedBuffer* SharedBuffer::alloc(size_t size)
 {
-    // Don't overflow if the combined size of the buffer / header is larger than
-    // size_max.
-    LOG_ALWAYS_FATAL_IF((size >= (SIZE_MAX - sizeof(SharedBuffer))),
-                        "Invalid buffer size %zu", size);
-
     SharedBuffer* sb = static_cast<SharedBuffer *>(malloc(sizeof(SharedBuffer) + size));
     if (sb) {
-        // Should be std::atomic_init(&sb->mRefs, 1);
-        // But that generates a warning with some compilers.
-        // The following is OK on Android-supported platforms.
-        sb->mRefs.store(1, std::memory_order_relaxed);
+        sb->mRefs = 1;
         sb->mSize = size;
-        sb->mClientMetadata = 0;
     }
     return sb;
 }
 
 
-void SharedBuffer::dealloc(const SharedBuffer* released)
+ssize_t SharedBuffer::dealloc(const SharedBuffer* released)
 {
+    if (released->mRefs != 0) return -1; // XXX: invalid operation
     free(const_cast<SharedBuffer*>(released));
+    return 0;
 }
 
 SharedBuffer* SharedBuffer::edit() const
@@ -70,13 +64,8 @@ SharedBuffer* SharedBuffer::editResize(size_t newSize) const
     if (onlyOwner()) {
         SharedBuffer* buf = const_cast<SharedBuffer*>(this);
         if (buf->mSize == newSize) return buf;
-        // Don't overflow if the combined size of the new buffer / header is larger than
-        // size_max.
-        LOG_ALWAYS_FATAL_IF((newSize >= (SIZE_MAX - sizeof(SharedBuffer))),
-                            "Invalid buffer size %zu", newSize);
-
         buf = (SharedBuffer*)realloc(buf, sizeof(SharedBuffer) + newSize);
-        if (buf != nullptr) {
+        if (buf != NULL) {
             buf->mSize = newSize;
             return buf;
         }
@@ -87,7 +76,7 @@ SharedBuffer* SharedBuffer::editResize(size_t newSize) const
         memcpy(sb->data(), data(), newSize < mySize ? newSize : mySize);
         release();
     }
-    return sb;    
+    return sb;
 }
 
 SharedBuffer* SharedBuffer::attemptEdit() const
@@ -95,7 +84,7 @@ SharedBuffer* SharedBuffer::attemptEdit() const
     if (onlyOwner()) {
         return const_cast<SharedBuffer*>(this);
     }
-    return nullptr;
+    return 0;
 }
 
 SharedBuffer* SharedBuffer::reset(size_t new_size) const
@@ -109,31 +98,19 @@ SharedBuffer* SharedBuffer::reset(size_t new_size) const
 }
 
 void SharedBuffer::acquire() const {
-    mRefs.fetch_add(1, std::memory_order_relaxed);
+    android_atomic_inc(&mRefs);
 }
 
 int32_t SharedBuffer::release(uint32_t flags) const
 {
-    const bool useDealloc = ((flags & eKeepStorage) == 0);
-    if (onlyOwner()) {
-        // Since we're the only owner, our reference count goes to zero.
-        mRefs.store(0, std::memory_order_relaxed);
-        if (useDealloc) {
-            dealloc(this);
-        }
-        // As the only owner, our previous reference count was 1.
-        return 1;
-    }
-    // There's multiple owners, we need to use an atomic decrement.
-    int32_t prevRefCount = mRefs.fetch_sub(1, std::memory_order_release);
-    if (prevRefCount == 1) {
-        // We're the last reference, we need the acquire fence.
-        atomic_thread_fence(std::memory_order_acquire);
-        if (useDealloc) {
-            dealloc(this);
+    int32_t prev = 1;
+    if (onlyOwner() || ((prev = android_atomic_dec(&mRefs)) == 1)) {
+        mRefs = 0;
+        if ((flags & eKeepStorage) == 0) {
+            free(const_cast<SharedBuffer*>(this));
         }
     }
-    return prevRefCount;
+    return prev;
 }
 
 

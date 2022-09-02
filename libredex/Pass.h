@@ -35,9 +35,6 @@ class Pass : public Configurable {
 
   bool is_analysis_pass() const { return m_kind == ANALYSIS; }
 
-  // \returns True means this pass is fully updated to use editable cfg.
-  virtual bool is_editable_cfg_friendly() { return false; }
-
   virtual void destroy_analysis_result() {
     always_assert_log(m_kind != ANALYSIS,
                       "destroy_analysis_result not implemented for %s",
@@ -62,10 +59,6 @@ class Pass : public Configurable {
   virtual void set_analysis_usage(AnalysisUsage& analysis_usage) const;
 
   Configurable::Reflection reflect() override;
-
-  virtual std::unique_ptr<Pass> clone(const std::string& /*new_name*/) const {
-    return nullptr;
-  }
 
  private:
   const std::string m_name;

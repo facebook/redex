@@ -325,12 +325,12 @@ bool RemoveArgs::update_method_signature(
   always_assert_log(method->is_def(),
                     "We don't treat virtuals, so methods must be defined\n");
 
-  const auto full_name = method->get_deobfuscated_name_or_empty();
+  const auto& full_name = method->get_deobfuscated_name_or_empty();
   for (const auto& s : m_blocklist) {
     if (full_name.find(s) != std::string::npos) {
       TRACE(ARGS, 3,
             "Skipping {%s} due to black list match of {%s} against {%s}",
-            SHOW(method), str_copy(full_name).c_str(), s.c_str());
+            SHOW(method), full_name.c_str(), s.c_str());
       return false;
     }
   }

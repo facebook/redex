@@ -77,19 +77,8 @@ void SoLibrary::populate_functions() {
       std::string desc = method["desc"].asString();
       std::string function_name = method["function"].asString();
 
-      // Avoids temporary allocations to make clang-tidy happy.
-      auto get_compound = [&]() {
-        std::string tmp;
-        tmp.reserve(class_name.size() + method_name.size() + desc.size() + 2);
-        tmp += class_name;
-        tmp += ".";
-        tmp += method_name;
-        tmp += ":";
-        tmp += desc;
-        return tmp;
-      };
-
-      DexMethodRef* m = DexMethod::get_method(get_compound());
+      DexMethodRef* m =
+          DexMethod::get_method(class_name + "." + method_name + ":" + desc);
       if (m) {
         DexMethod* decl = m->as_def();
         always_assert_log(decl,

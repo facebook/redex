@@ -50,7 +50,7 @@ static const char* VOID_RETURN_OBJECT_PROTO = "()Ljava/lang/Object;";
 static const char* VOID_RETURN_STRING_PROTO = "()Ljava/lang/String;";
 
 void testReadDex(const char* dexfile) {
-  DexLoader dl(DexLocation::make_location("", dexfile));
+  DexLoader dl(dexfile);
   dex_stats_t stats{{0}};
   auto classes = dl.load_dex(dexfile, &stats, 38);
   auto idx = dl.get_idx();
@@ -324,8 +324,7 @@ TEST(Dex038Test, ReadWriteDex038) {
   DexMetadata dm;
   dm.set_id("classes");
   DexStore root_store(dm);
-  root_store.add_classes(load_classes_from_dex(
-      DexLocation::make_location("dex", dexfile), true, true, 38));
+  root_store.add_classes(load_classes_from_dex(dexfile, true, true, 38));
   DexClasses& classes = root_store.get_dexen().back();
   std::vector<DexStore> stores;
   stores.emplace_back(std::move(root_store));
@@ -359,7 +358,6 @@ TEST(Dex038Test, ReadWriteDex038) {
                        std::move(gtypes),
                        nullptr,
                        0,
-                       nullptr,
                        0,
                        dummy_cfg,
                        pos_mapper.get(),
