@@ -85,6 +85,8 @@ void InterDexPass::bind_config() {
   bind("minimize_cross_dex_refs_string_ref_weight",
        m_minimize_cross_dex_refs_config.string_seed_weight,
        m_minimize_cross_dex_refs_config.string_seed_weight);
+  bind("minimize_cross_dex_refs_emit_json", false,
+       m_minimize_cross_dex_refs_config.emit_json);
   bind("minimize_cross_dex_refs_relocate_static_methods", false,
        m_cross_dex_relocator_config.relocate_static_methods);
   bind("minimize_cross_dex_refs_relocate_non_static_direct_methods", false,

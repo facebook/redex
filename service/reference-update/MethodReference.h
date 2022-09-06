@@ -15,6 +15,8 @@
 
 struct MethodItemEntry;
 
+using OrderedMethodSet = std::set<DexMethod*, dexmethods_comparator>;
+
 namespace method_reference {
 
 // A callsite instruction in caller. mie should always contain an IRInstruction.

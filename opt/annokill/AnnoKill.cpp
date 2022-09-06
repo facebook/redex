@@ -17,6 +17,7 @@
 #include "PassManager.h"
 #include "Resolver.h"
 #include "Show.h"
+#include "Timer.h"
 #include "Walkers.h"
 
 constexpr const char* METRIC_ANNO_KILLED = "num_anno_killed";
@@ -126,6 +127,8 @@ AnnoKill::AnnoKill(
 }
 
 AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
+  Timer timer{"get_referenced_annos"};
+
   AnnoKill::AnnoSet all_annos;
 
   // all used annotations
@@ -353,29 +356,37 @@ AnnoKill::AnnoSet AnnoKill::get_removable_annotation_instances() {
   return bannotations;
 }
 
-void AnnoKill::count_annotation(const DexAnnotation* da) {
-  std::string annoName(da->type()->get_name()->c_str());
+void AnnoKill::count_annotation(const DexAnnotation* da,
+                                AnnoKillStats& stats) const {
+  auto inc_counter = [](auto&, auto& c, auto) { c++; };
   if (da->system_visible()) {
-    m_system_anno_map[annoName]++;
-    m_stats.visibility_system_count++;
+    if (traceEnabled(ANNO, 3)) {
+      m_system_anno_map.update(da->type()->get_name()->str(), inc_counter);
+    }
+    stats.visibility_system_count++;
   } else if (da->runtime_visible()) {
-    m_runtime_anno_map[annoName]++;
-    m_stats.visibility_runtime_count++;
+    if (traceEnabled(ANNO, 3)) {
+      m_runtime_anno_map.update(da->type()->get_name()->str(), inc_counter);
+    }
+    stats.visibility_runtime_count++;
   } else if (da->build_visible()) {
-    m_build_anno_map[annoName]++;
-    m_stats.visibility_build_count++;
+    if (traceEnabled(ANNO, 3)) {
+      m_build_anno_map.update(da->type()->get_name()->str(), inc_counter);
+    }
+    stats.visibility_build_count++;
   }
 }
 
 void AnnoKill::cleanup_aset(
     DexAnnotationSet* aset,
     const AnnoKill::AnnoSet& referenced_annos,
-    const std::unordered_set<const DexType*>& keep_annos) {
-  m_stats.annotations += aset->size();
+    AnnoKillStats& stats,
+    const std::unordered_set<const DexType*>& keep_annos) const {
+  stats.annotations += aset->size();
   auto& annos = aset->get_annotations();
   auto fn = [&](const auto& da) {
     auto anno_type = da->type();
-    count_annotation(da.get());
+    count_annotation(da.get(), stats);
 
     if (referenced_annos.count(anno_type) > 0) {
       TRACE(ANNO,
@@ -409,7 +420,7 @@ void AnnoKill::cleanup_aset(
             "annotation: %s",
             SHOW(anno_type),
             SHOW(da.get()));
-      m_stats.annotations_killed++;
+      stats.annotations_killed++;
       return true;
     }
 
@@ -420,19 +431,19 @@ void AnnoKill::cleanup_aset(
             "annotation: %s",
             SHOW(anno_type),
             SHOW(da.get()));
-      m_stats.annotations_killed++;
+      stats.annotations_killed++;
       return true;
     }
 
     if (!m_only_force_kill && !da->system_visible()) {
       TRACE(ANNO, 3, "Killing annotation instance %s", SHOW(da.get()));
-      m_stats.annotations_killed++;
+      stats.annotations_killed++;
       return true;
     }
 
     if (anno_type == DexType::get_type("Ldalvik/annotation/Signature;")) {
       if (should_kill_bad_signature(da.get())) {
-        m_stats.signatures_killed++;
+        stats.signatures_killed++;
         return true;
       }
     }
@@ -442,7 +453,7 @@ void AnnoKill::cleanup_aset(
   annos.erase(std::remove_if(annos.begin(), annos.end(), fn), annos.end());
 }
 
-bool AnnoKill::should_kill_bad_signature(DexAnnotation* da) {
+bool AnnoKill::should_kill_bad_signature(DexAnnotation* da) const {
   if (!m_kill_bad_signatures) return false;
   TRACE(ANNO, 3, "Examining @Signature instance %s", SHOW(da));
   auto& elems = da->anno_elems();
@@ -453,8 +464,10 @@ bool AnnoKill::should_kill_bad_signature(DexAnnotation* da) {
     auto const& evs = arrayev->evalues();
     for (auto& strev : *evs) {
       if (strev->evtype() != DEVT_STRING) continue;
-      const auto& sigstr =
-          static_cast<DexEncodedValueString*>(strev.get())->string()->str();
+      const std::string sigstr =
+          static_cast<DexEncodedValueString*>(strev.get())
+              ->string()
+              ->str_copy();
       always_assert(sigstr.length() > 0);
       const auto* sigcstr = sigstr.c_str();
       // @Signature grammar is non-trivial[1], nevermind the fact that
@@ -474,7 +487,7 @@ bool AnnoKill::should_kill_bad_signature(DexAnnotation* da) {
       // [1] androidxref.com/8.0.0_r4/xref/libcore/luni/src/main/java/libcore/
       //     reflect/GenericSignatureParser.java
       if (sigstr[0] == 'L' && strchr(sigcstr, '/') && !strchr(sigcstr, ':')) {
-        auto* sigtype = DexType::get_type(sigstr.c_str());
+        auto* sigtype = DexType::get_type(sigstr);
         if (!sigtype) {
           // Try with semicolon.
           sigtype = DexType::get_type(sigstr + ';');
@@ -482,7 +495,7 @@ bool AnnoKill::should_kill_bad_signature(DexAnnotation* da) {
         if (!sigtype && sigstr.back() == '<') {
           // Try replacing angle bracket with semicolon
           // d8 often encodes signature annotations this way
-          std::string copy = sigstr;
+          std::string copy = str_copy(sigstr);
           copy.pop_back();
           copy.push_back(';');
           sigtype = DexType::get_type(copy);
@@ -518,11 +531,13 @@ bool AnnoKill::should_kill_bad_signature(DexAnnotation* da) {
 }
 
 std::unordered_set<const DexType*> AnnoKill::build_anno_keep(
-    DexAnnotationSet* aset) {
+    DexAnnotationSet* aset) const {
   std::unordered_set<const DexType*> keep_list;
   for (const auto& anno : aset->get_annotations()) {
-    auto& keeps = m_annotated_keep_annos[anno->type()];
-    keep_list.insert(keeps.begin(), keeps.end());
+    auto it = m_annotated_keep_annos.find(anno->type());
+    if (it != m_annotated_keep_annos.end()) {
+      keep_list.insert(it->second.begin(), it->second.end());
+    }
   }
   return keep_list;
 }
@@ -533,93 +548,122 @@ bool AnnoKill::kill_annotations() {
     m_kill = get_removable_annotation_instances();
   }
 
-  for (auto clazz : m_scope) {
-    DexAnnotationSet* aset = clazz->get_anno_set();
-    if (!aset) {
-      continue;
-    }
-    auto keep_list = build_anno_keep(aset);
-    auto& class_hier_keep_list = m_anno_class_hierarchy_keep[clazz->get_type()];
-    keep_list.insert(class_hier_keep_list.begin(), class_hier_keep_list.end());
+  {
+    Timer timer{"optimize classes"};
+    m_stats +=
+        walk::parallel::classes<AnnoKillStats>(m_scope, [&](auto* clazz) {
+          AnnoKillStats local_stats{};
+          DexAnnotationSet* aset = clazz->get_anno_set();
+          if (!aset) {
+            return local_stats;
+          }
+          auto keep_list = build_anno_keep(aset);
+          {
+            auto it = m_anno_class_hierarchy_keep.find(clazz->get_type());
+            if (it != m_anno_class_hierarchy_keep.end()) {
+              keep_list.insert(it->second.begin(), it->second.end());
+            }
+          }
 
-    m_stats.class_asets++;
-    cleanup_aset(aset, referenced_annos, keep_list);
-    if (aset->size() == 0) {
-      TRACE(
-          ANNO, 3, "Clearing annotation for class %s", SHOW(clazz->get_type()));
-      clazz->clear_annotations();
-      m_stats.class_asets_cleared++;
-    }
+          local_stats.class_asets++;
+          cleanup_aset(aset, referenced_annos, local_stats, keep_list);
+          if (aset->size() == 0) {
+            TRACE(ANNO,
+                  3,
+                  "Clearing annotation for class %s",
+                  SHOW(clazz->get_type()));
+            clazz->clear_annotations();
+            local_stats.class_asets_cleared++;
+          }
+          return local_stats;
+        });
   }
 
-  walk::methods(m_scope, [&](DexMethod* method) {
-    // Method annotations
-    auto method_aset = method->get_anno_set();
-    if (method_aset) {
-      m_stats.method_asets++;
-      auto keep_list = build_anno_keep(method_aset);
-      cleanup_aset(method_aset, referenced_annos, keep_list);
-      if (method_aset->size() == 0) {
-        TRACE(ANNO,
-              3,
-              "Clearing annotations for method %s.%s:%s",
-              SHOW(method->get_class()),
-              SHOW(method->get_name()),
-              SHOW(method->get_proto()));
-        method->clear_annotations();
-        m_stats.method_asets_cleared++;
-      }
-    }
+  {
+    Timer timer{"optimize methods"};
+    m_stats += walk::parallel::methods<
+        AnnoKillStats>(m_scope, [&](DexMethod* method) {
+      // Method annotations
+      AnnoKillStats local_stats{};
 
-    // Parameter annotations.
-    auto param_annos = method->get_param_anno();
-    if (param_annos) {
-      m_stats.method_param_asets += param_annos->size();
-      bool clear_pas = true;
-      for (auto& pa : *param_annos) {
-        auto& param_aset = pa.second;
-        if (param_aset->size() == 0) {
-          continue;
+      auto method_aset = method->get_anno_set();
+      if (method_aset) {
+        local_stats.method_asets++;
+        auto keep_list = build_anno_keep(method_aset);
+        cleanup_aset(method_aset, referenced_annos, local_stats, keep_list);
+        if (method_aset->size() == 0) {
+          TRACE(ANNO,
+                3,
+                "Clearing annotations for method %s.%s:%s",
+                SHOW(method->get_class()),
+                SHOW(method->get_name()),
+                SHOW(method->get_proto()));
+          method->clear_annotations();
+          local_stats.method_asets_cleared++;
         }
-        auto keep_list = build_anno_keep(param_aset.get());
-        cleanup_aset(param_aset.get(), referenced_annos, keep_list);
-        if (param_aset->size() == 0) {
-          continue;
-        }
-        clear_pas = false;
       }
-      if (clear_pas) {
-        TRACE(ANNO,
-              3,
-              "Clearing parameter annotations for method parameters %s.%s:%s",
-              SHOW(method->get_class()),
-              SHOW(method->get_name()),
-              SHOW(method->get_proto()));
-        m_stats.method_param_asets_cleared += param_annos->size();
-        param_annos->clear();
-      }
-    }
-  });
 
-  walk::fields(m_scope, [&](DexField* field) {
-    DexAnnotationSet* aset = field->get_anno_set();
-    if (!aset) {
-      return;
-    }
-    m_stats.field_asets++;
-    auto keep_list = build_anno_keep(aset);
-    cleanup_aset(aset, referenced_annos, keep_list);
-    if (aset->size() == 0) {
-      TRACE(ANNO,
-            3,
-            "Clearing annotations for field %s.%s:%s",
-            SHOW(field->get_class()),
-            SHOW(field->get_name()),
-            SHOW(field->get_type()));
-      field->clear_annotations();
-      m_stats.field_asets_cleared++;
-    }
-  });
+      // Parameter annotations.
+      auto param_annos = method->get_param_anno();
+      if (param_annos) {
+        local_stats.method_param_asets += param_annos->size();
+        bool clear_pas = true;
+        for (auto& pa : *param_annos) {
+          auto& param_aset = pa.second;
+          if (param_aset->size() == 0) {
+            continue;
+          }
+          auto keep_list = build_anno_keep(param_aset.get());
+          cleanup_aset(
+              param_aset.get(), referenced_annos, local_stats, keep_list);
+          if (param_aset->size() == 0) {
+            continue;
+          }
+          clear_pas = false;
+        }
+        if (clear_pas) {
+          TRACE(ANNO,
+                3,
+                "Clearing parameter annotations for method parameters %s.%s:%s",
+                SHOW(method->get_class()),
+                SHOW(method->get_name()),
+                SHOW(method->get_proto()));
+          local_stats.method_param_asets_cleared += param_annos->size();
+          method->release_param_anno();
+        }
+      }
+
+      return local_stats;
+    });
+  }
+
+  {
+    Timer timer{"optimize fields"};
+    m_stats +=
+        walk::parallel::fields<AnnoKillStats>(m_scope, [&](DexField* field) {
+          AnnoKillStats local_stats{};
+
+          DexAnnotationSet* aset = field->get_anno_set();
+          if (!aset) {
+            return local_stats;
+          }
+          local_stats.field_asets++;
+          auto keep_list = build_anno_keep(aset);
+          cleanup_aset(aset, referenced_annos, local_stats, keep_list);
+          if (aset->size() == 0) {
+            TRACE(ANNO,
+                  3,
+                  "Clearing annotations for field %s.%s:%s",
+                  SHOW(field->get_class()),
+                  SHOW(field->get_name()),
+                  SHOW(field->get_type()));
+            field->clear_annotations();
+            local_stats.field_asets_cleared++;
+          }
+
+          return local_stats;
+        });
+  }
 
   bool classes_removed = false;
   // We're done removing annotation instances, go ahead and remove annotation
@@ -645,16 +689,24 @@ bool AnnoKill::kill_annotations() {
                      }),
       m_scope.end());
 
-  for (const auto& p : m_build_anno_map) {
-    TRACE(ANNO, 3, "Build anno: %lu, %s", p.second, p.first.c_str());
-  }
+  if (traceEnabled(ANNO, 3)) {
+    for (const auto& p : m_build_anno_map) {
+      TRACE(
+          ANNO, 3, "Build anno: %lu, %s", p.second, str_copy(p.first).c_str());
+    }
 
-  for (const auto& p : m_runtime_anno_map) {
-    TRACE(ANNO, 3, "Runtime anno: %lu, %s", p.second, p.first.c_str());
-  }
+    for (const auto& p : m_runtime_anno_map) {
+      TRACE(ANNO,
+            3,
+            "Runtime anno: %lu, %s",
+            p.second,
+            str_copy(p.first).c_str());
+    }
 
-  for (const auto& p : m_system_anno_map) {
-    TRACE(ANNO, 3, "System anno: %lu, %s", p.second, p.first.c_str());
+    for (const auto& p : m_system_anno_map) {
+      TRACE(
+          ANNO, 3, "System anno: %lu, %s", p.second, str_copy(p.first).c_str());
+    }
   }
 
   return classes_removed;
@@ -667,7 +719,7 @@ void AnnoKillPass::run_pass(DexStoresVector& stores,
   auto scope = build_class_scope(stores);
 
   AnnoKill ak(scope,
-              only_force_kill(),
+              m_only_force_kill,
               m_kill_bad_signatures,
               m_keep_annos,
               m_kill_annos,

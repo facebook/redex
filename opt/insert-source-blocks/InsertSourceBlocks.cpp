@@ -389,15 +389,11 @@ prepare_profile_files_and_interactions(const std::string& profile_files_str,
     });
 
     profile_files.resize(files.size());
-    std::vector<size_t> indices(files.size());
-    std::iota(indices.begin(), indices.end(), 0);
-    workqueue_run<size_t>(
-        [&](size_t i) {
-          profile_files.at(i) = ProfileFile::prepare_profile_file(files.at(i));
-          TRACE(METH_PROF, 1, "Loaded basic block profile %s",
-                profile_files.at(i)->interaction.c_str());
-        },
-        indices);
+    workqueue_run_for<size_t>(0, files.size(), [&](size_t i) {
+      profile_files.at(i) = ProfileFile::prepare_profile_file(files.at(i));
+      TRACE(METH_PROF, 1, "Loaded basic block profile %s",
+            profile_files.at(i)->interaction.c_str());
+    });
 
     // Sort the interactions.
     sort_coldstart_and_set_indices(

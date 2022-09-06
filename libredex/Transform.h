@@ -19,6 +19,7 @@ namespace transform {
 using RegMap = std::unordered_map<reg_t, reg_t>;
 
 void remap_registers(IRCode*, const RegMap&);
+void remap_registers(cfg::ControlFlowGraph&, const RegMap&);
 void remap_registers(IRInstruction* insn, const RegMap& reg_map);
 void remap_registers(MethodItemEntry& mei, const RegMap& reg_map);
 

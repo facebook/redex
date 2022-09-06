@@ -61,7 +61,7 @@ int main(int argc, char* argv[]) {
   auto dex = argv[1];
 
   g_redex = new RedexContext();
-  auto classes = load_classes_from_dex(dex);
+  auto classes = load_classes_from_dex(DexLocation::make_location("", dex));
   auto runner_cls =
       std::find_if(classes.begin(), classes.end(), [](const DexClass* cls) {
         return cls->get_name() ==
@@ -91,7 +91,8 @@ int main(int argc, char* argv[]) {
   std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make(""));
 
   DexStore store("classes");
-  store.set_dex_magic(load_dex_magic_from_dex(dex));
+  store.set_dex_magic(
+      load_dex_magic_from_dex(DexLocation::make_location("dex", dex)));
   store.add_classes(classes);
   DexStoresVector stores;
   stores.emplace_back(std::move(store));
@@ -106,6 +107,7 @@ int main(int argc, char* argv[]) {
                        std::move(gtypes),
                        nullptr /* LocatorIndex* */,
                        0,
+                       nullptr /* store_name */,
                        0,
                        conf,
                        pos_mapper.get(),

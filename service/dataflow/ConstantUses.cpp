@@ -70,21 +70,27 @@
 
 namespace constant_uses {
 
-ConstantUses::ConstantUses(const cfg::ControlFlowGraph& cfg, DexMethod* method)
-    : ConstantUses(cfg,
-                   method ? is_static(method) : true,
-                   method ? method->get_class() : nullptr,
-                   method ? method->get_proto()->get_rtype() : nullptr,
-                   method ? method->get_proto()->get_args() : nullptr,
-                   [method]() { return show(method); }) {}
+ConstantUses::ConstantUses(const cfg::ControlFlowGraph& cfg,
+                           DexMethod* method,
+                           bool force_type_inference)
+    : ConstantUses(
+          cfg,
+          method ? is_static(method) : true,
+          method ? method->get_class() : nullptr,
+          method ? method->get_proto()->get_rtype() : nullptr,
+          method ? method->get_proto()->get_args() : nullptr,
+          [method]() { return show(method); },
+          force_type_inference) {}
 
 ConstantUses::ConstantUses(const cfg::ControlFlowGraph& cfg,
                            bool is_static,
                            DexType* declaring_type,
                            DexType* rtype,
                            DexTypeList* args,
-                           const std::function<std::string()>& method_describer)
+                           const std::function<std::string()>& method_describer,
+                           bool force_type_inference)
     : m_reaching_definitions(cfg), m_rtype(rtype) {
+  always_assert(!force_type_inference || args);
   m_reaching_definitions.run(reaching_defs::Environment());
 
   bool need_type_inference = false;
@@ -132,7 +138,7 @@ ConstantUses::ConstantUses(const cfg::ControlFlowGraph& cfg,
 
   TRACE(CU, 2, "[CU] ConstantUses(%s) need_type_inference:%u",
         method_describer().c_str(), need_type_inference);
-  if (need_type_inference && args) {
+  if ((need_type_inference && args) || force_type_inference) {
     m_type_inference.reset(new type_inference::TypeInference(cfg));
     m_type_inference->run(is_static, declaring_type, args);
   }

@@ -146,7 +146,7 @@ void build_allowed_violations(const Scope& scope,
     }
   }
   for (const auto& cls : scope) {
-    auto& dname = cls->get_deobfuscated_name_or_empty();
+    std::string dname = cls->get_deobfuscated_name_or_empty_copy();
     if (allowed_class_names.count(dname) != 0) {
       types->emplace(cls->get_type());
       allowed_class_names[dname] = true;

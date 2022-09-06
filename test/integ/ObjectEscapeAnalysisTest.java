@@ -83,13 +83,35 @@ public class ObjectEscapeAnalysisTest {
     return e.getX() + f.getX();
   }
 
+  static abstract class Base {
+    public Base() {}
+    public abstract int getX();
+  }
+  static class Derived extends Base {
+    int x;
+    public Derived(int x) {
+      this.x = x;
+    }
+    public /* override */ int getX() {
+      return this.x;
+    }
+  }
+
+  public static int reduceTo42D() {
+    Derived d = new Derived(42);
+    return d.getX();
+  }
+
 
   static class G {
     static Object leak;
+    static Object leak2;
     public G() {
       leak = this;
     }
     public G(H h) {
+      leak = this;
+      leak2 = h;
     }
     public int getX() {
       return 42;
@@ -177,5 +199,104 @@ public class ObjectEscapeAnalysisTest {
   public static int reduceTo42WithInitClass() {
     K k = new K(42);
     return k.getX();
+  }
+
+
+  static class L {
+    int x;
+    public L(int x) {
+      this.x = x;
+    }
+    public synchronized int getX() {
+      return this.x;
+    }
+  }
+
+  public static int reduceTo42WithMonitors() {
+    L l = new L(42);
+    synchronized (l) {
+      return l.getX();
+    }
+  }
+
+
+  static class M {
+    int x;
+    public M(int x) {
+      this.x = x;
+    }
+    public void add(int other) {
+      this.x += this.x * other;
+      this.x += this.x * other;
+      this.x += this.x * other;
+    }
+    public int get() {
+      return this.x;
+    }
+  }
+
+  public static int reduceTo42WithMultiples1(int x) {
+    M m = new M(x);
+    m.add(1);
+    m.add(2);
+    m.add(3);
+    return m.get();
+  }
+
+  public static int reduceTo42WithMultiples2(int x) {
+    M m = new M(x);
+    m.add(1);
+    m.add(2);
+    m.add(3);
+    return m.get();
+  }
+
+
+  public static class N {
+    int x;
+    public N(Builder builder) {
+      this.x = builder.x;
+    }
+    public static class Builder {
+      public int x;
+      public Builder(int x) {
+        this.x = x;
+      }
+    }
+    public int get() {
+      return this.x;
+    }
+  }
+
+  public static N reduceTo42WithExpandedCtor() {
+    return new N(new N.Builder(42));
+  }
+
+  static class O {
+    int x;
+    public static O instance;
+    static {
+      // This prevents O from being completely inlinable (everywhere).
+      instance = new O(23);
+    }
+    public O(int x) {
+      this.x = x;
+    }
+    public int getX() {
+      return this.x;
+    }
+  }
+
+  public static int reduceTo42IncompleteInlinableType() {
+    O o = new O(42);
+    return o.getX();
+  }
+
+  public static int reduceTo42IncompleteInlinableTypeB() {
+    // This object creation can be reduced
+    O o = new O(42);
+    // This one not.
+    O.instance = new O(16);
+    return o.getX();
   }
 }

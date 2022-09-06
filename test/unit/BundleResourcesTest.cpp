@@ -15,16 +15,11 @@
 #include "RedexResources.h"
 #include "RedexTestUtils.h"
 #include "Trace.h"
+#include "androidfw/ResourceTypes.h"
 
 using namespace boost::filesystem;
 
 namespace {
-
-void copy_file(const std::string& from, const std::string& to) {
-  std::ifstream src_stream(from, std::ios::binary);
-  std::ofstream dest_stream(to, std::ios::binary);
-  dest_stream << src_stream.rdbuf();
-}
 
 void setup_resources_and_run(
     const std::function<void(const std::string& extract_dir, BundleResources*)>&
@@ -34,17 +29,18 @@ void setup_resources_and_run(
 
   auto res_dir = p / "base";
   create_directories(res_dir);
-  copy_file(std::getenv("test_res_path"), res_dir.string() + "/resources.pb");
+  redex::copy_file(std::getenv("test_res_path"),
+                   res_dir.string() + "/resources.pb");
 
   auto manifest_dir = p / "base/manifest";
   create_directories(manifest_dir);
-  copy_file(std::getenv("test_manifest_path"),
-            manifest_dir.string() + "/AndroidManifest.xml");
+  redex::copy_file(std::getenv("test_manifest_path"),
+                   manifest_dir.string() + "/AndroidManifest.xml");
 
   auto layout_dir = p / "base/res/layout";
   create_directories(layout_dir);
   auto layout_dest = layout_dir.string() + "/activity_main.xml";
-  copy_file(std::getenv("test_layout_path"), layout_dest);
+  redex::copy_file(std::getenv("test_layout_path"), layout_dest);
 
   BundleResources resources(tmp_dir.path);
   callback(tmp_dir.path, &resources);
@@ -61,11 +57,14 @@ ComponentTagInfo find_component_info(const std::vector<ComponentTagInfo>& list,
 }
 } // namespace
 
-TEST(BundleResources, TestReadMinSdk) {
+TEST(BundleResources, TestReadManifest) {
   setup_resources_and_run(
       [&](const std::string& extract_dir, BundleResources* resources) {
         auto result = resources->get_min_sdk();
         EXPECT_EQ(*result, 21);
+
+        auto package_name = resources->get_manifest_package_name();
+        EXPECT_STREQ(package_name->c_str(), "com.fb.bundles");
       });
 }
 
@@ -510,4 +509,43 @@ TEST(BundleResources, ObfuscateResourcesName) {
     EXPECT_EQ(files.size(), 1);
     EXPECT_EQ(*files.begin(), "base/res/a.png");
   });
+}
+
+TEST(BundleResources, GetConfigurations) {
+  setup_resources_and_run(
+      [&](const std::string& /* unused */, BundleResources* resources) {
+        auto res_table = resources->load_res_table();
+        EXPECT_EQ(res_table->package_count(), 1);
+        std::vector<android::ResTable_config> configs;
+        res_table->get_configurations(0x7f, "color", &configs);
+        EXPECT_EQ(configs.size(), 2);
+        EXPECT_STREQ(configs[0].toString().c_str(), "");
+        EXPECT_STREQ(configs[1].toString().c_str(), "night");
+        configs.clear();
+        res_table->get_configurations(0x7f, "dimen", &configs);
+        EXPECT_EQ(configs.size(), 2);
+        EXPECT_STREQ(configs[0].toString().c_str(), "");
+        EXPECT_STREQ(configs[1].toString().c_str(), "land");
+        configs.clear();
+        res_table->get_configurations(0x7f, "nope", &configs);
+        EXPECT_EQ(configs.size(), 0);
+      });
+}
+
+TEST(BundleResources, GetConfigsWithValue) {
+  setup_resources_and_run(
+      [&](const std::string& /* unused */, BundleResources* resources) {
+        auto res_table = resources->load_res_table();
+        EXPECT_EQ(res_table->package_count(), 1);
+        auto config_set = res_table->get_configs_with_values(0x7f04000f);
+        EXPECT_EQ(config_set.size(), 1);
+        EXPECT_STREQ(config_set.begin()->toString().c_str(), "land");
+
+        auto another_set = res_table->get_configs_with_values(0x7f030002);
+        EXPECT_EQ(another_set.size(), 2);
+        auto it = another_set.begin();
+        EXPECT_STREQ(it->toString().c_str(), "");
+        it++;
+        EXPECT_STREQ(it->toString().c_str(), "night");
+      });
 }

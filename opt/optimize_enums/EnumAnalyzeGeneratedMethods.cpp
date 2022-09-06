@@ -21,7 +21,6 @@ size_t EnumAnalyzeGeneratedMethods::transform_code(const Scope& scope) {
     }
 
     auto env = EnumFixpointIterator::gen_env(method);
-    code.build_cfg(/*editable*/ false);
     EnumFixpointIterator engine(code.cfg(), m_config);
     engine.run(env);
 

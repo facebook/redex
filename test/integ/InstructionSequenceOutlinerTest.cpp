@@ -1038,9 +1038,9 @@ TEST_F(InstructionSequenceOutlinerTest, check_positions) {
   // methods (whick invoke the outlined method) when reuse
   // the outlined method across the dex.
   std::vector<DexMethod*> methods;
-  std::set<std::string> method_names{"basic1", "basic2",     "basic3",
-                                     "basic4", "in_try",     "twice1",
-                                     "twice2", "secondary1", "secondary2"};
+  std::set<std::string_view> method_names{"basic1", "basic2",     "basic3",
+                                          "basic4", "in_try",     "twice1",
+                                          "twice2", "secondary1", "secondary2"};
   for (auto iter_store = stores.begin(); iter_store != stores.end();
        ++iter_store) {
     const auto& dex = iter_store->get_dexen();

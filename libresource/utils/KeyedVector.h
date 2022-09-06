@@ -21,19 +21,16 @@
 #include <stdint.h>
 #include <sys/types.h>
 
-#ifdef _MSC_VER
-#include "CompatWindows.h"
-#endif
-
-#include "cutils/log.h"
-
+#include "utils/Log.h"
+#include "utils/Errors.h"
 #include "utils/SortedVector.h"
 #include "utils/TypeHelpers.h"
-#include "utils/Errors.h"
 
 // ---------------------------------------------------------------------------
 
 namespace android {
+
+// DO NOT USE: please use std::map
 
 template <typename KEY, typename VALUE>
 class KeyedVector
@@ -50,7 +47,7 @@ public:
 
     inline  void            clear()                     { mVector.clear(); }
 
-    /*!
+    /*! 
      * vector stats
      */
 
@@ -66,7 +63,7 @@ public:
     // returns true if the arguments is known to be identical to this vector
     inline bool isIdenticalTo(const KeyedVector& rhs) const;
 
-    /*!
+    /*! 
      * accessors
      */
             const VALUE&    valueFor(const KEY& key) const;
@@ -82,10 +79,10 @@ public:
             VALUE&          editValueFor(const KEY& key);
             VALUE&          editValueAt(size_t index);
 
-            /*!
+            /*! 
              * add/insert/replace items
              */
-
+             
             ssize_t         add(const KEY& key, const VALUE& item);
             ssize_t         replaceValueFor(const KEY& key, const VALUE& item);
             ssize_t         replaceValueAt(size_t index, const VALUE& item);
@@ -96,17 +93,10 @@ public:
 
             ssize_t         removeItem(const KEY& key);
             ssize_t         removeItemsAt(size_t index, size_t count = 1);
-
+            
 private:
             SortedVector< key_value_pair_t<KEY, VALUE> >    mVector;
 };
-
-// KeyedVector<KEY, VALUE> can be trivially moved using memcpy() because its
-// underlying SortedVector can be trivially moved.
-template<typename KEY, typename VALUE> struct trait_trivial_move<KeyedVector<KEY, VALUE> > {
-    enum { value = trait_trivial_move<SortedVector< key_value_pair_t<KEY, VALUE> > >::value };
-};
-
 
 // ---------------------------------------------------------------------------
 
@@ -168,7 +158,7 @@ template<typename KEY, typename VALUE> inline
 VALUE& KeyedVector<KEY,VALUE>::editValueFor(const KEY& key) {
     ssize_t i = this->indexOfKey(key);
     LOG_ALWAYS_FATAL_IF(i<0, "%s: key not found", __PRETTY_FUNCTION__);
-    return mVector.editItemAt(i).value;
+    return mVector.editItemAt(static_cast<size_t>(i)).value;
 }
 
 template<typename KEY, typename VALUE> inline
@@ -192,7 +182,7 @@ template<typename KEY, typename VALUE> inline
 ssize_t KeyedVector<KEY,VALUE>::replaceValueAt(size_t index, const VALUE& item) {
     if (index<size()) {
         mVector.editItemAt(index).value = item;
-        return index;
+        return static_cast<ssize_t>(index);
     }
     return BAD_INDEX;
 }
@@ -221,7 +211,7 @@ const VALUE& DefaultKeyedVector<KEY,VALUE>::valueFor(const KEY& key) const {
     return i >= 0 ? KeyedVector<KEY,VALUE>::valueAt(i) : mDefault;
 }
 
-}; // namespace android
+}  // namespace android
 
 // ---------------------------------------------------------------------------
 

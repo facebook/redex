@@ -40,6 +40,7 @@ class Impl final {
  private:
   DexHash get_hash() const;
   void hash_metadata();
+  void hash(const std::string_view str);
   void hash(const std::string& str);
   void hash(int value);
   void hash(uint64_t value);
@@ -113,6 +114,11 @@ class Impl final {
   size_t m_registers_hash{0};
   size_t m_positions_hash{0};
 };
+
+void Impl::hash(const std::string_view str) {
+  TRACE(HASHER, 4, "[hasher] %s", str_copy(str).c_str());
+  boost::hash_combine(m_hash, str);
+}
 
 void Impl::hash(const std::string& str) {
   TRACE(HASHER, 4, "[hasher] %s", str.c_str());

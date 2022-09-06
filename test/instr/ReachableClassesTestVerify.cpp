@@ -57,8 +57,8 @@ TEST_F(PostVerify, TestClassesUsedByReflectionKept) {
     // Should have deleted the private dmethod foo.
     auto dmethods = cls->get_dmethods();
     EXPECT_EQ(dmethods.size(), 2) << "Sub should have 2 dmethods!";
-    const auto& name0 = dmethods[0]->str();
-    const auto& name1 = dmethods[1]->str();
+    const auto name0 = dmethods[0]->str();
+    const auto name1 = dmethods[1]->str();
     EXPECT_EQ(name0 == "<init>" || name0 == "bar", true)
         << "Unexpected dmethod on class Sub! Got: " << name0;
     EXPECT_EQ(name1 == "<init>" || name1 == "bar", true)

@@ -141,6 +141,13 @@ MethodItemEntry::~MethodItemEntry() {
   }
 }
 
+void MethodItemEntry::replace_ir_with_dex(DexInstruction* dex_insn) {
+  always_assert(type == MFLOW_OPCODE);
+  delete this->insn;
+  this->type = MFLOW_DEX_OPCODE;
+  this->dex_insn = dex_insn;
+}
+
 void MethodItemEntry::gather_strings(
     std::vector<const DexString*>& lstring) const {
   switch (type) {
@@ -904,6 +911,15 @@ IRInstruction* move_result_pseudo_of(IRList::iterator it) {
 
 } // namespace ir_list
 
+IRList::iterator IRList::insn_erase_and_dispose(const IRList::iterator& it) {
+  return m_list.erase_and_dispose(it, [](auto* mie) {
+    if (mie->type == MFLOW_OPCODE) {
+      delete mie->insn;
+    }
+    delete mie;
+  });
+}
+
 void IRList::insn_clear_and_dispose() {
   m_list.clear_and_dispose([](auto* mie) {
     if (mie->type == MFLOW_OPCODE) {
@@ -929,7 +945,8 @@ std::string SourceBlock::show(bool quoted_src) const {
     }
     o << "@" << cur->id;
     o << "(";
-    for (const auto& val : cur->vals) {
+    for (size_t i = 0; i != cur->vals_size; ++i) {
+      auto& val = cur->vals[i];
       if (val) {
         o << val->val << ":" << val->appear100;
       } else {
@@ -942,7 +959,10 @@ std::string SourceBlock::show(bool quoted_src) const {
   return o.str();
 }
 
-void IRList::chain_consecutive_source_blocks() {
+IRList::ConsecutiveStyle IRList::CONSECUTIVE_STYLE =
+    IRList::ConsecutiveStyle::kMax;
+
+void IRList::chain_consecutive_source_blocks(ConsecutiveStyle style) {
   boost::optional<IRList::iterator> last_it = boost::none;
   for (auto it = begin(); it != end(); ++it) {
     if (it->type == MFLOW_POSITION || it->type == MFLOW_DEBUG) {
@@ -955,8 +975,18 @@ void IRList::chain_consecutive_source_blocks() {
     }
 
     if (last_it) {
+      switch (style) {
+      case ConsecutiveStyle::kChain:
+        (*last_it)->src_block->append(std::move(it->src_block));
+        break;
+      case ConsecutiveStyle::kDrop:
+        break;
+      case ConsecutiveStyle::kMax:
+        (*last_it)->src_block->max(*it->src_block);
+        break;
+      }
+
       auto prev = std::prev(it);
-      (*last_it)->src_block->append(std::move(it->src_block));
       erase_and_dispose(it);
       it = prev;
     } else {

@@ -336,8 +336,7 @@ bool ResourceTableVisitor::visit_package(android::ResTable_package* package) {
 }
 
 bool ResourceTableVisitor::visit_unknown_chunk(
-  android::ResTable_package* package,
-  android::ResChunk_header* header) {
+    android::ResTable_package* package, android::ResChunk_header* header) {
   LOGVV("visit unknown chunk, offset = %ld", get_file_offset(header));
   return true;
 }
@@ -373,29 +372,39 @@ bool ResourceTableVisitor::visit_type(android::ResTable_package* package,
   android::TypeVariant tv(type);
   for (auto it = tv.beginEntries(); it != tv.endEntries(); ++it) {
     android::ResTable_entry* entry = const_cast<android::ResTable_entry*>(*it);
-    if (!entry) {
-      continue;
+    if (!begin_visit_entry(package, type_spec, type, entry)) {
+      return false;
     }
-    if (dtohs(entry->flags) & android::ResTable_entry::FLAG_COMPLEX) {
-      auto map_entry = static_cast<android::ResTable_map_entry*>(entry);
-      auto entry_count = dtohl(map_entry->count);
-      if (!visit_map_entry(package, type_spec, type, map_entry)) {
-          return false;
-        }
-      for (size_t i = 0; i < entry_count; i++) {
-        android::ResTable_map* value =
-            (android::ResTable_map*)((uint8_t*)entry + dtohl(entry->size) +
-                                     i * sizeof(android::ResTable_map));
-        if (!visit_map_value(package, type_spec, type, map_entry, value)) {
-          return false;
-        }
-      }
-    } else {
-      android::Res_value* value =
-          (android::Res_value*)((uint8_t*)entry + dtohl(entry->size));
-      if (!visit_entry(package, type_spec, type, entry, value)) {
+  }
+  return true;
+}
+
+bool ResourceTableVisitor::begin_visit_entry(android::ResTable_package* package,
+                                            android::ResTable_typeSpec* type_spec,
+                                            android::ResTable_type* type,
+                                            android::ResTable_entry* entry) {
+  if (!entry) {
+    return true;
+  }
+  if (dtohs(entry->flags) & android::ResTable_entry::FLAG_COMPLEX) {
+    auto map_entry = static_cast<android::ResTable_map_entry*>(entry);
+    auto entry_count = dtohl(map_entry->count);
+    if (!visit_map_entry(package, type_spec, type, map_entry)) {
+      return false;
+    }
+    for (size_t i = 0; i < entry_count; i++) {
+      android::ResTable_map* value =
+          (android::ResTable_map*)((uint8_t*)entry + dtohl(entry->size) +
+                                    i * sizeof(android::ResTable_map));
+      if (!visit_map_value(package, type_spec, type, map_entry, value)) {
         return false;
       }
+    }
+  } else {
+    android::Res_value* value =
+        (android::Res_value*)((uint8_t*)entry + dtohl(entry->size));
+    if (!visit_entry(package, type_spec, type, entry, value)) {
+      return false;
     }
   }
   return true;
@@ -434,7 +443,9 @@ bool ResourceTableVisitor::visit_map_value(
 // BEGIN StringPoolRefVisitor
 
 bool StringPoolRefVisitor::visit_key_strings_ref(
-    android::ResTable_package* package, android::ResStringPool_ref* ref) {
+    android::ResTable_package* package,
+    android::ResTable_type* type,
+    android::ResStringPool_ref* ref) {
   LOGVV("visit key ResStringPool_ref, offset = %ld", get_file_offset(ref));
   // Subclasses meant to override.
   return true;
@@ -488,7 +499,7 @@ bool StringPoolRefVisitor::visit_entry(android::ResTable_package* package,
   LOGVV("visit entry offset = %ld, value offset = %ld",
         get_file_offset(entry),
         get_file_offset(value));
-  if (!visit_key_strings_ref(package, &entry->key)) {
+  if (!visit_key_strings_ref(package, type, &entry->key)) {
     return false;
   }
   if (value->dataType == android::Res_value::TYPE_STRING) {
@@ -505,7 +516,7 @@ bool StringPoolRefVisitor::visit_map_entry(
     android::ResTable_type* type,
     android::ResTable_map_entry* entry) {
   LOGVV("visit map entry offset = %ld", get_file_offset(entry));
-  if (!visit_key_strings_ref(package, &entry->key)) {
+  if (!visit_key_strings_ref(package, type, &entry->key)) {
     return false;
   }
   return true;
@@ -523,6 +534,174 @@ bool StringPoolRefVisitor::visit_map_value(
       return false;
     }
   }
+  return true;
+}
+
+bool XmlFileVisitor::visit(void* data, size_t len) {
+  m_data = data;
+  m_length = len;
+  auto header =
+      convert_chunk<android::ResChunk_header>((android::ResChunk_header*)data);
+  if (!header) {
+    ALOGE("corrupt ResChunk_header");
+    return false;
+  }
+  if (dtohs(header->type) != android::RES_XML_TYPE) {
+    ALOGE("Wrong chunk type");
+    return false;
+  }
+  if (len != dtohl(header->size)) {
+    ALOGE("Bad file size, expected %d", dtohl(header->size));
+    return false;
+  }
+  android::ResStringPool_header* global_string_pool = nullptr;
+  android::ResChunk_header* attribute_ids_header = nullptr;
+  size_t attr_count;
+  android::ResXMLTree_node* node = nullptr;
+  ResChunkPullParser parser(get_data(header), get_data_len(header));
+  while (ResChunkPullParser::IsGoodEvent(parser.Next())) {
+    auto current_type = dtohs(parser.chunk()->type);
+    switch (current_type) {
+    case android::RES_STRING_POOL_TYPE:
+      if (global_string_pool == nullptr) {
+        global_string_pool =
+            convert_chunk<android::ResStringPool_header>(parser.chunk());
+        if (global_string_pool == nullptr) {
+          ALOGE("bad string pool chunk");
+          return false;
+        }
+        if (!visit_global_strings(global_string_pool)) {
+          return false;
+        }
+      } else {
+        ALOGE("unexpected string pool in ResTable, ignoring");
+      }
+      break;
+    case android::RES_XML_RESOURCE_MAP_TYPE:
+      attribute_ids_header =
+          convert_chunk<android::ResChunk_header>(parser.chunk());
+      if (attribute_ids_header == nullptr) {
+        return false;
+      }
+      attr_count = (dtohl(attribute_ids_header->size) -
+                    dtohs(attribute_ids_header->headerSize)) /
+                   sizeof(uint32_t);
+      if (attr_count > 0) {
+        if (!visit_attribute_ids((uint32_t*)get_data(attribute_ids_header),
+                                 attr_count)) {
+          return false;
+        }
+      }
+      break;
+    default:
+      if (current_type >= android::RES_XML_FIRST_CHUNK_TYPE &&
+          current_type <= android::RES_XML_LAST_CHUNK_TYPE) {
+        node = convert_chunk<android::ResXMLTree_node>(parser.chunk());
+        if (!visit_node(node)) {
+          return false;
+        }
+      } else {
+        ALOGE("unexpected chunk type %x, ignoring", current_type);
+      }
+      break;
+    }
+  }
+  if (parser.event() == ResChunkPullParser::Event::BadDocument) {
+    ALOGE("corrupt resource table");
+    return false;
+  }
+  return true;
+}
+
+bool XmlFileVisitor::visit_global_strings(android::ResStringPool_header* pool) {
+  LOGVV("visit global string pool, offset = %ld", get_file_offset(pool));
+  return true;
+}
+
+bool XmlFileVisitor::visit_attribute_ids(uint32_t* id, size_t count) {
+  LOGVV("visit attribute id, offset = %ld, count = %zu",
+        get_file_offset(id),
+        count);
+  return true;
+}
+
+bool XmlFileVisitor::visit_node(android::ResXMLTree_node* node) {
+  auto node_type = dtohs(node->header.type);
+  LOGVV("visit node (0x%x), offset = %ld", node_type, get_file_offset(node));
+  if (node_type == android::RES_XML_START_NAMESPACE_TYPE) {
+    return visit_start_namespace(
+        node, (android::ResXMLTree_namespaceExt*)get_data(&node->header));
+  } else if (node_type == android::RES_XML_END_NAMESPACE_TYPE) {
+    return visit_end_namespace(
+        node, (android::ResXMLTree_namespaceExt*)get_data(&node->header));
+  } else if (node_type == android::RES_XML_START_ELEMENT_TYPE) {
+    return visit_start_tag(
+        node, (android::ResXMLTree_attrExt*)get_data(&node->header));
+  } else if (node_type == android::RES_XML_END_ELEMENT_TYPE) {
+    return visit_end_tag(
+        node, (android::ResXMLTree_endElementExt*)get_data(&node->header));
+  } else if (node_type == android::RES_XML_CDATA_TYPE) {
+    return visit_cdata(node,
+                       (android::ResXMLTree_cdataExt*)get_data(&node->header));
+  }
+  return true;
+}
+
+bool XmlFileVisitor::visit_start_namespace(
+    android::ResXMLTree_node* node,
+    android::ResXMLTree_namespaceExt* extension) {
+  LOGVV("visit start namespace ext, offset = %ld", get_file_offset(extension));
+  return true;
+}
+
+bool XmlFileVisitor::visit_end_namespace(
+    android::ResXMLTree_node* node,
+    android::ResXMLTree_namespaceExt* extension) {
+  LOGVV("visit end namespace ext, offset = %ld", get_file_offset(extension));
+  return true;
+}
+
+bool XmlFileVisitor::visit_start_tag(android::ResXMLTree_node* node,
+                                     android::ResXMLTree_attrExt* extension) {
+  LOGVV("visit start element ext, offset = %ld", get_file_offset(extension));
+  auto count = dtohl(extension->attributeCount);
+  auto attribute =
+      (android::ResXMLTree_attribute*)((uint8_t*)extension +
+                                       dtohs(extension->attributeStart));
+  for (size_t i = 0; i < count; i++) {
+    if (!visit_attribute(node, extension, attribute++)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool XmlFileVisitor::visit_attribute(android::ResXMLTree_node* node,
+                                     android::ResXMLTree_attrExt* extension,
+                                     android::ResXMLTree_attribute* attribute) {
+  LOGVV("visit attribute, offset = %ld for tag starting at %ld",
+        get_file_offset(attribute),
+        get_file_offset(node));
+  visit_typed_data(&attribute->typedValue);
+  return true;
+}
+
+bool XmlFileVisitor::visit_end_tag(
+    android::ResXMLTree_node* node,
+    android::ResXMLTree_endElementExt* extension) {
+  LOGVV("visit end element ext, offset = %ld", get_file_offset(extension));
+  return true;
+}
+
+bool XmlFileVisitor::visit_cdata(android::ResXMLTree_node* node,
+                                 android::ResXMLTree_cdataExt* extension) {
+  LOGVV("visit cdata ext, offset = %ld", get_file_offset(extension));
+  visit_typed_data(&extension->typedData);
+  return true;
+}
+
+bool XmlFileVisitor::visit_typed_data(android::Res_value* value) {
+  LOGVV("visit value, offset = %ld", get_file_offset(value));
   return true;
 }
 

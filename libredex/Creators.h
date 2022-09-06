@@ -507,9 +507,12 @@ struct MethodCreator {
  * Once create is called this creator should not be used any longer.
  */
 struct ClassCreator {
-  explicit ClassCreator(DexType* type, const std::string& location = "") {
+  explicit ClassCreator(DexType* type, const DexLocation* location = nullptr) {
     always_assert_log(type_class(type) == nullptr,
                       "class already exists for %s\n", show_type(type).c_str());
+    if (location == nullptr) {
+      location = DexLocation::make_location("", "");
+    }
     m_cls = new DexClass(location);
     m_cls->m_self = type;
     m_cls->m_access_flags = (DexAccessFlags)0;

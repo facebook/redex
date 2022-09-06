@@ -146,8 +146,7 @@ std::unique_ptr<FixpointIterator> PassImpl::analyze(
   std::unordered_set<const DexField*> definitely_assigned_ifields;
   if (m_config.compute_definitely_assigned_ifields) {
     definitely_assigned_ifields =
-        definitely_assigned_ifields::get_definitely_assigned_ifields(
-            scope);
+        definitely_assigned_ifields::get_definitely_assigned_ifields(scope);
   }
   m_stats.definitely_assigned_ifields = definitely_assigned_ifields.size();
   for (size_t i = 0; i < m_config.max_heap_analysis_iterations; ++i) {

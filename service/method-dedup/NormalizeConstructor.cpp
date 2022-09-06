@@ -17,6 +17,8 @@
 #include "TypeReference.h"
 #include "Walkers.h"
 
+using MethodToType = std::map<DexMethod*, DexProto*, dexmethods_comparator>;
+
 namespace {
 /**
  * Summary example of a simple constructor whose parameters are only used to
@@ -371,10 +373,9 @@ DexMethod* get_representative(
     const CtorSummaries& methods,
     const std::vector<DexField*>& fields,
     const DexMethodRef* super_ctor,
-    std::unordered_set<DexProto*>& pending_new_protos,
-    std::unordered_map<DexMethod*, DexProto*>& global_pending_ctor_changes,
-    std::unordered_map<DexMethod*, DexProto*>&
-        pending_colliding_constructors_changes) {
+    std::set<DexProto*, dexprotos_comparator>& pending_new_protos,
+    MethodToType& global_pending_ctor_changes,
+    MethodToType& pending_colliding_constructors_changes) {
   std::vector<DexType*> normalized_typelist;
   auto super_ctor_args = super_ctor->get_proto()->get_args();
   normalized_typelist.reserve(fields.size() + super_ctor_args->size());
@@ -474,19 +475,18 @@ uint32_t estimate_deduplicatable_ctor_code_size(const DexClass* cls) {
 uint32_t dedup_constructors(const std::vector<DexClass*>& classes,
                             const std::vector<DexClass*>& scope) {
   Timer timer("dedup_constructors");
-  std::unordered_map<DexMethod*, DexMethod*> old_to_new;
+  std::map<DexMethod*, DexMethod*, dexmethods_comparator> old_to_new;
   CtorSummaries methods_summaries;
-  std::unordered_set<DexMethod*> ctor_set;
-  std::unordered_map<DexMethod*, DexProto*> global_pending_ctor_changes;
-  std::unordered_map<DexMethod*, DexProto*>
-      pending_colliding_constructors_changes;
+  OrderedMethodSet ctor_set;
+  MethodToType global_pending_ctor_changes;
+  MethodToType pending_colliding_constructors_changes;
   walk::classes(classes, [&](DexClass* cls) {
     auto ctors = cls->get_ctors();
     if (ctors.size() < 2) {
       return;
     }
     // Calculate the summaries and group them by super constructor reference.
-    std::map<DexMethodRef*, std::unordered_map<size_t, CtorSummaries>,
+    std::map<DexMethodRef*, std::map<size_t, CtorSummaries>,
              dexmethods_comparator>
         grouped_methods;
     for (auto method : ctors) {
@@ -501,7 +501,7 @@ uint32_t dedup_constructors(const std::vector<DexClass*>& classes,
     }
     // We might need to change the constructor signatures after we finish the
     // deduplication, so we keep a record to avoid collision.
-    std::unordered_set<DexProto*> pending_new_protos;
+    std::set<DexProto*, dexprotos_comparator> pending_new_protos;
     for (auto& pair : grouped_methods) {
       for (auto&& [_, cluster] : pair.second) {
         if (cluster.size() < 2) {

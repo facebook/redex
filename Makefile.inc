@@ -99,6 +99,7 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/service/api-levels \
 	-I$(top_srcdir)/service/class-init \
 	-I$(top_srcdir)/service/class-merging \
+	-I$(top_srcdir)/service/class-splitting \
 	-I$(top_srcdir)/service/constant-propagation \
 	-I$(top_srcdir)/service/copy-propagation \
 	-I$(top_srcdir)/service/cross-dex-ref-minimizer \
@@ -119,6 +120,7 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/service/reference-update \
 	-I$(top_srcdir)/service/regalloc \
 	-I$(top_srcdir)/service/regalloc-fast \
+	-I$(top_srcdir)/service/resources \
 	-I$(top_srcdir)/service/shrinker \
 	-I$(top_srcdir)/service/switch-dispatch \
 	-I$(top_srcdir)/service/switch-partitioning \

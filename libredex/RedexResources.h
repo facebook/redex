@@ -12,6 +12,7 @@
 #include <boost/filesystem/operations.hpp>
 #include <boost/noncopyable.hpp>
 #include <boost/optional.hpp>
+#include <cstdint>
 #include <map>
 #include <memory>
 #include <set>
@@ -23,6 +24,7 @@
 
 #include "androidfw/ResourceTypes.h"
 
+#include "Debug.h"
 #include "RedexMappedFile.h"
 
 const char* const ONCLICK_ATTRIBUTE = "android:onClick";
@@ -31,6 +33,18 @@ const char* const OBFUSCATED_RES_DIRECTORY = "r";
 const char* const RESOURCE_NAME_REMOVED = "(name removed)";
 
 const uint32_t PACKAGE_RESID_START = 0x7f000000;
+const uint32_t APPLICATION_PACKAGE = 0x7f;
+
+namespace resources {
+// Holder object for details about a type that is pending creation.
+struct TypeDefinition {
+  uint32_t package_id;
+  uint8_t type_id;
+  std::string name;
+  std::vector<android::ResTable_config*> configs;
+  std::vector<uint32_t> source_res_ids;
+};
+} // namespace resources
 
 /*
  * These are all the components which may contain references to Java classes in
@@ -99,10 +113,19 @@ class ResourceTableFile {
  public:
   virtual ~ResourceTableFile() {}
 
+  virtual size_t package_count() = 0;
   virtual void collect_resid_values_and_hashes(
       const std::vector<uint32_t>& ids,
       std::map<size_t, std::vector<uint32_t>>* res_by_hash) = 0;
   virtual bool resource_value_identical(uint32_t a_id, uint32_t b_id) = 0;
+  // Fill the given vector with the names of types in the resource table, using
+  // .apk conventions for numbering such that the zeroth element of the vector
+  // is the name of type ID 0x1, 1st element of the vector is the name of type
+  // ID 0x2, etc. To make this numbering scheme work, non-contiguous type IDs
+  // will need to put placeholder/empty strings in the output vector.
+  // This API is wonky, but meant to mimic iterating over the .arsc file type
+  // string pool and how that would behave.
+  virtual void get_type_names(std::vector<std::string>* type_names) = 0;
   virtual std::unordered_set<uint32_t> get_types_by_name(
       const std::unordered_set<std::string>& type_names) = 0;
   virtual std::unordered_set<uint32_t> get_types_by_name_prefixes(
@@ -112,15 +135,9 @@ class ResourceTableFile {
   virtual void remap_res_ids_and_serialize(
       const std::vector<std::string>& resource_files,
       const std::map<uint32_t, uint32_t>& old_to_new) = 0;
-
-  // Rename qualified resource names that are in allowed type and don't have
-  // keep_resource_prefixes to "(name removed)". Also rename filepaths
-  // according to filepath_old_to_new.
-  virtual size_t obfuscate_resource_and_serialize(
-      const std::vector<std::string>& resource_files,
-      const std::map<std::string, std::string>& filepath_old_to_new,
-      const std::unordered_set<uint32_t>& allowed_types,
-      const std::unordered_set<std::string>& keep_resource_prefixes) = 0;
+  // Instead of remapping deleted resource ids, we nullify them.
+  virtual void nullify_res_ids_and_serialize(
+      const std::vector<std::string>& resource_files) = 0;
 
   // Similar to above function, but reorder flags/entry/value data according to
   // old_to_new, as well as remapping references.
@@ -131,6 +148,14 @@ class ResourceTableFile {
   virtual void remap_file_paths_and_serialize(
       const std::vector<std::string>& resource_files,
       const std::unordered_map<std::string, std::string>& old_to_new) = 0;
+  // Rename qualified resource names that are in allowed type and don't have
+  // keep_resource_prefixes to "(name removed)". Also rename filepaths
+  // according to filepath_old_to_new.
+  virtual size_t obfuscate_resource_and_serialize(
+      const std::vector<std::string>& resource_files,
+      const std::map<std::string, std::string>& filepath_old_to_new,
+      const std::unordered_set<uint32_t>& allowed_types,
+      const std::unordered_set<std::string>& keep_resource_prefixes) = 0;
 
   // Removes entries from string pool structures that are not referenced by
   // entries/values in the resource table
@@ -153,6 +178,40 @@ class ResourceTableFile {
       std::unordered_set<uint32_t>* nodes_visited,
       std::unordered_set<std::string>* potential_file_paths) = 0;
 
+  // Mainly used by test to check if a resource has been nullified
+  virtual uint64_t resource_value_count(uint32_t res_id) = 0;
+
+  // For a given package and type name (i.e. "drawable", "layout", etc) return
+  // the configurations of that type. Data that is outputted may require
+  // conversion, which will happen internally, so do not use reference equality
+  // on the result.
+  virtual void get_configurations(
+      uint32_t package_id,
+      const std::string& name,
+      std::vector<android::ResTable_config>* configs) = 0;
+
+  // For a given resource ID, return the configs for which the value is nonempty
+  virtual std::set<android::ResTable_config> get_configs_with_values(
+      uint32_t id) = 0;
+
+  // Takes effect during serialization. Appends a new type with the given
+  // details (id, name) to the package. It will contain types with the given
+  // configs and use existing resource entry/value data of "source_res_ids" to
+  // populate this new type. Actual type data in the resulting file will be
+  // emitted in the order as the given configs.
+  void define_type(uint32_t package_id,
+                   uint8_t type_id,
+                   const std::string& name,
+                   const std::vector<android::ResTable_config*>& configs,
+                   const std::vector<uint32_t>& source_res_ids) {
+    always_assert_log((package_id & 0xFFFFFF00) == 0,
+                      "package_id expected to have low byte set; got 0x%x",
+                      package_id);
+    resources::TypeDefinition def{package_id, type_id, name, configs,
+                                  source_res_ids};
+    m_added_types.emplace_back(std::move(def));
+  }
+
   // Return the resource ids based on the given resource name.
   std::vector<uint32_t> get_res_ids_by_name(const std::string& name) const {
     if (name_to_ids.count(name)) {
@@ -161,9 +220,13 @@ class ResourceTableFile {
     return std::vector<uint32_t>{};
   }
 
-  android::SortedVector<uint32_t> sorted_res_ids;
+  std::vector<uint32_t> sorted_res_ids;
   std::map<uint32_t, std::string> id_to_name;
   std::map<std::string, std::vector<uint32_t>> name_to_ids;
+  bool m_nullify_removed{false};
+  // Pending changes to take effect during serialization
+  std::unordered_set<uint32_t> m_ids_to_remove;
+  std::vector<resources::TypeDefinition> m_added_types;
 
  protected:
   ResourceTableFile() {}
@@ -174,6 +237,7 @@ class AndroidResources {
   virtual boost::optional<int32_t> get_min_sdk() = 0;
 
   virtual ManifestClassInfo get_manifest_class_info() = 0;
+  virtual boost::optional<std::string> get_manifest_package_name() = 0;
 
   // Given the xml file name, return the list of resource ids referred in xml
   // attributes.
@@ -206,6 +270,16 @@ class AndroidResources {
   virtual std::unordered_set<std::string> find_all_xml_files() = 0;
   virtual std::vector<std::string> find_resources_files() = 0;
   virtual std::string get_base_assets_dir() = 0;
+  // For drawable/layout .xml files, remove/shorten attribute names where
+  // possible. Any file with an element name in the given set will be kept
+  // intact by convention (this method will be overly cautious when applying
+  // keeps).
+  virtual void obfuscate_xml_files(
+      const std::unordered_set<std::string>& allowed_types,
+      const std::unordered_set<std::string>& do_not_obfuscate_elements) = 0;
+  bool can_obfuscate_xml_file(
+      const std::unordered_set<std::string>& allowed_types,
+      const std::string& dirname);
   // Classnames present in native libraries (lib/*/*.so)
   std::unordered_set<std::string> get_native_classes();
 

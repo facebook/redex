@@ -94,6 +94,10 @@ void ProguardConfig::bind_config() {
        disable_default_blocklist);
 }
 
+void PassManagerConfig::bind_config() {
+  bind("pass_aliases", pass_aliases, pass_aliases);
+}
+
 void GlobalConfig::bind_config() {
   bool bool_param;
   std::string string_param;
@@ -180,6 +184,7 @@ GlobalConfigRegistry& GlobalConfig::default_registry() {
       register_as<MethodProfileOrderingConfig>("method_profile_order"),
       register_as<MethodSimilarityOrderingConfig>("method_similarity_order"),
       register_as<ProguardConfig>("proguard"),
+      register_as<PassManagerConfig>("pass_manager"),
   };
   return registry;
 }

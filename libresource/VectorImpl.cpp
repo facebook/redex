@@ -16,19 +16,15 @@
 
 #define LOG_TAG "Vector"
 
-#include <string.h>
-#include <stdlib.h>
-#include <stdio.h>
-
-#ifdef _MSC_VER
-#include "CompatWindows.h"
-#endif
-
-#include "cutils/log.h"
-
-#include "utils/Errors.h"
-#include "utils/SharedBuffer.h"
 #include "utils/VectorImpl.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "utils/Log.h"
+
+#include "utils/SharedBuffer.h"
 
 /*****************************************************************************/
 
@@ -46,7 +42,7 @@ static inline size_t max(size_t a, size_t b) {
 // ----------------------------------------------------------------------------
 
 VectorImpl::VectorImpl(size_t itemSize, uint32_t flags)
-    : mStorage(0), mCount(0), mFlags(flags), mItemSize(itemSize)
+    : mStorage(nullptr), mCount(0), mFlags(flags), mItemSize(itemSize)
 {
 }
 
@@ -79,7 +75,7 @@ VectorImpl& VectorImpl::operator = (const VectorImpl& rhs)
             mCount = rhs.mCount;
             SharedBuffer::bufferFromData(mStorage)->acquire();
         } else {
-            mStorage = 0;
+            mStorage = nullptr;
             mCount = 0;
         }
     }
@@ -89,14 +85,19 @@ VectorImpl& VectorImpl::operator = (const VectorImpl& rhs)
 void* VectorImpl::editArrayImpl()
 {
     if (mStorage) {
-        SharedBuffer* sb = SharedBuffer::bufferFromData(mStorage)->attemptEdit();
-        if (sb == 0) {
-            sb = SharedBuffer::alloc(capacity() * mItemSize);
-            if (sb) {
-                _do_copy(sb->data(), mStorage, mCount);
-                release_storage();
-                mStorage = sb->data();
-            }
+        const SharedBuffer* sb = SharedBuffer::bufferFromData(mStorage);
+        SharedBuffer* editable = sb->attemptEdit();
+        if (editable == nullptr) {
+            // If we're here, we're not the only owner of the buffer.
+            // We must make a copy of it.
+            editable = SharedBuffer::alloc(sb->size());
+            // Fail instead of returning a pointer to storage that's not
+            // editable. Otherwise we'd be editing the contents of a buffer
+            // for which we're not the only owner, which is undefined behaviour.
+            LOG_ALWAYS_FATAL_IF(editable == nullptr, "alloc failed");
+            _do_copy(editable->data(), mStorage, mCount);
+            release_storage();
+            mStorage = editable->data();
         }
     }
     return mStorage;
@@ -141,7 +142,7 @@ ssize_t VectorImpl::appendArray(const void* array, size_t length)
 
 ssize_t VectorImpl::insertAt(size_t index, size_t numItems)
 {
-    return insertAt(0, index, numItems);
+    return insertAt(nullptr, index, numItems);
 }
 
 ssize_t VectorImpl::insertAt(const void* item, size_t index, size_t numItems)
@@ -177,7 +178,7 @@ status_t VectorImpl::sort(VectorImpl::compar_r_t cmp, void* state)
     const ssize_t count = size();
     if (count > 1) {
         void* array = const_cast<void*>(arrayImpl());
-        void* temp = 0;
+        void* temp = nullptr;
         ssize_t i = 1;
         while (i < count) {
             void* item = reinterpret_cast<char*>(array) + mItemSize*(i);
@@ -205,7 +206,10 @@ status_t VectorImpl::sort(VectorImpl::compar_r_t cmp, void* state)
                     _do_copy(next, curr, 1);
                     next = curr;
                     --j;
-                    curr = reinterpret_cast<char*>(array) + mItemSize*(j);
+                    curr = nullptr;
+                    if (j >= 0) {
+                        curr = reinterpret_cast<char*>(array) + mItemSize*(j);
+                    }
                 } while (j>=0 && (cmp(curr, temp, state) > 0));
 
                 _do_destroy(next, 1);
@@ -219,7 +223,7 @@ status_t VectorImpl::sort(VectorImpl::compar_r_t cmp, void* state)
             free(temp);
         }
     }
-    return NO_ERROR;
+    return OK;
 }
 
 void VectorImpl::pop()
@@ -230,7 +234,7 @@ void VectorImpl::pop()
 
 void VectorImpl::push()
 {
-    push(0);
+    push(nullptr);
 }
 
 void VectorImpl::push(const void* item)
@@ -240,7 +244,7 @@ void VectorImpl::push(const void* item)
 
 ssize_t VectorImpl::add()
 {
-    return add(0);
+    return add(nullptr);
 }
 
 ssize_t VectorImpl::add(const void* item)
@@ -250,7 +254,7 @@ ssize_t VectorImpl::add(const void* item)
 
 ssize_t VectorImpl::replaceAt(size_t index)
 {
-    return replaceAt(0, index);
+    return replaceAt(nullptr, index);
 }
 
 ssize_t VectorImpl::replaceAt(const void* prototype, size_t index)
@@ -264,10 +268,10 @@ ssize_t VectorImpl::replaceAt(const void* prototype, size_t index)
 
     void* item = editItemLocation(index);
     if (item != prototype) {
-        if (item == 0)
+        if (item == nullptr)
             return NO_MEMORY;
         _do_destroy(item, 1);
-        if (prototype == 0) {
+        if (prototype == nullptr) {
             _do_construct(item, 1);
         } else {
             _do_copy(item, prototype, 1);
@@ -291,7 +295,7 @@ ssize_t VectorImpl::removeItemsAt(size_t index, size_t count)
 void VectorImpl::finish_vector()
 {
     release_storage();
-    mStorage = 0;
+    mStorage = nullptr;
     mCount = 0;
 }
 
@@ -312,7 +316,7 @@ void* VectorImpl::editItemLocation(size_t index)
             return reinterpret_cast<char*>(buffer) + index*mItemSize;
         }
     }
-    return 0;
+    return nullptr;
 }
 
 const void* VectorImpl::itemLocation(size_t index) const
@@ -327,18 +331,20 @@ const void* VectorImpl::itemLocation(size_t index) const
             return reinterpret_cast<const char*>(buffer) + index*mItemSize;
         }
     }
-    return 0;
+    return nullptr;
 }
 
 ssize_t VectorImpl::setCapacity(size_t new_capacity)
 {
-    size_t current_capacity = capacity();
-    ssize_t amount = new_capacity - size();
-    if (amount <= 0) {
-        // we can't reduce the capacity
-        return current_capacity;
+    // The capacity must always be greater than or equal to the size
+    // of this vector.
+    if (new_capacity <= size()) {
+        return capacity();
     }
-    SharedBuffer* sb = SharedBuffer::alloc(new_capacity * mItemSize);
+
+    size_t new_allocation_size = 0;
+    LOG_ALWAYS_FATAL_IF(__builtin_mul_overflow(new_capacity, mItemSize, &new_allocation_size), "overflow");
+    SharedBuffer* sb = SharedBuffer::alloc(new_allocation_size);
     if (sb) {
         void* array = sb->data();
         if (mStorage) {
@@ -353,7 +359,7 @@ ssize_t VectorImpl::setCapacity(size_t new_capacity)
 }
 
 ssize_t VectorImpl::resize(size_t size) {
-    ssize_t result = NO_ERROR;
+    ssize_t result = OK;
     if (size > mCount) {
         result = insertAt(mCount, size - mCount);
     } else if (size < mCount) {
@@ -382,24 +388,44 @@ void* VectorImpl::_grow(size_t where, size_t amount)
             "[%p] _grow: where=%d, amount=%d, count=%d",
             this, (int)where, (int)amount, (int)mCount); // caller already checked
 
-    const size_t new_size = mCount + amount;
+    size_t new_size;
+    LOG_ALWAYS_FATAL_IF(__builtin_add_overflow(mCount, amount, &new_size), "new_size overflow");
+
     if (capacity() < new_size) {
-        const size_t new_capacity = max(kMinVectorCapacity, (new_size + (new_size/2)+1));
-//        ALOGV("grow vector %p, new_capacity=%d", this, (int)new_capacity);
+        // NOTE: This implementation used to resize vectors as per ((3*x + 1) / 2)
+        // (sigh..). Also note, the " + 1" was necessary to handle the special case
+        // where x == 1, where the resized_capacity will be equal to the old
+        // capacity without the +1. The old calculation wouldn't work properly
+        // if x was zero.
+        //
+        // This approximates the old calculation, using (x + (x/2) + 1) instead.
+        size_t new_capacity = 0;
+        LOG_ALWAYS_FATAL_IF(__builtin_add_overflow(new_size, (new_size / 2), &new_capacity),
+                            "new_capacity overflow");
+        LOG_ALWAYS_FATAL_IF(
+                __builtin_add_overflow(new_capacity, static_cast<size_t>(1u), &new_capacity),
+                "new_capacity overflow");
+        new_capacity = max(kMinVectorCapacity, new_capacity);
+
+        size_t new_alloc_size = 0;
+        LOG_ALWAYS_FATAL_IF(__builtin_mul_overflow(new_capacity, mItemSize, &new_alloc_size),
+                            "new_alloc_size overflow");
+
+        // ALOGV("grow vector %p, new_capacity=%d", this, (int)new_capacity);
         if ((mStorage) &&
             (mCount==where) &&
             (mFlags & HAS_TRIVIAL_COPY) &&
             (mFlags & HAS_TRIVIAL_DTOR))
         {
             const SharedBuffer* cur_sb = SharedBuffer::bufferFromData(mStorage);
-            SharedBuffer* sb = cur_sb->editResize(new_capacity * mItemSize);
+            SharedBuffer* sb = cur_sb->editResize(new_alloc_size);
             if (sb) {
                 mStorage = sb->data();
             } else {
-                return NULL;
+                return nullptr;
             }
         } else {
-            SharedBuffer* sb = SharedBuffer::alloc(new_capacity * mItemSize);
+            SharedBuffer* sb = SharedBuffer::alloc(new_alloc_size);
             if (sb) {
                 void* array = sb->data();
                 if (where != 0) {
@@ -413,7 +439,7 @@ void* VectorImpl::_grow(size_t where, size_t amount)
                 release_storage();
                 mStorage = const_cast<void*>(array);
             } else {
-                return NULL;
+                return nullptr;
             }
         }
     } else {
@@ -441,10 +467,19 @@ void VectorImpl::_shrink(size_t where, size_t amount)
             "[%p] _shrink: where=%d, amount=%d, count=%d",
             this, (int)where, (int)amount, (int)mCount); // caller already checked
 
-    const size_t new_size = mCount - amount;
-    if (new_size*3 < capacity()) {
-        const size_t new_capacity = max(kMinVectorCapacity, new_size*2);
-//        ALOGV("shrink vector %p, new_capacity=%d", this, (int)new_capacity);
+    size_t new_size;
+    LOG_ALWAYS_FATAL_IF(__builtin_sub_overflow(mCount, amount, &new_size), "overflow");
+
+    if (new_size < (capacity() / 2)) {
+        // NOTE: (new_size * 2) is safe because capacity didn't overflow and
+        // new_size < (capacity / 2)).
+        const size_t new_capacity = max(kMinVectorCapacity, new_size * 2);
+
+        // NOTE: (new_capacity * mItemSize), (where * mItemSize) and
+        // ((where + amount) * mItemSize) beyond this point are safe because
+        // we are always reducing the capacity of the underlying SharedBuffer.
+        // In other words, (old_capacity * mItemSize) did not overflow, and
+        // where < (where + amount) < new_capacity < old_capacity.
         if ((where == new_size) &&
             (mFlags & HAS_TRIVIAL_COPY) &&
             (mFlags & HAS_TRIVIAL_DTOR))
@@ -560,6 +595,10 @@ size_t SortedVectorImpl::orderOf(const void* item) const
 
 ssize_t SortedVectorImpl::_indexOrderOf(const void* item, size_t* order) const
 {
+    if (order) *order = 0;
+    if (isEmpty()) {
+        return NAME_NOT_FOUND;
+    }
     // binary search
     ssize_t err = NAME_NOT_FOUND;
     ssize_t l = 0;
@@ -610,13 +649,13 @@ ssize_t SortedVectorImpl::merge(const VectorImpl& vector)
             }
         }
     }
-    return NO_ERROR;
+    return OK;
 }
 
 ssize_t SortedVectorImpl::merge(const SortedVectorImpl& vector)
 {
     // we've merging a sorted vector... nice!
-    ssize_t err = NO_ERROR;
+    ssize_t err = OK;
     if (!vector.isEmpty()) {
         // first take care of the case where the vectors are sorted together
         if (do_compare(vector.itemLocation(vector.size()-1), arrayImpl()) <= 0) {

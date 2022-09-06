@@ -19,31 +19,7 @@
 #include "Trace.h"
 #include "Walkers.h"
 #include "WeakTopologicalOrdering.h"
-
-namespace purity {
-
-CacheConfig& CacheConfig::get_default() {
-  static CacheConfig cc = CacheConfig{};
-  return cc;
-}
-
-void CacheConfig::parse_default(const ConfigFiles& conf) {
-  CacheConfig& def = CacheConfig::get_default();
-  const auto& json = conf.get_json_config();
-  if (json.contains("purity")) {
-    auto purity = JsonWrapper(json["purity"]);
-    if (purity.contains("cache")) {
-      auto cache = JsonWrapper(purity["cache"]);
-      cache.get("max_entries", def.max_entries, def.max_entries);
-      cache.get("fill_entry_threshold", def.fill_entry_threshold,
-                def.fill_entry_threshold);
-      cache.get("fill_size_threshold", def.fill_size_threshold,
-                def.fill_size_threshold);
-    }
-  }
-}
-
-} // namespace purity
+#include "WorkQueue.h"
 
 std::ostream& operator<<(std::ostream& o, const CseLocation& l) {
   switch (l.special_location) {
@@ -144,7 +120,7 @@ CseLocation get_read_location(const IRInstruction* insn) {
   }
 }
 
-static const char* pure_method_names[] = {
+static const std::string_view pure_method_names[] = {
     "Ljava/lang/Boolean;.booleanValue:()Z",
     "Ljava/lang/Boolean;.equals:(Ljava/lang/Object;)Z",
     "Ljava/lang/Boolean;.getBoolean:(Ljava/lang/String;)Z",
@@ -331,10 +307,10 @@ static const char* pure_method_names[] = {
 std::unordered_set<DexMethodRef*> get_pure_methods() {
   std::unordered_set<DexMethodRef*> pure_methods;
   for (auto const pure_method_name : pure_method_names) {
-    auto method_ref = DexMethod::get_method(std::string(pure_method_name));
+    auto method_ref = DexMethod::get_method(pure_method_name);
     if (method_ref == nullptr) {
       TRACE(CSE, 1, "[get_pure_methods]: Could not find pure method %s",
-            pure_method_name);
+            str_copy(pure_method_name).c_str());
       continue;
     }
 
@@ -437,13 +413,105 @@ bool process_base_and_overriding_methods(
   return true;
 }
 
+static AccumulatingTimer s_wto_timer;
+double get_compute_locations_closure_wto_seconds() {
+  return s_wto_timer.get_seconds();
+}
+
+static constexpr const DexMethod* WTO_ROOT = nullptr;
+static std::function<const std::vector<const DexMethod*>&(const DexMethod*)>
+get_wto_successors(
+    std::unordered_map<const DexMethod*, std::vector<const DexMethod*>>&
+        inverse_dependencies,
+    const std::unordered_set<const DexMethod*>& impacted_methods,
+    bool first_iteration) {
+  // Make number of iterations deterministic by sorting  successors
+  auto get_sorted_impacted_methods = [&impacted_methods]() {
+    std::vector<const DexMethod*> successors;
+    successors.reserve(impacted_methods.size());
+    std::copy(impacted_methods.begin(), impacted_methods.end(),
+              std::back_inserter(successors));
+    std::sort(successors.begin(), successors.end(), compare_dexmethods);
+    return successors;
+  };
+  std::vector<const DexMethod*> wto_nodes{WTO_ROOT};
+  std::copy(impacted_methods.begin(), impacted_methods.end(),
+            std::back_inserter(wto_nodes));
+
+  if (first_iteration) {
+    // In the first iteration, besides computing the sorted root successors, we
+    // also sort all inverse_dependencies entries in-place. They represent the
+    // full successor vectors.
+    auto root_cache = std::make_shared<std::vector<const DexMethod*>>();
+    workqueue_run<const DexMethod*>(
+        [&inverse_dependencies, root_cache,
+         &get_sorted_impacted_methods](const DexMethod* m) {
+          if (m == WTO_ROOT) {
+            *root_cache = get_sorted_impacted_methods();
+            return;
+          }
+          auto it = inverse_dependencies.find(m);
+          if (it != inverse_dependencies.end()) {
+            auto& entries = it->second;
+            entries.shrink_to_fit();
+            std::sort(entries.begin(), entries.end(), compare_dexmethods);
+          }
+        },
+        wto_nodes);
+    return [root_cache, &inverse_dependencies](
+               const DexMethod* m) -> const std::vector<const DexMethod*>& {
+      if (m == WTO_ROOT) {
+        // Pre-initialized and pre-sorted
+        return *root_cache;
+      }
+      auto it = inverse_dependencies.find(m);
+      if (it != inverse_dependencies.end()) {
+        // Pre-sorted
+        return it->second;
+      }
+      static std::vector<const DexMethod*> no_successors;
+      return no_successors;
+    };
+  }
+
+  // In subsequent iteration, besides computing the sorted root successors
+  // again, we also filter all previously sorted inverse_dependencies entries.
+  auto concurrent_cache = std::make_shared<
+      ConcurrentMap<const DexMethod*, std::vector<const DexMethod*>>>();
+  workqueue_run<const DexMethod*>(
+      [&impacted_methods, &get_sorted_impacted_methods, &inverse_dependencies,
+       concurrent_cache](const DexMethod* m) {
+        std::vector<const DexMethod*> successors;
+        if (m == WTO_ROOT) {
+          // Re-initialize and re-sort
+          successors = get_sorted_impacted_methods();
+        }
+        auto it = inverse_dependencies.find(m);
+        if (it != inverse_dependencies.end()) {
+          // Note that we are filtering on an already pre-sorted vector
+          for (auto n : it->second) {
+            if (impacted_methods.count(n)) {
+              successors.push_back(n);
+            }
+          }
+        }
+        auto emplaced = concurrent_cache->emplace(m, std::move(successors));
+        always_assert(emplaced);
+      },
+      wto_nodes);
+  return
+      [concurrent_cache](
+          const DexMethod* const& m) -> const std::vector<const DexMethod*>& {
+        return concurrent_cache->at_unsafe(m);
+      };
+}
+
 size_t compute_locations_closure(
     const Scope& scope,
     const method_override_graph::Graph* method_override_graph,
     std::function<boost::optional<LocationsAndDependencies>(DexMethod*)>
         init_func,
-    std::unordered_map<const DexMethod*, CseUnorderedLocationSet>* result,
-    const purity::CacheConfig& cache_config) {
+    std::unordered_map<const DexMethod*, CseUnorderedLocationSet>* result) {
   // 1. Let's initialize known method read locations and dependencies by
   //    scanning method bodies
   ConcurrentMap<const DexMethod*, LocationsAndDependencies>
@@ -463,15 +531,13 @@ size_t compute_locations_closure(
   // 2. Compute inverse dependencies so that we know what needs to be recomputed
   // during the fixpoint computation, and determine set of methods that are
   // initially "impacted" in the sense that they have dependencies.
-  std::unordered_map<const DexMethod*, std::unordered_set<const DexMethod*>>
+  std::unordered_map<const DexMethod*, std::vector<const DexMethod*>>
       inverse_dependencies;
   std::unordered_set<const DexMethod*> impacted_methods;
-  for (const auto& p : method_lads) {
-    auto method = p.first;
-    auto& lads = p.second;
+  for (auto&& [method, lads] : method_lads) {
     if (!lads.dependencies.empty()) {
       for (auto d : lads.dependencies) {
-        inverse_dependencies[d].insert(method);
+        inverse_dependencies[d].push_back(method);
       }
       impacted_methods.insert(method);
     }
@@ -496,139 +562,12 @@ size_t compute_locations_closure(
     std::vector<const DexMethod*> ordered_impacted_methods;
 
     {
-      constexpr bool kCacheDebug = false;
+      auto wto_timer_scope = s_wto_timer.scope();
 
-      struct Cache {
-        struct CacheData {
-          size_t runs{0};
-          size_t size_if_populated{0};
-          std::vector<const DexMethod*> data;
-        };
-        std::unordered_map<const DexMethod*, CacheData> cache;
-        size_t sum_entries{0};
-        size_t pop_miss{0};
-
-        const size_t cache_max_entries;
-        const size_t cache_fill_entry_threshold;
-        const size_t cache_fill_size_threshold;
-
-        explicit Cache(const purity::CacheConfig& config)
-            : cache_max_entries(config.max_entries),
-              cache_fill_entry_threshold(config.fill_entry_threshold),
-              cache_fill_size_threshold(config.fill_size_threshold) {}
-
-        boost::optional<std::vector<const DexMethod*>> get(const DexMethod* m) {
-          auto it = cache.find(m);
-          if (it == cache.end()) {
-            return boost::none;
-          }
-          redex_assert(it->second.runs > 0);
-          if (it->second.runs < cache_fill_entry_threshold) {
-            return boost::none;
-          }
-          ++it->second.runs;
-          if (it->second.size_if_populated > 0) {
-            // We did not have space.
-            pop_miss++;
-            return boost::none;
-          }
-          return it->second.data;
-        }
-
-        void new_data(const DexMethod* m,
-                      const std::vector<const DexMethod*>& data) {
-          CacheData& cd = cache[m];
-          cd.runs++;
-          if (cd.runs < cache_fill_entry_threshold) {
-            return; // Do not cache, yet.
-          }
-          size_t size = data.size();
-          if (size >= cache_fill_size_threshold &&
-              sum_entries + size <= cache_max_entries) {
-            redex_assert(cd.size_if_populated == 0);
-            cd.data = data;
-            sum_entries += size;
-          } else {
-            redex_assert(cd.size_if_populated == 0 ||
-                         cd.size_if_populated == size);
-            cd.size_if_populated = size;
-          }
-        }
-
-        void print_stats() const {
-          std::ostringstream oss;
-
-          size_t sum_not_pop{0};
-          size_t max_not_pop{0};
-          size_t max_pop{0};
-          size_t max_not_pop_runs{0};
-          size_t max_pop_runs{0};
-          size_t below_size_thresh{0};
-          size_t runs_below_size_thresh{0};
-          for (const auto& p : cache) {
-            sum_not_pop += p.second.size_if_populated;
-            max_not_pop = std::max(max_not_pop, p.second.size_if_populated);
-            if (p.second.size_if_populated > 0) {
-              max_not_pop_runs = std::max(max_not_pop_runs, p.second.runs);
-              if (p.second.size_if_populated < cache_fill_size_threshold) {
-                ++below_size_thresh;
-                runs_below_size_thresh += p.second.runs;
-              }
-            } else {
-              max_pop_runs = std::max(max_pop_runs, p.second.runs);
-              max_pop = std::max(max_pop, p.second.data.size());
-            }
-          }
-          oss << "  In=" << sum_entries << " Miss=" << pop_miss << std::endl;
-          oss << "  CACHED: Max=" << max_pop << " Runs=" << max_pop_runs
-              << std::endl;
-          oss << " NCACHED: Sum=" << sum_not_pop << " Max=" << max_not_pop
-              << " Runs=" << max_not_pop_runs << std::endl;
-          oss << " NCACHED: #short=" << below_size_thresh
-              << " Runs=" << runs_below_size_thresh;
-          TRACE(PURITY, 1, "%s", oss.str().c_str());
-        }
-      };
-
-      Cache cache(cache_config);
+      auto wto_successors = get_wto_successors(
+          inverse_dependencies, impacted_methods, iterations == 1);
       sparta::WeakTopologicalOrdering<const DexMethod*> wto(
-          nullptr,
-          [&impacted_methods, &inverse_dependencies,
-           &cache](const DexMethod* const& m) {
-            auto cached = cache.get(m);
-            if (cached && !kCacheDebug) {
-              return std::move(*cached);
-            }
-
-            std::vector<const DexMethod*> successors;
-            if (m == nullptr) {
-              std::copy(impacted_methods.begin(), impacted_methods.end(),
-                        std::back_inserter(successors));
-            } else {
-              auto it = inverse_dependencies.find(m);
-              if (it != inverse_dependencies.end()) {
-                for (auto n : it->second) {
-                  if (impacted_methods.count(n)) {
-                    successors.push_back(n);
-                  }
-                }
-              }
-            }
-            // Make number of iterations deterministic
-            std::sort(successors.begin(), successors.end(), compare_dexmethods);
-
-            if (kCacheDebug && cached) {
-              redex_assert(*cached == successors);
-            }
-
-            cache.new_data(m, successors);
-            return successors;
-          });
-
-      if (traceEnabled(PURITY, 5)) {
-        cache.print_stats();
-      }
-
+          WTO_ROOT, std::move(wto_successors));
       wto.visit_depth_first([&ordered_impacted_methods](const DexMethod* m) {
         if (m) {
           ordered_impacted_methods.push_back(m);
@@ -666,13 +605,13 @@ size_t compute_locations_closure(
     // Given set of changed methods, determine set of dependents for which
     // we need to re-run the analysis in another iteration.
     for (auto changed_method : changed_methods) {
-      auto idit = inverse_dependencies.find(changed_method);
-      if (idit == inverse_dependencies.end()) {
+      auto it = inverse_dependencies.find(changed_method);
+      if (it == inverse_dependencies.end()) {
         continue;
       }
 
       // remove inverse dependency entries as appropriate
-      auto& entries = idit->second;
+      auto& entries = it->second;
       std20::erase_if(entries, [&](auto* m) { return !method_lads.count(m); });
 
       if (entries.empty()) {
@@ -687,8 +626,8 @@ size_t compute_locations_closure(
 
   // For all methods which have a known set of locations at this point,
   // persist that information
-  for (auto& p : method_lads) {
-    result->emplace(p.first, std::move(p.second.locations));
+  for (auto&& [method, lads] : method_lads) {
+    result->emplace(method, std::move(lads.locations));
   }
 
   return iterations;
@@ -715,8 +654,7 @@ static size_t analyze_read_locations(
     bool ignore_methods_with_assumenosideeffects,
     bool for_conditional_purity,
     bool compute_locations,
-    std::unordered_map<const DexMethod*, CseUnorderedLocationSet>* result,
-    const purity::CacheConfig& cache_config) {
+    std::unordered_map<const DexMethod*, CseUnorderedLocationSet>* result) {
   std::unordered_set<const DexMethod*> pure_methods_closure;
   for (auto pure_method_ref : pure_methods) {
     auto pure_method = pure_method_ref->as_def();
@@ -845,7 +783,7 @@ static size_t analyze_read_locations(
 
         return lads;
       },
-      result, cache_config);
+      result);
 }
 
 size_t compute_conditionally_pure_methods(
@@ -853,14 +791,13 @@ size_t compute_conditionally_pure_methods(
     const method_override_graph::Graph* method_override_graph,
     const method::ClInitHasNoSideEffectsPredicate& clinit_has_no_side_effects,
     const std::unordered_set<DexMethodRef*>& pure_methods,
-    std::unordered_map<const DexMethod*, CseUnorderedLocationSet>* result,
-    const purity::CacheConfig& cache_config) {
+    std::unordered_map<const DexMethod*, CseUnorderedLocationSet>* result) {
   Timer t("compute_conditionally_pure_methods");
   auto iterations = analyze_read_locations(
       scope, method_override_graph, clinit_has_no_side_effects, pure_methods,
       /* ignore_methods_with_assumenosideeffects */ false,
       /* for_conditional_purity */ true,
-      /* compute_locations */ true, result, cache_config);
+      /* compute_locations */ true, result);
   for (auto& p : *result) {
     TRACE(CSE, 4, "[CSE] conditionally pure method %s: %s", SHOW(p.first),
           SHOW(&p.second));
@@ -873,8 +810,7 @@ size_t compute_no_side_effects_methods(
     const method_override_graph::Graph* method_override_graph,
     const method::ClInitHasNoSideEffectsPredicate& clinit_has_no_side_effects,
     const std::unordered_set<DexMethodRef*>& pure_methods,
-    std::unordered_set<const DexMethod*>* result,
-    const purity::CacheConfig& cache_config) {
+    std::unordered_set<const DexMethod*>* result) {
   Timer t("compute_no_side_effects_methods");
   std::unordered_map<const DexMethod*, CseUnorderedLocationSet>
       method_locations;
@@ -882,7 +818,7 @@ size_t compute_no_side_effects_methods(
       scope, method_override_graph, clinit_has_no_side_effects, pure_methods,
       /* ignore_methods_with_assumenosideeffects */ true,
       /* for_conditional_purity */ false,
-      /* compute_locations */ false, &method_locations, cache_config);
+      /* compute_locations */ false, &method_locations);
   for (auto& p : method_locations) {
     TRACE(CSE, 4, "[CSE] no side effects method %s", SHOW(p.first));
     result->insert(p.first);

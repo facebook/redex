@@ -27,7 +27,6 @@ using namespace class_merging;
 
 namespace {
 
-using MergedTypeNames = std::unordered_map<std::string, std::string>;
 using CallSites = std::vector<std::pair<DexMethod*, IRInstruction*>>;
 
 const std::string TE_MAPPING_FILE_NAME = "redex-type-erasure-mappings.txt";
@@ -519,7 +518,6 @@ std::vector<DexClass*> ModelMerger::merge_model(Scope& scope,
   Timer t("merge_model");
   std::vector<const MergerType*> to_materialize;
   std::vector<DexClass*> merger_classes;
-  MergedTypeNames merged_type_names;
   const auto model_spec = model.get_model_spec();
   bool input_has_type_tag = model_spec.input_has_type_tag();
 
@@ -581,7 +579,6 @@ std::vector<DexClass*> ModelMerger::merge_model(Scope& scope,
     auto type = const_cast<DexType*>(merger->type);
     for (auto mergeable : merger->mergeables) {
       loosen_access_modifier_except_vmethods(type_class(mergeable));
-      merged_type_names[mergeable->get_name()->str()] = type->get_name()->str();
       mergeable_to_merger[mergeable] = type;
     }
   }

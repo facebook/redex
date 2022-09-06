@@ -101,13 +101,7 @@ class MethodProfiles {
     return sum;
   }
 
-  size_t unresolved_size() const {
-    size_t result = 0;
-    for (const auto& pair : m_unresolved_lines) {
-      result += pair.second.size();
-    }
-    return result;
-  }
+  size_t unresolved_size() const { return m_unresolved_lines.size(); }
 
   // Get the method profiles for some interaction id.
   // If no interactions are found by that interaction id, Return an empty map.
@@ -131,12 +125,29 @@ class MethodProfiles {
   // Try to resolve previously unresolved lines
   void process_unresolved_lines();
 
+  static double get_process_unresolved_lines_seconds();
+
+  std::unordered_set<dex_member_refs::MethodDescriptorTokens>
+  get_unresolved_method_descriptor_tokens() const;
+
+  void resolve_method_descriptor_tokens(
+      const std::unordered_map<dex_member_refs::MethodDescriptorTokens,
+                               std::vector<DexMethodRef*>>& map);
+
  private:
+  static AccumulatingTimer s_process_unresolved_lines_timer;
   AllInteractions m_method_stats;
   // Resolution may fail because of renaming or generated methods. Store the
   // unresolved lines here (per interaction) so we can update after passes run
   // and change the names of methods
-  std::unordered_map<std::string, std::vector<std::string>> m_unresolved_lines;
+  struct ParsedMain {
+    std::unique_ptr<std::string> line_interaction_id;
+    std::unique_ptr<std::string> ref_str;
+    std::optional<dex_member_refs::MethodDescriptorTokens> mdt;
+    DexMethodRef* ref = nullptr;
+    Stats stats;
+  };
+  std::vector<ParsedMain> m_unresolved_lines;
   ParsingMode m_mode{NONE};
   // A map from interaction ID to the number of times that interaction was
   // triggered. This can be used to compare relative prevalence of different
@@ -153,10 +164,12 @@ class MethodProfiles {
   bool parse_stats_file(const std::string& csv_filename);
 
   // Read a line of data (not a header)
-  bool parse_line(std::string_view line);
+  bool parse_line(std::string line);
   // Read a line from the main section of the aggregated stats file and put an
   // entry into m_method_stats
-  bool parse_main(std::string_view line);
+  bool parse_main(std::string line, std::string* interaction_id);
+  std::optional<ParsedMain> parse_main_internal(std::string_view line);
+  bool apply_main_internal_result(ParsedMain v, std::string* interaction_id);
   // Read a line of data from the metadata section (at the top of the file)
   bool parse_metadata(std::string_view line);
 

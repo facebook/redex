@@ -45,6 +45,7 @@ struct RedexIntegrationTest : public RedexTest {
   boost::optional<DexClasses&> classes;
   DexMetadata dex_metadata;
   redex::TempDir configfiles_out_dir;
+  std::unique_ptr<ConfigFiles> conf;
   std::unique_ptr<PassManager> pass_manager;
 
  public:
@@ -58,9 +59,11 @@ struct RedexIntegrationTest : public RedexTest {
 
     dex_metadata.set_id("classes");
     DexStore root_store(dex_metadata);
-    root_store.add_classes(load_classes_from_dex(dex_file));
+    root_store.add_classes(
+        load_classes_from_dex(DexLocation::make_location("dex", dex_file)));
     if (secondary_dex_file) {
-      root_store.add_classes(load_classes_from_dex(secondary_dex_file));
+      root_store.add_classes(load_classes_from_dex(
+          DexLocation::make_location("dex", secondary_dex_file)));
     }
     classes = root_store.get_dexen().back();
     stores.emplace_back(std::move(root_store));
@@ -81,19 +84,19 @@ struct RedexIntegrationTest : public RedexTest {
                   std::unique_ptr<keep_rules::ProguardConfiguration> pg_config,
                   const Json::Value& json_conf,
                   const Fn& fn) {
+    conf = std::make_unique<ConfigFiles>(json_conf);
     if (pg_config) {
-      pass_manager = std::make_unique<PassManager>(passes, std::move(pg_config),
-                                                   json_conf);
+      pass_manager =
+          std::make_unique<PassManager>(passes, std::move(pg_config), *conf);
     } else {
-      pass_manager = std::make_unique<PassManager>(passes, json_conf);
+      pass_manager = std::make_unique<PassManager>(passes, *conf);
     }
 
     fn(*pass_manager);
 
     pass_manager->set_testing_mode();
-    ConfigFiles conf(json_conf);
-    conf.set_outdir(configfiles_out_dir.path);
-    pass_manager->run_passes(stores, conf);
+    conf->set_outdir(configfiles_out_dir.path);
+    pass_manager->run_passes(stores, *conf);
   }
 
   virtual ~RedexIntegrationTest() {}

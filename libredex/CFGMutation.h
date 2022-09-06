@@ -26,6 +26,7 @@ namespace cfg {
 /// TODO(T59235117) Flush mutation in the destructor.
 class CFGMutation {
  public:
+  static double get_seconds();
   /// Create a new mutation to apply to \p cfg.
   explicit CFGMutation(ControlFlowGraph& cfg);
 
@@ -184,6 +185,7 @@ class CFGMutation {
   /// A memento of a change we wish to make to the CFG.
   class ChangeSet {
    public:
+    explicit ChangeSet(const IRList::iterator& it) : m_it(it) {}
     ~ChangeSet();
 
     enum class Insert { Before, After, Replacing };
@@ -194,7 +196,12 @@ class CFGMutation {
     ///    after the anchor's initial position.
     ///  - Note the iterator may not be moved at all, even if the change is
     ///    applied.
-    void apply(ControlFlowGraph& cfg, InstructionIterator& it);
+    /// Returns whether iterators were invalidated.
+    bool apply(ControlFlowGraph& cfg,
+               cfg::Block* block,
+               ir_list::InstructionIterator& it);
+
+    void scan(bool* throws_or_returns, bool* may_throw);
 
     /// Accumulates changes for a specific instruction.
     /// Check \link CFGMutation::add_change \endlink for more details
@@ -214,7 +221,22 @@ class CFGMutation {
     /// empty (so applying it would be a nop).
     void dispose();
 
+    /// Gets the original iterator.
+    IRList::iterator& get_iterator() { return m_it; }
+
+    bool has_replace() const { return !!m_replace; }
+
+    bool is_simple_empty_replace() const {
+      return m_insert_before.empty() && m_replace && m_replace->empty() &&
+             m_insert_after.empty() && m_insert_pos_before.empty() &&
+             m_insert_pos_after.empty() && m_insert_sb_before.empty() &&
+             m_insert_sb_after.empty() && m_insert_before_var.empty() &&
+             m_insert_after_var.empty();
+    }
+
    private:
+    IRList::iterator m_it;
+
     std::vector<IRInstruction*> m_insert_before;
     boost::optional<std::vector<IRInstruction*>> m_replace;
     std::vector<IRInstruction*> m_insert_after;
@@ -229,8 +251,35 @@ class CFGMutation {
     std::vector<cfg::ControlFlowGraph::InsertVariant> m_insert_after_var;
   };
 
+  using Changes =
+      std::unordered_map<IRInstruction*, std::unique_ptr<ChangeSet>>;
+
+  ChangeSet* get_change_set(const cfg::InstructionIterator& anchor) {
+    auto& change_set = m_changes[anchor.block()][anchor->insn];
+    if (!change_set) {
+      change_set = std::make_unique<ChangeSet>(anchor.unwrap());
+    }
+    return change_set.get();
+  }
+
+  ChangeSet* primary_change_of_move_result(cfg::Block* block,
+                                           ChangeSet& move_result_change);
+
+  /// Removes (and logs) move-result-any* changes that overlap with primary
+  /// instruction changes. The return value indicates whether we need to do slow
+  /// (sequential) processing, as some changes may invalidate iterators or add
+  /// new blocks.
+  bool reduce_block_changes(cfg::Block* block,
+                            Changes& changes,
+                            bool* requires_slow_processing);
+  /// Apply changes by iterating over all instructions. The return value
+  /// indicates whether all changes were processed.
+  bool process_block_changes_slow(cfg::Block* block, Changes& changes);
+  /// Apply changes in any order.
+  void process_block_changes(cfg::Block* block, Changes& changes);
+
   cfg::ControlFlowGraph& m_cfg;
-  std::unordered_map<IRInstruction*, ChangeSet> m_changes;
+  std::unordered_map<cfg::Block*, Changes> m_changes;
 };
 
 inline CFGMutation::CFGMutation(cfg::ControlFlowGraph& cfg) : m_cfg(cfg) {}
@@ -324,7 +373,7 @@ inline void CFGMutation::insert_before(
     const cfg::InstructionIterator& anchor,
     std::vector<IRInstruction*> instructions) {
   always_assert(!anchor.is_end());
-  m_changes[anchor->insn].add_change(ChangeSet::Insert::Before,
+  get_change_set(anchor)->add_change(ChangeSet::Insert::Before,
                                      std::move(instructions));
 }
 
@@ -332,7 +381,7 @@ inline void CFGMutation::insert_after(
     const cfg::InstructionIterator& anchor,
     std::vector<IRInstruction*> instructions) {
   always_assert(!anchor.is_end());
-  m_changes[anchor->insn].add_change(ChangeSet::Insert::After,
+  get_change_set(anchor)->add_change(ChangeSet::Insert::After,
                                      std::move(instructions));
 }
 
@@ -340,7 +389,7 @@ inline void CFGMutation::insert_before_var(
     const cfg::InstructionIterator& anchor,
     std::vector<cfg::ControlFlowGraph::InsertVariant> instructions) {
   always_assert(!anchor.is_end());
-  m_changes[anchor->insn].add_var(ChangeSet::Insert::Before,
+  get_change_set(anchor)->add_var(ChangeSet::Insert::Before,
                                   std::move(instructions));
 }
 
@@ -348,48 +397,48 @@ inline void CFGMutation::insert_after_var(
     const cfg::InstructionIterator& anchor,
     std::vector<cfg::ControlFlowGraph::InsertVariant> instructions) {
   always_assert(!anchor.is_end());
-  m_changes[anchor->insn].add_var(ChangeSet::Insert::After,
+  get_change_set(anchor)->add_var(ChangeSet::Insert::After,
                                   std::move(instructions));
 }
 
 inline void CFGMutation::insert_before(const cfg::InstructionIterator& anchor,
                                        std::unique_ptr<DexPosition> position) {
   always_assert(!anchor.is_end());
-  m_changes[anchor->insn].add_position(ChangeSet::Insert::Before,
+  get_change_set(anchor)->add_position(ChangeSet::Insert::Before,
                                        std::move(position));
 }
 
 inline void CFGMutation::insert_after(const cfg::InstructionIterator& anchor,
                                       std::unique_ptr<DexPosition> position) {
   always_assert(!anchor.is_end());
-  m_changes[anchor->insn].add_position(ChangeSet::Insert::After,
+  get_change_set(anchor)->add_position(ChangeSet::Insert::After,
                                        std::move(position));
 }
 
 inline void CFGMutation::insert_before(const cfg::InstructionIterator& anchor,
                                        std::unique_ptr<SourceBlock> sb) {
   always_assert(!anchor.is_end());
-  m_changes[anchor->insn].add_source_block(ChangeSet::Insert::Before,
+  get_change_set(anchor)->add_source_block(ChangeSet::Insert::Before,
                                            std::move(sb));
 }
 
 inline void CFGMutation::insert_after(const cfg::InstructionIterator& anchor,
                                       std::unique_ptr<SourceBlock> sb) {
   always_assert(!anchor.is_end());
-  m_changes[anchor->insn].add_source_block(ChangeSet::Insert::After,
+  get_change_set(anchor)->add_source_block(ChangeSet::Insert::After,
                                            std::move(sb));
 }
 
 inline void CFGMutation::replace(const cfg::InstructionIterator& anchor,
                                  std::vector<IRInstruction*> instructions) {
   always_assert(!anchor.is_end());
-  m_changes[anchor->insn].add_change(ChangeSet::Insert::Replacing,
+  get_change_set(anchor)->add_change(ChangeSet::Insert::Replacing,
                                      std::move(instructions));
 }
 
 inline void CFGMutation::remove(const cfg::InstructionIterator& anchor) {
   always_assert(!anchor.is_end());
-  m_changes[anchor->insn].add_change(ChangeSet::Insert::Replacing, {});
+  get_change_set(anchor)->add_change(ChangeSet::Insert::Replacing, {});
 }
 
 inline bool CFGMutation::is_terminal(IROpcode op) {

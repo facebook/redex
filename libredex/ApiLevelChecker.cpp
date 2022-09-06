@@ -103,7 +103,7 @@ void LevelChecker::init_method(DexMethod* method) {
 
 DexClass* LevelChecker::get_outer_class(const DexClass* cls) {
   TraceContext context(cls->get_type());
-  const std::string& cls_name = cls->get_deobfuscated_name_or_empty();
+  const auto cls_name = cls->get_deobfuscated_name_or_empty();
   auto cash_idx = cls_name.find_last_of('$');
   if (cash_idx == std::string::npos) {
     // this is not an inner class
@@ -115,7 +115,7 @@ DexClass* LevelChecker::get_outer_class(const DexClass* cls) {
     const std::string& outer_name = cls_name.substr(0, cash_idx) + ';';
     DexType* outer = DexType::get_type(outer_name);
     if (outer == nullptr) {
-      TRACE(MMINL, 4, "Can't find outer class! %s -> %s", cls_name.c_str(),
+      TRACE(MMINL, 4, "Can't find outer class! %s -> %s", cls_name.data(),
             outer_name.c_str());
       return nullptr;
     }
@@ -139,12 +139,12 @@ constexpr const char* ANDROID_X_PREFIX = "Landroidx/";
 constexpr const char* ANDROID_SUPPORT_LIB_PREFIX = "Landroid/support/";
 
 bool is_android_sdk_type(const DexType* type) {
-  const std::string& name = type->str();
+  const auto name = type->str();
   return boost::starts_with(name, ANDROID_SDK_PREFIX);
 }
 
 bool is_support_lib_type(const DexType* type) {
-  const std::string& name = type->str();
+  const auto name = type->str();
   return boost::starts_with(name, ANDROID_X_PREFIX) ||
          boost::starts_with(name, ANDROID_SUPPORT_LIB_PREFIX);
 }

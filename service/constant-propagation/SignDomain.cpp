@@ -7,6 +7,8 @@
 
 #include "SignDomain.h"
 
+#include <limits>
+
 #include "Debug.h"
 
 namespace sign_domain {

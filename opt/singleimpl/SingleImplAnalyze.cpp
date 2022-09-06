@@ -110,7 +110,7 @@ void AnalysisImpl::filter_list(const std::vector<std::string>& list,
                                bool keep_match) {
   if (list.empty()) return;
 
-  auto find_in_list = [&](const std::string& name) {
+  auto find_in_list = [&](const std::string_view name) {
     for (const std::string& el_name : list) {
       if (name.compare(0, el_name.size(), el_name) == 0) {
         return true;
@@ -122,7 +122,7 @@ void AnalysisImpl::filter_list(const std::vector<std::string>& list,
   for (const auto& intf_it : single_impls) {
     const auto intf = intf_it.first;
     const auto intf_cls = type_class(intf);
-    const std::string& intf_name = intf_cls->get_deobfuscated_name_or_empty();
+    const auto intf_name = intf_cls->get_deobfuscated_name_or_empty();
     bool match = find_in_list(intf_name);
     if (match && keep_match) continue;
     if (!match && !keep_match) continue;
@@ -134,7 +134,7 @@ void AnalysisImpl::filter_proguard_special_interface() {
   for (const auto& intf_it : single_impls) {
     const auto intf = intf_it.first;
     const auto intf_cls = type_class(intf);
-    const std::string& intf_name = intf_cls->get_deobfuscated_name_or_empty();
+    std::string intf_name = intf_cls->get_deobfuscated_name_or_empty_copy();
     if (pg_map.is_special_interface(intf_name)) {
       escape_interface(intf, FILTERED);
     }

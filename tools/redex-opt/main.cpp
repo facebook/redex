@@ -216,7 +216,8 @@ int main(int argc, char* argv[]) {
   if (!stores.empty()) {
     auto first_dex_path = boost::filesystem::path(args.input_ir_dir) /
                           entry_data["dex_list"][0]["list"][0].asString();
-    stores[0].set_dex_magic(load_dex_magic_from_dex(first_dex_path.c_str()));
+    auto location = DexLocation::make_location("dex", first_dex_path.string());
+    stores[0].set_dex_magic(load_dex_magic_from_dex(location));
   }
 
   if (!args.config_file.empty()) {
@@ -229,7 +230,7 @@ int main(int argc, char* argv[]) {
   ConfigFiles conf(config_data, args.output_ir_dir);
 
   const auto& passes = PassRegistry::get().get_passes();
-  PassManager manager(passes, config_data, args.redex_options);
+  PassManager manager(passes, conf, args.redex_options);
   manager.set_testing_mode();
   manager.run_passes(stores, conf);
 

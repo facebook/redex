@@ -238,6 +238,12 @@ class ConcurrentMapContainer
       : ConcurrentContainer<MapContainer, Key, Hash, n_slots>(
             std::move(container)) {}
 
+  ConcurrentMapContainer& operator=(ConcurrentMapContainer&&) noexcept =
+      default;
+
+  ConcurrentMapContainer& operator=(const ConcurrentMapContainer&) noexcept =
+      default;
+
   template <typename InputIt>
   ConcurrentMapContainer(InputIt first, InputIt last) {
     insert(first, last);
@@ -430,6 +436,10 @@ class ConcurrentSet final
                             Hash,
                             n_slots>(std::move(set)) {}
 
+  ConcurrentSet& operator=(ConcurrentSet&&) noexcept = default;
+
+  ConcurrentSet& operator=(const ConcurrentSet&) noexcept = default;
+
   /*
    * The Boolean return value denotes whether the insertion took place.
    * This operation is always thread-safe.
@@ -474,33 +484,31 @@ class ConcurrentSet final
 };
 
 /**
- * A concurrent set that only accept insertions.
+// A concurrent container with set semantics that only accepts insertions.
  *
  * This allows accessing constant references on elements safely.
  */
-template <typename Key,
+template <typename SetContainer,
+          typename Key,
           typename Hash = std::hash<Key>,
-          typename Equal = std::equal_to<Key>,
           size_t n_slots = 31>
-class InsertOnlyConcurrentSet final
-    : public ConcurrentContainer<std::unordered_set<Key, Hash, Equal>,
-                                 Key,
-                                 Hash,
-                                 n_slots> {
+class InsertOnlyConcurrentSetContainer final
+    : public ConcurrentContainer<SetContainer, Key, Hash, n_slots> {
  public:
-  InsertOnlyConcurrentSet() = default;
+  InsertOnlyConcurrentSetContainer() = default;
 
-  InsertOnlyConcurrentSet(const InsertOnlyConcurrentSet& set)
-      : ConcurrentContainer<std::unordered_set<Key, Hash, Equal>,
-                            Key,
-                            Hash,
-                            n_slots>(set) {}
+  InsertOnlyConcurrentSetContainer(const InsertOnlyConcurrentSetContainer& set)
+      : ConcurrentContainer<SetContainer, Key, Hash, n_slots>(set) {}
 
-  InsertOnlyConcurrentSet(InsertOnlyConcurrentSet&& set) noexcept
-      : ConcurrentContainer<std::unordered_set<Key, Hash, Equal>,
-                            Key,
-                            Hash,
-                            n_slots>(std::move(set)) {}
+  InsertOnlyConcurrentSetContainer(
+      InsertOnlyConcurrentSetContainer&& set) noexcept
+      : ConcurrentContainer<SetContainer, Key, Hash, n_slots>(std::move(set)) {}
+
+  InsertOnlyConcurrentSetContainer& operator=(
+      InsertOnlyConcurrentSetContainer&&) noexcept = default;
+
+  InsertOnlyConcurrentSetContainer& operator=(
+      const InsertOnlyConcurrentSetContainer&) noexcept = default;
 
   /*
    * Returns a pair consisting of a pointer on the inserted element (or the
@@ -535,6 +543,21 @@ class InsertOnlyConcurrentSet final
 
   size_t erase(const Key& key) = delete;
 };
+
+/**
+ * A concurrent set that only accepts insertions.
+ *
+ * This allows accessing constant references on elements safely.
+ */
+template <typename Key,
+          typename Hash = std::hash<Key>,
+          typename Equal = std::equal_to<Key>,
+          size_t n_slots = 31>
+using InsertOnlyConcurrentSet =
+    InsertOnlyConcurrentSetContainer<std::unordered_set<Key, Hash, Equal>,
+                                     Key,
+                                     Hash,
+                                     n_slots>;
 
 namespace cc_impl {
 

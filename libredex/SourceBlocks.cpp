@@ -42,30 +42,40 @@ constexpr SourceBlock::Val kXVal = SourceBlock::Val::none();
 static SourceBlockConsistencyCheck s_sbcc;
 
 struct InsertHelper {
+  std::ostringstream oss;
   const DexString* method;
   uint32_t id{0};
-  std::ostringstream oss;
   bool serialize;
   bool insert_after_excs;
 
   struct ProfileParserState {
-    s_expr root_expr;
     std::vector<s_expr> expr_stack;
     bool had_profile_failure{false};
-    boost::optional<SourceBlock::Val> default_val;
-    boost::optional<SourceBlock::Val> error_val;
-    ProfileParserState(s_expr root_expr,
-                       std::vector<s_expr> expr_stack,
-                       bool had_profile_failure,
-                       const boost::optional<SourceBlock::Val>& default_val,
-                       const boost::optional<SourceBlock::Val>& error_val)
-        : root_expr(std::move(root_expr)),
-          expr_stack(std::move(expr_stack)),
-          had_profile_failure(had_profile_failure),
+    bool root_expr_is_nil;
+    const SourceBlock::Val* default_val;
+    const SourceBlock::Val* error_val;
+    ProfileParserState(std::vector<s_expr> expr_stack,
+                       bool root_expr_is_nil,
+                       const SourceBlock::Val* default_val,
+                       const SourceBlock::Val* error_val)
+        : expr_stack(std::move(expr_stack)),
+          root_expr_is_nil(root_expr_is_nil),
           default_val(default_val),
           error_val(error_val) {}
   };
   std::vector<ProfileParserState> parser_state;
+  struct MatcherState {
+    const std::string* val_str_ptr;
+    s_expr tail;
+    s_expr inner_tail;
+    s_patn val_str_inner_tail_tail_pattern;
+    s_patn val_str_tail_pattern;
+    MatcherState()
+        : val_str_inner_tail_tail_pattern(
+              {s_patn({s_patn(&val_str_ptr)}, inner_tail)}, tail),
+          val_str_tail_pattern({s_patn(&val_str_ptr)}, tail) {}
+  };
+  MatcherState matcher_state;
 
   InsertHelper(const DexString* method,
                const std::vector<ProfileData>& profiles,
@@ -74,19 +84,21 @@ struct InsertHelper {
       : method(method),
         serialize(serialize),
         insert_after_excs(insert_after_excs) {
+    parser_state.reserve(profiles.size());
     for (const auto& p : profiles) {
       switch (p.index()) {
       case 0:
         // Nothing.
-        parser_state.emplace_back(s_expr(), std::vector<s_expr>(), false,
-                                  boost::none, boost::none);
+        parser_state.emplace_back(std::vector<s_expr>(),
+                                  /* root_expr_is_nil */ true,
+                                  /* default_val */ nullptr,
+                                  /* error_val */ nullptr);
         break;
 
       case 1:
         // Profile string.
         {
-          const auto& pair = std::get<1>(p);
-          const std::string& profile = pair.first;
+          const auto& [profile, error_val_opt] = std::get<1>(p);
           std::istringstream iss{profile};
           s_expr_istream s_expr_input(iss);
           s_expr root_expr;
@@ -96,18 +108,22 @@ struct InsertHelper {
                             profile.c_str(),
                             SHOW(method),
                             s_expr_input.what().c_str());
-          std::vector<s_expr> expr_stack;
-          expr_stack.push_back(s_expr({root_expr}));
-          parser_state.emplace_back(std::move(root_expr), std::move(expr_stack),
-                                    false, boost::none, pair.second);
+          bool root_expr_is_nil = root_expr.is_nil();
+          std::vector<s_expr> expr_stack{s_expr({std::move(root_expr)})};
+          auto* error_val = error_val_opt ? &*error_val_opt : nullptr;
+          parser_state.emplace_back(std::move(expr_stack), root_expr_is_nil,
+                                    /* default_val */ nullptr, error_val);
           break;
         }
 
-      case 2:
+      case 2: {
         // A default Val.
-        parser_state.emplace_back(s_expr(), std::vector<s_expr>(), false,
-                                  std::get<2>(p), boost::none);
+        auto* default_val = &std::get<2>(p);
+        parser_state.emplace_back(std::vector<s_expr>(),
+                                  /* root_expr_is_nil */ true, default_val,
+                                  /* error_val */ nullptr);
         break;
+      }
 
       default:
         not_reached();
@@ -202,6 +218,7 @@ struct InsertHelper {
   std::vector<SourceBlock::Val> start_profile(Block* cur,
                                               bool empty_inner_tail = false) {
     std::vector<SourceBlock::Val> ret;
+    ret.reserve(parser_state.size());
     for (auto& p_state : parser_state) {
       ret.emplace_back(start_profile_one(cur, empty_inner_tail, p_state));
     }
@@ -214,7 +231,7 @@ struct InsertHelper {
     if (p_state.had_profile_failure) {
       return kFailVal;
     }
-    if (p_state.root_expr.is_nil()) {
+    if (p_state.root_expr_is_nil) {
       if (p_state.default_val) {
         return *p_state.default_val;
       }
@@ -227,32 +244,29 @@ struct InsertHelper {
             SHOW(method), cur->id());
       return kFailVal;
     }
-    std::string val_str;
-    const s_expr& e = p_state.expr_stack.back();
-    s_expr tail, inner_tail;
-    if (!s_patn({s_patn({s_patn(&val_str)}, inner_tail)}, tail).match_with(e)) {
+    s_expr& top_expr = p_state.expr_stack.back();
+    if (!matcher_state.val_str_inner_tail_tail_pattern.match_with(top_expr)) {
       p_state.had_profile_failure = true;
       TRACE(MMINL, 3,
             "Failed profile matching for %s: cannot match string for %s",
-            SHOW(method), e.str().c_str());
+            SHOW(method), top_expr.str().c_str());
       return kFailVal;
     }
     if (empty_inner_tail) {
-      redex_assert(inner_tail.is_nil());
+      redex_assert(matcher_state.inner_tail.is_nil());
     }
-    auto val = parse_val(val_str);
+    auto val = parse_val(*matcher_state.val_str_ptr);
     TRACE(MMINL,
           5,
           "Started block with val=%f/%f. Popping %s, pushing %s + %s",
           val ? val->val : std::numeric_limits<float>::quiet_NaN(),
           val ? val->appear100 : std::numeric_limits<float>::quiet_NaN(),
-          e.str().c_str(),
-          tail.str().c_str(),
-          inner_tail.str().c_str());
-    p_state.expr_stack.pop_back();
-    p_state.expr_stack.push_back(tail);
+          top_expr.str().c_str(),
+          matcher_state.tail.str().c_str(),
+          matcher_state.inner_tail.str().c_str());
+    top_expr = std::move(matcher_state.tail);
     if (!empty_inner_tail) {
-      p_state.expr_stack.push_back(inner_tail);
+      p_state.expr_stack.push_back(std::move(matcher_state.inner_tail));
     }
     return val;
   }
@@ -292,33 +306,32 @@ struct InsertHelper {
     if (p_state.had_profile_failure || p_state.expr_stack.empty()) {
       return;
     }
-    std::string val;
-    s_expr& expr = p_state.expr_stack.back();
-    s_expr tail;
-    if (!s_patn({s_patn(&val)}, tail).match_with(expr)) {
+    s_expr& top_expr = p_state.expr_stack.back();
+    if (!matcher_state.val_str_tail_pattern.match_with(top_expr)) {
       p_state.had_profile_failure = true;
       TRACE(MMINL, 3,
             "Failed profile matching for %s: cannot match string for %s",
-            SHOW(method), expr.str().c_str());
+            SHOW(method), top_expr.str().c_str());
       return;
     }
-    std::string expected(1, get_edge_char(e));
-    if (expected != val) {
+    char edge_char = get_edge_char(e);
+    std::string_view expected(&edge_char, 1);
+    if (expected != *matcher_state.val_str_ptr) {
       p_state.had_profile_failure = true;
       TRACE(MMINL, 3,
             "Failed profile matching for %s: edge type \"%s\" did not match "
             "expectation \"%s\"",
-            SHOW(method), val.c_str(), expected.c_str());
+            SHOW(method), matcher_state.val_str_ptr->c_str(),
+            str_copy(expected).c_str());
       return;
     }
     TRACE(MMINL,
           5,
           "Matched edge %s. Popping %s, pushing %s",
-          val.c_str(),
-          expr.str().c_str(),
-          tail.str().c_str());
-    p_state.expr_stack.pop_back();
-    p_state.expr_stack.push_back(tail);
+          matcher_state.val_str_ptr->c_str(),
+          top_expr.str().c_str(),
+          matcher_state.tail.str().c_str());
+    top_expr = std::move(matcher_state.tail);
   }
 
   void end(Block* cur) {
@@ -338,7 +351,7 @@ struct InsertHelper {
     if (p_state.had_profile_failure) {
       return;
     }
-    if (p_state.root_expr.is_nil()) {
+    if (p_state.root_expr_is_nil) {
       return;
     }
     if (p_state.expr_stack.empty()) {
@@ -349,7 +362,8 @@ struct InsertHelper {
       p_state.had_profile_failure = true;
       return;
     }
-    if (!p_state.expr_stack.back().is_nil()) {
+    s_expr& top_expr = p_state.expr_stack.back();
+    if (!top_expr.is_nil()) {
       TRACE(MMINL,
             3,
             "Failed profile matching for %s: edge sentinel not NIL",
@@ -357,7 +371,7 @@ struct InsertHelper {
       p_state.had_profile_failure = true;
       return;
     }
-    TRACE(MMINL, 5, "Popping %s", p_state.expr_stack.back().str().c_str());
+    TRACE(MMINL, 5, "Popping %s", top_expr.str().c_str());
     p_state.expr_stack.pop_back(); // Remove sentinel nil.
   }
 
@@ -365,7 +379,7 @@ struct InsertHelper {
     bool ret = false;
     for (size_t i = 0; i != parser_state.size(); ++i) {
       auto& p_state = parser_state[i];
-      if (p_state.root_expr.is_nil()) {
+      if (p_state.root_expr_is_nil) {
         continue;
       }
       if (!p_state.had_profile_failure) {
@@ -513,7 +527,7 @@ size_t chain_hot_violations_tmpl(Block* block, const Fn& fn) {
       // next SourceBlock.
       auto* next = sb->next.get();
       size_t local_sum{0};
-      for (size_t i = 0; i != sb->vals.size(); ++i) {
+      for (size_t i = 0; i != sb->vals_size; ++i) {
         auto sb_val = sb->get_val(i);
         auto next_val = next->get_val(i);
         if (sb_val) {
@@ -544,40 +558,64 @@ size_t chain_hot_one_violations(
                                    [](auto val) { return val > 0 ? 1 : 0; });
 }
 
-size_t chain_and_dom_violations(
-    Block* block,
+struct ChainAndDomState {
+  const SourceBlock* last{nullptr};
+  cfg::Block* dom_block{nullptr};
+  size_t violations{0};
+};
+
+void chain_and_dom_update(
+    cfg::Block* block,
+    const SourceBlock* sb,
+    bool first_in_block,
+    ChainAndDomState& state,
     const dominators::SimpleFastDominators<cfg::GraphInterface>& dom) {
-  const SourceBlock* last = nullptr;
-  for (auto* b = dom.get_idom(block); last == nullptr && b != nullptr;
-       b = dom.get_idom(b)) {
-    last = get_last_source_block(b);
-    if (b == b->cfg().entry_block()) {
-      break;
+  if (first_in_block) {
+    state.last = nullptr;
+    for (auto* b = dom.get_idom(block); state.last == nullptr && b != nullptr;
+         b = dom.get_idom(b)) {
+      state.last = get_last_source_block(b);
+      if (b == b->cfg().entry_block()) {
+        state.dom_block = b;
+        break;
+      }
+    }
+  } else {
+    state.dom_block = nullptr;
+  }
+
+  if (state.last != nullptr) {
+    for (size_t i = 0; i != sb->vals_size; ++i) {
+      auto last_val = state.last->get_val(i);
+      auto sb_val = sb->get_val(i);
+      if (last_val) {
+        if (sb_val && *last_val < *sb_val) {
+          state.violations++;
+          break;
+        }
+      } else if (sb_val && *sb_val > 0) {
+        // Treat 'x' and '0' the same for violations for now.
+        state.violations++;
+        break;
+      }
     }
   }
 
-  size_t sum{0};
-  foreach_source_block(block, [&sum, &last](const auto* sb) {
-    if (last != nullptr) {
-      for (size_t i = 0; i != sb->vals.size(); ++i) {
-        auto last_val = last->get_val(i);
-        auto sb_val = sb->get_val(i);
-        if (last_val) {
-          if (sb_val && *last_val < *sb_val) {
-            sum++;
-            break;
-          }
-        } else if (sb_val) {
-          sum++;
-          break;
-        }
-      }
-    }
+  state.last = sb;
+}
 
-    last = sb;
+size_t chain_and_dom_violations(
+    Block* block,
+    const dominators::SimpleFastDominators<cfg::GraphInterface>& dom) {
+  ChainAndDomState state{};
+
+  bool first = true;
+  foreach_source_block(block, [block, &state, &first, &dom](const auto* sb) {
+    chain_and_dom_update(block, sb, first, state, dom);
+    first = false;
   });
 
-  return sum;
+  return state.violations;
 }
 
 // Ugly but necessary for constexpr below.
@@ -753,28 +791,44 @@ struct ViolationsHelper::ViolationsHelperImpl {
   std::unordered_map<DexMethod*, size_t> violations_start;
   std::vector<std::string> print;
 
-  ViolationsHelperImpl(const Scope& scope, std::vector<std::string> to_vis)
-      : print(std::move(to_vis)) {
+  using Violation = ViolationsHelper::Violation;
+  const Violation v;
+
+  ViolationsHelperImpl(Violation v,
+                       const Scope& scope,
+                       std::vector<std::string> to_vis)
+      : print(std::move(to_vis)), v(v) {
     {
       std::mutex lock;
-      walk::parallel::methods(scope, [this, &lock](DexMethod* m) {
+      walk::parallel::methods(scope, [this, &lock, v](DexMethod* m) {
         if (m->get_code() == nullptr) {
           return;
         }
-        m->get_code()->build_cfg();
-        auto val = hot_immediate_dom_not_hot_cfg(m->get_code()->cfg());
+        cfg::ScopedCFG cfg(m->get_code());
+        auto val = compute(v, *cfg);
         {
           std::unique_lock<std::mutex> ulock{lock};
           violations_start[m] = val;
         }
-        m->get_code()->clear_cfg();
       });
     }
 
     print_all();
   }
 
+  static size_t compute(Violation v, cfg::ControlFlowGraph& cfg) {
+    switch (v) {
+    case Violation::kHotImmediateDomNotHot:
+      return hot_immediate_dom_not_hot_cfg(cfg);
+    case Violation::kChainAndDom:
+      return chain_and_dom_violations_cfg(cfg);
+    }
+    not_reached();
+  }
+
   ~ViolationsHelperImpl() {
+    std::atomic<size_t> change_sum{0};
+
     {
       std::mutex lock;
 
@@ -797,10 +851,11 @@ struct ViolationsHelper::ViolationsHelperImpl {
               return;
             }
             cfg::ScopedCFG cfg(m->get_code());
-            auto val = hot_immediate_dom_not_hot_cfg(*cfg);
+            auto val = compute(v, *cfg);
             if (val <= p.second) {
               return;
             }
+            change_sum.fetch_add(val - p.second);
 
             auto m_delta = val - p.second;
             size_t s = m->get_code()->sum_opcode_sizes();
@@ -842,6 +897,8 @@ struct ViolationsHelper::ViolationsHelperImpl {
     }
 
     print_all();
+
+    TRACE(MMINL, 0, "Introduced %zu violations.", change_sum.load());
   }
 
   static size_t hot_immediate_dom_not_hot_cfg(cfg::ControlFlowGraph& cfg) {
@@ -853,90 +910,165 @@ struct ViolationsHelper::ViolationsHelperImpl {
     return sum;
   }
 
+  static size_t chain_and_dom_violations_cfg(cfg::ControlFlowGraph& cfg) {
+    size_t sum{0};
+    dominators::SimpleFastDominators<cfg::GraphInterface> dom{cfg};
+    for (auto* b : cfg.blocks()) {
+      sum += chain_and_dom_violations(b, dom);
+    }
+    return sum;
+  }
+
   void print_all() const {
     for (const auto& m_str : print) {
       auto* m = DexMethod::get_method(m_str);
       if (m != nullptr) {
         redex_assert(m != nullptr && m->is_def());
         auto* m_def = m->as_def();
-        print_cfg_with_violations(m_def);
+        print_cfg_with_violations(v, m_def);
       }
     }
   }
 
+  template <typename SpecialT>
   static void print_cfg_with_violations(DexMethod* m) {
-    struct SBSpecial {
-      cfg::Block* cur{nullptr};
-      dominators::SimpleFastDominators<cfg::GraphInterface> dom;
+    cfg::ScopedCFG cfg(m->get_code());
+    SpecialT special{*cfg};
+    TRACE(MMINL, 0, "=== %s ===\n%s\n", SHOW(m),
+          show<SpecialT>(*cfg, special).c_str());
+  }
 
-      explicit SBSpecial(cfg::ControlFlowGraph& cfg)
-          : dom(dominators::SimpleFastDominators<cfg::GraphInterface>(cfg)) {}
+  static void print_cfg_with_violations(Violation v, DexMethod* m) {
+    switch (v) {
+    case Violation::kHotImmediateDomNotHot: {
+      struct HotImmediateSpecial {
+        cfg::Block* cur{nullptr};
+        dominators::SimpleFastDominators<cfg::GraphInterface> dom;
 
-      void mie_before(std::ostream&, const MethodItemEntry&) {}
-      void mie_after(std::ostream& os, const MethodItemEntry& mie) {
-        if (mie.type != MFLOW_SOURCE_BLOCK) {
-          return;
+        explicit HotImmediateSpecial(cfg::ControlFlowGraph& cfg)
+            : dom(dominators::SimpleFastDominators<cfg::GraphInterface>(cfg)) {}
+
+        void mie_before(std::ostream&, const MethodItemEntry&) {}
+        void mie_after(std::ostream& os, const MethodItemEntry& mie) {
+          if (mie.type != MFLOW_SOURCE_BLOCK) {
+            return;
+          }
+
+          auto immediate_dominator = dom.get_idom(cur);
+          if (!immediate_dominator) {
+            os << " NO DOMINATOR\n";
+            return;
+          }
+
+          if (!source_blocks::has_source_block_positive_val(
+                  mie.src_block.get())) {
+            os << " NOT HOT\n";
+            return;
+          }
+
+          auto* first_sb_immediate_dominator =
+              source_blocks::get_first_source_block(immediate_dominator);
+          if (!first_sb_immediate_dominator) {
+            os << " NO DOMINATOR SOURCE BLOCK B" << immediate_dominator->id()
+               << "\n";
+            return;
+          }
+
+          bool is_idom_hot = source_blocks::has_source_block_positive_val(
+              first_sb_immediate_dominator);
+          if (is_idom_hot) {
+            os << " DOMINATOR HOT\n";
+            return;
+          }
+
+          os << " !!! B" << immediate_dominator->id() << ": ";
+          auto sb = first_sb_immediate_dominator;
+          os << " \"" << show(sb->src) << "\"@" << sb->id;
+          for (size_t i = 0; i < sb->vals_size; i++) {
+            auto& val = sb->vals[i];
+            os << " ";
+            if (val) {
+              os << val->val << "/" << val->appear100;
+            } else {
+              os << "N/A";
+            }
+          }
+          os << "\n";
         }
 
-        auto immediate_dominator = dom.get_idom(cur);
-        if (!immediate_dominator) {
-          os << " NO DOMINATOR\n";
-          return;
-        }
+        void start_block(std::ostream&, cfg::Block* b) { cur = b; }
+        void end_block(std::ostream&, cfg::Block*) { cur = nullptr; }
+      };
+      print_cfg_with_violations<HotImmediateSpecial>(m);
+      return;
+    }
+    case Violation::kChainAndDom: {
+      struct ChainAndDom {
+        cfg::Block* cur{nullptr};
+        ChainAndDomState state{};
+        bool first_in_block{false};
 
-        if (!source_blocks::has_source_block_positive_val(
-                mie.src_block.get())) {
-          os << " NOT HOT\n";
-          return;
-        }
+        dominators::SimpleFastDominators<cfg::GraphInterface> dom;
 
-        auto* first_sb_immediate_dominator =
-            source_blocks::get_first_source_block(immediate_dominator);
-        if (!first_sb_immediate_dominator) {
-          os << " NO DOMINATOR SOURCE BLOCK B" << immediate_dominator->id()
-             << "\n";
-          return;
-        }
+        explicit ChainAndDom(cfg::ControlFlowGraph& cfg)
+            : dom(dominators::SimpleFastDominators<cfg::GraphInterface>(cfg)) {}
 
-        bool is_idom_hot = source_blocks::has_source_block_positive_val(
-            first_sb_immediate_dominator);
-        if (is_idom_hot) {
-          os << " DOMINATOR HOT\n";
-          return;
-        }
+        void mie_before(std::ostream&, const MethodItemEntry&) {}
+        void mie_after(std::ostream& os, const MethodItemEntry& mie) {
+          if (mie.type != MFLOW_SOURCE_BLOCK) {
+            return;
+          }
 
-        os << " !!! B" << immediate_dominator->id() << ": ";
-        auto sb = first_sb_immediate_dominator;
-        os << " \"" << show(sb->src) << "\"@" << sb->id;
-        for (const auto& val : sb->vals) {
-          os << " ";
-          if (val) {
-            os << val->val << "/" << val->appear100;
-          } else {
-            os << "N/A";
+          size_t old_count = state.violations;
+
+          auto* sb = mie.src_block.get();
+
+          chain_and_dom_update(cur, sb, first_in_block, state, dom);
+          first_in_block = false;
+
+          const bool head_error = state.violations > old_count;
+          const auto* dom_block = state.dom_block;
+
+          for (auto* cur_sb = sb->next.get(); cur_sb != nullptr;
+               cur_sb = cur_sb->next.get()) {
+            chain_and_dom_update(cur, cur_sb, false, state, dom);
+          }
+
+          if (state.violations > old_count) {
+            os << " !!!";
+            if (head_error) {
+              os << " HEAD";
+              if (dom_block != nullptr) {
+                os << " (B" << dom_block->id() << ")";
+              }
+            }
+            auto other = state.violations - old_count - (head_error ? 1 : 0);
+            if (other > 0) {
+              os << " IN_CHAIN " << other;
+            }
+            os << "\n";
           }
         }
-        os << "\n";
-      }
 
-      void start_block(std::ostream&, cfg::Block* b) { cur = b; }
-      void end_block(std::ostream&, cfg::Block*) { cur = nullptr; }
-    };
-
-    m->get_code()->build_cfg();
-    auto& cfg = m->get_code()->cfg();
-
-    SBSpecial special{cfg};
-    TRACE(MMINL, 0, "=== %s ===\n%s\n", SHOW(m),
-          show<SBSpecial>(cfg, special).c_str());
-
-    m->get_code()->clear_cfg();
+        void start_block(std::ostream&, cfg::Block* b) {
+          cur = b;
+          first_in_block = true;
+        }
+        void end_block(std::ostream&, cfg::Block*) { cur = nullptr; }
+      };
+      print_cfg_with_violations<ChainAndDom>(m);
+      return;
+    }
+    }
+    not_reached();
   }
 };
 
-ViolationsHelper::ViolationsHelper(const Scope& scope,
+ViolationsHelper::ViolationsHelper(Violation v,
+                                   const Scope& scope,
                                    std::vector<std::string> to_vis)
-    : impl(std::make_unique<ViolationsHelperImpl>(scope, std::move(to_vis))) {}
+    : impl(std::make_unique<ViolationsHelperImpl>(
+          v, scope, std::move(to_vis))) {}
 ViolationsHelper::~ViolationsHelper() {}
 
 } // namespace source_blocks

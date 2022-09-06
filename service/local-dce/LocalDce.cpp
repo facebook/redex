@@ -192,7 +192,7 @@ void LocalDce::dce(cfg::ControlFlowGraph& cfg,
       if (!npe_creator) {
         npe_creator = std::make_unique<npe::NullPointerExceptionCreator>(&cfg);
       }
-      cfg.replace_insns(cfg_it, npe_creator->get_insns(insn));
+      mutation.replace(cfg_it, npe_creator->get_insns(insn));
       npe_instructions++;
     } else {
       TRACE(DCE, 2, "DEAD: %s", SHOW(insn));

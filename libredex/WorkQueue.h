@@ -168,3 +168,20 @@ void workqueue_run(
   }
   wq.run_all();
 }
+template <class InteralType, typename Fn>
+void workqueue_run_for(
+    InteralType start,
+    InteralType end,
+    const Fn& fn,
+    unsigned int num_threads = redex_parallel::default_num_threads()) {
+  auto wq = sparta::SpartaWorkQueue<
+      InteralType,
+      redex_workqueue_impl::NoStateWorkQueueHelper<InteralType, Fn>>(
+      redex_workqueue_impl::NoStateWorkQueueHelper<InteralType, Fn>{fn},
+      num_threads,
+      /* push_tasks_while_running */ false);
+  for (InteralType i = start; i < end; i++) {
+    wq.add_item(i);
+  }
+  wq.run_all();
+}

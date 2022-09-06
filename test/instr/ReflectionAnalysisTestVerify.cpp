@@ -69,7 +69,7 @@ void get_reflected_methods_by_test(Methods& out,
       const auto& aobj = it.second.first; // abstract object
       if (aobj.obj_kind == reflection::AbstractObjectKind::METHOD &&
           aobj.dex_type == test_cls) {
-        out.emplace(std::make_pair(aobj.dex_string->str(),
+        out.emplace(std::make_pair(aobj.dex_string->str_copy(),
                                    aobj.dex_type_array ? *(aobj.dex_type_array)
                                                        : empty));
       }

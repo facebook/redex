@@ -6,7 +6,9 @@
  */
 
 #include <boost/functional/hash.hpp>
+#include <cstddef>
 #include <iostream>
+#include <vector>
 
 #include "utils/ByteOrder.h"
 #include "utils/Debug.h"
@@ -119,6 +121,12 @@ void push_data_no_swap(void* data, size_t length, android::Vector<char>* out) {
 void push_chunk(android::ResChunk_header* header, android::Vector<char>* out) {
   push_data_no_swap(header, dtohl(header->size), out);
 }
+
+void push_vec(android::Vector<char>& vec, android::Vector<char>* out) {
+  if (vec.size() > 0) {
+    out->appendVector(vec);
+  }
+}
 } // namespace
 
 void encode_string8(const android::String8& s, android::Vector<char>* vec) {
@@ -186,6 +194,26 @@ bool are_configs_equivalent(android::ResTable_config* a,
   return false;
 }
 
+float complex_value(uint32_t complex) {
+  const float MANTISSA_MULT =
+      1.0f / (1 << android::Res_value::COMPLEX_MANTISSA_SHIFT);
+  const float RADIX_MULTS[] = {
+      1.0f * MANTISSA_MULT, 1.0f / (1 << 7) * MANTISSA_MULT,
+      1.0f / (1 << 15) * MANTISSA_MULT, 1.0f / (1 << 23) * MANTISSA_MULT};
+
+  float value =
+      (complex & (android::Res_value::COMPLEX_MANTISSA_MASK
+                  << android::Res_value::COMPLEX_MANTISSA_SHIFT)) *
+      RADIX_MULTS[(complex >> android::Res_value::COMPLEX_RADIX_SHIFT) &
+                  android::Res_value::COMPLEX_RADIX_MASK];
+  return value;
+}
+
+uint32_t complex_unit(uint32_t complex, bool isFraction) {
+  return (complex >> android::Res_value::COMPLEX_UNIT_SHIFT) &
+         android::Res_value::COMPLEX_UNIT_MASK;
+}
+
 size_t CanonicalEntries::hash(const EntryValueData& data) {
   size_t seed = 0;
   uint8_t* ptr = data.getKey();
@@ -229,6 +257,7 @@ void CanonicalEntries::record(EntryValueData data,
 }
 
 void ResTableTypeProjector::serialize_type(android::ResTable_type* type,
+                                           size_t last_non_deleted,
                                            android::Vector<char>* out) {
   auto original_entries = dtohl(type->entryCount);
   auto original_entries_start = dtohs(type->entriesStart);
@@ -240,7 +269,6 @@ void ResTableTypeProjector::serialize_type(android::ResTable_type* type,
   // Check if this config has all of its entries deleted. If a non-default
   // config has everything deleted, skip emitting data.
   {
-    size_t num_non_deleted_entries = 0;
     size_t num_non_deleted_non_empty_entries = 0;
     uint32_t* entry_offsets =
         (uint32_t*)((uint8_t*)type + dtohs(type->header.headerSize));
@@ -248,9 +276,6 @@ void ResTableTypeProjector::serialize_type(android::ResTable_type* type,
       auto id = make_id(i);
       auto is_deleted = m_ids_to_remove.count(id) != 0;
       uint32_t offset = dtohl(entry_offsets[i]);
-      if (!is_deleted) {
-        num_non_deleted_entries++;
-      }
       if (!is_deleted && offset != android::ResTable_type::NO_ENTRY) {
         num_non_deleted_non_empty_entries++;
       }
@@ -263,7 +288,7 @@ void ResTableTypeProjector::serialize_type(android::ResTable_type* type,
   // Write entry/value data by iterating the existing offset data again, and
   // copying all non-deleted data to the temp vec.
   android::Vector<char> temp;
-  android::Vector<uint32_t> offsets;
+  std::vector<uint32_t> offsets;
   CanonicalEntries canonical_entries;
   // Pointer to the first Res_entry
   uint32_t* entry_offsets =
@@ -301,6 +326,8 @@ void ResTableTypeProjector::serialize_type(android::ResTable_type* type,
           }
         }
       }
+    } else if (m_nullify_removed && i <= last_non_deleted) {
+      offsets.push_back(htodl(android::ResTable_type::NO_ENTRY));
     }
   }
   // Header and actual data structure
@@ -327,7 +354,7 @@ void ResTableTypeProjector::serialize_type(android::ResTable_type* type,
   for (size_t i = 0; i < num_entries; i++) {
     push_long(offsets[i], out);
   }
-  out->appendVector(temp);
+  push_vec(temp, out);
 }
 
 void ResTableTypeProjector::serialize(android::Vector<char>* out) {
@@ -338,10 +365,13 @@ void ResTableTypeProjector::serialize(android::Vector<char>* out) {
   // data is emitted.
   auto original_entries = dtohl(m_spec->entryCount);
   size_t num_deletions = 0;
+  size_t last_non_deleted = 0;
   for (size_t i = 0; i < original_entries; i++) {
     auto id = make_id(i);
     if (m_ids_to_remove.count(id) != 0) {
       num_deletions++;
+    } else {
+      last_non_deleted = i;
     }
   }
   if (num_deletions == original_entries) {
@@ -349,7 +379,8 @@ void ResTableTypeProjector::serialize(android::Vector<char>* out) {
     return;
   }
   // Write the ResTable_typeSpec header
-  auto entries = original_entries - num_deletions;
+  auto entries = m_nullify_removed ? last_non_deleted + 1
+                                   : original_entries - num_deletions;
   push_short(android::RES_TABLE_TYPE_SPEC_TYPE, out);
   auto header_size = sizeof(android::ResTable_typeSpec);
   push_short(header_size, out);
@@ -365,12 +396,14 @@ void ResTableTypeProjector::serialize(android::Vector<char>* out) {
     auto id = make_id(i);
     if (m_ids_to_remove.count(id) == 0) {
       push_long(dtohl(get_spec_flags(m_spec, i)), out);
+    } else if (m_nullify_removed && i <= last_non_deleted) {
+      push_long(dtohl(0), out);
     }
   }
   // Write all applicable ResTable_type structures (and their corresponding
   // entries/values).
   for (size_t i = 0; i < m_configs.size(); i++) {
-    serialize_type(m_configs.at(i), out);
+    serialize_type(m_configs.at(i), last_non_deleted, out);
   }
 }
 
@@ -444,7 +477,7 @@ void ResTableTypeDefiner::serialize(android::Vector<char>* out) {
     android::Vector<char> entry_data;
     uint32_t offset = 0;
     for (auto& ev : data) {
-      if (ev.key == nullptr && ev.value == 0) {
+      if (is_empty(ev)) {
         push_long(dtohl(android::ResTable_type::NO_ENTRY), out);
       } else if (!m_enable_canonical_entries) {
         push_long(offset, out);
@@ -464,7 +497,7 @@ void ResTableTypeDefiner::serialize(android::Vector<char>* out) {
       }
     }
     // Actual data.
-    out->appendVector(entry_data);
+    push_vec(entry_data, out);
     write_long_at_pos(total_size_pos, entries_start + entry_data.size(), out);
   }
 }
@@ -489,10 +522,7 @@ void ResStringPoolBuilder::add_style(const char* s,
                                      size_t len,
                                      SpanVector spans) {
   StringHolder holder(s, len);
-  StyleInfo info{
-    .str = std::move(holder),
-    .spans = std::move(spans)
-  };
+  StyleInfo info{.str = std::move(holder), .spans = std::move(spans)};
   m_styles.emplace_back(std::move(info));
 }
 
@@ -500,21 +530,14 @@ void ResStringPoolBuilder::add_style(const char16_t* s,
                                      size_t len,
                                      SpanVector spans) {
   StringHolder holder(s, len);
-  StyleInfo info{
-    .str = std::move(holder),
-    .spans = std::move(spans)
-  };
+  StyleInfo info{.str = std::move(holder), .spans = std::move(spans)};
   m_styles.emplace_back(std::move(info));
 }
 
-void ResStringPoolBuilder::add_style(std::string s,
-                                     SpanVector spans) {
+void ResStringPoolBuilder::add_style(std::string s, SpanVector spans) {
   auto len = s.length();
   StringHolder holder(std::move(s), len);
-  StyleInfo info{
-    .str = std::move(holder),
-    .spans = std::move(spans)
-  };
+  StyleInfo info{.str = std::move(holder), .spans = std::move(spans)};
   m_styles.emplace_back(std::move(info));
 }
 
@@ -600,8 +623,8 @@ void ResStringPoolBuilder::serialize(android::Vector<char>* out) {
   // will be used to calculate offsets, and later copied to final output. While
   // we're iterating styles emitting their string data, we'll also compute the
   // size emitting the span tags will take up.
-  android::Vector<uint32_t> string_idx;
-  android::Vector<uint32_t> span_off;
+  std::vector<uint32_t> string_idx;
+  std::vector<uint32_t> span_off;
   android::Vector<char> serialized_strings;
   auto utf8 = is_utf8();
   auto num_styles = style_count();
@@ -612,7 +635,7 @@ void ResStringPoolBuilder::serialize(android::Vector<char>* out) {
     span_off.push_back(spans_size);
     write_string(utf8, info.str, &serialized_strings);
     spans_size += info.spans.size() * sizeof(android::ResStringPool_span) +
-                    sizeof(android::ResStringPool_span::END);
+                  sizeof(android::ResStringPool_span::END);
   }
   if (spans_size > 0) {
     spans_size += 2 * sizeof(android::ResStringPool_span::END);
@@ -653,7 +676,7 @@ void ResStringPoolBuilder::serialize(android::Vector<char>* out) {
   for (const uint32_t& i : span_off) {
     push_long(i, out);
   }
-  out->appendVector(serialized_strings);
+  push_vec(serialized_strings, out);
   // Append spans
   for (auto& info : m_styles) {
     auto& spans = info.spans;
@@ -733,7 +756,7 @@ void ResPackageBuilder::serialize(android::Vector<char>* out) {
   push_long(header_size + type_strings_size, out);
   push_long(m_last_public_key, out);
   push_long(m_type_id_offset, out);
-  out->appendVector(temp);
+  push_vec(temp, out);
 }
 
 void ResTableBuilder::serialize(android::Vector<char>* out) {
@@ -758,4 +781,49 @@ void ResTableBuilder::serialize(android::Vector<char>* out) {
   write_long_at_pos(total_size_pos, out->size() - initial_size, out);
 }
 
+void replace_xml_string_pool(android::ResChunk_header* data,
+                             size_t len,
+                             ResStringPoolBuilder& builder,
+                             android::Vector<char>* out) {
+  // Find boundaries for the various pieces of the file.
+  auto chunk_size = dtohs(data->headerSize);
+  auto pool_ptr = (android::ResStringPool_header*)((char*)data + chunk_size);
+  // Build the new file.
+  auto initial_vec_size = out->size();
+  arsc::push_short(android::RES_XML_TYPE, out);
+  arsc::push_short(chunk_size, out);
+  auto total_size_pos = out->size();
+  arsc::push_long(FILL_IN_LATER, out);
+  builder.serialize(out);
+  // Straight copy of everything after the original data's string pool.
+  auto start = chunk_size + dtohl(pool_ptr->header.size);
+  auto remaining = len - start;
+  void* start_ptr = ((char*)data) + start;
+  push_data_no_swap(start_ptr, remaining, out);
+  write_long_at_pos(total_size_pos, out->size() - initial_vec_size, out);
+}
+
+bool is_empty(const EntryValueData& ev) {
+  if (ev.getKey() == nullptr) {
+    LOG_ALWAYS_FATAL_IF(ev.getValue() != 0, "Invalid pointer, length pair");
+    return true;
+  }
+  return false;
+}
+
+PtrLen<uint8_t> get_value_data(const EntryValueData& ev) {
+  if (is_empty(ev)) {
+    return {nullptr, 0};
+  }
+  auto entry_and_value_len = ev.getValue();
+  auto entry = (android::ResTable_entry*)ev.getKey();
+  auto entry_size = dtohs(entry->size);
+  LOG_ALWAYS_FATAL_IF(entry_size > entry_and_value_len,
+                      "Malformed entry size at %p", entry);
+  if (entry_size == entry_and_value_len) {
+    return {nullptr, 0};
+  }
+  auto ptr = (uint8_t*)entry + entry_size;
+  return {ptr, entry_and_value_len - entry_size};
+}
 } // namespace arsc

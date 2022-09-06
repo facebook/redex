@@ -228,7 +228,7 @@ class Concatenator {
         break;
       }
       case OPCODE_CONST_STRING:
-        registers.put_string(RESULT_REGISTER, insn->get_string()->str());
+        registers.put_string(RESULT_REGISTER, insn->get_string()->str_copy());
         continue;
       case OPCODE_NEW_INSTANCE:
         if (insn->get_type() == m_config.string_builder) {

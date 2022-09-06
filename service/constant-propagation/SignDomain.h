@@ -7,8 +7,6 @@
 
 #pragma once
 
-#include <boost/functional/hash.hpp>
-
 #include "FiniteAbstractDomain.h"
 
 /*
@@ -30,9 +28,8 @@ enum class Interval {
   SIZE // The number of items in Interval
 };
 
-using Lattice = sparta::BitVectorLattice<Interval,
-                                         static_cast<size_t>(Interval::SIZE),
-                                         boost::hash<Interval>>;
+using Lattice =
+    sparta::BitVectorLattice<Interval, static_cast<size_t>(Interval::SIZE)>;
 
 extern Lattice lattice;
 

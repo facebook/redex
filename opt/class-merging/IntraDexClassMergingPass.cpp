@@ -22,15 +22,15 @@ void IntraDexClassMergingPass::bind_config() {
        "Do not merge the classes or its implementors");
   utils::load_types_and_prefixes(excl_names, m_merging_spec.exclude_types,
                                  m_merging_spec.exclude_prefixes);
-  bind("min_count",
-       10,
-       m_merging_spec.min_count,
-       "Minimal number of mergeables to be merged together");
   bind("global_min_count",
-       50,
+       4,
        m_global_min_count,
        "Ignore interface or class hierarchies with less than global_mint_count "
        "implementors or subclasses");
+  bind("min_count",
+       2,
+       m_merging_spec.min_count,
+       "Minimal number of mergeables to be merged together");
   std::string interdex_grouping;
   bind("interdex_grouping", "non-ordered-set", interdex_grouping);
   m_merging_spec.interdex_grouping =
@@ -52,12 +52,13 @@ void IntraDexClassMergingPass::run_pass(DexStoresVector& stores,
   m_merging_spec.class_name_prefix = "IDx";
   // The merging strategy can be tuned.
   m_merging_spec.strategy = strategy::BY_CODE_SIZE;
-  // Can merge FULL interdex groups.
-  m_merging_spec.dedup_throw_blocks = false;
+  // TODO: Can merge FULL interdex groups.
   m_merging_spec.per_dex_grouping = true;
+  m_merging_spec.dedup_fill_in_stack_trace = false;
+
   auto scope = build_class_scope(stores);
   TypeSystem type_system(scope);
-  find_all_mergeables_and_roots(type_system, scope, m_global_min_count,
+  find_all_mergeables_and_roots(type_system, scope, m_global_min_count, mgr,
                                 &m_merging_spec);
   if (m_merging_spec.roots.empty()) {
     TRACE(CLMG, 1, "No mergeable classes found by IntraDexClassMergingPass");
@@ -69,6 +70,9 @@ void IntraDexClassMergingPass::run_pass(DexStoresVector& stores,
 
   post_dexen_changes(scope, stores);
 
+  // For interface roots, the num_roots count is not accurate. It counts the
+  // total number of unique common base classes among the implementors, not the
+  // common interface roots.
   mgr.set_metric("num_roots", m_merging_spec.roots.size());
 
   m_merging_spec.merging_targets.clear();

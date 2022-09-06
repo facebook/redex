@@ -9,7 +9,6 @@
 
 #include <boost/regex.hpp>
 
-#include "BuilderAnalysis.h"
 #include "BuilderTransform.h"
 #include "ConfigFiles.h"
 #include "CppUtil.h"
@@ -22,6 +21,9 @@
 #include "Walkers.h"
 
 namespace builder_pattern {
+
+constexpr size_t MAX_NUM_INLINE_ITERATION = 4;
+constexpr size_t ESCAPING_CALLEE_SIZE_THRESHOLD = 140;
 
 namespace {
 
@@ -42,7 +44,7 @@ std::unordered_set<DexType*> get_associated_buildees(
 
   std::unordered_set<DexType*> buildees;
   for (const auto& builder : builders) {
-    const std::string& builder_name = builder->str();
+    const auto builder_name = builder->str();
     std::string buildee_name =
         builder_name.substr(0, builder_name.size() - 9) + ";";
 
@@ -55,6 +57,31 @@ std::unordered_set<DexType*> get_associated_buildees(
   return buildees;
 }
 
+bool has_statics(const DexClass* cls) {
+  always_assert(cls);
+  auto& dmethods = cls->get_dmethods();
+  for (const auto* m : dmethods) {
+    if (is_static(m)) {
+      return true;
+    }
+  }
+
+  return !cls->get_sfields().empty();
+}
+
+bool has_large_escaping_calls(
+    const std::unordered_set<IRInstruction*>& to_inline) {
+  for (const auto* invoke : to_inline) {
+    always_assert(invoke->has_method());
+    auto callee = invoke->get_method()->as_def();
+    size_t callee_size = callee->get_code()->sum_opcode_sizes();
+    if (callee_size > ESCAPING_CALLEE_SIZE_THRESHOLD) {
+      return true;
+    }
+  }
+  return false;
+}
+
 class RemoveClasses {
  public:
   RemoveClasses(const DexType* super_cls,
@@ -63,19 +90,19 @@ class RemoveClasses {
                     init_classes_with_side_effects,
                 const inliner::InlinerConfig& inliner_config,
                 const std::vector<DexType*>& blocklist,
-                bool propagate_escape_results,
+                const size_t max_num_inline_iteration,
                 DexStoresVector& stores)
       : m_root(super_cls),
         m_scope(scope),
         m_blocklist(blocklist),
         m_type_system(scope),
-        m_propagate_escape_results(propagate_escape_results),
         m_transform(scope,
                     m_type_system,
                     super_cls,
                     init_classes_with_side_effects,
                     inliner_config,
                     stores),
+        m_max_num_inline_iteration(max_num_inline_iteration),
         m_stores(stores) {
     gather_classes();
   }
@@ -118,6 +145,13 @@ class RemoveClasses {
     for (const auto& type : m_removed_types) {
       TRACE(BLD_PATTERN, 2, "Removed type: %s", SHOW(type));
     }
+    for (const auto& pair : m_num_inline_iterations) {
+      std::stringstream metric;
+      metric << "_num_inline_iteration_" << pair.first;
+      mgr.incr_metric(root_name + metric.str(), pair.second);
+      TRACE(BLD_PATTERN, 4, "%s_num_inline_iteration %ld %ld",
+            root_name.c_str(), pair.first, pair.second);
+    }
   }
 
  private:
@@ -126,12 +160,24 @@ class RemoveClasses {
     auto* object_type = type::java_lang_Object();
     boost::regex re("\\$Builder;$");
 
-    // We are only tackling leaf classes.
     for (const DexType* type : subclasses) {
-      if (m_type_system.get_children(type).empty()) {
-        if (m_root != object_type || boost::regex_search(type->c_str(), re)) {
-          m_classes.emplace(type);
-        }
+      if (!m_type_system.get_children(type).empty()) {
+        // Only leaf classes
+        continue;
+      }
+
+      auto cls = type_class(type);
+      if (!cls || cls->is_external()) {
+        continue;
+      }
+
+      if (m_root == object_type && has_statics(cls)) {
+        // Only simple builders with no static methods or fields.
+        continue;
+      }
+      // For Builders extending j/l/Object;, we filter by name.
+      if (m_root != object_type || boost::regex_search(type->c_str(), re)) {
+        m_classes.emplace(type);
       }
     }
   }
@@ -172,6 +218,7 @@ class RemoveClasses {
       bool have_builders_to_remove =
           inline_builders_and_check_method(method, &analysis);
       m_num_usages += analysis.get_total_num_usages();
+      m_num_inline_iterations[analysis.get_num_inline_iterations()]++;
 
       if (!have_builders_to_remove) {
         continue;
@@ -232,12 +279,10 @@ class RemoveClasses {
                                         BuilderAnalysis* analysis) {
     bool builders_to_remove = false;
 
-    // To be used for local excludes. We cleanup m_excluded_types at the end.
-    std::unordered_set<const DexType*> local_excludes;
-
     std::unique_ptr<IRCode> original_code = nullptr;
+    size_t num_iterations = 1;
 
-    do {
+    for (; num_iterations < m_max_num_inline_iteration; num_iterations++) {
       analysis->run_analysis();
 
       std::vector<IRInstruction*> deleted_insns;
@@ -275,11 +320,6 @@ class RemoveClasses {
         auto non_removable_types = analysis->non_removable_types();
         if (!non_removable_types.empty()) {
           for (const auto* type : non_removable_types) {
-            if (m_excluded_types.count(type) == 0 &&
-                !m_propagate_escape_results) {
-              local_excludes.emplace(type);
-            }
-
             m_excluded_types.emplace(type);
           }
 
@@ -298,19 +338,23 @@ class RemoveClasses {
         }
       }
 
-      auto not_inlined_insns =
-          m_transform.get_not_inlined_insns(method, to_inline, &deleted_insns);
+      // For Simple Builders (the ones exntending j/l/Object;), if the escaping
+      // callee is too large, we give up on inlining them. Instead, we treat all
+      // `to_inline` calls as `not_inlined` and mark escaping types as excluded.
+      std::unordered_set<IRInstruction*> not_inlined_insns;
+      if (m_root != type::java_lang_Object() ||
+          !has_large_escaping_calls(to_inline)) {
+        not_inlined_insns =
+            m_transform.try_inline_calls(method, to_inline, &deleted_insns);
+      } else {
+        not_inlined_insns = to_inline;
+      }
 
       if (!not_inlined_insns.empty()) {
-        auto to_eliminate =
-            analysis->get_instantiated_types(&not_inlined_insns);
-        for (const DexType* type : to_eliminate) {
-          if (m_excluded_types.count(type) == 0 &&
-              !m_propagate_escape_results) {
-            local_excludes.emplace(type);
-          }
-
-          m_excluded_types.emplace(type);
+        auto escaped_builders =
+            analysis->get_escaped_types_from_invokes(not_inlined_insns);
+        for (auto* escaped_builder : escaped_builders) {
+          m_excluded_types.emplace(escaped_builder);
         }
 
         if (not_inlined_insns.size() == to_inline.size()) {
@@ -336,14 +380,13 @@ class RemoveClasses {
       // If we inlined everything, we still need to make sure we don't have
       // new methods to inline (for example from something that was inlined
       // in this step).
-    } while (true);
-
-    for (const DexType* type : local_excludes) {
-      m_excluded_types.erase(type);
     }
+
     if (!builders_to_remove && original_code != nullptr) {
       method->set_code(std::move(original_code));
     }
+
+    analysis->set_num_inline_iterations(num_iterations);
     return builders_to_remove;
   }
 
@@ -351,13 +394,14 @@ class RemoveClasses {
   const Scope& m_scope;
   const std::vector<DexType*>& m_blocklist;
   TypeSystem m_type_system;
-  bool m_propagate_escape_results;
   BuilderTransform m_transform;
   std::unordered_set<const DexType*> m_classes;
   std::unordered_set<const DexType*> m_excluded_types;
   std::unordered_set<const DexType*> m_removed_types;
   size_t m_num_usages{0};
   size_t m_num_removed_usages{0};
+  size_t m_max_num_inline_iteration{0};
+  std::map<size_t, size_t> m_num_inline_iterations;
   const DexStoresVector& m_stores;
 };
 
@@ -369,7 +413,8 @@ void RemoveBuilderPatternPass::bind_config() {
        Configurable::bindflags::types::warn_if_unresolvable);
   bind("blocklist", {}, m_blocklist, Configurable::default_doc(),
        Configurable::bindflags::types::warn_if_unresolvable);
-  bind("propagate_escape_results", true, m_propagate_escape_results);
+  bind("max_num_iteration", MAX_NUM_INLINE_ITERATION,
+       m_max_num_inline_iteration);
 
   // TODO(T44502473): if we could pass a binding filter lambda instead of
   // bindflags, this could be more simply expressed
@@ -398,10 +443,14 @@ void RemoveBuilderPatternPass::run_pass(DexStoresVector& stores,
   auto scope = build_class_scope(stores);
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, conf.create_init_class_insns());
+
   for (const auto& root : m_roots) {
+    TRACE(BLD_PATTERN, 1, "removing root %s w/ %ld iterations", SHOW(root),
+          m_max_num_inline_iteration);
+    Timer t("root_iteration");
     RemoveClasses rm_builder_pattern(
         root, scope, init_classes_with_side_effects, conf.get_inliner_config(),
-        m_blocklist, m_propagate_escape_results, stores);
+        m_blocklist, m_max_num_inline_iteration, stores);
     rm_builder_pattern.optimize();
     rm_builder_pattern.print_stats(mgr);
     rm_builder_pattern.cleanup();

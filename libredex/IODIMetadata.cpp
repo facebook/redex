@@ -93,19 +93,8 @@ void IODIMetadata::mark_methods(DexStoresVector& scope) {
       m_canonical[m] = canonical;
       m_name_clusters[canonical].insert(m);
     }
-
-    auto iter = name_method_map.find(str);
-    if (iter != name_method_map.end()) {
-      auto name_iter = m_method_to_name.find(iter->second);
-      if (name_iter != m_method_to_name.end()) {
-        m_method_to_name.erase(name_iter);
-      }
-      iter->second = nullptr;
-    } else {
-      name_method_map.emplace(str, m);
-      m_method_to_name.emplace(m, str);
-    }
   };
+
   for (auto& store : scope) {
     for (auto& classes : store.get_dexen()) {
       for (auto& cls : classes) {

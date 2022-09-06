@@ -637,7 +637,7 @@ DexMethod* create_simple_dispatch(
 
 const DexString* gen_dispatch_name(DexType* owner,
                                    DexProto* proto,
-                                   const std::string& orig_name) {
+                                   const std::string_view orig_name) {
   auto simple_name = DexString::make_string(DISPATCH_PREFIX + orig_name);
   if (DexMethod::get_method(owner, simple_name, proto) == nullptr) {
     return simple_name;
@@ -656,7 +656,7 @@ const DexString* gen_dispatch_name(DexType* owner,
 }
 
 bool may_be_dispatch(const DexMethod* method) {
-  const auto& name = method->str();
+  const auto name = method->str();
   if (name.find(DISPATCH_PREFIX) != 0) {
     return false;
   }

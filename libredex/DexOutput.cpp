@@ -374,8 +374,7 @@ std::vector<DexTypeList*>* GatheredTypes::get_typelist_list(
     dexproto_to_idx* protos, cmp_dtypelist cmp) {
   std::vector<DexTypeList*>* typel = new std::vector<DexTypeList*>();
   auto class_defs_size = (uint32_t)m_classes->size();
-  typel->reserve(protos->size() + class_defs_size +
-                 m_additional_ltypelists.size());
+  typel->reserve(protos->size() + class_defs_size);
 
   for (auto& it : *protos) {
     auto proto = it.first;
@@ -385,9 +384,6 @@ std::vector<DexTypeList*>* GatheredTypes::get_typelist_list(
     DexClass* clz = m_classes->at(i);
     typel->push_back(clz->get_interfaces());
   }
-  typel->insert(typel->end(),
-                m_additional_ltypelists.begin(),
-                m_additional_ltypelists.end());
   sort_unique(*typel, compare_dextypelists);
   return typel;
 }
@@ -534,6 +530,7 @@ DexOutput::DexOutput(
     LocatorIndex* locator_index,
     bool normal_primary_dex,
     size_t store_number,
+    const std::string* store_name,
     size_t dex_number,
     DebugInfoKind debug_info_kind,
     IODIMetadata* iodi_metadata,
@@ -586,6 +583,7 @@ DexOutput::DexOutput(
   m_full_mapping_filename = config_files.metafile(REDEX_FULL_MAPPING);
   m_bytecode_offset_filename = config_files.metafile(BYTECODE_OFFSET_MAPPING);
   m_store_number = store_number;
+  m_store_name = store_name;
   m_dex_number = dex_number;
   m_locator_index = locator_index;
   m_normal_primary_dex = normal_primary_dex;
@@ -2589,7 +2587,7 @@ void write_method_mapping(const std::string& filename,
     auto deobf_class = [&] {
       if (cls) {
         auto deobname = cls->get_deobfuscated_name_or_empty();
-        if (!deobname.empty()) return deobname;
+        if (!deobname.empty()) return str_copy(deobname);
       }
       return show(typecls);
     }();
@@ -2613,7 +2611,7 @@ void write_method_mapping(const std::string& filename,
         const auto& deobfname =
             resolved_method->as_def()->get_deobfuscated_name_or_empty();
         if (!deobfname.empty()) {
-          return deobfname;
+          return str_copy(deobfname);
         }
       }
       return show(resolved_method);
@@ -2649,7 +2647,7 @@ void write_class_mapping(const std::string& filename,
     auto deobf_class = [&] {
       if (cls) {
         auto deobname = cls->get_deobfuscated_name_or_empty();
-        if (!deobname.empty()) return deobname;
+        if (!deobname.empty()) return str_copy(deobname);
       }
       return show(cls);
     }();
@@ -2699,7 +2697,7 @@ void write_pg_mapping(
   auto deobf_class = [&](DexClass* cls) {
     if (cls) {
       auto deobname = cls->get_deobfuscated_name_or_empty();
-      if (!deobname.empty()) return deobname;
+      if (!deobname.empty()) return str_copy(deobname);
     }
     return show(cls);
   };
@@ -2722,8 +2720,9 @@ void write_pg_mapping(
         } else {
           result = java_names::internal_to_external(&type_str[dim]);
         }
+        result.reserve(result.size() + 2 * dim);
         for (int i = 0; i < dim; ++i) {
-          result = result + "[]";
+          result += "[]";
         }
         return result;
       } else {
@@ -2835,13 +2834,20 @@ void write_pg_mapping(
   }
 }
 
-void write_full_mapping(const std::string& filename, DexClasses* classes) {
+void write_full_mapping(const std::string& filename,
+                        DexClasses* classes,
+                        const std::string* store_name) {
   if (filename.empty()) return;
 
   std::ofstream ofs(filename.c_str(), std::ofstream::out | std::ofstream::app);
   for (auto cls : *classes) {
     ofs << "type " << cls->get_deobfuscated_name_or_empty() << " -> "
         << show(cls) << std::endl;
+    if (store_name) {
+      const auto& original_store_name = cls->get_location()->get_store_name();
+      ofs << "store " << std::quoted(original_store_name) << " -> "
+          << std::quoted(*store_name) << std::endl;
+    }
     for (auto field : cls->get_ifields()) {
       ofs << "ifield " << field->get_deobfuscated_name_or_empty() << " -> "
           << show(field) << std::endl;
@@ -2890,7 +2896,7 @@ void DexOutput::write_symbol_files() {
     // XXX: should write_bytecode_offset_mapping be included here too?
   }
   write_pg_mapping(m_pg_mapping_filename, m_classes, &m_detached_methods);
-  write_full_mapping(m_full_mapping_filename, m_classes);
+  write_full_mapping(m_full_mapping_filename, m_classes, m_store_name);
   write_bytecode_offset_mapping(m_bytecode_offset_filename,
                                 m_method_bytecode_offsets);
 }
@@ -3030,6 +3036,7 @@ dex_stats_t write_classes_to_dex(
     std::shared_ptr<GatheredTypes> gtypes,
     LocatorIndex* locator_index,
     size_t store_number,
+    const std::string* store_name,
     size_t dex_number,
     ConfigFiles& conf,
     PositionMapper* pos_mapper,
@@ -3088,7 +3095,7 @@ dex_stats_t write_classes_to_dex(
   TRACE(OPUT, 2, "[write_classes_to_dex][filename] %s", filename.c_str());
 
   DexOutput dout(filename.c_str(), classes, std::move(gtypes), locator_index,
-                 normal_primary_dex, store_number, dex_number,
+                 normal_primary_dex, store_number, store_name, dex_number,
                  redex_options.debug_info_kind, iodi_metadata, conf, pos_mapper,
                  method_to_id, code_debug_lines, post_lowering, min_sdk);
 
@@ -3126,8 +3133,9 @@ LocatorIndex make_locator_index(DexStoresVector& stores) {
                                 clsname, Locator::make(strnr, dexnr, clsnr)))
                             .second;
         // We shouldn't see the same class defined in two dexen
-        always_assert_log(inserted, "This was already inserted %s\n",
-                          (*clsit)->get_deobfuscated_name_or_empty().c_str());
+        always_assert_log(
+            inserted, "This was already inserted %s\n",
+            (*clsit)->get_deobfuscated_name_or_empty_copy().c_str());
         (void)inserted; // Shut up compiler when defined(NDEBUG)
       }
     }
