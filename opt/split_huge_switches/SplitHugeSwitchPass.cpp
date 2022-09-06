@@ -598,7 +598,7 @@ AnalysisData analyze(DexMethod* m,
   data.constructor = false;
 
   // Filter out non-hot methods.
-  if (method_profiles.has_stats()) {
+  if (hotness_threshold > 0 && method_profiles.has_stats()) {
     auto is_hot_fn = [&]() {
       for (const auto& interaction_stats : method_profiles.all_interactions()) {
         const auto& stats_map = interaction_stats.second;
@@ -609,7 +609,7 @@ AnalysisData analyze(DexMethod* m,
       }
       return false;
     };
-    bool is_hot = hotness_threshold > 0 && is_hot_fn();
+    bool is_hot = is_hot_fn();
     if (!is_hot) {
       data.not_hot = true;
       return data;
@@ -707,32 +707,37 @@ Stats run_split_dexes(DexStoresVector& stores,
 
       // If hotness data is available, sort.
       if (method_profiles.has_stats()) {
-        std::sort(dex_candidate_methods.begin(),
-                  dex_candidate_methods.end(),
-                  [&](const AnalysisData& lhs, const AnalysisData& rhs) {
-                    const auto& profile_stats = method_profiles.method_stats(
-                        method_profiles::COLD_START);
-                    double lhs_hotness = profile_stats.at(lhs.m).call_count;
-                    double rhs_hotness = profile_stats.at(rhs.m).call_count;
-                    // Sort by hotness, descending.
-                    if (lhs_hotness > rhs_hotness) {
-                      return true;
-                    }
-                    if (lhs_hotness < rhs_hotness) {
-                      return false;
-                    }
-                    // Then greedily by size.
-                    size_t lhs_size = lhs.switch_range->mid_cases.size();
-                    size_t rhs_size = rhs.switch_range->mid_cases.size();
-                    if (lhs_size > rhs_size) {
-                      return true;
-                    }
-                    if (lhs_size < rhs_size) {
-                      return false;
-                    }
-                    // For determinism, compare by name.
-                    return compare_dexmethods(lhs.m, rhs.m);
-                  });
+        std::sort(
+            dex_candidate_methods.begin(),
+            dex_candidate_methods.end(),
+            [&](const AnalysisData& lhs, const AnalysisData& rhs) {
+              const auto& profile_stats =
+                  method_profiles.method_stats(method_profiles::COLD_START);
+              auto call_count = [&profile_stats](DexMethod* m) {
+                auto it = profile_stats.find(m);
+                return it != profile_stats.end() ? it->second.call_count : 0;
+              };
+              double lhs_hotness = call_count(lhs.m);
+              double rhs_hotness = call_count(rhs.m);
+              // Sort by hotness, descending.
+              if (lhs_hotness > rhs_hotness) {
+                return true;
+              }
+              if (lhs_hotness < rhs_hotness) {
+                return false;
+              }
+              // Then greedily by size.
+              size_t lhs_size = lhs.switch_range->mid_cases.size();
+              size_t rhs_size = rhs.switch_range->mid_cases.size();
+              if (lhs_size > rhs_size) {
+                return true;
+              }
+              if (lhs_size < rhs_size) {
+                return false;
+              }
+              // For determinism, compare by name.
+              return compare_dexmethods(lhs.m, rhs.m);
+            });
       }
 
       // Now go and apply.
@@ -813,11 +818,19 @@ Stats SplitHugeSwitchPass::run(
 
 void SplitHugeSwitchPass::bind_config() {
   bind("method_filter", "", m_method_filter, "Method filter regex");
+  bind("consider_methods_too_large_for_inlining", false,
+       m_consider_methods_too_large_for_inlining,
+       "Whether to consider methods that have become too large to be inlined "
+       "intoregardless of hotness");
   bind("hotness_threshold",
        5.0F,
        m_hotness_threshold,
        "Method hotness threshold");
   bind("method_size", 9000u, m_method_size, "Method size threshold");
+  bind("method_size_when_too_large_for_inlining", 9000u,
+       m_method_size_when_too_large_for_inlining,
+       "Method size threshold for methods that were previously identified as "
+       "too large to be inlined into");
   bind("switch_size", 100u, m_switch_size, "Switch case threshold");
   bind("debug", false, m_debug, "Debug output");
 }
@@ -847,12 +860,19 @@ void SplitHugeSwitchPass::run_pass(DexStoresVector& stores,
       return Stats{};
     }
 
+    auto method_size = m->rstate.too_large_for_inlining_into()
+                           ? m_method_size_when_too_large_for_inlining
+                           : m_method_size;
+    auto hotness_threshold = (m_consider_methods_too_large_for_inlining &&
+                              m->rstate.too_large_for_inlining_into())
+                                 ? 0
+                                 : m_hotness_threshold;
     AnalysisData data = analyze(m,
                                 m->get_code(),
-                                m_method_size,
+                                method_size,
                                 m_switch_size,
                                 method_profiles,
-                                m_hotness_threshold);
+                                hotness_threshold);
 
     Stats ret = analysis_data_to_stats(data, m);
     if (!data.scoped_cfg) {

@@ -57,8 +57,10 @@ class SplitHugeSwitchPass : public Pass {
 
  private:
   std::string m_method_filter;
+  bool m_consider_methods_too_large_for_inlining = false;
   float m_hotness_threshold = 0.0;
   uint32_t m_method_size = 0;
+  uint32_t m_method_size_when_too_large_for_inlining = 0;
   uint32_t m_switch_size = 0;
   bool m_debug = false;
 };

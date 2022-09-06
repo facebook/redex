@@ -828,6 +828,7 @@ size_t MultiMethodInliner::inline_inlinables(
   }
   if (caller_too_large) {
     info.caller_too_large += caller_too_large;
+    caller_method->rstate.set_too_large_for_inlining_into();
   }
   if (init_classes) {
     info.init_classes += init_classes;
