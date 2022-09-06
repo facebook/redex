@@ -237,8 +237,12 @@ DexMethod* create_dex_method(DexMethod* m, std::unique_ptr<IRCode>&& code) {
   auto method_ref =
       DexMethod::make_method(m->get_class(), clone_name, m->get_proto());
 
-  auto cloned_method = method_ref->make_concrete(
-      m->get_access(), std::move(code), m->is_virtual());
+  DexAccessFlags access_flags = DexAccessFlags::ACC_PRIVATE;
+  if (is_static(m)) {
+    access_flags |= DexAccessFlags::ACC_STATIC;
+  }
+  auto cloned_method = method_ref->make_concrete(access_flags, std::move(code),
+                                                 /* is_virtual */ false);
   cloned_method->set_deobfuscated_name(show_deobfuscated(cloned_method));
 
   cloned_method->rstate.set_dont_inline(); // Don't undo our work.
@@ -345,7 +349,7 @@ void insert_dispatches(
 
   // Create templates for the dispatch code, so it's easy to create a block.
   auto invoke_template = std::make_unique<IRInstruction>(
-      m->is_virtual() ? OPCODE_INVOKE_VIRTUAL : OPCODE_INVOKE_STATIC);
+      is_static(m) ? OPCODE_INVOKE_STATIC : OPCODE_INVOKE_DIRECT);
   {
     auto params = cfg.get_param_instructions();
     size_t s = 0;
