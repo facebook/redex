@@ -16,6 +16,7 @@
 
 #include "ControlFlow.h"
 #include "DexClass.h"
+#include "DexLimits.h"
 #include "DexStore.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
@@ -433,18 +434,6 @@ void insert_dispatches(
                       dispatch_blocks[0].condition_head);
 }
 
-// Reserve a constant amount of method references.
-class SplitHugeSwitchInterDexPlugin : public interdex::InterDexPassPlugin {
- public:
-  explicit SplitHugeSwitchInterDexPlugin(size_t max_split_methods)
-      : m_max_split_methods(max_split_methods) {}
-
-  size_t reserve_mrefs() override { return m_max_split_methods; }
-
- private:
-  size_t m_max_split_methods;
-};
-
 struct AnalysisData {
   boost::optional<cfg::ScopedCFG> scoped_cfg = boost::none;
   boost::optional<cfg::InstructionIterator> switch_it = boost::none;
@@ -680,7 +669,7 @@ Stats run_split_dexes(DexStoresVector& stores,
                       std::vector<AnalysisData>& methods,
                       const method_profiles::MethodProfiles& method_profiles,
                       size_t case_threshold,
-                      size_t max_split_methods) {
+                      size_t reserved_mrefs) {
   std::unordered_set<DexType*> cset;
   std::unordered_map<DexType*, std::vector<AnalysisData>> mmap;
   for (auto& data : methods) {
@@ -702,6 +691,10 @@ Stats run_split_dexes(DexStoresVector& stores,
       }
       if (dex_candidate_types.empty()) {
         continue;
+      }
+      std::unordered_set<DexMethodRef*> method_refs;
+      for (auto cls : dex) {
+        cls->gather_methods(method_refs);
       }
 
       // Get the candidate methods.
@@ -743,7 +736,10 @@ Stats run_split_dexes(DexStoresVector& stores,
       }
 
       // Now go and apply.
-      size_t left = max_split_methods;
+      always_assert_log(method_refs.size() + reserved_mrefs <= kMaxMethodRefs,
+                        "Method refs exceeded in a dex: %zu + %zu > %zu",
+                        method_refs.size(), reserved_mrefs, kMaxMethodRefs);
+      size_t left = kMaxMethodRefs - method_refs.size() - reserved_mrefs;
       for (auto& data : dex_candidate_methods) {
         size_t required = data.switch_range->mid_cases.size() - 1;
         if (left < required) {
@@ -824,21 +820,6 @@ void SplitHugeSwitchPass::bind_config() {
   bind("method_size", 9000u, m_method_size, "Method size threshold");
   bind("switch_size", 100u, m_switch_size, "Switch case threshold");
   bind("debug", false, m_debug, "Debug output");
-  bind("max_split_methods",
-       0u,
-       m_max_split_methods,
-       "Maximum number of splits per dex");
-
-  after_configuration([this] {
-    interdex::InterDexRegistry* registry =
-        static_cast<interdex::InterDexRegistry*>(
-            PluginRegistry::get().pass_registry(interdex::INTERDEX_PASS_NAME));
-    std::function<interdex::InterDexPassPlugin*()> fn =
-        [this]() -> interdex::InterDexPassPlugin* {
-      return new SplitHugeSwitchInterDexPlugin(m_max_split_methods);
-    };
-    registry->register_plugin("SPLIT_HUGE_SWITCHES_PLUGIN", std::move(fn));
-  });
 }
 
 void SplitHugeSwitchPass::run_pass(DexStoresVector& stores,
@@ -846,11 +827,6 @@ void SplitHugeSwitchPass::run_pass(DexStoresVector& stores,
                                    PassManager& mgr) {
   // Don't run under instrumentation.
   if (mgr.get_redex_options().instrument_pass_enabled) {
-    return;
-  }
-
-  if (m_max_split_methods == 0) {
-    mgr.set_metric("max_split_methods_zero", 1);
     return;
   }
 
@@ -928,8 +904,12 @@ void SplitHugeSwitchPass::run_pass(DexStoresVector& stores,
 
   // 2) Prioritize and split the candidates per dex.
 
+  const auto& interdex_metrics = mgr.get_interdex_metrics();
+  auto it = interdex_metrics.find(interdex::METRIC_RESERVED_MREFS);
+  size_t reserved_mrefs = it == interdex_metrics.end() ? 0 : it->second;
+
   Stats result_stats = run_split_dexes(stores, candidates, method_profiles,
-                                       m_switch_size, m_max_split_methods);
+                                       m_switch_size, reserved_mrefs);
 
   mgr.set_metric("created_methods", result_stats.new_methods.size());
   mgr.set_metric("no_slots", result_stats.no_slots);

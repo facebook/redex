@@ -60,6 +60,5 @@ class SplitHugeSwitchPass : public Pass {
   float m_hotness_threshold = 0.0;
   uint32_t m_method_size = 0;
   uint32_t m_switch_size = 0;
-  uint32_t m_max_split_methods = 0;
   bool m_debug = false;
 };
