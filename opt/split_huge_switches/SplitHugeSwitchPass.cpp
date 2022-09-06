@@ -678,95 +678,103 @@ Stats run_split_dexes(DexStoresVector& stores,
     mmap[t].emplace_back(std::move(data));
   }
 
-  // Could parallelize this, but the set is likely small.
   Stats result{};
+  std::mutex mutex; // protecting result
+  std::vector<const DexClasses*> dexes;
   for (const DexStore& store : stores) {
     for (const auto& dex : store.get_dexen()) {
-      // Collect the candidates in this dex.
-      std::vector<DexType*> dex_candidate_types;
-      for (const auto* c : dex) {
-        if (cset.count(c->get_type()) != 0) {
-          dex_candidate_types.push_back(c->get_type());
-        }
-      }
-      if (dex_candidate_types.empty()) {
-        continue;
-      }
-      std::unordered_set<DexMethodRef*> method_refs;
-      for (auto cls : dex) {
-        cls->gather_methods(method_refs);
-      }
-
-      // Get the candidate methods.
-      std::vector<AnalysisData> dex_candidate_methods;
-      for (auto* t : dex_candidate_types) {
-        dex_candidate_methods.insert(dex_candidate_methods.end(),
-                                     std::make_move_iterator(mmap[t].begin()),
-                                     std::make_move_iterator(mmap[t].end()));
-      }
-
-      // If hotness data is available, sort.
-      if (method_profiles.has_stats()) {
-        std::sort(
-            dex_candidate_methods.begin(),
-            dex_candidate_methods.end(),
-            [&](const AnalysisData& lhs, const AnalysisData& rhs) {
-              const auto& profile_stats =
-                  method_profiles.method_stats(method_profiles::COLD_START);
-              auto call_count = [&profile_stats](DexMethod* m) {
-                auto it = profile_stats.find(m);
-                return it != profile_stats.end() ? it->second.call_count : 0;
-              };
-              double lhs_hotness = call_count(lhs.m);
-              double rhs_hotness = call_count(rhs.m);
-              // Sort by hotness, descending.
-              if (lhs_hotness > rhs_hotness) {
-                return true;
-              }
-              if (lhs_hotness < rhs_hotness) {
-                return false;
-              }
-              // Then greedily by size.
-              size_t lhs_size = lhs.switch_range->mid_cases.size();
-              size_t rhs_size = rhs.switch_range->mid_cases.size();
-              if (lhs_size > rhs_size) {
-                return true;
-              }
-              if (lhs_size < rhs_size) {
-                return false;
-              }
-              // For determinism, compare by name.
-              return compare_dexmethods(lhs.m, rhs.m);
-            });
-      }
-
-      // Now go and apply.
-      always_assert_log(method_refs.size() + reserved_mrefs <= kMaxMethodRefs,
-                        "Method refs exceeded in a dex: %zu + %zu > %zu",
-                        method_refs.size(), reserved_mrefs, kMaxMethodRefs);
-      size_t left = kMaxMethodRefs - method_refs.size() - reserved_mrefs;
-      for (auto& data : dex_candidate_methods) {
-        size_t required = data.switch_range->mid_cases.size() - 1;
-        if (left < required) {
-          ++result.no_slots;
-          continue;
-        }
-        left -= required;
-        size_t orig_size = data.m->get_code()->sum_opcode_sizes();
-        auto new_methods =
-            run_split(data, data.m, data.m->get_code(), case_threshold);
-        size_t new_size = data.m->get_code()->sum_opcode_sizes();
-        for (DexMethod* m : new_methods) {
-          type_class(m->get_class())->add_method(m);
-          new_size += m->get_code()->sum_opcode_sizes();
-        }
-
-        result.new_methods.insert(new_methods.begin(), new_methods.end());
-        result.transformed_srcs.emplace(data.m,
-                                        std::make_pair(orig_size, new_size));
-      }
+      dexes.push_back(&dex);
     }
   }
+  workqueue_run<const DexClasses*>(
+      [&](const DexClasses* dex) {
+        // Collect the candidates in this dex.
+        std::vector<DexType*> dex_candidate_types;
+        for (const auto* c : *dex) {
+          if (cset.count(c->get_type()) != 0) {
+            dex_candidate_types.push_back(c->get_type());
+          }
+        }
+        if (dex_candidate_types.empty()) {
+          return;
+        }
+        std::unordered_set<DexMethodRef*> method_refs;
+        for (auto cls : *dex) {
+          cls->gather_methods(method_refs);
+        }
+
+        // Get the candidate methods.
+        std::vector<AnalysisData> dex_candidate_methods;
+        for (auto* t : dex_candidate_types) {
+          dex_candidate_methods.insert(dex_candidate_methods.end(),
+                                       std::make_move_iterator(mmap[t].begin()),
+                                       std::make_move_iterator(mmap[t].end()));
+        }
+
+        // If hotness data is available, sort.
+        if (method_profiles.has_stats()) {
+          std::sort(
+              dex_candidate_methods.begin(),
+              dex_candidate_methods.end(),
+              [&](const AnalysisData& lhs, const AnalysisData& rhs) {
+                const auto& profile_stats =
+                    method_profiles.method_stats(method_profiles::COLD_START);
+                auto call_count = [&profile_stats](DexMethod* m) {
+                  auto it = profile_stats.find(m);
+                  return it != profile_stats.end() ? it->second.call_count : 0;
+                };
+                double lhs_hotness = call_count(lhs.m);
+                double rhs_hotness = call_count(rhs.m);
+                // Sort by hotness, descending.
+                if (lhs_hotness > rhs_hotness) {
+                  return true;
+                }
+                if (lhs_hotness < rhs_hotness) {
+                  return false;
+                }
+                // Then greedily by size.
+                size_t lhs_size = lhs.switch_range->mid_cases.size();
+                size_t rhs_size = rhs.switch_range->mid_cases.size();
+                if (lhs_size > rhs_size) {
+                  return true;
+                }
+                if (lhs_size < rhs_size) {
+                  return false;
+                }
+                // For determinism, compare by name.
+                return compare_dexmethods(lhs.m, rhs.m);
+              });
+        }
+
+        // Now go and apply.
+        always_assert_log(method_refs.size() + reserved_mrefs <= kMaxMethodRefs,
+                          "Method refs exceeded in a dex: %zu + %zu > %zu",
+                          method_refs.size(), reserved_mrefs, kMaxMethodRefs);
+        size_t left = kMaxMethodRefs - method_refs.size() - reserved_mrefs;
+        for (auto& data : dex_candidate_methods) {
+          size_t required = data.switch_range->mid_cases.size() - 1;
+          if (left < required) {
+            std::lock_guard<std::mutex> lock_guard(mutex);
+            ++result.no_slots;
+            continue;
+          }
+          left -= required;
+          size_t orig_size = data.m->get_code()->sum_opcode_sizes();
+          auto new_methods =
+              run_split(data, data.m, data.m->get_code(), case_threshold);
+          size_t new_size = data.m->get_code()->sum_opcode_sizes();
+          for (DexMethod* m : new_methods) {
+            type_class(m->get_class())->add_method(m);
+            new_size += m->get_code()->sum_opcode_sizes();
+          }
+
+          std::lock_guard<std::mutex> lock_guard(mutex);
+          result.new_methods.insert(new_methods.begin(), new_methods.end());
+          result.transformed_srcs.emplace(data.m,
+                                          std::make_pair(orig_size, new_size));
+        }
+      },
+      dexes);
 
   return result;
 }
