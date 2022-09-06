@@ -11,7 +11,7 @@ use std::iter::FromIterator;
 use super::abstract_domain::AbstractDomain;
 use crate::datatype::PatriciaTreeSet;
 
-pub trait SetAbstractDomainOps: Clone {
+pub trait SetAbstractDomainOps: Clone + Eq {
     fn is_subset(&self, other: &Self) -> bool;
     fn intersection_with(&mut self, other: &Self);
     fn union_with(&mut self, other: Self);

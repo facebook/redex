@@ -29,6 +29,42 @@ enum Node<V: Sized> {
     },
 }
 
+impl<V: Sized + Eq> PartialEq for Node<V> {
+    fn eq(&self, other: &Self) -> bool {
+        use Node::*;
+
+        match (self, other) {
+            (
+                Leaf {
+                    key: l_key,
+                    value: l_value,
+                },
+                Leaf {
+                    key: r_key,
+                    value: r_value,
+                },
+            ) => l_key == r_key && l_value == r_value,
+            (
+                Branch {
+                    prefix: l_prefix,
+                    left: l_left,
+                    right: l_right,
+                },
+                Branch {
+                    prefix: r_prefix,
+                    left: r_left,
+                    right: r_right,
+                },
+            ) => {
+                (l_prefix == r_prefix)
+                    && ((Rc::ptr_eq(l_left, r_left) || l_left == r_left)
+                        && (Rc::ptr_eq(l_right, r_right) || l_right == r_right))
+            }
+            (_, _) => false,
+        }
+    }
+}
+
 impl<V> ToString for Node<V> {
     fn to_string(&self) -> String {
         use Node::*;
@@ -599,6 +635,20 @@ impl<V: Sized> PatriciaTree<V> {
     }
 }
 
+impl<V: Sized + Eq> PartialEq for PatriciaTree<V> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self.root.as_ref(), other.root.as_ref()) {
+            (None, None) => true,
+            (Some(ref self_node), Some(ref other_node)) => {
+                Rc::ptr_eq(self_node, other_node) || (self_node == other_node)
+            }
+            (_, _) => false,
+        }
+    }
+}
+
+impl<V: Sized + Eq> Eq for PatriciaTree<V> {}
+
 pub(crate) struct PatriciaTreePostOrderIterator<'a, V> {
     branch_stack: Vec<&'a Node<V>>,
     current: Option<&'a Node<V>>,
@@ -697,31 +747,35 @@ mod tests {
 
         let mut map2 = map.clone();
 
+        assert!(map2 == map);
+
         map2.insert(55.into(), 555);
         assert_eq!(map.len(), 4);
         assert_eq!(map2.len(), 5);
 
-        map2.remove(&1.into());
+        assert!(map2 != map);
+
+        map2.remove(&55.into());
         assert_eq!(map2.len(), 4);
+        assert!(map2 == map);
+
+        map2.remove(&1.into());
         assert!(map.contains_key(&1.into()));
         assert!(!map2.contains_key(&1.into()));
 
         map2.remove(&1.into());
-        assert_eq!(map2.len(), 4);
+        assert_eq!(map2.len(), 3);
         assert!(!map2.contains_key(&1.into()));
 
         map2.remove(&22.into());
-        assert_eq!(map2.len(), 3);
+        assert_eq!(map2.len(), 2);
         assert!(!map2.contains_key(&22.into()));
 
         map2.remove(&13.into());
-        assert_eq!(map2.len(), 2);
+        assert_eq!(map2.len(), 1);
         assert!(!map2.contains_key(&13.into()));
 
         map2.remove(&42.into());
-        assert_eq!(map2.len(), 1);
-
-        map2.remove(&55.into());
         assert_eq!(map2.len(), 0);
     }
 }

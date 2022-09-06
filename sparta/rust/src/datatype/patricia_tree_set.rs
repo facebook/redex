@@ -65,6 +65,14 @@ impl<K: Into<BitVec>> Default for PatriciaTreeSet<K> {
     }
 }
 
+impl<K: Into<BitVec>> PartialEq for PatriciaTreeSet<K> {
+    fn eq(&self, other: &Self) -> bool {
+        self.storage.eq(&other.storage)
+    }
+}
+
+impl<K: Into<BitVec>> Eq for PatriciaTreeSet<K> {}
+
 pub struct PatriciaTreeSetIterator<'a, K: Into<BitVec>> {
     iter_impl: PatriciaTreePostOrderIterator<'a, ()>,
     _key_type_phantom: PhantomData<K>,
