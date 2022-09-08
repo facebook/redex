@@ -656,7 +656,7 @@ impl<V> PatriciaTree<V> {
 
     pub(crate) fn get(&self, key: &BitVec) -> Option<&V> {
         use Node::*;
-        let node = Node::<V>::find_leaf_by_key(self.root.as_ref(), key);
+        let node = Node::find_leaf_by_key(self.root.as_ref(), key);
         match node {
             Some(leaf_node) => match leaf_node.as_ref() {
                 Leaf { key: _, ref value } => Some(value),
@@ -753,7 +753,7 @@ impl<D: AbstractDomain> PatriciaTree<D> {
     // Both structures have implicit values that they use to encode top and bottom values
     // efficiently, which changes the semantics of the leq operation.
     pub(crate) fn leq(&self, other: &Self, implicit_value: &D) -> bool {
-        Node::<D>::is_tree_leq(self.root.as_ref(), other.root.as_ref(), implicit_value)
+        Node::is_tree_leq(self.root.as_ref(), other.root.as_ref(), implicit_value)
     }
 }
 

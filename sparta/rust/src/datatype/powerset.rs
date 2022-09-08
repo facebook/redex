@@ -37,7 +37,7 @@ pub enum PowersetLattice<S: SetAbstractDomainOps> {
 
 impl<S: SetAbstractDomainOps> PowersetLattice<S> {
     pub fn value_from_set(set: S) -> Self {
-        PowersetLattice::<S>::Value(set)
+        Self::Value(set)
     }
 }
 
@@ -101,62 +101,58 @@ impl<S: SetAbstractDomainOps + SetElementOps> PowersetLattice<S> {
 
 impl<S: SetAbstractDomainOps> AbstractDomain for PowersetLattice<S> {
     fn bottom() -> Self {
-        PowersetLattice::Bottom
+        Self::Bottom
     }
 
     fn top() -> Self {
-        PowersetLattice::Top
+        Self::Top
     }
 
     fn is_bottom(&self) -> bool {
-        matches!(self, PowersetLattice::Bottom)
+        matches!(self, Self::Bottom)
     }
 
     fn is_top(&self) -> bool {
-        matches!(self, PowersetLattice::Top)
+        matches!(self, Self::Top)
     }
 
     fn leq(&self, rhs: &Self) -> bool {
-        use PowersetLattice::*;
         match self {
-            Top => rhs.is_top(),
-            Value(ref s) => match rhs {
-                Top => true,
-                Value(ref t) => s.is_subset(t),
-                Bottom => false,
+            Self::Top => rhs.is_top(),
+            Self::Value(ref s) => match rhs {
+                Self::Top => true,
+                Self::Value(ref t) => s.is_subset(t),
+                Self::Bottom => false,
             },
-            Bottom => true,
+            Self::Bottom => true,
         }
     }
 
     fn join_with(&mut self, rhs: Self) {
-        use PowersetLattice::*;
         match self {
-            Top => {}
-            Value(ref mut s) => match rhs {
-                Top => *self = rhs,
-                // Is this ineffecient? Can we just ref mut s itself?
-                Value(t) => {
+            Self::Top => {}
+            Self::Value(ref mut s) => match rhs {
+                Self::Top => *self = rhs,
+                Self::Value(t) => {
                     s.union_with(t);
                 }
-                Bottom => {}
+                Self::Bottom => {}
             },
-            Bottom => *self = rhs,
+            Self::Bottom => *self = rhs,
         };
     }
 
     fn meet_with(&mut self, rhs: Self) {
-        use PowersetLattice::*;
         match self {
-            Top => *self = rhs,
-            Value(ref mut s) => match rhs {
-                Top => {}
-                Value(ref t) => {
+            Self::Top => *self = rhs,
+            Self::Value(ref mut s) => match rhs {
+                Self::Top => {}
+                Self::Value(ref t) => {
                     s.intersection_with(t);
                 }
-                Bottom => *self = rhs,
+                Self::Bottom => *self = rhs,
             },
-            Bottom => {}
+            Self::Bottom => {}
         };
     }
 
