@@ -523,10 +523,8 @@ size_t compute_locations_closure(
     }
   });
 
-  std::unordered_map<const DexMethod*, LocationsAndDependencies> method_lads;
-  for (auto& p : concurrent_method_lads) {
-    method_lads.insert(std::move(p));
-  }
+  std::unordered_map<const DexMethod*, LocationsAndDependencies> method_lads =
+      concurrent_method_lads.move_to_container();
 
   // 2. Compute inverse dependencies so that we know what needs to be recomputed
   // during the fixpoint computation, and determine set of methods that are

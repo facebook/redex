@@ -141,7 +141,7 @@ MultiMethodInliner::MultiMethodInliner(
   ConcurrentSet<DexMethod*> concurrent_x_dex_callees;
   ConcurrentMap<const DexMethod*, std::unordered_map<DexMethod*, size_t>>
       concurrent_callee_caller;
-  ConcurrentMap<DexMethod*, std::unordered_map<DexMethod*, size_t>>
+  ConcurrentMap<const DexMethod*, std::unordered_map<DexMethod*, size_t>>
       concurrent_caller_callee;
   std::unique_ptr<XDexRefs> x_dex;
   if (mode == IntraDex) {
@@ -186,12 +186,8 @@ MultiMethodInliner::MultiMethodInliner(
       });
   m_x_dex_callees.insert(concurrent_x_dex_callees.begin(),
                          concurrent_x_dex_callees.end());
-  for (auto& p : concurrent_callee_caller) {
-    callee_caller.insert(std::move(p));
-  }
-  for (auto& p : concurrent_caller_callee) {
-    caller_callee.insert(std::move(p));
-  }
+  callee_caller = concurrent_callee_caller.move_to_container();
+  caller_callee = concurrent_caller_callee.move_to_container();
   for (const auto& callee_callers : true_virtual_callers) {
     auto callee = callee_callers.first;
     for (const auto& caller_insns : callee_callers.second.caller_insns) {

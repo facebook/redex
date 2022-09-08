@@ -169,15 +169,9 @@ void analyze_scope(
       }
     }
   });
-  for (auto& p : concurrent_new_instances) {
-    new_instances->insert(std::move(p));
-  }
-  for (auto& p : concurrent_invokes) {
-    invokes->insert(std::move(p));
-  }
-  for (auto& p : concurrent_dependencies) {
-    dependencies->insert(std::move(p));
-  }
+  *new_instances = concurrent_new_instances.move_to_container();
+  *invokes = concurrent_invokes.move_to_container();
+  *dependencies = concurrent_dependencies.move_to_container();
 }
 
 // A benign method invocation can be ignored during the escape analysis.
@@ -501,11 +495,7 @@ std::unordered_map<DexType*, InlineAnchorsOfType> compute_inline_anchors(
           type, [&](auto*, auto& map, bool) { map[method].insert(insn); });
     }
   });
-  std::unordered_map<DexType*, InlineAnchorsOfType> inline_anchors;
-  for (auto& p : concurrent_inline_anchors) {
-    inline_anchors.insert(std::move(p));
-  }
-  return inline_anchors;
+  return concurrent_inline_anchors.move_to_container();
 }
 
 class InlinedCodeSizeEstimator {
