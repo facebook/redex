@@ -10,16 +10,18 @@ mod abstract_environment_test {
     use sparta::datatype::AbstractEnvironment;
     use sparta::datatype::HashMapAbstractEnvironment;
     use sparta::datatype::HashSetAbstractDomain;
+    use sparta::datatype::PatriciaTreeMapAbstractEnvironment;
 
     type Domain = HashSetAbstractDomain<String>;
-    type Environment = HashMapAbstractEnvironment<String, Domain>;
 
     fn build_domain<const N: usize>(arr: [&str; N]) -> Domain {
         arr.iter().map(|str| str.to_string()).collect()
     }
 
     #[test]
-    fn test_lattice_operations() {
+    fn test_hmae_lattice_operations() {
+        type Environment = HashMapAbstractEnvironment<String, Domain>;
+
         assert!(Environment::top().leq(&Environment::top()));
         assert!(!Environment::top().leq(&Environment::bottom()));
         assert!(Environment::bottom().leq(&Environment::top()));
@@ -77,6 +79,73 @@ mod abstract_environment_test {
 
         assert!(*meet.get(&("v2".to_string())) == build_domain(["c"]));
         assert!(*meet.get(&("v3".to_string())) == build_domain(["d", "e"]));
+
+        assert!(e1.clone().meet(Environment::bottom()).is_bottom());
+        assert!(e1.clone().meet(Environment::top()) == e1);
+    }
+
+    #[test]
+    fn test_ptmae_lattice_operations() {
+        type Environment = PatriciaTreeMapAbstractEnvironment<u32, Domain>;
+
+        assert!(Environment::top().leq(&Environment::top()));
+        assert!(!Environment::top().leq(&Environment::bottom()));
+        assert!(Environment::bottom().leq(&Environment::top()));
+        assert!(Environment::bottom().leq(&Environment::bottom()));
+
+        assert!(Environment::bottom() == Environment::bottom());
+        assert!(Environment::top() == Environment::top());
+        assert!(Environment::bottom() != Environment::top());
+
+        let mut e1 = Environment::top();
+        e1.set(1, build_domain(["a", "b"]));
+        e1.set(2, build_domain(["c"]));
+        e1.set(3, build_domain(["d", "e", "f"]));
+        e1.set(4, build_domain(["a", "f"]));
+        assert_eq!(e1.len(), 4);
+
+        let mut e2 = Environment::top();
+        e2.set(0, build_domain(["c", "f"]));
+        e2.set(2, build_domain(["c", "d"]));
+        e2.set(3, build_domain(["d", "e", "g", "h"]));
+        assert_eq!(e2.len(), 3);
+
+        let mut e3 = Environment::top();
+        e3.set(0, build_domain(["c", "d"]));
+        e3.set(2, Domain::bottom());
+        e3.set(3, build_domain(["a", "f", "g"]));
+        assert!(e3.is_bottom());
+
+        assert!(Environment::bottom().leq(&e1));
+        assert!(!e1.leq(&Environment::bottom()));
+        assert!(!Environment::top().leq(&e1));
+        assert!(e1.leq(&Environment::top()));
+        assert!(!e1.leq(&e2));
+        assert!(!e2.leq(&e1));
+
+        assert!(e1 == e1);
+        assert!(e1 != e2);
+
+        let join = e1.clone().join(e2.clone());
+        assert!(e1.leq(&join));
+        assert!(e2.leq(&join));
+        assert_eq!(join.len(), 2);
+        assert!(!join.is_bottom());
+        assert!(*join.get(&2) == build_domain(["c", "d"]));
+        assert!(*join.get(&3) == build_domain(["d", "e", "f", "g", "h"]));
+
+        assert!(*join.get(&4) == Domain::top());
+
+        assert!(e1.clone().join(Environment::top()).is_top());
+        assert!(e1.clone().join(Environment::bottom()) == (e1));
+
+        let meet = e1.clone().meet(e2.clone());
+        assert!(meet.leq(&e1));
+        assert!(meet.leq(&e2));
+        assert_eq!(meet.len(), 5);
+
+        assert!(*meet.get(&2) == build_domain(["c"]));
+        assert!(*meet.get(&3) == build_domain(["d", "e"]));
 
         assert!(e1.clone().meet(Environment::bottom()).is_bottom());
         assert!(e1.clone().meet(Environment::top()) == e1);
