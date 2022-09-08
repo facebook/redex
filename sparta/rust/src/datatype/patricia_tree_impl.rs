@@ -9,6 +9,7 @@ use std::rc::Rc;
 use std::string::ToString;
 
 use crate::datatype::bitvec::BitVec;
+use crate::datatype::AbstractDomain;
 
 /// This structure implements a map of integer/pointer keys to (possibly empty)
 /// values. It's based on the following paper:
@@ -494,6 +495,119 @@ impl<V> Node<V> {
     }
 }
 
+impl<D: AbstractDomain> Node<D> {
+    fn is_tree_leq(s: Option<&Rc<Node<D>>>, t: Option<&Rc<Node<D>>>, implicit_value: &D) -> bool {
+        match (s, t) {
+            (None, None) => true,
+            (None, _) => implicit_value.is_bottom(),
+            (_, None) => implicit_value.is_top(),
+            (Some(s), Some(t)) => Self::is_tree_leq_impl(s, t, implicit_value),
+        }
+    }
+
+    fn is_tree_leq_impl(s: &Rc<Node<D>>, t: &Rc<Node<D>>, implicit_value: &D) -> bool {
+        use Node::*;
+
+        if Rc::ptr_eq(s, t) {
+            return true;
+        }
+
+        match (s.as_ref(), t.as_ref()) {
+            (
+                Leaf {
+                    key: s_key,
+                    value: s_value,
+                },
+                Leaf {
+                    key: t_key,
+                    value: t_value,
+                },
+            ) => s_key == t_key && s_value.leq(t_value),
+            (
+                Leaf {
+                    key: s_key,
+                    value: s_value,
+                },
+                _,
+            ) => {
+                if implicit_value.is_top() {
+                    false
+                } else {
+                    match Self::find_leaf_by_key(Some(t), s_key) {
+                        Some(rc) => match rc.as_ref() {
+                            Leaf {
+                                key: _,
+                                value: t_value,
+                            } => s_value.leq(t_value),
+                            _ => unreachable!(),
+                        },
+                        None => false,
+                    }
+                }
+            }
+            (
+                _,
+                Leaf {
+                    key: t_key,
+                    value: t_value,
+                },
+            ) => {
+                if implicit_value.is_bottom() {
+                    false
+                } else {
+                    match Self::find_leaf_by_key(Some(s), t_key) {
+                        Some(rc) => match rc.as_ref() {
+                            Leaf {
+                                key: _,
+                                value: s_value,
+                            } => s_value.leq(t_value),
+                            _ => unreachable!(),
+                        },
+                        None => false,
+                    }
+                }
+            }
+            (
+                Branch {
+                    prefix: s_prefix,
+                    left: s_left,
+                    right: s_right,
+                },
+                Branch {
+                    prefix: t_prefix,
+                    left: t_left,
+                    right: t_right,
+                },
+            ) => {
+                if s_prefix == t_prefix {
+                    // The two trees have the same prefix, compare each subtrees.
+                    Self::is_tree_leq_impl(s_left, t_left, implicit_value)
+                        && Self::is_tree_leq_impl(s_right, t_right, implicit_value)
+                } else if s_prefix.begins_with(t_prefix) {
+                    // The tree t only contains bindings present in a subtree of s, and s has bindings not present in t.
+                    let branching_bit = s_prefix.get(t_prefix.len());
+                    implicit_value.is_top()
+                        && Self::is_tree_leq_impl(
+                            if !branching_bit { s_left } else { s_right },
+                            t,
+                            implicit_value,
+                        )
+                } else if t_prefix.begins_with(s_prefix) {
+                    let branching_bit = t_prefix.get(s_prefix.len());
+                    implicit_value.is_bottom()
+                        && Self::is_tree_leq_impl(
+                            s,
+                            if !branching_bit { t_left } else { t_right },
+                            implicit_value,
+                        )
+                } else {
+                    false
+                }
+            }
+        }
+    }
+}
+
 // Create an interface that gives the user a "mutable" illusion of an immutable data structure.
 pub(crate) struct PatriciaTree<V> {
     root: Option<Rc<Node<V>>>,
@@ -631,6 +745,15 @@ impl<V> PatriciaTree<V> {
             (_, None) => false,
             (Some(s), Some(t)) => Node::is_tree_subset_of(s, t),
         }
+    }
+}
+
+impl<D: AbstractDomain> PatriciaTree<D> {
+    // Leq operation here facilitates the abstract partition and abstract environment leqs.
+    // Both structures have implicit values that they use to encode top and bottom values
+    // efficiently, which changes the semantics of the leq operation.
+    pub(crate) fn leq(&self, other: &Self, implicit_value: &D) -> bool {
+        Node::<D>::is_tree_leq(self.root.as_ref(), other.root.as_ref(), implicit_value)
     }
 }
 

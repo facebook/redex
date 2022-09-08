@@ -12,6 +12,7 @@ use std::marker::PhantomData;
 use crate::datatype::bitvec::BitVec;
 use crate::datatype::patricia_tree_impl::PatriciaTree;
 use crate::datatype::patricia_tree_impl::PatriciaTreePostOrderIterator;
+use crate::datatype::AbstractDomain;
 
 // Interface structs for PatriciaTreeMap. Does not require V to impl Clone.
 pub struct PatriciaTreeMap<K: Into<BitVec>, V> {
@@ -118,6 +119,31 @@ impl<K: Into<BitVec>, V> FromIterator<(K, V)> for PatriciaTreeMap<K, V> {
             ret.upsert(k, v);
         }
         ret
+    }
+}
+
+// Specialized Leq for abstract partitions and environments when D is an abstract domain.
+impl<K: Into<BitVec>, D: AbstractDomain> PatriciaTreeMap<K, D> {
+    pub(crate) fn leq(&self, other: &Self, implicit_value: &D) -> bool {
+        self.storage.leq(&other.storage, implicit_value)
+    }
+
+    pub(crate) fn union_with(
+        &mut self,
+        other: &Self,
+        value_op_on_duplicate_key: impl Fn(&D, &D) -> D,
+    ) {
+        self.storage
+            .union_with(&other.storage, value_op_on_duplicate_key)
+    }
+
+    pub(crate) fn intersect_with(
+        &mut self,
+        other: &Self,
+        value_op_on_duplicate_key: impl Fn(&D, &D) -> D,
+    ) {
+        self.storage
+            .intersect_with(&other.storage, value_op_on_duplicate_key)
     }
 }
 
