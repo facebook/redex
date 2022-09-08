@@ -9,7 +9,9 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::hash::Hash;
 
+use crate::datatype::bitvec::BitVec;
 use crate::datatype::AbstractDomain;
+use crate::datatype::PatriciaTreeMap;
 
 /*
  * An abstract environment is a type of abstract domain that maps the variables
@@ -221,7 +223,7 @@ where
     fn join_like_operation(lhs: &mut Self, rhs: Self, operation: impl Fn(&mut D, D)) {
         use HashMapAbstractEnvironment::*;
 
-        match (&mut (*lhs), rhs) {
+        match (lhs, rhs) {
             (Value(l_map), Value(ref mut r_map)) => {
                 l_map.retain(|l_k, _| r_map.contains_key(l_k));
 
@@ -231,22 +233,13 @@ where
                 }
                 l_map.retain(|_, l_v| !l_v.is_top());
             }
-            (Bottom, rhs) => *lhs = rhs,
+            (lhs @ Bottom, rhs) => *lhs = rhs,
             (_, Bottom) => {}
         }
     }
 
     fn meet_like_operation(lhs: &mut Self, rhs: Self, operation: impl Fn(&mut D, D)) {
         use HashMapAbstractEnvironment::*;
-
-        if lhs.is_bottom() {
-            return;
-        }
-
-        if rhs.is_bottom() {
-            *lhs = rhs;
-            return;
-        }
 
         match (&mut *lhs, rhs) {
             (Value(l_map), Value(r_map)) => {
@@ -267,8 +260,223 @@ where
                 }
             }
             (Bottom, _) => {}
-            (_, Bottom) => {
-                *lhs = Bottom;
+            (_, rhs @ Bottom) => {
+                *lhs = rhs;
+            }
+        }
+    }
+}
+
+pub enum PatriciaTreeMapAbstractEnvironment<V: Into<BitVec> + Clone, D: Sized + Eq + AbstractDomain>
+{
+    Value(PatriciaTreeMap<V, D>), // Use empty map value as top
+    Bottom,
+}
+
+impl<V, D> Clone for PatriciaTreeMapAbstractEnvironment<V, D>
+where
+    V: Into<BitVec> + Clone,
+    D: Sized + AbstractDomain,
+{
+    fn clone(&self) -> Self {
+        use PatriciaTreeMapAbstractEnvironment::*;
+
+        match self {
+            Value(map) => Value(map.clone()),
+            Bottom => Bottom,
+        }
+    }
+}
+
+impl<V, D> PartialEq for PatriciaTreeMapAbstractEnvironment<V, D>
+where
+    V: Into<BitVec> + Clone,
+    D: Sized + AbstractDomain,
+{
+    fn eq(&self, rhs: &Self) -> bool {
+        use PatriciaTreeMapAbstractEnvironment::*;
+
+        match (self, rhs) {
+            (Value(l_map), Value(r_map)) => l_map == r_map,
+            (Bottom, Bottom) => true,
+            (_, _) => false,
+        }
+    }
+}
+
+impl<V, D> Eq for PatriciaTreeMapAbstractEnvironment<V, D>
+where
+    V: Into<BitVec> + Clone,
+    D: Sized + AbstractDomain,
+{
+}
+
+impl<V, D> AbstractEnvironment<V, D> for PatriciaTreeMapAbstractEnvironment<V, D>
+where
+    V: Into<BitVec> + Clone,
+    D: Sized + AbstractDomain,
+{
+    type ContainerType = PatriciaTreeMap<V, D>;
+
+    fn bindings(&self) -> Option<&PatriciaTreeMap<V, D>> {
+        match self {
+            PatriciaTreeMapAbstractEnvironment::Value(ref map) => Some(map),
+            _ => None,
+        }
+    }
+
+    fn into_bindings(self) -> Option<PatriciaTreeMap<V, D>> {
+        match self {
+            PatriciaTreeMapAbstractEnvironment::Value(map) => Some(map),
+            _ => None,
+        }
+    }
+
+    fn len(&self) -> usize {
+        self.bindings()
+            .expect("Bottom doesn't have a length!")
+            .len()
+    }
+
+    fn is_empty(&self) -> bool {
+        use PatriciaTreeMapAbstractEnvironment::*;
+        match self {
+            Value(map) => map.is_empty(),
+            Bottom => true,
+        }
+    }
+
+    fn get(&self, variable: &V) -> Cow<'_, D> {
+        use PatriciaTreeMapAbstractEnvironment::*;
+        let map = match self {
+            Value(map) => map,
+            Bottom => return Cow::Owned(D::bottom()),
+        };
+
+        match map.get(variable.clone()) {
+            Some(domain) => Cow::Borrowed(domain),
+            None => Cow::Owned(D::top()),
+        }
+    }
+
+    fn set(&mut self, variable: V, domain: D) {
+        use PatriciaTreeMapAbstractEnvironment::*;
+        if let Value(map) = self {
+            if domain.is_top() {
+                map.remove(variable);
+            } else if domain.is_bottom() {
+                *self = Bottom;
+            } else {
+                map.upsert(variable, domain);
+            }
+        }
+    }
+
+    fn update(&mut self, variable: &V, op: impl FnOnce(&mut D)) {
+        use PatriciaTreeMapAbstractEnvironment::*;
+
+        let map = match self {
+            Bottom => return,
+            Value(ref mut map) => map,
+        };
+
+        let mut update_domain = match map.get(variable.clone()) {
+            Some(domain) => domain.clone(),
+            None => D::top(),
+        };
+
+        op(&mut update_domain);
+
+        self.set(variable.clone(), update_domain);
+    }
+}
+
+impl<V, D> AbstractDomain for PatriciaTreeMapAbstractEnvironment<V, D>
+where
+    V: Into<BitVec> + Clone,
+    D: Sized + AbstractDomain,
+{
+    fn bottom() -> Self {
+        PatriciaTreeMapAbstractEnvironment::Bottom
+    }
+
+    fn top() -> Self {
+        PatriciaTreeMapAbstractEnvironment::Value(PatriciaTreeMap::new())
+    }
+
+    fn is_bottom(&self) -> bool {
+        matches!(self, PatriciaTreeMapAbstractEnvironment::Bottom)
+    }
+
+    fn is_top(&self) -> bool {
+        match self {
+            PatriciaTreeMapAbstractEnvironment::Value(map) => map.is_empty(),
+            _ => false,
+        }
+    }
+
+    fn leq(&self, rhs: &Self) -> bool {
+        use PatriciaTreeMapAbstractEnvironment::*;
+
+        match (self, rhs) {
+            (Value(self_map), Value(other_map)) => self_map.leq(other_map, &D::top()),
+            (Bottom, _) => true,
+            (_, Bottom) => self.is_bottom(),
+        }
+    }
+
+    fn join_with(&mut self, rhs: Self) {
+        Self::join_like_operation(self, rhs, |d1, d2| d1.join_with(d2));
+    }
+
+    fn meet_with(&mut self, rhs: Self) {
+        Self::meet_like_operation(self, rhs, |d1, d2| d1.meet_with(d2));
+    }
+
+    fn widen_with(&mut self, rhs: Self) {
+        Self::join_like_operation(self, rhs, |d1, d2| d1.widen_with(d2));
+    }
+
+    fn narrow_with(&mut self, rhs: Self) {
+        Self::meet_like_operation(self, rhs, |d1, d2| d1.narrow_with(d2));
+    }
+}
+
+impl<V, D> PatriciaTreeMapAbstractEnvironment<V, D>
+where
+    V: Into<BitVec> + Clone,
+    D: Sized + AbstractDomain,
+{
+    fn join_like_operation(lhs: &mut Self, rhs: Self, operation: impl Fn(&mut D, D)) {
+        use PatriciaTreeMapAbstractEnvironment::*;
+
+        match (lhs, rhs) {
+            (Value(lmap), Value(rmap)) => {
+                lmap.intersect_with(&rmap, |s, t| {
+                    let mut s = s.clone();
+                    operation(&mut s, t.clone());
+                    s
+                });
+            }
+            (lhs @ Bottom, rhs) => *lhs = rhs,
+            (_, Bottom) => {}
+        }
+    }
+
+    fn meet_like_operation(lhs: &mut Self, rhs: Self, operation: impl Fn(&mut D, D)) {
+        use PatriciaTreeMapAbstractEnvironment::*;
+
+        match (lhs, rhs) {
+            (Value(lmap), Value(rmap)) => {
+                lmap.union_with(&rmap, |s, t| {
+                    let mut s = s.clone();
+                    operation(&mut s, t.clone());
+                    s
+                });
+            }
+            (Bottom, _) => {}
+            (lhs, rhs @ Bottom) => {
+                *lhs = rhs;
             }
         }
     }
