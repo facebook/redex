@@ -15,12 +15,12 @@ use crate::datatype::patricia_tree_impl::PatriciaTreePostOrderIterator;
 
 // Interface structs for PatriciaTreeMap. Does not require V to impl Clone.
 #[derive(Clone)]
-pub struct PatriciaTreeMap<K: Into<BitVec>, V: Sized> {
+pub struct PatriciaTreeMap<K: Into<BitVec>, V> {
     storage: PatriciaTree<V>,
     _key_type_phantom: PhantomData<K>,
 }
 
-impl<K: Into<BitVec>, V: Sized> PatriciaTreeMap<K, V> {
+impl<K: Into<BitVec>, V> PatriciaTreeMap<K, V> {
     pub fn new() -> Self {
         Self {
             storage: PatriciaTree::<V>::new(),
@@ -62,26 +62,26 @@ impl<K: Into<BitVec>, V: Sized> PatriciaTreeMap<K, V> {
     }
 }
 
-impl<K: Into<BitVec>, V: Sized> Default for PatriciaTreeMap<K, V> {
+impl<K: Into<BitVec>, V> Default for PatriciaTreeMap<K, V> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<K: Into<BitVec>, V: Sized + Eq> PartialEq for PatriciaTreeMap<K, V> {
+impl<K: Into<BitVec>, V: Eq> PartialEq for PatriciaTreeMap<K, V> {
     fn eq(&self, other: &Self) -> bool {
         self.storage.eq(&other.storage)
     }
 }
 
-impl<K: Into<BitVec>, V: Sized + Eq> Eq for PatriciaTreeMap<K, V> {}
+impl<K: Into<BitVec>, V: Eq> Eq for PatriciaTreeMap<K, V> {}
 
-pub struct PatriciaTreeMapIterator<'a, K: Into<BitVec>, V: Sized> {
+pub struct PatriciaTreeMapIterator<'a, K: Into<BitVec>, V> {
     iter_impl: PatriciaTreePostOrderIterator<'a, V>,
     _key_type_phantom: PhantomData<K>,
 }
 
-impl<'a, K: Into<BitVec>, V: Sized> From<PatriciaTreePostOrderIterator<'a, V>>
+impl<'a, K: Into<BitVec>, V> From<PatriciaTreePostOrderIterator<'a, V>>
     for PatriciaTreeMapIterator<'a, K, V>
 {
     fn from(iter_impl: PatriciaTreePostOrderIterator<'a, V>) -> Self {
@@ -92,7 +92,7 @@ impl<'a, K: Into<BitVec>, V: Sized> From<PatriciaTreePostOrderIterator<'a, V>>
     }
 }
 
-impl<'a, K: 'a + Into<BitVec> + From<&'a BitVec>, V: Sized> Iterator
+impl<'a, K: 'a + Into<BitVec> + From<&'a BitVec>, V> Iterator
     for PatriciaTreeMapIterator<'a, K, V>
 {
     type Item = (K, &'a V);
@@ -103,7 +103,7 @@ impl<'a, K: 'a + Into<BitVec> + From<&'a BitVec>, V: Sized> Iterator
     }
 }
 
-impl<K: Into<BitVec>, V: Sized> FromIterator<(K, V)> for PatriciaTreeMap<K, V> {
+impl<K: Into<BitVec>, V> FromIterator<(K, V)> for PatriciaTreeMap<K, V> {
     fn from_iter<I: IntoIterator<Item = (K, V)>>(iter: I) -> Self {
         let mut ret: PatriciaTreeMap<K, V> = PatriciaTreeMap::new();
         for (k, v) in iter {

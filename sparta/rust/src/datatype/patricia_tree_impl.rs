@@ -15,7 +15,7 @@ use crate::datatype::bitvec::BitVec;
 ///
 /// C. Okasaki, A. Gill. Fast Mergeable Integer Maps. In Workshop on ML (1998).
 
-enum Node<V: Sized> {
+enum Node<V> {
     Leaf {
         key: BitVec,
         value: V,
@@ -29,7 +29,7 @@ enum Node<V: Sized> {
     },
 }
 
-impl<V: Sized + Eq> PartialEq for Node<V> {
+impl<V: Eq> PartialEq for Node<V> {
     fn eq(&self, other: &Self) -> bool {
         use Node::*;
 
@@ -84,7 +84,7 @@ impl<V> ToString for Node<V> {
     }
 }
 
-impl<V: Sized> Node<V> {
+impl<V> Node<V> {
     /// Core algorithm for node insert, update, and removal.
     /// Returns: updated tree.
     ///
@@ -496,11 +496,11 @@ impl<V: Sized> Node<V> {
 
 // Yes, the "deep" clone for a PatriciaTree is a shallow copy!
 #[derive(Clone)]
-pub(crate) struct PatriciaTree<V: Sized> {
+pub(crate) struct PatriciaTree<V> {
     root: Option<Rc<Node<V>>>,
 }
 
-impl<V: Sized> PatriciaTree<V> {
+impl<V> PatriciaTree<V> {
     pub(crate) fn new() -> Self {
         Self { root: None }
     }
@@ -635,7 +635,7 @@ impl<V: Sized> PatriciaTree<V> {
     }
 }
 
-impl<V: Sized + Eq> PartialEq for PatriciaTree<V> {
+impl<V: Eq> PartialEq for PatriciaTree<V> {
     fn eq(&self, other: &Self) -> bool {
         match (self.root.as_ref(), other.root.as_ref()) {
             (None, None) => true,
@@ -647,7 +647,7 @@ impl<V: Sized + Eq> PartialEq for PatriciaTree<V> {
     }
 }
 
-impl<V: Sized + Eq> Eq for PatriciaTree<V> {}
+impl<V: Eq> Eq for PatriciaTree<V> {}
 
 pub(crate) struct PatriciaTreePostOrderIterator<'a, V> {
     branch_stack: Vec<&'a Node<V>>,
