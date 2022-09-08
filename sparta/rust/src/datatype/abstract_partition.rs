@@ -9,7 +9,9 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::hash::Hash;
 
+use crate::datatype::bitvec::BitVec;
 use crate::datatype::AbstractDomain;
+use crate::datatype::PatriciaTreeMap;
 
 /*
  * A partition is a mapping from a set of labels to elements in an abstract
@@ -56,14 +58,14 @@ where
 {
     type ContainerType = HashMap<L, D>;
 
-    fn bindings(&self) -> Option<&HashMap<L, D>> {
+    fn bindings(&self) -> Option<&Self::ContainerType> {
         match self {
             HashMapAbstractPartition::Value(ref map) => Some(map),
             _ => None,
         }
     }
 
-    fn into_bindings(self) -> Option<HashMap<L, D>> {
+    fn into_bindings(self) -> Option<Self::ContainerType> {
         match self {
             HashMapAbstractPartition::Value(map) => Some(map),
             _ => None,
@@ -204,9 +206,9 @@ where
     fn join_like_operation(lhs: &mut Self, rhs: Self, operation: impl Fn(&mut D, D)) {
         use HashMapAbstractPartition::*;
 
-        match (&mut (*lhs), rhs) {
+        match (lhs, rhs) {
             (Top, _) => {}
-            (_, Top) => {
+            (lhs, Top) => {
                 *lhs = Top;
             }
             (Value(l_map), Value(r_map)) => {
@@ -228,8 +230,8 @@ where
     fn meet_like_operation(lhs: &mut Self, rhs: Self, operation: impl Fn(&mut D, D)) {
         use HashMapAbstractPartition::*;
 
-        match (&mut (*lhs), rhs) {
-            (Top, rhs) => {
+        match (lhs, rhs) {
+            (lhs @ Top, rhs) => {
                 *lhs = rhs;
             }
             (_, Top) => {}
@@ -242,6 +244,219 @@ where
                 }
 
                 l_map.retain(|_, l_v| !l_v.is_bottom());
+            }
+        }
+    }
+}
+
+pub enum PatriciaTreeMapAbstractPartition<L: Into<BitVec> + Clone, D: Sized + Eq + AbstractDomain> {
+    Top,
+    Value(PatriciaTreeMap<L, D>), // Use empty map value as bottom
+}
+
+impl<L, D> Clone for PatriciaTreeMapAbstractPartition<L, D>
+where
+    L: Into<BitVec> + Clone,
+    D: Sized + AbstractDomain,
+{
+    fn clone(&self) -> Self {
+        use PatriciaTreeMapAbstractPartition::*;
+
+        match self {
+            Top => Top,
+            Value(map) => Value(map.clone()),
+        }
+    }
+}
+
+impl<L, D> PartialEq for PatriciaTreeMapAbstractPartition<L, D>
+where
+    L: Into<BitVec> + Clone,
+    D: Sized + AbstractDomain,
+{
+    fn eq(&self, rhs: &Self) -> bool {
+        use PatriciaTreeMapAbstractPartition::*;
+
+        match (self, rhs) {
+            (Top, Top) => true,
+            (Value(l_map), Value(r_map)) => l_map == r_map,
+            (_, _) => false,
+        }
+    }
+}
+
+impl<L, D> Eq for PatriciaTreeMapAbstractPartition<L, D>
+where
+    L: Into<BitVec> + Clone,
+    D: Sized + AbstractDomain,
+{
+}
+
+impl<L, D> AbstractPartition<L, D> for PatriciaTreeMapAbstractPartition<L, D>
+where
+    L: Into<BitVec> + Clone,
+    D: Sized + AbstractDomain,
+{
+    type ContainerType = PatriciaTreeMap<L, D>;
+
+    fn bindings(&self) -> Option<&Self::ContainerType> {
+        match self {
+            PatriciaTreeMapAbstractPartition::Value(ref map) => Some(map),
+            _ => None,
+        }
+    }
+
+    fn into_bindings(self) -> Option<Self::ContainerType> {
+        match self {
+            PatriciaTreeMapAbstractPartition::Value(map) => Some(map),
+            _ => None,
+        }
+    }
+
+    fn len(&self) -> usize {
+        self.bindings()
+            .expect("Top abstract domain doesn't have a length!")
+            .len()
+    }
+
+    fn is_empty(&self) -> bool {
+        match self {
+            PatriciaTreeMapAbstractPartition::Top => false,
+            PatriciaTreeMapAbstractPartition::Value(map) => map.is_empty(),
+        }
+    }
+
+    fn get(&self, label: &L) -> Cow<'_, D> {
+        let map = match self {
+            PatriciaTreeMapAbstractPartition::Top => return Cow::Owned(D::top()),
+            PatriciaTreeMapAbstractPartition::Value(map) => map,
+        };
+
+        match map.get(label.clone()) {
+            Some(domain) => Cow::Borrowed(domain),
+            None => Cow::Owned(D::bottom()),
+        }
+    }
+
+    fn set(&mut self, label: L, domain: D) {
+        let map = match self {
+            PatriciaTreeMapAbstractPartition::Top => return,
+            PatriciaTreeMapAbstractPartition::Value(ref mut map) => map,
+        };
+
+        // Save some memory by implicitly storing bottom.
+        if domain.is_bottom() {
+            map.remove(label);
+        } else {
+            map.upsert(label, domain);
+        }
+    }
+
+    fn update(&mut self, label: &L, op: impl FnOnce(&mut D)) {
+        let map = match self {
+            PatriciaTreeMapAbstractPartition::Top => return,
+            PatriciaTreeMapAbstractPartition::Value(ref mut map) => map,
+        };
+
+        let mut update_domain = match map.get(label.clone()) {
+            Some(domain) => domain.clone(),
+            None => D::bottom(),
+        };
+
+        op(&mut update_domain);
+
+        self.set(label.clone(), update_domain);
+    }
+}
+
+impl<L, D> AbstractDomain for PatriciaTreeMapAbstractPartition<L, D>
+where
+    L: Into<BitVec> + Clone,
+    D: Sized + AbstractDomain,
+{
+    fn bottom() -> Self {
+        PatriciaTreeMapAbstractPartition::Value(PatriciaTreeMap::new())
+    }
+
+    fn top() -> Self {
+        PatriciaTreeMapAbstractPartition::Top
+    }
+
+    fn is_bottom(&self) -> bool {
+        match self {
+            PatriciaTreeMapAbstractPartition::Value(map) => map.is_empty(),
+            _ => false,
+        }
+    }
+
+    fn is_top(&self) -> bool {
+        matches!(self, PatriciaTreeMapAbstractPartition::Top)
+    }
+
+    fn leq(&self, rhs: &Self) -> bool {
+        use PatriciaTreeMapAbstractPartition::*;
+
+        match (self, rhs) {
+            (Top, _) => rhs.is_top(),
+            (_, Top) => true,
+            (Value(self_map), Value(other_map)) => self_map.leq(other_map, &D::bottom()),
+        }
+    }
+
+    fn join_with(&mut self, rhs: Self) {
+        Self::join_like_operation(self, rhs, |d1, d2| d1.join_with(d2));
+    }
+
+    fn meet_with(&mut self, rhs: Self) {
+        Self::meet_like_operation(self, rhs, |d1, d2| d1.meet_with(d2));
+    }
+
+    fn widen_with(&mut self, rhs: Self) {
+        Self::join_like_operation(self, rhs, |d1, d2| d1.widen_with(d2));
+    }
+
+    fn narrow_with(&mut self, rhs: Self) {
+        Self::meet_like_operation(self, rhs, |d1, d2| d1.narrow_with(d2));
+    }
+}
+
+impl<L, D> PatriciaTreeMapAbstractPartition<L, D>
+where
+    L: Into<BitVec> + Clone,
+    D: Sized + AbstractDomain,
+{
+    fn join_like_operation(lhs: &mut Self, rhs: Self, operation: impl Fn(&mut D, D)) {
+        use PatriciaTreeMapAbstractPartition::*;
+
+        match (lhs, rhs) {
+            (Top, _) => {}
+            (lhs, rhs @ Top) => {
+                *lhs = rhs;
+            }
+            (Value(lmap), Value(rmap)) => {
+                lmap.union_with(&rmap, |s, t| {
+                    let mut s = s.clone();
+                    operation(&mut s, t.clone());
+                    s
+                });
+            }
+        }
+    }
+
+    fn meet_like_operation(lhs: &mut Self, rhs: Self, operation: impl Fn(&mut D, D)) {
+        use PatriciaTreeMapAbstractPartition::*;
+
+        match (lhs, rhs) {
+            (lhs @ Top, rhs) => {
+                *lhs = rhs;
+            }
+            (_, Top) => {}
+            (Value(lmap), Value(rmap)) => {
+                lmap.intersect_with(&rmap, |s, t| {
+                    let mut s = s.clone();
+                    operation(&mut s, t.clone());
+                    s
+                });
             }
         }
     }
