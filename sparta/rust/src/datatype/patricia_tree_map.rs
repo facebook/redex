@@ -14,7 +14,6 @@ use crate::datatype::patricia_tree_impl::PatriciaTree;
 use crate::datatype::patricia_tree_impl::PatriciaTreePostOrderIterator;
 
 // Interface structs for PatriciaTreeMap. Does not require V to impl Clone.
-#[derive(Clone)]
 pub struct PatriciaTreeMap<K: Into<BitVec>, V> {
     storage: PatriciaTree<V>,
     _key_type_phantom: PhantomData<K>,
@@ -76,6 +75,15 @@ impl<K: Into<BitVec>, V: Eq> PartialEq for PatriciaTreeMap<K, V> {
 
 impl<K: Into<BitVec>, V: Eq> Eq for PatriciaTreeMap<K, V> {}
 
+impl<K: Into<BitVec>, V> Clone for PatriciaTreeMap<K, V> {
+    fn clone(&self) -> Self {
+        Self {
+            storage: self.storage.clone(),
+            ..Default::default()
+        }
+    }
+}
+
 pub struct PatriciaTreeMapIterator<'a, K: Into<BitVec>, V> {
     iter_impl: PatriciaTreePostOrderIterator<'a, V>,
     _key_type_phantom: PhantomData<K>,
@@ -135,5 +143,13 @@ mod tests {
         assert_eq!(*map.get(15).unwrap(), "15".to_string());
         assert_eq!(*map.get(9999).unwrap(), "9999".to_string());
         assert_eq!(map.get(10000), None);
+
+        assert!(map == map);
+        let mut map2 = map.clone();
+        assert!(map == map2);
+        map2.upsert(0xabcdef12, "0xabcdef12".to_owned());
+        assert!(map != map2);
+        map2.remove(0xabcdef12);
+        assert!(map == map2)
     }
 }

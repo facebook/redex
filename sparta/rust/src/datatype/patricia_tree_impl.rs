@@ -494,8 +494,7 @@ impl<V> Node<V> {
     }
 }
 
-// Yes, the "deep" clone for a PatriciaTree is a shallow copy!
-#[derive(Clone)]
+// Create an interface that gives the user a "mutable" illusion of an immutable data structure.
 pub(crate) struct PatriciaTree<V> {
     root: Option<Rc<Node<V>>>,
 }
@@ -631,6 +630,15 @@ impl<V> PatriciaTree<V> {
             (None, _) => true,
             (_, None) => false,
             (Some(s), Some(t)) => Node::is_tree_subset_of(s, t),
+        }
+    }
+}
+
+impl<V> Clone for PatriciaTree<V> {
+    fn clone(&self) -> Self {
+        // Cloning a patricia tree is just cloning the shared reference to the root node.
+        Self {
+            root: self.root.clone(),
         }
     }
 }

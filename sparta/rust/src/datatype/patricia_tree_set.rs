@@ -15,7 +15,6 @@ use crate::datatype::patricia_tree_impl::PatriciaTree;
 use crate::datatype::patricia_tree_impl::PatriciaTreePostOrderIterator;
 
 // Interface structs for PatriciaTree
-#[derive(Clone)]
 pub struct PatriciaTreeSet<K: Into<BitVec>> {
     storage: PatriciaTree<()>,
     _key_type_phantom: PhantomData<K>,
@@ -62,6 +61,15 @@ impl<K: Into<BitVec>> PatriciaTreeSet<K> {
 impl<K: Into<BitVec>> Default for PatriciaTreeSet<K> {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl<K: Into<BitVec>> Clone for PatriciaTreeSet<K> {
+    fn clone(&self) -> Self {
+        Self {
+            storage: self.storage.clone(),
+            ..Default::default()
+        }
     }
 }
 
@@ -159,6 +167,14 @@ mod tests {
         set.insert(10200); // Nothing bad happens
 
         assert_eq!(set.len(), 10001);
+
+        assert!(set == set);
+        let mut set2 = set.clone();
+        assert!(set == set2);
+        set2.insert(0xabcdef12);
+        assert!(set != set2);
+        set2.remove(0xabcdef12);
+        assert!(set == set2)
     }
 
     #[test]
