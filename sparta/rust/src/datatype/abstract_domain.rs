@@ -12,34 +12,22 @@ pub trait AbstractDomain: Clone + Eq {
     fn is_top(&self) -> bool;
     fn leq(&self, rhs: &Self) -> bool;
 
-    fn join(mut self, rhs: Self) -> Self
-    where
-        Self: Sized,
-    {
+    fn join(mut self, rhs: Self) -> Self {
         self.join_with(rhs);
         self
     }
 
-    fn meet(mut self, rhs: Self) -> Self
-    where
-        Self: Sized,
-    {
+    fn meet(mut self, rhs: Self) -> Self {
         self.meet_with(rhs);
         self
     }
 
-    fn widen(mut self, rhs: Self) -> Self
-    where
-        Self: Sized,
-    {
+    fn widen(mut self, rhs: Self) -> Self {
         self.widen_with(rhs);
         self
     }
 
-    fn narrow(mut self, rhs: Self) -> Self
-    where
-        Self: Sized,
-    {
+    fn narrow(mut self, rhs: Self) -> Self {
         self.narrow_with(rhs);
         self
     }
