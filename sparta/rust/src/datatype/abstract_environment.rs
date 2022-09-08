@@ -63,14 +63,14 @@ where
 
     fn bindings(&self) -> Option<&HashMap<V, D>> {
         match self {
-            HashMapAbstractEnvironment::Value(ref map) => Some(map),
+            Self::Value(ref map) => Some(map),
             _ => None,
         }
     }
 
     fn into_bindings(self) -> Option<HashMap<V, D>> {
         match self {
-            HashMapAbstractEnvironment::Value(map) => Some(map),
+            Self::Value(map) => Some(map),
             _ => None,
         }
     }
@@ -82,18 +82,16 @@ where
     }
 
     fn is_empty(&self) -> bool {
-        use HashMapAbstractEnvironment::*;
         match self {
-            Value(map) => map.is_empty(),
-            Bottom => true,
+            Self::Value(map) => map.is_empty(),
+            Self::Bottom => true,
         }
     }
 
     fn get(&self, variable: &V) -> Cow<'_, D> {
-        use HashMapAbstractEnvironment::*;
         let map = match self {
-            Value(map) => map,
-            Bottom => return Cow::Owned(D::bottom()),
+            Self::Value(map) => map,
+            Self::Bottom => return Cow::Owned(D::bottom()),
         };
 
         match map.get(variable) {
@@ -103,12 +101,11 @@ where
     }
 
     fn set(&mut self, variable: V, domain: D) {
-        use HashMapAbstractEnvironment::*;
-        if let Value(map) = self {
+        if let Self::Value(map) = self {
             if domain.is_top() {
                 map.remove(&variable);
             } else if domain.is_bottom() {
-                *self = Bottom;
+                *self = Self::Bottom;
             } else {
                 map.insert(variable, domain);
             }
@@ -116,9 +113,7 @@ where
     }
 
     fn update(&mut self, variable: &V, op: impl FnOnce(&mut D)) {
-        use HashMapAbstractEnvironment::*;
-
-        if let Value(map) = self {
+        if let Self::Value(map) = self {
             match map.get_mut(variable) {
                 Some(explicit_value) => {
                     op(explicit_value);
@@ -126,7 +121,7 @@ where
                         // Use implicit binding
                         map.remove(variable);
                     } else if explicit_value.is_bottom() {
-                        *self = Bottom;
+                        *self = Self::Bottom;
                     }
                 }
                 None => {
@@ -135,7 +130,7 @@ where
                     if domain.is_top() {
                         // Do nothing. Continue to use implicit binding.
                     } else if domain.is_bottom() {
-                        *self = Bottom;
+                        *self = Self::Bottom;
                     } else {
                         map.insert(variable.clone(), domain);
                     }
@@ -151,20 +146,20 @@ where
     D: AbstractDomain,
 {
     fn bottom() -> Self {
-        HashMapAbstractEnvironment::Bottom
+        Self::Bottom
     }
 
     fn top() -> Self {
-        HashMapAbstractEnvironment::Value(HashMap::new())
+        Self::Value(HashMap::new())
     }
 
     fn is_bottom(&self) -> bool {
-        matches!(self, HashMapAbstractEnvironment::Bottom)
+        matches!(self, Self::Bottom)
     }
 
     fn is_top(&self) -> bool {
         match self {
-            HashMapAbstractEnvironment::Value(map) => map.is_empty(),
+            Self::Value(map) => map.is_empty(),
             _ => false,
         }
     }
@@ -279,11 +274,9 @@ where
     D: Sized + AbstractDomain,
 {
     fn clone(&self) -> Self {
-        use PatriciaTreeMapAbstractEnvironment::*;
-
         match self {
-            Value(map) => Value(map.clone()),
-            Bottom => Bottom,
+            Self::Value(map) => Self::Value(map.clone()),
+            Self::Bottom => Self::Bottom,
         }
     }
 }
@@ -294,11 +287,9 @@ where
     D: Sized + AbstractDomain,
 {
     fn eq(&self, rhs: &Self) -> bool {
-        use PatriciaTreeMapAbstractEnvironment::*;
-
         match (self, rhs) {
-            (Value(l_map), Value(r_map)) => l_map == r_map,
-            (Bottom, Bottom) => true,
+            (Self::Value(l_map), Self::Value(r_map)) => l_map == r_map,
+            (Self::Bottom, Self::Bottom) => true,
             (_, _) => false,
         }
     }
@@ -320,14 +311,14 @@ where
 
     fn bindings(&self) -> Option<&PatriciaTreeMap<V, D>> {
         match self {
-            PatriciaTreeMapAbstractEnvironment::Value(ref map) => Some(map),
+            Self::Value(ref map) => Some(map),
             _ => None,
         }
     }
 
     fn into_bindings(self) -> Option<PatriciaTreeMap<V, D>> {
         match self {
-            PatriciaTreeMapAbstractEnvironment::Value(map) => Some(map),
+            Self::Value(map) => Some(map),
             _ => None,
         }
     }
@@ -339,18 +330,16 @@ where
     }
 
     fn is_empty(&self) -> bool {
-        use PatriciaTreeMapAbstractEnvironment::*;
         match self {
-            Value(map) => map.is_empty(),
-            Bottom => true,
+            Self::Value(map) => map.is_empty(),
+            Self::Bottom => true,
         }
     }
 
     fn get(&self, variable: &V) -> Cow<'_, D> {
-        use PatriciaTreeMapAbstractEnvironment::*;
         let map = match self {
-            Value(map) => map,
-            Bottom => return Cow::Owned(D::bottom()),
+            Self::Value(map) => map,
+            Self::Bottom => return Cow::Owned(D::bottom()),
         };
 
         match map.get(variable.clone()) {
@@ -360,12 +349,11 @@ where
     }
 
     fn set(&mut self, variable: V, domain: D) {
-        use PatriciaTreeMapAbstractEnvironment::*;
-        if let Value(map) = self {
+        if let Self::Value(map) = self {
             if domain.is_top() {
                 map.remove(variable);
             } else if domain.is_bottom() {
-                *self = Bottom;
+                *self = Self::Bottom;
             } else {
                 map.upsert(variable, domain);
             }
@@ -373,11 +361,9 @@ where
     }
 
     fn update(&mut self, variable: &V, op: impl FnOnce(&mut D)) {
-        use PatriciaTreeMapAbstractEnvironment::*;
-
         let map = match self {
-            Bottom => return,
-            Value(ref mut map) => map,
+            Self::Bottom => return,
+            Self::Value(ref mut map) => map,
         };
 
         let mut update_domain = match map.get(variable.clone()) {
@@ -397,20 +383,20 @@ where
     D: Sized + AbstractDomain,
 {
     fn bottom() -> Self {
-        PatriciaTreeMapAbstractEnvironment::Bottom
+        Self::Bottom
     }
 
     fn top() -> Self {
-        PatriciaTreeMapAbstractEnvironment::Value(PatriciaTreeMap::new())
+        Self::Value(PatriciaTreeMap::new())
     }
 
     fn is_bottom(&self) -> bool {
-        matches!(self, PatriciaTreeMapAbstractEnvironment::Bottom)
+        matches!(self, Self::Bottom)
     }
 
     fn is_top(&self) -> bool {
         match self {
-            PatriciaTreeMapAbstractEnvironment::Value(map) => map.is_empty(),
+            Self::Value(map) => map.is_empty(),
             _ => false,
         }
     }

@@ -60,14 +60,14 @@ where
 
     fn bindings(&self) -> Option<&Self::ContainerType> {
         match self {
-            HashMapAbstractPartition::Value(ref map) => Some(map),
+            Self::Value(ref map) => Some(map),
             _ => None,
         }
     }
 
     fn into_bindings(self) -> Option<Self::ContainerType> {
         match self {
-            HashMapAbstractPartition::Value(map) => Some(map),
+            Self::Value(map) => Some(map),
             _ => None,
         }
     }
@@ -80,15 +80,15 @@ where
 
     fn is_empty(&self) -> bool {
         match self {
-            HashMapAbstractPartition::Top => false,
-            HashMapAbstractPartition::Value(map) => map.is_empty(),
+            Self::Top => false,
+            Self::Value(map) => map.is_empty(),
         }
     }
 
     fn get(&self, label: &L) -> Cow<'_, D> {
         let map = match self {
-            HashMapAbstractPartition::Top => return Cow::Owned(D::top()),
-            HashMapAbstractPartition::Value(map) => map,
+            Self::Top => return Cow::Owned(D::top()),
+            Self::Value(map) => map,
         };
 
         match map.get(label) {
@@ -99,8 +99,8 @@ where
 
     fn set(&mut self, label: L, domain: D) {
         let map = match self {
-            HashMapAbstractPartition::Top => return,
-            HashMapAbstractPartition::Value(ref mut map) => map,
+            Self::Top => return,
+            Self::Value(ref mut map) => map,
         };
 
         // Save some memory by implicitly storing bottom.
@@ -113,8 +113,8 @@ where
 
     fn update(&mut self, label: &L, op: impl FnOnce(&mut D)) {
         let map = match self {
-            HashMapAbstractPartition::Top => return,
-            HashMapAbstractPartition::Value(ref mut map) => map,
+            Self::Top => return,
+            Self::Value(ref mut map) => map,
         };
 
         match map.get_mut(label) {
@@ -136,22 +136,22 @@ where
     D: AbstractDomain,
 {
     fn bottom() -> Self {
-        HashMapAbstractPartition::Value(HashMap::new())
+        Self::Value(HashMap::new())
     }
 
     fn top() -> Self {
-        HashMapAbstractPartition::Top
+        Self::Top
     }
 
     fn is_bottom(&self) -> bool {
         match self {
-            HashMapAbstractPartition::Value(map) => map.is_empty(),
+            Self::Value(map) => map.is_empty(),
             _ => false,
         }
     }
 
     fn is_top(&self) -> bool {
-        matches!(self, HashMapAbstractPartition::Top)
+        matches!(self, Self::Top)
     }
 
     fn leq(&self, rhs: &Self) -> bool {
@@ -301,14 +301,14 @@ where
 
     fn bindings(&self) -> Option<&Self::ContainerType> {
         match self {
-            PatriciaTreeMapAbstractPartition::Value(ref map) => Some(map),
+            Self::Value(ref map) => Some(map),
             _ => None,
         }
     }
 
     fn into_bindings(self) -> Option<Self::ContainerType> {
         match self {
-            PatriciaTreeMapAbstractPartition::Value(map) => Some(map),
+            Self::Value(map) => Some(map),
             _ => None,
         }
     }
@@ -321,15 +321,15 @@ where
 
     fn is_empty(&self) -> bool {
         match self {
-            PatriciaTreeMapAbstractPartition::Top => false,
-            PatriciaTreeMapAbstractPartition::Value(map) => map.is_empty(),
+            Self::Top => false,
+            Self::Value(map) => map.is_empty(),
         }
     }
 
     fn get(&self, label: &L) -> Cow<'_, D> {
         let map = match self {
-            PatriciaTreeMapAbstractPartition::Top => return Cow::Owned(D::top()),
-            PatriciaTreeMapAbstractPartition::Value(map) => map,
+            Self::Top => return Cow::Owned(D::top()),
+            Self::Value(map) => map,
         };
 
         match map.get(label.clone()) {
@@ -340,8 +340,8 @@ where
 
     fn set(&mut self, label: L, domain: D) {
         let map = match self {
-            PatriciaTreeMapAbstractPartition::Top => return,
-            PatriciaTreeMapAbstractPartition::Value(ref mut map) => map,
+            Self::Top => return,
+            Self::Value(ref mut map) => map,
         };
 
         // Save some memory by implicitly storing bottom.
@@ -354,8 +354,8 @@ where
 
     fn update(&mut self, label: &L, op: impl FnOnce(&mut D)) {
         let map = match self {
-            PatriciaTreeMapAbstractPartition::Top => return,
-            PatriciaTreeMapAbstractPartition::Value(ref mut map) => map,
+            Self::Top => return,
+            Self::Value(ref mut map) => map,
         };
 
         let mut update_domain = match map.get(label.clone()) {
@@ -375,22 +375,22 @@ where
     D: Sized + AbstractDomain,
 {
     fn bottom() -> Self {
-        PatriciaTreeMapAbstractPartition::Value(PatriciaTreeMap::new())
+        Self::Value(PatriciaTreeMap::new())
     }
 
     fn top() -> Self {
-        PatriciaTreeMapAbstractPartition::Top
+        Self::Top
     }
 
     fn is_bottom(&self) -> bool {
         match self {
-            PatriciaTreeMapAbstractPartition::Value(map) => map.is_empty(),
+            Self::Value(map) => map.is_empty(),
             _ => false,
         }
     }
 
     fn is_top(&self) -> bool {
-        matches!(self, PatriciaTreeMapAbstractPartition::Top)
+        matches!(self, Self::Top)
     }
 
     fn leq(&self, rhs: &Self) -> bool {
