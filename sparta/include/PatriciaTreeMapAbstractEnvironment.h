@@ -110,7 +110,8 @@ class PatriciaTreeMapAbstractEnvironment final
     return *this;
   }
 
-  bool map(std::function<Domain(const Domain&)> f) {
+  template <typename Operation> // Domain(const Domain&)
+  bool map(Operation f) {
     if (this->is_bottom()) {
       return false;
     }
@@ -137,9 +138,9 @@ class PatriciaTreeMapAbstractEnvironment final
     return *this;
   }
 
-  PatriciaTreeMapAbstractEnvironment& update(
-      const Variable& variable,
-      std::function<Domain(const Domain&)> operation) {
+  template <typename Operation> // Domain(const Domain&)
+  PatriciaTreeMapAbstractEnvironment& update(const Variable& variable,
+                                             Operation&& operation) {
     if (this->is_bottom()) {
       return *this;
     }
@@ -273,22 +274,25 @@ class MapValue final : public AbstractValue<MapValue<Variable, Domain>> {
     m_map.insert_or_assign(variable, value);
   }
 
-  bool map(std::function<Domain(const Domain&)>& f) { return m_map.map(f); }
+  template <typename Operation> // Domain(const Domain&)
+  bool map(Operation&& f) {
+    return m_map.map(f);
+  }
 
   bool erase_all_matching(const Variable& variable_mask) {
     return m_map.erase_all_matching(variable_mask);
   }
 
-  AbstractValueKind join_like_operation(
-      const MapValue& other,
-      std::function<Domain(const Domain&, const Domain&)> operation) {
+  template <typename Operation> // Domain(const Domain&, const Domain&)
+  AbstractValueKind join_like_operation(const MapValue& other,
+                                        Operation&& operation) {
     m_map.intersection_with(operation, other.m_map);
     return kind();
   }
 
-  AbstractValueKind meet_like_operation(
-      const MapValue& other,
-      std::function<Domain(const Domain&, const Domain&)> operation) {
+  template <typename Operation> // Domain(const Domain&, const Domain&)
+  AbstractValueKind meet_like_operation(const MapValue& other,
+                                        Operation&& operation) {
     try {
       m_map.union_with(
           [&operation](const Domain& x, const Domain& y) {

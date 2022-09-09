@@ -108,8 +108,10 @@ class PatriciaTreeMapAbstractPartition final
   /*
    * This is a no-op if the partition is set to Top.
    */
-  PatriciaTreeMapAbstractPartition& update(
-      const Label& label, std::function<Domain(const Domain&)> operation) {
+
+  template <typename Operation> // Domain(const Domain&)
+  PatriciaTreeMapAbstractPartition& update(const Label& label,
+                                           Operation&& operation) {
     if (is_top()) {
       return *this;
     }
@@ -117,7 +119,8 @@ class PatriciaTreeMapAbstractPartition final
     return *this;
   }
 
-  bool map(std::function<Domain(const Domain&)> f) {
+  template <typename Operation> // Domain(const Domain&)
+  bool map(Operation&& f) {
     if (is_top()) {
       return false;
     }
@@ -175,9 +178,9 @@ class PatriciaTreeMapAbstractPartition final
         other, [](const Domain& x, const Domain& y) { return x.narrowing(y); });
   }
 
-  void join_like_operation(
-      const PatriciaTreeMapAbstractPartition& other,
-      std::function<Domain(const Domain&, const Domain&)> operation) {
+  template <typename Operation> // Domain(const Domain&, const Domain&)
+  void join_like_operation(const PatriciaTreeMapAbstractPartition& other,
+                           Operation&& operation) {
     if (is_top()) {
       return;
     }
@@ -188,9 +191,9 @@ class PatriciaTreeMapAbstractPartition final
     m_map.union_with(operation, other.m_map);
   }
 
-  void meet_like_operation(
-      const PatriciaTreeMapAbstractPartition& other,
-      std::function<Domain(const Domain&, const Domain&)> operation) {
+  template <typename Operation> // Domain(const Domain&, const Domain&)
+  void meet_like_operation(const PatriciaTreeMapAbstractPartition& other,
+                           Operation&& operation) {
     if (is_top()) {
       *this = other;
       return;
@@ -201,9 +204,9 @@ class PatriciaTreeMapAbstractPartition final
     m_map.intersection_with(operation, other.m_map);
   }
 
-  void difference_like_operation(
-      const PatriciaTreeMapAbstractPartition& other,
-      std::function<Domain(const Domain&, const Domain&)> operation) {
+  template <typename Operation> // Domain(const Domain&, const Domain&)
+  void difference_like_operation(const PatriciaTreeMapAbstractPartition& other,
+                                 Operation&& operation) {
     if (other.is_top()) {
       set_to_bottom();
     } else if (is_top()) {

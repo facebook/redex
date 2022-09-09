@@ -85,9 +85,6 @@ class PatriciaTreeMap final {
   using const_pointer = const mapped_type*;
 
   using IntegerType = typename Codec::IntegerType;
-  using combining_function =
-      std::function<mapped_type(const mapped_type&, const mapped_type&)>;
-  using mapping_function = std::function<mapped_type(const mapped_type&)>;
 
   static_assert(std::is_same_v<ValueType, mapped_type>,
                 "ValueType must be equal to Value::type");
@@ -147,14 +144,14 @@ class PatriciaTreeMap final {
     return *this;
   }
 
-  PatriciaTreeMap& update(
-      const std::function<mapped_type(const mapped_type&)>& operation,
-      Key key) {
+  template <typename Operation> // mapped_type(const mapped_type&)
+  PatriciaTreeMap& update(Operation&& operation, Key key) {
     m_core.update(apply_leafs(operation), key);
     return *this;
   }
 
-  bool map(const mapping_function& f) {
+  template <typename MappingFunction> // mapped_type(const mapped_type&)
+  bool map(MappingFunction&& f) {
     return m_core.update_all_leafs(apply_leafs(f));
   }
 
@@ -163,8 +160,8 @@ class PatriciaTreeMap final {
     return *this;
   }
 
-  PatriciaTreeMap& filter(
-      const std::function<bool(const Key&, const ValueType&)>& predicate) {
+  template <typename Predicate> // bool(const Key&, const ValueType&)
+  PatriciaTreeMap& filter(Predicate&& predicate) {
     m_core.filter(predicate);
     return *this;
   }
@@ -173,40 +170,48 @@ class PatriciaTreeMap final {
     return m_core.erase_all_matching(key_mask);
   }
 
-  PatriciaTreeMap& union_with(const combining_function& combine,
+  // Requires CombiningFunction to coerce to
+  // std::function<mapped_type(const mapped_type&, const mapped_type&)>
+  template <typename CombiningFunction>
+  PatriciaTreeMap& union_with(const CombiningFunction& combine,
                               const PatriciaTreeMap& other) {
     m_core.merge(apply_leafs(combine), other.m_core);
     return *this;
   }
 
-  PatriciaTreeMap& intersection_with(const combining_function& combine,
+  template <typename CombiningFunction>
+  PatriciaTreeMap& intersection_with(const CombiningFunction& combine,
                                      const PatriciaTreeMap& other) {
     m_core.intersect(apply_leafs(combine), other.m_core);
     return *this;
   }
 
   // Requires that `combine(bottom, ...) = bottom`.
-  PatriciaTreeMap& difference_with(const combining_function& combine,
+  template <typename CombiningFunction>
+  PatriciaTreeMap& difference_with(const CombiningFunction& combine,
                                    const PatriciaTreeMap& other) {
     m_core.diff(apply_leafs(combine), other.m_core);
     return *this;
   }
 
-  PatriciaTreeMap get_union_with(const combining_function& combine,
+  template <typename CombiningFunction>
+  PatriciaTreeMap get_union_with(const CombiningFunction& combine,
                                  const PatriciaTreeMap& other) const {
     auto result = *this;
     result.union_with(combine, other);
     return result;
   }
 
-  PatriciaTreeMap get_intersection_with(const combining_function& combine,
+  template <typename CombiningFunction>
+  PatriciaTreeMap get_intersection_with(const CombiningFunction& combine,
                                         const PatriciaTreeMap& other) const {
     auto result = *this;
     result.intersection_with(combine, other);
     return result;
   }
 
-  PatriciaTreeMap get_difference_with(const combining_function& combine,
+  template <typename CombiningFunction>
+  PatriciaTreeMap get_difference_with(const CombiningFunction& combine,
                                       const PatriciaTreeMap& other) const {
     auto result = *this;
     result.difference_with(combine, other);

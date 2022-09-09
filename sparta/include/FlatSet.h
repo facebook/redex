@@ -119,7 +119,8 @@ class FlatSet final {
     return *this;
   }
 
-  FlatSet& filter(const std::function<bool(const Element&)>& predicate) {
+  template <typename Predicate> // bool(const Element&)
+  FlatSet& filter(Predicate&& predicate) {
     m_vector.erase(
         std::remove_if(m_vector.begin(), m_vector.end(),
                        [&](const Element& e) { return !predicate(e); }),
