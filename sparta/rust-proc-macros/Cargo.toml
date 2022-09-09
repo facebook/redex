@@ -1,5 +1,6 @@
 [package]
 name = "sparta-proc-macros"
+license = "MIT"
 description = "Rust proc macros"
 version = "0.1.0"
 edition = "2021"
