@@ -118,6 +118,15 @@ impl<K: Into<BitVec>> FromIterator<K> for PatriciaTreeSet<K> {
     }
 }
 
+impl<'a, K: Into<BitVec> + From<&'a BitVec>> IntoIterator for &'a PatriciaTreeSet<K> {
+    type Item = K;
+    type IntoIter = PatriciaTreeSetIterator<'a, K>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
 impl<K> SetAbstractDomainOps for PatriciaTreeSet<K>
 where
     K: Into<BitVec> + Clone,

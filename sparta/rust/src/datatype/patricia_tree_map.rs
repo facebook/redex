@@ -124,6 +124,15 @@ impl<K: Into<BitVec>, V> FromIterator<(K, V)> for PatriciaTreeMap<K, V> {
     }
 }
 
+impl<'a, K: Into<BitVec> + From<&'a BitVec>, V> IntoIterator for &'a PatriciaTreeMap<K, V> {
+    type Item = (K, &'a V);
+    type IntoIter = PatriciaTreeMapIterator<'a, K, V>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
 // Specialized Leq for abstract partitions and environments when D is an abstract domain.
 impl<K: Into<BitVec>, D: AbstractDomain> PatriciaTreeMap<K, D> {
     pub(crate) fn leq(&self, other: &Self, implicit_value: &D) -> bool {
