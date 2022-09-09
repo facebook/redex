@@ -15,6 +15,7 @@ use crate::datatype::patricia_tree_impl::PatriciaTreePostOrderIterator;
 use crate::datatype::AbstractDomain;
 
 // Interface structs for PatriciaTreeMap. Does not require V to impl Clone.
+#[derive(Debug)]
 pub struct PatriciaTreeMap<K: Into<BitVec>, V> {
     storage: PatriciaTree<V>,
     _key_type_phantom: PhantomData<K>,
@@ -85,6 +86,7 @@ impl<K: Into<BitVec>, V> Clone for PatriciaTreeMap<K, V> {
     }
 }
 
+#[derive(Debug)]
 pub struct PatriciaTreeMapIterator<'a, K: Into<BitVec>, V> {
     iter_impl: PatriciaTreePostOrderIterator<'a, V>,
     _key_type_phantom: PhantomData<K>,

@@ -45,7 +45,7 @@ pub trait AbstractPartition<L, D: AbstractDomain>: AbstractDomain {
  *
  * This makes for a much simpler implementation.
  */
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum HashMapAbstractPartition<L: Clone + Eq + Hash, D: AbstractDomain> {
     Top,
     Value(HashMap<L, D>), // Use empty map value as bottom
@@ -249,6 +249,7 @@ where
     }
 }
 
+#[derive(Debug)]
 pub enum PatriciaTreeMapAbstractPartition<L: Into<BitVec> + Clone, D: Sized + Eq + AbstractDomain> {
     Top,
     Value(PatriciaTreeMap<L, D>), // Use empty map value as bottom

@@ -48,7 +48,7 @@ pub trait AbstractEnvironment<V, D: AbstractDomain>: AbstractDomain {
     fn update(&mut self, variable: &V, op: impl Fn(&mut D));
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum HashMapAbstractEnvironment<V: Clone + Eq + Hash, D: AbstractDomain> {
     Value(HashMap<V, D>),
     Bottom,
@@ -262,6 +262,7 @@ where
     }
 }
 
+#[derive(Debug)]
 pub enum PatriciaTreeMapAbstractEnvironment<V: Into<BitVec> + Clone, D: Sized + Eq + AbstractDomain>
 {
     Value(PatriciaTreeMap<V, D>), // Use empty map value as top
