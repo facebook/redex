@@ -385,3 +385,472 @@ mod liveness {
         assert_analysis!(fp, 7, ["a", "b", "y", "z"], ["b", "c", "y", "z"]);
     }
 }
+
+mod numerical {
+    use smallvec::SmallVec;
+    use sparta::datatype::AbstractDomain;
+    use sparta::datatype::AbstractEnvironment;
+    use sparta::datatype::PatriciaTreeMapAbstractEnvironment;
+    use sparta::datatype::PatriciaTreeSet;
+    use sparta::datatype::SetAbstractDomainOps;
+    use sparta::fixpoint_iter::FixpointIteratorTransformer;
+    use sparta::fixpoint_iter::MonotonicFixpointIterator;
+    use sparta::graph::Graph;
+    use sparta::graph::DEFAULT_GRAPH_SUCCS_NUM;
+
+    type NodeId = usize;
+    type EdgeId = usize;
+
+    struct Edge(NodeId, NodeId);
+
+    // For simplicity, we directly use u32 to refer variable.
+    type Variable = u32;
+
+    #[derive(Clone, Copy)]
+    enum Statement {
+        Assignment {
+            var: Variable,
+            value: u32,
+        },
+        Addition {
+            result: Variable,
+            lhs: Variable,
+            rhs: u32,
+        },
+    }
+
+    #[derive(Default)]
+    struct BasicBlock {
+        statements: Vec<Statement>,
+        successors: Vec<EdgeId>,
+        predecessors: Vec<EdgeId>,
+    }
+
+    impl BasicBlock {
+        fn add(&mut self, stmt: Statement) {
+            self.statements.push(stmt);
+        }
+
+        fn statements(&self) -> &[Statement] {
+            self.statements.as_slice()
+        }
+
+        fn successors(&self) -> &[EdgeId] {
+            self.successors.as_slice()
+        }
+
+        fn predecessors(&self) -> &[EdgeId] {
+            self.predecessors.as_slice()
+        }
+    }
+
+    #[derive(Default)]
+    struct Program {
+        basic_blocks: Vec<BasicBlock>,
+        edges: Vec<Edge>,
+        entry: NodeId,
+        exit: NodeId,
+    }
+
+    impl Program {
+        fn create_block(&mut self) -> NodeId {
+            let id = self.basic_blocks.len();
+            let bb = BasicBlock::default();
+            self.basic_blocks.push(bb);
+            id
+        }
+
+        fn get_block_mut(&mut self, n: NodeId) -> &mut BasicBlock {
+            &mut self.basic_blocks[n]
+        }
+
+        fn add_edge(&mut self, source: NodeId, target: NodeId) {
+            let edge_id = self.edges.len();
+            self.edges.push(Edge(source, target));
+            self.basic_blocks[source].successors.push(edge_id);
+            self.basic_blocks[target].predecessors.push(edge_id);
+        }
+
+        fn set_entry(&mut self, entry: NodeId) {
+            self.entry = entry;
+        }
+
+        fn set_exit(&mut self, exit: NodeId) {
+            self.exit = exit;
+        }
+    }
+
+    impl Graph for Program {
+        type NodeId = NodeId;
+        type EdgeId = EdgeId;
+
+        fn entry(&self) -> Self::NodeId {
+            self.entry
+        }
+
+        fn exit(&self) -> Self::NodeId {
+            self.exit
+        }
+
+        fn predecessors(
+            &self,
+            n: Self::NodeId,
+        ) -> SmallVec<[Self::EdgeId; DEFAULT_GRAPH_SUCCS_NUM]> {
+            self.basic_blocks[n]
+                .predecessors()
+                .iter()
+                .copied()
+                .collect()
+        }
+
+        fn successors(&self, n: Self::NodeId) -> SmallVec<[Self::EdgeId; DEFAULT_GRAPH_SUCCS_NUM]> {
+            self.basic_blocks[n].successors().iter().copied().collect()
+        }
+
+        fn source(&self, e: Self::EdgeId) -> Self::NodeId {
+            self.edges[e].0
+        }
+
+        fn target(&self, e: Self::EdgeId) -> Self::NodeId {
+            self.edges[e].1
+        }
+
+        fn size(&self) -> usize {
+            self.basic_blocks.len()
+        }
+    }
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    enum IntegerSetAbstractDomain {
+        Top,
+        Value(PatriciaTreeSet<u32>),
+    }
+
+    impl IntegerSetAbstractDomain {
+        fn insert(&mut self, value: u32) {
+            if let Self::Value(set) = self {
+                set.insert(value);
+            }
+        }
+
+        fn add(lhs: &Self, rhs: &Self) -> Self {
+            match (lhs, rhs) {
+                (Self::Top, _) | (_, Self::Top) => Self::Top,
+                (Self::Value(lset), Self::Value(rset)) => {
+                    if lset.is_empty() || rset.is_empty() {
+                        Self::bottom()
+                    } else {
+                        let mut res = Self::bottom();
+                        for x in lset {
+                            for y in rset {
+                                res.insert(x + y);
+                            }
+                        }
+                        res
+                    }
+                }
+            }
+        }
+    }
+
+    impl AbstractDomain for IntegerSetAbstractDomain {
+        fn bottom() -> Self {
+            IntegerSetAbstractDomain::Value(PatriciaTreeSet::new())
+        }
+
+        fn top() -> Self {
+            IntegerSetAbstractDomain::Top
+        }
+
+        fn is_bottom(&self) -> bool {
+            if let Self::Value(set) = self {
+                return set.is_empty();
+            }
+            false
+        }
+
+        fn is_top(&self) -> bool {
+            matches!(self, Self::Top)
+        }
+
+        fn leq(&self, rhs: &Self) -> bool {
+            match (self, rhs) {
+                (_, Self::Top) => true,
+                (Self::Top, _) => false,
+                (Self::Value(lset), Self::Value(rset)) => {
+                    if lset.is_empty() {
+                        true
+                    } else if rset.is_empty() {
+                        false
+                    } else {
+                        lset.is_subset(rset)
+                    }
+                }
+            }
+        }
+
+        fn join_with(&mut self, rhs: Self) {
+            match (self, rhs) {
+                (Self::Top, _) => {}
+                (lhs @ _, Self::Top) => {
+                    *lhs = Self::Top;
+                }
+                (Self::Value(lset), Self::Value(rset)) => {
+                    if rset.is_empty() {
+                        return;
+                    }
+                    if lset.is_empty() {
+                        *lset = rset;
+                    } else {
+                        lset.union_with(rset);
+                    }
+                }
+            }
+        }
+
+        fn meet_with(&mut self, _rhs: Self) {}
+
+        fn widen_with(&mut self, rhs: Self) {
+            match (&self, rhs) {
+                (Self::Top, _) => {}
+                (_, Self::Top) => {
+                    *self = Self::Top;
+                }
+                (Self::Value(lset), Self::Value(rset)) => {
+                    if rset.is_subset(&lset) {
+                        return;
+                    }
+                    *self = Self::Top;
+                }
+            }
+        }
+
+        fn narrow_with(&mut self, _rhs: Self) {}
+    }
+
+    type IntegerSetAbstractEnvironment =
+        PatriciaTreeMapAbstractEnvironment<u32, IntegerSetAbstractDomain>;
+
+    pub struct IntegerSetTransformer<'a> {
+        prog: &'a Program,
+    }
+
+    impl<'a> IntegerSetTransformer<'a> {
+        fn new(prog: &'a Program) -> Self {
+            Self { prog }
+        }
+
+        fn analyze_statement(&self, stmt: &Statement, env: &mut IntegerSetAbstractEnvironment) {
+            match *stmt {
+                Statement::Assignment { var, value } => {
+                    env.set(var, IntegerSetAbstractDomain::Value([value].into()));
+                }
+                Statement::Addition { result, lhs, rhs } => {
+                    env.set(
+                        result,
+                        IntegerSetAbstractDomain::add(
+                            &env.get(&lhs).into_owned(),
+                            &IntegerSetAbstractDomain::Value([rhs].into()),
+                        ),
+                    );
+                }
+            }
+        }
+    }
+
+    impl<'a> FixpointIteratorTransformer<Program, IntegerSetAbstractEnvironment>
+        for IntegerSetTransformer<'a>
+    {
+        fn analyze_node(&self, n: NodeId, env: &mut IntegerSetAbstractEnvironment) {
+            let bb = &self.prog.basic_blocks[n];
+            for stmt in bb.statements() {
+                self.analyze_statement(stmt, env);
+            }
+        }
+
+        fn analyze_edge(
+            &self,
+            _: EdgeId,
+            env: &IntegerSetAbstractEnvironment,
+        ) -> IntegerSetAbstractEnvironment {
+            env.clone()
+        }
+    }
+
+    /**
+     * bb1: x = 1;
+     *      if (...) {
+     * bb2:   y = x + 1;
+     *      } else {
+     * bb3:   y = x + 2;
+     *      }
+     * bb4: return
+     */
+    fn build_program1() -> Program {
+        let mut program = Program::default();
+        let bb1 = program.create_block();
+        let bb2 = program.create_block();
+        let bb3 = program.create_block();
+        let bb4 = program.create_block();
+
+        let x = 0u32; // "x"
+        let y = 1u32; // "y"
+        program
+            .get_block_mut(bb1)
+            .add(Statement::Assignment { var: x, value: 1 });
+        program.add_edge(bb1, bb2);
+        program.add_edge(bb1, bb3);
+
+        program.get_block_mut(bb2).add(Statement::Addition {
+            result: y,
+            lhs: x,
+            rhs: 1,
+        });
+        program.add_edge(bb2, bb4);
+
+        program.get_block_mut(bb3).add(Statement::Addition {
+            result: y,
+            lhs: x,
+            rhs: 2,
+        });
+        program.add_edge(bb3, bb4);
+
+        program.set_entry(bb1);
+        program.set_exit(bb4);
+
+        program
+    }
+
+    /**
+     * bb1: x = 1;
+     *      while (...) {
+     * bb2:   x = x + 1;
+     *      }
+     * bb3: return
+     */
+    fn build_program2() -> Program {
+        let mut program = Program::default();
+        let bb1 = program.create_block();
+        let bb2 = program.create_block();
+        let bb3 = program.create_block();
+
+        let x = 0u32; // "x"
+        program
+            .get_block_mut(bb1)
+            .add(Statement::Assignment { var: x, value: 1 });
+        program.add_edge(bb1, bb2);
+
+        program.get_block_mut(bb2).add(Statement::Addition {
+            result: x,
+            lhs: x,
+            rhs: 1,
+        });
+        program.add_edge(bb2, bb2);
+        program.add_edge(bb2, bb3);
+
+        program.set_entry(bb1);
+        program.set_exit(bb3);
+
+        program
+    }
+
+    #[test]
+    fn test_fixpoint_iter_integerset_program1() {
+        let prog = build_program1();
+
+        let transformer = IntegerSetTransformer::new(&prog);
+        let mut fp = MonotonicFixpointIterator::new(&prog, 4, transformer, &prog);
+        fp.run(IntegerSetAbstractEnvironment::top());
+
+        let x = 0u32;
+        let y = 1u32;
+
+        let bb1 = 0;
+        assert_eq!(
+            fp.get_entry_state_at(bb1),
+            IntegerSetAbstractEnvironment::top()
+        );
+        assert_eq!(
+            fp.get_exit_state_at(bb1).get(&x).into_owned(),
+            IntegerSetAbstractDomain::Value([1].into())
+        );
+        assert_eq!(
+            fp.get_exit_state_at(bb1).get(&y).into_owned(),
+            IntegerSetAbstractDomain::top()
+        );
+
+        let bb2 = 1;
+        assert_eq!(fp.get_entry_state_at(bb2), fp.get_exit_state_at(bb1));
+        assert_eq!(
+            fp.get_exit_state_at(bb2).get(&x).into_owned(),
+            IntegerSetAbstractDomain::Value([1].into())
+        );
+        assert_eq!(
+            fp.get_exit_state_at(bb2).get(&y).into_owned(),
+            IntegerSetAbstractDomain::Value([2].into())
+        );
+
+        let bb3 = 2;
+        assert_eq!(fp.get_entry_state_at(bb3), fp.get_exit_state_at(bb1));
+        assert_eq!(
+            fp.get_exit_state_at(bb3).get(&x).into_owned(),
+            IntegerSetAbstractDomain::Value([1].into())
+        );
+        assert_eq!(
+            fp.get_exit_state_at(bb3).get(&y).into_owned(),
+            IntegerSetAbstractDomain::Value([3].into())
+        );
+
+        let bb4 = 3;
+        assert_eq!(fp.get_entry_state_at(bb4), fp.get_exit_state_at(bb4));
+        assert_eq!(
+            fp.get_exit_state_at(bb4).get(&x).into_owned(),
+            IntegerSetAbstractDomain::Value([1].into())
+        );
+        assert_eq!(
+            fp.get_exit_state_at(bb4).get(&y).into_owned(),
+            IntegerSetAbstractDomain::Value([2, 3].into())
+        );
+    }
+
+    #[test]
+    fn test_fixpoint_iter_integerset_program2() {
+        let prog = build_program2();
+
+        let transformer = IntegerSetTransformer::new(&prog);
+        let mut fp = MonotonicFixpointIterator::new(&prog, 4, transformer, &prog);
+        fp.run(IntegerSetAbstractEnvironment::top());
+
+        let x = 0u32;
+
+        let bb1 = 0;
+        assert_eq!(
+            fp.get_entry_state_at(bb1),
+            IntegerSetAbstractEnvironment::top()
+        );
+        assert_eq!(
+            fp.get_exit_state_at(bb1).get(&x).into_owned(),
+            IntegerSetAbstractDomain::Value([1].into())
+        );
+
+        let bb2 = 1;
+        assert_eq!(
+            fp.get_entry_state_at(bb2).get(&x).into_owned(),
+            IntegerSetAbstractDomain::top()
+        );
+        assert_eq!(
+            fp.get_exit_state_at(bb2).get(&x).into_owned(),
+            IntegerSetAbstractDomain::top()
+        );
+
+        let bb3 = 2;
+        assert_eq!(
+            fp.get_entry_state_at(bb3).get(&x).into_owned(),
+            IntegerSetAbstractDomain::top()
+        );
+        assert_eq!(
+            fp.get_exit_state_at(bb3).get(&x).into_owned(),
+            IntegerSetAbstractDomain::top()
+        );
+    }
+}

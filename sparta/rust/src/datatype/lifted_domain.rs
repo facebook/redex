@@ -125,8 +125,8 @@ mod tests {
         let mut lifted_top = Domain::lifted(underlying_top);
         let mut lifted_value1 = Domain::lifted(underlying_value1);
         let mut lifted_value2 = Domain::lifted(underlying_value2);
-        let mut lifted_value3 = Domain::lifted(underlying_value3);
-        let mut lifted_value4 = Domain::lifted(underlying_value4);
+        let lifted_value3 = Domain::lifted(underlying_value3);
+        let lifted_value4 = Domain::lifted(underlying_value4);
 
         // Domain::Bottom is equal to Domain::bottom()
         assert!(bottom.leq(&Domain::Bottom));
