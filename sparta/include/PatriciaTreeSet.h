@@ -140,8 +140,8 @@ class PatriciaTreeSet final {
     return *this;
   }
 
-  PatriciaTreeSet& filter(
-      const std::function<bool(const Element&)>& predicate) {
+  template <typename Predicate> // bool(const Element&)
+  PatriciaTreeSet& filter(Predicate&& predicate) {
     m_core.filter([&](Element key, const Empty&) { return predicate(key); });
     return *this;
   }

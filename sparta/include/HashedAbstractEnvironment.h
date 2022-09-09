@@ -143,8 +143,9 @@ class HashedAbstractEnvironment final
     return *this;
   }
 
+  template <typename Operation> // void (Domain*)
   HashedAbstractEnvironment& update(const Variable& variable,
-                                    std::function<void(Domain*)> operation) {
+                                    Operation&& operation) {
     if (this->is_bottom()) {
       return *this;
     }
@@ -338,9 +339,9 @@ class MapValue final
     }
   }
 
-  AbstractValueKind join_like_operation(
-      const MapValue& other,
-      std::function<void(Domain*, const Domain&)> operation) {
+  template <typename Operation> // void(Domain*, const Domain&)
+  AbstractValueKind join_like_operation(const MapValue& other,
+                                        Operation&& operation) {
     for (auto it = m_map.begin(); it != m_map.end();) {
       auto other_binding = other.m_map.find(it->first);
       if (other_binding == other.m_map.end()) {
@@ -364,9 +365,9 @@ class MapValue final
     return kind();
   }
 
-  AbstractValueKind meet_like_operation(
-      const MapValue& other,
-      std::function<void(Domain*, const Domain&)> operation) {
+  template <typename Operation> // void(Domain*, const Domain&)
+  AbstractValueKind meet_like_operation(const MapValue& other,
+                                        Operation&& operation) {
     for (const auto& other_binding : other.m_map) {
       auto binding = m_map.find(other_binding.first);
       if (binding == m_map.end()) {

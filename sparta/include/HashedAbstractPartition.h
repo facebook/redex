@@ -107,8 +107,8 @@ class HashedAbstractPartition final
   /*
    * This is a no-op if the partition is set to Top.
    */
-  HashedAbstractPartition& update(const Label& label,
-                                  std::function<void(Domain*)> operation) {
+  template <typename Operation> // void(Domain*)
+  HashedAbstractPartition& update(const Label& label, Operation&& operation) {
     if (is_top()) {
       return *this;
     }
@@ -205,9 +205,9 @@ class HashedAbstractPartition final
                         [](Domain* x, const Domain& y) { x->narrow_with(y); });
   }
 
-  void join_like_operation(
-      const HashedAbstractPartition& other,
-      std::function<void(Domain*, const Domain&)> operation) {
+  template <typename Operation> // void(Domain*, const Domain&)
+  void join_like_operation(const HashedAbstractPartition& other,
+                           Operation&& operation) {
     if (is_top()) {
       return;
     }
@@ -231,9 +231,9 @@ class HashedAbstractPartition final
     }
   }
 
-  void meet_like_operation(
-      const HashedAbstractPartition& other,
-      std::function<void(Domain*, const Domain&)> operation) {
+  template <typename Operation> // void(Domain*, const Domain&)
+  void meet_like_operation(const HashedAbstractPartition& other,
+                           Operation&& operation) {
     if (is_top()) {
       *this = other;
       return;

@@ -487,8 +487,8 @@ class AbstractDomainScaffolding : public AbstractDomain<Derived> {
   }
 
  private:
-  void join_like_operation_with(const Derived& other,
-                                std::function<void()> operation) {
+  template <typename Operation> // void()
+  void join_like_operation_with(const Derived& other, Operation&& operation) {
     if (is_top() || other.is_bottom()) {
       return;
     }
@@ -504,8 +504,8 @@ class AbstractDomainScaffolding : public AbstractDomain<Derived> {
     operation();
   }
 
-  void meet_like_operation_with(const Derived& other,
-                                std::function<void()> operation) {
+  template <typename Operation> // void()
+  void meet_like_operation_with(const Derived& other, Operation&& operation) {
     if (is_bottom() || other.is_top()) {
       return;
     }

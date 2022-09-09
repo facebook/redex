@@ -637,7 +637,6 @@ inline bool is_tree_leq(
   const auto& t0 = t_branch->left_tree();
   const auto& t1 = t_branch->right_tree();
   if (m == n && p == q) {
-    // The two trees have the same prefix, compare each subtrees.
     return is_tree_leq(s0, t0) && is_tree_leq(s1, t1);
   } else if (m < n && match_prefix(q, p, m)) {
     // The tree t only contains bindings present in a subtree of s, and s has
