@@ -5,6 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+use std::fmt::Debug;
+use std::fmt::Formatter;
+use std::fmt::Result;
 use std::string::ToString;
 
 const POINTER_SIZE_IN_BITS: usize = std::mem::size_of::<usize>() * 8;
@@ -17,6 +20,16 @@ union PointerOrBits {
 pub struct BitVec {
     actual_storage: PointerOrBits,
     len: usize,
+}
+
+impl Debug for BitVec {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        let bits_str = format!("{:#b}", unsafe { self.actual_storage.bits });
+        f.debug_struct("BitVec")
+            .field("actual_storage", &bits_str)
+            .field("len", &self.len)
+            .finish()
+    }
 }
 
 fn make_mask(len: usize) -> usize {

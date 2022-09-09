@@ -16,6 +16,7 @@ use crate::datatype::AbstractDomain;
 ///
 /// C. Okasaki, A. Gill. Fast Mergeable Integer Maps. In Workshop on ML (1998).
 
+#[derive(Debug)]
 enum Node<V> {
     Leaf {
         key: BitVec,
@@ -609,6 +610,7 @@ impl<D: AbstractDomain> Node<D> {
 }
 
 // Create an interface that gives the user a "mutable" illusion of an immutable data structure.
+#[derive(Debug)]
 pub(crate) struct PatriciaTree<V> {
     root: Option<Rc<Node<V>>>,
 }
@@ -780,6 +782,7 @@ impl<V: Eq> PartialEq for PatriciaTree<V> {
 
 impl<V: Eq> Eq for PatriciaTree<V> {}
 
+#[derive(Debug)]
 pub(crate) struct PatriciaTreePostOrderIterator<'a, V> {
     branch_stack: Vec<&'a Node<V>>,
     current: Option<&'a Node<V>>,
