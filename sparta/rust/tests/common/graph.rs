@@ -15,8 +15,8 @@ use smallvec::SmallVec;
 use sparta::graph::Graph;
 use sparta::graph::DEFAULT_GRAPH_SUCCS_NUM;
 
-type NodeId = u32;
-type EdgeId = u32;
+pub type NodeId = u32;
+pub type EdgeId = u32;
 
 pub struct Edge(NodeId, NodeId);
 
