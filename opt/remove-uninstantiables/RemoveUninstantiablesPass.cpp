@@ -109,7 +109,8 @@ class OverriddenVirtualScopesAnalysis {
     }
     auto& res = m_transitively_defined_virtual_scopes[t];
     if (is_instantiated(t)) {
-      auto own_defined_virtual_scopes = defined_virtual_scopes.at_unsafe(t);
+      const auto& own_defined_virtual_scopes =
+          defined_virtual_scopes.at_unsafe(t);
       res.insert(own_defined_virtual_scopes.begin(),
                  own_defined_virtual_scopes.end());
       return;
@@ -117,11 +118,11 @@ class OverriddenVirtualScopesAnalysis {
     std::unordered_map<VirtualScopeId, size_t, VirtualScopeIdHasher> counted;
     auto children_it = instantiable_children.find(t);
     if (children_it != instantiable_children.end()) {
-      auto& children = children_it->second;
+      const auto& children = children_it->second;
       for (auto child : children) {
-        auto& defined_virtual_scopes_of_child =
+        const auto& defined_virtual_scopes_of_child =
             defined_virtual_scopes.at_unsafe(child);
-        for (auto& virtual_scope : defined_virtual_scopes_of_child) {
+        for (const auto& virtual_scope : defined_virtual_scopes_of_child) {
           counted[virtual_scope]++;
         }
         compute_transitively_defined_virtual_scope(
@@ -197,7 +198,8 @@ class OverriddenVirtualScopesAnalysis {
         VirtualScopeId virtual_scope = VirtualScopeId::make(method);
         virtual_scopes.emplace(virtual_scope);
       }
-      defined_virtual_scopes.emplace(cls->get_type(), virtual_scopes);
+      defined_virtual_scopes.emplace(cls->get_type(),
+                                     std::move(virtual_scopes));
     });
 
     for (auto cls : scope) {
@@ -309,9 +311,6 @@ RemoveUninstantiablesPass::compute_scoped_uninstantiable_types(
     if (type::is_uninstantiable_class(cls->get_type())) {
       uninstantiable_types.insert(cls->get_type());
     } else if (is_interface(cls) && !is_interface_instantiable(cls)) {
-      uninstantiable_types.insert(cls->get_type());
-    } else if (is_abstract(cls) && !is_interface(cls) && !cls->is_external() &&
-               !is_native(cls) && !root(cls)) {
       uninstantiable_types.insert(cls->get_type());
     } else {
       instantiable_classes.insert(cls);
