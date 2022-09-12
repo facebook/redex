@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <functional>
 #include <unordered_set>
 #include <vector>
 
@@ -104,6 +105,8 @@ class ClassSplitter final {
   DexClasses additional_classes(const DexClasses& classes);
   void cleanup(const Scope& final_scope);
 
+  void set_instrumentation_callback(std::function<void(DexMethod*)>&& callback);
+
  private:
   struct RelocatableMethodInfo {
     DexClass* target_cls;
@@ -158,6 +161,9 @@ class ClassSplitter final {
   // Accumulated visibility changes that must be applied eventually.
   // This happens locally within prepare().
   std::unique_ptr<VisibilityChanges> m_delayed_visibility_changes;
+
+  // Potentially registered instrumentation callback.
+  std::function<void(DexMethod*)> m_instrumentation_callback;
 
   /**
    * Change visibilities of methods, assuming that`m_visibility_changes` is
