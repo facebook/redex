@@ -143,7 +143,9 @@ class PatriciaTreeNode {
   }
 
  protected:
-  PatriciaTreeNode(bool is_leaf) : m_reference_count(is_leaf ? LEAF_MASK : 0) {}
+  // The reference count begins at 1, accounting for the caller.
+  explicit PatriciaTreeNode(bool is_leaf)
+      : m_reference_count((is_leaf ? LEAF_MASK : 0) + 1) {}
 
  private:
   friend void intrusive_ptr_add_ref(const PatriciaTreeNode* p) {
@@ -234,7 +236,8 @@ class PatriciaTreeLeaf final : public PatriciaTreeNode<IntegerType, Value>,
 
   static inline boost::intrusive_ptr<PatriciaTreeLeaf> make(IntegerType key,
                                                             ValueType value) {
-    return new PatriciaTreeLeaf(key, std::move(value));
+    return boost::intrusive_ptr<PatriciaTreeLeaf>(
+        new PatriciaTreeLeaf(key, std::move(value)), /* add_ref */ false);
   }
 };
 
@@ -316,8 +319,10 @@ class PatriciaTreeBranch final
       IntegerType branching_bit,
       boost::intrusive_ptr<Base> left_tree,
       boost::intrusive_ptr<Base> right_tree) {
-    return new PatriciaTreeBranch(prefix, branching_bit, std::move(left_tree),
-                                  std::move(right_tree));
+    return boost::intrusive_ptr<PatriciaTreeBranch>(
+        new PatriciaTreeBranch(prefix, branching_bit, std::move(left_tree),
+                               std::move(right_tree)),
+        /* add_ref */ false);
   }
 
  private:
