@@ -47,14 +47,12 @@ template <typename Constant>
 class ConstantAbstractValue final
     : public AbstractValue<ConstantAbstractValue<Constant>> {
  public:
-  ~ConstantAbstractValue() {
-    static_assert(std::is_default_constructible<Constant>::value,
-                  "Constant is not default constructible");
-    static_assert(std::is_copy_constructible<Constant>::value,
-                  "Constant is not copy constructible");
-    static_assert(std::is_copy_assignable<Constant>::value,
-                  "Constant is not copy assignable");
-  }
+  static_assert(std::is_default_constructible_v<Constant>,
+                "Constant is not default constructible");
+  static_assert(std::is_copy_constructible_v<Constant>,
+                "Constant is not copy constructible");
+  static_assert(std::is_copy_assignable_v<Constant>,
+                "Constant is not copy assignable");
 
   ConstantAbstractValue() = default;
 
@@ -131,14 +129,12 @@ class ConstantAbstractValueRepr<
   Constant m_constant;
 
  public:
-  ~ConstantAbstractValueRepr() {
-    static_assert(static_cast<size_t>(AbstractValueKind::Bottom) < 4,
-                  "AbstractValueKind doesn't fit into 2 bits");
-    static_assert(static_cast<size_t>(AbstractValueKind::Value) < 4,
-                  "AbstractValueKind doesn't fit into 2 bits");
-    static_assert(static_cast<size_t>(AbstractValueKind::Top) < 4,
-                  "AbstractValueKind doesn't fit into 2 bits");
-  }
+  static_assert(static_cast<size_t>(AbstractValueKind::Bottom) < 4,
+                "AbstractValueKind doesn't fit into 2 bits");
+  static_assert(static_cast<size_t>(AbstractValueKind::Value) < 4,
+                "AbstractValueKind doesn't fit into 2 bits");
+  static_assert(static_cast<size_t>(AbstractValueKind::Top) < 4,
+                "AbstractValueKind doesn't fit into 2 bits");
 
   AbstractValueKind kind() const {
     return static_cast<AbstractValueKind>(
@@ -165,8 +161,6 @@ class ConstantAbstractDomain final
  public:
   using ReprType = acd_impl::ConstantAbstractValueRepr<Constant>;
   using ConstantType = Constant;
-
-  virtual ~ConstantAbstractDomain() {}
 
   ConstantAbstractDomain() { m_repr.set(AbstractValueKind::Top); }
 

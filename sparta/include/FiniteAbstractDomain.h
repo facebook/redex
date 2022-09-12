@@ -104,14 +104,8 @@ class FiniteAbstractDomain final
     : public AbstractDomain<
           FiniteAbstractDomain<Element, Lattice, Encoding, lattice>> {
  public:
-  ~FiniteAbstractDomain() {
-    // The destructor is the only method that is guaranteed to be created when a
-    // class template is instantiated. This is a good place to perform all the
-    // sanity checks on the template parameters.
-    static_assert(
-        std::is_base_of<LatticeEncoding<Element, Encoding>, Lattice>::value,
-        "Lattice doesn't derive from LatticeEncoding");
-  }
+  static_assert(std::is_base_of_v<LatticeEncoding<Element, Encoding>, Lattice>,
+                "Lattice doesn't derive from LatticeEncoding");
 
   /*
    * A default constructor is required in the AbstractDomain specification.
