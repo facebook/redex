@@ -22,12 +22,6 @@ class InterDexPassPlugin {
   // before running its implementation.
   virtual void configure(const Scope&, ConfigFiles&) {}
 
-  // The InterDex pass might create additional classes, e.g. to hold
-  // methods it relocates. Such classes get announced with this callback.
-  // Note that such additional class are not allowed to affect virtual scopes of
-  // classes in the original scope.
-  virtual void add_to_scope(DexClass*) {}
-
   // Will prevent clazz from going into any output dex.
   virtual bool should_skip_class(const DexClass*) { return false; }
 
@@ -61,12 +55,6 @@ class InterDexPassPlugin {
   // Return any new codegened classes that should be added to the current dex.
   virtual DexClasses additional_classes(const DexClassesVector&,
                                         const DexClasses&) {
-    DexClasses empty;
-    return empty;
-  }
-
-  // Return classes that should be added at the end. None, by default.
-  virtual DexClasses leftover_classes() {
     DexClasses empty;
     return empty;
   }

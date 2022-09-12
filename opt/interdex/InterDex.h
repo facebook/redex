@@ -146,7 +146,6 @@ class InterDex {
  private:
   void run_in_force_single_dex_mode();
   bool should_not_relocate_methods_of_class(const DexClass* clazz);
-  void add_to_scope(DexClass* cls);
   bool should_skip_class_due_to_plugin(DexClass* clazz);
 
   struct EmitResult {

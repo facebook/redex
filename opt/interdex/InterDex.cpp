@@ -314,12 +314,6 @@ bool InterDex::should_skip_class_due_to_plugin(DexClass* clazz) {
   return false;
 }
 
-void InterDex::add_to_scope(DexClass* cls) {
-  for (auto& plugin : m_plugins) {
-    plugin->add_to_scope(cls);
-  }
-}
-
 bool InterDex::should_not_relocate_methods_of_class(const DexClass* clazz) {
   for (const auto& plugin : m_plugins) {
     if (plugin->should_not_relocate_methods_of_class(clazz)) {
@@ -835,10 +829,6 @@ void InterDex::init_cross_dex_ref_minimizer_and_relocate_methods() {
       std::vector<DexClass*> relocated_classes;
       m_cross_dex_relocator->relocate_methods(cls, relocated_classes);
       for (DexClass* relocated_cls : relocated_classes) {
-        // Tell all plugins that the new class is now effectively part of the
-        // scope.
-        add_to_scope(relocated_cls);
-
         // It's important to call should_skip_class here, as some plugins
         // build up state for each class via this call.
         always_assert(!should_skip_class_due_to_plugin(relocated_cls));
@@ -1032,18 +1022,6 @@ void InterDex::run() {
   // Now emit the classes that weren't specified in the head or primary list.
   auto remaining_classes_first_dex_idx = m_outdex.size();
   emit_remaining_classes(dex_info, &canary_cls);
-
-  // Add whatever leftovers there are from plugins.
-  for (const auto& plugin : m_plugins) {
-    auto add_classes = plugin->leftover_classes();
-    std::string name = plugin->name();
-    for (DexClass* add_class : add_classes) {
-      TRACE(IDEX, 4, "IDEX: Emitting %s-plugin generated leftover class :: %s",
-            name.c_str(), SHOW(add_class));
-      emit_class(dex_info, add_class, /* check_if_skip */ false,
-                 /* perf_sensitive */ false, &canary_cls);
-    }
-  }
 
   // Emit what is left, if any.
   if (!m_dexes_structure.get_current_dex_classes().empty()) {
