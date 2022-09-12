@@ -77,7 +77,11 @@ def _find_biggest_build_tools_version(base: str) -> typing.Optional[str]:
         key=distutils.version.StrictVersion,
     )
     if version == "0.0.1":
+        logging.debug(
+            "No version found in %s: %s", build_tools, os.listdir(build_tools)
+        )
         return None
+    logging.debug("max build tools version: %s", version)
     return join(build_tools, version)
 
 
@@ -85,25 +89,25 @@ def _filter_none_not_exists_ret_none(
     input: typing.Optional[typing.List[typing.Optional[str]]],
 ) -> typing.Optional[typing.List[str]]:
     if input is None:
+        logging.debug("Filtering an input None to None")
         return None
     filtered = [p for p in input if p and os.path.exists(p)]
-    if filtered:
-        return filtered
-    return None
+    ret_val = filtered if filtered else None
+    logging.debug("Filtered %s to %s = %s", input, filtered, ret_val)
+    return ret_val
 
 
 def find_android_path_by_env() -> typing.Optional[typing.List[str]]:
-    return _filter_none_not_exists_ret_none(
-        [
-            os.environ[key]
-            for key in ["ANDROID_SDK", "ANDROID_HOME"]
-            if key in os.environ
-        ]
-    )
+    env_values: typing.List[typing.Optional[str]] = [
+        os.environ[key] for key in ["ANDROID_SDK", "ANDROID_HOME"] if key in os.environ
+    ]
+    logging.debug("Android ENV values = %s", env_values)
+    return _filter_none_not_exists_ret_none(env_values)
 
 
 def find_android_build_tools_by_env() -> typing.Optional[typing.List[str]]:
     base = find_android_path_by_env()
+    logging.debug("Android Build Tools base by env = %s", base)
     if not base:
         return None
 
@@ -137,7 +141,11 @@ def find_android_path_by_buck() -> typing.Optional[typing.List[str]]:
         logging.debug("Failed loading buckconfig: %s", e)
         return None
     if "android.sdk_path" not in buckconfig:
+        logging.debug("android.sdk_path is not in buckconfig")
         return None
+    logging.debug(
+        "buckconfig android.sdk_path = %s", buckconfig.get("android.sdk_path")
+    )
     return _filter_none_not_exists_ret_none([buckconfig.get("android.sdk_path")])
 
 
@@ -149,16 +157,20 @@ def find_android_build_tools_by_buck() -> typing.Optional[typing.List[str]]:
         logging.debug("Failed loading buckconfig: %s", e)
         return None
     if "android.sdk_path" not in buckconfig:
+        logging.debug("android.sdk_path is not in buckconfig")
         return None
     sdk_path = buckconfig.get("android.sdk_path")
+    logging.debug("buckconfig android.sdk_path = %s", sdk_path)
 
     if "android.build_tools_version" in buckconfig:
         version = buckconfig["android.build_tools_version"]
+        logging.debug("buckconfig android.build_tools_version is %s", version)
         assert isinstance(sdk_path, str)
         return _filter_none_not_exists_ret_none(
             [join(sdk_path, "build-tools", version)]
         )
     else:
+        logging.debug("No android.build_tools_version in buck-config")
         return _filter_none_not_exists_ret_none(
             [_find_biggest_build_tools_version(sdk_path)]
         )
@@ -219,40 +231,52 @@ def get_android_sdk_path() -> str:
 
 
 def find_android_build_tool(tool: str) -> str:
-    attempts: typing.List[str] = []
+    def run() -> typing.Tuple[typing.Optional[str], typing.List[str]]:
+        attempts: typing.List[str] = []
 
-    def try_find(
-        name: str, base_dir_fn: typing.Callable[[], typing.Optional[typing.List[str]]]
-    ) -> typing.Optional[str]:
-        try:
-            if base_dir_fn is None:
-                return None
-            base_dirs = base_dir_fn()
-            if not base_dirs:
-                attempts.append(name + ":<Nothing>")
-                return None
-            for base_dir in base_dirs:
-                candidate = join(base_dir, tool)
-                if os.path.exists(candidate):
-                    return candidate
-                attempts.append(name + ":" + base_dir)
-        except BaseException:
-            pass
-        return None
+        def try_find(
+            name: str,
+            base_dir_fn: typing.Callable[[], typing.Optional[typing.List[str]]],
+        ) -> typing.Optional[str]:
+            try:
+                if base_dir_fn is None:
+                    return None
+                base_dirs = base_dir_fn()
+                if not base_dirs:
+                    attempts.append(name + ":<Nothing>")
+                    return None
+                for base_dir in base_dirs:
+                    candidate = join(base_dir, tool)
+                    if os.path.exists(candidate):
+                        return candidate
+                    attempts.append(name + ":" + base_dir)
+            except BaseException:
+                pass
+            return None
 
-    global _sdk_search_order
-    for name, _, base_tools_fn in _sdk_search_order:
-        logging.debug("Attempting %s to find %s", name, tool)
-        candidate = try_find(name, base_tools_fn)
-        if candidate:
-            return candidate
+        global _sdk_search_order
+        for name, _, base_tools_fn in _sdk_search_order:
+            logging.debug("Attempting %s to find %s", name, tool)
+            candidate = try_find(name, base_tools_fn)
+            if candidate:
+                return candidate, attempts
 
-    # By `PATH`.
-    logging.debug("Attempting PATH to find %s", tool)
-    tool_path = shutil.which(tool)
-    if tool_path is not None:
-        return tool_path
-    attempts.append("PATH")
+        # By `PATH`.
+        logging.debug("Attempting PATH to find %s", tool)
+        tool_path = shutil.which(tool)
+        if tool_path is not None:
+            return tool_path, attempts
+        attempts.append("PATH")
+
+        return None, attempts
+
+    result, attempts = run()
+    if result:
+        return result
+
+    # Re-run for debug messages
+    logging.getLogger().setLevel(logging.DEBUG)
+    run()
 
     raise RuntimeError(f'Could not find {tool}, searched {", ".join(attempts)}')
 
