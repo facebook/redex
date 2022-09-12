@@ -65,7 +65,7 @@ in <a href="https://github.com/facebook/redex/blob/master/config/default.config"
 <span class="hljs-attr">"redex"</span> : {
   <span class="hljs-attr">"passes"</span> : [
     <span class="hljs-string">"ReBindRefsPass"</span>,
-    <span class="hljs-string">"BridgePass"</span>,
+    <span class="hljs-string">"BridgeSynthInlinePass"</span>,
     <span class="hljs-string">"FinalInlinePassV2"</span>,
     <span class="hljs-string">"DelSuperPass"</span>,
     <span class="hljs-string">"SingleImplPass"</span>,
@@ -92,8 +92,7 @@ this config:</p>
 <span class="hljs-attr">"redex"</span> : {
   <span class="hljs-attr">"passes"</span> : [
     <span class="hljs-string">"ReBindRefsPass"</span>,
-    <span class="hljs-string">"BridgePass"</span>,
-    <span class="hljs-string">"SynthPass"</span>,
+    <span class="hljs-string">"BridgeSynthInlinePass"</span>,
     <span class="hljs-string">"FinalInlinePass"</span>,
     <span class="hljs-string">"DelSuperPass"</span>,
     <span class="hljs-string">"SingleImplPass"</span>,
@@ -153,7 +152,7 @@ obfuscated names.</p></li>
 <p>(Note that you run <code>redex-all</code> here, not the <code>redex.py</code> wrapper!)</p>
 <p>This emits a JSON document detailing parameters, their types, defaults and
 possibly documentation.</p>
-</span></div></article></div><div class="docLastUpdate"><em>Last updated on 12/8/2020 by Andreas Gampe</em></div><div class="docs-prevnext"><a class="docs-prev button" href="/docs/installation"><span class="arrow-prev">← </span><span>Installation</span></a><a class="docs-next button" href="/docs/passes"><span>Passes</span><span class="arrow-next"> →</span></a></div></div></div><nav class="onPageNav"></nav></div><footer class="nav-footer" id="footer"><section class="sitemap"><a href="/" class="nav-home"><img src="/img/redex.png" alt="Redex" width="66" height="58"/></a><div class="footerSection"><h5>Docs</h5><a href="
+</span></div></article></div><div class="docLastUpdate"><em>Last updated on 9/12/2022 by Nikolai Tillmann</em></div><div class="docs-prevnext"><a class="docs-prev button" href="/docs/installation"><span class="arrow-prev">← </span><span>Installation</span></a><a class="docs-next button" href="/docs/passes"><span>Passes</span><span class="arrow-next"> →</span></a></div></div></div><nav class="onPageNav"></nav></div><footer class="nav-footer" id="footer"><section class="sitemap"><a href="/" class="nav-home"><img src="/img/redex.png" alt="Redex" width="66" height="58"/></a><div class="footerSection"><h5>Docs</h5><a href="
                 /docs/en/installation">Getting Started</a><a href="
                 /docs/en/configuring">Configuring</a><a href="
                 /docs/en/usage">Using</a><a href="

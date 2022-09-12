@@ -100,8 +100,9 @@ option specifies whether Redex should attempt to match signatures for removal.</
 <ul>
 <li><a href="#systemannokillpass"><code>SystemAnnoKillPass</code></a></li>
 </ul>
-<h2><a class="anchor" aria-hidden="true" id="bridgepass"></a><a href="#bridgepass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>BridgePass</h2>
-<p>BridgePass removes bridge methods created by the <code>javac</code> compiler as part of
+<h2><a class="anchor" aria-hidden="true" id="bridgesynthinlinepass"></a><a href="#bridgesynthinlinepass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>BridgeSynthInlinePass</h2>
+<p>As the name suggests BridgeSynthInlinePass removes bridge and synthetic methods by inlining them.</p>
+<p>Bridge methods are created by the <code>javac</code> compiler as part of
 type erasure for covariant generics.</p>
 <p>Example of a bridge method in pseudo-bytecode:</p>
 <pre><code class="hljs">check-cast*   (for checking covariant arg types)
@@ -109,20 +110,31 @@ invoke-{direct,virtual,static} <span class="hljs-keyword"> bridge</span>d-method
 move-result
 </span>return
 </code></pre>
-<p><code>BridgePass</code> inlines the target of the bridging, the &quot;bridgee&quot;, into the bridge
+<p><code>BridgeSynthInlinePass</code> inlines the target of the bridging, the &quot;bridgee&quot;, into the bridge
 method by replacing the <code>invoke-</code> and adjusting check-casts as needed. The
-bridgee can then be deleted. The optimization is not applied if the bridgee is
-referenced elsewhere in the code.</p>
-<p>Pass ordering dependencies:</p>
-<ul>
-<li><a href="#resultpropagationpass"><code>ResultPropagationPass</code></a> should be run after
-<code>BridgePass</code> to avoid pattern matching conflicts.</li>
-</ul>
-<p>See related:</p>
-<ul>
-<li><a href="#resultpropagationpass"><code>ResultPropagationPass</code></a></li>
-<li><a href="#synthpass"><code>SynthPass</code></a></li>
-</ul>
+bridgee can then be deleted.</p>
+<p><code>BridgeSynthInlinePass</code> also removes synthetic methods introduced by <code>javac</code>. <code>javac</code> generates
+these methods because while Java allows inner classes or nested classes, DEX
+bytecode does not. Inner classes, like <code>class Delta</code> in this example, are
+promoted to top-level classes in the DEX bytecode.</p>
+<pre><code class="hljs css language-java"><span class="hljs-keyword">public</span> <span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">Gamma</span> </span>{
+    <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-title">Gamma</span><span class="hljs-params">(<span class="hljs-keyword">int</span> v)</span> </span>{
+        x = v;
+    }
+    <span class="hljs-keyword">private</span> <span class="hljs-keyword">int</span> x;
+
+    <span class="hljs-keyword">public</span> <span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">Delta</span> </span>{
+        <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">int</span> <span class="hljs-title">doublex</span><span class="hljs-params">()</span> </span>{
+            <span class="hljs-keyword">return</span> <span class="hljs-number">2</span>*x;
+        }
+    }
+}
+</code></pre>
+<p><code>javac</code> generates a synthetic method that allows access to fields, methods, and
+constructors in the promoted class. <code>SynthPass</code> effectively removes these synthetic methods,
+replacing them with a direct access to the field or call to the method or
+constructor.</p>
+<p>The general limitations and the cost model of the inliner applies. As a result, some bridge and synthetic method inlining opportunities might not be acted upon, e.g. when it would result in API-level violations, or an overall size increase.</p>
 <h2><a class="anchor" aria-hidden="true" id="checkbreadcrumbspass"></a><a href="#checkbreadcrumbspass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>CheckBreadcrumbsPass</h2>
 <p><code>CheckBreadcrumbsPass</code> validates Redex codegen against leftover references to
 deleted types, methods, or fields.</p>
@@ -584,28 +596,6 @@ make other passes faster.</li>
 should be run before any inlining passes, and will not optiimize if inlining
 has been performed.</li>
 </ul>
-<h2><a class="anchor" aria-hidden="true" id="synthpass"></a><a href="#synthpass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>SynthPass</h2>
-<p><code>SynthPass</code> removes synthetic methods introduced by <code>javac</code>. <code>javac</code> generates
-these methods because while Java allows inner classes or nested classes, DEX
-bytecode does not. Inner classes, like <code>class Delta</code> in this example, are
-promoted to top-level classes in the DEX bytecode.</p>
-<pre><code class="hljs css language-java"><span class="hljs-keyword">public</span> <span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">Gamma</span> </span>{
-    <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-title">Gamma</span><span class="hljs-params">(<span class="hljs-keyword">int</span> v)</span> </span>{
-        x = v;
-    }
-    <span class="hljs-keyword">private</span> <span class="hljs-keyword">int</span> x;
-
-    <span class="hljs-keyword">public</span> <span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">Delta</span> </span>{
-        <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">int</span> <span class="hljs-title">doublex</span><span class="hljs-params">()</span> </span>{
-            <span class="hljs-keyword">return</span> <span class="hljs-number">2</span>*x;
-        }
-    }
-}
-</code></pre>
-<p><code>javac</code> generates a synthetic method that allows access to fields, methods, and
-constructors in the promoted class. <code>SynthPass</code> removes these synthetic methods,
-replacing them with a direct access to the field or call to the method or
-constructor.</p>
 <h2><a class="anchor" aria-hidden="true" id="trackresourcespass"></a><a href="#trackresourcespass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>TrackResourcesPass</h2>
 <p>An example config file entry:</p>
 <pre><code class="hljs"><span class="hljs-string">"TrackResourcesPass"</span> : {
@@ -621,7 +611,7 @@ constructor.</p>
 <p><code>UnreferencedInterfacesPass</code> removes concrete Interfaces that are not
 referenced anywhere in code except in <code>implements</code> clauses. Interfaces on
 abstract classes are harder to track and are thus considered for optimization.</p>
-</span></div></article></div><div class="docLastUpdate"><em>Last updated on 5/13/2021 by Man Wang</em></div><div class="docs-prevnext"><a class="docs-prev button" href="/docs/configuring"><span class="arrow-prev">← </span><span class="function-name-prevnext">Configuring ReDex</span></a><a class="docs-next button" href="/docs/usage"><span>Usage</span><span class="arrow-next"> →</span></a></div></div></div><nav class="onPageNav"><ul class="toc-headings"><li><a href="#accessmarkingpass">AccessMarkingPass</a></li><li><a href="#annokillpass">AnnoKillPass</a></li><li><a href="#bridgepass">BridgePass</a></li><li><a href="#checkbreadcrumbspass">CheckBreadcrumbsPass</a></li><li><a href="#classmergingpass">ClassMergingPass</a></li><li><a href="#constantpropagationpass">ConstantPropagationPass</a></li><li><a href="#copypropagationpass">CopyPropagationPass</a></li><li><a href="#dedupblockspass">DedupBlocksPass</a></li><li><a href="#delinitpass">DelInitPass</a></li><li><a href="#delsuperpass">DelSuperPass</a></li><li><a href="#finalinlinepassv2">FinalInlinePassV2</a></li><li><a href="#localdcepass">LocalDcePass</a></li><li><a href="#methoddevirtualizationpass">MethodDevirtualizationPass</a></li><li><a href="#obfuscatepass">ObfuscatePass</a></li><li><a href="#optimizeenumspass">OptimizeEnumsPass</a></li><li><a href="#originalnamepass">OriginalNamePass</a></li><li><a href="#peepholepass">PeepholePass</a></li><li><a href="#rebindrefspass">ReBindRefsPass</a></li><li><a href="#reducegotospass">ReduceGotosPass</a></li><li><a href="#regallocpass">RegAllocPass</a></li><li><a href="#removebuilderspass">RemoveBuildersPass</a></li><li><a href="#removeemptyclassespass">RemoveEmptyClassesPass</a></li><li><a href="#removegotospass">RemoveGotosPass</a></li><li><a href="#removeinterfacepass">RemoveInterfacePass</a></li><li><a href="#removeunreachablepass">RemoveUnreachablePass</a></li><li><a href="#removeunusedfieldspass">RemoveUnusedFieldsPass</a></li><li><a href="#removeunusedargspass">RemoveUnusedArgsPass</a></li><li><a href="#renameclassespassv2">RenameClassesPassV2</a></li><li><a href="#reorderinterfacesdeclpass">ReorderInterfacesDeclPass</a></li><li><a href="#resultpropagationpass">ResultPropagationPass</a></li><li><a href="#shortensrcstringspass">ShortenSrcStringsPass</a></li><li><a href="#methodinlinepass">MethodInlinePass</a></li><li><a href="#singleimplpass">SingleImplPass</a></li><li><a href="#staticrelopassv2">StaticReloPassV2</a></li><li><a href="#stringconcatenatorpass">StringConcatenatorPass</a></li><li><a href="#stripdebuginfopass">StripDebugInfoPass</a></li><li><a href="#synthpass">SynthPass</a></li><li><a href="#trackresourcespass">TrackResourcesPass</a></li><li><a href="#unreferencedinterfacespass">UnreferencedInterfacesPass</a></li></ul></nav></div><footer class="nav-footer" id="footer"><section class="sitemap"><a href="/" class="nav-home"><img src="/img/redex.png" alt="Redex" width="66" height="58"/></a><div class="footerSection"><h5>Docs</h5><a href="
+</span></div></article></div><div class="docLastUpdate"><em>Last updated on 9/12/2022 by Nikolai Tillmann</em></div><div class="docs-prevnext"><a class="docs-prev button" href="/docs/configuring"><span class="arrow-prev">← </span><span class="function-name-prevnext">Configuring ReDex</span></a><a class="docs-next button" href="/docs/usage"><span>Usage</span><span class="arrow-next"> →</span></a></div></div></div><nav class="onPageNav"><ul class="toc-headings"><li><a href="#accessmarkingpass">AccessMarkingPass</a></li><li><a href="#annokillpass">AnnoKillPass</a></li><li><a href="#bridgesynthinlinepass">BridgeSynthInlinePass</a></li><li><a href="#checkbreadcrumbspass">CheckBreadcrumbsPass</a></li><li><a href="#classmergingpass">ClassMergingPass</a></li><li><a href="#constantpropagationpass">ConstantPropagationPass</a></li><li><a href="#copypropagationpass">CopyPropagationPass</a></li><li><a href="#dedupblockspass">DedupBlocksPass</a></li><li><a href="#delinitpass">DelInitPass</a></li><li><a href="#delsuperpass">DelSuperPass</a></li><li><a href="#finalinlinepassv2">FinalInlinePassV2</a></li><li><a href="#localdcepass">LocalDcePass</a></li><li><a href="#methoddevirtualizationpass">MethodDevirtualizationPass</a></li><li><a href="#obfuscatepass">ObfuscatePass</a></li><li><a href="#optimizeenumspass">OptimizeEnumsPass</a></li><li><a href="#originalnamepass">OriginalNamePass</a></li><li><a href="#peepholepass">PeepholePass</a></li><li><a href="#rebindrefspass">ReBindRefsPass</a></li><li><a href="#reducegotospass">ReduceGotosPass</a></li><li><a href="#regallocpass">RegAllocPass</a></li><li><a href="#removebuilderspass">RemoveBuildersPass</a></li><li><a href="#removeemptyclassespass">RemoveEmptyClassesPass</a></li><li><a href="#removegotospass">RemoveGotosPass</a></li><li><a href="#removeinterfacepass">RemoveInterfacePass</a></li><li><a href="#removeunreachablepass">RemoveUnreachablePass</a></li><li><a href="#removeunusedfieldspass">RemoveUnusedFieldsPass</a></li><li><a href="#removeunusedargspass">RemoveUnusedArgsPass</a></li><li><a href="#renameclassespassv2">RenameClassesPassV2</a></li><li><a href="#reorderinterfacesdeclpass">ReorderInterfacesDeclPass</a></li><li><a href="#resultpropagationpass">ResultPropagationPass</a></li><li><a href="#shortensrcstringspass">ShortenSrcStringsPass</a></li><li><a href="#methodinlinepass">MethodInlinePass</a></li><li><a href="#singleimplpass">SingleImplPass</a></li><li><a href="#staticrelopassv2">StaticReloPassV2</a></li><li><a href="#stringconcatenatorpass">StringConcatenatorPass</a></li><li><a href="#stripdebuginfopass">StripDebugInfoPass</a></li><li><a href="#trackresourcespass">TrackResourcesPass</a></li><li><a href="#unreferencedinterfacespass">UnreferencedInterfacesPass</a></li></ul></nav></div><footer class="nav-footer" id="footer"><section class="sitemap"><a href="/" class="nav-home"><img src="/img/redex.png" alt="Redex" width="66" height="58"/></a><div class="footerSection"><h5>Docs</h5><a href="
                 /docs/en/installation">Getting Started</a><a href="
                 /docs/en/configuring">Configuring</a><a href="
                 /docs/en/usage">Using</a><a href="
