@@ -172,8 +172,6 @@ struct InconsistentDFGNodesAnalysis
 
 } // namespace
 
-InstructionMatcher::~InstructionMatcher() = default;
-
 const Constraint::Src& Constraint::src(src_index_t ix) const {
   if (ix < m_srcs.size()) {
     if (auto& src = m_srcs[ix]; src.loc != NO_LOC) {

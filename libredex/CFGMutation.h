@@ -186,7 +186,6 @@ class CFGMutation {
   class ChangeSet {
    public:
     explicit ChangeSet(const IRList::iterator& it) : m_it(it) {}
-    ~ChangeSet();
 
     enum class Insert { Before, After, Replacing };
     /// Apply this change on the control flow graph \p cfg, using \p it as the

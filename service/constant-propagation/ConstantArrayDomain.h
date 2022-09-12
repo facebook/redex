@@ -48,6 +48,9 @@ class ConstantArrayDomain final
                                            ArrayValuesDomain>;
   using typename SuperType::ReducedProductAbstractDomain;
 
+  static_assert(std::is_same_v<decltype(Domain::default_value()), Domain>,
+                "Domain::default_value() does not exist");
+
   // Some older compilers complain that the class is not default constructible.
   // We intended to use the default constructors of the base class (via the
   // `using` declaration above), but some compilers fail to catch this. So we
@@ -56,15 +59,6 @@ class ConstantArrayDomain final
 
   static void reduce_product(
       std::tuple<ArrayLengthDomain, ArrayValuesDomain>& domains) {}
-
-  ~ConstantArrayDomain() override {
-    // The destructor is the only method that is guaranteed to be created when
-    // a class template is instantiated. This is a good place to perform all
-    // the sanity checks on the template parameters.
-    static_assert(
-        std::is_same<decltype(Domain::default_value()), Domain>::value,
-        "Domain::default_value() does not exist");
-  }
 
   explicit ConstantArrayDomain(uint32_t length) {
     mutate_array_length(
