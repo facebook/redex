@@ -147,7 +147,6 @@ static void filter_candidates_bridge_synth_only(
       other++;
     }
 
-    // Looks for similar patterns as the legacy BridgePass
     if (field_refs.size() + other == 0 && invoked_methods.size() == 1 &&
         has_bridgelike_access(method)) {
       auto bridgee = (*invoked_methods.begin());

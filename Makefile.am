@@ -298,7 +298,6 @@ libopt_la_SOURCES = \
 	opt/builder_pattern/BuilderTransform.cpp \
 	opt/builder_pattern/RemoveBuilderPattern.cpp \
 	opt/branch-prefix-hoisting/BranchPrefixHoisting.cpp \
-	opt/bridge/Bridge.cpp \
 	opt/check_breadcrumbs/CheckBreadcrumbs.cpp \
 	opt/check-recursion/CheckRecursion.cpp \
 	opt/class-merging/AnonymousClassMergingPass.cpp \
@@ -400,7 +399,6 @@ libopt_la_SOURCES = \
 	opt/string_concatenator/StringConcatenator.cpp \
 	opt/stringbuilder-outliner/StringBuilderOutliner.cpp \
 	opt/strip-debug-info/StripDebugInfo.cpp \
-	opt/synth/Synth.cpp \
 	opt/test_cfg/TestCFG.cpp \
 	opt/track_resources/TrackResources.cpp \
 	opt/throw-propagation/ThrowPropagationPass.cpp \

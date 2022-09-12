@@ -33,11 +33,9 @@
 
 /*
  To understand this test one needs to also look at the file
- Java source file Alpha.java in the same directory.
- This Java source file compiled and a corresponding Dex file
- is created which is an input to this test. This test runs
- the prelimninary ReBindRefsPass pass and then the SynthPass
- which is the subject of this test.
+ Java source files BridgeSynthInline*.java in the same directory.
+ These Java source files is compiled and a corresponding Dex file
+ is created which is an input to this test.
 
  The Alpha class has an inner class Beta and there is an access
  inside Beta to a static field of Alpha which induces a synthetic

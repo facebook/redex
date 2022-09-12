@@ -58,9 +58,11 @@ option specifies whether Redex should attempt to match signatures for removal.
 See related:
 * [`SystemAnnoKillPass`](#systemannokillpass)
 
-## BridgePass
+## BridgeSynthInlinePass
 
-BridgePass removes bridge methods created by the `javac` compiler as part of
+As the name suggests BridgeSynthInlinePass removes bridge and synthetic methods by inlining them.
+
+Bridge methods are created by the `javac` compiler as part of
 type erasure for covariant generics.
 
 Example of a bridge method in pseudo-bytecode:
@@ -71,18 +73,35 @@ move-result
 return
 ```
 
-`BridgePass` inlines the target of the bridging, the "bridgee", into the bridge
+`BridgeSynthInlinePass` inlines the target of the bridging, the "bridgee", into the bridge
 method by replacing the `invoke-` and adjusting check-casts as needed. The
-bridgee can then be deleted. The optimization is not applied if the bridgee is
-referenced elsewhere in the code.
+bridgee can then be deleted.
 
-Pass ordering dependencies:
-* [`ResultPropagationPass`](#resultpropagationpass) should be run after
-  `BridgePass` to avoid pattern matching conflicts.
+`BridgeSynthInlinePass` also removes synthetic methods introduced by `javac`. `javac` generates
+these methods because while Java allows inner classes or nested classes, DEX
+bytecode does not. Inner classes, like `class Delta` in this example, are
+promoted to top-level classes in the DEX bytecode.
 
-See related:
- * [`ResultPropagationPass`](#resultpropagationpass)
- * [`SynthPass`](#synthpass)
+```java
+public class Gamma {
+    public Gamma(int v) {
+        x = v;
+    }
+    private int x;
+
+    public class Delta {
+        public int doublex() {
+            return 2*x;
+        }
+    }
+}
+```
+`javac` generates a synthetic method that allows access to fields, methods, and
+constructors in the promoted class. `SynthPass` effectively removes these synthetic methods,
+replacing them with a direct access to the field or call to the method or
+constructor.
+
+The general limitations and the cost model of the inliner applies. As a result, some bridge and synthetic method inlining opportunities might not be acted upon, e.g. when it would result in API-level violations, or an overall size increase.
 
 ## CheckBreadcrumbsPass
 
@@ -656,32 +675,6 @@ Pass ordering dependencies:
 *  Inlining complicates the flow graph for debug info. `StripDebugInfoPass`
    should be run before any inlining passes, and will not optiimize if inlining
    has been performed.
-
-## SynthPass
-
-`SynthPass` removes synthetic methods introduced by `javac`. `javac` generates
-these methods because while Java allows inner classes or nested classes, DEX
-bytecode does not. Inner classes, like `class Delta` in this example, are
-promoted to top-level classes in the DEX bytecode.
-
-```java
-public class Gamma {
-    public Gamma(int v) {
-        x = v;
-    }
-    private int x;
-
-    public class Delta {
-        public int doublex() {
-            return 2*x;
-        }
-    }
-}
-```
-`javac` generates a synthetic method that allows access to fields, methods, and
-constructors in the promoted class. `SynthPass` removes these synthetic methods,
-replacing them with a direct access to the field or call to the method or
-constructor.
 
 ## TrackResourcesPass
 

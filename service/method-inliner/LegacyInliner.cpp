@@ -67,36 +67,6 @@ IRInstruction* move_result(IRInstruction* res, IRInstruction* move_res) {
   return move;
 }
 
-/*
- * Map the callee's param registers to the argument registers of the caller.
- * Any other callee register N will get mapped to caller_registers_size + N.
- * The resulting callee code can then be appended to the caller's code without
- * any register conflicts.
- */
-void remap_callee_for_tail_call(const IRCode* caller_code,
-                                IRCode* callee_code,
-                                const IRList::iterator& invoke_it) {
-  RegMap reg_map;
-  auto insn = invoke_it->insn;
-  auto callee_reg_start = caller_code->get_registers_size();
-
-  auto param_insns = InstructionIterable(callee_code->get_param_instructions());
-  auto param_it = param_insns.begin();
-  auto param_end = param_insns.end();
-  for (size_t i = 0; i < insn->srcs_size(); ++i, ++param_it) {
-    always_assert_log(param_it != param_end, "no param insns\n%s",
-                      SHOW(callee_code));
-    reg_map[param_it->insn->dest()] = insn->src(i);
-  }
-  for (size_t i = 0; i < callee_code->get_registers_size(); ++i) {
-    if (reg_map.count(i) != 0) {
-      continue;
-    }
-    reg_map[i] = callee_reg_start + i;
-  }
-  transform::remap_registers(callee_code, reg_map);
-}
-
 } // namespace
 
 /*
@@ -358,38 +328,6 @@ void inline_method_unsafe(const DexMethod* caller_method,
   }
   splice.fix_parent_positions();
   TRACE(INL, 5, "post-inline caller code:\n%s", SHOW(caller_code));
-}
-
-void inline_tail_call(DexMethod* caller,
-                      DexMethod* callee,
-                      IRList::iterator pos) {
-  TRACE(INL, 2, "caller: %s\ncallee: %s", SHOW(caller), SHOW(callee));
-  auto* caller_code = caller->get_code();
-  auto* callee_code = callee->get_code();
-
-  remap_callee_for_tail_call(caller_code, callee_code, pos);
-  caller_code->set_registers_size(caller_code->get_registers_size() +
-                                  callee_code->get_registers_size());
-
-  callee_code->cleanup_debug();
-  auto it = callee_code->begin();
-  while (it != callee_code->end()) {
-    auto& mei = *it++;
-    if (mei.type == MFLOW_OPCODE &&
-        opcode::is_a_load_param(mei.insn->opcode())) {
-      continue;
-    }
-    callee_code->erase(callee_code->iterator_to(mei));
-    caller_code->insert_before(pos, mei);
-  }
-  // Delete the vestigial tail.
-  while (pos != caller_code->end()) {
-    if (pos->type == MFLOW_OPCODE) {
-      pos = caller_code->erase_and_dispose(pos);
-    } else {
-      ++pos;
-    }
-  }
 }
 
 } // namespace legacy_inliner
