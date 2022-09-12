@@ -1065,6 +1065,7 @@ void InterDex::run() {
     Json::Value json_file;
     json_file["first_dex"] = json_first_dex;
     json_file["solution"] = json_solution;
+    json_file["mapping"] = m_cross_dex_ref_minimizer.get_json_mapping();
     json_file["classes"] = *json_classes;
     write_string_to_file(
         m_conf.metafile("interdex-cross-ref-minimization.json"),

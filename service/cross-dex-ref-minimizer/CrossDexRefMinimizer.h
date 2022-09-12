@@ -8,6 +8,7 @@
 #pragma once
 
 #include <json/value.h>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -129,6 +130,9 @@ class CrossDexRefMinimizer {
    private:
     std::string m_prefix;
     std::unordered_map<Ref, uint64_t> m_indices;
+    std::string format(uint64_t index) const {
+      return m_prefix + std::to_string(index);
+    }
 
    public:
     explicit JsonRefIndices(std::string prefix) : m_prefix(std::move(prefix)) {}
@@ -137,7 +141,7 @@ class CrossDexRefMinimizer {
       if (index == 0) {
         index = m_indices.size();
       }
-      return m_prefix + std::to_string(index);
+      return format(index);
     }
 
     Json::Value get(const std::vector<Ref>& refs) {
@@ -146,6 +150,12 @@ class CrossDexRefMinimizer {
         res.append(get(ref));
       }
       return res;
+    }
+
+    void get_mapping(Json::Value* res) const {
+      for (const auto& [ref, index] : m_indices) {
+        (*res)[format(index)] = show(ref);
+      }
     }
   };
   JsonRefIndices<DexMethodRef*> m_json_methods{"M"};
@@ -184,6 +194,7 @@ class CrossDexRefMinimizer {
 
   std::string get_json_class_index(DexClass* cls);
   Json::Value get_json_class_indices(const std::vector<DexClass*>& classes);
+  Json::Value get_json_mapping();
   Json::Value* get_json_classes() { return m_json_classes.get(); }
 };
 

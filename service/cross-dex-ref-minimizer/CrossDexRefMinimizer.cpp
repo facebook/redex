@@ -468,4 +468,15 @@ Json::Value CrossDexRefMinimizer::get_json_class_indices(
   return m_json_types.get(types);
 }
 
+Json::Value CrossDexRefMinimizer::get_json_mapping() {
+  // These could be further nested into a ref-specific path,
+  // but it just makes the mapping more annoying to use.
+  Json::Value res = Json::objectValue;
+  m_json_methods.get_mapping(&res);
+  m_json_fields.get_mapping(&res);
+  m_json_types.get_mapping(&res);
+  m_json_strings.get_mapping(&res);
+  return res;
+}
+
 } // namespace cross_dex_ref_minimizer
