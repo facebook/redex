@@ -108,7 +108,7 @@ class ReducedProductAbstractDomain
    * to the constructor circumvents the issue without sacrificing readability.
    */
   explicit ReducedProductAbstractDomain(std::tuple<Domains...> product)
-      : DirectProductAbstractDomain<Derived, Domains...>(product) {
+      : DirectProductAbstractDomain<Derived, Domains...>(std::move(product)) {
     // Since one or more components can be _|_, we need to normalize the
     // representation.
     normalize();

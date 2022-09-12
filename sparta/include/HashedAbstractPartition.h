@@ -93,15 +93,14 @@ class HashedAbstractPartition final
    * This is a no-op if the partition is set to Top.
    */
   HashedAbstractPartition& set(const Label& label, const Domain& value) {
-    if (is_top()) {
-      return *this;
-    }
-    if (value.is_bottom()) {
-      m_map.erase(label);
-    } else {
-      m_map[label] = value;
-    }
-    return *this;
+    return set_internal(label, value);
+  }
+
+  /*
+   * This is a no-op if the partition is set to Top.
+   */
+  HashedAbstractPartition& set(const Label& label, Domain&& value) {
+    return set_internal(label, std::move(value));
   }
 
   /*
@@ -272,6 +271,19 @@ class HashedAbstractPartition final
   }
 
  private:
+  template <typename D>
+  HashedAbstractPartition& set_internal(const Label& label, D&& value) {
+    if (is_top()) {
+      return *this;
+    }
+    if (value.is_bottom()) {
+      m_map.erase(label);
+    } else {
+      m_map.insert_or_assign(label, std::forward<D>(value));
+    }
+    return *this;
+  }
+
   std::unordered_map<Label, Domain, LabelHash, LabelEqual> m_map;
   bool m_is_top{false};
 };

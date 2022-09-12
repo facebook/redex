@@ -93,6 +93,8 @@ class SparseSetValue final
     }
   }
 
+  void add(IntegerType&& element) override { add(element); }
+
   void remove(const IntegerType& element) override {
     if (element < m_capacity) {
       size_t dense_idx = m_sparse[element];
