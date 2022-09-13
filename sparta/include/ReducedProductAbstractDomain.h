@@ -18,6 +18,10 @@
 #include "DirectProductAbstractDomain.h"
 
 namespace sparta {
+namespace rpad_impl {
+template <typename Derived, typename... Domains>
+class ReducedProductAbstractDomainStaticAssert;
+} // namespace rpad_impl
 
 /*
  * The reduced cartesian product of abstract domains D1 x ... x Dn consists of
@@ -90,19 +94,13 @@ namespace sparta {
  */
 template <typename Derived, typename... Domains>
 class ReducedProductAbstractDomain
-    : public DirectProductAbstractDomain<Derived, Domains...> {
+    : public DirectProductAbstractDomain<Derived, Domains...>,
+      private rpad_impl::ReducedProductAbstractDomainStaticAssert<Derived,
+                                                                  Domains...> {
  public:
-  ~ReducedProductAbstractDomain() {
-    // The destructor is the only method that is guaranteed to be created when a
-    // class template is instantiated. This is a good place to perform all the
-    // sanity checks on the template parameters.
-    static_assert(
-        sizeof...(Domains) >= 2,
-        "ReducedProductAbstractDomain requires at least two parameters");
-    static_assert(std::is_void<decltype(Derived::reduce_product(
-                      std::declval<std::tuple<Domains...>&>()))>::value,
-                  "Derived::reduce_product() does not exist");
-  }
+  static_assert(
+      sizeof...(Domains) >= 2,
+      "ReducedProductAbstractDomain requires at least two parameters");
 
   /*
    * Defining a public variadic constructor will invariably lead to instances of
@@ -215,5 +213,17 @@ class ReducedProductAbstractDomain
     }
   }
 };
+
+namespace rpad_impl {
+template <typename Derived, typename... Domains>
+class ReducedProductAbstractDomainStaticAssert {
+ protected:
+  ~ReducedProductAbstractDomainStaticAssert() {
+    static_assert(std::is_void_v<decltype(Derived::reduce_product(
+                      std::declval<std::tuple<Domains...>&>()))>,
+                  "Derived::reduce_product() does not exist");
+  }
+};
+} // namespace rpad_impl
 
 } // namespace sparta

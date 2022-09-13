@@ -200,15 +200,10 @@ class SparseSetAbstractDomain final
  public:
   using Value = ssad_impl::SparseSetValue<IntegerType>;
 
-  ~SparseSetAbstractDomain() {
-    // The destructor is the only method that is guaranteed to be created when
-    // a class template is instantiated. This is a good place to perform all
-    // the sanity checks on the template parameters.
-    static_assert(std::is_unsigned<IntegerType>::value,
-                  "IntegerType is not an unsigned arihmetic type");
-    static_assert(sizeof(IntegerType) <= sizeof(size_t),
-                  "IntegerType is too large");
-  }
+  static_assert(std::is_unsigned_v<IntegerType>,
+                "IntegerType is not an unsigned arihmetic type");
+  static_assert(sizeof(IntegerType) <= sizeof(size_t),
+                "IntegerType is too large");
 
   SparseSetAbstractDomain()
       : PowersetAbstractDomain<IntegerType,
