@@ -173,13 +173,13 @@ WholeProgramState::WholeProgramState(
     const std::unordered_set<DexMethod*>& non_true_virtuals,
     const std::unordered_set<const DexType*>& field_blocklist,
     const std::unordered_set<const DexField*>& definitely_assigned_ifields,
-    const call_graph::Graph& call_graph)
+    std::shared_ptr<const call_graph::Graph> call_graph)
     : WholeProgramState(scope,
                         fp_iter,
                         non_true_virtuals,
                         field_blocklist,
                         definitely_assigned_ifields) {
-  m_call_graph = call_graph;
+  m_call_graph = std::move(call_graph);
 }
 /*
  * Walk over the entire program, doing a join over the values written to each

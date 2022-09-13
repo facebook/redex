@@ -56,10 +56,10 @@ void FixpointIterator::analyze_node(call_graph::NodeId const& node,
   auto& cfg = code->cfg();
   auto intra_cp = get_intraprocedural_analysis(method);
   const auto outgoing_edges =
-      call_graph::GraphInterface::successors(m_call_graph, node);
+      call_graph::GraphInterface::successors(*m_call_graph, node);
   std::unordered_set<IRInstruction*> outgoing_insns;
   for (const auto& edge : outgoing_edges) {
-    if (edge->callee() == m_call_graph.exit()) {
+    if (edge->callee() == m_call_graph->exit()) {
       continue; // ghost edge to the ghost exit node
     }
     outgoing_insns.emplace(edge->invoke_insn());
@@ -101,8 +101,8 @@ std::unique_ptr<intraprocedural::FixpointIterator>
 FixpointIterator::get_intraprocedural_analysis(const DexMethod* method) const {
   auto args = Domain::bottom();
 
-  if (m_call_graph.has_node(method)) {
-    args = this->get_entry_state_at(m_call_graph.node(method));
+  if (m_call_graph->has_node(method)) {
+    args = this->get_entry_state_at(m_call_graph->node(method));
   }
 
   return m_proc_analysis_factory(method,

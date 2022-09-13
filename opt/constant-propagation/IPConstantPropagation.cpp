@@ -127,12 +127,15 @@ std::unique_ptr<FixpointIterator> PassImpl::analyze(
     const ImmutableAttributeAnalyzerState* immut_analyzer_state,
     const ApiLevelAnalyzerState* api_level_analyzer_state) {
   auto method_override_graph = mog::build_graph(scope);
-  call_graph::Graph cg =
+  auto cg =
       m_config.use_multiple_callee_callgraph
-          ? call_graph::multiple_callee_graph(*method_override_graph, scope,
-                                              m_config.big_override_threshold)
-          : call_graph::single_callee_graph(*method_override_graph, scope);
-  auto cg_stats = get_num_nodes_edges(cg);
+          ? std::make_shared<call_graph::Graph>(
+                call_graph::multiple_callee_graph(
+                    *method_override_graph, scope,
+                    m_config.big_override_threshold))
+          : std::make_shared<call_graph::Graph>(
+                call_graph::single_callee_graph(*method_override_graph, scope));
+  auto cg_stats = get_num_nodes_edges(*cg);
   m_stats.callgraph_nodes = cg_stats.num_nodes;
   m_stats.callgraph_edges = cg_stats.num_edges;
   m_stats.callgraph_callsites = cg_stats.num_callsites;

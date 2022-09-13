@@ -59,7 +59,7 @@ class WholeProgramState {
                     const std::unordered_set<DexMethod*>&,
                     const std::unordered_set<const DexType*>&,
                     const std::unordered_set<const DexField*>&,
-                    const call_graph::Graph& call_graph);
+                    std::shared_ptr<const call_graph::Graph> call_graph);
 
   /*
    * If we only have knowledge of the constant values in a single class --
@@ -117,11 +117,10 @@ class WholeProgramState {
     return m_method_partition;
   }
 
-  bool has_call_graph() const { return m_call_graph != boost::none; }
+  bool has_call_graph() const { return !!m_call_graph; }
 
   ConstantValue get_return_value_from_cg(const IRInstruction* insn) const {
-    auto callees =
-        call_graph::resolve_callees_in_graph(m_call_graph.get(), insn);
+    auto callees = call_graph::resolve_callees_in_graph(*m_call_graph, insn);
     if (callees.empty()) {
       return ConstantValue::top();
     }
@@ -140,7 +139,7 @@ class WholeProgramState {
   }
 
   bool method_is_dynamic(const DexMethod* method) const {
-    return call_graph::method_is_dynamic(m_call_graph.get(), method);
+    return call_graph::method_is_dynamic(*m_call_graph, method);
   }
 
  private:
@@ -163,7 +162,7 @@ class WholeProgramState {
       ConcurrentMap<const DexMethod*, std::vector<ConstantValue>>*
           methods_value_tmp);
 
-  boost::optional<call_graph::Graph> m_call_graph;
+  std::shared_ptr<const call_graph::Graph> m_call_graph;
 
   // Unknown fields and methods will be treated as containing / returning Top.
   std::unordered_set<const DexField*> m_known_fields;
