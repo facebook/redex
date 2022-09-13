@@ -144,7 +144,6 @@ class PatriciaTreeNode {
 
  protected:
   PatriciaTreeNode(bool is_leaf) : m_reference_count(is_leaf ? LEAF_MASK : 0) {}
-  ~PatriciaTreeNode() = default;
 
  private:
   friend void intrusive_ptr_add_ref(const PatriciaTreeNode* p) {

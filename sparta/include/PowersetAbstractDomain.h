@@ -16,6 +16,13 @@
 #include "AbstractDomain.h"
 
 namespace sparta {
+namespace pad_impl {
+template <typename Element,
+          typename Powerset,
+          typename Snapshot,
+          typename Derived>
+class PowersetAbstractDomainStaticAssert;
+} // namespace pad_impl
 
 /*
  * The definition of an abstract value belonging to a powerset abstract domain.
@@ -68,23 +75,12 @@ template <typename Element,
           typename Snapshot,
           typename Derived>
 class PowersetAbstractDomain
-    : public AbstractDomainScaffolding<Powerset, Derived> {
+    : public AbstractDomainScaffolding<Powerset, Derived>,
+      private pad_impl::PowersetAbstractDomainStaticAssert<Element,
+                                                           Powerset,
+                                                           Snapshot,
+                                                           Derived> {
  public:
-  virtual ~PowersetAbstractDomain() {
-    // The destructor is the only method that is guaranteed to be created when a
-    // class template is instantiated. This is a good place to perform all the
-    // sanity checks on the template parameters.
-    static_assert(
-        std::is_base_of<PowersetImplementation<Element, Snapshot, Powerset>,
-                        Powerset>::value,
-        "Powerset doesn't inherit from PowersetImplementation");
-    static_assert(
-        std::is_base_of<
-            PowersetAbstractDomain<Element, Powerset, Snapshot, Derived>,
-            Derived>::value,
-        "Derived doesn't inherit from PowersetAbstractDomain");
-  }
-
   /*
    * This constructor produces the empty set, which is distinct from Bottom.
    */
@@ -200,5 +196,28 @@ class PowersetAbstractDomain
     return o;
   }
 };
+
+namespace pad_impl {
+
+template <typename Element,
+          typename Powerset,
+          typename Snapshot,
+          typename Derived>
+class PowersetAbstractDomainStaticAssert {
+ protected:
+  ~PowersetAbstractDomainStaticAssert() {
+    static_assert(
+        std::is_base_of_v<PowersetImplementation<Element, Snapshot, Powerset>,
+                          Powerset>,
+        "Powerset doesn't inherit from PowersetImplementation");
+    static_assert(
+        std::is_base_of_v<
+            PowersetAbstractDomain<Element, Powerset, Snapshot, Derived>,
+            Derived>,
+        "Derived doesn't inherit from PowersetAbstractDomain");
+  }
+};
+
+} // namespace pad_impl
 
 } // namespace sparta

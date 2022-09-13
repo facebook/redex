@@ -43,14 +43,8 @@ namespace sparta {
 template <typename Derived, typename... Domains>
 class DirectProductAbstractDomain : public AbstractDomain<Derived> {
  public:
-  ~DirectProductAbstractDomain() {
-    // The destructor is the only method that is guaranteed to be created when a
-    // class template is instantiated. This is a good place to perform all the
-    // sanity checks on the template parameters.
-    static_assert(
-        sizeof...(Domains) >= 2,
-        "DirectProductAbstractDomain requires at least two parameters");
-  }
+  static_assert(sizeof...(Domains) >= 2,
+                "DirectProductAbstractDomain requires at least two parameters");
 
   /*
    * Defining a public variadic constructor will invariably lead to instances of

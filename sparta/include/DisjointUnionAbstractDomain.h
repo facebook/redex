@@ -10,11 +10,16 @@
 #include <boost/optional.hpp>
 #include <boost/variant.hpp>
 #include <sstream>
+#include <type_traits>
 
 #include "AbstractDomain.h"
 
 // Forward declarations.
 namespace sparta {
+namespace duad_impl {
+template <typename FirstDomain, typename... Domains>
+class DisjointUnionAbstractDomainStaticAssert;
+} // namespace duad_impl
 
 template <typename FirstDomain, typename... Domains>
 class DisjointUnionAbstractDomain;
@@ -51,23 +56,15 @@ namespace sparta {
 template <typename FirstDomain, typename... Domains>
 class DisjointUnionAbstractDomain final
     : public AbstractDomain<
-          DisjointUnionAbstractDomain<FirstDomain, Domains...>> {
+          DisjointUnionAbstractDomain<FirstDomain, Domains...>>,
+      private duad_impl::DisjointUnionAbstractDomainStaticAssert<FirstDomain,
+                                                                 Domains...> {
 
  public:
   DisjointUnionAbstractDomain() : m_variant(FirstDomain::top()) {}
 
   template <typename Domain>
   /* implicit */ DisjointUnionAbstractDomain(Domain d) : m_variant(d) {}
-
-  ~DisjointUnionAbstractDomain() {
-    static_assert(
-        std::is_base_of<AbstractDomain<FirstDomain>, FirstDomain>::value,
-        "All members of the disjoint union must inherit from AbstractDomain");
-    static_assert(
-        all_true<(std::is_base_of<AbstractDomain<Domains>,
-                                  Domains>::value)...>::value,
-        "All members of the disjoint union must inherit from AbstractDomain");
-  }
 
   static DisjointUnionAbstractDomain top() {
     return DisjointUnionAbstractDomain(FirstDomain::top());
@@ -186,14 +183,6 @@ class DisjointUnionAbstractDomain final
                                     const DisjointUnionAbstractDomain<Ts...>&);
 
  private:
-  // Check if all template parameters are true (see
-  // https://stackoverflow.com/questions/28253399/check-traits-for-all-variadic-template-arguments/28253503#28253503)
-  template <bool...>
-  struct bool_pack;
-
-  template <bool... v>
-  using all_true = std::is_same<bool_pack<true, v...>, bool_pack<v..., true>>;
-
   boost::variant<FirstDomain, Domains...> m_variant;
 };
 
@@ -211,6 +200,18 @@ std::ostream& operator<<(
 namespace sparta {
 
 namespace duad_impl {
+
+template <typename FirstDomain, typename... Domains>
+class DisjointUnionAbstractDomainStaticAssert {
+ protected:
+  ~DisjointUnionAbstractDomainStaticAssert() {
+    static_assert(
+        std::conjunction_v<
+            std::is_base_of<AbstractDomain<FirstDomain>, FirstDomain>,
+            std::is_base_of<AbstractDomain<Domains>, Domains>...>,
+        "All members of the disjoint union must inherit from AbstractDomain");
+  }
+};
 
 /*
  * Top and Bottom are canonicalized via the leq and equals predicates, which
