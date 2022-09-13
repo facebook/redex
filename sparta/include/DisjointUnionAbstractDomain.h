@@ -64,7 +64,8 @@ class DisjointUnionAbstractDomain final
   DisjointUnionAbstractDomain() : m_variant(FirstDomain::top()) {}
 
   template <typename Domain>
-  /* implicit */ DisjointUnionAbstractDomain(Domain d) : m_variant(d) {}
+  /* implicit */ DisjointUnionAbstractDomain(Domain d)
+      : m_variant(std::move(d)) {}
 
   static DisjointUnionAbstractDomain top() {
     return DisjointUnionAbstractDomain(FirstDomain::top());

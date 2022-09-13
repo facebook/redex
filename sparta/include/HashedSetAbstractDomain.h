@@ -35,7 +35,7 @@ class SetValue final : public PowersetImplementation<
 
   SetValue() = default;
 
-  SetValue(const Element& e) { set().insert(e); }
+  SetValue(Element e) { add(std::move(e)); }
 
   SetValue(std::initializer_list<Element> l) {
     if (l.begin() != l.end()) {
@@ -74,7 +74,9 @@ class SetValue final : public PowersetImplementation<
     return m_set && m_set->count(e) > 0;
   }
 
-  void add(const Element& e) override { set().insert(e); }
+  void add(const Element& e) override { set().emplace(e); }
+
+  void add(Element&& e) override { set().emplace(std::move(e)); }
 
   void remove(const Element& e) override {
     if (m_set) {
@@ -199,8 +201,8 @@ class HashedSetAbstractDomain final
                                const std::unordered_set<Element, Hash, Equal>&,
                                HashedSetAbstractDomain>(kind) {}
 
-  explicit HashedSetAbstractDomain(const Element& e) {
-    this->set_to_value(Value(e));
+  explicit HashedSetAbstractDomain(Element e) {
+    this->set_to_value(Value(std::move(e)));
   }
 
   explicit HashedSetAbstractDomain(std::initializer_list<Element> l) {

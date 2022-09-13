@@ -455,9 +455,9 @@ class AbstractDomainScaffolding
 
   const Value* get_value() const { return &m_value; }
 
-  void set_to_value(const Value& value) {
+  void set_to_value(Value value) {
     m_kind = value.kind();
-    m_value = value;
+    m_value = std::move(value);
   }
 
   // In some implementations, the data structure chosen to represent an abstract

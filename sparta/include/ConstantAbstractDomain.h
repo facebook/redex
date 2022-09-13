@@ -56,8 +56,8 @@ class ConstantAbstractValue final
 
   ConstantAbstractValue() = default;
 
-  explicit ConstantAbstractValue(const Constant& constant)
-      : m_constant(constant) {}
+  explicit ConstantAbstractValue(Constant constant)
+      : m_constant(std::move(constant)) {}
 
   void clear() override {}
 

@@ -98,16 +98,12 @@ class PatriciaTreeMapAbstractEnvironment final
 
   PatriciaTreeMapAbstractEnvironment& set(const Variable& variable,
                                           const Domain& value) {
-    if (this->is_bottom()) {
-      return *this;
-    }
-    if (value.is_bottom()) {
-      this->set_to_bottom();
-      return *this;
-    }
-    this->get_value()->insert_binding(variable, value);
-    this->normalize();
-    return *this;
+    return set_internal(variable, value);
+  }
+
+  PatriciaTreeMapAbstractEnvironment& set(const Variable& variable,
+                                          Domain&& value) {
+    return set_internal(variable, std::move(value));
   }
 
   template <typename Operation> // Domain(const Domain&)
@@ -168,6 +164,22 @@ class PatriciaTreeMapAbstractEnvironment final
   static PatriciaTreeMapAbstractEnvironment top() {
     return PatriciaTreeMapAbstractEnvironment(AbstractValueKind::Top);
   }
+
+ private:
+  template <typename D>
+  PatriciaTreeMapAbstractEnvironment& set_internal(const Variable& variable,
+                                                   D&& value) {
+    if (this->is_bottom()) {
+      return *this;
+    }
+    if (value.is_bottom()) {
+      this->set_to_bottom();
+      return *this;
+    }
+    this->get_value()->insert_binding(variable, std::forward<D>(value));
+    this->normalize();
+    return *this;
+  }
 };
 
 } // namespace sparta
@@ -227,8 +239,8 @@ class MapValue final : public AbstractValue<MapValue<Variable, Domain>> {
 
   MapValue() = default;
 
-  MapValue(const Variable& variable, const Domain& value) {
-    insert_binding(variable, value);
+  MapValue(const Variable& variable, Domain value) {
+    insert_binding(variable, std::move(value));
   }
 
   void clear() override { m_map.clear(); }
@@ -268,10 +280,10 @@ class MapValue final : public AbstractValue<MapValue<Variable, Domain>> {
   }
 
  private:
-  void insert_binding(const Variable& variable, const Domain& value) {
+  void insert_binding(const Variable& variable, Domain value) {
     // The Bottom value is handled by the caller and should never occur here.
     RUNTIME_CHECK(!value.is_bottom(), internal_error());
-    m_map.insert_or_assign(variable, value);
+    m_map.insert_or_assign(variable, std::move(value));
   }
 
   template <typename Operation> // Domain(const Domain&)

@@ -67,6 +67,8 @@ class PatriciaTreeSet final {
 
   PatriciaTreeSet() = default;
 
+  explicit PatriciaTreeSet(Element e) { insert(std::move(e)); }
+
   explicit PatriciaTreeSet(std::initializer_list<Element> l) {
     for (Element x : l) {
       insert(x);
