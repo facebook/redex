@@ -315,8 +315,12 @@ TEST_F(CheckBreadcrumbsTest, CrossStoreValidityTest) {
                         /* verify_type_hierarchies= */ false,
                         /* verify_proto_cross_dex= */ false,
                         /* enforce_allowed_violations_file= */ false);
-  EXPECT_EQ(bc_shared.is_illegal_cross_store(type_s_A_B, type_s_A_B_C), false);
-  EXPECT_EQ(bc_shared.is_illegal_cross_store(type_s_B_C, type_s_A_B), true);
+  EXPECT_EQ(bc_shared.is_illegal_cross_store(type_s_A_B, type_s_A_B_C).first,
+            false);
+  EXPECT_EQ(bc_shared.is_illegal_cross_store(type_s_B_C, type_s_A_B).first,
+            true);
+  EXPECT_EQ(bc_shared.is_illegal_cross_store(type_s_B_C, type_s_A_B).second,
+            type_s_A_B);
 
   // standard behavior
   Breadcrumbs bc_standard(scope,
@@ -328,6 +332,9 @@ TEST_F(CheckBreadcrumbsTest, CrossStoreValidityTest) {
                           /* verify_type_hierarchies= */ false,
                           /* verify_proto_cross_dex= */ false,
                           /* enforce_allowed_violations_file= */ false);
-  EXPECT_EQ(bc_standard.is_illegal_cross_store(type_s_A_B, type_s_A_B_C), true);
+  EXPECT_EQ(bc_standard.is_illegal_cross_store(type_s_A_B, type_s_A_B_C).first,
+            true);
+  EXPECT_EQ(bc_standard.is_illegal_cross_store(type_s_A_B, type_s_A_B_C).second,
+            type_s_A_B_C);
 }
 } // namespace
