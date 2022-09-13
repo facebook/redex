@@ -66,8 +66,6 @@ void check_if_tracked_sget(
     DexField* target_field,
     const std::unordered_set<std::string>& src_set,
     const std::unordered_set<DexClass*>& classes_to_track,
-    size_t* num_field_references,
-    std::map<DexClass*, int, dexclasses_comparator>* per_cls_refs,
     std::unordered_set<DexField*>* recorded_fields) {
   auto src_cls_name = src_method->get_class()->get_name()->c_str();
   auto target_cls = type_class(target_field->get_class());
@@ -84,9 +82,7 @@ void check_if_tracked_sget(
       TRACE(TRACKRESOURCES, 3, "(non-primitive) sget to %s from %s",
             SHOW(target_field), SHOW(src_method));
     }
-    (*num_field_references)++;
     recorded_fields->emplace(target_field);
-    ++(*per_cls_refs)[target_cls];
   }
 }
 
@@ -98,12 +94,9 @@ size_t TrackResourcesPass::find_accessed_fields(
     const std::unordered_set<std::string>& classes_to_search,
     std::unordered_set<DexField*>* recorded_fields) {
   Timer t("TrackResourcesPass::find_accessed_fields");
+  always_assert(recorded_fields->empty());
   std::unordered_set<DexField*> inline_field;
   uint32_t aflags = ACC_STATIC | ACC_FINAL;
-
-  // data structures to track field references from given classes
-  size_t num_field_references = 0;
-  std::map<DexClass*, int, dexclasses_comparator> per_cls_refs;
 
   for (auto clazz : classes_to_track) {
     auto sfields = clazz->get_sfields();
@@ -124,17 +117,12 @@ size_t TrackResourcesPass::find_accessed_fields(
                                 field,
                                 classes_to_search,
                                 classes_to_track,
-                                &num_field_references,
-                                &per_cls_refs,
                                 recorded_fields);
         }
       });
+  size_t num_field_references = recorded_fields->size();
   TRACE(TRACKRESOURCES, 1, "found %zu total sgets to tracked classes",
         num_field_references);
-  for (auto& it : per_cls_refs) {
-    TRACE(TRACKRESOURCES, 3, "%d sgets to %s ", it.second,
-          SHOW(it.first->get_name()));
-  }
   return num_field_references;
 }
 
