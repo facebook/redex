@@ -32,11 +32,11 @@ class SetValue final
  public:
   SetValue() = default;
 
-  SetValue(const Element& e) { m_set.insert(e); }
+  SetValue(Element e) : m_set(std::move(e)) {}
 
   SetValue(std::initializer_list<Element> l) : m_set(l.begin(), l.end()) {}
 
-  SetValue(const PatriciaTreeSet<Element>& set) : m_set(set) {}
+  SetValue(PatriciaTreeSet<Element> set) : m_set(std::move(set)) {}
 
   const PatriciaTreeSet<Element>& elements() const override { return m_set; }
 
@@ -45,6 +45,8 @@ class SetValue final
   bool contains(const Element& e) const override { return m_set.contains(e); }
 
   void add(const Element& e) override { m_set.insert(e); }
+
+  void add(Element&& e) override { m_set.insert(std::move(e)); }
 
   void remove(const Element& e) override { m_set.remove(e); }
 
@@ -135,16 +137,16 @@ class PatriciaTreeSetAbstractDomain final
                                const PatriciaTreeSet<Element>&,
                                PatriciaTreeSetAbstractDomain>(kind) {}
 
-  explicit PatriciaTreeSetAbstractDomain(const Element& e) {
-    this->set_to_value(Value(e));
+  explicit PatriciaTreeSetAbstractDomain(Element e) {
+    this->set_to_value(Value(std::move(e)));
   }
 
   explicit PatriciaTreeSetAbstractDomain(std::initializer_list<Element> l) {
     this->set_to_value(Value(l));
   }
 
-  explicit PatriciaTreeSetAbstractDomain(const PatriciaTreeSet<Element>& set) {
-    this->set_to_value(Value(set));
+  explicit PatriciaTreeSetAbstractDomain(PatriciaTreeSet<Element> set) {
+    this->set_to_value(Value(std::move(set)));
   }
 
   static PatriciaTreeSetAbstractDomain bottom() {

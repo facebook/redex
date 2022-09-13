@@ -42,6 +42,7 @@ class PowersetImplementation : public AbstractValue<Derived> {
   virtual bool contains(const Element& e) const = 0;
 
   virtual void add(const Element& e) = 0;
+  virtual void add(Element&& e) = 0;
 
   virtual void remove(const Element& e) = 0;
 
@@ -108,6 +109,12 @@ class PowersetAbstractDomain
   void add(const Element& e) {
     if (this->kind() == AbstractValueKind::Value) {
       this->get_value()->add(e);
+    }
+  }
+
+  void add(Element&& e) {
+    if (this->kind() == AbstractValueKind::Value) {
+      this->get_value()->add(std::move(e));
     }
   }
 

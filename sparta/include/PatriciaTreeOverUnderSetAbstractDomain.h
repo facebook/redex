@@ -23,6 +23,17 @@ class OverUnderSetValue final
  public:
   OverUnderSetValue() = default;
 
+  OverUnderSetValue(Element e)
+      : OverUnderSetValue(PatriciaTreeSet<Element>{std::move(e)}) {}
+
+  OverUnderSetValue(std::initializer_list<Element> l)
+      : OverUnderSetValue(PatriciaTreeSet<Element>(l)) {}
+
+  OverUnderSetValue(PatriciaTreeSet<Element> over_and_under)
+      : m_over(over_and_under), m_under(std::move(over_and_under)) {
+    // Union is unnecessary.
+  }
+
   OverUnderSetValue(PatriciaTreeSet<Element> over,
                     PatriciaTreeSet<Element> under)
       : m_over(std::move(over)), m_under(std::move(under)) {
@@ -42,7 +53,14 @@ class OverUnderSetValue final
 
   const PatriciaTreeSet<Element>& under() const { return m_under; }
 
+  void add_over(Element e) { m_over.insert(std::move(e)); }
+
   void add_over(const PatriciaTreeSet<Element>& set) { m_over.union_with(set); }
+
+  void add_under(Element e) {
+    m_over.insert(e);
+    m_under.insert(std::move(e));
+  }
 
   void add_under(const PatriciaTreeSet<Element>& set) {
     m_over.union_with(set);
@@ -125,20 +143,18 @@ class PatriciaTreeOverUnderSetAbstractDomain final
             ptousad_impl::OverUnderSetValue<Element>,
             PatriciaTreeOverUnderSetAbstractDomain<Element>>(kind) {}
 
-  explicit PatriciaTreeOverUnderSetAbstractDomain(const Element& e) {
-    auto set = PatriciaTreeSet<Element>{e};
-    this->set_to_value(Value(/* over */ set, /* under */ set));
+  explicit PatriciaTreeOverUnderSetAbstractDomain(Element e) {
+    this->set_to_value(Value(std::move(e)));
   }
 
   explicit PatriciaTreeOverUnderSetAbstractDomain(
       std::initializer_list<Element> l) {
-    auto set = PatriciaTreeSet<Element>(l);
-    this->set_to_value(Value(/* over */ set, /* under */ set));
+    this->set_to_value(Value(l));
   }
 
   explicit PatriciaTreeOverUnderSetAbstractDomain(
-      const PatriciaTreeSet<Element>& set) {
-    this->set_to_value(Value(/* over */ set, /* under */ set));
+      PatriciaTreeSet<Element> set) {
+    this->set_to_value(Value(std::move(set)));
   }
 
   explicit PatriciaTreeOverUnderSetAbstractDomain(
@@ -172,24 +188,22 @@ class PatriciaTreeOverUnderSetAbstractDomain final
     return this->get_value()->under();
   }
 
-  void add_over(const Element& e) { add_over(PatriciaTreeSet<Element>{e}); }
+  void add_over(Element e) { add_over_internal(std::move(e)); }
 
-  void add_over(const PatriciaTreeSet<Element>& set) {
-    if (this->is_value()) {
-      this->get_value()->add_over(set);
-    } else if (this->is_bottom()) {
-      this->set_to_value(Value(/* over */ set, /* under */ {}));
-    }
+  void add_over(const PatriciaTreeSet<Element>& set) { add_over_internal(set); }
+
+  void add_over(PatriciaTreeSet<Element>&& set) {
+    add_over_internal(std::move(set));
   }
 
-  void add_under(const Element& e) { add_under(PatriciaTreeSet<Element>{e}); }
+  void add_under(Element e) { add_under_internal(std::move(e)); }
 
   void add_under(const PatriciaTreeSet<Element>& set) {
-    if (this->is_value()) {
-      this->get_value()->add_under(set);
-    } else if (this->is_bottom()) {
-      this->set_to_value(Value(/* over */ set, /* under */ set));
-    }
+    add_under_internal(set);
+  }
+
+  void add_under(PatriciaTreeSet<Element>&& set) {
+    add_under_internal(std::move(set));
   }
 
   void add(const PatriciaTreeOverUnderSetAbstractDomain& other) {
@@ -222,6 +236,27 @@ class PatriciaTreeOverUnderSetAbstractDomain final
     }
     }
     return out;
+  }
+
+ private:
+  template <typename T>
+  void add_over_internal(T&& element_or_set) {
+    if (this->is_value()) {
+      this->get_value()->add_over(std::forward<T>(element_or_set));
+    } else if (this->is_bottom()) {
+      this->set_to_value(Value(
+          /* over */ PatriciaTreeSet<Element>(std::forward<T>(element_or_set)),
+          /* under */ {}));
+    }
+  }
+
+  template <typename T>
+  void add_under_internal(T&& element_or_set) {
+    if (this->is_value()) {
+      this->get_value()->add_under(std::forward<T>(element_or_set));
+    } else if (this->is_bottom()) {
+      this->set_to_value(Value(std::forward<T>(element_or_set)));
+    }
   }
 };
 

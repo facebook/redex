@@ -98,11 +98,14 @@ class PatriciaTreeMapAbstractPartition final
    */
   PatriciaTreeMapAbstractPartition& set(const Label& label,
                                         const Domain& value) {
-    if (is_top()) {
-      return *this;
-    }
-    m_map.insert_or_assign(label, value);
-    return *this;
+    return set_internal(label, value);
+  }
+
+  /*
+   * This is a no-op if the partition is set to Top.
+   */
+  PatriciaTreeMapAbstractPartition& set(const Label& label, Domain&& value) {
+    return set_internal(label, std::move(value));
   }
 
   /*
@@ -227,6 +230,16 @@ class PatriciaTreeMapAbstractPartition final
   }
 
  private:
+  template <typename D>
+  PatriciaTreeMapAbstractPartition& set_internal(const Label& label,
+                                                 D&& value) {
+    if (is_top()) {
+      return *this;
+    }
+    m_map.insert_or_assign(label, std::forward<D>(value));
+    return *this;
+  }
+
   MapType m_map;
   bool m_is_top{false};
 };
