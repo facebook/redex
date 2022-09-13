@@ -37,6 +37,7 @@ struct ClassSplittingConfig {
   bool trampolines{true};
   unsigned int trampoline_size_threshold{100};
   std::vector<std::string> blocklist_types;
+  std::vector<std::string> blocklist_methods;
   // If true, only consider methods that appear in the profiles for relocation.
   bool profile_only{false};
   // If true, also consider source-block info for decision making.
