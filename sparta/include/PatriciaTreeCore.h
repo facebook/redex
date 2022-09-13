@@ -152,16 +152,39 @@ class PatriciaTreeNode {
     p->m_reference_count.fetch_add(1, std::memory_order_relaxed);
   }
 
+  static void intrusive_ptr_delete_leaf(const PatriciaTreeNode* p) {
+    delete static_cast<const LeafType*>(p);
+  }
+
+  static void intrusive_ptr_delete_branch(const PatriciaTreeNode* p) {
+    delete static_cast<const BranchType*>(p);
+  }
+
+  static void intrusive_ptr_delete(const PatriciaTreeNode* p) {
+    // This reloads what was already known by the caller, but it helps put
+    // more instructions behind a function call. Since we just poked the
+    // reference count this is effectively zero cost.
+    //
+    // In C++20 we could use std::atomic_ref to make this non-atomic,
+    // but on x86 its already just a normal load anyway.
+    size_t reference_count =
+        p->m_reference_count.load(std::memory_order_relaxed);
+    const bool is_leaf = reference_count & LEAF_MASK;
+
+    std::atomic_thread_fence(std::memory_order_acquire);
+    if (is_leaf) {
+      intrusive_ptr_delete_leaf(p);
+    } else {
+      intrusive_ptr_delete_branch(p);
+    }
+  }
+
   friend void intrusive_ptr_release(const PatriciaTreeNode* p) {
     size_t prev_reference_count =
         p->m_reference_count.fetch_sub(1, std::memory_order_release);
-    if ((prev_reference_count & ~LEAF_MASK) == 1) {
-      std::atomic_thread_fence(std::memory_order_acquire);
-      if (prev_reference_count & LEAF_MASK) {
-        delete static_cast<const LeafType*>(p);
-      } else {
-        delete static_cast<const BranchType*>(p);
-      }
+    const bool is_unique = (prev_reference_count & ~LEAF_MASK) == 1;
+    if (is_unique) {
+      intrusive_ptr_delete(p);
     }
   }
 
