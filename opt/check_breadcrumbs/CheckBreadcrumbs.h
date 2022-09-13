@@ -61,12 +61,18 @@ class CheckBreadcrumbsPass : public Pass {
 
 namespace {
 
+using FieldsAndType = std::vector<std::pair<const DexField*, const DexType*>>;
 using Fields = std::vector<const DexField*>;
 using Methods = std::vector<const DexMethod*>;
 using Instructions = std::vector<const IRInstruction*>;
+using InstructionsAndType =
+    std::vector<std::pair<const IRInstruction*, const DexType*>>;
 using Types = std::vector<const DexType*>;
+using TypesAndTypes = std::vector<std::pair<const DexType*, const DexType*>>;
 using MethodInsns =
     std::map<const DexMethod*, Instructions, dexmethods_comparator>;
+using MethodInsnsType =
+    std::map<const DexMethod*, InstructionsAndType, dexmethods_comparator>;
 
 } // namespace
 
@@ -86,7 +92,8 @@ class Breadcrumbs {
   std::string get_methods_with_bad_refs();
   void report_illegal_refs(bool fail_if_illegal_refs, PassManager& mgr);
   bool has_illegal_access(const DexMethod* input_method);
-  bool is_illegal_cross_store(const DexType* caller, const DexType* callee);
+  std::pair<bool, const DexType*> is_illegal_cross_store(const DexType* caller,
+                                                         const DexType* callee);
 
  private:
   const Scope& m_scope;
@@ -99,13 +106,14 @@ class Breadcrumbs {
       m_bad_field_insns;
   std::map<const DexMethod*, MethodInsns, dexmethods_comparator>
       m_bad_meth_insns;
-  std::map<const DexType*, Fields, dextypes_comparator> m_illegal_field;
-  std::map<const DexMethod*, Types, dexmethods_comparator> m_illegal_method;
+  std::map<const DexType*, FieldsAndType, dextypes_comparator> m_illegal_field;
+  std::map<const DexMethod*, TypesAndTypes, dexmethods_comparator>
+      m_illegal_method;
   std::map<const DexMethod*, Fields, dexmethods_comparator> m_bad_fields_refs;
-  MethodInsns m_illegal_type;
-  MethodInsns m_illegal_field_type;
-  MethodInsns m_illegal_field_cls;
-  MethodInsns m_illegal_method_call;
+  MethodInsnsType m_illegal_type;
+  MethodInsnsType m_illegal_field_type;
+  MethodInsnsType m_illegal_field_cls;
+  MethodInsnsType m_illegal_method_call;
   XStoreRefs m_xstores;
   std::unordered_set<const DexType*> m_allow_violations;
   std::unordered_set<std::string> m_allow_violation_type_prefixes;
@@ -120,9 +128,9 @@ class Breadcrumbs {
 
   bool should_allow_violations(const DexType* type);
   size_t process_illegal_elements(const XStoreRefs& xstores,
-                                  const MethodInsns& method_to_insns,
+                                  const MethodInsnsType& method_to_insns,
                                   const char* desc,
-                                  MethodInsns& allowed,
+                                  MethodInsnsType& allowed,
                                   std::ostream& ss);
   const DexType* check_type(const DexType* type);
   const DexType* check_method(const DexMethodRef* method);
