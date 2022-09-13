@@ -14,6 +14,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "ConcurrentContainers.h"
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexLoader.h"
@@ -64,14 +65,14 @@ void write_found_fields(const std::string& path,
 void check_if_tracked_sget(
     DexMethod* src_method,
     DexField* target_field,
-    const std::unordered_set<std::string>& src_set,
+    const std::unordered_set<DexType*>& src_set,
     const std::unordered_set<DexClass*>& classes_to_track,
-    std::unordered_set<DexField*>* recorded_fields) {
-  auto src_cls_name = src_method->get_class()->get_name()->c_str();
+    ConcurrentSet<DexField*>* recorded_fields) {
+  DexType* src_cls = src_method->get_class();
   auto target_cls = type_class(target_field->get_class());
-  if ((src_set.empty() || src_set.count(src_cls_name)) &&
+  if ((src_set.empty() || src_set.count(src_cls)) &&
       classes_to_track.count(target_cls) &&
-      !recorded_fields->count(target_field)) {
+      recorded_fields->insert(target_field)) {
     always_assert_log(target_field->is_concrete(), "Must be a concrete field");
     if (type::is_primitive(target_field->get_type())) {
       auto value = target_field->get_static_value();
@@ -82,7 +83,6 @@ void check_if_tracked_sget(
       TRACE(TRACKRESOURCES, 3, "(non-primitive) sget to %s from %s",
             SHOW(target_field), SHOW(src_method));
     }
-    recorded_fields->emplace(target_field);
   }
 }
 
@@ -105,7 +105,17 @@ size_t TrackResourcesPass::find_accessed_fields(
       inline_field.emplace(sfield);
     }
   }
-  walk::opcodes(
+
+  std::unordered_set<DexType*> src_set;
+  for (const auto& str : classes_to_search) {
+    auto* type = DexType::get_type(str);
+    if (type) {
+      src_set.insert(type);
+    }
+  }
+
+  ConcurrentSet<DexField*> concurrent_recorded_fields;
+  walk::parallel::opcodes(
       fullscope,
       [](DexMethod* method) { return true; },
       [&](DexMethod* method, IRInstruction* insn) {
@@ -115,11 +125,12 @@ size_t TrackResourcesPass::find_accessed_fields(
           if (inline_field.count(field) == 0) return;
           check_if_tracked_sget(method,
                                 field,
-                                classes_to_search,
+                                src_set,
                                 classes_to_track,
-                                recorded_fields);
+                                &concurrent_recorded_fields);
         }
       });
+  *recorded_fields = concurrent_recorded_fields.move_to_container();
   size_t num_field_references = recorded_fields->size();
   TRACE(TRACKRESOURCES, 1, "found %zu total sgets to tracked classes",
         num_field_references);
