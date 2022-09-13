@@ -57,7 +57,7 @@ enum class QuantFlag : uint16_t {
  * in-memory representation is hidden by a memory indirection.
  */
 struct InstructionMatcher {
-  virtual ~InstructionMatcher() = 0;
+  virtual ~InstructionMatcher() = default;
   virtual bool matches(const IRInstruction* insn) const = 0;
 };
 
