@@ -51,6 +51,7 @@ struct ClassSplittingStats {
   size_t non_relocated_methods{0};
   size_t popular_methods{0};
   size_t source_block_positive_vals{0};
+  size_t method_size_too_small{0};
 };
 
 constexpr const char* METRIC_STATICIZED_METHODS =
@@ -76,6 +77,8 @@ constexpr const char* METRIC_SOURCE_BLOCKS_POSITIVE_VALS =
 constexpr const char* METRIC_RELOCATED_METHODS =
     "num_class_splitting_relocated_methods";
 constexpr const char* METRIC_TRAMPOLINES = "num_class_splitting_trampolines";
+constexpr const char* METRIC_TOO_SMALL_METHODS =
+    "num_class_splitting_methods_too_small";
 
 constexpr const char* RELOCATED_SUFFIX = "$relocated;";
 
@@ -147,6 +150,26 @@ class ClassSplitter final {
   // Methods that appear in the profiles and whose frequency does not exceed
   // the threashold.
   const std::unordered_set<DexMethod*>& m_insufficiently_popular_methods;
+
+  // Set of methods that need to be made static eventually. The destructor
+  // of this class will do the necessary delayed work.
+  std::unordered_set<DexMethod*> m_delayed_make_static;
+
+  // Accumulated visibility changes that must be applied eventually.
+  // This happens locally within prepare().
+  std::unique_ptr<VisibilityChanges> m_delayed_visibility_changes;
+
+  /**
+   * Change visibilities of methods, assuming that`m_visibility_changes` is
+   * non-null.
+   */
+  void delayed_visibility_changes_apply();
+
+  /**
+   * Staticize required methods (stored in `m_delayed_make_static`) and update
+   * opcodes accordingly.
+   */
+  void delayed_invoke_direct_to_static(const Scope& final_scope);
 };
 
 } // namespace class_splitting
