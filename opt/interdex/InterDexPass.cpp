@@ -47,15 +47,15 @@ void InterDexPass::bind_config() {
                     "the primary dex as a special dex.");
   bind("linear_alloc_limit", 11600 * 1024, m_linear_alloc_limit);
 
-  bind("reserved_frefs", 0, m_reserved_frefs,
+  bind("reserved_frefs", 0, m_reserve_refs.frefs,
        "A relief valve for field refs within each dex in case a legacy "
        "optimization introduces a new field reference without declaring it "
        "explicitly to the InterDex pass");
-  bind("reserved_trefs", 0, m_reserved_trefs,
+  bind("reserved_trefs", 0, m_reserve_refs.trefs,
        "A relief valve for type refs within each dex in case a legacy "
        "optimization introduces a new type reference without declaring it "
        "explicitly to the InterDex pass");
-  bind("reserved_mrefs", 0, m_reserved_mrefs,
+  bind("reserved_mrefs", 0, m_reserve_refs.mrefs,
        "A relief valve for methods refs within each dex in case a legacy "
        "optimization introduces a new method reference without declaring it "
        "explicitly to the InterDex pass");
@@ -144,9 +144,8 @@ void InterDexPass::run_pass(
       m_linear_alloc_limit, m_static_prune, m_normal_primary_dex,
       m_keep_primary_order, force_single_dex, m_emit_canaries,
       m_minimize_cross_dex_refs, m_fill_last_coldstart_dex,
-      m_minimize_cross_dex_refs_config, m_cross_dex_relocator_config,
-      refs_info.frefs, refs_info.trefs, refs_info.mrefs, &xstore_refs,
-      mgr.get_redex_options().min_sdk, m_sort_remaining_classes,
+      m_minimize_cross_dex_refs_config, m_cross_dex_relocator_config, refs_info,
+      &xstore_refs, mgr.get_redex_options().min_sdk, m_sort_remaining_classes,
       m_methods_for_canary_clinit_reference, init_classes_with_side_effects,
       m_transitively_close_interdex_order);
 
@@ -236,10 +235,10 @@ void InterDexPass::run_pass_on_nonroot_store(
       m_keep_primary_order, false /* force single dex */,
       false /* emit canaries */, false /* minimize_cross_dex_refs */,
       /* fill_last_coldstart_dex=*/false, cross_dex_refs_config,
-      cross_dex_relocator_config, refs_info.frefs, refs_info.trefs,
-      refs_info.mrefs, &xstore_refs, mgr.get_redex_options().min_sdk,
-      m_sort_remaining_classes, m_methods_for_canary_clinit_reference,
-      init_classes_with_side_effects, m_transitively_close_interdex_order);
+      cross_dex_relocator_config, refs_info, &xstore_refs,
+      mgr.get_redex_options().min_sdk, m_sort_remaining_classes,
+      m_methods_for_canary_clinit_reference, init_classes_with_side_effects,
+      m_transitively_close_interdex_order);
 
   interdex.run_on_nonroot_store();
 
@@ -266,13 +265,13 @@ void InterDexPass::run_pass(DexStoresVector& stores,
       PluginRegistry::get().pass_registry(INTERDEX_PASS_NAME));
   auto plugins = registry->create_plugins();
 
-  ReserveRefsInfo refs_info(m_reserved_frefs, m_reserved_trefs,
-                            m_reserved_mrefs);
+  ReserveRefsInfo refs_info = m_reserve_refs;
   for (const auto& plugin : plugins) {
     plugin->configure(original_scope, conf);
-    refs_info.frefs += plugin->reserve_frefs();
-    refs_info.trefs += plugin->reserve_trefs();
-    refs_info.mrefs += plugin->reserve_mrefs();
+    const auto plugin_reserve_refs = plugin->reserve_refs();
+    refs_info.frefs += plugin_reserve_refs.frefs;
+    refs_info.trefs += plugin_reserve_refs.trefs;
+    refs_info.mrefs += plugin_reserve_refs.mrefs;
   }
 
   std::vector<DexStore*> parallel_stores;

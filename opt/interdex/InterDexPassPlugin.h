@@ -40,17 +40,10 @@ class InterDexPassPlugin {
                            std::vector<DexType*>&,
                            std::vector<DexType*>&) {}
 
-  // In each dex, reserve this many frefs to be potentially added after the
-  // inter-dex pass
-  virtual size_t reserve_frefs() { return 0; }
-
-  // In each dex, reserve this many trefs to be potentially added after the
-  // inter-dex pass
-  virtual size_t reserve_trefs() { return 0; }
-
-  // In each dex, reserve this many mrefs to be potentially added after the
-  // inter-dex pass
-  virtual size_t reserve_mrefs() { return 0; }
+  // Reserves refs in every dex, effectively lowering the capacity of each dex.
+  //
+  // This is applied uniformly (e.g., cannot be a per-dex value).
+  virtual ReserveRefsInfo reserve_refs() { return ReserveRefsInfo{}; }
 
   // Return any new codegened classes that should be added to the current dex.
   virtual DexClasses additional_classes(const DexClassesVector&,

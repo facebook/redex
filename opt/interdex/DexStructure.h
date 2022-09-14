@@ -17,6 +17,18 @@
 
 namespace interdex {
 
+struct ReserveRefsInfo {
+  size_t frefs;
+  size_t trefs;
+  size_t mrefs;
+
+  ReserveRefsInfo()
+      : ReserveRefsInfo(/* frefs */ 0, /* trefs */ 0, /* mrefs */ 0) {}
+
+  ReserveRefsInfo(size_t frefs, size_t trefs, size_t mrefs)
+      : frefs(frefs), trefs(trefs), mrefs(mrefs) {}
+};
+
 using MethodRefs = std::unordered_set<DexMethodRef*>;
 using FieldRefs = std::unordered_set<DexFieldRef*>;
 using TypeRefs = std::unordered_set<DexType*>;
@@ -141,16 +153,16 @@ class DexesStructure {
     m_linear_alloc_limit = linear_alloc_limit;
   }
 
-  void set_reserve_frefs(int64_t reserve_frefs) {
-    m_reserve_frefs = reserve_frefs;
+  void set_reserve_frefs(size_t reserve_frefs) {
+    m_reserve_refs.frefs = reserve_frefs;
   }
 
-  void set_reserve_trefs(int64_t reserve_trefs) {
-    m_reserve_trefs = reserve_trefs;
+  void set_reserve_trefs(size_t reserve_trefs) {
+    m_reserve_refs.trefs = reserve_trefs;
   }
 
   void set_reserve_mrefs(size_t reserve_mrefs) {
-    m_reserve_mrefs = reserve_mrefs;
+    m_reserve_refs.mrefs = reserve_mrefs;
   }
 
   void set_min_sdk(int min_sdk) { m_min_sdk = min_sdk; }
@@ -218,9 +230,7 @@ class DexesStructure {
   std::unordered_set<DexClass*> m_classes;
 
   int64_t m_linear_alloc_limit;
-  size_t m_reserve_frefs;
-  size_t m_reserve_trefs;
-  size_t m_reserve_mrefs;
+  ReserveRefsInfo m_reserve_refs;
   int m_min_sdk;
   const init_classes::InitClassesWithSideEffects*
       m_init_classes_with_side_effects{nullptr};

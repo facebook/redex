@@ -8,6 +8,7 @@
 #pragma once
 
 #include "DexClass.h"
+#include "DexStructure.h"
 #include "InterDex.h"
 #include "InterDexPassPlugin.h"
 #include "Pass.h"
@@ -50,15 +51,6 @@ constexpr const char* METRIC_RESERVED_TREFS = "reserved_trefs";
 constexpr const char* METRIC_RESERVED_MREFS = "reserved_mrefs";
 constexpr const char* METRIC_EMIT_CANARIES = "emit_canaries";
 
-struct ReserveRefsInfo {
-  int64_t frefs;
-  int64_t trefs;
-  int64_t mrefs;
-
-  ReserveRefsInfo(int64_t _frefs, int64_t _trefs, int64_t _mrefs)
-      : frefs(_frefs), trefs(_trefs), mrefs(_mrefs) {}
-};
-
 class InterDexPass : public Pass {
  public:
   explicit InterDexPass(bool register_plugins = true)
@@ -86,9 +78,7 @@ class InterDexPass : public Pass {
   bool m_normal_primary_dex;
   bool m_keep_primary_order;
   int64_t m_linear_alloc_limit;
-  int64_t m_reserved_frefs;
-  int64_t m_reserved_trefs;
-  int64_t m_reserved_mrefs;
+  ReserveRefsInfo m_reserve_refs;
   bool m_can_touch_coldstart_cls;
   bool m_can_touch_coldstart_extended_cls;
   bool m_minimize_cross_dex_refs;

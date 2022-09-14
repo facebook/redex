@@ -48,9 +48,7 @@ class InterDex {
            const cross_dex_ref_minimizer::CrossDexRefMinimizerConfig&
                cross_dex_refs_config,
            const CrossDexRelocatorConfig& cross_dex_relocator_config,
-           size_t reserve_frefs,
-           size_t reserve_trefs,
-           size_t reserve_mrefs,
+           const ReserveRefsInfo& reserve_refs,
            const XStoreRefs* xstore_refs,
            int min_sdk,
            bool sort_remaining_classes,
@@ -83,9 +81,9 @@ class InterDex {
             std::move(methods_for_canary_clinit_reference)),
         m_transitively_close_interdex_order(transitively_close_interdex_order) {
     m_dexes_structure.set_linear_alloc_limit(linear_alloc_limit);
-    m_dexes_structure.set_reserve_frefs(reserve_frefs);
-    m_dexes_structure.set_reserve_trefs(reserve_trefs);
-    m_dexes_structure.set_reserve_mrefs(reserve_mrefs);
+    m_dexes_structure.set_reserve_frefs(reserve_refs.frefs);
+    m_dexes_structure.set_reserve_trefs(reserve_refs.trefs);
+    m_dexes_structure.set_reserve_mrefs(reserve_refs.mrefs);
     m_dexes_structure.set_min_sdk(min_sdk);
     m_dexes_structure.set_init_classes_with_side_effects(
         &init_classes_with_side_effects);
