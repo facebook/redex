@@ -129,6 +129,7 @@ class ClassSplitter final {
   DexMethod* create_trampoline_method(DexMethod* method,
                                       DexClass* target_cls,
                                       uint32_t api_level);
+  size_t get_trampoline_method_cost(DexMethod* method);
   bool has_source_block_positive_val(DexMethod* method);
   void materialize_trampoline_code(DexMethod* source, DexMethod* target);
 

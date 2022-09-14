@@ -25,6 +25,8 @@
 
 namespace class_splitting {
 
+const int TRAMPOLINE_THRESHOLD_SIZE = 32;
+
 void update_coldstart_classes_order(
     ConfigFiles& conf,
     PassManager& mgr,
@@ -99,6 +101,13 @@ DexClass* ClassSplitter::create_target_class(
   target_cls->rstate.set_generated();
   target_cls->set_deobfuscated_name(target_type_name);
   return target_cls;
+}
+
+size_t ClassSplitter::get_trampoline_method_cost(DexMethod* method) {
+  // Maybe this can be calculated? Here goes the size of code for pushing
+  // parameters, making the call, adding refs, etc For now, empirically derive
+  // the best value.
+  return TRAMPOLINE_THRESHOLD_SIZE;
 }
 
 DexMethod* ClassSplitter::create_trampoline_method(DexMethod* method,
@@ -179,6 +188,10 @@ void ClassSplitter::prepare(const DexClass* cls,
       return;
     }
     if (requires_trampoline && !m_config.trampolines) {
+      return;
+    }
+    if (get_trampoline_method_cost(method) >=
+        method->get_code()->sum_opcode_sizes()) {
       return;
     }
     DexClass* target_cls;
