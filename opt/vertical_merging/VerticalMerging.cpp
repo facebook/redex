@@ -473,6 +473,8 @@ void record_field_reference(
     if (!can_rename(field)) {
       record_dont_merge_state(field->get_type(), kConditional,
                               dont_merge_status);
+      record_dont_merge_state(field->get_class(), kConditional,
+                              dont_merge_status);
     }
   });
 }
