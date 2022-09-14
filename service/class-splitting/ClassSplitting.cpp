@@ -247,6 +247,10 @@ void ClassSplitter::prepare(const DexClass* cls,
     }
     TRACE(CS, 4, "[class splitting] Method {%s} will be relocated to {%s}",
           SHOW(method), SHOW(target_cls));
+
+    if (m_instrumentation_callback.target<void (*)(DexMethod*)>() != nullptr) {
+      m_instrumentation_callback(method);
+    }
   };
   auto& dmethods = cls->get_dmethods();
   std::for_each(dmethods.begin(), dmethods.end(), process_method);
@@ -763,5 +767,10 @@ void ClassSplitter::delayed_invoke_direct_to_static(const Scope& final_scope) {
         }
       });
   m_delayed_make_static.clear();
+}
+
+void ClassSplitter::set_instrumentation_callback(
+    std::function<void(DexMethod*)>&& callback) {
+  m_instrumentation_callback = std::move(callback);
 }
 } // namespace class_splitting
