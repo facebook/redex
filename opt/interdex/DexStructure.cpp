@@ -104,6 +104,16 @@ size_t set_difference_size(const std::unordered_set<T>& a,
 
 namespace interdex {
 
+size_t DexesStructure::get_frefs_limit() const {
+  return MAX_FIELD_REFS - m_reserve_refs.frefs;
+}
+size_t DexesStructure::get_trefs_limit() const {
+  return MAX_TYPE_REFS(m_min_sdk) - m_reserve_refs.trefs;
+}
+size_t DexesStructure::get_mrefs_limit() const {
+  return MAX_METHOD_REFS - m_reserve_refs.mrefs;
+}
+
 void DexesStructure::resolve_init_classes(
     const interdex::FieldRefs& frefs,
     const interdex::TypeRefs& trefs,
@@ -129,10 +139,8 @@ bool DexesStructure::add_class_to_current_dex(const MethodRefs& clazz_mrefs,
                        &pending_init_class_fields, &pending_init_class_types);
   if (m_current_dex.add_class_if_fits(
           clazz_mrefs, clazz_frefs, clazz_trefs, pending_init_class_fields,
-          pending_init_class_types, m_linear_alloc_limit,
-          MAX_FIELD_REFS - m_reserve_refs.frefs,
-          MAX_METHOD_REFS - m_reserve_refs.mrefs,
-          MAX_TYPE_REFS(m_min_sdk) - m_reserve_refs.trefs, clazz)) {
+          pending_init_class_types, m_linear_alloc_limit, get_frefs_limit(),
+          get_mrefs_limit(), get_trefs_limit(), clazz)) {
     update_stats(clazz_mrefs, clazz_frefs, clazz);
     m_classes.emplace(clazz);
     return true;

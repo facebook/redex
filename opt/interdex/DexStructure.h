@@ -149,6 +149,10 @@ class DexesStructure {
 
   size_t get_num_vmethods() const { return m_stats.num_vmethods; }
 
+  size_t get_frefs_limit() const;
+  size_t get_trefs_limit() const;
+  size_t get_mrefs_limit() const;
+
   void set_linear_alloc_limit(int64_t linear_alloc_limit) {
     m_linear_alloc_limit = linear_alloc_limit;
   }

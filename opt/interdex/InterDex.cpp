@@ -1040,7 +1040,12 @@ void InterDex::run() {
             m_cross_dex_ref_minimizer.get_json_class_indices(dex));
       }
     }
+    Json::Value json_limits;
+    json_limits["types"] = m_dexes_structure.get_trefs_limit();
+    json_limits["fields"] = m_dexes_structure.get_frefs_limit();
+    json_limits["methods"] = m_dexes_structure.get_mrefs_limit();
     Json::Value json_file;
+    json_file["limits"] = json_limits;
     json_file["first_dex"] = json_first_dex;
     json_file["solution"] = json_solution;
     json_file["mapping"] = m_cross_dex_ref_minimizer.get_json_mapping();
