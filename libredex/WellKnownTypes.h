@@ -31,7 +31,8 @@
   FOR_EACH(java_lang_Integer, "Ljava/lang/Integer;")     \
   FOR_EACH(java_lang_Long, "Ljava/lang/Long;")           \
   FOR_EACH(java_lang_Float, "Ljava/lang/Float;")         \
-  FOR_EACH(java_lang_Double, "Ljava/lang/Double;")
+  FOR_EACH(java_lang_Double, "Ljava/lang/Double;")       \
+  FOR_EACH(java_lang_RuntimeException, "Ljava/lang/RuntimeException;")
 
 #define PRIMITIVE_PSEUDO_TYPE_FIELDS                                       \
   FOR_EACH(Void_TYPE, "Ljava/lang/Void;.TYPE:Ljava/lang/Class;")           \
@@ -56,4 +57,6 @@
            "Ljava/lang/Integer;.valueOf:(I)Ljava/lang/Integer;")              \
   FOR_EACH(java_lang_Integer_intValue, "Ljava/lang/Integer;.intValue:()I")    \
   FOR_EACH(java_lang_Throwable_fillInStackTrace,                              \
-           "Ljava/lang/Throwable;.fillInStackTrace:()Ljava/lang/Throwable;")
+           "Ljava/lang/Throwable;.fillInStackTrace:()Ljava/lang/Throwable;")  \
+  FOR_EACH(java_lang_RuntimeException_init_String,                            \
+           "Ljava/lang/RuntimeException;.<init>:(Ljava/lang/String;)V")

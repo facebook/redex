@@ -75,9 +75,8 @@ void create_runtime_exception_block(const DexString* except_str,
   // invoke-direct {v0, v1}, Ljava/lang/RuntimeException;.<init>:(Ljava/lang/String;)V
   // throw v0
   // clang-format on
-  auto new_inst =
-      (new IRInstruction(OPCODE_NEW_INSTANCE))
-          ->set_type(DexType::make_type("Ljava/lang/RuntimeException;"));
+  auto new_inst = (new IRInstruction(OPCODE_NEW_INSTANCE))
+                      ->set_type(type::java_lang_RuntimeException());
   new_inst->set_dest(0);
   IRInstruction* const_inst =
       (new IRInstruction(OPCODE_CONST_STRING))->set_string(except_str);
@@ -86,9 +85,8 @@ void create_runtime_exception_block(const DexString* except_str,
   auto arg = DexType::make_type("Ljava/lang/String;");
   auto args = DexTypeList::make_type_list({arg});
   auto proto = DexProto::make_proto(ret, args);
-  auto meth =
-      DexMethod::make_method(DexType::make_type("Ljava/lang/RuntimeException;"),
-                             DexString::make_string("<init>"), proto);
+  auto meth = DexMethod::make_method(type::java_lang_RuntimeException(),
+                                     DexString::make_string("<init>"), proto);
   auto invk = new IRInstruction(OPCODE_INVOKE_DIRECT);
   invk->set_method(meth);
   invk->set_srcs_size(2);

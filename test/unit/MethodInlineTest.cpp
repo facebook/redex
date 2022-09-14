@@ -61,8 +61,8 @@ DexClass* create_a_class(const char* description) {
 }
 
 void create_runtime_exception_init() {
-  auto init_method = static_cast<DexMethod*>(DexMethod::make_method(
-      "Ljava/lang/RuntimeException;.<init>:(Ljava/lang/String;)V"));
+  auto init_method =
+      static_cast<DexMethod*>(method::java_lang_RuntimeException_init_String());
   init_method->set_external();
 }
 
