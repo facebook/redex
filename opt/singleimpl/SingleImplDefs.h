@@ -65,6 +65,8 @@ enum EscapeReason : uint32_t {
   FILTERED = 0x80,
   // parent is unknown to redex
   IMPL_PARENT_ESCAPED = 0x100,
+  // interface is reference as a return type of a method
+  HAS_RETURN_REF = 0x200,
   // interface marked DoNotStrip
   DO_NOT_STRIP = 0X400,
   // create a reference across stores that is illegal

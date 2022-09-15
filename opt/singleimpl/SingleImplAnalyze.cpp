@@ -406,6 +406,18 @@ void AnalysisImpl::analyze_opcodes() {
     }
   };
 
+  auto check_return = [&](DexMethod* referrer,
+                          const IRList::iterator& insn_it,
+                          IRInstruction* insn) {
+    auto rtype = referrer->get_proto()->get_rtype();
+    auto intf = get_and_check_single_impl(rtype);
+    if (intf) {
+      auto& si = single_impls.at(intf);
+      std::lock_guard<std::mutex> lock(si.mutex);
+      si.referencing_methods[referrer][insn] = insn_it;
+    }
+  };
+
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
     redex_assert(!code.editable_cfg_built()); // Need *one* way to
     auto ii = ir_list::InstructionIterable(code);
@@ -488,6 +500,10 @@ void AnalysisImpl::analyze_opcodes() {
       case OPCODE_INVOKE_SUPER: {
         const auto meth = insn->get_method();
         check_sig(method, it.unwrap(), meth, insn);
+        break;
+      }
+      case OPCODE_RETURN_OBJECT: {
+        check_return(method, it.unwrap(), insn);
         break;
       }
       default:
