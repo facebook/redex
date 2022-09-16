@@ -45,7 +45,7 @@ pub trait AbstractEnvironment<V, D: AbstractDomain>: AbstractDomain {
     fn is_empty(&self) -> bool;
     fn get(&self, variable: &V) -> Cow<'_, D>;
     fn set(&mut self, variable: V, domain: D);
-    fn update(&mut self, variable: &V, op: impl Fn(&mut D));
+    fn update(&mut self, variable: &V, op: impl FnOnce(&mut D));
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]

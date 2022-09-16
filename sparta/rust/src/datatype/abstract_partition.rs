@@ -30,7 +30,7 @@ pub trait AbstractPartition<L, D: AbstractDomain>: AbstractDomain {
     fn is_empty(&self) -> bool;
     fn get(&self, label: &L) -> Cow<'_, D>;
     fn set(&mut self, label: L, domain: D);
-    fn update(&mut self, label: &L, op: impl Fn(&mut D));
+    fn update(&mut self, label: &L, op: impl FnOnce(&mut D));
 }
 
 /*
