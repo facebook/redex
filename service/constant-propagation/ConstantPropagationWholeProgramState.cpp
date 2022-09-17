@@ -53,7 +53,12 @@ void set_fields_in_partition(const DexClass* cls,
 void analyze_clinits(const Scope& scope,
                      const interprocedural::FixpointIterator& fp_iter,
                      ConstantFieldPartition* field_partition) {
-  for (DexClass* cls : scope) {
+  std::mutex mutex;
+  walk::parallel::classes(scope, [&](auto* cls) {
+    if (cls->get_sfields().empty()) {
+      return;
+    }
+    ConstantFieldPartition cls_field_partition;
     auto clinit = cls->get_clinit();
     if (clinit == nullptr) {
       // If there is no class initializer, then the initial field values are
@@ -61,16 +66,18 @@ void analyze_clinits(const Scope& scope,
       ConstantEnvironment env;
       set_encoded_values(cls, &env);
       set_fields_in_partition(cls, env.get_field_environment(),
-                              FieldType::STATIC, field_partition);
-      continue;
+                              FieldType::STATIC, &cls_field_partition);
+    } else {
+      IRCode* code = clinit->get_code();
+      auto& cfg = code->cfg();
+      auto intra_cp = fp_iter.get_intraprocedural_analysis(clinit);
+      auto env = intra_cp->get_exit_state_at(cfg.exit_block());
+      set_fields_in_partition(cls, env.get_field_environment(),
+                              FieldType::STATIC, &cls_field_partition);
     }
-    IRCode* code = clinit->get_code();
-    auto& cfg = code->cfg();
-    auto intra_cp = fp_iter.get_intraprocedural_analysis(clinit);
-    auto env = intra_cp->get_exit_state_at(cfg.exit_block());
-    set_fields_in_partition(cls, env.get_field_environment(), FieldType::STATIC,
-                            field_partition);
-  }
+    std::lock_guard<std::mutex> lock_guard(mutex);
+    field_partition->join_with(cls_field_partition);
+  });
 }
 
 bool analyze_gets_helper(const WholeProgramState* whole_program_state,
