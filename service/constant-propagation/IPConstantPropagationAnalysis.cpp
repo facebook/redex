@@ -39,6 +39,9 @@ ConstantEnvironment env_with_params(bool is_static,
 
 void FixpointIterator::analyze_node(call_graph::NodeId const& node,
                                     Domain* current_state) const {
+  current_state->set(CURRENT_PARTITION_LABEL, ArgumentDomain::bottom());
+  always_assert(current_state->is_bottom());
+
   const DexMethod* method = node->method();
   // The entry node has no associated method.
   if (method == nullptr) {
