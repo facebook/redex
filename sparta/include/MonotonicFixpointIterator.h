@@ -146,15 +146,15 @@ class MonotonicFixpointIteratorBase
   /*
    * Returns the invariant computed by the fixpoint iterator at a node entry.
    */
-  Domain get_entry_state_at(const NodeId& node) const {
+  const Domain& get_entry_state_at(const NodeId& node) const {
     auto it = m_entry_states.find(node);
-    return (it == m_entry_states.end()) ? Domain::bottom() : it->second;
+    return (it == m_entry_states.end()) ? m_bottom_state : it->second;
   }
 
   /*
    * Returns the invariant computed by the fixpoint iterator at a node exit.
    */
-  Domain get_exit_state_at(const NodeId& node) const {
+  const Domain& get_exit_state_at(const NodeId& node) const {
     auto it = m_exit_states.find(node);
     // It's impossible to get rid of this condition by initializing all exit
     // states to _|_ prior to starting the fixpoint iteration. The reason is
@@ -170,7 +170,7 @@ class MonotonicFixpointIteratorBase
     // When computing the entry state of A, we perform the join of the exit
     // states of all its predecessors, which include U. Since U is invisible to
     // the fixpoint iterator, there is no way to initialize its exit state.
-    return (it == m_exit_states.end()) ? Domain::bottom() : it->second;
+    return (it == m_exit_states.end()) ? m_bottom_state : it->second;
   }
 
   void clear() {
@@ -217,6 +217,7 @@ class MonotonicFixpointIteratorBase
   }
 
   const Graph& m_graph;
+  const Domain m_bottom_state = Domain::bottom();
   std::unordered_map<NodeId, Domain, NodeHash> m_entry_states;
   std::unordered_map<NodeId, Domain, NodeHash> m_exit_states;
 };
