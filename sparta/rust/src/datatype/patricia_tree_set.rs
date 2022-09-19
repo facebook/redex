@@ -10,6 +10,7 @@ use std::iter::Iterator;
 use std::marker::PhantomData;
 
 use super::powerset::SetAbstractDomainOps;
+use super::powerset::SetElementOps;
 use crate::datatype::bitvec::BitVec;
 use crate::datatype::patricia_tree_impl::PatriciaTree;
 use crate::datatype::patricia_tree_impl::PatriciaTreePostOrderIterator;
@@ -141,6 +142,18 @@ where
 
     fn union_with(&mut self, other: Self) {
         self.storage.union_with(&other.storage, |_, _| ())
+    }
+}
+
+impl<K: Into<BitVec> + Clone> SetElementOps for PatriciaTreeSet<K> {
+    type Element = K;
+
+    fn add_element(&mut self, e: K) {
+        self.insert(e);
+    }
+
+    fn remove_element(&mut self, e: &K) {
+        self.remove(e.clone());
     }
 }
 
