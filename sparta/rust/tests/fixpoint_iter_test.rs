@@ -131,13 +131,17 @@ mod liveness {
     impl<'a> FixpointIteratorTransformer<ReversedRefGraph<'a, Program>, LivenessDomain>
         for LivenessTransformer<'a>
     {
-        fn analyze_node(&self, n: NodeId, current_state: &mut LivenessDomain) {
+        fn analyze_node(&mut self, n: NodeId, current_state: &mut LivenessDomain) {
             let stmt = self.graph.stmt_at(n);
             current_state.remove_elements(&stmt.defs);
             current_state.add_elements(stmt.uses.clone());
         }
 
-        fn analyze_edge(&self, _: EdgeId, exit_state_at_src: &LivenessDomain) -> LivenessDomain {
+        fn analyze_edge(
+            &mut self,
+            _: EdgeId,
+            exit_state_at_src: &LivenessDomain,
+        ) -> LivenessDomain {
             exit_state_at_src.clone()
         }
     }
@@ -661,7 +665,7 @@ mod numerical {
     impl<'a> FixpointIteratorTransformer<Program, IntegerSetAbstractEnvironment>
         for IntegerSetTransformer<'a>
     {
-        fn analyze_node(&self, n: NodeId, env: &mut IntegerSetAbstractEnvironment) {
+        fn analyze_node(&mut self, n: NodeId, env: &mut IntegerSetAbstractEnvironment) {
             let bb = &self.prog.basic_blocks[n];
             for stmt in bb.statements() {
                 self.analyze_statement(stmt, env);
@@ -669,7 +673,7 @@ mod numerical {
         }
 
         fn analyze_edge(
-            &self,
+            &mut self,
             _: EdgeId,
             env: &IntegerSetAbstractEnvironment,
         ) -> IntegerSetAbstractEnvironment {
