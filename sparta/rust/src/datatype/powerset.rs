@@ -19,13 +19,9 @@ pub trait SetAbstractDomainOps: Clone + Eq {
 
 pub trait SetElementOps {
     type Element;
-    type ElementIter<'a>: Iterator<Item = &'a Self::Element>
-    where
-        Self: 'a;
 
     fn add_element(&mut self, e: Self::Element);
     fn remove_element(&mut self, e: &Self::Element);
-    fn elements(&self) -> Self::ElementIter<'_>;
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -41,7 +37,10 @@ impl<S: SetAbstractDomainOps> PowersetLattice<S> {
     }
 }
 
-impl<S: SetAbstractDomainOps + SetElementOps> PowersetLattice<S> {
+impl<'a, S: SetAbstractDomainOps + SetElementOps + 'a> PowersetLattice<S>
+where
+    &'a S: IntoIterator,
+{
     pub fn add_element(&mut self, e: S::Element) {
         if let Self::Value(powerset) = self {
             powerset.add_element(e);
@@ -62,9 +61,9 @@ impl<S: SetAbstractDomainOps + SetElementOps> PowersetLattice<S> {
         }
     }
 
-    pub fn remove_elements<'a, I: IntoIterator<Item = &'a S::Element>>(&mut self, elements: I)
+    pub fn remove_elements<'b, I: IntoIterator<Item = &'b S::Element>>(&mut self, elements: I)
     where
-        S::Element: 'a,
+        S::Element: 'b,
     {
         if let Self::Value(powerset) = self {
             for e in elements {
@@ -73,12 +72,12 @@ impl<S: SetAbstractDomainOps + SetElementOps> PowersetLattice<S> {
         }
     }
 
-    pub fn elements(&self) -> impl Iterator<Item = &'_ S::Element> {
+    pub fn elements(&'a self) -> impl Iterator<Item = <&'a S as IntoIterator>::Item> {
         // NOTE: this is a workaround to make an empty iter, since we don't
         // know the actual type of S::ElementIter, we cannot create an empty
         // iter with the same type.
         let res = match self {
-            Self::Value(powerset) => Some(powerset.elements()),
+            Self::Value(powerset) => Some(powerset.into_iter()),
             _ => None,
         };
         res.into_iter().flatten()
@@ -176,3 +175,54 @@ where
 
 pub type PatriciaTreeSetAbstractDomain<T> = PowersetLattice<PatriciaTreeSet<T>>;
 pub type HashSetAbstractDomain<T> = PowersetLattice<HashSet<T>>;
+
+#[cfg(test)]
+mod tests {
+    use crate::datatype::abstract_domain::AbstractDomain;
+    use crate::datatype::HashSetAbstractDomain;
+    use crate::datatype::PatriciaTreeSetAbstractDomain;
+
+    macro_rules! test_powerset_impl {
+        ($powerset_type:ty) => {
+            type IntPowerset = $powerset_type;
+
+            let top = IntPowerset::Top;
+            let value1: IntPowerset = vec![1, 2, 3, 4, 5].into_iter().collect();
+            let value2: IntPowerset = vec![3, 4, 5, 6, 7].into_iter().collect();
+
+            assert!(top.is_top());
+            assert!(!value1.is_top());
+            assert!(value1.leq(&IntPowerset::Top));
+            assert!(IntPowerset::Bottom.leq(&IntPowerset::Top));
+
+            assert!(!value1.leq(&value2));
+            assert!(!value2.leq(&value1));
+
+            let mut elements: Vec<_> = value1.elements().map(|e| e.to_owned()).collect();
+            elements.sort();
+            assert_eq!(elements, vec![1, 2, 3, 4, 5]);
+            let mut elements: Vec<_> = top.elements().map(|e| e.to_owned()).collect();
+            elements.sort();
+            assert_eq!(elements, vec![]);
+
+            let joined = value1.clone().join(value2.clone());
+            let expected_joined: IntPowerset = vec![1, 2, 3, 4, 5, 6, 7].into_iter().collect();
+
+            assert_eq!(joined, expected_joined);
+
+            let met = value1.meet(value2);
+            let expected_met: IntPowerset = vec![3, 4, 5].into_iter().collect();
+            assert_eq!(met, expected_met);
+        };
+    }
+
+    #[test]
+    fn test_hash_powerset() {
+        test_powerset_impl!(HashSetAbstractDomain<i64>);
+    }
+
+    #[test]
+    fn test_patriciatree_powerset() {
+        test_powerset_impl!(PatriciaTreeSetAbstractDomain<i64>);
+    }
+}
