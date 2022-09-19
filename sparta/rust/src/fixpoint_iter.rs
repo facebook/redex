@@ -24,9 +24,9 @@ use crate::wpo::WpoIdx;
 // diff for analyzer interface.
 pub trait FixpointIteratorTransformer<G: Graph, D: AbstractDomain> {
     /// The *current_state* could be updated in place.
-    fn analyze_node(&self, n: G::NodeId, current_state: &mut D);
+    fn analyze_node(&mut self, n: G::NodeId, current_state: &mut D);
 
-    fn analyze_edge(&self, e: G::EdgeId, exit_state_at_src: &D) -> D;
+    fn analyze_edge(&mut self, e: G::EdgeId, exit_state_at_src: &D) -> D;
 }
 
 pub struct MonotonicFixpointIteratorContext<G: Graph, D: AbstractDomain> {
@@ -156,7 +156,7 @@ where
             Self::compute_entry_state(
                 self.graph,
                 &self.exit_states,
-                &self.transformer,
+                &mut self.transformer,
                 &context,
                 head,
                 &mut new_state,
@@ -254,7 +254,7 @@ where
     pub fn compute_entry_state(
         graph: &'g G,
         exit_states: &HashMap<G::NodeId, D>,
-        transformer: &T,
+        transformer: &mut T,
         context: &MonotonicFixpointIteratorContext<G, D>,
         n: G::NodeId,
         entry_state: &mut D,
@@ -278,7 +278,7 @@ where
         Self::compute_entry_state(
             self.graph,
             &self.exit_states,
-            &self.transformer,
+            &mut self.transformer,
             context,
             n,
             entry_state,
