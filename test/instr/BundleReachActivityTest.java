@@ -8,7 +8,7 @@
 package com.facebook.redextest;
 
 import android.app.Activity;
-import android.support.test.rule.ActivityTestRule;
+import androidx.test.rule.ActivityTestRule;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
