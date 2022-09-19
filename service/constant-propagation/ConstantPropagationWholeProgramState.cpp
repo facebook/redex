@@ -71,7 +71,7 @@ void analyze_clinits(const Scope& scope,
       IRCode* code = clinit->get_code();
       auto& cfg = code->cfg();
       auto intra_cp = fp_iter.get_intraprocedural_analysis(clinit);
-      auto env = intra_cp->get_exit_state_at(cfg.exit_block());
+      const auto& env = intra_cp->get_exit_state_at(cfg.exit_block());
       set_fields_in_partition(cls, env.get_field_environment(),
                               FieldType::STATIC, &cls_field_partition);
     }

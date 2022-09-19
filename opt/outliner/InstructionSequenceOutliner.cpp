@@ -1044,12 +1044,9 @@ static MethodCandidates find_method_candidates(
           std::vector<std::pair<reg_t, IRInstruction*>> live_out_consts;
           boost::optional<std::pair<reg_t, bool>> out_reg;
           if (!pc.root.defined_regs.empty()) {
-            LivenessDomain live_out;
-            if (next_block) {
-              live_out = liveness_fp_iter->get_live_in_vars_at(next_block);
-            } else {
-              live_out = live_outs[it.block()].at(it->insn);
-            }
+            const auto& live_out =
+                next_block ? liveness_fp_iter->get_live_in_vars_at(next_block)
+                           : live_outs[it.block()].at(it->insn);
             auto first_block_throw_live_out = throw_live_out[first_block];
             for (auto& p : pc.root.defined_regs) {
               if (first_block_throw_live_out.contains(p.first)) {

@@ -421,7 +421,7 @@ boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
     if (last == block->end() || !opcode::is_a_return(last->insn->opcode())) {
       continue;
     }
-    const auto env = analyzer.get_exit_state_at(block);
+    const auto& env = analyzer.get_exit_state_at(block);
     const auto& block_return_param_index = env.get(RETURN_VALUE);
     return_param_index.join_with(block_return_param_index);
   }

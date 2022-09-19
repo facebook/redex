@@ -804,7 +804,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
 
   AbstractObjectDomain get_return_value() const { return m_return_value; }
 
-  AbstractObjectEnvironment get_exit_state() const {
+  const AbstractObjectEnvironment& get_exit_state() const {
     return get_exit_state_at(m_cfg.exit_block());
   }
 

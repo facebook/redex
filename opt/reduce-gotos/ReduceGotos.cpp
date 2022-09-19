@@ -138,7 +138,7 @@ void ReduceGotosPass::process_code_switches(cfg::ControlFlowGraph& cfg,
         liveness_iter.reset(new LivenessFixpointIterator(cfg));
         liveness_iter->run(LivenessDomain(cfg.get_registers_size()));
       }
-      auto live_out_vars = liveness_iter->get_live_out_vars_at(b);
+      const auto& live_out_vars = liveness_iter->get_live_out_vars_at(b);
       auto single_non_fallthrough_edge_it = std::find_if(
           branch_edges.begin(), branch_edges.end(),
           [goto_target](cfg::Edge* e) { return e->target() != goto_target; });

@@ -846,7 +846,7 @@ void Transform::forward_targets(
           liveness_fixpoint_iter.reset(new LivenessFixpointIterator(cfg));
           liveness_fixpoint_iter->run(LivenessDomain());
         }
-        auto live_in_vars = liveness_fixpoint_iter->get_live_in_vars_at(
+        const auto& live_in_vars = liveness_fixpoint_iter->get_live_in_vars_at(
             unconditional_target.target);
         if (live_in_vars.is_bottom()) {
           // Could happen after having applied other transformations already
@@ -1032,7 +1032,7 @@ void Transform::legacy_apply_forward_targets(
   // the cfg.
   std::unique_ptr<LivenessFixpointIterator> liveness_fixpoint_iter;
   for (auto block : cfg.blocks()) {
-    auto env = intra_cp.get_exit_state_at(block);
+    const auto& env = intra_cp.get_exit_state_at(block);
     if (env.is_bottom()) {
       // We found an unreachable block, or one that was added the cfg after
       // intra_cp has run; just ignore it.

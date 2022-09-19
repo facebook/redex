@@ -75,7 +75,7 @@ struct IteratorSpecial {
     os << "entry state: " << cur << "\n";
   }
   void end_block(std::ostream& os, cfg::Block* b) {
-    auto exit_state = iter.get_exit_state_at(b);
+    const auto& exit_state = iter.get_exit_state_at(b);
     os << "exit state: " << exit_state << "\n";
   }
 };

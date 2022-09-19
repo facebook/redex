@@ -479,7 +479,7 @@ void print(std::ostream& os,
       analysis::LockEnvironment env(sparta::AbstractValueKind::Bottom);
       print_state(env);
       for (auto* edge : GraphInterface::predecessors(cfg, b)) {
-        auto prev_exit =
+        const auto& prev_exit =
             iter.get_exit_state_at(GraphInterface::source(cfg, edge));
         auto analyzed = iter.analyze_edge(edge, prev_exit);
         env.join_with(analyzed);

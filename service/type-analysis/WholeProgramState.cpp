@@ -210,7 +210,7 @@ void WholeProgramState::analyze_clinits_and_ctors(
       IRCode* code = clinit->get_code();
       auto& cfg = code->cfg();
       auto lta = gta.get_local_analysis(clinit);
-      auto env = lta->get_exit_state_at(cfg.exit_block());
+      const auto& env = lta->get_exit_state_at(cfg.exit_block());
       set_sfields_in_partition(cls, env, field_partition);
     } else {
       set_sfields_in_partition(cls, DexTypeEnvironment::top(), field_partition);
@@ -224,7 +224,7 @@ void WholeProgramState::analyze_clinits_and_ctors(
       IRCode* code = ctor->get_code();
       auto& cfg = code->cfg();
       auto lta = gta.get_local_analysis(ctor);
-      auto env = lta->get_exit_state_at(cfg.exit_block());
+      const auto& env = lta->get_exit_state_at(cfg.exit_block());
       set_ifields_in_partition(cls, env, field_partition);
     }
   }

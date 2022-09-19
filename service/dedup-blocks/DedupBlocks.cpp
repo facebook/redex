@@ -1015,7 +1015,7 @@ class DedupBlocksImpl {
     // finer-grained partitioning.
 
     // Initializing stuff...
-    auto live_in_vars =
+    const auto& live_in_vars =
         liveness_fixpoint_iter.get_live_in_vars_at(*blocks.begin());
     if (!(live_in_vars.is_value())) {
       // should never happen, but we are not going to fight that here

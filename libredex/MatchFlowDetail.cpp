@@ -425,7 +425,7 @@ void DataFlowGraph::propagate_flow_constraints(
   // (1) Erase inconsistent nodes.
   for (auto it = m_adjacencies.begin(), end = m_adjacencies.end(); it != end;) {
     auto& node = it->first;
-    auto part = analysis.get_exit_state_at(node);
+    const auto& part = analysis.get_exit_state_at(node);
 
     if (part.get(node_loc(node)).contains(node_insn(node))) {
       TRACE(MFLOW, 6, "propagate_flow_constraints: %s inconsistent for L%zu",

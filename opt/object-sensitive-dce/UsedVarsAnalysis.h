@@ -81,11 +81,11 @@ class FixpointIterator final
   bool is_required(const IRInstruction* insn,
                    const UsedVarsSet& used_vars) const;
 
-  UsedVarsSet get_used_vars_at_entry(const NodeId& block) const {
+  const UsedVarsSet& get_used_vars_at_entry(const NodeId& block) const {
     return get_exit_state_at(block);
   }
 
-  UsedVarsSet get_used_vars_at_exit(const NodeId& block) const {
+  const UsedVarsSet& get_used_vars_at_exit(const NodeId& block) const {
     return get_entry_state_at(block);
   }
 
