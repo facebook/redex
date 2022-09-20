@@ -4,7 +4,7 @@
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
-
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include "Creators.h"
@@ -760,6 +760,129 @@ TEST_F(RemoveUninstantiablesTest, RunPassInstantiableChildrenDefined) {
   EXPECT_EQ(0, rm_uninst->metrics.at("removed_vmethods"));
   EXPECT_EQ(0, rm_uninst->metrics.at("throw_null_methods"));
   EXPECT_EQ(0, rm_uninst->metrics.at("get_uninstantiables"));
+}
+
+TEST_F(RemoveUninstantiablesTest, UsageHandlerMixedObfuscationUninstantiables_UsageInstantiablesRemoved) {
+  auto* obfuscated_instantiable = def_class("La/b/c$d;");
+  auto* obfuscated_uninstantiable = def_class("Le/f/g;");
+  auto* unobfuscated_instantiable = def_class("Lunobfuscated/but/instantiable;");
+  auto* unobfuscated_uninstantiable = def_class("Lunobfuscated/and/uninstantiable;");
+
+  std::unordered_set<DexType*> uninstantiable_types;
+  uninstantiable_types.emplace(obfuscated_instantiable->get_type());
+  uninstantiable_types.emplace(obfuscated_uninstantiable->get_type());
+  uninstantiable_types.emplace(unobfuscated_instantiable->get_type());
+  uninstantiable_types.emplace(unobfuscated_uninstantiable->get_type());
+
+  std::unordered_map<std::string, DexType*> deobfuscated_uninstantiable_type;
+  deobfuscated_uninstantiable_type.emplace("Ldeobfuscated/instantiable$name;", obfuscated_instantiable->get_type());
+  deobfuscated_uninstantiable_type.emplace("Ldeobfuscated/uninstantiable$name;", obfuscated_uninstantiable->get_type());
+
+  UsageHandler uh;
+
+  EXPECT_EQ(4, uninstantiable_types.size());
+  uh.handle_usage_line("deobfuscated.instantiable$name:", deobfuscated_uninstantiable_type, uninstantiable_types);
+  uh.handle_usage_line("    public instantiable$name()", deobfuscated_uninstantiable_type, uninstantiable_types);
+  uh.handle_usage_line("deobfuscated.uninstantiable$name:", deobfuscated_uninstantiable_type, uninstantiable_types);
+  uh.handle_usage_line("    public shouldNotMakeInstantiable()", deobfuscated_uninstantiable_type, uninstantiable_types);
+  uh.handle_usage_line("unobfuscated.but.instantiable:", deobfuscated_uninstantiable_type, uninstantiable_types);
+  uh.handle_usage_line("    public instantiable()", deobfuscated_uninstantiable_type, uninstantiable_types);
+  uh.handle_usage_line("unobfuscated.and.uninstantiable:", deobfuscated_uninstantiable_type, uninstantiable_types);
+  uh.handle_usage_line("    public shouldNotMakeInstantiable()", deobfuscated_uninstantiable_type, uninstantiable_types);
+  EXPECT_EQ(2, uninstantiable_types.size());
+  EXPECT_THAT(
+    uninstantiable_types,
+    testing::UnorderedElementsAre(
+      obfuscated_uninstantiable->get_type(),
+      unobfuscated_uninstantiable->get_type()));
+}
+
+TEST_F(RemoveUninstantiablesTest, MakeDeobfuscatedMapMixedObfuscation_OnlyDeobfuscatedInMapping) {
+  DexStoresVector dss{DexStore{"test_store"}};
+
+  const char* const abcd_init = R"(
+    (method (private) "La/b/c$d;.<init>:()V"
+      ((load-param-object v0)
+      (return-void))))";
+
+  auto* obfuscated_class = def_class("La/b/c$d;");
+  obfuscated_class->set_deobfuscated_name("deobfuscated.cls$name");
+  auto* raw_class = def_class("La/b/c;");
+  dss.back().add_classes({obfuscated_class, raw_class});
+
+  std::unordered_set<DexType*> uninstantiable_types;
+  uninstantiable_types.emplace(obfuscated_class->get_type());
+  std::unordered_map<std::string, DexType*> deobfuscated_uninstantiable_type = 
+      make_deobfuscated_map(uninstantiable_types);
+  EXPECT_EQ(1, deobfuscated_uninstantiable_type.size());
+  EXPECT_TRUE(deobfuscated_uninstantiable_type.count("deobfuscated.cls$name"));
+  EXPECT_EQ(deobfuscated_uninstantiable_type.at("deobfuscated.cls$name"), obfuscated_class->get_type());
+}
+
+TEST_F(RemoveUninstantiablesTest, RunPassUsageObfuscatedDefaultConstructor_KeepsInstantiable) {
+  DexStoresVector dss{DexStore{"test_store"}};
+
+  const char* const abcd_something = R"(
+(method (public) "La/b/c$d;.something:()V"
+  ((load-param-object v0)
+   (return-void))
+))";
+  auto* abcd_class = def_class("La/b/c$d;", abcd_something);
+  auto expected_code = assembler::to_string(DexMethod::get_method("La/b/c$d;.something:()V")->as_def()->get_code());
+
+  dss.back().add_classes({abcd_class});
+
+  RemoveUninstantiablesPass pass;
+
+  std::string usage_input_str =
+R"(deobfuscated.cls$name:
+    public cls$name())";
+  std::basic_istringstream usage_input(usage_input_str);
+  RemoveUninstantiablesPass::test_only_usage_file_input = &usage_input;
+
+  std::string proguard_input_str =
+R"(deobfuscated.cls$name -> a.b.c$d :
+    int field -> f)";
+  std::basic_istringstream proguard_input(proguard_input_str);
+
+  ConfigFiles c(Json::nullValue, proguard_input);
+
+  PassManager pm({&pass});
+  // applying deobfuscation happens in main.cpp which seems like bad design
+  for (auto& store : dss) {
+    apply_deobfuscated_names(store.get_dexen(), c.get_proguard_map());
+  }
+  ASSERT_EQ(1, dss.back().get_dexen().size());
+  pm.run_passes(dss, c);
+  ASSERT_EQ(1, dss.back().get_dexen().size());
+  ASSERT_EQ(1, dss.back().get_dexen().at(0).size());
+  
+  EXPECT_THAT(dss.back().get_dexen().at(0).at(0)->get_name()->c_str(), testing::StrEq("La/b/c$d;"));
+  EXPECT_THAT(dss.back().get_dexen().at(0).at(0)->get_deobfuscated_name().c_str(), testing::StrEq("Ldeobfuscated/cls$name;"));
+  
+  ASSERT_EQ(1, dss.back().get_dexen().at(0).at(0)->get_all_methods().size());
+  EXPECT_THAT(dss.back().get_dexen().at(0).at(0)->get_all_methods().at(0)->get_name()->c_str(), testing::StrEq("something"));
+  
+  ASSERT_TRUE(dss.back().get_dexen().at(0).at(0)->get_all_methods().at(0)->get_code());
+  EXPECT_THAT(expected_code, assembler::to_string(dss.back().get_dexen().at(0).at(0)->get_all_methods().at(0)->get_code()));
+  EXPECT_THAT(dss.back().get_dexen().at(0).at(0)->get_vmethods(), testing::ContainerEq(dss.back().get_dexen().at(0).at(0)->get_all_methods()));
+
+  const auto& pass_infos = pm.get_pass_info();
+  auto rm_uninst =
+      std::find_if(pass_infos.begin(), pass_infos.end(), [](const auto& pi) {
+        return pi.pass->name() == "RemoveUninstantiablesPass";
+      });
+  ASSERT_NE(rm_uninst, pass_infos.end());
+
+  EXPECT_EQ(0, rm_uninst->metrics.at("instance_ofs"));
+  EXPECT_EQ(0, rm_uninst->metrics.at("invokes"));
+  EXPECT_EQ(0, rm_uninst->metrics.at("field_accesses_on_uninstantiable"));
+  EXPECT_EQ(0, rm_uninst->metrics.at("throw_null_methods"));
+  EXPECT_EQ(0, rm_uninst->metrics.at("abstracted_classes"));
+  EXPECT_EQ(0, rm_uninst->metrics.at("abstracted_vmethods"));
+  EXPECT_EQ(0, rm_uninst->metrics.at("removed_vmethods"));
+  EXPECT_EQ(0, rm_uninst->metrics.at("get_uninstantiables"));
+  EXPECT_EQ(0, rm_uninst->metrics.at("check_casts"));
 }
 
 } // namespace

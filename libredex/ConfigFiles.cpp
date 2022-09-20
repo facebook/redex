@@ -49,6 +49,11 @@ ConfigFiles::ConfigFiles(const Json::Value& config, const std::string& outdir)
   m_instruction_size_bitwidth_limit = instruction_size_bitwidth_limit;
 }
 
+ConfigFiles::ConfigFiles(const Json::Value& config, std::istream& proguard_input) : ConfigFiles(config, "") {
+  m_proguard_map = std::make_unique<ProguardMap>(proguard_input);
+  m_method_profiles = std::make_unique<method_profiles::MethodProfiles>(*m_proguard_map);
+}
+
 ConfigFiles::ConfigFiles(const Json::Value& config) : ConfigFiles(config, "") {}
 
 ConfigFiles::~ConfigFiles() {

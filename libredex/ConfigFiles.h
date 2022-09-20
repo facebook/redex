@@ -46,6 +46,8 @@ class MethodProfiles;
  */
 struct ConfigFiles {
   explicit ConfigFiles(const Json::Value& config);
+  // For test purposes to inject a ProguardMap without a stand-alone file
+  explicit ConfigFiles(const Json::Value& config, std::istream& proguard_input);
   ConfigFiles(const Json::Value& config, const std::string& outdir);
   ~ConfigFiles();
 

@@ -14,6 +14,34 @@ namespace cfg {
 class ControlFlowGraph;
 } // namespace cfg
 
+std::unordered_map<std::string, DexType*> make_deobfuscated_map(const std::unordered_set<DexType*>& obfuscated_types);
+
+class UsageHandler {
+ public:
+  std::string cls_name;
+  std::string type_name;
+  DexType* cls_type = nullptr;
+  DexType* usage_type = nullptr;
+  int count = 0;
+  bool has_ctor = false;
+
+  void reset() {
+    cls_name = "";
+    type_name = "";
+    cls_type = nullptr;
+    usage_type = nullptr;
+    count = 0;
+    has_ctor = false;
+  };
+
+  UsageHandler() {};
+
+  void handle_usage_line(
+    const std::string& line,
+    const std::unordered_map<std::string, DexType*>& deobfuscated_uninstantiable_type,
+    std::unordered_set<DexType*>& uninstantiable_types);
+};
+
 /// Looks for mentions of classes that have no constructors and use the fact
 /// they can't be instantiated to simplify those mentions:
 ///
@@ -33,6 +61,10 @@ class ControlFlowGraph;
 ///    `null`.
 class RemoveUninstantiablesPass : public Pass {
  public:
+  UsageHandler uh;
+  // Testing injector to mimic m_proguard_usage_name
+  static std::istream* test_only_usage_file_input;
+
   RemoveUninstantiablesPass() : Pass("RemoveUninstantiablesPass") {}
 
   /// Counts of references to uninstantiable classes removed.
@@ -60,6 +92,8 @@ class RemoveUninstantiablesPass : public Pass {
       std::unordered_map<DexType*, std::unordered_set<DexType*>>*
           instantiable_children = nullptr);
 
+  static void readUsage(std::istream& usage_file, std::unordered_set<DexType*>& uninstantiable_types);
+
   /// Look for mentions of uninstantiable classes in \p cfg and modify them
   /// in-place.
   static Stats replace_uninstantiable_refs(
@@ -73,4 +107,12 @@ class RemoveUninstantiablesPass : public Pass {
   static Stats replace_all_with_throw(cfg::ControlFlowGraph& cfg);
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+
+  void bind_config() override {
+    // The Proguard usage.txt file name. Need to be added by gradle plugin.
+    bind("proguard_usage_name", "", m_proguard_usage_name);
+  }
+
+ protected:
+  static std::string m_proguard_usage_name;
 };

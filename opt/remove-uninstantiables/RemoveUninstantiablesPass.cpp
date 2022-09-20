@@ -22,6 +22,10 @@
 #include "Walkers.h"
 
 #include <boost/optional.hpp>
+#include <iostream>
+
+std::string RemoveUninstantiablesPass::m_proguard_usage_name = "";
+std::istream* RemoveUninstantiablesPass::test_only_usage_file_input = nullptr;
 
 namespace {
 
@@ -280,6 +284,126 @@ void RemoveUninstantiablesPass::Stats::report(PassManager& mgr) const {
 #undef REPORT
 }
 
+// Map deobfuscated type name in internal format (La/b/MyClass;) to the obfuscated DexType*.
+std::unordered_map<std::string, DexType*> make_deobfuscated_map(const std::unordered_set<DexType*>& obfuscated_types) {
+  std::unordered_map<std::string, DexType*> deobfuscated_to_type;
+  for (auto obfuscated_type : obfuscated_types) {
+    auto obfuscated_cls = type_class(obfuscated_type);
+    auto deobfuscated_name = obfuscated_cls->get_deobfuscated_name().str();
+    TRACE(
+      RMUNINST, 4, "Mapping deobfuscated name to obfuscated type: '%s' -> '%s'",
+      deobfuscated_name.c_str(), SHOW(obfuscated_type));
+    if (deobfuscated_to_type.count(deobfuscated_name) > 0) {
+      always_assert_log(
+        deobfuscated_to_type.count(deobfuscated_name),
+        "Multiple uninstantiable types with same deobfuscated name! '%s' == '%s' && '%s'",
+        deobfuscated_name.c_str(),
+        SHOW(obfuscated_type),
+        SHOW(deobfuscated_to_type.at(deobfuscated_name))
+      );
+    }
+    deobfuscated_to_type.emplace(deobfuscated_name, obfuscated_type);
+  }
+  return deobfuscated_to_type;
+}
+
+// Handles a single line of usage.txt proguard file from `-printusage`.
+// Focuses on looking for removed constructors for instantiability.
+//
+// Typical usage.txt contents:
+// ----
+// androidx.core.view.ViewKt$postOnAnimationDelayed$runnable$1
+// androidx.core.view.ViewParentCompat:
+//     private static int[] sTempNestedScrollConsumed
+//     41:41:private ViewParentCompat()
+// ----
+// A classname on its own line means the whole class was removed and can be
+// ignored.
+// If the classname is followed by a ":", then what follows is a 4-space
+// indented list of parts that were removed. The list continues until we find a
+// de-indent which means we once again have a class name.
+// We specifically look for removed constructors by doing a name check for a
+// removed method that is named the name of the class. All names are
+// unobfuscated (pre-proguard) and need to be obfuscated to find relevant redex
+// classes.
+void UsageHandler::handle_usage_line(
+    const std::string& line,
+    const std::unordered_map<std::string, DexType*>& deobfuscated_to_uninstantiable_type,
+    std::unordered_set<DexType*>& uninstantiable_types) {
+  TRACE(RMUNINST, 5, "usage.txt line: %s", line.c_str());
+  // The current line is a class
+  if (line.find(" ") != 0) {
+    int dot_index = line.find_last_of('.');
+    int end_index = line.find_first_of(':');
+    cls_name = line.substr(dot_index + 1, end_index - dot_index - 1);
+    // usage lines use external naming (a.b.MyClass) and we need to translate
+    // to internal naming (La/b/MyClass;) to match type names
+    type_name = convert_type(line.substr(0, end_index));
+    usage_type = DexType::get_type(type_name);
+
+    TRACE(RMUNINST, 5, "usage.txt line type (deobfuscated) name: '%s'", type_name.c_str());
+    if (usage_type != nullptr) {
+      TRACE(RMUNINST, 5, "usage.txt line type (deobfuscated): '%s'", SHOW(usage_type));
+    } else {
+      TRACE(RMUNINST, 5, "usage.txt line type (deobfuscated) does not exist!");
+    }
+
+    if (deobfuscated_to_uninstantiable_type.count(type_name) <= 0) {
+      TRACE(RMUNINST, 5, "usage.txt type has no obfuscated version: %s", type_name.c_str());
+      cls_type = usage_type;
+    } else {
+      cls_type = deobfuscated_to_uninstantiable_type.at(type_name);
+      TRACE(RMUNINST, 5, "usage.txt obfuscated type: '%s' -> '%s'", SHOW(cls_type), type_name.c_str());
+    }
+    if (uninstantiable_types.count(cls_type)) {
+      has_ctor = false;
+    } else {
+      has_ctor = true;
+    }
+  } else {
+    if (has_ctor) {
+      return;
+    }
+    // The current line is a constructor method
+    if (line.find(cls_name + "(") != std::string::npos) {
+      has_ctor = true;
+      if (uninstantiable_types.count(cls_type)) {
+        TRACE(
+          RMUNINST, 4,
+          "Keeping class due to proguard-removed constructor: %s",
+          SHOW(cls_type));
+        count++;
+      } else {
+        TRACE(
+          RMUNINST, 4, "Keep class not present! Skipping: %s",
+          SHOW(cls_type));
+      }
+      uninstantiable_types.erase(cls_type);
+    }
+  }
+}
+
+// Prune the list of possibly uninstantiable types by looking at the <init>
+// constructor that Proguard deleted.
+void RemoveUninstantiablesPass::readUsage(std::istream& usage_file, std::unordered_set<DexType*>& uninstantiable_types) {
+  // uninstantiable_types may have obfuscated names. Deobfuscate for usage.txt.
+  std::unordered_map<std::string, DexType*> deobfuscated_to_uninstantiable_type =
+      make_deobfuscated_map(uninstantiable_types);
+  TRACE(
+    RMUNINST, 1, "Mapped %lu deobfuscated<->obfuscated types",
+    deobfuscated_to_uninstantiable_type.size());
+
+  UsageHandler uh;
+  std::string line;
+  while(getline(usage_file, line)) {
+    uh.handle_usage_line(line, deobfuscated_to_uninstantiable_type, uninstantiable_types);
+  }
+  TRACE(
+    RMUNINST, 1,
+    "Removed %u types from uninstantiable_types by reading proguard file",
+    uh.count);
+}
+
 // Computes set of uninstantiable types, also looking at the type system to
 // find non-external (and non-native)...
 // - interfaces that are not annotations, are not root (or unrenameable) and
@@ -317,13 +441,24 @@ RemoveUninstantiablesPass::compute_scoped_uninstantiable_types(
       instantiable_classes.insert(cls);
     }
   });
+
+  if(RemoveUninstantiablesPass::m_proguard_usage_name.compare("") != 0) {
+    std::ifstream infile;
+    infile.open(RemoveUninstantiablesPass::m_proguard_usage_name.data());
+    always_assert(infile.is_open());
+    readUsage(infile, uninstantiable_types);
+    infile.close();
+  } else if (RemoveUninstantiablesPass::test_only_usage_file_input != nullptr) {
+    readUsage(*RemoveUninstantiablesPass::test_only_usage_file_input, uninstantiable_types);
+  }
+
   // Next, we prune the list of possibly uninstantiable types by looking at
   // what instantiable classes implement and extend.
   std::unordered_set<const DexClass*> visited;
-  std::function<bool(const DexClass*)> visit;
+  std::function<void(const DexClass*)> visit;
   visit = [&](const DexClass* cls) {
     if (cls == nullptr || !visited.insert(cls).second) {
-      return false;
+      return;
     }
     if (instantiable_children) {
       (*instantiable_children)[cls->get_super_class()].insert(cls->get_type());
@@ -332,13 +467,17 @@ RemoveUninstantiablesPass::compute_scoped_uninstantiable_types(
     for (auto interface : *cls->get_interfaces()) {
       visit(type_class(interface));
     }
-    return true;
+    visit(type_class(cls->get_super_class()));
   };
+
+  size_t count = uninstantiable_types.size();
   for (auto cls : instantiable_classes) {
-    while (visit(cls)) {
-      cls = type_class(cls->get_super_class());
-    }
+    visit(cls);
   }
+
+  TRACE(
+    RMUNINST, 1, "Removed %lu classes by pruning parents/interfaces",
+    count - uninstantiable_types.size());
   uninstantiable_types.insert(type::java_lang_Void());
   return uninstantiable_types;
 }
@@ -445,6 +584,21 @@ void RemoveUninstantiablesPass::run_pass(DexStoresVector& stores,
       instantiable_children;
   std::unordered_set<DexType*> scoped_uninstantiable_types =
       compute_scoped_uninstantiable_types(scope, &instantiable_children);
+  TRACE(RMUNINST, 2, "Total instantiable types: %lu", instantiable_children.size());
+  TRACE(RMUNINST, 2, "Total uninstantiable types: %lu", scoped_uninstantiable_types.size());
+  for (auto utype : scoped_uninstantiable_types) {
+    TRACE(
+      RMUNINST, 5, "uninstantiable class: %s -> %s",
+      SHOW(utype), type_class(utype)->get_deobfuscated_name_or_empty().c_str());
+  }
+  for (auto itype : instantiable_children) {
+    if (itype.first == nullptr) {
+      continue;
+    }
+    TRACE(
+      RMUNINST, 5, "instantible class: %s -> %s",
+      SHOW(itype.first), type_class(itype.first)->get_deobfuscated_name_or_empty().c_str());
+  }
   OverriddenVirtualScopesAnalysis overridden_virtual_scopes_analysis(
       scope, scoped_uninstantiable_types, instantiable_children);
   // We perform structural changes, i.e. whether a method has a body and
