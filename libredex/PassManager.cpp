@@ -850,6 +850,9 @@ class AfterPassSizes {
       close(STDERR_FILENO);
     }
 
+    // Ensure that aborts work correctly.
+    set_abort_if_not_this_thread();
+
     auto maybe_run = [&](const char* pass_name) {
       auto pass = m_mgr->find_pass(pass_name);
       if (pass != nullptr) {
