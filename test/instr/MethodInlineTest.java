@@ -420,7 +420,7 @@ public class MethodInlineTest {
       return 1;
     }
 
-    @android.support.annotation.RequiresApi(Build.VERSION_CODES.N)
+    @androidx.annotation.RequiresApi(Build.VERSION_CODES.N)
     public static int shouldNotInlineOintoN() {
       return NeedsAndroidO.useApiO();
     }
