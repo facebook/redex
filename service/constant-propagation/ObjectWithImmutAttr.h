@@ -366,6 +366,9 @@ class ObjectWithImmutAttrDomain final
       m_value = std::make_unique<ObjectWithImmutAttr>(*other.m_value);
     }
   }
+
+  ObjectWithImmutAttrDomain(ObjectWithImmutAttrDomain&& other) = default;
+
   ObjectWithImmutAttrDomain& operator=(const ObjectWithImmutAttrDomain& other) {
     m_kind = other.m_kind;
     if (other.m_value) {
@@ -373,6 +376,9 @@ class ObjectWithImmutAttrDomain final
     }
     return *this;
   }
+
+  ObjectWithImmutAttrDomain& operator=(ObjectWithImmutAttrDomain&& other) =
+      default;
 
   boost::optional<ObjectWithImmutAttr> get_constant() const {
     return m_value ? boost::make_optional(*m_value) : boost::none;
