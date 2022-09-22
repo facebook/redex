@@ -254,6 +254,27 @@ struct ObjectWithImmutAttr {
     return true;
   }
 
+  bool leq(const ObjectWithImmutAttr& other) const {
+    redex_assert(type == other.type);
+    if (jvm_cached_singleton && !other.jvm_cached_singleton) {
+      return false;
+    }
+    if (attributes.size() > other.attributes.size()) {
+      return false;
+    }
+    for (size_t idx = 0; idx < attributes.size(); idx++) {
+      auto& attr1 = attributes[idx];
+      const auto& attr2 = other.attributes[idx];
+      if (attr1.attr != attr2.attr) {
+        return false;
+      }
+      if (!attr1.value.leq(attr2.value)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   void join_with(const ObjectWithImmutAttr& other) {
     redex_assert(type == other.type);
     bool is_all_constant = true;
@@ -405,7 +426,13 @@ class ObjectWithImmutAttrDomain final
   }
 
   bool leq(const ObjectWithImmutAttrDomain& other) const override {
-    return equals(other);
+    if (is_top()) {
+      return other.is_top();
+    }
+    if (other.is_top()) {
+      return true;
+    }
+    return m_value->leq(*other.m_value);
   }
 
   bool equals(const ObjectWithImmutAttrDomain& other) const override {

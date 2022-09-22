@@ -111,7 +111,8 @@ struct ImmutableTest : public ConstantPropagationTest {
           return ImmutableAttr::Attr(method);
         }
       }();
-      always_assert_log(value.size() == 1, "Only accept string or integer");
+      always_assert_log(value.size() == 1,
+                        "Only accept string or integer or integer range");
       auto get_val = [&]() -> AttrDomain {
         if (value[0].is_int32()) {
           return SignedConstantDomain(value[0].get_int32());
@@ -123,6 +124,12 @@ struct ImmutableTest : public ConstantPropagationTest {
           } else {
             return StringDomain(DexString::make_string(value_s));
           }
+        } else if (value[0].is_list()) {
+          always_assert_log(value[0].size() == 2, "expected two elements");
+          always_assert_log(value[0][0].is_int32(), "expected int32");
+          always_assert_log(value[0][1].is_int32(), "expected int32");
+          return SignedConstantDomain(value[0][0].get_int32(),
+                                      value[0][1].get_int32());
         } else {
           always_assert_log(false, "value is not supported");
         };
@@ -278,6 +285,22 @@ TEST_F(ImmutableTest, abstract_domain) {
     ))");
     y_object.join_with(a_1_b_3);
     EXPECT_TRUE(y_object.is_top());
+  }
+  // leq
+  {
+    auto c_1 = create_object(R"((
+      "LX;" (
+        ("c:I" #1)
+      )
+    ))");
+    auto c_12 = create_object(R"((
+      "LX;" (
+        ("c:I" (#1 #2))
+      )
+    ))");
+    // c_1 is strictly less than c_12
+    EXPECT_TRUE(c_1.leq(c_12));
+    EXPECT_TRUE(!c_12.leq(c_1));
   }
 }
 
