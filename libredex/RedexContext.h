@@ -338,6 +338,8 @@ struct RedexContext {
 
     typename AType::iterator begin() { return sets.begin(); }
     typename AType::iterator end() { return sets.end(); }
+
+    size_t slots() const { return sets.size(); }
   };
 
   // Hash a 32-byte subsequence of a given string, offset by 32 bytes from the
