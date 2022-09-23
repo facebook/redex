@@ -399,6 +399,9 @@ struct MethodCreator {
                 std::unique_ptr<DexAnnotationSet> anno = nullptr,
                 bool with_debug_item = true);
 
+  MethodCreator(MethodCreator&&) noexcept = default;
+  MethodCreator& operator=(MethodCreator&&) noexcept = default;
+
   /**
    * Get an existing local.
    */

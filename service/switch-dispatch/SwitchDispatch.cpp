@@ -36,9 +36,9 @@ constexpr uint64_t MAX_NUM_DISPATCH_TARGET = 500;
  */
 constexpr uint64_t MAX_NUM_DISPATCH_INSTRUCTION = 40000;
 
-MethodCreator* init_method_creator(const dispatch::Spec& spec,
-                                   DexMethod* orig_method) {
-  return new MethodCreator(
+MethodCreator init_method_creator(const dispatch::Spec& spec,
+                                  DexMethod* orig_method) {
+  return MethodCreator(
       spec.owner_type,
       DexString::make_string(spec.name),
       spec.proto,
@@ -87,9 +87,9 @@ void emit_check_cast(const dispatch::Spec& spec,
  * dummy Location here. In this case, the subsequent return instruciton will be
  * a no-op one.
  */
-Location get_return_location(const dispatch::Spec& spec, MethodCreator* mc) {
-  return spec.proto->is_void() ? mc->get_local(0) // not used
-                               : mc->make_local(spec.proto->get_rtype());
+Location get_return_location(const dispatch::Spec& spec, MethodCreator& mc) {
+  return spec.proto->is_void() ? mc.get_local(0) // not used
+                               : mc.make_local(spec.proto->get_rtype());
 }
 
 bool save_type_tag_to_field(const dispatch::Spec& spec) {
@@ -109,7 +109,7 @@ void handle_default_block(
     const dispatch::Spec& spec,
     const std::map<SwitchIndices, DexMethod*>& indices_to_callee,
     const std::vector<Location>& args,
-    MethodCreator* mc,
+    MethodCreator& mc,
     Location& ret_loc,
     MethodBlock* def_block) {
   if (is_ctor(spec)) {
@@ -129,7 +129,7 @@ void handle_default_block(
     // dex2oat doesn't verify the simple init if the return type is an array
     // type.
     if (type::is_array(spec.proto->get_rtype())) {
-      Location size_loc = mc->make_local(type::_int());
+      Location size_loc = mc.make_local(type::_int());
       def_block->init_loc(size_loc);
       def_block->new_array(spec.proto->get_rtype(), size_loc, ret_loc);
     } else {
@@ -159,8 +159,8 @@ std::map<SwitchIndices, MethodBlock*> get_switch_cases(
   return cases;
 }
 
-DexMethod* materialize_dispatch(DexMethod* orig_method, MethodCreator* mc) {
-  auto dispatch = mc->create();
+DexMethod* materialize_dispatch(DexMethod* orig_method, MethodCreator& mc) {
+  auto dispatch = mc.create();
   dispatch->rstate = orig_method->rstate;
   set_public(dispatch);
   TRACE(SDIS,
@@ -176,11 +176,11 @@ DexMethod* materialize_dispatch(DexMethod* orig_method, MethodCreator* mc) {
  * Given all the method targets have the same proto, args will be the same
  * between them.
  */
-std::vector<Location> get_args_from(DexMethod* method, MethodCreator* mc) {
+std::vector<Location> get_args_from(DexMethod* method, MethodCreator& mc) {
   std::vector<Location> args;
   size_t args_size = method->get_proto()->get_args()->size();
   for (size_t arg_loc = 0; arg_loc < args_size; ++arg_loc) {
-    args.push_back(mc->get_local(arg_loc));
+    args.push_back(mc.get_local(arg_loc));
   }
 
   return args;
@@ -230,11 +230,11 @@ DexMethod* create_simple_switch_dispatch(
         indices_to_callee.size());
   auto orig_method = indices_to_callee.begin()->second;
   auto mc = init_method_creator(spec, orig_method);
-  auto self_loc = mc->get_local(0);
+  auto self_loc = mc.get_local(0);
   // iget type tag field.
-  auto type_tag_loc = mc->make_local(type::_int());
+  auto type_tag_loc = mc.make_local(type::_int());
   auto ret_loc = get_return_location(spec, mc);
-  auto mb = mc->get_main_block();
+  auto mb = mc.get_main_block();
 
   std::vector<Location> args = get_args_from(orig_method, mc);
 
@@ -272,10 +272,10 @@ dispatch::DispatchMethod create_two_level_switch_dispatch(
     const std::map<SwitchIndices, DexMethod*>& indices_to_callee) {
   auto orig_method = indices_to_callee.begin()->second;
   auto mc = init_method_creator(spec, orig_method);
-  auto self_loc = mc->get_local(0);
+  auto self_loc = mc.get_local(0);
   // iget type tag field.
-  auto type_tag_loc = mc->make_local(type::_int());
-  auto mb = mc->get_main_block();
+  auto type_tag_loc = mc.make_local(type::_int());
+  auto mb = mc.get_main_block();
   auto ret_loc = get_return_location(spec, mc);
 
   std::vector<Location> args = get_args_from(orig_method, mc);
@@ -551,10 +551,10 @@ DexMethod* create_ctor_or_static_dispatch(
   auto orig_method = indices_to_callee.begin()->second;
   auto mc = init_method_creator(spec, orig_method);
   auto dispatch_arg_list = spec.proto->get_args();
-  auto type_tag_loc = mc->get_local(
+  auto type_tag_loc = mc.get_local(
       get_type_tag_location_for_ctor_and_static(spec, dispatch_arg_list));
   auto ret_loc = get_return_location(spec, mc);
-  auto mb = mc->get_main_block();
+  auto mb = mc.get_main_block();
   // Set type tag field only when using synthesized type tags.
   // For the external type tag case (GQL), merged ctors take care of that
   // automatically.
