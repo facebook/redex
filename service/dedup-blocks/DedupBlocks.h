@@ -21,6 +21,7 @@ struct Config {
   bool split_postfix = true;
   bool debug = false;
   bool dedup_fill_in_stack_trace = false;
+  uint32_t max_iteration = 6;
 };
 
 struct Stats {

@@ -25,6 +25,7 @@ class DedupBlocksPass : public Pass {
     bind("debug", false, m_config.debug);
     bind(
         "dedup_fill_in_stack_trace", false, m_config.dedup_fill_in_stack_trace);
+    bind("max_iteration", 10, m_config.max_iteration);
   }
 
  private:
