@@ -289,6 +289,10 @@ class DedupBlocksImpl {
    * line up the splitting logic with the deduping logic (and install asserts
    * that they agree), or re-merge left-over block pairs, either explicitly,
    * or by running another RemoveGotos pass.
+   *
+   * TODO(T132664146): DedupBlocks's splitting algorithm unfortunately only
+   * splits out one subtree level per iteration, which could probably be
+   * improved with a better algorithm.
    */
   void split_postfix(cfg::ControlFlowGraph& cfg) {
     PostfixSplitGroupMap dups = collect_postfix_duplicates(cfg);
@@ -1123,11 +1127,14 @@ DedupBlocks::DedupBlocks(const Config* config,
 void DedupBlocks::run() {
   DedupBlocksImpl impl(m_config, m_stats);
   auto& cfg = m_code->cfg();
+  uint32_t iteration = 0;
   do {
+    ++iteration;
     if (m_config->split_postfix) {
       impl.split_postfix(cfg);
     }
-  } while (impl.dedup(m_is_static, m_declaring_type, m_args, cfg));
+  } while (impl.dedup(m_is_static, m_declaring_type, m_args, cfg) &&
+           iteration < m_config->max_iteration);
 }
 
 Stats& Stats::operator+=(const Stats& that) {

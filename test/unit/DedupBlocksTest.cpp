@@ -62,6 +62,18 @@ struct DedupBlocksTest : public RedexTest {
                });
   }
 
+  void run_dedup_blocks_with_iteration(DexMethod* method,
+                                       uint32_t max_iteration) {
+    method->get_code()->build_cfg(/* editable */ true);
+
+    auto& cfg = method->get_code()->cfg();
+    dedup_blocks_impl::Config config;
+    config.max_iteration = max_iteration;
+    dedup_blocks_impl::DedupBlocks impl(&config, method);
+    impl.run();
+    method->get_code()->clear_cfg();
+  }
+
   ~DedupBlocksTest() {}
 };
 
@@ -1337,4 +1349,285 @@ TEST_F(DedupBlocksTest, retainPositionWhenMayThrow) {
   )";
   auto expected_code = assembler::ircode_from_string(expected_str);
   EXPECT_CODE_EQ(expected_code.get(), method->get_code());
+}
+
+// The following two test cases illustrate an edge case we can work on
+// to improve build time. The handling of deduping four throws takes
+// two iterations. While it may be done in one iteration.
+TEST_F(DedupBlocksTest, blockWithIterativeLimit1) {
+  auto input_code = assembler::ircode_from_string(R"(
+    (
+      (:a)
+      (const v0 0)
+      (const v1 0)
+      (const v2 1)
+      (if-eqz v0 :h)
+
+      (:b)
+      (if-eqz v1 :j)
+
+      (:c)
+      (if-eqz v2 :i)
+
+      (:d)
+      (const-class "LTestClass")
+      (move-result-pseudo-object v3)
+      (monitor-enter v3)
+
+      (:e)
+      (new-instance "LTestClass")
+      (move-result-pseudo-object v4)
+      (invoke-direct (v4 v2) "LTestClass.<init>:(I)V")
+
+      (:f)
+      (move-exception v4)
+      (monitor-exit v3)
+
+      (:g)
+      (throw v4)
+      (goto :n)
+
+      (:h)
+      (new-instance "Ljava/lang/Throwable;")
+      (move-result-pseudo-object v4)
+      (invoke-direct (v4 v2) "Ljava/lang/Throwable;.<init>:(I)V")
+      (throw v4)
+      (goto :n)
+
+      (:i)
+      (new-instance "Ljava/lang/Throwable;")
+      (move-result-pseudo-object v6)
+      (invoke-direct (v6 v2) "Ljava/lang/Throwable;.<init>:(I)V")
+      (throw v6)
+      (goto :n)
+
+      (:j)
+      (const-class "LTestClass")
+      (move-result-pseudo-object v5)
+      (monitor-enter v5)
+
+      (:k)
+      (new-instance "LTestClass")
+      (move-result-pseudo-object v6)
+      (invoke-direct (v6 v2) "LTestClass.<init>:(I)V")
+
+      (:l)
+      (move-exception v6)
+      (monitor-exit v5)
+
+      (:m)
+      (throw v6)
+      (goto :n)
+
+      (:n)
+    )
+  )");
+  auto method = get_fresh_method("blockWithIterativeExecution");
+  method->set_code(std::move(input_code));
+  auto code = method->get_code();
+
+  run_dedup_blocks_with_iteration(method, 1);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (:a)
+      (const v0 0)
+      (const v1 0)
+      (const v2 1)
+      (if-eqz v0 :h)
+
+      (:b)
+      (if-eqz v1 :j)
+
+      (:c)
+      (if-eqz v2 :i)
+
+      (:d)
+      (const-class "LTestClass")
+      (move-result-pseudo-object v3)
+      (monitor-enter v3)
+
+      (:e)
+      (new-instance "LTestClass")
+      (move-result-pseudo-object v4)
+      (invoke-direct (v4 v2) "LTestClass.<init>:(I)V")
+
+      (:f)
+      (move-exception v4)
+      (monitor-exit v3)
+
+      (:g)
+      (throw v4)
+
+      (:h)
+      (new-instance "Ljava/lang/Throwable;")
+      (move-result-pseudo-object v4)
+      (invoke-direct (v4 v2) "Ljava/lang/Throwable;.<init>:(I)V")
+      (goto :g)
+
+      (:i)
+      (new-instance "Ljava/lang/Throwable;")
+      (move-result-pseudo-object v6)
+      (invoke-direct (v6 v2) "Ljava/lang/Throwable;.<init>:(I)V")
+      (throw v6)
+
+      (:j)
+      (const-class "LTestClass")
+      (move-result-pseudo-object v5)
+      (monitor-enter v5)
+
+      (:k)
+      (new-instance "LTestClass")
+      (move-result-pseudo-object v6)
+      (invoke-direct (v6 v2) "LTestClass.<init>:(I)V")
+
+      (:l)
+      (move-exception v6)
+      (monitor-exit v5)
+
+      (:m)
+      (throw v6)
+    )
+  )");
+
+  EXPECT_CODE_EQ(expected_code.get(), code);
+}
+
+TEST_F(DedupBlocksTest, blockWithIterativeLimit2) {
+  auto input_code = assembler::ircode_from_string(R"(
+    (
+      (:a)
+      (const v0 0)
+      (const v1 0)
+      (const v2 1)
+      (if-eqz v0 :h)
+
+      (:b)
+      (if-eqz v1 :j)
+
+      (:c)
+      (if-eqz v2 :i)
+
+      (:d)
+      (const-class "LTestClass")
+      (move-result-pseudo-object v3)
+      (monitor-enter v3)
+
+      (:e)
+      (new-instance "LTestClass")
+      (move-result-pseudo-object v4)
+      (invoke-direct (v4 v2) "LTestClass.<init>:(I)V")
+
+      (:f)
+      (move-exception v4)
+      (monitor-exit v3)
+
+      (:g)
+      (throw v4)
+      (goto :n)
+
+      (:h)
+      (new-instance "Ljava/lang/Throwable;")
+      (move-result-pseudo-object v4)
+      (invoke-direct (v4 v2) "Ljava/lang/Throwable;.<init>:(I)V")
+      (throw v4)
+      (goto :n)
+
+      (:i)
+      (new-instance "Ljava/lang/Throwable;")
+      (move-result-pseudo-object v6)
+      (invoke-direct (v6 v2) "Ljava/lang/Throwable;.<init>:(I)V")
+      (throw v6)
+      (goto :n)
+
+      (:j)
+      (const-class "LTestClass")
+      (move-result-pseudo-object v5)
+      (monitor-enter v5)
+
+      (:k)
+      (new-instance "LTestClass")
+      (move-result-pseudo-object v6)
+      (invoke-direct (v6 v2) "LTestClass.<init>:(I)V")
+
+      (:l)
+      (move-exception v6)
+      (monitor-exit v5)
+
+      (:m)
+      (throw v6)
+      (goto :n)
+
+      (:n)
+    )
+  )");
+  auto method = get_fresh_method("blockWithIterativeExecution");
+  method->set_code(std::move(input_code));
+  auto code = method->get_code();
+
+  run_dedup_blocks_with_iteration(method, 2);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (:a)
+      (const v0 0)
+      (const v1 0)
+      (const v2 1)
+      (if-eqz v0 :h)
+
+      (:b)
+      (if-eqz v1 :j)
+
+      (:c)
+      (if-eqz v2 :i)
+
+      (:d)
+      (const-class "LTestClass")
+      (move-result-pseudo-object v3)
+      (monitor-enter v3)
+
+      (:e)
+      (new-instance "LTestClass")
+      (move-result-pseudo-object v4)
+      (invoke-direct (v4 v2) "LTestClass.<init>:(I)V")
+
+      (:f)
+      (move-exception v4)
+      (monitor-exit v3)
+
+      (:g)
+      (throw v4)
+
+      (:h)
+      (new-instance "Ljava/lang/Throwable;")
+      (move-result-pseudo-object v4)
+      (invoke-direct (v4 v2) "Ljava/lang/Throwable;.<init>:(I)V")
+      (goto :g)
+
+      (:j)
+      (const-class "LTestClass")
+      (move-result-pseudo-object v5)
+      (monitor-enter v5)
+
+      (:k)
+      (new-instance "LTestClass")
+      (move-result-pseudo-object v6)
+      (invoke-direct (v6 v2) "LTestClass.<init>:(I)V")
+
+      (:l)
+      (move-exception v6)
+      (monitor-exit v5)
+      (goto :m)
+
+      (:i)
+      (new-instance "Ljava/lang/Throwable;")
+      (move-result-pseudo-object v6)
+      (invoke-direct (v6 v2) "Ljava/lang/Throwable;.<init>:(I)V")
+
+      (:m)
+      (throw v6)
+    )
+  )");
+
+  EXPECT_CODE_EQ(expected_code.get(), code);
 }
