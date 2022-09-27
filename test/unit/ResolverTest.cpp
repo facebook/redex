@@ -131,7 +131,9 @@ void create_field_scope() {
  *   void method()
  * class B implements A
  *   void method()
+ *   static void surprise()
  * class C extends B
+ *   void surprise()
  *
  * class D extends C
  *   void method()
@@ -162,8 +164,11 @@ void create_method_scope() {
   create_method(interface_a, "method", ACC_PUBLIC | ACC_INTERFACE);
   auto cls_b = create_class(b, obj_t, interfaces_a, no_fields, ACC_PUBLIC);
   create_method(cls_b, "method", ACC_PUBLIC);
+  create_method(cls_b, "surprise", ACC_PUBLIC | ACC_STATIC, /* concrete */ true,
+                /* is_virtual */ false);
   auto cls_c = create_class(c, b, interfaces_a, no_fields, ACC_PUBLIC);
   create_method(cls_c, "method", ACC_PUBLIC, /* concrete */ false);
+  create_method(cls_c, "surprise", ACC_PUBLIC);
   auto cls_d = create_class(d, c, interfaces_a, no_fields, ACC_PUBLIC);
   create_method(cls_d, "method", ACC_PUBLIC);
 
@@ -308,15 +313,20 @@ TEST_F(ResolverTest, ResolveMethod) {
 
   auto b_method = DexMethod::get_method("B.method:()V");
   EXPECT_TRUE(b_method != nullptr && b_method->is_def());
+  auto b_surprise = DexMethod::get_method("B.surprise:()V");
+  EXPECT_TRUE(b_surprise != nullptr && b_surprise->is_def());
 
   auto c_method = DexMethod::get_method("C.method:()V");
   EXPECT_TRUE(c_method != nullptr && !c_method->is_def());
+  auto c_surprise = DexMethod::get_method("C.surprise:()V");
+  EXPECT_TRUE(c_surprise != nullptr && c_surprise->is_def());
 
   auto d_method = DexMethod::get_method("D.method:()V");
   EXPECT_TRUE(d_method != nullptr && d_method->is_def());
 
   auto a_method_def = a_method->as_def();
   auto b_method_def = b_method->as_def();
+  auto c_surprise_def = c_surprise->as_def();
   auto d_method_def = d_method->as_def();
 
   EXPECT_TRUE(resolve_method(a_method, MethodSearch::Direct) == a_method);
@@ -371,6 +381,9 @@ TEST_F(ResolverTest, ResolveMethod) {
   EXPECT_TRUE(resolve_method(type_class(d_method->get_class()),
                              d_method->get_name(), d_method->get_proto(),
                              MethodSearch::Super, d_method_def) == b_method);
+  // Super search doesn't consider static methods
+  EXPECT_TRUE(resolve_method(c_surprise, MethodSearch::Super, c_surprise_def) ==
+              nullptr);
 
   MethodRefCache ref_cache;
   EXPECT_TRUE(resolve_method(c_method, MethodSearch::Direct, ref_cache) ==

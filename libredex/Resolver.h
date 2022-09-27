@@ -196,18 +196,19 @@ inline DexMethod* resolve_method(DexMethodRef* method,
                                  const DexMethod* caller = nullptr) {
   if (search == MethodSearch::Super) {
     if (caller) {
-      // caller must be provided. This condition is here to be compatible with
-      // old behavior.
-      DexType* containing_type = caller->get_class();
-      DexClass* containing_class = type_class(containing_type);
-      if (containing_class == nullptr) return nullptr;
-      DexType* super_class = containing_class->get_super_class();
-      if (!super_class) return nullptr;
-      // build method ref from parent class
-      method = DexMethod::make_method(super_class, method->get_name(),
-                                      method->get_proto());
+      auto cls = type_class(method->get_class());
+      if (cls == nullptr) {
+        return nullptr;
+      }
+      return resolve_super(cls, method->get_name(), method->get_proto(),
+                           caller);
     }
-    // The rest is the same as virtual.
+    // According to the JLS and Dalvik bytecode spec, a ::Super search requires
+    // knowing the "current class" (of the caller). However, when we get here,
+    // we don't have that. So, as a best effort, we are effectively going to do
+    // a ::Virtual search starting from the super class.
+    // TODO T132919742: Rewrite all callsites of resolve_method(..., ::Super::,
+    // ) to always provide the "current class" (given by a caller).
     search = MethodSearch::Virtual;
   }
 
