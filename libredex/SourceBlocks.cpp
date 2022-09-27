@@ -17,6 +17,7 @@
 #include "Debug.h"
 #include "DexClass.h"
 #include "Dominators.h"
+#include "IRList.h"
 #include "IROpcode.h"
 #include "Macros.h"
 #include "S_Expression.h"
@@ -434,6 +435,23 @@ bool has_source_block_positive_val(const SourceBlock* sb) {
     });
   }
   return any_positive_val;
+}
+
+IRList::iterator find_first_block_insert_point(cfg::Block* b) {
+  // Do not put source blocks before a (pseudo) move result at the head of a
+  // block.
+  auto it = b->begin();
+  if (it == b->end()) {
+    return it;
+  }
+  if (it->type == MFLOW_OPCODE) {
+    auto op = it->insn->opcode();
+    if (opcode::is_a_move_result(op) || opcode::is_a_move_result_pseudo(op) ||
+        opcode::is_move_exception(op)) {
+      ++it;
+    }
+  }
+  return it;
 }
 
 namespace {
