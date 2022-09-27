@@ -86,20 +86,6 @@ class InstructionSequenceOutlinerTest : public RedexIntegrationTest {
     RedexIntegrationTest::run_passes(passes, nullptr, m_cfg);
   }
 
-  void SetUp() override {
-    reset_ab_experiments_global_state();
-
-    std::string config =
-        "{\"ab_experiments_states\":{\"outliner_v1\":\"test\"}}";
-    Json::Value json_conf;
-    std::istringstream temp_json(config);
-
-    temp_json >> json_conf;
-
-    ConfigFiles conf_files(json_conf);
-    ab_test::ABExperimentContext::parse_experiments_states(conf_files, false);
-  }
-
  private:
   Json::Value m_cfg;
 };

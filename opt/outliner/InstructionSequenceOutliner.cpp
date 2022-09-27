@@ -2304,18 +2304,16 @@ using NewlyOutlinedMethods =
     std::unordered_map<DexMethod*, std::vector<DexMethod*>>;
 
 // Outlining all occurrences of a particular candidate.
-bool outline_candidate(
-    const Config& config,
-    const Candidate& c,
-    const CandidateInfo& ci,
-    ReusableOutlinedMethods* outlined_methods,
-    NewlyOutlinedMethods* newly_outlined_methods,
-    DexState* dex_state,
-    HostClassSelector* host_class_selector,
-    OutlinedMethodCreator* outlined_method_creator,
-    std::unique_ptr<ab_test::ABExperimentContext>& ab_experiment_context,
-    size_t* num_reused_methods,
-    bool reuse_outlined_methods_across_dexes) {
+bool outline_candidate(const Config& config,
+                       const Candidate& c,
+                       const CandidateInfo& ci,
+                       ReusableOutlinedMethods* outlined_methods,
+                       NewlyOutlinedMethods* newly_outlined_methods,
+                       DexState* dex_state,
+                       HostClassSelector* host_class_selector,
+                       OutlinedMethodCreator* outlined_method_creator,
+                       size_t* num_reused_methods,
+                       bool reuse_outlined_methods_across_dexes) {
   // Before attempting to create or reuse an outlined method that hasn't been
   // referenced in this dex before, we'll make sure that all the involved
   // type refs can be added to the dex. We collect those type refs.
@@ -2389,8 +2387,6 @@ bool outline_candidate(
     auto method = p.first;
     auto& cfg = method->get_code()->cfg();
 
-    ab_experiment_context->try_register_method(method);
-
     TRACE(ISO, 7, "[invoke sequence outliner] before outlined %s from %s\n%s",
           SHOW(outlined_method), SHOW(method), SHOW(cfg));
     for (auto& cml : p.second) {
@@ -2415,7 +2411,6 @@ static NewlyOutlinedMethods outline(
         candidate_ids_by_methods,
     ReusableOutlinedMethods* outlined_methods,
     size_t iteration,
-    std::unique_ptr<ab_test::ABExperimentContext>& ab_experiment_context,
     size_t* num_reused_methods) {
   MethodNameGenerator method_name_generator(mgr, iteration);
   OutlinedMethodCreator outlined_method_creator(config, mgr,
@@ -2481,7 +2476,7 @@ static NewlyOutlinedMethods outline(
     if (outline_candidate(config, cwi.candidate, cwi.info, outlined_methods,
                           &newly_outlined_methods, &dex_state,
                           &host_class_selector, &outlined_method_creator,
-                          ab_experiment_context, num_reused_methods,
+                          num_reused_methods,
                           config.reuse_outlined_methods_across_dexes)) {
       dex_state.insert_method_ref();
     } else {
@@ -3067,12 +3062,6 @@ void InstructionSequenceOutliner::bind_config() {
 void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
                                            ConfigFiles& config,
                                            PassManager& mgr) {
-  auto ab_experiment_context =
-      ab_test::ABExperimentContext::create("outliner_v1");
-  if (ab_experiment_context->use_control()) {
-    return;
-  }
-
   int32_t min_sdk = mgr.get_redex_options().min_sdk;
   mgr.incr_metric("min_sdk", min_sdk);
   TRACE(ISO, 2, "[invoke sequence outliner] min_sdk: %d", min_sdk);
@@ -3175,7 +3164,7 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
       auto newly_outlined_methods =
           outline(m_config, mgr, dex_state, min_sdk, &candidates_with_infos,
                   &candidate_ids_by_methods, &outlined_methods, iteration,
-                  ab_experiment_context, &num_reused_methods);
+                  &num_reused_methods);
       outlined_methods_to_reorder.push_back({&dex, newly_outlined_methods});
       auto affected_methods = count_affected_methods(newly_outlined_methods);
       auto total_methods = clear_cfgs(dex);
@@ -3195,8 +3184,6 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
   size_t resolved_method_profiles =
       update_method_profiles(config, outlined_methods_to_reorder);
   mgr.incr_metric("num_resolved_method_profiles", resolved_method_profiles);
-
-  ab_experiment_context->flush();
   mgr.incr_metric("num_reused_methods", num_reused_methods);
 }
 
