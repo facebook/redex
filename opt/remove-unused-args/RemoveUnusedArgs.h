@@ -10,6 +10,7 @@
 #include <mutex>
 
 #include "ConcurrentContainers.h"
+#include "ControlFlow.h"
 #include "InitClassesWithSideEffects.h"
 #include "LocalDce.h"
 #include "MethodOverrideGraph.h"
@@ -19,9 +20,10 @@ namespace remove_unused_args {
 
 namespace mog = method_override_graph;
 
-std::deque<uint16_t> compute_live_args(DexMethod* method,
-                                       size_t num_args,
-                                       std::vector<IRInstruction*>* dead_insns);
+std::deque<uint16_t> compute_live_args(
+    DexMethod* method,
+    size_t num_args,
+    std::vector<cfg::InstructionIterator>* dead_insns);
 
 class RemoveArgs {
  public:
@@ -92,6 +94,8 @@ class RemoveUnusedArgsPass : public Pass {
 
   void bind_config() override { bind("blocklist", {}, m_blocklist); }
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager& mgr) override;
+
+  bool is_editable_cfg_friendly() override { return true; }
 
  private:
   std::vector<std::string> m_blocklist;
