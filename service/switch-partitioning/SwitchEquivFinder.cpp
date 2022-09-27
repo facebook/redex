@@ -12,6 +12,7 @@
 
 #include "ConstantPropagationAnalysis.h"
 #include "ReachingDefinitions.h"
+#include "SourceBlocks.h"
 #include "StlUtil.h"
 #include "Trace.h"
 
@@ -295,20 +296,11 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves() {
   }
 
   for (auto& [blk, source_blocks] : source_blocks_to_move) {
-    // Not sure what the best way to insert a source block is.
-    // You need an opcode in the block as an insertion point, it seems?
-    auto it_insert = [](auto b) {
-      for (auto& mie : *b) {
-        if (mie.type == MFLOW_OPCODE) {
-          return b->to_cfg_instruction_iterator(mie);
-        }
-      }
-      return b->to_cfg_instruction_iterator(b->end());
-    }(blk);
+    auto it_insert = source_blocks::find_first_block_insert_point(blk);
 
     for (auto source_block : source_blocks) {
-      m_cfg->insert_before(it_insert,
-                           std::make_unique<SourceBlock>(*source_block));
+      blk->insert_before(it_insert,
+                         std::make_unique<SourceBlock>(*source_block));
     }
   }
 

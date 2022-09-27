@@ -305,6 +305,8 @@ inline const SourceBlock* get_last_source_block(const cfg::Block* b) {
       get_last_source_block(const_cast<cfg::Block*>(b)));
 }
 
+IRList::iterator find_first_block_insert_point(cfg::Block* b);
+
 void track_source_block_coverage(ScopedMetrics& sm,
                                  const DexStoresVector& stores);
 
