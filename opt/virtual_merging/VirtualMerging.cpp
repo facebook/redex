@@ -42,7 +42,6 @@
 
 #include "VirtualMerging.h"
 
-#include "ABExperimentContext.h"
 #include "ConfigFiles.h"
 #include "ControlFlow.h"
 #include "CppUtil.h"
@@ -90,8 +89,6 @@ constexpr const char* METRIC_CALLER_SIZE_REMOVED_METHODS =
     "num_caller_size_removed_methods";
 constexpr const char* METRIC_REMOVED_VIRTUAL_METHODS =
     "num_removed_virtual_methods";
-
-constexpr const char* METRIC_EXPERIMENT_METHODS = "num_experiment_methods";
 
 constexpr size_t kAppear100Buckets = 10;
 
@@ -926,56 +923,6 @@ std::pair<std::vector<MethodData>, VirtualMergingStats> create_ordering(
   return std::make_pair(std::move(ordering), stats);
 }
 
-template <typename T>
-std::unordered_set<typename T::key_type> get_keys(const T& c) {
-  std::unordered_set<typename T::key_type> c_keys;
-  std::transform(c.begin(), c.end(), std::inserter(c_keys, c_keys.end()),
-                 [](const auto& p) { return p.first; });
-  return c_keys;
-}
-
-template <typename T>
-void check_keys(const T& c1, const T& c2) {
-  redex_assert(c1.size() == c2.size());
-  auto c1_keys = get_keys(c1);
-  auto c2_keys = get_keys(c2);
-  std20::erase_if(c1_keys,
-                  [&c2_keys](const auto& k) { return c2_keys.count(k) != 0; });
-  redex_assert(c1_keys.empty());
-};
-
-void check_remove(
-    const std::unordered_map<DexClass*, std::vector<const DexMethod*>>& a,
-    const std::unordered_map<DexClass*, std::vector<const DexMethod*>>& b,
-    const std::unordered_map<const DexMethod*, DexMethod*>& clones) {
-  check_keys(a, b);
-  for (const auto& l : a) {
-    std::unordered_set<const DexMethod*> as_clones;
-    std::transform(l.second.begin(), l.second.end(),
-                   std::inserter(as_clones, as_clones.end()),
-                   [&clones](const auto* m) { return clones.at(m); });
-
-    const auto& r = b.at(l.first);
-    std::unordered_set<const DexMethod*> as_exp(r.begin(), r.end());
-
-    redex_assert(as_clones == as_exp);
-  }
-}
-
-void check_remap(
-    const std::unordered_map<DexMethod*, DexMethod*>& a,
-    const std::unordered_map<DexMethod*, DexMethod*>& b,
-    const std::unordered_map<const DexMethod*, DexMethod*>& clones) {
-  auto remap_keys = get_keys(a);
-  {
-    auto exp_remap_keys = get_keys(b);
-    redex_assert(remap_keys.size() == exp_remap_keys.size());
-    for (auto* m : remap_keys) {
-      redex_assert(exp_remap_keys.count(clones.at(m)) != 0);
-    }
-  }
-}
-
 void reset_sb(SourceBlock& sb, DexMethod* ref, uint32_t id) {
   sb.src = ref->get_deobfuscated_name_or_null();
   sb.id = id;
@@ -1175,11 +1122,9 @@ struct SBHelper {
   }
 };
 
-template <typename MethodFn>
 VirtualMergingStats apply_ordering(
     MultiMethodInliner& inliner,
     std::vector<MethodData>& ordering,
-    const MethodFn& method_fn,
     std::unordered_map<DexClass*, std::vector<const DexMethod*>>&
         virtual_methods_to_remove,
     std::unordered_map<DexMethod*, DexMethod*>& virtual_methods_to_remap,
@@ -1191,8 +1136,6 @@ VirtualMergingStats apply_ordering(
       if (q.second.empty()) {
         continue;
       }
-      overridden_method = method_fn(overridden_method);
-
       SBHelper sb_helper(overridden_method, q.second);
 
       auto* virtual_scope = q.first;
@@ -1200,8 +1143,6 @@ VirtualMergingStats apply_ordering(
       for (auto* overriding_method_const : q.second) {
         auto overriding_method =
             const_cast<DexMethod*>(overriding_method_const);
-        overriding_method = method_fn(overriding_method);
-
         size_t estimated_callee_size =
             overriding_method->get_code()->sum_opcode_sizes();
         size_t estimated_insn_size =
@@ -1463,34 +1404,13 @@ VirtualMergingStats apply_ordering(
 //         constraints. Record set of methods in each class which can be
 //         removed.
 void VirtualMerging::merge_methods(
-    const MergablePairsByVirtualScope& mergable_pairs,
-    const MergablePairsByVirtualScope& exp_mergable_pairs,
-    ab_test::ABExperimentContext* ab_experiment_context,
-    InsertionStrategy insertion_strategy,
-    InsertionStrategy ab_insertion_strategy) {
+    const MergablePairsByVirtualScope& mergeable_pairs,
+    InsertionStrategy insertion_strategy) {
   auto ordering_pair = create_ordering(
-      mergable_pairs, m_max_overriding_method_instructions, *m_inliner);
+      mergeable_pairs, m_max_overriding_method_instructions, *m_inliner);
   m_stats += ordering_pair.second;
 
-  const bool is_experiment = !exp_mergable_pairs.empty();
-  std::unordered_map<const DexMethod*, DexMethod*> clones;
-
-  auto make_clone = [&clones, is_experiment](DexMethod* m) {
-    if (!is_experiment) {
-      return m;
-    }
-
-    if (clones.count(m) == 0) {
-      TRACE(VM, 5, "[VM] Cloning %s", show_deobfuscated(m).c_str());
-      clones.emplace(m, DexMethod::make_full_method_from(
-                            m, m->get_class(),
-                            DexString::make_string(
-                                m->str() + "$VirtualMergingTemporaryClone")));
-    }
-    return m;
-  };
-
-  auto stats = apply_ordering(*m_inliner, ordering_pair.first, make_clone,
+  auto stats = apply_ordering(*m_inliner, ordering_pair.first,
                               m_virtual_methods_to_remove,
                               m_virtual_methods_to_remap, insertion_strategy);
   m_stats += stats;
@@ -1499,94 +1419,6 @@ void VirtualMerging::merge_methods(
                 m_stats.huge_methods + m_stats.uninlinable_methods +
                     m_stats.caller_size_removed_methods +
                     m_stats.removed_virtual_methods);
-
-  if (is_experiment) {
-    TRACE(VM, 3, "[VM] Applying experiment.");
-    // Gotta remap everything.
-    auto exp_mergable_pairs_remapped = exp_mergable_pairs;
-    for (auto& p : exp_mergable_pairs_remapped) {
-      for (auto& q : p.second) {
-        auto check_clone = [&clones](const DexMethod* m) -> const DexMethod* {
-          // Some methods will be filtered out, so not everything is a clone.
-          auto it = clones.find(m);
-          if (it == clones.end()) {
-            return m;
-          }
-          return it->second;
-        };
-        q.first = check_clone(q.first);
-        q.second = check_clone(q.second);
-      }
-    }
-
-    auto exp_ordering_pair =
-        create_ordering(exp_mergable_pairs_remapped,
-                        m_max_overriding_method_instructions, *m_inliner);
-
-    // Minimal integrity check.
-    redex_assert(ordering_pair.second == exp_ordering_pair.second);
-
-    std::unordered_map<const DexMethod*, const DexMethod*> clones_rev;
-    for (const auto& p : clones) {
-      auto it = clones_rev.emplace(p.second, p.first);
-      redex_assert(it.second);
-    }
-
-    // TODO: Check the orderings.
-
-    std::unordered_map<DexClass*, std::vector<const DexMethod*>>
-        exp_virtual_methods_to_remove;
-    std::unordered_map<DexMethod*, DexMethod*> exp_virtual_methods_to_remap;
-
-    auto exp_stats = apply_ordering(
-        *m_inliner, exp_ordering_pair.first,
-        [&clones_rev](auto* m) {
-          always_assert_log(clones_rev.count(m) != 0, "%s not a clone!",
-                            SHOW(m));
-          return m;
-        },
-        exp_virtual_methods_to_remove, exp_virtual_methods_to_remap,
-        ab_insertion_strategy);
-    redex_assert(stats == exp_stats);
-
-    check_remove(m_virtual_methods_to_remove, exp_virtual_methods_to_remove,
-                 clones);
-    check_remap(m_virtual_methods_to_remap, exp_virtual_methods_to_remap,
-                clones);
-
-    // Go and process things with an experiment now.
-    std::unordered_set<const DexMethod*> all_methods;
-    std::transform(ordering_pair.first.begin(), ordering_pair.first.end(),
-                   std::inserter(all_methods, all_methods.end()),
-                   [](const auto& p) { return p.first; });
-    auto remap_keys = get_keys(m_virtual_methods_to_remap);
-    std20::erase_if(all_methods, [&remap_keys](const auto* m) {
-      return remap_keys.count(const_cast<DexMethod*>(m)) != 0;
-    });
-
-    TRACE(VM, 3, "[VM] Registering %zu methods for experiments",
-          all_methods.size());
-    m_stats.experiment_methods = all_methods.size();
-
-    redex_assert(ab_experiment_context != nullptr);
-
-    for (auto* m_const : all_methods) {
-      auto* m = const_cast<DexMethod*>(m_const);
-      redex_assert(!m->get_code()->cfg_built());
-      m->get_code()->build_cfg();
-      ab_experiment_context->try_register_method(m);
-      m->get_code()->clear_cfg();
-
-      m->set_code(clones.at(m)->release_code());
-      m->get_code()->build_cfg();
-    }
-
-    ab_experiment_context->flush();
-
-    for (auto* m_const : all_methods) {
-      const_cast<DexMethod*>(m_const)->get_code()->clear_cfg();
-    }
-  }
 }
 
 // Part 5: Remove methods within classes.
@@ -1624,30 +1456,17 @@ void VirtualMerging::remap_invoke_virtuals() {
 
 void VirtualMerging::run(const method_profiles::MethodProfiles& profiles,
                          Strategy strategy,
-                         InsertionStrategy insertion_strategy,
-                         Strategy ab_strategy,
-                         InsertionStrategy ab_insertion_strategy,
-                         ab_test::ABExperimentContext* ab_experiment_context) {
+                         InsertionStrategy insertion_strategy) {
   TRACE(VM, 1, "[VM] Finding unsupported virtual scopes");
   find_unsupported_virtual_scopes();
   TRACE(VM, 1, "[VM] Computing mergeable scope methods");
   compute_mergeable_scope_methods();
   TRACE(VM, 1, "[VM] Computing mergeable pairs by virtual scopes");
-  auto stats_copy = m_stats;
   auto scopes =
       compute_mergeable_pairs_by_virtual_scopes(profiles, strategy, m_stats);
 
-  MergablePairsByVirtualScope exp_scopes;
-  if (ab_experiment_context != nullptr &&
-      !ab_experiment_context->use_control()) {
-    exp_scopes = compute_mergeable_pairs_by_virtual_scopes(
-        profiles, ab_strategy, stats_copy);
-    redex_assert(m_stats == stats_copy);
-  }
-
   TRACE(VM, 1, "[VM] Merging methods");
-  merge_methods(scopes, exp_scopes, ab_experiment_context, insertion_strategy,
-                ab_insertion_strategy);
+  merge_methods(scopes, insertion_strategy);
   TRACE(VM, 1, "[VM] Removing methods");
   remove_methods();
   TRACE(VM, 1, "[VM] Remapping invoke-virtual instructions");
@@ -1666,21 +1485,15 @@ void VirtualMergingPass::bind_config() {
        m_max_overriding_method_instructions);
   std::string strategy;
   bind("strategy", "call-count", strategy);
-  std::string ab_strategy;
-  bind("ab_strategy", "lexicographical", ab_strategy);
-
   std::string insertion_strategy;
   bind("insertion_strategy", "jump-to", insertion_strategy);
-  std::string ab_insertion_strategy;
-  bind("ab_insertion_strategy", "jump-to", ab_insertion_strategy);
 
   bind("perf_appear100_threshold", m_perf_config.appear100_threshold,
        m_perf_config.appear100_threshold);
   bind("perf_call_count_threshold", m_perf_config.call_count_threshold,
        m_perf_config.call_count_threshold);
 
-  after_configuration([this, strategy, ab_strategy, insertion_strategy,
-                       ab_insertion_strategy] {
+  after_configuration([this, strategy, insertion_strategy] {
     always_assert(m_max_overriding_method_instructions >= 0);
 
     auto parse_strategy = [](const std::string& s) {
@@ -1697,7 +1510,6 @@ void VirtualMergingPass::bind_config() {
     };
 
     m_strategy = parse_strategy(strategy);
-    m_ab_strategy = parse_strategy(ab_strategy);
 
     auto parse_insertion_strategy = [](const std::string& s) {
       if (s == "jump-to") {
@@ -1710,7 +1522,6 @@ void VirtualMergingPass::bind_config() {
     };
 
     m_insertion_strategy = parse_insertion_strategy(insertion_strategy);
-    m_ab_insertion_strategy = parse_insertion_strategy(ab_insertion_strategy);
   });
 }
 
@@ -1742,17 +1553,10 @@ void VirtualMergingPass::run_pass(DexStoresVector& stores,
   // We don't need to worry about inlining synchronized code, as we always
   // inline at the top-level outside of other try-catch regions.
   inliner_config.respect_sketchy_methods = false;
-  auto ab_experiment_context =
-      ab_test::ABExperimentContext::create("virtual_merging");
   VirtualMerging vm(stores, inliner_config,
                     m_max_overriding_method_instructions, min_sdk_api,
                     m_perf_config);
-  vm.run(conf.get_method_profiles(),
-         m_strategy,
-         m_insertion_strategy,
-         m_ab_strategy,
-         m_ab_insertion_strategy,
-         ab_experiment_context.get());
+  vm.run(conf.get_method_profiles(), m_strategy, m_insertion_strategy);
   auto stats = vm.get_stats();
 
   mgr.incr_metric(METRIC_DEDUPPED_VIRTUAL_METHODS, dedupped);
@@ -1782,7 +1586,6 @@ void VirtualMergingPass::run_pass(DexStoresVector& stores,
                   stats.caller_size_removed_methods);
   mgr.incr_metric(METRIC_REMOVED_VIRTUAL_METHODS,
                   stats.removed_virtual_methods);
-  mgr.incr_metric(METRIC_EXPERIMENT_METHODS, stats.experiment_methods);
 
   mgr.incr_metric("num_mergeable.perf_skipped", stats.perf_skipped);
 }
