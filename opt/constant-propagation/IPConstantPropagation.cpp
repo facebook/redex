@@ -127,14 +127,18 @@ std::unique_ptr<FixpointIterator> PassImpl::analyze(
     const ImmutableAttributeAnalyzerState* immut_analyzer_state,
     const ApiLevelAnalyzerState* api_level_analyzer_state) {
   auto method_override_graph = mog::build_graph(scope);
-  auto cg =
-      m_config.use_multiple_callee_callgraph
-          ? std::make_shared<call_graph::Graph>(
-                call_graph::multiple_callee_graph(
-                    *method_override_graph, scope,
-                    m_config.big_override_threshold))
-          : std::make_shared<call_graph::Graph>(
-                call_graph::single_callee_graph(*method_override_graph, scope));
+  std::shared_ptr<call_graph::Graph> cg;
+  {
+    cg = m_config.use_multiple_callee_callgraph
+             ? std::make_shared<call_graph::Graph>(
+                   call_graph::multiple_callee_graph(
+                       *method_override_graph, scope,
+                       m_config.big_override_threshold))
+             : std::make_shared<call_graph::Graph>(
+                   call_graph::single_callee_graph(*method_override_graph,
+                                                   scope));
+  }
+  auto cg_for_wps = m_config.use_multiple_callee_callgraph ? cg : nullptr;
   auto cg_stats = get_num_nodes_edges(*cg);
   m_stats.callgraph_nodes = cg_stats.num_nodes;
   m_stats.callgraph_edges = cg_stats.num_edges;
@@ -154,14 +158,9 @@ std::unique_ptr<FixpointIterator> PassImpl::analyze(
   m_stats.definitely_assigned_ifields = definitely_assigned_ifields.size();
   for (size_t i = 0; i < m_config.max_heap_analysis_iterations; ++i) {
     // Build an approximation of all the field values and method return values.
-    auto wps =
-        m_config.use_multiple_callee_callgraph
-            ? std::make_unique<WholeProgramState>(
-                  scope, *fp_iter, non_true_virtuals, m_config.field_blocklist,
-                  definitely_assigned_ifields, cg)
-            : std::make_unique<WholeProgramState>(
-                  scope, *fp_iter, non_true_virtuals, m_config.field_blocklist,
-                  definitely_assigned_ifields);
+    auto wps = std::make_unique<WholeProgramState>(
+        scope, *fp_iter, non_true_virtuals, m_config.field_blocklist,
+        definitely_assigned_ifields, cg_for_wps);
     // If this approximation is not better than the previous one, we are done.
     if (fp_iter->get_whole_program_state().leq(*wps)) {
       break;

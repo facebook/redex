@@ -44,15 +44,10 @@ class WholeProgramState {
   // By default, the field and method partitions are initialized to Bottom.
   WholeProgramState() = default;
 
+  // By default, the field and method partitions are initialized to Bottom.
   explicit WholeProgramState(
       const std::unordered_set<const DexType*>& field_blocklist)
       : m_field_blocklist(field_blocklist) {}
-
-  WholeProgramState(const Scope&,
-                    const interprocedural::FixpointIterator&,
-                    const std::unordered_set<DexMethod*>&,
-                    const std::unordered_set<const DexType*>&,
-                    const std::unordered_set<const DexField*>&);
 
   WholeProgramState(const Scope&,
                     const interprocedural::FixpointIterator&,

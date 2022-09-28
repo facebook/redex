@@ -140,8 +140,9 @@ WholeProgramState::WholeProgramState(
     const interprocedural::FixpointIterator& fp_iter,
     const std::unordered_set<DexMethod*>& non_true_virtuals,
     const std::unordered_set<const DexType*>& field_blocklist,
-    const std::unordered_set<const DexField*>& definitely_assigned_ifields)
-    : m_field_blocklist(field_blocklist) {
+    const std::unordered_set<const DexField*>& definitely_assigned_ifields,
+    std::shared_ptr<const call_graph::Graph> call_graph)
+    : m_call_graph(std::move(call_graph)), m_field_blocklist(field_blocklist) {
 
   walk::fields(scope, [&](DexField* field) {
     // We exclude those marked by keep rules: keep-marked fields may be
@@ -174,20 +175,6 @@ WholeProgramState::WholeProgramState(
   collect(scope, fp_iter, definitely_assigned_ifields);
 }
 
-WholeProgramState::WholeProgramState(
-    const Scope& scope,
-    const interprocedural::FixpointIterator& fp_iter,
-    const std::unordered_set<DexMethod*>& non_true_virtuals,
-    const std::unordered_set<const DexType*>& field_blocklist,
-    const std::unordered_set<const DexField*>& definitely_assigned_ifields,
-    std::shared_ptr<const call_graph::Graph> call_graph)
-    : WholeProgramState(scope,
-                        fp_iter,
-                        non_true_virtuals,
-                        field_blocklist,
-                        definitely_assigned_ifields) {
-  m_call_graph = std::move(call_graph);
-}
 /*
  * Walk over the entire program, doing a join over the values written to each
  * field, as well as a join over the values returned by each method.
