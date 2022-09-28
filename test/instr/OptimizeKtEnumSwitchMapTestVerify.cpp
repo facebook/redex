@@ -15,23 +15,23 @@
 namespace {
 
 constexpr const char* name_WhenMappings =
-    "Lcom/facebook/redextest/kt/OptimizeEnumsTestKt$WhenMappings;";
+    "Lcom/facebook/redextest/kt/OptimizeEnumSwitchMapTestKt$WhenMappings;";
 constexpr const char* name_A = "Lcom/facebook/redextest/kt/A;";
 constexpr const char* name_B = "Lcom/facebook/redextest/kt/B;";
 constexpr const char* name_Big = "Lcom/facebook/redextest/kt/Big;";
 
 constexpr const char* name_useA =
-    "Lcom/facebook/redextest/kt/OptimizeEnumsTestKt;.useA:("
+    "Lcom/facebook/redextest/kt/OptimizeEnumSwitchMapTestKt;.useA:("
     "Lcom/facebook/redextest/kt/A;"
     ")I";
 
 constexpr const char* name_useB =
-    "Lcom/facebook/redextest/kt/OptimizeEnumsTestKt;.useB:("
+    "Lcom/facebook/redextest/kt/OptimizeEnumSwitchMapTestKt;.useB:("
     "Lcom/facebook/redextest/kt/B;"
     ")I";
 
 constexpr const char* name_useAAgain =
-    "Lcom/facebook/redextest/kt/OptimizeEnumsTestKt;.useAAgain:("
+    "Lcom/facebook/redextest/kt/OptimizeEnumSwitchMapTestKt;.useAAgain:("
     "Lcom/facebook/redextest/kt/A;"
     ")I";
 

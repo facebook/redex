@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <unordered_set>
+#include <set>
 
 #include "Debug.h"
 #include "DexInstruction.h"
@@ -20,12 +20,12 @@ constexpr const char* ENUM_A = "Lcom/facebook/redextest/EnumA;";
 constexpr const char* ENUM_B = "Lcom/facebook/redextest/EnumB;";
 constexpr const char* BIG_ENUM = "Lcom/facebook/redextest/BigEnum;";
 
-std::unordered_set<size_t> collect_switch_cases(DexMethodRef* method_ref) {
+std::set<size_t> collect_switch_cases(DexMethodRef* method_ref) {
   auto method = static_cast<DexMethod*>(method_ref);
   method->balloon();
 
   auto code = method->get_code();
-  std::unordered_set<size_t> switch_cases;
+  std::set<size_t> switch_cases;
 
   auto smp =
       SwitchMethodPartitioning::create(code, /* verify_default_case */ false);
@@ -58,21 +58,21 @@ TEST_F(PreVerify, JavaGeneratedClass) {
       "Lcom/facebook/redextest/Foo;.useEnumA:(Lcom/facebook/redextest/"
       "EnumA;)I");
   auto switch_cases_A = collect_switch_cases(method_use_enumA);
-  std::unordered_set<size_t> expected_switch_cases_A = {1, 2};
+  std::set<size_t> expected_switch_cases_A = {1, 2};
   EXPECT_EQ(expected_switch_cases_A, switch_cases_A);
 
   auto method_use_enumB = DexMethod::get_method(
       "Lcom/facebook/redextest/Foo;.useEnumB:(Lcom/facebook/redextest/"
       "EnumB;)I");
   auto switch_cases_B = collect_switch_cases(method_use_enumB);
-  std::unordered_set<size_t> expected_switch_cases_B = {1, 2};
+  std::set<size_t> expected_switch_cases_B = {1, 2};
   EXPECT_EQ(expected_switch_cases_B, switch_cases_B);
 
   auto method_use_enumA_again = DexMethod::get_method(
       "Lcom/facebook/redextest/Foo;.useEnumA_again:(Lcom/facebook/redextest/"
       "EnumA;)I");
   auto switch_cases_A_again = collect_switch_cases(method_use_enumA_again);
-  std::unordered_set<size_t> expected_switch_cases_A_again = {1, 3};
+  std::set<size_t> expected_switch_cases_A_again = {1, 3};
   auto code = static_cast<DexMethod*>(method_use_enumA_again)->get_code();
   code->build_cfg();
   EXPECT_EQ(expected_switch_cases_A_again, switch_cases_A_again)
@@ -99,20 +99,20 @@ TEST_F(PostVerify, JavaGeneratedClass) {
       "Lcom/facebook/redextest/Foo;.useEnumA:(Lcom/facebook/redextest/"
       "EnumA;)I");
   auto switch_cases_A = collect_switch_cases(method_use_enumA);
-  std::unordered_set<size_t> expected_switch_cases_A = {0, 2};
+  std::set<size_t> expected_switch_cases_A = {0, 2};
   EXPECT_EQ(expected_switch_cases_A, switch_cases_A);
 
   auto method_use_enumB = DexMethod::get_method(
       "Lcom/facebook/redextest/Foo;.useEnumB:(Lcom/facebook/redextest/"
       "EnumB;)I");
   auto switch_cases_B = collect_switch_cases(method_use_enumB);
-  std::unordered_set<size_t> expected_switch_cases_B = {0, 2};
+  std::set<size_t> expected_switch_cases_B = {0, 2};
   EXPECT_EQ(expected_switch_cases_B, switch_cases_B);
 
   auto method_use_enumA_again = DexMethod::get_method(
       "Lcom/facebook/redextest/Foo;.useEnumA_again:(Lcom/facebook/redextest/"
       "EnumA;)I");
   auto switch_cases_A_again = collect_switch_cases(method_use_enumA_again);
-  std::unordered_set<size_t> expected_switch_cases_A_again = {0, 1};
+  std::set<size_t> expected_switch_cases_A_again = {0, 1};
   EXPECT_EQ(expected_switch_cases_A_again, switch_cases_A_again);
 }

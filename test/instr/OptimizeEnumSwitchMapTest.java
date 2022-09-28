@@ -99,6 +99,7 @@ class Foo {
         return o.hashCode();
       }
     } catch (NullPointerException npe) {
+      // Not throw for testing
       return 404;
     }
   }
@@ -151,7 +152,7 @@ class Foo {
   }
 }
 
-public class OptimizeEnumsTest {
+public class OptimizeEnumSwitchMapTest {
   @Test
   public void testEnumA() {
     Foo foo = new Foo();

@@ -107,7 +107,7 @@ public fun useBig(elem: Big): Int =
       else -> throw IllegalArgumentException()
     }
 
-class OptimizeEnumsTest {
+class OptimizeEnumSwitchMapTest {
   @Test
   fun testA() {
     assertThat(useA(A.A0)).isEqualTo(40)
