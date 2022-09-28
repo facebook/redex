@@ -83,7 +83,7 @@ class RemoveArgs {
       const mog::Graph& override_graph,
       const std::unordered_set<DexType*>& no_devirtualize_anno);
   size_t update_callsite(IRInstruction* instr);
-  size_t update_callsites();
+  std::pair<size_t, LocalDce::Stats> update_callsites();
   void gather_results_used();
   void compute_reordered_protos(const mog::Graph& override_graph);
 };

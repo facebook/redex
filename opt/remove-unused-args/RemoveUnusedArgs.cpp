@@ -65,12 +65,14 @@ RemoveArgs::PassStats RemoveArgs::run(ConfigFiles& config) {
   pass_stats.method_params_removed_count =
       method_stats.method_params_removed_count;
   pass_stats.methods_updated_count = method_stats.methods_updated_count;
-  pass_stats.callsite_args_removed_count = update_callsites();
+  auto callsites_stats = update_callsites();
+  pass_stats.callsite_args_removed_count = callsites_stats.first;
   pass_stats.method_results_removed_count =
       method_stats.method_results_removed_count;
   pass_stats.method_protos_reordered_count =
       method_stats.method_protos_reordered_count;
   pass_stats.local_dce_stats = method_stats.local_dce_stats;
+  pass_stats.local_dce_stats += callsites_stats.second;
   return pass_stats;
 }
 
@@ -514,6 +516,27 @@ static std::deque<uint16_t> update_method_body_for_reordered_proto(
   return idxs;
 }
 
+namespace {
+
+void run_cleanup(DexMethod* method,
+                 cfg::ControlFlowGraph& cfg,
+                 const init_classes::InitClassesWithSideEffects*
+                     init_classes_with_side_effects,
+                 std::mutex& mutex,
+                 LocalDce::Stats& stats) {
+  std::unordered_set<DexMethodRef*> pure_methods;
+  auto local_dce = LocalDce(init_classes_with_side_effects, pure_methods);
+  local_dce.dce(cfg, /* normalize_new_instances */ true, method->get_class());
+  const auto& local_stats = local_dce.get_stats();
+  if (local_stats.dead_instruction_count |
+      local_stats.unreachable_instruction_count) {
+    std::lock_guard<std::mutex> lock(mutex);
+    stats += local_stats;
+  }
+}
+
+} // namespace
+
 /**
  * For methods that have unused arguments, record live argument registers.
  */
@@ -627,17 +650,11 @@ RemoveArgs::MethodStats RemoveArgs::update_method_protos(
           }
         }
 
-        std::unordered_set<DexMethodRef*> pure_methods;
-        auto local_dce =
-            LocalDce(&m_init_classes_with_side_effects, pure_methods);
-        local_dce.dce(cfg, /* normalize_new_instances */ true,
-                      method->get_class());
-        const auto& stats = local_dce.get_stats();
-        if (stats.dead_instruction_count |
-            stats.unreachable_instruction_count) {
-          std::lock_guard<std::mutex> lock(local_dce_stats_mutex);
-          local_dce_stats += stats;
-        }
+        run_cleanup(method,
+                    cfg,
+                    &m_init_classes_with_side_effects,
+                    local_dce_stats_mutex,
+                    local_dce_stats);
       }
 
       if (entry.reordered_proto != nullptr) {
@@ -686,9 +703,11 @@ size_t RemoveArgs::update_callsite(IRInstruction* instr) {
  * Removes unused arguments at callsites and returns the number of arguments
  * removed.
  */
-size_t RemoveArgs::update_callsites() {
+std::pair<size_t, LocalDce::Stats> RemoveArgs::update_callsites() {
   // Walk through all methods to look for and edit callsites.
-  return walk::parallel::methods<size_t>(
+  std::mutex local_dce_stats_mutex;
+  LocalDce::Stats local_dce_stats{};
+  auto cnt = walk::parallel::methods<size_t>(
       m_scope, [&](DexMethod* method) -> size_t {
         auto code = method->get_code();
         if (code == nullptr) {
@@ -707,8 +726,18 @@ size_t RemoveArgs::update_callsites() {
             }
           }
         }
+
+        if (callsite_args_removed) {
+          run_cleanup(method,
+                      cfg,
+                      &m_init_classes_with_side_effects,
+                      local_dce_stats_mutex,
+                      local_dce_stats);
+        }
+
         return callsite_args_removed;
       });
+  return std::make_pair(cnt, std::move(local_dce_stats));
 }
 
 void RemoveUnusedArgsPass::run_pass(DexStoresVector& stores,
