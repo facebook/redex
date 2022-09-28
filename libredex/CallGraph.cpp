@@ -108,9 +108,8 @@ RootAndDynamic MultipleCalleeBaseStrategy::get_roots() const {
       // No need to add root methods, they will be added anyway.
       return;
     }
-    if (!emplaced_methods.count(method)) {
+    if (emplaced_methods.emplace(method).second) {
       roots.emplace_back(method);
-      emplaced_methods.emplace(method);
     }
   };
   walk::methods(m_scope, [&](DexMethod* method) {
@@ -136,9 +135,8 @@ RootAndDynamic MultipleCalleeBaseStrategy::get_roots() const {
         !can_rename(method)) {
       dynamic_methods.emplace(method);
     }
-    if (!emplaced_methods.count(method) && method->get_code()) {
+    if (method->get_code() && emplaced_methods.emplace(method).second) {
       roots.emplace_back(method);
-      emplaced_methods.emplace(method);
     }
     const auto& overriding_methods =
         mog::get_overriding_methods(m_method_override_graph, method);
@@ -163,10 +161,9 @@ RootAndDynamic MultipleCalleeBaseStrategy::get_roots() const {
         if (overriding->is_external()) {
           dynamic_methods.emplace(overriding);
         }
-        if (!overriding->is_external() && !emplaced_methods.count(overriding) &&
-            overriding->get_code()) {
+        if (!overriding->is_external() && overriding->get_code() &&
+            emplaced_methods.emplace(overriding).second) {
           roots.emplace_back(overriding);
-          emplaced_methods.emplace(overriding);
         }
       }
       // Internal methods might be overriden by external methods. Add such
@@ -266,17 +263,15 @@ RootAndDynamic CompleteCallGraphStrategy::get_roots() const {
   MethodSet emplaced_methods;
   auto& roots = root_and_dynamic.roots;
   auto add_root_method_overrides = [&](const DexMethod* method) {
-    if (!root(method) && !emplaced_methods.count(method)) {
+    if (!root(method) && emplaced_methods.emplace(method).second) {
       // No need to add root methods, they will be added anyway.
       roots.emplace_back(method);
-      emplaced_methods.emplace(method);
     }
   };
   walk::methods(m_scope, [&](DexMethod* method) {
     if (root(method) || method::is_clinit(method)) {
-      if (!emplaced_methods.count(method)) {
+      if (emplaced_methods.emplace(method).second) {
         roots.emplace_back(method);
-        emplaced_methods.emplace(method);
       }
     }
     if (!root(method) && !(method->is_virtual() &&
@@ -305,9 +300,8 @@ RootAndDynamic CompleteCallGraphStrategy::get_roots() const {
       const auto& overriding_methods =
           mog::get_overriding_methods(m_method_override_graph, method, true);
       for (auto* overriding : overriding_methods) {
-        if (!emplaced_methods.count(overriding)) {
+        if (emplaced_methods.emplace(overriding).second) {
           roots.emplace_back(overriding);
-          emplaced_methods.emplace(overriding);
         }
       }
     }
@@ -442,10 +436,9 @@ Graph::Graph(const BuildStrategy& strat)
   MethodSet visited;
   auto visit = [&](const auto* caller) {
     auto visit_impl = [&](const auto* caller, auto& visit_fn) {
-      if (visited.count(caller) != 0) {
+      if (!visited.emplace(caller).second) {
         return;
       }
-      visited.emplace(caller);
       auto callsites = strat.get_callsites(caller);
       if (callsites.empty()) {
         this->add_edge(make_node(caller), this->exit(), nullptr);
@@ -503,14 +496,15 @@ MethodSet resolve_callees_in_graph(const Graph& graph,
   return ret;
 }
 
-MethodSet resolve_callees_in_graph(const Graph& graph,
-                                   const IRInstruction* insn) {
-  MethodSet ret;
+const MethodSet& resolve_callees_in_graph(const Graph& graph,
+                                          const IRInstruction* insn) {
   const auto& insn_to_callee = graph.get_insn_to_callee();
-  if (insn_to_callee.count(insn)) {
-    ret = insn_to_callee.at(insn);
+  auto it = insn_to_callee.find(insn);
+  if (it != insn_to_callee.end()) {
+    return it->second;
   }
-  return ret;
+  static const MethodSet no_methods;
+  return no_methods;
 }
 
 bool method_is_dynamic(const Graph& graph, const DexMethod* method) {
@@ -526,14 +520,13 @@ CallgraphStats get_num_nodes_edges(const Graph& graph) {
   while (!to_visit.empty()) {
     auto front = to_visit.front();
     to_visit.pop();
-    if (!visited_node.count(front)) {
-      visited_node.emplace(front);
+    if (visited_node.emplace(front).second) {
       num_edge += front->callees().size();
       std::unordered_set<IRInstruction*> callsites;
       for (const auto& edge : front->callees()) {
         to_visit.push(edge->callee());
         auto invoke_insn = edge->invoke_insn();
-        if (invoke_insn && !callsites.count(invoke_insn)) {
+        if (invoke_insn) {
           callsites.emplace(invoke_insn);
         }
       }

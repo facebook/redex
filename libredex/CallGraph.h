@@ -261,8 +261,8 @@ MethodSet resolve_callees_in_graph(const Graph& graph,
                                    const DexMethod* method,
                                    const IRInstruction* insn);
 
-MethodSet resolve_callees_in_graph(const Graph& graph,
-                                   const IRInstruction* insn);
+const MethodSet& resolve_callees_in_graph(const Graph& graph,
+                                          const IRInstruction* insn);
 
 bool method_is_dynamic(const Graph& graph, const DexMethod* method);
 

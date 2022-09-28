@@ -120,7 +120,8 @@ class WholeProgramState {
   bool has_call_graph() const { return !!m_call_graph; }
 
   ConstantValue get_return_value_from_cg(const IRInstruction* insn) const {
-    auto callees = call_graph::resolve_callees_in_graph(*m_call_graph, insn);
+    const auto& callees =
+        call_graph::resolve_callees_in_graph(*m_call_graph, insn);
     if (callees.empty()) {
       return ConstantValue::top();
     }
