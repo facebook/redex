@@ -70,8 +70,8 @@ void analyze_clinits(const Scope& scope,
     } else {
       IRCode* code = clinit->get_code();
       auto& cfg = code->cfg();
-      auto intra_cp = fp_iter.get_intraprocedural_analysis(clinit);
-      const auto& env = intra_cp->get_exit_state_at(cfg.exit_block());
+      auto ipa = fp_iter.get_intraprocedural_analysis(clinit);
+      const auto& env = ipa->fp_iter.get_exit_state_at(cfg.exit_block());
       set_fields_in_partition(cls, env.get_field_environment(),
                               FieldType::STATIC, &cls_field_partition);
     }
@@ -80,7 +80,7 @@ void analyze_clinits(const Scope& scope,
   });
 }
 
-bool analyze_gets_helper(const WholeProgramState* whole_program_state,
+bool analyze_gets_helper(const WholeProgramStateAccessor* whole_program_state,
                          const IRInstruction* insn,
                          ConstantEnvironment* env) {
   if (whole_program_state == nullptr) {
@@ -192,13 +192,14 @@ void WholeProgramState::collect(
       return;
     }
     auto& cfg = code->cfg();
-    auto intra_cp = fp_iter.get_intraprocedural_analysis(method);
+    auto ipa = fp_iter.get_intraprocedural_analysis(method);
+    auto& intra_cp = ipa->fp_iter;
     for (cfg::Block* b : cfg.blocks()) {
-      auto env = intra_cp->get_entry_state_at(b);
+      auto env = intra_cp.get_entry_state_at(b);
       auto last_insn = b->get_last_insn();
       for (auto& mie : InstructionIterable(b)) {
         auto* insn = mie.insn;
-        intra_cp->analyze_instruction(insn, &env, insn == last_insn->insn);
+        intra_cp.analyze_instruction(insn, &env, insn == last_insn->insn);
         collect_field_values(insn, env,
                              method::is_clinit(method) ? method->get_class()
                                                        : nullptr,
@@ -336,21 +337,21 @@ void WholeProgramState::collect_instance_finals(
 }
 
 bool WholeProgramAwareAnalyzer::analyze_sget(
-    const WholeProgramState* whole_program_state,
+    const WholeProgramStateAccessor* whole_program_state,
     const IRInstruction* insn,
     ConstantEnvironment* env) {
   return analyze_gets_helper(whole_program_state, insn, env);
 }
 
 bool WholeProgramAwareAnalyzer::analyze_iget(
-    const WholeProgramState* whole_program_state,
+    const WholeProgramStateAccessor* whole_program_state,
     const IRInstruction* insn,
     ConstantEnvironment* env) {
   return analyze_gets_helper(whole_program_state, insn, env);
 }
 
 bool WholeProgramAwareAnalyzer::analyze_invoke(
-    const WholeProgramState* whole_program_state,
+    const WholeProgramStateAccessor* whole_program_state,
     const IRInstruction* insn,
     ConstantEnvironment* env) {
   if (whole_program_state == nullptr) {

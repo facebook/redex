@@ -119,25 +119,7 @@ class WholeProgramState {
 
   bool has_call_graph() const { return !!m_call_graph; }
 
-  ConstantValue get_return_value_from_cg(const IRInstruction* insn) const {
-    const auto& callees =
-        call_graph::resolve_callees_in_graph(*m_call_graph, insn);
-    if (callees.empty()) {
-      return ConstantValue::top();
-    }
-    ConstantValue ret = ConstantValue::bottom();
-    for (const DexMethod* callee : callees) {
-      auto val = ConstantValue::top();
-      if (callee->get_code()) {
-        val = m_method_partition.get(callee);
-      }
-      ret.join_with(val);
-    }
-    if (ret == ConstantValue::bottom()) {
-      return ConstantValue::top();
-    }
-    return ret;
-  }
+  const call_graph::Graph* call_graph() const { return m_call_graph.get(); }
 
   bool method_is_dynamic(const DexMethod* method) const {
     return call_graph::method_is_dynamic(*m_call_graph, method);
@@ -192,6 +174,75 @@ class WholeProgramState {
   ConstantMethodPartition m_method_partition;
 };
 
+struct WholeProgramStateAccessorRecord {
+  std::unordered_map<const DexField*, ConstantValue> field_dependencies;
+  std::unordered_map<const DexMethod*, ConstantValue> method_dependencies;
+};
+
+class WholeProgramStateAccessor {
+ public:
+  explicit WholeProgramStateAccessor(const WholeProgramState& wps)
+      : m_wps(wps) {}
+
+  bool has_call_graph() const { return m_wps.has_call_graph(); }
+
+  bool method_is_dynamic(const DexMethod* method) const {
+    return m_wps.method_is_dynamic(method);
+  }
+
+  ConstantValue get_field_value(const DexField* field) const {
+    auto val = m_wps.get_field_value(field);
+    if (m_record) {
+      m_record->field_dependencies.emplace(field, val);
+      return val;
+    }
+    return val;
+  }
+
+  ConstantValue get_return_value_from_cg(const IRInstruction* insn) const {
+    const auto& callees =
+        call_graph::resolve_callees_in_graph(*m_wps.call_graph(), insn);
+    if (callees.empty()) {
+      return ConstantValue::top();
+    }
+    for (const DexMethod* callee : callees) {
+      if (!callee->get_code()) {
+        return ConstantValue::top();
+      }
+    }
+    ConstantValue ret = ConstantValue::bottom();
+    for (const DexMethod* callee : callees) {
+      const auto& val = m_wps.get_method_partition().get(callee);
+      if (m_record) {
+        m_record->method_dependencies.emplace(callee, val);
+      }
+      ret.join_with(val);
+    }
+    if (ret == ConstantValue::bottom()) {
+      return ConstantValue::top();
+    }
+    return ret;
+  }
+
+  ConstantValue get_return_value(const DexMethod* method) const {
+    auto val = m_wps.get_return_value(method);
+    if (m_record) {
+      m_record->method_dependencies.emplace(method, val);
+    }
+    return val;
+  }
+
+  void start_recording(WholeProgramStateAccessorRecord* record) {
+    m_record = record;
+  }
+
+  void stop_recording() { m_record = nullptr; }
+
+ private:
+  const WholeProgramState& m_wps;
+  WholeProgramStateAccessorRecord* m_record{nullptr};
+};
+
 /*
  * Incorporate information about the values of static fields and the return
  * values of other methods in the local analysis of a given method.
@@ -199,19 +250,20 @@ class WholeProgramState {
 class WholeProgramAwareAnalyzer final
     : public InstructionAnalyzerBase<WholeProgramAwareAnalyzer,
                                      ConstantEnvironment,
-                                     const WholeProgramState*> {
+                                     const WholeProgramStateAccessor*> {
  public:
-  static bool analyze_sget(const WholeProgramState* whole_program_state,
+  static bool analyze_sget(const WholeProgramStateAccessor* whole_program_state,
                            const IRInstruction* insn,
                            ConstantEnvironment* env);
 
-  static bool analyze_iget(const WholeProgramState* whole_program_state,
+  static bool analyze_iget(const WholeProgramStateAccessor* whole_program_state,
                            const IRInstruction* insn,
                            ConstantEnvironment* env);
 
-  static bool analyze_invoke(const WholeProgramState* whole_program_state,
-                             const IRInstruction* insn,
-                             ConstantEnvironment* env);
+  static bool analyze_invoke(
+      const WholeProgramStateAccessor* whole_program_state,
+      const IRInstruction* insn,
+      ConstantEnvironment* env);
 };
 
 } // namespace constant_propagation

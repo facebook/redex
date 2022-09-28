@@ -459,18 +459,19 @@ TEST_F(InterproceduralConstantPropagationTest, unreachableInvoke) {
   walk::code(scope, [](DexMethod*, IRCode& code) {
     code.build_cfg(/* editable */ false);
   });
-  FixpointIterator fp_iter(
-      std::move(cg),
-      [](const DexMethod* method,
-         const WholeProgramState&,
-         const ArgumentDomain& args) {
-        auto& code = *method->get_code();
-        auto env = env_with_params(is_static(method), &code, args);
-        auto intra_cp = std::make_unique<intraprocedural::FixpointIterator>(
-            code.cfg(), ConstantPrimitiveAnalyzer());
-        intra_cp->run(env);
-        return intra_cp;
-      });
+  FixpointIterator fp_iter(std::move(cg),
+                           [](const DexMethod* method,
+                              const WholeProgramState&,
+                              const ArgumentDomain& args) {
+                             auto& code = *method->get_code();
+                             auto env = env_with_params(
+                                 is_static(method), &code, args);
+                             return std::make_unique<IntraproceduralAnalysis>(
+                                 /* wps accessor */ nullptr,
+                                 code.cfg(),
+                                 ConstantPrimitiveAnalyzer(),
+                                 std::move(env));
+                           });
 
   fp_iter.run({{CURRENT_PARTITION_LABEL, ArgumentDomain()}});
 

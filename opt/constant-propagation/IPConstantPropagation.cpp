@@ -70,7 +70,7 @@ class AnalyzerGenerator {
     static_cast<void>(ApiLevelAnalyzerState::get());
   }
 
-  std::unique_ptr<intraprocedural::FixpointIterator> operator()(
+  std::unique_ptr<IntraproceduralAnalysis> operator()(
       const DexMethod* method,
       const WholeProgramState& wps,
       ArgumentDomain args) {
@@ -93,19 +93,22 @@ class AnalyzerGenerator {
     }
     TRACE(ICONSTP, 5, "%s", SHOW(code.cfg()));
 
-    auto intra_cp = std::make_unique<intraprocedural::FixpointIterator>(
-        code.cfg(),
+    auto wps_accessor = std::make_unique<WholeProgramStateAccessor>(wps);
+    auto wps_accessor_ptr = wps_accessor.get();
+    return std::make_unique<IntraproceduralAnalysis>(
+        std::move(wps_accessor), code.cfg(),
         CombinedAnalyzer(
             class_under_init,
             const_cast<ImmutableAttributeAnalyzerState*>(
                 m_immut_analyzer_state),
-            &wps, EnumFieldAnalyzerState::get(),
-            BoxedBooleanAnalyzerState::get(), nullptr, nullptr,
+            wps_accessor_ptr,
+            EnumFieldAnalyzerState::get(),
+            BoxedBooleanAnalyzerState::get(),
+            nullptr,
+            nullptr,
             *const_cast<ApiLevelAnalyzerState*>(m_api_level_analyzer_state),
-            nullptr));
-    intra_cp->run(env);
-
-    return intra_cp;
+            nullptr),
+        std::move(env));
   }
 };
 
@@ -148,6 +151,12 @@ std::unique_ptr<FixpointIterator> PassImpl::analyze(
       cg_for_wps);
   auto run_fp_iter = [&]() {
     fp_iter->run({{CURRENT_PARTITION_LABEL, ArgumentDomain()}});
+    auto stats = fp_iter->get_stats();
+    auto& last_stats = m_stats.fp_iter;
+    TRACE(ICONSTP, 1, "%zu/%zu (additional) method cache hits / misses",
+          stats.method_cache_hits - last_stats.method_cache_hits,
+          stats.method_cache_misses - last_stats.method_cache_misses);
+    last_stats = stats;
   };
   // Run the bootstrap. All field value and method return values are
   // represented by Top.
@@ -176,7 +185,6 @@ std::unique_ptr<FixpointIterator> PassImpl::analyze(
   }
   compute_analysis_stats(fp_iter->get_whole_program_state(),
                          definitely_assigned_ifields);
-
   return fp_iter;
 }
 
@@ -233,11 +241,11 @@ void PassImpl::optimize(
           return Transform::Stats();
         }
         auto& code = *method->get_code();
-        auto intra_cp = fp_iter.get_intraprocedural_analysis(method);
+        auto ipa = fp_iter.get_intraprocedural_analysis(method);
 
         if (m_config.create_runtime_asserts) {
           RuntimeAssertTransform rat(m_config.runtime_assert);
-          rat.apply(*intra_cp, fp_iter.get_whole_program_state(), method);
+          rat.apply(ipa->fp_iter, fp_iter.get_whole_program_state(), method);
           return Transform::Stats();
         } else {
           Transform::Config config(m_config.transform);
@@ -247,7 +255,7 @@ void PassImpl::optimize(
               &immut_analyzer_state->attribute_methods;
           Transform tf(config, &runtime_cache);
           tf.legacy_apply_constants_and_prune_unreachable(
-              *intra_cp,
+              ipa->fp_iter,
               fp_iter.get_whole_program_state(),
               code.cfg(),
               &xstores,
@@ -306,6 +314,10 @@ void PassImpl::run_pass(DexStoresVector& stores,
   mgr.incr_metric("callgraph_edges", m_stats.callgraph_edges);
   mgr.incr_metric("callgraph_nodes", m_stats.callgraph_nodes);
   mgr.incr_metric("callgraph_callsites", m_stats.callgraph_callsites);
+  mgr.incr_metric("fp_iter.method_cache_hits",
+                  m_stats.fp_iter.method_cache_hits);
+  mgr.incr_metric("fp_iter.method_cache_misses",
+                  m_stats.fp_iter.method_cache_misses);
 }
 
 static PassImpl s_pass;
