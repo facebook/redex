@@ -662,12 +662,14 @@ class BackwardsFixpointIterationAdaptor {
   static NodeId exit(const Graph& graph) {
     return GraphInterface::entry(graph);
   }
-  static std::vector<EdgeId> predecessors(const Graph& graph,
-                                          const NodeId& node) {
+  static decltype(GraphInterface::successors(std::declval<const Graph&>(),
+                                             std::declval<const NodeId&>()))
+  predecessors(const Graph& graph, const NodeId& node) {
     return GraphInterface::successors(graph, node);
   }
-  static std::vector<EdgeId> successors(const Graph& graph,
-                                        const NodeId& node) {
+  static decltype(GraphInterface::predecessors(std::declval<const Graph&>(),
+                                               std::declval<const NodeId&>()))
+  successors(const Graph& graph, const NodeId& node) {
     return GraphInterface::predecessors(graph, node);
   }
   static NodeId source(const Graph& graph, const EdgeId& edge) {

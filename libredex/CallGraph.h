@@ -243,10 +243,10 @@ class GraphInterface {
 
   static NodeId entry(const Graph& graph) { return graph.entry(); }
   static NodeId exit(const Graph& graph) { return graph.exit(); }
-  static Edges predecessors(const Graph& graph, const NodeId& m) {
+  static const Edges& predecessors(const Graph& graph, const NodeId& m) {
     return m->callers();
   }
-  static Edges successors(const Graph& graph, const NodeId& m) {
+  static const Edges& successors(const Graph& graph, const NodeId& m) {
     return m->callees();
   }
   static NodeId source(const Graph& graph, const EdgeId& e) {

@@ -1274,10 +1274,11 @@ class GraphInterface {
   static NodeId exit(const Graph& graph) {
     return const_cast<NodeId>(graph.exit_block());
   }
-  static std::vector<EdgeId> predecessors(const Graph&, const NodeId& b) {
+  static const std::vector<EdgeId>& predecessors(const Graph&,
+                                                 const NodeId& b) {
     return b->preds();
   }
-  static std::vector<EdgeId> successors(const Graph&, const NodeId& b) {
+  static const std::vector<EdgeId>& successors(const Graph&, const NodeId& b) {
     return b->succs();
   }
   static NodeId source(const Graph&, const EdgeId& e) { return e->src(); }
