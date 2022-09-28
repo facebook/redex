@@ -49,6 +49,11 @@ class WholeProgramState {
       const std::unordered_set<const DexType*>& field_blocklist)
       : m_field_blocklist(field_blocklist) {}
 
+  // By default, the field and method partitions are initialized to Bottom.
+  explicit WholeProgramState(
+      std::shared_ptr<const call_graph::Graph> call_graph)
+      : m_call_graph(std::move(call_graph)) {}
+
   WholeProgramState(const Scope&,
                     const interprocedural::FixpointIterator&,
                     const std::unordered_set<DexMethod*>&,

@@ -68,12 +68,14 @@ class FixpointIterator : public sparta::ParallelMonotonicFixpointIterator<
                              call_graph::GraphInterface,
                              Domain> {
  public:
-  FixpointIterator(std::shared_ptr<const call_graph::Graph> call_graph,
-                   const ProcedureAnalysisFactory& proc_analysis_factory)
+  FixpointIterator(
+      std::shared_ptr<const call_graph::Graph> call_graph,
+      const ProcedureAnalysisFactory& proc_analysis_factory,
+      std::shared_ptr<const call_graph::Graph> call_graph_for_wps = nullptr)
       : ParallelMonotonicFixpointIterator(*call_graph),
         m_proc_analysis_factory(proc_analysis_factory),
         m_call_graph(std::move(call_graph)) {
-    auto wps = new WholeProgramState();
+    auto wps = new WholeProgramState(std::move(call_graph_for_wps));
     wps->set_to_top();
     m_wps.reset(wps);
   }

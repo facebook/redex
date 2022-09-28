@@ -144,7 +144,11 @@ std::unique_ptr<FixpointIterator> PassImpl::analyze(
   m_stats.callgraph_edges = cg_stats.num_edges;
   m_stats.callgraph_callsites = cg_stats.num_callsites;
   auto fp_iter = std::make_unique<FixpointIterator>(
-      cg, AnalyzerGenerator(immut_analyzer_state, api_level_analyzer_state));
+      cg, AnalyzerGenerator(immut_analyzer_state, api_level_analyzer_state),
+      cg_for_wps);
+  auto run_fp_iter = [&]() {
+    fp_iter->run({{CURRENT_PARTITION_LABEL, ArgumentDomain()}});
+  };
   // Run the bootstrap. All field value and method return values are
   // represented by Top.
   fp_iter->run({{CURRENT_PARTITION_LABEL, ArgumentDomain()}});
