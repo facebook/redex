@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include "ABExperimentContext.h"
 #include "DexClass.h"
 
 namespace reduce_boolean_branches_impl {
@@ -26,8 +25,7 @@ class ReduceBooleanBranches {
   ReduceBooleanBranches(const Config& config,
                         bool is_static,
                         DexTypeList* args,
-                        IRCode* code,
-                        const std::function<void()>* on_change = nullptr);
+                        IRCode* code);
 
   const Stats& get_stats() const { return m_stats; }
 
@@ -36,14 +34,12 @@ class ReduceBooleanBranches {
  private:
   bool reduce_diamonds();
   bool reduce_xors();
-  void ensure_experiment();
 
   const Config& m_config;
   bool m_is_static;
   DexTypeList* m_args;
   IRCode* m_code;
   Stats m_stats;
-  const std::function<void()>* m_on_change;
 };
 
 } // namespace reduce_boolean_branches_impl

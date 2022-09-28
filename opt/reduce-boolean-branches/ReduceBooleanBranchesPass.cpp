@@ -28,13 +28,6 @@ constexpr const char* METRIC_XORS_REDUCED = "num_xors_reduced";
 void ReduceBooleanBranchesPass::run_pass(DexStoresVector& stores,
                                          ConfigFiles& /* unused */,
                                          PassManager& mgr) {
-  std::unique_ptr<ab_test::ABExperimentContext> experiment =
-      ab_test::ABExperimentContext::create("reduce_boolean_branches");
-
-  if (experiment->use_control()) {
-    return;
-  }
-
   auto scope = build_class_scope(stores);
 
   copy_propagation_impl::Config copy_prop_config;
@@ -43,21 +36,16 @@ void ReduceBooleanBranchesPass::run_pass(DexStoresVector& stores,
   copy_prop_config.static_finals = false;
   auto pure_methods = get_pure_methods();
   auto stats = walk::parallel::methods<reduce_boolean_branches_impl::Stats>(
-      scope, [&config = m_config, &copy_prop_config, &pure_methods,
-              &experiment](DexMethod* method) {
+      scope, [&config = m_config, &copy_prop_config,
+              &pure_methods](DexMethod* method) {
         const auto code = method->get_code();
         if (!code) {
           return reduce_boolean_branches_impl::Stats{};
         }
 
         code->build_cfg(/* editable */ true);
-        std::function<void()> on_change = [&experiment, method]() {
-          experiment->try_register_method(method);
-        };
-
         reduce_boolean_branches_impl::ReduceBooleanBranches rbb(
-            config, is_static(method), method->get_proto()->get_args(), code,
-            &on_change);
+            config, is_static(method), method->get_proto()->get_args(), code);
         while (rbb.run()) {
           // clean up
           copy_propagation_impl::CopyPropagation copy_propagation(
@@ -70,8 +58,6 @@ void ReduceBooleanBranchesPass::run_pass(DexStoresVector& stores,
         code->clear_cfg();
         return rbb.get_stats();
       });
-
-  experiment->flush();
 
   mgr.incr_metric(METRIC_BOOLEAN_BRANCHES_REMOVED,
                   stats.boolean_branches_removed);

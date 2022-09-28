@@ -184,17 +184,11 @@ class Analyzer {
 
 namespace reduce_boolean_branches_impl {
 
-ReduceBooleanBranches::ReduceBooleanBranches(
-    const Config& config,
-    bool is_static,
-    DexTypeList* args,
-    IRCode* code,
-    const std::function<void()>* on_change)
-    : m_config(config),
-      m_is_static(is_static),
-      m_args(args),
-      m_code(code),
-      m_on_change(on_change) {}
+ReduceBooleanBranches::ReduceBooleanBranches(const Config& config,
+                                             bool is_static,
+                                             DexTypeList* args,
+                                             IRCode* code)
+    : m_config(config), m_is_static(is_static), m_args(args), m_code(code) {}
 
 bool ReduceBooleanBranches::run() {
   bool any_changes = false;
@@ -325,9 +319,6 @@ bool ReduceBooleanBranches::reduce_diamonds() {
                           goto_target_goto_edge_target});
   }
   if (!reductions.empty()) {
-    if (m_on_change) {
-      (*m_on_change)();
-    }
     for (auto& r : reductions) {
       auto it = cfg.find_insn(r.last_insn, r.block);
       always_assert(!it.is_end());
@@ -379,9 +370,6 @@ bool ReduceBooleanBranches::reduce_xors() {
     }
   }
   if (!reductions.empty()) {
-    if (m_on_change) {
-      (*m_on_change)();
-    }
     for (auto& r : reductions) {
       r.insn->set_opcode(r.new_op)->set_src(0, r.new_src);
     }
