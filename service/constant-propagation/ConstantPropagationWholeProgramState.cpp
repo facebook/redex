@@ -40,7 +40,7 @@ void set_fields_in_partition(const DexClass* cls,
       TRACE(ICONSTP, 2, "%s has unknown value after <clinit> or <init>",
             SHOW(field));
     }
-    field_partition->set(field, value);
+    field_partition->set(field, std::move(value));
   }
 }
 
@@ -119,7 +119,7 @@ void initialize_ifields(
     auto value = definitely_assigned_ifields.count(field)
                      ? SignedConstantDomain::bottom()
                      : SignedConstantDomain(0);
-    field_partition->set(field, value);
+    field_partition->set(field, std::move(value));
   });
 }
 
@@ -197,8 +197,8 @@ void WholeProgramState::collect(
     const interprocedural::FixpointIterator& fp_iter,
     const std::unordered_set<const DexField*>& definitely_assigned_ifields) {
   initialize_ifields(scope, &m_field_partition, definitely_assigned_ifields);
-  ConcurrentMap<const DexField*, std::vector<ConstantValue>> fields_value_tmp;
-  ConcurrentMap<const DexMethod*, std::vector<ConstantValue>> methods_value_tmp;
+  ConcurrentMap<const DexField*, ConstantValue> fields_value_tmp;
+  ConcurrentMap<const DexMethod*, ConstantValue> methods_value_tmp;
   walk::parallel::methods(scope, [&](DexMethod* method) {
     IRCode* code = method->get_code();
     if (code == nullptr) {
@@ -221,18 +221,14 @@ void WholeProgramState::collect(
     }
   });
   for (const auto& pair : fields_value_tmp) {
-    for (auto& value : pair.second) {
-      m_field_partition.update(pair.first, [&value](auto* current_value) {
-        current_value->join_with(value);
-      });
-    }
+    m_field_partition.update(pair.first, [&pair](auto* current_value) {
+      current_value->join_with(pair.second);
+    });
   }
   for (const auto& pair : methods_value_tmp) {
-    for (auto& value : pair.second) {
-      m_method_partition.update(pair.first, [&value](auto* current_value) {
-        current_value->join_with(value);
-      });
-    }
+    m_method_partition.update(pair.first, [&pair](auto* current_value) {
+      current_value->join_with(pair.second);
+    });
   }
 }
 
@@ -249,8 +245,7 @@ void WholeProgramState::collect_field_values(
     const IRInstruction* insn,
     const ConstantEnvironment& env,
     const DexType* clinit_cls,
-    ConcurrentMap<const DexField*, std::vector<ConstantValue>>*
-        fields_value_tmp) {
+    ConcurrentMap<const DexField*, ConstantValue>* fields_value_tmp) {
   if (!opcode::is_an_sput(insn->opcode()) &&
       !opcode::is_an_iput(insn->opcode())) {
     return;
@@ -264,9 +259,13 @@ void WholeProgramState::collect_field_values(
     auto value = env.get(insn->src(0));
     fields_value_tmp->update(
         field,
-        [value](const DexField*,
-                std::vector<ConstantValue>& s,
-                bool /* exists */) { s.emplace_back(value); });
+        [&value](const DexField*, ConstantValue& current_value, bool exists) {
+          if (exists) {
+            current_value.join_with(value);
+          } else {
+            current_value = std::move(value);
+          }
+        });
   }
 }
 
@@ -280,8 +279,7 @@ void WholeProgramState::collect_return_values(
     const IRInstruction* insn,
     const ConstantEnvironment& env,
     const DexMethod* method,
-    ConcurrentMap<const DexMethod*, std::vector<ConstantValue>>*
-        methods_value_tmp) {
+    ConcurrentMap<const DexMethod*, ConstantValue>* methods_value_tmp) {
   auto op = insn->opcode();
   if (!opcode::is_a_return(op)) {
     return;
@@ -293,17 +291,21 @@ void WholeProgramState::collect_return_values(
     // reachable.
     methods_value_tmp->update(
         method,
-        [](const DexMethod*, std::vector<ConstantValue>& s, bool /* exists */) {
-          s.emplace_back(ConstantValue::top());
+        [](const DexMethod*, ConstantValue& current_value, bool /* exists */) {
+          current_value = ConstantValue::top();
         });
     return;
   }
   auto value = env.get(insn->src(0));
   methods_value_tmp->update(
       method,
-      [value](const DexMethod*,
-              std::vector<ConstantValue>& s,
-              bool /* exists */) { s.emplace_back(value); });
+      [&value](const DexMethod*, ConstantValue& current_value, bool exists) {
+        if (exists) {
+          current_value.join_with(value);
+        } else {
+          current_value = std::move(value);
+        }
+      });
 }
 
 void WholeProgramState::collect_static_finals(const DexClass* cls,

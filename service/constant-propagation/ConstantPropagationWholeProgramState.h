@@ -152,15 +152,13 @@ class WholeProgramState {
       const IRInstruction* insn,
       const ConstantEnvironment& env,
       const DexType* clinit_cls,
-      ConcurrentMap<const DexField*, std::vector<ConstantValue>>*
-          fields_value_tmp);
+      ConcurrentMap<const DexField*, ConstantValue>* fields_value_tmp);
 
   void collect_return_values(
       const IRInstruction* insn,
       const ConstantEnvironment& env,
       const DexMethod* method,
-      ConcurrentMap<const DexMethod*, std::vector<ConstantValue>>*
-          methods_value_tmp);
+      ConcurrentMap<const DexMethod*, ConstantValue>* methods_value_tmp);
 
   std::shared_ptr<const call_graph::Graph> m_call_graph;
 
