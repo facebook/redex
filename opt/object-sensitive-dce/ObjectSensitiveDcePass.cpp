@@ -61,8 +61,8 @@ class CallGraphStrategy final : public call_graph::BuildStrategy {
     for (auto& mie : InstructionIterable(code)) {
       auto insn = mie.insn;
       if (opcode::is_an_invoke(insn->opcode())) {
-        auto callee = resolve_method(insn->get_method(), opcode_to_search(insn),
-                                     m_resolved_refs, method);
+        auto callee =
+            resolve_method(insn->get_method(), opcode_to_search(insn), method);
         if (callee == nullptr || may_be_overridden(callee)) {
           continue;
         }
@@ -95,7 +95,6 @@ class CallGraphStrategy final : public call_graph::BuildStrategy {
 
   const Scope& m_scope;
   std::unordered_set<const DexMethod*> m_non_overridden_virtuals;
-  mutable MethodRefCache m_resolved_refs;
 };
 
 static side_effects::InvokeToSummaryMap build_summary_map(

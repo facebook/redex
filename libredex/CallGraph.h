@@ -192,7 +192,6 @@ class SingleCalleeStrategy : public BuildStrategy {
 
   const Scope& m_scope;
   std::unordered_set<DexMethod*> m_non_virtual;
-  mutable MethodRefCache m_resolved_refs;
 };
 
 class MultipleCalleeBaseStrategy : public SingleCalleeStrategy {

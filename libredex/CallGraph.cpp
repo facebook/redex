@@ -14,6 +14,7 @@
 #include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"
+#include "WorkQueue.h"
 
 namespace mog = method_override_graph;
 
@@ -87,8 +88,7 @@ bool SingleCalleeStrategy::is_definitely_virtual(DexMethod* method) const {
 
 DexMethod* SingleCalleeStrategy::resolve_callee(const DexMethod* caller,
                                                 IRInstruction* invoke) const {
-  return resolve_method(invoke->get_method(), opcode_to_search(invoke),
-                        m_resolved_refs, caller);
+  return resolve_method(invoke->get_method(), opcode_to_search(invoke), caller);
 }
 
 MultipleCalleeBaseStrategy::MultipleCalleeBaseStrategy(
@@ -198,19 +198,12 @@ CompleteCallGraphStrategy::CompleteCallGraphStrategy(
     const mog::Graph& method_override_graph, const Scope& scope)
     : MultipleCalleeBaseStrategy(method_override_graph, scope) {}
 
-DexMethod* resolve_interface_virtual_callee(const IRInstruction* insn,
-                                            const DexMethod* caller,
-                                            MethodRefCache& ref_cache,
-                                            bool use_cache) {
+static DexMethod* resolve_interface_virtual_callee(const IRInstruction* insn,
+                                                   const DexMethod* caller) {
   DexMethod* callee = nullptr;
   if (opcode_to_search(insn) == MethodSearch::Virtual) {
-    callee = use_cache ? resolve_method(insn->get_method(),
-                                        MethodSearch::InterfaceVirtual,
-                                        ref_cache,
-                                        caller)
-                       : resolve_method(insn->get_method(),
-                                        MethodSearch::InterfaceVirtual,
-                                        caller);
+    callee = resolve_method(insn->get_method(), MethodSearch::InterfaceVirtual,
+                            caller);
     if (callee == nullptr) {
       auto insn_method_cls = type_class(insn->get_method()->get_class());
       if (insn_method_cls != nullptr && !insn_method_cls->is_external()) {
@@ -235,9 +228,7 @@ CallSites CompleteCallGraphStrategy::get_callsites(
         if (opcode::is_an_invoke(insn->opcode())) {
           auto callee = this->resolve_callee(method, insn);
           if (callee == nullptr) {
-            callee =
-                resolve_interface_virtual_callee(insn, method, m_resolved_refs,
-                                                 /* use_cache */ true);
+            callee = resolve_interface_virtual_callee(insn, method);
             if (callee == nullptr) {
               return editable_cfg_adapter::LOOP_CONTINUE;
             }
@@ -315,20 +306,23 @@ MultipleCalleeStrategy::MultipleCalleeStrategy(
     uint32_t big_override_threshold)
     : MultipleCalleeBaseStrategy(method_override_graph, scope) {
   // Gather big overrides true virtual methods.
-  ConcurrentSet<const DexMethod*> bigoverrides;
+  ConcurrentSet<const DexMethod*> concurrent_callees;
+  ConcurrentSet<const DexMethod*> concurrent_big_overrides;
   walk::parallel::opcodes(scope, [&](const DexMethod* method,
                                      IRInstruction* insn) {
     if (opcode::is_an_invoke(insn->opcode())) {
       auto callee =
           resolve_method(insn->get_method(), opcode_to_search(insn), method);
       if (callee == nullptr) {
-        callee = resolve_interface_virtual_callee(insn, method, m_resolved_refs,
-                                                  /* use_cache */ false);
+        callee = resolve_interface_virtual_callee(insn, method);
         if (callee == nullptr) {
           return;
         }
       }
       if (!callee->is_virtual()) {
+        return;
+      }
+      if (!concurrent_callees.insert(callee)) {
         return;
       }
       const auto& overriding_methods =
@@ -340,16 +334,14 @@ MultipleCalleeStrategy::MultipleCalleeStrategy(
         }
       }
       if (num_override > big_override_threshold) {
-        bigoverrides.emplace(callee);
+        concurrent_big_overrides.emplace(callee);
         for (auto overriding_method : overriding_methods) {
-          bigoverrides.emplace(overriding_method);
+          concurrent_big_overrides.emplace(overriding_method);
         }
       }
     }
   });
-  for (auto item : bigoverrides) {
-    m_big_override.emplace(item);
-  }
+  m_big_override = concurrent_big_overrides.move_to_container();
 }
 
 CallSites MultipleCalleeStrategy::get_callsites(const DexMethod* method) const {
@@ -364,9 +356,7 @@ CallSites MultipleCalleeStrategy::get_callsites(const DexMethod* method) const {
         if (opcode::is_an_invoke(insn->opcode())) {
           auto callee = this->resolve_callee(method, insn);
           if (callee == nullptr) {
-            callee =
-                resolve_interface_virtual_callee(insn, method, m_resolved_refs,
-                                                 /* use_cache */ true);
+            callee = resolve_interface_virtual_callee(insn, method);
             if (callee == nullptr) {
               return editable_cfg_adapter::LOOP_CONTINUE;
               ;
@@ -426,36 +416,76 @@ Graph::Graph(const BuildStrategy& strat)
   const auto& roots = root_and_dynamic.roots;
   m_dynamic_methods = std::move(root_and_dynamic.dynamic_methods);
   for (const DexMethod* root : roots) {
-    auto edge = std::make_shared<Edge>(this->entry(), make_node(root), nullptr);
+    auto root_node = make_node(root);
+    auto edge = std::make_shared<Edge>(entry(), root_node, nullptr);
     m_entry->m_successors.emplace_back(edge);
-    make_node(root)->m_predecessors.emplace_back(edge);
+    root_node->m_predecessors.emplace_back(edge);
   }
 
   // Obtain the callsites of each method recursively, building the graph in the
   // process.
-  MethodSet visited;
-  auto visit = [&](const auto* caller) {
-    auto visit_impl = [&](const auto* caller, auto& visit_fn) {
-      if (!visited.emplace(caller).second) {
-        return;
-      }
-      auto callsites = strat.get_callsites(caller);
-      if (callsites.empty()) {
-        this->add_edge(make_node(caller), this->exit(), nullptr);
-      }
-      for (const auto& callsite : callsites) {
-        this->add_edge(make_node(caller), make_node(callsite.callee),
-                       callsite.invoke_insn);
-        m_insn_to_callee[callsite.invoke_insn].emplace(callsite.callee);
-        visit_fn(callsite.callee, visit_fn);
-      }
-    };
-    visit_impl(caller, visit_impl);
-  };
+  ConcurrentSet<const DexMethod*> concurrent_added;
+  ConcurrentMap<const IRInstruction*, std::unordered_set<const DexMethod*>>
+      concurrent_insn_to_callee;
+  std::mutex nodes_mutex;
+  std::mutex edges_mutex;
+  using WorkItem = std::pair<const DexMethod*, NodeId>;
+  auto wq = workqueue_foreach<WorkItem>(
+      [&](sparta::SpartaWorkerState<WorkItem>* worker_state,
+          const WorkItem& work_item) {
+        auto [caller, caller_node] = work_item;
 
+        auto callsites = strat.get_callsites(caller);
+
+        // Gather and create all callee nodes, and kick off new concurrent work
+        std::unordered_map<const DexMethod*, NodeId> callee_nodes;
+        for (const auto& callsite : callsites) {
+          callee_nodes.emplace(callsite.callee, NodeId());
+        }
+        {
+          std::lock_guard<std::mutex> lock_guard(nodes_mutex);
+          for (auto&& [callee, node] : callee_nodes) {
+            node = this->make_node(callee);
+          }
+        }
+        for (auto&& [callee, node] : callee_nodes) {
+          if (concurrent_added.insert(callee)) {
+            worker_state->push_task(std::make_pair(callee, node));
+          }
+        }
+
+        // Create all edges
+        {
+          std::lock_guard<std::mutex> lock_guard(edges_mutex);
+          if (callsites.empty()) {
+            this->add_edge(caller_node, this->exit(), nullptr);
+            return;
+          }
+          for (const auto& callsite : callsites) {
+            this->add_edge(caller_node, callee_nodes.at(callsite.callee),
+                           callsite.invoke_insn);
+          }
+        }
+
+        // Populate concurrent_insn_to_callee
+        std::unordered_map<const IRInstruction*,
+                           std::unordered_set<const DexMethod*>>
+            insn_to_callee;
+        for (const auto& callsite : callsites) {
+          insn_to_callee[callsite.invoke_insn].emplace(callsite.callee);
+        }
+        for (auto&& [invoke_insn, callees] : insn_to_callee) {
+          concurrent_insn_to_callee.emplace(invoke_insn, std::move(callees));
+        }
+      },
+      redex_parallel::default_num_threads(),
+      /*push_tasks_while_running=*/true);
   for (const DexMethod* root : roots) {
-    visit(root);
+    concurrent_added.insert(root);
+    wq.add_item(std::make_pair(root, this->make_node(root)));
   }
+  wq.run_all();
+  m_insn_to_callee = concurrent_insn_to_callee.move_to_container();
 }
 
 NodeId Graph::make_node(const DexMethod* m) {
