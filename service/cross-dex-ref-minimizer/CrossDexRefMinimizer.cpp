@@ -132,6 +132,10 @@ void CrossDexRefMinimizer::ignore(DexClass* cls) {
   // to have an extremely high frequency and thus get skipped from
   // consideration by insert/add_weight.
   m_ref_counts[cls->get_type()] = std::numeric_limits<size_t>::max();
+
+  if (m_json_classes) {
+    (*m_json_classes)[get_json_class_index(cls)]["ignored"] = true;
+  }
 }
 
 void CrossDexRefMinimizer::sample(DexClass* cls) {
@@ -166,6 +170,9 @@ void CrossDexRefMinimizer::sample(DexClass* cls) {
     json_class["field_refs"] = m_json_fields.get(field_refs);
     json_class["types"] = m_json_types.get(types);
     json_class["strings"] = m_json_strings.get(strings);
+    json_class["is_generated"] = cls->rstate.is_generated();
+    json_class["ignored"] = false;
+    json_class["insert_index"] = -1;
     (*m_json_classes)[get_json_class_index(cls)] = json_class;
   }
 }
@@ -277,6 +284,10 @@ void CrossDexRefMinimizer::insert(DexClass* cls) {
         SHOW(cls), priority, class_info.index,
         format_infrequent_refs_array(class_info.infrequent_refs_weight).c_str(),
         refs.size());
+  if (m_json_classes) {
+    (*m_json_classes)[get_json_class_index(cls)]["insert_index"] =
+        class_info.index;
+  }
   reprioritize(affected_classes);
 }
 
