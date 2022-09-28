@@ -12,6 +12,12 @@ import static org.fest.assertions.api.Assertions.assertThat;
 import java.io.Serializable;
 import java.util.EventObject;
 
+/**
+ * The existence of the non-primitive/non-String field on the following enums prevents the replace_enum_with_int optimization.
+ * So they will be opitmized to non-enum classes.
+ * The focus of this test is on generated util methods like values and valueOf are handled properly by the optimization.
+ */
+
 // CHECK-LABEL: class: redex.UsesValueOf
 // CHECK: Superclass: java.lang.Enum
 enum UsesValueOf {
@@ -20,6 +26,7 @@ enum UsesValueOf {
   // CHECK: method: direct redex.UsesValueOf.values:()redex.UsesValueOf[]
   Integer otherField; /* prevent replace_enum_with_int */
 }
+
 // CHECK-LABEL: class: redex.UsesValuesMethod
 // CHECK: Superclass: java.lang.Enum
 enum UsesValuesMethod {
@@ -28,6 +35,7 @@ enum UsesValuesMethod {
   // CHECK: method: direct redex.UsesValuesMethod.values:()redex.UsesValuesMethod[]
   Integer otherField;
 }
+
 // CHECK-LABEL: class: redex.UsesNothing
 // CHECK: Superclass: java.lang.Enum
 enum UsesNothing {
@@ -36,6 +44,7 @@ enum UsesNothing {
   // CHECK-NOT: method: direct redex.UsesNothing.values:()redex.UsesNothing[]
   Integer otherField;
 }
+
 // CHECK-LABEL: class: redex.Captured
 // CHECK: Superclass: java.lang.Enum
 enum Captured {
@@ -44,6 +53,7 @@ enum Captured {
   // CHECK: method: direct redex.Captured.values:()redex.Captured[]
   Integer otherField;
 }
+
 // CHECK-LABEL: class: redex.UsedAsTypeClass
 // CHECK: Superclass: java.lang.Enum
 enum UsedAsTypeClass {
@@ -52,6 +62,7 @@ enum UsedAsTypeClass {
   // CHECK: method: direct redex.UsedAsTypeClass.values:()redex.UsedAsTypeClass[]
   Integer otherField;
 }
+
 // CHECK-LABEL: class: redex.Upcasted
 // CHECK: Superclass: java.lang.Enum
 enum Upcasted {
@@ -60,6 +71,7 @@ enum Upcasted {
   // CHECK: method: direct redex.Upcasted.values:()redex.Upcasted[]
   Integer otherField;
 }
+
 // CHECK-LABEL: class: redex.UpcastedToSerializable
 // CHECK: Superclass: java.lang.Enum
 enum UpcastedToSerializable {
@@ -68,6 +80,7 @@ enum UpcastedToSerializable {
   // CHECK: method: direct redex.UpcastedToSerializable.values:()redex.UpcastedToSerializable[]
   Integer otherField;
 }
+
 // CHECK-LABEL: class: redex.AsInstanceField
 // CHECK: Superclass: java.lang.Enum
 enum AsInstanceField {
@@ -82,6 +95,11 @@ public class EnumRemoveGeneratedTest {
   class ImplementsSerializable extends EventObject {
     AsInstanceField field;
     ImplementsSerializable(Object source) { super(source); }
+  }
+
+  @Test
+  public void testAsInstanceField() {
+    assertThat(AsInstanceField.ONE.toString()).isEqualTo("ONE");
   }
 
   static class CapturingClass {
@@ -100,6 +118,15 @@ public class EnumRemoveGeneratedTest {
       }
   }
 
+  @Test
+  public void testEscapeToFields() {
+    CapturingClass capturingClass = new CapturingClass();
+    capturingClass.capture_as_self(UsesValuesMethod.ONE);
+    capturingClass.capture_as_object(Captured.ONE);
+    assertThat(Captured.TWO.ordinal()).isEqualTo(1);
+    assertThat(UsesNothing.ONE.ordinal()).isEqualTo(0);
+  }
+
   // `UsesValues` is upcasted and used as type `Class`, but it does not escape
   // the method.
   boolean upcast_locally(UsesValuesMethod s) {
@@ -111,6 +138,11 @@ public class EnumRemoveGeneratedTest {
     }
   }
 
+  @Test
+  public void testUpcastLocally() {
+    upcast_locally(UsesValuesMethod.ONE);
+  }
+
   // Enums that are used as type `Class` could call one of many methods that
   // could lead to reflection, e.g., `Class.getMethods()`.
   boolean use_as_type_class(UsedAsTypeClass s) {
@@ -118,9 +150,21 @@ public class EnumRemoveGeneratedTest {
     return cl == null;
   }
 
+  @Test
+  public void testGetDeclaringClass() {
+    use_as_type_class(UsedAsTypeClass.ONE);
+    assertThat(UsedAsTypeClass.ONE.ordinal()).isEqualTo(0);
+  }
+
   // `Upcasted` is upcasted and escapes the method.
   Enum return_type_enum(Upcasted s) {
     return s;
+  }
+
+  @Test
+  public void testEscapeAsReturnType() {
+    return_type_enum(Upcasted.ONE);
+    assertThat(Upcasted.ONE.ordinal()).isEqualTo(0);
   }
 
   boolean upcast_to_serializable(Serializable s) {
@@ -128,30 +172,25 @@ public class EnumRemoveGeneratedTest {
   }
 
   @Test
-  public void main() {
-    CapturingClass capturingClass = new CapturingClass();
-    capturingClass.capture_as_self(UsesValuesMethod.ONE);
-    capturingClass.capture_as_object(Captured.ONE);
-    upcast_locally(UsesValuesMethod.ONE);
-    use_as_type_class(UsedAsTypeClass.ONE);
-    return_type_enum(Upcasted.ONE);
+  public void testUpcastToSerializable() {
     upcast_to_serializable(UpcastedToSerializable.ONE);
-
-    UsesValueOf.valueOf("ONE");
-    UsesValuesMethod.values();
-
-    assertThat(UsesValueOf.ONE.ordinal()).isEqualTo(0);
-    assertThat(UsesValuesMethod.ONE.ordinal()).isEqualTo(0);
-    assertThat(UsesNothing.ONE.ordinal()).isEqualTo(0);
-    assertThat(Captured.TWO.ordinal()).isEqualTo(1);
-    assertThat(UsedAsTypeClass.ONE.ordinal()).isEqualTo(0);
-    assertThat(Upcasted.ONE.ordinal()).isEqualTo(0);
     assertThat(UpcastedToSerializable.TWO.ordinal()).isEqualTo(1);
+  }
+
+  @Test
+  public void testUseOfValueOf() {
+    UsesValueOf.valueOf("ONE");
+    assertThat(UsesValueOf.ONE.ordinal()).isEqualTo(0);
+  }
+
+  @Test
+  public void testUseOfValues() {
+    UsesValuesMethod.values();
+    assertThat(UsesValuesMethod.ONE.ordinal()).isEqualTo(0);
     UsesValuesMethod.ONE.compareTo(UsesValuesMethod.TWO);
     UsesValuesMethod.TWO.hashCode();
     assertThat(UsesValuesMethod.ONE.equals(UsesValuesMethod.TWO)).isFalse();
     assertThat(UsesValuesMethod.TWO.name()).isEqualTo("TWO");
     assertThat(UsesValuesMethod.TWO.toString()).isEqualTo("TWO");
-    assertThat(AsInstanceField.ONE.toString()).isEqualTo("ONE");
   }
 }
