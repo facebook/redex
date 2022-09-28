@@ -178,14 +178,6 @@ class MonotonicFixpointIteratorBase
     m_exit_states.clear();
   }
 
-  void set_all_to_bottom(std::unordered_set<NodeId>& all_nodes) {
-    // Pre-populate entry and exit states for all nodes.
-    for (auto& node : all_nodes) {
-      m_entry_states[node] = Domain::bottom();
-      m_exit_states[node] = Domain::bottom();
-    }
-  }
-
   void compute_entry_state(Context* context,
                            const NodeId& node,
                            Domain* entry_state) {
@@ -403,11 +395,55 @@ class ParallelMonotonicFixpointIterator
       node_queue.pop();
       for (auto& edge : GraphInterface::successors(graph, node)) {
         auto target = GraphInterface::target(graph, edge);
-        if (!m_all_nodes.count(target)) {
-          m_all_nodes.emplace(target);
+        if (m_all_nodes.emplace(target).second) {
           node_queue.push(target);
         }
       }
+    }
+  }
+
+  void set_all_to_bottom() {
+    if (this->m_entry_states.size() < ChunkSize) {
+      this->m_entry_states.reserve(m_all_nodes.size());
+      this->m_exit_states.reserve(m_all_nodes.size());
+      // Pre-populate entry and exit states for all nodes.
+      for (auto& node : m_all_nodes) {
+        this->m_entry_states[node] = Domain::bottom();
+        this->m_exit_states[node] = Domain::bottom();
+      }
+      return;
+    }
+
+    assert(this->m_entry_states.size() == m_all_nodes.size());
+    assert(this->m_exit_states.size() == m_all_nodes.size());
+    // We are going to destroy a lot of domain values, which can be relatively
+    // expensive. To speed this up, we are going to process chunks in
+    // parallel.
+    std::vector<Domain*> linear_map;
+    linear_map.reserve(m_all_nodes.size() * 2);
+    for (auto& [node, state] : this->m_entry_states) {
+      linear_map.push_back(&state);
+    }
+    for (auto& [node, state] : this->m_exit_states) {
+      linear_map.push_back(&state);
+    }
+    auto wq = sparta::work_queue<size_t>(
+        [&linear_map](SpartaWorkerState<size_t>* worker_state, size_t start) {
+          size_t end = std::min(linear_map.size(), start + ChunkSize);
+          for (size_t i = start; i < end; i++) {
+            *linear_map[i] = Domain::bottom();
+          }
+        });
+    for (size_t i = 0; i < linear_map.size(); i += ChunkSize) {
+      wq.add_item(i);
+    }
+    wq.run_all();
+  }
+
+  virtual ~ParallelMonotonicFixpointIterator() {
+    if (this->m_entry_states.size() >= ChunkSize) {
+      // We clear the memory explicitly so that we can do it faster in parallel.
+      this->set_all_to_bottom();
     }
   }
 
@@ -418,7 +454,7 @@ class ParallelMonotonicFixpointIterator
    * initial conditions.
    */
   void run(const Domain& init) {
-    this->set_all_to_bottom(m_all_nodes);
+    this->set_all_to_bottom();
     Context context(init, m_all_nodes);
     std::unique_ptr<std::atomic<uint32_t>[]> wpo_counter(
         new std::atomic<uint32_t>[m_wpo.size()]);
@@ -515,6 +551,7 @@ class ParallelMonotonicFixpointIterator
   WeakPartialOrdering<NodeId, NodeHash> m_wpo;
   size_t m_num_thread;
   std::unordered_set<NodeId> m_all_nodes;
+  static constexpr size_t ChunkSize = 512;
 };
 
 /*
