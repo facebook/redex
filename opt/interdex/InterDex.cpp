@@ -1252,7 +1252,6 @@ void InterDex::flush_out_dex(DexInfo& dex_info, DexClass* canary_cls) {
         std::make_tuple(canary_cls->get_name()->str_copy(), dex_info));
   }
 
-  std::unordered_set<DexClass*> additional_classes;
   for (auto& plugin : m_plugins) {
     DexClasses classes = m_dexes_structure.get_current_dex_classes();
     const DexClasses& squashed_classes =
@@ -1269,7 +1268,6 @@ void InterDex::flush_out_dex(DexInfo& dex_info, DexClass* canary_cls) {
       if (dex_info.primary || dex_info.betamap_ordered) {
         cls->set_perf_sensitive(true);
       }
-      additional_classes.insert(cls);
     }
   }
 
