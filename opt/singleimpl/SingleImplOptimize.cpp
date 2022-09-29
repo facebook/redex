@@ -803,7 +803,7 @@ check_casts::impl::Stats OptimizationImpl::post_process(
         auto code = m->get_code();
         always_assert(!code->editable_cfg_built());
         cfg::ScopedCFG cfg(code);
-        // T131858231 If enable weaken, we are hitting an assertion in
+        // T131253060 If enable weaken, we are hitting an assertion in
         // CheckCastAnalysis where a definition of a value is unknown. This only
         // occurs here within SingleImplPass, but not in subsequent
         // CheckCastRemovals where weaken is enabled by default.
