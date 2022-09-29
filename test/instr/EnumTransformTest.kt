@@ -10,6 +10,17 @@ package redex
 import org.fest.assertions.api.Assertions.assertThat
 import org.junit.Test
 
+// The following rules are about the helper class synthesized by OptimizeEnumsPass.
+// POSTCHECK-LABEL: class: redex.$EnumUtils
+// POSTCHECK-NEXT: Access flags: (PUBLIC, FINAL)
+// POSTCHECK-NEXT: Superclass: java.lang.Object
+// POSTCHECK: (PRIVATE, STATIC, FINAL) $VALUES:java.lang.Integer[]
+// POSTCHECK: (PUBLIC, STATIC, FINAL) f0:java.lang.Integer
+// POSTCHECK: (PUBLIC, STATIC, FINAL) f1:java.lang.Integer
+// POSTCHECK: (PUBLIC, STATIC, FINAL) f2:java.lang.Integer
+// POSTCHECK: (PUBLIC, STATIC, FINAL) f3:java.lang.Integer
+// POSTCHECK-NOT: (PUBLIC, STATIC, FINAL) f4:java.lang.Integer
+
 // Simple case is optimized.
 // CHECK-LABEL: class: redex.A
 // CHECK-NEXT: Access flags:
@@ -104,6 +115,42 @@ enum class F {
   }
 }
 
+// Not optimized due to the upcast to Any (Object in Java).
+// Note that the is type check in useEnumH is not what rejects the optimization,
+// but the upcast preceding that is the reason.
+// CHECK-LABEL: class: redex.H
+// CHECK-NEXT: Access flags:
+// PRECHECK-NEXT: Superclass: java.lang.Enum
+// POSTCHECK-NEXT: Superclass: java.lang.Enum
+enum class H {
+  H0,
+  H1,
+  H2
+}
+
+// Not optimized due to the upcast to java.io.Serializable.
+// Note that on the return value, the as type cast could be implicit.
+// CHECK-LABEL: class: redex.J
+// CHECK-NEXT: Access flags:
+// PRECHECK-NEXT: Superclass: java.lang.Enum
+// POSTCHECK-NEXT: Superclass: java.lang.Enum
+enum class J {
+  J0,
+  J1,
+  J2
+}
+
+// Not optimized if referenced by reflection.
+// CHECK-LABEL: class: redex.K
+// CHECK-NEXT: Access flags:
+// PRECHECK-NEXT: Superclass: java.lang.Enum
+// POSTCHECK-NEXT: Superclass: java.lang.Enum
+enum class K {
+  K0,
+  K1,
+  K2
+}
+
 class Helper {
   companion object {
     // This method cannot be in the Test class to avoid Proguard keep rules.
@@ -113,6 +160,20 @@ class Helper {
           A.A2 -> 42
           else -> 41
         }
+
+    fun useEnumAValueOf(s: String): Int {
+      val elem: A = A.valueOf(s)
+      return when (elem) {
+        A.A0 -> 40
+        A.A2 -> 42
+        else -> 41
+      }
+    }
+
+    fun useEnumAValues(): Int {
+      val vals = A.values()
+      return vals.size
+    }
 
     fun useEnumB(elem: B): Int =
         when (elem) {
@@ -154,6 +215,20 @@ class Helper {
           F.F1 -> "F1"
           else -> "F2"
         }
+
+    fun useEnumH(elem: Any): String {
+      if (elem is H) {
+        return elem.name
+      } else {
+        return "Not H"
+      }
+    }
+
+    fun useEnumJ(elem: J): java.io.Serializable {
+      return elem as java.io.Serializable
+    }
+
+    fun useEnumK(elem: K): String = elem::class.java.simpleName
   }
 }
 
@@ -164,6 +239,12 @@ class EnumTransformTest {
     assertThat(Helper.Companion.useEnumA(A.A0)).isEqualTo(40)
     assertThat(Helper.Companion.useEnumA(A.A1)).isEqualTo(41)
     assertThat(Helper.Companion.useEnumA(A.A2)).isEqualTo(42)
+
+    assertThat(Helper.Companion.useEnumAValueOf("A0")).isEqualTo(40)
+    assertThat(Helper.Companion.useEnumAValueOf("A1")).isEqualTo(41)
+    assertThat(Helper.Companion.useEnumAValueOf("A2")).isEqualTo(42)
+
+    assertThat(Helper.Companion.useEnumAValues()).isEqualTo(3)
   }
 
   @Test
@@ -204,5 +285,26 @@ class EnumTransformTest {
     assertThat(Helper.Companion.useEnumF("f0")).isEqualTo("F0")
     assertThat(Helper.Companion.useEnumF("f1")).isEqualTo("F1")
     assertThat(Helper.Companion.useEnumF("f2")).isEqualTo("F2")
+  }
+
+  @Test
+  fun testH() {
+    assertThat(Helper.Companion.useEnumH(H.H0)).isEqualTo("H0")
+    assertThat(Helper.Companion.useEnumH(H.H1)).isEqualTo("H1")
+    assertThat(Helper.Companion.useEnumH(H.H2)).isEqualTo("H2")
+    assertThat(Helper.Companion.useEnumH(1)).isEqualTo("Not H")
+  }
+
+  @Test
+  fun testJ() {
+    assertThat(Helper.Companion.useEnumJ(J.J0)).isNotNull()
+    assertThat(Helper.Companion.useEnumJ(J.J1)).isNotNull()
+    assertThat(Helper.Companion.useEnumJ(J.J2)).isNotNull()
+  }
+
+  @Test
+  fun testK() {
+    assertThat(Helper.Companion.useEnumK(K.K0)).isEqualTo("K")
+    assertThat(Helper.Companion.useEnumK(K.K1)).isEqualTo("K")
   }
 }
