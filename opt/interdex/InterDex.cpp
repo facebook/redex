@@ -370,17 +370,6 @@ InterDex::EmitResult InterDex::emit_class(DexInfo& dex_info,
       return {false, true};
     }
 
-    // Plugins may maintain internal state after gathering refs, and
-    // then they tend to forget that state after flushing out (class
-    // merging, looking at you). So, let's redo gathering of refs here
-    // to give plugins a chance to rebuild their internal state.
-    clazz_mrefs.clear();
-    clazz_frefs.clear();
-    clazz_trefs.clear();
-    clazz_itrefs.clear();
-    gather_refs(m_plugins, dex_info, clazz, &clazz_mrefs, &clazz_frefs,
-                &clazz_trefs, &clazz_itrefs);
-
     m_dexes_structure.add_class_no_checks(clazz_mrefs, clazz_frefs, clazz_trefs,
                                           clazz_itrefs, clazz);
   }
