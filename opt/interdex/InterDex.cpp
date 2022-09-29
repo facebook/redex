@@ -1247,7 +1247,7 @@ void InterDex::flush_out_dex(DexInfo& dex_info, DexClass* canary_cls) {
         m_dexes_structure.get_current_dex_squashed_classes();
     classes.insert(classes.end(), squashed_classes.begin(),
                    squashed_classes.end());
-    for (auto cls : plugin->additional_classes(m_outdex, classes)) {
+    for (auto cls : plugin->additional_classes(m_outdex.size(), classes)) {
       TRACE(IDEX, 4, "IDEX: Emitting %s-plugin-generated class :: %s",
             plugin->name().c_str(), SHOW(cls));
       m_dexes_structure.add_class_no_checks(cls);

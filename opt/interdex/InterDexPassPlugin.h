@@ -46,8 +46,7 @@ class InterDexPassPlugin {
   virtual ReserveRefsInfo reserve_refs() { return ReserveRefsInfo{}; }
 
   // Return any new codegened classes that should be added to the current dex.
-  virtual DexClasses additional_classes(const DexClassesVector&,
-                                        const DexClasses&) {
+  virtual DexClasses additional_classes(size_t dex_count, const DexClasses&) {
     DexClasses empty;
     return empty;
   }
