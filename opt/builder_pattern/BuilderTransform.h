@@ -10,6 +10,7 @@
 #include "BuilderAnalysis.h"
 #include "DexClass.h"
 #include "Inliner.h"
+#include "InlinerConfig.h"
 #include "TypeSystem.h"
 
 namespace builder_pattern {
