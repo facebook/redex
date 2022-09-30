@@ -232,8 +232,6 @@ void MultiMethodInliner::inline_methods(bool methods_need_deconstruct) {
     }
   }
 
-  m_ab_experiment_context = ab_test::ABExperimentContext::create("pgi_v1");
-
   // Inlining and shrinking initiated from within this method will be done
   // in parallel.
   m_scheduler.get_thread_pool().set_num_threads(
@@ -323,9 +321,6 @@ void MultiMethodInliner::inline_methods(bool methods_need_deconstruct) {
 
   info.critical_path_length =
       m_scheduler.run(methods_to_schedule.begin(), methods_to_schedule.end());
-
-  m_ab_experiment_context->flush();
-  m_ab_experiment_context = nullptr;
 
   delayed_visibility_changes_apply();
   delayed_invoke_direct_to_static();
@@ -531,10 +526,6 @@ size_t MultiMethodInliner::inline_inlinables(
     const std::vector<Inlinable>& inlinables,
     std::vector<IRInstruction*>* deleted_insns) {
   auto timer = m_inline_inlinables_timer.scope();
-  if (for_speed() && m_ab_experiment_context->use_control()) {
-    return 0;
-  }
-
   auto caller = caller_method->get_code();
   std::unordered_set<IRCode*> need_deconstruct;
   if (inline_inlinables_need_deconstruct(caller_method)) {
@@ -741,11 +732,6 @@ size_t MultiMethodInliner::inline_inlinables(
     TRACE(MMINL, 4, "%s",
           create_inlining_trace_msg(caller_method, callee_method, callsite_insn)
               .c_str());
-
-    if (for_speed()) {
-      std::lock_guard<std::mutex> lock(ab_exp_mutex);
-      m_ab_experiment_context->try_register_method(caller_method);
-    }
 
     if (m_config.unique_inlined_registers) {
       cfg_next_caller_reg = caller->cfg().get_registers_size();
