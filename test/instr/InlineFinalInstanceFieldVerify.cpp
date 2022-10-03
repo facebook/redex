@@ -166,13 +166,6 @@ TEST_F(PreVerify, InlineFinalInstanceField) {
   auto read_ctors_cls1 = find_class_named(classes, "Lredex/ReadInCtors1;");
   auto read_ctors_cls2 = find_class_named(classes, "Lredex/ReadInCtors2;");
 
-  // Ctors of both read ctors class have one iget.
-  for (auto& meth : read_ctors_cls1->get_dmethods()) {
-    IRCode* code = new IRCode(meth);
-    ASSERT_NE(code, nullptr);
-    code->build_cfg(/* editable */ true);
-    EXPECT_EQ(1, count_igets(code->cfg()));
-  }
   for (auto& meth : read_ctors_cls2->get_dmethods()) {
     IRCode* code = new IRCode(meth);
     ASSERT_NE(code, nullptr);

@@ -27,7 +27,6 @@ namespace {
 // (how many times optimization runs) * (code units saved per run)
 #define TESTS                                           \
   WORK(test_Coalesce_InitVoid_AppendString, 3)          \
-  WORK(test_CompileTime_StringHashCode, 5 * 1)          \
   WORK(test_Remove_AppendEmptyString, 1 * 3)            \
   WORK(test_Coalesce_Init_AppendChar, 4)                \
   WORK(test_Coalesce_AppendString_AppendInt, 6 * 1)     \

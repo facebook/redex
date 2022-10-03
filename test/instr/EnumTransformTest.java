@@ -287,6 +287,7 @@ class EnumHelper {
   public void aput_method() {
     Object[] array = new Object[10];
     array[0] = CAST_APUT_OBJECT.ONE;
+    s_obj = CAST_APUT_OBJECT.ONE;
   }
 
   public static int my_ordinal(SCORE score) { return score.ordinal(); }
