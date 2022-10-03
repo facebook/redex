@@ -380,6 +380,7 @@ void FixpointIteratorMapDeleter::operator()(FixpointIteratorMap* map) {
     wq.add_item(pair.second);
   }
   wq.run_all();
+  delete map;
 }
 
 static void analyze_method_recursive(
