@@ -85,6 +85,20 @@ function SocialBanner() {
   );
 }
 
+function OfficeHourBanner() {
+  return (
+    <div className="OfficeHourBanner">
+      <div>
+        Redex Public
+        <a href="https://fb.zoom.us/j/99839669035?pwd=NHJIMjFUc2NXbnVuTk5rR1VXUkozUT09">
+          Office Hour
+        </a>
+        .
+      </div>
+    </div>
+  );
+}
+
 class HomeSplash extends React.Component {
   render() {
     let language = this.props.language || '';
@@ -119,6 +133,7 @@ class Index extends React.Component {
     return (
       <div>
         <SocialBanner />
+        <OfficeHourBanner />
         <HomeSplash language={language} />
         <div className="mainContainer">
           <Container padding={['bottom', 'top']}>
