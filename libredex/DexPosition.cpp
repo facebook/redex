@@ -59,15 +59,18 @@ PositionPatternSwitchManager::PositionPatternSwitchManager()
 
 DexPosition* PositionPatternSwitchManager::internalize(DexPosition* pos) {
   always_assert(pos);
-  auto it = m_positions.find(*pos);
-  if (it == m_positions.end()) {
-    auto cloned_position = new DexPosition(*pos);
-    if (pos->parent) {
-      cloned_position->parent = internalize(pos->parent);
-    }
-    it = m_positions.emplace(*cloned_position, cloned_position).first;
+  auto it = m_positions.find(pos);
+  if (it != m_positions.end()) {
+    return it->second.get();
   }
-  return it->second;
+
+  auto cloned_position = new DexPosition(*pos);
+  if (pos->parent) {
+    cloned_position->parent = internalize(pos->parent);
+  }
+  m_positions.emplace(cloned_position,
+                      std::unique_ptr<DexPosition>(cloned_position));
+  return cloned_position;
 }
 
 uint32_t PositionPatternSwitchManager::make_pattern(

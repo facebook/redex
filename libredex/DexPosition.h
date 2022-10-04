@@ -38,6 +38,13 @@ struct DexPosition final {
   static std::unique_ptr<DexPosition> make_synthetic_entry_position(
       const DexMethod* method);
 };
+inline size_t hash_value(const DexPosition* pos) {
+  return pos == nullptr ? 0
+                        : ((size_t)pos->method + (size_t)pos->file + pos->line +
+                           hash_value(pos->parent));
+}
+using ConstDexPositionPtrHasher = boost::hash<const DexPosition*>;
+
 inline size_t hash_value(const DexPosition& pos) {
   return (size_t)pos.method + (size_t)pos.file + pos.line +
          (pos.parent == nullptr ? 0 : hash_value(*pos.parent));
@@ -121,7 +128,10 @@ class PositionPatternSwitchManager {
  private:
   DexPosition* internalize(DexPosition* pos);
 
-  std::unordered_map<DexPosition, DexPosition*, DexPositionHasher> m_positions;
+  std::unordered_map<const DexPosition*,
+                     std::unique_ptr<DexPosition>,
+                     ConstDexPositionPtrHasher>
+      m_positions;
   std::unordered_map<PositionPattern, uint32_t, PositionPatternHasher>
       m_patterns_map;
   std::vector<PositionPattern> m_patterns;
