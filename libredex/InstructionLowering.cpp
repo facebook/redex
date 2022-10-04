@@ -235,7 +235,7 @@ void check_load_params(DexMethod* method) {
   if (!is_static(method)) {
     auto op = it->insn->opcode();
     always_assert(op == IOPCODE_LOAD_PARAM_OBJECT);
-    it.reset(code->erase(it.unwrap()));
+    it.reset(code->erase_and_dispose(it.unwrap()));
     ++next_ins;
   }
   auto args_it = args_list->begin();
