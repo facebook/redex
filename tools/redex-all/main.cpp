@@ -65,6 +65,7 @@
 #include "ReachableClasses.h"
 #include "RedexContext.h"
 #include "RedexResources.h"
+#include "Sanitizers.h"
 #include "SanitizersConfig.h"
 #include "Show.h"
 #include "Timer.h"
@@ -1094,6 +1095,8 @@ void redex_backend(ConfigFiles& conf,
         instruction_lowering::run(stores, lower_with_cfg);
   }
 
+  sanitizers::lsan_do_recoverable_leak_check();
+
   TRACE(MAIN, 1, "Writing out new DexClasses...");
   const JsonWrapper& json_config = conf.get_json_config();
 
@@ -1178,6 +1181,8 @@ void redex_backend(ConfigFiles& conf,
       signatures.insert(*reinterpret_cast<uint32_t*>(this_dex_stats.signature));
     }
   }
+
+  sanitizers::lsan_do_recoverable_leak_check();
 
   std::vector<DexMethod*> needs_debug_line_mapping;
   if (post_lowering) {
