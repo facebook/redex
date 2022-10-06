@@ -7,6 +7,7 @@
 
 #include "ConfigFiles.h"
 
+#include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
 #include <fstream>
 #include <json/json.h>
@@ -212,7 +213,29 @@ ConfigFiles::load_class_lists() {
   return lists;
 }
 
-const std::vector<std::string>& ConfigFiles::get_dead_class_list() {
+std::unordered_set<std::string>& ConfigFiles::get_dead_class_list() {
+  build_dead_class_and_live_class_split_lists();
+  return m_dead_classes;
+}
+
+std::unordered_set<std::string>& ConfigFiles::get_live_class_split_list() {
+  build_dead_class_and_live_class_split_lists();
+  return m_live_relocated_classes;
+}
+
+bool ConfigFiles::is_relocated_class(std::string const& name) const {
+  return boost::algorithm::ends_with(name, CLASS_SPLITTING_RELOCATED_SUFFIX);
+}
+
+void ConfigFiles::remove_relocated_part(std::string* name) {
+  always_assert(name != nullptr);
+  if (name->length() < CLASS_SPLITTING_RELOCATED_SUFFIX_LEN) {
+    return;
+  }
+  name->erase(name->length() - CLASS_SPLITTING_RELOCATED_SUFFIX_LEN);
+}
+
+void ConfigFiles::build_dead_class_and_live_class_split_lists() {
   if (!m_dead_class_list_attempted) {
     m_dead_class_list_attempted = true;
     std::string dead_class_list_filename;
@@ -227,14 +250,25 @@ const std::vector<std::string>& ConfigFiles::get_dead_class_list() {
       }
       std::string classname;
       while (input >> classname) {
+        bool is_relocated = is_relocated_class(classname);
+        if (is_relocated) {
+          remove_relocated_part(&classname);
+        }
         std::string converted = std::string("L") + classname + std::string(";");
         std::replace(converted.begin(), converted.end(), '.', '/');
-        auto translated = m_proguard_map->translate_class(converted);
-        m_dead_class_list.push_back(std::move(translated));
+        if (!is_relocated) {
+          auto translated = m_proguard_map->translate_class(converted);
+          m_dead_classes.insert(std::move(translated));
+        } else {
+          // No need to proguard translate the name of the live classes since
+          // we use the unobfuscated name. The unobfuscated name is already
+          // translated in ProguardMap.apply_deobfuscated_names called
+          // from redex_frontend in main.cpp.
+          m_live_relocated_classes.insert(std::move(converted));
+        }
       }
     }
   }
-  return m_dead_class_list;
 }
 
 void ConfigFiles::ensure_agg_method_stats_loaded() const {

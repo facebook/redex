@@ -98,7 +98,8 @@ void ClassSplittingPass::run_pass(DexStoresVector& stores,
     DexType* type = DexType::get_type(str.c_str());
     if (type) {
       coldstart_types.insert(type);
-    } else if (boost::algorithm::ends_with(str, RELOCATED_SUFFIX)) {
+    } else if (boost::algorithm::ends_with(
+                   str, CLASS_SPLITTING_RELOCATED_SUFFIX_SEMI)) {
       previously_relocated_types.emplace_back(str);
     }
   }

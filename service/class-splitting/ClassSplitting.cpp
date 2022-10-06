@@ -227,8 +227,9 @@ void ClassSplitter::prepare(const DexClass* cls,
         target_cls = it->second;
       } else {
         auto source_name = source_cls->str();
-        target_cls = create_target_class(
-            source_name.substr(0, source_name.size() - 1) + RELOCATED_SUFFIX);
+        target_cls =
+            create_target_class(source_name.substr(0, source_name.size() - 1) +
+                                CLASS_SPLITTING_RELOCATED_SUFFIX_SEMI);
         m_target_classes_by_source_classes.emplace(source_cls, target_cls);
       }
     }
