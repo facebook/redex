@@ -21,6 +21,10 @@ class DexMethodRef;
 class DexType;
 struct ProguardMap;
 
+constexpr const char* CLASS_SPLITTING_RELOCATED_SUFFIX = "$relocated";
+constexpr const size_t CLASS_SPLITTING_RELOCATED_SUFFIX_LEN = 10;
+constexpr const char* CLASS_SPLITTING_RELOCATED_SUFFIX_SEMI = "$relocated;";
+
 namespace Json {
 class Value;
 } // namespace Json
@@ -83,7 +87,14 @@ struct ConfigFiles {
     return m_class_lists.at(name);
   }
 
-  const std::vector<std::string>& get_dead_class_list();
+  std::unordered_set<std::string>& get_dead_class_list();
+  std::unordered_set<std::string>& get_live_class_split_list();
+
+  void clear_dead_class_and_live_relocated_sets() {
+    m_dead_class_list_attempted = false;
+    m_dead_classes.clear();
+    m_live_relocated_classes.clear();
+  }
 
   method_profiles::MethodProfiles& get_method_profiles() {
     ensure_agg_method_stats_loaded();
@@ -184,18 +195,21 @@ struct ConfigFiles {
   void ensure_agg_method_stats_loaded() const;
   void ensure_secondary_method_stats_loaded() const;
   void load_inliner_config(inliner::InlinerConfig*);
-
+  void build_dead_class_and_live_class_split_lists();
+  bool is_relocated_class(const std::string& name) const;
+  void remove_relocated_part(std::string* name);
   bool m_load_class_lists_attempted{false};
   std::unique_ptr<ProguardMap> m_proguard_map;
   std::string m_coldstart_class_filename;
   std::vector<std::string> m_coldstart_classes;
   std::unordered_map<std::string, std::vector<std::string>> m_class_lists;
-  std::vector<std::string> m_dead_class_list;
   bool m_dead_class_list_attempted{false};
   std::string m_printseeds; // Filename to dump computed seeds.
   mutable std::unique_ptr<method_profiles::MethodProfiles> m_method_profiles;
   mutable std::unique_ptr<method_profiles::MethodProfiles>
       m_secondary_method_profiles;
+  std::unordered_set<std::string> m_dead_classes;
+  std::unordered_set<std::string> m_live_relocated_classes;
 
   // limits the output instruction size of any DexMethod to 2^n
   // 0 when limit is not present

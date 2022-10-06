@@ -82,8 +82,6 @@ constexpr const char* METRIC_TRAMPOLINES = "num_class_splitting_trampolines";
 constexpr const char* METRIC_TOO_SMALL_METHODS =
     "num_class_splitting_methods_too_small";
 
-constexpr const char* RELOCATED_SUFFIX = "$relocated;";
-
 class ClassSplitter final {
  public:
   explicit ClassSplitter(
