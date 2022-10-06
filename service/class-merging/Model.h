@@ -54,6 +54,18 @@ enum TypeTagConfig {
   INPUT_HANDLED = 3,
 };
 
+enum TypeLikeStringConfig {
+  // Type like strings are safe to be replaced with the name of the new
+  // shape class. The assumption is that the reflections against the type like
+  // strings still work after merging. This usually means type tags exist in the
+  // targeted input. Merging only changes class names not intiantiation pattern.
+  REPLACE = 0,
+  // Do not merge classes potentially reflected using the type like string. It's
+  // more conservative. We do not have the full knowledge about the reflection
+  // pattern. It's better to avoid merging altogether.
+  EXCLUDE = 1,
+};
+
 /**
  * A class hierarchy specification to model for erasure.
  * This is normally specified via config entries:
@@ -153,11 +165,8 @@ struct ModelSpec {
   // capture stack traces for human-written code may make java stack trace
   // confusing.
   bool dedup_fill_in_stack_trace{true};
-  // Replace string literals matching a merged type.
-  bool replace_type_like_const_strings{true};
-  // Whether string literals matching class names disqualifies classes from
-  // being merged
-  bool type_like_const_strings_unsafe{false};
+  // Replace type like string or exclude potentially referenced class.
+  TypeLikeStringConfig type_like_string_confg{TypeLikeStringConfig::EXCLUDE};
   // Indicates if the merging should be performed per dex.
   bool per_dex_grouping{false};
   // The Model targets are generated code. If so, we consider merging_targets as
@@ -188,6 +197,14 @@ struct ModelSpec {
   bool pass_type_tag_to_ctor() const {
     return type_tag_config == TypeTagConfig::GENERATE ||
            type_tag_config == TypeTagConfig::INPUT_PASS_TYPE_TAG_TO_CTOR;
+  }
+
+  bool replace_type_like_strings() const {
+    return type_like_string_confg == TypeLikeStringConfig::REPLACE;
+  }
+
+  bool exclude_type_like_strings() const {
+    return type_like_string_confg == TypeLikeStringConfig::EXCLUDE;
   }
 
   boost::optional<size_t> max_num_dispatch_target{boost::none};

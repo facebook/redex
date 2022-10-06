@@ -617,7 +617,7 @@ std::vector<DexClass*> ModelMerger::merge_model(Scope& scope,
   rewriter::TypeStringMap type_str_mapping(mergeable_to_merger);
   rewriter::rewrite_dalvik_annotation_signature(scope, type_str_mapping);
 
-  if (model_spec.replace_type_like_const_strings) {
+  if (model_spec.replace_type_like_strings()) {
     rewriter::rewrite_string_literal_instructions(scope, type_str_mapping);
   }
 

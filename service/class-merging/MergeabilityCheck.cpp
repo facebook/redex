@@ -99,7 +99,7 @@ TypeSet MergeabilityChecker::exclude_unsupported_bytecode_refs_for(
 
     // The presence of type-like strings can indicate that types are used by
     // reflection, and then it's not safe to merge those types.
-    if (m_spec.type_like_const_strings_unsafe &&
+    if (m_spec.exclude_type_like_strings() &&
         insn->opcode() == OPCODE_CONST_STRING) {
       const DexString* str = insn->get_string();
       std::string class_name = java_names::external_to_internal(str->str());
