@@ -111,7 +111,9 @@ uint32_t remove_duplicated_vmethods(const Scope& scope) {
         TRACE(VM, 8, "Same as %s", SHOW(method));
         for (auto m : duplicates) {
           TRACE(VM, 8, "\t%s", SHOW(m));
-          type_class(m->get_class())->remove_method_definition(m);
+          type_class(m->get_class())->remove_method(m);
+          DexMethod::erase_method(m);
+          DexMethod::delete_method(m);
         }
         ret += duplicates.size();
         TRACE(VM, 9, "%s\n", SHOW(method->get_code()));

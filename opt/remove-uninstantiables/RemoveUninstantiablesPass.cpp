@@ -531,7 +531,9 @@ void RemoveUninstantiablesPass::run_pass(DexStoresVector& stores,
                           [&class_post_processing](DexClass* cls) {
                             auto& cpp = class_post_processing.at_unsafe(cls);
                             for (auto& p : cpp.remove_vmethods) {
-                              cls->remove_method_definition(p.first);
+                              cls->remove_method(p.first);
+                              DexMethod::erase_method(p.first);
+                              DexMethod::delete_method(p.first);
                             }
                           });
 
