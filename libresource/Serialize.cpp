@@ -85,7 +85,8 @@ void encode_string8(const char* string,
   push_u8_length(u16_len, vec);
   push_u8_length(len, vec);
   // Push each char
-  for (auto c = (char*)string; *c; c++) {
+  size_t i = 0;
+  for (auto c = (char*)string; i < len; c++, i++) {
     vec->push_back(*c);
   }
   vec->push_back('\0');
@@ -106,7 +107,8 @@ void encode_string16(const char16_t* s,
   } else {
     push_short((uint16_t)len, vec);
   }
-  for (uint16_t* c = (uint16_t*)s; *c; c++) {
+  size_t i = 0;
+  for (uint16_t* c = (uint16_t*)s; i < len; c++, i++) {
     push_short(*c, vec);
   }
   push_short('\0', vec);
