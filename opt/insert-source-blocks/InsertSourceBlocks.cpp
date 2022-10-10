@@ -323,6 +323,17 @@ void run_source_blocks(DexStoresVector& stores,
   mgr.set_metric("skipped_methods", skipped.load());
   mgr.set_metric("methods_with_profiles", profile_count);
 
+  {
+    size_t unresolved = 0;
+    for (const auto& p_file : profile_files) {
+      unresolved += p_file->unresolved_method_meta.size();
+    }
+    mgr.set_metric("avg_unresolved_methods_100",
+                   unresolved > 0
+                       ? (int64_t)(unresolved * 100.0 / profile_files.size())
+                       : 0);
+  }
+
   if (!serialize) {
     return;
   }
