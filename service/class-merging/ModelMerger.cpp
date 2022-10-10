@@ -93,6 +93,19 @@ MergerToField get_type_tag_fields(const std::vector<const MergerType*>& mergers,
   return merger_to_type_tag_field;
 }
 
+/*
+ * INSTANCE_OF needs special treatment involving the type tag.
+ */
+bool is_simple_type_ref(IRInstruction* insn) {
+  if (!insn->has_type()) {
+    return false;
+  }
+  return opcode::is_new_instance(insn->opcode()) ||
+         opcode::is_check_cast(insn->opcode()) ||
+         opcode::is_const_class(insn->opcode()) ||
+         opcode::is_new_array(insn->opcode());
+}
+
 void update_code_type_refs(
     const Scope& scope,
     const std::unordered_map<const DexType*, DexType*>& mergeable_to_merger) {
@@ -144,13 +157,7 @@ void update_code_type_refs(
       ////////////////////////////////////////
       // Update simple type refs
       ////////////////////////////////////////
-      if (!insn->has_type()) {
-        continue;
-      }
-      if (insn->opcode() != OPCODE_NEW_INSTANCE &&
-          insn->opcode() != OPCODE_CHECK_CAST &&
-          insn->opcode() != OPCODE_CONST_CLASS &&
-          insn->opcode() != OPCODE_NEW_ARRAY) {
+      if (!is_simple_type_ref(insn)) {
         continue;
       }
       const auto ref_type = insn->get_type();

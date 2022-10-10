@@ -602,7 +602,8 @@ DexType* check_current_instance(const ConstTypeHashSet& types,
                                 IRInstruction* insn) {
   DexType* type = nullptr;
   if (insn->has_type()) {
-    type = insn->get_type();
+    type =
+        const_cast<DexType*>(type::get_element_type_if_array(insn->get_type()));
   } else if (insn->has_method()) {
     type = insn->get_method()->get_class();
   } else if (insn->has_field()) {
@@ -638,10 +639,7 @@ ConcurrentMap<DexType*, TypeHashSet> get_type_usages(
         [&cls](DexType* /* key */, std::unordered_set<DexType*>& set,
                bool /* already_exists */) { set.emplace(cls); };
 
-    if (insn->opcode() == OPCODE_CONST_CLASS ||
-        insn->opcode() == OPCODE_CHECK_CAST ||
-        insn->opcode() == OPCODE_INSTANCE_OF ||
-        insn->opcode() == OPCODE_NEW_INSTANCE) {
+    if (insn->has_type()) {
       auto current_instance = check_current_instance(types, insn);
       if (current_instance) {
         res.update(current_instance, updater);
