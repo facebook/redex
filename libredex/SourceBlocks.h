@@ -244,25 +244,33 @@ inline const SourceBlock* get_first_source_block(const cfg::Block* b) {
   return nullptr;
 }
 
+template <typename Iterator>
+inline SourceBlock* find_between(const Iterator& start, const Iterator& end) {
+  auto it = std::find_if(
+      start, end, [](auto& e) { return e.type == MFLOW_SOURCE_BLOCK; });
+  return it != end ? it->src_block.get() : nullptr;
+}
+
 inline SourceBlock* get_last_source_block_before(cfg::Block* b,
                                                  IRList::iterator it) {
-  while (it != b->begin()) {
-    it--;
-    if (it->type == MFLOW_SOURCE_BLOCK) {
-      return it->src_block->get_last_in_chain();
-    }
-  }
-  return nullptr;
+  auto* sb = find_between(IRList::reverse_iterator(it), b->rend());
+  return sb != nullptr ? sb->get_last_in_chain() : nullptr;
 }
 inline const SourceBlock* get_last_source_block_before(
     const cfg::Block* b, IRList::const_iterator it) {
-  while (it != b->begin()) {
-    it--;
-    if (it->type == MFLOW_SOURCE_BLOCK) {
-      return it->src_block->get_last_in_chain();
-    }
-  }
-  return nullptr;
+  auto* sb = find_between(IRList::const_reverse_iterator(it), b->rend());
+  return sb != nullptr ? sb->get_last_in_chain() : nullptr;
+}
+
+inline SourceBlock* get_first_source_block_after(cfg::Block* b,
+                                                 IRList::iterator it) {
+  auto* sb = find_between(it, b->end());
+  return sb != nullptr ? sb : nullptr;
+}
+inline const SourceBlock* get_first_source_block_after(
+    const cfg::Block* b, IRList::const_iterator it) {
+  auto* sb = find_between(it, b->end());
+  return sb != nullptr ? sb : nullptr;
 }
 
 inline SourceBlock* get_first_source_block(cfg::ControlFlowGraph* cfg) {
@@ -306,6 +314,98 @@ inline const SourceBlock* get_last_source_block(const cfg::Block* b) {
 }
 
 IRList::iterator find_first_block_insert_point(cfg::Block* b);
+
+namespace normalize {
+
+size_t num_interactions(const cfg::ControlFlowGraph& cfg,
+                        const SourceBlock* sb);
+
+inline float get_factor(SourceBlock* dominating,
+                        SourceBlock* dominated,
+                        size_t idx) {
+  float caller_val;
+  {
+    if (dominating == nullptr) {
+      return NAN;
+    }
+    auto val = dominating->get_val(idx);
+    if (!val) {
+      return NAN;
+    }
+    caller_val = *val;
+  }
+  if (caller_val == 0) {
+    return 0.0f;
+  }
+
+  float callee_val;
+  {
+    if (dominated == nullptr) {
+      return NAN;
+    }
+    auto val = dominated->get_val(idx);
+    if (!val) {
+      return NAN;
+    }
+    callee_val = *val;
+  }
+  if (callee_val == 0) {
+    return 0.0f;
+  }
+
+  // Expectation would be that callee_val >= caller_val. But tracking might
+  // not be complete.
+
+  // This will normalize to the value at the dominating source block.
+  return caller_val / callee_val;
+}
+
+inline void normalize(SourceBlock* sb, size_t idx, float factor) {
+  if (sb->vals[idx]) {
+    sb->vals[idx]->val *= factor;
+  }
+}
+
+inline void normalize(SourceBlock* dominating,
+                      SourceBlock* dominated,
+                      size_t interactions) {
+  for (size_t i = 0; i != interactions; ++i) {
+    auto sb_factor = get_factor(dominating, dominated, i);
+    normalize(dominated, i, sb_factor);
+  }
+}
+
+inline void normalize(ControlFlowGraph& cfg,
+                      SourceBlock* dominating,
+                      SourceBlock* dominated,
+                      size_t interactions) {
+  if (interactions == 0) {
+    return;
+  }
+  std::vector<float> factors;
+  factors.reserve(interactions);
+  for (size_t i = 0; i != interactions; ++i) {
+    factors.push_back(get_factor(dominating, dominated, i));
+  }
+  for (auto* b : cfg.blocks()) {
+    source_blocks::foreach_source_block(b, [&](auto* sb) {
+      for (size_t i = 0; i != interactions; ++i) {
+        normalize(sb, i, factors[i]);
+      }
+    });
+  }
+}
+
+inline void normalize(ControlFlowGraph& cfg,
+                      SourceBlock* dominating,
+                      size_t interactions) {
+  // Assume that integrity is guaranteed, so that val at entry is
+  // dominating all blocks.
+  normalize(
+      cfg, dominating, get_first_source_block(cfg.entry_block()), interactions);
+}
+
+} // namespace normalize
 
 void track_source_block_coverage(ScopedMetrics& sm,
                                  const DexStoresVector& stores);

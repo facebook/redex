@@ -276,6 +276,12 @@ class Block final {
   IRList::const_iterator end() const;
   IRList::reverse_iterator rbegin() { return IRList::reverse_iterator(end()); }
   IRList::reverse_iterator rend() { return IRList::reverse_iterator(begin()); }
+  IRList::const_reverse_iterator rbegin() const {
+    return IRList::const_reverse_iterator(end());
+  }
+  IRList::const_reverse_iterator rend() const {
+    return IRList::const_reverse_iterator(begin());
+  }
 
   bool is_catch() const;
 
