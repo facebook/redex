@@ -25,6 +25,7 @@
 #include "Resolver.h"
 #include "ScopedCFG.h"
 #include "Show.h"
+#include "SourceBlocks.h"
 #include "Trace.h"
 #include "Transform.h"
 #include "TypeSystem.h"
@@ -388,7 +389,7 @@ void LocalDce::normalize_new_instances(cfg::ControlFlowGraph& cfg) {
       }
 
       // Scan for the move-result-pseudo and a source block afterwards.
-      std::unique_ptr<SourceBlock> sb_move;
+      std::unique_ptr<SourceBlock> sb_copy;
       {
         auto original_move_cfg_it =
             cfg.move_result_of(cfg.find_insn(old_new_instance_insn, block));
@@ -401,8 +402,11 @@ void LocalDce::normalize_new_instances(cfg::ControlFlowGraph& cfg) {
             break;
           }
           if (original_move_it->type == MFLOW_SOURCE_BLOCK) {
-            sb_move = std::move(original_move_it->src_block);
-            block->remove_mie(original_move_it);
+            sb_copy =
+                std::make_unique<SourceBlock>(*original_move_it->src_block);
+            // We only need the head here.
+            // TODO: Better copy mechanism.
+            sb_copy->next.reset();
             break;
           }
           ++original_move_it;
@@ -417,17 +421,33 @@ void LocalDce::normalize_new_instances(cfg::ControlFlowGraph& cfg) {
       auto move_result_pseudo_object_insn =
           new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
       move_result_pseudo_object_insn->set_dest(reg);
-      if (sb_move == nullptr) {
+      if (sb_copy == nullptr) {
         mutation.insert_before(
             block->to_cfg_instruction_iterator(it),
             {new_instance_insn, move_result_pseudo_object_insn});
       } else {
         std::vector<cfg::ControlFlowGraph::InsertVariant> tmp;
+        auto* copied_sb = sb_copy.get();
         tmp.emplace_back(new_instance_insn);
         tmp.emplace_back(move_result_pseudo_object_insn);
-        tmp.emplace_back(std::move(sb_move));
+        tmp.emplace_back(std::move(sb_copy));
         mutation.insert_before_var(block->to_cfg_instruction_iterator(it),
                                    std::move(tmp));
+        // Scale the source-block accordingly.
+        auto* other_sb = [&]() {
+          auto* sb =
+              source_blocks::get_last_source_block_before(block, it.unwrap());
+          if (sb != nullptr) {
+            return sb;
+          }
+          // Should technically find the dominating source block, but this
+          // should be good enough.
+          return source_blocks::get_first_source_block_after(block,
+                                                             it.unwrap());
+        }();
+        source_blocks::normalize::normalize(
+            other_sb, copied_sb,
+            source_blocks::normalize::num_interactions(block->cfg(), other_sb));
       }
       m_stats.normalized_new_instances++;
     }

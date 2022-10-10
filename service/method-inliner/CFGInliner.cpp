@@ -38,81 +38,14 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
 
 namespace {
 
-// Fallback implementation.
-size_t num_interactions(const InstructionIterator& inline_site,
-                        const ControlFlowGraph& callee_cfg) {
-  auto nums = [](auto* b) -> std::optional<size_t> {
-    auto sb = source_blocks::get_first_source_block(b);
-    return (sb != nullptr) ? std::optional<size_t>(sb->vals_size)
-                           : std::nullopt;
-  };
-
-  auto caller = nums(inline_site.block());
-  if (caller) {
-    return *caller;
-  }
-  auto callee = nums(callee_cfg.entry_block());
-  if (caller) {
-    return *caller;
-  }
-
-  return 0;
-}
-
-float get_source_blocks_factor(const InstructionIterator& inline_site,
-                               const ControlFlowGraph& callee_cfg,
-                               size_t idx) {
+void normalize_source_blocks(const InstructionIterator& inline_site,
+                             ControlFlowGraph& callee_cfg) {
   auto caller_block = inline_site.block();
-  float caller_val;
-  {
-    auto* sb = source_blocks::get_last_source_block_before(
-        caller_block, inline_site.unwrap());
-    if (sb == nullptr) {
-      return NAN;
-    }
-    auto val = sb->get_val(idx);
-    if (!val) {
-      return NAN;
-    }
-    caller_val = *val;
-  }
-  if (caller_val == 0) {
-    return 0.0f;
-  }
-
-  // Assume that integrity is guaranteed, so that val at entry is
-  // dominating all blocks.
-  float callee_val;
-  {
-    auto sb = source_blocks::get_first_source_block(callee_cfg.entry_block());
-    if (sb == nullptr) {
-      return NAN;
-    }
-    auto val = sb->get_val(idx);
-    if (!val) {
-      return NAN;
-    }
-    callee_val = *val;
-  }
-  if (callee_val == 0) {
-    return 0.0f;
-  }
-
-  // Expectation would be that callee_val >= caller_val. But tracking might
-  // not be complete.
-
-  // This will normalize to the value at the callsite.
-  return caller_val / callee_val;
-}
-
-void normalize_source_blocks(ControlFlowGraph& cfg, float factor, size_t idx) {
-  for (auto* b : cfg.blocks()) {
-    source_blocks::foreach_source_block(b, [&](auto* sb) {
-      if (sb->vals[idx]) {
-        sb->vals[idx]->val *= factor;
-      }
-    });
-  }
+  auto* caller_sb = source_blocks::get_last_source_block_before(
+      caller_block, inline_site.unwrap());
+  source_blocks::normalize::normalize(
+      callee_cfg, caller_sb,
+      source_blocks::normalize::num_interactions(callee_cfg, caller_sb));
 }
 
 } // namespace
@@ -131,14 +64,7 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
   callee_orig.deep_copy(&callee);
   remove_ghost_exit_block(&callee);
 
-  {
-    auto num = g_redex != nullptr ? g_redex->num_sb_interaction_indices()
-                                  : num_interactions(inline_site, callee_orig);
-    for (size_t i = 0; i < num; ++i) {
-      auto sb_factor = get_source_blocks_factor(inline_site, callee_orig, i);
-      normalize_source_blocks(callee, sb_factor, i);
-    }
-  }
+  normalize_source_blocks(inline_site, callee);
 
   cleanup_callee_debug(&callee);
   if (needs_receiver_cast || needs_init_class) {

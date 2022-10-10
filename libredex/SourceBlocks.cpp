@@ -20,6 +20,7 @@
 #include "IRList.h"
 #include "IROpcode.h"
 #include "Macros.h"
+#include "RedexContext.h"
 #include "S_Expression.h"
 #include "ScopedCFG.h"
 #include "ScopedMetrics.h"
@@ -453,6 +454,33 @@ IRList::iterator find_first_block_insert_point(cfg::Block* b) {
   }
   return it;
 }
+
+namespace normalize {
+
+size_t num_interactions(const cfg::ControlFlowGraph& cfg,
+                        const SourceBlock* sb) {
+  if (g_redex != nullptr) {
+    return g_redex->num_sb_interaction_indices();
+  }
+
+  auto nums = [](auto* sb) -> std::optional<size_t> {
+    return (sb != nullptr) ? std::optional<size_t>(sb->vals_size)
+                           : std::nullopt;
+  };
+
+  auto caller = nums(sb);
+  if (caller) {
+    return *caller;
+  }
+  auto callee = nums(source_blocks::get_first_source_block(cfg.entry_block()));
+  if (caller) {
+    return *caller;
+  }
+
+  return 0;
+}
+
+} // namespace normalize
 
 namespace {
 
