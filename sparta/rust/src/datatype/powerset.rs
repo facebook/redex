@@ -5,8 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-use std::collections::HashSet;
 use std::iter::FromIterator;
+
+use im::HashSet;
 
 use super::abstract_domain::AbstractDomain;
 use crate::datatype::PatriciaTreeSet;

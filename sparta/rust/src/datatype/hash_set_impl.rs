@@ -5,8 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-use std::collections::HashSet;
 use std::hash::Hash;
+
+use im::HashSet;
 
 use super::powerset::SetAbstractDomainOps;
 use super::powerset::SetElementOps;
