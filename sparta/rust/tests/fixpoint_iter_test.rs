@@ -8,6 +8,7 @@
 //! Tests borrowed from the MonotonicFixpointIteratorTest.cpp in the C++ version.
 
 mod liveness {
+    use std::borrow::Cow;
     use std::collections::HashMap;
 
     use im::HashSet;
@@ -147,8 +148,8 @@ mod liveness {
     }
 
     trait LivenessAnalysis {
-        fn get_live_in_vars_at(&self, n: NodeId) -> LivenessDomain;
-        fn get_live_out_vars_at(&self, n: NodeId) -> LivenessDomain;
+        fn get_live_in_vars_at(&self, n: NodeId) -> Cow<'_, LivenessDomain>;
+        fn get_live_out_vars_at(&self, n: NodeId) -> Cow<'_, LivenessDomain>;
     }
 
     type LivenessFixpointIterator<'g> = MonotonicFixpointIterator<
@@ -159,11 +160,11 @@ mod liveness {
     >;
 
     impl<'g> LivenessAnalysis for LivenessFixpointIterator<'g> {
-        fn get_live_in_vars_at(&self, n: NodeId) -> LivenessDomain {
+        fn get_live_in_vars_at(&self, n: NodeId) -> Cow<'_, LivenessDomain> {
             self.get_exit_state_at(n)
         }
 
-        fn get_live_out_vars_at(&self, n: NodeId) -> LivenessDomain {
+        fn get_live_out_vars_at(&self, n: NodeId) -> Cow<'_, LivenessDomain> {
             self.get_entry_state_at(n)
         }
     }
@@ -283,12 +284,12 @@ mod liveness {
     macro_rules! assert_analysis {
         ( $fp:ident, $index:literal, [$($live_in_vars:literal),*], [$($live_out_vars:literal),*] ) => {
             assert!(matches!(
-                $fp.get_exit_state_at($index),
-                LivenessDomain::Value(_)
+                $fp.get_exit_state_at($index).as_ref(),
+                &LivenessDomain::Value(_)
             ));
             assert!(matches!(
-                $fp.get_entry_state_at($index),
-                LivenessDomain::Value(_)
+                $fp.get_entry_state_at($index).as_ref(),
+                &LivenessDomain::Value(_)
             ));
             assert_analysis_values!($fp, $index, get_live_in_vars_at, [$($live_in_vars),*]);
             assert_analysis_values!($fp, $index, get_live_out_vars_at, [$($live_out_vars),*]);
@@ -351,8 +352,14 @@ mod liveness {
         assert_analysis!(fp, 5, ["a", "b", "y"], ["a", "b", "x", "y"]);
 
         // 7: x = y + a;
-        assert!(matches!(fp.get_exit_state_at(6), LivenessDomain::Bottom));
-        assert!(matches!(fp.get_entry_state_at(6), LivenessDomain::Bottom));
+        assert!(matches!(
+            fp.get_exit_state_at(6).as_ref(),
+            &LivenessDomain::Bottom
+        ));
+        assert!(matches!(
+            fp.get_entry_state_at(6).as_ref(),
+            &LivenessDomain::Bottom
+        ));
     }
 
     #[test]
@@ -771,7 +778,7 @@ mod numerical {
 
         let bb1 = 0;
         assert_eq!(
-            fp.get_entry_state_at(bb1),
+            fp.get_entry_state_at(bb1).into_owned(),
             IntegerSetAbstractEnvironment::top()
         );
         assert_eq!(
@@ -829,7 +836,7 @@ mod numerical {
 
         let bb1 = 0;
         assert_eq!(
-            fp.get_entry_state_at(bb1),
+            fp.get_entry_state_at(bb1).into_owned(),
             IntegerSetAbstractEnvironment::top()
         );
         assert_eq!(
