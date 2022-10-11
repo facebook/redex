@@ -177,12 +177,11 @@ where
                 Self::extrapolate(&context, head, current_state, new_state);
                 context.increase_iteration_count_for(head);
                 for (&component_idx, &num) in self.wpo.get_num_outer_preds(wpo_idx) {
-                    if component_idx != entry_idx {
-                        let old_counter =
-                            wpo_counter[component_idx as usize].fetch_add(num, Ordering::Relaxed);
-                        if old_counter + num == self.wpo.get_num_preds(component_idx) {
-                            worklist.push_back(component_idx);
-                        }
+                    assert!(component_idx != entry_idx);
+                    let old_counter =
+                        wpo_counter[component_idx as usize].fetch_add(num, Ordering::Relaxed);
+                    if old_counter + num == self.wpo.get_num_preds(component_idx) {
+                        worklist.push_back(component_idx);
                     }
                 }
 
