@@ -6,8 +6,7 @@
  */
 
 mod abstract_partition_test {
-    use std::collections::HashSet;
-
+    use im::HashSet;
     use sparta::datatype::AbstractDomain;
     use sparta::datatype::AbstractPartition;
     use sparta::datatype::HashMapAbstractPartition;
@@ -65,11 +64,11 @@ mod abstract_partition_test {
 
         assert!(
             join.get(&("v2".to_string())).set()
-                == &HashSet::from(["c".to_string(), "d".to_string()])
+                == &HashSet::from(vec!["c".to_string(), "d".to_string()])
         );
         assert!(
             join.get(&("v3".to_string())).set()
-                == &HashSet::from([
+                == &HashSet::from(vec![
                     "d".to_string(),
                     "e".to_string(),
                     "f".to_string(),
@@ -88,10 +87,10 @@ mod abstract_partition_test {
         assert!(meet.leq(&p2));
         assert_eq!(meet.len(), 2);
 
-        assert!(meet.get(&("v2".to_string())).set() == &HashSet::from(["c".to_string()]));
+        assert!(meet.get(&("v2".to_string())).set() == &HashSet::from(vec!["c".to_string()]));
         assert!(
             meet.get(&("v3".to_string())).set()
-                == &HashSet::from(["d".to_string(), "e".to_string()])
+                == &HashSet::from(vec!["d".to_string(), "e".to_string()])
         );
 
         assert!(p1.clone().meet(Partition::bottom()).is_bottom());
@@ -141,10 +140,10 @@ mod abstract_partition_test {
         assert!(join.get(&0) == p2.get(&0));
         assert!(join.get(&1) == p1.get(&1));
 
-        assert!(join.get(&2).set() == &HashSet::from(["c".to_string(), "d".to_string()]));
+        assert!(join.get(&2).set() == &HashSet::from(vec!["c".to_string(), "d".to_string()]));
         assert!(
             join.get(&3).set()
-                == &HashSet::from([
+                == &HashSet::from(vec![
                     "d".to_string(),
                     "e".to_string(),
                     "f".to_string(),
@@ -163,8 +162,8 @@ mod abstract_partition_test {
         assert!(meet.leq(&p2));
         assert_eq!(meet.len(), 2);
 
-        assert!(meet.get(&2).set() == &HashSet::from(["c".to_string()]));
-        assert!(meet.get(&3).set() == &HashSet::from(["d".to_string(), "e".to_string()]));
+        assert!(meet.get(&2).set() == &HashSet::from(vec!["c".to_string()]));
+        assert!(meet.get(&3).set() == &HashSet::from(vec!["d".to_string(), "e".to_string()]));
 
         assert!(p1.clone().meet(Partition::bottom()).is_bottom());
         assert!(p1.clone().meet(Partition::top()) == p1);

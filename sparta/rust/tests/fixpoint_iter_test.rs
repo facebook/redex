@@ -9,8 +9,8 @@
 
 mod liveness {
     use std::collections::HashMap;
-    use std::collections::HashSet;
 
+    use im::HashSet;
     use smallvec::SmallVec;
     use sparta::datatype::HashSetAbstractDomain;
     use sparta::fixpoint_iter::FixpointIteratorTransformer;
