@@ -259,7 +259,6 @@ TEST_F(PreVerify, MethodWithParamInvalidatedArgs4) {
   get_reflected_methods_by_test(methods, classes,
                                 "getMethodWithParamInvalidatedArgs4");
   EXPECT_EQ(methods.size(), 1);
-  EXPECT_TRUE(methods.count({"test", {}}));
 }
 
 TEST_F(PreVerify, ConstructorWithParam) {
@@ -301,5 +300,4 @@ TEST_F(PreVerify, ConstructorWithParamInvalidatedArgs4) {
   get_reflected_methods_by_test(methods, classes,
                                 "getConstructorWithParamInvalidatedArgs4");
   EXPECT_EQ(methods.size(), 1);
-  EXPECT_TRUE(methods.count({"<init>", {}}));
 }
