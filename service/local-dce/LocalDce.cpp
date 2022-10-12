@@ -78,6 +78,10 @@ bool has_normalizable_new_instance(cfg::ControlFlowGraph& cfg) {
     always_assert(opcode::is_a_move_result_pseudo(next_it->insn->opcode()));
     auto reg = next_it->insn->dest();
     auto next_next_it = cfg.next_following_gotos(next_it);
+    if (next_next_it.is_end()) {
+      // infinite loop
+      continue;
+    }
     if (!opcode::is_invoke_direct(next_next_it->insn->opcode()) ||
         !method::is_init(next_next_it->insn->get_method()) ||
         next_next_it->insn->src(0) != reg) {
