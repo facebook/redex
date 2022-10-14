@@ -16,6 +16,7 @@
 #include <cstdint>
 #include <fstream>
 #include <mutex>
+#include <string_view>
 
 #include "ConfigFiles.h"
 #include "DexClass.h"
@@ -48,6 +49,26 @@ source_blocks::InsertResult source_blocks(
                                              serialize, exc_inject);
 }
 
+constexpr const char* kAccessName = "access$";
+
+std::optional<std::pair<std::string_view, std::string_view>> is_access_method(
+    const std::string_view& full_descriptor) {
+  auto tokens = dex_member_refs::parse_method<true>(full_descriptor);
+  if (tokens.name.substr(0, 7) != kAccessName) {
+    return std::nullopt;
+  }
+  return std::make_pair(tokens.cls, tokens.name.substr(7));
+}
+
+std::optional<std::pair<const DexType*, std::string_view>> is_access_method(
+    const DexMethodRef* mref) {
+  auto name = mref->get_name()->str();
+  if (name.substr(0, 7) != kAccessName) {
+    return std::nullopt;
+  }
+  return std::make_pair(mref->get_class(), name.substr(7));
+}
+
 using namespace boost::multi_index;
 
 struct ProfileFile {
@@ -59,41 +80,55 @@ struct ProfileFile {
   using MethodMeta = std::unordered_map<const DexMethodRef*, StringPos>;
   MethodMeta method_meta;
 
-  // Consider std::string_view in C++17.
   struct StringViewEquals {
     bool operator()(const std::string& s1, const std::string& s2) const {
       return s1 == s2;
     }
-    bool operator()(const std::string& s1, const boost::string_view& v2) const {
+    bool operator()(const std::string& s1, const std::string_view& v2) const {
       return v2 == s1;
     }
-    bool operator()(const boost::string_view& v1, const std::string& s2) const {
+    bool operator()(const std::string_view& v1, const std::string& s2) const {
       return v1 == s2;
     }
-    bool operator()(const boost::string_view& v1,
-                    const boost::string_view& v2) const {
+    bool operator()(const std::string_view& v1,
+                    const std::string_view& v2) const {
       return v1 == v2;
     }
   };
   using UnresolvedMethodMeta = multi_index_container<
-      std::pair<boost::string_view, StringPos>,
-      indexed_by<hashed_unique<
-          member<std::pair<boost::string_view, StringPos>,
-                 boost::string_view,
-                 &std::pair<boost::string_view, StringPos>::first>,
-          boost::hash<boost::string_view>,
-          StringViewEquals>>>;
+      std::pair<std::string_view, StringPos>,
+      indexed_by<
+          hashed_unique<member<std::pair<std::string_view, StringPos>,
+                               std::string_view,
+                               &std::pair<std::string_view, StringPos>::first>,
+                        boost::hash<std::string_view>,
+                        StringViewEquals>>>;
 
   UnresolvedMethodMeta unresolved_method_meta;
+
+  using ClassAccessMethods = multi_index_container<
+      std::pair<std::string_view, StringPos>,
+      indexed_by<
+          hashed_unique<member<std::pair<std::string_view, StringPos>,
+                               std::string_view,
+                               &std::pair<std::string_view, StringPos>::first>,
+                        boost::hash<std::string_view>,
+                        StringViewEquals>>>;
+
+  using AccessMethods = std::unordered_map<const DexType*, ClassAccessMethods>;
+
+  AccessMethods access_methods;
 
   ProfileFile(RedexMappedFile mapped_file,
               std::string interaction,
               MethodMeta method_meta,
-              UnresolvedMethodMeta unresolved_method_meta)
+              UnresolvedMethodMeta unresolved_method_meta,
+              AccessMethods access_methods)
       : mapped_file(std::move(mapped_file)),
         interaction(std::move(interaction)),
         method_meta(std::move(method_meta)),
-        unresolved_method_meta(std::move(unresolved_method_meta)) {}
+        unresolved_method_meta(std::move(unresolved_method_meta)),
+        access_methods(std::move(access_methods)) {}
 
   static std::unique_ptr<ProfileFile> prepare_profile_file(
       const std::string& profile_file_name) {
@@ -103,8 +138,9 @@ struct ProfileFile {
     auto file = RedexMappedFile::open(profile_file_name, /*read_only=*/true);
     MethodMeta meta;
     UnresolvedMethodMeta unresolved_meta;
+    AccessMethods access_methods;
 
-    boost::string_view data{file.const_data(), file.size()};
+    std::string_view data{file.const_data(), file.size()};
     size_t pos = 0;
     std::string interaction;
 
@@ -124,7 +160,7 @@ struct ProfileFile {
         boost::split(split_vec, line, [](const auto& c) { return c == ','; });
         always_assert_log(num == 0 ? split_vec == exp : split_vec.size() == num,
                           "Unexpected line: %s (%s). Expected %s/%zu.",
-                          line.to_string().c_str(),
+                          std::string(line).c_str(),
                           boost::join(split_vec, "'").c_str(),
                           boost::join(exp, ",").c_str(), num);
         return split_vec;
@@ -150,7 +186,8 @@ struct ProfileFile {
       }
       pos = linefeed_pos + 1;
       // Do not use pos anymore! Ensure by scope from lambda.
-      [&data, &src_pos, &linefeed_pos, &meta, &unresolved_meta]() {
+      [&data, &src_pos, &linefeed_pos, &meta, &unresolved_meta,
+       &access_methods]() {
         size_t comma_pos = data.find(',', src_pos);
         always_assert(comma_pos < linefeed_pos);
 
@@ -158,14 +195,26 @@ struct ProfileFile {
             std::make_pair(comma_pos + 1, linefeed_pos - comma_pos - 1);
 
         auto method_view = data.substr(src_pos, comma_pos - src_pos);
-        // Would be nice to avoid the conversion.
-        auto mref = DexMethod::get_method</*kCheckFormat=*/true>(
-            method_view.to_string());
+
+        if (auto access_val = is_access_method(method_view)) {
+          auto* access_class = DexType::get_type(access_val->first);
+          if (access_class != nullptr) {
+            access_methods[access_class].emplace(access_val->second,
+                                                 string_pos);
+            return;
+          }
+          TRACE(METH_PROF,
+                6,
+                "failed to resolve class %s for access method",
+                std::string(access_val->first).c_str());
+        }
+
+        auto mref = DexMethod::get_method</*kCheckFormat=*/true>(method_view);
         if (mref == nullptr) {
           TRACE(METH_PROF,
                 6,
                 "failed to resolve %s",
-                method_view.to_string().c_str());
+                std::string(method_view).c_str());
           unresolved_meta.emplace(method_view, string_pos);
           return;
         }
@@ -175,7 +224,7 @@ struct ProfileFile {
 
     return std::make_unique<ProfileFile>(
         std::move(file), std::move(interaction), std::move(meta),
-        std::move(unresolved_meta));
+        std::move(unresolved_meta), std::move(access_methods));
   }
 };
 
@@ -212,11 +261,27 @@ struct Injector {
     return SourceBlock::Val(1, it->second.appear_percent);
   }
 
-  std::pair<std::vector<source_blocks::ProfileData>, bool> find_profiles(
-      const DexMethodRef* mref) {
-    std::vector<source_blocks::ProfileData> profiles;
-    profiles.reserve(profile_files.size());
+  using ProfileResult =
+      std::pair<std::vector<source_blocks::ProfileData>, bool>;
 
+  ProfileResult empty_profile_files(const DexMethodRef* mref) {
+    std::vector<source_blocks::ProfileData> profiles;
+
+    if (always_inject) {
+      profiles.reserve(interactions.size());
+      auto& method_profiles = conf.get_method_profiles();
+      // Some effort to recover from method profiles in general.
+      redex_assert(method_profiles.has_stats() || interactions.empty());
+
+      for (const auto& inter : interactions) {
+        auto val_opt = maybe_val_from_mp(inter, mref);
+        profiles.emplace_back(val_opt ? *val_opt : SourceBlock::Val(0, 0));
+      }
+    }
+    return std::make_pair(std::move(profiles), false);
+  }
+
+  ProfileResult find_profiles(const DexMethodRef* mref) {
     auto val_to_str = [](const auto& v) -> std::string {
       if (!v) {
         return "x";
@@ -228,25 +293,38 @@ struct Injector {
     };
 
     if (profile_files.empty()) {
-      if (always_inject) {
-        auto& method_profiles = conf.get_method_profiles();
-        // Some effort to recover from method profiles in general.
-        redex_assert(method_profiles.has_stats() || interactions.empty());
-
-        for (const auto& inter : interactions) {
-          auto val_opt = maybe_val_from_mp(inter, mref);
-          profiles.emplace_back(val_opt ? *val_opt : SourceBlock::Val(0, 0));
-        }
-      }
-      return std::make_pair(std::move(profiles), false);
+      return empty_profile_files(mref);
     }
+
+    std::vector<source_blocks::ProfileData> profiles;
+    profiles.reserve(profile_files.size());
+
+    auto access_method = is_access_method(mref);
 
     bool found_one = false;
     for (auto& profile_file : profile_files) {
       auto val_opt = maybe_val_from_mp(profile_file->interaction, mref);
 
-      auto it = profile_file->method_meta.find(mref);
-      if (it == profile_file->method_meta.end()) {
+      auto maybe_strpos = [&]() -> std::optional<ProfileFile::StringPos> {
+        if (access_method) {
+          auto it = profile_file->access_methods.find(access_method->first);
+          if (it != profile_file->access_methods.end()) {
+            auto it2 = it->second.find(access_method->second);
+            if (it2 != it->second.end()) {
+              return it2->second;
+            }
+          }
+        }
+
+        auto it = profile_file->method_meta.find(mref);
+        if (it != profile_file->method_meta.end()) {
+          return it->second;
+        }
+
+        return std::nullopt;
+      }();
+
+      if (!maybe_strpos) {
         if (always_inject) {
           TRACE(METH_PROF, 3,
                 "No basic block profile for %s. Always-inject=true, falling "
@@ -269,12 +347,13 @@ struct Injector {
         }
         continue;
       }
+
       found_one = true;
-      const auto& pos = it->second;
-      profiles.emplace_back(std::make_pair(
-          std::string(profile_file->mapped_file.const_data() + pos.first,
-                      pos.second),
-          val_opt));
+      profiles.emplace_back(
+          std::make_pair(std::string(profile_file->mapped_file.const_data() +
+                                         maybe_strpos->first,
+                                     maybe_strpos->second),
+                         val_opt));
       TRACE(METH_PROF, 3,
             "Found basic block profile for %s. Error fallback is %s.",
             SHOW(mref), maybe_val_to_str(val_opt).c_str());

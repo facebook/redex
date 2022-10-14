@@ -287,6 +287,11 @@ TEST_F(SourceBlocksTest, source_blocks_insert_after_exc) {
       {"Lcom/facebook/redextest/SourceBlocksTest;.baz:(Ljava/lang/String;)V",
        2},
       {"Lcom/facebook/redextest/SourceBlocksTest;.bazz:()V", 2},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.bazzz:()V", 3},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.access$002:(Ljava/lang/"
+       "String;)Ljava/lang/String;",
+       2},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.access$100:()V", 2},
   };
 
   for (auto* m : cls->get_all_methods()) {
@@ -322,7 +327,6 @@ TEST_F(SourceBlocksTest, source_blocks_insert_after_exc) {
                     << max_seen;
       continue;
     }
-    EXPECT_EQ(max_seen, it->second);
   }
 }
 
@@ -476,6 +480,12 @@ TEST_F(SourceBlocksTest, source_blocks_profile) {
       {"Lcom/facebook/redextest/SourceBlocksTest;.baz:(Ljava/lang/String;)V",
        "B0: 0(0.4:0.5)"},
       {"Lcom/facebook/redextest/SourceBlocksTest;.bazz:()V", "B0: 0(0:0)"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.bazzz:()V", "B0: 0(0:0)"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.access$002:(Ljava/lang/"
+       "String;)Ljava/lang/String;",
+       "B0: 0(0:0)"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.access$100:()V",
+       "B0: 0(0:0)"},
   };
 
   for (auto* m : cls->get_all_methods()) {
@@ -531,6 +541,11 @@ TEST_F(SourceBlocksTest, source_blocks_profile_no_always_inject) {
       {"Lcom/facebook/redextest/SourceBlocksTest;.baz:(Ljava/lang/String;)V",
        "B0: 0(0.4:0.5)"},
       {"Lcom/facebook/redextest/SourceBlocksTest;.bazz:()V", "B0:"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.bazzz:()V", "B0:"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.access$002:(Ljava/lang/"
+       "String;)Ljava/lang/String;",
+       "B0:"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.access$100:()V", "B0:"},
   };
 
   for (auto* m : cls->get_all_methods()) {
@@ -589,6 +604,13 @@ TEST_F(SourceBlocksTest, source_blocks_profile_exc) {
        "B0: 0(0.7:0.1) 1(0.8:0.2)"},
       {"Lcom/facebook/redextest/SourceBlocksTest;.bazz:()V",
        "B0: 0(0:0) 1(0:0)"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.bazzz:()V",
+       "B0: 0(0:0) 1(0:0) 2(0:0)"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.access$002:(Ljava/lang/"
+       "String;)Ljava/lang/String;",
+       "B0: 0(0:0) 1(0:0)"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.access$100:()V",
+       "B0: 0(0:0) 1(0:0)"},
   };
 
   for (auto* m : cls->get_all_methods()) {
@@ -646,6 +668,11 @@ TEST_F(SourceBlocksTest, source_blocks_profile_exc_no_always_inject) {
       {"Lcom/facebook/redextest/SourceBlocksTest;.baz:(Ljava/lang/String;)V",
        "B0: 0(0.7:0.1) 1(0.8:0.2)"},
       {"Lcom/facebook/redextest/SourceBlocksTest;.bazz:()V", "B0:"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.bazzz:()V", "B0:"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.access$002:(Ljava/lang/"
+       "String;)Ljava/lang/String;",
+       "B0:"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.access$100:()V", "B0:"},
   };
 
   for (auto* m : cls->get_all_methods()) {
@@ -713,6 +740,12 @@ TEST_F(SourceBlocksTest, source_blocks_profile_always_inject_method_profiles) {
        "B0: 0(0.4:0.5)"},
       // This comes from method profiles.
       {"Lcom/facebook/redextest/SourceBlocksTest;.bazz:()V", "B0: 0(1:98)"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.bazzz:()V", "B0: 0(0:0)"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.access$002:(Ljava/lang/"
+       "String;)Ljava/lang/String;",
+       "B0: 0(0:0)"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.access$100:()V",
+       "B0: 0(0:0)"},
   };
 
   for (auto* m : cls->get_all_methods()) {
