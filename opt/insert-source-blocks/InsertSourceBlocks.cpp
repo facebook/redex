@@ -179,51 +179,41 @@ struct ProfileFile {
   }
 };
 
-boost::optional<SourceBlock::Val> maybe_val_from_mp(
-    const method_profiles::MethodProfiles& method_profiles,
-    const std::string& interaction,
-    const DexMethodRef* mref) {
-  if (!method_profiles.has_stats()) {
-    return boost::none;
+struct Injector {
+  ConfigFiles& conf;
+  std::vector<std::unique_ptr<ProfileFile>> profile_files;
+  std::vector<std::string> interactions;
+  bool always_inject;
+
+  Injector(ConfigFiles& conf, bool always_inject)
+      : conf(conf), always_inject(always_inject) {}
+
+  boost::optional<SourceBlock::Val> maybe_val_from_mp(
+      const std::string& interaction, const DexMethodRef* mref) {
+    auto& method_profiles = conf.get_method_profiles();
+    if (!method_profiles.has_stats()) {
+      return boost::none;
+    }
+
+    const auto& mp_map = method_profiles.all_interactions();
+    const auto& inter_it = mp_map.find(interaction);
+    if (inter_it == mp_map.end()) {
+      return boost::none;
+    }
+
+    const auto& inter_map = inter_it->second;
+    auto it = inter_map.find(mref);
+    if (it == inter_map.end()) {
+      return boost::none;
+    }
+
+    // For now, just convert to coverage. Having stats means it's not zero.
+    redex_assert(it->second.call_count > 0);
+    return SourceBlock::Val(1, it->second.appear_percent);
   }
 
-  const auto& mp_map = method_profiles.all_interactions();
-  const auto& inter_it = mp_map.find(interaction);
-  if (inter_it == mp_map.end()) {
-    return boost::none;
-  }
-
-  const auto& inter_map = inter_it->second;
-  auto it = inter_map.find(mref);
-  if (it == inter_map.end()) {
-    return boost::none;
-  }
-
-  // For now, just convert to coverage. Having stats means it's not zero.
-  redex_assert(it->second.call_count > 0);
-  return SourceBlock::Val(1, it->second.appear_percent);
-}
-
-void run_source_blocks(DexStoresVector& stores,
-                       ConfigFiles& conf,
-                       PassManager& mgr,
-                       bool serialize,
-                       bool exc_inject,
-                       bool always_inject,
-                       std::vector<std::unique_ptr<ProfileFile>>& profile_files,
-                       const method_profiles::MethodProfiles& method_profiles,
-                       const std::vector<std::string>& interactions) {
-  auto scope = build_class_scope(stores);
-
-  std::mutex serialized_guard;
-  std::vector<std::pair<const DexMethod*, std::string>> serialized;
-  size_t blocks{0};
-  size_t profile_count{0};
-
-  std::atomic<size_t> skipped{0};
-
-  auto find_profiles = [&profile_files, &always_inject, &method_profiles,
-                        &interactions](const DexMethodRef* mref) {
+  std::pair<std::vector<source_blocks::ProfileData>, bool> find_profiles(
+      const DexMethodRef* mref) {
     std::vector<source_blocks::ProfileData> profiles;
     profiles.reserve(profile_files.size());
 
@@ -239,11 +229,12 @@ void run_source_blocks(DexStoresVector& stores,
 
     if (profile_files.empty()) {
       if (always_inject) {
+        auto& method_profiles = conf.get_method_profiles();
         // Some effort to recover from method profiles in general.
         redex_assert(method_profiles.has_stats() || interactions.empty());
 
         for (const auto& inter : interactions) {
-          auto val_opt = maybe_val_from_mp(method_profiles, inter, mref);
+          auto val_opt = maybe_val_from_mp(inter, mref);
           profiles.emplace_back(val_opt ? *val_opt : SourceBlock::Val(0, 0));
         }
       }
@@ -252,8 +243,7 @@ void run_source_blocks(DexStoresVector& stores,
 
     bool found_one = false;
     for (auto& profile_file : profile_files) {
-      auto val_opt =
-          maybe_val_from_mp(method_profiles, profile_file->interaction, mref);
+      auto val_opt = maybe_val_from_mp(profile_file->interaction, mref);
 
       auto it = profile_file->method_meta.find(mref);
       if (it == profile_file->method_meta.end()) {
@@ -294,143 +284,151 @@ void run_source_blocks(DexStoresVector& stores,
       TRACE(METH_PROF, 2, "No basic block profile for %s!", SHOW(mref));
     }
     return std::make_pair(std::move(profiles), found_one);
-  };
+  }
 
-  walk::parallel::methods(scope, [&](DexMethod* method) {
-    auto code = method->get_code();
-    if (code != nullptr) {
-      auto profiles = find_profiles(method);
-      if (!profiles.second && !always_inject) {
-        // Skip without profile.
-        skipped.fetch_add(1);
-        return;
+  void run_source_blocks(DexStoresVector& stores,
+                         PassManager& mgr,
+                         bool serialize,
+                         bool exc_inject) {
+    auto scope = build_class_scope(stores);
+
+    std::mutex serialized_guard;
+    std::vector<std::pair<const DexMethod*, std::string>> serialized;
+    size_t blocks{0};
+    size_t profile_count{0};
+
+    std::atomic<size_t> skipped{0};
+
+    walk::parallel::methods(scope, [&](DexMethod* method) {
+      auto code = method->get_code();
+      if (code != nullptr) {
+        auto profiles = find_profiles(method);
+        if (!profiles.second && !always_inject) {
+          // Skip without profile.
+          skipped.fetch_add(1);
+          return;
+        }
+
+        auto res =
+            source_blocks(method, code, profiles.first, serialize, exc_inject);
+        std::unique_lock<std::mutex> lock(serialized_guard);
+        serialized.emplace_back(method, std::move(res.serialized));
+        blocks += res.block_count;
+        profile_count += profiles.second ? 1 : 0;
       }
+    });
 
-      auto res =
-          source_blocks(method, code, profiles.first, serialize, exc_inject);
-      std::unique_lock<std::mutex> lock(serialized_guard);
-      serialized.emplace_back(method, std::move(res.serialized));
-      blocks += res.block_count;
-      profile_count += profiles.second ? 1 : 0;
+    if (conf.get_global_config()
+            .get_config_by_name<AssessorConfig>("assessor")
+            ->run_sb_consistency) {
+      source_blocks::get_sbcc().initialize(scope);
     }
-  });
 
-  if (conf.get_global_config()
-          .get_config_by_name<AssessorConfig>("assessor")
-          ->run_sb_consistency) {
-    source_blocks::get_sbcc().initialize(scope);
-  }
+    mgr.set_metric("inserted_source_blocks", blocks);
+    mgr.set_metric("handled_methods", serialized.size());
+    mgr.set_metric("skipped_methods", skipped.load());
+    mgr.set_metric("methods_with_profiles", profile_count);
 
-  mgr.set_metric("inserted_source_blocks", blocks);
-  mgr.set_metric("handled_methods", serialized.size());
-  mgr.set_metric("skipped_methods", skipped.load());
-  mgr.set_metric("methods_with_profiles", profile_count);
-
-  {
-    size_t unresolved = 0;
-    for (const auto& p_file : profile_files) {
-      unresolved += p_file->unresolved_method_meta.size();
+    {
+      size_t unresolved = 0;
+      for (const auto& p_file : profile_files) {
+        unresolved += p_file->unresolved_method_meta.size();
+      }
+      mgr.set_metric("avg_unresolved_methods_100",
+                     unresolved > 0
+                         ? (int64_t)(unresolved * 100.0 / profile_files.size())
+                         : 0);
     }
-    mgr.set_metric("avg_unresolved_methods_100",
-                   unresolved > 0
-                       ? (int64_t)(unresolved * 100.0 / profile_files.size())
-                       : 0);
+
+    if (!serialize) {
+      return;
+    }
+
+    std::sort(serialized.begin(),
+              serialized.end(),
+              [](const auto& lhs, const auto& rhs) {
+                return compare_dexmethods(lhs.first, rhs.first);
+              });
+
+    std::ofstream ofs(conf.metafile("redex-source-blocks.csv"));
+    ofs << "type,version\nredex-source-blocks,1\nname,serialized\n";
+    for (const auto& p : serialized) {
+      ofs << show(p.first) << "," << p.second << "\n";
+    }
   }
 
-  if (!serialize) {
-    return;
+  template <typename T, typename Fn>
+  void sort_coldstart_and_set_indices(T& container, const Fn& fn) {
+    std::sort(container.begin(), container.end(),
+              [&fn](const auto& lhs_in, const auto& rhs_in) {
+                if (lhs_in == rhs_in) {
+                  return false;
+                }
+                const auto& lhs = fn(lhs_in);
+                const auto& rhs = fn(rhs_in);
+                if (lhs == rhs) {
+                  return false;
+                }
+                if (lhs == "ColdStart") {
+                  return true;
+                }
+                if (rhs == "ColdStart") {
+                  return false;
+                }
+                return lhs < rhs;
+              });
+
+    std::unordered_map<std::string, size_t> interaction_indices;
+    for (size_t i = 0; i != container.size(); ++i) {
+      interaction_indices[fn(container[i])] = i;
+    }
+    g_redex->set_sb_interaction_index(interaction_indices);
   }
 
-  std::sort(serialized.begin(),
-            serialized.end(),
-            [](const auto& lhs, const auto& rhs) {
-              return compare_dexmethods(lhs.first, rhs.first);
-            });
-
-  std::ofstream ofs(conf.metafile("redex-source-blocks.csv"));
-  ofs << "type,version\nredex-source-blocks,1\nname,serialized\n";
-  for (const auto& p : serialized) {
-    ofs << show(p.first) << "," << p.second << "\n";
-  }
-}
-
-template <typename T, typename Fn>
-void sort_coldstart_and_set_indices(T& container, const Fn& fn) {
-  std::sort(container.begin(), container.end(),
-            [&fn](const auto& lhs_in, const auto& rhs_in) {
-              if (lhs_in == rhs_in) {
-                return false;
-              }
-              const auto& lhs = fn(lhs_in);
-              const auto& rhs = fn(rhs_in);
-              if (lhs == rhs) {
-                return false;
-              }
-              if (lhs == "ColdStart") {
-                return true;
-              }
-              if (rhs == "ColdStart") {
-                return false;
-              }
-              return lhs < rhs;
-            });
-
-  std::unordered_map<std::string, size_t> interaction_indices;
-  for (size_t i = 0; i != container.size(); ++i) {
-    interaction_indices[fn(container[i])] = i;
-  }
-  g_redex->set_sb_interaction_index(interaction_indices);
-}
-
-std::pair<std::vector<std::unique_ptr<ProfileFile>>, std::vector<std::string>>
-prepare_profile_files_and_interactions(const std::string& profile_files_str,
-                                       ConfigFiles& conf,
-                                       bool always_inject) {
-  std::vector<std::unique_ptr<ProfileFile>> profile_files;
-  std::vector<std::string> interactions;
-
-  if (!profile_files_str.empty()) {
-    Timer t("reading files");
-    std::vector<std::string> files;
-    boost::split(files, profile_files_str, [](const auto& c) {
-      constexpr char separator =
+  void prepare_profile_files_and_interactions(
+      const std::string& profile_files_str) {
+    if (!profile_files_str.empty()) {
+      Timer t("reading files");
+      std::vector<std::string> files;
+      boost::split(files, profile_files_str, [](const auto& c) {
+        constexpr char separator =
 #if IS_WINDOWS
-          ';';
+            ';';
 #else
           ':';
 #endif
-      return c == separator;
-    });
+        return c == separator;
+      });
 
-    profile_files.resize(files.size());
-    workqueue_run_for<size_t>(0, files.size(), [&](size_t i) {
-      profile_files.at(i) = ProfileFile::prepare_profile_file(files.at(i));
-      TRACE(METH_PROF, 1, "Loaded basic block profile %s",
-            profile_files.at(i)->interaction.c_str());
-    });
+      profile_files.resize(files.size());
+      workqueue_run_for<size_t>(0, files.size(), [&](size_t i) {
+        profile_files.at(i) = ProfileFile::prepare_profile_file(files.at(i));
+        TRACE(METH_PROF, 1, "Loaded basic block profile %s",
+              profile_files.at(i)->interaction.c_str());
+      });
 
-    // Sort the interactions.
-    sort_coldstart_and_set_indices(
-        profile_files,
-        [](const auto& u) -> const std::string& { return u->interaction; });
-
-    std::transform(profile_files.begin(), profile_files.end(),
-                   std::back_inserter(interactions),
-                   [](const auto& p) { return p->interaction; });
-  } else if (always_inject) {
-    // Need to recover interaction names from method profiles.
-    if (conf.get_method_profiles().has_stats()) {
-      const auto& mp_map = conf.get_method_profiles().all_interactions();
-      std::transform(mp_map.begin(), mp_map.end(),
-                     std::back_inserter(interactions),
-                     [](const auto& p) { return p.first; });
+      // Sort the interactions.
       sort_coldstart_and_set_indices(
-          interactions, [](const auto& s) -> const std::string& { return s; });
+          profile_files,
+          [](const auto& u) -> const std::string& { return u->interaction; });
+
+      std::transform(profile_files.begin(), profile_files.end(),
+                     std::back_inserter(interactions),
+                     [](const auto& p) { return p->interaction; });
+    } else if (always_inject) {
+      // Need to recover interaction names from method profiles.
+      if (conf.get_method_profiles().has_stats()) {
+        const auto& mp_map = conf.get_method_profiles().all_interactions();
+        std::transform(mp_map.begin(), mp_map.end(),
+                       std::back_inserter(interactions),
+                       [](const auto& p) { return p.first; });
+        sort_coldstart_and_set_indices(
+            interactions,
+            [](const auto& s) -> const std::string& { return s; });
+      }
     }
   }
-
-  return std::make_pair(std::move(profile_files), std::move(interactions));
-}
+};
 
 } // namespace
 
@@ -454,18 +452,14 @@ void InsertSourceBlocksPass::run_pass(DexStoresVector& stores,
   bool is_instr_mode = mgr.get_redex_options().instrument_pass_enabled;
   bool always_inject = m_always_inject || m_force_serialize || is_instr_mode;
 
-  auto prep = prepare_profile_files_and_interactions(m_profile_files, conf,
-                                                     always_inject);
+  Injector inj(conf, always_inject);
 
-  run_source_blocks(stores,
-                    conf,
-                    mgr,
-                    /* serialize= */ m_force_serialize || is_instr_mode,
-                    m_insert_after_excs,
-                    /* always_inject= */ always_inject,
-                    /* profile_files= */ prep.first,
-                    conf.get_method_profiles(),
-                    /* interactions= */ prep.second);
+  inj.prepare_profile_files_and_interactions(m_profile_files);
+
+  inj.run_source_blocks(stores,
+                        mgr,
+                        /* serialize= */ m_force_serialize || is_instr_mode,
+                        m_insert_after_excs);
 }
 
 static InsertSourceBlocksPass s_pass;
