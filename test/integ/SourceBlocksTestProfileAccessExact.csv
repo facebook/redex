@@ -1,0 +1,5 @@
+interaction,appear#
+ColdStart,4
+name,profiled_srcblks_exprs
+Lcom/facebook/redextest/SourceBlocksTest;.access$002:(Ljava/lang/String;)Ljava/lang/String;,(0.1:0.2)
+Lcom/facebook/redextest/SourceBlocksTest;.access$100:()V,(0.3:0.4)

@@ -9,6 +9,10 @@
 
 #include "Pass.h"
 
+namespace cfg {
+class ControlFlowGraph;
+} // namespace cfg
+
 // A pass to insert SourceBlock MIEs into CFGs.
 //
 // This is a pass so it can be more freely scheduled. A simple example is

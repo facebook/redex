@@ -52,7 +52,8 @@ class SourceBlocksTest : public RedexIntegrationTest {
     isbp.m_force_serialize = true;
   }
 
-  std::string get_blocks_as_txt(const cfg::ControlFlowGraph& cfg) {
+  template <bool kFull>
+  std::string get_blocks_as_txt_impl(const cfg::ControlFlowGraph& cfg) {
     std::ostringstream oss;
     bool first = true;
     for (auto* block : cfg.blocks()) {
@@ -64,7 +65,11 @@ class SourceBlocksTest : public RedexIntegrationTest {
       oss << "B" << block->id() << ":";
       auto vec = source_blocks::gather_source_blocks(block);
       for (auto* sb : vec) {
-        oss << " " << sb->id;
+        oss << " ";
+        if (kFull) {
+          oss << sb->src->str() << "@";
+        }
+        oss << sb->id;
         if (sb->vals_size > 0) {
           oss << "(";
           bool first_val = true;
@@ -85,6 +90,14 @@ class SourceBlocksTest : public RedexIntegrationTest {
       }
     }
     return oss.str();
+  }
+
+  std::string get_blocks_as_txt(const cfg::ControlFlowGraph& cfg) {
+    return get_blocks_as_txt_impl<false>(cfg);
+  }
+
+  std::string get_blocks_as_txt_full(const cfg::ControlFlowGraph& cfg) {
+    return get_blocks_as_txt_impl<true>(cfg);
   }
 
   void insert_source_block_vals(DexMethod* method,
@@ -169,7 +182,9 @@ TEST_F(SourceBlocksTest, source_blocks) {
           EXPECT_EQ(seen_ids.count(mie.src_block->id), 0u);
           seen_ids.insert(mie.src_block->id);
 
-          EXPECT_EQ(mie.src_block->src, m->get_deobfuscated_name_or_null());
+          if (m->get_name()->str().substr(0, 7) != "access$") {
+            EXPECT_EQ(mie.src_block->src, m->get_deobfuscated_name_or_null());
+          }
         }
         EXPECT_TRUE(seen_source_block_in_b);
       }
@@ -316,7 +331,9 @@ TEST_F(SourceBlocksTest, source_blocks_insert_after_exc) {
         EXPECT_EQ(seen_ids.count(mie.src_block->id), 0u);
         seen_ids.insert(mie.src_block->id);
 
-        EXPECT_EQ(mie.src_block->src, m->get_deobfuscated_name_or_null());
+        if (m->get_name()->str().substr(0, 7) != "access$") {
+          EXPECT_EQ(mie.src_block->src, m->get_deobfuscated_name_or_null());
+        }
       }
       EXPECT_GT(b_seen, 0u);
       max_seen = std::max(max_seen, b_seen);
@@ -762,3 +779,165 @@ TEST_F(SourceBlocksTest, source_blocks_profile_always_inject_method_profiles) {
     EXPECT_EQ(actual, it->second) << show(m);
   }
 }
+
+TEST_F(SourceBlocksTest, source_blocks_access_methods) {
+  auto type = DexType::get_type("Lcom/facebook/redextest/SourceBlocksTest;");
+  ASSERT_NE(type, nullptr);
+  auto cls = type_class(type);
+  ASSERT_NE(cls, nullptr);
+
+  // Check that no code has source blocks so far.
+  {
+    for (const auto* m : cls->get_all_methods()) {
+      if (m->get_code() == nullptr) {
+        continue;
+      }
+      for (const auto& mie : *m->get_code()) {
+        ASSERT_NE(mie.type, MFLOW_SOURCE_BLOCK);
+      }
+    }
+  }
+
+  // Run the pass, check that each block has a SourceBlock.
+  InsertSourceBlocksPass isbp{};
+  run_passes({&isbp}, nullptr, Json::nullValue, [&](const auto&) {
+    enable_pass(isbp);
+    enable_always_inject(isbp);
+    set_insert_after_excs(isbp, false);
+  });
+
+  std::unordered_map<std::string, std::string> kExpectations = {
+      {"Lcom/facebook/redextest/SourceBlocksTest;.access$002:(Ljava/lang/"
+       "String;)Ljava/lang/String;",
+       "B0: "
+       "Lcom/facebook/redextest/"
+       "SourceBlocksTest;.access$5be80c743d1d5171$02(Ljava/lang/String;)Ljava/"
+       "lang/String;@0"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.access$100:()V",
+       "B0: "
+       "Lcom/facebook/redextest/"
+       "SourceBlocksTest;.access$1bc24000ccc37110$00()V@0"},
+  };
+
+  for (auto* m : cls->get_all_methods()) {
+    if (m->get_code() == nullptr) {
+      continue;
+    }
+    if (m->get_name()->str().substr(0, 7) != "access$") {
+      continue;
+    }
+    cfg::ScopedCFG cfg{m->get_code()};
+    auto actual = get_blocks_as_txt_full(*cfg);
+    auto it = kExpectations.find(show(m));
+    if (it == kExpectations.end()) {
+      EXPECT_TRUE(false) << "No expectation for " << show(m) << ": " << actual;
+      continue;
+    }
+    EXPECT_EQ(actual, it->second) << show(m);
+  }
+}
+
+namespace {
+namespace access_methods {
+
+struct Data {
+  const char* profile;
+  const char* field_access;
+  const char* method_access;
+};
+
+} // namespace access_methods
+} // namespace
+
+class SourceBlocksAccessMethodsTest
+    : public SourceBlocksTest,
+      public testing::WithParamInterface<access_methods::Data> {};
+
+TEST_P(SourceBlocksAccessMethodsTest, profile) {
+  auto& param = GetParam();
+  auto profile_path = std::getenv(param.profile);
+  ASSERT_NE(profile_path, nullptr) << "Missing profile path.";
+
+  auto type = DexType::get_type("Lcom/facebook/redextest/SourceBlocksTest;");
+  ASSERT_NE(type, nullptr);
+  auto cls = type_class(type);
+  ASSERT_NE(cls, nullptr);
+
+  // Check that no code has source blocks so far.
+  {
+    for (const auto* m : cls->get_all_methods()) {
+      if (m->get_code() == nullptr) {
+        continue;
+      }
+      for (const auto& mie : *m->get_code()) {
+        ASSERT_NE(mie.type, MFLOW_SOURCE_BLOCK);
+      }
+    }
+  }
+
+  // Run the pass, check that each block has a SourceBlock.
+  InsertSourceBlocksPass isbp{};
+
+  run_passes({&isbp}, nullptr, Json::nullValue, [&](const auto&) {
+    enable_pass(isbp);
+    enable_always_inject(isbp);
+    set_insert_after_excs(isbp, false);
+    set_profile(isbp, profile_path);
+  });
+
+  std::unordered_map<std::string, std::string> kExpectations = {
+      {"Lcom/facebook/redextest/SourceBlocksTest;.access$002:(Ljava/lang/"
+       "String;)Ljava/lang/String;",
+       param.field_access},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.access$100:()V",
+       param.method_access},
+  };
+
+  for (auto* m : cls->get_all_methods()) {
+    if (m->get_code() == nullptr) {
+      continue;
+    }
+    if (m->get_name()->str().substr(0, 7) != "access$") {
+      continue;
+    }
+    cfg::ScopedCFG cfg{m->get_code()};
+    auto actual = get_blocks_as_txt_full(*cfg);
+    auto it = kExpectations.find(show(m));
+    if (it == kExpectations.end()) {
+      EXPECT_TRUE(false) << "No expectation for " << show(m) << ": " << actual;
+      continue;
+    }
+    EXPECT_EQ(actual, it->second) << show(m);
+  }
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    AccessMethodsGroup,
+    SourceBlocksAccessMethodsTest,
+    testing::ValuesIn(std::vector<access_methods::Data>{
+        {"profile_access_exact",
+         "B0: "
+         "Lcom/facebook/redextest/"
+         "SourceBlocksTest;.access$5be80c743d1d5171$02(Ljava/lang/"
+         "String;)Ljava/lang/String;@0(0.1:0.2)",
+         "B0: "
+         "Lcom/facebook/redextest/"
+         "SourceBlocksTest;.access$1bc24000ccc37110$00()V@0(0.3:0.4)"},
+        {"profile_access_hash",
+         "B0: "
+         "Lcom/facebook/redextest/"
+         "SourceBlocksTest;.access$5be80c743d1d5171$02(Ljava/lang/"
+         "String;)Ljava/lang/String;@0(0.6:0.7)",
+         "B0: "
+         "Lcom/facebook/redextest/"
+         "SourceBlocksTest;.access$1bc24000ccc37110$00()V@0(0.8:0.9)"},
+        {"profile_access_both",
+         // When both are available prefer hash.
+         "B0: "
+         "Lcom/facebook/redextest/"
+         "SourceBlocksTest;.access$5be80c743d1d5171$02(Ljava/lang/"
+         "String;)Ljava/lang/String;@0(0.6:0.7)",
+         "B0: "
+         "Lcom/facebook/redextest/"
+         "SourceBlocksTest;.access$1bc24000ccc37110$00()V@0(0.8:0.9)"}}),
+    [](const auto& info) { return info.param.profile; });

@@ -57,6 +57,56 @@ struct BlockAccessor {
   }
 };
 
+inline std::vector<Edge*> get_sorted_edges(Block* b) {
+  auto succs = b->succs();
+  std::sort(succs.begin(), succs.end(), [](const Edge* lhs, const Edge* rhs) {
+    if (lhs->type() != rhs->type()) {
+      return lhs->type() < rhs->type();
+    }
+    switch (lhs->type()) {
+    case EDGE_GOTO:
+      redex_assert(lhs == rhs);
+      return false;
+    case EDGE_BRANCH: {
+      auto lhs_case = lhs->case_key();
+      auto rhs_case = rhs->case_key();
+      if (!lhs_case) {
+        redex_assert(!rhs_case);
+        redex_assert(lhs == rhs);
+        return false;
+      }
+      redex_assert(rhs_case);
+      return *lhs_case < *rhs_case;
+    }
+    case EDGE_THROW: {
+      auto lhs_info = lhs->throw_info();
+      auto rhs_info = rhs->throw_info();
+      redex_assert(lhs_info != nullptr);
+      redex_assert(rhs_info != nullptr);
+      auto lhs_catch = lhs_info->catch_type;
+      auto rhs_catch = rhs_info->catch_type;
+      if (lhs_catch == nullptr) {
+        if (rhs_catch == nullptr) {
+          redex_assert(lhs == rhs);
+          return false;
+        }
+        return true;
+      }
+      if (rhs_catch == nullptr) {
+        return false;
+      }
+      return compare_dextypes(lhs_catch, rhs_catch);
+    }
+    case EDGE_GHOST:
+      return false;
+    case EDGE_TYPE_SIZE:
+      not_reached();
+    }
+    not_reached(); // For GCC.
+  });
+  return succs;
+}
+
 template <typename BlockStartFn, typename EdgeFn, typename BlockEndFn>
 void visit_in_order(const ControlFlowGraph* cfg,
                     const BlockStartFn& block_start_fn,
@@ -64,56 +114,6 @@ void visit_in_order(const ControlFlowGraph* cfg,
                     const BlockEndFn& block_end_fn) {
   // Do not rely on `blocks()`, as there are no ordering guarantees. For now,
   // do a simple DFS with explicitly ordered edges.
-
-  auto get_sorted_edges = [](Block* b) {
-    auto succs = b->succs();
-    std::sort(succs.begin(), succs.end(), [](const Edge* lhs, const Edge* rhs) {
-      if (lhs->type() != rhs->type()) {
-        return lhs->type() < rhs->type();
-      }
-      switch (lhs->type()) {
-      case EDGE_GOTO:
-        redex_assert(lhs == rhs);
-        return false;
-      case EDGE_BRANCH: {
-        auto lhs_case = lhs->case_key();
-        auto rhs_case = rhs->case_key();
-        if (!lhs_case) {
-          redex_assert(!rhs_case);
-          redex_assert(lhs == rhs);
-          return false;
-        }
-        redex_assert(rhs_case);
-        return *lhs_case < *rhs_case;
-      }
-      case EDGE_THROW: {
-        auto lhs_info = lhs->throw_info();
-        auto rhs_info = rhs->throw_info();
-        redex_assert(lhs_info != nullptr);
-        redex_assert(rhs_info != nullptr);
-        auto lhs_catch = lhs_info->catch_type;
-        auto rhs_catch = rhs_info->catch_type;
-        if (lhs_catch == nullptr) {
-          if (rhs_catch == nullptr) {
-            redex_assert(lhs == rhs);
-            return false;
-          }
-          return true;
-        }
-        if (rhs_catch == nullptr) {
-          return false;
-        }
-        return compare_dextypes(lhs_catch, rhs_catch);
-      }
-      case EDGE_GHOST:
-        return false;
-      case EDGE_TYPE_SIZE:
-        not_reached();
-      }
-      not_reached(); // For GCC.
-    });
-    return succs;
-  };
 
   std::unordered_set<Block*> visited;
   self_recursive_fn(
@@ -157,6 +157,12 @@ using ProfileData =
     std::variant<std::nullopt_t,
                  std::pair<std::string, boost::optional<SourceBlock::Val>>,
                  SourceBlock::Val>;
+
+InsertResult insert_source_blocks(const DexString* method,
+                                  ControlFlowGraph* cfg,
+                                  const std::vector<ProfileData>& profiles = {},
+                                  bool serialize = true,
+                                  bool insert_after_excs = false);
 
 InsertResult insert_source_blocks(DexMethod* method,
                                   ControlFlowGraph* cfg,

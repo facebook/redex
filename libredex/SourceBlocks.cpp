@@ -414,8 +414,16 @@ InsertResult insert_source_blocks(DexMethod* method,
                                   const std::vector<ProfileData>& profiles,
                                   bool serialize,
                                   bool insert_after_excs) {
-  InsertHelper helper(&method->get_deobfuscated_name(), profiles, serialize,
-                      insert_after_excs);
+  return insert_source_blocks(&method->get_deobfuscated_name(), cfg, profiles,
+                              serialize, insert_after_excs);
+}
+
+InsertResult insert_source_blocks(const DexString* method,
+                                  ControlFlowGraph* cfg,
+                                  const std::vector<ProfileData>& profiles,
+                                  bool serialize,
+                                  bool insert_after_excs) {
+  InsertHelper helper(method, profiles, serialize, insert_after_excs);
 
   impl::visit_in_order(
       cfg, [&](Block* cur) { helper.start(cur); },

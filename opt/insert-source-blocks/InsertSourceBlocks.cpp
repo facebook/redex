@@ -14,12 +14,16 @@
 #include <boost/multi_index_container.hpp>
 #include <boost/utility/string_view.hpp>
 #include <cstdint>
+#include <deque>
 #include <fstream>
 #include <mutex>
 #include <string_view>
 
+#include <boost/format.hpp>
+
 #include "ConfigFiles.h"
 #include "DexClass.h"
+#include "DexInstruction.h"
 #include "DexStore.h"
 #include "GlobalConfig.h"
 #include "IRCode.h"
@@ -38,16 +42,133 @@
 using namespace cfg;
 
 namespace {
-source_blocks::InsertResult source_blocks(
-    DexMethod* method,
-    IRCode* code,
-    const std::vector<source_blocks::ProfileData>& profiles,
-    bool serialize,
-    bool exc_inject) {
-  ScopedCFG cfg(code);
-  return source_blocks::insert_source_blocks(method, cfg.get(), profiles,
-                                             serialize, exc_inject);
+
+namespace hasher {
+
+uint64_t stable_hash_value(const std::string& s) {
+  uint64_t stable_hash{s.size()};
+  for (auto c : s) {
+    stable_hash = stable_hash * 3 + c;
+  }
+  return stable_hash;
 }
+uint64_t stable_hash_value(const IRInstruction* insn) {
+  uint64_t stable_hash = static_cast<uint64_t>(insn->opcode());
+  switch (opcode::ref(insn->opcode())) {
+  case opcode::Ref::Method:
+    stable_hash =
+        stable_hash * 41 + stable_hash_value(show(insn->get_method()));
+    break;
+  case opcode::Ref::Field:
+    stable_hash = stable_hash * 43 + stable_hash_value(show(insn->get_field()));
+    break;
+  case opcode::Ref::String:
+    stable_hash =
+        stable_hash * 47 + stable_hash_value(show(insn->get_string()));
+    break;
+  case opcode::Ref::Type:
+    stable_hash = stable_hash * 53 + stable_hash_value(show(insn->get_type()));
+    break;
+  case opcode::Ref::Data:
+    stable_hash = stable_hash * 59 + insn->get_data()->size();
+    break;
+  case opcode::Ref::Literal:
+    stable_hash = stable_hash * 61 + insn->get_literal();
+    break;
+  case opcode::Ref::MethodHandle:
+  case opcode::Ref::CallSite:
+    always_assert_log(false, "Unsupported Ref");
+    __builtin_unreachable();
+  case opcode::Ref::None:
+    break;
+  }
+
+  for (auto reg : insn->srcs()) {
+    stable_hash = stable_hash * 3 + reg;
+  }
+  if (insn->has_dest()) {
+    stable_hash = stable_hash * 5 + insn->dest();
+  }
+
+  return stable_hash;
+}
+
+uint64_t stable_hash(ControlFlowGraph& cfg) {
+  // We need a stable iteration order, no matter how blocks were constructed.
+  // The actual order does not matter, so do a BFS because that doesn't have
+  // recursive depth problems.
+
+  uint64_t hash = 0;
+
+  std::deque<Block*> queue;
+  std::unordered_set<Block*> seen;
+
+  auto push = [&queue, &seen](auto* b) {
+    if (seen.insert(b).second) {
+      queue.push_back(b);
+    }
+  };
+
+  push(cfg.entry_block());
+  while (!queue.empty()) {
+    auto* cur = queue.front();
+    queue.pop_front();
+
+    hash = hash * 3 + 1;
+
+    for (auto& mie : *cur) {
+      if (mie.type != MFLOW_OPCODE) {
+        continue;
+      }
+      auto insn_hash = stable_hash_value(mie.insn);
+      hash = hash * 5 + insn_hash;
+    }
+
+    // Handle outgoing edges.
+    auto succs = source_blocks::impl::get_sorted_edges(cur);
+    for (auto* e : succs) {
+      hash = hash * 7 + static_cast<uint64_t>(e->type());
+      hash = hash * 3 + [e]() {
+        switch (e->type()) {
+        case EDGE_GOTO:
+          return 0;
+        case EDGE_BRANCH:
+          return 1;
+        case EDGE_THROW:
+          return 2;
+        case EDGE_GHOST:
+        case EDGE_TYPE_SIZE:
+          not_reached();
+          return 0;
+        }
+      }();
+      hash = hash * 23 + [e]() -> uint64_t {
+        switch (e->type()) {
+        case EDGE_GOTO:
+          return 0;
+        case EDGE_BRANCH:
+          return e->case_key() ? *e->case_key() : 1;
+        case EDGE_THROW: {
+          auto* t = e->throw_info();
+          return (t->catch_type == nullptr
+                      ? 0
+                      : stable_hash_value(show(t->catch_type))) *
+                     5 +
+                 t->index;
+        }
+        case EDGE_GHOST:
+        case EDGE_TYPE_SIZE:
+          not_reached();
+          return 0;
+        }
+      }();
+    }
+  }
+
+  return hash;
+}
+
+} // namespace hasher
 
 constexpr const char* kAccessName = "access$";
 
@@ -199,6 +320,8 @@ struct ProfileFile {
         if (auto access_val = is_access_method(method_view)) {
           auto* access_class = DexType::get_type(access_val->first);
           if (access_class != nullptr) {
+            TRACE(METH_PROF, 7, "Found access method %s",
+                  std::string(method_view).c_str());
             access_methods[access_class].emplace(access_val->second,
                                                  string_pos);
             return;
@@ -218,6 +341,8 @@ struct ProfileFile {
           unresolved_meta.emplace(method_view, string_pos);
           return;
         }
+        TRACE(METH_PROF, 7, "Found normal method %s.",
+              std::string(method_view).c_str());
         meta.emplace(mref, string_pos);
       }();
     }
@@ -281,7 +406,10 @@ struct Injector {
     return std::make_pair(std::move(profiles), false);
   }
 
-  ProfileResult find_profiles(const DexMethodRef* mref) {
+  ProfileResult find_profiles(DexMethod* mref,
+                              const DexType* access_method_type_or_null,
+                              std::string_view exact_name,
+                              const std::string& hashed_name) {
     auto val_to_str = [](const auto& v) -> std::string {
       if (!v) {
         return "x";
@@ -299,20 +427,45 @@ struct Injector {
     std::vector<source_blocks::ProfileData> profiles;
     profiles.reserve(profile_files.size());
 
-    auto access_method = is_access_method(mref);
-
     bool found_one = false;
     for (auto& profile_file : profile_files) {
       auto val_opt = maybe_val_from_mp(profile_file->interaction, mref);
 
       auto maybe_strpos = [&]() -> std::optional<ProfileFile::StringPos> {
-        if (access_method) {
-          auto it = profile_file->access_methods.find(access_method->first);
+        if (access_method_type_or_null != nullptr) {
+          auto it =
+              profile_file->access_methods.find(access_method_type_or_null);
           if (it != profile_file->access_methods.end()) {
-            auto it2 = it->second.find(access_method->second);
-            if (it2 != it->second.end()) {
+            auto& map = it->second;
+            // Try hashed name first, new style.
+            auto it2 = map.find(hashed_name);
+            if (it2 != map.end()) {
+              TRACE(METH_PROF, 7, "Found hashed access method %s for %s",
+                    hashed_name.c_str(), SHOW(mref));
               return it2->second;
             }
+
+            // Try original name, legacy/transition.
+            it2 = map.find(exact_name);
+            if (it2 != map.end()) {
+              TRACE(METH_PROF, 7, "Found exact access method %s for %s",
+                    std::string(exact_name).c_str(), SHOW(mref));
+              return it2->second;
+            }
+
+            TRACE(METH_PROF, 3,
+                  "Did not find an access method for %s/%s in %s\n%s",
+                  std::string(exact_name).c_str(), hashed_name.c_str(),
+                  SHOW(access_method_type_or_null),
+                  [&]() {
+                    std::string res;
+                    for (auto& p : map) {
+                      res.append(p.first);
+                      res.append(", ");
+                    }
+                    return res;
+                  }()
+                      .c_str());
           }
         }
 
@@ -381,15 +534,49 @@ struct Injector {
     walk::parallel::methods(scope, [&](DexMethod* method) {
       auto code = method->get_code();
       if (code != nullptr) {
-        auto profiles = find_profiles(method);
+        auto access_method = is_access_method(method);
+        const DexType* access_method_type = nullptr;
+        std::string_view access_method_name;
+        std::string access_method_hash_name;
+
+        ScopedCFG cfg(code);
+
+        if (access_method) {
+          access_method_type = access_method->first;
+          access_method_name = access_method->second;
+
+          auto hash_value = hasher::stable_hash(*cfg);
+
+          access_method_hash_name = (boost::format("%08x") % hash_value).str() +
+                                    "$" +
+                                    std::string(access_method_name.substr(
+                                        access_method_name.length() - 2, 2));
+        }
+
+        auto profiles =
+            find_profiles(method, access_method_type, access_method_name,
+                          access_method_hash_name);
         if (!profiles.second && !always_inject) {
           // Skip without profile.
           skipped.fetch_add(1);
           return;
         }
 
-        auto res =
-            source_blocks(method, code, profiles.first, serialize, exc_inject);
+        auto* sb_name = [&]() {
+          if (!access_method) {
+            return &method->get_deobfuscated_name();
+          }
+          // Emulate show.
+          std::string new_name = show_deobfuscated(method->get_class());
+          new_name.append(".access$");
+          new_name.append(access_method_hash_name);
+          new_name.append(show_deobfuscated(method->get_proto()));
+          return DexString::make_string(new_name);
+        }();
+
+        auto res = source_blocks::insert_source_blocks(
+            sb_name, cfg.get(), profiles.first, serialize, exc_inject);
+
         std::unique_lock<std::mutex> lock(serialized_guard);
         serialized.emplace_back(method, std::move(res.serialized));
         blocks += res.block_count;
