@@ -48,6 +48,8 @@
 #include "DedupBlocks.h"
 #include "DedupBlockValueNumbering.h"
 
+#include <algorithm>
+
 #include "DexPosition.h"
 #include "Lazy.h"
 #include "LiveRange.h"
@@ -906,11 +908,9 @@ class DedupBlocksImpl {
   get_init_receiver_instructions_defined_outside_of_block(
       cfg::Block* block, Lazy<LiveRanges>& live_ranges) {
     std::vector<IRInstruction*> res;
-    boost::optional<reaching_defs::Environment> defs_in;
-    auto iterable = InstructionIterable(block);
     std::unordered_set<IRInstruction*> block_insns;
-    for (auto it = iterable.begin(); it != iterable.end(); it++) {
-      auto insn = it->insn;
+    for (auto& mie : InstructionIterable(block)) {
+      auto insn = mie.insn;
       if (opcode::is_invoke_direct(insn->opcode()) &&
           method::is_init(insn->get_method())) {
         TRACE(DEDUP_BLOCKS, 5, "[dedup blocks] found init invocation: %s",
@@ -1003,7 +1003,7 @@ class DedupBlocksImpl {
       if (!other_insns) {
         return true;
       } else if (!insns) {
-        insns = other_insns;
+        insns = std::move(other_insns);
       } else {
         always_assert(insns->size() == other_insns->size());
         for (size_t i = 0; i < insns->size(); i++) {
@@ -1027,26 +1027,24 @@ class DedupBlocksImpl {
     }
     // Join together all initial type environments of the the blocks; this
     // corresponds to what will happen when we dedup the blocks.
-    boost::optional<type_inference::TypeEnvironment> joined_env;
+    auto joined_env = type_inference::TypeEnvironment::bottom();
     for (cfg::Block* block : blocks) {
-      auto env = type_inference->get_entry_state_at(block);
-      if (!joined_env) {
-        joined_env = env;
-      } else {
-        joined_env->join_with(env);
-      }
+      joined_env.join_with(type_inference->get_entry_state_at(block));
     }
-    always_assert(joined_env);
+    if (joined_env.is_bottom()) {
+      // shouldn't happen, but we are not going to fight that here
+      return true;
+    }
     // Let's see if any of the type environments of the existing blocks
     // matches, considering live-in registers. If so, we know that things will
     // verify after deduping.
     // TODO: Can we be even more lenient without actually deduping and
     // re-type-inferring?
     for (cfg::Block* block : blocks) {
-      auto env = type_inference->get_entry_state_at(block);
+      const auto& env = type_inference->get_entry_state_at(block);
       bool matches = true;
       for (auto reg : live_in_vars.elements()) {
-        auto type = joined_env->get_type(reg);
+        auto type = joined_env.get_type(reg);
         if (type.is_top() || type.is_bottom()) {
           // should never happen, but we are not going to fight that here
           return true;
@@ -1056,7 +1054,7 @@ class DedupBlocksImpl {
           break;
         }
         if (type.element() == REFERENCE &&
-            joined_env->get_dex_type(reg) != env.get_dex_type(reg)) {
+            joined_env.get_dex_type(reg) != env.get_dex_type(reg)) {
           matches = false;
           break;
         }
@@ -1079,12 +1077,8 @@ class DedupBlocksImpl {
   }
 
   static size_t num_opcodes(cfg::Block* block) {
-    size_t result = 0;
     const auto& iterable = InstructionIterable(block);
-    for (auto it = iterable.begin(); it != iterable.end(); it++) {
-      result++;
-    }
-    return result;
+    return std::distance(iterable.begin(), iterable.end());
   }
 
   static void print_dups(const Duplicates& dups) {
