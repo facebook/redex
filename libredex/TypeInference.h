@@ -122,6 +122,12 @@ std::ostream& operator<<(std::ostream& output, const IRType& type);
 
 namespace type_inference {
 
+/*
+ * Checks whether a (joined) type can be safely used in the presence of if-
+ * instructions.
+ */
+bool is_safely_usable(IRType type);
+
 using std::placeholders::_1;
 
 using TypeLattice = sparta::BitVectorLattice<IRType,

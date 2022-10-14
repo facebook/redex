@@ -1021,7 +1021,8 @@ class DedupBlocksImpl {
     // Initializing stuff...
     const auto& live_in_vars =
         liveness_fixpoint_iter.get_live_in_vars_at(*blocks.begin());
-    if (!(live_in_vars.is_value())) {
+    always_assert(!live_in_vars.is_top());
+    if (live_in_vars.is_bottom()) {
       // should never happen, but we are not going to fight that here
       return true;
     }
@@ -1036,35 +1037,15 @@ class DedupBlocksImpl {
       return true;
     }
     // Let's see if any of the type environments of the existing blocks
-    // matches, considering live-in registers. If so, we know that things will
+    // match, considering the live-in registers. If so, we know that things will
     // verify after deduping.
-    // TODO: Can we be even more lenient without actually deduping and
-    // re-type-inferring?
-    for (cfg::Block* block : blocks) {
-      const auto& env = type_inference->get_entry_state_at(block);
-      bool matches = true;
-      for (auto reg : live_in_vars.elements()) {
-        auto type = joined_env.get_type(reg);
-        if (type.is_top() || type.is_bottom()) {
-          // should never happen, but we are not going to fight that here
-          return true;
-        }
-        if (type != env.get_type(reg)) {
-          matches = false;
-          break;
-        }
-        if (type.element() == REFERENCE &&
-            joined_env.get_dex_type(reg) != env.get_dex_type(reg)) {
-          matches = false;
-          break;
-        }
-      }
-      if (matches) {
-        return false;
+    for (auto reg : live_in_vars.elements()) {
+      auto joined_type = joined_env.get_type(reg);
+      if (!type_inference::is_safely_usable(joined_type.element())) {
+        return true;
       }
     }
-    // we did not find any matching block
-    return true;
+    return false;
   }
 
   static boost::optional<MethodItemEntry&> last_opcode(cfg::Block* block) {

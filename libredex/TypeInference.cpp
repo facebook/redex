@@ -86,6 +86,32 @@ std::ostream& operator<<(std::ostream& output, const IRType& type) {
 
 namespace type_inference {
 
+bool is_safely_usable(IRType type) {
+  switch (type) {
+  case IRType::TOP:
+  case IRType::SCALAR:
+  case IRType::SCALAR1:
+    // This type is the result of joins of very different types.
+    // TODO: Actually, our current type-inference implementation introduces
+    // scalar values also for AGET, while the actual Android verifier tracks
+    // int or float separately. Thus we might be giving up a bit too often
+    // here.
+    return false;
+  case IRType::ZERO:
+  case IRType::CONST:
+  case IRType::CONST1:
+  case IRType::REFERENCE:
+  case IRType::INT:
+  case IRType::FLOAT:
+  case IRType::LONG1:
+  case IRType::DOUBLE1:
+    // This type is the result of joins producing a consistent type.
+    return true;
+  default:
+    not_reached_log("unexpected type %s", SHOW(type));
+  }
+}
+
 TypeLattice type_lattice(
     {BOTTOM, ZERO, CONST, CONST1, CONST2, REFERENCE, INT, FLOAT, LONG1, LONG2,
      DOUBLE1, DOUBLE2, SCALAR, SCALAR1, SCALAR2, TOP},
