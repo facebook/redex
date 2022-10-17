@@ -238,9 +238,8 @@ where
             (_, Top) => {}
             (Value(l_map), Value(mut r_map)) => {
                 l_map.retain(|l_k, _| r_map.contains_key(l_k));
-
-                let r_vs: Vec<_> = l_map.keys().map(|l_k| r_map.remove(l_k).unwrap()).collect();
-                for (l_v, r_v) in l_map.iter_mut().zip(r_vs) {
+                for (l_k, l_v) in l_map.iter_mut() {
+                    let r_v = r_map.remove(l_k).unwrap();
                     operation(l_v, r_v);
                 }
 
