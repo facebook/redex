@@ -10,7 +10,7 @@ edition = "2021"
 [dependencies]
 smallvec = { version = "1.9.0", features = ["const_generics"] }
 disjoint-sets = "0.4.2"
-im = "14.2.0"
+im = "15.1.0"
 petgraph = "0.6.2"
 sparta-proc-macros = { path = "../rust-proc-macros", version = "0.1.0" }
 
