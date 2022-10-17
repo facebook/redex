@@ -78,21 +78,6 @@ bool can_delete_class(const DexClass* cls, bool is_anonymous_class) {
   return true;
 }
 
-bool is_from_allowed_packages(
-    const std::unordered_set<std::string>& allowed_packages,
-    const DexClass* cls) {
-  if (allowed_packages.empty()) {
-    return true;
-  }
-  const auto name = cls->get_deobfuscated_name_or_empty();
-  for (auto& prefix : allowed_packages) {
-    if (boost::starts_with(name, prefix)) {
-      return true;
-    }
-  }
-  return false;
-}
-
 } // namespace
 
 namespace class_merging {
@@ -170,72 +155,6 @@ void find_all_mergeables_and_roots(const TypeSystem& type_system,
   }
   TRACE(CLMG, 9, "Discover %zu mergeables from %zu roots",
         merging_spec->merging_targets.size(), merging_spec->roots.size());
-}
-
-void discover_mergeable_anonymous_classes(
-    const DexStoresVector& stores,
-    const std::unordered_set<std::string>& allowed_packages,
-    size_t min_implementors,
-    ModelSpec* merging_spec,
-    PassManager* mgr) {
-  auto root_store_classes =
-      get_root_store_types(stores, merging_spec->include_primary_dex);
-  const auto object_type = type::java_lang_Object();
-  std::unordered_map<const DexType*, std::vector<const DexType*>> parents;
-  for (auto* type : root_store_classes) {
-    auto cls = type_class(type);
-    auto* itfs = cls->get_interfaces();
-    if (is_interface(cls) || itfs->size() > 1 || cls->get_clinit() ||
-        !is_from_allowed_packages(allowed_packages, cls)) {
-      continue;
-    }
-    bool is_anonymous_class = maybe_anonymous_class(cls);
-    if (!is_anonymous_class) {
-      continue;
-    }
-    if (!can_delete_class(cls, is_anonymous_class)) {
-      continue;
-    }
-    auto super_cls = cls->get_super_class();
-    if (itfs->size() == 1) {
-      auto* intf = *itfs->begin();
-      if (type_class(intf)) {
-        if (itfs->size() == 1) {
-          parents[intf].push_back(cls->get_type());
-          continue;
-        }
-      }
-    } else {
-      parents[super_cls].push_back(cls->get_type());
-    }
-  }
-  for (const auto& pair : parents) {
-    auto parent = pair.first;
-    if (!merging_spec->exclude_types.count(parent) &&
-        pair.second.size() >= min_implementors) {
-      TRACE(CLMG,
-            9,
-            "Discover %sroot %s with %zu anonymous classes",
-            (is_interface(type_class(parent)) ? "interface " : ""),
-            SHOW(parent),
-            pair.second.size());
-      if (parent == object_type) {
-        // TODO: Currently not able to merge classes that only extend
-        // java.lang.Object.
-        continue;
-      }
-      if (is_interface(type_class(parent))) {
-        auto first_mergeable = type_class(pair.second[0]);
-        merging_spec->roots.insert(first_mergeable->get_super_class());
-        mgr->incr_metric("intf_" + show(parent), pair.second.size());
-      } else {
-        merging_spec->roots.insert(parent);
-        mgr->incr_metric("cls_" + show(parent), pair.second.size());
-      }
-      merging_spec->merging_targets.insert(pair.second.begin(),
-                                           pair.second.end());
-    }
-  }
 }
 
 } // namespace class_merging
