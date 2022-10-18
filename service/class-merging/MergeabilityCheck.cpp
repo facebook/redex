@@ -117,10 +117,9 @@ TypeSet MergeabilityChecker::exclude_unsupported_bytecode_refs_for(
     // Java language level enforcement recommended!
     //
     // For mergeables with type tags, it is not safe to merge those
-    // used with CONST_CLASS or NEW_ARRAY since we will lose
-    // granularity as we can't map to the old type anymore.
-    if (has_type_tag && !opcode::is_const_class(insn->opcode()) &&
-        !opcode::is_new_array(insn->opcode())) {
+    // referenced by CONST_CLASS, since we will lose granularity as we can't map
+    // to the old type anymore.
+    if (has_type_tag && !opcode::is_const_class(insn->opcode())) {
       continue;
     }
 
