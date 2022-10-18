@@ -73,3 +73,27 @@ class C21 extends C2 {
     return 0;
   }
 }
+
+class PD {
+  public int method() {
+    return 0;
+  }
+}
+
+class C2D extends PD {
+  @Duplication
+  public int method() {
+    return 0;
+  }
+
+  void callV() {
+    C21D c = new C21D();
+    c.method();
+  }
+}
+class C21D extends C2D {
+  @Duplication
+  public int method() {
+    return 0;
+  }
+}

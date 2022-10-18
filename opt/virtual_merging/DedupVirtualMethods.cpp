@@ -6,6 +6,7 @@
  */
 
 #include "DexUtil.h"
+#include "MethodDedup.h"
 #include "MethodOverrideGraph.h"
 #include "Show.h"
 #include "Trace.h"
@@ -86,6 +87,7 @@ void publicize_methods(const method_override_graph::Graph* graph,
 uint32_t remove_duplicated_vmethods(const Scope& scope) {
   uint32_t ret = 0;
   auto graph = method_override_graph::build_graph(scope);
+  std::unordered_map<DexMethodRef*, DexMethodRef*> removed_vmethods;
 
   walk::classes(scope, [&](DexClass* cls) {
     for (auto method : cls->get_vmethods()) {
@@ -112,6 +114,7 @@ uint32_t remove_duplicated_vmethods(const Scope& scope) {
         for (auto m : duplicates) {
           TRACE(VM, 8, "\t%s", SHOW(m));
           type_class(m->get_class())->remove_method(m);
+          removed_vmethods.emplace(m, method);
           DexMethod::erase_method(m);
           DexMethod::delete_method(m);
         }
@@ -120,6 +123,9 @@ uint32_t remove_duplicated_vmethods(const Scope& scope) {
       }
     }
   });
+
+  method_dedup::fixup_references_to_removed_methods(scope, removed_vmethods);
+
   return ret;
 }
 } // namespace
