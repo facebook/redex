@@ -131,14 +131,6 @@ void ClassSplittingPass::run_pass(DexStoresVector& stores,
     }
     return false;
   };
-  auto should_not_relocate_methods_of_class = [&](DexClass* cls) {
-    for (auto& plugin : plugins) {
-      if (plugin->should_not_relocate_methods_of_class(cls)) {
-        return true;
-      }
-    }
-    return false;
-  };
 
   // We are only going to perform class-splitting in the first store, as
   // that's
@@ -159,8 +151,7 @@ void ClassSplittingPass::run_pass(DexStoresVector& stores,
         continue;
       }
       classes.push_back(cls);
-      class_splitter.prepare(cls, nullptr /* mrefs */, nullptr /* trefs */,
-                             should_not_relocate_methods_of_class(cls));
+      class_splitter.prepare(cls, nullptr /* mrefs */, nullptr /* trefs */);
     }
   }
   auto classes_to_add = class_splitter.additional_classes(classes);

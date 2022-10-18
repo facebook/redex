@@ -87,21 +87,9 @@ void InterDexPass::bind_config() {
        m_minimize_cross_dex_refs_config.string_seed_weight);
   bind("minimize_cross_dex_refs_emit_json", false,
        m_minimize_cross_dex_refs_config.emit_json);
-  bind("minimize_cross_dex_refs_relocate_static_methods", false,
-       m_cross_dex_relocator_config.relocate_static_methods);
-  bind("minimize_cross_dex_refs_relocate_non_static_direct_methods", false,
-       m_cross_dex_relocator_config.relocate_non_static_direct_methods);
-  bind("minimize_cross_dex_refs_relocate_virtual_methods", false,
-       m_cross_dex_relocator_config.relocate_virtual_methods);
 
   bind("fill_last_coldstart_dex", m_fill_last_coldstart_dex,
        m_fill_last_coldstart_dex);
-
-  // The actual number of relocated methods per class tends to be just a
-  // fraction of this number, as relocated methods get re-relocated back into
-  // their original class when they end up in the same dex.
-  bind("max_relocated_methods_per_class", 200,
-       m_cross_dex_relocator_config.max_relocated_methods_per_class);
 
   bind("can_touch_coldstart_cls", false, m_can_touch_coldstart_cls);
   bind("can_touch_coldstart_extended_cls", false,
@@ -139,15 +127,15 @@ void InterDexPass::run_pass(
   mgr.set_metric(METRIC_EMIT_CANARIES, m_emit_canaries);
 
   bool force_single_dex = conf.get_json_config().get("force_single_dex", false);
-  InterDex interdex(
-      original_scope, dexen, mgr.asset_manager(), conf, plugins,
-      m_linear_alloc_limit, m_static_prune, m_normal_primary_dex,
-      m_keep_primary_order, force_single_dex, m_emit_canaries,
-      m_minimize_cross_dex_refs, m_fill_last_coldstart_dex,
-      m_minimize_cross_dex_refs_config, m_cross_dex_relocator_config, refs_info,
-      &xstore_refs, mgr.get_redex_options().min_sdk, m_sort_remaining_classes,
-      m_methods_for_canary_clinit_reference, init_classes_with_side_effects,
-      m_transitively_close_interdex_order);
+  InterDex interdex(original_scope, dexen, mgr.asset_manager(), conf, plugins,
+                    m_linear_alloc_limit, m_static_prune, m_normal_primary_dex,
+                    m_keep_primary_order, force_single_dex, m_emit_canaries,
+                    m_minimize_cross_dex_refs, m_fill_last_coldstart_dex,
+                    m_minimize_cross_dex_refs_config, refs_info, &xstore_refs,
+                    mgr.get_redex_options().min_sdk, m_sort_remaining_classes,
+                    m_methods_for_canary_clinit_reference,
+                    init_classes_with_side_effects,
+                    m_transitively_close_interdex_order);
 
   if (m_expect_order_list) {
     always_assert_log(
@@ -160,7 +148,6 @@ void InterDexPass::run_pass(
   dexen = interdex.take_outdex();
 
   auto final_scope = build_class_scope(stores);
-  interdex.cleanup(final_scope);
   for (const auto& plugin : plugins) {
     plugin->cleanup(final_scope);
   }
@@ -187,24 +174,6 @@ void InterDexPass::run_pass(
     mgr.set_metric(metric, p.second);
   }
 
-  const auto cross_dex_relocator_stats =
-      interdex.get_cross_dex_relocator_stats();
-  mgr.set_metric(METRIC_CLASSES_ADDED_FOR_RELOCATED_METHODS,
-                 cross_dex_relocator_stats.classes_added_for_relocated_methods);
-  mgr.set_metric(METRIC_RELOCATABLE_STATIC_METHODS,
-                 cross_dex_relocator_stats.relocatable_static_methods);
-  mgr.set_metric(
-      METRIC_RELOCATABLE_NON_STATIC_DIRECT_METHODS,
-      cross_dex_relocator_stats.relocatable_non_static_direct_methods);
-  mgr.set_metric(METRIC_RELOCATABLE_VIRTUAL_METHODS,
-                 cross_dex_relocator_stats.relocatable_virtual_methods);
-  mgr.set_metric(METRIC_RELOCATED_STATIC_METHODS,
-                 cross_dex_relocator_stats.relocated_static_methods);
-  mgr.set_metric(METRIC_RELOCATED_NON_STATIC_DIRECT_METHODS,
-                 cross_dex_relocator_stats.relocated_non_static_direct_methods);
-  mgr.set_metric(METRIC_RELOCATED_VIRTUAL_METHODS,
-                 cross_dex_relocator_stats.relocated_virtual_methods);
-
   mgr.set_metric(METRIC_CURRENT_CLASSES_WHEN_EMITTING_REMAINING,
                  interdex.get_current_classes_when_emitting_remaining());
 }
@@ -226,7 +195,6 @@ void InterDexPass::run_pass_on_nonroot_store(
   // TODO: Make this logic cleaner when these features get enabled for non-root
   //       stores. Would also need to clean up after it.
   cross_dex_ref_minimizer::CrossDexRefMinimizerConfig cross_dex_refs_config;
-  CrossDexRelocatorConfig cross_dex_relocator_config;
 
   // Initialize interdex and run for nonroot store
   InterDex interdex(
@@ -234,9 +202,8 @@ void InterDexPass::run_pass_on_nonroot_store(
       m_linear_alloc_limit, m_static_prune, m_normal_primary_dex,
       m_keep_primary_order, false /* force single dex */,
       false /* emit canaries */, false /* minimize_cross_dex_refs */,
-      /* fill_last_coldstart_dex=*/false, cross_dex_refs_config,
-      cross_dex_relocator_config, refs_info, &xstore_refs,
-      mgr.get_redex_options().min_sdk, m_sort_remaining_classes,
+      /* fill_last_coldstart_dex=*/false, cross_dex_refs_config, refs_info,
+      &xstore_refs, mgr.get_redex_options().min_sdk, m_sort_remaining_classes,
       m_methods_for_canary_clinit_reference, init_classes_with_side_effects,
       m_transitively_close_interdex_order);
 

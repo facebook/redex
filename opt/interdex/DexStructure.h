@@ -50,8 +50,6 @@ class DexStructure {
 
   const DexClasses& get_all_classes() const { return m_classes; }
 
-  const DexClasses& get_squashed_classes() const { return m_squashed_classes; }
-
   /**
    * Only call this if you know what you are doing. This will leave the
    * current instance is in an unusable state.
@@ -98,8 +96,6 @@ class DexStructure {
 
   void check_refs_count();
 
-  void squash_empty_last_class(DexClass* clazz);
-
  private:
   size_t m_linear_alloc_size;
   TypeRefs m_trefs;
@@ -108,17 +104,12 @@ class DexStructure {
   interdex::TypeRefs m_pending_init_class_fields;
   interdex::TypeRefs m_pending_init_class_types;
   std::vector<DexClass*> m_classes;
-  std::vector<DexClass*> m_squashed_classes;
 };
 
 class DexesStructure {
  public:
   const DexClasses& get_current_dex_classes() const {
     return m_current_dex.get_all_classes();
-  }
-
-  const DexClasses& get_current_dex_squashed_classes() const {
-    return m_current_dex.get_squashed_classes();
   }
 
   bool current_dex_has_tref(DexType* type) const {
@@ -210,10 +201,6 @@ class DexesStructure {
                             const interdex::TypeRefs& itrefs,
                             interdex::TypeRefs* pending_init_class_fields,
                             interdex::TypeRefs* pending_init_class_types);
-
-  void squash_empty_last_class(DexClass* clazz) {
-    m_current_dex.squash_empty_last_class(clazz);
-  }
 
   /**
    * It returns the classes contained in this dex and moves on to the next dex.

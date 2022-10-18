@@ -321,7 +321,6 @@ libopt_la_SOURCES = \
 	opt/insert-source-blocks/InsertSourceBlocks.cpp \
 	opt/instrument/BlockInstrument.cpp \
 	opt/instrument/Instrument.cpp \
-	opt/interdex/CrossDexRelocator.cpp \
 	opt/interdex/DexStructure.cpp \
 	opt/interdex/InterDex.cpp \
 	opt/interdex/InterDexPass.cpp \

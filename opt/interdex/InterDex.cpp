@@ -314,18 +314,6 @@ bool InterDex::should_skip_class_due_to_plugin(DexClass* clazz) {
   return false;
 }
 
-bool InterDex::should_not_relocate_methods_of_class(const DexClass* clazz) {
-  for (const auto& plugin : m_plugins) {
-    if (plugin->should_not_relocate_methods_of_class(clazz)) {
-      TRACE(IDEX, 4, "IDEX: Not relocating methods of class from %s :: %s",
-            plugin->name().c_str(), SHOW(clazz));
-      return true;
-    }
-  }
-
-  return false;
-}
-
 InterDex::EmitResult InterDex::emit_class(DexInfo& dex_info,
                                           DexClass* clazz,
                                           bool check_if_skip,
@@ -765,7 +753,7 @@ void InterDex::update_interdexorder(const DexClasses& dex,
                          primary_dex.end());
 }
 
-void InterDex::init_cross_dex_ref_minimizer_and_relocate_methods() {
+void InterDex::init_cross_dex_ref_minimizer() {
   TRACE(IDEX, 2,
         "[dex ordering] Cross-dex-ref-minimizer active with method ref weight "
         "%" PRIu64 ", field ref weight %" PRIu64 ", type ref weight %" PRIu64
@@ -781,50 +769,13 @@ void InterDex::init_cross_dex_ref_minimizer_and_relocate_methods() {
         m_cross_dex_ref_minimizer.get_config().type_seed_weight,
         m_cross_dex_ref_minimizer.get_config().string_seed_weight);
 
-  if (m_cross_dex_relocator_config.relocate_static_methods ||
-      m_cross_dex_relocator_config.relocate_non_static_direct_methods ||
-      m_cross_dex_relocator_config.relocate_virtual_methods) {
-    m_cross_dex_relocator =
-        new CrossDexRelocator(m_cross_dex_relocator_config, m_original_scope,
-                              m_xstore_refs, m_dexes_structure);
-
-    TRACE(IDEX, 2,
-          "[dex ordering] Cross-dex-relocator active, max relocated methods "
-          "per class: %" PRIu64
-          ", relocating static methods: %s"
-          ", non-static direct methods: %s"
-          ", virtual methods: %s",
-          m_cross_dex_relocator_config.max_relocated_methods_per_class,
-          m_cross_dex_relocator_config.relocate_static_methods ? "yes" : "no",
-          m_cross_dex_relocator_config.relocate_non_static_direct_methods
-              ? "yes"
-              : "no",
-          m_cross_dex_relocator_config.relocate_virtual_methods ? "yes" : "no");
-  }
-
   std::vector<DexClass*> classes_to_insert;
   // Emit classes using some algorithm to group together classes which
   // tend to share the same refs.
   for (DexClass* cls : m_scope) {
     // Don't bother with classes that emit_class will skip anyway.
-    // (Postpone checking should_skip_class until after we have possibly
-    // extracted relocatable methods.)
     if (is_canary(cls) || m_dexes_structure.has_class(cls)) {
       continue;
-    }
-
-    if (m_cross_dex_relocator != nullptr &&
-        !should_not_relocate_methods_of_class(cls)) {
-      std::vector<DexClass*> relocated_classes;
-      m_cross_dex_relocator->relocate_methods(cls, relocated_classes);
-      for (DexClass* relocated_cls : relocated_classes) {
-        // It's important to call should_skip_class here, as some plugins
-        // build up state for each class via this call.
-        always_assert(!should_skip_class_due_to_plugin(relocated_cls));
-
-        m_cross_dex_ref_minimizer.ignore(relocated_cls);
-        classes_to_insert.emplace_back(relocated_cls);
-      }
     }
 
     // Don't bother with classes that emit_class will skip anyway
@@ -874,7 +825,7 @@ void InterDex::emit_remaining_classes(DexInfo& dex_info,
     return;
   }
 
-  init_cross_dex_ref_minimizer_and_relocate_methods();
+  init_cross_dex_ref_minimizer();
 
   // Strategy for picking the next class to emit:
   // - at the beginning of a new dex, pick the "worst" class, i.e. the class
@@ -908,26 +859,12 @@ void InterDex::emit_remaining_classes(DexInfo& dex_info,
       always_assert(!emitted);
       m_cross_dex_ref_minimizer.reset();
       pick_worst = true;
-      if (m_cross_dex_relocator != nullptr) {
-        m_cross_dex_relocator->current_dex_overflowed();
-      }
       continue;
     }
 
     m_cross_dex_ref_minimizer.erase(cls, emitted, overflowed);
 
-    if (m_cross_dex_relocator != nullptr) {
-      // Let's merge relocated helper classes
-      m_cross_dex_relocator->add_to_current_dex(cls);
-    }
-
     pick_worst = pick_worst && !emitted;
-  }
-}
-
-void InterDex::cleanup(const Scope& final_scope) {
-  if (m_cross_dex_relocator != nullptr) {
-    m_cross_dex_relocator->cleanup(final_scope);
   }
 }
 
@@ -1243,10 +1180,6 @@ void InterDex::flush_out_dex(DexInfo& dex_info, DexClass* canary_cls) {
 
   for (auto& plugin : m_plugins) {
     DexClasses classes = m_dexes_structure.get_current_dex_classes();
-    const DexClasses& squashed_classes =
-        m_dexes_structure.get_current_dex_squashed_classes();
-    classes.insert(classes.end(), squashed_classes.begin(),
-                   squashed_classes.end());
     for (auto cls : plugin->additional_classes(m_outdex.size(), classes)) {
       TRACE(IDEX, 4, "IDEX: Emitting %s-plugin-generated class :: %s",
             plugin->name().c_str(), SHOW(cls));

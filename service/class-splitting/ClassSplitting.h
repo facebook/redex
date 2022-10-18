@@ -99,8 +99,7 @@ class ClassSplitter final {
   void configure(const Scope& scope);
   void prepare(const DexClass* cls,
                std::vector<DexMethodRef*>* mrefs,
-               std::vector<DexType*>* trefs,
-               bool should_not_relocate_methods_of_class);
+               std::vector<DexType*>* trefs);
   DexClasses additional_classes(const DexClasses& classes);
   void cleanup(const Scope& final_scope);
 

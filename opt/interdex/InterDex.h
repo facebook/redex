@@ -11,9 +11,9 @@
 
 #include "AssetManager.h"
 #include "CrossDexRefMinimizer.h"
-#include "CrossDexRelocator.h"
 #include "DexClass.h"
 #include "DexStructure.h"
+#include "DexUtil.h"
 #include "InitClassesWithSideEffects.h"
 #include "InterDexPassPlugin.h"
 #include "MixedModeInfo.h"
@@ -47,7 +47,6 @@ class InterDex {
            bool fill_last_coldstart_dex,
            const cross_dex_ref_minimizer::CrossDexRefMinimizerConfig&
                cross_dex_refs_config,
-           const CrossDexRelocatorConfig& cross_dex_relocator_config,
            const ReserveRefsInfo& reserve_refs,
            const XStoreRefs* xstore_refs,
            int min_sdk,
@@ -72,7 +71,6 @@ class InterDex {
         m_emitted_bg_set(false),
         m_emitting_extended(false),
         m_cross_dex_ref_minimizer(cross_dex_refs_config),
-        m_cross_dex_relocator_config(cross_dex_relocator_config),
         m_original_scope(original_scope),
         m_scope(build_class_scope(m_dexen)),
         m_xstore_refs(xstore_refs),
@@ -91,8 +89,6 @@ class InterDex {
     load_interdex_types();
   }
 
-  ~InterDex() { delete m_cross_dex_relocator; }
-
   size_t get_num_cold_start_set_dexes() const {
     return m_dexes_structure.get_num_coldstart_dexes();
   }
@@ -106,14 +102,6 @@ class InterDex {
     return m_cross_dex_ref_minimizer.stats();
   }
 
-  CrossDexRelocatorStats get_cross_dex_relocator_stats() const {
-    if (m_cross_dex_relocator != nullptr) {
-      return m_cross_dex_relocator->stats();
-    }
-
-    return CrossDexRelocatorStats();
-  }
-
   /**
    * Only call this if you know what you are doing.
    * This will leave the current instance is in an unusable state.
@@ -123,7 +111,6 @@ class InterDex {
   void run();
   void run_on_nonroot_store();
   void add_dexes_from_store(const DexStore& store);
-  void cleanup(const Scope& final_scope);
 
   const std::vector<DexType*>& get_interdex_types() const {
     return m_interdex_types;
@@ -143,7 +130,6 @@ class InterDex {
 
  private:
   void run_in_force_single_dex_mode();
-  bool should_not_relocate_methods_of_class(const DexClass* clazz);
   bool should_skip_class_due_to_plugin(DexClass* clazz);
 
   struct EmitResult {
@@ -168,7 +154,7 @@ class InterDex {
       const std::vector<DexType*>& interdex_types,
       const std::unordered_set<DexClass*>& unreferenced_classes,
       DexClass** canary_cls);
-  void init_cross_dex_ref_minimizer_and_relocate_methods();
+  void init_cross_dex_ref_minimizer();
   void emit_remaining_classes(DexInfo& dex_info, DexClass** canary_cls);
   DexClass* get_canary_cls(DexInfo& dex_info);
   void flush_out_dex(DexInfo& dex_info, DexClass* canary_cls);
@@ -216,9 +202,7 @@ class InterDex {
   std::vector<DexType*> m_scroll_markers;
 
   cross_dex_ref_minimizer::CrossDexRefMinimizer m_cross_dex_ref_minimizer;
-  const CrossDexRelocatorConfig m_cross_dex_relocator_config;
   const Scope& m_original_scope;
-  CrossDexRelocator* m_cross_dex_relocator{nullptr};
   Scope m_scope;
   std::vector<DexType*> m_interdex_types;
   const XStoreRefs* m_xstore_refs;

@@ -25,12 +25,6 @@ class InterDexPassPlugin {
   // Will prevent clazz from going into any output dex.
   virtual bool should_skip_class(const DexClass*) { return false; }
 
-  // Whether the InterDex pass logic is allowed to move around methods
-  // of a particular class.
-  virtual bool should_not_relocate_methods_of_class(const DexClass*) {
-    return false;
-  }
-
   // Calculate the amount of refs that any classes from additional_classes
   // will add to the output dex (see below).
   virtual void gather_refs(const DexInfo&,
