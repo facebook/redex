@@ -844,9 +844,10 @@ class ZipManager:
             z.extractall(self.extracted_apk_dir)
 
     def set_resource_file_mapping(self, path: str) -> None:
-        mapping = json.loads(open(path).read())
-        for k, v in mapping.items():
-            self.renamed_files_to_original[v] = k
+        with open(path) as f:
+            mapping = json.load(f)
+            for k, v in mapping.items():
+                self.renamed_files_to_original[v] = k
 
     def __exit__(self, *args: typing.Any) -> None:
         remove_signature_files(self.extracted_apk_dir)
