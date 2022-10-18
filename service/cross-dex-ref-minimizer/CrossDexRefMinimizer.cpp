@@ -394,7 +394,9 @@ size_t CrossDexRefMinimizer::erase(DexClass* cls, bool emitted, bool reset) {
     for (const auto& p : refs) {
       auto ref = p.first;
       uint32_t weight = p.second;
-      auto& classes = m_ref_classes.at(ref);
+      auto classes_it = m_ref_classes.find(ref);
+      always_assert(classes_it != m_ref_classes.end());
+      auto& classes = classes_it->second;
       size_t frequency = classes.size();
       always_assert(frequency > 0);
       const auto erased = classes.erase(cls);
@@ -406,7 +408,9 @@ size_t CrossDexRefMinimizer::erase(DexClass* cls, bool emitted, bool reset) {
         }
       }
       --frequency;
-      if (frequency > 0 && frequency <= INFREQUENT_REFS_COUNT) {
+      if (frequency == 0) {
+        m_ref_classes.erase(classes_it);
+      } else if (frequency <= INFREQUENT_REFS_COUNT) {
         for (DexClass* affected_class : classes) {
           affected_classes[affected_class]
               .infrequent_refs_weight[frequency - 1] += weight;
