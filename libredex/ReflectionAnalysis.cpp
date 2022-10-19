@@ -811,6 +811,10 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
  private:
   const DexMethod* m_dex_method;
   const cfg::ControlFlowGraph& m_cfg;
+  // Mapping from instruction to the AOEnvironment after the instruction.
+  // For instance, a const-class produces a CLASS obj. The mapping here includes
+  // an entry from the const-class instruction to the AOEnvironment where the
+  // created CLASS obj is at RESULT_REGISTER.
   std::unordered_map<IRInstruction*, AbstractObjectEnvironment> m_environments;
   mutable AbstractObjectDomain m_return_value;
   SummaryQueryFn* m_summary_query_fn;
@@ -1062,8 +1066,8 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       AbstractObjectEnvironment current_state = get_entry_state_at(block);
       for (auto& mie : InstructionIterable(block)) {
         IRInstruction* insn = mie.insn;
-        m_environments.emplace(insn, current_state);
         analyze_instruction(insn, &current_state);
+        m_environments.emplace(insn, current_state);
       }
     }
   }

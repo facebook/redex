@@ -319,6 +319,25 @@ class ReflectionAnalysis final {
                               SummaryQueryFn* summary_query_fn = nullptr,
                               const MetadataCache* cache = nullptr);
 
+  /* clang-format off */
+  /*
+   * The reflection sites include a mapping from instruction to
+   * ReflectionAbstractObject the instruction produces (created after the
+   * instruction) and receives (created before the instruction).
+   *
+   * E.g., for the following code:
+   *   (invoke-virtual (v6) "Ljava/lang/Object;.getClass:()Ljava/lang/Class;")
+   *   (move-result-object v1)
+   *
+   * The reflection sites include the followings:
+   *   INVOKE_VIRTUAL v6, Ljava/lang/Object;.getClass:()Ljava/lang/Class; {4294967294, CLASS{Ljava/lang/Object;}(REFLECTION)}
+   *   MOVE_RESULT_OBJECT v1 {1, CLASS{Ljava/lang/Object;}(REFLECTION);4294967294, CLASS{Ljava/lang/Object;}(REFLECTION)}
+   *
+   * The invoke-virtual produces the CLASS obj onto RESULT_REGISTER. The
+   * following move-result-object receives the CLASS obj at RESULT_REGISTER.
+   * It also moves the CLASS obj onto the dest reg at v1.
+   */
+  /* clang-format on */
   ReflectionSites get_reflection_sites() const;
 
   AbstractObjectDomain get_return_value() const;

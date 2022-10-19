@@ -76,20 +76,20 @@ TEST_F(IPReflectionAnalysisTest, test_results) {
   std::map<std::string, size_t> expected_entries{
       {"Lcom/facebook/redextest/IPReflectionAnalysisTest;.reflClass:()Ljava/"
        "lang/Class;",
-       2},
+       3},
       {"Lcom/facebook/redextest/IPReflectionAnalysisTest;.reflMethod:()Ljava/"
        "lang/reflect/Method;",
-       9},
+       10},
       {"Lcom/facebook/redextest/"
        "IPReflectionAnalysisTest;.callsReflMethod:()Ljava/lang/reflect/Method;",
-       2},
+       3},
       {"Lcom/facebook/redextest/"
        "IPReflectionAnalysisTest;.callsReflClass:()Ljava/lang/Class;",
-       2},
+       3},
       {"Lcom/facebook/redextest/"
        "IPReflectionAnalysisTest;.reflMethodWithCallsReflClass:()Ljava/lang/"
        "reflect/Method;",
-       9},
+       10},
       {"Lcom/facebook/redextest/"
        "IPReflectionAnalysisTest;.reflMethodWithInputClass:(Ljava/lang/"
        "Class;)Ljava/lang/reflect/Method;",
@@ -97,47 +97,47 @@ TEST_F(IPReflectionAnalysisTest, test_results) {
       {"Lcom/facebook/redextest/"
        "IPReflectionAnalysisTest;.callsReflMethodWithInputClass:()Ljava/lang/"
        "reflect/Method;",
-       4},
+       5},
       {"Lcom/facebook/redextest/"
        "IPReflectionAnalysisTest;.reflClassWithInputString:(Ljava/lang/"
        "String;)Ljava/lang/Class;",
-       2},
+       3},
       {"Lcom/facebook/redextest/"
        "IPReflectionAnalysisTest;.callsReflClassWithInputString:()Ljava/lang/"
        "Class;",
-       2},
+       3},
       {"Lcom/facebook/redextest/"
        "IPReflectionAnalysisTest;.reflMethodWithInputString:(Ljava/lang/"
        "String;Ljava/lang/String;)Ljava/lang/reflect/Method;",
-       7},
+       8},
       {"Lcom/facebook/redextest/"
        "IPReflectionAnalysisTest;.reflClassWithCallGetClassName:()Ljava/lang/"
        "Class;",
-       2},
+       3},
       {"Lcom/facebook/redextest/IPReflectionAnalysisTest;.getClassName:()Ljava/"
        "lang/String;",
        0},
       {"Lcom/facebook/redextest/"
        "IPReflectionAnalysisTest;.callsReflMethodWithInputString:()Ljava/lang/"
        "reflect/Method;",
-       2},
-      {"Lcom/facebook/redextest/Base;.reflBaseClass:()Ljava/lang/Class;", 2},
+       3},
+      {"Lcom/facebook/redextest/Base;.reflBaseClass:()Ljava/lang/Class;", 3},
       {"Lcom/facebook/redextest/Base;.reflString:(Ljava/lang/String;)Ljava/"
        "lang/Class;",
        0},
       {"Lcom/facebook/redextest/Extended;.reflBaseClass:()Ljava/lang/Class;",
-       2},
+       3},
       {"Lcom/facebook/redextest/Extended;.reflString:(Ljava/lang/String;)Ljava/"
        "lang/Class;",
-       2},
+       3},
       {"Lcom/facebook/redextest/Extended;.callsReflBaseClass:()Ljava/lang/"
        "Class;",
-       2},
+       3},
       {"Lcom/facebook/redextest/Extended;.callsReflString:()Ljava/lang/Class;",
-       2},
+       3},
       {"Lcom/facebook/redextest/ExtendedExtended;.callsReflString:()Ljava/lang/"
        "Class;",
-       2},
+       3},
   };
 
   for (const auto& entry : expected_entries) {
