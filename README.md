@@ -8,6 +8,8 @@ source.
 
 Go to https://fbredex.com for full documentation.
 
+![Redex Public Office Hour](https://fbredex.com/img/office-hour-oct-2022.png)
+
 ## Contributions
 
 See [CONTRIBUTING.md](https://github.com/facebook/redex/blob/master/CONTRIBUTING.md) to understand how to contribute to this project.
