@@ -100,3 +100,21 @@ body {
   margin: 0 auto;
   text-align: center;
 }
+
+.OfficeHourBanner {
+  font-weight: bold;
+  font-size: 20px;
+  padding: 20px;
+  margin: 0 auto;
+  text-align: center;
+  background: #eeffee;
+}
+
+.OfficeHourDescription {
+  font-weight: bold;
+  font-size: 15px;
+  padding: 10px;
+  margin: 0 auto;
+  text-align: center;
+  background: #eeffee;
+}
