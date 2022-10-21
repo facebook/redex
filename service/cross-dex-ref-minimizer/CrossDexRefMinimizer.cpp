@@ -424,6 +424,9 @@ size_t CrossDexRefMinimizer::erase(DexClass* cls, bool emitted, bool reset) {
         continue;
       }
       m_applied_refs.emplace(ref);
+      if (frequency == 0) {
+        continue;
+      }
       for (DexClass* affected_class : classes) {
         affected_classes[affected_class].applied_refs_weight += weight;
       }
