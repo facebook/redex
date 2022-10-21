@@ -26,7 +26,7 @@ constexpr const char* METRIC_REORDER_CLASSES = "num_reorder_classes";
 constexpr const char* METRIC_REORDER_RESETS = "num_reorder_resets";
 constexpr const char* METRIC_REORDER_REPRIORITIZATIONS =
     "num_reorder_reprioritization";
-constexpr const char* METRIC_REORDER_CLASSES_WORST = "reorder_classes_worst";
+constexpr const char* METRIC_REORDER_CLASSES_SEEDS = "reorder_classes_seeds";
 
 constexpr const char* METRIC_CLASSES_ADDED_FOR_RELOCATED_METHODS =
     "num_classes_added_for_relocated_methods";
@@ -82,6 +82,7 @@ class InterDexPass : public Pass {
   bool m_can_touch_coldstart_cls;
   bool m_can_touch_coldstart_extended_cls;
   bool m_minimize_cross_dex_refs;
+  int64_t m_minimize_cross_dex_refs_explore_alternatives;
   bool m_fill_last_coldstart_dex{false};
   cross_dex_ref_minimizer::CrossDexRefMinimizerConfig
       m_minimize_cross_dex_refs_config;

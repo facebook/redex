@@ -33,6 +33,7 @@
 #include "StlUtil.h"
 #include "StringUtil.h"
 #include "Walkers.h"
+#include "WorkQueue.h"
 #include "file-utils.h"
 
 namespace {
@@ -302,7 +303,7 @@ bool compare_dexclasses_for_compressed_size(DexClass* c1, DexClass* c2) {
   return compare_dextypes(c1->get_type(), c2->get_type());
 }
 
-bool InterDex::should_skip_class_due_to_plugin(DexClass* clazz) {
+bool InterDex::should_skip_class_due_to_plugin(DexClass* clazz) const {
   for (const auto& plugin : m_plugins) {
     if (plugin->should_skip_class(clazz)) {
       TRACE(IDEX, 4, "IDEX: Skipping class from %s :: %s",
@@ -314,18 +315,20 @@ bool InterDex::should_skip_class_due_to_plugin(DexClass* clazz) {
   return false;
 }
 
-InterDex::EmitResult InterDex::emit_class(DexInfo& dex_info,
-                                          DexClass* clazz,
-                                          bool check_if_skip,
-                                          bool perf_sensitive,
-                                          DexClass** canary_cls,
-                                          bool* overflowed) {
+InterDex::EmitResult InterDex::emit_class(
+    EmittingState& emitting_state,
+    DexInfo& dex_info,
+    DexClass* clazz,
+    bool check_if_skip,
+    bool perf_sensitive,
+    DexClass** canary_cls,
+    std::optional<FlushOutDexResult>* opt_fodr) const {
   if (is_canary(clazz)) {
     // Nothing to do here.
     return {false, false};
   }
 
-  if (m_dexes_structure.has_class(clazz)) {
+  if (emitting_state.dexes_structure.has_class(clazz)) {
     TRACE(IDEX, 6, "Trying to re-add class %s!", SHOW(clazz));
     return {false, false};
   }
@@ -347,19 +350,22 @@ InterDex::EmitResult InterDex::emit_class(DexInfo& dex_info,
   gather_refs(m_plugins, dex_info, clazz, &clazz_mrefs, &clazz_frefs,
               &clazz_trefs, &clazz_itrefs);
 
-  bool fits_current_dex = m_dexes_structure.add_class_to_current_dex(
-      clazz_mrefs, clazz_frefs, clazz_trefs, clazz_itrefs, clazz);
+  bool fits_current_dex =
+      emitting_state.dexes_structure.add_class_to_current_dex(
+          clazz_mrefs, clazz_frefs, clazz_trefs, clazz_itrefs, clazz);
   if (!fits_current_dex) {
-    flush_out_dex(dex_info, *canary_cls);
-    *canary_cls = get_canary_cls(dex_info);
+    auto fodr = flush_out_dex(emitting_state, dex_info, *canary_cls);
+    *canary_cls = get_canary_cls(emitting_state, dex_info);
 
-    if (overflowed) {
-      *overflowed = true;
+    if (opt_fodr) {
+      *opt_fodr = fodr;
       return {false, true};
     }
 
-    m_dexes_structure.add_class_no_checks(clazz_mrefs, clazz_frefs, clazz_trefs,
-                                          clazz_itrefs, clazz);
+    post_process_dex(emitting_state, fodr);
+
+    emitting_state.dexes_structure.add_class_no_checks(
+        clazz_mrefs, clazz_frefs, clazz_trefs, clazz_itrefs, clazz);
   }
   return {true, !fits_current_dex};
 }
@@ -395,7 +401,8 @@ void InterDex::emit_primary_dex(
         continue;
       }
 
-      emit_class(primary_dex_info, cls, /* check_if_skip */ true,
+      emit_class(m_emitting_state, primary_dex_info, cls,
+                 /* check_if_skip */ true,
                  /* perf_sensitive */ true, /* canary_cls */ nullptr);
       coldstart_classes_in_primary++;
     }
@@ -403,7 +410,8 @@ void InterDex::emit_primary_dex(
 
   // Now add the rest.
   for (DexClass* cls : primary_dex) {
-    emit_class(primary_dex_info, cls, /* check_if_skip */ true,
+    emit_class(m_emitting_state, primary_dex_info, cls,
+               /* check_if_skip */ true,
                /* perf_sensitive */ false, /* canary_cls */ nullptr);
   }
   TRACE(IDEX, 2,
@@ -415,13 +423,15 @@ void InterDex::emit_primary_dex(
         "from interdex list.",
         coldstart_classes_skipped_in_primary, primary_dex.size());
 
-  flush_out_dex(primary_dex_info, /* canary_cls */ nullptr);
+  auto fodr = flush_out_dex(m_emitting_state, primary_dex_info,
+                            /* canary_cls */ nullptr);
+  post_process_dex(m_emitting_state, fodr);
 
   // Double check only 1 dex was created.
   always_assert_log(
-      m_dexes_structure.get_num_dexes() == 1,
+      m_emitting_state.dexes_structure.get_num_dexes() == 1,
       "[error]: Primary dex doesn't fit in only 1 dex anymore :|, but in %zu\n",
-      m_dexes_structure.get_num_dexes());
+      m_emitting_state.dexes_structure.get_num_dexes());
 }
 
 void InterDex::emit_interdex_classes(
@@ -500,8 +510,9 @@ void InterDex::emit_interdex_classes(
           TRACE(IDEX, 2, "Terminating dex due to %s", SHOW(type));
           if (end_marker != cold_start_end_marker ||
               !m_fill_last_coldstart_dex || m_end_markers.size() == 1) {
-            flush_out_dex(dex_info, *canary_cls);
-            *canary_cls = get_canary_cls(dex_info);
+            auto fodr = flush_out_dex(m_emitting_state, dex_info, *canary_cls);
+            post_process_dex(m_emitting_state, fodr);
+            *canary_cls = get_canary_cls(m_emitting_state, dex_info);
             if (end_marker == cold_start_end_marker) {
               dex_info.coldstart = false;
             }
@@ -524,8 +535,9 @@ void InterDex::emit_interdex_classes(
         m_emitting_extended = true;
       }
       dex_info.betamap_ordered = true;
-      auto res = emit_class(dex_info, cls, /* check_if_skip */ true,
-                            /* perf_sensitive */ true, canary_cls);
+      auto res =
+          emit_class(m_emitting_state, dex_info, cls, /* check_if_skip */ true,
+                     /* perf_sensitive */ true, canary_cls);
 
       if (res.overflowed && reset_coldstart_on_overflow) {
         dex_info.coldstart = false;
@@ -542,8 +554,9 @@ void InterDex::emit_interdex_classes(
     DexClass* cls = type_class(type);
 
     if (cls && unreferenced_classes.count(cls)) {
-      auto res = emit_class(dex_info, cls, /* check_if_skip */ true,
-                            /* perf_sensitive */ false, canary_cls);
+      auto res =
+          emit_class(m_emitting_state, dex_info, cls, /* check_if_skip */ true,
+                     /* perf_sensitive */ false, canary_cls);
 
       if (res.overflowed && reset_coldstart_on_overflow) {
         dex_info.coldstart = false;
@@ -566,8 +579,9 @@ void InterDex::emit_interdex_classes(
 
   if (reset_coldstart_on_overflow) {
     TRACE(IDEX, 2, "No overflow after cold-start dex, flushing now.");
-    flush_out_dex(dex_info, *canary_cls);
-    *canary_cls = get_canary_cls(dex_info);
+    auto fodr = flush_out_dex(m_emitting_state, dex_info, *canary_cls);
+    post_process_dex(m_emitting_state, fodr);
+    *canary_cls = get_canary_cls(m_emitting_state, dex_info);
     dex_info.coldstart = false;
   }
 }
@@ -774,7 +788,7 @@ void InterDex::init_cross_dex_ref_minimizer() {
   // tend to share the same refs.
   for (DexClass* cls : m_scope) {
     // Don't bother with classes that emit_class will skip anyway.
-    if (is_canary(cls) || m_dexes_structure.has_class(cls)) {
+    if (is_canary(cls) || m_emitting_state.dexes_structure.has_class(cls)) {
       continue;
     }
 
@@ -804,22 +818,21 @@ void InterDex::init_cross_dex_ref_minimizer() {
   // A few classes might have already been emitted to the current dex which we
   // are about to fill up. Make it so that the minimizer knows that all the refs
   // of those classes have already been emitted.
-  for (auto cls : m_dexes_structure.get_current_dex_classes()) {
+  for (auto cls : m_emitting_state.dexes_structure.get_current_dex_classes()) {
     m_cross_dex_ref_minimizer.sample(cls);
     m_cross_dex_ref_minimizer.insert(cls);
-    m_cross_dex_ref_minimizer.erase(cls, /* emitted */ true,
-                                    /* overflowed */ false);
+    m_cross_dex_ref_minimizer.erase(cls, /* emitted */ true);
   }
 }
 
 void InterDex::emit_remaining_classes(DexInfo& dex_info,
                                       DexClass** canary_cls) {
   m_current_classes_when_emitting_remaining =
-      m_dexes_structure.get_current_dex_classes().size();
+      m_emitting_state.dexes_structure.get_current_dex_classes().size();
 
   if (!m_minimize_cross_dex_refs) {
     for (DexClass* cls : m_scope) {
-      emit_class(dex_info, cls, /* check_if_skip */ true,
+      emit_class(m_emitting_state, dex_info, cls, /* check_if_skip */ true,
                  /* perf_sensitive */ false, canary_cls);
     }
     return;
@@ -827,6 +840,15 @@ void InterDex::emit_remaining_classes(DexInfo& dex_info,
 
   init_cross_dex_ref_minimizer();
 
+  if (m_minimize_cross_dex_refs_explore_alternatives <= 1) {
+    emit_remaining_classes_legacy(dex_info, canary_cls);
+  } else {
+    emit_remaining_classes_exploring_alternatives(dex_info, canary_cls);
+  }
+}
+
+void InterDex::emit_remaining_classes_legacy(DexInfo& dex_info,
+                                             DexClass** canary_cls) {
   // Strategy for picking the next class to emit:
   // - at the beginning of a new dex, pick the "worst" class, i.e. the class
   //   with the most (adjusted) unapplied refs
@@ -851,20 +873,128 @@ void InterDex::emit_remaining_classes(DexInfo& dex_info,
       cls = m_cross_dex_ref_minimizer.front();
     }
 
-    bool overflowed = false;
+    std::optional<FlushOutDexResult> opt_fodr;
     bool emitted =
-        emit_class(dex_info, cls, /* check_if_skip */ false,
-                   /* perf_sensitive */ false, canary_cls, &overflowed);
-    if (overflowed) {
+        emit_class(m_emitting_state, dex_info, cls, /* check_if_skip */ false,
+                   /* perf_sensitive */ false, canary_cls, &opt_fodr);
+    if (opt_fodr) {
       always_assert(!emitted);
+      post_process_dex(m_emitting_state, *opt_fodr);
       m_cross_dex_ref_minimizer.reset();
       pick_worst = true;
       continue;
     }
 
-    m_cross_dex_ref_minimizer.erase(cls, emitted, overflowed);
+    m_cross_dex_ref_minimizer.erase(cls, emitted);
 
     pick_worst = pick_worst && !emitted;
+  }
+}
+
+void InterDex::emit_remaining_classes_exploring_alternatives(
+    DexInfo& dex_info, DexClass** canary_cls) {
+  // Strategy for picking the next class to emit in a dex:
+  // - at the beginning of a new dex, consider a "seed" class, i.e. a class
+  //   with a high seed weight
+  // - otherwise, pick the "best" class according to the priority scheme that
+  //   prefers classes that share many applied refs and bring in few unapplied
+  //   refs
+  // For each dex, we explore a set of alternatives in parallel, choosing the
+  // "best" one to continue with. We use a cost function that tries to minimize
+  // the remaining "difficulty" of assigning the remaining classes to dexes.
+
+  struct Alternative {
+    EmittingState emitting_state;
+    DexInfo dex_info;
+    cross_dex_ref_minimizer::CrossDexRefMinimizer cross_dex_ref_minimizer;
+    DexClass* canary_cls;
+    std::vector<FlushOutDexResult> fodrs;
+
+    double fill_current_dex(const InterDex* inter_dex, DexClass* seed_cls) {
+      while (!cross_dex_ref_minimizer.empty()) {
+        DexClass* cls;
+        if (seed_cls) {
+          cls = seed_cls;
+          seed_cls = nullptr;
+        } else {
+          // Default case
+          cls = cross_dex_ref_minimizer.front();
+        }
+
+        std::optional<FlushOutDexResult> opt_fodr;
+        bool emitted = inter_dex->emit_class(emitting_state, dex_info, cls,
+                                             /* check_if_skip */ false,
+                                             /* perf_sensitive */ false,
+                                             &canary_cls, &opt_fodr);
+        if (opt_fodr) {
+          always_assert(!emitted);
+          cross_dex_ref_minimizer.reset();
+          fodrs.push_back(*opt_fodr);
+          break;
+        }
+
+        cross_dex_ref_minimizer.erase(cls, emitted);
+      }
+      return cross_dex_ref_minimizer.get_remaining_difficulty();
+    }
+  };
+
+  TRACE(IDEX, 1,
+        "Finding cross-dex-ref-minimization solutions, considering %ld "
+        "alternatives at each step",
+        m_minimize_cross_dex_refs_explore_alternatives);
+
+  auto best = std::make_unique<Alternative>(
+      (Alternative){std::move(m_emitting_state), dex_info,
+                    std::move(m_cross_dex_ref_minimizer), *canary_cls,
+                    /* fodrs */ {}});
+
+  bool first = true;
+  while (!best->cross_dex_ref_minimizer.empty()) {
+    auto worst_classes = best->cross_dex_ref_minimizer.worst(
+        m_minimize_cross_dex_refs_explore_alternatives);
+    if (first) {
+      first = false;
+      worst_classes.push_back(nullptr);
+    }
+
+    std::unique_ptr<Alternative> last;
+    std::swap(last, best);
+    std::mutex best_mutex;
+    double best_remaining_difficulty = 0;
+    size_t best_index = 0;
+
+    workqueue_run_for<size_t>(
+        0, worst_classes.size(),
+        [this, &worst_classes, &last, &best, &best_remaining_difficulty,
+         &best_index, &best_mutex](size_t index) {
+          auto seed_cls = worst_classes.at(index);
+
+          auto alt = std::make_unique<Alternative>(*last);
+          auto remaining_difficulty = alt->fill_current_dex(this, seed_cls);
+
+          TRACE(IDEX, 2,
+                "Found cross-dex-ref-minimization solution with %f remaining "
+                "difficulity at index %zu",
+                remaining_difficulty, index);
+
+          std::lock_guard<std::mutex> lock_guard(best_mutex);
+          if (!best || remaining_difficulty < best_remaining_difficulty ||
+              (remaining_difficulty == best_remaining_difficulty &&
+               index < best_index)) {
+            best = std::move(alt);
+            best_remaining_difficulty = remaining_difficulty;
+            best_index = index;
+          }
+        });
+  }
+
+  m_emitting_state = std::move(best->emitting_state);
+  dex_info = best->dex_info;
+  m_cross_dex_ref_minimizer = std::move(best->cross_dex_ref_minimizer);
+  *canary_cls = best->canary_cls;
+  for (const auto& fodr : best->fodrs) {
+    post_process_dex(m_emitting_state, fodr);
   }
 }
 
@@ -893,18 +1023,20 @@ void InterDex::run_in_force_single_dex_mode() {
     gather_refs(m_plugins, dex_info, cls, &clazz_mrefs, &clazz_frefs,
                 &clazz_trefs, &clazz_itrefs);
 
-    m_dexes_structure.add_class_no_checks(clazz_mrefs, clazz_frefs, clazz_trefs,
-                                          clazz_itrefs, cls);
+    m_emitting_state.dexes_structure.add_class_no_checks(
+        clazz_mrefs, clazz_frefs, clazz_trefs, clazz_itrefs, cls);
   }
 
   // Emit all no matter what it is.
-  if (!m_dexes_structure.get_current_dex_classes().empty()) {
-    flush_out_dex(dex_info, /* canary_cls */ nullptr);
+  if (!m_emitting_state.dexes_structure.get_current_dex_classes().empty()) {
+    auto fodr =
+        flush_out_dex(m_emitting_state, dex_info, /* canary_cls */ nullptr);
+    post_process_dex(m_emitting_state, fodr);
   }
 
   TRACE(IDEX, 7, "IDEX: force_single_dex dex number: %zu",
-        m_dexes_structure.get_num_dexes());
-  print_stats(&m_dexes_structure);
+        m_emitting_state.dexes_structure.get_num_dexes());
+  print_stats(&m_emitting_state.dexes_structure);
 }
 
 void InterDex::run() {
@@ -934,7 +1066,7 @@ void InterDex::run() {
 
   // Emit interdex classes, if any.
   DexInfo dex_info;
-  DexClass* canary_cls = get_canary_cls(dex_info);
+  DexClass* canary_cls = get_canary_cls(m_emitting_state, dex_info);
   emit_interdex_classes(dex_info, m_interdex_types, unreferenced_classes,
                         &canary_cls);
 
@@ -942,34 +1074,38 @@ void InterDex::run() {
   Json::Value json_first_dex;
   if (json_classes) {
     json_first_dex = m_cross_dex_ref_minimizer.get_json_class_indices(
-        m_dexes_structure.get_current_dex_classes());
+        m_emitting_state.dexes_structure.get_current_dex_classes());
   }
 
   // Now emit the classes that weren't specified in the head or primary list.
-  auto remaining_classes_first_dex_idx = m_outdex.size();
+  auto remaining_classes_first_dex_idx = m_emitting_state.outdex.size();
   emit_remaining_classes(dex_info, &canary_cls);
 
   // Emit what is left, if any.
-  if (!m_dexes_structure.get_current_dex_classes().empty()) {
-    flush_out_dex(dex_info, canary_cls);
+  if (!m_emitting_state.dexes_structure.get_current_dex_classes().empty()) {
+    auto fodr = flush_out_dex(m_emitting_state, dex_info, canary_cls);
+    post_process_dex(m_emitting_state, fodr);
     canary_cls = nullptr;
   }
 
   if (json_classes) {
     Json::Value json_solution = Json::arrayValue;
     for (size_t dex_idx = remaining_classes_first_dex_idx;
-         dex_idx < m_outdex.size();
+         dex_idx < m_emitting_state.outdex.size();
          dex_idx++) {
-      auto& dex = m_outdex.at(dex_idx);
+      auto& dex = m_emitting_state.outdex.at(dex_idx);
       if (!dex.empty()) {
         json_solution.append(
             m_cross_dex_ref_minimizer.get_json_class_indices(dex));
       }
     }
     Json::Value json_limits;
-    json_limits["types"] = int(m_dexes_structure.get_trefs_limit());
-    json_limits["fields"] = int(m_dexes_structure.get_frefs_limit());
-    json_limits["methods"] = int(m_dexes_structure.get_mrefs_limit());
+    json_limits["types"] =
+        int(m_emitting_state.dexes_structure.get_trefs_limit());
+    json_limits["fields"] =
+        int(m_emitting_state.dexes_structure.get_frefs_limit());
+    json_limits["methods"] =
+        int(m_emitting_state.dexes_structure.get_mrefs_limit());
     Json::Value json_file;
     json_file["limits"] = json_limits;
     json_file["first_dex"] = json_first_dex;
@@ -988,7 +1124,7 @@ void InterDex::run() {
     mixed_mode_fh.seek_end();
     std::stringstream ss;
     int ordinal = 0;
-    for (const auto& info : m_dex_infos) {
+    for (const auto& info : m_emitting_state.dex_infos) {
       const auto& flags = std::get<1>(info);
       ss << std::get<0>(info) << ",ordinal=" << ordinal++
          << ",coldstart=" << flags.coldstart << ",extended=" << flags.extended
@@ -1000,46 +1136,56 @@ void InterDex::run() {
   }
 
   always_assert_log(!m_emit_canaries ||
-                        m_dexes_structure.get_num_dexes() < MAX_DEX_NUM,
+                        m_emitting_state.dexes_structure.get_num_dexes() <
+                            MAX_DEX_NUM,
                     "Bailing, max dex number surpassed %zu\n",
-                    m_dexes_structure.get_num_dexes());
+                    m_emitting_state.dexes_structure.get_num_dexes());
 
-  print_stats(&m_dexes_structure);
+  print_stats(&m_emitting_state.dexes_structure);
 }
 
 void InterDex::run_on_nonroot_store() {
   TRACE(IDEX, 2, "IDEX: Running on non-root store");
-  auto canary_cls = get_canary_cls(EMPTY_DEX_INFO);
+  auto canary_cls = get_canary_cls(m_emitting_state, EMPTY_DEX_INFO);
   for (DexClass* cls : m_scope) {
-    emit_class(EMPTY_DEX_INFO, cls, /* check_if_skip */ false,
+    emit_class(m_emitting_state, EMPTY_DEX_INFO, cls,
+               /* check_if_skip */ false,
                /* perf_sensitive */ false, &canary_cls);
   }
 
   // Emit what is left, if any.
-  if (!m_dexes_structure.get_current_dex_classes().empty()) {
-    flush_out_dex(EMPTY_DEX_INFO, canary_cls);
+  if (!m_emitting_state.dexes_structure.get_current_dex_classes().empty()) {
+    auto fodr = flush_out_dex(m_emitting_state, EMPTY_DEX_INFO, canary_cls);
+    post_process_dex(m_emitting_state, fodr);
   }
 
-  print_stats(&m_dexes_structure);
+  print_stats(&m_emitting_state.dexes_structure);
 }
 
 void InterDex::add_dexes_from_store(const DexStore& store) {
-  auto canary_cls = get_canary_cls(EMPTY_DEX_INFO);
+  auto canary_cls = get_canary_cls(m_emitting_state, EMPTY_DEX_INFO);
   const auto& dexes = store.get_dexen();
   for (const DexClasses& classes : dexes) {
     for (DexClass* cls : classes) {
-      emit_class(EMPTY_DEX_INFO, cls, /* check_if_skip */ false,
+      emit_class(m_emitting_state, EMPTY_DEX_INFO, cls,
+                 /* check_if_skip */ false,
                  /* perf_sensitive */ false, &canary_cls);
     }
   }
-  flush_out_dex(EMPTY_DEX_INFO, canary_cls);
+  auto fodr = flush_out_dex(m_emitting_state, EMPTY_DEX_INFO, canary_cls);
+  post_process_dex(m_emitting_state, fodr);
 }
 
-void InterDex::set_clinit_methods_if_needed(DexClass* cls) {
+void InterDex::set_clinit_methods_if_needed(DexClass* cls) const {
   using namespace dex_asm;
 
   if (m_methods_for_canary_clinit_reference.empty()) {
     // No methods to call from clinit; don't create clinit.
+    return;
+  }
+
+  if (cls->get_clinit()) {
+    // We already created and added a clinit.
     return;
   }
 
@@ -1113,13 +1259,19 @@ DexClass* create_canary(int dexnum, const DexString* store_name) {
 // beginning a new dex. As canary classes are added in the end without checks,
 // the implied references are added here immediately to ensure that we don't
 // exceed limits.
-DexClass* InterDex::get_canary_cls(DexInfo& dex_info) {
+DexClass* InterDex::get_canary_cls(EmittingState& emitting_state,
+                                   DexInfo& dex_info) const {
   if (!m_emit_canaries || dex_info.primary) {
     return nullptr;
   }
-  int dexnum = m_dexes_structure.get_num_dexes();
-  auto canary_cls = create_canary(dexnum);
-  set_clinit_methods_if_needed(canary_cls);
+  int dexnum = emitting_state.dexes_structure.get_num_dexes();
+  DexClass* canary_cls;
+  {
+    static std::mutex canary_mutex;
+    std::lock_guard<std::mutex> lock_guard(canary_mutex);
+    canary_cls = create_canary(dexnum);
+    set_clinit_methods_if_needed(canary_cls);
+  }
   MethodRefs clazz_mrefs;
   FieldRefs clazz_frefs;
   TypeRefs clazz_trefs;
@@ -1128,7 +1280,7 @@ DexClass* InterDex::get_canary_cls(DexInfo& dex_info) {
   canary_cls->gather_fields(clazz_frefs);
   canary_cls->gather_types(clazz_trefs);
   canary_cls->gather_init_classes(clazz_itrefs);
-  m_dexes_structure.add_refs_no_checks(
+  emitting_state.dexes_structure.add_refs_no_checks(
       clazz_mrefs, clazz_frefs, clazz_trefs,
       TypeRefs(clazz_itrefs.begin(), clazz_itrefs.end()));
   return canary_cls;
@@ -1137,29 +1289,32 @@ DexClass* InterDex::get_canary_cls(DexInfo& dex_info) {
 /**
  * This needs to be called before getting to the next dex.
  */
-void InterDex::flush_out_dex(DexInfo& dex_info, DexClass* canary_cls) {
+InterDex::FlushOutDexResult InterDex::flush_out_dex(
+    EmittingState& emitting_state,
+    DexInfo& dex_info,
+    DexClass* canary_cls) const {
 
-  int dexnum = m_dexes_structure.get_num_dexes();
+  int dexnum = emitting_state.dexes_structure.get_num_dexes();
   if (dex_info.primary) {
     TRACE(IDEX, 2, "Writing out primary dex with %zu classes.",
-          m_dexes_structure.get_current_dex_classes().size());
+          emitting_state.dexes_structure.get_current_dex_classes().size());
   } else {
     TRACE(IDEX, 2,
           "Writing out secondary dex number %zu, which is %s of coldstart, "
           "%s of extended set, %s of background set, %s scroll "
           "classes and has %zu classes.",
-          m_dexes_structure.get_num_secondary_dexes() + 1,
+          emitting_state.dexes_structure.get_num_secondary_dexes() + 1,
           (dex_info.coldstart ? "part of" : "not part of"),
           (dex_info.extended ? "part of" : "not part of"),
           (dex_info.background ? "part of" : "not part of"),
           (dex_info.scroll ? "has" : "doesn't have"),
-          m_dexes_structure.get_current_dex_classes().size());
+          emitting_state.dexes_structure.get_current_dex_classes().size());
   }
 
   // Add the Canary class, if any.
   if (canary_cls) {
-    always_assert(
-        m_dexes_structure.current_dex_has_tref(canary_cls->get_type()));
+    always_assert(emitting_state.dexes_structure.current_dex_has_tref(
+        canary_cls->get_type()));
 
     // Properly try to insert the class.
 
@@ -1170,95 +1325,18 @@ void InterDex::flush_out_dex(DexInfo& dex_info, DexClass* canary_cls) {
     gather_refs(m_plugins, dex_info, canary_cls, &clazz_mrefs, &clazz_frefs,
                 &clazz_trefs, &clazz_itrefs);
 
-    bool canary_added = m_dexes_structure.add_class_to_current_dex(
+    bool canary_added = emitting_state.dexes_structure.add_class_to_current_dex(
         clazz_mrefs, clazz_frefs, clazz_trefs, clazz_itrefs, canary_cls);
     always_assert(canary_added);
 
-    m_dex_infos.emplace_back(
+    emitting_state.dex_infos.emplace_back(
         std::make_tuple(canary_cls->get_name()->str_copy(), dex_info));
   }
 
-  for (auto& plugin : m_plugins) {
-    DexClasses classes = m_dexes_structure.get_current_dex_classes();
-    for (auto cls : plugin->additional_classes(m_outdex.size(), classes)) {
-      TRACE(IDEX, 4, "IDEX: Emitting %s-plugin-generated class :: %s",
-            plugin->name().c_str(), SHOW(cls));
-      m_dexes_structure.add_class_no_checks(cls);
-      // If this is the primary dex, or if there are any betamap-ordered classes
-      // in this dex, then we treat the additional classes as perf-sensitive, to
-      // be conservative.
-      if (dex_info.primary || dex_info.betamap_ordered) {
-        cls->set_perf_sensitive(true);
-      }
-    }
-  }
-
-  {
-    auto classes = m_dexes_structure.end_dex(dex_info);
-    if (m_sort_remaining_classes) {
-      std::vector<DexClass*> perf_sensitive_classes;
-      using DexClassWithSortNum = std::pair<DexClass*, double>;
-      std::vector<DexClassWithSortNum> classes_with_sort_num;
-      std::vector<DexClass*> remaining_classes;
-      using namespace method_profiles;
-      // Copy intended!
-      auto mpoc = *m_conf.get_global_config()
-                       .get_config_by_name<MethodProfileOrderingConfig>(
-                           "method_profile_order");
-      mpoc.min_appear_percent = 1.0f;
-      dexmethods_profiled_comparator comparator(
-          {}, &m_conf.get_method_profiles(), &mpoc);
-      for (auto cls : classes) {
-        if (cls->is_perf_sensitive()) {
-          perf_sensitive_classes.push_back(cls);
-          continue;
-        }
-        double cls_sort_num = dexmethods_profiled_comparator::VERY_END;
-        walk::methods(std::vector<DexClass*>{cls}, [&](DexMethod* method) {
-          auto method_sort_num = comparator.get_overall_method_sort_num(method);
-          if (method_sort_num < cls_sort_num) {
-            cls_sort_num = method_sort_num;
-          }
-        });
-        if (cls_sort_num < dexmethods_profiled_comparator::VERY_END) {
-          classes_with_sort_num.emplace_back(cls, cls_sort_num);
-          continue;
-        }
-        remaining_classes.push_back(cls);
-      }
-      always_assert(perf_sensitive_classes.size() +
-                        classes_with_sort_num.size() +
-                        remaining_classes.size() ==
-                    classes.size());
-
-      TRACE(IDEX, 2,
-            "Skipping %zu perf sensitive, ordering %zu by method profiles, and "
-            "sorting %zu classes",
-            perf_sensitive_classes.size(), classes_with_sort_num.size(),
-            remaining_classes.size());
-      std::stable_sort(
-          classes_with_sort_num.begin(), classes_with_sort_num.end(),
-          [](const DexClassWithSortNum& a, const DexClassWithSortNum& b) {
-            return a.second < b.second;
-          });
-      std::sort(remaining_classes.begin(), remaining_classes.end(),
-                compare_dexclasses_for_compressed_size);
-      // Rearrange classes so that...
-      // - perf_sensitive_classes go first, then
-      // - classes_with_sort_num that got ordered by the method profiles, and
-      // finally
-      // - remaining_classes
-      classes.clear();
-      classes.insert(classes.end(), perf_sensitive_classes.begin(),
-                     perf_sensitive_classes.end());
-      for (auto& p : classes_with_sort_num) {
-        classes.push_back(p.first);
-      }
-      classes.insert(classes.end(), remaining_classes.begin(),
-                     remaining_classes.end());
-    }
-    m_outdex.emplace_back(std::move(classes));
-  }
+  FlushOutDexResult fodr{emitting_state.outdex.size(),
+                         dex_info.primary || dex_info.betamap_ordered};
+  auto classes = emitting_state.dexes_structure.end_dex(dex_info);
+  emitting_state.outdex.emplace_back(std::move(classes));
 
   if (!m_emitting_scroll_set) {
     dex_info.scroll = false;
@@ -1275,6 +1353,89 @@ void InterDex::flush_out_dex(DexInfo& dex_info, DexClass* canary_cls) {
   // This resets the flag as this method advances to the next
   // writable DEX.
   dex_info.betamap_ordered = false;
+
+  return fodr;
+}
+
+void InterDex::post_process_dex(EmittingState& emitting_state,
+                                const FlushOutDexResult& fodr) const {
+  auto& classes = emitting_state.outdex.at(fodr.dex_count);
+
+  for (auto& plugin : m_plugins) {
+    for (auto cls : plugin->additional_classes(fodr.dex_count, classes)) {
+      TRACE(IDEX, 4, "IDEX: Emitting %s-plugin-generated class :: %s",
+            plugin->name().c_str(), SHOW(cls));
+      classes.push_back(cls);
+      // If this is the primary dex, or if there are any betamap-ordered
+      // classes in this dex, then we treat the additional classes as
+      // perf-sensitive, to be conservative.
+      if (fodr.primary_or_betamap_ordered) {
+        cls->set_perf_sensitive(true);
+      }
+    }
+  }
+
+  if (m_sort_remaining_classes) {
+    std::vector<DexClass*> perf_sensitive_classes;
+    using DexClassWithSortNum = std::pair<DexClass*, double>;
+    std::vector<DexClassWithSortNum> classes_with_sort_num;
+    std::vector<DexClass*> remaining_classes;
+    using namespace method_profiles;
+    // Copy intended!
+    auto mpoc = *m_conf.get_global_config()
+                     .get_config_by_name<MethodProfileOrderingConfig>(
+                         "method_profile_order");
+    mpoc.min_appear_percent = 1.0f;
+    dexmethods_profiled_comparator comparator({}, &m_conf.get_method_profiles(),
+                                              &mpoc);
+    for (auto cls : classes) {
+      if (cls->is_perf_sensitive()) {
+        perf_sensitive_classes.push_back(cls);
+        continue;
+      }
+      double cls_sort_num = dexmethods_profiled_comparator::VERY_END;
+      walk::methods(std::vector<DexClass*>{cls}, [&](DexMethod* method) {
+        auto method_sort_num = comparator.get_overall_method_sort_num(method);
+        if (method_sort_num < cls_sort_num) {
+          cls_sort_num = method_sort_num;
+        }
+      });
+      if (cls_sort_num < dexmethods_profiled_comparator::VERY_END) {
+        classes_with_sort_num.emplace_back(cls, cls_sort_num);
+        continue;
+      }
+      remaining_classes.push_back(cls);
+    }
+    always_assert(perf_sensitive_classes.size() + classes_with_sort_num.size() +
+                      remaining_classes.size() ==
+                  classes.size());
+
+    TRACE(IDEX, 2,
+          "Skipping %zu perf sensitive, ordering %zu by method profiles, and "
+          "sorting %zu classes",
+          perf_sensitive_classes.size(), classes_with_sort_num.size(),
+          remaining_classes.size());
+    std::stable_sort(
+        classes_with_sort_num.begin(), classes_with_sort_num.end(),
+        [](const DexClassWithSortNum& a, const DexClassWithSortNum& b) {
+          return a.second < b.second;
+        });
+    std::sort(remaining_classes.begin(), remaining_classes.end(),
+              compare_dexclasses_for_compressed_size);
+    // Rearrange classes so that...
+    // - perf_sensitive_classes go first, then
+    // - classes_with_sort_num that got ordered by the method profiles, and
+    // finally
+    // - remaining_classes
+    classes.clear();
+    classes.insert(classes.end(), perf_sensitive_classes.begin(),
+                   perf_sensitive_classes.end());
+    for (auto& p : classes_with_sort_num) {
+      classes.push_back(p.first);
+    }
+    classes.insert(classes.end(), remaining_classes.begin(),
+                   remaining_classes.end());
+  }
 }
 
 } // namespace interdex

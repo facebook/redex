@@ -33,7 +33,7 @@ struct CrossDexRefMinimizerStats {
   uint64_t classes{0};
   uint64_t resets{0};
   uint64_t reprioritizations{0};
-  std::vector<std::pair<DexClass*, uint64_t>> worst_classes;
+  std::vector<std::pair<DexClass*, uint64_t>> seed_classes;
 };
 
 struct CrossDexRefMinimizerConfig {
@@ -88,13 +88,15 @@ class CrossDexRefMinimizer {
     // This array stores (the weights of) how many of the *refs of this class
     // have only one, two, ... classes left that reference them.
     std::array<uint32_t, INFREQUENT_REFS_COUNT> infrequent_refs_weight;
-    std::vector<std::pair<const void*, uint32_t>> refs;
+    using Refs = std::vector<std::pair<const void*, uint32_t>>;
+    std::shared_ptr<Refs> refs;
     uint64_t refs_weight;
     uint64_t applied_refs_weight;
     uint64_t seed_weight{0};
     explicit ClassInfo(uint32_t i)
         : index(i),
           infrequent_refs_weight(),
+          refs(std::make_shared<Refs>()),
           refs_weight(0),
           applied_refs_weight(0) {}
     uint64_t get_primary_priority_denominator() const;
@@ -104,7 +106,7 @@ class CrossDexRefMinimizer {
   uint32_t m_next_index{0};
   std::unordered_map<const void*, std::unordered_set<DexClass*>> m_ref_classes;
   CrossDexRefMinimizerStats m_stats;
-  const CrossDexRefMinimizerConfig m_config;
+  CrossDexRefMinimizerConfig m_config;
 
   struct ClassInfoDelta {
     std::array<int32_t, INFREQUENT_REFS_COUNT> infrequent_refs_weight{};
@@ -113,7 +115,6 @@ class CrossDexRefMinimizer {
 
   void reprioritize(
       const std::unordered_map<DexClass*, ClassInfoDelta>& affected_classes);
-  DexClass* worst(bool generated);
 
   std::unordered_map<const void*, size_t> m_ref_counts;
   size_t m_max_ref_count{0};
@@ -124,7 +125,7 @@ class CrossDexRefMinimizer {
                    std::vector<DexType*>& types,
                    std::vector<const DexString*>& strings);
 
-  std::unique_ptr<Json::Value> m_json_classes;
+  std::optional<Json::Value> m_json_classes;
   template <class Ref>
   class JsonRefIndices {
    private:
@@ -167,7 +168,7 @@ class CrossDexRefMinimizer {
   explicit CrossDexRefMinimizer(const CrossDexRefMinimizerConfig& config)
       : m_config(config) {
     if (config.emit_json) {
-      m_json_classes = std::make_unique<Json::Value>(Json::objectValue);
+      m_json_classes = Json::objectValue;
     }
   }
   // Gather frequency counts; must be called for relevant classes before
@@ -180,22 +181,27 @@ class CrossDexRefMinimizer {
   DexClass* front() const;
   // "Worst" in the sense of having highest seed weight.
   DexClass* worst();
+  std::vector<DexClass*> worst(size_t, bool include_generated = true);
   // "Erasing" a class applies its refs, updating
   // the priorities of all remaining classes.
   // "Resetting" must happen when the previous dex was flushed and the given
   // class is in fact applied to a new dex.
   // This function returns the number of applied refs.
-  size_t erase(DexClass* cls, bool emitted, bool reset);
+  size_t erase(DexClass* cls, bool emitted, bool reset = false);
   void reset() { erase(nullptr, /* emitted */ false, /* reset */ true); }
   const CrossDexRefMinimizerConfig& get_config() const { return m_config; }
   const CrossDexRefMinimizerStats& stats() const { return m_stats; }
   size_t get_applied_refs() const { return m_applied_refs.size(); }
-  size_t get_unapplied_refs(DexClass* cls);
+  size_t get_unapplied_refs(DexClass* cls) const;
+  double get_remaining_difficulty() const;
+  size_t size() const { return m_class_infos.size(); }
 
   std::string get_json_class_index(DexClass* cls);
   Json::Value get_json_class_indices(const std::vector<DexClass*>& classes);
   Json::Value get_json_mapping();
-  Json::Value* get_json_classes() { return m_json_classes.get(); }
+  Json::Value* get_json_classes() {
+    return m_json_classes.has_value() ? &m_json_classes.value() : nullptr;
+  }
 };
 
 } // namespace cross_dex_ref_minimizer

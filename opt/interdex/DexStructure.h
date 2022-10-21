@@ -46,8 +46,6 @@ class DexStructure {
  public:
   DexStructure() : m_linear_alloc_size(0) {}
 
-  size_t get_linear_alloc_size() const { return m_linear_alloc_size; }
-
   const DexClasses& get_all_classes() const { return m_classes; }
 
   /**

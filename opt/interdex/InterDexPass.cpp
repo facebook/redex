@@ -87,6 +87,8 @@ void InterDexPass::bind_config() {
        m_minimize_cross_dex_refs_config.string_seed_weight);
   bind("minimize_cross_dex_refs_emit_json", false,
        m_minimize_cross_dex_refs_config.emit_json);
+  bind("minimize_cross_dex_refs_explore_alternatives", 1,
+       m_minimize_cross_dex_refs_explore_alternatives);
 
   bind("fill_last_coldstart_dex", m_fill_last_coldstart_dex,
        m_fill_last_coldstart_dex);
@@ -135,7 +137,8 @@ void InterDexPass::run_pass(
                     mgr.get_redex_options().min_sdk, m_sort_remaining_classes,
                     m_methods_for_canary_clinit_reference,
                     init_classes_with_side_effects,
-                    m_transitively_close_interdex_order);
+                    m_transitively_close_interdex_order,
+                    m_minimize_cross_dex_refs_explore_alternatives);
 
   if (m_expect_order_list) {
     always_assert_log(
@@ -166,11 +169,11 @@ void InterDexPass::run_pass(
   mgr.set_metric(METRIC_REORDER_RESETS, cross_dex_ref_minimizer_stats.resets);
   mgr.set_metric(METRIC_REORDER_REPRIORITIZATIONS,
                  cross_dex_ref_minimizer_stats.reprioritizations);
-  const auto& worst_classes = cross_dex_ref_minimizer_stats.worst_classes;
-  for (size_t i = 0; i < worst_classes.size(); ++i) {
-    auto& p = worst_classes.at(i);
+  const auto& seed_classes = cross_dex_ref_minimizer_stats.seed_classes;
+  for (size_t i = 0; i < seed_classes.size(); ++i) {
+    auto& p = seed_classes.at(i);
     std::string metric =
-        METRIC_REORDER_CLASSES_WORST + std::to_string(i) + "_" + SHOW(p.first);
+        METRIC_REORDER_CLASSES_SEEDS + std::to_string(i) + "_" + SHOW(p.first);
     mgr.set_metric(metric, p.second);
   }
 
@@ -205,7 +208,8 @@ void InterDexPass::run_pass_on_nonroot_store(
       /* fill_last_coldstart_dex=*/false, cross_dex_refs_config, refs_info,
       &xstore_refs, mgr.get_redex_options().min_sdk, m_sort_remaining_classes,
       m_methods_for_canary_clinit_reference, init_classes_with_side_effects,
-      m_transitively_close_interdex_order);
+      m_transitively_close_interdex_order,
+      m_minimize_cross_dex_refs_explore_alternatives);
 
   interdex.run_on_nonroot_store();
 
