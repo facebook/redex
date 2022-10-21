@@ -420,10 +420,9 @@ size_t CrossDexRefMinimizer::erase(DexClass* cls, bool emitted, bool reset) {
       if (!emitted) {
         continue;
       }
-      if (m_applied_refs.count(ref) != 0) {
+      if (!m_applied_refs.insert(ref).second) {
         continue;
       }
-      m_applied_refs.emplace(ref);
       if (frequency == 0) {
         continue;
       }
@@ -435,7 +434,6 @@ size_t CrossDexRefMinimizer::erase(DexClass* cls, bool emitted, bool reset) {
     // Updating m_class_infos and m_prioritized_classes
 
     m_class_infos.erase(class_info_it);
-    always_assert(m_class_infos.count(cls) == 0);
   }
 
   if (reset) {
