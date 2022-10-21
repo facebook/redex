@@ -702,7 +702,10 @@ DexLocation* RedexContext::make_location(std::string_view store_name,
   }
   std::unique_ptr<DexLocation> value(
       new DexLocation(std::string(store_name), std::string(file_name)));
-  key = std::make_pair(value->get_store_name(), value->get_file_name());
+  key = std::make_pair(std::string_view(value->get_store_name()),
+                       std::string_view(value->get_file_name()));
+  always_assert(key.first.data() == value->get_store_name().data());
+  always_assert(key.second.data() == value->get_file_name().data());
   return try_insert(key, std::move(value), &s_location_map);
 }
 
