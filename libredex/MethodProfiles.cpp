@@ -664,8 +664,26 @@ bool dexmethods_profiled_secondary_comparator::operator()(DexMethod* a,
   const auto& stats_map = m_method_profiles->method_stats("DittoCoverageMain");
   auto it_a = stats_map.find(a);
   auto it_b = stats_map.find(b);
-  if (it_a == stats_map.end() || it_b == stats_map.end()) {
+  if (it_a == stats_map.end() && it_b == stats_map.end()) {
     return m_initial_order.at(a) < m_initial_order.at(b);
+  } else if (it_a == stats_map.end()) {
+    double appear_pct_b = it_b->second.appear_percent;
+    // If appear pct b is 0.0, then we want a < b to have b be at the end.
+    // If appear pct b is bigger than 0.0, then we want initial ordering
+    if (appear_pct_b == 0.0) {
+      return true;
+    } else {
+      return m_initial_order.at(a) < m_initial_order.at(b);
+    }
+  } else if (it_b == stats_map.end()) {
+    double appear_pct_a = it_a->second.appear_percent;
+    // If appear pct a is 0.0, then we want a > b to have a be at the end.
+    // If appear pct a is bigger than 0.0, then we want initial ordering
+    if (appear_pct_a == 0.0) {
+      return false;
+    } else {
+      return m_initial_order.at(a) < m_initial_order.at(b);
+    }
   }
 
   double appear_pct_a = it_a->second.appear_percent;
