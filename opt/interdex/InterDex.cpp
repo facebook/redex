@@ -940,8 +940,8 @@ void InterDex::emit_remaining_classes_exploring_alternatives(
   };
 
   TRACE(IDEX, 1,
-        "Finding cross-dex-ref-minimization solutions, considering %ld "
-        "alternatives at each step",
+        "Finding cross-dex-ref-minimization solutions, considering %" PRId64
+        " alternatives at each step",
         m_minimize_cross_dex_refs_explore_alternatives);
 
   auto best = std::make_unique<Alternative>(
