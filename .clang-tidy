@@ -19,7 +19,7 @@ google-explicit-constructor,hicpp-explicit-conversions,
 llvm-namespace-comment,
 -facebook-hte-NullableReturn,
 '
-WarningsAsErrors: '*'
+WarningsAsErrors: 'performance-*,readability-*,misc-definitions-in-headers,modernize-use-*,llvm-namespace-comment,google-explicit-constructor,hicpp-explicit-conversions,modernize-make-shared,bugprone-*'
 CheckOptions:
   - key: modernize-use-override.IgnoreDestructors
     value: 1
