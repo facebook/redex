@@ -373,6 +373,11 @@ class ReflectionAnalysis final {
   boost::optional<AbstractObject> get_abstract_object(
       size_t reg, IRInstruction* insn) const;
 
+  boost::optional<AbstractObject> get_result_abstract_object(
+      IRInstruction* insn) const {
+    return get_abstract_object(RESULT_REGISTER, insn);
+  }
+
   boost::optional<ClassObjectSource> get_class_source(
       size_t reg, IRInstruction* insn) const;
 

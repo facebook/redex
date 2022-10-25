@@ -8,6 +8,7 @@
 #include "ModelSpecGenerator.h"
 #include "Model.h"
 #include "PassManager.h"
+#include "ReflectionAnalysis.h"
 #include "Show.h"
 #include "TypeUtil.h"
 #include "Walkers.h"
@@ -76,6 +77,62 @@ bool can_delete_class(const DexClass* cls, bool is_anonymous_class) {
     return false;
   }
   return true;
+}
+
+TypeSet collect_reflected_mergeables(
+    reflection::MetadataCache& refl_metadata_cache,
+    class_merging::ModelSpec* merging_spec,
+    DexMethod* method) {
+  TypeSet non_mergeables;
+  auto code = method->get_code();
+  if (!code) {
+    return non_mergeables;
+  }
+
+  std::unique_ptr<reflection::ReflectionAnalysis> analysis =
+      std::make_unique<reflection::ReflectionAnalysis>(
+          /* dex_method */ method,
+          /* context (interprocedural only) */ nullptr,
+          /* summary_query_fn (interprocedural only) */ nullptr,
+          /* metadata_cache */ &refl_metadata_cache);
+
+  if (!analysis->has_found_reflection()) {
+    return non_mergeables;
+  }
+
+  for (const auto& mie : InstructionIterable(code)) {
+    auto insn = mie.insn;
+    auto aobj = analysis->get_result_abstract_object(insn);
+
+    DexType* reflected_type = nullptr;
+    if (aobj && aobj->is_class() && aobj->get_dex_type()) {
+      reflected_type = const_cast<DexType*>(
+          type::get_element_type_if_array(aobj->get_dex_type()));
+    }
+    if (reflected_type != nullptr &&
+        merging_spec->merging_targets.count(reflected_type) > 0) {
+      non_mergeables.insert(reflected_type);
+      TRACE(CLMG, 5, "[reflected mergeable] %s (%s) in %s", SHOW(insn),
+            SHOW(reflected_type), SHOW(method));
+    }
+  }
+
+  return non_mergeables;
+}
+
+void drop_reflected_mergeables(const Scope& scope,
+                               class_merging::ModelSpec* merging_spec) {
+  reflection::MetadataCache refl_metadata_cache;
+  TypeSet reflected_mergeables =
+      walk::parallel::methods<TypeSet, MergeContainers<TypeSet>>(
+          scope, [&](DexMethod* meth) {
+            return collect_reflected_mergeables(refl_metadata_cache,
+                                                merging_spec, meth);
+          });
+
+  for (const auto* type : reflected_mergeables) {
+    merging_spec->merging_targets.erase(type);
+  }
 }
 
 } // namespace
@@ -153,6 +210,8 @@ void find_all_mergeables_and_roots(const TypeSystem& type_system,
       mgr.incr_metric("intf_" + show(intf), implementors.size());
     }
   }
+
+  drop_reflected_mergeables(scope, merging_spec);
   TRACE(CLMG, 9, "Discover %zu mergeables from %zu roots",
         merging_spec->merging_targets.size(), merging_spec->roots.size());
 }
