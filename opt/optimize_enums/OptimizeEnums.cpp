@@ -559,16 +559,7 @@ class OptimizeEnums {
   std::vector<DexClass*> collect_generated_classes() {
     std::vector<DexClass*> generated_classes;
 
-    // To avoid any cross store references, only accept generated classes
-    // that are in the root store (same for the Enums they reference).
-    XStoreRefs xstores(m_stores);
-
     for (const auto& cls : m_scope) {
-      size_t cls_store_idx = xstores.get_store_idx(cls->get_type());
-      if (cls_store_idx > 1) {
-        continue;
-      }
-
       auto& sfields = cls->get_sfields();
       const auto all_sfield_names_contain = [&sfields](const char* sub) {
         return std::all_of(
