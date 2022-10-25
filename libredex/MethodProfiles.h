@@ -223,4 +223,26 @@ class dexmethods_profiled_comparator {
   bool operator()(DexMethod* a, DexMethod* b);
 };
 
+// NOTE: Do not use this comparator directly in `std::sort` calls, as it is
+// stateful. libstdc++ copies the comparator during sorting. Instead, use
+// `std::ref` of a local instance.
+class dexmethods_profiled_secondary_comparator {
+  const MethodProfiles* m_method_profiles;
+  std::unordered_map<DexMethod*, size_t> m_initial_order;
+
+ public:
+  dexmethods_profiled_secondary_comparator(
+      const std::vector<DexMethod*>& initial_order,
+      const method_profiles::MethodProfiles* method_profiles,
+      const MethodProfileOrderingConfig* config);
+
+  // See class comment.
+  dexmethods_profiled_secondary_comparator(
+      const dexmethods_profiled_secondary_comparator&) = delete;
+  dexmethods_profiled_secondary_comparator& operator=(
+      const dexmethods_profiled_secondary_comparator&) = delete;
+
+  bool operator()(DexMethod* a, DexMethod* b);
+};
+
 } // namespace method_profiles
