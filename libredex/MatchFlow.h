@@ -347,7 +347,7 @@ struct result_t {
      * If the range contains precisely one instruction, returns it, otherwise
      * returns nullptr.
      */
-    IRInstruction* unique() {
+    IRInstruction* unique() const {
       return m_begin != m_end && std::next(m_begin) == m_end ? *m_begin
                                                              : nullptr;
     }

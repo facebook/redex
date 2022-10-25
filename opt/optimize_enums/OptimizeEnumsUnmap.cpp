@@ -107,33 +107,32 @@ class OptimizeEnumsUnmapCfg {
       auto cmp_it = m_cfg.find_insn(insn_cmp);
       always_assert(!cmp_it.is_end());
 
-      // ...find the aget instr supplying it. From the aget we find the
-      // field being used to do the lookup, as well as the instruction
-      // that results in the ordinal.
-      auto* insn_aget = res.matching(cmp_location, insn_cmp, aget_src).unique();
+      // ...find the aget instrs supplying it. From each aget we find the
+      // field being used to do the lookup, and can continue as long as
+      // all of them use the identical switchmap. While we're doing this
+      // we also gather up all the places an ordinal feeds into the map.
+      auto insn_aget_range = res.matching(cmp_location, insn_cmp, aget_src);
+      const auto [lookup_field, insn_ordinal_set] =
+          get_lookup_and_ordinals(res, insn_aget_range);
 
-      auto* insn_look = res.matching(m_flow.aget, insn_aget, 0).unique();
-      if (!insn_look) {
-        continue;
-      }
-
-      auto* insn_ordi = res.matching(m_flow.aget, insn_aget, 1).unique();
-      if (!insn_ordi) {
+      if (!lookup_field) {
+        // No clear switchmap to undo. Unactionable in general.
         continue;
       }
 
       // Grab the inverse lookup from case-value to enum. Our lookup
       // instruction was constrained to only match on fields present
       // in generated_switch_cases, so this entry always exists.
-      const auto* lookup_field = insn_look->get_field();
       const auto case_to_enum_it = m_generated_switch_cases.find(lookup_field);
 
       always_assert(case_to_enum_it != m_generated_switch_cases.end());
       const auto& case_to_enum = case_to_enum_it->second;
 
-      // Stash the ordinal in a new temporary register.
+      // Stash the ordinal sources in a new temporary register.
       const reg_t ordinal_reg = m_cfg.allocate_temp();
-      copy_ordinal(insn_ordi, ordinal_reg);
+      for (IRInstruction* insn_ordi : insn_ordinal_set) {
+        copy_ordinal(insn_ordi, ordinal_reg);
+      }
 
       // Finally, update the comparison.
       if (cmp_location == m_flow.cmp_switch) {
@@ -153,6 +152,37 @@ class OptimizeEnumsUnmapCfg {
                  const_src, insn_kase_range);
       }
     }
+  }
+
+  std::tuple<DexFieldRef*, std::unordered_set<IRInstruction*>>
+  get_lookup_and_ordinals(const mf::result_t& res,
+                          mf::result_t::src_range insn_aget_range) {
+    DexFieldRef* unique_lookup_field = nullptr;
+    std::unordered_set<IRInstruction*> insn_ordinal_set;
+
+    for (IRInstruction* insn_aget : insn_aget_range) {
+      // Every lookup field must be *identical* to safely unmap.
+      for (IRInstruction* insn_look : res.matching(m_flow.aget, insn_aget, 0)) {
+        auto* lookup_field = insn_look->get_field();
+
+        if (unique_lookup_field == nullptr) {
+          unique_lookup_field = lookup_field;
+        } else if (lookup_field != unique_lookup_field) {
+          TRACE(ENUM, 1, "Mismatched switchmap lookup fields; %s is not %s",
+                SHOW(lookup_field), SHOW(unique_lookup_field));
+
+          return {nullptr, {}};
+        }
+      }
+
+      // Remember where all the ordinal results are, for later copying.
+      for (IRInstruction* insn_ordi : res.matching(m_flow.aget, insn_aget, 1)) {
+        insn_ordinal_set.emplace(insn_ordi);
+      }
+    }
+
+    always_assert(!unique_lookup_field || !insn_ordinal_set.empty());
+    return std::make_tuple(unique_lookup_field, std::move(insn_ordinal_set));
   }
 
   void copy_ordinal(IRInstruction* insn_ordi, reg_t ordinal_reg) {
@@ -316,25 +346,24 @@ OptimizeEnumsUnmapMatchFlow::OptimizeEnumsUnmapMatchFlow(
   auto m_lookup = m::sget_object_(
       m::has_field(m::in<DexFieldRef*>(generated_switch_cases)));
 
-  // We allow multiple const sources for a comparison, hence the use
-  // of forall instead of uniq. This doesn't occur often, but there
-  // are scenarios where other passes leave such patterns.
-  auto uniq = mf::alias | mf::unique;
+  // We allow multiple sources to the aget as well as multiple consts for
+  // a comparison, hence the use of forall instead of unique. This doesn't
+  // occur often, but there are cases where other passes leave such patterns.
   auto forall = mf::alias | mf::forall;
 
   kase = flow.insn(m::const_());
   lookup = flow.insn(m_lookup);
   ordinal = flow.insn(m_invoke_ordinal);
-  aget = flow.insn(m::aget_()).src(0, lookup, uniq).src(1, ordinal, uniq);
+  aget = flow.insn(m::aget_()).src(0, lookup, forall).src(1, ordinal, forall);
 
   // See top of file for why IF_EQZ/IF_NEZ are omitted.
-  cmp_switch = flow.insn(m::switch_()).src(0, aget, uniq);
+  cmp_switch = flow.insn(m::switch_()).src(0, aget, forall);
   cmp_if_src0 = flow.insn(m::if_eq_() || m::if_ne_())
-                    .src(0, aget, uniq)
+                    .src(0, aget, forall)
                     .src(1, kase, forall);
   cmp_if_src1 = flow.insn(m::if_eq_() || m::if_ne_())
                     .src(0, kase, forall)
-                    .src(1, aget, uniq);
+                    .src(1, aget, forall);
 }
 
 OptimizeEnumsUnmap::OptimizeEnumsUnmap(
