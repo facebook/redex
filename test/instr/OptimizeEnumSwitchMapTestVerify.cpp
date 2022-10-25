@@ -60,6 +60,16 @@ TEST_F(PreVerify, JavaGeneratedClass) {
       collect_const_branch_cases(method_use_enumA_again);
   std::set<BranchCase> expected_switch_cases_A_again = {
       {BranchSource::ArrayGet, 1}, {BranchSource::ArrayGet, 3}};
+
+  auto method_use_bigEnum = DexMethod::get_method(
+      "Lcom/facebook/redextest/Foo;.useBigEnum:(Lcom/facebook/redextest/"
+      "BigEnum;)I");
+  auto switch_cases_bigEnum = collect_const_branch_cases(method_use_bigEnum);
+  std::set<BranchCase> expected_switch_cases_bigEnum;
+  for (int64_t i = 0; i != 20; ++i) {
+    expected_switch_cases_bigEnum.emplace(BranchSource::ArrayGet, 1 + i);
+  }
+  EXPECT_EQ(expected_switch_cases_bigEnum, switch_cases_bigEnum);
 }
 
 TEST_F(PostVerify, JavaGeneratedClass) {
@@ -106,4 +116,14 @@ TEST_F(PostVerify, JavaGeneratedClass) {
   std::set<BranchCase> expected_switch_cases_A_again = {
       {BranchSource::VirtualCall, 0}, {BranchSource::VirtualCall, 1}};
   EXPECT_EQ(expected_switch_cases_A_again, switch_cases_A_again);
+
+  auto method_use_bigEnum = DexMethod::get_method(
+      "Lcom/facebook/redextest/Foo;.useBigEnum:(Lcom/facebook/redextest/"
+      "BigEnum;)I");
+  auto switch_cases_bigEnum = collect_const_branch_cases(method_use_bigEnum);
+  std::set<BranchCase> expected_switch_cases_bigEnum;
+  for (int64_t i = 0; i != 20; ++i) {
+    expected_switch_cases_bigEnum.emplace(BranchSource::VirtualCall, i);
+  }
+  EXPECT_EQ(expected_switch_cases_bigEnum, switch_cases_bigEnum);
 }

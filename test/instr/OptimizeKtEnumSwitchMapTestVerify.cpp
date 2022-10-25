@@ -34,6 +34,11 @@ constexpr const char* name_useAAgain =
     "Lcom/facebook/redextest/kt/A;"
     ")I";
 
+constexpr const char* name_useBig =
+    "Lcom/facebook/redextest/kt/OptimizeEnumSwitchMapTestKt;.useBig:("
+    "Lcom/facebook/redextest/kt/Big;"
+    ")I";
+
 // Note: Different versions of compilers (javac/kotlinc/d8) can generate
 // different keys. So we don't check the specific values of the keys in
 // PreVerify, but only that they are positive and unique.
@@ -64,14 +69,17 @@ TEST_F(PreVerify, KotlinGeneratedClass) {
   auto* meth_useA = DexMethod::get_method(name_useA);
   auto* meth_useB = DexMethod::get_method(name_useB);
   auto* meth_useAAgain = DexMethod::get_method(name_useAAgain);
+  auto* meth_useBig = DexMethod::get_method(name_useBig);
 
   auto switch_cases_A = collect_const_branch_cases(meth_useA);
   auto switch_cases_B = collect_const_branch_cases(meth_useB);
   auto switch_cases_A_again = collect_const_branch_cases(meth_useAAgain);
+  auto switch_cases_Big = collect_const_branch_cases(meth_useBig);
 
   expect_kotlin_switchmapping_of_size(switch_cases_A, 2);
   expect_kotlin_switchmapping_of_size(switch_cases_B, 2);
   expect_kotlin_switchmapping_of_size(switch_cases_A_again, 2);
+  expect_kotlin_switchmapping_of_size(switch_cases_Big, 20);
 }
 
 TEST_F(PostVerify, KotlinGeneratedClass) {
@@ -90,10 +98,12 @@ TEST_F(PostVerify, KotlinGeneratedClass) {
   auto* meth_useA = DexMethod::get_method(name_useA);
   auto* meth_useB = DexMethod::get_method(name_useB);
   auto* meth_useAAgain = DexMethod::get_method(name_useAAgain);
+  auto* meth_useBig = DexMethod::get_method(name_useBig);
 
   auto switch_cases_A = collect_const_branch_cases(meth_useA);
   auto switch_cases_B = collect_const_branch_cases(meth_useB);
   auto switch_cases_A_again = collect_const_branch_cases(meth_useAAgain);
+  auto switch_cases_Big = collect_const_branch_cases(meth_useBig);
 
   // OptimizeEnumsPass replaces the old keys with ordinals. Here we check if the
   // keys are expected.
@@ -105,8 +115,13 @@ TEST_F(PostVerify, KotlinGeneratedClass) {
                                                {BranchSource::VirtualCall, 2}};
   std::set<BranchCase> expected_switch_cases_A_again{
       {BranchSource::VirtualCall, 0}, {BranchSource::VirtualCall, 1}};
+  std::set<BranchCase> expected_switch_cases_Big;
+  for (int64_t i = 0; i != 20; ++i) {
+    expected_switch_cases_Big.emplace(BranchSource::VirtualCall, i);
+  }
 
   EXPECT_EQ(expected_switch_cases_A, switch_cases_A);
   EXPECT_EQ(expected_switch_cases_B, switch_cases_B);
   EXPECT_EQ(expected_switch_cases_A_again, switch_cases_A_again);
+  EXPECT_EQ(expected_switch_cases_Big, switch_cases_Big);
 }
