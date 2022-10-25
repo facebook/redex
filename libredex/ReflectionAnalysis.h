@@ -165,6 +165,20 @@ struct AbstractObject final : public sparta::AbstractValue<AbstractObject> {
     return sparta::AbstractValueKind::Value;
   }
 
+  DexType* get_dex_type() const { return dex_type; }
+
+  bool is_object() const { return obj_kind == OBJECT; }
+
+  bool is_int() const { return obj_kind == INT; }
+
+  bool is_string() const { return obj_kind == STRING; }
+
+  bool is_class() const { return obj_kind == CLASS; }
+
+  bool is_field() const { return obj_kind == FIELD; }
+
+  bool is_method() const { return obj_kind == METHOD; }
+
   bool leq(const AbstractObject& other) const override;
 
   bool equals(const AbstractObject& other) const override;
