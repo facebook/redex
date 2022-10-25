@@ -34,6 +34,21 @@ constexpr const char* name_useAAgain =
     "Lcom/facebook/redextest/kt/A;"
     ")I";
 
+// Note: Different versions of compilers (javac/kotlinc/d8) can generate
+// different keys. So we don't check the specific values of the keys in
+// PreVerify, but only that they are positive and unique.
+void expect_kotlin_switchmapping_of_size(
+    const std::set<BranchCase>& branch_cases, size_t expected_size) {
+  std::set<int64_t> seen;
+  for (const auto& [source, value] : branch_cases) {
+    EXPECT_EQ(source, BranchSource::ArrayGet);
+    EXPECT_GT(value, 0);
+    EXPECT_TRUE(seen.emplace(value).second);
+  }
+
+  EXPECT_EQ(seen.size(), expected_size);
+}
+
 } // namespace
 
 TEST_F(PreVerify, KotlinGeneratedClass) {
@@ -54,11 +69,9 @@ TEST_F(PreVerify, KotlinGeneratedClass) {
   auto switch_cases_B = collect_const_branch_cases(meth_useB);
   auto switch_cases_A_again = collect_const_branch_cases(meth_useAAgain);
 
-  // Note: Different versions of compilers (javac/kotlinc/d8) can generate
-  // different keys. So we don't check the values of the keys in PreVerify.
-  EXPECT_EQ(switch_cases_A.size(), 2);
-  EXPECT_EQ(switch_cases_B.size(), 2);
-  EXPECT_EQ(switch_cases_A_again.size(), 2);
+  expect_kotlin_switchmapping_of_size(switch_cases_A, 2);
+  expect_kotlin_switchmapping_of_size(switch_cases_B, 2);
+  expect_kotlin_switchmapping_of_size(switch_cases_A_again, 2);
 }
 
 TEST_F(PostVerify, KotlinGeneratedClass) {
