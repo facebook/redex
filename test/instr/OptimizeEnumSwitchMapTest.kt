@@ -13,7 +13,11 @@ import org.junit.Test
 enum class A {
   A0,
   A1,
-  A2
+  A2;
+
+  companion object {
+    val MY_FAVORITE: A = A1
+  }
 }
 
 enum class B {

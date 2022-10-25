@@ -14,6 +14,8 @@ enum EnumA {
   TYPE_A_0,
   TYPE_A_1,
   TYPE_A_2;
+
+  public static final EnumA MY_FAVORITE = EnumA.TYPE_A_1;
 }
 
 enum EnumB {
