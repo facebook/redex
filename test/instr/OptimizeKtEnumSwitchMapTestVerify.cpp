@@ -108,10 +108,8 @@ TEST_F(PostVerify, KotlinGeneratedClass) {
   // OptimizeEnumsPass replaces the old keys with ordinals. Here we check if the
   // keys are expected.
   std::set<BranchCase> expected_switch_cases_A{{BranchSource::VirtualCall, 0},
-                                               {BranchSource::VirtualCall, 1},
                                                {BranchSource::VirtualCall, 2}};
   std::set<BranchCase> expected_switch_cases_B{{BranchSource::VirtualCall, 0},
-                                               {BranchSource::VirtualCall, 1},
                                                {BranchSource::VirtualCall, 2}};
   std::set<BranchCase> expected_switch_cases_A_again{
       {BranchSource::VirtualCall, 0}, {BranchSource::VirtualCall, 1}};

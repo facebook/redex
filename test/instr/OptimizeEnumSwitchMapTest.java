@@ -90,6 +90,32 @@ class Foo {
     }
   }
 
+  boolean useEnumB_again(EnumB element) {
+    switch (element) {
+      case TYPE_B_0:
+        return computation(1);
+
+      case TYPE_B_1:
+        // When DedupBlocksPass runs, each branch will merge with
+        // a block of the other two switch cases. This defeats any
+        // syntactic switch-equivalent if-statement finding.
+        if (A_NUMBER > 101) {
+          return computation(1);
+        } else {
+          return computation(2);
+        }
+
+      case TYPE_B_2:
+        return computation(2);
+    }
+
+    return true;
+  }
+
+  boolean computation(int value) {
+    return value == 2;
+  }
+
   int with_other_code(EnumB element, boolean b, Object o) {
     try {
       if (b) {
@@ -179,6 +205,10 @@ public class OptimizeEnumSwitchMapTest {
     assertThat(foo.useEnumB(EnumB.TYPE_B_0)).isEqualTo(3);
     assertThat(foo.useEnumB(EnumB.TYPE_B_1)).isEqualTo(4);
     assertThat(foo.useEnumB(EnumB.TYPE_B_2)).isEqualTo(5);
+
+    assertThat(foo.useEnumB_again(EnumB.TYPE_B_0)).isEqualTo(false);
+    assertThat(foo.useEnumB_again(EnumB.TYPE_B_1)).isEqualTo(true);
+    assertThat(foo.useEnumB_again(EnumB.TYPE_B_2)).isEqualTo(true);
 
     Object o = new Object();
     assertThat(foo.with_other_code(EnumB.TYPE_B_0, true, null)).isEqualTo(0);

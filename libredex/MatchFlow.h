@@ -290,6 +290,11 @@ inline constexpr flag_t operator|(QuantFlag q, AliasFlag a) { return {a, q}; }
 
 struct location_t {
   /**
+   * A null location. Cannot be used in a `find()` invocation.
+   */
+  location_t() : location_t(nullptr, 0) {}
+
+  /**
    * Add a data-flow constraint:  The operand referred to by ix must be supplied
    * by an instruction matching the constraint at l.
    *

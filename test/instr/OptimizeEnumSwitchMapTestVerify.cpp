@@ -61,6 +61,16 @@ TEST_F(PreVerify, JavaGeneratedClass) {
   std::set<BranchCase> expected_switch_cases_A_again = {
       {BranchSource::ArrayGet, 1}, {BranchSource::ArrayGet, 3}};
 
+  auto method_use_enumB_again = DexMethod::get_method(
+      "Lcom/facebook/redextest/Foo;.useEnumB_again:(Lcom/facebook/redextest/"
+      "EnumB;)Z");
+  auto switch_cases_B_again =
+      collect_const_branch_cases(method_use_enumB_again);
+  std::set<BranchCase> expected_switch_cases_B_again = {
+      {BranchSource::ArrayGet, 1},
+      {BranchSource::ArrayGet, 2},
+      {BranchSource::ArrayGet, 3}};
+
   auto method_use_bigEnum = DexMethod::get_method(
       "Lcom/facebook/redextest/Foo;.useBigEnum:(Lcom/facebook/redextest/"
       "BigEnum;)I");
@@ -93,9 +103,7 @@ TEST_F(PostVerify, JavaGeneratedClass) {
       "EnumA;)I");
   auto switch_cases_A = collect_const_branch_cases(method_use_enumA);
   std::set<BranchCase> expected_switch_cases_A = {
-      {BranchSource::VirtualCall, 0},
-      {BranchSource::VirtualCall, 1},
-      {BranchSource::VirtualCall, 2}};
+      {BranchSource::VirtualCall, 0}, {BranchSource::VirtualCall, 2}};
   EXPECT_EQ(expected_switch_cases_A, switch_cases_A);
 
   auto method_use_enumB = DexMethod::get_method(
@@ -103,9 +111,7 @@ TEST_F(PostVerify, JavaGeneratedClass) {
       "EnumB;)I");
   auto switch_cases_B = collect_const_branch_cases(method_use_enumB);
   std::set<BranchCase> expected_switch_cases_B = {
-      {BranchSource::VirtualCall, 0},
-      {BranchSource::VirtualCall, 1},
-      {BranchSource::VirtualCall, 2}};
+      {BranchSource::VirtualCall, 0}, {BranchSource::VirtualCall, 2}};
   EXPECT_EQ(expected_switch_cases_B, switch_cases_B);
 
   auto method_use_enumA_again = DexMethod::get_method(
@@ -116,6 +122,16 @@ TEST_F(PostVerify, JavaGeneratedClass) {
   std::set<BranchCase> expected_switch_cases_A_again = {
       {BranchSource::VirtualCall, 0}, {BranchSource::VirtualCall, 1}};
   EXPECT_EQ(expected_switch_cases_A_again, switch_cases_A_again);
+
+  auto method_use_enumB_again = DexMethod::get_method(
+      "Lcom/facebook/redextest/Foo;.useEnumB_again:(Lcom/facebook/redextest/"
+      "EnumB;)Z");
+  auto switch_cases_B_again =
+      collect_const_branch_cases(method_use_enumB_again);
+  std::set<BranchCase> expected_switch_cases_B_again = {
+      {BranchSource::VirtualCall, 1},
+      {BranchSource::VirtualCall, 2},
+      {BranchSource::VirtualCall, 3}};
 
   auto method_use_bigEnum = DexMethod::get_method(
       "Lcom/facebook/redextest/Foo;.useBigEnum:(Lcom/facebook/redextest/"

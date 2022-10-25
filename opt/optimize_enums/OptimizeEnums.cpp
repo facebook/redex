@@ -17,6 +17,7 @@
 #include "IRCode.h"
 #include "MatchFlow.h"
 #include "OptimizeEnumsAnalysis.h"
+#include "OptimizeEnumsUnmap.h"
 #include "PassManager.h"
 #include "ProguardMap.h"
 #include "Resolver.h"
@@ -26,8 +27,8 @@
 
 /**
  * 1. The pass tries to remove synthetic switch map classes for enums
- * completely, by replacing the access to thelookup table with the use of the
- * enum ordinal itself.
+ * completely, by replacing the access to the lookup table with the use
+ * of the enum ordinal itself.
  * Background of synthetic switch map classes:
  *   javac converts enum switches to a packed switch. In order to do this, for
  *   every use of an enum in a switch statement, an anonymous class is generated
@@ -43,26 +44,12 @@ namespace {
 // Map the field holding the lookup table to its associated enum type.
 using LookupTableToEnum = std::unordered_map<DexField*, DexType*>;
 
-// Map the static fields holding enumerands to their ordinal number (passed in
-// to their constructor).
-using EnumFieldToOrdinal = std::unordered_map<DexField*, size_t>;
-
 // Sets of types.  Intended to be sub-classes of Ljava/lang/Enum; but not
 // guaranteed by the type.
 using EnumTypes = std::unordered_set<DexType*>;
 
-// Lookup tables in generated classes map enum ordinals to the integers they
-// are represented by in switch statements using that lookup table:
-//
-//   lookup[enum.ordinal()] = case;
-//
-// GeneratedSwitchCases represent the reverse mapping for a lookup table:
-//
-//   gsc[lookup][case] = enum
-//
-// with lookup and enum identified by their fields.
-using GeneratedSwitchCases =
-    std::unordered_map<DexField*, std::unordered_map<size_t, DexField*>>;
+using GeneratedSwitchCases = optimize_enums::GeneratedSwitchCases;
+using EnumFieldToOrdinal = optimize_enums::EnumFieldToOrdinal;
 
 constexpr const char* METRIC_NUM_SYNTHETIC_CLASSES = "num_synthetic_classes";
 constexpr const char* METRIC_NUM_LOOKUP_TABLES = "num_lookup_tables";
@@ -689,31 +676,52 @@ class OptimizeEnums {
       const EnumFieldToOrdinal& enum_field_to_ordinal,
       const GeneratedSwitchCases& generated_switch_cases) {
 
-    namespace cp = constant_propagation;
+    const optimize_enums::OptimizeEnumsUnmap unmap(enum_field_to_ordinal,
+                                                   generated_switch_cases);
+
     walk::parallel::code(m_scope, [&](DexMethod*, IRCode& code) {
       always_assert(code.cfg().editable());
       cfg::ControlFlowGraph& cfg = code.cfg();
       cfg.calculate_exit_block();
 
-      optimize_enums::Iterator fixpoint(&cfg);
-      fixpoint.run(optimize_enums::Environment());
-      std::unordered_set<IRInstruction*> switches;
-      for (const auto& info : fixpoint.collect()) {
-        const auto pair = switches.insert((*info.branch)->insn);
-        bool insert_occurred = pair.second;
-        if (!insert_occurred) {
-          // Make sure we don't have any duplicate switch opcodes. We can't
-          // change the register of a switch opcode to two different registers.
-          continue;
-        }
-        if (!check_lookup_table_usage(lookup_table_to_enum,
-                                      generated_switch_cases, info)) {
-          continue;
-        }
-        remove_lookup_table_usage(enum_field_to_ordinal, generated_switch_cases,
-                                  info);
+      // TODO(ngorski): This is left in just to minimize diff size
+      // for review, and is deleted later in the diff stack.
+      const bool kUseMatchFlow = true;
+      if (kUseMatchFlow) {
+        unmap.unmap_switchmaps(cfg);
+      } else {
+        remove_generated_classes_usage_old(lookup_table_to_enum,
+                                           enum_field_to_ordinal,
+                                           generated_switch_cases, cfg);
       }
     });
+  }
+
+  void remove_generated_classes_usage_old(
+      const LookupTableToEnum& lookup_table_to_enum,
+      const EnumFieldToOrdinal& enum_field_to_ordinal,
+      const GeneratedSwitchCases& generated_switch_cases,
+      cfg::ControlFlowGraph& cfg) {
+    optimize_enums::Iterator fixpoint(&cfg);
+    fixpoint.run(optimize_enums::Environment());
+
+    std::unordered_set<IRInstruction*> switches;
+    for (const auto& info : fixpoint.collect()) {
+      const auto pair = switches.insert((*info.branch)->insn);
+      bool insert_occurred = pair.second;
+      if (!insert_occurred) {
+        // Make sure we don't have any duplicate switch opcodes. We can't
+        // change the register of a switch opcode to two different
+        // registers.
+        continue;
+      }
+      if (!check_lookup_table_usage(lookup_table_to_enum,
+                                    generated_switch_cases, info)) {
+        continue;
+      }
+      remove_lookup_table_usage(enum_field_to_ordinal, generated_switch_cases,
+                                info);
+    }
   }
 
   /**
@@ -804,16 +812,16 @@ class OptimizeEnums {
 
       // if-else chains will load constants to compare against. Sometimes the
       // leaves will use these values so we have to copy those values to the
-      // beginning of the leaf blocks. Any dead instructions will be cleaned up
-      // by LDCE.
+      // beginning of the leaf blocks. Any dead instructions will be cleaned
+      // up by LDCE.
       const auto& extra_loads = finder.extra_loads();
       const auto& loads_for_this_leaf = extra_loads.find(leaf);
       if (loads_for_this_leaf != extra_loads.end()) {
         for (const auto& register_and_insn : loads_for_this_leaf->second) {
           IRInstruction* insn = register_and_insn.second;
           if (insn != nullptr) {
-            // null instruction pointers are used to signify the upper half of a
-            // wide load.
+            // null instruction pointers are used to signify the upper half of
+            // a wide load.
             auto copy = new IRInstruction(*insn);
             TRACE(ENUM, 4, "adding %s to B%zu", SHOW(copy), leaf->id());
             leaf->push_front(copy);
@@ -833,8 +841,8 @@ class OptimizeEnums {
       } else {
         // Ignore blocks with...
         // - negative case key, which should be dead code
-        // - 0 case key, as long as the leaf block is the fallthrough block, as
-        //   0 encodes the default case
+        // - 0 case key, as long as the leaf block is the fallthrough block,
+        // as 0 encodes the default case
         always_assert_log(
             *old_case_key < 0 || (*old_case_key == 0 && fallthrough == leaf),
             "can't find case key %d leaving block %zu\n%s\nin %s\n",
