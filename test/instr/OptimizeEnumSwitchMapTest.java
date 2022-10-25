@@ -46,6 +46,8 @@ enum BigEnum {
 }
 
 class Foo {
+  static int A_NUMBER = 0;
+
   int useEnumA(EnumA element) {
     switch (element) {
       case TYPE_A_0:
@@ -79,7 +81,13 @@ class Foo {
         return 7;
     }
 
-    return 8;
+    // When turned into an if-tree, the default case will contain an
+    // "unexpected" sget instruction and break any syntax matching.
+    if (A_NUMBER < 100) {
+      return 8;
+    } else {
+      return 9;
+    }
   }
 
   int with_other_code(EnumB element, boolean b, Object o) {

@@ -5,11 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <unordered_set>
-
 #include "Debug.h"
 #include "DexInstruction.h"
 #include "SwitchMap.h"
+#include "verify/OptimizeEnumCommon.h"
 #include "verify/VerifyUtil.h"
 
 namespace {
@@ -35,22 +34,6 @@ constexpr const char* name_useAAgain =
     "Lcom/facebook/redextest/kt/A;"
     ")I";
 
-std::unordered_set<size_t> collect_switch_cases(DexMethodRef* method_ref) {
-  auto method = static_cast<DexMethod*>(method_ref);
-  method->balloon();
-
-  auto code = method->get_code();
-  std::unordered_set<size_t> switch_cases;
-
-  auto smp =
-      SwitchMethodPartitioning::create(code, /* verify_default_case */ false);
-  redex_assert(smp);
-  for (const auto& entry : smp->get_key_to_block()) {
-    switch_cases.insert(entry.first);
-  }
-  return switch_cases;
-}
-
 } // namespace
 
 TEST_F(PreVerify, KotlinGeneratedClass) {
@@ -67,9 +50,9 @@ TEST_F(PreVerify, KotlinGeneratedClass) {
   auto* meth_useB = DexMethod::get_method(name_useB);
   auto* meth_useAAgain = DexMethod::get_method(name_useAAgain);
 
-  auto switch_cases_A = collect_switch_cases(meth_useA);
-  auto switch_cases_B = collect_switch_cases(meth_useB);
-  auto switch_cases_A_again = collect_switch_cases(meth_useAAgain);
+  auto switch_cases_A = collect_const_branch_cases(meth_useA);
+  auto switch_cases_B = collect_const_branch_cases(meth_useB);
+  auto switch_cases_A_again = collect_const_branch_cases(meth_useAAgain);
 
   // Note: Different versions of compilers (javac/kotlinc/d8) can generate
   // different keys. So we don't check the values of the keys in PreVerify.
@@ -95,15 +78,20 @@ TEST_F(PostVerify, KotlinGeneratedClass) {
   auto* meth_useB = DexMethod::get_method(name_useB);
   auto* meth_useAAgain = DexMethod::get_method(name_useAAgain);
 
-  auto switch_cases_A = collect_switch_cases(meth_useA);
-  auto switch_cases_B = collect_switch_cases(meth_useB);
-  auto switch_cases_A_again = collect_switch_cases(meth_useAAgain);
+  auto switch_cases_A = collect_const_branch_cases(meth_useA);
+  auto switch_cases_B = collect_const_branch_cases(meth_useB);
+  auto switch_cases_A_again = collect_const_branch_cases(meth_useAAgain);
 
   // OptimizeEnumsPass replaces the old keys with ordinals. Here we check if the
   // keys are expected.
-  std::unordered_set<size_t> expected_switch_cases_A{0, 2};
-  std::unordered_set<size_t> expected_switch_cases_B{0, 2};
-  std::unordered_set<size_t> expected_switch_cases_A_again{0, 1};
+  std::set<BranchCase> expected_switch_cases_A{{BranchSource::VirtualCall, 0},
+                                               {BranchSource::VirtualCall, 1},
+                                               {BranchSource::VirtualCall, 2}};
+  std::set<BranchCase> expected_switch_cases_B{{BranchSource::VirtualCall, 0},
+                                               {BranchSource::VirtualCall, 1},
+                                               {BranchSource::VirtualCall, 2}};
+  std::set<BranchCase> expected_switch_cases_A_again{
+      {BranchSource::VirtualCall, 0}, {BranchSource::VirtualCall, 1}};
 
   EXPECT_EQ(expected_switch_cases_A, switch_cases_A);
   EXPECT_EQ(expected_switch_cases_B, switch_cases_B);

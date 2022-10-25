@@ -308,6 +308,12 @@ struct location_t {
    */
   location_t srcs_from(src_index_t lb, location_t l, flag_t flags = {});
 
+  bool operator==(const location_t& other) const {
+    return std::tie(m_owner, m_ix) == std::tie(other.m_owner, other.m_ix);
+  }
+
+  bool operator!=(const location_t& other) const { return !(*this == other); }
+
  private:
   friend struct flow_t;
   friend struct result_t;
