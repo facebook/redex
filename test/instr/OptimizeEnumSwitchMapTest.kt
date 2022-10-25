@@ -66,6 +66,14 @@ public fun useAAgain(elem: A): Int =
       else -> 48
     }
 
+public fun useBAgain(elem: B?): Int =
+    when (elem) {
+      B.B0 -> 49
+      B.B2 -> 51
+      null -> 52
+      else -> 50
+    }
+
 public fun withOtherCode(elem: B, b: Boolean, o: Any?): Int =
     try {
       if (b) {
@@ -107,6 +115,32 @@ public fun useBig(elem: Big): Int =
       else -> throw IllegalArgumentException()
     }
 
+public fun useBigAgain(elem: Big?): Int =
+    when (elem) {
+      Big.BIG01 -> 21
+      Big.BIG02 -> 22
+      Big.BIG03 -> 23
+      Big.BIG04 -> 24
+      Big.BIG05 -> 25
+      Big.BIG06 -> 26
+      Big.BIG07 -> 27
+      Big.BIG08 -> 28
+      Big.BIG09 -> 29
+      Big.BIG10 -> 30
+      Big.BIG11 -> 31
+      Big.BIG12 -> 32
+      Big.BIG13 -> 33
+      Big.BIG14 -> 34
+      Big.BIG15 -> 35
+      Big.BIG16 -> 36
+      Big.BIG17 -> 37
+      Big.BIG18 -> 38
+      Big.BIG19 -> 39
+      Big.BIG20 -> 40
+      null -> 41
+      else -> throw IllegalArgumentException()
+    }
+
 class OptimizeEnumSwitchMapTest {
   @Test
   fun testA() {
@@ -124,6 +158,11 @@ class OptimizeEnumSwitchMapTest {
     assertThat(useB(B.B0)).isEqualTo(43)
     assertThat(useB(B.B1)).isEqualTo(44)
     assertThat(useB(B.B2)).isEqualTo(45)
+
+    assertThat(useBAgain(B.B0)).isEqualTo(49)
+    assertThat(useBAgain(B.B1)).isEqualTo(50)
+    assertThat(useBAgain(B.B2)).isEqualTo(51)
+    assertThat(useBAgain(null)).isEqualTo(52)
 
     val o = Object()
     assertThat(withOtherCode(B.B0, true, null)).isEqualTo(49)
@@ -156,5 +195,27 @@ class OptimizeEnumSwitchMapTest {
     assertThat(useBig(Big.BIG18)).isEqualTo(18)
     assertThat(useBig(Big.BIG19)).isEqualTo(19)
     assertThat(useBig(Big.BIG20)).isEqualTo(20)
+
+    assertThat(useBigAgain(Big.BIG01)).isEqualTo(21)
+    assertThat(useBigAgain(Big.BIG02)).isEqualTo(22)
+    assertThat(useBigAgain(Big.BIG03)).isEqualTo(23)
+    assertThat(useBigAgain(Big.BIG04)).isEqualTo(24)
+    assertThat(useBigAgain(Big.BIG05)).isEqualTo(25)
+    assertThat(useBigAgain(Big.BIG06)).isEqualTo(26)
+    assertThat(useBigAgain(Big.BIG07)).isEqualTo(27)
+    assertThat(useBigAgain(Big.BIG08)).isEqualTo(28)
+    assertThat(useBigAgain(Big.BIG09)).isEqualTo(29)
+    assertThat(useBigAgain(Big.BIG10)).isEqualTo(30)
+    assertThat(useBigAgain(Big.BIG11)).isEqualTo(31)
+    assertThat(useBigAgain(Big.BIG12)).isEqualTo(32)
+    assertThat(useBigAgain(Big.BIG13)).isEqualTo(33)
+    assertThat(useBigAgain(Big.BIG14)).isEqualTo(34)
+    assertThat(useBigAgain(Big.BIG15)).isEqualTo(35)
+    assertThat(useBigAgain(Big.BIG16)).isEqualTo(36)
+    assertThat(useBigAgain(Big.BIG17)).isEqualTo(37)
+    assertThat(useBigAgain(Big.BIG18)).isEqualTo(38)
+    assertThat(useBigAgain(Big.BIG19)).isEqualTo(39)
+    assertThat(useBigAgain(Big.BIG20)).isEqualTo(40)
+    assertThat(useBigAgain(null)).isEqualTo(41)
   }
 }

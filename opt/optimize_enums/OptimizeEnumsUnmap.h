@@ -43,7 +43,7 @@ class OptimizeEnumsUnmapMatchFlow final {
   mf::location_t kase;
   mf::location_t lookup;
   mf::location_t ordinal;
-  mf::location_t aget;
+  mf::location_t aget_or_m1;
 
   // A switch is the primary way a lookup will be used, but some
   // switches will be transformed into a series of ifs instead.

@@ -25,7 +25,9 @@
 
 enum class BranchSource {
   ArrayGet,
+  ArrayGetOrConstMinus1,
   VirtualCall,
+  VirtualCallOrConstMinus1,
 };
 
 using BranchCase = std::tuple<BranchSource, int64_t>;
