@@ -770,6 +770,47 @@ bool BoxedBooleanAnalyzer::analyze_invoke(
   }
 }
 
+bool StringAnalyzer::analyze_invoke(const IRInstruction* insn,
+                                    ConstantEnvironment* env) {
+  DexMethod* method =
+      resolve_method(insn->get_method(), opcode_to_search(insn));
+  if (method == nullptr) {
+    return false;
+  }
+
+  auto maybe_string = [&](int arg_idx) -> const DexString* {
+    auto value = env->get(insn->src(arg_idx));
+    if (value.is_top() || value.is_bottom()) {
+      return nullptr;
+    }
+    if (const auto& string_value_opt = value.maybe_get<StringDomain>()) {
+      return *string_value_opt->get_constant();
+    }
+    return nullptr;
+  };
+
+  if (method == method::java_lang_String_equals()) {
+    always_assert(insn->srcs_size() == 2);
+    if (const auto* arg0 = maybe_string(0)) {
+      if (const auto* arg1 = maybe_string(1)) {
+        // pointer comparison is okay, DexStrings are internalized
+        int64_t res = arg0 == arg1;
+        env->set(RESULT_REGISTER, SignedConstantDomain(res));
+        return true;
+      }
+    }
+  } else if (method == method::java_lang_String_hashCode()) {
+    always_assert(insn->srcs_size() == 1);
+    if (const auto* arg0 = maybe_string(0)) {
+      int64_t res = arg0->java_hashcode();
+      env->set(RESULT_REGISTER, SignedConstantDomain(res));
+      return true;
+    }
+  }
+
+  return false;
+}
+
 ImmutableAttributeAnalyzerState::Initializer&
 ImmutableAttributeAnalyzerState::add_initializer(DexMethod* initialize_method,
                                                  DexMethod* attr) {

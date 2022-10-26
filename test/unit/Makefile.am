@@ -399,6 +399,8 @@ static_relo_v2_test_SOURCES = StaticReloV2Test.cpp
 
 # stringbuilder_outline_test_SOURCES = StringBuilderOutlinerTest.cpp
 
+string_propagation_test_SOURCES = constant-propagation/StringPropagationTest.cpp
+
 strip_debug_info_test_SOURCES = StripDebugInfoTest.cpp
 
 switch_dispatch_test_SOURCES = SwitchDispatchTest.cpp

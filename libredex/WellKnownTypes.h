@@ -59,4 +59,7 @@
   FOR_EACH(java_lang_Throwable_fillInStackTrace,                              \
            "Ljava/lang/Throwable;.fillInStackTrace:()Ljava/lang/Throwable;")  \
   FOR_EACH(java_lang_RuntimeException_init_String,                            \
-           "Ljava/lang/RuntimeException;.<init>:(Ljava/lang/String;)V")
+           "Ljava/lang/RuntimeException;.<init>:(Ljava/lang/String;)V")       \
+  FOR_EACH(java_lang_String_equals,                                           \
+           "Ljava/lang/String;.equals:(Ljava/lang/Object;)Z")                 \
+  FOR_EACH(java_lang_String_hashCode, "Ljava/lang/String;.hashCode:()I")

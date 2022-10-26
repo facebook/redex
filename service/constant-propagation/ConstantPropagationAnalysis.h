@@ -385,6 +385,8 @@ class StringAnalyzer
     env->set(RESULT_REGISTER, StringDomain(insn->get_string()));
     return true;
   }
+
+  static bool analyze_invoke(const IRInstruction*, ConstantEnvironment*);
 };
 
 class ConstantClassObjectAnalyzer
