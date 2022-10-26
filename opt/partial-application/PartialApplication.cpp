@@ -361,6 +361,9 @@ bool filter(const RefChecker& ref_checker,
       always_assert(signed_value2);
       return filter(ref_checker, enum_utils_cache, *signed_value2);
     }
+  } else if (const auto& string_value = value.maybe_get<StringDomain>()) {
+    // TODO: Support strings.
+    return false;
   } else {
     not_reached_log("unexpected value: %s", SHOW(value));
   }

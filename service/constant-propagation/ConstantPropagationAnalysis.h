@@ -558,6 +558,7 @@ using ConstantPrimitiveAndBoxedAnalyzer =
                                 ImmutableAttributeAnalyzer,
                                 EnumFieldAnalyzer,
                                 BoxedBooleanAnalyzer,
+                                StringAnalyzer,
                                 ApiLevelAnalyzer,
                                 PrimitiveAnalyzer>;
 

@@ -1785,3 +1785,128 @@ TEST_F(MethodInlineTest, dont_inline_sketchy_callee_into_into_try) {
     EXPECT_EQ(inlined.size(), 0);
   }
 }
+
+TEST_F(MethodInlineTest, inline_with_string_analyzer) {
+  auto foo_cls = create_a_class("LFoo;");
+
+  DexMethod* caller =
+      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.caller:()V"));
+  caller->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
+
+  DexMethod* callee = static_cast<DexMethod*>(
+      DexMethod::make_method("LFoo;.callee:(Ljava/lang/Object;)V"));
+  callee->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
+
+  foo_cls->add_method(caller);
+  foo_cls->add_method(callee);
+
+  const auto& caller_str = R"(
+    (
+      (const-string "Some string")
+      (move-result-pseudo-object v0)
+      (invoke-static (v0) "LFoo;.callee:(Ljava/lang/Object;)V")
+      (invoke-static (v0) "LFoo;.callee:(Ljava/lang/Object;)V")
+      (invoke-static (v0) "LFoo;.callee:(Ljava/lang/Object;)V")
+      (invoke-static (v0) "LFoo;.callee:(Ljava/lang/Object;)V")
+      (invoke-static (v0) "LFoo;.callee:(Ljava/lang/Object;)V")
+      (invoke-static (v0) "LFoo;.callee:(Ljava/lang/Object;)V")
+      (invoke-static (v0) "LFoo;.callee:(Ljava/lang/Object;)V")
+      (invoke-static (v0) "LFoo;.callee:(Ljava/lang/Object;)V")
+      (invoke-static (v0) "LFoo;.callee:(Ljava/lang/Object;)V")
+      (invoke-static (v0) "LFoo;.callee:(Ljava/lang/Object;)V")
+      (invoke-static (v0) "LFoo;.callee:(Ljava/lang/Object;)V")
+      (invoke-static (v0) "LFoo;.callee:(Ljava/lang/Object;)V")
+      (return-void)
+    )
+  )";
+
+  caller->set_code(assembler::ircode_from_string(caller_str));
+
+  const auto& callee_str = R"(
+    (
+      (load-param-object v0)
+      (const-string "Different String")
+      (move-result-pseudo-object v1)
+      (if-ne v0 v1 :exit)
+      (const v2 0)
+      (throw v2)
+      (:exit)
+      (return-void)
+    )
+  )";
+
+  callee->set_code(assembler::ircode_from_string(callee_str));
+
+  ConcurrentMethodRefCache concurrent_resolve_cache;
+  auto concurrent_resolver = [&concurrent_resolve_cache](DexMethodRef* method,
+                                                         MethodSearch search) {
+    return resolve_method(method, search, concurrent_resolve_cache);
+  };
+
+  bool intra_dex = false;
+
+  DexStoresVector stores;
+  std::unordered_set<DexMethod*> candidates;
+  std::unordered_set<DexMethod*> expected_inlined;
+  {
+    DexStore store("root");
+    store.add_classes({});
+    store.add_classes({foo_cls});
+    stores.push_back(std::move(store));
+  }
+  {
+    candidates.insert(caller);
+    candidates.insert(callee);
+    expected_inlined.insert(callee);
+  }
+  auto scope = build_class_scope(stores);
+  api::LevelChecker::init(0, scope);
+  inliner::InlinerConfig inliner_config;
+  inliner_config.populate(scope);
+  inliner_config.multiple_callers = true;
+  inliner_config.use_call_site_summaries = true;
+  inliner_config.throws_inline = true;
+  inliner_config.shrinker.run_local_dce = true;
+  inliner_config.shrinker.run_const_prop = true;
+  inliner_config.shrinker.compute_pure_methods = false;
+
+  caller->get_code()->build_cfg(true);
+  callee->get_code()->build_cfg(true);
+
+  {
+    init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+        scope, /* create_init_class_insns */ false);
+    int min_sdk = 0;
+    MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
+                               candidates, concurrent_resolver, inliner_config,
+                               min_sdk, intra_dex ? IntraDex : InterDex,
+                               /* true_virtual_callers */ {},
+                               /* inline_for_speed */ nullptr,
+                               /* analyze_and_prune_inits */ false, {});
+    inliner.inline_methods();
+
+    auto inlined = inliner.get_inlined();
+    EXPECT_EQ(inlined.size(), expected_inlined.size());
+    for (auto method : expected_inlined) {
+      EXPECT_EQ(inlined.count(method), 1);
+    }
+  }
+
+  caller->get_code()->clear_cfg();
+  callee->get_code()->clear_cfg();
+
+  const auto& caller_expected_str = R"(
+    (
+      (return-void)
+    )
+  )";
+
+  auto caller_actual = caller->get_code();
+
+  // Let's filter out all positions.
+  // TODO: Enhance position filtering so that we don't get redundant positions.
+  remove_position(caller_actual);
+
+  auto caller_expected = assembler::ircode_from_string(caller_expected_str);
+  EXPECT_CODE_EQ(caller_actual, caller_expected.get());
+}
