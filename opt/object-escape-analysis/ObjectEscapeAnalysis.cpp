@@ -51,14 +51,6 @@
  * Ideas for future work:
  * - Support check-cast instructions for singleton-allocations
  * - Support conditional branches over either zero or single allocations
- * - Refine the tracing of object allocations in root methods to ignore
- *   unanchored object allocations
- * - Instead of inlining all invoked methods, consider transforming those which
- *   do not mutate or compare the allocated object as follows: instead of
- *   passing in the allocated object via an argument, pass in all read fields
- *   are passed in as separate arguments. This could reduce the size increase
- *   due to multiple inlined method body copies. We already do something similar
- *   for constructors.
  */
 
 #include "ObjectEscapeAnalysis.h"
