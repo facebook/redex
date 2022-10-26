@@ -223,8 +223,10 @@ void Shrinker::shrink_code(
       code->build_cfg(/* editable */ true);
     }
 
-    const_prop_stats =
-        constant_propagation(is_static, declaring_type, proto, code, {}, {});
+    constant_propagation::Transform::Config config;
+    config.pure_methods = &m_pure_methods;
+    const_prop_stats = constant_propagation(is_static, declaring_type, proto,
+                                            code, {}, config);
   }
 
   if (m_config.run_cse) {

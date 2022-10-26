@@ -39,6 +39,7 @@ class Transform final {
     // value.
     const ConcurrentSet<DexMethod*>* getter_methods_for_immutable_fields{
         nullptr};
+    const std::unordered_set<DexMethodRef*>* pure_methods{nullptr};
     Config() {}
   };
 
@@ -169,6 +170,8 @@ class Transform final {
                               DexType* declaring_type,
                               DexProto* proto,
                               const XStoreRefs*);
+
+  bool assumenosideeffects(DexMethodRef* ref, DexMethod* meth) const;
 
   const Config m_config;
   std::unique_ptr<cfg::CFGMutation> m_mutation;

@@ -1254,6 +1254,7 @@ std::shared_ptr<ReducedCode> MultiMethodInliner::apply_call_site_summary(
   // No need to add extra instructions to load constant params, we'll pass those
   // in anyway
   config.add_param_const = false;
+  config.pure_methods = &m_shrinker.get_pure_methods();
   m_shrinker.constant_propagation(is_static, declaring_type, proto,
                                   &reduced_code->code(), initial_env, config);
   m_shrinker.local_dce(&reduced_code->code(),

@@ -78,7 +78,9 @@ TEST_F(StringTest, equals_false) {
 )");
 
   cp::Transform::Config config;
-  config.replace_move_result_with_consts = true;
+  std::unordered_set<DexMethodRef*> pure_methods{
+      method::java_lang_String_equals()};
+  config.pure_methods = &pure_methods;
   do_const_prop(code.get(), StringAnalyzer(), config);
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -110,7 +112,9 @@ TEST_F(StringTest, equals_true) {
 )");
 
   cp::Transform::Config config;
-  config.replace_move_result_with_consts = true;
+  std::unordered_set<DexMethodRef*> pure_methods{
+      method::java_lang_String_equals()};
+  config.pure_methods = &pure_methods;
   do_const_prop(code.get(), StringAnalyzer(), config);
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -140,7 +144,9 @@ TEST_F(StringTest, hashCode) {
 )");
 
   cp::Transform::Config config;
-  config.replace_move_result_with_consts = true;
+  std::unordered_set<DexMethodRef*> pure_methods{
+      method::java_lang_String_hashCode()};
+  config.pure_methods = &pure_methods;
   do_const_prop(code.get(), StringAnalyzer(), config);
 
   auto expected_code = assembler::ircode_from_string(R"(

@@ -7,6 +7,7 @@
 
 #include "ConstantPropagationTransform.h"
 
+#include "ReachableClasses.h"
 #include "ReachingDefinitions.h"
 #include "RedexContext.h"
 #include "ScopedMetrics.h"
@@ -394,6 +395,13 @@ void try_simplify(const ConstantEnvironment& env,
 
 } // namespace
 
+bool Transform::assumenosideeffects(DexMethodRef* ref, DexMethod* meth) const {
+  if (::assumenosideeffects(meth)) {
+    return true;
+  }
+  return m_config.pure_methods->find(ref) != m_config.pure_methods->end();
+}
+
 void Transform::simplify_instruction(const ConstantEnvironment& env,
                                      const WholeProgramState& wps,
                                      const cfg::InstructionIterator& cfg_it,
@@ -440,16 +448,34 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
   case OPCODE_MOVE_RESULT_OBJECT: {
     if (m_config.replace_move_result_with_consts) {
       replace_with_const(env, cfg_it, xstores, declaring_type);
-    } else if (m_config.getter_methods_for_immutable_fields) {
-      auto& cfg = cfg_it.cfg();
-      auto primary_insn = cfg.primary_instruction_of_move_result(cfg_it)->insn;
-      if (opcode::is_invoke_virtual(primary_insn->opcode())) {
-        auto invoked =
-            resolve_method(primary_insn->get_method(), MethodSearch::Virtual);
-        if (m_config.getter_methods_for_immutable_fields->count(invoked)) {
-          replace_with_const(env, cfg_it, xstores, declaring_type);
-        }
-      }
+      break;
+    }
+    if (!m_config.getter_methods_for_immutable_fields &&
+        !m_config.pure_methods) {
+      break;
+    }
+
+    auto& cfg = cfg_it.cfg();
+    auto primary_insn = cfg.primary_instruction_of_move_result(cfg_it)->insn;
+    if (!opcode::is_an_invoke(primary_insn->opcode())) {
+      break;
+    }
+    auto invoked = resolve_method(primary_insn->get_method(),
+                                  opcode_to_search(primary_insn));
+    if (!invoked) {
+      break;
+    }
+    if (m_config.getter_methods_for_immutable_fields &&
+        opcode::is_invoke_virtual(primary_insn->opcode()) &&
+        m_config.getter_methods_for_immutable_fields->count(invoked)) {
+      replace_with_const(env, cfg_it, xstores, declaring_type);
+      break;
+    }
+
+    if (m_config.pure_methods &&
+        assumenosideeffects(primary_insn->get_method(), invoked)) {
+      replace_with_const(env, cfg_it, xstores, declaring_type);
+      break;
     }
     break;
   }
