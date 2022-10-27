@@ -270,13 +270,18 @@ def find_android_build_tool(tool: str) -> str:
 
         return None, attempts
 
-    result, attempts = run()
+    result, _ = run()
     if result:
         return result
 
-    # Re-run for debug messages
+    # Try again with more debug messages (the under the hood call to buck audit
+    # seems to not always return a result)
+    old_level = logging.getLogger().getEffectiveLevel()
     logging.getLogger().setLevel(logging.DEBUG)
-    run()
+    result, attempts = run()
+    if result:
+        logging.getLogger().setLevel(old_level)
+        return result
 
     raise RuntimeError(f'Could not find {tool}, searched {", ".join(attempts)}')
 
