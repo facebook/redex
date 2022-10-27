@@ -61,7 +61,8 @@ static void append_key_value(std::ostringstream& oss,
                              const StringDomain& string_value) {
   auto dex_string = string_value.get_constant();
   always_assert(dex_string);
-  oss << std::quoted((*dex_string)->str());
+  auto str = (*dex_string)->str();
+  oss << std::quoted(str_copy(str));
 }
 
 static void append_key_value(std::ostringstream& oss,
