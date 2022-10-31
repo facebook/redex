@@ -86,7 +86,7 @@ std::ostream& operator<<(std::ostream& output, const IRType& type) {
 
 namespace type_inference {
 
-bool is_safely_usable(IRType type) {
+bool is_safely_usable_in_ifs(IRType type) {
   switch (type) {
   case IRType::TOP:
   case IRType::SCALAR:

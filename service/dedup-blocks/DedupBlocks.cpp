@@ -338,13 +338,13 @@ class DedupBlocksImpl {
   Stats& m_stats;
 
   struct LiveRanges {
-    live_range::DefUseChains def_use_chains;
-    live_range::UseDefChains use_def_chains;
-    explicit LiveRanges(cfg::ControlFlowGraph& cfg) {
-      live_range::MoveAwareChains chains(cfg);
-      def_use_chains = chains.get_def_use_chains();
-      use_def_chains = chains.get_use_def_chains();
-    }
+    live_range::MoveAwareChains chains;
+    Lazy<live_range::DefUseChains> def_use_chains;
+    Lazy<live_range::UseDefChains> use_def_chains;
+    explicit LiveRanges(cfg::ControlFlowGraph& cfg)
+        : chains(cfg),
+          def_use_chains([this] { return chains.get_def_use_chains(); }),
+          use_def_chains([this] { return chains.get_use_def_chains(); }) {}
   };
 
   // Find blocks with the same exact code
@@ -915,7 +915,7 @@ class DedupBlocksImpl {
           method::is_init(insn->get_method())) {
         TRACE(DEDUP_BLOCKS, 5, "[dedup blocks] found init invocation: %s",
               SHOW(insn));
-        auto& defs = live_ranges->use_def_chains[live_range::Use{insn, 0}];
+        auto& defs = (*live_ranges->use_def_chains)[live_range::Use{insn, 0}];
         always_assert(defs.size() > 0);
         if (defs.size() > 1) {
           // should never happen, but we are not going to fight that here
@@ -1041,8 +1041,52 @@ class DedupBlocksImpl {
     // verify after deduping.
     for (auto reg : live_in_vars.elements()) {
       auto joined_type = joined_env.get_type(reg);
-      if (!type_inference::is_safely_usable(joined_type.element())) {
+      if (!type_inference::is_safely_usable_in_ifs(joined_type.element())) {
         return true;
+      }
+      if (joined_type.element() != IRType::REFERENCE) {
+        continue;
+      }
+      // If any of the reference types we joined might have been of an array
+      // type...
+      auto joined_type_domain = DexTypeDomain::bottom();
+      bool maybe_array{false};
+      for (cfg::Block* block : blocks) {
+        auto type_domain =
+            type_inference->get_entry_state_at(block).get_type_domain(reg);
+        auto dex_type = type_domain.get_dex_type();
+        if (type_domain.is_top() || !dex_type || type::is_array(*dex_type)) {
+          maybe_array = true;
+        }
+        joined_type_domain.join_with(type_domain);
+      }
+      always_assert(!joined_type_domain.is_bottom());
+      if (!maybe_array) {
+        continue;
+      }
+      // ...but didn't join to an array type...
+      if (!joined_type_domain.is_top()) {
+        auto joined_dex_type = joined_type_domain.get_dex_type();
+        if (joined_dex_type && type::is_array(*joined_dex_type)) {
+          continue;
+        }
+      }
+      // ...then we need to make sure that register is not used with an
+      // instruction that expects *some* array type.
+      auto reaching_defs = reaching_defs::Domain::bottom();
+      const auto& fp_iter = live_ranges->chains.get_fp_iter();
+      for (cfg::Block* block : blocks) {
+        reaching_defs.join_with(fp_iter.get_entry_state_at(block).get(reg));
+      }
+      always_assert(!reaching_defs.is_bottom());
+      for (auto reaching_def : reaching_defs.elements()) {
+        for (const auto& use : (*live_ranges->def_use_chains)[reaching_def]) {
+          auto op = use.insn->opcode();
+          if (opcode::is_array_length(op) || opcode::is_an_aget(op) ||
+              opcode::is_an_aput(op) || opcode::is_fill_array_data(op)) {
+            return true;
+          }
+        }
       }
     }
     return false;

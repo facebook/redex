@@ -992,6 +992,110 @@ TEST_F(DedupBlocksTest, dontRespectDexTypes) {
   EXPECT_CODE_EQ(expected_code.get(), method->get_code());
 }
 
+TEST_F(DedupBlocksTest, dontRespectDexTypesIncludingArraysIfNotUsedAsSuch) {
+  using namespace dex_asm;
+  DexMethod* method = get_fresh_method("v");
+
+  auto str = R"(
+    (
+      ; A
+      (const v0 0)
+      (new-array v0 "[Ljava/lang/Object;")
+      (move-result-pseudo-object v0)
+      (if-eqz v0 :D)
+
+      ; B
+      (const-class "Lbaz;")
+      (move-result-pseudo-object v0)
+      (if-eqz v0 :C)
+
+      (:E)
+      (return-void)
+
+      (:C)
+      (if-nez v0 :E)
+      (goto :E)
+
+      (:D)
+      (if-nez v0 :E)
+      (goto :E)
+    )
+  )";
+
+  auto code = assembler::ircode_from_string(str);
+  method->set_code(std::move(code));
+
+  run_dedup_blocks();
+
+  auto expected_str = R"(
+    (
+      ; A
+      (const v0 0)
+      (new-array v0 "[Ljava/lang/Object;")
+      (move-result-pseudo-object v0)
+      (if-eqz v0 :C)
+
+      ; B
+      (const-class "Lbaz;")
+      (move-result-pseudo-object v0)
+      (if-eqz v0 :C)
+
+      (:E)
+      (return-void)
+
+      (:C)
+      (if-nez v0 :E)
+      (goto :E)
+    )
+  )";
+  auto expected_code = assembler::ircode_from_string(expected_str);
+  EXPECT_CODE_EQ(expected_code.get(), method->get_code());
+}
+
+TEST_F(DedupBlocksTest, dontRespectDexTypesExceptArraysIfUsedAsSuch) {
+  using namespace dex_asm;
+  DexMethod* method = get_fresh_method("I");
+
+  auto str = R"(
+    (
+      ; A
+      (const v1 0)
+      (new-array v1 "[Ljava/lang/Object;")
+      (move-result-pseudo-object v0)
+      (if-eqz v0 :D)
+
+      ; B
+      (new-array v1 "[Ljava/lang/Integer;")
+      (move-result-pseudo-object v0)
+      (if-eqz v0 :C)
+
+      (:E)
+      (return v1)
+
+      (:C)
+      (array-length v0)
+      (move-result-pseudo v1)
+      (if-nez v0 :E)
+      (goto :E)
+
+      (:D)
+      (array-length v0)
+      (move-result-pseudo v1)
+      (if-nez v0 :E)
+      (goto :E)
+    )
+  )";
+
+  auto code = assembler::ircode_from_string(str);
+  method->set_code(std::move(code));
+
+  run_dedup_blocks();
+
+  auto expected_str = str;
+  auto expected_code = assembler::ircode_from_string(expected_str);
+  EXPECT_CODE_EQ(expected_code.get(), method->get_code());
+}
+
 TEST_F(DedupBlocksTest, self_loops_are_alike) {
   auto input_code = assembler::ircode_from_string(R"(
     (
