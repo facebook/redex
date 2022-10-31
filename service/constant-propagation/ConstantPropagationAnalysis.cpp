@@ -779,6 +779,7 @@ bool StringAnalyzer::analyze_invoke(const IRInstruction* insn,
   const DexMethod* Integer_parseInt{
       static_cast<DexMethod*>(DexMethod::get_method("Ljava/lang/Integer;.parseInt:(Ljava/lang/String;)I"))};
   const DexType* String_class{DexType::get_type("Ljava/lang/String;")};
+  auto method = insn->get_method();
   if(method == nullptr || (method->get_class() != String_class && method != Integer_parseInt)){
     return false;
   }
