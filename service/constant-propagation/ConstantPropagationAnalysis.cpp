@@ -772,15 +772,9 @@ bool BoxedBooleanAnalyzer::analyze_invoke(
 
 bool StringAnalyzer::analyze_invoke(const IRInstruction* insn,
                                     ConstantEnvironment* env) {
-  const DexMethod* String_hashCode{
-      static_cast<DexMethod*>(DexMethod::get_method("Ljava/lang/String;.hashCode:()I"))};
-  const DexMethod* String_equals{
-      static_cast<DexMethod*>(DexMethod::get_method("Ljava/lang/String;.equals:(Ljava/lang/Object;)Z"))}; 
-  const DexMethod* Integer_parseInt{
-      static_cast<DexMethod*>(DexMethod::get_method("Ljava/lang/Integer;.parseInt:(Ljava/lang/String;)I"))};
-  const DexType* String_class{DexType::get_type("Ljava/lang/String;")};
-  auto method = insn->get_method();
-  if(method == nullptr || (method->get_class() != String_class && method != Integer_parseInt)){
+  DexMethod* method =
+      resolve_method(insn->get_method(), opcode_to_search(insn));
+  if (method == nullptr) {
     return false;
   }
 
@@ -795,7 +789,7 @@ bool StringAnalyzer::analyze_invoke(const IRInstruction* insn,
     return nullptr;
   };
 
-  if (method == String_equals) {
+  if (method == method::java_lang_String_equals()) {
     always_assert(insn->srcs_size() == 2);
     if (const auto* arg0 = maybe_string(0)) {
       if (const auto* arg1 = maybe_string(1)) {
@@ -805,14 +799,14 @@ bool StringAnalyzer::analyze_invoke(const IRInstruction* insn,
         return true;
       }
     }
-  } else if (method == String_hashCode) {
+  } else if (method == method::java_lang_String_hashCode()) {
     always_assert(insn->srcs_size() == 1);
     if (const auto* arg0 = maybe_string(0)) {
       int64_t res = arg0->java_hashcode();
       env->set(RESULT_REGISTER, SignedConstantDomain(res));
       return true;
     }
-  }else if (method == Integer_parseInt){
+  }else if (method == method::java_lang_Integer_parseInt()){
     if (const auto* arg0 = maybe_string(0)) {
       const char* int_ = arg0->c_str();
       int64_t res = atoi(int_);

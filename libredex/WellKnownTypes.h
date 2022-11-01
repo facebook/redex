@@ -56,10 +56,11 @@
   FOR_EACH(java_lang_Integer_valueOf,                                         \
            "Ljava/lang/Integer;.valueOf:(I)Ljava/lang/Integer;")              \
   FOR_EACH(java_lang_Integer_intValue, "Ljava/lang/Integer;.intValue:()I")    \
+  FOR_EACH(java_lang_Integer_parseInt, "Ljava/lang/Integer;.parseInt:(Ljava/lang/String;)I") \
   FOR_EACH(java_lang_Throwable_fillInStackTrace,                              \
            "Ljava/lang/Throwable;.fillInStackTrace:()Ljava/lang/Throwable;")  \
   FOR_EACH(java_lang_RuntimeException_init_String,                            \
            "Ljava/lang/RuntimeException;.<init>:(Ljava/lang/String;)V")       \
   FOR_EACH(java_lang_String_equals,                                           \
            "Ljava/lang/String;.equals:(Ljava/lang/Object;)Z")                 \
-  FOR_EACH(java_lang_String_hashCode, "Ljava/lang/String;.hashCode:()I")
+  FOR_EACH(java_lang_String_hashCode, "Ljava/lang/String;.hashCode:()I")      
