@@ -188,6 +188,7 @@ static const std::string_view pure_method_names[] = {
     "Ljava/lang/Integer;.toString:(I)Ljava/lang/String;",
     "Ljava/lang/Integer;.toString:(II)Ljava/lang/String;",
     "Ljava/lang/Integer;.valueOf:(I)Ljava/lang/Integer;",
+    "Ljava/lang/Integer;.parseInt:(Ljava/lang/String;)I",
     "Ljava/lang/Long;.bitCount:(J)I",
     "Ljava/lang/Long;.compareTo:(Ljava/lang/Long;)I",
     "Ljava/lang/Long;.doubleValue:()D",
