@@ -240,6 +240,8 @@ void fixup_references_to_removed_methods(
           insn->set_method(it->second);
         }
       }
+      always_assert(!insn->has_method() ||
+                    !removed_vmethods.count(insn->get_method()));
       return editable_cfg_adapter::LOOP_CONTINUE;
     });
   });

@@ -44,7 +44,7 @@ bool eligible_code(const IRCode* code) {
 
 void find_duplications(const method_override_graph::Graph* graph,
                        const DexMethod* root_method,
-                       std::vector<DexMethod*>* result) {
+                       std::unordered_set<DexMethod*>* result) {
   auto root_code = root_method->get_code();
   if (!root_code) {
     return;
@@ -58,7 +58,7 @@ void find_duplications(const method_override_graph::Graph* graph,
     auto child_code = child->get_code();
     if (child_code && eligible_code(child_code) &&
         root_code->structural_equals(*child_code)) {
-      result->push_back(const_cast<DexMethod*>(child));
+      result->insert(const_cast<DexMethod*>(child));
       find_duplications(graph, child, result);
     }
   }
@@ -84,7 +84,9 @@ void publicize_methods(const method_override_graph::Graph* graph,
 /**
  * Deduplicate identical overriding code.
  */
-uint32_t remove_duplicated_vmethods(const Scope& scope) {
+uint32_t remove_duplicated_vmethods(
+    const Scope& scope,
+    const ConcurrentSet<DexMethodRef*>& super_invoked_methods) {
   uint32_t ret = 0;
   auto graph = method_override_graph::build_graph(scope);
   std::unordered_map<DexMethodRef*, DexMethodRef*> removed_vmethods;
@@ -104,8 +106,17 @@ uint32_t remove_duplicated_vmethods(const Scope& scope) {
       if (!eligible_code(method->get_code())) {
         continue;
       }
-      std::vector<DexMethod*> duplicates;
+      std::unordered_set<DexMethod*> duplicates;
       find_duplications(graph.get(), method, &duplicates);
+
+      // Now, remove the methods that are called with INVOKE_SUPER from
+      // the duplicates set.
+      for (auto& m : duplicates) {
+        if (super_invoked_methods.count_unsafe(m) != 0) {
+          duplicates.erase(m);
+        }
+      }
+
       if (!duplicates.empty()) {
         if (is_protected(method)) {
           publicize_methods(graph.get(), method);
@@ -128,13 +139,33 @@ uint32_t remove_duplicated_vmethods(const Scope& scope) {
 
   return ret;
 }
+
+/**
+ * Collect all the methods that are called with INVOKE_SUPPER opcode
+ */
+void collect_all_invoke_super_called(
+    const Scope& scope, ConcurrentSet<DexMethodRef*>* super_invoked_methods) {
+  walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
+    editable_cfg_adapter::iterate(&code, [&](MethodItemEntry& mie) {
+      auto insn = mie.insn;
+      if (insn->opcode() == OPCODE_INVOKE_SUPER) {
+        auto callee_ref = insn->get_method();
+        super_invoked_methods->insert(callee_ref);
+      }
+      return editable_cfg_adapter::LOOP_CONTINUE;
+    });
+  });
+}
 } // namespace
 
 namespace dedup_vmethods {
 
 uint32_t dedup(const DexStoresVector& stores) {
   auto scope = build_class_scope(stores);
-  auto deduplicated_vmethods = remove_duplicated_vmethods(scope);
+  ConcurrentSet<DexMethodRef*> super_invoked_methods;
+  collect_all_invoke_super_called(scope, &super_invoked_methods);
+  auto deduplicated_vmethods =
+      remove_duplicated_vmethods(scope, super_invoked_methods);
   TRACE(VM, 2, "deduplicated_vmethods %d\n", deduplicated_vmethods);
   return deduplicated_vmethods;
 }
