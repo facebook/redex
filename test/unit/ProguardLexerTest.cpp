@@ -21,6 +21,14 @@ TEST(ProguardLexerTest, empty) {
   ASSERT_EQ(tokens[0].type, TokenType::eof_token);
 }
 
+TEST(ProguardLexerTest, unknown) {
+  std::vector<Token> tokens = lex("···(");
+  ASSERT_EQ(tokens.size(), 3);
+  ASSERT_EQ(tokens[0].type, TokenType::identifier);
+  ASSERT_EQ(tokens[1].type, TokenType::openBracket);
+  ASSERT_EQ(tokens[2].type, TokenType::eof_token);
+}
+
 // Parse a few tokens.
 TEST(ProguardLexerTest, assortment) {
   // The ss stream below should result in the vector of tokens in the expected
