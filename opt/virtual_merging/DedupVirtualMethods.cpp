@@ -15,7 +15,7 @@
 namespace {
 // Only look at small methods. Increase the limit does not match more
 // identical code in practise.
-constexpr const uint32_t MAX_NUM_INSTRUCTIONS = 20;
+constexpr const uint32_t MAX_NUM_INSTRUCTIONS = 32;
 
 /**
  * Allow code without invoke-super and with less than MAX_NUM_INSTRUCTIONS
