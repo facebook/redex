@@ -9,6 +9,7 @@
 #include "MethodDedup.h"
 #include "MethodOverrideGraph.h"
 #include "Show.h"
+#include "StlUtil.h"
 #include "Trace.h"
 #include "Walkers.h"
 
@@ -44,7 +45,7 @@ bool eligible_code(const IRCode* code) {
 
 void find_duplications(const method_override_graph::Graph* graph,
                        const DexMethod* root_method,
-                       std::unordered_set<DexMethod*>* result) {
+                       std::vector<DexMethod*>* result) {
   auto root_code = root_method->get_code();
   if (!root_code) {
     return;
@@ -58,7 +59,7 @@ void find_duplications(const method_override_graph::Graph* graph,
     auto child_code = child->get_code();
     if (child_code && eligible_code(child_code) &&
         root_code->structural_equals(*child_code)) {
-      result->insert(const_cast<DexMethod*>(child));
+      result->push_back(const_cast<DexMethod*>(child));
       find_duplications(graph, child, result);
     }
   }
@@ -106,16 +107,14 @@ uint32_t remove_duplicated_vmethods(
       if (!eligible_code(method->get_code())) {
         continue;
       }
-      std::unordered_set<DexMethod*> duplicates;
+      std::vector<DexMethod*> duplicates;
       find_duplications(graph.get(), method, &duplicates);
 
       // Now, remove the methods that are called with INVOKE_SUPER from
       // the duplicates set.
-      for (auto& m : duplicates) {
-        if (super_invoked_methods.count_unsafe(m) != 0) {
-          duplicates.erase(m);
-        }
-      }
+      std20::erase_if(duplicates, [&](auto& m) {
+        return super_invoked_methods.count_unsafe(m);
+      });
 
       if (!duplicates.empty()) {
         if (is_protected(method)) {
