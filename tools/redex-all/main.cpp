@@ -1150,7 +1150,8 @@ void redex_backend(ConfigFiles& conf,
   if (is_iodi(dik)) {
     Timer t("Compute initial IODI metadata");
     ScopedMemStats iodi_mem_stats{mem_stats_enabled, reset_hwm};
-    iodi_metadata.mark_methods(stores);
+    iodi_metadata.mark_methods(stores,
+                               dik == DebugInfoKind::InstructionOffsetsLayered);
     iodi_mem_stats.trace_log("Compute initial IODI metadata");
   }
 

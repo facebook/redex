@@ -1595,11 +1595,7 @@ uint32_t emit_instruction_offset_debug_info_helper(
   uint8_t* tmp = temporary_buffer.get();
   std::unordered_map<const DexMethod*, std::vector<const DexMethod*>>
       clustered_methods;
-  // Returns whether this is in a cluster, period, not a "current" cluster in
-  // this iteration.
-  auto is_in_global_cluster = [&](const DexMethod* method) {
-    return iodi_metadata.get_cluster(method).size() > 1;
-  };
+
   for (auto& it : code_items) {
     DexCode* dc = it->code;
     const auto dbg_item = dc->get_debug_item();
@@ -1628,7 +1624,7 @@ uint32_t emit_instruction_offset_debug_info_helper(
                                                   debug_size);
     always_assert_log(res.second, "Failed to insert %s, %d pair", SHOW(method),
                       dc->size());
-    if (is_in_global_cluster(method)) {
+    if (iodi_metadata.is_in_global_cluster(method)) {
       clustered_methods[iodi_metadata.get_canonical_method(method)].push_back(
           method);
     }
@@ -2217,7 +2213,7 @@ uint32_t emit_instruction_offset_debug_info_helper(
       //       versions for all of them.
       DebugMetadata no_line_addin_metadata;
       const DebugMetadata* metadata = &method_to_debug_meta.at(method);
-      if (!is_in_global_cluster(method) && line_addin != 0) {
+      if (!iodi_metadata.is_in_global_cluster(method) && line_addin != 0) {
         no_line_addin_metadata =
             calculate_debug_metadata(dbg, dc, it->code_item, pos_mapper,
                                      metadata->num_params, code_debug_map,
@@ -2258,16 +2254,10 @@ uint32_t emit_instruction_offset_debug_info(
   // be encoded.
   const size_t large_bound = iodi_layers ? DexOutput::kIODILayerBound : 1;
 
-  std::unordered_set<const DexMethod*> too_large_cluster_methods;
-  {
-    for (const auto& p : iodi_metadata.get_name_clusters()) {
-      if (p.second.size() > large_bound) {
-        too_large_cluster_methods.insert(p.second.begin(), p.second.end());
-      }
-    }
-  }
-  TRACE(IODI, 1, "%zu methods in too-large clusters.",
-        too_large_cluster_methods.size());
+  const auto& too_large_cluster_canonical_methods =
+      iodi_metadata.get_too_large_cluster_canonical_methods();
+  TRACE(IODI, 1, "%zu too-large method clusters.",
+        too_large_cluster_canonical_methods.size());
 
   std::vector<CodeItemEmit*> code_items_tmp;
   code_items_tmp.reserve(code_items.size());
@@ -2294,18 +2284,20 @@ uint32_t emit_instruction_offset_debug_info(
         code_items.size() - code_items_tmp.size());
   // Remove all unsupported items.
   std::vector<CodeItemEmit*> unsupported_code_items;
-  if (!too_large_cluster_methods.empty()) {
+  if (!too_large_cluster_canonical_methods.empty()) {
     code_items_tmp.erase(
-        std::remove_if(code_items_tmp.begin(), code_items_tmp.end(),
-                       [&](CodeItemEmit* cie) {
-                         bool supported =
-                             too_large_cluster_methods.count(cie->method) == 0;
-                         if (!supported) {
-                           iodi_metadata.mark_method_huge(cie->method);
-                           unsupported_code_items.push_back(cie);
-                         }
-                         return !supported;
-                       }),
+        std::remove_if(
+            code_items_tmp.begin(), code_items_tmp.end(),
+            [&](CodeItemEmit* cie) {
+              bool supported =
+                  too_large_cluster_canonical_methods.count(
+                      iodi_metadata.get_canonical_method(cie->method)) == 0;
+              if (!supported) {
+                iodi_metadata.mark_method_huge(cie->method);
+                unsupported_code_items.push_back(cie);
+              }
+              return !supported;
+            }),
         code_items_tmp.end());
   }
 
