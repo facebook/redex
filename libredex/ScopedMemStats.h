@@ -26,7 +26,7 @@ class ScopedMemStats {
     }
   }
 
-  void trace_log(PassManager* mgr, const Pass* pass) {
+  void trace_log(const char* name, PassManager* mgr = nullptr) {
     if (m_enabled) {
       auto mem_stats = get_mem_stats();
       uint64_t after = mem_stats.vm_hwm;
@@ -37,8 +37,8 @@ class ScopedMemStats {
         mgr->set_metric("vm_rss_after", rss_after);
         mgr->set_metric("vm_rss_delta", rss_after - m_rss_before);
       }
-      TRACE(STATS, 1, "VmHWM for %s was %s (%s over start).",
-            pass->name().c_str(), pretty_bytes(after).c_str(),
+      TRACE(STATS, 1, "VmHWM for %s was %s (%s over start).", name,
+            pretty_bytes(after).c_str(),
             pretty_bytes(after - m_before).c_str());
 
       int64_t rss_delta =
@@ -50,11 +50,14 @@ class ScopedMemStats {
         rss_delta_sign = "-";
       }
 
-      TRACE(STATS, 1, "VmRSS for %s went from %s to %s (%s%s).",
-            pass->name().c_str(), pretty_bytes(m_rss_before).c_str(),
-            pretty_bytes(rss_after).c_str(), rss_delta_sign,
-            pretty_bytes(rss_delta_abs).c_str());
+      TRACE(STATS, 1, "VmRSS for %s went from %s to %s (%s%s).", name,
+            pretty_bytes(m_rss_before).c_str(), pretty_bytes(rss_after).c_str(),
+            rss_delta_sign, pretty_bytes(rss_delta_abs).c_str());
     }
+  }
+
+  void trace_log(PassManager* mgr, const Pass* pass) {
+    trace_log(pass->name().c_str(), mgr);
   }
 
  private:

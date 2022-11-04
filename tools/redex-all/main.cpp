@@ -67,6 +67,7 @@
 #include "RedexResources.h"
 #include "Sanitizers.h"
 #include "SanitizersConfig.h"
+#include "ScopedMemStats.h"
 #include "Show.h"
 #include "Timer.h"
 #include "ToolsCommon.h"
@@ -1142,44 +1143,57 @@ void redex_backend(ConfigFiles& conf,
     post_lowering->sync();
   }
 
+  const bool mem_stats_enabled =
+      traceEnabled(STATS, 1) || conf.get_json_config().get("mem_stats", true);
+  const bool reset_hwm = conf.get_json_config().get("mem_stats_per_pass", true);
+
   if (is_iodi(dik)) {
     Timer t("Compute initial IODI metadata");
+    ScopedMemStats iodi_mem_stats{mem_stats_enabled, reset_hwm};
     iodi_metadata.mark_methods(stores);
+    iodi_mem_stats.trace_log("Compute initial IODI metadata");
   }
-  for (size_t store_number = 0; store_number < stores.size(); ++store_number) {
-    auto& store = stores[store_number];
-    Timer t("Writing optimized dexes");
-    for (size_t i = 0; i < store.get_dexen().size(); i++) {
-      auto gtypes = std::make_shared<GatheredTypes>(&store.get_dexen()[i]);
 
-      if (post_lowering) {
-        post_lowering->load_dex_indexes(
-            conf, manager.get_redex_options().min_sdk, &store.get_dexen()[i],
-            *gtypes, store.get_name(), i);
+  {
+    ScopedMemStats wod_mem_stats{mem_stats_enabled, reset_hwm};
+    for (size_t store_number = 0; store_number < stores.size();
+         ++store_number) {
+      auto& store = stores[store_number];
+      Timer t("Writing optimized dexes");
+      for (size_t i = 0; i < store.get_dexen().size(); i++) {
+        auto gtypes = std::make_shared<GatheredTypes>(&store.get_dexen()[i]);
+
+        if (post_lowering) {
+          post_lowering->load_dex_indexes(
+              conf, manager.get_redex_options().min_sdk, &store.get_dexen()[i],
+              *gtypes, store.get_name(), i);
+        }
+
+        auto this_dex_stats = write_classes_to_dex(
+            redex_options,
+            redex::get_dex_output_name(output_dir, store, i),
+            &store.get_dexen()[i],
+            gtypes,
+            locator_index,
+            store_number,
+            &store.get_name(),
+            i,
+            conf,
+            pos_mapper.get(),
+            needs_addresses ? &method_to_id : nullptr,
+            needs_addresses ? &code_debug_lines : nullptr,
+            is_iodi(dik) ? &iodi_metadata : nullptr,
+            stores[0].get_dex_magic(),
+            symbolicate_detached_methods ? post_lowering.get() : nullptr,
+            manager.get_redex_options().min_sdk);
+
+        output_totals += this_dex_stats;
+        output_dexes_stats.push_back(this_dex_stats);
+        signatures.insert(
+            *reinterpret_cast<uint32_t*>(this_dex_stats.signature));
       }
-
-      auto this_dex_stats = write_classes_to_dex(
-          redex_options,
-          redex::get_dex_output_name(output_dir, store, i),
-          &store.get_dexen()[i],
-          gtypes,
-          locator_index,
-          store_number,
-          &store.get_name(),
-          i,
-          conf,
-          pos_mapper.get(),
-          needs_addresses ? &method_to_id : nullptr,
-          needs_addresses ? &code_debug_lines : nullptr,
-          is_iodi(dik) ? &iodi_metadata : nullptr,
-          stores[0].get_dex_magic(),
-          symbolicate_detached_methods ? post_lowering.get() : nullptr,
-          manager.get_redex_options().min_sdk);
-
-      output_totals += this_dex_stats;
-      output_dexes_stats.push_back(this_dex_stats);
-      signatures.insert(*reinterpret_cast<uint32_t*>(this_dex_stats.signature));
     }
+    wod_mem_stats.trace_log("Writing optimized dexes");
   }
 
   sanitizers::lsan_do_recoverable_leak_check();
