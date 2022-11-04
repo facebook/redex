@@ -77,27 +77,25 @@ void IODIMetadata::mark_methods(DexStoresVector& scope) {
   //
   // We do this linearly for now because otherwise we need locks
 
-  std::unordered_map<std::string, DexMethod*> name_method_map;
-
-  std::unordered_map<std::string, const DexMethod*> name_map;
-  auto emplace_entry = [&](const std::string& str, DexMethod* m) {
-    {
-      const DexMethod* canonical;
-      auto it = name_map.find(str);
-      if (it == name_map.end()) {
-        canonical = m;
-        name_map.emplace(str, m);
-      } else {
-        canonical = m_canonical.at(it->second);
-      }
-      m_canonical[m] = canonical;
-      m_name_clusters[canonical].insert(m);
-    }
-  };
-
   for (auto& store : scope) {
     for (auto& classes : store.get_dexen()) {
       for (auto& cls : classes) {
+        std::unordered_map<std::string, const DexMethod*> name_map;
+        auto emplace_entry = [&](const std::string& str, DexMethod* m) {
+          {
+            const DexMethod* canonical;
+            auto it = name_map.find(str);
+            if (it == name_map.end()) {
+              canonical = m;
+              name_map.emplace(str, m);
+            } else {
+              canonical = m_canonical.at(it->second);
+            }
+            m_canonical[m] = canonical;
+            m_name_clusters[canonical].insert(m);
+          }
+        };
+
         auto pretty_prefix = pretty_prefix_for_cls(cls);
         // First we need to mark all entries...
         for (DexMethod* m : cls->get_dmethods()) {
