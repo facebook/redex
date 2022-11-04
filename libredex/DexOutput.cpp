@@ -1561,7 +1561,7 @@ struct ParamSizeOrder {
   }
 };
 
-uint32_t emit_instruction_offset_debug_info(
+uint32_t emit_instruction_offset_debug_info_helper(
     DexOutputIdx* dodx,
     PositionMapper* pos_mapper,
     std::vector<CodeItemEmit*>& code_items,
@@ -1591,7 +1591,8 @@ uint32_t emit_instruction_offset_debug_info(
   // method. Hopefully no debug program is > 128k. Its ok to increase this
   // in the future.
   constexpr int TMP_SIZE = 128 * 1024;
-  uint8_t* tmp = (uint8_t*)malloc(TMP_SIZE);
+  auto temporary_buffer = std::make_unique<uint8_t[]>(TMP_SIZE);
+  uint8_t* tmp = temporary_buffer.get();
   std::unordered_map<const DexMethod*, std::vector<const DexMethod*>>
       clustered_methods;
   // Returns whether this is in a cluster, period, not a "current" cluster in
@@ -1632,7 +1633,7 @@ uint32_t emit_instruction_offset_debug_info(
           method);
     }
   }
-  free((void*)tmp);
+  temporary_buffer = nullptr;
 
   std20::erase_if(clustered_methods,
                   [](auto& p) { return p.second.size() <= 1; });
@@ -2316,7 +2317,7 @@ uint32_t emit_instruction_offset_debug_info(
       }
       TRACE(IODI, 1, "IODI iteration %zu", i);
       const size_t before_size = code_items_tmp.size();
-      offset += emit_instruction_offset_debug_info(
+      offset += emit_instruction_offset_debug_info_helper(
           dodx, pos_mapper, code_items_tmp, iodi_metadata, i,
           i << DexOutput::kIODILayerShift, store_number, dex_number, output,
           offset, dbgcount, code_debug_map);

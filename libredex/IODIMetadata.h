@@ -107,8 +107,7 @@ class IODIMetadata {
       m_name_clusters;
   std::unordered_map<const DexMethod*, const DexMethod*> m_canonical;
 
-  std::unordered_map<const DexMethod*, std::pair<std::string, size_t>>
-      m_iodi_method_layers;
+  std::unordered_map<const DexMethod*, size_t> m_iodi_method_layers;
 
   // These exists for can_safely_use_iodi
   std::unordered_set<const DexMethod*> m_huge_methods;

@@ -112,13 +112,12 @@ void IODIMetadata::mark_methods(DexStoresVector& scope) {
 }
 
 void IODIMetadata::set_iodi_layer(const DexMethod* method, size_t layer) {
-  m_iodi_method_layers.emplace(method,
-                               std::make_pair(get_iodi_name(method), layer));
+  m_iodi_method_layers.emplace(method, layer);
 }
 
 size_t IODIMetadata::get_iodi_layer(const DexMethod* method) const {
   auto it = m_iodi_method_layers.find(method);
-  return it != m_iodi_method_layers.end() ? it->second.second : 0u;
+  return it != m_iodi_method_layers.end() ? it->second : 0u;
 }
 
 bool IODIMetadata::has_iodi_layer(const DexMethod* method) const {
@@ -182,15 +181,13 @@ void IODIMetadata::write(
   size_t max_layer{0};
   size_t layered_count{0};
 
-  for (const auto& p : m_iodi_method_layers) {
+  for (const auto& [method, layer] : m_iodi_method_layers) {
     count += 1;
     always_assert_log(count != 0, "Too many entries found, overflowed");
 
-    auto* method = p.first;
-    const auto& name = p.second.first;
-    auto layer = p.second.second;
     redex_assert(layer < DexOutput::kIODILayerBound);
 
+    auto name = get_iodi_name(method);
     std::string tmp;
     const std::string& layered_name = get_layered_name(name, layer, tmp);
 
