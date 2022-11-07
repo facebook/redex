@@ -61,6 +61,13 @@ static void validate_dex_header(const dex_header* dh,
       dexsize,
       dh->file_size);
 
+  auto map_list_off = (uint64_t)dh->map_off;
+  always_assert_log(map_list_off < dexsize, "map_off out of range");
+  const uint8_t* dexbase = (const uint8_t*)dh;
+  const dex_map_list* map_list = (dex_map_list*)(dexbase + dh->map_off);
+  auto map_list_limit = map_list_off + map_list->size * sizeof(dex_map_item);
+  always_assert_log(map_list_limit < dexsize, "inavlid map_list size");
+
   auto str_ids_off = (uint64_t)dh->string_ids_off;
   auto str_ids_limit =
       str_ids_off + dh->string_ids_size * sizeof(dex_string_id);
