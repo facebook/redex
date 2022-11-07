@@ -7,4 +7,5 @@
 
 package com.facebook.redextest;
 
+// CHECK-LABEL: OSS
 class OSSConfigTest {}
