@@ -31,6 +31,10 @@ DexLoader::DexLoader(const DexLocation* location)
 static void validate_dex_header(const dex_header* dh,
                                 size_t dexsize,
                                 int support_dex_version) {
+  always_assert_log(sizeof(dex_header) <= dexsize,
+                    "Header size (%lu) is larger than file size (%zu)\n",
+                    dexsize,
+                    sizeof(dex_header));
   bool supported = false;
   switch (support_dex_version) {
   case 38:
@@ -56,10 +60,41 @@ static void validate_dex_header(const dex_header* dh,
       "Reported size in header (%zu) does not match file size (%u)\n",
       dexsize,
       dh->file_size);
-  auto off = (uint64_t)dh->class_defs_off;
-  auto limit = off + dh->class_defs_size * sizeof(dex_class_def);
-  always_assert_log(off < dexsize, "class_defs_off out of range");
-  always_assert_log(limit <= dexsize, "invalid class_defs_size");
+
+  auto str_ids_off = (uint64_t)dh->string_ids_off;
+  auto str_ids_limit =
+      str_ids_off + dh->string_ids_size * sizeof(dex_string_id);
+  always_assert_log(str_ids_off < dexsize, "string_ids_off out of range");
+  always_assert_log(str_ids_limit <= dexsize, "invalid string_ids_size");
+
+  auto type_ids_off = (uint64_t)dh->type_ids_off;
+  auto type_ids_limit = type_ids_off + dh->type_ids_size * sizeof(dex_type_id);
+  always_assert_log(type_ids_off < dexsize, "type_ids_off out of range");
+  always_assert_log(type_ids_limit <= dexsize, "invalid type_ids_size");
+
+  auto proto_ids_off = (uint64_t)dh->proto_ids_off;
+  auto proto_ids_limit =
+      proto_ids_off + dh->proto_ids_size * sizeof(dex_proto_id);
+  always_assert_log(proto_ids_off < dexsize, "proto_ids_off out of range");
+  always_assert_log(proto_ids_limit <= dexsize, "invalid proto_ids_size");
+
+  auto field_ids_off = (uint64_t)dh->field_ids_off;
+  auto field_ids_limit =
+      field_ids_off + dh->field_ids_size * sizeof(dex_field_id);
+  always_assert_log(field_ids_off < dexsize, "field_ids_off out of range");
+  always_assert_log(field_ids_limit <= dexsize, "invalid field_ids_size");
+
+  auto meth_ids_off = (uint64_t)dh->method_ids_off;
+  auto meth_ids_limit =
+      meth_ids_off + dh->method_ids_size * sizeof(dex_method_id);
+  always_assert_log(meth_ids_off < dexsize, "method_ids_off out of range");
+  always_assert_log(meth_ids_limit <= dexsize, "invalid method_ids_size");
+
+  auto cls_defs_off = (uint64_t)dh->class_defs_off;
+  auto cls_defs_limit =
+      cls_defs_off + dh->class_defs_size * sizeof(dex_class_def);
+  always_assert_log(cls_defs_off < dexsize, "class_defs_off out of range");
+  always_assert_log(cls_defs_limit <= dexsize, "invalid class_defs_size");
 }
 
 void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
