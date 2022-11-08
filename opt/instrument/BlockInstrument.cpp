@@ -1827,18 +1827,15 @@ void BlockInstrumentHelper::do_basic_block_tracing(
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, cfg.create_init_class_insns(), method_override_graph.get());
 
-  ConcurrentMethodRefCache concurrent_resolved_refs;
-  auto concurrent_resolver = [&](DexMethodRef* method, MethodSearch search) {
-    return resolve_method(method, search, concurrent_resolved_refs);
-  };
+  ConcurrentMethodResolver concurrent_method_resolver;
 
   std::unordered_set<DexMethod*> no_default_inlinables;
   auto inliner_config = cfg.get_inliner_config();
   int min_sdk = pm.get_redex_options().min_sdk;
-  MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                             no_default_inlinables, concurrent_resolver,
-                             inliner_config, min_sdk,
-                             MultiMethodInlinerMode::None);
+  MultiMethodInliner inliner(
+      scope, init_classes_with_side_effects, stores, no_default_inlinables,
+      std::ref(concurrent_method_resolver), inliner_config, min_sdk,
+      MultiMethodInlinerMode::None);
 
   for (auto& en : onNonLoopBlockHit_map) {
     std::unordered_set<DexMethod*> insns;

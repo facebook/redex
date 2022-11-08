@@ -403,11 +403,7 @@ TEST_F(MethodInlineTest, debugPositionsAfterReturn) {
 }
 
 TEST_F(MethodInlineTest, test_intra_dex_inlining) {
-  ConcurrentMethodRefCache concurrent_resolve_cache;
-  auto concurrent_resolver = [&concurrent_resolve_cache](DexMethodRef* method,
-                                                         MethodSearch search) {
-    return resolve_method(method, search, concurrent_resolve_cache);
-  };
+  ConcurrentMethodResolver concurrent_method_resolver;
 
   // Only inline methods within dex.
   bool intra_dex = true;
@@ -450,8 +446,9 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining) {
       scope, /* create_init_class_insns */ false);
   int min_sdk = 0;
   MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                             canidates, concurrent_resolver, inliner_config,
-                             min_sdk, intra_dex ? IntraDex : InterDex);
+                             canidates, std::ref(concurrent_method_resolver),
+                             inliner_config, min_sdk,
+                             intra_dex ? IntraDex : InterDex);
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), expected_inlined.size());
@@ -462,11 +459,7 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining) {
 
 // Don't inline when it would exceed (configured) size
 TEST_F(MethodInlineTest, size_limit) {
-  ConcurrentMethodRefCache concurrent_resolve_cache;
-  auto concurrent_resolver = [&concurrent_resolve_cache](DexMethodRef* method,
-                                                         MethodSearch search) {
-    return resolve_method(method, search, concurrent_resolve_cache);
-  };
+  ConcurrentMethodResolver concurrent_method_resolver;
 
   DexStoresVector stores;
   std::unordered_set<DexMethod*> canidates;
@@ -503,19 +496,15 @@ TEST_F(MethodInlineTest, size_limit) {
       scope, /* create_init_class_insns */ false);
   int min_sdk = 0;
   MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                             canidates, concurrent_resolver, inliner_config,
-                             min_sdk, IntraDex);
+                             canidates, std::ref(concurrent_method_resolver),
+                             inliner_config, min_sdk, IntraDex);
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), 0);
 }
 
 TEST_F(MethodInlineTest, minimal_self_loop_regression) {
-  ConcurrentMethodRefCache concurrent_resolve_cache;
-  auto concurrent_resolver = [&concurrent_resolve_cache](DexMethodRef* method,
-                                                         MethodSearch search) {
-    return resolve_method(method, search, concurrent_resolve_cache);
-  };
+  ConcurrentMethodResolver concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -544,8 +533,9 @@ TEST_F(MethodInlineTest, minimal_self_loop_regression) {
       scope, /* create_init_class_insns */ false);
   int min_sdk = 0;
   MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                             candidates, concurrent_resolver, inliner_config,
-                             min_sdk, intra_dex ? IntraDex : InterDex);
+                             candidates, std::ref(concurrent_method_resolver),
+                             inliner_config, min_sdk,
+                             intra_dex ? IntraDex : InterDex);
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), expected_inlined.size());
@@ -555,11 +545,7 @@ TEST_F(MethodInlineTest, minimal_self_loop_regression) {
 }
 
 TEST_F(MethodInlineTest, non_unique_inlined_registers) {
-  ConcurrentMethodRefCache concurrent_resolve_cache;
-  auto concurrent_resolver = [&concurrent_resolve_cache](DexMethodRef* method,
-                                                         MethodSearch search) {
-    return resolve_method(method, search, concurrent_resolve_cache);
-  };
+  ConcurrentMethodResolver concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -594,8 +580,9 @@ TEST_F(MethodInlineTest, non_unique_inlined_registers) {
       scope, /* create_init_class_insns */ false);
   int min_sdk = 0;
   MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                             candidates, concurrent_resolver, inliner_config,
-                             min_sdk, intra_dex ? IntraDex : InterDex);
+                             candidates, std::ref(concurrent_method_resolver),
+                             inliner_config, min_sdk,
+                             intra_dex ? IntraDex : InterDex);
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), expected_inlined.size());
@@ -618,11 +605,7 @@ TEST_F(MethodInlineTest, non_unique_inlined_registers) {
 }
 
 TEST_F(MethodInlineTest, inline_beneficial_on_average_after_constant_prop) {
-  ConcurrentMethodRefCache concurrent_resolve_cache;
-  auto concurrent_resolver = [&concurrent_resolve_cache](DexMethodRef* method,
-                                                         MethodSearch search) {
-    return resolve_method(method, search, concurrent_resolve_cache);
-  };
+  ConcurrentMethodResolver concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -667,8 +650,9 @@ TEST_F(MethodInlineTest, inline_beneficial_on_average_after_constant_prop) {
       scope, /* create_init_class_insns */ false);
   int min_sdk = 0;
   MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                             candidates, concurrent_resolver, inliner_config,
-                             min_sdk, intra_dex ? IntraDex : InterDex);
+                             candidates, std::ref(concurrent_method_resolver),
+                             inliner_config, min_sdk,
+                             intra_dex ? IntraDex : InterDex);
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), expected_inlined.size());
@@ -689,11 +673,7 @@ TEST_F(MethodInlineTest, inline_beneficial_on_average_after_constant_prop) {
 
 TEST_F(MethodInlineTest,
        inline_beneficial_for_particular_instance_after_constant_prop) {
-  ConcurrentMethodRefCache concurrent_resolve_cache;
-  auto concurrent_resolver = [&concurrent_resolve_cache](DexMethodRef* method,
-                                                         MethodSearch search) {
-    return resolve_method(method, search, concurrent_resolve_cache);
-  };
+  ConcurrentMethodResolver concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -738,8 +718,9 @@ TEST_F(MethodInlineTest,
       scope, /* create_init_class_insns */ false);
   int min_sdk = 0;
   MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                             candidates, concurrent_resolver, inliner_config,
-                             min_sdk, intra_dex ? IntraDex : InterDex);
+                             candidates, std::ref(concurrent_method_resolver),
+                             inliner_config, min_sdk,
+                             intra_dex ? IntraDex : InterDex);
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), expected_inlined.size());
@@ -771,11 +752,7 @@ TEST_F(MethodInlineTest,
 TEST_F(
     MethodInlineTest,
     inline_beneficial_for_particular_instance_after_constant_prop_and_local_dce) {
-  ConcurrentMethodRefCache concurrent_resolve_cache;
-  auto concurrent_resolver = [&concurrent_resolve_cache](DexMethodRef* method,
-                                                         MethodSearch search) {
-    return resolve_method(method, search, concurrent_resolve_cache);
-  };
+  ConcurrentMethodResolver concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -820,8 +797,9 @@ TEST_F(
       scope, /* create_init_class_insns */ false);
   int min_sdk = 0;
   MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                             candidates, concurrent_resolver, inliner_config,
-                             min_sdk, intra_dex ? IntraDex : InterDex);
+                             candidates, std::ref(concurrent_method_resolver),
+                             inliner_config, min_sdk,
+                             intra_dex ? IntraDex : InterDex);
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), expected_inlined.size());
@@ -851,11 +829,7 @@ TEST_F(
 }
 
 TEST_F(MethodInlineTest, throw_after_no_return) {
-  ConcurrentMethodRefCache concurrent_resolve_cache;
-  auto concurrent_resolver = [&concurrent_resolve_cache](DexMethodRef* method,
-                                                         MethodSearch search) {
-    return resolve_method(method, search, concurrent_resolve_cache);
-  };
+  ConcurrentMethodResolver concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -895,8 +869,9 @@ TEST_F(MethodInlineTest, throw_after_no_return) {
       scope, /* create_init_class_insns */ false);
   int min_sdk = 0;
   MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                             candidates, concurrent_resolver, inliner_config,
-                             min_sdk, intra_dex ? IntraDex : InterDex);
+                             candidates, std::ref(concurrent_method_resolver),
+                             inliner_config, min_sdk,
+                             intra_dex ? IntraDex : InterDex);
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), 0);
@@ -916,11 +891,7 @@ TEST_F(MethodInlineTest, throw_after_no_return) {
 }
 
 TEST_F(MethodInlineTest, boxed_boolean) {
-  ConcurrentMethodRefCache concurrent_resolve_cache;
-  auto concurrent_resolver = [&concurrent_resolve_cache](DexMethodRef* method,
-                                                         MethodSearch search) {
-    return resolve_method(method, search, concurrent_resolve_cache);
-  };
+  ConcurrentMethodResolver concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -975,8 +946,9 @@ TEST_F(MethodInlineTest, boxed_boolean) {
       scope, /* create_init_class_insns */ false);
   int min_sdk = 0;
   MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                             candidates, concurrent_resolver, inliner_config,
-                             min_sdk, intra_dex ? IntraDex : InterDex,
+                             candidates, std::ref(concurrent_method_resolver),
+                             inliner_config, min_sdk,
+                             intra_dex ? IntraDex : InterDex,
                              /* true_virtual_callers */ {},
                              /* inline_for_speed */ nullptr,
                              /* analyze_and_prune_inits */ false, pure_methods);
@@ -1015,11 +987,7 @@ TEST_F(MethodInlineTest, boxed_boolean) {
 }
 
 TEST_F(MethodInlineTest, boxed_boolean_without_shrinking) {
-  ConcurrentMethodRefCache concurrent_resolve_cache;
-  auto concurrent_resolver = [&concurrent_resolve_cache](DexMethodRef* method,
-                                                         MethodSearch search) {
-    return resolve_method(method, search, concurrent_resolve_cache);
-  };
+  ConcurrentMethodResolver concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -1067,8 +1035,9 @@ TEST_F(MethodInlineTest, boxed_boolean_without_shrinking) {
       scope, /* create_init_class_insns */ false);
   int min_sdk = 0;
   MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                             candidates, concurrent_resolver, inliner_config,
-                             min_sdk, intra_dex ? IntraDex : InterDex,
+                             candidates, std::ref(concurrent_method_resolver),
+                             inliner_config, min_sdk,
+                             intra_dex ? IntraDex : InterDex,
                              /* true_virtual_callers */ {},
                              /* inline_for_speed */ nullptr,
                              /* analyze_and_prune_inits */ false, pure_methods);
@@ -1205,11 +1174,7 @@ TEST_F(MethodInlineTest, visibility_change_static_invoke) {
   nested_callee_2->set_code(assembler::ircode_from_string(nested_callee_2_str));
   init->set_code(assembler::ircode_from_string(init_str));
 
-  ConcurrentMethodRefCache concurrent_resolve_cache;
-  auto concurrent_resolver = [&concurrent_resolve_cache](DexMethodRef* method,
-                                                         MethodSearch search) {
-    return resolve_method(method, search, concurrent_resolve_cache);
-  };
+  ConcurrentMethodResolver concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -1249,8 +1214,9 @@ TEST_F(MethodInlineTest, visibility_change_static_invoke) {
         scope, /* create_init_class_insns */ false);
     int min_sdk = 0;
     MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                               candidates, concurrent_resolver, inliner_config,
-                               min_sdk, intra_dex ? IntraDex : InterDex,
+                               candidates, std::ref(concurrent_method_resolver),
+                               inliner_config, min_sdk,
+                               intra_dex ? IntraDex : InterDex,
                                /* true_virtual_callers */ {},
                                /* inline_for_speed */ nullptr,
                                /* analyze_and_prune_inits */ false, {});
@@ -1389,11 +1355,7 @@ TEST_F(MethodInlineTest, unused_result) {
 
   callee->set_code(assembler::ircode_from_string(callee_str));
 
-  ConcurrentMethodRefCache concurrent_resolve_cache;
-  auto concurrent_resolver = [&concurrent_resolve_cache](DexMethodRef* method,
-                                                         MethodSearch search) {
-    return resolve_method(method, search, concurrent_resolve_cache);
-  };
+  ConcurrentMethodResolver concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -1427,8 +1389,9 @@ TEST_F(MethodInlineTest, unused_result) {
         scope, /* create_init_class_insns */ false);
     int min_sdk = 0;
     MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                               candidates, concurrent_resolver, inliner_config,
-                               min_sdk, intra_dex ? IntraDex : InterDex,
+                               candidates, std::ref(concurrent_method_resolver),
+                               inliner_config, min_sdk,
+                               intra_dex ? IntraDex : InterDex,
                                /* true_virtual_callers */ {},
                                /* inline_for_speed */ nullptr,
                                /* analyze_and_prune_inits */ false, {});
@@ -1535,11 +1498,7 @@ TEST_F(MethodInlineTest, caller_caller_callee_call_site) {
 
   callee->set_code(assembler::ircode_from_string(callee_str));
 
-  ConcurrentMethodRefCache concurrent_resolve_cache;
-  auto concurrent_resolver = [&concurrent_resolve_cache](DexMethodRef* method,
-                                                         MethodSearch search) {
-    return resolve_method(method, search, concurrent_resolve_cache);
-  };
+  ConcurrentMethodResolver concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -1578,8 +1537,9 @@ TEST_F(MethodInlineTest, caller_caller_callee_call_site) {
         scope, /* create_init_class_insns */ false);
     int min_sdk = 0;
     MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                               candidates, concurrent_resolver, inliner_config,
-                               min_sdk, intra_dex ? IntraDex : InterDex,
+                               candidates, std::ref(concurrent_method_resolver),
+                               inliner_config, min_sdk,
+                               intra_dex ? IntraDex : InterDex,
                                /* true_virtual_callers */ {},
                                /* inline_for_speed */ nullptr,
                                /* analyze_and_prune_inits */ false, {});
@@ -1661,11 +1621,7 @@ TEST_F(MethodInlineTest,
 
   callee->set_code(assembler::ircode_from_string(callee_str));
 
-  ConcurrentMethodRefCache concurrent_resolve_cache;
-  auto concurrent_resolver = [&concurrent_resolve_cache](DexMethodRef* method,
-                                                         MethodSearch search) {
-    return resolve_method(method, search, concurrent_resolve_cache);
-  };
+  ConcurrentMethodResolver concurrent_method_resolver;
 
   DexStoresVector stores;
   {
@@ -1688,8 +1644,8 @@ TEST_F(MethodInlineTest,
         scope, /* create_init_class_insns */ false);
     int min_sdk = 0;
     MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                               candidates, concurrent_resolver, inliner_config,
-                               min_sdk, IntraDex,
+                               candidates, std::ref(concurrent_method_resolver),
+                               inliner_config, min_sdk, IntraDex,
                                /* true_virtual_callers */ {},
                                /* inline_for_speed */ nullptr,
                                /* analyze_and_prune_inits */ false, {});
@@ -1747,11 +1703,7 @@ TEST_F(MethodInlineTest, dont_inline_sketchy_callee_into_into_try) {
 
   callee->set_code(assembler::ircode_from_string(callee_str));
 
-  ConcurrentMethodRefCache concurrent_resolve_cache;
-  auto concurrent_resolver = [&concurrent_resolve_cache](DexMethodRef* method,
-                                                         MethodSearch search) {
-    return resolve_method(method, search, concurrent_resolve_cache);
-  };
+  ConcurrentMethodResolver concurrent_method_resolver;
 
   DexStoresVector stores;
   {
@@ -1774,8 +1726,8 @@ TEST_F(MethodInlineTest, dont_inline_sketchy_callee_into_into_try) {
         scope, /* create_init_class_insns */ false);
     int min_sdk = 0;
     MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                               candidates, concurrent_resolver, inliner_config,
-                               min_sdk, IntraDex,
+                               candidates, std::ref(concurrent_method_resolver),
+                               inliner_config, min_sdk, IntraDex,
                                /* true_virtual_callers */ {},
                                /* inline_for_speed */ nullptr,
                                /* analyze_and_prune_inits */ false, {});
@@ -1837,11 +1789,7 @@ TEST_F(MethodInlineTest, inline_with_string_analyzer) {
 
   callee->set_code(assembler::ircode_from_string(callee_str));
 
-  ConcurrentMethodRefCache concurrent_resolve_cache;
-  auto concurrent_resolver = [&concurrent_resolve_cache](DexMethodRef* method,
-                                                         MethodSearch search) {
-    return resolve_method(method, search, concurrent_resolve_cache);
-  };
+  ConcurrentMethodResolver concurrent_method_resolver;
 
   bool intra_dex = false;
 
@@ -1878,8 +1826,9 @@ TEST_F(MethodInlineTest, inline_with_string_analyzer) {
         scope, /* create_init_class_insns */ false);
     int min_sdk = 0;
     MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                               candidates, concurrent_resolver, inliner_config,
-                               min_sdk, intra_dex ? IntraDex : InterDex,
+                               candidates, std::ref(concurrent_method_resolver),
+                               inliner_config, min_sdk,
+                               intra_dex ? IntraDex : InterDex,
                                /* true_virtual_callers */ {},
                                /* inline_for_speed */ nullptr,
                                /* analyze_and_prune_inits */ false, {});

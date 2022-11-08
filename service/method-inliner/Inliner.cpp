@@ -73,7 +73,7 @@ MultiMethodInliner::MultiMethodInliner(
         init_classes_with_side_effects,
     DexStoresVector& stores,
     const std::unordered_set<DexMethod*>& candidates,
-    std::function<DexMethod*(DexMethodRef*, MethodSearch)>
+    std::function<DexMethod*(DexMethodRef*, MethodSearch, const DexMethod*)>
         concurrent_resolve_fn,
     const inliner::InlinerConfig& config,
     int min_sdk,
@@ -163,8 +163,8 @@ MultiMethodInliner::MultiMethodInliner(
         if (!opcode::is_an_invoke(insn->opcode())) {
           return;
         }
-        auto callee =
-            m_concurrent_resolver(insn->get_method(), opcode_to_search(insn));
+        auto callee = m_concurrent_resolver(insn->get_method(),
+                                            opcode_to_search(insn), caller);
         if (callee == nullptr || !callee->is_concrete() ||
             !candidates.count(callee)) {
           return;
@@ -336,7 +336,7 @@ DexMethod* MultiMethodInliner::get_callee(DexMethod* caller,
     return nullptr;
   }
   auto callee =
-      m_concurrent_resolver(insn->get_method(), opcode_to_search(insn));
+      m_concurrent_resolver(insn->get_method(), opcode_to_search(insn), caller);
   auto it = m_caller_virtual_callees.find(caller);
   if (it == m_caller_virtual_callees.end()) {
     return callee;
@@ -1791,7 +1791,7 @@ bool MultiMethodInliner::cannot_inline_opcodes(const DexMethod* caller,
             can_inline = false;
             return editable_cfg_adapter::LOOP_BREAK;
           }
-          if (unknown_virtual(insn)) {
+          if (unknown_virtual(insn, caller)) {
             if (invk_insn) {
               log_nopt(INL_UNKNOWN_VIRTUAL, caller, invk_insn);
             }
@@ -1843,7 +1843,7 @@ bool MultiMethodInliner::create_vmethod(IRInstruction* insn,
   auto opcode = insn->opcode();
   if (opcode == OPCODE_INVOKE_DIRECT) {
     auto method =
-        m_concurrent_resolver(insn->get_method(), MethodSearch::Direct);
+        m_concurrent_resolver(insn->get_method(), MethodSearch::Direct, caller);
     if (method == nullptr) {
       info.need_vmethod++;
       return true;
@@ -1901,10 +1901,12 @@ bool MultiMethodInliner::nonrelocatable_invoke_super(IRInstruction* insn) {
  * But we need to make all methods public across the hierarchy and for methods
  * we don't know we have no idea whether the method was public or not anyway.
  */
-bool MultiMethodInliner::unknown_virtual(IRInstruction* insn) {
+bool MultiMethodInliner::unknown_virtual(IRInstruction* insn,
+                                         const DexMethod* caller) {
   if (insn->opcode() == OPCODE_INVOKE_VIRTUAL) {
     auto method = insn->get_method();
-    auto res_method = m_concurrent_resolver(method, MethodSearch::Virtual);
+    auto res_method =
+        m_concurrent_resolver(method, MethodSearch::Virtual, caller);
     if (res_method == nullptr) {
       info.unresolved_methods++;
       if (unknown_virtuals::is_method_known_to_be_public(method)) {

@@ -1633,10 +1633,7 @@ void reduce(DexStoresVector& stores,
             Stats* stats,
             size_t max_inline_size) {
   Timer t("reduce");
-  ConcurrentMethodRefCache concurrent_resolved_refs;
-  auto concurrent_resolver = [&](DexMethodRef* method, MethodSearch search) {
-    return resolve_method(method, search, concurrent_resolved_refs);
-  };
+  ConcurrentMethodResolver concurrent_method_resolver;
 
   std::unordered_set<DexMethod*> no_default_inlinables;
   // customize shrinking options
@@ -1648,10 +1645,10 @@ void reduce(DexStoresVector& stores,
   inliner_config.shrinker.run_local_dce = true;
   inliner_config.shrinker.compute_pure_methods = false;
   int min_sdk = 0;
-  MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                             no_default_inlinables, concurrent_resolver,
-                             inliner_config, min_sdk,
-                             MultiMethodInlinerMode::None);
+  MultiMethodInliner inliner(
+      scope, init_classes_with_side_effects, stores, no_default_inlinables,
+      std::ref(concurrent_method_resolver), inliner_config, min_sdk,
+      MultiMethodInlinerMode::None);
 
   // First, we compute all reduced methods
 

@@ -145,7 +145,7 @@ class MultiMethodInliner {
           init_classes_with_side_effects,
       DexStoresVector& stores,
       const std::unordered_set<DexMethod*>& candidates,
-      std::function<DexMethod*(DexMethodRef*, MethodSearch)>
+      std::function<DexMethod*(DexMethodRef*, MethodSearch, const DexMethod*)>
           concurrent_resolve_fn,
       const inliner::InlinerConfig& config,
       int min_sdk,
@@ -269,7 +269,7 @@ class MultiMethodInliner {
    * we cannot inline as we could cause a verification error if the method
    * was package/protected and we move the call out of context.
    */
-  bool unknown_virtual(IRInstruction* insn);
+  bool unknown_virtual(IRInstruction* insn, const DexMethod* caller);
 
   /**
    * Return true if the callee contains an access to an unknown field.
@@ -465,14 +465,14 @@ class MultiMethodInliner {
   // Under these conditions, a constructor is universally inlinable.
   bool can_inline_init(const DexMethod* init_method);
 
- private:
   std::unique_ptr<std::vector<std::unique_ptr<RefChecker>>> m_ref_checkers;
 
   /**
    * Resolver function to map a method reference to a method definition. Must be
    * thread-safe.
    */
-  std::function<DexMethod*(DexMethodRef*, MethodSearch)> m_concurrent_resolver;
+  std::function<DexMethod*(DexMethodRef*, MethodSearch, const DexMethod*)>
+      m_concurrent_resolver;
 
   /**
    * Inlined methods.
@@ -571,7 +571,6 @@ class MultiMethodInliner {
   mutable ConcurrentMap<const DexMethod*, boost::optional<bool>>
       m_can_inline_init;
 
- private:
   std::unique_ptr<inliner::CallSiteSummarizer> m_call_site_summarizer;
 
   /**

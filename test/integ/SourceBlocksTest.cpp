@@ -199,10 +199,7 @@ TEST_F(SourceBlocksTest, source_blocks) {
     init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
         scope, /* create_init_class_insns */ false);
 
-    ConcurrentMethodRefCache m_concurrent_resolved_refs;
-    auto concurrent_resolver = [&](DexMethodRef* method, MethodSearch search) {
-      return resolve_method(method, search, m_concurrent_resolved_refs);
-    };
+    ConcurrentMethodResolver concurrent_method_resolver;
 
     auto baz_ref = DexMethod::get_method(
         "Lcom/facebook/redextest/SourceBlocksTest;.baz:(Ljava/lang/"
@@ -214,7 +211,8 @@ TEST_F(SourceBlocksTest, source_blocks) {
 
     int min_sdk = 0;
     MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                               def_inlinables, concurrent_resolver, conf,
+                               def_inlinables,
+                               std::ref(concurrent_method_resolver), conf,
                                min_sdk, MultiMethodInlinerMode::IntraDex);
     inliner.inline_methods();
     ASSERT_EQ(inliner.get_inlined().size(), 1u);
@@ -435,17 +433,15 @@ TEST_F(SourceBlocksTest, scaling) {
     init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
         scope, /* create_init_class_insns */ false);
 
-    ConcurrentMethodRefCache m_concurrent_resolved_refs;
-    auto concurrent_resolver = [&](DexMethodRef* method, MethodSearch search) {
-      return resolve_method(method, search, m_concurrent_resolved_refs);
-    };
+    ConcurrentMethodResolver concurrent_method_resolver;
 
     std::unordered_set<DexMethod*> def_inlinables{
         hot_source_blocks_inlined_method};
 
     int min_sdk = 0;
     MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                               def_inlinables, concurrent_resolver, conf,
+                               def_inlinables,
+                               std::ref(concurrent_method_resolver), conf,
                                min_sdk, MultiMethodInlinerMode::IntraDex);
     inliner.inline_methods();
     ASSERT_EQ(inliner.get_inlined().size(), 1u);

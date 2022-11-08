@@ -712,12 +712,6 @@ void run_inliner(DexStoresVector& stores,
     gather_true_virtual_methods(*method_override_graph, scope,
                                 &true_virtual_callers);
   }
-  // keep a map from refs to defs or nullptr if no method was found
-  ConcurrentMethodRefCache concurrent_resolved_refs;
-  auto concurrent_resolver = [&concurrent_resolved_refs](DexMethodRef* method,
-                                                         MethodSearch search) {
-    return resolve_method(method, search, concurrent_resolved_refs);
-  };
 
   walk::parallel::code(scope, [](DexMethod*, IRCode& code) {
     code.build_cfg(/* editable */ true);
@@ -730,13 +724,14 @@ void run_inliner(DexStoresVector& stores,
   inliner_config.shrinker.analyze_constructors =
       inliner_config.shrinker.run_const_prop;
 
+  ConcurrentMethodResolver concurrent_method_resolver;
   // inline candidates
-  MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                             candidates, concurrent_resolver, inliner_config,
-                             min_sdk, intra_dex ? IntraDex : InterDex,
-                             true_virtual_callers, inline_for_speed,
-                             analyze_and_prune_inits, conf.get_pure_methods(),
-                             min_sdk_api, cross_dex_penalty);
+  MultiMethodInliner inliner(
+      scope, init_classes_with_side_effects, stores, candidates,
+      std::ref(concurrent_method_resolver), inliner_config, min_sdk,
+      intra_dex ? IntraDex : InterDex, true_virtual_callers, inline_for_speed,
+      analyze_and_prune_inits, conf.get_pure_methods(), min_sdk_api,
+      cross_dex_penalty);
   inliner.inline_methods(/* need_deconstruct */ false);
 
   walk::parallel::code(scope,
@@ -762,7 +757,8 @@ void run_inliner(DexStoresVector& stores,
     for (const auto& pair : true_virtual_callers) {
       inlined.erase(pair.first);
     }
-    deleted = delete_methods(scope, inlined, concurrent_resolver);
+    deleted =
+        delete_methods(scope, inlined, std::ref(concurrent_method_resolver));
   }
 
   if (inline_bridge_synth_only) {

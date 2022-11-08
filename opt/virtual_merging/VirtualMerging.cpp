@@ -108,17 +108,13 @@ VirtualMerging::VirtualMerging(DexStoresVector& stores,
       m_init_classes_with_side_effects(m_scope,
                                        /* create_init_class_insns */ false),
       m_perf_config(perf_config) {
-  auto concurrent_resolver = [&](DexMethodRef* method, MethodSearch search) {
-    return resolve_method(method, search, m_concurrent_resolved_refs);
-  };
-
   std::unordered_set<DexMethod*> no_default_inlinables;
   // disable shrinking options, minimizing initialization time
   m_inliner_config.shrinker = shrinker::ShrinkerConfig();
   int min_sdk = 0;
   m_inliner.reset(new MultiMethodInliner(
       m_scope, m_init_classes_with_side_effects, stores, no_default_inlinables,
-      concurrent_resolver, m_inliner_config, min_sdk,
+      std::ref(m_concurrent_method_resolver), m_inliner_config, min_sdk,
       MultiMethodInlinerMode::None,
       /* true_virtual_callers */ {},
       /* inline_for_speed */ nullptr,
