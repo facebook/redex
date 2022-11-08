@@ -128,14 +128,16 @@ void GlobalTypeAnalysisPass::run_pass(DexStoresVector& stores,
   type_analyzer::Transform::NullAssertionSet null_assertion_set =
       kotlin_nullcheck_wrapper::get_kotlin_null_assertions();
   Scope scope = build_class_scope(stores);
+  XStoreRefs xstores(stores);
   global::GlobalTypeAnalysis analysis(m_config.max_global_analysis_iteration);
   auto gta = analysis.analyze(scope);
-  optimize(scope, *gta, null_assertion_set, mgr);
+  optimize(scope, xstores, *gta, null_assertion_set, mgr);
   m_result = std::move(gta);
 }
 
 void GlobalTypeAnalysisPass::optimize(
     const Scope& scope,
+    const XStoreRefs& xstores,
     const type_analyzer::global::GlobalTypeAnalyzer& gta,
     const type_analyzer::Transform::NullAssertionSet& null_assertion_set,
     PassManager& mgr) {
@@ -177,7 +179,7 @@ void GlobalTypeAnalysisPass::optimize(
   stats.report(mgr);
 
   if (m_config.resolve_method_refs) {
-    ResolveMethodRefs intf_trans(scope, gta);
+    ResolveMethodRefs intf_trans(scope, gta, xstores);
     intf_trans.report(mgr);
   }
 }

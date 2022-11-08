@@ -22,12 +22,14 @@
 class ResolveMethodRefs final {
  public:
   ResolveMethodRefs(const Scope& scope,
-                    const type_analyzer::global::GlobalTypeAnalyzer& gta);
+                    const type_analyzer::global::GlobalTypeAnalyzer& gta,
+                    const XStoreRefs& xstores);
 
   void report(PassManager& mgr) const;
 
  private:
   void analyze_method(DexMethod* method,
-                      const type_analyzer::local::LocalTypeAnalyzer& lta);
+                      const type_analyzer::local::LocalTypeAnalyzer& lta,
+                      const XStoreRefs& xstores);
   size_t m_num_resolved_kt_non_capturing_lambda_calls = 0;
 };

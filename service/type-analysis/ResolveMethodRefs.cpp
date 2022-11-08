@@ -15,7 +15,9 @@
 #include "Walkers.h"
 
 ResolveMethodRefs::ResolveMethodRefs(
-    const Scope& scope, const type_analyzer::global::GlobalTypeAnalyzer& gta) {
+    const Scope& scope,
+    const type_analyzer::global::GlobalTypeAnalyzer& gta,
+    const XStoreRefs& xstores) {
   walk::methods(scope, [&](DexMethod* method) {
     auto* code = const_cast<IRCode*>(method->get_code());
     if (!code) {
@@ -25,12 +27,14 @@ ResolveMethodRefs::ResolveMethodRefs(
     auto lta = gta.get_local_analysis(method);
     // Using the result of GTA, check if an interface can be resolved to its
     // implementor at certain callsite.
-    analyze_method(method, *lta);
+    analyze_method(method, *lta, xstores);
   });
 }
 
 void ResolveMethodRefs::analyze_method(
-    DexMethod* method, const type_analyzer::local::LocalTypeAnalyzer& lta) {
+    DexMethod* method,
+    const type_analyzer::local::LocalTypeAnalyzer& lta,
+    const XStoreRefs& xstores) {
   IRCode* code = method->get_code();
   auto& cfg = code->cfg();
 
@@ -72,7 +76,7 @@ void ResolveMethodRefs::analyze_method(
                                        intf->get_proto(), ms);
       // Step2.  if this calle can be resolved, replace invoke-interface to
       // invoke-virtual.
-      if (!impl) {
+      if (!impl || xstores.cross_store_ref(method, impl)) {
         continue;
       }
 
