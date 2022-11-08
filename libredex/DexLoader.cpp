@@ -68,6 +68,34 @@ static void validate_dex_header(const dex_header* dh,
   auto map_list_limit = map_list_off + map_list->size * sizeof(dex_map_item);
   always_assert_log(map_list_limit < dexsize, "inavlid map_list size");
 
+  for (uint32_t i = 0; i < map_list->size; i++) {
+    auto& item = map_list->items[i];
+    switch (item.type) {
+    case TYPE_CALL_SITE_ID_ITEM: {
+      auto callsite_ids_off = (uint64_t)item.offset;
+      always_assert_log(callsite_ids_off < dexsize,
+                        "callsite_ids out of range");
+      dex_callsite_id* callsite_ids =
+          (dex_callsite_id*)((uint8_t*)dh + item.offset);
+      auto callsite_ids_limit =
+          callsite_ids_off + item.size * sizeof(dex_callsite_id);
+      always_assert_log(callsite_ids_limit < dexsize,
+                        "inavlid callsite_ids size");
+    } break;
+    case TYPE_METHOD_HANDLE_ITEM: {
+      auto methodhandle_ids_off = (uint64_t)item.offset;
+      always_assert_log(methodhandle_ids_off < dexsize,
+                        "methodhandle_ids out of range");
+      dex_methodhandle_id* methodhandle_ids =
+          (dex_methodhandle_id*)((uint8_t*)dh + item.offset);
+      auto methodhandle_ids_limit =
+          methodhandle_ids_off + item.size * sizeof(dex_callsite_id);
+      always_assert_log(methodhandle_ids_limit < dexsize,
+                        "inavlid methodhandle_ids size");
+    } break;
+    }
+  }
+
   auto str_ids_off = (uint64_t)dh->string_ids_off;
   auto str_ids_limit =
       str_ids_off + dh->string_ids_size * sizeof(dex_string_id);
