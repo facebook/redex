@@ -62,6 +62,7 @@ class GlobalTypeAnalysisPass : public Pass {
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
   void optimize(
       const Scope& scope,
+      const XStoreRefs& xstores,
       const type_analyzer::global::GlobalTypeAnalyzer& gta,
       const type_analyzer::Transform::NullAssertionSet& null_assertion_set,
       PassManager& mgr);
