@@ -492,11 +492,21 @@ size_t CrossDexRefMinimizer::get_unapplied_refs(DexClass* cls) const {
 }
 
 double CrossDexRefMinimizer::get_remaining_difficulty() const {
-  double count{0};
+  // As a proxy for the remaining difficulty, we compute the sum over the
+  // inverse squares of how many classes reference each remaining reference.
+  // (Why? Unclear, but it seems to work well in practice.) The following does
+  // this computation in a way that results in a high precision and is
+  // deterministic using floating-point values.
+  std::unordered_map<size_t, size_t> counts;
   for (auto& p : m_ref_classes) {
-    count += 1.0 / (p.second.size() * p.second.size());
+    counts[p.second.size()]++;
   }
-  return count;
+  std::vector<double> summands;
+  summands.reserve(counts.size());
+  std::transform(counts.begin(), counts.end(), std::back_inserter(summands),
+                 [](auto& p) { return p.second * 1.0 / (p.first * p.first); });
+  std::sort(summands.begin(), summands.end());
+  return std::accumulate(summands.begin(), summands.end(), 0.0);
 }
 
 std::string CrossDexRefMinimizer::get_json_class_index(DexClass* cls) {
