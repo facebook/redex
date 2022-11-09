@@ -7,6 +7,7 @@
 
 #include "SpartaWorkQueue.h"
 
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <gtest/gtest.h>
