@@ -5,7 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#![feature(generic_associated_types)]
 #![allow(dead_code)]
 
 pub mod datatype;
