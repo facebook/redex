@@ -677,7 +677,7 @@ class OptimizeEnums {
 
       // TODO(ngorski): This is left in just to minimize diff size
       // for review, and is deleted later in the diff stack.
-      const bool kUseMatchFlow = true;
+      const bool kUseMatchFlow = false;
       if (kUseMatchFlow) {
         unmap.unmap_switchmaps(cfg);
       } else {
