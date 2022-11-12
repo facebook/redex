@@ -131,7 +131,7 @@ TEST_F(PostVerify, KotlinGeneratedClass) {
   EXPECT_NE(nullptr, cls_Big);
 
   auto* cls_WhenMappings = find_class_named(classes, name_WhenMappings);
-  EXPECT_NE(nullptr, cls_WhenMappings);
+  EXPECT_EQ(nullptr, cls_WhenMappings);
 
   auto* meth_useA = DexMethod::get_method(name_useA);
   auto* meth_useB = DexMethod::get_method(name_useB);
@@ -150,26 +150,24 @@ TEST_F(PostVerify, KotlinGeneratedClass) {
   // OptimizeEnumsPass replaces the old keys with ordinals. Here we check if the
   // keys are expected.
   std::set<BranchCase> expected_switch_cases_A{{BranchSource::VirtualCall, 0},
-                                               {BranchSource::VirtualCall, 1},
                                                {BranchSource::VirtualCall, 2}};
   std::set<BranchCase> expected_switch_cases_B{{BranchSource::VirtualCall, 0},
-                                               {BranchSource::VirtualCall, 1},
                                                {BranchSource::VirtualCall, 2}};
   std::set<BranchCase> expected_switch_cases_A_again{
       {BranchSource::VirtualCall, 0}, {BranchSource::VirtualCall, 1}};
   std::set<BranchCase> expected_switch_cases_B_again{
-      {BranchSource::ArrayGetOrConstMinus1, -1},
-      {BranchSource::ArrayGetOrConstMinus1, 1},
-      {BranchSource::ArrayGetOrConstMinus1, 2}};
+      {BranchSource::VirtualCallOrConstMinus1, -1},
+      {BranchSource::VirtualCallOrConstMinus1, 0},
+      {BranchSource::VirtualCallOrConstMinus1, 2}};
   std::set<BranchCase> expected_switch_cases_Big;
   for (int64_t i = 0; i != 20; ++i) {
     expected_switch_cases_Big.emplace(BranchSource::VirtualCall, i);
   }
   std::set<BranchCase> expected_switch_cases_Big_again = {
-      {BranchSource::ArrayGetOrConstMinus1, -1}};
-  for (int64_t i = 0; i != 21; ++i) {
-    expected_switch_cases_Big_again.emplace(BranchSource::ArrayGetOrConstMinus1,
-                                            i);
+      {BranchSource::VirtualCallOrConstMinus1, -1}};
+  for (int64_t i = 0; i != 20; ++i) {
+    expected_switch_cases_Big_again.emplace(
+        BranchSource::VirtualCallOrConstMinus1, i);
   }
 
   EXPECT_EQ(expected_switch_cases_A, switch_cases_A);

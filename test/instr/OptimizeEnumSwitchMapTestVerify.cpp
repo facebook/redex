@@ -96,16 +96,14 @@ TEST_F(PostVerify, JavaGeneratedClass) {
   EXPECT_NE(nullptr, foo);
 
   auto foo_anonymous = find_class_named(classes, FOO_ANONYMOUS);
-  EXPECT_NE(nullptr, foo_anonymous);
+  EXPECT_EQ(nullptr, foo_anonymous);
 
   auto method_use_enumA = DexMethod::get_method(
       "Lcom/facebook/redextest/Foo;.useEnumA:(Lcom/facebook/redextest/"
       "EnumA;)I");
   auto switch_cases_A = collect_const_branch_cases(method_use_enumA);
   std::set<BranchCase> expected_switch_cases_A = {
-      {BranchSource::VirtualCall, 0},
-      {BranchSource::VirtualCall, 1},
-      {BranchSource::VirtualCall, 2}};
+      {BranchSource::VirtualCall, 0}, {BranchSource::VirtualCall, 2}};
   EXPECT_EQ(expected_switch_cases_A, switch_cases_A);
 
   auto method_use_enumB = DexMethod::get_method(
@@ -113,9 +111,7 @@ TEST_F(PostVerify, JavaGeneratedClass) {
       "EnumB;)I");
   auto switch_cases_B = collect_const_branch_cases(method_use_enumB);
   std::set<BranchCase> expected_switch_cases_B = {
-      {BranchSource::VirtualCall, 0},
-      {BranchSource::VirtualCall, 1},
-      {BranchSource::VirtualCall, 2}};
+      {BranchSource::VirtualCall, 0}, {BranchSource::VirtualCall, 2}};
   EXPECT_EQ(expected_switch_cases_B, switch_cases_B);
 
   auto method_use_enumA_again = DexMethod::get_method(

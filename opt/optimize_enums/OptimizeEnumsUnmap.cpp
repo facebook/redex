@@ -222,11 +222,10 @@ class OptimizeEnumsUnmapCfg {
     }
   }
 
-  std::tuple<DexFieldRef*, std::unordered_set<IRInstruction*>>
-  get_lookup_and_ordinals(const mf::result_t& res,
-                          mf::result_t::src_range insn_aget_or_m1_range) {
+  std::tuple<DexFieldRef*, std::set<IRInstruction*>> get_lookup_and_ordinals(
+      const mf::result_t& res, mf::result_t::src_range insn_aget_or_m1_range) {
     DexFieldRef* unique_lookup_field = nullptr;
-    std::unordered_set<IRInstruction*> insn_ordinal_set;
+    std::set<IRInstruction*> insn_ordinal_set;
 
     for (IRInstruction* insn_aget_or_m1 : insn_aget_or_m1_range) {
       // Kotlin null enum "ordinal"; see top of file.
