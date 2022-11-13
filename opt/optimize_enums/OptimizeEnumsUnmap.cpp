@@ -180,7 +180,7 @@ class OptimizeEnumsUnmapCfg {
       // we also gather up all the places an ordinal feeds into the map.
       auto insn_aget_or_m1_range =
           res.matching(cmp_location, insn_cmp, aget_src);
-      const auto [lookup_field, insn_ordinal_set] =
+      const auto [lookup_field, insn_ordinal_list] =
           get_lookup_and_ordinals(res, insn_aget_or_m1_range);
 
       if (!lookup_field) {
@@ -198,7 +198,7 @@ class OptimizeEnumsUnmapCfg {
 
       // Stash the ordinal sources in a new temporary register.
       const reg_t ordinal_reg = m_cfg.allocate_temp();
-      for (IRInstruction* insn_ordi : insn_ordinal_set) {
+      for (IRInstruction* insn_ordi : insn_ordinal_list) {
         copy_ordinal(insn_ordi, ordinal_reg);
       }
 
@@ -222,17 +222,17 @@ class OptimizeEnumsUnmapCfg {
     }
   }
 
-  std::tuple<DexFieldRef*, std::set<IRInstruction*>> get_lookup_and_ordinals(
+  std::tuple<DexFieldRef*, std::vector<IRInstruction*>> get_lookup_and_ordinals(
       const mf::result_t& res, mf::result_t::src_range insn_aget_or_m1_range) {
     DexFieldRef* unique_lookup_field = nullptr;
-    std::set<IRInstruction*> insn_ordinal_set;
+    std::vector<IRInstruction*> insn_ordinal_list;
 
     for (IRInstruction* insn_aget_or_m1 : insn_aget_or_m1_range) {
       // Kotlin null enum "ordinal"; see top of file.
       if (opcode::is_const(insn_aget_or_m1->opcode())) {
         always_assert(insn_aget_or_m1->get_literal() == kKotlinNullOrdinal);
 
-        insn_ordinal_set.emplace(insn_aget_or_m1);
+        insn_ordinal_list.push_back(insn_aget_or_m1);
         continue;
       }
 
@@ -254,12 +254,12 @@ class OptimizeEnumsUnmapCfg {
       // Remember where all the ordinal results are, for later copying.
       for (IRInstruction* insn_ordi :
            res.matching(m_flow.aget_or_m1, insn_aget_or_m1, 1)) {
-        insn_ordinal_set.emplace(insn_ordi);
+        insn_ordinal_list.push_back(insn_ordi);
       }
     }
 
-    always_assert(!unique_lookup_field || !insn_ordinal_set.empty());
-    return std::make_tuple(unique_lookup_field, std::move(insn_ordinal_set));
+    always_assert(!unique_lookup_field || !insn_ordinal_list.empty());
+    return std::make_tuple(unique_lookup_field, std::move(insn_ordinal_list));
   }
 
   void copy_ordinal(IRInstruction* insn_ordi, reg_t ordinal_reg) {
