@@ -10,6 +10,7 @@
 #include <fstream>
 #include <functional>
 
+#include "CFGMutation.h"
 #include "ConcurrentContainers.h"
 #include "ConfigFiles.h"
 #include "DexUtil.h"
@@ -20,7 +21,6 @@
 #include "PassManager.h"
 #include "ScopedCFG.h"
 #include "SummarySerialization.h"
-#include "Transform.h"
 #include "Walkers.h"
 
 /*
@@ -58,7 +58,8 @@ class CallGraphStrategy final : public call_graph::BuildStrategy {
     if (code == nullptr) {
       return callsites;
     }
-    for (auto& mie : InstructionIterable(code)) {
+    auto& cfg = code->cfg();
+    for (auto& mie : InstructionIterable(cfg)) {
       auto insn = mie.insn;
       if (opcode::is_an_invoke(insn->opcode())) {
         auto callee =
@@ -128,7 +129,7 @@ void ObjectSensitiveDcePass::run_pass(DexStoresVector& stores,
       scope, conf.create_init_class_insns());
 
   walk::parallel::code(scope, [&](const DexMethod* method, IRCode& code) {
-    code.build_cfg(/* editable */ false);
+    always_assert(code.editable_cfg_built());
     // The backwards uv::FixpointIterator analysis will need it later.
     code.cfg().calculate_exit_block();
   });
@@ -158,20 +159,23 @@ void ObjectSensitiveDcePass::run_pass(DexStoresVector& stores,
   init_classes::Stats init_class_stats;
   std::mutex init_class_stats_mutex;
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
-    if (method->rstate.no_optimizations()) {
+    if (method->get_code() == nullptr || method->rstate.no_optimizations()) {
       return;
     }
-
+    always_assert(code.editable_cfg_built());
+    auto& cfg = code.cfg();
     uv::FixpointIterator used_vars_fp_iter(
         *ptrs_fp_iter_map->find(method)->second,
         build_summary_map(effect_summaries, call_graph, method),
-        code.cfg());
+        cfg);
     used_vars_fp_iter.run(uv::UsedVarsSet());
 
+    cfg::CFGMutation mutator(cfg);
+
     TRACE(OSDCE, 5, "Transforming %s", SHOW(method));
-    TRACE(OSDCE, 5, "Before:\n%s", SHOW(code.cfg()));
+    TRACE(OSDCE, 5, "Before:\n%s", SHOW(cfg));
     auto dead_instructions =
-        used_vars::get_dead_instructions(code, used_vars_fp_iter);
+        used_vars::get_dead_instructions(cfg, used_vars_fp_iter);
     auto local_init_class_instructions_added = 0;
     for (const auto& dead : dead_instructions) {
       // This logging is useful for quantifying what gets removed. E.g. to
@@ -182,21 +186,23 @@ void ObjectSensitiveDcePass::run_pass(DexStoresVector& stores,
           init_classes_with_side_effects.create_init_class_insn(
               get_init_class_type_demand(dead->insn));
       if (init_class_insn) {
-        code.replace_opcode(dead, {init_class_insn});
+        mutator.replace(dead, {init_class_insn});
         local_init_class_instructions_added++;
       } else {
-        code.remove_opcode(dead);
+        mutator.remove(dead);
       }
     }
-    transform::remove_unreachable_blocks(&code);
-    TRACE(OSDCE, 5, "After:\n%s", SHOW(&code));
+
+    mutator.flush();
+
+    cfg.remove_unreachable_blocks();
+    TRACE(OSDCE, 5, "After:\n%s", SHOW(cfg));
     if (!dead_instructions.empty()) {
       removed += dead_instructions.size();
       if (local_init_class_instructions_added > 0) {
         init_class_instructions_added += local_init_class_instructions_added;
-        cfg::ScopedCFG cfg(&code);
         init_classes::InitClassPruner init_class_pruner(
-            init_classes_with_side_effects, method->get_class(), *cfg);
+            init_classes_with_side_effects, method->get_class(), cfg);
         init_class_pruner.apply();
         std::lock_guard lock_guard(init_class_stats_mutex);
         init_class_stats += init_class_pruner.get_stats();
