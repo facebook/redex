@@ -66,6 +66,22 @@ class InterDexTest : public RedexIntegrationTest {
     EXPECT_EQ(expected_manifest, buffer.str());
   }
 
+  void define_throwing_test(
+      const std::vector<std::string>& betmap,
+      const std::string& expected_manifest,
+      bool minimize_cross_dex_refs_explore_alternatives = false) {
+    EXPECT_THROW(
+        try {
+          define_test(betmap,
+                      expected_manifest,
+                      minimize_cross_dex_refs_explore_alternatives);
+        } catch (RedexException& e) {
+          EXPECT_EQ(e.type, RedexError::INVALID_BETAMAP);
+          throw;
+        },
+        RedexException);
+  }
+
   std::string make_betmap_file(const std::string& tmp,
                                const std::vector<std::string>& betamap) {
     std::ofstream betamap_out;
@@ -305,4 +321,27 @@ TEST_F(InterDexTest, interdex_cross_dex_ref_minimization) {
   // First regular class is the one with highest seed weight
   EXPECT_EQ(stores[0].get_dexen()[1].front()->get_name()->str(), "Lcom/facebook/redextest/C7;");
 }
+
+TEST_F(InterDexTest, interdex_test_validate_class_spec) {
+  define_throwing_test({
+      "com/facebook/redextest/InterDexPrimary.class",
+      "com/facebook/redextest/C0.class",
+      "DexEndMarker0.class",
+      "com/facebook/redextest/C1.class",
+      "Lcom/facebook/redextest/C2;", // bad
+      "DexEndMarker1.class",
+      "com/facebook/redextest/C3.class",
+      "com/facebook/redextest/C4.class",
+      "com/facebook/redextest/C5.class",
+      "com/facebook/redextest/C6.class",
+      "com/facebook/redextest/C7.class",
+      "com/facebook/redextest/C8.class",
+      "com/facebook/redextest/C9.class"
+    },
+    "Lsecondary/dex00/Canary;,ordinal=0,coldstart=1,extended=0,primary=0,scroll=0,background=0\n"
+    "Lsecondary/dex01/Canary;,ordinal=1,coldstart=1,extended=0,primary=0,scroll=0,background=0\n"
+    "Lsecondary/dex02/Canary;,ordinal=2,coldstart=0,extended=0,primary=0,scroll=0,background=0\n"
+  );
+}
+
 /* clang-format on */
