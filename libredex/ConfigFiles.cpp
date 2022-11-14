@@ -21,6 +21,8 @@
 #include "MethodProfiles.h"
 #include "ProguardMap.h"
 
+using namespace std::string_literals;
+
 ConfigFiles::ConfigFiles(const Json::Value& config, const std::string& outdir)
     : m_json(config),
       outdir(outdir),
@@ -151,26 +153,46 @@ std::vector<std::string> ConfigFiles::load_coldstart_classes() {
   if (m_coldstart_class_filename.empty()) {
     return {};
   }
-  const char* kClassTail = ".class";
-  const size_t lentail = strlen(kClassTail);
-  auto file = m_coldstart_class_filename.c_str();
+
+  static constexpr std::string_view kClassTail = ".class";
+  static constexpr size_t lentail = kClassTail.size();
 
   std::vector<std::string> coldstart_classes;
 
-  std::ifstream input(file);
+  std::ifstream input(m_coldstart_class_filename);
   if (!input) {
-    fprintf(stderr,
-            "[error] Can not open <coldstart_classes> file, path is %s\n",
-            file);
-    exit(EXIT_FAILURE);
+    throw RedexException(
+        RedexError::INVALID_BETAMAP,
+        "[error] Can not open <coldstart_classes> file, path is "s +
+            m_coldstart_class_filename);
   }
+
+  auto validate_class_spec =
+      [](std::string_view class_spec) -> std::pair<bool, size_t> {
+    if (lentail >= class_spec.size()) {
+      return {false, static_cast<size_t>(-1)};
+    }
+
+    auto pos_tail = class_spec.size() - lentail;
+
+    if (class_spec.compare(pos_tail, lentail, kClassTail) != 0) {
+      return {false, static_cast<size_t>(-1)};
+    }
+
+    return {true, pos_tail};
+  };
+
   std::string clzname;
   while (input >> clzname) {
-    long position = clzname.length() - lentail;
-    always_assert_log(position >= 0,
-                      "Bailing, invalid class spec '%s' in interdex file %s\n",
-                      clzname.c_str(), file);
-    clzname.replace(position, lentail, ";");
+    auto [valid_class_spec, pos_tail] = validate_class_spec(clzname);
+    if (!valid_class_spec) {
+      throw RedexException(RedexError::INVALID_BETAMAP,
+                           "Bailing, invalid class spec"s +
+                               m_coldstart_class_filename +
+                               " in interdex file " + clzname);
+    }
+
+    clzname.replace(pos_tail, lentail, ";");
     coldstart_classes.emplace_back(
         m_proguard_map->translate_class("L" + clzname));
   }
