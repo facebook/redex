@@ -33,7 +33,7 @@
 #include "RedexMappedFile.h"
 #include "RedexResources.h"
 #include "Trace.h"
-#include "androidfw/Locale.h"
+#include "androidfw/LocaleValue.h"
 #include "androidfw/ResourceTypes.h"
 
 namespace {

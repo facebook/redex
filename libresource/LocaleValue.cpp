@@ -15,7 +15,7 @@
  */
 
 #include "android-base/macros.h"
-#include "androidfw/Locale.h"
+#include "androidfw/LocaleValue.h"
 #include "androidfw/Util.h"
 
 #include <ctype.h>
