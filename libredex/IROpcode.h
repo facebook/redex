@@ -30,6 +30,7 @@ enum class Ref {
   CallSite,
   MethodHandle,
   Data,
+  Proto
 };
 
 } // namespace opcode

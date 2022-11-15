@@ -977,6 +977,12 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
   case OPCODE_CONST_CLASS: {
     break;
   }
+  case OPCODE_CONST_METHOD_HANDLE: {
+    break;
+  }
+  case OPCODE_CONST_METHOD_TYPE: {
+    break;
+  }
   case OPCODE_MONITOR_ENTER:
   case OPCODE_MONITOR_EXIT: {
     assume_reference(current_state, insn->src(0));

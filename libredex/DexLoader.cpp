@@ -37,6 +37,10 @@ static void validate_dex_header(const dex_header* dh,
                     sizeof(dex_header));
   bool supported = false;
   switch (support_dex_version) {
+  case 39:
+    supported = supported ||
+                !memcmp(dh->magic, DEX_HEADER_DEXMAGIC_V39, sizeof(dh->magic));
+    FALLTHROUGH_INTENDED; /* intentional fallthrough to also check for v38 */
   case 38:
     supported = supported ||
                 !memcmp(dh->magic, DEX_HEADER_DEXMAGIC_V38, sizeof(dh->magic));

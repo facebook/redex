@@ -392,6 +392,8 @@ const DexType* OutlinerTypeAnalysis::get_result_type_helper(
 
   case OPCODE_INVOKE_CUSTOM:
   case OPCODE_INVOKE_POLYMORPHIC:
+  case OPCODE_CONST_METHOD_HANDLE:
+  case OPCODE_CONST_METHOD_TYPE:
     not_reached_log(
         "Unsupported instruction {%s} in "
         "get_result_type_helper\n",
@@ -725,6 +727,8 @@ const DexType* OutlinerTypeAnalysis::get_type_demand(IRInstruction* insn,
   }
   case OPCODE_INVOKE_CUSTOM:
   case OPCODE_INVOKE_POLYMORPHIC:
+  case OPCODE_CONST_METHOD_HANDLE:
+  case OPCODE_CONST_METHOD_TYPE:
     not_reached_log(
         "Unsupported instruction {%s} in "
         "get_type_demand\n",

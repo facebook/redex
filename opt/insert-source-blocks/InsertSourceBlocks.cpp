@@ -77,6 +77,7 @@ uint64_t stable_hash_value(const IRInstruction* insn) {
     break;
   case opcode::Ref::MethodHandle:
   case opcode::Ref::CallSite:
+  case opcode::Ref::Proto:
     always_assert_log(false, "Unsupported Ref");
     __builtin_unreachable();
   case opcode::Ref::None:

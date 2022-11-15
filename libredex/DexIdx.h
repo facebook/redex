@@ -106,6 +106,8 @@ class DexIdx {
     return m_field_cache[fidx];
   }
 
+  uint32_t get_method_ids_size() { return m_method_ids_size; }
+
   DexMethodRef* get_methodidx(uint32_t midx) {
     always_assert_type_log(
         midx < m_method_ids_size, RedexError::CACHE_INDEX_OUT_OF_BOUND,
@@ -148,6 +150,8 @@ class DexIdx {
     redex_assert(m_methodhandle_cache[mhidx]);
     return m_methodhandle_cache[mhidx];
   }
+
+  uint32_t get_proto_ids_size() { return m_proto_ids_size; }
 
   DexProto* get_protoidx(uint32_t pidx) {
     always_assert_type_log(

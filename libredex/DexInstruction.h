@@ -34,6 +34,7 @@ class DexInstruction : public Gatherable {
     REF_METHOD,
     REF_CALLSITE,
     REF_METHODHANDLE,
+    REF_PROTO,
   } m_ref_type{REF_NONE};
 
  private:
@@ -97,6 +98,7 @@ class DexInstruction : public Gatherable {
   bool has_method() const { return m_ref_type == REF_METHOD; }
   bool has_callsite() const { return m_ref_type == REF_CALLSITE; }
   bool has_methodhandle() const { return m_ref_type == REF_METHODHANDLE; }
+  bool has_proto() const { return m_ref_type == REF_PROTO; }
 
   bool has_range() const { return dex_opcode::has_range(opcode()); }
   bool has_literal() const { return dex_opcode::has_literal(opcode()); }
@@ -278,10 +280,8 @@ class DexOpcodeMethodHandle : public DexInstruction {
     return new DexOpcodeMethodHandle(*this);
   }
 
-  DexOpcodeMethodHandle(DexOpcode opcode,
-                        DexMethodHandle* methodhandle,
-                        uint16_t arg = 0)
-      : DexInstruction(opcode, arg) {
+  DexOpcodeMethodHandle(DexOpcode opcode, DexMethodHandle* methodhandle)
+      : DexInstruction(opcode) {
     m_methodhandle = methodhandle;
     m_ref_type = REF_METHODHANDLE;
   }
@@ -336,6 +336,27 @@ class DexOpcodeData : public DexInstruction {
   const uint16_t* data() const { return m_data.get(); }
   // This size refers to just the length of the data array
   size_t data_size() const { return m_data_count; }
+};
+
+class DexOpcodeProto : public DexInstruction {
+ private:
+  DexProto* m_proto;
+
+ public:
+  size_t size() const override;
+  void encode(DexOutputIdx* dodx, uint16_t*& insns) const override;
+  void gather_strings(std::vector<const DexString*>& lstring) const override;
+
+  DexOpcodeProto* clone() const override { return new DexOpcodeProto(*this); }
+
+  DexOpcodeProto(DexOpcode opcode, DexProto* proto) : DexInstruction(opcode) {
+    m_proto = proto;
+    m_ref_type = REF_PROTO;
+  }
+
+  DexProto* get_proto() const { return m_proto; }
+
+  void set_proto(DexProto* proto) { m_proto = proto; }
 };
 
 // helper function to create fill-array-data-payload according to

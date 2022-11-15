@@ -321,6 +321,8 @@ class InstructionAnalyzerCombiner final {
           std::index_sequence_for<Analyzers...>{}, insn, env);
     case OPCODE_CONST:
     case OPCODE_CONST_WIDE:
+    case OPCODE_CONST_METHOD_HANDLE:
+    case OPCODE_CONST_METHOD_TYPE:
       return analyze_const(std::index_sequence_for<Analyzers...>{}, insn, env);
     case OPCODE_CONST_STRING:
       return analyze_const_string(

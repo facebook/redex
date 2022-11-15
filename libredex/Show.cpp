@@ -209,6 +209,13 @@ std::string show_method(const DexMethodRef* ref, bool deobfuscated) {
   return b.str();
 }
 
+std::string show_methodhandle(const DexMethodHandle* ref, bool deobfuscated) {
+  if (ref == nullptr) {
+    return "";
+  }
+  return show_method(ref->methodref(), deobfuscated);
+}
+
 std::string show_opcode(const DexInstruction* insn, bool deobfuscated = false) {
   if (!insn) return "";
   std::ostringstream ss;
@@ -892,6 +899,17 @@ std::string show_opcode(const DexInstruction* insn, bool deobfuscated = false) {
     ss << show_method(static_cast<const DexOpcodeMethod*>(insn)->get_method(),
                       deobfuscated);
     return ss.str();
+  case DOPCODE_CONST_METHOD_HANDLE:
+    ss << "const-method-handle ";
+    ss << show_methodhandle(
+        static_cast<const DexOpcodeMethodHandle*>(insn)->get_methodhandle(),
+        deobfuscated);
+    return ss.str();
+  case DOPCODE_CONST_METHOD_TYPE:
+    ss << "const-method-type ";
+    ss << show_proto(static_cast<const DexOpcodeProto*>(insn)->get_proto(),
+                     deobfuscated);
+    return ss.str();
   }
 }
 
@@ -955,6 +973,9 @@ std::string show_insn(const IRInstruction* insn, bool deobfuscated) {
     } else {
       ss << show(insn->get_methodhandle());
     }
+    break;
+  case opcode::Ref::Proto:
+    ss << show_proto(insn->get_proto(), deobfuscated);
     break;
   }
   return ss.str();

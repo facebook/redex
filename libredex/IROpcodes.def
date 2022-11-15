@@ -152,7 +152,7 @@ OP(INVOKE_DIRECT     , invoke_direct     , Ref::Method, "invoke-direct")
 OP(INVOKE_STATIC     , invoke_static     , Ref::Method, "invoke-static")
 OP(INVOKE_INTERFACE  , invoke_interface  , Ref::Method, "invoke-interface")
 
-OP(INVOKE_POLYMORPHIC, invoke_polymorphic, Ref::MethodHandle, "invoke-polymorphic")
+OP(INVOKE_POLYMORPHIC, invoke_polymorphic, Ref::Method, "invoke-polymorphic")
 OP(INVOKE_CUSTOM     , invoke_custom     , Ref::CallSite, "invoke-custom")
 OP(NEG_INT           , neg_int           , Ref::None, "neg-int")
 OP(NOT_INT           , not_int           , Ref::None, "not-int")
@@ -220,6 +220,9 @@ OP(XOR_INT_LIT       , xor_int_lit       , Ref::Literal, "xor-int/lit")
 OP(SHL_INT_LIT       , shl_int_lit       , Ref::Literal, "shl-int/lit")
 OP(SHR_INT_LIT       , shr_int_lit       , Ref::Literal, "shr-int/lit")
 OP(USHR_INT_LIT      , ushr_int_lit      , Ref::Literal, "ushr-int/lit")
+
+OP(CONST_METHOD_HANDLE        , const_method_handle       , Ref::MethodHandle, "const-method-handle")
+OP(CONST_METHOD_TYPE          , const_method_type         , Ref::Proto, "const-method-type")
 
 // Internal opcodes cannot be mapped to a corresponding DexOpcode.
 OPRANGE(an_internal , IOPCODE_LOAD_PARAM, IOPCODE_INIT_CLASS)

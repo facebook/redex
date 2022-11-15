@@ -286,6 +286,8 @@ DexInstruction* create_dex_instruction(const IRInstruction* insn) {
     return new DexOpcodeCallSite(op, insn->get_callsite());
   case opcode::Ref::MethodHandle:
     return new DexOpcodeMethodHandle(op, insn->get_methodhandle());
+  case opcode::Ref::Proto:
+    return new DexOpcodeProto(op, insn->get_proto());
   }
 }
 

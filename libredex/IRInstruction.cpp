@@ -391,6 +391,7 @@ uint64_t IRInstruction::hash() const {
     }
     break;
   }
+  case opcode::Ref::Proto:
   case opcode::Ref::CallSite:
   case opcode::Ref::MethodHandle:
   case opcode::Ref::Field:
@@ -423,6 +424,7 @@ void IRInstruction::gather_types(std::vector<DexType*>& ltype) const {
   case opcode::Ref::Data:
   case opcode::Ref::CallSite:
   case opcode::Ref::MethodHandle:
+  case opcode::Ref::Proto:
     break;
 
   case opcode::Ref::Type:

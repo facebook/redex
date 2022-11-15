@@ -762,6 +762,20 @@ void DexOpcodeData::encode(DexOutputIdx* /* unused */, uint16_t*& insns) const {
   insns += m_data_count;
 }
 
+size_t DexOpcodeProto::size() const { return 3; }
+
+void DexOpcodeProto::encode(DexOutputIdx* dodx, uint16_t*& insns) const {
+  encode_opcode(insns);
+  uint16_t idx = dodx->protoidx(m_proto);
+  *insns++ = idx;
+  encode_args(insns);
+}
+
+void DexOpcodeProto::gather_strings(
+    std::vector<const DexString*>& lstring) const {
+  m_proto->gather_strings(lstring);
+}
+
 void DexInstruction::encode(DexOutputIdx* /* unused */,
                             uint16_t*& insns) const {
   encode_opcode(insns);
@@ -1033,8 +1047,8 @@ DexInstruction* DexInstruction::make_instruction(DexIdx* idx,
   case DOPCODE_INVOKE_POLYMORPHIC_RANGE: {
     uint16_t csidx = *insns++;
     uint16_t arg = *insns++;
-    DexMethodHandle* methodhandle = idx->get_methodhandleidx(csidx);
-    return new DexOpcodeMethodHandle(fopcode, methodhandle, arg);
+    DexMethodRef* meth = idx->get_methodidx(csidx);
+    return new DexOpcodeMethod(fopcode, meth, arg);
   }
   /* CallSite: */
   case DOPCODE_INVOKE_CUSTOM:
@@ -1071,6 +1085,16 @@ DexInstruction* DexInstruction::make_instruction(DexIdx* idx,
     uint16_t arg = *insns++;
     DexType* type = idx->get_typeidx(tidx);
     return new DexOpcodeType(fopcode, type, arg);
+  }
+  case DOPCODE_CONST_METHOD_HANDLE: {
+    uint16_t tidx = *insns++;
+    DexMethodHandle* methhandle = idx->get_methodhandleidx(tidx);
+    return new DexOpcodeMethodHandle(fopcode, methhandle);
+  }
+  case DOPCODE_CONST_METHOD_TYPE: {
+    uint16_t tidx = *insns++;
+    DexProto* proto = idx->get_protoidx(tidx);
+    return new DexOpcodeProto(fopcode, proto);
   }
   default:
     fprintf(stderr, "Unknown opcode %02x\n", opcode);
@@ -1185,6 +1209,11 @@ bool DexInstruction::operator==(const DexInstruction& that) const {
     auto this_ = static_cast<const DexOpcodeMethodHandle*>(this);
     auto that_ = static_cast<const DexOpcodeMethodHandle*>(&that);
     return this_->get_methodhandle() == that_->get_methodhandle();
+  }
+  case REF_PROTO: {
+    auto this_ = static_cast<const DexOpcodeProto*>(this);
+    auto that_ = static_cast<const DexOpcodeProto*>(&that);
+    return this_->get_proto() == that_->get_proto();
   }
   }
 }

@@ -552,6 +552,18 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     set_reference(current_state, RESULT_REGISTER, type::java_lang_Class());
     break;
   }
+  case OPCODE_CONST_METHOD_HANDLE: {
+    always_assert_log(false,
+                      "TypeInference::analyze_instruction does not support "
+                      "const-method-handle yet");
+    break;
+  }
+  case OPCODE_CONST_METHOD_TYPE: {
+    always_assert_log(false,
+                      "TypeInference::analyze_instruction does not support "
+                      "const-method-type yet");
+    break;
+  }
   case OPCODE_MONITOR_ENTER:
   case OPCODE_MONITOR_EXIT: {
     refine_reference(current_state, insn->src(0));
