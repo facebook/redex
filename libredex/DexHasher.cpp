@@ -49,6 +49,16 @@ class Impl final {
   void hash(uint8_t value);
   void hash(bool value);
   void hash(const IRCode* c);
+  void hash_code_init(
+      IRList::const_iterator begin,
+      IRList::const_iterator end,
+      std::unordered_map<const MethodItemEntry*, uint32_t>* mie_ids,
+      std::unordered_map<DexPosition*, uint32_t>* pos_ids);
+  void hash_code_flush(
+      IRList::const_iterator begin,
+      IRList::const_iterator end,
+      const std::unordered_map<const MethodItemEntry*, uint32_t>& mie_ids,
+      const std::unordered_map<DexPosition*, uint32_t>& pos_ids);
   void hash(const IRInstruction* insn);
   void hash(const EncodedAnnotations* a);
   void hash(const ParamAnnotations* m);
@@ -202,32 +212,46 @@ void Impl::hash(const IRCode* c) {
   auto old_hash = m_hash;
   m_hash = 0;
 
-  std::unordered_map<const MethodItemEntry*, uint32_t> mie_ids;
-  auto get_mie_id = [&mie_ids](const MethodItemEntry* mie) {
-    auto it = mie_ids.find(mie);
-    if (it != mie_ids.end()) {
-      return it->second;
-    } else {
-      auto id = (uint32_t)mie_ids.size();
-      mie_ids.emplace(mie, id);
-      return id;
-    }
-  };
-
-  std::unordered_map<DexPosition*, uint32_t> pos_ids;
-  auto get_pos_id = [&pos_ids](DexPosition* pos) {
-    auto it = pos_ids.find(pos);
-    if (it != pos_ids.end()) {
-      return it->second;
-    } else {
-      auto id = (uint32_t)pos_ids.size();
-      pos_ids.emplace(pos, id);
-      return id;
-    }
-  };
-
   hash(c->get_registers_size());
-  for (const MethodItemEntry& mie : *c) {
+  std::unordered_map<const MethodItemEntry*, uint32_t> mie_ids;
+  std::unordered_map<DexPosition*, uint32_t> pos_ids;
+
+  hash_code_init(c->begin(), c->end(), &mie_ids, &pos_ids);
+  hash_code_flush(c->begin(), c->end(), mie_ids, pos_ids);
+
+  boost::hash_combine(m_code_hash, m_hash);
+  m_hash = old_hash;
+}
+
+void Impl::hash_code_init(
+    IRList::const_iterator begin,
+    IRList::const_iterator end,
+    std::unordered_map<const MethodItemEntry*, uint32_t>* mie_ids,
+    std::unordered_map<DexPosition*, uint32_t>* pos_ids) {
+  auto get_mie_id = [mie_ids](const MethodItemEntry* mie) {
+    auto it = mie_ids->find(mie);
+    if (it != mie_ids->end()) {
+      return it->second;
+    } else {
+      auto id = (uint32_t)mie_ids->size();
+      mie_ids->emplace(mie, id);
+      return id;
+    }
+  };
+
+  auto get_pos_id = [pos_ids](DexPosition* pos) {
+    auto it = pos_ids->find(pos);
+    if (it != pos_ids->end()) {
+      return it->second;
+    } else {
+      auto id = (uint32_t)pos_ids->size();
+      pos_ids->emplace(pos, id);
+      return id;
+    }
+  };
+
+  for (auto code_it = begin; code_it != end; code_it++) {
+    const MethodItemEntry& mie = *code_it;
     switch (mie.type) {
     case MFLOW_OPCODE:
       hash((uint8_t)MFLOW_OPCODE);
@@ -281,9 +305,16 @@ void Impl::hash(const IRCode* c) {
       not_reached();
     }
   }
+}
 
+void Impl::hash_code_flush(
+    IRList::const_iterator begin,
+    IRList::const_iterator end,
+    const std::unordered_map<const MethodItemEntry*, uint32_t>& mie_ids,
+    const std::unordered_map<DexPosition*, uint32_t>& pos_ids) {
   uint32_t mie_index = 0;
-  for (const MethodItemEntry& mie : *c) {
+  for (auto code_it = begin; code_it != end; code_it++) {
+    const MethodItemEntry& mie = *code_it;
     auto it = mie_ids.find(&mie);
     if (it != mie_ids.end()) {
       hash(it->second);
@@ -302,9 +333,6 @@ void Impl::hash(const IRCode* c) {
     }
     mie_index++;
   }
-
-  boost::hash_combine(m_code_hash, m_hash);
-  m_hash = old_hash;
 }
 
 void Impl::hash(const DexProto* p) {
