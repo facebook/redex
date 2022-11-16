@@ -455,7 +455,8 @@ void DataFlowGraph::propagate_flow_constraints(
 
 DataFlowGraph instruction_graph(cfg::ControlFlowGraph& cfg,
                                 const std::vector<Constraint>& constraints,
-                                const std::unordered_set<LocationIx>& roots) {
+                                const std::unordered_set<LocationIx>& roots,
+                                Order* order) {
   if (!cfg.exit_block()) {
     // The instruction constraint analysis runs backwards and so requires a
     // single exit block to start from.
@@ -540,6 +541,9 @@ DataFlowGraph instruction_graph(cfg::ControlFlowGraph& cfg,
         }
       }
 
+      if (order) {
+        order->emplace(insn, order->size());
+      }
       analysis.analyze_instruction(insn, &env);
     }
   }

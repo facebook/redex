@@ -170,7 +170,7 @@ class OptimizeEnumsUnmapCfg {
     const src_index_t aget_src = cmp_location == m_flow.cmp_if_src1;
 
     // For each matching comparison...
-    for (auto* insn_cmp : res.matching(cmp_location)) {
+    for (auto* insn_cmp : res.order(res.matching(cmp_location))) {
       auto cmp_it = m_cfg.find_insn(insn_cmp);
       always_assert(!cmp_it.is_end());
 

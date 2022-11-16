@@ -392,9 +392,15 @@ struct result_t {
   using src_range = range<src_iterator>;
 
   /**
-   * Return all instructions referred to by l in these results.
+   * Return all instructions referred to by l in these results. Beware, the
+   * resulting range is unordered.
    */
   insn_range matching(location_t l) const;
+
+  /**
+   * Orders the elements of an unordered instruction range.
+   */
+  std::vector<IRInstruction*> order(insn_range range) const;
 
   /**
    * Assuming insn is referred to by l in these results, returns all the
@@ -411,10 +417,12 @@ struct result_t {
   friend std::ostream& operator<<(std::ostream&, const result_t&);
 
   /** result_t instances are only constructible by flow_t::find. */
-  explicit result_t(detail::Locations results)
-      : m_results(std::move(results)) {}
+  explicit result_t(detail::Locations results,
+                    std::shared_ptr<detail::Order> order)
+      : m_results(std::move(results)), m_order(std::move(order)) {}
 
   detail::Locations m_results;
+  std::shared_ptr<detail::Order> m_order;
 };
 
 template <typename M>
