@@ -1621,7 +1621,7 @@ class MethodNameGenerator {
   std::unordered_map<StableHash, size_t> m_unique_method_ids;
   size_t m_max_unique_method_id{0};
   size_t m_iteration;
-  std::atomic_int short_id_counter{0};
+  size_t short_id_counter{0};
 
  public:
   MethodNameGenerator() = delete;
