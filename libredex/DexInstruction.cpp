@@ -1162,6 +1162,10 @@ DexInstruction* DexInstruction::make_instruction(DexOpcode op) {
   case DOPCODE_FILLED_NEW_ARRAY:
   case DOPCODE_FILLED_NEW_ARRAY_RANGE:
     return new DexOpcodeType(op, nullptr);
+  case DOPCODE_CONST_METHOD_HANDLE:
+    return new DexOpcodeMethodHandle(op, nullptr);
+  case DOPCODE_CONST_METHOD_TYPE:
+    return new DexOpcodeProto(op, nullptr);
   default:
     return new DexInstruction(op);
   }

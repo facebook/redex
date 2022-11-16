@@ -86,9 +86,13 @@ TEST_F(IRInstructionTest, RoundTrip) {
     } else if (insn->has_field()) {
       static_cast<DexOpcodeField*>(insn)->set_field(field);
     } else if (insn->has_method()) {
-      // XXX We can / should test method-bearing instructions -- just need to
+      // TODO: We can / should test method-bearing instructions -- just need to
       // generate a method with a proto that matches the number of registers we
       // are passing in
+      continue;
+    } else if (insn->has_proto() || insn->has_methodhandle()) {
+      // TODO: We can / should test proto- and methodhandle-bearing instructions
+      // -- just need to generate a proto/methodhandle
       continue;
     }
 

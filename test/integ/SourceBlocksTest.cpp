@@ -807,7 +807,7 @@ TEST_F(SourceBlocksTest, source_blocks_access_methods) {
        "String;)Ljava/lang/String;",
        "B0: "
        "Lcom/facebook/redextest/"
-       "SourceBlocksTest;.access$5be80c743d1d5171$02(Ljava/lang/String;)Ljava/"
+       "SourceBlocksTest;.access$5be80c743d1d526b$02(Ljava/lang/String;)Ljava/"
        "lang/String;@0"},
       {"Lcom/facebook/redextest/SourceBlocksTest;.access$100:()V",
        "B0: "
@@ -914,7 +914,7 @@ INSTANTIATE_TEST_SUITE_P(
         {"profile_access_exact",
          "B0: "
          "Lcom/facebook/redextest/"
-         "SourceBlocksTest;.access$5be80c743d1d5171$02(Ljava/lang/"
+         "SourceBlocksTest;.access$5be80c743d1d526b$02(Ljava/lang/"
          "String;)Ljava/lang/String;@0(0.1:0.2)",
          "B0: "
          "Lcom/facebook/redextest/"
@@ -922,7 +922,7 @@ INSTANTIATE_TEST_SUITE_P(
         {"profile_access_hash",
          "B0: "
          "Lcom/facebook/redextest/"
-         "SourceBlocksTest;.access$5be80c743d1d5171$02(Ljava/lang/"
+         "SourceBlocksTest;.access$5be80c743d1d526b$02(Ljava/lang/"
          "String;)Ljava/lang/String;@0(0.6:0.7)",
          "B0: "
          "Lcom/facebook/redextest/"
@@ -931,7 +931,7 @@ INSTANTIATE_TEST_SUITE_P(
          // When both are available prefer hash.
          "B0: "
          "Lcom/facebook/redextest/"
-         "SourceBlocksTest;.access$5be80c743d1d5171$02(Ljava/lang/"
+         "SourceBlocksTest;.access$5be80c743d1d526b$02(Ljava/lang/"
          "String;)Ljava/lang/String;@0(0.6:0.7)",
          "B0: "
          "Lcom/facebook/redextest/"

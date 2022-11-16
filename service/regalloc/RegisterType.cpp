@@ -286,6 +286,9 @@ RegisterType dest_reg_type(const IRInstruction* insn) {
   case OPCODE_NEW_ARRAY:
   case OPCODE_FILLED_NEW_ARRAY:
     return RegisterType::OBJECT;
+  case OPCODE_CONST_METHOD_HANDLE:
+  case OPCODE_CONST_METHOD_TYPE:
+    return RegisterType::OBJECT;
   case IOPCODE_LOAD_PARAM:
     return RegisterType::NORMAL;
   case IOPCODE_LOAD_PARAM_OBJECT:

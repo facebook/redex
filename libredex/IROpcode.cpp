@@ -822,6 +822,10 @@ DexOpcode to_dex_opcode(IROpcode op) {
     return DOPCODE_NEW_ARRAY;
   case OPCODE_FILLED_NEW_ARRAY:
     return DOPCODE_FILLED_NEW_ARRAY;
+  case OPCODE_CONST_METHOD_HANDLE:
+    return DOPCODE_CONST_METHOD_HANDLE;
+  case OPCODE_CONST_METHOD_TYPE:
+    return DOPCODE_CONST_METHOD_TYPE;
   default:
     not_reached_log("Cannot create DexOpcode from %s", SHOW(op));
   }
