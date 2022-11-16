@@ -24,6 +24,7 @@ struct Config {
   bool debug_make_crashing{false};
   ProfileGuidanceConfig profile_guidance;
   bool outline_control_flow{true};
+  bool method_names_obfuscated{false};
 };
 
 } // namespace outliner

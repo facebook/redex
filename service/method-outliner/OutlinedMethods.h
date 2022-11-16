@@ -12,10 +12,13 @@
 namespace outliner {
 
 constexpr const char* OUTLINED_METHOD_NAME_PREFIX = "$outlined$";
+constexpr const char* OUTLINED_METHOD_SHORT_NAME_PREFIX = "$o$";
 
 inline bool is_outlined_method(const DexMethodRef* method) {
   return strncmp(method->get_name()->c_str(), OUTLINED_METHOD_NAME_PREFIX,
-                 strlen(OUTLINED_METHOD_NAME_PREFIX)) == 0;
+                 strlen(OUTLINED_METHOD_NAME_PREFIX)) == 0 ||
+                 strncmp(method->get_name()->c_str(), OUTLINED_METHOD_SHORT_NAME_PREFIX,
+                 strlen(OUTLINED_METHOD_SHORT_NAME_PREFIX)) == 0;
 }
 
 } // namespace outliner
