@@ -198,7 +198,8 @@ std::optional<MethodProfiles::ParsedMain> MethodProfiles::parse_main_internal(
     case NAME:
       // We move the string to a unique_ptr, so that its location is pinned, and
       // the string_views of the mdt are defined.
-      result.ref_str = std::make_unique<std::string>(cell);
+      result.ref_str = std::make_unique<std::string>(
+        m_pg_map.translate_method(std::string(cell)));
       result.mdt =
           dex_member_refs::parse_method</*kCheckFormat=*/true>(*result.ref_str);
       result.ref = DexMethod::get_method(*result.mdt);

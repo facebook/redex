@@ -31,8 +31,8 @@ ConfigFiles::ConfigFiles(const Json::Value& config, const std::string& outdir)
           new ProguardMap(config.get("proguard_map", "").asString(),
                           config.get("use_new_rename_map", 0).asBool())),
       m_printseeds(config.get("printseeds", "").asString()),
-      m_method_profiles(new method_profiles::MethodProfiles()),
-      m_secondary_method_profiles(new method_profiles::MethodProfiles()) {
+      m_method_profiles(new method_profiles::MethodProfiles(*m_proguard_map)),
+      m_secondary_method_profiles(new method_profiles::MethodProfiles(*m_proguard_map)) {
 
   m_coldstart_class_filename = config.get("coldstart_classes", "").asString();
   if (m_coldstart_class_filename.empty()) {

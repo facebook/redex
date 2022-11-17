@@ -16,6 +16,7 @@
 #include "MethodDedup.h"
 #include "NullPointerExceptionUtil.h"
 #include "PassManager.h"
+#include "ProguardMap.h"
 #include "Resolver.h"
 #include "Show.h"
 #include "Trace.h"
@@ -285,26 +286,26 @@ void RemoveUninstantiablesPass::Stats::report(PassManager& mgr) const {
 }
 
 // Map deobfuscated type name in internal format (La/b/MyClass;) to the obfuscated DexType*.
-std::unordered_map<std::string, DexType*> make_deobfuscated_map(const std::unordered_set<DexType*>& obfuscated_types) {
-  std::unordered_map<std::string, DexType*> deobfuscated_to_type;
+std::unordered_map<std::string_view, DexType*> make_deobfuscated_map(const std::unordered_set<DexType*>& obfuscated_types) {
+  std::unordered_map<std::string_view, DexType*> deobfuscated_to_type;
   for (auto obfuscated_type : obfuscated_types) {
     auto obfuscated_cls = type_class(obfuscated_type);
     auto deobfuscated_name = obfuscated_cls->get_deobfuscated_name().str();
     TRACE(
       RMUNINST, 4, "Mapping deobfuscated name to obfuscated type: '%s' -> '%s'",
-      deobfuscated_name.c_str(), SHOW(obfuscated_type));
+      deobfuscated_name.data(), SHOW(obfuscated_type));
     if (deobfuscated_to_type.count(deobfuscated_name) > 0) {
       always_assert_log(
         deobfuscated_to_type.count(deobfuscated_name),
         "Multiple uninstantiable types with same deobfuscated name! '%s' == '%s' && '%s'",
-        deobfuscated_name.c_str(),
+        deobfuscated_name.data(),
         SHOW(obfuscated_type),
         SHOW(deobfuscated_to_type.at(deobfuscated_name))
       );
     }
     deobfuscated_to_type.emplace(deobfuscated_name, obfuscated_type);
   }
-  return deobfuscated_to_type;
+  return std::move(deobfuscated_to_type);
 }
 
 // Handles a single line of usage.txt proguard file from `-printusage`.
@@ -328,7 +329,7 @@ std::unordered_map<std::string, DexType*> make_deobfuscated_map(const std::unord
 // classes.
 void UsageHandler::handle_usage_line(
     const std::string& line,
-    const std::unordered_map<std::string, DexType*>& deobfuscated_to_uninstantiable_type,
+    const std::unordered_map<std::string_view, DexType*>& deobfuscated_to_uninstantiable_type,
     std::unordered_set<DexType*>& uninstantiable_types) {
   TRACE(RMUNINST, 5, "usage.txt line: %s", line.c_str());
   // The current line is a class
@@ -387,7 +388,7 @@ void UsageHandler::handle_usage_line(
 // constructor that Proguard deleted.
 void RemoveUninstantiablesPass::readUsage(std::istream& usage_file, std::unordered_set<DexType*>& uninstantiable_types) {
   // uninstantiable_types may have obfuscated names. Deobfuscate for usage.txt.
-  std::unordered_map<std::string, DexType*> deobfuscated_to_uninstantiable_type =
+  std::unordered_map<std::string_view, DexType*> deobfuscated_to_uninstantiable_type =
       make_deobfuscated_map(uninstantiable_types);
   TRACE(
     RMUNINST, 1, "Mapped %lu deobfuscated<->obfuscated types",
@@ -589,7 +590,7 @@ void RemoveUninstantiablesPass::run_pass(DexStoresVector& stores,
   for (auto utype : scoped_uninstantiable_types) {
     TRACE(
       RMUNINST, 5, "uninstantiable class: %s -> %s",
-      SHOW(utype), type_class(utype)->get_deobfuscated_name_or_empty().c_str());
+      SHOW(utype), type_class(utype)->get_deobfuscated_name_or_empty().data());
   }
   for (auto itype : instantiable_children) {
     if (itype.first == nullptr) {
@@ -597,7 +598,7 @@ void RemoveUninstantiablesPass::run_pass(DexStoresVector& stores,
     }
     TRACE(
       RMUNINST, 5, "instantible class: %s -> %s",
-      SHOW(itype.first), type_class(itype.first)->get_deobfuscated_name_or_empty().c_str());
+      SHOW(itype.first), type_class(itype.first)->get_deobfuscated_name_or_empty().data());
   }
   OverriddenVirtualScopesAnalysis overridden_virtual_scopes_analysis(
       scope, scoped_uninstantiable_types, instantiable_children);

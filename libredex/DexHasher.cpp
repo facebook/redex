@@ -231,7 +231,7 @@ void Impl::hash(const IRCode* c) {
 
 void Impl::hash(const cfg::ControlFlowGraph& cfg) {
   hash(cfg.get_registers_size());
-  hash(cfg.entry_block()->id());
+  hash((uint64_t)cfg.entry_block()->id());
   std::unordered_map<const MethodItemEntry*, uint32_t> mie_ids;
   std::unordered_map<DexPosition*, uint32_t> pos_ids;
   for (auto b : cfg.blocks()) {

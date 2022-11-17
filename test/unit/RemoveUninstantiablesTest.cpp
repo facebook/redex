@@ -12,6 +12,7 @@
 #include "RedexTest.h"
 #include "RemoveUninstantiablesPass.h"
 #include "ScopeHelper.h"
+#include "Trace.h"
 #include "VirtualScope.h"
 
 namespace {
@@ -774,7 +775,7 @@ TEST_F(RemoveUninstantiablesTest, UsageHandlerMixedObfuscationUninstantiables_Us
   uninstantiable_types.emplace(unobfuscated_instantiable->get_type());
   uninstantiable_types.emplace(unobfuscated_uninstantiable->get_type());
 
-  std::unordered_map<std::string, DexType*> deobfuscated_uninstantiable_type;
+  std::unordered_map<std::string_view, DexType*> deobfuscated_uninstantiable_type;
   deobfuscated_uninstantiable_type.emplace("Ldeobfuscated/instantiable$name;", obfuscated_instantiable->get_type());
   deobfuscated_uninstantiable_type.emplace("Ldeobfuscated/uninstantiable$name;", obfuscated_uninstantiable->get_type());
 
@@ -812,7 +813,7 @@ TEST_F(RemoveUninstantiablesTest, MakeDeobfuscatedMapMixedObfuscation_OnlyDeobfu
 
   std::unordered_set<DexType*> uninstantiable_types;
   uninstantiable_types.emplace(obfuscated_class->get_type());
-  std::unordered_map<std::string, DexType*> deobfuscated_uninstantiable_type = 
+  std::unordered_map<std::string_view, DexType*> deobfuscated_uninstantiable_type =
       make_deobfuscated_map(uninstantiable_types);
   EXPECT_EQ(1, deobfuscated_uninstantiable_type.size());
   EXPECT_TRUE(deobfuscated_uninstantiable_type.count("deobfuscated.cls$name"));
@@ -846,6 +847,7 @@ R"(deobfuscated.cls$name -> a.b.c$d :
   std::basic_istringstream proguard_input(proguard_input_str);
 
   ConfigFiles c(Json::nullValue, proguard_input);
+  c.parse_global_config();
 
   PassManager pm({&pass});
   // applying deobfuscation happens in main.cpp which seems like bad design
@@ -856,15 +858,15 @@ R"(deobfuscated.cls$name -> a.b.c$d :
   pm.run_passes(dss, c);
   ASSERT_EQ(1, dss.back().get_dexen().size());
   ASSERT_EQ(1, dss.back().get_dexen().at(0).size());
-  
+
   EXPECT_THAT(dss.back().get_dexen().at(0).at(0)->get_name()->c_str(), testing::StrEq("La/b/c$d;"));
   EXPECT_THAT(dss.back().get_dexen().at(0).at(0)->get_deobfuscated_name().c_str(), testing::StrEq("Ldeobfuscated/cls$name;"));
-  
+
   ASSERT_EQ(1, dss.back().get_dexen().at(0).at(0)->get_all_methods().size());
   EXPECT_THAT(dss.back().get_dexen().at(0).at(0)->get_all_methods().at(0)->get_name()->c_str(), testing::StrEq("something"));
-  
+
   ASSERT_TRUE(dss.back().get_dexen().at(0).at(0)->get_all_methods().at(0)->get_code());
-  EXPECT_THAT(expected_code, assembler::to_string(dss.back().get_dexen().at(0).at(0)->get_all_methods().at(0)->get_code()));
+  EXPECT_THAT(expected_code, testing::StrEq(assembler::to_string(dss.back().get_dexen().at(0).at(0)->get_all_methods().at(0)->get_code())));
   EXPECT_THAT(dss.back().get_dexen().at(0).at(0)->get_vmethods(), testing::ContainerEq(dss.back().get_dexen().at(0).at(0)->get_all_methods()));
 
   const auto& pass_infos = pm.get_pass_info();

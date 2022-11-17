@@ -11,6 +11,7 @@
 #include <string_view>
 
 #include "DexClass.h"
+#include "ProguardMap.h"
 #include "Timer.h"
 #include "Trace.h"
 
@@ -60,7 +61,8 @@ const std::string COLD_START = "ColdStart";
 
 class MethodProfiles {
  public:
-  MethodProfiles() {}
+  MethodProfiles(): m_pg_map(std::move(ProguardMap())) {}
+  MethodProfiles(const ProguardMap& pg_map): m_pg_map(pg_map) {}
 
   void initialize(const std::vector<std::string>& csv_filenames) {
     m_initialized = true;
@@ -136,6 +138,7 @@ class MethodProfiles {
 
  private:
   static AccumulatingTimer s_process_unresolved_lines_timer;
+  const ProguardMap& m_pg_map;
   AllInteractions m_method_stats;
   // Resolution may fail because of renaming or generated methods. Store the
   // unresolved lines here (per interaction) so we can update after passes run

@@ -14,7 +14,7 @@ namespace cfg {
 class ControlFlowGraph;
 } // namespace cfg
 
-std::unordered_map<std::string, DexType*> make_deobfuscated_map(const std::unordered_set<DexType*>& obfuscated_types);
+std::unordered_map<std::string_view, DexType*> make_deobfuscated_map(const std::unordered_set<DexType*>& obfuscated_types);
 
 class UsageHandler {
  public:
@@ -38,7 +38,7 @@ class UsageHandler {
 
   void handle_usage_line(
     const std::string& line,
-    const std::unordered_map<std::string, DexType*>& deobfuscated_uninstantiable_type,
+    const std::unordered_map<std::string_view, DexType*>& deobfuscated_uninstantiable_type,
     std::unordered_set<DexType*>& uninstantiable_types);
 };
 
