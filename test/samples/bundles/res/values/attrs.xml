@@ -18,6 +18,7 @@
       <enum name="shimmer" value="3"/>
     </attr>
     <attr name="unused_boolean_attr" format="boolean" />
+    <attr name="dangerous" format="string" />
   </declare-styleable>
 
   <attr name="SameAttributeA">
