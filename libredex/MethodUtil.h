@@ -23,6 +23,11 @@ bool is_init(const DexMethodRef* method);
 bool is_clinit(const DexMethodRef* method);
 
 /**
+ * True if the method is a constructor without arguments
+ */
+bool is_argless_init(const DexMethodRef* method);
+
+/**
  * Whether the method is a ctor or static ctor.
  */
 inline bool is_any_init(const DexMethodRef* method) {

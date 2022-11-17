@@ -382,15 +382,13 @@ void TransitiveClosureMarker::visit_cls(const DexClass* cls) {
   for (auto& m : cls->get_dmethods()) {
     if (method::is_clinit(m)) {
       push(cls, m);
-    } else if (method::is_init(m)) {
+    } else if (!m_remove_no_argument_constructors &&
+               method::is_argless_init(m)) {
       // Push the parameterless constructor, in case it's constructed via
       // .class or Class.forName()
       // if m_remove_no_argument_constructors, make an exception. This is only
       // used for testing
-      if (!m_remove_no_argument_constructors &&
-          m->get_proto()->get_args()->empty()) {
-        push(cls, m);
-      }
+      push(cls, m);
     }
   }
   push(cls, type_class(cls->get_super_class()));
