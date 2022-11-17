@@ -148,14 +148,16 @@ class ResourceTableFile {
   virtual void remap_file_paths_and_serialize(
       const std::vector<std::string>& resource_files,
       const std::unordered_map<std::string, std::string>& old_to_new) = 0;
-  // Rename qualified resource names that are in allowed type and don't have
-  // keep_resource_prefixes to "(name removed)". Also rename filepaths
-  // according to filepath_old_to_new.
+  // Rename qualified resource names that are in allowed type, and are not in
+  // the specific list of resource names to keep and don't have a prefix in the
+  // keep_resource_prefixes set. All such resource names will be rewritten to
+  // "(name removed)". Also, rename filepaths according to filepath_old_to_new.
   virtual size_t obfuscate_resource_and_serialize(
       const std::vector<std::string>& resource_files,
       const std::map<std::string, std::string>& filepath_old_to_new,
       const std::unordered_set<uint32_t>& allowed_types,
-      const std::unordered_set<std::string>& keep_resource_prefixes) = 0;
+      const std::unordered_set<std::string>& keep_resource_prefixes,
+      const std::unordered_set<std::string>& keep_resource_specific) = 0;
 
   // Removes entries from string pool structures that are not referenced by
   // entries/values in the resource table
@@ -263,6 +265,14 @@ class AndroidResources {
       const std::unordered_set<std::string>& attributes_to_read,
       std::unordered_set<std::string>* out_classes,
       std::unordered_multimap<std::string, std::string>* out_attributes) = 0;
+  // Similar to collect_layout_classes_and_attributes, but less focused to cover
+  // custom View subclasses that might be doing interesting things with string
+  // values
+  void collect_xml_attribute_string_values(
+      std::unordered_set<std::string>* out);
+  // As above, for single file.
+  virtual void collect_xml_attribute_string_values_for_file(
+      const std::string& file_path, std::unordered_set<std::string>* out) = 0;
   virtual std::unique_ptr<ResourceTableFile> load_res_table() = 0;
   virtual size_t remap_xml_reference_attributes(
       const std::string& filename,

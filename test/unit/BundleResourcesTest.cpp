@@ -474,10 +474,8 @@ TEST(BundleResources, ObfuscateResourcesName) {
     filepath_old_to_new["base/res/drawable-mdpi-v4/icon.png"] =
         "base/res/a.png";
     res_table->obfuscate_resource_and_serialize(
-        resources->find_resources_files(),
-        filepath_old_to_new,
-        shifted_allow_type_ids,
-        {"keep_me_unused_"});
+        resources->find_resources_files(), filepath_old_to_new,
+        shifted_allow_type_ids, {"keep_me_unused_"}, {});
 
     auto res_table_new = resources->load_res_table();
 

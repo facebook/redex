@@ -64,7 +64,8 @@ class ResourcesPbFile : public ResourceTableFile {
       const std::vector<std::string>& resource_files,
       const std::map<std::string, std::string>& filepath_old_to_new,
       const std::unordered_set<uint32_t>& allowed_types,
-      const std::unordered_set<std::string>& keep_resource_prefixes) override;
+      const std::unordered_set<std::string>& keep_resource_prefixes,
+      const std::unordered_set<std::string>& keep_resource_specific) override;
   void get_configurations(
       uint32_t package_id,
       const std::string& name,
@@ -104,6 +105,9 @@ class BundleResources : public AndroidResources {
       std::unordered_set<std::string>* out_classes,
       std::unordered_multimap<std::string, std::string>* out_attributes)
       override;
+  void collect_xml_attribute_string_values_for_file(
+      const std::string& file_path,
+      std::unordered_set<std::string>* out) override;
   size_t remap_xml_reference_attributes(
       const std::string& filename,
       const std::map<uint32_t, uint32_t>& kept_to_remapped_ids) override;

@@ -228,7 +228,8 @@ class ResourcesArscFile : public ResourceTableFile {
       const std::vector<std::string>& resource_files,
       const std::map<std::string, std::string>& filepath_old_to_new,
       const std::unordered_set<uint32_t>& allowed_types,
-      const std::unordered_set<std::string>& keep_resource_prefixes) override;
+      const std::unordered_set<std::string>& keep_resource_prefixes,
+      const std::unordered_set<std::string>& keep_resource_specific) override;
   size_t serialize();
 
   size_t package_count() override;
@@ -304,6 +305,9 @@ class ApkResources : public AndroidResources {
       std::unordered_set<std::string>* out_classes,
       std::unordered_multimap<std::string, std::string>* out_attributes)
       override;
+  void collect_xml_attribute_string_values_for_file(
+      const std::string& file_path,
+      std::unordered_set<std::string>* out) override;
 
   // Given the bytes of a binary XML file, replace the entries (if any) in the
   // ResStringPool. Writes result to the given Vector output param.

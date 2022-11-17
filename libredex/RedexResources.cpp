@@ -295,6 +295,39 @@ void AndroidResources::collect_layout_classes_and_attributes(
   }
 }
 
+void AndroidResources::collect_xml_attribute_string_values(
+    std::unordered_set<std::string>* out) {
+  std::mutex out_mutex;
+  workqueue_run<std::string>(
+      [&](sparta::SpartaWorkerState<std::string>* worker_state,
+          const std::string& input) {
+        if (input.empty()) {
+          // Dispatcher, find files and create tasks.
+          auto directories = find_res_directories();
+          for (const auto& dir : directories) {
+            TRACE(RES, 9, "Scanning %s for xml files for attribute values",
+                  dir.c_str());
+            find_resource_xml_files(dir, {}, [&](const std::string& file) {
+              worker_state->push_task(file);
+            });
+          }
+
+          return;
+        }
+
+        std::unordered_set<std::string> local_out_values;
+        collect_xml_attribute_string_values_for_file(input, &local_out_values);
+        if (!local_out_values.empty()) {
+          std::unique_lock<std::mutex> lock(out_mutex);
+          // C++17: use merge to avoid copies.
+          out->insert(local_out_values.begin(), local_out_values.end());
+        }
+      },
+      std::vector<std::string>{""},
+      std::min(redex_parallel::default_num_threads(), kReadXMLThreads),
+      /*push_tasks_while_running=*/true);
+}
+
 void AndroidResources::rename_classes_in_layouts(
     const std::map<std::string, std::string>& rename_map) {
   workqueue_run<std::string>(

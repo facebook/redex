@@ -924,6 +924,47 @@ void ApkResources::collect_layout_classes_and_attributes_for_file(
 }
 
 namespace {
+class XmlStringAttributeCollector : public arsc::XmlFileVisitor {
+ public:
+  ~XmlStringAttributeCollector() override {}
+
+  bool visit_global_strings(android::ResStringPool_header* pool) override {
+    always_assert_log(m_string_pool->setTo(pool, dtohl(pool->header.size),
+                                           true) == android::NO_ERROR,
+                      "Failed to parse xml strings!");
+    return true;
+  }
+
+  bool visit_typed_data(android::Res_value* value) override {
+    if (value->dataType == android::Res_value::TYPE_STRING) {
+      auto idx = dtohl(value->data);
+      if (apk::is_valid_global_string(*m_string_pool, idx)) {
+        auto s = apk::get_string_from_pool(*m_string_pool, idx);
+        m_values.emplace(s);
+      }
+    }
+    return true;
+  }
+
+  std::shared_ptr<android::ResStringPool> m_string_pool =
+      std::make_shared<android::ResStringPool>();
+  std::unordered_set<std::string> m_values;
+};
+} // namespace
+
+void ApkResources::collect_xml_attribute_string_values_for_file(
+    const std::string& file_path, std::unordered_set<std::string>* out) {
+  redex::read_file_with_contents(file_path, [&](const char* data, size_t size) {
+    if (is_binary_xml(data, size)) {
+      XmlStringAttributeCollector collector;
+      if (collector.visit((void*)data, size)) {
+        out->insert(collector.m_values.begin(), collector.m_values.end());
+      }
+    }
+  });
+}
+
+namespace {
 template <typename ValueType>
 boost::optional<ValueType> read_xml_value(
     const std::string& file_path,
@@ -1796,7 +1837,8 @@ size_t ResourcesArscFile::obfuscate_resource_and_serialize(
     const std::vector<std::string>& /* unused */,
     const std::map<std::string, std::string>& filepath_old_to_new,
     const std::unordered_set<uint32_t>& allowed_types,
-    const std::unordered_set<std::string>& keep_resource_prefixes) {
+    const std::unordered_set<std::string>& keep_resource_prefixes,
+    const std::unordered_set<std::string>& keep_resource_specific) {
   arsc::ResTableBuilder table_builder;
 
   // Find the global string pool and read its settings.
@@ -1893,13 +1935,13 @@ size_t ResourcesArscFile::obfuscate_resource_and_serialize(
         auto old = dtohl(ref->index);
         std::string old_string =
             apk::get_string_from_pool(*key_string_pool, old);
-        if (std::find_if(keep_resource_prefixes.begin(),
+        if (keep_resource_specific.count(old_string) > 0 ||
+            std::find_if(keep_resource_prefixes.begin(),
                          keep_resource_prefixes.end(),
                          [&](const std::string& v) {
                            return old_string.find(v) == 0;
                          }) != keep_resource_prefixes.end()) {
-          // Resource name matches one of the block prefix - Don't change the
-          // name
+          // Resource name matches block criteria; don't change the name.
           continue;
         }
         TRACE(RES, 9, "REMAP OLD KEY %u", old);
