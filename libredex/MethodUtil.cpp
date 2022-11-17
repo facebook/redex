@@ -173,6 +173,10 @@ bool is_clinit(const DexMethodRef* method) {
   return strcmp(method->get_name()->c_str(), "<clinit>") == 0;
 }
 
+bool is_argless_init(const DexMethodRef* method) {
+  return is_init(method) && method->get_proto()->get_args()->empty();
+}
+
 bool is_trivial_clinit(const IRCode& code) {
   always_assert(!code.editable_cfg_built());
   auto ii = InstructionIterable(code);

@@ -75,7 +75,7 @@ RootAndDynamic SingleCalleeStrategy::get_roots() const {
   auto& roots = root_and_dynamic.roots;
   walk::code(m_scope, [&](DexMethod* method, IRCode& /* code */) {
     if (is_definitely_virtual(method) || root(method) ||
-        method::is_clinit(method)) {
+        method::is_clinit(method) || method::is_argless_init(method)) {
       roots.emplace_back(method);
     }
   });
@@ -123,9 +123,10 @@ RootAndDynamic MultipleCalleeBaseStrategy::get_roots() const {
     if (method->rstate.dont_inline()) {
       dynamic_methods.emplace(method);
     }
-    if (!root(method) && !(method->is_virtual() &&
-                           is_interface(type_class(method->get_class())) &&
-                           !can_rename(method))) {
+    if (!root(method) && !method::is_argless_init(method) &&
+        !(method->is_virtual() &&
+          is_interface(type_class(method->get_class())) &&
+          !can_rename(method))) {
       // For root methods and dynamically added classes, created via
       // Proxy.newProxyInstance, we need to add them and their overrides and
       // overriden to roots.
@@ -260,7 +261,8 @@ RootAndDynamic CompleteCallGraphStrategy::get_roots() const {
     }
   };
   walk::methods(m_scope, [&](DexMethod* method) {
-    if (root(method) || method::is_clinit(method)) {
+    if (root(method) || method::is_clinit(method) ||
+        method::is_argless_init(method)) {
       if (emplaced_methods.emplace(method).second) {
         roots.emplace_back(method);
       }
