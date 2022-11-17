@@ -32,7 +32,7 @@ constexpr char kPathDelim =
 
 bool is_deliminator(char ch) {
   return isspace(ch) || ch == '{' || ch == '}' || ch == '(' || ch == ')' ||
-         ch == ',' || ch == ';' || ch == ':' || ch == EOF || ch == '#';
+         ch == ',' || ch == ';' || ch == ':' || ch == '#';
 }
 
 bool is_not_idenfitier_character(char ch) {
@@ -786,6 +786,9 @@ std::vector<Token> lex(const std::string_view& in) {
       continue;
     }
 
+    // At this point:
+    // * data is not empty
+    // * it does not start with a deliminator
     auto word = parse_part_fn</*kSkipWs=*/false>(data, &line, is_deliminator);
 
     {
