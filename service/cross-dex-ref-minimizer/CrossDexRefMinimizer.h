@@ -174,8 +174,6 @@ class CrossDexRefMinimizer {
   // Gather frequency counts; must be called for relevant classes before
   // inserting them
   void sample(DexClass* cls);
-  // Ignore a class reference when computing weights
-  void ignore(DexClass* cls);
   void insert(DexClass* cls);
   bool empty() const;
   DexClass* front() const;
