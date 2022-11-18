@@ -769,7 +769,7 @@ struct NetSavings {
       }
     }
     for (auto method : methods) {
-      if (can_delete(method)) {
+      if (can_delete(method) && !method::is_argless_init(method)) {
         auto code_size = get_code_size(method);
         net_savings += COST_METHOD + code_size;
         if (is_static(method)) {

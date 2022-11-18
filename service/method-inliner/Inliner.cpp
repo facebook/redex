@@ -1058,7 +1058,8 @@ bool MultiMethodInliner::should_inline_fast(const DexMethod* callee) {
   // as the method can be removed afterwards
   const auto& callers = callee_caller.at(callee);
   if (callers.size() == 1 && callers.begin()->second == 1 && !root(callee) &&
-      !m_recursive_callees.count(callee) && !m_x_dex_callees.count(callee) &&
+      !method::is_argless_init(callee) && !m_recursive_callees.count(callee) &&
+      !m_x_dex_callees.count(callee) &&
       !m_true_virtual_callees_with_other_call_sites.count(callee)) {
     return true;
   }
@@ -1575,7 +1576,7 @@ bool MultiMethodInliner::can_inline_init(const DexMethod* init_method) {
 bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
   bool can_delete_callee = true;
   if (root(callee) || m_recursive_callees.count(callee) ||
-      m_x_dex_callees.count(callee) ||
+      m_x_dex_callees.count(callee) || method::is_argless_init(callee) ||
       m_true_virtual_callees_with_other_call_sites.count(callee) ||
       !m_config.multiple_callers) {
     if (m_config.use_call_site_summaries) {
