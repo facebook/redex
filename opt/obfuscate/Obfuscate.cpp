@@ -245,12 +245,6 @@ void obfuscate(Scope& scope,
 void ObfuscatePass::run_pass(DexStoresVector& stores,
                              ConfigFiles& /* conf */,
                              PassManager& mgr) {
-  if (mgr.no_proguard_rules()) {
-    TRACE(OBFUSCATE, 1,
-          "ObfuscatePass not run because no ProGuard configuration was "
-          "provided.");
-    return;
-  }
   auto scope = build_class_scope(stores);
   RenameStats stats;
   auto debug_info_kind = mgr.get_redex_options().debug_info_kind;

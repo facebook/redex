@@ -219,13 +219,6 @@ void InterDexPass::run_pass_on_nonroot_store(
 void InterDexPass::run_pass(DexStoresVector& stores,
                             ConfigFiles& conf,
                             PassManager& mgr) {
-  if (mgr.no_proguard_rules()) {
-    TRACE(
-        IDEX, 1,
-        "InterDexPass not run because no ProGuard configuration was provided.");
-    return;
-  }
-
   Scope original_scope = build_class_scope(stores);
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       original_scope, conf.create_init_class_insns());

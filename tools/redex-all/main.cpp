@@ -915,6 +915,13 @@ void redex_frontend(ConfigFiles& conf, /* input */
                   parser_stats.unknown_commands == 0);
   }
 
+  if (pg_config.keep_rules.empty()) {
+    std::cerr << "error: No ProGuard keep rules provided. Redex optimizations "
+                 "will not preserve semantics without accurate keep rules."
+              << std::endl;
+    exit(EXIT_FAILURE);
+  }
+
   {
     Json::Value d;
     using u64 = Json::Value::UInt64;

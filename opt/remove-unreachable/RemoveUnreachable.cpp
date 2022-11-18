@@ -176,14 +176,6 @@ void RemoveUnreachablePassBase::run_pass(DexStoresVector& stores,
   // Store names of removed classes and methods
   ConcurrentSet<std::string> removed_symbols;
 
-  if (pm.no_proguard_rules()) {
-    TRACE(RMU,
-          1,
-          "RemoveUnreachablePass not run because no "
-          "ProGuard configuration was provided.");
-    return;
-  }
-
   root_metrics(stores, pm);
 
   bool emit_graph_this_run =

@@ -1093,13 +1093,6 @@ void FinalInlinePassV2::run_pass(DexStoresVector& stores,
       !mgr.init_class_lowering_has_run(),
       "Implementation limitation: FinalInlinePassV2 could introduce new "
       "init-class instructions.");
-  if (mgr.no_proguard_rules()) {
-    TRACE(FINALINLINE,
-          1,
-          "FinalInlinePassV2 not run because no ProGuard configuration was "
-          "provided.");
-    return;
-  }
   auto scope = build_class_scope(stores);
   auto min_sdk = mgr.get_redex_options().min_sdk;
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(

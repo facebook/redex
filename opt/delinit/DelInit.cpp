@@ -578,12 +578,6 @@ int DeadRefs::remove_unreachable(Scope& scope) {
 void DelInitPass::run_pass(DexStoresVector& stores,
                            ConfigFiles& /* conf */,
                            PassManager& mgr) {
-  if (mgr.no_proguard_rules()) {
-    TRACE(
-        DELINIT, 1,
-        "DelInitPass not run because no ProGuard configuration was provided.");
-    return;
-  }
   package_filter = m_package_filter;
   auto scope = build_class_scope(stores);
   find_referenced_classes(scope);

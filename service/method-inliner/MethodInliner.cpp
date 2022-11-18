@@ -640,13 +640,6 @@ void run_inliner(DexStoresVector& stores,
       !mgr.init_class_lowering_has_run(),
       "Implementation limitation: The inliner could introduce new "
       "init-class instructions.");
-  if (mgr.no_proguard_rules()) {
-    TRACE(INLINE, 1,
-          "MethodInlinePass not run because no ProGuard configuration was "
-          "provided.");
-    return;
-  }
-
   auto scope = build_class_scope(stores);
 
   auto inliner_config = conf.get_inliner_config();

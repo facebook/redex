@@ -226,14 +226,6 @@ bool RemoveBuildersPass::escapes_stack(DexType* builder, DexMethod* method) {
 void RemoveBuildersPass::run_pass(DexStoresVector& stores,
                                   ConfigFiles& conf,
                                   PassManager& mgr) {
-  if (mgr.no_proguard_rules()) {
-    TRACE(BUILDERS,
-          1,
-          "RemoveBuildersPass did not run because no Proguard configuration "
-          "was provided.");
-    return;
-  }
-
   // Initialize couters.
   b_counter = {0, 0, 0, 0};
 
