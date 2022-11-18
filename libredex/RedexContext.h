@@ -210,6 +210,11 @@ struct RedexContext {
   // This is for convenience.
   bool instrument_mode{false};
 
+  bool ordering_changes_allowed() const { return m_ordering_changes_allowed; }
+  void set_ordering_changes_allowed(bool new_val) {
+    m_ordering_changes_allowed = new_val;
+  }
+
  private:
   struct Strcmp;
   struct TruncatedStringHash;
@@ -440,4 +445,6 @@ struct RedexContext {
   // Return values map specified by Proguard assume value
   ConcurrentMap<DexMethod*, std::unique_ptr<keep_rules::AssumeReturnValue>>
       method_return_values;
+
+  bool m_ordering_changes_allowed{true};
 };

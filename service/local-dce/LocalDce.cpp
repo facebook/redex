@@ -22,6 +22,7 @@
 #include "NullPointerExceptionUtil.h"
 #include "Purity.h"
 #include "ReachingDefinitions.h"
+#include "RedexContext.h"
 #include "Resolver.h"
 #include "ScopedCFG.h"
 #include "Show.h"
@@ -314,6 +315,10 @@ void LocalDce::normalize_new_instances(cfg::ControlFlowGraph& cfg) {
   // TODO: This normalization optimization doesn't really belong to local-dce,
   // but it combines nicely as local-dce will clean-up redundant new-instance
   // instructions and moves afterwards.
+
+  if (!g_redex->ordering_changes_allowed()) {
+    return;
+  }
 
   // Let's not do the transformation if there's a chance that it could leave
   // behind dangling new-instance instructions that LocalDce couldn't remove.

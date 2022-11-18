@@ -1667,4 +1667,15 @@ public class InstrumentBasicBlockTarget {
       assertThat(hitValue).isEqualTo(blockHitList[i]);
     }
   }
+
+  @Test
+  @DoNotStrip
+  public void testFuncNewInstanceOrder() {
+    try {
+      String input = "const";
+      String output = new String(input);
+      assertThat(output).isEqualTo(input);
+    } catch (RuntimeException e) {
+    }
+  }
 }

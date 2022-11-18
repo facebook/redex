@@ -14,6 +14,7 @@
 #include "Inliner.h"
 #include "LoopInfo.h"
 #include "MethodReference.h"
+#include "RedexContext.h"
 #include "ScopedMetrics.h"
 #include "Show.h"
 #include "SourceBlocks.h"
@@ -1708,6 +1709,11 @@ void BlockInstrumentHelper::do_basic_block_tracing(
     ConfigFiles& cfg,
     PassManager& pm,
     const InstrumentPass::Options& options) {
+  // Do not allow semantics-changing reorderings anymore. They may move the
+  // instrumentation instructions relative to their anchors. An example is
+  // new-instance normalization.
+  g_redex->set_ordering_changes_allowed(false);
+
   // I'm too lazy to support sharding in block instrumentation. Future work.
   const size_t NUM_SHARDS = options.num_shards;
   if (NUM_SHARDS != 1 || options.num_stats_per_method != 0) {
