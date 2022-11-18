@@ -156,7 +156,6 @@ std::unordered_set<DexClass*> find_unrefenced_coldstart_classes(
 
 void gather_refs(
     const std::vector<std::unique_ptr<interdex::InterDexPassPlugin>>& plugins,
-    const interdex::DexInfo& dex_info,
     const DexClass* cls,
     interdex::MethodRefs* mrefs,
     interdex::FieldRefs* frefs,
@@ -172,7 +171,7 @@ void gather_refs(
   cls->gather_init_classes(init_type_refs);
 
   for (const auto& plugin : plugins) {
-    plugin->gather_refs(dex_info, cls, method_refs, field_refs, type_refs,
+    plugin->gather_refs(cls, method_refs, field_refs, type_refs,
                         init_type_refs);
   }
 
@@ -347,8 +346,8 @@ InterDex::EmitResult InterDex::emit_class(
   FieldRefs clazz_frefs;
   TypeRefs clazz_trefs;
   TypeRefs clazz_itrefs;
-  gather_refs(m_plugins, dex_info, clazz, &clazz_mrefs, &clazz_frefs,
-              &clazz_trefs, &clazz_itrefs);
+  gather_refs(m_plugins, clazz, &clazz_mrefs, &clazz_frefs, &clazz_trefs,
+              &clazz_itrefs);
 
   bool fits_current_dex =
       emitting_state.dexes_structure.add_class_to_current_dex(
@@ -1020,8 +1019,8 @@ void InterDex::run_in_force_single_dex_mode() {
     FieldRefs clazz_frefs;
     TypeRefs clazz_trefs;
     TypeRefs clazz_itrefs;
-    gather_refs(m_plugins, dex_info, cls, &clazz_mrefs, &clazz_frefs,
-                &clazz_trefs, &clazz_itrefs);
+    gather_refs(m_plugins, cls, &clazz_mrefs, &clazz_frefs, &clazz_trefs,
+                &clazz_itrefs);
 
     m_emitting_state.dexes_structure.add_class_no_checks(
         clazz_mrefs, clazz_frefs, clazz_trefs, clazz_itrefs, cls);
@@ -1322,8 +1321,8 @@ InterDex::FlushOutDexResult InterDex::flush_out_dex(
     FieldRefs clazz_frefs;
     TypeRefs clazz_trefs;
     TypeRefs clazz_itrefs;
-    gather_refs(m_plugins, dex_info, canary_cls, &clazz_mrefs, &clazz_frefs,
-                &clazz_trefs, &clazz_itrefs);
+    gather_refs(m_plugins, canary_cls, &clazz_mrefs, &clazz_frefs, &clazz_trefs,
+                &clazz_itrefs);
 
     bool canary_added = emitting_state.dexes_structure.add_class_to_current_dex(
         clazz_mrefs, clazz_frefs, clazz_trefs, clazz_itrefs, canary_cls);

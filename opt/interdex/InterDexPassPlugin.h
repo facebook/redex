@@ -27,8 +27,7 @@ class InterDexPassPlugin {
 
   // Calculate the amount of refs that any classes from additional_classes
   // will add to the output dex (see below).
-  virtual void gather_refs(const DexInfo&,
-                           const DexClass*,
+  virtual void gather_refs(const DexClass*,
                            std::vector<DexMethodRef*>&,
                            std::vector<DexFieldRef*>&,
                            std::vector<DexType*>&,
