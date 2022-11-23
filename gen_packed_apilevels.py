@@ -69,9 +69,10 @@ def compress_tar_xz(inputs):
 
     for input in inputs:
         logging.info("Adding %s", input)
-        info = tar.gettarinfo(input)
-        info.name = os.path.basename(input)
+        # In case the inputs are symlinks, it's better to work with the file
+        # object outright.
         with open(input, "rb") as f:
+            info = tar.gettarinfo(arcname=os.path.basename(input), fileobj=f)
             tar.addfile(info, fileobj=f)
 
     tar.close()
