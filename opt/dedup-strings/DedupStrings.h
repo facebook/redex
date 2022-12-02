@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include "ABExperimentContext.h"
 #include "InterDexPass.h"
 #include "Pass.h"
 #include "PluginRegistry.h"
@@ -45,9 +44,7 @@ class DedupStrings {
 
   const Stats& get_stats() const { return m_stats; }
 
-  void run(
-      DexStoresVector& stores,
-      std::unique_ptr<ab_test::ABExperimentContext>& ab_experiment_context);
+  void run(DexStoresVector& stores);
 
  private:
   struct DedupStringInfo {
@@ -86,8 +83,7 @@ class DedupStrings {
       const std::unordered_map<const DexMethod*, size_t>& methods_to_dex,
       const std::unordered_set<const DexMethod*>& perf_sensitive_methods,
       const std::unordered_map<const DexString*, DedupStringInfo>&
-          strings_to_dedup,
-      std::unique_ptr<ab_test::ABExperimentContext>& ab_experiment_context);
+          strings_to_dedup);
 
   mutable Stats m_stats;
   size_t m_max_factory_methods;
