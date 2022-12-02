@@ -94,6 +94,7 @@
 #include "Macros.h"
 #include "MethodProfiles.h"
 #include "MutablePriorityQueue.h"
+#include "ObfuscateUtils.h"
 #include "OutlinedMethods.h"
 #include "OutlinerTypeAnalysis.h"
 #include "OutliningProfileGuidanceImpl.h"
@@ -1620,6 +1621,7 @@ class MethodNameGenerator {
   std::unordered_map<StableHash, size_t> m_unique_method_ids;
   size_t m_max_unique_method_id{0};
   size_t m_iteration;
+  size_t short_id_counter{0};
 
  public:
   MethodNameGenerator() = delete;
@@ -1630,13 +1632,23 @@ class MethodNameGenerator {
 
   // Compute the name of the outlined method in a way that tends to be stable
   // across Redex runs.
-  const DexString* get_name(const Candidate& c) {
+  // obfuscated_name argument allows to generate obfuscate name instead of names
+  // with a long hashed string, by default hashed names are returned.
+  const DexString* get_name(const Candidate& c, bool obfuscated_name = false) {
     StableHash stable_hash = stable_hash_value(c);
     auto unique_method_id = m_unique_method_ids[stable_hash]++;
     m_max_unique_method_id = std::max(m_max_unique_method_id, unique_method_id);
-    std::string name(OUTLINED_METHOD_NAME_PREFIX);
-    name += std::to_string(m_iteration) + "$";
-    name += (boost::format("%08x") % stable_hash).str();
+    std::string name;
+    if (obfuscated_name) {
+      name += OUTLINED_METHOD_SHORT_NAME_PREFIX;
+      std::string identifier_name;
+      obfuscate_utils::compute_identifier(short_id_counter++, &identifier_name);
+      name += identifier_name;
+    } else {
+      name += OUTLINED_METHOD_NAME_PREFIX;
+      name += std::to_string(m_iteration) + "$";
+      name += (boost::format("%08x") % stable_hash).str();
+    }
     if (unique_method_id > 0) {
       name += std::string("$") + std::to_string(unique_method_id);
       TRACE(ISO, 5,
@@ -1745,7 +1757,8 @@ class OutlinedMethodCreator {
                                     const CandidateInfo& ci,
                                     const DexType* host_class,
                                     std::set<uint32_t>* pattern_ids) {
-    auto name = m_method_name_generator.get_name(c);
+    auto name =
+        m_method_name_generator.get_name(c, m_config.obfuscate_method_names);
     DexTypeList::ContainerType arg_types;
     for (auto t : c.arg_types) {
       arg_types.push_back(const_cast<DexType*>(t));
@@ -3045,6 +3058,11 @@ void InstructionSequenceOutliner::bind_config() {
        m_config.debug_make_crashing,
        "Make outlined code crash, to harvest crashing stack traces involving "
        "outlined code.");
+  bind("obfuscate_method_names", m_config.obfuscate_method_names,
+       m_config.obfuscate_method_names,
+       "Whether to obfuscate generated method names for outlined methods, "
+       "instead of encoding a strong hash of their contents. Obfuscated names "
+       "tend to be shorter, but are less stable across builds.");
   after_configuration([=]() {
     always_assert(m_config.min_insns_size >= MIN_INSNS_SIZE);
     always_assert(m_config.max_insns_size >= m_config.min_insns_size);
