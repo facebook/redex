@@ -28,7 +28,7 @@ TEST_F(PostVerify, MergeablesRemoval) {
 
 TEST_F(PostVerify, InterfaceMethodsOnShape) {
   auto shape = find_class_named(
-      classes, "Lcom/facebook/redex/AnonInterface1Shape0S0100000;");
+      classes, "Lcom/facebook/redex/AnonInterface1Shape2S0100000;");
   ASSERT_NE(shape, nullptr) << "Not find merged shape for Interface1\n";
   auto magic1 = find_vmethod_named(*shape, "magic1");
   ASSERT_NE(magic1, nullptr);
