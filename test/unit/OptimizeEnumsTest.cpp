@@ -5,7 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <boost/optional/optional_io.hpp>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
