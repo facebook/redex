@@ -618,6 +618,7 @@ struct ChainAndDomState {
   size_t violations{0};
 };
 
+template <uint32_t kMaxInteraction>
 void chain_and_dom_update(
     cfg::Block* block,
     const SourceBlock* sb,
@@ -638,8 +639,10 @@ void chain_and_dom_update(
     state.dom_block = nullptr;
   }
 
+  auto limit = std::min(sb->vals_size, kMaxInteraction);
+
   if (state.last != nullptr) {
-    for (size_t i = 0; i != sb->vals_size; ++i) {
+    for (size_t i = 0; i != limit; ++i) {
       auto last_val = state.last->get_val(i);
       auto sb_val = sb->get_val(i);
       if (last_val) {
@@ -665,7 +668,22 @@ size_t chain_and_dom_violations(
 
   bool first = true;
   foreach_source_block(block, [block, &state, &first, &dom](const auto* sb) {
-    chain_and_dom_update(block, sb, first, state, dom);
+    chain_and_dom_update<std::numeric_limits<uint32_t>::max()>(block, sb, first,
+                                                               state, dom);
+    first = false;
+  });
+
+  return state.violations;
+}
+
+size_t chain_and_dom_violations_coldstart(
+    Block* block,
+    const dominators::SimpleFastDominators<cfg::GraphInterface>& dom) {
+  ChainAndDomState state{};
+
+  bool first = true;
+  foreach_source_block(block, [block, &state, &first, &dom](const auto* sb) {
+    chain_and_dom_update<1>(block, sb, first, state, dom);
     first = false;
   });
 
@@ -676,7 +694,7 @@ size_t chain_and_dom_violations(
 using CounterFnPtr = size_t (*)(
     Block*, const dominators::SimpleFastDominators<cfg::GraphInterface>&);
 
-constexpr std::array<std::pair<std::string_view, CounterFnPtr>, 6> gCounters = {
+constexpr std::array<std::pair<std::string_view, CounterFnPtr>, 7> gCounters = {
     {
         {"~blocks~count", &count_blocks},
         {"~blocks~with~source~blocks", &count_block_has_sbs},
@@ -684,6 +702,8 @@ constexpr std::array<std::pair<std::string_view, CounterFnPtr>, 6> gCounters = {
         {"~flow~violation~in~chain", &chain_hot_violations},
         {"~flow~violation~in~chain~one", &chain_hot_one_violations},
         {"~flow~violation~chain~and~dom", &chain_and_dom_violations},
+        {"~flow~violation~chain~and~dom.cold_start",
+         &chain_and_dom_violations_coldstart},
     }};
 
 constexpr std::array<std::pair<std::string_view, CounterFnPtr>, 3>
@@ -1077,7 +1097,8 @@ struct ViolationsHelper::ViolationsHelperImpl {
 
           auto* sb = mie.src_block.get();
 
-          chain_and_dom_update(cur, sb, first_in_block, state, dom);
+          chain_and_dom_update<std::numeric_limits<uint32_t>::max()>(
+              cur, sb, first_in_block, state, dom);
           first_in_block = false;
 
           const bool head_error = state.violations > old_count;
@@ -1085,7 +1106,8 @@ struct ViolationsHelper::ViolationsHelperImpl {
 
           for (auto* cur_sb = sb->next.get(); cur_sb != nullptr;
                cur_sb = cur_sb->next.get()) {
-            chain_and_dom_update(cur, cur_sb, false, state, dom);
+            chain_and_dom_update<std::numeric_limits<uint32_t>::max()>(
+                cur, cur_sb, false, state, dom);
           }
 
           if (state.violations > old_count) {
