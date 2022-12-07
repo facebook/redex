@@ -529,22 +529,31 @@ struct Injector {
       size_t skipped{0};
       size_t blocks{0};
       size_t profile_count{0};
+      size_t profile_failed{0};
+      size_t access_methods{0};
       std::vector<std::pair<const DexMethod*, std::string>> serialized;
 
       InsertResult() = default;
-      InsertResult(size_t skipped) : skipped(skipped) {}
+      InsertResult(size_t skipped, size_t access_methods)
+          : skipped(skipped), access_methods(access_methods) {}
       InsertResult(
+          size_t access_methods,
           size_t blocks,
           size_t profile_count,
+          size_t profile_failed,
           std::vector<std::pair<const DexMethod*, std::string>> serialized)
           : blocks(blocks),
             profile_count(profile_count),
+            profile_failed(profile_failed),
+            access_methods(access_methods),
             serialized(std::move(serialized)) {}
 
       InsertResult operator+=(const InsertResult& other) {
         skipped += other.skipped;
         blocks += other.blocks;
         profile_count += other.profile_count;
+        profile_failed += other.profile_failed;
+        access_methods += other.access_methods;
         serialized.reserve(serialized.size() + other.serialized.size());
         for (auto& p : other.serialized) {
           serialized.emplace_back(p.first, p.second);
@@ -581,7 +590,7 @@ struct Injector {
                               access_method_hash_name);
             if (!profiles.second && !always_inject) {
               // Skip without profile.
-              return InsertResult(1);
+              return InsertResult(access_method ? 1 : 0, 1);
             }
 
             auto* sb_name = [&]() {
@@ -600,8 +609,10 @@ struct Injector {
                 sb_name, cfg.get(), profiles.first, serialize, exc_inject);
 
             return InsertResult(
+                access_method ? 1 : 0,
                 res.block_count,
                 profiles.second ? 1 : 0,
+                res.profile_success ? 0 : 1,
                 {std::make_pair(method, std::move(res.serialized))});
           }
           return InsertResult();
@@ -617,6 +628,8 @@ struct Injector {
     mgr.set_metric("handled_methods", res.serialized.size());
     mgr.set_metric("skipped_methods", res.skipped);
     mgr.set_metric("methods_with_profiles", res.profile_count);
+    mgr.set_metric("profile_failed", res.profile_failed);
+    mgr.set_metric("access_methods", res.access_methods);
 
     {
       size_t unresolved = 0;
