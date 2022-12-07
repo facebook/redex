@@ -243,7 +243,6 @@ void DedupStrings::gather_non_load_strings(
                     /* exclude_loads */ true);
 
   strings->insert(lstring.begin(), lstring.end());
-  strings->insert(m_ignore_strings.begin(), m_ignore_strings.end());
 }
 
 ConcurrentMap<const DexString*, std::unordered_map<size_t, size_t>>
