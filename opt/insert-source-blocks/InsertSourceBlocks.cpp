@@ -525,65 +525,87 @@ struct Injector {
                          bool exc_inject) {
     auto scope = build_class_scope(stores);
 
-    std::mutex serialized_guard;
-    std::vector<std::pair<const DexMethod*, std::string>> serialized;
-    size_t blocks{0};
-    size_t profile_count{0};
+    struct InsertResult {
+      size_t skipped{0};
+      size_t blocks{0};
+      size_t profile_count{0};
+      std::vector<std::pair<const DexMethod*, std::string>> serialized;
 
-    std::atomic<size_t> skipped{0};
+      InsertResult() = default;
+      InsertResult(size_t skipped) : skipped(skipped) {}
+      InsertResult(
+          size_t blocks,
+          size_t profile_count,
+          std::vector<std::pair<const DexMethod*, std::string>> serialized)
+          : blocks(blocks),
+            profile_count(profile_count),
+            serialized(std::move(serialized)) {}
 
-    walk::parallel::methods(scope, [&](DexMethod* method) {
-      auto code = method->get_code();
-      if (code != nullptr) {
-        auto access_method = is_access_method(method);
-        const DexType* access_method_type = nullptr;
-        std::string_view access_method_name;
-        std::string access_method_hash_name;
-
-        ScopedCFG cfg(code);
-
-        if (access_method) {
-          access_method_type = access_method->first;
-          access_method_name = access_method->second;
-
-          auto hash_value = hasher::stable_hash(*cfg);
-
-          access_method_hash_name = (boost::format("%08x") % hash_value).str() +
-                                    "$" +
-                                    std::string(access_method_name.substr(
-                                        access_method_name.length() - 2, 2));
+      InsertResult operator+=(const InsertResult& other) {
+        skipped += other.skipped;
+        blocks += other.blocks;
+        profile_count += other.profile_count;
+        serialized.reserve(serialized.size() + other.serialized.size());
+        for (auto& p : other.serialized) {
+          serialized.emplace_back(p.first, p.second);
         }
-
-        auto profiles =
-            find_profiles(method, access_method_type, access_method_name,
-                          access_method_hash_name);
-        if (!profiles.second && !always_inject) {
-          // Skip without profile.
-          skipped.fetch_add(1);
-          return;
-        }
-
-        auto* sb_name = [&]() {
-          if (!access_method) {
-            return &method->get_deobfuscated_name();
-          }
-          // Emulate show.
-          std::string new_name = show_deobfuscated(method->get_class());
-          new_name.append(".access$");
-          new_name.append(access_method_hash_name);
-          new_name.append(show_deobfuscated(method->get_proto()));
-          return DexString::make_string(new_name);
-        }();
-
-        auto res = source_blocks::insert_source_blocks(
-            sb_name, cfg.get(), profiles.first, serialize, exc_inject);
-
-        std::unique_lock<std::mutex> lock(serialized_guard);
-        serialized.emplace_back(method, std::move(res.serialized));
-        blocks += res.block_count;
-        profile_count += profiles.second ? 1 : 0;
+        return *this;
       }
-    });
+    };
+
+    auto res =
+        walk::parallel::methods<InsertResult>(scope, [&](DexMethod* method) {
+          auto code = method->get_code();
+          if (code != nullptr) {
+            auto access_method = is_access_method(method);
+            const DexType* access_method_type = nullptr;
+            std::string_view access_method_name;
+            std::string access_method_hash_name;
+
+            ScopedCFG cfg(code);
+
+            if (access_method) {
+              access_method_type = access_method->first;
+              access_method_name = access_method->second;
+
+              auto hash_value = hasher::stable_hash(*cfg);
+
+              access_method_hash_name =
+                  (boost::format("%08x") % hash_value).str() + "$" +
+                  std::string(access_method_name.substr(
+                      access_method_name.length() - 2, 2));
+            }
+
+            auto profiles =
+                find_profiles(method, access_method_type, access_method_name,
+                              access_method_hash_name);
+            if (!profiles.second && !always_inject) {
+              // Skip without profile.
+              return InsertResult(1);
+            }
+
+            auto* sb_name = [&]() {
+              if (!access_method) {
+                return &method->get_deobfuscated_name();
+              }
+              // Emulate show.
+              std::string new_name = show_deobfuscated(method->get_class());
+              new_name.append(".access$");
+              new_name.append(access_method_hash_name);
+              new_name.append(show_deobfuscated(method->get_proto()));
+              return DexString::make_string(new_name);
+            }();
+
+            auto res = source_blocks::insert_source_blocks(
+                sb_name, cfg.get(), profiles.first, serialize, exc_inject);
+
+            return InsertResult(
+                res.block_count,
+                profiles.second ? 1 : 0,
+                {std::make_pair(method, std::move(res.serialized))});
+          }
+          return InsertResult();
+        });
 
     if (conf.get_global_config()
             .get_config_by_name<AssessorConfig>("assessor")
@@ -591,10 +613,10 @@ struct Injector {
       source_blocks::get_sbcc().initialize(scope);
     }
 
-    mgr.set_metric("inserted_source_blocks", blocks);
-    mgr.set_metric("handled_methods", serialized.size());
-    mgr.set_metric("skipped_methods", skipped.load());
-    mgr.set_metric("methods_with_profiles", profile_count);
+    mgr.set_metric("inserted_source_blocks", res.blocks);
+    mgr.set_metric("handled_methods", res.serialized.size());
+    mgr.set_metric("skipped_methods", res.skipped);
+    mgr.set_metric("methods_with_profiles", res.profile_count);
 
     {
       size_t unresolved = 0;
@@ -611,15 +633,15 @@ struct Injector {
       return;
     }
 
-    std::sort(serialized.begin(),
-              serialized.end(),
+    std::sort(res.serialized.begin(),
+              res.serialized.end(),
               [](const auto& lhs, const auto& rhs) {
                 return compare_dexmethods(lhs.first, rhs.first);
               });
 
     std::ofstream ofs(conf.metafile("redex-source-blocks.csv"));
     ofs << "type,version\nredex-source-blocks,1\nname,serialized\n";
-    for (const auto& p : serialized) {
+    for (const auto& p : res.serialized) {
       ofs << show(p.first) << "," << p.second << "\n";
     }
   }
