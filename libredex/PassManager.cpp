@@ -1337,7 +1337,10 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       // Ensure the CFG is clean, e.g., no unreachable blocks.
       if (pass->is_editable_cfg_friendly()) {
         auto temp_scope = build_class_scope(stores);
-        walk::parallel::code(temp_scope, [&](DexMethod*, IRCode& code) {
+        walk::parallel::code(temp_scope, [&](DexMethod* method, IRCode& code) {
+          always_assert_log(code.editable_cfg_built(),
+                            "%s has no editable cfg after cfg-friendly pass %s",
+                            SHOW(method), pass->name().c_str());
           code.cfg().simplify();
         });
       }
