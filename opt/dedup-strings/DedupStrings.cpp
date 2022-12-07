@@ -35,6 +35,9 @@ constexpr const char* METRIC_PERF_SENSITIVE_METHODS =
     "num_perf_sensitive_methods";
 constexpr const char* METRIC_NON_PERF_SENSITIVE_METHODS =
     "num_non_perf_sensitive_methods";
+constexpr const char* METRIC_PERF_SENSITIVE_INSNS = "num_perf_sensitive_insns";
+constexpr const char* METRIC_NON_PERF_SENSITIVE_INSNS =
+    "num_non_perf_sensitive_insns";
 constexpr const char* METRIC_DUPLICATE_STRINGS = "num_duplicate_strings";
 constexpr const char* METRIC_DUPLICATE_STRINGS_SIZE = "duplicate_strings_size";
 constexpr const char* METRIC_DUPLICATE_STRING_LOADS =
@@ -256,13 +259,18 @@ DedupStrings::get_occurrences(
       occurrences;
   ConcurrentMap<const DexString*, std::unordered_set<size_t>>
       perf_sensitive_strings;
+  std::atomic<size_t> perf_sensitive_insns{0};
+  std::atomic<size_t> non_perf_sensitive_insns{0};
   walk::parallel::code(
       scope, [&occurrences, &perf_sensitive_strings, &methods_to_dex,
-              &perf_sensitive_methods](DexMethod* method, IRCode& code) {
+              &perf_sensitive_methods, &perf_sensitive_insns,
+              &non_perf_sensitive_insns](DexMethod* method, IRCode& code) {
         const auto dexnr = methods_to_dex.at(method);
         const auto perf_sensitive = perf_sensitive_methods.count(method) != 0;
         always_assert(code.editable_cfg_built());
         auto& cfg = code.cfg();
+        size_t local_perf_sensitive_insns{0};
+        size_t local_non_perf_sensitive_insns{0};
         for (auto& mie : InstructionIterable(cfg)) {
           const auto insn = mie.insn;
           if (insn->opcode() == OPCODE_CONST_STRING) {
@@ -273,13 +281,21 @@ DedupStrings::get_occurrences(
                   [dexnr](const DexString*,
                           std::unordered_set<size_t>& s,
                           bool /* exists */) { s.emplace(dexnr); });
+              local_perf_sensitive_insns++;
             } else {
               occurrences.update(str,
                                  [dexnr](const DexString*,
                                          std::unordered_map<size_t, size_t>& m,
                                          bool /* exists */) { ++m[dexnr]; });
+              local_non_perf_sensitive_insns++;
             }
           }
+        }
+        if (local_perf_sensitive_insns) {
+          perf_sensitive_insns += local_perf_sensitive_insns;
+        }
+        if (local_non_perf_sensitive_insns) {
+          non_perf_sensitive_insns += local_non_perf_sensitive_insns;
         }
       });
 
@@ -298,6 +314,8 @@ DedupStrings::get_occurrences(
 
   m_stats.perf_sensitive_strings = perf_sensitive_strings.size();
   m_stats.non_perf_sensitive_strings = occurrences.size();
+  m_stats.perf_sensitive_insns = (size_t)perf_sensitive_insns;
+  m_stats.non_perf_sensitive_insns = (size_t)non_perf_sensitive_insns;
   return occurrences;
 }
 
@@ -696,8 +714,14 @@ void DedupStringsPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_PERF_SENSITIVE_METHODS, stats.perf_sensitive_methods);
   mgr.incr_metric(METRIC_NON_PERF_SENSITIVE_METHODS,
                   stats.non_perf_sensitive_methods);
-  TRACE(DS, 1, "[dedup strings] perf sensitive methods: %zu vs %zu",
-        stats.perf_sensitive_methods, stats.non_perf_sensitive_methods);
+  mgr.incr_metric(METRIC_PERF_SENSITIVE_INSNS, stats.perf_sensitive_insns);
+  mgr.incr_metric(METRIC_NON_PERF_SENSITIVE_INSNS,
+                  stats.non_perf_sensitive_insns);
+  TRACE(DS, 1,
+        "[dedup strings] perf sensitive methods (instructions): %zu(%zu) vs "
+        "%zu(%zu)",
+        stats.perf_sensitive_methods, stats.perf_sensitive_insns,
+        stats.non_perf_sensitive_methods, stats.non_perf_sensitive_insns);
 
   mgr.incr_metric(METRIC_DUPLICATE_STRINGS, stats.duplicate_strings);
   mgr.incr_metric(METRIC_DUPLICATE_STRINGS_SIZE, stats.duplicate_strings_size);
