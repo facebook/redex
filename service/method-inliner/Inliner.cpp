@@ -65,6 +65,33 @@ const float UNUSED_ARGS_DISCOUNT = 1.0f;
  */
 constexpr uint64_t HARD_MAX_INSTRUCTION_SIZE = UINT64_C(1) << 32;
 
+/*
+ * Given a method, gather all resolved init-class instruction types. This
+ * gathering-logic mimics (the first part of) what
+ * DexStructure::resolve_init_classes does.
+ */
+std::unordered_set<DexType*> gather_resolved_init_class_types(
+    DexMethod* m,
+    const init_classes::InitClassesWithSideEffects&
+        init_classes_with_side_effects) {
+  std::unordered_set<DexType*> refined_init_class_types;
+
+  editable_cfg_adapter::iterate(m->get_code(), [&](const MethodItemEntry& mie) {
+    auto insn = mie.insn;
+    if (insn->opcode() != IOPCODE_INIT_CLASS) {
+      return editable_cfg_adapter::LOOP_CONTINUE;
+    }
+    auto* refined_type =
+        init_classes_with_side_effects.refine(insn->get_type());
+    if (refined_type != nullptr) {
+      refined_init_class_types.insert(const_cast<DexType*>(refined_type));
+    }
+    return editable_cfg_adapter::LOOP_CONTINUE;
+  });
+
+  return refined_init_class_types;
+}
+
 } // namespace
 
 MultiMethodInliner::MultiMethodInliner(
@@ -143,9 +170,9 @@ MultiMethodInliner::MultiMethodInliner(
       concurrent_callee_caller;
   ConcurrentMap<const DexMethod*, std::unordered_map<DexMethod*, size_t>>
       concurrent_caller_callee;
-  std::unique_ptr<XDexRefs> x_dex;
+  std::unique_ptr<XDexMethodRefs> x_dex;
   if (mode == IntraDex) {
-    x_dex = std::make_unique<XDexRefs>(stores);
+    x_dex = std::make_unique<XDexMethodRefs>(stores);
   }
   if (min_sdk_api) {
     const auto& xstores = m_shrinker.get_xstores();
@@ -169,7 +196,10 @@ MultiMethodInliner::MultiMethodInliner(
             !candidates.count(callee)) {
           return;
         }
-        if (x_dex && x_dex->cross_dex_ref(caller, callee)) {
+        if (x_dex && x_dex->callee_has_cross_dex_refs(
+                         caller, callee,
+                         gather_resolved_init_class_types(
+                             callee, init_classes_with_side_effects))) {
           concurrent_x_dex_callees.insert(callee);
           return;
         }

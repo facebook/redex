@@ -14,6 +14,7 @@
 #include "DexStore.h"
 #include "DexUtil.h"
 #include "Show.h"
+#include "WorkQueue.h"
 
 namespace {
 constexpr const char* ROOT_STORE_NAME = "classes";
@@ -119,6 +120,26 @@ DexStoresDependencies build_reverse_dependencies(
     }
   }
   return reverse_dependencies;
+}
+
+template <typename T>
+bool is_subset_of(const std::unordered_set<T>& lhs,
+                  const std::unordered_set<T>& rhs) {
+  if (lhs.size() > rhs.size()) {
+    return false;
+  }
+
+  if (rhs.empty()) {
+    return true;
+  }
+
+  for (auto& elem : lhs) {
+    if (rhs.count(elem) == 0) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 } // namespace
@@ -301,6 +322,81 @@ size_t XDexRefs::num_dexes() const { return m_num_dexes; }
 bool XDexRefs::cross_dex_ref(const DexMethod* caller,
                              const DexMethod* callee) const {
   return get_dex_idx(callee->get_class()) != get_dex_idx(caller->get_class());
+}
+
+XDexMethodRefs::XDexMethodRefs(const DexStoresVector& stores)
+    : XDexRefs(stores) {
+  size_t dex_nr = 0;
+  for (auto& store : stores) {
+    for (auto& dexen : store.get_dexen()) {
+      m_dex_to_classes.emplace_back(dex_nr, &dexen);
+      dex_nr++;
+    }
+  }
+  m_dex_refs = std::vector<DexRefs>(dex_nr);
+  workqueue_run<std::pair<size_t, const DexClasses*>>(
+      [&](std::pair<size_t, const DexClasses*> p) {
+        auto& refs = m_dex_refs.at(p.first);
+        for (auto* cls : *p.second) {
+          cls->gather_methods(refs.methods);
+          cls->gather_fields(refs.fields);
+          cls->gather_types(refs.types);
+        }
+      },
+      m_dex_to_classes);
+}
+
+bool XDexMethodRefs::callee_has_cross_dex_refs(
+    DexMethod* caller,
+    DexMethod* callee,
+    const std::unordered_set<DexType*>& refined_init_class_types) {
+  auto code = callee->get_code();
+  always_assert(code != nullptr);
+
+  std::vector<DexMethodRef*> lmethods;
+  std::vector<DexFieldRef*> lfields;
+  std::vector<DexType*> ltypes;
+  code->gather_methods(lmethods);
+  code->gather_fields(lfields);
+  code->gather_types(ltypes);
+
+  DexRefs callee_dex_refs;
+  callee_dex_refs.methods =
+      std::unordered_set<DexMethodRef*>(lmethods.begin(), lmethods.end());
+  callee_dex_refs.fields =
+      std::unordered_set<DexFieldRef*>(lfields.begin(), lfields.end());
+  callee_dex_refs.types =
+      std::unordered_set<DexType*>(ltypes.begin(), ltypes.end());
+
+  auto& refs = m_dex_refs.at(get_dex_idx(caller->get_class()));
+
+  // Check if there's init-class instructions in the callee that might
+  // result in an sget instruction to a field unreferenced in the caller dex.
+  // This init-class logic mimics (the second part of) what
+  // DexStructure::resolve_init_classes does.
+  for (auto refined_type : refined_init_class_types) {
+    if (refs.types.count(refined_type) == 0) {
+      return true;
+    }
+
+    auto* cls = type_class(refined_type);
+    always_assert(cls);
+    const auto& s_fields = cls->get_sfields();
+    bool has_a_field_ref{false};
+    for (auto* callee_static_field : s_fields) {
+      if (refs.fields.count(callee_static_field) != 0) {
+        has_a_field_ref = true;
+        break;
+      }
+    }
+    if (!has_a_field_ref) {
+      return true;
+    }
+  }
+
+  return !is_subset_of(callee_dex_refs.methods, refs.methods) ||
+         !is_subset_of(callee_dex_refs.fields, refs.fields) ||
+         !is_subset_of(callee_dex_refs.types, refs.types);
 }
 
 void squash_into_one_dex(DexStoresVector& stores) {

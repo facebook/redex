@@ -17,6 +17,7 @@
 #include "InlinerConfig.h"
 #include "LegacyInliner.h"
 #include "RedexTest.h"
+#include "VirtualScope.h"
 
 struct MethodInlineTest : public RedexTest {
   MethodInlineTest() {
@@ -436,6 +437,154 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining) {
     // Expect foo_m1 and bar_m1 be inlined if `intra_dex` is true.
     expected_inlined.insert(foo_m1);
     expected_inlined.insert(bar_m1);
+    // Expect bar_m2 to be inlined as well if `intra_dex` is true, as it does
+    // not bring in any new references.
+    expected_inlined.insert(bar_m2);
+  }
+  auto scope = build_class_scope(stores);
+  api::LevelChecker::init(0, scope);
+
+  inliner::InlinerConfig inliner_config;
+  inliner_config.populate(scope);
+  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+      scope, /* create_init_class_insns */ false);
+  int min_sdk = 0;
+  MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
+                             canidates, std::ref(concurrent_method_resolver),
+                             inliner_config, min_sdk,
+                             intra_dex ? IntraDex : InterDex);
+  inliner.inline_methods();
+  auto inlined = inliner.get_inlined();
+  EXPECT_EQ(inlined.size(), expected_inlined.size());
+  for (auto method : expected_inlined) {
+    EXPECT_EQ(inlined.count(method), 1);
+  }
+}
+
+TEST_F(MethodInlineTest, test_intra_dex_inlining_new_references) {
+  ConcurrentMethodResolver concurrent_method_resolver;
+
+  // Only inline methods within dex.
+  bool intra_dex = true;
+
+  DexStoresVector stores;
+  std::unordered_set<DexMethod*> canidates;
+  std::unordered_set<DexMethod*> expected_inlined;
+  auto foo_cls = create_a_class("Lfoo;");
+  auto bar_cls = create_a_class("Lbar;");
+  auto baz_cls = create_a_class("Lbaz;");
+  {
+    // foo is in dex 2, bar is in dex 3.
+    DexStore store("root");
+    store.add_classes({});
+    store.add_classes({foo_cls});
+    store.add_classes({bar_cls, baz_cls});
+    stores.push_back(std::move(store));
+  }
+  {
+    auto foo_m1 = make_a_method(foo_cls, "foo_m1", 1);
+    auto baz_m1 = make_a_method(baz_cls, "baz_m1", 3001);
+
+    // bar_m1 calls baz_m1.
+    auto bar_m1 = make_a_method_calls_others(bar_cls, "bar_m1", {baz_m1});
+
+    // foo_main calls foo_m1 and bar_m1.
+    auto foo_main =
+        make_a_method_calls_others(foo_cls, "foo_main", {foo_m1, bar_m1});
+
+    canidates.insert(foo_m1);
+    canidates.insert(bar_m1);
+
+    // Expect foo_m1 to be inlined if `intra_dex` is true.
+    expected_inlined.insert(foo_m1);
+
+    // Expect bar_m1 not to be inlined, as it does
+    // bring a new reference from baz_m1.
+  }
+  auto scope = build_class_scope(stores);
+  api::LevelChecker::init(0, scope);
+
+  inliner::InlinerConfig inliner_config;
+  inliner_config.populate(scope);
+  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+      scope, /* create_init_class_insns */ false);
+  int min_sdk = 0;
+  MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
+                             canidates, std::ref(concurrent_method_resolver),
+                             inliner_config, min_sdk,
+                             intra_dex ? IntraDex : InterDex);
+  inliner.inline_methods();
+  auto inlined = inliner.get_inlined();
+  EXPECT_EQ(inlined.size(), expected_inlined.size());
+  for (auto method : expected_inlined) {
+    EXPECT_EQ(inlined.count(method), 1);
+  }
+}
+
+TEST_F(MethodInlineTest, test_intra_dex_inlining_init_class) {
+  ConcurrentMethodResolver concurrent_method_resolver;
+
+  get_vmethods(type::java_lang_Object());
+
+  // Only inline methods within dex.
+  bool intra_dex = true;
+
+  DexStoresVector stores;
+  std::unordered_set<DexMethod*> canidates;
+  std::unordered_set<DexMethod*> expected_inlined;
+  auto foo_cls = create_a_class("Lfoo;");
+  auto bar_cls = create_a_class("Lbar;");
+
+  {
+    auto clinit_name = DexString::make_string("<clinit>");
+    auto void_args = DexTypeList::make_type_list({});
+    auto void_void = DexProto::make_proto(type::_void(), void_args);
+    auto clinit = static_cast<DexMethod*>(
+        DexMethod::make_method(bar_cls->get_type(), clinit_name, void_void));
+    clinit->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_CONSTRUCTOR, false);
+    clinit->set_code(std::make_unique<IRCode>());
+    auto code = clinit->get_code();
+    auto method = DexMethod::make_method("Lunknown;.unknown:()V");
+    code->push_back(dex_asm::dasm(OPCODE_INVOKE_STATIC, method, {}));
+    code->push_back(dex_asm::dasm(OPCODE_RETURN_VOID));
+    bar_cls->add_method(clinit);
+
+    auto sfield_name = DexString::make_string("existing_field");
+    auto field = static_cast<DexField*>(
+        DexField::make_field(bar_cls->get_type(), sfield_name, type::_int()));
+    field->make_concrete(ACC_PUBLIC | ACC_STATIC);
+    type_class(bar_cls->get_type())->add_field(field);
+  }
+  {
+    // foo is in dex 2, bar is in dex 3.
+    DexStore store("root");
+    store.add_classes({});
+    store.add_classes({foo_cls});
+    store.add_classes({bar_cls});
+    stores.push_back(std::move(store));
+  }
+  {
+    auto foo_m1 = make_a_method(foo_cls, "foo_m1", 1);
+    auto bar_m1 = make_a_method(bar_cls, "bar_m1", 10);
+    auto init_code = assembler::ircode_from_string(R"(
+    (
+      (init-class "Lbar;")
+      (return-void)
+    )
+  )");
+    bar_m1->set_code(std::move(init_code));
+
+    // foo_main calls foo_m1 and init.
+    auto foo_main =
+        make_a_method_calls_others(foo_cls, "foo_main", {foo_m1, bar_m1});
+
+    canidates.insert(foo_m1);
+    canidates.insert(bar_m1);
+
+    // Expect foo_m1 to be inlined if `intra_dex` is true.
+    expected_inlined.insert(foo_m1);
+
+    // Expect bar_m1 not to be inlined, as it has an init-class instruction.
   }
   auto scope = build_class_scope(stores);
   api::LevelChecker::init(0, scope);

@@ -400,6 +400,27 @@ class XDexRefs {
   size_t num_dexes() const;
 };
 
+class XDexMethodRefs : public XDexRefs {
+  std::vector<std::pair<size_t, const DexClasses*>> m_dex_to_classes;
+
+  struct DexRefs {
+    std::unordered_set<DexMethodRef*> methods;
+    std::unordered_set<DexFieldRef*> fields;
+    std::unordered_set<DexType*> types;
+  };
+
+  std::vector<DexRefs> m_dex_refs;
+
+ public:
+  explicit XDexMethodRefs(const DexStoresVector& stores);
+  ~XDexMethodRefs() = default;
+
+  bool callee_has_cross_dex_refs(
+      DexMethod* caller,
+      DexMethod* callee,
+      const std::unordered_set<DexType*>& refined_init_class_types);
+};
+
 /**
  * Squash the stores into a single dex.
  */
