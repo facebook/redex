@@ -15,6 +15,7 @@
 #include <boost/utility/string_view.hpp>
 #include <cstdint>
 #include <fstream>
+#include <iterator>
 #include <mutex>
 
 #include "ConfigFiles.h"
@@ -215,7 +216,13 @@ void run_source_blocks(DexStoresVector& stores,
   auto scope = build_class_scope(stores);
 
   std::mutex serialized_guard;
-  std::vector<std::pair<const DexMethod*, std::string>> serialized;
+  struct SerializedMethodInfo {
+    const DexMethod* method;
+    std::string s_expression;
+    std::string idom_map;
+  };
+
+  std::vector<SerializedMethodInfo> serialized;
   size_t blocks{0};
   size_t profile_count{0};
 
@@ -308,7 +315,7 @@ void run_source_blocks(DexStoresVector& stores,
       auto res =
           source_blocks(method, code, profiles.first, serialize, exc_inject);
       std::unique_lock<std::mutex> lock(serialized_guard);
-      serialized.emplace_back(method, std::move(res.serialized));
+        serialized.push_back({method, res.serialized, res.serialized_idom_map});
       blocks += res.block_count;
       profile_count += profiles.second ? 1 : 0;
     }
@@ -338,16 +345,44 @@ void run_source_blocks(DexStoresVector& stores,
     return;
   }
 
+  // Put all unique idom maps into a file.
+  std::vector<std::string> unique_idom_maps;
+  {
+    std::set<std::string> unique_idom_maps_set;
+    std::transform(serialized.begin(), serialized.end(),
+                   std::inserter(unique_idom_maps_set, unique_idom_maps_set.begin()),
+                   [](const auto& s) { return s.idom_map; });
+    unique_idom_maps.reserve(unique_idom_maps_set.size());
+    std::copy(unique_idom_maps_set.begin(), unique_idom_maps_set.end(), std::back_inserter(unique_idom_maps));
+  }
+
+  std::ofstream ofs_uim(conf.metafile("unique-idom-maps.txt"));
+  for (const auto& uim : unique_idom_maps) {
+    ofs_uim << uim << "\n";
+  }
+
   std::sort(serialized.begin(),
             serialized.end(),
             [](const auto& lhs, const auto& rhs) {
-              return compare_dexmethods(lhs.first, rhs.first);
-            });
+              return compare_dexmethods(lhs.method, rhs.method);
+          });
 
-  std::ofstream ofs(conf.metafile("redex-source-blocks.csv"));
-  ofs << "type,version\nredex-source-blocks,1\nname,serialized\n";
-  for (const auto& p : serialized) {
-    ofs << show(p.first) << "," << p.second << "\n";
+  std::ofstream ofs_rsb(conf.metafile("redex-source-blocks.csv"));
+  ofs_rsb << "type,version\nredex-source-blocks,1\nname,serialized\n";
+
+  std::ofstream ofs_rsbidm(conf.metafile("redex-source-block-idom-maps.csv"));
+  ofs_rsbidm
+      << "type,version\nredex-source-blocks-idom-maps,1\nidom_map_id\n";
+
+  for (const auto& [method, s_expression, idom_map] : serialized) {
+    ofs_rsb << show(method) << "," << s_expression << "\n";
+
+    // idom_map_id is a line index into unique-idom-maps.txt
+    auto it = std::lower_bound(unique_idom_maps.begin(),
+                               unique_idom_maps.end(), idom_map);
+    always_assert(it != unique_idom_maps.end() && *it == idom_map);
+    size_t idom_map_id = std::distance(unique_idom_maps.begin(), it);
+    ofs_rsbidm << idom_map_id << "\n";
   }
 }
 

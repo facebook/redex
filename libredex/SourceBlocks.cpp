@@ -409,6 +409,55 @@ struct InsertHelper {
 
 SourceBlockConsistencyCheck& get_sbcc() { return s_sbcc; }
 
+static std::string get_serialized_idom_map(ControlFlowGraph* cfg) {
+  auto doms = dominators::SimpleFastDominators<cfg::GraphInterface>(*cfg);
+  std::stringstream ss_idom_map;
+  auto cfg_blocks = cfg->blocks();
+  bool wrote_first_idom_map_elem = false;
+  auto write_idom_map_elem = [&wrote_first_idom_map_elem,
+                              &ss_idom_map](uint32_t sb_id, uint32_t idom_id) {
+    if (wrote_first_idom_map_elem) {
+      ss_idom_map << ";";
+    }
+    wrote_first_idom_map_elem = true;
+
+    ss_idom_map << sb_id << "->" << idom_id;
+  };
+
+  for (cfg::Block* block : cfg->blocks()) {
+    if (block == cfg->exit_block() &&
+        cfg->get_pred_edge_of_type(block, EDGE_GHOST)) {
+      continue;
+    }
+
+    auto first_sb_in_block = source_blocks::get_first_source_block(block);
+    if (!first_sb_in_block) {
+      continue;
+    }
+
+    auto curr_idom = doms.get_idom(block);
+    if (curr_idom && curr_idom != block) {
+      if (curr_idom != cfg->exit_block() ||
+          !cfg->get_pred_edge_of_type(curr_idom, EDGE_GHOST)) {
+        auto sb_in_idom = source_blocks::get_last_source_block(curr_idom);
+        always_assert(sb_in_idom);
+        write_idom_map_elem(first_sb_in_block->id, sb_in_idom->id);
+      }
+    }
+
+    SourceBlock* prev = nullptr;
+    source_blocks::foreach_source_block(block, [&](const auto& sb) {
+      if (sb != first_sb_in_block) {
+        always_assert(prev);
+        write_idom_map_elem(sb->id, prev->id);
+      }
+      prev = sb;
+    });
+  }
+
+  return ss_idom_map.str();
+}
+
 InsertResult insert_source_blocks(DexMethod* method,
                                   ControlFlowGraph* cfg,
                                   const std::vector<ProfileData>& profiles,
@@ -424,7 +473,9 @@ InsertResult insert_source_blocks(DexMethod* method,
 
   bool had_failures = helper.wipe_profile_failures(*cfg);
 
-  return {helper.id, helper.oss.str(), !had_failures};
+  auto idom_map = get_serialized_idom_map(cfg);
+
+  return {helper.id, helper.oss.str(), std::move(idom_map), !had_failures};
 }
 
 bool has_source_block_positive_val(const SourceBlock* sb) {

@@ -145,6 +145,7 @@ void visit_in_order(const ControlFlowGraph* cfg,
 struct InsertResult {
   size_t block_count;
   std::string serialized;
+  std::string serialized_idom_map;
   bool profile_success;
 };
 

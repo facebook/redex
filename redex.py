@@ -1189,6 +1189,8 @@ def finalize_redex(state: State) -> None:
             for f in (
                 "redex-source-block-method-dictionary.csv",
                 "redex-source-blocks.csv",
+                "redex-source-block-idom-maps.csv",
+                "unique-idom-maps.txt",
             )
         ]
         FILES_ACTUALLY = [
