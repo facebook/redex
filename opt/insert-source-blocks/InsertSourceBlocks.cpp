@@ -16,6 +16,7 @@
 #include <cstdint>
 #include <deque>
 #include <fstream>
+#include <iterator>
 #include <mutex>
 #include <string_view>
 
@@ -525,23 +526,28 @@ struct Injector {
                          bool exc_inject) {
     auto scope = build_class_scope(stores);
 
+    struct SerializedMethodInfo {
+      const DexMethod* method;
+      std::string s_expression;
+      std::string idom_map;
+    };
+
     struct InsertResult {
       size_t skipped{0};
       size_t blocks{0};
       size_t profile_count{0};
       size_t profile_failed{0};
       size_t access_methods{0};
-      std::vector<std::pair<const DexMethod*, std::string>> serialized;
+      std::vector<SerializedMethodInfo> serialized;
 
       InsertResult() = default;
       InsertResult(size_t skipped, size_t access_methods)
           : skipped(skipped), access_methods(access_methods) {}
-      InsertResult(
-          size_t access_methods,
-          size_t blocks,
-          size_t profile_count,
-          size_t profile_failed,
-          std::vector<std::pair<const DexMethod*, std::string>> serialized)
+      InsertResult(size_t access_methods,
+                   size_t blocks,
+                   size_t profile_count,
+                   size_t profile_failed,
+                   std::vector<SerializedMethodInfo> serialized)
           : blocks(blocks),
             profile_count(profile_count),
             profile_failed(profile_failed),
@@ -555,8 +561,8 @@ struct Injector {
         profile_failed += other.profile_failed;
         access_methods += other.access_methods;
         serialized.reserve(serialized.size() + other.serialized.size());
-        for (auto& p : other.serialized) {
-          serialized.emplace_back(p.first, p.second);
+        for (auto& smi : other.serialized) {
+          serialized.emplace_back(smi);
         }
         return *this;
       }
@@ -613,7 +619,7 @@ struct Injector {
                 res.block_count,
                 profiles.second ? 1 : 0,
                 res.profile_success ? 0 : 1,
-                {std::make_pair(method, std::move(res.serialized))});
+                {{method, res.serialized, res.serialized_idom_map}});
           }
           return InsertResult();
         });
@@ -646,16 +652,46 @@ struct Injector {
       return;
     }
 
+    // Put all unique idom maps into a file.
+    std::vector<std::string> unique_idom_maps;
+    {
+      std::set<std::string> unique_idom_maps_set;
+      std::transform(
+          res.serialized.begin(), res.serialized.end(),
+          std::inserter(unique_idom_maps_set, unique_idom_maps_set.begin()),
+          [](const auto& s) { return s.idom_map; });
+      unique_idom_maps.reserve(unique_idom_maps_set.size());
+      std::copy(unique_idom_maps_set.begin(), unique_idom_maps_set.end(),
+                std::back_inserter(unique_idom_maps));
+    }
+
+    std::ofstream ofs_uim(conf.metafile("unique-idom-maps.txt"));
+    for (const auto& uim : unique_idom_maps) {
+      ofs_uim << uim << "\n";
+    }
+
     std::sort(res.serialized.begin(),
               res.serialized.end(),
               [](const auto& lhs, const auto& rhs) {
-                return compare_dexmethods(lhs.first, rhs.first);
+                return compare_dexmethods(lhs.method, rhs.method);
               });
 
-    std::ofstream ofs(conf.metafile("redex-source-blocks.csv"));
-    ofs << "type,version\nredex-source-blocks,1\nname,serialized\n";
-    for (const auto& p : res.serialized) {
-      ofs << show(p.first) << "," << p.second << "\n";
+    std::ofstream ofs_rsb(conf.metafile("redex-source-blocks.csv"));
+    ofs_rsb << "type,version\nredex-source-blocks,1\nname,serialized\n";
+
+    std::ofstream ofs_rsbidm(conf.metafile("redex-source-block-idom-maps.csv"));
+    ofs_rsbidm
+        << "type,version\nredex-source-blocks-idom-maps,1\nidom_map_id\n";
+
+    for (const auto& [method, s_expression, idom_map] : res.serialized) {
+      ofs_rsb << show(method) << "," << s_expression << "\n";
+
+      // idom_map_id is a line index into unique-idom-maps.txt
+      auto it = std::lower_bound(unique_idom_maps.begin(),
+                                 unique_idom_maps.end(), idom_map);
+      always_assert(it != unique_idom_maps.end() && *it == idom_map);
+      size_t idom_map_id = std::distance(unique_idom_maps.begin(), it);
+      ofs_rsbidm << idom_map_id << "\n";
     }
   }
 
