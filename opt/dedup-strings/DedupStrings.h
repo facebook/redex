@@ -36,10 +36,12 @@ class DedupStrings {
 
   DedupStrings(size_t max_factory_methods,
                float method_profiles_appear_percent_threshold,
+               bool legacy_perf_logic,
                const method_profiles::MethodProfiles& method_profiles)
       : m_max_factory_methods(max_factory_methods),
         m_method_profiles_appear_percent_threshold(
             method_profiles_appear_percent_threshold),
+        m_legacy_perf_logic(legacy_perf_logic),
         m_method_profiles(method_profiles) {}
 
   const Stats& get_stats() const { return m_stats; }
@@ -88,6 +90,7 @@ class DedupStrings {
   mutable Stats m_stats;
   size_t m_max_factory_methods;
   float m_method_profiles_appear_percent_threshold;
+  bool m_legacy_perf_logic;
   const method_profiles::MethodProfiles& m_method_profiles;
 };
 
@@ -166,4 +169,5 @@ class DedupStringsPass : public Pass {
  private:
   int64_t m_max_factory_methods;
   float m_method_profiles_appear_percent_threshold{1.f};
+  bool m_legacy_perf_logic;
 };
