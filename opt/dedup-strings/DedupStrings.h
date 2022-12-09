@@ -21,6 +21,8 @@ enum class DedupStringsPerfMode {
   // Consider method-profiles, if available, otherwise fall back to excluding
   // all perf-sensitive classes.
   EXCLUDE_HOT_METHODS_OR_CLASSES,
+  // Also take into account basic-block hotness
+  EXCLUDE_HOT_BLOCKS_IN_HOT_METHODS_OR_CLASSES,
 };
 
 class DedupStrings {
