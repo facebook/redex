@@ -50,6 +50,16 @@ constexpr const char* METRIC_EXCLUDED_DUPLICATE_NON_LOAD_STRINGS =
 constexpr const char* METRIC_FACTORY_METHODS = "num_factory_methods";
 constexpr const char* METRIC_EXCLUDED_OUT_OF_FACTORY_METHODS_STRINGS =
     "num_excluded_out_of_factory_methods_strings";
+
+DedupStringsPerfMode parse_perf_mode(const std::string& str) {
+  if (str == "legacy") {
+    return DedupStringsPerfMode::LEGACY;
+  }
+  if (str == "exclude-hot-methods-or-classes") {
+    return DedupStringsPerfMode::EXCLUDE_HOT_METHODS_OR_CLASSES;
+  }
+  always_assert_log(false, "Unknown perf mode: %s", str.c_str());
+}
 } // namespace
 
 void DedupStrings::run(DexStoresVector& stores) {
@@ -117,7 +127,7 @@ std::unordered_set<const DexMethod*> DedupStrings::get_perf_sensitive_methods(
         type_class(method->get_class())->rstate.outlined()) {
       return true;
     }
-    if (m_legacy_perf_logic) {
+    if (m_perf_mode == DedupStringsPerfMode::LEGACY) {
       // We used to have some strange logic for perf-sensitivity. Avoid using
       // it.
       if (!cls->is_perf_sensitive()) {
@@ -126,6 +136,8 @@ std::unordered_set<const DexMethod*> DedupStrings::get_perf_sensitive_methods(
       return !m_method_profiles.has_stats() ||
              !sufficiently_popular_methods.count(method);
     }
+    always_assert(m_perf_mode ==
+                  DedupStringsPerfMode::EXCLUDE_HOT_METHODS_OR_CLASSES);
     if (!m_method_profiles.has_stats()) {
       return cls->is_perf_sensitive();
     }
@@ -690,11 +702,12 @@ void DedupStringsPass::bind_config() {
   bind("method_profiles_appear_percent_threshold",
        default_method_profiles_appear_percent_threshold,
        m_method_profiles_appear_percent_threshold);
-  bind("legacy_perf_logic", false, m_legacy_perf_logic);
+  std::string perf_mode_str;
+  bind("perf_mode", "exclude-hot-methods-or-classes", perf_mode_str);
 
   trait(Traits::Pass::unique, true);
 
-  after_configuration([this] {
+  after_configuration([this, perf_mode_str = std::move(perf_mode_str)] {
     always_assert(m_max_factory_methods > 0);
     interdex::InterDexRegistry* registry =
         static_cast<interdex::InterDexRegistry*>(
@@ -704,6 +717,8 @@ void DedupStringsPass::bind_config() {
       return new DedupStringsInterDexPlugin(m_max_factory_methods);
     };
     registry->register_plugin("DEDUP_STRINGS_PLUGIN", std::move(fn));
+    always_assert(!perf_mode_str.empty());
+    m_perf_mode = parse_perf_mode(perf_mode_str);
   });
 }
 
@@ -711,8 +726,8 @@ void DedupStringsPass::run_pass(DexStoresVector& stores,
                                 ConfigFiles& conf,
                                 PassManager& mgr) {
   DedupStrings ds(m_max_factory_methods,
-                  m_method_profiles_appear_percent_threshold,
-                  m_legacy_perf_logic, conf.get_method_profiles());
+                  m_method_profiles_appear_percent_threshold, m_perf_mode,
+                  conf.get_method_profiles());
   ds.run(stores);
   const auto stats = ds.get_stats();
   mgr.incr_metric(METRIC_PERF_SENSITIVE_STRINGS, stats.perf_sensitive_strings);
