@@ -14,6 +14,7 @@
 #include "InitClassesWithSideEffects.h"
 #include "ScopedCFG.h"
 #include "Show.h"
+#include "StlUtil.h"
 #include "Trace.h"
 #include "Walkers.h"
 
@@ -40,25 +41,39 @@ static const char* redex_field_name = "$redex_init_class";
 
 class InitClassFields {
  public:
-  DexField* get(DexType* type) const {
-    DexField* res = nullptr;
-    m_init_class_fields.update(
-        type, [&](DexType* type_, InitClassField& icf, bool exist) {
-          if (!exist) {
-            icf.field = make_init_class_field(type_);
-            icf.field->rstate.set_init_class();
+  explicit InitClassFields(DexStoresVector& stores) {
+    // For each dex, figure out which static fields it references, and which
+    // classes belong to it.
+    std::vector<std::pair<size_t, const DexClasses*>> dex_to_classes;
+    for (auto& store : stores) {
+      for (auto& dexen : store.get_dexen()) {
+        dex_to_classes.emplace_back(dex_to_classes.size(), &dexen);
+      }
+    }
+    m_dex_referenced_sfields.resize(dex_to_classes.size());
+    ConcurrentMap<DexType*, size_t> concurrent_class_dex_indices;
+    workqueue_run<std::pair<size_t, const DexClasses*>>(
+        [&](std::pair<size_t, const DexClasses*> p) {
+          auto& dex_referenced_sfields = m_dex_referenced_sfields.at(p.first);
+          for (auto* cls : *p.second) {
+            cls->gather_fields(dex_referenced_sfields);
+            concurrent_class_dex_indices.emplace(cls->get_type(), p.first);
           }
-          icf.count++;
-          res = icf.field;
-        });
-    always_assert(res);
-    return res;
+          std20::erase_if(dex_referenced_sfields, [](DexFieldRef* f) {
+            return !f->is_def() || !is_static(f->as_def());
+          });
+        },
+        dex_to_classes);
+    m_class_dex_indices = concurrent_class_dex_indices.move_to_container();
   }
 
   std::vector<IRInstruction*> get_replacements(
-      DexType* type, const std::function<reg_t(DexField*)>& reg_getter) const {
+      DexType* type,
+      DexMethod* caller,
+      const std::function<reg_t(DexField*)>& reg_getter) const {
     std::vector<IRInstruction*> insns;
-    auto field = get(type);
+    auto caller_dex_idx = m_class_dex_indices.at(caller->get_class());
+    auto field = get(type, caller_dex_idx);
     auto reg = reg_getter(field);
     auto sget_insn = (new IRInstruction(opcode::sget_opcode_for_field(field)))
                          ->set_field(field);
@@ -79,7 +94,11 @@ class InitClassFields {
   get_ordered_init_class_reference_counts() {
     std::vector<std::pair<DexType*, size_t>> res;
     for (auto& p : m_init_class_fields) {
-      res.emplace_back(p.first, p.second.count);
+      size_t count = 0;
+      for (auto& q : p.second) {
+        count += q.second.count;
+      }
+      res.emplace_back(p.first, count);
     }
     std::stable_sort(res.begin(), res.end(), [](const auto& a, const auto& b) {
       return a.second > b.second;
@@ -88,46 +107,98 @@ class InitClassFields {
   }
 
   std::vector<DexField*> get_all() {
-    std::vector<DexField*> res;
+    std::unordered_set<DexField*> set;
     for (auto& p : m_init_class_fields) {
-      res.emplace_back(p.second.field);
+      for (auto& q : p.second) {
+        set.insert(q.second.field);
+      }
     }
+    std::vector<DexField*> res(set.begin(), set.end());
+    std::sort(res.begin(), res.end(), compare_dexfields);
     return res;
   }
 
  private:
+  std::vector<std::unordered_set<DexFieldRef*>> m_dex_referenced_sfields;
+  std::unordered_map<DexType*, size_t> m_class_dex_indices;
   const DexString* m_field_name = DexString::make_string(redex_field_name);
   mutable std::atomic<size_t> m_fields_added{0};
   struct InitClassField {
     DexField* field{nullptr};
     size_t count{0};
   };
-  mutable ConcurrentMap<DexType*, InitClassField> m_init_class_fields;
+  mutable ConcurrentMap<DexType*, std::unordered_map<size_t, InitClassField>>
+      m_init_class_fields;
 
-  DexField* make_init_class_field(DexType* type) const {
+  DexField* get(DexType* type, size_t dex_idx) const {
+    DexField* res = nullptr;
+    m_init_class_fields.update(type, [&](DexType* type_, auto& map, bool) {
+      auto& icf = map[dex_idx];
+      if (icf.field == nullptr) {
+        icf.field = make_init_class_field(type_, dex_idx);
+        icf.field->rstate.set_init_class();
+      }
+      icf.count++;
+      res = icf.field;
+    });
+    always_assert(res);
+    return res;
+  }
+
+  static DexField* get_preferred_field(const std::vector<DexField*>& sfields) {
+    always_assert(!sfields.empty());
+    // 1. non-wide primitive, if any.
+    for (auto f : sfields) {
+      if (!type::is_wide_type(f->get_type()) &&
+          type::is_primitive(f->get_type())) {
+        return f;
+      }
+    }
+    // 2. non-wide, if any.
+    for (auto f : sfields) {
+      if (!type::is_wide_type(f->get_type())) {
+        return f;
+      }
+    }
+    // 3. anything.
+    return sfields.front();
+  }
+
+  DexField* make_init_class_field(DexType* type, size_t dex_idx) const {
     auto cls = type_class(type);
     always_assert(cls);
+    const auto& dex_referenced_sfields = m_dex_referenced_sfields.at(dex_idx);
     const auto& sfields = cls->get_sfields();
-    if (!sfields.empty()) {
-      // We pick the first...
-      // 1. non-wide primitive, if any.
-      for (auto f : sfields) {
-        if (!type::is_wide_type(f->get_type()) &&
-            type::is_primitive(f->get_type())) {
-          return f;
-        }
-      }
-      // 2. non-wide, if any.
-      for (auto f : sfields) {
-        if (!type::is_wide_type(f->get_type())) {
-          return f;
-        }
-      }
-      // 3. anything.
-      return sfields.front();
+
+    auto referenced_sfields = sfields;
+    std20::erase_if(referenced_sfields,
+                    [&](auto* f) { return !dex_referenced_sfields.count(f); });
+    if (!referenced_sfields.empty()) {
+      // Ideally, we can pick from the filtered list of referenced sfields
+      auto f = get_preferred_field(referenced_sfields);
+      always_assert(f->get_name() != m_field_name);
+      return f;
     }
-    always_assert_log(DexField::get_field(type, m_field_name, type::_int()) ==
-                          nullptr,
+
+    auto pre_existing_sfields = sfields;
+    std20::erase_if(pre_existing_sfields,
+                    [&](auto* f) { return f->get_name() == m_field_name; });
+    if (!pre_existing_sfields.empty()) {
+      // If there is no referenced sfield in this dex, but we have any
+      // pre-existing sfields, then we pick one of them. This will effectively
+      // add a field reference to this dex, but that's accounted for.
+      return get_preferred_field(pre_existing_sfields);
+    }
+
+    // If we already created a new dummy field (for another dex), then we must
+    // reuse that.
+    for (auto f : sfields) {
+      if (f->get_name() == m_field_name) {
+        return f;
+      }
+    }
+
+    always_assert_log(DexField::get_field(type, m_field_name, type) == nullptr,
                       "field %s already exists!",
                       redex_field_name);
     auto field = DexField::make_field(type, m_field_name, type)
@@ -287,7 +358,7 @@ void InitClassLoweringPass::run_pass(DexStoresVector& stores,
       m_log_in_clinits ? DexString::make_string("init-class") : nullptr;
   std::atomic<size_t> sget_instructions_added{0};
   std::atomic<size_t> methods_with_init_class{0};
-  InitClassFields init_class_fields;
+  InitClassFields init_class_fields(stores);
   ConcurrentSet<DexMethod*> clinits;
   const auto stats =
       walk::parallel::methods<Stats>(scope, [&](DexMethod* method) {
@@ -342,7 +413,8 @@ void InitClassLoweringPass::run_pass(DexStoresVector& stores,
             auto type = it->insn->get_type();
             std::vector<IRInstruction*> replacements;
             if (!m_drop) {
-              replacements = init_class_fields.get_replacements(type, get_reg);
+              replacements =
+                  init_class_fields.get_replacements(type, method, get_reg);
               local_sget_instructions_added++;
             }
             auto cfg_it = block->to_cfg_instruction_iterator(it);
