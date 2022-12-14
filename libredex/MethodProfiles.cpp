@@ -99,7 +99,7 @@ bool MethodProfiles::parse_stats_file(const std::string& csv_filename) {
     if (m_mode == NONE) {
       success = parse_header(line);
     } else {
-      success = parse_line(std::move(line));
+      success = parse_line(line);
     }
     if (!success) {
       return false;
@@ -275,7 +275,8 @@ bool MethodProfiles::apply_main_internal_result(ParsedMain v,
   }
 }
 
-bool MethodProfiles::parse_main(std::string line, std::string* interaction_id) {
+bool MethodProfiles::parse_main(const std::string& line,
+                                std::string* interaction_id) {
   auto result = parse_main_internal(line);
   if (!result) {
     return false;
@@ -284,9 +285,9 @@ bool MethodProfiles::parse_main(std::string line, std::string* interaction_id) {
   return true;
 }
 
-bool MethodProfiles::parse_line(std::string line) {
+bool MethodProfiles::parse_line(const std::string& line) {
   if (m_mode == MAIN) {
-    return parse_main(std::move(line), &m_interaction_id);
+    return parse_main(line, &m_interaction_id);
   } else if (m_mode == METADATA) {
     return parse_metadata(line);
   } else {
