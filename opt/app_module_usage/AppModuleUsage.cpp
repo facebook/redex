@@ -438,7 +438,7 @@ bool AppModuleUsagePass::access_granted_by_annotation(DexClass* cls,
 
   // Check outer class.
   std::string_view cls_name = cls->str();
-  auto dollar_sign_idx = cls_name.rfind("$");
+  auto dollar_sign_idx = cls_name.rfind('$');
   while (dollar_sign_idx != std::string_view::npos) {
     cls_name.remove_suffix(cls_name.size() - dollar_sign_idx);
     std::string new_class_name = std::string(cls_name) + ";";
@@ -447,7 +447,7 @@ bool AppModuleUsagePass::access_granted_by_annotation(DexClass* cls,
     if (outer_class) {
       return access_granted_by_annotation(outer_class, target);
     }
-    dollar_sign_idx = cls_name.rfind("$");
+    dollar_sign_idx = cls_name.rfind('$');
   }
   return false;
 }
