@@ -34,7 +34,7 @@ class PositionMap(object):
             pmap = PositionMap()
             for _ in range(0, spool_count):
                 ssize = struct.unpack("<L", mapping.read(4))[0]
-                pmap.string_pool.append(mapping.read(ssize).decode("ascii"))
+                pmap.string_pool.append(mapping.read(ssize).decode("utf-8"))
             logging.info("Unpacked %d strings from line map", spool_count)
             pos_count = struct.unpack("<L", mapping.read(4))[0]
             # this is pretty slow; it would be much faster in C++ with memcpy
