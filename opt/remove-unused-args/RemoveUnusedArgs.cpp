@@ -633,7 +633,7 @@ RemoveArgs::MethodStats RemoveArgs::update_method_protos(
         auto& cfg = method->get_code()->cfg();
         // We update the method signature, so we must remove unused
         // OPCODE_LOAD_PARAM_* to satisfy IRTypeChecker.
-        for (auto dead_insn : entry.dead_insns) {
+        for (const auto& dead_insn : entry.dead_insns) {
           cfg.remove_insn(dead_insn);
         }
         m_live_arg_idxs_map.emplace(method, entry.live_arg_idxs);
