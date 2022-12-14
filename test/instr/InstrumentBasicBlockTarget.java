@@ -1249,6 +1249,7 @@ public class InstrumentBasicBlockTarget {
     }
   }
 
+  /*
   @Test
   @DoNotStrip
   public void test21() {
@@ -1356,6 +1357,7 @@ public class InstrumentBasicBlockTarget {
       }
     }
   }
+  */
 
   @Test
   @DoNotStrip
