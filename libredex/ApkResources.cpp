@@ -1661,8 +1661,7 @@ void rebuild_type_strings(
 }
 } // namespace
 
-void ResourcesArscFile::remove_unreferenced_strings(
-    const ResourceConfig& config) {
+void ResourcesArscFile::finalize_resource_table(const ResourceConfig& config) {
   // Find the global string pool and read its settings.
   GlobalStringPoolReader string_reader;
   string_reader.visit(m_f.data(), m_arsc_len);

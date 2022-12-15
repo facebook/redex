@@ -1079,7 +1079,7 @@ void finalize_resource_table(ConfigFiles& conf) {
   auto res_table = resources->load_res_table();
   auto global_resources_config =
       conf.get_global_config().get_config_by_name<ResourceConfig>("resources");
-  res_table->remove_unreferenced_strings(*global_resources_config);
+  res_table->finalize_resource_table(*global_resources_config);
 }
 
 /**

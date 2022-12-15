@@ -740,7 +740,7 @@ TEST(ResTableParse, TestUnknownPackageChunks) {
   auto res_path = tmp_dir.path + "/resources.arsc";
   copy_file(std::getenv("resources_unknown_chunk"), res_path);
   ResourcesArscFile res_table(res_path);
-  res_table.remove_unreferenced_strings({});
+  res_table.finalize_resource_table({});
   EXPECT_TRUE(
       are_files_equal(std::getenv("resources_unknown_chunk"), res_path));
 }
@@ -954,7 +954,7 @@ void delete_resources(const std::string& arsc_file_path,
   // We actually have to reload the table, since all modifications are
   // meant to be written directly to disk afterwards.
   ResourcesArscFile reloaded_file(arsc_file_path);
-  reloaded_file.remove_unreferenced_strings({});
+  reloaded_file.finalize_resource_table({});
 }
 
 UNUSED int32_t load_global_strings(const RedexMappedFile& arsc_file,

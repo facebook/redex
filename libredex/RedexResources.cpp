@@ -449,8 +449,7 @@ bool AndroidResources::can_obfuscate_xml_file(
   return false;
 }
 
-void ResourceTableFile::remove_unreferenced_strings(
-    const ResourceConfig& config) {
+void ResourceTableFile::finalize_resource_table(const ResourceConfig& config) {
   // Intentionally left empty, proto resource table will not contain a relevant
-  // structure to prune.
+  // structure to clean up.
 }

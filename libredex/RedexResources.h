@@ -163,7 +163,7 @@ class ResourceTableFile {
   // Removes entries from string pool structures that are not referenced by
   // entries/values in the resource table and other structural changes that are
   // better left until all passes have run.
-  virtual void remove_unreferenced_strings(const ResourceConfig& config);
+  virtual void finalize_resource_table(const ResourceConfig& config);
 
   // Returns any file paths from entries in the given ID. A non-existent ID or
   // an for which all values are not files will return an empty vector.
