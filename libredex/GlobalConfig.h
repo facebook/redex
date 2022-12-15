@@ -164,7 +164,12 @@ struct ResourceConfig : public Configurable {
            "cleanup steps.";
   }
 
+  // Outer R class names that have been customized to hold extra data (which
+  // need special treatment when remapping constants). Not used by all apps.
   std::unordered_set<std::string> customized_r_classes;
+  // Type names in the resource table (example: "id") which should enable
+  // canonical offsets for entries/values.
+  std::unordered_set<std::string> canonical_entry_types;
 };
 
 class GlobalConfig;

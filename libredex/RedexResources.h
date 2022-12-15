@@ -25,6 +25,7 @@
 #include "androidfw/ResourceTypes.h"
 
 #include "Debug.h"
+#include "GlobalConfig.h"
 #include "RedexMappedFile.h"
 
 const char* const ONCLICK_ATTRIBUTE = "android:onClick";
@@ -160,8 +161,9 @@ class ResourceTableFile {
       const std::unordered_set<std::string>& keep_resource_specific) = 0;
 
   // Removes entries from string pool structures that are not referenced by
-  // entries/values in the resource table
-  virtual void remove_unreferenced_strings();
+  // entries/values in the resource table and other structural changes that are
+  // better left until all passes have run.
+  virtual void remove_unreferenced_strings(const ResourceConfig& config);
 
   // Returns any file paths from entries in the given ID. A non-existent ID or
   // an for which all values are not files will return an empty vector.

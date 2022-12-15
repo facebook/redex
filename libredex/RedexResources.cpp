@@ -22,6 +22,7 @@
 #include "Debug.h"
 #include "DetectBundle.h"
 #include "DexUtil.h"
+#include "GlobalConfig.h"
 #include "IOUtil.h"
 #include "Macros.h"
 #include "ReadMaybeMapped.h"
@@ -448,7 +449,8 @@ bool AndroidResources::can_obfuscate_xml_file(
   return false;
 }
 
-void ResourceTableFile::remove_unreferenced_strings() {
+void ResourceTableFile::remove_unreferenced_strings(
+    const ResourceConfig& config) {
   // Intentionally left empty, proto resource table will not contain a relevant
   // structure to prune.
 }

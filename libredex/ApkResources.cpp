@@ -37,6 +37,7 @@
 
 #include "Debug.h"
 #include "DexUtil.h"
+#include "GlobalConfig.h"
 #include "IOUtil.h"
 #include "ReadMaybeMapped.h"
 #include "RedexMappedFile.h"
@@ -51,7 +52,7 @@
 #endif
 
 namespace apk {
-bool is_valid_global_string(const android::ResStringPool& pool, size_t idx) {
+bool is_valid_string_idx(const android::ResStringPool& pool, size_t idx) {
   size_t u16_len;
   return pool.stringAt(idx, &u16_len) != nullptr;
 }
@@ -501,7 +502,7 @@ void TableSnapshot::collect_resource_values(
 }
 
 bool TableSnapshot::is_valid_global_string_idx(size_t idx) const {
-  return is_valid_global_string(m_global_strings, idx);
+  return is_valid_string_idx(m_global_strings, idx);
 }
 
 std::string TableSnapshot::get_global_string(size_t idx) const {
@@ -938,7 +939,7 @@ class XmlStringAttributeCollector : public arsc::XmlFileVisitor {
   bool visit_typed_data(android::Res_value* value) override {
     if (value->dataType == android::Res_value::TYPE_STRING) {
       auto idx = dtohl(value->data);
-      if (apk::is_valid_global_string(*m_string_pool, idx)) {
+      if (apk::is_valid_string_idx(*m_string_pool, idx)) {
         auto s = apk::get_string_from_pool(*m_string_pool, idx);
         m_values.emplace(s);
       }
@@ -1660,7 +1661,8 @@ void rebuild_type_strings(
 }
 } // namespace
 
-void ResourcesArscFile::remove_unreferenced_strings() {
+void ResourcesArscFile::remove_unreferenced_strings(
+    const ResourceConfig& config) {
   // Find the global string pool and read its settings.
   GlobalStringPoolReader string_reader;
   string_reader.visit(m_f.data(), m_arsc_len);
@@ -1726,10 +1728,6 @@ void ResourcesArscFile::remove_unreferenced_strings() {
   table_builder.set_global_strings(global_strings_builder);
   for (auto& package_entries : collector.m_package_entries) {
     // 5) Do a similar remapping as above, but for key strings.
-    //
-    //    TODO: also do a similar step for type strings pool, and any empty type
-    //    chunks that had all their entries deleted.
-    //
     auto& package = package_entries.first;
     std::shared_ptr<arsc::ResPackageBuilder> package_builder =
         std::make_shared<arsc::ResPackageBuilder>(package);
@@ -1749,6 +1747,17 @@ void ResourcesArscFile::remove_unreferenced_strings() {
     project_string_mapping(used_key_strings, key_string_pool->size(),
                            &key_old_to_new);
 
+    // TODO: also do a similar rebuild step for type strings pool; any empty
+    // type chunks that had all their entries deleted can have their string name
+    // removed from the output.
+    auto& type_strings_header =
+        collector.m_package_type_string_headers.at(package);
+    android::ResStringPool type_strings;
+    always_assert_log(type_strings.setTo(type_strings_header,
+                                         CHUNK_SIZE(type_strings_header),
+                                         true) == android::NO_ERROR,
+                      "Failed to parse type strings!");
+
     // Remap the entries.
     for (auto& ref : refs) {
       auto old = dtohl(ref->index);
@@ -1764,16 +1773,28 @@ void ResourcesArscFile::remove_unreferenced_strings() {
         *key_string_pool, key_old_to_new, [](android::ResStringPool_span*) {},
         key_strings_builder.get());
     package_builder->set_key_strings(key_strings_builder);
-    package_builder->set_type_strings(
-        collector.m_package_type_string_headers.at(package));
-
+    package_builder->set_type_strings(type_strings_header);
     // Copy over all existing type data, which has been remapped by the step
     // above.
     auto search = collector.m_package_types.find(package);
     if (search != collector.m_package_types.end()) {
       auto types = search->second;
       for (auto& info : types) {
-        package_builder->add_type(info);
+        std::string type_name;
+        auto type_string_idx = info.spec->id - 1;
+        if (apk::is_valid_string_idx(type_strings, type_string_idx)) {
+          type_name = apk::get_string_from_pool(type_strings, type_string_idx);
+        }
+        if (!type_name.empty() &&
+            config.canonical_entry_types.count(type_name) > 0) {
+          TRACE(RES, 9, "Canonical entries enabled for ID 0x%x (%s)",
+                info.spec->id, type_name.c_str());
+          auto type_builder = std::make_shared<arsc::ResTableTypeProjector>(
+              package->id, info.spec, info.configs, true);
+          package_builder->add_type(type_builder);
+        } else {
+          package_builder->add_type(info);
+        }
       }
     }
 

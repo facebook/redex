@@ -104,6 +104,7 @@ void PassManagerConfig::bind_config() {
 
 void ResourceConfig::bind_config() {
   bind("customized_r_classes", {}, customized_r_classes);
+  bind("canonical_entry_types", {}, canonical_entry_types);
 }
 
 void GlobalConfig::bind_config() {

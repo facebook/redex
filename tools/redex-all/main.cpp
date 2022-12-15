@@ -1077,7 +1077,9 @@ void finalize_resource_table(ConfigFiles& conf) {
   TRACE(MAIN, 1, "Finalizing resource table.");
   auto resources = create_resource_reader(apk_dir);
   auto res_table = resources->load_res_table();
-  res_table->remove_unreferenced_strings();
+  auto global_resources_config =
+      conf.get_global_config().get_config_by_name<ResourceConfig>("resources");
+  res_table->remove_unreferenced_strings(*global_resources_config);
 }
 
 /**
