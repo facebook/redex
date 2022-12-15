@@ -1083,8 +1083,6 @@ TEST(ResTable, DeleteAllEntriesInType) {
           EXPECT_EQ(string_values.count("third"), 1);
         }
         {
-          // We do not yet delete the type names, for now just validate that
-          // dimen is still here.
           android::ResStringPool pool;
           EXPECT_EQ(load_type_strings(built_arsc_file, &pool), 0);
           std::unordered_set<std::string> string_values;
@@ -1092,6 +1090,7 @@ TEST(ResTable, DeleteAllEntriesInType) {
             string_values.emplace(apk::get_string_from_pool(pool, i));
           }
           EXPECT_EQ(string_values.count("dimen"), 1);
+          EXPECT_EQ(string_values.count("style"), 0);
         }
 
         // Ensure that we have only 1 ResTable_typeSpec, but two configs within.

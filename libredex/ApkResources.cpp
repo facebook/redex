@@ -1746,9 +1746,6 @@ void ResourcesArscFile::finalize_resource_table(const ResourceConfig& config) {
     project_string_mapping(used_key_strings, key_string_pool->size(),
                            &key_old_to_new);
 
-    // TODO: also do a similar rebuild step for type strings pool; any empty
-    // type chunks that had all their entries deleted can have their string name
-    // removed from the output.
     auto& type_strings_header =
         collector.m_package_type_string_headers.at(package);
     android::ResStringPool type_strings;
@@ -1756,6 +1753,8 @@ void ResourcesArscFile::finalize_resource_table(const ResourceConfig& config) {
                                          CHUNK_SIZE(type_strings_header),
                                          true) == android::NO_ERROR,
                       "Failed to parse type strings!");
+    std::vector<std::string> kept_type_names(type_strings.size());
+    int last_kept_type_name = 0;
 
     // Remap the entries.
     for (auto& ref : refs) {
@@ -1772,7 +1771,6 @@ void ResourcesArscFile::finalize_resource_table(const ResourceConfig& config) {
         *key_string_pool, key_old_to_new, [](android::ResStringPool_span*) {},
         key_strings_builder.get());
     package_builder->set_key_strings(key_strings_builder);
-    package_builder->set_type_strings(type_strings_header);
     // Copy over all existing type data, which has been remapped by the step
     // above.
     auto search = collector.m_package_types.find(package);
@@ -1794,8 +1792,23 @@ void ResourcesArscFile::finalize_resource_table(const ResourceConfig& config) {
         } else {
           package_builder->add_type(info);
         }
+        if (dtohl(info.spec->entryCount) > 0) {
+          kept_type_names.at(type_string_idx) = type_name;
+          if (type_string_idx > last_kept_type_name) {
+            last_kept_type_name = type_string_idx;
+          }
+        }
       }
     }
+
+    // Copy all type names that were not fully deleted (or empty strings if they
+    // were).
+    std::shared_ptr<arsc::ResStringPoolBuilder> type_strings_builder =
+        std::make_shared<arsc::ResStringPoolBuilder>(POOL_FLAGS(&type_strings));
+    for (int i = 0; i <= last_kept_type_name; i++) {
+      type_strings_builder->add_string(kept_type_names.at(i));
+    }
+    package_builder->set_type_strings(type_strings_builder);
 
     // Finally, preserve any chunks that we are not parsing.
     auto& unknown_chunks = collector.m_package_unknown_chunks.at(package);
