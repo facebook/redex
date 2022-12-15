@@ -48,7 +48,7 @@ class DexMetadata {
 class DexStore {
   std::vector<DexClasses> m_dexen;
   DexMetadata m_metadata;
-  std::string dex_magic = "";
+  std::string dex_magic;
   bool m_generated = false;
 
  public:
