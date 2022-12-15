@@ -72,7 +72,7 @@ bool init_for_type_has_side_effects(
       init = method;
     }
   }
-  if (!init || init->get_proto()->get_args()->size() || !init->get_code()) {
+  if (!init || !init->get_proto()->get_args()->empty() || !init->get_code()) {
     return true;
   }
   auto is_pure = check_inits_has_side_effects(

@@ -774,7 +774,7 @@ bool is_enum_values(const DexMethodRef* method) {
     return false;
   }
   auto proto = method->get_proto();
-  if (proto->get_args()->size() != 0) {
+  if (!proto->get_args()->empty()) {
     return false;
   }
   return type::get_array_component_type(proto->get_rtype()) ==

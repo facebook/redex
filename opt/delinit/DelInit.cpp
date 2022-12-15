@@ -171,7 +171,7 @@ bool can_remove_init(const DexMethod* m,
   DexClass* clazz = type_class(m->get_class());
   if (can_remove(clazz)) {
     return true;
-  } else if (m->get_proto()->get_args()->size() == 0) {
+  } else if (m->get_proto()->get_args()->empty()) {
     // If the class is kept, we should probably keep the no argument constructor
     // Because it may be invoked with `Class.newInstance()`.
     return false;

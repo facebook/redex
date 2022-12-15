@@ -369,7 +369,7 @@ class OptimizeEnums {
      */
     auto is_safe_enum = [this](const DexClass* cls) {
       if (is_enum(cls) && !cls->is_external() && is_final(cls) &&
-          can_delete(cls) && cls->get_interfaces()->size() == 0 &&
+          can_delete(cls) && cls->get_interfaces()->empty() &&
           only_one_static_synth_field(cls)) {
 
         const auto& ctors = cls->get_ctors();
@@ -440,7 +440,7 @@ class OptimizeEnums {
       // Only consider enums that are final, not external, do not have
       // interfaces, and are not instance fields of any classes.
       return is_enum(cls) && !cls->is_external() && is_final(cls) &&
-             can_delete(cls) && cls->get_interfaces()->size() == 0 &&
+             can_delete(cls) && cls->get_interfaces()->empty() &&
              !types_used_as_instance_fields.count(cls->get_type());
     };
 

@@ -73,7 +73,7 @@ void emit_check_cast(const dispatch::Spec& spec,
                      std::vector<Location>& args,
                      DexMethod* callee,
                      MethodBlock* block) {
-  if (!args.empty() && spec.proto->get_args()->size()) {
+  if (!args.empty() && !spec.proto->get_args()->empty()) {
     auto dispatch_head_arg_type = spec.proto->get_args()->at(0);
     auto callee_head_arg_type = callee->get_proto()->get_args()->at(0);
     if (dispatch_head_arg_type != callee_head_arg_type) {

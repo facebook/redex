@@ -1603,7 +1603,7 @@ namespace optimize_enums {
 int transform_enums(const Config& config,
                     DexStoresVector* stores,
                     size_t* num_int_objs) {
-  if (!config.candidate_enums.size()) {
+  if (config.candidate_enums.empty()) {
     return 0;
   }
 

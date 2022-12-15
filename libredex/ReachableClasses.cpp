@@ -627,8 +627,7 @@ void analyze_serializable(const Scope& scope) {
     // any Serializable class, if they are themselves not Serializable.
     if (!children.count(child_super_type)) {
       for (auto meth : child_supercls->get_dmethods()) {
-        if (method::is_init(meth) &&
-            meth->get_proto()->get_args()->size() == 0) {
+        if (method::is_init(meth) && meth->get_proto()->get_args()->empty()) {
           meth->rstate.set_root(keep_reason::SERIALIZABLE);
         }
       }

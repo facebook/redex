@@ -374,7 +374,7 @@ std::string get_method_signature(const DexMethod* method) {
   ss << show(proto->get_rtype()) << " ";
   ss << method->get_simple_deobfuscated_name();
   auto arg_list = proto->get_args();
-  if (arg_list->size() > 0) {
+  if (!arg_list->empty()) {
     ss << "(";
     for (auto t : *arg_list) {
       ss << show(t) << ", ";

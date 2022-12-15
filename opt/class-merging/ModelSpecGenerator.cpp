@@ -173,7 +173,7 @@ void find_all_mergeables_and_roots(const TypeSystem& type_system,
     auto super_cls = cls->get_super_class();
     if (super_cls != type::java_lang_Object()) {
       parent_children[super_cls].push_back(cur_type);
-    } else if (intfs->size()) {
+    } else if (!intfs->empty()) {
       intfs_implementors[intfs].push_back(cur_type);
     } else {
       // TODO: Investigate error P444184021 when merging simple classes without
