@@ -102,6 +102,10 @@ void PassManagerConfig::bind_config() {
   bind("jemalloc_full_stats", jemalloc_full_stats, jemalloc_full_stats);
 }
 
+void ResourceConfig::bind_config() {
+  bind("customized_r_classes", {}, customized_r_classes);
+}
+
 void GlobalConfig::bind_config() {
   bool bool_param;
   std::string string_param;
@@ -189,6 +193,7 @@ GlobalConfigRegistry& GlobalConfig::default_registry() {
       register_as<MethodSimilarityOrderingConfig>("method_similarity_order"),
       register_as<ProguardConfig>("proguard"),
       register_as<PassManagerConfig>("pass_manager"),
+      register_as<ResourceConfig>("resources"),
   };
   return registry;
 }

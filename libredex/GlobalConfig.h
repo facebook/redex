@@ -155,6 +155,18 @@ struct PassManagerConfig : public Configurable {
   bool jemalloc_full_stats{false};
 };
 
+struct ResourceConfig : public Configurable {
+  void bind_config() override;
+
+  std::string get_config_name() override { return "ResourceConfig"; }
+  std::string get_config_doc() override {
+    return "Options used by many resource optimization passes or global "
+           "cleanup steps.";
+  }
+
+  std::unordered_set<std::string> customized_r_classes;
+};
+
 class GlobalConfig;
 
 using BindOperationFn = std::function<std::unique_ptr<Configurable>(
