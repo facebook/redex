@@ -237,7 +237,8 @@ TEST(BundleResources, ReadResource) {
     EXPECT_EQ(bg_grey.size(), 1);
     obtain_resource_name_back = id_to_name.at(bg_grey[0]);
     EXPECT_EQ(obtain_resource_name_back, "bg_grey");
-    auto drawable_type_id = res_table->get_types_by_name({"drawable"});
+    std::unordered_set<std::string> types = {"drawable"};
+    auto drawable_type_id = res_table->get_types_by_name(types);
     EXPECT_EQ(drawable_type_id.size(), 1);
     std::unordered_set<std::string> drawable_res_names;
     for (const auto& pair : id_to_name) {
@@ -465,7 +466,8 @@ TEST(BundleResources, ObfuscateResourcesName) {
     EXPECT_EQ(files.size(), 1);
     EXPECT_EQ(*files.begin(), "base/res/drawable-mdpi-v4/icon.png");
 
-    auto type_ids = res_table->get_types_by_name({"color"});
+    std::unordered_set<std::string> types = {"color"};
+    auto type_ids = res_table->get_types_by_name(types);
     std::unordered_set<uint32_t> shifted_allow_type_ids;
     for (auto& type_id : type_ids) {
       shifted_allow_type_ids.emplace(type_id >> TYPE_INDEX_BIT_SHIFT);

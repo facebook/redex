@@ -127,8 +127,18 @@ class ResourceTableFile {
   // This API is wonky, but meant to mimic iterating over the .arsc file type
   // string pool and how that would behave.
   virtual void get_type_names(std::vector<std::string>* type_names) = 0;
+  // Return type ids for the given set of type names. Type ids will be shifted
+  // to TT0000 range, so type 0x1 will be returned as 0x10000 (for ease of
+  // comparison with resource IDs).
   virtual std::unordered_set<uint32_t> get_types_by_name(
       const std::unordered_set<std::string>& type_names) = 0;
+  // Same as above, return values will be given in no particular order.
+  std::unordered_set<uint32_t> get_types_by_name(
+      const std::vector<std::string>& type_names) {
+    std::unordered_set<std::string> set;
+    set.insert(type_names.begin(), type_names.end());
+    return get_types_by_name(set);
+  }
   virtual std::unordered_set<uint32_t> get_types_by_name_prefixes(
       const std::unordered_set<std::string>& type_name_prefixes) = 0;
   virtual void delete_resource(uint32_t red_id) = 0;
