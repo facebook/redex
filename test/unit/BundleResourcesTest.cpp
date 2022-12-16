@@ -490,7 +490,7 @@ TEST(BundleResources, ObfuscateResourcesName) {
     EXPECT_EQ(res_table_new->get_res_ids_by_name("hex_or_file2").size(), 0);
     EXPECT_EQ(res_table_new->get_res_ids_by_name("duplicate_name").size(), 2);
     EXPECT_EQ(res_table_new->get_res_ids_by_name(RESOURCE_NAME_REMOVED).size(),
-              5);
+              7);
     const auto& id_to_name = res_table_new->id_to_name;
     EXPECT_EQ(id_to_name.at(color1_id), RESOURCE_NAME_REMOVED);
     EXPECT_EQ(id_to_name.at(color3_id), RESOURCE_NAME_REMOVED);
