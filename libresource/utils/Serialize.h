@@ -108,13 +108,9 @@ class ResStringPoolBuilder {
     return (m_flags & android::ResStringPool_header::UTF8_FLAG) != 0;
   }
 
-  size_t non_style_string_count() {
-    return m_strings.size();
-  }
+  size_t non_style_string_count() { return m_strings.size(); }
 
-  size_t style_count() {
-    return m_styles.size();
-  }
+  size_t style_count() { return m_styles.size(); }
 
   std::vector<StringHolder> m_strings;
   std::vector<StyleInfo> m_styles;
