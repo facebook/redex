@@ -19,7 +19,6 @@
 #include "InstructionSequenceOutliner.h"
 #include "MethodProfiles.h"
 #include "PassManager.h"
-#include "ScopedCFG.h"
 #include "Show.h"
 #include "Walkers.h"
 #include "locator.h"
@@ -225,6 +224,7 @@ DexMethod* DedupStrings::make_const_string_loader_method(
   }
   auto method = method_creator.create();
   host_cls->add_method(method);
+  method->get_code()->build_cfg(/* editable */ true);
   return method;
 }
 
@@ -261,7 +261,9 @@ DedupStrings::get_occurrences(
               &perf_sensitive_methods](DexMethod* method, IRCode& code) {
         const auto dexnr = methods_to_dex.at(method);
         const auto perf_sensitive = perf_sensitive_methods.count(method) != 0;
-        for (auto& mie : InstructionIterable(code)) {
+        always_assert(code.editable_cfg_built());
+        auto& cfg = code.cfg();
+        for (auto& mie : InstructionIterable(cfg)) {
           const auto insn = mie.insn;
           if (insn->opcode() == OPCODE_CONST_STRING) {
             const auto str = insn->get_string();
@@ -546,8 +548,9 @@ void DedupStrings::rewrite_const_string_instructions(
 
         // First, we collect all const-string instructions that we want to
         // rewrite
-        cfg::ScopedCFG cfg(&code);
-        auto ii = cfg::InstructionIterable(*cfg);
+        always_assert(code.editable_cfg_built());
+        auto& cfg = code.cfg();
+        auto ii = cfg::InstructionIterable(cfg);
         std::vector<std::pair<cfg::InstructionIterator, const DedupStringInfo*>>
             const_strings;
         for (auto it = ii.begin(); it != ii.end(); it++) {
@@ -576,7 +579,7 @@ void DedupStrings::rewrite_const_string_instructions(
         }
 
         // Second, we actually rewrite them.
-        cfg::CFGMutation cfg_mut(*cfg);
+        cfg::CFGMutation cfg_mut(cfg);
 
         // From
         //   const-string v0, "foo"
@@ -590,11 +593,11 @@ void DedupStrings::rewrite_const_string_instructions(
         // register v0, as that would change its type and cause type conflicts
         // in catch blocks, if any.
 
-        auto temp_reg = cfg->allocate_temp();
+        auto temp_reg = cfg.allocate_temp();
         for (const auto& p : const_strings) {
           const auto& const_string_it = p.first;
           const auto& info = *p.second;
-          auto move_result = cfg->move_result_of(const_string_it);
+          auto move_result = cfg.move_result_of(const_string_it);
           always_assert(move_result != ii.end());
           always_assert(
               opcode::is_a_move_result_pseudo(move_result->insn->opcode()));
