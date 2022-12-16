@@ -1347,6 +1347,15 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
         TRACE(PM, 2, "%s Pass uses editable cfg.\n", SHOW(pass->name()));
       }
       pass->run_pass(stores, conf, *this);
+
+      // Ensure the CFG is clean, e.g., no unreachable blocks.
+      if (pass->is_editable_cfg_friendly()) {
+        auto temp_scope = build_class_scope(stores);
+        walk::parallel::code(temp_scope, [&](DexMethod*, IRCode& code) {
+          code.cfg().simplify();
+        });
+      }
+
       trace_cls.dump(pass->name());
     }
 
