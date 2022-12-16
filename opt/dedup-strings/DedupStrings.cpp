@@ -107,20 +107,29 @@ std::unordered_set<const DexMethod*> DedupStrings::get_perf_sensitive_methods(
   }
   auto is_perf_sensitive = [&](size_t dexnr, DexClass* cls,
                                DexMethod* method) -> bool {
-    // All methods in the primary dex 0 must not be touched,
-    // as well as popular methods in classes marked as being perf-sensitive.
-    // We also choose to not dedup strings in cl_inits and outlined methods,
-    // as they either tend to get called during critical initialization code
-    // paths, or often.
+    // All methods in the primary dex 0 must not be touched.
+    // If method-profiles are available, we treat all popular methods as
+    // perf-sensitive. Otherwise, we treat all methods of perf sensitive classes
+    // as perf-sensitive. We also choose to not dedup strings in cl_inits and
+    // outlined methods, as they either tend to get called during critical
+    // initialization code paths, or often.
     if (dexnr == 0 || method::is_clinit(method) ||
         type_class(method->get_class())->rstate.outlined()) {
       return true;
     }
-    if (!cls->is_perf_sensitive()) {
-      return false;
+    if (m_legacy_perf_logic) {
+      // We used to have some strange logic for perf-sensitivity. Avoid using
+      // it.
+      if (!cls->is_perf_sensitive()) {
+        return false;
+      }
+      return !m_method_profiles.has_stats() ||
+             !sufficiently_popular_methods.count(method);
     }
-    return !m_method_profiles.has_stats() ||
-           !sufficiently_popular_methods.count(method);
+    if (!m_method_profiles.has_stats()) {
+      return cls->is_perf_sensitive();
+    }
+    return sufficiently_popular_methods.count(method);
   };
   std::unordered_set<const DexMethod*> perf_sensitive_methods;
   for (size_t dexnr = 0; dexnr < dexen.size(); dexnr++) {
@@ -679,6 +688,7 @@ void DedupStringsPass::bind_config() {
   bind("method_profiles_appear_percent_threshold",
        default_method_profiles_appear_percent_threshold,
        m_method_profiles_appear_percent_threshold);
+  bind("legacy_perf_logic", false, m_legacy_perf_logic);
 
   trait(Traits::Pass::unique, true);
 
@@ -700,7 +710,7 @@ void DedupStringsPass::run_pass(DexStoresVector& stores,
                                 PassManager& mgr) {
   DedupStrings ds(m_max_factory_methods,
                   m_method_profiles_appear_percent_threshold,
-                  conf.get_method_profiles());
+                  m_legacy_perf_logic, conf.get_method_profiles());
   ds.run(stores);
   const auto stats = ds.get_stats();
   mgr.incr_metric(METRIC_PERF_SENSITIVE_STRINGS, stats.perf_sensitive_strings);
