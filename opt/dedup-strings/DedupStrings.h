@@ -22,6 +22,8 @@ class DedupStrings {
     size_t non_perf_sensitive_strings{0};
     size_t perf_sensitive_methods{0};
     size_t non_perf_sensitive_methods{0};
+    size_t perf_sensitive_insns{0};
+    size_t non_perf_sensitive_insns{0};
     size_t excluded_duplicate_non_load_strings{0};
     size_t duplicate_strings{0};
     size_t duplicate_strings_size{0};
