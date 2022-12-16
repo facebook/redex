@@ -15,6 +15,14 @@ namespace method_profiles {
 class MethodProfiles;
 } // namespace method_profiles
 
+enum class DedupStringsPerfMode {
+  // Quirky. Don't use.
+  LEGACY,
+  // Consider method-profiles, if available, otherwise fall back to excluding
+  // all perf-sensitive classes.
+  EXCLUDE_HOT_METHODS_OR_CLASSES,
+};
+
 class DedupStrings {
  public:
   struct Stats {
@@ -36,12 +44,12 @@ class DedupStrings {
 
   DedupStrings(size_t max_factory_methods,
                float method_profiles_appear_percent_threshold,
-               bool legacy_perf_logic,
+               DedupStringsPerfMode perf_mode,
                const method_profiles::MethodProfiles& method_profiles)
       : m_max_factory_methods(max_factory_methods),
         m_method_profiles_appear_percent_threshold(
             method_profiles_appear_percent_threshold),
-        m_legacy_perf_logic(legacy_perf_logic),
+        m_perf_mode(perf_mode),
         m_method_profiles(method_profiles) {}
 
   const Stats& get_stats() const { return m_stats; }
@@ -90,7 +98,7 @@ class DedupStrings {
   mutable Stats m_stats;
   size_t m_max_factory_methods;
   float m_method_profiles_appear_percent_threshold;
-  bool m_legacy_perf_logic;
+  DedupStringsPerfMode m_perf_mode;
   const method_profiles::MethodProfiles& m_method_profiles;
 };
 
@@ -169,5 +177,5 @@ class DedupStringsPass : public Pass {
  private:
   int64_t m_max_factory_methods;
   float m_method_profiles_appear_percent_threshold{1.f};
-  bool m_legacy_perf_logic;
+  DedupStringsPerfMode m_perf_mode;
 };
