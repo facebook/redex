@@ -551,6 +551,19 @@ size_t count_block_has_sbs(
     Block* b, const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
   return source_blocks::has_source_blocks(b) ? 1 : 0;
 }
+size_t count_block_has_incomplete_sbs(
+    Block* b, const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
+  auto sb = get_first_source_block(b);
+  if (sb == nullptr) {
+    return 0;
+  }
+  for (uint32_t idx = 0; idx < sb->vals_size; idx++) {
+    if (!sb->vals[idx]) {
+      return 1;
+    }
+  }
+  return 0;
+}
 size_t count_all_sbs(
     Block* b, const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
   size_t ret{0};
@@ -745,10 +758,12 @@ size_t chain_and_dom_violations_coldstart(
 using CounterFnPtr = size_t (*)(
     Block*, const dominators::SimpleFastDominators<cfg::GraphInterface>&);
 
-constexpr std::array<std::pair<std::string_view, CounterFnPtr>, 7> gCounters = {
+constexpr std::array<std::pair<std::string_view, CounterFnPtr>, 8> gCounters = {
     {
         {"~blocks~count", &count_blocks},
         {"~blocks~with~source~blocks", &count_block_has_sbs},
+        {"~blocks~with~incomplete-source~blocks",
+         &count_block_has_incomplete_sbs},
         {"~assessment~source~blocks~total", &count_all_sbs},
         {"~flow~violation~in~chain", &chain_hot_violations},
         {"~flow~violation~in~chain~one", &chain_hot_one_violations},
