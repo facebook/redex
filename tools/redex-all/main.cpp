@@ -1057,6 +1057,29 @@ void redex_frontend(ConfigFiles& conf, /* input */
   }
 }
 
+// Performa check for resources that must exist for app to behave correctly,
+// crash the build if they fail to present.
+void check_required_resources(ConfigFiles& conf, bool pre_run) {
+  std::vector<std::string> check_required_resources;
+  conf.get_json_config().get("check_required_resources", {},
+                             check_required_resources);
+  if (check_required_resources.empty()) {
+    return;
+  }
+
+  std::string apk_dir;
+  conf.get_json_config().get("apk_dir", "", apk_dir);
+  TRACE(MAIN, 1, "Validating resources.");
+  auto resources = create_resource_reader(apk_dir);
+  auto res_table = resources->load_res_table();
+  for (const auto& required_resource : check_required_resources) {
+    always_assert_log(res_table->name_to_ids.count(required_resource) != 0,
+                      "Required resource %s does not exist in %s apk",
+                      required_resource.c_str(),
+                      pre_run ? "input" : "final");
+  }
+}
+
 // Performa final wave of cleanup (i.e. garbage collect unreferenced strings,
 // etc) so that this only needs to happen once and not after every resource
 // modification.
@@ -1094,6 +1117,7 @@ void redex_backend(ConfigFiles& conf,
   const auto& output_dir = conf.get_outdir();
 
   finalize_resource_table(conf);
+  check_required_resources(conf, false);
 
   instruction_lowering::Stats instruction_lowering_stats;
   {
@@ -1453,6 +1477,8 @@ int main(int argc, char* argv[]) {
       conf.parse_global_config();
       maybe_dump_jemalloc_profile("MALLOC_PROFILE_DUMP_FRONTEND");
     }
+
+    check_required_resources(conf, true);
 
     auto const& passes = PassRegistry::get().get_passes();
     PassManager manager(passes, std::move(pg_config), conf, args.redex_options);

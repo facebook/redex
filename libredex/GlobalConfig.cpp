@@ -170,6 +170,7 @@ void GlobalConfig::bind_config() {
   bind("no_devirtualize_annos", {}, string_vector_param);
   bind("create_init_class_insns", true, bool_param);
   bind("finalize_resource_table", false, bool_param);
+  bind("check_required_resources", {}, string_vector_param);
 
   for (const auto& entry : m_registry) {
     m_global_configs.emplace(entry.name,
