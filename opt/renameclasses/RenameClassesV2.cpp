@@ -22,6 +22,7 @@
 #include "IRInstruction.h"
 #include "KeepReason.h"
 #include "PassManager.h"
+#include "ProguardConfiguration.h"
 #include "ReachableClasses.h"
 #include "RedexResources.h"
 #include "Show.h"

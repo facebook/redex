@@ -19,7 +19,6 @@
 #include "AssetManager.h"
 #include "DexHasher.h"
 #include "JsonWrapper.h"
-#include "ProguardConfiguration.h"
 #include "RedexOptions.h"
 #include "Timer.h"
 
@@ -30,6 +29,10 @@ class Pass;
 namespace Json {
 class Value;
 } // namespace Json
+
+namespace keep_rules {
+struct ProguardConfiguration;
+} // namespace keep_rules
 
 // Must match DexStore.
 using DexStoresVector = std::vector<DexStore>;
