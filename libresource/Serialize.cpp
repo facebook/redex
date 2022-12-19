@@ -361,7 +361,7 @@ void ResTableTypeProjector::serialize_type(android::ResTable_type* type,
 
 void ResTableTypeProjector::serialize(android::Vector<char>* out) {
   // Basic validation of the inputs given.
-  LOG_ALWAYS_FATAL_IF(m_configs.size() == 0, "No configs given for type %d",
+  LOG_ALWAYS_FATAL_IF(m_configs.empty(), "No configs given for type %d",
                       m_type);
   // Check if all entries in this type have been marked for deletion. If so, no
   // data is emitted.

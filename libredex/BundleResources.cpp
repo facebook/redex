@@ -1817,8 +1817,8 @@ void ResourcesPbFile::collect_resource_data_for_file(
 }
 
 void ResourcesPbFile::get_type_names(std::vector<std::string>* type_names) {
-  always_assert(m_type_id_to_names.size() > 0);
-  always_assert_log(type_names->size() == 0,
+  always_assert(!m_type_id_to_names.empty());
+  always_assert_log(type_names->empty(),
                     "Must provide an empty vector, for documented indexing "
                     "scheme to be valid");
   auto highest_type_id = m_type_id_to_names.rbegin()->first;
@@ -1834,7 +1834,7 @@ void ResourcesPbFile::get_type_names(std::vector<std::string>* type_names) {
 
 std::unordered_set<uint32_t> ResourcesPbFile::get_types_by_name(
     const std::unordered_set<std::string>& type_names) {
-  always_assert(m_type_id_to_names.size() > 0);
+  always_assert(!m_type_id_to_names.empty());
   std::unordered_set<uint32_t> type_ids;
   for (const auto& pair : m_type_id_to_names) {
     if (type_names.count(pair.second) == 1) {
@@ -1846,7 +1846,7 @@ std::unordered_set<uint32_t> ResourcesPbFile::get_types_by_name(
 
 std::unordered_set<uint32_t> ResourcesPbFile::get_types_by_name_prefixes(
     const std::unordered_set<std::string>& type_name_prefixes) {
-  always_assert(m_type_id_to_names.size() > 0);
+  always_assert(!m_type_id_to_names.empty());
   std::unordered_set<uint32_t> type_ids;
   for (const auto& pair : m_type_id_to_names) {
     const auto& type_name = pair.second;
