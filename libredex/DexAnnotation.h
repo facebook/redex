@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <boost/functional/hash.hpp>
 #include <cstring>
 #include <deque>

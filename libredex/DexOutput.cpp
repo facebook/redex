@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <assert.h>
+#include <bitset>
 #include <boost/filesystem.hpp>
 #include <exception>
 #include <fcntl.h>

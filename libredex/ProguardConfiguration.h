@@ -8,6 +8,8 @@
 #pragma once
 
 #include <boost/functional/hash.hpp>
+#include <functional>
+#include <set>
 #include <string>
 #include <unordered_set>
 #include <vector>

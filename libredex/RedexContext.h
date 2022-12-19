@@ -17,6 +17,7 @@
 #include <list>
 #include <map>
 #include <mutex>
+#include <set>
 #include <sstream>
 #include <string_view>
 #include <unordered_map>
