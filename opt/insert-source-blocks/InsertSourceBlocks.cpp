@@ -44,6 +44,22 @@ using namespace cfg;
 
 namespace {
 
+// Access methods do not have a stable naming scheme in Javac. It seems a
+// running counter is used with the first reference to a member.
+//
+// At the same time, Kotlin seems to generate complex-named access methods
+// that include the accessed member in the name. We should not touch this.
+//
+// To deal with this, we will hash Java's access method's contents in the hope
+// that it is simple and stable. We prefix the hash name with "redex" in the
+// hope to detect it properly. (We could also use a purely decimal
+// representation, but hex is simpler and more standard.)
+
+bool is_numeric(const std::string_view& s) {
+  return std::all_of(s.begin(), s.end(),
+                     [](auto c) { return '0' <= c && c <= '9'; });
+}
+
 namespace hasher {
 
 uint64_t stable_hash_value(const std::string& s) {
@@ -170,26 +186,70 @@ uint64_t stable_hash(ControlFlowGraph& cfg) {
   return hash;
 }
 
+// Try to use a name that is unlikely to be used by someone in code and then
+// Kotlin generates it.
+std::string hashed_name(uint64_t hash_value,
+                        const std::string_view& access_method_name) {
+  return std::string("redex") + (boost::format("%016x") % hash_value).str() +
+         "$" +
+         std::string(
+             access_method_name.substr(access_method_name.length() - 2, 2));
+}
+
+bool maybe_hashed_name(const std::string_view& access_part) {
+  if (access_part.length() !=
+      5 /* redex */ + 16 + /* hash */ +1 /* $ */ + 2 /* flags */) {
+    return false;
+  }
+  if (access_part.substr(0, 5) != "redex") {
+    return false;
+  }
+  {
+    auto hash_part = access_part.substr(5, 16);
+    if (!std::all_of(hash_part.begin(), hash_part.end(), [](auto c) {
+          return ('0' <= c && c <= '9') || ('a' <= c && c <= 'f');
+        })) {
+      return false;
+    }
+  }
+  if (access_part[5 + 16] != '$') {
+    return false;
+  }
+  return is_numeric(access_part.substr(5 + 16 + 1, 2));
+}
+
 } // namespace hasher
+
+// NOTE: It looks like the Kotlin compiler does not follow the Javac naming
+//       scheme, using names instead. Let's rely on those names being stable.
 
 constexpr const char* kAccessName = "access$";
 
-std::optional<std::pair<std::string_view, std::string_view>> is_access_method(
-    const std::string_view& full_descriptor) {
+std::optional<std::pair<std::string_view, std::string_view>>
+is_traditional_access_method(const std::string_view& full_descriptor) {
   auto tokens = dex_member_refs::parse_method<true>(full_descriptor);
   if (tokens.name.substr(0, 7) != kAccessName) {
     return std::nullopt;
   }
-  return std::make_pair(tokens.cls, tokens.name.substr(7));
+  auto access_name = tokens.name.substr(7);
+  if (!is_numeric(access_name) && !hasher::maybe_hashed_name(access_name)) {
+    return std::nullopt;
+  }
+  return std::make_pair(tokens.cls, access_name);
 }
 
-std::optional<std::pair<const DexType*, std::string_view>> is_access_method(
-    const DexMethodRef* mref) {
+std::optional<std::pair<const DexType*, std::string_view>>
+is_traditional_access_method(const DexMethodRef* mref) {
   auto name = mref->get_name()->str();
   if (name.substr(0, 7) != kAccessName) {
     return std::nullopt;
   }
-  return std::make_pair(mref->get_class(), name.substr(7));
+  auto access_name = name.substr(7);
+  // Note: we do not rename the methods, so this should be a Java-style number.
+  if (!is_numeric(access_name)) {
+    return std::nullopt;
+  }
+  return std::make_pair(mref->get_class(), access_name);
 }
 
 using namespace boost::multi_index;
@@ -319,7 +379,7 @@ struct ProfileFile {
 
         auto method_view = data.substr(src_pos, comma_pos - src_pos);
 
-        if (auto access_val = is_access_method(method_view)) {
+        if (auto access_val = is_traditional_access_method(method_view)) {
           auto* access_class = DexType::get_type(access_val->first);
           if (access_class != nullptr) {
             TRACE(METH_PROF, 7, "Found access method %s",
@@ -572,7 +632,7 @@ struct Injector {
         walk::parallel::methods<InsertResult>(scope, [&](DexMethod* method) {
           auto code = method->get_code();
           if (code != nullptr) {
-            auto access_method = is_access_method(method);
+            auto access_method = is_traditional_access_method(method);
             const DexType* access_method_type = nullptr;
             std::string_view access_method_name;
             std::string access_method_hash_name;
@@ -586,9 +646,7 @@ struct Injector {
               auto hash_value = hasher::stable_hash(*cfg);
 
               access_method_hash_name =
-                  (boost::format("%08x") % hash_value).str() + "$" +
-                  std::string(access_method_name.substr(
-                      access_method_name.length() - 2, 2));
+                  hasher::hashed_name(hash_value, access_method_name);
             }
 
             auto profiles =

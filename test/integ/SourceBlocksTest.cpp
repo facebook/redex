@@ -807,12 +807,12 @@ TEST_F(SourceBlocksTest, source_blocks_access_methods) {
        "String;)Ljava/lang/String;",
        "B0: "
        "Lcom/facebook/redextest/"
-       "SourceBlocksTest;.access$5be80c743d1d526b$02(Ljava/lang/String;)Ljava/"
-       "lang/String;@0"},
+       "SourceBlocksTest;.access$redex5be80c743d1d526b$02(Ljava/lang/"
+       "String;)Ljava/lang/String;@0"},
       {"Lcom/facebook/redextest/SourceBlocksTest;.access$100:()V",
        "B0: "
        "Lcom/facebook/redextest/"
-       "SourceBlocksTest;.access$1bc24000ccc37110$00()V@0"},
+       "SourceBlocksTest;.access$redex1bc24000ccc37110$00()V@0"},
   };
 
   for (auto* m : cls->get_all_methods()) {
@@ -914,26 +914,26 @@ INSTANTIATE_TEST_SUITE_P(
         {"profile_access_exact",
          "B0: "
          "Lcom/facebook/redextest/"
-         "SourceBlocksTest;.access$5be80c743d1d526b$02(Ljava/lang/"
+         "SourceBlocksTest;.access$redex5be80c743d1d526b$02(Ljava/lang/"
          "String;)Ljava/lang/String;@0(0.1:0.2)",
          "B0: "
          "Lcom/facebook/redextest/"
-         "SourceBlocksTest;.access$1bc24000ccc37110$00()V@0(0.3:0.4)"},
+         "SourceBlocksTest;.access$redex1bc24000ccc37110$00()V@0(0.3:0.4)"},
         {"profile_access_hash",
          "B0: "
          "Lcom/facebook/redextest/"
-         "SourceBlocksTest;.access$5be80c743d1d526b$02(Ljava/lang/"
+         "SourceBlocksTest;.access$redex5be80c743d1d526b$02(Ljava/lang/"
          "String;)Ljava/lang/String;@0(0.6:0.7)",
          "B0: "
          "Lcom/facebook/redextest/"
-         "SourceBlocksTest;.access$1bc24000ccc37110$00()V@0(0.8:0.9)"},
+         "SourceBlocksTest;.access$redex1bc24000ccc37110$00()V@0(0.8:0.9)"},
         {"profile_access_both",
          // When both are available prefer hash.
          "B0: "
          "Lcom/facebook/redextest/"
-         "SourceBlocksTest;.access$5be80c743d1d526b$02(Ljava/lang/"
+         "SourceBlocksTest;.access$redex5be80c743d1d526b$02(Ljava/lang/"
          "String;)Ljava/lang/String;@0(0.6:0.7)",
          "B0: "
          "Lcom/facebook/redextest/"
-         "SourceBlocksTest;.access$1bc24000ccc37110$00()V@0(0.8:0.9)"}}),
+         "SourceBlocksTest;.access$redex1bc24000ccc37110$00()V@0(0.8:0.9)"}}),
     [](const auto& info) { return info.param.profile; });
