@@ -10,6 +10,7 @@
 #include <iostream>
 #include <vector>
 
+#include "androidfw/TypeWrappers.h"
 #include "utils/ByteOrder.h"
 #include "utils/Debug.h"
 #include "utils/Log.h"
@@ -261,9 +262,7 @@ void CanonicalEntries::record(EntryValueData data,
 void ResTableTypeProjector::serialize_type(android::ResTable_type* type,
                                            size_t last_non_deleted,
                                            android::Vector<char>* out) {
-  auto original_entries = dtohl(type->entryCount);
-  auto original_entries_start = dtohs(type->entriesStart);
-  if (original_entries == 0 || original_entries_start == 0) {
+  if (dtohl(type->entryCount) == 0 || dtohs(type->entriesStart) == 0) {
     // Wonky input data, omit this config.
     ALOGD("Wonky config for type %d, dropping!", type->id);
     return;
@@ -272,13 +271,13 @@ void ResTableTypeProjector::serialize_type(android::ResTable_type* type,
   // config has everything deleted, skip emitting data.
   {
     size_t num_non_deleted_non_empty_entries = 0;
-    uint32_t* entry_offsets =
-        (uint32_t*)((uint8_t*)type + dtohs(type->header.headerSize));
-    for (size_t i = 0; i < original_entries; i++) {
+    android::TypeVariant tv(type);
+    uint16_t i = 0;
+    for (auto it = tv.beginEntries(); it != tv.endEntries(); ++it, ++i) {
+      auto entry_ptr = const_cast<android::ResTable_entry*>(*it);
       auto id = make_id(i);
       auto is_deleted = m_ids_to_remove.count(id) != 0;
-      uint32_t offset = dtohl(entry_offsets[i]);
-      if (!is_deleted && offset != android::ResTable_type::NO_ENTRY) {
+      if (!is_deleted && entry_ptr != nullptr) {
         num_non_deleted_non_empty_entries++;
       }
     }
@@ -292,17 +291,16 @@ void ResTableTypeProjector::serialize_type(android::ResTable_type* type,
   android::Vector<char> temp;
   std::vector<uint32_t> offsets;
   CanonicalEntries canonical_entries;
-  // Pointer to the first Res_entry
-  uint32_t* entry_offsets =
-      (uint32_t*)((uint8_t*)type + dtohs(type->header.headerSize));
-  for (size_t i = 0; i < original_entries; i++) {
+  // iterate again, now that we know it's useful
+  android::TypeVariant tv(type);
+  uint16_t i = 0;
+  for (auto it = tv.beginEntries(); it != tv.endEntries(); ++it, ++i) {
+    auto entry_ptr = const_cast<android::ResTable_entry*>(*it);
     auto id = make_id(i);
     if (m_ids_to_remove.count(id) == 0) {
-      uint32_t offset = dtohl(entry_offsets[i]);
-      if (offset == android::ResTable_type::NO_ENTRY) {
+      if (entry_ptr == nullptr) {
         offsets.push_back(htodl(android::ResTable_type::NO_ENTRY));
       } else {
-        auto entry_ptr = (uint8_t*)type + dtohs(type->entriesStart) + offset;
         uint32_t total_size =
             compute_entry_value_length((android::ResTable_entry*)entry_ptr);
         if (!m_enable_canonical_entries) {
@@ -311,7 +309,7 @@ void ResTableTypeProjector::serialize_type(android::ResTable_type* type,
           push_data_no_swap(entry_ptr, total_size, &temp);
         } else {
           // Check if we have already emitted identical data.
-          EntryValueData ev(entry_ptr, total_size);
+          EntryValueData ev((uint8_t*)entry_ptr, total_size);
           size_t hash;
           uint32_t prev_offset;
           if (canonical_entries.find(ev, &hash, &prev_offset)) {
