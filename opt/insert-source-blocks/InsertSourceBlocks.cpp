@@ -527,7 +527,7 @@ struct Injector {
     auto scope = build_class_scope(stores);
 
     struct SerializedMethodInfo {
-      const DexMethod* method;
+      const DexString* method;
       std::string s_expression;
       std::string idom_map;
     };
@@ -619,7 +619,7 @@ struct Injector {
                 res.block_count,
                 profiles.second ? 1 : 0,
                 res.profile_success ? 0 : 1,
-                {{method, res.serialized, res.serialized_idom_map}});
+                {{sb_name, res.serialized, res.serialized_idom_map}});
           }
           return InsertResult();
         });
@@ -673,7 +673,7 @@ struct Injector {
     std::sort(res.serialized.begin(),
               res.serialized.end(),
               [](const auto& lhs, const auto& rhs) {
-                return compare_dexmethods(lhs.method, rhs.method);
+                return compare_dexstrings(lhs.method, rhs.method);
               });
 
     std::ofstream ofs_rsb(conf.metafile("redex-source-blocks.csv"));
