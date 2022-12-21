@@ -1213,4 +1213,66 @@ ViolationsHelper::ViolationsHelper(Violation v,
           v, scope, std::move(to_vis))) {}
 ViolationsHelper::~ViolationsHelper() {}
 
+SourceBlock* get_first_source_block_of_method(const DexMethod* m) {
+  auto code = m->get_code();
+  if (code->cfg_built()) {
+    return get_first_source_block(code->cfg().entry_block());
+  } else {
+    for (auto& mie : *code) {
+      if (mie.type == MFLOW_SOURCE_BLOCK) {
+        return mie.src_block.get();
+      }
+    };
+  }
+  return nullptr;
+}
+
+SourceBlock* get_any_first_source_block_of_methods(
+    const std::vector<const DexMethod*>& methods) {
+  for (auto* m : methods) {
+    auto* sb = get_first_source_block_of_method(m);
+    if (sb != nullptr) {
+      return sb;
+    }
+  }
+  return nullptr;
+}
+
+void insert_synthetic_source_blocks_in_method(
+    DexMethod* method,
+    const std::function<std::unique_ptr<SourceBlock>()>& source_block_creator) {
+  auto* code = method->get_code();
+  cfg::ScopedCFG cfg(code);
+
+  for (auto* block : cfg->blocks()) {
+    if (block == cfg->entry_block()) {
+      // Special handling.
+      continue;
+    }
+    auto new_sb = source_block_creator();
+    auto it = block->get_first_insn();
+    if (it != block->end() && opcode::is_move_result_any(it->insn->opcode())) {
+      block->insert_after(it, std::move(new_sb));
+    } else {
+      block->insert_before(it, std::move(new_sb));
+    }
+  }
+
+  auto* block = cfg->entry_block();
+  auto new_sb = source_block_creator();
+  auto it = block->get_first_non_param_loading_insn();
+  block->insert_before(it, std::move(new_sb));
+}
+
+void fill_source_block(SourceBlock& sb,
+                       DexMethod* ref,
+                       uint32_t id,
+                       const SourceBlock::Val& val) {
+  sb.src = ref->get_deobfuscated_name_or_null();
+  sb.id = id;
+  for (size_t i = 0; i < sb.vals_size; i++) {
+    sb.vals[i] = val;
+  }
+}
+
 } // namespace source_blocks

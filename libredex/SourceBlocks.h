@@ -435,4 +435,18 @@ struct ViolationsHelper {
   ~ViolationsHelper();
 };
 
+SourceBlock* get_first_source_block_of_method(const DexMethod* m);
+
+SourceBlock* get_any_first_source_block_of_methods(
+    const std::vector<const DexMethod*>& methods);
+
+void insert_synthetic_source_blocks_in_method(
+    DexMethod* method,
+    const std::function<std::unique_ptr<SourceBlock>()>& source_block_creator);
+
+void fill_source_block(SourceBlock& sb,
+                       DexMethod* ref,
+                       uint32_t id,
+                       const SourceBlock::Val& val);
+
 } // namespace source_blocks
