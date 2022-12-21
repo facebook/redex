@@ -140,8 +140,7 @@ std::vector<std::string> aapt_dump_helper(const std::string& arsc_path) {
   boost::process::child c(
       arsc_dumper_bin,
       boost::process::args({"--aapt", std::getenv("aapt_path"), "--arsc",
-                            arsc_path.c_str(), "--outfile", out, "--errfile",
-                            err}));
+                            arsc_path, "--outfile", out, "--errfile", err}));
   c.wait();
   auto exit_code = c.exit_code();
   if (exit_code != 0) {
@@ -347,7 +346,7 @@ ParsedAaptOutput aapt_dump_and_parse(const std::string& arsc_path,
 
   auto lines = aapt_dump_helper(arsc_path);
   output.lines = lines;
-  std::string current_config("");
+  std::string current_config;
   enum ComplexState { Unknown, Begin, Values };
   ComplexState state = Unknown;
   // complex_entries[complex_entries.size() - 1] is the entry we're working on

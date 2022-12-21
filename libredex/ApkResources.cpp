@@ -344,7 +344,7 @@ void TableSnapshot::get_configurations(
                         dtohl(c->size));
       android::ResTable_config swapped;
       swapped.copyFromDtoH(*c);
-      out->emplace_back(std::move(swapped));
+      out->emplace_back(swapped);
     }
   }
 }
