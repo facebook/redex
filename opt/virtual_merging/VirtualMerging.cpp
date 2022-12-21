@@ -996,14 +996,11 @@ struct SBHelper {
       reset_sb(*new_sb, overridden_method, SourceBlock::kSyntheticId);
 
       auto it = block->get_first_insn();
-      if (it == block->end()) {
-        block->insert_before(block->begin(), std::move(new_sb));
+      if (it != block->end() &&
+          opcode::is_move_result_any(it->insn->opcode())) {
+        block->insert_after(it, std::move(new_sb));
       } else {
-        if (opcode::is_a_move_result(it->insn->opcode())) {
-          block->insert_after(it, std::move(new_sb));
-        } else {
-          block->insert_before(it, std::move(new_sb));
-        }
+        block->insert_before(it, std::move(new_sb));
       }
     }
 
@@ -1012,11 +1009,7 @@ struct SBHelper {
     // Bit weird, but better than making up real numbers.
     reset_sb(*new_sb, overridden_method, SourceBlock::kSyntheticId);
     auto it = block->get_first_non_param_loading_insn();
-    if (it == block->end()) {
-      block->insert_before(it, std::move(new_sb));
-    } else {
-      block->insert_after(it, std::move(new_sb));
-    }
+    block->insert_before(it, std::move(new_sb));
   }
 
   std::unique_ptr<SourceBlock> gen_arbitrary_reset_sb() {
