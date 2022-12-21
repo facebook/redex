@@ -1378,7 +1378,8 @@ void ResourcesArscFile::remap_reorder_and_serialize(
 
         auto configs = table_parser.get_configs(package_id, type_id);
         auto type_definer = std::make_shared<arsc::ResTableTypeDefiner>(
-            package_id, type_id, configs, flags);
+            package_id, type_id, configs, flags, false,
+            arsc::any_sparse_types(type_info.configs));
 
         for (auto& config : configs) {
           for (uint32_t new_entry_id = 0; new_entry_id < entry_count;

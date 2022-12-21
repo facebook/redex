@@ -8,6 +8,7 @@
 #include <boost/functional/hash.hpp>
 #include <cstddef>
 #include <iostream>
+#include <limits>
 #include <vector>
 
 #include "androidfw/TypeWrappers.h"
@@ -259,6 +260,46 @@ void CanonicalEntries::record(EntryValueData data,
   search->second.emplace_back(p);
 }
 
+bool ResTableTypeBuilder::should_encode_offsets_as_sparse(
+    const std::vector<uint32_t>& offsets, size_t entry_data_size) {
+  if (!m_enable_sparse_encoding) {
+    return false;
+  }
+  if (entry_data_size / 4 > std::numeric_limits<uint16_t>::max()) {
+    return false;
+  }
+  size_t total_non_empty = 0;
+  for (const auto& i : offsets) {
+    if (i != android::ResTable_type::NO_ENTRY) {
+      if (i % 4 != 0) {
+        // this should probably be fatal
+        return false;
+      }
+      total_non_empty++;
+    }
+  }
+  // See
+  // https://cs.android.com/android/platform/superproject/+/android-12.0.0_r1:frameworks/base/tools/aapt2/format/binary/TableFlattener.cpp;l=382
+  return (100 * total_non_empty) / offsets.size() < 60;
+}
+
+void ResTableTypeBuilder::encode_offsets_as_sparse(
+    std::vector<uint32_t>* offsets) {
+  std::vector<uint32_t> copy;
+  copy.insert(copy.begin(), offsets->begin(), offsets->end());
+  offsets->clear();
+  uint16_t entry_id = 0;
+  for (const auto& i : copy) {
+    if (i != android::ResTable_type::NO_ENTRY) {
+      android::ResTable_sparseTypeEntry entry;
+      entry.idx = htods(entry_id);
+      entry.offset = htods(i / 4);
+      offsets->emplace_back(entry.entry);
+    }
+    entry_id++;
+  }
+}
+
 void ResTableTypeProjector::serialize_type(android::ResTable_type* type,
                                            size_t last_non_deleted,
                                            android::Vector<char>* out) {
@@ -330,6 +371,11 @@ void ResTableTypeProjector::serialize_type(android::ResTable_type* type,
       offsets.push_back(htodl(android::ResTable_type::NO_ENTRY));
     }
   }
+  uint8_t type_flags{0};
+  if (should_encode_offsets_as_sparse(offsets, temp.size())) {
+    encode_offsets_as_sparse(&offsets);
+    type_flags |= android::ResTable_type::FLAG_SPARSE;
+  }
   // Header and actual data structure
   push_short(android::RES_TABLE_TYPE_TYPE, out);
   // Derive the header size from the input data (guard against inputs generated
@@ -339,19 +385,19 @@ void ResTableTypeProjector::serialize_type(android::ResTable_type* type,
   auto type_header_size =
       sizeof(android::ResChunk_header) + sizeof(uint32_t) * 3 + config_size;
   push_short(type_header_size, out);
-  auto num_entries = offsets.size();
-  auto entries_start = type_header_size + num_entries * sizeof(uint32_t);
+  auto num_offsets = offsets.size();
+  auto entries_start = type_header_size + num_offsets * sizeof(uint32_t);
   auto total_size = entries_start + temp.size();
   push_long(total_size, out);
   out->push_back(m_type);
+  out->push_back(type_flags);
   out->push_back(0); // pad to 4 bytes
   out->push_back(0);
-  out->push_back(0);
-  push_long(num_entries, out);
+  push_long(num_offsets, out);
   push_long(entries_start, out);
   auto cp = &type->config;
   push_data_no_swap(cp, config_size, out);
-  for (size_t i = 0; i < num_entries; i++) {
+  for (size_t i = 0; i < num_offsets; i++) {
     push_long(offsets[i], out);
   }
   push_vec(temp, out);
@@ -455,50 +501,57 @@ void ResTableTypeDefiner::serialize(android::Vector<char>* out) {
       continue;
     }
     auto& data = m_data.at(config);
-    // Write the type header
-    push_short(android::RES_TABLE_TYPE_TYPE, out);
-    auto config_size = dtohs(config->size);
-    auto type_header_size =
-        sizeof(android::ResChunk_header) + sizeof(uint32_t) * 3 + config_size;
-    push_short(type_header_size, out);
-    auto entries_start = type_header_size + data.size() * sizeof(uint32_t);
-    // Write the final size later
-    auto total_size_pos = out->size();
-    push_long(FILL_IN_LATER, out);
-    out->push_back(m_type);
-    out->push_back(0); // pad to 4 bytes
-    out->push_back(0);
-    out->push_back(0);
-    push_long(data.size(), out);
-    push_long(entries_start, out);
-    push_data_no_swap(config, config_size, out);
-    // Compute and write offsets.
+    // Compute offsets and entry/value data size.
     CanonicalEntries canonical_entries;
     android::Vector<char> entry_data;
+    std::vector<uint32_t> offsets;
     uint32_t offset = 0;
     for (auto& ev : data) {
       if (is_empty(ev)) {
-        push_long(dtohl(android::ResTable_type::NO_ENTRY), out);
+        offsets.emplace_back(android::ResTable_type::NO_ENTRY);
       } else if (!m_enable_canonical_entries) {
-        push_long(offset, out);
+        offsets.emplace_back(offset);
         offset += ev.value;
         push_data_no_swap(ev.key, ev.value, &entry_data);
       } else {
         size_t hash;
         uint32_t prev_offset;
         if (canonical_entries.find(ev, &hash, &prev_offset)) {
-          push_long(prev_offset, out);
+          offsets.emplace_back(prev_offset);
         } else {
           canonical_entries.record(ev, hash, offset);
-          push_long(offset, out);
+          offsets.emplace_back(offset);
           offset += ev.value;
           push_data_no_swap(ev.key, ev.value, &entry_data);
         }
       }
     }
-    // Actual data.
+    uint8_t type_flags{0};
+    if (should_encode_offsets_as_sparse(offsets, entry_data.size())) {
+      encode_offsets_as_sparse(&offsets);
+      type_flags |= android::ResTable_type::FLAG_SPARSE;
+    }
+    // Write the type header
+    push_short(android::RES_TABLE_TYPE_TYPE, out);
+    auto config_size = dtohs(config->size);
+    auto type_header_size =
+        sizeof(android::ResChunk_header) + sizeof(uint32_t) * 3 + config_size;
+    push_short(type_header_size, out);
+    auto entries_start = type_header_size + offsets.size() * sizeof(uint32_t);
+    auto total_size = entries_start + entry_data.size();
+    push_long(total_size, out);
+    out->push_back(m_type);
+    out->push_back(type_flags);
+    out->push_back(0); // pad to 4 bytes
+    out->push_back(0);
+    push_long(offsets.size(), out);
+    push_long(entries_start, out);
+    push_data_no_swap(config, config_size, out);
+    // Actual offsets and data.
+    for (const auto& i : offsets) {
+      push_long(i, out);
+    }
     push_vec(entry_data, out);
-    write_long_at_pos(total_size_pos, entries_start + entry_data.size(), out);
   }
 }
 
