@@ -1,1 +1,3 @@
 -keep class com.facebook.redextest.BundleReachActivityTest { *; }
+-keep class com.facebook.redextest.DedupResourceActivityTest { *; }
+-keep class com.facebook.redextest.OptimizeResourcesActivityTest { *; }

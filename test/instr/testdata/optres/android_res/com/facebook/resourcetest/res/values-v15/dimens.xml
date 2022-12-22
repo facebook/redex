@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <dimen name="sample_dp_2">102dp</dimen>
+  <dimen name="only_v15_value">15px</dimen>
+</resources>

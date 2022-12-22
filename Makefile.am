@@ -311,6 +311,8 @@ libopt_la_SOURCES = \
 	opt/copy-propagation/CopyPropagationPass.cpp \
 	opt/cse/CommonSubexpressionEliminationPass.cpp \
 	opt/dedup_blocks/DedupBlocksPass.cpp \
+	opt/dedup_resources/DedupResources.cpp \
+	opt/dedup_resources/murmur_hash.cpp \
 	opt/dedup-strings/DedupStrings.cpp \
 	opt/delinit/DelInit.cpp \
 	opt/delsuper/DelSuper.cpp \
@@ -332,6 +334,7 @@ libopt_la_SOURCES = \
 	opt/obfuscate/Obfuscate.cpp \
 	opt/obfuscate/ObfuscateUtils.cpp \
 	opt/obfuscate/VirtualRenamer.cpp \
+	opt/obfuscate_resources/ObfuscateResourcesPass.cpp \
 	opt/object-sensitive-dce/ObjectSensitiveDcePass.cpp \
 	opt/object-sensitive-dce/SideEffectSummary.cpp \
 	opt/object-sensitive-dce/UsedVarsAnalysis.cpp \
@@ -393,6 +396,7 @@ libopt_la_SOURCES = \
 	opt/singleimpl/SingleImplStats.cpp \
 	opt/simplify_cfg/SimplifyCFG.cpp \
 	opt/split_huge_switches/SplitHugeSwitchPass.cpp \
+	opt/split_resource_tables/SplitResourceTables.cpp \
 	opt/object-escape-analysis/ExpandableMethodParams.cpp \
 	opt/object-escape-analysis/ObjectEscapeAnalysis.cpp \
 	opt/staticrelo/StaticReloV2.cpp \
@@ -401,6 +405,7 @@ libopt_la_SOURCES = \
 	opt/strip-debug-info/StripDebugInfo.cpp \
 	opt/test_cfg/TestCFG.cpp \
 	opt/track_resources/TrackResources.cpp \
+	opt/optimize_resources/OptimizeResources.cpp \
 	opt/throw-propagation/ThrowPropagationPass.cpp \
 	opt/type-analysis/CallGraphFileGenerationPass.cpp \
 	opt/type-analysis/GlobalTypeAnalysisPass.cpp \
