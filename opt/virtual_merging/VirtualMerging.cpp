@@ -956,14 +956,14 @@ struct SBHelper {
     return sb;
   }
 
-  std::function<std::unique_ptr<SourceBlock>()> get_source_block_creator()
-      const {
+  std::function<std::unique_ptr<SourceBlock>()> get_source_block_creator(
+      float val = 0) const {
     return [overridden = this->overridden,
-            template_sb = get_arbitrary_first_sb()]() {
+            template_sb = get_arbitrary_first_sb(), val]() {
       auto new_sb = std::make_unique<SourceBlock>(*template_sb);
       source_blocks::fill_source_block(*new_sb, overridden,
                                        SourceBlock::kSyntheticId,
-                                       SourceBlock::Val{0, 0});
+                                       SourceBlock::Val{val, 0});
       return new_sb;
     };
   }
@@ -1257,6 +1257,13 @@ VirtualMergingStats apply_ordering(
           allocate_wide_temp = [=]() { return cfg_ptr->allocate_wide_temp(); };
           cleanup = []() {};
         }
+
+        if (sb_helper.create_source_blocks) {
+          // Insert source block with val == 1.0 so that inlining normalizes
+          // source-blocks properly
+          push_sb(sb_helper.get_source_block_creator(/* val */ 1.0)());
+        }
+
         always_assert(1 + proto->get_args()->size() == param_regs.size());
 
         // invoke-virtual temp, param1, ..., paramN, OverridingMethod
