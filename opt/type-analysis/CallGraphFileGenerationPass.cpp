@@ -7,6 +7,8 @@
 
 #include "CallGraphFileGenerationPass.h"
 
+#include <fstream>
+
 #include "CallGraph.h"
 #include "ConcurrentContainers.h"
 #include "ConfigFiles.h"
