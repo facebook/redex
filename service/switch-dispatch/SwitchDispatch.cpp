@@ -11,6 +11,7 @@
 
 #include "Creators.h"
 #include "Show.h"
+#include "SourceBlocks.h"
 #include "Trace.h"
 #include "TypeReference.h"
 
@@ -159,7 +160,19 @@ std::map<SwitchIndices, MethodBlock*> get_switch_cases(
   return cases;
 }
 
-DexMethod* materialize_dispatch(DexMethod* orig_method, MethodCreator& mc) {
+SourceBlock* get_template_source_block(
+    const std::map<SwitchIndices, DexMethod*>& indices_to_callee) {
+  std::vector<const DexMethod*> methods;
+  methods.reserve(indices_to_callee.size());
+  for (auto&& [_, m] : indices_to_callee) {
+    methods.push_back(m);
+  }
+  return source_blocks::get_any_first_source_block_of_methods(methods);
+}
+
+DexMethod* materialize_dispatch(DexMethod* orig_method,
+                                MethodCreator& mc,
+                                SourceBlock* template_sb) {
   auto dispatch = mc.create();
   dispatch->rstate = orig_method->rstate;
   set_public(dispatch);
@@ -168,6 +181,15 @@ DexMethod* materialize_dispatch(DexMethod* orig_method, MethodCreator& mc) {
         " created dispatch: %s\n%s",
         SHOW(dispatch),
         SHOW(dispatch->get_code()));
+
+  if (template_sb) {
+    source_blocks::insert_synthetic_source_blocks_in_method(dispatch, [&]() {
+      auto new_sb = std::make_unique<SourceBlock>(*template_sb);
+      source_blocks::fill_source_block(
+          *new_sb, dispatch, SourceBlock::kSyntheticId, SourceBlock::Val{1, 0});
+      return new_sb;
+    });
+  }
 
   return dispatch;
 }
@@ -242,7 +264,8 @@ DexMethod* create_simple_switch_dispatch(
   if (is_single_target_case(spec, indices_to_callee)) {
     invoke_static(spec, args, ret_loc, orig_method, mb);
     mb->ret(spec.proto->get_rtype(), ret_loc);
-    return materialize_dispatch(orig_method, mc);
+    auto template_sb = get_template_source_block(indices_to_callee);
+    return materialize_dispatch(orig_method, mc, template_sb);
   }
 
   mb->iget(spec.type_tag_field, self_loc, type_tag_loc);
@@ -263,7 +286,8 @@ DexMethod* create_simple_switch_dispatch(
     invoke_static(spec, args, ret_loc, callee, case_block);
   }
 
-  return materialize_dispatch(orig_method, mc);
+  auto template_sb = get_template_source_block(indices_to_callee);
+  return materialize_dispatch(orig_method, mc, template_sb);
 }
 
 dispatch::DispatchMethod create_two_level_switch_dispatch(
@@ -330,7 +354,8 @@ dispatch::DispatchMethod create_two_level_switch_dispatch(
     case_index++;
   }
 
-  auto dispatch_meth = materialize_dispatch(orig_method, mc);
+  auto template_sb = get_template_source_block(indices_to_callee);
+  auto dispatch_meth = materialize_dispatch(orig_method, mc, template_sb);
 
   /////////////////////////////////////////////////////////////////////////////
   // Remove unwanted gotos.
@@ -569,7 +594,8 @@ DexMethod* create_ctor_or_static_dispatch(
   if (is_single_target_case(spec, indices_to_callee)) {
     invoke_static(spec, args, ret_loc, orig_method, mb);
     mb->ret(spec.proto->get_rtype(), ret_loc);
-    return materialize_dispatch(orig_method, mc);
+    auto template_sb = get_template_source_block(indices_to_callee);
+    return materialize_dispatch(orig_method, mc, template_sb);
   }
 
   auto cases = get_switch_cases(indices_to_callee, is_ctor(spec));
@@ -586,7 +612,8 @@ DexMethod* create_ctor_or_static_dispatch(
     invoke_static(spec, args, ret_loc, callee, case_block);
   }
 
-  return materialize_dispatch(orig_method, mc);
+  auto template_sb = get_template_source_block(indices_to_callee);
+  return materialize_dispatch(orig_method, mc, template_sb);
 }
 
 // TODO(fengliu): There are some redundant logic with other dispatch creating
