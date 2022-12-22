@@ -23,7 +23,6 @@
 #include "KeepReason.h"
 #include "PassManager.h"
 #include "ProguardConfiguration.h"
-#include "ProguardMap.h"
 #include "ReachableClasses.h"
 #include "RedexResources.h"
 #include "Show.h"

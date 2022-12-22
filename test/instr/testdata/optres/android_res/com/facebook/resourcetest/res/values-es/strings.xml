@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <plurals name="multi_plural_str" gender="unknown">
+    <item quantity="one">1 apple ES</item>
+    <item quantity="other">%1$s apples ES</item>
+  </plurals>
+</resources>

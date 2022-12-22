@@ -8,7 +8,7 @@
 #pragma once
 
 #include <cstddef>
-#include <iosfwd>
+#include <fstream>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
