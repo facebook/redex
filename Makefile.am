@@ -334,6 +334,7 @@ libopt_la_SOURCES = \
 	opt/obfuscate/Obfuscate.cpp \
 	opt/obfuscate/ObfuscateUtils.cpp \
 	opt/obfuscate/VirtualRenamer.cpp \
+	opt/obfuscate_resources/ObfuscateResourcesPass.cpp \
 	opt/object-sensitive-dce/ObjectSensitiveDcePass.cpp \
 	opt/object-sensitive-dce/SideEffectSummary.cpp \
 	opt/object-sensitive-dce/UsedVarsAnalysis.cpp \

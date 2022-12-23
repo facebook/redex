@@ -45,6 +45,7 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/opt/merge_interface \
 	-I$(top_srcdir)/opt/methodinline \
 	-I$(top_srcdir)/opt/obfuscate \
+	-I$(top_srcdir)/opt/obfuscate_resources \
 	-I$(top_srcdir)/opt/object-sensitive-dce \
 	-I$(top_srcdir)/opt/optimize_enums \
 	-I$(top_srcdir)/opt/optimize_resources \
