@@ -8,6 +8,7 @@
 #include "RemoveUnreachable.h"
 
 #include <atomic>
+#include <fstream>
 #include <set>
 
 #include "ConfigFiles.h"

@@ -7,6 +7,7 @@
 
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
+#include <fstream>
 #include <iostream>
 
 #include "DexLoader.h"

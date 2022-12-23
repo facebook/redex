@@ -5,6 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#pragma once
+
+#include <iosfwd>
+
 #include "DexClass.h"
 #include "ReferencedState.h"
 

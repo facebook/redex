@@ -15,6 +15,7 @@
 #include <boost/optional.hpp>
 #include <boost/regex.hpp>
 #include <fcntl.h>
+#include <fstream>
 #include <map>
 
 #include "Macros.h"
