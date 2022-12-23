@@ -46,6 +46,7 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/opt/obfuscate \
 	-I$(top_srcdir)/opt/object-sensitive-dce \
 	-I$(top_srcdir)/opt/optimize_enums \
+	-I$(top_srcdir)/opt/optimize_resources \
 	-I$(top_srcdir)/opt/original_name \
 	-I$(top_srcdir)/opt/outliner \
 	-I$(top_srcdir)/opt/partial-application \
