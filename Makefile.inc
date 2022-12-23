@@ -80,6 +80,7 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/opt/shorten-srcstrings \
 	-I$(top_srcdir)/opt/singleimpl \
 	-I$(top_srcdir)/opt/split_huge_switches \
+	-I$(top_srcdir)/opt/split_resource_tables \
 	-I$(top_srcdir)/opt/staticrelo \
 	-I$(top_srcdir)/opt/static-sink \
 	-I$(top_srcdir)/opt/stringbuilder-outliner \
