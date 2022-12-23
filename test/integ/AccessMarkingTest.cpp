@@ -7,6 +7,7 @@
 
 #include <gtest/gtest.h>
 #include <json/json.h>
+#include <fstream>
 #include <sstream>
 
 #include "AccessMarking.h"

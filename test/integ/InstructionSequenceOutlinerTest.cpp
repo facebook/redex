@@ -6,6 +6,7 @@
  */
 
 #include <boost/thread/once.hpp>
+#include <fstream>
 #include <gtest/gtest.h>
 #include <json/json.h>
 #include <unordered_set>

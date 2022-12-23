@@ -11,6 +11,7 @@
 #include <boost/none.hpp>
 #include <boost/none_t.hpp>
 #include <boost/optional/optional.hpp>
+#include <fstream>
 #include <sstream>
 #include <string>
 

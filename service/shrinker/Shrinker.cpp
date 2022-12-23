@@ -7,6 +7,8 @@
 
 #include "Shrinker.h"
 
+#include <fstream>
+
 #include "ConstructorParams.h"
 #include "LinearScan.h"
 #include "RandomForest.h"

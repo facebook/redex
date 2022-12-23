@@ -10,6 +10,7 @@
 #include <boost/format.hpp>
 #include <boost/functional/hash.hpp>
 #include <boost/optional.hpp>
+#include <fstream>
 #include <map>
 #include <unordered_set>
 

@@ -8,6 +8,7 @@
 #include "ApkResources.h"
 #include "RedexTestUtils.h"
 
+#include <fstream>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
