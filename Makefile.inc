@@ -30,6 +30,7 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/opt/copy-propagation \
 	-I$(top_srcdir)/opt/cse \
 	-I$(top_srcdir)/opt/dedup_blocks \
+	-I$(top_srcdir)/opt/dedup_resources \
 	-I$(top_srcdir)/opt/dedup-strings \
 	-I$(top_srcdir)/opt/delinit \
 	-I$(top_srcdir)/opt/delsuper \
