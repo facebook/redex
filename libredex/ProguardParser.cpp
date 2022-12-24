@@ -37,6 +37,7 @@ struct TokenIndex {
 
   void next() {
     redex_assert(it != vec.end());
+    redex_assert(type() != TokenType::eof_token);
     ++it;
     skip_comments();
   }
