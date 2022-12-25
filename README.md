@@ -1,4 +1,4 @@
-# ReDex: An Android Bytecode Optimizer
+#  ReDex: An Android Bytecode Optimizer
 
 ReDex is an Android bytecode (dex) optimizer originally developed at
 Facebook. It provides a framework for reading, writing, and analyzing .dex
