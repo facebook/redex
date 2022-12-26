@@ -1,0 +1,37 @@
+líneas (36 sloc)  1.83KB
+Contribuyendo a ReDex
+Queremos que contribuir a este proyecto sea lo más fácil y transparente posible.
+
+Código de conducta
+El código de conducta se describe enCODE_OF_CONDUCT.md
+
+Nuestro proceso de desarrollo
+Este proyecto se desarrolla internamente en Facebook dentro de un repositorio privado. Los cambios internos se envían periódicamente a la rama de código abierto. Primero, las solicitudes de incorporación de cambios se integran manualmente en nuestro repositorio privado y luego se propagan al repositorio público con el siguiente impulso.
+
+Solicitudes de extracción
+¡Agradecemos activamente sus solicitudes de incorporación de cambios!
+
+Bifurque el repositorio y cree su rama desde master.
+Si ha agregado código que debe probarse, agregue pruebas.
+Si ha cambiado las API, actualice la documentación.
+Asegúrese de que el conjunto de pruebas pase.
+Si aún no lo ha hecho, complete el Acuerdo de licencia de colaborador ("CLA").
+Acuerdo de licencia de colaborador ("CLA")
+Para aceptar su solicitud de extracción, necesitamos que envíe un CLA. Solo necesita hacer esto una vez para trabajar en cualquiera de los proyectos de código abierto de Facebook.
+
+Completa tu CLA aquí: https://code.facebook.com/cla
+
+Cuestiones
+Usamos problemas de GitHub para rastrear errores públicos. Asegúrese de que su descripción sea clara y tenga suficientes instrucciones para poder reproducir el problema.
+
+Facebook tiene un programa de recompensas por la divulgación segura de errores de seguridad. En esos casos, siga el proceso descrito en esa página y no presente un problema público.
+
+Estilo de codificación
+Nuestras únicas reglas de estilo de codificación estrictas y rápidas son:
+
+2 espacios para sangría en lugar de tabulaciones
+Longitud de línea de 80 caracteres
+En general, si utiliza nuestro archivo con formato .clang , nadie se quejará.
+
+Licencia
+Al contribuir a ReDex, usted acepta que sus contribuciones serán autorizadas bajo su licencia MIT.
