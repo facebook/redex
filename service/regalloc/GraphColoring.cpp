@@ -1074,7 +1074,7 @@ void Allocator::allocate(cfg::ControlFlowGraph& cfg, bool is_static) {
 
       // If we've hit this many iterations, it's very likely that we've hit
       // some bug that's causing us to loop infinitely.
-      always_assert(m_stats.reiteration_count++ < 200);
+      always_assert(m_stats.reiteration_count++ < 1000);
     }
     TRACE(REG, 7, "IG:\n%s", SHOW(ig));
 
