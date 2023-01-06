@@ -782,8 +782,6 @@ constexpr std::array<std::pair<std::string_view, CounterFnPtr>, 3>
 struct SourceBlocksStats {
   size_t methods_with_sbs{0};
 
-  std::array<size_t, gCounters.size()> global{};
-
   struct Data {
     size_t count{0};
     size_t methods{0};
@@ -836,6 +834,7 @@ struct SourceBlocksStats {
     }
   };
 
+  std::array<Data, gCounters.size()> global{};
   std::array<Data, gCountersNonEntry.size()> non_entry{};
 
   SourceBlocksStats& operator+=(const SourceBlocksStats& that) {
@@ -854,7 +853,11 @@ struct SourceBlocksStats {
 
   void fill_derived(const DexMethod* m) {
     static_assert(gCounters[1].first == "~blocks~with~source~blocks");
-    methods_with_sbs = global[1] > 0 ? 1 : 0;
+    methods_with_sbs = global[1].count > 0 ? 1 : 0;
+
+    for (auto& data : global) {
+      data.fill_derived(m);
+    }
 
     for (auto& data : non_entry) {
       data.fill_derived(m);
@@ -885,7 +888,7 @@ void track_source_block_coverage(ScopedMetrics& sm,
         bool seen_sb = false;
         for (auto block : cfg.blocks()) {
           for (size_t i = 0; i != gCounters.size(); ++i) {
-            ret.global[i] += (*gCounters[i].second)(block, dominators);
+            ret.global[i].count += (*gCounters[i].second)(block, dominators);
           }
           if (block != cfg.entry_block()) {
             for (size_t i = 0; i != gCountersNonEntry.size(); ++i) {
@@ -908,10 +911,6 @@ void track_source_block_coverage(ScopedMetrics& sm,
 
   sm.set_metric("~assessment~methods~with~sbs", stats.methods_with_sbs);
 
-  for (size_t i = 0; i != gCounters.size(); ++i) {
-    sm.set_metric(gCounters[i].first, stats.global[i]);
-  }
-
   auto data_metric = [&sm](const std::string_view& name, const auto& data) {
     sm.set_metric(name, data.count);
 
@@ -929,6 +928,9 @@ void track_source_block_coverage(ScopedMetrics& sm,
     min_max(data.min_method, "min_method");
     min_max(data.max_method, "max_method");
   };
+  for (size_t i = 0; i != gCounters.size(); ++i) {
+    data_metric(gCounters[i].first, stats.global[i]);
+  }
   for (size_t i = 0; i != gCountersNonEntry.size(); ++i) {
     data_metric(gCountersNonEntry[i].first, stats.non_entry[i]);
   }
