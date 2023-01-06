@@ -431,6 +431,7 @@ struct ViolationsHelper {
 
   ViolationsHelper(Violation v,
                    const Scope& scope,
+                   size_t top_n,
                    std::vector<std::string> to_vis);
   ~ViolationsHelper();
 };

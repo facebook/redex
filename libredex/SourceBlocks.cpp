@@ -937,6 +937,7 @@ void track_source_block_coverage(ScopedMetrics& sm,
 }
 
 struct ViolationsHelper::ViolationsHelperImpl {
+  size_t top_n;
   std::unordered_map<DexMethod*, size_t> violations_start;
   std::vector<std::string> print;
 
@@ -945,8 +946,9 @@ struct ViolationsHelper::ViolationsHelperImpl {
 
   ViolationsHelperImpl(Violation v,
                        const Scope& scope,
+                       size_t top_n,
                        std::vector<std::string> to_vis)
-      : print(std::move(to_vis)), v(v) {
+      : top_n(top_n), print(std::move(to_vis)), v(v) {
     {
       std::mutex lock;
       walk::parallel::methods(scope, [this, &lock, v](DexMethod* m) {
@@ -991,7 +993,6 @@ struct ViolationsHelper::ViolationsHelperImpl {
       };
 
       std::vector<MethodDelta> top_changes;
-      constexpr size_t kTopChanges = 10;
 
       workqueue_run<std::pair<DexMethod*, size_t>>(
           [&](const std::pair<DexMethod*, size_t>& p) {
@@ -1009,7 +1010,7 @@ struct ViolationsHelper::ViolationsHelperImpl {
             auto m_delta = val - p.second;
             size_t s = m->get_code()->sum_opcode_sizes();
             std::unique_lock<std::mutex> ulock{lock};
-            if (top_changes.size() < kTopChanges) {
+            if (top_changes.size() < top_n) {
               top_changes.emplace_back(m, m_delta, s);
               return;
             }
@@ -1217,9 +1218,10 @@ struct ViolationsHelper::ViolationsHelperImpl {
 
 ViolationsHelper::ViolationsHelper(Violation v,
                                    const Scope& scope,
+                                   size_t top_n,
                                    std::vector<std::string> to_vis)
     : impl(std::make_unique<ViolationsHelperImpl>(
-          v, scope, std::move(to_vis))) {}
+          v, scope, top_n, std::move(to_vis))) {}
 ViolationsHelper::~ViolationsHelper() {}
 
 SourceBlock* get_first_source_block_of_method(const DexMethod* m) {
