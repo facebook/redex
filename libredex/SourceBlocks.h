@@ -434,6 +434,12 @@ struct ViolationsHelper {
                    size_t top_n,
                    std::vector<std::string> to_vis);
   ~ViolationsHelper();
+
+  void process(ScopedMetrics* sm);
+  void silence();
+
+  ViolationsHelper(ViolationsHelper&& other) noexcept;
+  ViolationsHelper& operator=(ViolationsHelper&& rhs) noexcept;
 };
 
 SourceBlock* get_first_source_block_of_method(const DexMethod* m);

@@ -100,6 +100,7 @@ void ProguardConfig::bind_config() {
 void PassManagerConfig::bind_config() {
   bind("pass_aliases", pass_aliases, pass_aliases);
   bind("jemalloc_full_stats", jemalloc_full_stats, jemalloc_full_stats);
+  bind("violations_tracking", violations_tracking, violations_tracking);
 }
 
 void ResourceConfig::bind_config() {

@@ -8,6 +8,7 @@
 #include "SourceBlocks.h"
 
 #include <limits>
+#include <memory>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -940,6 +941,7 @@ struct ViolationsHelper::ViolationsHelperImpl {
   size_t top_n;
   std::unordered_map<DexMethod*, size_t> violations_start;
   std::vector<std::string> print;
+  bool processed{false};
 
   using Violation = ViolationsHelper::Violation;
   const Violation v;
@@ -977,7 +979,15 @@ struct ViolationsHelper::ViolationsHelperImpl {
     not_reached();
   }
 
-  ~ViolationsHelperImpl() {
+  ~ViolationsHelperImpl() { process(nullptr); }
+
+  void silence() { processed = true; }
+  void process(ScopedMetrics* sm) {
+    if (processed) {
+      return;
+    }
+    processed = true;
+
     std::atomic<size_t> change_sum{0};
 
     {
@@ -1040,15 +1050,48 @@ struct ViolationsHelper::ViolationsHelperImpl {
           },
           violations_start);
 
-      for (auto& t : top_changes) {
+      struct MaybeMetrics {
+        ScopedMetrics* root{nullptr};
+        std::optional<ScopedMetrics::Scope> scope;
+        explicit MaybeMetrics(ScopedMetrics* root) : root(root) {}
+        explicit MaybeMetrics(ScopedMetrics* root, ScopedMetrics::Scope sc)
+            : root(root), scope(std::move(sc)) {}
+        void set_metric(const std::string_view& key, int64_t value) {
+          if (root != nullptr) {
+            root->set_metric(key, value);
+          }
+        }
+        MaybeMetrics sub_scope(std::string key) {
+          if (root == nullptr) {
+            return MaybeMetrics(nullptr);
+          }
+          return MaybeMetrics(root, root->scope(std::move(key)));
+        }
+      };
+      MaybeMetrics mm(sm);
+      auto mm_top_changes = mm.sub_scope("top_changes");
+      for (size_t i = 0; i != top_changes.size(); ++i) {
+        auto& t = top_changes[i];
         TRACE(MMINL, 0, "%s (size %zu): +%zu", SHOW(t.method), t.method_size,
               t.violations_delta);
+        auto mm_top_changes_i = mm_top_changes.sub_scope(std::to_string(i));
+        {
+          auto mm_top_changes_i_size = mm_top_changes_i.sub_scope("size");
+          mm_top_changes_i_size.set_metric(show(t.method), t.method_size);
+        }
+        {
+          auto mm_top_changes_i_size = mm_top_changes_i.sub_scope("delta");
+          mm_top_changes_i_size.set_metric(show(t.method), t.violations_delta);
+        }
       }
     }
 
     print_all();
 
     TRACE(MMINL, 0, "Introduced %zu violations.", change_sum.load());
+    if (sm != nullptr) {
+      sm->set_metric("new_violations", change_sum.load());
+    }
   }
 
   static size_t hot_immediate_dom_not_hot_cfg(cfg::ControlFlowGraph& cfg) {
@@ -1223,6 +1266,25 @@ ViolationsHelper::ViolationsHelper(Violation v,
     : impl(std::make_unique<ViolationsHelperImpl>(
           v, scope, top_n, std::move(to_vis))) {}
 ViolationsHelper::~ViolationsHelper() {}
+
+void ViolationsHelper::process(ScopedMetrics* sm) {
+  if (impl) {
+    impl->process(sm);
+  }
+}
+void ViolationsHelper::silence() {
+  if (impl) {
+    impl->silence();
+  }
+}
+
+ViolationsHelper::ViolationsHelper(ViolationsHelper&& other) noexcept {
+  impl = std::move(other.impl);
+}
+ViolationsHelper& ViolationsHelper::operator=(ViolationsHelper&& rhs) noexcept {
+  impl = std::move(rhs.impl);
+  return *this;
+}
 
 SourceBlock* get_first_source_block_of_method(const DexMethod* m) {
   auto code = m->get_code();

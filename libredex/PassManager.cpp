@@ -968,6 +968,51 @@ struct JemallocStats {
   }
 };
 
+struct ViolationsTracking {
+  bool enabled{false};
+
+  explicit ViolationsTracking(bool enabled) : enabled(enabled) {}
+
+  struct Handler {
+    PassManager* pm;
+    std::unique_ptr<source_blocks::ViolationsHelper> vh;
+    Handler(PassManager* pm, DexStoresVector& stores)
+        : pm(pm),
+          vh(std::make_unique<source_blocks::ViolationsHelper>(
+              source_blocks::ViolationsHelper::Violation::kChainAndDom,
+              build_class_scope(stores),
+              10,
+              std::vector<std::string>{})) {}
+    ~Handler() {
+      if (vh != nullptr) {
+        ScopedMetrics sm(*pm);
+        auto scope = sm.scope("~violation~tracking");
+        vh->process(&sm);
+      }
+    }
+
+    Handler(const Handler&) = delete;
+    Handler& operator=(const Handler&) = delete;
+
+    Handler(Handler&& other) noexcept : pm(other.pm), vh(std::move(other.vh)) {}
+    Handler& operator=(Handler&& rhs) noexcept {
+      if (vh != nullptr) {
+        vh->silence();
+      }
+      vh = std::move(rhs.vh);
+      pm = rhs.pm;
+      return *this;
+    }
+  };
+
+  std::optional<Handler> maybe_track(PassManager* pm, DexStoresVector& stores) {
+    if (!enabled) {
+      return std::nullopt;
+    }
+    return Handler(pm, stores);
+  }
+};
+
 } // namespace
 
 std::unique_ptr<keep_rules::ProguardConfiguration> empty_pg_config() {
@@ -1134,6 +1179,11 @@ void PassManager::eval_passes(DexStoresVector& stores, ConfigFiles& conf) {
 }
 
 void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
+  const auto* pm_config =
+      conf.get_global_config().get_config_by_name<PassManagerConfig>(
+          "pass_manager");
+  redex_assert(pm_config != nullptr);
+
   auto profiler_info = ScopedCommandProfiling::maybe_info_from_env("");
   const Pass* profiler_info_pass = nullptr;
   if (profiler_info) {
@@ -1196,6 +1246,9 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   check_unique_deobfuscated.run_initially(scope);
 
   VisualizerHelper graph_visualizer(conf);
+  ViolationsTracking violatios_tracking(
+      pm_config->violations_tracking ||
+      (assessor_config->run_after_each_pass && g_redex->instrument_mode));
 
   sanitizers::lsan_do_recoverable_leak_check();
 
@@ -1317,6 +1370,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       auto scoped_command_all_prof = ScopedCommandProfiling::maybe_from_info(
           profiler_all_info, &pass->name());
       jemalloc_util::ScopedProfiling malloc_prof(m_malloc_profile_pass == pass);
+      auto maybe_track_violations =
+          violatios_tracking.maybe_track(this, stores);
       if (!pass->is_editable_cfg_friendly()) {
         // if this pass hasn't been updated to editable_cfg yet, clear_cfg. In
         // the future, once all editable cfg updates are done, this branch will
