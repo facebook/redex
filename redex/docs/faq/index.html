@@ -1,0 +1,134 @@
+<!DOCTYPE html><html lang="en"><head><meta charSet="utf-8"/><meta http-equiv="X-UA-Compatible" content="IE=edge"/><title>FAQ · Redex</title><meta name="viewport" content="width=device-width, initial-scale=1.0"/><meta name="generator" content="Docusaurus"/><meta name="description" content="## I&#x27;m getting &quot;Couldn&#x27;t find zipalign. See README.md to resolve this.&quot; or other zipalign errors"/><meta name="docsearch:language" content="en"/><meta property="og:title" content="FAQ · Redex"/><meta property="og:type" content="website"/><meta property="og:url" content="https://fbredex.com/"/><meta property="og:description" content="## I&#x27;m getting &quot;Couldn&#x27;t find zipalign. See README.md to resolve this.&quot; or other zipalign errors"/><meta property="og:image" content="https://fbredex.com/img/og_image.png"/><meta name="twitter:card" content="summary"/><link rel="shortcut icon" href="/img/favicon.png"/><link rel="stylesheet" href="https://cdn.jsdelivr.net/docsearch.js/1/docsearch.min.css"/><link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/default.min.css"/><script type="text/javascript" src="https://buttons.github.io/buttons.js"></script><script src="/js/scrollSpy.js"></script><link rel="stylesheet" href="/css/main.css"/><script src="/js/codetabs.js"></script></head><body class="sideNavVisible separateOnPageNav"><div class="fixedHeaderContainer"><div class="headerWrapper wrapper"><header><a href="/"><img class="logo" src="/img/redex.png" alt="Redex"/><h2 class="headerTitleWithLogo">Redex</h2></a><div class="navigationWrapper navigationSlider"><nav class="slidingNav"><ul class="nav-site nav-site-internal"><li class="siteNavGroupActive"><a href="/docs/installation" target="_self">Docs</a></li><li class="siteNavGroupActive siteNavItemActive"><a href="/docs/faq" target="_self">FAQ</a></li><li class=""><a href="https://code.facebook.com/posts/1480969635539475/optimizing-android-bytecode-with-redex" target="_self">Birth</a></li><li class="navSearchWrapper reactNavSearchWrapper"><input type="text" id="search_input_react" placeholder="Search" title="Search"/></li></ul></nav></div></header></div></div><div class="navPusher"><div class="docMainWrapper wrapper"><div class="docsNavContainer" id="docsNav"><nav class="toc"><div class="toggleNav"><section class="navWrapper wrapper"><div class="navBreadcrumb wrapper"><div class="navToggle" id="navToggler"><div class="hamburger-menu"><div class="line1"></div><div class="line2"></div><div class="line3"></div></div></div><h2><i>›</i><span>Help</span></h2><div class="tocToggler" id="tocToggler"><i class="icon-toc"></i></div></div><div class="navGroups"><div class="navGroup"><h3 class="navGroupCategoryTitle">Getting Started</h3><ul class=""><li class="navListItem"><a class="navItem" href="/docs/installation">Installation</a></li><li class="navListItem"><a class="navItem" href="/docs/configuring">Configuring ReDex</a></li><li class="navListItem"><a class="navItem" href="/docs/passes">Passes</a></li><li class="navListItem"><a class="navItem" href="/docs/usage">Usage</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle">Examples</h3><ul class=""><li class="navListItem"><a class="navItem" href="/docs/proguard">Using ProGuard Rules with Redex</a></li><li class="navListItem"><a class="navItem" href="/docs/synth">Redex Synth Pass Example</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle">Technical Details</h3><ul class=""><li class="navListItem"><a class="navItem" href="/docs/docker">Docker Container Deployments</a></li><li class="navListItem"><a class="navItem" href="/docs/interdex">Interdex</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle">Help</h3><ul class=""><li class="navListItem navListItemActive"><a class="navItem" href="/docs/faq">FAQ</a></li></ul></div></div></section></div><script>
+            var coll = document.getElementsByClassName('collapsible');
+            var checkActiveCategory = true;
+            for (var i = 0; i < coll.length; i++) {
+              var links = coll[i].nextElementSibling.getElementsByTagName('*');
+              if (checkActiveCategory){
+                for (var j = 0; j < links.length; j++) {
+                  if (links[j].classList.contains('navListItemActive')){
+                    coll[i].nextElementSibling.classList.toggle('hide');
+                    coll[i].childNodes[1].classList.toggle('rotate');
+                    checkActiveCategory = false;
+                    break;
+                  }
+                }
+              }
+
+              coll[i].addEventListener('click', function() {
+                var arrow = this.childNodes[1];
+                arrow.classList.toggle('rotate');
+                var content = this.nextElementSibling;
+                content.classList.toggle('hide');
+              });
+            }
+
+            document.addEventListener('DOMContentLoaded', function() {
+              createToggler('#navToggler', '#docsNav', 'docsSliderActive');
+              createToggler('#tocToggler', 'body', 'tocActive');
+
+              var headings = document.querySelector('.toc-headings');
+              headings && headings.addEventListener('click', function(event) {
+                var el = event.target;
+                while(el !== headings){
+                  if (el.tagName === 'A') {
+                    document.body.classList.remove('tocActive');
+                    break;
+                  } else{
+                    el = el.parentNode;
+                  }
+                }
+              }, false);
+
+              function createToggler(togglerSelector, targetSelector, className) {
+                var toggler = document.querySelector(togglerSelector);
+                var target = document.querySelector(targetSelector);
+
+                if (!toggler) {
+                  return;
+                }
+
+                toggler.onclick = function(event) {
+                  event.preventDefault();
+
+                  target.classList.toggle(className);
+                };
+              }
+            });
+        </script></nav></div><div class="container mainContainer docsContainer"><div class="wrapper"><div class="post"><header class="postHeader"><h1 id="__docusaurus" class="postHeaderTitle">FAQ</h1></header><article><div><span><h2><a class="anchor" aria-hidden="true" id="im-getting-couldnt-find-zipalign-see-readmemd-to-resolve-this-or-other-zipalign-errors"></a><a href="#im-getting-couldnt-find-zipalign-see-readmemd-to-resolve-this-or-other-zipalign-errors" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>I'm getting &quot;Couldn't find zipalign. See README.md to resolve this.&quot; or other zipalign errors</h2>
+<p><code>zipalign</code> is an optimization step that is bundled with the Android SDK.  You
+need to tell redex where to find it.  For example, if you installed the SDK at
+<code>/path/to/android/sdk</code>, try:</p>
+<pre><code class="hljs"><span class="hljs-attribute">ANDROID_SDK</span>=/path/to/android/sdk redex [<span class="hljs-built_in">..</span>. arguments <span class="hljs-built_in">..</span>.]
+</code></pre>
+<p>You can alternatively add <code>zipalign</code> to your PATH, for example:</p>
+<pre><code class="hljs">PATH=<span class="hljs-regexp">/path/</span>to<span class="hljs-regexp">/android/</span>sdk<span class="hljs-regexp">/build-tools/</span>xx.y.zz:<span class="hljs-variable">$PATH</span> redex [... arguments ...]
+</code></pre>
+<p>Additionally, it's possible zipalign itself failed. In this case the stderr will be reported to aid debugging (for example, zipalign fails if you provide an output path that already exists).</p>
+<h2><a class="anchor" aria-hidden="true" id="my-app-fails-to-install-with-failure-install_parse_failed_no_certificates"></a><a href="#my-app-fails-to-install-with-failure-install_parse_failed_no_certificates" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>My app fails to install with <code>Failure [INSTALL_PARSE_FAILED_NO_CERTIFICATES]</code></h2>
+<p>After you run redex, you will need to re-sign your app.  You can re-sign manually
+using these instructions:
+<a href="https://developer.android.com/tools/publishing/app-signing.html#signing-manually">https://developer.android.com/tools/publishing/app-signing.html#signing-manually</a>.</p>
+<p>You can also tell redex to sign for you.  If you want to sign with the debug
+key, you can simply do:</p>
+<pre><code class="hljs">redex <span class="hljs-params">--sign</span> [ <span class="hljs-string">...</span> arguments <span class="hljs-string">...</span>]
+</code></pre>
+<p>If you want to sign with your release key, you'll need to provide the
+appropriate args:</p>
+<pre><code class="hljs"><span class="hljs-selector-tag">--sign</span> <span class="hljs-selector-tag">Sign</span> <span class="hljs-selector-tag">the</span> <span class="hljs-selector-tag">apk</span> <span class="hljs-selector-tag">after</span> <span class="hljs-selector-tag">optimizing</span> <span class="hljs-selector-tag">it</span>
+<span class="hljs-selector-tag">-s</span> <span class="hljs-selector-attr">[KEYSTORE]</span>, <span class="hljs-selector-tag">--keystore</span> <span class="hljs-selector-attr">[KEYSTORE]</span>
+<span class="hljs-selector-tag">-a</span> <span class="hljs-selector-attr">[KEYALIAS]</span>, <span class="hljs-selector-tag">--keyalias</span> <span class="hljs-selector-attr">[KEYALIAS]</span>
+<span class="hljs-selector-tag">-p</span> <span class="hljs-selector-attr">[KEYPASS]</span>, <span class="hljs-selector-tag">--keypass</span> <span class="hljs-selector-attr">[KEYPASS]</span>
+</code></pre>
+<h2><a class="anchor" aria-hidden="true" id="my-app-crashes-with-methodnotfoundexception-classnotfoundexception-nosuchfieldexception-or-something-similar-how-do-i-fix-this"></a><a href="#my-app-crashes-with-methodnotfoundexception-classnotfoundexception-nosuchfieldexception-or-something-similar-how-do-i-fix-this" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>My App crashes with <code>MethodNotFoundException</code>, <code>ClassNotFoundException</code>, <code>NoSuchFieldException</code>, or something similar. How do I fix this?</h2>
+<p>Redex probably deleted or renamed it. Redex is quite aggressive about deleting
+things it deems are unreachable. But, often Redex doesn't know about reflection
+or other complex ways an entity could be reached.</p>
+<p>Here's how you ensure Redex will not delete or rename something:</p>
+<p>Annotate any class, method, or field you want to keep with <code>@DoNotStrip</code>, and
+add this to your ProGuard config file (which should be passed to redex.py via
+the <code>--proguard-config</code> flag):</p>
+<pre><code class="hljs"><span class="hljs-comment"># Do not strip classes annotated with @DoNotStrip</span>
+-keep @com.path.<span class="hljs-keyword">to</span>.your.DoNotStrip <span class="hljs-class"><span class="hljs-keyword">class</span> *</span>
+<span class="hljs-comment"># Do not strip annotated fields or methods either</span>
+-keepclassmembers <span class="hljs-class"><span class="hljs-keyword">class</span> * {</span>
+    @com.path.<span class="hljs-keyword">to</span>.your.DoNotStrip *;
+}
+</code></pre>
+<p>and define <code>DoNotStrip</code>:</p>
+<pre><code class="hljs"><span class="hljs-selector-tag">package</span> <span class="hljs-selector-tag">com</span><span class="hljs-selector-class">.path</span><span class="hljs-selector-class">.to</span><span class="hljs-selector-class">.your</span>;
+<span class="hljs-selector-tag">public</span> <span class="hljs-keyword">@interface</span> DoNotStrip {}
+</code></pre>
+<h2><a class="anchor" aria-hidden="true" id="how-does-this-compare-to-proguard"></a><a href="#how-does-this-compare-to-proguard" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>How does this compare to ProGuard?</h2>
+<p>ReDex is conceptually similar to ProGuard, in that both optimize bytecode.
+ReDex, however, optimizes .dex bytecode, while ProGuard optimizes .class
+bytecode before it is lowered to .dex.  Operating on .dex is sometimes an
+advantage: you can consider the number of virtual registers used by a method
+that is an inlining candidate, and you can control the layout of classes within
+a dex file.  But ProGuard has some capabilities that ReDex does not (for
+example, ReDex will not remove unused method parameters, which ProGuard does).</p>
+<h2><a class="anchor" aria-hidden="true" id="how-about-dexguard"></a><a href="#how-about-dexguard" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>How about DexGuard?</h2>
+<p>DexGuard operates on dex, but we haven't evaluated it at all since it's closed
+source.  We don't use it at Facebook and we have no plans to start.</p>
+</span></div></article></div><div class="docLastUpdate"><em>Last updated on 1/9/2023 by Andreas Gampe</em></div><div class="docs-prevnext"><a class="docs-prev button" href="/docs/interdex"><span class="arrow-prev">← </span><span>Interdex</span></a></div></div></div><nav class="onPageNav"><ul class="toc-headings"><li><a href="#im-getting-couldnt-find-zipalign-see-readmemd-to-resolve-this-or-other-zipalign-errors">I'm getting &quot;Couldn't find zipalign. See README.md to resolve this.&quot; or other zipalign errors</a></li><li><a href="#my-app-fails-to-install-with-failure-install_parse_failed_no_certificates">My app fails to install with <code>Failure [INSTALL_PARSE_FAILED_NO_CERTIFICATES]</code></a></li><li><a href="#my-app-crashes-with-methodnotfoundexception-classnotfoundexception-nosuchfieldexception-or-something-similar-how-do-i-fix-this">My App crashes with <code>MethodNotFoundException</code>, <code>ClassNotFoundException</code>, <code>NoSuchFieldException</code>, or something similar. How do I fix this?</a></li><li><a href="#how-does-this-compare-to-proguard">How does this compare to ProGuard?</a></li><li><a href="#how-about-dexguard">How about DexGuard?</a></li></ul></nav></div><footer class="nav-footer" id="footer"><section class="sitemap"><a href="/" class="nav-home"><img src="/img/redex.png" alt="Redex" width="66" height="58"/></a><div class="footerSection"><h5>Docs</h5><a href="
+                /docs/en/installation">Getting Started</a><a href="
+                /docs/en/configuring">Configuring</a><a href="
+                /docs/en/usage">Using</a><a href="
+                /docs/en/faq">FAQ</a></div><div class="footerSection"><h5>Social</h5><div class="social"><a class="github-button" href="https://github.com/facebook/redex" data-count-href="https://github.com/facebook/redex/stargazers" data-show-count="true" data-count-aria-label="# stargazers on GitHub" aria-label="Star this project on GitHub">redex</a></div></div></section><a href="https://opensource.facebook.com/" target="_blank" rel="noreferrer noopener" class="fbOpenSource"><img src="/img/oss_logo.png" alt="Facebook Open Source" width="170" height="45"/></a><section class="copyright"><span>Copyright © 2023 Meta Platforms Inc.</span></section></footer></div><script type="text/javascript" src="https://cdn.jsdelivr.net/docsearch.js/1/docsearch.min.js"></script><script>
+                document.addEventListener('keyup', function(e) {
+                  if (e.target !== document.body) {
+                    return;
+                  }
+                  // keyCode for '/' (slash)
+                  if (e.keyCode === 191) {
+                    const search = document.getElementById('search_input_react');
+                    search && search.focus();
+                  }
+                });
+              </script><script>
+              var search = docsearch({
+                
+                apiKey: '7ef33486bb9b0c17ed9a5dedb0da8e36',
+                indexName: 'fbredex',
+                inputSelector: '#search_input_react'
+              });
+            </script></body></html>

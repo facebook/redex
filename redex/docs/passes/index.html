@@ -1,0 +1,636 @@
+<!DOCTYPE html><html lang="en"><head><meta charSet="utf-8"/><meta http-equiv="X-UA-Compatible" content="IE=edge"/><title>Passes · Redex</title><meta name="viewport" content="width=device-width, initial-scale=1.0"/><meta name="generator" content="Docusaurus"/><meta name="description" content="ReDex has a large set of optimization passes that is constantly evolving."/><meta name="docsearch:language" content="en"/><meta property="og:title" content="Passes · Redex"/><meta property="og:type" content="website"/><meta property="og:url" content="https://fbredex.com/"/><meta property="og:description" content="ReDex has a large set of optimization passes that is constantly evolving."/><meta property="og:image" content="https://fbredex.com/img/og_image.png"/><meta name="twitter:card" content="summary"/><link rel="shortcut icon" href="/img/favicon.png"/><link rel="stylesheet" href="https://cdn.jsdelivr.net/docsearch.js/1/docsearch.min.css"/><link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/default.min.css"/><script type="text/javascript" src="https://buttons.github.io/buttons.js"></script><script src="/js/scrollSpy.js"></script><link rel="stylesheet" href="/css/main.css"/><script src="/js/codetabs.js"></script></head><body class="sideNavVisible separateOnPageNav"><div class="fixedHeaderContainer"><div class="headerWrapper wrapper"><header><a href="/"><img class="logo" src="/img/redex.png" alt="Redex"/><h2 class="headerTitleWithLogo">Redex</h2></a><div class="navigationWrapper navigationSlider"><nav class="slidingNav"><ul class="nav-site nav-site-internal"><li class="siteNavGroupActive"><a href="/docs/installation" target="_self">Docs</a></li><li class="siteNavGroupActive"><a href="/docs/faq" target="_self">FAQ</a></li><li class=""><a href="https://code.facebook.com/posts/1480969635539475/optimizing-android-bytecode-with-redex" target="_self">Birth</a></li><li class="navSearchWrapper reactNavSearchWrapper"><input type="text" id="search_input_react" placeholder="Search" title="Search"/></li></ul></nav></div></header></div></div><div class="navPusher"><div class="docMainWrapper wrapper"><div class="docsNavContainer" id="docsNav"><nav class="toc"><div class="toggleNav"><section class="navWrapper wrapper"><div class="navBreadcrumb wrapper"><div class="navToggle" id="navToggler"><div class="hamburger-menu"><div class="line1"></div><div class="line2"></div><div class="line3"></div></div></div><h2><i>›</i><span>Getting Started</span></h2><div class="tocToggler" id="tocToggler"><i class="icon-toc"></i></div></div><div class="navGroups"><div class="navGroup"><h3 class="navGroupCategoryTitle">Getting Started</h3><ul class=""><li class="navListItem"><a class="navItem" href="/docs/installation">Installation</a></li><li class="navListItem"><a class="navItem" href="/docs/configuring">Configuring ReDex</a></li><li class="navListItem navListItemActive"><a class="navItem" href="/docs/passes">Passes</a></li><li class="navListItem"><a class="navItem" href="/docs/usage">Usage</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle">Examples</h3><ul class=""><li class="navListItem"><a class="navItem" href="/docs/proguard">Using ProGuard Rules with Redex</a></li><li class="navListItem"><a class="navItem" href="/docs/synth">Redex Synth Pass Example</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle">Technical Details</h3><ul class=""><li class="navListItem"><a class="navItem" href="/docs/docker">Docker Container Deployments</a></li><li class="navListItem"><a class="navItem" href="/docs/interdex">Interdex</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle">Help</h3><ul class=""><li class="navListItem"><a class="navItem" href="/docs/faq">FAQ</a></li></ul></div></div></section></div><script>
+            var coll = document.getElementsByClassName('collapsible');
+            var checkActiveCategory = true;
+            for (var i = 0; i < coll.length; i++) {
+              var links = coll[i].nextElementSibling.getElementsByTagName('*');
+              if (checkActiveCategory){
+                for (var j = 0; j < links.length; j++) {
+                  if (links[j].classList.contains('navListItemActive')){
+                    coll[i].nextElementSibling.classList.toggle('hide');
+                    coll[i].childNodes[1].classList.toggle('rotate');
+                    checkActiveCategory = false;
+                    break;
+                  }
+                }
+              }
+
+              coll[i].addEventListener('click', function() {
+                var arrow = this.childNodes[1];
+                arrow.classList.toggle('rotate');
+                var content = this.nextElementSibling;
+                content.classList.toggle('hide');
+              });
+            }
+
+            document.addEventListener('DOMContentLoaded', function() {
+              createToggler('#navToggler', '#docsNav', 'docsSliderActive');
+              createToggler('#tocToggler', 'body', 'tocActive');
+
+              var headings = document.querySelector('.toc-headings');
+              headings && headings.addEventListener('click', function(event) {
+                var el = event.target;
+                while(el !== headings){
+                  if (el.tagName === 'A') {
+                    document.body.classList.remove('tocActive');
+                    break;
+                  } else{
+                    el = el.parentNode;
+                  }
+                }
+              }, false);
+
+              function createToggler(togglerSelector, targetSelector, className) {
+                var toggler = document.querySelector(togglerSelector);
+                var target = document.querySelector(targetSelector);
+
+                if (!toggler) {
+                  return;
+                }
+
+                toggler.onclick = function(event) {
+                  event.preventDefault();
+
+                  target.classList.toggle(className);
+                };
+              }
+            });
+        </script></nav></div><div class="container mainContainer docsContainer"><div class="wrapper"><div class="post"><header class="postHeader"><h1 id="__docusaurus" class="postHeaderTitle">Passes</h1></header><article><div><span><p>ReDex has a large set of optimization passes that is constantly evolving.
+Information in this document may be outdated, inspect the code if necessary.</p>
+<h2><a class="anchor" aria-hidden="true" id="accessmarkingpass"></a><a href="#accessmarkingpass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>AccessMarkingPass</h2>
+<p>Final objects and private methods can be optimized more aggressively than
+virtual objects and public methods.</p>
+<p>Devirtualization can result in [NullPointerException]. Two Redex passes perform
+devirtualization of methods: <code>AccessMarkingPass</code> devirtualizes methods not using
+<code>this</code>. <a href="#methodinlinepass"><code>MethodInlinePass</code></a> inlines monomorphic virtual
+calls.</p>
+<p>The <a href="/docs/configuring">app's config file</a> can override <code>AccessMarkingPass</code> behavior.
+<code>finalize_methods</code>, <code>finalize_unwritten_fields</code>, <code>finalize_classes</code>, and
+<code>privatize_methods</code> default to <code>true</code>. <code>finalize_written_fields</code> defaults to <code>false</code>.</p>
+<pre><code class="hljs"><span class="hljs-attr">"AccessMarkingPass":</span> <span class="hljs-string">{</span>
+  <span class="hljs-attr">"finalize_written_fields":</span> <span class="hljs-literal">true</span>
+<span class="hljs-string">},</span>
+</code></pre>
+<p>Pass ordering dependencies:</p>
+<ul>
+<li><code>AccessMarkingPass</code> should be run early as it enables other optimizations.</li>
+</ul>
+<p>See related:</p>
+<ul>
+<li><a href="#methoddevirtualizationpass"><code>MethodDevirtualizationPass</code></a></li>
+</ul>
+<h2><a class="anchor" aria-hidden="true" id="annokillpass"></a><a href="#annokillpass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>AnnoKillPass</h2>
+<p><code>AnnoKillPass</code> originally removed only annotations with no static references in
+the code--&quot;build-visible&quot; annotations. It was expanded to remove annotations
+referenced statically, but not used at runtime--&quot;runtime-visible&quot; annotations.</p>
+<p><code>AnnoKillPass</code> reads configuration options from the <a href="/docs/configuring">app's config
+file</a> specifying annotations to be kept or killed. An additional
+option specifies whether Redex should attempt to match signatures for removal.</p>
+<pre><code class="hljs"><span class="hljs-string">"AnnoKillPass"</span> : {
+  <span class="hljs-string">"keep_annos"</span>: [
+    <span class="hljs-string">"Landroid/view/ViewDebug$CapturedViewProperty;"</span>,
+    <span class="hljs-string">"Landroid/view/ViewDebug$ExportedProperty;"</span>
+  ],
+  <span class="hljs-string">"kill_bad_signatures"</span> : <span class="hljs-type">true</span>,
+  <span class="hljs-string">"kill_annos"</span> : [
+    <span class="hljs-string">"Lcom/google/inject/BindingAnnotation;"</span>
+  ]
+},
+</code></pre>
+<p>See related:</p>
+<ul>
+<li><a href="#systemannokillpass"><code>SystemAnnoKillPass</code></a></li>
+</ul>
+<h2><a class="anchor" aria-hidden="true" id="bridgesynthinlinepass"></a><a href="#bridgesynthinlinepass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>BridgeSynthInlinePass</h2>
+<p>As the name suggests BridgeSynthInlinePass removes bridge and synthetic methods by inlining them.</p>
+<p>Bridge methods are created by the <code>javac</code> compiler as part of
+type erasure for covariant generics.</p>
+<p>Example of a bridge method in pseudo-bytecode:</p>
+<pre><code class="hljs">check-cast*   (for checking covariant arg types)
+invoke-{direct,virtual,static} <span class="hljs-keyword"> bridge</span>d-method<span class="hljs-built_in">
+move-result
+</span>return
+</code></pre>
+<p><code>BridgeSynthInlinePass</code> inlines the target of the bridging, the &quot;bridgee&quot;, into the bridge
+method by replacing the <code>invoke-</code> and adjusting check-casts as needed. The
+bridgee can then be deleted.</p>
+<p><code>BridgeSynthInlinePass</code> also removes synthetic methods introduced by <code>javac</code>. <code>javac</code> generates
+these methods because while Java allows inner classes or nested classes, DEX
+bytecode does not. Inner classes, like <code>class Delta</code> in this example, are
+promoted to top-level classes in the DEX bytecode.</p>
+<pre><code class="hljs css language-java"><span class="hljs-keyword">public</span> <span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">Gamma</span> </span>{
+    <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-title">Gamma</span><span class="hljs-params">(<span class="hljs-keyword">int</span> v)</span> </span>{
+        x = v;
+    }
+    <span class="hljs-keyword">private</span> <span class="hljs-keyword">int</span> x;
+
+    <span class="hljs-keyword">public</span> <span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">Delta</span> </span>{
+        <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">int</span> <span class="hljs-title">doublex</span><span class="hljs-params">()</span> </span>{
+            <span class="hljs-keyword">return</span> <span class="hljs-number">2</span>*x;
+        }
+    }
+}
+</code></pre>
+<p><code>javac</code> generates a synthetic method that allows access to fields, methods, and
+constructors in the promoted class. <code>SynthPass</code> effectively removes these synthetic methods,
+replacing them with a direct access to the field or call to the method or
+constructor.</p>
+<p>The general limitations and the cost model of the inliner applies. As a result, some bridge and synthetic method inlining opportunities might not be acted upon, e.g. when it would result in API-level violations, or an overall size increase.</p>
+<h2><a class="anchor" aria-hidden="true" id="checkbreadcrumbspass"></a><a href="#checkbreadcrumbspass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>CheckBreadcrumbsPass</h2>
+<p><code>CheckBreadcrumbsPass</code> validates Redex codegen against leftover references to
+deleted types, methods, or fields.</p>
+<ul>
+<li>Verifies that there are no references to a deleted class definition remaining
+in DEX files (essentially an <code>internal</code> class that is not in scope).</li>
+<li>Verifies that the target of a field and method reference exists on the class
+it is defined on.</li>
+</ul>
+<p>Redex will warn if it finds dangling references or illegal references to
+entities.</p>
+<h2><a class="anchor" aria-hidden="true" id="classmergingpass"></a><a href="#classmergingpass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>ClassMergingPass</h2>
+<p><code>ClassMergingPass</code> shrinks the size of code generated by some frameworks. These
+tools produce large amounts of Java code for each component. The code generated
+for different component types often shares the same structure, differing only by
+the type of the component.</p>
+<p>Class Merging identifies pieces of generated code that have the same &quot;shape&quot;.
+Erasing the types that differ allows the pieces of generated code to be merged.</p>
+<h2><a class="anchor" aria-hidden="true" id="constantpropagationpass"></a><a href="#constantpropagationpass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>ConstantPropagationPass</h2>
+<p><code>ConstantPropagationPass</code> substitutes the values of constants into expressions
+at compile time. Constant propagation can eliminate multiple expressions,
+resulting in a constant load.</p>
+<p><code>ConstantPropagationPass</code> does a whole program analysis to replace instructions
+with single destination registers with constant loads. The analysis is run
+iteratively until a fixed point or configurable limit is reached.</p>
+<p><code>CostantPropagationPass</code> should be run before dead code elimination (DCE) passes
+as it can create dead code.</p>
+<p>See related:</p>
+<ul>
+<li><a href="#localdcepass"><code>LocalDCEPass</code></a></li>
+<li><a href="#removeunreachablepass"><code>RemoveUnreachablePass</code></a></li>
+</ul>
+<h2><a class="anchor" aria-hidden="true" id="copypropagationpass"></a><a href="#copypropagationpass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>CopyPropagationPass</h2>
+<p><code>CopyPropagationPass</code> removes writes of duplicated values to registers in a
+basic block. If value <code>A</code> and value <code>B</code> are aliases, then any moves between
+these registers are unnecessary and can be eliminated. Duplicated source
+registers can also be deduplicated.</p>
+<p><code>CopyPropagationPass</code> can also remove duplicated instructions if the source and
+the destination are aliased.</p>
+<p>Example: <code>v0</code> and <code>v1</code> contain the same value and can be treated locally as
+aliases:</p>
+<pre><code class="hljs">const v0, 0<span class="hljs-built_in">
+const </span>v1, 0<span class="hljs-built_in">
+invoke-static </span>v0 foo<span class="hljs-built_in">
+invoke-static </span>v1 bar
+</code></pre>
+<p>can be transformed into</p>
+<pre><code class="hljs">const v0, 0<span class="hljs-built_in">
+invoke-static </span>v0 foo<span class="hljs-built_in">
+invoke-static </span>v0 bar
+</code></pre>
+<p><code>CopyPropagationPass</code> should be run before dead code elimination (DCE) passes as
+it can create dead code.</p>
+<p>See related:</p>
+<ul>
+<li><a href="#localdcepass"><code>LocalDCEPass</code></a></li>
+<li><a href="#removeunreachablepass"><code>RemoveUnreachablePass</code></a></li>
+</ul>
+<h2><a class="anchor" aria-hidden="true" id="dedupblockspass"></a><a href="#dedupblockspass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>DedupBlocksPass</h2>
+<p>Dedup blocks inside of a method. Duplicated blocks are those with the same code
+and the same successor. Duplicated blocks can have different predecessors.</p>
+<p><code>DedupBlocksPass</code> identifies one of the blocks as the canonical version, then
+redirects all predecessors to the canonical block. The pass currenly only
+identifies blocks with a single successor, but in the future may identify blocks
+with multiple sucessors.</p>
+<p>Stack traces for deduplicated blocks will always report the same line number,
+but the predecessor line numbers will be correct.</p>
+<p><code>DedupBlocksPass</code> should be run after <a href="#interdexpass"><code>InterDexPass</code></a>.</p>
+<h2><a class="anchor" aria-hidden="true" id="delinitpass"></a><a href="#delinitpass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>DelInitPass</h2>
+<p>DelInitPass deletes unreferenced methods and fields that have no reachable
+constructor, as well as constructors for classes that can be removed or for
+classes that have another constructor that can be called.</p>
+<p>The scope of <code>DelInitPass</code> can be limited by a <code>package_allowlist</code> in the
+<a href="/docs/configuring">app's config file</a>. Lacking a white list, <code>DelInitPass</code> works at
+global scope.</p>
+<p><code>DelInitPass</code> should be run before
+<a href="#removeunreachablepass"><code>RemoveUnreachablePass</code></a> (RMU) as <code>DelInitPass</code> cleans
+constructors, enabling RMU to clean up more classes.</p>
+<p>See related:</p>
+<ul>
+<li><a href="#localdcepass"><code>LocalDcePass</code></a></li>
+<li><a href="#removeunreachablepass"><code>RemoveUnreachablePass</code></a></li>
+</ul>
+<h2><a class="anchor" aria-hidden="true" id="delsuperpass"></a><a href="#delsuperpass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>DelSuperPass</h2>
+<p>DelSuperPass eliminates subclass methods that invoke the superclass method and
+trivially return.</p>
+<p><code>DelSuperPass</code> only optimizes virtual methods with the following
+characteristics:</p>
+<ul>
+<li>The subclass method must match the name and signature of the superclass method</li>
+<li>The subclass method must only invoke the superclass method and either return
+<code>void</code> or the result of the callee.</li>
+</ul>
+<p><code>DelSuperPass</code> also fixes up references to the removed subclass methods, making
+them refer to the superclass method instead. Though <a href="https://source.android.com/devices/tech/dalvik/dalvik-bytecode">Dalvik's
+<code>invoke-virtual</code></a>
+would automatically resolve to the correct superclass method, doing this reduces
+the number of method references in the Dex file and saves on space.</p>
+<h2><a class="anchor" aria-hidden="true" id="finalinlinepassv2"></a><a href="#finalinlinepassv2" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>FinalInlinePassV2</h2>
+<p><code>FinalInlinePassV2</code>, or an instance field's value after <code>&lt;init&gt;</code>, and inlines
+the value in dex code. Note that this pass is separate from the <code>MethodInline</code>
+and <code>SwitchInline</code> passes.</p>
+<p>The <code>DX</code> tool often introduces verbose bytecode sequences to initialize static
+fields in classes it generates. The <code>encoded_value</code> equivalents are much more
+compact. This pass determines the values of static fields after <code>&lt;clinit&gt;</code> and
+eliminates the redundant writes to the static field.</p>
+<p>This pass applies to both final and non-final static fields. For final statics
+it also inlines reads of the static field where possible, replacing them with
+constant operations outside of <code>&lt;clinit&gt;</code>.</p>
+<p>For instance fields, the pass calculates the field's value after <code>&lt;init&gt;</code> is
+finished. It inlines reads of the instance field where possible.</p>
+<p>Unlike a static field, if an instance field were changed outside of <code>&lt;init&gt;</code>, it
+might have different values for different instances of the class. For classes
+with multiple <code>&lt;init&gt;</code> the instance field values might differ based on the
+constructor. This pass does not inline instance fields that are:</p>
+<ol>
+<li>Modified outside of their class <code>&lt;init&gt;</code>.</li>
+<li>In a class that have more than one constructor.</li>
+<li>Accessed by reflection or native code anywhere in code.</li>
+<li>Accessed in another method that is called inside of the constructor.</li>
+</ol>
+<p>Note that this pass does not inline the <code>CharSequence</code> type for static or
+instance fields because older Dalvik VMs cannot handle this class.</p>
+<p>See related:</p>
+<ul>
+<li><a href="#methodinlinepass"><code>MethodInlinePass</code></a></li>
+</ul>
+<h2><a class="anchor" aria-hidden="true" id="localdcepass"></a><a href="#localdcepass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>LocalDcePass</h2>
+<p><code>LocalDcePass</code> removes dead instructions in a method. Code is considered to be
+&quot;dead' if it has no side-effects and does not change its output registers. Code
+in a <code>catch</code> block is considered live for the duration of the <code>try</code>, as any
+instruction in the <code>try</code> block is assumed to be able to throw. Methods annotated
+with <code>@DoNotOptimize</code> are not considered for dead code elimination.</p>
+<p>Dead code elimination (DCE) differs from RemoveUnreachable (RMU) in two ways:
+first, RMU works from global roots (at the scope of Class/Method/Field) whereas
+DCE works at the function scope. Second, DCE removes code that does not change
+state, for example, a store to a memory address that is not read in the scope of
+the block, whereas RMU removes code that is unreachable regardless of its effect
+on state.</p>
+<p>See related:</p>
+<ul>
+<li><a href="#removeunreachablepass">RemoveUnreachablePass</a></li>
+</ul>
+<h2><a class="anchor" aria-hidden="true" id="methoddevirtualizationpass"></a><a href="#methoddevirtualizationpass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>MethodDevirtualizationPass</h2>
+<p><code>MethodDevirtualizationPass</code> converts virtual methods with single
+implementation to static dmethods.</p>
+<p>The <a href="/docs/configuring">app's config file</a>:</p>
+<pre><code class="hljs"><span class="hljs-string">"MethodDevirtualizationPass"</span> : {
+  <span class="hljs-string">"staticize_vmethods_not_using_this"</span> : <span class="hljs-type">true</span>,
+  <span class="hljs-string">"staticize_dmethods_not_using_this"</span> : <span class="hljs-type">true</span>
+},
+</code></pre>
+<p>See related:</p>
+<ul>
+<li><a href="#accessmarkingpass"><code>AccessMarkingPass</code></a></li>
+</ul>
+<h2><a class="anchor" aria-hidden="true" id="obfuscatepass"></a><a href="#obfuscatepass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>ObfuscatePass</h2>
+<p><code>ObfuscatePass</code> pass obfuscates method and field names. <code>RenameClassesPassV2</code>
+obfuscates class names.</p>
+<p>See related:</p>
+<ul>
+<li><a href="#renameclassespassv2"><code>RenameClassesPassV2</code></a></li>
+</ul>
+<h2><a class="anchor" aria-hidden="true" id="optimizeenumspass"></a><a href="#optimizeenumspass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>OptimizeEnumsPass</h2>
+<p><code>OptimizeEnumsPass</code> does two things to make use of <code>Enum</code> classes more
+efficient. It optimizes the use of <code>Enum</code> values in <code>switch</code> tables and replaces
+some uses of <code>Enum</code> values with <code>Integer</code> singletons.</p>
+<p>The <code>javac</code> compiler creates <a href="https://source.android.com/devices/tech/dalvik/dalvik-bytecode">Dalvik packed
+switch</a> tables
+that contain a generated anonymous class. <code>OptimizeEnumPass</code> replaces these
+packed <code>switch</code> statements with lookups based on the <code>Enum</code> ordinal itself. Note
+that this optimization does not work with ProGuard obfuscation enabled. ProGuard
+can rewrite <code>Enum</code> value names such that they no longer match the <code>Enum</code> class
+name.</p>
+<p><code>OptimizeEnumsPass</code> also replaces some uses of an <code>Enum</code> with a boxed <code>Integer</code>
+singleton and keeps the runtime behavior unchanged at the same time.</p>
+<p>The pass does not guarantee to erase all the enums, perf sensitive code should
+never use enums. An <code>Enum</code> is not optimizable if it is:</p>
+<ol>
+<li>An abstract <code>Enum</code>.</li>
+<li>Reflectively used.</li>
+<li>Contains an instance field that is not a primitive.</li>
+<li>Contains non-final instance fields.</li>
+<li>Cast to any other types, like <code>java.lang.Object</code>, <code>java.lang.Enum</code>,
+<code>java.io.Serializable</code>, <code>java.lang.Comparable</code></li>
+</ol>
+<h2><a class="anchor" aria-hidden="true" id="originalnamepass"></a><a href="#originalnamepass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>OriginalNamePass</h2>
+<pre><code class="hljs"><span class="hljs-string">"OriginalNamePass"</span> : {
+  <span class="hljs-string">"hierarchy_roots"</span> : [
+    <span class="hljs-string">"Ljava/lang/Runnable;"</span>
+  ]
+},
+</code></pre>
+<p>Redex renames classes for performance reasons. Renaming can result in different
+class names in debug and release builds, which results in mismatches in logging.
+Also, some system functions should not be renamed.</p>
+<p>An alternative is to use <code>OriginalClassName.getSimpleName()</code> for logging.
+<code>OriginalNamePass</code> is preferred as is does not significantly increase the APK
+size.</p>
+<h2><a class="anchor" aria-hidden="true" id="peepholepass"></a><a href="#peepholepass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>PeepholePass</h2>
+<p>Replace small code patterns with a more efficient pattern. The optimization
+matches known patterns for replacement. It essentially performs a string search
+of the code for known inefficient sequences and replaces them with more
+efficient code. <code>PeepholePass</code> will not replace patterns that span a basic block
+boundary. <code>PeepholePass</code> can remove no-op function calls such as redundant moves
+and appends of null strings.</p>
+<p>Peephole pass should be run early.</p>
+<h2><a class="anchor" aria-hidden="true" id="rebindrefspass"></a><a href="#rebindrefspass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>ReBindRefsPass</h2>
+<p>Rebind references to their most abstract type.</p>
+<p>The number of methods in a DEX file is limited to 64K. Method definitions (defs)
+and references (refs) both count against this limit. The class scope in an
+inheritance situation can create needless method refs. Calls based on the
+subclassed methods create unnecessary method refs for the subclass. This is
+especially true when calls are made through the implicit <code>this</code>.</p>
+<p>For example, you have a class specialized on <code>&lt;n&gt;</code> with a method that calls
+<code>Object.equals(Object)</code>. All of these calls create a ref <code>X&lt;n&gt;.equals(Object)</code>,
+each of them counting against the 64K limit. Rebinding them lower in the
+hierarchy reduces the number of unique refs.</p>
+<pre><code class="hljs css language-java"><span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">X</span>&lt;<span class="hljs-title">n</span>&gt;
+</span>{
+    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> foo&lt;n&gt;(Object o)
+    {
+        ...
+        <span class="hljs-keyword">if</span> (equals(o) {...}
+        ...
+    }
+}
+</code></pre>
+<p><code>ReBindRefsPass</code> rebinds all <code>invoke-virtual</code> to the base def of the virtual
+scope. For <code>invoke-interface</code>, it rebinds to the first interface method def. The
+optimization is only done as long as there is no change in method visibility: we
+walk down the hiearchy as long as the method is public. <code>ReBindRefsPass</code>
+drastically reduces the number of methods defined in DEX files.</p>
+<h2><a class="anchor" aria-hidden="true" id="reducegotospass"></a><a href="#reducegotospass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>ReduceGotosPass</h2>
+<p>Reduces gotos in two ways:</p>
+<ol>
+<li>When a conditional branch would fallthrough to a block that has multiple
+sources, and the branch target only one has one, invert condition and swap
+branch and goto target. This reduces the need for additional gotos and
+maximizes the fallthrough efficiency.</li>
+<li>It replaces gotos that eventually simply return by return instructions.
+Return instructions tend to have a smaller encoding than goto instructions,
+and tend to compress better due to less entropy (no offset).</li>
+</ol>
+<p>Example, inverting this conditional will eliminate a <code>goto</code>:</p>
+<pre><code class="hljs">(<span class="hljs-name">const</span> v2 <span class="hljs-number">0</span>)
+
+(<span class="hljs-name">if-eqz</span> v0 <span class="hljs-symbol">:true</span>)
+(<span class="hljs-symbol">:back_jump_target</span>)
+
+(<span class="hljs-name">return</span> v2)
+
+(<span class="hljs-symbol">:true</span>)
+(<span class="hljs-name">const</span> v2 <span class="hljs-number">1</span>)
+(<span class="hljs-name">goto</span> <span class="hljs-symbol">:back_jump_target</span>)
+</code></pre>
+<h2><a class="anchor" aria-hidden="true" id="regallocpass"></a><a href="#regallocpass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>RegAllocPass</h2>
+<p><code>RegAllocPass</code> does register allocation: the process of allocating variables
+into the available physical registers. The goal of register allocation is to
+avoid &quot;spilling&quot;, that is, moving values from registers into memory.</p>
+<p><code>RegAllocPass</code> uses a standard graph-coloring register allocator algorithm,
+known as the Chaitin-Briggs algorithm.</p>
+<h2><a class="anchor" aria-hidden="true" id="removebuilderspass"></a><a href="#removebuilderspass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>RemoveBuildersPass</h2>
+<p>Remove builder invocations. A trivial builder is one that:</p>
+<ul>
+<li>Doesn't escape the stack (<code>this</code> is never passed to a method not in this
+instance, stored in a field, or returned)</li>
+<li>Has no static methods</li>
+<li>Has no static fields</li>
+</ul>
+<p>Unreferenced builders are left to be removed by RemoveUnreachablePass (RMU).</p>
+<p>See related:</p>
+<ul>
+<li><a href="#removeunreachablepass"><code>RemoveUnreachablePass</code></a></li>
+<li><a href="#resultpropagationpass"><code>ResultPropagationPass</code></a></li>
+</ul>
+<h2><a class="anchor" aria-hidden="true" id="removeemptyclassespass"></a><a href="#removeemptyclassespass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>RemoveEmptyClassesPass</h2>
+<p><code>RemoveEmptyClassesPass</code> removes classes that contain no methods or fields.
+Classes that are referenced by code or annotations are kept.</p>
+<p>See related:</p>
+<ul>
+<li><a href="#staticrelopassv2"><code>StaticReloPassV2</code></a></li>
+</ul>
+<h2><a class="anchor" aria-hidden="true" id="removegotospass"></a><a href="#removegotospass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>RemoveGotosPass</h2>
+<p>Remove unnecessary control flow edges. A merge of blocks <code>B</code> and <code>C</code> is done iff:</p>
+<ul>
+<li><code>B</code> jumps to <code>C</code> unconditionally</li>
+<li>The only [predecessor] of <code>C</code> is <code>B</code></li>
+<li><code>B</code> and <code>C</code> both point to the same catch handler</li>
+</ul>
+<h2><a class="anchor" aria-hidden="true" id="removeinterfacepass"></a><a href="#removeinterfacepass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>RemoveInterfacePass</h2>
+<p>The motivation of this pass is to remove a hierarchy of interfaces extending
+each others. The removal of the interfaces simplifies the type system and
+enables additional type system level optimizations.</p>
+<p>We remove each interface by replacing each invoke-interface site with a
+generated dispatch stub that models the interface call semantic at bytecode
+level. After that we remove the existing references to them from the
+implementors and remove them completely. We start at the leaf level of the
+interface hierarchy. After removing the leaf level, we iteratively apply the
+same transformation to the now newly formed leaf level again and again until all
+interfaces are removed.</p>
+<p>Note that this is a critical pass for optimizing GraphQL generated fragment
+models. Aside from the fragment model classes themselves, the GraphQL tool chain
+also generates a Java interface for each GraphQL fragment namely fragment
+interface. The existence of these interfaces greatly complicates the type system
+of the generated GraphQL fragment models making merging the underlying model
+classes virtually impossible. The other interface removal optimizations like
+<code>SingleImpl</code> and <code>UnreferencedInterfacesPass</code> can address this issue to some
+extend. But they are not able to remove the majority of them.
+<code>RemoveInterfacePass</code> is capable of removing most of the fragment interfaces at
+the expense of producing the above mentioned dispatch stubs. Doing so before
+Class Merging paves the way for maximizing the code size reduction we can achieve
+in Class Merging.</p>
+<h2><a class="anchor" aria-hidden="true" id="removeunreachablepass"></a><a href="#removeunreachablepass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>RemoveUnreachablePass</h2>
+<p>Starting from the roots, recursively mark the other elements that the roots
+reference. Afterwards, it deletes all the unmarked elements. While doing the
+marking, Redex doesn't attempt to figure out which basic blocks get executed in
+each method; doing that for every single method would be too expensive.</p>
+<p>More information about <code>RemoveUnreachablePass</code> is available in this [note on
+Teaching Reachability Analysis about Dependency Injection].</p>
+<p>See related:</p>
+<ul>
+<li><a href="#localdcepass"><code>LocalDcePass</code></a></li>
+</ul>
+<h2><a class="anchor" aria-hidden="true" id="removeunusedfieldspass"></a><a href="#removeunusedfieldspass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>RemoveUnusedFieldsPass</h2>
+<p>It's pretty much in the name. A lot of these unread fields are actually
+<code>javac</code>-generated fields for inner classes. Notably, this turns non-static inner
+classes into static ones where possible.</p>
+<p>This pass occasionally causes issues because the app may have been relying on an
+unread field to stop the GC from deleting an object.</p>
+<h2><a class="anchor" aria-hidden="true" id="removeunusedargspass"></a><a href="#removeunusedargspass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>RemoveUnusedArgsPass</h2>
+<p>Removes unused parameters. Currently only works on non-virtual methods and
+virtual methods that are not part of some overriding inheritance hierarchy.</p>
+<h2><a class="anchor" aria-hidden="true" id="renameclassespassv2"></a><a href="#renameclassespassv2" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>RenameClassesPassV2</h2>
+<p><code>RenameClassesPassV2</code> renames classes to shorter names such as &quot;X.A1c&quot;, saving
+in APK size, obfuscating the code, and ordering classes to optimize performance
+of loading.</p>
+<p><code>RenameClassesPassV2</code> will not rename any class mentioned in resources, nor will
+it rename anything in blocklist either by direct class name or as part of
+an excluded package.</p>
+<p><code>RenameClassesPassV2</code> relies on the <a href="/docs/configuring">app's config file</a>, excluding
+of the class or hierarchy, or use of reflection.</p>
+<p>Logview and bug reports are configured to automatically undo this renaming.</p>
+<p>See related:</p>
+<ul>
+<li><a href="#obfuscatepass"><code>ObfuscatePass</code></a></li>
+</ul>
+<h2><a class="anchor" aria-hidden="true" id="reorderinterfacesdeclpass"></a><a href="#reorderinterfacesdeclpass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>ReorderInterfacesDeclPass</h2>
+<p><code>ReorderInterfacesDeclPass</code> list for each class by how frquently the Interfaces
+are called. The Interface list is searched linearly when an Interface is called,
+so calling an Interface at the list will be faster. An alphabetical sort is used
+for tie-breaks in number of incoming calls to preserve consistency across
+Classes.</p>
+<p>This pass could be improved by checking the number of incoming calls
+dynamically.</p>
+<h2><a class="anchor" aria-hidden="true" id="resultpropagationpass"></a><a href="#resultpropagationpass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>ResultPropagationPass</h2>
+<p>Refactor code, e.g.,</p>
+<pre><code class="hljs css language-java">Text.create(context)
+    .clipToBounds(<span class="hljs-keyword">false</span>)
+    .text(myText)
+</code></pre>
+<p>to be as efficient as the less elegant equivalent version:</p>
+<pre><code class="hljs css language-java">Text.Builder b = Text.create(context);
+b.clipToBounds(<span class="hljs-keyword">false</span>)
+b.text(myText)
+</code></pre>
+<p>See related:</p>
+<ul>
+<li><a href="#removebuilderspass">RemoveBuildersPass</a></li>
+</ul>
+<h2><a class="anchor" aria-hidden="true" id="shortensrcstringspass"></a><a href="#shortensrcstringspass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>ShortenSrcStringsPass</h2>
+<p>Replaces long filename strings with strings used elsewhere in the APK. This
+munges the filename component of stack traces. Logview and bug reports
+automatically reverse this for you.</p>
+<h2><a class="anchor" aria-hidden="true" id="methodinlinepass"></a><a href="#methodinlinepass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>MethodInlinePass</h2>
+<p>For example, in this code, if <code>run</code> is inlined to <code>main</code> and the access of <code>bar</code>
+throws, the stack trace in <code>main</code> will show a <code>NullPointerException</code> at the
+dereference of <code>this</code> instead of a call to <code>run</code>.</p>
+<pre><code class="hljs css language-java"><span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">Foo</span> </span>{
+  <span class="hljs-keyword">private</span> String bar;
+  <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title">run</span><span class="hljs-params">()</span> </span>{
+    System.out.println(bar);
+  }
+}
+
+<span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">Main</span> </span>{
+  <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">void</span> <span class="hljs-title">main</span><span class="hljs-params">(String[] args)</span> </span>{
+    Foo foo = <span class="hljs-keyword">null</span>;
+    foo.run();
+  }
+}
+</code></pre>
+<p><code>MethodInlinePass</code> will not inline a constructor as the Android verifier checks
+for a call to <code>&lt;init&gt;</code> before any access to the object.</p>
+<p><code>MethodInlinePass</code> cannot currently be run after <a href="#interdexpass"><code>InterDexPass</code></a>.</p>
+<p>See related:</p>
+<ul>
+<li><a href="#finalinlinepassv2"><code>FinalInlinePassV2</code></a></li>
+</ul>
+<h2><a class="anchor" aria-hidden="true" id="singleimplpass"></a><a href="#singleimplpass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>SingleImplPass</h2>
+<p>Removes interfaces with only a single implementation. Any classes referring to
+the interface will now refer to the implementation instead. This can cause minor
+confusion in stack traces.</p>
+<h2><a class="anchor" aria-hidden="true" id="staticrelopassv2"></a><a href="#staticrelopassv2" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>StaticReloPassV2</h2>
+<p><code>StaticReloPassV2</code> relocates static fields and methods that only have one
+calling class to that class. It improves the performance and reduces the app
+size.</p>
+<p>Pass ordering dependencies:</p>
+<ul>
+<li><code>StaticReloPassV2</code> should be run before <code>RemoveEmptyClassesPass</code> as it enables
+more classes to be optimized.</li>
+</ul>
+<p>See related:</p>
+<ul>
+<li><a href="#removeemptyclassespass"><code>RemoveEmptyClassesPass</code></a></li>
+<li><a href="#staticrelopass"><code>StaticReloPass</code></a></li>
+</ul>
+<h2><a class="anchor" aria-hidden="true" id="stringconcatenatorpass"></a><a href="#stringconcatenatorpass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>StringConcatenatorPass</h2>
+<p>Reduce string operations as well as reducing the number of strings that need
+to be loaded.</p>
+<p>Here's an example <code>&lt;clinit&gt;</code> method <code>StringConcatenationPass</code> will optimize:</p>
+<pre><code class="hljs css language-java"><span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">final</span> String PREFIX = <span class="hljs-string">"foo"</span>;
+<span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">final</span> String CONCATENATED = PREFIX + <span class="hljs-string">"bar"</span>;
+</code></pre>
+<p>The output code should be equivalent to:</p>
+<pre><code class="hljs css language-java"><span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">final</span> PREFIX = <span class="hljs-string">"foo"</span>;
+<span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">final</span> CONCATENATED = <span class="hljs-string">"foobar"</span>;
+</code></pre>
+<p>This is a targeted optimization that is only performed on static initializers
+with many string concatenations.</p>
+<h2><a class="anchor" aria-hidden="true" id="stripdebuginfopass"></a><a href="#stripdebuginfopass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>StripDebugInfoPass</h2>
+<p><code>StripDebugInfoPass</code> removes debug information for instructions that will
+never throw. As debug positions can correspond to multiple instructions, we need
+to check that none of the instructions will throw. Also, Redex won't strip the
+first piece of debug information in a function to preserve the accuracty of
+sampling profiles and ANR stack traces.</p>
+<p>The <a href="/docs/configuring">app's config file</a> can direct <code>StripDebugInfoPass</code> removals at a
+more granular level:</p>
+<pre><code class="hljs"><span class="hljs-string">"StripDebugInfoPass"</span> : {
+  <span class="hljs-string">"drop_all_dbg_info"</span> : "0",
+  <span class="hljs-string">"drop_local_variables"</span> : "1",
+  <span class="hljs-string">"drop_line_numbers"</span> : "0",
+  <span class="hljs-string">"drop_src_files"</span> : "0",
+  <span class="hljs-string">"use_allowlist"</span> : "0",
+  <span class="hljs-string">"cls_allowlist"</span> : [],
+  <span class="hljs-string">"method_allowlist"</span> : [],
+  <span class="hljs-string">"drop_prologue_end"</span> : "1",
+  <span class="hljs-string">"drop_epilogue_begin"</span> : "1",
+  <span class="hljs-string">"drop_all_dbg_info_if_empty"</span> : "1",
+  <span class="hljs-string">"drop_synth_aggressive"</span> : "0",
+  <span class="hljs-string">"drop_line_numbers_preceeding_safe"</span> : "1"
+},
+</code></pre>
+<p>Pass ordering dependencies:</p>
+<ul>
+<li><code>StripDebugInfoPass</code> should be run early as removal of the debug info should
+make other passes faster.</li>
+<li>Inlining complicates the flow graph for debug info. <code>StripDebugInfoPass</code>
+should be run before any inlining passes, and will not optiimize if inlining
+has been performed.</li>
+</ul>
+<h2><a class="anchor" aria-hidden="true" id="trackresourcespass"></a><a href="#trackresourcespass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>TrackResourcesPass</h2>
+<p>An example config file entry:</p>
+<pre><code class="hljs"><span class="hljs-string">"TrackResourcesPass"</span> : {
+  <span class="hljs-string">"classes_to_track"</span> : [
+    <span class="hljs-string">"Lcom/foo/R<span class="hljs-variable">$drawable</span>;"</span>,
+    <span class="hljs-string">"Lcom/foo/R<span class="hljs-variable">$string</span>;"</span>,
+    <span class="hljs-string">"Lcom/foo/R<span class="hljs-variable">$plurals</span>;"</span>,
+  ],
+  <span class="hljs-string">"tracked_fields_output"</span>: <span class="hljs-string">"coldstart_fields_in_R_classes.txt"</span>
+},
+</code></pre>
+<h2><a class="anchor" aria-hidden="true" id="unreferencedinterfacespass"></a><a href="#unreferencedinterfacespass" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>UnreferencedInterfacesPass</h2>
+<p><code>UnreferencedInterfacesPass</code> removes concrete Interfaces that are not
+referenced anywhere in code except in <code>implements</code> clauses. Interfaces on
+abstract classes are harder to track and are thus considered for optimization.</p>
+</span></div></article></div><div class="docLastUpdate"><em>Last updated on 1/9/2023 by Andreas Gampe</em></div><div class="docs-prevnext"><a class="docs-prev button" href="/docs/configuring"><span class="arrow-prev">← </span><span class="function-name-prevnext">Configuring ReDex</span></a><a class="docs-next button" href="/docs/usage"><span>Usage</span><span class="arrow-next"> →</span></a></div></div></div><nav class="onPageNav"><ul class="toc-headings"><li><a href="#accessmarkingpass">AccessMarkingPass</a></li><li><a href="#annokillpass">AnnoKillPass</a></li><li><a href="#bridgesynthinlinepass">BridgeSynthInlinePass</a></li><li><a href="#checkbreadcrumbspass">CheckBreadcrumbsPass</a></li><li><a href="#classmergingpass">ClassMergingPass</a></li><li><a href="#constantpropagationpass">ConstantPropagationPass</a></li><li><a href="#copypropagationpass">CopyPropagationPass</a></li><li><a href="#dedupblockspass">DedupBlocksPass</a></li><li><a href="#delinitpass">DelInitPass</a></li><li><a href="#delsuperpass">DelSuperPass</a></li><li><a href="#finalinlinepassv2">FinalInlinePassV2</a></li><li><a href="#localdcepass">LocalDcePass</a></li><li><a href="#methoddevirtualizationpass">MethodDevirtualizationPass</a></li><li><a href="#obfuscatepass">ObfuscatePass</a></li><li><a href="#optimizeenumspass">OptimizeEnumsPass</a></li><li><a href="#originalnamepass">OriginalNamePass</a></li><li><a href="#peepholepass">PeepholePass</a></li><li><a href="#rebindrefspass">ReBindRefsPass</a></li><li><a href="#reducegotospass">ReduceGotosPass</a></li><li><a href="#regallocpass">RegAllocPass</a></li><li><a href="#removebuilderspass">RemoveBuildersPass</a></li><li><a href="#removeemptyclassespass">RemoveEmptyClassesPass</a></li><li><a href="#removegotospass">RemoveGotosPass</a></li><li><a href="#removeinterfacepass">RemoveInterfacePass</a></li><li><a href="#removeunreachablepass">RemoveUnreachablePass</a></li><li><a href="#removeunusedfieldspass">RemoveUnusedFieldsPass</a></li><li><a href="#removeunusedargspass">RemoveUnusedArgsPass</a></li><li><a href="#renameclassespassv2">RenameClassesPassV2</a></li><li><a href="#reorderinterfacesdeclpass">ReorderInterfacesDeclPass</a></li><li><a href="#resultpropagationpass">ResultPropagationPass</a></li><li><a href="#shortensrcstringspass">ShortenSrcStringsPass</a></li><li><a href="#methodinlinepass">MethodInlinePass</a></li><li><a href="#singleimplpass">SingleImplPass</a></li><li><a href="#staticrelopassv2">StaticReloPassV2</a></li><li><a href="#stringconcatenatorpass">StringConcatenatorPass</a></li><li><a href="#stripdebuginfopass">StripDebugInfoPass</a></li><li><a href="#trackresourcespass">TrackResourcesPass</a></li><li><a href="#unreferencedinterfacespass">UnreferencedInterfacesPass</a></li></ul></nav></div><footer class="nav-footer" id="footer"><section class="sitemap"><a href="/" class="nav-home"><img src="/img/redex.png" alt="Redex" width="66" height="58"/></a><div class="footerSection"><h5>Docs</h5><a href="
+                /docs/en/installation">Getting Started</a><a href="
+                /docs/en/configuring">Configuring</a><a href="
+                /docs/en/usage">Using</a><a href="
+                /docs/en/faq">FAQ</a></div><div class="footerSection"><h5>Social</h5><div class="social"><a class="github-button" href="https://github.com/facebook/redex" data-count-href="https://github.com/facebook/redex/stargazers" data-show-count="true" data-count-aria-label="# stargazers on GitHub" aria-label="Star this project on GitHub">redex</a></div></div></section><a href="https://opensource.facebook.com/" target="_blank" rel="noreferrer noopener" class="fbOpenSource"><img src="/img/oss_logo.png" alt="Facebook Open Source" width="170" height="45"/></a><section class="copyright"><span>Copyright © 2023 Meta Platforms Inc.</span></section></footer></div><script type="text/javascript" src="https://cdn.jsdelivr.net/docsearch.js/1/docsearch.min.js"></script><script>
+                document.addEventListener('keyup', function(e) {
+                  if (e.target !== document.body) {
+                    return;
+                  }
+                  // keyCode for '/' (slash)
+                  if (e.keyCode === 191) {
+                    const search = document.getElementById('search_input_react');
+                    search && search.focus();
+                  }
+                });
+              </script><script>
+              var search = docsearch({
+                
+                apiKey: '7ef33486bb9b0c17ed9a5dedb0da8e36',
+                indexName: 'fbredex',
+                inputSelector: '#search_input_react'
+              });
+            </script></body></html>

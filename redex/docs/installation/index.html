@@ -1,0 +1,216 @@
+<!DOCTYPE html><html lang="en"><head><meta charSet="utf-8"/><meta http-equiv="X-UA-Compatible" content="IE=edge"/><title>Installation · Redex</title><meta name="viewport" content="width=device-width, initial-scale=1.0"/><meta name="generator" content="Docusaurus"/><meta name="description" content="## Dependencies"/><meta name="docsearch:language" content="en"/><meta property="og:title" content="Installation · Redex"/><meta property="og:type" content="website"/><meta property="og:url" content="https://fbredex.com/"/><meta property="og:description" content="## Dependencies"/><meta property="og:image" content="https://fbredex.com/img/og_image.png"/><meta name="twitter:card" content="summary"/><link rel="shortcut icon" href="/img/favicon.png"/><link rel="stylesheet" href="https://cdn.jsdelivr.net/docsearch.js/1/docsearch.min.css"/><link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/default.min.css"/><script type="text/javascript" src="https://buttons.github.io/buttons.js"></script><script src="/js/scrollSpy.js"></script><link rel="stylesheet" href="/css/main.css"/><script src="/js/codetabs.js"></script></head><body class="sideNavVisible separateOnPageNav"><div class="fixedHeaderContainer"><div class="headerWrapper wrapper"><header><a href="/"><img class="logo" src="/img/redex.png" alt="Redex"/><h2 class="headerTitleWithLogo">Redex</h2></a><div class="navigationWrapper navigationSlider"><nav class="slidingNav"><ul class="nav-site nav-site-internal"><li class="siteNavGroupActive siteNavItemActive"><a href="/docs/installation" target="_self">Docs</a></li><li class="siteNavGroupActive"><a href="/docs/faq" target="_self">FAQ</a></li><li class=""><a href="https://code.facebook.com/posts/1480969635539475/optimizing-android-bytecode-with-redex" target="_self">Birth</a></li><li class="navSearchWrapper reactNavSearchWrapper"><input type="text" id="search_input_react" placeholder="Search" title="Search"/></li></ul></nav></div></header></div></div><div class="navPusher"><div class="docMainWrapper wrapper"><div class="docsNavContainer" id="docsNav"><nav class="toc"><div class="toggleNav"><section class="navWrapper wrapper"><div class="navBreadcrumb wrapper"><div class="navToggle" id="navToggler"><div class="hamburger-menu"><div class="line1"></div><div class="line2"></div><div class="line3"></div></div></div><h2><i>›</i><span>Getting Started</span></h2><div class="tocToggler" id="tocToggler"><i class="icon-toc"></i></div></div><div class="navGroups"><div class="navGroup"><h3 class="navGroupCategoryTitle">Getting Started</h3><ul class=""><li class="navListItem navListItemActive"><a class="navItem" href="/docs/installation">Installation</a></li><li class="navListItem"><a class="navItem" href="/docs/configuring">Configuring ReDex</a></li><li class="navListItem"><a class="navItem" href="/docs/passes">Passes</a></li><li class="navListItem"><a class="navItem" href="/docs/usage">Usage</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle">Examples</h3><ul class=""><li class="navListItem"><a class="navItem" href="/docs/proguard">Using ProGuard Rules with Redex</a></li><li class="navListItem"><a class="navItem" href="/docs/synth">Redex Synth Pass Example</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle">Technical Details</h3><ul class=""><li class="navListItem"><a class="navItem" href="/docs/docker">Docker Container Deployments</a></li><li class="navListItem"><a class="navItem" href="/docs/interdex">Interdex</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle">Help</h3><ul class=""><li class="navListItem"><a class="navItem" href="/docs/faq">FAQ</a></li></ul></div></div></section></div><script>
+            var coll = document.getElementsByClassName('collapsible');
+            var checkActiveCategory = true;
+            for (var i = 0; i < coll.length; i++) {
+              var links = coll[i].nextElementSibling.getElementsByTagName('*');
+              if (checkActiveCategory){
+                for (var j = 0; j < links.length; j++) {
+                  if (links[j].classList.contains('navListItemActive')){
+                    coll[i].nextElementSibling.classList.toggle('hide');
+                    coll[i].childNodes[1].classList.toggle('rotate');
+                    checkActiveCategory = false;
+                    break;
+                  }
+                }
+              }
+
+              coll[i].addEventListener('click', function() {
+                var arrow = this.childNodes[1];
+                arrow.classList.toggle('rotate');
+                var content = this.nextElementSibling;
+                content.classList.toggle('hide');
+              });
+            }
+
+            document.addEventListener('DOMContentLoaded', function() {
+              createToggler('#navToggler', '#docsNav', 'docsSliderActive');
+              createToggler('#tocToggler', 'body', 'tocActive');
+
+              var headings = document.querySelector('.toc-headings');
+              headings && headings.addEventListener('click', function(event) {
+                var el = event.target;
+                while(el !== headings){
+                  if (el.tagName === 'A') {
+                    document.body.classList.remove('tocActive');
+                    break;
+                  } else{
+                    el = el.parentNode;
+                  }
+                }
+              }, false);
+
+              function createToggler(togglerSelector, targetSelector, className) {
+                var toggler = document.querySelector(togglerSelector);
+                var target = document.querySelector(targetSelector);
+
+                if (!toggler) {
+                  return;
+                }
+
+                toggler.onclick = function(event) {
+                  event.preventDefault();
+
+                  target.classList.toggle(className);
+                };
+              }
+            });
+        </script></nav></div><div class="container mainContainer docsContainer"><div class="wrapper"><div class="post"><header class="postHeader"><h1 id="__docusaurus" class="postHeaderTitle">Installation</h1></header><article><div><span><h2><a class="anchor" aria-hidden="true" id="dependencies"></a><a href="#dependencies" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Dependencies</h2>
+<p>We use package managers to resolve third-party library dependencies.</p>
+<h3><a class="anchor" aria-hidden="true" id="macos"></a><a href="#macos" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>macOS</h3>
+<p>You will need Xcode with command line tools installed.  To get the command line tools, use:</p>
+<pre><code class="hljs">xcode-<span class="hljs-keyword">select</span> <span class="hljs-comment">--install</span>
+</code></pre>
+<p>Install dependencies using homebrew:</p>
+<pre><code class="hljs"><span class="hljs-keyword">brew </span><span class="hljs-keyword">install </span>autoconf automake libtool python3
+<span class="hljs-keyword">brew </span><span class="hljs-keyword">install </span><span class="hljs-keyword">boost </span><span class="hljs-keyword">jsoncpp
+</span></code></pre>
+<p>For App Bundle support <code>brew install protobuf</code> is also required.</p>
+<h3><a class="anchor" aria-hidden="true" id="ubuntudebian-64-bit"></a><a href="#ubuntudebian-64-bit" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Ubuntu/Debian (64-bit)</h3>
+<p>Base requirements are automake &amp; libtool, GCC &gt;= 7, Python &gt;= 3.6 and Boost &gt;= 1.71.0, as well as
+development versions of <code>iberty</code>, <code>jemalloc</code>, <code>jsoncpp</code>, <code>lz4</code>, <code>lzma</code>, and <code>zlib</code>. <code>Protobuf</code> &gt;= 3.0 is required if optimizing an App Bundle.</p>
+<h4><a class="anchor" aria-hidden="true" id="ubuntu-1804-debian-10buster"></a><a href="#ubuntu-1804-debian-10buster" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Ubuntu 18.04+, Debian 10(Buster)+</h4>
+<p>The minimum supported Ubuntu version is 18.04. The minimum supported Debian version is 10.</p>
+<p>A <a href="https://github.com/facebook/redex/blob/master/setup_oss_toolchain.sh">convenience script</a>
+will set up the build environment. This may include downloading Python 3.6 and Boost 1.71.0
+on older OS versions.</p>
+<pre><code class="hljs">sudo <span class="hljs-string">./setup_oss_toolchain.sh</span>
+</code></pre>
+<p>After the script, please run <code>sudo ldconfig</code> if it throws an error about loading shared libraries for running protoc.</p>
+<h3><a class="anchor" aria-hidden="true" id="experimental-windows-64-bit-with-msys2"></a><a href="#experimental-windows-64-bit-with-msys2" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Experimental: Windows (64-bit) with MSYS2</h3>
+<p>You need <a href="https://www.msys2.org/#installation">MSYS2</a> to build <code>redex-all</code> (only MingW-w64 is supported) and <a href="https://www.python.org/downloads/windows/">Python 3.6+</a> to run <code>redex.py</code>.</p>
+<p>Install the build requirements in an MSYS or MingW64 shell:</p>
+<pre><code class="hljs">pacman -Syuu &amp;&amp; pacman -Sy make mingw-w<span class="hljs-number">64</span>-<span class="hljs-keyword">x</span><span class="hljs-number">86</span>_<span class="hljs-number">64</span>-boost mingw-w<span class="hljs-number">64</span>-<span class="hljs-keyword">x</span><span class="hljs-number">86</span>_<span class="hljs-number">64</span>-cmake mingw-w<span class="hljs-number">64</span>-<span class="hljs-keyword">x</span><span class="hljs-number">86</span>_<span class="hljs-number">64</span>-gcc mingw-w<span class="hljs-number">64</span>-<span class="hljs-keyword">x</span><span class="hljs-number">86</span>_<span class="hljs-number">64</span>-jsoncpp mingw-w<span class="hljs-number">64</span>-<span class="hljs-keyword">x</span><span class="hljs-number">86</span>_<span class="hljs-number">64</span>-make
+</code></pre>
+<p>If you do not use Git on Windows directly, you may install and use it under MSYS2:</p>
+<pre><code class="hljs"><span class="hljs-attribute">pacman -S git</span>
+</code></pre>
+<h3><a class="anchor" aria-hidden="true" id="experimental-windows-10-64-bit"></a><a href="#experimental-windows-10-64-bit" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Experimental: Windows 10 (64-bit)</h3>
+<p>You need Visual Studio 2017. Visual Studio 2015 is also possible, but a couple of C++ compile errors need to be fixed. We use <a href="https://github.com/Microsoft/vcpkg">vcpkg</a> for dependencies. Install vcpkg from their <a href="https://github.com/Microsoft/vcpkg">document</a>:</p>
+<pre><code class="hljs"><span class="hljs-keyword">cd</span> c:\tools
+git clone https:<span class="hljs-comment">//github.com/Microsoft/vcpkg.git</span>
+<span class="hljs-keyword">cd</span> vcpkg
+.\<span class="hljs-keyword">bootstrap</span>-vcpkg.bat
+.\vcpkg integrate install
+</code></pre>
+<p>Install necessary libraries with <code>x64-windows-static</code>:</p>
+<pre><code class="hljs">.\vcpkg <span class="hljs-keyword">install</span> boost <span class="hljs-comment">--triplet x64-windows-static</span>
+.\vcpkg <span class="hljs-keyword">install</span> zlib <span class="hljs-comment">--triplet x64-windows-static</span>
+.\vcpkg <span class="hljs-keyword">install</span> jsoncpp <span class="hljs-comment">--triplet x64-windows-static</span>
+.\vcpkg <span class="hljs-keyword">install</span> mman <span class="hljs-comment">--triplet x64-windows-static</span>
+</code></pre>
+<h2><a class="anchor" aria-hidden="true" id="download-build-and-install"></a><a href="#download-build-and-install" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Download, Build and Install</h2>
+<p>Get ReDex from GitHub:</p>
+<pre><code class="hljs">git <span class="hljs-keyword">clone</span> <span class="hljs-title">https</span>://github.com/facebook/redex.git
+cd redex
+</code></pre>
+<p>Now, build ReDex using autoconf and make.</p>
+<pre><code class="hljs">autoreconf -ivf &amp;&amp; ./configure &amp;&amp; <span class="hljs-built_in">make</span>
+sudo <span class="hljs-built_in">make</span> install
+</code></pre>
+<p>Alternatively, to enable protobuf to support App Bundles, please use:</p>
+<pre><code class="hljs">autoreconf -ivf &amp;&amp; ./configure --<span class="hljs-keyword">enable</span>-protobuf
+<span class="hljs-built_in">make</span>
+sudo <span class="hljs-built_in">make</span> install
+</code></pre>
+<p>For protobuf installed in the default system (Homebrew) search path (e.g /usr/local/bin), <code>--enable-protobuf</code> is sufficient to trigger the build. Otherwise, specify the protobuf installation path for the autoconf:</p>
+<pre><code class="hljs">autoreconf -ivf
+./configure --<span class="hljs-keyword">with</span>-protoc=/path/<span class="hljs-keyword">to</span>/protoc --<span class="hljs-keyword">with</span>-protolib=/path/<span class="hljs-keyword">to</span>/protobuf_libs --<span class="hljs-keyword">with</span>-protoheader=/path/<span class="hljs-keyword">to</span>/protobuf_headers --enable-protobuf
+make
+sudo make install
+</code></pre>
+<p><em>If your build machine has lots of RAM (on the order of 2-4GB per core), using
+Make parallelism can speed up the build (e.g., <code>make -j4</code>). However, the C++
+compilers are very memory hungry and this needs to be finely tuned on many
+systems.</em></p>
+<h3><a class="anchor" aria-hidden="true" id="experimental-windows-64-bit-with-msys2-1"></a><a href="#experimental-windows-64-bit-with-msys2-1" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Experimental: Windows (64-bit) with MSYS2</h3>
+<p>The MSYS2 build relies on CMake. In a MingW64 shell:</p>
+<pre><code class="hljs"><span class="hljs-comment"># Assumes you want to use Git under MSYS. Else skip to below.</span>
+git clone https:<span class="hljs-string">//github.com/facebook/redex.git</span>
+<span class="hljs-keyword">cd</span> redex
+<span class="hljs-comment"># Assumes you are in the redex directory</span>
+mkdir build-cmake
+<span class="hljs-keyword">cd</span> build-cmake
+cmake -G <span class="hljs-string">"MSYS Makefiles"</span> <span class="hljs-string">..</span>
+make
+</code></pre>
+<p><em>If your build machine has lots of RAM (on the order of 2-4GB per core), using
+Make parallelism can speed up the build (e.g., <code>make -j4</code>). However, the C++
+compilers are very memory hungry and this needs to be finely tuned on many
+systems.</em></p>
+<p>You may check whether the produced binary seems in a working condition:</p>
+<pre><code class="hljs"><span class="hljs-comment"># In the MingW64 shell:</span>
+./redex-<span class="hljs-literal">all</span>.exe --<span class="hljs-literal">show</span>-passes
+<span class="hljs-comment"># Or in a standard Windows command prompt in the same directory</span>
+redex-<span class="hljs-literal">all</span>.exe --<span class="hljs-literal">show</span>-passes
+</code></pre>
+<p>The output should show a large number of included passes, at the time of writing 81.</p>
+<p>Bundling the <code>redex-all</code> binary with the python scripts is not supported on Windows. Manually copy the binary into the same directory as <code>redex.py</code> and use <code>redex.py</code> that way, or ensure that <code>redex.py</code> is called with the <code>--redex-binary</code> parameter:</p>
+<pre><code class="hljs"><span class="hljs-selector-tag">python</span> <span class="hljs-selector-tag">redex</span><span class="hljs-selector-class">.py</span> <span class="hljs-selector-tag">--redex-binary</span> <span class="hljs-selector-tag">PATH_TO_BINARY</span> <span class="hljs-selector-attr">[...]</span>
+</code></pre>
+<h3><a class="anchor" aria-hidden="true" id="experimental-cmake-for-mac-linux-and-windows"></a><a href="#experimental-cmake-for-mac-linux-and-windows" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Experimental: CMake for Mac, Linux, and Windows</h3>
+<p>Alternatively, build using CMake. Note that the current <code>CMakeLists.txt</code> only implements a rule for <code>redex-all</code> binary. We will support installation and testing soon.</p>
+<p>Generate build files. By default, it uses Makefile:</p>
+<pre><code class="hljs"><span class="hljs-comment"># Assume you are in redex directory</span>
+<span class="hljs-attr">mkdir</span> <span class="hljs-string">build-cmake</span>
+<span class="hljs-attr">cd</span> <span class="hljs-string">build-cmake</span>
+<span class="hljs-comment"># .. is the root source directory of Redex</span>
+<span class="hljs-attr">cmake</span> <span class="hljs-string">..</span>
+</code></pre>
+<p>If you prefer the ninja build system:</p>
+<pre><code class="hljs"><span class="hljs-function"><span class="hljs-title">cmake</span></span> .. -G Ninja
+</code></pre>
+<p>On Windows, first, get <code>CMAKE_TOOLCHAIN_FILE</code> from the output of <code>&quot;vcpkg integrate install&quot;</code>, and then:</p>
+<pre><code class="hljs">cmake <span class="hljs-built_in">..</span> -G <span class="hljs-string">"Visual Studio 15 2017 Win64"</span>
+ <span class="hljs-attribute">-DVCPKG_TARGET_TRIPLET</span>=x64-windows-static
+ <span class="hljs-attribute">-DCMAKE_TOOLCHAIN_FILE</span>=<span class="hljs-string">"C:/tools/vcpkg/scripts/buildsystems/vcpkg.cmake"</span>
+</code></pre>
+<p>Build <code>redex-all</code>:</p>
+<pre><code class="hljs">cmake <span class="hljs-comment">--build .</span>
+</code></pre>
+<p>On Windows, you may build from Visual Studio. <code>Redex.sln</code> has been generated.</p>
+<p>You should see a <code>redex-all</code> executable, and the executable should show about 45 passes.</p>
+<pre><code class="hljs">./redex-<span class="hljs-keyword">all</span> <span class="hljs-comment">--show-passes</span>
+</code></pre>
+<h2><a class="anchor" aria-hidden="true" id="test"></a><a href="#test" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Test</h2>
+<p>Optionally, you can run our unit test suite.  We use gtest, which is automatically
+downloaded when testing (or by invoking a setup script directly).</p>
+<p>Note: Testing is currently not supported for CMake-based builds.</p>
+<h3><a class="anchor" aria-hidden="true" id="dependencies-1"></a><a href="#dependencies-1" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Dependencies</h3>
+<p>Some ReDex tests require a Java environment and Android compiler tooling. If a JDK and the
+Android SDK are available on the machine, ensure that <code>javac</code> and <code>dx</code> are available on
+the <code>PATH</code>. Otherwise, install those dependencies.</p>
+<p>For Ubuntu/Debian, this may for example be done with</p>
+<pre><code class="hljs">sudo apt-get <span class="hljs-keyword">install</span> -y <span class="hljs-comment">--no-install-recommends dalvik-exchange openjdk-8-jdk-headless</span>
+sudo <span class="hljs-keyword">ln</span> -s /usr/<span class="hljs-keyword">bin</span>/dalvik-<span class="hljs-keyword">exchange</span> /usr/<span class="hljs-keyword">local</span>/<span class="hljs-keyword">bin</span>/dx
+</code></pre>
+<h3><a class="anchor" aria-hidden="true" id="execute"></a><a href="#execute" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Execute</h3>
+<p>Run tests with</p>
+<pre><code class="hljs">make -j<span class="hljs-built_in"> check
+</span></code></pre>
+<p><em>If your build machine has lots of RAM (on the order of 2-4GB per core), using
+Make parallelism can speed up the build and testing (e.g., <code>make -j4</code>). However,
+the C++ compilers are very memory hungry and this needs to be finely tuned on
+many systems.</em></p>
+</span></div></article></div><div class="docLastUpdate"><em>Last updated on 1/9/2023 by Andreas Gampe</em></div><div class="docs-prevnext"><a class="docs-next button" href="/docs/configuring"><span class="function-name-prevnext">Configuring ReDex</span><span class="arrow-next"> →</span></a></div></div></div><nav class="onPageNav"><ul class="toc-headings"><li><a href="#dependencies">Dependencies</a><ul class="toc-headings"><li><a href="#macos">macOS</a></li><li><a href="#ubuntudebian-64-bit">Ubuntu/Debian (64-bit)</a></li><li><a href="#experimental-windows-64-bit-with-msys2">Experimental: Windows (64-bit) with MSYS2</a></li><li><a href="#experimental-windows-10-64-bit">Experimental: Windows 10 (64-bit)</a></li></ul></li><li><a href="#download-build-and-install">Download, Build and Install</a><ul class="toc-headings"><li><a href="#experimental-windows-64-bit-with-msys2-1">Experimental: Windows (64-bit) with MSYS2</a></li><li><a href="#experimental-cmake-for-mac-linux-and-windows">Experimental: CMake for Mac, Linux, and Windows</a></li></ul></li><li><a href="#test">Test</a><ul class="toc-headings"><li><a href="#dependencies-1">Dependencies</a></li><li><a href="#execute">Execute</a></li></ul></li></ul></nav></div><footer class="nav-footer" id="footer"><section class="sitemap"><a href="/" class="nav-home"><img src="/img/redex.png" alt="Redex" width="66" height="58"/></a><div class="footerSection"><h5>Docs</h5><a href="
+                /docs/en/installation">Getting Started</a><a href="
+                /docs/en/configuring">Configuring</a><a href="
+                /docs/en/usage">Using</a><a href="
+                /docs/en/faq">FAQ</a></div><div class="footerSection"><h5>Social</h5><div class="social"><a class="github-button" href="https://github.com/facebook/redex" data-count-href="https://github.com/facebook/redex/stargazers" data-show-count="true" data-count-aria-label="# stargazers on GitHub" aria-label="Star this project on GitHub">redex</a></div></div></section><a href="https://opensource.facebook.com/" target="_blank" rel="noreferrer noopener" class="fbOpenSource"><img src="/img/oss_logo.png" alt="Facebook Open Source" width="170" height="45"/></a><section class="copyright"><span>Copyright © 2023 Meta Platforms Inc.</span></section></footer></div><script type="text/javascript" src="https://cdn.jsdelivr.net/docsearch.js/1/docsearch.min.js"></script><script>
+                document.addEventListener('keyup', function(e) {
+                  if (e.target !== document.body) {
+                    return;
+                  }
+                  // keyCode for '/' (slash)
+                  if (e.keyCode === 191) {
+                    const search = document.getElementById('search_input_react');
+                    search && search.focus();
+                  }
+                });
+              </script><script>
+              var search = docsearch({
+                
+                apiKey: '7ef33486bb9b0c17ed9a5dedb0da8e36',
+                indexName: 'fbredex',
+                inputSelector: '#search_input_react'
+              });
+            </script></body></html>
