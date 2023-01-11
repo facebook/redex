@@ -393,7 +393,6 @@ libopt_la_SOURCES = \
 	opt/singleimpl/SingleImplAnalyze.cpp \
 	opt/singleimpl/SingleImplOptimize.cpp \
 	opt/singleimpl/SingleImplStats.cpp \
-	opt/simplify_cfg/SimplifyCFG.cpp \
 	opt/split_huge_switches/SplitHugeSwitchPass.cpp \
 	opt/split_resource_tables/SplitResourceTables.cpp \
 	opt/object-escape-analysis/ExpandableMethodParams.cpp \
