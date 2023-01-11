@@ -370,7 +370,6 @@ libopt_la_SOURCES = \
 	opt/remove-nullcheck-string-arg/RemoveNullcheckStringArg.cpp \
 	opt/remove-unused-fields/RemoveUnusedFields.cpp \
 	opt/remove_empty_classes/RemoveEmptyClasses.cpp \
-	opt/remove_gotos/RemoveGotos.cpp \
 	opt/remove-unused-args/RemoveUnusedArgs.cpp \
 	opt/renameclasses/RenameClassesV2.cpp \
 	opt/reorder-interfaces-decl/ReorderInterfacesDecl.cpp \

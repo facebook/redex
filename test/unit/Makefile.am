@@ -108,7 +108,6 @@ check_PROGRAMS = \
     reg_alloc_test \
     registers_test \
     remove_apilevel_checks_test \
-    remove_gotos_test \
     remove_null_check_string_arg_test \
     remove_recursive_locks_test \
     remove_redundant_check_casts_test \
@@ -363,8 +362,6 @@ registers_test_SOURCES = RegistersTest.cpp OpcodeList.cpp
 remove_apilevel_checks_test_SOURCES = RemoveApiLevelChecksTest.cpp
 remove_apilevel_checks_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
-remove_gotos_test_SOURCES = RemoveGotosTest.cpp VirtScopeHelper.cpp ScopeHelper.cpp
-
 remove_null_check_string_arg_test_SOURCES = RemoveNullCheckStringArgTest.cpp ScopeHelper.cpp
 
 remove_recursive_locks_test_SOURCES = RemoveRecursiveLocksTest.cpp
@@ -542,7 +539,6 @@ TESTS = \
     reg_alloc_test \
     registers_test \
     remove_apilevel_checks_test \
-    remove_gotos_test \
     remove_null_check_string_arg_test \
     remove_recursive_locks_test \
     remove_redundant_check_casts_test \

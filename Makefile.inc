@@ -64,7 +64,6 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/opt/remove-apilevel-checks \
 	-I$(top_srcdir)/opt/remove-builders \
 	-I$(top_srcdir)/opt/remove_empty_classes \
-	-I$(top_srcdir)/opt/remove_gotos \
 	-I$(top_srcdir)/opt/remove-interfaces \
 	-I$(top_srcdir)/opt/remove-nullcheck-string-arg \
 	-I$(top_srcdir)/opt/remove-recursive-locks \
