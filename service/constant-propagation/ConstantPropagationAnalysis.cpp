@@ -1343,13 +1343,13 @@ static SignedConstantDomain refine_ne_left(const SignedConstantDomain& left,
       if (*c >= left.max_element_int()) {
         return SignedConstantDomain::bottom();
       }
-      return SignedConstantDomain(*c + 1, left.max_element_int());
+      return left.meet(SignedConstantDomain(*c + 1, left.max_element_int()));
     }
     if (*c == left.max_element_int()) {
       if (*c <= left.min_element_int()) {
         return SignedConstantDomain::bottom();
       }
-      return SignedConstantDomain(left.min_element_int(), *c - 1);
+      return left.meet(SignedConstantDomain(left.min_element_int(), *c - 1));
     }
   }
   return left;
