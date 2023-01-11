@@ -28,8 +28,6 @@ bool is_canary(DexClass* clazz);
 
 DexClass* create_canary(int dexnum, const DexString* store_name = nullptr);
 
-bool compare_dexclasses_for_compressed_size(DexClass* c1, DexClass* c2);
-
 class InterDex {
  private:
   struct EmittingState {
@@ -57,7 +55,6 @@ class InterDex {
            const ReserveRefsInfo& reserve_refs,
            const XStoreRefs* xstore_refs,
            int min_sdk,
-           bool sort_remaining_classes,
            std::vector<std::string> methods_for_canary_clinit_reference,
            const init_classes::InitClassesWithSideEffects&
                init_classes_with_side_effects,
@@ -82,7 +79,6 @@ class InterDex {
         m_original_scope(original_scope),
         m_scope(build_class_scope(m_dexen)),
         m_xstore_refs(xstore_refs),
-        m_sort_remaining_classes(sort_remaining_classes),
         m_methods_for_canary_clinit_reference(
             std::move(methods_for_canary_clinit_reference)),
         m_transitively_close_interdex_order(transitively_close_interdex_order),
@@ -230,7 +226,6 @@ class InterDex {
   Scope m_scope;
   std::vector<DexType*> m_interdex_types;
   const XStoreRefs* m_xstore_refs;
-  bool m_sort_remaining_classes;
   size_t m_current_classes_when_emitting_remaining{0};
   std::vector<std::string> m_methods_for_canary_clinit_reference;
 

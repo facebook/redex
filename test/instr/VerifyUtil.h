@@ -42,6 +42,10 @@ struct PostVerify : public RedexTest {
                                         "post")) {}
 };
 
+// \returns -1 if no class with \name is found. Otherwise, \returns the the
+// class's idx in \classes list.
+int find_class_idx(const DexClasses& classes, const char* name);
+
 DexClass* find_class_named(const DexClasses& classes, const char* name);
 DexField* find_ifield_named(const DexClass& cls, const char* name);
 DexField* find_sfield_named(const DexClass& cls, const char* name);

@@ -23,6 +23,15 @@
 #include "VerifyUtil.h"
 #include "Walkers.h"
 
+int find_class_idx(const DexClasses& classes, const char* name) {
+  for (size_t i = 0; i < classes.size(); ++i) {
+    if (!strcmp(name, classes[i]->get_name()->c_str())) {
+      return i;
+    }
+  }
+  return -1;
+}
+
 DexClass* find_class_named(const DexClasses& classes, const char* name) {
   auto it =
       std::find_if(classes.begin(), classes.end(), [&name](DexClass* cls) {

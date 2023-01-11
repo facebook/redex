@@ -135,6 +135,7 @@ class DexType;
   TM(SDIS)              \
   TM(SHORTEN)           \
   TM(SPLIT_RES)         \
+  TM(SRC_PASS)          \
   TM(STATIC_RELO)       \
   TM(STATS)             \
   TM(STRBUILD)          \

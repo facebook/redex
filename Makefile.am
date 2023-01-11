@@ -326,6 +326,7 @@ libopt_la_SOURCES = \
 	opt/interdex/DexStructure.cpp \
 	opt/interdex/InterDex.cpp \
 	opt/interdex/InterDexPass.cpp \
+	opt/interdex/SortRemainingClassesPass.cpp \
 	opt/kotlin-lambda/RewriteKotlinSingletonInstance.cpp \
 	opt/kotlin-lambda/KotlinObjectInliner.cpp \
 	opt/layout-reachability/LayoutReachabilityPass.cpp \
