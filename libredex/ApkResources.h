@@ -45,6 +45,34 @@ namespace apk {
 std::string get_string_from_pool(const android::ResStringPool& pool,
                                  size_t idx);
 
+class XmlValueCollector : public arsc::XmlFileVisitor {
+ public:
+  ~XmlValueCollector() override {}
+
+  bool visit_attribute_ids(uint32_t* id, size_t count) override {
+    for (size_t i = 0; i < count; i++) {
+      auto res_id = id[i];
+      if (res_id > PACKAGE_RESID_START) {
+        m_ids.emplace(res_id);
+      }
+    }
+    return true;
+  }
+
+  bool visit_typed_data(android::Res_value* value) override {
+    auto data_type = value->dataType;
+    auto res_id = dtohl(value->data);
+    if (res_id > PACKAGE_RESID_START &&
+        (data_type == android::Res_value::TYPE_REFERENCE ||
+         data_type == android::Res_value::TYPE_ATTRIBUTE)) {
+      m_ids.emplace(res_id);
+    }
+    return true;
+  }
+
+  std::unordered_set<uint32_t> m_ids;
+};
+
 class XmlFileEditor : public arsc::XmlFileVisitor {
  public:
   ~XmlFileEditor() override {}
