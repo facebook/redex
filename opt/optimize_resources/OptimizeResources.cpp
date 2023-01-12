@@ -705,8 +705,7 @@ void OptimizeResourcesPass::run_pass(DexStoresVector& stores,
   std::unordered_set<uint32_t> external_id_roots;
   const auto& xml_files = resources->find_all_xml_files();
   for (const std::string& path : xml_files) {
-    if (path.find("AndroidManifest.xml") == std::string::npos &&
-        path.find("/res/anim/") == std::string::npos) {
+    if (path.find("AndroidManifest.xml") == std::string::npos) {
       continue;
     }
     explored_xml_files.emplace(path);
