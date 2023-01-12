@@ -362,10 +362,13 @@ class Impl {
         if (!try_plan_move(move)) {
           continue;
         }
+        if (traceEnabled(IDEXR, 5)) {
+          print_stats();
+        }
         move_gains.moved_class(move);
       }
       total_moves += move_gains.moves_this_epoch();
-      TRACE(IDEX, 2, "executed %zu moves in epoch %zu",
+      TRACE(IDEXR, 2, "executed %zu moves in epoch %zu",
             move_gains.moves_this_epoch(), batches);
       if (move_gains.should_stop()) {
         break;
@@ -376,7 +379,7 @@ class Impl {
     m_mgr.incr_metric("total_moves", total_moves);
     m_mgr.incr_metric("batches", batches);
     m_mgr.incr_metric("first_dex_index", m_first_dex_index);
-    TRACE(IDEX, 1, "executed %zu moves in %zu batches", total_moves, batches);
+    TRACE(IDEXR, 1, "executed %zu moves in %zu batches", total_moves, batches);
   }
 
   void apply_plan() {
@@ -386,13 +389,30 @@ class Impl {
           auto& dex = m_dexen.at(dex_idx);
           const auto& mutable_dex = m_mutable_dexen.at(dex_idx);
           auto classes = mutable_dex.get_classes();
-          TRACE(IDEX, 2, "dex %zu: %zu => %zu classes", dex_idx, dex.size(),
+          TRACE(IDEXR, 2, "dex %zu: %zu => %zu classes", dex_idx, dex.size(),
                 classes.size());
           dex = std::move(classes);
         });
   }
 
  private:
+  void print_stats() {
+    size_t n_classes = 0;
+    size_t n_mrefs = 0;
+    size_t n_frefs = 0;
+    for (size_t idx = 0; idx < m_mutable_dexen.size(); ++idx) {
+      auto& mutable_dex = m_mutable_dexen.at(idx);
+      n_classes += mutable_dex.get_num_classes();
+      n_mrefs += mutable_dex.get_num_mrefs();
+      n_frefs += mutable_dex.get_num_frefs();
+    }
+
+    TRACE(IDEXR, 5, "Global stats:");
+    TRACE(IDEXR, 5, "\t %zu classes", n_classes);
+    TRACE(IDEXR, 5, "\t %zu mrefs", n_mrefs);
+    TRACE(IDEXR, 5, "\t %zu frefs", n_frefs);
+  }
+
   bool try_plan_move(const Move& move) {
     auto& target_dex = m_mutable_dexen.at(move.target_dex_index);
     always_assert(m_class_refs.count(move.cls));
@@ -457,7 +477,7 @@ void InterDexReshufflePass::run_pass(DexStoresVector& stores,
   if (!interdex_pass->minimize_cross_dex_refs()) {
     mgr.incr_metric("no minimize_cross_dex_refs", 1);
     TRACE(
-        IDEX, 1,
+        IDEXR, 1,
         "InterDexReshufflePass not run because InterDexPass is not configured "
         "for minimize_cross_dex_refs.");
     return;

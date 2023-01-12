@@ -126,6 +126,12 @@ also reject some legal cases.
     return it == m_frefs.end() ? 0 : it->second;
   }
 
+  size_t get_num_classes() const { return m_classes.size(); }
+
+  size_t get_num_mrefs() const { return m_mrefs.size(); }
+
+  size_t get_num_frefs() const { return m_frefs.size(); }
+
  private:
   size_t m_linear_alloc_size;
   std::unordered_map<DexType*, size_t> m_trefs;
