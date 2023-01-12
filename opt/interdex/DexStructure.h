@@ -17,6 +17,8 @@
 
 namespace interdex {
 
+unsigned estimate_linear_alloc(const DexClass* clazz);
+
 struct ReserveRefsInfo {
   size_t frefs;
   size_t trefs;
@@ -46,13 +48,11 @@ class DexStructure {
  public:
   DexStructure() : m_linear_alloc_size(0) {}
 
-  const DexClasses& get_all_classes() const { return m_classes; }
+  bool empty() const { return m_classes_iterators.empty(); }
 
-  /**
-   * Only call this if you know what you are doing. This will leave the
-   * current instance is in an unusable state.
-   */
-  DexClasses take_all_classes() { return std::move(m_classes); }
+  DexClasses get_classes() const {
+    return std::vector(m_classes.begin(), m_classes.end());
+  }
 
   /**
    * Tries to add the specified class. Returns false if it doesn't fit.
@@ -82,6 +82,21 @@ class DexStructure {
                           const interdex::TypeRefs& pending_init_class_fields,
                           const interdex::TypeRefs& pending_init_class_types);
 
+  /* Remove \p clazz from current dex, and update the refs.
+This implementation is conservative, in that it leave behind the counters in a
+way that would allow detecting any later illegal addition of classes, but may
+also reject some legal cases.
+   */
+  void remove_class(const init_classes::InitClassesWithSideEffects*
+                        init_classes_with_side_effects,
+                    const MethodRefs& clazz_mrefs,
+                    const FieldRefs& clazz_frefs,
+                    const TypeRefs& clazz_trefs,
+                    const interdex::TypeRefs& pending_init_class_fields,
+                    const interdex::TypeRefs& pending_init_class_types,
+                    unsigned laclazz,
+                    DexClass* clazz);
+
   void resolve_init_classes(const init_classes::InitClassesWithSideEffects*
                                 init_classes_with_side_effects,
                             const interdex::FieldRefs& frefs,
@@ -94,21 +109,38 @@ class DexStructure {
 
   void check_refs_count();
 
+  size_t size() const { return m_classes_iterators.size(); }
+
+  size_t get_tref_occurrences(DexType* type) const {
+    auto it = m_trefs.find(type);
+    return it == m_trefs.end() ? 0 : it->second;
+  }
+
+  size_t get_mref_occurrences(DexMethodRef* method) const {
+    auto it = m_mrefs.find(method);
+    return it == m_mrefs.end() ? 0 : it->second;
+  }
+
+  size_t get_fref_occurrences(DexFieldRef* field) const {
+    auto it = m_frefs.find(field);
+    return it == m_frefs.end() ? 0 : it->second;
+  }
+
  private:
   size_t m_linear_alloc_size;
-  TypeRefs m_trefs;
-  MethodRefs m_mrefs;
-  FieldRefs m_frefs;
+  std::unordered_map<DexType*, size_t> m_trefs;
+  std::unordered_map<DexMethodRef*, size_t> m_mrefs;
+  std::unordered_map<DexFieldRef*, size_t> m_frefs;
   interdex::TypeRefs m_pending_init_class_fields;
   interdex::TypeRefs m_pending_init_class_types;
-  std::vector<DexClass*> m_classes;
+  std::list<DexClass*> m_classes;
+  std::unordered_map<DexClass*, std::list<DexClass*>::iterator>
+      m_classes_iterators;
 };
 
 class DexesStructure {
  public:
-  const DexClasses& get_current_dex_classes() const {
-    return m_current_dex.get_all_classes();
-  }
+  const DexStructure& get_current_dex() const { return m_current_dex; }
 
   bool current_dex_has_tref(DexType* type) const {
     return m_current_dex.has_tref(type);
@@ -186,8 +218,8 @@ class DexesStructure {
                            const TypeRefs& clazz_itrefs,
                            DexClass* clazz);
   void add_class_no_checks(DexClass* clazz) {
-    add_class_no_checks(
-        MethodRefs(), FieldRefs(), TypeRefs(), TypeRefs(), clazz);
+    add_class_no_checks(MethodRefs(), FieldRefs(), TypeRefs(), TypeRefs(),
+                        clazz);
   }
   void add_refs_no_checks(const MethodRefs& clazz_mrefs,
                           const FieldRefs& clazz_frefs,
