@@ -1063,39 +1063,13 @@ boost::optional<std::string> ApkResources::get_manifest_package_name() {
 
 std::unordered_set<uint32_t> ApkResources::get_xml_reference_attributes(
     const std::string& filename) {
-  std::unordered_set<uint32_t> result;
   if (is_raw_resource(filename)) {
-    return result;
+    return {};
   }
   auto file = RedexMappedFile::open(filename);
-  android::ResXMLTree parser;
-  parser.setTo(file.const_data(), file.size());
-  if (parser.getError() != android::NO_ERROR) {
-    throw std::runtime_error("Unable to read file: " + filename);
-  }
-
-  android::ResXMLParser::event_code_t type;
-  do {
-    type = parser.next();
-    if (type == android::ResXMLParser::START_TAG) {
-      const size_t attr_count = parser.getAttributeCount();
-      for (size_t i = 0; i < attr_count; ++i) {
-        if (parser.getAttributeDataType(i) ==
-                android::Res_value::TYPE_REFERENCE ||
-            parser.getAttributeDataType(i) ==
-                android::Res_value::TYPE_ATTRIBUTE) {
-          android::Res_value outValue;
-          parser.getAttributeValue(i, &outValue);
-          if (outValue.data > PACKAGE_RESID_START) {
-            result.emplace(outValue.data);
-          }
-        }
-      }
-    }
-  } while (type != android::ResXMLParser::BAD_DOCUMENT &&
-           type != android::ResXMLParser::END_DOCUMENT);
-
-  return result;
+  apk::XmlValueCollector collector;
+  collector.visit((void*)file.const_data(), file.size());
+  return collector.m_ids;
 }
 
 namespace {
