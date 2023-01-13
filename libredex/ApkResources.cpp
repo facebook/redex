@@ -2178,8 +2178,9 @@ size_t ResourcesArscFile::serialize() {
         table_parser.m_package_type_string_headers.at(package);
     android::ResStringPool type_strings(
         type_strings_header, dtohl(type_strings_header->header.size));
-    auto type_strings_builder =
-        std::make_shared<arsc::ResStringPoolBuilder>(POOL_FLAGS(&type_strings));
+    auto type_strings_builder = std::make_shared<arsc::ResStringPoolBuilder>(
+        m_added_types.empty() ? POOL_FLAGS(&type_strings)
+                              : POOL_FLAGS_CLEAR_SORT(&type_strings));
     rebuild_type_strings(package_id, type_strings, m_added_types,
                          type_strings_builder.get());
     package_builder->set_type_strings(type_strings_builder);
