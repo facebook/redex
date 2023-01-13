@@ -436,6 +436,9 @@ class ObjectWithImmutAttrDomain final
   }
 
   bool leq(const ObjectWithImmutAttrDomain& other) const override {
+    if (is_bottom()) {
+      return true;
+    }
     if (is_top()) {
       return other.is_top();
     }
