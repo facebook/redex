@@ -288,6 +288,16 @@ struct ObjectWithImmutAttr {
         jvm_cached_singleton && other.jvm_cached_singleton && is_all_constant;
   }
 
+  void meet_with(const ObjectWithImmutAttr& other) {
+    redex_assert(type == other.type);
+    for (size_t idx = 0; idx < attributes.size(); idx++) {
+      auto& attr1 = attributes[idx];
+      const auto& attr2 = other.attributes[idx];
+      attr1.value.meet_with(attr2.value);
+    }
+    jvm_cached_singleton &= other.jvm_cached_singleton;
+  }
+
   bool operator==(const ObjectWithImmutAttr& other) const {
     if (jvm_cached_singleton != other.jvm_cached_singleton ||
         type != other.type || attributes.size() != other.attributes.size()) {
@@ -491,6 +501,17 @@ class ObjectWithImmutAttrDomain final
     } else if (equality == TriState::False) {
       set_to_bottom();
     } else {
+      always_assert(equality == TriState::Unknown);
+      if (m_value->same_attrs(*other.m_value)) {
+        m_value->meet_with(*other.m_value);
+        for (auto& attr : m_value->attributes) {
+          if (attr.value.is_bottom()) {
+            set_to_bottom();
+            return;
+          }
+        }
+        return;
+      }
       set_to_top();
     }
   }

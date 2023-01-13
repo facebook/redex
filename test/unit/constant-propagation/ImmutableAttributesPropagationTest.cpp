@@ -153,25 +153,26 @@ struct ImmutableTest : public ConstantPropagationTest {
 TEST_F(ImmutableTest, abstract_domain) {
   // meet
   {
-    // Integer{100} meet Integer{100} => top
-    auto integer_100 = create_integer_abstract_value(100, false);
-    auto integer_100_2 = create_integer_abstract_value(100, false);
-    integer_100.meet_with(integer_100_2);
-    EXPECT_TRUE(integer_100.is_top());
+    // Integer{100} meet Integer{100} => Integer{100}
+    auto i100 = create_integer_abstract_value(100, false);
+    auto x = i100;
+    x.meet_with(i100);
+    EXPECT_TRUE(x.equals(i100));
   }
   {
-    // Integer{100} meet CachedInteger{100} => top
-    auto integer_100 = create_integer_abstract_value(100, false);
-    auto cached_integer_100 = create_integer_abstract_value(100, true);
-    cached_integer_100.meet_with(integer_100);
-    EXPECT_TRUE(cached_integer_100.is_top());
+    // Integer{100} meet CachedInteger{100} => Integer{100}
+    auto i100 = create_integer_abstract_value(100, false);
+    auto ci100 = create_integer_abstract_value(100, true);
+    auto x = ci100;
+    x.meet_with(i100);
+    EXPECT_TRUE(x.equals(i100));
   }
   {
     // CachedInteger{100} meet CachedInteger{100} => CachedInteger{100}
-    auto cached_integer_100 = create_integer_abstract_value(100, true);
-    auto cached_integer_100_2 = create_integer_abstract_value(100, true);
-    cached_integer_100.meet_with(cached_integer_100_2);
-    EXPECT_TRUE(cached_integer_100.is_value());
+    auto ci100 = create_integer_abstract_value(100, true);
+    auto x = ci100;
+    x.meet_with(ci100);
+    EXPECT_TRUE(x.equals(ci100));
   }
   {
     // Integer{200} meet CatchedInteger{100} => bottom
