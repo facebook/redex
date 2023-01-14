@@ -23,6 +23,13 @@ constexpr bool debug =
 
 extern bool slow_invariants_debug;
 
+namespace redex_debug {
+
+void set_exc_type_as_abort(RedexError type);
+void disable_stack_trace_for_exc_type(RedexError type);
+
+} // namespace redex_debug
+
 #ifdef _MSC_VER
 #define DEBUG_ONLY
 

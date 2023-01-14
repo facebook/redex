@@ -73,6 +73,22 @@ std::atomic<size_t> g_crashing{0};
 
 }; // namespace
 
+namespace redex_debug {
+
+namespace {
+
+std::array<bool, RedexError::MAX + 1> abort_for_type{};
+std::array<bool, RedexError::MAX + 1> no_stacktrace_for_type{};
+
+} // namespace
+
+void set_exc_type_as_abort(RedexError type) { abort_for_type[type] = true; }
+void disable_stack_trace_for_exc_type(RedexError type) {
+  no_stacktrace_for_type[type] = true;
+}
+
+} // namespace redex_debug
+
 void crash_backtrace_handler(int sig) {
   size_t crashing = g_crashing.fetch_add(1);
   if (crashing == 0) {
@@ -220,12 +236,22 @@ void assert_fail(const char* expr,
     }
   }
 
+  if (redex_debug::abort_for_type[type]) {
+    // Pretend a termination for `redex.py`.
+    std::cerr << "terminate called after assertion" << std::endl;
+    std::cerr << "  what():  RedexError: " << type << " " << msg << std::endl;
+    if (!redex_debug::no_stacktrace_for_type[type]) {
+      CRASH_BACKTRACE();
+    }
+    _exit(-6);
+  }
+
 #ifdef __linux__
   // Asked to abort if not the set thread. Print message and exit.
   if (g_abort_if_not_tid != 0 && g_abort_if_not_tid != cur) {
     // Pretend a termination for `redex.py`.
     std::cerr << "terminate called after assertion" << std::endl;
-    std::cerr << "  what():  " << msg << std::endl;
+    std::cerr << "  what():  RedexError: " << type << " " << msg << std::endl;
     abort();
   }
 #endif
