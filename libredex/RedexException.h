@@ -25,6 +25,7 @@ enum RedexError {
   UNSATISFIED_ANALYSIS_PASS = 7,
   REJECTED_CODING_PATTERN = 8,
   INVALID_BETAMAP = 9,
+  MAX = 9,
 };
 
 class RedexException : public std::exception {

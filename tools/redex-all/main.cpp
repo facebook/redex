@@ -1343,6 +1343,12 @@ int main(int argc, char* argv[]) {
   // For better stacks in abort dumps.
   set_abort_if_not_this_thread();
 
+  // For Breadcrumbs issues, do not throw, do not print stack trace. Improves
+  // error readability.
+  redex_debug::set_exc_type_as_abort(RedexError::REJECTED_CODING_PATTERN);
+  redex_debug::disable_stack_trace_for_exc_type(
+      RedexError::REJECTED_CODING_PATTERN);
+
   auto maybe_global_profile =
       ScopedCommandProfiling::maybe_from_env("GLOBAL_", "global");
 
