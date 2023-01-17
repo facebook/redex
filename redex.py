@@ -1251,7 +1251,10 @@ def _init_logging(level_str: str) -> None:
         "debug": logging.DEBUG,
     }
     level = levels[level_str]
-    logging.basicConfig(level=level)
+    logging.basicConfig(
+        level=level,
+        format="[%(levelname)-8s] %(message)s",
+    )
 
 
 def run_redex_passthrough(
