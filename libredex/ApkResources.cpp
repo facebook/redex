@@ -562,6 +562,32 @@ size_t write_serialized_data(const android::Vector<char>& cVec,
 }
 
 /*
+ * skip a tag including its nested tags
+ */
+void skip_nested_tags(android::ResXMLTree* parser) {
+  size_t depth{1};
+  while (depth) {
+    auto type = parser->next();
+    switch (type) {
+    case android::ResXMLParser::START_TAG: {
+      ++depth;
+      break;
+    }
+    case android::ResXMLParser::END_TAG: {
+      --depth;
+      break;
+    }
+    case android::ResXMLParser::BAD_DOCUMENT: {
+      not_reached();
+    }
+    default: {
+      break;
+    }
+    }
+  }
+}
+
+/*
  * Look for <search_tag> within the descendants of the current node in the XML
  * tree.
  */
@@ -608,6 +634,7 @@ ManifestClassInfo extract_classes_from_manifest(const char* data, size_t size) {
   android::String16 receiver("receiver");
   android::String16 service("service");
   android::String16 instrumentation("instrumentation");
+  android::String16 queries("queries");
   android::String16 intent_filter("intent-filter");
 
   // This is not an unordered_map because String16 doesn't define a hash
@@ -661,6 +688,10 @@ ManifestClassInfo extract_classes_from_manifest(const char* data, size_t size) {
         always_assert(classname.size());
         manifest_classes.instrumentation_classes.emplace(
             java_names::external_to_internal(classname));
+      } else if (tag == queries) {
+        // queries break the logic to find providers below because they don't
+        // declare a name
+        skip_nested_tags(&parser);
       } else if (string_to_tag.count(tag)) {
         std::string classname = get_string_attribute_value(
             parser, tag != activity_alias ? name : target_activity);
