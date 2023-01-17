@@ -32,7 +32,10 @@
  * If a resource cannot be removed, either individual names (or entire types)
  * can be disabled. Do this if there is any requirement on looking up resources
  * by their string name, i.e. android.content.res.Resources.getIdentifier() on a
- * non-canonical duplicate.
+ * non-canonical duplicate. Also note that this pass has not been equally tested
+ * against all possible resource types. "attr" type has some known problems with
+ * regards to xml attribute ordering in app bundles, so for best results enable
+ * this for simple things like dimen, color, etc.
  *
  * Possible further improvements:
  * This does not do a particularly good job of finding duplicate files when run

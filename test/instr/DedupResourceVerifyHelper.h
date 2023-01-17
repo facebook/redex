@@ -288,11 +288,11 @@ inline void dedupresource_postverify(const DexClasses& classes,
 
   auto same_attribute_a_ids = res_table->get_res_ids_by_name("SameAttributeA");
   auto same_attribute_b_ids = res_table->get_res_ids_by_name("SameAttributeB");
-  EXPECT_EQ(same_attribute_a_ids.size() + same_attribute_b_ids.size(), 1);
+  EXPECT_EQ(same_attribute_a_ids.size() + same_attribute_b_ids.size(), 2);
   auto attr_cls = find_class_named(classes, "Lcom/facebook/R$attr;");
   auto same_attribute_a_field = find_sfield_named(*attr_cls, "SameAttributeA");
   auto same_attribute_b_field = find_sfield_named(*attr_cls, "SameAttributeB");
-  EXPECT_FIELDS_SAME(same_attribute_a_field, same_attribute_b_field);
+  EXPECT_FIELDS_DIFFERENT(same_attribute_a_field, same_attribute_b_field);
 
   // drawable
   auto drawable_cls = find_class_named(classes, "Lcom/facebook/R$drawable;");
