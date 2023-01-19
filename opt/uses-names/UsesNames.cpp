@@ -7,6 +7,8 @@
 
 #include "UsesNames.h"
 
+#include <mutex>
+
 #include "ClassHierarchy.h"
 #include "ConcurrentContainers.h"
 #include "DexUtil.h"
@@ -142,6 +144,7 @@ class UsesNamesMarker {
           match_uses_names_annotation(annos.get(), uses_names_trans_anno);
 
       if (has_uses_names || has_uses_name_trans) {
+        std::lock_guard<std::mutex> lock(m_map_mutex);
         DexType* matched_anno;
         if (has_uses_names) {
           matched_anno = uses_names_anno;
@@ -176,6 +179,7 @@ class UsesNamesMarker {
 
  private:
   const ClassHierarchy m_ch;
+  std::mutex m_map_mutex;
   InterfaceMap m_interface_map;
   DexType* uses_names_anno;
   DexType* uses_names_trans_anno;
