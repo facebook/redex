@@ -40,9 +40,14 @@ class WtoBuilder;
  * strongly connected component. It's not a fixpoint iterator.
  */
 template <typename NodeId>
-class WtoComponentIterator final
-    : public std::iterator<std::forward_iterator_tag, WtoComponent<NodeId>> {
+class WtoComponentIterator final {
  public:
+  using iterator_category = std::forward_iterator_tag;
+  using difference_type = std::ptrdiff_t;
+  using value_type = WtoComponent<NodeId>;
+  using pointer = value_type*;
+  using reference = value_type&;
+
   WtoComponentIterator& operator++() {
     RUNTIME_CHECK(m_component != m_end, undefined_operation());
     // All components of a WTO are stored linearly inside a vector in reverse
