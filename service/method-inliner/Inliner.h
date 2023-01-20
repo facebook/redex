@@ -157,7 +157,8 @@ class MultiMethodInliner {
       const api::AndroidSDK* min_sdk_api = nullptr,
       bool cross_dex_penalty = false,
       const std::unordered_set<const DexString*>&
-          configured_finalish_field_names = {});
+          configured_finalish_field_names = {},
+      bool local_only = false);
 
   ~MultiMethodInliner() { delayed_invoke_direct_to_static(); }
 
@@ -644,6 +645,8 @@ class MultiMethodInliner {
 
   const DexFieldRef* m_sdk_int_field =
       DexField::get_field("Landroid/os/Build$VERSION;.SDK_INT:I");
+
+  bool m_local_only;
 
  public:
   const InliningInfo& get_info() { return info; }

@@ -386,6 +386,7 @@ libopt_la_SOURCES = \
 	opt/shrinker/ShrinkerPass.cpp \
 	opt/make-public/MakePublicPass.cpp \
 	opt/methodinline/IntraDexInlinePass.cpp \
+	opt/methodinline/LocalMethodInlinePass.cpp \
 	opt/methodinline/MethodInlinePass.cpp \
 	opt/methodinline/PerfMethodInlinePass.cpp \
 	opt/methodinline/BridgeSynthInlinePass.cpp \

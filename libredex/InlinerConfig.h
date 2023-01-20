@@ -56,6 +56,9 @@ struct InlinerConfig {
   std::vector<std::string> m_caller_blocklist;
   std::vector<std::string> m_intradex_allowlist;
 
+  // Limit on number of relevant invokes to speed up local-only pass.
+  uint64_t max_relevant_invokes_when_local_only{10};
+
   /**
    * 1. Populate m_blocklist m_caller_blocklist to blocklist and
    * caller_blocklist with the initial scope.

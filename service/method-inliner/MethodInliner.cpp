@@ -185,6 +185,42 @@ static void filter_candidates_bridge_synth_only(
   mgr.incr_metric(prefix + "ctors", ctors.size());
 }
 
+// When inlining with making local decisions only, we remove some candidates
+// with many relevant invokes, as this reduces the length of the critical path
+// and thus speeds up the inlining pass, while not reducing the effectiveness of
+// the pass in a meaningful way.
+static void filter_candidates_local_only(
+    PassManager& mgr,
+    Scope& scope,
+    uint64_t max_relevant_invokes_when_local_only,
+    std::unordered_set<DexMethod*>& candidates) {
+  ConcurrentSet<DexMethod*> large_candidates;
+  walk::parallel::code(scope, [&large_candidates, &candidates,
+                               max_relevant_invokes_when_local_only](
+                                  DexMethod* caller, IRCode& code) {
+    if (!candidates.count(caller)) {
+      return;
+    }
+    size_t relevant_invokes{0};
+    for (auto& mie : InstructionIterable(code.cfg())) {
+      if (!opcode::is_an_invoke(mie.insn->opcode())) {
+        continue;
+      }
+      auto callee = resolve_method(mie.insn->get_method(),
+                                   opcode_to_search(mie.insn), caller);
+      if (candidates.count(callee)) {
+        relevant_invokes++;
+      }
+    }
+    if (relevant_invokes > max_relevant_invokes_when_local_only) {
+      large_candidates.insert(caller);
+    }
+  });
+  std20::erase_if(candidates,
+                  [&](auto method) { return large_candidates.count(method); });
+  mgr.incr_metric("large_candidates", large_candidates.size());
+}
+
 /**
  * Collect all non virtual methods and make all small methods candidates
  * for inlining.
@@ -635,7 +671,8 @@ void run_inliner(DexStoresVector& stores,
                  ConfigFiles& conf,
                  bool intra_dex /* false */,
                  InlineForSpeed* inline_for_speed /* nullptr */,
-                 bool inline_bridge_synth_only /* false */) {
+                 bool inline_bridge_synth_only /* false */,
+                 bool local_only /* false */) {
   always_assert_log(
       !mgr.init_class_lowering_has_run(),
       "Implementation limitation: The inliner could introduce new "
@@ -683,6 +720,12 @@ void run_inliner(DexStoresVector& stores,
     cross_dex_penalty = false;
   }
 
+  if (local_only) {
+    inliner_config.true_virtual_inline = false;
+    inliner_config.shrink_other_methods = false;
+    inliner_config.delete_non_virtuals = true;
+  }
+
   inliner_config.unique_inlined_registers = false;
 
   std::unique_ptr<const mog::Graph> method_override_graph;
@@ -714,6 +757,12 @@ void run_inliner(DexStoresVector& stores,
     filter_candidates_bridge_synth_only(mgr, scope, candidates, "initial_");
   }
 
+  if (local_only) {
+    filter_candidates_local_only(
+        mgr, scope, inliner_config.max_relevant_invokes_when_local_only,
+        candidates);
+  }
+
   inliner_config.shrinker.analyze_constructors =
       inliner_config.shrinker.run_const_prop;
 
@@ -724,7 +773,8 @@ void run_inliner(DexStoresVector& stores,
       std::ref(concurrent_method_resolver), inliner_config, min_sdk,
       intra_dex ? IntraDex : InterDex, true_virtual_callers, inline_for_speed,
       analyze_and_prune_inits, conf.get_pure_methods(), min_sdk_api,
-      cross_dex_penalty);
+      cross_dex_penalty,
+      /* configured_finalish_field_names */ {}, local_only);
   inliner.inline_methods(/* need_deconstruct */ false);
 
   walk::parallel::code(scope,

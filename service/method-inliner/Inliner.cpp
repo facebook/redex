@@ -111,7 +111,8 @@ MultiMethodInliner::MultiMethodInliner(
     const std::unordered_set<DexMethodRef*>& configured_pure_methods,
     const api::AndroidSDK* min_sdk_api,
     bool cross_dex_penalty,
-    const std::unordered_set<const DexString*>& configured_finalish_field_names)
+    const std::unordered_set<const DexString*>& configured_finalish_field_names,
+    bool local_only)
     : m_concurrent_resolver(std::move(concurrent_resolve_fn)),
       m_scheduler(
           [this](DexMethod* method) {
@@ -145,7 +146,8 @@ MultiMethodInliner::MultiMethodInliner(
                  config.shrinker,
                  min_sdk,
                  configured_pure_methods,
-                 configured_finalish_field_names) {
+                 configured_finalish_field_names),
+      m_local_only(local_only) {
   Timer t("MultiMethodInliner construction");
   for (const auto& callee_callers : true_virtual_callers) {
     auto callee = callee_callers.first;
@@ -1098,6 +1100,10 @@ bool MultiMethodInliner::should_inline_fast(const DexMethod* callee) {
 }
 
 bool MultiMethodInliner::should_inline_always(const DexMethod* callee) {
+  if (m_local_only) {
+    return false;
+  }
+
   if (should_inline_fast(callee)) {
     return true;
   }

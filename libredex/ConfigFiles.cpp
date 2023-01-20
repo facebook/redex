@@ -354,6 +354,8 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   jw.get("respect_sketchy_methods", true,
          inliner_config->respect_sketchy_methods);
   jw.get("check_min_sdk_refs", true, inliner_config->check_min_sdk_refs);
+  jw.get("max_relevant_invokes_when_local_only", 10,
+         inliner_config->max_relevant_invokes_when_local_only);
 
   std::vector<std::string> no_inline_annos;
   jw.get("no_inline_annos", {}, no_inline_annos);
