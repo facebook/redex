@@ -198,11 +198,6 @@ void keep_rules::show_configuration(
     std::ostream& output,
     const Scope& classes,
     const keep_rules::ProguardConfiguration& config) {
-  size_t total = classes.size();
-  for (const auto& cls : classes) {
-    total += cls->get_vmethods().size() + cls->get_dmethods().size() +
-             cls->get_ifields().size() + cls->get_sfields().size();
-  }
   for (const auto& keep : config.keep_rules) {
     output << keep_rules::show_keep(*keep) << std::endl;
   }

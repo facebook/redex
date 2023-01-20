@@ -1371,8 +1371,13 @@ class InstructionIteratorImpl {
   InstructionIteratorImpl(const InstructionIteratorImpl<false>& rhs)
       : m_cfg(rhs.m_cfg), m_block(rhs.m_block), m_it(rhs.m_it) {}
 
-  InstructionIteratorImpl& operator=(const InstructionIteratorImpl& other) =
-      default;
+  InstructionIteratorImpl& operator=(
+      const InstructionIteratorImpl<false>& rhs) {
+    m_cfg = rhs.m_cfg;
+    m_block = rhs.m_block;
+    m_it = rhs.m_it;
+    return *this;
+  }
 
   InstructionIteratorImpl<is_const>& operator++() {
     assert_not_end();

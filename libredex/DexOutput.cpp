@@ -1211,15 +1211,14 @@ void DexOutput::generate_static_values() {
     for (uint32_t i = 0; i < callsites.size(); i++) {
       auto callsite = callsites[i];
       auto eva = callsite->as_encoded_value_array();
-      uint32_t offset;
       if (enc_arrays.count(eva)) {
-        offset = m_call_site_items[callsite] = enc_arrays.at(eva);
+        m_call_site_items[callsite] = enc_arrays.at(eva);
       } else {
         uint8_t* output = m_output.get() + m_offset;
         uint8_t* outputsv = output;
         eva.encode(m_dodx.get(), output);
         enc_arrays.emplace(std::move(eva), m_offset);
-        offset = m_call_site_items[callsite] = m_offset;
+        m_call_site_items[callsite] = m_offset;
         inc_offset(output - outputsv);
         m_stats.num_static_values++;
       }
@@ -1372,9 +1371,6 @@ void DexOutput::generate_annotations() {
    * 5) Attach annotation_directories to the classdefs
    */
   std::vector<DexAnnotationDirectory*> lad;
-  int xrefsize = 0;
-  int annodirsize = 0;
-  int xrefcnt = 0;
   std::map<DexAnnotationDirectory*, int> ad_to_classnum;
   annomap_t annomap;
   asetmap_t asetmap;
@@ -1385,9 +1381,6 @@ void DexOutput::generate_annotations() {
     DexClass* clz = m_classes->at(i);
     DexAnnotationDirectory* ad = clz->get_annotation_directory();
     if (ad) {
-      xrefsize += ad->xref_size();
-      annodirsize += ad->annodir_size();
-      xrefcnt += ad->xref_count();
       lad.push_back(ad);
       ad_to_classnum[ad] = i;
     }
