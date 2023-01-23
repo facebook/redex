@@ -518,8 +518,34 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
 }
 
 void DexLoader::load_dex_class(int num) {
+  size_t dexsize = m_file->size();
   const dex_class_def* cdef = m_class_defs + num;
-  DexClass* dc = DexClass::create(m_idx.get(), cdef, m_location);
+  auto idx = m_idx.get();
+
+  // Validate dex_class_def layout
+  auto annotations_off = cdef->annotations_off;
+  if (annotations_off != 0) {
+    // Validate dex_annotations_directory_item layout
+    always_assert_log(
+        annotations_off + sizeof(dex_annotations_directory_item) <= dexsize,
+        "Invalid cdef->annotations_off");
+    const dex_annotations_directory_item* annodir =
+        (const dex_annotations_directory_item*)idx->get_uint_data(
+            annotations_off);
+    auto cls_annos_off = annodir->class_annotations_off;
+    always_assert_log(cls_annos_off < dexsize,
+                      "Invalid annodir->class_annotations_off");
+    if (cls_annos_off != 0) {
+      // annotation_off_item is of size uint. So this is probably precise
+      // enough.
+      const uint32_t* adata = idx->get_uint_data(cls_annos_off);
+      uint32_t count = *adata;
+      always_assert_log(cls_annos_off + count <= dexsize,
+                        "Invalid class annotation set count");
+    }
+  }
+
+  DexClass* dc = DexClass::create(idx, cdef, m_location);
   // We may be inserting a nullptr here. Need to remove them later
   //
   // We're inserting nullptr because we can't mess up the indices of the other
