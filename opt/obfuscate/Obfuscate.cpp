@@ -79,32 +79,35 @@ template <typename DexMember,
           typename K>
 DexMember* find_renamable_ref(
     DexMemberRef* ref,
-    std::unordered_map<DexMemberRef*, DexMember*>& ref_def_cache,
+    std::mutex& mutex,
+    ConcurrentMap<DexMemberRef*, DexMember*>& ref_def_cache,
     DexElemManager<DexMember*, DexMemberRef*, DexMemberSpec, K>& name_mapping) {
   TRACE(OBFUSCATE, 4, "Found a ref opcode");
   DexMember* def = nullptr;
-  auto member_itr = ref_def_cache.find(ref);
-  if (member_itr != ref_def_cache.end()) {
-    def = member_itr->second;
-  } else {
-    def = name_mapping.def_of_ref(ref);
-  }
-  ref_def_cache[ref] = def;
+  ref_def_cache.update(ref, [&](auto, auto& cache, bool exists) {
+    if (!exists) {
+      std::lock_guard<std::mutex> lock_guard(mutex);
+      cache = name_mapping.def_of_ref(ref);
+    }
+    def = cache;
+  });
   return def;
 }
 
 void update_refs(Scope& scope,
                  DexFieldManager& field_name_mapping,
                  DexMethodManager& method_name_mapping) {
-  std::unordered_map<DexFieldRef*, DexField*> f_ref_def_cache;
-  std::unordered_map<DexMethodRef*, DexMethod*> m_ref_def_cache;
-  walk::opcodes(scope, [&](DexMethod*, IRInstruction* instr) {
+  ConcurrentMap<DexFieldRef*, DexField*> f_ref_def_cache;
+  ConcurrentMap<DexMethodRef*, DexMethod*> m_ref_def_cache;
+  std::mutex f_mutex;
+  std::mutex m_mutex;
+  walk::parallel::opcodes(scope, [&](DexMethod*, IRInstruction* instr) {
     auto op = instr->opcode();
     if (instr->has_field()) {
       DexFieldRef* field_ref = instr->get_field();
       if (field_ref->is_def()) return;
-      DexField* field_def =
-          find_renamable_ref(field_ref, f_ref_def_cache, field_name_mapping);
+      DexField* field_def = find_renamable_ref(
+          field_ref, f_mutex, f_ref_def_cache, field_name_mapping);
       if (field_def != nullptr) {
         TRACE(OBFUSCATE, 4, "Found a ref to fixup %s", SHOW(field_ref));
         instr->set_field(field_def);
@@ -119,8 +122,8 @@ void update_refs(Scope& scope,
       // same name but isn't actually inherited.
       DexMethodRef* method_ref = instr->get_method();
       if (method_ref->is_def()) return;
-      DexMethod* method_def =
-          find_renamable_ref(method_ref, m_ref_def_cache, method_name_mapping);
+      DexMethod* method_def = find_renamable_ref(
+          method_ref, m_mutex, m_ref_def_cache, method_name_mapping);
       if (method_def != nullptr) {
         TRACE(OBFUSCATE, 4, "Found a ref to fixup %s", SHOW(method_ref));
         instr->set_method(method_def);
