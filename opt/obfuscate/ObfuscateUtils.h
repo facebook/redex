@@ -23,16 +23,6 @@ namespace obfuscate_utils {
 void compute_identifier(int value, std::string* res);
 } // namespace obfuscate_utils
 
-// Type for the map of descriptor -> [newname -> oldname]
-// This map is used for reverse lookup to find naming collisions
-using NameMapping =
-    std::unordered_map<std::string,
-                       std::unordered_map<std::string, std::string>>;
-
-// Renames a field in the Dex
-void rename_field(DexField* field, const std::string& new_name);
-void rename_method(DexMethod* method, const std::string& new_name);
-
 // Whether or not the configs allow for us to obfuscate the member
 // We don't want to obfuscate seeds. Keep members shouldn't be obfuscated
 // unless we are explicitly told to do so with the allowobfuscation flag
@@ -513,20 +503,12 @@ class DexElemManager {
   RefCtrFn ref_getter_fn;
   ElemCtrFn elemCtr;
 
-  bool mark_all_unrenamable;
-
  public:
   DexElemManager(ElemCtrFn elem_ctr, SigGetFn get_sig, RefCtrFn ref_ctr)
-      : sig_getter_fn(get_sig),
-        ref_getter_fn(ref_ctr),
-        elemCtr(elem_ctr),
-        mark_all_unrenamable(false) {}
+      : sig_getter_fn(get_sig), ref_getter_fn(ref_ctr), elemCtr(elem_ctr) {}
   // NOLINTNEXTLINE(performance-noexcept-move-constructor)
   DexElemManager(DexElemManager&& other) = default;
   virtual ~DexElemManager() {}
-
-  // void lock_elements() { mark_all_unrenamable = true; }
-  // void unlock_elements() { mark_all_unrenamable = false; }
 
   inline bool contains_elem(DexType* cls, K sig, const DexString* name) {
     return elements.count(cls) > 0 && elements[cls].count(sig) > 0 &&
@@ -541,9 +523,6 @@ class DexElemManager {
   inline DexNameWrapper<T>* emplace(T elem) {
     elements[elem->get_class()][sig_getter_fn(elem)][elem->get_name()] =
         std::unique_ptr<DexNameWrapper<T>>(elemCtr(elem));
-    if (mark_all_unrenamable)
-      elements[elem->get_class()][sig_getter_fn(elem)][elem->get_name()]
-          ->mark_unrenamable();
     return elements[elem->get_class()][sig_getter_fn(elem)][elem->get_name()]
         .get();
   }
