@@ -510,30 +510,16 @@ class DexElemManager {
   DexElemManager(DexElemManager&& other) = default;
   virtual ~DexElemManager() {}
 
-  inline bool contains_elem(DexType* cls, K sig, const DexString* name) {
-    return elements.count(cls) > 0 && elements[cls].count(sig) > 0 &&
-           elements[cls][sig].count(name) > 0;
-  }
-
-  inline bool contains_elem(R elem) {
-    return contains_elem(elem->get_class(), sig_getter_fn(elem),
-                         elem->get_name());
-  }
-
-  inline DexNameWrapper<T>* emplace(T elem) {
-    elements[elem->get_class()][sig_getter_fn(elem)][elem->get_name()] =
-        std::unique_ptr<DexNameWrapper<T>>(elemCtr(elem));
-    return elements[elem->get_class()][sig_getter_fn(elem)][elem->get_name()]
-        .get();
-  }
-
-  // Mirrors the map get operator, but ensures we create correct wrappers
+  // Mirrors the map [] operator, but ensures we create correct wrappers
   // if they don't exist
   inline DexNameWrapper<T>* operator[](T elem) {
-    return contains_elem(elem) ? elements[elem->get_class()]
-                                         [sig_getter_fn(elem)][elem->get_name()]
-                                             .get()
-                               : emplace(elem);
+    auto [it, emplaced] =
+        elements[elem->get_class()][sig_getter_fn(elem)].emplace(
+            elem->get_name(), nullptr);
+    if (emplaced) {
+      it->second = std::unique_ptr<DexNameWrapper<T>>(elemCtr(elem));
+    }
+    return it->second.get();
   }
 
   // Commits all the renamings in elements to the dex by modifying the
@@ -577,12 +563,25 @@ class DexElemManager {
 
  private:
   // Returns the def for that class and ref if it exists, nullptr otherwise
-  T find_def(R ref, DexType* cls) {
+  T find_def(R ref, DexType* cls) const {
     if (cls == nullptr) return nullptr;
-    if (contains_elem(cls, sig_getter_fn(ref), ref->get_name())) {
-      DexNameWrapper<T>* wrap =
-          elements[cls][sig_getter_fn(ref)][ref->get_name()].get();
-      if (wrap->is_modified()) return wrap->get();
+    auto sig = sig_getter_fn(ref);
+    auto name = ref->get_name();
+    auto it = elements.find(cls);
+    if (it == elements.end()) {
+      return nullptr;
+    }
+    auto it2 = it->second.find(sig);
+    if (it2 == it->second.end()) {
+      return nullptr;
+    }
+    auto it3 = it2->second.find(name);
+    if (it3 == it2->second.end()) {
+      return nullptr;
+    }
+    DexNameWrapper<T>* wrap = it3->second.get();
+    if (wrap->is_modified()) {
+      return wrap->get();
     }
     return nullptr;
   }
@@ -590,7 +589,7 @@ class DexElemManager {
   /**
    * Look up in the class and all its interfaces.
    */
-  T find_def_in_class_and_intf(R ref, DexClass* cls) {
+  T find_def_in_class_and_intf(R ref, DexClass* cls) const {
     if (cls == nullptr) return nullptr;
     auto found_def = find_def(ref, cls->get_type());
     if (found_def != nullptr) return found_def;
@@ -605,7 +604,7 @@ class DexElemManager {
   // Does a lookup over the fields we renamed in the dex to see what the
   // reference should be reset with. Returns nullptr if there is no mapping.
   // Note: we also have to look in superclasses in the case that this is a ref
-  T def_of_ref(R ref) {
+  T def_of_ref(R ref) const {
     DexClass* cls = type_class(ref->get_class());
     while (cls && !cls->is_external()) {
       auto found = find_def_in_class_and_intf(ref, cls);
