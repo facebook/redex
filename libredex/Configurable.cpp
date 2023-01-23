@@ -115,8 +115,10 @@ optional<DexMethod*> parse_method(const Json::Value& str,
 
 // Infer the result of the parsing function.
 template <typename ParseFn>
-using parse_result = typename std::result_of<ParseFn(
-    const Json::Value&, Configurable::bindflags_t)>::type::value_type;
+using parse_result =
+    typename std::invoke_result<ParseFn,
+                                const Json::Value&,
+                                Configurable::bindflags_t>::type::value_type;
 
 template <typename ParseFn>
 optional<std::vector<parse_result<ParseFn>>> parse_vec(

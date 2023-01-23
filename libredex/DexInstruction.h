@@ -46,6 +46,7 @@ class DexInstruction : public Gatherable {
 
   // use clone() instead
   DexInstruction(const DexInstruction&) = default;
+  DexInstruction& operator=(const DexInstruction&) = default;
 
   // Ref-less opcodes, largest size is 5 insns.
   // If the constructor is called with a non-numeric
