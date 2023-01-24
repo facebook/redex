@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <functional>
 #include <gtest/gtest.h>
 
 #include "DexClass.h"
@@ -43,6 +44,8 @@ struct PostVerify : public RedexTest {
 };
 
 DexClass* find_class_named(const DexClasses& classes, const char* name);
+DexClass* find_class_named(const DexClasses& classes,
+                           const std::function<bool(const char*)>& matcher);
 DexField* find_ifield_named(const DexClass& cls, const char* name);
 DexField* find_sfield_named(const DexClass& cls, const char* name);
 DexField* find_field_named(const DexClass& cls, const char* name);

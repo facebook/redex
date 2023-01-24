@@ -31,6 +31,15 @@ DexClass* find_class_named(const DexClasses& classes, const char* name) {
   return it == classes.end() ? nullptr : *it;
 }
 
+DexClass* find_class_named(const DexClasses& classes,
+                           const std::function<bool(const char*)>& matcher) {
+  auto it =
+      std::find_if(classes.begin(), classes.end(), [&matcher](DexClass* cls) {
+        return matcher(cls->get_name()->c_str());
+      });
+  return it == classes.end() ? nullptr : *it;
+}
+
 DexField* find_ifield_named(const DexClass& cls, const char* name) {
   auto fields = cls.get_ifields();
   auto it =
