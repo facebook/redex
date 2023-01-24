@@ -492,8 +492,8 @@ TEST_F(IRTypeCheckerTest, arrayRead) {
   checker.run();
   EXPECT_TRUE(checker.good()) << checker.what();
   EXPECT_EQ("OK", checker.what());
-  EXPECT_EQ(SCALAR, checker.get_type(insns[4], 1));
-  EXPECT_EQ(INT, checker.get_type(insns[5], 1));
+  EXPECT_EQ(IRType::SCALAR, checker.get_type(insns[4], 1));
+  EXPECT_EQ(IRType::INT, checker.get_type(insns[5], 1));
 }
 
 TEST_F(IRTypeCheckerTest, arrayReadWide) {
@@ -510,10 +510,10 @@ TEST_F(IRTypeCheckerTest, arrayReadWide) {
   IRTypeChecker checker(m_method);
   checker.run();
   EXPECT_TRUE(checker.good()) << checker.what();
-  EXPECT_EQ(SCALAR1, checker.get_type(insns[4], 1));
-  EXPECT_EQ(SCALAR2, checker.get_type(insns[4], 2));
-  EXPECT_EQ(DOUBLE1, checker.get_type(insns[5], 3));
-  EXPECT_EQ(DOUBLE2, checker.get_type(insns[5], 4));
+  EXPECT_EQ(IRType::SCALAR1, checker.get_type(insns[4], 1));
+  EXPECT_EQ(IRType::SCALAR2, checker.get_type(insns[4], 2));
+  EXPECT_EQ(IRType::DOUBLE1, checker.get_type(insns[5], 3));
+  EXPECT_EQ(IRType::DOUBLE2, checker.get_type(insns[5], 4));
 }
 
 TEST_F(IRTypeCheckerTest, multipleDefinitions) {
@@ -538,14 +538,14 @@ TEST_F(IRTypeCheckerTest, multipleDefinitions) {
   IRTypeChecker checker(m_method);
   checker.run();
   EXPECT_TRUE(checker.good()) << checker.what();
-  EXPECT_EQ(REFERENCE, checker.get_type(insns[2], 0));
-  EXPECT_EQ(SCALAR, checker.get_type(insns[4], 0));
-  EXPECT_EQ(FLOAT, checker.get_type(insns[5], 0));
-  EXPECT_EQ(FLOAT, checker.get_type(insns[6], 0));
-  EXPECT_EQ(REFERENCE, checker.get_type(insns[7], 0));
-  EXPECT_EQ(REFERENCE, checker.get_type(insns[9], 0));
-  EXPECT_EQ(LONG1, checker.get_type(insns[11], 0));
-  EXPECT_EQ(LONG2, checker.get_type(insns[11], 1));
+  EXPECT_EQ(IRType::REFERENCE, checker.get_type(insns[2], 0));
+  EXPECT_EQ(IRType::SCALAR, checker.get_type(insns[4], 0));
+  EXPECT_EQ(IRType::FLOAT, checker.get_type(insns[5], 0));
+  EXPECT_EQ(IRType::FLOAT, checker.get_type(insns[6], 0));
+  EXPECT_EQ(IRType::REFERENCE, checker.get_type(insns[7], 0));
+  EXPECT_EQ(IRType::REFERENCE, checker.get_type(insns[9], 0));
+  EXPECT_EQ(IRType::LONG1, checker.get_type(insns[11], 0));
+  EXPECT_EQ(IRType::LONG2, checker.get_type(insns[11], 1));
 }
 
 TEST_F(IRTypeCheckerTest, referenceFromInteger) {
@@ -773,19 +773,19 @@ TEST_F(IRTypeCheckerTest, exceptionHandler) {
   IRTypeChecker checker(m_method);
   checker.run();
   EXPECT_TRUE(checker.good()) << checker.what();
-  EXPECT_EQ(INT, checker.get_type(noexc_return, 0));
-  EXPECT_EQ(CONST, checker.get_type(noexc_return, 1));
-  EXPECT_EQ(INT, checker.get_type(noexc_return, 2));
-  EXPECT_EQ(CONST, checker.get_type(noexc_return, 3));
+  EXPECT_EQ(IRType::INT, checker.get_type(noexc_return, 0));
+  EXPECT_EQ(IRType::CONST, checker.get_type(noexc_return, 1));
+  EXPECT_EQ(IRType::INT, checker.get_type(noexc_return, 2));
+  EXPECT_EQ(IRType::CONST, checker.get_type(noexc_return, 3));
   // The exception is thrown by DIV_INT before v2 is modified.
-  EXPECT_EQ(INT, checker.get_type(exc_return, 0));
-  EXPECT_EQ(ZERO, checker.get_type(exc_return, 1));
-  EXPECT_EQ(CONST, checker.get_type(exc_return, 2));
-  EXPECT_EQ(TOP, checker.get_type(exc_return, 3));
-  EXPECT_EQ(INT, checker.get_type(exc_return, 5));
+  EXPECT_EQ(IRType::INT, checker.get_type(exc_return, 0));
+  EXPECT_EQ(IRType::ZERO, checker.get_type(exc_return, 1));
+  EXPECT_EQ(IRType::CONST, checker.get_type(exc_return, 2));
+  EXPECT_EQ(IRType::TOP, checker.get_type(exc_return, 3));
+  EXPECT_EQ(IRType::INT, checker.get_type(exc_return, 5));
   // The rest of the type environment, like method parameters, should be
   // left unchanged in the exception handler.
-  EXPECT_EQ(REFERENCE, checker.get_type(exc_return, 14));
+  EXPECT_EQ(IRType::REFERENCE, checker.get_type(exc_return, 14));
 }
 
 TEST_F(IRTypeCheckerTest, overlappingMoveWide) {
@@ -800,14 +800,14 @@ TEST_F(IRTypeCheckerTest, overlappingMoveWide) {
   checker.run();
   EXPECT_TRUE(checker.good()) << checker.what();
   EXPECT_EQ("OK", checker.what());
-  EXPECT_EQ(LONG1, checker.get_type(insns[1], 1));
-  EXPECT_EQ(LONG2, checker.get_type(insns[1], 2));
-  EXPECT_EQ(LONG1, checker.get_type(insns[2], 0));
-  EXPECT_EQ(LONG2, checker.get_type(insns[2], 1));
-  EXPECT_EQ(DOUBLE1, checker.get_type(insns[3], 0));
-  EXPECT_EQ(DOUBLE2, checker.get_type(insns[3], 1));
-  EXPECT_EQ(DOUBLE1, checker.get_type(insns[4], 1));
-  EXPECT_EQ(DOUBLE2, checker.get_type(insns[4], 2));
+  EXPECT_EQ(IRType::LONG1, checker.get_type(insns[1], 1));
+  EXPECT_EQ(IRType::LONG2, checker.get_type(insns[1], 2));
+  EXPECT_EQ(IRType::LONG1, checker.get_type(insns[2], 0));
+  EXPECT_EQ(IRType::LONG2, checker.get_type(insns[2], 1));
+  EXPECT_EQ(IRType::DOUBLE1, checker.get_type(insns[3], 0));
+  EXPECT_EQ(IRType::DOUBLE2, checker.get_type(insns[3], 1));
+  EXPECT_EQ(IRType::DOUBLE1, checker.get_type(insns[4], 1));
+  EXPECT_EQ(IRType::DOUBLE2, checker.get_type(insns[4], 2));
 }
 
 TEST_F(IRTypeCheckerTest, filledNewArray) {
@@ -849,16 +849,16 @@ TEST_F(IRTypeCheckerTest, zeroOrReference) {
   checker.run();
   EXPECT_TRUE(checker.good()) << checker.what();
   EXPECT_EQ("OK", checker.what());
-  EXPECT_EQ(REFERENCE, checker.get_type(insns[2], 0));
-  EXPECT_EQ(REFERENCE, checker.get_type(insns[3], 0));
-  EXPECT_EQ(REFERENCE, checker.get_type(insns[4], 0));
-  EXPECT_EQ(ZERO, checker.get_type(insns[4], 1));
-  EXPECT_EQ(REFERENCE, checker.get_type(insns[5], 0));
-  EXPECT_EQ(ZERO, checker.get_type(insns[5], 1));
-  EXPECT_EQ(BOTTOM, checker.get_type(insns[6], 0));
-  EXPECT_EQ(BOTTOM, checker.get_type(insns[6], 1));
-  EXPECT_EQ(BOTTOM, checker.get_type(insns[7], 1));
-  EXPECT_EQ(BOTTOM, checker.get_type(insns[8], 1));
+  EXPECT_EQ(IRType::REFERENCE, checker.get_type(insns[2], 0));
+  EXPECT_EQ(IRType::REFERENCE, checker.get_type(insns[3], 0));
+  EXPECT_EQ(IRType::REFERENCE, checker.get_type(insns[4], 0));
+  EXPECT_EQ(IRType::ZERO, checker.get_type(insns[4], 1));
+  EXPECT_EQ(IRType::REFERENCE, checker.get_type(insns[5], 0));
+  EXPECT_EQ(IRType::ZERO, checker.get_type(insns[5], 1));
+  EXPECT_EQ(IRType::BOTTOM, checker.get_type(insns[6], 0));
+  EXPECT_EQ(IRType::BOTTOM, checker.get_type(insns[6], 1));
+  EXPECT_EQ(IRType::BOTTOM, checker.get_type(insns[7], 1));
+  EXPECT_EQ(IRType::BOTTOM, checker.get_type(insns[8], 1));
 }
 
 /**

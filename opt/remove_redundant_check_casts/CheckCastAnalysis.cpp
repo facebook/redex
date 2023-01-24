@@ -512,7 +512,7 @@ bool CheckCastAnalysis::is_check_cast_redundant(IRInstruction* insn,
   auto& env = envs.at(insn);
 
   auto type = env.get_type(reg);
-  if (type.equals(type_inference::TypeDomain(ZERO))) {
+  if (type.equals(type_inference::TypeDomain(IRType::ZERO))) {
     return true;
   }
 

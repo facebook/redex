@@ -196,7 +196,8 @@ TEST_F(TypeInferenceTest, test_join_with_null) {
     if (!opcode::is_a_return(insn->opcode())) {
       continue;
     }
-    EXPECT_EQ(exit_env.get_type(insn->src(0)), type_inference::TypeDomain(INT));
+    EXPECT_EQ(exit_env.get_type(insn->src(0)),
+              type_inference::TypeDomain(IRType::INT));
     auto ret_type = exit_env.get_type_domain(insn->src(0));
     EXPECT_TRUE(ret_type.is_top());
   }

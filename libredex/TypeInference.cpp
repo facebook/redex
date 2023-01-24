@@ -16,67 +16,67 @@
 
 std::ostream& operator<<(std::ostream& output, const IRType& type) {
   switch (type) {
-  case BOTTOM: {
+  case IRType::BOTTOM: {
     output << "BOTTOM";
     break;
   }
-  case ZERO: {
+  case IRType::ZERO: {
     output << "ZERO";
     break;
   }
-  case CONST: {
+  case IRType::CONST: {
     output << "CONST";
     break;
   }
-  case CONST1: {
+  case IRType::CONST1: {
     output << "CONST1";
     break;
   }
-  case CONST2: {
+  case IRType::CONST2: {
     output << "CONST2";
     break;
   }
-  case REFERENCE: {
+  case IRType::REFERENCE: {
     output << "REF";
     break;
   }
-  case INT: {
+  case IRType::INT: {
     output << "INT";
     break;
   }
-  case FLOAT: {
+  case IRType::FLOAT: {
     output << "FLOAT";
     break;
   }
-  case LONG1: {
+  case IRType::LONG1: {
     output << "LONG1";
     break;
   }
-  case LONG2: {
+  case IRType::LONG2: {
     output << "LONG2";
     break;
   }
-  case DOUBLE1: {
+  case IRType::DOUBLE1: {
     output << "DOUBLE1";
     break;
   }
-  case DOUBLE2: {
+  case IRType::DOUBLE2: {
     output << "DOUBLE2";
     break;
   }
-  case SCALAR: {
+  case IRType::SCALAR: {
     output << "SCALAR";
     break;
   }
-  case SCALAR1: {
+  case IRType::SCALAR1: {
     output << "SCALAR1";
     break;
   }
-  case SCALAR2: {
+  case IRType::SCALAR2: {
     output << "SCALAR2";
     break;
   }
-  case TOP: {
+  case IRType::TOP: {
     output << "TOP";
     break;
   }
@@ -113,39 +113,45 @@ bool is_safely_usable_in_ifs(IRType type) {
 }
 
 TypeLattice type_lattice(
-    {BOTTOM, ZERO, CONST, CONST1, CONST2, REFERENCE, INT, FLOAT, LONG1, LONG2,
-     DOUBLE1, DOUBLE2, SCALAR, SCALAR1, SCALAR2, TOP},
-    {{BOTTOM, ZERO},    {BOTTOM, CONST1},   {BOTTOM, CONST2},
-     {ZERO, REFERENCE}, {ZERO, CONST},      {CONST, INT},
-     {CONST, FLOAT},    {CONST1, LONG1},    {CONST1, DOUBLE1},
-     {CONST2, LONG2},   {CONST2, DOUBLE2},  {INT, SCALAR},
-     {FLOAT, SCALAR},   {LONG1, SCALAR1},   {DOUBLE1, SCALAR1},
-     {LONG2, SCALAR2},  {DOUBLE2, SCALAR2}, {REFERENCE, TOP},
-     {SCALAR, TOP},     {SCALAR1, TOP},     {SCALAR2, TOP}});
+    {IRType::BOTTOM, IRType::ZERO, IRType::CONST, IRType::CONST1,
+     IRType::CONST2, IRType::REFERENCE, IRType::INT, IRType::FLOAT,
+     IRType::LONG1, IRType::LONG2, IRType::DOUBLE1, IRType::DOUBLE2,
+     IRType::SCALAR, IRType::SCALAR1, IRType::SCALAR2, IRType::TOP},
+    {{IRType::BOTTOM, IRType::ZERO},     {IRType::BOTTOM, IRType::CONST1},
+     {IRType::BOTTOM, IRType::CONST2},   {IRType::ZERO, IRType::REFERENCE},
+     {IRType::ZERO, IRType::CONST},      {IRType::CONST, IRType::INT},
+     {IRType::CONST, IRType::FLOAT},     {IRType::CONST1, IRType::LONG1},
+     {IRType::CONST1, IRType::DOUBLE1},  {IRType::CONST2, IRType::LONG2},
+     {IRType::CONST2, IRType::DOUBLE2},  {IRType::INT, IRType::SCALAR},
+     {IRType::FLOAT, IRType::SCALAR},    {IRType::LONG1, IRType::SCALAR1},
+     {IRType::DOUBLE1, IRType::SCALAR1}, {IRType::LONG2, IRType::SCALAR2},
+     {IRType::DOUBLE2, IRType::SCALAR2}, {IRType::REFERENCE, IRType::TOP},
+     {IRType::SCALAR, IRType::TOP},      {IRType::SCALAR1, IRType::TOP},
+     {IRType::SCALAR2, IRType::TOP}});
 
 void set_type(TypeEnvironment* state, reg_t reg, const TypeDomain& type) {
   state->set_type(reg, type);
 }
 
 void set_integer(TypeEnvironment* state, reg_t reg) {
-  state->set_type(reg, TypeDomain(INT));
+  state->set_type(reg, TypeDomain(IRType::INT));
   state->reset_dex_type(reg);
 }
 
 void set_float(TypeEnvironment* state, reg_t reg) {
-  state->set_type(reg, TypeDomain(FLOAT));
+  state->set_type(reg, TypeDomain(IRType::FLOAT));
   state->reset_dex_type(reg);
 }
 
 void set_scalar(TypeEnvironment* state, reg_t reg) {
-  state->set_type(reg, TypeDomain(SCALAR));
+  state->set_type(reg, TypeDomain(IRType::SCALAR));
   state->reset_dex_type(reg);
 }
 
 void set_reference(TypeEnvironment* state,
                    reg_t reg,
                    const boost::optional<const DexType*>& dex_type_opt) {
-  state->set_type(reg, TypeDomain(REFERENCE));
+  state->set_type(reg, TypeDomain(IRType::REFERENCE));
   const DexTypeDomain dex_type =
       dex_type_opt ? DexTypeDomain(*dex_type_opt) : DexTypeDomain::top();
   state->set_dex_type(reg, dex_type);
@@ -154,27 +160,27 @@ void set_reference(TypeEnvironment* state,
 void set_reference(TypeEnvironment* state,
                    reg_t reg,
                    const DexTypeDomain& dex_type) {
-  state->set_type(reg, TypeDomain(REFERENCE));
+  state->set_type(reg, TypeDomain(IRType::REFERENCE));
   state->set_dex_type(reg, dex_type);
 }
 
 void set_long(TypeEnvironment* state, reg_t reg) {
-  state->set_type(reg, TypeDomain(LONG1));
-  state->set_type(reg + 1, TypeDomain(LONG2));
+  state->set_type(reg, TypeDomain(IRType::LONG1));
+  state->set_type(reg + 1, TypeDomain(IRType::LONG2));
   state->reset_dex_type(reg);
   state->reset_dex_type(reg + 1);
 }
 
 void set_double(TypeEnvironment* state, reg_t reg) {
-  state->set_type(reg, TypeDomain(DOUBLE1));
-  state->set_type(reg + 1, TypeDomain(DOUBLE2));
+  state->set_type(reg, TypeDomain(IRType::DOUBLE1));
+  state->set_type(reg + 1, TypeDomain(IRType::DOUBLE2));
   state->reset_dex_type(reg);
   state->reset_dex_type(reg + 1);
 }
 
 void set_wide_scalar(TypeEnvironment* state, reg_t reg) {
-  state->set_type(reg, TypeDomain(SCALAR1));
-  state->set_type(reg + 1, TypeDomain(SCALAR2));
+  state->set_type(reg, TypeDomain(IRType::SCALAR1));
+  state->set_type(reg + 1, TypeDomain(IRType::SCALAR2));
   state->reset_dex_type(reg);
   state->reset_dex_type(reg + 1);
 }
@@ -188,13 +194,13 @@ void refine_comparable_with_zero(TypeEnvironment* state, reg_t reg) {
     return;
   }
   IRType t = state->get_type(reg).element();
-  if (t == SCALAR) {
+  if (t == IRType::SCALAR) {
     // We can't say anything conclusive about a register that has SCALAR type,
     // so we just bail out.
     return;
   }
-  if (!(TypeDomain(t).leq(TypeDomain(REFERENCE)) ||
-        TypeDomain(t).leq(TypeDomain(INT)))) {
+  if (!(TypeDomain(t).leq(TypeDomain(IRType::REFERENCE)) ||
+        TypeDomain(t).leq(TypeDomain(IRType::INT)))) {
     // The type is incompatible with the operation and hence, the code that
     // follows is unreachable.
     state->set_to_bottom();
@@ -212,11 +218,11 @@ void refine_comparable(TypeEnvironment* state, reg_t reg1, reg_t reg2) {
   }
   IRType t1 = state->get_type(reg1).element();
   IRType t2 = state->get_type(reg2).element();
-  if (!((TypeDomain(t1).leq(TypeDomain(REFERENCE)) &&
-         TypeDomain(t2).leq(TypeDomain(REFERENCE))) ||
-        (TypeDomain(t1).leq(TypeDomain(SCALAR)) &&
-         TypeDomain(t2).leq(TypeDomain(SCALAR)) && (t1 != FLOAT) &&
-         (t2 != FLOAT)))) {
+  if (!((TypeDomain(t1).leq(TypeDomain(IRType::REFERENCE)) &&
+         TypeDomain(t2).leq(TypeDomain(IRType::REFERENCE))) ||
+        (TypeDomain(t1).leq(TypeDomain(IRType::SCALAR)) &&
+         TypeDomain(t2).leq(TypeDomain(IRType::SCALAR)) &&
+         (t1 != IRType::FLOAT) && (t2 != IRType::FLOAT)))) {
     // Two values can be used in a comparison operation if they either both
     // have the REFERENCE type or have non-float scalar types. Note that in
     // the case where one or both types have the SCALAR type, we can't
@@ -276,8 +282,8 @@ void TypeInference::refine_type(TypeEnvironment* state,
                                 reg_t reg,
                                 IRType expected) const {
   state->update_type(reg, [this, expected](const TypeDomain& type) {
-    return refine_type(type, expected, /* const_type */ CONST,
-                       /* scalar_type */ SCALAR);
+    return refine_type(type, expected, /* const_type */ IRType::CONST,
+                       /* scalar_type */ IRType::SCALAR);
   });
 }
 
@@ -288,57 +294,58 @@ void TypeInference::refine_wide_type(TypeEnvironment* state,
   state->update_type(reg, [this, expected1](const TypeDomain& type) {
     return refine_type(type,
                        expected1,
-                       /* const_type */ CONST1,
-                       /* scalar_type */ SCALAR1);
+                       /* const_type */ IRType::CONST1,
+                       /* scalar_type */ IRType::SCALAR1);
   });
   state->update_type(reg + 1, [this, expected2](const TypeDomain& type) {
     return refine_type(type,
                        expected2,
-                       /* const_type */ CONST2,
-                       /* scalar_type */ SCALAR2);
+                       /* const_type */ IRType::CONST2,
+                       /* scalar_type */ IRType::SCALAR2);
   });
 }
 
 void TypeInference::refine_reference(TypeEnvironment* state, reg_t reg) const {
   refine_type(state,
               reg,
-              /* expected */ REFERENCE);
+              /* expected */ IRType::REFERENCE);
 }
 
 void TypeInference::refine_scalar(TypeEnvironment* state, reg_t reg) const {
   refine_type(state,
               reg,
-              /* expected */ SCALAR);
+              /* expected */ IRType::SCALAR);
   state->reset_dex_type(reg);
 }
 
 void TypeInference::refine_integer(TypeEnvironment* state, reg_t reg) const {
-  refine_type(state, reg, /* expected */ INT);
+  refine_type(state, reg, /* expected */ IRType::INT);
   state->reset_dex_type(reg);
 }
 
 void TypeInference::refine_float(TypeEnvironment* state, reg_t reg) const {
-  refine_type(state, reg, /* expected */ FLOAT);
+  refine_type(state, reg, /* expected */ IRType::FLOAT);
   state->reset_dex_type(reg);
 }
 
 void TypeInference::refine_wide_scalar(TypeEnvironment* state,
                                        reg_t reg) const {
-  refine_wide_type(state, reg, /* expected1 */ SCALAR1,
-                   /* expected2 */ SCALAR2);
+  refine_wide_type(state, reg, /* expected1 */ IRType::SCALAR1,
+                   /* expected2 */ IRType::SCALAR2);
   state->reset_dex_type(reg);
   state->reset_dex_type(reg + 1);
 }
 
 void TypeInference::refine_long(TypeEnvironment* state, reg_t reg) const {
-  refine_wide_type(state, reg, /* expected1 */ LONG1, /* expected2 */ LONG2);
+  refine_wide_type(state, reg, /* expected1 */ IRType::LONG1,
+                   /* expected2 */ IRType::LONG2);
   state->reset_dex_type(reg);
   state->reset_dex_type(reg + 1);
 }
 
 void TypeInference::refine_double(TypeEnvironment* state, reg_t reg) const {
-  refine_wide_type(state, reg, /* expected1 */ DOUBLE1,
-                   /* expected2 */ DOUBLE2);
+  refine_wide_type(state, reg, /* expected1 */ IRType::DOUBLE1,
+                   /* expected2 */ IRType::DOUBLE2);
   state->reset_dex_type(reg);
   state->reset_dex_type(reg + 1);
 }
@@ -430,7 +437,8 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   }
   case OPCODE_MOVE_OBJECT: {
     refine_reference(current_state, insn->src(0));
-    if (current_state->get_type(insn->src(0)) == TypeDomain(REFERENCE)) {
+    if (current_state->get_type(insn->src(0)) ==
+        TypeDomain(IRType::REFERENCE)) {
       const auto dex_type = current_state->get_type_domain(insn->src(0));
       set_reference(current_state, insn->dest(), dex_type);
     } else {
@@ -533,15 +541,15 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   case OPCODE_CONST: {
     if (insn->get_literal() == 0) {
       current_state->set_dex_type(insn->dest(), DexTypeDomain::null());
-      set_type(current_state, insn->dest(), TypeDomain(ZERO));
+      set_type(current_state, insn->dest(), TypeDomain(IRType::ZERO));
     } else {
-      set_type(current_state, insn->dest(), TypeDomain(CONST));
+      set_type(current_state, insn->dest(), TypeDomain(IRType::CONST));
     }
     break;
   }
   case OPCODE_CONST_WIDE: {
-    set_type(current_state, insn->dest(), TypeDomain(CONST1));
-    set_type(current_state, insn->dest() + 1, TypeDomain(CONST2));
+    set_type(current_state, insn->dest(), TypeDomain(IRType::CONST1));
+    set_type(current_state, insn->dest() + 1, TypeDomain(IRType::CONST2));
     break;
   }
   case OPCODE_CONST_STRING: {

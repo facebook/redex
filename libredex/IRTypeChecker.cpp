@@ -46,11 +46,11 @@ std::ostringstream& print_register(std::ostringstream& out, reg_t reg) {
 }
 
 void check_type_match(reg_t reg, IRType actual, IRType expected) {
-  if (actual == BOTTOM) {
+  if (actual == IRType::BOTTOM) {
     // There's nothing to do for unreachable code.
     return;
   }
-  if (actual == SCALAR && expected != REFERENCE) {
+  if (actual == IRType::SCALAR && expected != IRType::REFERENCE) {
     // If the type is SCALAR and we're checking compatibility with an integer
     // or float type, we just bail out.
     return;
@@ -157,12 +157,12 @@ void check_wide_type_match(reg_t reg,
                            IRType actual2,
                            IRType expected1,
                            IRType expected2) {
-  if (actual1 == BOTTOM) {
+  if (actual1 == IRType::BOTTOM) {
     // There's nothing to do for unreachable code.
     return;
   }
 
-  if (actual1 == SCALAR1 && actual2 == SCALAR2) {
+  if (actual1 == IRType::SCALAR1 && actual2 == IRType::SCALAR2) {
     // If type of the pair of registers is (SCALAR1, SCALAR2), we just bail
     // out.
     return;
@@ -186,7 +186,7 @@ void assume_type(TypeEnvironment* state,
     return;
   }
   IRType actual = state->get_type(reg).element();
-  if (ignore_top && actual == TOP) {
+  if (ignore_top && actual == IRType::TOP) {
     return;
   }
   check_type_match(reg, actual, /* expected */ expected);
@@ -218,13 +218,13 @@ void assume_comparable_with_zero(TypeEnvironment* state, reg_t reg) {
     return;
   }
   IRType t = state->get_type(reg).element();
-  if (t == SCALAR) {
+  if (t == IRType::SCALAR) {
     // We can't say anything conclusive about a register that has SCALAR type,
     // so we just bail out.
     return;
   }
-  if (!(TypeDomain(t).leq(TypeDomain(REFERENCE)) ||
-        TypeDomain(t).leq(TypeDomain(INT)))) {
+  if (!(TypeDomain(t).leq(TypeDomain(IRType::REFERENCE)) ||
+        TypeDomain(t).leq(TypeDomain(IRType::INT)))) {
     std::ostringstream out;
     print_register(out, reg)
         << ": expected integer or reference type, but found " << t
@@ -243,11 +243,11 @@ void assume_comparable(TypeEnvironment* state, reg_t reg1, reg_t reg2) {
   }
   IRType t1 = state->get_type(reg1).element();
   IRType t2 = state->get_type(reg2).element();
-  if (!((TypeDomain(t1).leq(TypeDomain(REFERENCE)) &&
-         TypeDomain(t2).leq(TypeDomain(REFERENCE))) ||
-        (TypeDomain(t1).leq(TypeDomain(SCALAR)) &&
-         TypeDomain(t2).leq(TypeDomain(SCALAR)) && (t1 != FLOAT) &&
-         (t2 != FLOAT)))) {
+  if (!((TypeDomain(t1).leq(TypeDomain(IRType::REFERENCE)) &&
+         TypeDomain(t2).leq(TypeDomain(IRType::REFERENCE))) ||
+        (TypeDomain(t1).leq(TypeDomain(IRType::SCALAR)) &&
+         TypeDomain(t2).leq(TypeDomain(IRType::SCALAR)) &&
+         (t1 != IRType::FLOAT) && (t2 != IRType::FLOAT)))) {
     // Two values can be used in a comparison operation if they either both
     // have the REFERENCE type or have non-float scalar types. Note that in
     // the case where one or both types have the SCALAR type, we can't
@@ -261,25 +261,30 @@ void assume_comparable(TypeEnvironment* state, reg_t reg1, reg_t reg2) {
 }
 
 void assume_integer(TypeEnvironment* state, reg_t reg) {
-  assume_type(state, reg, /* expected */ INT);
+  assume_type(state, reg, /* expected */ IRType::INT);
 }
 
 void assume_float(TypeEnvironment* state, reg_t reg) {
-  assume_type(state, reg, /* expected */ FLOAT);
+  assume_type(state, reg, /* expected */ IRType::FLOAT);
 }
 
 void assume_long(TypeEnvironment* state, reg_t reg) {
-  assume_wide_type(state, reg, /* expected1 */ LONG1, /* expected2 */ LONG2);
+  assume_wide_type(
+      state, reg, /* expected1 */ IRType::LONG1, /* expected2 */ IRType::LONG2);
 }
 
 void assume_double(TypeEnvironment* state, reg_t reg) {
-  assume_wide_type(
-      state, reg, /* expected1 */ DOUBLE1, /* expected2 */ DOUBLE2);
+  assume_wide_type(state,
+                   reg,
+                   /* expected1 */ IRType::DOUBLE1,
+                   /* expected2 */ IRType::DOUBLE2);
 }
 
 void assume_wide_scalar(TypeEnvironment* state, reg_t reg) {
-  assume_wide_type(
-      state, reg, /* expected1 */ SCALAR1, /* expected2 */ SCALAR2);
+  assume_wide_type(state,
+                   reg,
+                   /* expected1 */ IRType::SCALAR1,
+                   /* expected2 */ IRType::SCALAR2);
 }
 
 class Result final {
@@ -855,7 +860,7 @@ void IRTypeChecker::assume_scalar(TypeEnvironment* state,
                                   bool in_move) const {
   assume_type(state,
               reg,
-              /* expected */ SCALAR,
+              /* expected */ IRType::SCALAR,
               /* ignore_top */ in_move && !m_verify_moves);
 }
 
@@ -864,7 +869,7 @@ void IRTypeChecker::assume_reference(TypeEnvironment* state,
                                      bool in_move) const {
   assume_type(state,
               reg,
-              /* expected */ REFERENCE,
+              /* expected */ IRType::REFERENCE,
               /* ignore_top */ in_move && !m_verify_moves);
 }
 
@@ -1456,7 +1461,7 @@ IRType IRTypeChecker::get_type(IRInstruction* insn, reg_t reg) const {
   if (it == type_envs.end()) {
     // The instruction doesn't belong to this method. We treat this as
     // unreachable code and return BOTTOM.
-    return BOTTOM;
+    return IRType::BOTTOM;
   }
   return it->second.get_type(reg).element();
 }

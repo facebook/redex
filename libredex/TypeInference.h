@@ -99,7 +99,7 @@
  * control-flow graph.
  */
 
-enum IRType {
+enum class IRType {
   BOTTOM,
   ZERO,
   CONST,

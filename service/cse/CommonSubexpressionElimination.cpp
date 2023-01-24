@@ -1783,13 +1783,14 @@ void CommonSubexpressionElimination::insert_runtime_assertions(
       always_assert(!type.is_bottom());
       TRACE(CSE, 6, "[CSE] to check: %s => %s - r%u: %s", SHOW(earlier_insn),
             SHOW(insn), temp, SHOW(type.element()));
-      always_assert(type.element() != CONST2);
-      always_assert(type.element() != LONG2);
-      always_assert(type.element() != DOUBLE2);
-      always_assert(type.element() != SCALAR2);
-      if (type.element() != ZERO && type.element() != CONST &&
-          type.element() != INT && type.element() != REFERENCE &&
-          type.element() != LONG1) {
+      always_assert(type.element() != IRType::CONST2);
+      always_assert(type.element() != IRType::LONG2);
+      always_assert(type.element() != IRType::DOUBLE2);
+      always_assert(type.element() != IRType::SCALAR2);
+      if (type.element() != IRType::ZERO && type.element() != IRType::CONST &&
+          type.element() != IRType::INT &&
+          type.element() != IRType::REFERENCE &&
+          type.element() != IRType::LONG1) {
         // TODO: Handle floats and doubles via Float.floatToIntBits and
         // Double.doubleToLongBits to deal with NaN.
         // TODO: Improve TypeInference so that we never have to deal with
@@ -1819,7 +1820,7 @@ void CommonSubexpressionElimination::insert_runtime_assertions(
                        throw_info->index);
       }
 
-      if (type.element() == LONG1) {
+      if (type.element() == IRType::LONG1) {
         auto cmp_reg = m_cfg.allocate_temp();
         IRInstruction* cmp_insn = new IRInstruction(OPCODE_CMP_LONG);
         cmp_insn->set_dest(cmp_reg);

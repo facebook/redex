@@ -201,7 +201,7 @@ TypeDemand ConstantUses::get_type_demand(DexType* type) {
 }
 
 static bool is_non_zero_int(IRType type) {
-  return type == SCALAR || type == INT || type == CONST;
+  return type == IRType::SCALAR || type == IRType::INT || type == IRType::CONST;
 }
 
 TypeDemand ConstantUses::get_type_demand(IRInstruction* insn,
@@ -372,7 +372,8 @@ TypeDemand ConstantUses::get_type_demand(IRInstruction* insn,
       auto t1 = type_environment.get_type(insn->src(0));
       auto t2 = type_environment.get_type(insn->src(1));
       if (!t1.is_top() && !t1.is_bottom() && !t2.is_top() && !t2.is_bottom()) {
-        if (t1.element() == REFERENCE || t2.element() == REFERENCE) {
+        if (t1.element() == IRType::REFERENCE ||
+            t2.element() == IRType::REFERENCE) {
           return TypeDemand::Object;
         }
         if (is_non_zero_int(t1.element()) || is_non_zero_int(t2.element())) {
@@ -395,7 +396,7 @@ TypeDemand ConstantUses::get_type_demand(IRInstruction* insn,
       auto& type_environment = type_environments.at(insn);
       auto t = type_environment.get_type(insn->src(0));
       if (!t.is_top() && !t.is_bottom()) {
-        if (t.element() == REFERENCE) {
+        if (t.element() == IRType::REFERENCE) {
           return TypeDemand::Object;
         }
         if (is_non_zero_int(t.element())) {

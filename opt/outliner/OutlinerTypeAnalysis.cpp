@@ -71,32 +71,32 @@ const DexType* OutlinerTypeAnalysis::get_inferred_type(
   auto insn = pc.root.insns.front();
   const auto& env = m_type_environments->at(insn);
   switch (env.get_type(reg).element()) {
-  case BOTTOM:
-  case ZERO:
-  case CONST:
-  case CONST1:
-  case SCALAR:
-  case SCALAR1:
+  case IRType::BOTTOM:
+  case IRType::ZERO:
+  case IRType::CONST:
+  case IRType::CONST1:
+  case IRType::SCALAR:
+  case IRType::SCALAR1:
     // Can't figure out exact type via type inference; let's try reaching-defs
     return get_type_of_reaching_defs(nullptr, insn, reg);
-  case REFERENCE: {
+  case IRType::REFERENCE: {
     auto dex_type = env.get_dex_type(reg);
     return dex_type ? *dex_type : nullptr;
   }
-  case INT:
+  case IRType::INT:
     // Could actually be boolean, byte, short; let's try reaching-defs
     return get_type_of_reaching_defs(nullptr, insn, reg);
-  case FLOAT:
+  case IRType::FLOAT:
     return type::_float();
-  case LONG1:
+  case IRType::LONG1:
     return type::_long();
-  case DOUBLE1:
+  case IRType::DOUBLE1:
     return type::_double();
-  case CONST2:
-  case DOUBLE2:
-  case LONG2:
-  case SCALAR2:
-  case TOP:
+  case IRType::CONST2:
+  case IRType::DOUBLE2:
+  case IRType::LONG2:
+  case IRType::SCALAR2:
+  case IRType::TOP:
   default:
     not_reached();
   }
@@ -428,11 +428,11 @@ const DexType* OutlinerTypeAnalysis::get_if_insn_type_demand(
   auto& env = m_type_environments->at(insn);
   for (size_t src_index = 0; src_index < insn->srcs_size(); src_index++) {
     auto t = env.get_type(insn->src(src_index));
-    if (t.element() == REFERENCE) {
+    if (t.element() == IRType::REFERENCE) {
       return type::java_lang_Object();
-    } else if (t.element() == FLOAT) {
+    } else if (t.element() == IRType::FLOAT) {
       return type::_float();
-    } else if (t.element() == INT) {
+    } else if (t.element() == IRType::INT) {
       return type::_int();
     }
   }
