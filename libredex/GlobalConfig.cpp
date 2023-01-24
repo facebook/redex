@@ -53,6 +53,7 @@ void IRTypeCheckerConfig::bind_config() {
   bind("check_num_of_refs", {}, check_num_of_refs);
   bind("annotated_cfg_on_error", annotated_cfg_on_error,
        annotated_cfg_on_error);
+  bind("check_classes", {}, check_classes);
 }
 
 void HasherConfig::bind_config() {

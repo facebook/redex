@@ -22,6 +22,7 @@ check_PROGRAMS = \
     cfg_inliner_test \
     cfg_mutation_test \
     cfg_positions_test \
+    class_checker_test \
     check_breadcrumbs_test \
     check_cast_analysis_test \
     concurrent_containers_test \
@@ -169,6 +170,8 @@ cfg_positions_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 check_breadcrumbs_test_SOURCES = CheckBreadCrumbsTest.cpp
 
 check_cast_analysis_test_SOURCES = CheckCastAnalysisTest.cpp
+
+class_checker_test_SOURCES = ClassCheckerTest.cpp ScopeHelper.cpp
 
 concurrent_containers_test_SOURCES = ConcurrentContainersTest.cpp
 
@@ -463,6 +466,7 @@ TESTS = \
     cfg_positions_test \
     check_breadcrumbs_test \
     check_cast_analysis_test \
+    class_checker_test \
     concurrent_containers_test \
     configurable_test \
     constructor_analysis_test \

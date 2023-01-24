@@ -33,6 +33,7 @@
 #include "ApiLevelChecker.h"
 #include "AssetManager.h"
 #include "CFGMutation.h"
+#include "ClassChecker.h"
 #include "CommandProfiling.h"
 #include "ConfigFiles.h"
 #include "Debug.h"
@@ -111,6 +112,8 @@ class CheckerConfig {
 
     m_check_num_of_refs =
         type_checker_args.get("check_num_of_refs", false).asBool();
+
+    m_check_classes = type_checker_args.get("check_classes", true).asBool();
 
     for (auto& trigger_pass : type_checker_args["run_after_passes"]) {
       m_type_checker_trigger_passes.insert(trigger_pass.asString());
@@ -292,27 +295,42 @@ class CheckerConfig {
           return Result(dex_method);
         });
 
-    if (res.errors == 0) {
+    if (res.errors != 0) {
+      // Re-run the smallest method to produce error message.
+      auto checker = run_checker(res.smallest_error_method);
+      redex_assert(checker.fail());
+
+      std::ostringstream oss;
+      oss << "Inconsistency found in Dex code for "
+          << show(res.smallest_error_method) << std::endl
+          << " " << checker.what() << std::endl
+          << "Code:" << std::endl
+          << run_checker_error(res.smallest_error_method);
+
+      if (res.errors > 1) {
+        oss << "\n(" << (res.errors - 1) << " more issues!)";
+      }
+
+      always_assert_log(!exit_on_fail, "%s", oss.str().c_str());
+      return oss.str();
+    }
+
+    if (!m_check_classes) {
       return boost::none;
     }
 
-    // Re-run the smallest method to produce error message.
-    auto checker = run_checker(res.smallest_error_method);
-    redex_assert(checker.fail());
+    TRACE(PM, 1, "Running NonAbstractClassChecker...");
+    Timer t1("NonAbstractClassChecker");
 
-    std::ostringstream oss;
-    oss << "Inconsistency found in Dex code for "
-        << show(res.smallest_error_method) << std::endl
-        << " " << checker.what() << std::endl
-        << "Code:" << std::endl
-        << run_checker_error(res.smallest_error_method);
-
-    if (res.errors > 1) {
-      oss << "\n(" << (res.errors - 1) << " more issues!)";
+    ClassChecker class_checker;
+    class_checker.run(scope);
+    if (class_checker.fail()) {
+      std::ostringstream oss = class_checker.print_failed_classes();
+      always_assert_log(!exit_on_fail, "%s", oss.str().c_str());
+      return oss.str();
     }
 
-    always_assert_log(!exit_on_fail, "%s", oss.str().c_str());
-    return oss.str();
+    return boost::none;
   }
 
   static void fail_error(const std::string& error_msg, size_t errors = 1) {
@@ -336,6 +354,7 @@ class CheckerConfig {
   bool m_validate_access{true};
   bool m_annotated_cfg_on_error{false};
   bool m_annotated_cfg_on_error_reduced{true};
+  bool m_check_classes;
 };
 
 class CheckUniqueDeobfuscatedNames {

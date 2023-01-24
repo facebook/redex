@@ -52,6 +52,7 @@ libredex_la_SOURCES = \
 	libredex/CallGraph.cpp \
 	libredex/ClassHierarchy.cpp \
 	libredex/ClassUtil.cpp \
+	libredex/ClassChecker.cpp \
 	libredex/ConfigFiles.cpp \
 	libredex/Configurable.cpp \
 	libredex/ControlFlow.cpp \

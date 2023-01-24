@@ -39,6 +39,7 @@ struct IRTypeCheckerConfig : public Configurable {
   std::unordered_set<std::string> run_after_passes;
   bool check_no_overwrite_this;
   bool annotated_cfg_on_error{false};
+  bool check_classes;
 };
 
 struct HasherConfig : public Configurable {
