@@ -77,8 +77,9 @@ class DexNameWrapper {
 
   virtual bool name_has_changed() { return has_new_name; }
 
-  virtual const char* get_name() {
-    return has_new_name ? this->name.c_str() : this->get()->get_name()->c_str();
+  virtual std::string_view get_name() {
+    return has_new_name ? std::string_view(this->name)
+                        : this->get()->get_name()->str();
   }
 
   virtual void set_name(const std::string& new_name) {
@@ -157,7 +158,7 @@ class MethodNameWrapper : public DexMethodWrapper {
     return next->name_has_changed();
   }
 
-  const char* get_name() override {
+  std::string_view get_name() override {
     if (next == nullptr) return DexMethodWrapper::get_name();
     update_link();
     return next->get_name();
@@ -175,8 +176,7 @@ class MethodNameWrapper : public DexMethodWrapper {
   void link(MethodNameWrapper* other) {
     always_assert(other != nullptr);
     always_assert(other != this);
-    always_assert(
-        strcmp(SHOW(get()->get_name()), SHOW(other->get()->get_name())) == 0);
+    always_assert(get()->get_name() == other->get()->get_name());
 
     auto this_end = find_end_link();
     // Make sure they aren't already linked
@@ -321,16 +321,16 @@ class MethodNameGenerator : public NameGenerator<DexMethod*> {
         std::string new_name(this->next_name());
         wrap->set_name(new_name);
         this->used_ids.insert(new_name);
-        TRACE(OBFUSCATE, 3, "\tTrying method name %s for %s", wrap->get_name(),
-              SHOW(wrap->get()));
+        TRACE(OBFUSCATE, 3, "\tTrying method name %s for %s",
+              std::string(wrap->get_name()).c_str(), SHOW(wrap->get()));
       } while (DexMethod::get_method(wrap->get()->get_class(),
                                      DexString::make_string(wrap->get_name()),
                                      wrap->get()->get_proto()) != nullptr);
       // Keep spinning on a name until you find one that isn't used at all
       TRACE(OBFUSCATE, 2,
             "\tIntending to rename method %s (%s) to %s ids to avoid %zu",
-            SHOW(wrap->get()), SHOW(wrap->get()->get_name()), wrap->get_name(),
-            ids_to_avoid.size());
+            SHOW(wrap->get()), SHOW(wrap->get()->get_name()),
+            std::string(wrap->get_name()).c_str(), ids_to_avoid.size());
     }
   }
 };
@@ -462,8 +462,8 @@ class FieldNameGenerator : public NameGenerator<DexField*> {
         std::string new_name(this->next_name());
         wrap->set_name(new_name);
         this->used_ids.insert(new_name);
-        TRACE(OBFUSCATE, 2, "\tTrying field name %s for %s", wrap->get_name(),
-              SHOW(wrap->get()));
+        TRACE(OBFUSCATE, 2, "\tTrying field name %s for %s",
+              std::string(wrap->get_name()).c_str(), SHOW(wrap->get()));
       } while (DexField::get_field(wrap->get()->get_class(),
                                    DexString::make_string(wrap->get_name()),
                                    wrap->get()->get_type()) != nullptr);
@@ -474,7 +474,7 @@ class FieldNameGenerator : public NameGenerator<DexField*> {
             SHOW(wrap->get()),
             SHOW(wrap->get()->get_name()),
             should_rename_elem(wrap->get()) ? "true" : "false",
-            wrap->get_name());
+            std::string(wrap->get_name()).c_str());
     }
   }
 };
@@ -496,7 +496,7 @@ class DexElemManager {
           std::unordered_map<const DexString*,
                              std::unique_ptr<DexNameWrapper<T>>>>>
       elements;
-  using RefCtrFn = std::function<S(const std::string&)>;
+  using RefCtrFn = std::function<S(std::string_view)>;
   using SigGetFn = std::function<K(R)>;
   using ElemCtrFn = std::function<DexNameWrapper<T>*(T&)>;
   SigGetFn sig_getter_fn;
@@ -535,16 +535,17 @@ class DexElemManager {
           // need both because of methods ??
           if (!wrap->is_modified() || !should_rename_elem(wrap->get()) ||
               !wrap->should_commit() ||
-              strcmp(wrap->get()->get_name()->c_str(), wrap->get_name()) == 0) {
+              wrap->get()->get_name()->str() == wrap->get_name()) {
             TRACE(OBFUSCATE, 2, "Not committing %s to %s", SHOW(wrap->get()),
-                  wrap->get_name());
+                  std::string(wrap->get_name()).c_str());
             continue;
           }
           auto elem = wrap->get();
           TRACE(OBFUSCATE, 2,
                 "\tRenaming the elem 0x%p %s%s to %s external: %s can_rename: "
                 "%s\n",
-                elem, SHOW(sig_getter_fn(elem)), SHOW(elem), wrap->get_name(),
+                elem, SHOW(sig_getter_fn(elem)), SHOW(elem),
+                std::string(wrap->get_name()).c_str(),
                 type_class(elem->get_class())->is_external() ? "true" : "false",
                 can_rename(elem) ? "true" : "false");
           if (renamed_elems.count(elem) > 0) {
@@ -624,9 +625,6 @@ class DexElemManager {
         for (auto& name_wrap : type_itr.second) {
           TRACE(OBFUSCATE, 2, " (%s) %s", SHOW(type_itr.first),
                 name_wrap.second->get_printable().c_str());
-          /*SHOW(class_itr.first),
-          SHOW(name_wrap.first),
-          name_wrap.second->get_name());*/
         }
       }
     }
@@ -712,9 +710,9 @@ class FieldObfuscationState
                              DexFieldManager& name_manager,
                              const ClassHierarchy& /* unused */) override {
     for (auto f : base->get_ifields())
-      ids_to_avoid.insert(name_manager[f]->get_name());
+      ids_to_avoid.insert(std::string(name_manager[f]->get_name()));
     for (auto f : base->get_sfields())
-      ids_to_avoid.insert(name_manager[f]->get_name());
+      ids_to_avoid.insert(std::string(name_manager[f]->get_name()));
   }
 };
 
@@ -785,9 +783,10 @@ class MethodObfuscationState : public ObfuscationState<DexMethod*,
                              const ClassHierarchy& ch) override {
     auto visit_member = [&](DexMethod* m) {
       auto wrap(name_manager[m]);
-      if (wrap->name_has_changed())
-        ids_to_avoid.insert(SHOW(wrap->get()->get_name()));
-      ids_to_avoid.insert(wrap->get_name());
+      if (wrap->name_has_changed()) {
+        ids_to_avoid.insert(wrap->get()->get_name()->str_copy());
+      }
+      ids_to_avoid.insert(std::string(wrap->get_name()));
     };
     walk_hierarchy(base, visit_member, false,
                    HierarchyDirection::VisitSuperClasses, ch);

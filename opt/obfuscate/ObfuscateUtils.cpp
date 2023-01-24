@@ -60,7 +60,7 @@ DexFieldManager new_dex_field_manager() {
   return DexFieldManager(
       [](DexField*& f) -> FieldNameWrapper* { return new FieldNameWrapper(f); },
       [](DexFieldRef* f) -> DexType* { return f->get_type(); },
-      [](const std::string& new_name) -> DexFieldSpec {
+      [](std::string_view new_name) -> DexFieldSpec {
         DexFieldSpec spec;
         spec.name = DexString::make_string(new_name);
         return spec;
@@ -73,7 +73,7 @@ DexMethodManager new_dex_method_manager() {
         return new MethodNameWrapper(f);
       },
       [](DexMethodRef* m) -> DexProto* { return m->get_proto(); },
-      [](const std::string& new_name) -> DexMethodSpec {
+      [](std::string_view new_name) -> DexMethodSpec {
         DexMethodSpec spec;
         spec.name = DexString::make_string(new_name);
         return spec;
