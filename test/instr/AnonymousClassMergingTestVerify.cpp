@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <boost/regex.hpp>
+
 #include "Show.h"
 #include "verify/VerifyUtil.h"
 
@@ -27,8 +29,12 @@ TEST_F(PostVerify, MergeablesRemoval) {
 }
 
 TEST_F(PostVerify, InterfaceMethodsOnShape) {
-  auto shape = find_class_named(
-      classes, "Lcom/facebook/redex/AnonInterface1Shape2S0100000;");
+  boost::regex shape_name_pattern(
+      "^Lcom/facebook/redex/AnonInterface1Shape[0-9]+S0100000;$");
+  auto shape =
+      find_class_named(classes, [&shape_name_pattern](const char* name) {
+        return boost::regex_match(name, shape_name_pattern);
+      });
   ASSERT_NE(shape, nullptr) << "Not find merged shape for Interface1\n";
   auto magic1 = find_vmethod_named(*shape, "magic1");
   ASSERT_NE(magic1, nullptr);
