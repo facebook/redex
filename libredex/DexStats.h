@@ -105,6 +105,6 @@ struct dex_stats_t {
 
   int annotations_directory_count = 0;
   int annotations_directory_bytes = 0;
-};
 
-dex_stats_t& operator+=(dex_stats_t& lhs, const dex_stats_t& rhs);
+  dex_stats_t& operator+=(const dex_stats_t& rhs);
+};

@@ -109,7 +109,9 @@ void ResourceConfig::bind_config() {
   bind("canonical_entry_types", {}, canonical_entry_types);
 }
 
-void DexOutputConfig::bind_config() {}
+void DexOutputConfig::bind_config() {
+  bind("write_class_sizes", write_class_sizes, write_class_sizes);
+}
 
 void GlobalConfig::bind_config() {
   bool bool_param;
