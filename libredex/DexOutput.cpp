@@ -556,6 +556,7 @@ DexOutput::DexOutput(
     PositionMapper* pos_mapper,
     std::unordered_map<DexMethod*, uint64_t>* method_to_id,
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
+    const DexOutputConfig& dex_output_config,
     PostLowering* post_lowering,
     int min_sdk)
     : m_classes(classes),
@@ -570,7 +571,8 @@ DexOutput::DexOutput(
       m_offset(0),
       m_iodi_metadata(iodi_metadata),
       m_config_files(config_files),
-      m_min_sdk(min_sdk) {
+      m_min_sdk(min_sdk),
+      m_dex_output_config(dex_output_config) {
   // Ensure a clean slate.
   memset(m_output.get(), 0, m_output_size);
 
@@ -3055,6 +3057,7 @@ dex_stats_t write_classes_to_dex(
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
     IODIMetadata* iodi_metadata,
     const std::string& dex_magic,
+    const DexOutputConfig& dex_output_config,
     PostLowering* post_lowering,
     int min_sdk) {
   const JsonWrapper& json_cfg = conf.get_json_config();
@@ -3108,7 +3111,7 @@ dex_stats_t write_classes_to_dex(
   DexOutput dout(filename.c_str(), classes, std::move(gtypes), locator_index,
                  normal_primary_dex, store_number, store_name, dex_number,
                  debug_info_kind, iodi_metadata, conf, pos_mapper, method_to_id,
-                 code_debug_lines, post_lowering, min_sdk);
+                 code_debug_lines, dex_output_config, post_lowering, min_sdk);
 
   dout.prepare(string_sort_mode, code_sort_mode, conf, dex_magic);
   dout.write();

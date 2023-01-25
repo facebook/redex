@@ -17,6 +17,7 @@
 #include "DexMethodHandle.h"
 #include "DexStats.h"
 #include "DexUtil.h"
+#include "GlobalConfig.h"
 #include "Pass.h"
 #include "PostLowering.h"
 #include "ProguardMap.h"
@@ -147,6 +148,7 @@ dex_stats_t write_classes_to_dex(
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
     IODIMetadata* iodi_metadata,
     const std::string& dex_magic,
+    const DexOutputConfig& dex_output_config = DexOutputConfig{},
     PostLowering* post_lowering = nullptr,
     int min_sdk = 0);
 
@@ -343,6 +345,7 @@ class DexOutput {
   bool m_normal_primary_dex;
   const ConfigFiles& m_config_files;
   int m_min_sdk;
+  const DexOutputConfig m_dex_output_config;
 
   void insert_map_item(uint16_t maptype,
                        uint32_t size,
@@ -411,6 +414,7 @@ class DexOutput {
             std::unordered_map<DexMethod*, uint64_t>* method_to_id,
             std::unordered_map<DexCode*, std::vector<DebugLineItem>>*
                 code_debug_lines,
+            const DexOutputConfig& dex_output_config = DexOutputConfig{},
             PostLowering* post_lowering = nullptr,
             int min_sdk = 0);
   void prepare(SortMode string_mode,

@@ -109,6 +109,8 @@ void ResourceConfig::bind_config() {
   bind("canonical_entry_types", {}, canonical_entry_types);
 }
 
+void DexOutputConfig::bind_config() {}
+
 void GlobalConfig::bind_config() {
   bool bool_param;
   std::string string_param;
@@ -198,6 +200,7 @@ GlobalConfigRegistry& GlobalConfig::default_registry() {
       register_as<ProguardConfig>("proguard"),
       register_as<PassManagerConfig>("pass_manager"),
       register_as<ResourceConfig>("resources"),
+      register_as<DexOutputConfig>("dex_output"),
   };
   return registry;
 }

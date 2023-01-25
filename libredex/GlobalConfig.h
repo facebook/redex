@@ -174,6 +174,15 @@ struct ResourceConfig : public Configurable {
   std::unordered_set<std::string> canonical_entry_types;
 };
 
+struct DexOutputConfig : public Configurable {
+  void bind_config() override;
+
+  std::string get_config_name() override { return "DexOutputConfig"; }
+  std::string get_config_doc() override {
+    return "Options used by the Dex writer.";
+  }
+};
+
 class GlobalConfig;
 
 using BindOperationFn = std::function<std::unique_ptr<Configurable>(
