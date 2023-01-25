@@ -451,3 +451,9 @@ void ConfigFiles::set_outdir(const std::string& new_outdir) {
   boost::filesystem::create_directory(meta_path);
   outdir = new_outdir;
 }
+
+void ConfigFiles::set_class_lists(
+    std::unordered_map<std::string, std::vector<std::string>> l) {
+  m_class_lists = std::move(l);
+  m_load_class_lists_attempted = true;
+}

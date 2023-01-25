@@ -197,6 +197,11 @@ struct ConfigFiles {
   void build_dead_class_and_live_class_split_lists();
   bool is_relocated_class(const std::string& name) const;
   void remove_relocated_part(std::string* name);
+
+  // For testing.
+  void set_class_lists(
+      std::unordered_map<std::string, std::vector<std::string>> l);
+
   bool m_load_class_lists_attempted{false};
   std::unique_ptr<ProguardMap> m_proguard_map;
   std::string m_coldstart_class_filename;
@@ -229,4 +234,6 @@ struct ConfigFiles {
   // min_sdk AndroidAPI
   int32_t m_min_sdk_api_level = 0;
   std::unique_ptr<api::AndroidSDK> m_android_min_sdk_api;
+
+  friend struct ClassPreloadTest;
 };
