@@ -29,6 +29,7 @@
 #include "InstructionLowering.h"
 #include "JarLoader.h"
 #include "Macros.h"
+#include "RedexOptions.h"
 #include "Show.h"
 #include "Timer.h"
 #include "Walkers.h"
@@ -118,8 +119,7 @@ void write_intermediate_dex(const RedexOptions& redex_options,
       std::string filename =
           redex::get_dex_output_name(output_ir_dir, store, i);
       auto gtypes = std::make_shared<GatheredTypes>(&store.get_dexen()[i]);
-      write_classes_to_dex(redex_options,
-                           filename,
+      write_classes_to_dex(filename,
                            &store.get_dexen()[i],
                            std::move(gtypes),
                            /* locator_index= */ nullptr,
@@ -128,6 +128,7 @@ void write_intermediate_dex(const RedexOptions& redex_options,
                            i,
                            conf,
                            pos_mapper.get(),
+                           redex_options.debug_info_kind,
                            /* method_to_id= */ nullptr,
                            /* code_debug_lines= */ nullptr,
                            /* iodi_metadata= */ nullptr,

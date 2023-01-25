@@ -20,7 +20,6 @@
 #include "Pass.h"
 #include "PostLowering.h"
 #include "ProguardMap.h"
-#include "RedexOptions.h"
 #include "Trace.h"
 
 #include <locator.h>
@@ -28,6 +27,8 @@ using facebook::Locator;
 
 class DexAnnotation;
 class DexCallSite;
+
+enum class DebugInfoKind : uint32_t;
 
 using dexstring_to_idx = std::unordered_map<const DexString*, uint32_t>;
 using dextype_to_idx = std::unordered_map<DexType*, uint16_t>;
@@ -132,7 +133,6 @@ class IODIMetadata;
 class GatheredTypes;
 
 dex_stats_t write_classes_to_dex(
-    const RedexOptions&,
     const std::string& filename,
     DexClasses* classes,
     std::shared_ptr<GatheredTypes> gtypes,
@@ -142,6 +142,7 @@ dex_stats_t write_classes_to_dex(
     size_t dex_number,
     ConfigFiles& conf,
     PositionMapper* pos_mapper,
+    DebugInfoKind debug_info_kind,
     std::unordered_map<DexMethod*, uint64_t>* method_to_id,
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
     IODIMetadata* iodi_metadata,

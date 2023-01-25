@@ -10,8 +10,6 @@
 #include <cstdint>
 #include <string>
 
-#include <boost/optional.hpp>
-
 namespace Json {
 class Value;
 } // namespace Json
