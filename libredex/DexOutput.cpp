@@ -1025,6 +1025,9 @@ void DexOutput::generate_class_data_items() {
     if (!clz->has_class_data()) continue;
     /* No alignment constraints for this data */
     int size = clz->encode(m_dodx.get(), dco, m_output.get() + m_offset);
+    if (m_dex_output_config.write_class_sizes) {
+      m_stats.class_size[clz] = size;
+    }
     cdefs[i].class_data_offset = m_offset;
     inc_offset(size);
     count += 1;
@@ -3048,7 +3051,7 @@ static SortMode make_sort_bytecode(const std::string& sort_bytecode) {
   }
 }
 
-dex_stats_t write_classes_to_dex(
+enhanced_dex_stats_t write_classes_to_dex(
     const std::string& filename,
     DexClasses* classes,
     std::shared_ptr<GatheredTypes> gtypes,

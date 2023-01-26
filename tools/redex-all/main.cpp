@@ -11,6 +11,7 @@
 #include <ctime>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <memory>
 #include <regex>
 #include <set>
@@ -680,7 +681,8 @@ Json::Value get_position_stats(const PositionMapper* pos_mapper) {
   return obj;
 }
 
-Json::Value get_detailed_stats(const std::vector<dex_stats_t>& dexes_stats) {
+template <typename StatsT>
+Json::Value get_detailed_stats(const std::vector<StatsT>& dexes_stats) {
   Json::Value dexes;
   int i = 0;
   for (const dex_stats_t& stats : dexes_stats) {
@@ -714,7 +716,7 @@ Json::Value get_input_stats(const dex_stats_t& stats,
 
 Json::Value get_output_stats(
     const dex_stats_t& stats,
-    const std::vector<dex_stats_t>& dexes_stats,
+    const std::vector<enhanced_dex_stats_t>& dexes_stats,
     const PassManager& mgr,
     const instruction_lowering::Stats& instruction_lowering_stats,
     const PositionMapper* pos_mapper) {
@@ -1100,8 +1102,8 @@ void redex_backend(ConfigFiles& conf,
     locator_index = new LocatorIndex(make_locator_index(stores));
   }
 
-  dex_stats_t output_totals;
-  std::vector<dex_stats_t> output_dexes_stats;
+  enhanced_dex_stats_t output_totals;
+  std::vector<enhanced_dex_stats_t> output_dexes_stats;
 
   const std::string& line_number_map_filename = conf.metafile(LINE_NUMBER_MAP);
   const std::string& debug_line_map_filename = conf.metafile(DEBUG_LINE_MAP);
@@ -1139,6 +1141,11 @@ void redex_backend(ConfigFiles& conf,
     Timer t("Compute initial IODI metadata");
     iodi_metadata.mark_methods(stores);
   }
+
+  const auto& dex_output_config =
+      *conf.get_global_config().get_config_by_name<DexOutputConfig>(
+          "dex_output");
+
   for (size_t store_number = 0; store_number < stores.size(); ++store_number) {
     auto& store = stores[store_number];
     Timer t("Writing optimized dexes");
@@ -1166,12 +1173,13 @@ void redex_backend(ConfigFiles& conf,
           needs_addresses ? &code_debug_lines : nullptr,
           is_iodi(dik) ? &iodi_metadata : nullptr,
           stores[0].get_dex_magic(),
-          *conf.get_global_config().get_config_by_name<DexOutputConfig>(
-              "dex_output"),
+          dex_output_config,
           symbolicate_detached_methods ? post_lowering.get() : nullptr,
           manager.get_redex_options().min_sdk);
 
       output_totals += this_dex_stats;
+      // Remove class sizes here to free up memory.
+      this_dex_stats.class_size.clear();
       output_dexes_stats.push_back(this_dex_stats);
       signatures.insert(*reinterpret_cast<uint32_t*>(this_dex_stats.signature));
     }
@@ -1223,6 +1231,21 @@ void redex_backend(ConfigFiles& conf,
         get_output_stats(output_totals, output_dexes_stats, manager,
                          instruction_lowering_stats, pos_mapper.get());
     print_warning_summary();
+
+    if (dex_output_config.write_class_sizes) {
+      Timer t2("Writing class sizes");
+      // Sort for stability.
+      std::vector<const DexClass*> keys;
+      std::transform(output_totals.class_size.begin(),
+                     output_totals.class_size.end(), std::back_inserter(keys),
+                     [](const auto& p) { return p.first; });
+      std::sort(keys.begin(), keys.end(), compare_dexclasses);
+      std::ofstream ofs{conf.metafile("redex-class-sizes.csv")};
+      for (auto* c : keys) {
+        ofs << c->get_deobfuscated_name_or_empty() << ","
+            << output_totals.class_size.at(c) << "\n";
+      }
+    }
   }
 }
 

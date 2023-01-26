@@ -160,6 +160,8 @@ struct DexOutputConfig : public Configurable {
   std::string get_config_doc() override {
     return "Options used by the Dex writer.";
   }
+
+  bool write_class_sizes{false};
 };
 
 class GlobalConfig;

@@ -1167,6 +1167,15 @@ def get_compression_list() -> typing.List[CompressionEntry]:
             "redex-instrument-metadata.zip",
             "redex-instrument-checksum.txt",
         ),
+        CompressionEntry(
+            "Redex Class Sizes",
+            lambda args: True,
+            True,
+            [],
+            ["redex-class-sizes.csv"],
+            None,
+            None,
+        ),
     ]
 
 

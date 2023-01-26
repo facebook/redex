@@ -133,7 +133,17 @@ class DexOutputIdx {
 class IODIMetadata;
 class GatheredTypes;
 
-dex_stats_t write_classes_to_dex(
+struct enhanced_dex_stats_t : public dex_stats_t {
+  std::unordered_map<const DexClass*, size_t> class_size;
+
+  enhanced_dex_stats_t& operator+=(const enhanced_dex_stats_t& rhs) {
+    dex_stats_t::operator+=(rhs);
+    class_size.insert(rhs.class_size.begin(), rhs.class_size.end());
+    return *this;
+  }
+};
+
+enhanced_dex_stats_t write_classes_to_dex(
     const std::string& filename,
     DexClasses* classes,
     std::shared_ptr<GatheredTypes> gtypes,
@@ -302,7 +312,7 @@ class DexOutput {
   friend class DexOutputTest;
 
  public:
-  dex_stats_t m_stats;
+  enhanced_dex_stats_t m_stats;
 
   static constexpr size_t kIODILayerBits = 4;
   static constexpr size_t kIODILayerBound = 1 << (kIODILayerBits - 1);

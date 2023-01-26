@@ -98,7 +98,9 @@ void PassManagerConfig::bind_config() {
   bind("pass_aliases", pass_aliases, pass_aliases);
 }
 
-void DexOutputConfig::bind_config() {}
+void DexOutputConfig::bind_config() {
+  bind("write_class_sizes", write_class_sizes, write_class_sizes);
+}
 
 void GlobalConfig::bind_config() {
   bool bool_param;
