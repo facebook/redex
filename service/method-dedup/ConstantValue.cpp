@@ -224,7 +224,7 @@ DexMethod* ConstantValues::create_stub_method(DexMethod* callee) {
   // Assuming that callee's proto is already modified by appending the lifted
   // params.
   auto appended_proto = callee->get_proto();
-  auto stub_arg_list = appended_proto->get_args()->pop_front(size());
+  auto stub_arg_list = appended_proto->get_args()->pop_back(size());
   auto stub_proto =
       DexProto::make_proto(appended_proto->get_rtype(), stub_arg_list);
   auto name = DexString::make_string(callee->get_name()->str() + "$stub");

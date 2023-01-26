@@ -512,6 +512,7 @@ class DexTypeList {
   DexTypeList* push_front(DexType* t) const;
   DexTypeList* pop_front() const;
   DexTypeList* pop_front(size_t n) const;
+  DexTypeList* pop_back(size_t n) const;
 
   DexTypeList* push_back(DexType* t) const;
   DexTypeList* push_back(const std::vector<DexType*>& t) const;
