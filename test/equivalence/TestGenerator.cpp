@@ -22,6 +22,7 @@
 #include "DexPosition.h"
 #include "IRCode.h"
 #include "InstructionLowering.h"
+#include "RedexOptions.h"
 #include "RedexTestUtils.h"
 #include "SanitizersConfig.h"
 #include "TestGenerator.h"
@@ -98,11 +99,9 @@ int main(int argc, char* argv[]) {
   stores.emplace_back(std::move(store));
   instruction_lowering::run(stores);
 
-  RedexOptions redex_options;
   auto gtypes = std::make_shared<GatheredTypes>(&classes);
 
-  write_classes_to_dex(redex_options,
-                       dex,
+  write_classes_to_dex(dex,
                        &classes,
                        std::move(gtypes),
                        nullptr /* LocatorIndex* */,
@@ -111,6 +110,7 @@ int main(int argc, char* argv[]) {
                        0,
                        conf,
                        pos_mapper.get(),
+                       DebugInfoKind::NoCustomSymbolication,
                        nullptr,
                        nullptr,
                        nullptr /* IODIMetadata* */,

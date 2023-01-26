@@ -49,6 +49,7 @@
 #include "MethodProfiles.h"
 #include "MethodSimilarityOrderer.h"
 #include "Pass.h"
+#include "RedexOptions.h" // For DebugInfoKind
 #include "Resolver.h"
 #include "Sha1.h"
 #include "Show.h"
@@ -3046,7 +3047,6 @@ static SortMode make_sort_bytecode(const std::string& sort_bytecode) {
 }
 
 dex_stats_t write_classes_to_dex(
-    const RedexOptions& redex_options,
     const std::string& filename,
     DexClasses* classes,
     std::shared_ptr<GatheredTypes> gtypes,
@@ -3056,6 +3056,7 @@ dex_stats_t write_classes_to_dex(
     size_t dex_number,
     ConfigFiles& conf,
     PositionMapper* pos_mapper,
+    DebugInfoKind debug_info_kind,
     std::unordered_map<DexMethod*, uint64_t>* method_to_id,
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
     IODIMetadata* iodi_metadata,
@@ -3112,8 +3113,8 @@ dex_stats_t write_classes_to_dex(
 
   DexOutput dout(filename.c_str(), classes, std::move(gtypes), locator_index,
                  normal_primary_dex, store_number, store_name, dex_number,
-                 redex_options.debug_info_kind, iodi_metadata, conf, pos_mapper,
-                 method_to_id, code_debug_lines, post_lowering, min_sdk);
+                 debug_info_kind, iodi_metadata, conf, pos_mapper, method_to_id,
+                 code_debug_lines, post_lowering, min_sdk);
 
   dout.prepare(string_sort_mode, code_sort_mode, conf, dex_magic);
   dout.write();

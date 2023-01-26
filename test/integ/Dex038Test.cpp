@@ -20,6 +20,7 @@
 #include "InstructionLowering.h"
 #include "PassManager.h"
 #include "RedexContext.h"
+#include "RedexOptions.h"
 #include "RedexTestUtils.h"
 #include "SanitizersConfig.h"
 #include "Show.h"
@@ -340,7 +341,6 @@ TEST(Dex038Test, ReadWriteDex038) {
   Json::Value conf_obj = Json::nullValue;
   auto tmpdir = redex::make_tmp_dir("dex038_test_%%%%%%%%");
   ConfigFiles dummy_cfg(conf_obj, tmpdir.path);
-  RedexOptions dummy_options;
 
   std::string metafiles = tmpdir.path + "/meta";
   int status = mkdir(metafiles.c_str(), 0755);
@@ -353,8 +353,7 @@ TEST(Dex038Test, ReadWriteDex038) {
   std::string output_dex = tmpdir.path + "/output.dex";
   auto gtypes = std::make_shared<GatheredTypes>(&classes);
 
-  write_classes_to_dex(dummy_options,
-                       output_dex,
+  write_classes_to_dex(output_dex,
                        &classes,
                        std::move(gtypes),
                        nullptr,
@@ -363,6 +362,7 @@ TEST(Dex038Test, ReadWriteDex038) {
                        0,
                        dummy_cfg,
                        pos_mapper.get(),
+                       DebugInfoKind::NoCustomSymbolication,
                        &method_to_id,
                        &code_debug_lines,
                        nullptr,

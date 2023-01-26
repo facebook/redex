@@ -21,6 +21,7 @@
 #include "IODIMetadata.h"
 #include "InstructionLowering.h"
 #include "RedexContext.h"
+#include "RedexOptions.h"
 #include "SanitizersConfig.h"
 #include "Show.h"
 #include "StlUtil.h"

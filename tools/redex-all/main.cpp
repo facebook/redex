@@ -1152,7 +1152,6 @@ void redex_backend(ConfigFiles& conf,
       }
 
       auto this_dex_stats = write_classes_to_dex(
-          redex_options,
           redex::get_dex_output_name(output_dir, store, i),
           &store.get_dexen()[i],
           gtypes,
@@ -1162,6 +1161,7 @@ void redex_backend(ConfigFiles& conf,
           i,
           conf,
           pos_mapper.get(),
+          redex_options.debug_info_kind,
           needs_addresses ? &method_to_id : nullptr,
           needs_addresses ? &code_debug_lines : nullptr,
           is_iodi(dik) ? &iodi_metadata : nullptr,
