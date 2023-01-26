@@ -163,6 +163,12 @@ DexTypeList* DexTypeList::pop_front(size_t n) const {
   return make_type_list(std::move(new_list));
 }
 
+DexTypeList* DexTypeList::pop_back(size_t n) const {
+  redex_assert(m_list.size() >= n);
+  ContainerType new_list{m_list.begin(), m_list.end() - n};
+  return make_type_list(std::move(new_list));
+}
+
 DexTypeList* DexTypeList::push_back(DexType* t) const {
   ContainerType new_list{m_list};
   new_list.push_back(t);
