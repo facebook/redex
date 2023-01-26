@@ -12,12 +12,14 @@ import glob
 import hashlib
 import json
 import logging
+import lzma
 import os
 import re
 import shlex
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
 import timeit
 import typing
@@ -1138,6 +1140,147 @@ def prepare_redex(args: argparse.Namespace) -> State:
     )
 
 
+# TODO: Move to dataclass once minimum Python version increments.
+class CompressionEntry(typing.NamedTuple):
+    name: str
+    filter_fn: typing.Callable[[argparse.Namespace], bool]
+    remove_source: bool
+    file_list_must: typing.List[str]
+    file_list_may: typing.List[str]
+    output_name: typing.Optional[str]
+    checksum_name: typing.Optional[str]
+
+
+def get_compression_list() -> typing.List[CompressionEntry]:
+    return [
+        CompressionEntry(
+            "Redex Instrumentation Metadata",
+            lambda args: args.enable_instrument_pass,
+            True,
+            ["redex-instrument-metadata.txt"],
+            [
+                "redex-source-block-method-dictionary.csv",
+                "redex-source-blocks.csv",
+                "redex-source-block-idom-maps.csv",
+                "unique-idom-maps.txt",
+            ],
+            "redex-instrument-metadata.zip",
+            "redex-instrument-checksum.txt",
+        ),
+    ]
+
+
+def compress_entries(
+    conf: typing.List[CompressionEntry],
+    src_dir: str,
+    trg_dir: str,
+    args: argparse.Namespace,
+) -> None:
+    for to_compress in conf:
+        logging.debug("Checking %s for compression...", to_compress.name)
+        if not to_compress.filter_fn(args):
+            continue
+
+        inputs = to_compress.file_list_must + [
+            f
+            for f in to_compress.file_list_may
+            if os.path.exists(os.path.join(src_dir, f))
+        ]
+        if not inputs:
+            logging.debug("No inputs found.")
+            continue
+
+        start_time = timer()
+
+        logging.info("Compressing %s...", to_compress.name)
+
+        # If an output name is given, use it. If not, ensure that it is only
+        # one file.
+
+        if to_compress.output_name is not None:
+            name = os.path.join(trg_dir, to_compress.output_name)
+
+            def _do_nothing(_input: str) -> None:
+                pass
+
+            hash: typing.Optional[hashlib._Hash] = None
+
+            def _do_checksum(input: str) -> None:
+                nonlocal hash
+                if hash is None:
+                    hash = hashlib.md5()
+                # Files should be small enough to read into memory.
+                with open(input, "rb") as f:
+                    hash.update(f.read())
+
+            _run_per_file = _do_checksum if to_compress.checksum_name else _do_nothing
+
+            # Compress to archive.
+            if name.endswith(".tar.xz"):
+                with tarfile.open(name=name, mode="w:xz") as tar:
+                    for f in inputs:
+                        f_full = os.path.join(src_dir, f)
+                        # This deals better with symlinks.
+                        with open(f_full, "rb") as f_in:
+                            info = tar.gettarinfo(arcname=f, fileobj=f_in)
+                            tar.addfile(info, fileobj=f_in)
+
+                        _run_per_file(f_full)
+
+                    if to_compress.checksum_name:
+                        assert hash is not None
+                        # tarfile does not support writing a buffer in. :-(
+                        with tempfile.TemporaryDirectory() as tmp_dir:
+                            checksum_filename = os.path.join(tmp_dir, "checksum.txt")
+                            with open(checksum_filename, "W") as f:
+                                f.write(f"{hash.hexdigest()}\n")
+                            tar.add(checksum_filename, to_compress.checksum_name)
+
+            elif name.endswith(".zip"):
+                with zipfile.ZipFile(
+                    name, "w", compression=zipfile.ZIP_DEFLATED
+                ) as zip_f:
+                    for f in inputs:
+                        f_full = os.path.join(src_dir, f)
+                        zip_f.write(filename=f_full, arcname=f)
+                        _run_per_file(f_full)
+
+                    if to_compress.checksum_name:
+                        assert hash is not None
+                        zip_f.writestr(
+                            to_compress.checksum_name, f"{hash.hexdigest()}\n"
+                        )
+            else:
+                raise RuntimeError(f"Unsupported naming scheme {name}")
+        else:
+            assert len(to_compress.file_list_must) + len(to_compress.file_list_may) == 1
+            # Can also not use checksum.
+            assert not to_compress.checksum_name
+
+            # Compress to .xz
+            name = to_compress.output_name or (inputs[0] + ".xz")
+            with lzma.open(
+                filename=os.path.join(trg_dir, name),
+                mode="wb",
+                preset=7 | lzma.PRESET_EXTREME,
+            ) as xz:
+                with open(os.path.join(src_dir, inputs[0]), "rb") as f_in:
+                    shutil.copyfileobj(f_in, xz)
+
+        if to_compress.remove_source:
+            for f in inputs:
+                os.remove(os.path.join(src_dir, f))
+
+        end_time = timer()
+        time_delta = end_time - start_time
+        if time_delta > 1:
+            logging.warning(
+                "Needed %fs to compress %s.", end_time - start_time, to_compress.name
+            )
+        else:
+            logging.debug("Needed %fs to compress.", end_time - start_time)
+
+
 def finalize_redex(state: State) -> None:
     _assert_val(state.lib_manager).__exit__(*sys.exc_info())
 
@@ -1172,46 +1315,16 @@ def finalize_redex(state: State) -> None:
         )
     )
 
+    compress_entries(
+        get_compression_list(),
+        meta_file_dir,
+        os.path.dirname(state.args.out),
+        state.args,
+    )
+
     copy_all_file_to_out_dir(
         meta_file_dir, state.args.out, "*", "all redex generated artifacts"
     )
-
-    if state.args.enable_instrument_pass:
-        logging.debug("Creating redex-instrument-metadata.zip")
-        zipfile_path = join(dirname(state.args.out), "redex-instrument-metadata.zip")
-
-        FILES_MUST = [
-            join(dirname(state.args.out), f) for f in ("redex-instrument-metadata.txt",)
-        ]
-
-        FILES_MAY = [
-            join(dirname(state.args.out), f)
-            for f in (
-                "redex-source-block-method-dictionary.csv",
-                "redex-source-blocks.csv",
-                "redex-source-block-idom-maps.csv",
-                "unique-idom-maps.txt",
-            )
-        ]
-        FILES_ACTUALLY = [
-            *FILES_MUST,
-            *[f for f in FILES_MAY if os.path.exists(f)],
-        ]
-
-        # Write a checksum file.
-        hash = hashlib.md5()
-        for f in FILES_ACTUALLY:
-            hash.update(open(f, "rb").read())
-        checksum_path = join(dirname(state.args.out), "redex-instrument-checksum.txt")
-        with open(checksum_path, "w") as f:
-            f.write(f"{hash.hexdigest()}\n")
-
-        with zipfile.ZipFile(zipfile_path, "w", compression=zipfile.ZIP_DEFLATED) as z:
-            for f in [*FILES_ACTUALLY, checksum_path]:
-                z.write(f, os.path.basename(f))
-
-        for f in [*FILES_ACTUALLY, checksum_path]:
-            os.remove(f)
 
     redex_stats_filename = state.config_dict.get("stats_output", "redex-stats.txt")
     redex_stats_file = join(dirname(meta_file_dir), redex_stats_filename)
