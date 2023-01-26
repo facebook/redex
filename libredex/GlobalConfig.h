@@ -153,6 +153,15 @@ struct PassManagerConfig : public Configurable {
   std::unordered_map<std::string, std::string> pass_aliases;
 };
 
+struct DexOutputConfig : public Configurable {
+  void bind_config() override;
+
+  std::string get_config_name() override { return "DexOutputConfig"; }
+  std::string get_config_doc() override {
+    return "Options used by the Dex writer.";
+  }
+};
+
 class GlobalConfig;
 
 using BindOperationFn = std::function<std::unique_ptr<Configurable>(

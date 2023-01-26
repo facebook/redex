@@ -98,6 +98,8 @@ void PassManagerConfig::bind_config() {
   bind("pass_aliases", pass_aliases, pass_aliases);
 }
 
+void DexOutputConfig::bind_config() {}
+
 void GlobalConfig::bind_config() {
   bool bool_param;
   std::string string_param;
@@ -185,6 +187,7 @@ GlobalConfigRegistry& GlobalConfig::default_registry() {
       register_as<MethodSimilarityOrderingConfig>("method_similarity_order"),
       register_as<ProguardConfig>("proguard"),
       register_as<PassManagerConfig>("pass_manager"),
+      register_as<DexOutputConfig>("dex_output"),
   };
   return registry;
 }
