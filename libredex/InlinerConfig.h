@@ -12,7 +12,7 @@
 
 // When to consider running constant-propagation to better estimate inlined
 // cost. It just takes too much time to run the analysis for large methods.
-const size_t MAX_COST_FOR_CONSTANT_PROPAGATION = 1000;
+const size_t MAX_COST_FOR_CONSTANT_PROPAGATION = 5000;
 
 namespace inliner {
 
