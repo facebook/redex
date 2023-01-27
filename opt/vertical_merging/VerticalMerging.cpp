@@ -18,6 +18,7 @@
 #include "Trace.h"
 #include "TypeReference.h"
 #include "Walkers.h"
+#include "WorkQueue.h"
 
 namespace {
 using ClassMap = std::unordered_map<DexClass*, DexClass*>;
@@ -56,19 +57,22 @@ bool is_internal_def(DexMethodRef* method) {
  */
 enum DontMergeState { kConditional, kStrict };
 
+void record_dont_merge_element_state(
+    const DexType* type,
+    DontMergeState state,
+    std::unordered_map<const DexType*, DontMergeState>* dont_merge_status) {
+  auto [it, emplaced] = dont_merge_status->emplace(type, state);
+  if (!emplaced && it->second < state) {
+    it->second = state;
+  }
+}
+
 void record_dont_merge_state(
     const DexType* type,
     DontMergeState state,
     std::unordered_map<const DexType*, DontMergeState>* dont_merge_status) {
-  auto element_type = type::get_element_type_if_array(type);
-  if (state == kStrict) {
-    (*dont_merge_status)[element_type] = state;
-    return;
-  }
-  const auto& find = dont_merge_status->find(element_type);
-  if (find == dont_merge_status->end() || find->second != kStrict) {
-    (*dont_merge_status)[element_type] = state;
-  }
+  record_dont_merge_element_state(type::get_element_type_if_array(type), state,
+                                  dont_merge_status);
 }
 
 /**
@@ -325,24 +329,34 @@ void record_annotation(
 void record_code_reference(
     const Scope& scope,
     std::unordered_map<const DexType*, DontMergeState>* dont_merge_status) {
-  walk::opcodes(
+  ConcurrentMap<const DexType*, DontMergeState> deferred_records;
+  auto deferred_record_dont_merge_state =
+      [&deferred_records](const DexType* type, DontMergeState state) {
+        type = type::get_element_type_if_array(type);
+        deferred_records.update(type, [state](auto*, auto& v, auto exists) {
+          if (!exists || state > v) {
+            v = state;
+          }
+        });
+      };
+  walk::parallel::opcodes(
       scope,
-      [](DexMethod* method) { return true; },
-      [&](DexMethod* method, IRInstruction* insn) {
+      [&deferred_record_dont_merge_state](DexMethod* method,
+                                          IRInstruction* insn) {
         if (insn->has_type()) {
           auto type = type::get_element_type_if_array(insn->get_type());
           if (opcode::is_instance_of(insn->opcode())) {
             // We don't want to merge class if either merger or
             // mergeable was ever accessed in instance_of to prevent
             // semantic error.
-            record_dont_merge_state(type, kStrict, dont_merge_status);
+            deferred_record_dont_merge_state(type, kStrict);
             return;
           } else {
             DexClass* cls = type_class(type);
             if (cls && !is_abstract(cls)) {
               // If a type is referenced and not an abstract type then
               // add it to don't use this type as mergeable.
-              record_dont_merge_state(type, kConditional, dont_merge_status);
+              deferred_record_dont_merge_state(type, kConditional);
               TRACE(VMERGE, 9, "dont_merge %s as mergeable for type usage: %s",
                     SHOW(type), SHOW(insn));
             }
@@ -359,14 +373,13 @@ void record_code_reference(
               // merge it as we need the field and this field can't be renamed
               // if having collision.
               // TODO(suree404): can improve.
-              record_dont_merge_state(field->get_class(), kStrict,
-                                      dont_merge_status);
-              record_dont_merge_state(insn->get_field()->get_class(), kStrict,
-                                      dont_merge_status);
+              deferred_record_dont_merge_state(field->get_class(), kStrict);
+              deferred_record_dont_merge_state(insn->get_field()->get_class(),
+                                               kStrict);
             }
           } else {
-            record_dont_merge_state(insn->get_field()->get_class(),
-                                    kConditional, dont_merge_status);
+            deferred_record_dont_merge_state(insn->get_field()->get_class(),
+                                             kConditional);
           }
         } else if (insn->has_method()) {
           auto callee_ref = insn->get_method();
@@ -375,14 +388,12 @@ void record_code_reference(
             return;
           }
           if (!is_internal_def(callee_ref)) {
-            record_dont_merge_state(callee_ref->get_class(), kStrict,
-                                    dont_merge_status);
+            deferred_record_dont_merge_state(callee_ref->get_class(), kStrict);
             TRACE(VMERGE, 9, "dont_merge %s for pure ref %s",
                   SHOW(callee_ref->get_class()), SHOW(callee_ref));
             DexMethod* callee = resolve_method(callee_ref, MethodSearch::Any);
             if (callee) {
-              record_dont_merge_state(callee->get_class(), kStrict,
-                                      dont_merge_status);
+              deferred_record_dont_merge_state(callee->get_class(), kStrict);
               TRACE(VMERGE, 9,
                     "dont_merge %s for it may be invoked as a pure ref %s",
                     SHOW(callee->get_class()), SHOW(callee_ref));
@@ -390,6 +401,9 @@ void record_code_reference(
           }
         }
       });
+  for (auto [type, state] : deferred_records) {
+    record_dont_merge_element_state(type, state, dont_merge_status);
+  }
 }
 
 /**
