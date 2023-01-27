@@ -1419,6 +1419,7 @@ void copy_proguard_stats(Json::Value& stats) {
 
 } // namespace
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 int main(int argc, char* argv[]) {
   signal(SIGABRT, debug_backtrace_handler);
   signal(SIGINT, debug_backtrace_handler);
