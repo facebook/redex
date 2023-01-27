@@ -246,6 +246,7 @@ class RemoveClasses {
 
     auto post_process = [&](DexMethod* method) {
       m_transform.get_shrinker().shrink_method(method);
+      always_assert(method->get_code()->editable_cfg_built());
     };
 
     // Walkers are over classes, so need to do this "manually."

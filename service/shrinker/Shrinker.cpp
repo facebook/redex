@@ -211,6 +211,9 @@ void Shrinker::shrink_code(
   bool editable_cfg_built = code->editable_cfg_built();
   // force simplification/linearization of any existing editable cfg once, and
   // forget existing cfg for a clean start
+  if (editable_cfg_built) {
+    code->cfg().recompute_registers_size();
+  }
   code->clear_cfg();
 
   constant_propagation::Transform::Stats const_prop_stats;
