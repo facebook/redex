@@ -788,8 +788,12 @@ struct SourceBlocksStats {
     size_t methods{0};
     size_t min{std::numeric_limits<size_t>::max()};
     size_t max{0};
-    const DexMethod* min_method{nullptr};
-    const DexMethod* max_method{nullptr};
+    struct Method {
+      const DexMethod* method;
+      size_t num_opcodes;
+    };
+    std::optional<Method> min_method;
+    std::optional<Method> max_method;
 
     Data& operator+=(const Data& rhs) {
       count += rhs.count;
@@ -799,18 +803,17 @@ struct SourceBlocksStats {
       max = std::max(max, rhs.max);
 
       auto set_min_max = [](auto& lhs, auto& rhs, auto fn) {
-        if (rhs == nullptr) {
+        if (!rhs) {
           return;
         }
-        if (lhs == nullptr) {
+        if (!lhs) {
           lhs = rhs;
           return;
         }
-        auto lhs_count = lhs->get_code()->count_opcodes();
-        auto rhs_count = rhs->get_code()->count_opcodes();
-        auto op = fn(lhs_count, rhs_count);
-        if (op == rhs_count &&
-            (op != lhs_count || compare_dexmethods(rhs, lhs))) {
+        auto op = fn(lhs->num_opcodes, rhs->num_opcodes);
+        if (op == rhs->num_opcodes &&
+            (op != lhs->num_opcodes ||
+             compare_dexmethods(rhs->method, lhs->method))) {
           lhs = rhs;
         }
       };
@@ -825,12 +828,11 @@ struct SourceBlocksStats {
 
     void fill_derived(const DexMethod* m) {
       methods = count > 0 ? 1 : 0;
-      min = count;
-      max = count;
+      min = max = count;
 
       if (count != 0) {
-        min_method = m;
-        max_method = m;
+        size_t num_opcodes = m->get_code()->count_opcodes();
+        min_method = max_method = (Method){m, num_opcodes};
       }
     }
   };
@@ -899,9 +901,10 @@ void track_source_block_coverage(ScopedMetrics& sm,
           }
         }
 
+        code->clear_cfg();
+
         ret.fill_derived(m);
 
-        code->clear_cfg();
         return ret;
       });
 
@@ -920,10 +923,10 @@ void track_source_block_coverage(ScopedMetrics& sm,
     sm.set_metric("min", data.min);
     sm.set_metric("max", data.max);
 
-    auto min_max = [&](const DexMethod* m, const char* name) {
-      if (m != nullptr) {
+    auto min_max = [&](const auto& m, const char* name) {
+      if (m) {
         auto min_max_scope = sm.scope(name);
-        sm.set_metric(show_deobfuscated(m), m->get_code()->count_opcodes());
+        sm.set_metric(show_deobfuscated(m->method), m->num_opcodes);
       }
     };
     min_max(data.min_method, "min_method");
