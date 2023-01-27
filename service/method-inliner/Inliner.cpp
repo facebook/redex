@@ -52,10 +52,6 @@ const float COST_MOVE_RESULT = 3.0f;
 // Overhead of having a method and its metadata.
 const size_t COST_METHOD = 16;
 
-// When to consider running constant-propagation to better estimate inlined
-// cost. It just takes too much time to run the analysis for large methods.
-const size_t MAX_COST_FOR_CONSTANT_PROPAGATION = 1000;
-
 // Typical savings in caller when callee doesn't use any argument.
 const float UNUSED_ARGS_DISCOUNT = 1.0f;
 
@@ -1200,9 +1196,8 @@ static size_t get_inlined_cost(IRInstruction* insn) {
         cost += 4;
       } else if (lit < -32768 || lit > 32767) {
         cost += 2;
-      } else if (opcode::is_a_const(op) && (lit < -8 || lit > 7)) {
-        cost++;
-      } else if (!opcode::is_a_const(op) && (lit < -128 || lit > 127)) {
+      } else if ((opcode::is_a_const(op) && (lit < -8 || lit > 7)) ||
+                 (!opcode::is_a_const(op) && (lit < -128 || lit > 127))) {
         cost++;
       }
     }
@@ -1454,7 +1449,8 @@ const InlinedCost* MultiMethodInliner::get_call_site_inlined_cost(
     const CallSiteSummary* call_site_summary, const DexMethod* callee) {
   auto fully_inlined_cost = get_fully_inlined_cost(callee);
   always_assert(fully_inlined_cost);
-  if (fully_inlined_cost->full_code > MAX_COST_FOR_CONSTANT_PROPAGATION) {
+  if (fully_inlined_cost->full_code >
+      m_config.max_cost_for_constant_propagation) {
     return nullptr;
   }
 
@@ -1510,7 +1506,8 @@ const InlinedCost* MultiMethodInliner::get_average_inlined_cost(
 
   const std::vector<CallSiteSummaryOccurrences>*
       callee_call_site_summary_occurrences;
-  if (fully_inlined_cost->full_code > MAX_COST_FOR_CONSTANT_PROPAGATION ||
+  if (fully_inlined_cost->full_code >
+          m_config.max_cost_for_constant_propagation ||
       !(callee_call_site_summary_occurrences =
             m_call_site_summarizer
                 ? m_call_site_summarizer

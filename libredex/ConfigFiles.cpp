@@ -329,6 +329,9 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   jw.get("true_virtual_inline", false, inliner_config->true_virtual_inline);
   jw.get("throws", false, inliner_config->throws_inline);
   jw.get("throw_after_no_return", false, inliner_config->throw_after_no_return);
+  jw.get("max_cost_for_constant_propagation",
+         MAX_COST_FOR_CONSTANT_PROPAGATION,
+         inliner_config->max_cost_for_constant_propagation);
   jw.get("enforce_method_size_limit",
          true,
          inliner_config->enforce_method_size_limit);

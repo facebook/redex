@@ -16,6 +16,8 @@ void InlinerConfig::bind_config() {
        enforce_method_size_limit);
   bind("throws", throws_inline, throws_inline);
   bind("throw_after_no_return", throw_after_no_return, throw_after_no_return);
+  bind("max_cost_for_constant_propagation", max_cost_for_constant_propagation,
+       max_cost_for_constant_propagation);
   bind("multiple_callers", multiple_callers, multiple_callers);
   bind("run_const_prop", shrinker.run_const_prop, shrinker.run_const_prop);
   bind("run_cse", shrinker.run_cse, shrinker.run_cse);

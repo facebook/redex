@@ -100,6 +100,28 @@ DexMethod* make_a_method(DexClass* cls, const char* name, int val) {
 }
 
 /**
+ * Create a small method with just one argument like
+ * public static void {{name}}(int x) {
+ *  return;
+ *   }
+ * }
+ */
+DexMethod* make_small_method_with_one_arg(DexClass* cls, const char* name) {
+  auto method_name = cls->get_name()->str() + "." + name;
+  auto method = assembler::method_from_string(std::string("") + R"(
+    (method (public static) ")" + method_name +
+                                              R"(:(Z)V"
+      (
+        (load-param v0)
+        (return-void)
+     )
+    )
+  )");
+  cls->add_method(method);
+  return method;
+}
+
+/**
  * Create a method like
  * void {{name}}() {
  *   while (true) {}
@@ -2007,4 +2029,80 @@ TEST_F(MethodInlineTest, inline_with_string_analyzer) {
 
   auto caller_expected = assembler::ircode_from_string(caller_expected_str);
   EXPECT_CODE_EQ(caller_actual, caller_expected.get());
+}
+
+/// testing parameter max_cost_for_constant_propagation
+TEST_F(MethodInlineTest, max_cost_for_constant_propagation) {
+  ConcurrentMethodResolver concurrent_method_resolver;
+
+  bool intra_dex = false;
+  DexStoresVector stores;
+  std::unordered_set<DexMethod*> candidates;
+  auto foo_cls = create_a_class("Lfoo;");
+  {
+    DexStore store("root");
+    store.add_classes({});
+    store.add_classes({foo_cls});
+    stores.push_back(std::move(store));
+  }
+  DexMethod *check_method, *small_method, *foo_main;
+  {
+    create_runtime_exception_init();
+    check_method = make_unboxing_precondition_method(foo_cls, "check");
+    small_method = make_small_method_with_one_arg(foo_cls, "small");
+    candidates.insert(check_method);
+    candidates.insert(small_method);
+    // foo_main calls check_method a few times.
+    auto FALSE_field = (DexField*)DexField::get_field(
+        "Ljava/lang/Boolean;.FALSE:Ljava/lang/Boolean;");
+    always_assert(FALSE_field != nullptr);
+    auto TRUE_field = (DexField*)DexField::get_field(
+        "Ljava/lang/Boolean;.TRUE:Ljava/lang/Boolean;");
+    always_assert(TRUE_field != nullptr);
+    foo_main =
+        make_a_method_calls_others_with_arg(foo_cls,
+                                            "foo_main",
+                                            {
+                                                {check_method, FALSE_field},
+                                                {check_method, FALSE_field},
+                                                {check_method, TRUE_field},
+                                                {check_method, FALSE_field},
+                                                {check_method, FALSE_field},
+                                                {check_method, FALSE_field},
+                                                {small_method, TRUE_field},
+                                            });
+  }
+  auto scope = build_class_scope(stores);
+  api::LevelChecker::init(0, scope);
+  inliner::InlinerConfig inliner_config;
+  inliner_config.populate(scope);
+  inliner_config.throws_inline = true;
+  inliner_config.shrinker.run_const_prop = true;
+  inliner_config.shrinker.run_local_dce = true;
+  inliner_config.shrinker.compute_pure_methods = false;
+  // set the cost threshold so low, the effect is that
+  // inliner would think it is too expensive to analyze for inlining
+  // thus end up no inlining. this number 8 is carefully chosen as to
+  // let check_method fail to inline and small_method go
+  inliner_config.max_cost_for_constant_propagation = 8;
+  check_method->get_code()->build_cfg(true);
+  small_method->get_code()->build_cfg(true);
+  foo_main->get_code()->build_cfg(true);
+  std::unordered_set<DexMethodRef*> pure_methods{
+      DexMethod::get_method("Ljava/lang/Boolean;.booleanValue:()Z")};
+  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+      scope, /* create_init_class_insns */ false);
+  int min_sdk = 0;
+  MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
+                             candidates, std::ref(concurrent_method_resolver),
+                             inliner_config, min_sdk,
+                             intra_dex ? IntraDex : InterDex,
+                             /* true_virtual_callers */ {},
+                             /* inline_for_speed */ nullptr,
+                             /* analyze_and_prune_inits */ false, pure_methods);
+  inliner.inline_methods();
+  auto inlined = inliner.get_inlined();
+  EXPECT_EQ(inlined.size(), 1);
+  EXPECT_EQ(inlined.count(check_method), 0);
+  EXPECT_EQ(inlined.count(small_method), 1);
 }

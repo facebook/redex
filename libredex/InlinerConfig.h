@@ -10,6 +10,10 @@
 #include "DexClass.h"
 #include "ShrinkerConfig.h"
 
+// When to consider running constant-propagation to better estimate inlined
+// cost. It just takes too much time to run the analysis for large methods.
+const size_t MAX_COST_FOR_CONSTANT_PROPAGATION = 1000;
+
 namespace inliner {
 
 /**
@@ -46,6 +50,10 @@ struct InlinerConfig {
   // than our estimate -- during the sync phase, we may have to pick larger
   // branch opcodes to encode large jumps.
   uint64_t instruction_size_buffer{1 << 12};
+
+  // max_cost_for_constant_propagation is amoungt of constant propagation
+  // analysis redex compiler can tolerate when making decision to inline
+  size_t max_cost_for_constant_propagation{MAX_COST_FOR_CONSTANT_PROPAGATION};
 
   std::unordered_set<DexType*> allowlist_no_method_limit;
   // We will populate the information to rstate of classes and methods.
