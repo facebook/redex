@@ -51,7 +51,7 @@ class DexStructure {
   bool empty() const { return m_classes_iterators.empty(); }
 
   DexClasses get_classes() const {
-    return std::vector(m_classes.begin(), m_classes.end());
+    return DexClasses(m_classes.begin(), m_classes.end());
   }
 
   /**
