@@ -18,7 +18,6 @@ class ClassChecker {
   ClassChecker(ClassChecker&& other) = default;
 
   ClassChecker& operator=(const ClassChecker&) = delete;
-  ClassChecker& operator=(ClassChecker&& rhs) = default;
 
   void run(const Scope& scope);
 
