@@ -691,29 +691,43 @@ static bool validate_pce(pk_cdir_end& pce, ssize_t size) {
   return true;
 }
 
-static bool extract_jar_entry(const uint8_t*& mapping, jar_entry& je) {
+static bool extract_jar_entry(const uint8_t*& mapping,
+                              ssize_t& offset,
+                              ssize_t total_size,
+                              jar_entry& je) {
+  if (offset + kSignatureSize > total_size) {
+    fprintf(stderr, "Reading mapping out of bound, bailing\n");
+    return false;
+  }
   if (memcmp(mapping, kCDFile, kSignatureSize) != 0) {
     fprintf(stderr, "Invalid central directory entry, bailing\n");
     return false;
   }
+  offset += sizeof(pk_cd_file);
+  always_assert_log(offset < total_size, "Reading mapping out of bound");
   memcpy(&je.cd_entry, mapping, sizeof(pk_cd_file));
   mapping += sizeof(pk_cd_file);
   je.filename = (uint8_t*)malloc(je.cd_entry.fname_len + 1);
+  offset += je.cd_entry.fname_len;
+  always_assert_log(offset < total_size, "Reading mapping out of bound");
   memcpy(je.filename, mapping, je.cd_entry.fname_len);
   je.filename[je.cd_entry.fname_len] = '\0';
   mapping += je.cd_entry.fname_len;
+  offset = offset + je.cd_entry.extra_len + je.cd_entry.comment_len;
   mapping += je.cd_entry.extra_len;
   mapping += je.cd_entry.comment_len;
   return true;
 }
 
 static bool get_jar_entries(const uint8_t* mapping,
+                            ssize_t size,
                             pk_cdir_end& pce,
                             std::vector<jar_entry>& files) {
   const uint8_t* cdir = mapping + pce.cd_disk_offset;
   files.resize(pce.cd_entries);
+  ssize_t offset = pce.cd_disk_offset;
   for (int entry = 0; entry < pce.cd_entries; entry++) {
-    if (!extract_jar_entry(cdir, files[entry])) return false;
+    if (!extract_jar_entry(cdir, offset, size, files[entry])) return false;
   }
   return true;
 }
@@ -866,9 +880,15 @@ bool process_jar(const DexLocation* location,
                  const attribute_hook_t& attr_hook) {
   pk_cdir_end pce;
   std::vector<jar_entry> files;
-  if (!find_central_directory(mapping, size, pce)) return false;
-  if (!validate_pce(pce, size)) return false;
-  if (!get_jar_entries(mapping, pce, files)) return false;
+  if (!find_central_directory(mapping, size, pce)) {
+    return false;
+  }
+  if (!validate_pce(pce, size)) {
+    return false;
+  }
+  if (!get_jar_entries(mapping, size, pce, files)) {
+    return false;
+  }
   if (!process_jar_entries(location, files, mapping, classes, attr_hook)) {
     return false;
   }
