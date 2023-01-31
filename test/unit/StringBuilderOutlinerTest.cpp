@@ -76,6 +76,7 @@ class StringBuilderOutlinerTest : public RedexTest {
 
  protected:
   void run_outliner(IRCode* code) {
+    code->build_cfg();
     Outliner outliner(m_config);
     outliner.analyze(*code);
     outliner.create_outline_helpers(&m_stores);
@@ -85,6 +86,7 @@ class StringBuilderOutlinerTest : public RedexTest {
     // running this pass against an app, the app's redex config should always
     // contain a run of OSDCE after StringBuilderOutlinerPass.
     remove_dead_instructions(code);
+    code->clear_cfg();
   }
 
   void populate_summary_maps(
@@ -123,8 +125,8 @@ class StringBuilderOutlinerTest : public RedexTest {
                                            cfg);
     used_vars_fp_iter.run(uv::UsedVarsSet());
 
-    for (const auto& it : uv::get_dead_instructions(*code, used_vars_fp_iter)) {
-      code->remove_opcode(it);
+    for (const auto& it : uv::get_dead_instructions(cfg, used_vars_fp_iter)) {
+      cfg.remove_insn(it);
     }
   }
 
@@ -273,6 +275,7 @@ TEST_F(StringBuilderOutlinerTest, outlineThree) {
   auto outline_cls =
       type_class(DexType::get_type("Lcom/redex/OutlinedStringBuilders;"));
   ASSERT_EQ(outline_cls->get_dmethods().size(), 1);
+
   auto outline_helper_method = outline_cls->get_dmethods().at(0);
   auto expected_outlined_code = assembler::ircode_from_string(R"(
     (
@@ -295,9 +298,12 @@ TEST_F(StringBuilderOutlinerTest, outlineThree) {
   // ensures that running StringBuilderOutlinerPass before OSDCE won't
   // inadvertently cause dead code to be retained.
   auto outline_helper_code = outline_helper_method->get_code();
+  // When outline_helper_method was created, it generated editable cfg.
+  // Therefore, need to be cleared before comparing code.
+  outline_helper_code->clear_cfg();
   EXPECT_CODE_EQ(expected_outlined_code.get(), outline_helper_code);
 
-  outline_helper_code->build_cfg(false);
+  outline_helper_code->build_cfg();
   auto& outline_helper_cfg = outline_helper_code->cfg();
   outline_helper_cfg.calculate_exit_block();
 
@@ -350,11 +356,11 @@ TEST_F(StringBuilderOutlinerTest, outlineWide) {
   auto expected_code = assembler::ircode_from_string(R"(
     (
       (const-wide v1 123)
-      (move-wide v2 v1)
+      (move-wide v3 v1)
       (const-string "foo")
       (move-result-pseudo-object v1)
-      (move-object v4 v1)
-      (invoke-static (v2 v4) "Lcom/redex/OutlinedStringBuilders;.concat:(JLjava/lang/String;)Ljava/lang/String;")
+      (move-object v5 v1)
+      (invoke-static (v3 v5) "Lcom/redex/OutlinedStringBuilders;.concat:(JLjava/lang/String;)Ljava/lang/String;")
       (move-result-object v0)
       (return-object v0)
     )
