@@ -86,8 +86,8 @@ struct ConfigFiles {
     return m_class_lists.at(name);
   }
 
-  std::unordered_set<std::string>& get_dead_class_list();
-  std::unordered_set<std::string>& get_live_class_split_list();
+  const std::unordered_map<std::string, int64_t>& get_dead_class_list();
+  const std::unordered_set<std::string>& get_live_class_split_list();
 
   void clear_dead_class_and_live_relocated_sets() {
     m_dead_class_list_attempted = false;
@@ -195,8 +195,8 @@ struct ConfigFiles {
   void ensure_secondary_method_stats_loaded() const;
   void load_inliner_config(inliner::InlinerConfig*);
   void build_dead_class_and_live_class_split_lists();
-  bool is_relocated_class(const std::string& name) const;
-  void remove_relocated_part(std::string* name);
+  bool is_relocated_class(std::string_view name) const;
+  void remove_relocated_part(std::string_view* name);
 
   // For testing.
   void set_class_lists(
@@ -212,7 +212,7 @@ struct ConfigFiles {
   mutable std::unique_ptr<method_profiles::MethodProfiles> m_method_profiles;
   mutable std::unique_ptr<method_profiles::MethodProfiles>
       m_secondary_method_profiles;
-  std::unordered_set<std::string> m_dead_classes;
+  std::unordered_map<std::string, int64_t> m_dead_classes;
   std::unordered_set<std::string> m_live_relocated_classes;
 
   // limits the output instruction size of any DexMethod to 2^n

@@ -235,26 +235,28 @@ ConfigFiles::load_class_lists() {
   return lists;
 }
 
-std::unordered_set<std::string>& ConfigFiles::get_dead_class_list() {
+const std::unordered_map<std::string, int64_t>&
+ConfigFiles::get_dead_class_list() {
   build_dead_class_and_live_class_split_lists();
   return m_dead_classes;
 }
 
-std::unordered_set<std::string>& ConfigFiles::get_live_class_split_list() {
+const std::unordered_set<std::string>&
+ConfigFiles::get_live_class_split_list() {
   build_dead_class_and_live_class_split_lists();
   return m_live_relocated_classes;
 }
 
-bool ConfigFiles::is_relocated_class(std::string const& name) const {
+bool ConfigFiles::is_relocated_class(std::string_view name) const {
   return boost::algorithm::ends_with(name, CLASS_SPLITTING_RELOCATED_SUFFIX);
 }
 
-void ConfigFiles::remove_relocated_part(std::string* name) {
+void ConfigFiles::remove_relocated_part(std::string_view* name) {
   always_assert(name != nullptr);
   if (name->length() < CLASS_SPLITTING_RELOCATED_SUFFIX_LEN) {
     return;
   }
-  name->erase(name->length() - CLASS_SPLITTING_RELOCATED_SUFFIX_LEN);
+  name->remove_suffix(CLASS_SPLITTING_RELOCATED_SUFFIX_LEN);
 }
 
 void ConfigFiles::build_dead_class_and_live_class_split_lists() {
@@ -270,17 +272,33 @@ void ConfigFiles::build_dead_class_and_live_class_split_lists() {
                 dead_class_list_filename.c_str());
         exit(EXIT_FAILURE);
       }
-      std::string classname;
-      while (input >> classname) {
+      std::string line;
+      while (input >> line) {
+        int64_t load_count = 50; // legacy
+        auto i = line.find('\t');
+        std::string_view classname;
+        if (i == std::string::npos) {
+          classname = line;
+        } else {
+          classname = ((std::string_view)line).substr(0, i);
+          char* endptr = nullptr;
+          long parsed = strtol(line.c_str() + i + 1, &endptr, 10);
+          always_assert(endptr == line.c_str() + line.length());
+          load_count = parsed;
+        }
         bool is_relocated = is_relocated_class(classname);
         if (is_relocated) {
           remove_relocated_part(&classname);
         }
-        std::string converted = std::string("L") + classname + std::string(";");
+        std::string converted;
+        converted.reserve(classname.size() + 2);
+        converted.append(1, 'L');
+        converted.append(classname);
+        converted.append(1, ';');
         std::replace(converted.begin(), converted.end(), '.', '/');
         if (!is_relocated) {
           auto translated = m_proguard_map->translate_class(converted);
-          m_dead_classes.insert(std::move(translated));
+          m_dead_classes.emplace(std::move(translated), load_count);
         } else {
           // No need to proguard translate the name of the live classes since
           // we use the unobfuscated name. The unobfuscated name is already
