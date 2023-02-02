@@ -210,7 +210,7 @@ void do_order_classes(const std::vector<std::string>& coldstart_class_names,
   std::unordered_map<const DexClass*, uint32_t> class_to_priority;
   uint32_t priority = 0;
   for (const auto& class_name : coldstart_class_names) {
-    if (DexType* type = DexType::get_type(class_name.c_str())) {
+    if (DexType* type = DexType::get_type(class_name)) {
       if (auto cls = type_class(type)) {
         class_to_priority[cls] = priority++;
         cls->set_perf_sensitive(true);
@@ -580,10 +580,10 @@ void InterDex::load_interdex_types() {
   std::unordered_set<DexType*> transitive_added{};
 
   for (const auto& entry : interdexorder) {
-    DexType* type = DexType::get_type(entry.c_str());
+    DexType* type = DexType::get_type(entry);
     if (!type) {
       if (boost::algorithm::starts_with(entry, END_MARKER_FORMAT)) {
-        type = DexType::make_type(entry.c_str());
+        type = DexType::make_type(entry);
         m_end_markers.emplace_back(type);
 
         if (interdex_group_classes.size() > curr_interdex_group) {
@@ -598,21 +598,21 @@ void InterDex::load_interdex_types() {
               entry.c_str());
       } else if (boost::algorithm::starts_with(entry,
                                                SCROLL_SET_START_FORMAT)) {
-        type = DexType::make_type(entry.c_str());
+        type = DexType::make_type(entry);
         TRACE(IDEX, 4,
               "[interdex order]: Found scroll set start class marker %s.",
               entry.c_str());
       } else if (boost::algorithm::starts_with(entry, SCROLL_SET_END_FORMAT)) {
-        type = DexType::make_type(entry.c_str());
+        type = DexType::make_type(entry);
         TRACE(IDEX, 4,
               "[interdex order]: Found scroll set end class marker %s.",
               entry.c_str());
       } else if (boost::algorithm::starts_with(entry, BG_SET_START_FORMAT)) {
-        type = DexType::make_type(entry.c_str());
+        type = DexType::make_type(entry);
         TRACE(IDEX, 4, "[interdex order]: Found bg set start class marker %s.",
               entry.c_str());
       } else if (boost::algorithm::starts_with(entry, BG_SET_END_FORMAT)) {
-        type = DexType::make_type(entry.c_str());
+        type = DexType::make_type(entry);
         TRACE(IDEX, 4, "[interdex order]: Found bg set end class marker %s.",
               entry.c_str());
       } else {
@@ -1183,7 +1183,7 @@ DexClass* create_canary(int dexnum, const DexString* store_name) {
   auto canary_type = DexType::get_type(canary_name);
   if (!canary_type) {
     TRACE(IDEX, 4, "Warning, no canary class %s found.", canary_name.c_str());
-    canary_type = DexType::make_type(canary_name.c_str());
+    canary_type = DexType::make_type(canary_name);
   }
   auto canary_cls = type_class(canary_type);
   if (!canary_cls) {

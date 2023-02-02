@@ -336,7 +336,7 @@ struct EnumUtil {
       name.insert(name.size() - 1, "$u");
       type = DexType::get_type(name);
     }
-    type = DexType::make_type(name.c_str());
+    type = DexType::make_type(name);
     ClassCreator cc(type);
     cc.set_access(ACC_PUBLIC | ACC_FINAL);
     cc.set_super(type::java_lang_Object());

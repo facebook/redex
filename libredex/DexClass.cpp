@@ -887,12 +887,12 @@ DexMethodRef* DexMethod::make_method(
     const std::string& return_type) {
   DexTypeList::ContainerType dex_types;
   for (const std::string& type_str : arg_types) {
-    dex_types.push_back(DexType::make_type(type_str.c_str()));
+    dex_types.push_back(DexType::make_type(type_str));
   }
   return DexMethod::make_method(
-      DexType::make_type(class_type.c_str()),
+      DexType::make_type(class_type),
       DexString::make_string(name),
-      DexProto::make_proto(DexType::make_type(return_type.c_str()),
+      DexProto::make_proto(DexType::make_type(return_type),
                            DexTypeList::make_type_list(std::move(dex_types))));
 }
 

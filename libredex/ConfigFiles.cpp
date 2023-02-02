@@ -66,7 +66,7 @@ const std::unordered_set<DexType*>& ConfigFiles::get_no_optimizations_annos() {
     if (!no_optimizations_anno.empty()) {
       for (auto const& config_anno_name : no_optimizations_anno) {
         std::string anno_name = config_anno_name.asString();
-        DexType* anno = DexType::get_type(anno_name.c_str());
+        DexType* anno = DexType::get_type(anno_name);
         if (anno) m_no_optimizations_annos.insert(anno);
       }
     }
@@ -384,7 +384,7 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   std::vector<std::string> no_inline_annos;
   jw.get("no_inline_annos", {}, no_inline_annos);
   for (const auto& type_s : no_inline_annos) {
-    auto type = DexType::get_type(type_s.c_str());
+    auto type = DexType::get_type(type_s);
     if (type != nullptr) {
       inliner_config->m_no_inline_annos.emplace(type);
     } else {
@@ -396,7 +396,7 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   std::vector<std::string> force_inline_annos;
   jw.get("force_inline_annos", {}, force_inline_annos);
   for (const auto& type_s : force_inline_annos) {
-    auto type = DexType::get_type(type_s.c_str());
+    auto type = DexType::get_type(type_s);
     if (type != nullptr) {
       inliner_config->m_force_inline_annos.emplace(type);
     } else {

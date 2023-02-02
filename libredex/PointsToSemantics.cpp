@@ -182,12 +182,12 @@ boost::optional<DexMethodRef*> s_expr_to_dex_method(const s_expr& e) {
     if (!signature[arg].is_string()) {
       return {};
     }
-    types.push_back(DexType::make_type(signature[arg].get_string().c_str()));
+    types.push_back(DexType::make_type(signature[arg].get_string()));
   }
   return {DexMethod::make_method(
-      DexType::make_type(type_str.c_str()),
+      DexType::make_type(type_str),
       DexString::make_string(name_str),
-      DexProto::make_proto(DexType::make_type(rtype_str.c_str()),
+      DexProto::make_proto(DexType::make_type(rtype_str),
                            DexTypeList::make_type_list(std::move(types))))};
 }
 
@@ -267,8 +267,7 @@ boost::optional<PointsToOperation> PointsToOperation::from_s_expr(
     if (!s_patn({s_patn(&dex_type_str)}).match_with(args)) {
       return {};
     }
-    return {
-        PointsToOperation(op_kind, DexType::make_type(dex_type_str.c_str()))};
+    return {PointsToOperation(op_kind, DexType::make_type(dex_type_str))};
   }
   case PTS_GET_EXCEPTION:
   case PTS_GET_CLASS:
@@ -296,9 +295,9 @@ boost::optional<PointsToOperation> PointsToOperation::from_s_expr(
     }
     return {PointsToOperation(
         op_kind,
-        DexField::make_field(DexType::make_type(container_str.c_str()),
+        DexField::make_field(DexType::make_type(container_str),
                              DexString::make_string(name_str),
-                             DexType::make_type(type_str.c_str())))};
+                             DexType::make_type(type_str)))};
   }
   case PTS_IGET_SPECIAL:
   case PTS_IPUT_SPECIAL: {

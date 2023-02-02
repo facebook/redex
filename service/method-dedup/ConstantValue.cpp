@@ -42,7 +42,7 @@ ConstantValue::ConstantValue(const TypeTags* type_tags,
     m_kind = ConstantKind::INT;
     m_int_val = std::stoll(val_str);
   } else if (kind_str == "T") {
-    auto type_val = DexType::get_type(val_str.c_str());
+    auto type_val = DexType::get_type(val_str);
     if (type_val != nullptr && type_tags->has_type_tag(type_val)) {
       m_kind = ConstantKind::TYPE;
       m_int_val = type_tags->get_type_tag(type_val);

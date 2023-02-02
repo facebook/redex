@@ -145,7 +145,7 @@ void AnalysisImpl::filter_by_annotations(
     const std::vector<std::string>& blocklist) {
   std::unordered_set<DexType*> anno_types;
   for (const auto& s : blocklist) {
-    auto ty = DexType::get_type(s.c_str());
+    auto ty = DexType::get_type(s);
     if (ty != nullptr) {
       anno_types.emplace(ty);
     }

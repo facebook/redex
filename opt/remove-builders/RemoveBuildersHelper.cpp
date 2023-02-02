@@ -1096,7 +1096,7 @@ DexType* get_buildee(DexType* builder) {
       !deobfuscated_name.empty() ? deobfuscated_name : builder->str();
 
   auto buildee_name = builder_name.substr(0, builder_name.size() - 9) + ";";
-  return DexType::get_type(buildee_name.c_str());
+  return DexType::get_type(buildee_name);
 }
 
 std::unordered_set<DexMethod*> get_all_methods(IRCode* code, DexType* type) {

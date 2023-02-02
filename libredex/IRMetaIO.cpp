@@ -183,7 +183,7 @@ void deserialize_class_data(std::ifstream& istrm, uint32_t data_size) {
     switch (btype) {
     case BlockType::ClassBlock: {
       // Create a std::string for null termination
-      DexType* type = DexType::get_type(std::string(ptr, strsize));
+      DexType* type = DexType::get_type(std::string_view(ptr, strsize));
       cls = type_class(type);
       always_assert(cls != nullptr);
       ptr += strsize + 1;

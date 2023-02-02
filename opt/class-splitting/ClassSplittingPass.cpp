@@ -95,7 +95,7 @@ void ClassSplittingPass::run_pass(DexStoresVector& stores,
   std::unordered_set<DexType*> coldstart_types;
   std::vector<std::string> previously_relocated_types;
   for (const auto& str : conf.get_coldstart_classes()) {
-    DexType* type = DexType::get_type(str.c_str());
+    DexType* type = DexType::get_type(str);
     if (type) {
       coldstart_types.insert(type);
     } else if (boost::algorithm::ends_with(

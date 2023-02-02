@@ -168,7 +168,7 @@ RenameClassesPassV2::build_dont_rename_for_types_with_reflection(
     if (deobf_cls_string.empty()) {
       deobf_cls_string = refl_type_str;
     }
-    DexType* type_with_refl = DexType::get_type(deobf_cls_string.c_str());
+    DexType* type_with_refl = DexType::get_type(deobf_cls_string);
     if (type_with_refl != nullptr) {
       TRACE(RENAME, 4, "got DexType %s", SHOW(type_with_refl));
       refl_map.insert(type_with_refl);
@@ -215,7 +215,7 @@ RenameClassesPassV2::build_force_rename_hierarchies(
   for (const auto& base : m_force_rename_hierarchies) {
     // skip comments
     if (base.c_str()[0] == '#') continue;
-    auto base_type = DexType::get_type(base.c_str());
+    auto base_type = DexType::get_type(base);
     if (base_type != nullptr) {
       DexClass* base_class = type_class(base_type);
       if (!base_class) {
@@ -252,7 +252,7 @@ RenameClassesPassV2::build_dont_rename_hierarchies(
   for (const auto& base : m_dont_rename_hierarchies) {
     // skip comments
     if (base.c_str()[0] == '#') continue;
-    auto base_type = DexType::get_type(base.c_str());
+    auto base_type = DexType::get_type(base);
     if (base_type != nullptr) {
       DexClass* base_class = type_class(base_type);
       if (!base_class) {

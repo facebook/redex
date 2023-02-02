@@ -2746,7 +2746,7 @@ void write_pg_mapping(
         } else if (type::is_primitive(type)) {
           return std::string(deobf_primitive(type->c_str()[0]));
         } else {
-          return java_names::internal_to_external(type->c_str());
+          return java_names::internal_to_external(type->str());
         }
       }
     }
@@ -2817,7 +2817,7 @@ void write_pg_mapping(
   for (auto cls : *classes) {
     auto deobf_cls = deobf_class(cls);
     ofs << java_names::internal_to_external(deobf_cls) << " -> "
-        << java_names::internal_to_external(cls->get_type()->c_str()) << ":"
+        << java_names::internal_to_external(cls->get_type()->str()) << ":"
         << std::endl;
     for (auto field : cls->get_ifields()) {
       auto deobf = deobf_field(field);
