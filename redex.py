@@ -1176,6 +1176,15 @@ def get_compression_list() -> typing.List[CompressionEntry]:
             None,
             None,
         ),
+        CompressionEntry(
+            "Redex Stats",
+            lambda args: True,
+            False,
+            ["redex-stats.txt"],
+            [],
+            None,
+            None,
+        ),
     ]
 
 
