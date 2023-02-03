@@ -18,6 +18,7 @@ bool AnalyzePureMethodsPass::analyze_and_check_pure_method_helper(
     const init_classes::InitClassesWithSideEffects&
         init_classes_with_side_effects,
     IRCode* code) {
+  always_assert(code->editable_cfg_built());
   auto& cfg = code->cfg();
 
   // MoveAwareFixpointIterator to see if any object accessed is parameter (OK)
@@ -51,10 +52,6 @@ AnalyzePureMethodsPass::analyze_and_set_pure_methods(Scope& scope) {
   auto method_override_graph = method_override_graph::build_graph(scope);
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, /* create_init_class_insns */ false, method_override_graph.get());
-  // Build all the CFGs
-  walk::parallel::code(scope, [&](DexMethod*, IRCode& code) {
-    code.build_cfg(/* editable */ false);
-  });
 
   Stats stats = walk::parallel::methods<Stats>(scope, [&](DexMethod* method) {
     Stats stats;
@@ -94,9 +91,6 @@ AnalyzePureMethodsPass::analyze_and_set_pure_methods(Scope& scope) {
     return stats;
   });
 
-  // Clear all the CFGs
-  walk::parallel::code(scope,
-                       [&](DexMethod*, IRCode& code) { code.clear_cfg(); });
   return stats;
 }
 

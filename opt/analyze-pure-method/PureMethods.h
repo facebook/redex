@@ -31,6 +31,9 @@ class AnalyzePureMethodsPass : public Pass {
   AnalyzePureMethodsPass() : Pass("AnalyzePureMethodsPass") {}
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+
+  bool is_editable_cfg_friendly() override { return true; }
+
   Stats analyze_and_set_pure_methods(Scope& scope);
 
  private:
