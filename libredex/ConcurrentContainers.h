@@ -17,7 +17,6 @@
 
 #include "Debug.h"
 #include "Timer.h"
-#include "WorkQueue.h"
 
 // Forward declaration.
 namespace cc_impl {
@@ -28,6 +27,10 @@ class ConcurrentContainerIterator;
 inline AccumulatingTimer s_destructor{};
 
 inline double get_destructor_seconds() { return s_destructor.get_seconds(); }
+
+void workqueue_run_for(size_t start,
+                       size_t end,
+                       const std::function<void(size_t)>& fn);
 
 } // namespace cc_impl
 
@@ -69,7 +72,7 @@ class ConcurrentContainer {
       }
       return;
     }
-    workqueue_run_for<size_t>(
+    cc_impl::workqueue_run_for(
         0, n_slots, [this](size_t slot) { m_slots[slot] = Container(); });
   }
 

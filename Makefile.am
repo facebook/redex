@@ -53,6 +53,7 @@ libredex_la_SOURCES = \
 	libredex/ClassHierarchy.cpp \
 	libredex/ClassUtil.cpp \
 	libredex/ClassChecker.cpp \
+	libredex/ConcurrentContainers.cpp \
 	libredex/ConfigFiles.cpp \
 	libredex/Configurable.cpp \
 	libredex/ControlFlow.cpp \
