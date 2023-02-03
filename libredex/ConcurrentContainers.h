@@ -17,6 +17,7 @@
 
 #include "Debug.h"
 #include "Timer.h"
+#include "WorkQueue.h"
 
 // Forward declaration.
 namespace cc_impl {
@@ -62,9 +63,14 @@ class ConcurrentContainer {
 
   virtual ~ConcurrentContainer() {
     auto timer_scope = cc_impl::s_destructor.scope();
-    for (size_t slot = 0; slot < n_slots; ++slot) {
-      m_slots[slot] = Container();
+    if (size() < 4096) {
+      for (size_t slot = 0; slot < n_slots; ++slot) {
+        m_slots[slot] = Container();
+      }
+      return;
     }
+    workqueue_run_for<size_t>(
+        0, n_slots, [this](size_t slot) { m_slots[slot] = Container(); });
   }
 
   /*
