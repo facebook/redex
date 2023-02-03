@@ -1478,6 +1478,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       method_profiles::MethodProfiles::get_process_unresolved_lines_seconds());
   Timer::add_timer("compute_locations_closure_wto",
                    get_compute_locations_closure_wto_seconds());
+  Timer::add_timer("cc_impl::destructor_second",
+                   cc_impl::get_destructor_seconds());
 }
 
 void PassManager::activate_pass(const std::string& name,

@@ -16,12 +16,17 @@
 #include <utility>
 
 #include "Debug.h"
+#include "Timer.h"
 
 // Forward declaration.
 namespace cc_impl {
 
 template <typename Container, size_t n_slots>
 class ConcurrentContainerIterator;
+
+inline AccumulatingTimer s_destructor{};
+
+inline double get_destructor_seconds() { return s_destructor.get_seconds(); }
 
 } // namespace cc_impl
 
@@ -55,7 +60,12 @@ class ConcurrentContainer {
   using const_iterator =
       cc_impl::ConcurrentContainerIterator<const Container, n_slots>;
 
-  virtual ~ConcurrentContainer() {}
+  virtual ~ConcurrentContainer() {
+    auto timer_scope = cc_impl::s_destructor.scope();
+    for (size_t slot = 0; slot < n_slots; ++slot) {
+      m_slots[slot] = Container();
+    }
+  }
 
   /*
    * Using iterators or accessor functions while the container is concurrently
