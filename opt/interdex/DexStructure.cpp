@@ -224,6 +224,8 @@ DexClasses DexesStructure::end_dex(DexInfo dex_info) {
     m_info.num_scroll_dexes++;
   }
 
+  m_dex_info.push_back(dex_info);
+
   m_current_dex.check_refs_count();
 
   DexClasses all_classes = m_current_dex.get_classes();

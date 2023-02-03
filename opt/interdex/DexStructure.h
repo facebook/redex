@@ -245,6 +245,8 @@ class DexesStructure {
 
   bool has_class(DexClass* clazz) const { return m_classes.count(clazz); }
 
+  const std::vector<DexInfo>& get_dex_info() const { return m_dex_info; }
+
  private:
   void update_stats(const MethodRefs& clazz_mrefs,
                     const FieldRefs& clazz_frefs,
@@ -279,6 +281,7 @@ class DexesStructure {
     // Number of mixed mode dexes;
     size_t num_mixed_mode_dexes{0};
   } m_info;
+  std::vector<DexInfo> m_dex_info;
 
   struct DexesStats {
     size_t num_static_meths{0};
