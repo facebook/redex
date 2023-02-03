@@ -310,11 +310,6 @@ void ThrowPropagationPass::run_pass(DexStoresVector& stores,
                                     ConfigFiles&,
                                     PassManager& mgr) {
   Scope scope = build_class_scope(stores);
-  walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
-    if (!method->rstate.no_optimizations()) {
-      code.build_cfg(/* editable */ true);
-    }
-  });
   auto override_graph = method_override_graph::build_graph(scope);
   std::unordered_set<DexMethod*> no_return_methods;
   {
@@ -380,12 +375,6 @@ void ThrowPropagationPass::run_pass(DexStoresVector& stores,
       no_return_methods.insert(method);
     }
   }
-
-  walk::parallel::code(scope, [&](const DexMethod* method, IRCode& code) {
-    if (!method->rstate.no_optimizations()) {
-      code.clear_cfg();
-    }
-  });
 
   mgr.incr_metric(METRIC_THROWS_INSERTED, stats.throws_inserted);
   mgr.incr_metric(METRIC_UNREACHABLE_INSTRUCTIONS,
