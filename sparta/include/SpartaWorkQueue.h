@@ -135,7 +135,7 @@ class SpartaWorkerState final {
     if (m_state_counters->num_running < m_state_counters->num_all) {
       m_state_counters->waiter->give(1u); // May consider waking all.
     }
-    m_queue.push(task);
+    m_queue.push(std::move(task));
   }
 
   size_t worker_id() const { return m_id; }
@@ -161,7 +161,7 @@ class SpartaWorkerState final {
       }
       auto task = std::move(m_queue.front());
       m_queue.pop();
-      return task;
+      return boost::optional<Input>(std::move(task));
     }
     return boost::none;
   }
@@ -189,10 +189,6 @@ class SpartaWorkQueue {
   workqueue_impl::StateCounters m_state_counters;
   const bool m_can_push_task{false};
 
-  void consume(SpartaWorkerState<Input>* state, Input task) {
-    m_executor(state, task);
-  }
-
  public:
   SpartaWorkQueue(Executor,
                   unsigned int num_threads = parallel::default_num_threads(),
@@ -210,6 +206,7 @@ class SpartaWorkQueue {
   // moves are allowed
   SpartaWorkQueue(SpartaWorkQueue&&) = default;
 
+  /* Adds (a copy of) an item to a pseudo-random worker. */
   void add_item(Input task);
 
   /* Add an item on the queue of the given worker. */
@@ -243,13 +240,13 @@ template <class Input, typename Executor>
 void SpartaWorkQueue<Input, Executor>::add_item(Input task) {
   m_insert_idx = (m_insert_idx + 1) % m_num_threads;
   assert(m_insert_idx < m_states.size());
-  m_states[m_insert_idx]->m_queue.push(task);
+  m_states[m_insert_idx]->m_queue.push(std::move(task));
 }
 
 template <class Input, typename Executor>
 void SpartaWorkQueue<Input, Executor>::add_item(Input task, size_t worker_id) {
   assert(worker_id < m_states.size());
-  m_states[worker_id]->m_queue.push(task);
+  m_states[worker_id]->m_queue.push(std::move(task));
 }
 
 /*
@@ -274,7 +271,7 @@ void SpartaWorkQueue<Input, Executor>::run_all() {
           auto task = other_state->pop_task(state);
           if (task) {
             have_task = true;
-            consume(state, *task);
+            m_executor(state, std::move(*task));
             break;
           }
         }
@@ -360,12 +357,14 @@ namespace workqueue_impl {
 template <typename Input, typename Fn>
 struct NoStateWorkQueueHelper {
   Fn fn;
-  void operator()(SpartaWorkerState<Input>*, Input a) { fn(a); }
+  void operator()(SpartaWorkerState<Input>*, Input a) { fn(std::move(a)); }
 };
 template <typename Input, typename Fn>
 struct WithStateWorkQueueHelper {
   Fn fn;
-  void operator()(SpartaWorkerState<Input>* state, Input a) { fn(state, a); }
+  void operator()(SpartaWorkerState<Input>* state, Input a) {
+    fn(state, std::move(a));
+  }
 };
 } // namespace workqueue_impl
 

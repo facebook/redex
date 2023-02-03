@@ -46,10 +46,10 @@ RedexContext::~RedexContext() {
     if (timer_name != nullptr) {
       Timer timer(timer_name, /*indent=*/false);
       workqueue_run<std::function<void()>>(
-          [](std::function<void()>& fn) { fn(); }, fns);
+          [](const std::function<void()>& fn) { fn(); }, fns);
     } else {
       workqueue_run<std::function<void()>>(
-          [](std::function<void()>& fn) { fn(); }, fns);
+          [](const std::function<void()>& fn) { fn(); }, fns);
     }
   };
 
