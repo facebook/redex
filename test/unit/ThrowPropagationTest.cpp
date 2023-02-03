@@ -194,3 +194,29 @@ TEST_F(ThrowPropagationTest, cannot_return_simple_already_does_not_terminate) {
        code_str,
        code_str);
 }
+
+TEST_F(ThrowPropagationTest, dont_change_throw_result) {
+  ClassCreator foo_creator(DexType::make_type("LFoo;"));
+  foo_creator.set_super(type::java_lang_Object());
+
+  auto method =
+      DexMethod::make_method("LFoo;.bar:()Ljava/lang/Exception;")
+          ->make_concrete(ACC_STATIC | ACC_PUBLIC, false /* is_virtual */);
+  method->set_code(assembler::ircode_from_string(R"(
+        (const v0 0)
+        (return-object v0)
+      )"));
+  foo_creator.add_method(method);
+
+  auto code_str = R"(
+    (
+      (invoke-static () "LFoo;.bar:()Ljava/lang/Exception;")
+      (move-result-object v0)
+      (throw v0)
+    )
+  )";
+  auto expected_str = code_str;
+  test(Scope{type_class(type::java_lang_Object()), foo_creator.create()},
+       code_str,
+       expected_str);
+}

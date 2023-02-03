@@ -153,9 +153,8 @@ ThrowPropagationPass::Stats ThrowPropagationPass::run(
       case OPCODE_MOVE:
       case OPCODE_NOP:
       case OPCODE_NEW_INSTANCE:
-      case IOPCODE_LOAD_PARAM:
-      case IOPCODE_LOAD_PARAM_OBJECT:
-      case IOPCODE_MOVE_RESULT_PSEUDO:
+      case OPCODE_MOVE_RESULT_OBJECT:
+      case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT:
         break;
       case OPCODE_INVOKE_DIRECT: {
         auto method = it->insn->get_method();
