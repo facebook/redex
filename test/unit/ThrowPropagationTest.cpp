@@ -36,8 +36,10 @@ void test(const Scope& scope,
   auto no_return_methods =
       ThrowPropagationPass::get_no_return_methods(config, scope);
   auto override_graph = method_override_graph::build_graph(scope);
+  code->build_cfg();
   ThrowPropagationPass::run(
       config, no_return_methods, *override_graph, code.get());
+  code->clear_cfg();
 
   EXPECT_CODE_EQ(code.get(), expected.get());
 };

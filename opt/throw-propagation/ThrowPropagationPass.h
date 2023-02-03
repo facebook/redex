@@ -28,6 +28,8 @@ class ThrowPropagationPass : public Pass {
  private:
   Config m_config;
 
+  static bool is_no_return_method(const Config& config, DexMethod* method);
+
  public:
   ThrowPropagationPass() : Pass("ThrowPropagationPass") {}
 
@@ -36,9 +38,11 @@ class ThrowPropagationPass : public Pass {
   static std::unordered_set<DexMethod*> get_no_return_methods(
       const Config& config, const Scope& scope);
 
-  static Stats run(const Config& config,
-                   const std::unordered_set<DexMethod*>& no_return_methods,
-                   const method_override_graph::Graph& graph,
-                   IRCode* code);
+  static Stats run(
+      const Config& config,
+      const std::unordered_set<DexMethod*>& no_return_methods,
+      const method_override_graph::Graph& graph,
+      IRCode* code,
+      std::unordered_set<DexMethod*>* no_return_methods_checked = nullptr);
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 };
