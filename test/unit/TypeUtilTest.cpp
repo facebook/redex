@@ -150,3 +150,26 @@ TEST_F(TypeUtilTest, check_cast_array) {
   EXPECT_TRUE(check_cast(DexType::make_type("[[Ljava/lang/Object;"),
                          DexType::make_type("[Ljava/lang/Object;")));
 }
+
+TEST_F(TypeUtilTest, same_package) {
+  using namespace type;
+
+  EXPECT_TRUE(same_package(DexType::make_type("Ljava/lang/Object;"),
+                           DexType::make_type("Ljava/lang/Object;")));
+
+  EXPECT_TRUE(same_package(DexType::make_type("Ljava/lang/Object;"),
+                           DexType::make_type("Ljava/lang/String;")));
+
+  EXPECT_FALSE(same_package(DexType::make_type("Ljava/lang/Object;"),
+                            DexType::make_type("Ljava/util/List;")));
+}
+
+TEST_F(TypeUtilTest, same_package_sub_package) {
+  using namespace type;
+
+  EXPECT_TRUE(same_package(DexType::make_type("Ljava/lang/Object;"),
+                           DexType::make_type("Ljava/lang/Object;")));
+
+  EXPECT_FALSE(same_package(DexType::make_type("Ljava/lang/Object;"),
+                            DexType::make_type("Ljava/lang/reflect/Method;")));
+}
