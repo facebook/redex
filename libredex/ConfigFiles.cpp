@@ -272,8 +272,12 @@ void ConfigFiles::build_dead_class_and_live_class_split_lists() {
                 dead_class_list_filename.c_str());
         exit(EXIT_FAILURE);
       }
-      std::string line;
-      while (input >> line) {
+      for (std::string line; std::getline(input, line);) {
+        // trim trailing whitespace
+        line.erase(std::find_if(line.rbegin(), line.rend(),
+                                [](auto c) { return c > ' '; })
+                       .base(),
+                   line.end());
         int64_t load_count = 50; // legacy
         auto i = line.find('\t');
         std::string_view classname;
