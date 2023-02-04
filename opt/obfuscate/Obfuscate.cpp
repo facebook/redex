@@ -95,10 +95,24 @@ DexMember* find_renamable_ref(
 
 void update_refs(Scope& scope,
                  DexFieldManager& field_name_mapping,
-                 DexMethodManager& method_name_mapping) {
+                 DexMethodManager& method_name_mapping,
+                 size_t* classes_made_public) {
   std::unordered_map<DexFieldRef*, DexField*> f_ref_def_cache;
   std::unordered_map<DexMethodRef*, DexMethod*> m_ref_def_cache;
-  walk::opcodes(scope, [&](DexMethod*, IRInstruction* instr) {
+
+  auto maybe_publicize_class = [&](DexMethod* referrer, DexClass* referree) {
+    if (is_public(referree)) {
+      return;
+    }
+    // TODO: Be more conservative here?
+    if (!type::same_package(referrer->get_class(), referree->get_type()) ||
+        is_private(referree)) {
+      set_public(referree);
+      ++(*classes_made_public);
+    }
+  };
+
+  walk::opcodes(scope, [&](DexMethod* m, IRInstruction* instr) {
     auto op = instr->opcode();
     if (instr->has_field()) {
       DexFieldRef* field_ref = instr->get_field();
@@ -108,6 +122,7 @@ void update_refs(Scope& scope,
       if (field_def != nullptr) {
         TRACE(OBFUSCATE, 4, "Found a ref to fixup %s", SHOW(field_ref));
         instr->set_field(field_def);
+        maybe_publicize_class(m, type_class(field_def->get_class()));
       }
     } else if (instr->has_method() &&
                (opcode::is_invoke_direct(op) || opcode::is_invoke_static(op))) {
@@ -124,6 +139,7 @@ void update_refs(Scope& scope,
       if (method_def != nullptr) {
         TRACE(OBFUSCATE, 4, "Found a ref to fixup %s", SHOW(method_ref));
         instr->set_method(method_def);
+        maybe_publicize_class(m, type_class(method_def->get_class()));
       }
     }
   });
@@ -219,7 +235,8 @@ void obfuscate(Scope& scope,
   // Update any instructions with a member that is a ref to the corresponding
   // def for any field that we are going to rename. This allows us to in-place
   // rename the field def and have that change seen everywhere.
-  update_refs(scope, field_name_manager, method_name_manager);
+  update_refs(scope, field_name_manager, method_name_manager,
+              &stats.classes_made_public);
 
   TRACE(OBFUSCATE, 3, "Finished transforming refs");
 

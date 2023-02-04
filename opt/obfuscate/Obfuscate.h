@@ -32,6 +32,7 @@ struct RenameStats {
   size_t dmethods_renamed = 0;
   size_t vmethods_total = 0;
   size_t vmethods_renamed = 0;
+  size_t classes_made_public{0};
 };
 
 void obfuscate(Scope& classes,
