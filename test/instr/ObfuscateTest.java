@@ -7,6 +7,8 @@
 
 package com.facebook.redex.test.instr;
 
+import com.facebook.redex.test.instr.base.ObfuscateTestPackages;
+
 import static org.fest.assertions.api.Assertions.*;
 import java.lang.reflect.*;
 
@@ -28,6 +30,9 @@ class C1 extends A2 {
     }
 }
 
+class Sub extends ObfuscateTestPackages {
+}
+
 public class ObfuscateTest {
 
   @Test
@@ -35,5 +40,10 @@ public class ObfuscateTest {
       A2 o = new C1();
       o.m1();
       assertThat(C1.f1[0]).isEqualTo(0);
+  }
+
+  @Test
+  public void testSub() {
+    assertThat(Sub.foo()).isEqualTo("foo");
   }
 }
