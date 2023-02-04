@@ -246,10 +246,7 @@ std::string_view get_package_name(const DexType* type) {
 }
 
 bool same_package(const DexType* type1, const DexType* type2) {
-  auto package1 = get_package_name(type1);
-  auto package2 = get_package_name(type2);
-  auto min_len = std::min(package1.size(), package2.size());
-  return package1.compare(0, min_len, package2, 0, min_len) == 0;
+  return get_package_name(type1) == get_package_name(type2);
 }
 
 std::string get_simple_name(const DexType* type) {
