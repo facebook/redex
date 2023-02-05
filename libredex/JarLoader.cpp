@@ -563,7 +563,7 @@ bool load_class_file(const std::string& filename, Scope* classes) {
  */
 
 namespace {
-static const int kSignatureSize = 4;
+constexpr size_t kSignatureSize = 4;
 
 /* CDFile
  * Central directory file header entry structures.
@@ -692,8 +692,8 @@ static bool validate_pce(pk_cdir_end& pce, ssize_t size) {
 }
 
 static bool extract_jar_entry(const uint8_t*& mapping,
-                              ssize_t& offset,
-                              ssize_t total_size,
+                              size_t& offset,
+                              size_t total_size,
                               jar_entry& je) {
   if (offset + kSignatureSize > total_size) {
     fprintf(stderr, "Reading mapping out of bound, bailing\n");
@@ -720,12 +720,12 @@ static bool extract_jar_entry(const uint8_t*& mapping,
 }
 
 static bool get_jar_entries(const uint8_t* mapping,
-                            ssize_t size,
+                            size_t size,
                             pk_cdir_end& pce,
                             std::vector<jar_entry>& files) {
   const uint8_t* cdir = mapping + pce.cd_disk_offset;
   files.resize(pce.cd_entries);
-  ssize_t offset = pce.cd_disk_offset;
+  size_t offset = pce.cd_disk_offset;
   for (int entry = 0; entry < pce.cd_entries; entry++) {
     if (!extract_jar_entry(cdir, offset, size, files[entry])) return false;
   }
@@ -774,6 +774,7 @@ static int jar_uncompress(Bytef* dest,
 
 static bool decompress_class(jar_entry& file,
                              const uint8_t* mapping,
+                             size_t map_size,
                              uint8_t* outbuffer,
                              ssize_t bufsize) {
   if (file.cd_entry.comp_method != kCompMethodDeflate &&
@@ -783,6 +784,11 @@ static bool decompress_class(jar_entry& file,
     return false;
   }
 
+  static_assert(kSignatureSize <= sizeof(pk_lfile));
+  if (file.cd_entry.disk_offset + sizeof(pk_lfile) >= map_size) {
+    fprintf(stderr, "Entry out of map bounds!\n");
+    return false;
+  }
   const uint8_t* lfile = mapping + file.cd_entry.disk_offset;
   if (memcmp(lfile, kLFile, kSignatureSize) != 0) {
     fprintf(stderr, "Invalid local file entry, bailing\n");
@@ -799,6 +805,13 @@ static bool decompress_class(jar_entry& file,
   }
 
   lfile += sizeof(pk_lfile);
+
+  if (file.cd_entry.disk_offset + sizeof(pk_lfile) + pkf.fname_len +
+          pkf.extra_len + pkf.comp_size >=
+      map_size) {
+    fprintf(stderr, "Complete entry exceeds mapping bounds.\n");
+    return false;
+  }
 
   if (pkf.fname_len != file.cd_entry.fname_len ||
       pkf.comp_size != file.cd_entry.comp_size ||
@@ -835,6 +848,7 @@ static const int kStartBufferSize = 128 * 1024;
 static bool process_jar_entries(const DexLocation* location,
                                 std::vector<jar_entry>& files,
                                 const uint8_t* mapping,
+                                const size_t map_size,
                                 Scope* classes,
                                 const attribute_hook_t& attr_hook) {
   ssize_t bufsize = kStartBufferSize;
@@ -859,7 +873,7 @@ static bool process_jar_entries(const DexLocation* location,
       outbuffer = (uint8_t*)malloc(bufsize);
     }
 
-    if (!decompress_class(file, mapping, outbuffer, bufsize)) {
+    if (!decompress_class(file, mapping, map_size, outbuffer, bufsize)) {
       free(outbuffer);
       return false;
     }
@@ -875,7 +889,7 @@ static bool process_jar_entries(const DexLocation* location,
 
 bool process_jar(const DexLocation* location,
                  const uint8_t* mapping,
-                 ssize_t size,
+                 size_t size,
                  Scope* classes,
                  const attribute_hook_t& attr_hook) {
   pk_cdir_end pce;
@@ -889,7 +903,8 @@ bool process_jar(const DexLocation* location,
   if (!get_jar_entries(mapping, size, pce, files)) {
     return false;
   }
-  if (!process_jar_entries(location, files, mapping, classes, attr_hook)) {
+  if (!process_jar_entries(location, files, mapping, size, classes,
+                           attr_hook)) {
     return false;
   }
   return true;

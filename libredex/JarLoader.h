@@ -36,7 +36,7 @@ bool load_class_file(const std::string& filename, Scope* classes = nullptr);
 void init_basic_types();
 bool process_jar(const DexLocation* location,
                  const uint8_t* mapping,
-                 ssize_t size,
+                 size_t size,
                  Scope* classes,
                  const attribute_hook_t& attr_hook);
 
