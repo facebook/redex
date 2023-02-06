@@ -916,7 +916,7 @@ class DedupBlocksImpl {
         TRACE(DEDUP_BLOCKS, 5, "[dedup blocks] found init invocation: %s",
               SHOW(insn));
         auto& defs = (*live_ranges->use_def_chains)[live_range::Use{insn, 0}];
-        always_assert(defs.size() > 0);
+        always_assert(!defs.empty());
         if (defs.size() > 1) {
           // should never happen, but we are not going to fight that here
           TRACE(DEDUP_BLOCKS, 5, "[dedup blocks] defs.size() = %zu",
