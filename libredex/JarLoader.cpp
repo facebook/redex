@@ -700,8 +700,7 @@ bool extract_jar_entry(const uint8_t*& mapping,
   mapping += sizeof(pk_cd_file);
   offset += je.cd_entry.fname_len;
   always_assert_log(offset < total_size, "Reading mapping out of bound");
-  je.filename = std::string(
-      std::string_view((const char*)mapping, je.cd_entry.fname_len));
+  je.filename = std::string((const char*)mapping, je.cd_entry.fname_len);
   mapping += je.cd_entry.fname_len;
   offset = offset + je.cd_entry.extra_len + je.cd_entry.comment_len;
   mapping += je.cd_entry.extra_len;
@@ -848,12 +847,12 @@ bool process_jar_entries(const DexLocation* location,
   init_basic_types();
   for (auto& file : files) {
     if (file.cd_entry.ucomp_size == 0) continue;
-    if (file.cd_entry.fname_len < (kClassEndString.length() + 1)) continue;
 
     // Skip non-class files
+    std::string_view filename = file.filename;
+    if (filename.length() < kClassEndString.length()) continue;
     auto endcomp =
-        std::string_view(file.filename.c_str())
-            .substr(file.filename.length() - kClassEndString.length());
+        filename.substr(filename.length() - kClassEndString.length());
     if (endcomp != kClassEndString) continue;
 
     // Resize output if necessary.
