@@ -28,11 +28,33 @@ inline AccumulatingTimer s_destructor{};
 
 inline double get_destructor_seconds() { return s_destructor.get_seconds(); }
 
+inline size_t s_concurrent_destruction_threshold{
+    std::numeric_limits<size_t>::max()};
+
 void workqueue_run_for(size_t start,
                        size_t end,
                        const std::function<void(size_t)>& fn);
 
 } // namespace cc_impl
+
+// Use this scope at the top-level function of your application to allow for
+// fast concurrent destruction. Avoid changing the threshold in the global scope
+// due to hard to control global destruction order, and our dependency on
+// threading / the sparta-workqueue for concurrent destruction.
+class ConcurrentContainerConcurrentDestructionScope {
+  size_t m_last_threshold;
+
+ public:
+  explicit ConcurrentContainerConcurrentDestructionScope(
+      size_t threshold = 4096)
+      : m_last_threshold(threshold) {
+    std::swap(cc_impl::s_concurrent_destruction_threshold, m_last_threshold);
+  }
+
+  ~ConcurrentContainerConcurrentDestructionScope() {
+    std::swap(cc_impl::s_concurrent_destruction_threshold, m_last_threshold);
+  }
+};
 
 /*
  * This class implements the common functionalities of concurrent sets and maps.
@@ -66,7 +88,7 @@ class ConcurrentContainer {
 
   virtual ~ConcurrentContainer() {
     auto timer_scope = cc_impl::s_destructor.scope();
-    if (size() < 4096) {
+    if (size() <= cc_impl::s_concurrent_destruction_threshold) {
       for (size_t slot = 0; slot < n_slots; ++slot) {
         m_slots[slot] = Container();
       }

@@ -1442,6 +1442,9 @@ int main(int argc, char* argv[]) {
   auto maybe_global_profile =
       ScopedCommandProfiling::maybe_from_env("GLOBAL_", "global");
 
+  ConcurrentContainerConcurrentDestructionScope
+      concurrent_container_destruction_scope;
+
   std::string stats_output_path;
   Json::Value stats;
   double cpu_time_s;
