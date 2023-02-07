@@ -222,7 +222,6 @@ class ConcurrentContainer {
 
   std::mutex& get_lock(size_t slot) const { return m_locks[slot]; }
 
- protected:
   mutable std::mutex m_locks[n_slots];
   Container m_slots[n_slots];
 };
