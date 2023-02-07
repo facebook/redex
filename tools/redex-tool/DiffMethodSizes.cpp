@@ -38,10 +38,10 @@ JarMethodInfoMap load_jar_method_info(const std::string& base_directory,
                                       const std::vector<std::string>& jars) {
   JarMethodInfoMap info;
   auto hook = [&info](boost::variant<DexField*, DexMethod*> field_or_method,
-                      const char* attribute_name,
+                      const auto& attribute_name,
                       uint8_t* attribute_pointer) {
     // 0: DexField, 1: DexMethod
-    if (field_or_method.which() != 1 || strcmp(attribute_name, "Code") != 0) {
+    if (field_or_method.which() != 1 || attribute_name != "Code" != 0) {
       return;
     }
 
