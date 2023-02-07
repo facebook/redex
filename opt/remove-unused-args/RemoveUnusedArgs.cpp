@@ -23,6 +23,7 @@
 #include "OptData.h"
 #include "OptDataDefs.h"
 #include "PassManager.h"
+#include "Resolver.h"
 #include "Show.h"
 #include "Walkers.h"
 
@@ -79,28 +80,29 @@ RemoveArgs::PassStats RemoveArgs::run(ConfigFiles& config) {
  * move-result instructions, and record this information for each method.
  */
 void RemoveArgs::gather_results_used() {
-  walk::parallel::code(
-      m_scope, [&result_used = m_result_used](DexMethod*, IRCode& code) {
-        const auto ii = InstructionIterable(code);
-        for (auto it = ii.begin(); it != ii.end(); it++) {
-          auto insn = it->insn;
-          if (!opcode::is_an_invoke(insn->opcode())) {
-            continue;
-          }
-          const auto next = std::next(it);
-          always_assert(next != ii.end());
-          const auto peek = next->insn;
-          if (!opcode::is_a_move_result(peek->opcode())) {
-            continue;
-          }
-          auto method = insn->get_method()->as_def();
-          if (!method) {
-            // TODO: T31388603 -- Remove unused results for true virtuals.
-            continue;
-          }
-          result_used.insert(method);
-        }
-      });
+  walk::parallel::code(m_scope, [&result_used = m_result_used](DexMethod*,
+                                                               IRCode& code) {
+    const auto ii = InstructionIterable(code);
+    for (auto it = ii.begin(); it != ii.end(); it++) {
+      auto insn = it->insn;
+      if (!opcode::is_an_invoke(insn->opcode())) {
+        continue;
+      }
+      const auto next = std::next(it);
+      always_assert(next != ii.end());
+      const auto peek = next->insn;
+      if (!opcode::is_a_move_result(peek->opcode())) {
+        continue;
+      }
+      auto method =
+          resolve_method(insn->get_method(), opcode_to_search(insn->opcode()));
+      if (!method) {
+        // TODO: T31388603 -- Remove unused results for true virtuals.
+        continue;
+      }
+      result_used.insert(method);
+    }
+  });
 }
 
 // For normalization, we put primitive types last and thus all reference types
@@ -407,13 +409,20 @@ bool RemoveArgs::update_method_signature(
   }
 
   DexMethodSpec spec(nullptr, name, updated_proto);
+
+  std::string tmp;
+  if (traceEnabled(ARGS, 3)) {
+    tmp = show(method);
+  }
+
   method->change(spec, true /* rename on collision */);
 
   // We make virtual method names unique via $rvp / $uva name mangling; check
   // that this worked:
   always_assert(!method->is_virtual() || method->get_name() == name);
 
-  TRACE(ARGS, 3, "Method signature updated to %s", SHOW(method));
+  TRACE(ARGS, 3, "Method signature %s updated to %s", tmp.c_str(),
+        SHOW(method));
   log_opt(METHOD_PARAMS_REMOVED, method);
   return true;
 }
