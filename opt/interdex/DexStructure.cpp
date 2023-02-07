@@ -230,6 +230,8 @@ DexClasses DexesStructure::end_dex(DexInfo dex_info) {
 
   DexClasses all_classes = m_current_dex.get_classes();
 
+  m_overflow_stats += m_current_dex.m_overflow_stats;
+
   m_current_dex = DexStructure();
   return all_classes;
 }
@@ -314,6 +316,7 @@ bool DexStructure::add_class_if_fits(
           "over the linear alloc limit: %s",
           SHOW(clazz));
     trace_details();
+    ++m_overflow_stats.linear_alloc_overflow;
     return false;
   }
 
@@ -325,6 +328,7 @@ bool DexStructure::add_class_if_fits(
           "over the method refs limit: %zu >= %zu: %s",
           m_mrefs.size() + extra_mrefs_size, method_refs_limit, SHOW(clazz));
     trace_details();
+    ++m_overflow_stats.method_refs_overflow;
     return false;
   }
 
@@ -338,6 +342,7 @@ bool DexStructure::add_class_if_fits(
           "over the field refs limit: %zu >= %zu: %s",
           new_field_refs, field_refs_limit, SHOW(clazz));
     trace_details();
+    ++m_overflow_stats.field_refs_overflow;
     return false;
   }
 
@@ -351,6 +356,7 @@ bool DexStructure::add_class_if_fits(
           "over the type refs limit: %zu >= %zu: %s",
           new_type_refs, type_refs_limit, SHOW(clazz));
     trace_details();
+    ++m_overflow_stats.type_refs_overflow;
     return false;
   }
 

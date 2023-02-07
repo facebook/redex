@@ -138,6 +138,10 @@ class InterDex {
     return m_emitting_state.dexes_structure.get_dex_info();
   }
 
+  const OverflowStats& get_overflow_stats() const {
+    return m_emitting_state.dexes_structure.get_overflow_stats();
+  }
+
  private:
   void run_in_force_single_dex_mode();
   bool should_skip_class_due_to_plugin(DexClass* clazz) const;

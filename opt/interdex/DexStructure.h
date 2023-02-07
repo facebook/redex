@@ -44,6 +44,21 @@ struct DexInfo {
   bool betamap_ordered{false};
 };
 
+struct OverflowStats {
+  size_t linear_alloc_overflow{0};
+  size_t method_refs_overflow{0};
+  size_t field_refs_overflow{0};
+  size_t type_refs_overflow{0};
+
+  OverflowStats& operator+=(const OverflowStats& rhs) {
+    linear_alloc_overflow += rhs.linear_alloc_overflow;
+    method_refs_overflow += rhs.method_refs_overflow;
+    field_refs_overflow += rhs.field_refs_overflow;
+    type_refs_overflow += rhs.type_refs_overflow;
+    return *this;
+  }
+};
+
 class DexStructure {
  public:
   DexStructure() : m_linear_alloc_size(0) {}
@@ -142,6 +157,10 @@ also reject some legal cases.
   std::list<DexClass*> m_classes;
   std::unordered_map<DexClass*, std::list<DexClass*>::iterator>
       m_classes_iterators;
+
+  OverflowStats m_overflow_stats{};
+
+  friend class DexesStructure;
 };
 
 class DexesStructure {
@@ -247,6 +266,8 @@ class DexesStructure {
 
   const std::vector<DexInfo>& get_dex_info() const { return m_dex_info; }
 
+  const OverflowStats& get_overflow_stats() const { return m_overflow_stats; }
+
  private:
   void update_stats(const MethodRefs& clazz_mrefs,
                     const FieldRefs& clazz_frefs,
@@ -290,6 +311,8 @@ class DexesStructure {
     size_t num_mrefs{0};
     size_t num_frefs{0};
   } m_stats;
+
+  OverflowStats m_overflow_stats{};
 };
 
 } // namespace interdex

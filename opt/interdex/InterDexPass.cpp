@@ -204,6 +204,12 @@ void InterDexPass::run_pass(
 
   mgr.set_metric(METRIC_CURRENT_CLASSES_WHEN_EMITTING_REMAINING,
                  interdex.get_current_classes_when_emitting_remaining());
+
+  auto& over = interdex.get_overflow_stats();
+  mgr.set_metric("num_overflows.linear_alloc", over.linear_alloc_overflow);
+  mgr.set_metric("num_overflows.method_refs", over.method_refs_overflow);
+  mgr.set_metric("num_overflows.field_refs", over.field_refs_overflow);
+  mgr.set_metric("num_overflows.type_refs", over.type_refs_overflow);
 }
 
 void InterDexPass::run_pass_on_nonroot_store(
