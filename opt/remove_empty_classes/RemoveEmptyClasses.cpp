@@ -88,6 +88,7 @@ void process_code(ConcurrentSet<const DexType*>* class_references,
     } else if (opcode->has_method()) {
       auto const& m = opcode->get_method();
       process_proto(class_references, m);
+      class_references->insert(m->get_class());
     }
   }
   // Also gather exception types that are caught.
