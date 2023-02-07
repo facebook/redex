@@ -143,6 +143,10 @@ class InterDex {
     return m_transitive_closure_moved;
   }
 
+  const OverflowStats& get_overflow_stats() const {
+    return m_dexes_structure.get_overflow_stats();
+  }
+
  private:
   void run_in_force_single_dex_mode();
   bool should_not_relocate_methods_of_class(const DexClass* clazz);

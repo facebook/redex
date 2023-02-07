@@ -30,6 +30,21 @@ struct DexInfo {
   bool betamap_ordered{false};
 };
 
+struct OverflowStats {
+  size_t linear_alloc_overflow{0};
+  size_t method_refs_overflow{0};
+  size_t field_refs_overflow{0};
+  size_t type_refs_overflow{0};
+
+  OverflowStats& operator+=(const OverflowStats& rhs) {
+    linear_alloc_overflow += rhs.linear_alloc_overflow;
+    method_refs_overflow += rhs.method_refs_overflow;
+    field_refs_overflow += rhs.field_refs_overflow;
+    type_refs_overflow += rhs.type_refs_overflow;
+    return *this;
+  }
+};
+
 class DexStructure {
  public:
   DexStructure() : m_linear_alloc_size(0) {}
@@ -97,6 +112,10 @@ class DexStructure {
   interdex::TypeRefs m_pending_init_class_types;
   std::vector<DexClass*> m_classes;
   std::vector<DexClass*> m_squashed_classes;
+
+  OverflowStats m_overflow_stats{};
+
+  friend class DexesStructure;
 };
 
 class DexesStructure {
@@ -206,6 +225,8 @@ class DexesStructure {
 
   bool has_class(DexClass* clazz) const { return m_classes.count(clazz); }
 
+  const OverflowStats& get_overflow_stats() const { return m_overflow_stats; }
+
  private:
   void update_stats(const MethodRefs& clazz_mrefs,
                     const FieldRefs& clazz_frefs,
@@ -250,6 +271,8 @@ class DexesStructure {
     size_t num_mrefs{0};
     size_t num_frefs{0};
   } m_stats;
+
+  OverflowStats m_overflow_stats{};
 };
 
 } // namespace interdex
