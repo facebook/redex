@@ -22,7 +22,7 @@ class ExternalRefsManglingPass : public Pass {
   explicit ExternalRefsManglingPass(const std::string& name) : Pass(name) {}
 
   void bind_config() override {
-    bind("refine_to_external", false, m_refine_to_external,
+    bind("refine_to_external", true, m_refine_to_external,
          "Allowing resolving method ref to an external one");
     bind("supported_min_sdk_for_external_refs", 14,
          m_supported_min_sdk_for_external_refs,
@@ -37,7 +37,7 @@ class ExternalRefsManglingPass : public Pass {
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override = 0;
 
  protected:
-  bool m_refine_to_external = false;
+  bool m_refine_to_external = true;
   int32_t m_supported_min_sdk_for_external_refs;
   std::vector<std::string> m_excluded_externals;
   const api::AndroidSDK* m_min_sdk_api;

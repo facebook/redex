@@ -56,7 +56,11 @@ public class WickedCoolButton extends Button {
         if (type != 1) {
           throw new AssertionError("Unexpected value: " + type);
         }
-        android.util.Log.w("BNDL", "WickedCoolButton inflated with correct values " + b + ", 0x" + Integer.toHexString(flags) + ", " + typeToName(type));
+        String string = a.getString(R.styleable.WickedCoolButton_dangerous);
+        if (!string.contains("welcome")) {
+          throw new AssertionError("Unexpected string value: " + string);
+        }
+        android.util.Log.w("BNDL", "WickedCoolButton inflated with correct values " + b + ", 0x" + Integer.toHexString(flags) + ", " + typeToName(type) + ", \"" + string + "\"");
       } finally {
         a.recycle();
       }

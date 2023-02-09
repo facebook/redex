@@ -15,7 +15,6 @@
 
 #include "GlobalConfig.h"
 #include "JsonWrapper.h"
-#include "ProguardMap.h"
 
 class DexMethodRef;
 class DexType;

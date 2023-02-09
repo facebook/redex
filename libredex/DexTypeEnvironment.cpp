@@ -46,7 +46,7 @@ bool is_subset(DexTypeList* left, DexTypeList* right) {
 // Can the interface identity of `left` be merged into `right`.
 bool are_interfaces_mergeable_to(const DexClass* left, const DexClass* right) {
   always_assert(left && right);
-  if (left->get_interfaces()->size() == 0) {
+  if (left->get_interfaces()->empty()) {
     return true;
   }
   return is_subset(left->get_interfaces(), right->get_interfaces());

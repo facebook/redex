@@ -144,25 +144,17 @@ bool dest_may_be_pointer(const IRInstruction* insn) {
   case OPCODE_MUL_DOUBLE:
   case OPCODE_DIV_DOUBLE:
   case OPCODE_REM_DOUBLE:
-  case OPCODE_ADD_INT_LIT16:
-  case OPCODE_RSUB_INT:
-  case OPCODE_MUL_INT_LIT16:
-  case OPCODE_DIV_INT_LIT16:
-  case OPCODE_REM_INT_LIT16:
-  case OPCODE_AND_INT_LIT16:
-  case OPCODE_OR_INT_LIT16:
-  case OPCODE_XOR_INT_LIT16:
-  case OPCODE_ADD_INT_LIT8:
-  case OPCODE_RSUB_INT_LIT8:
-  case OPCODE_MUL_INT_LIT8:
-  case OPCODE_DIV_INT_LIT8:
-  case OPCODE_REM_INT_LIT8:
-  case OPCODE_AND_INT_LIT8:
-  case OPCODE_OR_INT_LIT8:
-  case OPCODE_XOR_INT_LIT8:
-  case OPCODE_SHL_INT_LIT8:
-  case OPCODE_SHR_INT_LIT8:
-  case OPCODE_USHR_INT_LIT8:
+  case OPCODE_ADD_INT_LIT:
+  case OPCODE_RSUB_INT_LIT:
+  case OPCODE_MUL_INT_LIT:
+  case OPCODE_DIV_INT_LIT:
+  case OPCODE_REM_INT_LIT:
+  case OPCODE_AND_INT_LIT:
+  case OPCODE_OR_INT_LIT:
+  case OPCODE_XOR_INT_LIT:
+  case OPCODE_SHL_INT_LIT:
+  case OPCODE_SHR_INT_LIT:
+  case OPCODE_USHR_INT_LIT:
     return false;
   case OPCODE_CONST:
     return insn->get_literal() == 0;
@@ -416,7 +408,7 @@ static void analyze_method_recursive(
 
   // The following updates form a critical section.
   {
-    boost::lock_guard<boost::mutex> lock(fp_iter_map->get_lock(method));
+    std::unique_lock<std::mutex> lock(fp_iter_map->get_lock(method));
     fp_iter_map->update_unsafe(method,
                                [&](auto, FixpointIterator*& v, bool exists) {
                                  redex_assert(!(exists ^ (v != nullptr)));

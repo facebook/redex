@@ -15,6 +15,7 @@
 #include <boost/optional.hpp>
 #include <boost/regex.hpp>
 #include <fcntl.h>
+#include <fstream>
 #include <map>
 
 #include "Macros.h"
@@ -37,6 +38,7 @@
 
 #include "Debug.h"
 #include "DexUtil.h"
+#include "GlobalConfig.h"
 #include "IOUtil.h"
 #include "ReadMaybeMapped.h"
 #include "RedexMappedFile.h"
@@ -51,7 +53,7 @@
 #endif
 
 namespace apk {
-bool is_valid_global_string(const android::ResStringPool& pool, size_t idx) {
+bool is_valid_string_idx(const android::ResStringPool& pool, size_t idx) {
   size_t u16_len;
   return pool.stringAt(idx, &u16_len) != nullptr;
 }
@@ -343,7 +345,7 @@ void TableSnapshot::get_configurations(
                         dtohl(c->size));
       android::ResTable_config swapped;
       swapped.copyFromDtoH(*c);
-      out->emplace_back(std::move(swapped));
+      out->emplace_back(swapped);
     }
   }
 }
@@ -501,7 +503,7 @@ void TableSnapshot::collect_resource_values(
 }
 
 bool TableSnapshot::is_valid_global_string_idx(size_t idx) const {
-  return is_valid_global_string(m_global_strings, idx);
+  return is_valid_string_idx(m_global_strings, idx);
 }
 
 std::string TableSnapshot::get_global_string(size_t idx) const {
@@ -924,6 +926,47 @@ void ApkResources::collect_layout_classes_and_attributes_for_file(
 }
 
 namespace {
+class XmlStringAttributeCollector : public arsc::XmlFileVisitor {
+ public:
+  ~XmlStringAttributeCollector() override {}
+
+  bool visit_global_strings(android::ResStringPool_header* pool) override {
+    always_assert_log(m_string_pool->setTo(pool, dtohl(pool->header.size),
+                                           true) == android::NO_ERROR,
+                      "Failed to parse xml strings!");
+    return true;
+  }
+
+  bool visit_typed_data(android::Res_value* value) override {
+    if (value->dataType == android::Res_value::TYPE_STRING) {
+      auto idx = dtohl(value->data);
+      if (apk::is_valid_string_idx(*m_string_pool, idx)) {
+        auto s = apk::get_string_from_pool(*m_string_pool, idx);
+        m_values.emplace(s);
+      }
+    }
+    return true;
+  }
+
+  std::shared_ptr<android::ResStringPool> m_string_pool =
+      std::make_shared<android::ResStringPool>();
+  std::unordered_set<std::string> m_values;
+};
+} // namespace
+
+void ApkResources::collect_xml_attribute_string_values_for_file(
+    const std::string& file_path, std::unordered_set<std::string>* out) {
+  redex::read_file_with_contents(file_path, [&](const char* data, size_t size) {
+    if (is_binary_xml(data, size)) {
+      XmlStringAttributeCollector collector;
+      if (collector.visit((void*)data, size)) {
+        out->insert(collector.m_values.begin(), collector.m_values.end());
+      }
+    }
+  });
+}
+
+namespace {
 template <typename ValueType>
 boost::optional<ValueType> read_xml_value(
     const std::string& file_path,
@@ -1310,7 +1353,8 @@ void ResourcesArscFile::remap_reorder_and_serialize(
 
         auto configs = table_parser.get_configs(package_id, type_id);
         auto type_definer = std::make_shared<arsc::ResTableTypeDefiner>(
-            package_id, type_id, configs, flags);
+            package_id, type_id, configs, flags, false,
+            arsc::any_sparse_types(type_info.configs));
 
         for (auto& config : configs) {
           for (uint32_t new_entry_id = 0; new_entry_id < entry_count;
@@ -1593,7 +1637,7 @@ void rebuild_type_strings(
 }
 } // namespace
 
-void ResourcesArscFile::remove_unreferenced_strings() {
+void ResourcesArscFile::finalize_resource_table(const ResourceConfig& config) {
   // Find the global string pool and read its settings.
   GlobalStringPoolReader string_reader;
   string_reader.visit(m_f.data(), m_arsc_len);
@@ -1659,10 +1703,6 @@ void ResourcesArscFile::remove_unreferenced_strings() {
   table_builder.set_global_strings(global_strings_builder);
   for (auto& package_entries : collector.m_package_entries) {
     // 5) Do a similar remapping as above, but for key strings.
-    //
-    //    TODO: also do a similar step for type strings pool, and any empty type
-    //    chunks that had all their entries deleted.
-    //
     auto& package = package_entries.first;
     std::shared_ptr<arsc::ResPackageBuilder> package_builder =
         std::make_shared<arsc::ResPackageBuilder>(package);
@@ -1682,6 +1722,16 @@ void ResourcesArscFile::remove_unreferenced_strings() {
     project_string_mapping(used_key_strings, key_string_pool->size(),
                            &key_old_to_new);
 
+    auto& type_strings_header =
+        collector.m_package_type_string_headers.at(package);
+    android::ResStringPool type_strings;
+    always_assert_log(type_strings.setTo(type_strings_header,
+                                         CHUNK_SIZE(type_strings_header),
+                                         true) == android::NO_ERROR,
+                      "Failed to parse type strings!");
+    std::vector<std::string> kept_type_names(type_strings.size());
+    int last_kept_type_name = 0;
+
     // Remap the entries.
     for (auto& ref : refs) {
       auto old = dtohl(ref->index);
@@ -1697,18 +1747,44 @@ void ResourcesArscFile::remove_unreferenced_strings() {
         *key_string_pool, key_old_to_new, [](android::ResStringPool_span*) {},
         key_strings_builder.get());
     package_builder->set_key_strings(key_strings_builder);
-    package_builder->set_type_strings(
-        collector.m_package_type_string_headers.at(package));
-
     // Copy over all existing type data, which has been remapped by the step
     // above.
     auto search = collector.m_package_types.find(package);
     if (search != collector.m_package_types.end()) {
       auto types = search->second;
       for (auto& info : types) {
-        package_builder->add_type(info);
+        std::string type_name;
+        auto type_string_idx = info.spec->id - 1;
+        if (apk::is_valid_string_idx(type_strings, type_string_idx)) {
+          type_name = apk::get_string_from_pool(type_strings, type_string_idx);
+        }
+        if (!type_name.empty() &&
+            config.canonical_entry_types.count(type_name) > 0) {
+          TRACE(RES, 9, "Canonical entries enabled for ID 0x%x (%s)",
+                info.spec->id, type_name.c_str());
+          auto type_builder = std::make_shared<arsc::ResTableTypeProjector>(
+              package->id, info.spec, info.configs, true);
+          package_builder->add_type(type_builder);
+        } else {
+          package_builder->add_type(info);
+        }
+        if (dtohl(info.spec->entryCount) > 0) {
+          kept_type_names.at(type_string_idx) = type_name;
+          if (type_string_idx > last_kept_type_name) {
+            last_kept_type_name = type_string_idx;
+          }
+        }
       }
     }
+
+    // Copy all type names that were not fully deleted (or empty strings if they
+    // were).
+    std::shared_ptr<arsc::ResStringPoolBuilder> type_strings_builder =
+        std::make_shared<arsc::ResStringPoolBuilder>(POOL_FLAGS(&type_strings));
+    for (int i = 0; i <= last_kept_type_name; i++) {
+      type_strings_builder->add_string(kept_type_names.at(i));
+    }
+    package_builder->set_type_strings(type_strings_builder);
 
     // Finally, preserve any chunks that we are not parsing.
     auto& unknown_chunks = collector.m_package_unknown_chunks.at(package);
@@ -1770,7 +1846,8 @@ size_t ResourcesArscFile::obfuscate_resource_and_serialize(
     const std::vector<std::string>& /* unused */,
     const std::map<std::string, std::string>& filepath_old_to_new,
     const std::unordered_set<uint32_t>& allowed_types,
-    const std::unordered_set<std::string>& keep_resource_prefixes) {
+    const std::unordered_set<std::string>& keep_resource_prefixes,
+    const std::unordered_set<std::string>& keep_resource_specific) {
   arsc::ResTableBuilder table_builder;
 
   // Find the global string pool and read its settings.
@@ -1867,13 +1944,13 @@ size_t ResourcesArscFile::obfuscate_resource_and_serialize(
         auto old = dtohl(ref->index);
         std::string old_string =
             apk::get_string_from_pool(*key_string_pool, old);
-        if (std::find_if(keep_resource_prefixes.begin(),
+        if (keep_resource_specific.count(old_string) > 0 ||
+            std::find_if(keep_resource_prefixes.begin(),
                          keep_resource_prefixes.end(),
                          [&](const std::string& v) {
                            return old_string.find(v) == 0;
                          }) != keep_resource_prefixes.end()) {
-          // Resource name matches one of the block prefix - Don't change the
-          // name
+          // Resource name matches block criteria; don't change the name.
           continue;
         }
         TRACE(RES, 9, "REMAP OLD KEY %u", old);

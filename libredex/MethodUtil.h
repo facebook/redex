@@ -10,6 +10,7 @@
 #include "ControlFlow.h"
 #include "DexClass.h"
 #include "IROpcode.h"
+#include "WellKnownTypes.h"
 
 namespace method {
 /**
@@ -111,21 +112,12 @@ inline bool signatures_match(const DexMethodRef* a, const DexMethodRef* b) {
   return a->get_name() == b->get_name() && a->get_proto() == b->get_proto();
 }
 
-DexMethod* java_lang_Object_ctor();
+#define DECLARE_METHOD(name, _) DexMethod* name();
 
-DexMethod* java_lang_Enum_ctor();
-
-DexMethod* java_lang_Enum_ordinal();
-
-DexMethod* java_lang_Enum_name();
-
-DexMethod* java_lang_Enum_equals();
-
-DexMethod* java_lang_Integer_valueOf();
-
-DexMethod* java_lang_Integer_intValue();
-
-DexMethod* java_lang_Throwable_fillInStackTrace();
+#define FOR_EACH DECLARE_METHOD
+WELL_KNOWN_METHODS
+#undef FOR_EACH
+#undef DECLARE_METHOD
 
 DexMethod* kotlin_jvm_internal_Intrinsics_checkParameterIsNotNull();
 

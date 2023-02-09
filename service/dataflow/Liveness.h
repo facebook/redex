@@ -29,11 +29,11 @@ class LivenessFixpointIterator final
     }
   }
 
-  LivenessDomain get_live_in_vars_at(const NodeId& block) const {
+  const LivenessDomain& get_live_in_vars_at(const NodeId& block) const {
     return get_exit_state_at(block);
   }
 
-  LivenessDomain get_live_out_vars_at(const NodeId& block) const {
+  const LivenessDomain& get_live_out_vars_at(const NodeId& block) const {
     return get_entry_state_at(block);
   }
 };

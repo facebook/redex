@@ -109,7 +109,7 @@ std::vector<cfg::Block*> Analyzer::get_monitor_mismatches() {
     }
   }
   for (auto* block : m_cfg.return_blocks()) {
-    auto count = get_exit_state_at(block);
+    const auto& count = get_exit_state_at(block);
     if (count.is_value() && *count.get_constant() != 0) {
       blocks.push_back(block);
     }

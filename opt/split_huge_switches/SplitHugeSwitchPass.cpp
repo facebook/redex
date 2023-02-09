@@ -16,6 +16,7 @@
 
 #include "ControlFlow.h"
 #include "DexClass.h"
+#include "DexLimits.h"
 #include "DexStore.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
@@ -237,8 +238,12 @@ DexMethod* create_dex_method(DexMethod* m, std::unique_ptr<IRCode>&& code) {
   auto method_ref =
       DexMethod::make_method(m->get_class(), clone_name, m->get_proto());
 
-  auto cloned_method = method_ref->make_concrete(
-      m->get_access(), std::move(code), m->is_virtual());
+  DexAccessFlags access_flags = DexAccessFlags::ACC_PRIVATE;
+  if (is_static(m)) {
+    access_flags |= DexAccessFlags::ACC_STATIC;
+  }
+  auto cloned_method = method_ref->make_concrete(access_flags, std::move(code),
+                                                 /* is_virtual */ false);
   cloned_method->set_deobfuscated_name(show_deobfuscated(cloned_method));
 
   cloned_method->rstate.set_dont_inline(); // Don't undo our work.
@@ -345,7 +350,7 @@ void insert_dispatches(
 
   // Create templates for the dispatch code, so it's easy to create a block.
   auto invoke_template = std::make_unique<IRInstruction>(
-      m->is_virtual() ? OPCODE_INVOKE_VIRTUAL : OPCODE_INVOKE_STATIC);
+      is_static(m) ? OPCODE_INVOKE_STATIC : OPCODE_INVOKE_DIRECT);
   {
     auto params = cfg.get_param_instructions();
     size_t s = 0;
@@ -428,18 +433,6 @@ void insert_dispatches(
   cfg.set_edge_target(last_block->succs()[0],
                       dispatch_blocks[0].condition_head);
 }
-
-// Reserve a constant amount of method references.
-class SplitHugeSwitchInterDexPlugin : public interdex::InterDexPassPlugin {
- public:
-  explicit SplitHugeSwitchInterDexPlugin(size_t max_split_methods)
-      : m_max_split_methods(max_split_methods) {}
-
-  size_t reserve_mrefs() override { return m_max_split_methods; }
-
- private:
-  size_t m_max_split_methods;
-};
 
 struct AnalysisData {
   boost::optional<cfg::ScopedCFG> scoped_cfg = boost::none;
@@ -584,10 +577,8 @@ AnalysisData analyze(DexMethod* m,
     for (size_t i = param_chain->size() - 2; i > 0; --i) {
       const IRInstruction* middle = param_chain->at(i);
       switch (middle->opcode()) {
-      case OPCODE_ADD_INT_LIT16:
-      case OPCODE_ADD_INT_LIT8:
-      case OPCODE_AND_INT_LIT16:
-      case OPCODE_AND_INT_LIT8:
+      case OPCODE_ADD_INT_LIT:
+      case OPCODE_AND_INT_LIT:
       case OPCODE_MOVE:
         continue;
 
@@ -607,7 +598,7 @@ AnalysisData analyze(DexMethod* m,
   data.constructor = false;
 
   // Filter out non-hot methods.
-  if (method_profiles.has_stats()) {
+  if (hotness_threshold > 0 && method_profiles.has_stats()) {
     auto is_hot_fn = [&]() {
       for (const auto& interaction_stats : method_profiles.all_interactions()) {
         const auto& stats_map = interaction_stats.second;
@@ -618,7 +609,7 @@ AnalysisData analyze(DexMethod* m,
       }
       return false;
     };
-    bool is_hot = hotness_threshold > 0 && is_hot_fn();
+    bool is_hot = is_hot_fn();
     if (!is_hot) {
       data.not_hot = true;
       return data;
@@ -678,7 +669,7 @@ Stats run_split_dexes(DexStoresVector& stores,
                       std::vector<AnalysisData>& methods,
                       const method_profiles::MethodProfiles& method_profiles,
                       size_t case_threshold,
-                      size_t max_split_methods) {
+                      size_t reserved_mrefs) {
   std::unordered_set<DexType*> cset;
   std::unordered_map<DexType*, std::vector<AnalysisData>> mmap;
   for (auto& data : methods) {
@@ -687,83 +678,103 @@ Stats run_split_dexes(DexStoresVector& stores,
     mmap[t].emplace_back(std::move(data));
   }
 
-  // Could parallelize this, but the set is likely small.
   Stats result{};
+  std::mutex mutex; // protecting result
+  std::vector<const DexClasses*> dexes;
   for (const DexStore& store : stores) {
     for (const auto& dex : store.get_dexen()) {
-      // Collect the candidates in this dex.
-      std::vector<DexType*> dex_candidate_types;
-      for (const auto* c : dex) {
-        if (cset.count(c->get_type()) != 0) {
-          dex_candidate_types.push_back(c->get_type());
-        }
-      }
-      if (dex_candidate_types.empty()) {
-        continue;
-      }
-
-      // Get the candidate methods.
-      std::vector<AnalysisData> dex_candidate_methods;
-      for (auto* t : dex_candidate_types) {
-        dex_candidate_methods.insert(dex_candidate_methods.end(),
-                                     std::make_move_iterator(mmap[t].begin()),
-                                     std::make_move_iterator(mmap[t].end()));
-      }
-
-      // If hotness data is available, sort.
-      if (method_profiles.has_stats()) {
-        std::sort(dex_candidate_methods.begin(),
-                  dex_candidate_methods.end(),
-                  [&](const AnalysisData& lhs, const AnalysisData& rhs) {
-                    const auto& profile_stats = method_profiles.method_stats(
-                        method_profiles::COLD_START);
-                    double lhs_hotness = profile_stats.at(lhs.m).call_count;
-                    double rhs_hotness = profile_stats.at(rhs.m).call_count;
-                    // Sort by hotness, descending.
-                    if (lhs_hotness > rhs_hotness) {
-                      return true;
-                    }
-                    if (lhs_hotness < rhs_hotness) {
-                      return false;
-                    }
-                    // Then greedily by size.
-                    size_t lhs_size = lhs.switch_range->mid_cases.size();
-                    size_t rhs_size = rhs.switch_range->mid_cases.size();
-                    if (lhs_size > rhs_size) {
-                      return true;
-                    }
-                    if (lhs_size < rhs_size) {
-                      return false;
-                    }
-                    // For determinism, compare by name.
-                    return compare_dexmethods(lhs.m, rhs.m);
-                  });
-      }
-
-      // Now go and apply.
-      size_t left = max_split_methods;
-      for (auto& data : dex_candidate_methods) {
-        size_t required = data.switch_range->mid_cases.size() - 1;
-        if (left < required) {
-          ++result.no_slots;
-          continue;
-        }
-        left -= required;
-        size_t orig_size = data.m->get_code()->sum_opcode_sizes();
-        auto new_methods =
-            run_split(data, data.m, data.m->get_code(), case_threshold);
-        size_t new_size = data.m->get_code()->sum_opcode_sizes();
-        for (DexMethod* m : new_methods) {
-          type_class(m->get_class())->add_method(m);
-          new_size += m->get_code()->sum_opcode_sizes();
-        }
-
-        result.new_methods.insert(new_methods.begin(), new_methods.end());
-        result.transformed_srcs.emplace(data.m,
-                                        std::make_pair(orig_size, new_size));
-      }
+      dexes.push_back(&dex);
     }
   }
+  workqueue_run<const DexClasses*>(
+      [&](const DexClasses* dex) {
+        // Collect the candidates in this dex.
+        std::vector<DexType*> dex_candidate_types;
+        for (const auto* c : *dex) {
+          if (cset.count(c->get_type()) != 0) {
+            dex_candidate_types.push_back(c->get_type());
+          }
+        }
+        if (dex_candidate_types.empty()) {
+          return;
+        }
+        std::unordered_set<DexMethodRef*> method_refs;
+        for (auto cls : *dex) {
+          cls->gather_methods(method_refs);
+        }
+
+        // Get the candidate methods.
+        std::vector<AnalysisData> dex_candidate_methods;
+        for (auto* t : dex_candidate_types) {
+          dex_candidate_methods.insert(dex_candidate_methods.end(),
+                                       std::make_move_iterator(mmap[t].begin()),
+                                       std::make_move_iterator(mmap[t].end()));
+        }
+
+        // If hotness data is available, sort.
+        if (method_profiles.has_stats()) {
+          std::sort(
+              dex_candidate_methods.begin(),
+              dex_candidate_methods.end(),
+              [&](const AnalysisData& lhs, const AnalysisData& rhs) {
+                const auto& profile_stats =
+                    method_profiles.method_stats(method_profiles::COLD_START);
+                auto call_count = [&profile_stats](DexMethod* m) {
+                  auto it = profile_stats.find(m);
+                  return it != profile_stats.end() ? it->second.call_count : 0;
+                };
+                double lhs_hotness = call_count(lhs.m);
+                double rhs_hotness = call_count(rhs.m);
+                // Sort by hotness, descending.
+                if (lhs_hotness > rhs_hotness) {
+                  return true;
+                }
+                if (lhs_hotness < rhs_hotness) {
+                  return false;
+                }
+                // Then greedily by size.
+                size_t lhs_size = lhs.switch_range->mid_cases.size();
+                size_t rhs_size = rhs.switch_range->mid_cases.size();
+                if (lhs_size > rhs_size) {
+                  return true;
+                }
+                if (lhs_size < rhs_size) {
+                  return false;
+                }
+                // For determinism, compare by name.
+                return compare_dexmethods(lhs.m, rhs.m);
+              });
+        }
+
+        // Now go and apply.
+        always_assert_log(method_refs.size() + reserved_mrefs <= kMaxMethodRefs,
+                          "Method refs exceeded in a dex: %zu + %zu > %zu",
+                          method_refs.size(), reserved_mrefs, kMaxMethodRefs);
+        size_t left = kMaxMethodRefs - method_refs.size() - reserved_mrefs;
+        for (auto& data : dex_candidate_methods) {
+          size_t required = data.switch_range->mid_cases.size() - 1;
+          if (left < required) {
+            std::lock_guard<std::mutex> lock_guard(mutex);
+            ++result.no_slots;
+            continue;
+          }
+          left -= required;
+          size_t orig_size = data.m->get_code()->sum_opcode_sizes();
+          auto new_methods =
+              run_split(data, data.m, data.m->get_code(), case_threshold);
+          size_t new_size = data.m->get_code()->sum_opcode_sizes();
+          for (DexMethod* m : new_methods) {
+            type_class(m->get_class())->add_method(m);
+            new_size += m->get_code()->sum_opcode_sizes();
+          }
+
+          std::lock_guard<std::mutex> lock_guard(mutex);
+          result.new_methods.insert(new_methods.begin(), new_methods.end());
+          result.transformed_srcs.emplace(data.m,
+                                          std::make_pair(orig_size, new_size));
+        }
+      },
+      dexes);
 
   return result;
 }
@@ -815,28 +826,21 @@ Stats SplitHugeSwitchPass::run(
 
 void SplitHugeSwitchPass::bind_config() {
   bind("method_filter", "", m_method_filter, "Method filter regex");
+  bind("consider_methods_too_large_for_inlining", false,
+       m_consider_methods_too_large_for_inlining,
+       "Whether to consider methods that have become too large to be inlined "
+       "intoregardless of hotness");
   bind("hotness_threshold",
        5.0F,
        m_hotness_threshold,
        "Method hotness threshold");
   bind("method_size", 9000u, m_method_size, "Method size threshold");
+  bind("method_size_when_too_large_for_inlining", 9000u,
+       m_method_size_when_too_large_for_inlining,
+       "Method size threshold for methods that were previously identified as "
+       "too large to be inlined into");
   bind("switch_size", 100u, m_switch_size, "Switch case threshold");
   bind("debug", false, m_debug, "Debug output");
-  bind("max_split_methods",
-       0u,
-       m_max_split_methods,
-       "Maximum number of splits per dex");
-
-  after_configuration([this] {
-    interdex::InterDexRegistry* registry =
-        static_cast<interdex::InterDexRegistry*>(
-            PluginRegistry::get().pass_registry(interdex::INTERDEX_PASS_NAME));
-    std::function<interdex::InterDexPassPlugin*()> fn =
-        [this]() -> interdex::InterDexPassPlugin* {
-      return new SplitHugeSwitchInterDexPlugin(m_max_split_methods);
-    };
-    registry->register_plugin("SPLIT_HUGE_SWITCHES_PLUGIN", std::move(fn));
-  });
 }
 
 void SplitHugeSwitchPass::run_pass(DexStoresVector& stores,
@@ -844,11 +848,6 @@ void SplitHugeSwitchPass::run_pass(DexStoresVector& stores,
                                    PassManager& mgr) {
   // Don't run under instrumentation.
   if (mgr.get_redex_options().instrument_pass_enabled) {
-    return;
-  }
-
-  if (m_max_split_methods == 0) {
-    mgr.set_metric("max_split_methods_zero", 1);
     return;
   }
 
@@ -869,12 +868,19 @@ void SplitHugeSwitchPass::run_pass(DexStoresVector& stores,
       return Stats{};
     }
 
+    auto method_size = m->rstate.too_large_for_inlining_into()
+                           ? m_method_size_when_too_large_for_inlining
+                           : m_method_size;
+    auto hotness_threshold = (m_consider_methods_too_large_for_inlining &&
+                              m->rstate.too_large_for_inlining_into())
+                                 ? 0
+                                 : m_hotness_threshold;
     AnalysisData data = analyze(m,
                                 m->get_code(),
-                                m_method_size,
+                                method_size,
                                 m_switch_size,
                                 method_profiles,
-                                m_hotness_threshold);
+                                hotness_threshold);
 
     Stats ret = analysis_data_to_stats(data, m);
     if (!data.scoped_cfg) {
@@ -926,8 +932,12 @@ void SplitHugeSwitchPass::run_pass(DexStoresVector& stores,
 
   // 2) Prioritize and split the candidates per dex.
 
+  const auto& interdex_metrics = mgr.get_interdex_metrics();
+  auto it = interdex_metrics.find(interdex::METRIC_RESERVED_MREFS);
+  size_t reserved_mrefs = it == interdex_metrics.end() ? 0 : it->second;
+
   Stats result_stats = run_split_dexes(stores, candidates, method_profiles,
-                                       m_switch_size, m_max_split_methods);
+                                       m_switch_size, reserved_mrefs);
 
   mgr.set_metric("created_methods", result_stats.new_methods.size());
   mgr.set_metric("no_slots", result_stats.no_slots);

@@ -66,7 +66,7 @@ class IODITest : public ::testing::Test {
     std::unordered_map<DexMethod*, uint64_t> method_to_id;
     std::unordered_map<DexCode*, std::vector<DebugLineItem>> code_debug_lines;
     IODIMetadata iodi_metadata;
-    iodi_metadata.mark_methods(stores);
+    iodi_metadata.mark_methods(stores, iodi_layers);
 
     Json::Value conf_obj = Json::nullValue;
     ConfigFiles dummy_cfg(conf_obj);

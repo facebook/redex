@@ -21,7 +21,7 @@ void calc_split_costs(const LivenessFixpointIterator& fixpoint_iter,
     // Incrementing load number for each death in
     // LiveOut(block) - LiveIn(succs).
     for (auto& succ : block->succs()) {
-      LivenessDomain live_in =
+      const LivenessDomain& live_in =
           fixpoint_iter.get_live_in_vars_at(succ->target());
       for (auto reg : live_out.elements()) {
         if (!live_in.contains(reg)) {
@@ -127,7 +127,8 @@ size_t split_for_block(const SplitPlan& split_plan,
                        BlockLoadInfo* block_load_info) {
   size_t split_move = 0;
   for (auto& succ : block->succs()) {
-    LivenessDomain live_in = fixpoint_iter.get_live_in_vars_at(succ->target());
+    const LivenessDomain& live_in =
+        fixpoint_iter.get_live_in_vars_at(succ->target());
     for (auto reg : live_out.elements()) {
       if (live_in.contains(reg)) {
         continue;

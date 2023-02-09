@@ -13,11 +13,13 @@ public class ObjectEscapeAnalysisTest {
   static class C {
     int x;
     int y;
+
     public C(int x, int y) {
       this.x = x;
       Foo = "inlinable side effect";
       this.y = y;
     }
+
     public int getX() {
       Foo = "another inlinable side effect";
       return this.x;
@@ -29,8 +31,7 @@ public class ObjectEscapeAnalysisTest {
     }
   }
 
-  static void does_not_leak(Object o) {
-  }
+  static void does_not_leak(Object o) {}
 
   public static int reduceTo42A() {
     C c = new C(23, 19);
@@ -38,15 +39,17 @@ public class ObjectEscapeAnalysisTest {
     return c.getX() + c.getY();
   }
 
-
   static class D {
     int x;
+
     public D(int x) {
       this.x = x;
     }
+
     public static D allocator(int x) {
       return new D(x);
     }
+
     public int getX() {
       return this.x;
     }
@@ -57,21 +60,25 @@ public class ObjectEscapeAnalysisTest {
     return d.getX();
   }
 
-
   static class E {
     int x;
+
     public E(int x) {
       this.x = x;
     }
+
     public int getX() {
       return this.x;
     }
   }
+
   static class F {
     int x;
+
     public F(int x) {
       this.x = x;
     }
+
     public int getX() {
       return this.x;
     }
@@ -83,15 +90,19 @@ public class ObjectEscapeAnalysisTest {
     return e.getX() + f.getX();
   }
 
-  static abstract class Base {
+  abstract static class Base {
     public Base() {}
+
     public abstract int getX();
   }
+
   static class Derived extends Base {
     int x;
+
     public Derived(int x) {
       this.x = x;
     }
+
     public /* override */ int getX() {
       return this.x;
     }
@@ -102,17 +113,19 @@ public class ObjectEscapeAnalysisTest {
     return d.getX();
   }
 
-
   static class G {
     static Object leak;
     static Object leak2;
+
     public G() {
       leak = this;
     }
+
     public G(H h) {
       leak = this;
       leak2 = h;
     }
+
     public int getX() {
       return 42;
     }
@@ -123,10 +136,9 @@ public class ObjectEscapeAnalysisTest {
     return g.getX();
   }
 
-
   static class H {
-    public H() {
-    }
+    public H() {}
+
     public int getX() {
       return 42;
     }
@@ -138,15 +150,17 @@ public class ObjectEscapeAnalysisTest {
     return h.getX();
   }
 
-
   static class I {
     int x;
+
     public I(int x) {
       this.x = x;
     }
+
     public static I allocator(int x) {
       return new I(x);
     }
+
     public int getX() {
       return this.x;
     }
@@ -157,7 +171,6 @@ public class ObjectEscapeAnalysisTest {
     return i == null;
   }
 
-
   static class J {
     public J() {}
   }
@@ -165,32 +178,40 @@ public class ObjectEscapeAnalysisTest {
   static class DontOptimizeFinalInInit {
     final int x;
     int y;
+
     DontOptimizeFinalInInit() {
       J j = new J();
       int x = read_x(j);
       this.x = 42;
       this.y = this.x; // must not use previously read value of x (even though x is final)
     }
+
     int read_x(J j) {
       return this.x;
     }
   }
 
-
   static class K {
     int x;
     static int X;
+
     static class CyclicStaticInitDependency {
       static int Y;
-      static { Y = X; }
+
+      static {
+        Y = X;
+      }
     }
+
     static {
       // Static initialization order matters.
       X = CyclicStaticInitDependency.Y;
     }
+
     public K(int x) {
       this.x = x;
     }
+
     public int getX() {
       return this.x;
     }
@@ -201,12 +222,13 @@ public class ObjectEscapeAnalysisTest {
     return k.getX();
   }
 
-
   static class L {
     int x;
+
     public L(int x) {
       this.x = x;
     }
+
     public synchronized int getX() {
       return this.x;
     }
@@ -219,17 +241,19 @@ public class ObjectEscapeAnalysisTest {
     }
   }
 
-
   static class M {
     int x;
+
     public M(int x) {
       this.x = x;
     }
+
     public void add(int other) {
       this.x += this.x * other;
       this.x += this.x * other;
       this.x += this.x * other;
     }
+
     public int get() {
       return this.x;
     }
@@ -251,18 +275,25 @@ public class ObjectEscapeAnalysisTest {
     return m.get();
   }
 
-
   public static class N {
     int x;
+
     public N(Builder builder) {
       this.x = builder.x;
     }
+
+    public static void onlyUseInstanceField(Builder builder) {
+      System.out.println(builder.x);
+    }
+
     public static class Builder {
       public int x;
+
       public Builder(int x) {
         this.x = x;
       }
     }
+
     public int get() {
       return this.x;
     }
@@ -272,16 +303,23 @@ public class ObjectEscapeAnalysisTest {
     return new N(new N.Builder(42));
   }
 
+  public static void reduceTo42WithExpandedMethod() {
+    N.onlyUseInstanceField(new N.Builder(42));
+  }
+
   static class O {
     int x;
     public static O instance;
+
     static {
       // This prevents O from being completely inlinable (everywhere).
       instance = new O(23);
     }
+
     public O(int x) {
       this.x = x;
     }
+
     public int getX() {
       return this.x;
     }

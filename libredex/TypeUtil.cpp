@@ -452,7 +452,7 @@ bool is_uninstantiable_class(DexType* type) {
       cls->is_external() || !cls->rstate.can_delete()) {
     return false;
   }
-  return !cls->has_ctors();
+  return is_abstract(cls) || !cls->has_ctors();
 }
 
 boost::optional<int32_t> evaluate_type_check(const DexType* src_type,

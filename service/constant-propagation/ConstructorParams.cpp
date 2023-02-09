@@ -131,7 +131,7 @@ class InitFixpointIterator final
           env->set(RESULT_REGISTER, ParamIdxDomain::top());
           return;
         }
-        boost::lock_guard<boost::mutex> lock(
+        std::unique_lock<std::mutex> lock(
             m_state.method_initializers.get_lock(method));
         auto it = m_state.method_initializers.find(method);
         if (it != m_state.method_initializers.end()) {

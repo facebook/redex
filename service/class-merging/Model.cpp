@@ -602,7 +602,8 @@ DexType* check_current_instance(const ConstTypeHashSet& types,
                                 IRInstruction* insn) {
   DexType* type = nullptr;
   if (insn->has_type()) {
-    type = insn->get_type();
+    type =
+        const_cast<DexType*>(type::get_element_type_if_array(insn->get_type()));
   } else if (insn->has_method()) {
     type = insn->get_method()->get_class();
   } else if (insn->has_field()) {
@@ -638,10 +639,7 @@ ConcurrentMap<DexType*, TypeHashSet> get_type_usages(
         [&cls](DexType* /* key */, std::unordered_set<DexType*>& set,
                bool /* already_exists */) { set.emplace(cls); };
 
-    if (insn->opcode() == OPCODE_CONST_CLASS ||
-        insn->opcode() == OPCODE_CHECK_CAST ||
-        insn->opcode() == OPCODE_INSTANCE_OF ||
-        insn->opcode() == OPCODE_NEW_INSTANCE) {
+    if (insn->has_type()) {
       auto current_instance = check_current_instance(types, insn);
       if (current_instance) {
         res.update(current_instance, updater);
@@ -1151,7 +1149,9 @@ void Model::distribute_virtual_methods(
   const auto& class_scopes = m_type_system.get_class_scopes();
   const auto& virt_scopes = class_scopes.get(type);
   for (const auto& virt_scope : virt_scopes) {
-    if (virt_scope->methods.size() == 1) continue;
+    if (virt_scope->methods.size() == 1) {
+      continue;
+    }
     TRACE(CLMG,
           8,
           "virtual scope found [%ld] %s",
@@ -1177,31 +1177,58 @@ void Model::distribute_virtual_methods(
             SHOW(virt_scope->methods[0].first->get_name()));
       bool is_interface = !virt_scope->interfaces.empty();
       std::vector<DexMethod*>* insert_list = nullptr;
-      // TODO(zwei): currently we only handle overridden method resided in the
-      // based type. If we plan to support more complicated vertical hierarchy,
-      // we need to revise the logic here.
-      auto top_def = virt_scope->methods[0].first;
-      DexMethod* overridden_meth = top_def->is_def() ? top_def : nullptr;
-      for (const auto& vmeth : virt_scope->methods) {
-        if (!vmeth.first->is_def()) {
+      // If the top_def is concrete, it's a valid virtual fallback for
+      // mergeables w/o override. However, if the top_def is a non-def miranda,
+      // we need to keep probing the next def in the same virtual scope. At the
+      // same time, we need to make sure the overridden def we take is actually
+      // on a base class of the targeted mergeables, not on a separate
+      // inheritance branch.
+      // We commit on the 1st valid base impl as the virtual fallback, not the
+      // lowest one in the virtual scope. It's not necessary to go even lower,
+      // the emitted code is correct. Virtual method refs can be rebound at a
+      // later point.
+      auto top_def = virt_scope->methods[0];
+      DexMethod* overridden_meth =
+          top_def.first->is_def() ? top_def.first : nullptr;
+      const auto update_overridden = [&merger, &overridden_meth](
+                                         const VirtualMethod& top_def,
+                                         DexMethod* virt_meth) {
+        always_assert(virt_meth->is_def());
+        if (overridden_meth == nullptr && is_miranda(top_def.second)) {
+          const auto* cls = virt_meth->get_class();
+          const auto& mergeables = merger->second.mergeables;
+          always_assert(!mergeables.empty());
+          const auto* a_mergeable = *mergeables.begin();
+          if (type::is_subclass(cls, a_mergeable)) {
+            overridden_meth = virt_meth;
+            TRACE(CLMG, 9, "Update overridden_meth to %s for top_def %s",
+                  SHOW(virt_meth), SHOW(top_def.first));
+          }
+        }
+      };
+
+      for (const auto& pair : virt_scope->methods) {
+        auto* virt_meth = pair.first;
+        if (!virt_meth->is_def()) {
           continue;
         }
-        if (merger->second.mergeables.count(vmeth.first->get_class()) == 0) {
+        if (merger->second.mergeables.count(virt_meth->get_class()) == 0) {
+          update_overridden(virt_scope->methods[0], virt_meth);
           continue;
         }
         TRACE(CLMG,
               9,
               "method %s (%s)",
-              vmeth.first->get_deobfuscated_name_or_empty_copy().c_str(),
-              SHOW(vmeth.first->get_name()));
+              virt_meth->get_deobfuscated_name_or_empty_copy().c_str(),
+              SHOW(virt_meth->get_name()));
         if (is_interface) {
           if (insert_list == nullptr) {
             // must be a new method
             TRACE(CLMG,
                   8,
                   "add interface method %s (%s) w/ overridden_meth %s",
-                  vmeth.first->get_deobfuscated_name_or_empty_copy().c_str(),
-                  SHOW(vmeth.first->get_name()),
+                  virt_meth->get_deobfuscated_name_or_empty_copy().c_str(),
+                  SHOW(virt_meth->get_name()),
                   SHOW(overridden_meth));
             merger->second.intfs_methods.push_back(
                 MergerType::InterfaceMethod());
@@ -1211,20 +1238,20 @@ void Model::distribute_virtual_methods(
                 virt_scope->interfaces.begin(), virt_scope->interfaces.end());
             insert_list = &merger->second.intfs_methods.back().methods;
           }
-          insert_list->emplace_back(vmeth.first);
+          insert_list->emplace_back(virt_meth);
         } else {
           if (insert_list == nullptr) {
             // must be a new method
             TRACE(CLMG,
                   8,
                   "add virtual method %s w/ overridden_meth %s",
-                  SHOW(vmeth.first),
+                  SHOW(virt_meth),
                   SHOW(overridden_meth));
             merger->second.vmethods.emplace_back(overridden_meth,
                                                  std::vector<DexMethod*>());
             insert_list = &merger->second.vmethods.back().second;
           }
-          insert_list->emplace_back(vmeth.first);
+          insert_list->emplace_back(virt_meth);
         }
       }
     }

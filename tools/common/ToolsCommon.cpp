@@ -16,6 +16,7 @@
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
 #endif
+#include <fstream>
 #include <iostream>
 #include <json/json.h>
 

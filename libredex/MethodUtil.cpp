@@ -9,6 +9,7 @@
 
 #include "ControlFlow.h"
 #include "EditableCfgAdapter.h"
+#include "RedexContext.h"
 #include "Resolver.h"
 #include "TypeUtil.h"
 
@@ -507,45 +508,14 @@ bool no_invoke_super(const IRCode& code) {
   return true;
 }
 
-DexMethod* java_lang_Object_ctor() {
-  return static_cast<DexMethod*>(
-      DexMethod::make_method("Ljava/lang/Object;.<init>:()V"));
-}
+#define DEFINE_CACHED_METHOD(func_name, _)                 \
+  DexMethod* func_name() {                                 \
+    return g_redex->pointers_cache().method_##func_name(); \
+  }
 
-DexMethod* java_lang_Enum_ctor() {
-  return static_cast<DexMethod*>(
-      DexMethod::make_method("Ljava/lang/Enum;.<init>:(Ljava/lang/String;I)V"));
-}
-
-DexMethod* java_lang_Enum_ordinal() {
-  return static_cast<DexMethod*>(
-      DexMethod::make_method("Ljava/lang/Enum;.ordinal:()I"));
-}
-
-DexMethod* java_lang_Enum_name() {
-  return static_cast<DexMethod*>(
-      DexMethod::make_method("Ljava/lang/Enum;.name:()Ljava/lang/String;"));
-}
-
-DexMethod* java_lang_Enum_equals() {
-  return static_cast<DexMethod*>(
-      DexMethod::make_method("Ljava/lang/Enum;.equals:(Ljava/lang/Object;)Z"));
-}
-
-DexMethod* java_lang_Integer_valueOf() {
-  return static_cast<DexMethod*>(DexMethod::make_method(
-      "Ljava/lang/Integer;.valueOf:(I)Ljava/lang/Integer;"));
-}
-
-DexMethod* java_lang_Integer_intValue() {
-  return static_cast<DexMethod*>(
-      DexMethod::make_method("Ljava/lang/Integer;.intValue:()I"));
-}
-
-DexMethod* java_lang_Throwable_fillInStackTrace() {
-  return static_cast<DexMethod*>(DexMethod::make_method(
-      "Ljava/lang/Throwable;.fillInStackTrace:()Ljava/lang/Throwable;"));
-}
+#define FOR_EACH DEFINE_CACHED_METHOD
+WELL_KNOWN_METHODS
+#undef FOR_EACH
 
 DexMethod* kotlin_jvm_internal_Intrinsics_checkParameterIsNotNull() {
   return static_cast<DexMethod*>(DexMethod::get_method(

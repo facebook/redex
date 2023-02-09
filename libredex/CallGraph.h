@@ -192,7 +192,6 @@ class SingleCalleeStrategy : public BuildStrategy {
 
   const Scope& m_scope;
   std::unordered_set<DexMethod*> m_non_virtual;
-  mutable MethodRefCache m_resolved_refs;
 };
 
 class MultipleCalleeBaseStrategy : public SingleCalleeStrategy {
@@ -243,10 +242,10 @@ class GraphInterface {
 
   static NodeId entry(const Graph& graph) { return graph.entry(); }
   static NodeId exit(const Graph& graph) { return graph.exit(); }
-  static Edges predecessors(const Graph& graph, const NodeId& m) {
+  static const Edges& predecessors(const Graph& graph, const NodeId& m) {
     return m->callers();
   }
-  static Edges successors(const Graph& graph, const NodeId& m) {
+  static const Edges& successors(const Graph& graph, const NodeId& m) {
     return m->callees();
   }
   static NodeId source(const Graph& graph, const EdgeId& e) {
@@ -261,8 +260,8 @@ MethodSet resolve_callees_in_graph(const Graph& graph,
                                    const DexMethod* method,
                                    const IRInstruction* insn);
 
-MethodSet resolve_callees_in_graph(const Graph& graph,
-                                   const IRInstruction* insn);
+const MethodSet& resolve_callees_in_graph(const Graph& graph,
+                                          const IRInstruction* insn);
 
 bool method_is_dynamic(const Graph& graph, const DexMethod* method);
 

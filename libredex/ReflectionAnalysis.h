@@ -165,6 +165,20 @@ struct AbstractObject final : public sparta::AbstractValue<AbstractObject> {
     return sparta::AbstractValueKind::Value;
   }
 
+  DexType* get_dex_type() const { return dex_type; }
+
+  bool is_object() const { return obj_kind == OBJECT; }
+
+  bool is_int() const { return obj_kind == INT; }
+
+  bool is_string() const { return obj_kind == STRING; }
+
+  bool is_class() const { return obj_kind == CLASS; }
+
+  bool is_field() const { return obj_kind == FIELD; }
+
+  bool is_method() const { return obj_kind == METHOD; }
+
   bool leq(const AbstractObject& other) const override;
 
   bool equals(const AbstractObject& other) const override;
@@ -319,6 +333,25 @@ class ReflectionAnalysis final {
                               SummaryQueryFn* summary_query_fn = nullptr,
                               const MetadataCache* cache = nullptr);
 
+  /* clang-format off */
+  /*
+   * The reflection sites include a mapping from instruction to
+   * ReflectionAbstractObject the instruction produces (created after the
+   * instruction) and receives (created before the instruction).
+   *
+   * E.g., for the following code:
+   *   (invoke-virtual (v6) "Ljava/lang/Object;.getClass:()Ljava/lang/Class;")
+   *   (move-result-object v1)
+   *
+   * The reflection sites include the followings:
+   *   INVOKE_VIRTUAL v6, Ljava/lang/Object;.getClass:()Ljava/lang/Class; {4294967294, CLASS{Ljava/lang/Object;}(REFLECTION)}
+   *   MOVE_RESULT_OBJECT v1 {1, CLASS{Ljava/lang/Object;}(REFLECTION);4294967294, CLASS{Ljava/lang/Object;}(REFLECTION)}
+   *
+   * The invoke-virtual produces the CLASS obj onto RESULT_REGISTER. The
+   * following move-result-object receives the CLASS obj at RESULT_REGISTER.
+   * It also moves the CLASS obj onto the dest reg at v1.
+   */
+  /* clang-format on */
   ReflectionSites get_reflection_sites() const;
 
   AbstractObjectDomain get_return_value() const;
@@ -339,6 +372,11 @@ class ReflectionAnalysis final {
    */
   boost::optional<AbstractObject> get_abstract_object(
       size_t reg, IRInstruction* insn) const;
+
+  boost::optional<AbstractObject> get_result_abstract_object(
+      IRInstruction* insn) const {
+    return get_abstract_object(RESULT_REGISTER, insn);
+  }
 
   boost::optional<ClassObjectSource> get_class_source(
       size_t reg, IRInstruction* insn) const;

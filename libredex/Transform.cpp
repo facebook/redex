@@ -85,41 +85,6 @@ void remap_registers(cfg::ControlFlowGraph& cfg, const RegMap& reg_map) {
   }
 }
 
-static size_t remove_block(IRCode* code, cfg::Block* b) {
-  size_t insns_removed{0};
-  for (auto& mei : InstructionIterable(b)) {
-    code->remove_opcode(mei.insn);
-    ++insns_removed;
-  }
-  return insns_removed;
-}
-
-/**
- * TODO: The method is deprecated since it doesn't delete the edges associated
- * with the deleted blocks, use ControlFlowGraph::remove_unreachable_blocks()
- * instead.
- */
-size_t remove_unreachable_blocks(IRCode* code) {
-  auto& cfg = code->cfg();
-  const auto& blocks = cfg.blocks();
-  size_t insns_removed{0};
-
-  // remove unreachable blocks
-  const auto& visited = cfg.visit();
-  for (size_t i = 1; i < blocks.size(); ++i) {
-    auto& b = blocks.at(i);
-    if (visited.test(b->id())) {
-      continue;
-    }
-    // Remove all successor edges. Note that we don't need to try and remove
-    // predecessors since by definition, unreachable blocks have no preds
-    cfg.delete_succ_edges(b);
-    insns_removed += remove_block(code, b);
-  }
-
-  return insns_removed;
-}
-
 MethodItemEntry* find_active_catch(IRCode* code, IRList::iterator pos) {
   while (++pos != code->end() && pos->type != MFLOW_TRY)
     ;

@@ -203,15 +203,6 @@ class Graph {
            m_containment_graph.end();
   }
 
-  /*
-   * Returns the live-out info for a given instruction that has a potential
-   * range encoding. We can use it to make better allocation decisions for
-   * these instructions.
-   */
-  const LivenessDomain& get_liveness(const IRInstruction* insn) const {
-    return m_range_liveness.at(const_cast<IRInstruction*>(insn));
-  }
-
   void remove_node(reg_t);
 
   /*
@@ -240,9 +231,6 @@ class Graph {
   std::unordered_map<reg_t, Node> m_nodes;
   std::unordered_map<reg_pair_t, bool> m_adj_matrix;
   std::unordered_set<reg_pair_t> m_containment_graph;
-  // This map contains the LivenessDomains for all instructions which could
-  // potentialy take on the /range format.
-  std::unordered_map<IRInstruction*, LivenessDomain> m_range_liveness;
 
   friend class impl::GraphBuilder;
 };
@@ -280,7 +268,8 @@ class GraphBuilder {
   static Graph build(const LivenessFixpointIterator&,
                      cfg::ControlFlowGraph&,
                      reg_t initial_regs,
-                     const RangeSet&);
+                     const RangeSet&,
+                     bool containment_edges = true);
 
   // For unit tests
   static Graph create_empty() { return Graph(); }
@@ -295,8 +284,10 @@ uint32_t edge_weight_helper(uint8_t, uint8_t);
 inline Graph build_graph(const LivenessFixpointIterator& fixpoint_iter,
                          cfg::ControlFlowGraph& cfg,
                          reg_t initial_regs,
-                         const RangeSet& range_set) {
-  return impl::GraphBuilder::build(fixpoint_iter, cfg, initial_regs, range_set);
+                         const RangeSet& range_set,
+                         bool containment_edges = true) {
+  return impl::GraphBuilder::build(
+      fixpoint_iter, cfg, initial_regs, range_set, containment_edges);
 }
 
 } // namespace interference

@@ -18,7 +18,7 @@ static bool is_separator(const char c) {
 }
 
 std::string_view next_token(std::string_view& line) {
-  auto first_non_space = line.find_first_not_of(" ");
+  auto first_non_space = line.find_first_not_of(' ');
   if (first_non_space == std::string_view::npos) {
     first_non_space = line.size();
   }

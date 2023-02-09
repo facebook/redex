@@ -63,6 +63,7 @@ void AssessorConfig::bind_config() {
   bind("run_after_each_pass", run_after_each_pass, run_after_each_pass);
   bind("run_initially", run_initially, run_initially);
   bind("run_finally", run_finally, run_finally);
+  bind("run_sb_consistency", run_sb_consistency, run_sb_consistency);
 }
 
 void CheckUniqueDeobfuscatedNamesConfig::bind_config() {
@@ -92,10 +93,19 @@ void ProguardConfig::bind_config() {
   bind("blocklist", blocklist, blocklist);
   bind("disable_default_blocklist", disable_default_blocklist,
        disable_default_blocklist);
+  bind("fail_on_unknown_commands", fail_on_unknown_commands,
+       fail_on_unknown_commands);
 }
 
 void PassManagerConfig::bind_config() {
   bind("pass_aliases", pass_aliases, pass_aliases);
+  bind("jemalloc_full_stats", jemalloc_full_stats, jemalloc_full_stats);
+  bind("violations_tracking", violations_tracking, violations_tracking);
+}
+
+void ResourceConfig::bind_config() {
+  bind("customized_r_classes", {}, customized_r_classes);
+  bind("canonical_entry_types", {}, canonical_entry_types);
 }
 
 void DexOutputConfig::bind_config() {
@@ -165,6 +175,7 @@ void GlobalConfig::bind_config() {
   bind("no_devirtualize_annos", {}, string_vector_param);
   bind("create_init_class_insns", true, bool_param);
   bind("finalize_resource_table", false, bool_param);
+  bind("check_required_resources", {}, string_vector_param);
 
   for (const auto& entry : m_registry) {
     m_global_configs.emplace(entry.name,
@@ -189,6 +200,7 @@ GlobalConfigRegistry& GlobalConfig::default_registry() {
       register_as<MethodSimilarityOrderingConfig>("method_similarity_order"),
       register_as<ProguardConfig>("proguard"),
       register_as<PassManagerConfig>("pass_manager"),
+      register_as<ResourceConfig>("resources"),
       register_as<DexOutputConfig>("dex_output"),
   };
   return registry;

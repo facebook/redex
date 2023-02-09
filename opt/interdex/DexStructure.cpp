@@ -37,9 +37,9 @@ constexpr unsigned VTABLE_SLOT_SIZE = 4;
 constexpr unsigned OBJECT_VTABLE = 48;
 constexpr unsigned METHOD_SIZE = 52;
 constexpr unsigned INSTANCE_FIELD_SIZE = 16;
-constexpr unsigned MAX_METHOD_REFS = kMaxMethodRefs - 1;
-constexpr unsigned MAX_FIELD_REFS = kMaxFieldRefs - 1;
-inline unsigned MAX_TYPE_REFS(int min_sdk) {
+constexpr size_t MAX_METHOD_REFS = kMaxMethodRefs - 1;
+constexpr size_t MAX_FIELD_REFS = kMaxFieldRefs - 1;
+inline size_t MAX_TYPE_REFS(int min_sdk) {
   return get_max_type_refs(min_sdk) - 1;
 }
 
@@ -104,6 +104,16 @@ size_t set_difference_size(const std::unordered_set<T>& a,
 
 namespace interdex {
 
+size_t DexesStructure::get_frefs_limit() const {
+  return MAX_FIELD_REFS - m_reserve_refs.frefs;
+}
+size_t DexesStructure::get_trefs_limit() const {
+  return MAX_TYPE_REFS(m_min_sdk) - m_reserve_refs.trefs;
+}
+size_t DexesStructure::get_mrefs_limit() const {
+  return MAX_METHOD_REFS - m_reserve_refs.mrefs;
+}
+
 void DexesStructure::resolve_init_classes(
     const interdex::FieldRefs& frefs,
     const interdex::TypeRefs& trefs,
@@ -129,9 +139,8 @@ bool DexesStructure::add_class_to_current_dex(const MethodRefs& clazz_mrefs,
                        &pending_init_class_fields, &pending_init_class_types);
   if (m_current_dex.add_class_if_fits(
           clazz_mrefs, clazz_frefs, clazz_trefs, pending_init_class_fields,
-          pending_init_class_types, m_linear_alloc_limit,
-          MAX_FIELD_REFS - m_reserve_frefs, MAX_METHOD_REFS - m_reserve_mrefs,
-          MAX_TYPE_REFS(m_min_sdk) - m_reserve_trefs, clazz)) {
+          pending_init_class_types, m_linear_alloc_limit, get_frefs_limit(),
+          get_mrefs_limit(), get_trefs_limit(), clazz)) {
     update_stats(clazz_mrefs, clazz_frefs, clazz);
     m_classes.emplace(clazz);
     return true;
@@ -428,18 +437,6 @@ void DexStructure::check_refs_count() {
   }
 
   // TODO: do we need to re-check linear_alloc_limit?
-}
-
-void DexStructure::squash_empty_last_class(DexClass* clazz) {
-  always_assert(m_classes.back() == clazz);
-  always_assert(clazz->get_dmethods().empty());
-  always_assert(clazz->get_vmethods().empty());
-  always_assert(clazz->get_sfields().empty());
-  always_assert(clazz->get_ifields().empty());
-  always_assert(!is_interface(clazz));
-  m_classes.pop_back();
-  m_trefs.erase(clazz->get_type());
-  m_squashed_classes.push_back(clazz);
 }
 
 } // namespace interdex

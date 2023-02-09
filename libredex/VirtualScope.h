@@ -86,6 +86,26 @@ inline VirtualFlags operator&(const VirtualFlags a, const VirtualFlags b) {
                                    static_cast<uint16_t>(b));
 }
 
+inline bool is_top_def(VirtualFlags flags) {
+  return (flags & TOP_DEF) == TOP_DEF;
+}
+
+inline bool is_override(VirtualFlags flags) {
+  return (flags & OVERRIDE) == OVERRIDE;
+}
+
+inline bool is_impl(VirtualFlags flags) { return (flags & IMPL) == IMPL; }
+
+inline bool is_final(VirtualFlags flags) { return (flags & FINAL) == FINAL; }
+
+inline bool is_miranda(VirtualFlags flags) {
+  return (flags & MIRANDA) == MIRANDA;
+}
+
+inline bool is_escaped(VirtualFlags flags) {
+  return (flags & ESCAPED) == ESCAPED;
+}
+
 // (DexMethod, VirtualFlags)
 // VirtualFlags of that method in relationship to the VirtualScope.
 using VirtualMethod = std::pair<DexMethod*, VirtualFlags>;

@@ -134,7 +134,8 @@ constexpr int INVALID_SCORE = std::numeric_limits<int>::max();
  * move instruction to remap :reg.
  */
 bool needs_remap(const transform::RegMap& reg_map, reg_t reg, vreg_t vreg) {
-  return reg_map.find(reg) != reg_map.end() && reg_map.at(reg) != vreg;
+  auto it = reg_map.find(reg);
+  return it != reg_map.end() && it->second != vreg;
 }
 
 /*
@@ -153,8 +154,6 @@ int score_range_fit(
     auto reg = range_regs.at(i);
     const auto& node = ig.get_node(reg);
     const auto& vreg_file = vreg_files.at(reg);
-    // XXX We could be more precise here by checking the LivenessDomain for the
-    // given range instruction instead of just using the graph
     if (!vreg_file.is_free(vreg, node.width())) {
       return INVALID_SCORE;
     }
@@ -208,13 +207,13 @@ void fit_range_instruction(
   for (size_t i = 0; i < insn->srcs_size(); ++i) {
     auto src = insn->src(i);
     const auto& node = ig.get_node(src);
-    const auto& vreg_file = vreg_files.at(src);
     auto& reg_map = reg_transform->map;
     // If the vreg we're trying to map the node to is too large, or if the node
     // has been mapped to a different vreg already, we need to spill it.
     if (vreg > node.max_vreg() || needs_remap(reg_map, src, vreg)) {
       spills->range_spills[insn].emplace_back(i);
     } else {
+      const auto& vreg_file = vreg_files.at(src);
       always_assert(vreg_file.is_free(vreg, node.width()));
       reg_map.emplace(src, vreg);
     }
@@ -239,13 +238,13 @@ void fit_params(
     auto* insn = mie.insn;
     auto dest = insn->dest();
     const auto& node = ig.get_node(dest);
-    const auto& vreg_file = vreg_files.at(dest);
     auto& reg_map = reg_transform->map;
     // If the vreg we're trying to map the node to is too large, or if the node
     // has been mapped to a different vreg already, we need to spill it.
     if (vreg > node.max_vreg() || needs_remap(reg_map, dest, vreg)) {
       spills->param_spills.emplace(dest);
     } else {
+      const auto& vreg_file = vreg_files.at(dest);
       always_assert(vreg_file.is_free(vreg, node.width()));
       reg_map.emplace(dest, vreg);
     }
@@ -364,6 +363,7 @@ bool Allocator::coalesce(interference::Graph* ig, cfg::ControlFlowGraph& cfg) {
   auto ii = InstructionIterable(cfg);
   auto old_coalesce_count = m_stats.moves_coalesced;
   cfg::CFGMutation m(cfg);
+  bool any_linked{false};
   for (auto it = ii.begin(); it != ii.end(); ++it) {
     auto insn = it->insn;
     auto op = insn->opcode();
@@ -389,6 +389,7 @@ bool Allocator::coalesce(interference::Graph* ig, cfg::ControlFlowGraph& cfg) {
     } else if (ig->is_coalesceable(dest, src)) {
       // This unifies the two trees represented by dest and src
       aliases.link(dest, src);
+      any_linked = true;
       // Since link() doesn't tell us whether dest or src is the root of the
       // newly merged trees, we have to use find_set() to figure that out.
       auto parent = dest;
@@ -409,11 +410,13 @@ bool Allocator::coalesce(interference::Graph* ig, cfg::ControlFlowGraph& cfg) {
 
   m.flush();
 
-  transform::RegMap reg_map;
-  for (reg_t i = 0; i < cfg.get_registers_size(); ++i) {
-    reg_map.emplace(i, aliases.find_set(i));
+  if (any_linked) {
+    transform::RegMap reg_map;
+    for (reg_t i = 0; i < cfg.get_registers_size(); ++i) {
+      reg_map.emplace(i, aliases.find_set(i));
+    }
+    transform::remap_registers(cfg, reg_map);
   }
-  transform::remap_registers(cfg, reg_map);
 
   return m_stats.moves_coalesced != old_coalesce_count;
 }
@@ -439,7 +442,7 @@ void Allocator::simplify(interference::Graph* ig,
   // of them here since some of them can have zero weight.
   std::set<reg_t> low;
   // Nodes that may not be colorable
-  std::set<reg_t> high;
+  std::unordered_set<reg_t> high;
 
   for (const auto& pair : ig->active_nodes()) {
     auto reg = pair.first;
@@ -504,12 +507,18 @@ void Allocator::simplify(interference::Graph* ig,
         std::min_element(high.begin(), high.end(), [ig](reg_t a, reg_t b) {
           auto& node_a = ig->get_node(a);
           auto& node_b = ig->get_node(b);
-          if (node_a.is_spilt() == node_b.is_spilt()) {
-            // Note that a / b < c / d <=> a * d < c * b.
-            return node_a.spill_cost() * node_b.weight() <
-                   node_b.spill_cost() * node_a.weight();
+          if (node_a.is_spilt() != node_b.is_spilt()) {
+            return !node_a.is_spilt() && node_b.is_spilt();
           }
-          return !node_a.is_spilt() && node_b.is_spilt();
+          // Note that a / b < c / d <=> a * d < c * b.
+          auto a_value = node_a.spill_cost() * node_b.weight();
+          auto b_value = node_b.spill_cost() * node_a.weight();
+          if (a_value != b_value) {
+            return a_value < b_value;
+          }
+          // Among equivalent options, prefer lowest register number as tie
+          // breaker.
+          return a < b;
         });
     TRACE(REG, 6, "Potentially spilling %u", *spill_candidate_it);
     // Our spill candidate has too many neighbors for us to be certain that we
@@ -571,10 +580,9 @@ void Allocator::select_ranges(const cfg::ControlFlowGraph& cfg,
     TRACE(REG, 5, "Allocating %s as range kind", SHOW(insn));
     std::unordered_map<reg_t, VirtualRegistersFile> vreg_files;
     for (size_t i = 0; i < insn->srcs_size(); ++i) {
-      VirtualRegistersFile vreg_file;
       auto src = insn->src(i);
+      VirtualRegistersFile& vreg_file = vreg_files[src];
       mark_adjacent(ig, src, reg_transform->map, &vreg_file);
-      vreg_files.emplace(src, vreg_file);
     }
 
     vreg_t range_base =
@@ -602,9 +610,8 @@ void Allocator::select_params(const cfg::ControlFlowGraph& cfg,
     const auto& node = ig.get_node(dest);
     params_size += node.width();
     param_regs.emplace_back(dest);
-    VirtualRegistersFile vreg_file;
+    VirtualRegistersFile& vreg_file = vreg_files[dest];
     mark_adjacent(ig, dest, reg_transform->map, &vreg_file);
-    vreg_files.emplace(dest, vreg_file);
   }
 
   auto min_param_reg =
@@ -932,8 +939,7 @@ void Allocator::spill(const interference::Graph& ig,
         }
         auto& node = ig.get_node(src);
         auto max_value = max_value_for_src(insn, i, node.width() == 2);
-        if (sp_it != spill_plan.global_spills.end() &&
-            sp_it->second > max_value) {
+        if (sp_it->second > max_value) {
           auto temp = cfg.allocate_temp();
           insn->set_src(i, temp);
           auto mov = gen_move(node.type(), temp, src);
@@ -1030,6 +1036,7 @@ void Allocator::allocate(cfg::ControlFlowGraph& cfg, bool is_static) {
   // monotonically increasing set, i.e. we only add and never remove from it
   // in the allocation loop below.
   auto range_set = init_range_set(cfg);
+  range_set.prioritize();
 
   bool no_overwrite_this = m_config.no_overwrite_this && !is_static;
   if (no_overwrite_this) {
@@ -1043,12 +1050,13 @@ void Allocator::allocate(cfg::ControlFlowGraph& cfg, bool is_static) {
     RegisterTransform reg_transform;
 
     cfg.calculate_exit_block();
-    LivenessFixpointIterator fixpoint_iter(cfg);
-    fixpoint_iter.run(LivenessDomain());
+    auto fixpoint_iter = std::make_unique<LivenessFixpointIterator>(cfg);
+    fixpoint_iter->run(LivenessDomain());
 
     TRACE(REG, 5, "Allocating:\n%s", ::SHOW(cfg));
-    auto ig =
-        interference::build_graph(fixpoint_iter, cfg, initial_regs, range_set);
+    auto ig = interference::build_graph(
+        *fixpoint_iter, cfg, initial_regs, range_set,
+        /* containment_edges */ m_config.use_splitting);
 
     // Make the `this` symreg conflict with every other one so that it never
     // gets overwritten in the method. See check_no_overwrite_this in
@@ -1066,7 +1074,11 @@ void Allocator::allocate(cfg::ControlFlowGraph& cfg, bool is_static) {
       first = false;
       // After coalesce the live_out and live_in of blocks may change, so run
       // LivenessFixpointIterator again.
-      fixpoint_iter.run(LivenessDomain());
+      if (m_config.use_splitting) {
+        fixpoint_iter->run(LivenessDomain());
+      } else {
+        fixpoint_iter = nullptr;
+      }
       TRACE(REG, 5, "Post-coalesce:\n%s", ::SHOW(cfg));
     } else {
       // TODO we should coalesce here too, but we'll need to avoid removing
@@ -1084,7 +1096,6 @@ void Allocator::allocate(cfg::ControlFlowGraph& cfg, bool is_static) {
     select(cfg, ig, &select_stack, &reg_transform, &spill_plan);
 
     TRACE(REG, 5, "Transform before range alloc:\n%s", SHOW(reg_transform));
-    range_set.prioritize();
     select_ranges(cfg, ig, range_set, &reg_transform, &spill_plan);
     // Select registers for symregs that can be addressed using all 16 bits.
     // These symregs are typically generated during the spilling and splitting
@@ -1103,16 +1114,17 @@ void Allocator::allocate(cfg::ControlFlowGraph& cfg, bool is_static) {
         // TODO (T124893789): Live-range-splitting is known to be broken.
         fprintf(stderr,
                 "WARNING: Live-range-splitting is known to be broken.\n");
-        calc_split_costs(fixpoint_iter, cfg, &split_costs);
+        calc_split_costs(*fixpoint_iter, cfg, &split_costs);
         find_split(ig, split_costs, &reg_transform, &spill_plan, &split_plan);
       }
       split_params(ig, spill_plan.param_spills, cfg);
       spill(ig, spill_plan, range_set, cfg);
 
       if (!split_plan.split_around.empty()) {
+        always_assert(m_config.use_splitting);
         TRACE(REG, 5, "Split plan:\n%s", SHOW(split_plan));
         m_stats.split_moves +=
-            split(fixpoint_iter, split_plan, split_costs, ig, cfg);
+            split(*fixpoint_iter, split_plan, split_costs, ig, cfg);
       }
     } else {
       transform::remap_registers(cfg, reg_transform.map);

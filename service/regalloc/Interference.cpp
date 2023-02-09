@@ -108,6 +108,17 @@ void Graph::combine(reg_t u, reg_t v) {
       continue;
     }
     t_node.m_weight -= edge_weight(t_node, v_node);
+  }
+  u_node.m_max_vreg = std::min(u_node.m_max_vreg, v_node.m_max_vreg);
+  u_node.m_type_domain.meet_with(v_node.m_type_domain);
+  u_node.m_props |= v_node.m_props;
+  u_node.m_spill_cost += v_node.m_spill_cost;
+  v_node.m_props.reset(Node::ACTIVE);
+  for (auto t : v_node.adjacent()) {
+    auto& t_node = m_nodes.at(t);
+    if (!t_node.is_active()) {
+      continue;
+    }
     add_edge(u, t, is_coalesceable(v, t));
     if (has_containment_edge(v, t)) {
       add_containment_edge(u, t);
@@ -116,10 +127,6 @@ void Graph::combine(reg_t u, reg_t v) {
       add_containment_edge(t, u);
     }
   }
-  u_node.m_max_vreg = std::min(u_node.m_max_vreg, v_node.m_max_vreg);
-  u_node.m_type_domain.meet_with(v_node.m_type_domain);
-  u_node.m_props |= v_node.m_props;
-  v_node.m_props.reset(Node::ACTIVE);
 }
 
 void Graph::remove_node(reg_t u) {
@@ -151,23 +158,29 @@ size_t dest_bit_width(const cfg::InstructionIterator& it) {
   } else if (opcode::is_a_literal_const(op)) {
     // const opcodes can always be encoded in a form that addresses 8-bit regs
     return 8;
+  } else if (opcode::is_an_int_lit(op)) {
+    return (int8_t)insn->get_literal() == insn->get_literal() ? 8 : 4;
   } else {
     return dex_opcode::dest_bit_width(opcode::to_dex_opcode(op));
   }
 }
 
-size_t src_bit_width(IROpcode op, int i) {
+size_t src_bit_width(const IRInstruction* insn, int src_i) {
+  auto op = insn->opcode();
   // move-* opcodes can always be encoded as move-*/16
   if (opcode::is_a_move(op)) {
     return 16;
   }
-  return dex_opcode::src_bit_width(opcode::to_dex_opcode(op), i);
+  if (opcode::is_an_int_lit(op)) {
+    return (int8_t)insn->get_literal() == insn->get_literal() ? 8 : 4;
+  }
+  return dex_opcode::src_bit_width(opcode::to_dex_opcode(op), src_i);
 }
 
 vreg_t max_value_for_src(const IRInstruction* insn,
                          size_t src_index,
                          bool src_is_wide) {
-  auto max_value = max_unsigned_value(src_bit_width(insn->opcode(), src_index));
+  auto max_value = max_unsigned_value(src_bit_width(insn, src_index));
   auto op = insn->opcode();
   if (opcode::has_range_form(op) && insn->srcs_size() == 1) {
     // An `invoke {v0}` opcode can always be rewritten as `invoke/range {v0}`
@@ -268,7 +281,8 @@ void GraphBuilder::update_node_constraints(const cfg::InstructionIterator& it,
 Graph GraphBuilder::build(const LivenessFixpointIterator& fixpoint_iter,
                           cfg::ControlFlowGraph& cfg,
                           reg_t initial_regs,
-                          const RangeSet& range_set) {
+                          const RangeSet& range_set,
+                          bool containment_edges) {
   Graph graph;
   auto ii = cfg::InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
@@ -283,9 +297,6 @@ Graph GraphBuilder::build(const LivenessFixpointIterator& fixpoint_iter,
       }
       auto insn = it->insn;
       auto op = insn->opcode();
-      if (opcode::has_range_form(op)) {
-        graph.m_range_liveness.emplace(insn, live_out);
-      }
       if (insn->has_dest()) {
         for (auto reg : live_out.elements()) {
           if (opcode::is_a_move(op) && reg == insn->src(0)) {
@@ -320,7 +331,7 @@ Graph GraphBuilder::build(const LivenessFixpointIterator& fixpoint_iter,
       }
       // adding containment edge between liverange defined in insn and elements
       // in live-out set of insn
-      if (insn->has_dest()) {
+      if (containment_edges && insn->has_dest()) {
         for (auto reg : live_out.elements()) {
           graph.add_containment_edge(insn->dest(), reg);
         }
@@ -328,9 +339,11 @@ Graph GraphBuilder::build(const LivenessFixpointIterator& fixpoint_iter,
       fixpoint_iter.analyze_instruction(it->insn, &live_out);
       // adding containment edge between liverange used in insn and elements
       // in live-in set of insn
-      for (size_t i = 0; i < insn->srcs_size(); ++i) {
-        for (auto reg : live_out.elements()) {
-          graph.add_containment_edge(insn->src(i), reg);
+      if (containment_edges) {
+        for (size_t i = 0; i < insn->srcs_size(); ++i) {
+          for (auto reg : live_out.elements()) {
+            graph.add_containment_edge(insn->src(i), reg);
+          }
         }
       }
     }

@@ -138,7 +138,7 @@ TEST_F(FinalInlineTest, fieldSetInLoop) {
       (:loop)
       (sget "LFoo;.bar:I")
       (move-result-pseudo v0)
-      (add-int/lit8 v0 v0 1)
+      (add-int/lit v0 v0 1)
       (sput v0 "LFoo;.bar:I")
       (const v1 10)
       (if-ne v0 v1 :loop)

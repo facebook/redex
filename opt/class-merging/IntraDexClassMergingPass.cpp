@@ -40,13 +40,6 @@ void IntraDexClassMergingPass::bind_config() {
 void IntraDexClassMergingPass::run_pass(DexStoresVector& stores,
                                         ConfigFiles& conf,
                                         PassManager& mgr) {
-  if (mgr.no_proguard_rules()) {
-    TRACE(CLMG,
-          1,
-          "IntraDexClassMergingPass not run because no "
-          "ProGuard configuration was provided.");
-    return;
-  }
   // Fill the merging configurations.
   m_merging_spec.name = "Intra Dex";
   m_merging_spec.class_name_prefix = "IDx";

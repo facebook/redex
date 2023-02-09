@@ -33,7 +33,7 @@
 #include "RedexMappedFile.h"
 #include "RedexResources.h"
 #include "Trace.h"
-#include "androidfw/Locale.h"
+#include "androidfw/LocaleValue.h"
 #include "androidfw/ResourceTypes.h"
 
 namespace {
@@ -1199,6 +1199,49 @@ void BundleResources::collect_layout_classes_and_attributes_for_file(
       });
 }
 
+void BundleResources::collect_xml_attribute_string_values_for_file(
+    const std::string& file_path, std::unordered_set<std::string>* out) {
+  if (is_raw_resource(file_path)) {
+    return;
+  }
+  TRACE(RES,
+        9,
+        "BundleResources collecting xml attribute string values for file: %s",
+        file_path.c_str());
+  read_protobuf_file_contents(
+      file_path,
+      [&](google::protobuf::io::CodedInputStream& input, size_t size) {
+        aapt::pb::XmlNode pb_node;
+        always_assert_log(pb_node.ParseFromCodedStream(&input),
+                          "BundleResoource failed to read %s",
+                          file_path.c_str());
+        if (pb_node.has_element()) {
+          const auto& root = pb_node.element();
+          traverse_element_and_children(
+              root, [&](const aapt::pb::XmlElement& element) {
+                for (const auto& pb_attr : element.attribute()) {
+                  if (pb_attr.has_compiled_item()) {
+                    const auto& pb_item = pb_attr.compiled_item();
+                    if (pb_item.has_str()) {
+                      const auto& val = pb_item.str().value();
+                      if (!val.empty()) {
+                        out->emplace(val);
+                      }
+                    } else if (pb_item.has_raw_str()) {
+                      TRACE(RES, 9,
+                            "Not considering %s as a possible string value",
+                            pb_item.raw_str().value().c_str());
+                    }
+                  } else {
+                    out->emplace(pb_attr.value());
+                  }
+                }
+                return true;
+              });
+        }
+      });
+}
+
 size_t BundleResources::remap_xml_reference_attributes(
     const std::string& filename,
     const std::map<uint32_t, uint32_t>& kept_to_remapped_ids) {
@@ -1482,7 +1525,8 @@ size_t ResourcesPbFile::obfuscate_resource_and_serialize(
     const std::vector<std::string>& resource_files,
     const std::map<std::string, std::string>& filepath_old_to_new,
     const std::unordered_set<uint32_t>& allowed_types,
-    const std::unordered_set<std::string>& keep_resource_prefixes) {
+    const std::unordered_set<std::string>& keep_resource_prefixes,
+    const std::unordered_set<std::string>& keep_resource_specific) {
   if (allowed_types.empty() && filepath_old_to_new.empty()) {
     TRACE(RES, 9, "BundleResources: Nothing to change, returning");
     return 0;
@@ -1542,10 +1586,11 @@ size_t ResourcesPbFile::obfuscate_resource_and_serialize(
                 remap_entry_file_paths(remap_filepaths, res_id,
                                        type->mutable_entry(k));
                 if (!is_allow_type ||
-                    find_prefix_match(keep_resource_prefixes, entry_name)) {
+                    find_prefix_match(keep_resource_prefixes, entry_name) ||
+                    keep_resource_specific.count(entry_name) > 0) {
                   TRACE(RES,
                         9,
-                        "BundleResources: skipping annonymize entry %s",
+                        "BundleResources: keeping entry name %s",
                         entry_name.c_str());
                   continue;
                 }
@@ -1772,8 +1817,8 @@ void ResourcesPbFile::collect_resource_data_for_file(
 }
 
 void ResourcesPbFile::get_type_names(std::vector<std::string>* type_names) {
-  always_assert(m_type_id_to_names.size() > 0);
-  always_assert_log(type_names->size() == 0,
+  always_assert(!m_type_id_to_names.empty());
+  always_assert_log(type_names->empty(),
                     "Must provide an empty vector, for documented indexing "
                     "scheme to be valid");
   auto highest_type_id = m_type_id_to_names.rbegin()->first;
@@ -1789,7 +1834,7 @@ void ResourcesPbFile::get_type_names(std::vector<std::string>* type_names) {
 
 std::unordered_set<uint32_t> ResourcesPbFile::get_types_by_name(
     const std::unordered_set<std::string>& type_names) {
-  always_assert(m_type_id_to_names.size() > 0);
+  always_assert(!m_type_id_to_names.empty());
   std::unordered_set<uint32_t> type_ids;
   for (const auto& pair : m_type_id_to_names) {
     if (type_names.count(pair.second) == 1) {
@@ -1801,7 +1846,7 @@ std::unordered_set<uint32_t> ResourcesPbFile::get_types_by_name(
 
 std::unordered_set<uint32_t> ResourcesPbFile::get_types_by_name_prefixes(
     const std::unordered_set<std::string>& type_name_prefixes) {
-  always_assert(m_type_id_to_names.size() > 0);
+  always_assert(!m_type_id_to_names.empty());
   std::unordered_set<uint32_t> type_ids;
   for (const auto& pair : m_type_id_to_names) {
     const auto& type_name = pair.second;

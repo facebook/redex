@@ -109,7 +109,7 @@ Scope reverse_tsort_by_clinit_deps(const Scope& scope) {
  * we are not dealing with them now so we won't have knowledge about their
  * instance field.
  */
-Scope reverse_tsort_by_init_deps(const Scope& scope) {
+Scope reverse_tsort_by_init_deps(const Scope& scope, size_t& possible_cycles) {
   std::unordered_set<const DexClass*> scope_set(scope.begin(), scope.end());
   Scope result;
   std::unordered_set<const DexClass*> visiting;
@@ -119,14 +119,17 @@ Scope reverse_tsort_by_init_deps(const Scope& scope) {
       return;
     }
     if (visiting.count(cls) != 0) {
+      ++possible_cycles;
       TRACE(FINALINLINE, 1, "Possible class init cycle (could be benign):");
       for (auto visiting_cls : visiting) {
         TRACE(FINALINLINE, 1, "  %s", SHOW(visiting_cls));
       }
       TRACE(FINALINLINE, 1, "  %s", SHOW(cls));
-      fprintf(stderr,
-              "WARNING: Possible class init cycle found in FinalInlineV2. "
-              "To check re-run with TRACE=FINALINLINE:1.\n");
+      if (!traceEnabled(FINALINLINE, 1)) {
+        TRACE(FINALINLINE, 0,
+              "WARNING: Possible class init cycle found in FinalInlineV2. To "
+              "check re-run with TRACE=FINALINLINE:1.\n");
+      }
       return;
     }
     visiting.emplace(cls);
@@ -436,6 +439,8 @@ cp::WholeProgramState analyze_and_simplify_clinits(
       call_graph::Graph(ClassInitStrategy(*method_override_graph, scope));
   StaticFieldReadAnalysis analysis(graph, allowed_opaque_callee_names);
 
+  cp::Transform::RuntimeCache runtime_cache{};
+
   for (DexClass* cls : reverse_tsort_by_clinit_deps(scope)) {
     ConstantEnvironment env;
     cp::set_encoded_values(cls, &env);
@@ -445,9 +450,11 @@ cp::WholeProgramState analyze_and_simplify_clinits(
       {
         cfg::ScopedCFG cfg(code);
         cfg->calculate_exit_block();
+        constant_propagation::WholeProgramStateAccessor wps_accessor(wps);
         cp::intraprocedural::FixpointIterator intra_cp(
             *cfg,
-            CombinedAnalyzer(cls->get_type(), &wps, nullptr, nullptr, nullptr));
+            CombinedAnalyzer(cls->get_type(), &wps_accessor, nullptr, nullptr,
+                             nullptr));
         intra_cp.run(env);
         env = intra_cp.get_exit_state_at(cfg->exit_block());
 
@@ -468,7 +475,7 @@ cp::WholeProgramState analyze_and_simplify_clinits(
         // remove those sputs.
         cp::Transform::Config transform_config;
         transform_config.class_under_init = cls->get_type();
-        cp::Transform(transform_config)
+        cp::Transform(transform_config, &runtime_cache)
             .legacy_apply_constants_and_prune_unreachable(
                 intra_cp, wps, *cfg, xstores, cls->get_type());
         // Delete the instructions rendered dead by the removal of those sputs.
@@ -502,10 +509,11 @@ cp::WholeProgramState analyze_and_simplify_inits(
         init_classes_with_side_effects,
     const XStoreRefs* xstores,
     const std::unordered_set<const DexType*>& blocklist_types,
-    const cp::EligibleIfields& eligible_ifields) {
+    const cp::EligibleIfields& eligible_ifields,
+    size_t& possible_cycles) {
   const std::unordered_set<DexMethodRef*> pure_methods = get_pure_methods();
   cp::WholeProgramState wps(blocklist_types);
-  for (DexClass* cls : reverse_tsort_by_init_deps(scope)) {
+  for (DexClass* cls : reverse_tsort_by_init_deps(scope, possible_cycles)) {
     if (cls->is_external()) {
       continue;
     }
@@ -533,9 +541,11 @@ cp::WholeProgramState analyze_and_simplify_inits(
         auto* code = ctor->get_code();
         cfg::ScopedCFG cfg(code);
         cfg->calculate_exit_block();
+        constant_propagation::WholeProgramStateAccessor wps_accessor(wps);
         cp::intraprocedural::FixpointIterator intra_cp(
-            *cfg, CombinedInitAnalyzer(cls->get_type(), &wps, nullptr, nullptr,
-                                       nullptr));
+            *cfg,
+            CombinedInitAnalyzer(cls->get_type(), &wps_accessor, nullptr,
+                                 nullptr, nullptr));
         intra_cp.run(env);
         env = intra_cp.get_exit_state_at(cfg->exit_block());
 
@@ -577,7 +587,7 @@ class ThisObjectAnalysis final
   explicit ThisObjectAnalysis(cfg::ControlFlowGraph* cfg,
                               DexMethod* method,
                               size_t this_param_reg)
-      : MonotonicFixpointIterator(*cfg, cfg->blocks().size()),
+      : MonotonicFixpointIterator(*cfg, cfg->num_blocks()),
         m_method(method),
         m_this_param_reg(this_param_reg) {}
   void analyze_node(const NodeId& node, ThisEnvironment* env) const override {
@@ -1052,7 +1062,7 @@ FinalInlinePassV2::Stats FinalInlinePassV2::run(
                              config.blocklist_types, cp::FieldType::STATIC);
   } catch (final_inline::class_initialization_cycle& e) {
     std::cerr << e.what();
-    return {0, 0};
+    return {0, 0, 1};
   }
 }
 
@@ -1065,12 +1075,15 @@ FinalInlinePassV2::Stats FinalInlinePassV2::run_inline_ifields(
     const cp::EligibleIfields& eligible_ifields,
     const Config& config,
     std::optional<DexStoresVector*> stores) {
+  size_t possible_cycles = 0;
   auto wps = final_inline::analyze_and_simplify_inits(
       scope, init_classes_with_side_effects, xstores, config.blocklist_types,
-      eligible_ifields);
-  return inline_final_gets(stores, scope, min_sdk,
-                           init_classes_with_side_effects, xstores, wps,
-                           config.blocklist_types, cp::FieldType::INSTANCE);
+      eligible_ifields, possible_cycles);
+  auto ret = inline_final_gets(stores, scope, min_sdk,
+                               init_classes_with_side_effects, xstores, wps,
+                               config.blocklist_types, cp::FieldType::INSTANCE);
+  ret.possible_cycles = possible_cycles;
+  return ret;
 }
 
 void FinalInlinePassV2::run_pass(DexStoresVector& stores,
@@ -1080,13 +1093,6 @@ void FinalInlinePassV2::run_pass(DexStoresVector& stores,
       !mgr.init_class_lowering_has_run(),
       "Implementation limitation: FinalInlinePassV2 could introduce new "
       "init-class instructions.");
-  if (mgr.no_proguard_rules()) {
-    TRACE(FINALINLINE,
-          1,
-          "FinalInlinePassV2 not run because no ProGuard configuration was "
-          "provided.");
-    return;
-  }
   auto scope = build_class_scope(stores);
   auto min_sdk = mgr.get_redex_options().min_sdk;
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
@@ -1094,7 +1100,7 @@ void FinalInlinePassV2::run_pass(DexStoresVector& stores,
   XStoreRefs xstores(stores);
   auto sfield_stats = run(scope, min_sdk, init_classes_with_side_effects,
                           &xstores, m_config, &stores);
-  FinalInlinePassV2::Stats ifield_stats{0, 0};
+  FinalInlinePassV2::Stats ifield_stats{};
   if (m_config.inline_instance_field) {
     cp::EligibleIfields eligible_ifields =
         gather_ifield_candidates(scope, m_config.allowlist_method_names);
@@ -1106,6 +1112,8 @@ void FinalInlinePassV2::run_pass(DexStoresVector& stores,
   mgr.incr_metric("num_static_finals_inlined", sfield_stats.inlined_count);
   mgr.incr_metric("num_instance_finals_inlined", ifield_stats.inlined_count);
   mgr.incr_metric("num_init_classes", sfield_stats.init_classes);
+  mgr.incr_metric("num_possible_clinit_cycles", sfield_stats.possible_cycles);
+  mgr.incr_metric("num_possible_init_cycles", ifield_stats.possible_cycles);
 }
 
 static FinalInlinePassV2 s_pass;

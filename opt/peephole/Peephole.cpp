@@ -453,8 +453,8 @@ struct Matcher {
       return new IRInstruction(OPCODE_CONST_STRING);
 
     case OPCODE_CONST:
-    case OPCODE_SHR_INT_LIT8:
-    case OPCODE_SHL_INT_LIT8:
+    case OPCODE_SHR_INT_LIT:
+    case OPCODE_SHL_INT_LIT:
       redex_assert(replace.kind == DexPattern::Kind::literal);
       return new IRInstruction((IROpcode)opcode);
 
@@ -1515,27 +1515,27 @@ bool first_instruction_literal_is_power_of_two(const Matcher& m) {
 }
 
 DexPattern mul_lit(Register src, Register dst) {
-  return {{OPCODE_MUL_INT_LIT8, OPCODE_MUL_INT_LIT16}, {src}, {dst}};
+  return {{OPCODE_MUL_INT_LIT, OPCODE_MUL_INT_LIT}, {src}, {dst}};
 }
 
 DexPattern mul_literal_kind(Register src, Register dst, Literal lit) {
-  return {{OPCODE_MUL_INT_LIT8, OPCODE_MUL_INT_LIT16}, {src}, {dst}, lit};
+  return {{OPCODE_MUL_INT_LIT, OPCODE_MUL_INT_LIT}, {src}, {dst}, lit};
 }
 
 std::vector<DexPattern> div_lit(Register src, Register dst) {
-  return {{{OPCODE_DIV_INT_LIT8, OPCODE_DIV_INT_LIT16}, {src}, {}},
+  return {{{OPCODE_DIV_INT_LIT, OPCODE_DIV_INT_LIT}, {src}, {}},
           {{IOPCODE_MOVE_RESULT_PSEUDO}, {}, {dst}}};
 }
 
 std::vector<DexPattern> div_literal_kind(Register src,
                                          Register dst,
                                          Literal lit) {
-  return {{{OPCODE_DIV_INT_LIT8, OPCODE_DIV_INT_LIT16}, {src}, {}, lit},
+  return {{{OPCODE_DIV_INT_LIT, OPCODE_DIV_INT_LIT}, {src}, {}, lit},
           {{IOPCODE_MOVE_RESULT_PSEUDO}, {}, {dst}}};
 }
 
 DexPattern add_lit(Register src, Register dst) {
-  return {{OPCODE_ADD_INT_LIT8, OPCODE_ADD_INT_LIT16}, {src}, {dst}};
+  return {{OPCODE_ADD_INT_LIT, OPCODE_ADD_INT_LIT}, {src}, {dst}};
 }
 
 std::vector<Pattern> get_arith_patterns() {
@@ -1578,7 +1578,7 @@ std::vector<Pattern> get_arith_patterns() {
           {"Arith_MulLit_Power2",
            {mul_literal_kind(Register::A, Register::B,
                              Literal::Mul_Div_To_Shift_Log2)},
-           {{{OPCODE_SHL_INT_LIT8},
+           {{{OPCODE_SHL_INT_LIT},
              {Register::A},
              {Register::B},
              Literal::Mul_Div_To_Shift_Log2}},
@@ -1588,7 +1588,7 @@ std::vector<Pattern> get_arith_patterns() {
           {"Arith_DivLit_Power2",
            {div_literal_kind(Register::A, Register::B,
                              Literal::Mul_Div_To_Shift_Log2)},
-           {{{OPCODE_SHR_INT_LIT8},
+           {{{OPCODE_SHR_INT_LIT},
              {Register::A},
              {Register::B},
              Literal::Mul_Div_To_Shift_Log2}},

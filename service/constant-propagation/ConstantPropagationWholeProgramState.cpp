@@ -40,7 +40,7 @@ void set_fields_in_partition(const DexClass* cls,
       TRACE(ICONSTP, 2, "%s has unknown value after <clinit> or <init>",
             SHOW(field));
     }
-    field_partition->set(field, value);
+    field_partition->set(field, std::move(value));
   }
 }
 
@@ -53,7 +53,12 @@ void set_fields_in_partition(const DexClass* cls,
 void analyze_clinits(const Scope& scope,
                      const interprocedural::FixpointIterator& fp_iter,
                      ConstantFieldPartition* field_partition) {
-  for (DexClass* cls : scope) {
+  std::mutex mutex;
+  walk::parallel::classes(scope, [&](auto* cls) {
+    if (cls->get_sfields().empty()) {
+      return;
+    }
+    ConstantFieldPartition cls_field_partition;
     auto clinit = cls->get_clinit();
     if (clinit == nullptr) {
       // If there is no class initializer, then the initial field values are
@@ -61,19 +66,21 @@ void analyze_clinits(const Scope& scope,
       ConstantEnvironment env;
       set_encoded_values(cls, &env);
       set_fields_in_partition(cls, env.get_field_environment(),
-                              FieldType::STATIC, field_partition);
-      continue;
+                              FieldType::STATIC, &cls_field_partition);
+    } else {
+      IRCode* code = clinit->get_code();
+      auto& cfg = code->cfg();
+      auto ipa = fp_iter.get_intraprocedural_analysis(clinit);
+      const auto& env = ipa->fp_iter.get_exit_state_at(cfg.exit_block());
+      set_fields_in_partition(cls, env.get_field_environment(),
+                              FieldType::STATIC, &cls_field_partition);
     }
-    IRCode* code = clinit->get_code();
-    auto& cfg = code->cfg();
-    auto intra_cp = fp_iter.get_intraprocedural_analysis(clinit);
-    auto env = intra_cp->get_exit_state_at(cfg.exit_block());
-    set_fields_in_partition(cls, env.get_field_environment(), FieldType::STATIC,
-                            field_partition);
-  }
+    std::lock_guard<std::mutex> lock_guard(mutex);
+    field_partition->join_with(cls_field_partition);
+  });
 }
 
-bool analyze_gets_helper(const WholeProgramState* whole_program_state,
+bool analyze_gets_helper(const WholeProgramStateAccessor* whole_program_state,
                          const IRInstruction* insn,
                          ConstantEnvironment* env) {
   if (whole_program_state == nullptr) {
@@ -112,7 +119,7 @@ void initialize_ifields(
     auto value = definitely_assigned_ifields.count(field)
                      ? SignedConstantDomain::bottom()
                      : SignedConstantDomain(0);
-    field_partition->set(field, value);
+    field_partition->set(field, std::move(value));
   });
 }
 
@@ -133,8 +140,9 @@ WholeProgramState::WholeProgramState(
     const interprocedural::FixpointIterator& fp_iter,
     const std::unordered_set<DexMethod*>& non_true_virtuals,
     const std::unordered_set<const DexType*>& field_blocklist,
-    const std::unordered_set<const DexField*>& definitely_assigned_ifields)
-    : m_field_blocklist(field_blocklist) {
+    const std::unordered_set<const DexField*>& definitely_assigned_ifields,
+    std::shared_ptr<const call_graph::Graph> call_graph)
+    : m_call_graph(std::move(call_graph)), m_field_blocklist(field_blocklist) {
 
   walk::fields(scope, [&](DexField* field) {
     // We exclude those marked by keep rules: keep-marked fields may be
@@ -167,20 +175,6 @@ WholeProgramState::WholeProgramState(
   collect(scope, fp_iter, definitely_assigned_ifields);
 }
 
-WholeProgramState::WholeProgramState(
-    const Scope& scope,
-    const interprocedural::FixpointIterator& fp_iter,
-    const std::unordered_set<DexMethod*>& non_true_virtuals,
-    const std::unordered_set<const DexType*>& field_blocklist,
-    const std::unordered_set<const DexField*>& definitely_assigned_ifields,
-    const call_graph::Graph& call_graph)
-    : WholeProgramState(scope,
-                        fp_iter,
-                        non_true_virtuals,
-                        field_blocklist,
-                        definitely_assigned_ifields) {
-  m_call_graph = call_graph;
-}
 /*
  * Walk over the entire program, doing a join over the values written to each
  * field, as well as a join over the values returned by each method.
@@ -190,21 +184,22 @@ void WholeProgramState::collect(
     const interprocedural::FixpointIterator& fp_iter,
     const std::unordered_set<const DexField*>& definitely_assigned_ifields) {
   initialize_ifields(scope, &m_field_partition, definitely_assigned_ifields);
-  ConcurrentMap<const DexField*, std::vector<ConstantValue>> fields_value_tmp;
-  ConcurrentMap<const DexMethod*, std::vector<ConstantValue>> methods_value_tmp;
+  ConcurrentMap<const DexField*, ConstantValue> fields_value_tmp;
+  ConcurrentMap<const DexMethod*, ConstantValue> methods_value_tmp;
   walk::parallel::methods(scope, [&](DexMethod* method) {
     IRCode* code = method->get_code();
     if (code == nullptr) {
       return;
     }
     auto& cfg = code->cfg();
-    auto intra_cp = fp_iter.get_intraprocedural_analysis(method);
+    auto ipa = fp_iter.get_intraprocedural_analysis(method);
+    auto& intra_cp = ipa->fp_iter;
     for (cfg::Block* b : cfg.blocks()) {
-      auto env = intra_cp->get_entry_state_at(b);
+      auto env = intra_cp.get_entry_state_at(b);
       auto last_insn = b->get_last_insn();
       for (auto& mie : InstructionIterable(b)) {
         auto* insn = mie.insn;
-        intra_cp->analyze_instruction(insn, &env, insn == last_insn->insn);
+        intra_cp.analyze_instruction(insn, &env, insn == last_insn->insn);
         collect_field_values(insn, env,
                              method::is_clinit(method) ? method->get_class()
                                                        : nullptr,
@@ -214,18 +209,14 @@ void WholeProgramState::collect(
     }
   });
   for (const auto& pair : fields_value_tmp) {
-    for (auto& value : pair.second) {
-      m_field_partition.update(pair.first, [&value](auto* current_value) {
-        current_value->join_with(value);
-      });
-    }
+    m_field_partition.update(pair.first, [&pair](auto* current_value) {
+      current_value->join_with(pair.second);
+    });
   }
   for (const auto& pair : methods_value_tmp) {
-    for (auto& value : pair.second) {
-      m_method_partition.update(pair.first, [&value](auto* current_value) {
-        current_value->join_with(value);
-      });
-    }
+    m_method_partition.update(pair.first, [&pair](auto* current_value) {
+      current_value->join_with(pair.second);
+    });
   }
 }
 
@@ -242,8 +233,7 @@ void WholeProgramState::collect_field_values(
     const IRInstruction* insn,
     const ConstantEnvironment& env,
     const DexType* clinit_cls,
-    ConcurrentMap<const DexField*, std::vector<ConstantValue>>*
-        fields_value_tmp) {
+    ConcurrentMap<const DexField*, ConstantValue>* fields_value_tmp) {
   if (!opcode::is_an_sput(insn->opcode()) &&
       !opcode::is_an_iput(insn->opcode())) {
     return;
@@ -257,9 +247,13 @@ void WholeProgramState::collect_field_values(
     auto value = env.get(insn->src(0));
     fields_value_tmp->update(
         field,
-        [value](const DexField*,
-                std::vector<ConstantValue>& s,
-                bool /* exists */) { s.emplace_back(value); });
+        [&value](const DexField*, ConstantValue& current_value, bool exists) {
+          if (exists) {
+            current_value.join_with(value);
+          } else {
+            current_value = std::move(value);
+          }
+        });
   }
 }
 
@@ -273,8 +267,7 @@ void WholeProgramState::collect_return_values(
     const IRInstruction* insn,
     const ConstantEnvironment& env,
     const DexMethod* method,
-    ConcurrentMap<const DexMethod*, std::vector<ConstantValue>>*
-        methods_value_tmp) {
+    ConcurrentMap<const DexMethod*, ConstantValue>* methods_value_tmp) {
   auto op = insn->opcode();
   if (!opcode::is_a_return(op)) {
     return;
@@ -286,17 +279,21 @@ void WholeProgramState::collect_return_values(
     // reachable.
     methods_value_tmp->update(
         method,
-        [](const DexMethod*, std::vector<ConstantValue>& s, bool /* exists */) {
-          s.emplace_back(ConstantValue::top());
+        [](const DexMethod*, ConstantValue& current_value, bool /* exists */) {
+          current_value = ConstantValue::top();
         });
     return;
   }
   auto value = env.get(insn->src(0));
   methods_value_tmp->update(
       method,
-      [value](const DexMethod*,
-              std::vector<ConstantValue>& s,
-              bool /* exists */) { s.emplace_back(value); });
+      [&value](const DexMethod*, ConstantValue& current_value, bool exists) {
+        if (exists) {
+          current_value.join_with(value);
+        } else {
+          current_value = std::move(value);
+        }
+      });
 }
 
 void WholeProgramState::collect_static_finals(const DexClass* cls,
@@ -340,21 +337,21 @@ void WholeProgramState::collect_instance_finals(
 }
 
 bool WholeProgramAwareAnalyzer::analyze_sget(
-    const WholeProgramState* whole_program_state,
+    const WholeProgramStateAccessor* whole_program_state,
     const IRInstruction* insn,
     ConstantEnvironment* env) {
   return analyze_gets_helper(whole_program_state, insn, env);
 }
 
 bool WholeProgramAwareAnalyzer::analyze_iget(
-    const WholeProgramState* whole_program_state,
+    const WholeProgramStateAccessor* whole_program_state,
     const IRInstruction* insn,
     ConstantEnvironment* env) {
   return analyze_gets_helper(whole_program_state, insn, env);
 }
 
 bool WholeProgramAwareAnalyzer::analyze_invoke(
-    const WholeProgramState* whole_program_state,
+    const WholeProgramStateAccessor* whole_program_state,
     const IRInstruction* insn,
     ConstantEnvironment* env) {
   if (whole_program_state == nullptr) {

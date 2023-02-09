@@ -171,7 +171,7 @@ bool can_remove_init(const DexMethod* m,
   DexClass* clazz = type_class(m->get_class());
   if (can_remove(clazz)) {
     return true;
-  } else if (m->get_proto()->get_args()->size() == 0) {
+  } else if (m->get_proto()->get_args()->empty()) {
     // If the class is kept, we should probably keep the no argument constructor
     // Because it may be invoked with `Class.newInstance()`.
     return false;
@@ -578,12 +578,6 @@ int DeadRefs::remove_unreachable(Scope& scope) {
 void DelInitPass::run_pass(DexStoresVector& stores,
                            ConfigFiles& /* conf */,
                            PassManager& mgr) {
-  if (mgr.no_proguard_rules()) {
-    TRACE(
-        DELINIT, 1,
-        "DelInitPass not run because no ProGuard configuration was provided.");
-    return;
-  }
   package_filter = m_package_filter;
   auto scope = build_class_scope(stores);
   find_referenced_classes(scope);

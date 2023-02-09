@@ -53,7 +53,8 @@ TEST_F(RemoveUnusedArgsTest, noArgs) {
     )
   )");
 
-  std::vector<IRInstruction*> dead_insns;
+  method->get_code()->build_cfg();
+  std::vector<cfg::InstructionIterator> dead_insns;
   size_t num_args = 0;
   auto live_arg_idxs =
       remove_unused_args::compute_live_args(method, num_args, &dead_insns);
@@ -73,8 +74,8 @@ TEST_F(RemoveUnusedArgsTest, simpleUsedArg) {
       )
     )
   )");
-
-  std::vector<IRInstruction*> dead_insns;
+  method->get_code()->build_cfg();
+  std::vector<cfg::InstructionIterator> dead_insns;
   size_t num_args = 0;
   auto live_arg_idxs =
       remove_unused_args::compute_live_args(method, num_args, &dead_insns);
@@ -94,7 +95,8 @@ TEST_F(RemoveUnusedArgsTest, simpleUsedArgWide) {
     )
   )");
 
-  std::vector<IRInstruction*> dead_insns;
+  method->get_code()->build_cfg();
+  std::vector<cfg::InstructionIterator> dead_insns;
   size_t num_args = 0;
   auto live_arg_idxs =
       remove_unused_args::compute_live_args(method, num_args, &dead_insns);
@@ -118,7 +120,8 @@ TEST_F(RemoveUnusedArgsTest, simpleUsedArgs) {
     )
   )");
 
-  std::vector<IRInstruction*> dead_insns;
+  method->get_code()->build_cfg();
+  std::vector<cfg::InstructionIterator> dead_insns;
   size_t num_args = 2;
   auto live_arg_idxs =
       remove_unused_args::compute_live_args(method, num_args, &dead_insns);
@@ -141,7 +144,8 @@ TEST_F(RemoveUnusedArgsTest, simpleUsedArgsWide) {
     )
   )");
 
-  std::vector<IRInstruction*> dead_insns;
+  method->get_code()->build_cfg();
+  std::vector<cfg::InstructionIterator> dead_insns;
   size_t num_args = 2;
   auto live_arg_idxs =
       remove_unused_args::compute_live_args(method, num_args, &dead_insns);
@@ -174,7 +178,8 @@ TEST_F(RemoveUnusedArgsTest, multipleBlocksRegularArgs) {
     )
   )");
 
-  std::vector<IRInstruction*> dead_insns;
+  method->get_code()->build_cfg();
+  std::vector<cfg::InstructionIterator> dead_insns;
   size_t num_args = 2;
   auto live_arg_idxs =
       remove_unused_args::compute_live_args(method, num_args, &dead_insns);
@@ -207,7 +212,8 @@ TEST_F(RemoveUnusedArgsTest, multipleBlocksWideArgs) {
     )
   )");
 
-  std::vector<IRInstruction*> dead_insns;
+  method->get_code()->build_cfg();
+  std::vector<cfg::InstructionIterator> dead_insns;
   size_t num_args = 2;
   auto live_arg_idxs =
       remove_unused_args::compute_live_args(method, num_args, &dead_insns);
@@ -242,7 +248,8 @@ TEST_F(RemoveUnusedArgsTest, multipleBlocksMixedArgs) {
     )
   )");
 
-  std::vector<IRInstruction*> dead_insns;
+  method->get_code()->build_cfg();
+  std::vector<cfg::InstructionIterator> dead_insns;
   size_t num_args = 3;
   auto live_arg_idxs =
       remove_unused_args::compute_live_args(method, num_args, &dead_insns);

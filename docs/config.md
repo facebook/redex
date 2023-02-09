@@ -18,7 +18,7 @@ in [config/default.config](https://github.com/facebook/redex/blob/master/config/
 "redex" : {
   "passes" : [
     "ReBindRefsPass",
-    "BridgePass",
+    "BridgeSynthInlinePass",
     "FinalInlinePassV2",
     "DelSuperPass",
     "SingleImplPass",
@@ -53,8 +53,7 @@ this config:
 "redex" : {
   "passes" : [
     "ReBindRefsPass",
-    "BridgePass",
-    "SynthPass",
+    "BridgeSynthInlinePass",
     "FinalInlinePass",
     "DelSuperPass",
     "SingleImplPass",

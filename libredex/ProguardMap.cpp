@@ -7,6 +7,8 @@
 
 #include "ProguardMap.h"
 
+#include <fstream>
+
 #include "DexPosition.h"
 #include "DexUtil.h"
 #include "IRCode.h"

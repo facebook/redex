@@ -26,6 +26,12 @@ public class SourceBlocksTest {
     bar();
   }
 
+  private static String mWorld;
+
+  private static void bazzz() {
+    mWorld = "WORLD";
+  }
+
   static class Scaling {
     public void no_source_blocks() {
       hot_source_blocks_inlined(true);
@@ -49,6 +55,16 @@ public class SourceBlocksTest {
       } else {
         System.out.println("B");
       }
+    }
+
+    public void set_world() {
+      // Generate a field accessor.
+      SourceBlocksTest.mWorld = "World";
+    }
+
+    public void call_bazzz() {
+      // Generate a method accessor.
+      SourceBlocksTest.bazzz();
     }
   }
 }

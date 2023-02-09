@@ -19,6 +19,7 @@
 #include "utils/Serialize.h"
 #include "utils/Visitor.h"
 
+#include "GlobalConfig.h"
 #include "RedexMappedFile.h"
 #include "RedexResources.h"
 
@@ -256,7 +257,8 @@ class ResourcesArscFile : public ResourceTableFile {
       const std::vector<std::string>& resource_files,
       const std::map<std::string, std::string>& filepath_old_to_new,
       const std::unordered_set<uint32_t>& allowed_types,
-      const std::unordered_set<std::string>& keep_resource_prefixes) override;
+      const std::unordered_set<std::string>& keep_resource_prefixes,
+      const std::unordered_set<std::string>& keep_resource_specific) override;
   size_t serialize();
 
   size_t package_count() override;
@@ -281,7 +283,7 @@ class ResourcesArscFile : public ResourceTableFile {
   void remap_file_paths_and_serialize(
       const std::vector<std::string>& resource_files,
       const std::unordered_map<std::string, std::string>& old_to_new) override;
-  void remove_unreferenced_strings() override;
+  void finalize_resource_table(const ResourceConfig& config) override;
   std::vector<std::string> get_files_by_rid(
       uint32_t res_id,
       ResourcePathType path_type = ResourcePathType::DevicePath) override;
@@ -332,6 +334,9 @@ class ApkResources : public AndroidResources {
       std::unordered_set<std::string>* out_classes,
       std::unordered_multimap<std::string, std::string>* out_attributes)
       override;
+  void collect_xml_attribute_string_values_for_file(
+      const std::string& file_path,
+      std::unordered_set<std::string>* out) override;
 
   // Given the bytes of a binary XML file, replace the entries (if any) in the
   // ResStringPool. Writes result to the given Vector output param.

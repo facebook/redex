@@ -1205,32 +1205,32 @@ TEST_F(ConstantPropagationTest, ArithmeticFoldingFromLit) {
     (
       (load-param v0)
 
-      (add-int/lit8 v2 v0 0)
-      (add-int/lit16 v3 v1 0)
+      (add-int/lit v2 v0 0)
+      (add-int/lit v3 v1 0)
 
-      (rsub-int v4 v0 0)
-      (rsub-int/lit8 v5 v0 0)
+      (rsub-int/lit v4 v0 0)
+      (rsub-int/lit v5 v0 0)
 
-      (mul-int/lit8 v6 v0 0)
-      (mul-int/lit16 v7 v0 0)
+      (mul-int/lit v6 v0 0)
+      (mul-int/lit v7 v0 0)
 
-      (mul-int/lit8 v8 v0 1)
-      (mul-int/lit16 v9 v0 1)
+      (mul-int/lit v8 v0 1)
+      (mul-int/lit v9 v0 1)
 
-      (mul-int/lit8 v10 v0 -1)
-      (mul-int/lit16 v11 v0 -1)
+      (mul-int/lit v10 v0 -1)
+      (mul-int/lit v11 v0 -1)
 
-      (or-int/lit8 v12 v0 0)
-      (or-int/lit16 v13 v0 0)
+      (or-int/lit v12 v0 0)
+      (or-int/lit v13 v0 0)
 
-      (or-int/lit8 v14 v0 -1)
-      (or-int/lit16 v15 v0 -1)
+      (or-int/lit v14 v0 -1)
+      (or-int/lit v15 v0 -1)
 
-      (and-int/lit8 v1 v0 0)
-      (and-int/lit16 v2 v0 0)
+      (and-int/lit v1 v0 0)
+      (and-int/lit v2 v0 0)
 
-      (and-int/lit8 v3 v0 -1)
-      (and-int/lit16 v4 v0 -1)
+      (and-int/lit v3 v0 -1)
+      (and-int/lit v4 v0 -1)
 
       (return v0)
     )
@@ -1314,17 +1314,17 @@ TEST_F(ConstantPropagationTest, ArithmeticFoldingToLit8) {
       (const v127 127)
       (const v128 -128)
 
-      (add-int/lit8 v2 v0 127)
-      (add-int/lit8 v3 v0 -128)
+      (add-int/lit v2 v0 127)
+      (add-int/lit v3 v0 -128)
 
-      (mul-int/lit8 v4 v0 127)
-      (mul-int/lit8 v5 v0 -128)
+      (mul-int/lit v4 v0 127)
+      (mul-int/lit v5 v0 -128)
 
-      (or-int/lit8 v6 v0 127)
-      (or-int/lit8 v7 v0 -128)
+      (or-int/lit v6 v0 127)
+      (or-int/lit v7 v0 -128)
 
-      (and-int/lit8 v8 v0 127)
-      (and-int/lit8 v9 v0 -128)
+      (and-int/lit v8 v0 127)
+      (and-int/lit v9 v0 -128)
 
       (return v0)
     )
@@ -1369,17 +1369,17 @@ TEST_F(ConstantPropagationTest, ArithmeticFoldingToLit16) {
       (const v127 32767)
       (const v128 -32768)
 
-      (add-int/lit16 v2 v0 32767)
-      (add-int/lit16 v3 v0 -32768)
+      (add-int/lit v2 v0 32767)
+      (add-int/lit v3 v0 -32768)
 
-      (mul-int/lit16 v4 v0 32767)
-      (mul-int/lit16 v5 v0 -32768)
+      (mul-int/lit v4 v0 32767)
+      (mul-int/lit v5 v0 -32768)
 
-      (or-int/lit16 v6 v0 32767)
-      (or-int/lit16 v7 v0 -32768)
+      (or-int/lit v6 v0 32767)
+      (or-int/lit v7 v0 -32768)
 
-      (and-int/lit16 v8 v0 32767)
-      (and-int/lit16 v9 v0 -32768)
+      (and-int/lit v8 v0 32767)
+      (and-int/lit v9 v0 -32768)
 
       (return v0)
     )

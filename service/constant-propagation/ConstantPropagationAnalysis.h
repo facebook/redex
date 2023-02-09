@@ -310,6 +310,8 @@ struct ImmutableAttributeAnalyzerState {
 
   ImmutableAttributeAnalyzerState();
 
+  // Immutable state should not be updated in parallel with analysis!
+
   Initializer& add_initializer(DexMethod* initialize_method, DexMethod* attr);
   Initializer& add_initializer(DexMethod* initialize_method, DexField* attr);
   Initializer& add_initializer(DexMethod* initialize_method,
@@ -383,6 +385,8 @@ class StringAnalyzer
     env->set(RESULT_REGISTER, StringDomain(insn->get_string()));
     return true;
   }
+
+  static bool analyze_invoke(const IRInstruction*, ConstantEnvironment*);
 };
 
 class ConstantClassObjectAnalyzer
@@ -556,6 +560,7 @@ using ConstantPrimitiveAndBoxedAnalyzer =
                                 ImmutableAttributeAnalyzer,
                                 EnumFieldAnalyzer,
                                 BoxedBooleanAnalyzer,
+                                StringAnalyzer,
                                 ApiLevelAnalyzer,
                                 PrimitiveAnalyzer>;
 

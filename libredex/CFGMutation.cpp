@@ -192,8 +192,6 @@ void CFGMutation::flush() {
   m_changes.clear();
 }
 
-CFGMutation::ChangeSet::~ChangeSet() {}
-
 bool CFGMutation::ChangeSet::apply(ControlFlowGraph& cfg,
                                    cfg::Block* block,
                                    ir_list::InstructionIterator& it) {

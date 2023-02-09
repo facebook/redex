@@ -549,6 +549,7 @@ TEST_F(RemoveUninstantiablesTest, RunPass) {
   PassManager pm({&pass});
 
   ConfigFiles c(Json::nullValue);
+  c.parse_global_config();
   pm.run_passes(dss, c);
 
   EXPECT_ABSTRACT_METHOD("LFoo;.baz:()V");
@@ -742,6 +743,7 @@ TEST_F(RemoveUninstantiablesTest, RunPassInstantiableChildrenDefined) {
   PassManager pm({&pass});
 
   ConfigFiles c(Json::nullValue);
+  c.parse_global_config();
   pm.run_passes(dss, c);
 
   EXPECT_ABSTRACT_METHOD("LBar;.baz:()V");

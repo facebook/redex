@@ -1223,8 +1223,7 @@ class DexClass {
   void add_method(DexMethod* m);
   // Removes the method from this class
   void remove_method(const DexMethod* m);
-  // Remove the method from the class and delete the definition.
-  void remove_method_definition(DexMethod* m);
+
   const std::vector<DexField*>& get_sfields() const { return m_sfields; }
   std::vector<DexField*>& get_sfields() {
     redex_assert(!m_external);

@@ -6,15 +6,17 @@
  */
 
 #include "DexUtil.h"
+#include "MethodDedup.h"
 #include "MethodOverrideGraph.h"
 #include "Show.h"
+#include "StlUtil.h"
 #include "Trace.h"
 #include "Walkers.h"
 
 namespace {
 // Only look at small methods. Increase the limit does not match more
 // identical code in practise.
-constexpr const uint32_t MAX_NUM_INSTRUCTIONS = 20;
+constexpr const uint32_t MAX_NUM_INSTRUCTIONS = 32;
 
 /**
  * Allow code without invoke-super and with less than MAX_NUM_INSTRUCTIONS
@@ -83,9 +85,12 @@ void publicize_methods(const method_override_graph::Graph* graph,
 /**
  * Deduplicate identical overriding code.
  */
-uint32_t remove_duplicated_vmethods(const Scope& scope) {
+uint32_t remove_duplicated_vmethods(
+    const Scope& scope,
+    const ConcurrentSet<DexMethodRef*>& super_invoked_methods) {
   uint32_t ret = 0;
   auto graph = method_override_graph::build_graph(scope);
+  std::unordered_map<DexMethodRef*, DexMethodRef*> removed_vmethods;
 
   walk::classes(scope, [&](DexClass* cls) {
     for (auto method : cls->get_vmethods()) {
@@ -104,6 +109,13 @@ uint32_t remove_duplicated_vmethods(const Scope& scope) {
       }
       std::vector<DexMethod*> duplicates;
       find_duplications(graph.get(), method, &duplicates);
+
+      // Now, remove the methods that are called with INVOKE_SUPER from
+      // the duplicates set.
+      std20::erase_if(duplicates, [&](auto& m) {
+        return super_invoked_methods.count_unsafe(m);
+      });
+
       if (!duplicates.empty()) {
         if (is_protected(method)) {
           publicize_methods(graph.get(), method);
@@ -111,14 +123,37 @@ uint32_t remove_duplicated_vmethods(const Scope& scope) {
         TRACE(VM, 8, "Same as %s", SHOW(method));
         for (auto m : duplicates) {
           TRACE(VM, 8, "\t%s", SHOW(m));
-          type_class(m->get_class())->remove_method_definition(m);
+          type_class(m->get_class())->remove_method(m);
+          removed_vmethods.emplace(m, method);
+          DexMethod::erase_method(m);
+          DexMethod::delete_method(m);
         }
         ret += duplicates.size();
         TRACE(VM, 9, "%s\n", SHOW(method->get_code()));
       }
     }
   });
+
+  method_dedup::fixup_references_to_removed_methods(scope, removed_vmethods);
+
   return ret;
+}
+
+/**
+ * Collect all the methods that are called with INVOKE_SUPPER opcode
+ */
+void collect_all_invoke_super_called(
+    const Scope& scope, ConcurrentSet<DexMethodRef*>* super_invoked_methods) {
+  walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
+    editable_cfg_adapter::iterate(&code, [&](MethodItemEntry& mie) {
+      auto insn = mie.insn;
+      if (insn->opcode() == OPCODE_INVOKE_SUPER) {
+        auto callee_ref = insn->get_method();
+        super_invoked_methods->insert(callee_ref);
+      }
+      return editable_cfg_adapter::LOOP_CONTINUE;
+    });
+  });
 }
 } // namespace
 
@@ -126,7 +161,10 @@ namespace dedup_vmethods {
 
 uint32_t dedup(const DexStoresVector& stores) {
   auto scope = build_class_scope(stores);
-  auto deduplicated_vmethods = remove_duplicated_vmethods(scope);
+  ConcurrentSet<DexMethodRef*> super_invoked_methods;
+  collect_all_invoke_super_called(scope, &super_invoked_methods);
+  auto deduplicated_vmethods =
+      remove_duplicated_vmethods(scope, super_invoked_methods);
   TRACE(VM, 2, "deduplicated_vmethods %d\n", deduplicated_vmethods);
   return deduplicated_vmethods;
 }

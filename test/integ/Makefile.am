@@ -31,6 +31,7 @@ check_PROGRAMS = \
     max_depth_test \
     method_override_graph_test \
     monotonic_fixpoint_test \
+    optimize_resources_test \
     partial_application_test \
     peephole_test \
     points_to_semantics_test \
@@ -41,7 +42,6 @@ check_PROGRAMS = \
     remove_unreachable_test \
     result_propagation_test \
     strip_debug_info_test \
-    synth_test \
     type_analysis_transform_test \
     type_inference_test \
 	uses_app_module_annotation_test \
@@ -109,6 +109,9 @@ EXTRA_method_override_graph_test_DEPENDENCIES = method_override_graph_test-class
 monotonic_fixpoint_test_SOURCES = MonotonicFixpointTest.cpp
 EXTRA_monotonic_fixpoint_test_DEPENDENCIES = monotonic_fixpoint_test-class.dex
 
+optimize_resources_test_SOURCES = OptimizeResourcesTest.cpp
+EXTRA_optimize_resources_test_DEPENDENCIES = optimize_resources_test-class.dex
+
 partial_application_test_SOURCES = PartialApplicationTest.cpp
 EXTRA_partial_application_test_DEPENDENCIES = partial_application_test-class.dex
 
@@ -138,9 +141,6 @@ EXTRA_result_propagation_test_DEPENDENCIES = result_propagation_test-class.dex
 
 strip_debug_info_test_SOURCES = StripDebugInfoTest.cpp
 EXTRA_strip_debug_info_test_DEPENDENCIES = strip_debug_info_test-class.dex
-
-synth_test_SOURCES = SynthTest.cpp
-EXTRA_synth_test_DEPENDENCIES = synth_test-class.dex
 
 type_analysis_transform_test_SOURCES = TypeAnalysisTransformTest.cpp
 EXTRA_type_analysis_transform_test_DEPENDENCIES = type_analysis_transform_test-class.dex
@@ -231,6 +231,9 @@ method_override_graph_test-class.jar: MethodOverrideGraphTest.java
 monotonic_fixpoint_test-class.jar: MonotonicFixpoint.java
 	$(create_jar)
 
+optimize_resources_test-class.jar: R.java
+	$(create_jar)
+
 partial_application_test-class.jar: PartialApplication.java
 	$(create_jar)
 
@@ -259,9 +262,6 @@ result_propagation_test-class.jar: ResultPropagation.java
 	$(create_jar)
 
 strip_debug_info_test-class.jar: StripDebugInfo.java
-	$(create_jar)
-
-synth_test-class.jar: Alpha.java SynthTest.java
 	$(create_jar)
 
 type_analysis_transform_test-class.jar: TypeAnalysisTransformTest.java

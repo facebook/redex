@@ -1,0 +1,4 @@
+com.facebook.redex.test.instr:dimen/a_text_deleted1 = 0x7f020000
+com.facebook.redex.test.instr:dimen/a_text_size = 0x7f020001
+com.facebook.redex.test.instr:dimen/a_text_deleted2 = 0x7f020002
+com.facebook.redex.test.instr:dimen/a_text_deleted3 = 0x7f020003

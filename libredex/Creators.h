@@ -248,14 +248,10 @@ struct MethodBlock {
   // Helper
   void init_loc(Location& loc);
 
-  void binop_lit16(IROpcode op,
-                   const Location& dest,
-                   const Location& src,
-                   int16_t literal);
-  void binop_lit8(IROpcode op,
-                  const Location& dest,
-                  const Location& src,
-                  int8_t literal);
+  void binop_lit(IROpcode op,
+                 const Location& dest,
+                 const Location& src,
+                 int16_t literal);
 
   //
   // branch instruction
@@ -402,6 +398,9 @@ struct MethodCreator {
                 DexAccessFlags access,
                 std::unique_ptr<DexAnnotationSet> anno = nullptr,
                 bool with_debug_item = true);
+
+  MethodCreator(MethodCreator&&) noexcept = default;
+  MethodCreator& operator=(MethodCreator&&) noexcept = default;
 
   /**
    * Get an existing local.

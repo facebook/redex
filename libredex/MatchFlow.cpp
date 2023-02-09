@@ -27,13 +27,14 @@ result_t flow_t::find(cfg::ControlFlowGraph& cfg,
   }
 
   TRACE(MFLOW, 6, "find: Building Instruction Graph");
-  auto dfg = detail::instruction_graph(cfg, m_constraints, lixs);
+  auto order = std::make_shared<detail::Order>();
+  auto dfg = detail::instruction_graph(cfg, m_constraints, lixs, order.get());
 
   TRACE(MFLOW, 6, "find: Propagating Flow Constraints");
   dfg.propagate_flow_constraints(m_constraints);
 
   TRACE(MFLOW, 6, "find: Done.");
-  return result_t{dfg.locations(lixs)};
+  return result_t{dfg.locations(lixs), std::move(order)};
 }
 
 result_t::insn_range result_t::matching(location_t l) const {
@@ -48,6 +49,15 @@ result_t::insn_range result_t::matching(location_t l) const {
 
   return insn_range{insn_iterator{insns->cbegin()},
                     insn_iterator{insns->cend()}};
+}
+
+std::vector<IRInstruction*> result_t::order(insn_range range) const {
+  std::vector<IRInstruction*> ordered(range.begin(), range.end());
+  auto less = [order = m_order.get()](auto* a, auto* b) {
+    return order->at(a) < order->at(b);
+  };
+  std::sort(ordered.begin(), ordered.end(), std::move(less));
+  return ordered;
 }
 
 result_t::src_range result_t::matching(location_t l,

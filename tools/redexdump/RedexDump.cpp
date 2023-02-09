@@ -95,7 +95,7 @@ int main(int argc, char* argv[]) {
       {nullptr, 0, nullptr, 0},
   };
 
-  while ((c = getopt_long(argc, argv, "asStpfmcCxeAdDh", &options[0],
+  while ((c = getopt_long(argc, argv, "asStpfmcCxeAdD:h", &options[0],
                           nullptr)) != -1) {
     switch (c) {
     case 'a':

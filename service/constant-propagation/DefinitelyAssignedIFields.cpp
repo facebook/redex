@@ -302,7 +302,7 @@ std::unordered_set<const DexField*> get_definitely_assigned_ifields(
     if (!ctor->is_external() && ctor->get_code()) {
       auto& cfg = ctor->get_code()->cfg();
       Analyzer analyzer(cfg, ctor->get_class(), get_analysis_result);
-      auto env = analyzer.get_exit_state_at(cfg.exit_block());
+      const auto& env = analyzer.get_exit_state_at(cfg.exit_block());
       auto cls = type_class(ctor->get_class());
       res = std::make_shared<AnalysisResult>(env.get_analysis_result(cls));
     } else {

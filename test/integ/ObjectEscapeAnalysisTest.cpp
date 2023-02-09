@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <cstdlib>
+#include <fstream>
 #include <gtest/gtest.h>
 #include <json/json.h>
 #include <memory>
@@ -24,6 +25,7 @@
 #include "IRList.h"
 #include "ObjectEscapeAnalysis.h"
 #include "RedexTest.h"
+#include "Show.h"
 #include "VirtualScope.h"
 
 class ObjectEscapeAnalysisTest : public RedexIntegrationTest {
@@ -311,6 +313,39 @@ TEST_F(ObjectEscapeAnalysisTest, reduceTo42WithExpandedCtor) {
     )
 )");
   ASSERT_EQ(actual_expanded_ctor.str(),
+            assembler::to_s_expr(expected_expanded_ctor.get()).str());
+}
+
+TEST_F(ObjectEscapeAnalysisTest, reduceTo42WithExpandedMethod) {
+  run();
+
+  auto actual = get_s_expr(
+      "Lcom/facebook/redextest/"
+      "ObjectEscapeAnalysisTest;.reduceTo42WithExpandedMethod:()V");
+  auto expected = assembler::ircode_from_string(R"(
+    (
+      (const v2 42)
+      (invoke-static (v2) "Lcom/facebook/redextest/ObjectEscapeAnalysisTest$N;.onlyUseInstanceField$oea$0:(I)V")
+      (return-void)
+    )
+)");
+  ASSERT_EQ(actual.str(), assembler::to_s_expr(expected.get()).str());
+
+  auto actual_expanded_method = get_s_expr(
+      "Lcom/facebook/redextest/"
+      "ObjectEscapeAnalysisTest$N;.onlyUseInstanceField$oea$0:(I)V");
+  auto expected_expanded_ctor = assembler::ircode_from_string(R"(
+    (
+      (load-param v3)
+      (const v2 0)
+      (sget-object "Ljava/lang/System;.out:Ljava/io/PrintStream;")
+      (move-result-pseudo-object v0)
+      (move v1 v3)
+      (invoke-virtual (v0 v1) "Ljava/io/PrintStream;.println:(I)V")
+      (return-void)
+    )
+  )");
+  ASSERT_EQ(actual_expanded_method.str(),
             assembler::to_s_expr(expected_expanded_ctor.get()).str());
 }
 

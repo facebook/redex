@@ -37,17 +37,4 @@ void find_all_mergeables_and_roots(const TypeSystem& type_system,
                                    PassManager& mgr,
                                    ModelSpec* merging_spec);
 
-/**
- * Analyze type hierarchy to find anonymous classes to merge.
- * Fill the merging_spec with roots and merging_targets.
- *
- * TODO: Deprecate this method and use the new version instead.
- */
-void discover_mergeable_anonymous_classes(
-    const DexStoresVector& stores,
-    const std::unordered_set<std::string>& allowed_packages,
-    size_t min_implementors,
-    ModelSpec* merging_spec,
-    PassManager* mgr);
-
 } // namespace class_merging

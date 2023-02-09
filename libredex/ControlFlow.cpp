@@ -1810,7 +1810,7 @@ std::vector<Block*> ControlFlowGraph::wto_chains(
     sparta::WeakTopologicalOrdering<BlockChain*> wto) {
 
   std::vector<Block*> main_order;
-  main_order.reserve(this->blocks().size());
+  main_order.reserve(this->num_blocks());
 
   auto chain_order = [&main_order](BlockChain* c) {
     for (Block* b : *c) {

@@ -38,6 +38,7 @@ void run_passes(const std::vector<Pass*>& passes,
 
   Json::Value conf_obj = Json::nullValue;
   ConfigFiles dummy_config(conf_obj);
+  dummy_config.parse_global_config();
   manager.run_passes(stores, dummy_config);
 }
 

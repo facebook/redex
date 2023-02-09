@@ -12,10 +12,13 @@
 #include <cinttypes>
 #include <cstdio>
 #include <cstdlib>
+#include <fstream>
 #include <iostream>
+#include <json/json.h>
 #include <limits>
 #include <list>
 #include <mutex>
+#include <sstream>
 #include <thread>
 #include <typeinfo>
 #include <unordered_set>
@@ -37,6 +40,7 @@
 #include "DexLoader.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
+#include "GlobalConfig.h"
 #include "GraphVisualizer.h"
 #include "IRCode.h"
 #include "IRTypeChecker.h"
@@ -53,6 +57,7 @@
 #include "ReachableClasses.h"
 #include "Sanitizers.h"
 #include "ScopedCFG.h"
+#include "ScopedMemStats.h"
 #include "ScopedMetrics.h"
 #include "Show.h"
 #include "SourceBlocks.h"
@@ -331,56 +336,6 @@ class CheckerConfig {
   bool m_validate_access{true};
   bool m_annotated_cfg_on_error{false};
   bool m_annotated_cfg_on_error_reduced{true};
-};
-
-class ScopedMemStats {
- public:
-  explicit ScopedMemStats(bool enabled, bool reset) : m_enabled(enabled) {
-    if (enabled) {
-      if (reset) {
-        try_reset_hwm_mem_stat();
-      }
-      auto mem_stats = get_mem_stats();
-      m_before = mem_stats.vm_hwm;
-      m_rss_before = mem_stats.vm_rss;
-    }
-  }
-
-  void trace_log(PassManager* mgr, const Pass* pass) {
-    if (m_enabled) {
-      auto mem_stats = get_mem_stats();
-      uint64_t after = mem_stats.vm_hwm;
-      uint64_t rss_after = mem_stats.vm_rss;
-      if (mgr != nullptr) {
-        mgr->set_metric("vm_hwm_after", after);
-        mgr->set_metric("vm_hwm_delta", after - m_before);
-        mgr->set_metric("vm_rss_after", rss_after);
-        mgr->set_metric("vm_rss_delta", rss_after - m_rss_before);
-      }
-      TRACE(STATS, 1, "VmHWM for %s was %s (%s over start).",
-            pass->name().c_str(), pretty_bytes(after).c_str(),
-            pretty_bytes(after - m_before).c_str());
-
-      int64_t rss_delta =
-          static_cast<int64_t>(rss_after) - static_cast<int64_t>(m_rss_before);
-      const char* rss_delta_sign = "+";
-      uint64_t rss_delta_abs = rss_delta;
-      if (rss_delta < 0) {
-        rss_delta_abs = -rss_delta;
-        rss_delta_sign = "-";
-      }
-
-      TRACE(STATS, 1, "VmRSS for %s went from %s to %s (%s%s).",
-            pass->name().c_str(), pretty_bytes(m_rss_before).c_str(),
-            pretty_bytes(rss_after).c_str(), rss_delta_sign,
-            pretty_bytes(rss_delta_abs).c_str());
-    }
-  }
-
- private:
-  uint64_t m_rss_before;
-  uint64_t m_before;
-  bool m_enabled;
 };
 
 class CheckUniqueDeobfuscatedNames {
@@ -691,17 +646,11 @@ bool is_run_hasher_after_each_pass(const ConfigFiles& conf,
   return hasher_args.get("run_after_each_pass", false).asBool();
 }
 
-AssessorConfig get_assessor_config(const ConfigFiles& conf,
-                                   const RedexOptions&) {
-  const Json::Value& assessor_args = conf.get_json_config()["assessor"];
-  AssessorConfig res;
-  res.run_after_each_pass =
-      assessor_args.get("run_after_each_pass", false).asBool();
-  res.run_initially = assessor_args.get("run_initially", false).asBool();
-  res.run_finally = assessor_args.get("run_finally", false).asBool();
-  res.run_sb_consistency =
-      assessor_args.get("run_sb_consistency", false).asBool();
-  return res;
+void ensure_editable_cfg(DexStoresVector& stores) {
+  auto temp_scope = build_class_scope(stores);
+  walk::parallel::code(temp_scope, [&](DexMethod*, IRCode& code) {
+    code.build_cfg(/* editable */ true, /*fresh_editable_build*/ false);
+  });
 }
 
 class AfterPassSizes {
@@ -860,11 +809,17 @@ class AfterPassSizes {
       close(STDERR_FILENO);
     }
 
+    // Ensure that aborts work correctly.
+    set_abort_if_not_this_thread();
+
     auto maybe_run = [&](const char* pass_name) {
       auto pass = m_mgr->find_pass(pass_name);
       if (pass != nullptr) {
         if (m_debug) {
           std::cerr << "Running " << pass_name << std::endl;
+        }
+        if (pass->is_editable_cfg_friendly()) {
+          ensure_editable_cfg(*stores);
         }
         pass->run_pass(*stores, *conf, *m_mgr);
       }
@@ -979,6 +934,84 @@ class TraceClassAfterEachPass {
 };
 
 static TraceClassAfterEachPass trace_cls;
+
+struct JemallocStats {
+  PassManager* pm;
+  const ConfigFiles& c;
+  bool full_stats{false};
+
+  JemallocStats(PassManager* pm, const ConfigFiles& c) : pm(pm), c(c) {
+    const auto* pmc =
+        c.get_global_config().get_config_by_name<PassManagerConfig>(
+            "pass_manager");
+    redex_assert(pmc != nullptr);
+
+    full_stats = pmc->jemalloc_full_stats;
+  }
+
+  void process_jemalloc_stats_for_pass(const Pass* pass, size_t run) {
+#ifdef USE_JEMALLOC
+    std::string key_base = "~jemalloc.";
+    auto cb = [&](const char* key, uint64_t value) {
+      pm->set_metric(key_base + key, value);
+    };
+    jemalloc_util::some_malloc_stats(cb);
+
+    if (full_stats) {
+      std::string name =
+          "jemalloc." + pass->name() + "." + std::to_string(run) + ".json";
+      auto filename = c.metafile(name);
+      std::ofstream ofs{filename};
+      ofs << jemalloc_util::get_malloc_stats();
+    }
+#endif
+  }
+};
+
+struct ViolationsTracking {
+  bool enabled{false};
+
+  explicit ViolationsTracking(bool enabled) : enabled(enabled) {}
+
+  struct Handler {
+    PassManager* pm;
+    std::unique_ptr<source_blocks::ViolationsHelper> vh;
+    Handler(PassManager* pm, DexStoresVector& stores)
+        : pm(pm),
+          vh(std::make_unique<source_blocks::ViolationsHelper>(
+              source_blocks::ViolationsHelper::Violation::kChainAndDom,
+              build_class_scope(stores),
+              10,
+              std::vector<std::string>{})) {}
+    ~Handler() {
+      if (vh != nullptr) {
+        ScopedMetrics sm(*pm);
+        auto scope = sm.scope("~violation~tracking");
+        vh->process(&sm);
+      }
+    }
+
+    Handler(const Handler&) = delete;
+    Handler& operator=(const Handler&) = delete;
+
+    Handler(Handler&& other) noexcept : pm(other.pm), vh(std::move(other.vh)) {}
+    Handler& operator=(Handler&& rhs) noexcept {
+      if (vh != nullptr) {
+        vh->silence();
+      }
+      vh = std::move(rhs.vh);
+      pm = rhs.pm;
+      return *this;
+    }
+  };
+
+  std::optional<Handler> maybe_track(PassManager* pm, DexStoresVector& stores) {
+    if (!enabled) {
+      return std::nullopt;
+    }
+    return Handler(pm, stores);
+  }
+};
 
 } // namespace
 
@@ -1146,6 +1179,11 @@ void PassManager::eval_passes(DexStoresVector& stores, ConfigFiles& conf) {
 }
 
 void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
+  const auto* pm_config =
+      conf.get_global_config().get_config_by_name<PassManagerConfig>(
+          "pass_manager");
+  redex_assert(pm_config != nullptr);
+
   auto profiler_info = ScopedCommandProfiling::maybe_info_from_env("");
   const Pass* profiler_info_pass = nullptr;
   if (profiler_info) {
@@ -1189,8 +1227,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       is_run_hasher_after_each_pass(conf, get_redex_options());
 
   // Retrieve the assessor's settings.
-  m_assessor_config = ::get_assessor_config(conf, get_redex_options());
-  const auto& assessor_config = this->get_assessor_config();
+  const auto* assessor_config =
+      conf.get_global_config().get_config_by_name<AssessorConfig>("assessor");
 
   // Retrieve the type checker's settings.
   CheckerConfig checker_conf{conf};
@@ -1208,6 +1246,9 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   check_unique_deobfuscated.run_initially(scope);
 
   VisualizerHelper graph_visualizer(conf);
+  ViolationsTracking violatios_tracking(
+      pm_config->violations_tracking ||
+      (assessor_config->run_after_each_pass && g_redex->instrument_mode));
 
   sanitizers::lsan_do_recoverable_leak_check();
 
@@ -1227,7 +1268,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   // For core loop legibility, have a lambda here.
 
   auto pre_pass_verifiers = [&](Pass* pass, size_t i) {
-    if (i == 0 && assessor_config.run_initially) {
+    if (i == 0 && assessor_config->run_initially) {
       ::run_assessor(*this, scope, /* initially */ true);
     }
   };
@@ -1266,8 +1307,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
     }
 
     bool run_hasher = run_hasher_after_each_pass;
-    bool run_assessor = assessor_config.run_after_each_pass ||
-                        (assessor_config.run_finally && i == size - 1);
+    bool run_assessor = assessor_config->run_after_each_pass ||
+                        (assessor_config->run_finally && i == size - 1);
     bool run_type_checker = checker_conf.run_after_pass(pass);
 
     if (run_hasher || run_assessor || run_type_checker ||
@@ -1301,6 +1342,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   JNINativeContextHelper jni_native_context_helper(
       scope, m_redex_options.jni_summary_path);
 
+  JemallocStats jemalloc_stats{this, conf};
+
   std::unordered_map<const Pass*, size_t> runs;
 
   /////////////////////
@@ -1327,6 +1370,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       auto scoped_command_all_prof = ScopedCommandProfiling::maybe_from_info(
           profiler_all_info, &pass->name());
       jemalloc_util::ScopedProfiling malloc_prof(m_malloc_profile_pass == pass);
+      auto maybe_track_violations =
+          violatios_tracking.maybe_track(this, stores);
       if (!pass->is_editable_cfg_friendly()) {
         // if this pass hasn't been updated to editable_cfg yet, clear_cfg. In
         // the future, once all editable cfg updates are done, this branch will
@@ -1340,10 +1385,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
         // Run build_cfg() in case any newly added methods by previous passes
         // are not built as editable cfg. But if editable cfg is already built,
         // no need to rebuild it.
-        auto temp_scope = build_class_scope(stores);
-        walk::parallel::code(temp_scope, [&](DexMethod*, IRCode& code) {
-          code.build_cfg(/* editable */ true, /*fresh_editable_build*/ false);
-        });
+        ensure_editable_cfg(stores);
         TRACE(PM, 2, "%s Pass uses editable cfg.\n", SHOW(pass->name()));
       }
       pass->run_pass(stores, conf, *this);
@@ -1363,6 +1405,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
     }
 
     scoped_mem_stats.trace_log(this, pass);
+
+    jemalloc_stats.process_jemalloc_stats_for_pass(pass, pass_run);
 
     sanitizers::lsan_do_recoverable_leak_check();
 

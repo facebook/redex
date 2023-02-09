@@ -398,68 +398,60 @@ bool PrimitiveAnalyzer::analyze_binop_lit(
   if (cst) {
     bool use_result_reg = false;
     switch (op) {
-    case OPCODE_ADD_INT_LIT16:
-    case OPCODE_ADD_INT_LIT8: {
-      // add-int/lit8 is the most common arithmetic instruction: about .29% of
+    case OPCODE_ADD_INT_LIT: {
+      // add-int/lit is the most common arithmetic instruction: about .29% of
       // all instructions. All other arithmetic instructions are less than
       // .05%
       result = (*cst) + lit;
       break;
     }
-    case OPCODE_RSUB_INT:
-    case OPCODE_RSUB_INT_LIT8: {
+    case OPCODE_RSUB_INT_LIT: {
       result = lit - (*cst);
       break;
     }
-    case OPCODE_MUL_INT_LIT16:
-    case OPCODE_MUL_INT_LIT8: {
+    case OPCODE_MUL_INT_LIT: {
       result = (*cst) * lit;
       break;
     }
-    case OPCODE_DIV_INT_LIT16:
-    case OPCODE_DIV_INT_LIT8: {
+    case OPCODE_DIV_INT_LIT: {
       if (lit != 0) {
         result = (*cst) / lit;
       }
       use_result_reg = true;
       break;
     }
-    case OPCODE_REM_INT_LIT16:
-    case OPCODE_REM_INT_LIT8: {
+    case OPCODE_REM_INT_LIT: {
       if (lit != 0) {
         result = (*cst) % lit;
       }
       use_result_reg = true;
       break;
     }
-    case OPCODE_AND_INT_LIT16:
-    case OPCODE_AND_INT_LIT8: {
+    case OPCODE_AND_INT_LIT: {
       result = (*cst) & lit;
       break;
     }
-    case OPCODE_OR_INT_LIT16:
-    case OPCODE_OR_INT_LIT8: {
+    case OPCODE_OR_INT_LIT: {
       result = (*cst) | lit;
       break;
     }
-    case OPCODE_XOR_INT_LIT16:
-    case OPCODE_XOR_INT_LIT8: {
+    case OPCODE_XOR_INT_LIT: {
       result = (*cst) ^ lit;
       break;
     }
     // as in https://source.android.com/devices/tech/dalvik/dalvik-bytecode
     // the following operations have the second operand masked.
-    case OPCODE_SHL_INT_LIT8: {
+    case OPCODE_SHL_INT_LIT: {
       uint32_t ucst = *cst;
       uint32_t uresult = ucst << (lit & 0x1f);
       result = (int32_t)uresult;
       break;
     }
-    case OPCODE_SHR_INT_LIT8: {
+    case OPCODE_SHR_INT_LIT: {
       result = (*cst) >> (lit & 0x1f);
       break;
     }
-    case OPCODE_USHR_INT_LIT8: {
+    case OPCODE_USHR_INT_LIT: {
       uint32_t ucst = *cst;
       // defined in dalvik spec
       result = ucst >> (lit & 0x1f);
@@ -778,6 +770,47 @@ bool BoxedBooleanAnalyzer::analyze_invoke(
   }
 }
 
+bool StringAnalyzer::analyze_invoke(const IRInstruction* insn,
+                                    ConstantEnvironment* env) {
+  DexMethod* method =
+      resolve_method(insn->get_method(), opcode_to_search(insn));
+  if (method == nullptr) {
+    return false;
+  }
+
+  auto maybe_string = [&](int arg_idx) -> const DexString* {
+    auto value = env->get(insn->src(arg_idx));
+    if (value.is_top() || value.is_bottom()) {
+      return nullptr;
+    }
+    if (const auto& string_value_opt = value.maybe_get<StringDomain>()) {
+      return *string_value_opt->get_constant();
+    }
+    return nullptr;
+  };
+
+  if (method == method::java_lang_String_equals()) {
+    always_assert(insn->srcs_size() == 2);
+    if (const auto* arg0 = maybe_string(0)) {
+      if (const auto* arg1 = maybe_string(1)) {
+        // pointer comparison is okay, DexStrings are internalized
+        int64_t res = arg0 == arg1;
+        env->set(RESULT_REGISTER, SignedConstantDomain(res));
+        return true;
+      }
+    }
+  } else if (method == method::java_lang_String_hashCode()) {
+    always_assert(insn->srcs_size() == 1);
+    if (const auto* arg0 = maybe_string(0)) {
+      int64_t res = arg0->java_hashcode();
+      env->set(RESULT_REGISTER, SignedConstantDomain(res));
+      return true;
+    }
+  }
+
+  return false;
+}
+
 ImmutableAttributeAnalyzerState::Initializer&
 ImmutableAttributeAnalyzerState::add_initializer(DexMethod* initialize_method,
                                                  DexMethod* attr) {
@@ -904,7 +937,10 @@ bool ImmutableAttributeAnalyzer::analyze_iget(
   if (!field) {
     field = static_cast<DexField*>(field_ref);
   }
-  if (!state->attribute_fields.count(field)) {
+
+  // Immutable state should not be updated in parallel with analysis.
+
+  if (!state->attribute_fields.count_unsafe(field)) {
     return false;
   }
   auto this_domain = env->get(insn->src(0));
@@ -942,9 +978,12 @@ bool ImmutableAttributeAnalyzer::analyze_invoke(
     // Example: Integer.valueOf(I) is an external method.
     method = static_cast<DexMethod*>(method_ref);
   }
-  if (state->method_initializers.count(method)) {
+
+  // Immutable state should not be updated in parallel with analysis.
+
+  if (state->method_initializers.count_unsafe(method)) {
     return analyze_method_initialization(state, insn, env, method);
-  } else if (state->attribute_methods.count(method)) {
+  } else if (state->attribute_methods.count_unsafe(method)) {
     return analyze_method_attr(state, insn, env, method);
   }
   return false;

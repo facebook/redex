@@ -505,7 +505,7 @@ TEST_F(CopyPropagationTest, loopNoChange) {
 
       (:loop)
       (if-eq v0 v1 :end)
-      (add-int/lit8 v0 v0 1)
+      (add-int/lit v0 v0 1)
       (goto :loop)
 
       (:end)
@@ -524,7 +524,7 @@ TEST_F(CopyPropagationTest, loopNoChange) {
 
       (:loop)
       (if-eq v0 v1 :end)
-      (add-int/lit8 v0 v0 1)
+      (add-int/lit v0 v0 1)
       (goto :loop)
 
       (:end)

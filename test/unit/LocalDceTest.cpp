@@ -585,6 +585,28 @@ TEST_F(LocalDceTryTest, invoked_static_method_with_pure_external_barrier) {
   EXPECT_CODE_EQ(ircode, expected_code.get());
 }
 
+TEST_F(LocalDceTryTest, new_instances_infinite_loop) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (new-instance "Ljava/lang/Object;")
+      (move-result-pseudo-object v0)
+      (:loop)
+      (goto :loop)
+    )
+  )");
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (:loop)
+      (goto :loop)
+    )
+  )");
+
+  Scope scope{type_class(type::java_lang_Object())};
+  IRCode* ircode = code.get();
+  dce(ircode);
+  EXPECT_CODE_EQ(ircode, expected_code.get());
+}
+
 TEST_F(LocalDceTryTest, normalize_new_instances) {
   auto code = assembler::ircode_from_string(R"(
     (

@@ -7,6 +7,8 @@
 
 #include "Shrinker.h"
 
+#include <fstream>
+
 #include "ConstructorParams.h"
 #include "LinearScan.h"
 #include "RandomForest.h"
@@ -150,11 +152,11 @@ constant_propagation::Transform::Stats Shrinker::constant_propagation(
       constant_propagation::ConstantPrimitiveAndBoxedAnalyzer(
           &m_immut_analyzer_state, &m_immut_analyzer_state,
           constant_propagation::EnumFieldAnalyzerState::get(),
-          constant_propagation::BoxedBooleanAnalyzerState::get(),
+          constant_propagation::BoxedBooleanAnalyzerState::get(), nullptr,
           constant_propagation::ApiLevelAnalyzerState::get(m_min_sdk), nullptr),
       /* imprecise_switches */ true);
   fp_iter.run(initial_env);
-  constant_propagation::Transform tf(config);
+  constant_propagation::Transform tf(config, &m_runtime_cache);
   tf.apply(fp_iter, constant_propagation::WholeProgramState(), code->cfg(),
            &m_xstores, is_static, declaring_type, proto);
   return tf.get_stats();
@@ -223,8 +225,10 @@ void Shrinker::shrink_code(
       code->build_cfg(/* editable */ true);
     }
 
-    const_prop_stats =
-        constant_propagation(is_static, declaring_type, proto, code, {}, {});
+    constant_propagation::Transform::Config config;
+    config.pure_methods = &m_pure_methods;
+    const_prop_stats = constant_propagation(is_static, declaring_type, proto,
+                                            code, {}, config);
   }
 
   if (m_config.run_cse) {

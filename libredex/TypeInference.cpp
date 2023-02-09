@@ -86,6 +86,32 @@ std::ostream& operator<<(std::ostream& output, const IRType& type) {
 
 namespace type_inference {
 
+bool is_safely_usable_in_ifs(IRType type) {
+  switch (type) {
+  case IRType::TOP:
+  case IRType::SCALAR:
+  case IRType::SCALAR1:
+    // This type is the result of joins of very different types.
+    // TODO: Actually, our current type-inference implementation introduces
+    // scalar values also for AGET, while the actual Android verifier tracks
+    // int or float separately. Thus we might be giving up a bit too often
+    // here.
+    return false;
+  case IRType::ZERO:
+  case IRType::CONST:
+  case IRType::CONST1:
+  case IRType::REFERENCE:
+  case IRType::INT:
+  case IRType::FLOAT:
+  case IRType::LONG1:
+  case IRType::DOUBLE1:
+    // This type is the result of joins producing a consistent type.
+    return true;
+  default:
+    not_reached_log("unexpected type %s", SHOW(type));
+  }
+}
+
 TypeLattice type_lattice(
     {BOTTOM, ZERO, CONST, CONST1, CONST2, REFERENCE, INT, FLOAT, LONG1, LONG2,
      DOUBLE1, DOUBLE2, SCALAR, SCALAR1, SCALAR2, TOP},
@@ -524,6 +550,18 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   }
   case OPCODE_CONST_CLASS: {
     set_reference(current_state, RESULT_REGISTER, type::java_lang_Class());
+    break;
+  }
+  case OPCODE_CONST_METHOD_HANDLE: {
+    always_assert_log(false,
+                      "TypeInference::analyze_instruction does not support "
+                      "const-method-handle yet");
+    break;
+  }
+  case OPCODE_CONST_METHOD_TYPE: {
+    always_assert_log(false,
+                      "TypeInference::analyze_instruction does not support "
+                      "const-method-type yet");
     break;
   }
   case OPCODE_MONITOR_ENTER:
@@ -1037,29 +1075,21 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     set_double(current_state, insn->dest());
     break;
   }
-  case OPCODE_ADD_INT_LIT16:
-  case OPCODE_RSUB_INT:
-  case OPCODE_MUL_INT_LIT16:
-  case OPCODE_AND_INT_LIT16:
-  case OPCODE_OR_INT_LIT16:
-  case OPCODE_XOR_INT_LIT16:
-  case OPCODE_ADD_INT_LIT8:
-  case OPCODE_RSUB_INT_LIT8:
-  case OPCODE_MUL_INT_LIT8:
-  case OPCODE_AND_INT_LIT8:
-  case OPCODE_OR_INT_LIT8:
-  case OPCODE_XOR_INT_LIT8:
-  case OPCODE_SHL_INT_LIT8:
-  case OPCODE_SHR_INT_LIT8:
-  case OPCODE_USHR_INT_LIT8: {
+  case OPCODE_ADD_INT_LIT:
+  case OPCODE_RSUB_INT_LIT:
+  case OPCODE_MUL_INT_LIT:
+  case OPCODE_AND_INT_LIT:
+  case OPCODE_OR_INT_LIT:
+  case OPCODE_XOR_INT_LIT:
+  case OPCODE_SHL_INT_LIT:
+  case OPCODE_SHR_INT_LIT:
+  case OPCODE_USHR_INT_LIT: {
     refine_integer(current_state, insn->src(0));
     set_integer(current_state, insn->dest());
     break;
   }
-  case OPCODE_DIV_INT_LIT16:
-  case OPCODE_REM_INT_LIT16:
-  case OPCODE_DIV_INT_LIT8:
-  case OPCODE_REM_INT_LIT8: {
+  case OPCODE_DIV_INT_LIT:
+  case OPCODE_REM_INT_LIT: {
     refine_integer(current_state, insn->src(0));
     set_integer(current_state, RESULT_REGISTER);
     break;
@@ -1099,7 +1129,7 @@ void TypeInference::traceState(TypeEnvironment* state) const {
 void TypeInference::populate_type_environments() {
   // We reserve enough space for the map in order to avoid repeated rehashing
   // during the computation.
-  m_type_envs.reserve(m_cfg.blocks().size() * 16);
+  m_type_envs.reserve(m_cfg.num_blocks() * 16);
   for (cfg::Block* block : m_cfg.blocks()) {
     TypeEnvironment current_state = get_entry_state_at(block);
     for (auto& mie : InstructionIterable(block)) {

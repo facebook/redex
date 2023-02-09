@@ -140,6 +140,7 @@ struct ProguardConfig : public Configurable {
 
   std::vector<std::string> blocklist;
   bool disable_default_blocklist{false};
+  bool fail_on_unknown_commands{true};
 };
 
 struct PassManagerConfig : public Configurable {
@@ -151,6 +152,25 @@ struct PassManagerConfig : public Configurable {
   }
 
   std::unordered_map<std::string, std::string> pass_aliases;
+  bool jemalloc_full_stats{false};
+  bool violations_tracking{false};
+};
+
+struct ResourceConfig : public Configurable {
+  void bind_config() override;
+
+  std::string get_config_name() override { return "ResourceConfig"; }
+  std::string get_config_doc() override {
+    return "Options used by many resource optimization passes or global "
+           "cleanup steps.";
+  }
+
+  // Outer R class names that have been customized to hold extra data (which
+  // need special treatment when remapping constants). Not used by all apps.
+  std::unordered_set<std::string> customized_r_classes;
+  // Type names in the resource table (example: "id") which should enable
+  // canonical offsets for entries/values.
+  std::unordered_set<std::string> canonical_entry_types;
 };
 
 struct DexOutputConfig : public Configurable {

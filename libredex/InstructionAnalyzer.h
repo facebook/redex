@@ -8,6 +8,7 @@
 #pragma once
 
 #include <functional>
+#include <type_traits>
 #include <utility>
 
 #include "IRInstruction.h"
@@ -154,26 +155,23 @@ class InstructionAnalyzerCombiner final {
   // All Analyzers should have the same Env type.
   using Env = typename std::common_type<typename Analyzers::Env...>::type;
 
-  ~InstructionAnalyzerCombiner() {
-    static_assert(
-        template_util::all_true<(
-            std::is_base_of<InstructionAnalyzerBase<Analyzers,
-                                                    typename Analyzers::Env,
-                                                    typename Analyzers::State>,
-                            Analyzers>::value)...>::value,
-        "Not all analyses inherit from the right instance of "
-        "InstructionAnalyzerBase!");
-  }
+  static_assert(
+      std::conjunction_v<
+          std::is_base_of<InstructionAnalyzerBase<Analyzers,
+                                                  typename Analyzers::Env,
+                                                  typename Analyzers::State>,
+                          Analyzers>...>,
+      "Not all analyses inherit from the right instance of "
+      "InstructionAnalyzerBase!");
 
   explicit InstructionAnalyzerCombiner(typename Analyzers::State... states)
       : m_states(std::make_tuple(states...)) {}
 
   // If all sub-analyzers have a default-constructible state, then this
   // combined analyzer is default-constructible.
-  template <bool B = template_util::all_true<
-                (std::is_default_constructible<
-                    typename Analyzers::State>::value)...>::value,
-            typename = typename std::enable_if_t<B>>
+  template <bool Enabled = std::conjunction_v<
+                std::is_default_constructible<typename Analyzers::State>...>,
+            typename = std::enable_if_t<Enabled>>
   InstructionAnalyzerCombiner()
       : m_states(std::make_tuple(typename Analyzers::State()...)) {}
 
@@ -308,29 +306,23 @@ class InstructionAnalyzerCombiner final {
     case OPCODE_DIV_DOUBLE:
     case OPCODE_REM_DOUBLE:
       return analyze_binop(std::index_sequence_for<Analyzers...>{}, insn, env);
-    case OPCODE_ADD_INT_LIT16:
-    case OPCODE_RSUB_INT:
-    case OPCODE_MUL_INT_LIT16:
-    case OPCODE_DIV_INT_LIT16:
-    case OPCODE_REM_INT_LIT16:
-    case OPCODE_AND_INT_LIT16:
-    case OPCODE_OR_INT_LIT16:
-    case OPCODE_XOR_INT_LIT16:
-    case OPCODE_ADD_INT_LIT8:
-    case OPCODE_RSUB_INT_LIT8:
-    case OPCODE_MUL_INT_LIT8:
-    case OPCODE_DIV_INT_LIT8:
-    case OPCODE_REM_INT_LIT8:
-    case OPCODE_AND_INT_LIT8:
-    case OPCODE_OR_INT_LIT8:
-    case OPCODE_XOR_INT_LIT8:
-    case OPCODE_SHL_INT_LIT8:
-    case OPCODE_SHR_INT_LIT8:
-    case OPCODE_USHR_INT_LIT8:
+    case OPCODE_ADD_INT_LIT:
+    case OPCODE_RSUB_INT_LIT:
+    case OPCODE_MUL_INT_LIT:
+    case OPCODE_DIV_INT_LIT:
+    case OPCODE_REM_INT_LIT:
+    case OPCODE_AND_INT_LIT:
+    case OPCODE_OR_INT_LIT:
+    case OPCODE_XOR_INT_LIT:
+    case OPCODE_SHL_INT_LIT:
+    case OPCODE_SHR_INT_LIT:
+    case OPCODE_USHR_INT_LIT:
       return analyze_binop_lit(
           std::index_sequence_for<Analyzers...>{}, insn, env);
     case OPCODE_CONST:
     case OPCODE_CONST_WIDE:
+    case OPCODE_CONST_METHOD_HANDLE:
+    case OPCODE_CONST_METHOD_TYPE:
       return analyze_const(std::index_sequence_for<Analyzers...>{}, insn, env);
     case OPCODE_CONST_STRING:
       return analyze_const_string(

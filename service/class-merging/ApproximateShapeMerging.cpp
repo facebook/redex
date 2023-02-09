@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <climits>
+#include <fstream>
 
 #include "ConfigFiles.h"
 #include "Trace.h"

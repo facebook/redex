@@ -22,10 +22,6 @@ BuilderTransform::BuilderTransform(
     : m_type_system(type_system),
       m_root(root),
       m_inliner_config(inliner_config) {
-  auto concurrent_resolver = [&](DexMethodRef* method, MethodSearch search) {
-    return resolve_method(method, search, m_concurrent_resolved_refs);
-  };
-
   std::unordered_set<DexMethod*> no_default_inlinables;
   // customize shrinking options
   m_inliner_config.shrinker = shrinker::ShrinkerConfig();
@@ -37,7 +33,7 @@ BuilderTransform::BuilderTransform(
   int min_sdk = 0;
   m_inliner = std::unique_ptr<MultiMethodInliner>(new MultiMethodInliner(
       scope, init_classes_with_side_effects, stores, no_default_inlinables,
-      concurrent_resolver, m_inliner_config, min_sdk,
+      std::ref(m_concurrent_method_resolver), m_inliner_config, min_sdk,
       MultiMethodInlinerMode::None));
 }
 

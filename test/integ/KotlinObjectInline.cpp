@@ -75,7 +75,13 @@ TEST_F(KotlinLambdaOptTest, MethodHasNoEqDefined) {
       ASSERT_EQ(outer_classes.count(cls), 1);
     }
   }
-  ASSERT_EQ(static_calls, 2);
+  // invoke-static {v2},
+  // Lcom/facebook/redextest/objtest/CompanionClass;.getSomeStr invoke-static
+  // {v2},
+  // Lcom/facebook/redextest/objtest/AnotherCompanionClass;.getSomeOtherStr
+  //  invoke-static {v2},
+  //  Lcom/facebook/redextest/objtest/AnotherCompanionClass;.funX
+  ASSERT_EQ(static_calls, 3);
 }
 
 TEST_F(KotlinLambdaOptTest, MethodCollideTest) {

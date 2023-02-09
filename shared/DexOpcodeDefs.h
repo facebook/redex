@@ -182,6 +182,8 @@ enum OpcodeFormat : uint8_t {
   OP(INVOKE_POLYMORPHIC_RANGE, 0xfb, f4rcc, "invoke-polymorphic-range") \
   OP(INVOKE_CUSTOM, 0xfc, f35c, "invoke-custom")                        \
   OP(INVOKE_CUSTOM_RANGE, 0xfd, f3rc, "invoke-custom-range")            \
+  OP(CONST_METHOD_HANDLE, 0xfe, f21c_d, "const-method-handle")          \
+  OP(CONST_METHOD_TYPE, 0xff, f21c_d, "const-method-type")              \
   OP(NEG_INT, 0x7b, f12x, "neg-int")                                    \
   OP(NOT_INT, 0x7c, f12x, "not-int")                                    \
   OP(NEG_LONG, 0x7d, f12x, "neg-long")                                  \

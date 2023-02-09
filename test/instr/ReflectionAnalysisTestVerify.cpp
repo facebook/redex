@@ -164,51 +164,68 @@ TEST_F(PreVerify, TestAbstractDomain) {
 }
 
 TEST_F(PreVerify, JoinSameClassType) {
+  // clang-format off
   test_analysis(
       classes, "getClassJoinSame",
-      "MOVE_RESULT_OBJECT v1 {4294967294, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION)}\n\
-GOTO  {1, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION);4294967294, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION)}\n\
-IOPCODE_MOVE_RESULT_PSEUDO_OBJECT v1 {4294967294, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION)}\n\
-INVOKE_VIRTUAL v1, Ljava/lang/Class;.getName:()Ljava/lang/String; {1, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION);4294967294, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION)}\n\
-MOVE_RESULT_OBJECT v1 {1, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION)}\n");
+      "INVOKE_STATIC v1, Ljava/lang/Class;.forName:(Ljava/lang/String;)Ljava/lang/Class; {4294967294, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION)}\n"
+      "MOVE_RESULT_OBJECT v1 {1, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION);4294967294, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION)}\n"
+      "GOTO  {1, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION);4294967294, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION)}\n"
+      "CONST_CLASS Lcom/facebook/redextest/ReflectionAnalysisTest$Foo; {4294967294, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION)}\n"
+      "IOPCODE_MOVE_RESULT_PSEUDO_OBJECT v1 {1, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION);4294967294, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION)}\n"
+      "INVOKE_VIRTUAL v1, Ljava/lang/Class;.getName:()Ljava/lang/String; {1, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION)}\n");
+  // clang-format on
 }
 
 TEST_F(PreVerify, JoinDifferentClassType) {
+  // clang-format off
   test_analysis(
       classes, "getClassJoinDifferent",
-      "MOVE_RESULT_OBJECT v1 {4294967294, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION)}\n\
-GOTO  {1, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION);4294967294, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION)}\n\
-MOVE_RESULT_OBJECT v1 {4294967294, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Bar;}(REFLECTION)}\n\
-INVOKE_VIRTUAL v1, Ljava/lang/Class;.getName:()Ljava/lang/String; {1, CLASS{}(REFLECTION);4294967294, CLASS{}(REFLECTION)}\n\
-MOVE_RESULT_OBJECT v1 {1, CLASS{}(REFLECTION)}\n");
+      "INVOKE_STATIC v1, Ljava/lang/Class;.forName:(Ljava/lang/String;)Ljava/lang/Class; {4294967294, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION)}\n"
+      "MOVE_RESULT_OBJECT v1 {1, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION);4294967294, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION)}\n"
+      "GOTO  {1, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION);4294967294, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION)}\n"
+      "INVOKE_STATIC v1, Ljava/lang/Class;.forName:(Ljava/lang/String;)Ljava/lang/Class; {4294967294, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Bar;}(REFLECTION)}\n"
+      "MOVE_RESULT_OBJECT v1 {1, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Bar;}(REFLECTION);4294967294, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Bar;}(REFLECTION)}\n"
+      "INVOKE_VIRTUAL v1, Ljava/lang/Class;.getName:()Ljava/lang/String; {1, CLASS{}(REFLECTION)}\n");
+  // clang-format on
 }
 
 TEST_F(PreVerify, JoinClassTypeWithEmpty) {
+  // clang-format off
   test_analysis(
       classes, "getClassJoinEmpty",
-      "MOVE_RESULT_OBJECT v1 {4294967294, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION)}\n\
-INVOKE_VIRTUAL v1, Ljava/lang/Class;.getPackage:()Ljava/lang/Package; {1, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION);4294967294, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION)}\n\
-INVOKE_VIRTUAL v1, Ljava/lang/Class;.getName:()Ljava/lang/String; {1, CLASS{}}\n\
-MOVE_RESULT_OBJECT v1 {1, CLASS{}}\n");
+      "INVOKE_STATIC v1, Ljava/lang/Class;.forName:(Ljava/lang/String;)Ljava/lang/Class; {4294967294, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION)}\n"
+      "MOVE_RESULT_OBJECT v1 {1, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION);4294967294, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION)}\n"
+      "INVOKE_VIRTUAL v1, Ljava/lang/Class;.getPackage:()Ljava/lang/Package; {1, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION)}\n"
+      "INVOKE_VIRTUAL v1, Ljava/lang/Class;.getName:()Ljava/lang/String; {1, CLASS{}}\n");
+  // clang-format on
 }
 
 TEST_F(PreVerify, JoinSameString) {
+  // clang-format off
   test_analysis(
       classes, "getStringJoinSame",
-      "MOVE_RESULT_OBJECT v1 {4294967294, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION)}\n\
-RETURN_OBJECT v1 {1, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION);4294967294, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION)}\n");
+      "INVOKE_STATIC v1, Ljava/lang/Class;.forName:(Ljava/lang/String;)Ljava/lang/Class; {4294967294, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION)}\n"
+      "MOVE_RESULT_OBJECT v1 {1, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION);4294967294, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION)}\n"
+      "RETURN_OBJECT v1 {1, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION);4294967294, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION)}\n");
+  // clang-format on
 }
 
 TEST_F(PreVerify, JoinDifferentString) {
+  // clang-format off
   test_analysis(classes, "getStringJoinDifferent",
-                "MOVE_RESULT_OBJECT v1 {4294967294, CLASS{}(REFLECTION)}\n\
-RETURN_OBJECT v1 {1, CLASS{}(REFLECTION);4294967294, CLASS{}(REFLECTION)}\n");
+                "INVOKE_STATIC v1, Ljava/lang/Class;.forName:(Ljava/lang/String;)Ljava/lang/Class; {4294967294, CLASS{}(REFLECTION)}\n"
+                "MOVE_RESULT_OBJECT v1 {1, CLASS{}(REFLECTION);4294967294, CLASS{}(REFLECTION)}\n"
+                "RETURN_OBJECT v1 {1, CLASS{}(REFLECTION);4294967294, CLASS{}(REFLECTION)}\n");
+  // clang-format on
 }
 
 TEST_F(PreVerify, JoinStringWithEmpty) {
+  // clang-format off
   test_analysis(classes, "getStringJoinEmpty",
-                "MOVE_RESULT_OBJECT v1 {4294967294, CLASS{}(REFLECTION)}\n\
-RETURN_OBJECT v1 {1, CLASS{}(REFLECTION);4294967294, CLASS{}(REFLECTION)}\n");
+                "INVOKE_STATIC v1, Ljava/lang/Class;.forName:(Ljava/lang/String;)Ljava/lang/Class; {4294967294, CLASS{}(REFLECTION)}\n"
+                "MOVE_RESULT_OBJECT v1 {1, CLASS{}(REFLECTION);4294967294, CLASS{}(REFLECTION)}\n"
+                "RETURN_OBJECT v1 {1, CLASS{}(REFLECTION);4294967294, CLASS{}(REFLECTION)}\n");
+  // clang-format on
 }
 
 TEST_F(PreVerify, MethodWithParam) {

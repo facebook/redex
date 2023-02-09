@@ -17,6 +17,7 @@
 static const char* dex_v35_header_string = "dex\n035";
 static const char* dex_v37_header_string = "dex\n037";
 static const char* dex_v38_header_string = "dex\n038";
+static const char* dex_v39_header_string = "dex\n039";
 
 void get_dex_map_items(ddump_data* rd,
                        unsigned int* _count,
@@ -69,6 +70,8 @@ void open_dex_file(const char* filename, ddump_data* rd) {
       memcmp(rd->dexh->magic, dex_v37_header_string, sizeof(rd->dexh->magic)) !=
           0 &&
       memcmp(rd->dexh->magic, dex_v38_header_string, sizeof(rd->dexh->magic)) !=
+          0 &&
+      memcmp(rd->dexh->magic, dex_v39_header_string, sizeof(rd->dexh->magic)) !=
           0) {
     fprintf(stderr, "Bad dex magic, bailing\n");
     exit(1);

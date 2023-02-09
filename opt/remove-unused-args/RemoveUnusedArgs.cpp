@@ -66,12 +66,14 @@ RemoveArgs::PassStats RemoveArgs::run(ConfigFiles& config) {
   pass_stats.method_params_removed_count =
       method_stats.method_params_removed_count;
   pass_stats.methods_updated_count = method_stats.methods_updated_count;
-  pass_stats.callsite_args_removed_count = update_callsites();
+  auto callsites_stats = update_callsites();
+  pass_stats.callsite_args_removed_count = callsites_stats.first;
   pass_stats.method_results_removed_count =
       method_stats.method_results_removed_count;
   pass_stats.method_protos_reordered_count =
       method_stats.method_protos_reordered_count;
   pass_stats.local_dce_stats = method_stats.local_dce_stats;
+  pass_stats.local_dce_stats += callsites_stats.second;
   return pass_stats;
 }
 
@@ -82,16 +84,16 @@ RemoveArgs::PassStats RemoveArgs::run(ConfigFiles& config) {
 void RemoveArgs::gather_results_used() {
   walk::parallel::code(m_scope, [&result_used = m_result_used](DexMethod*,
                                                                IRCode& code) {
-    const auto ii = InstructionIterable(code);
-    for (auto it = ii.begin(); it != ii.end(); it++) {
+    always_assert(code.editable_cfg_built());
+    auto& cfg = code.cfg();
+    auto ii = InstructionIterable(cfg);
+    for (auto it = ii.begin(); it != ii.end(); ++it) {
       auto insn = it->insn;
       if (!opcode::is_an_invoke(insn->opcode())) {
         continue;
       }
-      const auto next = std::next(it);
-      always_assert(next != ii.end());
-      const auto peek = next->insn;
-      if (!opcode::is_a_move_result(peek->opcode())) {
+      auto move_result = cfg.move_result_of(it);
+      if (move_result.is_end()) {
         continue;
       }
       auto method =
@@ -195,7 +197,8 @@ void RemoveArgs::compute_reordered_protos(const mog::Graph& override_graph) {
         if (code == nullptr) {
           return;
         }
-        for (const auto& mie : InstructionIterable(code)) {
+        always_assert(code->editable_cfg_built());
+        for (const auto& mie : InstructionIterable(code->cfg())) {
           if (mie.insn->has_method()) {
             auto callee = mie.insn->get_method();
             auto callee_proto = callee->get_proto();
@@ -252,9 +255,9 @@ void RemoveArgs::compute_reordered_protos(const mog::Graph& override_graph) {
 std::deque<uint16_t> compute_live_args(
     DexMethod* method,
     size_t num_args,
-    std::vector<IRInstruction*>* dead_insns) {
+    std::vector<cfg::InstructionIterator>* dead_insns) {
   auto code = method->get_code();
-  code->build_cfg(/* editable */ false);
+  always_assert(code->editable_cfg_built());
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   LivenessFixpointIterator fixpoint_iter(cfg);
@@ -280,7 +283,8 @@ std::deque<uint16_t> compute_live_args(
         // Mark live args live, and always mark the "this" arg live.
         live_arg_idxs.push_front(last_arg_idx);
       } else {
-        dead_insns->emplace_back(it->insn);
+        dead_insns->emplace_back(
+            entry_block->to_cfg_instruction_iterator(--(it.base())));
       }
       last_arg_idx--;
     }
@@ -432,7 +436,7 @@ static void compute_dead_insns_and_remove_result(
     const mog::Graph& override_graph,
     const ConcurrentSet<DexMethod*>& results_used,
     std::deque<uint16_t>* live_arg_idxs,
-    std::vector<IRInstruction*>* dead_insns,
+    std::vector<cfg::InstructionIterator>* dead_insns,
     bool* remove_result) {
   if (method->get_code() == nullptr) {
     return;
@@ -482,7 +486,7 @@ static std::deque<uint16_t> update_method_body_for_reordered_proto(
   std::vector<LoadParamInfo> load_param_infos;
   boost::optional<std::vector<LoadParamInfo>::iterator> load_param_infos_it;
   if (method->get_code()) {
-    auto param_insns = method->get_code()->get_param_instructions();
+    auto param_insns = method->get_code()->cfg().get_param_instructions();
     for (const auto& mie : InstructionIterable(param_insns)) {
       load_param_infos.push_back(
           {mie.insn->opcode(), mie.insn->dest(), mie.insn});
@@ -521,6 +525,27 @@ static std::deque<uint16_t> update_method_body_for_reordered_proto(
   return idxs;
 }
 
+namespace {
+
+void run_cleanup(DexMethod* method,
+                 cfg::ControlFlowGraph& cfg,
+                 const init_classes::InitClassesWithSideEffects*
+                     init_classes_with_side_effects,
+                 std::mutex& mutex,
+                 LocalDce::Stats& stats) {
+  std::unordered_set<DexMethodRef*> pure_methods;
+  auto local_dce = LocalDce(init_classes_with_side_effects, pure_methods);
+  local_dce.dce(cfg, /* normalize_new_instances */ true, method->get_class());
+  const auto& local_stats = local_dce.get_stats();
+  if (local_stats.dead_instruction_count |
+      local_stats.unreachable_instruction_count) {
+    std::lock_guard<std::mutex> lock(mutex);
+    stats += local_stats;
+  }
+}
+
+} // namespace
+
 /**
  * For methods that have unused arguments, record live argument registers.
  */
@@ -530,7 +555,7 @@ RemoveArgs::MethodStats RemoveArgs::update_method_protos(
   // Phase 1: Find (in parallel) all methods that we can potentially update
 
   struct Entry {
-    std::vector<IRInstruction*> dead_insns;
+    std::vector<cfg::InstructionIterator> dead_insns;
     std::deque<uint16_t> live_arg_idxs;
     bool remove_result;
     DexProto* original_proto;
@@ -539,7 +564,7 @@ RemoveArgs::MethodStats RemoveArgs::update_method_protos(
   ConcurrentMap<DexMethod*, Entry> unordered_entries;
   walk::parallel::methods(m_scope, [&](DexMethod* method) {
     std::deque<uint16_t> live_arg_idxs;
-    std::vector<IRInstruction*> dead_insns;
+    std::vector<cfg::InstructionIterator> dead_insns;
     bool remove_result{false};
     DexProto* reordered_proto{nullptr};
 
@@ -613,16 +638,20 @@ RemoveArgs::MethodStats RemoveArgs::update_method_protos(
       const Entry& entry = p.second;
 
       if (!entry.dead_insns.empty()) {
+        always_assert(method->get_code()->editable_cfg_built());
+        auto& cfg = method->get_code()->cfg();
         // We update the method signature, so we must remove unused
         // OPCODE_LOAD_PARAM_* to satisfy IRTypeChecker.
-        for (auto dead_insn : entry.dead_insns) {
-          method->get_code()->remove_opcode(dead_insn);
+        for (const auto& dead_insn : entry.dead_insns) {
+          cfg.remove_insn(dead_insn);
         }
         m_live_arg_idxs_map.emplace(method, entry.live_arg_idxs);
       }
 
       if (entry.remove_result) {
-        for (const auto& mie : InstructionIterable(method->get_code())) {
+        always_assert(method->get_code()->editable_cfg_built());
+        auto& cfg = method->get_code()->cfg();
+        for (const auto& mie : InstructionIterable(cfg)) {
           auto insn = mie.insn;
           if (opcode::is_a_return_value(insn->opcode())) {
             insn->set_opcode(OPCODE_RETURN_VOID);
@@ -630,17 +659,11 @@ RemoveArgs::MethodStats RemoveArgs::update_method_protos(
           }
         }
 
-        std::unordered_set<DexMethodRef*> pure_methods;
-        auto local_dce =
-            LocalDce(&m_init_classes_with_side_effects, pure_methods);
-        local_dce.dce(method->get_code(), /* normalize_new_instances */ true,
-                      method->get_class());
-        const auto& stats = local_dce.get_stats();
-        if (stats.dead_instruction_count |
-            stats.unreachable_instruction_count) {
-          std::lock_guard<std::mutex> lock(local_dce_stats_mutex);
-          local_dce_stats += stats;
-        }
+        run_cleanup(method,
+                    cfg,
+                    &m_init_classes_with_side_effects,
+                    local_dce_stats_mutex,
+                    local_dce_stats);
       }
 
       if (entry.reordered_proto != nullptr) {
@@ -689,16 +712,20 @@ size_t RemoveArgs::update_callsite(IRInstruction* instr) {
  * Removes unused arguments at callsites and returns the number of arguments
  * removed.
  */
-size_t RemoveArgs::update_callsites() {
+std::pair<size_t, LocalDce::Stats> RemoveArgs::update_callsites() {
   // Walk through all methods to look for and edit callsites.
-  return walk::parallel::methods<size_t>(
+  std::mutex local_dce_stats_mutex;
+  LocalDce::Stats local_dce_stats{};
+  auto cnt = walk::parallel::methods<size_t>(
       m_scope, [&](DexMethod* method) -> size_t {
         auto code = method->get_code();
         if (code == nullptr) {
           return 0;
         }
+        always_assert(code->editable_cfg_built());
+        auto& cfg = code->cfg();
         size_t callsite_args_removed = 0;
-        for (const auto& mie : InstructionIterable(code)) {
+        for (const auto& mie : InstructionIterable(cfg)) {
           auto insn = mie.insn;
           if (opcode::is_an_invoke(insn->opcode())) {
             size_t insn_args_removed = update_callsite(insn);
@@ -708,8 +735,18 @@ size_t RemoveArgs::update_callsites() {
             }
           }
         }
+
+        if (callsite_args_removed) {
+          run_cleanup(method,
+                      cfg,
+                      &m_init_classes_with_side_effects,
+                      local_dce_stats_mutex,
+                      local_dce_stats);
+        }
+
         return callsite_args_removed;
       });
+  return std::make_pair(cnt, std::move(local_dce_stats));
 }
 
 void RemoveUnusedArgsPass::run_pass(DexStoresVector& stores,

@@ -102,6 +102,14 @@ TypeTagConfig get_type_tag_config(const std::string& type_tag_config) {
   return string_to_config.at(type_tag_config);
 }
 
+TypeLikeStringConfig get_type_like_string_config(
+    const std::string& type_like_string_config) {
+  const static std::unordered_map<std::string, TypeLikeStringConfig>
+      string_to_config = {{"replace", TypeLikeStringConfig::REPLACE},
+                          {"exclude", TypeLikeStringConfig::EXCLUDE}};
+  return string_to_config.at(type_like_string_config);
+}
+
 } // namespace
 
 namespace class_merging {
@@ -226,10 +234,20 @@ void ClassMergingPass::bind_config() {
       model_spec.get("merge_types_with_static_fields", false,
                      model.merge_types_with_static_fields);
       model_spec.get("keep_debug_info", false, model.keep_debug_info);
-      model_spec.get("replace_type_like_const_strings", true,
-                     model.replace_type_like_const_strings);
-      model_spec.get("type_like_const_strings_unsafe", false,
-                     model.type_like_const_strings_unsafe);
+
+      // TypeLikeStringConfig defaults to `exclude`.
+      std::string type_like_string_config;
+      model_spec.get("type_like_string_config", "exclude",
+                     type_like_string_config);
+      model.type_like_string_confg =
+          get_type_like_string_config(type_like_string_config);
+      if (model.type_like_string_confg == TypeLikeStringConfig::REPLACE) {
+        always_assert_log(
+            model.type_tag_config != TypeTagConfig::GENERATE,
+            "Type like strings are not safe to replace with TypeTagConfig %s",
+            type_tag_config.c_str());
+      }
+
       if (max_count > 0) {
         model.max_count = boost::optional<size_t>(max_count);
       }

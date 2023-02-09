@@ -30,6 +30,7 @@ enum class Ref {
   CallSite,
   MethodHandle,
   Data,
+  Proto
 };
 
 } // namespace opcode
@@ -134,14 +135,6 @@ inline bool is_branch(IROpcode op) {
   default:
     return false;
   }
-}
-
-inline bool is_div_int_lit(IROpcode op) {
-  return op == OPCODE_DIV_INT_LIT16 || op == OPCODE_DIV_INT_LIT8;
-}
-
-inline bool is_rem_int_lit(IROpcode op) {
-  return op == OPCODE_REM_INT_LIT16 || op == OPCODE_REM_INT_LIT8;
 }
 
 inline bool is_div_int_or_long(IROpcode op) {

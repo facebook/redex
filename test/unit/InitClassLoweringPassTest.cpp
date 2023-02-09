@@ -62,6 +62,7 @@ class InitClassLoweringPassTest : public RedexTest {
     InitClassLoweringPass pass;
     PassManager manager({&pass});
     ConfigFiles config(Json::nullValue);
+    config.parse_global_config();
     DexStore store("classes");
     store.add_classes({a_cls, b_cls, c_cls, d_cls, creator.create()});
     std::vector<DexStore> stores;

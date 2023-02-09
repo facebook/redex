@@ -10,6 +10,11 @@
 #include "Pass.h"
 #include "PassManager.h"
 
+/**
+ * This pass is meant to be run after OptimizeResourcesPass. Its purpose is
+ * simply to define a discrete place in the pass order for the reachability of
+ * classes to be recomputed, after dead resource files have been removed.
+ */
 class LayoutReachabilityPass : Pass {
  public:
   LayoutReachabilityPass() : Pass("LayoutReachabilityPass") {}

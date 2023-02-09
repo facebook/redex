@@ -15,6 +15,7 @@
 #include "IPConstantPropagationAnalysis.h"
 #include "MethodOverrideGraph.h"
 #include "PassManager.h"
+#include "Purity.h"
 #include "ScopedMetrics.h"
 #include "Timer.h"
 #include "Trace.h"
@@ -70,7 +71,7 @@ class AnalyzerGenerator {
     static_cast<void>(ApiLevelAnalyzerState::get());
   }
 
-  std::unique_ptr<intraprocedural::FixpointIterator> operator()(
+  std::unique_ptr<IntraproceduralAnalysis> operator()(
       const DexMethod* method,
       const WholeProgramState& wps,
       ArgumentDomain args) {
@@ -93,19 +94,22 @@ class AnalyzerGenerator {
     }
     TRACE(ICONSTP, 5, "%s", SHOW(code.cfg()));
 
-    auto intra_cp = std::make_unique<intraprocedural::FixpointIterator>(
-        code.cfg(),
+    auto wps_accessor = std::make_unique<WholeProgramStateAccessor>(wps);
+    auto wps_accessor_ptr = wps_accessor.get();
+    return std::make_unique<IntraproceduralAnalysis>(
+        std::move(wps_accessor), code.cfg(),
         CombinedAnalyzer(
             class_under_init,
             const_cast<ImmutableAttributeAnalyzerState*>(
                 m_immut_analyzer_state),
-            &wps, EnumFieldAnalyzerState::get(),
-            BoxedBooleanAnalyzerState::get(), nullptr, nullptr,
+            wps_accessor_ptr,
+            EnumFieldAnalyzerState::get(),
+            BoxedBooleanAnalyzerState::get(),
+            nullptr,
+            nullptr,
             *const_cast<ApiLevelAnalyzerState*>(m_api_level_analyzer_state),
-            nullptr));
-    intra_cp->run(env);
-
-    return intra_cp;
+            nullptr),
+        std::move(env));
   }
 };
 
@@ -127,17 +131,34 @@ std::unique_ptr<FixpointIterator> PassImpl::analyze(
     const ImmutableAttributeAnalyzerState* immut_analyzer_state,
     const ApiLevelAnalyzerState* api_level_analyzer_state) {
   auto method_override_graph = mog::build_graph(scope);
-  call_graph::Graph cg =
-      m_config.use_multiple_callee_callgraph
-          ? call_graph::multiple_callee_graph(*method_override_graph, scope,
-                                              m_config.big_override_threshold)
-          : call_graph::single_callee_graph(*method_override_graph, scope);
-  auto cg_stats = get_num_nodes_edges(cg);
+  std::shared_ptr<call_graph::Graph> cg;
+  {
+    cg = m_config.use_multiple_callee_callgraph
+             ? std::make_shared<call_graph::Graph>(
+                   call_graph::multiple_callee_graph(
+                       *method_override_graph, scope,
+                       m_config.big_override_threshold))
+             : std::make_shared<call_graph::Graph>(
+                   call_graph::single_callee_graph(*method_override_graph,
+                                                   scope));
+  }
+  auto cg_for_wps = m_config.use_multiple_callee_callgraph ? cg : nullptr;
+  auto cg_stats = get_num_nodes_edges(*cg);
   m_stats.callgraph_nodes = cg_stats.num_nodes;
   m_stats.callgraph_edges = cg_stats.num_edges;
   m_stats.callgraph_callsites = cg_stats.num_callsites;
   auto fp_iter = std::make_unique<FixpointIterator>(
-      cg, AnalyzerGenerator(immut_analyzer_state, api_level_analyzer_state));
+      cg, AnalyzerGenerator(immut_analyzer_state, api_level_analyzer_state),
+      cg_for_wps);
+  auto run_fp_iter = [&]() {
+    fp_iter->run({{CURRENT_PARTITION_LABEL, ArgumentDomain()}});
+    auto stats = fp_iter->get_stats();
+    auto& last_stats = m_stats.fp_iter;
+    TRACE(ICONSTP, 1, "%zu/%zu (additional) method cache hits / misses",
+          stats.method_cache_hits - last_stats.method_cache_hits,
+          stats.method_cache_misses - last_stats.method_cache_misses);
+    last_stats = stats;
+  };
   // Run the bootstrap. All field value and method return values are
   // represented by Top.
   fp_iter->run({{CURRENT_PARTITION_LABEL, ArgumentDomain()}});
@@ -151,14 +172,9 @@ std::unique_ptr<FixpointIterator> PassImpl::analyze(
   m_stats.definitely_assigned_ifields = definitely_assigned_ifields.size();
   for (size_t i = 0; i < m_config.max_heap_analysis_iterations; ++i) {
     // Build an approximation of all the field values and method return values.
-    auto wps =
-        m_config.use_multiple_callee_callgraph
-            ? std::make_unique<WholeProgramState>(
-                  scope, *fp_iter, non_true_virtuals, m_config.field_blocklist,
-                  definitely_assigned_ifields, cg)
-            : std::make_unique<WholeProgramState>(
-                  scope, *fp_iter, non_true_virtuals, m_config.field_blocklist,
-                  definitely_assigned_ifields);
+    auto wps = std::make_unique<WholeProgramState>(
+        scope, *fp_iter, non_true_virtuals, m_config.field_blocklist,
+        definitely_assigned_ifields, cg_for_wps);
     // If this approximation is not better than the previous one, we are done.
     if (fp_iter->get_whole_program_state().leq(*wps)) {
       break;
@@ -170,7 +186,6 @@ std::unique_ptr<FixpointIterator> PassImpl::analyze(
   }
   compute_analysis_stats(fp_iter->get_whole_program_state(),
                          definitely_assigned_ifields);
-
   return fp_iter;
 }
 
@@ -219,6 +234,8 @@ void PassImpl::optimize(
     const XStoreRefs& xstores,
     const FixpointIterator& fp_iter,
     const ImmutableAttributeAnalyzerState* immut_analyzer_state) {
+  Transform::RuntimeCache runtime_cache{};
+  const auto& pure_methods = ::get_pure_methods();
   m_transform_stats =
       walk::parallel::methods<Transform::Stats>(scope, [&](DexMethod* method) {
         if (method->get_code() == nullptr ||
@@ -226,11 +243,11 @@ void PassImpl::optimize(
           return Transform::Stats();
         }
         auto& code = *method->get_code();
-        auto intra_cp = fp_iter.get_intraprocedural_analysis(method);
+        auto ipa = fp_iter.get_intraprocedural_analysis(method);
 
         if (m_config.create_runtime_asserts) {
           RuntimeAssertTransform rat(m_config.runtime_assert);
-          rat.apply(*intra_cp, fp_iter.get_whole_program_state(), method);
+          rat.apply(ipa->fp_iter, fp_iter.get_whole_program_state(), method);
           return Transform::Stats();
         } else {
           Transform::Config config(m_config.transform);
@@ -238,9 +255,10 @@ void PassImpl::optimize(
               method::is_clinit(method) ? method->get_class() : nullptr;
           config.getter_methods_for_immutable_fields =
               &immut_analyzer_state->attribute_methods;
-          Transform tf(config);
+          config.pure_methods = &pure_methods;
+          Transform tf(config, &runtime_cache);
           tf.legacy_apply_constants_and_prune_unreachable(
-              *intra_cp,
+              ipa->fp_iter,
               fp_iter.get_whole_program_state(),
               code.cfg(),
               &xstores,
@@ -299,6 +317,10 @@ void PassImpl::run_pass(DexStoresVector& stores,
   mgr.incr_metric("callgraph_edges", m_stats.callgraph_edges);
   mgr.incr_metric("callgraph_nodes", m_stats.callgraph_nodes);
   mgr.incr_metric("callgraph_callsites", m_stats.callgraph_callsites);
+  mgr.incr_metric("fp_iter.method_cache_hits",
+                  m_stats.fp_iter.method_cache_hits);
+  mgr.incr_metric("fp_iter.method_cache_misses",
+                  m_stats.fp_iter.method_cache_misses);
 }
 
 static PassImpl s_pass;

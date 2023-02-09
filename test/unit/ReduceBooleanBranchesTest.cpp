@@ -57,7 +57,7 @@ TEST_F(ReduceBooleanBranchesTest, boolean_negation_diamond) {
     (
       (sget-boolean "LFoo;.bar:Z")
       (move-result-pseudo v0)
-      (xor-int/lit8 v0 v0 1)
+      (xor-int/lit v0 v0 1)
       (return v0)
     )
   )";
@@ -160,7 +160,7 @@ TEST_F(ReduceBooleanBranchesTest, object_negative_diamond) {
       (move-result-pseudo-object v0)
       (instance-of v0 "Ljava/lang/Object;")
       (move-result-pseudo v0)
-      (xor-int/lit8 v0 v0 1)
+      (xor-int/lit v0 v0 1)
       (return v0)
     )
   )";
@@ -172,7 +172,7 @@ TEST_F(ReduceBooleanBranchesTest, reduce_xor_conditional_branch) {
     (
       (sget-boolean "LFoo;.bar:Z")
       (move-result-pseudo v0)
-      (xor-int/lit8 v0 v0 1)
+      (xor-int/lit v0 v0 1)
       (if-eqz v0 :a)
       (const v0 42)
       (return v0)
@@ -186,7 +186,7 @@ TEST_F(ReduceBooleanBranchesTest, reduce_xor_conditional_branch) {
       (sget-boolean "LFoo;.bar:Z")
       (move-result-pseudo v0)
       (move v1 v0)
-      (xor-int/lit8 v0 v0 1)
+      (xor-int/lit v0 v0 1)
       (if-nez v1 :a)
       (const v0 42)
       (return v0)
@@ -203,8 +203,8 @@ TEST_F(ReduceBooleanBranchesTest, reduce_xor_xor) {
     (
       (sget-boolean "LFoo;.bar:Z")
       (move-result-pseudo v0)
-      (xor-int/lit8 v0 v0 1)
-      (xor-int/lit8 v0 v0 1)
+      (xor-int/lit v0 v0 1)
+      (xor-int/lit v0 v0 1)
       (return v0)
     )
   )";
@@ -213,7 +213,7 @@ TEST_F(ReduceBooleanBranchesTest, reduce_xor_xor) {
       (sget-boolean "LFoo;.bar:Z")
       (move-result-pseudo v0)
       (move v1 v0)
-      (xor-int/lit8 v0 v0 1)
+      (xor-int/lit v0 v0 1)
       (move v0 v1)
       (return v0)
     )

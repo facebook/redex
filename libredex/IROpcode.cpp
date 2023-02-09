@@ -324,43 +324,43 @@ IROpcode from_dex_opcode(DexOpcode op) {
   case DOPCODE_REM_DOUBLE:
     return OPCODE_REM_DOUBLE;
   case DOPCODE_ADD_INT_LIT16:
-    return OPCODE_ADD_INT_LIT16;
+    return OPCODE_ADD_INT_LIT;
   case DOPCODE_RSUB_INT:
-    return OPCODE_RSUB_INT;
+    return OPCODE_RSUB_INT_LIT;
   case DOPCODE_MUL_INT_LIT16:
-    return OPCODE_MUL_INT_LIT16;
+    return OPCODE_MUL_INT_LIT;
   case DOPCODE_DIV_INT_LIT16:
-    return OPCODE_DIV_INT_LIT16;
+    return OPCODE_DIV_INT_LIT;
   case DOPCODE_REM_INT_LIT16:
-    return OPCODE_REM_INT_LIT16;
+    return OPCODE_REM_INT_LIT;
   case DOPCODE_AND_INT_LIT16:
-    return OPCODE_AND_INT_LIT16;
+    return OPCODE_AND_INT_LIT;
   case DOPCODE_OR_INT_LIT16:
-    return OPCODE_OR_INT_LIT16;
+    return OPCODE_OR_INT_LIT;
   case DOPCODE_XOR_INT_LIT16:
-    return OPCODE_XOR_INT_LIT16;
+    return OPCODE_XOR_INT_LIT;
   case DOPCODE_ADD_INT_LIT8:
-    return OPCODE_ADD_INT_LIT8;
+    return OPCODE_ADD_INT_LIT;
   case DOPCODE_RSUB_INT_LIT8:
-    return OPCODE_RSUB_INT_LIT8;
+    return OPCODE_RSUB_INT_LIT;
   case DOPCODE_MUL_INT_LIT8:
-    return OPCODE_MUL_INT_LIT8;
+    return OPCODE_MUL_INT_LIT;
   case DOPCODE_DIV_INT_LIT8:
-    return OPCODE_DIV_INT_LIT8;
+    return OPCODE_DIV_INT_LIT;
   case DOPCODE_REM_INT_LIT8:
-    return OPCODE_REM_INT_LIT8;
+    return OPCODE_REM_INT_LIT;
   case DOPCODE_AND_INT_LIT8:
-    return OPCODE_AND_INT_LIT8;
+    return OPCODE_AND_INT_LIT;
   case DOPCODE_OR_INT_LIT8:
-    return OPCODE_OR_INT_LIT8;
+    return OPCODE_OR_INT_LIT;
   case DOPCODE_XOR_INT_LIT8:
-    return OPCODE_XOR_INT_LIT8;
+    return OPCODE_XOR_INT_LIT;
   case DOPCODE_SHL_INT_LIT8:
-    return OPCODE_SHL_INT_LIT8;
+    return OPCODE_SHL_INT_LIT;
   case DOPCODE_SHR_INT_LIT8:
-    return OPCODE_SHR_INT_LIT8;
+    return OPCODE_SHR_INT_LIT;
   case DOPCODE_USHR_INT_LIT8:
-    return OPCODE_USHR_INT_LIT8;
+    return OPCODE_USHR_INT_LIT;
   case DOPCODE_MOVE_16:
     return OPCODE_MOVE;
   case DOPCODE_MOVE_WIDE_16:
@@ -481,6 +481,10 @@ IROpcode from_dex_opcode(DexOpcode op) {
     return OPCODE_FILLED_NEW_ARRAY;
   case DOPCODE_FILLED_NEW_ARRAY_RANGE:
     return OPCODE_FILLED_NEW_ARRAY;
+  case DOPCODE_CONST_METHOD_HANDLE:
+    return OPCODE_CONST_METHOD_HANDLE;
+  case DOPCODE_CONST_METHOD_TYPE:
+    return OPCODE_CONST_METHOD_TYPE;
   case FOPCODE_PACKED_SWITCH:
   case FOPCODE_SPARSE_SWITCH:
   case FOPCODE_FILLED_ARRAY:
@@ -704,43 +708,27 @@ DexOpcode to_dex_opcode(IROpcode op) {
     return DOPCODE_DIV_DOUBLE;
   case OPCODE_REM_DOUBLE:
     return DOPCODE_REM_DOUBLE;
-  case OPCODE_ADD_INT_LIT16:
+  case OPCODE_ADD_INT_LIT:
     return DOPCODE_ADD_INT_LIT16;
-  case OPCODE_RSUB_INT:
+  case OPCODE_RSUB_INT_LIT:
     return DOPCODE_RSUB_INT;
-  case OPCODE_MUL_INT_LIT16:
+  case OPCODE_MUL_INT_LIT:
     return DOPCODE_MUL_INT_LIT16;
-  case OPCODE_DIV_INT_LIT16:
+  case OPCODE_DIV_INT_LIT:
     return DOPCODE_DIV_INT_LIT16;
-  case OPCODE_REM_INT_LIT16:
+  case OPCODE_REM_INT_LIT:
     return DOPCODE_REM_INT_LIT16;
-  case OPCODE_AND_INT_LIT16:
+  case OPCODE_AND_INT_LIT:
     return DOPCODE_AND_INT_LIT16;
-  case OPCODE_OR_INT_LIT16:
+  case OPCODE_OR_INT_LIT:
     return DOPCODE_OR_INT_LIT16;
-  case OPCODE_XOR_INT_LIT16:
+  case OPCODE_XOR_INT_LIT:
     return DOPCODE_XOR_INT_LIT16;
-  case OPCODE_ADD_INT_LIT8:
-    return DOPCODE_ADD_INT_LIT8;
-  case OPCODE_RSUB_INT_LIT8:
-    return DOPCODE_RSUB_INT_LIT8;
-  case OPCODE_MUL_INT_LIT8:
-    return DOPCODE_MUL_INT_LIT8;
-  case OPCODE_DIV_INT_LIT8:
-    return DOPCODE_DIV_INT_LIT8;
-  case OPCODE_REM_INT_LIT8:
-    return DOPCODE_REM_INT_LIT8;
-  case OPCODE_AND_INT_LIT8:
-    return DOPCODE_AND_INT_LIT8;
-  case OPCODE_OR_INT_LIT8:
-    return DOPCODE_OR_INT_LIT8;
-  case OPCODE_XOR_INT_LIT8:
-    return DOPCODE_XOR_INT_LIT8;
-  case OPCODE_SHL_INT_LIT8:
+  case OPCODE_SHL_INT_LIT:
     return DOPCODE_SHL_INT_LIT8;
-  case OPCODE_SHR_INT_LIT8:
+  case OPCODE_SHR_INT_LIT:
     return DOPCODE_SHR_INT_LIT8;
-  case OPCODE_USHR_INT_LIT8:
+  case OPCODE_USHR_INT_LIT:
     return DOPCODE_USHR_INT_LIT8;
   case OPCODE_CONST:
     return DOPCODE_CONST;
@@ -834,6 +822,10 @@ DexOpcode to_dex_opcode(IROpcode op) {
     return DOPCODE_NEW_ARRAY;
   case OPCODE_FILLED_NEW_ARRAY:
     return DOPCODE_FILLED_NEW_ARRAY;
+  case OPCODE_CONST_METHOD_HANDLE:
+    return DOPCODE_CONST_METHOD_HANDLE;
+  case OPCODE_CONST_METHOD_TYPE:
+    return DOPCODE_CONST_METHOD_TYPE;
   default:
     not_reached_log("Cannot create DexOpcode from %s", SHOW(op));
   }
@@ -944,10 +936,8 @@ bool may_throw(IROpcode op) {
   case OPCODE_REM_INT:
   case OPCODE_DIV_LONG:
   case OPCODE_REM_LONG:
-  case OPCODE_DIV_INT_LIT16:
-  case OPCODE_REM_INT_LIT16:
-  case OPCODE_DIV_INT_LIT8:
-  case OPCODE_REM_INT_LIT8:
+  case OPCODE_DIV_INT_LIT:
+  case OPCODE_REM_INT_LIT:
     return true;
   default:
     return false;
@@ -1597,25 +1587,17 @@ bool dest_is_object(IROpcode op) {
   case OPCODE_DIV_DOUBLE:
   case OPCODE_REM_DOUBLE:
     return false;
-  case OPCODE_ADD_INT_LIT16:
-  case OPCODE_RSUB_INT:
-  case OPCODE_MUL_INT_LIT16:
-  case OPCODE_DIV_INT_LIT16:
-  case OPCODE_REM_INT_LIT16:
-  case OPCODE_AND_INT_LIT16:
-  case OPCODE_OR_INT_LIT16:
-  case OPCODE_XOR_INT_LIT16:
-  case OPCODE_ADD_INT_LIT8:
-  case OPCODE_RSUB_INT_LIT8:
-  case OPCODE_MUL_INT_LIT8:
-  case OPCODE_DIV_INT_LIT8:
-  case OPCODE_REM_INT_LIT8:
-  case OPCODE_AND_INT_LIT8:
-  case OPCODE_OR_INT_LIT8:
-  case OPCODE_XOR_INT_LIT8:
-  case OPCODE_SHL_INT_LIT8:
-  case OPCODE_SHR_INT_LIT8:
-  case OPCODE_USHR_INT_LIT8:
+  case OPCODE_ADD_INT_LIT:
+  case OPCODE_RSUB_INT_LIT:
+  case OPCODE_MUL_INT_LIT:
+  case OPCODE_DIV_INT_LIT:
+  case OPCODE_REM_INT_LIT:
+  case OPCODE_AND_INT_LIT:
+  case OPCODE_OR_INT_LIT:
+  case OPCODE_XOR_INT_LIT:
+  case OPCODE_SHL_INT_LIT:
+  case OPCODE_SHR_INT_LIT:
+  case OPCODE_USHR_INT_LIT:
     return false;
   case OPCODE_CONST:
     return false;

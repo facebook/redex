@@ -8,6 +8,7 @@
 #include "IPConstantPropagationAnalysis.h"
 
 #include "DexAnnotation.h"
+#include "WorkQueue.h"
 
 namespace constant_propagation {
 
@@ -37,8 +38,23 @@ ConstantEnvironment env_with_params(bool is_static,
   return env;
 }
 
+FixpointIterator::~FixpointIterator() {
+  // We are going to destroy a lot of patricia trees, which can be expensive. To
+  // speed this up, we are going to do it in parallel.
+  auto wq = workqueue_foreach<const DexMethod*>(
+      [&](const DexMethod* method) { m_cache.at_unsafe(method).clear(); });
+  for (auto&& [method, method_cache] : m_cache) {
+    wq.add_item(method);
+  }
+  wq.run_all();
+}
+
 void FixpointIterator::analyze_node(call_graph::NodeId const& node,
                                     Domain* current_state) const {
+  auto args = current_state->get(CURRENT_PARTITION_LABEL); // intential copy
+  current_state->set(CURRENT_PARTITION_LABEL, ArgumentDomain::bottom());
+  always_assert(current_state->is_bottom());
+
   const DexMethod* method = node->method();
   // The entry node has no associated method.
   if (method == nullptr) {
@@ -53,19 +69,38 @@ void FixpointIterator::analyze_node(call_graph::NodeId const& node,
     // never run.
     return;
   }
+  auto& method_cache = get_method_cache(method);
+  const auto* method_cache_entry =
+      find_matching_method_cache_entry(method_cache, args);
+  if (method_cache_entry) {
+    for (auto& [insn, out_args] : method_cache_entry->result) {
+      current_state->set(insn, out_args);
+    }
+    std::lock_guard<std::mutex> lock_guard(m_stats_mutex);
+    m_stats.method_cache_hits++;
+    return;
+  }
+
   auto& cfg = code->cfg();
-  auto intra_cp = get_intraprocedural_analysis(method);
+  auto ipa =
+      m_proc_analysis_factory(method, this->get_whole_program_state(), args);
+  auto& intra_cp = ipa->fp_iter;
   const auto outgoing_edges =
-      call_graph::GraphInterface::successors(m_call_graph, node);
+      call_graph::GraphInterface::successors(*m_call_graph, node);
   std::unordered_set<IRInstruction*> outgoing_insns;
   for (const auto& edge : outgoing_edges) {
-    if (edge->callee() == m_call_graph.exit()) {
+    if (edge->callee() == m_call_graph->exit()) {
       continue; // ghost edge to the ghost exit node
     }
     outgoing_insns.emplace(edge->invoke_insn());
   }
+  WholeProgramStateAccessorRecord record;
+  if (ipa->wps_accessor) {
+    ipa->wps_accessor->start_recording(&record);
+  }
+  std::unordered_map<const IRInstruction*, ArgumentDomain> result;
   for (auto* block : cfg.blocks()) {
-    auto state = intra_cp->get_entry_state_at(block);
+    auto state = intra_cp.get_entry_state_at(block);
     auto last_insn = block->get_last_insn();
     for (auto& mie : InstructionIterable(block)) {
       auto* insn = mie.insn;
@@ -75,12 +110,22 @@ void FixpointIterator::analyze_node(call_graph::NodeId const& node,
           for (size_t i = 0; i < insn->srcs_size(); ++i) {
             out_args.set(i, state.get(insn->src(i)));
           }
-          current_state->set(insn, out_args);
+          result.emplace(insn, std::move(out_args));
         }
       }
-      intra_cp->analyze_instruction(insn, &state, insn == last_insn->insn);
+      intra_cp.analyze_instruction(insn, &state, insn == last_insn->insn);
     }
   }
+  if (ipa->wps_accessor) {
+    ipa->wps_accessor->stop_recording();
+  }
+  for (auto& [insn, out_args] : result) {
+    current_state->set(insn, out_args);
+  }
+  method_cache.push_front(std::make_shared<MethodCacheEntry>((MethodCacheEntry){
+      std::move(args), std::move(record), std::move(result)}));
+  std::lock_guard<std::mutex> lock_guard(m_stats_mutex);
+  m_stats.method_cache_misses++;
 }
 
 Domain FixpointIterator::analyze_edge(
@@ -97,17 +142,81 @@ Domain FixpointIterator::analyze_edge(
   return entry_state_at_dest;
 }
 
-std::unique_ptr<intraprocedural::FixpointIterator>
+std::unique_ptr<IntraproceduralAnalysis>
 FixpointIterator::get_intraprocedural_analysis(const DexMethod* method) const {
-  auto args = Domain::bottom();
+  return m_proc_analysis_factory(
+      method, this->get_whole_program_state(), get_entry_args(method));
+}
 
-  if (m_call_graph.has_node(method)) {
-    args = this->get_entry_state_at(m_call_graph.node(method));
+IntraproceduralAnalysis::IntraproceduralAnalysis(
+    std::unique_ptr<WholeProgramStateAccessor> wps_accessor,
+    const cfg::ControlFlowGraph& cfg,
+    InstructionAnalyzer<ConstantEnvironment> insn_analyzer,
+    const ConstantEnvironment& env)
+    : wps_accessor(std::move(wps_accessor)),
+      fp_iter(cfg, std::move(insn_analyzer)) {
+  fp_iter.run(env);
+}
+
+const ArgumentDomain& FixpointIterator::get_entry_args(
+    const DexMethod* method) const {
+  if (m_call_graph->has_node(method)) {
+    return this->get_entry_state_at(m_call_graph->node(method))
+        .get(CURRENT_PARTITION_LABEL);
   }
+  static const ArgumentDomain bottom = ArgumentDomain::bottom();
+  return bottom;
+}
 
-  return m_proc_analysis_factory(method,
-                                 this->get_whole_program_state(),
-                                 args.get(CURRENT_PARTITION_LABEL));
+FixpointIterator::MethodCache& FixpointIterator::get_method_cache(
+    const DexMethod* method) const {
+  MethodCache* method_cache;
+  m_cache.update(method,
+                 [&](auto*, auto& value, auto) { method_cache = &value; });
+  return *method_cache;
+}
+
+bool FixpointIterator::method_cache_entry_matches(
+    const MethodCacheEntry& mce, const ArgumentDomain& args) const {
+  if (!mce.args.equals(args)) {
+    return false;
+  }
+  if (m_wps->has_call_graph()) {
+    for (auto&& [method, val] : mce.wps_accessor_record.method_dependencies) {
+      if (!m_wps->get_method_partition().get(method).equals(val)) {
+        return false;
+      }
+    }
+  } else {
+    for (auto&& [method, val] : mce.wps_accessor_record.method_dependencies) {
+      if (!m_wps->get_return_value(method).equals(val)) {
+        return false;
+      }
+    }
+  }
+  for (auto&& [field, val] : mce.wps_accessor_record.field_dependencies) {
+    if (!m_wps->get_field_value(field).equals(val)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+const FixpointIterator::MethodCacheEntry*
+FixpointIterator::find_matching_method_cache_entry(
+    MethodCache& method_cache, const ArgumentDomain& args) const {
+  for (auto it = method_cache.begin(); it != method_cache.end(); it++) {
+    if (method_cache_entry_matches(**it, args)) {
+      auto copy = *it;
+      if (it != method_cache.begin()) {
+        method_cache.erase(it);
+        method_cache.push_front(std::move(copy));
+        copy = *method_cache.begin();
+      }
+      return copy.get();
+    }
+  }
+  return nullptr;
 }
 
 } // namespace interprocedural

@@ -100,7 +100,7 @@ void CrossDexRefMinimizer::reprioritize(
         format_infrequent_refs_array(affected_class_info.infrequent_refs_weight)
             .c_str(),
         format_infrequent_refs_array(delta.infrequent_refs_weight).c_str(),
-        affected_class_info.refs.size());
+        affected_class_info.refs->size());
   }
 }
 
@@ -125,13 +125,6 @@ void CrossDexRefMinimizer::gather_refs(DexClass* cls,
   std::sort(field_refs.begin(), field_refs.end(), compare_dexfields);
   std::sort(types.begin(), types.end(), compare_dextypes);
   std::sort(strings.begin(), strings.end(), compare_dexstrings);
-}
-
-void CrossDexRefMinimizer::ignore(DexClass* cls) {
-  // By setting the count to the maximum value here, the class will later appear
-  // to have an extremely high frequency and thus get skipped from
-  // consideration by insert/add_weight.
-  m_ref_counts[cls->get_type()] = std::numeric_limits<size_t>::max();
 }
 
 void CrossDexRefMinimizer::sample(DexClass* cls) {
@@ -166,6 +159,8 @@ void CrossDexRefMinimizer::sample(DexClass* cls) {
     json_class["field_refs"] = m_json_fields.get(field_refs);
     json_class["types"] = m_json_types.get(types);
     json_class["strings"] = m_json_strings.get(strings);
+    json_class["is_generated"] = cls->rstate.is_generated();
+    json_class["insert_index"] = -1;
     (*m_json_classes)[get_json_class_index(cls)] = json_class;
   }
 }
@@ -188,7 +183,7 @@ void CrossDexRefMinimizer::insert(DexClass* cls) {
   std::vector<const DexString*> strings;
   gather_refs(cls, method_refs, field_refs, types, strings);
 
-  auto& refs = class_info.refs;
+  auto& refs = *class_info.refs;
   refs.reserve(method_refs.size() + field_refs.size() + types.size() +
                strings.size());
   uint64_t& refs_weight = class_info.refs_weight;
@@ -277,6 +272,10 @@ void CrossDexRefMinimizer::insert(DexClass* cls) {
         SHOW(cls), priority, class_info.index,
         format_infrequent_refs_array(class_info.infrequent_refs_weight).c_str(),
         refs.size());
+  if (m_json_classes) {
+    (*m_json_classes)[get_json_class_index(cls)]["insert_index"] =
+        class_info.index;
+  }
   reprioritize(affected_classes);
 }
 
@@ -288,46 +287,62 @@ DexClass* CrossDexRefMinimizer::front() const {
   return m_prioritized_classes.front();
 }
 
-DexClass* CrossDexRefMinimizer::worst(bool generated) {
-  auto max_it = m_class_infos.end();
-  uint64_t max_value = 0;
+std::vector<DexClass*> CrossDexRefMinimizer::worst(size_t count,
+                                                   bool include_generated) {
+  std::map<uint64_t, std::map<size_t, DexClass*, std::greater<size_t>>>
+      selected;
+  size_t selected_count{0};
 
   for (auto it = m_class_infos.begin(); it != m_class_infos.end(); ++it) {
-    // If requested, let's skip generated classes, as they tend to be not stable
-    // and may cause drastic build-over-build changes.
-    if (it->first->rstate.is_generated() != generated) {
-      continue;
-    }
-
     const CrossDexRefMinimizer::ClassInfo& class_info = it->second;
     uint64_t value = class_info.seed_weight;
 
-    // Prefer the largest denominator
-    if (value < max_value) {
+    if (it->first->rstate.is_generated()) {
+      if (!include_generated) {
+        continue;
+      }
+      // We still prefer to find a class that is not generated, as they tend to
+      // be not stable and may cause drastic build-over-build changes. Thus we
+      // cut the seed weight for generated classes in half.
+      value /= 2;
+    }
+
+    if (selected_count >= count && selected.begin()->first > value) {
       continue;
     }
+
+    selected[value][class_info.index] = it->first;
+    selected_count++;
 
     // If equal, prefer the class that was inserted earlier (smaller index) to
     // make things deterministic.
-    if (value == max_value && max_it != m_class_infos.end() &&
-        class_info.index > max_it->second.index) {
-      continue;
+    while (selected_count > count) {
+      auto selected_it = selected.begin();
+      auto selected_ordered_it = selected_it->second.begin();
+      selected_it->second.erase(selected_ordered_it);
+      if (selected_it->second.empty()) {
+        selected.erase(selected_it);
+      }
+      selected_count--;
     }
-
-    max_it = it;
-    max_value = value;
   }
 
-  if (max_it == m_class_infos.end()) {
-    return nullptr;
+  std::ostringstream ss;
+  std::vector<DexClass*> classes;
+  for (auto rit = selected.rbegin(); rit != selected.rend(); rit++) {
+    auto& [value, selected_ordered] = *rit;
+    for (auto [index, cls] : selected_ordered) {
+      if (traceEnabled(IDEX, 3)) {
+        ss << "Effective seed " << value << ": {" << SHOW(cls) << "}; index "
+           << index << "\n";
+      }
+      classes.push_back(cls);
+    }
   }
-
-  TRACE(IDEX, 3,
-        "[dex ordering] Picked worst class {%s} with seed %" PRIu64
-        "; index %u",
-        SHOW(max_it->first), max_value, max_it->second.index);
-  m_stats.worst_classes.emplace_back(max_it->first, max_value);
-  return max_it->first;
+  always_assert(classes.size() == selected_count);
+  TRACE(IDEX, 3, "[dex ordering] Picked %zu <= %zu worst classes:\n%s",
+        selected_count, count, ss.str().c_str());
+  return classes;
 }
 
 DexClass* CrossDexRefMinimizer::worst() {
@@ -335,12 +350,13 @@ DexClass* CrossDexRefMinimizer::worst() {
   // We prefer to find a class that is not generated. Only when such a class
   // doesn't exist (because all classes are generated), then we pick the worst
   // generated class.
-  DexClass* cls = worst(/* generated */ false);
-  if (cls == nullptr) {
-    cls = worst(/* generated */ true);
+  auto classes = worst(1, /* include_generated */ false);
+  if (classes.empty()) {
+    classes = worst(1, /* include_generated */ true);
   }
-  always_assert(cls != nullptr);
-  return cls;
+  always_assert(!classes.empty());
+  always_assert(classes.front() != nullptr);
+  return classes.front();
 }
 
 size_t CrossDexRefMinimizer::erase(DexClass* cls, bool emitted, bool reset) {
@@ -351,6 +367,9 @@ size_t CrossDexRefMinimizer::erase(DexClass* cls, bool emitted, bool reset) {
     class_info_it = m_class_infos.find(cls);
     always_assert(class_info_it != m_class_infos.end());
     const auto& class_info = class_info_it->second;
+    if (m_stats.seed_classes.empty() || m_applied_refs.empty()) {
+      m_stats.seed_classes.emplace_back(cls, class_info.seed_weight);
+    }
     TRACE(
         IDEX, 3,
         "[dex ordering] Processing class {%s} with priority %016" PRIu64
@@ -360,7 +379,7 @@ size_t CrossDexRefMinimizer::erase(DexClass* cls, bool emitted, bool reset) {
         SHOW(cls), class_info.get_priority(), class_info.index,
         class_info.applied_refs_weight,
         format_infrequent_refs_array(class_info.infrequent_refs_weight).c_str(),
-        class_info.refs.size(), emitted);
+        class_info.refs->size(), emitted);
   } else {
     always_assert(!emitted);
   }
@@ -379,11 +398,13 @@ size_t CrossDexRefMinimizer::erase(DexClass* cls, bool emitted, bool reset) {
   size_t old_applied_refs = m_applied_refs.size();
   if (class_info_it != m_class_infos.end()) {
     const auto& class_info = class_info_it->second;
-    const auto& refs = class_info.refs;
+    const auto& refs = *class_info.refs;
     for (const auto& p : refs) {
       auto ref = p.first;
       uint32_t weight = p.second;
-      auto& classes = m_ref_classes.at(ref);
+      auto classes_it = m_ref_classes.find(ref);
+      always_assert(classes_it != m_ref_classes.end());
+      auto& classes = classes_it->second;
       size_t frequency = classes.size();
       always_assert(frequency > 0);
       const auto erased = classes.erase(cls);
@@ -395,7 +416,9 @@ size_t CrossDexRefMinimizer::erase(DexClass* cls, bool emitted, bool reset) {
         }
       }
       --frequency;
-      if (frequency > 0 && frequency <= INFREQUENT_REFS_COUNT) {
+      if (frequency == 0) {
+        m_ref_classes.erase(classes_it);
+      } else if (frequency <= INFREQUENT_REFS_COUNT) {
         for (DexClass* affected_class : classes) {
           affected_classes[affected_class]
               .infrequent_refs_weight[frequency - 1] += weight;
@@ -405,10 +428,12 @@ size_t CrossDexRefMinimizer::erase(DexClass* cls, bool emitted, bool reset) {
       if (!emitted) {
         continue;
       }
-      if (m_applied_refs.count(ref) != 0) {
+      if (!m_applied_refs.insert(ref).second) {
         continue;
       }
-      m_applied_refs.emplace(ref);
+      if (frequency == 0) {
+        continue;
+      }
       for (DexClass* affected_class : classes) {
         affected_classes[affected_class].applied_refs_weight += weight;
       }
@@ -417,7 +442,6 @@ size_t CrossDexRefMinimizer::erase(DexClass* cls, bool emitted, bool reset) {
     // Updating m_class_infos and m_prioritized_classes
 
     m_class_infos.erase(class_info_it);
-    always_assert(m_class_infos.count(cls) == 0);
   }
 
   if (reset) {
@@ -440,18 +464,37 @@ size_t CrossDexRefMinimizer::erase(DexClass* cls, bool emitted, bool reset) {
   return m_applied_refs.size() - old_applied_refs;
 }
 
-size_t CrossDexRefMinimizer::get_unapplied_refs(DexClass* cls) {
+size_t CrossDexRefMinimizer::get_unapplied_refs(DexClass* cls) const {
   auto it = m_class_infos.find(cls);
   if (it == m_class_infos.end()) {
     return 0;
   }
   size_t unapplied_refs{0};
-  for (auto& p : it->second.refs) {
+  const auto& refs = *it->second.refs;
+  for (auto& p : refs) {
     if (!m_applied_refs.count(p.first)) {
       unapplied_refs++;
     }
   }
   return unapplied_refs;
+}
+
+double CrossDexRefMinimizer::get_remaining_difficulty() const {
+  // As a proxy for the remaining difficulty, we compute the sum over the
+  // inverse squares of how many classes reference each remaining reference.
+  // (Why? Unclear, but it seems to work well in practice.) The following does
+  // this computation in a way that results in a high precision and is
+  // deterministic using floating-point values.
+  std::unordered_map<size_t, size_t> counts;
+  for (auto& p : m_ref_classes) {
+    counts[p.second.size()]++;
+  }
+  std::vector<double> summands;
+  summands.reserve(counts.size());
+  std::transform(counts.begin(), counts.end(), std::back_inserter(summands),
+                 [](auto& p) { return p.second * 1.0 / (p.first * p.first); });
+  std::sort(summands.begin(), summands.end());
+  return std::accumulate(summands.begin(), summands.end(), 0.0);
 }
 
 std::string CrossDexRefMinimizer::get_json_class_index(DexClass* cls) {
@@ -466,6 +509,17 @@ Json::Value CrossDexRefMinimizer::get_json_class_indices(
     types.push_back(cls->get_type());
   }
   return m_json_types.get(types);
+}
+
+Json::Value CrossDexRefMinimizer::get_json_mapping() {
+  // These could be further nested into a ref-specific path,
+  // but it just makes the mapping more annoying to use.
+  Json::Value res = Json::objectValue;
+  m_json_methods.get_mapping(&res);
+  m_json_fields.get_mapping(&res);
+  m_json_types.get_mapping(&res);
+  m_json_strings.get_mapping(&res);
+  return res;
 }
 
 } // namespace cross_dex_ref_minimizer

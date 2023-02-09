@@ -108,13 +108,9 @@ class ResStringPoolBuilder {
     return (m_flags & android::ResStringPool_header::UTF8_FLAG) != 0;
   }
 
-  size_t non_style_string_count() {
-    return m_strings.size();
-  }
+  size_t non_style_string_count() { return m_strings.size(); }
 
-  size_t style_count() {
-    return m_styles.size();
-  }
+  size_t style_count() { return m_styles.size(); }
 
   std::vector<StringHolder> m_strings;
   std::vector<StyleInfo> m_styles;
@@ -155,6 +151,16 @@ class CanonicalEntries {
   std::unordered_map<size_t, std::vector<EntryOffsetData>> m_canonical_entries;
 };
 
+inline bool any_sparse_types(
+    const std::vector<android::ResTable_type*>& configs) {
+  for (const auto& t : configs) {
+    if ((t->flags & android::ResTable_type::FLAG_SPARSE) != 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
 // Builder for serializing a ResTable_typeSpec structure with N ResTable_type
 // structures (and entries). As with other Builder classes, this can be used two
 // ways:
@@ -164,10 +170,12 @@ class ResTableTypeBuilder {
  public:
   ResTableTypeBuilder(uint32_t package_id,
                       uint8_t type,
-                      bool enable_canonical_entries)
+                      bool enable_canonical_entries,
+                      bool enable_sparse_encoding)
       : m_package_id(package_id),
         m_type(type),
-        m_enable_canonical_entries(enable_canonical_entries) {
+        m_enable_canonical_entries(enable_canonical_entries),
+        m_enable_sparse_encoding(enable_sparse_encoding) {
     LOG_ALWAYS_FATAL_IF((package_id & 0xFFFFFF00) != 0,
                         "package_id expected to have low byte set; got 0x%x",
                         package_id);
@@ -177,6 +185,9 @@ class ResTableTypeBuilder {
   uint32_t make_id(size_t entry) {
     return (m_package_id << 24) | (m_type << 16) | (entry & 0xFFFF);
   }
+  bool should_encode_offsets_as_sparse(const std::vector<uint32_t>& offsets,
+                                       size_t entry_data_size);
+  void encode_offsets_as_sparse(std::vector<uint32_t>* offsets);
   virtual void serialize(android::Vector<char>* out) = 0;
 
  protected:
@@ -186,6 +197,9 @@ class ResTableTypeBuilder {
   uint8_t m_type;
   // Whether or not to check for redundant entry/value data.
   bool m_enable_canonical_entries;
+  // Allows the encoding of a ResTable_type to set FLAG_SPARSE and emit
+  // ResTable_sparseTypeEntry style entry offsets, if deemed beneficial for size
+  bool m_enable_sparse_encoding;
 };
 
 // Builder for projecting deletions over existing data ResTable_typeSpec and its
@@ -196,7 +210,10 @@ class ResTableTypeProjector : public ResTableTypeBuilder {
                         android::ResTable_typeSpec* spec,
                         std::vector<android::ResTable_type*> configs,
                         bool enable_canonical_entries = false)
-      : ResTableTypeBuilder(package_id, spec->id, enable_canonical_entries),
+      : ResTableTypeBuilder(package_id,
+                            spec->id,
+                            enable_canonical_entries,
+                            any_sparse_types(configs)),
         m_spec(spec),
         m_configs(std::move(configs)) {}
   void remove_ids(std::unordered_set<uint32_t>& ids_to_remove,
@@ -227,8 +244,10 @@ class ResTableTypeDefiner : public ResTableTypeBuilder {
                       uint8_t id,
                       std::vector<android::ResTable_config*> configs,
                       std::vector<uint32_t> flags,
-                      bool enable_canonical_entries = false)
-      : ResTableTypeBuilder(package_id, id, enable_canonical_entries),
+                      bool enable_canonical_entries = false,
+                      bool enable_sparse_encoding = false)
+      : ResTableTypeBuilder(
+            package_id, id, enable_canonical_entries, enable_sparse_encoding),
         m_configs(std::move(configs)),
         m_flags(std::move(flags)) {}
   // Adds a chunk of data representing an entry and value to the given config.

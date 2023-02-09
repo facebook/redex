@@ -8,8 +8,10 @@
 #include <boost/functional/hash.hpp>
 #include <cstddef>
 #include <iostream>
+#include <limits>
 #include <vector>
 
+#include "androidfw/TypeWrappers.h"
 #include "utils/ByteOrder.h"
 #include "utils/Debug.h"
 #include "utils/Log.h"
@@ -258,12 +260,50 @@ void CanonicalEntries::record(EntryValueData data,
   search->second.emplace_back(p);
 }
 
+bool ResTableTypeBuilder::should_encode_offsets_as_sparse(
+    const std::vector<uint32_t>& offsets, size_t entry_data_size) {
+  if (!m_enable_sparse_encoding) {
+    return false;
+  }
+  if (entry_data_size / 4 > std::numeric_limits<uint16_t>::max()) {
+    return false;
+  }
+  size_t total_non_empty = 0;
+  for (const auto& i : offsets) {
+    if (i != android::ResTable_type::NO_ENTRY) {
+      if (i % 4 != 0) {
+        // this should probably be fatal
+        return false;
+      }
+      total_non_empty++;
+    }
+  }
+  // See
+  // https://cs.android.com/android/platform/superproject/+/android-12.0.0_r1:frameworks/base/tools/aapt2/format/binary/TableFlattener.cpp;l=382
+  return (100 * total_non_empty) / offsets.size() < 60;
+}
+
+void ResTableTypeBuilder::encode_offsets_as_sparse(
+    std::vector<uint32_t>* offsets) {
+  std::vector<uint32_t> copy;
+  copy.insert(copy.begin(), offsets->begin(), offsets->end());
+  offsets->clear();
+  uint16_t entry_id = 0;
+  for (const auto& i : copy) {
+    if (i != android::ResTable_type::NO_ENTRY) {
+      android::ResTable_sparseTypeEntry entry;
+      entry.idx = htods(entry_id);
+      entry.offset = htods(i / 4);
+      offsets->emplace_back(entry.entry);
+    }
+    entry_id++;
+  }
+}
+
 void ResTableTypeProjector::serialize_type(android::ResTable_type* type,
                                            size_t last_non_deleted,
                                            android::Vector<char>* out) {
-  auto original_entries = dtohl(type->entryCount);
-  auto original_entries_start = dtohs(type->entriesStart);
-  if (original_entries == 0 || original_entries_start == 0) {
+  if (dtohl(type->entryCount) == 0 || dtohs(type->entriesStart) == 0) {
     // Wonky input data, omit this config.
     ALOGD("Wonky config for type %d, dropping!", type->id);
     return;
@@ -272,13 +312,13 @@ void ResTableTypeProjector::serialize_type(android::ResTable_type* type,
   // config has everything deleted, skip emitting data.
   {
     size_t num_non_deleted_non_empty_entries = 0;
-    uint32_t* entry_offsets =
-        (uint32_t*)((uint8_t*)type + dtohs(type->header.headerSize));
-    for (size_t i = 0; i < original_entries; i++) {
+    android::TypeVariant tv(type);
+    uint16_t i = 0;
+    for (auto it = tv.beginEntries(); it != tv.endEntries(); ++it, ++i) {
+      auto entry_ptr = const_cast<android::ResTable_entry*>(*it);
       auto id = make_id(i);
       auto is_deleted = m_ids_to_remove.count(id) != 0;
-      uint32_t offset = dtohl(entry_offsets[i]);
-      if (!is_deleted && offset != android::ResTable_type::NO_ENTRY) {
+      if (!is_deleted && entry_ptr != nullptr) {
         num_non_deleted_non_empty_entries++;
       }
     }
@@ -292,17 +332,16 @@ void ResTableTypeProjector::serialize_type(android::ResTable_type* type,
   android::Vector<char> temp;
   std::vector<uint32_t> offsets;
   CanonicalEntries canonical_entries;
-  // Pointer to the first Res_entry
-  uint32_t* entry_offsets =
-      (uint32_t*)((uint8_t*)type + dtohs(type->header.headerSize));
-  for (size_t i = 0; i < original_entries; i++) {
+  // iterate again, now that we know it's useful
+  android::TypeVariant tv(type);
+  uint16_t i = 0;
+  for (auto it = tv.beginEntries(); it != tv.endEntries(); ++it, ++i) {
+    auto entry_ptr = const_cast<android::ResTable_entry*>(*it);
     auto id = make_id(i);
     if (m_ids_to_remove.count(id) == 0) {
-      uint32_t offset = dtohl(entry_offsets[i]);
-      if (offset == android::ResTable_type::NO_ENTRY) {
+      if (entry_ptr == nullptr) {
         offsets.push_back(htodl(android::ResTable_type::NO_ENTRY));
       } else {
-        auto entry_ptr = (uint8_t*)type + dtohs(type->entriesStart) + offset;
         uint32_t total_size =
             compute_entry_value_length((android::ResTable_entry*)entry_ptr);
         if (!m_enable_canonical_entries) {
@@ -311,7 +350,7 @@ void ResTableTypeProjector::serialize_type(android::ResTable_type* type,
           push_data_no_swap(entry_ptr, total_size, &temp);
         } else {
           // Check if we have already emitted identical data.
-          EntryValueData ev(entry_ptr, total_size);
+          EntryValueData ev((uint8_t*)entry_ptr, total_size);
           size_t hash;
           uint32_t prev_offset;
           if (canonical_entries.find(ev, &hash, &prev_offset)) {
@@ -332,6 +371,11 @@ void ResTableTypeProjector::serialize_type(android::ResTable_type* type,
       offsets.push_back(htodl(android::ResTable_type::NO_ENTRY));
     }
   }
+  uint8_t type_flags{0};
+  if (should_encode_offsets_as_sparse(offsets, temp.size())) {
+    encode_offsets_as_sparse(&offsets);
+    type_flags |= android::ResTable_type::FLAG_SPARSE;
+  }
   // Header and actual data structure
   push_short(android::RES_TABLE_TYPE_TYPE, out);
   // Derive the header size from the input data (guard against inputs generated
@@ -341,19 +385,19 @@ void ResTableTypeProjector::serialize_type(android::ResTable_type* type,
   auto type_header_size =
       sizeof(android::ResChunk_header) + sizeof(uint32_t) * 3 + config_size;
   push_short(type_header_size, out);
-  auto num_entries = offsets.size();
-  auto entries_start = type_header_size + num_entries * sizeof(uint32_t);
+  auto num_offsets = offsets.size();
+  auto entries_start = type_header_size + num_offsets * sizeof(uint32_t);
   auto total_size = entries_start + temp.size();
   push_long(total_size, out);
   out->push_back(m_type);
+  out->push_back(type_flags);
   out->push_back(0); // pad to 4 bytes
   out->push_back(0);
-  out->push_back(0);
-  push_long(num_entries, out);
+  push_long(num_offsets, out);
   push_long(entries_start, out);
   auto cp = &type->config;
   push_data_no_swap(cp, config_size, out);
-  for (size_t i = 0; i < num_entries; i++) {
+  for (size_t i = 0; i < num_offsets; i++) {
     push_long(offsets[i], out);
   }
   push_vec(temp, out);
@@ -361,8 +405,8 @@ void ResTableTypeProjector::serialize_type(android::ResTable_type* type,
 
 void ResTableTypeProjector::serialize(android::Vector<char>* out) {
   // Basic validation of the inputs given.
-  LOG_ALWAYS_FATAL_IF(
-      m_configs.size() == 0, "No configs given for type %d", m_type);
+  LOG_ALWAYS_FATAL_IF(m_configs.empty(), "No configs given for type %d",
+                      m_type);
   // Check if all entries in this type have been marked for deletion. If so, no
   // data is emitted.
   auto original_entries = dtohl(m_spec->entryCount);
@@ -457,50 +501,57 @@ void ResTableTypeDefiner::serialize(android::Vector<char>* out) {
       continue;
     }
     auto& data = m_data.at(config);
-    // Write the type header
-    push_short(android::RES_TABLE_TYPE_TYPE, out);
-    auto config_size = dtohs(config->size);
-    auto type_header_size =
-        sizeof(android::ResChunk_header) + sizeof(uint32_t) * 3 + config_size;
-    push_short(type_header_size, out);
-    auto entries_start = type_header_size + data.size() * sizeof(uint32_t);
-    // Write the final size later
-    auto total_size_pos = out->size();
-    push_long(FILL_IN_LATER, out);
-    out->push_back(m_type);
-    out->push_back(0); // pad to 4 bytes
-    out->push_back(0);
-    out->push_back(0);
-    push_long(data.size(), out);
-    push_long(entries_start, out);
-    push_data_no_swap(config, config_size, out);
-    // Compute and write offsets.
+    // Compute offsets and entry/value data size.
     CanonicalEntries canonical_entries;
     android::Vector<char> entry_data;
+    std::vector<uint32_t> offsets;
     uint32_t offset = 0;
     for (auto& ev : data) {
       if (is_empty(ev)) {
-        push_long(dtohl(android::ResTable_type::NO_ENTRY), out);
+        offsets.emplace_back(android::ResTable_type::NO_ENTRY);
       } else if (!m_enable_canonical_entries) {
-        push_long(offset, out);
+        offsets.emplace_back(offset);
         offset += ev.value;
         push_data_no_swap(ev.key, ev.value, &entry_data);
       } else {
         size_t hash;
         uint32_t prev_offset;
         if (canonical_entries.find(ev, &hash, &prev_offset)) {
-          push_long(prev_offset, out);
+          offsets.emplace_back(prev_offset);
         } else {
           canonical_entries.record(ev, hash, offset);
-          push_long(offset, out);
+          offsets.emplace_back(offset);
           offset += ev.value;
           push_data_no_swap(ev.key, ev.value, &entry_data);
         }
       }
     }
-    // Actual data.
+    uint8_t type_flags{0};
+    if (should_encode_offsets_as_sparse(offsets, entry_data.size())) {
+      encode_offsets_as_sparse(&offsets);
+      type_flags |= android::ResTable_type::FLAG_SPARSE;
+    }
+    // Write the type header
+    push_short(android::RES_TABLE_TYPE_TYPE, out);
+    auto config_size = dtohs(config->size);
+    auto type_header_size =
+        sizeof(android::ResChunk_header) + sizeof(uint32_t) * 3 + config_size;
+    push_short(type_header_size, out);
+    auto entries_start = type_header_size + offsets.size() * sizeof(uint32_t);
+    auto total_size = entries_start + entry_data.size();
+    push_long(total_size, out);
+    out->push_back(m_type);
+    out->push_back(type_flags);
+    out->push_back(0); // pad to 4 bytes
+    out->push_back(0);
+    push_long(offsets.size(), out);
+    push_long(entries_start, out);
+    push_data_no_swap(config, config_size, out);
+    // Actual offsets and data.
+    for (const auto& i : offsets) {
+      push_long(i, out);
+    }
     push_vec(entry_data, out);
-    write_long_at_pos(total_size_pos, entries_start + entry_data.size(), out);
   }
 }
 

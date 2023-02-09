@@ -244,7 +244,7 @@ boost::optional<SwitchMethodPartitioning> SwitchMethodPartitioning::create(
   std::unordered_map<int32_t, cfg::Block*> key_to_block;
   for (auto edge : cases) {
     auto case_block = edge->target();
-    auto env = fixpoint.get_entry_state_at(case_block);
+    const auto& env = fixpoint.get_entry_state_at(case_block);
     auto case_key = env.get<SignedConstantDomain>(determining_reg);
     if (case_key.is_top() && verify_default_case) {
       always_assert_log(throws(case_block),

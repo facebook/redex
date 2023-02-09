@@ -23,4 +23,5 @@
 std::vector<DexMethod*> delete_methods(
     std::vector<DexClass*>& scope,
     std::unordered_set<DexMethod*>& removable,
-    std::function<DexMethod*(DexMethodRef*, MethodSearch)> concurrent_resolver);
+    std::function<DexMethod*(DexMethodRef*, MethodSearch, const DexMethod*)>
+        concurrent_resolver);

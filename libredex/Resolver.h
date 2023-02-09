@@ -330,3 +330,12 @@ inline DexField* resolve_field(const DexFieldRef* field,
   return resolve_field(field->get_class(), field->get_name(), field->get_type(),
                        search);
 }
+
+struct ConcurrentMethodResolver {
+  ConcurrentMethodRefCache concurrent_resolve_cache;
+  DexMethod* operator()(DexMethodRef* method,
+                        MethodSearch search,
+                        const DexMethod* caller) {
+    return resolve_method(method, search, concurrent_resolve_cache, caller);
+  }
+};

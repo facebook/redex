@@ -14,7 +14,7 @@ class C3 { }
 class C4 { }
 class C5 { }
 class C6 { }
-class C7 { }
+class C7 extends C6 { } // highest seed weight, since it extends another (non-external) class
 class C8 { }
 class C9 { }
 class C10 { }

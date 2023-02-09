@@ -60,7 +60,7 @@ class IODIMetadata {
 
   // This fills the internal map of stack trace name -> method. This must be
   // called after the last pass and before anything starts to get lowered.
-  void mark_methods(DexStoresVector& scope);
+  void mark_methods(DexStoresVector& scope, bool iodi_layers);
 
   // This is called while lowering to dex to note that a method has been
   // determined to be too big for a given dex.
@@ -85,17 +85,21 @@ class IODIMetadata {
                                              std::string& storage);
 
   const DexMethod* get_canonical_method(const DexMethod* m) const {
-    return m_canonical.at(m);
+    auto it = m_canonical.find(m);
+    if (it == m_canonical.end()) {
+      return m;
+    }
+
+    return it->second;
   }
 
-  const std::unordered_map<const DexMethod*,
-                           std::unordered_set<const DexMethod*>>&
-  get_name_clusters() const {
-    return m_name_clusters;
+  const std::unordered_set<const DexMethod*>&
+  get_too_large_cluster_canonical_methods() const {
+    return m_too_large_cluster_canonical_methods;
   }
-  const std::unordered_set<const DexMethod*>& get_cluster(
-      const DexMethod* m) const {
-    return m_name_clusters.at(get_canonical_method(m));
+
+  bool is_in_global_cluster(const DexMethod* m) const {
+    return m_canonical.find(m) != m_canonical.end();
   }
 
   void set_iodi_layer(const DexMethod* method, size_t layer);
@@ -103,12 +107,10 @@ class IODIMetadata {
   bool has_iodi_layer(const DexMethod* method) const;
 
  private:
-  std::unordered_map<const DexMethod*, std::unordered_set<const DexMethod*>>
-      m_name_clusters;
+  std::unordered_set<const DexMethod*> m_too_large_cluster_canonical_methods;
   std::unordered_map<const DexMethod*, const DexMethod*> m_canonical;
 
-  std::unordered_map<const DexMethod*, std::pair<std::string, size_t>>
-      m_iodi_method_layers;
+  std::unordered_map<const DexMethod*, size_t> m_iodi_method_layers;
 
   // These exists for can_safely_use_iodi
   std::unordered_set<const DexMethod*> m_huge_methods;

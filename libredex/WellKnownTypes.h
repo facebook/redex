@@ -31,7 +31,8 @@
   FOR_EACH(java_lang_Integer, "Ljava/lang/Integer;")     \
   FOR_EACH(java_lang_Long, "Ljava/lang/Long;")           \
   FOR_EACH(java_lang_Float, "Ljava/lang/Float;")         \
-  FOR_EACH(java_lang_Double, "Ljava/lang/Double;")
+  FOR_EACH(java_lang_Double, "Ljava/lang/Double;")       \
+  FOR_EACH(java_lang_RuntimeException, "Ljava/lang/RuntimeException;")
 
 #define PRIMITIVE_PSEUDO_TYPE_FIELDS                                       \
   FOR_EACH(Void_TYPE, "Ljava/lang/Void;.TYPE:Ljava/lang/Class;")           \
@@ -43,3 +44,22 @@
   FOR_EACH(Boolean_TYPE, "Ljava/lang/Boolean;.TYPE:Ljava/lang/Class;")     \
   FOR_EACH(Float_TYPE, "Ljava/lang/Float;.TYPE:Ljava/lang/Class;")         \
   FOR_EACH(Double_TYPE, "Ljava/lang/Double;.TYPE:Ljava/lang/Class;")
+
+#define WELL_KNOWN_METHODS                                                    \
+  FOR_EACH(java_lang_Object_ctor, "Ljava/lang/Object;.<init>:()V")            \
+  FOR_EACH(java_lang_Enum_ctor,                                               \
+           "Ljava/lang/Enum;.<init>:(Ljava/lang/String;I)V")                  \
+  FOR_EACH(java_lang_Enum_ordinal, "Ljava/lang/Enum;.ordinal:()I")            \
+  FOR_EACH(java_lang_Enum_name, "Ljava/lang/Enum;.name:()Ljava/lang/String;") \
+  FOR_EACH(java_lang_Enum_equals,                                             \
+           "Ljava/lang/Enum;.equals:(Ljava/lang/Object;)Z")                   \
+  FOR_EACH(java_lang_Integer_valueOf,                                         \
+           "Ljava/lang/Integer;.valueOf:(I)Ljava/lang/Integer;")              \
+  FOR_EACH(java_lang_Integer_intValue, "Ljava/lang/Integer;.intValue:()I")    \
+  FOR_EACH(java_lang_Throwable_fillInStackTrace,                              \
+           "Ljava/lang/Throwable;.fillInStackTrace:()Ljava/lang/Throwable;")  \
+  FOR_EACH(java_lang_RuntimeException_init_String,                            \
+           "Ljava/lang/RuntimeException;.<init>:(Ljava/lang/String;)V")       \
+  FOR_EACH(java_lang_String_equals,                                           \
+           "Ljava/lang/String;.equals:(Ljava/lang/Object;)Z")                 \
+  FOR_EACH(java_lang_String_hashCode, "Ljava/lang/String;.hashCode:()I")

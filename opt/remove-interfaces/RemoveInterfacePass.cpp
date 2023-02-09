@@ -26,7 +26,7 @@ namespace {
 
 // The max num of implementors a removable interface can have.
 // If an interface has more implementors, we do not remove it.
-constexpr size_t MAX_IMPLS_SIZE = 10;
+constexpr size_t MAX_IMPLS_SIZE = 7;
 
 std::vector<Location> get_args_for(DexProto* proto, MethodCreator* mc) {
   std::vector<Location> args;

@@ -259,20 +259,23 @@ public class ClassMergingSimpleTest {
     A a = new A("Oh A!");
     Object o = a;
     assertThat(fromObj(o)).isEqualTo(a);
-    // NOTICE: at the moment we exclude from the optimization classes with
-    // new-array instructions outside the generated code.
-    // That may change later once we can do static analysis and prove there
-    // are no dangerous covariant use of the array.
-    // So for now we comment the code below
-    /*
+  }
+
+  @Test
+  public void testNewArray() {
     A[] aa = {new A("Oh A0!"), new A("Oh A1!"), new A("Oh A2!")};
-    o = aa;
+    Object o = aa;
     A[] casted = (A[]) o;
     assertThat(casted.length).isEqualTo(3);
     assertThat(casted[0].str).isEqualTo("Oh A0!");
     assertThat(casted[1].str).isEqualTo("Oh A1!");
     assertThat(casted[2].str).isEqualTo("Oh A2!");
-    */
+
+    Base[] ba = {new A("Oh A!"), new B("Oh B!")};
+    assertThat(ba[0].str).isEqualTo("Oh A!");
+    assertThat(ba[0].wasOverridden()).isEqualTo(true);
+    assertThat(ba[1].str).isEqualTo("Oh B!");
+    assertThat(ba[1].wasOverridden()).isEqualTo(true);
   }
 
   // Dummy for test

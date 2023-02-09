@@ -12,6 +12,7 @@
 #include "ConstantPropagationRuntimeAssert.h"
 #include "ConstantPropagationTransform.h"
 #include "ConstantPropagationWholeProgramState.h"
+#include "IPConstantPropagationAnalysis.h"
 #include "Pass.h"
 
 namespace constant_propagation {
@@ -111,6 +112,8 @@ class PassImpl : public Pass {
     size_t callgraph_nodes{0};
     size_t callgraph_edges{0};
     size_t callgraph_callsites{0};
+
+    FixpointIterator::Stats fp_iter;
   } m_stats;
   Transform::Stats m_transform_stats;
   Config m_config;

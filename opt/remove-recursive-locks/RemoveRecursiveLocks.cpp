@@ -414,7 +414,7 @@ boost::variant<bool, std::pair<size_t, size_t>> check(
   size_t max_d = 0;
   size_t max_same = 0;
   for (auto* b : cfg.blocks()) {
-    auto state = iter.get_entry_state_at(b);
+    const auto& state = iter.get_entry_state_at(b);
     if (state.is_top()) {
       return false;
     }
@@ -479,7 +479,7 @@ void print(std::ostream& os,
       analysis::LockEnvironment env(sparta::AbstractValueKind::Bottom);
       print_state(env);
       for (auto* edge : GraphInterface::predecessors(cfg, b)) {
-        auto prev_exit =
+        const auto& prev_exit =
             iter.get_exit_state_at(GraphInterface::source(cfg, edge));
         auto analyzed = iter.analyze_edge(edge, prev_exit);
         env.join_with(analyzed);

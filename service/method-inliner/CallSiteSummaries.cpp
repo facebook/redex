@@ -39,9 +39,9 @@ std::string CallSiteSummary::get_key() const {
   return oss.str();
 }
 
-static void append_signed_constant(std::ostringstream& oss,
-                                   const SignedConstantDomain& signed_value) {
-  auto c = signed_value.get_constant();
+static void append_key_value(std::ostringstream& oss,
+                             const SignedConstantDomain& signed_value) {
+  const auto c = signed_value.get_constant();
   if (c) {
     // prefer compact pretty value
     oss << *c;
@@ -50,44 +50,69 @@ static void append_signed_constant(std::ostringstream& oss,
   }
 }
 
+static void append_key_value(std::ostringstream& oss,
+                             const SingletonObjectDomain& singleton_value) {
+  auto dex_field = singleton_value.get_constant();
+  always_assert(dex_field);
+  oss << show(*dex_field);
+}
+
+static void append_key_value(std::ostringstream& oss,
+                             const StringDomain& string_value) {
+  auto dex_string = string_value.get_constant();
+  always_assert(dex_string);
+  auto str = (*dex_string)->str();
+  oss << std::quoted(str_copy(str));
+}
+
+static void append_key_value(std::ostringstream& oss,
+                             const ObjectWithImmutAttrDomain& obj_or_none) {
+  auto object = obj_or_none.get_constant();
+  always_assert(object);
+  if (object->jvm_cached_singleton) {
+    oss << "(cached)";
+  }
+  oss << show(object->type);
+  oss << "{";
+  bool first{true};
+  for (auto& attr : object->attributes) {
+    if (first) {
+      first = false;
+    } else {
+      oss << ",";
+    }
+    if (attr.attr.is_field()) {
+      oss << show(attr.attr.val.field);
+    } else {
+      always_assert(attr.attr.is_method());
+      oss << show(attr.attr.val.method);
+    }
+    oss << "=";
+    if (const auto& signed_value =
+            attr.value.maybe_get<SignedConstantDomain>()) {
+      append_key_value(oss, *signed_value);
+    } else if (const auto& string_value =
+                   attr.value.maybe_get<StringDomain>()) {
+      append_key_value(oss, *string_value);
+    } else {
+      not_reached_log("unexpected value: %s", SHOW(attr.value));
+    }
+  }
+  oss << "}";
+}
+
 void CallSiteSummary::append_key_value(std::ostringstream& oss,
                                        const ConstantValue& value) {
   if (const auto& signed_value = value.maybe_get<SignedConstantDomain>()) {
-    append_signed_constant(oss, *signed_value);
+    ::append_key_value(oss, *signed_value);
   } else if (const auto& singleton_value =
                  value.maybe_get<SingletonObjectDomain>()) {
-    auto field = *singleton_value->get_constant();
-    oss << show(field);
+    ::append_key_value(oss, *singleton_value);
   } else if (const auto& obj_or_none =
                  value.maybe_get<ObjectWithImmutAttrDomain>()) {
-    auto object = obj_or_none->get_constant();
-    if (object->jvm_cached_singleton) {
-      oss << "(cached)";
-    }
-    oss << show(object->type);
-    oss << "{";
-    bool first{true};
-    for (auto& attr : object->attributes) {
-      if (first) {
-        first = false;
-      } else {
-        oss << ",";
-      }
-      if (attr.attr.is_field()) {
-        oss << show(attr.attr.val.field);
-      } else {
-        always_assert(attr.attr.is_method());
-        oss << show(attr.attr.val.method);
-      }
-      oss << "=";
-      if (const auto& signed_value2 =
-              attr.value.maybe_get<SignedConstantDomain>()) {
-        append_signed_constant(oss, *signed_value2);
-      } else {
-        not_reached_log("unexpected attr value: %s", SHOW(attr.value));
-      }
-    }
-    oss << "}";
+    ::append_key_value(oss, *obj_or_none);
+  } else if (const auto& string_value = value.maybe_get<StringDomain>()) {
+    ::append_key_value(oss, *string_value);
   } else {
     not_reached_log("unexpected value: %s", SHOW(value));
   }
@@ -266,7 +291,7 @@ CallSiteSummarizer::get_invoke_call_site_summaries(
           m_shrinker.get_immut_analyzer_state(),
           m_shrinker.get_immut_analyzer_state(),
           constant_propagation::EnumFieldAnalyzerState::get(),
-          constant_propagation::BoxedBooleanAnalyzerState::get(),
+          constant_propagation::BoxedBooleanAnalyzerState::get(), nullptr,
           constant_propagation::ApiLevelAnalyzerState::get(), nullptr));
   intra_cp.run(initial_env);
   for (const auto& block : cfg.blocks()) {

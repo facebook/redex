@@ -30,6 +30,7 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/opt/copy-propagation \
 	-I$(top_srcdir)/opt/cse \
 	-I$(top_srcdir)/opt/dedup_blocks \
+	-I$(top_srcdir)/opt/dedup_resources \
 	-I$(top_srcdir)/opt/dedup-strings \
 	-I$(top_srcdir)/opt/delinit \
 	-I$(top_srcdir)/opt/delsuper \
@@ -44,8 +45,10 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/opt/merge_interface \
 	-I$(top_srcdir)/opt/methodinline \
 	-I$(top_srcdir)/opt/obfuscate \
+	-I$(top_srcdir)/opt/obfuscate_resources \
 	-I$(top_srcdir)/opt/object-sensitive-dce \
 	-I$(top_srcdir)/opt/optimize_enums \
+	-I$(top_srcdir)/opt/optimize_resources \
 	-I$(top_srcdir)/opt/original_name \
 	-I$(top_srcdir)/opt/outliner \
 	-I$(top_srcdir)/opt/partial-application \
@@ -78,6 +81,7 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/opt/shorten-srcstrings \
 	-I$(top_srcdir)/opt/singleimpl \
 	-I$(top_srcdir)/opt/split_huge_switches \
+	-I$(top_srcdir)/opt/split_resource_tables \
 	-I$(top_srcdir)/opt/staticrelo \
 	-I$(top_srcdir)/opt/static-sink \
 	-I$(top_srcdir)/opt/stringbuilder-outliner \

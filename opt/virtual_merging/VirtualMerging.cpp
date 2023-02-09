@@ -108,17 +108,13 @@ VirtualMerging::VirtualMerging(DexStoresVector& stores,
       m_init_classes_with_side_effects(m_scope,
                                        /* create_init_class_insns */ false),
       m_perf_config(perf_config) {
-  auto concurrent_resolver = [&](DexMethodRef* method, MethodSearch search) {
-    return resolve_method(method, search, m_concurrent_resolved_refs);
-  };
-
   std::unordered_set<DexMethod*> no_default_inlinables;
   // disable shrinking options, minimizing initialization time
   m_inliner_config.shrinker = shrinker::ShrinkerConfig();
   int min_sdk = 0;
   m_inliner.reset(new MultiMethodInliner(
       m_scope, m_init_classes_with_side_effects, stores, no_default_inlinables,
-      concurrent_resolver, m_inliner_config, min_sdk,
+      std::ref(m_concurrent_method_resolver), m_inliner_config, min_sdk,
       MultiMethodInlinerMode::None,
       /* true_virtual_callers */ {},
       /* inline_for_speed */ nullptr,
@@ -923,14 +919,6 @@ std::pair<std::vector<MethodData>, VirtualMergingStats> create_ordering(
   return std::make_pair(std::move(ordering), stats);
 }
 
-void reset_sb(SourceBlock& sb, DexMethod* ref, uint32_t id) {
-  sb.src = ref->get_deobfuscated_name_or_null();
-  sb.id = id;
-  for (size_t i = 0; i < sb.vals_size; i++) {
-    sb.vals[i] = SourceBlock::Val{0, 0};
-  }
-}
-
 struct SBHelper {
   DexMethod* overridden;
   const std::vector<const DexMethod*>& v;
@@ -943,10 +931,11 @@ struct SBHelper {
         v(v),
         overridden_had_source_blocks(
             overridden->get_code() != nullptr &&
-            method_get_first_source_block(overridden) != nullptr),
+            source_blocks::get_first_source_block_of_method(overridden) !=
+                nullptr),
         create_source_blocks([&]() {
           for (auto* m : v) {
-            if (method_get_first_source_block(m) != nullptr) {
+            if (source_blocks::get_first_source_block_of_method(m) != nullptr) {
               return true;
             }
           }
@@ -956,77 +945,27 @@ struct SBHelper {
     // do this ahead of time.
     if (create_source_blocks && !overridden_had_source_blocks &&
         overridden->get_code() != nullptr) {
-      normalize_overridden_method_withouts_sbs(overridden,
-                                               get_arbitrary_first_sb());
+      source_blocks::insert_synthetic_source_blocks_in_method(
+          overridden, get_source_block_creator());
     }
   }
 
-  static SourceBlock* method_get_first_source_block(const DexMethod* m) {
-    auto code = m->get_code();
-    if (code->cfg_built()) {
-      return source_blocks::get_first_source_block(code->cfg().entry_block());
-    } else {
-      for (auto& mie : *code) {
-        if (mie.type == MFLOW_SOURCE_BLOCK) {
-          return mie.src_block.get();
-        }
-      };
-    }
-    return nullptr;
+  SourceBlock* get_arbitrary_first_sb() const {
+    auto sb = source_blocks::get_any_first_source_block_of_methods(v);
+    always_assert(sb != nullptr);
+    return sb;
   }
 
-  SourceBlock* get_arbitrary_first_sb() {
-    for (auto* m : v) {
-      auto* sb = method_get_first_source_block(m);
-      if (sb != nullptr) {
-        return sb;
-      }
-    }
-    not_reached();
-  }
-
-  static void normalize_overridden_method_withouts_sbs(
-      DexMethod* overridden_method, SourceBlock* arbitrary_sb) {
-    auto* code = overridden_method->get_code();
-    cfg::ScopedCFG cfg(code);
-
-    for (auto* block : cfg->blocks()) {
-      if (block == cfg->entry_block()) {
-        // Special handling.
-        continue;
-      }
-      auto new_sb = std::make_unique<SourceBlock>(*arbitrary_sb);
-      // Bit weird, but better than making up real numbers.
-      reset_sb(*new_sb, overridden_method, SourceBlock::kSyntheticId);
-
-      auto it = block->get_first_insn();
-      if (it == block->end()) {
-        block->insert_before(block->begin(), std::move(new_sb));
-      } else {
-        if (opcode::is_a_move_result(it->insn->opcode())) {
-          block->insert_after(it, std::move(new_sb));
-        } else {
-          block->insert_before(it, std::move(new_sb));
-        }
-      }
-    }
-
-    auto* block = cfg->entry_block();
-    auto new_sb = std::make_unique<SourceBlock>(*arbitrary_sb);
-    // Bit weird, but better than making up real numbers.
-    reset_sb(*new_sb, overridden_method, SourceBlock::kSyntheticId);
-    auto it = block->get_first_non_param_loading_insn();
-    if (it == block->end()) {
-      block->insert_before(it, std::move(new_sb));
-    } else {
-      block->insert_after(it, std::move(new_sb));
-    }
-  }
-
-  std::unique_ptr<SourceBlock> gen_arbitrary_reset_sb() {
-    auto src_block = std::make_unique<SourceBlock>(*get_arbitrary_first_sb());
-    reset_sb(*src_block, overridden, SourceBlock::kSyntheticId);
-    return src_block;
+  std::function<std::unique_ptr<SourceBlock>()> get_source_block_creator(
+      float val = 0) const {
+    return [overridden = this->overridden,
+            template_sb = get_arbitrary_first_sb(), val]() {
+      auto new_sb = std::make_unique<SourceBlock>(*template_sb);
+      source_blocks::fill_source_block(*new_sb, overridden,
+                                       SourceBlock::kSyntheticId,
+                                       SourceBlock::Val{val, 0});
+      return new_sb;
+    };
   }
 
   struct ScopedSplitHelper {
@@ -1053,7 +992,8 @@ struct SBHelper {
 
     ~ScopedSplitHelper() {
       if (block != nullptr) {
-        auto overriding_sb = method_get_first_source_block(overriding);
+        auto overriding_sb =
+            source_blocks::get_first_source_block_of_method(overriding);
         auto new_sb = std::make_unique<SourceBlock>(
             overriding_sb != nullptr ? *overriding_sb
             : first_sb != nullptr    ? *first_sb
@@ -1207,7 +1147,7 @@ VirtualMergingStats apply_ordering(
           }
 
           if (sb_helper.create_source_blocks) {
-            overridden_code->push_back(sb_helper.gen_arbitrary_reset_sb());
+            overridden_code->push_back(sb_helper.get_source_block_creator()());
           }
 
           // we'll define helper functions in a way that lets them mutate the
@@ -1317,6 +1257,13 @@ VirtualMergingStats apply_ordering(
           allocate_wide_temp = [=]() { return cfg_ptr->allocate_wide_temp(); };
           cleanup = []() {};
         }
+
+        if (sb_helper.create_source_blocks) {
+          // Insert source block with val == 1.0 so that inlining normalizes
+          // source-blocks properly
+          push_sb(sb_helper.get_source_block_creator(/* val */ 1.0)());
+        }
+
         always_assert(1 + proto->get_args()->size() == param_regs.size());
 
         // invoke-virtual temp, param1, ..., paramN, OverridingMethod

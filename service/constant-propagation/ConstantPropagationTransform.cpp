@@ -7,6 +7,7 @@
 
 #include "ConstantPropagationTransform.h"
 
+#include "ReachableClasses.h"
 #include "ReachingDefinitions.h"
 #include "RedexContext.h"
 #include "ScopedMetrics.h"
@@ -73,8 +74,8 @@ bool Transform::eliminate_redundant_null_check(
   auto* insn = cfg_it->insn;
   switch (insn->opcode()) {
   case OPCODE_INVOKE_STATIC: {
-    if (auto index =
-            get_null_check_object_index(insn, m_kotlin_null_check_assertions)) {
+    if (auto index = get_null_check_object_index(
+            insn, m_runtime_cache.kotlin_null_check_assertions)) {
       ++m_stats.null_checks_method_calls;
       auto val = env.get(insn->src(*index)).maybe_get<SignedConstantDomain>();
       if (val && val->interval() == sign_domain::Interval::NEZ) {
@@ -163,24 +164,23 @@ void try_simplify(const ConstantEnvironment& env,
     return true;
   };
 
-  auto reg_fits_lit8 = [&env](reg_t reg) -> std::optional<int8_t> {
+  auto reg_fits_lit = [&](reg_t reg) -> std::optional<int16_t> {
     auto value = env.get(reg).maybe_get<SignedConstantDomain>();
     if (!value || !value->get_constant()) {
       return std::nullopt;
     }
     int64_t val = *value->get_constant();
-    if (val < -128 || val > 127) {
-      return std::nullopt;
+    if (config.to_int_lit8 && val >= -128 && val <= 127) {
+      return (int16_t)val;
     }
-    return (int8_t)val;
+    if (config.to_int_lit16 && val >= -32768 && val <= 32767) {
+      return (int16_t)val;
+    }
+    return std::nullopt;
   };
 
-  auto maybe_reduce_lit8 = [&](size_t idx) -> bool {
-    if (!config.to_int_lit8) {
-      return false;
-    }
-
-    auto val = reg_fits_lit8(insn->src(idx));
+  auto maybe_reduce_lit = [&](size_t idx) -> bool {
+    auto val = reg_fits_lit(insn->src(idx));
     if (!val) {
       return false;
     }
@@ -188,16 +188,16 @@ void try_simplify(const ConstantEnvironment& env,
     auto new_op = [&]() -> IROpcode {
       switch (insn->opcode()) {
       case OPCODE_ADD_INT:
-        return OPCODE_ADD_INT_LIT8;
+        return OPCODE_ADD_INT_LIT;
       // TODO: SUB to RSUB
       case OPCODE_MUL_INT:
-        return OPCODE_MUL_INT_LIT8;
+        return OPCODE_MUL_INT_LIT;
       case OPCODE_AND_INT:
-        return OPCODE_AND_INT_LIT8;
+        return OPCODE_AND_INT_LIT;
       case OPCODE_OR_INT:
-        return OPCODE_OR_INT_LIT8;
+        return OPCODE_OR_INT_LIT;
       case OPCODE_XOR_INT:
-        return OPCODE_XOR_INT_LIT8;
+        return OPCODE_XOR_INT_LIT;
       default:
         always_assert(false);
       }
@@ -212,70 +212,11 @@ void try_simplify(const ConstantEnvironment& env,
     return true;
   };
 
-  auto maybe_reduce_lit8_both = [&]() {
-    if (maybe_reduce_lit8(0)) {
+  auto maybe_reduce_lit_both = [&]() {
+    if (maybe_reduce_lit(0)) {
       return true;
     }
-    if (maybe_reduce_lit8(1)) {
-      return true;
-    }
-    return false;
-  };
-
-  auto reg_fits_lit16 = [&env](reg_t reg) -> std::optional<int16_t> {
-    auto value = env.get(reg).maybe_get<SignedConstantDomain>();
-    if (!value || !value->get_constant()) {
-      return std::nullopt;
-    }
-    int64_t val = *value->get_constant();
-    if (val < -32768 || val > 32767) {
-      return std::nullopt;
-    }
-    return (int16_t)val;
-  };
-
-  auto maybe_reduce_lit16 = [&](size_t idx) -> bool {
-    if (!config.to_int_lit16) {
-      return false;
-    }
-
-    auto val = reg_fits_lit16(insn->src(idx));
-    if (!val) {
-      return false;
-    }
-
-    auto new_op = [&]() -> IROpcode {
-      switch (insn->opcode()) {
-      case OPCODE_ADD_INT:
-        return OPCODE_ADD_INT_LIT16;
-      // TODO: SUB to RSUB
-      case OPCODE_MUL_INT:
-        return OPCODE_MUL_INT_LIT16;
-      case OPCODE_AND_INT:
-        return OPCODE_AND_INT_LIT16;
-      case OPCODE_OR_INT:
-        return OPCODE_OR_INT_LIT16;
-      case OPCODE_XOR_INT:
-        return OPCODE_XOR_INT_LIT16;
-      default:
-        always_assert(false);
-      }
-      not_reached();
-    }();
-
-    auto repl = new IRInstruction(new_op);
-    repl->set_src(0, insn->src(idx == 0 ? 1 : 0));
-    repl->set_dest(insn->dest());
-    repl->set_literal(*val);
-    mutation.replace(cfg_it, {repl});
-    return true;
-  };
-
-  auto maybe_reduce_lit16_both = [&]() {
-    if (maybe_reduce_lit16(0)) {
-      return true;
-    }
-    if (maybe_reduce_lit16(1)) {
+    if (maybe_reduce_lit(1)) {
       return true;
     }
     return false;
@@ -305,24 +246,21 @@ void try_simplify(const ConstantEnvironment& env,
   switch (insn->opcode()) {
     // These should have been handled by PeepHole, really.
 
-  case OPCODE_ADD_INT_LIT16:
-  case OPCODE_ADD_INT_LIT8: {
+  case OPCODE_ADD_INT_LIT: {
     if (insn->get_literal() == 0) {
       replace_with_move(insn->src(0));
     }
     break;
   }
 
-  case OPCODE_RSUB_INT:
-  case OPCODE_RSUB_INT_LIT8: {
+  case OPCODE_RSUB_INT_LIT: {
     if (insn->get_literal() == 0) {
       replace_with_neg(insn->src(0));
     }
     break;
   }
 
-  case OPCODE_MUL_INT_LIT16:
-  case OPCODE_MUL_INT_LIT8: {
+  case OPCODE_MUL_INT_LIT: {
     if (insn->get_literal() == 1) {
       replace_with_move(insn->src(0));
       break;
@@ -337,8 +275,7 @@ void try_simplify(const ConstantEnvironment& env,
     }
     break;
   }
-  case OPCODE_AND_INT_LIT16:
-  case OPCODE_AND_INT_LIT8: {
+  case OPCODE_AND_INT_LIT: {
     if (insn->get_literal() == 0) {
       replace_with_const(0);
       break;
@@ -349,8 +286,7 @@ void try_simplify(const ConstantEnvironment& env,
     }
     break;
   }
-  case OPCODE_OR_INT_LIT16:
-  case OPCODE_OR_INT_LIT8: {
+  case OPCODE_OR_INT_LIT: {
     if (insn->get_literal() == 0) {
       replace_with_move(insn->src(0));
       break;
@@ -361,15 +297,14 @@ void try_simplify(const ConstantEnvironment& env,
     }
     break;
   }
-  case OPCODE_XOR_INT_LIT16:
-  case OPCODE_XOR_INT_LIT8: {
+  case OPCODE_XOR_INT_LIT: {
     // TODO
     break;
   }
 
-  case OPCODE_SHL_INT_LIT8:
-  case OPCODE_USHR_INT_LIT8:
-  case OPCODE_SHR_INT_LIT8: {
+  case OPCODE_SHL_INT_LIT:
+  case OPCODE_USHR_INT_LIT:
+  case OPCODE_SHR_INT_LIT: {
     // Can at most simplify the operand, but doesn't make much sense.
     break;
   }
@@ -379,9 +314,7 @@ void try_simplify(const ConstantEnvironment& env,
       replace_with_move(insn->src(1));
     } else if (reg_is_exact(insn->src(1), 0)) {
       replace_with_move(insn->src(0));
-    } else if (maybe_reduce_lit8_both()) {
-      break;
-    } else if (maybe_reduce_lit16_both()) {
+    } else if (maybe_reduce_lit_both()) {
       break;
     }
     break;
@@ -407,9 +340,7 @@ void try_simplify(const ConstantEnvironment& env,
       replace_with_neg(insn->src(1));
     } else if (reg_is_exact(insn->src(1), -1)) {
       replace_with_neg(insn->src(0));
-    } else if (maybe_reduce_lit8_both()) {
-      break;
-    } else if (maybe_reduce_lit16_both()) {
+    } else if (maybe_reduce_lit_both()) {
       break;
     }
     break;
@@ -422,9 +353,7 @@ void try_simplify(const ConstantEnvironment& env,
       replace_with_move(insn->src(0));
     } else if (reg_is_exact(insn->src(0), 0) || reg_is_exact(insn->src(1), 0)) {
       replace_with_const(0);
-    } else if (maybe_reduce_lit8_both()) {
-      break;
-    } else if (maybe_reduce_lit16_both()) {
+    } else if (maybe_reduce_lit_both()) {
       break;
     }
     break;
@@ -438,18 +367,14 @@ void try_simplify(const ConstantEnvironment& env,
     } else if (reg_is_exact(insn->src(0), -1) ||
                reg_is_exact(insn->src(1), -1)) {
       replace_with_const(-1);
-    } else if (maybe_reduce_lit8_both()) {
-      break;
-    } else if (maybe_reduce_lit16_both()) {
+    } else if (maybe_reduce_lit_both()) {
       break;
     }
     break;
   }
 
   case OPCODE_XOR_INT:
-    if (maybe_reduce_lit8_both()) {
-      break;
-    } else if (maybe_reduce_lit16_both()) {
+    if (maybe_reduce_lit_both()) {
       break;
     }
     break;
@@ -469,6 +394,13 @@ void try_simplify(const ConstantEnvironment& env,
 }
 
 } // namespace
+
+bool Transform::assumenosideeffects(DexMethodRef* ref, DexMethod* meth) const {
+  if (::assumenosideeffects(meth)) {
+    return true;
+  }
+  return m_config.pure_methods->find(ref) != m_config.pure_methods->end();
+}
 
 void Transform::simplify_instruction(const ConstantEnvironment& env,
                                      const WholeProgramState& wps,
@@ -516,34 +448,46 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
   case OPCODE_MOVE_RESULT_OBJECT: {
     if (m_config.replace_move_result_with_consts) {
       replace_with_const(env, cfg_it, xstores, declaring_type);
-    } else if (m_config.getter_methods_for_immutable_fields) {
-      auto& cfg = cfg_it.cfg();
-      auto primary_insn = cfg.primary_instruction_of_move_result(cfg_it)->insn;
-      if (opcode::is_invoke_virtual(primary_insn->opcode())) {
-        auto invoked =
-            resolve_method(primary_insn->get_method(), MethodSearch::Virtual);
-        if (m_config.getter_methods_for_immutable_fields->count(invoked)) {
-          replace_with_const(env, cfg_it, xstores, declaring_type);
-        }
-      }
+      break;
+    }
+    if (!m_config.getter_methods_for_immutable_fields &&
+        !m_config.pure_methods) {
+      break;
+    }
+
+    auto& cfg = cfg_it.cfg();
+    auto primary_insn = cfg.primary_instruction_of_move_result(cfg_it)->insn;
+    if (!opcode::is_an_invoke(primary_insn->opcode())) {
+      break;
+    }
+    auto invoked = resolve_method(primary_insn->get_method(),
+                                  opcode_to_search(primary_insn));
+    if (!invoked) {
+      break;
+    }
+    if (m_config.getter_methods_for_immutable_fields &&
+        opcode::is_invoke_virtual(primary_insn->opcode()) &&
+        m_config.getter_methods_for_immutable_fields->count(invoked)) {
+      replace_with_const(env, cfg_it, xstores, declaring_type);
+      break;
+    }
+
+    if (m_config.pure_methods &&
+        assumenosideeffects(primary_insn->get_method(), invoked)) {
+      replace_with_const(env, cfg_it, xstores, declaring_type);
+      break;
     }
     break;
   }
-  case OPCODE_ADD_INT_LIT16:
-  case OPCODE_ADD_INT_LIT8:
-  case OPCODE_RSUB_INT:
-  case OPCODE_RSUB_INT_LIT8:
-  case OPCODE_MUL_INT_LIT16:
-  case OPCODE_MUL_INT_LIT8:
-  case OPCODE_AND_INT_LIT16:
-  case OPCODE_AND_INT_LIT8:
-  case OPCODE_OR_INT_LIT16:
-  case OPCODE_OR_INT_LIT8:
-  case OPCODE_XOR_INT_LIT16:
-  case OPCODE_XOR_INT_LIT8:
-  case OPCODE_SHL_INT_LIT8:
-  case OPCODE_SHR_INT_LIT8:
-  case OPCODE_USHR_INT_LIT8:
+  case OPCODE_ADD_INT_LIT:
+  case OPCODE_RSUB_INT_LIT:
+  case OPCODE_MUL_INT_LIT:
+  case OPCODE_AND_INT_LIT:
+  case OPCODE_OR_INT_LIT:
+  case OPCODE_XOR_INT_LIT:
+  case OPCODE_SHL_INT_LIT:
+  case OPCODE_SHR_INT_LIT:
+  case OPCODE_USHR_INT_LIT:
   case OPCODE_ADD_INT:
   case OPCODE_SUB_INT:
   case OPCODE_MUL_INT:
@@ -928,7 +872,7 @@ void Transform::forward_targets(
           liveness_fixpoint_iter.reset(new LivenessFixpointIterator(cfg));
           liveness_fixpoint_iter->run(LivenessDomain());
         }
-        auto live_in_vars = liveness_fixpoint_iter->get_live_in_vars_at(
+        const auto& live_in_vars = liveness_fixpoint_iter->get_live_in_vars_at(
             unconditional_target.target);
         if (live_in_vars.is_bottom()) {
           // Could happen after having applied other transformations already
@@ -1114,7 +1058,7 @@ void Transform::legacy_apply_forward_targets(
   // the cfg.
   std::unique_ptr<LivenessFixpointIterator> liveness_fixpoint_iter;
   for (auto block : cfg.blocks()) {
-    auto env = intra_cp.get_exit_state_at(block);
+    const auto& env = intra_cp.get_exit_state_at(block);
     if (env.is_bottom()) {
       // We found an unreachable block, or one that was added the cfg after
       // intra_cp has run; just ignore it.

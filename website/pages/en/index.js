@@ -85,6 +85,25 @@ function SocialBanner() {
   );
 }
 
+function OfficeHourBanner() {
+  return (
+    <div>
+      <div className="OfficeHourBanner">
+        !!! Redex Public Office Hour Coming on Wed. 10/26/2022 @2PM PST !!! <br></br>
+        <a href="https://fb.zoom.us/j/92134545091?pwd=NDRZSEhQSXBpeEVxTUF4Y3NMYjU3dz09">
+           Zoom Meeting id: 921 3454 5091; passcode: 177943
+        </a>
+      </div>
+      <div className="OfficeHourDescription">
+        Please dial in to chat! We would love to learn how do you use Redex, what challenges are <br></br>
+        you facing, and how can we better help. We would like keep the 1st office hour to be more <br></br>
+        high level. If you have very specific questions, like how to build Redex, Github issue is still <br></br>
+        the best way to resolve it.
+      </div>
+    </div>
+  );
+}
+
 class HomeSplash extends React.Component {
   render() {
     let language = this.props.language || '';
@@ -119,6 +138,7 @@ class Index extends React.Component {
     return (
       <div>
         <SocialBanner />
+        <OfficeHourBanner />
         <HomeSplash language={language} />
         <div className="mainContainer">
           <Container padding={['bottom', 'top']}>

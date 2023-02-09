@@ -41,5 +41,6 @@
         custom:a_boolean="true"
         custom:fancy_effects="distortion|reverb"
         custom:reverb_type="spring"
+        custom:dangerous="flerp, welcome_view,glurp,"
         />
 </LinearLayout>

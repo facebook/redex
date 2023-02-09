@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="a_string">Hello, world</string>
+  <plurals name="simple_plural_str" gender="unknown">
+    <item quantity="one">1 banana</item>
+    <item quantity="other">Wow! %1$s fabulous bananas!</item>
+  </plurals>
+  <plurals name="simple_plural_str2" gender="unknown">
+    <item quantity="one">1 kerfuffle</item>
+    <item quantity="other">%1$s kerfuffles</item>
+  </plurals>
+  <plurals name="simple_plural_str3" gender="unknown">
+    <item quantity="one">1 X</item>
+    <item quantity="other">%1$s XX</item>
+  </plurals>
+  <plurals name="simple_plural_str4" gender="unknown">
+    <item quantity="one">1 Y</item>
+    <item quantity="other">%1$s YY</item>
+  </plurals>
+  <plurals name="simple_plural_str5" gender="unknown">
+    <item quantity="one">1 Z</item>
+    <item quantity="other">%1$s ZZ</item>
+  </plurals>
+  <plurals name="multi_plural_str" gender="unknown">
+    <item quantity="one">1 apple</item>
+    <item quantity="other">%1$s apples</item>
+  </plurals>
+</resources>

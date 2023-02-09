@@ -138,7 +138,7 @@ void ReduceGotosPass::process_code_switches(cfg::ControlFlowGraph& cfg,
         liveness_iter.reset(new LivenessFixpointIterator(cfg));
         liveness_iter->run(LivenessDomain(cfg.get_registers_size()));
       }
-      auto live_out_vars = liveness_iter->get_live_out_vars_at(b);
+      const auto& live_out_vars = liveness_iter->get_live_out_vars_at(b);
       auto single_non_fallthrough_edge_it = std::find_if(
           branch_edges.begin(), branch_edges.end(),
           [goto_target](cfg::Edge* e) { return e->target() != goto_target; });
@@ -171,10 +171,10 @@ void ReduceGotosPass::process_code_switches(cfg::ControlFlowGraph& cfg,
       } else if (!live_out_vars.contains(reg)) {
         if (reg < 256 && (int8_t)case_key == case_key) {
           // Case 2
-          transform_opcode = OPCODE_RSUB_INT_LIT8;
+          transform_opcode = OPCODE_RSUB_INT_LIT;
         } else if (reg < 16 && (int16_t)case_key == case_key) {
           // Case 3
-          transform_opcode = OPCODE_RSUB_INT;
+          transform_opcode = OPCODE_RSUB_INT_LIT;
         }
       }
 

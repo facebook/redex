@@ -163,6 +163,26 @@ class BBB extends AAA {
   }
 }
 
+class Base {
+  public int get() { return 0; }
+}
+
+class Extended extends Base {
+  public void test() {
+    // We are testing that the inliner manages its callees properly when in the
+    // same method contains both super and virtual calls to the same true
+    // virtual method.
+    assertThat(super.get() == 0);
+    Base b = this;
+    assertThat(b.get() == 42);
+  }
+}
+
+class ExtendedExtended extends Extended {
+  @Override
+  public int get() { return 42; }
+}
+
 public class TrueVirtualInlineTest {
 
   // CHECK: method: virtual redex.TrueVirtualInlineTest.test_do_something
@@ -297,5 +317,24 @@ public class TrueVirtualInlineTest {
     // PRECHECK: invoke-virtual {{.*}} redex.GetInt.add
     // POSTCHECK: invoke-virtual {{.*}} redex.GetInt.add
     assertThat(get_int.add() > 0).isTrue();
+  }
+
+  // CHECK: method: virtual redex.TrueVirtualInlineTest.test_super
+  @Test
+  public void test_super() {
+    // CHECK: invoke-direct {{.*}} redex.ExtendedExtended.<init>:()void
+    Extended e = new ExtendedExtended();
+    // PRECHECK: invoke-virtual {{.*}} redex.Extended.test
+
+    // The following e.test() call is eventually getting inlined.
+    // The super.get() can get fully inlined, and the assertion is discharged.
+    // What remains is the this.get() call and check (as the inliner isn't
+    // smart enough yet to recognize that the invoke-virtual target is in fact
+    // also statically correctly predictable).
+
+    // POSTCHECK: invoke-virtual {{.*}} redex.Base.get:()int
+    // POSTCHECK: const{{.*}}42
+    // POSTCHECK: invoke-static {{.*}}assertThat
+    e.test();
   }
 }

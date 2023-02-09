@@ -229,7 +229,7 @@ TEST_F(ReduceGotosTest, trivial_replaced_switch_rsub_lit8) {
   const auto& expected_str = R"(
     (
       (load-param v0)
-      (rsub-int/lit8 v0 v0 16)
+      (rsub-int/lit v0 v0 16)
       (if-eqz v0 :c)
       (return-void)
 
@@ -256,7 +256,7 @@ TEST_F(ReduceGotosTest, trivial_replaced_switch_rsub) {
   const auto& expected_str = R"(
     (
       (load-param v0)
-      (rsub-int v0 v0 256)
+      (rsub-int/lit v0 v0 256)
       (if-eqz v0 :c)
       (return-void)
 

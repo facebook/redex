@@ -5,4 +5,6 @@
   <color name="prickly_green">#8A9E46</color>
   <color name="hex_or_file">#000000</color>
   <color name="duplicate_name">#000001</color>
+  <color name="red">#FF0000</color>
+  <color name="red_duplicate">#FF0000</color>
 </resources>

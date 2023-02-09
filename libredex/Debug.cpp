@@ -187,6 +187,9 @@ void block_multi_asserts(bool block) {
 }
 
 void set_abort_if_not_this_thread() {
+#if defined(__linux__)
+  g_aborting = 0; // Reset for good measure.
+#endif
 #if defined(__linux__) && defined(__GNUC__)
 // See https://gcc.gnu.org/bugzilla/show_bug.cgi?id=55917.
 #if __GNUC__ < 8

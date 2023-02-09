@@ -8,6 +8,7 @@
 #include "RemoveUnreachable.h"
 
 #include <atomic>
+#include <fstream>
 #include <set>
 
 #include "ConfigFiles.h"
@@ -175,14 +176,6 @@ void RemoveUnreachablePassBase::run_pass(DexStoresVector& stores,
                                          PassManager& pm) {
   // Store names of removed classes and methods
   ConcurrentSet<std::string> removed_symbols;
-
-  if (pm.no_proguard_rules()) {
-    TRACE(RMU,
-          1,
-          "RemoveUnreachablePass not run because no "
-          "ProGuard configuration was provided.");
-    return;
-  }
 
   root_metrics(stores, pm);
 

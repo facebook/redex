@@ -163,7 +163,7 @@ libredex_la_SOURCES = \
 	libredex/VirtualScope.cpp \
 	libredex/Warning.cpp \
 	libredex/WorkQueue.cpp \
-	libresource/Locale.cpp \
+	libresource/LocaleValue.cpp \
 	libresource/LocaleData.cpp \
 	libresource/ResourceTypes.cpp \
 	libresource/Serialize.cpp \
@@ -298,7 +298,6 @@ libopt_la_SOURCES = \
 	opt/builder_pattern/BuilderTransform.cpp \
 	opt/builder_pattern/RemoveBuilderPattern.cpp \
 	opt/branch-prefix-hoisting/BranchPrefixHoisting.cpp \
-	opt/bridge/Bridge.cpp \
 	opt/check_breadcrumbs/CheckBreadcrumbs.cpp \
 	opt/check-recursion/CheckRecursion.cpp \
 	opt/class-merging/AnonymousClassMergingPass.cpp \
@@ -312,6 +311,8 @@ libopt_la_SOURCES = \
 	opt/copy-propagation/CopyPropagationPass.cpp \
 	opt/cse/CommonSubexpressionEliminationPass.cpp \
 	opt/dedup_blocks/DedupBlocksPass.cpp \
+	opt/dedup_resources/DedupResources.cpp \
+	opt/dedup_resources/murmur_hash.cpp \
 	opt/dedup-strings/DedupStrings.cpp \
 	opt/delinit/DelInit.cpp \
 	opt/delsuper/DelSuper.cpp \
@@ -322,7 +323,6 @@ libopt_la_SOURCES = \
 	opt/insert-source-blocks/InsertSourceBlocks.cpp \
 	opt/instrument/BlockInstrument.cpp \
 	opt/instrument/Instrument.cpp \
-	opt/interdex/CrossDexRelocator.cpp \
 	opt/interdex/DexStructure.cpp \
 	opt/interdex/InterDex.cpp \
 	opt/interdex/InterDexPass.cpp \
@@ -334,6 +334,7 @@ libopt_la_SOURCES = \
 	opt/obfuscate/Obfuscate.cpp \
 	opt/obfuscate/ObfuscateUtils.cpp \
 	opt/obfuscate/VirtualRenamer.cpp \
+	opt/obfuscate_resources/ObfuscateResourcesPass.cpp \
 	opt/object-sensitive-dce/ObjectSensitiveDcePass.cpp \
 	opt/object-sensitive-dce/SideEffectSummary.cpp \
 	opt/object-sensitive-dce/UsedVarsAnalysis.cpp \
@@ -345,6 +346,7 @@ libopt_la_SOURCES = \
 	opt/optimize_enums/EnumUpcastAnalysis.cpp \
 	opt/optimize_enums/OptimizeEnumsAnalysis.cpp \
 	opt/optimize_enums/OptimizeEnums.cpp \
+	opt/optimize_enums/OptimizeEnumsUnmap.cpp \
 	opt/original_name/OriginalNamePass.cpp \
 	opt/partial-application/PartialApplication.cpp \
 	opt/peephole/Peephole.cpp \
@@ -394,14 +396,16 @@ libopt_la_SOURCES = \
 	opt/singleimpl/SingleImplStats.cpp \
 	opt/simplify_cfg/SimplifyCFG.cpp \
 	opt/split_huge_switches/SplitHugeSwitchPass.cpp \
+	opt/split_resource_tables/SplitResourceTables.cpp \
+	opt/object-escape-analysis/ExpandableMethodParams.cpp \
 	opt/object-escape-analysis/ObjectEscapeAnalysis.cpp \
 	opt/staticrelo/StaticReloV2.cpp \
 	opt/string_concatenator/StringConcatenator.cpp \
 	opt/stringbuilder-outliner/StringBuilderOutliner.cpp \
 	opt/strip-debug-info/StripDebugInfo.cpp \
-	opt/synth/Synth.cpp \
 	opt/test_cfg/TestCFG.cpp \
 	opt/track_resources/TrackResources.cpp \
+	opt/optimize_resources/OptimizeResources.cpp \
 	opt/throw-propagation/ThrowPropagationPass.cpp \
 	opt/type-analysis/CallGraphFileGenerationPass.cpp \
 	opt/type-analysis/GlobalTypeAnalysisPass.cpp \

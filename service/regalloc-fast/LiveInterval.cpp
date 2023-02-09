@@ -99,8 +99,8 @@ VRegAliveRangeInBlock get_live_range_in_block(
     std::unordered_map<cfg::Block*, std::unordered_set<vreg_t>>*
         check_cast_throw_targets_vregs) {
   VRegAliveRangeInBlock vreg_block_range;
-  LivenessDomain live_in = fixpoint_iter.get_live_in_vars_at(block);
-  LivenessDomain live_out = fixpoint_iter.get_live_out_vars_at(block);
+  const LivenessDomain& live_in = fixpoint_iter.get_live_in_vars_at(block);
+  const LivenessDomain& live_out = fixpoint_iter.get_live_out_vars_at(block);
 
   LiveIntervalPoint first = LiveIntervalPoint::get_block_begin(block);
   for (auto vreg : live_in.elements()) {
@@ -163,7 +163,7 @@ VRegAliveRangeInBlock get_check_cast_throw_targets_live_range(
     cfg::Block* block,
     const std::unordered_set<vreg_t>& vregs) {
   VRegAliveRangeInBlock vreg_block_range;
-  LivenessDomain live_in = fixpoint_iter.get_live_in_vars_at(block);
+  const LivenessDomain& live_in = fixpoint_iter.get_live_in_vars_at(block);
   auto elements = live_in.elements();
   for (auto vreg : vregs) {
     if (!elements.contains(vreg)) {
@@ -210,7 +210,7 @@ std::vector<cfg::Block*> get_ordered_blocks(
   // exit-block) over all live-in registers
   std::unordered_map<cfg::Block*, size_t> live_in_def_depths;
   for (cfg::Block* block : cfg.blocks()) {
-    auto live_in = liveness_fixpoint_iter.get_live_in_vars_at(block);
+    const auto& live_in = liveness_fixpoint_iter.get_live_in_vars_at(block);
     size_t depth = 0;
     for (auto vreg : live_in.elements()) {
       auto vreg_defs_depth = vreg_defs_depths.at(vreg);
@@ -249,7 +249,7 @@ std::vector<cfg::Block*> get_ordered_blocks(
     ordered_blocks.push_back(block);
   };
   visit(cfg.exit_block());
-  always_assert(ordered_blocks.size() == cfg.blocks().size());
+  always_assert(ordered_blocks.size() == cfg.num_blocks());
   return ordered_blocks;
 }
 

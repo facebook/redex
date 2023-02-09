@@ -107,8 +107,7 @@ struct EnumUtil {
   DexType* STRING_TYPE = type::java_lang_String();
   DexType* SERIALIZABLE_TYPE = DexType::make_type("Ljava/io/Serializable;");
   DexType* COMPARABLE_TYPE = DexType::make_type("Ljava/lang/Comparable;");
-  DexType* RTEXCEPTION_TYPE =
-      DexType::make_type("Ljava/lang/RuntimeException;");
+  DexType* RTEXCEPTION_TYPE = type::java_lang_RuntimeException();
   DexType* ILLEGAL_ARG_EXCP_TYPE =
       DexType::make_type("Ljava/lang/IllegalArgumentException;");
 
@@ -138,8 +137,8 @@ struct EnumUtil {
   DexMethodRef* INTEGER_COMPARETO_METHOD = DexMethod::make_method(
       "Ljava/lang/Integer;.compareTo:(Ljava/lang/Integer;)I");
   DexMethodRef* INTEGER_VALUEOF_METHOD = method::java_lang_Integer_valueOf();
-  DexMethodRef* RTEXCEPTION_CTOR_METHOD = DexMethod::make_method(
-      "Ljava/lang/RuntimeException;.<init>:(Ljava/lang/String;)V");
+  DexMethodRef* RTEXCEPTION_CTOR_METHOD =
+      method::java_lang_RuntimeException_init_String();
   DexMethodRef* ILLEGAL_ARG_CONSTRUCT_METHOD = DexMethod::make_method(
       "Ljava/lang/IllegalArgumentException;.<init>:(Ljava/lang/String;)V");
   DexMethodRef* STRING_EQ_METHOD =
@@ -490,7 +489,7 @@ struct EnumUtil {
         {dasm(OPCODE_INVOKE_STATIC, INTEGER_VALUEOF_METHOD, {5_v}),
          dasm(OPCODE_MOVE_RESULT_OBJECT, {6_v}),
          dasm(OPCODE_APUT_OBJECT, {6_v, 1_v, 5_v}),
-         dasm(OPCODE_ADD_INT_LIT8, {5_v, 5_v, 1_L})});
+         dasm(OPCODE_ADD_INT_LIT, {5_v, 5_v, 1_L})});
 
     auto copy_array_method = DexMethod::make_method(
         "Ljava/lang/System;.arraycopy:(Ljava/lang/Object;ILjava/lang/"
@@ -1604,7 +1603,7 @@ namespace optimize_enums {
 int transform_enums(const Config& config,
                     DexStoresVector* stores,
                     size_t* num_int_objs) {
-  if (!config.candidate_enums.size()) {
+  if (config.candidate_enums.empty()) {
     return 0;
   }
 

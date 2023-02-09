@@ -921,10 +921,11 @@ public class InstrumentBasicBlockTarget {
     int j = 0;
 
     for(i = 0; i < blockList.length; i++) {
+      int[] tmp = new int[blockList[i].length];
       for(j = 0; j < blockList[i].length; j++) {
-        int hitValue = MetadataParser.checkBlockHit("testFunc09", stats, blockList[i][j]);
-        assertThat(hitValue).isEqualTo(blockHitList[i][j]);
+        tmp[j] = MetadataParser.checkBlockHit("testFunc09", stats, blockList[i][j]);
       }
+      assertThat(tmp).isEqualTo(blockHitList[i]);
     }
   }
 

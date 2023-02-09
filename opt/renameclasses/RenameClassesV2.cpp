@@ -22,6 +22,8 @@
 #include "IRInstruction.h"
 #include "KeepReason.h"
 #include "PassManager.h"
+#include "ProguardConfiguration.h"
+#include "ProguardMap.h"
 #include "ReachableClasses.h"
 #include "RedexResources.h"
 #include "Show.h"
@@ -786,13 +788,6 @@ std::string RenameClassesPassV2::prepend_package_prefix(
 
 std::unordered_set<DexClass*> RenameClassesPassV2::get_renamable_classes(
     Scope& scope, ConfigFiles& conf, PassManager& mgr) {
-  if (mgr.no_proguard_rules()) {
-    TRACE(RENAME, 1,
-          "RenameClassesPassV2 not run because no ProGuard configuration was "
-          "provided.");
-    return {};
-  }
-
   if (!m_package_prefix.empty()) {
     always_assert_log(
         !(conf.get_json_config().get("emit_locator_strings", false)),

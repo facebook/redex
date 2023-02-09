@@ -21,12 +21,11 @@ class TrackResourcesPass : public Pass {
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
-  static void find_accessed_fields(
-      Scope& fullscope,
-      ConfigFiles& conf,
-      std::unordered_set<DexClass*> classes_to_track,
-      std::unordered_set<DexField*>& recorded_fields,
-      std::unordered_set<std::string>& classes_to_search);
+  static size_t find_accessed_fields(
+      const Scope& fullscope,
+      const std::unordered_set<DexClass*>& classes_to_track,
+      const std::unordered_set<std::string>& classes_to_search,
+      std::unordered_set<DexField*>* recorded_fields);
 
   static std::unordered_set<DexClass*> build_tracked_cls_set(
       const std::vector<std::string>& cls_suffixes, const ProguardMap& pg_map);

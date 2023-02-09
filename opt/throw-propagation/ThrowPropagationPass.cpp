@@ -160,8 +160,7 @@ ThrowPropagationPass::Stats ThrowPropagationPass::run(
       case OPCODE_INVOKE_DIRECT: {
         auto method = it->insn->get_method();
         if (!method::is_init(method) ||
-            method->get_class() !=
-                DexType::make_type("Ljava/lang/RuntimeException;")) {
+            method->get_class() != type::java_lang_RuntimeException()) {
           return false;
         }
         break;
@@ -222,7 +221,7 @@ ThrowPropagationPass::Stats ThrowPropagationPass::run(
     cfg::Block* new_block = cfg->create_block();
     std::vector<IRInstruction*> insns;
     auto new_instance_insn = new IRInstruction(OPCODE_NEW_INSTANCE);
-    auto exception_type = DexType::get_type("Ljava/lang/RuntimeException;");
+    auto exception_type = type::java_lang_RuntimeException();
     always_assert(exception_type != nullptr);
     new_instance_insn->set_type(exception_type);
     insns.push_back(new_instance_insn);
@@ -242,8 +241,7 @@ ThrowPropagationPass::Stats ThrowPropagationPass::run(
     insns.push_back(move_result_pseudo_string_insn);
 
     auto invoke_direct_insn = new IRInstruction(OPCODE_INVOKE_DIRECT);
-    auto init_method = DexMethod::get_method(
-        "Ljava/lang/RuntimeException;.<init>:(Ljava/lang/String;)V");
+    auto init_method = method::java_lang_RuntimeException_init_String();
     always_assert(init_method != nullptr);
     invoke_direct_insn->set_method(init_method)
         ->set_srcs_size(2)

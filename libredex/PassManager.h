@@ -18,9 +18,7 @@
 #include "AnalysisUsage.h"
 #include "AssetManager.h"
 #include "DexHasher.h"
-#include "GlobalConfig.h"
 #include "JsonWrapper.h"
-#include "ProguardConfiguration.h"
 #include "RedexOptions.h"
 #include "Timer.h"
 
@@ -31,6 +29,10 @@ class Pass;
 namespace Json {
 class Value;
 } // namespace Json
+
+namespace keep_rules {
+struct ProguardConfiguration;
+} // namespace keep_rules
 
 // Must match DexStore.
 using DexStoresVector = std::vector<DexStore>;
@@ -79,10 +81,6 @@ class PassManager {
     return *m_pg_config;
   }
 
-  bool no_proguard_rules() {
-    return m_pg_config->keep_rules.empty() && !m_testing_mode;
-  }
-
   // Call set_testing_mode() in tests that need passes to run which
   // do not use ProGuard configuration keep rules.
   void set_testing_mode() { m_testing_mode = true; }
@@ -119,10 +117,6 @@ class PassManager {
 
   Pass* find_pass(const std::string& pass_name) const;
 
-  const AssessorConfig& get_assessor_config() const {
-    return m_assessor_config;
-  }
-
  private:
   void activate_pass(const std::string& name,
                      const std::string* alias,
@@ -156,8 +150,6 @@ class PassManager {
   boost::optional<hashing::DexHash> m_initial_hash;
   AccumulatingTimer m_hashers_timer;
   AccumulatingTimer m_check_unique_deobfuscateds_timer;
-
-  AssessorConfig m_assessor_config;
 
   std::vector<std::unique_ptr<Pass>> m_cloned_passes;
 

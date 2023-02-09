@@ -114,64 +114,48 @@ DexOpcode select_binop_lit_opcode(const IRInstruction* insn) {
   auto literal = insn->get_literal();
   if (signed_int_fits<8>(literal)) { // lit8 -> literal is 8 bits
     switch (op) {
-    case OPCODE_ADD_INT_LIT8:
-    case OPCODE_ADD_INT_LIT16:
+    case OPCODE_ADD_INT_LIT:
       return DOPCODE_ADD_INT_LIT8;
-    case OPCODE_RSUB_INT_LIT8:
-    case OPCODE_RSUB_INT:
+    case OPCODE_RSUB_INT_LIT:
       return DOPCODE_RSUB_INT_LIT8;
-    case OPCODE_MUL_INT_LIT8:
-    case OPCODE_MUL_INT_LIT16:
+    case OPCODE_MUL_INT_LIT:
       return DOPCODE_MUL_INT_LIT8;
-    case OPCODE_DIV_INT_LIT8:
-    case OPCODE_DIV_INT_LIT16:
+    case OPCODE_DIV_INT_LIT:
       return DOPCODE_DIV_INT_LIT8;
-    case OPCODE_REM_INT_LIT8:
-    case OPCODE_REM_INT_LIT16:
+    case OPCODE_REM_INT_LIT:
       return DOPCODE_REM_INT_LIT8;
-    case OPCODE_AND_INT_LIT8:
-    case OPCODE_AND_INT_LIT16:
+    case OPCODE_AND_INT_LIT:
       return DOPCODE_AND_INT_LIT8;
-    case OPCODE_OR_INT_LIT8:
-    case OPCODE_OR_INT_LIT16:
+    case OPCODE_OR_INT_LIT:
       return DOPCODE_OR_INT_LIT8;
-    case OPCODE_XOR_INT_LIT8:
-    case OPCODE_XOR_INT_LIT16:
+    case OPCODE_XOR_INT_LIT:
       return DOPCODE_XOR_INT_LIT8;
-    case OPCODE_SHL_INT_LIT8:
+    case OPCODE_SHL_INT_LIT:
       return DOPCODE_SHL_INT_LIT8;
-    case OPCODE_SHR_INT_LIT8:
+    case OPCODE_SHR_INT_LIT:
       return DOPCODE_SHR_INT_LIT8;
-    case OPCODE_USHR_INT_LIT8:
+    case OPCODE_USHR_INT_LIT:
       return DOPCODE_USHR_INT_LIT8;
     default:
       not_reached();
     }
   } else if (signed_int_fits<16>(literal)) { // lit16 -> literal is 16 bits
     switch (op) {
-    case OPCODE_ADD_INT_LIT8:
-    case OPCODE_ADD_INT_LIT16:
+    case OPCODE_ADD_INT_LIT:
       return DOPCODE_ADD_INT_LIT16;
-    case OPCODE_RSUB_INT_LIT8:
-    case OPCODE_RSUB_INT:
+    case OPCODE_RSUB_INT_LIT:
       return DOPCODE_RSUB_INT;
-    case OPCODE_MUL_INT_LIT8:
-    case OPCODE_MUL_INT_LIT16:
+    case OPCODE_MUL_INT_LIT:
       return DOPCODE_MUL_INT_LIT16;
-    case OPCODE_DIV_INT_LIT8:
-    case OPCODE_DIV_INT_LIT16:
+    case OPCODE_DIV_INT_LIT:
       return DOPCODE_DIV_INT_LIT16;
-    case OPCODE_REM_INT_LIT8:
-    case OPCODE_REM_INT_LIT16:
+    case OPCODE_REM_INT_LIT:
       return DOPCODE_REM_INT_LIT16;
-    case OPCODE_AND_INT_LIT8:
-    case OPCODE_AND_INT_LIT16:
+    case OPCODE_AND_INT_LIT:
       return DOPCODE_AND_INT_LIT16;
-    case OPCODE_OR_INT_LIT8:
-    case OPCODE_OR_INT_LIT16:
+    case OPCODE_OR_INT_LIT:
       return DOPCODE_OR_INT_LIT16;
-    case OPCODE_XOR_INT_LIT8:
-    case OPCODE_XOR_INT_LIT16:
+    case OPCODE_XOR_INT_LIT:
       return DOPCODE_XOR_INT_LIT16;
     default:
       not_reached();
@@ -302,6 +286,8 @@ DexInstruction* create_dex_instruction(const IRInstruction* insn) {
     return new DexOpcodeCallSite(op, insn->get_callsite());
   case opcode::Ref::MethodHandle:
     return new DexOpcodeMethodHandle(op, insn->get_methodhandle());
+  case opcode::Ref::Proto:
+    return new DexOpcodeProto(op, insn->get_proto());
   }
 }
 
@@ -404,7 +390,7 @@ void lower_simple_instruction(DexMethod*, IRCode*, IRList::iterator* it_) {
     dex_insn = new DexInstruction(select_move_opcode(insn));
   } else if (op >= OPCODE_CONST && op <= OPCODE_CONST_WIDE) {
     dex_insn = new DexInstruction(select_const_opcode(insn));
-  } else if (op >= OPCODE_ADD_INT_LIT16 && op <= OPCODE_USHR_INT_LIT8) {
+  } else if (op >= OPCODE_ADD_INT_LIT && op <= OPCODE_USHR_INT_LIT) {
     dex_insn = new DexInstruction(select_binop_lit_opcode(insn));
   } else {
     dex_insn = create_dex_instruction(insn);

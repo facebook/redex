@@ -102,6 +102,8 @@ class ReferencedState {
     // side effects.
     bool m_clinit_has_no_side_effects : 1;
 
+    bool m_too_large_for_inlining_into : 1;
+
     InnerStruct() {
       // Initializers in bit fields are C++20...
       m_by_string = false;
@@ -135,6 +137,7 @@ class ReferencedState {
 
       m_init_class = false;
       m_clinit_has_no_side_effects = false;
+      m_too_large_for_inlining_into = false;
     }
   } inner_struct;
 
@@ -408,6 +411,13 @@ class ReferencedState {
   }
   bool clinit_has_no_side_effects() const {
     return inner_struct.m_clinit_has_no_side_effects;
+  }
+
+  void set_too_large_for_inlining_into() {
+    inner_struct.m_too_large_for_inlining_into = true;
+  }
+  bool too_large_for_inlining_into() const {
+    return inner_struct.m_too_large_for_inlining_into;
   }
 
  private:

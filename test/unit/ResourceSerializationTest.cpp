@@ -140,8 +140,7 @@ std::vector<std::string> aapt_dump_helper(const std::string& arsc_path) {
   boost::process::child c(
       arsc_dumper_bin,
       boost::process::args({"--aapt", std::getenv("aapt_path"), "--arsc",
-                            arsc_path.c_str(), "--outfile", out, "--errfile",
-                            err}));
+                            arsc_path, "--outfile", out, "--errfile", err}));
   c.wait();
   auto exit_code = c.exit_code();
   if (exit_code != 0) {
@@ -332,7 +331,7 @@ ParsedAaptOutput aapt_dump_and_parse(const std::string& arsc_path,
       "^Package Group 0 id=0x7f packageCount=1 name=(.*)$"};
   boost::regex spec_exp{
       "^[ ]*spec resource 0x([0-9a-fA-F]+)[^=]+=0x([0-9a-fA-F]+)$"};
-  boost::regex config_exp{"^[ ]*config ([^:]+):$"};
+  boost::regex config_exp{"^[ ]*config ([^ :]+)[^:]*:$"};
   // Capture the id, package, type/entry, value type, data.
   // Size and r0 are intentionally not captured as we know their hard coded
   // value ahead of time. If they differ, we will not match and fail the test.
@@ -347,7 +346,7 @@ ParsedAaptOutput aapt_dump_and_parse(const std::string& arsc_path,
 
   auto lines = aapt_dump_helper(arsc_path);
   output.lines = lines;
-  std::string current_config("");
+  std::string current_config;
   enum ComplexState { Unknown, Begin, Values };
   ComplexState state = Unknown;
   // complex_entries[complex_entries.size() - 1] is the entry we're working on
@@ -740,7 +739,7 @@ TEST(ResTableParse, TestUnknownPackageChunks) {
   auto res_path = tmp_dir.path + "/resources.arsc";
   copy_file(std::getenv("resources_unknown_chunk"), res_path);
   ResourcesArscFile res_table(res_path);
-  res_table.remove_unreferenced_strings();
+  res_table.finalize_resource_table({});
   EXPECT_TRUE(
       are_files_equal(std::getenv("resources_unknown_chunk"), res_path));
 }
@@ -954,7 +953,7 @@ void delete_resources(const std::string& arsc_file_path,
   // We actually have to reload the table, since all modifications are
   // meant to be written directly to disk afterwards.
   ResourcesArscFile reloaded_file(arsc_file_path);
-  reloaded_file.remove_unreferenced_strings();
+  reloaded_file.finalize_resource_table({});
 }
 
 UNUSED int32_t load_global_strings(const RedexMappedFile& arsc_file,
@@ -1083,8 +1082,6 @@ TEST(ResTable, DeleteAllEntriesInType) {
           EXPECT_EQ(string_values.count("third"), 1);
         }
         {
-          // We do not yet delete the type names, for now just validate that
-          // dimen is still here.
           android::ResStringPool pool;
           EXPECT_EQ(load_type_strings(built_arsc_file, &pool), 0);
           std::unordered_set<std::string> string_values;
@@ -1092,6 +1089,7 @@ TEST(ResTable, DeleteAllEntriesInType) {
             string_values.emplace(apk::get_string_from_pool(pool, i));
           }
           EXPECT_EQ(string_values.count("dimen"), 1);
+          EXPECT_EQ(string_values.count("style"), 0);
         }
 
         // Ensure that we have only 1 ResTable_typeSpec, but two configs within.
@@ -1468,4 +1466,167 @@ TEST(ResTable, GetStringsByName) {
   EXPECT_STREQ(vec[1].c_str(), "e");
   vec = arsc_file.get_resource_strings_by_name("blah");
   EXPECT_EQ(vec.size(), 0);
+}
+
+TEST(ResTable, BuildDumpAndParseSparseType) {
+  // Build a table with one type (dimen) with two configurations, the latter
+  // being sparsely encoded. Default config will have all values for all entries
+  // but land config will have values for only second and fourth.
+  auto pool_flags = android::ResStringPool_header::UTF8_FLAG;
+  auto global_strings_builder =
+      std::make_shared<arsc::ResStringPoolBuilder>(pool_flags);
+  auto key_strings_builder =
+      std::make_shared<arsc::ResStringPoolBuilder>(pool_flags);
+  key_strings_builder->add_string("first");
+  key_strings_builder->add_string("second");
+  key_strings_builder->add_string("third");
+  key_strings_builder->add_string("fourth");
+  key_strings_builder->add_string("fifth");
+  key_strings_builder->add_string("sixth");
+  key_strings_builder->add_string("seventh");
+  key_strings_builder->add_string("eighth");
+  auto type_strings_builder =
+      std::make_shared<arsc::ResStringPoolBuilder>(pool_flags);
+  type_strings_builder->add_string("dimen");
+
+  auto package_builder =
+      std::make_shared<arsc::ResPackageBuilder>(&package_header);
+  package_builder->set_key_strings(key_strings_builder);
+  package_builder->set_type_strings(type_strings_builder);
+
+  auto table_builder = std::make_shared<arsc::ResTableBuilder>();
+  table_builder->set_global_strings(global_strings_builder);
+  table_builder->add_package(package_builder);
+
+  std::vector<android::ResTable_config*> dimen_configs = {&default_config,
+                                                          &land_config};
+  std::vector<uint32_t> flags = {
+      0, android::ResTable_config::CONFIG_ORIENTATION,
+      0, android::ResTable_config::CONFIG_ORIENTATION,
+      0, 0,
+      0, 0};
+  auto type_definer = std::make_shared<arsc::ResTableTypeDefiner>(
+      package_header.id, 1, dimen_configs, flags, true, true);
+  package_builder->add_type(type_definer);
+
+  // Add all 8 values
+  uint32_t key_idx = 0;
+  EntryAndValue first(key_idx++, android::Res_value::TYPE_DIMENSION, 1);
+  type_definer->add(&default_config, {(uint8_t*)&first, sizeof(EntryAndValue)});
+  type_definer->add_empty(&land_config);
+
+  EntryAndValue second(key_idx, android::Res_value::TYPE_DIMENSION, 2);
+  EntryAndValue second_land(key_idx++, android::Res_value::TYPE_DIMENSION, 22);
+  type_definer->add(&default_config,
+                    {(uint8_t*)&second, sizeof(EntryAndValue)});
+  type_definer->add(&land_config,
+                    {(uint8_t*)&second_land, sizeof(EntryAndValue)});
+
+  EntryAndValue third(key_idx++, android::Res_value::TYPE_DIMENSION, 3);
+  type_definer->add(&default_config, {(uint8_t*)&third, sizeof(EntryAndValue)});
+  type_definer->add_empty(&land_config);
+
+  EntryAndValue fourth(key_idx, android::Res_value::TYPE_DIMENSION, 4);
+  EntryAndValue fourth_land(key_idx++, android::Res_value::TYPE_DIMENSION, 44);
+  type_definer->add(&default_config,
+                    {(uint8_t*)&fourth, sizeof(EntryAndValue)});
+  type_definer->add(&land_config,
+                    {(uint8_t*)&fourth_land, sizeof(EntryAndValue)});
+
+  EntryAndValue fifth(key_idx++, android::Res_value::TYPE_DIMENSION, 5);
+  type_definer->add(&default_config, {(uint8_t*)&fifth, sizeof(EntryAndValue)});
+  type_definer->add_empty(&land_config);
+
+  EntryAndValue sixth(key_idx++, android::Res_value::TYPE_DIMENSION, 6);
+  type_definer->add(&default_config, {(uint8_t*)&sixth, sizeof(EntryAndValue)});
+  type_definer->add_empty(&land_config);
+
+  EntryAndValue seventh(key_idx++, android::Res_value::TYPE_DIMENSION, 7);
+  type_definer->add(&default_config,
+                    {(uint8_t*)&seventh, sizeof(EntryAndValue)});
+  type_definer->add_empty(&land_config);
+
+  EntryAndValue eighth(key_idx++, android::Res_value::TYPE_DIMENSION, 8);
+  type_definer->add(&default_config,
+                    {(uint8_t*)&eighth, sizeof(EntryAndValue)});
+  type_definer->add_empty(&land_config);
+
+  android::Vector<char> out;
+  table_builder->serialize(&out);
+
+  auto tmp_dir = redex::make_tmp_dir("ResTable_Sparse%%%%%%%%");
+  auto arsc_path = tmp_dir.path + "/resources.arsc";
+  write_to_file(arsc_path, out);
+
+  size_t size_of_entry_value_and_offset =
+      sizeof(uint32_t) + sizeof(EntryAndValue);
+  {
+    // Make sure aapt can parse it.
+    auto round_trip_dump = aapt_dump_and_parse(arsc_path);
+    EXPECT_EQ(round_trip_dump.get_simple_value("default", 0x7f010001).data, 2);
+    EXPECT_EQ(round_trip_dump.get_simple_value("land", 0x7f010001).data, 22);
+    EXPECT_EQ(round_trip_dump.get_simple_value("default", 0x7f010003).data, 4);
+    EXPECT_EQ(round_trip_dump.get_simple_value("land", 0x7f010003).data, 44);
+
+    // Make sure our APIs can still parse it.
+    ResourcesArscFile arsc_file(arsc_path);
+    EXPECT_EQ(arsc_file.resource_value_count(0x7f010000), 1);
+    EXPECT_EQ(arsc_file.resource_value_count(0x7f010001), 2);
+    EXPECT_EQ(arsc_file.resource_value_count(0x7f010002), 1);
+    EXPECT_EQ(arsc_file.resource_value_count(0x7f010003), 2);
+    EXPECT_EQ(arsc_file.resource_value_count(0x7f010004), 1);
+    EXPECT_EQ(arsc_file.resource_value_count(0x7f010005), 1);
+    EXPECT_EQ(arsc_file.resource_value_count(0x7f010006), 1);
+    EXPECT_EQ(arsc_file.resource_value_count(0x7f010007), 1);
+
+    // Ensure sparse encoding really took effect, by checking the resulting data
+    // size.
+    auto& parsed_table = arsc_file.get_table_snapshot().get_parsed_table();
+    auto& types = parsed_table.m_types_to_configs.begin()->second;
+    EXPECT_EQ(types.size(), 2);
+    EXPECT_EQ(
+        types.at(0)->header.size,
+        sizeof(android::ResTable_type) + 8 * size_of_entry_value_and_offset);
+    EXPECT_EQ(
+        types.at(1)->header.size,
+        sizeof(android::ResTable_type) + 2 * size_of_entry_value_and_offset)
+        << "Expected small type size due to sparse encoding";
+
+    // Deleting an entry will force ResTableTypeProjector to parse/emit the
+    // sparse encoding. More validation will happen on the resulting file to
+    // ensure things are well formed.
+    arsc_file.delete_resource(0x7f010001);
+    arsc_file.serialize();
+  }
+  {
+    // Make sure aapt can parse it.
+    auto round_trip_dump = aapt_dump_and_parse(arsc_path);
+    EXPECT_EQ(round_trip_dump.get_simple_value("default", 0x7f010001).data, 3);
+    EXPECT_EQ(round_trip_dump.get_simple_value("default", 0x7f010002).data, 4);
+    EXPECT_EQ(round_trip_dump.get_simple_value("land", 0x7f010002).data, 44);
+
+    // Make sure our APIs can still parse it.
+    ResourcesArscFile arsc_file(arsc_path);
+    EXPECT_EQ(arsc_file.resource_value_count(0x7f010000), 1);
+    EXPECT_EQ(arsc_file.resource_value_count(0x7f010001), 1);
+    // Post-delete, 0x7f010002 is now entry "fourth" which is the only one with
+    // values in two configs.
+    EXPECT_EQ(arsc_file.resource_value_count(0x7f010002), 2);
+    EXPECT_EQ(arsc_file.resource_value_count(0x7f010003), 1);
+    EXPECT_EQ(arsc_file.resource_value_count(0x7f010004), 1);
+    EXPECT_EQ(arsc_file.resource_value_count(0x7f010005), 1);
+    EXPECT_EQ(arsc_file.resource_value_count(0x7f010006), 1);
+
+    // Ensure sparse encoding really took effect, by checking the resulting data
+    // size.
+    auto& parsed_table = arsc_file.get_table_snapshot().get_parsed_table();
+    auto& types = parsed_table.m_types_to_configs.begin()->second;
+    EXPECT_EQ(types.size(), 2);
+    EXPECT_EQ(
+        types.at(0)->header.size,
+        sizeof(android::ResTable_type) + 7 * size_of_entry_value_and_offset);
+    EXPECT_EQ(types.at(1)->header.size,
+              sizeof(android::ResTable_type) + size_of_entry_value_and_offset)
+        << "Expected small type size due to sparse encoding";
+  }
 }

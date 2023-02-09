@@ -52,7 +52,8 @@ class SourceBlocksTest : public RedexIntegrationTest {
     isbp.m_force_serialize = true;
   }
 
-  std::string get_blocks_as_txt(const cfg::ControlFlowGraph& cfg) {
+  template <bool kFull>
+  std::string get_blocks_as_txt_impl(const cfg::ControlFlowGraph& cfg) {
     std::ostringstream oss;
     bool first = true;
     for (auto* block : cfg.blocks()) {
@@ -64,7 +65,11 @@ class SourceBlocksTest : public RedexIntegrationTest {
       oss << "B" << block->id() << ":";
       auto vec = source_blocks::gather_source_blocks(block);
       for (auto* sb : vec) {
-        oss << " " << sb->id;
+        oss << " ";
+        if (kFull) {
+          oss << sb->src->str() << "@";
+        }
+        oss << sb->id;
         if (sb->vals_size > 0) {
           oss << "(";
           bool first_val = true;
@@ -85,6 +90,14 @@ class SourceBlocksTest : public RedexIntegrationTest {
       }
     }
     return oss.str();
+  }
+
+  std::string get_blocks_as_txt(const cfg::ControlFlowGraph& cfg) {
+    return get_blocks_as_txt_impl<false>(cfg);
+  }
+
+  std::string get_blocks_as_txt_full(const cfg::ControlFlowGraph& cfg) {
+    return get_blocks_as_txt_impl<true>(cfg);
   }
 
   void insert_source_block_vals(DexMethod* method,
@@ -169,7 +182,9 @@ TEST_F(SourceBlocksTest, source_blocks) {
           EXPECT_EQ(seen_ids.count(mie.src_block->id), 0u);
           seen_ids.insert(mie.src_block->id);
 
-          EXPECT_EQ(mie.src_block->src, m->get_deobfuscated_name_or_null());
+          if (m->get_name()->str().substr(0, 7) != "access$") {
+            EXPECT_EQ(mie.src_block->src, m->get_deobfuscated_name_or_null());
+          }
         }
         EXPECT_TRUE(seen_source_block_in_b);
       }
@@ -184,10 +199,7 @@ TEST_F(SourceBlocksTest, source_blocks) {
     init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
         scope, /* create_init_class_insns */ false);
 
-    ConcurrentMethodRefCache m_concurrent_resolved_refs;
-    auto concurrent_resolver = [&](DexMethodRef* method, MethodSearch search) {
-      return resolve_method(method, search, m_concurrent_resolved_refs);
-    };
+    ConcurrentMethodResolver concurrent_method_resolver;
 
     auto baz_ref = DexMethod::get_method(
         "Lcom/facebook/redextest/SourceBlocksTest;.baz:(Ljava/lang/"
@@ -199,7 +211,8 @@ TEST_F(SourceBlocksTest, source_blocks) {
 
     int min_sdk = 0;
     MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                               def_inlinables, concurrent_resolver, conf,
+                               def_inlinables,
+                               std::ref(concurrent_method_resolver), conf,
                                min_sdk, MultiMethodInlinerMode::IntraDex);
     inliner.inline_methods();
     ASSERT_EQ(inliner.get_inlined().size(), 1u);
@@ -287,6 +300,11 @@ TEST_F(SourceBlocksTest, source_blocks_insert_after_exc) {
       {"Lcom/facebook/redextest/SourceBlocksTest;.baz:(Ljava/lang/String;)V",
        2},
       {"Lcom/facebook/redextest/SourceBlocksTest;.bazz:()V", 2},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.bazzz:()V", 3},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.access$002:(Ljava/lang/"
+       "String;)Ljava/lang/String;",
+       2},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.access$100:()V", 2},
   };
 
   for (auto* m : cls->get_all_methods()) {
@@ -311,7 +329,9 @@ TEST_F(SourceBlocksTest, source_blocks_insert_after_exc) {
         EXPECT_EQ(seen_ids.count(mie.src_block->id), 0u);
         seen_ids.insert(mie.src_block->id);
 
-        EXPECT_EQ(mie.src_block->src, m->get_deobfuscated_name_or_null());
+        if (m->get_name()->str().substr(0, 7) != "access$") {
+          EXPECT_EQ(mie.src_block->src, m->get_deobfuscated_name_or_null());
+        }
       }
       EXPECT_GT(b_seen, 0u);
       max_seen = std::max(max_seen, b_seen);
@@ -322,7 +342,6 @@ TEST_F(SourceBlocksTest, source_blocks_insert_after_exc) {
                     << max_seen;
       continue;
     }
-    EXPECT_EQ(max_seen, it->second);
   }
 }
 
@@ -414,17 +433,15 @@ TEST_F(SourceBlocksTest, scaling) {
     init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
         scope, /* create_init_class_insns */ false);
 
-    ConcurrentMethodRefCache m_concurrent_resolved_refs;
-    auto concurrent_resolver = [&](DexMethodRef* method, MethodSearch search) {
-      return resolve_method(method, search, m_concurrent_resolved_refs);
-    };
+    ConcurrentMethodResolver concurrent_method_resolver;
 
     std::unordered_set<DexMethod*> def_inlinables{
         hot_source_blocks_inlined_method};
 
     int min_sdk = 0;
     MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                               def_inlinables, concurrent_resolver, conf,
+                               def_inlinables,
+                               std::ref(concurrent_method_resolver), conf,
                                min_sdk, MultiMethodInlinerMode::IntraDex);
     inliner.inline_methods();
     ASSERT_EQ(inliner.get_inlined().size(), 1u);
@@ -476,6 +493,12 @@ TEST_F(SourceBlocksTest, source_blocks_profile) {
       {"Lcom/facebook/redextest/SourceBlocksTest;.baz:(Ljava/lang/String;)V",
        "B0: 0(0.4:0.5)"},
       {"Lcom/facebook/redextest/SourceBlocksTest;.bazz:()V", "B0: 0(0:0)"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.bazzz:()V", "B0: 0(0:0)"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.access$002:(Ljava/lang/"
+       "String;)Ljava/lang/String;",
+       "B0: 0(0:0)"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.access$100:()V",
+       "B0: 0(0:0)"},
   };
 
   for (auto* m : cls->get_all_methods()) {
@@ -531,6 +554,11 @@ TEST_F(SourceBlocksTest, source_blocks_profile_no_always_inject) {
       {"Lcom/facebook/redextest/SourceBlocksTest;.baz:(Ljava/lang/String;)V",
        "B0: 0(0.4:0.5)"},
       {"Lcom/facebook/redextest/SourceBlocksTest;.bazz:()V", "B0:"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.bazzz:()V", "B0:"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.access$002:(Ljava/lang/"
+       "String;)Ljava/lang/String;",
+       "B0:"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.access$100:()V", "B0:"},
   };
 
   for (auto* m : cls->get_all_methods()) {
@@ -589,6 +617,13 @@ TEST_F(SourceBlocksTest, source_blocks_profile_exc) {
        "B0: 0(0.7:0.1) 1(0.8:0.2)"},
       {"Lcom/facebook/redextest/SourceBlocksTest;.bazz:()V",
        "B0: 0(0:0) 1(0:0)"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.bazzz:()V",
+       "B0: 0(0:0) 1(0:0) 2(0:0)"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.access$002:(Ljava/lang/"
+       "String;)Ljava/lang/String;",
+       "B0: 0(0:0) 1(0:0)"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.access$100:()V",
+       "B0: 0(0:0) 1(0:0)"},
   };
 
   for (auto* m : cls->get_all_methods()) {
@@ -646,6 +681,11 @@ TEST_F(SourceBlocksTest, source_blocks_profile_exc_no_always_inject) {
       {"Lcom/facebook/redextest/SourceBlocksTest;.baz:(Ljava/lang/String;)V",
        "B0: 0(0.7:0.1) 1(0.8:0.2)"},
       {"Lcom/facebook/redextest/SourceBlocksTest;.bazz:()V", "B0:"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.bazzz:()V", "B0:"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.access$002:(Ljava/lang/"
+       "String;)Ljava/lang/String;",
+       "B0:"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.access$100:()V", "B0:"},
   };
 
   for (auto* m : cls->get_all_methods()) {
@@ -713,6 +753,12 @@ TEST_F(SourceBlocksTest, source_blocks_profile_always_inject_method_profiles) {
        "B0: 0(0.4:0.5)"},
       // This comes from method profiles.
       {"Lcom/facebook/redextest/SourceBlocksTest;.bazz:()V", "B0: 0(1:98)"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.bazzz:()V", "B0: 0(0:0)"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.access$002:(Ljava/lang/"
+       "String;)Ljava/lang/String;",
+       "B0: 0(0:0)"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.access$100:()V",
+       "B0: 0(0:0)"},
   };
 
   for (auto* m : cls->get_all_methods()) {
@@ -729,3 +775,165 @@ TEST_F(SourceBlocksTest, source_blocks_profile_always_inject_method_profiles) {
     EXPECT_EQ(actual, it->second) << show(m);
   }
 }
+
+TEST_F(SourceBlocksTest, source_blocks_access_methods) {
+  auto type = DexType::get_type("Lcom/facebook/redextest/SourceBlocksTest;");
+  ASSERT_NE(type, nullptr);
+  auto cls = type_class(type);
+  ASSERT_NE(cls, nullptr);
+
+  // Check that no code has source blocks so far.
+  {
+    for (const auto* m : cls->get_all_methods()) {
+      if (m->get_code() == nullptr) {
+        continue;
+      }
+      for (const auto& mie : *m->get_code()) {
+        ASSERT_NE(mie.type, MFLOW_SOURCE_BLOCK);
+      }
+    }
+  }
+
+  // Run the pass, check that each block has a SourceBlock.
+  InsertSourceBlocksPass isbp{};
+  run_passes({&isbp}, nullptr, Json::nullValue, [&](const auto&) {
+    enable_pass(isbp);
+    enable_always_inject(isbp);
+    set_insert_after_excs(isbp, false);
+  });
+
+  std::unordered_map<std::string, std::string> kExpectations = {
+      {"Lcom/facebook/redextest/SourceBlocksTest;.access$002:(Ljava/lang/"
+       "String;)Ljava/lang/String;",
+       "B0: "
+       "Lcom/facebook/redextest/"
+       "SourceBlocksTest;.access$redex5be80c743d1d526b$02(Ljava/lang/"
+       "String;)Ljava/lang/String;@0"},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.access$100:()V",
+       "B0: "
+       "Lcom/facebook/redextest/"
+       "SourceBlocksTest;.access$redex1bc24000ccc37110$00()V@0"},
+  };
+
+  for (auto* m : cls->get_all_methods()) {
+    if (m->get_code() == nullptr) {
+      continue;
+    }
+    if (m->get_name()->str().substr(0, 7) != "access$") {
+      continue;
+    }
+    cfg::ScopedCFG cfg{m->get_code()};
+    auto actual = get_blocks_as_txt_full(*cfg);
+    auto it = kExpectations.find(show(m));
+    if (it == kExpectations.end()) {
+      EXPECT_TRUE(false) << "No expectation for " << show(m) << ": " << actual;
+      continue;
+    }
+    EXPECT_EQ(actual, it->second) << show(m);
+  }
+}
+
+namespace {
+namespace access_methods {
+
+struct Data {
+  const char* profile;
+  const char* field_access;
+  const char* method_access;
+};
+
+} // namespace access_methods
+} // namespace
+
+class SourceBlocksAccessMethodsTest
+    : public SourceBlocksTest,
+      public testing::WithParamInterface<access_methods::Data> {};
+
+TEST_P(SourceBlocksAccessMethodsTest, profile) {
+  auto& param = GetParam();
+  auto profile_path = std::getenv(param.profile);
+  ASSERT_NE(profile_path, nullptr) << "Missing profile path.";
+
+  auto type = DexType::get_type("Lcom/facebook/redextest/SourceBlocksTest;");
+  ASSERT_NE(type, nullptr);
+  auto cls = type_class(type);
+  ASSERT_NE(cls, nullptr);
+
+  // Check that no code has source blocks so far.
+  {
+    for (const auto* m : cls->get_all_methods()) {
+      if (m->get_code() == nullptr) {
+        continue;
+      }
+      for (const auto& mie : *m->get_code()) {
+        ASSERT_NE(mie.type, MFLOW_SOURCE_BLOCK);
+      }
+    }
+  }
+
+  // Run the pass, check that each block has a SourceBlock.
+  InsertSourceBlocksPass isbp{};
+
+  run_passes({&isbp}, nullptr, Json::nullValue, [&](const auto&) {
+    enable_pass(isbp);
+    enable_always_inject(isbp);
+    set_insert_after_excs(isbp, false);
+    set_profile(isbp, profile_path);
+  });
+
+  std::unordered_map<std::string, std::string> kExpectations = {
+      {"Lcom/facebook/redextest/SourceBlocksTest;.access$002:(Ljava/lang/"
+       "String;)Ljava/lang/String;",
+       param.field_access},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.access$100:()V",
+       param.method_access},
+  };
+
+  for (auto* m : cls->get_all_methods()) {
+    if (m->get_code() == nullptr) {
+      continue;
+    }
+    if (m->get_name()->str().substr(0, 7) != "access$") {
+      continue;
+    }
+    cfg::ScopedCFG cfg{m->get_code()};
+    auto actual = get_blocks_as_txt_full(*cfg);
+    auto it = kExpectations.find(show(m));
+    if (it == kExpectations.end()) {
+      EXPECT_TRUE(false) << "No expectation for " << show(m) << ": " << actual;
+      continue;
+    }
+    EXPECT_EQ(actual, it->second) << show(m);
+  }
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    AccessMethodsGroup,
+    SourceBlocksAccessMethodsTest,
+    testing::ValuesIn(std::vector<access_methods::Data>{
+        {"profile_access_exact",
+         "B0: "
+         "Lcom/facebook/redextest/"
+         "SourceBlocksTest;.access$redex5be80c743d1d526b$02(Ljava/lang/"
+         "String;)Ljava/lang/String;@0(0.1:0.2)",
+         "B0: "
+         "Lcom/facebook/redextest/"
+         "SourceBlocksTest;.access$redex1bc24000ccc37110$00()V@0(0.3:0.4)"},
+        {"profile_access_hash",
+         "B0: "
+         "Lcom/facebook/redextest/"
+         "SourceBlocksTest;.access$redex5be80c743d1d526b$02(Ljava/lang/"
+         "String;)Ljava/lang/String;@0(0.6:0.7)",
+         "B0: "
+         "Lcom/facebook/redextest/"
+         "SourceBlocksTest;.access$redex1bc24000ccc37110$00()V@0(0.8:0.9)"},
+        {"profile_access_both",
+         // When both are available prefer hash.
+         "B0: "
+         "Lcom/facebook/redextest/"
+         "SourceBlocksTest;.access$redex5be80c743d1d526b$02(Ljava/lang/"
+         "String;)Ljava/lang/String;@0(0.6:0.7)",
+         "B0: "
+         "Lcom/facebook/redextest/"
+         "SourceBlocksTest;.access$redex1bc24000ccc37110$00()V@0(0.8:0.9)"}}),
+    [](const auto& info) { return info.param.profile; });

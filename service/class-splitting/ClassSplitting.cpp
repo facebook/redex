@@ -161,10 +161,9 @@ bool ClassSplitter::has_source_block_positive_val(DexMethod* method) {
 
 void ClassSplitter::prepare(const DexClass* cls,
                             std::vector<DexMethodRef*>* mrefs,
-                            std::vector<DexType*>* trefs,
-                            bool should_not_relocate_methods_of_class) {
+                            std::vector<DexType*>* trefs) {
   // Bail out if we just cannot or should not relocate methods of this class.
-  if (!can_relocate(cls) || should_not_relocate_methods_of_class) {
+  if (!can_relocate(cls)) {
     return;
   }
   auto cls_has_problematic_clinit = method::clinit_may_have_side_effects(

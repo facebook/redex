@@ -86,9 +86,13 @@ TEST_F(IRInstructionTest, RoundTrip) {
     } else if (insn->has_field()) {
       static_cast<DexOpcodeField*>(insn)->set_field(field);
     } else if (insn->has_method()) {
-      // XXX We can / should test method-bearing instructions -- just need to
+      // TODO: We can / should test method-bearing instructions -- just need to
       // generate a method with a proto that matches the number of registers we
       // are passing in
+      continue;
+    } else if (insn->has_proto() || insn->has_methodhandle()) {
+      // TODO: We can / should test proto- and methodhandle-bearing instructions
+      // -- just need to generate a proto/methodhandle
       continue;
     }
 
@@ -292,13 +296,13 @@ TEST_F(IRInstructionTest, SelectBinopLit) {
   using namespace dex_asm;
   using namespace instruction_lowering::impl;
   const IROpcode ops[] = {
-      OPCODE_ADD_INT_LIT16, OPCODE_RSUB_INT,      OPCODE_MUL_INT_LIT16,
-      OPCODE_DIV_INT_LIT16, OPCODE_REM_INT_LIT16, OPCODE_AND_INT_LIT16,
-      OPCODE_OR_INT_LIT16,  OPCODE_XOR_INT_LIT16, OPCODE_ADD_INT_LIT8,
-      OPCODE_RSUB_INT_LIT8, OPCODE_MUL_INT_LIT8,  OPCODE_DIV_INT_LIT8,
-      OPCODE_REM_INT_LIT8,  OPCODE_AND_INT_LIT8,  OPCODE_OR_INT_LIT8,
-      OPCODE_XOR_INT_LIT8,  OPCODE_SHL_INT_LIT8,  OPCODE_SHR_INT_LIT8,
-      OPCODE_USHR_INT_LIT8};
+      OPCODE_ADD_INT_LIT,  OPCODE_RSUB_INT_LIT, OPCODE_MUL_INT_LIT,
+      OPCODE_DIV_INT_LIT,  OPCODE_REM_INT_LIT,  OPCODE_AND_INT_LIT,
+      OPCODE_OR_INT_LIT,   OPCODE_XOR_INT_LIT,  OPCODE_ADD_INT_LIT,
+      OPCODE_RSUB_INT_LIT, OPCODE_MUL_INT_LIT,  OPCODE_DIV_INT_LIT,
+      OPCODE_REM_INT_LIT,  OPCODE_AND_INT_LIT,  OPCODE_OR_INT_LIT,
+      OPCODE_XOR_INT_LIT,  OPCODE_SHL_INT_LIT,  OPCODE_SHR_INT_LIT,
+      OPCODE_USHR_INT_LIT};
 
   const DexOpcode expected_fit8[] = {
       DOPCODE_ADD_INT_LIT8,  DOPCODE_RSUB_INT_LIT8, DOPCODE_MUL_INT_LIT8,
@@ -331,8 +335,8 @@ TEST_F(IRInstructionTest, SelectBinopLit) {
 
     // literal within 16 bits
     insn->set_literal(0x7fff);
-    if (ops[i] != OPCODE_SHL_INT_LIT8 && ops[i] != OPCODE_SHR_INT_LIT8 &&
-        ops[i] != OPCODE_USHR_INT_LIT8) {
+    if (ops[i] != OPCODE_SHL_INT_LIT && ops[i] != OPCODE_SHR_INT_LIT &&
+        ops[i] != OPCODE_USHR_INT_LIT) {
       EXPECT_EQ(expected_fit16[i], select_binop_lit_opcode(insn))
           << "at " << show(ops[i]);
     }

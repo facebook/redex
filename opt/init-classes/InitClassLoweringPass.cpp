@@ -64,9 +64,7 @@ class InitClassFields {
           });
         },
         dex_to_classes);
-    m_class_dex_indices.insert(
-        concurrent_class_dex_indices.begin(),
-        concurrent_class_dex_indices.end());
+    m_class_dex_indices = concurrent_class_dex_indices.move_to_container();
   }
 
   std::vector<IRInstruction*> get_replacements(

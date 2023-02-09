@@ -444,7 +444,7 @@ TEST_F(StringBuilderOutlinerTest, builderUsedinLoop) {
       (const-string "bar")
       (move-result-pseudo-object v1)
       (invoke-virtual (v0 v1) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
-      (add-int/lit8 v2 v2 1)
+      (add-int/lit v2 v2 1)
       (goto :loop)
       (:end-loop)
 
@@ -481,7 +481,7 @@ TEST_F(StringBuilderOutlinerTest, builderNotUsedinLoop) {
       ; below can still be outlined.
       (:loop)
       (if-eqz v2 :end-loop)
-      (add-int/lit8 v2 v2 1)
+      (add-int/lit v2 v2 1)
       (goto :loop)
       (:end-loop)
 
@@ -505,7 +505,7 @@ TEST_F(StringBuilderOutlinerTest, builderNotUsedinLoop) {
 
       (:loop)
       (if-eqz v2 :end-loop)
-      (add-int/lit8 v2 v2 1)
+      (add-int/lit v2 v2 1)
       (goto :loop)
       (:end-loop)
 

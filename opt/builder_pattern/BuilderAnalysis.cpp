@@ -540,12 +540,13 @@ ConstTypeHashSet BuilderAnalysis::escape_types() {
   liveness_iter.run(LivenessDomain());
 
   for (cfg::Block* block : cfg.blocks()) {
-    auto current_env = m_analyzer->get_exit_state_at(block);
+    const auto& current_env = m_analyzer->get_exit_state_at(block);
 
     for (auto& succ : block->succs()) {
       cfg::Block* block_succ = succ->target();
-      auto entry_env_at_succ = m_analyzer->get_entry_state_at(block_succ);
-      auto live_in_vars_at_succ =
+      const auto& entry_env_at_succ =
+          m_analyzer->get_entry_state_at(block_succ);
+      const auto& live_in_vars_at_succ =
           liveness_iter.get_live_in_vars_at(succ->target());
 
       // Check that live registers, if they hold a builder at the end of block

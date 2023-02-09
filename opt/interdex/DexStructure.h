@@ -17,6 +17,18 @@
 
 namespace interdex {
 
+struct ReserveRefsInfo {
+  size_t frefs;
+  size_t trefs;
+  size_t mrefs;
+
+  ReserveRefsInfo()
+      : ReserveRefsInfo(/* frefs */ 0, /* trefs */ 0, /* mrefs */ 0) {}
+
+  ReserveRefsInfo(size_t frefs, size_t trefs, size_t mrefs)
+      : frefs(frefs), trefs(trefs), mrefs(mrefs) {}
+};
+
 using MethodRefs = std::unordered_set<DexMethodRef*>;
 using FieldRefs = std::unordered_set<DexFieldRef*>;
 using TypeRefs = std::unordered_set<DexType*>;
@@ -49,11 +61,7 @@ class DexStructure {
  public:
   DexStructure() : m_linear_alloc_size(0) {}
 
-  size_t get_linear_alloc_size() const { return m_linear_alloc_size; }
-
   const DexClasses& get_all_classes() const { return m_classes; }
-
-  const DexClasses& get_squashed_classes() const { return m_squashed_classes; }
 
   /**
    * Only call this if you know what you are doing. This will leave the
@@ -101,8 +109,6 @@ class DexStructure {
 
   void check_refs_count();
 
-  void squash_empty_last_class(DexClass* clazz);
-
  private:
   size_t m_linear_alloc_size;
   TypeRefs m_trefs;
@@ -122,10 +128,6 @@ class DexesStructure {
  public:
   const DexClasses& get_current_dex_classes() const {
     return m_current_dex.get_all_classes();
-  }
-
-  const DexClasses& get_current_dex_squashed_classes() const {
-    return m_current_dex.get_squashed_classes();
   }
 
   bool current_dex_has_tref(DexType* type) const {
@@ -156,20 +158,24 @@ class DexesStructure {
 
   size_t get_num_vmethods() const { return m_stats.num_vmethods; }
 
+  size_t get_frefs_limit() const;
+  size_t get_trefs_limit() const;
+  size_t get_mrefs_limit() const;
+
   void set_linear_alloc_limit(int64_t linear_alloc_limit) {
     m_linear_alloc_limit = linear_alloc_limit;
   }
 
-  void set_reserve_frefs(int64_t reserve_frefs) {
-    m_reserve_frefs = reserve_frefs;
+  void set_reserve_frefs(size_t reserve_frefs) {
+    m_reserve_refs.frefs = reserve_frefs;
   }
 
-  void set_reserve_trefs(int64_t reserve_trefs) {
-    m_reserve_trefs = reserve_trefs;
+  void set_reserve_trefs(size_t reserve_trefs) {
+    m_reserve_refs.trefs = reserve_trefs;
   }
 
   void set_reserve_mrefs(size_t reserve_mrefs) {
-    m_reserve_mrefs = reserve_mrefs;
+    m_reserve_refs.mrefs = reserve_mrefs;
   }
 
   void set_min_sdk(int min_sdk) { m_min_sdk = min_sdk; }
@@ -214,10 +220,6 @@ class DexesStructure {
                             interdex::TypeRefs* pending_init_class_fields,
                             interdex::TypeRefs* pending_init_class_types);
 
-  void squash_empty_last_class(DexClass* clazz) {
-    m_current_dex.squash_empty_last_class(clazz);
-  }
-
   /**
    * It returns the classes contained in this dex and moves on to the next dex.
    */
@@ -239,9 +241,7 @@ class DexesStructure {
   std::unordered_set<DexClass*> m_classes;
 
   int64_t m_linear_alloc_limit;
-  size_t m_reserve_frefs;
-  size_t m_reserve_trefs;
-  size_t m_reserve_mrefs;
+  ReserveRefsInfo m_reserve_refs;
   int m_min_sdk;
   const init_classes::InitClassesWithSideEffects*
       m_init_classes_with_side_effects{nullptr};

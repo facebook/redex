@@ -57,7 +57,7 @@ enum class QuantFlag : uint16_t {
  * in-memory representation is hidden by a memory indirection.
  */
 struct InstructionMatcher {
-  virtual ~InstructionMatcher() = 0;
+  virtual ~InstructionMatcher() = default;
   virtual bool matches(const IRInstruction* insn) const = 0;
 };
 
@@ -190,6 +190,7 @@ using Source = std::vector<IRInstruction*>;
 using Sources = std::vector<Source>;
 using Instructions = std::unordered_map<IRInstruction*, Sources>;
 using Locations = std::vector<std::unique_ptr<Instructions>>;
+using Order = std::unordered_map<IRInstruction*, size_t>;
 
 /**
  * Mutable representation of a data-flow graph.  Nodes in this graph are
@@ -349,7 +350,8 @@ struct DataFlowGraph {
  */
 DataFlowGraph instruction_graph(cfg::ControlFlowGraph& cfg,
                                 const std::vector<Constraint>& constraints,
-                                const std::unordered_set<LocationIx>& roots);
+                                const std::unordered_set<LocationIx>& roots,
+                                Order* order = nullptr);
 
 inline void Constraint::add_src(src_index_t ix,
                                 LocationIx loc,

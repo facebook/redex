@@ -81,27 +81,51 @@ public class InstrumentBasicBlockAnalysis {
   }
 
   @DoNotStrip
-  public static void onMethodExit(int offset, short bitvec) {
+  public static boolean onMethodExit(int offset, short bitvec) {
     if (sIsEnabled) {
       sMethodStats[offset + 2] |= bitvec;
+      return true;
     }
+    return false;
   }
 
   @DoNotStrip
-  public static void onMethodExit(int offset, short bitvec1, short bitvec2) {
+  public static boolean onMethodExit(int offset, short bitvec1, short bitvec2) {
     if (sIsEnabled) {
       sMethodStats[offset + 2] |= bitvec1;
       sMethodStats[offset + 3] |= bitvec2;
+      return true;
     }
+    return false;
   }
 
   @DoNotStrip
-  public static void onMethodExit(int offset, short bitvec1, short bitvec2, short bitvec3) {
+  public static boolean onMethodExit(int offset, short bitvec1, short bitvec2, short bitvec3) {
     if (sIsEnabled) {
       sMethodStats[offset + 2] |= bitvec1;
       sMethodStats[offset + 3] |= bitvec2;
       sMethodStats[offset + 4] |= bitvec3;
+      return true;
     }
+    return false;
+  }
+
+@DoNotStrip
+  public static void onMethodExitUnchecked(int offset, short bitvec) {
+    sMethodStats[offset + 2] |= bitvec;
+  }
+
+  @DoNotStrip
+  public static void onMethodExitUnchecked(int offset, short bitvec1, short bitvec2) {
+    sMethodStats[offset + 2] |= bitvec1;
+    sMethodStats[offset + 3] |= bitvec2;
+  }
+
+  @DoNotStrip
+  public static void onMethodExitUnchecked(int offset, short bitvec1, short bitvec2, short bitvec3) {
+    sMethodStats[offset + 2] |= bitvec1;
+    sMethodStats[offset + 3] |= bitvec2;
+    sMethodStats[offset + 4] |= bitvec3;
   }
 
   // Compared to the previous implementation, we unrolled the loop into a binary tree to

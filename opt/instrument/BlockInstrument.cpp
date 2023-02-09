@@ -19,6 +19,7 @@
 #include "Show.h"
 #include "SourceBlocks.h"
 #include "TypeSystem.h"
+#include "TypeUtil.h"
 #include "Walkers.h"
 
 #include <boost/algorithm/string/join.hpp>
@@ -478,7 +479,8 @@ IRList::iterator get_first_next_of_move_except(cfg::Block* b) {
 }
 
 OnMethodExitMap build_onMethodExit_map(const DexClass& cls,
-                                       const std::string& onMethodExit_name) {
+                                       const std::string& onMethodExit_name,
+                                       const DexType* return_type) {
   OnMethodExitMap onMethodExit_map;
   for (const auto& m : cls.get_dmethods()) {
     const auto name = m->get_name()->str();
@@ -490,30 +492,33 @@ OnMethodExitMap build_onMethodExit_map(const DexClass& cls,
     // - onMethodExit(int offset), or
     // - onMethodExit(int offset, short vec1, ..., short vecN);
     const auto* args = m->get_proto()->get_args();
-    if (args->empty() || *args->begin() != DexType::make_type("I") ||
-        std::any_of(
-            std::next(args->begin(), 1), args->end(),
-            [](const auto& type) { return type != DexType::make_type("S"); })) {
-      always_assert_log(
-          false,
-          "[InstrumentPass] error: Proto type of onMethodExit must be "
-          "(int) or (int, short, ..., short), but it was %s",
-          show(m->get_proto()).c_str());
-    }
+    always_assert_log(!args->empty(), "%s", SHOW(m));
+    always_assert_log(*args->begin() == DexType::make_type("I"), "%s", SHOW(m));
+    always_assert_log(std::none_of(std::next(args->begin(), 1), args->end(),
+                                   [](const auto& type) {
+                                     return type != DexType::make_type("S");
+                                   }),
+                      "%s", SHOW(m));
+    always_assert_log(
+        m->get_proto()->get_rtype() == return_type,
+        "Analysis method %s does not have expected return type %s", SHOW(m),
+        SHOW(return_type));
 
     // -1 is to exclude `int offset`.
     onMethodExit_map[args->size() - 1] = m;
   }
 
-  if (onMethodExit_map.empty()) {
-    std::stringstream ss;
-    for (const auto& m : cls.get_dmethods()) {
-      ss << " " << show(m) << std::endl;
-    }
-    always_assert_log(false,
-                      "[InstrumentPass] error: cannot find %s in %s:\n%s",
-                      onMethodExit_name.c_str(), SHOW(cls), ss.str().c_str());
-  }
+  always_assert_log(!onMethodExit_map.empty(),
+                    "[InstrumentPass] error: cannot find %s in %s:\n%s",
+                    onMethodExit_name.c_str(), SHOW(cls),
+                    [&]() {
+                      std::stringstream ss;
+                      for (const auto& m : cls.get_dmethods()) {
+                        ss << " " << show(m) << std::endl;
+                      }
+                      return ss.str();
+                    }()
+                        .c_str());
 
   return onMethodExit_map;
 }
@@ -626,11 +631,13 @@ auto insert_prologue_insts(cfg::ControlFlowGraph& cfg,
 }
 
 std::tuple<size_t, std::vector<IRInstruction*>> insert_onMethodExit_calls(
+    DexMethod* method,
     cfg::ControlFlowGraph& cfg,
     const std::vector<reg_t>& reg_vectors, // May be empty
     const size_t method_offset,
     const reg_t reg_method_offset,
     const std::map<size_t, DexMethod*>& onMethodExit_map,
+    const std::map<size_t, DexMethod*>& onMethodExitUnchecked_map,
     const size_t max_vector_arity,
     const std::vector<short>& loop_shorts,
     const InstrumentPass::Options& options) {
@@ -642,6 +649,22 @@ std::tuple<size_t, std::vector<IRInstruction*>> insert_onMethodExit_calls(
     return std::make_tuple(num_exit_blocks, invokes);
   }
 
+  struct SingletonTempReg {
+    cfg::ControlFlowGraph& cfg;
+    std::optional<reg_t> reg = std::nullopt;
+    bool wide;
+    SingletonTempReg(cfg::ControlFlowGraph& cfg, bool wide)
+        : cfg(cfg), wide(wide) {}
+
+    reg_t operator*() {
+      if (!reg) {
+        reg = wide ? cfg.allocate_wide_temp() : cfg.allocate_temp();
+      }
+      return *reg;
+    }
+    operator bool() const { return reg.has_value(); }
+  };
+
   // When a method exits, we call onMethodExit to pass all vectors to record.
   // onMethodExit is overloaded to some degrees (e.g., up to 5 vectors). If
   // number of vectors > 5, generate one or more onMethodExit calls.
@@ -649,33 +672,73 @@ std::tuple<size_t, std::vector<IRInstruction*>> insert_onMethodExit_calls(
   const size_t num_invokes =
       std::max(1., std::ceil(double(num_vectors) / double(max_vector_arity)));
 
-  auto create_invoke_insts = [&]() -> auto {
-    // This code works in case of num_invokes == 1.
-    std::vector<IRInstruction*> invoke_insts((num_invokes * 2 - 1));
+  auto inject_onMethodExit = [&](cfg::Block* block,
+                                 const cfg::InstructionIterator& before_it,
+                                 SingletonTempReg& invoke_result_tmp_reg) {
+    // Standard layout:
+    //
+    // if (onMethodExit(0, ...)) {
+    //   onMethodExitUnchecked(1, ...)
+    //   onMethodExitUnchecked(2, ...)
+    //   ...
+    // }
+
     size_t offset = method_offset;
-    for (size_t i = 0, v = num_vectors; i < num_invokes;
-         ++i, v -= max_vector_arity) {
+    size_t v = num_vectors;
+    size_t iteration = 0;
+
+    auto create_call = [&](const auto& method_map) {
       const size_t arity = std::min(v, max_vector_arity);
 
-      IRInstruction* inst = new IRInstruction(OPCODE_INVOKE_STATIC);
-      inst->set_method(onMethodExit_map.at(arity));
-      inst->set_srcs_size(arity + 1);
-      inst->set_src(0, reg_method_offset);
+      IRInstruction* inst = (new IRInstruction(OPCODE_INVOKE_STATIC))
+                                ->set_method(method_map.at(arity))
+                                ->set_srcs_size(arity + 1)
+                                ->set_src(0, reg_method_offset);
       for (size_t j = 0; j < arity; ++j) {
-        inst->set_src(j + 1, reg_vectors[max_vector_arity * i + j]);
+        inst->set_src(j + 1, reg_vectors[max_vector_arity * iteration + j]);
       }
-      invoke_insts.at(i * 2) = inst;
 
-      if (i != num_invokes - 1) {
-        inst = new IRInstruction(OPCODE_CONST);
-        // Move forward the offset.
-        offset += max_vector_arity;
-        inst->set_literal(offset);
-        inst->set_dest(reg_method_offset);
-        invoke_insts.at(i * 2 + 1) = inst;
-      }
+      iteration++;
+      v -= arity;
+
+      return inst;
+    };
+
+    auto checked_invoke = create_call(onMethodExit_map);
+    if (v == 0) {
+      // No tail of unchecked calls, don't create control flow.
+      block->insert_before(before_it, checked_invoke);
+      return block;
     }
-    return invoke_insts;
+
+    auto head_block = cfg.split_block_before(block, before_it.unwrap());
+    // Assumption: block has no instructions before before_it, so that
+    // head_block is empty.
+    redex_assert(head_block->num_opcodes() == 0);
+    head_block->push_back(checked_invoke);
+    head_block->push_back((new IRInstruction(OPCODE_MOVE_RESULT))
+                              ->set_dest(*invoke_result_tmp_reg));
+    auto cmp_insn =
+        (new IRInstruction(OPCODE_IF_NEZ))->set_src(0, *invoke_result_tmp_reg);
+
+    // Create a new block with the unchecked calls.
+    auto unchecked_block = cfg.create_block();
+    while (v != 0) {
+      // Move forward the offset.
+      offset += max_vector_arity;
+
+      unchecked_block->push_back((new IRInstruction(OPCODE_CONST))
+                                     ->set_literal(offset)
+                                     ->set_dest(reg_method_offset));
+
+      unchecked_block->push_back(create_call(onMethodExitUnchecked_map));
+    }
+
+    cfg.create_branch(head_block, cmp_insn, block, unchecked_block);
+
+    cfg.add_edge(unchecked_block, block, cfg::EDGE_GOTO);
+
+    return head_block;
   };
 
   auto create_invoke_insts_hit = [&]() -> auto {
@@ -687,7 +750,10 @@ std::tuple<size_t, std::vector<IRInstruction*>> insert_onMethodExit_calls(
       const reg_t& reg = reg_vectors[j];
       short vec = loop_shorts[j];
       short inv_vec = ~vec;
-      IRInstruction* inst_and = new IRInstruction(OPCODE_AND_INT_LIT16);
+      IRInstruction* inst_and = new IRInstruction(OPCODE_AND_INT_LIT);
+      TRACE(INSTRUMENT, 8,
+            "Normal Vector for Just Loop Blocks (%hu) inverted (%hu)", vec,
+            inv_vec);
       inst_and->set_literal(inv_vec);
       inst_and->set_src(0, reg);
       inst_and->set_dest(reg);
@@ -763,12 +829,14 @@ std::tuple<size_t, std::vector<IRInstruction*>> insert_onMethodExit_calls(
     kWide,
   };
 
-  auto handle_instrumentation = [&cfg, &create_invoke_insts,
-                                 &create_invoke_insts_hit, &invokes,
-                                 &options](DedupeMap& map,
-                                           std::optional<reg_t>& tmp_reg,
-                                           cfg::Block* b, CatchCoverage& cv,
-                                           RegType reg_type) {
+  SingletonTempReg invoke_result_tmp_reg(cfg, /*wide=*/false);
+
+  auto handle_instrumentation = [&cfg, &inject_onMethodExit,
+                                 &create_invoke_insts_hit, &invokes, &options,
+                                 &invoke_result_tmp_reg](
+                                    DedupeMap& map, SingletonTempReg& tmp_reg,
+                                    cfg::Block* b, CatchCoverage& cv,
+                                    RegType reg_type) {
     auto pushback_move = [reg_type](cfg::Block* b, reg_t from, reg_t to) {
       auto move_insn =
           new IRInstruction(reg_type == RegType::kObject ? OPCODE_MOVE_OBJECT
@@ -789,11 +857,6 @@ std::tuple<size_t, std::vector<IRInstruction*>> insert_onMethodExit_calls(
       // If there is a reg involved, check for a temp reg, rename the
       // operand operand, and insert a move.
       if (reg_type != RegType::kNone) {
-        // First time, allocate a temp reg.
-        if (!tmp_reg) {
-          tmp_reg = reg_type == RegType::kWide ? cfg.allocate_wide_temp()
-                                               : cfg.allocate_temp();
-        }
         // Insert a move.
         pushback_move(new_pred, last_insn->src(0), *tmp_reg);
         // Change the return's operand.
@@ -803,13 +866,16 @@ std::tuple<size_t, std::vector<IRInstruction*>> insert_onMethodExit_calls(
       // Now instrument the return.
 
       if (options.instrumentation_strategy == "basic_block_hit_count") {
+        // TODO: Single-check code.
         std::vector<IRInstruction*> hit_count_insts;
         std::tie(hit_count_insts, invokes) = create_invoke_insts_hit();
         b->insert_before(b->to_cfg_instruction_iterator(b->get_last_insn()),
                          hit_count_insts);
       } else {
-        b->insert_before(b->to_cfg_instruction_iterator(b->get_last_insn()),
-                         create_invoke_insts());
+        b = inject_onMethodExit(
+            b,
+            b->to_cfg_instruction_iterator(b->get_last_insn()),
+            invoke_result_tmp_reg);
       }
 
       // And store in the cache.
@@ -832,8 +898,9 @@ std::tuple<size_t, std::vector<IRInstruction*>> insert_onMethodExit_calls(
 
   DedupeMap return_map{};
   DedupeMap throw_map{};
-  std::optional<reg_t> return_temp_reg{std::nullopt};
-  std::optional<reg_t> throw_temp_reg{std::nullopt};
+  SingletonTempReg return_temp_reg{
+      cfg, type::is_wide_type(method->get_proto()->get_rtype())};
+  SingletonTempReg throw_temp_reg{cfg, /*wide=*/false};
 
   const auto& exit_blocks = only_terminal_return_or_throw_blocks(cfg);
   for (cfg::Block* b : exit_blocks) {
@@ -1063,7 +1130,7 @@ void insert_block_coverage_computations(const std::vector<BlockInfo>& blocks,
     const auto& insert_pos = info.it;
 
     // bit_vectors[vector_id] |= 1 << bit_id'
-    IRInstruction* inst = new IRInstruction(OPCODE_OR_INT_LIT16);
+    IRInstruction* inst = new IRInstruction(OPCODE_OR_INT_LIT);
     inst->set_literal(static_cast<int16_t>(1ULL << (bit_id % BIT_VECTOR_SIZE)));
     inst->set_src(0, reg_vectors.at(vector_id));
     inst->set_dest(reg_vectors.at(vector_id));
@@ -1119,19 +1186,21 @@ std::vector<IRInstruction*> insert_hit_count_insts(
   return invokes;
 }
 
-MethodInfo instrument_basic_blocks(IRCode& code,
-                                   DexMethod* method,
-                                   DexMethod* onMethodBegin,
-                                   const OnMethodExitMap& onMethodExit_map,
-                                   DexMethod* onBlockHit,
-                                   const OnMethodExitMap& onNonLoopBlockHit_map,
-                                   const size_t max_vector_arity,
-                                   const size_t max_vector_arity_hit,
-                                   const size_t method_offset,
-                                   const size_t hit_offset,
-                                   const size_t max_num_blocks,
-                                   MultiMethodInliner& inliner,
-                                   const InstrumentPass::Options& options) {
+MethodInfo instrument_basic_blocks(
+    IRCode& code,
+    DexMethod* method,
+    DexMethod* onMethodBegin,
+    const OnMethodExitMap& onMethodExit_map,
+    const OnMethodExitMap& onMethodExitUnchecked_map,
+    DexMethod* onBlockHit,
+    const OnMethodExitMap& onNonLoopBlockHit_map,
+    const size_t max_vector_arity,
+    const size_t max_vector_arity_hit,
+    const size_t method_offset,
+    const size_t hit_offset,
+    const size_t max_num_blocks,
+    MultiMethodInliner& inliner,
+    const InstrumentPass::Options& options) {
   MethodInfo info;
   info.method = method;
 
@@ -1198,7 +1267,7 @@ MethodInfo instrument_basic_blocks(IRCode& code,
   // Step 3: Insert onMethodBegin to track method execution, and bit-vector
   //         allocation code in its method entry point.
   //
-  const size_t origin_num_non_entry_blocks = cfg.blocks().size() - 1;
+  const size_t origin_num_non_entry_blocks = cfg.num_blocks() - 1;
   const size_t num_vectors =
       std::ceil(num_to_instrument / double(BIT_VECTOR_SIZE));
 
@@ -1209,7 +1278,7 @@ MethodInfo instrument_basic_blocks(IRCode& code,
   std::tie(reg_vectors, reg_method_offset, reg_hit_offset) =
       insert_prologue_insts(cfg, onMethodBegin, num_vectors, method_offset,
                             hit_offset, blocks);
-  const size_t after_prologue_num_non_entry_blocks = cfg.blocks().size() - 1;
+  const size_t after_prologue_num_non_entry_blocks = cfg.num_blocks() - 1;
 
   // Step 4: Insert block coverage update instructions to each blocks.
   //
@@ -1219,7 +1288,7 @@ MethodInfo instrument_basic_blocks(IRCode& code,
         show_deobfuscated(method).c_str(), SHOW(method), SHOW(cfg));
 
   // Gather early as step 4 may modify CFG.
-  auto num_non_entry_blocks = cfg.blocks().size() - 1;
+  auto num_non_entry_blocks = cfg.num_blocks() - 1;
 
   size_t num_exit_calls;
   std::vector<IRInstruction*> invokes;
@@ -1257,8 +1326,9 @@ MethodInfo instrument_basic_blocks(IRCode& code,
     }
 
     std::tie(num_exit_calls, invokes) = insert_onMethodExit_calls(
-        cfg, reg_vectors, hit_offset, reg_hit_offset, onNonLoopBlockHit_map,
-        max_vector_arity_hit, loop_shorts, options);
+        method, cfg, reg_vectors, hit_offset, reg_hit_offset,
+        onNonLoopBlockHit_map, onNonLoopBlockHit_map, max_vector_arity_hit,
+        loop_shorts, options);
     if (options.inline_onNonLoopBlockHit) {
       TRACE(INSTRUMENT, 4, "Inline onNonLoopBlockHit\n");
       std::unordered_set<IRInstruction*> insns(invokes.begin(), invokes.end());
@@ -1272,8 +1342,9 @@ MethodInfo instrument_basic_blocks(IRCode& code,
     // case is extremely rare in our apps. In this case, let us do method
     // tracing by instrumenting prologues.
     std::tie(num_exit_calls, invokes) = insert_onMethodExit_calls(
-        cfg, reg_vectors, method_offset, reg_method_offset, onMethodExit_map,
-        max_vector_arity, loop_shorts, options);
+        method, cfg, reg_vectors, method_offset, reg_method_offset,
+        onMethodExit_map, onMethodExitUnchecked_map, max_vector_arity,
+        loop_shorts, options);
   }
   cfg.recompute_registers_size();
 
@@ -1740,17 +1811,25 @@ void BlockInstrumentHelper::do_basic_block_tracing(
       load_onMethodBegin(*analysis_cls, options.analysis_method_names[0]);
   TRACE(INSTRUMENT, 4, "Loaded onMethodBegin: %s", SHOW(onMethodBegin));
 
-  const auto& onMethodExit_map =
-      build_onMethodExit_map(*analysis_cls, options.analysis_method_names[1]);
+  const auto& onMethodExit_map = build_onMethodExit_map(
+      *analysis_cls, options.analysis_method_names[1], type::_boolean());
   const size_t max_vector_arity = onMethodExit_map.rbegin()->first;
   TRACE(INSTRUMENT, 4, "Max arity for onMethodExit: %zu", max_vector_arity);
 
+  const auto& onMethodExitUnchecked_map = build_onMethodExit_map(
+      *analysis_cls, options.analysis_method_names[2], type::_void());
+  // For simplicity we expect the same checked and unchecked max method arities.
+  always_assert_log(max_vector_arity ==
+                        onMethodExitUnchecked_map.rbegin()->first,
+                    "%zu != %zu", max_vector_arity,
+                    onMethodExitUnchecked_map.rbegin()->first);
+
   DexMethod* onBlockHit =
-      load_onMethodBegin(*analysis_cls, options.analysis_method_names[2]);
+      load_onMethodBegin(*analysis_cls, options.analysis_method_names[3]);
   TRACE(INSTRUMENT, 4, "Loaded onBlockHit: %s", SHOW(onBlockHit));
 
-  const auto& onNonLoopBlockHit_map =
-      build_onMethodExit_map(*analysis_cls, options.analysis_method_names[3]);
+  const auto& onNonLoopBlockHit_map = build_onMethodExit_map(
+      *analysis_cls, options.analysis_method_names[4], type::_void());
   const size_t max_vector_arity_other = onMethodExit_map.rbegin()->first;
   TRACE(INSTRUMENT, 4, "Max arity for onNonLoopBlockHit: %zu",
         max_vector_arity_other);
@@ -1830,18 +1909,15 @@ void BlockInstrumentHelper::do_basic_block_tracing(
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, cfg.create_init_class_insns(), method_override_graph.get());
 
-  ConcurrentMethodRefCache concurrent_resolved_refs;
-  auto concurrent_resolver = [&](DexMethodRef* method, MethodSearch search) {
-    return resolve_method(method, search, concurrent_resolved_refs);
-  };
+  ConcurrentMethodResolver concurrent_method_resolver;
 
   std::unordered_set<DexMethod*> no_default_inlinables;
   auto inliner_config = cfg.get_inliner_config();
   int min_sdk = pm.get_redex_options().min_sdk;
-  MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
-                             no_default_inlinables, concurrent_resolver,
-                             inliner_config, min_sdk,
-                             MultiMethodInlinerMode::None);
+  MultiMethodInliner inliner(
+      scope, init_classes_with_side_effects, stores, no_default_inlinables,
+      std::ref(concurrent_method_resolver), inliner_config, min_sdk,
+      MultiMethodInlinerMode::None);
 
   for (auto& en : onNonLoopBlockHit_map) {
     std::unordered_set<DexMethod*> insns;
@@ -1860,6 +1936,12 @@ void BlockInstrumentHelper::do_basic_block_tracing(
     }
 
     if (std::any_of(onMethodExit_map.begin(), onMethodExit_map.end(),
+                    [&](const auto& e) { return e.second == method; })) {
+      specials++;
+      return;
+    }
+    if (std::any_of(onMethodExitUnchecked_map.begin(),
+                    onMethodExitUnchecked_map.end(),
                     [&](const auto& e) { return e.second == method; })) {
       specials++;
       return;
@@ -1896,9 +1978,10 @@ void BlockInstrumentHelper::do_basic_block_tracing(
     }
 
     instrumented_methods.emplace_back(instrument_basic_blocks(
-        code, method, onMethodBegin, onMethodExit_map, onBlockHit,
-        onNonLoopBlockHit_map, max_vector_arity, max_vector_arity_other,
-        method_offset, hit_offset, max_num_blocks, inliner, options));
+        code, method, onMethodBegin, onMethodExit_map,
+        onMethodExitUnchecked_map, onBlockHit, onNonLoopBlockHit_map,
+        max_vector_arity, max_vector_arity_other, method_offset, hit_offset,
+        max_num_blocks, inliner, options));
 
     const auto& method_info = instrumented_methods.back();
     if (method_info.too_many_blocks) {
@@ -1952,7 +2035,7 @@ void BlockInstrumentHelper::do_basic_block_tracing(
         "sNumStaticallyHitsInstrumented");
     always_assert(field != nullptr);
     InstrumentPass::patch_static_field(analysis_cls, field->get_name()->str(),
-                                       hit_offset);
+                                       hit_offset - 8);
 
     field =
         analysis_cls->find_field_from_simple_deobfuscated_name("sProfileType");

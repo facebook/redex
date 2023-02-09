@@ -112,11 +112,13 @@ bool StripDebugInfo::should_drop_for_synth(const DexMethod* method) const {
 }
 
 Stats StripDebugInfo::run(const Scope& scope) {
-  Stats stats;
-  walk::code(scope, [&](DexMethod* meth, IRCode& code) {
-    stats += run(code, should_drop_for_synth(meth));
+  return walk::parallel::methods<Stats>(scope, [&](DexMethod* meth) {
+    auto code = meth->get_code();
+    if (!code) {
+      return Stats();
+    }
+    return run(*code, should_drop_for_synth(meth));
   });
-  return stats;
 }
 
 Stats StripDebugInfo::run(IRCode& code, bool should_drop_synth) {

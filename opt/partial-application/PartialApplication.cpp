@@ -322,20 +322,11 @@ void gather_caller_callees(
     }
   });
 
-  for (auto& p : concurrent_callee_caller) {
-    callee_caller->insert(std::move(p));
-  }
-  for (auto& p : concurrent_caller_callee) {
-    caller_callee->insert(std::move(p));
-  }
-  excluded_invoke_insns->insert(concurrent_excluded_invoke_insns.begin(),
-                                concurrent_excluded_invoke_insns.end());
-  for (auto& p : concurrent_arg_exclusivity) {
-    arg_exclusivity->insert(std::move(p));
-  }
-  for (auto& p : concurrent_callee_caller_classes) {
-    callee_caller_classes->insert(std::move(p));
-  }
+  *callee_caller = concurrent_callee_caller.move_to_container();
+  *caller_callee = concurrent_caller_callee.move_to_container();
+  *excluded_invoke_insns = concurrent_excluded_invoke_insns.move_to_container();
+  *arg_exclusivity = concurrent_arg_exclusivity.move_to_container();
+  *callee_caller_classes = concurrent_callee_caller_classes.move_to_container();
 }
 
 using InvokeCallSiteSummaries =
@@ -370,6 +361,9 @@ bool filter(const RefChecker& ref_checker,
       always_assert(signed_value2);
       return filter(ref_checker, enum_utils_cache, *signed_value2);
     }
+  } else if (const auto& string_value = value.maybe_get<StringDomain>()) {
+    // TODO: Support strings.
+    return false;
   } else {
     not_reached_log("unexpected value: %s", SHOW(value));
   }

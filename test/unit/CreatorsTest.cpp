@@ -69,8 +69,8 @@ TEST_F(CreatorsTest, MakeSwitchMultiIndices) {
     auto idx = it.first;
     auto case_block = cases[idx];
     ASSERT_TRUE(idx.size());
-    case_block->binop_lit16(
-        OPCODE_ADD_INT_LIT16, param_loc, param_loc, *idx.begin());
+    case_block->binop_lit(
+        OPCODE_ADD_INT_LIT, param_loc, param_loc, *idx.begin());
   }
 
   auto method = mc.create();
@@ -85,13 +85,13 @@ TEST_F(CreatorsTest, MakeSwitchMultiIndices) {
 
   EXPECT_EQ(*it++->insn, *dasm(OPCODE_CONST, {2_v, 0_L}));
 
-  EXPECT_EQ(*it++->insn, *dasm(OPCODE_ADD_INT_LIT16, {2_v, 2_v, 0_L}));
+  EXPECT_EQ(*it++->insn, *dasm(OPCODE_ADD_INT_LIT, {2_v, 2_v, 0_L}));
   EXPECT_EQ(*it++->insn, *dasm(OPCODE_GOTO, {}));
 
-  EXPECT_EQ(*it++->insn, *dasm(OPCODE_ADD_INT_LIT16, {2_v, 2_v, 2_L}));
+  EXPECT_EQ(*it++->insn, *dasm(OPCODE_ADD_INT_LIT, {2_v, 2_v, 2_L}));
   EXPECT_EQ(*it++->insn, *dasm(OPCODE_GOTO, {}));
 
-  EXPECT_EQ(*it++->insn, *dasm(OPCODE_ADD_INT_LIT16, {2_v, 2_v, 3_L}));
+  EXPECT_EQ(*it++->insn, *dasm(OPCODE_ADD_INT_LIT, {2_v, 2_v, 3_L}));
   EXPECT_EQ(*it++->insn, *dasm(OPCODE_GOTO, {}));
 
   method->sync();
