@@ -26,7 +26,7 @@ from pipes import quote
 import pyredex.bintools as bintools
 import pyredex.logger as logger
 from pyredex.buck import BuckConnectionScope, BuckPartScope
-from pyredex.packer import compress_entries, CompressionEntry
+from pyredex.packer import compress_entries, CompressionEntry, CompressionLevel
 from pyredex.unpacker import (
     LibraryManager,
     unpack_tar_xz,
@@ -1152,6 +1152,7 @@ def get_compression_list() -> typing.List[CompressionEntry]:
             ],
             "redex-instrument-metadata.zip",
             "redex-instrument-checksum.txt",
+            CompressionLevel.BETTER,  # Not as time-sensitive.
         ),
         CompressionEntry(
             "Redex Class Sizes",
@@ -1161,6 +1162,7 @@ def get_compression_list() -> typing.List[CompressionEntry]:
             ["redex-class-sizes.csv"],
             None,
             None,
+            CompressionLevel.DEFAULT,  # May be large.
         ),
         CompressionEntry(
             "Redex Stats",
@@ -1170,11 +1172,9 @@ def get_compression_list() -> typing.List[CompressionEntry]:
             [],
             None,
             None,
+            CompressionLevel.BETTER,  # Usually small enough.
         ),
     ]
-
-
-
 
 
 def finalize_redex(state: State) -> None:
