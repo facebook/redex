@@ -15,6 +15,7 @@ import lzma
 import multiprocessing
 import os
 import shutil
+import subprocess
 import tarfile
 import tempfile
 import timeit
@@ -132,6 +133,12 @@ class _TarGzCompressor(_Compressor):
 
 
 def _compress_xz(from_file: str, to_file: str) -> None:
+    if shutil.which("xz"):
+        logging.debug("Using command line xz")
+        cmd = f'cat "{from_file}" | xz -z -7e -T10 - > "{to_file}"'
+        subprocess.check_call(cmd, shell=True)  # noqa: P204
+        return
+
     with lzma.open(filename=to_file, mode="wb", preset=7 | lzma.PRESET_EXTREME) as xz:
         with open(from_file, "rb") as f_in:
             shutil.copyfileobj(f_in, xz)
