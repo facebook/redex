@@ -12,6 +12,7 @@ import argparse
 import hashlib
 import logging
 import lzma
+import multiprocessing
 import os
 import shutil
 import tarfile
@@ -29,12 +30,24 @@ timer: typing.Callable[[], float] = timeit.default_timer
 # TODO: Move to dataclass once minimum Python version increments.
 class CompressionEntry(typing.NamedTuple):
     name: str
-    filter_fn: typing.Callable[[argparse.Namespace], bool]
+    filter_fn: typing.Optional[typing.Callable[[argparse.Namespace], bool]]
     remove_source: bool
     file_list_must: typing.List[str]
     file_list_may: typing.List[str]
     output_name: typing.Optional[str]
     checksum_name: typing.Optional[str]
+
+    # For pickling.
+    def without_filter(self) -> "CompressionEntry":
+        return CompressionEntry(
+            self.name,
+            None,
+            self.remove_source,
+            self.file_list_must,
+            self.file_list_may,
+            self.output_name,
+            self.checksum_name,
+        )
 
 
 class _Compressor(ABC):
@@ -145,56 +158,82 @@ def _warning_timer(name: str, threshold: float) -> typing.Generator[int, None, N
             logging.debug("Needed %fs to compress.", end_time - start_time)
 
 
+def _compress(
+    data: typing.Tuple[CompressionEntry, str, str, argparse.Namespace]
+) -> None:
+    item, src_dir, trg_dir, args = data
+    logging.debug("Checking %s for compression...", item.name)
+
+    inputs = _ensure_exists(item.file_list_must, src_dir) + [
+        f for f in item.file_list_may if os.path.exists(os.path.join(src_dir, f))
+    ]
+    if not inputs:
+        logging.debug("No inputs found.")
+        return
+
+    with _warning_timer(item.name, 1.0) as _:
+        logging.info("Compressing %s...", item.name)
+
+        # If an output name is given, use it. If not, ensure that it is only
+        # one file.
+
+        if item.output_name is not None:
+            name = os.path.join(trg_dir, item.output_name)
+            # Compress to archive.
+            compressor = None
+            if name.endswith(".tar.xz"):
+                compressor = _TarGzCompressor(name, item.checksum_name)
+            elif name.endswith(".zip"):
+                compressor = _ZipCompressor(name, item.checksum_name)
+            assert compressor is not None
+
+            for f in inputs:
+                f_full = os.path.join(src_dir, f)
+                compressor.handle_file(f_full, f)
+
+            compressor.finalize()
+        else:
+            assert len(item.file_list_must) + len(item.file_list_may) == 1
+            # Can also not use checksum.
+            assert not item.checksum_name
+
+            # Compress to .xz
+            _compress_xz(
+                os.path.join(src_dir, inputs[0]),
+                os.path.join(trg_dir, item.output_name or (inputs[0] + ".xz")),
+            )
+
+        if item.remove_source:
+            for f in inputs:
+                os.remove(os.path.join(src_dir, f))
+    pass
+
+
 def compress_entries(
     conf: typing.List[CompressionEntry],
     src_dir: str,
     trg_dir: str,
     args: argparse.Namespace,
+    processes: int = 4,
 ) -> None:
-    for item in conf:
-        logging.debug("Checking %s for compression...", item.name)
-        if not item.filter_fn(args):
-            continue
+    if processes == 1:
+        for item in conf:
+            _compress((item, src_dir, trg_dir, args))
+    else:
+        with multiprocessing.Pool(processes=processes) as pool:
 
-        inputs = _ensure_exists(item.file_list_must, src_dir) + [
-            f for f in item.file_list_may if os.path.exists(os.path.join(src_dir, f))
-        ]
-        if not inputs:
-            logging.debug("No inputs found.")
-            continue
+            def _is_selected(item: CompressionEntry) -> bool:
+                filter_fn = item.filter_fn
+                return filter_fn is None or filter_fn(args)
 
-        with _warning_timer(item.name, 1.0) as _:
-            logging.info("Compressing %s...", item.name)
+            imap_iter = pool.imap_unordered(
+                _compress,
+                (
+                    (item.without_filter(), src_dir, trg_dir, args)
+                    for item in conf
+                    if _is_selected(item)  # Can't pickle lambdas so test here.
+                ),
+            )
 
-            # If an output name is given, use it. If not, ensure that it is only
-            # one file.
-
-            if item.output_name is not None:
-                name = os.path.join(trg_dir, item.output_name)
-                # Compress to archive.
-                compressor = None
-                if name.endswith(".tar.xz"):
-                    compressor = _TarGzCompressor(name, item.checksum_name)
-                elif name.endswith(".zip"):
-                    compressor = _ZipCompressor(name, item.checksum_name)
-                assert compressor is not None
-
-                for f in inputs:
-                    f_full = os.path.join(src_dir, f)
-                    compressor.handle_file(f_full, f)
-
-                compressor.finalize()
-            else:
-                assert len(item.file_list_must) + len(item.file_list_may) == 1
-                # Can also not use checksum.
-                assert not item.checksum_name
-
-                # Compress to .xz
-                _compress_xz(
-                    os.path.join(src_dir, inputs[0]),
-                    os.path.join(trg_dir, item.output_name or (inputs[0] + ".xz")),
-                )
-
-            if item.remove_source:
-                for f in inputs:
-                    os.remove(os.path.join(src_dir, f))
+            for _ in imap_iter:
+                pass
