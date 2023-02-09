@@ -23,9 +23,16 @@ import typing
 import zipfile
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
+from enum import Enum
 
 
 timer: typing.Callable[[], float] = timeit.default_timer
+
+
+class CompressionLevel(Enum):
+    FAST = 1
+    DEFAULT = 2
+    BETTER = 3
 
 
 # TODO: Move to dataclass once minimum Python version increments.
@@ -37,6 +44,7 @@ class CompressionEntry(typing.NamedTuple):
     file_list_may: typing.List[str]
     output_name: typing.Optional[str]
     checksum_name: typing.Optional[str]
+    compression_level: CompressionLevel
 
     # For pickling.
     def without_filter(self) -> "CompressionEntry":
@@ -48,6 +56,7 @@ class CompressionEntry(typing.NamedTuple):
             self.file_list_may,
             self.output_name,
             self.checksum_name,
+            self.compression_level,
         )
 
 
@@ -95,9 +104,28 @@ class _Compressor(ABC):
 
 
 class _ZipCompressor(_Compressor):
-    def __init__(self, zip_path: str, checksum_name: typing.Optional[str]) -> None:
+    def __init__(
+        self,
+        zip_path: str,
+        checksum_name: typing.Optional[str],
+        compression_level: CompressionLevel,
+    ) -> None:
         super().__init__(checksum_name)
-        self.zipfile = zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED)
+        self.zipfile = zipfile.ZipFile(
+            zip_path,
+            "w",
+            compression=zipfile.ZIP_DEFLATED,
+            compresslevel=_ZipCompressor._get_compress_level(compression_level),
+        )
+
+    @staticmethod
+    def _get_compress_level(compression_level: CompressionLevel) -> int:
+        if compression_level == CompressionLevel.FAST:
+            return 0
+        elif compression_level == CompressionLevel.BETTER:
+            return 9
+        else:
+            return 6  # This is the default.
 
     def _handle_file_impl(self, file_path: str, file_name: str) -> None:
         self.zipfile.write(filename=file_path, arcname=file_name)
@@ -110,9 +138,27 @@ class _ZipCompressor(_Compressor):
 
 
 class _TarGzCompressor(_Compressor):
-    def __init__(self, targz_path: str, checksum_name: typing.Optional[str]) -> None:
+    def __init__(
+        self,
+        targz_path: str,
+        checksum_name: typing.Optional[str],
+        compression_level: CompressionLevel,
+    ) -> None:
         super().__init__(checksum_name)
-        self.tarfile: tarfile.TarFile = tarfile.open(name=targz_path, mode="w:xz")
+        self.tarfile: tarfile.TarFile = tarfile.open(
+            name=targz_path,
+            mode="w:xz",
+            compresslevel=_TarGzCompressor._get_compress_level(compression_level),
+        )
+
+    @staticmethod
+    def _get_compress_level(compression_level: CompressionLevel) -> int:
+        if compression_level == CompressionLevel.FAST:
+            return 0
+        elif compression_level == CompressionLevel.BETTER:
+            return 9
+        else:
+            return 9  # This is the default.
 
     def _handle_file_impl(self, file_path: str, file_name: str) -> None:
         # This deals better with symlinks.
@@ -132,14 +178,28 @@ class _TarGzCompressor(_Compressor):
             self.tarfile.add(checksum_filename, name)
 
 
-def _compress_xz(from_file: str, to_file: str) -> None:
+def _get_xz_compress_level(
+    compression_level: CompressionLevel,
+) -> typing.Tuple[str, int]:
+    if compression_level == CompressionLevel.FAST:
+        return ("-5", 5)
+    elif compression_level == CompressionLevel.BETTER:
+        return ("-9e", 9 | lzma.PRESET_EXTREME)
+    else:
+        return ("-7e", 7 | lzma.PRESET_EXTREME)
+
+
+def _compress_xz(
+    from_file: str, to_file: str, compression_level: CompressionLevel
+) -> None:
+    comp = _get_xz_compress_level(compression_level)
     if shutil.which("xz"):
         logging.debug("Using command line xz")
-        cmd = f'cat "{from_file}" | xz -z -7e -T10 - > "{to_file}"'
+        cmd = f'cat "{from_file}" | xz -z {comp[0]} -T10 - > "{to_file}"'
         subprocess.check_call(cmd, shell=True)  # noqa: P204
         return
 
-    with lzma.open(filename=to_file, mode="wb", preset=7 | lzma.PRESET_EXTREME) as xz:
+    with lzma.open(filename=to_file, mode="wb", preset=comp[1]) as xz:
         with open(from_file, "rb") as f_in:
             shutil.copyfileobj(f_in, xz)
 
@@ -189,9 +249,13 @@ def _compress(
             # Compress to archive.
             compressor = None
             if name.endswith(".tar.xz"):
-                compressor = _TarGzCompressor(name, item.checksum_name)
+                compressor = _TarGzCompressor(
+                    name, item.checksum_name, item.compression_level
+                )
             elif name.endswith(".zip"):
-                compressor = _ZipCompressor(name, item.checksum_name)
+                compressor = _ZipCompressor(
+                    name, item.checksum_name, item.compression_level
+                )
             assert compressor is not None
 
             for f in inputs:
@@ -208,6 +272,7 @@ def _compress(
             _compress_xz(
                 os.path.join(src_dir, inputs[0]),
                 os.path.join(trg_dir, item.output_name or (inputs[0] + ".xz")),
+                item.compression_level,
             )
 
         if item.remove_source:
