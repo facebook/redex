@@ -61,6 +61,8 @@ class CompressionEntry(typing.NamedTuple):
 
 
 class _Compressor(ABC):
+    _BUF_SIZE: int = 128 * 1024
+
     def __init__(self, checksum_name: typing.Optional[str]) -> None:
         self.checksum_name = checksum_name
         self.do_checksum: bool = checksum_name is not None
@@ -75,10 +77,14 @@ class _Compressor(ABC):
                 hash = hashlib.md5()
                 self.hash = hash
 
-            # Files should be small enough to read into memory.
-            assert os.path.getsize(file_path) < 10000000
+            # Gotta read this block-wise, as some files may be
+            # quite large.
             with open(file_path, "rb") as f:
-                hash.update(f.read())
+                while True:
+                    data = f.read(_Compressor._BUF_SIZE)
+                    if not data:
+                        break
+                    hash.update(data)
 
     @abstractmethod
     def _handle_file_impl(self, file_path: str, file_name: str) -> None:
