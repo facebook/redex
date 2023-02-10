@@ -14,6 +14,7 @@
 #include "IRInstruction.h"
 #include "Show.h"
 #include "Walkers.h"
+#include <array>
 
 namespace instruction_lowering {
 
