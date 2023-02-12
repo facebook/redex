@@ -1052,7 +1052,7 @@ TEST_F(DedupBlocksTest, dontRespectDexTypesIncludingArraysIfNotUsedAsSuch) {
   EXPECT_CODE_EQ(expected_code.get(), method->get_code());
 }
 
-TEST_F(DedupBlocksTest, dontRespectDexTypesExceptArraysIfUsedAsSuch) {
+TEST_F(DedupBlocksTest, referenceAndPrimitiveArraysHaveNoCommonBaseType) {
   using namespace dex_asm;
   DexMethod* method = get_fresh_method("I");
 
@@ -1065,7 +1065,7 @@ TEST_F(DedupBlocksTest, dontRespectDexTypesExceptArraysIfUsedAsSuch) {
       (if-eqz v0 :D)
 
       ; B
-      (new-array v1 "[Ljava/lang/Integer;")
+      (new-array v1 "[I")
       (move-result-pseudo-object v0)
       (if-eqz v0 :C)
 
@@ -1092,6 +1092,212 @@ TEST_F(DedupBlocksTest, dontRespectDexTypesExceptArraysIfUsedAsSuch) {
   run_dedup_blocks();
 
   auto expected_str = str;
+  auto expected_code = assembler::ircode_from_string(expected_str);
+  EXPECT_CODE_EQ(expected_code.get(), method->get_code());
+}
+
+TEST_F(DedupBlocksTest, allReferenceArraysHaveCommonBaseType) {
+  using namespace dex_asm;
+  DexMethod* method = get_fresh_method("I");
+
+  ClassCreator object_creator(type::java_lang_Object());
+  object_creator.create()->set_external();
+
+  ClassCreator some_object_creator(DexType::make_type("LSomeObject;"));
+  some_object_creator.set_super(type::java_lang_Object());
+  some_object_creator.create();
+
+  auto str = R"(
+    (
+      ; A
+      (const v1 0)
+      (new-array v1 "[Ljava/lang/Object;")
+      (move-result-pseudo-object v0)
+      (if-eqz v0 :D)
+
+      ; B
+      (new-array v1 "[LSomeObject;")
+      (move-result-pseudo-object v0)
+      (if-eqz v0 :C)
+
+      (:E)
+      (return v1)
+
+      (:C)
+      (array-length v0)
+      (move-result-pseudo v1)
+      (if-nez v0 :E)
+      (goto :E)
+
+      (:D)
+      (array-length v0)
+      (move-result-pseudo v1)
+      (if-nez v0 :E)
+      (goto :E)
+    )
+  )";
+
+  auto code = assembler::ircode_from_string(str);
+  method->set_code(std::move(code));
+
+  run_dedup_blocks();
+
+  auto expected_str = R"(
+    (
+      ; A
+      (const v1 0)
+      (new-array v1 "[Ljava/lang/Object;")
+      (move-result-pseudo-object v0)
+      (if-eqz v0 :C)
+
+      ; B
+      (new-array v1 "[LSomeObject;")
+      (move-result-pseudo-object v0)
+      (if-eqz v0 :C)
+
+      (:E)
+      (return v1)
+
+      (:C)
+      (array-length v0)
+      (move-result-pseudo v1)
+      (if-nez v0 :E)
+      (goto :E)
+    )
+  )";
+
+  auto expected_code = assembler::ircode_from_string(expected_str);
+  EXPECT_CODE_EQ(expected_code.get(), method->get_code());
+}
+
+TEST_F(DedupBlocksTest, androidIsAfraidOfArraysOfInterfaces) {
+  using namespace dex_asm;
+  DexMethod* method = get_fresh_method("I");
+
+  ClassCreator object_creator(type::java_lang_Object());
+  object_creator.create();
+
+  ClassCreator i_creator(DexType::make_type("LI;"));
+  i_creator.set_access(ACC_INTERFACE);
+  i_creator.set_super(type::java_lang_Object());
+  i_creator.create();
+
+  ClassCreator a_creator(DexType::make_type("LA;"));
+  a_creator.add_interface(i_creator.get_class()->get_type());
+  a_creator.set_super(type::java_lang_Object());
+  a_creator.create();
+
+  ClassCreator b_creator(DexType::make_type("LB;"));
+  b_creator.add_interface(i_creator.get_class()->get_type());
+  b_creator.set_super(type::java_lang_Object());
+  b_creator.create();
+
+  auto str = R"(
+    (
+      ; A
+      (const v1 0)
+      (new-array v1 "[LA;")
+      (move-result-pseudo-object v0)
+      (if-eqz v0 :D)
+
+      ; B
+      (new-array v1 "[LB;")
+      (move-result-pseudo-object v0)
+      (if-eqz v0 :C)
+
+      (:E)
+      (return v1)
+
+      (:C)
+      (invoke-static (v0) "LTotallyLegit;.method:([LI;)V")
+      (return v1)
+
+      (:D)
+      (invoke-static (v0) "LTotallyLegit;.method:([LI;)V")
+      (return v1)
+    )
+  )";
+
+  auto code = assembler::ircode_from_string(str);
+  method->set_code(std::move(code));
+
+  run_dedup_blocks();
+
+  auto expected_str = str;
+  auto expected_code = assembler::ircode_from_string(expected_str);
+  EXPECT_CODE_EQ(expected_code.get(), method->get_code());
+}
+
+TEST_F(DedupBlocksTest, trivialJoinOfArrayOfClassesIsFine) {
+  using namespace dex_asm;
+  DexMethod* method = get_fresh_method("I");
+
+  ClassCreator object_creator(type::java_lang_Object());
+  object_creator.create();
+
+  ClassCreator i_creator(DexType::make_type("LI;"));
+  i_creator.set_access(ACC_INTERFACE);
+  i_creator.set_super(type::java_lang_Object());
+  i_creator.create();
+
+  ClassCreator a_creator(DexType::make_type("LA;"));
+  a_creator.add_interface(i_creator.get_class()->get_type());
+  a_creator.set_super(type::java_lang_Object());
+  a_creator.create();
+
+  auto str = R"(
+    (
+      ; A
+      (const v1 0)
+      (new-array v1 "[LA;")
+      (move-result-pseudo-object v0)
+      (if-eqz v0 :D)
+
+      ; B
+      (new-array v1 "[LA;")
+      (move-result-pseudo-object v0)
+      (if-eqz v0 :C)
+
+      (:E)
+      (return v1)
+
+      (:C)
+      (invoke-static (v0) "LTotallyLegit;.method:([LI;)V")
+      (return v1)
+
+      (:D)
+      (invoke-static (v0) "LTotallyLegit;.method:([LI;)V")
+      (return v1)
+    )
+  )";
+
+  auto code = assembler::ircode_from_string(str);
+  method->set_code(std::move(code));
+
+  run_dedup_blocks();
+
+  auto expected_str = R"(
+    (
+      ; A
+      (const v1 0)
+      (new-array v1 "[LA;")
+      (move-result-pseudo-object v0)
+      (if-eqz v0 :C)
+
+      ; B
+      (new-array v1 "[LA;")
+      (move-result-pseudo-object v0)
+      (if-eqz v0 :C)
+
+      (:E)
+      (return v1)
+
+      (:C)
+      (invoke-static (v0) "LTotallyLegit;.method:([LI;)V")
+      (goto :E)
+    )
+  )";
+
   auto expected_code = assembler::ircode_from_string(expected_str);
   EXPECT_CODE_EQ(expected_code.get(), method->get_code());
 }
