@@ -1050,19 +1050,64 @@ class DedupBlocksImpl {
       // If any of the reference types we joined might have been of an array
       // type...
       auto joined_type_domain = DexTypeDomain::bottom();
+      auto common_dex_type = joined_env.get_dex_type(reg);
       bool maybe_array{false};
+      bool maybe_array_of_object{false};
       for (cfg::Block* block : blocks) {
         auto type_domain =
             type_inference->get_entry_state_at(block).get_type_domain(reg);
         auto dex_type = type_domain.get_dex_type();
-        if (type_domain.is_top() || !dex_type || type::is_array(*dex_type)) {
+        if (type_domain.is_top() || !dex_type) {
           maybe_array = true;
+          maybe_array_of_object = true;
+        } else if (type::is_array(*dex_type)) {
+          maybe_array = true;
+          if (type::is_object(type::get_array_component_type(*dex_type))) {
+            maybe_array_of_object = true;
+          }
         }
         joined_type_domain.join_with(type_domain);
+        if (common_dex_type && dex_type && *common_dex_type != *dex_type) {
+          common_dex_type = boost::none;
+        }
       }
       always_assert(!joined_type_domain.is_bottom());
+      always_assert(!maybe_array_of_object || maybe_array);
       if (!maybe_array) {
         continue;
+      }
+      if (common_dex_type) {
+        // Trivial join. This is fine.
+        continue;
+      }
+      auto reaching_defs = reaching_defs::Domain::bottom();
+      auto init_reaching_defs = [&blocks, &live_ranges, &reaching_defs, reg]() {
+        if (reaching_defs.is_bottom()) {
+          const auto& fp_iter = live_ranges->chains.get_fp_iter();
+          for (cfg::Block* block : blocks) {
+            reaching_defs.join_with(fp_iter.get_entry_state_at(block).get(reg));
+          }
+          always_assert(!reaching_defs.is_bottom());
+        }
+      };
+      if (maybe_array_of_object) {
+        // Android's verifier has shortcomings around arrays of interface types,
+        // so if there's any use of the register in such a context, we give up.
+        // TODO: This is very conservative. Right now, we give up by just
+        // looking at the use-instructions. We can be more precise by analyzing
+        // the type demand of the instruction, and only give up if it involves
+        // an array of an interface type.
+        init_reaching_defs();
+        for (auto reaching_def : reaching_defs.elements()) {
+          for (const auto& use : (*live_ranges->def_use_chains)[reaching_def]) {
+            auto op = use.insn->opcode();
+            if (opcode::is_an_aget(op) || opcode::is_an_iput(op) ||
+                opcode::is_an_sput(op) || opcode::is_an_invoke(op) ||
+                opcode::is_a_return(op)) {
+              return true;
+            }
+          }
+        }
       }
       // ...but didn't join to an array type...
       if (!joined_type_domain.is_top()) {
@@ -1073,12 +1118,7 @@ class DedupBlocksImpl {
       }
       // ...then we need to make sure that register is not used with an
       // instruction that expects *some* array type.
-      auto reaching_defs = reaching_defs::Domain::bottom();
-      const auto& fp_iter = live_ranges->chains.get_fp_iter();
-      for (cfg::Block* block : blocks) {
-        reaching_defs.join_with(fp_iter.get_entry_state_at(block).get(reg));
-      }
-      always_assert(!reaching_defs.is_bottom());
+      init_reaching_defs();
       for (auto reaching_def : reaching_defs.elements()) {
         for (const auto& use : (*live_ranges->def_use_chains)[reaching_def]) {
           auto op = use.insn->opcode();
