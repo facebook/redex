@@ -9,6 +9,10 @@ class A {
   public int foo;
   public OnlyInArray[] arr;
 
+  static {
+    // trivial
+  }
+
   public A() {
     foo = 0;
     arr = new OnlyInArray[10];
@@ -27,6 +31,10 @@ class A {
 }
 
 class D extends A {
+  static {
+    System.out.println("side effect");
+  }
+
   public int bar() { return 3; }
   public int baz() { return 4; }
   public void bor() {}

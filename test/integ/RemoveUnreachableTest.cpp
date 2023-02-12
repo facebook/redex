@@ -287,3 +287,32 @@ TEST_F(RemoveUnreachableTest, TypeAnalysisInheritanceTriangleTest) {
   ASSERT_TRUE(find_vmethod(*classes, "LI;", "V", "wat", {}));
   ASSERT_TRUE(find_vmethod(*classes, "LSuper;", "V", "wat", {}));
 }
+
+TEST_F(RemoveUnreachableTest, StaticInitializerTest) {
+  // Make sure some things exist before we start.
+  DexClass* a = find_class(*classes, "LA;");
+  ASSERT_TRUE(a);
+  DexClass* d = find_class(*classes, "LD;");
+  ASSERT_TRUE(d);
+  ASSERT_TRUE(a->get_clinit());
+  ASSERT_TRUE(d->get_clinit());
+
+  const auto& dexen = stores[0].get_dexen();
+  auto pg_config = process_and_get_proguard_config(dexen, R"(
+    -keep class A
+    -keep class D
+  )");
+
+  ASSERT_TRUE(pg_config->ok);
+  ASSERT_EQ(pg_config->keep_rules.size(), 2);
+
+  run_passes({new RemoveUnreachablePass()}, std::move(pg_config));
+
+  // Seed elements
+  a = find_class(*classes, "LA;");
+  ASSERT_TRUE(a);
+  d = find_class(*classes, "LD;");
+  ASSERT_TRUE(d);
+  ASSERT_FALSE(a->get_clinit());
+  ASSERT_TRUE(d->get_clinit());
+}
