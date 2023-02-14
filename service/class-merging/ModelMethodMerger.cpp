@@ -866,6 +866,7 @@ void ModelMethodMerger::dedup_non_ctor_non_virt_methods() {
       auto cls = type_class(owner);
       cls->remove_method(m);
       DexMethod::erase_method(m);
+      DexMethod::delete_method(m);
       return true;
     };
     int before = non_ctors.size() + non_vmethods.size();

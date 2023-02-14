@@ -350,6 +350,10 @@ void move_methods_to_interface(
                               method_to_move->get_proto());
     if (methodref_in_context != nullptr) {
       DexMethodRef::erase_method(methodref_in_context);
+      if (methodref_in_context->is_def()) {
+        DexMethod::delete_method(methodref_in_context->as_def());
+      }
+
       // Even resolve_method returns nullptr, get_method might still return
       // some DexMethodRef, that means some where in code this DexMethodRef
       // is being used, also keep track of this so we can replace later.

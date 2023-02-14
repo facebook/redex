@@ -670,10 +670,10 @@ void sweep(DexStoresVector& stores,
   }
 
   auto sweep_method = [&](DexMethodRef* m) {
-    if (m->is_def()) {
-      m->as_def()->release_code(); // Free code.
-    }
     DexMethod::erase_method(m);
+    if (m->is_def()) {
+      DexMethod::delete_method(m->as_def());
+    }
   };
 
   walk::parallel::classes(scope, [&](DexClass* cls) {
