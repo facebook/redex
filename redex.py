@@ -1174,6 +1174,16 @@ def get_compression_list() -> typing.List[CompressionEntry]:
             None,
             CompressionLevel.BETTER,  # Usually small enough.
         ),
+        CompressionEntry(
+            "Redex Class Dependencies",
+            lambda args: True,
+            True,
+            [],
+            ["redex-class-dependencies.txt"],
+            None,
+            None,
+            CompressionLevel.FAST,  # May be quite large.
+        ),
     ]
 
 

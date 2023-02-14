@@ -16,7 +16,7 @@ class TestArtifactsGeneration(ArtifactsTestFixture):
         "redex-method-id-map.txt",
         "redex-class-rename-map.txt",
         "redex-class-method-info-map.txt",
-        "redex-class-dependencies.txt",
+        "redex-class-dependencies.txt.xz",
         "redex-opt-decisions.json",
         "iodi-metadata",
         "redex-merge-interface-mappings.txt",
