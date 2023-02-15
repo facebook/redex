@@ -1086,13 +1086,13 @@ void Model::collect_methods() {
 // virtual methods
 void Model::add_virtual_scope(MergerType& merger,
                               const VirtualScope& virt_scope) {
-  merger.vmethods.emplace_back(nullptr, std::vector<DexMethod*>());
+  merger.vmethods.emplace_back(nullptr);
   for (const auto& vmeth : virt_scope.methods) {
     TRACE(CLMG, 9, "check virtual method %s", SHOW(vmeth.first));
     always_assert_log(vmeth.first->is_def(), "not def %s", SHOW(vmeth.first));
     if (merger.mergeables.count(vmeth.first->get_class()) == 0) continue;
     TRACE(CLMG, 8, "add virtual method %s", SHOW(vmeth.first));
-    merger.vmethods.back().second.emplace_back(vmeth.first);
+    merger.vmethods.back().overrides.emplace_back(vmeth.first);
   }
 }
 
@@ -1247,9 +1247,8 @@ void Model::distribute_virtual_methods(
                   "add virtual method %s w/ overridden_meth %s",
                   SHOW(virt_meth),
                   SHOW(overridden_meth));
-            merger->second.vmethods.emplace_back(overridden_meth,
-                                                 std::vector<DexMethod*>());
-            insert_list = &merger->second.vmethods.back().second;
+            merger->second.vmethods.emplace_back(overridden_meth);
+            insert_list = &merger->second.vmethods.back().overrides;
           }
           insert_list->emplace_back(virt_meth);
         }
@@ -1297,7 +1296,7 @@ std::string Model::print(const MergerType* merger) const {
      << merger->non_virt_methods.size() << ") vmethods("
      << merger->vmethods.size();
   for (const auto& meths : merger->vmethods) {
-    ss << "[" << meths.second.size() << "]";
+    ss << "[" << meths.overrides.size() << "]";
   }
   ss << ") intf_methods(" << merger->intfs_methods.size();
   for (const auto& intf_meths : merger->intfs_methods) {
@@ -1397,7 +1396,7 @@ std::string Model::print(const DexType* type, int nest) const {
       indent('-');
       ss << "# " << merger->second.vmethods.size() << " virtual methods:\n";
       for (const auto& vmeths : merger->second.vmethods) {
-        for (const auto& meth : vmeths.second) {
+        for (const auto& meth : vmeths.overrides) {
           meth_str(meth);
         }
       }

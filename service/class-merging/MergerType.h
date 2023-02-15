@@ -28,9 +28,20 @@ using FieldsMap = std::unordered_map<const DexType*, std::vector<DexField*>>;
  */
 struct MergerType {
 
-  // Left is the default impl in the base type; right is the list of overriding
-  // impls in mergeables.
-  using VirtualMethod = std::pair<DexMethod*, std::vector<DexMethod*>>;
+  // Model virtual methods belonging to the same VirtualScope on the MergerType
+  // we are creating.
+  struct VirtualMethod {
+    // Base implementation on the base type.
+    DexMethod* base;
+    // Overrides in mergeable types.
+    std::vector<DexMethod*> overrides;
+
+    explicit VirtualMethod(DexMethod* base) : base(base) {}
+    VirtualMethod(DexMethod* base, const std::vector<DexMethod*>& lst)
+        : base(base) {
+      overrides.insert(overrides.begin(), lst.begin(), lst.end());
+    }
+  };
 
   /**
    * Merged types may have implementation of interfaces that need to be
