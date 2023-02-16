@@ -1160,9 +1160,10 @@ void Model::distribute_virtual_methods(
     base_scopes.emplace_back(virt_scope);
   }
 
-  const auto& merger = m_mergers.find(type);
-  if (merger != m_mergers.end() && !merger->second.mergeables.empty()) {
-    TRACE(CLMG, 8, "merger found %s", SHOW(merger->second.type));
+  const auto& merger_it = m_mergers.find(type);
+  if (merger_it != m_mergers.end() && !merger_it->second.mergeables.empty()) {
+    auto& merger = merger_it->second;
+    TRACE(CLMG, 8, "merger found %s", SHOW(merger.type));
     // loop through the parent scopes of the mergeable types and
     // if a method is from a mergeable type add it to the merger
     for (const auto& virt_scope : base_scopes) {
@@ -1196,7 +1197,7 @@ void Model::distribute_virtual_methods(
         always_assert(virt_meth->is_def());
         if (overridden_meth == nullptr && is_miranda(top_def.second)) {
           const auto* cls = virt_meth->get_class();
-          const auto& mergeables = merger->second.mergeables;
+          const auto& mergeables = merger.mergeables;
           always_assert(!mergeables.empty());
           const auto* a_mergeable = *mergeables.begin();
           if (type::is_subclass(cls, a_mergeable)) {
@@ -1212,7 +1213,7 @@ void Model::distribute_virtual_methods(
         if (!virt_meth->is_def()) {
           continue;
         }
-        if (merger->second.mergeables.count(virt_meth->get_class()) == 0) {
+        if (merger.mergeables.count(virt_meth->get_class()) == 0) {
           update_overridden(virt_scope->methods[0], virt_meth);
           continue;
         }
@@ -1230,13 +1231,12 @@ void Model::distribute_virtual_methods(
                   virt_meth->get_deobfuscated_name_or_empty_copy().c_str(),
                   SHOW(virt_meth->get_name()),
                   SHOW(overridden_meth));
-            merger->second.intfs_methods.push_back(
-                MergerType::InterfaceMethod());
-            auto& intf_meth = merger->second.intfs_methods.back();
+            merger.intfs_methods.push_back(MergerType::InterfaceMethod());
+            auto& intf_meth = merger.intfs_methods.back();
             intf_meth.overridden_meth = overridden_meth;
-            merger->second.intfs_methods.back().interfaces.insert(
+            merger.intfs_methods.back().interfaces.insert(
                 virt_scope->interfaces.begin(), virt_scope->interfaces.end());
-            insert_list = &merger->second.intfs_methods.back().methods;
+            insert_list = &merger.intfs_methods.back().methods;
           }
           insert_list->emplace_back(virt_meth);
         } else {
@@ -1247,8 +1247,8 @@ void Model::distribute_virtual_methods(
                   "add virtual method %s w/ overridden_meth %s",
                   SHOW(virt_meth),
                   SHOW(overridden_meth));
-            merger->second.vmethods.emplace_back(overridden_meth);
-            insert_list = &merger->second.vmethods.back().overrides;
+            merger.vmethods.emplace_back(overridden_meth);
+            insert_list = &merger.vmethods.back().overrides;
           }
           insert_list->emplace_back(virt_meth);
         }
@@ -1282,32 +1282,32 @@ std::string Model::print() const {
   return ss.str();
 }
 
-std::string Model::print(const MergerType* merger) const {
+std::string Model::print(const MergerType& merger) const {
   std::ostringstream ss;
-  ss << SHOW(merger->type) << " mergeables(" << merger->mergeables.size() << ")"
-     << " shape(str: " << merger->shape.string_fields
-     << ", refs: " << merger->shape.reference_fields
-     << ", bool: " << merger->shape.bool_fields
-     << ", int: " << merger->shape.int_fields
-     << ", long: " << merger->shape.long_fields
-     << ", double: " << merger->shape.double_fields
-     << ", float: " << merger->shape.float_fields << ") dmethods("
-     << merger->dmethods.size() << ") non_virt_methods("
-     << merger->non_virt_methods.size() << ") vmethods("
-     << merger->vmethods.size();
-  for (const auto& meths : merger->vmethods) {
+  ss << SHOW(merger.type) << " mergeables(" << merger.mergeables.size() << ")"
+     << " shape(str: " << merger.shape.string_fields
+     << ", refs: " << merger.shape.reference_fields
+     << ", bool: " << merger.shape.bool_fields
+     << ", int: " << merger.shape.int_fields
+     << ", long: " << merger.shape.long_fields
+     << ", double: " << merger.shape.double_fields
+     << ", float: " << merger.shape.float_fields << ") dmethods("
+     << merger.dmethods.size() << ") non_virt_methods("
+     << merger.non_virt_methods.size() << ") vmethods("
+     << merger.vmethods.size();
+  for (const auto& meths : merger.vmethods) {
     ss << "[" << meths.overrides.size() << "]";
   }
-  ss << ") intf_methods(" << merger->intfs_methods.size();
-  for (const auto& intf_meths : merger->intfs_methods) {
+  ss << ") intf_methods(" << merger.intfs_methods.size();
+  for (const auto& intf_meths : merger.intfs_methods) {
     ss << "[" << intf_meths.methods.size() << "]";
   }
   ss << ")";
-  const auto& children = m_hierarchy.find(merger->type);
+  const auto& children = m_hierarchy.find(merger.type);
   if (children != m_hierarchy.end()) {
     ss << " children(" << children->second.size() << ")";
   }
-  const auto& intfs = m_class_to_intfs.find(merger->type);
+  const auto& intfs = m_class_to_intfs.find(merger.type);
   if (intfs != m_class_to_intfs.end()) {
     ss << " interfaces(" << intfs->second.size() << ")";
     if (intfs->second.size() <= 7) {
@@ -1347,18 +1347,20 @@ std::string Model::print(const DexType* type, int nest) const {
     }
   };
 
-  const auto& merger = m_mergers.find(type);
+  const auto merger_it = m_mergers.find(type);
   indent('+');
   ss << " ";
-  if (merger != m_mergers.end()) {
-    ss << print(&merger->second);
+  if (merger_it != m_mergers.end()) {
+    const MergerType& merger = merger_it->second;
+    ss << print(merger);
   } else {
     ss << print(type);
   }
   ss << "\n";
 
-  if (merger != m_mergers.end()) {
-    for (const auto& mergeable : merger->second.mergeables) {
+  if (merger_it != m_mergers.end()) {
+    const MergerType& merger = merger_it->second;
+    for (const auto& mergeable : merger.mergeables) {
       indent('-');
       ss << " " << print(mergeable) << "\n";
       const auto cls = type_class(mergeable);
@@ -1369,44 +1371,51 @@ std::string Model::print(const DexType* type, int nest) const {
       }
     }
 
-    const auto meth_str = [&](const DexMethod* meth) {
+    const auto meth_str = [&](const DexMethod* meth,
+                              const std::string& suffix = "") {
       indent('-');
-      ss << "# " << show_deobfuscated(meth) << " (" << meth->get_name()->c_str()
-         << ") [" << meth->get_code()->count_opcodes() << "]\n";
+      if (meth) {
+        ss << "# " << show_deobfuscated(meth) << " ("
+           << meth->get_name()->c_str() << ") ["
+           << (meth->get_code() ? meth->get_code()->count_opcodes() : 0) << "]";
+      } else {
+        ss << "# missing";
+      }
+      ss << (suffix.empty() ? "" : " (") << suffix << ")\n";
     };
 
-    if (!merger->second.dmethods.empty()) {
+    if (!merger_it->second.dmethods.empty()) {
       indent('-');
-      ss << "# " << merger->second.dmethods.size() << " dmethods:\n";
-      for (const auto& meth : merger->second.dmethods) {
+      ss << "# " << merger.dmethods.size() << " dmethods:\n";
+      for (const auto& meth : merger.dmethods) {
         meth_str(meth);
       }
     }
 
-    if (!merger->second.non_virt_methods.empty()) {
+    if (!merger_it->second.non_virt_methods.empty()) {
       indent('-');
-      ss << "# " << merger->second.non_virt_methods.size()
-         << " non virtual methods:\n";
-      for (const auto& meth : merger->second.non_virt_methods) {
+      ss << "# " << merger.non_virt_methods.size() << " non virtual methods:\n";
+      for (const auto& meth : merger_it->second.non_virt_methods) {
         meth_str(meth);
       }
     }
 
-    if (!merger->second.vmethods.empty()) {
+    if (!merger.vmethods.empty()) {
       indent('-');
-      ss << "# " << merger->second.vmethods.size() << " virtual methods:\n";
-      for (const auto& vmeths : merger->second.vmethods) {
+      ss << "# " << merger.vmethods.size() << " virtual methods:\n";
+      for (const auto& vmeths : merger.vmethods) {
+        meth_str(vmeths.base, "base");
         for (const auto& meth : vmeths.overrides) {
           meth_str(meth);
         }
       }
     }
 
-    if (!merger->second.intfs_methods.empty()) {
+    if (!merger_it->second.intfs_methods.empty()) {
       indent('-');
-      ss << "# " << merger->second.intfs_methods.size()
-         << " interface methods:\n";
-      for (const auto& intf_meths : merger->second.intfs_methods) {
+      ss << "# " << merger.intfs_methods.size() << " interface methods:\n";
+      for (const auto& intf_meths : merger.intfs_methods) {
+        meth_str(intf_meths.overridden_meth, "overridden");
         for (const auto& meth : intf_meths.methods) {
           meth_str(meth);
         }
