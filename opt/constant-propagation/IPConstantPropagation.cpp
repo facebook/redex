@@ -150,15 +150,6 @@ std::unique_ptr<FixpointIterator> PassImpl::analyze(
   auto fp_iter = std::make_unique<FixpointIterator>(
       cg, AnalyzerGenerator(immut_analyzer_state, api_level_analyzer_state),
       cg_for_wps);
-  auto run_fp_iter = [&]() {
-    fp_iter->run({{CURRENT_PARTITION_LABEL, ArgumentDomain()}});
-    auto stats = fp_iter->get_stats();
-    auto& last_stats = m_stats.fp_iter;
-    TRACE(ICONSTP, 1, "%zu/%zu (additional) method cache hits / misses",
-          stats.method_cache_hits - last_stats.method_cache_hits,
-          stats.method_cache_misses - last_stats.method_cache_misses);
-    last_stats = stats;
-  };
   // Run the bootstrap. All field value and method return values are
   // represented by Top.
   fp_iter->run({{CURRENT_PARTITION_LABEL, ArgumentDomain()}});
@@ -289,6 +280,7 @@ void PassImpl::run(const DexStoresVector& stores, int min_sdk) {
       ApiLevelAnalyzerState::get(min_sdk);
   auto fp_iter =
       analyze(scope, &immut_analyzer_state, &api_level_analyzer_state);
+  m_stats.fp_iter = fp_iter->get_stats();
   optimize(scope, xstores, *fp_iter, &immut_analyzer_state);
   walk::parallel::code(scope,
                        [](DexMethod*, IRCode& code) { code.clear_cfg(); });
