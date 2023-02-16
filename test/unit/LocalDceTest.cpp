@@ -26,7 +26,7 @@ struct LocalDceTryTest : public RedexTest {
   LocalDceTryTest() {
     // Calling get_vmethods under the hood initializes the object-class, which
     // we need in the tests to create a proper scope
-    get_vmethods(type::java_lang_Object());
+    virt_scope::get_vmethods(type::java_lang_Object());
 
     auto args = DexTypeList::make_type_list({});
     auto proto = DexProto::make_proto(type::_void(), args);

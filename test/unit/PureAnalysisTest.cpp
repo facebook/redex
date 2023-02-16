@@ -18,7 +18,7 @@
 
 class PureAnalysisTest : public RedexTest {
  public:
-  PureAnalysisTest() { get_vmethods(type::java_lang_Object()); }
+  PureAnalysisTest() { virt_scope::get_vmethods(type::java_lang_Object()); }
 };
 
 void test(const char* signature, const std::string& code_str, bool is_pure) {

@@ -661,7 +661,7 @@ VirtualMerging::compute_mergeable_pairs_by_virtual_scopes(
       mergeable_pairs_by_virtual_scopes;
   SimpleOrderingProvider ordering_provider{profiles};
   walk::parallel::virtual_scopes(
-      virtual_scopes, [&](const VirtualScope* virtual_scope) {
+      virtual_scopes, [&](const virt_scope::VirtualScope* virtual_scope) {
         MergePairsBuilder mpb(virtual_scope, ordering_provider, m_perf_config);
         auto res = mpb.build(m_mergeable_scope_methods.at(virtual_scope),
                              m_xstores, m_xdexes, profiles, strategy);

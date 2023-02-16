@@ -546,7 +546,7 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining_new_references) {
 TEST_F(MethodInlineTest, test_intra_dex_inlining_init_class) {
   ConcurrentMethodResolver concurrent_method_resolver;
 
-  get_vmethods(type::java_lang_Object());
+  virt_scope::get_vmethods(type::java_lang_Object());
 
   // Only inline methods within dex.
   bool intra_dex = true;

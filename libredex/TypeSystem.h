@@ -7,15 +7,16 @@
 
 #pragma once
 
+#include <unordered_map>
+
 #include "ClassHierarchy.h"
 #include "DexClass.h"
 #include "VirtualScope.h"
 
-#include <unordered_map>
-
 using TypeVector = std::vector<const DexType*>;
 using InstanceOfTable = std::unordered_map<const DexType*, TypeVector>;
 using TypeToTypeSet = std::unordered_map<const DexType*, TypeSet>;
+using namespace virt_scope;
 
 /**
  * TypeSystem

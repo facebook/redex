@@ -6,6 +6,10 @@
  */
 
 #include "VirtualRenamer.h"
+
+#include <map>
+#include <set>
+
 #include "ConcurrentContainers.h"
 #include "DexAccess.h"
 #include "DexClass.h"
@@ -17,8 +21,7 @@
 #include "VirtualScope.h"
 #include "Walkers.h"
 
-#include <map>
-#include <set>
+using namespace virt_scope;
 
 namespace {
 
@@ -154,7 +157,6 @@ struct VirtualRenamer {
   mutable std::unordered_map<const VirtualScope*, int> next_virtualscope_seeds;
   mutable std::unordered_map<const DexType*, TypeSet> hier_cache;
 
- private:
   const std::string& get_prefix(const DexType* type) const {
     always_assert(external_name_cache != nullptr);
     auto iter = external_name_cache->find(type);
