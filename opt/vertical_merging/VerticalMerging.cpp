@@ -91,6 +91,20 @@ void check_dont_merge_list(
       (find_child == find_end || find_child->second != kStrict)) {
     // Parent class is not referenced, and child class is not having kStrict
     // don't merge status, so we can merge parent class into child class.
+    if (is_abstract(parent_cls) && !is_abstract(child_cls)) {
+      for (auto m : parent_cls->get_vmethods()) {
+        if (is_abstract(m)) {
+          auto possible_child_method_ref = DexMethod::get_method(
+              child_cls->get_type(), m->get_name(), m->get_proto());
+          if (!possible_child_method_ref ||
+              !is_internal_def(possible_child_method_ref)) {
+            // We have parent class having abstract method without implementor,
+            // it's a weird situation which we should avoid further merging.
+            return;
+          }
+        }
+      }
+    }
     (*mergeable_to_merger)[parent_cls] = child_cls;
   } else if (find_child == find_end) {
     // Parent class is in don't remove set but child class is not. Check if we
@@ -495,8 +509,8 @@ void record_field_reference(
 
 void record_referenced(
     const Scope& scope,
-    std::unordered_map<const DexType*, DontMergeState>* dont_merge_status,
-    const std::vector<std::string>& blocklist) {
+    const std::vector<std::string>& blocklist,
+    std::unordered_map<const DexType*, DontMergeState>* dont_merge_status) {
   record_annotation(scope, dont_merge_status);
   record_code_reference(scope, dont_merge_status);
   record_field_reference(scope, dont_merge_status);
@@ -806,6 +820,7 @@ void VerticalMergingPass::move_methods(DexClass* from_cls,
           }
         }
       } else {
+        always_assert(!is_abstract(method) || is_abstract(to_cls));
         move_method(method, false /* rename_on_collision */);
       }
     } else {
@@ -857,7 +872,7 @@ void VerticalMergingPass::run_pass(DexStoresVector& stores,
   auto scope = build_class_scope(stores);
 
   std::unordered_map<const DexType*, DontMergeState> dont_merge_status;
-  record_referenced(scope, &dont_merge_status, m_blocklist);
+  record_referenced(scope, m_blocklist, &dont_merge_status);
   XStoreRefs xstores(stores);
   size_t num_single_extend;
   auto mergeable_to_merger =
