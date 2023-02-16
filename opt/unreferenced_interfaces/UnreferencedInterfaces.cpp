@@ -65,6 +65,7 @@ TypeSet collect_interfaces(const Scope& scope,
     if (!is_interface(cls)) continue;
     if (!can_delete(cls)) continue;
     if (!cls->get_sfields().empty()) continue;
+    always_assert(!cls->is_external());
     candidates.insert(cls->get_type());
     metric.candidates++;
   }
@@ -82,17 +83,6 @@ TypeSet collect_interfaces(const Scope& scope,
         metric.on_abstract_cls++;
       }
     }
-  }
-
-  std::vector<const DexType*> external;
-  for (const auto& intf : candidates) {
-    const auto cls = type_class(intf);
-    if (cls == nullptr || cls->is_external()) {
-      external.emplace_back(intf);
-    }
-  }
-  for (const auto& intf : external) {
-    metric.external += candidates.erase(intf);
   }
 
   return candidates;
@@ -263,7 +253,6 @@ void UnreferencedInterfacesPass::run_pass(DexStoresVector& stores,
   post_dexen_changes(scope, stores);
 
   TRACE(UNREF_INTF, 1, "candidates %ld", m_metric.candidates);
-  TRACE(UNREF_INTF, 1, "external %ld", m_metric.external);
   TRACE(UNREF_INTF, 1, "on abstract classes %ld", m_metric.on_abstract_cls);
   TRACE(UNREF_INTF, 1, "field references %ld", m_metric.field_refs);
   TRACE(UNREF_INTF, 1, "signature references %ld", m_metric.sig_refs);

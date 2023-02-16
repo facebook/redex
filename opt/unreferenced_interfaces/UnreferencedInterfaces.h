@@ -23,7 +23,6 @@ class UnreferencedInterfacesPass : public Pass {
 
   struct Metric {
     size_t candidates{0};
-    size_t external{0};
     size_t on_abstract_cls{0};
     size_t field_refs{0};
     size_t sig_refs{0};
