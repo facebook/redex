@@ -273,6 +273,7 @@ void UnreferencedInterfacesPass::run_pass(DexStoresVector& stores,
   TRACE(UNREF_INTF, 1, "updated implementations %ld", m_metric.updated_impls);
   TRACE(UNREF_INTF, 1, "removable %ld", m_metric.removed);
 
+  mgr.set_metric("on abstract classes", m_metric.on_abstract_cls);
   mgr.set_metric("updated implementations", m_metric.updated_impls);
   mgr.set_metric("removed_interfaces", m_metric.removed);
 }
