@@ -562,7 +562,6 @@ void gather_true_virtual_methods(const mog::Graph& method_override_graph,
             continue;
           }
           auto type_demand = get_receiver_type_demand(callee_rtype, use);
-          always_assert(type::check_cast(callee->get_class(), type_demand));
           if (type_demand == nullptr) {
             formal_callee_types.clear();
             type_demands = nullptr;
