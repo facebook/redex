@@ -85,6 +85,19 @@ void build_type_maps(const Scope& scope,
   }
 }
 
+bool misses_a_method(const DexClass* intf_cls, const DexClass* impl_cls) {
+  // Check if implementation has all interface methods
+  for (auto meth : intf_cls->get_vmethods()) {
+    auto new_meth = resolve_virtual(impl_cls, meth->get_name(), meth->get_proto());
+    if (!new_meth) {
+      // method not found (probably optimized away)
+      // => exclude pair from possible merging
+      return true;
+    }
+  }
+  return false;
+}
+
 void collect_single_impl(const TypeToTypes& intfs_to_classes,
                          TypeMap& single_impl) {
   for (const auto& intf_it : intfs_to_classes) {
@@ -98,6 +111,7 @@ void collect_single_impl(const TypeToTypes& intfs_to_classes,
     always_assert(impl_cls && !impl_cls->is_external());
     // I don't know if it's possible but it's cheap enough to check
     if (impl_cls->get_access() & DexAccessFlags::ACC_ANNOTATION) continue;
+    if (misses_a_method(intf_cls, impl_cls)) continue;
     single_impl[intf] = impl;
   }
 }
