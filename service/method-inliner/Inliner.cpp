@@ -566,7 +566,7 @@ size_t MultiMethodInliner::inline_inlinables(
       always_assert(!code->editable_cfg_built());
       code->build_cfg(/* editable */ true);
       // if (deleted_insns != nullptr) {
-      //   code->cfg().set_removed_insn_ownerhsip(false);
+      //   code->cfg().set_removed_insn_ownership(false);
       // }
     }
   }
