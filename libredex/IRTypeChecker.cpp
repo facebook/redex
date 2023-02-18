@@ -688,33 +688,11 @@ Result check_monitors(const DexMethod* method) {
 
 /**
  * Validate if the caller has the permit to call a method or access a field.
- *
- * +-------------------------+--------+----------+-----------+-------+
- * | Access Levels Modifier  | Class  | Package  | Subclass  | World |
- * +-------------------------+--------+----------+-----------+-------+
- * | public                  | Y      | Y        | Y         | Y     |
- * | protected               | Y      | Y        | Y         | N     |
- * | no modifier             | Y      | Y        | N         | N     |
- * | private                 | Y      | N        | N         | N     |
- * +-------------------------+--------+----------+-----------+-------+
  */
 template <typename DexMember>
 void validate_access(const DexMethod* accessor, const DexMember* accessee) {
-  auto accessor_class = accessor->get_class();
-  if (accessee == nullptr || is_public(accessee) ||
-      accessor_class == accessee->get_class()) {
+  if (type::can_access(accessor, accessee)) {
     return;
-  }
-  if (!is_private(accessee)) {
-    auto accessee_class = accessee->get_class();
-    auto from_same_package = type::same_package(accessor_class, accessee_class);
-    if (is_package_private(accessee) && from_same_package) {
-      return;
-    } else if (is_protected(accessee) &&
-               (from_same_package ||
-                type::check_cast(accessor_class, accessee_class))) {
-      return;
-    }
   }
 
   std::ostringstream out;

@@ -224,6 +224,45 @@ boost::optional<int32_t> evaluate_type_check(const DexType* src_type,
                                              const DexType* test_type);
 
 /**
+ * Validate if the caller has the permit to call a method or access a field.
+ *
+ * +-------------------------+--------+----------+-----------+-------+
+ * | Access Levels Modifier  | Class  | Package  | Subclass  | World |
+ * +-------------------------+--------+----------+-----------+-------+
+ * | public                  | Y      | Y        | Y         | Y     |
+ * | protected               | Y      | Y        | Y         | N     |
+ * | no modifier             | Y      | Y        | N         | N     |
+ * | private                 | Y      | N        | N         | N     |
+ * +-------------------------+--------+----------+-----------+-------+
+ */
+template <typename DexMember>
+bool can_access(const DexMethod* accessor, const DexMember* accessee) {
+  if (accessee == nullptr) {
+    // In case the accessee is nullptr, we return true. Since blocking nullptr
+    // is not the intention of this check.
+    return true;
+  }
+  auto accessor_class = accessor->get_class();
+  if (is_public(accessee) || accessor_class == accessee->get_class()) {
+    return true;
+  }
+  if (is_private(accessee)) {
+    // Cannot be same class
+    return false;
+  }
+  auto accessee_class = accessee->get_class();
+  auto from_same_package = same_package(accessor_class, accessee_class);
+  redex_assert(is_protected(accessee) || is_package_private(accessee));
+  if (from_same_package) {
+    return true;
+  }
+  if (is_protected(accessee) && check_cast(accessor_class, accessee_class)) {
+    return true;
+  }
+  return false;
+}
+
+/**
  * Return true if the cls is derived from Kotlin lambda.
  */
 bool is_kotlin_lambda(const DexClass* cls);
