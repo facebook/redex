@@ -977,7 +977,7 @@ class ControlFlowGraph {
    * Set whether this cfg holds the memory ownership of instructions that are
    * removed. (The default is true.)
    */
-  void set_removed_insn_ownerhsip(bool owns_removed_insns) {
+  void set_removed_insn_ownership(bool owns_removed_insns) {
     m_owns_removed_insns = owns_removed_insns;
   }
 
