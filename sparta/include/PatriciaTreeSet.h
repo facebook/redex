@@ -142,6 +142,12 @@ class PatriciaTreeSet final {
     return *this;
   }
 
+  /*
+   * If the set is a singleton, returns a pointer to the element.
+   * Otherwise, returns nullptr.
+   */
+  const Element* singleton() const { return m_core.as_leaf_key(); }
+
   template <typename Predicate> // bool(const Element&)
   PatriciaTreeSet& filter(Predicate&& predicate) {
     m_core.filter([&](Element key, const Empty&) { return predicate(key); });

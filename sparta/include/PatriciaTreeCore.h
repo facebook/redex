@@ -1347,6 +1347,23 @@ class PatriciaTreeCore {
     return default_value;
   }
 
+  /*
+   * If the tree is a leaf, returns a pointer on the key.
+   * Otherwise, returns nullptr.
+   */
+  inline const Key* as_leaf_key() const {
+    if (m_tree == nullptr) {
+      return nullptr;
+    }
+    const auto* leaf = m_tree->as_leaf();
+    if (leaf == nullptr) {
+      return nullptr;
+    }
+    // Taking the address of the return value of `Codec::decode` is safe here
+    // since it has type `const IntegerType& -> const Key&`.
+    return &Codec::decode(leaf->key());
+  }
+
   inline bool is_subset_of(const PatriciaTreeCore& other) const {
     return pt_core::is_tree_subset_of(m_tree, other.m_tree);
   }

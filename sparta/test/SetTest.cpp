@@ -273,3 +273,11 @@ TYPED_TEST(UInt64SetTest, setOfUnsignedInt64) {
     EXPECT_EQ(1, values.count(x));
   }
 }
+
+TEST(PatriciaTreeSet, singleton) {
+  using Set = PatriciaTreeSet<uint64_t>;
+  EXPECT_EQ(Set{}.singleton(), nullptr);
+  EXPECT_NE(Set{1}.singleton(), nullptr);
+  EXPECT_EQ(*(Set{1}.singleton()), 1);
+  EXPECT_EQ((Set{1, 2}.singleton()), nullptr);
+}
