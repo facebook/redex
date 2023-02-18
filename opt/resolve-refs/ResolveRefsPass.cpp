@@ -208,6 +208,7 @@ bool is_excluded_external(const std::vector<std::string>& excluded_externals,
 }
 
 boost::optional<DexMethod*> get_inferred_method_def(
+    const DexMethod* caller,
     const std::vector<std::string>& excluded_externals,
     const bool is_support_lib,
     DexMethod* callee,
@@ -235,6 +236,12 @@ boost::optional<DexMethod*> get_inferred_method_def(
   if (is_external && api::is_android_sdk_type(resolved->get_class()) &&
       is_support_lib) {
     TRACE(RESO, 4, "Bailed on external in support lib %s", SHOW(resolved));
+    return boost::none;
+  }
+
+  if (!type::can_access(caller, resolved)) {
+    TRACE(RESO, 4, "Bailed on inaccessible %s from %s", SHOW(resolved),
+          SHOW(caller));
     return boost::none;
   }
 
@@ -290,8 +297,8 @@ RefStats ResolveRefsPass::refine_virtual_callsites(DexMethod* method,
     }
 
     // replace it with the actual implementation if any provided.
-    auto m_def = get_inferred_method_def(m_excluded_externals, is_support_lib,
-                                         callee, *dex_type);
+    auto m_def = get_inferred_method_def(method, m_excluded_externals,
+                                         is_support_lib, callee, *dex_type);
     if (!m_def) {
       continue;
     }
