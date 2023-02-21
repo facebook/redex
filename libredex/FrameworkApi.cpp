@@ -138,6 +138,8 @@ void AndroidSDK::load_framework_classes() {
     auto& map_entry = m_framework_classes[framework_api.cls];
     map_entry = std::move(framework_api);
   }
+  always_assert_log(!m_framework_classes.empty(),
+                    "Failed to load any class from the framework api file");
 }
 
 } // namespace api
