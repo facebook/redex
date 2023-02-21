@@ -69,6 +69,7 @@ enum Reason {
   UNSAFE_INVOCATION_ON_CANDIDATE_ENUM = 9,
   IFIELD_SET_OUTSIDE_INIT = 10,
   CAST_ENUM_ARRAY_TO_OBJECT = 11,
+  USED_IN_INSTANCE_OF = 12,
 };
 
 /**
@@ -115,6 +116,9 @@ class EnumUpcastDetector {
     } break;
     case OPCODE_CONST_CLASS:
       reject(insn, insn->get_type(), rejected_enums, USED_AS_CLASS_OBJECT);
+      break;
+    case OPCODE_INSTANCE_OF:
+      reject(insn, insn->get_type(), rejected_enums, USED_IN_INSTANCE_OF);
       break;
     case OPCODE_INVOKE_INTERFACE:
     case OPCODE_INVOKE_SUPER:
