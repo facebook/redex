@@ -210,6 +210,14 @@ enum USED_AS_CLASS_OBJECT {
   public static <T> void method(Class<T> c) {}
   public static void method() { method(USED_AS_CLASS_OBJECT.class); }
 }
+// CHECK: class: redex.USED_IN_INSTANCE_OF
+// CHECK-NEXT: Access flags:
+// CHECK-NEXT: Superclass: java.lang.Enum
+enum USED_IN_INSTANCE_OF {
+  ONE;
+  public static void method(boolean b) {}
+  public static void method() { method(ONE instanceof USED_IN_INSTANCE_OF); }
+}
 // CHECK: class: redex.CAST_CHECK_CAST
 // CHECK-NEXT: Access flags:
 // CHECK-NEXT: Superclass: java.lang.Enum
