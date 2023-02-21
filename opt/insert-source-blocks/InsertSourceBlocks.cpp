@@ -665,6 +665,7 @@ struct Injector {
               std::string new_name = show_deobfuscated(method->get_class());
               new_name.append(".access$");
               new_name.append(access_method_hash_name);
+              new_name.append(":");
               new_name.append(show_deobfuscated(method->get_proto()));
               return DexString::make_string(new_name);
             }();
