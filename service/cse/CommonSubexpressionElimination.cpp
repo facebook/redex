@@ -496,6 +496,10 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
   void install_forwarding(const IRInstruction* insn,
                           const IRValue& value,
                           CseEnvironment* current_state) const {
+    if (!ENABLE_STORE_LOAD_FORWARDING) {
+      return;
+    }
+
     auto value_id = *get_value_id(value);
     current_state->mutate_def_env([value_id, insn](DefEnvironment* env) {
       env->set(value_id, IRInstructionsDomain(insn));
