@@ -912,6 +912,7 @@ SharedState::SharedState(
       "Ljava/lang/Byte;.parseByte:(Ljava/lang/String;)B",
       "Ljava/lang/Class;.forName:(Ljava/lang/String;)Ljava/lang/Class;",
       "Ljava/lang/Double;.parseDouble:(Ljava/lang/String;)D",
+      // NOLINTNEXTLINE(bugprone-suspicious-missing-comma)
       "Ljava/lang/Enum;.valueOf:(Ljava/lang/Class;Ljava/lang/String;)Ljava/"
       "lang/Enum;",
       "Ljava/lang/Float;.parseFloat:(Ljava/lang/String;)F",
