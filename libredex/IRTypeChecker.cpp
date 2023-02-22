@@ -715,10 +715,27 @@ void validate_access(const DexMethod* accessor, const DexMember* accessee) {
   throw TypeCheckingException(out.str());
 }
 
-void validate_invoke_super(const DexMethodRef* callee) {
+void validate_invoke_super(const DexMethod* caller,
+                           const DexMethodRef* callee) {
+  if (callee == nullptr) {
+    // Forgive unresolved refs.
+    return;
+  }
   auto callee_cls = type_class(callee->get_class());
   if (!callee_cls || !is_interface(callee_cls)) {
     return;
+  }
+
+  if (callee->is_def()) {
+    const DexMethod* callee_method = callee->as_def();
+    if (callee_method->is_external() && !is_abstract(callee_method)) {
+      // An external interface method might a default one. Invoking the external
+      // default method from a subclass using INVOKE_SUPER is permitted. This is
+      // independent from Dex format 037 support.
+      if (type::can_access(caller, callee_method)) {
+        return;
+      }
+    }
   }
 
   std::ostringstream out;
@@ -1266,7 +1283,7 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
       ::validate_access(m_dex_method, resolved);
     }
     if (m_validate_invoke_super && insn->opcode() == OPCODE_INVOKE_SUPER) {
-      validate_invoke_super(dex_method);
+      validate_invoke_super(m_dex_method, dex_method);
     }
     break;
   }
