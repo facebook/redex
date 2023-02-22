@@ -116,7 +116,7 @@ class PositionPatternSwitchManager {
   }
 
   bool empty() const {
-    return m_positions.empty() & m_patterns.empty() && m_switches.empty();
+    return m_positions.empty() && m_patterns.empty() && m_switches.empty();
   }
 
   const std::vector<PositionPattern>& get_patterns() const {
