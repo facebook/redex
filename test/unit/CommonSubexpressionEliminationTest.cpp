@@ -1992,6 +1992,31 @@ TEST_F(CommonSubexpressionEliminationTest, no_phi_node) {
   test(Scope{type_class(type::java_lang_Object())}, code_str, expected_str, 0);
 }
 
+TEST_F(CommonSubexpressionEliminationTest, phi_node_sput_sget_forwarding_try) {
+  auto code_str = R"(
+    (
+      (load-param v0)
+      (load-param v1)
+      (if-eqz v0 :L1)
+      (sput v1 "LFoo;.s:I")
+      (:L2)
+      (sget "LFoo;.s:I")
+      (move-result-pseudo v1)
+      (return v1)
+      (.try_start foo)
+      (:L1)
+      (sput v1 "LFoo;.s:I")
+      (goto :L2)
+      (.try_end foo)
+      (.catch (foo))
+      (move-exception v0)
+      (goto :L2)
+    )
+  )";
+  auto expected_str = code_str;
+  test(Scope{type_class(type::java_lang_Object())}, code_str, expected_str, 0);
+}
+
 TEST_F(CommonSubexpressionEliminationTest, untracked_finalish_field) {
   ClassCreator bar_creator(DexType::make_type("LBar;"));
   bar_creator.set_super(type::java_lang_Object());
