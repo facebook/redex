@@ -28,6 +28,15 @@ interface Intf { String method(); }
 @OkToExtend
 abstract class AbstractBase implements Intf {}
 
+interface IntfD {
+  default int foo() { return 42; }
+}
+
+@OkToExtend
+abstract class NonAbstractBase {
+  public int foo() { return 12; }
+}
+
 @KeepForRedexTest
 public class ClassMergingMirandaTest {
 
@@ -125,5 +134,29 @@ public class ClassMergingMirandaTest {
 
     assertThat(s1.method()).isEqualTo("SubD1");
     assertThat(s2.method()).isEqualTo("BaseD3");
+  }
+
+  @OkToExtend
+  class SubE1 extends NonAbstractBase implements IntfD {
+    @Override
+    public int foo() { return 22; }
+  }
+
+  @OkToExtend
+  class SubE2 extends NonAbstractBase implements IntfD {}
+
+  @KeepForRedexTest
+  @Test
+  public void testBaseImplWithDefaultMethod() {
+    NonAbstractBase s1 = new SubE1();
+    NonAbstractBase s2 = new SubE2();
+
+    assertThat(s1.foo()).isEqualTo(22);
+    assertThat(s2.foo()).isEqualTo(12);
+
+    IntfD id1 = new SubE1();
+    IntfD id2 = new SubE2();
+    assertThat(id1.foo()).isEqualTo(22);
+    assertThat(id2.foo()).isEqualTo(12);
   }
 }
