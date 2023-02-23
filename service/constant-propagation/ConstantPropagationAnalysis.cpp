@@ -1232,23 +1232,18 @@ FixpointIterator::FixpointIterator(
     const cfg::ControlFlowGraph& cfg,
     InstructionAnalyzer<ConstantEnvironment> insn_analyzer,
     bool imprecise_switches)
-    : MonotonicFixpointIterator(cfg),
+    : BaseEdgeAwareIRAnalyzer(cfg),
       m_insn_analyzer(std::move(insn_analyzer)),
       m_kotlin_null_check_assertions(get_kotlin_null_assertions()),
       m_imprecise_switches(imprecise_switches) {}
 
-void FixpointIterator::analyze_instruction(const IRInstruction* insn,
-                                           ConstantEnvironment* env,
-                                           bool is_last) const {
-  TRACE(CONSTP, 5, "Analyzing instruction: %s", SHOW(insn));
+void FixpointIterator::analyze_instruction_normal(
+    const IRInstruction* insn, ConstantEnvironment* env) const {
   m_insn_analyzer(insn, env);
-  if (!is_last) {
-    analyze_instruction_no_throw(insn, env);
-  }
 }
 
-void FixpointIterator::analyze_instruction_no_throw(
-    const IRInstruction* insn, ConstantEnvironment* current_state) const {
+void FixpointIterator::analyze_no_throw(const IRInstruction* insn,
+                                        ConstantEnvironment* env) const {
   auto src_index = get_dereferenced_object_src_index(insn);
   if (!src_index) {
     src_index =
@@ -1265,19 +1260,8 @@ void FixpointIterator::analyze_instruction_no_throw(
     }
   }
   auto src = insn->src(*src_index);
-  auto value = current_state->get(src);
-  current_state->set(
-      src, meet(value, SignedConstantDomain(sign_domain::Interval::NEZ)));
-}
-
-void FixpointIterator::analyze_node(const NodeId& block,
-                                    ConstantEnvironment* state_at_entry) const {
-  TRACE(CONSTP, 5, "Analyzing block: %zu", block->id());
-  auto last_insn = block->get_last_insn();
-  for (auto& mie : InstructionIterable(block)) {
-    auto insn = mie.insn;
-    analyze_instruction(insn, state_at_entry, insn == last_insn->insn);
-  }
+  auto value = env->get(src);
+  env->set(src, meet(value, SignedConstantDomain(sign_domain::Interval::NEZ)));
 }
 
 /*
@@ -1360,12 +1344,13 @@ static SignedConstantDomain refine_ne_left(const SignedConstantDomain& left,
  * the environment, set the environment to bottom upon entry into the
  * unreachable block.
  */
-static void analyze_if(const IRInstruction* insn,
-                       ConstantEnvironment* env,
-                       bool is_true_branch) {
+void FixpointIterator::analyze_if(const IRInstruction* insn,
+                                  cfg::Edge* const& edge,
+                                  ConstantEnvironment* env) const {
   if (env->is_bottom()) {
     return;
   }
+  bool is_true_branch = edge->type() == cfg::EDGE_BRANCH;
   // Inverting the conditional here means that we only need to consider the
   // "true" case of the if-* opcode
   auto op = !is_true_branch ? opcode::invert_conditional_branch(insn->opcode())
@@ -1477,67 +1462,52 @@ static void analyze_if(const IRInstruction* insn,
   }
 }
 
-ConstantEnvironment FixpointIterator::analyze_edge(
-    const EdgeId& edge, const ConstantEnvironment& exit_state_at_source) const {
-  auto env = exit_state_at_source;
-  auto last_insn_it = edge->src()->get_last_insn();
-  if (last_insn_it == edge->src()->end()) {
-    return env;
-  }
-
-  auto insn = last_insn_it->insn;
-  auto op = insn->opcode();
-  if (opcode::is_a_conditional_branch(op)) {
-    analyze_if(insn, &env, edge->type() == cfg::EDGE_BRANCH);
-  } else if (opcode::is_switch(op)) {
-    auto selector_val = env.get(insn->src(0));
-    const auto& case_key = edge->case_key();
-    if (case_key) {
-      always_assert(edge->type() == cfg::EDGE_BRANCH);
-      selector_val.meet_with(SignedConstantDomain(*case_key));
-      if (m_imprecise_switches) {
-        // We could refine the selector value itself, for maximum knowledge.
-        // However, in practice, this can cause following blocks to be refined
-        // with the constant, which then degrades subsequent block deduping.
-        if (selector_val.is_bottom()) {
-          env.set_to_bottom();
-          return env;
-        }
-      } else {
-        env.set(insn->src(0), selector_val);
+void FixpointIterator::analyze_switch(const IRInstruction* insn,
+                                      cfg::Edge* const& edge,
+                                      ConstantEnvironment* env) const {
+  auto selector_val = env->get(insn->src(0));
+  const auto& case_key = edge->case_key();
+  if (case_key) {
+    always_assert(edge->type() == cfg::EDGE_BRANCH);
+    selector_val.meet_with(SignedConstantDomain(*case_key));
+    if (m_imprecise_switches) {
+      // We could refine the selector value itself, for maximum knowledge.
+      // However, in practice, this can cause following blocks to be refined
+      // with the constant, which then degrades subsequent block deduping.
+      if (selector_val.is_bottom()) {
+        env->set_to_bottom();
+        return;
       }
     } else {
-      always_assert(edge->type() == cfg::EDGE_GOTO);
-      // We are looking at the fallthrough case. Set env to bottom in case there
-      // is a non-fallthrough edge with a case-key that is equal to the actual
-      // selector value.
-      auto scd = selector_val.maybe_get<SignedConstantDomain>();
-      if (!scd) {
-        return env;
-      }
-      auto selector_const = scd->get_constant();
-      if (selector_const &&
-          has_switch_consecutive_case_keys(edge->src(), *selector_const,
-                                           *selector_const)) {
-        env.set_to_bottom();
-        return env;
-      }
-      auto numeric_interval_domain = scd->numeric_interval_domain();
-      if (numeric_interval_domain.is_bottom()) {
-        return env;
-      }
-      auto lb = numeric_interval_domain.lower_bound();
-      auto ub = numeric_interval_domain.upper_bound();
-      if (lb > NumericIntervalDomain::MIN && ub < NumericIntervalDomain::MAX &&
-          has_switch_consecutive_case_keys(edge->src(), lb, ub)) {
-        env.set_to_bottom();
-        return env;
-      }
+      env->set(insn->src(0), selector_val);
     }
-  } else if (edge->type() != cfg::EDGE_THROW) {
-    analyze_instruction_no_throw(insn, &env);
+  } else {
+    always_assert(edge->type() == cfg::EDGE_GOTO);
+    // We are looking at the fallthrough case. Set env to bottom in case there
+    // is a non-fallthrough edge with a case-key that is equal to the actual
+    // selector value.
+    auto scd = selector_val.maybe_get<SignedConstantDomain>();
+    if (!scd) {
+      return;
+    }
+    auto selector_const = scd->get_constant();
+    if (selector_const && has_switch_consecutive_case_keys(
+                              edge->src(), *selector_const, *selector_const)) {
+      env->set_to_bottom();
+      return;
+    }
+    auto numeric_interval_domain = scd->numeric_interval_domain();
+    if (numeric_interval_domain.is_bottom()) {
+      return;
+    }
+    auto lb = numeric_interval_domain.lower_bound();
+    auto ub = numeric_interval_domain.upper_bound();
+    if (lb > NumericIntervalDomain::MIN && ub < NumericIntervalDomain::MAX &&
+        has_switch_consecutive_case_keys(edge->src(), lb, ub)) {
+      env->set_to_bottom();
+      return;
+    }
   }
-  return env;
 }
 
 } // namespace intraprocedural
