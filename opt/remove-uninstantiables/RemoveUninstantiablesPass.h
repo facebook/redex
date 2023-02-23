@@ -45,6 +45,7 @@ class RemoveUninstantiablesPass : public Pass {
     int abstracted_vmethods = 0;
     int removed_vmethods = 0;
     int get_uninstantiables = 0;
+    int invoke_uninstantiables = 0;
     int check_casts = 0;
 
     Stats& operator+=(const Stats&);

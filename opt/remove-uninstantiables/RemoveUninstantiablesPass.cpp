@@ -246,6 +246,7 @@ RemoveUninstantiablesPass::Stats& RemoveUninstantiablesPass::Stats::operator+=(
   this->abstracted_vmethods += that.abstracted_vmethods;
   this->removed_vmethods += that.removed_vmethods;
   this->get_uninstantiables += that.get_uninstantiables;
+  this->invoke_uninstantiables += that.invoke_uninstantiables;
   this->check_casts += that.check_casts;
   return *this;
 }
@@ -275,6 +276,7 @@ void RemoveUninstantiablesPass::Stats::report(PassManager& mgr) const {
   REPORT(abstracted_vmethods);
   REPORT(removed_vmethods);
   REPORT(get_uninstantiables);
+  REPORT(invoke_uninstantiables);
   REPORT(check_casts);
 
 #undef REPORT
@@ -309,9 +311,8 @@ RemoveUninstantiablesPass::compute_scoped_uninstantiable_types(
     return false;
   };
   walk::classes(scope, [&](const DexClass* cls) {
-    if (type::is_uninstantiable_class(cls->get_type())) {
-      uninstantiable_types.insert(cls->get_type());
-    } else if (is_interface(cls) && !is_interface_instantiable(cls)) {
+    if (type::is_uninstantiable_class(cls->get_type()) ||
+        (is_interface(cls) && !is_interface_instantiable(cls))) {
       uninstantiable_types.insert(cls->get_type());
     } else {
       instantiable_classes.insert(cls);
@@ -412,6 +413,18 @@ RemoveUninstantiablesPass::replace_uninstantiable_refs(
       auto dest = cfg.move_result_of(it)->insn->dest();
       m.replace(it, {ir_const(dest, 0)});
       stats.get_uninstantiables++;
+      continue;
+    }
+
+    if (opcode::is_an_invoke(op) &&
+        scoped_uninstantiable_types.count(
+            insn->get_method()->get_proto()->get_rtype())) {
+      auto move_result_it = cfg.move_result_of(it);
+      if (!move_result_it.is_end()) {
+        auto dest = move_result_it->insn->dest();
+        m.replace(move_result_it, {ir_const(dest, 0)});
+        stats.invoke_uninstantiables++;
+      }
       continue;
     }
   }
