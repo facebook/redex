@@ -25,8 +25,6 @@ class ControlFlowGraph;
 
 namespace cse_impl {
 
-constexpr bool ENABLE_STORE_LOAD_FORWARDING = false;
-
 struct Stats {
   size_t results_captured{0};
   size_t stores_captured{0};
