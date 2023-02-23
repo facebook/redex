@@ -1142,10 +1142,6 @@ TEST_F(CommonSubexpressionEliminationTest, aget_related_aput) {
 }
 
 TEST_F(CommonSubexpressionEliminationTest, aput_related_aget) {
-  if (!cse_impl::ENABLE_STORE_LOAD_FORWARDING) {
-    return;
-  }
-
   auto code_str = R"(
     (
       (const v0 0)
@@ -1189,10 +1185,6 @@ TEST_F(CommonSubexpressionEliminationTest, aput_object_related_aget_object) {
 }
 
 TEST_F(CommonSubexpressionEliminationTest, iput_related_iget) {
-  if (!cse_impl::ENABLE_STORE_LOAD_FORWARDING) {
-    return;
-  }
-
   auto code_str = R"(
     (
       (const v0 0)
@@ -1217,10 +1209,6 @@ TEST_F(CommonSubexpressionEliminationTest, iput_related_iget) {
 }
 
 TEST_F(CommonSubexpressionEliminationTest, sput_related_sget) {
-  if (!cse_impl::ENABLE_STORE_LOAD_FORWARDING) {
-    return;
-  }
-
   auto code_str = R"(
     (
       (const v0 0)
@@ -1518,10 +1506,6 @@ TEST_F(CommonSubexpressionEliminationTest, unwrap_and_wrap) {
 }
 
 TEST_F(CommonSubexpressionEliminationTest, array_length) {
-  if (!cse_impl::ENABLE_STORE_LOAD_FORWARDING) {
-    return;
-  }
-
   auto code_str = R"(
     (
       (const v0 0)

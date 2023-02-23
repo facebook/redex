@@ -228,8 +228,6 @@ TEST_F(ObjectEscapeAnalysisTest, DontOptimizeFinalInInit) {
       (invoke-direct (v3) "Ljava/lang/Object;.<init>:()V")
       (const v2 42)
       (iput v2 v3 "Lcom/facebook/redextest/ObjectEscapeAnalysisTest$DontOptimizeFinalInInit;.x:I")
-      (iget v3 "Lcom/facebook/redextest/ObjectEscapeAnalysisTest$DontOptimizeFinalInInit;.x:I")
-      (move-result-pseudo v2)
       (iput v2 v3 "Lcom/facebook/redextest/ObjectEscapeAnalysisTest$DontOptimizeFinalInInit;.y:I")
       (return-void)
     )
