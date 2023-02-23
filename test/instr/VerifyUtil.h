@@ -68,7 +68,7 @@ DexOpcodeMethod* find_invoke(std::vector<DexInstruction*>::iterator begin,
                              DexType* receiver = nullptr);
 DexInstruction* find_instruction(DexMethod* m, DexOpcode opcode);
 
-void verify_type_erased(const DexClass* cls, size_t num_dmethods = 0);
+void verify_class_merged(const DexClass* cls, size_t num_dmethods = 0);
 
 // A quick helper to dump CFGs before/after verify
 //

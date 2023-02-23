@@ -12,14 +12,14 @@ TEST_F(PostVerify, MergerClassGenerated) {
   auto cls_a = find_class_named(classes, "Lcom/facebook/redextest/A;");
   auto cls_b = find_class_named(classes, "Lcom/facebook/redextest/B;");
   auto cls_c = find_class_named(classes, "Lcom/facebook/redextest/C;");
-  verify_type_erased(cls_a);
-  verify_type_erased(cls_b);
-  verify_type_erased(cls_c);
+  verify_class_merged(cls_a);
+  verify_class_merged(cls_b);
+  verify_class_merged(cls_c);
 }
 
 TEST_F(PostVerify, ClassWithStaticFields) {
   auto cls_d = find_class_named(classes, "Lcom/facebook/redextest/D;");
-  verify_type_erased(cls_d, 1 /* clinit */);
+  verify_class_merged(cls_d, 1 /* clinit */);
   auto& static_fields = cls_d->get_sfields();
   ASSERT_EQ(static_fields.size(), 1);
 }

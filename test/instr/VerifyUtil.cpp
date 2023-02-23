@@ -162,7 +162,7 @@ DexInstruction* find_instruction(DexMethod* m, DexOpcode opcode) {
   return it == insns.end() ? nullptr : *it;
 }
 
-void verify_type_erased(const DexClass* cls, size_t num_dmethods) {
+void verify_class_merged(const DexClass* cls, size_t num_dmethods) {
   if (!cls) {
     ASSERT_EQ(num_dmethods, 0)
         << "cls is null, can not have " << num_dmethods << " dmethods\n";

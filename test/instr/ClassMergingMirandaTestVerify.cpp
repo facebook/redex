@@ -18,12 +18,12 @@ TEST_F(PostVerify, MergeablesRemoval) {
   auto sc2 = find_class_named(classes, "Lcom/facebook/redextest/SubC2;");
   auto sd1 = find_class_named(classes, "Lcom/facebook/redextest/SubD1;");
   auto sd2 = find_class_named(classes, "Lcom/facebook/redextest/SubD2;");
-  verify_type_erased(sa1);
-  verify_type_erased(sa2);
-  verify_type_erased(sb1);
-  verify_type_erased(sb2);
-  verify_type_erased(sc1);
-  verify_type_erased(sc2);
-  verify_type_erased(sd1);
-  verify_type_erased(sd2);
+  verify_class_merged(sa1);
+  verify_class_merged(sa2);
+  verify_class_merged(sb1);
+  verify_class_merged(sb2);
+  verify_class_merged(sc1);
+  verify_class_merged(sc2);
+  verify_class_merged(sd1);
+  verify_class_merged(sd2);
 }
