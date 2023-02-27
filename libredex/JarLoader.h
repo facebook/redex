@@ -19,14 +19,15 @@ class DexMethod;
 #include <string_view>
 
 namespace JarLoaderUtil {
-uint32_t read32(uint8_t*& buffer);
-uint32_t read16(uint8_t*& buffer);
+uint32_t read32(uint8_t*& buffer, uint8_t* buffer_end);
+uint32_t read16(uint8_t*& buffer, uint8_t* buffer_end);
 }; // namespace JarLoaderUtil
 
 using attribute_hook_t =
     std::function<void(boost::variant<DexField*, DexMethod*> field_or_method,
                        const std::string_view& attribute_name,
-                       uint8_t* attribute_pointer)>;
+                       uint8_t* attribute_pointer,
+                       uint8_t* attribute_pointer_end)>;
 
 bool load_jar_file(const DexLocation* location,
                    Scope* classes = nullptr,
@@ -42,6 +43,7 @@ bool process_jar(const DexLocation* location,
                  const attribute_hook_t& attr_hook);
 
 bool parse_class(uint8_t* buffer,
+                 size_t buffer_size,
                  Scope* classes,
                  attribute_hook_t attr_hook,
                  const DexLocation* jar_location);

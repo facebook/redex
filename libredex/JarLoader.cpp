@@ -37,17 +37,25 @@
  */
 
 namespace JarLoaderUtil {
-uint32_t read32(uint8_t*& buffer) {
+uint32_t read32(uint8_t*& buffer, uint8_t* buffer_end) {
   uint32_t rv;
+  auto next = buffer + sizeof(uint32_t);
+  if (next >= buffer_end) {
+    throw RedexException(RedexError::BUFFER_END_EXCEEDED);
+  }
   memcpy(&rv, buffer, sizeof(uint32_t));
-  buffer += sizeof(uint32_t);
+  buffer = next;
   return htonl(rv);
 }
 
-uint32_t read16(uint8_t*& buffer) {
+uint32_t read16(uint8_t*& buffer, uint8_t* buffer_end) {
   uint16_t rv;
+  auto next = buffer + sizeof(uint16_t);
+  if (next >= buffer_end) {
+    throw RedexException(RedexError::BUFFER_END_EXCEEDED);
+  }
   memcpy(&rv, buffer, sizeof(uint16_t));
-  buffer += sizeof(uint16_t);
+  buffer = next;
   return htons(rv);
 }
 } // namespace JarLoaderUtil
@@ -113,7 +121,7 @@ constexpr size_t CP_CONST_PACKAGE =     20;
 
 /* clang-format on */
 
-bool parse_cp_entry(uint8_t*& buffer, cp_entry& cpe) {
+bool parse_cp_entry(uint8_t*& buffer, uint8_t* buffer_end, cp_entry& cpe) {
   cpe.tag = *buffer++;
   switch (cpe.tag) {
   case CP_CONST_CLASS:
@@ -121,30 +129,30 @@ bool parse_cp_entry(uint8_t*& buffer, cp_entry& cpe) {
   case CP_CONST_METHTYPE:
   case CP_CONST_MODULE:
   case CP_CONST_PACKAGE:
-    cpe.s0 = read16(buffer);
+    cpe.s0 = read16(buffer, buffer_end);
     return true;
   case CP_CONST_FIELD:
   case CP_CONST_METHOD:
   case CP_CONST_INTERFACE:
   case CP_CONST_NAMEANDTYPE:
-    cpe.s0 = read16(buffer);
-    cpe.s1 = read16(buffer);
+    cpe.s0 = read16(buffer, buffer_end);
+    cpe.s1 = read16(buffer, buffer_end);
     return true;
   case CP_CONST_METHHANDLE:
     cpe.s0 = *buffer++;
-    cpe.s1 = read16(buffer);
+    cpe.s1 = read16(buffer, buffer_end);
     return true;
   case CP_CONST_INT:
   case CP_CONST_FLOAT:
-    cpe.i0 = read32(buffer);
+    cpe.i0 = read32(buffer, buffer_end);
     return true;
   case CP_CONST_LONG:
   case CP_CONST_DOUBLE:
-    cpe.i0 = read32(buffer);
-    cpe.i1 = read32(buffer);
+    cpe.i0 = read32(buffer, buffer_end);
+    cpe.i1 = read32(buffer, buffer_end);
     return true;
   case CP_CONST_UTF8:
-    cpe.len = read16(buffer);
+    cpe.len = read16(buffer, buffer_end);
     cpe.data = buffer;
     buffer += cpe.len;
     return true;
@@ -157,15 +165,15 @@ bool parse_cp_entry(uint8_t*& buffer, cp_entry& cpe) {
   return false;
 }
 
-void skip_attributes(uint8_t*& buffer) {
+void skip_attributes(uint8_t*& buffer, uint8_t* buffer_end) {
   /* Todo:
    * Consider adding some verification so we don't walk
    * off the end in the case of a corrupt class file.
    */
-  uint16_t acount = read16(buffer);
+  uint16_t acount = read16(buffer, buffer_end);
   for (int i = 0; i < acount; i++) {
     buffer += 2; // Skip name_index
-    uint32_t length = read32(buffer);
+    uint32_t length = read32(buffer, buffer_end);
     buffer += length;
   }
 }
@@ -379,13 +387,15 @@ DexMethod* make_dexmethod(std::vector<cp_entry>& cpool,
 } // namespace
 
 bool parse_class(uint8_t* buffer,
+                 size_t buffer_size,
                  Scope* classes,
                  attribute_hook_t attr_hook,
                  const DexLocation* jar_location) {
-  uint32_t magic = read32(buffer);
-  uint16_t vminor DEBUG_ONLY = read16(buffer);
-  uint16_t vmajor DEBUG_ONLY = read16(buffer);
-  uint16_t cp_count = read16(buffer);
+  auto buffer_end = buffer + buffer_size;
+  uint32_t magic = read32(buffer, buffer_end);
+  uint16_t vminor DEBUG_ONLY = read16(buffer, buffer_end);
+  uint16_t vmajor DEBUG_ONLY = read16(buffer, buffer_end);
+  uint16_t cp_count = read16(buffer, buffer_end);
   if (magic != kClassMagic) {
     std::cerr << "Bad class magic " << std::hex << magic << ", Bailing\n";
     return false;
@@ -394,16 +404,16 @@ bool parse_class(uint8_t* buffer,
   cpool.resize(cp_count);
   /* The zero'th entry is always empty.  Java is annoying. */
   for (int i = 1; i < cp_count; i++) {
-    if (!parse_cp_entry(buffer, cpool[i])) return false;
+    if (!parse_cp_entry(buffer, buffer_end, cpool[i])) return false;
     if (cpool[i].tag == CP_CONST_LONG || cpool[i].tag == CP_CONST_DOUBLE) {
       cpool[i + 1] = cpool[i];
       i++;
     }
   }
-  uint16_t aflags = read16(buffer);
-  uint16_t clazz = read16(buffer);
-  uint16_t super = read16(buffer);
-  uint16_t ifcount = read16(buffer);
+  uint16_t aflags = read16(buffer, buffer_end);
+  uint16_t clazz = read16(buffer, buffer_end);
+  uint16_t super = read16(buffer, buffer_end);
+  uint16_t ifcount = read16(buffer, buffer_end);
 
   if (is_module((DexAccessFlags)aflags)) {
     // Classes with the ACC_MODULE access flag are special.  They contain
@@ -459,12 +469,12 @@ bool parse_class(uint8_t* buffer,
   cc.set_access((DexAccessFlags)aflags);
   if (ifcount) {
     for (int i = 0; i < ifcount; i++) {
-      uint16_t iface = read16(buffer);
+      uint16_t iface = read16(buffer, buffer_end);
       DexType* iftype = make_dextype_from_cref(cpool, iface);
       cc.add_interface(iftype);
     }
   }
-  uint16_t fcount = read16(buffer);
+  uint16_t fcount = read16(buffer, buffer_end);
 
   auto invoke_attr_hook =
       [&](const boost::variant<DexField*, DexMethod*>& field_or_method,
@@ -472,10 +482,10 @@ bool parse_class(uint8_t* buffer,
         if (attr_hook == nullptr) {
           return;
         }
-        uint16_t attributes_count = read16(attrPtr);
+        uint16_t attributes_count = read16(attrPtr, buffer_end);
         for (uint16_t j = 0; j < attributes_count; j++) {
-          uint16_t attribute_name_index = read16(attrPtr);
-          uint32_t attribute_length = read32(attrPtr);
+          uint16_t attribute_name_index = read16(attrPtr, buffer_end);
+          uint32_t attribute_length = read32(attrPtr, buffer_end);
           std::string_view attribute_name;
           auto extract_res =
               extract_utf8(cpool, attribute_name_index, &attribute_name);
@@ -483,34 +493,34 @@ bool parse_class(uint8_t* buffer,
               extract_res,
               "attribute hook was specified, but failed to load the attribute "
               "name due to insufficient name buffer");
-          attr_hook(field_or_method, attribute_name, attrPtr);
+          attr_hook(field_or_method, attribute_name, attrPtr, buffer_end);
           attrPtr += attribute_length;
         }
       };
 
   for (int i = 0; i < fcount; i++) {
     cp_field_info cpfield;
-    cpfield.aflags = read16(buffer);
-    cpfield.nameNdx = read16(buffer);
-    cpfield.descNdx = read16(buffer);
+    cpfield.aflags = read16(buffer, buffer_end);
+    cpfield.nameNdx = read16(buffer, buffer_end);
+    cpfield.descNdx = read16(buffer, buffer_end);
     uint8_t* attrPtr = buffer;
-    skip_attributes(buffer);
+    skip_attributes(buffer, buffer_end);
     DexField* field = make_dexfield(cpool, self, cpfield);
     if (field == nullptr) return false;
     cc.add_field(field);
     invoke_attr_hook({field}, attrPtr);
   }
 
-  uint16_t mcount = read16(buffer);
+  uint16_t mcount = read16(buffer, buffer_end);
   if (mcount) {
     for (int i = 0; i < mcount; i++) {
       cp_method_info cpmethod;
-      cpmethod.aflags = read16(buffer);
-      cpmethod.nameNdx = read16(buffer);
-      cpmethod.descNdx = read16(buffer);
+      cpmethod.aflags = read16(buffer, buffer_end);
+      cpmethod.nameNdx = read16(buffer, buffer_end);
+      cpmethod.descNdx = read16(buffer, buffer_end);
 
       uint8_t* attrPtr = buffer;
-      skip_attributes(buffer);
+      skip_attributes(buffer, buffer_end);
       DexMethod* method = make_dexmethod(cpool, self, cpmethod);
       if (method == nullptr) return false;
       cc.add_method(method);
@@ -567,7 +577,7 @@ bool load_class_file(const std::string& filename, Scope* classes) {
   auto buffer = std::make_unique<char[]>(size);
   buf->sgetn(buffer.get(), size);
   auto jar_location = DexLocation::make_location("", filename);
-  return parse_class(reinterpret_cast<uint8_t*>(buffer.get()), classes,
+  return parse_class(reinterpret_cast<uint8_t*>(buffer.get()), size, classes,
                      /* attr_hook */ nullptr, jar_location);
 }
 
@@ -866,7 +876,7 @@ bool process_jar_entries(const DexLocation* location,
       return false;
     }
 
-    if (!parse_class(outbuffer.get(), classes, attr_hook, location)) {
+    if (!parse_class(outbuffer.get(), bufsize, classes, attr_hook, location)) {
       return false;
     }
   }
