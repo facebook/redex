@@ -13,6 +13,7 @@
 #include "DexClass.h"
 #include "DexStore.h"
 #include "FrameworkApi.h"
+#include "MethodOverrideGraph.h"
 #include "TypeUtil.h"
 
 // All references occurring in some method.
@@ -56,7 +57,9 @@ class RefChecker {
    * Check the :cls itself and its fields, methods and method code.
    * No cache for :cls because it's common to only check a definition once.
    */
-  bool check_class(const DexClass* cls) const;
+  bool check_class(const DexClass* cls,
+                   const std::unique_ptr<const method_override_graph::Graph>&
+                       mog = nullptr) const;
 
   /**
    * Check :method signature and its code.

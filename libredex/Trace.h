@@ -117,6 +117,7 @@ class DexType;
   TM(RAL)               \
   TM(RBB)               \
   TM(REACH)             \
+  TM(REFC)              \
   TM(REFL)              \
   TM(REFU)              \
   TM(REG)               \

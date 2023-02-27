@@ -235,12 +235,13 @@ void MergeabilityChecker::exclude_static_fields(TypeSet& non_mergeables) {
 
 void MergeabilityChecker::exclude_unsafe_sdk_and_store_refs(
     TypeSet& non_mergeables) {
+  const auto mog = method_override_graph::build_graph(m_scope);
   for (auto type : m_spec.merging_targets) {
     if (non_mergeables.count(type)) {
       continue;
     }
     auto cls = type_class(type);
-    if (!m_ref_checker.check_class(cls)) {
+    if (!m_ref_checker.check_class(cls, mog)) {
       non_mergeables.insert(type);
     }
     if (!m_spec.include_primary_dex && m_ref_checker.is_in_primary_dex(type)) {
