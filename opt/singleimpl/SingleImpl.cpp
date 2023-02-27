@@ -113,7 +113,8 @@ void collect_single_impl(const TypeToTypes& intfs_to_classes,
     always_assert(impl_cls && !impl_cls->is_external());
     // I don't know if it's possible but it's cheap enough to check
     if (impl_cls->get_access() & DexAccessFlags::ACC_ANNOTATION) continue;
-    if (!implements_all_intf_methods(impl_cls, intf_cls)) {
+    if (!is_abstract(impl_cls) &&
+        !implements_all_intf_methods(impl_cls, intf_cls)) {
       continue;
     }
     single_impl[intf] = impl;
