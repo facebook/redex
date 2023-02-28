@@ -1262,7 +1262,7 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
         assume_assignable(current_state->get_dex_type(src), arg_type);
         continue;
       }
-      if (type::is_integer(arg_type)) {
+      if (type::is_integral(arg_type)) {
         assume_integer(current_state, insn->src(src_idx++));
         continue;
       }

@@ -72,9 +72,17 @@ bool is_object(const DexType* type);
  * Return true if the type is a primitive type that fits within a 32-bit
  * register, i.e., boolean, byte, char, short or int.
  */
-bool is_integer(const DexType* type);
+bool is_integral(const DexType* type);
+
+bool is_int(const DexType* type);
+
+bool is_char(const DexType* type);
+
+bool is_short(const DexType* type);
 
 bool is_boolean(const DexType* type);
+
+bool is_byte(const DexType* type);
 
 bool is_long(const DexType* type);
 

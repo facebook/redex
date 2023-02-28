@@ -122,7 +122,7 @@ ir_list::InstructionIterator RuntimeAssertTransform::insert_field_assert(
   if (field == nullptr) {
     return it;
   }
-  if (!(type::is_integer(field->get_type()) ||
+  if (!(type::is_integral(field->get_type()) ||
         type::is_object(field->get_type()))) {
     return it;
   }
@@ -210,7 +210,7 @@ ir_list::InstructionIterator RuntimeAssertTransform::insert_return_value_assert(
   }
   auto reg = it->insn->dest();
   auto ret_type = callee->get_proto()->get_rtype();
-  if (!(type::is_integer(ret_type) || type::is_object(ret_type))) {
+  if (!(type::is_integral(ret_type) || type::is_object(ret_type))) {
     return it;
   }
   auto scd = cst.maybe_get<SignedConstantDomain>();
@@ -256,7 +256,7 @@ void RuntimeAssertTransform::insert_param_asserts(
   for (uint32_t i = 0; i < arg_types->size(); ++i, ++insn_it) {
     auto* arg_type = arg_types->at(i);
     // We don't currently support floating-point or long types...
-    if (!(type::is_integer(arg_type) || type::is_object(arg_type))) {
+    if (!(type::is_integral(arg_type) || type::is_object(arg_type))) {
       continue;
     }
     auto reg = insn_it->insn->dest();

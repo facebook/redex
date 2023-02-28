@@ -9,6 +9,7 @@
 
 #include "DedupBlocks.h"
 #include "DexClass.h"
+#include "IRAssembler.h"
 #include "RedexTest.h"
 #include "TypeInference.h"
 
@@ -198,6 +199,8 @@ TEST_F(TypeInferenceTest, test_join_with_null) {
     }
     EXPECT_EQ(exit_env.get_type(insn->src(0)),
               type_inference::TypeDomain(IRType::INT));
+    EXPECT_EQ(exit_env.get_int_type(insn->src(0)),
+              type_inference::IntTypeDomain(IntType::INT));
     auto ret_type = exit_env.get_type_domain(insn->src(0));
     EXPECT_TRUE(ret_type.is_top());
   }
@@ -261,5 +264,316 @@ TEST_F(TypeInferenceTest, test_join_with_interface) {
         type_set.contains(DexType::get_type("Lcom/facebook/redextest/I;")));
     EXPECT_TRUE(
         type_set.contains(DexType::get_type("Lcom/facebook/redextest/C;")));
+  }
+}
+
+TEST_F(TypeInferenceTest, test_char) {
+  auto method = DexMethod::get_method(
+                    "Lcom/facebook/redextest/"
+                    "TypeInferenceTest;.testChar:()C")
+                    ->as_def();
+  auto& cfg = get_cfg(method);
+
+  type_inference::TypeInference inference(cfg);
+  inference.run(method);
+  auto exit_block = cfg.exit_block();
+  auto exit_env = inference.get_exit_state_at(exit_block);
+
+  for (auto& mie : InstructionIterable(exit_block)) {
+    auto insn = mie.insn;
+    if (!opcode::is_a_return(insn->opcode())) {
+      continue;
+    }
+    EXPECT_EQ(exit_env.get_type(insn->src(0)),
+              type_inference::TypeDomain(IRType::INT));
+    EXPECT_EQ(exit_env.get_int_type(insn->src(0)),
+              type_inference::IntTypeDomain(IntType::CHAR));
+    auto ret_type = exit_env.get_type_domain(insn->src(0));
+    EXPECT_TRUE(ret_type.is_top());
+  }
+}
+
+TEST_F(TypeInferenceTest, test_short) {
+  auto method = DexMethod::get_method(
+                    "Lcom/facebook/redextest/"
+                    "TypeInferenceTest;.testShort:()S")
+                    ->as_def();
+  auto& cfg = get_cfg(method);
+
+  type_inference::TypeInference inference(cfg);
+  inference.run(method);
+  auto exit_block = cfg.exit_block();
+  auto exit_env = inference.get_exit_state_at(exit_block);
+
+  for (auto& mie : InstructionIterable(exit_block)) {
+    auto insn = mie.insn;
+    if (!opcode::is_a_return(insn->opcode())) {
+      continue;
+    }
+    EXPECT_EQ(exit_env.get_type(insn->src(0)),
+              type_inference::TypeDomain(IRType::INT));
+    EXPECT_EQ(exit_env.get_int_type(insn->src(0)),
+              type_inference::IntTypeDomain(IntType::SHORT));
+    auto ret_type = exit_env.get_type_domain(insn->src(0));
+    EXPECT_TRUE(ret_type.is_top());
+  }
+}
+
+TEST_F(TypeInferenceTest, test_byte) {
+  auto method = DexMethod::get_method(
+                    "Lcom/facebook/redextest/"
+                    "TypeInferenceTest;.testByte:()B")
+                    ->as_def();
+  auto& cfg = get_cfg(method);
+
+  type_inference::TypeInference inference(cfg);
+  inference.run(method);
+  auto exit_block = cfg.exit_block();
+  auto exit_env = inference.get_exit_state_at(exit_block);
+
+  for (auto& mie : InstructionIterable(exit_block)) {
+    auto insn = mie.insn;
+    if (!opcode::is_a_return(insn->opcode())) {
+      continue;
+    }
+    EXPECT_EQ(exit_env.get_type(insn->src(0)),
+              type_inference::TypeDomain(IRType::INT));
+    EXPECT_EQ(exit_env.get_int_type(insn->src(0)),
+              type_inference::IntTypeDomain(IntType::BYTE));
+    auto ret_type = exit_env.get_type_domain(insn->src(0));
+    EXPECT_TRUE(ret_type.is_top());
+  }
+}
+
+TEST_F(TypeInferenceTest, test_char_int) {
+  auto method = DexMethod::get_method(
+                    "Lcom/facebook/redextest/"
+                    "TypeInferenceTest;.testCharToInt:()I")
+                    ->as_def();
+  auto& cfg = get_cfg(method);
+
+  type_inference::TypeInference inference(cfg);
+  inference.run(method);
+  auto exit_block = cfg.exit_block();
+  auto exit_env = inference.get_exit_state_at(exit_block);
+
+  bool has_int_to_char = false;
+  for (auto& mie : InstructionIterable(exit_block)) {
+    auto insn = mie.insn;
+    if (insn->opcode() == IROpcode::OPCODE_INT_TO_CHAR) {
+      has_int_to_char = true;
+    }
+    if (!opcode::is_a_return(insn->opcode())) {
+      continue;
+    }
+    EXPECT_EQ(exit_env.get_type(insn->src(0)),
+              type_inference::TypeDomain(IRType::INT));
+    EXPECT_EQ(exit_env.get_int_type(insn->src(0)),
+              type_inference::IntTypeDomain(IntType::INT));
+    auto ret_type = exit_env.get_type_domain(insn->src(0));
+    EXPECT_TRUE(ret_type.is_top());
+  }
+  EXPECT_TRUE(has_int_to_char);
+}
+
+TEST_F(TypeInferenceTest, test_byte_int) {
+  auto method = DexMethod::get_method(
+                    "Lcom/facebook/redextest/"
+                    "TypeInferenceTest;.testByteToInt:()I")
+                    ->as_def();
+  auto& cfg = get_cfg(method);
+
+  type_inference::TypeInference inference(cfg);
+  inference.run(method);
+  auto exit_block = cfg.exit_block();
+  auto exit_env = inference.get_exit_state_at(exit_block);
+
+  bool has_int_to_byte = false;
+  for (auto& mie : InstructionIterable(exit_block)) {
+    auto insn = mie.insn;
+    if (insn->opcode() == IROpcode::OPCODE_INT_TO_BYTE) {
+      has_int_to_byte = true;
+    }
+    if (!opcode::is_a_return(insn->opcode())) {
+      continue;
+    }
+    EXPECT_EQ(exit_env.get_type(insn->src(0)),
+              type_inference::TypeDomain(IRType::INT));
+    EXPECT_EQ(exit_env.get_int_type(insn->src(0)),
+              type_inference::IntTypeDomain(IntType::INT));
+    auto ret_type = exit_env.get_type_domain(insn->src(0));
+    EXPECT_TRUE(ret_type.is_top());
+  }
+  EXPECT_TRUE(has_int_to_byte);
+}
+
+TEST_F(TypeInferenceTest, test_short_int) {
+  auto method = DexMethod::get_method(
+                    "Lcom/facebook/redextest/"
+                    "TypeInferenceTest;.testShortToInt:()I")
+                    ->as_def();
+  auto& cfg = get_cfg(method);
+
+  type_inference::TypeInference inference(cfg);
+  inference.run(method);
+  auto exit_block = cfg.exit_block();
+  auto exit_env = inference.get_exit_state_at(exit_block);
+
+  bool has_int_to_short = false;
+  for (auto& mie : InstructionIterable(exit_block)) {
+    auto insn = mie.insn;
+    if (insn->opcode() == IROpcode::OPCODE_INT_TO_SHORT) {
+      has_int_to_short = true;
+    }
+    if (!opcode::is_a_return(insn->opcode())) {
+      continue;
+    }
+    EXPECT_EQ(exit_env.get_type(insn->src(0)),
+              type_inference::TypeDomain(IRType::INT));
+    EXPECT_EQ(exit_env.get_int_type(insn->src(0)),
+              type_inference::IntTypeDomain(IntType::INT));
+    auto ret_type = exit_env.get_type_domain(insn->src(0));
+    EXPECT_TRUE(ret_type.is_top());
+  }
+  EXPECT_TRUE(has_int_to_short);
+}
+
+TEST_F(TypeInferenceTest, test_byte_short) {
+  auto method = DexMethod::get_method(
+                    "Lcom/facebook/redextest/"
+                    "TypeInferenceTest;.testByteToShort:()S")
+                    ->as_def();
+  auto& cfg = get_cfg(method);
+
+  type_inference::TypeInference inference(cfg);
+  inference.run(method);
+  auto exit_block = cfg.exit_block();
+  auto exit_env = inference.get_exit_state_at(exit_block);
+
+  bool has_int_to_byte = false;
+  bool has_int_to_short = false;
+  for (auto& mie : InstructionIterable(exit_block)) {
+    auto insn = mie.insn;
+    if (insn->opcode() == IROpcode::OPCODE_INT_TO_BYTE) {
+      has_int_to_byte = true;
+    }
+    if (insn->opcode() == IROpcode::OPCODE_INT_TO_SHORT) {
+      has_int_to_short = true;
+    }
+    if (!opcode::is_a_return(insn->opcode())) {
+      continue;
+    }
+    EXPECT_EQ(exit_env.get_type(insn->src(0)),
+              type_inference::TypeDomain(IRType::INT));
+    EXPECT_EQ(exit_env.get_int_type(insn->src(0)),
+              type_inference::IntTypeDomain(IntType::SHORT));
+    auto ret_type = exit_env.get_type_domain(insn->src(0));
+    EXPECT_TRUE(ret_type.is_top());
+  }
+  EXPECT_TRUE(has_int_to_byte);
+  EXPECT_TRUE(has_int_to_short);
+}
+
+TEST_F(TypeInferenceTest, test_int_bool) {
+  auto method = assembler::method_from_string(R"(
+    (method (static) "LFoo;.bar:()Z"
+      (
+        (sget "Lcom/facebook/redextest/A;.m_a:I;")
+        (move-result-pseudo v0)
+        (return v0)
+      )
+    )
+  )");
+  auto& cfg = get_cfg(method);
+
+  type_inference::TypeInference inference(cfg);
+  inference.run(method);
+  auto exit_block = cfg.exit_block();
+  auto exit_env = inference.get_exit_state_at(exit_block);
+
+  for (auto& mie : InstructionIterable(exit_block)) {
+    auto insn = mie.insn;
+    if (!opcode::is_a_return(insn->opcode())) {
+      continue;
+    }
+    EXPECT_EQ(exit_env.get_type(insn->src(0)),
+              type_inference::TypeDomain(IRType::INT));
+    EXPECT_EQ(exit_env.get_int_type(insn->src(0)),
+              type_inference::IntTypeDomain(IntType::INT));
+    auto ret_type = exit_env.get_type_domain(insn->src(0));
+    EXPECT_TRUE(ret_type.is_top());
+  }
+}
+
+TEST_F(TypeInferenceTest, test_int_bool2) {
+  auto method = assembler::method_from_string(R"(
+    (method (static) "LFoo;.bar:()Z"
+      (
+        (sget "Lcom/facebook/redextest/A;.m_a:I;")
+        (move-result-pseudo v0)
+        (if-eqz v0 :b0)
+        (if-nez v0 :b1)
+
+        (:b0)
+        (const v1 0)
+        (invoke-static (v1) "Ljava/lang/Boolean;.valueOf:(Z)Ljava/lang/Boolean;")
+        (move-result-object v1)
+        (invoke-virtual (v1) "Ljava/lang/Boolean;.booleanValue:()Z")
+        (move-result v1)
+        (return v1)
+
+        (:b1)
+        (const v1 1)
+        (invoke-static (v1) "Ljava/lang/Boolean;.valueOf:(Z)Ljava/lang/Boolean;")
+        (move-result-object v1)
+        (invoke-virtual (v1) "Ljava/lang/Boolean;.booleanValue:()Z")
+        (move-result v1)
+        (return v1)
+      )
+    )
+  )");
+  auto& cfg = get_cfg(method);
+
+  type_inference::TypeInference inference(cfg);
+  inference.run(method);
+
+  for (auto block : cfg.real_exit_blocks()) {
+    IRInstruction* insn = block->get_last_insn()->insn;
+    const auto& exit_env = inference.get_exit_state_at(block);
+    EXPECT_EQ(exit_env.get_type(insn->src(0)),
+              type_inference::TypeDomain(IRType::INT));
+    EXPECT_EQ(exit_env.get_int_type(insn->src(0)),
+              type_inference::IntTypeDomain(IntType::BOOLEAN));
+    auto ret_type = exit_env.get_type_domain(insn->src(0));
+    EXPECT_TRUE(ret_type.is_top());
+  }
+}
+
+TEST_F(TypeInferenceTest, test_bool_int) {
+  auto method = assembler::method_from_string(R"(
+    (method (static) "LFoo;.bar:()I"
+      (
+        (const v0 0)
+        (invoke-virtual (v0) "Ljava/lang/Boolean;.booleanValue:()Z")
+        (move-result v0)
+        (add-int/lit v0 v0 1)
+        (return v0)
+      )
+    )
+  )");
+  auto& cfg = get_cfg(method);
+
+  type_inference::TypeInference inference(cfg);
+  inference.run(method);
+
+  for (auto block : cfg.real_exit_blocks()) {
+    IRInstruction* insn = block->get_last_insn()->insn;
+    const auto& exit_env = inference.get_exit_state_at(block);
+    EXPECT_EQ(exit_env.get_type(insn->src(0)),
+              type_inference::TypeDomain(IRType::INT));
+    EXPECT_EQ(exit_env.get_int_type(insn->src(0)),
+              type_inference::IntTypeDomain(IntType::INT));
+    auto ret_type = exit_env.get_type_domain(insn->src(0));
+    EXPECT_TRUE(ret_type.is_top());
   }
 }
