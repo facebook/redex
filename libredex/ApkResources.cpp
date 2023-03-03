@@ -1600,19 +1600,27 @@ void add_string_idx_to_builder(
 }
 
 // Copies the string data for the kept indicies from the given pool to the
-// builder. If needed, a remapper function can be run against the spans required
-// by a kept index.
+// builder in the order specified. If needed, a remapper function can be run
+// against the spans required by a kept index.
 void rebuild_string_pool(
     const android::ResStringPool& string_pool,
     const std::unordered_map<uint32_t, uint32_t>& kept_old_to_new,
     const std::function<void(android::ResStringPool_span*)>& span_remapper,
     arsc::ResStringPoolBuilder* builder) {
-  const auto original_string_count = string_pool.size();
   const auto is_utf8 = string_pool.isUTF8();
-  for (size_t idx = 0; idx < original_string_count; idx++) {
-    if (kept_old_to_new.count(idx) == 0) {
-      continue;
-    }
+  const auto new_string_pool_size = kept_old_to_new.size();
+  always_assert_log(new_string_pool_size <= string_pool.size(),
+                    "Pool remapping is too large");
+
+  std::vector<ssize_t> output_order(new_string_pool_size, -1);
+  for (const auto& pair : kept_old_to_new) {
+    always_assert_log(pair.second < new_string_pool_size,
+                      "Pool remap idx out of bounds");
+    always_assert_log(output_order.at(pair.second) == -1,
+                      "Pool remapping is invalid");
+    output_order.at(pair.second) = pair.first;
+  }
+  for (const auto& idx : output_order) {
     size_t length;
     if (is_utf8) {
       auto s = string_pool.string8At(idx, &length);
@@ -1624,6 +1632,17 @@ void rebuild_string_pool(
                                           span_remapper, builder);
     }
   }
+}
+
+// Copies the string data for the kept indicies from the given pool to the
+// builder in the order specified.
+void rebuild_string_pool(
+    const android::ResStringPool& string_pool,
+    const std::unordered_map<uint32_t, uint32_t>& kept_old_to_new,
+    arsc::ResStringPoolBuilder* builder) {
+  rebuild_string_pool(
+      string_pool, kept_old_to_new, [](android::ResStringPool_span*) {},
+      builder);
 }
 
 // Given the kept strings, build the mapping from old -> new in the projected
@@ -1675,10 +1694,6 @@ void ResourcesArscFile::finalize_resource_table(const ResourceConfig& config) {
   auto string_pool = string_reader.global_strings();
   TRACE(RES, 9, "Global string pool has %zu styles and %zu total strings",
         string_pool->styleCount(), string_pool->size());
-  auto is_utf8 = string_pool->isUTF8();
-  auto is_sorted = string_pool->isSorted();
-  auto flags = (is_utf8 ? android::ResStringPool_header::UTF8_FLAG : 0) |
-               (is_sorted ? android::ResStringPool_header::SORTED_FLAG : 0);
 
   // 1) Collect all referenced global string indicies and key string indicies.
   PackageStringRefCollector collector;
@@ -1724,7 +1739,7 @@ void ResourcesArscFile::finalize_resource_table(const ResourceConfig& config) {
     }
   };
   std::shared_ptr<arsc::ResStringPoolBuilder> global_strings_builder =
-      std::make_shared<arsc::ResStringPoolBuilder>(flags);
+      std::make_shared<arsc::ResStringPoolBuilder>(POOL_FLAGS(string_pool));
   rebuild_string_pool(*string_pool, global_old_to_new, remap_spans,
                       global_strings_builder.get());
 
@@ -1774,9 +1789,8 @@ void ResourcesArscFile::finalize_resource_table(const ResourceConfig& config) {
     std::shared_ptr<arsc::ResStringPoolBuilder> key_strings_builder =
         std::make_shared<arsc::ResStringPoolBuilder>(
             POOL_FLAGS(key_string_pool));
-    rebuild_string_pool(
-        *key_string_pool, key_old_to_new, [](android::ResStringPool_span*) {},
-        key_strings_builder.get());
+    rebuild_string_pool(*key_string_pool, key_old_to_new,
+                        key_strings_builder.get());
     package_builder->set_key_strings(key_strings_builder);
     // Copy over all existing type data, which has been remapped by the step
     // above.
