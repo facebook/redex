@@ -109,6 +109,7 @@ void PassManagerConfig::bind_config() {
 void ResourceConfig::bind_config() {
   bind("customized_r_classes", {}, customized_r_classes);
   bind("canonical_entry_types", {}, canonical_entry_types);
+  bind("sort_key_strings", false, sort_key_strings);
 }
 
 void DexOutputConfig::bind_config() {

@@ -172,6 +172,7 @@ struct ResourceConfig : public Configurable {
   // Type names in the resource table (example: "id") which should enable
   // canonical offsets for entries/values.
   std::unordered_set<std::string> canonical_entry_types;
+  bool sort_key_strings{false};
 };
 
 struct DexOutputConfig : public Configurable {

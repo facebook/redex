@@ -17,6 +17,7 @@
 #include <fcntl.h>
 #include <fstream>
 #include <map>
+#include <string_view>
 
 #include "Macros.h"
 #if IS_WINDOWS
@@ -34,6 +35,7 @@
 #include "utils/String16.h"
 #include "utils/String8.h"
 #include "utils/TypeHelpers.h"
+#include "utils/Unicode.h"
 #include "utils/Visitor.h"
 
 #include "Debug.h"
@@ -1649,14 +1651,40 @@ void rebuild_string_pool(
 // new string pool.
 void project_string_mapping(
     const std::unordered_set<uint32_t>& used_strings,
-    const size_t& string_count,
-    std::unordered_map<uint32_t, uint32_t>* kept_old_to_new) {
-  for (size_t i = 0; i < string_count; i++) {
-    if (used_strings.count(i) > 0) {
-      auto new_index = kept_old_to_new->size();
-      TRACE(RES, 9, "MAPPING %zu => %zu", i, new_index);
-      kept_old_to_new->emplace(i, new_index);
+    const android::ResStringPool& string_pool,
+    std::unordered_map<uint32_t, uint32_t>* kept_old_to_new,
+    bool sort_by_string_value = false) {
+  always_assert(kept_old_to_new->empty());
+
+  std::vector<uint32_t> used_indices(used_strings.begin(), used_strings.end());
+  if (!sort_by_string_value) {
+    std::sort(used_indices.begin(), used_indices.end());
+  } else {
+    always_assert_log(string_pool.styleCount() == 0,
+                      "Sorting by string value not supported with styles");
+    // AOSP implementation will perform binary search via strzcmp16; to ensure
+    // proper order this will convert to UTF-16 if needed and run the same
+    // comparison.
+    std::vector<std::u16string_view> pool_items;
+    auto size = string_pool.size();
+    pool_items.reserve(size);
+    for (size_t i = 0; i < size; i++) {
+      size_t len;
+      auto chars = string_pool.stringAt(i, &len);
+      pool_items.emplace_back(chars, len);
     }
+    std::sort(used_indices.begin(), used_indices.end(),
+              [&](uint32_t a, uint32_t b) {
+                const auto& view_a = pool_items.at(a);
+                const auto& view_b = pool_items.at(b);
+                return strzcmp16(view_a.data(), view_a.size(), view_b.data(),
+                                 view_b.size()) < 0;
+              });
+  }
+  for (const auto& i : used_indices) {
+    auto new_index = kept_old_to_new->size();
+    TRACE(RES, 9, "MAPPING %u => %zu", i, new_index);
+    kept_old_to_new->emplace(i, new_index);
   }
 }
 
@@ -1708,8 +1736,7 @@ void ResourcesArscFile::finalize_resource_table(const ResourceConfig& config) {
 
   // 2) Build the compacted map of old -> new indicies for used global strings.
   std::unordered_map<uint32_t, uint32_t> global_old_to_new;
-  project_string_mapping(used_global_strings, string_pool->size(),
-                         &global_old_to_new);
+  project_string_mapping(used_global_strings, *string_pool, &global_old_to_new);
 
   // 3) Remap all Res_value structs
   auto remap_value = [&global_old_to_new](android::Res_value* value) {
@@ -1765,8 +1792,8 @@ void ResourcesArscFile::finalize_resource_table(const ResourceConfig& config) {
       used_key_strings.emplace(dtohl(ref->index));
     }
     std::unordered_map<uint32_t, uint32_t> key_old_to_new;
-    project_string_mapping(used_key_strings, key_string_pool->size(),
-                           &key_old_to_new);
+    project_string_mapping(used_key_strings, *key_string_pool, &key_old_to_new,
+                           config.sort_key_strings);
 
     auto& type_strings_header =
         collector.m_package_type_string_headers.at(package);
@@ -1786,9 +1813,12 @@ void ResourcesArscFile::finalize_resource_table(const ResourceConfig& config) {
     }
 
     // Actually build the key strings pool.
+    auto key_flags = POOL_FLAGS(key_string_pool);
+    if (config.sort_key_strings) {
+      key_flags |= android::ResStringPool_header::SORTED_FLAG;
+    }
     std::shared_ptr<arsc::ResStringPoolBuilder> key_strings_builder =
-        std::make_shared<arsc::ResStringPoolBuilder>(
-            POOL_FLAGS(key_string_pool));
+        std::make_shared<arsc::ResStringPoolBuilder>(key_flags);
     rebuild_string_pool(*key_string_pool, key_old_to_new,
                         key_strings_builder.get());
     package_builder->set_key_strings(key_strings_builder);

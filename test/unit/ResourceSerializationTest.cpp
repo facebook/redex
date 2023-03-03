@@ -739,7 +739,12 @@ TEST(ResTableParse, TestUnknownPackageChunks) {
   auto res_path = tmp_dir.path + "/resources.arsc";
   copy_file(std::getenv("resources_unknown_chunk"), res_path);
   ResourcesArscFile res_table(res_path);
-  res_table.finalize_resource_table({});
+  ResourceConfig config;
+  // Be explicit here for when the default value of this config option gets
+  // changed. The intent of this test is to verify our parsers/builders can be a
+  // simple round trip with no changes.
+  config.sort_key_strings = false;
+  res_table.finalize_resource_table(config);
   EXPECT_TRUE(
       are_files_equal(std::getenv("resources_unknown_chunk"), res_path));
 }
