@@ -586,11 +586,22 @@ struct Injector {
                          bool exc_inject) {
     auto scope = build_class_scope(stores);
 
+    // operator+= does not work well, too much copying around.
     struct SerializedMethodInfo {
       const DexString* method;
       std::string s_expression;
       std::string idom_map;
     };
+    struct SimpleSMIStore {
+      std::mutex acc_mutex{};
+      std::deque<SerializedMethodInfo> data{};
+
+      void add(SerializedMethodInfo&& in) {
+        std::unique_lock<std::mutex> lock{acc_mutex};
+        data.emplace_back(in);
+      }
+    };
+    SimpleSMIStore smi{};
 
     struct InsertResult {
       size_t skipped{0};
@@ -598,7 +609,6 @@ struct Injector {
       size_t profile_count{0};
       size_t profile_failed{0};
       size_t access_methods{0};
-      std::vector<SerializedMethodInfo> serialized;
 
       InsertResult() = default;
       InsertResult(size_t skipped, size_t access_methods)
@@ -606,13 +616,11 @@ struct Injector {
       InsertResult(size_t access_methods,
                    size_t blocks,
                    size_t profile_count,
-                   size_t profile_failed,
-                   std::vector<SerializedMethodInfo> serialized)
+                   size_t profile_failed)
           : blocks(blocks),
             profile_count(profile_count),
             profile_failed(profile_failed),
-            access_methods(access_methods),
-            serialized(std::move(serialized)) {}
+            access_methods(access_methods) {}
 
       InsertResult operator+=(const InsertResult& other) {
         skipped += other.skipped;
@@ -620,10 +628,6 @@ struct Injector {
         profile_count += other.profile_count;
         profile_failed += other.profile_failed;
         access_methods += other.access_methods;
-        serialized.reserve(serialized.size() + other.serialized.size());
-        for (auto& smi : other.serialized) {
-          serialized.emplace_back(smi);
-        }
         return *this;
       }
     };
@@ -673,12 +677,13 @@ struct Injector {
             auto res = source_blocks::insert_source_blocks(
                 sb_name, cfg.get(), profiles.first, serialize, exc_inject);
 
-            return InsertResult(
-                access_method ? 1 : 0,
-                res.block_count,
-                profiles.second ? 1 : 0,
-                res.profile_success ? 0 : 1,
-                {{sb_name, res.serialized, res.serialized_idom_map}});
+            smi.add({sb_name, std::move(res.serialized),
+                     std::move(res.serialized_idom_map)});
+
+            return InsertResult(access_method ? 1 : 0,
+                                res.block_count,
+                                profiles.second ? 1 : 0,
+                                res.profile_success ? 0 : 1);
           }
           return InsertResult();
         });
@@ -690,7 +695,7 @@ struct Injector {
     }
 
     mgr.set_metric("inserted_source_blocks", res.blocks);
-    mgr.set_metric("handled_methods", res.serialized.size());
+    mgr.set_metric("handled_methods", smi.data.size());
     mgr.set_metric("skipped_methods", res.skipped);
     mgr.set_metric("methods_with_profiles", res.profile_count);
     mgr.set_metric("profile_failed", res.profile_failed);
@@ -716,7 +721,7 @@ struct Injector {
     {
       std::set<std::string> unique_idom_maps_set;
       std::transform(
-          res.serialized.begin(), res.serialized.end(),
+          smi.data.begin(), smi.data.end(),
           std::inserter(unique_idom_maps_set, unique_idom_maps_set.begin()),
           [](const auto& s) { return s.idom_map; });
       unique_idom_maps.reserve(unique_idom_maps_set.size());
@@ -729,8 +734,7 @@ struct Injector {
       ofs_uim << uim << "\n";
     }
 
-    std::sort(res.serialized.begin(),
-              res.serialized.end(),
+    std::sort(smi.data.begin(), smi.data.end(),
               [](const auto& lhs, const auto& rhs) {
                 return compare_dexstrings(lhs.method, rhs.method);
               });
@@ -742,7 +746,7 @@ struct Injector {
     ofs_rsbidm
         << "type,version\nredex-source-blocks-idom-maps,1\nidom_map_id\n";
 
-    for (const auto& [method, s_expression, idom_map] : res.serialized) {
+    for (const auto& [method, s_expression, idom_map] : smi.data) {
       ofs_rsb << show(method) << "," << s_expression << "\n";
 
       // idom_map_id is a line index into unique-idom-maps.txt
