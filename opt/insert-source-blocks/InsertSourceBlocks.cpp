@@ -622,7 +622,7 @@ struct Injector {
             profile_failed(profile_failed),
             access_methods(access_methods) {}
 
-      InsertResult operator+=(const InsertResult& other) {
+      InsertResult& operator+=(const InsertResult& other) {
         skipped += other.skipped;
         blocks += other.blocks;
         profile_count += other.profile_count;
