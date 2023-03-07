@@ -87,8 +87,17 @@ class _FindAndroidBuildToolHelper:
             ),
         ]
         self.root_dir_for_buck: typing.Optional[str] = None
+        self.tool_overrides: typing.Dict[str, str] = {}
 
-    def find(self, tool: str) -> str:
+    def add_tool_override(self, tool_name: str, path: str) -> None:
+        self.tool_overrides[tool_name] = path
+
+    def find(self, tool_name: str, tool: str) -> str:
+        if tool_name in self.tool_overrides:
+            res = self.tool_overrides[tool_name]
+            logging.debug("Using tool override: %s -> %s", tool_name, res)
+            return res
+
         result, _ = self._run(tool)
         if result:
             return result
@@ -293,6 +302,10 @@ def set_root_dir_for_buck(path: str) -> None:
     FIND_HELPER.root_dir_for_buck = path
 
 
+def add_tool_override(tool_name: str, path: str) -> None:
+    FIND_HELPER.add_tool_override(tool_name, path)
+
+
 def get_android_sdk_path() -> str:
     attempts = []
     for name, base_dir_fn, _ in FIND_HELPER.sdk_search_order:
@@ -305,16 +318,16 @@ def get_android_sdk_path() -> str:
     raise RuntimeError(f'Could not find SDK path, searched {", ".join(attempts)}')
 
 
-def find_android_build_tool(tool: str) -> str:
-    return FIND_HELPER.find(tool)
+def find_android_build_tool(tool_name: str, tool: str) -> str:
+    return FIND_HELPER.find(tool_name, tool)
 
 
 def find_apksigner() -> str:
-    return find_android_build_tool("apksigner.bat" if IS_WINDOWS else "apksigner")
+    return FIND_HELPER.find("apksigner", "apksigner.bat" if IS_WINDOWS else "apksigner")
 
 
 def find_zipalign() -> str:
-    return find_android_build_tool("zipalign.exe" if IS_WINDOWS else "zipalign")
+    return FIND_HELPER.find("zipalign", "zipalign.exe" if IS_WINDOWS else "zipalign")
 
 
 def remove_signature_files(extracted_apk_dir: str) -> None:
