@@ -316,9 +316,12 @@ void ConfigFiles::build_dead_class_and_live_class_split_lists() {
 }
 
 void ConfigFiles::ensure_agg_method_stats_loaded() const {
+  if (m_method_profiles->is_initialized()) {
+    return;
+  }
   std::vector<std::string> csv_filenames;
   get_json_config().get("agg_method_stats_files", {}, csv_filenames);
-  if (csv_filenames.empty() || m_method_profiles->is_initialized()) {
+  if (csv_filenames.empty()) {
     return;
   }
   m_method_profiles->initialize(csv_filenames);
