@@ -422,7 +422,12 @@ struct Injector {
   bool always_inject;
 
   Injector(ConfigFiles& conf, bool always_inject)
-      : conf(conf), always_inject(always_inject) {}
+      : conf(conf), always_inject(always_inject) {
+    // Prefetch the method profiles. We may need them when block profiles
+    // are missing and it's easier to do it here than have to synchronize
+    // loading later. (It's probably also amortized with later passes.)
+    conf.get_method_profiles();
+  }
 
   boost::optional<SourceBlock::Val> maybe_val_from_mp(
       const std::string& interaction, const DexMethodRef* mref) {
