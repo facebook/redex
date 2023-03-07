@@ -38,7 +38,7 @@ from pyredex.utils import (
     add_android_sdk_path,
     argparse_yes_no_flag,
     dex_glob,
-    find_android_build_tool,
+    find_zipalign,
     get_android_sdk_path,
     get_file_ext,
     make_temp_dir,
@@ -413,7 +413,7 @@ def zipalign(
     # Align zip and optionally perform good compression.
     try:
         zipalign = [
-            find_android_build_tool("zipalign.exe" if IS_WINDOWS else "zipalign"),
+            find_zipalign(),
             "4",
             unaligned_apk_path,
             output_apk_path,
