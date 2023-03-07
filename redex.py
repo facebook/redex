@@ -36,6 +36,7 @@ from pyredex.unpacker import (
 )
 from pyredex.utils import (
     add_android_sdk_path,
+    add_tool_override,
     argparse_yes_no_flag,
     dex_glob,
     find_zipalign,
@@ -743,6 +744,46 @@ Given an APK, produce a better APK!
         default=None,
         type=str,
         help="Path to JNI summary directory of json files.",
+    )
+
+    # Manual tool paths.
+
+    # Must be subclassed.
+    class ToolAction(argparse.Action):
+        def __init__(
+            self, tool_name, option_strings, dest, nargs=None, type=None, **kwargs
+        ):
+            if nargs is not None:
+                raise ValueError("nargs not allowed")
+            if type is not None:
+                raise ValueError("type not allowed")
+            super().__init__(option_strings, dest, type=str, **kwargs)
+            self.tool_name = tool_name
+
+        def __call__(self, parser, namespace, values, option_string=None):
+            if values is not None:
+                add_tool_override(self.tool_name, values)
+
+    class ZipAlignToolAction(ToolAction):
+        def __init__(self, **kwargs):
+            super().__init__("zipalign", **kwargs)
+
+    parser.add_argument(
+        "--zipalign-path",
+        default=None,
+        action=ZipAlignToolAction,
+        help="Path to zipalign executable.",
+    )
+
+    class ApkSignerToolAction(ToolAction):
+        def __init__(self, *args, **kwargs):
+            super().__init__("apksigner", *args, **kwargs)
+
+    parser.add_argument(
+        "--apksigner-path",
+        default=None,
+        action=ApkSignerToolAction,
+        help="Path to apksigner executable.",
     )
 
     # Passthrough mode.
