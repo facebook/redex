@@ -25,6 +25,7 @@ void overriden_should_not_be_public(
     overriden_should_not_be_public(overriden, graph, should_not_mark);
   }
 }
+
 /**
  * XXX: Why not simply mark the virtual methods public? For a virtual method,
  * there can be an invisible final virtual method with the same signature in the
@@ -41,9 +42,12 @@ void loosen_access_modifier_for_vmethods(const DexClasses& scope) {
     // not change it to be public.
     if (is_final(method) && !pair.second.children.empty()) {
       overriden_should_not_be_public(method, graph.get(), &should_not_mark);
+      auto& children = pair.second.children;
+      auto* first_child = *children.begin();
       always_assert_log(!is_public(method) && !is_protected(method),
-                        "%s is visible final but it has children",
-                        SHOW(method));
+                        "%s is visible final but it has children %s",
+                        SHOW(method->get_deobfuscated_name()),
+                        SHOW(first_child->get_deobfuscated_name()));
     }
   }
   walk::parallel::classes(scope, [&should_not_mark](DexClass* cls) {
