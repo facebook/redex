@@ -889,17 +889,18 @@ inline s_expr_istream& s_expr_istream::operator>>(s_expr& expr) {
         set_status_fail(out.str());
         return *this;
       }
-      std::ostringstream symbol;
+      std::string symbol;
       while (m_input.good() && s_expr_impl::is_symbol_char(next_char)) {
-        symbol << next_char;
+        symbol.append({next_char});
         m_input.get();
         next_char = m_input.peek();
       }
+      symbol.shrink_to_fit();
       if (m_stack.empty()) {
-        expr = s_expr(symbol.str());
+        expr = s_expr(std::move(symbol));
         return *this;
       }
-      m_stack.top().add_element(s_expr(symbol.str()));
+      m_stack.top().add_element(s_expr(std::move(symbol)));
     }
     }
   }
