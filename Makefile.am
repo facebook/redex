@@ -152,6 +152,7 @@ libredex_la_SOURCES = \
 	libredex/Show.cpp \
 	libredex/SourceBlockConsistencyCheck.cpp \
 	libredex/SourceBlocks.cpp \
+	libredex/StringTreeSet.cpp \
 	libredex/Timer.cpp \
 	libredex/Trace.cpp \
 	libredex/Transform.cpp \
