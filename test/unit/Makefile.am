@@ -142,7 +142,8 @@ check_PROGRAMS = \
     virtual_merging_test \
     walkers_test \
     work_queue_test \
-    xstorerefs_test
+    xstorerefs_test \
+    string_tree_test
 
 aliased_registers_test_SOURCES = AliasedRegistersTest.cpp
 
@@ -453,6 +454,8 @@ work_queue_test_SOURCES = WorkQueueTest.cpp
 
 xstorerefs_test_SOURCES = XStoreRefsTest.cpp
 
+string_tree_test_SOURCES = StringTreeTest.cpp
+
 
 TESTS = \
     aliased_registers_test \
@@ -579,4 +582,5 @@ TESTS = \
     virtual_merging_test \
     walkers_test \
     work_queue_test \
-    xstorerefs_test
+    xstorerefs_test \
+    string_tree_test
