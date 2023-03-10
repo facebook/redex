@@ -9,7 +9,7 @@ package com.facebook.redextest;
 
 import org.junit.Test;
 
-import static org.fest.assertions.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
 
 abstract class Base {}
 class S1 extends Base {

@@ -8,7 +8,7 @@
 package com.facebook.redextest;
 
 
-import static org.fest.assertions.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.InputStream;
 import java.util.Random;

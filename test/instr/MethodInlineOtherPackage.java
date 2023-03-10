@@ -7,7 +7,7 @@
 
 package com.facebook.redexinline.otherpackage;
 
-import static org.fest.assertions.api.Assertions.*;
+import static org.assertj.core.api.Assertions.*;
 
 public class MethodInlineOtherPackage {
   private class Foo {

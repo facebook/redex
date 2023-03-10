@@ -9,7 +9,7 @@ package com.facebook.redextest;
 
 import java.util.List;
 import org.junit.Test;
-import static org.fest.assertions.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
 
 public class CheckRecursionTest {
   // Positive test with bad self recursion.

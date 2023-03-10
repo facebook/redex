@@ -15,7 +15,7 @@ package com.facebook.redextest;
 import com.facebook.redex.annotations.MethodMeta;
 import org.junit.Test;
 
-import static org.fest.assertions.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
 
 interface Interface {
   int magic();

@@ -20,7 +20,7 @@ package com.facebook.redex.test.instr;
  * DelInit is turned on we should flip this bit.
  */
 
-import static org.fest.assertions.api.Assertions.*;
+import static org.assertj.core.api.Assertions.*;
 
 import org.junit.Test;
 import java.lang.reflect.InvocationTargetException;

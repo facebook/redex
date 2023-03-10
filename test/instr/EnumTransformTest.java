@@ -10,7 +10,7 @@ package redex;
 import java.util.Random;
 import javax.annotation.Nullable;
 import org.junit.Test;
-import static org.fest.assertions.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
 
 // POSTCHECK-LABEL: class: redex.$EnumUtils
 // POSTCHECK-NEXT: Access flags: (PUBLIC, FINAL)

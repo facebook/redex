@@ -7,7 +7,7 @@
 
 package com.facebook.redextest;
 
-import static org.fest.assertions.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.facebook.annotations.OkToExtend;
 import com.facebook.redex.test.instr.KeepForRedexTest;
