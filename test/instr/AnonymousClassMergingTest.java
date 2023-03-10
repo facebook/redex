@@ -19,7 +19,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import org.junit.Test;
 
-import static org.fest.assertions.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
 
 interface Interface1 {
   default int magic1() { return 42; }

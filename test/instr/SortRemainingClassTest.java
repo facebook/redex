@@ -16,7 +16,7 @@ import org.junit.Test;
 
 import com.facebook.redex.annotations.ModelIdentity;
 import com.facebook.redex.annotations.MethodMeta;
-import static org.fest.assertions.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
 
 //@interface DoNotStrip {}
 

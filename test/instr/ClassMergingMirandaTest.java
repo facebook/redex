@@ -11,7 +11,7 @@ import com.facebook.annotations.OkToExtend;
 import com.facebook.redex.test.instr.KeepForRedexTest;
 import org.junit.Test;
 
-import static org.fest.assertions.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * This test mimics a seriously complicated inheritance hierachy where non-def miranda methods exist in the virtual scopes.

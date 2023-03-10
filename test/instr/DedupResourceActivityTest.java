@@ -7,7 +7,7 @@
 
 package com.facebook.redextest;
 
-import static org.fest.assertions.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import android.app.Activity;
 import android.content.res.Resources;

@@ -9,7 +9,7 @@ package com.facebook.redex.test.instr;
 
 import com.facebook.redex.test.instr.base.ObfuscateTestPackages;
 
-import static org.fest.assertions.api.Assertions.*;
+import static org.assertj.core.api.Assertions.*;
 import java.lang.reflect.*;
 
 import org.junit.Test;

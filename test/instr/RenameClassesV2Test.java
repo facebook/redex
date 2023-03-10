@@ -7,7 +7,7 @@
 
 package com.facebook.redex.test.instr;
 
-import static org.fest.assertions.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.facebook.FooTextView;
 import org.junit.Test;

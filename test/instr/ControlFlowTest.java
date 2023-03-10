@@ -12,7 +12,7 @@ import java.io.InputStream;
 import java.io.IOException;
 import java.util.Random;
 import org.junit.Test;
-import static org.fest.assertions.api.Assertions.*;
+import static org.assertj.core.api.Assertions.*;
 
 class E1 extends Error {}
 class E2 extends Error {}

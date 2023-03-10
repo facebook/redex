@@ -7,7 +7,7 @@
 
 package redex;
 
-import static org.fest.assertions.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.Test;
 
@@ -332,8 +332,8 @@ public class IPConstantPropagationTest {
     assertThat(a.return2()).isEqualTo(2);
     if (a.calculate(3) != 2 || a.return2() != 2) {
       // CHECK-NOT: return-void
-      // PRECHECK: invoke-virtual {{.*}} org.fest.assertions.api.BooleanAssert.isTrue
-      // POSTCHECK-NOT: invoke-virtual {{.*}} org.fest.assertions.api.BooleanAssert.isTrue
+      // PRECHECK: invoke-virtual {{.*}} org.assertj.core.api.AbstractBooleanAssert.isTrue
+      // POSTCHECK-NOT: invoke-virtual {{.*}} org.assertj.core.api.AbstractBooleanAssert.isTrue
       assertThat(false).isTrue();
     }
     // CHECK: return-void
@@ -351,7 +351,7 @@ public class IPConstantPropagationTest {
     assertThat(a.return2()).isEqualTo(2);
     assertThat(a.returnSomething()).isEqualTo(2);
     // CHECK-NOT: return-void
-    // CHECK: invoke-virtual {{.*}} org.fest.assertions.api.BooleanAssert.isTrue
+    // CHECK: invoke-virtual {{.*}} org.assertj.core.api.AbstractBooleanAssert.isTrue
     if (a.return2() != 2 || a.returnSomething() != 2) {
       assertThat(false).isTrue();
     }
@@ -364,8 +364,8 @@ public class IPConstantPropagationTest {
     OverrideWithSameValue a = new OverrideWithSameValue();
     assertThat(a.return3()).isEqualTo(3);
     // CHECK-NOT: return-void
-    // PRECHECK: invoke-virtual {{.*}} org.fest.assertions.api.BooleanAssert.isTrue
-    // POSTCHECK-NOT: invoke-virtual {{.*}} org.fest.assertions.api.BooleanAssert.isTrue
+    // PRECHECK: invoke-virtual {{.*}} org.assertj.core.api.AbstractBooleanAssert.isTrue
+    // POSTCHECK-NOT: invoke-virtual {{.*}} org.assertj.core.api.AbstractBooleanAssert.isTrue
     if (a.return3() != 3) {
       assertThat(false).isTrue();
     }
@@ -378,7 +378,7 @@ public class IPConstantPropagationTest {
     OverrideWithDifferentValue a = new OverrideWithDifferentValue();
     assertThat(a.returnSomething()).isEqualTo(4);
     // CHECK-NOT: return-void
-    // CHECK: invoke-virtual {{.*}} org.fest.assertions.api.BooleanAssert.isTrue
+    // CHECK: invoke-virtual {{.*}} org.assertj.core.api.AbstractBooleanAssert.isTrue
     if (a.returnSomething() != 4) {
       assertThat(false).isTrue();
     }

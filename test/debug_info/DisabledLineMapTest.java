@@ -7,7 +7,7 @@
 
 package com.facebook.redexlinemap;
 
-import static org.fest.assertions.api.Assertions.*;
+import static org.assertj.core.api.Assertions.*;
 
 import java.util.Arrays;
 import java.util.List;

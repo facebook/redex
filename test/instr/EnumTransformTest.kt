@@ -7,7 +7,7 @@
 
 package redex
 
-import org.fest.assertions.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThat
 import org.junit.Test
 
 // The following rules are about the helper class synthesized by OptimizeEnumsPass.

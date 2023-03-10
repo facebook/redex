@@ -7,7 +7,7 @@
 
 package com.facebook.redextest.kt
 
-import org.fest.assertions.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThat
 import org.junit.Test
 
 enum class A {

@@ -8,7 +8,7 @@
 package com.facebook.redextest;
 
 import org.junit.Test;
-import static org.fest.assertions.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * This is a relatively simple mock up hierarchy that's close to what the

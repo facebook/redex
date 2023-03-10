@@ -12,7 +12,7 @@
 
 package com.facebook.redextest;
 
-import static org.fest.assertions.api.Assertions.*;
+import static org.assertj.core.api.Assertions.*;
 
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Method;

@@ -17,7 +17,7 @@ import java.lang.Integer;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 
-import static org.fest.assertions.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
 import androidx.annotation.Nullable;
 
 public class ReflectionAnalysisTest {
