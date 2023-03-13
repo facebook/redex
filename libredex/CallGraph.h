@@ -96,7 +96,6 @@ class Node {
   explicit Node(NodeType type) : m_method(nullptr), m_type(type) {}
 
   const DexMethod* method() const { return m_method; }
-  bool operator==(const Node& that) const { return method() == that.method(); }
   const Edges& callers() const { return m_predecessors; }
   const Edges& callees() const { return m_successors; }
 
