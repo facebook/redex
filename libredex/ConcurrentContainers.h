@@ -420,6 +420,17 @@ class ConcurrentMapContainer
         .second;
   }
 
+  template <typename... Args>
+  bool emplace_unsafe(Args&&... args) {
+    std::pair<Key, Value> entry(std::forward<Args>(args)...);
+    size_t slot = Hash()(entry.first) % n_slots;
+    auto& map = this->get_container(slot);
+    return map
+        .emplace(KeyProjection()(std::move(entry.first)),
+                 std::move(entry.second))
+        .second;
+  }
+
   /*
    * This operation atomically modifies an entry in the map. If the entry
    * doesn't exist, it is created. The third argument of the updater function is

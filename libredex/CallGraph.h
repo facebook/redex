@@ -208,7 +208,15 @@ class MultipleCalleeBaseStrategy : public SingleCalleeStrategy {
     return std::vector<const DexMethod*>();
   }
 
+  const std::vector<const DexMethod*>& get_ordered_overriding_methods_with_code(
+      const DexMethod* method) const;
+
   const method_override_graph::Graph& m_method_override_graph;
+
+ private:
+  mutable ConcurrentMap<const DexMethod*,
+                        std::shared_ptr<std::vector<const DexMethod*>>>
+      m_overriding_methods_cache;
 };
 
 class CompleteCallGraphStrategy : public MultipleCalleeBaseStrategy {
