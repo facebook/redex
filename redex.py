@@ -790,6 +790,9 @@ Given an APK, produce a better APK!
     parser.add_argument("--outdir", type=str)
     parser.add_argument("--dex-files", nargs="+", default=[])
 
+    parser.add_argument("--trace", type=str)
+    parser.add_argument("--trace-file", type=str)
+
     return parser
 
 
@@ -1345,9 +1348,6 @@ def run_redex(
     exception_formatter: typing.Optional[ExceptionMessageFormatter] = None,
     output_line_handler: typing.Optional[typing.Callable[[str], str]] = None,
 ) -> None:
-    # This is late, but hopefully early enough.
-    _init_logging(args.log_level)
-
     with BuckConnectionScope():
         if exception_formatter is None:
             exception_formatter = ExceptionMessageFormatter()
@@ -1371,6 +1371,18 @@ def run_redex(
         finalize_redex(state)
 
 
+def early_apply_args(args: argparse.Namespace) -> None:
+    # This is late, but hopefully early enough.
+    _init_logging(args.log_level)
+
+    # Translate these to the regular environment variables.
+    if args.trace:
+        os.environ["TRACE"] = args.trace
+
+    if args.trace_file:
+        os.environ["TRACEFILE"] = args.trace_file
+
+
 if __name__ == "__main__":
     keys: typing.Dict[str, str] = {}
     try:
@@ -1382,5 +1394,6 @@ if __name__ == "__main__":
     except Exception:
         pass
     args: argparse.Namespace = arg_parser(**keys).parse_args()
+    early_apply_args(args)
     validate_args(args)
     with_temp_cleanup(lambda: run_redex(args), args.always_clean_up)
