@@ -227,7 +227,7 @@ static void filter_candidates_local_only(
  */
 std::unordered_set<DexMethod*> gather_non_virtual_methods(
     Scope& scope,
-    const mog::Graph* method_override_graph,
+    const std::unordered_set<DexMethod*>* non_virtual,
     const std::unordered_set<DexType*>& no_devirtualize_anno) {
   // trace counter
   size_t all_methods = 0;
@@ -265,11 +265,9 @@ std::unordered_set<DexMethod*> gather_non_virtual_methods(
 
     methods.insert(method);
   });
-  if (method_override_graph) {
-    auto non_virtual =
-        mog::get_non_true_virtuals(*method_override_graph, scope);
-    non_virt_methods = non_virtual.size();
-    for (const auto& vmeth : non_virtual) {
+  if (non_virtual) {
+    non_virt_methods = non_virtual->size();
+    for (const auto& vmeth : *non_virtual) {
       auto code = vmeth->get_code();
       if (code == nullptr) {
         non_virtual_no_code++;
@@ -304,6 +302,9 @@ struct SameImplementation {
   std::vector<DexMethod*> methods;
 };
 
+using SameImplementationMap =
+    std::unordered_map<const DexMethod*, std::shared_ptr<SameImplementation>>;
+
 /**
  * Get a map of method -> implementation method that hold the same
  * implementation as the method would perform at run time.
@@ -311,9 +312,8 @@ struct SameImplementation {
  * implementation, we can have a mapping between the abstract method and
  * one of its implementor.
  */
-std::unordered_map<const DexMethod*, std::shared_ptr<SameImplementation>>
-get_same_implementation_map(const Scope& scope,
-                            const mog::Graph& method_override_graph) {
+SameImplementationMap get_same_implementation_map(
+    const Scope& scope, const mog::Graph& method_override_graph) {
   std::unordered_map<const DexMethod*, std::shared_ptr<SameImplementation>>
       method_to_implementations;
   walk::methods(scope, [&](DexMethod* method) {
@@ -425,13 +425,13 @@ bool can_have_unknown_implementations(const mog::Graph& method_override_graph,
  * We are currently ruling out candidates that use the receiver in ways that
  * would require additional casts.
  */
-void gather_true_virtual_methods(const mog::Graph& method_override_graph,
-                                 const Scope& scope,
-                                 CalleeCallerInsns* true_virtual_callers) {
+void gather_true_virtual_methods(
+    const mog::Graph& method_override_graph,
+    const std::unordered_set<DexMethod*>& non_virtual,
+    const Scope& scope,
+    const SameImplementationMap& same_implementation_map,
+    CalleeCallerInsns* true_virtual_callers) {
   Timer t("gather_true_virtual_methods");
-  auto non_virtual = mog::get_non_true_virtuals(method_override_graph, scope);
-  auto same_implementation_map =
-      get_same_implementation_map(scope, method_override_graph);
   ConcurrentMap<const DexMethod*, CallerInsns> concurrent_true_virtual_callers;
   ConcurrentMap<IRInstruction*, SameImplementation*>
       same_implementation_invokes;
@@ -478,69 +478,73 @@ void gather_true_virtual_methods(const mog::Graph& method_override_graph,
     if (!code) {
       return;
     }
-    for (auto& mie : InstructionIterable(code)) {
-      auto insn = mie.insn;
-      if (insn->opcode() != OPCODE_INVOKE_VIRTUAL &&
-          insn->opcode() != OPCODE_INVOKE_INTERFACE &&
-          insn->opcode() != OPCODE_INVOKE_SUPER) {
-        continue;
-      }
-      auto insn_method = insn->get_method();
-      auto callee = resolve_method(insn_method, opcode_to_search(insn), method);
-      if (callee == nullptr) {
-        // There are some invoke-virtual call on methods whose def are
-        // actually in interface.
-        callee = resolve_method(insn->get_method(), MethodSearch::Interface);
-      }
-      if (callee == nullptr) {
-        continue;
-      }
-      if (non_virtual.count(callee) != 0) {
-        // Not true virtual, no need to continue;
-        continue;
-      }
-      if (can_have_unknown_implementations(method_override_graph, callee)) {
-        add_other_call_site(callee);
-        if (insn->opcode() != OPCODE_INVOKE_SUPER) {
-          auto overriding_methods =
-              mog::get_overriding_methods(method_override_graph, callee);
+    auto& cfg = code->cfg();
+    for (auto* block : cfg.blocks()) {
+      for (auto& mie : InstructionIterable(block)) {
+        auto insn = mie.insn;
+        if (insn->opcode() != OPCODE_INVOKE_VIRTUAL &&
+            insn->opcode() != OPCODE_INVOKE_INTERFACE &&
+            insn->opcode() != OPCODE_INVOKE_SUPER) {
+          continue;
+        }
+        auto insn_method = insn->get_method();
+        auto callee =
+            resolve_method(insn_method, opcode_to_search(insn), method);
+        if (callee == nullptr) {
+          // There are some invoke-virtual call on methods whose def are
+          // actually in interface.
+          callee = resolve_method(insn->get_method(), MethodSearch::Interface);
+        }
+        if (callee == nullptr) {
+          continue;
+        }
+        if (non_virtual.count(callee) != 0) {
+          // Not true virtual, no need to continue;
+          continue;
+        }
+        if (can_have_unknown_implementations(method_override_graph, callee)) {
+          add_other_call_site(callee);
+          if (insn->opcode() != OPCODE_INVOKE_SUPER) {
+            auto overriding_methods =
+                mog::get_overriding_methods(method_override_graph, callee);
+            for (auto overriding_method : overriding_methods) {
+              add_other_call_site(overriding_method);
+            }
+          }
+          continue;
+        }
+        always_assert_log(callee->is_def(), "Resolved method not def %s",
+                          SHOW(callee));
+        if (insn->opcode() == OPCODE_INVOKE_SUPER) {
+          add_monomorphic_call_site(method, insn, callee);
+          continue;
+        }
+        auto it = same_implementation_map.find(callee);
+        if (it != same_implementation_map.end()) {
+          // We can find the resolved callee in same_implementation_map,
+          // just use that piece of info because we know the implementors are
+          // all the same
+          add_monomorphic_call_site(method, insn, it->second->representative);
+          same_implementation_invokes.emplace(insn, it->second.get());
+          continue;
+        }
+        auto overriding_methods =
+            mog::get_overriding_methods(method_override_graph, callee);
+        std20::erase_if(overriding_methods,
+                        [&](auto* m) { return is_abstract(m); });
+        if (overriding_methods.empty()) {
+          // There is no override for this method
+          add_monomorphic_call_site(method, insn, callee);
+        } else if (is_abstract(callee) && overriding_methods.size() == 1) {
+          // The method is an abstract method, the only override is its
+          // implementation.
+          auto implementing_method = *overriding_methods.begin();
+          add_monomorphic_call_site(method, insn, implementing_method);
+        } else {
+          add_other_call_site(callee);
           for (auto overriding_method : overriding_methods) {
             add_other_call_site(overriding_method);
           }
-        }
-        continue;
-      }
-      always_assert_log(callee->is_def(), "Resolved method not def %s",
-                        SHOW(callee));
-      if (insn->opcode() == OPCODE_INVOKE_SUPER) {
-        add_monomorphic_call_site(method, insn, callee);
-        continue;
-      }
-      auto it = same_implementation_map.find(callee);
-      if (it != same_implementation_map.end()) {
-        // We can find the resolved callee in same_implementation_map,
-        // just use that piece of info because we know the implementors are all
-        // the same
-        add_monomorphic_call_site(method, insn, it->second->representative);
-        same_implementation_invokes.emplace(insn, it->second.get());
-        continue;
-      }
-      auto overriding_methods =
-          mog::get_overriding_methods(method_override_graph, callee);
-      std20::erase_if(overriding_methods,
-                      [&](auto* m) { return is_abstract(m); });
-      if (overriding_methods.empty()) {
-        // There is no override for this method
-        add_monomorphic_call_site(method, insn, callee);
-      } else if (is_abstract(callee) && overriding_methods.size() == 1) {
-        // The method is an abstract method, the only override is its
-        // implementation.
-        auto implementing_method = *overriding_methods.begin();
-        add_monomorphic_call_site(method, insn, implementing_method);
-      } else {
-        add_other_call_site(callee);
-        for (auto overriding_method : overriding_methods) {
-          add_other_call_site(overriding_method);
         }
       }
     }
@@ -571,13 +575,11 @@ void gather_true_virtual_methods(const mog::Graph& method_override_graph,
         // a cast.
         std::unordered_set<live_range::Use> first_load_param_uses;
         {
-          code->build_cfg(/* editable */ true);
           live_range::MoveAwareChains chains(code->cfg());
           auto ii = InstructionIterable(code->cfg().get_param_instructions());
           auto first_load_param = ii.begin()->insn;
           first_load_param_uses =
               std::move(chains.get_def_use_chains()[first_load_param]);
-          code->clear_cfg();
         }
         std::unordered_set<DexType*> formal_callee_types;
         bool any_same_implementation_invokes{false};
@@ -728,29 +730,45 @@ void run_inliner(DexStoresVector& stores,
   inliner_config.unique_inlined_registers = false;
 
   std::unique_ptr<const mog::Graph> method_override_graph;
+  std::unique_ptr<const std::unordered_set<DexMethod*>> non_virtual;
   if (inliner_config.virtual_inline) {
     method_override_graph = mog::build_graph(scope);
+    non_virtual = std::make_unique<const std::unordered_set<DexMethod*>>(
+        mog::get_non_true_virtuals(*method_override_graph, scope));
   }
 
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, conf.create_init_class_insns(), method_override_graph.get());
 
-  auto candidates = gather_non_virtual_methods(
-      scope, method_override_graph.get(), conf.get_do_not_devirt_anon());
+  auto candidates = gather_non_virtual_methods(scope, non_virtual.get(),
+                                               conf.get_do_not_devirt_anon());
 
   // The candidates list computed above includes all constructors, regardless of
   // whether it's safe to inline them or not. We'll let the inliner decide
   // what to do with constructors.
   bool analyze_and_prune_inits = true;
 
+  std::unique_ptr<SameImplementationMap> same_implementation_map;
   if (inliner_config.virtual_inline && inliner_config.true_virtual_inline) {
-    gather_true_virtual_methods(*method_override_graph, scope,
-                                &true_virtual_callers);
+    same_implementation_map = std::make_unique<SameImplementationMap>(
+        get_same_implementation_map(scope, *method_override_graph));
   }
 
   walk::parallel::code(scope, [](DexMethod*, IRCode& code) {
     code.build_cfg(/* editable */ true);
   });
+
+  if (inliner_config.virtual_inline && inliner_config.true_virtual_inline) {
+    gather_true_virtual_methods(*method_override_graph, *non_virtual, scope,
+                                *same_implementation_map,
+                                &true_virtual_callers);
+    same_implementation_map = nullptr;
+  }
+
+  // TODO: The Shrinker will later create another method_override_graph. Use
+  // this one instead of re-creating.
+  method_override_graph = nullptr;
+  non_virtual = nullptr;
 
   if (inline_bridge_synth_only) {
     filter_candidates_bridge_synth_only(mgr, scope, candidates, "initial_");

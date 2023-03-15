@@ -497,15 +497,16 @@ const DexClass* clinit_may_have_side_effects(
 }
 
 bool no_invoke_super(const IRCode& code) {
-  always_assert(!code.editable_cfg_built());
-  for (const auto& mie : InstructionIterable(code)) {
+  bool has_invoke_super{false};
+  editable_cfg_adapter::iterate(&code, [&](const MethodItemEntry& mie) {
     auto insn = mie.insn;
     if (insn->opcode() == OPCODE_INVOKE_SUPER) {
-      return false;
+      has_invoke_super = true;
+      return editable_cfg_adapter::LOOP_BREAK;
     }
-  }
-
-  return true;
+    return editable_cfg_adapter::LOOP_CONTINUE;
+  });
+  return !has_invoke_super;
 }
 
 #define DEFINE_CACHED_METHOD(func_name, _)                 \
