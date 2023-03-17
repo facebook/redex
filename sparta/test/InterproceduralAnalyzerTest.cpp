@@ -55,7 +55,7 @@ struct ControlPoint {
   explicit ControlPoint(const std::string& l) : label(l) {}
 };
 
-bool operator==(const ControlPoint& cp1, const ControlPoint& cp2) {
+static bool operator==(const ControlPoint& cp1, const ControlPoint& cp2) {
   return cp1.label == cp2.label;
 }
 
@@ -164,7 +164,7 @@ class ControlFlowGraph final {
   friend class ControlFlowGraphInterface;
 };
 
-const ControlFlowGraph& build_cfg(const Function* f) {
+static const ControlFlowGraph& build_cfg(const Function* f) {
   if (f && f->cfg) {
     return *f->cfg;
   }
@@ -603,7 +603,7 @@ using Analysis = sparta::InterproceduralAnalyzer<PurityAnalysisAdaptor>;
 
 } // namespace purity_interprocedural
 
-void test1() {
+static void test1() {
   using namespace language;
 
   Function fun1, fun2, fun3, fun4, fun5, fun6, fun7, mainfun;

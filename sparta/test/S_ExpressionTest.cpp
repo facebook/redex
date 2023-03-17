@@ -18,6 +18,8 @@
 
 using namespace sparta;
 
+namespace {
+
 void check_s_expr_istream(s_expr_istream& input) { EXPECT_TRUE(input.good()); }
 
 s_expr parse(const std::string& str) {
@@ -41,6 +43,8 @@ void erroneous_parse(const std::string& str, size_t count, std::string& what) {
   EXPECT_TRUE(input.fail());
   what = input.what();
 }
+
+} // namespace
 
 TEST(S_ExpressionTest, basicOperations) {
   auto e1 = s_expr({s_expr("cons"), s_expr("a"),
