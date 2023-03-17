@@ -47,7 +47,7 @@ class PatriciaTreeMapAbstractEnvironmentTest : public ::testing::Test {
   std::uniform_int_distribution<uint32_t> m_elem_dist;
 };
 
-HashedAbstractEnvironment<uint32_t, Domain> hae_from_ptae(
+static HashedAbstractEnvironment<uint32_t, Domain> hae_from_ptae(
     const Environment& env) {
   HashedAbstractEnvironment<uint32_t, Domain> hae;
   if (env.is_value()) {
