@@ -656,7 +656,8 @@ static void sweep_if_unmarked(const ReachableObjects& reachables,
 
 void sweep(DexStoresVector& stores,
            const ReachableObjects& reachables,
-           ConcurrentSet<std::string>* removed_symbols) {
+           ConcurrentSet<std::string>* removed_symbols,
+           bool output_full_removed_symbols) {
   Timer t("Sweep");
   auto scope = build_class_scope(stores);
 
@@ -682,6 +683,9 @@ void sweep(DexStoresVector& stores,
       cls->get_ifields().clear();
       cls->get_sfields().clear();
       for (auto method : cls->get_all_methods()) {
+        if (removed_symbols && output_full_removed_symbols) {
+          removed_symbols->insert(show_deobfuscated(method));
+        }
         sweep_method(method);
       }
       cls->get_dmethods().clear();
