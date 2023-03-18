@@ -213,7 +213,8 @@ void RemoveUnreachablePassBase::run_pass(DexStoresVector& stores,
     gather_references_from_removed_symbols(stores, *reachables, references);
   }
   reachability::sweep(stores, *reachables,
-                      output_unreachable_symbols ? &removed_symbols : nullptr);
+                      output_unreachable_symbols ? &removed_symbols : nullptr,
+                      m_output_full_removed_symbols);
 
   reachability::ObjectCounts after = reachability::count_objects(stores);
   TRACE(RMU, 1, "after: %lu classes, %lu fields, %lu methods",

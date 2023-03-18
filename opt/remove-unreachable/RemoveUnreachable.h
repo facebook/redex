@@ -28,6 +28,7 @@ class RemoveUnreachablePassBase : public Pass {
     bind("remove_no_argument_constructors",
          false,
          m_remove_no_argument_constructors);
+    bind("output_full_removed_symbols", false, m_output_full_removed_symbols);
     after_configuration([this] {
       // To keep the backward compatability of this code, ensure that the
       // "MemberClasses" annotation is always in system_annos.
@@ -55,6 +56,7 @@ class RemoveUnreachablePassBase : public Pass {
   boost::optional<uint32_t> m_emit_graph_on_run;
   bool m_always_emit_unreachable_symbols = false;
   bool m_emit_removed_symbols_references = false;
+  bool m_output_full_removed_symbols = false;
 };
 
 class RemoveUnreachablePass : public RemoveUnreachablePassBase {
