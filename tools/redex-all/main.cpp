@@ -1074,6 +1074,11 @@ void redex_frontend(ConfigFiles& conf, /* input */
     process_proguard_rules(conf, scope, external_classes, pg_config);
   }
 
+  TRACE(NATIVE, 2, "Blanket native classes: %zu",
+        g_redex->blanket_native_root_classes.size());
+  TRACE(NATIVE, 2, "Blanket native methods: %zu",
+        g_redex->blanket_native_root_methods.size());
+
   if (keep_reason::Reason::record_keep_reasons()) {
     dump_keep_reasons(conf, args, stores);
   }

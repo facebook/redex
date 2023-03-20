@@ -605,13 +605,26 @@ void KeepRuleMatcher::keep_methods(
     const boost::regex& method_regex) {
   for (DexMethod* method : methods) {
     if (method_level_match(methodSpecification, method, method_regex)) {
-      if (rule_type_is_keep(m_rule_type)) {
+      bool could_delete = can_delete(method);
+      switch (m_rule_type) {
+      case RuleType::KEEP:
+      case RuleType::KEEP_NATIVE: {
         apply_keep_modifiers(m_keep_rule, method);
+        break;
       }
-      if (m_rule_type == RuleType::ASSUME_NO_SIDE_EFFECTS) {
+      case RuleType::ASSUME_NO_SIDE_EFFECTS:
         apply_assume_method_return_value(m_keep_rule, method);
+        break;
+      case RuleType::WHY_ARE_YOU_KEEPING:
+        break;
       }
       apply_rule(method);
+
+      if (m_rule_type == RuleType::KEEP_NATIVE) {
+        if (could_delete && !can_delete(method)) {
+          g_redex->blanket_native_root_methods.insert(method);
+        }
+      }
     }
   }
 }
@@ -733,8 +746,14 @@ void KeepRuleMatcher::mark_class_and_members_for_keep(DexClass* cls) {
     maybe_warn(oss.str());
   }
   if (m_keep_rule.mark_classes || m_keep_rule.mark_conditionally) {
+    bool could_delete = can_delete(cls);
     apply_keep_modifiers(m_keep_rule, cls);
     impl::KeepState::set_has_keep(cls, &m_keep_rule);
+    if (m_rule_type == RuleType::KEEP_NATIVE) {
+      if (could_delete && !can_delete(cls)) {
+        g_redex->blanket_native_root_classes.insert(cls);
+      }
+    }
     ++m_class_matches;
     if (cls->rstate.report_whyareyoukeeping()) {
       TRACE(PGR, 2, "whyareyoukeeping Class %s kept by %s",

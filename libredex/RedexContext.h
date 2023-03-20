@@ -216,6 +216,9 @@ struct RedexContext {
     m_ordering_changes_allowed = new_val;
   }
 
+  ConcurrentSet<DexClass*> blanket_native_root_classes;
+  ConcurrentSet<DexMethod*> blanket_native_root_methods;
+
  private:
   struct Strcmp;
   struct TruncatedStringHash;
