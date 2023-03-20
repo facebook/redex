@@ -384,6 +384,7 @@ libopt_la_SOURCES = \
 	opt/reduce-gotos/ReduceGotos.cpp \
 	opt/resolve-refs/ResolveRefsPass.cpp \
 	opt/resolve-refs/ExternalRefsManglingPass.cpp \
+	opt/resolve-refs/SpecializeRtype.cpp \
 	opt/result-propagation/ResultPropagation.cpp \
 	opt/resolve-proguard-values/ResolveProguardAssumeValues.cpp \
 	opt/shorten-srcstrings/Shorten.cpp \

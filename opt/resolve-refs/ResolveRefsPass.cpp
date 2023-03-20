@@ -16,11 +16,13 @@
 #include "PassManager.h"
 #include "Resolver.h"
 #include "Show.h"
+#include "SpecializeRtype.h"
 #include "Trace.h"
 #include "TypeInference.h"
 #include "Walkers.h"
 
 namespace mog = method_override_graph;
+using namespace resolve_refs;
 
 namespace impl {
 
@@ -30,6 +32,10 @@ struct RefStats {
   size_t num_invoke_virtual_refined = 0;
   size_t num_invoke_interface_replaced = 0;
   size_t num_invoke_super_removed = 0;
+  RtypeStats rtype_stats;
+
+  // Only used for return type specialization
+  RtypeCandidates rtype_candidates;
 
   void print(PassManager* mgr) {
     TRACE(RESO, 1, "[ref reso] method ref resolved %zu", num_mref_resolved);
@@ -52,6 +58,14 @@ struct RefStats {
     mgr->incr_metric("num_invoke_interface_replaced",
                      num_invoke_interface_replaced);
     mgr->incr_metric("num_invoke_super_removed", num_invoke_super_removed);
+
+    TRACE(RESO,
+          1,
+          "[ref reso] rtype specialization candidates %zu",
+          rtype_candidates.get_candidates().size());
+    mgr->incr_metric("num_rtype_specialization_candidates",
+                     rtype_candidates.get_candidates().size());
+    rtype_stats.print(mgr);
   }
 
   RefStats& operator+=(const RefStats& that) {
@@ -60,6 +74,8 @@ struct RefStats {
     num_invoke_virtual_refined += that.num_invoke_virtual_refined;
     num_invoke_interface_replaced += that.num_invoke_interface_replaced;
     num_invoke_super_removed += that.num_invoke_super_removed;
+    rtype_candidates += that.rtype_candidates;
+    rtype_stats += that.rtype_stats;
     return *this;
   }
 };
@@ -255,7 +271,8 @@ boost::optional<DexMethod*> get_inferred_method_def(
 using namespace impl;
 
 RefStats ResolveRefsPass::refine_virtual_callsites(DexMethod* method,
-                                                   bool desuperify) {
+                                                   bool desuperify,
+                                                   bool specialize_rtype) {
   RefStats stats;
   if (!method || !method->get_code()) {
     return stats;
@@ -268,6 +285,7 @@ RefStats ResolveRefsPass::refine_virtual_callsites(DexMethod* method,
   inference.run(method);
   auto& envs = inference.get_type_environments();
   auto is_support_lib = api::is_support_lib_type(method->get_class());
+  DexTypeDomain rtype_domain = DexTypeDomain::bottom();
 
   for (auto& mie : InstructionIterable(code)) {
     IRInstruction* insn = mie.insn;
@@ -276,6 +294,14 @@ RefStats ResolveRefsPass::refine_virtual_callsites(DexMethod* method,
     }
 
     auto opcode = insn->opcode();
+    if (specialize_rtype && opcode::is_return_object(opcode)) {
+      auto& env = envs.at(insn);
+      auto inferred_rtype = env.get_type_domain(insn->src(0));
+      stats.rtype_candidates.collect_inferred_rtype(method, inferred_rtype,
+                                                    rtype_domain);
+      continue;
+    }
+
     if (!opcode::is_invoke_virtual(opcode) &&
         !opcode::is_invoke_interface(opcode)) {
       continue;
@@ -329,6 +355,7 @@ RefStats ResolveRefsPass::refine_virtual_callsites(DexMethod* method,
     }
   }
 
+  stats.rtype_candidates.collect_specializable_rtype(method, rtype_domain);
   return stats;
 }
 
@@ -340,7 +367,25 @@ void ResolveRefsPass::run_pass(DexStoresVector& stores,
   impl::RefStats stats =
       walk::parallel::methods<impl::RefStats>(scope, [&](DexMethod* method) {
         auto local_stats = impl::resolve_refs(method);
-        local_stats += refine_virtual_callsites(method, m_desuperify);
+        local_stats +=
+            refine_virtual_callsites(method, m_desuperify, m_specialize_rtype);
+        return local_stats;
+      });
+  stats.print(&mgr);
+
+  if (!m_specialize_rtype) {
+    return;
+  }
+  RtypeSpecialization rs(stats.rtype_candidates.get_candidates());
+  auto rtype_stats = rs.specialize_rtypes(scope);
+  rtype_stats.print(&mgr);
+
+  // Resolve virtual method refs again based on the new rtypes. But further
+  // rtypes collection is disabled.
+  stats =
+      walk::parallel::methods<impl::RefStats>(scope, [&](DexMethod* method) {
+        auto local_stats = refine_virtual_callsites(
+            method, false /* desuperfy */, false /* specialize_rtype */);
         return local_stats;
       });
   stats.print(&mgr);

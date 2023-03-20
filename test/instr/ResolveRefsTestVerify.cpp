@@ -86,10 +86,15 @@ TEST_F(PostVerify, FactoryBaseInvokeVirtual) {
                                  base_cls->get_type()));
   ASSERT_EQ(nullptr, find_invoke(m, DOPCODE_INVOKE_VIRTUAL, "foo",
                                  sub1_cls->get_type()));
-  ASSERT_EQ(nullptr, find_invoke(m, DOPCODE_INVOKE_VIRTUAL, "foo",
+  ASSERT_NE(nullptr, find_invoke(m, DOPCODE_INVOKE_VIRTUAL, "foo",
                                  sub2_cls->get_type()));
-  ASSERT_EQ(nullptr, find_invoke(m, DOPCODE_INVOKE_VIRTUAL, "foo",
+  ASSERT_NE(nullptr, find_invoke(m, DOPCODE_INVOKE_VIRTUAL, "foo",
                                  sub3_cls->get_type()));
+
+  // rtype is specialized
+  auto s1_getinstance = find_dmethod_named(*sub1_cls, "getInstance");
+  ASSERT_NE(nullptr, s1_getinstance);
+  ASSERT_EQ(s1_getinstance->get_proto()->get_rtype(), sub1_cls->get_type());
 }
 
 TEST_F(PostVerify, FactoryCastInvokeVirtual) {
@@ -117,4 +122,36 @@ TEST_F(PostVerify, FactoryCastInvokeVirtual) {
                                  sub2_cls->get_type()));
   ASSERT_NE(nullptr, find_invoke(m, DOPCODE_INVOKE_VIRTUAL, "foo",
                                  sub3_cls->get_type()));
+}
+
+TEST_F(PreVerify, SimpleRTypeSpecialization) {
+  auto intf_cls = find_class_named(classes, "Lcom/facebook/redextest/Intf;");
+  ASSERT_NE(nullptr, intf_cls);
+  auto impl_cls = find_class_named(classes, "Lcom/facebook/redextest/Impl;");
+  ASSERT_NE(nullptr, impl_cls);
+
+  // rtype is specialized
+  auto intf_getinstance = find_vmethod_named(*intf_cls, "getInstance");
+  ASSERT_NE(nullptr, intf_getinstance);
+  ASSERT_EQ(intf_getinstance->get_proto()->get_rtype(), intf_cls->get_type());
+
+  auto impl_getinstance = find_vmethod_named(*impl_cls, "getInstance");
+  ASSERT_NE(nullptr, impl_getinstance);
+  ASSERT_EQ(impl_getinstance->get_proto()->get_rtype(), intf_cls->get_type());
+}
+
+TEST_F(PostVerify, SimpleRTypeSpecialization) {
+  auto intf_cls = find_class_named(classes, "Lcom/facebook/redextest/Intf;");
+  ASSERT_NE(nullptr, intf_cls);
+  auto impl_cls = find_class_named(classes, "Lcom/facebook/redextest/Impl;");
+  ASSERT_NE(nullptr, impl_cls);
+
+  // rtype is specialized
+  auto intf_getinstance = find_vmethod_named(*intf_cls, "getInstance");
+  ASSERT_NE(nullptr, intf_getinstance);
+  ASSERT_EQ(intf_getinstance->get_proto()->get_rtype(), impl_cls->get_type());
+
+  auto impl_getinstance = find_vmethod_named(*impl_cls, "getInstance");
+  ASSERT_NE(nullptr, impl_getinstance);
+  ASSERT_EQ(impl_getinstance->get_proto()->get_rtype(), impl_cls->get_type());
 }

@@ -37,6 +37,9 @@ class ResolveRefsPass : public ExternalRefsManglingPass {
     ExternalRefsManglingPass::bind_config();
     bind("desuperify", true, m_desuperify,
          "Convert invoke-super calls to invoke-virtual where possible");
+    bind(
+        "specialize_return_type", true, m_specialize_rtype,
+        "Specialize the return type of methods based on local type inference.");
     trait(Traits::Pass::atleast, 1);
   }
 
@@ -49,6 +52,9 @@ class ResolveRefsPass : public ExternalRefsManglingPass {
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
-  impl::RefStats refine_virtual_callsites(DexMethod* method, bool desuperify);
+  impl::RefStats refine_virtual_callsites(DexMethod* method,
+                                          bool desuperify,
+                                          bool specialize_rtype);
   bool m_desuperify;
+  bool m_specialize_rtype;
 };

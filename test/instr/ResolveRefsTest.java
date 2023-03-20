@@ -37,6 +37,27 @@ class SubThree extends SubTwo {
   static Base getInstance() { return new SubThree(); }
 }
 
+interface Intf {
+  Intf getInstance(int i);
+  String foo();
+}
+
+class Impl implements Intf {
+  @Override
+  public Intf getInstance(int i) {
+    if (i != 0) {
+      return this;
+    }
+
+    return this;
+  }
+
+  @Override
+  public String foo() {
+    return "Impl";
+  }
+}
+
 @KeepForRedexTest
 public class ResolveRefsTest {
 
@@ -75,5 +96,13 @@ public class ResolveRefsTest {
     assertThat(s2.foo()).isEqualTo("SubTwo");
     SubTwo s3 = (SubThree) SubThree.getInstance();
     assertThat(s3.foo()).isEqualTo("SubThree");
+  }
+
+  @KeepForRedexTest
+  @Test
+  public void testSimpleRTypeSpecialization() {
+    Intf i = new Impl();
+    Intf ii = i.getInstance(1);
+    assertThat(ii.foo()).isEqualTo("Impl");
   }
 }
