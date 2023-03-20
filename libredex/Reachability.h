@@ -224,6 +224,11 @@ class RootSetMarker {
    */
   void mark(const Scope& scope);
 
+  void mark_with_exclusions(
+      const Scope& scope,
+      const ConcurrentSet<const DexClass*>& excluded_classes,
+      const ConcurrentSet<const DexMethod*>& excluded_methods);
+
   /**
    * Mark everything as seed.
    */
