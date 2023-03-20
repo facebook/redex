@@ -44,5 +44,7 @@ size_t remove_default_blocklisted_rules(ProguardConfiguration* pg_config);
 size_t remove_blocklisted_rules(const std::string& rules,
                                 ProguardConfiguration* pg_config);
 
+size_t identify_blanket_native_rules(ProguardConfiguration* pg_config);
+
 } // namespace proguard_parser
 } // namespace keep_rules

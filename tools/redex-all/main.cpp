@@ -955,6 +955,12 @@ void redex_frontend(ConfigFiles& conf, /* input */
                   parser_stats.unknown_commands == 0);
   }
 
+  // WARNING: No further modifications of pg_config should happen after this
+  // call
+  // TODO: T148153725: [redex] Better encapsulate ProguardConfiguration
+  // construction
+  keep_rules::proguard_parser::identify_blanket_native_rules(&pg_config);
+
   auto ignore_no_keep_rules =
       args.config.get("ignore_no_keep_rules", false).asBool();
   if (pg_config.keep_rules.empty() && !ignore_no_keep_rules) {
@@ -973,6 +979,9 @@ void redex_frontend(ConfigFiles& conf, /* input */
     d["unknown_commands"] = (u64)parser_stats.unknown_commands;
     d["ok"] = (u64)(pg_config.ok ? 1 : 0);
     d["blocklisted_rules"] = (u64)blocklisted_rules;
+    d["blanket_native_rules"] = (u64)(std::distance(
+        pg_config.keep_rules_native_begin.value_or(pg_config.keep_rules.end()),
+        pg_config.keep_rules.end()));
     stats["proguard"] = d;
   }
 

@@ -218,7 +218,19 @@ enum class RuleType {
   WHY_ARE_YOU_KEEPING,
   KEEP,
   ASSUME_NO_SIDE_EFFECTS,
+  KEEP_NATIVE,
 };
+
+bool rule_type_is_keep(RuleType rule_type) {
+  switch (rule_type) {
+  case RuleType::KEEP:
+  case RuleType::KEEP_NATIVE:
+    return true;
+  case RuleType::ASSUME_NO_SIDE_EFFECTS:
+  case RuleType::WHY_ARE_YOU_KEEPING:
+    return false;
+  }
+}
 
 std::string to_string(RuleType rule_type) {
   switch (rule_type) {
@@ -228,6 +240,8 @@ std::string to_string(RuleType rule_type) {
     return "classes and members";
   case RuleType::ASSUME_NO_SIDE_EFFECTS:
     return "assumenosideeffects";
+  case RuleType::KEEP_NATIVE:
+    return "classes with native members";
   }
 }
 
@@ -375,7 +389,8 @@ class ProguardMatcher {
   void process_proguard_rules(const ProguardConfiguration& pg_config);
   void mark_all_annotation_classes_as_keep();
 
-  void process_keep(const KeepSpecSet& keep_rules,
+  void process_keep(KeepSpecSet::iterator keep_rules_begin,
+                    KeepSpecSet::iterator keep_rules_end,
                     RuleType rule_type,
                     bool process_external = false);
 
@@ -536,7 +551,7 @@ void KeepRuleMatcher::keep_fields(const Container& fields,
     if (!field_level_match(fieldSpecification, field, fieldname_regex)) {
       continue;
     }
-    if (m_rule_type == RuleType::KEEP) {
+    if (rule_type_is_keep(m_rule_type)) {
       apply_keep_modifiers(m_keep_rule, field);
     }
     if (m_rule_type == RuleType::ASSUME_NO_SIDE_EFFECTS) {
@@ -590,7 +605,7 @@ void KeepRuleMatcher::keep_methods(
     const boost::regex& method_regex) {
   for (DexMethod* method : methods) {
     if (method_level_match(methodSpecification, method, method_regex)) {
-      if (m_rule_type == RuleType::KEEP) {
+      if (rule_type_is_keep(m_rule_type)) {
         apply_keep_modifiers(m_keep_rule, method);
       }
       if (m_rule_type == RuleType::ASSUME_NO_SIDE_EFFECTS) {
@@ -765,7 +780,8 @@ void KeepRuleMatcher::apply_rule(DexMember* member) {
   case RuleType::WHY_ARE_YOU_KEEPING:
     member->rstate.set_whyareyoukeeping();
     break;
-  case RuleType::KEEP: {
+  case RuleType::KEEP:
+  case RuleType::KEEP_NATIVE: {
     impl::KeepState::set_has_keep(member, &m_keep_rule);
     ++m_member_matches;
     if (member->rstate.report_whyareyoukeeping()) {
@@ -799,6 +815,7 @@ void KeepRuleMatcher::keep_processor(DexClass* cls) {
     process_whyareyoukeeping(cls);
     break;
   case RuleType::KEEP:
+  case RuleType::KEEP_NATIVE:
     mark_class_and_members_for_keep(cls);
     break;
   case RuleType::ASSUME_NO_SIDE_EFFECTS:
@@ -820,7 +837,8 @@ DexClass* ProguardMatcher::find_single_class(
   return type_class(typ);
 }
 
-void ProguardMatcher::process_keep(const KeepSpecSet& keep_rules,
+void ProguardMatcher::process_keep(KeepSpecSet::iterator keep_rules_begin,
+                                   KeepSpecSet::iterator keep_rules_end,
                                    RuleType rule_type,
                                    bool process_external) {
   Timer t("Process keep for " + to_string(rule_type));
@@ -868,8 +886,8 @@ void ProguardMatcher::process_keep(const KeepSpecSet& keep_rules,
   });
 
   RegexMap regex_map;
-  for (const auto& keep_rule_ptr : keep_rules) {
-    const auto& keep_rule = *keep_rule_ptr;
+  for (auto it = keep_rules_begin; it != keep_rules_end; ++it) {
+    const auto& keep_rule = *(*it);
     ClassMatcher class_match(keep_rule);
 
     bool has_negation = std::any_of(keep_rule.class_spec.classNames.begin(),
@@ -927,9 +945,22 @@ void ProguardMatcher::process_proguard_rules(
     const ProguardConfiguration& pg_config) {
   // Now process each of the different kinds of rules as well
   // as -assumenosideeffects and -whyareyoukeeping.
-  process_keep(pg_config.whyareyoukeeping_rules, RuleType::WHY_ARE_YOU_KEEPING);
-  process_keep(pg_config.keep_rules, RuleType::KEEP);
-  process_keep(pg_config.assumenosideeffects_rules,
+  process_keep(pg_config.whyareyoukeeping_rules.begin(),
+               pg_config.whyareyoukeeping_rules.end(),
+               RuleType::WHY_ARE_YOU_KEEPING);
+
+  auto keep_rules_native_begin =
+      pg_config.keep_rules_native_begin.value_or(pg_config.keep_rules.end());
+
+  process_keep(pg_config.keep_rules.begin(), keep_rules_native_begin,
+               RuleType::KEEP);
+
+  process_keep(keep_rules_native_begin,
+               pg_config.keep_rules.end(),
+               RuleType::KEEP_NATIVE);
+
+  process_keep(pg_config.assumenosideeffects_rules.begin(),
+               pg_config.assumenosideeffects_rules.end(),
                RuleType::ASSUME_NO_SIDE_EFFECTS,
                /* process_external = */ true);
 }

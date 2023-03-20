@@ -77,7 +77,7 @@ class PassManager {
   // A temporary hack to return the interdex metrics. Will be removed later.
   const std::unordered_map<std::string, int64_t>& get_interdex_metrics();
 
-  keep_rules::ProguardConfiguration& get_proguard_config() {
+  const keep_rules::ProguardConfiguration& get_proguard_config() {
     return *m_pg_config;
   }
 
@@ -137,7 +137,7 @@ class PassManager {
   std::vector<PassManager::PassInfo> m_pass_info;
   PassInfo* m_current_pass_info;
 
-  std::unique_ptr<keep_rules::ProguardConfiguration> m_pg_config;
+  std::unique_ptr<const keep_rules::ProguardConfiguration> m_pg_config;
   const RedexOptions m_redex_options;
   bool m_testing_mode{false};
   bool m_regalloc_has_run{false};
