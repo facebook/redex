@@ -238,8 +238,11 @@ class SmallSetDexTypeDomain final
 
 /*
  *
- * NullnessDomain X SingletonDexTypeDomain
+ * ArrayConstNullnessDomain X SingletonDexTypeDomain X SmallSetDexTypeDomain
  *
+ *
+ * When the SmallSetDexTypeDomain has elements, then they represent an exact set
+ * of non-interface classes (including arrays), or possibly java.lang.Throwable.
  */
 class DexTypeDomain
     : public sparta::ReducedProductAbstractDomain<DexTypeDomain,
@@ -279,11 +282,14 @@ class DexTypeDomain
                             SingletonDexTypeDomain(dex_type),
                             SmallSetDexTypeDomain(dex_type))) {}
 
-  explicit DexTypeDomain(const DexType* dex_type, const Nullness nullness)
-      : ReducedProductAbstractDomain(
-            std::make_tuple(ConstNullnessDomain(nullness),
-                            SingletonDexTypeDomain(dex_type),
-                            SmallSetDexTypeDomain(dex_type))) {}
+  explicit DexTypeDomain(const DexType* dex_type,
+                         const Nullness nullness,
+                         bool is_dex_type_exact)
+      : ReducedProductAbstractDomain(std::make_tuple(
+            ConstNullnessDomain(nullness),
+            SingletonDexTypeDomain(dex_type),
+            is_dex_type_exact ? SmallSetDexTypeDomain(dex_type)
+                              : SmallSetDexTypeDomain::top())) {}
 
   static void reduce_product(std::tuple<ArrayConstNullnessDomain,
                                         SingletonDexTypeDomain,

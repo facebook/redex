@@ -89,7 +89,13 @@ bool RegisterTypeAnalyzer::analyze_aget(const IRInstruction* insn,
   auto idx_opt = env->get(insn->src(1)).get_constant();
   auto nullness = env->get(insn->src(0)).get_array_element_nullness(idx_opt);
   const auto ctype = type::get_array_component_type(*array_type);
-  env->set(RESULT_REGISTER, DexTypeDomain(ctype, nullness.element()));
+  auto cls = type_class(ctype);
+  bool is_type_exact = cls && !cls->is_external() && is_final(cls);
+  // is_type_exact is to decide whether to populate the
+  // small-set-dex-type-domain, which should only hold exact (non-interface)
+  // class (and possibly java.lang.Throwable, but we ignore that here).
+  env->set(RESULT_REGISTER,
+           DexTypeDomain(ctype, nullness.element(), is_type_exact));
   return true;
 }
 
