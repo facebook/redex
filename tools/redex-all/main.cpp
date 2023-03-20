@@ -1049,10 +1049,6 @@ void redex_frontend(ConfigFiles& conf, /* input */
   DexStoreClassesIterator it(stores);
   Scope scope = build_class_scope(it);
   {
-    Timer t("Processing proguard rules");
-    process_proguard_rules(conf, scope, external_classes, pg_config);
-  }
-  {
     Timer t("No Optimizations Rules");
     // this will change rstate of methods
     keep_rules::process_no_optimizations_rules(
@@ -1063,6 +1059,10 @@ void redex_frontend(ConfigFiles& conf, /* input */
     Timer t("Initializing reachable classes");
     // init reachable will change rstate of classes, methods and fields
     init_reachable_classes(scope, ReachableClassesConfig(json_config));
+  }
+  {
+    Timer t("Processing proguard rules");
+    process_proguard_rules(conf, scope, external_classes, pg_config);
   }
 
   if (keep_reason::Reason::record_keep_reasons()) {
