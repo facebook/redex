@@ -12,6 +12,7 @@
 #include <boost/bimap/unordered_set_of.hpp>
 #include <boost/optional/optional.hpp>
 #include <boost/range/adaptor/map.hpp>
+#include <fstream>
 #include <iterator>
 #include <string>
 
