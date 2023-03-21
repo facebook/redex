@@ -29,6 +29,8 @@ struct RtypeStats {
   size_t num_rtype_specialized_virtual_1p = 0;
   size_t num_rtype_specialized_virtual_10p = 0;
   size_t num_rtype_specialized_virtual_100p = 0;
+  size_t num_rtype_specialized_virtual_more_override = 0;
+  size_t num_true_virtual_candidates = 0;
 
   void print(PassManager* mgr);
   RtypeStats& operator+=(const RtypeStats& that);
@@ -68,6 +70,7 @@ class RtypeSpecialization final {
       const method_override_graph::Graph& override_graph,
       DexMethod* meth,
       const DexType* better_rtype,
+      ConcurrentMap<DexMethod*, const DexType*>& virtual_roots,
       MethodSet& specialized,
       RtypeStats& stats) const;
   bool shares_identical_rtype_candidate(DexMethod* meth,
