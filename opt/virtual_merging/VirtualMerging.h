@@ -109,6 +109,7 @@ class VirtualMerging {
   struct PerfConfig {
     float appear100_threshold;
     float call_count_threshold;
+    std::vector<std::string> interactions{"ColdStart"};
 
     PerfConfig()
         : appear100_threshold(101.0), call_count_threshold(0) {} // Default: off
