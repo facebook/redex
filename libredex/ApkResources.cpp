@@ -14,6 +14,7 @@
 #include <boost/iostreams/device/mapped_file.hpp>
 #include <boost/optional.hpp>
 #include <boost/regex.hpp>
+#include <cstdint>
 #include <fcntl.h>
 #include <fstream>
 #include <map>
@@ -842,15 +843,6 @@ std::string ApkResources::get_base_assets_dir() {
 }
 
 namespace {
-bool is_binary_xml(const void* data, size_t size) {
-  if (size < sizeof(android::ResChunk_header)) {
-    return false;
-  }
-  auto chunk = (android::ResChunk_header*)data;
-  return dtohs(chunk->type) == android::RES_XML_TYPE &&
-         dtohs(chunk->headerSize) == sizeof(android::ResChunk_header) &&
-         dtohl(chunk->size) == size;
-}
 
 std::string read_attribute_name_at_idx(const android::ResXMLTree& parser,
                                        size_t idx) {
@@ -872,7 +864,7 @@ void extract_classes_from_layout(
     const std::unordered_set<std::string>& attributes_to_read,
     std::unordered_set<std::string>* out_classes,
     std::unordered_multimap<std::string, std::string>* out_attributes) {
-  if (!is_binary_xml(data, size)) {
+  if (!arsc::is_binary_xml(data, size)) {
     return;
   }
 
@@ -990,7 +982,7 @@ class XmlStringAttributeCollector : public arsc::XmlFileVisitor {
 void ApkResources::collect_xml_attribute_string_values_for_file(
     const std::string& file_path, std::unordered_set<std::string>* out) {
   redex::read_file_with_contents(file_path, [&](const char* data, size_t size) {
-    if (is_binary_xml(data, size)) {
+    if (arsc::is_binary_xml(data, size)) {
       XmlStringAttributeCollector collector;
       if (collector.visit((void*)data, size)) {
         out->insert(collector.m_values.begin(), collector.m_values.end());
@@ -1121,30 +1113,46 @@ void add_existing_string_to_builder(const android::ResStringPool& string_pool,
 }
 } // namespace
 
+int ApkResources::appened_xml_string_pool(const void* data,
+                                          const size_t len,
+                                          const std::string& new_string,
+                                          android::Vector<char>* out_data,
+                                          size_t* idx) {
+  int validation_result = arsc::validate_xml_string_pool(data, len);
+  if (validation_result != android::OK) {
+    return validation_result;
+  }
+
+  const auto chunk_size = sizeof(android::ResChunk_header);
+  auto pool_ptr = (android::ResStringPool_header*)((char*)data + chunk_size);
+  android::ResStringPool pool(pool_ptr, dtohl(pool_ptr->header.size));
+  auto flags = pool.isUTF8() ? htodl(android::ResStringPool_header::UTF8_FLAG)
+                             : (uint32_t)0;
+  arsc::ResStringPoolBuilder pool_builder(flags);
+  for (size_t i = 0; i < dtohl(pool_ptr->stringCount); i++) {
+    add_existing_string_to_builder(pool, &pool_builder, i);
+  }
+  *idx = dtohl(pool_ptr->stringCount);
+  pool_builder.add_string(new_string);
+  // serialize new string pool into out data
+  arsc::replace_xml_string_pool((android::ResChunk_header*)data, len,
+                                pool_builder, out_data);
+  return android::OK;
+}
+
 int ApkResources::replace_in_xml_string_pool(
     const void* data,
     const size_t len,
     const std::map<std::string, std::string>& rename_map,
     android::Vector<char>* out_data,
     size_t* out_num_renamed) {
+  int validation_result = arsc::validate_xml_string_pool(data, len);
+  if (validation_result != android::OK) {
+    return validation_result;
+  }
+
   const auto chunk_size = sizeof(android::ResChunk_header);
-  const auto pool_header_size = (uint16_t)sizeof(android::ResStringPool_header);
-
-  // Validate the given bytes.
-  if (len < chunk_size + pool_header_size) {
-    return android::NOT_ENOUGH_DATA;
-  }
-
-  // Layout XMLs will have a ResChunk_header, followed by ResStringPool
-  // representing each XML tag and attribute string.
-  if (!is_binary_xml(data, len)) {
-    return android::BAD_TYPE;
-  }
   auto pool_ptr = (android::ResStringPool_header*)((char*)data + chunk_size);
-  if (dtohs(pool_ptr->header.type) != android::RES_STRING_POOL_TYPE) {
-    return android::BAD_TYPE;
-  }
-
   size_t num_replaced = 0;
   android::ResStringPool pool(pool_ptr, dtohl(pool_ptr->header.size));
   auto flags = pool.isUTF8() ? htodl(android::ResStringPool_header::UTF8_FLAG)
@@ -1188,6 +1196,23 @@ bool ApkResources::rename_classes_in_layout(
   }
   write_serialized_data(serialized, std::move(f));
   return true;
+}
+
+// add a new string to string pool in the xml file.
+// and return this new string's index
+size_t ApkResources::add_string_to_xml_file(const std::string& file_path,
+                                            const std::string& new_string) {
+  RedexMappedFile f = RedexMappedFile::open(file_path, /* read_only= */ false);
+  size_t len = f.size();
+  android::Vector<char> serialized;
+  size_t new_idx;
+  auto status =
+      appened_xml_string_pool(f.data(), len, new_string, &serialized, &new_idx);
+  always_assert_log(status == android::OK,
+                    "Failed to get parsed string pool from %s",
+                    file_path.c_str());
+  write_serialized_data_with_expansion(serialized, std::move(f));
+  return new_idx;
 }
 
 std::unordered_set<std::string> ApkResources::find_all_xml_files() {

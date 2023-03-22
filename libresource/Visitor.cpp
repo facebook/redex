@@ -62,6 +62,36 @@ inline static uint32_t get_data_len(android::ResChunk_header* chunk) {
   return dtohl(chunk->size) - dtohs(chunk->headerSize);
 }
 
+bool is_binary_xml(const void* data, size_t size) {
+  if (size < sizeof(android::ResChunk_header)) {
+    return false;
+  }
+  auto chunk = (android::ResChunk_header*)data;
+  return dtohs(chunk->type) == android::RES_XML_TYPE &&
+         dtohs(chunk->headerSize) == sizeof(android::ResChunk_header) &&
+         dtohl(chunk->size) == size;
+}
+
+int validate_xml_string_pool(const void* data, const size_t len) {
+  // Validate the given bytes.
+  const auto chunk_size = sizeof(android::ResChunk_header);
+  const auto pool_header_size = (uint16_t)sizeof(android::ResStringPool_header);
+  if (len < chunk_size + pool_header_size) {
+    return android::NOT_ENOUGH_DATA;
+  }
+
+  // Layout XMLs will have a ResChunk_header, followed by ResStringPool
+  // representing each XML tag and attribute string.
+  if (!arsc::is_binary_xml(data, len)) {
+    return android::BAD_TYPE;
+  }
+  auto pool_ptr = (android::ResStringPool_header*)((char*)data + chunk_size);
+  if (dtohs(pool_ptr->header.type) != android::RES_STRING_POOL_TYPE) {
+    return android::BAD_TYPE;
+  }
+  return android::OK;
+}
+
 // Modeled after aapt2's ResChunkPullParser. Simple iteration over
 // ResChunk_header structs with validation of sizes in the header.
 class ResChunkPullParser {

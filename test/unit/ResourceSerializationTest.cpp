@@ -21,6 +21,7 @@
 #include "SanitizersConfig.h"
 #include "Util.h"
 #include "androidfw/ResourceTypes.h"
+#include "utils/Errors.h"
 #include "utils/Serialize.h"
 #include "utils/Visitor.h"
 
@@ -428,6 +429,23 @@ ParsedAaptOutput aapt_dump_and_parse(const std::string& arsc_path,
   return output;
 }
 } // namespace
+
+TEST(ResStringPool, AppendStringInXmlLayout) {
+  auto f = RedexMappedFile::open(std::getenv("test_layout_path"));
+  android::Vector<char> serialized;
+  size_t new_idx;
+  int status = ApkResources::appened_xml_string_pool(f.const_data(), f.size(),
+                                                     std::string("test_test"),
+                                                     &serialized, &new_idx);
+  EXPECT_EQ(status, android::OK);
+  EXPECT_EQ(new_idx, 19);
+  const auto chunk_size = sizeof(android::ResChunk_header);
+  auto pool_ptr =
+      (android::ResStringPool_header*)((char*)(&(serialized[0])) + chunk_size);
+  android::ResStringPool pool(pool_ptr, dtohl(pool_ptr->header.size));
+  auto new_str = apk::get_string_from_pool(pool, new_idx);
+  EXPECT_EQ(new_str, "test_test");
+}
 
 TEST(ResStringPool, ReplaceStringsInXmlLayout) {
   // Given layout file should have a series of View subclasses in the XML, which
