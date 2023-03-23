@@ -454,6 +454,32 @@ void remove_both_have_clinit(ClassMap* mergeable_to_merger) {
 }
 
 /**
+ * Remove pair of classes from merging if there are potentially name collision
+ * for static method that can't be renamed.
+ */
+void remove_unrenamable_collisions(ClassMap* mergeable_to_merger) {
+  std::vector<DexClass*> to_delete;
+  for (const auto& pair : *mergeable_to_merger) {
+    auto mergeable = pair.first;
+    auto merger = pair.second;
+    for (auto m : mergeable->get_dmethods()) {
+      if (is_constructor(m) || method::is_clinit(m) || can_rename(m)) {
+        continue;
+      }
+      auto merger_method_ref = DexMethod::get_method(
+          merger->get_type(), m->get_name(), m->get_proto());
+      if (merger_method_ref) {
+        to_delete.emplace_back(mergeable);
+        break;
+      }
+    }
+  }
+  for (DexClass* cls : to_delete) {
+    mergeable_to_merger->erase(cls);
+  }
+}
+
+/**
  * Don't merge a class if it is a field's type and this field can't be
  * renamed, of if it appeared in a field value.
  */
@@ -777,8 +803,12 @@ void VerticalMergingPass::move_methods(DexClass* from_cls,
             continue;
           } else if (!method->is_virtual()) {
             // Static or direct method. Safe to move
-            always_assert(can_rename(method));
-            move_method(method, true /* rename_on_collision */);
+            if (can_rename(method)) {
+
+              move_method(method, true /* rename_on_collision */);
+            } else {
+              move_method(method, false /* rename_on_collision */);
+            }
           } else {
             // Otherwise the method is virtual and child class overrides the
             // method in parent, we shouldn't care for the method as it is dead
@@ -800,7 +830,11 @@ void VerticalMergingPass::move_methods(DexClass* from_cls,
       // mergeable. Move the non-constructor static methods from subclass to
       // super class.
       if (is_static(method) && !is_constructor(method)) {
-        move_method(method, true /* rename_on_collision */);
+        if (can_rename(method)) {
+          move_method(method, true /* rename_on_collision */);
+        } else {
+          move_method(method, false /* rename_on_collision */);
+        }
       }
     }
   }
@@ -850,6 +884,7 @@ void VerticalMergingPass::run_pass(DexStoresVector& stores,
       collect_can_merge(scope, xstores, dont_merge_status, &num_single_extend);
 
   remove_both_have_clinit(&mergeable_to_merger);
+  remove_unrenamable_collisions(&mergeable_to_merger);
   resolve_virtual_calls_to_merger(scope, mergeable_to_merger);
 
   merge_classes(scope, mergeable_to_merger);
