@@ -32,7 +32,6 @@ struct RefStats {
   size_t num_invoke_virtual_refined = 0;
   size_t num_invoke_interface_replaced = 0;
   size_t num_invoke_super_removed = 0;
-  RtypeStats rtype_stats;
 
   // Only used for return type specialization
   RtypeCandidates rtype_candidates;
@@ -65,7 +64,6 @@ struct RefStats {
           rtype_candidates.get_candidates().size());
     mgr->incr_metric("num_rtype_specialization_candidates",
                      rtype_candidates.get_candidates().size());
-    rtype_stats.print(mgr);
   }
 
   RefStats& operator+=(const RefStats& that) {
@@ -75,7 +73,6 @@ struct RefStats {
     num_invoke_interface_replaced += that.num_invoke_interface_replaced;
     num_invoke_super_removed += that.num_invoke_super_removed;
     rtype_candidates += that.rtype_candidates;
-    rtype_stats += that.rtype_stats;
     return *this;
   }
 };
@@ -377,8 +374,8 @@ void ResolveRefsPass::run_pass(DexStoresVector& stores,
     return;
   }
   RtypeSpecialization rs(stats.rtype_candidates.get_candidates());
-  auto rtype_stats = rs.specialize_rtypes(scope);
-  rtype_stats.print(&mgr);
+  rs.specialize_rtypes(scope);
+  rs.print_stats(&mgr);
 
   // Resolve virtual method refs again based on the new rtypes. But further
   // rtypes collection is disabled.

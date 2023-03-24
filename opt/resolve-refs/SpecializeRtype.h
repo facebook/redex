@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <atomic>
+
 #include "DexClass.h"
 #include "Resolver.h"
 
@@ -23,17 +25,16 @@ using MethodToInferredReturnType =
     std::map<DexMethod*, const DexType*, dexmethods_comparator>;
 
 struct RtypeStats {
-  size_t num_rtype_specialized = 0;
-  size_t num_rtype_specialized_direct = 0;
-  size_t num_rtype_specialized_virtual_1 = 0;
-  size_t num_rtype_specialized_virtual_1p = 0;
-  size_t num_rtype_specialized_virtual_10p = 0;
-  size_t num_rtype_specialized_virtual_100p = 0;
-  size_t num_rtype_specialized_virtual_more_override = 0;
-  size_t num_true_virtual_candidates = 0;
+  std::atomic<size_t> num_rtype_specialized = 0;
+  std::atomic<size_t> num_rtype_specialized_direct = 0;
+  std::atomic<size_t> num_rtype_specialized_virtual_1 = 0;
+  std::atomic<size_t> num_rtype_specialized_virtual_1p = 0;
+  std::atomic<size_t> num_rtype_specialized_virtual_10p = 0;
+  std::atomic<size_t> num_rtype_specialized_virtual_100p = 0;
+  std::atomic<size_t> num_rtype_specialized_virtual_more_override = 0;
+  size_t num_virtual_candidates = 0;
 
-  void print(PassManager* mgr);
-  RtypeStats& operator+=(const RtypeStats& that);
+  void print(PassManager* mgr) const;
 };
 
 class RtypeCandidates final {
@@ -61,17 +62,25 @@ class RtypeSpecialization final {
   explicit RtypeSpecialization(const MethodToInferredReturnType& candidates)
       : m_candidates(candidates) {}
 
-  RtypeStats specialize_rtypes(const Scope& scope) const;
+  void specialize_rtypes(const Scope& scope);
+  void print_stats(PassManager* mgr) const { m_stats.print(mgr); }
 
  private:
   const MethodToInferredReturnType m_candidates;
+  RtypeStats m_stats;
+
+  void specialize_non_true_virtuals(
+      const method_override_graph::Graph& override_graph,
+      DexMethod* meth,
+      const DexType* better_rtype,
+      ConcurrentMap<DexMethod*, const DexType*>& virtual_roots,
+      RtypeStats& stats) const;
 
   void specialize_true_virtuals(
       const method_override_graph::Graph& override_graph,
       DexMethod* meth,
       const DexType* better_rtype,
       ConcurrentMap<DexMethod*, const DexType*>& virtual_roots,
-      MethodSet& specialized,
       RtypeStats& stats) const;
   bool shares_identical_rtype_candidate(DexMethod* meth,
                                         const DexType* better_rtype) const;

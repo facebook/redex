@@ -14,30 +14,32 @@
 #include "ReachableClasses.h"
 #include "Show.h"
 #include "Trace.h"
+#include "WorkQueue.h"
 
 namespace mog = method_override_graph;
 
 namespace resolve_refs {
 
-void RtypeStats::print(PassManager* mgr) {
+void RtypeStats::print(PassManager* mgr) const {
   if (num_rtype_specialized == 0) {
     return;
   }
-  TRACE(RESO, 1, "[ref reso] rtype specialized %zu", num_rtype_specialized);
+  TRACE(RESO, 1, "[ref reso] rtype specialized %zu",
+        num_rtype_specialized.load());
   TRACE(RESO, 1, "[ref reso] rtype specialized direct %zu",
-        num_rtype_specialized_direct);
+        num_rtype_specialized_direct.load());
   TRACE(RESO, 1, "[ref reso] rtype specialized virtual 1 %zu",
-        num_rtype_specialized_virtual_1);
+        num_rtype_specialized_virtual_1.load());
   TRACE(RESO, 1, "[ref reso] rtype specialized virtual 1+ %zu",
-        num_rtype_specialized_virtual_1p);
+        num_rtype_specialized_virtual_1p.load());
   TRACE(RESO, 1, "[ref reso] rtype specialized virtual 10+ %zu",
-        num_rtype_specialized_virtual_10p);
+        num_rtype_specialized_virtual_10p.load());
   TRACE(RESO, 1, "[ref reso] rtype specialized virtual 100+ %zu",
-        num_rtype_specialized_virtual_100p);
+        num_rtype_specialized_virtual_100p.load());
   TRACE(RESO, 1, "[ref reso] rtype specialized more override %zu",
-        num_rtype_specialized_virtual_more_override);
-  TRACE(RESO, 1, "[ref reso] rtype specialize true virtual candidates %zu",
-        num_true_virtual_candidates);
+        num_rtype_specialized_virtual_more_override.load());
+  TRACE(RESO, 1, "[ref reso] rtype specialize virtual candidates %zu",
+        num_virtual_candidates);
   mgr->incr_metric("num_rtype_specialized", num_rtype_specialized);
   mgr->incr_metric("num_rtype_specialized_direct",
                    num_rtype_specialized_direct);
@@ -51,20 +53,7 @@ void RtypeStats::print(PassManager* mgr) {
                    num_rtype_specialized_virtual_100p);
   mgr->incr_metric("num_rtype_specialized_virtual_more_override+",
                    num_rtype_specialized_virtual_more_override);
-  mgr->incr_metric("num_true_virtual_candidates", num_true_virtual_candidates);
-}
-
-RtypeStats& RtypeStats::operator+=(const RtypeStats& that) {
-  num_rtype_specialized += that.num_rtype_specialized;
-  num_rtype_specialized_direct += that.num_rtype_specialized_direct;
-  num_rtype_specialized_virtual_1 += that.num_rtype_specialized_virtual_1;
-  num_rtype_specialized_virtual_1p += that.num_rtype_specialized_virtual_1p;
-  num_rtype_specialized_virtual_10p += that.num_rtype_specialized_virtual_10p;
-  num_rtype_specialized_virtual_100p += that.num_rtype_specialized_virtual_100p;
-  num_rtype_specialized_virtual_more_override +=
-      that.num_rtype_specialized_virtual_more_override;
-  num_true_virtual_candidates += that.num_true_virtual_candidates;
-  return *this;
+  mgr->incr_metric("num_virtual_candidates", num_virtual_candidates);
 }
 
 namespace {
@@ -139,7 +128,8 @@ bool share_common_rtype_candidate(
 
 void update_rtype_for(DexMethod* meth,
                       const DexType* new_rtype,
-                      RtypeStats& stats) {
+                      RtypeStats& stats,
+                      bool rename_on_collision = false) {
   DexProto* updated_proto =
       DexProto::make_proto(new_rtype, meth->get_proto()->get_args());
   if (!can_update_rtype_for(meth, updated_proto)) {
@@ -147,7 +137,7 @@ void update_rtype_for(DexMethod* meth,
   }
 
   DexMethodSpec spec(nullptr, nullptr, updated_proto);
-  meth->change(spec, /* rename_on_collision */ false);
+  meth->change(spec, rename_on_collision);
   TRACE(RESO, 4, "rtype specialized -> %s", SHOW(meth));
   stats.num_rtype_specialized++;
 }
@@ -166,7 +156,9 @@ void update_rtype_unsafe_for(DexMethod* meth,
 bool update_rtype_for_list(const std::vector<const DexMethod*>& meths,
                            const DexType* new_rtype,
                            RtypeStats& stats) {
-  always_assert(!meths.empty());
+  if (meths.empty()) {
+    return true;
+  }
   DexProto* updated_proto =
       DexProto::make_proto(new_rtype, meths.front()->get_proto()->get_args());
 
@@ -217,7 +209,8 @@ void RtypeCandidates::collect_specializable_rtype(
     return;
   }
   // `better_rtype` is a subtype of the exsting `rtype`.
-  if (type::check_cast(*better_rtype, rtype)) {
+  if (type::check_cast(*better_rtype, rtype) &&
+      can_update_rtype_for(meth, *better_rtype)) {
     m_rtype_candidates.emplace(meth, *better_rtype);
   }
 }
@@ -239,12 +232,24 @@ bool RtypeSpecialization::shares_identical_rtype_candidate(
   return true;
 }
 
+void RtypeSpecialization::specialize_non_true_virtuals(
+    const method_override_graph::Graph& override_graph,
+    DexMethod* meth,
+    const DexType* better_rtype,
+    ConcurrentMap<DexMethod*, const DexType*>& virtual_roots,
+    RtypeStats& stats) const {
+  const auto& overridings =
+      method_override_graph::get_overriding_methods(override_graph, meth, true);
+  always_assert(overridings.empty());
+  virtual_roots.emplace(meth, better_rtype);
+  stats.num_rtype_specialized_direct++;
+}
+
 void RtypeSpecialization::specialize_true_virtuals(
     const method_override_graph::Graph& override_graph,
     DexMethod* meth,
     const DexType* better_rtype,
     ConcurrentMap<DexMethod*, const DexType*>& virtual_roots,
-    MethodSet& specialized,
     RtypeStats& stats) const {
   const auto& overridings =
       method_override_graph::get_overriding_methods(override_graph, meth, true);
@@ -308,6 +313,8 @@ void RtypeSpecialization::specialize_true_virtuals(
         can_update_rtype_for(meth, better_rtype)) {
       stats.num_rtype_specialized_virtual_1++;
       virtual_roots.emplace(overridden, better_rtype);
+      TRACE(RESO, 4, "root virtual 1 overridden %s w/ rtype %s",
+            SHOW(overridden), SHOW(better_rtype));
     }
   } else {
     not_reached_log("true virtual w/ 0 overridden & 0 overridding %s",
@@ -315,51 +322,66 @@ void RtypeSpecialization::specialize_true_virtuals(
   }
 }
 
-RtypeStats RtypeSpecialization::specialize_rtypes(const Scope& scope) const {
-  RtypeStats stats;
+void RtypeSpecialization::specialize_rtypes(const Scope& scope) {
+  Timer t("specialize_rtype");
   const auto& override_graph = method_override_graph::build_graph(scope);
-  MethodSet specialized;
   ConcurrentMap<DexMethod*, const DexType*> virtual_roots;
 
-  for (const auto& pair : m_candidates) {
-    auto* meth = pair.first;
-    const auto* better_rtype = const_cast<DexType*>(pair.second);
+  // Preprocess the candidates to cut down the size of candidates.
+  // The main logic is filtering out complex virtual scopes that we choose not
+  // to touch.
+  auto process_candidates =
+      [&](const std::pair<DexMethod*, const DexType*>& pair) {
+        auto* meth = pair.first;
+        const auto* better_rtype = const_cast<DexType*>(pair.second);
 
-    if (specialized.find(meth) != specialized.end()) {
+        if (!meth->is_virtual()) {
+          // Simple direct methods. Fall through to 2nd step.
+        } else if (!method_override_graph::is_true_virtual(*override_graph,
+                                                           meth)) {
+          // Non true virtual methods.
+          TRACE(RESO, 4, "specialize non true virtual %s w/ rtype %s",
+                SHOW(meth), SHOW(better_rtype));
+          specialize_non_true_virtuals(*override_graph, meth, better_rtype,
+                                       virtual_roots, m_stats);
+        } else {
+          specialize_true_virtuals(*override_graph, meth, better_rtype,
+                                   virtual_roots, m_stats);
+        }
+      };
+
+  workqueue_run<std::pair<DexMethod*, const DexType*>>(process_candidates,
+                                                       m_candidates);
+
+  // Update direct targets.
+  for (auto& pair : m_candidates) {
+    auto* meth = pair.first;
+    if (meth->is_virtual()) {
       continue;
     }
-
-    if (!method_override_graph::is_true_virtual(*override_graph, meth)) {
-      // Simple direct or non true virtual methods.
-      TRACE(RESO, 4, "specialize direct %s w/ rtype %s", SHOW(meth),
-            SHOW(better_rtype));
-      update_rtype_for(meth, better_rtype, stats);
-      specialized.insert(meth);
-      stats.num_rtype_specialized_direct++;
-    } else {
-      specialize_true_virtuals(*override_graph, meth, better_rtype,
-                               virtual_roots, specialized, stats);
-    }
+    const auto* better_rtype = pair.second;
+    update_rtype_for(meth, better_rtype, m_stats);
+    TRACE(RESO, 4, "specialize direct %s w/ rtype %s", SHOW(meth),
+          SHOW(better_rtype));
+    m_stats.num_rtype_specialized_direct++;
   }
 
-  TRACE(RESO, 2, "[ref reso] virtual roots size %zu", virtual_roots.size());
-  stats.num_true_virtual_candidates = virtual_roots.size();
-  std::vector<DexMethod*> true_virtual_lst;
+  // Sort and update virtual targets.
+  m_stats.num_virtual_candidates = virtual_roots.size();
+  std::vector<DexMethod*> virtuals_lst;
   for (auto& pair : virtual_roots) {
-    true_virtual_lst.push_back(pair.first);
+    virtuals_lst.push_back(pair.first);
   }
-  std::sort(true_virtual_lst.begin(), true_virtual_lst.end(),
-            compare_dexmethods);
+  std::sort(virtuals_lst.begin(), virtuals_lst.end(), compare_dexmethods);
 
-  for (auto* root : true_virtual_lst) {
+  for (auto* root : virtuals_lst) {
     const auto* better_rtype = virtual_roots.at(root);
     const auto& overrides = method_override_graph::get_overriding_methods(
         *override_graph, root, true);
-    if (update_rtype_for_list(overrides, better_rtype, stats)) {
-      update_rtype_for(root, better_rtype, stats);
+    if (update_rtype_for_list(overrides, better_rtype, m_stats)) {
+      update_rtype_for(root, better_rtype, m_stats);
     }
   }
-  return stats;
 }
 
 } // namespace resolve_refs
