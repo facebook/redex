@@ -58,6 +58,29 @@ class Impl implements Intf {
   }
 }
 
+// Rtype specialization virtual subclass collision
+interface Animal {
+  String getName();
+}
+class Cat implements Animal {
+  @Override
+  public String getName() {
+    return "Cat";
+  }
+  Animal foo() {
+    return new Cat();
+  } // I think you'd specialize this to "Cat foo()"
+  Animal bar() { return foo(); }
+}
+@OkToExtend
+class NotYourFavoriteCat extends Cat {
+  @Override
+  public String getName() {
+    return "NotYourFavoriteCat";
+  }
+  Cat foo() { return new NotYourFavoriteCat(); }
+}
+
 @KeepForRedexTest
 public class ResolveRefsTest {
 
@@ -104,5 +127,14 @@ public class ResolveRefsTest {
     Intf i = new Impl();
     Intf ii = i.getInstance(1);
     assertThat(ii.foo()).isEqualTo("Impl");
+  }
+
+  @KeepForRedexTest
+  @Test
+  public void testRTypeSpecializationCollision() {
+    Cat c = new NotYourFavoriteCat();
+    assertThat(c.getName()).isEqualTo("NotYourFavoriteCat");
+    Animal bar = c.bar();
+    assertThat(bar.getName()).isEqualTo("NotYourFavoriteCat");
   }
 }

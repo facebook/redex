@@ -7,6 +7,7 @@
 
 #include "SpecializeRtype.h"
 
+#include "ClassHierarchy.h"
 #include "ConcurrentContainers.h"
 #include "DexTypeEnvironment.h"
 #include "MethodOverrideGraph.h"
@@ -374,10 +375,20 @@ void RtypeSpecialization::specialize_rtypes(const Scope& scope) {
   }
   std::sort(virtuals_lst.begin(), virtuals_lst.end(), compare_dexmethods);
 
+  ClassHierarchy ch = build_type_hierarchy(scope);
   for (auto* root : virtuals_lst) {
     const auto* better_rtype = virtual_roots.at(root);
     const auto& overrides = method_override_graph::get_overriding_methods(
         *override_graph, root, true);
+    auto* new_proto =
+        DexProto::make_proto(better_rtype, root->get_proto()->get_args());
+    auto* cls = type_class(root->get_class());
+    if (find_collision(ch, root->get_name(), new_proto, cls,
+                       /* is_virtual */ true)) {
+      TRACE(RESO, 4, "Bail on virtual collision %s w/ rtype %s", SHOW(root),
+            SHOW(better_rtype));
+      continue;
+    }
     if (update_rtype_for_list(overrides, better_rtype, m_stats)) {
       update_rtype_for(root, better_rtype, m_stats);
     }
