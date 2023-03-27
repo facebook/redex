@@ -46,6 +46,7 @@ libredex_la_SOURCES = \
 	libredex/ApiLevelChecker.cpp \
 	libredex/ApkResources.cpp \
 	libredex/AssetManager.cpp \
+	libredex/BalancedPartitioning.cpp \
 	libredex/BigBlocks.cpp \
 	libredex/BundleResources.cpp \
 	libredex/CFGMutation.cpp \
@@ -112,6 +113,7 @@ libredex_la_SOURCES = \
 	libredex/MethodDevirtualizer.cpp \
 	libredex/MethodOverrideGraph.cpp \
 	libredex/MethodProfiles.cpp \
+	libredex/MethodSimilarityCompressionConsciousOrderer.cpp \
 	libredex/MethodSimilarityGreedyOrderer.cpp \
 	libredex/MethodUtil.cpp \
 	libredex/MonitorCount.cpp \
