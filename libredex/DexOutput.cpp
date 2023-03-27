@@ -48,6 +48,7 @@
 #include "IRCode.h"
 #include "Macros.h"
 #include "MethodProfiles.h"
+#include "MethodSimilarityCompressionConsciousOrderer.h"
 #include "MethodSimilarityGreedyOrderer.h"
 #include "Pass.h"
 #include "RedexOptions.h" // For DebugInfoKind
@@ -202,12 +203,16 @@ void GatheredTypes::sort_dexmethod_emitlist_method_similarity_order(
     }
   }
 
+  bool use_compression_conscious_order{false};
   MethodSimilarityOrderingConfig* similarity_config{nullptr};
   if (global_config.has_config_by_name("method_similarity_order")) {
     similarity_config =
         global_config.get_config_by_name<MethodSimilarityOrderingConfig>(
             "method_similarity_order");
+    use_compression_conscious_order =
+        similarity_config->use_compression_conscious_order;
   }
+
   if (similarity_config != nullptr &&
       similarity_config->use_class_level_perf_sensitivity) {
     for (auto meth : lmeth) {
@@ -233,8 +238,14 @@ void GatheredTypes::sort_dexmethod_emitlist_method_similarity_order(
       OPUT, 2,
       "Skipping %zu perf sensitive methods, ordering %zu methods by similarity",
       perf_sensitive_methods.size(), remaining_methods.size());
-  MethodSimilarityGreedyOrderer method_similarity_greedy_orderer;
-  method_similarity_greedy_orderer.order(remaining_methods);
+
+  if (use_compression_conscious_order) {
+    MethodSimilarityCompressionConsciousOrderer method_orderer;
+    method_orderer.order(remaining_methods, this);
+  } else {
+    MethodSimilarityGreedyOrderer method_orderer;
+    method_orderer.order(remaining_methods);
+  }
 
   lmeth.clear();
   lmeth.insert(lmeth.end(), perf_sensitive_methods.begin(),
