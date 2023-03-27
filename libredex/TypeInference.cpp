@@ -13,6 +13,7 @@
 
 #include "Show.h"
 #include "Trace.h"
+#include "TypeUtil.h"
 
 std::ostream& operator<<(std::ostream& output, const IRType& type) {
   switch (type) {
@@ -716,12 +717,24 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   case OPCODE_CHECK_CAST: {
     refine_reference(current_state, insn->src(0));
     auto to_type = insn->get_type();
-    auto to_cls = type_class(to_type);
-    if (m_skip_check_cast_to_intf && to_cls && is_interface(to_cls)) {
-      set_reference(current_state, RESULT_REGISTER,
-                    current_state->get_type_domain(insn->src(0)));
+
+    if (!m_skip_check_cast_upcasting) {
+      set_reference(current_state, RESULT_REGISTER, to_type);
     } else {
-      set_reference(current_state, RESULT_REGISTER, insn->get_type());
+      // Avoid using this check-cast type if casting to base class or an
+      // interface.
+      auto to_cls = type_class(to_type);
+      auto current_type_domain = current_state->get_type_domain(insn->src(0));
+      auto current_type = current_type_domain.get_dex_type();
+      auto is_intf = to_cls && is_interface(to_cls);
+      auto is_cast_to_base =
+          current_type && to_type &&
+          type::check_cast(*current_type, /* base_type */ to_type);
+      if (is_intf || is_cast_to_base) {
+        set_reference(current_state, RESULT_REGISTER, current_type_domain);
+      } else {
+        set_reference(current_state, RESULT_REGISTER, to_type);
+      }
     }
     break;
   }
