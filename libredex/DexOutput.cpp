@@ -48,7 +48,7 @@
 #include "IRCode.h"
 #include "Macros.h"
 #include "MethodProfiles.h"
-#include "MethodSimilarityOrderer.h"
+#include "MethodSimilarityGreedyOrderer.h"
 #include "Pass.h"
 #include "RedexOptions.h" // For DebugInfoKind
 #include "Resolver.h"
@@ -233,8 +233,8 @@ void GatheredTypes::sort_dexmethod_emitlist_method_similarity_order(
       OPUT, 2,
       "Skipping %zu perf sensitive methods, ordering %zu methods by similarity",
       perf_sensitive_methods.size(), remaining_methods.size());
-  MethodSimilarityOrderer method_similarity_orderer;
-  method_similarity_orderer.order(remaining_methods);
+  MethodSimilarityGreedyOrderer method_similarity_greedy_orderer;
+  method_similarity_greedy_orderer.order(remaining_methods);
 
   lmeth.clear();
   lmeth.insert(lmeth.end(), perf_sensitive_methods.begin(),
