@@ -10,7 +10,6 @@
 
 # Don't muck with test infra
 
--keep class org.fest.** { *; }
 -keep class org.junit.** { *; }
 -keep class junit.** { *; }
 -keep class sun.misc.** { *; }
