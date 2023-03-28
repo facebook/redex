@@ -12,6 +12,7 @@
 #include <optional>
 
 #include "Debug.h"
+#include "WorkQueue.h"
 
 BalancedPartitioning::BalancedPartitioning(std::vector<Document*>& documents)
     : documents(documents) {
@@ -27,46 +28,67 @@ void BalancedPartitioning::run() const {
   for (uint32_t i = 0; i < documents.size(); i++) {
     documents[i]->hash = i;
   }
-  bisect(begin(documents), end(documents), 0, 1, 0);
-}
 
-void BalancedPartitioning::bisect(
-    const std::vector<Document*>::iterator& document_begin,
-    const std::vector<Document*>::iterator& document_end,
-    uint32_t rec_depth,
-    uint32_t root_bucket,
-    uint32_t offset) const {
-  uint32_t num_documents = std::distance(document_begin, document_end);
-  if (num_documents == 0) return;
+  /// Run a recursive bisection of a given list of documents where
+  ///  - 'rec_depth' is the current depth of recursion
+  ///  - 'root_bucket' is the initial bucket of the dataVertices
+  ///  - the assigned buckets are the range [offset, offset + num_documents)
+  struct WorkItem {
+    const std::vector<Document*>::iterator document_begin;
+    const std::vector<Document*>::iterator document_end;
+    uint32_t rec_depth;
+    uint32_t root_bucket;
+    uint32_t offset;
+  };
 
-  // Reached the lowest level of the recursion tree
-  if (rec_depth >= SPLIT_DEPTH || num_documents <= 1) {
-    order(document_begin, document_end, offset);
-    return;
-  }
+  auto wq = workqueue_foreach<WorkItem>(
+      [&](sparta::SpartaWorkerState<WorkItem>* worker_state,
+          const WorkItem& work_item) {
+        uint32_t num_documents =
+            std::distance(work_item.document_begin, work_item.document_end);
+        if (num_documents == 0) return;
 
-  std::mt19937 rng(root_bucket);
+        // Reached the lowest level of the recursion tree
+        if (work_item.rec_depth >= SPLIT_DEPTH || num_documents <= 1) {
+          order(work_item.document_begin, work_item.document_end,
+                work_item.offset);
+          return;
+        }
 
-  uint32_t left_bucket = 2 * root_bucket;
-  uint32_t right_bucket = 2 * root_bucket + 1;
+        std::mt19937 rng(work_item.root_bucket);
 
-  // Initialize 2 buckets
-  split(document_begin, document_end, left_bucket);
+        uint32_t left_bucket = 2 * work_item.root_bucket;
+        uint32_t right_bucket = 2 * work_item.root_bucket + 1;
 
-  // Do iterations to improve the objective
-  run_iterations(document_begin, document_end, left_bucket, right_bucket, rng);
+        // Initialize 2 buckets
+        split(work_item.document_begin, work_item.document_end, left_bucket);
 
-  // Split documents wrt the resulting buckets
-  auto document_mid = std::partition(document_begin, document_end,
-                                     [left_bucket](const Document* doc) {
-                                       return doc->bucket == left_bucket;
-                                     });
+        // Do iterations to improve the objective
+        run_iterations(work_item.document_begin, work_item.document_end,
+                       left_bucket, right_bucket, rng);
 
-  uint32_t mid_offset = offset + std::distance(document_begin, document_mid);
+        // Split documents wrt the resulting buckets
+        auto document_mid =
+            std::partition(work_item.document_begin, work_item.document_end,
+                           [left_bucket](const Document* doc) {
+                             return doc->bucket == left_bucket;
+                           });
 
-  // Two recursive tasks
-  bisect(document_begin, document_mid, rec_depth + 1, left_bucket, offset);
-  bisect(document_mid, document_end, rec_depth + 1, right_bucket, mid_offset);
+        uint32_t mid_offset =
+            work_item.offset +
+            std::distance(work_item.document_begin, document_mid);
+
+        // Two recursive tasks
+        worker_state->push_task(
+            (WorkItem){work_item.document_begin, document_mid,
+                       work_item.rec_depth + 1, left_bucket, work_item.offset});
+        worker_state->push_task((WorkItem){document_mid, work_item.document_end,
+                                           work_item.rec_depth + 1,
+                                           right_bucket, mid_offset});
+      },
+      redex_parallel::default_num_threads(), /*push_tasks_while_running=*/true);
+  wq.add_item((WorkItem){begin(documents), end(documents), 0, 1, 0});
+  wq.run_all();
 }
 
 void BalancedPartitioning::run_iterations(

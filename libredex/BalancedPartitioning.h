@@ -50,16 +50,6 @@ class BalancedPartitioning {
   void run() const;
 
  private:
-  /// Run a recursive bisection of a given list of documents where
-  ///  - 'rec_depth' is the current depth of recursion
-  ///  - 'root_bucket' is the initial bucket of the dataVertices
-  ///  - the assigned buckets are the range [offset, offset + num_documents)
-  void bisect(const std::vector<Document*>::iterator& document_begin,
-              const std::vector<Document*>::iterator& document_end,
-              uint32_t rec_depth,
-              uint32_t root_bucket,
-              uint32_t offset) const;
-
   /// Run bisection iterations.
   /// Returns true iff a progress has been made.
   void run_iterations(const std::vector<Document*>::iterator& document_begin,
