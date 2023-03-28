@@ -732,10 +732,18 @@ void validate_access(const DexMethod* accessor, const DexMember* accessee) {
   throw TypeCheckingException(out.str());
 }
 
-void validate_invoke_super(const DexMethodRef* callee) {
+void validate_invoke_super(const DexMethod* caller,
+                           const DexMethodRef* callee) {
   auto callee_cls = type_class(callee->get_class());
   if (!callee_cls || !is_interface(callee_cls)) {
     return;
+  }
+
+  if (callee->is_def() && !callee->as_def()->is_virtual()) {
+    std::ostringstream out;
+    out << "\nillegal invoke-super to non-virtual method "
+        << show_deobfuscated(callee) << " in " << show_deobfuscated(caller);
+    throw TypeCheckingException(out.str());
   }
 
   std::ostringstream out;
@@ -745,6 +753,76 @@ void validate_invoke_super(const DexMethodRef* callee) {
          "passed to D8 as a classpath dependency; in such cases D8 may "
          "silently generate illegal invoke-supers to interface methods)";
 
+  throw TypeCheckingException(out.str());
+}
+
+void validate_invoke_virtual(const DexMethod* caller,
+                             const DexMethodRef* callee) {
+  if (callee == nullptr || !callee->is_def()) {
+    // Forgive unresolved refs.
+    return;
+  }
+
+  if (callee->as_def()->is_virtual()) {
+    return;
+  }
+
+  std::ostringstream out;
+  out << "\nillegal invoke-virtual to non-virtual method "
+      << show_deobfuscated(callee) << " in " << show_deobfuscated(caller);
+  throw TypeCheckingException(out.str());
+}
+
+void validate_invoke_direct(const DexMethod* caller,
+                            const DexMethodRef* callee) {
+  if (callee == nullptr || !callee->is_def()) {
+    // Forgive unresolved refs.
+    return;
+  }
+
+  if (!callee->as_def()->is_virtual() && !is_static(callee->as_def())) {
+    return;
+  }
+
+  std::ostringstream out;
+  out << "\nillegal invoke-direct to virtual or static method "
+      << show_deobfuscated(callee) << " in " << show_deobfuscated(caller);
+  throw TypeCheckingException(out.str());
+}
+
+void validate_invoke_static(const DexMethod* caller,
+                            const DexMethodRef* callee) {
+  if (callee == nullptr || !callee->is_def()) {
+    // Forgive unresolved refs.
+    return;
+  }
+
+  if (is_static(callee->as_def())) {
+    return;
+  }
+
+  std::ostringstream out;
+  out << "\nillegal invoke-static to non-static method "
+      << show_deobfuscated(callee) << " in " << show_deobfuscated(caller);
+  throw TypeCheckingException(out.str());
+}
+
+void validate_invoke_interface(const DexMethod* caller,
+                               const DexMethodRef* callee) {
+  if (callee == nullptr || !callee->is_def()) {
+    // Forgive unresolved refs.
+    return;
+  }
+
+  auto callee_cls = type_class(callee->get_class());
+  if (!callee_cls ||
+      (is_interface(callee_cls) && callee->as_def()->is_virtual())) {
+    return;
+  }
+
+  std::ostringstream out;
+  out << "\nillegal invoke-interface to non-interface method "
+      << show_deobfuscated(callee) << " in " << show_deobfuscated(caller);
   throw TypeCheckingException(out.str());
 }
 
@@ -1283,7 +1361,15 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
       ::validate_access(m_dex_method, resolved);
     }
     if (m_validate_invoke_super && insn->opcode() == OPCODE_INVOKE_SUPER) {
-      validate_invoke_super(dex_method);
+      validate_invoke_super(m_dex_method, dex_method);
+    } else if (insn->opcode() == OPCODE_INVOKE_VIRTUAL) {
+      validate_invoke_virtual(m_dex_method, dex_method);
+    } else if (insn->opcode() == OPCODE_INVOKE_DIRECT) {
+      validate_invoke_direct(m_dex_method, dex_method);
+    } else if (insn->opcode() == OPCODE_INVOKE_STATIC) {
+      validate_invoke_static(m_dex_method, dex_method);
+    } else if (insn->opcode() == OPCODE_INVOKE_INTERFACE) {
+      validate_invoke_interface(m_dex_method, dex_method);
     }
     break;
   }
