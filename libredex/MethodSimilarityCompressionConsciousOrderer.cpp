@@ -7,6 +7,7 @@
 
 #include "MethodSimilarityCompressionConsciousOrderer.h"
 
+#include <inttypes.h>
 #include <unordered_map>
 
 #include "BalancedPartitioning.h"
@@ -103,7 +104,7 @@ void init_bipartite_graph(std::vector<BinaryFunction>& functions,
     uint64_t hash = functions[f].hash;
     always_assert_log(first_func_with_hash.find(hash) !=
                           first_func_with_hash.end(),
-                      "Function with hash %lu not found", hash);
+                      "Function with hash %" PRIu64 " not found", hash);
     if (first_func_with_hash[hash] == f) {
       // Found a new function instance
       Document& doc = documents.at(num_docs);
@@ -214,7 +215,7 @@ MethodSimilarityCompressionConsciousOrderer::get_encoded_method_content(
   // Encode
   size_t size = code->encode(dodx.get(), (uint32_t*)(output.get()));
   always_assert_log(size <= METHOD_MAX_OUTPUT_SIZE,
-                    "Encoded code size limit exceeded %lu versus %lu", size,
+                    "Encoded code size limit exceeded %zu versus %zu", size,
                     METHOD_MAX_OUTPUT_SIZE);
 
   // Collect the results
