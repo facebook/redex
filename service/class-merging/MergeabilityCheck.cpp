@@ -88,10 +88,8 @@ TypeSet MergeabilityChecker::exclude_unsupported_bytecode_refs_for(
       auto meth_ref = insn->get_method();
       auto type = meth_ref->get_class();
       if (m_spec.merging_targets.count(type) > 0) {
-        TRACE(CLMG,
-              5,
-              "[non mergeable] referenced by pure ref %s",
-              SHOW(meth_ref));
+        TRACE(CLMG, 5, "[non mergeable] referenced by pure ref %s in %s",
+              SHOW(meth_ref), SHOW(method));
         non_mergeables.insert(type);
       }
       continue;
@@ -106,10 +104,9 @@ TypeSet MergeabilityChecker::exclude_unsupported_bytecode_refs_for(
       DexType* maybe_type = DexType::get_type(class_name);
       if (maybe_type && m_spec.merging_targets.count(maybe_type) > 0) {
         non_mergeables.insert(maybe_type);
-        TRACE(CLMG,
-              5,
-              "[non mergeable] type like const string unsafe: %s",
-              SHOW(insn));
+        TRACE(CLMG, 5,
+              "[non mergeable] type like const string unsafe: %s in %s",
+              SHOW(insn), SHOW(method));
       }
       continue;
     }
@@ -181,10 +178,8 @@ TypeSet MergeabilityChecker::exclude_unsupported_bytecode_refs_for(
       auto callee = use_insn->get_method();
       auto callee_type = callee->get_class();
       if (!m_const_class_safe_types.count(callee_type)) {
-        TRACE(CLMG,
-              5,
-              "[non mergeable] const class unsafe callee %s",
-              SHOW(callee));
+        TRACE(CLMG, 5, "[non mergeable] const class unsafe callee %s in %s",
+              SHOW(callee), SHOW(method));
         non_mergeables.insert(referenced_type);
         break;
       }
