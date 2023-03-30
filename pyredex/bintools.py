@@ -191,7 +191,12 @@ def run_and_stream_stderr(
         proc: PopenType = subprocess.Popen(args, env=env, stderr=subprocess.PIPE)
     else:
         proc: PopenType = subprocess.Popen(
-            args, env=env, pass_fds=pass_fds, stderr=subprocess.PIPE
+            args,
+            env=env,
+            # pyre-fixme[6]: For 3rd argument expected `Collection[int]` but got
+            #  `Optional[List[int]]`.
+            pass_fds=pass_fds,
+            stderr=subprocess.PIPE,
         )
 
     def stream_and_return(
