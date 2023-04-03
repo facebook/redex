@@ -151,9 +151,6 @@ void GlobalConfig::bind_config() {
        "\"always-skip-layer-0\"");
   bind("symbolicate_detached_methods", false, bool_param);
   bind("enable_quickening", false, bool_param);
-  bind("ab_experiments_states", {}, string_map_param);
-  bind("ab_experiments_states_override", {}, string_map_param);
-  bind("ab_experiments_default", "", string_param);
   bind("force_single_dex", false, bool_param);
   bind("emit_incoming_hashes", false, bool_param);
   bind("emit_outgoing_hashes", false, bool_param);

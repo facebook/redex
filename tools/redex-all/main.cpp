@@ -1194,13 +1194,6 @@ void redex_backend(ConfigFiles& conf,
   std::set<uint32_t> signatures;
   std::unique_ptr<PostLowering> post_lowering =
       redex_options.redacted ? PostLowering::create() : nullptr;
-  bool symbolicate_detached_methods;
-  conf.get_json_config().get("symbolicate_detached_methods", false,
-                             symbolicate_detached_methods);
-
-  if (post_lowering) {
-    post_lowering->sync();
-  }
 
   const bool mem_stats_enabled =
       traceEnabled(STATS, 1) || conf.get_json_config().get("mem_stats", true);
@@ -1249,7 +1242,6 @@ void redex_backend(ConfigFiles& conf,
             is_iodi(dik) ? &iodi_metadata : nullptr,
             stores[0].get_dex_magic(),
             dex_output_config,
-            symbolicate_detached_methods ? post_lowering.get() : nullptr,
             manager.get_redex_options().min_sdk);
 
         output_totals += this_dex_stats;
@@ -1267,15 +1259,6 @@ void redex_backend(ConfigFiles& conf,
 
   std::vector<DexMethod*> needs_debug_line_mapping;
   if (post_lowering) {
-    if (symbolicate_detached_methods) {
-      post_lowering->emit_symbolication_metadata(
-          pos_mapper.get(),
-          needs_addresses ? &method_to_id : nullptr,
-          needs_addresses ? &code_debug_lines : nullptr,
-          is_iodi(dik) ? &iodi_metadata : nullptr,
-          needs_debug_line_mapping,
-          signatures);
-    }
     post_lowering->run(stores);
     post_lowering->finalize(manager.asset_manager());
   }

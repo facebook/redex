@@ -60,8 +60,7 @@ TEST_F(DexOutputTest, TEST_PROFILED_SECONDARY_ORDER) {
   auto gtypes = std::make_shared<GatheredTypes>(&*classes);
   DexOutput dout("", &*classes, std::move(gtypes), nullptr, true, 0, nullptr, 0,
                  DebugInfoKind::NoCustomSymbolication, nullptr, config_files,
-                 pos_mapper.get(), nullptr, nullptr, DexOutputConfig(), nullptr,
-                 25);
+                 pos_mapper.get(), nullptr, nullptr, DexOutputConfig(), 25);
 
   dout.prepare(SortMode::DEFAULT, sort_modes, config_files, "dex\n039");
   auto code_items = get_ordered_methods(dout);
@@ -108,8 +107,7 @@ TEST_F(DexOutputTest, TEST_SIMILARITY_ORDERER) {
   auto gtypes = std::make_shared<GatheredTypes>(&*classes);
   DexOutput dout("", &*classes, std::move(gtypes), nullptr, true, 0, nullptr, 0,
                  DebugInfoKind::NoCustomSymbolication, nullptr, config_files,
-                 pos_mapper.get(), nullptr, nullptr, DexOutputConfig(), nullptr,
-                 25);
+                 pos_mapper.get(), nullptr, nullptr, DexOutputConfig(), 25);
 
   dout.prepare(SortMode::DEFAULT, sort_modes, config_files, "dex\n039");
   auto code_items = get_ordered_methods(dout);
@@ -170,8 +168,7 @@ TEST_F(DexOutputTest, TEST_SIMILARITY_ORDERER_PERF_SENSITIVE) {
   auto gtypes = std::make_shared<GatheredTypes>(&*classes);
   DexOutput dout("", &*classes, std::move(gtypes), nullptr, true, 0, nullptr, 0,
                  DebugInfoKind::NoCustomSymbolication, nullptr, config_files,
-                 pos_mapper.get(), nullptr, nullptr, DexOutputConfig{}, nullptr,
-                 25);
+                 pos_mapper.get(), nullptr, nullptr, DexOutputConfig(), 25);
 
   dout.prepare(SortMode::DEFAULT, sort_modes, config_files, "dex\n039");
   auto code_items = get_ordered_methods(dout);
@@ -228,8 +225,7 @@ TEST_F(DexOutputTest, TEST_COMPRESSION_ORDERER) {
   auto gtypes = std::make_shared<GatheredTypes>(&*classes);
   DexOutput dout("", &*classes, std::move(gtypes), nullptr, true, 0, nullptr, 0,
                  DebugInfoKind::NoCustomSymbolication, nullptr, config_files,
-                 pos_mapper.get(), nullptr, nullptr, DexOutputConfig(), nullptr,
-                 25);
+                 pos_mapper.get(), nullptr, nullptr, DexOutputConfig(), 25);
 
   dout.prepare(SortMode::DEFAULT, sort_modes, config_files, "dex\n039");
   auto code_items = get_ordered_methods(dout);
@@ -291,8 +287,7 @@ TEST_F(DexOutputTest, TEST_COMPRESSION_ORDERER_PERF_SENSITIVE) {
   auto gtypes = std::make_shared<GatheredTypes>(&*classes);
   DexOutput dout("", &*classes, std::move(gtypes), nullptr, true, 0, nullptr, 0,
                  DebugInfoKind::NoCustomSymbolication, nullptr, config_files,
-                 pos_mapper.get(), nullptr, nullptr, DexOutputConfig{}, nullptr,
-                 25);
+                 pos_mapper.get(), nullptr, nullptr, DexOutputConfig(), 25);
 
   dout.prepare(SortMode::DEFAULT, sort_modes, config_files, "dex\n039");
   auto code_items = get_ordered_methods(dout);

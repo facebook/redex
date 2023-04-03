@@ -159,7 +159,6 @@ enhanced_dex_stats_t write_classes_to_dex(
     IODIMetadata* iodi_metadata,
     const std::string& dex_magic,
     const DexOutputConfig& dex_output_config = DexOutputConfig{},
-    PostLowering* post_lowering = nullptr,
     int min_sdk = 0);
 
 using cmp_dstring = bool (*)(const DexString*, const DexString*);
@@ -348,7 +347,6 @@ class DexOutput {
   std::vector<std::pair<std::string, uint32_t>> m_method_bytecode_offsets;
   std::unordered_map<DexClass*, uint32_t> m_static_values;
   std::unordered_map<DexCallSite*, uint32_t> m_call_site_items;
-  std::unordered_map<DexClass*, std::vector<DexMethod*>> m_detached_methods;
   dex_header hdr;
   std::vector<dex_map_item> m_map_items;
   LocatorIndex* m_locator_index;
@@ -425,7 +423,6 @@ class DexOutput {
             std::unordered_map<DexCode*, std::vector<DebugLineItem>>*
                 code_debug_lines,
             const DexOutputConfig& dex_output_config = DexOutputConfig{},
-            PostLowering* post_lowering = nullptr,
             int min_sdk = 0);
   void prepare(SortMode string_mode,
                const std::vector<SortMode>& code_mode,

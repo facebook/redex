@@ -38,8 +38,6 @@ endif
 
 libredex_la_SOURCES = \
 	liblocator/locator.cpp \
-	libredex/ABExperimentContext.cpp \
-	libredex/ABExperimentContextImpl.cpp \
 	libredex/AggregateException.cpp \
 	libredex/AnalysisUsage.cpp \
 	libredex/AnnoUtils.cpp \
