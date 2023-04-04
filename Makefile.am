@@ -336,6 +336,8 @@ libopt_la_SOURCES = \
 	opt/layout-reachability/LayoutReachabilityPass.cpp \
 	opt/local-dce/LocalDcePass.cpp \
 	opt/merge_interface/MergeInterface.cpp \
+	opt/nullcheck_conversion/IntrinsifyNullChecksPass.cpp \
+	opt/nullcheck_conversion/MaterializeNullChecksPass.cpp \
 	opt/obfuscate/Obfuscate.cpp \
 	opt/obfuscate/ObfuscateUtils.cpp \
 	opt/obfuscate/VirtualRenamer.cpp \
