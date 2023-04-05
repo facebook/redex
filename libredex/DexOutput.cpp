@@ -2821,22 +2821,22 @@ void write_pg_mapping(const std::string& filename, DexClasses* classes) {
     auto deobf_cls = deobf_class(cls);
     ofs << java_names::internal_to_external(deobf_cls) << " -> "
         << java_names::internal_to_external(cls->get_type()->str()) << ":"
-        << std::endl;
+        << "\n";
     for (auto field : cls->get_ifields()) {
       auto deobf = deobf_field(field);
-      ofs << "    " << deobf << " -> " << field->c_str() << std::endl;
+      ofs << "    " << deobf << " -> " << field->c_str() << "\n";
     }
     for (auto field : cls->get_sfields()) {
       auto deobf = deobf_field(field);
-      ofs << "    " << deobf << " -> " << field->c_str() << std::endl;
+      ofs << "    " << deobf << " -> " << field->c_str() << "\n";
     }
     for (auto meth : cls->get_dmethods()) {
       auto deobf = deobf_meth(meth);
-      ofs << "    " << deobf << " -> " << meth->c_str() << std::endl;
+      ofs << "    " << deobf << " -> " << meth->c_str() << "\n";
     }
     for (auto meth : cls->get_vmethods()) {
       auto deobf = deobf_meth(meth);
-      ofs << "    " << deobf << " -> " << meth->c_str() << std::endl;
+      ofs << "    " << deobf << " -> " << meth->c_str() << "\n";
     }
   }
 }
@@ -2849,27 +2849,27 @@ void write_full_mapping(const std::string& filename,
   std::ofstream ofs(filename.c_str(), std::ofstream::out | std::ofstream::app);
   for (auto cls : *classes) {
     ofs << "type " << cls->get_deobfuscated_name_or_empty() << " -> "
-        << show(cls) << std::endl;
+        << show(cls) << "\n";
     if (store_name) {
       const auto& original_store_name = cls->get_location()->get_store_name();
       ofs << "store " << std::quoted(original_store_name) << " -> "
-          << std::quoted(*store_name) << std::endl;
+          << std::quoted(*store_name) << "\n";
     }
     for (auto field : cls->get_ifields()) {
       ofs << "ifield " << field->get_deobfuscated_name_or_empty() << " -> "
-          << show(field) << std::endl;
+          << show(field) << "\n";
     }
     for (auto field : cls->get_sfields()) {
       ofs << "sfield " << field->get_deobfuscated_name_or_empty() << " -> "
-          << show(field) << std::endl;
+          << show(field) << "\n";
     }
     for (auto method : cls->get_dmethods()) {
       ofs << "dmethod " << method->get_deobfuscated_name_or_empty() << " -> "
-          << show(method) << std::endl;
+          << show(method) << "\n";
     }
     for (auto method : cls->get_vmethods()) {
       ofs << "vmethod " << method->get_deobfuscated_name_or_empty() << " -> "
-          << show(method) << std::endl;
+          << show(method) << "\n";
     }
   }
 }
