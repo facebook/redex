@@ -55,16 +55,23 @@ void set_type_refs(const DexType* intf, const SingleImplData& data) {
  */
 DexProto* get_or_make_proto(const DexType* intf,
                             DexType* impl,
-                            DexProto* proto) {
+                            DexProto* proto,
+                            bool skip_args = false) {
   DexType* rtype = proto->get_rtype();
-  if (rtype == intf) rtype = impl;
+  if (rtype == intf) {
+    rtype = impl;
+  }
   DexTypeList* new_args = nullptr;
   const auto args = proto->get_args();
   DexTypeList::ContainerType new_arg_list;
   for (const auto arg : *args) {
     new_arg_list.push_back(arg == intf ? impl : arg);
   }
-  new_args = DexTypeList::make_type_list(std::move(new_arg_list));
+  if (skip_args) {
+    new_args = args;
+  } else {
+    new_args = DexTypeList::make_type_list(std::move(new_arg_list));
+  }
   return DexProto::make_proto(rtype, new_args, proto->get_shorty());
 }
 
@@ -597,6 +604,28 @@ EscapeReason OptimizationImpl::check_method_collision(
                                  proto,
                                  type_class(method->get_class()),
                                  method->is_virtual());
+    }
+    // For bridge method, a collision could exist with the actual implementation
+    // method if the interface to be removed is also on the parameter list.
+    // Example:
+    //   interface Intf { Intf setup(Intf i); }
+    //   class Impl {
+    //     Impl setup(Intf i) {
+    //       return this;
+    //     }
+    //   }
+    //
+    // The bridge method on class Impl is Intf setup(Intf).
+    // The actual implementation method on class Impl is Impl setup(Intf).
+    // The collision only exists if we update the proto for both methods.
+    // Alternatively, for the bridge method, we can perform additional collision
+    // check by only update the rtype on the proto (Impl is Impl setup(Intf) in
+    // the above example) just to be conservative.
+    if (!collision && is_bridge(method)) {
+      proto = get_or_make_proto(intf, data.cls, method->get_proto(),
+                                /* skip_args */ true);
+      collision =
+          DexMethod::get_method(method->get_class(), method->get_name(), proto);
     }
     if (collision) {
       TRACE(INTF, 9, "Found collision %s", SHOW(method));
