@@ -2547,7 +2547,7 @@ void ControlFlowGraph::insert_block(Block* pred,
                       "invalid block insertion\n");
     to_move.push_back(e);
   }
-  always_assert_log(to_move.size() >= 1,
+  always_assert_log(!to_move.empty(),
                     "Can't insert a block between 2 disconnected blocks\n");
   // Redirect the edges from succ to inserted_block.
   for (auto e : to_move) {

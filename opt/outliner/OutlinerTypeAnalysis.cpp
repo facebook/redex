@@ -365,7 +365,6 @@ const DexType* OutlinerTypeAnalysis::get_result_type_helper(
   case OPCODE_ARRAY_LENGTH:
     return type::_int();
   case OPCODE_INSTANCE_OF:
-    return type::_boolean();
   case OPCODE_AGET_BOOLEAN:
     return type::_boolean();
   case OPCODE_AGET_BYTE:

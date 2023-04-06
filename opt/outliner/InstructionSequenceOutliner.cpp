@@ -573,14 +573,12 @@ static bool can_outline_opcode(IROpcode opcode, bool outline_control_flow) {
   case OPCODE_RETURN_VOID:
   case OPCODE_RETURN_WIDE:
   case OPCODE_THROW:
-    return false;
-
   case OPCODE_CMPL_FLOAT:
   case OPCODE_CMPG_FLOAT:
   case OPCODE_CMPL_DOUBLE:
   case OPCODE_CMPG_DOUBLE:
   case OPCODE_CMP_LONG:
-    // While these instructions could formally be part of an outlined methods,
+    // While the CMP instructions could formally be part of an outlined methods,
     // we ran into issues in the past with the CSE pass, where breaking up
     // CMP and IF instructions caused some obscure issues on some Android
     // versions. So we rather avoid that. It's not a big loss.
