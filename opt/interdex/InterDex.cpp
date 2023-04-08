@@ -245,63 +245,6 @@ bool is_canary(DexClass* clazz) {
                  strlen(SECONDARY_CANARY_PREFIX)) == 0;
 }
 
-// Compare two classes for sorting in a way that is best for compression.
-bool compare_dexclasses_for_compressed_size(DexClass* c1, DexClass* c2) {
-  // Canary classes go last
-  if (interdex::is_canary(c1) != interdex::is_canary(c2)) {
-    return (interdex::is_canary(c1) ? 1 : 0) <
-           (interdex::is_canary(c2) ? 1 : 0);
-  }
-  // Interfaces go after non-interfaces
-  if (is_interface(c1) != is_interface(c2)) {
-    return (is_interface(c1) ? 1 : 0) < (is_interface(c2) ? 1 : 0);
-  }
-  // Base types and implemented interfaces go last
-  if (type::check_cast(c2->get_type(), c1->get_type())) {
-    return false;
-  }
-  always_assert(c1 != c2);
-  if (type::check_cast(c1->get_type(), c2->get_type())) {
-    return true;
-  }
-  // If types are unrelated, sort by super-classes and then
-  // interfaces
-  if (c1->get_super_class() != c2->get_super_class()) {
-    return compare_dextypes(c1->get_super_class(), c2->get_super_class());
-  }
-  if (c1->get_interfaces() != c2->get_interfaces()) {
-    return compare_dextypelists(c1->get_interfaces(), c2->get_interfaces());
-  }
-
-  // Tie-breaker: fields/methods count distance
-  int dmethods_distance =
-      (int)c1->get_dmethods().size() - (int)c2->get_dmethods().size();
-  if (dmethods_distance != 0) {
-    return dmethods_distance < 0;
-  }
-  int vmethods_distance =
-      (int)c1->get_vmethods().size() - (int)c2->get_vmethods().size();
-  if (vmethods_distance != 0) {
-    return vmethods_distance < 0;
-  }
-  int ifields_distance =
-      (int)c1->get_ifields().size() - (int)c2->get_ifields().size();
-  if (ifields_distance != 0) {
-    return ifields_distance < 0;
-  }
-  int sfields_distance =
-      (int)c1->get_sfields().size() - (int)c2->get_sfields().size();
-  if (sfields_distance != 0) {
-    return sfields_distance < 0;
-  }
-  // Tie-breaker: has-class-data
-  if (c1->has_class_data() != c2->has_class_data()) {
-    return (c1->has_class_data() ? 1 : 0) < (c2->has_class_data() ? 1 : 0);
-  }
-  // Final tie-breaker: Compare types, which means names
-  return compare_dextypes(c1->get_type(), c2->get_type());
-}
-
 bool InterDex::should_skip_class_due_to_plugin(DexClass* clazz) const {
   for (const auto& plugin : m_plugins) {
     if (plugin->should_skip_class(clazz)) {
@@ -1372,68 +1315,6 @@ void InterDex::post_process_dex(EmittingState& emitting_state,
         cls->set_perf_sensitive(true);
       }
     }
-  }
-
-  if (m_sort_remaining_classes) {
-    std::vector<DexClass*> perf_sensitive_classes;
-    using DexClassWithSortNum = std::pair<DexClass*, double>;
-    std::vector<DexClassWithSortNum> classes_with_sort_num;
-    std::vector<DexClass*> remaining_classes;
-    using namespace method_profiles;
-    // Copy intended!
-    auto mpoc = *m_conf.get_global_config()
-                     .get_config_by_name<MethodProfileOrderingConfig>(
-                         "method_profile_order");
-    mpoc.min_appear_percent = 1.0f;
-    dexmethods_profiled_comparator comparator({}, &m_conf.get_method_profiles(),
-                                              &mpoc);
-    for (auto cls : classes) {
-      if (cls->is_perf_sensitive()) {
-        perf_sensitive_classes.push_back(cls);
-        continue;
-      }
-      double cls_sort_num = dexmethods_profiled_comparator::VERY_END;
-      walk::methods(std::vector<DexClass*>{cls}, [&](DexMethod* method) {
-        auto method_sort_num = comparator.get_overall_method_sort_num(method);
-        if (method_sort_num < cls_sort_num) {
-          cls_sort_num = method_sort_num;
-        }
-      });
-      if (cls_sort_num < dexmethods_profiled_comparator::VERY_END) {
-        classes_with_sort_num.emplace_back(cls, cls_sort_num);
-        continue;
-      }
-      remaining_classes.push_back(cls);
-    }
-    always_assert(perf_sensitive_classes.size() + classes_with_sort_num.size() +
-                      remaining_classes.size() ==
-                  classes.size());
-
-    TRACE(IDEX, 2,
-          "Skipping %zu perf sensitive, ordering %zu by method profiles, and "
-          "sorting %zu classes",
-          perf_sensitive_classes.size(), classes_with_sort_num.size(),
-          remaining_classes.size());
-    std::stable_sort(
-        classes_with_sort_num.begin(), classes_with_sort_num.end(),
-        [](const DexClassWithSortNum& a, const DexClassWithSortNum& b) {
-          return a.second < b.second;
-        });
-    std::sort(remaining_classes.begin(), remaining_classes.end(),
-              compare_dexclasses_for_compressed_size);
-    // Rearrange classes so that...
-    // - perf_sensitive_classes go first, then
-    // - classes_with_sort_num that got ordered by the method profiles, and
-    // finally
-    // - remaining_classes
-    classes.clear();
-    classes.insert(classes.end(), perf_sensitive_classes.begin(),
-                   perf_sensitive_classes.end());
-    for (auto& p : classes_with_sort_num) {
-      classes.push_back(p.first);
-    }
-    classes.insert(classes.end(), remaining_classes.begin(),
-                   remaining_classes.end());
   }
 }
 

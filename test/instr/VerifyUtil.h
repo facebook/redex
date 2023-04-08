@@ -43,6 +43,10 @@ struct PostVerify : public RedexTest {
                                         "post")) {}
 };
 
+// \returns -1 if no class with \name is found. Otherwise, \returns the the
+// class's idx in \classes list.
+int find_class_idx(const DexClasses& classes, const char* name);
+
 DexClass* find_class_named(const DexClasses& classes, const char* name);
 DexClass* find_class_named(const DexClasses& classes,
                            const std::function<bool(const char*)>& matcher);

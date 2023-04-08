@@ -87,7 +87,6 @@ class InterDexPass : public Pass {
   cross_dex_ref_minimizer::CrossDexRefMinimizerConfig
       m_minimize_cross_dex_refs_config;
   bool m_expect_order_list;
-  bool m_sort_remaining_classes;
   std::vector<std::string> m_methods_for_canary_clinit_reference;
   bool m_transitively_close_interdex_order{false};
 
