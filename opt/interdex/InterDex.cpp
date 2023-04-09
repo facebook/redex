@@ -760,7 +760,8 @@ void InterDex::init_cross_dex_ref_minimizer() {
   // A few classes might have already been emitted to the current dex which we
   // are about to fill up. Make it so that the minimizer knows that all the refs
   // of those classes have already been emitted.
-  for (auto cls : m_emitting_state.dexes_structure.get_current_dex_classes()) {
+  for (auto cls :
+       m_emitting_state.dexes_structure.get_current_dex().get_classes()) {
     m_cross_dex_ref_minimizer.sample(cls);
     m_cross_dex_ref_minimizer.insert(cls);
     m_cross_dex_ref_minimizer.erase(cls, /* emitted */ true);
@@ -769,8 +770,8 @@ void InterDex::init_cross_dex_ref_minimizer() {
 
 void InterDex::emit_remaining_classes(DexInfo& dex_info,
                                       DexClass** canary_cls) {
-  m_current_classes_when_emitting_remaining =
-      m_emitting_state.dexes_structure.get_current_dex_classes().size();
+   m_current_classes_when_emitting_remaining =
+      m_emitting_state.dexes_structure.get_current_dex().size();
 
   if (!m_minimize_cross_dex_refs) {
     for (DexClass* cls : m_scope) {
@@ -970,7 +971,7 @@ void InterDex::run_in_force_single_dex_mode() {
   }
 
   // Emit all no matter what it is.
-  if (!m_emitting_state.dexes_structure.get_current_dex_classes().empty()) {
+  if (!m_emitting_state.dexes_structure.get_current_dex().empty()) {
     auto fodr =
         flush_out_dex(m_emitting_state, dex_info, /* canary_cls */ nullptr);
     post_process_dex(m_emitting_state, fodr);
@@ -1016,7 +1017,7 @@ void InterDex::run() {
   Json::Value json_first_dex;
   if (json_classes) {
     json_first_dex = m_cross_dex_ref_minimizer.get_json_class_indices(
-        m_emitting_state.dexes_structure.get_current_dex_classes());
+        m_emitting_state.dexes_structure.get_current_dex().get_classes());
   }
 
   // Now emit the classes that weren't specified in the head or primary list.
@@ -1024,7 +1025,7 @@ void InterDex::run() {
   emit_remaining_classes(dex_info, &canary_cls);
 
   // Emit what is left, if any.
-  if (!m_emitting_state.dexes_structure.get_current_dex_classes().empty()) {
+  if (!m_emitting_state.dexes_structure.get_current_dex().empty()) {
     auto fodr = flush_out_dex(m_emitting_state, dex_info, canary_cls);
     post_process_dex(m_emitting_state, fodr);
     canary_cls = nullptr;
@@ -1096,7 +1097,7 @@ void InterDex::run_on_nonroot_store() {
   }
 
   // Emit what is left, if any.
-  if (!m_emitting_state.dexes_structure.get_current_dex_classes().empty()) {
+  if (!m_emitting_state.dexes_structure.get_current_dex().empty()) {
     auto fodr = flush_out_dex(m_emitting_state, EMPTY_DEX_INFO, canary_cls);
     post_process_dex(m_emitting_state, fodr);
   }
@@ -1239,7 +1240,7 @@ InterDex::FlushOutDexResult InterDex::flush_out_dex(
   int dexnum = emitting_state.dexes_structure.get_num_dexes();
   if (dex_info.primary) {
     TRACE(IDEX, 2, "Writing out primary dex with %zu classes.",
-          emitting_state.dexes_structure.get_current_dex_classes().size());
+          emitting_state.dexes_structure.get_current_dex().size());
   } else {
     TRACE(IDEX, 2,
           "Writing out secondary dex number %zu, which is %s of coldstart, "
@@ -1250,7 +1251,7 @@ InterDex::FlushOutDexResult InterDex::flush_out_dex(
           (dex_info.extended ? "part of" : "not part of"),
           (dex_info.background ? "part of" : "not part of"),
           (dex_info.scroll ? "has" : "doesn't have"),
-          emitting_state.dexes_structure.get_current_dex_classes().size());
+          emitting_state.dexes_structure.get_current_dex().size());
   }
 
   // Add the Canary class, if any.

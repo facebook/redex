@@ -54,6 +54,28 @@ bool matches_penalty(const char* str, unsigned* penalty) {
 }
 
 /**
+ * Returns the count of elements present in a but not in b.
+ */
+template <typename T>
+size_t set_difference_size(const std::unordered_set<T>& a,
+                           const std::unordered_set<T>& b) {
+  size_t result = a.size();
+  if (a.size() <= b.size()) {
+    for (const auto& v : a) {
+      result -= b.count(v);
+    }
+  } else {
+    for (const auto& v : b) {
+      result -= a.count(v);
+    }
+  }
+  return result;
+}
+
+} // namespace
+
+namespace interdex {
+/**
  * Estimates the linear alloc space consumed by the class at runtime.
  */
 unsigned estimate_linear_alloc(const DexClass* clazz) {
@@ -86,21 +108,21 @@ unsigned estimate_linear_alloc(const DexClass* clazz) {
  */
 template <typename T>
 size_t set_difference_size(const std::unordered_set<T>& a,
-                           const std::unordered_set<T>& b) {
+                           const std::unordered_map<T, size_t>& b) {
   size_t result = a.size();
   if (a.size() <= b.size()) {
     for (const auto& v : a) {
       result -= b.count(v);
     }
   } else {
-    for (const auto& v : b) {
+    for (const auto [v, c] : b) {
       result -= a.count(v);
     }
   }
   return result;
 }
 
-} // namespace
+} // namespace interdex
 
 namespace interdex {
 
@@ -203,7 +225,7 @@ DexClasses DexesStructure::end_dex(DexInfo dex_info) {
 
   m_current_dex.check_refs_count();
 
-  DexClasses all_classes = m_current_dex.take_all_classes();
+  DexClasses all_classes = m_current_dex.get_classes();
 
   m_overflow_stats += m_current_dex.m_overflow_stats;
 
@@ -250,9 +272,9 @@ void DexStructure::resolve_init_classes(
       continue;
     }
     const auto& fields = cls->get_sfields();
-    if (std::find_if(fields.begin(), fields.end(), [&](DexField* field) {
+     if (std::any_of(fields.begin(), fields.end(), [&](DexField* field) {
           return m_frefs.count(field) || frefs.count(field);
-        }) != fields.end()) {
+        })) {
       continue;
     }
     pending_init_class_fields->insert(type);
@@ -353,6 +375,9 @@ void DexStructure::add_class_no_checks(
                      pending_init_class_fields, pending_init_class_types);
   m_linear_alloc_size += laclazz;
   m_classes.push_back(clazz);
+  auto emplaced =
+      m_classes_iterators.emplace(clazz, std::prev(m_classes.end())).second;
+  always_assert(emplaced);
 }
 
 void DexStructure::add_refs_no_checks(
@@ -361,9 +386,11 @@ void DexStructure::add_refs_no_checks(
     const TypeRefs& clazz_trefs,
     const interdex::TypeRefs& pending_init_class_fields,
     const interdex::TypeRefs& pending_init_class_types) {
-  m_mrefs.insert(clazz_mrefs.begin(), clazz_mrefs.end());
+  for (auto mref : clazz_mrefs) {
+    m_mrefs[mref]++;
+  }
   for (auto fref : clazz_frefs) {
-    if (!m_frefs.insert(fref).second) {
+    if (++m_frefs[fref] > 1) {
       continue;
     }
     if (!fref->is_def()) {
@@ -379,7 +406,7 @@ void DexStructure::add_refs_no_checks(
     }
   }
   for (auto type : clazz_trefs) {
-    if (!m_trefs.insert(type).second) {
+    if (++m_trefs[type] > 1) {
       continue;
     }
     m_pending_init_class_types.erase(type);
@@ -393,6 +420,74 @@ void DexStructure::add_refs_no_checks(
     always_assert(inserted);
     always_assert(!m_trefs.count(type));
   }
+}
+
+void DexStructure::remove_class(
+    const init_classes::InitClassesWithSideEffects*
+        init_classes_with_side_effects,
+    const MethodRefs& clazz_mrefs,
+    const FieldRefs& clazz_frefs,
+    const TypeRefs& clazz_trefs,
+    const interdex::TypeRefs& pending_init_class_fields,
+    const interdex::TypeRefs& pending_init_class_types,
+    unsigned laclazz,
+    DexClass* clazz) {
+  for (auto mref : clazz_mrefs) {
+    auto it = m_mrefs.find(mref);
+    if (--it->second == 0) {
+      m_mrefs.erase(it);
+    }
+  }
+  for (auto fref : clazz_frefs) {
+    auto it = m_frefs.find(fref);
+    if (--it->second > 0) {
+      continue;
+    }
+    m_frefs.erase(it);
+    if (!fref->is_def()) {
+      continue;
+    }
+    auto f = fref->as_def();
+    if (!is_static(f)) {
+      continue;
+    }
+    auto type = fref->get_class();
+    auto cls = type_class(type);
+    if (cls->is_external()) {
+      continue;
+    }
+    const auto& fields = cls->get_sfields();
+    if (std::any_of(fields.begin(), fields.end(),
+                    [&](DexField* field) { return m_frefs.count(field); })) {
+      continue;
+    }
+    if (init_classes_with_side_effects->refine(type) != fref->get_class()) {
+      continue;
+    }
+    auto inserted = m_pending_init_class_fields.insert(type).second;
+    always_assert(inserted);
+    if (!m_trefs.count(type) && !clazz_trefs.count(type)) {
+      m_pending_init_class_types.insert(fref->get_class());
+    }
+  }
+  for (auto type : clazz_trefs) {
+    auto it = m_trefs.find(type);
+    if (--it->second > 0) {
+      continue;
+    }
+    m_trefs.erase(it);
+    if (!m_pending_init_class_fields.count(type)) {
+      continue;
+    }
+    auto inserted = m_pending_init_class_types.insert(type).second;
+    always_assert(inserted);
+  }
+  m_linear_alloc_size -= laclazz;
+  auto classes_iterators_it = m_classes_iterators.find(clazz);
+  always_assert(classes_iterators_it != m_classes_iterators.end());
+  auto classes_it = classes_iterators_it->second;
+  m_classes.erase(classes_it);
+  m_classes_iterators.erase(classes_iterators_it);
 }
 
 /*
