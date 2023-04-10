@@ -275,10 +275,9 @@ void TransitiveClosureMarker::push(const Parent* parent, const DexClass* cls) {
     return;
   }
   record_reachability(parent, cls);
-  if (m_reachable_objects->marked(cls)) {
+  if (!m_reachable_objects->mark(cls)) {
     return;
   }
-  m_reachable_objects->mark(cls);
   m_worker_state->push_task(ReachableObject(cls));
 }
 
@@ -289,14 +288,13 @@ void TransitiveClosureMarker::push(const Parent* parent,
     return;
   }
   record_reachability(parent, field);
-  if (m_reachable_objects->marked(field)) {
+  if (!m_reachable_objects->mark(field)) {
     return;
   }
   auto f = field->as_def();
   if (f) {
     gather_and_push(f);
   }
-  m_reachable_objects->mark(field);
   m_worker_state->push_task(ReachableObject(field));
 }
 
@@ -308,10 +306,9 @@ void TransitiveClosureMarker::push(const Parent* parent,
   }
 
   record_reachability(parent, method);
-  if (m_reachable_objects->marked(method)) {
+  if (!m_reachable_objects->mark(method)) {
     return;
   }
-  m_reachable_objects->mark(method);
   m_worker_state->push_task(ReachableObject(method));
 }
 
