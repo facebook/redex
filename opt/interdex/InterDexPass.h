@@ -72,6 +72,8 @@ class InterDexPass : public Pass {
   }
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
+  bool minimize_cross_dex_refs() const { return m_minimize_cross_dex_refs; }
+
  private:
   bool m_static_prune;
   bool m_emit_canaries;
