@@ -310,6 +310,10 @@ double MethodProfiles::get_process_unresolved_lines_seconds() {
 }
 
 void MethodProfiles::process_unresolved_lines() {
+  if (m_unresolved_lines.empty()) {
+    return;
+  }
+
   auto timer_scope = s_process_unresolved_lines_timer.scope();
 
   std::set<ParsedMain*> resolved;
