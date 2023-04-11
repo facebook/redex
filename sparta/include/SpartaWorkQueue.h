@@ -332,7 +332,7 @@ void SpartaWorkQueue<Input, Executor>::run_all() {
   std::vector<std::thread> all_threads;
   all_threads.reserve(m_num_threads);
   for (size_t i = 0; i < m_num_threads; ++i) {
-    all_threads.emplace_back(std::bind<void>(worker, m_states[i].get(), i));
+    all_threads.emplace_back(worker, m_states[i].get(), i);
   }
 
   for (auto& thread : all_threads) {
