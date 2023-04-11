@@ -541,4 +541,10 @@ DexMethod* kotlin_jvm_internal_Intrinsics_checkNotNullExpressionValue() {
       "Lkotlin/jvm/internal/Intrinsics;.checkNotNullExpressionValue:(Ljava/"
       "lang/Object;Ljava/lang/String;)V"));
 }
+
+DexMethod* redex_internal_checkObjectNotNull() {
+  return static_cast<DexMethod*>(DexMethod::get_method(
+      "Lredex/$NullCheck;.null_check:(Ljava/lang/Object;)V"));
+}
+
 }; // namespace method

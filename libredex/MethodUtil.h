@@ -127,6 +127,8 @@ DexMethod* kotlin_jvm_internal_Intrinsics_checExpressionValueIsNotNull();
 
 DexMethod* kotlin_jvm_internal_Intrinsics_checkNotNullExpressionValue();
 
+DexMethod* redex_internal_checkObjectNotNull();
+
 inline unsigned count_opcode_of_types(
     const cfg::ControlFlowGraph& cfg,
     const std::unordered_set<IROpcode>& opcodes) {

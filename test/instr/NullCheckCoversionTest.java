@@ -30,6 +30,7 @@ class NullCheckConversionTest {
   public NullCheckConversionTest(String ss, SampleObj so, String so2) {
     Objects.requireNonNull(ss);
     this.ss = ss;
+    Objects.requireNonNull(this.ss);
     Objects.requireNonNull(so, "new bar must not be null");
     this.so = so;
     this.so2 = Preconditions.checkNotNull(so2);
@@ -49,7 +50,8 @@ class NullCheckConversionTest {
   @DoNotStrip
   @Test
   public void Test(String[] args) {
-    NullCheckConversionTest my = new NullCheckConversionTest(args[2], null, args[1]);
+    String s1 = "abc";
+    NullCheckConversionTest my = new NullCheckConversionTest(s1, null, args[1]);
     System.out.println(my.Test2(args[1]));
   }
 }

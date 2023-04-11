@@ -71,6 +71,12 @@ DexOpcodeMethod* find_invoke(std::vector<DexInstruction*>::iterator begin,
                              DexType* receiver = nullptr);
 DexInstruction* find_instruction(DexMethod* m, DexOpcode opcode);
 
+/* Find the number of invoke instructions that calls a particular method name */
+size_t find_num_invoke(const DexMethod* m,
+                       DexOpcode opcode,
+                       const char* target_mname,
+                       DexType* receiver = nullptr);
+
 void verify_class_merged(const DexClass* cls, size_t num_dmethods = 0);
 
 // A quick helper to dump CFGs before/after verify

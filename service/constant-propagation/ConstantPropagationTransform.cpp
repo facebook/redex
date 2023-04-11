@@ -74,10 +74,21 @@ bool Transform::eliminate_redundant_null_check(
   auto* insn = cfg_it->insn;
   switch (insn->opcode()) {
   case OPCODE_INVOKE_STATIC: {
+    // Kotlin null check.
     if (auto index = get_null_check_object_index(
             insn, m_runtime_cache.kotlin_null_check_assertions)) {
       ++m_stats.null_checks_method_calls;
       auto val = env.get(insn->src(*index)).maybe_get<SignedConstantDomain>();
+      if (val && val->interval() == sign_domain::Interval::NEZ) {
+        m_mutation->remove(cfg_it);
+        ++m_stats.null_checks;
+        return true;
+      }
+    }
+    // Redex null check.
+    if (insn->get_method() == m_runtime_cache.redex_null_check_assertion) {
+      ++m_stats.null_checks_method_calls;
+      auto val = env.get(insn->src(0)).maybe_get<SignedConstantDomain>();
       if (val && val->interval() == sign_domain::Interval::NEZ) {
         m_mutation->remove(cfg_it);
         ++m_stats.null_checks;

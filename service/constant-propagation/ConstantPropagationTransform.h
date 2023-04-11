@@ -46,6 +46,8 @@ class Transform final {
   struct RuntimeCache {
     const std::unordered_set<DexMethodRef*> kotlin_null_check_assertions{
         kotlin_nullcheck_wrapper::get_kotlin_null_assertions()};
+    const DexMethodRef* redex_null_check_assertion{
+        method::redex_internal_checkObjectNotNull()};
   };
 
   struct Stats {

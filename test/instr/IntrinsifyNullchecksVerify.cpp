@@ -20,9 +20,10 @@ TEST_F(PreVerify, TestNullCheck) {
 
   auto* meth_init = find_dmethod_named(*test_obj_cls, "<init>");
   ASSERT_NE(nullptr, meth_init);
-  // Before opt, there is a invoke-virtual Object;.getClass();
+  // Before opt, there two 2 invoke-virtual Object;.getClass();
   EXPECT_NE(nullptr,
             find_invoke(meth_init, DOPCODE_INVOKE_VIRTUAL, "getClass"));
+  EXPECT_EQ(2, find_num_invoke(meth_init, DOPCODE_INVOKE_VIRTUAL, "getClass"));
 }
 
 TEST_F(PostVerify, TestNullCheck) {
@@ -34,9 +35,11 @@ TEST_F(PostVerify, TestNullCheck) {
 
   auto* meth_init = find_dmethod_named(*test_obj_cls, "<init>");
   ASSERT_NE(nullptr, meth_init);
-  // After opt, getClass() should be replaced with a null_check.
+  // After opt, getClass() should be replaced with a null_check. And there is
+  // only 1 left, since the duplicated one is removed.
   EXPECT_EQ(nullptr,
             find_invoke(meth_init, DOPCODE_INVOKE_VIRTUAL, "getClass"));
   EXPECT_NE(nullptr,
             find_invoke(meth_init, DOPCODE_INVOKE_STATIC, "null_check"));
+  EXPECT_EQ(1, find_num_invoke(meth_init, DOPCODE_INVOKE_STATIC, "null_check"));
 }
