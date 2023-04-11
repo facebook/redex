@@ -14,7 +14,6 @@
 #include <boost/dynamic_bitset.hpp>
 
 #include "DexClass.h"
-#include "Timer.h"
 
 class DexInstruction;
 
@@ -31,7 +30,7 @@ class DexInstruction;
  * true;" would all get co-located right after the first such method, resulting
  * in better compression.
  */
-class MethodSimilarityOrderer {
+class MethodSimilarityGreedyOrderer {
  public:
   // Converted unique id (32 bit) for a sequence (chunk) of instructions
   // represented by stable_hash.

@@ -110,7 +110,7 @@ libredex_la_SOURCES = \
 	libredex/MethodDevirtualizer.cpp \
 	libredex/MethodOverrideGraph.cpp \
 	libredex/MethodProfiles.cpp \
-	libredex/MethodSimilarityOrderer.cpp \
+	libredex/MethodSimilarityGreedyOrderer.cpp \
 	libredex/MethodUtil.cpp \
 	libredex/MonitorCount.cpp \
 	libredex/Mutators.cpp \

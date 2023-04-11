@@ -5,10 +5,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "MethodSimilarityOrderer.h"
+#include "MethodSimilarityGreedyOrderer.h"
 
 #include "DexInstruction.h"
 #include "Show.h"
+#include "Timer.h"
 #include "Trace.h"
 #include "WorkQueue.h"
 
@@ -36,14 +37,13 @@ struct CountingFakeOutputIterator {
 };
 }; // namespace
 
-void MethodSimilarityOrderer::gather_code_hash_ids(
+void MethodSimilarityGreedyOrderer::gather_code_hash_ids(
     const std::vector<DexInstruction*>& instructions,
     std::vector<CodeHashId>& code_hash_ids) {
 
   std::unordered_set<StableHash> stable_hashes;
 
-  // For any instruction,we can compute a (stable) hash representing
-  // it.
+  // For any instruction, we can compute a (stable) hash representing it.
   for (size_t i = 0; i < instructions.size(); i++) {
     uint64_t code_hash{0};
     auto insn = instructions.at(i);
@@ -84,8 +84,10 @@ void MethodSimilarityOrderer::gather_code_hash_ids(
 // For the given code hash ids (i) and code hash ids (j), get score for j
 // against i.
 static inline Score get_score(
-    const std::vector<MethodSimilarityOrderer::CodeHashId>& code_hash_ids_i,
-    const std::vector<MethodSimilarityOrderer::CodeHashId>& code_hash_ids_j) {
+    const std::vector<MethodSimilarityGreedyOrderer::CodeHashId>&
+        code_hash_ids_i,
+    const std::vector<MethodSimilarityGreedyOrderer::CodeHashId>&
+        code_hash_ids_j) {
   uint32_t i_size = code_hash_ids_i.size();
   uint32_t j_size = code_hash_ids_j.size();
 
@@ -93,7 +95,7 @@ static inline Score get_score(
   std::set_intersection(
       code_hash_ids_i.begin(), code_hash_ids_i.end(), code_hash_ids_j.begin(),
       code_hash_ids_j.end(),
-      CountingFakeOutputIterator<MethodSimilarityOrderer::CodeHashId>(
+      CountingFakeOutputIterator<MethodSimilarityGreedyOrderer::CodeHashId>(
           score.shared));
 
   score.missing = i_size - score.shared;
@@ -102,7 +104,7 @@ static inline Score get_score(
   return score;
 }
 
-void MethodSimilarityOrderer::compute_score() {
+void MethodSimilarityGreedyOrderer::compute_score() {
   m_score_map.clear();
   m_score_map.resize(m_id_to_method.size());
 
@@ -149,7 +151,7 @@ void MethodSimilarityOrderer::compute_score() {
       indices);
 }
 
-void MethodSimilarityOrderer::insert(DexMethod* method) {
+void MethodSimilarityGreedyOrderer::insert(DexMethod* method) {
   always_assert(m_method_to_id.count(method) == 0);
   // While the number of methods can reach 65536 (2^16), at
   // this stage not all methods have been added, so we assert that
@@ -166,8 +168,8 @@ void MethodSimilarityOrderer::insert(DexMethod* method) {
   }
 }
 
-boost::optional<MethodSimilarityOrderer::MethodId>
-MethodSimilarityOrderer::get_next() {
+boost::optional<MethodSimilarityGreedyOrderer::MethodId>
+MethodSimilarityGreedyOrderer::get_next() {
   // Clear best candidates.
   if (m_id_to_method.empty()) {
     return {};
@@ -199,7 +201,7 @@ MethodSimilarityOrderer::get_next() {
   return best_method_id;
 }
 
-void MethodSimilarityOrderer::remove_method(DexMethod* meth) {
+void MethodSimilarityGreedyOrderer::remove_method(DexMethod* meth) {
   if (!m_method_to_id.count(meth)) return;
 
   auto method_id = m_method_to_id[meth];
@@ -207,8 +209,9 @@ void MethodSimilarityOrderer::remove_method(DexMethod* meth) {
   m_method_to_id.erase(meth);
 }
 
-void MethodSimilarityOrderer::order(std::vector<DexMethod*>& methods) {
-  Timer t("Reordering methods by similarity");
+void MethodSimilarityGreedyOrderer::order(std::vector<DexMethod*>& methods) {
+  Timer t("Reordering " + std::to_string(methods.size()) +
+          " methods by similarity using the greedy approach");
 
   for (auto* method : methods) {
     insert(method);
