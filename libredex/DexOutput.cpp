@@ -282,22 +282,6 @@ void GatheredTypes::sort_dexmethod_emitlist_profiled_order(
   std::stable_sort(lmeth.begin(), lmeth.end(), std::ref(comparator));
 }
 
-void GatheredTypes::sort_dexmethod_emitlist_profiled_secondary_order(
-    std::vector<DexMethod*>& lmeth) {
-  redex_assert(m_config != nullptr);
-
-  MethodProfileOrderingConfig* config =
-      m_config->get_global_config()
-          .get_config_by_name<MethodProfileOrderingConfig>(
-              "method_profile_order");
-
-  method_profiles::dexmethods_profiled_secondary_comparator comparator(
-      lmeth, &m_config->get_secondary_method_profiles(), config);
-
-  // Use std::ref to avoid comparator copies.
-  std::stable_sort(lmeth.begin(), lmeth.end(), std::ref(comparator));
-}
-
 void GatheredTypes::sort_dexmethod_emitlist_clinit_order(
     std::vector<DexMethod*>& lmeth) {
   std::stable_sort(lmeth.begin(), lmeth.end(),
@@ -1095,11 +1079,6 @@ void DexOutput::generate_code_items(const std::vector<SortMode>& mode) {
     case SortMode::METHOD_SIMILARITY:
       TRACE(CUSTOMSORT, 2, "using method similarity order");
       m_gtypes->sort_dexmethod_emitlist_method_similarity_order(lmeth);
-      break;
-    case SortMode::METHOD_PROFILED_SECONDARY_ORDER:
-      TRACE(CUSTOMSORT, 2,
-            "using method profiled secondary order for bytecode sorting");
-      m_gtypes->sort_dexmethod_emitlist_profiled_secondary_order(lmeth);
       break;
     case SortMode::DEFAULT:
       TRACE(CUSTOMSORT, 2, "using default sorting order");
@@ -3031,8 +3010,6 @@ static SortMode make_sort_bytecode(const std::string& sort_bytecode) {
     return SortMode::METHOD_PROFILED_ORDER;
   } else if (sort_bytecode == "method_similarity_order") {
     return SortMode::METHOD_SIMILARITY;
-  } else if (sort_bytecode == "method_profiled_secondary_order") {
-    return SortMode::METHOD_PROFILED_SECONDARY_ORDER;
   } else {
     return SortMode::DEFAULT;
   }
