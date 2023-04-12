@@ -429,14 +429,15 @@ get_wto_successors(
   auto get_sorted_impacted_methods = [&impacted_methods]() {
     std::vector<const DexMethod*> successors;
     successors.reserve(impacted_methods.size());
-    std::copy(impacted_methods.begin(), impacted_methods.end(),
-              std::back_inserter(successors));
+    successors.insert(successors.end(), impacted_methods.begin(),
+                      impacted_methods.end());
     std::sort(successors.begin(), successors.end(), compare_dexmethods);
     return successors;
   };
   std::vector<const DexMethod*> wto_nodes{WTO_ROOT};
-  std::copy(impacted_methods.begin(), impacted_methods.end(),
-            std::back_inserter(wto_nodes));
+  wto_nodes.reserve(wto_nodes.size() + impacted_methods.size());
+  wto_nodes.insert(wto_nodes.end(), impacted_methods.begin(),
+                   impacted_methods.end());
 
   if (first_iteration) {
     // In the first iteration, besides computing the sorted root successors, we

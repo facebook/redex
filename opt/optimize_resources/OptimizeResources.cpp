@@ -606,10 +606,10 @@ OptimizeResourcesPass::find_code_resource_references(
         // were constant folded/concatenated at build time with other strings.
         std::string to_find = insn->get_string()->str_copy();
         std::vector<std::string> int_strings;
-        std::copy(boost::sregex_token_iterator(to_find.begin(), to_find.end(),
-                                               find_ints),
-                  boost::sregex_token_iterator(),
-                  std::back_inserter(int_strings));
+        int_strings.insert(int_strings.end(),
+                           boost::sregex_token_iterator(
+                               to_find.begin(), to_find.end(), find_ints),
+                           boost::sregex_token_iterator());
         for (const auto& int_string : int_strings) {
           int64_t potential_num;
           try {
