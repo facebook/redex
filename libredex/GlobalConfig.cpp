@@ -86,6 +86,8 @@ void MethodProfileOrderingConfig::bind_config() {
 void MethodSimilarityOrderingConfig::bind_config() {
   bind("use_class_level_perf_sensitivity", use_class_level_perf_sensitivity,
        use_class_level_perf_sensitivity);
+  bind("use_compression_conscious_order", use_compression_conscious_order,
+       use_compression_conscious_order);
   bind("disable", disable, disable);
 }
 

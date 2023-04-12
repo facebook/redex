@@ -126,6 +126,7 @@ struct MethodSimilarityOrderingConfig : public Configurable {
   }
 
   bool disable{true};
+  bool use_compression_conscious_order{false};
   bool use_class_level_perf_sensitivity{false};
 };
 
