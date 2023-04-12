@@ -20,6 +20,8 @@
 #include "DexHasher.h"
 #include "JsonWrapper.h"
 #include "RedexOptions.h"
+#include "RedexProperties.h"
+#include "RedexPropertyCheckerRegistry.h"
 #include "Timer.h"
 
 struct ConfigFiles;
@@ -46,10 +48,12 @@ class PassManager {
 
   PassManager(const std::vector<Pass*>& passes,
               std::unique_ptr<keep_rules::ProguardConfiguration> pg_config);
-  PassManager(const std::vector<Pass*>& passes,
-              std::unique_ptr<keep_rules::ProguardConfiguration> pg_config,
-              const ConfigFiles& config,
-              const RedexOptions& options = RedexOptions{});
+  PassManager(
+      const std::vector<Pass*>& passes,
+      std::unique_ptr<keep_rules::ProguardConfiguration> pg_config,
+      const ConfigFiles& config,
+      const RedexOptions& options = RedexOptions{},
+      const std::vector<redex_properties::PropertyChecker*>& checkers = {});
 
   ~PassManager();
 
@@ -62,6 +66,7 @@ class PassManager {
     std::unordered_map<std::string, int64_t> metrics;
     JsonWrapper config;
     boost::optional<hashing::DexHash> hash;
+    redex_properties::PropertyInteractions property_interactions;
   };
 
   void run_passes(DexStoresVector&, ConfigFiles&);
@@ -135,10 +140,13 @@ class PassManager {
 
   void eval_passes(DexStoresVector&, ConfigFiles&);
 
+  void init_property_interactions();
+
   AssetManager m_asset_mgr;
   std::vector<Pass*> m_registered_passes;
   std::vector<Pass*> m_activated_passes;
   std::unordered_map<AnalysisID, Pass*> m_preserved_analysis_passes;
+  std::vector<redex_properties::PropertyChecker*> m_checkers;
 
   // Per-pass information and metrics
   std::vector<PassManager::PassInfo> m_pass_info;
@@ -152,7 +160,6 @@ class PassManager {
   bool m_materialize_nullchecks_has_run{false};
   bool m_interdex_has_run{false};
   bool m_unreliable_virtual_scopes{false};
-
   Pass* m_malloc_profile_pass{nullptr};
 
   boost::optional<hashing::DexHash> m_initial_hash;
@@ -164,4 +171,6 @@ class PassManager {
   // unique_ptr to avoid header include.
   struct InternalFields;
   std::unique_ptr<InternalFields> m_internal_fields;
+
+  std::unordered_set<redex_properties::PropertyName> m_established_properties;
 };

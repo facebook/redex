@@ -56,6 +56,7 @@
 #include "ProguardReporting.h"
 #include "Purity.h"
 #include "ReachableClasses.h"
+#include "RedexPropertyChecker.h"
 #include "Sanitizers.h"
 #include "ScopedCFG.h"
 #include "ScopedMemStats.h"
@@ -1062,14 +1063,17 @@ PassManager::PassManager(
     const std::vector<Pass*>& passes,
     std::unique_ptr<keep_rules::ProguardConfiguration> pg_config,
     const ConfigFiles& config,
-    const RedexOptions& options)
+    const RedexOptions& options,
+    const std::vector<redex_properties::PropertyChecker*>& checkers)
     : m_asset_mgr(get_apk_dir(config)),
       m_registered_passes(passes),
+      m_checkers(checkers),
       m_current_pass_info(nullptr),
       m_pg_config(std::move(pg_config)),
       m_redex_options(options),
       m_testing_mode(false),
-      m_internal_fields(new InternalFields()) {
+      m_internal_fields(new InternalFields()),
+      m_established_properties(redex_properties::get_initial()) {
   init(config);
   if (getenv("MALLOC_PROFILE_PASS")) {
     m_malloc_profile_pass = find_pass(getenv("MALLOC_PROFILE_PASS"));
@@ -1197,6 +1201,20 @@ void PassManager::eval_passes(DexStoresVector& stores, ConfigFiles& conf) {
   }
 }
 
+void PassManager::init_property_interactions() {
+  for (size_t i = 0; i < m_activated_passes.size(); ++i) {
+    Pass* pass = m_activated_passes[i];
+    auto* pass_info = &m_pass_info[i];
+    auto m = pass->get_property_interactions();
+    for (auto&& [name, property_interaction] : m) {
+      always_assert_log(property_interaction.is_valid(),
+                        "%s has an invalid property interaction for %s",
+                        pass->name().c_str(), name.c_str());
+    }
+    pass_info->property_interactions = std::move(m);
+  }
+}
+
 void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   const auto* pm_config =
       conf.get_global_config().get_config_by_name<PassManagerConfig>(
@@ -1241,6 +1259,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
 
   eval_passes(stores, conf);
 
+  init_property_interactions();
+
   // Retrieve the hasher's settings.
   bool run_hasher_after_each_pass =
       is_run_hasher_after_each_pass(conf, get_redex_options());
@@ -1283,6 +1303,23 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   AnalysisUsage::check_dependencies(m_activated_passes);
 
   AfterPassSizes after_pass_size(this, conf);
+
+  if (pm_config->check_pass_order_properties) {
+    std::vector<std::pair<std::string, redex_properties::PropertyInteractions>>
+        pass_interactions;
+    for (size_t i = 0; i < m_activated_passes.size(); ++i) {
+      Pass* pass = m_activated_passes[i];
+      auto* pass_info = &m_pass_info[i];
+      pass_interactions.emplace_back(pass->name(),
+                                     pass_info->property_interactions);
+    }
+    auto failure =
+        redex_properties::verify_pass_interactions(pass_interactions);
+    if (failure) {
+      fprintf(stderr, "ABORT! Illegal pass order:\n%s", failure->c_str());
+      exit(EXIT_FAILURE);
+    }
+  }
 
   // For core loop legibility, have a lambda here.
 
@@ -1355,6 +1392,19 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
     }
     if (i >= min_pass_idx_for_dex_ref_check) {
       CheckerConfig::ref_validation(stores, pass->name());
+    }
+    if (pm_config->check_properties_deep) {
+      TRACE(PM, 2, "Checking established properties of %s...",
+            m_current_pass_info->pass->name().c_str());
+      for (auto* checker : m_checkers) {
+        if (m_established_properties.count(checker->get_property_name())) {
+          TRACE(PM, 3, "Checking for %s...",
+                checker->get_property_name().c_str());
+          checker->run_checker(stores, conf, *this);
+        }
+      }
+      m_established_properties = redex_properties::apply(
+          m_established_properties, m_current_pass_info->property_interactions);
     }
   };
 

@@ -4,6 +4,7 @@
 COMMON_INCLUDES = \
 	-I$(top_srcdir)/analysis/ip-reflection-analysis \
 	-I$(top_srcdir)/analysis/max-depth \
+	-I$(top_srcdir)/checkers \
 	-I$(top_srcdir)/liblocator \
 	-I$(top_srcdir)/libredex \
 	-I$(top_srcdir)/libresource \

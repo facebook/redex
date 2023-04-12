@@ -64,6 +64,7 @@
 #include "ProguardPrintConfiguration.h" // New ProGuard configuration
 #include "ReachableClasses.h"
 #include "RedexContext.h"
+#include "RedexPropertyCheckerRegistry.h"
 #include "RedexResources.h"
 #include "Sanitizers.h"
 #include "SanitizersConfig.h"
@@ -1523,7 +1524,10 @@ int main(int argc, char* argv[]) {
     check_required_resources(conf, true);
 
     auto const& passes = PassRegistry::get().get_passes();
-    PassManager manager(passes, std::move(pg_config), conf, args.redex_options);
+    auto const& checkers =
+        redex_properties::PropertyCheckerRegistry::get().get_checkers();
+    PassManager manager(passes, std::move(pg_config), conf, args.redex_options,
+                        checkers);
 
     {
       Timer t("Running optimization passes");

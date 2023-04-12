@@ -30,6 +30,12 @@ class ObfuscateResourcesPass : public Pass {
  public:
   ObfuscateResourcesPass() : Pass("ObfuscateResourcesPass") {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::names;
+    return {{NoInitClassInstructions, {.preserves = true}}};
+  }
+
   void bind_config() override {
     // Resource type names (i.e. color, dimen, etc) that may have the names of
     // entries in that type removed (replaced with a dummy value).

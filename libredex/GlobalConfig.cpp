@@ -106,6 +106,9 @@ void PassManagerConfig::bind_config() {
   bind("pass_aliases", pass_aliases, pass_aliases);
   bind("jemalloc_full_stats", jemalloc_full_stats, jemalloc_full_stats);
   bind("violations_tracking", violations_tracking, violations_tracking);
+  bind("check_pass_order_properties", check_pass_order_properties,
+       check_pass_order_properties);
+  bind("check_properties_deep", check_properties_deep, check_properties_deep);
 }
 
 void ResourceConfig::bind_config() {

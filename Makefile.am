@@ -37,6 +37,7 @@ endif
 #
 
 libredex_la_SOURCES = \
+	checkers/NoInitClassInstructionsChecker.cpp \
 	liblocator/locator.cpp \
 	libredex/AggregateException.cpp \
 	libredex/AnalysisUsage.cpp \
@@ -144,6 +145,9 @@ libredex_la_SOURCES = \
 	libredex/RedexMappedFile.cpp \
 	libredex/ReadMaybeMapped.cpp \
 	libredex/RedexContext.cpp \
+	libredex/RedexProperties.cpp \
+	libredex/RedexPropertyChecker.cpp \
+	libredex/RedexPropertyCheckerRegistry.cpp \
 	libredex/RedexException.cpp \
 	libredex/RedexOptions.cpp \
 	libredex/RedexResources.cpp \
