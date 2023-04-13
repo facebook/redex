@@ -35,7 +35,6 @@ class DexType;
   TM(CALLGRAPH)         \
   TM(CDDP)              \
   TM(CFG)               \
-  TM(CFP)               \
   TM(CHECKRECURSION)    \
   TM(CIC)               \
   TM(CLA)               \
