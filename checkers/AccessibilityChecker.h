@@ -11,10 +11,9 @@
 
 namespace redex_properties {
 
-class NoInitClassInstructionsChecker : public PropertyChecker {
+class AccessibilityChecker : public PropertyChecker {
  public:
-  NoInitClassInstructionsChecker()
-      : PropertyChecker(names::NoInitClassInstructions) {}
+  AccessibilityChecker() : PropertyChecker(names::NeedsEverythingPublic) {}
 
   void run_checker(DexStoresVector&, ConfigFiles&, PassManager&, bool) override;
 };

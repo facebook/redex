@@ -16,7 +16,11 @@ namespace redex_properties {
 
 void NoInitClassInstructionsChecker::run_checker(DexStoresVector& stores,
                                                  ConfigFiles& /* conf */,
-                                                 PassManager& mgr) {
+                                                 PassManager& mgr,
+                                                 bool established) {
+  if (!established) {
+    return;
+  }
   const auto& scope = build_class_scope(stores);
   walk::parallel::opcodes(scope, [&](DexMethod* method, IRInstruction* insn) {
     always_assert_log(!opcode::is_init_class(insn->opcode()),

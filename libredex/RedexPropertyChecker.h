@@ -25,7 +25,8 @@ class PropertyChecker {
   const PropertyName& get_property_name() { return m_property_name; }
   virtual void run_checker(DexStoresVector& stores,
                            ConfigFiles& conf,
-                           PassManager& mgr) = 0;
+                           PassManager& mgr,
+                           bool established) = 0;
 };
 
 } // namespace redex_properties

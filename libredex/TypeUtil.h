@@ -269,6 +269,23 @@ bool can_access(const DexMethod* accessor, const DexMember* accessee) {
   }
   return false;
 }
+template <>
+inline bool can_access(const DexMethod* accessor, const DexClass* accessee) {
+  if (accessee == nullptr) {
+    // In case the accessee is nullptr, we return true. Since blocking nullptr
+    // is not the intention of this check.
+    return true;
+  }
+  auto accessor_class = accessor->get_class();
+  if (is_public(accessee) || accessor_class == accessee->get_type()) {
+    return true;
+  }
+  if (is_private(accessee)) {
+    // Cannot be same class
+    return false;
+  }
+  return true;
+}
 
 /**
  * Return true if the cls is derived from Kotlin lambda.

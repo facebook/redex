@@ -1397,16 +1397,26 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       TRACE(PM, 2, "Checking established properties of %s...",
             m_current_pass_info->pass->name().c_str());
       for (auto* checker : m_checkers) {
-        if (m_established_properties.count(checker->get_property_name())) {
-          TRACE(PM, 3, "Checking for %s...",
-                checker->get_property_name().c_str());
-          checker->run_checker(stores, conf, *this);
-        }
+        TRACE(PM, 3, "Checking for %s...",
+              checker->get_property_name().c_str());
+        checker->run_checker(
+            stores, conf, *this,
+            m_established_properties.count(checker->get_property_name()));
       }
       m_established_properties = redex_properties::apply(
           m_established_properties, m_current_pass_info->property_interactions);
     }
   };
+
+  if (pm_config->check_properties_deep) {
+    TRACE(PM, 2, "Checking initial properties of...");
+    for (auto* checker : m_checkers) {
+      TRACE(PM, 3, "Checking for %s...", checker->get_property_name().c_str());
+      checker->run_checker(
+          stores, conf, *this,
+          m_established_properties.count(checker->get_property_name()));
+    }
+  }
 
   JNINativeContextHelper jni_native_context_helper(
       scope, m_redex_options.jni_summary_path);
