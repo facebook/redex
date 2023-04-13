@@ -130,10 +130,20 @@ class PriorityThreadPool {
 
  private:
   void run() {
-    for (;;) {
+    for (bool first = true;; first = false) {
       auto highest_priority_f =
           [&]() -> boost::optional<std::function<void()>> {
         std::unique_lock<std::mutex> lock{m_mutex};
+
+        // Notify when *all* work is done, i.e. nothing is running or pending.
+        //
+        // Moving this check here from the end of the loop avoids
+        // potential repeated lock acquisition.
+        if (!first && m_pending_work_items.empty() &&
+            m_running_work_items == 0) {
+          m_done_condition.notify_one();
+        }
+
         // Wait for work or shutdown.
         m_work_condition.wait(lock, [&]() {
           return !m_pending_work_items.empty() || m_shutdown;
@@ -167,15 +177,7 @@ class PriorityThreadPool {
         throw;
       }
 
-      // Notify when *all* work is done, i.e. nothing is running or pending.
-      {
-        if (--m_running_work_items == 0) {
-          std::unique_lock<std::mutex> lock{m_mutex};
-          if (m_running_work_items == 0 && m_pending_work_items.empty()) {
-            m_done_condition.notify_one();
-          }
-        }
-      }
+      --m_running_work_items;
     }
   }
 };
