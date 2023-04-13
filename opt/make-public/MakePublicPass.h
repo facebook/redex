@@ -21,7 +21,10 @@ class MakePublicPass : public Pass {
   redex_properties::PropertyInteractions get_property_interactions()
       const override {
     using namespace redex_properties::names;
-    return {{NoInitClassInstructions, {.preserves = true}}};
+    return {
+        {NoInitClassInstructions, {.preserves = true}},
+        {NeedsEverythingPublic, {.preserves = false}},
+    };
   }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;

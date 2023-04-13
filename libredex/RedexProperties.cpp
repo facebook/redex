@@ -22,6 +22,23 @@ std::unordered_set<PropertyName> get_final() {
   return {NoInitClassInstructions};
 }
 
+namespace {
+
+using namespace names;
+
+std::vector<PropertyName> get_all_properties() {
+  return {
+      NoInitClassInstructions,
+      NeedsEverythingPublic,
+  };
+}
+
+bool is_negative(PropertyName property) {
+  return property == NeedsEverythingPublic;
+}
+
+} // namespace
+
 std::unordered_set<PropertyName> get_required(
     const PropertyInteractions& interactions) {
   std::unordered_set<PropertyName> res;
@@ -38,7 +55,7 @@ std::unordered_set<PropertyName> apply(
   std20::erase_if(established_properties, [&](const auto& property_name) {
     auto it = interactions.find(property_name);
     if (it == interactions.end()) {
-      return true;
+      return !is_negative(property_name);
     }
     const auto& interaction = it->second;
     return !interaction.preserves;
@@ -86,9 +103,22 @@ std::optional<std::string> verify_pass_interactions(
   auto final_properties = get_final();
   log_established_properties("final state requires");
   check(final_properties);
+
+  for (auto& property_name : get_all_properties()) {
+    if (!is_negative(property_name)) {
+      continue;
+    }
+    if (established_properties.count(property_name)) {
+      oss << "    *** MUST-NOT PROPERTY IS ESTABLISHED IN FINAL STATE ***: "
+          << property_name << "\n";
+      failed = true;
+    }
+  }
+
   if (failed) {
     return std::optional<std::string>(oss.str());
   }
+
   return std::nullopt;
 }
 
