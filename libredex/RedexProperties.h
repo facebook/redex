@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include "ConfigFiles.h"
+
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -38,8 +40,11 @@ inline const std::string NeedsEverythingPublic("NeedsEverythingPublic");
 inline const std::string HasSourceBlocks("HasSourceBlocks");
 } // namespace names
 
-std::unordered_set<PropertyName> get_initial();
-std::unordered_set<PropertyName> get_final();
+bool property_is_enabled(const PropertyName& property_name,
+                         const ConfigFiles& conf);
+
+std::unordered_set<PropertyName> get_initial(const ConfigFiles& conf);
+std::unordered_set<PropertyName> get_final(const ConfigFiles& conf);
 
 using PropertyInteractions =
     std::unordered_map<PropertyName, PropertyInteraction>;
@@ -51,6 +56,7 @@ std::unordered_set<PropertyName> apply(
     const PropertyInteractions& interactions);
 std::optional<std::string> verify_pass_interactions(
     const std::vector<std::pair<std::string, PropertyInteractions>>&
-        pass_interactions);
+        pass_interactions,
+    ConfigFiles& conf);
 
 } // namespace redex_properties

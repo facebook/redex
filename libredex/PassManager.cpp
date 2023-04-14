@@ -1073,7 +1073,7 @@ PassManager::PassManager(
       m_redex_options(options),
       m_testing_mode(false),
       m_internal_fields(new InternalFields()),
-      m_established_properties(redex_properties::get_initial()) {
+      m_established_properties(redex_properties::get_initial(config)) {
   init(config);
   if (getenv("MALLOC_PROFILE_PASS")) {
     m_malloc_profile_pass = find_pass(getenv("MALLOC_PROFILE_PASS"));
@@ -1201,15 +1201,23 @@ void PassManager::eval_passes(DexStoresVector& stores, ConfigFiles& conf) {
   }
 }
 
-void PassManager::init_property_interactions() {
+void PassManager::init_property_interactions(ConfigFiles& conf) {
   for (size_t i = 0; i < m_activated_passes.size(); ++i) {
     Pass* pass = m_activated_passes[i];
     auto* pass_info = &m_pass_info[i];
     auto m = pass->get_property_interactions();
-    for (auto&& [name, property_interaction] : m) {
+    for (auto it = m.begin(); it != m.end();) {
+      auto&& [name, property_interaction] = *it;
+
+      if (!redex_properties::property_is_enabled(name, conf)) {
+        it = m.erase(it);
+        continue;
+      }
+
       always_assert_log(property_interaction.is_valid(),
                         "%s has an invalid property interaction for %s",
                         pass->name().c_str(), name.c_str());
+      ++it;
     }
     pass_info->property_interactions = std::move(m);
   }
@@ -1259,7 +1267,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
 
   eval_passes(stores, conf);
 
-  init_property_interactions();
+  init_property_interactions(conf);
 
   // Retrieve the hasher's settings.
   bool run_hasher_after_each_pass =
@@ -1314,7 +1322,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
                                      pass_info->property_interactions);
     }
     auto failure =
-        redex_properties::verify_pass_interactions(pass_interactions);
+        redex_properties::verify_pass_interactions(pass_interactions, conf);
     if (failure) {
       fprintf(stderr, "ABORT! Illegal pass order:\n%s", failure->c_str());
       exit(EXIT_FAILURE);

@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "RedexProperties.h"
 #include "RedexPropertyChecker.h"
 
 namespace redex_properties {

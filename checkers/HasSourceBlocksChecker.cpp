@@ -6,6 +6,7 @@
  */
 
 #include "HasSourceBlocksChecker.h"
+#include "RedexProperties.h"
 
 #include "ConfigFiles.h"
 #include "Debug.h"
@@ -21,26 +22,8 @@ void HasSourceBlocksChecker::run_checker(DexStoresVector& stores,
                                          ConfigFiles& config,
                                          PassManager&,
                                          bool) {
-  // If InsertSourceBlocksPass is not on the pass list, or is disabled, don't
-  // run this check.
-  const auto& json_config = config.get_json_config();
-  const auto& passes_from_config = json_config["redex"]["passes"];
-
-  static constexpr const char* sb_passname = "InsertSourceBlocksPass";
-
-  if (!std::any_of(
-          passes_from_config.begin(), passes_from_config.end(),
-          [](const auto& pass_name) { return pass_name == sb_passname; })) {
+  if (!property_is_enabled(names::HasSourceBlocks, config)) {
     return;
-  }
-
-  if (json_config.contains(sb_passname)) {
-    const auto& pass_data = json_config[sb_passname];
-    if (pass_data.isMember("disabled")) {
-      if (pass_data["disabled"].asBool()) {
-        return;
-      }
-    }
   }
 
   const auto& scope = build_class_scope(stores);

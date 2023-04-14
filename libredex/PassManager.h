@@ -140,7 +140,7 @@ class PassManager {
 
   void eval_passes(DexStoresVector&, ConfigFiles&);
 
-  void init_property_interactions();
+  void init_property_interactions(ConfigFiles& conf);
 
   AssetManager m_asset_mgr;
   std::vector<Pass*> m_registered_passes;
