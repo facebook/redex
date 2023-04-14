@@ -43,6 +43,12 @@ class PassImpl : public Pass {
  public:
   PassImpl() : Pass("RemoveUnusedFieldsPass") {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::names;
+    return {{HasSourceBlocks, {.preserves = true}}};
+  }
+
   void bind_config() override {
     bind("remove_unread_fields", true, m_config.remove_unread_fields);
     bind("remove_unwritten_fields", true, m_config.remove_unwritten_fields);

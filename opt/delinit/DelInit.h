@@ -13,6 +13,12 @@ class DelInitPass : public Pass {
  public:
   DelInitPass() : Pass("DelInitPass") {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::names;
+    return {{HasSourceBlocks, {.preserves = true}}};
+  }
+
   void bind_config() override {
     bind("package_allowlist", {}, m_package_filter);
   }

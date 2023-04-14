@@ -13,6 +13,12 @@ class MethodDevirtualizationPass : public Pass {
  public:
   MethodDevirtualizationPass() : Pass("MethodDevirtualizationPass") {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::names;
+    return {{HasSourceBlocks, {.preserves = true}}};
+  }
+
   void bind_config() override {
     bind("staticize_vmethods_not_using_this",
          true,

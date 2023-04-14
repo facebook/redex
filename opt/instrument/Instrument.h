@@ -31,6 +31,12 @@ class InstrumentPass : public Pass {
  public:
   InstrumentPass() : Pass("InstrumentPass") {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::names;
+    return {{HasSourceBlocks, {.requires_ = true, .preserves = false}}};
+  }
+
   void bind_config() override;
   void eval_pass(DexStoresVector& stores,
                  ConfigFiles& conf,

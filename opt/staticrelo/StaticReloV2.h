@@ -14,6 +14,13 @@ namespace static_relo_v2 {
 class StaticReloPassV2 : public Pass {
  public:
   StaticReloPassV2() : Pass("StaticReloPassV2") {}
+
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::names;
+    return {{HasSourceBlocks, {.preserves = true}}};
+  }
+
   static std::vector<DexClass*> gen_candidates(const Scope&);
   static int run_relocation(const Scope&, std::vector<DexClass*>&);
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;

@@ -16,6 +16,12 @@ class ClassSplittingPass : public Pass {
  public:
   ClassSplittingPass() : Pass("ClassSplittingPass") {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::names;
+    return {{HasSourceBlocks, {.requires_ = true, .preserves = true}}};
+  }
+
   void bind_config() override {
     bind("enabled", m_config.enabled, m_config.enabled);
     bind("combine_target_classes_by_api_level",

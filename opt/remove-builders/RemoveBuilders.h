@@ -13,6 +13,12 @@ class RemoveBuildersPass : public Pass {
  public:
   RemoveBuildersPass() : Pass("RemoveBuildersPass") {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::names;
+    return {{HasSourceBlocks, {.preserves = true}}};
+  }
+
   void bind_config() override {
     bind("enable_buildee_constr_change", false, m_enable_buildee_constr_change);
     bind("blocklist", {}, m_blocklist);

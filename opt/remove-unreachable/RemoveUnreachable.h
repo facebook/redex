@@ -14,6 +14,12 @@ class RemoveUnreachablePassBase : public Pass {
  public:
   explicit RemoveUnreachablePassBase(const std::string& name) : Pass(name) {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::names;
+    return {{HasSourceBlocks, {.preserves = true}}};
+  }
+
   void bind_config() override {
     bind("ignore_string_literals", {}, m_ignore_sets.string_literals);
     bind("ignore_string_literal_annos", {}, m_ignore_sets.string_literal_annos);

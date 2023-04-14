@@ -13,6 +13,12 @@ class CheckRecursionPass : public Pass {
  public:
   CheckRecursionPass() : Pass("CheckRecursionPass") {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::names;
+    return {{HasSourceBlocks, {.preserves = true}}};
+  }
+
   int bad_recursion_count{4};
 
   void bind_config() override {

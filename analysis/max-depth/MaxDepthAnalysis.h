@@ -15,6 +15,13 @@
 class MaxDepthAnalysisPass : public Pass {
  public:
   MaxDepthAnalysisPass() : Pass("MaxDepthAnalysisPass", Pass::ANALYSIS) {}
+
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::names;
+    return {{HasSourceBlocks, {.preserves = true}}};
+  }
+
   void bind_config() override { bind("max_iteration", 20U, m_max_iteration); }
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 

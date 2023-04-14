@@ -145,6 +145,12 @@ class ResultPropagationPass : public Pass {
  public:
   ResultPropagationPass() : Pass("ResultPropagationPass") {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::names;
+    return {{HasSourceBlocks, {.preserves = true}}};
+  }
+
   bool is_editable_cfg_friendly() override { return true; }
 
   void bind_config() override {

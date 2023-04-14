@@ -41,6 +41,12 @@ class PassImpl : public Pass {
       : Pass("InterproceduralConstantPropagationPass"),
         m_config(std::move(config)) {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::names;
+    return {{HasSourceBlocks, {.preserves = true}}};
+  }
+
   PassImpl() : PassImpl(Config()) {}
 
   void bind_config() override {

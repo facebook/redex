@@ -83,6 +83,12 @@ class SplitResourceTablesPass : public Pass {
  public:
   SplitResourceTablesPass() : Pass("SplitResourceTablesPass") {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::names;
+    return {{HasSourceBlocks, {.preserves = true}}};
+  }
+
   void bind_config() override {
     bind("allowed_types", {}, m_allowed_types);
     bind("static_ids", "", m_static_ids_file_path);

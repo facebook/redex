@@ -19,6 +19,13 @@
 class AnalysisConsumerPass : public Pass {
  public:
   AnalysisConsumerPass() : Pass("AnalysisConsumerPass") {}
+
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::names;
+    return {{HasSourceBlocks, {.preserves = true}}};
+  }
+
   void set_analysis_usage(AnalysisUsage& au) const override {
     au.add_required<MaxDepthAnalysisPass>();
     au.set_preserve_all();

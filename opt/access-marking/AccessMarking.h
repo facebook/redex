@@ -13,6 +13,12 @@ class AccessMarkingPass : public Pass {
  public:
   AccessMarkingPass() : Pass("AccessMarkingPass") {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::names;
+    return {{HasSourceBlocks, {.preserves = true}}};
+  }
+
   std::string get_config_doc() override {
     return "This pass will mark class, methods, and fields final, when able to "
            "do so. This is generally advantageous for performance. It will "

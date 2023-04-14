@@ -15,6 +15,12 @@ class TrackResourcesPass : public Pass {
  public:
   TrackResourcesPass() : Pass("TrackResourcesPass") {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::names;
+    return {{HasSourceBlocks, {.preserves = true}}};
+  }
+
   void bind_config() override {
     bind("classes_to_track", {}, m_classes_to_track);
   }

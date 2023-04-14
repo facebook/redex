@@ -13,6 +13,12 @@ class SortRemainingClassesPass : public Pass {
  public:
   explicit SortRemainingClassesPass() : Pass("SortRemainingClassesPass") {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::names;
+    return {{HasSourceBlocks, {.preserves = true}}};
+  }
+
   void bind_config() override {
     bind("enable_pass", false, m_enable_pass,
          "Whether to enable SortRemainingClassesPass.");

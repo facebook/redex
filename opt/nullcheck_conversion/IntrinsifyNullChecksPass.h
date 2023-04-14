@@ -52,6 +52,13 @@ class IntrinsifyNullChecksPass : public Pass {
   };
 
   explicit IntrinsifyNullChecksPass() : Pass("IntrinsifyNullChecksPass") {}
+
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::names;
+    return {{HasSourceBlocks, {.preserves = true}}};
+  }
+
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
   bool is_editable_cfg_friendly() override { return true; }
   Stats convert_getClass(DexMethod* method);

@@ -51,6 +51,12 @@ class DedupResourcesPass : public Pass {
  public:
   DedupResourcesPass() : Pass("DedupResourcesPass") {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::names;
+    return {{HasSourceBlocks, {.preserves = true}}};
+  }
+
   void bind_config() override {
     bind("disallowed_types", {}, m_disallowed_types);
     bind("disallowed_resources", {}, m_disallowed_resources);

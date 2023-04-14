@@ -21,6 +21,13 @@ class ModelMerger;
 class ClassMergingPass : public Pass {
  public:
   ClassMergingPass() : Pass("ClassMergingPass") {}
+
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::names;
+    return {{HasSourceBlocks, {.preserves = true}}};
+  }
+
   explicit ClassMergingPass(const char* name) : Pass(name) {}
 
   void bind_config() override;

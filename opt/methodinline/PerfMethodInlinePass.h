@@ -13,6 +13,13 @@
 class PerfMethodInlinePass : public Pass {
  public:
   PerfMethodInlinePass() : Pass("PerfMethodInlinePass") {}
+
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::names;
+    return {{HasSourceBlocks, {.requires_ = true, .preserves = true}}};
+  }
+
   ~PerfMethodInlinePass();
 
   void bind_config() override;

@@ -45,6 +45,12 @@ class AppModuleUsagePass : public Pass {
  public:
   AppModuleUsagePass() : Pass("AppModuleUsagePass") {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::names;
+    return {{HasSourceBlocks, {.preserves = true}}};
+  }
+
   void bind_config() override {
     bind("uses_app_module_annotation_descriptor",
          DexType::get_type("Lcom/facebook/redex/annotations/UsesAppModule;"),

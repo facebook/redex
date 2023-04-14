@@ -262,6 +262,12 @@ class StringBuilderOutlinerPass : public Pass {
  public:
   StringBuilderOutlinerPass() : Pass("StringBuilderOutlinerPass") {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::names;
+    return {{HasSourceBlocks, {.preserves = true}}};
+  }
+
   void bind_config() override {
     bind("max_outline_length", m_config.max_outline_length,
          m_config.max_outline_length);

@@ -27,6 +27,12 @@ class TypeAnalysisCallGraphGenerationPass : public Pass {
       : Pass("TypeAnalysisCallGraphGenerationPass", Pass::ANALYSIS),
         m_config(config) {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::names;
+    return {{HasSourceBlocks, {.preserves = true}}};
+  }
+
   TypeAnalysisCallGraphGenerationPass()
       : TypeAnalysisCallGraphGenerationPass(Config()) {}
 

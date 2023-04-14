@@ -20,6 +20,12 @@ class FastRegAllocPass : public Pass {
  public:
   FastRegAllocPass() : Pass("FastRegAllocPass") {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::names;
+    return {{HasSourceBlocks, {.preserves = true}}};
+  }
+
   void eval_pass(DexStoresVector& stores,
                  ConfigFiles& conf,
                  PassManager& mgr) override;

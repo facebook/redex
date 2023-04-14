@@ -55,12 +55,19 @@ class InterDexPass : public Pass {
  public:
   explicit InterDexPass(bool register_plugins = true)
       : Pass(INTERDEX_PASS_NAME) {
+
     if (register_plugins) {
       std::unique_ptr<InterDexRegistry> plugin =
           std::make_unique<InterDexRegistry>();
       PluginRegistry::get().register_pass(INTERDEX_PASS_NAME,
                                           std::move(plugin));
     }
+  }
+
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::names;
+    return {{HasSourceBlocks, {.preserves = true}}};
   }
 
   void bind_config() override;

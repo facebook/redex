@@ -56,6 +56,13 @@ class PrintKotlinStats : public Pass {
   };
 
   PrintKotlinStats() : Pass("PrintKotlinStatsPass") {}
+
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::names;
+    return {{HasSourceBlocks, {.preserves = true}}};
+  }
+
   void setup();
   void eval_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;

@@ -13,5 +13,11 @@ class TestCFGPass : public Pass {
  public:
   TestCFGPass() : Pass("TestCFGPass") {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::names;
+    return {{HasSourceBlocks, {.preserves = true}}};
+  }
+
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 };

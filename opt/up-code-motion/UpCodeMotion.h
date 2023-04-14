@@ -32,6 +32,12 @@ class UpCodeMotionPass : public Pass {
 
   UpCodeMotionPass() : Pass("UpCodeMotionPass") {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::names;
+    return {{HasSourceBlocks, {.requires_ = true, .preserves = true}}};
+  }
+
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
   void bind_config() override {
     bind("check_branch_hotness",

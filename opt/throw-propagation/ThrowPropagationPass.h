@@ -33,6 +33,12 @@ class ThrowPropagationPass : public Pass {
  public:
   ThrowPropagationPass() : Pass("ThrowPropagationPass") {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::names;
+    return {{HasSourceBlocks, {.preserves = true}}};
+  }
+
   void bind_config() override;
 
   static std::unordered_set<DexMethod*> get_no_return_methods(

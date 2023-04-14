@@ -17,7 +17,10 @@ class InitClassLoweringPass : public Pass {
   redex_properties::PropertyInteractions get_property_interactions()
       const override {
     using namespace redex_properties::names;
-    return {{NoInitClassInstructions, {.establishes = true}}};
+    return {
+        {NoInitClassInstructions, {.establishes = true}},
+        {HasSourceBlocks, {.preserves = true}},
+    };
   }
 
   void bind_config() override;

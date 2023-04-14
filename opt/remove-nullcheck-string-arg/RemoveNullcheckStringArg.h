@@ -76,6 +76,13 @@ class RemoveNullcheckStringArg : public Pass {
   };
 
   RemoveNullcheckStringArg() : Pass("RemoveNullcheckStringArgPass") {}
+
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::names;
+    return {{HasSourceBlocks, {.preserves = true}}};
+  }
+
   bool setup(TransferMapForParam& transfer_map_param,
              TransferMapForExpr& transfer_map_expr,
              NewMethodSet& new_methods);

@@ -27,6 +27,12 @@ class FinalInlinePassV2 : public Pass {
 
   FinalInlinePassV2() : Pass("FinalInlinePassV2") {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::names;
+    return {{HasSourceBlocks, {.preserves = true}}};
+  }
+
   void bind_config() override {
     bind("inline_instance_field", true, m_config.inline_instance_field);
     bind("blocklist_types",

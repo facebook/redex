@@ -16,6 +16,12 @@ class ConstantPropagationPass : public Pass {
  public:
   ConstantPropagationPass() : Pass("ConstantPropagationPass") {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::names;
+    return {{HasSourceBlocks, {.preserves = true}}};
+  }
+
   void bind_config() override {
     bind("replace_moves_with_consts",
          true,

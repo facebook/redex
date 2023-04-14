@@ -37,6 +37,12 @@ class MyAnalysisPass : public Pass {
 
   MyAnalysisPass() : Pass("MyAnalysisPass", Pass::ANALYSIS) {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::names;
+    return {{HasSourceBlocks, {.preserves = true}}};
+  }
+
   void run_pass(DexStoresVector& /* stores */,
                 ConfigFiles& /* conf */,
                 PassManager& /* mgr */) override {
@@ -59,6 +65,12 @@ class MyAnalysisPass2 : public Pass {
 
   MyAnalysisPass2() : Pass("MyAnalysisPass2", Pass::ANALYSIS) {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::names;
+    return {{HasSourceBlocks, {.preserves = true}}};
+  }
+
   void run_pass(DexStoresVector& /* stores */,
                 ConfigFiles& /* conf */,
                 PassManager& /* mgr */) override {
@@ -80,6 +92,12 @@ class ConsumeAnalysisAndInvalidatePass : public Pass {
   ConsumeAnalysisAndInvalidatePass()
       : Pass("ConsumeAnalysisAndInvalidatePass") {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::names;
+    return {{HasSourceBlocks, {.preserves = true}}};
+  }
+
   void set_analysis_usage(AnalysisUsage& au) const override {
     au.add_required<MyAnalysisPass>();
   }
@@ -97,6 +115,12 @@ class ConsumeAnalysisAndInvalidatePass : public Pass {
 class ConsumeAnalysisAndPreservePass : public Pass {
  public:
   ConsumeAnalysisAndPreservePass() : Pass("ConsumeAnalysisAndPreservePass") {}
+
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::names;
+    return {{HasSourceBlocks, {.preserves = true}}};
+  }
 
   void set_analysis_usage(AnalysisUsage& au) const override {
     au.add_required<MyAnalysisPass>();
@@ -118,6 +142,12 @@ class ConsumeAnalysisAndPreserveOnePass : public Pass {
   ConsumeAnalysisAndPreserveOnePass()
       : Pass("ConsumeAnalysisAndPreserveOnePass") {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::names;
+    return {{HasSourceBlocks, {.preserves = true}}};
+  }
+
   void set_analysis_usage(AnalysisUsage& au) const override {
     au.add_required<MyAnalysisPass>();
     au.add_preserve_specific<MyAnalysisPass>();
@@ -136,6 +166,12 @@ class ConsumeAnalysisAndPreserveOnePass : public Pass {
 class ConsumeAnalysis2Pass : public Pass {
  public:
   ConsumeAnalysis2Pass() : Pass("ConsumeAnalysis2Pass") {}
+
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::names;
+    return {{HasSourceBlocks, {.preserves = true}}};
+  }
 
   void set_analysis_usage(AnalysisUsage& au) const override {
     au.add_required<MyAnalysisPass2>();

@@ -15,6 +15,12 @@ class StripDebugInfoPass : public Pass {
  public:
   StripDebugInfoPass() : Pass("StripDebugInfoPass") {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::names;
+    return {{HasSourceBlocks, {.preserves = true}}};
+  }
+
   void bind_config() override {
     bind("drop_all_dbg_info", false, m_config.drop_all_dbg_info);
     bind("drop_local_variables", true, m_config.drop_local_variables);

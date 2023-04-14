@@ -16,6 +16,13 @@ namespace builder_pattern {
 class RemoveBuilderPatternPass : public Pass {
  public:
   RemoveBuilderPatternPass() : Pass("RemoveBuilderPatternPass") {}
+
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::names;
+    return {{HasSourceBlocks, {.preserves = true}}};
+  }
+
   explicit RemoveBuilderPatternPass(const std::string& name) : Pass(name) {}
 
   void bind_config() override;
