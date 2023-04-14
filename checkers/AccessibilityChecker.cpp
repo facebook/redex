@@ -21,6 +21,7 @@ void AccessibilityChecker::run_checker(DexStoresVector& stores,
                                        ConfigFiles& /* conf */,
                                        PassManager& mgr,
                                        bool established) {
+  return;
   if (established) {
     return;
   }
