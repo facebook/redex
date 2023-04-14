@@ -37,7 +37,6 @@ endif
 #
 
 libredex_la_SOURCES = \
-	checkers/NoInitClassInstructionsChecker.cpp \
 	liblocator/locator.cpp \
 	libredex/AggregateException.cpp \
 	libredex/AnalysisUsage.cpp \
@@ -294,6 +293,7 @@ endif
 # registration. Instead, share sources and create libopt for the tests.
 
 libopt_la_SOURCES = \
+	checkers/NoInitClassInstructionsChecker.cpp \
 	analysis/max-depth/MaxDepthAnalysis.cpp \
 	analysis/ip-reflection-analysis/IPReflectionAnalysis.cpp \
 	opt/access-marking/AccessMarking.cpp \
