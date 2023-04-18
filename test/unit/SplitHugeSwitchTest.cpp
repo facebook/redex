@@ -468,3 +468,14 @@ TEST_F(SplitHugeSwitchTest, Split3) {
                   });
   EXPECT_TRUE(res);
 }
+
+TEST_F(SplitHugeSwitchTest, NoSplitExactThreshold) {
+  auto res = test("(I)V",
+                  SRC,
+                  28,
+                  0,
+                  method_profiles::MethodProfiles(),
+                  0.0,
+                  {pair("", SRC)});
+  EXPECT_TRUE(res);
+}
