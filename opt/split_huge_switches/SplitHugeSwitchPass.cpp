@@ -523,7 +523,7 @@ AnalysisData analyze(DexMethod* m,
   data.no_code = false;
 
   auto size = code->sum_opcode_sizes();
-  if (size < insn_threshold) {
+  if (size <= insn_threshold) {
     data.under_insn_threshold = true;
     return data;
   }
@@ -555,6 +555,7 @@ AnalysisData analyze(DexMethod* m,
   data.no_easy_expr = false;
 
   size_t nr_splits = (size_t)std::ceil(((float)size) / insn_threshold);
+  redex_assert(nr_splits > 1);
   auto switch_range =
       get_switch_range(*scoped_cfg, switch_it.block(), nr_splits);
   if (switch_range.cases < nr_splits) {
