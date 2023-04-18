@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+// @licenselint-loose-mode
+
 // See https://docusaurus.io/docs/site-config for all the possible
 // site configuration options.
 
@@ -61,7 +63,7 @@ const siteConfig = {
   */
 
   // This copyright info is used in /core/Footer.js and blog RSS/Atom feeds.
-  copyright: `Copyright © ${new Date().getFullYear()} Meta Platforms Inc.`,
+  copyright: `Copyright © ${new Date().getFullYear()} Meta Platforms, Inc. and affiliates.`,
 
   highlight: {
     // Highlight.js theme to use for syntax highlighting in code blocks.
