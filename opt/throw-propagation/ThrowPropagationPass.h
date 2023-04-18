@@ -36,7 +36,8 @@ class ThrowPropagationPass : public Pass {
   redex_properties::PropertyInteractions get_property_interactions()
       const override {
     using namespace redex_properties::names;
-    return {{HasSourceBlocks, {.preserves = true}}};
+    return {{HasSourceBlocks, {.preserves = true}},
+            {NoSpuriousGetClassCalls, {.preserves = true}}};
   }
 
   void bind_config() override;
@@ -50,6 +51,7 @@ class ThrowPropagationPass : public Pass {
       const method_override_graph::Graph& graph,
       IRCode* code,
       std::unordered_set<DexMethod*>* no_return_methods_checked = nullptr);
+
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
   bool is_editable_cfg_friendly() override { return true; }
 };

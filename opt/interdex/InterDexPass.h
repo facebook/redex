@@ -67,7 +67,8 @@ class InterDexPass : public Pass {
   redex_properties::PropertyInteractions get_property_interactions()
       const override {
     using namespace redex_properties::names;
-    return {{HasSourceBlocks, {.preserves = true}}};
+    return {{HasSourceBlocks, {.preserves = true}},
+            {NoSpuriousGetClassCalls, {.preserves = true}}};
   }
 
   void bind_config() override;
@@ -77,6 +78,7 @@ class InterDexPass : public Pass {
                  PassManager& mgr) override {
     ++m_eval;
   }
+
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   bool minimize_cross_dex_refs() const { return m_minimize_cross_dex_refs; }

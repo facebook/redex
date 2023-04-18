@@ -49,6 +49,12 @@ class ResolveRefsPass : public ExternalRefsManglingPass {
     ExternalRefsManglingPass::eval_pass(stores, conf, mgr);
   }
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::names;
+    return {{NoSpuriousGetClassCalls, {.preserves = true}}};
+  }
+
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:

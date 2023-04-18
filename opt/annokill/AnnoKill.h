@@ -119,7 +119,8 @@ class AnnoKillPass : public Pass {
   redex_properties::PropertyInteractions get_property_interactions()
       const override {
     using namespace redex_properties::names;
-    return {{HasSourceBlocks, {.preserves = true}}};
+    return {{HasSourceBlocks, {.preserves = true}},
+            {NoSpuriousGetClassCalls, {.preserves = true}}};
   }
 
   explicit AnnoKillPass(const std::string& name) : Pass(name) {}

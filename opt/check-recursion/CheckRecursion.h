@@ -16,7 +16,8 @@ class CheckRecursionPass : public Pass {
   redex_properties::PropertyInteractions get_property_interactions()
       const override {
     using namespace redex_properties::names;
-    return {{HasSourceBlocks, {.preserves = true}}};
+    return {{HasSourceBlocks, {.preserves = true}},
+            {NoSpuriousGetClassCalls, {.preserves = true}}};
   }
 
   int bad_recursion_count{4};

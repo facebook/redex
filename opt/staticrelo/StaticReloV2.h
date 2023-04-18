@@ -18,7 +18,8 @@ class StaticReloPassV2 : public Pass {
   redex_properties::PropertyInteractions get_property_interactions()
       const override {
     using namespace redex_properties::names;
-    return {{HasSourceBlocks, {.preserves = true}}};
+    return {{HasSourceBlocks, {.preserves = true}},
+            {NoSpuriousGetClassCalls, {.preserves = true}}};
   }
 
   static std::vector<DexClass*> gen_candidates(const Scope&);

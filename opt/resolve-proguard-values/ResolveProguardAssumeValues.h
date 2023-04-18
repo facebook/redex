@@ -57,7 +57,8 @@ class ResolveProguardAssumeValuesPass : public Pass {
   redex_properties::PropertyInteractions get_property_interactions()
       const override {
     using namespace redex_properties::names;
-    return {{HasSourceBlocks, {.preserves = true}}};
+    return {{HasSourceBlocks, {.preserves = true}},
+            {NoSpuriousGetClassCalls, {.preserves = true}}};
   }
 
   static ResolveProguardAssumeValuesPass::Stats process_for_code(IRCode* code);

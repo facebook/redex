@@ -30,7 +30,8 @@ class FinalInlinePassV2 : public Pass {
   redex_properties::PropertyInteractions get_property_interactions()
       const override {
     using namespace redex_properties::names;
-    return {{HasSourceBlocks, {.preserves = true}}};
+    return {{HasSourceBlocks, {.preserves = true}},
+            {NoSpuriousGetClassCalls, {.preserves = true}}};
   }
 
   void bind_config() override {
@@ -67,6 +68,7 @@ class FinalInlinePassV2 : public Pass {
       const constant_propagation::EligibleIfields& eligible_ifields,
       const Config& config = Config(),
       std::optional<DexStoresVector*> stores = std::nullopt);
+
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
