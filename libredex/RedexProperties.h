@@ -38,6 +38,7 @@ inline const std::string NoInitClassInstructions("NoInitClassInstructions");
 // Stand-in for fixing up passes.
 inline const std::string NeedsEverythingPublic("NeedsEverythingPublic");
 inline const std::string HasSourceBlocks("HasSourceBlocks");
+inline const std::string NoSpuriousGetClassCalls("NoSpuriousGetClassCalls");
 } // namespace names
 
 bool property_is_enabled(const PropertyName& property_name,

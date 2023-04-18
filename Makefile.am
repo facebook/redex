@@ -295,6 +295,7 @@ endif
 libopt_la_SOURCES = \
 	checkers/HasSourceBlocksChecker.cpp \
 	checkers/NoInitClassInstructionsChecker.cpp \
+	checkers/NoSpuriousGetClassCallsChecker.cpp \
 	analysis/max-depth/MaxDepthAnalysis.cpp \
 	analysis/ip-reflection-analysis/IPReflectionAnalysis.cpp \
 	opt/access-marking/AccessMarking.cpp \
