@@ -36,6 +36,7 @@ class ObfuscateResourcesPass : public Pass {
     return {
         {NoInitClassInstructions, {.preserves = true}},
         {HasSourceBlocks, {.preserves = true}},
+        {RenameClass, {.preserves = true}},
     };
   }
 

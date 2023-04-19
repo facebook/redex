@@ -43,6 +43,7 @@ inline const std::string NoInitClassInstructions("NoInitClassInstructions");
 inline const std::string NeedsEverythingPublic("NeedsEverythingPublic");
 inline const std::string HasSourceBlocks("HasSourceBlocks");
 inline const std::string NoSpuriousGetClassCalls("NoSpuriousGetClassCalls");
+inline const std::string RenameClass("RenameClass");
 } // namespace names
 
 bool property_is_enabled(const PropertyName& property_name,

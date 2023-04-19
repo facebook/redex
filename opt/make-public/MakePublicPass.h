@@ -25,6 +25,7 @@ class MakePublicPass : public Pass {
         {NoInitClassInstructions, {.preserves = true}},
         {NeedsEverythingPublic, {.preserves = false}},
         {HasSourceBlocks, {.preserves = true}},
+        {RenameClass, {.preserves = true}},
     };
   }
 

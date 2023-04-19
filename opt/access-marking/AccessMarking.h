@@ -16,8 +16,11 @@ class AccessMarkingPass : public Pass {
   redex_properties::PropertyInteractions get_property_interactions()
       const override {
     using namespace redex_properties::names;
-    return {{HasSourceBlocks, {.preserves = true}},
-            {NoSpuriousGetClassCalls, {.preserves = true}}};
+    return {
+        {HasSourceBlocks, {.preserves = true}},
+        {NoSpuriousGetClassCalls, {.preserves = true}},
+        {RenameClass, {.preserves = true}},
+    };
   }
 
   std::string get_config_doc() override {

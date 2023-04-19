@@ -20,6 +20,7 @@ class InitClassLoweringPass : public Pass {
     return {
         {NoInitClassInstructions, {.establishes = true}},
         {HasSourceBlocks, {.preserves = true}},
+        {RenameClass, {.preserves = true}},
     };
   }
 
