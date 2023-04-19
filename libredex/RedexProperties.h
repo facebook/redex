@@ -22,9 +22,13 @@ struct PropertyInteraction {
   bool establishes{false};
   bool requires_{false};
   bool preserves{false};
+  bool requires_finally{false};
   // "destroys" when !establishes && !preserves;
   bool is_valid() const {
     if (requires_ && establishes && !preserves) {
+      return false;
+    }
+    if (requires_finally && !establishes) {
       return false;
     }
     return true;

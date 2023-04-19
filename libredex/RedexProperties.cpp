@@ -109,6 +109,7 @@ std::optional<std::string> verify_pass_interactions(
       }
     }
   };
+  auto final_properties = get_final(conf);
   for (auto& [pass_name, interactions] : pass_interactions) {
     auto required_properties = get_required(interactions);
     log_established_properties("requires");
@@ -117,8 +118,12 @@ std::optional<std::string> verify_pass_interactions(
     established_properties =
         redex_properties::apply(established_properties, interactions);
     log_established_properties("establishes");
+    for (const auto& [property_name, interaction] : interactions) {
+      if (interaction.requires_finally) {
+        final_properties.insert(property_name);
+      }
+    }
   }
-  auto final_properties = get_final(conf);
   log_established_properties("final state requires");
   check(final_properties);
 
