@@ -243,7 +243,7 @@ bool LocalArrayAnalyzer::analyze_new_array(const IRInstruction* insn,
     return false;
   }
   env->new_heap_value(RESULT_REGISTER, insn,
-                      ConstantPrimitiveArrayDomain(*length_value_opt));
+                      ConstantValueArrayDomain(*length_value_opt));
   return true;
 }
 
@@ -257,7 +257,7 @@ bool LocalArrayAnalyzer::analyze_aget(const IRInstruction* insn,
   if (!idx_opt) {
     return false;
   }
-  auto arr = env->get_pointee<ConstantPrimitiveArrayDomain>(insn->src(0));
+  auto arr = env->get_pointee<ConstantValueArrayDomain>(insn->src(0));
   env->set(RESULT_REGISTER, arr.get(*idx_opt));
   return true;
 }
@@ -272,7 +272,7 @@ bool LocalArrayAnalyzer::analyze_aput(const IRInstruction* insn,
   if (!idx_opt) {
     return false;
   }
-  auto val = env->get<SignedConstantDomain>(insn->src(0));
+  auto val = env->get(insn->src(0));
   env->set_array_binding(insn->src(1), *idx_opt, val);
   return true;
 }

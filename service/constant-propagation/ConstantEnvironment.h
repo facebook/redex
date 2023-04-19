@@ -70,6 +70,10 @@ using ConstantValue =
                                         ObjectWithImmutAttrDomain,
                                         AbstractHeapPointer>;
 
+struct ConstantValueDefaultValue {
+  ConstantValue operator()() { return SignedConstantDomain(0); }
+};
+
 // For storing non-escaping static and instance fields.
 using FieldEnvironment =
     sparta::PatriciaTreeMapAbstractEnvironment<const DexField*, ConstantValue>;
@@ -83,13 +87,13 @@ using ConstantRegisterEnvironment =
  * LocalPointersAnalysis for local mutable objects analysis.
  *****************************************************************************/
 
-using ConstantPrimitiveArrayDomain = ConstantArrayDomain<SignedConstantDomain>;
+using ConstantValueArrayDomain =
+    ConstantArrayDomain<ConstantValue, ConstantValueDefaultValue>;
 
 using ConstantObjectDomain = ObjectDomain<ConstantValue>;
 
-using HeapValue =
-    sparta::DisjointUnionAbstractDomain<ConstantPrimitiveArrayDomain,
-                                        ConstantObjectDomain>;
+using HeapValue = sparta::DisjointUnionAbstractDomain<ConstantValueArrayDomain,
+                                                      ConstantObjectDomain>;
 
 using ConstantHeap = sparta::PatriciaTreeMapAbstractEnvironment<
     AbstractHeapPointer::ConstantType,
@@ -225,14 +229,14 @@ class ConstantEnvironment final
    */
   ConstantEnvironment& set_array_binding(reg_t reg,
                                          uint32_t idx,
-                                         const SignedConstantDomain& value) {
+                                         const ConstantValue& value) {
     return mutate_heap([&](ConstantHeap* heap) {
       auto ptr = get<AbstractHeapPointer>(reg);
       if (!ptr.is_value()) {
         return;
       }
       heap->update(*ptr.get_constant(), [&](const HeapValue& arr) {
-        auto copy = arr.get<ConstantPrimitiveArrayDomain>();
+        auto copy = arr.get<ConstantValueArrayDomain>();
         copy.set(idx, value);
         return copy;
       });

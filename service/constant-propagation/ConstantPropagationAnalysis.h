@@ -172,9 +172,9 @@ class HeapEscapeAnalyzer final
  * Handle non-escaping arrays.
  *
  * This Analyzer should typically be used followed by the
- * HeapEscapeAnalyzer in a combined analysis -- LocalArrayAnalyzer only
- * handles the creation and mutation of array values, but does not account for
- * how they may escape.
+ * HeapEscapeAnalyzer in a combined analysis -- LocalArrayAnalyzer
+ * only handles the creation and mutation of array values, but does not account
+ * for how they may escape.
  */
 class LocalArrayAnalyzer final
     : public InstructionAnalyzerBase<LocalArrayAnalyzer, ConstantEnvironment> {

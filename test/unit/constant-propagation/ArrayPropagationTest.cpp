@@ -13,7 +13,11 @@
 #include "ConstantPropagationTestUtil.h"
 #include "IRAssembler.h"
 
-using PrimitiveArrayDomain = ConstantArrayDomain<SignedConstantDomain>;
+struct SignedConstantDomainZero {
+  SignedConstantDomain operator()() { return SignedConstantDomain(0); }
+};
+using PrimitiveArrayDomain =
+    ConstantArrayDomain<SignedConstantDomain, SignedConstantDomainZero>;
 
 INSTANTIATE_TYPED_TEST_CASE_P(PrimitiveArrayDomain,
                               AbstractDomainPropertyTest,
@@ -34,7 +38,7 @@ AbstractDomainPropertyTest<PrimitiveArrayDomain>::non_extremal_values() {
 TEST_F(ConstantPropagationTest, ConstantArrayOperations) {
   {
     // Top cannot be changed to another value by setting an array index
-    ConstantArrayDomain<SignedConstantDomain> arr;
+    PrimitiveArrayDomain arr;
     EXPECT_TRUE(arr.is_top());
     arr.set(0, SignedConstantDomain(1));
     EXPECT_TRUE(arr.is_top());
@@ -42,7 +46,7 @@ TEST_F(ConstantPropagationTest, ConstantArrayOperations) {
 
   {
     // Arrays are zero-initialized
-    ConstantArrayDomain<SignedConstantDomain> arr(10);
+    PrimitiveArrayDomain arr(10);
     EXPECT_EQ(arr.length(), 10);
     for (uint32_t i = 0; i < arr.length(); ++i) {
       EXPECT_EQ(arr.get(i), SignedConstantDomain(0));
@@ -59,7 +63,7 @@ TEST_F(ConstantPropagationTest, ConstantArrayOperations) {
   {
     // OOB read/write
     for (uint32_t i = 0; i < 10; ++i) {
-      ConstantArrayDomain<SignedConstantDomain> arr(i);
+      PrimitiveArrayDomain arr(i);
       EXPECT_EQ(arr.length(), i);
       EXPECT_TRUE(arr.get(i).is_bottom());
       arr.set(i, SignedConstantDomain(1));
@@ -70,8 +74,8 @@ TEST_F(ConstantPropagationTest, ConstantArrayOperations) {
 
   {
     // join/meet of differently-sized arrays is Top/Bottom respectively
-    ConstantArrayDomain<SignedConstantDomain> arr1(1);
-    ConstantArrayDomain<SignedConstantDomain> arr2(2);
+    PrimitiveArrayDomain arr1(1);
+    PrimitiveArrayDomain arr2(2);
     EXPECT_TRUE(arr1.join(arr2).is_top());
     EXPECT_TRUE(arr1.meet(arr2).is_bottom());
   }
