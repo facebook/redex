@@ -1404,6 +1404,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
     if (pm_config->check_properties_deep) {
       TRACE(PM, 2, "Checking established properties of %s...",
             m_current_pass_info->pass->name().c_str());
+      m_established_properties = redex_properties::apply(
+          m_established_properties, m_current_pass_info->property_interactions);
       for (auto* checker : m_checkers) {
         TRACE(PM, 3, "Checking for %s...",
               checker->get_property_name().c_str());
@@ -1411,8 +1413,6 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
             stores, conf, *this,
             m_established_properties.count(checker->get_property_name()));
       }
-      m_established_properties = redex_properties::apply(
-          m_established_properties, m_current_pass_info->property_interactions);
     }
   };
 
