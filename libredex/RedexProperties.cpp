@@ -50,7 +50,7 @@ std::vector<PropertyName> get_all_properties() {
   };
 }
 
-bool is_negative(PropertyName property) {
+bool is_negative(const PropertyName& property) {
   return property == NeedsEverythingPublic;
 }
 
