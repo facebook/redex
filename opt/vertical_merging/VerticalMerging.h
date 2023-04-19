@@ -29,8 +29,11 @@ class VerticalMergingPass : public Pass {
   redex_properties::PropertyInteractions get_property_interactions()
       const override {
     using namespace redex_properties::names;
-    return {{HasSourceBlocks, {.preserves = true}},
-            {NoSpuriousGetClassCalls, {.preserves = true}}};
+    return {
+        {HasSourceBlocks, {.preserves = true}},
+        {NoSpuriousGetClassCalls, {.preserves = true}},
+        {NeedsEverythingPublic, {.establishes = true}}, // TT150850158};
+    };
   }
 
   void bind_config() override { bind("blocklist", {}, m_blocklist); }
