@@ -453,3 +453,19 @@ void ResourceTableFile::finalize_resource_table(const ResourceConfig& config) {
   // Intentionally left empty, proto resource table will not contain a relevant
   // structure to clean up.
 }
+
+namespace resources {
+bool is_r_class(const DexClass* cls) {
+  const auto c_name = cls->get_name()->str();
+  const auto d_name = cls->get_deobfuscated_name_or_empty();
+  return is_resource_class_name(c_name) || is_resource_class_name(d_name);
+}
+
+void gather_r_classes(const Scope& scope, std::vector<DexClass*>* vec) {
+  for (auto c : scope) {
+    if (is_r_class(c)) {
+      vec->emplace_back(c);
+    }
+  }
+}
+} // namespace resources
