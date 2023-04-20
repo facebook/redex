@@ -34,7 +34,6 @@
 #include "ScopedCFG.h"
 #include "Show.h"
 #include "StlUtil.h"
-#include "TrackResources.h"
 #include "Walkers.h"
 #include "androidfw/ResourceTypes.h"
 #include "utils/Vector.h"
@@ -65,32 +64,9 @@ ReachableResourcesPluginRegistry::get_plugins() const {
 } // namespace opt_res
 
 namespace {
-
-bool is_resource_class_name(const std::string_view c_name) {
-  return c_name.find("/R$") != std::string::npos;
-}
-
-bool is_resource_class(const DexClass* cls) {
-  const auto c_name = cls->get_name()->str();
-  const auto d_name = cls->get_deobfuscated_name_or_empty();
-  return is_resource_class_name(c_name) || is_resource_class_name(d_name);
-}
-
-std::vector<std::string> get_resource_classes(const Scope& scope) {
-  std::vector<std::string> resource_classes;
-  for (const DexClass* clazz : scope) {
-    const auto name_str = clazz->get_name()->str();
-    if (is_resource_class(clazz)) {
-      resource_classes.push_back(str_copy(name_str));
-    }
-  }
-
-  return resource_classes;
-}
-
 void extract_resources_from_static_arrays(
     const std::unordered_set<DexField*>& array_fields,
-    std::unordered_set<uint32_t>& array_values) {
+    std::unordered_set<uint32_t>* out_values) {
   std::unordered_set<DexClass*> classes_to_search;
   for (DexField* field : array_fields) {
     DexClass* clazz = type_class(field->get_class());
@@ -173,7 +149,7 @@ void extract_resources_from_static_arrays(
           }
         }
       }
-      array_values.insert(inner_array_values.begin(), inner_array_values.end());
+      out_values->insert(inner_array_values.begin(), inner_array_values.end());
     }
   }
 }
@@ -369,7 +345,7 @@ void OptimizeResourcesPass::remap_resource_classes(
   int replaced_fields = 0;
   auto scope = build_class_scope(stores);
   for (auto clazz : scope) {
-    if (is_resource_class(clazz)) {
+    if (resources::is_r_class(clazz)) {
       const std::vector<DexField*>& fields = clazz->get_sfields();
       for (auto& field : fields) {
         uint64_t f_value = field->get_static_value()->value();
@@ -550,61 +526,31 @@ OptimizeResourcesPass::find_code_resource_references(
     bool assume_id_inlined) {
   std::unordered_set<uint32_t> ids_from_code;
   Scope scope = build_class_scope(stores);
+  ConcurrentSet<uint32_t> potential_ids_from_code;
+  ConcurrentSet<DexField*> accessed_sfields;
+  ConcurrentSet<uint32_t> potential_ids_from_strings;
+  boost::regex find_ints("(\\d+)");
 
-  std::unordered_set<DexField*> recorded_fields;
-  const auto& pg_map = conf.get_proguard_map();
-
-  std::vector<std::string> resource_classes = get_resource_classes(scope);
-
-  auto tracked_classes =
-      TrackResourcesPass::build_tracked_cls_set(resource_classes, pg_map);
-  std::unordered_set<std::string> search_all_classes;
-  auto num_field_references = TrackResourcesPass::find_accessed_fields(
-      scope, tracked_classes, search_all_classes, &recorded_fields);
-  mgr.incr_metric("num_field_references", num_field_references);
-
-  std::unordered_set<DexField*> array_fields;
-  for (auto& field : recorded_fields) {
-    // Ignore fields with non-resID values
-    if (type::is_primitive(field->get_type()) &&
-        field->get_static_value()->value() > PACKAGE_RESID_START) {
-      ids_from_code.emplace(field->get_static_value()->value());
-    }
-
-    if (type::is_array(field->get_type())) {
-      array_fields.emplace(field);
-    }
-  }
-
-  std::unordered_set<uint32_t> array_values_referenced;
-  // TODO: Improve this piece of analysis to lift restriction of having to run
-  // the pass before ReduceArrayLiteralsPass and
-  // InstructionSequenceOutlinerPass.
-  extract_resources_from_static_arrays(array_fields, array_values_referenced);
-
-  TRACE(OPTRES, 2, "array_values_referenced count: %zu",
-        array_values_referenced.size());
-  ids_from_code.insert(array_values_referenced.begin(),
-                       array_values_referenced.end());
-
-  if (assume_id_inlined) {
-    // Let's walk through code and collect all values that looks like a
-    // resource id.
-    ConcurrentSet<uint32_t> potential_ids_from_code;
-    ConcurrentSet<DexField*> accessed_sfields;
-    boost::regex find_ints("(\\d+)");
-    walk::parallel::opcodes(scope, [&](DexMethod*, IRInstruction* insn) {
-      if (insn->has_literal()) {
-        auto lit = insn->get_literal();
-        if (is_potential_resid(lit)) {
-          potential_ids_from_code.emplace(lit);
-        }
-      } else if (insn->has_string()) {
+  walk::parallel::opcodes(scope, [&](DexMethod*, IRInstruction* insn) {
+    // Collect all accessed fields that could be R fields, or values that got
+    // inlined elsewhere.
+    if (insn->has_field() && opcode::is_an_sfield_op(insn->opcode())) {
+      auto field = resolve_field(insn->get_field(), FieldSearch::Static);
+      if (field && field->is_concrete()) {
+        accessed_sfields.emplace(field);
+      }
+    } else if (insn->has_literal()) {
+      auto lit = insn->get_literal();
+      if (assume_id_inlined && is_potential_resid(lit)) {
+        potential_ids_from_code.emplace(lit);
+      }
+    } else if (insn->has_string()) {
+      std::string to_find = insn->get_string()->str_copy();
+      if (assume_id_inlined) {
         // Redex evaluates expressions like
         // String.valueOf(R.drawable.inspiration_no_format)
         // which means we need to parse ints encoded as strings or ints that
         // were constant folded/concatenated at build time with other strings.
-        std::string to_find = insn->get_string()->str_copy();
         std::vector<std::string> int_strings;
         int_strings.insert(int_strings.end(),
                            boost::sregex_token_iterator(
@@ -621,41 +567,38 @@ OptimizeResourcesPass::find_code_resource_references(
             potential_ids_from_code.emplace(potential_num);
           }
         }
-      } else if (insn->has_field() && opcode::is_an_sfield_op(insn->opcode())) {
-        auto field = resolve_field(insn->get_field(), FieldSearch::Static);
-        if (field && field->is_concrete()) {
-          accessed_sfields.emplace(field);
-        }
       }
-    });
-
-    for (auto* field : accessed_sfields) {
-      // Ignore fields with non-resID values
-      if (type::is_primitive(field->get_type()) && field->get_static_value() &&
-          is_potential_resid(field->get_static_value()->value())) {
-        ids_from_code.emplace(field->get_static_value()->value());
-      }
-    }
-    ids_from_code.insert(potential_ids_from_code.begin(),
-                         potential_ids_from_code.end());
-  }
-  if (check_string_for_name) {
-    ConcurrentSet<uint32_t> potential_ids_from_strings;
-    walk::parallel::opcodes(scope, [&](DexMethod*, IRInstruction* insn) {
-      if (insn->has_string()) {
+      if (check_string_for_name) {
         // Being more conservative of what might get passed into
         // Landroid/content/res/Resources;.getIdentifier:(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)I
-        std::string to_find = insn->get_string()->str_copy();
         auto search = name_to_ids.find(to_find);
         if (search != name_to_ids.end()) {
           potential_ids_from_strings.insert(search->second.begin(),
                                             search->second.end());
         }
       }
-    });
-    ids_from_code.insert(potential_ids_from_strings.begin(),
-                         potential_ids_from_strings.end());
+    }
+  });
+
+  std::unordered_set<DexField*> array_fields;
+  for (auto* field : accessed_sfields) {
+    auto is_r_field = resources::is_r_class(type_class(field->get_class()));
+    if (type::is_primitive(field->get_type()) && field->get_static_value() &&
+        is_potential_resid(field->get_static_value()->value()) &&
+        (is_r_field || assume_id_inlined)) {
+      ids_from_code.emplace(field->get_static_value()->value());
+    } else if (is_r_field && type::is_array(field->get_type())) {
+      array_fields.emplace(field);
+    }
   }
+  // TODO: Improve this piece of analysis to lift restriction of having to run
+  // the pass before ReduceArrayLiteralsPass and
+  // InstructionSequenceOutlinerPass.
+  extract_resources_from_static_arrays(array_fields, &ids_from_code);
+  ids_from_code.insert(potential_ids_from_code.begin(),
+                       potential_ids_from_code.end());
+  ids_from_code.insert(potential_ids_from_strings.begin(),
+                       potential_ids_from_strings.end());
   return ids_from_code;
 }
 
