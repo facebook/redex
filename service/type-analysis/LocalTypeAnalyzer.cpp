@@ -325,8 +325,7 @@ bool RegisterTypeAnalyzer::analyze_new_array(const IRInstruction* insn,
 
 bool RegisterTypeAnalyzer::analyze_filled_new_array(const IRInstruction* insn,
                                                     DexTypeEnvironment* env) {
-  // TODO(zwei): proper array nullness domain population.
-  env->set(RESULT_REGISTER, DexTypeDomain(insn->get_type(), 0));
+  env->set(RESULT_REGISTER, DexTypeDomain(insn->get_type()));
   return true;
 }
 
