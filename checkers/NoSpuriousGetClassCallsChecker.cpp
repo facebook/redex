@@ -45,7 +45,10 @@ void NoSpuriousGetClassCallsChecker::check_spurious_getClass(
 void NoSpuriousGetClassCallsChecker::run_checker(DexStoresVector& stores,
                                                  ConfigFiles& /* conf */,
                                                  PassManager&,
-                                                 bool) {
+                                                 bool established) {
+  if (!established) {
+    return;
+  }
   const auto& scope = build_class_scope(stores);
   m_getClass_ref =
       DexMethod::get_method("Ljava/lang/Object;.getClass:()Ljava/lang/Class;");

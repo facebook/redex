@@ -7,14 +7,8 @@
 
 #pragma once
 
-#include "ConfigFiles.h"
-
-#include <cstdint>
-#include <optional>
 #include <string>
 #include <unordered_map>
-#include <unordered_set>
-#include <vector>
 
 namespace redex_properties {
 
@@ -36,35 +30,18 @@ struct PropertyInteraction {
 };
 
 using PropertyName = std::string;
-
-namespace names {
-inline const std::string NoInitClassInstructions("NoInitClassInstructions");
-inline const std::string DexLimitsObeyed("DexLimitsObeyed");
-
-// Stand-in for fixing up passes.
-inline const std::string NeedsEverythingPublic("NeedsEverythingPublic");
-inline const std::string HasSourceBlocks("HasSourceBlocks");
-inline const std::string NoSpuriousGetClassCalls("NoSpuriousGetClassCalls");
-inline const std::string RenameClass("RenameClass");
-} // namespace names
-
-bool property_is_enabled(const PropertyName& property_name,
-                         const ConfigFiles& conf);
-
-std::unordered_set<PropertyName> get_initial(const ConfigFiles& conf);
-std::unordered_set<PropertyName> get_final(const ConfigFiles& conf);
-
 using PropertyInteractions =
     std::unordered_map<PropertyName, PropertyInteraction>;
 
-std::unordered_set<PropertyName> get_required(
-    const PropertyInteractions& interactions);
-std::unordered_set<PropertyName> apply(
-    std::unordered_set<PropertyName> established_properties,
-    const PropertyInteractions& interactions);
-std::optional<std::string> verify_pass_interactions(
-    const std::vector<std::pair<std::string, PropertyInteractions>>&
-        pass_interactions,
-    ConfigFiles& conf);
+namespace names {
 
+inline const PropertyName NoInitClassInstructions("NoInitClassInstructions");
+inline const PropertyName DexLimitsObeyed("DexLimitsObeyed");
+// Stand-in for fixing up passes.
+inline const PropertyName NeedsEverythingPublic("NeedsEverythingPublic");
+inline const PropertyName HasSourceBlocks("HasSourceBlocks");
+inline const PropertyName NoSpuriousGetClassCalls("NoSpuriousGetClassCalls");
+inline const PropertyName RenameClass("RenameClass");
+
+} // namespace names
 } // namespace redex_properties

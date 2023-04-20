@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "RedexPropertiesManager.h"
+
 #include <algorithm>
 #include <iterator>
 #include <sstream>
@@ -12,41 +14,57 @@
 
 #include "ConfigFiles.h"
 #include "RedexProperties.h"
+#include "RedexPropertyChecker.h"
 #include "StlUtil.h"
+#include "Trace.h"
 
 namespace redex_properties {
 
+Manager::Manager(ConfigFiles& conf,
+                 std::vector<redex_properties::PropertyChecker*> checkers)
+    : m_conf(conf),
+      m_established(get_initial()),
+      m_checkers(std::move(checkers)) {
+  // TODO: Filter m_checkers for unused properties.
+}
+
+namespace {
+
 template <typename CollectionT>
-static CollectionT filter_out_disabled_properties(const CollectionT& c,
-                                                  const ConfigFiles& conf) {
+CollectionT filter_out_disabled_properties(const CollectionT& c,
+                                           const Manager& mgr) {
   CollectionT res;
   std::copy_if(c.begin(), c.end(), std::inserter(res, res.end()),
-               [&conf](const auto& x) { return property_is_enabled(x, conf); });
-
+               [&mgr](const auto& x) { return mgr.property_is_enabled(x); });
   return res;
 }
 
-std::unordered_set<PropertyName> get_initial(const ConfigFiles& conf) {
+} // namespace
+
+std::unordered_set<PropertyName> Manager::get_initial() const {
   using namespace names;
   static const std::unordered_set<PropertyName> default_initial_properties{};
-  return filter_out_disabled_properties(default_initial_properties, conf);
+  return filter_out_disabled_properties(default_initial_properties, *this);
 }
 
-std::unordered_set<PropertyName> get_final(const ConfigFiles& conf) {
+std::unordered_set<PropertyName> Manager::get_final() const {
   using namespace names;
   static const std::unordered_set<PropertyName> default_final_properties{
       NoInitClassInstructions, DexLimitsObeyed};
-  return filter_out_disabled_properties(default_final_properties, conf);
+  return filter_out_disabled_properties(default_final_properties, *this);
 }
 
 namespace {
 
 using namespace names;
 
+// TODO: Figure out a way to keep this complete.
+//
+//       We could move to an enum with the typical .def file to autogenerate.
 std::vector<PropertyName> get_all_properties() {
   return {
-      NoInitClassInstructions,
-      NeedsEverythingPublic,
+      NoInitClassInstructions, DexLimitsObeyed,         NeedsEverythingPublic,
+      HasSourceBlocks,         NoSpuriousGetClassCalls, RenameClass,
   };
 }
 
@@ -56,8 +74,8 @@ bool is_negative(const PropertyName& property) {
 
 } // namespace
 
-std::unordered_set<PropertyName> get_required(
-    const PropertyInteractions& interactions) {
+std::unordered_set<PropertyName> Manager::get_required(
+    const PropertyInteractions& interactions) const {
   std::unordered_set<PropertyName> res;
   for (const auto& [property_name, interaction] : interactions) {
     if (interaction.requires_) {
@@ -66,10 +84,18 @@ std::unordered_set<PropertyName> get_required(
   }
   return res;
 }
-std::unordered_set<PropertyName> apply(
-    std::unordered_set<PropertyName> established_properties,
+
+void Manager::check(DexStoresVector& stores, PassManager& mgr) {
+  for (auto* checker : m_checkers) {
+    TRACE(PM, 3, "Checking for %s...", checker->get_property_name().c_str());
+    checker->run_checker(stores, m_conf, mgr,
+                         m_established.count(checker->get_property_name()));
+  }
+}
+
+const std::unordered_set<PropertyName>& Manager::apply(
     const PropertyInteractions& interactions) {
-  std20::erase_if(established_properties, [&](const auto& property_name) {
+  std20::erase_if(m_established, [&](const auto& property_name) {
     auto it = interactions.find(property_name);
     if (it == interactions.end()) {
       return !is_negative(property_name);
@@ -79,44 +105,58 @@ std::unordered_set<PropertyName> apply(
   });
   for (const auto& [property_name, interaction] : interactions) {
     if (interaction.establishes) {
-      established_properties.insert(property_name);
+      m_established.insert(property_name);
     }
   }
-  return established_properties;
+  return m_established;
 }
 
-std::optional<std::string> verify_pass_interactions(
+const std::unordered_set<PropertyName>& Manager::apply_and_check(
+    const PropertyInteractions& interactions,
+    DexStoresVector& stores,
+    PassManager& mgr) {
+  apply(interactions);
+  check(stores, mgr);
+  return m_established;
+}
+
+std::optional<std::string> Manager::verify_pass_interactions(
     const std::vector<std::pair<std::string, PropertyInteractions>>&
         pass_interactions,
     ConfigFiles& conf) {
   std::ostringstream oss;
+
+  Manager m{conf, {}};
+
   bool failed{false};
-  auto established_properties = get_initial(conf);
+
   auto log_established_properties = [&](const std::string& title) {
     oss << "  " << title << ": ";
-    for (auto& property_name : established_properties) {
+    for (auto& property_name : m.m_established) {
       oss << property_name << ", ";
     }
     oss << "\n";
   };
   log_established_properties("initial state establishes");
+
   auto check = [&](const auto& properties) {
     for (auto& property_name : properties) {
-      if (!established_properties.count(property_name)) {
+      if (!m.m_established.count(property_name)) {
         oss << "    *** REQUIRED PROPERTY NOT CURRENTLY ESTABLISHED ***: "
             << property_name << "\n";
         failed = true;
       }
     }
   };
-  auto final_properties = get_final(conf);
+
+  auto final_properties = m.get_final();
+
   for (auto& [pass_name, interactions] : pass_interactions) {
-    auto required_properties = get_required(interactions);
+    auto required_properties = m.get_required(interactions);
     log_established_properties("requires");
     check(required_properties);
     oss << pass_name << "\n";
-    established_properties =
-        redex_properties::apply(established_properties, interactions);
+    m.apply(interactions);
     log_established_properties("establishes");
     for (const auto& [property_name, interaction] : interactions) {
       if (interaction.requires_finally) {
@@ -131,7 +171,7 @@ std::optional<std::string> verify_pass_interactions(
     if (!is_negative(property_name)) {
       continue;
     }
-    if (established_properties.count(property_name)) {
+    if (m.m_established.count(property_name)) {
       oss << "    *** MUST-NOT PROPERTY IS ESTABLISHED IN FINAL STATE ***: "
           << property_name << "\n";
       failed = true;
@@ -139,7 +179,7 @@ std::optional<std::string> verify_pass_interactions(
   }
 
   if (failed) {
-    return std::optional<std::string>(oss.str());
+    return oss.str();
   }
 
   return std::nullopt;
@@ -169,8 +209,7 @@ static bool pass_is_enabled(const std::string& pass_name,
   return true;
 }
 
-bool property_is_enabled(const PropertyName& property_name,
-                         const ConfigFiles& conf) {
+bool Manager::property_is_enabled(const PropertyName& property_name) const {
   // If we had c++20, we could use a constexpr sorted std::array with
   // std::lower_bound for fast lookups...
   static const std::unordered_map<PropertyName, bool (*)(const ConfigFiles&)>
@@ -186,7 +225,7 @@ bool property_is_enabled(const PropertyName& property_name,
     return true;
   }
 
-  return (it->second)(conf);
+  return (it->second)(m_conf);
 }
 
 } // namespace redex_properties

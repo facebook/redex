@@ -39,6 +39,10 @@ struct ProguardConfiguration;
 // Must match DexStore.
 using DexStoresVector = std::vector<DexStore>;
 
+namespace redex_properties {
+class Manager;
+} // namespace redex_properties
+
 class PassManager {
  public:
   explicit PassManager(const std::vector<Pass*>& passes);
@@ -48,12 +52,11 @@ class PassManager {
 
   PassManager(const std::vector<Pass*>& passes,
               std::unique_ptr<keep_rules::ProguardConfiguration> pg_config);
-  PassManager(
-      const std::vector<Pass*>& passes,
-      std::unique_ptr<keep_rules::ProguardConfiguration> pg_config,
-      const ConfigFiles& config,
-      const RedexOptions& options = RedexOptions{},
-      const std::vector<redex_properties::PropertyChecker*>& checkers = {});
+  PassManager(const std::vector<Pass*>& passes,
+              std::unique_ptr<keep_rules::ProguardConfiguration> pg_config,
+              const ConfigFiles& config,
+              const RedexOptions& options = RedexOptions{},
+              redex_properties::Manager* properties_manager = nullptr);
 
   ~PassManager();
 
@@ -146,7 +149,6 @@ class PassManager {
   std::vector<Pass*> m_registered_passes;
   std::vector<Pass*> m_activated_passes;
   std::unordered_map<AnalysisID, Pass*> m_preserved_analysis_passes;
-  std::vector<redex_properties::PropertyChecker*> m_checkers;
 
   // Per-pass information and metrics
   std::vector<PassManager::PassInfo> m_pass_info;
@@ -172,5 +174,5 @@ class PassManager {
   struct InternalFields;
   std::unique_ptr<InternalFields> m_internal_fields;
 
-  std::unordered_set<redex_properties::PropertyName> m_established_properties;
+  redex_properties::Manager* m_properties_manager{nullptr};
 };

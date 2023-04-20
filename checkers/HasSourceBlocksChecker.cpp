@@ -21,8 +21,8 @@ namespace redex_properties {
 void HasSourceBlocksChecker::run_checker(DexStoresVector& stores,
                                          ConfigFiles& config,
                                          PassManager&,
-                                         bool) {
-  if (!property_is_enabled(names::HasSourceBlocks, config)) {
+                                         bool established) {
+  if (!established) {
     return;
   }
 

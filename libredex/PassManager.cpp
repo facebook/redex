@@ -56,7 +56,7 @@
 #include "ProguardReporting.h"
 #include "Purity.h"
 #include "ReachableClasses.h"
-#include "RedexPropertyChecker.h"
+#include "RedexPropertiesManager.h"
 #include "Sanitizers.h"
 #include "ScopedCFG.h"
 #include "ScopedMemStats.h"
@@ -1004,16 +1004,15 @@ PassManager::PassManager(
     std::unique_ptr<keep_rules::ProguardConfiguration> pg_config,
     const ConfigFiles& config,
     const RedexOptions& options,
-    const std::vector<redex_properties::PropertyChecker*>& checkers)
+    redex_properties::Manager* properties_manager)
     : m_asset_mgr(get_apk_dir(config)),
       m_registered_passes(passes),
-      m_checkers(checkers),
       m_current_pass_info(nullptr),
       m_pg_config(std::move(pg_config)),
       m_redex_options(options),
       m_testing_mode(false),
       m_internal_fields(new InternalFields()),
-      m_established_properties(redex_properties::get_initial(config)) {
+      m_properties_manager(properties_manager) {
   init(config);
   if (getenv("MALLOC_PROFILE_PASS")) {
     m_malloc_profile_pass = find_pass(getenv("MALLOC_PROFILE_PASS"));
@@ -1149,7 +1148,8 @@ void PassManager::init_property_interactions(ConfigFiles& conf) {
     for (auto it = m.begin(); it != m.end();) {
       auto&& [name, property_interaction] = *it;
 
-      if (!redex_properties::property_is_enabled(name, conf)) {
+      if (m_properties_manager != nullptr &&
+          !m_properties_manager->property_is_enabled(name)) {
         it = m.erase(it);
         continue;
       }
@@ -1258,8 +1258,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       pass_interactions.emplace_back(pass->name(),
                                      pass_info->property_interactions);
     }
-    auto failure =
-        redex_properties::verify_pass_interactions(pass_interactions, conf);
+    auto failure = redex_properties::Manager::verify_pass_interactions(
+        pass_interactions, conf);
     if (failure) {
       fprintf(stderr, "ABORT! Illegal pass order:\n%s", failure->c_str());
       exit(EXIT_FAILURE);
@@ -1335,29 +1335,17 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       auto timer = m_check_unique_deobfuscateds_timer.scope();
       check_unique_deobfuscated.run_after_pass(pass, scope);
     }
-    if (pm_config->check_properties_deep) {
+    if (pm_config->check_properties_deep && m_properties_manager != nullptr) {
       TRACE(PM, 2, "Checking established properties of %s...",
             m_current_pass_info->pass->name().c_str());
-      m_established_properties = redex_properties::apply(
-          m_established_properties, m_current_pass_info->property_interactions);
-      for (auto* checker : m_checkers) {
-        TRACE(PM, 3, "Checking for %s...",
-              checker->get_property_name().c_str());
-        checker->run_checker(
-            stores, conf, *this,
-            m_established_properties.count(checker->get_property_name()));
-      }
+      m_properties_manager->apply_and_check(
+          m_current_pass_info->property_interactions, stores, *this);
     }
   };
 
-  if (pm_config->check_properties_deep) {
+  if (pm_config->check_properties_deep && m_properties_manager != nullptr) {
     TRACE(PM, 2, "Checking initial properties of...");
-    for (auto* checker : m_checkers) {
-      TRACE(PM, 3, "Checking for %s...", checker->get_property_name().c_str());
-      checker->run_checker(
-          stores, conf, *this,
-          m_established_properties.count(checker->get_property_name()));
-    }
+    m_properties_manager->check(stores, *this);
   }
 
   JNINativeContextHelper jni_native_context_helper(
