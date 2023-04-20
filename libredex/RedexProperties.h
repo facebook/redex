@@ -39,6 +39,8 @@ using PropertyName = std::string;
 
 namespace names {
 inline const std::string NoInitClassInstructions("NoInitClassInstructions");
+inline const std::string DexLimitsObeyed("DexLimitsObeyed");
+
 // Stand-in for fixing up passes.
 inline const std::string NeedsEverythingPublic("NeedsEverythingPublic");
 inline const std::string HasSourceBlocks("HasSourceBlocks");

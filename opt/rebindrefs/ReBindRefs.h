@@ -30,21 +30,20 @@ class ReBindRefsPass : public ExternalRefsManglingPass {
  public:
   ReBindRefsPass() : ExternalRefsManglingPass("ReBindRefsPass") {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::names;
+    return {{DexLimitsObeyed, {.preserves = true}},
+            {HasSourceBlocks, {.preserves = true}},
+            {NoSpuriousGetClassCalls, {.preserves = true}}};
+  }
+
   void bind_config() override { ExternalRefsManglingPass::bind_config(); }
 
   void eval_pass(DexStoresVector& stores,
                  ConfigFiles& conf,
                  PassManager& mgr) override {
     ExternalRefsManglingPass::eval_pass(stores, conf, mgr);
-  }
-
-  redex_properties::PropertyInteractions get_property_interactions()
-      const override {
-    using namespace redex_properties::names;
-    return {
-        {HasSourceBlocks, {.preserves = true}},
-        {NoSpuriousGetClassCalls, {.preserves = true}},
-    };
   }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;

@@ -37,11 +37,10 @@ class ReduceGotosPass : public Pass {
   redex_properties::PropertyInteractions get_property_interactions()
       const override {
     using namespace redex_properties::names;
-    return {
-        {NoInitClassInstructions, {.preserves = true}},
-        {HasSourceBlocks, {.preserves = true}},
-        {RenameClass, {.preserves = true}},
-    };
+    return {{DexLimitsObeyed, {.preserves = true}},
+            {HasSourceBlocks, {.preserves = true}},
+            {NoInitClassInstructions, {.preserves = true}},
+            {RenameClass, {.preserves = true}}};
   }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;

@@ -35,7 +35,7 @@ std::unordered_set<PropertyName> get_initial(const ConfigFiles& conf) {
 std::unordered_set<PropertyName> get_final(const ConfigFiles& conf) {
   using namespace names;
   static const std::unordered_set<PropertyName> default_final_properties{
-      NoInitClassInstructions};
+      NoInitClassInstructions, DexLimitsObeyed};
   return filter_out_disabled_properties(default_final_properties, conf);
 }
 

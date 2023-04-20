@@ -17,6 +17,7 @@ class AccessMarkingPass : public Pass {
       const override {
     using namespace redex_properties::names;
     return {
+        {DexLimitsObeyed, {.preserves = true}},
         {HasSourceBlocks, {.preserves = true}},
         {NoSpuriousGetClassCalls, {.preserves = true}},
         {RenameClass, {.preserves = true}},

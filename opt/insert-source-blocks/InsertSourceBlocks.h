@@ -25,7 +25,8 @@ class InsertSourceBlocksPass : public Pass {
   redex_properties::PropertyInteractions get_property_interactions()
       const override {
     using namespace redex_properties::names;
-    return {{HasSourceBlocks, {.establishes = true}},
+    return {{DexLimitsObeyed, {.preserves = true}},
+            {HasSourceBlocks, {.establishes = true}},
             {NoSpuriousGetClassCalls, {.preserves = true}}};
   }
 
