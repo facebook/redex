@@ -111,9 +111,6 @@ class CheckerConfig {
     m_annotated_cfg_on_error_reduced =
         type_checker_args.get("annotated_cfg_on_error_reduced", true).asBool();
 
-    m_check_num_of_refs =
-        type_checker_args.get("check_num_of_refs", false).asBool();
-
     m_check_classes = type_checker_args.get("check_classes", true).asBool();
 
     for (auto& trigger_pass : type_checker_args["run_after_passes"]) {
@@ -161,62 +158,6 @@ class CheckerConfig {
   bool run_after_pass(const Pass* pass) {
     return m_run_type_checker_after_each_pass ||
            m_type_checker_trigger_passes.count(pass->name()) > 0;
-  }
-
-  /**
-   * Return activated_passes.size() if the checking is turned off.
-   * Otherwize, return 0 or the index of the last InterDexPass.
-   */
-  size_t min_pass_idx_for_dex_ref_check(
-      const std::vector<Pass*>& activated_passes) {
-    if (!m_check_num_of_refs) {
-      return activated_passes.size();
-    }
-    size_t idx = 0;
-    for (size_t i = 0; i < activated_passes.size(); i++) {
-      if (activated_passes[i]->name() == "InterDexPass") {
-        idx = i;
-      }
-    }
-    return idx;
-  }
-
-  static void ref_validation(const DexStoresVector& stores,
-                             const std::string& pass_name) {
-    Timer t("ref_validation");
-    auto check_ref_num = [pass_name](const DexClasses& classes,
-                                     const DexStore& store, size_t dex_id) {
-      constexpr size_t limit = 65536;
-      std::unordered_set<DexMethodRef*> total_method_refs;
-      std::unordered_set<DexFieldRef*> total_field_refs;
-      std::unordered_set<DexType*> total_type_refs;
-      for (const auto cls : classes) {
-        std::vector<DexMethodRef*> method_refs;
-        std::vector<DexFieldRef*> field_refs;
-        std::vector<DexType*> type_refs;
-        cls->gather_methods(method_refs);
-        cls->gather_fields(field_refs);
-        cls->gather_types(type_refs);
-        total_type_refs.insert(type_refs.begin(), type_refs.end());
-        total_field_refs.insert(field_refs.begin(), field_refs.end());
-        total_method_refs.insert(method_refs.begin(), method_refs.end());
-      }
-      TRACE(PM, 1, "dex %s: method refs %zu, filed refs %zu, type refs %zu",
-            dex_name(store, dex_id).c_str(), total_method_refs.size(),
-            total_field_refs.size(), total_type_refs.size());
-      always_assert_log(total_method_refs.size() <= limit,
-                        "%s adds too many method refs", pass_name.c_str());
-      always_assert_log(total_field_refs.size() <= limit,
-                        "%s adds too many field refs", pass_name.c_str());
-      always_assert_log(total_type_refs.size() <= limit,
-                        "%s adds too many type refs", pass_name.c_str());
-    };
-    for (const auto& store : stores) {
-      size_t dex_id = 0;
-      for (const auto& classes : store.get_dexen()) {
-        check_ref_num(classes, store, dex_id++);
-      }
-    }
   }
 
   // Literate style.
@@ -350,7 +291,6 @@ class CheckerConfig {
   bool m_verify_moves;
   bool m_validate_invoke_super;
   bool m_check_no_overwrite_this;
-  bool m_check_num_of_refs;
   // TODO(fengliu): Kill the `validate_access` flag.
   bool m_validate_access{true};
   bool m_annotated_cfg_on_error{false};
@@ -1304,9 +1244,6 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   const bool hwm_per_pass =
       conf.get_json_config().get("mem_stats_per_pass", true);
 
-  size_t min_pass_idx_for_dex_ref_check =
-      checker_conf.min_pass_idx_for_dex_ref_check(m_activated_passes);
-
   // Abort if the analysis pass dependencies are not satisfied.
   AnalysisUsage::check_dependencies(m_activated_passes);
 
@@ -1397,9 +1334,6 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       }
       auto timer = m_check_unique_deobfuscateds_timer.scope();
       check_unique_deobfuscated.run_after_pass(pass, scope);
-    }
-    if (i >= min_pass_idx_for_dex_ref_check) {
-      CheckerConfig::ref_validation(stores, pass->name());
     }
     if (pm_config->check_properties_deep) {
       TRACE(PM, 2, "Checking established properties of %s...",

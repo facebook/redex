@@ -37,6 +37,8 @@ endif
 #
 
 libredex_la_SOURCES = \
+	checkers/DexLimitsChecker.cpp \
+	checkers/NoInitClassInstructionsChecker.cpp \
 	liblocator/locator.cpp \
 	libredex/AggregateException.cpp \
 	libredex/AnalysisUsage.cpp \

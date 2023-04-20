@@ -52,7 +52,6 @@ void IRTypeCheckerConfig::bind_config() {
   bind("validate_invoke_super", {}, validate_invoke_super);
   bind("run_after_passes", {}, run_after_passes);
   bind("check_no_overwrite_this", {}, check_no_overwrite_this);
-  bind("check_num_of_refs", {}, check_num_of_refs);
   bind("annotated_cfg_on_error", annotated_cfg_on_error,
        annotated_cfg_on_error);
   bind("check_classes", {}, check_classes);
