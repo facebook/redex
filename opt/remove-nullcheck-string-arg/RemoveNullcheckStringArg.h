@@ -79,9 +79,12 @@ class RemoveNullcheckStringArg : public Pass {
 
   redex_properties::PropertyInteractions get_property_interactions()
       const override {
+    using namespace redex_properties::interactions;
     using namespace redex_properties::names;
-    return {{HasSourceBlocks, {.preserves = true}},
-            {NoSpuriousGetClassCalls, {.preserves = true}}};
+    return {
+        {HasSourceBlocks, Preserves},
+        {NoSpuriousGetClassCalls, Preserves},
+    };
   }
 
   bool setup(TransferMapForParam& transfer_map_param,

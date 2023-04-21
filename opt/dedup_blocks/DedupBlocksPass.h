@@ -16,12 +16,15 @@ class DedupBlocksPass : public Pass {
 
   redex_properties::PropertyInteractions get_property_interactions()
       const override {
+    using namespace redex_properties::interactions;
     using namespace redex_properties::names;
-    return {{DexLimitsObeyed, {.preserves = true}},
-            {HasSourceBlocks, {.preserves = true}},
-            {NoInitClassInstructions, {.preserves = true}},
-            {NoSpuriousGetClassCalls, {.preserves = true}},
-            {RenameClass, {.preserves = true}}};
+    return {
+        {DexLimitsObeyed, Preserves},
+        {HasSourceBlocks, Preserves},
+        {NoInitClassInstructions, Preserves},
+        {NoSpuriousGetClassCalls, Preserves},
+        {RenameClass, Preserves},
+    };
   }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;

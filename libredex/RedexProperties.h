@@ -13,10 +13,18 @@
 namespace redex_properties {
 
 struct PropertyInteraction {
-  bool establishes{false};
-  bool requires_{false};
-  bool preserves{false};
-  bool requires_finally{false};
+  bool establishes;
+  bool requires_;
+  bool preserves;
+  bool requires_finally;
+  PropertyInteraction(bool establishes,
+                      bool requires_,
+                      bool preserves,
+                      bool requires_finally)
+      : establishes(establishes),
+        requires_(requires_),
+        preserves(preserves),
+        requires_finally(requires_finally) {}
   // "destroys" when !establishes && !preserves;
   bool is_valid() const {
     if (requires_ && establishes && !preserves) {
@@ -28,6 +36,21 @@ struct PropertyInteraction {
     return true;
   }
 };
+
+namespace interactions {
+inline const PropertyInteraction Destroys = // default
+    PropertyInteraction(false, false, false, false);
+inline const PropertyInteraction Preserves =
+    PropertyInteraction(false, false, true, false);
+inline const PropertyInteraction Requires =
+    PropertyInteraction(false, true, false, false);
+inline const PropertyInteraction Establishes =
+    PropertyInteraction(true, false, false, false);
+inline const PropertyInteraction RequiresAndEstablishes =
+    PropertyInteraction(true, true, true, false);
+inline const PropertyInteraction EstablishesAndRequiresFinally =
+    PropertyInteraction(true, false, false, true);
+} // namespace interactions
 
 using PropertyName = std::string;
 using PropertyInteractions =

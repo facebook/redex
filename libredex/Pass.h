@@ -47,7 +47,7 @@ class Pass : public Configurable {
 
   virtual redex_properties::PropertyInteractions get_property_interactions()
       const {
-    return redex_properties::PropertyInteractions{};
+    return {};
   }
 
   /**

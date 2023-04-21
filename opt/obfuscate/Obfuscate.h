@@ -15,9 +15,12 @@ class ObfuscatePass : public Pass {
 
   redex_properties::PropertyInteractions get_property_interactions()
       const override {
+    using namespace redex_properties::interactions;
     using namespace redex_properties::names;
-    return {{DexLimitsObeyed, {.preserves = true}},
-            {HasSourceBlocks, {.preserves = true}}};
+    return {
+        {DexLimitsObeyed, Preserves},
+        {HasSourceBlocks, Preserves},
+    };
   }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;

@@ -15,10 +15,13 @@ class ShortenSrcStringsPass : public Pass {
 
   redex_properties::PropertyInteractions get_property_interactions()
       const override {
+    using namespace redex_properties::interactions;
     using namespace redex_properties::names;
-    return {{DexLimitsObeyed, {.preserves = true}},
-            {HasSourceBlocks, {.preserves = true}},
-            {RenameClass, {.preserves = true}}};
+    return {
+        {DexLimitsObeyed, Preserves},
+        {HasSourceBlocks, Preserves},
+        {RenameClass, Preserves},
+    };
   }
 
   void bind_config() override {

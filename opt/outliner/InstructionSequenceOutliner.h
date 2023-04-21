@@ -35,10 +35,13 @@ class InstructionSequenceOutliner : public Pass {
 
   redex_properties::PropertyInteractions get_property_interactions()
       const override {
+    using namespace redex_properties::interactions;
     using namespace redex_properties::names;
-    return {{DexLimitsObeyed, {.preserves = true}},
-            {HasSourceBlocks, {.requires_ = true, .preserves = true}},
-            {NoSpuriousGetClassCalls, {.establishes = true}}};
+    return {
+        {DexLimitsObeyed, Preserves},
+        {HasSourceBlocks, RequiresAndEstablishes},
+        {NoSpuriousGetClassCalls, Establishes},
+    };
   }
 
   void bind_config() override;

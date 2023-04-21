@@ -55,9 +55,12 @@ class IntrinsifyNullChecksPass : public Pass {
 
   redex_properties::PropertyInteractions get_property_interactions()
       const override {
+    using namespace redex_properties::interactions;
     using namespace redex_properties::names;
-    return {{HasSourceBlocks, {.preserves = true}},
-            {NoSpuriousGetClassCalls, {.establishes = true}}};
+    return {
+        {HasSourceBlocks, Preserves},
+        {NoSpuriousGetClassCalls, Establishes},
+    };
   }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;

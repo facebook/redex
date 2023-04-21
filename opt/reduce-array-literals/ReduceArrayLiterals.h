@@ -74,10 +74,13 @@ class ReduceArrayLiteralsPass : public Pass {
 
   redex_properties::PropertyInteractions get_property_interactions()
       const override {
+    using namespace redex_properties::interactions;
     using namespace redex_properties::names;
-    return {{DexLimitsObeyed, {.preserves = true}},
-            {HasSourceBlocks, {.preserves = true}},
-            {NoSpuriousGetClassCalls, {.preserves = true}}};
+    return {
+        {DexLimitsObeyed, Preserves},
+        {HasSourceBlocks, Preserves},
+        {NoSpuriousGetClassCalls, Preserves},
+    };
   }
 
   void bind_config() override;

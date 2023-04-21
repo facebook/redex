@@ -66,10 +66,13 @@ class InterDexPass : public Pass {
 
   redex_properties::PropertyInteractions get_property_interactions()
       const override {
+    using namespace redex_properties::interactions;
     using namespace redex_properties::names;
-    return {{DexLimitsObeyed, {.establishes = true}},
-            {HasSourceBlocks, {.preserves = true}},
-            {NoSpuriousGetClassCalls, {.preserves = true}}};
+    return {
+        {DexLimitsObeyed, Establishes},
+        {HasSourceBlocks, Preserves},
+        {NoSpuriousGetClassCalls, Preserves},
+    };
   }
 
   void bind_config() override;
