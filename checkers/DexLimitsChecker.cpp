@@ -46,7 +46,7 @@ void DexLimitsChecker::run_checker(DexStoresVector& stores,
       total_field_refs.insert(field_refs.begin(), field_refs.end());
       total_method_refs.insert(method_refs.begin(), method_refs.end());
     }
-    TRACE(PM, 1, "dex %s: method refs %zu, filed refs %zu, type refs %zu",
+    TRACE(PM, 2, "dex %s: method refs %zu, filed refs %zu, type refs %zu",
           dex_name(store, dex_id).c_str(), total_method_refs.size(),
           total_field_refs.size(), total_type_refs.size());
     always_assert_log(total_method_refs.size() <= limit,
