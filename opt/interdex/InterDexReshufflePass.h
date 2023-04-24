@@ -62,7 +62,7 @@ class InterDexReshufflePass : public Pass {
     using namespace redex_properties::interactions;
     using namespace redex_properties::names;
     return {
-        {DexLimitsObeyed, Preserves},
+        {DexLimitsObeyed, Establishes},
         {HasSourceBlocks, Preserves},
         {NoSpuriousGetClassCalls, Preserves},
     };
