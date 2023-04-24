@@ -7,6 +7,8 @@
 
 #include "DexLimitsChecker.h"
 
+#include <sstream>
+
 #include "Debug.h"
 #include "DexClass.h"
 #include "PassManager.h"
@@ -29,8 +31,11 @@ void DexLimitsChecker::run_checker(DexStoresVector& stores,
     pass_name = info->name;
   }
 
-  auto check_ref_num = [pass_name](const DexClasses& classes,
-                                   const DexStore& store, size_t dex_id) {
+  std::ostringstream result;
+
+  auto check_ref_num = [&pass_name, &result](const DexClasses& classes,
+                                             const DexStore& store,
+                                             size_t dex_id) {
     constexpr size_t limit = 65536;
     std::unordered_set<DexMethodRef*> total_method_refs;
     std::unordered_set<DexFieldRef*> total_field_refs;
@@ -46,15 +51,18 @@ void DexLimitsChecker::run_checker(DexStoresVector& stores,
       total_field_refs.insert(field_refs.begin(), field_refs.end());
       total_method_refs.insert(method_refs.begin(), method_refs.end());
     }
-    TRACE(PM, 2, "dex %s: method refs %zu, filed refs %zu, type refs %zu",
+    TRACE(PM, 2, "dex %s: method refs %zu, field refs %zu, type refs %zu",
           dex_name(store, dex_id).c_str(), total_method_refs.size(),
           total_field_refs.size(), total_type_refs.size());
-    always_assert_log(total_method_refs.size() <= limit,
-                      "%s adds too many method refs", pass_name.c_str());
-    always_assert_log(total_field_refs.size() <= limit,
-                      "%s adds too many field refs", pass_name.c_str());
-    always_assert_log(total_type_refs.size() <= limit,
-                      "%s adds too many type refs", pass_name.c_str());
+    auto check = [&](auto& c, const char* type) {
+      if (c.size() > limit) {
+        result << pass_name << " adds too many " << type << " refs in dex "
+               << dex_name(store, dex_id) << "\n";
+      }
+    };
+    check(total_method_refs, "method");
+    check(total_field_refs, "field");
+    check(total_type_refs, "type");
   };
   for (const auto& store : stores) {
     size_t dex_id = 0;
@@ -62,6 +70,8 @@ void DexLimitsChecker::run_checker(DexStoresVector& stores,
       check_ref_num(classes, store, dex_id++);
     }
   }
+  auto result_str = result.str();
+  always_assert_log(result_str.empty(), "%s", result_str.c_str());
 }
 
 } // namespace redex_properties
