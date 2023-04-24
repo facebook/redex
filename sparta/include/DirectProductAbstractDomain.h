@@ -33,7 +33,7 @@ namespace sparta {
  * subclass ReducedProductAbstractDomain is the way we handle components that
  * are bottom. DirectProductAbstractDomain doesn't do normalization,
  * meaning that a non-Bottom direct product can contain components that
- * are not Bottom.
+ * are Bottom.
  *
  * By default the entire product becomes bottom only if all the components are
  * bottom. Similarly, setting the product to top marks every component as top.
