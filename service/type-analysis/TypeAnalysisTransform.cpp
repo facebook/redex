@@ -145,6 +145,9 @@ Transform::Stats Transform::apply(
   auto code = method->get_code();
   TRACE(TYPE_TRANSFORM, 4, "Processing %s", SHOW(method));
   Transform::Stats stats{};
+  if (!code || method->rstate.no_optimizations()) {
+    return stats;
+  }
   for (const auto& block : code->cfg().blocks()) {
     auto env = lta.get_entry_state_at(block);
     if (env.is_bottom()) {
