@@ -144,9 +144,9 @@ int main(int argc, char** argv) {
   if (checked_strncmp(argv[4], strlen(argv[4]), "0x", 2, 2) == 0) {
     data = strtol(argv[4], nullptr, 0);
   } else {
-    std::cerr << "adding " << argv[4] << " into string pool" << std::endl;
+    std::cout << "adding " << argv[4] << " into string pool" << std::endl;
     data = (uint32_t)(append_in_xml_string_pool(path, std::string(argv[4])));
-    std::cerr << "finished appending string pool with new idx " << data
+    std::cout << "finished appending string pool with new idx " << data
               << std::endl;
   }
 
