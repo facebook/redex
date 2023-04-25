@@ -116,23 +116,23 @@ class IntervalDomain final : public AbstractDomain<IntervalDomain<Num>> {
     return cpy;
   }
 
-  bool is_bottom() const override { return m_lb > m_ub; }
-  bool is_top() const override { return m_lb == MIN && m_ub == MAX; }
+  bool is_bottom() const { return m_lb > m_ub; }
+  bool is_top() const { return m_lb == MIN && m_ub == MAX; }
 
-  bool leq(const IntervalDomain& that) const override {
+  bool leq(const IntervalDomain& that) const {
     return is_bottom() || (that.m_lb <= m_lb && m_ub <= that.m_ub);
   }
 
-  bool equals(const IntervalDomain& that) const override {
+  bool equals(const IntervalDomain& that) const {
     return m_lb == that.m_lb && m_ub == that.m_ub;
   }
 
-  void set_to_bottom() override {
+  void set_to_bottom() {
     m_lb = MAX;
     m_ub = MIN;
   }
 
-  void set_to_top() override {
+  void set_to_top() {
     m_lb = MIN;
     m_ub = MAX;
   }
@@ -142,7 +142,7 @@ class IntervalDomain final : public AbstractDomain<IntervalDomain<Num>> {
    *   [a,b] \/  _|_  = [a, b]
    *   [a,b] \/ [c,d] = [min(a,c), max(b,d)]
    */
-  void join_with(const IntervalDomain& that) override {
+  void join_with(const IntervalDomain& that) {
     m_lb = std::min(m_lb, that.m_lb);
     m_ub = std::max(m_ub, that.m_ub);
   }
@@ -153,7 +153,7 @@ class IntervalDomain final : public AbstractDomain<IntervalDomain<Num>> {
    *   [a,b] W [c,d] = [ c < a ? -inf : a
    *                   , b < d ? +inf : b]
    */
-  void widen_with(const IntervalDomain& that) override {
+  void widen_with(const IntervalDomain& that) {
     if (is_bottom()) {
       *this = that;
       return;
@@ -173,7 +173,7 @@ class IntervalDomain final : public AbstractDomain<IntervalDomain<Num>> {
    *    _   /\  _|_  = _|_
    *  [a,b] /\ [c,d] = [max(a,c), min(b,d)]
    */
-  void meet_with(const IntervalDomain& that) override {
+  void meet_with(const IntervalDomain& that) {
     m_lb = std::max(m_lb, that.m_lb);
     m_ub = std::min(m_ub, that.m_ub);
 
@@ -189,7 +189,7 @@ class IntervalDomain final : public AbstractDomain<IntervalDomain<Num>> {
    *   [a,b] N [c,d] = [ a == -inf ? c : a
    *                   , b == +inf ? d : b]
    */
-  void narrow_with(const IntervalDomain& that) override {
+  void narrow_with(const IntervalDomain& that) {
     if (that.is_bottom()) {
       set_to_bottom();
       return;

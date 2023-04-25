@@ -182,12 +182,12 @@ class ArrayNullnessDomain final
     });
   }
 
-  void join_with(const ArrayNullnessDomain& other) override {
+  void join_with(const ArrayNullnessDomain& other) {
     BaseType::join_with(other);
     reduce();
   }
 
-  void widen_with(const ArrayNullnessDomain& other) override {
+  void widen_with(const ArrayNullnessDomain& other) {
     BaseType::widen_with(other);
     reduce();
   }

@@ -243,38 +243,34 @@ class MapValue final : public AbstractValue<MapValue<Variable, Domain>> {
     insert_binding(variable, std::move(value));
   }
 
-  void clear() override { m_map.clear(); }
+  void clear() { m_map.clear(); }
 
-  AbstractValueKind kind() const override {
+  AbstractValueKind kind() const {
     // If the map is empty, then all variables are implicitly bound to Top,
     // i.e., the abstract environment itself is Top.
     return m_map.empty() ? AbstractValueKind::Top : AbstractValueKind::Value;
   }
 
-  bool leq(const MapValue& other) const override {
-    return m_map.leq(other.m_map);
-  }
+  bool leq(const MapValue& other) const { return m_map.leq(other.m_map); }
 
-  bool equals(const MapValue& other) const override {
-    return m_map.equals(other.m_map);
-  }
+  bool equals(const MapValue& other) const { return m_map.equals(other.m_map); }
 
-  AbstractValueKind join_with(const MapValue& other) override {
+  AbstractValueKind join_with(const MapValue& other) {
     return join_like_operation(
         other, [](const Domain& x, const Domain& y) { return x.join(y); });
   }
 
-  AbstractValueKind widen_with(const MapValue& other) override {
+  AbstractValueKind widen_with(const MapValue& other) {
     return join_like_operation(
         other, [](const Domain& x, const Domain& y) { return x.widening(y); });
   }
 
-  AbstractValueKind meet_with(const MapValue& other) override {
+  AbstractValueKind meet_with(const MapValue& other) {
     return meet_like_operation(
         other, [](const Domain& x, const Domain& y) { return x.meet(y); });
   }
 
-  AbstractValueKind narrow_with(const MapValue& other) override {
+  AbstractValueKind narrow_with(const MapValue& other) {
     return meet_like_operation(
         other, [](const Domain& x, const Domain& y) { return x.narrowing(y); });
   }

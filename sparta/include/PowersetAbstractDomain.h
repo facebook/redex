@@ -35,29 +35,63 @@ class PowersetAbstractDomainStaticAssert;
 template <typename Element, typename Snapshot, typename Derived>
 class PowersetImplementation : public AbstractValue<Derived> {
  public:
-  virtual Snapshot elements() const = 0;
+  ~PowersetImplementation() {
+    // The destructor is the only method that is guaranteed to be created when a
+    // class template is instantiated. This is a good place to perform all the
+    // sanity checks on the template parameters.
 
-  virtual size_t size() const = 0;
+    // Snapshot elements() const;
+    static_assert(
+        std::is_same<decltype(std::declval<const Derived>().elements()),
+                     Snapshot>::value,
+        "Derived::elements() does not exist");
 
-  virtual bool contains(const Element& e) const = 0;
+    // size_t size() const;
+    static_assert(std::is_same<decltype(std::declval<const Derived>().size()),
+                               size_t>::value,
+                  "Derived::size() does not exist");
 
-  virtual void add(const Element& e) = 0;
-  virtual void add(Element&& e) = 0;
+    // bool contains(const Element& e) const;
+    static_assert(std::is_same<decltype(std::declval<const Derived>().contains(
+                                   std::declval<const Element>())),
+                               bool>::value,
+                  "Derived::contains(const Element&) does not exist");
 
-  virtual void remove(const Element& e) = 0;
+    // void add(const Element& e);
+    static_assert(std::is_same<decltype(std::declval<Derived>().add(
+                                   std::declval<const Element>())),
+                               void>::value,
+                  "Derived::add(const Element&) does not exist");
+
+    // void add(Element&& e);
+    static_assert(std::is_same<decltype(std::declval<Derived>().add(
+                                   std::declval<Element&&>())),
+                               void>::value,
+                  "Derived::add(Element&&) does not exist");
+
+    // void remove(const Element& e);
+    static_assert(std::is_same<decltype(std::declval<Derived>().remove(
+                                   std::declval<const Element>())),
+                               void>::value,
+                  "Derived::remove(const Element&) does not exist");
+
+    // AbstractValueKind difference_with(const Derived& other);
+    static_assert(std::is_same<decltype(std::declval<Derived>().difference_with(
+                                   std::declval<const Derived>())),
+                               AbstractValueKind>::value,
+                  "Derived::difference_with(const Derived&) does not exist");
+  }
 
   // We only consider finite powerset domains. Hence, we don't need to define a
   // widening or narrowing operator.
 
-  AbstractValueKind widen_with(const Derived& other) override {
-    return this->join_with(other);
+  AbstractValueKind widen_with(const Derived& other) {
+    return static_cast<Derived&>(*this).join_with(other);
   }
 
-  AbstractValueKind narrow_with(const Derived& other) override {
-    return this->meet_with(other);
+  AbstractValueKind narrow_with(const Derived& other) {
+    return static_cast<Derived&>(*this).meet_with(other);
   }
-
-  virtual AbstractValueKind difference_with(const Derived& other) = 0;
 };
 
 /*

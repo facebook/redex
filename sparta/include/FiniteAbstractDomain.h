@@ -117,37 +117,33 @@ class FiniteAbstractDomain final
 
   Element element() const { return lattice->decode(m_encoding); }
 
-  bool is_bottom() const override { return lattice->is_bottom(m_encoding); }
+  bool is_bottom() const { return lattice->is_bottom(m_encoding); }
 
-  bool is_top() const override { return lattice->is_top(m_encoding); }
+  bool is_top() const { return lattice->is_top(m_encoding); }
 
-  bool leq(const FiniteAbstractDomain& other) const override {
+  bool leq(const FiniteAbstractDomain& other) const {
     return lattice->leq(m_encoding, other.m_encoding);
   }
 
-  bool equals(const FiniteAbstractDomain& other) const override {
+  bool equals(const FiniteAbstractDomain& other) const {
     return lattice->equals(m_encoding, other.m_encoding);
   }
 
-  void set_to_bottom() override { m_encoding = lattice->bottom(); }
+  void set_to_bottom() { m_encoding = lattice->bottom(); }
 
-  void set_to_top() override { m_encoding = lattice->top(); }
+  void set_to_top() { m_encoding = lattice->top(); }
 
-  void join_with(const FiniteAbstractDomain& other) override {
+  void join_with(const FiniteAbstractDomain& other) {
     m_encoding = lattice->join(m_encoding, other.m_encoding);
   }
 
-  void widen_with(const FiniteAbstractDomain& other) override {
-    join_with(other);
-  }
+  void widen_with(const FiniteAbstractDomain& other) { join_with(other); }
 
-  void meet_with(const FiniteAbstractDomain& other) override {
+  void meet_with(const FiniteAbstractDomain& other) {
     m_encoding = lattice->meet(m_encoding, other.m_encoding);
   }
 
-  void narrow_with(const FiniteAbstractDomain& other) override {
-    meet_with(other);
-  }
+  void narrow_with(const FiniteAbstractDomain& other) { meet_with(other); }
 
   static FiniteAbstractDomain bottom() {
     return FiniteAbstractDomain(lattice->bottom());

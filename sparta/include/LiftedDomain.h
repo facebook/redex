@@ -62,11 +62,9 @@ class LiftedDomain final : public AbstractDomain<LiftedDomain<D>> {
     return *this;
   }
 
-  bool is_bottom() const override { return !m_underlying; }
+  bool is_bottom() const { return !m_underlying; }
 
-  bool is_top() const override {
-    return m_underlying && m_underlying->is_top();
-  }
+  bool is_top() const { return m_underlying && m_underlying->is_top(); }
 
   bool is_lifted() const { return !is_bottom(); }
 
@@ -80,7 +78,7 @@ class LiftedDomain final : public AbstractDomain<LiftedDomain<D>> {
     return *m_underlying;
   }
 
-  bool leq(const LiftedDomain& that) const override {
+  bool leq(const LiftedDomain& that) const {
     if (is_bottom()) {
       return true;
     } else if (that.is_bottom()) {
@@ -90,14 +88,14 @@ class LiftedDomain final : public AbstractDomain<LiftedDomain<D>> {
     }
   }
 
-  bool equals(const LiftedDomain& that) const override {
+  bool equals(const LiftedDomain& that) const {
     return (is_bottom() && that.is_bottom()) ||
            m_underlying->equals(*that.m_underlying);
   }
 
-  void set_to_bottom() override { m_underlying = nullptr; }
+  void set_to_bottom() { m_underlying = nullptr; }
 
-  void set_to_top() override { m_underlying = std::make_unique<D>(D::top()); }
+  void set_to_top() { m_underlying = std::make_unique<D>(D::top()); }
 
   /*
    *  _|_ \/  x  = x
@@ -106,7 +104,7 @@ class LiftedDomain final : public AbstractDomain<LiftedDomain<D>> {
    *
    * Where \/' is the join on the underlying domain.
    */
-  void join_with(const LiftedDomain& that) override {
+  void join_with(const LiftedDomain& that) {
     if (is_bottom()) {
       *this = that;
     } else if (!that.is_bottom()) {
@@ -121,7 +119,7 @@ class LiftedDomain final : public AbstractDomain<LiftedDomain<D>> {
    *
    * Where W' is the widening on the underlying domain.
    */
-  void widen_with(const LiftedDomain& that) override {
+  void widen_with(const LiftedDomain& that) {
     if (is_bottom()) {
       *this = that;
     } else if (!that.is_bottom()) {
@@ -136,7 +134,7 @@ class LiftedDomain final : public AbstractDomain<LiftedDomain<D>> {
    *
    * Where /\' is the meet on the underlying domain.
    */
-  void meet_with(const LiftedDomain& that) override {
+  void meet_with(const LiftedDomain& that) {
     if (is_bottom()) {
       return;
     } else if (that.is_bottom()) {
@@ -153,7 +151,7 @@ class LiftedDomain final : public AbstractDomain<LiftedDomain<D>> {
    *
    * Where N' is the narrowing on the underlying domain.
    */
-  void narrow_with(const LiftedDomain& that) override {
+  void narrow_with(const LiftedDomain& that) {
     if (is_bottom()) {
       return;
     } else if (that.is_bottom()) {

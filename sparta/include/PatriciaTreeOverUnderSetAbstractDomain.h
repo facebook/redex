@@ -40,12 +40,12 @@ class OverUnderSetValue final
     m_over.union_with(m_under);
   }
 
-  void clear() override {
+  void clear() {
     m_over.clear();
     m_under.clear();
   }
 
-  AbstractValueKind kind() const override { return AbstractValueKind::Value; }
+  AbstractValueKind kind() const { return AbstractValueKind::Value; }
 
   bool empty() const { return m_over.empty(); }
 
@@ -72,33 +72,33 @@ class OverUnderSetValue final
     m_under.union_with(other.m_under);
   }
 
-  bool leq(const OverUnderSetValue& other) const override {
+  bool leq(const OverUnderSetValue& other) const {
     return m_over.is_subset_of(other.m_over) &&
            other.m_under.is_subset_of(m_under);
   }
 
-  bool equals(const OverUnderSetValue& other) const override {
+  bool equals(const OverUnderSetValue& other) const {
     return m_over.equals(other.m_over) && m_under.equals(other.m_under);
   }
 
-  AbstractValueKind join_with(const OverUnderSetValue& other) override {
+  AbstractValueKind join_with(const OverUnderSetValue& other) {
     m_over.union_with(other.m_over);
     m_under.intersection_with(other.m_under);
     return AbstractValueKind::Value;
   }
 
-  AbstractValueKind widen_with(const OverUnderSetValue& other) override {
+  AbstractValueKind widen_with(const OverUnderSetValue& other) {
     return join_with(other);
   }
 
-  AbstractValueKind meet_with(const OverUnderSetValue& other) override {
+  AbstractValueKind meet_with(const OverUnderSetValue& other) {
     m_over.intersection_with(other.m_over);
     m_under.union_with(other.m_under);
     return m_under.is_subset_of(m_over) ? AbstractValueKind::Value
                                         : AbstractValueKind::Bottom;
   }
 
-  AbstractValueKind narrow_with(const OverUnderSetValue& other) override {
+  AbstractValueKind narrow_with(const OverUnderSetValue& other) {
     return meet_with(other);
   }
 

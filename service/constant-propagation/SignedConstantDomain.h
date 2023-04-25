@@ -117,43 +117,43 @@ class SignedConstantDomain
   static SignedConstantDomain bottom() { return SignedConstantDomain(BOTTOM); }
   static SignedConstantDomain top() { return SignedConstantDomain(TOP); }
   static SignedConstantDomain nez() { return SignedConstantDomain(NEZ); }
-  bool is_bottom() const override { return m_bounds == BOTTOM; }
-  bool is_top() const override { return m_bounds == TOP; }
+  bool is_bottom() const { return m_bounds == BOTTOM; }
+  bool is_top() const { return m_bounds == TOP; }
   bool is_nez() const { return m_bounds.nez; }
 
-  bool leq(const SignedConstantDomain& that) const override {
+  bool leq(const SignedConstantDomain& that) const {
     if (m_bounds == BOTTOM) return true;
     return that.m_bounds.l <= m_bounds.l && m_bounds.u <= that.m_bounds.u &&
            that.m_bounds.nez <= m_bounds.nez;
   }
 
-  bool equals(const SignedConstantDomain& that) const override {
+  bool equals(const SignedConstantDomain& that) const {
     return m_bounds == that.m_bounds;
   }
 
-  void set_to_bottom() override { m_bounds = BOTTOM; }
+  void set_to_bottom() { m_bounds = BOTTOM; }
 
-  void set_to_top() override { m_bounds = TOP; }
+  void set_to_top() { m_bounds = TOP; }
 
-  void join_with(const SignedConstantDomain& that) override {
+  void join_with(const SignedConstantDomain& that) {
     m_bounds.l = std::min(m_bounds.l, that.m_bounds.l);
     m_bounds.u = std::max(m_bounds.u, that.m_bounds.u);
     m_bounds.nez &= that.m_bounds.nez;
     always_assert(m_bounds.is_normalized());
   }
 
-  void widen_with(const SignedConstantDomain&) override {
+  void widen_with(const SignedConstantDomain&) {
     throw std::runtime_error("widen_with not implemented!");
   }
 
-  void meet_with(const SignedConstantDomain& that) override {
+  void meet_with(const SignedConstantDomain& that) {
     m_bounds.l = std::max(m_bounds.l, that.m_bounds.l);
     m_bounds.u = std::min(m_bounds.u, that.m_bounds.u);
     m_bounds.nez |= that.m_bounds.nez;
     m_bounds.normalize();
   }
 
-  void narrow_with(const SignedConstantDomain&) override {
+  void narrow_with(const SignedConstantDomain&) {
     throw std::runtime_error("narrow_with not implemented!");
   }
 

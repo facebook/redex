@@ -38,41 +38,39 @@ class SetValue final
 
   SetValue(PatriciaTreeSet<Element> set) : m_set(std::move(set)) {}
 
-  const PatriciaTreeSet<Element>& elements() const override { return m_set; }
+  const PatriciaTreeSet<Element>& elements() const { return m_set; }
 
-  size_t size() const override { return m_set.size(); }
+  size_t size() const { return m_set.size(); }
 
-  bool contains(const Element& e) const override { return m_set.contains(e); }
+  bool contains(const Element& e) const { return m_set.contains(e); }
 
-  void add(const Element& e) override { m_set.insert(e); }
+  void add(const Element& e) { m_set.insert(e); }
 
-  void add(Element&& e) override { m_set.insert(std::move(e)); }
+  void add(Element&& e) { m_set.insert(std::move(e)); }
 
-  void remove(const Element& e) override { m_set.remove(e); }
+  void remove(const Element& e) { m_set.remove(e); }
 
-  void clear() override { m_set.clear(); }
+  void clear() { m_set.clear(); }
 
-  AbstractValueKind kind() const override { return AbstractValueKind::Value; }
+  AbstractValueKind kind() const { return AbstractValueKind::Value; }
 
-  bool leq(const SetValue& other) const override {
+  bool leq(const SetValue& other) const {
     return m_set.is_subset_of(other.m_set);
   }
 
-  bool equals(const SetValue& other) const override {
-    return m_set.equals(other.m_set);
-  }
+  bool equals(const SetValue& other) const { return m_set.equals(other.m_set); }
 
-  AbstractValueKind join_with(const SetValue& other) override {
+  AbstractValueKind join_with(const SetValue& other) {
     m_set.union_with(other.m_set);
     return AbstractValueKind::Value;
   }
 
-  AbstractValueKind meet_with(const SetValue& other) override {
+  AbstractValueKind meet_with(const SetValue& other) {
     m_set.intersection_with(other.m_set);
     return AbstractValueKind::Value;
   }
 
-  AbstractValueKind difference_with(const SetValue& other) override {
+  AbstractValueKind difference_with(const SetValue& other) {
     m_set.difference_with(other.m_set);
     return AbstractValueKind::Value;
   }

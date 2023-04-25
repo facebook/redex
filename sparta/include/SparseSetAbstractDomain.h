@@ -48,16 +48,16 @@ class SparseSetValue final
         m_dense(max_size),
         m_sparse(max_size) {}
 
-  void clear() override { m_element_num = 0; }
+  void clear() { m_element_num = 0; }
 
   // Returns a vector that contains all the elements in the sparse set.
-  std::vector<IntegerType> elements() const override {
+  std::vector<IntegerType> elements() const {
     return std::vector<IntegerType>(begin(), end());
   }
 
-  AbstractValueKind kind() const override { return AbstractValueKind::Value; }
+  AbstractValueKind kind() const { return AbstractValueKind::Value; }
 
-  bool contains(const IntegerType& element) const override {
+  bool contains(const IntegerType& element) const {
     if (element >= m_capacity) {
       return false;
     }
@@ -65,7 +65,7 @@ class SparseSetValue final
     return dense_idx < m_element_num && m_dense[dense_idx] == element;
   }
 
-  bool leq(const SparseSetValue& other) const override {
+  bool leq(const SparseSetValue& other) const {
     if (m_element_num > other.m_element_num) {
       return false;
     }
@@ -77,11 +77,11 @@ class SparseSetValue final
     return true;
   }
 
-  bool equals(const SparseSetValue& other) const override {
+  bool equals(const SparseSetValue& other) const {
     return (m_element_num == other.m_element_num) && this->leq(other);
   }
 
-  void add(const IntegerType& element) override {
+  void add(const IntegerType& element) {
     if (element < m_capacity) {
       size_t dense_idx = m_sparse[element];
       size_t n = m_element_num;
@@ -93,9 +93,9 @@ class SparseSetValue final
     }
   }
 
-  void add(IntegerType&& element) override { add(element); }
+  void add(IntegerType&& element) { add(element); }
 
-  void remove(const IntegerType& element) override {
+  void remove(const IntegerType& element) {
     if (element < m_capacity) {
       size_t dense_idx = m_sparse[element];
       size_t n = m_element_num;
@@ -118,7 +118,7 @@ class SparseSetValue final
     return std::next(m_dense.begin(), m_element_num);
   }
 
-  AbstractValueKind join_with(const SparseSetValue& other) override {
+  AbstractValueKind join_with(const SparseSetValue& other) {
     if (other.m_capacity > m_capacity) {
       m_dense.resize(other.m_capacity);
       m_sparse.resize(other.m_capacity);
@@ -130,11 +130,11 @@ class SparseSetValue final
     return AbstractValueKind::Value;
   }
 
-  AbstractValueKind widen_with(const SparseSetValue& other) override {
+  AbstractValueKind widen_with(const SparseSetValue& other) {
     return join_with(other);
   }
 
-  AbstractValueKind meet_with(const SparseSetValue& other) override {
+  AbstractValueKind meet_with(const SparseSetValue& other) {
     for (auto it = begin(); it != end();) {
       if (!other.contains(*it)) {
         // If other doesn't contain this element, we remove it using the current
@@ -149,11 +149,11 @@ class SparseSetValue final
     return AbstractValueKind::Value;
   }
 
-  AbstractValueKind narrow_with(const SparseSetValue& other) override {
+  AbstractValueKind narrow_with(const SparseSetValue& other) {
     return meet_with(other);
   }
 
-  AbstractValueKind difference_with(const SparseSetValue& other) override {
+  AbstractValueKind difference_with(const SparseSetValue& other) {
     for (auto it = begin(); it != end();) {
       if (other.contains(*it)) {
         remove(*it);
@@ -164,7 +164,7 @@ class SparseSetValue final
     return AbstractValueKind::Value;
   }
 
-  size_t size() const override { return m_element_num; }
+  size_t size() const { return m_element_num; }
 
   friend std::ostream& operator<<(std::ostream& o,
                                   const SparseSetValue& value) {

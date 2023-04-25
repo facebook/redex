@@ -59,37 +59,35 @@ class ConstantAbstractValue final
   explicit ConstantAbstractValue(Constant constant)
       : m_constant(std::move(constant)) {}
 
-  void clear() override {}
+  void clear() {}
 
-  AbstractValueKind kind() const override { return AbstractValueKind::Value; }
+  AbstractValueKind kind() const { return AbstractValueKind::Value; }
 
-  bool leq(const ConstantAbstractValue& other) const override {
-    return equals(other);
-  }
+  bool leq(const ConstantAbstractValue& other) const { return equals(other); }
 
-  bool equals(const ConstantAbstractValue& other) const override {
+  bool equals(const ConstantAbstractValue& other) const {
     return m_constant == other.get_constant();
   }
 
-  AbstractValueKind join_with(const ConstantAbstractValue& other) override {
+  AbstractValueKind join_with(const ConstantAbstractValue& other) {
     if (equals(other)) {
       return AbstractValueKind::Value;
     }
     return AbstractValueKind::Top;
   }
 
-  AbstractValueKind widen_with(const ConstantAbstractValue& other) override {
+  AbstractValueKind widen_with(const ConstantAbstractValue& other) {
     return join_with(other);
   }
 
-  AbstractValueKind meet_with(const ConstantAbstractValue& other) override {
+  AbstractValueKind meet_with(const ConstantAbstractValue& other) {
     if (equals(other)) {
       return AbstractValueKind::Value;
     }
     return AbstractValueKind::Bottom;
   }
 
-  AbstractValueKind narrow_with(const ConstantAbstractValue& other) override {
+  AbstractValueKind narrow_with(const ConstantAbstractValue& other) {
     return meet_with(other);
   }
 
@@ -214,21 +212,17 @@ class ConstantAbstractDomain final
 
   AbstractValueKind kind() const { return m_repr.kind(); }
 
-  bool is_bottom() const override {
-    return m_repr.kind() == AbstractValueKind::Bottom;
-  }
+  bool is_bottom() const { return m_repr.kind() == AbstractValueKind::Bottom; }
 
-  bool is_top() const override {
-    return m_repr.kind() == AbstractValueKind::Top;
-  }
+  bool is_top() const { return m_repr.kind() == AbstractValueKind::Top; }
 
   bool is_value() const { return m_repr.kind() == AbstractValueKind::Value; }
 
-  void set_to_bottom() override { m_repr.set(AbstractValueKind::Bottom); }
+  void set_to_bottom() { m_repr.set(AbstractValueKind::Bottom); }
 
-  void set_to_top() override { m_repr.set(AbstractValueKind::Top); }
+  void set_to_top() { m_repr.set(AbstractValueKind::Top); }
 
-  bool leq(const ConstantAbstractDomain<Constant>& other) const override {
+  bool leq(const ConstantAbstractDomain<Constant>& other) const {
     if (is_bottom()) {
       return true;
     }
@@ -244,7 +238,7 @@ class ConstantAbstractDomain final
     return m_repr.constant() == other.m_repr.constant();
   }
 
-  bool equals(const ConstantAbstractDomain<Constant>& other) const override {
+  bool equals(const ConstantAbstractDomain<Constant>& other) const {
     if (is_bottom()) {
       return other.is_bottom();
     }
@@ -257,7 +251,7 @@ class ConstantAbstractDomain final
     return m_repr.constant() == other.m_repr.constant();
   }
 
-  void join_with(const ConstantAbstractDomain<Constant>& other) override {
+  void join_with(const ConstantAbstractDomain<Constant>& other) {
     if (is_top() || other.is_bottom()) {
       return;
     }
@@ -274,11 +268,11 @@ class ConstantAbstractDomain final
                    : AbstractValueKind::Top);
   }
 
-  void widen_with(const ConstantAbstractDomain<Constant>& other) override {
+  void widen_with(const ConstantAbstractDomain<Constant>& other) {
     return join_with(other);
   }
 
-  void meet_with(const ConstantAbstractDomain<Constant>& other) override {
+  void meet_with(const ConstantAbstractDomain<Constant>& other) {
     if (is_bottom() || other.is_top()) {
       return;
     }
@@ -295,7 +289,7 @@ class ConstantAbstractDomain final
                    : AbstractValueKind::Bottom);
   }
 
-  void narrow_with(const ConstantAbstractDomain<Constant>& other) override {
+  void narrow_with(const ConstantAbstractDomain<Constant>& other) {
     return meet_with(other);
   }
 
