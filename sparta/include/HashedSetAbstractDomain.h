@@ -60,7 +60,7 @@ class SetValue final : public PowersetImplementation<
 
   SetValue& operator=(SetValue&& other) noexcept = default;
 
-  const SetImplType& elements() const override {
+  const SetImplType& elements() const {
     if (m_set) {
       return *m_set;
     } else {
@@ -68,17 +68,15 @@ class SetValue final : public PowersetImplementation<
     }
   }
 
-  size_t size() const override { return m_set ? m_set->size() : 0; }
+  size_t size() const { return m_set ? m_set->size() : 0; }
 
-  bool contains(const Element& e) const override {
-    return m_set && m_set->count(e) > 0;
-  }
+  bool contains(const Element& e) const { return m_set && m_set->count(e) > 0; }
 
-  void add(const Element& e) override { set().emplace(e); }
+  void add(const Element& e) { set().emplace(e); }
 
-  void add(Element&& e) override { set().emplace(std::move(e)); }
+  void add(Element&& e) { set().emplace(std::move(e)); }
 
-  void remove(const Element& e) override {
+  void remove(const Element& e) {
     if (m_set) {
       if (m_set->erase(e) && m_set->empty()) {
         m_set = nullptr;
@@ -86,11 +84,11 @@ class SetValue final : public PowersetImplementation<
     }
   }
 
-  void clear() override { m_set = nullptr; }
+  void clear() { m_set = nullptr; }
 
-  AbstractValueKind kind() const override { return AbstractValueKind::Value; }
+  AbstractValueKind kind() const { return AbstractValueKind::Value; }
 
-  bool leq(const SetValue& other) const override {
+  bool leq(const SetValue& other) const {
     if (size() > other.size()) {
       return false;
     }
@@ -104,11 +102,11 @@ class SetValue final : public PowersetImplementation<
     return true;
   }
 
-  bool equals(const SetValue& other) const override {
+  bool equals(const SetValue& other) const {
     return (size() == other.size()) && leq(other);
   }
 
-  AbstractValueKind join_with(const SetValue& other) override {
+  AbstractValueKind join_with(const SetValue& other) {
     if (other.m_set) {
       auto& this_set = set();
       for (const Element& e : *other.m_set) {
@@ -118,7 +116,7 @@ class SetValue final : public PowersetImplementation<
     return AbstractValueKind::Value;
   }
 
-  AbstractValueKind meet_with(const SetValue& other) override {
+  AbstractValueKind meet_with(const SetValue& other) {
     if (m_set) {
       for (auto it = m_set->begin(); it != m_set->end();) {
         if (other.contains(*it) == 0) {
@@ -131,7 +129,7 @@ class SetValue final : public PowersetImplementation<
     return AbstractValueKind::Value;
   }
 
-  AbstractValueKind difference_with(const SetValue& other) override {
+  AbstractValueKind difference_with(const SetValue& other) {
     if (m_set) {
       for (auto it = m_set->begin(); it != m_set->end();) {
         if (other.contains(*it) != 0) {

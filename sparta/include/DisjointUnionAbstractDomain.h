@@ -75,44 +75,44 @@ class DisjointUnionAbstractDomain final
     return DisjointUnionAbstractDomain(FirstDomain::bottom());
   }
 
-  bool is_top() const override {
+  bool is_top() const {
     return boost::apply_visitor([](const auto& dom) { return dom.is_top(); },
                                 this->m_variant);
   }
 
-  bool is_bottom() const override {
+  bool is_bottom() const {
     return boost::apply_visitor([](const auto& dom) { return dom.is_bottom(); },
                                 this->m_variant);
   }
 
-  void set_to_top() override {
+  void set_to_top() {
     boost::apply_visitor([](auto& dom) { dom.set_to_top(); }, this->m_variant);
   }
 
-  void set_to_bottom() override {
+  void set_to_bottom() {
     boost::apply_visitor([](auto& dom) { dom.set_to_bottom(); },
                          this->m_variant);
   }
 
-  bool leq(const DisjointUnionAbstractDomain<FirstDomain, Domains...>& other)
-      const override;
+  bool leq(
+      const DisjointUnionAbstractDomain<FirstDomain, Domains...>& other) const;
 
-  bool equals(const DisjointUnionAbstractDomain<FirstDomain, Domains...>& other)
-      const override;
+  bool equals(
+      const DisjointUnionAbstractDomain<FirstDomain, Domains...>& other) const;
 
-  void join_with(const DisjointUnionAbstractDomain<FirstDomain, Domains...>&
-                     other) override;
+  void join_with(
+      const DisjointUnionAbstractDomain<FirstDomain, Domains...>& other);
 
-  void widen_with(const DisjointUnionAbstractDomain<FirstDomain, Domains...>&
-                      other) override {
+  void widen_with(
+      const DisjointUnionAbstractDomain<FirstDomain, Domains...>& other) {
     this->join_with(other);
   }
 
-  void meet_with(const DisjointUnionAbstractDomain<FirstDomain, Domains...>&
-                     other) override;
+  void meet_with(
+      const DisjointUnionAbstractDomain<FirstDomain, Domains...>& other);
 
-  void narrow_with(const DisjointUnionAbstractDomain<FirstDomain, Domains...>&
-                       other) override {
+  void narrow_with(
+      const DisjointUnionAbstractDomain<FirstDomain, Domains...>& other) {
     this->meet_with(other);
   }
 

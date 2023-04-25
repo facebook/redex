@@ -219,21 +219,21 @@ class AliasedRegisters final : public sparta::AbstractValue<AliasedRegisters> {
 
   // ---- extends AbstractValue ----
 
-  void clear() override;
+  void clear();
 
-  sparta::AbstractValueKind kind() const override;
+  sparta::AbstractValueKind kind() const;
 
-  bool leq(const AliasedRegisters& other) const override;
+  bool leq(const AliasedRegisters& other) const;
 
-  bool equals(const AliasedRegisters& other) const override;
+  bool equals(const AliasedRegisters& other) const;
 
-  sparta::AbstractValueKind join_with(const AliasedRegisters& other) override;
+  sparta::AbstractValueKind join_with(const AliasedRegisters& other);
 
-  sparta::AbstractValueKind widen_with(const AliasedRegisters& other) override;
+  sparta::AbstractValueKind widen_with(const AliasedRegisters& other);
 
-  sparta::AbstractValueKind meet_with(const AliasedRegisters& other) override;
+  sparta::AbstractValueKind meet_with(const AliasedRegisters& other);
 
-  sparta::AbstractValueKind narrow_with(const AliasedRegisters& other) override;
+  sparta::AbstractValueKind narrow_with(const AliasedRegisters& other);
 
  private:
   // A directed graph where register Values are vertices

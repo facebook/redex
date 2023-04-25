@@ -24,9 +24,9 @@ class SetValue final : public AbstractValue<SetValue<Element, MaxCount>> {
 
   SetValue(FlatSet<Element> set) : m_set(std::move(set)) {}
 
-  void clear() override { m_set.clear(); }
+  void clear() { m_set.clear(); }
 
-  AbstractValueKind kind() const override {
+  AbstractValueKind kind() const {
     if (m_set.size() > MaxCount) {
       return AbstractValueKind::Top;
     } else {
@@ -46,29 +46,27 @@ class SetValue final : public AbstractValue<SetValue<Element, MaxCount>> {
 
   bool contains(const Element& e) const { return m_set.contains(e); }
 
-  bool leq(const SetValue& other) const override {
+  bool leq(const SetValue& other) const {
     return m_set.is_subset_of(other.m_set);
   }
 
-  bool equals(const SetValue& other) const override {
-    return m_set.equals(other.m_set);
-  }
+  bool equals(const SetValue& other) const { return m_set.equals(other.m_set); }
 
-  AbstractValueKind join_with(const SetValue& other) override {
+  AbstractValueKind join_with(const SetValue& other) {
     m_set.union_with(other.m_set);
     return kind();
   }
 
-  AbstractValueKind widen_with(const SetValue& other) override {
+  AbstractValueKind widen_with(const SetValue& other) {
     return join_with(other);
   }
 
-  AbstractValueKind meet_with(const SetValue& other) override {
+  AbstractValueKind meet_with(const SetValue& other) {
     m_set.intersection_with(other.m_set);
     return kind();
   }
 
-  AbstractValueKind narrow_with(const SetValue& other) override {
+  AbstractValueKind narrow_with(const SetValue& other) {
     return meet_with(other);
   }
 

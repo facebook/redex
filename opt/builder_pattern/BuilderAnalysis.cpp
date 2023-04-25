@@ -48,7 +48,7 @@ class NullableConstantDomain final
                : boost::none;
   }
 
-  void join_with(const NullableConstantDomain& other) override {
+  void join_with(const NullableConstantDomain& other) {
     if (is_value() && other.is_value()) {
       if (get_value()->get_constant()->opcode() == OPCODE_CONST &&
           other.get_value()->get_constant()->opcode() != OPCODE_CONST) {

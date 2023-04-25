@@ -128,21 +128,21 @@ class HashedAbstractPartition final
     return *this;
   }
 
-  bool is_top() const override { return m_is_top; }
+  bool is_top() const { return m_is_top; }
 
-  bool is_bottom() const override { return !m_is_top && m_map.empty(); }
+  bool is_bottom() const { return !m_is_top && m_map.empty(); }
 
-  void set_to_bottom() override {
+  void set_to_bottom() {
     m_map.clear();
     m_is_top = false;
   }
 
-  void set_to_top() override {
+  void set_to_top() {
     m_map.clear();
     m_is_top = true;
   }
 
-  bool leq(const HashedAbstractPartition& other) const override {
+  bool leq(const HashedAbstractPartition& other) const {
     if (is_top()) {
       return other.is_top();
     }
@@ -168,7 +168,7 @@ class HashedAbstractPartition final
     return true;
   }
 
-  bool equals(const HashedAbstractPartition& other) const override {
+  bool equals(const HashedAbstractPartition& other) const {
     if (m_is_top != other.m_is_top || m_map.size() != other.m_map.size()) {
       return false;
     }
@@ -184,22 +184,22 @@ class HashedAbstractPartition final
     return true;
   }
 
-  void join_with(const HashedAbstractPartition& other) override {
+  void join_with(const HashedAbstractPartition& other) {
     join_like_operation(other,
                         [](Domain* x, const Domain& y) { x->join_with(y); });
   }
 
-  void widen_with(const HashedAbstractPartition& other) override {
+  void widen_with(const HashedAbstractPartition& other) {
     join_like_operation(other,
                         [](Domain* x, const Domain& y) { x->widen_with(y); });
   }
 
-  void meet_with(const HashedAbstractPartition& other) override {
+  void meet_with(const HashedAbstractPartition& other) {
     meet_like_operation(other,
                         [](Domain* x, const Domain& y) { x->meet_with(y); });
   }
 
-  void narrow_with(const HashedAbstractPartition& other) override {
+  void narrow_with(const HashedAbstractPartition& other) {
     meet_like_operation(other,
                         [](Domain* x, const Domain& y) { x->narrow_with(y); });
   }

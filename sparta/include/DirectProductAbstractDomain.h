@@ -84,47 +84,46 @@ class DirectProductAbstractDomain : public AbstractDomain<Derived> {
     operation(&std::get<Index>(m_product));
   }
 
-  virtual bool is_bottom() const override {
+  bool is_bottom() const {
     return all_of([](auto&& component) { return component.is_bottom(); });
   }
 
-  bool is_top() const override {
+  bool is_top() const {
     return all_of([](auto&& component) { return component.is_top(); });
   }
 
-  bool leq(const Derived& other_domain) const override {
+  bool leq(const Derived& other_domain) const {
     return compare_with(other_domain, [](auto&& self, auto&& other) {
       return self.leq(other);
     });
   }
 
-  bool equals(const Derived& other_domain) const override {
+  bool equals(const Derived& other_domain) const {
     return compare_with(other_domain, [](auto&& self, auto&& other) {
       return self.equals(other);
     });
   }
 
-  void set_to_bottom() override {
+  void set_to_bottom() {
     return tuple_apply(
         [](auto&&... c) { discard({(c.set_to_bottom(), 0)...}); }, m_product);
   }
 
-  void set_to_top() override {
+  void set_to_top() {
     return tuple_apply([](auto&&... c) { discard({(c.set_to_top(), 0)...}); },
                        m_product);
   }
 
-  // We leave the Meet and Narrowing methods virtual, because one might want
-  // to refine the result of these operations.
+  // Note that one might want to refine the result of meet and narrow.
 
-  virtual void meet_with(const Derived& other_domain) override {
+  void meet_with(const Derived& other_domain) {
     combine_with(
         other_domain,
         [](auto&& self, auto&& other) { self.meet_with(other); },
         /* smash_bottom */ false);
   }
 
-  virtual void narrow_with(const Derived& other_domain) override {
+  void narrow_with(const Derived& other_domain) {
     combine_with(
         other_domain,
         [](auto&& self, auto&& other) { self.narrow_with(other); },
@@ -135,16 +134,16 @@ class DirectProductAbstractDomain : public AbstractDomain<Derived> {
   // the information in the other components. As such, it only makes sense to
   // call reduce() after meet/narrow -- operations which can refine the
   // components of a product. However, we may still need to canonicalize our
-  // product after a join/widen, so these methods are virtual as well.
+  // product after a join/widen, so these methods might be overriden.
 
-  virtual void join_with(const Derived& other_domain) override {
+  void join_with(const Derived& other_domain) {
     combine_with(
         other_domain,
         [](auto&& self, auto&& other) { self.join_with(other); },
         /* smash_bottom */ false);
   }
 
-  virtual void widen_with(const Derived& other_domain) override {
+  void widen_with(const Derived& other_domain) {
     combine_with(
         other_domain,
         [](auto&& self, auto&& other) { self.widen_with(other); },

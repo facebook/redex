@@ -261,16 +261,16 @@ class MapValue final
     insert_binding(variable, std::move(value));
   }
 
-  void clear() override { m_map.clear(); }
+  void clear() { m_map.clear(); }
 
-  AbstractValueKind kind() const override {
+  AbstractValueKind kind() const {
     // If the map is empty, then all variables are implicitly bound to Top,
     // i.e., the abstract environment itself is Top.
     return (m_map.size() == 0) ? AbstractValueKind::Top
                                : AbstractValueKind::Value;
   }
 
-  bool leq(const MapValue& other) const override {
+  bool leq(const MapValue& other) const {
     if (other.m_map.size() > m_map.size()) {
       // In this case, there is a variable bound to a non-Top value in 'other'
       // that is not defined in 'this' (and is therefore implicitly bound to
@@ -300,7 +300,7 @@ class MapValue final
     return true;
   }
 
-  bool equals(const MapValue& other) const override {
+  bool equals(const MapValue& other) const {
     if (m_map.size() != other.m_map.size()) {
       return false;
     }
@@ -316,22 +316,22 @@ class MapValue final
     return true;
   }
 
-  AbstractValueKind join_with(const MapValue& other) override {
+  AbstractValueKind join_with(const MapValue& other) {
     return join_like_operation(
         other, [](Domain* x, const Domain& y) { x->join_with(y); });
   }
 
-  AbstractValueKind widen_with(const MapValue& other) override {
+  AbstractValueKind widen_with(const MapValue& other) {
     return join_like_operation(
         other, [](Domain* x, const Domain& y) { x->widen_with(y); });
   }
 
-  AbstractValueKind meet_with(const MapValue& other) override {
+  AbstractValueKind meet_with(const MapValue& other) {
     return meet_like_operation(
         other, [](Domain* x, const Domain& y) { x->meet_with(y); });
   }
 
-  AbstractValueKind narrow_with(const MapValue& other) override {
+  AbstractValueKind narrow_with(const MapValue& other) {
     return meet_like_operation(
         other, [](Domain* x, const Domain& y) { x->narrow_with(y); });
   }

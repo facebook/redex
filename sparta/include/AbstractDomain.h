@@ -70,42 +70,124 @@ class AbstractDomainScaffoldingStaticAssert;
 template <typename Derived>
 class AbstractDomain {
  public:
-  virtual ~AbstractDomain() {
+  ~AbstractDomain() {
     // The destructor is the only method that is guaranteed to be created when a
     // class template is instantiated. This is a good place to perform all the
     // sanity checks on the template parameters.
     static_assert(std::is_base_of<AbstractDomain<Derived>, Derived>::value,
                   "Derived doesn't inherit from AbstractDomain");
+
+    // Derived();
     static_assert(std::is_default_constructible<Derived>::value,
                   "Derived is not default constructible");
+
+    // Derived(const Derived&);
     static_assert(std::is_copy_constructible<Derived>::value,
                   "Derived is not copy constructible");
+
+    // Derived& operator=(const Derived&);
     static_assert(std::is_copy_assignable<Derived>::value,
                   "Derived is not copy assignable");
+
     // top() and bottom() are factory methods that respectively produce the top
     // and bottom values. We define default implementations for them in terms
     // of set_to_{top, bottom}, but implementors may wish to override those
     // implementations with more efficient versions. Here we check that any
     // such overrides bear the correct method signature.
+
+    // static Derived bottom();
     static_assert(std::is_same<decltype(Derived::bottom()), Derived>::value,
                   "Derived::bottom() does not exist");
+
+    // static Derived top();
     static_assert(std::is_same<decltype(Derived::top()), Derived>::value,
                   "Derived::top() does not exist");
+
+    // bool is_bottom() const;
+    static_assert(
+        std::is_same<decltype(std::declval<const Derived>().is_bottom()),
+                     bool>::value,
+        "Derived::is_bottom() does not exist");
+
+    // bool is_top() const;
+    static_assert(std::is_same<decltype(std::declval<const Derived>().is_top()),
+                               bool>::value,
+                  "Derived::is_bottom() does not exist");
+
+    /*
+     * The partial order relation.
+     */
+    // bool leq(const Derived& other) const;
+    static_assert(std::is_same<decltype(std::declval<const Derived>().leq(
+                                   std::declval<const Derived>())),
+                               bool>::value,
+                  "Derived::leq(const Derived&) does not exist");
+
+    /*
+     * a.equals(b) is semantically equivalent to a.leq(b) && b.leq(a).
+     */
+    // bool equals(const Derived& other) const;
+    static_assert(std::is_same<decltype(std::declval<const Derived>().equals(
+                                   std::declval<const Derived>())),
+                               bool>::value,
+                  "Derived::equals(const Derived&) does not exist");
+
+    /*
+     * Elements of an abstract domain are mutable and the basic operations have
+     * side effects.
+     */
+
+    // void set_to_bottom();
+    static_assert(
+        std::is_same<decltype(std::declval<Derived>().set_to_bottom()),
+                     void>::value,
+        "Derived::set_to_bottom() does not exist");
+
+    // void set_to_top();
+    static_assert(std::is_same<decltype(std::declval<Derived>().set_to_top()),
+                               void>::value,
+                  "Derived::set_to_top() does not exist");
+
+    /*
+     * If the abstract domain is a lattice, this is the least upper bound
+     * operation.
+     */
+    // void join_with(const Derived& other);
+    static_assert(std::is_same<decltype(std::declval<Derived>().join_with(
+                                   std::declval<const Derived>())),
+                               void>::value,
+                  "Derived::join_with(const Derived&) does not exist");
+
+    /*
+     * If the abstract domain has finite ascending chains, one doesn't need to
+     * define a widening operator and can simply use the join instead.
+     */
+    // void widen_with(const Derived& other);
+    static_assert(std::is_same<decltype(std::declval<Derived>().widen_with(
+                                   std::declval<const Derived>())),
+                               void>::value,
+                  "Derived::widen_with(const Derived&) does not exist");
+
+    /*
+     * If the abstract domain is a lattice, this is the greatest lower bound
+     * operation.
+     */
+    // void meet_with(const Derived& other);
+    static_assert(std::is_same<decltype(std::declval<Derived>().meet_with(
+                                   std::declval<const Derived>())),
+                               void>::value,
+                  "Derived::meet_with(const Derived&) does not exist");
+
+    /*
+     * If the abstract domain has finite descending chains, one doesn't need to
+     * define a narrowing operator and can simply use the meet instead.
+     */
+    // void narrow_with(const Derived& other);
+    static_assert(std::is_same<decltype(std::declval<Derived>().narrow_with(
+                                   std::declval<const Derived>())),
+                               void>::value,
+                  "Derived::narrow_with(const Derived&) does not exist");
   }
-
-  virtual bool is_bottom() const = 0;
-
-  virtual bool is_top() const = 0;
-
-  /*
-   * The partial order relation.
-   */
-  virtual bool leq(const Derived& other) const = 0;
-
-  /*
-   * a.equals(b) is semantically equivalent to a.leq(b) && b.leq(a).
-   */
-  virtual bool equals(const Derived& other) const = 0;
 
   /*
    * Many C++ libraries default to using operator== to check for equality,
@@ -118,39 +200,6 @@ class AbstractDomain {
   friend bool operator!=(const Derived& self, const Derived& other) {
     return !self.equals(other);
   }
-
-  /*
-   * Elements of an abstract domain are mutable and the basic operations have
-   * side effects.
-   */
-
-  virtual void set_to_bottom() = 0;
-
-  virtual void set_to_top() = 0;
-
-  /*
-   * If the abstract domain is a lattice, this is the least upper bound
-   * operation.
-   */
-  virtual void join_with(const Derived& other) = 0;
-
-  /*
-   * If the abstract domain has finite ascending chains, one doesn't need to
-   * define a widening operator and can simply use the join instead.
-   */
-  virtual void widen_with(const Derived& other) = 0;
-
-  /*
-   * If the abstract domain is a lattice, this is the greatest lower bound
-   * operation.
-   */
-  virtual void meet_with(const Derived& other) = 0;
-
-  /*
-   * If the abstract domain has finite descending chains, one doesn't need to
-   * define a narrowing operator and can simply use the meet instead.
-   */
-  virtual void narrow_with(const Derived& other) = 0;
 
   /*
    * This is a functional interface on top of the side-effecting API provided
@@ -250,48 +299,94 @@ namespace sparta {
 template <typename Derived>
 class AbstractValue {
  public:
-  virtual ~AbstractValue() {
+  ~AbstractValue() {
+    // The destructor is the only method that is guaranteed to be created when a
+    // class template is instantiated. This is a good place to perform all the
+    // sanity checks on the template parameters.
     static_assert(std::is_base_of<AbstractValue<Derived>, Derived>::value,
                   "Derived doesn't inherit from AbstractValue");
+
+    // Derived();
     static_assert(std::is_default_constructible<Derived>::value,
                   "Derived is not default constructible");
+
+    // Derived(const Derived&);
     static_assert(std::is_copy_constructible<Derived>::value,
                   "Derived is not copy constructible");
+
+    // Derived& operator=(const Derived&);
     static_assert(std::is_copy_assignable<Derived>::value,
                   "Derived is not copy assignable");
+
+    /*
+     * When the result of an operation is Top or Bottom, we no longer need an
+     * explicit representation for the abstract value. This method frees the
+     * memory used to represent an abstract value (hash tables, vectors, etc.).
+     */
+    // void clear();
+    static_assert(
+        std::is_same<decltype(std::declval<Derived>().clear()), void>::value,
+        "Derived::clear() does not exist");
+
+    /*
+     * Even though we factor out the logic for Top and Bottom, these elements
+     * may still be represented by regular abstract values (for example [0, -1]
+     * and
+     * [-oo, +oo] in the domain of intervals), hence the need for such a method.
+     */
+    // AbstractValueKind kind() const;
+    static_assert(std::is_same<decltype(std::declval<const Derived>().kind()),
+                               AbstractValueKind>::value,
+                  "Derived::kind() does not exist");
+
+    /*
+     * The partial order relation.
+     */
+    // bool leq(const Derived& other) const;
+    static_assert(std::is_same<decltype(std::declval<const Derived>().leq(
+                                   std::declval<const Derived>())),
+                               bool>::value,
+                  "Derived::leq(const Derived&) does not exist");
+
+    /*
+     * a.equals(b) is semantically equivalent to a.leq(b) && b.leq(a).
+     */
+    // bool equals(const Derived& other) const;
+    static_assert(std::is_same<decltype(std::declval<const Derived>().equals(
+                                   std::declval<const Derived>())),
+                               bool>::value,
+                  "Derived::equals(const Derived&) does not exist");
+
+    /*
+     * These are the regular abstract domain operations that perform side
+     * effects. They return a AbstractValueKind value to identify situations
+     * where the result of the operation is either Top or Bottom.
+     */
+
+    // AbstractValueKind join_with(const Derived& other);
+    static_assert(std::is_same<decltype(std::declval<Derived>().join_with(
+                                   std::declval<const Derived>())),
+                               AbstractValueKind>::value,
+                  "Derived::join_with(const Derived&) does not exist");
+
+    // AbstractValueKind widen_with(const Derived& other);
+    static_assert(std::is_same<decltype(std::declval<Derived>().widen_with(
+                                   std::declval<const Derived>())),
+                               AbstractValueKind>::value,
+                  "Derived::widen_with(const Derived&) does not exist");
+
+    // AbstractValueKind meet_with(const Derived& other);
+    static_assert(std::is_same<decltype(std::declval<Derived>().meet_with(
+                                   std::declval<const Derived>())),
+                               AbstractValueKind>::value,
+                  "Derived::meet_with(const Derived&) does not exist");
+
+    // AbstractValueKind narrow_with(const Derived& other);
+    static_assert(std::is_same<decltype(std::declval<Derived>().narrow_with(
+                                   std::declval<const Derived>())),
+                               AbstractValueKind>::value,
+                  "Derived::narrow_with(const Derived&) does not exist");
   }
-
-  /*
-   * When the result of an operation is Top or Bottom, we no longer need an
-   * explicit representation for the abstract value. This method frees the
-   * memory used to represent an abstract value (hash tables, vectors, etc.).
-   */
-  virtual void clear() = 0;
-
-  /*
-   * Even though we factor out the logic for Top and Bottom, these elements may
-   * still be represented by regular abstract values (for example [0, -1] and
-   * [-oo, +oo] in the domain of intervals), hence the need for such a method.
-   */
-  virtual AbstractValueKind kind() const = 0;
-
-  virtual bool leq(const Derived& other) const = 0;
-
-  virtual bool equals(const Derived& other) const = 0;
-
-  /*
-   * These are the regular abstract domain operations that perform side effects.
-   * They return a AbstractValueKind value to identify situations where the
-   * result of the operation is either Top or Bottom.
-   */
-
-  virtual AbstractValueKind join_with(const Derived& other) = 0;
-
-  virtual AbstractValueKind widen_with(const Derived& other) = 0;
-
-  virtual AbstractValueKind meet_with(const Derived& other) = 0;
-
-  virtual AbstractValueKind narrow_with(const Derived& other) = 0;
 };
 
 /*
@@ -362,25 +457,23 @@ class AbstractDomainScaffolding
 
   AbstractValueKind kind() const { return m_kind; }
 
-  bool is_bottom() const override {
-    return m_kind == AbstractValueKind::Bottom;
-  }
+  bool is_bottom() const { return m_kind == AbstractValueKind::Bottom; }
 
-  bool is_top() const override { return m_kind == AbstractValueKind::Top; }
+  bool is_top() const { return m_kind == AbstractValueKind::Top; }
 
   bool is_value() const { return m_kind == AbstractValueKind::Value; }
 
-  void set_to_bottom() override {
+  void set_to_bottom() {
     m_kind = AbstractValueKind::Bottom;
     m_value.clear();
   }
 
-  void set_to_top() override {
+  void set_to_top() {
     m_kind = AbstractValueKind::Top;
     m_value.clear();
   }
 
-  bool leq(const Derived& other) const override {
+  bool leq(const Derived& other) const {
     if (is_bottom()) {
       return true;
     }
@@ -404,7 +497,7 @@ class AbstractDomainScaffolding
     return m_value.leq(other.m_value);
   }
 
-  bool equals(const Derived& other) const override {
+  bool equals(const Derived& other) const {
     if (is_bottom()) {
       return other.is_bottom();
     }
@@ -421,28 +514,28 @@ class AbstractDomainScaffolding
     return m_value.equals(other.m_value);
   }
 
-  void join_with(const Derived& other) override {
+  void join_with(const Derived& other) {
     auto value_join = [this, &other]() {
       m_kind = m_value.join_with(other.m_value);
     };
     join_like_operation_with(other, value_join);
   }
 
-  void widen_with(const Derived& other) override {
+  void widen_with(const Derived& other) {
     auto value_widening = [this, &other]() {
       m_kind = m_value.widen_with(other.m_value);
     };
     join_like_operation_with(other, value_widening);
   }
 
-  void meet_with(const Derived& other) override {
+  void meet_with(const Derived& other) {
     auto value_meet = [this, &other]() {
       m_kind = m_value.meet_with(other.m_value);
     };
     meet_like_operation_with(other, value_meet);
   }
 
-  void narrow_with(const Derived& other) override {
+  void narrow_with(const Derived& other) {
     auto value_narrowing = [this, &other]() {
       m_kind = m_value.narrow_with(other.m_value);
     };
@@ -535,29 +628,27 @@ class CopyOnWriteAbstractValue
   using This = CopyOnWriteAbstractValue<Value>;
 
  public:
-  void clear() override { get().clear(); }
+  void clear() { get().clear(); }
 
-  AbstractValueKind kind() const override { return get().kind(); }
+  AbstractValueKind kind() const { return get().kind(); }
 
-  bool leq(const This& other) const override { return get().leq(other.get()); }
+  bool leq(const This& other) const { return get().leq(other.get()); }
 
-  bool equals(const This& other) const override {
-    return get().equals(other.get());
-  }
+  bool equals(const This& other) const { return get().equals(other.get()); }
 
-  AbstractValueKind join_with(const This& other) override {
+  AbstractValueKind join_with(const This& other) {
     return get().join_with(other.get());
   }
 
-  AbstractValueKind widen_with(const This& other) override {
+  AbstractValueKind widen_with(const This& other) {
     return get().widen_with(other.get());
   }
 
-  AbstractValueKind meet_with(const This& other) override {
+  AbstractValueKind meet_with(const This& other) {
     return get().meet_with(other.get());
   }
 
-  AbstractValueKind narrow_with(const This& other) override {
+  AbstractValueKind narrow_with(const This& other) {
     return get().narrow_with(other.get());
   }
 
@@ -599,35 +690,31 @@ class AbstractDomainReverseAdaptor : public AbstractDomain<Derived> {
   explicit AbstractDomainReverseAdaptor(Args&&... args)
       : m_domain(std::forward<Args>(args)...) {}
 
-  bool is_bottom() const override { return m_domain.is_top(); }
+  bool is_bottom() const { return m_domain.is_top(); }
 
-  bool is_top() const override { return m_domain.is_bottom(); }
+  bool is_top() const { return m_domain.is_bottom(); }
 
-  bool leq(const Derived& other) const override {
+  bool leq(const Derived& other) const {
     return m_domain.equals(other.m_domain) || !m_domain.leq(other.m_domain);
   }
 
-  bool equals(const Derived& other) const override {
+  bool equals(const Derived& other) const {
     return m_domain.equals(other.m_domain);
   }
 
-  void set_to_bottom() override { m_domain.set_to_top(); }
+  void set_to_bottom() { m_domain.set_to_top(); }
 
-  void set_to_top() override { m_domain.set_to_bottom(); }
+  void set_to_top() { m_domain.set_to_bottom(); }
 
-  void join_with(const Derived& other) override {
-    m_domain.meet_with(other.m_domain);
-  }
+  void join_with(const Derived& other) { m_domain.meet_with(other.m_domain); }
 
-  void widen_with(const Derived& other) override {
+  void widen_with(const Derived& other) {
     m_domain.narrow_with(other.m_domain);
   }
 
-  void meet_with(const Derived& other) override {
-    m_domain.join_with(other.m_domain);
-  }
+  void meet_with(const Derived& other) { m_domain.join_with(other.m_domain); }
 
-  void narrow_with(const Derived& other) override {
+  void narrow_with(const Derived& other) {
     m_domain.widen_with(other.m_domain);
   }
 

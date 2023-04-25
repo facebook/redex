@@ -135,9 +135,6 @@ class ReducedProductAbstractDomain
   // This method allows the user to explicitly call the reduction operation at
   // any time during the analysis. The `reduce_product()` method implements the
   // mechanics of the reduction operation and should never be called explicitly.
-  // Note that this method cannot be virtual, because it would otherwise be
-  // impossible to call it from the constructor (dynamic binding is disabled in
-  // the body of constructors).
   void reduce() {
     Derived::reduce_product(this->m_product);
     // We don't assume that the reduction operation leaves the representation in
@@ -179,26 +176,25 @@ class ReducedProductAbstractDomain
     }
   }
 
-  bool is_bottom() const override {
+  bool is_bottom() const {
     // The normalized _|_ element in the product domain has all its components
     // set to _|_, so that we just need to check the first component.
     return this->get<0>().is_bottom();
   }
 
-  // We leave the Meet and Narrowing methods virtual, because one might want
-  // to refine the result of these operations by applying reduce(). The default
-  // implementation doesn't call reduce() as it might be too costly to perform
-  // this operation after each Meet, or it might even break the termination
-  // property of the Narrowing.
+  // Note that one might want to refine the result of meet and narrow by
+  // applying reduce(). The default implementation doesn't call reduce() as it
+  // might be too costly to perform this operation after each Meet, or it might
+  // even break the termination property of the Narrowing.
 
-  virtual void meet_with(const Derived& other_domain) override {
+  void meet_with(const Derived& other_domain) {
     this->combine_with(
         other_domain,
         [](auto&& self, auto&& other) { self.meet_with(other); },
         /* smash_bottom */ true);
   }
 
-  virtual void narrow_with(const Derived& other_domain) override {
+  void narrow_with(const Derived& other_domain) {
     this->combine_with(
         other_domain,
         [](auto&& self, auto&& other) { self.narrow_with(other); },

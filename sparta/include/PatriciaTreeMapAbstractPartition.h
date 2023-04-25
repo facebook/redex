@@ -130,21 +130,21 @@ class PatriciaTreeMapAbstractPartition final
     return m_map.map(f);
   }
 
-  bool is_top() const override { return m_is_top; }
+  bool is_top() const { return m_is_top; }
 
-  bool is_bottom() const override { return !m_is_top && m_map.empty(); }
+  bool is_bottom() const { return !m_is_top && m_map.empty(); }
 
-  void set_to_bottom() override {
+  void set_to_bottom() {
     m_map.clear();
     m_is_top = false;
   }
 
-  void set_to_top() override {
+  void set_to_top() {
     m_map.clear();
     m_is_top = true;
   }
 
-  bool leq(const PatriciaTreeMapAbstractPartition& other) const override {
+  bool leq(const PatriciaTreeMapAbstractPartition& other) const {
     if (is_top()) {
       return other.is_top();
     }
@@ -154,29 +154,29 @@ class PatriciaTreeMapAbstractPartition final
     return m_map.leq(other.m_map);
   }
 
-  bool equals(const PatriciaTreeMapAbstractPartition& other) const override {
+  bool equals(const PatriciaTreeMapAbstractPartition& other) const {
     if (m_is_top != other.m_is_top) {
       return false;
     }
     return m_map.equals(other.m_map);
   }
 
-  void join_with(const PatriciaTreeMapAbstractPartition& other) override {
+  void join_with(const PatriciaTreeMapAbstractPartition& other) {
     join_like_operation(
         other, [](const Domain& x, const Domain& y) { return x.join(y); });
   }
 
-  void widen_with(const PatriciaTreeMapAbstractPartition& other) override {
+  void widen_with(const PatriciaTreeMapAbstractPartition& other) {
     join_like_operation(
         other, [](const Domain& x, const Domain& y) { return x.widening(y); });
   }
 
-  void meet_with(const PatriciaTreeMapAbstractPartition& other) override {
+  void meet_with(const PatriciaTreeMapAbstractPartition& other) {
     meet_like_operation(
         other, [](const Domain& x, const Domain& y) { return x.meet(y); });
   }
 
-  void narrow_with(const PatriciaTreeMapAbstractPartition& other) override {
+  void narrow_with(const PatriciaTreeMapAbstractPartition& other) {
     meet_like_operation(
         other, [](const Domain& x, const Domain& y) { return x.narrowing(y); });
   }

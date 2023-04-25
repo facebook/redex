@@ -24,7 +24,7 @@ namespace dtv_impl {
 
 class DexTypeValue final : public sparta::AbstractValue<DexTypeValue> {
  public:
-  ~DexTypeValue() override {
+  ~DexTypeValue() {
     static_assert(std::is_default_constructible<DexType*>::value,
                   "Constant is not default constructible");
     static_assert(std::is_copy_constructible<DexType*>::value,
@@ -37,9 +37,9 @@ class DexTypeValue final : public sparta::AbstractValue<DexTypeValue> {
 
   explicit DexTypeValue(const DexType* dex_type) : m_dex_type(dex_type) {}
 
-  void clear() override { m_dex_type = nullptr; }
+  void clear() { m_dex_type = nullptr; }
 
-  sparta::AbstractValueKind kind() const override {
+  sparta::AbstractValueKind kind() const {
     return sparta::AbstractValueKind::Value;
   }
 
@@ -60,7 +60,7 @@ class DexTypeValue final : public sparta::AbstractValue<DexTypeValue> {
    */
   bool is_none() const { return m_dex_type == nullptr; }
 
-  bool leq(const DexTypeValue& other) const override {
+  bool leq(const DexTypeValue& other) const {
     if (equals(other)) {
       return true;
     }
@@ -75,13 +75,13 @@ class DexTypeValue final : public sparta::AbstractValue<DexTypeValue> {
     return type::check_cast(l, r);
   }
 
-  bool equals(const DexTypeValue& other) const override {
+  bool equals(const DexTypeValue& other) const {
     return m_dex_type == other.get_dex_type();
   }
 
-  sparta::AbstractValueKind join_with(const DexTypeValue& other) override;
+  sparta::AbstractValueKind join_with(const DexTypeValue& other);
 
-  sparta::AbstractValueKind widen_with(const DexTypeValue& other) override {
+  sparta::AbstractValueKind widen_with(const DexTypeValue& other) {
     if (equals(other)) {
       return kind();
     }
@@ -96,7 +96,7 @@ class DexTypeValue final : public sparta::AbstractValue<DexTypeValue> {
     return sparta::AbstractValueKind::Top;
   }
 
-  sparta::AbstractValueKind meet_with(const DexTypeValue& other) override {
+  sparta::AbstractValueKind meet_with(const DexTypeValue& other) {
     if (equals(other)) {
       return sparta::AbstractValueKind::Value;
     }
@@ -104,7 +104,7 @@ class DexTypeValue final : public sparta::AbstractValue<DexTypeValue> {
     return sparta::AbstractValueKind::Bottom;
   }
 
-  sparta::AbstractValueKind narrow_with(const DexTypeValue& other) override {
+  sparta::AbstractValueKind narrow_with(const DexTypeValue& other) {
     return meet_with(other);
   }
 
@@ -187,20 +187,16 @@ class SmallSetDexTypeDomain final
     m_kind = sparta::AbstractValueKind::Value;
   }
 
-  bool is_bottom() const override {
-    return m_kind == sparta::AbstractValueKind::Bottom;
-  }
+  bool is_bottom() const { return m_kind == sparta::AbstractValueKind::Bottom; }
 
-  bool is_top() const override {
-    return m_kind == sparta::AbstractValueKind::Top;
-  }
+  bool is_top() const { return m_kind == sparta::AbstractValueKind::Top; }
 
-  void set_to_bottom() override {
+  void set_to_bottom() {
     m_kind = sparta::AbstractValueKind::Bottom;
     m_types.clear();
   }
 
-  void set_to_top() override {
+  void set_to_top() {
     m_kind = sparta::AbstractValueKind::Top;
     m_types.clear();
   }
@@ -212,19 +208,19 @@ class SmallSetDexTypeDomain final
     return m_types;
   }
 
-  bool leq(const SmallSetDexTypeDomain& other) const override;
+  bool leq(const SmallSetDexTypeDomain& other) const;
 
-  bool equals(const SmallSetDexTypeDomain& other) const override;
+  bool equals(const SmallSetDexTypeDomain& other) const;
 
-  void join_with(const SmallSetDexTypeDomain& other) override;
+  void join_with(const SmallSetDexTypeDomain& other);
 
-  void widen_with(const SmallSetDexTypeDomain& other) override;
+  void widen_with(const SmallSetDexTypeDomain& other);
 
-  void meet_with(const SmallSetDexTypeDomain& /* other */) override {
+  void meet_with(const SmallSetDexTypeDomain& /* other */) {
     throw std::runtime_error("meet_with not implemented!");
   }
 
-  void narrow_with(const SmallSetDexTypeDomain& /* other */) override {
+  void narrow_with(const SmallSetDexTypeDomain& /* other */) {
     throw std::runtime_error("narrow_with not implemented!");
   }
 

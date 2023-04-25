@@ -72,13 +72,13 @@ class ConstantArrayDomain final
   }
 
   void join_with(
-      const ConstantArrayDomain<Domain, DefaultValue>& other_domain) override {
+      const ConstantArrayDomain<Domain, DefaultValue>& other_domain) {
     SuperType::join_with(other_domain);
     canonicalize();
   }
 
   void widen_with(
-      const ConstantArrayDomain<Domain, DefaultValue>& other_domain) override {
+      const ConstantArrayDomain<Domain, DefaultValue>& other_domain) {
     SuperType::widen_with(other_domain);
     canonicalize();
   }

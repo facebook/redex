@@ -159,9 +159,9 @@ struct AbstractObject final : public sparta::AbstractValue<AbstractObject> {
            heap_address != 0;
   }
 
-  void clear() override {}
+  void clear() {}
 
-  sparta::AbstractValueKind kind() const override {
+  sparta::AbstractValueKind kind() const {
     return sparta::AbstractValueKind::Value;
   }
 
@@ -179,19 +179,19 @@ struct AbstractObject final : public sparta::AbstractValue<AbstractObject> {
 
   bool is_method() const { return obj_kind == METHOD; }
 
-  bool leq(const AbstractObject& other) const override;
+  bool leq(const AbstractObject& other) const;
 
-  bool equals(const AbstractObject& other) const override;
+  bool equals(const AbstractObject& other) const;
 
-  sparta::AbstractValueKind join_with(const AbstractObject& other) override;
+  sparta::AbstractValueKind join_with(const AbstractObject& other);
 
-  sparta::AbstractValueKind widen_with(const AbstractObject& other) override {
+  sparta::AbstractValueKind widen_with(const AbstractObject& other) {
     return join_with(other);
   }
 
-  sparta::AbstractValueKind meet_with(const AbstractObject& other) override;
+  sparta::AbstractValueKind meet_with(const AbstractObject& other);
 
-  sparta::AbstractValueKind narrow_with(const AbstractObject& other) override {
+  sparta::AbstractValueKind narrow_with(const AbstractObject& other) {
     return meet_with(other);
   }
 };
