@@ -76,6 +76,7 @@ class AbstractDomain {
     // sanity checks on the template parameters.
     static_assert(std::is_base_of<AbstractDomain<Derived>, Derived>::value,
                   "Derived doesn't inherit from AbstractDomain");
+    static_assert(std::is_final<Derived>::value, "Derived is not final");
 
     // Derived();
     static_assert(std::is_default_constructible<Derived>::value,
@@ -305,6 +306,7 @@ class AbstractValue {
     // sanity checks on the template parameters.
     static_assert(std::is_base_of<AbstractValue<Derived>, Derived>::value,
                   "Derived doesn't inherit from AbstractValue");
+    static_assert(std::is_final<Derived>::value, "Derived is not final");
 
     // Derived();
     static_assert(std::is_default_constructible<Derived>::value,
@@ -623,7 +625,7 @@ class AbstractDomainScaffolding
 // This AbstractValue is recommended whenever copying the underlying abstract
 // value incurs a significant cost
 template <typename Value>
-class CopyOnWriteAbstractValue
+class CopyOnWriteAbstractValue final
     : AbstractValue<CopyOnWriteAbstractValue<Value>> {
   using This = CopyOnWriteAbstractValue<Value>;
 
@@ -750,6 +752,7 @@ class AbstractDomainScaffoldingStaticAssert {
     static_assert(
         std::is_base_of_v<AbstractDomainScaffolding<Value, Derived>, Derived>,
         "Derived doesn't inherit from AbstractDomainScaffolding");
+    static_assert(std::is_final<Derived>::value, "Derived is not final");
   }
 };
 

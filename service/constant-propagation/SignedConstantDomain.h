@@ -42,7 +42,7 @@ inline NumericIntervalDomain numeric_interval_domain_from_int(int64_t min,
 // This class effectively implements a
 //   ReducedProductAbstractDomain<SignedConstantDomain,
 //     sign_domain::Domain, NumericIntervalDomain, ConstantDomain>
-class SignedConstantDomain
+class SignedConstantDomain final
     : public sparta::AbstractDomain<SignedConstantDomain> {
  private:
   static constexpr int64_t MIN = std::numeric_limits<int64_t>::min();

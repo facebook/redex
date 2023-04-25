@@ -32,7 +32,7 @@ using namespace sparta_interprocedural;
 
 // Define an abstract domain as a summary for a method. The summary should
 // contain what properties we are interested in knowing such a method.
-struct DepthDomain : public AbstractDomain<DepthDomain> {
+struct DepthDomain final : public AbstractDomain<DepthDomain> {
   explicit DepthDomain() : m_depth(0), m_kind(sparta::AbstractValueKind::Top) {}
 
   explicit DepthDomain(unsigned i)

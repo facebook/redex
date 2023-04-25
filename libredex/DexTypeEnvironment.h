@@ -237,7 +237,7 @@ class SmallSetDexTypeDomain final
  * NullnessDomain X SingletonDexTypeDomain
  *
  */
-class DexTypeDomain
+class DexTypeDomain final
     : public sparta::ReducedProductAbstractDomain<DexTypeDomain,
                                                   ArrayConstNullnessDomain,
                                                   SingletonDexTypeDomain,

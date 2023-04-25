@@ -39,6 +39,11 @@ class PowersetImplementation : public AbstractValue<Derived> {
     // The destructor is the only method that is guaranteed to be created when a
     // class template is instantiated. This is a good place to perform all the
     // sanity checks on the template parameters.
+    static_assert(
+        std::is_base_of<PowersetImplementation<Element, Snapshot, Derived>,
+                        Derived>::value,
+        "Derived doesn't inherit from PowersetImplementation");
+    static_assert(std::is_final<Derived>::value, "Derived is not final");
 
     // Snapshot elements() const;
     static_assert(
