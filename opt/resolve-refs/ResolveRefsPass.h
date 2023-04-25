@@ -29,6 +29,8 @@ namespace impl {
 struct RefStats;
 } // namespace impl
 
+class IRInstruction;
+
 class ResolveRefsPass : public ExternalRefsManglingPass {
  public:
   ResolveRefsPass() : ExternalRefsManglingPass("ResolveRefsPass") {}
@@ -62,6 +64,10 @@ class ResolveRefsPass : public ExternalRefsManglingPass {
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
+  void resolve_method_refs(const DexMethod* caller,
+                           IRInstruction* insn,
+                           impl::RefStats& stats);
+  impl::RefStats resolve_refs(DexMethod* method);
   impl::RefStats refine_virtual_callsites(DexMethod* method,
                                           bool desuperify,
                                           bool specialize_rtype);

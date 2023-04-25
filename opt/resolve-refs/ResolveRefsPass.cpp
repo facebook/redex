@@ -77,32 +77,6 @@ struct RefStats {
   }
 };
 
-void resolve_method_refs(const DexMethod* caller,
-                         IRInstruction* insn,
-                         RefStats& stats) {
-  always_assert(insn->has_method());
-  auto mref = insn->get_method();
-  auto mdef = resolve_method(mref, opcode_to_search(insn), caller);
-  if (!mdef || mdef == mref) {
-    return;
-  }
-  // Do not handle external refs in the simple resolve path.
-  if (mdef->is_external()) {
-    return;
-  }
-  auto cls = type_class(mdef->get_class());
-  // Bail out if the def is non public external
-  if (cls && cls->is_external() && !is_public(cls)) {
-    return;
-  }
-  TRACE(RESO, 2, "Resolving %s\n\t=>%s", SHOW(mref), SHOW(mdef));
-  insn->set_method(mdef);
-  stats.num_mref_resolved++;
-  if (cls != nullptr && !is_public(cls)) {
-    set_public(cls);
-  }
-}
-
 void resolve_field_refs(IRInstruction* insn,
                         FieldSearch field_search,
                         RefStats& stats) {
@@ -122,61 +96,6 @@ void resolve_field_refs(IRInstruction* insn,
       set_public(cls);
     }
   }
-}
-
-RefStats resolve_refs(DexMethod* method) {
-  RefStats stats;
-  if (!method || !method->get_code()) {
-    return stats;
-  }
-
-  for (auto& mie : InstructionIterable(method->get_code())) {
-    auto insn = mie.insn;
-    switch (insn->opcode()) {
-    case OPCODE_INVOKE_VIRTUAL:
-    case OPCODE_INVOKE_SUPER:
-    case OPCODE_INVOKE_INTERFACE:
-    case OPCODE_INVOKE_STATIC:
-      resolve_method_refs(method, insn, stats);
-      break;
-    case OPCODE_SGET:
-    case OPCODE_SGET_WIDE:
-    case OPCODE_SGET_OBJECT:
-    case OPCODE_SGET_BOOLEAN:
-    case OPCODE_SGET_BYTE:
-    case OPCODE_SGET_CHAR:
-    case OPCODE_SGET_SHORT:
-    case OPCODE_SPUT:
-    case OPCODE_SPUT_WIDE:
-    case OPCODE_SPUT_OBJECT:
-    case OPCODE_SPUT_BOOLEAN:
-    case OPCODE_SPUT_BYTE:
-    case OPCODE_SPUT_CHAR:
-    case OPCODE_SPUT_SHORT:
-      resolve_field_refs(insn, FieldSearch::Static, stats);
-      break;
-    case OPCODE_IGET:
-    case OPCODE_IGET_WIDE:
-    case OPCODE_IGET_OBJECT:
-    case OPCODE_IGET_BOOLEAN:
-    case OPCODE_IGET_BYTE:
-    case OPCODE_IGET_CHAR:
-    case OPCODE_IGET_SHORT:
-    case OPCODE_IPUT:
-    case OPCODE_IPUT_WIDE:
-    case OPCODE_IPUT_OBJECT:
-    case OPCODE_IPUT_BOOLEAN:
-    case OPCODE_IPUT_BYTE:
-    case OPCODE_IPUT_CHAR:
-    case OPCODE_IPUT_SHORT:
-      resolve_field_refs(insn, FieldSearch::Instance, stats);
-      break;
-    default:
-      break;
-    }
-  }
-
-  return stats;
 }
 
 void try_desuperify(const DexMethod* caller,
@@ -266,6 +185,93 @@ boost::optional<DexMethod*> get_inferred_method_def(
 } // namespace impl
 
 using namespace impl;
+
+void ResolveRefsPass::resolve_method_refs(const DexMethod* caller,
+                                          IRInstruction* insn,
+                                          RefStats& stats) {
+  always_assert(insn->has_method());
+  auto mref = insn->get_method();
+  auto mdef = resolve_method(mref, opcode_to_search(insn), caller);
+  if (!mdef || mdef == mref) {
+    return;
+  }
+  // Handle external refs.
+  if (!m_refine_to_external && mdef->is_external()) {
+    return;
+  } else if (mdef->is_external() && !m_min_sdk_api->has_method(mdef)) {
+    // Resolving to external and the target is missing in the min_sdk_api.
+    TRACE(RESO, 4, "Bailed on mismatch with min_sdk %s", SHOW(mdef));
+    return;
+  }
+
+  auto cls = type_class(mdef->get_class());
+  // Bail out if the def is non public external
+  if (cls && cls->is_external() && !is_public(cls)) {
+    return;
+  }
+  redex_assert(cls != nullptr || !cls->is_external());
+  if (!is_public(cls)) {
+    set_public(cls);
+  }
+  TRACE(RESO, 2, "Resolving %s\n\t=>%s", SHOW(mref), SHOW(mdef));
+  insn->set_method(mdef);
+  stats.num_mref_resolved++;
+}
+
+RefStats ResolveRefsPass::resolve_refs(DexMethod* method) {
+  RefStats stats;
+  if (!method || !method->get_code()) {
+    return stats;
+  }
+
+  for (auto& mie : InstructionIterable(method->get_code())) {
+    auto insn = mie.insn;
+    switch (insn->opcode()) {
+    case OPCODE_INVOKE_VIRTUAL:
+    case OPCODE_INVOKE_SUPER:
+    case OPCODE_INVOKE_INTERFACE:
+    case OPCODE_INVOKE_STATIC:
+      resolve_method_refs(method, insn, stats);
+      break;
+    case OPCODE_SGET:
+    case OPCODE_SGET_WIDE:
+    case OPCODE_SGET_OBJECT:
+    case OPCODE_SGET_BOOLEAN:
+    case OPCODE_SGET_BYTE:
+    case OPCODE_SGET_CHAR:
+    case OPCODE_SGET_SHORT:
+    case OPCODE_SPUT:
+    case OPCODE_SPUT_WIDE:
+    case OPCODE_SPUT_OBJECT:
+    case OPCODE_SPUT_BOOLEAN:
+    case OPCODE_SPUT_BYTE:
+    case OPCODE_SPUT_CHAR:
+    case OPCODE_SPUT_SHORT:
+      resolve_field_refs(insn, FieldSearch::Static, stats);
+      break;
+    case OPCODE_IGET:
+    case OPCODE_IGET_WIDE:
+    case OPCODE_IGET_OBJECT:
+    case OPCODE_IGET_BOOLEAN:
+    case OPCODE_IGET_BYTE:
+    case OPCODE_IGET_CHAR:
+    case OPCODE_IGET_SHORT:
+    case OPCODE_IPUT:
+    case OPCODE_IPUT_WIDE:
+    case OPCODE_IPUT_OBJECT:
+    case OPCODE_IPUT_BOOLEAN:
+    case OPCODE_IPUT_BYTE:
+    case OPCODE_IPUT_CHAR:
+    case OPCODE_IPUT_SHORT:
+      resolve_field_refs(insn, FieldSearch::Instance, stats);
+      break;
+    default:
+      break;
+    }
+  }
+
+  return stats;
+}
 
 RefStats ResolveRefsPass::refine_virtual_callsites(DexMethod* method,
                                                    bool desuperify,
@@ -363,7 +369,7 @@ void ResolveRefsPass::run_pass(DexStoresVector& stores,
   Scope scope = build_class_scope(stores);
   impl::RefStats stats =
       walk::parallel::methods<impl::RefStats>(scope, [&](DexMethod* method) {
-        auto local_stats = impl::resolve_refs(method);
+        auto local_stats = resolve_refs(method);
         local_stats +=
             refine_virtual_callsites(method, m_desuperify, m_specialize_rtype);
         return local_stats;
