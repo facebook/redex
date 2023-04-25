@@ -98,6 +98,10 @@ Scope reverse_tsort_by_clinit_deps(const Scope& scope, size_t& init_cycles) {
     walk::parallel::classes(scope, [&](DexClass* cls) {
       std::vector<DexClass*> deps_vec;
       auto add_dep = [&](auto* dependee_cls) {
+        if (dependee_cls == nullptr || dependee_cls == cls ||
+            scope_set.count(dependee_cls) == 0) {
+          return;
+        }
         reverse_deps_parallel.update(
             dependee_cls, [&](auto&, auto& v, auto) { v.push_back(cls); });
         maybe_roots.insert(dependee_cls);
@@ -110,9 +114,7 @@ Scope reverse_tsort_by_clinit_deps(const Scope& scope, size_t& init_cycles) {
       // a chain internal <- external <- internal should not exist.
       {
         auto super_class = type_class_internal(cls->get_super_class());
-        if (super_class != nullptr && scope_set.count(super_class) != 0) {
-          add_dep(super_class);
-        }
+        add_dep(super_class);
       }
 
       auto clinit = cls->get_clinit();
@@ -122,14 +124,10 @@ Scope reverse_tsort_by_clinit_deps(const Scope& scope, size_t& init_cycles) {
             clinit->get_code(), [&](const IRList::iterator& it) {
               auto insn = it->insn;
               if (opcode::is_an_sget(insn->opcode())) {
-                auto dependee_cls = type_class(insn->get_field()->get_class());
-                if (dependee_cls == nullptr || dependee_cls == cls ||
-                    scope_set.count(dependee_cls) == 0) {
-                  return editable_cfg_adapter::LOOP_CONTINUE;
-                }
-                add_dep(dependee_cls);
+                add_dep(type_class(insn->get_field()->get_class()));
+              } else if (opcode::is_invoke_static(insn->opcode())) {
+                add_dep(type_class(insn->get_method()->get_class()));
               }
-              // TODO: Consider static methods.
               return editable_cfg_adapter::LOOP_CONTINUE;
             });
       }
