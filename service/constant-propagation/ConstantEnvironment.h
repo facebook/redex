@@ -268,9 +268,10 @@ class ConstantEnvironment final
 /*
  * For modeling the stack + heap at method return statements.
  */
-class ReturnState : public sparta::ReducedProductAbstractDomain<ReturnState,
-                                                                ConstantValue,
-                                                                ConstantHeap> {
+class ReturnState final
+    : public sparta::ReducedProductAbstractDomain<ReturnState,
+                                                  ConstantValue,
+                                                  ConstantHeap> {
  public:
   using ReducedProductAbstractDomain::ReducedProductAbstractDomain;
 

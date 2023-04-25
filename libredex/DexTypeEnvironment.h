@@ -240,7 +240,7 @@ class SmallSetDexTypeDomain final
  * When the SmallSetDexTypeDomain has elements, then they represent an exact set
  * of non-interface classes (including arrays), or possibly java.lang.Throwable.
  */
-class DexTypeDomain
+class DexTypeDomain final
     : public sparta::ReducedProductAbstractDomain<DexTypeDomain,
                                                   ArrayConstNullnessDomain,
                                                   SingletonDexTypeDomain,

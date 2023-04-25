@@ -62,7 +62,7 @@ using ConstantDomain = sparta::ConstantAbstractDomain<int64_t>;
  *
  * A const integer value can have nullness. E.g., const 0 -> NULL.
  */
-class ConstNullnessDomain
+class ConstNullnessDomain final
     : public sparta::ReducedProductAbstractDomain<ConstNullnessDomain,
                                                   ConstantDomain,
                                                   NullnessDomain> {
