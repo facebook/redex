@@ -124,6 +124,9 @@ inline size_t hash_value(const std::unique_ptr<KeepSpec>& spec) {
  */
 class KeepSpecSet {
  public:
+  using iterator = std::vector<KeepSpec*>::const_iterator;
+  using const_iterator = std::vector<KeepSpec*>::const_iterator;
+
   void emplace(std::unique_ptr<KeepSpec> spec) {
     const auto& p = m_unordered_set.emplace(std::move(spec));
     bool did_insert = p.second;
@@ -132,11 +135,9 @@ class KeepSpecSet {
     }
   }
 
-  std::vector<KeepSpec*>::const_iterator begin() const {
-    return m_ordered.begin();
-  }
+  iterator begin() const { return m_ordered.begin(); }
 
-  std::vector<KeepSpec*>::const_iterator end() const { return m_ordered.end(); }
+  iterator end() const { return m_ordered.end(); }
 
   const std::vector<KeepSpec*>& elements() const { return m_ordered; }
 
@@ -146,12 +147,20 @@ class KeepSpecSet {
 
   void erase_if(const std::function<bool(const KeepSpec&)>&);
 
+  template <typename Pred>
+  iterator stable_partition(Pred p);
+
  private:
   std::vector<KeepSpec*> m_ordered;
   std::unordered_set<std::unique_ptr<KeepSpec>,
                      boost::hash<std::unique_ptr<KeepSpec>>>
       m_unordered_set;
 };
+
+template <typename Pred>
+inline KeepSpecSet::iterator KeepSpecSet::stable_partition(Pred p) {
+  return std::stable_partition(m_ordered.begin(), m_ordered.end(), p);
+}
 
 struct ProguardConfiguration {
   bool ok;
@@ -175,6 +184,7 @@ struct ProguardConfiguration {
   bool verbose{false};
   std::string target_version;
   KeepSpecSet keep_rules;
+  std::optional<KeepSpecSet::iterator> keep_rules_native_begin;
   KeepSpecSet assumenosideeffects_rules;
   KeepSpecSet whyareyoukeeping_rules;
   std::vector<std::string> optimization_filters;

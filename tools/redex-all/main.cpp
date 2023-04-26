@@ -874,6 +874,45 @@ void dump_keep_reasons(const ConfigFiles& conf,
   }
 }
 
+void process_proguard_rules(ConfigFiles& conf,
+                            Scope& scope,
+                            Scope& external_classes,
+                            keep_rules::ProguardConfiguration& pg_config) {
+  bool keep_all_annotation_classes;
+  conf.get_json_config().get("keep_all_annotation_classes", true,
+                             keep_all_annotation_classes);
+
+  ConcurrentSet<const keep_rules::KeepSpec*> unused_rules =
+      process_proguard_rules(conf.get_proguard_map(), scope, external_classes,
+                             pg_config, keep_all_annotation_classes);
+  if (!unused_rules.empty()) {
+    std::vector<std::string> out;
+    for (const keep_rules::KeepSpec* keep_rule : unused_rules) {
+      out.push_back(keep_rules::show_keep(*keep_rule));
+    }
+    // Make output deterministic
+    std::sort(out.begin(), out.end());
+    bool unused_rule_abort;
+    conf.get_json_config().get("unused_keep_rule_abort", false,
+                               unused_rule_abort);
+    always_assert_log(!unused_rule_abort, "%s",
+                      [&]() {
+                        std::string tmp;
+                        for (const auto& s : out) {
+                          tmp += s;
+                          tmp += " not used\n";
+                        }
+                        return tmp;
+                      }()
+                          .c_str());
+
+    std::ofstream ofs{conf.metafile("redex-unused-keep-rules.txt")};
+    for (const auto& s : out) {
+      ofs << s << "\n";
+    }
+  }
+}
+
 /**
  * Pre processing steps: load dex and configurations
  */
@@ -916,6 +955,12 @@ void redex_frontend(ConfigFiles& conf, /* input */
                   parser_stats.unknown_commands == 0);
   }
 
+  // WARNING: No further modifications of pg_config should happen after this
+  // call
+  // TODO: T148153725: [redex] Better encapsulate ProguardConfiguration
+  // construction
+  keep_rules::proguard_parser::identify_blanket_native_rules(&pg_config);
+
   auto ignore_no_keep_rules =
       args.config.get("ignore_no_keep_rules", false).asBool();
   if (pg_config.keep_rules.empty() && !ignore_no_keep_rules) {
@@ -934,6 +979,9 @@ void redex_frontend(ConfigFiles& conf, /* input */
     d["unknown_commands"] = (u64)parser_stats.unknown_commands;
     d["ok"] = (u64)(pg_config.ok ? 1 : 0);
     d["blocklisted_rules"] = (u64)blocklisted_rules;
+    d["blanket_native_rules"] = (u64)(std::distance(
+        pg_config.keep_rules_native_begin.value_or(pg_config.keep_rules.end()),
+        pg_config.keep_rules.end()));
     stats["proguard"] = d;
   }
 
@@ -1010,40 +1058,6 @@ void redex_frontend(ConfigFiles& conf, /* input */
   DexStoreClassesIterator it(stores);
   Scope scope = build_class_scope(it);
   {
-    Timer t("Processing proguard rules");
-
-    bool keep_all_annotation_classes;
-    json_config.get("keep_all_annotation_classes", true,
-                    keep_all_annotation_classes);
-
-    ConcurrentSet<const keep_rules::KeepSpec*> unused_rules =
-        process_proguard_rules(conf.get_proguard_map(), scope, external_classes,
-                               pg_config, keep_all_annotation_classes);
-    if (unused_rules.size() > 0) {
-      std::vector<std::string> out;
-      for (const keep_rules::KeepSpec* keep_rule : unused_rules) {
-        out.push_back(keep_rules::show_keep(*keep_rule));
-      }
-      // Make output deterministic
-      std::sort(out.begin(), out.end());
-      bool unused_rule_abort;
-      conf.get_json_config().get("unused_keep_rule_abort", false,
-                                 unused_rule_abort);
-      if (unused_rule_abort) {
-        exit(1);
-        for (const auto& s : out) {
-          fprintf(stderr, "%s not used\n", s.c_str());
-        }
-      }
-      auto fd =
-          fopen(conf.metafile("redex-unused-keep-rules.txt").c_str(), "w");
-      for (const auto& s : out) {
-        fprintf(fd, "%s\n", s.c_str());
-      }
-      fclose(fd);
-    }
-  }
-  {
     Timer t("No Optimizations Rules");
     // this will change rstate of methods
     keep_rules::process_no_optimizations_rules(
@@ -1055,6 +1069,15 @@ void redex_frontend(ConfigFiles& conf, /* input */
     // init reachable will change rstate of classes, methods and fields
     init_reachable_classes(scope, ReachableClassesConfig(json_config));
   }
+  {
+    Timer t("Processing proguard rules");
+    process_proguard_rules(conf, scope, external_classes, pg_config);
+  }
+
+  TRACE(NATIVE, 2, "Blanket native classes: %zu",
+        g_redex->blanket_native_root_classes.size());
+  TRACE(NATIVE, 2, "Blanket native methods: %zu",
+        g_redex->blanket_native_root_methods.size());
 
   if (keep_reason::Reason::record_keep_reasons()) {
     dump_keep_reasons(conf, args, stores);

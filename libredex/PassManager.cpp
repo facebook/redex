@@ -596,7 +596,7 @@ void maybe_write_env_seeds_file(const ConfigFiles& conf, const Scope& scope) {
 void maybe_print_seeds_incoming(
     const ConfigFiles& conf,
     const Scope& scope,
-    const std::unique_ptr<keep_rules::ProguardConfiguration>& pg_config) {
+    const std::unique_ptr<const keep_rules::ProguardConfiguration>& pg_config) {
   if (!conf.get_printseeds().empty()) {
     Timer t("Writing seeds to file " + conf.get_printseeds());
     std::ofstream seeds_file(conf.get_printseeds());

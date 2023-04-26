@@ -128,6 +128,55 @@ void RootSetMarker::mark(const Scope& scope) {
   mark_external_method_overriders();
 }
 
+void RootSetMarker::mark_with_exclusions(
+    const Scope& scope,
+    const ConcurrentSet<const DexClass*>& excluded_classes,
+    const ConcurrentSet<const DexMethod*>& excluded_methods) {
+  auto excluded = [&excluded_classes, &excluded_methods](auto* item) -> bool {
+    if constexpr (std::is_same_v<decltype(item), const DexClass*>) {
+      return excluded_classes.find(item) != excluded_classes.end();
+    } else if constexpr (std::is_same_v<decltype(item), const DexMethod*>) {
+      return excluded_methods.find(item) != excluded_methods.end();
+    } else {
+      static_assert(std::is_same_v<decltype(item), const DexField*>);
+      return false;
+    }
+  };
+
+  walk::parallel::classes(scope, [&](const DexClass* cls) {
+    if (should_mark_cls(cls) && !excluded(cls)) {
+      TRACE(REACH, 3, "Visiting seed: %s", SHOW(cls));
+      push_seed(cls);
+    }
+    for (const auto* f : cls->get_ifields()) {
+      if ((root(f) || is_volatile(f)) && !excluded(f)) {
+        TRACE(REACH, 3, "Visiting seed: %s", SHOW(f));
+        push_seed(f);
+      }
+    }
+    for (const auto* f : cls->get_sfields()) {
+      if (root(f) && !excluded(f)) {
+        TRACE(REACH, 3, "Visiting seed: %s", SHOW(f));
+        push_seed(f);
+      }
+    }
+    for (const auto* m : cls->get_dmethods()) {
+      if (root(m) && !excluded(m)) {
+        TRACE(REACH, 3, "Visiting seed: %s", SHOW(m));
+        push_seed(m);
+      }
+    }
+    for (const auto* m : cls->get_vmethods()) {
+      if (root(m) && !excluded(m)) {
+        TRACE(REACH, 3, "Visiting seed: %s (root)", SHOW(m));
+        push_seed(m);
+      }
+    }
+  });
+
+  mark_external_method_overriders();
+}
+
 void RootSetMarker::push_seed(const DexClass* cls) {
   if (!cls) return;
   record_is_seed(cls);
