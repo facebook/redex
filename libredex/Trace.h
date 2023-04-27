@@ -95,6 +95,7 @@ class DexType;
   TM(MORTIROLO)         \
   TM(MTRANS)            \
   TM(NATIVE)            \
+  TM(NCI)               \
   TM(NULLCHECK)         \
   TM(OBFUSCATE)         \
   TM(OEA)               \
