@@ -97,6 +97,13 @@ class PassManager {
     return m_init_class_lowering_has_run;
   }
 
+  void record_materialize_nullchecks() {
+    m_materialize_nullchecks_has_run = true;
+  }
+  bool materialize_nullchecks_has_run() const {
+    return m_materialize_nullchecks_has_run;
+  }
+
   void record_running_interdex() { m_interdex_has_run = true; }
   bool interdex_has_run() const { return m_interdex_has_run; }
 
@@ -142,6 +149,7 @@ class PassManager {
   bool m_testing_mode{false};
   bool m_regalloc_has_run{false};
   bool m_init_class_lowering_has_run{false};
+  bool m_materialize_nullchecks_has_run{false};
   bool m_interdex_has_run{false};
   bool m_unreliable_virtual_scopes{false};
 

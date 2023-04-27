@@ -78,6 +78,7 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
         std::make_unique<init_classes::InitClassesWithSideEffects>(
             scope, conf.create_init_class_insns(), override_graph.get());
   }
+
   std::unordered_set<const DexMethod*> computed_no_side_effects_methods;
   size_t computed_no_side_effects_methods_iterations = 0;
   if (!mgr.unreliable_virtual_scopes()) {
@@ -92,6 +93,18 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
             pure_methods, &computed_no_side_effects_methods);
     for (auto m : computed_no_side_effects_methods) {
       pure_methods.insert(const_cast<DexMethod*>(m));
+    }
+  }
+
+  if (mgr.materialize_nullchecks_has_run()) {
+    // If MaterializeNullchecksPass is run,
+    // "Ljava/lang/Object;.getClass:()Ljava/lang/Class;" will be used to keep
+    // proper null check and it shouldn't be deleted. Therefore, we remove it
+    // from pure method list.
+    DexMethodRef* getClassRef = DexMethod::get_method(
+        "Ljava/lang/Object;.getClass:()Ljava/lang/Class;");
+    if (getClassRef != nullptr) {
+      pure_methods.erase(getClassRef);
     }
   }
 

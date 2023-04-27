@@ -63,6 +63,8 @@ class FixpointIterator final
   mutable std::unordered_map<cfg::Block*, SwitchSuccs> m_switch_succs;
   InstructionAnalyzer<ConstantEnvironment> m_insn_analyzer;
   const std::unordered_set<DexMethodRef*>& m_kotlin_null_check_assertions;
+  const DexMethodRef* m_redex_null_check_assertion;
+
   const bool m_imprecise_switches;
 
   const SwitchSuccs& find_switch_succs(cfg::Block* block) const {

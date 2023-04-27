@@ -1235,6 +1235,7 @@ FixpointIterator::FixpointIterator(
     : BaseEdgeAwareIRAnalyzer(cfg),
       m_insn_analyzer(std::move(insn_analyzer)),
       m_kotlin_null_check_assertions(get_kotlin_null_assertions()),
+      m_redex_null_check_assertion(method::redex_internal_checkObjectNotNull()),
       m_imprecise_switches(imprecise_switches) {}
 
 void FixpointIterator::analyze_instruction_normal(
@@ -1250,8 +1251,14 @@ void FixpointIterator::analyze_no_throw(const IRInstruction* insn,
         get_null_check_object_index(insn, m_kotlin_null_check_assertions);
   }
   if (!src_index) {
-    return;
+    // Check if it is redex null check.
+    if (insn->opcode() != OPCODE_INVOKE_STATIC ||
+        insn->get_method() != m_redex_null_check_assertion) {
+      return;
+    }
+    src_index = 0;
   }
+
   if (insn->has_dest()) {
     auto dest = insn->dest();
     if ((dest == *src_index) ||

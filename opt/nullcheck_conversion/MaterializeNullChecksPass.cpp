@@ -32,6 +32,7 @@ void MaterializeNullChecksPass::run_pass(DexStoresVector& stores,
   m_stats = walk::parallel::methods<Stats>(
       scope, [&](DexMethod* method) { return rewrite_null_check(method); });
   m_stats.report(mgr);
+  mgr.record_materialize_nullchecks();
 }
 
 MaterializeNullChecksPass::Stats MaterializeNullChecksPass::rewrite_null_check(

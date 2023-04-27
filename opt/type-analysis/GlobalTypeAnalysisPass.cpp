@@ -127,6 +127,7 @@ void GlobalTypeAnalysisPass::run_pass(DexStoresVector& stores,
 
   type_analyzer::Transform::NullAssertionSet null_assertion_set =
       kotlin_nullcheck_wrapper::get_kotlin_null_assertions();
+  null_assertion_set.insert(method::redex_internal_checkObjectNotNull());
   Scope scope = build_class_scope(stores);
   XStoreRefs xstores(stores);
   global::GlobalTypeAnalysis analysis(m_config.max_global_analysis_iteration);

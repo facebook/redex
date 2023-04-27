@@ -131,6 +131,27 @@ DexOpcodeMethod* find_invoke(std::vector<DexInstruction*>::iterator begin,
   return it == end ? nullptr : static_cast<DexOpcodeMethod*>(*it);
 }
 
+size_t find_num_invoke(const DexMethod* m,
+                       DexOpcode opcode,
+                       const char* target_mname,
+                       DexType* receiver) {
+  size_t num = 0;
+  for (const auto& insn : m->get_dex_code()->get_instructions()) {
+    if (insn->opcode() != opcode) {
+      continue;
+    }
+    auto meth = static_cast<DexOpcodeMethod*>(insn)->get_method();
+    if (receiver && meth->get_class() != receiver) {
+      continue;
+    }
+    auto mname = static_cast<DexOpcodeMethod*>(insn)->get_method()->get_name();
+    if (mname == DexString::get_string(target_mname)) {
+      num++;
+    }
+  }
+  return num;
+}
+
 // Given a semicolon delimited list of extracted files from the APK, return a
 // map of the original APK's file path to its path on disk.
 ResourceFiles decode_resource_paths(const char* location, const char* suffix) {
