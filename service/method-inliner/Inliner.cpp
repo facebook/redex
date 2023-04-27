@@ -1177,6 +1177,8 @@ static size_t get_inlined_cost(IRInstruction* insn) {
       opcode::is_a_return(op)) {
     if (op == IOPCODE_INIT_CLASS) {
       cost += 2;
+    } else if (op == IOPCODE_INJECTION_ID) {
+      cost += 3;
     }
   } else {
     cost++;

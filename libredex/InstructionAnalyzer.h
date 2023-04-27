@@ -58,7 +58,8 @@
   X(unop)             \
   X(binop)            \
   X(binop_lit)        \
-  X(init_class)
+  X(init_class)       \
+  X(injection_id)
 
 /* clang-format on */
 
@@ -392,6 +393,9 @@ class InstructionAnalyzerCombiner final {
           std::index_sequence_for<Analyzers...>{}, insn, env);
     case IOPCODE_INIT_CLASS:
       return analyze_init_class(
+          std::index_sequence_for<Analyzers...>{}, insn, env);
+    case IOPCODE_INJECTION_ID:
+      return analyze_injection_id(
           std::index_sequence_for<Analyzers...>{}, insn, env);
     }
   }

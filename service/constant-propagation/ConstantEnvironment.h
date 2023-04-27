@@ -52,6 +52,8 @@ using StringDomain = sparta::ConstantAbstractDomain<const DexString*>;
 using ConstantClassObjectDomain =
     sparta::ConstantAbstractDomain<const DexType*>;
 
+using ConstantInjectionIdDomain = sparta::ConstantAbstractDomain<int32_t>;
+
 /*
  * This represents a new-instance or new-array instruction.
  */
@@ -67,6 +69,7 @@ using ConstantValue =
                                         StringSetDomain,
                                         StringDomain,
                                         ConstantClassObjectDomain,
+                                        ConstantInjectionIdDomain,
                                         ObjectWithImmutAttrDomain,
                                         AbstractHeapPointer>;
 

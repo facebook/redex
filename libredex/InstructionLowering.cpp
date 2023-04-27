@@ -267,6 +267,11 @@ DexInstruction* create_dex_instruction(const IRInstruction* insn) {
   if (insn->opcode() == IOPCODE_INIT_CLASS) {
     return new DexInstruction(DOPCODE_NOP);
   }
+  // TODO: Assert that this never happens. IOPCODE_INJECTION_ID should never
+  // make it here.
+  if (insn->opcode() == IOPCODE_INJECTION_ID) {
+    return new DexInstruction(DOPCODE_CONST);
+  }
 
   auto op = opcode::to_dex_opcode(insn->opcode());
   switch (opcode::ref(insn->opcode())) {

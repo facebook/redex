@@ -125,6 +125,8 @@ bool UpCodeMotionPass::gather_movable_instructions(
     case OPCODE_SHL_INT_LIT:
     case OPCODE_SHR_INT_LIT:
     case OPCODE_USHR_INT_LIT:
+
+    case IOPCODE_INJECTION_ID:
       instructions->push_back(insn);
       continue;
 

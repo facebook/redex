@@ -545,6 +545,15 @@ bool PrimitiveAnalyzer::analyze_binop(const IRInstruction* insn,
   return analyze_default(insn, env);
 }
 
+bool InjectionIdAnalyzer::analyze_injection_id(const IRInstruction* insn,
+                                               ConstantEnvironment* env) {
+  auto id = static_cast<int32_t>(insn->get_literal());
+  TRACE(CONSTP, 5, "Discovered new injection id for reg: %d value: %d",
+        insn->dest(), id);
+  env->set(insn->dest(), ConstantInjectionIdDomain(id));
+  return true;
+}
+
 bool ClinitFieldAnalyzer::analyze_sget(const DexType* class_under_init,
                                        const IRInstruction* insn,
                                        ConstantEnvironment* env) {

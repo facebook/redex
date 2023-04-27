@@ -144,6 +144,13 @@ class PrimitiveAnalyzer final
                                   ConstantEnvironment* env);
 };
 
+class InjectionIdAnalyzer final
+    : public InstructionAnalyzerBase<InjectionIdAnalyzer, ConstantEnvironment> {
+ public:
+  static bool analyze_injection_id(const IRInstruction* insn,
+                                   ConstantEnvironment* env);
+};
+
 // This is the most common use of constant propagation, so we define this alias
 // for our convenience.
 using ConstantPrimitiveAnalyzer =

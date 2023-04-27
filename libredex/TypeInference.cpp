@@ -674,7 +674,8 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     refine_reference(current_state, insn->src(0));
     break;
   }
-  case OPCODE_CONST: {
+  case OPCODE_CONST:
+  case IOPCODE_INJECTION_ID: {
     if (insn->get_literal() == 0) {
       current_state->set_dex_type(insn->dest(), DexTypeDomain::null());
       set_type(current_state, insn->dest(), TypeDomain(IRType::ZERO));

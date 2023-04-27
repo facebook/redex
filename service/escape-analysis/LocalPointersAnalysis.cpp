@@ -226,6 +226,8 @@ bool dest_may_be_pointer(const IRInstruction* insn) {
     return true;
   case IOPCODE_MOVE_RESULT_PSEUDO_WIDE:
     return false;
+  case IOPCODE_INJECTION_ID:
+    return false;
   default:
     not_reached_log("Unknown opcode %02x\n", op);
   }

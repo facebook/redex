@@ -1522,7 +1522,8 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
     assume_integer(current_state, insn->src(0));
     break;
   }
-  case IOPCODE_INIT_CLASS: {
+  case IOPCODE_INIT_CLASS:
+  case IOPCODE_INJECTION_ID: {
     break;
   }
   }

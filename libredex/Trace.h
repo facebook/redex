@@ -67,6 +67,8 @@ class DexType;
   TM(IDEX)              \
   TM(IDEXR)             \
   TM(IFCS_ANALYSIS)     \
+  TM(III)               \
+  TM(IIL)               \
   TM(INL)               \
   TM(INLINE)            \
   TM(INLRES)            \
