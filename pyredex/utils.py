@@ -88,6 +88,7 @@ class _FindAndroidBuildToolHelper:
         ]
         self.root_dir_for_buck: typing.Optional[str] = None
         self.tool_overrides: typing.Dict[str, str] = {}
+        self.omit_sdk_tool_discovery: bool = False
 
     def add_tool_override(self, tool_name: str, path: str) -> None:
         self.tool_overrides[tool_name] = path
@@ -98,6 +99,9 @@ class _FindAndroidBuildToolHelper:
             logging.debug("Using tool override: %s -> %s", tool_name, res)
             return res
 
+        if self.omit_sdk_tool_discovery:
+            raise RuntimeError(f'Path for {tool} was not provided and the --omit-sdk-tool-discovery flag was set requiring tool paths to be explicitly provided.')
+            
         result, _ = self._run(tool)
         if result:
             return result
@@ -150,6 +154,9 @@ class _FindAndroidBuildToolHelper:
         attempts.append("PATH")
 
         return None, attempts
+
+    def set_omit_sdk_tool_discovery(self) -> None:
+        self.omit_sdk_tool_discovery = True
 
     @staticmethod
     def _find_biggest_build_tools_version(base: str) -> typing.Optional[str]:
@@ -318,13 +325,13 @@ def get_android_sdk_path() -> str:
     raise RuntimeError(f'Could not find SDK path, searched {", ".join(attempts)}')
 
 
-def find_android_build_tool(tool_name: str, tool: str) -> str:
-    return FIND_HELPER.find(tool_name, tool)
+def omit_sdk_tool_discovery() -> None:
+    FIND_HELPER.set_omit_sdk_tool_discovery()
 
 
 def find_apksigner() -> str:
     return FIND_HELPER.find("apksigner", "apksigner.bat" if IS_WINDOWS else "apksigner")
-
+    
 
 def find_zipalign() -> str:
     return FIND_HELPER.find("zipalign", "zipalign.exe" if IS_WINDOWS else "zipalign")
