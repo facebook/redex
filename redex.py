@@ -44,6 +44,7 @@ from pyredex.utils import (
     get_file_ext,
     make_temp_dir,
     move_dexen_to_directories,
+    omit_sdk_tool_discovery,
     remove_comments,
     sign_apk,
     with_temp_cleanup,
@@ -722,6 +723,12 @@ Given an APK, produce a better APK!
     )
 
     parser.add_argument(
+        "--omit-sdk-tool-discovery",
+        action="store_true",
+        help="Do not look attempt to search for SDK tools via path construction. Use the provided tool path overrides or the buck defaults",
+    )
+
+    parser.add_argument(
         "--log-level",
         default="warning",
         help="Specify the python logging level",
@@ -814,7 +821,7 @@ def _has_android_library_jars(pg_file: str) -> bool:
     return False
 
 
-def _check_android_sdk(args: argparse.Namespace) -> None:
+def _check_android_sdk_jar(args: argparse.Namespace) -> None:
     if args.suppress_android_jar_check:
         logging.debug("No SDK jar check done")
         return
@@ -831,8 +838,14 @@ def _check_android_sdk(args: argparse.Namespace) -> None:
 
     # Check whether we can find and add one.
     logging.info(
-        "No SDK jar found, attempting to find one. If the detection is wrong, add `--suppress-android-jar-check`."
+        "No SDK jar found. If the detection is wrong, add `--suppress-android-jar-check`."
     )
+    if args.omit_sdk_tool_discovery:
+        raise RuntimeError(
+            "SDK tool discovery explicitly disabled, not attempting to locate SDK jar via SDK path. Failing due to no SDK jar provided."
+        )
+
+    logging.info("Attempting to find an SDK-looking jar via SDK path")
 
     try:
         sdk_path = get_android_sdk_path()
@@ -1004,6 +1017,9 @@ def prepare_redex(args: argparse.Namespace) -> State:
     if args.android_sdk_path:
         add_android_sdk_path(args.android_sdk_path)
 
+    if args.omit_sdk_tool_discovery:
+        omit_sdk_tool_discovery()
+
     # avoid accidentally mixing up file formats since we now support
     # both apk files and Android bundle files
     file_ext = get_file_ext(args.input_apk)
@@ -1156,8 +1172,8 @@ def prepare_redex(args: argparse.Namespace) -> State:
     # Check for shrinker heuristics.
     _check_shrinker_heuristics(args)
 
-    # Scan for SDK jar. If not found, warn and add if available.
-    _check_android_sdk(args)
+    # Scan for SDK jar provided. If not found, warn and add if available and allowed.
+    _check_android_sdk_jar(args)
 
     logging.debug("Running redex-all on %d dex files ", len(dexen))
     if args.lldb:
