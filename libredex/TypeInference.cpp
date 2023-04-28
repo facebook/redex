@@ -682,7 +682,7 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     } else {
       set_type(current_state, insn->dest(), TypeDomain(IRType::CONST));
     }
-    set_type(current_state, insn->dest(), IntTypeDomain(IntType::INT));
+    set_type(current_state, insn->dest(), IntTypeDomain(IntType::BOOLEAN));
     break;
   }
   case OPCODE_CONST_WIDE: {
@@ -739,7 +739,11 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     }
     break;
   }
-  case OPCODE_INSTANCE_OF:
+  case OPCODE_INSTANCE_OF: {
+    refine_reference(current_state, insn->src(0));
+    set_boolean(current_state, RESULT_REGISTER);
+    break;
+  }
   case OPCODE_ARRAY_LENGTH: {
     refine_reference(current_state, insn->src(0));
     set_int(current_state, RESULT_REGISTER);
@@ -1285,9 +1289,6 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   case OPCODE_ADD_INT:
   case OPCODE_SUB_INT:
   case OPCODE_MUL_INT:
-  case OPCODE_AND_INT:
-  case OPCODE_OR_INT:
-  case OPCODE_XOR_INT:
   case OPCODE_SHL_INT:
   case OPCODE_SHR_INT:
   case OPCODE_USHR_INT: {
@@ -1296,6 +1297,20 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     set_int(current_state, insn->dest());
     break;
   }
+  case OPCODE_AND_INT:
+  case OPCODE_OR_INT:
+  case OPCODE_XOR_INT: {
+    // TODO: The IntType of the destination is set to boolean to make the
+    // IntTypePatcher more conservative when finding conversions. The
+    // Android 4.4 verifier actually determines the type for the destination
+    // based on types of the inputs, so a possible improvement would be to set
+    // the IntType based on the inputs.
+    refine_int(current_state, insn->src(0));
+    refine_int(current_state, insn->src(1));
+    set_boolean(current_state, insn->dest());
+    break;
+  }
+
   case OPCODE_DIV_INT:
   case OPCODE_REM_INT: {
     refine_int(current_state, insn->src(0));
@@ -1352,14 +1367,18 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   case OPCODE_ADD_INT_LIT:
   case OPCODE_RSUB_INT_LIT:
   case OPCODE_MUL_INT_LIT:
-  case OPCODE_AND_INT_LIT:
-  case OPCODE_OR_INT_LIT:
-  case OPCODE_XOR_INT_LIT:
   case OPCODE_SHL_INT_LIT:
   case OPCODE_SHR_INT_LIT:
   case OPCODE_USHR_INT_LIT: {
     refine_int(current_state, insn->src(0));
     set_int(current_state, insn->dest());
+    break;
+  }
+  case OPCODE_AND_INT_LIT:
+  case OPCODE_OR_INT_LIT:
+  case OPCODE_XOR_INT_LIT: {
+    refine_int(current_state, insn->src(0));
+    set_boolean(current_state, insn->dest());
     break;
   }
   case OPCODE_DIV_INT_LIT:

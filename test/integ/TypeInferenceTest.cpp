@@ -577,3 +577,57 @@ TEST_F(TypeInferenceTest, test_bool_int) {
     EXPECT_TRUE(ret_type.is_top());
   }
 }
+
+TEST_F(TypeInferenceTest, test_and_int_lit) {
+  auto method = assembler::method_from_string(R"(
+    (method (static) "LFoo;.bar:()I"
+      (
+        (const v0 0)
+        (and-int/lit v0 v0 1)
+        (return v0)
+      )
+    )
+  )");
+  auto& cfg = get_cfg(method);
+
+  type_inference::TypeInference inference(cfg);
+  inference.run(method);
+
+  for (auto block : cfg.real_exit_blocks()) {
+    IRInstruction* insn = block->get_last_insn()->insn;
+    const auto& exit_env = inference.get_exit_state_at(block);
+    EXPECT_EQ(exit_env.get_type(insn->src(0)),
+              type_inference::TypeDomain(IRType::INT));
+    EXPECT_EQ(exit_env.get_int_type(insn->src(0)),
+              type_inference::IntTypeDomain(IntType::BOOLEAN));
+    auto ret_type = exit_env.get_type_domain(insn->src(0));
+    EXPECT_TRUE(ret_type.is_top());
+  }
+}
+
+TEST_F(TypeInferenceTest, test_instance_of) {
+  auto method = assembler::method_from_string(R"(
+    (method (static) "LFoo;.bar:()I"
+      (
+        (instance-of v0 "LFoo;")
+        (move-result-pseudo v1)
+        (return v1)
+      )
+    )
+  )");
+  auto& cfg = get_cfg(method);
+
+  type_inference::TypeInference inference(cfg);
+  inference.run(method);
+
+  for (auto block : cfg.real_exit_blocks()) {
+    IRInstruction* insn = block->get_last_insn()->insn;
+    const auto& exit_env = inference.get_exit_state_at(block);
+    EXPECT_EQ(exit_env.get_type(insn->src(0)),
+              type_inference::TypeDomain(IRType::INT));
+    EXPECT_EQ(exit_env.get_int_type(insn->src(0)),
+              type_inference::IntTypeDomain(IntType::BOOLEAN));
+    auto ret_type = exit_env.get_type_domain(insn->src(0));
+    EXPECT_TRUE(ret_type.is_top());
+  }
+}
