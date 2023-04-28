@@ -69,25 +69,14 @@ class FinalInlinePassV2 : public Pass {
 
 namespace final_inline {
 
-class class_initialization_cycle : public std::exception {
- public:
-  explicit class_initialization_cycle(const DexClass* cls) {
-    m_msg = "Found a class initialization cycle involving " + show(cls);
-  }
-
-  const char* what() const noexcept override { return m_msg.c_str(); }
-
- private:
-  std::string m_msg;
-};
-
 constant_propagation::WholeProgramState analyze_and_simplify_clinits(
     const Scope& scope,
     const init_classes::InitClassesWithSideEffects&
         init_classes_with_side_effects,
     const XStoreRefs* xstores,
-    const std::unordered_set<const DexType*>& blocklist_types = {},
-    const std::unordered_set<std::string>& allowed_opaque_callee_names = {});
+    const std::unordered_set<const DexType*>& blocklist_types,
+    const std::unordered_set<std::string>& allowed_opaque_callee_names,
+    size_t& clinit_cycles);
 
 class StaticFieldReadAnalysis {
  public:
