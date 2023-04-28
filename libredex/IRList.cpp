@@ -584,13 +584,28 @@ void IRList::remove_opcode(IRInstruction* insn) {
 }
 
 size_t IRList::sum_opcode_sizes() const {
-  size_t size{0};
+  uint32_t size{0};
   for (const auto& mie : m_list) {
     if (mie.type == MFLOW_OPCODE) {
       size += mie.insn->size();
     }
   }
   return size;
+}
+
+uint32_t IRList::estimate_code_units() const {
+  uint32_t code_units{0};
+  for (const auto& mie : m_list) {
+    if (mie.type == MFLOW_OPCODE) {
+      code_units += mie.insn->size();
+      if (opcode::is_fill_array_data(mie.insn->opcode())) {
+        // fill-array-data-payload
+        auto* data = mie.insn->get_data();
+        code_units += 4 + data->size();
+      }
+    }
+  }
+  return code_units;
 }
 
 size_t IRList::count_opcodes() const {

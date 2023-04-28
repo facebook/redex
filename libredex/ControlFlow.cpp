@@ -19,6 +19,7 @@
 #include "DexUtil.h"
 #include "GraphUtil.h"
 #include "IRList.h"
+#include "InstructionLowering.h"
 #include "RedexContext.h"
 #include "Show.h"
 #include "SourceBlocks.h"
@@ -319,6 +320,31 @@ uint32_t Block::sum_opcode_sizes() const {
   return m_entries.sum_opcode_sizes();
 }
 
+uint32_t Block::estimate_code_units() const {
+  always_assert(m_parent->editable());
+  auto code_units = m_entries.estimate_code_units();
+  auto it = get_last_insn();
+  if (it != end() && opcode::is_switch(it->insn->opcode())) {
+    std::vector<int32_t> case_keys;
+    for (auto* e : succs()) {
+      if (e->type() == EDGE_BRANCH) {
+        case_keys.push_back(*e->case_key());
+      }
+    }
+    std::sort(case_keys.begin(), case_keys.end());
+    if (instruction_lowering::sufficiently_sparse(case_keys)) {
+      // sparse-switch-payload
+      code_units += 4 + 4 * case_keys.size();
+    } else {
+      // packed-switch-payload
+      const uint64_t size =
+          instruction_lowering::get_packed_switch_size(case_keys);
+      code_units += 4 + size * 2;
+    }
+  }
+  return code_units;
+}
+
 // shallowly copy pointers (edges and parent cfg)
 // but deeply copy MethodItemEntries
 Block::Block(const Block& b, MethodItemEntryCloner* cloner)
@@ -377,7 +403,30 @@ IRList::iterator Block::get_last_insn() {
   return end();
 }
 
+IRList::const_iterator Block::get_last_insn() const {
+  for (auto it = rbegin(); it != rend(); ++it) {
+    if (it->type == MFLOW_OPCODE) {
+      // Reverse iterators have a member base() which returns a corresponding
+      // forward iterator. Beware that this isn't an iterator that refers to the
+      // same object - it actually refers to the next object in the sequence.
+      // This is so that rbegin() corresponds with end() and rend() corresponds
+      // with begin(). Copied from https://stackoverflow.com/a/2037917
+      return std::prev(it.base());
+    }
+  }
+  return end();
+}
+
 IRList::iterator Block::get_first_insn() {
+  for (auto it = begin(); it != end(); ++it) {
+    if (it->type == MFLOW_OPCODE) {
+      return it;
+    }
+  }
+  return end();
+}
+
+IRList::const_iterator Block::get_first_insn() const {
   for (auto it = begin(); it != end(); ++it) {
     if (it->type == MFLOW_OPCODE) {
       return it;
@@ -398,8 +447,36 @@ IRList::iterator Block::get_first_non_param_loading_insn() {
   return end();
 }
 
+IRList::const_iterator Block::get_first_non_param_loading_insn() const {
+  for (auto it = begin(); it != end(); ++it) {
+    if (it->type != MFLOW_OPCODE) {
+      continue;
+    }
+    if (!opcode::is_a_load_param(it->insn->opcode())) {
+      return it;
+    }
+  }
+  return end();
+}
+
 IRList::iterator Block::get_last_param_loading_insn() {
   IRList::iterator res = end();
+  for (auto it = begin(); it != end(); ++it) {
+    if (it->type != MFLOW_OPCODE) {
+      continue;
+    }
+    if (opcode::is_a_load_param(it->insn->opcode())) {
+      res = it;
+    } else {
+      // There won't be another one.
+      break;
+    }
+  }
+  return res;
+}
+
+IRList::const_iterator Block::get_last_param_loading_insn() const {
+  IRList::const_iterator res = end();
   for (auto it = begin(); it != end(); ++it) {
     if (it->type != MFLOW_OPCODE) {
       continue;
@@ -428,7 +505,21 @@ IRList::iterator Block::get_first_insn_before_position() {
   return end();
 }
 
-bool Block::starts_with_move_result() {
+IRList::const_iterator Block::get_first_insn_before_position() const {
+  for (auto it = begin(); it != end(); ++it) {
+    if (it->type == MFLOW_OPCODE) {
+      auto op = it->insn->opcode();
+      if (!opcode::is_move_result_any(op) && !opcode::is_goto(op)) {
+        return it;
+      }
+    } else if (it->type == MFLOW_POSITION) {
+      return end();
+    }
+  }
+  return end();
+}
+
+bool Block::starts_with_move_result() const {
   auto first_it = get_first_insn();
   if (first_it != end()) {
     auto first_op = first_it->insn->opcode();
@@ -439,7 +530,7 @@ bool Block::starts_with_move_result() {
   return false;
 }
 
-bool Block::starts_with_move_exception() {
+bool Block::starts_with_move_exception() const {
   auto first_it = get_first_insn();
   if (first_it != end()) {
     auto first_op = first_it->insn->opcode();
@@ -450,7 +541,7 @@ bool Block::starts_with_move_exception() {
   return false;
 }
 
-bool Block::contains_opcode(IROpcode opcode) {
+bool Block::contains_opcode(IROpcode opcode) const {
   for (auto it = begin(); it != end(); ++it) {
     if (it->type != MFLOW_OPCODE) {
       continue;
@@ -462,9 +553,9 @@ bool Block::contains_opcode(IROpcode opcode) {
   return false;
 }
 
-bool Block::begins_with(Block* other) {
-  IRList::iterator self_it = this->begin();
-  IRList::iterator other_it = other->begin();
+bool Block::begins_with(Block* other) const {
+  IRList::const_iterator self_it = this->begin();
+  IRList::const_iterator other_it = other->begin();
 
   while (self_it != this->end() && other_it != other->end()) {
     if (*self_it != *other_it) {
@@ -1358,6 +1449,15 @@ uint32_t ControlFlowGraph::sum_opcode_sizes() const {
     result += entry.second->sum_opcode_sizes();
   }
   return result;
+}
+
+// similar to sum_opcode_sizes, but takes into account non-opcode payloads
+uint32_t ControlFlowGraph::estimate_code_units() const {
+  uint32_t code_units = 0;
+  for (const auto& entry : m_blocks) {
+    code_units += entry.second->estimate_code_units();
+  }
+  return code_units;
 }
 
 Block* ControlFlowGraph::get_first_block_with_insns() const {
