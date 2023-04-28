@@ -96,11 +96,28 @@ Scope reverse_tsort_by_clinit_deps(const Scope& scope, size_t& init_cycles) {
     ConcurrentSet<DexClass*> maybe_roots;
     ConcurrentSet<DexClass*> all;
     walk::parallel::classes(scope, [&](DexClass* cls) {
-      // TODO: Consider superclass relationship.
+      std::vector<DexClass*> deps_vec;
+      auto add_dep = [&](auto* dependee_cls) {
+        reverse_deps_parallel.update(
+            dependee_cls, [&](auto&, auto& v, auto) { v.push_back(cls); });
+        maybe_roots.insert(dependee_cls);
+        deps_vec.push_back(dependee_cls);
+      };
+
+      // A superclass must be initialized before a subclass.
+      //
+      // We are not considering externals here. This should be fine, as
+      // a chain internal <- external <- internal should not exist.
+      {
+        auto super_class = type_class_internal(cls->get_super_class());
+        if (super_class != nullptr && scope_set.count(super_class) != 0) {
+          add_dep(super_class);
+        }
+      }
+
       auto clinit = cls->get_clinit();
       bool has_deps = false;
       if (clinit != nullptr && clinit->get_code() != nullptr) {
-        std::vector<DexClass*> deps_vec;
         editable_cfg_adapter::iterate_with_iterator(
             clinit->get_code(), [&](const IRList::iterator& it) {
               auto insn = it->insn;
@@ -110,23 +127,18 @@ Scope reverse_tsort_by_clinit_deps(const Scope& scope, size_t& init_cycles) {
                     scope_set.count(dependee_cls) == 0) {
                   return editable_cfg_adapter::LOOP_CONTINUE;
                 }
-                reverse_deps_parallel.update(
-                    dependee_cls,
-                    [&](auto&, auto& v, auto) { v.push_back(cls); });
-                maybe_roots.insert(dependee_cls);
-                deps_vec.push_back(dependee_cls);
+                add_dep(dependee_cls);
               }
               // TODO: Consider static methods.
               return editable_cfg_adapter::LOOP_CONTINUE;
             });
-        if (!deps_vec.empty()) {
-          has_deps = true;
-          is_target.insert(cls);
-          deps_parallel.emplace(cls, std::move(deps_vec));
-        }
       }
-      // Something with no deps - make it a root so it gets visited.
-      if (!has_deps) {
+
+      if (!deps_vec.empty()) {
+        is_target.insert(cls);
+        deps_parallel.emplace(cls, std::move(deps_vec));
+      } else {
+        // Something with no deps - make it a root so it gets visited.
         maybe_roots.insert(cls);
       }
       all.insert(cls);
