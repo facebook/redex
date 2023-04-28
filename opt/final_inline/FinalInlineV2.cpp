@@ -123,7 +123,7 @@ Scope reverse_tsort_by_clinit_deps(const Scope& scope, size_t& init_cycles) {
         editable_cfg_adapter::iterate_with_iterator(
             clinit->get_code(), [&](const IRList::iterator& it) {
               auto insn = it->insn;
-              if (opcode::is_an_sget(insn->opcode())) {
+              if (opcode::is_an_sfield_op(insn->opcode())) {
                 add_dep(type_class(insn->get_field()->get_class()));
               } else if (opcode::is_invoke_static(insn->opcode())) {
                 add_dep(type_class(insn->get_method()->get_class()));
