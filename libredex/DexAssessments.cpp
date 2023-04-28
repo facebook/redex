@@ -241,7 +241,7 @@ class Assessor {
 
 } // namespace dex_position
 
-size_t adjust_sum_opcode_sizes(cfg::ControlFlowGraph& cfg) {
+size_t adjust_size(cfg::ControlFlowGraph& cfg) {
   auto ordering = cfg.order();
   size_t adjustment{0};
   for (auto it = ordering.begin(); it != ordering.end(); ++it) {
@@ -353,6 +353,7 @@ DexAssessment DexScopeAssessor::run() {
     std::atomic<size_t> huge_methods{0};
     std::atomic<size_t> num_instructions{0};
     std::atomic<size_t> sum_opcodes{0};
+    std::atomic<size_t> code_units{0};
     std::atomic<size_t> with_annotations{0};
     std::atomic<size_t> sum_annotations{0};
     std::atomic<size_t> with_param_annotations{0};
@@ -394,7 +395,7 @@ DexAssessment DexScopeAssessor::run() {
     if (code->editable_cfg_built()) {
       // The editable cfg is missing plain OPCODE_GOTOs; let's figure out how
       // many we are missing.
-      sum_opcode_sizes += adjust_sum_opcode_sizes(code->cfg());
+      sum_opcode_sizes += adjust_size(code->cfg());
     }
     method_stats.sum_opcodes.fetch_add(sum_opcode_sizes,
                                        std::memory_order_relaxed);
@@ -403,6 +404,13 @@ DexAssessment DexScopeAssessor::run() {
       // start splitting.
       method_stats.huge_methods.fetch_add(1, std::memory_order_relaxed);
     }
+    auto code_units = code->estimate_code_units();
+    if (code->editable_cfg_built()) {
+      // The editable cfg is missing plain OPCODE_GOTOs; let's figure out how
+      // many we are missing.
+      code_units += adjust_size(code->cfg());
+    }
+    method_stats.code_units.fetch_add(code_units, std::memory_order_relaxed);
   });
 
   dex_position::Assessor dex_position_assessor;
@@ -456,6 +464,7 @@ DexAssessment DexScopeAssessor::run() {
   res["huge~methods"] = method_stats.huge_methods.load();
   res["num_instructions"] = method_stats.num_instructions.load();
   res["sum_opcodes"] = method_stats.sum_opcodes.load();
+  res["code_units"] = method_stats.code_units.load();
 
   res["methods.with_annotations"] = method_stats.with_annotations.load();
   res["methods.sum_annotations"] = method_stats.sum_annotations.load();
