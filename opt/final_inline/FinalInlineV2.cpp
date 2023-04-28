@@ -127,6 +127,8 @@ Scope reverse_tsort_by_clinit_deps(const Scope& scope, size_t& init_cycles) {
                 add_dep(type_class(insn->get_field()->get_class()));
               } else if (opcode::is_invoke_static(insn->opcode())) {
                 add_dep(type_class(insn->get_method()->get_class()));
+              } else if (opcode::is_new_instance(insn->opcode())) {
+                add_dep(type_class(insn->get_type()));
               }
               return editable_cfg_adapter::LOOP_CONTINUE;
             });
