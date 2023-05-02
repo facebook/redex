@@ -58,6 +58,7 @@ file(GLOB test
         "test/*.cpp"
         )
 
+include(CTest)
 # ${test} contains all paths to the test cpps
 foreach(testfile ${test})
     # ${testfile} is in the format of test/SomeTest.cpp
@@ -67,7 +68,6 @@ foreach(testfile ${test})
     # ${test_bin} is in the format of SomeTest_test
     add_executable(${test_bin} ${testfile})
     target_link_libraries(${test_bin} PRIVATE sparta gmock_main)
+    add_test(NAME ${testfile} COMMAND ${test_bin})
 endforeach()
 
-# Copy the script that runs all tests under the build directory
-configure_file(run_all_tests.sh run_all_tests.sh COPYONLY)
