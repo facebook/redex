@@ -10,6 +10,7 @@
 #include <iostream>
 #include <map>
 #include <string>
+#include <vector>
 
 // The StringTreeSet provides a compact encoding for a set of strings that tend
 // to share prefices.
@@ -18,6 +19,9 @@ class StringTreeSet {
   void insert(const std::string& s, size_t start = 0);
 
   void encode(std::ostringstream& oss) const;
+
+  static std::string encode_string_tree_set(
+      const std::vector<std::string>& strings);
 
  private:
   std::map<char, StringTreeSet> m_map;

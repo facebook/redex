@@ -65,3 +65,14 @@ void StringTreeSet::encode(std::ostringstream& oss) const {
     rest.encode(oss);
   }
 }
+
+std::string StringTreeSet::encode_string_tree_set(
+    const std::vector<std::string>& strings) {
+  StringTreeSet sts;
+  for (const auto& s : strings) {
+    sts.insert(s);
+  }
+  std::ostringstream oss;
+  sts.encode(oss);
+  return oss.str();
+}
