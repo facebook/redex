@@ -46,6 +46,7 @@ class ReachableNativesPass : public Pass {
     return {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, Preserves},
+        {UltralightCodePatterns, Preserves},
     };
   }
 

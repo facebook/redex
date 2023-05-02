@@ -60,6 +60,7 @@ class IntrinsifyNullChecksPass : public Pass {
     return {
         {HasSourceBlocks, Preserves},
         {NoSpuriousGetClassCalls, Establishes},
+        {UltralightCodePatterns, Preserves},
     };
   }
 

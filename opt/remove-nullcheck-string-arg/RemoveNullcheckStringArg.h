@@ -84,6 +84,7 @@ class RemoveNullcheckStringArg : public Pass {
     return {
         {HasSourceBlocks, Preserves},
         {NoSpuriousGetClassCalls, Preserves},
+        {UltralightCodePatterns, Preserves},
     };
   }
 

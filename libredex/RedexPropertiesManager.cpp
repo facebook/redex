@@ -43,7 +43,8 @@ CollectionT filter_out_disabled_properties(const CollectionT& c,
 
 std::unordered_set<PropertyName> Manager::get_initial() const {
   using namespace names;
-  static const std::unordered_set<PropertyName> default_initial_properties{};
+  static const std::unordered_set<PropertyName> default_initial_properties{
+      UltralightCodePatterns};
   return filter_out_disabled_properties(default_initial_properties, *this);
 }
 
@@ -70,6 +71,7 @@ std::vector<PropertyName> get_all_properties() {
       HasSourceBlocks,
       NoSpuriousGetClassCalls,
       RenameClass,
+      UltralightCodePatterns,
   };
 }
 
