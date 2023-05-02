@@ -76,7 +76,7 @@ cmake --build .
 To run the unit tests, please type:
 
 ```
-./run_all_tests.sh
+make test
 ```
 
 To copy the header files into `/usr/local/include/sparta` and set up a cmake library for SPARTA, you can use the following command:
