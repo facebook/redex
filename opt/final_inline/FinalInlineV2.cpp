@@ -67,6 +67,77 @@ std::ostream& operator<<(std::ostream& o,
   return o;
 }
 
+auto compute_deps(const Scope& scope,
+                  const std::unordered_set<const DexClass*>& scope_set) {
+  ConcurrentMap<DexClass*, std::vector<DexClass*>> deps_parallel;
+  ConcurrentMap<DexClass*, std::vector<DexClass*>> reverse_deps_parallel;
+  ConcurrentSet<DexClass*> is_target;
+  ConcurrentSet<DexClass*> maybe_roots;
+  ConcurrentSet<DexClass*> all;
+  walk::parallel::classes(scope, [&](DexClass* cls) {
+    std::vector<DexClass*> deps_vec;
+    auto add_dep = [&](auto* dependee_cls) {
+      if (dependee_cls == nullptr || dependee_cls == cls ||
+          scope_set.count(dependee_cls) == 0) {
+        return;
+      }
+      reverse_deps_parallel.update(
+          dependee_cls, [&](auto&, auto& v, auto) { v.push_back(cls); });
+      maybe_roots.insert(dependee_cls);
+      deps_vec.push_back(dependee_cls);
+    };
+
+    // A superclass must be initialized before a subclass.
+    //
+    // We are not considering externals here. This should be fine, as
+    // a chain internal <- external <- internal should not exist.
+    {
+      auto super_class = type_class_internal(cls->get_super_class());
+      add_dep(super_class);
+    }
+
+    auto clinit = cls->get_clinit();
+    if (clinit != nullptr && clinit->get_code() != nullptr) {
+      editable_cfg_adapter::iterate_with_iterator(
+          clinit->get_code(), [&](const IRList::iterator& it) {
+            auto insn = it->insn;
+            if (opcode::is_an_sfield_op(insn->opcode())) {
+              add_dep(type_class(insn->get_field()->get_class()));
+            } else if (opcode::is_invoke_static(insn->opcode())) {
+              add_dep(type_class(insn->get_method()->get_class()));
+            } else if (opcode::is_new_instance(insn->opcode())) {
+              add_dep(type_class(insn->get_type()));
+            }
+            return editable_cfg_adapter::LOOP_CONTINUE;
+          });
+    }
+
+    if (!deps_vec.empty()) {
+      is_target.insert(cls);
+      deps_parallel.emplace(cls, std::move(deps_vec));
+    } else {
+      // Something with no deps - make it a root so it gets visited.
+      maybe_roots.insert(cls);
+    }
+    all.insert(cls);
+  });
+  std::unordered_map<DexClass*, std::vector<DexClass*>> deps;
+  for (auto& kv : deps_parallel) {
+    deps[kv.first] = std::move(kv.second);
+  }
+  std::unordered_map<DexClass*, std::vector<DexClass*>> reverse_deps;
+  for (auto& kv : reverse_deps_parallel) {
+    reverse_deps[kv.first] = std::move(kv.second);
+  }
+
+  std::vector<DexClass*> roots;
+  std::copy_if(maybe_roots.begin(), maybe_roots.end(),
+               std::back_inserter(roots),
+               [&](auto* cls) { return is_target.count_unsafe(cls) == 0; });
+  return std::make_tuple(std::move(deps), std::move(reverse_deps),
+                         std::move(roots), all.size());
+}
+
 /*
  * Foo.<clinit> may read some static fields from class Bar, in which case
  * Bar.<clinit> will be executed first by the VM to determine the values of
@@ -88,80 +159,9 @@ Scope reverse_tsort_by_clinit_deps(const Scope& scope, size_t& init_cycles) {
 
   // Collect data for WTO.
   // NOTE: Doing this already also as reverse so we don't have to do that later.
-
-  auto [deps, reverse_deps, roots, all_cnt] = [&]() {
-    ConcurrentMap<DexClass*, std::vector<DexClass*>> deps_parallel;
-    ConcurrentMap<DexClass*, std::vector<DexClass*>> reverse_deps_parallel;
-    ConcurrentSet<DexClass*> is_target;
-    ConcurrentSet<DexClass*> maybe_roots;
-    ConcurrentSet<DexClass*> all;
-    walk::parallel::classes(scope, [&](DexClass* cls) {
-      std::vector<DexClass*> deps_vec;
-      auto add_dep = [&](auto* dependee_cls) {
-        if (dependee_cls == nullptr || dependee_cls == cls ||
-            scope_set.count(dependee_cls) == 0) {
-          return;
-        }
-        reverse_deps_parallel.update(
-            dependee_cls, [&](auto&, auto& v, auto) { v.push_back(cls); });
-        maybe_roots.insert(dependee_cls);
-        deps_vec.push_back(dependee_cls);
-      };
-
-      // A superclass must be initialized before a subclass.
-      //
-      // We are not considering externals here. This should be fine, as
-      // a chain internal <- external <- internal should not exist.
-      {
-        auto super_class = type_class_internal(cls->get_super_class());
-        add_dep(super_class);
-      }
-
-      auto clinit = cls->get_clinit();
-      bool has_deps = false;
-      if (clinit != nullptr && clinit->get_code() != nullptr) {
-        editable_cfg_adapter::iterate_with_iterator(
-            clinit->get_code(), [&](const IRList::iterator& it) {
-              auto insn = it->insn;
-              if (opcode::is_an_sfield_op(insn->opcode())) {
-                add_dep(type_class(insn->get_field()->get_class()));
-              } else if (opcode::is_invoke_static(insn->opcode())) {
-                add_dep(type_class(insn->get_method()->get_class()));
-              } else if (opcode::is_new_instance(insn->opcode())) {
-                add_dep(type_class(insn->get_type()));
-              }
-              return editable_cfg_adapter::LOOP_CONTINUE;
-            });
-      }
-
-      if (!deps_vec.empty()) {
-        is_target.insert(cls);
-        deps_parallel.emplace(cls, std::move(deps_vec));
-      } else {
-        // Something with no deps - make it a root so it gets visited.
-        maybe_roots.insert(cls);
-      }
-      all.insert(cls);
-    });
-    std::unordered_map<DexClass*, std::vector<DexClass*>> deps;
-    for (auto& kv : deps_parallel) {
-      deps[kv.first] = std::move(kv.second);
-    }
-    std::unordered_map<DexClass*, std::vector<DexClass*>> reverse_deps;
-    for (auto& kv : reverse_deps_parallel) {
-      reverse_deps[kv.first] = std::move(kv.second);
-    }
-
-    std::vector<DexClass*> roots;
-    std::copy_if(maybe_roots.begin(), maybe_roots.end(),
-                 std::back_inserter(roots),
-                 [&](auto* cls) { return is_target.count_unsafe(cls) == 0; });
-    return std::make_tuple(std::move(deps), std::move(reverse_deps),
-                           std::move(roots), all.size());
-  }();
+  auto [deps, reverse_deps, roots, all_cnt] = compute_deps(scope, scope_set);
 
   // NOTE: Using nullptr for root node.
-
   auto wto = sparta::WeakTopologicalOrdering<DexClass*>(
       nullptr,
       [&roots = roots, &reverse_deps = reverse_deps](DexClass* const& cls) {
