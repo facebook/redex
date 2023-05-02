@@ -8,15 +8,32 @@
 #pragma once
 
 #include <map>
+#include <set>
 #include <sstream>
 #include <string>
 #include <vector>
 
-// The StringTreeSet provides a compact encoding for a set of strings that tend
-// to share prefices.
+// The StringTreeSet and StringTreeMap provide a compact encoding for
+// collections of strings that tend to share prefices.
+template <typename ValueType>
+class StringTreeMap {
+ public:
+  void insert(const std::string& s, ValueType value, size_t start = 0);
+
+  void encode(std::ostringstream& oss) const;
+
+  static std::string encode_string_tree_map(
+      const std::map<std::string, ValueType>& strings);
+
+ private:
+  std::map<char, StringTreeMap<ValueType>> m_map;
+  bool m_terminal{false};
+  ValueType m_value;
+};
+
 class StringTreeSet {
  public:
-  void insert(const std::string& s, size_t start = 0);
+  void insert(const std::string& s) { m_set.emplace(s); }
 
   void encode(std::ostringstream& oss) const;
 
@@ -24,6 +41,5 @@ class StringTreeSet {
       const std::vector<std::string>& strings);
 
  private:
-  std::map<char, StringTreeSet> m_map;
-  bool m_terminal{false};
+  std::set<std::string> m_set;
 };
