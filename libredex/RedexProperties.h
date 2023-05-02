@@ -62,9 +62,10 @@ inline const PropertyName NoInitClassInstructions("NoInitClassInstructions");
 inline const PropertyName DexLimitsObeyed("DexLimitsObeyed");
 // Stand-in for fixing up passes.
 inline const PropertyName NeedsEverythingPublic("NeedsEverythingPublic");
+inline const PropertyName NeedsInjectionIdLowering("NeedsInjectionIdLowering");
 inline const PropertyName HasSourceBlocks("HasSourceBlocks");
 inline const PropertyName NoSpuriousGetClassCalls("NoSpuriousGetClassCalls");
 inline const PropertyName RenameClass("RenameClass");
-
 } // namespace names
+
 } // namespace redex_properties

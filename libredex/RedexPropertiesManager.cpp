@@ -63,13 +63,19 @@ using namespace names;
 //       We could move to an enum with the typical .def file to autogenerate.
 std::vector<PropertyName> get_all_properties() {
   return {
-      NoInitClassInstructions, DexLimitsObeyed,         NeedsEverythingPublic,
-      HasSourceBlocks,         NoSpuriousGetClassCalls, RenameClass,
+      NoInitClassInstructions,
+      DexLimitsObeyed,
+      NeedsEverythingPublic,
+      NeedsInjectionIdLowering,
+      HasSourceBlocks,
+      NoSpuriousGetClassCalls,
+      RenameClass,
   };
 }
 
 bool is_negative(const PropertyName& property) {
-  return property == NeedsEverythingPublic;
+  return property == NeedsEverythingPublic ||
+         property == NeedsInjectionIdLowering;
 }
 
 } // namespace
