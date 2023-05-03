@@ -146,31 +146,24 @@ boost::optional<DexMethod*> get_inferred_method_def(
     DexMethod* callee,
     const DexType* inferred_type) {
 
-  auto inferred_cls = type_class(inferred_type);
-  if (!inferred_cls || is_interface(inferred_cls)) {
-    return boost::none;
-  }
-  auto resolved = resolve_method(inferred_cls, callee->get_name(),
-                                 callee->get_proto(), MethodSearch::Virtual);
+  auto* inferred_cls = type_class(inferred_type);
+  auto* resolved = resolve_method(inferred_cls, callee->get_name(),
+                                  callee->get_proto(), MethodSearch::Virtual);
+  // 1. If we cannot resolve the callee based on the inferred_cls, we bail.
   if (!resolved || !resolved->is_def()) {
+    TRACE(RESO, 4, "Bailed resolved upon inferred_cls %s for %s",
+          SHOW(inferred_cls), SHOW(callee));
     return boost::none;
   }
-  auto resolved_cls = type_class(resolved->get_class());
+  auto* resolved_cls = type_class(resolved->get_class());
   bool is_external = resolved_cls && resolved_cls->is_external();
-  // 1. If the resolved target is an excluded external, we bail.
+  // 2. If the resolved target is an excluded external, we bail.
   if (is_external && is_excluded_external(excluded_externals, show(resolved))) {
     TRACE(RESO, 4, "Bailed on excluded external%s", SHOW(resolved));
     return boost::none;
   }
 
-  // 2. If the resolved target is external and is referenced in support
-  // libraries, we bail.
-  if (is_external && api::is_android_sdk_type(resolved->get_class()) &&
-      is_support_lib) {
-    TRACE(RESO, 4, "Bailed on external in support lib %s", SHOW(resolved));
-    return boost::none;
-  }
-
+  // 3. Accessibility check.
   if (!type::can_access(caller, resolved)) {
     TRACE(RESO, 4, "Bailed on inaccessible %s from %s", SHOW(resolved),
           SHOW(caller));
@@ -315,13 +308,16 @@ RefStats ResolveRefsPass::refine_virtual_callsites(DexMethod* method,
     if (!callee) {
       continue;
     }
+    TRACE(RESO, 4, "resolved method %s for %s", SHOW(callee), SHOW(insn));
 
     auto this_reg = insn->src(0);
     auto& env = envs.at(insn);
     auto dex_type = env.get_dex_type(this_reg);
 
-    if (!dex_type || callee->get_class() == *dex_type) {
-      // Unsuccessful inference or inferred to the same type.
+    if (!dex_type) {
+      // Unsuccessful inference.
+      TRACE(RESO, 4, "bailed on inferred dex type %s for %s", SHOW(dex_type),
+            SHOW(callee));
       continue;
     }
 
@@ -333,10 +329,7 @@ RefStats ResolveRefsPass::refine_virtual_callsites(DexMethod* method,
     }
     auto def_meth = *m_def;
     auto def_cls = type_class((def_meth)->get_class());
-    if (!def_cls) {
-      continue;
-    }
-    if (mref == def_meth) {
+    if (!def_cls || mref == def_meth) {
       continue;
     }
     // Stop if the resolve_to_external config is False.
