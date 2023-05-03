@@ -1,10 +1,9 @@
 # SPARTA
 
-<img src="SPARTA.png" width="300" height="300"/> 
+<img src="SPARTA.png" width="300" height="300"/>
 
 [![Support Ukraine](https://img.shields.io/badge/Support-Ukraine-FFD500?style=flat&labelColor=005BBB)](https://opensource.fb.com/support-ukraine)
 ![Rust Build](https://github.com/facebook/SPARTA/actions/workflows/rust.yml/badge.svg)
-![C++](https://github.com/facebook/SPARTA/actions/workflows/cmake.yml/badge.svg)
 [![crates.io](https://img.shields.io/crates/v/sparta.svg)](https://crates.io/crates/sparta)
 
 SPARTA is a library of software components specially designed for building high-performance static analyzers based on the theory of Abstract Interpretation.
@@ -23,74 +22,19 @@ Building an industrial-grade static analysis tool based on Abstract Interpretati
 
 SPARTA is an acronym that stands for **S**emantics, **PART**itioning and **A**bstraction.
 
-## Using SPARTA
+SPARTA for C++ is the analytic engine that powers most optimization passes of the [ReDex](https://github.com/facebook/redex) Android bytecode optimizer. The ReDex codebase contains multiple examples of analyses built with SPARTA that run at industrial scale. The [interprocedural constant propagation](https://github.com/facebook/redex/tree/main/service/constant-propagation) illustrates how to assemble the building blocks provided by SPARTA in order to implement a sophisticated yet scalable analysis.
 
-A detailed documentation for SPARTA can be found in the code of the library itself. It includes code samples, typical use cases and references to the literature. Additionally, the unit tests are a good illustration of how to use the API. The unit test for the [fixpoint iterator](test/MonotonicFixpointIteratorTest.cpp), in particular, implements a complete analysis (live variables) for a simple language.
+## SPARTA in Rust
 
-SPARTA is the analytic engine that powers most optimization passes of the [ReDex](https://github.com/facebook/redex) Android bytecode optimizer. The ReDex codebase contains multiple examples of analyses built with SPARTA that run at industrial scale. The [interprocedural constant propagation](https://github.com/facebook/redex/tree/master/service/constant-propagation) illustrates how to assemble the building blocks provided by SPARTA in order to implement a sophisticated yet scalable analysis.
+SPARTA for Rust is published as a crate on [crates.io](https://crates.io/crates/sparta). It is still in an experimental stage and there's no guarantee that the API won't change. So far, we have reimplemented the basic functions found in the C++ version, namely:
 
-## Dependencies
-
-SPARTA requires Boost 1.71 or later.
-
-### macOS
-
-You will need Xcode with the command line tools installed. To get the command line tools, please use:
-
-```
-xcode-select --install
-```
-
-Boost can be obtained via homebrew:
-
-```
-brew install boost
-```
-
-### Ubuntu (64-bit)
-
-On Ubuntu 16.04 or later, Boost can be installed through the package manager:
-
-```
-sudo apt-get install libboost-all-dev
-```
-
-For earlier versions of Ubuntu, we provide a script to install Boost:
-
-```
-sudo ./get_boost.sh
-```
-
-## Setup
-
-SPARTA is a header-only C++ library. You can just copy the contents of the `include` directory to any location in the include path of your compiler.
-
-We also provide a quick setup using cmake that builds all the tests:
-
-```
-# Assume you are in the SPARTA directory
-mkdir build-cmake
-cd build-cmake
-# .. is the root source directory of SPARTA
-cmake ..
-cmake --build .
-```
-
-To run the unit tests, please type:
-
-```
-make test
-```
-
-To copy the header files into `/usr/local/include/sparta` and set up a cmake library for SPARTA, you can use the following command:
-
-```
-sudo make install
-```
-
+* **Abstract Domains**: The SPARTA crate models abstract domains as a trait. The C++ version uses CRTP and `static_asserts` to ensure the user defined type satisfies the quality of an abstract domain. This is no longer necessary in Rust.
+* **Data Structures**: We have implemented PatriciaTree based Set and Map containers along with the abstract domains.
+* **Graph Trait**: SPARTA fixpoint iterator can operate on user defined graph types as long as they implement the `sparta::graph::Graph` trait. This is analogous to the Graph interface in C++, which uses CRTP for compile-time polymorphism.
+* **Weak Partial Ordering**: A replacement for Weak Topological Ordering described in the paper. Sung Kook Kim, Arnaud J. Venet, and Aditya V. Thakur. 2019. Deterministic parallel fixpoint computation. Proc. ACM Program. Lang. 4, POPL, Article 14 (January 2020), 33 pages. https://doi.org/10.1145/3371082https://dl.acm.org/doi/10.1145/3371082
+* **Fixpoint Iteration**: A single threaded fixpoint iterator based on Weak Partial Ordering.
 
 ## Issues
-
 
 Issues on GitHub are assigned priorities which reflect their urgency and how soon they are likely to be addressed.
 
