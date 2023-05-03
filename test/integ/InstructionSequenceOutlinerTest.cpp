@@ -254,12 +254,19 @@ TEST_F(InstructionSequenceOutlinerTest, in_try_ineligible_) {
 
   run_passes(passes);
 
+  std::vector<DexMethod*> outlined_methods;
   for (auto m : in_try_ineligible_methods) {
     cfg::ScopedCFG scoped_cfg(m->get_code());
-    EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 5);
+    EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 1);
     auto methods = find_invoked_methods(*scoped_cfg, "$outline");
-    EXPECT_EQ(methods.size(), 0);
+    EXPECT_EQ(methods.size(), 2);
+    for (auto outlined_method : methods) {
+      EXPECT_EQ(count_invokes(*scoped_cfg, outlined_method), 1);
+      outlined_methods.push_back(outlined_method->as_def());
+    }
   }
+  sort_unique(outlined_methods);
+  EXPECT_EQ(outlined_methods.size(), 2);
 }
 
 TEST_F(InstructionSequenceOutlinerTest, param) {
@@ -284,20 +291,19 @@ TEST_F(InstructionSequenceOutlinerTest, param) {
   for (auto m : param_methods) {
     cfg::ScopedCFG scoped_cfg(m->get_code());
     auto methods = find_invoked_methods(*scoped_cfg, "$outline");
-    EXPECT_EQ(methods.size(), 1);
+    EXPECT_EQ(methods.size(), 2);
     for (auto outlined_method : methods) {
       EXPECT_EQ(count_invokes(*scoped_cfg, outlined_method), 1);
       outlined_methods.push_back(outlined_method->as_def());
     }
   }
   sort_unique(outlined_methods);
-  EXPECT_EQ(outlined_methods.size(), 1);
+  EXPECT_EQ(outlined_methods.size(), 2);
   for (auto m : outlined_methods) {
     EXPECT_TRUE(is_static(m));
     auto proto = m->get_proto();
     EXPECT_EQ(proto->get_rtype(), type::_void());
-    EXPECT_EQ(proto->get_args()->size(), 1);
-    EXPECT_EQ(proto->get_args()->at(0), type::java_lang_String());
+    EXPECT_EQ(proto->get_args()->size(), 0);
   }
 }
 
@@ -531,25 +537,20 @@ TEST_F(InstructionSequenceOutlinerTest, cfg_tree) {
   for (auto m : cfg_tree_methods) {
     cfg::ScopedCFG scoped_cfg(m->get_code());
     auto methods = find_invoked_methods(*scoped_cfg, "$outline");
-    EXPECT_EQ(methods.size(), 1);
+    EXPECT_EQ(methods.size(), 3);
     for (auto outlined_method : methods) {
       EXPECT_EQ(count_invokes(*scoped_cfg, outlined_method), 1);
       outlined_methods.push_back(outlined_method->as_def());
     }
   }
   sort_unique(outlined_methods);
-  EXPECT_EQ(outlined_methods.size(), 1);
+  EXPECT_EQ(outlined_methods.size(), 3);
   for (auto m : outlined_methods) {
     auto proto = m->get_proto();
     EXPECT_EQ(proto->get_rtype(), type::_void());
-    EXPECT_EQ(proto->get_args()->size(), 5);
-    EXPECT_EQ(proto->get_args()->at(0), type::_int());
-    EXPECT_EQ(proto->get_args()->at(1), type::java_lang_Object());
-    EXPECT_EQ(proto->get_args()->at(2), type::_int());
-    EXPECT_EQ(proto->get_args()->at(3), type::_int());
-    EXPECT_EQ(proto->get_args()->at(4), type::_int());
+    EXPECT_EQ(proto->get_args()->size(), 0);
     cfg::ScopedCFG scoped_cfg(m->get_code());
-    EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 3);
+    EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 1);
   }
 }
 
@@ -584,17 +585,17 @@ TEST_F(InstructionSequenceOutlinerTest, switch) {
   for (auto m : cfg_tree_methods) {
     cfg::ScopedCFG scoped_cfg(m->get_code());
     auto methods = find_invoked_methods(*scoped_cfg, "$outline");
-    EXPECT_EQ(methods.size(), 1);
+    EXPECT_EQ(methods.size(), 4);
     for (auto outlined_method : methods) {
       EXPECT_EQ(count_invokes(*scoped_cfg, outlined_method), 1);
       outlined_methods.push_back(outlined_method->as_def());
     }
   }
   sort_unique(outlined_methods);
-  EXPECT_EQ(outlined_methods.size(), 1);
+  EXPECT_EQ(outlined_methods.size(), 4);
   for (auto m : outlined_methods) {
     cfg::ScopedCFG scoped_cfg(m->get_code());
-    EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 4);
+    EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 1);
   }
 }
 
@@ -630,20 +631,20 @@ TEST_F(InstructionSequenceOutlinerTest, cfg_with_arg_and_res) {
   for (auto m : cfg_tree_methods) {
     cfg::ScopedCFG scoped_cfg(m->get_code());
     auto methods = find_invoked_methods(*scoped_cfg, "$outline");
-    EXPECT_EQ(methods.size(), 1);
+    EXPECT_EQ(methods.size(), 3);
     for (auto outlined_method : methods) {
       EXPECT_EQ(count_invokes(*scoped_cfg, outlined_method), 1);
       outlined_methods.push_back(outlined_method->as_def());
     }
   }
   sort_unique(outlined_methods);
-  EXPECT_EQ(outlined_methods.size(), 1);
+  EXPECT_EQ(outlined_methods.size(), 3);
   for (auto m : outlined_methods) {
     auto proto = m->get_proto();
-    EXPECT_EQ(proto->get_rtype(), type::_int());
-    EXPECT_EQ(proto->get_args()->size(), 2);
+    EXPECT_EQ(proto->get_rtype(), type::_void());
+    EXPECT_EQ(proto->get_args()->size(), 0);
     cfg::ScopedCFG scoped_cfg(m->get_code());
-    EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 3);
+    EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 1);
   }
 }
 
@@ -679,19 +680,19 @@ TEST_F(InstructionSequenceOutlinerTest, cfg_with_const_res) {
   for (auto m : cfg_tree_methods) {
     cfg::ScopedCFG scoped_cfg(m->get_code());
     auto methods = find_invoked_methods(*scoped_cfg, "$outline");
-    EXPECT_EQ(methods.size(), 1);
+    EXPECT_EQ(methods.size(), 3);
     for (auto outlined_method : methods) {
       EXPECT_EQ(count_invokes(*scoped_cfg, outlined_method), 1);
       outlined_methods.push_back(outlined_method->as_def());
     }
   }
   sort_unique(outlined_methods);
-  EXPECT_EQ(outlined_methods.size(), 1);
+  EXPECT_EQ(outlined_methods.size(), 3);
   for (auto m : outlined_methods) {
     auto proto = m->get_proto();
-    EXPECT_EQ(proto->get_rtype(), type::_int());
+    EXPECT_EQ(proto->get_rtype(), type::_void());
     cfg::ScopedCFG scoped_cfg(m->get_code());
-    EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 3);
+    EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 1);
   }
 }
 
@@ -730,19 +731,19 @@ TEST_F(InstructionSequenceOutlinerTest, cfg_with_float_const_res) {
   for (auto m : cfg_tree_methods) {
     cfg::ScopedCFG scoped_cfg(m->get_code());
     auto methods = find_invoked_methods(*scoped_cfg, "$outline");
-    EXPECT_EQ(methods.size(), 1);
+    EXPECT_EQ(methods.size(), 3);
     for (auto outlined_method : methods) {
       EXPECT_EQ(count_invokes(*scoped_cfg, outlined_method), 1);
       outlined_methods.push_back(outlined_method->as_def());
     }
   }
   sort_unique(outlined_methods);
-  EXPECT_EQ(outlined_methods.size(), 1);
+  EXPECT_EQ(outlined_methods.size(), 3);
   for (auto m : outlined_methods) {
     auto proto = m->get_proto();
-    EXPECT_EQ(proto->get_rtype(), type::_float());
+    EXPECT_EQ(proto->get_rtype(), type::_void());
     cfg::ScopedCFG scoped_cfg(m->get_code());
-    EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 3);
+    EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 1);
   }
 }
 
@@ -778,20 +779,19 @@ TEST_F(InstructionSequenceOutlinerTest, cfg_with_object_res) {
   for (auto m : cfg_tree_methods) {
     cfg::ScopedCFG scoped_cfg(m->get_code());
     auto methods = find_invoked_methods(*scoped_cfg, "$outline");
-    EXPECT_EQ(methods.size(), 1);
+    EXPECT_EQ(methods.size(), 3);
     for (auto outlined_method : methods) {
       EXPECT_EQ(count_invokes(*scoped_cfg, outlined_method), 1);
       outlined_methods.push_back(outlined_method->as_def());
     }
   }
   sort_unique(outlined_methods);
-  EXPECT_EQ(outlined_methods.size(), 1);
+  EXPECT_EQ(outlined_methods.size(), 3);
   for (auto m : outlined_methods) {
     auto proto = m->get_proto();
-    EXPECT_EQ(proto->get_rtype()->str(),
-              "Lcom/facebook/redextest/InstructionSequenceOutlinerTest$Base;");
+    EXPECT_EQ(proto->get_rtype()->str(), "V");
     cfg::ScopedCFG scoped_cfg(m->get_code());
-    EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 3);
+    EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 1);
   }
 }
 
@@ -828,20 +828,19 @@ TEST_F(InstructionSequenceOutlinerTest, cfg_with_joinable_object_res) {
   for (auto m : cfg_tree_methods) {
     cfg::ScopedCFG scoped_cfg(m->get_code());
     auto methods = find_invoked_methods(*scoped_cfg, "$outline");
-    EXPECT_EQ(methods.size(), 1);
+    EXPECT_EQ(methods.size(), 3);
     for (auto outlined_method : methods) {
       EXPECT_EQ(count_invokes(*scoped_cfg, outlined_method), 1);
       outlined_methods.push_back(outlined_method->as_def());
     }
   }
   sort_unique(outlined_methods);
-  EXPECT_EQ(outlined_methods.size(), 1);
+  EXPECT_EQ(outlined_methods.size(), 3);
   for (auto m : outlined_methods) {
     auto proto = m->get_proto();
-    EXPECT_EQ(proto->get_rtype()->str(),
-              "Lcom/facebook/redextest/InstructionSequenceOutlinerTest$Base;");
+    EXPECT_EQ(proto->get_rtype()->str(), "V");
     cfg::ScopedCFG scoped_cfg(m->get_code());
-    EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 3);
+    EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 1);
   }
 }
 
@@ -877,23 +876,20 @@ TEST_F(InstructionSequenceOutlinerTest, cfg_with_object_arg) {
   for (auto m : cfg_tree_methods) {
     cfg::ScopedCFG scoped_cfg(m->get_code());
     auto methods = find_invoked_methods(*scoped_cfg, "$outline");
-    EXPECT_EQ(methods.size(), 1);
+    EXPECT_EQ(methods.size(), 4);
     for (auto outlined_method : methods) {
       EXPECT_EQ(count_invokes(*scoped_cfg, outlined_method), 1);
       outlined_methods.push_back(outlined_method->as_def());
     }
   }
   sort_unique(outlined_methods);
-  EXPECT_EQ(outlined_methods.size(), 1);
+  EXPECT_EQ(outlined_methods.size(), 4);
   for (auto m : outlined_methods) {
     auto proto = m->get_proto();
     EXPECT_EQ(proto->get_rtype(), type::_void());
-    EXPECT_EQ(proto->get_args()->size(), 2);
-    EXPECT_EQ(proto->get_args()->at(0), type::_int());
-    EXPECT_EQ(proto->get_args()->at(1)->str(),
-              "Lcom/facebook/redextest/InstructionSequenceOutlinerTest$Sub1;");
+    EXPECT_EQ(proto->get_args()->size(), 0);
     cfg::ScopedCFG scoped_cfg(m->get_code());
-    EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 4);
+    EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 1);
   }
 }
 
@@ -928,19 +924,19 @@ TEST_F(InstructionSequenceOutlinerTest, distributed) {
   std::vector<DexMethod*> outlined_methods;
   for (const auto& m : distributed_methods) {
     cfg::ScopedCFG scoped_cfg(m->get_code());
-    EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 0);
+    EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 1);
     auto methods = find_invoked_methods(*scoped_cfg, "$outline");
-    EXPECT_EQ(methods.size(), 1);
+    EXPECT_EQ(methods.size(), 4);
     for (auto outlined_method : methods) {
       EXPECT_EQ(count_invokes(*scoped_cfg, outlined_method), 1);
       outlined_methods.push_back(outlined_method->as_def());
     }
   }
   sort_unique(outlined_methods);
-  EXPECT_EQ(outlined_methods.size(), 1);
+  EXPECT_EQ(outlined_methods.size(), 4);
   for (auto m : outlined_methods) {
     cfg::ScopedCFG scoped_cfg(m->get_code());
-    EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 5);
+    EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 1);
   }
 }
 

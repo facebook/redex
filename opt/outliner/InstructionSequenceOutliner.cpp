@@ -2434,9 +2434,11 @@ static NewlyOutlinedMethods outline(
   auto get_priority = [&config, &candidates_with_infos,
                        outlined_methods](CandidateId id) {
     auto& cwi = candidates_with_infos->at(id);
-    Priority primary_priority =
-        get_savings(config, cwi.candidate, cwi.info, *outlined_methods) *
-        cwi.candidate.size;
+    auto savings =
+        get_savings(config, cwi.candidate, cwi.info, *outlined_methods);
+    auto size = cwi.candidate.size;
+    auto count = cwi.info.count;
+    Priority primary_priority = (savings + 1) * 100000 / (size * count);
     // clip primary_priority to 32-bit
     if (primary_priority >= (1UL << 32)) {
       primary_priority = (1UL << 32) - 1;

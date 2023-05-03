@@ -287,7 +287,7 @@ public class InlineTestCode {
               Arrays.asList(
                   "com.facebook.redexlinemap.InlineSeparateFileV2.wrapsThrow2(InlineSeparateFileV2.java:32)",
                   "com.facebook.redexlinemap.InlineSeparateFileV2.outlinedThrower(InlineSeparateFileV2.java:38)",
-                  "com.redex.Outlined$0$0$0.$outlined$0$6dde6ce7db5fb2e0(RedexGenerated)", // ideally, we wouldn't see this
+                  "com.redex.Outlined$0$0$0.$outlined$0$88687b1b5dba69a0(RedexGenerated)", // ideally, we wouldn't see this
                   "com.facebook.redexlinemap.InlineTestCode.testOutlined(InlineTestCode.java:282)"));
     }
 
@@ -301,7 +301,7 @@ public class InlineTestCode {
               Arrays.asList(
                   "com.facebook.redexlinemap.InlineSeparateFileV2.wrapsThrow2(InlineSeparateFileV2.java:32)",
                   "com.facebook.redexlinemap.InlineSeparateFileV2.outlinedThrower(InlineSeparateFileV2.java:39)",
-                  "com.redex.Outlined$0$0$0.$outlined$0$6dde6ce7db5fb2e0(RedexGenerated)",
+                  "com.redex.Outlined$0$0$0.$outlined$0$88687b1b5dba69a0(RedexGenerated)",
                   "com.facebook.redexlinemap.InlineTestCode.testOutlined(InlineTestCode.java:296)"));
     }
 
@@ -315,7 +315,7 @@ public class InlineTestCode {
               Arrays.asList(
                   "com.facebook.redexlinemap.InlineSeparateFileV2.wrapsThrow2(InlineSeparateFileV2.java:32)",
                   "com.facebook.redexlinemap.InlineSeparateFileV2.outlinedThrower(InlineSeparateFileV2.java:40)",
-                  "com.redex.Outlined$0$0$0.$outlined$0$6dde6ce7db5fb2e0(RedexGenerated)",
+                  "com.redex.Outlined$0$0$0.$outlined$0$88687b1b5dba69a0(RedexGenerated)",
                   "com.facebook.redexlinemap.InlineTestCode.testOutlined(InlineTestCode.java:310)"));
     }
 
@@ -328,8 +328,8 @@ public class InlineTestCode {
           .isEqualTo(
               Arrays.asList(
                   "com.facebook.redexlinemap.InlineSeparateFileV2.wrapsThrow2(InlineSeparateFileV2.java:32)",
-                  "com.facebook.redexlinemap.InlineSeparateFileV2.outlinedThrower(InlineSeparateFileV2.java:55)", // <-- wrong, should be :79
-                  "com.redex.Outlined$0$0$0.$outlined$0$6dde6ce7db5fb2e0(RedexGenerated)",
+                  "com.facebook.redexlinemap.InlineSeparateFileV2.outlinedThrower(InlineSeparateFileV2.java:39)", // <-- wrong, should be :79
+                  "com.redex.Outlined$0$0$0.$outlined$0$88687b1b5dba69a0(RedexGenerated)",
                   "com.facebook.redexlinemap.InlineTestCode.testOutlined(InlineTestCode.java:324)"));
     }
   }
@@ -348,7 +348,7 @@ public class InlineTestCode {
                   "com.facebook.redexlinemap.InlineSeparateFileV2.wrapsThrow3(InlineSeparateFileV2.java:91)",
                   "com.facebook.redexlinemap.InlineSeparateFileV2.wrapsThrowInline(InlineSeparateFileV2.java:97)",
                   "com.facebook.redexlinemap.InlineSeparateFileV2.outlinedThrowerInlined(InlineSeparateFileV2.java:102)",
-                  "com.redex.Outlined$0$0$0.$outlined$0$bfeec5cff070a818(RedexGenerated)",
+                  "com.redex.Outlined$0$0$0.$outlined$0$886bb44310f1a408(RedexGenerated)",
                   "com.facebook.redexlinemap.InlineTestCode.testOutlinedInlined(InlineTestCode.java:342)"));
     }
 
@@ -363,7 +363,7 @@ public class InlineTestCode {
                   "com.facebook.redexlinemap.InlineSeparateFileV2.wrapsThrow3(InlineSeparateFileV2.java:91)",
                   "com.facebook.redexlinemap.InlineSeparateFileV2.wrapsThrowInline(InlineSeparateFileV2.java:97)",
                   "com.facebook.redexlinemap.InlineSeparateFileV2.outlinedThrowerInlined(InlineSeparateFileV2.java:103)",
-                  "com.redex.Outlined$0$0$0.$outlined$0$bfeec5cff070a818(RedexGenerated)",
+                  "com.redex.Outlined$0$0$0.$outlined$0$886bb44310f1a408(RedexGenerated)",
                   "com.facebook.redexlinemap.InlineTestCode.testOutlinedInlined(InlineTestCode.java:357)"));
     }
 
@@ -378,7 +378,7 @@ public class InlineTestCode {
                   "com.facebook.redexlinemap.InlineSeparateFileV2.wrapsThrow3(InlineSeparateFileV2.java:91)",
                   "com.facebook.redexlinemap.InlineSeparateFileV2.wrapsThrowInline(InlineSeparateFileV2.java:97)",
                   "com.facebook.redexlinemap.InlineSeparateFileV2.outlinedThrowerInlined(InlineSeparateFileV2.java:104)",
-                  "com.redex.Outlined$0$0$0.$outlined$0$bfeec5cff070a818(RedexGenerated)",
+                  "com.redex.Outlined$0$0$0.$outlined$0$886bb44310f1a408(RedexGenerated)",
                   "com.facebook.redexlinemap.InlineTestCode.testOutlinedInlined(InlineTestCode.java:372)"));
     }
 
@@ -392,8 +392,8 @@ public class InlineTestCode {
               Arrays.asList(
                   "com.facebook.redexlinemap.InlineSeparateFileV2.wrapsThrow3(InlineSeparateFileV2.java:91)",
                   "com.facebook.redexlinemap.InlineSeparateFileV2.wrapsThrowInline(InlineSeparateFileV2.java:97)",
-                  "com.facebook.redexlinemap.InlineSeparateFileV2.outlinedThrowerInlined(InlineSeparateFileV2.java:119)", // <-- wrong, should be :143
-                  "com.redex.Outlined$0$0$0.$outlined$0$bfeec5cff070a818(RedexGenerated)",
+                  "com.facebook.redexlinemap.InlineSeparateFileV2.outlinedThrowerInlined(InlineSeparateFileV2.java:103)", // <-- wrong, should be :143
+                  "com.redex.Outlined$0$0$0.$outlined$0$886bb44310f1a408(RedexGenerated)",
                   "com.facebook.redexlinemap.InlineTestCode.testOutlinedInlined(InlineTestCode.java:387)"));
     }
   }
