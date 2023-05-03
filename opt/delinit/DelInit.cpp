@@ -502,7 +502,7 @@ int DeadRefs::remove_unreachable(Scope& scope) {
   };
   ConcurrentMap<DexClass*, LocalStats> local_stats;
   walk::parallel::classes(scope, [&](DexClass* cls) {
-    auto ci = class_infos.at(cls);
+    auto& ci = class_infos.at(cls);
     LocalStats stats;
     for (const auto& meth : ci.vmethods) {
       redex_assert(meth->is_virtual());
