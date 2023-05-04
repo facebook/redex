@@ -1,6 +1,6 @@
 # SPARTA
 
-<img src="SPARTA.png" width="300" height="300"/>
+<img src="https://github.com/facebook/SPARTA/raw/main/SPARTA.png" width="300" height="300"/>
 
 [![Support Ukraine](https://img.shields.io/badge/Support-Ukraine-FFD500?style=flat&labelColor=005BBB)](https://opensource.fb.com/support-ukraine)
 ![Rust Build](https://github.com/facebook/SPARTA/actions/workflows/rust.yml/badge.svg)
