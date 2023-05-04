@@ -21,8 +21,6 @@ void DexLimitsChecker::run_checker(DexStoresVector& stores,
                                    ConfigFiles& /* conf */,
                                    PassManager& mgr,
                                    bool established) {
-  // Temporary work around.
-  return;
   if (!established) {
     return;
   }
