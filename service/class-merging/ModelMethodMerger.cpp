@@ -520,7 +520,11 @@ void ModelMethodMerger::sink_common_ctor_to_return_block(DexMethod* dispatch) {
  * to do so. It is only needed when we want to make sure the entries in the
  * dispatch are indeed inlined in the final output.
  */
-void ModelMethodMerger::inline_dispatch_entries(DexMethod* dispatch) {
+void ModelMethodMerger::inline_dispatch_entries(
+    DexType* merger_type,
+    DexMethod* dispatch,
+    std::vector<std::pair<DexType*, DexMethod*>>&
+        not_inlined_dispatch_entries) {
   // TODO:The clear_cfg flag is used to make sure that using editable cfg in
   // this function won't affect other parts which use non-editable cfg. Once the
   // pass is updated to editable cfg, this flag and check can be removed.
@@ -550,19 +554,19 @@ void ModelMethodMerger::inline_dispatch_entries(DexMethod* dispatch) {
       callee->get_code()->build_cfg();
       to_clear = true;
     }
-    inliner::inline_with_cfg(dispatch, callee, callsite,
-                             /* needs_receiver_cast */ nullptr,
-                             /* needs_init_class */ nullptr,
-                             dispatch_cfg.get_registers_size());
+    bool inlined = inliner::inline_with_cfg(dispatch, callee, callsite,
+                                            /* needs_receiver_cast */ nullptr,
+                                            /* needs_init_class */ nullptr,
+                                            dispatch_cfg.get_registers_size());
     if (to_clear) {
       callee->get_code()->clear_cfg();
     }
+    if (!inlined) {
+      TRACE(CLMG, 9, "inline dispatch entry %s failed!", SHOW(callee));
+      not_inlined_dispatch_entries.emplace_back(merger_type, callee);
+    }
   }
-  TRACE(CLMG,
-        9,
-        "inlined ctor dispatch %s\n%s",
-        SHOW(dispatch),
-        SHOW(dispatch_cfg));
+  TRACE(CLMG, 9, "inlined dispatch %s\n%s", SHOW(dispatch), SHOW(dispatch_cfg));
   if (clear_cfg) {
     dispatch->get_code()->clear_cfg();
   }
@@ -614,15 +618,12 @@ void ModelMethodMerger::merge_virtual_methods(
                         overridden_meth, m_max_num_dispatch_target,
                         boost::none,     m_model_spec.keep_debug_info};
     dispatch::DispatchMethod dispatch = create_dispatch_method(spec, meth_lst);
-    dispatch_methods.emplace_back(target_cls, dispatch.main_dispatch);
     for (const auto sub_dispatch : dispatch.sub_dispatches) {
       dispatch_methods.emplace_back(target_cls, sub_dispatch);
     }
+    dispatch_methods.emplace_back(target_cls, dispatch.main_dispatch);
     for (const auto& m : meth_lst) {
       old_to_new_callee[m] = dispatch.main_dispatch;
-    }
-    for (const auto& m : meth_lst) {
-      relocate_method(m, target_type);
     }
     // Populating method dedup map
     for (auto& type_to_sig : meth_signatures) {
@@ -723,9 +724,10 @@ void ModelMethodMerger::merge_ctors() {
       for (const auto& m : ctors) {
         old_to_new_callee[m] = dispatch;
       }
+      std::vector<std::pair<DexType*, DexMethod*>> not_inlined_ctors;
       type_class(target_type)->add_method(dispatch);
       // Inline entries
-      inline_dispatch_entries(dispatch);
+      inline_dispatch_entries(target_type, dispatch, not_inlined_ctors);
       sink_common_ctor_to_return_block(dispatch);
       auto mergeable_cls = type_class(ctors.front()->get_class());
       always_assert(mergeable_cls->get_super_class() ==
@@ -734,6 +736,7 @@ void ModelMethodMerger::merge_ctors() {
       // Remove mergeable ctors
       // The original mergeable ctors have been converted to static and won't
       // pass VFY.
+      redex_assert(not_inlined_ctors.empty());
       for (const auto ctor : ctors) {
         auto cls = type_class(ctor->get_class());
         cls->remove_method(ctor);
@@ -916,10 +919,21 @@ void ModelMethodMerger::merge_virt_itf_methods() {
   method_reference::update_call_refs_simple(m_scope, old_to_new_callee);
   // Adding dispatch after updating callsites to avoid patching callsites within
   // the dispatch switch itself.
+  std::vector<std::pair<DexType*, DexMethod*>> not_inlined_dispatch_entries;
   for (auto& pair : dispatch_methods) {
     auto merger_cls = pair.first;
     auto dispatch = pair.second;
     merger_cls->add_method(dispatch);
+    inline_dispatch_entries(merger_cls->get_type(), dispatch,
+                            not_inlined_dispatch_entries);
+  }
+  // Only relocate dispatch entries that for what whatever reason were not
+  // inlined. They are however still referenced by the dispatch. What's left on
+  // the merged classes will be purged later.
+  for (const auto& pair : not_inlined_dispatch_entries) {
+    auto merger_type = pair.first;
+    auto not_inlined = pair.second;
+    relocate_method(not_inlined, merger_type);
   }
 }
 

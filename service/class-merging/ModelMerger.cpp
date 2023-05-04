@@ -646,8 +646,27 @@ std::vector<DexClass*> ModelMerger::merge_model(Scope& scope,
                          cls->set_super_class(type::java_lang_Object());
                          redex_assert(cls->get_vmethods().empty());
                          if (!cls->get_clinit() && cls->get_sfields().empty()) {
-                           redex_assert(cls->get_dmethods().empty());
+                           // Purge merged cls w/o static fields.
                            return true;
+                         } else {
+                           // Purge dmethods other than the clinit.
+                           // For the original dmethods on the merged classes,
+                           // we dedup them and relocate the selected ones to
+                           // the merger. We remove the replaced ones in
+                           // `ModelMethodMerger::dedup_non_ctor_non_virt_methods`.
+                           // What's left here are staticized virtual methods
+                           // left by the virtual method merging process. We did
+                           // inline their entries in the merged dispatch or
+                           // relocate if inlining failed. So what's left here
+                           // are not reachable anymore, and safe to be purged.
+                           auto dmethods = cls->get_dmethods();
+                           for (auto* m : dmethods) {
+                             if (!method::is_clinit(m)) {
+                               cls->remove_method(m);
+                               DexMethod::erase_method(m);
+                               DexMethod::delete_method(m);
+                             }
+                           }
                          }
                        }
                        return false;
