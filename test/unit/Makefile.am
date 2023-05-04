@@ -64,6 +64,7 @@ check_PROGRAMS = \
     init_class_pruner_test \
     init_class_lowering_pass_test \
     instruction_sequence_outliner_test \
+    int_type_patcher_test \
     interprocedural_constant_propagation_test \
     intraprocedural_constant_propagation_test \
     ir_assembler_test \
@@ -254,6 +255,8 @@ init_class_test_SOURCES = InitClassTest.cpp
 init_class_pruner_test_SOURCES = InitClassPrunerTest.cpp
 
 init_class_lowering_pass_test_SOURCES = InitClassLoweringPassTest.cpp
+
+int_type_patcher_test_SOURCES = IntTypePatcherTest.cpp
 
 instruction_sequence_outliner_test_SOURCES = InstructionSequenceOutlinerTest.cpp ScopeHelper.cpp
 
@@ -508,6 +511,7 @@ TESTS = \
     init_class_pruner_test \
     init_class_lowering_pass_test \
     instruction_sequence_outliner_test \
+    int_typechecker_test \
     interprocedural_constant_propagation_test \
     intraprocedural_constant_propagation_test \
     ir_assembler_test \

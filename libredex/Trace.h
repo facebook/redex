@@ -77,6 +77,7 @@ class DexType;
   TM(INTRO_SWITCH)      \
   TM(IODI)              \
   TM(ISO)               \
+  TM(ITP)               \
   TM(LCR_PASS)          \
   TM(LIB)               \
   TM(LOC)               \
