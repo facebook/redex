@@ -677,11 +677,6 @@ static bool can_outline_insn(const RefChecker& ref_checker,
     if (!ref_checker.check_method(method)) {
       return false;
     }
-    auto rabbit_type =
-        DexType::make_type("Lcom/facebook/redex/RabbitRuntimeHelper;");
-    if (method->get_class() == rabbit_type) {
-      return false;
-    }
     if (!PositionPatternSwitchManager::
             CAN_OUTLINED_METHOD_INVOKE_OUTLINED_METHOD &&
         insn->opcode() == OPCODE_INVOKE_STATIC && is_outlined_method(method)) {
