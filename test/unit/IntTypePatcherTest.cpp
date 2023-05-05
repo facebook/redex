@@ -11,9 +11,9 @@
 #include "ScopeHelper.h"
 #include "TypeInference.h"
 
-class IntTypeCheckerTest : public RedexTest {};
+class IntTypePatcherTest : public RedexTest {};
 
-TEST_F(IntTypeCheckerTest, test_int_bool) {
+TEST_F(IntTypePatcherTest, test_int_bool) {
   auto method = assembler::method_from_string(R"(
     (method (static) "LFoo;.bar:()Z"
       (
@@ -25,8 +25,8 @@ TEST_F(IntTypeCheckerTest, test_int_bool) {
   )");
   IRCode* code = method->get_code();
   code->build_cfg();
-  IntTypePatcherPass checker;
-  checker.run(method);
+  IntTypePatcherPass patcher;
+  patcher.run(method);
   code->clear_cfg();
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -48,7 +48,7 @@ TEST_F(IntTypeCheckerTest, test_int_bool) {
             assembler::to_s_expr(expected_code.get()));
 }
 
-TEST_F(IntTypeCheckerTest, test_int_short) {
+TEST_F(IntTypePatcherTest, test_int_short) {
   auto method = assembler::method_from_string(R"(
     (method (static) "LFoo;.bar:()S"
       (
@@ -60,8 +60,8 @@ TEST_F(IntTypeCheckerTest, test_int_short) {
   )");
   IRCode* code = method->get_code();
   code->build_cfg();
-  IntTypePatcherPass checker;
-  checker.run(method);
+  IntTypePatcherPass patcher;
+  patcher.run(method);
   code->clear_cfg();
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -77,7 +77,7 @@ TEST_F(IntTypeCheckerTest, test_int_short) {
             assembler::to_s_expr(expected_code.get()));
 }
 
-TEST_F(IntTypeCheckerTest, test_int_char) {
+TEST_F(IntTypePatcherTest, test_int_char) {
   auto method = assembler::method_from_string(R"(
     (method (static) "LFoo;.bar:()C"
       (
@@ -89,8 +89,8 @@ TEST_F(IntTypeCheckerTest, test_int_char) {
   )");
   IRCode* code = method->get_code();
   code->build_cfg();
-  IntTypePatcherPass checker;
-  checker.run(method);
+  IntTypePatcherPass patcher;
+  patcher.run(method);
   code->clear_cfg();
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -106,7 +106,7 @@ TEST_F(IntTypeCheckerTest, test_int_char) {
             assembler::to_s_expr(expected_code.get()));
 }
 
-TEST_F(IntTypeCheckerTest, test_int_byte) {
+TEST_F(IntTypePatcherTest, test_int_byte) {
   auto method = assembler::method_from_string(R"(
     (method (static) "LFoo;.bar:()B"
       (
@@ -118,8 +118,8 @@ TEST_F(IntTypeCheckerTest, test_int_byte) {
   )");
   IRCode* code = method->get_code();
   code->build_cfg();
-  IntTypePatcherPass checker;
-  checker.run(method);
+  IntTypePatcherPass patcher;
+  patcher.run(method);
   code->clear_cfg();
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -135,7 +135,7 @@ TEST_F(IntTypeCheckerTest, test_int_byte) {
             assembler::to_s_expr(expected_code.get()));
 }
 
-TEST_F(IntTypeCheckerTest, test_short_bool) {
+TEST_F(IntTypePatcherTest, test_short_bool) {
   auto method = assembler::method_from_string(R"(
     (method (static) "LFoo;.bar:()Z"
       (
@@ -148,8 +148,8 @@ TEST_F(IntTypeCheckerTest, test_short_bool) {
   )");
   IRCode* code = method->get_code();
   code->build_cfg();
-  IntTypePatcherPass checker;
-  checker.run(method);
+  IntTypePatcherPass patcher;
+  patcher.run(method);
   code->clear_cfg();
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -172,7 +172,7 @@ TEST_F(IntTypeCheckerTest, test_short_bool) {
             assembler::to_s_expr(expected_code.get()));
 }
 
-TEST_F(IntTypeCheckerTest, test_char_bool) {
+TEST_F(IntTypePatcherTest, test_char_bool) {
   auto method = assembler::method_from_string(R"(
     (method (static) "LFoo;.bar:()Z"
       (
@@ -185,8 +185,8 @@ TEST_F(IntTypeCheckerTest, test_char_bool) {
   )");
   IRCode* code = method->get_code();
   code->build_cfg();
-  IntTypePatcherPass checker;
-  checker.run(method);
+  IntTypePatcherPass patcher;
+  patcher.run(method);
   code->clear_cfg();
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -209,7 +209,7 @@ TEST_F(IntTypeCheckerTest, test_char_bool) {
             assembler::to_s_expr(expected_code.get()));
 }
 
-TEST_F(IntTypeCheckerTest, test_byte_bool) {
+TEST_F(IntTypePatcherTest, test_byte_bool) {
   auto method = assembler::method_from_string(R"(
     (method (static) "LFoo;.bar:()Z"
       (
@@ -222,8 +222,8 @@ TEST_F(IntTypeCheckerTest, test_byte_bool) {
   )");
   IRCode* code = method->get_code();
   code->build_cfg();
-  IntTypePatcherPass checker;
-  checker.run(method);
+  IntTypePatcherPass patcher;
+  patcher.run(method);
   code->clear_cfg();
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -246,7 +246,7 @@ TEST_F(IntTypeCheckerTest, test_byte_bool) {
             assembler::to_s_expr(expected_code.get()));
 }
 
-TEST_F(IntTypeCheckerTest, test_byte_char) {
+TEST_F(IntTypePatcherTest, test_byte_char) {
   auto method = assembler::method_from_string(R"(
     (method (static) "LFoo;.bar:()C"
       (
@@ -259,8 +259,8 @@ TEST_F(IntTypeCheckerTest, test_byte_char) {
   )");
   IRCode* code = method->get_code();
   code->build_cfg();
-  IntTypePatcherPass checker;
-  checker.run(method);
+  IntTypePatcherPass patcher;
+  patcher.run(method);
   code->clear_cfg();
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -277,7 +277,7 @@ TEST_F(IntTypeCheckerTest, test_byte_char) {
             assembler::to_s_expr(expected_code.get()));
 }
 
-TEST_F(IntTypeCheckerTest, test_short_char) {
+TEST_F(IntTypePatcherTest, test_short_char) {
   auto method = assembler::method_from_string(R"(
     (method (static) "LFoo;.bar:()C"
       (
@@ -290,8 +290,8 @@ TEST_F(IntTypeCheckerTest, test_short_char) {
   )");
   IRCode* code = method->get_code();
   code->build_cfg();
-  IntTypePatcherPass checker;
-  checker.run(method);
+  IntTypePatcherPass patcher;
+  patcher.run(method);
   code->clear_cfg();
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -308,7 +308,7 @@ TEST_F(IntTypeCheckerTest, test_short_char) {
             assembler::to_s_expr(expected_code.get()));
 }
 
-TEST_F(IntTypeCheckerTest, test_char_short) {
+TEST_F(IntTypePatcherTest, test_char_short) {
   auto method = assembler::method_from_string(R"(
     (method (static) "LFoo;.bar:()S"
       (
@@ -321,8 +321,8 @@ TEST_F(IntTypeCheckerTest, test_char_short) {
   )");
   IRCode* code = method->get_code();
   code->build_cfg();
-  IntTypePatcherPass checker;
-  checker.run(method);
+  IntTypePatcherPass patcher;
+  patcher.run(method);
   code->clear_cfg();
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -339,7 +339,7 @@ TEST_F(IntTypeCheckerTest, test_char_short) {
             assembler::to_s_expr(expected_code.get()));
 }
 
-TEST_F(IntTypeCheckerTest, test_char_byte) {
+TEST_F(IntTypePatcherTest, test_char_byte) {
   auto method = assembler::method_from_string(R"(
     (method (static) "LFoo;.bar:()B"
       (
@@ -352,8 +352,8 @@ TEST_F(IntTypeCheckerTest, test_char_byte) {
   )");
   IRCode* code = method->get_code();
   code->build_cfg();
-  IntTypePatcherPass checker;
-  checker.run(method);
+  IntTypePatcherPass patcher;
+  patcher.run(method);
   code->clear_cfg();
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -370,7 +370,7 @@ TEST_F(IntTypeCheckerTest, test_char_byte) {
             assembler::to_s_expr(expected_code.get()));
 }
 
-TEST_F(IntTypeCheckerTest, test_const) {
+TEST_F(IntTypePatcherTest, test_const) {
   auto method = assembler::method_from_string(R"(
     (method (static) "LFoo;.bar:()B"
       (
@@ -381,8 +381,8 @@ TEST_F(IntTypeCheckerTest, test_const) {
   )");
   IRCode* code = method->get_code();
   code->build_cfg();
-  IntTypePatcherPass checker;
-  checker.run(method);
+  IntTypePatcherPass patcher;
+  patcher.run(method);
   code->clear_cfg();
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -396,7 +396,7 @@ TEST_F(IntTypeCheckerTest, test_const) {
             assembler::to_s_expr(expected_code.get()));
 }
 
-TEST_F(IntTypeCheckerTest, test_convert_all_blocks) {
+TEST_F(IntTypePatcherTest, test_convert_all_blocks) {
   auto method = assembler::method_from_string(R"(
     (method (static) "LFoo;.bar:()Z"
       (
@@ -418,8 +418,8 @@ TEST_F(IntTypeCheckerTest, test_convert_all_blocks) {
   )");
   IRCode* code = method->get_code();
   code->build_cfg();
-  IntTypePatcherPass checker;
-  checker.run(method);
+  IntTypePatcherPass patcher;
+  patcher.run(method);
   code->clear_cfg();
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -458,7 +458,7 @@ TEST_F(IntTypeCheckerTest, test_convert_all_blocks) {
             assembler::to_s_expr(expected_code.get()));
 }
 
-TEST_F(IntTypeCheckerTest, test_convert_one_block) {
+TEST_F(IntTypePatcherTest, test_convert_one_block) {
   auto method = assembler::method_from_string(R"(
     (method (static) "LFoo;.bar:()Z"
       (
@@ -478,8 +478,8 @@ TEST_F(IntTypeCheckerTest, test_convert_one_block) {
   )");
   IRCode* code = method->get_code();
   code->build_cfg();
-  IntTypePatcherPass checker;
-  checker.run(method);
+  IntTypePatcherPass patcher;
+  patcher.run(method);
   code->clear_cfg();
 
   auto expected_code = assembler::ircode_from_string(R"(

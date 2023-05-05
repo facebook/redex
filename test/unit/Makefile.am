@@ -511,7 +511,7 @@ TESTS = \
     init_class_pruner_test \
     init_class_lowering_pass_test \
     instruction_sequence_outliner_test \
-    int_typechecker_test \
+    int_type_patcher_test \
     interprocedural_constant_propagation_test \
     intraprocedural_constant_propagation_test \
     ir_assembler_test \
