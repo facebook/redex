@@ -16,6 +16,20 @@ class IntTypePatcherPass : public Pass {
  public:
   IntTypePatcherPass() : Pass("IntTypePatcherPass") {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::interactions;
+    using namespace redex_properties::names;
+    return {{DexLimitsObeyed, Preserves},
+            {HasSourceBlocks, Preserves},
+            {UltralightCodePatterns, Preserves},
+            {NoInitClassInstructions, Preserves},
+            {NeedsEverythingPublic, Preserves},
+            {NeedsInjectionIdLowering, Preserves},
+            {NoSpuriousGetClassCalls, Preserves},
+            {RenameClass, Preserves}};
+  }
+
   void run_pass(DexStoresVector& stores,
                 ConfigFiles& conf,
                 PassManager& mgr) override;
