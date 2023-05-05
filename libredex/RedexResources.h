@@ -349,7 +349,7 @@ bool is_raw_resource(const std::string& filename);
 
 // Convenience method for copying values in a multimap to a set, for a
 // particular key.
-std::set<std::string> multimap_values_to_set(
+std::unordered_set<std::string_view> multimap_values_to_set(
     const std::unordered_multimap<std::string, std::string>& map,
     const std::string& key);
 
