@@ -7,8 +7,15 @@
 
 #include "OptimizeEnums.h"
 
+#include <algorithm>
+#include <fstream>
+#include <ostream>
+#include <set>
+#include <unordered_set>
+
 #include "ClassAssemblingUtils.h"
 #include "ConfigFiles.h"
+#include "DexClass.h"
 #include "EnumAnalyzeGeneratedMethods.h"
 #include "EnumClinitAnalysis.h"
 #include "EnumInSwitch.h"
@@ -292,12 +299,82 @@ DexMethod* get_java_enum_ctor() {
   return java_enum_ctors.at(0);
 }
 
+enum class UnsafeType {
+  kNotFinal,
+  kCannotDelete,
+  kHasInterfaces,
+  kMoreThanOneSynthField,
+  kMultipleCtors,
+  kComplexCtor,
+  kUnrenamableDmethod,
+  kUnrenamableVmethod,
+  kComplexField,
+  kUsage,
+};
+
+std::ostream& operator<<(std::ostream& os, const UnsafeType& u) {
+  switch (u) {
+  case UnsafeType::kNotFinal:
+    os << "NotFinal";
+    break;
+  case UnsafeType::kCannotDelete:
+    os << "CannotDelete";
+    break;
+  case UnsafeType::kHasInterfaces:
+    os << "HasInterfaces";
+    break;
+  case UnsafeType::kMoreThanOneSynthField:
+    os << "MoreThanOneSynthField";
+    break;
+  case UnsafeType::kMultipleCtors:
+    os << "MultipleCtors";
+    break;
+  case UnsafeType::kComplexCtor:
+    os << "ComplexCtor";
+    break;
+  case UnsafeType::kUnrenamableDmethod:
+    os << "UnrenamableDmethod";
+    break;
+  case UnsafeType::kUnrenamableVmethod:
+    os << "UnrenamableVmethod";
+    break;
+  case UnsafeType::kComplexField:
+    os << "ComplexField";
+    break;
+  case UnsafeType::kUsage:
+    os << "Usage";
+    break;
+  }
+  return os;
+}
+
+using UnsafeTypes = std::set<UnsafeType>;
+
+std::ostream& operator<<(std::ostream& os, const UnsafeTypes& u) {
+  std::vector<UnsafeType> vec(u.begin(), u.end());
+  std::sort(vec.begin(), vec.end());
+  for (auto t : vec) {
+    os << " ";
+    os << t;
+  }
+  return os;
+}
+
 class OptimizeEnums {
  public:
   OptimizeEnums(DexStoresVector& stores, ConfigFiles& conf)
       : m_stores(stores), m_pg_map(conf.get_proguard_map()) {
     m_scope = build_class_scope(stores);
     m_java_enum_ctor = get_java_enum_ctor();
+
+    // Collect number of all enum classes.
+    std::atomic<size_t> cnt{0};
+    walk::parallel::classes(m_scope, [&](auto* klass) {
+      if (is_enum(klass) && !klass->is_external()) {
+        ++cnt;
+      }
+    });
+    m_stats.num_all_enum_classes = cnt.load();
   }
 
   void remove_redundant_generated_classes() {
@@ -346,6 +423,7 @@ class OptimizeEnums {
            m_stats.num_candidate_generated_methods);
     report(METRIC_NUM_REMOVED_GENERATED_METHODS,
            m_stats.num_removed_generated_methods);
+    report("num_all_enum_classes", m_stats.num_all_enum_classes);
   }
 
   /**
@@ -353,7 +431,8 @@ class OptimizeEnums {
    */
   void replace_enum_with_int(int max_enum_size,
                              bool skip_sanity_check,
-                             const std::vector<DexType*>& allowlist) {
+                             const std::vector<DexType*>& allowlist,
+                             ConfigFiles& conf) {
     if (max_enum_size <= 0) {
       return;
     }
@@ -362,51 +441,90 @@ class OptimizeEnums {
     calculate_param_summaries(m_scope, *override_graph,
                               &config.param_summary_map);
 
+    auto base_enum_check = [](const DexClass* cls) {
+      return is_enum(cls) && !cls->is_external();
+    };
+
     /**
      * An enum is safe if it not external, has no interfaces, and has only one
      * simple enum constructor. Static fields, primitive or string instance
      * fields, and virtual methods are safe.
      */
-    auto is_safe_enum = [this](const DexClass* cls) {
-      if (is_enum(cls) && !cls->is_external() && is_final(cls) &&
-          can_delete(cls) && cls->get_interfaces()->empty() &&
-          only_one_static_synth_field(cls)) {
 
-        const auto& ctors = cls->get_ctors();
-        if (ctors.size() != 1 ||
-            !is_simple_enum_constructor(cls, ctors.front())) {
-          return false;
-        }
-
-        for (auto& dmethod : cls->get_dmethods()) {
-          if (is_static(dmethod) || method::is_constructor(dmethod)) {
-            continue;
-          }
-          if (!can_rename(dmethod)) {
-            return false;
-          }
-        }
-
-        for (auto& vmethod : cls->get_vmethods()) {
-          if (!can_rename(vmethod)) {
-            return false;
-          }
-        }
-
-        const auto& ifields = cls->get_ifields();
-        return std::all_of(ifields.begin(), ifields.end(), [](DexField* field) {
-          auto type = field->get_type();
-          return type::is_primitive(type) || type == type::java_lang_String();
-        });
+    auto is_safe_enum = [this, &base_enum_check](const DexClass* cls,
+                                                 UnsafeTypes& utypes) {
+      if (!base_enum_check(cls)) {
+        return false;
       }
-      return false;
+
+      if (!is_final(cls)) {
+        utypes.insert(UnsafeType::kNotFinal);
+      }
+      if (!can_delete(cls)) {
+        utypes.insert(UnsafeType::kCannotDelete);
+      }
+      if (!cls->get_interfaces()->empty()) {
+        utypes.insert(UnsafeType::kHasInterfaces);
+      }
+      if (!only_one_static_synth_field(cls)) {
+        utypes.insert(UnsafeType::kMoreThanOneSynthField);
+      }
+
+      const auto& ctors = cls->get_ctors();
+      if (ctors.size() != 1) {
+        utypes.insert(UnsafeType::kMultipleCtors);
+      }
+      if (!is_simple_enum_constructor(cls, ctors.front())) {
+        utypes.insert(UnsafeType::kComplexCtor);
+      }
+
+      for (auto& dmethod : cls->get_dmethods()) {
+        if (is_static(dmethod) || method::is_constructor(dmethod)) {
+          continue;
+        }
+        if (!can_rename(dmethod)) {
+          utypes.insert(UnsafeType::kUnrenamableDmethod);
+          break;
+        }
+      }
+
+      for (auto& vmethod : cls->get_vmethods()) {
+        if (!can_rename(vmethod)) {
+          utypes.insert(UnsafeType::kUnrenamableVmethod);
+          break;
+        }
+      }
+
+      const auto& ifields = cls->get_ifields();
+      bool all_of =
+          std::all_of(ifields.begin(), ifields.end(), [](DexField* field) {
+            auto type = field->get_type();
+            return type::is_primitive(type) || type == type::java_lang_String();
+          });
+      if (!all_of) {
+        utypes.insert(UnsafeType::kComplexField);
+      }
+
+      return utypes.empty();
     };
 
-    walk::parallel::classes(m_scope, [&config, is_safe_enum](DexClass* cls) {
-      if (is_safe_enum(cls)) {
-        config.candidate_enums.insert(cls->get_type());
+    ConcurrentMap<DexType*, UnsafeTypes> unsafe_enums;
+    walk::parallel::classes(m_scope, [&config, is_safe_enum, &base_enum_check,
+                                      &unsafe_enums](DexClass* cls) {
+      if (base_enum_check(cls)) {
+        UnsafeTypes utypes;
+        if (is_safe_enum(cls, utypes)) {
+          config.candidate_enums.insert(cls->get_type());
+        } else {
+          unsafe_enums.emplace(cls->get_type(), std::move(utypes));
+        }
       }
     });
+
+
+    // Need to remember to understand what was rejected.
+    std::unordered_set<DexType*> orig_candidates{config.candidate_enums.begin(),
+                                                 config.candidate_enums.end()};
 
     optimize_enums::reject_unsafe_enums(m_scope, &config);
     if (traceEnabled(ENUM, 4)) {
@@ -414,6 +532,28 @@ class OptimizeEnums {
         TRACE(ENUM, 4, "candidate_enum %s", SHOW(cls));
       }
     }
+
+    for (auto* t : orig_candidates) {
+      if (config.candidate_enums.count_unsafe(t) == 0) {
+        unsafe_enums.emplace_unsafe(t, UnsafeTypes{UnsafeType::kUsage});
+      }
+    }
+
+    // Write unsafe enums to file.
+    {
+      std::ofstream ofs(conf.metafile("redex-unsafe-enums.txt"),
+                        std::ofstream::out | std::ofstream::app);
+      std::vector<DexType*> unsafe_types;
+      unsafe_types.reserve(unsafe_enums.size());
+      std::transform(unsafe_enums.begin(), unsafe_enums.end(),
+                     std::back_inserter(unsafe_types),
+                     [](const auto& p) { return p.first; });
+      std::sort(unsafe_types.begin(), unsafe_types.end(), compare_dextypes);
+      for (auto* t : unsafe_types) {
+        ofs << show(t) << ":" << unsafe_enums.at(t) << "\n";
+      }
+    }
+
     m_stats.num_enum_objs = optimize_enums::transform_enums(
         config, &m_stores, &m_stats.num_int_objs);
     m_stats.num_enum_classes = config.candidate_enums.size();
@@ -987,6 +1127,7 @@ class OptimizeEnums {
     std::atomic<size_t> num_switch_equiv_finder_failures{0};
     size_t num_candidate_generated_methods{0};
     size_t num_removed_generated_methods{0};
+    size_t num_all_enum_classes{0};
   };
   Stats m_stats;
 
@@ -1016,7 +1157,7 @@ void OptimizeEnumsPass::run_pass(DexStoresVector& stores,
   OptimizeEnums opt_enums(stores, conf);
   opt_enums.remove_redundant_generated_classes();
   opt_enums.replace_enum_with_int(m_max_enum_size, m_skip_sanity_check,
-                                  m_enum_to_integer_allowlist);
+                                  m_enum_to_integer_allowlist, conf);
   opt_enums.remove_enum_generated_methods();
   opt_enums.stats(mgr);
 }

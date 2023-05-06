@@ -1244,6 +1244,16 @@ def get_compression_list() -> typing.List[CompressionEntry]:
             None,
             CompressionLevel.FAST,  # May be quite large.
         ),
+        CompressionEntry(
+            "Redex Unsafe Enums List",
+            lambda args: True,
+            True,
+            [],
+            ["redex-unsafe-enums.txt"],
+            None,
+            None,
+            CompressionLevel.BETTER,  # Usually small enough.
+        ),
     ]
 
 
