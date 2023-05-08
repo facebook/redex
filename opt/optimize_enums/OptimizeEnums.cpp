@@ -521,7 +521,6 @@ class OptimizeEnums {
       }
     });
 
-
     // Need to remember to understand what was rejected.
     std::unordered_set<DexType*> orig_candidates{config.candidate_enums.begin(),
                                                  config.candidate_enums.end()};
