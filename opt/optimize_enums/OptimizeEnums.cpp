@@ -25,6 +25,7 @@
 #include "MatchFlow.h"
 #include "OptimizeEnumsAnalysis.h"
 #include "OptimizeEnumsUnmap.h"
+#include "OptimizeEnumsUnsafeType.h"
 #include "PassManager.h"
 #include "ProguardMap.h"
 #include "Resolver.h"
@@ -47,6 +48,8 @@
  */
 
 namespace {
+
+using namespace optimize_enums;
 
 // Map the field holding the lookup table to its associated enum type.
 using LookupTableToEnum = std::unordered_map<DexField*, DexType*>;
@@ -297,67 +300,6 @@ DexMethod* get_java_enum_ctor() {
 
   always_assert(java_enum_ctors.size() == 1);
   return java_enum_ctors.at(0);
-}
-
-enum class UnsafeType {
-  kNotFinal,
-  kCannotDelete,
-  kHasInterfaces,
-  kMoreThanOneSynthField,
-  kMultipleCtors,
-  kComplexCtor,
-  kUnrenamableDmethod,
-  kUnrenamableVmethod,
-  kComplexField,
-  kUsage,
-};
-
-std::ostream& operator<<(std::ostream& os, const UnsafeType& u) {
-  switch (u) {
-  case UnsafeType::kNotFinal:
-    os << "NotFinal";
-    break;
-  case UnsafeType::kCannotDelete:
-    os << "CannotDelete";
-    break;
-  case UnsafeType::kHasInterfaces:
-    os << "HasInterfaces";
-    break;
-  case UnsafeType::kMoreThanOneSynthField:
-    os << "MoreThanOneSynthField";
-    break;
-  case UnsafeType::kMultipleCtors:
-    os << "MultipleCtors";
-    break;
-  case UnsafeType::kComplexCtor:
-    os << "ComplexCtor";
-    break;
-  case UnsafeType::kUnrenamableDmethod:
-    os << "UnrenamableDmethod";
-    break;
-  case UnsafeType::kUnrenamableVmethod:
-    os << "UnrenamableVmethod";
-    break;
-  case UnsafeType::kComplexField:
-    os << "ComplexField";
-    break;
-  case UnsafeType::kUsage:
-    os << "Usage";
-    break;
-  }
-  return os;
-}
-
-using UnsafeTypes = std::set<UnsafeType>;
-
-std::ostream& operator<<(std::ostream& os, const UnsafeTypes& u) {
-  std::vector<UnsafeType> vec(u.begin(), u.end());
-  std::sort(vec.begin(), vec.end());
-  for (auto t : vec) {
-    os << " ";
-    os << t;
-  }
-  return os;
 }
 
 class OptimizeEnums {
