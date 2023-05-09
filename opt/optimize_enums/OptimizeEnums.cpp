@@ -11,6 +11,7 @@
 #include <fstream>
 #include <ostream>
 #include <set>
+#include <sstream>
 #include <unordered_set>
 
 #include "ClassAssemblingUtils.h"
@@ -371,10 +372,12 @@ class OptimizeEnums {
   /**
    * Replace enum with Boxed Integer object
    */
-  void replace_enum_with_int(int max_enum_size,
-                             bool skip_sanity_check,
-                             const std::vector<DexType*>& allowlist,
-                             ConfigFiles& conf) {
+  void replace_enum_with_int(
+      int max_enum_size,
+      bool skip_sanity_check,
+      const std::vector<DexType*>& allowlist,
+      ConfigFiles& conf,
+      std::unordered_map<UnsafeType, size_t>& unsafe_counts) {
     if (max_enum_size <= 0) {
       return;
     }
@@ -498,6 +501,9 @@ class OptimizeEnums {
       std::sort(unsafe_types.begin(), unsafe_types.end(), compare_dextypes);
       for (auto* t : unsafe_types) {
         ofs << show(t) << ":" << unsafe_enums.at(t) << "\n";
+        for (auto u : unsafe_enums.at(t)) {
+          ++unsafe_counts[u];
+        }
       }
     }
 
@@ -1103,10 +1109,17 @@ void OptimizeEnumsPass::run_pass(DexStoresVector& stores,
                                  PassManager& mgr) {
   OptimizeEnums opt_enums(stores, conf);
   opt_enums.remove_redundant_generated_classes();
+  std::unordered_map<UnsafeType, size_t> unsafe_counts;
   opt_enums.replace_enum_with_int(m_max_enum_size, m_skip_sanity_check,
-                                  m_enum_to_integer_allowlist, conf);
+                                  m_enum_to_integer_allowlist, conf,
+                                  unsafe_counts);
   opt_enums.remove_enum_generated_methods();
   opt_enums.stats(mgr);
+  for (auto& p : unsafe_counts) {
+    std::ostringstream oss;
+    oss << "reason." << p.first;
+    mgr.set_metric(oss.str(), p.second);
+  }
 }
 
 static OptimizeEnumsPass s_pass;
