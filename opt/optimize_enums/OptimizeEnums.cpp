@@ -450,7 +450,7 @@ class OptimizeEnums {
       return utypes.empty();
     };
 
-    ConcurrentMap<DexType*, UnsafeTypes> unsafe_enums;
+    ConcurrentMap<const DexType*, UnsafeTypes> unsafe_enums;
     walk::parallel::classes(m_scope, [&config, is_safe_enum, &base_enum_check,
                                       &unsafe_enums](DexClass* cls) {
       if (base_enum_check(cls)) {
@@ -467,7 +467,13 @@ class OptimizeEnums {
     std::unordered_set<DexType*> orig_candidates{config.candidate_enums.begin(),
                                                  config.candidate_enums.end()};
 
-    optimize_enums::reject_unsafe_enums(m_scope, &config);
+    auto add_unsafe_usage = [&](const DexType* type, UnsafeType u) {
+      // May be called in parallel.
+      unsafe_enums.update(
+          type, [&](auto, UnsafeTypes& utypes, auto) { utypes.insert(u); });
+    };
+
+    optimize_enums::reject_unsafe_enums(m_scope, &config, add_unsafe_usage);
     if (traceEnabled(ENUM, 4)) {
       for (auto cls : config.candidate_enums) {
         TRACE(ENUM, 4, "candidate_enum %s", SHOW(cls));
@@ -484,7 +490,7 @@ class OptimizeEnums {
     {
       std::ofstream ofs(conf.metafile("redex-unsafe-enums.txt"),
                         std::ofstream::out | std::ofstream::app);
-      std::vector<DexType*> unsafe_types;
+      std::vector<const DexType*> unsafe_types;
       unsafe_types.reserve(unsafe_enums.size());
       std::transform(unsafe_enums.begin(), unsafe_enums.end(),
                      std::back_inserter(unsafe_types),

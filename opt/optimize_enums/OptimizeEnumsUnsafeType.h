@@ -25,6 +25,22 @@ enum class UnsafeType {
   kUnrenamableVmethod,
   kComplexField,
   kUsage,
+  kUsageUnrenamableFieldType,
+  kUsageUnrenamableMethodRef,
+  kUsageAnnotationMethodRef,
+  // Previously called Reason
+  kUsageCastWhenReturn,
+  kUsageCastThisPointer,
+  kUsageCastParameter,
+  kUsageUsedAsClassObject,
+  kUsageCastCheckCast,
+  kUsageCastISPutObject,
+  kUsageCastAputObject,
+  kUsageMultiEnumTypes,
+  kUsageUnsafeInvocationOnCandidateEnum,
+  kUsageIFieldSetOutsideInit,
+  kUsageCastEnumArrayToObject,
+  kUsageUsedInInstanceOf,
 };
 
 inline std::ostream& operator<<(std::ostream& os, const UnsafeType& u) {
@@ -58,6 +74,51 @@ inline std::ostream& operator<<(std::ostream& os, const UnsafeType& u) {
     break;
   case UnsafeType::kUsage:
     os << "Usage";
+    break;
+  case UnsafeType::kUsageUnrenamableFieldType:
+    os << "UsageUnrenamableFieldType";
+    break;
+  case UnsafeType::kUsageUnrenamableMethodRef:
+    os << "UsageUnrenamableMethodRef";
+    break;
+  case UnsafeType::kUsageAnnotationMethodRef:
+    os << "UsageAnnotationMethodRef";
+    break;
+  case UnsafeType::kUsageCastWhenReturn:
+    os << "UsageCastWhenReturn";
+    break;
+  case UnsafeType::kUsageCastThisPointer:
+    os << "UsageCastThisPointer";
+    break;
+  case UnsafeType::kUsageCastParameter:
+    os << "UsageCastParameter";
+    break;
+  case UnsafeType::kUsageUsedAsClassObject:
+    os << "UsageUsedAsClassObject";
+    break;
+  case UnsafeType::kUsageCastCheckCast:
+    os << "UsageCastCheckCast";
+    break;
+  case UnsafeType::kUsageCastISPutObject:
+    os << "UsageCastISPutObject";
+    break;
+  case UnsafeType::kUsageCastAputObject:
+    os << "UsageCastAputObject";
+    break;
+  case UnsafeType::kUsageMultiEnumTypes:
+    os << "UsageMultiEnumTypes";
+    break;
+  case UnsafeType::kUsageUnsafeInvocationOnCandidateEnum:
+    os << "UsageUnsafeInvocationOnCandidateEnum";
+    break;
+  case UnsafeType::kUsageIFieldSetOutsideInit:
+    os << "UsageIFieldSetOutsideInit";
+    break;
+  case UnsafeType::kUsageCastEnumArrayToObject:
+    os << "UsageCastEnumArrayToObject";
+    break;
+  case UnsafeType::kUsageUsedInInstanceOf:
+    os << "UsageUsedInInstanceOf";
     break;
   }
   return os;
