@@ -716,7 +716,7 @@ std::unordered_map<DexMethod*, InlinableTypes> compute_root_methods(
 }
 
 size_t get_code_size(DexMethod* method) {
-  return method->get_code()->cfg().sum_opcode_sizes();
+  return method->get_code()->estimate_code_units();
 }
 
 struct Stats {
