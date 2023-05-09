@@ -61,7 +61,7 @@ class SplitHugeSwitchPass : public Pass {
 
   static Stats run(DexMethod* m,
                    IRCode* code,
-                   size_t insn_threshold,
+                   size_t code_units_threshold,
                    size_t case_threshold,
                    const method_profiles::MethodProfiles& method_profiles,
                    double hotness_threshold);

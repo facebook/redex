@@ -399,11 +399,6 @@ DexAssessment DexScopeAssessor::run() {
     }
     method_stats.sum_opcodes.fetch_add(sum_opcode_sizes,
                                        std::memory_order_relaxed);
-    if (sum_opcode_sizes > 9000) {
-      // Why 9000? Because that's the default cut-off for SplitHugeSwitchPass to
-      // start splitting.
-      method_stats.huge_methods.fetch_add(1, std::memory_order_relaxed);
-    }
     auto code_units = code->estimate_code_units();
     if (code->editable_cfg_built()) {
       // The editable cfg is missing plain OPCODE_GOTOs; let's figure out how
@@ -411,6 +406,11 @@ DexAssessment DexScopeAssessor::run() {
       code_units += adjust_size(code->cfg());
     }
     method_stats.code_units.fetch_add(code_units, std::memory_order_relaxed);
+    if (code_units > 9000) {
+      // Why 9000? Because that's the default cut-off for SplitHugeSwitchPass to
+      // start splitting.
+      method_stats.huge_methods.fetch_add(1, std::memory_order_relaxed);
+    }
   });
 
   dex_position::Assessor dex_position_assessor;
