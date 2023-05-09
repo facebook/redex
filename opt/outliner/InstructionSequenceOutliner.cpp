@@ -98,6 +98,7 @@
 #include "OutlinedMethods.h"
 #include "OutlinerTypeAnalysis.h"
 #include "OutliningProfileGuidanceImpl.h"
+#include "PartialCandidateAdapter.h"
 #include "PartialCandidates.h"
 #include "PassManager.h"
 #include "ReachingInitializeds.h"
@@ -500,23 +501,24 @@ static Candidate normalize(
   };
   walk(pc.root, &c.root, nullptr);
   always_assert(next_temp == pc.temp_regs);
+  PartialCandidateAdapter pca(type_analysis, pc);
   if (out_reg) {
     always_assert(!out_reg_assignment_insns.empty());
     if (out_reg_assignment_insns.count(nullptr)) {
       // There is a control-flow path where the out-reg is not assigned;
       // fall-back to type inference at the beginning of the partial candidate.
-      c.res_type = type_analysis.get_inferred_type(pc, out_reg->first);
+      c.res_type = type_analysis.get_inferred_type(pca, out_reg->first);
       out_reg_assignment_insns.erase(nullptr);
     }
     if (!out_reg_assignment_insns.empty()) {
-      c.res_type = type_analysis.get_result_type(&pc, out_reg_assignment_insns,
+      c.res_type = type_analysis.get_result_type(&pca, out_reg_assignment_insns,
                                                  c.res_type);
     }
   }
+  pca.set_result(out_reg ? std::optional<reg_t>(out_reg->first) : std::nullopt,
+                 c.res_type);
   for (auto reg : arg_regs) {
-    auto type = type_analysis.get_type_demand(
-        pc, reg, out_reg ? boost::optional<reg_t>(out_reg->first) : boost::none,
-        c.res_type);
+    auto type = type_analysis.get_type_demand(pca, reg);
     c.arg_types.push_back(type);
   }
   return c;

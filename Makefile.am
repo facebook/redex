@@ -409,6 +409,7 @@ libopt_la_SOURCES = \
 	opt/methodinline/PerfMethodInlinePass.cpp \
 	opt/methodinline/BridgeSynthInlinePass.cpp \
 	opt/outliner/OutlinerTypeAnalysis.cpp \
+	opt/outliner/PartialCandidateAdapter.cpp \
 	opt/outliner/InstructionSequenceOutliner.cpp \
 	opt/singleimpl/SingleImpl.cpp \
 	opt/singleimpl/SingleImplAnalyze.cpp \
