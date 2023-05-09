@@ -176,7 +176,7 @@ void ClassSplitter::prepare(const DexClass* cls,
       return;
     }
     if (get_trampoline_method_cost(method) >=
-        method->get_code()->sum_opcode_sizes()) {
+        method->get_code()->estimate_code_units()) {
       m_stats.method_size_too_small++;
       return;
     }
@@ -698,8 +698,8 @@ bool ClassSplitter::can_relocate(bool cls_has_problematic_clinit,
     }
     *requires_trampoline = true;
   }
-  if (*requires_trampoline &&
-      m->get_code()->sum_opcode_sizes() < m_config.trampoline_size_threshold) {
+  if (*requires_trampoline && m->get_code()->estimate_code_units() <
+                                  m_config.trampoline_size_threshold) {
     if (log) {
       m_mgr.incr_metric("num_class_splitting_trampoline_size_threshold_not_met",
                         1);

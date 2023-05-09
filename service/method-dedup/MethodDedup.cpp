@@ -79,7 +79,7 @@ std::vector<MethodOrderedSet> group_similar_methods(
   // Split based on size.
   std::unordered_map<size_t, std::unordered_set<DexMethod*>> size_to_methods;
   for (const auto& method : methods) {
-    size_to_methods[method->get_code()->sum_opcode_sizes()].emplace(method);
+    size_to_methods[method->get_code()->estimate_code_units()].emplace(method);
   }
 
   std::vector<MethodOrderedSet> result;

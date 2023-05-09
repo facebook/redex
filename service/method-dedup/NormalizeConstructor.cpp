@@ -465,7 +465,7 @@ uint32_t estimate_deduplicatable_ctor_code_size(const DexClass* cls) {
     if (!summary) {
       continue;
     }
-    estimated_size += method->get_code()->sum_opcode_sizes() +
+    estimated_size += method->get_code()->estimate_code_units() +
                       /*estimated encoded_method size*/ 2 +
                       /*method_id_item size*/ 8;
   }

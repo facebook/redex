@@ -570,9 +570,7 @@ size_t MultiMethodInliner::inline_inlinables(
   }
 
   // attempt to inline all inlinable candidates
-  size_t estimated_caller_size = caller->editable_cfg_built()
-                                     ? caller->cfg().sum_opcode_sizes()
-                                     : caller->sum_opcode_sizes();
+  size_t estimated_caller_size = caller->estimate_code_units();
 
   // Prefer inlining smaller methods first, so that we are less likely to hit
   // overall size limit.
@@ -684,7 +682,7 @@ size_t MultiMethodInliner::inline_inlinables(
           unreachable_insns += unreachable_insn_count;
           recompute_remaining_callsites();
         }
-        estimated_caller_size = caller_cfg.sum_opcode_sizes();
+        estimated_caller_size = caller_cfg.estimate_code_units();
         no_returns++;
       }
       continue;
@@ -721,7 +719,7 @@ size_t MultiMethodInliner::inline_inlinables(
         caller->cfg().recompute_registers_size();
         cfg_next_caller_reg = caller->cfg().get_registers_size();
       }
-      estimated_caller_size = caller->cfg().sum_opcode_sizes();
+      estimated_caller_size = caller->cfg().estimate_code_units();
       recompute_remaining_callsites();
       if (!remaining_callsites->count(callsite_insn)) {
         calls_not_inlined++;
@@ -735,7 +733,7 @@ size_t MultiMethodInliner::inline_inlinables(
         intermediate_shrinkings++;
         m_shrinker.shrink_method(caller_method);
         cfg_next_caller_reg = caller->cfg().get_registers_size();
-        estimated_caller_size = caller->cfg().sum_opcode_sizes();
+        estimated_caller_size = caller->cfg().estimate_code_units();
         recompute_remaining_callsites();
         if (!remaining_callsites->count(callsite_insn)) {
           calls_not_inlined++;
@@ -1131,8 +1129,7 @@ size_t MultiMethodInliner::get_callee_insn_size(const DexMethod* callee) {
   }
 
   const IRCode* code = callee->get_code();
-  auto size = code->editable_cfg_built() ? code->cfg().sum_opcode_sizes()
-                                         : code->sum_opcode_sizes();
+  auto size = code->estimate_code_units();
   if (m_callee_insn_sizes) {
     m_callee_insn_sizes->emplace(callee, size);
   }
@@ -1361,7 +1358,7 @@ InlinedCost MultiMethodInliner::get_inlined_cost(
         unused_args++;
       }
     }
-    insn_size = cfg->sum_opcode_sizes();
+    insn_size = cfg->estimate_code_units();
   } else {
     editable_cfg_adapter::iterate(code, [&](const MethodItemEntry& mie) {
       auto insn = mie.insn;
@@ -1372,7 +1369,7 @@ InlinedCost MultiMethodInliner::get_inlined_cost(
       analyze_refs(insn);
       return editable_cfg_adapter::LOOP_CONTINUE;
     });
-    insn_size = code->sum_opcode_sizes();
+    insn_size = code->estimate_code_units();
   }
   if (returns > 1) {
     // if there's more than one return, gotos will get introduced to merge

@@ -20,7 +20,7 @@ namespace strategy {
 size_t estimate_vmethods_code_size(const DexClass* cls) {
   size_t estimated_size = 0;
   for (auto method : cls->get_vmethods()) {
-    estimated_size += method->get_code()->sum_opcode_sizes();
+    estimated_size += method->get_code()->estimate_code_units();
   }
   return estimated_size;
 }
