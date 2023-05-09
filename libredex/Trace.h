@@ -95,6 +95,7 @@ class DexType;
   TM(MODULARITY)        \
   TM(MONITOR)           \
   TM(MORTIROLO)         \
+  TM(MS)                \
   TM(MTRANS)            \
   TM(NATIVE)            \
   TM(NCI)               \

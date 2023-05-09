@@ -166,6 +166,7 @@ libredex_la_SOURCES = \
 	libredex/TypeInference.cpp \
 	libredex/TypeSystem.cpp \
 	libredex/TypeUtil.cpp \
+	libredex/UninitializedObjects.cpp \
 	libredex/UnknownVirtuals.cpp \
 	libredex/Vinfo.cpp \
 	libredex/VirtualScope.cpp \
@@ -408,9 +409,16 @@ libopt_la_SOURCES = \
 	opt/methodinline/MethodInlinePass.cpp \
 	opt/methodinline/PerfMethodInlinePass.cpp \
 	opt/methodinline/BridgeSynthInlinePass.cpp \
+	opt/outliner/ClosureAggregator.cpp \
+	opt/outliner/InstructionSequenceOutliner.cpp \
+	opt/outliner/MethodClosures.cpp \
+	opt/outliner/MethodSplitter.cpp \
+	opt/outliner/MethodSplittingPass.cpp \
 	opt/outliner/OutlinerTypeAnalysis.cpp \
 	opt/outliner/PartialCandidateAdapter.cpp \
-	opt/outliner/InstructionSequenceOutliner.cpp \
+	opt/outliner/ReducedControlFlow.cpp \
+	opt/outliner/ReducedCFGClosureAdapter.cpp \
+	opt/outliner/SplittableClosures.cpp \
 	opt/singleimpl/SingleImpl.cpp \
 	opt/singleimpl/SingleImplAnalyze.cpp \
 	opt/singleimpl/SingleImplOptimize.cpp \

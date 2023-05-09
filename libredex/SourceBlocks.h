@@ -456,4 +456,10 @@ void fill_source_block(SourceBlock& sb,
                        uint32_t id,
                        const SourceBlock::Val& val);
 
+void fill_source_block(
+    SourceBlock& sb,
+    DexMethod* ref,
+    uint32_t id,
+    const std::optional<SourceBlock::Val>& opt_val = std::nullopt);
+
 } // namespace source_blocks

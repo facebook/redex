@@ -27,6 +27,7 @@ using ReachingDefsEnvironments =
     std::unordered_map<const IRInstruction*, reaching_defs::Environment>;
 
 class PartialCandidateAdapter;
+class ReducedCFGClosureAdapter;
 
 class CandidateAdapter {
  public:
@@ -103,6 +104,7 @@ class OutlinerTypeAnalysis {
                                   const DexType* optional_extra_type);
 
   friend PartialCandidateAdapter;
+  friend ReducedCFGClosureAdapter;
 }; // class OutlinerTypeAnalysis
 
 } // namespace outliner_impl

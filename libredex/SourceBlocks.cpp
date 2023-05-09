@@ -1351,4 +1351,17 @@ void fill_source_block(SourceBlock& sb,
   }
 }
 
+void fill_source_block(SourceBlock& sb,
+                       DexMethod* ref,
+                       uint32_t id,
+                       const std::optional<SourceBlock::Val>& opt_val) {
+  sb.src = ref->get_deobfuscated_name_or_null();
+  sb.id = id;
+  if (opt_val) {
+    for (size_t i = 0; i < sb.vals_size; i++) {
+      sb.vals[i] = *opt_val;
+    }
+  }
+}
+
 } // namespace source_blocks
