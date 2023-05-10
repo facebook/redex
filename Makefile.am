@@ -79,6 +79,7 @@ libredex_la_SOURCES = \
 	libredex/DexStats.cpp \
 	libredex/DexStore.cpp \
 	libredex/DexStoreUtil.cpp \
+	libredex/DexStructure.cpp \
 	libredex/DexTypeEnvironment.cpp \
 	libredex/DexUtil.cpp \
 	libredex/DexStoreUtil.cpp \
@@ -91,6 +92,7 @@ libredex_la_SOURCES = \
 	libredex/GraphVisualizer.cpp \
 	libredex/HierarchyUtil.cpp \
 	libredex/InitCollisionFinder.cpp \
+	libredex/InitClassesWithSideEffects.cpp \
 	libredex/InlinerConfig.cpp \
 	libredex/InstructionLowering.cpp \
 	libredex/InteractiveDebugging.cpp \
@@ -220,7 +222,6 @@ libredex_la_SOURCES = \
 	service/escape-analysis/LocalPointersAnalysis.cpp \
 	service/field-ops/FieldOpTracker.cpp \
 	service/init-classes/InitClassPruner.cpp \
-	service/init-classes/InitClassesWithSideEffects.cpp \
 	service/kotlin-instance-rewrite/KotlinInstanceRewriter.cpp \
 	service/local-dce/LocalDce.cpp \
 	service/loop-info/LoopInfo.cpp \
@@ -338,7 +339,6 @@ libopt_la_SOURCES = \
 	opt/instrument/BlockInstrument.cpp \
 	opt/instrument/Instrument.cpp \
 	opt/int_type_patcher/IntTypePatcher.cpp \
-	opt/interdex/DexStructure.cpp \
 	opt/interdex/InterDex.cpp \
 	opt/interdex/InterDexPass.cpp \
 	opt/interdex/InterDexReshufflePass.cpp \
