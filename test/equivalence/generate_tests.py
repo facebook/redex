@@ -12,7 +12,7 @@ import tempfile
 import zipfile
 from os.path import join
 
-from pyredex.utils import sign_apk
+from pyredex.utils import add_tool_override, sign_apk
 
 
 parser = argparse.ArgumentParser()
@@ -22,6 +22,7 @@ parser.add_argument("--output", required=True)
 parser.add_argument("--keystore", required=True)
 parser.add_argument("--keypass", required=True)
 parser.add_argument("--keyalias", required=True)
+parser.add_argument("--apksigner_path", help="Path to apksigner tool.")
 args = parser.parse_args()
 
 with tempfile.TemporaryDirectory() as temp_dir:
@@ -38,4 +39,5 @@ with tempfile.TemporaryDirectory() as temp_dir:
     # `out`.zip was created, rename.
     os.rename(f"{args.output}.zip", args.output)
 
+    add_tool_override("apksigner", args.apksigner_path)
     sign_apk(args.keystore, args.keypass, args.keyalias, args.output)
