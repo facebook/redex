@@ -642,10 +642,10 @@ size_t ReduceArrayLiterals::patch_new_array_chunk(
 
 class ReduceArrayLiteralsInterDexPlugin : public interdex::InterDexPassPlugin {
  public:
-  interdex::ReserveRefsInfo reserve_refs() override {
-    return interdex::ReserveRefsInfo(/* frefs */ 0,
-                                     /* trefs */ 0,
-                                     /* mrefs */ 1);
+  ReserveRefsInfo reserve_refs() override {
+    return ReserveRefsInfo(/* frefs */ 0,
+                           /* trefs */ 0,
+                           /* mrefs */ 1);
   }
 };
 

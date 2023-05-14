@@ -21,10 +21,10 @@
 
 namespace {
 struct Refs {
-  interdex::MethodRefs mrefs;
-  interdex::FieldRefs frefs;
-  interdex::TypeRefs trefs;
-  interdex::TypeRefs itrefs;
+  MethodRefs mrefs;
+  FieldRefs frefs;
+  TypeRefs trefs;
+  TypeRefs itrefs;
   std::unordered_set<const DexString*> srefs;
 };
 
@@ -81,7 +81,7 @@ class MoveGains {
             const std::vector<DexClass*>& movable_classes,
             const std::unordered_map<DexClass*, size_t>& class_dex_indices,
             const std::unordered_map<DexClass*, Refs>& class_refs,
-            const std::vector<interdex::DexStructure>& dexen,
+            const std::vector<DexStructure>& dexen,
             const std::vector<std::unordered_map<const DexString*, size_t>>&
                 dexen_strings)
       : m_first_dex_index(first_dex_index),
@@ -237,7 +237,7 @@ class MoveGains {
   const std::vector<DexClass*>& m_movable_classes;
   const std::unordered_map<DexClass*, size_t>& m_class_dex_indices;
   const std::unordered_map<DexClass*, Refs>& m_class_refs;
-  const std::vector<interdex::DexStructure>& m_dexen;
+  const std::vector<DexStructure>& m_dexen;
   const std::vector<std::unordered_map<const DexString*, size_t>>&
       m_dexen_strings;
 };
@@ -315,13 +315,13 @@ class Impl {
           for (auto cls : dex) {
             always_assert(m_class_refs.count(cls));
             const auto& refs = m_class_refs.at(cls);
-            interdex::TypeRefs pending_init_class_fields;
-            interdex::TypeRefs pending_init_class_types;
+            TypeRefs pending_init_class_fields;
+            TypeRefs pending_init_class_types;
             mutable_dex.resolve_init_classes(
                 &m_init_classes_with_side_effects, refs.frefs, refs.trefs,
                 refs.itrefs, &pending_init_class_fields,
                 &pending_init_class_types);
-            auto laclazz = interdex::estimate_linear_alloc(cls);
+            auto laclazz = estimate_linear_alloc(cls);
             mutable_dex.add_class_no_checks(
                 refs.mrefs, refs.frefs, refs.trefs, pending_init_class_fields,
                 pending_init_class_types, laclazz, cls);
@@ -417,12 +417,12 @@ class Impl {
     auto& target_dex = m_mutable_dexen.at(move.target_dex_index);
     always_assert(m_class_refs.count(move.cls));
     const auto& refs = m_class_refs.at(move.cls);
-    interdex::TypeRefs pending_init_class_fields;
-    interdex::TypeRefs pending_init_class_types;
+    TypeRefs pending_init_class_fields;
+    TypeRefs pending_init_class_types;
     target_dex.resolve_init_classes(
         &m_init_classes_with_side_effects, refs.frefs, refs.trefs, refs.itrefs,
         &pending_init_class_fields, &pending_init_class_types);
-    auto laclazz = interdex::estimate_linear_alloc(move.cls);
+    auto laclazz = estimate_linear_alloc(move.cls);
     if (!target_dex.add_class_if_fits(
             refs.mrefs, refs.frefs, refs.trefs, pending_init_class_fields,
             pending_init_class_types, m_linear_alloc_limit,
@@ -459,11 +459,11 @@ class Impl {
   init_classes::InitClassesWithSideEffects m_init_classes_with_side_effects;
   DexClassesVector& m_dexen;
   size_t m_linear_alloc_limit;
-  interdex::DexesStructure m_dexes_structure;
+  DexesStructure m_dexes_structure;
   std::vector<DexClass*> m_movable_classes;
   std::unordered_map<DexClass*, size_t> m_class_dex_indices;
   std::unordered_map<DexClass*, Refs> m_class_refs;
-  std::vector<interdex::DexStructure> m_mutable_dexen;
+  std::vector<DexStructure> m_mutable_dexen;
   std::vector<std::unordered_map<const DexString*, size_t>>
       m_mutable_dexen_strings;
   size_t m_first_dex_index{1}; // skip primary dex

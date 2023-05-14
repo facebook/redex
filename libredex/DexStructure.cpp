@@ -17,7 +17,6 @@
 #include "Util.h"
 
 namespace {
-
 struct PenaltyPattern {
   const char* suffix;
   unsigned penalty;
@@ -74,8 +73,6 @@ size_t set_difference_size(const std::unordered_set<T>& a,
 
 } // namespace
 
-namespace interdex {
-
 /**
  * Estimates the linear alloc space consumed by the class at runtime.
  */
@@ -123,10 +120,6 @@ size_t set_difference_size(const std::unordered_set<T>& a,
   return result;
 }
 
-} // namespace interdex
-
-namespace interdex {
-
 size_t DexesStructure::get_frefs_limit() const {
   return MAX_FIELD_REFS - m_reserve_refs.frefs;
 }
@@ -137,12 +130,11 @@ size_t DexesStructure::get_mrefs_limit() const {
   return MAX_METHOD_REFS - m_reserve_refs.mrefs;
 }
 
-void DexesStructure::resolve_init_classes(
-    const interdex::FieldRefs& frefs,
-    const interdex::TypeRefs& trefs,
-    const interdex::TypeRefs& itrefs,
-    interdex::TypeRefs* pending_init_class_fields,
-    interdex::TypeRefs* pending_init_class_types) {
+void DexesStructure::resolve_init_classes(const FieldRefs& frefs,
+                                          const TypeRefs& trefs,
+                                          const TypeRefs& itrefs,
+                                          TypeRefs* pending_init_class_fields,
+                                          TypeRefs* pending_init_class_types) {
   m_current_dex.resolve_init_classes(m_init_classes_with_side_effects, frefs,
                                      trefs, itrefs, pending_init_class_fields,
                                      pending_init_class_types);
@@ -156,8 +148,8 @@ bool DexesStructure::add_class_to_current_dex(const MethodRefs& clazz_mrefs,
   always_assert_log(m_classes.count(clazz) == 0,
                     "Can't emit the same class twice! %s", SHOW(clazz));
 
-  interdex::TypeRefs pending_init_class_fields;
-  interdex::TypeRefs pending_init_class_types;
+  TypeRefs pending_init_class_fields;
+  TypeRefs pending_init_class_types;
   resolve_init_classes(clazz_frefs, clazz_trefs, clazz_itrefs,
                        &pending_init_class_fields, &pending_init_class_types);
   if (m_current_dex.add_class_if_fits(
@@ -180,8 +172,8 @@ void DexesStructure::add_class_no_checks(const MethodRefs& clazz_mrefs,
   always_assert_log(m_classes.count(clazz) == 0,
                     "Can't emit the same class twice: %s!\n", SHOW(clazz));
 
-  interdex::TypeRefs pending_init_class_fields;
-  interdex::TypeRefs pending_init_class_types;
+  TypeRefs pending_init_class_fields;
+  TypeRefs pending_init_class_types;
   resolve_init_classes(clazz_frefs, clazz_trefs, clazz_itrefs,
                        &pending_init_class_fields, &pending_init_class_types);
   auto laclazz = estimate_linear_alloc(clazz);
@@ -196,8 +188,8 @@ void DexesStructure::add_refs_no_checks(const MethodRefs& clazz_mrefs,
                                         const FieldRefs& clazz_frefs,
                                         const TypeRefs& clazz_trefs,
                                         const TypeRefs& clazz_itrefs) {
-  interdex::TypeRefs pending_init_class_fields;
-  interdex::TypeRefs pending_init_class_types;
+  TypeRefs pending_init_class_fields;
+  TypeRefs pending_init_class_types;
   resolve_init_classes(clazz_frefs, clazz_trefs, clazz_itrefs,
                        &pending_init_class_fields, &pending_init_class_types);
   m_current_dex.add_refs_no_checks(clazz_mrefs, clazz_frefs, clazz_trefs,
@@ -253,11 +245,11 @@ void DexesStructure::update_stats(const MethodRefs& clazz_mrefs,
 void DexStructure::resolve_init_classes(
     const init_classes::InitClassesWithSideEffects*
         init_classes_with_side_effects,
-    const interdex::FieldRefs& frefs,
-    const interdex::TypeRefs& trefs,
-    const interdex::TypeRefs& itrefs,
-    interdex::TypeRefs* pending_init_class_fields,
-    interdex::TypeRefs* pending_init_class_types) {
+    const FieldRefs& frefs,
+    const TypeRefs& trefs,
+    const TypeRefs& itrefs,
+    TypeRefs* pending_init_class_fields,
+    TypeRefs* pending_init_class_types) {
   if (!init_classes_with_side_effects || itrefs.empty()) {
     return;
   }
@@ -288,17 +280,16 @@ void DexStructure::resolve_init_classes(
   }
 }
 
-bool DexStructure::add_class_if_fits(
-    const MethodRefs& clazz_mrefs,
-    const FieldRefs& clazz_frefs,
-    const TypeRefs& clazz_trefs,
-    const interdex::TypeRefs& pending_init_class_fields,
-    const interdex::TypeRefs& pending_init_class_types,
-    size_t linear_alloc_limit,
-    size_t field_refs_limit,
-    size_t method_refs_limit,
-    size_t type_refs_limit,
-    DexClass* clazz) {
+bool DexStructure::add_class_if_fits(const MethodRefs& clazz_mrefs,
+                                     const FieldRefs& clazz_frefs,
+                                     const TypeRefs& clazz_trefs,
+                                     const TypeRefs& pending_init_class_fields,
+                                     const TypeRefs& pending_init_class_types,
+                                     size_t linear_alloc_limit,
+                                     size_t field_refs_limit,
+                                     size_t method_refs_limit,
+                                     size_t type_refs_limit,
+                                     DexClass* clazz) {
 
   auto trace_details = [&]() {
     TRACE(IDEX, 7,
@@ -370,8 +361,8 @@ void DexStructure::add_class_no_checks(
     const MethodRefs& clazz_mrefs,
     const FieldRefs& clazz_frefs,
     const TypeRefs& clazz_trefs,
-    const interdex::TypeRefs& pending_init_class_fields,
-    const interdex::TypeRefs& pending_init_class_types,
+    const TypeRefs& pending_init_class_fields,
+    const TypeRefs& pending_init_class_types,
     unsigned laclazz,
     DexClass* clazz) {
   add_refs_no_checks(clazz_mrefs, clazz_frefs, clazz_trefs,
@@ -387,8 +378,8 @@ void DexStructure::add_refs_no_checks(
     const MethodRefs& clazz_mrefs,
     const FieldRefs& clazz_frefs,
     const TypeRefs& clazz_trefs,
-    const interdex::TypeRefs& pending_init_class_fields,
-    const interdex::TypeRefs& pending_init_class_types) {
+    const TypeRefs& pending_init_class_fields,
+    const TypeRefs& pending_init_class_types) {
   for (auto mref : clazz_mrefs) {
     m_mrefs[mref]++;
   }
@@ -425,16 +416,15 @@ void DexStructure::add_refs_no_checks(
   }
 }
 
-void DexStructure::remove_class(
-    const init_classes::InitClassesWithSideEffects*
-        init_classes_with_side_effects,
-    const MethodRefs& clazz_mrefs,
-    const FieldRefs& clazz_frefs,
-    const TypeRefs& clazz_trefs,
-    const interdex::TypeRefs& pending_init_class_fields,
-    const interdex::TypeRefs& pending_init_class_types,
-    unsigned laclazz,
-    DexClass* clazz) {
+void DexStructure::remove_class(const init_classes::InitClassesWithSideEffects*
+                                    init_classes_with_side_effects,
+                                const MethodRefs& clazz_mrefs,
+                                const FieldRefs& clazz_frefs,
+                                const TypeRefs& clazz_trefs,
+                                const TypeRefs& pending_init_class_fields,
+                                const TypeRefs& pending_init_class_types,
+                                unsigned laclazz,
+                                DexClass* clazz) {
   for (auto mref : clazz_mrefs) {
     auto it = m_mrefs.find(mref);
     if (--it->second == 0) {
@@ -536,5 +526,3 @@ void DexStructure::check_refs_count() {
 
   // TODO: do we need to re-check linear_alloc_limit?
 }
-
-} // namespace interdex

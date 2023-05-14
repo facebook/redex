@@ -34,7 +34,7 @@ TEST_F(DexStructureTest, remove_class) {
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, /* create_init_class_insns */ false);
 
-  interdex::DexStructure dex1;
+  DexStructure dex1;
 
   DexType* ty = DexType::make_type("Lbaz;");
   DexProto* proto = DexProto::make_proto(ty, DexTypeList::make_type_list({}));

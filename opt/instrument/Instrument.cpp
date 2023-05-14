@@ -59,13 +59,13 @@ class InstrumentInterDexPlugin : public interdex::InterDexPassPlugin {
   explicit InstrumentInterDexPlugin(size_t max_analysis_methods)
       : m_max_analysis_methods(max_analysis_methods) {}
 
-  interdex::ReserveRefsInfo reserve_refs() override {
+  ReserveRefsInfo reserve_refs() override {
     // We may introduce a new field. We introduce a type reference to the
     // analysis class in each dex. We will introduce more method refs from
     // analysis methods.
-    return interdex::ReserveRefsInfo(/* frefs */ 1,
-                                     /* trefs */ 1,
-                                     /* mrefs */ m_max_analysis_methods);
+    return ReserveRefsInfo(/* frefs */ 1,
+                           /* trefs */ 1,
+                           /* mrefs */ m_max_analysis_methods);
   }
 
  private:
