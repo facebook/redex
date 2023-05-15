@@ -359,7 +359,6 @@ libopt_la_SOURCES = \
 	opt/object-sensitive-dce/UsedVarsAnalysis.cpp \
 	opt/optimize_enums/EnumClinitAnalysis.cpp \
 	opt/optimize_enums/EnumConfig.cpp \
-	opt/optimize_enums/EnumInSwitch.cpp \
 	opt/optimize_enums/EnumAnalyzeGeneratedMethods.cpp \
 	opt/optimize_enums/EnumTransformer.cpp \
 	opt/optimize_enums/EnumUpcastAnalysis.cpp \
