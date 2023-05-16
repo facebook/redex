@@ -194,7 +194,7 @@ void RemoveUnreachablePassBase::run_pass(DexStoresVector& stores,
   int num_ignore_check_strings = 0;
   auto reachables = this->compute_reachable_objects(
       stores, pm, &num_ignore_check_strings, emit_graph_this_run,
-      m_remove_no_argument_constructors);
+      m_relaxed_keep_class_members, m_remove_no_argument_constructors);
 
   reachability::ObjectCounts before = reachability::count_objects(stores);
   TRACE(RMU, 1, "before: %lu classes, %lu fields, %lu methods",
@@ -281,10 +281,12 @@ RemoveUnreachablePass::compute_reachable_objects(
     PassManager& /* pm */,
     int* num_ignore_check_strings,
     bool emit_graph_this_run,
+    bool relaxed_keep_class_members,
     bool remove_no_argument_constructors) {
   return reachability::compute_reachable_objects(
       stores, m_ignore_sets, num_ignore_check_strings, emit_graph_this_run,
-      false, nullptr, remove_no_argument_constructors);
+      relaxed_keep_class_members, false, nullptr,
+      remove_no_argument_constructors);
 }
 
 static RemoveUnreachablePass s_pass;

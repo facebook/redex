@@ -168,23 +168,49 @@ class ReachableObjects {
   friend class TransitiveClosureMarker;
 };
 
-struct ConditionallyMarked {
-  ConcurrentSet<const DexField*> fields;
-  ConcurrentSet<const DexMethod*> methods;
-  ConcurrentSet<const DexMethod*> methods_if_instantiable;
+enum class Condition {
+  ClassRetained,
+  ClassDynamicallyReferenced,
+  ClassInstantiable,
 };
 
-using InstantiableTypes = ConcurrentSet<DexClass*>;
+struct ConditionallyMarked {
+  struct ConcurrentMethodsAndFields {
+    ConcurrentSet<const DexField*> fields;
+    ConcurrentSet<const DexMethod*> methods;
+  };
+
+  // If any reference to the class if retained as part of any reachable
+  // structure.
+  ConcurrentMethodsAndFields if_class_retained;
+
+  // If the class is referenced in a certain way that makes it discoverable via
+  // reflection, using the rules of the DelInitPass.
+  ConcurrentMethodsAndFields if_class_dynamically_referenced;
+
+  // If the class is not abstract and has a constructor, or has a derived class
+  // that does.
+  ConcurrentMethodsAndFields if_class_instantiable;
+};
+
+using InstantiableTypes = ConcurrentSet<const DexClass*>;
+using DynamicallyReferencedClasses = ConcurrentSet<const DexClass*>;
 
 struct References {
   std::vector<const DexString*> strings;
   std::vector<DexType*> types;
   std::vector<DexFieldRef*> fields;
   std::vector<DexMethodRef*> methods;
-  // Conditional method references. They are already resolved DexMethods
+  // Conditional virtual method references. They are already resolved DexMethods
   // conditionally reachable at virtual call sites.
-  std::vector<const DexMethod*> cond_methods;
+  std::vector<const DexMethod*> vmethods_if_class_instantiable;
+  std::unordered_set<const DexClass*> classes_dynamically_referenced;
 };
+
+void gather_dynamic_references(const DexAnnotation* item,
+                               References* references);
+
+void gather_dynamic_references(const IRCode* item, References* references);
 
 // Each thread will have its own instance of Stats, so align it in order to
 // avoid false sharing.
@@ -213,11 +239,15 @@ class RootSetMarker {
  public:
   RootSetMarker(const method_override_graph::Graph& method_override_graph,
                 bool record_reachability,
+                bool relaxed_keep_class_members,
+                bool remove_no_argument_constructors,
                 ConditionallyMarked* cond_marked,
                 ReachableObjects* reachable_objects,
                 ConcurrentSet<ReachableObject, ReachableObjectHash>* root_set)
       : m_method_override_graph(method_override_graph),
         m_record_reachability(record_reachability),
+        m_relaxed_keep_class_members(relaxed_keep_class_members),
+        m_remove_no_argument_constructors(remove_no_argument_constructors),
         m_cond_marked(cond_marked),
         m_reachable_objects(reachable_objects),
         m_root_set(root_set) {}
@@ -246,11 +276,9 @@ class RootSetMarker {
  private:
   void push_seed(const DexClass* cls);
 
-  void push_seed(const DexField* field);
+  void push_seed(const DexField* field, Condition condition);
 
-  void push_seed(const DexMethod* method);
-
-  void push_seed_if_instantiable(const DexMethod* method);
+  void push_seed(const DexMethod* metho, Condition condition);
 
   template <class Seed>
   void record_is_seed(Seed* seed);
@@ -260,8 +288,14 @@ class RootSetMarker {
    */
   void mark_external_method_overriders();
 
+  static bool is_rootlike_clinit(const DexMethod* m);
+
+  bool is_rootlike_init(const DexMethod* m) const;
+
   const method_override_graph::Graph& m_method_override_graph;
   bool m_record_reachability;
+  bool m_relaxed_keep_class_members;
+  bool m_remove_no_argument_constructors;
   ConditionallyMarked* m_cond_marked;
   ReachableObjects* m_reachable_objects;
   ConcurrentSet<ReachableObject, ReachableObjectHash>* m_root_set;
@@ -273,21 +307,24 @@ class TransitiveClosureMarker {
       const IgnoreSets& ignore_sets,
       const method_override_graph::Graph& method_override_graph,
       bool record_reachability,
+      bool relaxed_keep_class_members,
       ConditionallyMarked* cond_marked,
       ReachableObjects* reachable_objects,
       InstantiableTypes* instantiable_types,
+      reachability::DynamicallyReferencedClasses*
+          dynamically_referenced_classes,
       MarkWorkerState* worker_state,
-      Stats* stats,
-      bool remove_no_argument_constructors = false)
+      Stats* stats)
       : m_ignore_sets(ignore_sets),
         m_method_override_graph(method_override_graph),
         m_record_reachability(record_reachability),
+        m_relaxed_keep_class_members(relaxed_keep_class_members),
         m_cond_marked(cond_marked),
         m_reachable_objects(reachable_objects),
         m_instantiable_types(instantiable_types),
+        m_dynamically_referenced_classes(dynamically_referenced_classes),
         m_worker_state(worker_state),
-        m_stats(stats),
-        m_remove_no_argument_constructors(remove_no_argument_constructors) {
+        m_stats(stats) {
     if (s_class_forname == nullptr) {
       s_class_forname = DexMethod::get_method(
           "Ljava/lang/Class;.forName:(Ljava/lang/String;)Ljava/lang/Class;");
@@ -334,7 +371,13 @@ class TransitiveClosureMarker {
 
   void push(const DexMethodRef* parent, const DexMethodRef* method);
 
-  void push_if_instantiable(const DexMethod* method);
+  void push_if_class_instantiable(const DexField* field);
+
+  void push_if_class_instantiable(const DexMethod* method);
+
+  void push_if_class_retained(const DexField* field);
+
+  void push_if_class_retained(const DexMethod* method);
 
   bool has_class_forname(DexMethod* meth);
 
@@ -359,15 +402,24 @@ class TransitiveClosureMarker {
 
   void instantiable(DexType* type);
 
+  void dynamically_referenced(const DexClass* cls);
+  void dynamically_referenced(
+      const std::unordered_set<const DexClass*>& classes) {
+    for (auto* cls : classes) {
+      dynamically_referenced(cls);
+    }
+  }
+
   const IgnoreSets& m_ignore_sets;
   const method_override_graph::Graph& m_method_override_graph;
   bool m_record_reachability;
+  bool m_relaxed_keep_class_members;
   ConditionallyMarked* m_cond_marked;
   ReachableObjects* m_reachable_objects;
   InstantiableTypes* m_instantiable_types;
+  DynamicallyReferencedClasses* m_dynamically_referenced_classes;
   MarkWorkerState* m_worker_state;
   Stats* m_stats;
-  bool m_remove_no_argument_constructors;
 
   static DexMethodRef* s_class_forname;
 };
@@ -381,6 +433,7 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
     const IgnoreSets& ignore_sets,
     int* num_ignore_check_strings,
     bool record_reachability = false,
+    bool relaxed_keep_class_members = false,
     bool should_mark_all_as_seed = false,
     std::unique_ptr<const method_override_graph::Graph>*
         out_method_override_graph = nullptr,

@@ -27,5 +27,6 @@ class TypeAnalysisAwareRemoveUnreachablePass
       PassManager& pm,
       int* num_ignore_check_strings,
       bool emit_graph_this_run,
+      bool relaxed_keep_class_members,
       bool remove_no_argument_constructors) override;
 };

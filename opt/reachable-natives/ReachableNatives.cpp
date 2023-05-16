@@ -71,17 +71,16 @@ void ReachableNativesPass::run_pass(DexStoresVector& stores,
   auto scope = build_class_scope(stores);
   auto reachable_objects = std::make_unique<reachability::ReachableObjects>();
   reachability::InstantiableTypes instantiable_types;
+  reachability::DynamicallyReferencedClasses dynamically_referenced_classes;
   reachability::ConditionallyMarked cond_marked;
   auto method_override_graph = method_override_graph::build_graph(scope);
 
   ConcurrentSet<reachability::ReachableObject,
                 reachability::ReachableObjectHash>
       root_set;
-  reachability::RootSetMarker root_set_marker(*method_override_graph,
-                                              false,
-                                              &cond_marked,
-                                              reachable_objects.get(),
-                                              &root_set);
+  reachability::RootSetMarker root_set_marker(
+      *method_override_graph, false, false, false, &cond_marked,
+      reachable_objects.get(), &root_set);
 
   TRACE(NATIVE, 2, "Blanket Native Classes: %zu",
         g_redex->blanket_native_root_classes.size());
@@ -99,9 +98,10 @@ void ReachableNativesPass::run_pass(DexStoresVector& stores,
       [&](reachability::MarkWorkerState* worker_state,
           const reachability::ReachableObject& obj) {
         reachability::TransitiveClosureMarker transitive_closure_marker(
-            ignore_sets, *method_override_graph, false, &cond_marked,
-            reachable_objects.get(), &instantiable_types, worker_state,
-            &stats_arr[worker_state->worker_id()], false);
+            ignore_sets, *method_override_graph, false, false, &cond_marked,
+            reachable_objects.get(), &instantiable_types,
+            &dynamically_referenced_classes, worker_state,
+            &stats_arr[worker_state->worker_id()]);
         transitive_closure_marker.visit(obj);
         return nullptr;
       },

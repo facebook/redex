@@ -44,18 +44,22 @@ class TypeAnaysisAwareClosureMarker final
       const IgnoreSets& ignore_sets,
       const method_override_graph::Graph& method_override_graph,
       bool record_reachability,
+      bool relaxed_keep_class_members,
       ConditionallyMarked* cond_marked,
       ReachableObjects* reachable_objects,
       InstantiableTypes* instantiable_types,
+      DynamicallyReferencedClasses* dynamically_referenced_classes,
       MarkWorkerState* worker_state,
       Stats* stats,
       std::shared_ptr<type_analyzer::global::GlobalTypeAnalyzer> gta)
       : reachability::TransitiveClosureMarker(ignore_sets,
                                               method_override_graph,
                                               record_reachability,
+                                              relaxed_keep_class_members,
                                               cond_marked,
                                               reachable_objects,
                                               instantiable_types,
+                                              dynamically_referenced_classes,
                                               worker_state,
                                               stats),
         m_gta(std::move(gta)) {}
@@ -69,6 +73,9 @@ class TypeAnaysisAwareClosureMarker final
     gather_methods_on_code(method, refs);
     // Gather from annotations
     method->gather_methods_from_annos(refs.methods);
+    if (m_relaxed_keep_class_members) {
+      gather_dynamic_references(method->get_code(), &refs);
+    }
     return refs;
   }
 
@@ -104,7 +111,7 @@ class TypeAnaysisAwareClosureMarker final
               overriding_methods.size(), SHOW(m));
       }
       for (auto* overriding : overriding_methods) {
-        push_if_instantiable(overriding);
+        push_if_class_instantiable(overriding);
         TRACE(REACH, 3, "marking root override: %s", SHOW(overriding));
       }
     }
@@ -178,7 +185,8 @@ class TypeAnaysisAwareClosureMarker final
     for (auto overriding_method : overriding_methods) {
       TRACE(TRMU, 5, "Gather conditional method ref %s",
             SHOW(overriding_method));
-      refs.cond_methods.push_back(overriding_method);
+      always_assert(overriding_method->is_virtual());
+      refs.vmethods_if_class_instantiable.push_back(overriding_method);
     }
   }
 
@@ -229,6 +237,7 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects_with_type_anaysis(
     const IgnoreSets& ignore_sets,
     int* num_ignore_check_strings,
     bool record_reachability,
+    bool relaxed_keep_class_members,
     std::shared_ptr<type_analyzer::global::GlobalTypeAnalyzer> gta,
     bool /*unused*/) {
   Timer t("Marking");
@@ -241,13 +250,16 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects_with_type_anaysis(
 
   auto reachable_objects = std::make_unique<ReachableObjects>();
   InstantiableTypes instantiable_types;
+  reachability::DynamicallyReferencedClasses dynamically_referenced_classes;
   ConditionallyMarked cond_marked;
   auto method_override_graph = mog::build_graph(scope);
 
   ConcurrentSet<ReachableObject, ReachableObjectHash> root_set;
+  bool remove_no_argument_constructors = false;
   RootSetMarker root_set_marker(*method_override_graph, record_reachability,
-                                &cond_marked, reachable_objects.get(),
-                                &root_set);
+                                relaxed_keep_class_members,
+                                remove_no_argument_constructors, &cond_marked,
+                                reachable_objects.get(), &root_set);
   root_set_marker.mark(scope);
 
   size_t num_threads = redex_parallel::default_num_threads();
@@ -256,8 +268,9 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects_with_type_anaysis(
       [&](MarkWorkerState* worker_state, const ReachableObject& obj) {
         TypeAnaysisAwareClosureMarker transitive_closure_marker(
             ignore_sets, *method_override_graph, record_reachability,
-            &cond_marked, reachable_objects.get(), &instantiable_types,
-            worker_state, &stats_arr[worker_state->worker_id()], gta);
+            relaxed_keep_class_members, &cond_marked, reachable_objects.get(),
+            &instantiable_types, &dynamically_referenced_classes, worker_state,
+            &stats_arr[worker_state->worker_id()], gta);
         transitive_closure_marker.visit(obj);
         return nullptr;
       },
@@ -282,6 +295,7 @@ TypeAnalysisAwareRemoveUnreachablePass::compute_reachable_objects(
     PassManager& pm,
     int* num_ignore_check_strings,
     bool emit_graph_this_run,
+    bool relaxed_keep_class_members,
     bool remove_no_argument_constructors) {
   // Fetch analysis result
   auto analysis = pm.template get_preserved_analysis<GlobalTypeAnalysisPass>();
@@ -290,8 +304,8 @@ TypeAnalysisAwareRemoveUnreachablePass::compute_reachable_objects(
   always_assert(gta);
 
   return compute_reachable_objects_with_type_anaysis(
-      stores, m_ignore_sets, num_ignore_check_strings, emit_graph_this_run, gta,
-      remove_no_argument_constructors);
+      stores, m_ignore_sets, num_ignore_check_strings, emit_graph_this_run,
+      relaxed_keep_class_members, gta, remove_no_argument_constructors);
 }
 
 static TypeAnalysisAwareRemoveUnreachablePass s_pass;

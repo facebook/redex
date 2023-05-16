@@ -41,6 +41,7 @@ class RemoveUnreachablePassBase : public Pass {
          false,
          m_remove_no_argument_constructors);
     bind("output_full_removed_symbols", false, m_output_full_removed_symbols);
+    bind("relaxed_keep_class_members", false, m_relaxed_keep_class_members);
     after_configuration([this] {
       // To keep the backward compatability of this code, ensure that the
       // "MemberClasses" annotation is always in system_annos.
@@ -56,6 +57,7 @@ class RemoveUnreachablePassBase : public Pass {
                             PassManager& pm,
                             int* num_ignore_check_strings,
                             bool emit_graph_this_run,
+                            bool relaxed_keep_class_members,
                             bool remove_no_argument_constructors) = 0;
 
   void write_out_removed_symbols(
@@ -69,6 +71,7 @@ class RemoveUnreachablePassBase : public Pass {
   bool m_always_emit_unreachable_symbols = false;
   bool m_emit_removed_symbols_references = false;
   bool m_output_full_removed_symbols = false;
+  bool m_relaxed_keep_class_members = false;
 };
 
 class RemoveUnreachablePass : public RemoveUnreachablePassBase {
@@ -81,5 +84,6 @@ class RemoveUnreachablePass : public RemoveUnreachablePassBase {
       PassManager& pm,
       int* num_ignore_check_strings,
       bool emit_graph_this_run,
+      bool relaxed_keep_class_members,
       bool remove_no_argument_constructors) override;
 };

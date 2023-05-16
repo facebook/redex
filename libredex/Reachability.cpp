@@ -32,6 +32,10 @@ namespace {
 
 static ReachableObject SEED_SINGLETON{};
 
+bool consider_dynamically_referenced(const DexClass* cls) {
+  return !root(cls) && !is_interface(cls) && !is_annotation(cls);
+}
+
 } // namespace
 
 namespace reachability {
@@ -72,21 +76,34 @@ void RootSetMarker::mark_all_as_seed(const Scope& scope) {
 
     for (auto const& f : cls->get_ifields()) {
       TRACE(REACH, 3, "Visiting seed: %s", SHOW(f));
-      push_seed(f);
+      push_seed(f, Condition::ClassRetained);
     }
     for (auto const& f : cls->get_sfields()) {
       TRACE(REACH, 3, "Visiting seed: %s", SHOW(f));
-      push_seed(f);
+      push_seed(f, Condition::ClassRetained);
     }
     for (auto const& m : cls->get_dmethods()) {
       TRACE(REACH, 3, "Visiting seed: %s", SHOW(m));
-      push_seed(m);
+      push_seed(m, Condition::ClassRetained);
     }
     for (auto const& m : cls->get_vmethods()) {
       TRACE(REACH, 3, "Visiting seed: %s (root)", SHOW(m));
-      push_seed(m);
+      push_seed(m, Condition::ClassRetained);
     }
   });
+}
+
+bool RootSetMarker::is_rootlike_clinit(const DexMethod* m) {
+  return method::is_clinit(m) &&
+         (!m->get_code() || !method::is_trivial_clinit(*m->get_code()));
+}
+
+bool RootSetMarker::is_rootlike_init(const DexMethod* m) const {
+  // We keep the parameterless constructor, in case it's constructed via
+  // .class or Class.forName()
+  // if m_remove_no_argument_constructors, make an exception. This is only
+  // used for testing
+  return !m_remove_no_argument_constructors && method::is_argless_init(m);
 }
 
 /*
@@ -99,28 +116,55 @@ void RootSetMarker::mark(const Scope& scope) {
       TRACE(REACH, 3, "Visiting seed: %s", SHOW(cls));
       push_seed(cls);
     }
+    // Applying the same exclusions as DelInitPass
+    auto relaxed =
+        m_relaxed_keep_class_members && consider_dynamically_referenced(cls);
+    // push_seed for an ifield or vmethod
+    auto push_iv_seed = [&](auto* m) {
+      if (relaxed) {
+        push_seed(m, Condition::ClassDynamicallyReferenced);
+        push_seed(m, Condition::ClassInstantiable);
+      } else {
+        push_seed(m, Condition::ClassRetained);
+      }
+    };
+    // push_seed for a dmethod
+    auto push_d_seed = [&](auto* m) {
+      push_seed(m, (m->get_code() && !method::is_clinit(m) && relaxed)
+                       ? Condition::ClassDynamicallyReferenced
+                       : Condition::ClassRetained);
+    };
     for (auto const& f : cls->get_ifields()) {
-      if (root(f) || is_volatile(f)) {
+      if (root(f)) {
         TRACE(REACH, 3, "Visiting seed: %s", SHOW(f));
-        push_seed(f);
+        push_iv_seed(f);
+      } else if (is_volatile(f) && !m_relaxed_keep_class_members) {
+        TRACE(REACH, 3, "Visiting seed (volatile): %s", SHOW(f));
+        push_iv_seed(f);
       }
     }
     for (auto const& f : cls->get_sfields()) {
       if (root(f)) {
         TRACE(REACH, 3, "Visiting seed: %s", SHOW(f));
-        push_seed(f);
+        push_seed(f, Condition::ClassRetained);
       }
     }
     for (auto const& m : cls->get_dmethods()) {
-      if (root(m)) {
+      if (is_rootlike_clinit(m)) {
+        TRACE(REACH, 3, "Visiting seed (root-like clinit): %s", SHOW(m));
+        push_d_seed(m);
+      } else if (is_rootlike_init(m)) {
+        TRACE(REACH, 3, "Visiting seed (root-like init): %s", SHOW(m));
+        push_d_seed(m);
+      } else if (root(m)) {
         TRACE(REACH, 3, "Visiting seed: %s", SHOW(m));
-        push_seed(m);
+        push_d_seed(m);
       }
     }
     for (auto const& m : cls->get_vmethods()) {
       if (root(m)) {
         TRACE(REACH, 3, "Visiting seed: %s (root)", SHOW(m));
-        push_seed(m);
+        push_iv_seed(m);
       }
     }
   });
@@ -151,25 +195,26 @@ void RootSetMarker::mark_with_exclusions(
     for (const auto* f : cls->get_ifields()) {
       if ((root(f) || is_volatile(f)) && !excluded(f)) {
         TRACE(REACH, 3, "Visiting seed: %s", SHOW(f));
-        push_seed(f);
+        push_seed(f, Condition::ClassRetained);
       }
     }
     for (const auto* f : cls->get_sfields()) {
       if (root(f) && !excluded(f)) {
         TRACE(REACH, 3, "Visiting seed: %s", SHOW(f));
-        push_seed(f);
+        push_seed(f, Condition::ClassRetained);
       }
     }
     for (const auto* m : cls->get_dmethods()) {
-      if (root(m) && !excluded(m)) {
+      if ((root(m) || is_rootlike_clinit(m) || is_rootlike_init(m)) &&
+          !excluded(m)) {
         TRACE(REACH, 3, "Visiting seed: %s", SHOW(m));
-        push_seed(m);
+        push_seed(m, Condition::ClassRetained);
       }
     }
     for (const auto* m : cls->get_vmethods()) {
       if (root(m) && !excluded(m)) {
         TRACE(REACH, 3, "Visiting seed: %s (root)", SHOW(m));
-        push_seed(m);
+        push_seed(m, Condition::ClassRetained);
       }
     }
   });
@@ -184,19 +229,38 @@ void RootSetMarker::push_seed(const DexClass* cls) {
   m_root_set->emplace(cls);
 }
 
-void RootSetMarker::push_seed(const DexField* field) {
+void RootSetMarker::push_seed(const DexField* field, Condition condition) {
   if (!field) return;
-  m_cond_marked->fields.insert(field);
+  switch (condition) {
+  case Condition::ClassRetained:
+    m_cond_marked->if_class_retained.fields.insert(field);
+    break;
+  case Condition::ClassDynamicallyReferenced:
+    m_cond_marked->if_class_dynamically_referenced.fields.insert(field);
+    break;
+  case Condition::ClassInstantiable:
+    m_cond_marked->if_class_instantiable.fields.insert(field);
+    break;
+  default:
+    not_reached();
+  }
 }
 
-void RootSetMarker::push_seed(const DexMethod* method) {
+void RootSetMarker::push_seed(const DexMethod* method, Condition condition) {
   if (!method) return;
-  m_cond_marked->methods.insert(method);
-}
-
-void RootSetMarker::push_seed_if_instantiable(const DexMethod* method) {
-  if (!method) return;
-  m_cond_marked->methods_if_instantiable.insert(method);
+  switch (condition) {
+  case Condition::ClassRetained:
+    m_cond_marked->if_class_retained.methods.insert(method);
+    break;
+  case Condition::ClassDynamicallyReferenced:
+    m_cond_marked->if_class_dynamically_referenced.methods.insert(method);
+    break;
+  case Condition::ClassInstantiable:
+    m_cond_marked->if_class_instantiable.methods.insert(method);
+    break;
+  default:
+    not_reached();
+  }
 }
 
 template <class Seed>
@@ -226,7 +290,7 @@ void RootSetMarker::mark_external_method_overriders() {
       if (!overriding->is_external()) {
         TRACE(REACH, 3, "Visiting seed: %s (implements %s)", SHOW(overriding),
               SHOW(method));
-        push_seed_if_instantiable(overriding);
+        push_seed(overriding, Condition::ClassInstantiable);
       }
     }
   }
@@ -322,13 +386,14 @@ void TransitiveClosureMarker::push(const DexMethodRef* parent,
   this->template push<DexMethodRef>(parent, method);
 }
 
-void TransitiveClosureMarker::push_if_instantiable(const DexMethod* method) {
+void TransitiveClosureMarker::push_if_class_instantiable(
+    const DexMethod* method) {
   if (!method || m_reachable_objects->marked(method)) return;
   TRACE(REACH, 4,
         "Conditionally marking method if declaring class is instantiable: %s",
         SHOW(method));
   auto clazz = type_class(method->get_class());
-  m_cond_marked->methods_if_instantiable.insert(method);
+  m_cond_marked->if_class_instantiable.methods.insert(method);
   // If :clazz is already known to be instantiable, then we cannot count on
   // instantiable(DexClass*) to have moved the
   // conditionally-if-instantiable-marked methods into the actually-marked ones
@@ -341,26 +406,195 @@ void TransitiveClosureMarker::push_if_instantiable(const DexMethod* method) {
   }
 }
 
+void TransitiveClosureMarker::push_if_class_instantiable(
+    const DexField* field) {
+  if (!field || m_reachable_objects->marked(field)) return;
+  TRACE(REACH, 4,
+        "Conditionally marking field if declaring class is instantiable: %s",
+        SHOW(field));
+  auto clazz = type_class(field->get_class());
+  m_cond_marked->if_class_instantiable.fields.insert(field);
+  if (m_instantiable_types->count(clazz)) {
+    push(clazz, field);
+  }
+}
+
+void TransitiveClosureMarker::push_if_class_retained(const DexMethod* method) {
+  if (!method || m_reachable_objects->marked(method)) return;
+  TRACE(REACH, 4,
+        "Conditionally marking method if declaring class is instantiable: %s",
+        SHOW(method));
+  auto clazz = type_class(method->get_class());
+  m_cond_marked->if_class_retained.methods.insert(method);
+  if (m_reachable_objects->marked(clazz)) {
+    push(clazz, method);
+  }
+}
+
+void TransitiveClosureMarker::push_if_class_retained(const DexField* field) {
+  if (!field || m_reachable_objects->marked(field)) return;
+  TRACE(REACH, 4,
+        "Conditionally marking field if declaring class is instantiable: %s",
+        SHOW(field));
+  auto clazz = type_class(field->get_class());
+  m_cond_marked->if_class_retained.fields.insert(field);
+  if (m_reachable_objects->marked(clazz)) {
+    push(clazz, field);
+  }
+}
+
+// Adapted from DelInitPass
+namespace relaxed_keep_class_members_impl {
+
+void process_signature_anno(const DexString* dstring, References* references) {
+  const char* cstr = dstring->c_str();
+  size_t len = strlen(cstr);
+  if (len < 3) return;
+  if (cstr[0] != 'L') return;
+  if (cstr[len - 1] == ';') {
+    auto cls = type_class(DexType::get_type(dstring));
+    if (cls) {
+      references->classes_dynamically_referenced.insert(cls);
+    }
+    return;
+  }
+  std::string buf(cstr);
+  buf += ';';
+  auto cls = type_class(DexType::get_type(buf));
+  if (cls) {
+    references->classes_dynamically_referenced.insert(cls);
+  }
+}
+
+void gather_dynamic_references_impl(const DexAnnotation* anno,
+                                    References* references) {
+  static DexType* dalviksig =
+      DexType::get_type("Ldalvik/annotation/Signature;");
+  // Signature annotations contain strings that Jackson uses
+  // to construct the underlying types.
+  if (anno->type() == dalviksig) {
+    auto& elems = anno->anno_elems();
+    for (auto const& elem : elems) {
+      auto& ev = elem.encoded_value;
+      if (ev->evtype() != DEVT_ARRAY) continue;
+      auto arrayev = static_cast<DexEncodedValueArray*>(ev.get());
+      auto const& evs = arrayev->evalues();
+      for (auto& strev : *evs) {
+        if (strev->evtype() != DEVT_STRING) continue;
+        auto stringev = static_cast<DexEncodedValueString*>(strev.get());
+        process_signature_anno(stringev->string(), references);
+      }
+    }
+    return;
+  }
+  // Class literals in annotations.
+  // Example:
+  //    @JsonDeserialize(using=MyJsonDeserializer.class)
+  if (anno->runtime_visible()) {
+    auto& elems = anno->anno_elems();
+    std::vector<DexType*> ltype;
+    for (auto const& dae : elems) {
+      auto& evalue = dae.encoded_value;
+      evalue->gather_types(ltype);
+    }
+    for (auto dextype : ltype) {
+      auto cls = type_class(dextype);
+      if (cls) {
+        references->classes_dynamically_referenced.insert(cls);
+      }
+    }
+  }
+}
+
 template <class T>
-static References generic_gather(T t) {
+void gather_dynamic_references(T item, References* references) {
+  auto* anno_set = item->get_anno_set();
+  if (anno_set) {
+    for (auto& anno : anno_set->get_annotations()) {
+      gather_dynamic_references_impl(anno.get(), references);
+    }
+  }
+}
+
+template <>
+void gather_dynamic_references(const DexAnnotation* item,
+                               References* references) {
+  gather_dynamic_references_impl(item, references);
+}
+
+// Note: this method will return nullptr if the dotname refers to an unknown
+// type.
+DexType* get_dextype_from_dotname(std::string_view dotname) {
+  std::string buf;
+  buf.reserve(dotname.size() + 2);
+  buf += 'L';
+  buf += dotname;
+  buf += ';';
+  std::replace(buf.begin(), buf.end(), '.', '/');
+  return DexType::get_type(buf);
+}
+
+template <>
+void gather_dynamic_references(const IRCode* item, References* references) {
+  if (!item) {
+    return;
+  }
+  for (const auto& mie : InstructionIterable(item)) {
+    auto opcode = mie.insn;
+    // Matches any stringref that name-aliases a type.
+    if (opcode->has_string()) {
+      const DexString* dsclzref = opcode->get_string();
+      auto* cls = type_class(get_dextype_from_dotname(dsclzref->str()));
+      if (cls) {
+        references->classes_dynamically_referenced.insert(cls);
+      }
+    }
+    if (opcode->has_type()) {
+      auto* cls = type_class(opcode->get_type());
+      if (cls) {
+        references->classes_dynamically_referenced.insert(cls);
+      }
+    }
+  }
+}
+} // namespace relaxed_keep_class_members_impl
+
+void gather_dynamic_references(const DexAnnotation* item,
+                               References* references) {
+  relaxed_keep_class_members_impl::gather_dynamic_references(item, references);
+}
+
+void gather_dynamic_references(const IRCode* item, References* references) {
+  relaxed_keep_class_members_impl::gather_dynamic_references(item, references);
+}
+
+template <class T>
+static References generic_gather(T t, bool include_dynamic_references) {
   References refs;
   t->gather_strings(refs.strings);
   t->gather_types(refs.types);
   t->gather_fields(refs.fields);
   t->gather_methods(refs.methods);
+  if (include_dynamic_references) {
+    relaxed_keep_class_members_impl::gather_dynamic_references<T>(t, &refs);
+  }
   return refs;
 }
 
 References TransitiveClosureMarker::gather(const DexAnnotation* anno) const {
-  return generic_gather(anno);
+  return generic_gather(anno, m_relaxed_keep_class_members);
 }
 
 References TransitiveClosureMarker::gather(const DexMethod* method) const {
-  return generic_gather(method);
+  auto refs = generic_gather(method, m_relaxed_keep_class_members);
+  if (m_relaxed_keep_class_members) {
+    gather_dynamic_references(method->get_code(), &refs);
+  }
+  return refs;
 }
 
 References TransitiveClosureMarker::gather(const DexField* field) const {
-  return generic_gather(field);
+  return generic_gather(field, m_relaxed_keep_class_members);
 }
 
 bool TransitiveClosureMarker::has_class_forname(DexMethod* meth) {
@@ -404,9 +638,10 @@ void TransitiveClosureMarker::gather_and_push(DexMethod* meth) {
   push(meth, refs.types.begin(), refs.types.end());
   push(meth, refs.fields.begin(), refs.fields.end());
   push(meth, refs.methods.begin(), refs.methods.end());
-  for (auto* cond_meth : refs.cond_methods) {
-    push_if_instantiable(cond_meth);
+  for (auto* vmeth : refs.vmethods_if_class_instantiable) {
+    push_if_class_instantiable(vmeth);
   }
+  dynamically_referenced(refs.classes_dynamically_referenced);
 }
 
 template <typename T>
@@ -416,6 +651,7 @@ void TransitiveClosureMarker::gather_and_push(T t) {
   push(t, refs.types.begin(), refs.types.end());
   push(t, refs.fields.begin(), refs.fields.end());
   push(t, refs.methods.begin(), refs.methods.end());
+  dynamically_referenced(refs.classes_dynamically_referenced);
 }
 
 template <class Parent>
@@ -436,20 +672,6 @@ void TransitiveClosureMarker::visit_cls(const DexClass* cls) {
   if (is_native(cls)) {
     instantiable(cls->get_type());
   }
-  for (auto& m : cls->get_dmethods()) {
-    if (method::is_clinit(m)) {
-      if (!m->get_code() || !method::is_trivial_clinit(*m->get_code())) {
-        push(cls, m);
-      }
-    } else if (!m_remove_no_argument_constructors &&
-               method::is_argless_init(m)) {
-      // Push the parameterless constructor, in case it's constructed via
-      // .class or Class.forName()
-      // if m_remove_no_argument_constructors, make an exception. This is only
-      // used for testing
-      push(cls, m);
-    }
-  }
   push(cls, type_class(cls->get_super_class()));
   for (auto const& t : *cls->get_interfaces()) {
     push(cls, t);
@@ -463,6 +685,11 @@ void TransitiveClosureMarker::visit_cls(const DexClass* cls) {
               "Stop marking from %s by system anno: %s",
               SHOW(cls),
               SHOW(anno->type()));
+        if (m_relaxed_keep_class_members) {
+          References refs;
+          gather_dynamic_references(anno.get(), &refs);
+          dynamically_referenced(refs.classes_dynamically_referenced);
+        }
         continue;
       }
       record_reachability(cls, anno.get());
@@ -470,23 +697,28 @@ void TransitiveClosureMarker::visit_cls(const DexClass* cls) {
     }
   }
 
+  if (m_relaxed_keep_class_members && consider_dynamically_referenced(cls) &&
+      marked_by_string(cls)) {
+    dynamically_referenced(cls);
+  }
+
   for (auto const& m : cls->get_ifields()) {
-    if (m_cond_marked->fields.count(m)) {
+    if (m_cond_marked->if_class_retained.fields.count(m)) {
       push(cls, m);
     }
   }
   for (auto const& m : cls->get_sfields()) {
-    if (m_cond_marked->fields.count(m)) {
+    if (m_cond_marked->if_class_retained.fields.count(m)) {
       push(cls, m);
     }
   }
   for (auto const& m : cls->get_dmethods()) {
-    if (m_cond_marked->methods.count(m)) {
+    if (m_cond_marked->if_class_retained.methods.count(m)) {
       push(cls, m);
     }
   }
   for (auto const& m : cls->get_vmethods()) {
-    if (m_cond_marked->methods.count(m)) {
+    if (m_cond_marked->if_class_retained.methods.count(m)) {
       push(cls, m);
     }
   }
@@ -545,9 +777,47 @@ void TransitiveClosureMarker::instantiable(DexType* type) {
   for (auto* intf : *cls->get_interfaces()) {
     instantiable(intf);
   }
-  for (auto const& m : cls->get_vmethods()) {
-    if (m_cond_marked->methods_if_instantiable.count(m)) {
+  for (auto const& f : cls->get_ifields()) {
+    if (m_cond_marked->if_class_instantiable.fields.count(f)) {
+      push(cls, f);
+    }
+  }
+  for (auto const& m : cls->get_dmethods()) {
+    if (m_cond_marked->if_class_instantiable.methods.count(m)) {
       push(cls, m);
+    }
+  }
+  for (auto const& m : cls->get_vmethods()) {
+    if (m_cond_marked->if_class_instantiable.methods.count(m)) {
+      push(cls, m);
+    }
+  }
+}
+
+void TransitiveClosureMarker::dynamically_referenced(const DexClass* cls) {
+  always_assert(m_relaxed_keep_class_members);
+  if (!consider_dynamically_referenced(cls) ||
+      !m_dynamically_referenced_classes->insert(cls)) {
+    return;
+  }
+  for (auto const& f : cls->get_ifields()) {
+    if (m_cond_marked->if_class_dynamically_referenced.fields.count(f)) {
+      push_if_class_retained(f);
+    }
+  }
+  for (auto const& f : cls->get_sfields()) {
+    if (m_cond_marked->if_class_dynamically_referenced.fields.count(f)) {
+      push_if_class_retained(f);
+    }
+  }
+  for (auto const& m : cls->get_dmethods()) {
+    if (m_cond_marked->if_class_dynamically_referenced.methods.count(m)) {
+      push_if_class_retained(m);
+    }
+  }
+  for (auto const& m : cls->get_vmethods()) {
+    if (m_cond_marked->if_class_dynamically_referenced.methods.count(m)) {
+      push_if_class_retained(m);
     }
   }
 }
@@ -579,7 +849,7 @@ void TransitiveClosureMarker::visit_method_ref(const DexMethodRef* method) {
     const auto& overriding_methods =
         mog::get_overriding_methods(m_method_override_graph, m);
     for (auto* overriding : overriding_methods) {
-      push_if_instantiable(overriding);
+      push_if_class_instantiable(overriding);
     }
   }
 }
@@ -598,6 +868,7 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
     const IgnoreSets& ignore_sets,
     int* num_ignore_check_strings,
     bool record_reachability,
+    bool relaxed_keep_class_members,
     bool should_mark_all_as_seed,
     std::unique_ptr<const mog::Graph>* out_method_override_graph,
     bool remove_no_argument_constructors) {
@@ -609,8 +880,9 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
 
   ConcurrentSet<ReachableObject, ReachableObjectHash> root_set;
   RootSetMarker root_set_marker(*method_override_graph, record_reachability,
-                                &cond_marked, reachable_objects.get(),
-                                &root_set);
+                                relaxed_keep_class_members,
+                                remove_no_argument_constructors, &cond_marked,
+                                reachable_objects.get(), &root_set);
 
   if (should_mark_all_as_seed) {
     root_set_marker.mark_all_as_seed(scope);
@@ -619,15 +891,16 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
   }
 
   InstantiableTypes instantiable_types;
+  reachability::DynamicallyReferencedClasses dynamically_referenced_classes;
   size_t num_threads = redex_parallel::default_num_threads();
   auto stats_arr = std::make_unique<Stats[]>(num_threads);
   workqueue_run<ReachableObject>(
       [&](MarkWorkerState* worker_state, const ReachableObject& obj) {
         TransitiveClosureMarker transitive_closure_marker(
             ignore_sets, *method_override_graph, record_reachability,
-            &cond_marked, reachable_objects.get(), &instantiable_types,
-            worker_state, &stats_arr[worker_state->worker_id()],
-            remove_no_argument_constructors);
+            relaxed_keep_class_members, &cond_marked, reachable_objects.get(),
+            &instantiable_types, &dynamically_referenced_classes, worker_state,
+            &stats_arr[worker_state->worker_id()]);
         transitive_closure_marker.visit(obj);
         return nullptr;
       },

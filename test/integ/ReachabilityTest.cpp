@@ -74,8 +74,8 @@ TEST_F(ReachabilityTest, ReachabilityMarkAllTest) {
   reachability::IgnoreSets ig_sets;
   auto reachable_objects = reachability::compute_reachable_objects(
       stores, ig_sets, &num_ignore_check_strings,
-      /* record_reachability */ false, /* should_mark_all_as_seed */ true,
-      nullptr);
+      /* record_reachability */ false, /* relaxed_keep_class_members */ false,
+      /* should_mark_all_as_seed */ true, nullptr);
 
   reachability::sweep(stores, *reachable_objects, nullptr);
 
