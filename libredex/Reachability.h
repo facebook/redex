@@ -171,7 +171,10 @@ class ReachableObjects {
 struct ConditionallyMarked {
   ConcurrentSet<const DexField*> fields;
   ConcurrentSet<const DexMethod*> methods;
+  ConcurrentSet<const DexMethod*> methods_if_instantiable;
 };
+
+using InstantiableTypes = ConcurrentSet<DexClass*>;
 
 struct References {
   std::vector<const DexString*> strings;
@@ -247,6 +250,8 @@ class RootSetMarker {
 
   void push_seed(const DexMethod* method);
 
+  void push_seed_if_instantiable(const DexMethod* method);
+
   template <class Seed>
   void record_is_seed(Seed* seed);
 
@@ -270,6 +275,7 @@ class TransitiveClosureMarker {
       bool record_reachability,
       ConditionallyMarked* cond_marked,
       ReachableObjects* reachable_objects,
+      InstantiableTypes* instantiable_types,
       MarkWorkerState* worker_state,
       Stats* stats,
       bool remove_no_argument_constructors = false)
@@ -278,6 +284,7 @@ class TransitiveClosureMarker {
         m_record_reachability(record_reachability),
         m_cond_marked(cond_marked),
         m_reachable_objects(reachable_objects),
+        m_instantiable_types(instantiable_types),
         m_worker_state(worker_state),
         m_stats(stats),
         m_remove_no_argument_constructors(remove_no_argument_constructors) {
@@ -327,7 +334,7 @@ class TransitiveClosureMarker {
 
   void push(const DexMethodRef* parent, const DexMethodRef* method);
 
-  void push_cond(const DexMethod* method);
+  void push_if_instantiable(const DexMethod* method);
 
   bool has_class_forname(DexMethod* meth);
 
@@ -350,11 +357,14 @@ class TransitiveClosureMarker {
   static DexMethod* resolve_without_context(const DexMethodRef* method,
                                             const DexClass* cls);
 
+  void instantiable(DexType* type);
+
   const IgnoreSets& m_ignore_sets;
   const method_override_graph::Graph& m_method_override_graph;
   bool m_record_reachability;
   ConditionallyMarked* m_cond_marked;
   ReachableObjects* m_reachable_objects;
+  InstantiableTypes* m_instantiable_types;
   MarkWorkerState* m_worker_state;
   Stats* m_stats;
   bool m_remove_no_argument_constructors;

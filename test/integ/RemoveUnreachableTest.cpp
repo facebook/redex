@@ -113,7 +113,12 @@ TEST_F(RemoveUnreachableTest, Inheritance3Test) {
 
   // Another tricky inheritance case.
   ASSERT_TRUE(find_class(*classes, "LHoneyBadger;"));
-  ASSERT_TRUE(find_vmethod(*classes, "LHoneyBadger;", "Z", "isAwesome", {}));
+  ASSERT_FALSE(find_dmethod(*classes, "LHoneyBadger;", "V", "<init>", {"Z"}));
+  ASSERT_FALSE(find_vmethod(*classes, "LHoneyBadger;", "Z", "isAwesome", {}));
+  ASSERT_TRUE(
+      find_dmethod(*classes, "LHoneyBadgerInstantiated;", "V", "<init>", {}));
+  ASSERT_TRUE(find_vmethod(
+      *classes, "LHoneyBadgerInstantiated;", "Z", "isAwesome", {}));
   // You might think that HogBadger.isAwesome() can be removed, since it
   // doesn't extend Badger.  But it's very tricky to remove this while still
   // getting the Guava Hasher case (below) correct.
@@ -247,7 +252,12 @@ TEST_F(RemoveUnreachableTest, TypeAnalysisInheritance3Test) {
 
   // Another tricky inheritance case.
   ASSERT_TRUE(find_class(*classes, "LHoneyBadger;"));
-  ASSERT_TRUE(find_vmethod(*classes, "LHoneyBadger;", "Z", "isAwesome", {}));
+  ASSERT_FALSE(find_dmethod(*classes, "LHoneyBadger;", "V", "<init>", {"Z"}));
+  ASSERT_FALSE(find_vmethod(*classes, "LHoneyBadger;", "Z", "isAwesome", {}));
+  ASSERT_TRUE(
+      find_dmethod(*classes, "LHoneyBadgerInstantiated;", "V", "<init>", {}));
+  ASSERT_TRUE(find_vmethod(
+      *classes, "LHoneyBadgerInstantiated;", "Z", "isAwesome", {}));
   // You might think that HogBadger.isAwesome() can be removed, since it
   // doesn't extend Badger.  But it's very tricky to remove this while still
   // getting the Guava Hasher case (below) correct.

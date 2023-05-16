@@ -70,6 +70,7 @@ void ReachableNativesPass::run_pass(DexStoresVector& stores,
 
   auto scope = build_class_scope(stores);
   auto reachable_objects = std::make_unique<reachability::ReachableObjects>();
+  reachability::InstantiableTypes instantiable_types;
   reachability::ConditionallyMarked cond_marked;
   auto method_override_graph = method_override_graph::build_graph(scope);
 
@@ -99,7 +100,7 @@ void ReachableNativesPass::run_pass(DexStoresVector& stores,
           const reachability::ReachableObject& obj) {
         reachability::TransitiveClosureMarker transitive_closure_marker(
             ignore_sets, *method_override_graph, false, &cond_marked,
-            reachable_objects.get(), worker_state,
+            reachable_objects.get(), &instantiable_types, worker_state,
             &stats_arr[worker_state->worker_id()], false);
         transitive_closure_marker.visit(obj);
         return nullptr;

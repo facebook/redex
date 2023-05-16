@@ -194,6 +194,11 @@ void RootSetMarker::push_seed(const DexMethod* method) {
   m_cond_marked->methods.insert(method);
 }
 
+void RootSetMarker::push_seed_if_instantiable(const DexMethod* method) {
+  if (!method) return;
+  m_cond_marked->methods_if_instantiable.insert(method);
+}
+
 template <class Seed>
 void RootSetMarker::record_is_seed(Seed* seed) {
   if (m_record_reachability) {
@@ -221,7 +226,7 @@ void RootSetMarker::mark_external_method_overriders() {
       if (!overriding->is_external()) {
         TRACE(REACH, 3, "Visiting seed: %s (implements %s)", SHOW(overriding),
               SHOW(method));
-        push_seed(overriding);
+        push_seed_if_instantiable(overriding);
       }
     }
   }
@@ -317,18 +322,21 @@ void TransitiveClosureMarker::push(const DexMethodRef* parent,
   this->template push<DexMethodRef>(parent, method);
 }
 
-void TransitiveClosureMarker::push_cond(const DexMethod* method) {
+void TransitiveClosureMarker::push_if_instantiable(const DexMethod* method) {
   if (!method || m_reachable_objects->marked(method)) return;
-  TRACE(REACH, 4, "Conditionally marking method: %s", SHOW(method));
+  TRACE(REACH, 4,
+        "Conditionally marking method if declaring class is instantiable: %s",
+        SHOW(method));
   auto clazz = type_class(method->get_class());
-  m_cond_marked->methods.insert(method);
-  // If :clazz has been marked, we cannot count on visit(DexClass*) to move
-  // the conditionally-marked methods into the actually-marked ones -- we have
-  // to do it ourselves. Note that we must do this check after adding :method
-  // to m_cond_marked to avoid a race condition where we add to m_cond_marked
-  // after visit(DexClass*) has finished moving its contents over to
-  // m_reachable_objects.
-  if (m_reachable_objects->marked(clazz)) {
+  m_cond_marked->methods_if_instantiable.insert(method);
+  // If :clazz is already known to be instantiable, then we cannot count on
+  // instantiable(DexClass*) to have moved the
+  // conditionally-if-instantiable-marked methods into the actually-marked ones
+  // -- we have to do it ourselves. Note that we must do this check after adding
+  // :method to m_cond_marked to avoid a race condition where we add to
+  // m_cond_marked after instantiable(DexClass*) has finished moving its
+  // contents over to m_reachable_objects.
+  if (m_instantiable_types->count(clazz)) {
     push(clazz, method);
   }
 }
@@ -397,7 +405,7 @@ void TransitiveClosureMarker::gather_and_push(DexMethod* meth) {
   push(meth, refs.fields.begin(), refs.fields.end());
   push(meth, refs.methods.begin(), refs.methods.end());
   for (auto* cond_meth : refs.cond_methods) {
-    push_cond(cond_meth);
+    push_if_instantiable(cond_meth);
   }
 }
 
@@ -425,6 +433,9 @@ void TransitiveClosureMarker::push_typelike_strings(
 
 void TransitiveClosureMarker::visit_cls(const DexClass* cls) {
   TRACE(REACH, 4, "Visiting class: %s", SHOW(cls));
+  if (is_native(cls)) {
+    instantiable(cls->get_type());
+  }
   for (auto& m : cls->get_dmethods()) {
     if (method::is_clinit(m)) {
       if (!m->get_code() || !method::is_trivial_clinit(*m->get_code())) {
@@ -458,6 +469,7 @@ void TransitiveClosureMarker::visit_cls(const DexClass* cls) {
       gather_and_push(anno.get());
     }
   }
+
   for (auto const& m : cls->get_ifields()) {
     if (m_cond_marked->fields.count(m)) {
       push(cls, m);
@@ -521,10 +533,29 @@ DexMethod* TransitiveClosureMarker::resolve_without_context(
   return nullptr;
 }
 
+void TransitiveClosureMarker::instantiable(DexType* type) {
+  auto cls = type_class(type);
+  if (!cls || cls->is_external()) {
+    return;
+  }
+  if (!m_instantiable_types->insert(cls)) {
+    return;
+  }
+  instantiable(cls->get_super_class());
+  for (auto* intf : *cls->get_interfaces()) {
+    instantiable(intf);
+  }
+  for (auto const& m : cls->get_vmethods()) {
+    if (m_cond_marked->methods_if_instantiable.count(m)) {
+      push(cls, m);
+    }
+  }
+}
+
 void TransitiveClosureMarker::visit_method_ref(const DexMethodRef* method) {
   TRACE(REACH, 4, "Visiting method: %s", SHOW(method));
-  auto resolved_method =
-      resolve_without_context(method, type_class(method->get_class()));
+  auto cls = type_class(method->get_class());
+  auto resolved_method = resolve_without_context(method, cls);
   if (resolved_method != nullptr) {
     TRACE(REACH, 5, "    Resolved to: %s", SHOW(resolved_method));
     push(method, resolved_method);
@@ -534,6 +565,9 @@ void TransitiveClosureMarker::visit_method_ref(const DexMethodRef* method) {
   push(method, method->get_proto()->get_rtype());
   for (auto const& t : *method->get_proto()->get_args()) {
     push(method, t);
+  }
+  if (cls && !is_abstract(cls) && method::is_init(method)) {
+    instantiable(method->get_class());
   }
   auto m = method->as_def();
   if (!m) {
@@ -545,7 +579,7 @@ void TransitiveClosureMarker::visit_method_ref(const DexMethodRef* method) {
     const auto& overriding_methods =
         mog::get_overriding_methods(m_method_override_graph, m);
     for (auto* overriding : overriding_methods) {
-      push_cond(overriding);
+      push_if_instantiable(overriding);
     }
   }
 }
@@ -574,10 +608,8 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
   auto method_override_graph = mog::build_graph(scope);
 
   ConcurrentSet<ReachableObject, ReachableObjectHash> root_set;
-  RootSetMarker root_set_marker(*method_override_graph,
-                                record_reachability,
-                                &cond_marked,
-                                reachable_objects.get(),
+  RootSetMarker root_set_marker(*method_override_graph, record_reachability,
+                                &cond_marked, reachable_objects.get(),
                                 &root_set);
 
   if (should_mark_all_as_seed) {
@@ -586,14 +618,15 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
     root_set_marker.mark(scope);
   }
 
+  InstantiableTypes instantiable_types;
   size_t num_threads = redex_parallel::default_num_threads();
   auto stats_arr = std::make_unique<Stats[]>(num_threads);
   workqueue_run<ReachableObject>(
       [&](MarkWorkerState* worker_state, const ReachableObject& obj) {
         TransitiveClosureMarker transitive_closure_marker(
             ignore_sets, *method_override_graph, record_reachability,
-            &cond_marked, reachable_objects.get(), worker_state,
-            &stats_arr[worker_state->worker_id()],
+            &cond_marked, reachable_objects.get(), &instantiable_types,
+            worker_state, &stats_arr[worker_state->worker_id()],
             remove_no_argument_constructors);
         transitive_closure_marker.visit(obj);
         return nullptr;

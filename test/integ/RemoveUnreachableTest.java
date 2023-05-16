@@ -72,6 +72,13 @@ class HoneyBadger extends BadgerImpl {
   }
 }
 
+class HoneyBadgerInstantiated extends BadgerImpl {
+  @Override
+  public boolean isAwesome() {
+    return true;
+  }
+}
+
 class HogBadger implements Badger {
   @Override
   public boolean isAwesome() {
@@ -81,6 +88,7 @@ class HogBadger implements Badger {
 
 class BadgerTester {
   public static boolean testBadger(Badger b) {
+    new HoneyBadgerInstantiated();
     return b.isAwesome();
   }
 }
