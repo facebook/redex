@@ -27,18 +27,33 @@ using namespace resolve_refs;
 namespace impl {
 
 struct RefStats {
-  size_t num_mref_resolved = 0;
-  size_t num_fref_resolved = 0;
+  // simple_resolved is local ref resolution using Resolver with no additinoal
+  // info.
+  size_t num_mref_simple_resolved = 0;
+  size_t num_fref_simple_resolved = 0;
   size_t num_invoke_virtual_refined = 0;
   size_t num_invoke_interface_replaced = 0;
   size_t num_invoke_super_removed = 0;
+  // External method refs
+  size_t num_bailed_on_external = 0;
+  size_t num_bailed_on_min_sdk_mismatch = 0;
+  // The method ref is not solvable by the Resolver to continue.
+  size_t num_unresolvable_mrefs = 0;
+  size_t num_failed_infer_callee_target_type = 0;
+  size_t num_failed_infer_callee_def = 0;
+  // Sub stats count for num_failed_infer_callee_def.
+  size_t num_failed_infer_resolver_fail = 0;
+  size_t num_failed_infer_to_external = 0;
+  size_t num_failed_infer_cannot_access = 0;
 
   // Only used for return type specialization
   RtypeCandidates rtype_candidates;
 
   void print(PassManager* mgr) {
-    TRACE(RESO, 1, "[ref reso] method ref resolved %zu", num_mref_resolved);
-    TRACE(RESO, 1, "[ref reso] field ref resolved %zu", num_fref_resolved);
+    TRACE(RESO, 1, "[ref reso] method ref simple resolved %zu",
+          num_mref_simple_resolved);
+    TRACE(RESO, 1, "[ref reso] field ref simple resolved %zu",
+          num_fref_simple_resolved);
     TRACE(RESO,
           1,
           "[ref reso] invoke-virtual refined %zu",
@@ -51,12 +66,42 @@ struct RefStats {
           1,
           "[ref reso] invoke-super removed %zu",
           num_invoke_super_removed);
-    mgr->incr_metric("method_refs_resolved", num_mref_resolved);
-    mgr->incr_metric("field_refs_resolved", num_fref_resolved);
+    TRACE(RESO, 1, "[ref reso] bailed on external %zu", num_bailed_on_external);
+    TRACE(RESO, 1, "[ref reso] bailed on min sdk mismatch %zu",
+          num_bailed_on_min_sdk_mismatch);
+    TRACE(RESO, 1, "[ref reso] un-resolvable method ref %zu",
+          num_unresolvable_mrefs);
+    TRACE(RESO, 1, "[ref reso] failed callee target type inference %zu",
+          num_failed_infer_callee_target_type);
+    TRACE(RESO, 1, "[ref reso] bailed callee method def inference %zu",
+          num_failed_infer_callee_def);
+    TRACE(RESO, 1, "[ref reso] bailed callee inference resolver fail %zu",
+          num_failed_infer_resolver_fail);
+    TRACE(RESO, 1,
+          "[ref reso] bailed callee inference to excluded externals %zu",
+          num_failed_infer_to_external);
+    TRACE(RESO, 1, "[ref reso] bailed callee inference accessibility check %zu",
+          num_failed_infer_cannot_access);
+    mgr->incr_metric("method_refs_simple_resolved", num_mref_simple_resolved);
+    mgr->incr_metric("field_refs_simple_resolved", num_fref_simple_resolved);
     mgr->incr_metric("num_invoke_virtual_refined", num_invoke_virtual_refined);
     mgr->incr_metric("num_invoke_interface_replaced",
                      num_invoke_interface_replaced);
     mgr->incr_metric("num_invoke_super_removed", num_invoke_super_removed);
+    mgr->incr_metric("num_bailed_on_external", num_bailed_on_external);
+    mgr->incr_metric("num_bailed_on_min_sdk_mismatch",
+                     num_bailed_on_min_sdk_mismatch);
+    mgr->incr_metric("num_unresolvable_mrefs", num_unresolvable_mrefs);
+    mgr->incr_metric("num_failed_infer_callee_target_type",
+                     num_failed_infer_callee_target_type);
+    mgr->incr_metric("num_failed_infer_callee_def",
+                     num_failed_infer_callee_def);
+    mgr->incr_metric("num_failed_infer_resolver_fail",
+                     num_failed_infer_resolver_fail);
+    mgr->incr_metric("num_failed_infer_to_external",
+                     num_failed_infer_to_external);
+    mgr->incr_metric("num_failed_infer_cannot_access",
+                     num_failed_infer_cannot_access);
 
     TRACE(RESO,
           1,
@@ -67,11 +112,20 @@ struct RefStats {
   }
 
   RefStats& operator+=(const RefStats& that) {
-    num_mref_resolved += that.num_mref_resolved;
-    num_fref_resolved += that.num_fref_resolved;
+    num_mref_simple_resolved += that.num_mref_simple_resolved;
+    num_fref_simple_resolved += that.num_fref_simple_resolved;
     num_invoke_virtual_refined += that.num_invoke_virtual_refined;
     num_invoke_interface_replaced += that.num_invoke_interface_replaced;
     num_invoke_super_removed += that.num_invoke_super_removed;
+    num_bailed_on_external += that.num_bailed_on_external;
+    num_bailed_on_min_sdk_mismatch += that.num_bailed_on_min_sdk_mismatch;
+    num_unresolvable_mrefs += that.num_unresolvable_mrefs;
+    num_failed_infer_callee_target_type +=
+        that.num_failed_infer_callee_target_type;
+    num_failed_infer_callee_def += that.num_failed_infer_callee_def;
+    num_failed_infer_resolver_fail += that.num_failed_infer_resolver_fail;
+    num_failed_infer_to_external += that.num_failed_infer_to_external;
+    num_failed_infer_cannot_access += that.num_failed_infer_cannot_access;
     rtype_candidates += that.rtype_candidates;
     return *this;
   }
@@ -88,7 +142,7 @@ void resolve_field_refs(IRInstruction* insn,
   if (real_ref && !real_ref->is_external() && real_ref != fref) {
     TRACE(RESO, 2, "Resolving %s\n\t=>%s", SHOW(fref), SHOW(real_ref));
     insn->set_field(real_ref);
-    stats.num_fref_resolved++;
+    stats.num_fref_simple_resolved++;
     auto cls = type_class(real_ref->get_class());
     always_assert(cls != nullptr);
     if (!is_public(cls)) {
@@ -144,7 +198,8 @@ boost::optional<DexMethod*> get_inferred_method_def(
     const std::vector<std::string>& excluded_externals,
     const bool is_support_lib,
     DexMethod* callee,
-    const DexType* inferred_type) {
+    const DexType* inferred_type,
+    RefStats& stats) {
 
   auto* inferred_cls = type_class(inferred_type);
   auto* resolved = resolve_method(inferred_cls, callee->get_name(),
@@ -153,6 +208,7 @@ boost::optional<DexMethod*> get_inferred_method_def(
   if (!resolved || !resolved->is_def()) {
     TRACE(RESO, 4, "Bailed resolved upon inferred_cls %s for %s",
           SHOW(inferred_cls), SHOW(callee));
+    stats.num_failed_infer_resolver_fail++;
     return boost::none;
   }
   auto* resolved_cls = type_class(resolved->get_class());
@@ -160,6 +216,7 @@ boost::optional<DexMethod*> get_inferred_method_def(
   // 2. If the resolved target is an excluded external, we bail.
   if (is_external && is_excluded_external(excluded_externals, show(resolved))) {
     TRACE(RESO, 4, "Bailed on excluded external%s", SHOW(resolved));
+    stats.num_failed_infer_to_external++;
     return boost::none;
   }
 
@@ -167,6 +224,7 @@ boost::optional<DexMethod*> get_inferred_method_def(
   if (!type::can_access(caller, resolved)) {
     TRACE(RESO, 4, "Bailed on inaccessible %s from %s", SHOW(resolved),
           SHOW(caller));
+    stats.num_failed_infer_cannot_access++;
     return boost::none;
   }
 
@@ -208,7 +266,7 @@ void ResolveRefsPass::resolve_method_refs(const DexMethod* caller,
   }
   TRACE(RESO, 2, "Resolving %s\n\t=>%s", SHOW(mref), SHOW(mdef));
   insn->set_method(mdef);
-  stats.num_mref_resolved++;
+  stats.num_mref_simple_resolved++;
 }
 
 RefStats ResolveRefsPass::resolve_refs(DexMethod* method) {
@@ -306,6 +364,7 @@ RefStats ResolveRefsPass::refine_virtual_callsites(DexMethod* method,
     auto mref = insn->get_method();
     auto callee = resolve_method(mref, opcode_to_search(insn), method);
     if (!callee) {
+      stats.num_unresolvable_mrefs++;
       continue;
     }
     TRACE(RESO, 4, "resolved method %s for %s", SHOW(callee), SHOW(insn));
@@ -318,27 +377,32 @@ RefStats ResolveRefsPass::refine_virtual_callsites(DexMethod* method,
       // Unsuccessful inference.
       TRACE(RESO, 4, "bailed on inferred dex type %s for %s", SHOW(dex_type),
             SHOW(callee));
+      stats.num_failed_infer_callee_target_type++;
       continue;
     }
 
     // replace it with the actual implementation if any provided.
-    auto m_def = get_inferred_method_def(method, m_excluded_externals,
-                                         is_support_lib, callee, *dex_type);
+    auto m_def = get_inferred_method_def(
+        method, m_excluded_externals, is_support_lib, callee, *dex_type, stats);
     if (!m_def) {
+      stats.num_failed_infer_callee_def++;
       continue;
     }
     auto def_meth = *m_def;
     auto def_cls = type_class((def_meth)->get_class());
     if (!def_cls || mref == def_meth) {
+      // The ref resolution is a nop.
       continue;
     }
     // Stop if the resolve_to_external config is False.
     if (!m_refine_to_external && def_cls->is_external()) {
       TRACE(RESO, 4, "Bailed on external %s", SHOW(def_meth));
+      stats.num_bailed_on_external++;
       continue;
     } else if (def_cls->is_external() && !m_min_sdk_api->has_method(def_meth)) {
       // Resolving to external and the target is missing in the min_sdk_api.
       TRACE(RESO, 4, "Bailed on mismatch with min_sdk %s", SHOW(def_meth));
+      stats.num_bailed_on_min_sdk_mismatch++;
       continue;
     }
     TRACE(RESO, 2, "Resolving %s\n\t=>%s", SHOW(mref), SHOW(def_meth));
