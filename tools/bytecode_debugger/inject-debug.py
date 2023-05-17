@@ -28,6 +28,7 @@ def arg_parser():
     parser.add_argument("-s", "--keystore", nargs="?", default=None)
     parser.add_argument("-a", "--keyalias", nargs="?", default=None)
     parser.add_argument("-p", "--keypass", nargs="?", default=None)
+    parser.add_argument("-n", "--apksigner_path", nargs="?", default=None)
     return parser
 
 
