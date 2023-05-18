@@ -9,8 +9,12 @@
 
 #include <sstream>
 
+#include "ConfigFiles.h"
 #include "Debug.h"
 #include "DexClass.h"
+#include "DexLimitsInfo.h"
+#include "DexUtil.h"
+#include "InitClassesWithSideEffects.h"
 #include "PassManager.h"
 #include "Show.h"
 #include "Trace.h"
@@ -18,7 +22,7 @@
 namespace redex_properties {
 
 void DexLimitsChecker::run_checker(DexStoresVector& stores,
-                                   ConfigFiles& /* conf */,
+                                   ConfigFiles& conf,
                                    PassManager& mgr,
                                    bool established) {
   if (!established) {
@@ -32,38 +36,31 @@ void DexLimitsChecker::run_checker(DexStoresVector& stores,
   }
 
   std::ostringstream result;
+  Scope scope = build_class_scope(stores);
+  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+      scope, conf.create_init_class_insns());
 
-  auto check_ref_num = [&pass_name, &result](const DexClasses& classes,
-                                             const DexStore& store,
-                                             size_t dex_id) {
-    constexpr size_t limit = 65536;
-    std::unordered_set<DexMethodRef*> total_method_refs;
-    std::unordered_set<DexFieldRef*> total_field_refs;
-    std::unordered_set<DexType*> total_type_refs;
-    for (const auto cls : classes) {
-      std::vector<DexMethodRef*> method_refs;
-      std::vector<DexFieldRef*> field_refs;
-      std::vector<DexType*> type_refs;
-      cls->gather_methods(method_refs);
-      cls->gather_fields(field_refs);
-      cls->gather_types(type_refs);
-      total_type_refs.insert(type_refs.begin(), type_refs.end());
-      total_field_refs.insert(field_refs.begin(), field_refs.end());
-      total_method_refs.insert(method_refs.begin(), method_refs.end());
-    }
-    TRACE(PM, 2, "dex %s: method refs %zu, field refs %zu, type refs %zu",
-          dex_name(store, dex_id).c_str(), total_method_refs.size(),
-          total_field_refs.size(), total_type_refs.size());
-    auto check = [&](auto& c, const char* type) {
-      if (c.size() > limit) {
-        result << pass_name << " adds too many " << type << " refs in dex "
-               << dex_name(store, dex_id) << "\n";
-      }
-    };
-    check(total_method_refs, "method");
-    check(total_field_refs, "field");
-    check(total_type_refs, "type");
-  };
+  auto check_ref_num =
+      [&init_classes_with_side_effects, &pass_name, &result](
+          const DexClasses& classes, const DexStore& store, size_t dex_id) {
+        DexLimitsInfo dex_limits(&init_classes_with_side_effects);
+        for (const auto& cls : classes) {
+          if (!dex_limits.update_refs_by_adding_class(cls)) {
+            if (dex_limits.is_method_overflow()) {
+              result << pass_name << " adds too many method refs in dex "
+                     << dex_name(store, dex_id) << "\n";
+            }
+            if (dex_limits.is_field_overflow()) {
+              result << pass_name << " adds too many field refs in dex "
+                     << dex_name(store, dex_id) << "\n";
+            }
+            if (dex_limits.is_type_overflow()) {
+              result << pass_name << " adds too many type refs in dex "
+                     << dex_name(store, dex_id) << "\n";
+            }
+          }
+        }
+      };
   for (const auto& store : stores) {
     size_t dex_id = 0;
     for (const auto& classes : store.get_dexen()) {
