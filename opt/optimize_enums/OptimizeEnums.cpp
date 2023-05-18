@@ -133,7 +133,7 @@ bool analyze_enum_ctors(
 
   // TODO: We could order them instead of looping ...
   for (; !delegating_calls.empty(); delegating_calls.pop()) {
-    auto dc = std::move(delegating_calls.front());
+    auto dc = delegating_calls.front();
 
     auto* delegate =
         resolve_method(dc.invoke->get_method(), MethodSearch::Direct);
@@ -142,7 +142,7 @@ bool analyze_enum_ctors(
     { // Only proceed if the delegate constructor has already been processed.
       auto it = ctor_to_arg_ordinal.find(delegate);
       if (it == ctor_to_arg_ordinal.end()) {
-        delegating_calls.emplace(std::move(dc));
+        delegating_calls.emplace(dc);
         continue;
       } else {
         delegate_ordinal = it->second;
@@ -218,19 +218,19 @@ void collect_generated_switch_cases(
                      MethodSearch::Virtual);
   always_assert(Enum_ordinal);
 
-  auto m__generated_field = m::has_field(
+  auto m_generated_field = m::has_field(
       m::member_of<DexFieldRef>(m::equals(generated_cls->get_type())));
-  auto m__lookup = m::sget_object_(m__generated_field) || m::new_array_();
-  auto m__sget_enum = m::sget_object_(m::has_field(
+  auto m_lookup = m::sget_object_(m_generated_field) || m::new_array_();
+  auto m_sget_enum = m::sget_object_(m::has_field(
       m::member_of<DexFieldRef>(m::in<DexType*>(collected_enums))));
-  auto m__invoke_ordinal = m::invoke_virtual_(m::has_method(
+  auto m_invoke_ordinal = m::invoke_virtual_(m::has_method(
       m::resolve_method(MethodSearch::Virtual, m::equals(Enum_ordinal))));
 
   auto uniq = mf::alias | mf::unique;
-  auto look = f.insn(m__lookup);
-  auto gete = f.insn(m__sget_enum);
+  auto look = f.insn(m_lookup);
+  auto gete = f.insn(m_sget_enum);
   auto kase = f.insn(m::const_());
-  auto ordi = f.insn(m__invoke_ordinal).src(0, gete, uniq);
+  auto ordi = f.insn(m_invoke_ordinal).src(0, gete, uniq);
   auto aput = f.insn(m::aput_())
                   .src(0, kase, uniq)
                   .src(1, look, uniq)
@@ -250,10 +250,10 @@ void collect_generated_switch_cases(
   if (!new_array_to_sput.empty()) {
     mf::flow_t g;
 
-    auto m__sput_lookup = m::sput_object_(m__generated_field);
+    auto m_sput_lookup = m::sput_object_(m_generated_field);
 
     auto newa = g.insn(m::in<IRInstruction*>(new_array_to_sput));
-    auto sput = g.insn(m__sput_lookup).src(0, newa, uniq);
+    auto sput = g.insn(m_sput_lookup).src(0, newa, uniq);
 
     auto res_sputs = g.find(clinit_cfg, sput);
     for (auto* insn_sput : res_sputs.matching(sput)) {
@@ -804,17 +804,17 @@ class OptimizeEnums {
                                         LookupTableToEnum& mapping) {
     mf::flow_t f;
 
-    auto m__invoke_values = m::invoke_static_(m::has_method(
+    auto m_invoke_values = m::invoke_static_(m::has_method(
         m::named<DexMethodRef>("values") &&
         m::member_of<DexMethodRef>(m::in<DexType*>(collected_enums))));
-    auto m__sput_lookup = m::sput_object_(m::has_field(
+    auto m_sput_lookup = m::sput_object_(m::has_field(
         m::member_of<DexFieldRef>(m::equals(generated_cls->get_type()))));
 
     auto uniq = mf::alias | mf::unique;
-    auto vals = f.insn(m__invoke_values);
+    auto vals = f.insn(m_invoke_values);
     auto alen = f.insn(m::array_length_()).src(0, vals, uniq);
     auto newa = f.insn(m::new_array_()).src(0, alen, uniq);
-    auto sput = f.insn(m__sput_lookup).src(0, newa, uniq);
+    auto sput = f.insn(m_sput_lookup).src(0, newa, uniq);
 
     auto res = f.find(clinit_cfg, sput);
     for (auto* insn_sput : res.matching(sput)) {
