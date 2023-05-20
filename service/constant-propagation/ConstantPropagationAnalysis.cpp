@@ -815,6 +815,13 @@ bool StringAnalyzer::analyze_invoke(const IRInstruction* insn,
       env->set(RESULT_REGISTER, SignedConstantDomain(res));
       return true;
     }
+  }else if (method == method::java_lang_Integer_parseInt()){
+    if (const auto* arg0 = maybe_string(0)) {
+      const char* int_ = arg0->c_str();
+      int64_t res = atoi(int_);
+      env->set(RESULT_REGISTER, SignedConstantDomain(res));
+      return true;
+    }
   }
 
   return false;
