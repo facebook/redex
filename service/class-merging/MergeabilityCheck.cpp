@@ -138,9 +138,8 @@ TypeSet MergeabilityChecker::exclude_unsupported_bytecode_refs_for(
       continue;
     }
 
-    const auto& type = type::get_element_type_if_array(insn->get_type());
+    const auto* type = type::get_element_type_if_array(insn->get_type());
     if (m_spec.merging_targets.count(type) > 0) {
-
       if (!opcode::is_const_class(insn->opcode()) ||
           m_const_class_safe_types.empty()) {
         non_mergeables.insert(type);
