@@ -50,7 +50,9 @@ void load_generated_types(const ModelSpec& spec,
                           const TypeSystem& type_system,
                           const ConstTypeHashSet& models,
                           TypeSet& generated) {
-  generated.insert(models.begin(), models.end());
+  if (spec.is_generated_code) {
+    generated.insert(models.begin(), models.end());
+  }
   for (const auto& type : spec.gen_types) {
     const auto& cls = type_class(type);
     redex_assert(cls != nullptr);
