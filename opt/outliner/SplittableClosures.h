@@ -27,11 +27,21 @@ struct SplittableClosure {
   std::shared_ptr<MethodClosures> method_closures;
   cfg::Block* switch_block;
   std::vector<const Closure*> closures;
-  size_t index;
   std::vector<ClosureArgument> args;
   double rank;
   size_t added_code_size;
   HotSplitKind hot_split_kind;
+
+  int is_switch() const { return switch_block ? 1 : 0; }
+
+  // id is unique among all splittable closures where is_switch() is the same.
+  size_t id() const {
+    if (switch_block) {
+      return switch_block->id();
+    }
+    always_assert(closures.size() == 1);
+    return closures.front()->target->id();
+  }
 };
 
 // Selects splittable closures for a given set of methods.

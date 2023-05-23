@@ -30,23 +30,32 @@ using namespace uninitialized_objects;
 struct ScoredClosure {
   cfg::Block* switch_block;
   std::vector<const Closure*> closures;
-  size_t index;
   std::unordered_set<const ReducedBlock*> reduced_components{};
   size_t split_size{};
   size_t remaining_size{};
   double overhead_ratio{};
   HotSplitKind hot_split_kind{};
   std::vector<ClosureArgument> args{};
+
+  int is_switch() const { return switch_block ? 1 : 0; }
+
+  // id is unique among all splittable closures where is_switch() is the same.
+  size_t id() const {
+    if (switch_block) {
+      return switch_block->id();
+    }
+    always_assert(closures.size() == 1);
+    return closures.front()->target->id();
+  }
 };
 
 std::optional<ScoredClosure> score(
     const Config& config,
     const MethodClosures& mcs,
     float max_overhead_ratio,
-    size_t id,
     cfg::Block* switch_block,
     const std::vector<const Closure*>& closures) {
-  ScoredClosure sc{switch_block, closures, id};
+  ScoredClosure sc{switch_block, closures};
   for (auto* c : closures) {
     sc.reduced_components.insert(c->reduced_components.begin(),
                                  c->reduced_components.end());
@@ -157,7 +166,6 @@ std::optional<ScoredClosure> aggregate(
     const Config& config,
     const MethodClosures& mcs,
     float max_overhead_ratio,
-    size_t id,
     cfg::Block* switch_block,
     const std::vector<const Closure*>& switched,
     const std::function<bool(const Closure*)>& predicate) {
@@ -203,7 +211,7 @@ std::optional<ScoredClosure> aggregate(
     aggregator.erase(c);
     aggregated.push_back(c);
     auto opt_sc =
-        score(config, mcs, max_overhead_ratio, id, switch_block, aggregated);
+        score(config, mcs, max_overhead_ratio, switch_block, aggregated);
     if (!opt_sc) {
       continue;
     }
@@ -225,8 +233,8 @@ std::vector<ScoredClosure> get_scored_closures(const Config& config,
   std::unordered_map<cfg::Block*, std::vector<const Closure*>>
       remaining_switch_case_closures;
   for (auto& c : mcs.closures) {
-    auto opt_sc = score(config, mcs, max_overhead_ratio, scored_closures.size(),
-                        nullptr, {&c});
+    auto opt_sc = score(config, mcs, max_overhead_ratio,
+                        /* switch_block */ nullptr, {&c});
     if (opt_sc) {
       scored_closures.push_back(std::move(*opt_sc));
     }
@@ -246,9 +254,8 @@ std::vector<ScoredClosure> get_scored_closures(const Config& config,
       [](const auto*) { return true; }};
   for (auto&& [switch_block, switched] : remaining_switch_case_closures) {
     for (const auto& predicate : predicates) {
-      auto opt_sc =
-          aggregate(config, mcs, max_overhead_ratio, scored_closures.size(),
-                    switch_block, switched, predicate);
+      auto opt_sc = aggregate(config, mcs, max_overhead_ratio, switch_block,
+                              switched, predicate);
       if (opt_sc) {
         scored_closures.push_back(std::move(*opt_sc));
         break;
@@ -273,7 +280,10 @@ std::vector<SplittableClosure> to_splittable_closures(
         if (a.reduced_components.size() != b.reduced_components.size()) {
           return a.reduced_components.size() > b.reduced_components.size();
         }
-        return a.index < b.index;
+        if (a.is_switch() != b.is_switch()) {
+          return a.is_switch() < b.is_switch();
+        }
+        return a.id() < b.id();
       });
 
   // Now we do the expensive analysis of the remaining scored closures.
@@ -412,8 +422,8 @@ std::vector<SplittableClosure> to_splittable_closures(
     auto added_code_size =
         sc.split_size + sc.remaining_size - mcs->original_size;
     splittable_closures.push_back((SplittableClosure){
-        mcs, sc.switch_block, std::move(sc.closures), sc.index,
-        std::move(sc.args), rank, added_code_size, sc.hot_split_kind});
+        mcs, sc.switch_block, std::move(sc.closures), std::move(sc.args), rank,
+        added_code_size, sc.hot_split_kind});
   }
   return splittable_closures;
 };

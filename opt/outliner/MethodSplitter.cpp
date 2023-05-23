@@ -327,7 +327,10 @@ std::unordered_set<DexMethod*> split_splittable_closures(
                 if (c_method != d_method) {
                   return compare_dexmethods(c_method, d_method);
                 }
-                return c->index > d->index;
+                if (c->is_switch() != d->is_switch()) {
+                  return c->is_switch() < d->is_switch();
+                }
+                return c->id() > d->id();
               });
     std::unordered_set<DexMethod*> affected_methods;
     for (auto* splittable_closure : ranked_splittable_closures) {
