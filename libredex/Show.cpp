@@ -1133,7 +1133,7 @@ std::string vshow(const DexClass* p) {
   std::ostringstream ss;
   ss << accessibility(p->get_access()) << humanize(show(p->get_type()))
      << " extends " << humanize(show(p->get_super_class()));
-  if (p->get_interfaces()) {
+  if (p->get_interfaces() && !p->get_interfaces()->empty()) {
     ss << " implements ";
     bool first = true;
     for (auto const type : *p->get_interfaces()) {
