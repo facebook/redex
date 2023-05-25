@@ -45,6 +45,47 @@ std::ostringstream& print_register(std::ostringstream& out, reg_t reg) {
   return out;
 }
 
+std::ostream& print_type_hierarchy(std::ostream& out, const DexType* type) {
+  size_t indent = 0;
+  auto print_indent = [&]() {
+    if (indent > 0) {
+      for (size_t i = 0; i != indent - 1; ++i) {
+        out << "--";
+      }
+      out << "-> ";
+    }
+  };
+
+  for (; type != nullptr; ++indent) {
+    auto klass = type_class(type);
+    if (klass == nullptr) {
+      print_indent();
+      out << vshow(type) << " (no class)\n";
+
+      type = nullptr;
+      continue;
+    }
+
+    print_indent();
+    // This does not match vshow(DexClass), so we do it manually.
+    out << vshow(klass->get_type());
+    if (klass->get_interfaces() != nullptr &&
+        !klass->get_interfaces()->empty()) {
+      out << " (implements";
+      for (auto& intf : *klass->get_interfaces()) {
+        out << " ";
+        out << vshow(intf);
+      }
+      out << ")";
+    }
+    out << '\n';
+
+    type = klass->get_super_class();
+  }
+
+  return out;
+}
+
 void check_type_match(reg_t reg, IRType actual, IRType expected) {
   if (actual == BOTTOM) {
     // There's nothing to do for unreachable code.
@@ -957,7 +998,8 @@ void IRTypeChecker::assume_assignable(boost::optional<const DexType*> from,
   // optional is empty.
   if (from && !check_is_assignable_from(*from, to, false)) {
     std::ostringstream out;
-    out << ": " << *from << " is not assignable to " << to << std::endl;
+    out << ": " << *from << " is not assignable to " << to << "\n";
+    print_type_hierarchy(out, *from);
     throw TypeCheckingException(out.str());
   }
 }
@@ -1037,7 +1079,8 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
       if (!check_is_assignable_from(*dtype, rtype, /*strict=*/false)) {
         std::ostringstream out;
         out << "Returning " << dtype << ", but expected from declaration "
-            << rtype << std::endl;
+            << rtype << "\n";
+        print_type_hierarchy(out, *dtype);
         throw TypeCheckingException(out.str());
       }
     }

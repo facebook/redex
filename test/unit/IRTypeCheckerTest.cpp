@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "gtest/gtest.h"
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <limits>
@@ -22,6 +23,7 @@
 #include "IRTypeChecker.h"
 #include "LocalDce.h"
 #include "RedexTest.h"
+#include "Show.h"
 
 using namespace testing;
 
@@ -93,13 +95,14 @@ struct TestValueType {
  * [For iget] (move-result-pseudo v0) / (move-result-pseudo-wide v0)
  * (return-void)
  */
-void field_incompatible_fail_helper(const TestValueType& a_type,
-                                    const TestValueType& b_type,
-                                    const std::string& exp_fail_str,
-                                    IROpcode opcode_to_test,
-                                    bool is_put,
-                                    OperandType ir_suffix,
-                                    DexMethod* method) {
+::testing::AssertionResult field_incompatible_fail_helper(
+    const TestValueType& a_type,
+    const TestValueType& b_type,
+    const std::string& exp_fail_str,
+    IROpcode opcode_to_test,
+    bool is_put,
+    OperandType ir_suffix,
+    DexMethod* method) {
 
   using namespace dex_asm;
   // these instructions differ from each IR
@@ -180,8 +183,20 @@ void field_incompatible_fail_helper(const TestValueType& a_type,
 
   IRTypeChecker checker(method);
   checker.run();
-  EXPECT_TRUE(checker.fail());
-  EXPECT_THAT(checker.what(), MatchesRegex(exp_fail_str.c_str()));
+
+  if (!checker.fail()) {
+    return ::testing::AssertionFailure() << "Checked did not fail";
+  }
+
+  auto matcher = (Matcher<std::string>)MatchesRegex(exp_fail_str.c_str());
+  if (matcher.MatchAndExplain(checker.what(), nullptr)) {
+    return ::testing::AssertionSuccess();
+  }
+
+  std::ostringstream oss;
+  oss << checker.what() << " ";
+  matcher.DescribeNegationTo(&oss);
+  return ::testing::AssertionFailure() << oss.str();
 }
 
 /**
@@ -1625,11 +1640,11 @@ TEST_F(IRTypeCheckerTest, putObjectFieldIncompatibleTypeFail) {
   IRTypeChecker checker(m_method);
   checker.run();
   EXPECT_TRUE(checker.fail());
-  EXPECT_THAT(
-      checker.what(),
-      MatchesRegex("^Type error in method testMethod at instruction "
-                   "'IPUT_OBJECT v0, v1, LA;.f:LB;' "
-                   "@ 0x[0-9a-f]+ for : LC; is not assignable to LB;\n"));
+  EXPECT_THAT(checker.what(),
+              MatchesRegex("^Type error in method testMethod at instruction "
+                           "'IPUT_OBJECT v0, v1, LA;.f:LB;' "
+                           "@ 0x[0-9a-f]+ for : LC; is not assignable to "
+                           "LB;\nC\n-> java.lang.Object\n"));
 }
 
 /**
@@ -1695,11 +1710,11 @@ TEST_F(IRTypeCheckerTest, putObjectFieldIncompatibleClassFail) {
   IRTypeChecker checker(m_method);
   checker.run();
   EXPECT_TRUE(checker.fail());
-  EXPECT_THAT(
-      checker.what(),
-      MatchesRegex("^Type error in method testMethod at instruction "
-                   "'IPUT_OBJECT v0, v1, LC;.f:LB;' "
-                   "@ 0x[0-9a-f]+ for : LA; is not assignable to LC;\n"));
+  EXPECT_THAT(checker.what(),
+              MatchesRegex("^Type error in method testMethod at instruction "
+                           "'IPUT_OBJECT v0, v1, LC;.f:LB;' "
+                           "@ 0x[0-9a-f]+ for : LA; is not assignable to "
+                           "LC;\nA\n-> java.lang.Object\n"));
 }
 
 /**
@@ -1817,11 +1832,11 @@ TEST_F(IRTypeCheckerTest, getObjectFieldIncompatibleClassFail) {
   IRTypeChecker checker(m_method);
   checker.run();
   EXPECT_TRUE(checker.fail());
-  EXPECT_THAT(
-      checker.what(),
-      MatchesRegex("^Type error in method testMethod at instruction "
-                   "'IGET_OBJECT v1, LC;.f:LB;' "
-                   "@ 0x[0-9a-f]+ for : LA; is not assignable to LC;\n"));
+  EXPECT_THAT(checker.what(),
+              MatchesRegex("^Type error in method testMethod at instruction "
+                           "'IGET_OBJECT v1, LC;.f:LB;' "
+                           "@ 0x[0-9a-f]+ for : LA; is not assignable to "
+                           "LC;\nA\n-> java.lang.Object\n"));
 }
 
 /**
@@ -1830,7 +1845,7 @@ TEST_F(IRTypeCheckerTest, getObjectFieldIncompatibleClassFail) {
  * class A { B f; } -> v1
  * class B {}       -> v0
  *
- * iget-object B (v0), A (v1), "LA;.f:LB;"
+ * iget-object B (v0), A (v1), "LA;.f:LB;
  *
  */
 TEST_F(IRTypeCheckerTest, getObjectSuccess) {
@@ -1930,11 +1945,11 @@ TEST_F(IRTypeCheckerTest, putInstanceFieldIncompatibleClassFail) {
   IRTypeChecker checker(m_method);
   checker.run();
   EXPECT_TRUE(checker.fail());
-  EXPECT_THAT(
-      checker.what(),
-      MatchesRegex("^Type error in method testMethod at instruction "
-                   "'IPUT v0, v1, LB;.f:I;' "
-                   "@ 0x[0-9a-f]+ for : LA; is not assignable to LB;\n"));
+  EXPECT_THAT(checker.what(),
+              MatchesRegex("^Type error in method testMethod at instruction "
+                           "'IPUT v0, v1, LB;.f:I;' "
+                           "@ 0x[0-9a-f]+ for : LA; is not assignable to "
+                           "LB;\nA\n-> java.lang.Object\n"));
 }
 
 /**
@@ -2033,11 +2048,106 @@ TEST_F(IRTypeCheckerTest, getInstanceFieldIncompatibleClassFail) {
   IRTypeChecker checker(m_method);
   checker.run();
   EXPECT_TRUE(checker.fail());
+  EXPECT_THAT(checker.what(),
+              MatchesRegex("^Type error in method testMethod at instruction "
+                           "'IGET v1, LB;.f:I;' "
+                           "@ 0x[0-9a-f]+ for : LA; is not assignable to "
+                           "LB;\nA\n-> java.lang.Object\n"));
+}
+
+/**
+ * Same as above, but with deeper hierarchy.
+ *
+ */
+TEST_F(IRTypeCheckerTest, deepClassFailPrinting) {
+  const auto type_a = DexType::make_type("LA;");
+  const auto type_b = DexType::make_type("LB;");
+
+  constexpr size_t kClasses = 5;
+
+  std::vector<DexType*> types;
+  types.reserve(kClasses);
+  for (size_t i = 0; i != kClasses; ++i) {
+    types.push_back(DexType::make_type("LX" + std::to_string(i) + ";"));
+  }
+  std::vector<DexType*> intfs;
+  intfs.reserve(kClasses);
+  for (size_t i = 0; i != kClasses; ++i) {
+    intfs.push_back(DexType::make_type("LI" + std::to_string(i) + ";"));
+  }
+  const auto type_y = DexType::make_type("LY;"); // Type without class.
+
+  for (size_t i = 0; i != kClasses; ++i) {
+    ClassCreator cls_x_creator(types[i]);
+    cls_x_creator.set_super(i == 0 ? type_y : types[i - 1]);
+    cls_x_creator.add_interface(intfs[i]);
+    auto x_ctor = DexMethod::make_method(show(types[i]) + ".<init>:(I)V")
+                      ->make_concrete(ACC_PUBLIC, false);
+    cls_x_creator.add_method(x_ctor);
+    auto x_f = DexField::make_field(show(types[i]) + ".f:I;")
+                   ->make_concrete(ACC_PUBLIC);
+    cls_x_creator.add_field(x_f);
+    cls_x_creator.create();
+  }
+
+  ClassCreator cls_a_creator(type_a);
+  cls_a_creator.set_super(types[kClasses - 1]);
+  auto a_ctor = DexMethod::make_method("LA;.<init>:(I)V")
+                    ->make_concrete(ACC_PUBLIC, false);
+  cls_a_creator.add_method(a_ctor);
+  auto a_f = DexField::make_field("LA;.f:I;")->make_concrete(ACC_PUBLIC);
+  cls_a_creator.add_field(a_f);
+  cls_a_creator.create();
+
+  ClassCreator cls_b_creator(type_b);
+  cls_b_creator.set_super(type::java_lang_Object());
+  auto b_ctor = DexMethod::make_method("LB;.<init>:()V")
+                    ->make_concrete(ACC_PUBLIC, false);
+  cls_b_creator.add_method(b_ctor);
+  auto b_f = DexField::make_field("LB;.f:I;")->make_concrete(ACC_PUBLIC);
+  cls_b_creator.add_field(b_f);
+  cls_b_creator.create();
+
+  using namespace dex_asm;
+  std::vector<IRInstruction*> insns = {
+      // literal 2
+      dasm(OPCODE_CONST, {3_v, 2_L}),
+      // type a
+      dasm(OPCODE_NEW_INSTANCE, type_a),
+      dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {1_v}),
+      dasm(OPCODE_INVOKE_DIRECT, a_ctor, {1_v, 3_v}),
+      // type b
+      dasm(OPCODE_NEW_INSTANCE, type_b),
+      dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {2_v}),
+      dasm(OPCODE_INVOKE_DIRECT, b_ctor, {2_v}),
+
+      dasm(OPCODE_IGET, b_f, {1_v}),
+      dasm(IOPCODE_MOVE_RESULT_PSEUDO, {0_v}),
+
+      dasm(OPCODE_RETURN_VOID),
+  };
+
+  add_code(insns);
+  IRTypeChecker checker(m_method);
+  checker.run();
+  EXPECT_TRUE(checker.fail());
   EXPECT_THAT(
       checker.what(),
-      MatchesRegex("^Type error in method testMethod at instruction "
-                   "'IGET v1, LB;.f:I;' "
-                   "@ 0x[0-9a-f]+ for : LA; is not assignable to LB;\n"));
+      MatchesRegex("^Type error in method testMethod at instruction 'IGET v1, "
+                   "LB;.f:I;' @ 0x[0-9a-f]+ for : LA; is not assignable to "
+                   "LB;\nA\n-> X4 \\(implements I4\\)\n---> X3 \\(implements "
+                   "I3\\)\n-----> X2 \\(implements I2\\)\n-------> X1 "
+                   "\\(implements I1\\)\n---------> X0 \\(implements "
+                   "I0\\)\n-----------> Y \\(no class\\)\n"));
+  // Should look like this:
+  // Type error in method ...
+  // A
+  // -> X4 (implements I4)
+  // ---> X3 (implements I3)
+  // -----> X2 (implements I2)
+  // -------> X1 (implements I1)
+  // ---------> X0 (implements I0)
+  // -----------> Y (no class)
 }
 
 /**
@@ -2096,7 +2206,8 @@ TEST_F(IRTypeCheckerTest, putShortFieldIncompatibleClassFail) {
   const std::string exp_fail_str =
       "^Type error in method testMethod at instruction "
       "'IPUT_SHORT v3, v1, LB;.f:S;' "
-      "@ 0x[0-9a-f]+ for : LA; is not assignable to LB;\n";
+      "@ 0x[0-9a-f]+ for : LA; is not assignable to LB;\nA\n-> "
+      "java.lang.Object\n";
 
   IROpcode op = OPCODE_IPUT_SHORT;
   const auto dex_type_a = DexType::make_type("LA;");
@@ -2107,8 +2218,8 @@ TEST_F(IRTypeCheckerTest, putShortFieldIncompatibleClassFail) {
   TestValueType b_type(dex_type_b, type::java_lang_Object(), "LB;.<init>:()V",
                        "LB;.f:S;");
 
-  field_incompatible_fail_helper(a_type, b_type, exp_fail_str.c_str(), op, true,
-                                 SHORT, m_method);
+  EXPECT_TRUE(field_incompatible_fail_helper(a_type, b_type, exp_fail_str, op,
+                                             true, SHORT, m_method));
 }
 
 /**
@@ -2149,7 +2260,8 @@ TEST_F(IRTypeCheckerTest, getShortFieldIncompatibleClassFail) {
   const std::string exp_fail_str =
       "^Type error in method testMethod at instruction "
       "'IGET_SHORT v1, LB;.f:S;' "
-      "@ 0x[0-9a-f]+ for : LA; is not assignable to LB;\n";
+      "@ 0x[0-9a-f]+ for : LA; is not assignable to LB;\nA\n-> "
+      "java.lang.Object\n";
   IROpcode op = OPCODE_IGET_SHORT;
   const auto dex_type_a = DexType::make_type("LA;");
   const auto dex_type_b = DexType::make_type("LB;");
@@ -2159,8 +2271,8 @@ TEST_F(IRTypeCheckerTest, getShortFieldIncompatibleClassFail) {
   TestValueType b_type(dex_type_b, type::java_lang_Object(), "LB;.<init>:()V",
                        "LB;.f:S;");
 
-  field_incompatible_fail_helper(a_type, b_type, exp_fail_str, op, false, SHORT,
-                                 m_method);
+  EXPECT_TRUE(field_incompatible_fail_helper(a_type, b_type, exp_fail_str, op,
+                                             false, SHORT, m_method));
 }
 
 /**
@@ -2200,7 +2312,8 @@ TEST_F(IRTypeCheckerTest, putBoolFieldIncompatibleClassFail) {
   const std::string exp_fail_str =
       "^Type error in method testMethod at instruction "
       "'IPUT_BOOLEAN v3, v1, LB;.f:Z;' "
-      "@ 0x[0-9a-f]+ for : LA; is not assignable to LB;\n";
+      "@ 0x[0-9a-f]+ for : LA; is not assignable to LB;\nA\n-> "
+      "java.lang.Object\n";
 
   IROpcode op = OPCODE_IPUT_BOOLEAN;
   const auto dex_type_a = DexType::make_type("LA;");
@@ -2211,8 +2324,8 @@ TEST_F(IRTypeCheckerTest, putBoolFieldIncompatibleClassFail) {
   TestValueType b_type(dex_type_b, type::java_lang_Object(), "LB;.<init>:()V",
                        "LB;.f:Z;");
 
-  field_incompatible_fail_helper(a_type, b_type, exp_fail_str, op, true, SHORT,
-                                 m_method);
+  EXPECT_TRUE(field_incompatible_fail_helper(a_type, b_type, exp_fail_str, op,
+                                             true, SHORT, m_method));
 }
 
 /**
@@ -2254,7 +2367,8 @@ TEST_F(IRTypeCheckerTest, getBoolFieldIncompatibleClassFail) {
   const std::string exp_fail_str =
       "^Type error in method testMethod at instruction "
       "'IGET_BOOLEAN v1, LB;.f:Z;' "
-      "@ 0x[0-9a-f]+ for : LA; is not assignable to LB;\n";
+      "@ 0x[0-9a-f]+ for : LA; is not assignable to LB;\nA\n-> "
+      "java.lang.Object\n";
 
   IROpcode op = OPCODE_IGET_BOOLEAN;
   const auto dex_type_a = DexType::make_type("LA;");
@@ -2265,8 +2379,8 @@ TEST_F(IRTypeCheckerTest, getBoolFieldIncompatibleClassFail) {
   TestValueType b_type(dex_type_b, type::java_lang_Object(), "LB;.<init>:()V",
                        "LB;.f:Z;");
 
-  field_incompatible_fail_helper(a_type, b_type, exp_fail_str, op, false, SHORT,
-                                 m_method);
+  EXPECT_TRUE(field_incompatible_fail_helper(a_type, b_type, exp_fail_str, op,
+                                             false, SHORT, m_method));
 }
 
 /**
@@ -2308,7 +2422,8 @@ TEST_F(IRTypeCheckerTest, putWideFieldIncompatibleClassFail) {
   const std::string exp_fail_str =
       "^Type error in method testMethod at instruction "
       "'IPUT_WIDE v3, v1, LB;.f:J;' "
-      "@ 0x[0-9a-f]+ for : LA; is not assignable to LB;\n";
+      "@ 0x[0-9a-f]+ for : LA; is not assignable to LB;\nA\n-> "
+      "java.lang.Object\n";
 
   IROpcode op = OPCODE_IPUT_WIDE;
   const auto dex_type_a = DexType::make_type("LA;");
@@ -2319,8 +2434,8 @@ TEST_F(IRTypeCheckerTest, putWideFieldIncompatibleClassFail) {
   TestValueType b_type(dex_type_b, type::java_lang_Object(), "LB;.<init>:()V",
                        "LB;.f:J;");
 
-  field_incompatible_fail_helper(a_type, b_type, exp_fail_str, op, true, WIDE,
-                                 m_method);
+  EXPECT_TRUE(field_incompatible_fail_helper(a_type, b_type, exp_fail_str, op,
+                                             true, WIDE, m_method));
 }
 
 /**
@@ -2362,7 +2477,8 @@ TEST_F(IRTypeCheckerTest, getWideFieldIncompatibleClassFail) {
   const std::string exp_fail_str =
       "^Type error in method testMethod at instruction "
       "'IGET_WIDE v1, LB;.f:J;' "
-      "@ 0x[0-9a-f]+ for : LA; is not assignable to LB;\n";
+      "@ 0x[0-9a-f]+ for : LA; is not assignable to LB;\nA\n-> "
+      "java.lang.Object\n";
 
   IROpcode op = OPCODE_IGET_WIDE;
   const auto dex_type_a = DexType::make_type("LA;");
@@ -2372,8 +2488,8 @@ TEST_F(IRTypeCheckerTest, getWideFieldIncompatibleClassFail) {
                        "LA;.f:J;");
   TestValueType b_type(dex_type_b, type::java_lang_Object(), "LB;.<init>:()V",
                        "LB;.f:J;");
-  field_incompatible_fail_helper(a_type, b_type, exp_fail_str, op, false, WIDE,
-                                 m_method);
+  EXPECT_TRUE(field_incompatible_fail_helper(a_type, b_type, exp_fail_str, op,
+                                             false, WIDE, m_method));
 }
 
 /**
@@ -2414,7 +2530,8 @@ TEST_F(IRTypeCheckerTest, putByteFieldIncompatibleClassFail) {
   const std::string exp_fail_str =
       "^Type error in method testMethod at instruction "
       "'IPUT_BYTE v3, v1, LB;.f:B;' "
-      "@ 0x[0-9a-f]+ for : LA; is not assignable to LB;\n";
+      "@ 0x[0-9a-f]+ for : LA; is not assignable to LB;\nA\n-> "
+      "java.lang.Object\n";
 
   IROpcode op = OPCODE_IPUT_BYTE;
   const auto dex_type_a = DexType::make_type("LA;");
@@ -2425,8 +2542,8 @@ TEST_F(IRTypeCheckerTest, putByteFieldIncompatibleClassFail) {
   TestValueType b_type(dex_type_b, type::java_lang_Object(), "LB;.<init>:()V",
                        "LB;.f:B;");
 
-  field_incompatible_fail_helper(a_type, b_type, exp_fail_str, op, true, SHORT,
-                                 m_method);
+  EXPECT_TRUE(field_incompatible_fail_helper(a_type, b_type, exp_fail_str, op,
+                                             true, SHORT, m_method));
 }
 
 /**
@@ -2468,7 +2585,8 @@ TEST_F(IRTypeCheckerTest, getByteFieldIncompatibleClassFail) {
   const std::string exp_fail_str =
       "^Type error in method testMethod at instruction "
       "'IGET_BYTE v1, LB;.f:B;' "
-      "@ 0x[0-9a-f]+ for : LA; is not assignable to LB;\n";
+      "@ 0x[0-9a-f]+ for : LA; is not assignable to LB;\nA\n-> "
+      "java.lang.Object\n";
 
   IROpcode op = OPCODE_IGET_BYTE;
   const auto dex_type_a = DexType::make_type("LA;");
@@ -2479,8 +2597,8 @@ TEST_F(IRTypeCheckerTest, getByteFieldIncompatibleClassFail) {
   TestValueType b_type(dex_type_b, type::java_lang_Object(), "LB;.<init>:()V",
                        "LB;.f:B;");
 
-  field_incompatible_fail_helper(a_type, b_type, exp_fail_str, op, false, SHORT,
-                                 m_method);
+  EXPECT_TRUE(field_incompatible_fail_helper(a_type, b_type, exp_fail_str, op,
+                                             false, SHORT, m_method));
 }
 
 /**
@@ -2522,7 +2640,8 @@ TEST_F(IRTypeCheckerTest, putCharFieldIncompatibleClassFail) {
   const std::string exp_fail_str =
       "^Type error in method testMethod at instruction "
       "'IPUT_CHAR v3, v1, LB;.f:C;' "
-      "@ 0x[0-9a-f]+ for : LA; is not assignable to LB;\n";
+      "@ 0x[0-9a-f]+ for : LA; is not assignable to LB;\nA\n-> "
+      "java.lang.Object\n";
 
   IROpcode op = OPCODE_IPUT_CHAR;
   const auto dex_type_a = DexType::make_type("LA;");
@@ -2533,8 +2652,8 @@ TEST_F(IRTypeCheckerTest, putCharFieldIncompatibleClassFail) {
   TestValueType b_type(dex_type_b, type::java_lang_Object(), "LB;.<init>:()V",
                        "LB;.f:C;");
 
-  field_incompatible_fail_helper(a_type, b_type, exp_fail_str, op, true, SHORT,
-                                 m_method);
+  EXPECT_TRUE(field_incompatible_fail_helper(a_type, b_type, exp_fail_str, op,
+                                             true, SHORT, m_method));
 }
 
 /**
@@ -2576,7 +2695,8 @@ TEST_F(IRTypeCheckerTest, getCharFieldIncompatibleClassFail) {
   const std::string exp_fail_str =
       "^Type error in method testMethod at instruction "
       "'IGET_CHAR v1, LB;.f:C;' "
-      "@ 0x[0-9a-f]+ for : LA; is not assignable to LB;\n";
+      "@ 0x[0-9a-f]+ for : LA; is not assignable to LB;\nA\n-> "
+      "java.lang.Object\n";
 
   IROpcode op = OPCODE_IGET_CHAR;
   const auto dex_type_a = DexType::make_type("LA;");
@@ -2587,8 +2707,8 @@ TEST_F(IRTypeCheckerTest, getCharFieldIncompatibleClassFail) {
   TestValueType b_type(dex_type_b, type::java_lang_Object(), "LB;.<init>:()V",
                        "LB;.f:C;");
 
-  field_incompatible_fail_helper(a_type, b_type, exp_fail_str, op, false, SHORT,
-                                 m_method);
+  EXPECT_TRUE(field_incompatible_fail_helper(a_type, b_type, exp_fail_str, op,
+                                             false, SHORT, m_method));
 }
 
 /**
