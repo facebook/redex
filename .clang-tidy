@@ -3,6 +3,7 @@
 InheritParentConfig: true
 Checks: '
 bugprone-*,
+-bugprone-branch-clone,
 -bugprone-narrowing-conversions,
 -bugprone-too-small-loop-variable,
 bugprone-macro-parentheses,
