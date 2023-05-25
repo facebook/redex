@@ -1006,13 +1006,11 @@ bool IRCode::try_sync(DexCode* code) {
       addr += count;
     } else {
       // Emit packed.
-      std::vector<int32_t> case_keys;
-      case_keys.reserve(targets.size());
+      instruction_lowering::CaseKeysExtentBuilder case_keys;
       for (const BranchTarget* t : targets) {
-        case_keys.push_back(t->case_key);
+        case_keys.insert(t->case_key);
       }
-      const uint64_t size =
-          instruction_lowering::get_packed_switch_size(case_keys);
+      const uint64_t size = case_keys->get_packed_switch_size();
       always_assert(size <= std::numeric_limits<uint16_t>::max());
       const size_t count = (size * 2) + 4;
       auto packed_payload = std::make_unique<uint16_t[]>(count);
@@ -1192,16 +1190,16 @@ uint32_t IRCode::estimate_code_units() const {
     return m_cfg->estimate_code_units();
   }
   uint32_t code_units = m_ir_list->estimate_code_units();
-  std::unordered_map<MethodItemEntry*, std::vector<int32_t>> switch_case_keys;
+  std::unordered_map<MethodItemEntry*,
+                     instruction_lowering::CaseKeysExtentBuilder>
+      switch_case_keys;
   for (auto it = m_ir_list->begin(); it != m_ir_list->end(); it++) {
     if (it->type == MFLOW_TARGET && it->target->type == BRANCH_MULTI) {
-      switch_case_keys[it->target->src].push_back(it->target->case_key);
+      switch_case_keys[it->target->src].insert(it->target->case_key);
     }
   }
   for (auto&& [_, case_keys] : switch_case_keys) {
-    std::sort(case_keys.begin(), case_keys.end());
-    code_units +=
-        instruction_lowering::estimate_switch_payload_code_units(case_keys);
+    code_units += case_keys->estimate_switch_payload_code_units();
   }
   return code_units;
 }

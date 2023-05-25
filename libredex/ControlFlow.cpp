@@ -325,15 +325,13 @@ uint32_t Block::estimate_code_units() const {
   auto code_units = m_entries.estimate_code_units();
   auto it = get_last_insn();
   if (it != end() && opcode::is_switch(it->insn->opcode())) {
-    std::vector<int32_t> case_keys;
+    instruction_lowering::CaseKeysExtentBuilder case_keys;
     for (auto* e : succs()) {
       if (e->type() == EDGE_BRANCH) {
-        case_keys.push_back(*e->case_key());
+        case_keys.insert(*e->case_key());
       }
     }
-    std::sort(case_keys.begin(), case_keys.end());
-    code_units +=
-        instruction_lowering::estimate_switch_payload_code_units(case_keys);
+    code_units += case_keys->estimate_switch_payload_code_units();
   }
   return code_units;
 }

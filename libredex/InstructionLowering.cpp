@@ -495,8 +495,9 @@ Stats lower(DexMethod* method, bool lower_with_cfg) {
     // its cases are laid out.
     if (op == OPCODE_SWITCH) {
       const auto& keys = case_keys.at(&*it);
-      DexOpcode dop = sufficiently_sparse(keys) ? DOPCODE_SPARSE_SWITCH
-                                                : DOPCODE_PACKED_SWITCH;
+      DexOpcode dop = CaseKeysExtent::from_ordered(keys).sufficiently_sparse()
+                          ? DOPCODE_SPARSE_SWITCH
+                          : DOPCODE_PACKED_SWITCH;
       it->dex_insn->set_opcode(dop);
     }
   }
@@ -521,34 +522,60 @@ Stats run(DexStoresVector& stores, bool lower_with_cfg) {
   });
 }
 
+CaseKeysExtent CaseKeysExtent::from_ordered(
+    const std::vector<int32_t>& case_keys) {
+  always_assert(!case_keys.empty());
+  always_assert(case_keys.front() <= case_keys.back());
+  return CaseKeysExtent{case_keys.front(), case_keys.back(),
+                        (uint32_t)case_keys.size()};
+}
+
 // Computes number of entries needed for a packed switch, accounting for any
 // holes that might exist
-uint64_t get_packed_switch_size(const std::vector<int32_t>& case_keys) {
-  int32_t first_key = case_keys.front();
-  int32_t last_key = case_keys.back();
+uint64_t CaseKeysExtent::get_packed_switch_size() const {
   always_assert(first_key <= last_key);
+  always_assert(size > 0);
   return (uint64_t)((int64_t)last_key - first_key + 1);
 }
 
 // Whether a sparse switch statement will be more compact than a packed switch
-bool sufficiently_sparse(const std::vector<int32_t>& case_keys) {
-  uint64_t size = get_packed_switch_size(case_keys);
+bool CaseKeysExtent::sufficiently_sparse() const {
+  uint64_t packed_switch_size = get_packed_switch_size();
   // packed switches must have less than 2^16 entries, and
   // sparse switches pay off once there are more holes than entries
-  return size > std::numeric_limits<uint16_t>::max() ||
-         size / 2 > case_keys.size();
+  return packed_switch_size > std::numeric_limits<uint16_t>::max() ||
+         packed_switch_size / 2 > size;
 }
 
-uint32_t estimate_switch_payload_code_units(
-    const std::vector<int32_t>& case_keys) {
-  if (sufficiently_sparse(case_keys)) {
+uint32_t CaseKeysExtent::estimate_switch_payload_code_units() const {
+  if (sufficiently_sparse()) {
     // sparse-switch-payload
-    return 2 + 4 * case_keys.size();
+    return 2 + 4 * size;
   } else {
     // packed-switch-payload
-    const uint64_t size = get_packed_switch_size(case_keys);
-    return 4 + size * 2;
+    const uint64_t packed_switch_size = get_packed_switch_size();
+    return 4 + packed_switch_size * 2;
   }
+}
+
+void CaseKeysExtentBuilder::insert(int32_t case_key) {
+  if (!m_info) {
+    m_info = (CaseKeysExtent){case_key, case_key, 1};
+    return;
+  }
+  m_info->first_key = std::min(m_info->first_key, case_key);
+  m_info->last_key = std::max(m_info->last_key, case_key);
+  m_info->size++;
+}
+
+const CaseKeysExtent& CaseKeysExtentBuilder::operator*() const {
+  always_assert(m_info);
+  return *m_info;
+}
+
+const CaseKeysExtent* CaseKeysExtentBuilder::operator->() const {
+  always_assert(m_info);
+  return &*m_info;
 }
 
 } // namespace instruction_lowering

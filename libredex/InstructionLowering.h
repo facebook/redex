@@ -9,6 +9,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 class DexMethod;
@@ -59,16 +60,33 @@ bool try_2addr_conversion(MethodItemEntry*);
 
 } // namespace impl
 
-// Computes number of entries needed for a packed switch, accounting for any
-// holes that might exist; assumes case_keys are sorted
-uint64_t get_packed_switch_size(const std::vector<int32_t>& case_keys);
+struct CaseKeysExtent {
+  int32_t first_key{0};
+  int32_t last_key{0};
+  uint32_t size{0};
 
-// Whether a sparse switch statement will be more compact than a packed switch;
-// assumes case_keys are sorted
-bool sufficiently_sparse(const std::vector<int32_t>& case_keys);
+  // Assumes case_keys are not empty and sorted.
+  static CaseKeysExtent from_ordered(const std::vector<int32_t>& case_keys);
 
-// Assumes case_keys are sorted
-uint32_t estimate_switch_payload_code_units(
-    const std::vector<int32_t>& case_keys);
+  // Computes number of entries needed for a packed switch, accounting for any
+  // holes that might exist; assumes case_keys are sorted
+  uint64_t get_packed_switch_size() const;
+
+  // Whether a sparse switch statement will be more compact than a packed switch
+  bool sufficiently_sparse() const;
+
+  // Assumes case_keys are sorted
+  uint32_t estimate_switch_payload_code_units() const;
+};
+
+class CaseKeysExtentBuilder {
+ private:
+  std::optional<CaseKeysExtent> m_info;
+
+ public:
+  void insert(int32_t case_key);
+  const CaseKeysExtent& operator*() const;
+  const CaseKeysExtent* operator->() const;
+};
 
 } // namespace instruction_lowering
