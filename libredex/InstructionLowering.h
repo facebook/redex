@@ -60,10 +60,15 @@ bool try_2addr_conversion(MethodItemEntry*);
 } // namespace impl
 
 // Computes number of entries needed for a packed switch, accounting for any
-// holes that might exist
+// holes that might exist; assumes case_keys are sorted
 uint64_t get_packed_switch_size(const std::vector<int32_t>& case_keys);
 
-// Whether a sparse switch statement will be more compact than a packed switch
+// Whether a sparse switch statement will be more compact than a packed switch;
+// assumes case_keys are sorted
 bool sufficiently_sparse(const std::vector<int32_t>& case_keys);
+
+// Assumes case_keys are sorted
+uint32_t estimate_switch_payload_code_units(
+    const std::vector<int32_t>& case_keys);
 
 } // namespace instruction_lowering

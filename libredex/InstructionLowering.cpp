@@ -539,4 +539,16 @@ bool sufficiently_sparse(const std::vector<int32_t>& case_keys) {
          size / 2 > case_keys.size();
 }
 
+uint32_t estimate_switch_payload_code_units(
+    const std::vector<int32_t>& case_keys) {
+  if (sufficiently_sparse(case_keys)) {
+    // sparse-switch-payload
+    return 4 + 4 * case_keys.size();
+  } else {
+    // packed-switch-payload
+    const uint64_t size = get_packed_switch_size(case_keys);
+    return 4 + size * 2;
+  }
+}
+
 } // namespace instruction_lowering

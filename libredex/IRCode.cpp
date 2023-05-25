@@ -1200,15 +1200,8 @@ uint32_t IRCode::estimate_code_units() const {
   }
   for (auto&& [_, case_keys] : switch_case_keys) {
     std::sort(case_keys.begin(), case_keys.end());
-    if (instruction_lowering::sufficiently_sparse(case_keys)) {
-      // sparse-switch-payload
-      code_units += 4 + 4 * case_keys.size();
-    } else {
-      // packed-switch-payload
-      const uint64_t size =
-          instruction_lowering::get_packed_switch_size(case_keys);
-      code_units += 4 + size * 2;
-    }
+    code_units +=
+        instruction_lowering::estimate_switch_payload_code_units(case_keys);
   }
   return code_units;
 }
