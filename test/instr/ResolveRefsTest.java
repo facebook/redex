@@ -81,6 +81,25 @@ class NotYourFavoriteCat extends Cat {
   Cat foo() { return new NotYourFavoriteCat(); }
 }
 
+// Resolve pure ref to interface method def
+interface Concept {
+  Concept getReal();
+  String getVal();
+}
+abstract class Incomplete implements Concept {
+  Concept getFake() { return getReal(); }
+}
+final class Complete extends Incomplete {
+  @Override
+  public Concept getReal() {
+    return this;
+  }
+  @Override
+  public String getVal() {
+    return "Complete";
+  }
+}
+
 @KeepForRedexTest
 public class ResolveRefsTest {
 
@@ -136,5 +155,14 @@ public class ResolveRefsTest {
     assertThat(c.getName()).isEqualTo("NotYourFavoriteCat");
     Animal bar = c.bar();
     assertThat(bar.getName()).isEqualTo("NotYourFavoriteCat");
+  }
+
+  @KeepForRedexTest
+  @Test
+  public void testResolveMirandaToInterface() {
+    Concept c = new Complete();
+    assertThat(c.getReal().getVal()).isEqualTo("Complete");
+    Incomplete i = new Complete();
+    assertThat(i.getFake().getVal()).isEqualTo("Complete");
   }
 }

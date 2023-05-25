@@ -32,6 +32,7 @@ struct RefStats {
   size_t num_mref_simple_resolved = 0;
   size_t num_fref_simple_resolved = 0;
   size_t num_invoke_virtual_refined = 0;
+  size_t num_resolve_to_interface = 0;
   size_t num_invoke_interface_replaced = 0;
   size_t num_invoke_super_removed = 0;
   // External method refs
@@ -60,6 +61,10 @@ struct RefStats {
           num_invoke_virtual_refined);
     TRACE(RESO,
           1,
+          "[ref reso] resolve invoke-virtual to invoke-interface %zu",
+          num_resolve_to_interface);
+    TRACE(RESO,
+          1,
           "[ref reso] invoke-interface replaced %zu",
           num_invoke_interface_replaced);
     TRACE(RESO,
@@ -85,6 +90,7 @@ struct RefStats {
     mgr->incr_metric("method_refs_simple_resolved", num_mref_simple_resolved);
     mgr->incr_metric("field_refs_simple_resolved", num_fref_simple_resolved);
     mgr->incr_metric("num_invoke_virtual_refined", num_invoke_virtual_refined);
+    mgr->incr_metric("num_resolve_to_interface", num_resolve_to_interface);
     mgr->incr_metric("num_invoke_interface_replaced",
                      num_invoke_interface_replaced);
     mgr->incr_metric("num_invoke_super_removed", num_invoke_super_removed);
@@ -115,6 +121,7 @@ struct RefStats {
     num_mref_simple_resolved += that.num_mref_simple_resolved;
     num_fref_simple_resolved += that.num_fref_simple_resolved;
     num_invoke_virtual_refined += that.num_invoke_virtual_refined;
+    num_resolve_to_interface += that.num_resolve_to_interface;
     num_invoke_interface_replaced += that.num_invoke_interface_replaced;
     num_invoke_super_removed += that.num_invoke_super_removed;
     num_bailed_on_external += that.num_bailed_on_external;
@@ -243,6 +250,16 @@ void ResolveRefsPass::resolve_method_refs(const DexMethod* caller,
   always_assert(insn->has_method());
   auto mref = insn->get_method();
   auto mdef = resolve_method(mref, opcode_to_search(insn), caller);
+  bool resolved_to_interface = false;
+  if (!mdef && opcode_to_search(insn) == MethodSearch::Virtual) {
+    mdef = resolve_method(mref, MethodSearch::InterfaceVirtual, caller);
+    if (mdef) {
+      TRACE(RESO, 4, "InterfaceVirtual resolve to %s in %s", SHOW(mdef),
+            SHOW(insn));
+      const auto* cls = type_class(mdef->get_class());
+      resolved_to_interface = cls && is_interface(cls);
+    }
+  }
   if (!mdef || mdef == mref) {
     return;
   }
@@ -267,6 +284,10 @@ void ResolveRefsPass::resolve_method_refs(const DexMethod* caller,
   TRACE(RESO, 2, "Resolving %s\n\t=>%s", SHOW(mref), SHOW(mdef));
   insn->set_method(mdef);
   stats.num_mref_simple_resolved++;
+  if (resolved_to_interface && opcode::is_invoke_virtual(insn->opcode())) {
+    insn->set_opcode(OPCODE_INVOKE_INTERFACE);
+    stats.num_resolve_to_interface++;
+  }
 }
 
 RefStats ResolveRefsPass::resolve_refs(DexMethod* method) {

@@ -187,3 +187,49 @@ TEST_F(PostVerify, RTypeSpecializationCollision) {
   auto* foo_cat = find_vmethod(*badcat_cls, "foo", foo_cat_proto);
   ASSERT_EQ(nullptr, foo_cat);
 }
+
+TEST_F(PreVerify, ResolveMirandaToInterface) {
+  auto conc_cls = find_class_named(classes, "Lcom/facebook/redextest/Concept;");
+  ASSERT_NE(nullptr, conc_cls);
+  auto incomp_cls =
+      find_class_named(classes, "Lcom/facebook/redextest/Incomplete;");
+  ASSERT_NE(nullptr, incomp_cls);
+  auto comp_cls =
+      find_class_named(classes, "Lcom/facebook/redextest/Complete;");
+  ASSERT_NE(nullptr, comp_cls);
+
+  // Miranda pure ref
+  auto incomp_getfake = find_vmethod_named(*incomp_cls, "getFake");
+  ASSERT_NE(nullptr, incomp_getfake);
+  ASSERT_NE(nullptr, find_invoke(incomp_getfake, DOPCODE_INVOKE_VIRTUAL,
+                                 "getReal", incomp_cls->get_type()));
+
+  // Interface virtual scope rtype not specialized
+  auto conc_getreal = find_vmethod_named(*conc_cls, "getReal");
+  ASSERT_EQ(conc_getreal->get_proto()->get_rtype(), conc_cls->get_type());
+  auto comp_getreal = find_vmethod_named(*comp_cls, "getReal");
+  ASSERT_EQ(comp_getreal->get_proto()->get_rtype(), conc_cls->get_type());
+}
+
+TEST_F(PostVerify, ResolveMirandaToInterface) {
+  auto conc_cls = find_class_named(classes, "Lcom/facebook/redextest/Concept;");
+  ASSERT_NE(nullptr, conc_cls);
+  auto incomp_cls =
+      find_class_named(classes, "Lcom/facebook/redextest/Incomplete;");
+  ASSERT_NE(nullptr, incomp_cls);
+  auto comp_cls =
+      find_class_named(classes, "Lcom/facebook/redextest/Complete;");
+  ASSERT_NE(nullptr, comp_cls);
+
+  // Pure ref resolved to interface method
+  auto incomp_getfake = find_vmethod_named(*incomp_cls, "getFake");
+  ASSERT_NE(nullptr, incomp_getfake);
+  ASSERT_NE(nullptr, find_invoke(incomp_getfake, DOPCODE_INVOKE_INTERFACE,
+                                 "getReal", conc_cls->get_type()));
+
+  // Interface virtual scope rtype specialized
+  auto conc_getreal = find_vmethod_named(*conc_cls, "getReal");
+  ASSERT_EQ(conc_getreal->get_proto()->get_rtype(), comp_cls->get_type());
+  auto comp_getreal = find_vmethod_named(*comp_cls, "getReal");
+  ASSERT_EQ(comp_getreal->get_proto()->get_rtype(), comp_cls->get_type());
+}
