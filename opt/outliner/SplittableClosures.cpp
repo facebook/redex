@@ -49,6 +49,35 @@ struct ScoredClosure {
   }
 };
 
+// For a given switch-block/closures, find all incoming preds which will be
+// eliminated by splitting them out.
+std::unordered_set<const ReducedEdge*> get_except_preds(
+    cfg::Block* switch_block,
+    const std::vector<const Closure*>& closures,
+    const std::unordered_set<const ReducedBlock*>& reduced_components) {
+  std::unordered_set<const ReducedEdge*> except_preds;
+  for (auto* c : closures) {
+    except_preds.insert(c->reduced_block->preds.begin(),
+                        c->reduced_block->preds.end());
+  }
+  if (switch_block) {
+    for (auto* c : closures) {
+      for (auto* pred : c->reduced_block->preds) {
+        if (reduced_components.count(pred->src)) {
+          continue;
+        }
+        for (auto* e : pred->edges) {
+          if (e->src() != switch_block) {
+            except_preds.erase(pred);
+            break;
+          }
+        }
+      }
+    }
+  }
+  return except_preds;
+}
+
 std::optional<ScoredClosure> score(
     const Config& config,
     const MethodClosures& mcs,
@@ -120,13 +149,10 @@ std::optional<ScoredClosure> score(
     not_reached();
   }
 
-  std::unordered_set<const ReducedEdge*> preds;
-  for (auto* c : closures) {
-    preds.insert(c->reduced_block->preds.begin(),
-                 c->reduced_block->preds.end());
-  }
+  auto except_preds =
+      get_except_preds(switch_block, closures, sc.reduced_components);
   auto& rcfg = *mcs.rcfg;
-  auto remaining_blocks = rcfg.reachable(rcfg.entry_block(), preds);
+  auto remaining_blocks = rcfg.reachable(rcfg.entry_block(), except_preds);
   sc.remaining_size = code_size(remaining_blocks);
   sc.remaining_size = sc.remaining_size < remaining_size_reduction
                           ? 0
