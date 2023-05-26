@@ -321,6 +321,7 @@ libopt_la_SOURCES = \
 	opt/class-merging/IntraDexClassMergingPass.cpp \
 	opt/class-merging/ModelSpecGenerator.cpp \
 	opt/class-splitting/ClassSplittingPass.cpp \
+	opt/const-class-branches/TransformConstClassBranches.cpp \
 	opt/constant-propagation/ConstantPropagationPass.cpp \
 	opt/constant-propagation/ConstantPropagationRuntimeAssert.cpp \
 	opt/constant-propagation/IPConstantPropagation.cpp \

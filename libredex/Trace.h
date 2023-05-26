@@ -33,6 +33,7 @@ class DexType;
   TM(BRIDGE)            \
   TM(BUILDERS)          \
   TM(CALLGRAPH)         \
+  TM(CCB)               \
   TM(CDDP)              \
   TM(CFG)               \
   TM(CHECKRECURSION)    \
