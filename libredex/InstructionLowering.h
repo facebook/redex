@@ -9,9 +9,11 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <optional>
 #include <vector>
 
+struct ConfigFiles;
 class DexMethod;
 class DexStore;
 class IRInstruction;
@@ -26,10 +28,36 @@ namespace instruction_lowering {
 struct Stats {
   size_t to_2addr{0};
   size_t move_for_check_cast{0};
+  struct SparseSwitches {
+    struct Data {
+      size_t all{0};
+      size_t in_hot_methods{0};
+
+      Data() = default;
+      Data(size_t all, size_t in_hot_methods)
+          : all(all), in_hot_methods(in_hot_methods) {}
+
+      Data& operator+=(const Data& rhs) {
+        all += rhs.all;
+        in_hot_methods += rhs.in_hot_methods;
+        return *this;
+      }
+    };
+
+    std::map<size_t, Data> data;
+
+    SparseSwitches& operator+=(const SparseSwitches& rhs) {
+      for (const auto& kv : rhs.data) {
+        data[kv.first] += kv.second;
+      }
+      return *this;
+    }
+  } sparse_switches{};
 
   Stats& operator+=(const Stats& that) {
     to_2addr += that.to_2addr;
     move_for_check_cast += that.move_for_check_cast;
+    sparse_switches += that.sparse_switches;
     return *this;
   }
 };
@@ -44,9 +72,13 @@ struct Stats {
  *   - Record the number of instructions converted to /2addr form, and the
  *     number of move instructions inserted because of check-casts.
  */
-Stats lower(DexMethod*, bool lower_with_cfg = false);
+Stats lower(DexMethod*,
+            bool lower_with_cfg = false,
+            ConfigFiles* conf = nullptr);
 
-Stats run(DexStoresVector&, bool lower_with_cfg = false);
+Stats run(DexStoresVector&,
+          bool lower_with_cfg = false,
+          ConfigFiles* conf = nullptr);
 
 namespace impl {
 

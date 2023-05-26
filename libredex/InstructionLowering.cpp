@@ -7,16 +7,25 @@
 
 #include "InstructionLowering.h"
 
+#include "ConfigFiles.h"
 #include "Debug.h"
 #include "DexInstruction.h"
 #include "DexOpcodeDefs.h"
 #include "DexStore.h"
 #include "IRInstruction.h"
+#include "MethodProfiles.h"
 #include "Show.h"
 #include "Walkers.h"
 #include <array>
+#include <optional>
 
 namespace instruction_lowering {
+
+namespace {
+
+constexpr double kSparseSwitchHotMethodAppearThreshold = 0.0;
+
+} // namespace
 
 /*
  * Returns whether the given value can fit in an integer of :width bits.
@@ -425,7 +434,7 @@ void lower_simple_instruction(DexMethod*, IRCode*, IRList::iterator* it_) {
 
 } // namespace
 
-Stats lower(DexMethod* method, bool lower_with_cfg) {
+Stats lower(DexMethod* method, bool lower_with_cfg, ConfigFiles* conf) {
   Stats stats;
   auto* code = method->get_code();
   always_assert(code != nullptr);
@@ -461,6 +470,8 @@ Stats lower(DexMethod* method, bool lower_with_cfg) {
     code->erase_and_dispose(code_begin);
     code_begin = code->begin();
   }
+
+  std::optional<bool> method_is_hot = std::nullopt;
 
   for (auto it = code_begin; it != code->end(); ++it) {
     if (it->type != MFLOW_OPCODE) {
@@ -499,6 +510,28 @@ Stats lower(DexMethod* method, bool lower_with_cfg) {
                           ? DOPCODE_SPARSE_SWITCH
                           : DOPCODE_PACKED_SWITCH;
       it->dex_insn->set_opcode(dop);
+      if (dop == DexOpcode::DOPCODE_SPARSE_SWITCH) {
+        if (!method_is_hot) {
+          if (conf != nullptr) {
+            method_is_hot = [&]() {
+              for (auto& p : conf->get_method_profiles().all_interactions()) {
+                auto it = p.second.find(method);
+                if (it != p.second.end() &&
+                    it->second.appear_percent >
+                        kSparseSwitchHotMethodAppearThreshold) {
+                  return true;
+                }
+              }
+              return false;
+            }();
+          } else {
+            method_is_hot = false;
+          }
+        }
+
+        Stats::SparseSwitches::Data data(1, (*method_is_hot) ? 1 : 0);
+        stats.sparse_switches.data[keys.size()] += data;
+      }
     }
   }
   for (auto it = code->begin(); it != code->end(); ++it) {
@@ -511,15 +544,16 @@ Stats lower(DexMethod* method, bool lower_with_cfg) {
   return stats;
 }
 
-Stats run(DexStoresVector& stores, bool lower_with_cfg) {
+Stats run(DexStoresVector& stores, bool lower_with_cfg, ConfigFiles* conf) {
   auto scope = build_class_scope(stores);
-  return walk::parallel::methods<Stats>(scope, [lower_with_cfg](DexMethod* m) {
-    Stats stats;
-    if (m->get_code() == nullptr) {
-      return stats;
-    }
-    return lower(m, lower_with_cfg);
-  });
+  return walk::parallel::methods<Stats>(scope,
+                                        [lower_with_cfg, conf](DexMethod* m) {
+                                          Stats stats;
+                                          if (m->get_code() == nullptr) {
+                                            return stats;
+                                          }
+                                          return lower(m, lower_with_cfg, conf);
+                                        });
 }
 
 CaseKeysExtent CaseKeysExtent::from_ordered(
