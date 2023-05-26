@@ -8,10 +8,16 @@
 #pragma once
 
 #include <boost/optional.hpp>
+#include <boost/variant.hpp>
 #include <map>
+#include <ostream>
 #include <unordered_set>
 
+#include "ConstantEnvironment.h"
+#include "ConstantPropagationAnalysis.h"
 #include "ControlFlow.h"
+#include "InstructionAnalyzer.h"
+#include "SignedConstantDomain.h"
 
 /**
  * The purpose of this class is to find control flow structures that are
@@ -19,27 +25,88 @@
  * switches as long as the only intervening instructions are const loads that do
  * not overwrite the switching register.
  */
-class SwitchEquivFinder final {
+class SwitchEquivFinder {
  public:
-  using KeyToCase = std::map<boost::optional<int32_t>, cfg::Block*>;
+  using Analyzer = InstructionAnalyzerCombiner<
+      constant_propagation::ConstantClassObjectAnalyzer,
+      constant_propagation::PrimitiveAnalyzer>;
+
+  static constexpr uint32_t NO_LEAF_DUPLICATION = 0;
+
+  // Token to denote the default case/last else block.
+  struct DefaultCase {};
+
+  // Types represented in the key to block mapping, with a special carve out for
+  // the else/default. More types can be added here as necessary as this becomes
+  // more capable.
+  enum class KeyKind { DEFAULT, INT, CLASS };
+
+  using SwitchingKey = boost::variant<DefaultCase, int32_t, const DexType*>;
+
+  static inline bool is_default_case(const SwitchingKey& k) {
+    return k.which() == static_cast<int>(KeyKind::DEFAULT);
+  }
+
+  struct key_comparator {
+    bool operator()(const SwitchingKey& l, const SwitchingKey& r) const {
+      auto class_kind = static_cast<int>(KeyKind::CLASS);
+      if (l.which() == class_kind && r.which() == class_kind) {
+        return compare_dextypes(boost::get<const DexType*>(l),
+                                boost::get<const DexType*>(r));
+      }
+      return l < r;
+    }
+  };
+
+  using KeyToCase = std::map<SwitchingKey, cfg::Block*, key_comparator>;
   using InstructionSet = std::map<reg_t, IRInstruction*>;
   using ExtraLoads = std::unordered_map<cfg::Block*, InstructionSet>;
 
-  static bool has_src(IRInstruction* insn, reg_t reg);
-
-  SwitchEquivFinder(cfg::ControlFlowGraph* cfg,
-                    const cfg::InstructionIterator& root_branch,
-                    reg_t switching_reg,
-                    uint32_t leaf_duplication_threshold = 0);
+  SwitchEquivFinder(
+      cfg::ControlFlowGraph* cfg,
+      const cfg::InstructionIterator& root_branch,
+      reg_t switching_reg,
+      uint32_t leaf_duplication_threshold = NO_LEAF_DUPLICATION,
+      std::shared_ptr<constant_propagation::intraprocedural::FixpointIterator>
+          fixpoint_iterator = {});
 
   SwitchEquivFinder() = delete;
   SwitchEquivFinder(const SwitchEquivFinder&) = delete;
+  SwitchEquivFinder& operator=(const SwitchEquivFinder&) = delete;
 
   // After construction, call `success()`, to find out if a control flow
   // structure equivalent to a switch has been found
   bool success() const { return m_success; }
   const KeyToCase& key_to_case() const { return m_key_to_case; }
   const ExtraLoads& extra_loads() const { return m_extra_loads; }
+  // Returns if the keys in the cases are only of the specific kind or default
+  // case. A method with only the default case will not be considered to be
+  // uniform for other types (that is ambiguous).
+  bool are_keys_uniform(KeyKind kind) const {
+    bool found = false;
+    auto desired_kind = static_cast<int>(kind);
+    for (const auto& [key, v] : m_key_to_case) {
+      if (is_default_case(key)) {
+        continue;
+      }
+      if (key.which() == desired_kind) {
+        found = true;
+      } else {
+        return false;
+      }
+    }
+    return found;
+  }
+  // Returns the block representing the default case, if a default case is
+  // present.
+  boost::optional<cfg::Block*> default_case() const {
+    DefaultCase d;
+    auto search = m_key_to_case.find(d);
+    if (search == m_key_to_case.end()) {
+      return boost::none;
+    }
+    return search->second;
+  }
 
   // Return all the blocks traversed by the finder, including leaves and
   // non-leaves.
@@ -51,6 +118,7 @@ class SwitchEquivFinder final {
   bool move_edges(
       const std::vector<std::pair<cfg::Edge*, cfg::Block*>>& edges_to_move);
   void find_case_keys(const std::vector<cfg::Edge*>& leaves);
+  constant_propagation::intraprocedural::FixpointIterator& get_analyzed_cfg();
 
   cfg::ControlFlowGraph* m_cfg;
   // The top-most branch instruction of the tree
@@ -73,6 +141,10 @@ class SwitchEquivFinder final {
   // opcodes the SwitchEquivFinder may duplicate that block. If this flag is
   // zero, the SwitchEquivFinder will not edit the CFG.
   uint32_t m_leaf_duplication_threshold{0};
+  // Analyzer for the given cfg; will be lazily constructed if not passed from
+  // above.
+  std::shared_ptr<constant_propagation::intraprocedural::FixpointIterator>
+      m_fixpoint_iterator;
   // If a switch equivalent cannot be found starting from `m_root_branch` this
   // flag will be false, otherwise true.
   bool m_success{false};
@@ -93,3 +165,8 @@ class SwitchEquivFinder final {
   // Note that this does not include the root branch.
   std::unordered_map<cfg::Block*, uint16_t> m_visit_count;
 };
+
+std::ostream& operator<<(std::ostream& os,
+                         const SwitchEquivFinder::DefaultCase&);
+bool operator<(const SwitchEquivFinder::DefaultCase&,
+               const SwitchEquivFinder::DefaultCase&);

@@ -12,17 +12,46 @@
 #include "IRAssembler.h"
 #include "RedexTest.h"
 #include "SwitchEquivFinder.h"
+#include "SwitchEquivPrerequisites.h"
 
 using namespace testing;
 
 namespace {
 void setup() {
+  std::vector<std::string> empty_types_to_create = {"LBar;", "LBaz;", "LBoo;",
+                                                    "LMoo;"};
+  for (const auto& s : empty_types_to_create) {
+    ClassCreator cc(DexType::make_type(s));
+    cc.set_super(type::java_lang_Object());
+    cc.create();
+  }
   ClassCreator cc(DexType::make_type("LFoo;"));
   cc.set_super(type::java_lang_Object());
   auto field = DexField::make_field("LFoo;.table:[LBar;")
                    ->make_concrete(ACC_PUBLIC | ACC_STATIC);
   cc.add_field(field);
   cc.create();
+}
+
+void print_extra_loads(const SwitchEquivFinder::ExtraLoads& extra_loads) {
+  for (const auto& [b, loads] : extra_loads) {
+    std::cerr << "B" << b->id() << "{";
+    bool first = true;
+    for (const auto& [r, i] : loads) {
+      if (!first) {
+        std::cerr << ", ";
+      }
+      std::cerr << "v" << r << " ~ " << SHOW(i);
+      first = false;
+    }
+    std::cerr << "} " << std::endl;
+  }
+}
+
+// Assumes the first instruction in the block is a const instruction and returns
+// the literal.
+inline int64_t get_first_instruction_literal(cfg::Block* b) {
+  return b->get_first_insn()->insn->get_literal();
 }
 
 cfg::InstructionIterator get_first_branch(cfg::ControlFlowGraph& cfg) {
@@ -82,20 +111,22 @@ TEST_F(SwitchEquivFinderTest, if_chain) {
   auto& cfg = code->cfg();
   SwitchEquivFinder finder(&cfg, get_first_branch(cfg), 0);
   ASSERT_TRUE(finder.success());
+  ASSERT_TRUE(finder.are_keys_uniform(SwitchEquivFinder::KeyKind::INT));
   bool checked_one = false;
   bool checked_zero = false;
   bool found_fallthrough = false;
   for (const auto& key_and_case : finder.key_to_case()) {
-    boost::optional<int32_t> key = key_and_case.first;
+    auto key = key_and_case.first;
     cfg::Block* leaf = key_and_case.second;
-    if (key == boost::none) {
+    if (SwitchEquivFinder::is_default_case(key)) {
       always_assert(!found_fallthrough);
       found_fallthrough = true;
       continue;
     }
+    auto key_int = boost::get<int32_t>(key);
     const auto& extra_loads = finder.extra_loads();
     const auto& search = extra_loads.find(leaf);
-    if (key == 1) {
+    if (key_int == 1) {
       EXPECT_NE(extra_loads.end(), search);
       const auto& loads = search->second;
       EXPECT_EQ(1, loads.size());
@@ -104,7 +135,7 @@ TEST_F(SwitchEquivFinderTest, if_chain) {
       EXPECT_EQ(OPCODE_CONST, reg_and_insn.second->opcode());
       EXPECT_EQ(1, reg_and_insn.second->get_literal());
       checked_one = true;
-    } else if (key == 0) {
+    } else if (key_int == 0) {
       EXPECT_EQ(extra_loads.end(), search);
       checked_zero = true;
     }
@@ -480,4 +511,312 @@ TEST_F(SwitchEquivFinderTest, divergent_leaf_entry_state) {
   SwitchEquivFinder finder(&cfg, get_first_branch(cfg), 0);
   ASSERT_FALSE(finder.success());
   code->clear_cfg();
+}
+
+TEST_F(SwitchEquivFinderTest, test_class_switch) {
+  setup();
+
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v1)
+
+      (const-class "LBar;")
+      (move-result-pseudo-object v0)
+      (if-eq v1 v0 :case0)
+
+      (const-class "LBaz;")
+      (move-result-pseudo-object v0)
+      (if-eq v1 v0 :case1)
+
+      (:case_default)
+      (const v0 -1)
+      (goto :out)
+
+      (:case0)
+      (const v0 100)
+      (goto :out)
+
+      (:case1)
+      (const v0 101)
+
+      (:out)
+      (return v0)
+    )
+)");
+
+  code->build_cfg();
+  auto& cfg = code->cfg();
+  SwitchEquivFinder finder(&cfg, get_first_branch(cfg), 1);
+  EXPECT_TRUE(finder.success());
+  EXPECT_TRUE(finder.are_keys_uniform(SwitchEquivFinder::KeyKind::CLASS));
+  auto& key_to_case = finder.key_to_case();
+  EXPECT_EQ(key_to_case.size(), 3);
+
+  auto default_case = finder.default_case();
+  EXPECT_NE(default_case, boost::none);
+  EXPECT_EQ(get_first_instruction_literal(*default_case), -1);
+
+  auto bar_type = DexType::get_type("LBar;");
+  auto bar_block = key_to_case.at(bar_type);
+  EXPECT_EQ(get_first_instruction_literal(bar_block), 100);
+
+  auto baz_type = DexType::get_type("LBaz;");
+  auto baz_block = key_to_case.at(baz_type);
+  EXPECT_EQ(get_first_instruction_literal(baz_block), 101);
+}
+
+TEST_F(SwitchEquivFinderTest, test_class_switch_with_extra_loads) {
+  setup();
+
+  // extra load never gets used in successor block
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v1)
+
+      (const-class "LBar;")
+      (move-result-pseudo-object v0)
+      (if-eq v1 v0 :case0)
+
+      (const-class "LBaz;")
+      (move-result-pseudo-object v0)
+      (const-class "LFoo;")
+      (move-result-pseudo-object v2)
+      (if-eq v1 v0 :case1)
+
+      (:case_default)
+      (const v0 -1)
+      (goto :out)
+
+      (:case0)
+      (const v0 100)
+      (goto :out)
+
+      (:case1)
+      (const v0 101)
+
+      (:out)
+      (return v0)
+    )
+)");
+
+  {
+    code->build_cfg();
+    auto& cfg = code->cfg();
+    SwitchEquivFinder finder(&cfg, get_first_branch(cfg), 1);
+    EXPECT_TRUE(finder.success());
+    auto& extra_loads = finder.extra_loads();
+    print_extra_loads(extra_loads);
+    EXPECT_EQ(extra_loads.size(), 0);
+  }
+
+  // Has an extra allowed instruction from the non-leaf, make sure this is
+  // tracked.
+  auto code_with_load = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v1)
+
+      (const-class "LBar;")
+      (move-result-pseudo-object v0)
+      (if-eq v1 v0 :case0)
+
+      (const-class "LBaz;")
+      (move-result-pseudo-object v0)
+      (const v2 200)
+      (if-eq v1 v0 :case1)
+
+      (:case_default)
+      (const v0 -1)
+      (goto :out)
+
+      (:case0)
+      (const v0 100)
+      (goto :out)
+
+      (:case1)
+      (const v0 101)
+      (add-int v0 v0 v2)
+
+      (:out)
+      (return v0)
+    )
+)");
+
+  {
+    code_with_load->build_cfg();
+    auto& cfg = code_with_load->cfg();
+    SwitchEquivFinder finder(&cfg, get_first_branch(cfg), 1);
+    EXPECT_TRUE(finder.success());
+    auto& extra_loads = finder.extra_loads();
+    EXPECT_EQ(extra_loads.size(), 2);
+    for (const auto& [b, loads] : extra_loads) {
+      auto id = b->id();
+      EXPECT_TRUE(id == 2 || id == 4);
+      EXPECT_EQ(loads.size(), 1);
+      // v2
+      EXPECT_EQ(loads.begin()->first, 2);
+    }
+  }
+
+  // Similar to above, but the extra load is from a const-class
+  auto code_with_cls_load = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v1)
+
+      (const-class "LBar;")
+      (move-result-pseudo-object v0)
+      (if-eq v1 v0 :case0)
+
+      (const-class "LBaz;")
+      (move-result-pseudo-object v0)
+      (const-class "LFoo;")
+      (move-result-pseudo-object v2)
+      (if-eq v1 v0 :case1)
+
+      (:case_default)
+      (const v0 -1)
+      (invoke-virtual (v2) "Ljava/lang/Object;.hashCode:()I")
+      (move-result v0)
+      (goto :out)
+
+      (:case0)
+      (const v0 100)
+      (goto :out)
+
+      (:case1)
+      (const v0 101)
+
+      (:out)
+      (return v0)
+    )
+)");
+
+  {
+    code_with_cls_load->build_cfg();
+    auto& cfg = code_with_cls_load->cfg();
+    SwitchEquivFinder finder(&cfg, get_first_branch(cfg), 1);
+    EXPECT_TRUE(finder.success());
+    auto& extra_loads = finder.extra_loads();
+    EXPECT_EQ(extra_loads.size(), 2);
+    for (const auto& [b, loads] : extra_loads) {
+      auto id = b->id();
+      EXPECT_TRUE(id == 2 || id == 4);
+      EXPECT_EQ(loads.size(), 1);
+      // v2
+      EXPECT_EQ(loads.begin()->first, 2);
+    }
+  }
+}
+
+TEST_F(SwitchEquivFinderTest, test_unsupported_insn) {
+  setup();
+
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v1)
+
+      (const-class "LBar;")
+      (move-result-pseudo-object v0)
+      (if-eq v1 v0 :case0)
+
+      (const-class "LBaz;")
+      (move-result-pseudo-object v0)
+      : the following instruction will now make this block a leaf and end the
+      : representation of cases
+      (invoke-virtual (v0) "Ljava/lang/Object;.notifyAll:()V")
+      (if-eq v1 v0 :case1)
+
+      (:case_default)
+      (const v0 -1)
+      (goto :out)
+
+      (:case0)
+      (const v0 100)
+      (goto :out)
+
+      (:case1)
+      (const v0 101)
+
+      (:out)
+      (return v0)
+    )
+)");
+
+  code->build_cfg();
+  auto& cfg = code->cfg();
+  SwitchEquivFinder finder(&cfg, get_first_branch(cfg), 1);
+  EXPECT_TRUE(finder.success());
+  // conspicuous invoke-virtual won't be considered valid in the middle of a if
+  // else series.
+  auto& key_to_case = finder.key_to_case();
+  EXPECT_EQ(key_to_case.size(), 2);
+
+  auto default_case = finder.default_case();
+  EXPECT_NE(default_case, boost::none);
+  EXPECT_EQ((*default_case)->get_first_insn()->insn->opcode(),
+            OPCODE_CONST_CLASS);
+
+  auto bar_type = DexType::get_type("LBar;");
+  auto bar_block = key_to_case.at(bar_type);
+  EXPECT_EQ(get_first_instruction_literal(bar_block), 100);
+}
+
+TEST_F(SwitchEquivFinderTest, test_class_switch_different_regs) {
+  setup();
+
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v1)
+      (load-param-object v2)
+
+      (const-class "LBar;")
+      (move-result-pseudo-object v0)
+      (if-eq v1 v0 :case0)
+
+      : this is a leaf since it branches on a different reg const is here just
+      : for ease of asserts
+      (const v3 999)
+      (const-class "LBaz;")
+      (move-result-pseudo-object v0)
+      (if-eq v2 v0 :case1)
+
+      (const-class "LMoo;")
+      (move-result-pseudo-object v0)
+      (if-eq v1 v0 :case1)
+
+      (:case_default)
+      (const v0 -1)
+      (goto :out)
+
+      (:case0)
+      (const v0 100)
+      (goto :out)
+
+      (:case1)
+      (const v0 101)
+      (goto :out)
+
+      (:case2)
+      (const v0 102)
+
+      (:out)
+      (return v0)
+    )
+)");
+
+  code->build_cfg();
+  auto& cfg = code->cfg();
+  std::cerr << SHOW(cfg) << std::endl;
+  SwitchEquivFinder finder(&cfg, get_first_branch(cfg), 1);
+  EXPECT_TRUE(finder.success());
+  EXPECT_TRUE(finder.are_keys_uniform(SwitchEquivFinder::KeyKind::CLASS));
+  auto& key_to_case = finder.key_to_case();
+  EXPECT_EQ(key_to_case.size(), 2);
+
+  auto default_case = finder.default_case();
+  EXPECT_NE(default_case, boost::none);
+  EXPECT_EQ(get_first_instruction_literal(*default_case), 999);
+
+  auto bar_type = DexType::get_type("LBar;");
+  auto bar_block = key_to_case.at(bar_type);
+  EXPECT_EQ(get_first_instruction_literal(bar_block), 100);
 }

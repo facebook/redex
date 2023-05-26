@@ -17,54 +17,18 @@
 #include "Trace.h"
 
 namespace {
-
-// Return true if this block is a leaf.
-// Any block that is not part of the if/switch tree is considered a leaf.
-bool is_leaf(cfg::ControlFlowGraph* cfg, cfg::Block* b, reg_t reg) {
-
-  // non-leaf nodes only have GOTO and BRANCH outgoing edges
-  if (cfg->get_succ_edge_if(b, [](const cfg::Edge* e) {
-        return e->type() == cfg::EDGE_GHOST || e->type() == cfg::EDGE_THROW;
-      }) != nullptr) {
-    return true;
-  }
-
-  const auto& last = b->get_last_insn();
-  if (last == b->end()) {
-    // No instructions in this block => can't be part of the switching logic =>
-    // must be a leaf
-    return true;
-  }
-  for (const auto& mie : InstructionIterable(b)) {
-    auto insn = mie.insn;
-    auto op = insn->opcode();
-    if (!(opcode::is_a_literal_const(op) || opcode::is_branch(op))) {
-      // non-leaf nodes only have const and branch instructions
-      return true;
-    }
-    if (insn->has_dest() &&
-        (insn->dest() == reg ||
-         (insn->dest_is_wide() && insn->dest() + 1 == reg))) {
-      // Overwriting the switching reg marks the end of the switch construct
+// Return true if any of the sources of `insn` are `reg`.
+bool has_src(IRInstruction* insn, reg_t reg) {
+  for (size_t i = 0; i < insn->srcs_size(); ++i) {
+    if (insn->src(i) == reg) {
       return true;
     }
   }
-
-  auto last_insn = last->insn;
-  auto last_op = last_insn->opcode();
-  if (opcode::is_branch(last_op) &&
-      SwitchEquivFinder::has_src(last_insn, reg)) {
-    // The only non-leaf block is one that branches on the switching reg
-    return false;
-  }
-
-  // Any other block must be a leaf
-  return true;
+  return false;
 }
 
 bool equals(const SwitchEquivFinder::InstructionSet& a,
             const SwitchEquivFinder::InstructionSet& b) {
-
   if (a.size() != b.size()) {
     return false;
   }
@@ -93,30 +57,112 @@ bool equals(const SwitchEquivFinder::InstructionSet& a,
   return true;
 }
 
-} // namespace
+bool is_valid_load_for_nonleaf(IROpcode op) {
+  return opcode::is_a_literal_const(op) || op == OPCODE_CONST_CLASS ||
+         opcode::is_move_result_pseudo_object(op);
+}
 
-namespace cp = constant_propagation;
+// Return true if this block is a leaf.
+// Any block that is not part of the if/switch tree is considered a leaf.
+bool is_leaf(cfg::ControlFlowGraph* cfg, cfg::Block* b, reg_t reg) {
+  // non-leaf nodes only have GOTO and BRANCH outgoing edges
+  if (cfg->get_succ_edge_if(b, [](const cfg::Edge* e) {
+        return e->type() == cfg::EDGE_GHOST || e->type() == cfg::EDGE_THROW;
+      }) != nullptr) {
+    return true;
+  }
 
-// Return true if any of the sources of `insn` are `reg`.
-bool SwitchEquivFinder::has_src(IRInstruction* insn, reg_t reg) {
-  for (size_t i = 0; i < insn->srcs_size(); ++i) {
-    if (insn->src(i) == reg) {
+  const auto& last = b->get_last_insn();
+  if (last == b->end()) {
+    // No instructions in this block => can't be part of the switching logic =>
+    // must be a leaf
+    return true;
+  }
+  for (const auto& mie : InstructionIterable(b)) {
+    auto insn = mie.insn;
+    auto op = insn->opcode();
+    if (!(is_valid_load_for_nonleaf(op) || opcode::is_branch(op))) {
+      // non-leaf nodes only have const and branch instructions
+      return true;
+    }
+    if (insn->has_dest() &&
+        (insn->dest() == reg ||
+         (insn->dest_is_wide() && insn->dest() + 1 == reg))) {
+      // Overwriting the switching reg marks the end of the switch construct
       return true;
     }
   }
+
+  auto last_insn = last->insn;
+  auto last_op = last_insn->opcode();
+  if (opcode::is_branch(last_op) && has_src(last_insn, reg)) {
+    // The only non-leaf block is one that branches on the switching reg
+    return false;
+  }
+
+  // Any other block must be a leaf
+  return true;
+}
+
+/*
+ * Checks possible ConstantValue domains for if they are known/supported for
+ * switching over, and returns the key.
+ */
+class key_creating_visitor
+    : public boost::static_visitor<SwitchEquivFinder::SwitchingKey> {
+ public:
+  key_creating_visitor() {}
+
+  SwitchEquivFinder::SwitchingKey operator()(
+      const SignedConstantDomain& dom) const {
+    if (dom.is_top() || dom.get_constant() == boost::none) {
+      return SwitchEquivFinder::DefaultCase{};
+    }
+    // It's safe to cast down to 32 bits because long values can't be used in
+    // switch statements.
+    return static_cast<int32_t>(*dom.get_constant());
+  }
+
+  SwitchEquivFinder::SwitchingKey operator()(
+      const ConstantClassObjectDomain& dom) const {
+    if (dom.is_top() || dom.get_constant() == boost::none) {
+      return SwitchEquivFinder::DefaultCase{};
+    }
+    return *dom.get_constant();
+  }
+
+  template <typename Domain>
+  SwitchEquivFinder::SwitchingKey operator()(const Domain&) const {
+    return SwitchEquivFinder::DefaultCase{};
+  }
+};
+} // namespace
+
+std::ostream& operator<<(std::ostream& os,
+                         const SwitchEquivFinder::DefaultCase&) {
+  return os << "DEFAULT";
+}
+
+// All DefaultCase structs should be considered equal.
+bool operator<(const SwitchEquivFinder::DefaultCase&,
+               const SwitchEquivFinder::DefaultCase&) {
   return false;
 }
+
+namespace cp = constant_propagation;
 
 SwitchEquivFinder::SwitchEquivFinder(
     cfg::ControlFlowGraph* cfg,
     const cfg::InstructionIterator& root_branch,
     reg_t switching_reg,
-    uint32_t leaf_duplication_threshold)
+    uint32_t leaf_duplication_threshold,
+    std::shared_ptr<constant_propagation::intraprocedural::FixpointIterator>
+        fixpoint_iterator)
     : m_cfg(cfg),
       m_root_branch(root_branch),
       m_switching_reg(switching_reg),
-      m_leaf_duplication_threshold(leaf_duplication_threshold) {
-
+      m_leaf_duplication_threshold(leaf_duplication_threshold),
+      m_fixpoint_iterator(std::move(fixpoint_iterator)) {
   {
     // make sure the input is well-formed
     auto insn = m_root_branch->insn;
@@ -222,17 +268,21 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves() {
           // lead to `leaf`.
           auto insn = mie.insn;
           auto op = insn->opcode();
-          if (opcode::is_a_literal_const(op)) {
+          if (is_valid_load_for_nonleaf(op)) {
             if (next_loads == boost::none) {
               // Copy loads here because we only want these loads to propagate
               // to successors of `next`, not any other successors of `b`
               next_loads = loads;
             }
-            // Overwrite any previous mapping for this dest register.
-            (*next_loads)[insn->dest()] = insn;
-            if (insn->dest_is_wide()) {
-              // And don't forget to clear out the upper register of wide loads.
-              (*next_loads)[insn->dest() + 1] = nullptr;
+
+            if (insn->has_dest()) {
+              // Overwrite any previous mapping for this dest register.
+              (*next_loads)[insn->dest()] = insn;
+              if (insn->dest_is_wide()) {
+                // And don't forget to clear out the upper register of wide
+                // loads.
+                (*next_loads)[insn->dest() + 1] = nullptr;
+              }
             }
           }
         }
@@ -372,7 +422,7 @@ void SwitchEquivFinder::normalize_extra_loads(
   std::unordered_set<IRInstruction*> extra_loads;
   for (const auto& non_leaf : non_leaves) {
     for (const auto& mie : InstructionIterable(non_leaf)) {
-      if (opcode::is_a_literal_const(mie.insn->opcode())) {
+      if (is_valid_load_for_nonleaf(mie.insn->opcode())) {
         extra_loads.insert(mie.insn);
       }
     }
@@ -420,19 +470,27 @@ void SwitchEquivFinder::normalize_extra_loads(
   std20::erase_if(m_extra_loads, [](auto& p) { return p.second.empty(); });
 }
 
+cp::intraprocedural::FixpointIterator& SwitchEquivFinder::get_analyzed_cfg() {
+  if (!m_fixpoint_iterator) {
+    m_fixpoint_iterator =
+        std::make_shared<cp::intraprocedural::FixpointIterator>(*m_cfg,
+                                                                Analyzer());
+    m_fixpoint_iterator->run(ConstantEnvironment());
+  }
+  return *m_fixpoint_iterator;
+}
+
 // Use a sparta analysis to find the value of reg at the beginning of each leaf
 // block
 void SwitchEquivFinder::find_case_keys(const std::vector<cfg::Edge*>& leaves) {
   // We use the fixpoint iterator to infer the values of registers at different
   // points in the program. Especially `m_switching_reg`.
-  cp::intraprocedural::FixpointIterator fixpoint(
-      *m_cfg, cp::ConstantPrimitiveAnalyzer());
-  fixpoint.run(ConstantEnvironment());
+  auto& fixpoint = get_analyzed_cfg();
 
   // return true on success
   // return false on failure (there was a conflicting entry already in the map)
-  const auto& insert = [this](boost::optional<int32_t> c, cfg::Block* b) {
-    const auto& pair = m_key_to_case.emplace(c, b);
+  const auto& insert = [this](const SwitchingKey& key, cfg::Block* b) {
+    const auto& pair = m_key_to_case.emplace(key, b);
     const auto& it = pair.first;
     bool already_there = !pair.second;
     if (already_there && it->second != b) {
@@ -445,21 +503,14 @@ void SwitchEquivFinder::find_case_keys(const std::vector<cfg::Edge*>& leaves) {
 
   // returns the value of `m_switching_reg` if the leaf is reached via this edge
   const auto& get_case_key =
-      [this, &fixpoint](cfg::Edge* edge_to_leaf) -> boost::optional<int32_t> {
+      [this, &fixpoint](cfg::Edge* edge_to_leaf) -> SwitchingKey {
     // Get the inferred value of m_switching_reg at the end of `edge_to_leaf`
     // but before the beginning of the leaf block because we would lose the
     // information by merging all the incoming edges.
     auto env = fixpoint.get_exit_state_at(edge_to_leaf->src());
     env = fixpoint.analyze_edge(edge_to_leaf, env);
-    const auto& case_key = env.get<SignedConstantDomain>(m_switching_reg);
-    if (case_key.is_top() || case_key.get_constant() == boost::none) {
-      // boost::none represents the fallthrough block
-      return boost::none;
-    } else {
-      // It's safe to cast down to 32 bits because long values can't be used in
-      // switch statements.
-      return static_cast<int32_t>(*case_key.get_constant());
-    }
+    const auto& val = env.get(m_switching_reg);
+    return ConstantValue::apply_visitor(key_creating_visitor(), val);
   };
 
   for (cfg::Edge* edge_to_leaf : leaves) {

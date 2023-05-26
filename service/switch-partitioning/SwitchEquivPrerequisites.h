@@ -47,11 +47,38 @@ inline bool gather_linear_prologue_blocks(
   return opcode::is_branch(op);
 }
 
+/*
+ * Checks possible ConstantValue domains for if they are known/supported for
+ * switching over.
+ */
+class known_visitor : public boost::static_visitor<bool> {
+ public:
+  known_visitor() {}
+
+  bool operator()(const SignedConstantDomain& dom) const {
+    if (dom.is_top()) {
+      return false;
+    }
+    return dom.get_constant() != boost::none;
+  }
+
+  bool operator()(const ConstantClassObjectDomain& dom) const {
+    if (dom.is_top()) {
+      return false;
+    }
+    return dom.get_constant() != boost::none;
+  }
+
+  template <typename Domain>
+  bool operator()(const Domain&) const {
+    return false;
+  }
+};
+
 /**
  * The "determining" register is the one that holds the value that decides which
  * case block we go to.
  */
-template <typename Domain>
 inline bool find_determining_reg(
     const constant_propagation::intraprocedural::FixpointIterator& fixpoint,
     cfg::Block* b,
@@ -82,14 +109,7 @@ inline bool find_determining_reg(
     reg_t right_reg = last->src(1);
     const auto& is_known = [&env](reg_t reg) -> bool {
       const auto& value = env.get(reg);
-      const auto& domain = value.maybe_get<Domain>();
-      if (domain == boost::none) {
-        return false;
-      }
-      if (domain->is_top()) {
-        return false;
-      }
-      return domain->get_constant() != boost::none;
+      return ConstantValue::apply_visitor(known_visitor(), value);
     };
     bool left_is_known = is_known(left_reg);
     bool right_is_known = is_known(right_reg);

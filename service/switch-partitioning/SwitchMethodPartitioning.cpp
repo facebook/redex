@@ -113,8 +113,7 @@ boost::variant<reg_t, bool> compute_prologue_blocks(
 
       // Make sure all blocks agree on which register is the determiner
       reg_t candidate_reg;
-      always_assert_log(find_determining_reg<SignedConstantDomain>(
-                            fixpoint, b, &candidate_reg),
+      always_assert_log(find_determining_reg(fixpoint, b, &candidate_reg),
                         "Couldn't find determining register in %s", SHOW(*cfg));
       if (determining_reg == boost::none) {
         determining_reg = candidate_reg;
