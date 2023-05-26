@@ -7,6 +7,7 @@
 
 #include "SwitchEquivFinder.h"
 
+#include <algorithm>
 #include <queue>
 #include <vector>
 
@@ -107,6 +108,31 @@ bool is_leaf(cfg::ControlFlowGraph* cfg, cfg::Block* b, reg_t reg) {
   return true;
 }
 
+// For the leaf, check if the non-leaf predecessor block contributes to any
+// extra loads. This is a check so that if this leaf is one of multiple that has
+// the same case, we can determine if dropping the later (in execution order)
+// would erroneously lose track of some surviving/relevant load.
+bool pred_creates_extra_loads(const SwitchEquivFinder::ExtraLoads& extra_loads,
+                              cfg::Block* leaf) {
+  // There is probably a more convenient way to do this, but this condition
+  // being hit should be quite rare (probably doesn't matter this is loopy).
+  std::unordered_set<IRInstruction*> insns;
+  for (const auto& [b, map] : extra_loads) {
+    for (const auto& [reg, insn] : map) {
+      insns.emplace(insn);
+    }
+  }
+  for (auto e : leaf->preds()) {
+    auto block = e->src();
+    for (auto it = block->begin(); it != block->end(); it++) {
+      if (it->type == MFLOW_OPCODE && insns.count(it->insn) > 0) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 /*
  * Checks possible ConstantValue domains for if they are known/supported for
  * switching over, and returns the key.
@@ -160,12 +186,14 @@ SwitchEquivFinder::SwitchEquivFinder(
     reg_t switching_reg,
     uint32_t leaf_duplication_threshold,
     std::shared_ptr<constant_propagation::intraprocedural::FixpointIterator>
-        fixpoint_iterator)
+        fixpoint_iterator,
+    DuplicateCaseStrategy duplicates_strategy)
     : m_cfg(cfg),
       m_root_branch(root_branch),
       m_switching_reg(switching_reg),
       m_leaf_duplication_threshold(leaf_duplication_threshold),
-      m_fixpoint_iterator(std::move(fixpoint_iterator)) {
+      m_fixpoint_iterator(std::move(fixpoint_iterator)),
+      m_duplicates_strategy(duplicates_strategy) {
   {
     // make sure the input is well-formed
     auto insn = m_root_branch->insn;
@@ -195,17 +223,35 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves() {
 
   // Traverse the tree in an depth first order so that the extra loads are
   // tracked in the same order that they will be executed at runtime
-  std::unordered_set<cfg::Block*> non_leaves;
+  std::unordered_map<cfg::Block*, bool> block_to_is_leaf;
+  auto block_is_leaf = [&](cfg::Block* b) {
+    auto search = block_to_is_leaf.find(b);
+    if (search != block_to_is_leaf.end()) {
+      return search->second;
+    }
+    auto ret = is_leaf(m_cfg, b, m_switching_reg);
+    block_to_is_leaf[b] = ret;
+    return ret;
+  };
   std::function<bool(cfg::Block*, InstructionSet,
                      const std::vector<SourceBlock*>&)>
       recurse;
   std::vector<std::pair<cfg::Edge*, cfg::Block*>> edges_to_move;
   std::unordered_map<cfg::Block*, std::vector<SourceBlock*>>
       source_blocks_to_move;
+
   recurse = [&](cfg::Block* b, const InstructionSet& loads,
                 const std::vector<SourceBlock*>& source_blocks_in) {
     // `loads` represents the state of the registers after evaluating `b`.
-    for (cfg::Edge* succ : b->succs()) {
+    std::vector<cfg::Edge*> ordered_edges(b->succs());
+    // NOTE: To maintain proper order of duplicated cases, non leafs successors
+    // will be encountered first.
+    std::stable_sort(ordered_edges.begin(), ordered_edges.end(),
+                     [&](const cfg::Edge* a, const cfg::Edge* b) {
+                       return !block_is_leaf(a->target()) &&
+                              block_is_leaf(b->target());
+                     });
+    for (cfg::Edge* succ : ordered_edges) {
       cfg::Block* next = succ->target();
 
       uint16_t count = ++m_visit_count[next];
@@ -218,7 +264,7 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves() {
 
       auto source_blocks_out = std::ref(source_blocks_in);
 
-      if (is_leaf(m_cfg, next, m_switching_reg)) {
+      if (block_is_leaf(next)) {
         leaves.push_back(succ);
         auto& source_blocks_vec = source_blocks_to_move[succ->target()];
         source_blocks_vec.insert(source_blocks_vec.end(),
@@ -248,7 +294,6 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves() {
           }
         }
       } else {
-        non_leaves.insert(next);
         boost::optional<InstructionSet> next_loads;
         std::vector<SourceBlock*> next_source_blocks;
         for (const auto& mie : *next) {
@@ -324,7 +369,7 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves() {
     return bail();
   }
 
-  normalize_extra_loads(non_leaves);
+  normalize_extra_loads(block_to_is_leaf);
 
   if (!m_extra_loads.empty()) {
     // Make sure there are no other ways to reach the leaf nodes. If there were
@@ -419,12 +464,15 @@ bool SwitchEquivFinder::move_edges(
 // * Remove loads that are never used outside the if-else chain blocks
 // * Remove empty lists of loads from the map (possibly emptying the map)
 void SwitchEquivFinder::normalize_extra_loads(
-    const std::unordered_set<cfg::Block*>& non_leaves) {
+    const std::unordered_map<cfg::Block*, bool>& block_to_is_leaf) {
 
   // collect the extra loads
   std::unordered_set<IRInstruction*> extra_loads;
-  for (const auto& non_leaf : non_leaves) {
-    for (const auto& mie : InstructionIterable(non_leaf)) {
+  for (const auto& [b, is_leaf] : block_to_is_leaf) {
+    if (is_leaf) {
+      continue;
+    }
+    for (const auto& mie : InstructionIterable(b)) {
       if (is_valid_load_for_nonleaf(mie.insn->opcode())) {
         extra_loads.insert(mie.insn);
       }
@@ -437,7 +485,8 @@ void SwitchEquivFinder::normalize_extra_loads(
   reaching_defs::FixpointIterator fixpoint_iter(*m_cfg);
   fixpoint_iter.run(reaching_defs::Environment());
   for (cfg::Block* block : m_cfg->blocks()) {
-    if (non_leaves.count(block)) {
+    auto search = block_to_is_leaf.find(block);
+    if (search != block_to_is_leaf.end() && !search->second) {
       continue;
     }
     reaching_defs::Environment defs_in =
@@ -497,9 +546,27 @@ void SwitchEquivFinder::find_case_keys(const std::vector<cfg::Edge*>& leaves) {
     const auto& it = pair.first;
     bool already_there = !pair.second;
     if (already_there && it->second != b) {
-      TRACE(SWITCH_EQUIV, 2, "Failure Reason: Divergent key to block mapping");
-      TRACE(SWITCH_EQUIV, 3, "%s", SHOW(*m_cfg));
-      return false;
+      if (m_duplicates_strategy == NOT_ALLOWED) {
+        TRACE(SWITCH_EQUIV, 2,
+              "Failure Reason: Divergent key to block mapping.");
+        TRACE(SWITCH_EQUIV, 3, "%s", SHOW(*m_cfg));
+        return false;
+      } else if (m_duplicates_strategy == EXECUTION_ORDER) {
+        if (pred_creates_extra_loads(m_extra_loads, it->second)) {
+          TRACE(SWITCH_EQUIV, 2,
+                "Failure Reason: Divergent key to block mapping with extra "
+                "loads.");
+          TRACE(SWITCH_EQUIV, 3, "%s", SHOW(*m_cfg));
+          return false;
+        }
+        TRACE(SWITCH_EQUIV, 2,
+              "Updating key to block mapping for duplicate case; B%zu will be "
+              "supplanted by B%zu.",
+              it->second->id(), b->id());
+        it->second = b;
+      } else {
+        not_reached();
+      }
     }
     return true;
   };

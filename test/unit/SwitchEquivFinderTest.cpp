@@ -849,3 +849,227 @@ TEST_F(SwitchEquivFinderTest, test_class_switch_different_regs) {
   auto bar_block = key_to_case.at(bar_type);
   EXPECT_EQ(get_first_instruction_literal(bar_block), 100);
 }
+
+TEST_F(SwitchEquivFinderTest, test_class_switch_with_duplicate_keys) {
+  setup();
+
+  auto code_with_dup = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v1)
+
+      (const-class "LBar;")
+      (move-result-pseudo-object v0)
+      (if-eq v1 v0 :case0)
+
+      (const-class "LBaz;")
+      (move-result-pseudo-object v0)
+      (if-eq v1 v0 :case1)
+
+      (const-class "LBoo;")
+      (move-result-pseudo-object v0)
+      (if-eq v1 v0 :case2)
+
+      (const-class "LBar;")
+      (move-result-pseudo-object v0)
+      (if-eq v1 v0 :case_decoy)
+
+      (const-class "LFoo;")
+      (move-result-pseudo-object v0)
+      (if-eq v1 v0 :case3)
+
+      (:case_default)
+      (const v0 -1)
+      (goto :out)
+
+      (:case0)
+      (const v0 100)
+      (goto :out)
+
+      (:case1)
+      (const v0 101)
+      (goto :out)
+
+      (:case2)
+      (const v0 102)
+      (goto :out)
+
+      (:case_decoy)
+      (const v0 9999)
+      (goto :out)
+
+      (:case3)
+      (const v0 103)
+
+      (:out)
+      (return v0)
+    )
+)");
+  // Same as above, but the branch statements are negated so that the tracking
+  // of cases encountered is clearly not dependent on the ordering of which
+  // successor block gets processed first.
+  auto code_inverse = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v1)
+
+      (const-class "LBar;")
+      (move-result-pseudo-object v0)
+      (if-ne v1 v0 :not_bar)
+      (const v0 100)
+      (goto :out)
+
+      (:not_bar)
+      (const-class "LBaz;")
+      (move-result-pseudo-object v0)
+      (if-ne v1 v0 :not_baz)
+      (const v0 101)
+      (goto :out)
+
+      (:not_baz)
+      (const-class "LBoo;")
+      (move-result-pseudo-object v0)
+      (if-ne v1 v0 :not_boo)
+      (const v0 102)
+      (goto :out)
+
+      (:not_boo)
+      (const-class "LBar;")
+      (move-result-pseudo-object v0)
+      (if-ne v1 v0 :definitely_not_bar)
+      (const v0 9999)
+      (goto :out)
+
+      (:definitely_not_bar)
+      (const-class "LFoo;")
+      (move-result-pseudo-object v0)
+      (if-ne v1 v0 :case_default)
+      (const v0 103)
+      (goto :out)
+
+      (:case_default)
+      (const v0 -1)
+
+      (:out)
+      (return v0)
+    )
+)");
+
+  std::vector<std::unique_ptr<IRCode>> vec;
+  vec.push_back(std::move(code_with_dup));
+  vec.push_back(std::move(code_inverse));
+  for (auto& code : vec) {
+    code->build_cfg();
+    auto& cfg = code->cfg();
+    // By default, duplicated cases like this will not return success. Run this
+    // variant and make sure it behaves reasonably.
+    {
+      SwitchEquivFinder finder(&cfg, get_first_branch(cfg), 1);
+      EXPECT_FALSE(finder.success());
+    }
+    // Turn on option to support dup
+    SwitchEquivFinder finder(&cfg,
+                             get_first_branch(cfg),
+                             1,
+                             SwitchEquivFinder::NO_LEAF_DUPLICATION,
+                             {},
+                             SwitchEquivFinder::EXECUTION_ORDER);
+    EXPECT_TRUE(finder.success());
+    EXPECT_TRUE(finder.are_keys_uniform(SwitchEquivFinder::KeyKind::CLASS));
+    auto& key_to_case = finder.key_to_case();
+    EXPECT_EQ(key_to_case.size(), 5);
+
+    auto default_case = finder.default_case();
+    EXPECT_NE(default_case, boost::none);
+    EXPECT_EQ(get_first_instruction_literal(*default_case), -1);
+
+    auto bar_type = DexType::get_type("LBar;");
+    auto bar_block = key_to_case.at(bar_type);
+    // The finder should not get confused, the case_decoy block should NOT be
+    // chosen here!
+    EXPECT_EQ(get_first_instruction_literal(bar_block), 100);
+
+    auto baz_type = DexType::get_type("LBaz;");
+    auto baz_block = key_to_case.at(baz_type);
+    EXPECT_EQ(get_first_instruction_literal(baz_block), 101);
+
+    auto boo_type = DexType::get_type("LBoo;");
+    auto boo_block = key_to_case.at(boo_type);
+    EXPECT_EQ(get_first_instruction_literal(boo_block), 102);
+
+    auto foo_type = DexType::get_type("LFoo;");
+    auto foo_block = key_to_case.at(foo_type);
+    EXPECT_EQ(get_first_instruction_literal(foo_block), 103);
+  }
+}
+
+TEST_F(SwitchEquivFinderTest, test_class_switch_with_dup_keys_extra_load) {
+  setup();
+
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v1)
+
+      (const-class "LBar;")
+      (move-result-pseudo-object v0)
+      (if-eq v1 v0 :case0)
+
+      (const-class "LBaz;")
+      (move-result-pseudo-object v0)
+      (if-eq v1 v0 :case1)
+
+      (const-class "LBoo;")
+      (move-result-pseudo-object v0)
+      (if-eq v1 v0 :case2)
+
+      (const-class "LBar;")
+      (move-result-pseudo-object v0)
+      (const-class "LMoo;")
+      (move-result-pseudo-object v2)
+      (if-eq v1 v0 :case_decoy)
+
+      (const-class "LFoo;")
+      (move-result-pseudo-object v0)
+      (if-eq v1 v0 :case3)
+
+      (:case_default)
+      (const v0 -1)
+      (invoke-static (v2) "Ljava/lang/String;.valueOf:(Ljava/lang/Object;)Ljava/lang/String;")
+      (move-result-object v3)
+      (goto :out)
+
+      (:case0)
+      (const v0 100)
+      (goto :out)
+
+      (:case1)
+      (const v0 101)
+      (goto :out)
+
+      (:case2)
+      (const v0 102)
+      (goto :out)
+
+      (:case_decoy)
+      (const v0 9999)
+      (goto :out)
+
+      (:case3)
+      (const v0 103)
+
+      (:out)
+      (return v0)
+    )
+)");
+
+  code->build_cfg();
+  auto& cfg = code->cfg();
+  std::cerr << SHOW(cfg) << std::endl;
+  SwitchEquivFinder finder(&cfg,
+                           get_first_branch(cfg),
+                           1,
+                           SwitchEquivFinder::NO_LEAF_DUPLICATION,
+                           {},
+                           SwitchEquivFinder::EXECUTION_ORDER);
+  // The block that checks the duplicated case key has some extra instructions
+  // that survive to leafs; this will not successfully represent out of caution.
+  EXPECT_FALSE(finder.success());
+}

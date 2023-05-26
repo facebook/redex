@@ -62,13 +62,18 @@ class SwitchEquivFinder {
   using InstructionSet = std::map<reg_t, IRInstruction*>;
   using ExtraLoads = std::unordered_map<cfg::Block*, InstructionSet>;
 
+  // Specify how the finder should behave when encountering redundant equals
+  // check on the same key.
+  enum DuplicateCaseStrategy { NOT_ALLOWED, EXECUTION_ORDER };
+
   SwitchEquivFinder(
       cfg::ControlFlowGraph* cfg,
       const cfg::InstructionIterator& root_branch,
       reg_t switching_reg,
       uint32_t leaf_duplication_threshold = NO_LEAF_DUPLICATION,
       std::shared_ptr<constant_propagation::intraprocedural::FixpointIterator>
-          fixpoint_iterator = {});
+          fixpoint_iterator = {},
+      DuplicateCaseStrategy duplicates_strategy = NOT_ALLOWED);
 
   SwitchEquivFinder() = delete;
   SwitchEquivFinder(const SwitchEquivFinder&) = delete;
@@ -114,7 +119,8 @@ class SwitchEquivFinder {
 
  private:
   std::vector<cfg::Edge*> find_leaves();
-  void normalize_extra_loads(const std::unordered_set<cfg::Block*>& non_leaves);
+  void normalize_extra_loads(
+      const std::unordered_map<cfg::Block*, bool>& block_to_is_leaf);
   bool move_edges(
       const std::vector<std::pair<cfg::Edge*, cfg::Block*>>& edges_to_move);
   void find_case_keys(const std::vector<cfg::Edge*>& leaves);
@@ -145,6 +151,12 @@ class SwitchEquivFinder {
   // above.
   std::shared_ptr<constant_propagation::intraprocedural::FixpointIterator>
       m_fixpoint_iterator;
+  // Specify what the finder should do if it encounters a if/else series in
+  // which duplicated cases are encountered. Default behavior is for the finder
+  // to not succeed, but other option can be enabled to represent only the first
+  // block that would be encountered at runtime, if all later duplicates have no
+  // extra loads.
+  DuplicateCaseStrategy m_duplicates_strategy;
   // If a switch equivalent cannot be found starting from `m_root_branch` this
   // flag will be false, otherwise true.
   bool m_success{false};
