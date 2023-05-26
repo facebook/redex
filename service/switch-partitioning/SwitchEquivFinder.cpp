@@ -57,6 +57,9 @@ bool equals(const SwitchEquivFinder::InstructionSet& a,
   return true;
 }
 
+// NOTE: instructions here may need to be relocated to leaf blocks. See
+// copy_extra_loads_to_leaf_block below and keep that functionality up to date
+// with this check.
 bool is_valid_load_for_nonleaf(IROpcode op) {
   return opcode::is_a_literal_const(op) || op == OPCODE_CONST_CLASS ||
          opcode::is_move_result_pseudo_object(op);
@@ -535,6 +538,46 @@ std::vector<cfg::Block*> SwitchEquivFinder::visited_blocks() const {
   result.emplace_back(m_root_branch.block());
   for (auto entry : m_visit_count) {
     result.emplace_back(entry.first);
+  }
+  return result;
+}
+
+size_t SwitchEquivEditor::copy_extra_loads_to_leaf_block(
+    const SwitchEquivFinder::ExtraLoads& extra_loads,
+    cfg::ControlFlowGraph* cfg,
+    cfg::Block* leaf) {
+  size_t changes = 0;
+  auto push_front = [&](IRInstruction* insn) {
+    auto copy = new IRInstruction(*insn);
+    TRACE(SWITCH_EQUIV, 4, "adding %s to B%zu", SHOW(copy), leaf->id());
+    changes++;
+    leaf->push_front(copy);
+  };
+  const auto& loads_for_this_leaf = extra_loads.find(leaf);
+  if (loads_for_this_leaf != extra_loads.end()) {
+    for (const auto& register_and_insn : loads_for_this_leaf->second) {
+      IRInstruction* insn = register_and_insn.second;
+      if (insn != nullptr) {
+        // null instruction pointers are used to signify the upper half of
+        // a wide load.
+        push_front(insn);
+        if (opcode::is_move_result_pseudo_object(insn->opcode())) {
+          auto primary_it =
+              cfg->primary_instruction_of_move_result(cfg->find_insn(insn));
+          push_front(primary_it->insn);
+        }
+      }
+    }
+  }
+  return changes;
+}
+
+size_t SwitchEquivEditor::copy_extra_loads_to_leaf_blocks(
+    const SwitchEquivFinder& finder, cfg::ControlFlowGraph* cfg) {
+  size_t result = 0;
+  const auto& extra_loads = finder.extra_loads();
+  for (const auto& pair : finder.key_to_case()) {
+    result += copy_extra_loads_to_leaf_block(extra_loads, cfg, pair.second);
   }
   return result;
 }

@@ -170,3 +170,17 @@ std::ostream& operator<<(std::ostream& os,
                          const SwitchEquivFinder::DefaultCase&);
 bool operator<(const SwitchEquivFinder::DefaultCase&,
                const SwitchEquivFinder::DefaultCase&);
+
+class SwitchEquivEditor {
+ public:
+  static size_t copy_extra_loads_to_leaf_block(
+      const SwitchEquivFinder::ExtraLoads& extra_loads,
+      cfg::ControlFlowGraph* cfg,
+      cfg::Block* leaf);
+  // if-else chains will load constants to compare against. Sometimes the leaves
+  // will use these values so transformations may have to copy those values to
+  // the beginning of the leaf blocks. Returns the number of instructions added
+  // to the beginning of leaf.
+  static size_t copy_extra_loads_to_leaf_blocks(const SwitchEquivFinder& finder,
+                                                cfg::ControlFlowGraph* cfg);
+};

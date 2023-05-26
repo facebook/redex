@@ -567,6 +567,7 @@ TEST_F(SwitchEquivFinderTest, test_class_switch) {
 
 TEST_F(SwitchEquivFinderTest, test_class_switch_with_extra_loads) {
   setup();
+  auto baz_type = DexType::get_type("LBaz;");
 
   // extra load never gets used in successor block
   auto code = assembler::ircode_from_string(R"(
@@ -621,6 +622,7 @@ TEST_F(SwitchEquivFinderTest, test_class_switch_with_extra_loads) {
 
       (const-class "LBaz;")
       (move-result-pseudo-object v0)
+      (const v2 2000)
       (const v2 200)
       (if-eq v1 v0 :case1)
 
@@ -655,6 +657,18 @@ TEST_F(SwitchEquivFinderTest, test_class_switch_with_extra_loads) {
       // v2
       EXPECT_EQ(loads.begin()->first, 2);
     }
+    // Load of v2 above should be counted as an extra load for case1 and
+    // case_default, should get tracked as the surviving value of 200.
+    auto instructions_copied =
+        SwitchEquivEditor::copy_extra_loads_to_leaf_blocks(finder, &cfg);
+    EXPECT_EQ(instructions_copied, 2);
+    auto case1 = finder.key_to_case().at(baz_type);
+    auto it = case1->get_first_insn();
+    EXPECT_EQ(it->insn->opcode(), OPCODE_CONST);
+    EXPECT_EQ(it->insn->get_literal(), 200);
+    auto default_case = *finder.default_case();
+    it = default_case->get_first_insn();
+    EXPECT_EQ(it->insn->get_literal(), 200);
   }
 
   // Similar to above, but the extra load is from a const-class
@@ -668,6 +682,7 @@ TEST_F(SwitchEquivFinderTest, test_class_switch_with_extra_loads) {
 
       (const-class "LBaz;")
       (move-result-pseudo-object v0)
+      (const v2 2000)
       (const-class "LFoo;")
       (move-result-pseudo-object v2)
       (if-eq v1 v0 :case1)
@@ -704,6 +719,20 @@ TEST_F(SwitchEquivFinderTest, test_class_switch_with_extra_loads) {
       // v2
       EXPECT_EQ(loads.begin()->first, 2);
     }
+    // Load of v2 above should be counted as an extra load for case1 and
+    // case_default, and both the const-class and move result should be able to
+    // be copied to leafs.
+    auto instructions_copied =
+        SwitchEquivEditor::copy_extra_loads_to_leaf_blocks(finder, &cfg);
+    EXPECT_EQ(instructions_copied, 4);
+    auto case1 = finder.key_to_case().at(baz_type);
+    auto it = case1->get_first_insn();
+    EXPECT_EQ(it->insn->opcode(), OPCODE_CONST_CLASS);
+    EXPECT_EQ((++it)->insn->opcode(), IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
+    auto default_case = *finder.default_case();
+    it = default_case->get_first_insn();
+    EXPECT_EQ(it->insn->opcode(), OPCODE_CONST_CLASS);
+    EXPECT_EQ((++it)->insn->opcode(), IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
   }
 }
 
