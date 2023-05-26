@@ -12,67 +12,11 @@
 
 #include "ConstantPropagationAnalysis.h"
 #include "ControlFlow.h"
+#include "SwitchEquivPrerequisites.h"
 
 namespace cp = constant_propagation;
 
 namespace {
-
-/**
- * The "determining" register is the one that holds the value that decides which
- * case block we go to.
- */
-reg_t find_determining_reg(
-    cfg::Block* b, const cp::intraprocedural::FixpointIterator& fixpoint) {
-  auto last_it = b->get_last_insn();
-  always_assert_log(last_it != b->end(), "non-leaf nodes should not be empty");
-  auto last = last_it->insn;
-  always_assert_log(opcode::is_branch(last->opcode()),
-                    "%s is not a branch instruction", SHOW(last));
-  boost::optional<reg_t> candidate_reg;
-  auto srcs_size = last->srcs_size();
-  if (srcs_size == 1) {
-    // SWITCH_* or IF_*Z
-    return last->src(0);
-  } else if (srcs_size == 2) {
-    // Expecting code like this:
-    //   CONST vA/B X
-    //   ...
-    //   IF_* vA, vB
-    // We want to return whichever register wasn't loaded by the constant
-    // instruction. For example, on this code:
-    //   CONST v0 2
-    //   IF_EQ v0 v1
-    // this method should return 1
-    const auto& env = fixpoint.get_exit_state_at(b);
-    reg_t left_reg = last->src(0);
-    reg_t right_reg = last->src(1);
-    const auto& is_known = [&env](reg_t reg) -> bool {
-      const auto& domain = env.get<SignedConstantDomain>(reg);
-      if (domain.is_top()) {
-        return false;
-      }
-      return domain.get_constant() != boost::none;
-    };
-    bool left_is_known = is_known(left_reg);
-    bool right_is_known = is_known(right_reg);
-    // The determining register should have an unknown value at the end of this
-    // block, whereas the other register should have a known constant
-    if (!left_is_known && right_is_known) {
-      return left_reg;
-    } else if (left_is_known && !right_is_known) {
-      return right_reg;
-    } else {
-      not_reached_log(
-          "Could not find determining register (unexpected structure of "
-          "non-leaf node)\n%s",
-          SHOW(b));
-    }
-  }
-  not_reached_log(
-      "Could not find determining register (unrecognized last instruction)\n%s",
-      SHOW(b));
-}
-
 /**
  * Fill `prologue_blocks` and derive the structure of the method. Return
  * Return a `reg_t` of the register if the method is a switch or if-else
@@ -168,7 +112,10 @@ boost::variant<reg_t, bool> compute_prologue_blocks(
       }
 
       // Make sure all blocks agree on which register is the determiner
-      reg_t candidate_reg = ::find_determining_reg(b, fixpoint);
+      reg_t candidate_reg;
+      always_assert_log(find_determining_reg<SignedConstantDomain>(
+                            fixpoint, b, &candidate_reg),
+                        "Couldn't find determining register in %s", SHOW(*cfg));
       if (determining_reg == boost::none) {
         determining_reg = candidate_reg;
       } else {
