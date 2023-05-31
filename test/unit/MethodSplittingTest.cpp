@@ -498,3 +498,105 @@ TEST_F(MethodSplitterTest, SplitHotColdSwitch) {
        std::make_pair<std::string, std::string>("split$hot_cold0", split0)});
   ASSERT_TRUE(res);
 }
+
+TEST_F(MethodSplitterTest, SplitSwitchPreferCasesWithSharedCode) {
+  auto before = R"(
+    (
+      (load-param v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (switch v0 (:a :b :c :d))
+      (return v0)
+    (:a 0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (goto :shared)
+    (:b 1)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (return v0)
+    (:c 2)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (return v0)
+    (:d 3)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (goto :shared)
+
+    (:shared)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (return v0)
+    ))";
+  auto after = R"(
+    (
+      (load-param v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (switch v0 (:b :c))
+      (.pos:dbg_0 "LFoo;.bar:(I)I" RedexGenerated 0)
+      (invoke-static (v0) "LFoo;.bar$split$cold0:(I)I")
+      (move-result v0)
+      (return v0)
+    (:b 1)
+      (invoke-static (v0) "LFoo;.bar$split$cold2:(I)I")
+      (move-result v0)
+      (return v0)
+    (:c 2)
+      (invoke-static (v0) "LFoo;.bar$split$cold1:(I)I")
+      (move-result v0)
+      (return v0)
+    ))";
+  auto split0ad = R"(
+    (
+      (load-param v0)
+      (switch v0 (:d :a))
+      (return v0)
+    (:d 3)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (goto :shared)
+    (:a 0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+
+    (:shared)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (return v0)
+    ))";
+  auto split1b = R"(
+    (
+      (load-param v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (return v0)
+    ))";
+  auto split2c = R"(
+    (
+      (load-param v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (return v0)
+    ))";
+  auto res =
+      test("(I)I",
+           before,
+           defaultConfig(),
+           {std::make_pair<std::string, std::string>("", after),
+            std::make_pair<std::string, std::string>("split$cold0", split0ad),
+            std::make_pair<std::string, std::string>("split$cold1", split1b),
+            std::make_pair<std::string, std::string>("split$cold2", split2c)});
+  ASSERT_TRUE(res);
+}

@@ -170,17 +170,16 @@ std::unordered_set<const ReducedBlock*> get_critical_components(
   std::unordered_map<const ReducedBlock*, size_t> counts;
   auto add_to_counts = [&counts](const Closure* c) {
     for (auto* component : c->reduced_components) {
-      counts[component++];
+      counts[component]++;
     }
   };
-  add_to_counts(fallthrough);
   for (auto [_, c] : keyed) {
     add_to_counts(c);
   }
   std::unordered_set<const ReducedBlock*> critical_components;
-  for (auto [component, count] : counts) {
-    if (count == keyed.size() + 1) {
-      critical_components.insert(component);
+  for (auto [c, count] : counts) {
+    if (count < keyed.size() && !fallthrough->reduced_components.count(c)) {
+      critical_components.insert(c);
     }
   }
   return critical_components;
@@ -224,13 +223,17 @@ std::optional<ScoredClosure> aggregate(
   std::sort(keyed.begin(), keyed.end(),
             [&](auto& p, auto& q) { return p.first > q.first; });
   ClosureAggregator aggregator(get_critical_components(keyed, fallthrough));
-  std::vector<const Closure*> aggregated{fallthrough};
-  aggregator.insert(fallthrough);
   for (auto [_, c] : keyed) {
     aggregator.insert(c);
   }
-  aggregator.erase(fallthrough);
-  std::optional<ScoredClosure> best_sc;
+  std::vector<const Closure*> aggregated{fallthrough};
+  // Select the seed case, which will influence all following cases.
+  // We start with the largest key, preferring aggregating a suffix.
+  auto seed = keyed.front().second;
+  aggregator.erase(seed);
+  aggregated.push_back(seed);
+
+  // Add up to half of all cases
   while (!aggregator.empty() && aggregated.size() * 2 <= switched.size()) {
     auto c = aggregator.front();
     aggregator.erase(c);

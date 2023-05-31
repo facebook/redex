@@ -22,7 +22,7 @@ uint64_t ClosureAggregator::ClosureInfo::get_primary_priority_denominator()
                                              }));
   uint32_t unapplied_code_size = code_size - applied_code_size;
   int64_t denominator = static_cast<int64_t>(unapplied_code_size) * 16;
-  for (size_t i = 0; i < infrequent_code_sizes.size(); ++i) {
+  for (size_t i = 1; i < infrequent_code_sizes.size(); ++i) {
     denominator -=
         static_cast<int64_t>(infrequent_code_sizes[i]) * 16 / (i + 1);
   }
@@ -30,7 +30,7 @@ uint64_t ClosureAggregator::ClosureInfo::get_primary_priority_denominator()
 }
 
 uint64_t ClosureAggregator::ClosureInfo::get_priority() const {
-  uint64_t nominator = applied_code_size;
+  uint64_t nominator = applied_code_size + infrequent_code_sizes[0];
   uint64_t denominator = get_primary_priority_denominator();
   uint64_t primary_priority = (nominator << 20) / denominator;
   primary_priority = std::min(primary_priority, (UINT64_C(1) << 40) - 1);
