@@ -33,6 +33,7 @@ struct RefStats {
   size_t num_fref_simple_resolved = 0;
   size_t num_invoke_virtual_refined = 0;
   size_t num_resolve_to_interface = 0;
+  size_t num_array_clone_ref_resolved = 0;
   size_t num_invoke_interface_replaced = 0;
   size_t num_invoke_super_removed = 0;
   // External method refs
@@ -65,6 +66,10 @@ struct RefStats {
           num_resolve_to_interface);
     TRACE(RESO,
           1,
+          "[ref reso] resolved array clone ref %zu",
+          num_array_clone_ref_resolved);
+    TRACE(RESO,
+          1,
           "[ref reso] invoke-interface replaced %zu",
           num_invoke_interface_replaced);
     TRACE(RESO,
@@ -91,23 +96,24 @@ struct RefStats {
     mgr->incr_metric("field_refs_simple_resolved", num_fref_simple_resolved);
     mgr->incr_metric("num_invoke_virtual_refined", num_invoke_virtual_refined);
     mgr->incr_metric("num_resolve_to_interface", num_resolve_to_interface);
-    mgr->incr_metric("num_invoke_interface_replaced",
-                     num_invoke_interface_replaced);
+    mgr->incr_metric("num_array_clone_ref_resolved",
+                     num_array_clone_ref_resolved);
     mgr->incr_metric("num_invoke_super_removed", num_invoke_super_removed);
-    mgr->incr_metric("num_bailed_on_external", num_bailed_on_external);
-    mgr->incr_metric("num_bailed_on_min_sdk_mismatch",
-                     num_bailed_on_min_sdk_mismatch);
-    mgr->incr_metric("num_unresolvable_mrefs", num_unresolvable_mrefs);
-    mgr->incr_metric("num_failed_infer_callee_target_type",
-                     num_failed_infer_callee_target_type);
-    mgr->incr_metric("num_failed_infer_callee_def",
-                     num_failed_infer_callee_def);
-    mgr->incr_metric("num_failed_infer_resolver_fail",
-                     num_failed_infer_resolver_fail);
-    mgr->incr_metric("num_failed_infer_to_external",
-                     num_failed_infer_to_external);
-    mgr->incr_metric("num_failed_infer_cannot_access",
-                     num_failed_infer_cannot_access);
+    // For the following metrics on failed cases, we only need the ones from
+    // final iteration.
+    mgr->set_metric("num_bailed_on_external", num_bailed_on_external);
+    mgr->set_metric("num_bailed_on_min_sdk_mismatch",
+                    num_bailed_on_min_sdk_mismatch);
+    mgr->set_metric("num_unresolvable_mrefs", num_unresolvable_mrefs);
+    mgr->set_metric("num_failed_infer_callee_target_type",
+                    num_failed_infer_callee_target_type);
+    mgr->set_metric("num_failed_infer_callee_def", num_failed_infer_callee_def);
+    mgr->set_metric("num_failed_infer_resolver_fail",
+                    num_failed_infer_resolver_fail);
+    mgr->set_metric("num_failed_infer_to_external",
+                    num_failed_infer_to_external);
+    mgr->set_metric("num_failed_infer_cannot_access",
+                    num_failed_infer_cannot_access);
 
     TRACE(RESO,
           1,
@@ -122,6 +128,7 @@ struct RefStats {
     num_fref_simple_resolved += that.num_fref_simple_resolved;
     num_invoke_virtual_refined += that.num_invoke_virtual_refined;
     num_resolve_to_interface += that.num_resolve_to_interface;
+    num_array_clone_ref_resolved += that.num_array_clone_ref_resolved;
     num_invoke_interface_replaced += that.num_invoke_interface_replaced;
     num_invoke_super_removed += that.num_invoke_super_removed;
     num_bailed_on_external += that.num_bailed_on_external;
@@ -137,6 +144,17 @@ struct RefStats {
     return *this;
   }
 };
+
+bool is_array_clone(IRInstruction* insn) {
+  if (!opcode::is_invoke_virtual(insn->opcode())) {
+    return false;
+  }
+  redex_assert(insn->has_method());
+  auto* mref = insn->get_method();
+  auto* type = mref->get_class();
+  return type::is_array(type) && mref->get_name()->str() == "clone" &&
+         !type::is_primitive(type::get_array_element_type(type));
+}
 
 void resolve_field_refs(IRInstruction* insn,
                         FieldSearch field_search,
@@ -235,7 +253,7 @@ boost::optional<DexMethod*> get_inferred_method_def(
     return boost::none;
   }
 
-  TRACE(RESO, 2, "Inferred to %s for type %s", SHOW(resolved),
+  TRACE(RESO, 4, "Inferred to %s for type %s", SHOW(resolved),
         SHOW(inferred_type));
   return boost::optional<DexMethod*>(const_cast<DexMethod*>(resolved));
 }
@@ -260,6 +278,15 @@ void ResolveRefsPass::resolve_method_refs(const DexMethod* caller,
       resolved_to_interface = cls && is_interface(cls);
     }
   }
+  if (!mdef && is_array_clone(insn)) {
+    auto* object_array_clone = method::java_lang_Objects_clone();
+    TRACE(RESO, 3, "Resolving %s\n\t=>%s", SHOW(mref),
+          SHOW(object_array_clone));
+    insn->set_method(object_array_clone);
+    stats.num_mref_simple_resolved++;
+    stats.num_array_clone_ref_resolved++;
+    return;
+  }
   if (!mdef || mdef == mref) {
     return;
   }
@@ -281,7 +308,7 @@ void ResolveRefsPass::resolve_method_refs(const DexMethod* caller,
   if (!is_public(cls)) {
     set_public(cls);
   }
-  TRACE(RESO, 2, "Resolving %s\n\t=>%s", SHOW(mref), SHOW(mdef));
+  TRACE(RESO, 3, "Resolving %s\n\t=>%s", SHOW(mref), SHOW(mdef));
   insn->set_method(mdef);
   stats.num_mref_simple_resolved++;
   if (resolved_to_interface && opcode::is_invoke_virtual(insn->opcode())) {
@@ -385,7 +412,9 @@ RefStats ResolveRefsPass::refine_virtual_callsites(DexMethod* method,
     auto mref = insn->get_method();
     auto callee = resolve_method(mref, opcode_to_search(insn), method);
     if (!callee) {
-      stats.num_unresolvable_mrefs++;
+      if (mref != method::java_lang_Objects_clone()) {
+        stats.num_unresolvable_mrefs++;
+      }
       continue;
     }
     TRACE(RESO, 4, "resolved method %s for %s", SHOW(callee), SHOW(insn));
@@ -426,7 +455,7 @@ RefStats ResolveRefsPass::refine_virtual_callsites(DexMethod* method,
       stats.num_bailed_on_min_sdk_mismatch++;
       continue;
     }
-    TRACE(RESO, 2, "Resolving %s\n\t=>%s", SHOW(mref), SHOW(def_meth));
+    TRACE(RESO, 3, "Resolving %s\n\t=>%s", SHOW(mref), SHOW(def_meth));
     insn->set_method(def_meth);
     if (opcode::is_invoke_interface(opcode) && !is_interface(def_cls)) {
       insn->set_opcode(OPCODE_INVOKE_VIRTUAL);

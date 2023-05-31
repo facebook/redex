@@ -62,4 +62,6 @@
            "Ljava/lang/RuntimeException;.<init>:(Ljava/lang/String;)V")       \
   FOR_EACH(java_lang_String_equals,                                           \
            "Ljava/lang/String;.equals:(Ljava/lang/Object;)Z")                 \
-  FOR_EACH(java_lang_String_hashCode, "Ljava/lang/String;.hashCode:()I")
+  FOR_EACH(java_lang_String_hashCode, "Ljava/lang/String;.hashCode:()I")      \
+  FOR_EACH(java_lang_Objects_clone,                                           \
+           "[Ljava/lang/Object;.clone:()Ljava/lang/Object;")
