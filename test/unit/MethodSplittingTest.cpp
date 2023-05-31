@@ -264,6 +264,51 @@ TEST_F(MethodSplitterTest, CannotSplitUninitializedObject) {
   ASSERT_TRUE(res);
 }
 
+TEST_F(MethodSplitterTest, CanSplitInitializedObject) {
+  auto before = R"(
+    (
+      (load-param v0)
+      (new-instance "Ljava/lang/Object;")
+      (move-result-pseudo-object v1)
+      (invoke-direct (v1) "Ljava/lang/Object;.<init>:()V")
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (return-object v1)
+    ))";
+  auto after = R"(
+    (
+      (load-param v0)
+      (new-instance "Ljava/lang/Object;")
+      (move-result-pseudo-object v1)
+      (invoke-direct (v1) "Ljava/lang/Object;.<init>:()V")
+      (.pos:dbg_0 "LFoo;.bar:(I)Ljava/lang/Object;" RedexGenerated 0)
+      (invoke-static (v0 v1) "LFoo;.bar$split$cold0:(ILjava/lang/Object;)Ljava/lang/Object;")
+      (move-result-object v0)
+      (return-object v0)
+    ))";
+  auto split0 = R"(
+    (
+      (load-param v0)
+      (load-param-object v1)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (return-object v1)
+    ))";
+  auto res =
+      test("(I)Ljava/lang/Object;",
+           before,
+           defaultConfig(),
+           {std::make_pair<std::string, std::string>("", after),
+            std::make_pair<std::string, std::string>("split$cold0", split0)});
+  ASSERT_TRUE(res);
+}
+
 TEST_F(MethodSplitterTest, SplitBranchFallthrough) {
   auto before = R"(
     (

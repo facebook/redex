@@ -4,6 +4,7 @@
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
+
 #include "UninitializedObjects.h"
 
 #include "BaseIRAnalyzer.h"
@@ -45,11 +46,11 @@ class Analyzer final : public BaseIRAnalyzer<UninitializedObjectEnvironment> {
       current_state->set(insn->dest(), UninitializedObjectDomain(false));
     } else if (opcode::is_new_instance(insn->opcode())) {
       current_state->set(RESULT_REGISTER, UninitializedObjectDomain(true));
-    } else if (insn->has_move_result_any()) {
-      current_state->set(RESULT_REGISTER, UninitializedObjectDomain(false));
     } else if (opcode::is_invoke_direct(insn->opcode()) &&
                method::is_init(insn->get_method())) {
       current_state->set(insn->src(0), UninitializedObjectDomain(false));
+    } else if (insn->has_move_result_any()) {
+      current_state->set(RESULT_REGISTER, UninitializedObjectDomain(false));
     }
   }
 
