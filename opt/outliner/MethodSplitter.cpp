@@ -350,6 +350,7 @@ std::unordered_set<DexMethod*> split_splittable_closures(
         break;
       }
       stats->added_code_size += splittable_closure->added_code_size;
+      stats->split_code_size += new_method->get_code()->estimate_code_units();
       if (splittable_closure->closures.size() == 1) {
         stats->split_count_simple++;
       } else {

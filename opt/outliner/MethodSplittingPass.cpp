@@ -80,6 +80,7 @@ void MethodSplittingPass::run_pass(DexStoresVector& stores,
   mgr.set_metric("cold_split_count", (size_t)stats.cold_split_count);
   mgr.set_metric("dex_limits_hit", (size_t)stats.dex_limits_hit);
   mgr.set_metric("added_code_size", (size_t)stats.added_code_size);
+  mgr.set_metric("split_code_size", (size_t)stats.split_code_size);
   TRACE(MS, 1, "Split out %zu methods", stats.added_methods.size());
 
   m_iteration++;
