@@ -33,7 +33,6 @@ struct ScoredClosure {
   std::unordered_set<const ReducedBlock*> reduced_components{};
   size_t split_size{};
   size_t remaining_size{};
-  double overhead_ratio{};
   HotSplitKind hot_split_kind{};
   std::vector<ClosureArgument> args{};
 
@@ -157,9 +156,9 @@ std::optional<ScoredClosure> score(
   sc.remaining_size = sc.remaining_size < remaining_size_reduction
                           ? 0
                           : sc.remaining_size - remaining_size_reduction;
-  sc.overhead_ratio =
+  auto overhead_ratio =
       (sc.split_size + sc.remaining_size) * 1.0 / mcs.original_size - 1.0;
-  if (sc.overhead_ratio > max_overhead_ratio) {
+  if (overhead_ratio > max_overhead_ratio) {
     return std::nullopt;
   }
   return std::optional<ScoredClosure>(std::move(sc));
@@ -236,17 +235,16 @@ std::optional<ScoredClosure> aggregate(
     auto c = aggregator.front();
     aggregator.erase(c);
     aggregated.push_back(c);
+  }
+  while (aggregated.size() > 1) {
     auto opt_sc =
         score(config, mcs, max_overhead_ratio, switch_block, aggregated);
-    if (!opt_sc) {
-      continue;
+    if (opt_sc) {
+      return opt_sc;
     }
-    if (!best_sc || opt_sc->overhead_ratio * best_sc->split_size <=
-                        best_sc->overhead_ratio * opt_sc->split_size) {
-      best_sc = std::move(opt_sc);
-    }
+    aggregated.pop_back();
   }
-  return best_sc;
+  return std::nullopt;
 };
 
 // Select closures that meet the configured size thresholds, and score them.
@@ -410,8 +408,7 @@ std::vector<SplittableClosure> to_splittable_closures(
     if (traceEnabled(MS, 2)) {
       std::ostringstream oss;
       oss << "=== selected " << show(method) << ": " << sc.split_size << " + "
-          << sc.remaining_size << " >= " << mcs->original_size
-          << ", overhead_ratio: " << sc.overhead_ratio << ", "
+          << sc.remaining_size << " >= " << mcs->original_size << ", "
           << describe(sc.hot_split_kind) << "\n";
       oss << "   args: ";
       for (auto [reg, type, def] : sc.args) {
