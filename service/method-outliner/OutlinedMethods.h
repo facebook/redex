@@ -18,8 +18,15 @@ constexpr const char* OUTLINED_METHOD_SHORT_NAME_PREFIX = "$o$";
 
 inline bool is_outlined_method(const DexMethodRef* method) {
   const auto name = method->get_name()->str();
+  const auto deobfuscated_name =
+      method->as_def() ? method->as_def()->get_simple_deobfuscated_name() : "";
   return boost::algorithm::starts_with(name, OUTLINED_METHOD_NAME_PREFIX) ||
-         boost::algorithm::starts_with(name, OUTLINED_METHOD_SHORT_NAME_PREFIX);
+         boost::algorithm::starts_with(name,
+                                       OUTLINED_METHOD_SHORT_NAME_PREFIX) ||
+         boost::algorithm::starts_with(deobfuscated_name,
+                                       OUTLINED_METHOD_NAME_PREFIX) ||
+         boost::algorithm::starts_with(deobfuscated_name,
+                                       OUTLINED_METHOD_SHORT_NAME_PREFIX);
 }
 
 } // namespace outliner
