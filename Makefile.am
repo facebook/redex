@@ -433,7 +433,6 @@ libopt_la_SOURCES = \
 	opt/stringbuilder-outliner/StringBuilderOutliner.cpp \
 	opt/strip-debug-info/StripDebugInfo.cpp \
 	opt/test_cfg/TestCFG.cpp \
-	opt/track_resources/TrackResources.cpp \
 	opt/optimize_resources/OptimizeResources.cpp \
 	opt/throw-propagation/ThrowPropagationPass.cpp \
 	opt/type-analysis/CallGraphFileGenerationPass.cpp \
