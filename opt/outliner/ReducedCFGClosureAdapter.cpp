@@ -57,7 +57,9 @@ void ReducedCFGClosureAdapter::gather_type_demands(
       continue;
     }
     for (auto& use : (*m_def_uses)[def]) {
-      if (!m_insns->count(use.insn) || opcode::is_a_move(use.insn->opcode())) {
+      auto reduced_component = m_insns->at(use.insn);
+      if (!m_reduced_components.count(reduced_component) ||
+          opcode::is_a_move(use.insn->opcode())) {
         continue;
       }
       if (opcode::is_a_return(use.insn->opcode())) {
