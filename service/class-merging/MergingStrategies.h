@@ -74,7 +74,8 @@ size_t estimate_vmethods_code_size(const DexClass* cls);
  */
 template <typename WalkerFn>
 void group_by_code_size(const TypeSet& mergeable_types, WalkerFn walker) {
-  constexpr size_t max_instruction_size = 1 << 15;
+  // 9000 - buffer_for_switch_payload
+  constexpr size_t huge_method_split_limit = 8500;
 
   std::vector<const DexType*> current_group;
 
@@ -83,11 +84,12 @@ void group_by_code_size(const TypeSet& mergeable_types, WalkerFn walker) {
     // Only check the code size of vmethods because these vmethods will be
     // merged into a large dispatch, dmethods will be relocated.
     auto vmethod_code_size = estimate_vmethods_code_size(type_class(type));
-    if (vmethod_code_size > max_instruction_size) {
+    if (vmethod_code_size > huge_method_split_limit) {
       // This class will never make it into any group; skip it
       continue;
     }
-    if (estimated_merged_code_size + vmethod_code_size > max_instruction_size) {
+    if (estimated_merged_code_size + vmethod_code_size >
+        huge_method_split_limit) {
       TRACE(CLMG, 9, "\tgroup_by_code_size %zu classes", current_group.size());
       if (current_group.size() > 1) {
         walker(current_group);
