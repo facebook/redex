@@ -47,8 +47,6 @@ class IntTypePatcherPass : public Pass {
   bool return_type_mismatch(const type_inference::IntTypeDomain& int_type,
                             const type_inference::IntTypeDomain& return_type);
 
-  bool is_editable_cfg_friendly() override { return true; }
-
  private:
   ConcurrentSet<DexMethod*> changed_methods;
   std::atomic<size_t> added_insns{0};

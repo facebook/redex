@@ -57,6 +57,7 @@ class SplitHugeSwitchPass : public Pass {
   SplitHugeSwitchPass() : Pass("SplitHugeSwitchPass") {}
 
   void bind_config() override;
+  bool is_cfg_legacy() override { return true; }
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   static Stats run(DexMethod* m,

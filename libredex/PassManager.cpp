@@ -778,7 +778,7 @@ class AfterPassSizes {
         if (m_debug) {
           std::cerr << "Running " << pass_name << std::endl;
         }
-        if (pass->is_editable_cfg_friendly()) {
+        if (!pass->is_cfg_legacy()) {
           ensure_editable_cfg(*stores);
         }
         pass->run_pass(*stores, *conf, *m_mgr);
@@ -1277,7 +1277,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   auto post_pass_verifiers = [&](Pass* pass, size_t i, size_t size) {
     ConcurrentSet<const DexMethodRef*> all_code_referenced_methods;
     ConcurrentSet<DexMethod*> unique_methods;
-    bool is_editable_cfg_friendly = pass->is_editable_cfg_friendly();
+    bool is_editable_cfg_friendly = !pass->is_cfg_legacy();
     walk::parallel::code(build_class_scope(stores), [&](DexMethod* m,
                                                         IRCode& code) {
       if (is_editable_cfg_friendly) {
@@ -1381,7 +1381,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       jemalloc_util::ScopedProfiling malloc_prof(m_malloc_profile_pass == pass);
       auto maybe_track_violations =
           violatios_tracking.maybe_track(this, stores);
-      if (!pass->is_editable_cfg_friendly()) {
+      if (pass->is_cfg_legacy()) {
         // if this pass hasn't been updated to editable_cfg yet, clear_cfg. In
         // the future, once all editable cfg updates are done, this branch will
         // be removed.
@@ -1400,7 +1400,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       pass->run_pass(stores, conf, *this);
 
       // Ensure the CFG is clean, e.g., no unreachable blocks.
-      if (pass->is_editable_cfg_friendly()) {
+      if (!pass->is_cfg_legacy()) {
         auto temp_scope = build_class_scope(stores);
         walk::parallel::code(temp_scope, [&](DexMethod* method, IRCode& code) {
           always_assert_log(code.editable_cfg_built(),

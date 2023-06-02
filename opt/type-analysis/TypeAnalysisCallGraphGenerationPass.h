@@ -50,6 +50,7 @@ class TypeAnalysisCallGraphGenerationPass : public Pass {
     au.set_preserve_all();
   }
 
+  bool is_cfg_legacy() override { return true; }
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   std::shared_ptr<call_graph::Graph> get_result() { return m_result; }

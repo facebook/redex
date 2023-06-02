@@ -156,8 +156,6 @@ class ResultPropagationPass : public Pass {
     };
   }
 
-  bool is_editable_cfg_friendly() override { return true; }
-
   void bind_config() override {
     bind("callee_blocklist",
          {},

@@ -107,8 +107,6 @@ class RemoveUnusedArgsPass : public Pass {
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager& mgr) override;
 
-  bool is_editable_cfg_friendly() override { return true; }
-
  private:
   std::vector<std::string> m_blocklist;
   size_t m_total_iterations{0};

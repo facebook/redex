@@ -56,5 +56,4 @@ class ThrowPropagationPass : public Pass {
       std::unordered_set<DexMethod*>* no_return_methods_checked = nullptr);
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
-  bool is_editable_cfg_friendly() override { return true; }
 };

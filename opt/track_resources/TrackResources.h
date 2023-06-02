@@ -8,11 +8,12 @@
 #pragma once
 
 #include "Pass.h"
-#include "ShrinkerConfig.h"
 
-class ShrinkerPass : public Pass {
+struct ProguardMap;
+
+class TrackResourcesPass : public Pass {
  public:
-  ShrinkerPass() : Pass("ShrinkerPass") {}
+  TrackResourcesPass() : Pass("TrackResourcesPass") {}
 
   redex_properties::PropertyInteractions get_property_interactions()
       const override {
@@ -25,10 +26,22 @@ class ShrinkerPass : public Pass {
     };
   }
 
-  void bind_config() override;
+  void bind_config() override {
+    bind("classes_to_track", {}, m_classes_to_track);
+  }
+
   bool is_cfg_legacy() override { return true; }
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
+  static size_t find_accessed_fields(
+      const Scope& fullscope,
+      const std::unordered_set<DexClass*>& classes_to_track,
+      const std::unordered_set<std::string>& classes_to_search,
+      std::unordered_set<DexField*>* recorded_fields);
+
+  static std::unordered_set<DexClass*> build_tracked_cls_set(
+      const std::vector<std::string>& cls_suffixes, const ProguardMap& pg_map);
+
  private:
-  shrinker::ShrinkerConfig m_config;
+  std::vector<std::string> m_classes_to_track;
 };

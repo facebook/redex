@@ -32,6 +32,8 @@ class ConstantPropagationPass : public Pass {
     bind("remove_dead_switch", true, m_config.transform.remove_dead_switch);
   }
 
+  bool is_cfg_legacy() override { return true; }
+
   void run_pass(DexStoresVector& stores,
                 ConfigFiles& conf,
                 PassManager& mgr) override;

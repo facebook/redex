@@ -27,6 +27,7 @@ class StaticReloPassV2 : public Pass {
 
   static std::vector<DexClass*> gen_candidates(const Scope&);
   static int run_relocation(const Scope&, std::vector<DexClass*>&);
+  bool is_cfg_legacy() override { return true; }
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 };
 } // namespace static_relo_v2

@@ -27,7 +27,6 @@ class MethodSplittingPass : public Pass {
 
   void bind_config() override;
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
-  bool is_editable_cfg_friendly() override { return true; }
 
  private:
   method_splitting_impl::Config m_config;

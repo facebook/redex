@@ -84,5 +84,7 @@ class RemoveUninstantiablesPass : public Pass {
   /// \pre Assumes that \p cfg is a non-empty instance method body.
   static Stats replace_all_with_throw(cfg::ControlFlowGraph& cfg);
 
+  bool is_cfg_legacy() override { return true; }
+
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 };

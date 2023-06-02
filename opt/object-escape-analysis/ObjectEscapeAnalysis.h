@@ -25,6 +25,8 @@ class ObjectEscapeAnalysisPass : public Pass {
 
   void bind_config() override;
 
+  bool is_cfg_legacy() override { return true; }
+
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:

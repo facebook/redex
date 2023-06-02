@@ -79,6 +79,8 @@ class PassImpl : public Pass {
          "they are read, in order to ignore the default value 0.");
   }
 
+  bool is_cfg_legacy() override { return true; }
+
   void run_pass(DexStoresVector& stores,
                 ConfigFiles& conf,
                 PassManager& mgr) override;

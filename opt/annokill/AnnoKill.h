@@ -139,6 +139,8 @@ class AnnoKillPass : public Pass {
     bind("only_force_kill", false, m_only_force_kill);
   }
 
+  bool is_cfg_legacy() override { return true; }
+
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   std::unique_ptr<Pass> clone(const std::string& new_name) const override {

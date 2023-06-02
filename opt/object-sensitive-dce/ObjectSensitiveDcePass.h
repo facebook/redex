@@ -48,8 +48,6 @@ class ObjectSensitiveDcePass final : public Pass {
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
-  bool is_editable_cfg_friendly() override { return true; }
-
  private:
   boost::optional<std::string> m_external_side_effect_summaries_file;
   boost::optional<std::string> m_external_escape_summaries_file;

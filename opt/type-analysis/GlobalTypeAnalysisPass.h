@@ -70,6 +70,7 @@ class GlobalTypeAnalysisPass : public Pass {
     bind("resolve_method_refs", true, m_config.resolve_method_refs);
   }
 
+  bool is_cfg_legacy() override { return true; }
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
   void optimize(
       const Scope& scope,
