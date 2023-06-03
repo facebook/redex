@@ -1988,9 +1988,9 @@ static void rewrite_at_location(DexMethod* outlined_method,
     auto pattern_id = call_site_pattern_ids->at(cml.first_insn);
     new_dbg_pos = manager->make_pattern_position(pattern_id);
   } else {
-    new_dbg_pos = std::make_unique<DexPosition>(0);
-    new_dbg_pos->bind(DexString::make_string(show(outlined_method)),
-                      DexString::make_string("RedexGenerated"));
+    new_dbg_pos = std::make_unique<DexPosition>(
+        DexString::make_string("RedexGenerated"), 0);
+    new_dbg_pos->bind(DexString::make_string(show(outlined_method)));
   }
 
   cfg_mutation.insert_before(first_insn_it, std::move(new_dbg_pos));

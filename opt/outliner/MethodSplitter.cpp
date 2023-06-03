@@ -271,9 +271,9 @@ DexMethod* split_method(const SplittableClosure& splittable_closure,
           source_blocks::get_first_source_block(launchpad_template)) {
     launchpad->insert_before(launchpad_it, make_new_sb(method, template_sb));
   }
-  auto new_pos = std::make_unique<DexPosition>(0);
-  new_pos->bind(DexString::make_string(show_deobfuscated(method)),
-                DexString::make_string("RedexGenerated"));
+  auto new_pos = std::make_unique<DexPosition>(
+      DexString::make_string("RedexGenerated"), 0);
+  new_pos->bind(DexString::make_string(show_deobfuscated(method)));
   cfg.insert_before(launchpad, launchpad_it, std::move(new_pos));
 
   return split_method;

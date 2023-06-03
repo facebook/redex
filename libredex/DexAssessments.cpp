@@ -154,6 +154,11 @@ class Assessor {
         if (it->type == MFLOW_POSITION) {
           positions.insert(it->pos.get());
           last_position = it->pos.get();
+          always_assert_log(
+              last_position->file != nullptr,
+              "%s has a position with no file string assigned.\n%s\n",
+              SHOW(method),
+              SHOW(cfg));
           if (last_position->line == 0 &&
               last_position->file == m_unknown_source) {
             any_unknown_source_position = true;

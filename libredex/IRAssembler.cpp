@@ -390,8 +390,8 @@ std::unique_ptr<DexPosition> position_from_s_expr(
   uint32_t line;
   std::istringstream in(line_str);
   in >> line;
-  auto pos = std::make_unique<DexPosition>(line);
-  pos->bind(DexString::make_string(method_str), file);
+  auto pos = std::make_unique<DexPosition>(file, line);
+  pos->bind(DexString::make_string(method_str));
   if (!parent_expr.is_nil()) {
     std::string parent_str;
     s_patn({
