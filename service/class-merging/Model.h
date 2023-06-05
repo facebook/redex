@@ -218,6 +218,8 @@ struct ModelStats {
   uint32_t m_dropped = 0;
   // InterDex grouping stats
   std::map<InterdexSubgroupIdx, size_t> m_interdex_groups{};
+  // MergingStrategy grouping stats
+  std::map<size_t, size_t> m_merging_size_counts{};
   // Stats for approximate shape merging
   ApproximateStats m_approx_stats{};
   // Merging related stats
@@ -301,8 +303,6 @@ class Model {
 
   bool process_method_meta() const { return m_spec.process_method_meta; }
   bool keep_debug_info() const { return m_spec.keep_debug_info; }
-
-  void update_redex_stats(PassManager& mgr) const;
 
   static void build_interdex_groups(ConfigFiles& conf);
 

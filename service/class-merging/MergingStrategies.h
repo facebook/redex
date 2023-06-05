@@ -10,7 +10,6 @@
 #include <boost/optional.hpp>
 
 #include "ClassHierarchy.h"
-#include "Trace.h"
 
 class DexType;
 using ConstTypeVector = std::vector<const DexType*>;
@@ -35,30 +34,6 @@ enum Strategy {
   // combined number of references becomes large, or when merged (virtual)
   // methods become large
   BY_REFS = 2,
-};
-
-struct GroupStats {
-  size_t cls_count{0};
-  size_t ref_count{0};
-  size_t estimated_code_size{0};
-  std::map<size_t, size_t> refs_stats{};
-
-  void count(size_t cls_ref, size_t code_size) {
-    if (!traceEnabled(CLMG, 5)) {
-      return;
-    }
-    cls_count++;
-    ref_count += cls_ref;
-    estimated_code_size += code_size;
-    refs_stats[cls_ref]++;
-  }
-
-  void reset() {
-    cls_count = 0;
-    ref_count = 0;
-    estimated_code_size = 0;
-    refs_stats.clear();
-  }
 };
 
 class MergingStrategy final {

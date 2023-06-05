@@ -7,15 +7,53 @@
 
 #include "MergingStrategies.h"
 
-#include <limits>
-
 #include "CrossDexRefMinimizer.h"
 #include "IRCode.h"
 #include "NormalizeConstructor.h"
 #include "Show.h"
+#include "Trace.h"
 
 namespace class_merging {
 namespace strategy {
+
+namespace {
+
+struct GroupStats {
+  size_t cls_count{0};
+  size_t ref_count{0};
+  size_t estimated_code_size{0};
+  std::map<size_t, size_t> refs_stats{};
+
+  void count(size_t cls_ref, size_t code_size) {
+    if (!traceEnabled(CLMG, 5)) {
+      return;
+    }
+    cls_count++;
+    ref_count += cls_ref;
+    estimated_code_size += code_size;
+    refs_stats[cls_ref]++;
+  }
+
+  void reset() {
+    cls_count = 0;
+    ref_count = 0;
+    estimated_code_size = 0;
+    refs_stats.clear();
+  }
+
+  void trace_stats() {
+    if (!traceEnabled(CLMG, 5)) {
+      return;
+    }
+    TRACE(CLMG, 5, "============== refs stats ==================");
+    for (const auto& stat : refs_stats) {
+      TRACE(CLMG, 5, "ref %zu cls %zu", stat.first, stat.second);
+    }
+    TRACE(CLMG, 5, "group ref %zu code size %zu cls %zu", ref_count,
+          estimated_code_size, cls_count);
+    TRACE(CLMG, 5, "============================================");
+  }
+};
 
 size_t estimate_vmethods_code_size(const DexClass* cls) {
   size_t estimated_size = 0;
@@ -25,18 +63,7 @@ size_t estimate_vmethods_code_size(const DexClass* cls) {
   return estimated_size;
 }
 
-void trace_refs_stats(const GroupStats& group_stats) {
-  if (!traceEnabled(CLMG, 5)) {
-    return;
-  }
-  TRACE(CLMG, 5, "============== refs stats ==================");
-  for (const auto& stat : group_stats.refs_stats) {
-    TRACE(CLMG, 5, "ref %zu cls %zu", stat.first, stat.second);
-  }
-  TRACE(CLMG, 5, "group ref %zu code size %zu cls %zu", group_stats.ref_count,
-        group_stats.estimated_code_size, group_stats.cls_count);
-  TRACE(CLMG, 5, "============================================");
-}
+} // namespace
 
 void MergingStrategy::group_by_cls_count(
     const TypeSet& mergeable_types,
@@ -146,7 +173,7 @@ void MergingStrategy::group_by_refs(const TypeSet& mergeable_types,
       if (current_group.size() > 1) {
         walker(current_group);
         TRACE(CLMG, 9, "\tgroup_by_refs %zu classes", current_group.size());
-        trace_refs_stats(group_stats);
+        group_stats.trace_stats();
         group_stats.reset();
       }
       current_group.clear();
@@ -168,7 +195,7 @@ void MergingStrategy::group_by_refs(const TypeSet& mergeable_types,
     walker(current_group);
     TRACE(CLMG, 9, "\tgroup_by_refs %zu classes at the end",
           current_group.size());
-    trace_refs_stats(group_stats);
+    group_stats.trace_stats();
     group_stats.reset();
   }
 }

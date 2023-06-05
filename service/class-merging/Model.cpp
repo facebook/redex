@@ -9,6 +9,7 @@
 
 #include <ostream>
 #include <sstream>
+#include <string>
 
 #include "AnnoUtils.h"
 #include "ApproximateShapeMerging.h"
@@ -400,6 +401,7 @@ void Model::create_mergers_helper(
                       create_merger_helper(merger_type, shape, intf_set, dex_id,
                                            group, interdex_subgroup_idx,
                                            subgroup_cnt++);
+                      m_stats.m_merging_size_counts[group.size()]++;
                     });
 }
 
@@ -1536,6 +1538,10 @@ ModelStats& ModelStats::operator+=(const ModelStats& stats) {
     m_interdex_groups[pair.first] += pair.second;
   }
 
+  for (const auto& pair : stats.m_merging_size_counts) {
+    m_merging_size_counts[pair.first] += pair.second;
+  }
+
   m_approx_stats += stats.m_approx_stats;
 
   m_num_classes_merged += stats.m_num_classes_merged;
@@ -1561,6 +1567,15 @@ void ModelStats::update_redex_stats(const std::string& prefix,
                     group_size);
     TRACE(CLMG, 3, "InterDex Group %s_%u %lu", prefix.c_str(), group_id,
           group_size);
+  }
+
+  for (auto& pair : m_merging_size_counts) {
+    auto merging_size = pair.first;
+    auto count = pair.second;
+    mgr.incr_metric(prefix + "_merging_size_" + std::to_string(merging_size),
+                    count);
+    TRACE(CLMG, 3, "Merging size %s_%lu %lu", prefix.c_str(), merging_size,
+          count);
   }
 
   m_approx_stats.update_redex_stats(prefix, mgr);
