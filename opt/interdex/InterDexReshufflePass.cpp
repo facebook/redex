@@ -36,7 +36,7 @@ const interdex::InterDexPass* get_interdex_pass(const PassManager& mgr) {
 }
 
 bool can_move(DexClass* cls) {
-  return !cls->is_perf_sensitive() && !interdex::is_canary(cls);
+  return !cls->is_perf_sensitive() && !is_canary(cls);
 }
 
 // Compute gain powers by reference occurrences. We don't use the upper 20 (19,

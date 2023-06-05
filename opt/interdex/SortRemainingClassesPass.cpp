@@ -25,9 +25,8 @@ namespace {
 // Compare two classes for sorting in a way that is best for compression.
 bool compare_dexclasses_for_compressed_size(DexClass* c1, DexClass* c2) {
   // Canary classes go first
-  if (interdex::is_canary(c1) != interdex::is_canary(c2)) {
-    return (interdex::is_canary(c1) ? 1 : 0) >
-           (interdex::is_canary(c2) ? 1 : 0);
+  if (is_canary(c1) != is_canary(c2)) {
+    return (is_canary(c1) ? 1 : 0) > (is_canary(c2) ? 1 : 0);
   }
   // Interfaces go after non-interfaces
   if (is_interface(c1) != is_interface(c2)) {
@@ -96,7 +95,7 @@ void sort_classes_for_compressed_size(const std::string& name,
   dexmethods_profiled_comparator comparator({}, &conf.get_method_profiles(),
                                             &mpoc);
   for (auto cls : *classes) {
-    if (cls->is_perf_sensitive() || interdex::is_canary(cls)) {
+    if (cls->is_perf_sensitive() || is_canary(cls)) {
       perf_sensitive_classes.push_back(cls);
       continue;
     }
