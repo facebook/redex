@@ -92,10 +92,16 @@ void MergingStrategy::group_by_cls_count(
   }
 }
 
-void MergingStrategy::group_by_code_size(const TypeSet& mergeable_types,
-                                         const GroupWalkerFn& walker) {
+void MergingStrategy::group_by_code_size(
+    const TypeSet& mergeable_types,
+    const boost::optional<size_t>& opt_max_mergeables_count,
+    const GroupWalkerFn& walker) {
   // 9000 - buffer_for_switch_payload
   constexpr size_t huge_method_split_limit = 8500;
+
+  size_t max_mergeables_count = opt_max_mergeables_count
+                                    ? *opt_max_mergeables_count
+                                    : std::numeric_limits<size_t>::max();
 
   std::vector<const DexType*> current_group;
 
@@ -108,8 +114,13 @@ void MergingStrategy::group_by_code_size(const TypeSet& mergeable_types,
       // This class will never make it into any group; skip it
       continue;
     }
-    if (estimated_merged_code_size + vmethod_code_size >
-        huge_method_split_limit) {
+    if (current_group.size() >= max_mergeables_count) {
+      redex_assert(current_group.size() > 1);
+      walker(current_group);
+      current_group.clear();
+      estimated_merged_code_size = 0;
+    } else if (estimated_merged_code_size + vmethod_code_size >
+               huge_method_split_limit) {
       TRACE(CLMG, 9, "\tgroup_by_code_size %zu classes", current_group.size());
       if (current_group.size() > 1) {
         walker(current_group);

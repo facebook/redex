@@ -51,7 +51,7 @@ class MergingStrategy final {
                          max_mergeables_count, walker);
       break;
     case BY_CODE_SIZE:
-      group_by_code_size(m_mergeable_types, walker);
+      group_by_code_size(m_mergeable_types, max_mergeables_count, walker);
       break;
     case BY_REFS:
       group_by_refs(m_mergeable_types, walker);
@@ -75,8 +75,10 @@ class MergingStrategy final {
    * Note it does only check the virtual methods code size on the classes and it
    * is not aware of how later optimizations would change the code.
    */
-  void group_by_code_size(const TypeSet& mergeable_types,
-                          const GroupWalkerFn& walker);
+  void group_by_code_size(
+      const TypeSet& mergeable_types,
+      const boost::optional<size_t>& opt_max_mergeables_count,
+      const GroupWalkerFn& walker);
 
   void group_by_refs(const TypeSet& mergeable_types,
                      const GroupWalkerFn& walker);

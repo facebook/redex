@@ -37,6 +37,7 @@ class AnonymousClassMergingPass : public Pass {
   ModelSpec m_merging_spec;
   size_t m_global_min_count;
   size_t m_min_count;
+  size_t m_max_count;
 };
 
 } // namespace class_merging
