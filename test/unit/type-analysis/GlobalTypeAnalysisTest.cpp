@@ -86,9 +86,7 @@ TEST_F(GlobalTypeAnalysisTest, SimpleArgumentPassingTest) {
 
   call_graph::Graph cg = call_graph::single_callee_graph(
       *method_override_graph::build_graph(scope), scope);
-  walk::code(scope, [](DexMethod*, IRCode& code) {
-    code.build_cfg(/* editable */ false);
-  });
+  walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(); });
   GlobalTypeAnalyzer gta(std::move(cg));
   gta.run({{CURRENT_PARTITION_LABEL, ArgumentTypeEnvironment()}});
 
@@ -149,9 +147,7 @@ TEST_F(GlobalTypeAnalysisTest, ArgumentPassingJoinWithNullTest) {
 
   call_graph::Graph cg = call_graph::single_callee_graph(
       *method_override_graph::build_graph(scope), scope);
-  walk::code(scope, [](DexMethod*, IRCode& code) {
-    code.build_cfg(/* editable */ false);
-  });
+  walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(); });
   GlobalTypeAnalyzer gta(std::move(cg));
   gta.run({{CURRENT_PARTITION_LABEL, ArgumentTypeEnvironment()}});
 
@@ -205,9 +201,7 @@ TEST_F(GlobalTypeAnalysisTest, ReturnTypeTest) {
 
   call_graph::Graph cg = call_graph::single_callee_graph(
       *method_override_graph::build_graph(scope), scope);
-  walk::code(scope, [](DexMethod*, IRCode& code) {
-    code.build_cfg(/* editable */ false);
-  });
+  walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(); });
 
   GlobalTypeAnalysis analysis;
   auto gta = analysis.analyze(scope);
@@ -275,9 +269,7 @@ TEST_F(GlobalTypeAnalysisTest, SimpleFieldTypeTest) {
 
   call_graph::Graph cg = call_graph::single_callee_graph(
       *method_override_graph::build_graph(scope), scope);
-  walk::code(scope, [](DexMethod*, IRCode& code) {
-    code.build_cfg(/* editable */ false);
-  });
+  walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(); });
 
   GlobalTypeAnalysis analysis;
   auto gta = analysis.analyze(scope);
@@ -358,9 +350,7 @@ TEST_F(GlobalTypeAnalysisTest, ClinitSimpleTest) {
 
   call_graph::Graph cg = call_graph::single_callee_graph(
       *method_override_graph::build_graph(scope), scope);
-  walk::code(scope, [](DexMethod*, IRCode& code) {
-    code.build_cfg(/* editable */ false);
-  });
+  walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(); });
 
   GlobalTypeAnalysis analysis;
   auto gta = analysis.analyze(scope);

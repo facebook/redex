@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <fstream>
 #include <gtest/gtest.h>
 
 #include "DexClass.h"
@@ -26,8 +27,8 @@ TEST_F(TypeAnalysisTransformTest, RemoveRedundantNullCheckTest) {
   auto gta = new GlobalTypeAnalysisPass();
   gta->get_config().transform.remove_redundant_null_checks = true;
   std::vector<Pass*> passes{gta};
-  run_passes(passes);
 
+  run_passes(passes);
   {
     auto meth_check_null_arg =
         get_method("TestRemoveRedundantNullChecks;.checkEQZNullArg",

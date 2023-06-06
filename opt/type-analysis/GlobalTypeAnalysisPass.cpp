@@ -77,22 +77,22 @@ void trace_analysis_diff(DexMethod* method,
       } else if (insn->opcode() == OPCODE_IGET_OBJECT ||
                  insn->opcode() == OPCODE_SGET_OBJECT) {
         auto gparam = genv.get(RESULT_REGISTER);
-        auto it = code->iterator_to(mie);
-        auto move_res = ir_list::move_result_pseudo_of(it);
+        auto it = block->to_cfg_instruction_iterator(mie);
+        auto move_res = cfg.move_result_of(it);
         auto field = insn->get_field();
         if (fields.count(field)) {
           continue;
         }
         fields.insert(field);
-        auto lparam = lenvs.at(move_res).get_dex_type(RESULT_REGISTER);
+        auto lparam = lenvs.at(move_res->insn).get_dex_type(RESULT_REGISTER);
         auto prefix = "field " + show(insn);
         found_improvement =
             trace_results_if_different(prefix, gparam, lparam, out);
       } else if (opcode::is_an_invoke(insn->opcode())) {
         auto gparam = genv.get(RESULT_REGISTER);
-        auto it = code->iterator_to(mie);
+        auto it = block->to_cfg_instruction_iterator(mie);
         auto callee = insn->get_method();
-        it++;
+        it.move_next_in_block();
         if (!lenvs.count(it->insn) || callees.count(callee)) {
           continue;
         }
@@ -146,7 +146,6 @@ void GlobalTypeAnalysisPass::optimize(
     if (method->get_code() == nullptr) {
       return Stats();
     }
-    auto code = method->get_code();
     auto lta = gta.get_local_analysis(method);
 
     if (m_config.trace_global_local_diff) {
@@ -158,7 +157,6 @@ void GlobalTypeAnalysisPass::optimize(
       Stats ra_stats;
       ra_stats.assert_stats =
           rat.apply(*lta, gta.get_whole_program_state(), method);
-      code->clear_cfg();
       return ra_stats;
     }
 
@@ -173,7 +171,6 @@ void GlobalTypeAnalysisPass::optimize(
             SHOW(method),
             SHOW(method->get_code()->cfg()));
     }
-    code->clear_cfg();
     return tr_stats;
   });
 

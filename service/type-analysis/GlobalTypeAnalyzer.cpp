@@ -6,8 +6,12 @@
  */
 
 #include "GlobalTypeAnalyzer.h"
-
 #include "ConcurrentContainers.h"
+
+#include "ControlFlow.h"
+#include "IRCode.h"
+#include "IRInstruction.h"
+
 #include "Resolver.h"
 #include "Show.h"
 #include "Trace.h"
@@ -54,15 +58,17 @@ void scan_any_init_reachables(
   if (!trace_callbacks && method::is_init(method)) {
     return;
   }
-  auto code = method->get_code();
+  auto code = (const_cast<DexMethod*>(method))->get_code();
   if (!code) {
     return;
   }
+  always_assert(code->editable_cfg_built());
+  auto& cfg = code->cfg();
   // We include all methods reachable from clinits and ctors. Even methods don't
   // access fields can indirectly consume field values through ctor calls.
   reachables.insert(method);
   TRACE(TYPE, 5, "[any init reachables] insert %s", SHOW(method));
-  for (auto& mie : InstructionIterable(code)) {
+  for (auto& mie : cfg::InstructionIterable(cfg)) {
     auto insn = mie.insn;
     if (!opcode::is_an_invoke(insn->opcode())) {
       continue;
@@ -342,7 +348,8 @@ void GlobalTypeAnalysis::find_any_init_reachables(
       return;
     }
     auto code = method->get_code();
-    for (auto& mie : InstructionIterable(code)) {
+    auto& cfg = code->cfg();
+    for (auto& mie : InstructionIterable(cfg)) {
       auto insn = mie.insn;
       if (!opcode::is_an_invoke(insn->opcode())) {
         continue;
@@ -407,7 +414,7 @@ std::unique_ptr<GlobalTypeAnalyzer> GlobalTypeAnalysis::analyze(
   // multiple times for a given method
   walk::parallel::code(scope, [](DexMethod*, IRCode& code) {
     if (!code.cfg_built()) {
-      code.build_cfg(/* editable */ false);
+      code.build_cfg();
     }
     code.cfg().calculate_exit_block();
   });

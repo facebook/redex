@@ -7,52 +7,16 @@
 
 #include "TypeAnalysisRuntimeAssert.h"
 
+#include "ControlFlow.h"
+#include "DexAsm.h"
+#include "IRAssembler.h"
+#include "IRCode.h"
+#include "IRInstruction.h"
 #include "ProguardMap.h"
 #include "Resolver.h"
 #include "Walkers.h"
 
 namespace type_analyzer {
-
-RuntimeAssertTransform::Config::Config(const ProguardMap& pg_map) {
-  param_assert_fail_handler = DexMethod::get_method(pg_map.translate_method(
-      "Lcom/facebook/redex/"
-      "ConstantPropagationAssertHandler;.paramValueError:(I)V"));
-  field_assert_fail_handler = DexMethod::get_method(
-      pg_map.translate_method("Lcom/facebook/redex/"
-                              "ConstantPropagationAssertHandler;."
-                              "fieldValueError:(Ljava/lang/String;)V"));
-  return_value_assert_fail_handler = DexMethod::get_method(
-      pg_map.translate_method("Lcom/facebook/redex/"
-                              "ConstantPropagationAssertHandler;."
-                              "returnValueError:(Ljava/lang/String;)V"));
-}
-
-static IRList::iterator insert_null_check(IRCode* code,
-                                          IRList::iterator it,
-                                          reg_t reg_to_check,
-                                          bool branch_on_null = true) {
-  auto opcode = branch_on_null ? OPCODE_IF_EQZ : OPCODE_IF_NEZ;
-  it = code->insert_after(
-      it, (new IRInstruction(opcode))->set_src(0, reg_to_check));
-  return it;
-}
-
-static IRList::iterator insert_type_check(IRCode* code,
-                                          IRList::iterator it,
-                                          reg_t reg_to_check,
-                                          const DexType* dex_type) {
-  always_assert(dex_type);
-  auto res_reg = code->allocate_temp();
-  it = code->insert_after(it,
-                          (new IRInstruction(OPCODE_INSTANCE_OF))
-                              ->set_type(const_cast<DexType*>(dex_type))
-                              ->set_src(0, reg_to_check));
-  it = code->insert_after(
-      it, (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO))->set_dest(res_reg));
-  it = code->insert_after(
-      it, (new IRInstruction(OPCODE_IF_NEZ))->set_src(0, res_reg));
-  return it;
-}
 
 namespace {
 
@@ -69,29 +33,118 @@ const DexString* get_deobfuscated_name_dex_string(const DexField* member) {
   }
   return DexString::make_string(str);
 }
-
 } // namespace
 
+RuntimeAssertTransform::Config::Config(const ProguardMap& pg_map) {
+  param_assert_fail_handler = DexMethod::get_method(pg_map.translate_method(
+      "Lcom/facebook/redex/"
+      "ConstantPropagationAssertHandler;.paramValueError:(I)V"));
+  field_assert_fail_handler = DexMethod::get_method(
+      pg_map.translate_method("Lcom/facebook/redex/"
+                              "ConstantPropagationAssertHandler;."
+                              "fieldValueError:(Ljava/lang/String;)V"));
+  return_value_assert_fail_handler = DexMethod::get_method(
+      pg_map.translate_method("Lcom/facebook/redex/"
+                              "ConstantPropagationAssertHandler;."
+                              "returnValueError:(Ljava/lang/String;)V"));
+}
+
+/* Given an iterator \p it, whose block is B, split block B into B1->B2. Then
+ * insert a if-stmt at the end of Block B1, and create another block throw_block
+ * with assertion call. After this change, the blocks look like: B1 (if_isns is
+ * false) -> throw_block -> B2, B1 (if_insn is true)-> B2 */
 template <typename DexMember>
-static IRList::iterator insert_throw_error(IRCode* code,
-                                           IRList::iterator it,
-                                           const DexMember* member,
-                                           DexMethodRef* handler) {
-  auto member_name_reg = code->allocate_temp();
-  it = code->insert_after(
-      it,
-      ((new IRInstruction(OPCODE_CONST_STRING))
-           ->set_string(get_deobfuscated_name_dex_string(member))));
-  it =
-      code->insert_after(it,
-                         ((new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
-                              ->set_dest(member_name_reg)));
-  it = code->insert_after(it,
-                          ((new IRInstruction(OPCODE_INVOKE_STATIC))
-                               ->set_method(handler)
-                               ->set_srcs_size(1)
-                               ->set_src(0, member_name_reg)));
-  return it;
+static void insert_null_check_with_throw(cfg::ControlFlowGraph& cfg,
+                                         cfg::InstructionIterator& it,
+                                         reg_t reg_to_check,
+                                         const DexMember* member,
+                                         DexMethodRef* handler,
+                                         bool branch_on_null = true) {
+  // 1. Split it into B1->B2, and current 'it' is the last insn of B1.
+  cfg::Block* B1 = it.block();
+  cfg::Block* B2 = cfg.split_block(it);
+  cfg.delete_edges_between(B1, B2);
+  // 2. Create a new block throw_block for throwing error.
+  cfg::Block* throw_block = cfg.create_block();
+  auto member_name_reg = cfg.allocate_temp();
+  IRInstruction* const_insn =
+      (new IRInstruction(OPCODE_CONST_STRING))
+          ->set_string(get_deobfuscated_name_dex_string(member));
+  IRInstruction* move_insn =
+      (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
+          ->set_dest(member_name_reg);
+  IRInstruction* invoke_insn = (new IRInstruction(OPCODE_INVOKE_STATIC))
+                                   ->set_method(handler)
+                                   ->set_srcs_size(1)
+                                   ->set_src(0, member_name_reg);
+  throw_block->push_back({const_insn, move_insn, invoke_insn});
+  // 3. Insert a null-check at the end of B1, and create edges between B1, B2,
+  // and throw_block.
+  auto opcode = branch_on_null ? OPCODE_IF_EQZ : OPCODE_IF_NEZ;
+  IRInstruction* if_insn = new IRInstruction(opcode);
+  if_insn->set_src(0, reg_to_check);
+  cfg.create_branch(B1, if_insn, throw_block, B2);
+  cfg.add_edge(throw_block, B2, cfg::EDGE_GOTO);
+}
+
+/* Given an iterator \p it, whose block is B, split block B into B1->B2. Then
+ * create one type_check_block(for type checking) and one block throw_block with
+ * assertion call. After this insertion, the blocks look like:
+ B1 -> type_check_block -> (T) B2
+                        |-> (F) throw_block -> B2
+*/
+template <typename DexMember>
+static void insert_type_check_with_throw(cfg::ControlFlowGraph& cfg,
+                                         cfg::InstructionIterator& it,
+                                         reg_t reg_to_check,
+                                         const DexMember* member,
+                                         DexMethodRef* handler,
+                                         const DexType* dex_type,
+                                         bool need_null_check,
+                                         bool branch_on_null = true) {
+  always_assert(dex_type);
+  // 1. Split it into B1->B2, and current 'it' is the last insn of B1.
+  cfg::Block* B1 = it.block();
+  cfg::Block* B2 = cfg.split_block(it);
+  cfg.delete_edges_between(B1, B2);
+  // 2. Create a new block throw_block for throwing error.
+  cfg::Block* throw_block = cfg.create_block();
+  auto member_name_reg = cfg.allocate_temp();
+  IRInstruction* const_insn =
+      (new IRInstruction(OPCODE_CONST_STRING))
+          ->set_string(get_deobfuscated_name_dex_string(member));
+  IRInstruction* move_obj_insn =
+      (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
+          ->set_dest(member_name_reg);
+  IRInstruction* invoke_insn = (new IRInstruction(OPCODE_INVOKE_STATIC))
+                                   ->set_method(handler)
+                                   ->set_srcs_size(1)
+                                   ->set_src(0, member_name_reg);
+  throw_block->push_back({const_insn, move_obj_insn, invoke_insn});
+  // 3. Create a new block type_check_block for type check.
+  cfg::Block* type_check_block = cfg.create_block();
+  auto res_reg = cfg.allocate_temp();
+  IRInstruction* inst_insn = (new IRInstruction(OPCODE_INSTANCE_OF))
+                                 ->set_type(const_cast<DexType*>(dex_type))
+                                 ->set_src(0, reg_to_check);
+  IRInstruction* move_insn =
+      (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO))->set_dest(res_reg);
+  IRInstruction* if_insn =
+      (new IRInstruction(OPCODE_IF_NEZ))->set_src(0, res_reg);
+  type_check_block->push_back({inst_insn, move_insn});
+  cfg.create_branch(type_check_block, if_insn, throw_block, B2);
+  // 3. If possible, insert a null-check at the end of B1, and update edges
+  // between B1, B2, type_check_block, and throw_block.
+  if (need_null_check) {
+    auto opcode = branch_on_null ? OPCODE_IF_EQZ : OPCODE_IF_NEZ;
+    IRInstruction* if_null_insn = new IRInstruction(opcode);
+    if_null_insn->set_src(0, reg_to_check);
+    cfg.create_branch(B1, if_null_insn, type_check_block, B2);
+  } else {
+    // Add goto edge between B1 and type_check_block.
+    cfg.add_edge(B1, type_check_block, cfg::EDGE_GOTO);
+  }
+  cfg.add_edge(throw_block, B2, cfg::EDGE_GOTO);
 }
 
 // The logic here is designed for testing purpose. It is not designed for
@@ -121,7 +174,9 @@ RuntimeAssertTransform::Stats RuntimeAssertTransform::apply(
   RuntimeAssertTransform::Stats stats{};
   bool in_clinit_or_init = method::is_clinit(method) && method::is_init(method);
   bool in_try = false;
-  for (auto it = code->begin(); it != code->end(); ++it) {
+  auto& cfg = code->cfg();
+  auto ii = cfg::InstructionIterable(cfg);
+  for (auto it = ii.begin(); it != ii.end(); ++it) {
     // Avoid emitting checks in a try section.
     // The inserted checks could introduce a throw edge from a block in the try
     // section to the catch section. This could change the CFG and the data
@@ -138,191 +193,151 @@ RuntimeAssertTransform::Stats RuntimeAssertTransform::apply(
     }
     if (!in_try) {
       always_assert(it->insn);
-      it = insert_field_assert(wps, method->get_class(), code,
-                               in_clinit_or_init, it, stats);
-      // Note that `it` may no longer point to an entry of type MFLOW_OPCODE, as
-      // it maybe of type MFLOW_TARGET
-      if (it->type != MFLOW_OPCODE) {
-        continue;
+      auto next_it = std::next(it);
+      bool changed;
+      changed = insert_field_assert(wps, method->get_class(), cfg,
+                                    in_clinit_or_init, it, stats);
+      if (changed) {
+        // Some code has been inserted. Skip the those code.
+        it = next_it;
       }
-      it =
-          insert_return_value_assert(wps, method->get_class(), code, it, stats);
+      changed =
+          insert_return_value_assert(wps, method->get_class(), cfg, it, stats);
+      if (changed) {
+        // Some code has been inserted. Skip the those code.
+        it = next_it;
+      }
     }
   }
   return stats;
 }
 
-IRList::iterator RuntimeAssertTransform::insert_field_assert(
-    const WholeProgramState& wps,
-    const DexType* from,
-    IRCode* code,
-    bool in_clinit_or_init,
-    IRList::iterator& it,
-    Stats& stats) {
+bool RuntimeAssertTransform::insert_field_assert(const WholeProgramState& wps,
+                                                 const DexType* from,
+                                                 cfg::ControlFlowGraph& cfg,
+                                                 bool in_clinit_or_init,
+                                                 cfg::InstructionIterator& it,
+                                                 Stats& stats) {
   auto* insn = it->insn;
   auto op = insn->opcode();
   if (!opcode::is_an_sget(op) && !opcode::is_an_iget(op)) {
-    return it;
+    return false;
   }
   auto* field = resolve_field(insn->get_field());
   if (field == nullptr) {
-    return it;
+    return false;
   }
   if (!type::is_object(field->get_type())) {
-    return it;
+    return false;
   }
   auto domain = wps.get_field_type(field);
   if (domain.is_top()) {
-    return it;
+    return false;
   }
-  ++it;
-  if (!opcode::is_a_move_result_pseudo(it->insn->opcode())) {
-    return it;
+  if (!insn->has_move_result_pseudo()) {
+    return false;
   }
-  auto mov_res_it = it;
+  auto mov_res_it = cfg.move_result_of(it);
+  if (mov_res_it.is_end()) {
+    return false;
+  }
+
   // Nullness check
   // We do not emit null checks for fields in clinits or ctors. Because the
   // field might not be initialized yet.
   bool skip_null_check = domain.is_not_null() || in_clinit_or_init;
+  auto reg_to_check = mov_res_it->insn->dest();
 
   if (!skip_null_check) {
     if (domain.is_null()) {
-      auto fm_it = it;
-      auto reg_to_check = fm_it->insn->dest();
-      fm_it = insert_null_check(code, fm_it, reg_to_check);
-      auto null_check_insn_it = fm_it;
-      // Fall through to throw Error
-      fm_it = insert_throw_error(code, fm_it, field,
-                                 m_config.field_assert_fail_handler);
-      fm_it = code->insert_after(fm_it, new BranchTarget(&*null_check_insn_it));
+      insert_null_check_with_throw(cfg, mov_res_it, reg_to_check, field,
+                                   m_config.field_assert_fail_handler);
       stats.field_nullness_check_inserted++;
-      // No need to emit type check anymore
-      return fm_it;
+      return true;
     } else if (domain.is_not_null()) {
-      auto fm_it = it;
-      auto reg_to_check = fm_it->insn->dest();
-      fm_it = insert_null_check(code, fm_it, reg_to_check,
-                                /* branch_on_null */ false);
-      auto null_check_insn_it = fm_it;
-      // Fall through to throw Error
-      fm_it = insert_throw_error(code, fm_it, field,
-                                 m_config.field_assert_fail_handler);
-      fm_it = code->insert_after(fm_it, new BranchTarget(&*null_check_insn_it));
+      insert_null_check_with_throw(cfg, mov_res_it, reg_to_check, field,
+                                   m_config.field_assert_fail_handler, false);
       stats.field_nullness_check_inserted++;
-      it = fm_it;
     }
   }
 
   // Singleton type check
   auto dex_type = domain.get_dex_type();
   if (!dex_type) {
-    return it;
+    return true;
   }
   if (!can_access(from, *dex_type)) {
-    return it;
+    return true;
   }
-  auto fm_it = it;
-  auto reg_to_check = mov_res_it->insn->dest();
-  auto null_check_insn_it = IRList::iterator();
-  if (!skip_null_check) {
-    // Emit null check if the type check is not preceded by one
-    fm_it = insert_null_check(code, fm_it, reg_to_check);
-    null_check_insn_it = fm_it;
-  }
-  fm_it = insert_type_check(code, fm_it, reg_to_check, *dex_type);
-  auto type_check_insn_it = fm_it;
-  // Fall through to throw Error
-  fm_it = insert_throw_error(code, fm_it, field,
-                             m_config.field_assert_fail_handler);
-  if (!skip_null_check) {
-    fm_it = code->insert_after(fm_it, new BranchTarget(&*null_check_insn_it));
-  }
-  fm_it = code->insert_after(fm_it, new BranchTarget(&*type_check_insn_it));
+
+  insert_type_check_with_throw(cfg, mov_res_it, reg_to_check, field,
+                               m_config.field_assert_fail_handler, *dex_type,
+                               !skip_null_check);
   stats.field_type_check_inserted++;
-  return fm_it;
+  return true;
 }
 
-IRList::iterator RuntimeAssertTransform::insert_return_value_assert(
+bool RuntimeAssertTransform::insert_return_value_assert(
     const WholeProgramState& wps,
     const DexType* from,
-    IRCode* code,
-    IRList::iterator& it,
+    cfg::ControlFlowGraph& cfg,
+    cfg::InstructionIterator& it,
     Stats& stats) {
   auto* insn = it->insn;
   if (!opcode::is_an_invoke(insn->opcode())) {
-    return it;
+    return false;
   }
   auto* callee = resolve_method(insn->get_method(), opcode_to_search(insn));
   if (callee == nullptr) {
-    return it;
+    return false;
   }
   auto ret_type = callee->get_proto()->get_rtype();
   if (!type::is_object(ret_type)) {
-    return it;
+    return false;
   }
   auto domain = wps.get_return_type(callee);
   if (domain.is_top()) {
-    return it;
+    return false;
   }
-  ++it;
-  if (!opcode::is_a_move_result(it->insn->opcode())) {
-    return it;
+  if (it.is_end_in_block()) {
+    return false;
   }
-  auto mov_res_it = it;
+
+  auto mov_res_it = cfg.move_result_of(it);
+  if (mov_res_it.is_end()) {
+    return false;
+  }
+
   // Nullness check
+  auto reg_to_check = mov_res_it->insn->dest();
   if (domain.is_null()) {
-    auto fm_it = it;
-    auto reg_to_check = fm_it->insn->dest();
-    fm_it = insert_null_check(code, fm_it, reg_to_check);
-    auto null_check_insn_it = fm_it;
-    // Fall through to throw Error
-    fm_it = insert_throw_error(code, fm_it, callee,
-                               m_config.return_value_assert_fail_handler);
-    fm_it = code->insert_after(fm_it, new BranchTarget(&*null_check_insn_it));
+    insert_null_check_with_throw(cfg, mov_res_it, reg_to_check, callee,
+                                 m_config.return_value_assert_fail_handler);
     stats.return_nullness_check_inserted++;
-    // No need to emit type check anymore
-    return fm_it;
+    // No need to emit type check anymore.
+    return true;
   } else if (domain.is_not_null()) {
-    auto fm_it = it;
-    auto reg_to_check = fm_it->insn->dest();
-    fm_it = insert_null_check(code, fm_it, reg_to_check,
-                              /* branch_on_null */ false);
-    auto null_check_insn_it = fm_it;
-    // Fall through to throw Error
-    fm_it = insert_throw_error(code, fm_it, callee,
-                               m_config.return_value_assert_fail_handler);
-    fm_it = code->insert_after(fm_it, new BranchTarget(&*null_check_insn_it));
+    insert_null_check_with_throw(cfg, mov_res_it, reg_to_check, callee,
+                                 m_config.return_value_assert_fail_handler,
+                                 false);
     stats.return_nullness_check_inserted++;
-    it = fm_it;
   }
 
   // Singleton type check
   auto dex_type = domain.get_dex_type();
   if (!dex_type) {
-    return it;
+    return true;
   }
   if (!can_access(from, *dex_type)) {
-    return it;
+    return true;
   }
-  auto fm_it = it;
-  auto reg_to_check = mov_res_it->insn->dest();
-  auto null_check_insn_it = IRList::iterator();
+
   bool skip_null_check = domain.is_not_null();
-  if (!skip_null_check) {
-    fm_it = insert_null_check(code, fm_it, reg_to_check);
-    null_check_insn_it = fm_it;
-  }
-  fm_it = insert_type_check(code, fm_it, reg_to_check, *dex_type);
-  auto type_check_insn_it = fm_it;
-  // Fall through to throw Error
-  fm_it = insert_throw_error(code, fm_it, callee,
-                             m_config.return_value_assert_fail_handler);
-  if (!skip_null_check) {
-    fm_it = code->insert_after(fm_it, new BranchTarget(&*null_check_insn_it));
-  }
-  fm_it = code->insert_after(fm_it, new BranchTarget(&*type_check_insn_it));
+  insert_type_check_with_throw(cfg, mov_res_it, reg_to_check, callee,
+                               m_config.return_value_assert_fail_handler,
+                               *dex_type, !skip_null_check);
   stats.return_type_check_inserted++;
-  return fm_it;
+  return true;
 }
 
 } // namespace type_analyzer
