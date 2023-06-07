@@ -11,6 +11,7 @@
 #include <unordered_set>
 
 #include "ConcurrentContainers.h"
+#include "ControlFlow.h"
 #include "DexClass.h"
 #include "KeepReason.h"
 #include "MethodOverrideGraph.h"
@@ -208,6 +209,9 @@ struct References {
 };
 
 void gather_dynamic_references(const DexAnnotation* item,
+                               References* references);
+
+void gather_dynamic_references(const cfg::ControlFlowGraph* item,
                                References* references);
 
 void gather_dynamic_references(const IRCode* item, References* references);

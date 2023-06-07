@@ -9,6 +9,7 @@
 
 #include <boost/algorithm/string.hpp>
 
+#include "ControlFlow.h"
 #include "MethodOverrideGraph.h"
 #include "PassManager.h"
 #include "Reachability.h"
@@ -73,8 +74,9 @@ class TypeAnaysisAwareClosureMarker final
     gather_methods_on_code(method, refs);
     // Gather from annotations
     method->gather_methods_from_annos(refs.methods);
-    if (m_relaxed_keep_class_members) {
-      gather_dynamic_references(method->get_code(), &refs);
+    if (m_relaxed_keep_class_members && method->get_code()) {
+      auto& cfg = method->get_code()->cfg();
+      gather_dynamic_references(&cfg, &refs);
     }
     return refs;
   }
@@ -195,12 +197,11 @@ class TypeAnaysisAwareClosureMarker final
     if (code == nullptr) {
       return;
     }
-    if (!code->cfg_built()) {
-      code->gather_methods(refs.methods);
-      return;
-    }
+    always_assert(code->editable_cfg_built());
+    auto& cfg = code->cfg();
+
     auto lta = m_gta->get_local_analysis(method);
-    for (const auto& block : code->cfg().blocks()) {
+    for (const auto& block : cfg.blocks()) {
       auto env = lta->get_entry_state_at(block);
       if (env.is_bottom()) {
         // Unreachable
@@ -242,12 +243,9 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects_with_type_anaysis(
     bool /*unused*/) {
   Timer t("Marking");
   auto scope = build_class_scope(stores);
-  // Rebuild uneditable CFGs.
   walk::parallel::code(scope, [](DexMethod*, IRCode& code) {
-    code.build_cfg(/* editable */ false);
     code.cfg().calculate_exit_block();
   });
-
   auto reachable_objects = std::make_unique<ReachableObjects>();
   InstantiableTypes instantiable_types;
   reachability::DynamicallyReferencedClasses dynamically_referenced_classes;

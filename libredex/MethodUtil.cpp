@@ -178,11 +178,18 @@ bool is_argless_init(const DexMethodRef* method) {
 }
 
 bool is_trivial_clinit(const IRCode& code) {
-  always_assert(!code.editable_cfg_built());
-  auto ii = InstructionIterable(code);
-  return std::none_of(ii.begin(), ii.end(), [](const MethodItemEntry& mie) {
-    return mie.insn->opcode() != OPCODE_RETURN_VOID;
-  });
+  if (!code.editable_cfg_built()) {
+    auto ii = InstructionIterable(code);
+    return std::none_of(ii.begin(), ii.end(), [](const MethodItemEntry& mie) {
+      return mie.insn->opcode() != OPCODE_RETURN_VOID;
+    });
+  } else {
+    auto& cfg = code.cfg();
+    auto ii = cfg::ConstInstructionIterable(cfg);
+    return std::none_of(ii.begin(), ii.end(), [](const MethodItemEntry& mie) {
+      return mie.insn->opcode() != OPCODE_RETURN_VOID;
+    });
+  }
 }
 
 bool is_clinit_invoked_method_benign(const DexMethodRef* method_ref) {
