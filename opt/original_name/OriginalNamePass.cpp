@@ -10,6 +10,9 @@
 #include "ConfigFiles.h"
 #include "DexAnnotation.h"
 #include "DexLimitsInfo.h"
+
+#include "DexStoreUtil.h"
+
 #include "DexUtil.h"
 #include "PassManager.h"
 #include "RenameClassesV2.h"
@@ -162,6 +165,15 @@ void OriginalNamePass::run_pass(DexStoresVector& stores,
             "rest number is %zu\n",
             overflow_classes.size(), removed, dex_id, store.get_name().c_str(),
             dex.size());
+        int dexnum = store.get_dexen().size();
+        DexClass* canary_cls;
+        if (store.is_root_store()) {
+          canary_cls = create_canary(dexnum);
+        } else {
+          canary_cls =
+              create_canary(dexnum, DexString::make_string(store.get_name()));
+        }
+        new_dex.push_back(canary_cls);
         new_dex.insert(new_dex.end(), overflow_classes.begin(),
                        overflow_classes.end());
       }
