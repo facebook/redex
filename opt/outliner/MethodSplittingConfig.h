@@ -14,8 +14,8 @@ namespace method_splitting_impl {
 
 struct Config {
   uint64_t split_block_size{100};
-  uint64_t min_original_size{6000};
-  uint64_t min_original_size_too_large_for_inlining{1600};
+  uint64_t min_original_size{5000};
+  uint64_t min_original_size_too_large_for_inlining{1500};
   uint64_t min_hot_cold_split_size{300};
   uint64_t min_hot_split_size{400};
   uint64_t min_cold_split_size{500};
