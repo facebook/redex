@@ -26,20 +26,20 @@ namespace {
  * `IllegalArgumentException`).
  */
 boost::variant<reg_t, bool> compute_prologue_blocks(
-    cfg::ControlFlowGraph* cfg,
+    cfg::ControlFlowGraph& cfg,
     const cp::intraprocedural::FixpointIterator& fixpoint,
     bool verify_default_case,
     std::vector<cfg::Block*>& prologue_blocks) {
-  for (const cfg::Block* b : cfg->blocks()) {
+  for (const cfg::Block* b : cfg.blocks()) {
     always_assert_log(!b->is_catch(),
                       "SwitchMethodPartitioning does not support methods with "
                       "catch blocks. %zu has a catch block in %s",
-                      b->id(), SHOW(*cfg));
+                      b->id(), SHOW(cfg));
   }
 
   // First, add all the prologue blocks that forma a linear chain before the
   // case block selection blocks (a switch or an if-else tree) begin.
-  for (cfg::Block* b = cfg->entry_block(); b != nullptr;
+  for (cfg::Block* b = cfg.entry_block(); b != nullptr;
        b = b->goes_to_only_edge()) {
     prologue_blocks.push_back(b);
   }
@@ -55,7 +55,7 @@ boost::variant<reg_t, bool> compute_prologue_blocks(
     auto op = last_prologue_insn->opcode();
     always_assert_log(!verify_default_case || opcode::is_branch(op) ||
                           opcode::is_a_return(op) || op == OPCODE_THROW,
-                      "%s in %s", SHOW(last_prologue_insn), SHOW(*cfg));
+                      "%s in %s", SHOW(last_prologue_insn), SHOW(cfg));
 
     if (!opcode::is_branch(op)) {
       return opcode::is_throw(op);
@@ -114,19 +114,19 @@ boost::variant<reg_t, bool> compute_prologue_blocks(
       // Make sure all blocks agree on which register is the determiner
       reg_t candidate_reg;
       always_assert_log(find_determining_reg(fixpoint, b, &candidate_reg),
-                        "Couldn't find determining register in %s", SHOW(*cfg));
+                        "Couldn't find determining register in %s", SHOW(cfg));
       if (determining_reg == boost::none) {
         determining_reg = candidate_reg;
       } else {
         always_assert_log(
             *determining_reg == candidate_reg,
             "Conflict: which register are we switching on? %d != %d in %s",
-            *determining_reg, candidate_reg, SHOW(*cfg));
+            *determining_reg, candidate_reg, SHOW(cfg));
       }
     }
   }
   always_assert_log(determining_reg != boost::none,
-                    "Couldn't find determining register in %s", SHOW(*cfg));
+                    "Couldn't find determining register in %s", SHOW(cfg));
   return *determining_reg;
 }
 
@@ -146,26 +146,25 @@ bool throws(cfg::Block* block) {
 }
 } // namespace
 
-boost::optional<SwitchMethodPartitioning> SwitchMethodPartitioning::create(
+std::unique_ptr<SwitchMethodPartitioning> SwitchMethodPartitioning::create(
     IRCode* code, bool verify_default_case) {
-  code->build_cfg(/* editable */ true);
-  auto& cfg = code->cfg();
+  cfg::ScopedCFG cfg(code);
   // Note that a single-case switch can be compiled as either a switch opcode or
   // a series of if-* opcodes. We can use constant propagation to handle these
   // cases uniformly: to determine the case key, we use the inferred value of
   // the operand to the branching opcode in the successor blocks.
   cp::intraprocedural::FixpointIterator fixpoint(
-      cfg, cp::ConstantPrimitiveAnalyzer());
+      *cfg, cp::ConstantPrimitiveAnalyzer());
   fixpoint.run(ConstantEnvironment());
 
   std::vector<cfg::Block*> prologue_blocks;
-  auto res = compute_prologue_blocks(&cfg, fixpoint, verify_default_case,
+  auto res = compute_prologue_blocks(*cfg, fixpoint, verify_default_case,
                                      prologue_blocks);
 
   reg_t determining_reg{0};
   if (res.which() == 1) {
     if (!boost::get<bool>(res)) {
-      return boost::none;
+      return nullptr;
     }
   } else {
     determining_reg = boost::get<reg_t>(res);
@@ -184,7 +183,7 @@ boost::optional<SwitchMethodPartitioning> SwitchMethodPartitioning::create(
 
   if (res.which() == 1 && !cases.empty()) {
     // This does not look like the simple throw function we expect!
-    return boost::none;
+    return nullptr;
   }
 
   std::unordered_map<int32_t, cfg::Block*> key_to_block;
@@ -196,7 +195,7 @@ boost::optional<SwitchMethodPartitioning> SwitchMethodPartitioning::create(
       always_assert_log(throws(case_block),
                         "Could not determine key for block that does not look "
                         "like it throws an IllegalArgumentException: %zu in %s",
-                        case_block->id(), SHOW(cfg));
+                        case_block->id(), SHOW(*cfg));
     } else if (!case_key.is_top()) {
       const auto& c = case_key.get_constant();
       if (c != boost::none) {
@@ -220,6 +219,7 @@ boost::optional<SwitchMethodPartitioning> SwitchMethodPartitioning::create(
     }
   }
 
-  return SwitchMethodPartitioning(code, std::move(prologue_blocks),
-                                  std::move(key_to_block));
+  // Can't use make_unique because constructor is private
+  return std::unique_ptr<SwitchMethodPartitioning>(new SwitchMethodPartitioning(
+      std::move(cfg), std::move(prologue_blocks), std::move(key_to_block)));
 }
