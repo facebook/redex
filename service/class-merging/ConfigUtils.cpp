@@ -26,7 +26,9 @@ std::vector<DexType*> get_types(const std::vector<std::string>& target_types) {
   std::vector<DexType*> types;
   for (const auto& type_s : target_types) {
     auto target_type = get_type(type_s);
-    if (target_type == nullptr) continue;
+    if (target_type == nullptr) {
+      continue;
+    }
     types.push_back(target_type);
   }
   return types;

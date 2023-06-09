@@ -114,27 +114,36 @@ void load_roots_subtypes_as_merging_targets(const TypeSystem& type_system,
 
 namespace class_merging {
 
-const ModelStats merge_model(Scope& scope,
-                             ConfigFiles& conf,
-                             PassManager& mgr,
-                             DexStoresVector& stores,
-                             ModelSpec& spec) {
+ModelStats merge_model(Scope& scope,
+                       ConfigFiles& conf,
+                       PassManager& mgr,
+                       DexStoresVector& stores,
+                       ModelSpec& spec) {
+  always_assert(!spec.roots.empty());
   TypeSystem type_system(scope);
   if (spec.merging_targets.empty()) {
     load_roots_subtypes_as_merging_targets(type_system, &spec);
   }
+  if (spec.merging_targets.empty()) {
+    return ModelStats();
+  }
   return merge_model(type_system, scope, conf, mgr, stores, spec);
 }
 
-const ModelStats merge_model(const TypeSystem& type_system,
-                             Scope& scope,
-                             ConfigFiles& conf,
-                             PassManager& mgr,
-                             DexStoresVector& stores,
-                             ModelSpec& spec) {
+ModelStats merge_model(const TypeSystem& type_system,
+                       Scope& scope,
+                       ConfigFiles& conf,
+                       PassManager& mgr,
+                       DexStoresVector& stores,
+                       ModelSpec& spec) {
   set_up(conf);
   always_assert(s_is_initialized);
-  TRACE(CLMG, 2, "[ClassMerging] merging %s model", spec.name.c_str());
+  TRACE(CLMG,
+        2,
+        "[ClassMerging] merging %s model merging targets %lu roots %lu",
+        spec.name.c_str(),
+        spec.merging_targets.size(),
+        spec.roots.size());
   Timer t("erase_model");
   int32_t min_sdk = mgr.get_redex_options().min_sdk;
   XStoreRefs xstores(stores);

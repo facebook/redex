@@ -11,17 +11,17 @@
 
 namespace class_merging {
 
-const ModelStats merge_model(Scope& scope,
-                             ConfigFiles& conf,
-                             PassManager& mgr,
-                             DexStoresVector& stores,
-                             ModelSpec& spec);
+ModelStats merge_model(Scope& scope,
+                       ConfigFiles& conf,
+                       PassManager& mgr,
+                       DexStoresVector& stores,
+                       ModelSpec& spec);
 
-const ModelStats merge_model(const TypeSystem&,
-                             Scope& scope,
-                             ConfigFiles& conf,
-                             PassManager& mgr,
-                             DexStoresVector& stores,
-                             ModelSpec& spec);
+ModelStats merge_model(const TypeSystem&,
+                       Scope& scope,
+                       ConfigFiles& conf,
+                       PassManager& mgr,
+                       DexStoresVector& stores,
+                       ModelSpec& spec);
 
 } // namespace class_merging
