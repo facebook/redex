@@ -718,9 +718,6 @@ void TransitiveClosureMarker::push_typelike_strings(
 
 void TransitiveClosureMarker::visit_cls(const DexClass* cls) {
   TRACE(REACH, 4, "Visiting class: %s", SHOW(cls));
-  if (is_native(cls)) {
-    instantiable(cls->get_type());
-  }
   push(cls, type_class(cls->get_super_class()));
   for (auto const& t : *cls->get_interfaces()) {
     push(cls, t);

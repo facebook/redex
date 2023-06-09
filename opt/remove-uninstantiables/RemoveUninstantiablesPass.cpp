@@ -177,8 +177,7 @@ class OverriddenVirtualScopesAnalysis {
 
   bool is_instantiated(DexType* t) const {
     auto cls = type_class(t);
-    return is_native(cls) || root(cls) || !can_rename(cls) ||
-           m_instantiated_types.count(t);
+    return root(cls) || !can_rename(cls) || m_instantiated_types.count(t);
   }
 
  public:
@@ -300,7 +299,7 @@ RemoveUninstantiablesPass::compute_scoped_uninstantiable_types(
   std::unordered_set<const DexClass*> instantiable_classes;
   auto is_interface_instantiable = [](const DexClass* interface) {
     if (is_annotation(interface) || interface->is_external() ||
-        is_native(interface) || root(interface) || !can_rename(interface)) {
+        root(interface) || !can_rename(interface)) {
       return true;
     }
     for (auto method : interface->get_vmethods()) {
