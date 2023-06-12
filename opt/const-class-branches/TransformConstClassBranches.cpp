@@ -53,22 +53,6 @@ struct PendingTransform {
   std::unique_ptr<SwitchEquivFinder> switch_equiv;
 };
 
-// Allow for sorting the transformations this pass could do. A transform is
-// considered "less important" if it has fewer cases, if its method is sorted
-// later, or instruction that starts the conceptual switch appears later in the
-// method body.
-bool operator<(const PendingTransform& l, const PendingTransform& r) {
-  auto l_size = l.switch_equiv->key_to_case().size();
-  auto r_size = r.switch_equiv->key_to_case().size();
-  if (l_size == r_size) {
-    if (l.method == r.method) {
-      return r.insn_idx < l.insn_idx;
-    }
-    return compare_dexmethods(r.method, l.method);
-  }
-  return l_size < r_size;
-}
-
 struct Stats {
   size_t methods_transformed{0};
   size_t const_class_instructions_removed{0};
@@ -209,27 +193,6 @@ void gather_possible_transformations(
   pending_transforms->emplace_back(std::move(t));
 }
 
-DexFieldRef* add_string_field(const std::string& encoded_str, DexClass* cls) {
-  size_t next_string_field = 0;
-  std::string field_prefix = "$RDX$tree";
-  for (const auto& f : cls->get_sfields()) {
-    auto name = f->get_name();
-    if (name->str().find(field_prefix) == 0) {
-      next_string_field++;
-    }
-  }
-  auto field_name =
-      DexString::make_string(field_prefix + std::to_string(next_string_field));
-  auto field = DexField::make_field(cls->get_type(), field_name,
-                                    type::java_lang_String());
-  auto concrete_field = field->make_concrete(
-      ACC_PRIVATE | ACC_STATIC, std::make_unique<DexEncodedValueString>(
-                                    DexString::make_string(encoded_str)));
-  concrete_field->set_deobfuscated_name(show_deobfuscated(field));
-  cls->add_field(concrete_field);
-  return field;
-}
-
 Stats apply_transform(const PassState& pass_state,
                       PendingTransform& transform) {
   Stats result;
@@ -274,7 +237,7 @@ Stats apply_transform(const PassState& pass_state,
   auto encoded_str =
       StringTreeMap<int16_t>::encode_string_tree_map(string_tree_items);
   result.string_tree_size = encoded_str.size();
-  auto field = add_string_field(encoded_str, transform.cls);
+  auto encoded_dex_str = DexString::make_string(encoded_str);
 
   // Fiddle with the prologue block and install an actual switch
   TRACE(CCB, 2, "Removing last prologue instruction: %s", SHOW(transform.insn));
@@ -295,13 +258,12 @@ Stats apply_transform(const PassState& pass_state,
   replacements.push_back(move_class_name);
 
   auto encoded_str_reg = cfg.allocate_temp();
-  auto sget_encoded = new IRInstruction(OPCODE_SGET_OBJECT);
-  sget_encoded->set_field(field);
-  replacements.push_back(sget_encoded);
-
-  auto move_encoded = new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
-  move_encoded->set_dest(encoded_str_reg);
-  replacements.push_back(move_encoded);
+  auto const_string_insn =
+      (new IRInstruction(OPCODE_CONST_STRING))->set_string(encoded_dex_str);
+  replacements.push_back(const_string_insn);
+  auto move_string_insn = (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
+                              ->set_dest(encoded_str_reg);
+  replacements.push_back(move_string_insn);
 
   auto default_value_reg = cfg.allocate_temp();
   auto default_value_const = new IRInstruction(OPCODE_CONST);
@@ -370,17 +332,13 @@ Stats apply_transform(const PassState& pass_state,
 class TransformConstClassBranchesInterDexPlugin
     : public interdex::InterDexPassPlugin {
  public:
-  explicit TransformConstClassBranchesInterDexPlugin(size_t reserved_fields)
-      : m_reserved_fields(reserved_fields) {}
+  explicit TransformConstClassBranchesInterDexPlugin() {}
 
   ReserveRefsInfo reserve_refs() override {
-    return ReserveRefsInfo(/* frefs */ m_reserved_fields,
+    return ReserveRefsInfo(/* frefs */ 0,
                            /* trefs */ 0,
                            /* mrefs */ 2);
   }
-
- private:
-  size_t m_reserved_fields;
 };
 } // namespace
 
@@ -391,20 +349,16 @@ void TransformConstClassBranchesPass::bind_config() {
   // Arbitrary default values to avoid creating unbounded amounts of encoded
   // string data.
   bind("max_cases", 2000, m_max_cases);
-  // String data is stored in a field, so we will tell InterDex about a fixed
-  // number of transforms we'll at most make.
-  bind("reserved_fields", 20, m_reserved_fields);
   bind("string_tree_lookup_method", "", m_string_tree_lookup_method);
   trait(Traits::Pass::unique, true);
 
-  after_configuration([this] {
-    always_assert(m_reserved_fields > 0);
+  after_configuration([] {
     interdex::InterDexRegistry* registry =
         static_cast<interdex::InterDexRegistry*>(
             PluginRegistry::get().pass_registry(interdex::INTERDEX_PASS_NAME));
     std::function<interdex::InterDexPassPlugin*()> fn =
-        [this]() -> interdex::InterDexPassPlugin* {
-      return new TransformConstClassBranchesInterDexPlugin(m_reserved_fields);
+        []() -> interdex::InterDexPassPlugin* {
+      return new TransformConstClassBranchesInterDexPlugin();
     };
     registry->register_plugin("TRANSFORM_CONST_CLASS_BRANCHES_PLUGIN",
                               std::move(fn));
@@ -437,46 +391,9 @@ void TransformConstClassBranchesPass::run_pass(DexStoresVector& stores,
     }
   });
 
-  // Perform the transforms in order of priority, biggest to smallest (until we
-  // run out of reserved room we asked for during InterDex).
-  std::unordered_map<DexClass*, std::vector<PendingTransform*>>
-      per_class_transforms;
-  for (auto& transform : transforms) {
-    per_class_transforms[transform.cls].emplace_back(&transform);
-  }
-
   Stats stats;
-  // Apply at most N transforms per dex.
-  auto apply_transforms_dex = [&](DexClasses& dex_file) {
-    std::vector<PendingTransform*> per_dex_transforms;
-    for (auto cls : dex_file) {
-      auto search = per_class_transforms.find(cls);
-      if (search != per_class_transforms.end()) {
-        per_dex_transforms.insert(per_dex_transforms.end(),
-                                  search->second.begin(), search->second.end());
-      }
-    }
-    std::sort(per_dex_transforms.begin(), per_dex_transforms.end(),
-              [](const PendingTransform* a, const PendingTransform* b) {
-                return *a < *b;
-              });
-    size_t transform_count{0};
-    for (auto it = per_dex_transforms.rbegin(); it != per_dex_transforms.rend();
-         ++it) {
-      if (transform_count >= m_reserved_fields) {
-        break;
-      }
-      auto& transform = *it;
-      stats += apply_transform(pass_state, *transform);
-      transform_count++;
-    }
-  };
-
-  for (auto& store : stores) {
-    auto& dex_files = store.get_dexen();
-    for (auto& dex_file : dex_files) {
-      apply_transforms_dex(dex_file);
-    }
+  for (auto& transform : transforms) {
+    stats += apply_transform(pass_state, transform);
   }
   mgr.incr_metric(METRIC_METHODS_TRANSFORMED, stats.methods_transformed);
   mgr.incr_metric(METRIC_CONST_CLASS_INSTRUCTIONS_REMOVED,
