@@ -417,8 +417,7 @@ class OptimizeEnums {
       const auto& ctors = cls->get_ctors();
       if (ctors.size() != 1) {
         utypes.insert(UnsafeType::kMultipleCtors);
-      }
-      if (!is_simple_enum_constructor(cls, ctors.front())) {
+      } else if (!is_simple_enum_constructor(cls, ctors.front())) {
         utypes.insert(UnsafeType::kComplexCtor);
       }
 
