@@ -266,13 +266,12 @@ void PassImpl::run(const DexStoresVector& stores, int min_sdk) {
 
   auto scope = build_class_scope(stores);
   XStoreRefs xstores(stores);
-  // Rebuild all CFGs here -- this should be more efficient than doing them
-  // within FixpointIterator::analyze_node(), since that can get called
-  // multiple times for a given method
-  walk::parallel::code(scope, [&](DexMethod*, IRCode& code) {
-    code.build_cfg(/* editable */ !m_config.create_runtime_asserts);
+
+  walk::parallel::code(scope, [&](const DexMethod* method, IRCode& code) {
+    always_assert(code.editable_cfg_built());
     code.cfg().calculate_exit_block();
   });
+
   // Hold the analyzer state of ImmutableAttributeAnalyzer.
   ImmutableAttributeAnalyzerState immut_analyzer_state;
   immutable_state::analyze_constructors(scope, &immut_analyzer_state);
@@ -282,8 +281,6 @@ void PassImpl::run(const DexStoresVector& stores, int min_sdk) {
       analyze(scope, &immut_analyzer_state, &api_level_analyzer_state);
   m_stats.fp_iter = fp_iter->get_stats();
   optimize(scope, xstores, *fp_iter, &immut_analyzer_state);
-  walk::parallel::code(scope,
-                       [](DexMethod*, IRCode& code) { code.clear_cfg(); });
 }
 
 void PassImpl::run_pass(DexStoresVector& stores,
