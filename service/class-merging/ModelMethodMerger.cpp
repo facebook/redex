@@ -28,24 +28,8 @@ using namespace class_merging;
 namespace {
 
 using MethodTypeTags = std::unordered_map<const DexMethod*, uint32_t>;
-using DedupTargets = std::map<uint32_t, std::vector<DexMethod*>>;
 
 const size_t CONST_LIFT_STUB_THRESHOLD = 2;
-
-template <class InstructionMatcher = bool(IRInstruction*)>
-std::vector<IRInstruction*> find_before(IRCode* code,
-                                        InstructionMatcher matcher) {
-  std::vector<IRInstruction*> res;
-  auto ii = InstructionIterable(code);
-  for (auto it = ii.begin(); it != ii.end(); ++it) {
-    auto next_it = std::next(it);
-    if (next_it != ii.end() && matcher(next_it->insn)) {
-      TRACE(CLMG, 9, "  matched insn %s", SHOW(next_it->insn));
-      res.push_back(it->insn);
-    }
-  }
-  return res;
-}
 
 void update_call_refs(
     const method_reference::CallSites& call_sites,
