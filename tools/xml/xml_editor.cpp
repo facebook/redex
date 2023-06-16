@@ -39,13 +39,13 @@ class XmlAttributeSetter : public arsc::XmlFileVisitor {
     LOG_ALWAYS_FATAL_IF(m_global_strings.setTo(pool, dtohl(pool->header.size),
                                                true) != android::NO_ERROR,
                         "Invalid string pool");
-    return true;
+    return arsc::XmlFileVisitor::visit_global_strings(pool);
   }
 
   bool visit_attribute_ids(uint32_t* id, size_t count) override {
     m_ids = id;
     m_attribute_count = count;
-    return true;
+    return arsc::XmlFileVisitor::visit_attribute_ids(id, count);
   }
 
   // give a stringPool ref of a name, return name in string format.
