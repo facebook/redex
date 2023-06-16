@@ -93,7 +93,8 @@ const DexType* OutlinerTypeAnalysis::get_inferred_type(
   case IRType::SCALAR2:
   case IRType::TOP:
   default:
-    not_reached();
+    // shouldn't happen for any input, but we don't need to fight that here
+    return nullptr;
   }
 }
 
