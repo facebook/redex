@@ -323,7 +323,8 @@ RefStats ResolveRefsPass::resolve_refs(DexMethod* method) {
     return stats;
   }
 
-  for (auto& mie : InstructionIterable(method->get_code())) {
+  auto& cfg = method->get_code()->cfg();
+  for (auto& mie : InstructionIterable(cfg)) {
     auto insn = mie.insn;
     switch (insn->opcode()) {
     case OPCODE_INVOKE_VIRTUAL:
@@ -381,7 +382,6 @@ RefStats ResolveRefsPass::refine_virtual_callsites(DexMethod* method,
   }
 
   auto* code = method->get_code();
-  code->build_cfg(/* editable */ false);
   auto& cfg = code->cfg();
   type_inference::TypeInference inference(cfg);
   inference.run(method);
@@ -389,7 +389,7 @@ RefStats ResolveRefsPass::refine_virtual_callsites(DexMethod* method,
   auto is_support_lib = api::is_support_lib_type(method->get_class());
   DexTypeDomain rtype_domain = DexTypeDomain::bottom();
 
-  for (auto& mie : InstructionIterable(code)) {
+  for (auto& mie : cfg::InstructionIterable(cfg)) {
     IRInstruction* insn = mie.insn;
     if (desuperify) {
       try_desuperify(method, insn, stats);

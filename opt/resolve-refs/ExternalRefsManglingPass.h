@@ -43,8 +43,6 @@ class ExternalRefsManglingPass : public Pass {
 
   void eval_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
-  bool is_cfg_legacy() override { return true; }
-
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override = 0;
 
  protected:
