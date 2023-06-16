@@ -8,6 +8,7 @@
 #include <gtest/gtest.h>
 #include <unordered_set>
 
+#include "Debug.h"
 #include "androidfw/ResourceTypes.h"
 #include "utils/ByteOrder.h"
 #include "utils/Visitor.h"
@@ -139,6 +140,42 @@ class StringTestVisitor : public arsc::StringPoolRefVisitor {
   std::unordered_set<uint32_t> m_key_strings_seen;
 };
 
+class XmlStringCollector : public arsc::XmlFileVisitor {
+ public:
+  ~XmlStringCollector() override {}
+
+  XmlStringCollector() {}
+
+  bool visit_global_strings(android::ResStringPool_header* pool) override {
+    LOG_ALWAYS_FATAL_IF(m_global_strings.setTo(pool, dtohl(pool->header.size),
+                                               true) != android::NO_ERROR,
+                        "Invalid string pool");
+    return arsc::XmlFileVisitor::visit_global_strings(pool);
+  }
+
+  std::string get_global_string(const android::ResStringPool_ref& ref) {
+    auto idx = dtohl(ref.index);
+    size_t len;
+    auto chars = m_global_strings.stringAt(idx, &len);
+    always_assert_log(chars != nullptr, "invalid string ref %d", idx);
+    android::String16 s16(chars, len);
+    android::String8 s8(s16);
+    return std::string(s8.string());
+  }
+
+  bool visit_string_ref(android::ResStringPool_ref* ref) override {
+    auto ret = XmlFileVisitor::visit_string_ref(ref);
+    auto idx = dtohl(ref->index);
+    if (idx != 0xFFFFFFFF) {
+      auto str = get_global_string(*ref);
+      m_encountered_strings.emplace(str);
+    }
+    return ret;
+  }
+
+  android::ResStringPool m_global_strings;
+  std::unordered_set<std::string> m_encountered_strings;
+};
 } // namespace
 
 TEST(Visitor, ParsePackageAndTypes) {
@@ -174,4 +211,21 @@ TEST(Visitor, VisitAllStrings) {
     EXPECT_EQ(visitor.m_key_strings_seen.count(i), 1)
         << "Did not visit key string index " << i;
   }
+}
+
+TEST(Visitor, VisitXmlStrings) {
+  auto f = RedexMappedFile::open(std::getenv("xml_path"));
+  XmlStringCollector collector;
+  collector.visit(const_cast<char*>(f.const_data()), f.size());
+  EXPECT_EQ(collector.m_encountered_strings.size(), 8);
+  EXPECT_EQ(collector.m_encountered_strings.count("Button"), 1);
+  EXPECT_EQ(collector.m_encountered_strings.count("background"), 1);
+  EXPECT_EQ(collector.m_encountered_strings.count("padding"), 1);
+  EXPECT_EQ(collector.m_encountered_strings.count("layout_width"), 1);
+  EXPECT_EQ(collector.m_encountered_strings.count("layout_height"), 1);
+  EXPECT_EQ(collector.m_encountered_strings.count("text"), 1);
+  EXPECT_EQ(collector.m_encountered_strings.count("android"), 1);
+  EXPECT_EQ(collector.m_encountered_strings.count(
+                "http://schemas.android.com/apk/res/android"),
+            1);
 }

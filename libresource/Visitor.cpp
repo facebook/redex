@@ -671,6 +671,7 @@ bool XmlFileVisitor::visit_attribute_ids(uint32_t* id, size_t count) {
 bool XmlFileVisitor::visit_node(android::ResXMLTree_node* node) {
   auto node_type = dtohs(node->header.type);
   LOGVV("visit node (0x%x), offset = %ld", node_type, get_file_offset(node));
+  visit_string_ref(&node->comment);
   if (node_type == android::RES_XML_START_NAMESPACE_TYPE) {
     return visit_start_namespace(
         node,
@@ -705,6 +706,8 @@ bool XmlFileVisitor::visit_end_namespace(
     android::ResXMLTree_node* node,
     android::ResXMLTree_namespaceExt* extension) {
   LOGVV("visit end namespace ext, offset = %ld", get_file_offset(extension));
+  visit_string_ref(&extension->prefix);
+  visit_string_ref(&extension->uri);
   return true;
 }
 
@@ -718,6 +721,8 @@ bool XmlFileVisitor::visit_start_tag(android::ResXMLTree_node* node,
   LOG_FATAL_IF(
       dtohs(extension->attributeSize) != sizeof(android::ResXMLTree_attribute),
       "Unable to read attribute, ResXMLTree_attribute struct mismatch");
+  visit_string_ref(&extension->ns);
+  visit_string_ref(&extension->name);
   for (size_t i = 0; i < count; i++) {
     if (!visit_attribute(node, extension, attribute++)) {
       return false;
@@ -732,6 +737,9 @@ bool XmlFileVisitor::visit_attribute(android::ResXMLTree_node* node,
   LOGVV("visit attribute, offset = %ld for tag starting at %ld",
         get_file_offset(attribute),
         get_file_offset(node));
+  visit_string_ref(&attribute->ns);
+  visit_string_ref(&attribute->name);
+  visit_string_ref(&attribute->rawValue);
   visit_typed_data(&attribute->typedValue);
   return true;
 }
@@ -740,18 +748,26 @@ bool XmlFileVisitor::visit_end_tag(
     android::ResXMLTree_node* node,
     android::ResXMLTree_endElementExt* extension) {
   LOGVV("visit end element ext, offset = %ld", get_file_offset(extension));
+  visit_string_ref(&extension->ns);
+  visit_string_ref(&extension->name);
   return true;
 }
 
 bool XmlFileVisitor::visit_cdata(android::ResXMLTree_node* node,
                                  android::ResXMLTree_cdataExt* extension) {
   LOGVV("visit cdata ext, offset = %ld", get_file_offset(extension));
+  visit_string_ref(&extension->data);
   visit_typed_data(&extension->typedData);
   return true;
 }
 
 bool XmlFileVisitor::visit_typed_data(android::Res_value* value) {
   LOGVV("visit value, offset = %ld", get_file_offset(value));
+  return true;
+}
+
+bool XmlFileVisitor::visit_string_ref(android::ResStringPool_ref* ref) {
+  LOGVV("visit string ref, offset = %ld", get_file_offset(ref));
   return true;
 }
 

@@ -160,6 +160,7 @@ class XmlFileVisitor : public VisitorBase {
   virtual bool visit_cdata(android::ResXMLTree_node* node,
                            android::ResXMLTree_cdataExt* extension);
   virtual bool visit_typed_data(android::Res_value* value);
+  virtual bool visit_string_ref(android::ResStringPool_ref* ref);
   virtual ~XmlFileVisitor() {}
 };
 } // namespace arsc
