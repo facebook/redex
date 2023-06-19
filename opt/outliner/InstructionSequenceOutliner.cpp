@@ -2891,7 +2891,7 @@ class OutlinedMethodBodySetter {
         } else if (insn->has_literal()) {
           insn->set_literal(ci.core.literal);
         } else if (insn->has_data()) {
-          insn->set_data(ci.core.data);
+          insn->set_data(ci.core.data->clone());
         }
         code->push_back(insn);
       }

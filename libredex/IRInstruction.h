@@ -357,11 +357,7 @@ class IRInstruction final {
     return m_data;
   }
 
-  IRInstruction* set_data(DexOpcodeData* data) {
-    always_assert(has_data());
-    m_data = data;
-    return this;
-  }
+  IRInstruction* set_data(DexOpcodeData* data);
 
   DexProto* get_proto() const {
     always_assert(has_proto());

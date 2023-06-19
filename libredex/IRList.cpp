@@ -344,12 +344,21 @@ MethodItemEntry* MethodItemEntryCloner::clone(const MethodItemEntry* mie) {
     cloned_mie->centry = new CatchEntry(*cloned_mie->centry);
     cloned_mie->centry->next = clone(cloned_mie->centry->next);
     return cloned_mie;
-  case MFLOW_OPCODE:
-    cloned_mie->insn = new IRInstruction(*cloned_mie->insn);
-    if (cloned_mie->insn->has_data()) {
-      cloned_mie->insn->set_data(cloned_mie->insn->get_data()->clone());
+  case MFLOW_OPCODE: {
+    auto* insn = cloned_mie->insn;
+    if (insn->has_data()) {
+      cloned_mie->insn = new IRInstruction(insn->opcode());
+      always_assert(!insn->has_dest());
+      always_assert(insn->srcs_size() <= 1);
+      if (insn->srcs_size() == 1) {
+        cloned_mie->insn->set_src(0, insn->src(0));
+      }
+      cloned_mie->insn->set_data(insn->get_data()->clone());
+    } else {
+      cloned_mie->insn = new IRInstruction(*insn);
     }
     return cloned_mie;
+  }
   case MFLOW_TARGET:
     cloned_mie->target = new BranchTarget(*cloned_mie->target);
     cloned_mie->target->src = clone(cloned_mie->target->src);

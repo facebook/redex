@@ -356,7 +356,7 @@ void lower_fill_array_data(DexMethod*, IRCode* code, IRList::iterator* it_) {
   dex_insn->set_src(0, insn->src(0));
   auto* bt = new BranchTarget(&*it);
   code->push_back(bt);
-  code->push_back(insn->get_data());
+  code->push_back(insn->get_data()->clone());
   it->replace_ir_with_dex(dex_insn);
 }
 
