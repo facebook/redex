@@ -193,7 +193,7 @@ Scope reverse_tsort_by_clinit_deps(const Scope& scope, size_t& init_cycles) {
       // Cycle...
       ++init_cycles;
 
-      TRACE(FINALINLINE, 0, "Init cycle detected in %s",
+      TRACE(FINALINLINE, 1, "Init cycle detected in %s",
             [&]() {
               std::ostringstream oss;
               oss << *it;
