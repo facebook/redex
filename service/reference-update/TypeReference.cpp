@@ -7,8 +7,10 @@
 
 #include "TypeReference.h"
 
+#include "ControlFlow.h"
 #include "MethodReference.h"
 #include "Resolver.h"
+#include "ScopedCFG.h"
 #include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"
@@ -497,7 +499,8 @@ void update_method_signature_type_references(
 
   // Ensure that no method references left that still refer old types.
   walk::parallel::code(scope, [&old_types](DexMethod*, IRCode& code) {
-    for (auto& mie : InstructionIterable(code)) {
+    cfg::ScopedCFG cfg(&code);
+    for (auto& mie : InstructionIterable(*cfg)) {
       auto insn = mie.insn;
       if (insn->has_method()) {
         auto proto = insn->get_method()->get_proto();
@@ -532,7 +535,8 @@ void update_field_type_references(
   walk::parallel::fields(scope, update_field);
 
   walk::parallel::code(scope, [&old_to_new](DexMethod*, IRCode& code) {
-    for (auto& mie : InstructionIterable(code)) {
+    cfg::ScopedCFG cfg(&code);
+    for (auto& mie : InstructionIterable(*cfg)) {
       auto insn = mie.insn;
       if (insn->has_field()) {
         const auto ref_type = insn->get_field()->get_type();
@@ -575,12 +579,22 @@ void fix_colliding_dmethods(
     num_additional_args[meth] = arg_count;
 
     auto code = meth->get_code();
+    cfg::ScopedCFG cfg(code);
+    auto block = cfg->entry_block();
+    auto last_loading = block->get_last_param_loading_insn();
     for (size_t i = 0; i < arg_count; ++i) {
-      auto new_param_reg = code->allocate_temp();
-      auto params = code->get_param_instructions();
+      auto new_param_reg = cfg->allocate_temp();
       auto new_param_load = new IRInstruction(IOPCODE_LOAD_PARAM);
       new_param_load->set_dest(new_param_reg);
-      code->insert_before(params.end(), new_param_load);
+      if (last_loading != block->end()) {
+        cfg->insert_after(block->to_cfg_instruction_iterator(last_loading),
+                          new_param_load);
+      } else {
+        cfg->insert_before(block->to_cfg_instruction_iterator(
+                               block->get_first_non_param_loading_insn()),
+                           new_param_load);
+      }
+      last_loading = block->get_last_param_loading_insn();
     }
     TRACE(REFU,
           9,
@@ -591,7 +605,8 @@ void fix_colliding_dmethods(
 
   walk::parallel::code(scope, [&](DexMethod* meth, IRCode& code) {
     method_reference::CallSites callsites;
-    for (auto& mie : InstructionIterable(code)) {
+    cfg::ScopedCFG cfg(&code);
+    for (auto& mie : InstructionIterable(*cfg)) {
       auto insn = mie.insn;
       if (!insn->has_method()) {
         continue;
@@ -603,7 +618,7 @@ void fix_colliding_dmethods(
           num_additional_args.find(callee) == num_additional_args.end()) {
         continue;
       }
-      callsites.emplace_back(meth, &mie, callee);
+      callsites.emplace_back(meth, insn, callee);
     }
 
     for (const auto& callsite : callsites) {

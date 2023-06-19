@@ -13,8 +13,6 @@
 #include "DexStore.h"
 #include "IRInstruction.h"
 
-struct MethodItemEntry;
-
 using OrderedMethodSet = std::set<DexMethod*, dexmethods_comparator>;
 
 namespace method_reference {
@@ -22,10 +20,10 @@ namespace method_reference {
 // A callsite instruction in caller. mie should always contain an IRInstruction.
 struct CallSite {
   DexMethod* caller;
-  MethodItemEntry* mie;
+  IRInstruction* insn;
   DexMethod* callee;
-  CallSite(DexMethod* caller, MethodItemEntry* mie, DexMethod* callee)
-      : caller(caller), mie(mie), callee(callee) {}
+  CallSite(DexMethod* caller, IRInstruction* insn, DexMethod* callee)
+      : caller(caller), insn(insn), callee(callee) {}
 };
 
 using CallSites = std::vector<CallSite>;
