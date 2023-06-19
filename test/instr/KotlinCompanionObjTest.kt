@@ -23,7 +23,9 @@ class CompanionClass(val greeting: String) {
   companion object {
     val s: String = "Hello"
     var s1 = "Hello2"
+
     fun hello() = CompanionClass(s)
+
     fun hello1(): Boolean {
       if (s1 == "Hello2") {
         return true
@@ -31,6 +33,7 @@ class CompanionClass(val greeting: String) {
         return false
       }
     }
+
     fun get(): String {
       return s1
     }
@@ -44,6 +47,7 @@ class CompanionClass(val greeting: String) {
 class AnotherCompanionClass {
   companion object Test {
     @JvmStatic var someOtherStr: String = "Bar"
+
     @JvmStatic
     fun funX(): String {
       return someOtherStr
@@ -54,6 +58,7 @@ class AnotherCompanionClass {
 class ThirdCompanionClass {
   companion object Test {
     const val thirdStr: String = "Bar"
+
     private fun funY(): String {
       return thirdStr
     }
