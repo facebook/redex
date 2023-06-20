@@ -304,6 +304,9 @@ class DexOpcodeData : public DexInstruction {
   size_t size() const override;
   void encode(DexOutputIdx* dodx, uint16_t*& insns) const override;
   DexOpcodeData* clone() const override { return new DexOpcodeData(*this); }
+  std::unique_ptr<DexOpcodeData> clone_as_unique_ptr() const {
+    return std::make_unique<DexOpcodeData>(*this);
+  }
 
   DexOpcodeData(const uint16_t* opcodes, size_t count)
       : DexInstruction(opcodes, 0),
@@ -363,7 +366,8 @@ class DexOpcodeProto : public DexInstruction {
 // helper function to create fill-array-data-payload according to
 // https://source.android.com/devices/tech/dalvik/dalvik-bytecode#fill-array
 template <typename IntType>
-DexOpcodeData* encode_fill_array_data_payload(const std::vector<IntType>& vec) {
+std::unique_ptr<DexOpcodeData> encode_fill_array_data_payload(
+    const std::vector<IntType>& vec) {
   static_assert(std::is_integral<IntType>::value,
                 "fill-array-data-payload can only contain integral values.");
   int width = sizeof(IntType);
@@ -378,7 +382,7 @@ DexOpcodeData* encode_fill_array_data_payload(const std::vector<IntType>& vec) {
   *(uint32_t*)(ptr + 2) = vec.size();
   uint8_t* data_bytes = (uint8_t*)(ptr + 4);
   memcpy(data_bytes, (void*)vec.data(), total_copy_size);
-  return new DexOpcodeData(data);
+  return std::make_unique<DexOpcodeData>(data);
 }
 
 template <typename IntType>

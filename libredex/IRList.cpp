@@ -353,7 +353,7 @@ MethodItemEntry* MethodItemEntryCloner::clone(const MethodItemEntry* mie) {
       if (insn->srcs_size() == 1) {
         cloned_mie->insn->set_src(0, insn->src(0));
       }
-      cloned_mie->insn->set_data(insn->get_data()->clone());
+      cloned_mie->insn->set_data(insn->get_data()->clone_as_unique_ptr());
     } else {
       cloned_mie->insn = new IRInstruction(*insn);
     }

@@ -52,10 +52,10 @@ IRInstruction::~IRInstruction() {
   }
 }
 
-IRInstruction* IRInstruction::set_data(DexOpcodeData* data) {
+IRInstruction* IRInstruction::set_data(std::unique_ptr<DexOpcodeData> data) {
   always_assert(has_data());
   delete m_data;
-  m_data = data;
+  m_data = data.release();
   return this;
 }
 

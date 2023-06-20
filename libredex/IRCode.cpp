@@ -221,7 +221,8 @@ static void shard_multi_target(IRList* ir,
 static void generate_branch_targets(
     IRList* ir,
     const EntryAddrBiMap& bm,
-    const std::unordered_map<MethodItemEntry*, DexOpcodeData*>& entry_to_data) {
+    std::unordered_map<MethodItemEntry*, std::unique_ptr<DexOpcodeData>>&
+        entry_to_data) {
   for (auto miter = ir->begin(); miter != ir->end(); ++miter) {
     MethodItemEntry* mentry = &*miter;
     if (mentry->type == MFLOW_DEX_OPCODE) {
@@ -229,10 +230,10 @@ static void generate_branch_targets(
       if (dex_opcode::is_branch(insn->opcode())) {
         if (dex_opcode::is_switch(insn->opcode())) {
           auto* fopcode_entry = get_target(mentry, bm);
-          auto* fopcode = entry_to_data.at(fopcode_entry);
-          shard_multi_target(ir, fopcode, mentry, bm);
-          delete fopcode;
-          // TODO: erase fopcode from map
+          auto data_it = entry_to_data.find(fopcode_entry);
+          always_assert(data_it != entry_to_data.end());
+          shard_multi_target(ir, data_it->second.get(), mentry, bm);
+          entry_to_data.erase(data_it);
         } else {
           auto target = get_target(mentry, bm);
           insert_branch_target(ir, target, mentry);
@@ -352,7 +353,8 @@ void generate_load_params(const DexMethod* method,
 void translate_dex_to_ir(
     IRList* ir_list,
     const EntryAddrBiMap& bm,
-    const std::unordered_map<MethodItemEntry*, DexOpcodeData*>& entry_to_data) {
+    std::unordered_map<MethodItemEntry*, std::unique_ptr<DexOpcodeData>>&
+        entry_to_data) {
   for (auto it = ir_list->begin(); it != ir_list->end(); ++it) {
     if (it->type != MFLOW_DEX_OPCODE) {
       continue;
@@ -414,7 +416,11 @@ void translate_dex_to_ir(
     } else if (dex_opcode::has_literal(dex_op)) {
       insn->set_literal(dex_insn->get_literal());
     } else if (op == OPCODE_FILL_ARRAY_DATA) {
-      insn->set_data(entry_to_data.at(get_target(&*it, bm)));
+      auto target = get_target(&*it, bm);
+      auto data_it = entry_to_data.find(target);
+      always_assert(data_it != entry_to_data.end());
+      insn->set_data(std::move(data_it->second));
+      entry_to_data.erase(data_it);
     }
 
     insn->normalize_registers();
@@ -435,7 +441,9 @@ void balloon(DexMethod* method, IRList* ir_list) {
   // This is a 1-to-1 map between MethodItemEntries of type MFLOW_OPCODE and
   // address offsets.
   EntryAddrBiMap bm;
-  std::unordered_map<MethodItemEntry*, DexOpcodeData*> entry_to_data;
+  std::unordered_map<MethodItemEntry*, std::unique_ptr<DexOpcodeData>>
+      entry_to_data;
+  std::unordered_set<DexOpcodeData*> data_set;
 
   uint32_t addr = 0;
   std::vector<std::unique_ptr<DexInstruction>> to_delete;
@@ -448,7 +456,10 @@ void balloon(DexMethod* method, IRList* ir_list) {
       // address.
       mei = new MethodItemEntry();
       if (dex_opcode::is_fopcode(insn->opcode())) {
-        entry_to_data.emplace(mei, static_cast<DexOpcodeData*>(insn));
+        auto data = static_cast<DexOpcodeData*>(insn);
+        auto inserted = data_set.insert(data).second;
+        always_assert(inserted);
+        entry_to_data.emplace(mei, std::unique_ptr<DexOpcodeData>(data));
       } else {
         to_delete.emplace_back(insn);
       }

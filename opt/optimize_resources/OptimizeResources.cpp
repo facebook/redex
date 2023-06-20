@@ -446,9 +446,9 @@ void remap_resource_class_clinit(
       filtered_op_data_entries.insert(filtered_op_data_entries.begin(),
                                       FOPCODE_FILLED_ARRAY);
 
-      op_data = new DexOpcodeData(filtered_op_data_entries.data(),
-                                  filtered_op_data_entries.size() - 1);
-      insn->set_data(op_data);
+      auto new_op_data = std::make_unique<DexOpcodeData>(
+          filtered_op_data_entries.data(), filtered_op_data_entries.size() - 1);
+      insn->set_data(std::move(new_op_data));
     }
   }
   // If any array entries were deleted we need to update the new-array constant.
