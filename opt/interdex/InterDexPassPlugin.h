@@ -50,7 +50,7 @@ class InterDexPassPlugin {
 
   const std::string& name() const { return m_name; }
 
-  virtual ~InterDexPassPlugin(){};
+  virtual ~InterDexPassPlugin() {}
 
  private:
   void set_name(const std::string& new_name) { m_name = new_name; }

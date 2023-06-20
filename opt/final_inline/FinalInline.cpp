@@ -545,7 +545,7 @@ class FinalInlineImpl {
       find_dependencies(clazz, clinit, result);
     }
     return result;
-  };
+  }
 
   void find_dependencies(
       const DexClass* clazz,
