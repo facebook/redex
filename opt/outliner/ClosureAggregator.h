@@ -7,6 +7,10 @@
 
 #pragma once
 
+#include <array>
+#include <unordered_map>
+#include <unordered_set>
+
 #include "MethodClosures.h"
 #include "MutablePriorityQueue.h"
 #include "ReducedControlFlow.h"

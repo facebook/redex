@@ -10,6 +10,7 @@
 #include <memory>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 #include "MethodSplittingConfig.h"
 #include "ReducedControlFlow.h"
