@@ -1786,23 +1786,6 @@ void DexClass::gather_methods(C& lmethod) const {
 }
 INSTANTIATE(DexClass::gather_methods, DexMethodRef*)
 
-size_t DexClass::estimated_size() const {
-  // These values are derived from the size of metadata for each class or field.
-  constexpr size_t base_size = 48;
-  constexpr size_t field_size = 8;
-
-  size_t size =
-      base_size + field_size * (get_ifields().size() + get_sfields().size());
-  for (const auto m : get_vmethods()) {
-    size += m->estimated_size();
-  }
-
-  for (const auto m : get_dmethods()) {
-    size += m->estimated_size();
-  }
-  return size;
-}
-
 const DexField* DexFieldRef::as_def() const {
   if (is_def()) {
     return static_cast<const DexField*>(this);
@@ -2142,12 +2125,6 @@ void DexMethod::add_load_params(size_t num_add_loads) {
     new_param_load->set_dest(temp);
     code->insert_before(callee_params.end(), new_param_load);
   }
-}
-
-size_t DexMethod::estimated_size() const {
-  constexpr size_t method_metadata_size = 20;
-  return method_metadata_size +
-         (get_code() ? get_code()->sum_opcode_sizes() : 0);
 }
 
 void gather_components(std::vector<const DexString*>& lstring,

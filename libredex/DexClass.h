@@ -1102,10 +1102,6 @@ class DexMethod : public DexMethodRef {
   // DexMethod, though. Eventually this will become a full delete.
   static void delete_method(DexMethod* method);
 
-  // Estimated in number of code units. Not representative of switch statements,
-  // or references.
-  size_t estimated_size() const;
-
  private:
   template <typename C>
   void gather_strings_internal(C& lstring, bool exclude_loads) const;
