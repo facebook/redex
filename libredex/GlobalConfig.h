@@ -35,10 +35,10 @@ struct IRTypeCheckerConfig : public Configurable {
   bool run_after_each_pass;
   bool verify_moves;
   bool validate_invoke_super;
-  bool check_num_of_refs;
   std::unordered_set<std::string> run_after_passes;
   bool check_no_overwrite_this;
   bool annotated_cfg_on_error{false};
+  bool check_classes;
 };
 
 struct HasherConfig : public Configurable {
@@ -155,6 +155,8 @@ struct PassManagerConfig : public Configurable {
   std::unordered_map<std::string, std::string> pass_aliases;
   bool jemalloc_full_stats{false};
   bool violations_tracking{false};
+  bool check_pass_order_properties{false};
+  bool check_properties_deep{false};
 };
 
 struct ResourceConfig : public Configurable {
@@ -172,6 +174,7 @@ struct ResourceConfig : public Configurable {
   // Type names in the resource table (example: "id") which should enable
   // canonical offsets for entries/values.
   std::unordered_set<std::string> canonical_entry_types;
+  bool sort_key_strings{false};
 };
 
 struct DexOutputConfig : public Configurable {

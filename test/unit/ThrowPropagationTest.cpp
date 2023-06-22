@@ -22,7 +22,7 @@ class ThrowPropagationTest : public RedexTest {
   ThrowPropagationTest() {
     // Calling get_vmethods under the hood initializes the object-class, which
     // we need in the tests to create a proper scope
-    get_vmethods(type::java_lang_Object());
+    virt_scope::get_vmethods(type::java_lang_Object());
   }
 };
 
@@ -36,8 +36,10 @@ void test(const Scope& scope,
   auto no_return_methods =
       ThrowPropagationPass::get_no_return_methods(config, scope);
   auto override_graph = method_override_graph::build_graph(scope);
+  code->build_cfg();
   ThrowPropagationPass::run(
       config, no_return_methods, *override_graph, code.get());
+  code->clear_cfg();
 
   EXPECT_CODE_EQ(code.get(), expected.get());
 };
@@ -193,4 +195,30 @@ TEST_F(ThrowPropagationTest, cannot_return_simple_already_does_not_terminate) {
   test(Scope{type_class(type::java_lang_Object()), foo_creator.create()},
        code_str,
        code_str);
+}
+
+TEST_F(ThrowPropagationTest, dont_change_throw_result) {
+  ClassCreator foo_creator(DexType::make_type("LFoo;"));
+  foo_creator.set_super(type::java_lang_Object());
+
+  auto method =
+      DexMethod::make_method("LFoo;.bar:()Ljava/lang/Exception;")
+          ->make_concrete(ACC_STATIC | ACC_PUBLIC, false /* is_virtual */);
+  method->set_code(assembler::ircode_from_string(R"(
+        (const v0 0)
+        (return-object v0)
+      )"));
+  foo_creator.add_method(method);
+
+  auto code_str = R"(
+    (
+      (invoke-static () "LFoo;.bar:()Ljava/lang/Exception;")
+      (move-result-object v0)
+      (throw v0)
+    )
+  )";
+  auto expected_str = code_str;
+  test(Scope{type_class(type::java_lang_Object()), foo_creator.create()},
+       code_str,
+       expected_str);
 }

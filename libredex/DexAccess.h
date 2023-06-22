@@ -33,7 +33,7 @@
   AF(ENUM,         enum,          0x4000)   \
   AF(MODULE,       module,        0x8000)   \
   AF(CONSTRUCTOR,  constructor,  0x10000)   \
-  AF(DECLARED_SYNCHRONIZED, declared_synchronized, 0x2000)
+  AF(DECLARED_SYNCHRONIZED, declared_synchronized, 0x20000)
 // clang-format on
 
 enum DexAccessFlags : uint32_t {

@@ -74,9 +74,9 @@ TEST_F(PostVerify, ThirdCompanionClass) {
   EXPECT_NE(nullptr, foo_cls);
 
   auto* meth_clinit = find_dmethod_named(*outer_cls, "<clinit>");
-  ASSERT_NE(nullptr, meth_clinit);
-  // After opt, there is no new-instance in LThirdCompanionClass clinit
-  ASSERT_EQ(nullptr, find_instruction(meth_clinit, DOPCODE_NEW_INSTANCE));
+  // After opt, there is no new-instance in LThirdCompanionClass clinit, and in
+  // fact the now trivial clinit is removed
+  ASSERT_EQ(nullptr, meth_clinit);
   // After opt, in LThirdCompanionClass; sfield "Test" should be removed.
   EXPECT_EQ(nullptr, find_sfield_named(*outer_cls, "Test"));
   // After opt, method "access$funY" and "funY" should be relocated from

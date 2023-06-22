@@ -175,8 +175,9 @@ std::string WholeProgramState::show_method(const DexMethod* m) {
 void WholeProgramState::setup_known_method_returns() {
   for (auto& p : STATIC_METHOD_TO_TYPE_MAP) {
     auto method = DexMethod::make_method(p.first);
-    auto type = DexTypeDomain(
-        DexType::make_type(DexString::make_string(p.second)), NOT_NULL);
+    auto type =
+        DexTypeDomain(DexType::make_type(DexString::make_string(p.second)),
+                      NOT_NULL, /* is_dex_type_exact */ true);
     m_known_method_returns.insert(std::make_pair(method, type));
   }
 }

@@ -95,11 +95,13 @@ class ReachableObjects {
  public:
   const ReachableObjectGraph& retainers_of() const { return m_retainers_of; }
 
-  void mark(const DexClass* cls) { m_marked_classes.insert(cls); }
+  bool mark(const DexClass* cls) { return m_marked_classes.insert(cls); }
 
-  void mark(const DexMethodRef* method) { m_marked_methods.insert(method); }
+  bool mark(const DexMethodRef* method) {
+    return m_marked_methods.insert(method);
+  }
 
-  void mark(const DexFieldRef* field) { m_marked_fields.insert(field); }
+  bool mark(const DexFieldRef* field) { return m_marked_fields.insert(field); }
 
   bool marked(const DexClass* cls) const { return m_marked_classes.count(cls); }
 

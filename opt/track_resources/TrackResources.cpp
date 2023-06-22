@@ -141,7 +141,7 @@ std::unordered_set<DexClass*> TrackResourcesPass::build_tracked_cls_set(
     const std::vector<std::string>& cls_suffixes, const ProguardMap& pg_map) {
   std::unordered_set<DexClass*> tracked_classes;
   for (auto& s : cls_suffixes) {
-    auto dtype = DexType::get_type(pg_map.translate_class(s).c_str());
+    auto dtype = DexType::get_type(pg_map.translate_class(s));
     if (dtype != nullptr) {
       auto cls = type_class(dtype);
       if (cls != nullptr) {

@@ -730,8 +730,9 @@ struct Injector {
           std::inserter(unique_idom_maps_set, unique_idom_maps_set.begin()),
           [](const auto& s) { return s.idom_map; });
       unique_idom_maps.reserve(unique_idom_maps_set.size());
-      std::copy(unique_idom_maps_set.begin(), unique_idom_maps_set.end(),
-                std::back_inserter(unique_idom_maps));
+      unique_idom_maps.insert(unique_idom_maps.end(),
+                              unique_idom_maps_set.begin(),
+                              unique_idom_maps_set.end());
     }
 
     std::ofstream ofs_uim(conf.metafile("unique-idom-maps.txt"));

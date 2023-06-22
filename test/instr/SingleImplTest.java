@@ -9,6 +9,7 @@ package com.facebook.redextest;
 
 import org.junit.Test;
 import static org.assertj.core.api.Assertions.assertThat;
+
 // TODO (fengliu): We may make the test tool to generate the PRECHECK directive
 // automatically.
 // PRECHECK: class: com.facebook.redextest.I_0

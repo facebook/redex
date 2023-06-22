@@ -10,6 +10,10 @@
 #include "DexClass.h"
 #include "ShrinkerConfig.h"
 
+// When to consider running constant-propagation to better estimate inlined
+// cost. It just takes too much time to run the analysis for large methods.
+const size_t MAX_COST_FOR_CONSTANT_PROPAGATION = 5000;
+
 namespace inliner {
 
 /**
@@ -47,6 +51,10 @@ struct InlinerConfig {
   // branch opcodes to encode large jumps.
   uint64_t instruction_size_buffer{1 << 12};
 
+  // max_cost_for_constant_propagation is amoungt of constant propagation
+  // analysis redex compiler can tolerate when making decision to inline
+  size_t max_cost_for_constant_propagation{MAX_COST_FOR_CONSTANT_PROPAGATION};
+
   std::unordered_set<DexType*> allowlist_no_method_limit;
   // We will populate the information to rstate of classes and methods.
   std::unordered_set<DexType*> m_no_inline_annos;
@@ -55,6 +63,9 @@ struct InlinerConfig {
   std::vector<std::string> m_blocklist;
   std::vector<std::string> m_caller_blocklist;
   std::vector<std::string> m_intradex_allowlist;
+
+  // Limit on number of relevant invokes to speed up local-only pass.
+  uint64_t max_relevant_invokes_when_local_only{10};
 
   /**
    * 1. Populate m_blocklist m_caller_blocklist to blocklist and

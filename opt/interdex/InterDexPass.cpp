@@ -125,7 +125,22 @@ void InterDexPass::run_pass(
   mgr.set_metric(METRIC_RESERVED_MREFS, refs_info.mrefs);
   mgr.set_metric(METRIC_EMIT_CANARIES, m_emit_canaries);
 
+  // Reflect configuration in stats.
+  mgr.set_metric("config.normal_primary_dex", m_normal_primary_dex);
+  mgr.set_metric("config.static_prune", m_static_prune);
+  mgr.set_metric("config.keep_primary_order", m_keep_primary_order);
+  mgr.set_metric("config.can_touch_coldstart_cls", m_can_touch_coldstart_cls);
+  mgr.set_metric("config.can_touch_coldstart_extended_cls",
+                 m_can_touch_coldstart_extended_cls);
+  mgr.set_metric("config.minimize_cross_dex_refs", m_minimize_cross_dex_refs);
+  mgr.set_metric("config.minimize_cross_dex_refs_explore_alternatives",
+                 m_minimize_cross_dex_refs_explore_alternatives);
+  mgr.set_metric("config.transitively_close_interdex_order",
+                 m_transitively_close_interdex_order);
+
   bool force_single_dex = conf.get_json_config().get("force_single_dex", false);
+  mgr.set_metric("config.force_single_dex", force_single_dex);
+
   InterDex interdex(
       original_scope, dexen, mgr.asset_manager(), conf, plugins,
       m_linear_alloc_limit, m_static_prune, m_normal_primary_dex,
@@ -145,6 +160,20 @@ void InterDexPass::run_pass(
   interdex.run();
   treat_generated_stores(stores, &interdex);
   dexen = interdex.take_outdex();
+
+  mgr.set_metric("root_store.dexes", dexen.size());
+  redex_assert(dexen.size() == interdex.get_dex_info().size());
+  for (size_t i = 0; i != dexen.size(); ++i) {
+    std::string key_prefix = "root_store.dexes." + std::to_string(i) + ".";
+    mgr.set_metric(key_prefix + "classes", dexen[i].size());
+    auto& info = interdex.get_dex_info()[i];
+    mgr.set_metric(key_prefix + "primary", info.primary);
+    mgr.set_metric(key_prefix + "coldstart", info.coldstart);
+    mgr.set_metric(key_prefix + "extended", info.extended);
+    mgr.set_metric(key_prefix + "scroll", info.scroll);
+    mgr.set_metric(key_prefix + "background", info.background);
+    mgr.set_metric(key_prefix + "betamap_ordered", info.betamap_ordered);
+  }
 
   auto final_scope = build_class_scope(stores);
   for (const auto& plugin : plugins) {
@@ -255,6 +284,8 @@ void InterDexPass::run_pass(DexStoresVector& stores,
         run_pass_on_nonroot_store(original_scope, xstore_refs,
                                   init_classes_with_side_effects,
                                   store->get_dexen(), conf, mgr, refs_info);
+        mgr.set_metric("nonroot_store." + store->get_name() + ".dexes",
+                       store->get_dexen().size());
       },
       parallel_stores);
 

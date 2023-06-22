@@ -29,14 +29,29 @@ namespace impl {
 struct RefStats;
 } // namespace impl
 
+class IRInstruction;
+
 class ResolveRefsPass : public ExternalRefsManglingPass {
  public:
   ResolveRefsPass() : ExternalRefsManglingPass("ResolveRefsPass") {}
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::interactions;
+    using namespace redex_properties::names;
+    return {
+        {DexLimitsObeyed, Preserves},
+        {HasSourceBlocks, Preserves},
+        {NoSpuriousGetClassCalls, Preserves},
+    };
+  }
 
   void bind_config() override {
     ExternalRefsManglingPass::bind_config();
     bind("desuperify", true, m_desuperify,
          "Convert invoke-super calls to invoke-virtual where possible");
+    bind(
+        "specialize_return_type", true, m_specialize_rtype,
+        "Specialize the return type of methods based on local type inference.");
     trait(Traits::Pass::atleast, 1);
   }
 
@@ -49,6 +64,13 @@ class ResolveRefsPass : public ExternalRefsManglingPass {
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
-  impl::RefStats refine_virtual_callsites(DexMethod* method, bool desuperify);
+  void resolve_method_refs(const DexMethod* caller,
+                           IRInstruction* insn,
+                           impl::RefStats& stats);
+  impl::RefStats resolve_refs(DexMethod* method);
+  impl::RefStats refine_virtual_callsites(DexMethod* method,
+                                          bool desuperify,
+                                          bool specialize_rtype);
   bool m_desuperify;
+  bool m_specialize_rtype;
 };

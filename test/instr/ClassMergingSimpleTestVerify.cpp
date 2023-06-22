@@ -13,10 +13,10 @@ TEST_F(PostVerify, MergeablesRemoval) {
   auto cls_b = find_class_named(classes, "Lcom/facebook/redextest/B;");
   auto cls_c = find_class_named(classes, "Lcom/facebook/redextest/C;");
   auto cls_d = find_class_named(classes, "Lcom/facebook/redextest/D;");
-  verify_type_erased(cls_a);
-  verify_type_erased(cls_b);
-  verify_type_erased(cls_c);
-  verify_type_erased(cls_d);
+  verify_class_merged(cls_a);
+  verify_class_merged(cls_b);
+  verify_class_merged(cls_c);
+  verify_class_merged(cls_d);
 }
 
 TEST_F(PostVerify, SinkCommonCtorInvocation) {

@@ -33,9 +33,9 @@ class DexType;
   TM(BRIDGE)            \
   TM(BUILDERS)          \
   TM(CALLGRAPH)         \
+  TM(CCB)               \
   TM(CDDP)              \
   TM(CFG)               \
-  TM(CFP)               \
   TM(CHECKRECURSION)    \
   TM(CIC)               \
   TM(CLA)               \
@@ -68,6 +68,8 @@ class DexType;
   TM(IDEX)              \
   TM(IDEXR)             \
   TM(IFCS_ANALYSIS)     \
+  TM(III)               \
+  TM(IIL)               \
   TM(INL)               \
   TM(INLINE)            \
   TM(INLRES)            \
@@ -118,6 +120,7 @@ class DexType;
   TM(RAL)               \
   TM(RBB)               \
   TM(REACH)             \
+  TM(REFC)              \
   TM(REFL)              \
   TM(REFU)              \
   TM(REG)               \

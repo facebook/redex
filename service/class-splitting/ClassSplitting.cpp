@@ -40,7 +40,7 @@ void update_coldstart_classes_order(
   for (const auto& str : previously_relocated_types) {
     auto initial_type = str.substr(0, str.size() - 11) + ";";
 
-    auto type = DexType::get_type(initial_type.c_str());
+    auto type = DexType::get_type(initial_type);
     if (type == nullptr) {
       TRACE(CS, 2,
             "[class splitting] Cannot find previously relocated type %s in "
@@ -97,7 +97,7 @@ void ClassSplitter::configure(const Scope& scope) {
 
 DexClass* ClassSplitter::create_target_class(
     const std::string& target_type_name) {
-  DexType* target_type = DexType::make_type(target_type_name.c_str());
+  DexType* target_type = DexType::make_type(target_type_name);
   ++m_stats.relocation_classes;
   ClassCreator cc(target_type);
   cc.set_access(ACC_PUBLIC | ACC_FINAL);

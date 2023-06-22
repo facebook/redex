@@ -573,14 +573,12 @@ static bool can_outline_opcode(IROpcode opcode, bool outline_control_flow) {
   case OPCODE_RETURN_VOID:
   case OPCODE_RETURN_WIDE:
   case OPCODE_THROW:
-    return false;
-
   case OPCODE_CMPL_FLOAT:
   case OPCODE_CMPG_FLOAT:
   case OPCODE_CMPL_DOUBLE:
   case OPCODE_CMPG_DOUBLE:
   case OPCODE_CMP_LONG:
-    // While these instructions could formally be part of an outlined methods,
+    // While the CMP instructions could formally be part of an outlined methods,
     // we ran into issues in the past with the CSE pass, where breaking up
     // CMP and IF instructions caused some obscure issues on some Android
     // versions. So we rather avoid that. It's not a big loss.
@@ -1993,9 +1991,9 @@ static void rewrite_at_location(DexMethod* outlined_method,
     auto pattern_id = call_site_pattern_ids->at(cml.first_insn);
     new_dbg_pos = manager->make_pattern_position(pattern_id);
   } else {
-    new_dbg_pos = std::make_unique<DexPosition>(0);
-    new_dbg_pos->bind(DexString::make_string(show(outlined_method)),
-                      DexString::make_string("RedexGenerated"));
+    new_dbg_pos = std::make_unique<DexPosition>(
+        DexString::make_string("RedexGenerated"), 0);
+    new_dbg_pos->bind(DexString::make_string(show(outlined_method)));
   }
 
   cfg_mutation.insert_before(first_insn_it, std::move(new_dbg_pos));
@@ -2436,9 +2434,11 @@ static NewlyOutlinedMethods outline(
   auto get_priority = [&config, &candidates_with_infos,
                        outlined_methods](CandidateId id) {
     auto& cwi = candidates_with_infos->at(id);
-    Priority primary_priority =
-        get_savings(config, cwi.candidate, cwi.info, *outlined_methods) *
-        cwi.candidate.size;
+    auto savings =
+        get_savings(config, cwi.candidate, cwi.info, *outlined_methods);
+    auto size = cwi.candidate.size;
+    auto count = cwi.info.count;
+    Priority primary_priority = (savings + 1) * 100000 / (size * count);
     // clip primary_priority to 32-bit
     if (primary_priority >= (1UL << 32)) {
       primary_priority = (1UL << 32) - 1;

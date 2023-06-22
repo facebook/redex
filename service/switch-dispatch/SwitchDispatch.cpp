@@ -124,6 +124,8 @@ void handle_default_block(
     always_assert_log(spec.overridden_meth->is_virtual(),
                       "non-virtual overridden method %s\n",
                       SHOW(spec.overridden_meth));
+    // Note that the overridden can be an default interface or external default
+    // interface method.
     emit_call(spec, OPCODE_INVOKE_SUPER, args, ret_loc, spec.overridden_meth,
               def_block);
   } else if (!spec.proto->is_void()) {

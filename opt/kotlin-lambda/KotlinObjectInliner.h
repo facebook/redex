@@ -35,6 +35,17 @@ class KotlinObjectInliner : public Pass {
          "Do not inline these companion objects");
   }
   KotlinObjectInliner() : Pass("KotlinObjectInlinerPass") {}
+
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::interactions;
+    using namespace redex_properties::names;
+    return {
+        {HasSourceBlocks, Preserves},
+        {NoSpuriousGetClassCalls, Preserves},
+    };
+  }
+
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
   bool is_editable_cfg_friendly() override { return true; }
 

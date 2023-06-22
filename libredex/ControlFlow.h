@@ -323,30 +323,38 @@ class Block final {
 
   uint32_t sum_opcode_sizes() const;
 
+  // similar to sum_opcode_sizes, but takes into account non-opcode payloads
+  uint32_t estimate_code_units() const;
+
   // return an iterator to the last MFLOW_OPCODE, or end() if there are none
   IRList::iterator get_last_insn();
+  IRList::const_iterator get_last_insn() const;
   // return an iterator to the first MFLOW_OPCODE, or end() if there are none
   IRList::iterator get_first_insn();
+  IRList::const_iterator get_first_insn() const;
   // return an iterator to the first non-param-loading MFLOW_OPCODE, or end() if
   // there are none.
   IRList::iterator get_first_non_param_loading_insn();
+  IRList::const_iterator get_first_non_param_loading_insn() const;
   // return an iterator to the last param-loading MFLOW_OPCODE, or end() if
   // there are none.
   IRList::iterator get_last_param_loading_insn();
+  IRList::const_iterator get_last_param_loading_insn() const;
   // return an iterator to the first instruction (except move-result* and goto)
   // if it occurs before the first position, or end() if there are none.
   IRList::iterator get_first_insn_before_position();
+  IRList::const_iterator get_first_insn_before_position() const;
 
   // including move-result-pseudo
-  bool starts_with_move_result();
+  bool starts_with_move_result() const;
 
-  bool starts_with_move_exception();
+  bool starts_with_move_exception() const;
 
-  bool contains_opcode(IROpcode opcode);
+  bool contains_opcode(IROpcode opcode) const;
 
   // returns true iff the block starts with the same MethodItemEntries as the
   // other block.
-  bool begins_with(Block* other);
+  bool begins_with(Block* other) const;
 
   // If this block has a single outgoing edge and it is a goto, return its
   // target. Otherwise, return nullptr
@@ -910,6 +918,9 @@ class ControlFlowGraph {
   uint32_t num_opcodes() const;
 
   uint32_t sum_opcode_sizes() const;
+
+  // similar to sum_opcode_sizes, but takes into account non-opcode payloads
+  uint32_t estimate_code_units() const;
 
   reg_t allocate_temp() { return m_registers_size++; }
 

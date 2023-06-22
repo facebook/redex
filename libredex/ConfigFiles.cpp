@@ -66,7 +66,7 @@ const std::unordered_set<DexType*>& ConfigFiles::get_no_optimizations_annos() {
     if (!no_optimizations_anno.empty()) {
       for (auto const& config_anno_name : no_optimizations_anno) {
         std::string anno_name = config_anno_name.asString();
-        DexType* anno = DexType::get_type(anno_name.c_str());
+        DexType* anno = DexType::get_type(anno_name);
         if (anno) m_no_optimizations_annos.insert(anno);
       }
     }
@@ -354,6 +354,9 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   jw.get("true_virtual_inline", false, inliner_config->true_virtual_inline);
   jw.get("throws", false, inliner_config->throws_inline);
   jw.get("throw_after_no_return", false, inliner_config->throw_after_no_return);
+  jw.get("max_cost_for_constant_propagation",
+         MAX_COST_FOR_CONSTANT_PROPAGATION,
+         inliner_config->max_cost_for_constant_propagation);
   jw.get("enforce_method_size_limit",
          true,
          inliner_config->enforce_method_size_limit);
@@ -379,11 +382,16 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   jw.get("respect_sketchy_methods", true,
          inliner_config->respect_sketchy_methods);
   jw.get("check_min_sdk_refs", true, inliner_config->check_min_sdk_refs);
+  size_t max_relevant_invokes_when_local_only;
+  jw.get("max_relevant_invokes_when_local_only", 10,
+         max_relevant_invokes_when_local_only);
+  inliner_config->max_relevant_invokes_when_local_only =
+      max_relevant_invokes_when_local_only;
 
   std::vector<std::string> no_inline_annos;
   jw.get("no_inline_annos", {}, no_inline_annos);
   for (const auto& type_s : no_inline_annos) {
-    auto type = DexType::get_type(type_s.c_str());
+    auto type = DexType::get_type(type_s);
     if (type != nullptr) {
       inliner_config->m_no_inline_annos.emplace(type);
     } else {
@@ -395,7 +403,7 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   std::vector<std::string> force_inline_annos;
   jw.get("force_inline_annos", {}, force_inline_annos);
   for (const auto& type_s : force_inline_annos) {
-    auto type = DexType::get_type(type_s.c_str());
+    auto type = DexType::get_type(type_s);
     if (type != nullptr) {
       inliner_config->m_force_inline_annos.emplace(type);
     } else {

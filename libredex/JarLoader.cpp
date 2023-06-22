@@ -7,6 +7,7 @@
 
 #include <boost/iostreams/device/mapped_file.hpp>
 
+#include <array>
 #include <cstdint>
 #include <fstream>
 #include <iostream>
@@ -36,17 +37,25 @@
  */
 
 namespace JarLoaderUtil {
-uint32_t read32(uint8_t*& buffer) {
+uint32_t read32(uint8_t*& buffer, uint8_t* buffer_end) {
   uint32_t rv;
+  auto next = buffer + sizeof(uint32_t);
+  if (next >= buffer_end) {
+    throw RedexException(RedexError::BUFFER_END_EXCEEDED);
+  }
   memcpy(&rv, buffer, sizeof(uint32_t));
-  buffer += sizeof(uint32_t);
+  buffer = next;
   return htonl(rv);
 }
 
-uint32_t read16(uint8_t*& buffer) {
+uint32_t read16(uint8_t*& buffer, uint8_t* buffer_end) {
   uint16_t rv;
+  auto next = buffer + sizeof(uint16_t);
+  if (next >= buffer_end) {
+    throw RedexException(RedexError::BUFFER_END_EXCEEDED);
+  }
   memcpy(&rv, buffer, sizeof(uint16_t));
-  buffer += sizeof(uint16_t);
+  buffer = next;
   return htons(rv);
 }
 } // namespace JarLoaderUtil
@@ -55,7 +64,7 @@ using namespace JarLoaderUtil;
 
 namespace {
 
-static const uint32_t kClassMagic = 0xcafebabe;
+constexpr uint32_t kClassMagic = 0xcafebabe;
 
 struct cp_entry {
   uint8_t tag;
@@ -85,35 +94,34 @@ struct cp_method_info {
   uint16_t nameNdx;
   uint16_t descNdx;
 };
-} // namespace
 
 /* clang-format off */
 
 // Java Virtual Machine Specification Chapter 4, Section 4.4
-#define CP_CONST_UTF8         (1)
-#define CP_CONST_INT          (3)
-#define CP_CONST_FLOAT        (4)
-#define CP_CONST_LONG         (5)
-#define CP_CONST_DOUBLE       (6)
-#define CP_CONST_CLASS        (7)
-#define CP_CONST_STRING       (8)
-#define CP_CONST_FIELD        (9)
-#define CP_CONST_METHOD      (10)
-#define CP_CONST_INTERFACE   (11)
-#define CP_CONST_NAMEANDTYPE (12)
+constexpr size_t CP_CONST_UTF8 =         1;
+constexpr size_t CP_CONST_INT =          3;
+constexpr size_t CP_CONST_FLOAT =        4;
+constexpr size_t CP_CONST_LONG =         5;
+constexpr size_t CP_CONST_DOUBLE =       6;
+constexpr size_t CP_CONST_CLASS =        7;
+constexpr size_t CP_CONST_STRING =       8;
+constexpr size_t CP_CONST_FIELD =        9;
+constexpr size_t CP_CONST_METHOD =      10;
+constexpr size_t CP_CONST_INTERFACE =   11;
+constexpr size_t CP_CONST_NAMEANDTYPE = 12;
 
 // Since Java 7
-#define CP_CONST_METHHANDLE  (15)
-#define CP_CONST_METHTYPE    (16)
-#define CP_CONST_INVOKEDYN   (18)
+constexpr size_t CP_CONST_METHHANDLE =  15;
+constexpr size_t CP_CONST_METHTYPE =    16;
+constexpr size_t CP_CONST_INVOKEDYN =   18;
 
 // Since Java 9
-#define CP_CONST_MODULE      (19)
-#define CP_CONST_PACKAGE     (20)
+constexpr size_t CP_CONST_MODULE =      19;
+constexpr size_t CP_CONST_PACKAGE =     20;
 
 /* clang-format on */
 
-static bool parse_cp_entry(uint8_t*& buffer, cp_entry& cpe) {
+bool parse_cp_entry(uint8_t*& buffer, uint8_t* buffer_end, cp_entry& cpe) {
   cpe.tag = *buffer++;
   switch (cpe.tag) {
   case CP_CONST_CLASS:
@@ -121,69 +129,71 @@ static bool parse_cp_entry(uint8_t*& buffer, cp_entry& cpe) {
   case CP_CONST_METHTYPE:
   case CP_CONST_MODULE:
   case CP_CONST_PACKAGE:
-    cpe.s0 = read16(buffer);
+    cpe.s0 = read16(buffer, buffer_end);
     return true;
   case CP_CONST_FIELD:
   case CP_CONST_METHOD:
   case CP_CONST_INTERFACE:
   case CP_CONST_NAMEANDTYPE:
-    cpe.s0 = read16(buffer);
-    cpe.s1 = read16(buffer);
+    cpe.s0 = read16(buffer, buffer_end);
+    cpe.s1 = read16(buffer, buffer_end);
     return true;
   case CP_CONST_METHHANDLE:
     cpe.s0 = *buffer++;
-    cpe.s1 = read16(buffer);
+    cpe.s1 = read16(buffer, buffer_end);
     return true;
   case CP_CONST_INT:
   case CP_CONST_FLOAT:
-    cpe.i0 = read32(buffer);
+    cpe.i0 = read32(buffer, buffer_end);
     return true;
   case CP_CONST_LONG:
   case CP_CONST_DOUBLE:
-    cpe.i0 = read32(buffer);
-    cpe.i1 = read32(buffer);
+    cpe.i0 = read32(buffer, buffer_end);
+    cpe.i1 = read32(buffer, buffer_end);
     return true;
   case CP_CONST_UTF8:
-    cpe.len = read16(buffer);
+    cpe.len = read16(buffer, buffer_end);
     cpe.data = buffer;
     buffer += cpe.len;
     return true;
   case CP_CONST_INVOKEDYN:
-    fprintf(stderr, "INVOKEDYN constant unsupported, Bailing\n");
+    std::cerr << "INVOKEDYN constant unsupported, Bailing\n";
     return false;
   }
-  fprintf(stderr, "Unrecognized constant pool tag 0x%02x, Bailing\n", cpe.tag);
+  std::cerr << "Unrecognized constant pool tag 0x" << std::hex << cpe.tag
+            << ", Bailing\n";
   return false;
 }
 
-static void skip_attributes(uint8_t*& buffer) {
+void skip_attributes(uint8_t*& buffer, uint8_t* buffer_end) {
   /* Todo:
    * Consider adding some verification so we don't walk
    * off the end in the case of a corrupt class file.
    */
-  uint16_t acount = read16(buffer);
+  uint16_t acount = read16(buffer, buffer_end);
   for (int i = 0; i < acount; i++) {
     buffer += 2; // Skip name_index
-    uint32_t length = read32(buffer);
+    uint32_t length = read32(buffer, buffer_end);
     buffer += length;
   }
 }
-#define MAX_CLASS_NAMELEN (8 * 1024)
-static DexType* make_dextype_from_cref(std::vector<cp_entry>& cpool,
-                                       uint16_t cref) {
+
+constexpr size_t MAX_CLASS_NAMELEN = 8 * 1024;
+
+DexType* make_dextype_from_cref(std::vector<cp_entry>& cpool, uint16_t cref) {
   char nbuffer[MAX_CLASS_NAMELEN];
   if (cpool[cref].tag != CP_CONST_CLASS) {
-    fprintf(stderr, "Non-class ref in get_class_name, Bailing\n");
+    std::cerr << "Non-class ref in get_class_name, Bailing\n";
     return nullptr;
   }
   uint16_t utf8ref = cpool[cref].s0;
   const cp_entry& utf8cpe = cpool[utf8ref];
   if (utf8cpe.tag != CP_CONST_UTF8) {
-    fprintf(stderr, "Non-utf8 ref in get_utf8, Bailing\n");
+    std::cerr << "Non-utf8 ref in get_utf8, Bailing\n";
     return nullptr;
   }
   if (utf8cpe.len > (MAX_CLASS_NAMELEN + 3)) {
-    fprintf(stderr, "classname is greater than max, bailing");
+    std::cerr << "classname is greater than max, bailing";
     return nullptr;
   }
   nbuffer[0] = 'L';
@@ -193,32 +203,30 @@ static DexType* make_dextype_from_cref(std::vector<cp_entry>& cpool,
   return DexType::make_type(nbuffer);
 }
 
-static bool extract_utf8(std::vector<cp_entry>& cpool,
-                         uint16_t utf8ref,
-                         char* out,
-                         uint32_t size) {
+bool extract_utf8(std::vector<cp_entry>& cpool,
+                  uint16_t utf8ref,
+                  std::string_view* out) {
   const cp_entry& utf8cpe = cpool[utf8ref];
   if (utf8cpe.tag != CP_CONST_UTF8) {
-    fprintf(stderr, "Non-utf8 ref in get_utf8, bailing\n");
+    std::cerr << "Non-utf8 ref in get_utf8, bailing\n";
     return false;
   }
-  if (utf8cpe.len > (size - 1)) {
-    fprintf(stderr, "Name is greater (%hu) than max (%u), bailing\n",
-            utf8cpe.len, size);
+  if (utf8cpe.len > (MAX_CLASS_NAMELEN - 1)) {
+    std::cerr << "Name is greater (" << utf8cpe.len << ") than max ("
+              << MAX_CLASS_NAMELEN << "), bailing\n";
     return false;
   }
-  memcpy(out, utf8cpe.data, utf8cpe.len);
-  out[utf8cpe.len] = '\0';
+  *out = std::string_view((const char*)utf8cpe.data, utf8cpe.len);
   return true;
 }
 
-static DexField* make_dexfield(std::vector<cp_entry>& cpool,
-                               DexType* self,
-                               cp_field_info& finfo) {
-  char dbuffer[MAX_CLASS_NAMELEN];
-  char nbuffer[MAX_CLASS_NAMELEN];
-  if (!extract_utf8(cpool, finfo.nameNdx, nbuffer, MAX_CLASS_NAMELEN) ||
-      !extract_utf8(cpool, finfo.descNdx, dbuffer, MAX_CLASS_NAMELEN)) {
+DexField* make_dexfield(std::vector<cp_entry>& cpool,
+                        DexType* self,
+                        cp_field_info& finfo) {
+  std::string_view dbuffer;
+  std::string_view nbuffer;
+  if (!extract_utf8(cpool, finfo.nameNdx, &nbuffer) ||
+      !extract_utf8(cpool, finfo.descNdx, &dbuffer)) {
     return nullptr;
   }
   auto name = DexString::make_string(nbuffer);
@@ -230,57 +238,64 @@ static DexField* make_dexfield(std::vector<cp_entry>& cpool,
   return field;
 }
 
-static DexType* simpleTypeB;
-static DexType* simpleTypeC;
-static DexType* simpleTypeD;
-static DexType* simpleTypeF;
-static DexType* simpleTypeI;
-static DexType* simpleTypeJ;
-static DexType* simpleTypeS;
-static DexType* simpleTypeZ;
-static DexType* simpleTypeV;
+DexType* sSimpleTypeB;
+DexType* sSimpleTypeC;
+DexType* sSimpleTypeD;
+DexType* sSimpleTypeF;
+DexType* sSimpleTypeI;
+DexType* sSimpleTypeJ;
+DexType* sSimpleTypeS;
+DexType* sSimpleTypeZ;
+DexType* sSimpleTypeV;
+
+} // namespace
 
 void init_basic_types() {
-  simpleTypeB = DexType::make_type("B");
-  simpleTypeC = DexType::make_type("C");
-  simpleTypeD = DexType::make_type("D");
-  simpleTypeF = DexType::make_type("F");
-  simpleTypeI = DexType::make_type("I");
-  simpleTypeJ = DexType::make_type("J");
-  simpleTypeS = DexType::make_type("S");
-  simpleTypeZ = DexType::make_type("Z");
-  simpleTypeV = DexType::make_type("V");
+  sSimpleTypeB = DexType::make_type("B");
+  sSimpleTypeC = DexType::make_type("C");
+  sSimpleTypeD = DexType::make_type("D");
+  sSimpleTypeF = DexType::make_type("F");
+  sSimpleTypeI = DexType::make_type("I");
+  sSimpleTypeJ = DexType::make_type("J");
+  sSimpleTypeS = DexType::make_type("S");
+  sSimpleTypeZ = DexType::make_type("Z");
+  sSimpleTypeV = DexType::make_type("V");
 }
 
-static DexType* parse_type(const char*& buf) {
+namespace {
+
+DexType* parse_type(std::string_view& buf) {
   char typebuffer[MAX_CLASS_NAMELEN];
-  char desc = *buf++;
+  char desc = buf.at(0);
+  buf = buf.substr(1);
   switch (desc) {
   case 'B':
-    return simpleTypeB;
+    return sSimpleTypeB;
   case 'C':
-    return simpleTypeC;
+    return sSimpleTypeC;
   case 'D':
-    return simpleTypeD;
+    return sSimpleTypeD;
   case 'F':
-    return simpleTypeF;
+    return sSimpleTypeF;
   case 'I':
-    return simpleTypeI;
+    return sSimpleTypeI;
   case 'J':
-    return simpleTypeJ;
+    return sSimpleTypeJ;
   case 'S':
-    return simpleTypeS;
+    return sSimpleTypeS;
   case 'Z':
-    return simpleTypeZ;
+    return sSimpleTypeZ;
   case 'V':
-    return simpleTypeV;
+    return sSimpleTypeV;
   case 'L': {
     char* tpout = typebuffer;
     *tpout++ = desc;
-    while (*buf != ';') {
-      *tpout++ = *buf++;
+    while (buf.at(0) != ';') {
+      *tpout++ = buf[0];
+      buf = buf.substr(1);
     }
-    *tpout++ = *buf++;
+    *tpout++ = buf.at(0);
+    buf = buf.substr(1);
     *tpout = '\0';
     return DexType::make_type(typebuffer);
     break;
@@ -288,56 +303,60 @@ static DexType* parse_type(const char*& buf) {
   case '[': {
     char* tpout = typebuffer;
     *tpout++ = desc;
-    while (*buf == '[') {
-      *tpout++ = *buf++;
+    while (buf.at(0) == '[') {
+      *tpout++ = buf[0];
+      buf = buf.substr(1);
     }
-    if (*buf == 'L') {
-      while (*buf != ';') {
-        *tpout++ = *buf++;
+    if (buf.at(0) == 'L') {
+      while (buf.at(0) != ';') {
+        *tpout++ = buf[0];
+        buf = buf.substr(1);
       }
-      *tpout++ = *buf++;
+      *tpout++ = buf.at(0);
+      buf = buf.substr(1);
     } else {
-      *tpout++ = *buf++;
+      *tpout++ = buf[0];
+      buf = buf.substr(1);
     }
     *tpout++ = '\0';
     return DexType::make_type(typebuffer);
   }
   }
-  fprintf(stderr, "Invalid parse-type '%c', bailing\n", desc);
+  std::cerr << "Invalid parse-type '" << desc << "', bailing\n";
   return nullptr;
 }
 
-static DexTypeList* extract_arguments(const char*& buf) {
-  buf++;
-  if (*buf == ')') {
-    buf++;
+DexTypeList* extract_arguments(std::string_view& buf) {
+  buf = buf.substr(1);
+  if (buf.at(0) == ')') {
+    buf = buf.substr(1);
     return DexTypeList::make_type_list({});
   }
   DexTypeList::ContainerType args;
-  while (*buf != ')') {
+  while (buf.at(0) != ')') {
     DexType* dtype = parse_type(buf);
     if (dtype == nullptr) return nullptr;
-    if (dtype == simpleTypeV) {
-      fprintf(stderr, "Invalid argument type 'V' in args, bailing\n");
+    if (dtype == sSimpleTypeV) {
+      std::cerr << "Invalid argument type 'V' in args, bailing\n";
       return nullptr;
     }
     args.push_back(dtype);
   }
-  buf++;
+  buf = buf.substr(1);
   return DexTypeList::make_type_list(std::move(args));
 }
 
-static DexMethod* make_dexmethod(std::vector<cp_entry>& cpool,
-                                 DexType* self,
-                                 cp_method_info& finfo) {
-  char dbuffer[MAX_CLASS_NAMELEN];
-  char nbuffer[MAX_CLASS_NAMELEN];
-  if (!extract_utf8(cpool, finfo.nameNdx, nbuffer, MAX_CLASS_NAMELEN) ||
-      !extract_utf8(cpool, finfo.descNdx, dbuffer, MAX_CLASS_NAMELEN)) {
+DexMethod* make_dexmethod(std::vector<cp_entry>& cpool,
+                          DexType* self,
+                          cp_method_info& finfo) {
+  std::string_view dbuffer;
+  std::string_view nbuffer;
+  if (!extract_utf8(cpool, finfo.nameNdx, &nbuffer) ||
+      !extract_utf8(cpool, finfo.descNdx, &dbuffer)) {
     return nullptr;
   }
   auto name = DexString::make_string(nbuffer);
-  const char* ptr = dbuffer;
+  std::string_view ptr = dbuffer;
   DexTypeList* tlist = extract_arguments(ptr);
   if (tlist == nullptr) return nullptr;
   DexType* rtype = parse_type(ptr);
@@ -346,8 +365,8 @@ static DexMethod* make_dexmethod(std::vector<cp_entry>& cpool,
   DexMethod* method =
       static_cast<DexMethod*>(DexMethod::make_method(self, name, proto));
   if (method->is_concrete()) {
-    fprintf(stderr, "Pre-concrete method attempted to load '%s', bailing\n",
-            SHOW(method));
+    std::cerr << "Pre-concrete method attempted to load '" << show(method)
+              << "', bailing\n";
     return nullptr;
   }
   uint32_t access = finfo.aflags;
@@ -365,32 +384,36 @@ static DexMethod* make_dexmethod(std::vector<cp_entry>& cpool,
   return method;
 }
 
+} // namespace
+
 bool parse_class(uint8_t* buffer,
+                 size_t buffer_size,
                  Scope* classes,
                  attribute_hook_t attr_hook,
                  const DexLocation* jar_location) {
-  uint32_t magic = read32(buffer);
-  uint16_t vminor DEBUG_ONLY = read16(buffer);
-  uint16_t vmajor DEBUG_ONLY = read16(buffer);
-  uint16_t cp_count = read16(buffer);
+  auto buffer_end = buffer + buffer_size;
+  uint32_t magic = read32(buffer, buffer_end);
+  uint16_t vminor DEBUG_ONLY = read16(buffer, buffer_end);
+  uint16_t vmajor DEBUG_ONLY = read16(buffer, buffer_end);
+  uint16_t cp_count = read16(buffer, buffer_end);
   if (magic != kClassMagic) {
-    fprintf(stderr, "Bad class magic %08x, Bailing\n", magic);
+    std::cerr << "Bad class magic " << std::hex << magic << ", Bailing\n";
     return false;
   }
   std::vector<cp_entry> cpool;
   cpool.resize(cp_count);
   /* The zero'th entry is always empty.  Java is annoying. */
   for (int i = 1; i < cp_count; i++) {
-    if (!parse_cp_entry(buffer, cpool[i])) return false;
+    if (!parse_cp_entry(buffer, buffer_end, cpool[i])) return false;
     if (cpool[i].tag == CP_CONST_LONG || cpool[i].tag == CP_CONST_DOUBLE) {
       cpool[i + 1] = cpool[i];
       i++;
     }
   }
-  uint16_t aflags = read16(buffer);
-  uint16_t clazz = read16(buffer);
-  uint16_t super = read16(buffer);
-  uint16_t ifcount = read16(buffer);
+  uint16_t aflags = read16(buffer, buffer_end);
+  uint16_t clazz = read16(buffer, buffer_end);
+  uint16_t super = read16(buffer, buffer_end);
+  uint16_t ifcount = read16(buffer, buffer_end);
 
   if (is_module((DexAccessFlags)aflags)) {
     // Classes with the ACC_MODULE access flag are special.  They contain
@@ -446,12 +469,12 @@ bool parse_class(uint8_t* buffer,
   cc.set_access((DexAccessFlags)aflags);
   if (ifcount) {
     for (int i = 0; i < ifcount; i++) {
-      uint16_t iface = read16(buffer);
+      uint16_t iface = read16(buffer, buffer_end);
       DexType* iftype = make_dextype_from_cref(cpool, iface);
       cc.add_interface(iftype);
     }
   }
-  uint16_t fcount = read16(buffer);
+  uint16_t fcount = read16(buffer, buffer_end);
 
   auto invoke_attr_hook =
       [&](const boost::variant<DexField*, DexMethod*>& field_or_method,
@@ -459,45 +482,45 @@ bool parse_class(uint8_t* buffer,
         if (attr_hook == nullptr) {
           return;
         }
-        uint16_t attributes_count = read16(attrPtr);
+        uint16_t attributes_count = read16(attrPtr, buffer_end);
         for (uint16_t j = 0; j < attributes_count; j++) {
-          uint16_t attribute_name_index = read16(attrPtr);
-          uint32_t attribute_length = read32(attrPtr);
-          char attribute_name[MAX_CLASS_NAMELEN];
-          auto extract_res = extract_utf8(cpool, attribute_name_index,
-                                          attribute_name, MAX_CLASS_NAMELEN);
+          uint16_t attribute_name_index = read16(attrPtr, buffer_end);
+          uint32_t attribute_length = read32(attrPtr, buffer_end);
+          std::string_view attribute_name;
+          auto extract_res =
+              extract_utf8(cpool, attribute_name_index, &attribute_name);
           always_assert_log(
               extract_res,
               "attribute hook was specified, but failed to load the attribute "
               "name due to insufficient name buffer");
-          attr_hook(field_or_method, attribute_name, attrPtr);
+          attr_hook(field_or_method, attribute_name, attrPtr, buffer_end);
           attrPtr += attribute_length;
         }
       };
 
   for (int i = 0; i < fcount; i++) {
     cp_field_info cpfield;
-    cpfield.aflags = read16(buffer);
-    cpfield.nameNdx = read16(buffer);
-    cpfield.descNdx = read16(buffer);
+    cpfield.aflags = read16(buffer, buffer_end);
+    cpfield.nameNdx = read16(buffer, buffer_end);
+    cpfield.descNdx = read16(buffer, buffer_end);
     uint8_t* attrPtr = buffer;
-    skip_attributes(buffer);
+    skip_attributes(buffer, buffer_end);
     DexField* field = make_dexfield(cpool, self, cpfield);
     if (field == nullptr) return false;
     cc.add_field(field);
     invoke_attr_hook({field}, attrPtr);
   }
 
-  uint16_t mcount = read16(buffer);
+  uint16_t mcount = read16(buffer, buffer_end);
   if (mcount) {
     for (int i = 0; i < mcount; i++) {
       cp_method_info cpmethod;
-      cpmethod.aflags = read16(buffer);
-      cpmethod.nameNdx = read16(buffer);
-      cpmethod.descNdx = read16(buffer);
+      cpmethod.aflags = read16(buffer, buffer_end);
+      cpmethod.nameNdx = read16(buffer, buffer_end);
+      cpmethod.descNdx = read16(buffer, buffer_end);
 
       uint8_t* attrPtr = buffer;
-      skip_attributes(buffer);
+      skip_attributes(buffer, buffer_end);
       DexMethod* method = make_dexmethod(cpool, self, cpmethod);
       if (method == nullptr) return false;
       cc.add_method(method);
@@ -508,35 +531,36 @@ bool parse_class(uint8_t* buffer,
   if (classes != nullptr) {
     classes->emplace_back(dc);
   }
-  //#define DEBUG_PRINT
-#ifdef DEBUG_PRINT
-  fprintf(stderr, "DexClass constructed from jar:\n%s\n", SHOW(dc));
-  if (dc->get_sfields().size()) {
-    fprintf(stderr, "Static Fields:\n");
-    for (auto const& field : dc->get_sfields()) {
-      fprintf(stderr, "\t%s\n", SHOW(field));
+
+  constexpr bool kDebugPrint = false;
+  if (kDebugPrint) {
+    fprintf(stderr, "DexClass constructed from jar:\n%s\n", SHOW(dc));
+    if (!dc->get_sfields().empty()) {
+      fprintf(stderr, "Static Fields:\n");
+      for (auto const& field : dc->get_sfields()) {
+        fprintf(stderr, "\t%s\n", SHOW(field));
+      }
     }
-  }
-  if (dc->get_ifields().size()) {
-    fprintf(stderr, "Instance Fields:\n");
-    for (auto const& field : dc->get_ifields()) {
-      fprintf(stderr, "\t%s\n", SHOW(field));
+    if (!dc->get_ifields().empty()) {
+      fprintf(stderr, "Instance Fields:\n");
+      for (auto const& field : dc->get_ifields()) {
+        fprintf(stderr, "\t%s\n", SHOW(field));
+      }
     }
-  }
-  if (dc->get_dmethods().size()) {
-    fprintf(stderr, "Direct Methods:\n");
-    for (auto const& method : dc->get_dmethods()) {
-      fprintf(stderr, "\t%s\n", SHOW(method));
+    if (!dc->get_dmethods().empty()) {
+      fprintf(stderr, "Direct Methods:\n");
+      for (auto const& method : dc->get_dmethods()) {
+        fprintf(stderr, "\t%s\n", SHOW(method));
+      }
     }
-  }
-  if (dc->get_vmethods().size()) {
-    fprintf(stderr, "Virtual Methods:\n");
-    for (auto const& method : dc->get_vmethods()) {
-      fprintf(stderr, "\t%s\n", SHOW(method));
+    if (!dc->get_vmethods().empty()) {
+      fprintf(stderr, "Virtual Methods:\n");
+      for (auto const& method : dc->get_vmethods()) {
+        fprintf(stderr, "\t%s\n", SHOW(method));
+      }
     }
   }
 
-#endif
   return true;
 }
 
@@ -553,7 +577,7 @@ bool load_class_file(const std::string& filename, Scope* classes) {
   auto buffer = std::make_unique<char[]>(size);
   buf->sgetn(buffer.get(), size);
   auto jar_location = DexLocation::make_location("", filename);
-  return parse_class(reinterpret_cast<uint8_t*>(buffer.get()), classes,
+  return parse_class(reinterpret_cast<uint8_t*>(buffer.get()), size, classes,
                      /* attr_hook */ nullptr, jar_location);
 }
 
@@ -563,14 +587,13 @@ bool load_class_file(const std::string& filename, Scope* classes) {
  */
 
 namespace {
-static const int kSignatureSize = 4;
 
 /* CDFile
  * Central directory file header entry structures.
  */
-static constexpr uint16_t kCompMethodStore = 0;
-static const uint16_t kCompMethodDeflate(8);
-static const uint8_t kCDFile[] = {'P', 'K', 0x01, 0x02};
+constexpr uint16_t kCompMethodStore = 0;
+constexpr uint16_t kCompMethodDeflate = 8;
+constexpr std::array<uint8_t, 4> kCDFile = {'P', 'K', 0x01, 0x02};
 
 PACKED(struct pk_cd_file {
   uint32_t signature;
@@ -595,8 +618,8 @@ PACKED(struct pk_cd_file {
 /* CDirEnd:
  * End of central directory record structures.
  */
-static const int kMaxCDirEndSearch = 100;
-static const uint8_t kCDirEnd[] = {'P', 'K', 0x05, 0x06};
+constexpr int kMaxCDirEndSearch = 100;
+constexpr std::array<uint8_t, 4> kCDirEnd = {'P', 'K', 0x05, 0x06};
 
 PACKED(struct pk_cdir_end {
   uint32_t signature;
@@ -613,7 +636,7 @@ PACKED(struct pk_cdir_end {
  * Local file header structures.
  * (Yes, this made more sense in the world of floppies and tapes.)
  */
-static const uint8_t kLFile[] = {'P', 'K', 0x03, 0x04};
+constexpr std::array<uint8_t, 4> kLFile = {'P', 'K', 0x03, 0x04};
 
 PACKED(struct pk_lfile {
   uint32_t signature;
@@ -631,87 +654,63 @@ PACKED(struct pk_lfile {
 
 struct jar_entry {
   struct pk_cd_file cd_entry;
-  uint8_t* filename;
-
-  jar_entry() = default;
-  jar_entry(const jar_entry&) = delete;
-  jar_entry(jar_entry&& other) noexcept { *this = std::move(other); }
-
-  jar_entry& operator=(const jar_entry&) = delete;
-  jar_entry& operator=(jar_entry&& other) noexcept {
-    if (this != &other) {
-      filename = std::exchange(other.filename, nullptr);
-      cd_entry = other.cd_entry;
-      memset(&other.cd_entry, 0, sizeof(other.cd_entry));
-    }
-    return *this;
-  }
-
-  ~jar_entry() {
-    if (filename != nullptr) {
-      free(filename);
-      filename = nullptr;
-    }
-  }
+  std::string filename;
 };
-} // namespace
 
-static bool find_central_directory(const uint8_t* mapping,
-                                   ssize_t size,
-                                   pk_cdir_end& pce) {
+bool find_central_directory(const uint8_t* mapping,
+                            ssize_t size,
+                            pk_cdir_end& pce) {
   ssize_t soffset = (size - sizeof(pk_cdir_end));
   ssize_t eoffset = soffset - kMaxCDirEndSearch;
   if (soffset < 0) return false;
   if (eoffset < 0) eoffset = 0;
   do {
     const uint8_t* cdsearch = mapping + soffset;
-    if (memcmp(cdsearch, kCDirEnd, kSignatureSize) == 0) {
+    if (memcmp(cdsearch, kCDirEnd.data(), kCDirEnd.size()) == 0) {
       memcpy(&pce, cdsearch, sizeof(pk_cdir_end));
       return true;
     }
   } while (soffset-- > eoffset);
-  fprintf(stderr, "End of central directory record not found, bailing\n");
+  std::cerr << "End of central directory record not found, bailing\n";
   return false;
 }
 
-static bool validate_pce(pk_cdir_end& pce, ssize_t size) {
+bool validate_pce(pk_cdir_end& pce, ssize_t size) {
   /* We only support a limited feature set.  We
    * don't support disk-spanning, so bail if that's the case.
    */
   if (pce.cd_diskno != pce.diskno || pce.cd_diskno != 0 ||
       pce.cd_entries != pce.cd_disk_entries) {
-    fprintf(stderr, "Disk spanning is not supported, bailing\n");
+    std::cerr << "Disk spanning is not supported, bailing\n";
     return false;
   }
   ssize_t data_size = size - sizeof(pk_cdir_end);
   if (pce.cd_disk_offset + pce.cd_size > data_size) {
-    fprintf(stderr, "Central directory overflow, invalid pce structure\n");
+    std::cerr << "Central directory overflow, invalid pce structure\n";
     return false;
   }
   return true;
 }
 
-static bool extract_jar_entry(const uint8_t*& mapping,
-                              ssize_t& offset,
-                              ssize_t total_size,
-                              jar_entry& je) {
-  if (offset + kSignatureSize > total_size) {
-    fprintf(stderr, "Reading mapping out of bound, bailing\n");
+bool extract_jar_entry(const uint8_t*& mapping,
+                       size_t& offset,
+                       size_t total_size,
+                       jar_entry& je) {
+  if (offset + kCDFile.size() > total_size) {
+    std::cerr << "Reading mapping out of bound, bailing\n";
     return false;
   }
-  if (memcmp(mapping, kCDFile, kSignatureSize) != 0) {
-    fprintf(stderr, "Invalid central directory entry, bailing\n");
+  if (memcmp(mapping, kCDFile.data(), kCDFile.size()) != 0) {
+    std::cerr << "Invalid central directory entry, bailing\n";
     return false;
   }
   offset += sizeof(pk_cd_file);
   always_assert_log(offset < total_size, "Reading mapping out of bound");
   memcpy(&je.cd_entry, mapping, sizeof(pk_cd_file));
   mapping += sizeof(pk_cd_file);
-  je.filename = (uint8_t*)malloc(je.cd_entry.fname_len + 1);
   offset += je.cd_entry.fname_len;
   always_assert_log(offset < total_size, "Reading mapping out of bound");
-  memcpy(je.filename, mapping, je.cd_entry.fname_len);
-  je.filename[je.cd_entry.fname_len] = '\0';
+  je.filename = std::string((const char*)mapping, je.cd_entry.fname_len);
   mapping += je.cd_entry.fname_len;
   offset = offset + je.cd_entry.extra_len + je.cd_entry.comment_len;
   mapping += je.cd_entry.extra_len;
@@ -719,24 +718,24 @@ static bool extract_jar_entry(const uint8_t*& mapping,
   return true;
 }
 
-static bool get_jar_entries(const uint8_t* mapping,
-                            ssize_t size,
-                            pk_cdir_end& pce,
-                            std::vector<jar_entry>& files) {
+bool get_jar_entries(const uint8_t* mapping,
+                     size_t size,
+                     pk_cdir_end& pce,
+                     std::vector<jar_entry>& files) {
   const uint8_t* cdir = mapping + pce.cd_disk_offset;
   files.resize(pce.cd_entries);
-  ssize_t offset = pce.cd_disk_offset;
+  size_t offset = pce.cd_disk_offset;
   for (int entry = 0; entry < pce.cd_entries; entry++) {
     if (!extract_jar_entry(cdir, offset, size, files[entry])) return false;
   }
   return true;
 }
 
-static int jar_uncompress(Bytef* dest,
-                          uLongf* destLen,
-                          const Bytef* source,
-                          uLong sourceLen,
-                          uint32_t comp_method) {
+int jar_uncompress(Bytef* dest,
+                   uLongf* destLen,
+                   const Bytef* source,
+                   uLong sourceLen,
+                   uint32_t comp_method) {
   if (comp_method == kCompMethodStore) {
     if (sourceLen > *destLen) {
       std::cerr << "Not enough space for STOREd entry: " << sourceLen << " vs "
@@ -772,20 +771,26 @@ static int jar_uncompress(Bytef* dest,
   return err;
 }
 
-static bool decompress_class(jar_entry& file,
-                             const uint8_t* mapping,
-                             uint8_t* outbuffer,
-                             ssize_t bufsize) {
+bool decompress_class(jar_entry& file,
+                      const uint8_t* mapping,
+                      size_t map_size,
+                      uint8_t* outbuffer,
+                      ssize_t bufsize) {
   if (file.cd_entry.comp_method != kCompMethodDeflate &&
       file.cd_entry.comp_method != kCompMethodStore) {
-    fprintf(stderr, "Unknown compression method %d for %s, Bailing\n",
-            file.cd_entry.comp_method, file.filename);
+    std::cerr << "Unknown compression method " << file.cd_entry.comp_method
+              << " for " << file.filename << ", Bailing\n";
     return false;
   }
 
+  static_assert(kLFile.size() <= sizeof(pk_lfile));
+  if (file.cd_entry.disk_offset + sizeof(pk_lfile) >= map_size) {
+    std::cerr << "Entry out of map bounds!\n";
+    return false;
+  }
   const uint8_t* lfile = mapping + file.cd_entry.disk_offset;
-  if (memcmp(lfile, kLFile, kSignatureSize) != 0) {
-    fprintf(stderr, "Invalid local file entry, bailing\n");
+  if (memcmp(lfile, kLFile.data(), kLFile.size()) != 0) {
+    std::cerr << "Invalid local file entry, bailing\n";
     return false;
   }
 
@@ -800,82 +805,89 @@ static bool decompress_class(jar_entry& file,
 
   lfile += sizeof(pk_lfile);
 
+  if (file.cd_entry.disk_offset + sizeof(pk_lfile) + pkf.fname_len +
+          pkf.extra_len + pkf.comp_size >=
+      map_size) {
+    std::cerr << "Complete entry exceeds mapping bounds.\n";
+    return false;
+  }
+
   if (pkf.fname_len != file.cd_entry.fname_len ||
       pkf.comp_size != file.cd_entry.comp_size ||
       pkf.ucomp_size != file.cd_entry.ucomp_size ||
       pkf.comp_method != file.cd_entry.comp_method ||
-      memcmp(lfile, file.filename, pkf.fname_len) != 0) {
-    fprintf(stderr,
-            "Directory entry doesn't match local file header, "
-            "Bailing %d %d %d %d, %d %d %d %d extra %d\n",
-            pkf.fname_len, pkf.comp_size, pkf.ucomp_size, pkf.comp_method,
-            file.cd_entry.fname_len, file.cd_entry.comp_size,
-            file.cd_entry.ucomp_size, file.cd_entry.comp_method, pkf.extra_len);
+      file.filename != std::string_view((const char*)lfile, pkf.fname_len)) {
+    std::cerr << "Directory entry doesn't match local file header, Bailing "
+              << pkf.fname_len << " " << pkf.comp_size << " " << pkf.ucomp_size
+              << " " << pkf.comp_method << " " << file.cd_entry.fname_len << " "
+              << file.cd_entry.comp_size << " " << file.cd_entry.ucomp_size
+              << " " << file.cd_entry.comp_method << " extra " << pkf.extra_len
+              << "\n";
     return false;
   }
 
   lfile += pkf.fname_len;
   lfile += pkf.extra_len;
+
   uLongf dlen = bufsize;
   int zlibrv = jar_uncompress(outbuffer, &dlen, lfile, pkf.comp_size,
                               file.cd_entry.comp_method);
   if (zlibrv != Z_OK) {
-    fprintf(stderr, "uncompress failed with code %d, Bailing\n", zlibrv);
+    std::cerr << "uncompress failed with code " << zlibrv << ", Bailing\n";
     return false;
   }
   if (dlen != pkf.ucomp_size) {
-    fprintf(stderr, "mis-match on uncompressed size, Bailing\n");
+    std::cerr << "mis-match on uncompressed size, Bailing\n";
     return false;
   }
   return true;
 }
 
-static const int kStartBufferSize = 128 * 1024;
+constexpr size_t kStartBufferSize = 128 * 1024;
 
-static bool process_jar_entries(const DexLocation* location,
-                                std::vector<jar_entry>& files,
-                                const uint8_t* mapping,
-                                Scope* classes,
-                                const attribute_hook_t& attr_hook) {
+bool process_jar_entries(const DexLocation* location,
+                         std::vector<jar_entry>& files,
+                         const uint8_t* mapping,
+                         const size_t map_size,
+                         Scope* classes,
+                         const attribute_hook_t& attr_hook) {
   ssize_t bufsize = kStartBufferSize;
-  uint8_t* outbuffer = (uint8_t*)malloc(bufsize);
-  static char classEndString[] = ".class";
-  static size_t classEndStringLen = strlen(classEndString);
+  std::unique_ptr<uint8_t[]> outbuffer = std::make_unique<uint8_t[]>(bufsize);
+  constexpr std::string_view kClassEndString = ".class";
   init_basic_types();
   for (auto& file : files) {
     if (file.cd_entry.ucomp_size == 0) continue;
-    if (file.cd_entry.fname_len < (classEndStringLen + 1)) continue;
 
     // Skip non-class files
-    uint8_t* endcomp =
-        file.filename + (file.cd_entry.fname_len - classEndStringLen);
-    if (memcmp(endcomp, classEndString, classEndStringLen) != 0) continue;
+    std::string_view filename = file.filename;
+    if (filename.length() < kClassEndString.length()) continue;
+    auto endcomp =
+        filename.substr(filename.length() - kClassEndString.length());
+    if (endcomp != kClassEndString) continue;
 
     // Resize output if necessary.
     if (bufsize < file.cd_entry.ucomp_size) {
       while (bufsize < file.cd_entry.ucomp_size)
         bufsize *= 2;
-      free(outbuffer);
-      outbuffer = (uint8_t*)malloc(bufsize);
+      outbuffer = std::make_unique<uint8_t[]>(bufsize);
     }
 
-    if (!decompress_class(file, mapping, outbuffer, bufsize)) {
-      free(outbuffer);
+    if (!decompress_class(file, mapping, map_size, outbuffer.get(), bufsize)) {
       return false;
     }
 
-    if (!parse_class(outbuffer, classes, attr_hook, location)) {
-      free(outbuffer);
+    if (!parse_class(outbuffer.get(), bufsize, classes, attr_hook, location)) {
       return false;
     }
   }
-  free(outbuffer);
   return true;
 }
 
+} // namespace
+
 bool process_jar(const DexLocation* location,
                  const uint8_t* mapping,
-                 ssize_t size,
+                 size_t size,
                  Scope* classes,
                  const attribute_hook_t& attr_hook) {
   pk_cdir_end pce;
@@ -889,7 +901,8 @@ bool process_jar(const DexLocation* location,
   if (!get_jar_entries(mapping, size, pce, files)) {
     return false;
   }
-  if (!process_jar_entries(location, files, mapping, classes, attr_hook)) {
+  if (!process_jar_entries(location, files, mapping, size, classes,
+                           attr_hook)) {
     return false;
   }
   return true;
@@ -903,15 +916,15 @@ bool load_jar_file(const DexLocation* location,
     file.open(location->get_file_name().c_str(),
               boost::iostreams::mapped_file::readonly);
   } catch (const std::exception& e) {
-    fprintf(stderr, "error: cannot open jar file: %s\n",
-            location->get_file_name().c_str());
+    std::cerr << "error: cannot open jar file: " << location->get_file_name()
+              << "\n";
     return false;
   }
 
   auto mapping = reinterpret_cast<const uint8_t*>(file.const_data());
   if (!process_jar(location, mapping, file.size(), classes, attr_hook)) {
-    fprintf(stderr, "error: cannot process jar: %s\n",
-            location->get_file_name().c_str());
+    std::cerr << "error: cannot process jar: " << location->get_file_name()
+              << "\n";
     return false;
   }
   return true;

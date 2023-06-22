@@ -13,7 +13,6 @@
 #include "BalancedPartitioning.h"
 #include "Debug.h"
 #include "Show.h"
-#include "Timer.h"
 
 namespace {
 constexpr size_t METHOD_MAX_OUTPUT_SIZE = 512 * 1024;

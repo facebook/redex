@@ -138,7 +138,6 @@ class Index extends React.Component {
     return (
       <div>
         <SocialBanner />
-        <OfficeHourBanner />
         <HomeSplash language={language} />
         <div className="mainContainer">
           <Container padding={['bottom', 'top']}>

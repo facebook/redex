@@ -55,12 +55,24 @@ class InterDexPass : public Pass {
  public:
   explicit InterDexPass(bool register_plugins = true)
       : Pass(INTERDEX_PASS_NAME) {
+
     if (register_plugins) {
       std::unique_ptr<InterDexRegistry> plugin =
           std::make_unique<InterDexRegistry>();
       PluginRegistry::get().register_pass(INTERDEX_PASS_NAME,
                                           std::move(plugin));
     }
+  }
+
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::interactions;
+    using namespace redex_properties::names;
+    return {
+        {DexLimitsObeyed, Establishes},
+        {HasSourceBlocks, Preserves},
+        {NoSpuriousGetClassCalls, Preserves},
+    };
   }
 
   void bind_config() override;
@@ -70,6 +82,7 @@ class InterDexPass : public Pass {
                  PassManager& mgr) override {
     ++m_eval;
   }
+
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   bool minimize_cross_dex_refs() const { return m_minimize_cross_dex_refs; }

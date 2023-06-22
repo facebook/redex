@@ -103,10 +103,10 @@ void AndroidSDK::load_framework_classes() {
   while (infile >> framework_cls_str >> access_flags >> super_cls_str >>
          num_methods >> num_fields) {
     FrameworkAPI framework_api;
-    framework_api.cls = DexType::make_type(framework_cls_str.c_str());
+    framework_api.cls = DexType::make_type(framework_cls_str);
     always_assert_log(m_framework_classes.count(framework_api.cls) == 0,
                       "Duplicated class name!");
-    framework_api.super_cls = DexType::make_type(super_cls_str.c_str());
+    framework_api.super_cls = DexType::make_type(super_cls_str);
     framework_api.access_flags = DexAccessFlags(access_flags);
 
     while (num_methods-- > 0) {
@@ -138,6 +138,8 @@ void AndroidSDK::load_framework_classes() {
     auto& map_entry = m_framework_classes[framework_api.cls];
     map_entry = std::move(framework_api);
   }
+  always_assert_log(!m_framework_classes.empty(),
+                    "Failed to load any class from the framework api file");
 }
 
 } // namespace api

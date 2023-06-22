@@ -37,9 +37,9 @@ endif
 #
 
 libredex_la_SOURCES = \
+	checkers/DexLimitsChecker.cpp \
+	checkers/NoInitClassInstructionsChecker.cpp \
 	liblocator/locator.cpp \
-	libredex/ABExperimentContext.cpp \
-	libredex/ABExperimentContextImpl.cpp \
 	libredex/AggregateException.cpp \
 	libredex/AnalysisUsage.cpp \
 	libredex/AnnoUtils.cpp \
@@ -53,6 +53,8 @@ libredex_la_SOURCES = \
 	libredex/CallGraph.cpp \
 	libredex/ClassHierarchy.cpp \
 	libredex/ClassUtil.cpp \
+	libredex/ClassChecker.cpp \
+	libredex/ConcurrentContainers.cpp \
 	libredex/ConfigFiles.cpp \
 	libredex/Configurable.cpp \
 	libredex/ControlFlow.cpp \
@@ -144,6 +146,9 @@ libredex_la_SOURCES = \
 	libredex/RedexMappedFile.cpp \
 	libredex/ReadMaybeMapped.cpp \
 	libredex/RedexContext.cpp \
+	libredex/RedexPropertiesManager.cpp \
+	libredex/RedexPropertyChecker.cpp \
+	libredex/RedexPropertyCheckerRegistry.cpp \
 	libredex/RedexException.cpp \
 	libredex/RedexOptions.cpp \
 	libredex/RedexResources.cpp \
@@ -290,6 +295,10 @@ endif
 # registration. Instead, share sources and create libopt for the tests.
 
 libopt_la_SOURCES = \
+	checkers/HasSourceBlocksChecker.cpp \
+	checkers/NoInitClassInstructionsChecker.cpp \
+	checkers/NoSpuriousGetClassCallsChecker.cpp \
+	checkers/RenameClassChecker.cpp \
 	analysis/max-depth/MaxDepthAnalysis.cpp \
 	analysis/ip-reflection-analysis/IPReflectionAnalysis.cpp \
 	opt/access-marking/AccessMarking.cpp \
@@ -308,6 +317,7 @@ libopt_la_SOURCES = \
 	opt/class-merging/IntraDexClassMergingPass.cpp \
 	opt/class-merging/ModelSpecGenerator.cpp \
 	opt/class-splitting/ClassSplittingPass.cpp \
+	opt/const-class-branches/TransformConstClassBranches.cpp \
 	opt/constant-propagation/ConstantPropagationPass.cpp \
 	opt/constant-propagation/ConstantPropagationRuntimeAssert.cpp \
 	opt/constant-propagation/IPConstantPropagation.cpp \
@@ -347,7 +357,6 @@ libopt_la_SOURCES = \
 	opt/object-sensitive-dce/UsedVarsAnalysis.cpp \
 	opt/optimize_enums/EnumClinitAnalysis.cpp \
 	opt/optimize_enums/EnumConfig.cpp \
-	opt/optimize_enums/EnumInSwitch.cpp \
 	opt/optimize_enums/EnumAnalyzeGeneratedMethods.cpp \
 	opt/optimize_enums/EnumTransformer.cpp \
 	opt/optimize_enums/EnumUpcastAnalysis.cpp \
@@ -378,7 +387,6 @@ libopt_la_SOURCES = \
 	opt/remove-nullcheck-string-arg/RemoveNullcheckStringArg.cpp \
 	opt/remove-unused-fields/RemoveUnusedFields.cpp \
 	opt/remove_empty_classes/RemoveEmptyClasses.cpp \
-	opt/remove_gotos/RemoveGotos.cpp \
 	opt/remove-unused-args/RemoveUnusedArgs.cpp \
 	opt/renameclasses/RenameClassesV2.cpp \
 	opt/reorder-interfaces-decl/ReorderInterfacesDecl.cpp \
@@ -387,12 +395,14 @@ libopt_la_SOURCES = \
 	opt/reduce-gotos/ReduceGotos.cpp \
 	opt/resolve-refs/ResolveRefsPass.cpp \
 	opt/resolve-refs/ExternalRefsManglingPass.cpp \
+	opt/resolve-refs/SpecializeRtype.cpp \
 	opt/result-propagation/ResultPropagation.cpp \
 	opt/resolve-proguard-values/ResolveProguardAssumeValues.cpp \
 	opt/shorten-srcstrings/Shorten.cpp \
 	opt/shrinker/ShrinkerPass.cpp \
 	opt/make-public/MakePublicPass.cpp \
 	opt/methodinline/IntraDexInlinePass.cpp \
+	opt/methodinline/LocalMethodInlinePass.cpp \
 	opt/methodinline/MethodInlinePass.cpp \
 	opt/methodinline/PerfMethodInlinePass.cpp \
 	opt/methodinline/BridgeSynthInlinePass.cpp \
@@ -402,7 +412,6 @@ libopt_la_SOURCES = \
 	opt/singleimpl/SingleImplAnalyze.cpp \
 	opt/singleimpl/SingleImplOptimize.cpp \
 	opt/singleimpl/SingleImplStats.cpp \
-	opt/simplify_cfg/SimplifyCFG.cpp \
 	opt/split_huge_switches/SplitHugeSwitchPass.cpp \
 	opt/split_resource_tables/SplitResourceTables.cpp \
 	opt/object-escape-analysis/ExpandableMethodParams.cpp \

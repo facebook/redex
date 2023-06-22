@@ -46,7 +46,8 @@ std::unordered_set<IRInstruction*> BuilderTransform::try_inline_calls(
   std::unordered_set<IRInstruction*> not_inlined_insns;
   // Check if everything was inlined.
   auto* code = caller->get_code();
-  for (const auto& mie : InstructionIterable(code)) {
+  auto& cfg = code->cfg();
+  for (const auto& mie : InstructionIterable(cfg)) {
     auto insn = mie.insn;
     if (insns.count(insn)) {
       not_inlined_insns.emplace(insn);
@@ -78,9 +79,9 @@ bool BuilderTransform::inline_super_calls_and_ctors(const DexType* type) {
     if (!method->get_code()) {
       continue;
     }
-
+    auto& cfg = method->get_code()->cfg();
     std::unordered_set<IRInstruction*> inlinable_insns;
-    for (const auto& mie : InstructionIterable(method->get_code())) {
+    for (const auto& mie : InstructionIterable(cfg)) {
       auto insn = mie.insn;
       if (insn->opcode() == OPCODE_INVOKE_SUPER) {
         inlinable_insns.emplace(insn);
@@ -152,9 +153,9 @@ namespace {
 
 void initialize_regs(
     const std::map<DexField*, size_t, dexfields_comparator>& field_to_reg,
-    IRCode* code) {
+    cfg::ControlFlowGraph& cfg) {
 
-  auto params = code->get_param_instructions();
+  auto params = cfg.get_param_instructions();
 
   for (const auto& pair : field_to_reg) {
     auto field = pair.first;
@@ -168,7 +169,11 @@ void initialize_regs(
     }
     initialization_insn->set_dest(reg);
     initialization_insn->set_literal(0);
-    code->insert_before(params.end(), initialization_insn);
+    cfg::Block* first_block_with_insns = cfg.get_first_block_with_insns();
+    auto insert_it = first_block_with_insns->get_first_non_param_loading_insn();
+    cfg.insert_before(
+        first_block_with_insns->to_cfg_instruction_iterator(insert_it),
+        initialization_insn);
   }
 }
 
@@ -178,9 +183,12 @@ void BuilderTransform::replace_fields(const InstantiationToUsage& usage,
                                       DexMethod* method) {
   auto code = method->get_code();
 
-  std::vector<std::pair<IRList::iterator, IRInstruction*>> to_replace;
+  std::vector<std::pair<cfg::InstructionIterator, IRInstruction*>> to_replace;
 
-  for (const auto& mie : InstructionIterable(code)) {
+  always_assert(code->editable_cfg_built());
+  auto& cfg = code->cfg();
+
+  for (const auto& mie : InstructionIterable(cfg)) {
     auto instantiation_insn = mie.insn;
     if (!usage.count(instantiation_insn)) {
       continue;
@@ -206,8 +214,8 @@ void BuilderTransform::replace_fields(const InstantiationToUsage& usage,
 
         if (field_to_reg.count(field) == 0) {
           field_to_reg[field] = type::is_wide_type(field->get_type())
-                                    ? code->allocate_wide_temp()
-                                    : code->allocate_temp();
+                                    ? cfg.allocate_wide_temp()
+                                    : cfg.allocate_temp();
         }
 
         // Replace usage.
@@ -224,7 +232,9 @@ void BuilderTransform::replace_fields(const InstantiationToUsage& usage,
           new_insn->set_dest(field_to_reg[field]);
           new_insn->set_src(0, insn->src(0));
         } else {
-          new_insn->set_dest(std::next(it)->insn->dest());
+          auto move_result = cfg.move_result_of(it);
+          always_assert(!move_result.is_end());
+          new_insn->set_dest(move_result->insn->dest());
           new_insn->set_src(0, field_to_reg[field]);
         }
         to_replace.emplace_back(it, new_insn);
@@ -253,17 +263,19 @@ void BuilderTransform::replace_fields(const InstantiationToUsage& usage,
           // Replace check-cast with move.
           IRInstruction* new_move = new IRInstruction(OPCODE_MOVE_OBJECT);
           new_move->set_src(0, insn->src(0));
-          new_move->set_dest(std::next(it)->insn->dest());
+          auto move_result = cfg.move_result_of(it);
+          always_assert(!move_result.is_end());
+          new_move->set_dest(move_result->insn->dest());
           to_replace.emplace_back(it, new_move);
         }
       }
     }
 
-    initialize_regs(field_to_reg, code);
+    initialize_regs(field_to_reg, code->cfg());
   }
 
   for (const auto& pair : to_replace) {
-    code->replace_opcode(pair.first, {pair.second});
+    cfg.replace_insn(pair.first, pair.second);
   }
 }
 

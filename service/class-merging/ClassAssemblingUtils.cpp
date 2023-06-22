@@ -76,8 +76,6 @@ DexClass* create_class(const DexType* type,
     field->set_deobfuscated_name(show_deobfuscated(field));
   }
   auto cls = creator.create();
-  // Keeping class-merging generated classes from being renamed.
-  cls->rstate.set_keepnames();
 
   if (!with_default_ctor) {
     return cls;

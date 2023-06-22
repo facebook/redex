@@ -262,6 +262,16 @@ class StringBuilderOutlinerPass : public Pass {
  public:
   StringBuilderOutlinerPass() : Pass("StringBuilderOutlinerPass") {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::interactions;
+    using namespace redex_properties::names;
+    return {
+        {HasSourceBlocks, Preserves},
+        {NoSpuriousGetClassCalls, Preserves},
+    };
+  }
+
   void bind_config() override {
     bind("max_outline_length", m_config.max_outline_length,
          m_config.max_outline_length);
@@ -270,6 +280,8 @@ class StringBuilderOutlinerPass : public Pass {
   }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+
+  bool is_editable_cfg_friendly() override { return true; }
 
  private:
   Config m_config;

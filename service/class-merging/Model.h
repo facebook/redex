@@ -389,7 +389,6 @@ class Model {
   static std::unordered_map<DexType*, size_t> s_cls_to_interdex_group;
   static size_t s_num_interdex_groups;
 
- private:
   /**
    * Build a Model given a set of roots and a set of types deriving from the
    * roots.
@@ -481,7 +480,7 @@ class Model {
 
   void move_child_to_mergeables(MergerType& merger, const DexType* child) {
     TRACE(CLMG, 3, "Adding child %s to merger %s", show_type(child).c_str(),
-          print(&merger).c_str());
+          print(merger).c_str());
     remove_child(child);
     merger.mergeables.insert(child);
   }
@@ -490,7 +489,7 @@ class Model {
                                                      // header.
 
   // printers
-  std::string print(const MergerType* merger) const;
+  std::string print(const MergerType& merger) const;
   std::string print(const DexType* type) const;
   std::string print(const DexType* type, int nest) const;
 
@@ -499,10 +498,13 @@ class Model {
   void walk_hierarchy_helper(HierarchyWalkerFn walker, const DexType* type) {
     const auto& children = m_hierarchy.find(type);
     if (children == m_hierarchy.end()) return;
-    for (const auto& child : children->second) {
-      const auto& merger = m_mergers.find(child);
-      if (merger != m_mergers.end() && !merger->second.dummy) {
-        walker(merger->second);
+    for (const auto* child : children->second) {
+      const auto& merger_it = m_mergers.find(child);
+      if (merger_it != m_mergers.end()) {
+        const auto& merger = merger_it->second;
+        if (!merger.dummy) {
+          walker(merger);
+        }
       }
       walk_hierarchy_helper(walker, child);
     }

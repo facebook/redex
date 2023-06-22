@@ -79,17 +79,16 @@ template <typename DexMember,
           typename K>
 DexMember* find_renamable_ref(
     DexMemberRef* ref,
-    std::unordered_map<DexMemberRef*, DexMember*>& ref_def_cache,
+    ConcurrentMap<DexMemberRef*, DexMember*>& ref_def_cache,
     DexElemManager<DexMember*, DexMemberRef*, DexMemberSpec, K>& name_mapping) {
   TRACE(OBFUSCATE, 4, "Found a ref opcode");
   DexMember* def = nullptr;
-  auto member_itr = ref_def_cache.find(ref);
-  if (member_itr != ref_def_cache.end()) {
-    def = member_itr->second;
-  } else {
-    def = name_mapping.def_of_ref(ref);
-  }
-  ref_def_cache[ref] = def;
+  ref_def_cache.update(ref, [&](auto, auto& cache, bool exists) {
+    if (!exists) {
+      cache = name_mapping.def_of_ref(ref);
+    }
+    def = cache;
+  });
   return def;
 }
 
@@ -97,8 +96,8 @@ void update_refs(Scope& scope,
                  DexFieldManager& field_name_mapping,
                  DexMethodManager& method_name_mapping,
                  size_t* classes_made_public) {
-  std::unordered_map<DexFieldRef*, DexField*> f_ref_def_cache;
-  std::unordered_map<DexMethodRef*, DexMethod*> m_ref_def_cache;
+  ConcurrentMap<DexFieldRef*, DexField*> f_ref_def_cache;
+  ConcurrentMap<DexMethodRef*, DexMethod*> m_ref_def_cache;
 
   auto maybe_publicize_class = [&](DexMethod* referrer, DexClass* referree) {
     if (is_public(referree)) {
@@ -112,7 +111,7 @@ void update_refs(Scope& scope,
     }
   };
 
-  walk::opcodes(scope, [&](DexMethod* m, IRInstruction* instr) {
+  walk::parallel::opcodes(scope, [&](DexMethod* m, IRInstruction* instr) {
     auto op = instr->opcode();
     if (instr->has_field()) {
       DexFieldRef* field_ref = instr->get_field();

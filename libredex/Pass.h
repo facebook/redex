@@ -14,6 +14,7 @@
 
 #include "Configurable.h"
 #include "DexStore.h"
+#include "RedexProperties.h"
 #include "Traits.h"
 
 class AnalysisUsage;
@@ -42,6 +43,11 @@ class Pass : public Configurable {
     always_assert_log(m_kind != ANALYSIS,
                       "destroy_analysis_result not implemented for %s",
                       m_name.c_str());
+  }
+
+  virtual redex_properties::PropertyInteractions get_property_interactions()
+      const {
+    return {};
   }
 
   /**

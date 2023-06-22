@@ -30,7 +30,19 @@ class AnalyzePureMethodsPass : public Pass {
 
   AnalyzePureMethodsPass() : Pass("AnalyzePureMethodsPass") {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::interactions;
+    using namespace redex_properties::names;
+    return {
+        {HasSourceBlocks, Preserves},
+    };
+  }
+
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+
+  bool is_editable_cfg_friendly() override { return true; }
+
   Stats analyze_and_set_pure_methods(Scope& scope);
 
  private:

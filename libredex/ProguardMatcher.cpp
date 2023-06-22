@@ -846,9 +846,9 @@ void KeepRuleMatcher::keep_processor(DexClass* cls) {
 DexClass* ProguardMatcher::find_single_class(
     const std::string& descriptor) const {
   auto const& dsc = java_names::external_to_internal(descriptor);
-  DexType* typ = DexType::get_type(m_pg_map.translate_class(dsc).c_str());
+  DexType* typ = DexType::get_type(m_pg_map.translate_class(dsc));
   if (typ == nullptr) {
-    typ = DexType::get_type(dsc.c_str());
+    typ = DexType::get_type(dsc);
     if (typ == nullptr) {
       return nullptr;
     }

@@ -18,7 +18,7 @@
 
 class PureAnalysisTest : public RedexTest {
  public:
-  PureAnalysisTest() { get_vmethods(type::java_lang_Object()); }
+  PureAnalysisTest() { virt_scope::get_vmethods(type::java_lang_Object()); }
 };
 
 void test(const char* signature, const std::string& code_str, bool is_pure) {
@@ -34,6 +34,7 @@ void test(const char* signature, const std::string& code_str, bool is_pure) {
   method1->set_access(ACC_PUBLIC);
   method1->set_external();
   method1->set_code(assembler::ircode_from_string(code_str));
+  method1->get_code()->build_cfg();
   creator1.add_method(method1);
   creator1.add_field(field_a);
   creator2.add_field(field_b);

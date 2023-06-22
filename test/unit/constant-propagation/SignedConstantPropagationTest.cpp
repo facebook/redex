@@ -861,3 +861,47 @@ TEST_F(ConstantPropagationTest, FoldDivIntLit) {
   )"); // division by 0 should not be optimized out
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
+
+TEST_F(ConstantPropagationTest, NeAtBoundaryOfNez) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (load-param v0) ; some unknown value
+
+     (const v1 -1)
+     (const v2 1)
+     (if-lt v0 v1 :exit)
+     (if-gt v0 v2 :exit)
+     (if-eqz v0 :exit)
+     ; we now know that v0 is either -1 or +1, but not 0
+
+     (if-eq v0 v1 :exit)
+     ; we now know that v0 is +1
+
+     (if-nez v0 :exit) ; must happen
+
+     (const v0 42) ; infeasible
+
+     (:exit)
+     (return v0)
+    )
+)");
+
+  do_const_prop(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (load-param v0)
+
+     (const v1 -1)
+     (const v2 1)
+     (if-lt v0 v1 :exit)
+     (if-gt v0 v2 :exit)
+     (if-eqz v0 :exit)
+     (if-eq v0 v1 :exit)
+
+     (:exit)
+     (return v0)
+    )
+)");
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}

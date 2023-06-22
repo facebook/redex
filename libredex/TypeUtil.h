@@ -72,9 +72,17 @@ bool is_object(const DexType* type);
  * Return true if the type is a primitive type that fits within a 32-bit
  * register, i.e., boolean, byte, char, short or int.
  */
-bool is_integer(const DexType* type);
+bool is_integral(const DexType* type);
+
+bool is_int(const DexType* type);
+
+bool is_char(const DexType* type);
+
+bool is_short(const DexType* type);
 
 bool is_boolean(const DexType* type);
+
+bool is_byte(const DexType* type);
 
 bool is_long(const DexType* type);
 
@@ -222,6 +230,62 @@ bool is_uninstantiable_class(DexType* type);
  */
 boost::optional<int32_t> evaluate_type_check(const DexType* src_type,
                                              const DexType* test_type);
+
+/**
+ * Validate if the caller has the permit to call a method or access a field.
+ *
+ * +-------------------------+--------+----------+-----------+-------+
+ * | Access Levels Modifier  | Class  | Package  | Subclass  | World |
+ * +-------------------------+--------+----------+-----------+-------+
+ * | public                  | Y      | Y        | Y         | Y     |
+ * | protected               | Y      | Y        | Y         | N     |
+ * | no modifier             | Y      | Y        | N         | N     |
+ * | private                 | Y      | N        | N         | N     |
+ * +-------------------------+--------+----------+-----------+-------+
+ */
+template <typename DexMember>
+bool can_access(const DexMethod* accessor, const DexMember* accessee) {
+  if (accessee == nullptr) {
+    // In case the accessee is nullptr, we return true. Since blocking nullptr
+    // is not the intention of this check.
+    return true;
+  }
+  auto accessor_class = accessor->get_class();
+  if (is_public(accessee) || accessor_class == accessee->get_class()) {
+    return true;
+  }
+  if (is_private(accessee)) {
+    // Cannot be same class
+    return false;
+  }
+  auto accessee_class = accessee->get_class();
+  auto from_same_package = same_package(accessor_class, accessee_class);
+  redex_assert(is_protected(accessee) || is_package_private(accessee));
+  if (from_same_package) {
+    return true;
+  }
+  if (is_protected(accessee) && check_cast(accessor_class, accessee_class)) {
+    return true;
+  }
+  return false;
+}
+template <>
+inline bool can_access(const DexMethod* accessor, const DexClass* accessee) {
+  if (accessee == nullptr) {
+    // In case the accessee is nullptr, we return true. Since blocking nullptr
+    // is not the intention of this check.
+    return true;
+  }
+  auto accessor_class = accessor->get_class();
+  if (is_public(accessee) || accessor_class == accessee->get_type()) {
+    return true;
+  }
+  if (is_private(accessee)) {
+    // Cannot be same class
+    return false;
+  }
+  return true;
+}
 
 /**
  * Return true if the cls is derived from Kotlin lambda.

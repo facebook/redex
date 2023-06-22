@@ -23,6 +23,16 @@ class ProcessUsesNamesAnnoPass : public Pass {
 
   ProcessUsesNamesAnnoPass() : Pass("ProcessUsesNamesAnnoPass") {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::interactions;
+    using namespace redex_properties::names;
+    return {
+        {HasSourceBlocks, Preserves},
+        {NoSpuriousGetClassCalls, Preserves},
+    };
+  }
+
   void bind_config() override {
     bind("uses_names_annotation",
          DexType::get_type("Lcom/facebook/redex/annotations/UsesNames;"),

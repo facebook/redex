@@ -97,7 +97,7 @@ class DexStructure {
                           const interdex::TypeRefs& pending_init_class_fields,
                           const interdex::TypeRefs& pending_init_class_types);
 
-   /* Remove \p clazz from current dex, and update the refs.
+  /* Remove \p clazz from current dex, and update the refs.
 This implementation is conservative, in that it leave behind the counters in a
 way that would allow detecting any later illegal addition of classes, but may
 also reject some legal cases.
@@ -264,6 +264,8 @@ class DexesStructure {
 
   bool has_class(DexClass* clazz) const { return m_classes.count(clazz); }
 
+  const std::vector<DexInfo>& get_dex_info() const { return m_dex_info; }
+
   const OverflowStats& get_overflow_stats() const { return m_overflow_stats; }
 
  private:
@@ -300,6 +302,7 @@ class DexesStructure {
     // Number of mixed mode dexes;
     size_t num_mixed_mode_dexes{0};
   } m_info;
+  std::vector<DexInfo> m_dex_info;
 
   struct DexesStats {
     size_t num_static_meths{0};

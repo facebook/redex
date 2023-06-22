@@ -6,8 +6,11 @@
  */
 
 #include "RefChecker.h"
+
 #include "EditableCfgAdapter.h"
 #include "Resolver.h"
+#include "Show.h"
+#include "Trace.h"
 #include "TypeUtil.h"
 
 CodeRefs::CodeRefs(const DexMethod* method) {
@@ -65,10 +68,14 @@ CodeRefs::CodeRefs(const DexMethod* method) {
     }
   }
 
-  std::copy(types_set.begin(), types_set.end(), std::back_inserter(types));
-  std::copy(methods_set.begin(), methods_set.end(),
-            std::back_inserter(methods));
-  std::copy(fields_set.begin(), fields_set.end(), std::back_inserter(fields));
+  types.reserve(types_set.size());
+  types.insert(types.end(), types_set.begin(), types_set.end());
+
+  methods.reserve(methods_set.size());
+  methods.insert(methods.end(), methods_set.begin(), methods_set.end());
+
+  fields.reserve(fields_set.size());
+  fields.insert(fields.end(), fields_set.begin(), fields_set.end());
 }
 
 bool RefChecker::check_type(const DexType* type) const {
@@ -112,7 +119,9 @@ bool RefChecker::check_field(const DexField* field) const {
   return *res;
 }
 
-bool RefChecker::check_class(const DexClass* cls) const {
+bool RefChecker::check_class(
+    const DexClass* cls,
+    const std::unique_ptr<const method_override_graph::Graph>& mog) const {
   if (!check_type(cls->get_type())) {
     return false;
   }
@@ -122,11 +131,26 @@ bool RefChecker::check_class(const DexClass* cls) const {
     return false;
   }
   const auto methods = cls->get_all_methods();
-  if (std::any_of(methods.begin(), methods.end(), [this](DexMethod* method) {
-        return !check_method_and_code(method);
-      })) {
-    return false;
+  for (const auto* method : methods) {
+    if (!check_method_and_code(method)) {
+      return false;
+    }
+    if (mog && method->is_virtual()) {
+      const auto& overriddens =
+          method_override_graph::get_overridden_methods(*mog, method, true);
+      for (const auto* m : overriddens) {
+        if (!m->is_external()) {
+          continue;
+        }
+        if (m_min_sdk_api && !m_min_sdk_api->has_method(m)) {
+          TRACE(REFC, 4, "Risky external method override %s -> %s",
+                SHOW(method), SHOW(m));
+          return false;
+        }
+      }
+    }
   }
+
   return true;
 }
 

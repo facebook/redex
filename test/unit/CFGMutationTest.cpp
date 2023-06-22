@@ -341,15 +341,15 @@ TEST_F(CFGMutationTest, Positions) {
       [](ControlFlowGraph& cfg) {
         CFGMutation m(cfg);
 
-        auto dbg_pos = std::make_unique<DexPosition>(1);
-        dbg_pos->bind(DexString::make_string("method_name"),
-                      DexString::make_string("RedexGenerated"));
+        auto dbg_pos = std::make_unique<DexPosition>(
+            DexString::make_string("RedexGenerated"), 1);
+        dbg_pos->bind(DexString::make_string("method_name"));
 
         m.insert_after(nth_insn(cfg, 0), std::move(dbg_pos));
 
-        dbg_pos = std::make_unique<DexPosition>(0);
-        dbg_pos->bind(DexString::make_string("method_name"),
-                      DexString::make_string("RedexGenerated"));
+        dbg_pos = std::make_unique<DexPosition>(
+            DexString::make_string("RedexGenerated"), 0);
+        dbg_pos->bind(DexString::make_string("method_name"));
         m.insert_before(nth_insn(cfg, 0), std::move(dbg_pos));
 
         m.insert_before(nth_insn(cfg, 1), {dasm(OPCODE_CONST, {2_v, 2_L})});

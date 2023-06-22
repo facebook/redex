@@ -52,10 +52,6 @@ const float COST_MOVE_RESULT = 3.0f;
 // Overhead of having a method and its metadata.
 const size_t COST_METHOD = 16;
 
-// When to consider running constant-propagation to better estimate inlined
-// cost. It just takes too much time to run the analysis for large methods.
-const size_t MAX_COST_FOR_CONSTANT_PROPAGATION = 1000;
-
 // Typical savings in caller when callee doesn't use any argument.
 const float UNUSED_ARGS_DISCOUNT = 1.0f;
 
@@ -111,7 +107,8 @@ MultiMethodInliner::MultiMethodInliner(
     const std::unordered_set<DexMethodRef*>& configured_pure_methods,
     const api::AndroidSDK* min_sdk_api,
     bool cross_dex_penalty,
-    const std::unordered_set<const DexString*>& configured_finalish_field_names)
+    const std::unordered_set<const DexString*>& configured_finalish_field_names,
+    bool local_only)
     : m_concurrent_resolver(std::move(concurrent_resolve_fn)),
       m_scheduler(
           [this](DexMethod* method) {
@@ -145,7 +142,8 @@ MultiMethodInliner::MultiMethodInliner(
                  config.shrinker,
                  min_sdk,
                  configured_pure_methods,
-                 configured_finalish_field_names) {
+                 configured_finalish_field_names),
+      m_local_only(local_only) {
   Timer t("MultiMethodInliner construction");
   for (const auto& callee_callers : true_virtual_callers) {
     auto callee = callee_callers.first;
@@ -1098,6 +1096,10 @@ bool MultiMethodInliner::should_inline_fast(const DexMethod* callee) {
 }
 
 bool MultiMethodInliner::should_inline_always(const DexMethod* callee) {
+  if (m_local_only) {
+    return false;
+  }
+
   if (should_inline_fast(callee)) {
     return true;
   }
@@ -1175,6 +1177,8 @@ static size_t get_inlined_cost(IRInstruction* insn) {
       opcode::is_a_return(op)) {
     if (op == IOPCODE_INIT_CLASS) {
       cost += 2;
+    } else if (op == IOPCODE_INJECTION_ID) {
+      cost += 3;
     }
   } else {
     cost++;
@@ -1194,9 +1198,8 @@ static size_t get_inlined_cost(IRInstruction* insn) {
         cost += 4;
       } else if (lit < -32768 || lit > 32767) {
         cost += 2;
-      } else if (opcode::is_a_const(op) && (lit < -8 || lit > 7)) {
-        cost++;
-      } else if (!opcode::is_a_const(op) && (lit < -128 || lit > 127)) {
+      } else if ((opcode::is_a_const(op) && (lit < -8 || lit > 7)) ||
+                 (!opcode::is_a_const(op) && (lit < -128 || lit > 127))) {
         cost++;
       }
     }
@@ -1448,7 +1451,8 @@ const InlinedCost* MultiMethodInliner::get_call_site_inlined_cost(
     const CallSiteSummary* call_site_summary, const DexMethod* callee) {
   auto fully_inlined_cost = get_fully_inlined_cost(callee);
   always_assert(fully_inlined_cost);
-  if (fully_inlined_cost->full_code > MAX_COST_FOR_CONSTANT_PROPAGATION) {
+  if (fully_inlined_cost->full_code >
+      m_config.max_cost_for_constant_propagation) {
     return nullptr;
   }
 
@@ -1504,7 +1508,8 @@ const InlinedCost* MultiMethodInliner::get_average_inlined_cost(
 
   const std::vector<CallSiteSummaryOccurrences>*
       callee_call_site_summary_occurrences;
-  if (fully_inlined_cost->full_code > MAX_COST_FOR_CONSTANT_PROPAGATION ||
+  if (fully_inlined_cost->full_code >
+          m_config.max_cost_for_constant_propagation ||
       !(callee_call_site_summary_occurrences =
             m_call_site_summarizer
                 ? m_call_site_summarizer

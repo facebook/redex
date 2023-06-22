@@ -398,7 +398,7 @@ void mark_onclick_attributes_reachable(
 }
 
 DexClass* maybe_class_from_string(const std::string& classname) {
-  auto dtype = DexType::get_type(classname.c_str());
+  auto dtype = DexType::get_type(classname);
   if (dtype == nullptr) {
     return nullptr;
   }
@@ -671,7 +671,7 @@ void init_reachable_classes(const Scope& scope,
       // Classnames present in native libraries (lib/*/*.so)
       auto resources = create_resource_reader(config.apk_dir);
       for (const std::string& classname : resources->get_native_classes()) {
-        auto type = DexType::get_type(classname.c_str());
+        auto type = DexType::get_type(classname);
         if (type == nullptr) continue;
         TRACE(PGR, 3, "native_lib: %s", classname.c_str());
         mark_reachable_by_classname(type);

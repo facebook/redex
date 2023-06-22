@@ -27,6 +27,16 @@ class FinalInlinePassV2 : public Pass {
 
   FinalInlinePassV2() : Pass("FinalInlinePassV2") {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::interactions;
+    using namespace redex_properties::names;
+    return {
+        {HasSourceBlocks, Preserves},
+        {NoSpuriousGetClassCalls, Preserves},
+    };
+  }
+
   void bind_config() override {
     bind("inline_instance_field", true, m_config.inline_instance_field);
     bind("blocklist_types",
@@ -61,6 +71,7 @@ class FinalInlinePassV2 : public Pass {
       const constant_propagation::EligibleIfields& eligible_ifields,
       const Config& config = Config(),
       std::optional<DexStoresVector*> stores = std::nullopt);
+
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:

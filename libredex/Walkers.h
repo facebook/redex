@@ -695,7 +695,8 @@ class walk {
         const VirtualScopes& virtual_scopes,
         const WalkerFn& walker,
         size_t num_threads = redex_parallel::default_num_threads()) {
-      workqueue_run<const VirtualScope*>(walker, virtual_scopes, num_threads);
+      workqueue_run<const virt_scope::VirtualScope*>(
+          walker, virtual_scopes, num_threads);
     }
   };
 };

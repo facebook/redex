@@ -179,6 +179,10 @@ class OverrideWithDifferentValue2 extends OverrideWithDifferentValue {
   }
 }
 
+class SideEffects {
+  public static int dummy;
+}
+
 public class IPConstantPropagationTest {
 
   // CHECK: method: virtual redex.IPConstantPropagationTest.two_ctors
@@ -267,11 +271,21 @@ public class IPConstantPropagationTest {
     // This Java code should be UB. Redex does the right thing to not evaluate the reference equality here.
     if (f0 == f1) {
       obj = f0;
+      // CHECK: const{{.*}} #int 111
+      // CHECK: sput{{.*}} redex.SideEffects.dummy
+      SideEffects.dummy = 111;
     } else {
       obj = f1;
+    // PRECHECK: const{{.*}} #int 222
+    // PRECHECK: sput{{.*}} redex.SideEffects.dummy
+      SideEffects.dummy = 222;
     }
     // CHECK: const{{.*}} #int 1000
     assertThat(obj.intValue()).isEqualTo(1000);
+
+    // The else-branch of the above if gets reordered to here by Redex' cfg linearization; annoying, but okay.
+    // POSTCHECK: const{{.*}} #int 222
+    // POSTCHECK: sput{{.*}} redex.SideEffects.dummy
   }
 
   // CHECK: method: virtual redex.IPConstantPropagationTest.immutable_instance_field

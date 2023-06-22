@@ -308,7 +308,7 @@ void ModelMethodMerger::fix_visibility() {
   }
   for (auto merger : m_mergers) {
     for (auto& vm_lst : merger->vmethods) {
-      for (auto m : vm_lst.second) {
+      for (auto m : vm_lst.overrides) {
         fix_visibility_helper(m, vmethods_created);
       }
     }
@@ -588,9 +588,9 @@ void ModelMethodMerger::merge_virtual_methods(
     std::unordered_map<DexMethod*, DexMethod*>& old_to_new_callee) {
   DexClass* target_cls = type_class(target_type);
   for (auto& virt_meth : virt_methods) {
-    auto& meth_lst = virt_meth.second;
+    auto& meth_lst = virt_meth.overrides;
     always_assert(meth_lst.size());
-    auto overridden_meth = virt_meth.first;
+    auto overridden_meth = virt_meth.base;
     auto front_meth = meth_lst.front();
     auto access = front_meth->get_access();
     auto dispatch_proto =
@@ -866,6 +866,7 @@ void ModelMethodMerger::dedup_non_ctor_non_virt_methods() {
       auto cls = type_class(owner);
       cls->remove_method(m);
       DexMethod::erase_method(m);
+      DexMethod::delete_method(m);
       return true;
     };
     int before = non_ctors.size() + non_vmethods.size();
@@ -897,7 +898,7 @@ void ModelMethodMerger::merge_virt_itf_methods() {
     std::vector<MergerType::VirtualMethod> virt_methods;
 
     for (auto& vm_lst : merger->vmethods) {
-      virt_methods.emplace_back(vm_lst.first, vm_lst.second);
+      virt_methods.emplace_back(vm_lst);
     }
     for (auto& im : merger->intfs_methods) {
       virt_methods.emplace_back(im.overridden_meth, im.methods);

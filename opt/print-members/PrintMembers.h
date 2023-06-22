@@ -15,6 +15,15 @@ class PrintMembersPass : public Pass {
  public:
   PrintMembersPass() : Pass("PrintMembersPass") {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::interactions;
+    using namespace redex_properties::names;
+    return {
+        {HasSourceBlocks, Preserves},
+    };
+  }
+
   void bind_config() override {
     bind("show_code", false, m_config.show_code);
     bind("show_sfields", true, m_config.show_sfields);

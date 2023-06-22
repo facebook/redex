@@ -21,6 +21,15 @@ class ExternalRefsManglingPass : public Pass {
  public:
   explicit ExternalRefsManglingPass(const std::string& name) : Pass(name) {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::interactions;
+    using namespace redex_properties::names;
+    return {
+        {HasSourceBlocks, Preserves},
+    };
+  }
+
   void bind_config() override {
     bind("refine_to_external", true, m_refine_to_external,
          "Allowing resolving method ref to an external one");

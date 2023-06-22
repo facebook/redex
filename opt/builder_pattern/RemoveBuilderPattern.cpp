@@ -48,7 +48,7 @@ std::unordered_set<DexType*> get_associated_buildees(
     std::string buildee_name =
         builder_name.substr(0, builder_name.size() - 9) + ";";
 
-    auto type = DexType::get_type(buildee_name.c_str());
+    auto type = DexType::get_type(buildee_name);
     if (type) {
       buildees.emplace(type);
     }
@@ -246,6 +246,7 @@ class RemoveClasses {
 
     auto post_process = [&](DexMethod* method) {
       m_transform.get_shrinker().shrink_method(method);
+      always_assert(method->get_code()->editable_cfg_built());
     };
 
     // Walkers are over classes, so need to do this "manually."

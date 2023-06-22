@@ -10,6 +10,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "CFGMutation.h"
 #include "ConcurrentContainers.h"
 #include "Creators.h"
 #include "DexAsm.h"
@@ -197,7 +198,7 @@ void Outliner::gather_outline_candidate_typelists(
 }
 
 void Outliner::analyze(IRCode& code) {
-  code.build_cfg(/* editable */ false); // Not editable because of T42743620
+  always_assert(code.editable_cfg_built());
   auto& cfg = code.cfg();
   cfg.calculate_exit_block();
 
@@ -311,6 +312,7 @@ std::unique_ptr<IRCode> Outliner::create_outline_helper_code(
   code->push_back(dasm(OPCODE_INVOKE_VIRTUAL, m_stringbuilder_tostring, {0_v}));
   code->push_back(dasm(OPCODE_MOVE_RESULT_OBJECT, {0_v}));
   code->push_back(dasm(OPCODE_RETURN_OBJECT, {0_v}));
+  code->build_cfg();
   return code;
 }
 
@@ -364,7 +366,8 @@ void Outliner::transform(IRCode* code) {
     return;
   }
   const auto& tostring_instruction_to_state = m_builder_state_maps.at(code);
-
+  always_assert(code->editable_cfg_built());
+  auto& cfg = code->cfg();
   std::unordered_map<const IRInstruction*, IRInstruction*> insns_to_insert;
   std::unordered_map<const IRInstruction*, IRInstruction*> insns_to_replace;
   for (const auto& p : tostring_instruction_to_state) {
@@ -389,8 +392,8 @@ void Outliner::transform(IRCode* code) {
         reg = insns_to_insert.at(insn)->dest();
       } else {
         auto ty = insn->get_method()->get_proto()->get_args()->at(0);
-        reg = type::is_wide_type(ty) ? code->allocate_wide_temp()
-                                     : code->allocate_temp();
+        reg = type::is_wide_type(ty) ? cfg.allocate_wide_temp()
+                                     : cfg.allocate_temp();
         auto move = (new IRInstruction(move_for_type(ty)))
                         ->set_src(0, insn->src(1))
                         ->set_dest(reg);
@@ -420,12 +423,12 @@ void Outliner::apply_changes(
         insns_to_replace,
     IRCode* code) {
   auto& cfg = code->cfg();
-  std::vector<std::pair<IRList::iterator, IRInstruction*>> to_insert;
-  std::vector<std::pair<IRList::iterator, IRInstruction*>> to_replace;
+  std::vector<std::pair<cfg::InstructionIterator, IRInstruction*>> to_insert;
+  std::vector<std::pair<cfg::InstructionIterator, IRInstruction*>> to_replace;
   for (auto* block : cfg.blocks()) {
     for (auto& mie : InstructionIterable(block)) {
       auto* insn = mie.insn;
-      auto it = code->iterator_to(mie);
+      auto it = block->to_cfg_instruction_iterator(mie);
       if (insns_to_insert.count(mie.insn)) {
         to_insert.emplace_back(it, insns_to_insert.at(insn));
       }
@@ -434,13 +437,15 @@ void Outliner::apply_changes(
       }
     }
   }
-
+  cfg::CFGMutation m(code->cfg());
   for (const auto& p : to_insert) {
-    code->insert_before(p.first, p.second);
+    m.insert_before(p.first, {p.second});
   }
+  m.flush();
+
   for (const auto& p : to_replace) {
-    code->insert_before(p.first, p.second);
-    code->remove_opcode(p.first);
+    delete p.first->insn;
+    p.first->insn = p.second;
   }
 }
 

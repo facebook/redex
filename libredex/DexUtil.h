@@ -233,7 +233,7 @@ bool is_valid_identifier(std::string_view s);
 
 namespace java_names {
 
-inline boost::optional<std::string> primitive_desc_to_name(char desc) {
+inline const std::string* primitive_desc_to_name(char desc) {
   const static std::unordered_map<char, std::string> conversion_table{
       {'V', "void"},    {'B', "byte"},  {'C', "char"},
       {'S', "short"},   {'I', "int"},   {'J', "long"},
@@ -241,9 +241,9 @@ inline boost::optional<std::string> primitive_desc_to_name(char desc) {
   };
   auto it = conversion_table.find(desc);
   if (it != conversion_table.end()) {
-    return it->second;
+    return &it->second;
   } else {
-    return boost::none;
+    return nullptr;
   }
 }
 
@@ -273,14 +273,17 @@ inline std::string internal_to_external(std::string_view internal_name) {
   char type = component_name.at(0);
   if (type == 'L') {
     // For arrays, we need to preserve the semicolon at the end of the name
-    auto external_name = std::string(component_name.substr(
-        1, component_name.size() - (array_level == 0 ? 2 : 1)));
-    std::replace(external_name.begin(), external_name.end(), '/', '.');
-    std::string array_name(array_level, '[');
+    std::string external_name;
+    size_t component_name_len =
+        component_name.size() - (array_level == 0 ? 2 : 1);
+    external_name.reserve(array_level + 1 + component_name_len);
     if (array_level != 0) {
-      array_name += "L"; // external only uses 'L' for arrays
+      external_name.append(array_level, '[');
+      external_name.append(1, 'L'); // external only uses 'L' for arrays
     }
-    return array_name + external_name;
+    external_name.append(component_name.substr(1, component_name_len));
+    std::replace(external_name.begin(), external_name.end(), '/', '.');
+    return external_name;
   } else if (array_level) {
     // If the type is an array of primitives, the external format is the same
     // as internal.
@@ -319,22 +322,20 @@ inline std::string external_to_internal(std::string_view external_name) {
     return std::string(external_name);
   }
 
-  std::string component_internal_name(component_external_name);
+  std::string internal_name;
+  internal_name.reserve(array_level + component_external_name.size() + 2);
   if (array_level == 0) {
-    component_internal_name = "L" + component_internal_name;
+    internal_name.append(1, 'L');
+  } else {
+    internal_name.append(array_level, '[');
   }
+  internal_name.append(component_external_name);
 
-  std::replace(
-      component_internal_name.begin(), component_internal_name.end(), '.', '/');
-  if (!boost::algorithm::ends_with(component_internal_name, ";")) {
-    component_internal_name += ";";
+  std::replace(internal_name.begin(), internal_name.end(), '.', '/');
+  if (!boost::algorithm::ends_with(internal_name, ";")) {
+    internal_name.append(1, ';');
   }
-  std::string array_prefix;
-  array_prefix.reserve(array_level);
-  for (int i = 0; i < array_level; i++) {
-    array_prefix += '[';
-  }
-  return array_prefix + component_internal_name;
+  return internal_name;
 }
 
 // Example: "Ljava/lang/String;" --> "String"

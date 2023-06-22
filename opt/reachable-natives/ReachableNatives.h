@@ -39,6 +39,16 @@ class ReachableNativesPass : public Pass {
  public:
   ReachableNativesPass() : Pass("ReachableNativesPass") {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::interactions;
+    using namespace redex_properties::names;
+    return {
+        {DexLimitsObeyed, Preserves},
+        {HasSourceBlocks, Preserves},
+    };
+  }
+
   void bind_config() override;
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 

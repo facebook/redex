@@ -33,7 +33,7 @@ static void mark_class_reachable_by_native(const DexType* dtype) {
 DexType* FbjniMarker::process_class_path(const std::string& class_path) {
   std::string class_name = java_names::external_to_internal(class_path);
 
-  auto type = DexType::get_type(class_name.c_str());
+  auto type = DexType::get_type(class_name);
   always_assert_log(type != nullptr, "Could not resolve type %s",
                     class_path.c_str());
 

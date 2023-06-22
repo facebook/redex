@@ -224,6 +224,14 @@ void compact_resource_ids(
     const std::map<uint8_t, uint32_t>& type_to_movable_entries,
     const std::unordered_set<uint32_t>& deleted_resources,
     std::map<uint32_t, uint32_t>* old_to_remapped_ids) {
+  auto keep_id = [&](uint32_t id) {
+    // Ensure that ids that don't get reassigned get considered for having their
+    // values remapped. Remapping APIs have wonky conventions where not present
+    // can signal deletion.
+    always_assert(old_to_remapped_ids->count(id) == 0);
+    TRACE(SPLIT_RES, 4, "Keeping id %x", id);
+    old_to_remapped_ids->emplace(id, id);
+  };
   uint32_t current_type_id = 0;
   size_t current_type_count = 0;
   size_t size = sorted_res_ids.size();
@@ -233,6 +241,7 @@ void compact_resource_ids(
     if (type_to_movable_entries.find(type_id) ==
         type_to_movable_entries.end()) {
       // Cannot compact this type.
+      keep_id(id);
       continue;
     }
     if (type_id != current_type_id) {
@@ -240,6 +249,8 @@ void compact_resource_ids(
       current_type_count = type_to_movable_entries.at(type_id);
     }
     if (id < current_type_count) {
+      // Unmovable id, keep it.
+      keep_id(id);
       continue;
     }
     if (deleted_resources.count(id) == 0) {
@@ -248,10 +259,7 @@ void compact_resource_ids(
         TRACE(SPLIT_RES, 4, "Compacting %x to %x", id, new_id);
         old_to_remapped_ids->emplace(id, new_id);
       } else {
-        TRACE(SPLIT_RES, 4, "Keeping id %x", id);
-        // Ensure that ids that don't get reassigned get considered for having
-        // their values remapped.
-        old_to_remapped_ids->emplace(id, id);
+        keep_id(id);
       }
     }
   }

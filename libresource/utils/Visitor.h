@@ -19,6 +19,9 @@ namespace arsc {
 void collect_spans(android::ResStringPool_span* ptr,
                    std::vector<android::ResStringPool_span*>* out);
 
+bool is_binary_xml(const void* data, size_t size);
+int validate_xml_string_pool(const void* data, const size_t len);
+
 class VisitorBase {
  public:
   // Returns how far into the file this pointer is.

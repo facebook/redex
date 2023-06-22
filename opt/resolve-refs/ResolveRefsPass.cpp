@@ -16,11 +16,13 @@
 #include "PassManager.h"
 #include "Resolver.h"
 #include "Show.h"
+#include "SpecializeRtype.h"
 #include "Trace.h"
 #include "TypeInference.h"
 #include "Walkers.h"
 
 namespace mog = method_override_graph;
+using namespace resolve_refs;
 
 namespace impl {
 
@@ -28,8 +30,12 @@ struct RefStats {
   size_t num_mref_resolved = 0;
   size_t num_fref_resolved = 0;
   size_t num_invoke_virtual_refined = 0;
+  size_t num_resolve_to_interface = 0;
   size_t num_invoke_interface_replaced = 0;
   size_t num_invoke_super_removed = 0;
+
+  // Only used for return type specialization
+  RtypeCandidates rtype_candidates;
 
   void print(PassManager* mgr) {
     TRACE(RESO, 1, "[ref reso] method ref resolved %zu", num_mref_resolved);
@@ -38,6 +44,10 @@ struct RefStats {
           1,
           "[ref reso] invoke-virtual refined %zu",
           num_invoke_virtual_refined);
+    TRACE(RESO,
+          1,
+          "[ref reso] resolve invoke-virtual to invoke-interface %zu",
+          num_resolve_to_interface);
     TRACE(RESO,
           1,
           "[ref reso] invoke-interface replaced %zu",
@@ -49,46 +59,30 @@ struct RefStats {
     mgr->incr_metric("method_refs_resolved", num_mref_resolved);
     mgr->incr_metric("field_refs_resolved", num_fref_resolved);
     mgr->incr_metric("num_invoke_virtual_refined", num_invoke_virtual_refined);
+    mgr->incr_metric("num_resolve_to_interface", num_resolve_to_interface);
     mgr->incr_metric("num_invoke_interface_replaced",
                      num_invoke_interface_replaced);
     mgr->incr_metric("num_invoke_super_removed", num_invoke_super_removed);
+
+    TRACE(RESO,
+          1,
+          "[ref reso] rtype specialization candidates %zu",
+          rtype_candidates.get_candidates().size());
+    mgr->incr_metric("num_rtype_specialization_candidates",
+                     rtype_candidates.get_candidates().size());
   }
 
   RefStats& operator+=(const RefStats& that) {
     num_mref_resolved += that.num_mref_resolved;
     num_fref_resolved += that.num_fref_resolved;
     num_invoke_virtual_refined += that.num_invoke_virtual_refined;
+    num_resolve_to_interface += that.num_resolve_to_interface;
     num_invoke_interface_replaced += that.num_invoke_interface_replaced;
     num_invoke_super_removed += that.num_invoke_super_removed;
+    rtype_candidates += that.rtype_candidates;
     return *this;
   }
 };
-
-void resolve_method_refs(const DexMethod* caller,
-                         IRInstruction* insn,
-                         RefStats& stats) {
-  always_assert(insn->has_method());
-  auto mref = insn->get_method();
-  auto mdef = resolve_method(mref, opcode_to_search(insn), caller);
-  if (!mdef || mdef == mref) {
-    return;
-  }
-  // Do not handle external refs in the simple resolve path.
-  if (mdef->is_external()) {
-    return;
-  }
-  auto cls = type_class(mdef->get_class());
-  // Bail out if the def is non public external
-  if (cls && cls->is_external() && !is_public(cls)) {
-    return;
-  }
-  TRACE(RESO, 2, "Resolving %s\n\t=>%s", SHOW(mref), SHOW(mdef));
-  insn->set_method(mdef);
-  stats.num_mref_resolved++;
-  if (cls != nullptr && !is_public(cls)) {
-    set_public(cls);
-  }
-}
 
 void resolve_field_refs(IRInstruction* insn,
                         FieldSearch field_search,
@@ -111,7 +105,141 @@ void resolve_field_refs(IRInstruction* insn,
   }
 }
 
-RefStats resolve_refs(DexMethod* method) {
+void try_desuperify(const DexMethod* caller,
+                    IRInstruction* insn,
+                    RefStats& stats) {
+  if (!opcode::is_invoke_super(insn->opcode())) {
+    return;
+  }
+  auto cls = type_class(caller->get_class());
+  if (cls == nullptr) {
+    return;
+  }
+  // Skip if the callee is an interface default method (037).
+  auto callee_cls = type_class(insn->get_method()->get_class());
+  if (!callee_cls || is_interface(callee_cls)) {
+    return;
+  }
+  // resolve_method_ref will start its search in the superclass of :cls.
+  auto callee = resolve_method_ref(cls, insn->get_method()->get_name(),
+                                   insn->get_method()->get_proto(),
+                                   MethodSearch::Virtual);
+  // External methods may not always be final across runtime versions
+  if (callee == nullptr || callee->is_external() || !is_final(callee)) {
+    return;
+  }
+
+  TRACE(RESO, 5, "Desuperifying %s because %s is final", SHOW(insn),
+        SHOW(callee));
+  insn->set_opcode(OPCODE_INVOKE_VIRTUAL);
+  stats.num_invoke_super_removed++;
+}
+
+bool is_excluded_external(const std::vector<std::string>& excluded_externals,
+                          const std::string& name) {
+  for (auto& excluded : excluded_externals) {
+    if (boost::starts_with(name, excluded)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+boost::optional<DexMethod*> get_inferred_method_def(
+    const DexMethod* caller,
+    const std::vector<std::string>& excluded_externals,
+    const bool is_support_lib,
+    DexMethod* callee,
+    const DexType* inferred_type) {
+
+  auto inferred_cls = type_class(inferred_type);
+  if (!inferred_cls || is_interface(inferred_cls)) {
+    return boost::none;
+  }
+  auto resolved = resolve_method(inferred_cls, callee->get_name(),
+                                 callee->get_proto(), MethodSearch::Virtual);
+  if (!resolved || !resolved->is_def()) {
+    return boost::none;
+  }
+  auto resolved_cls = type_class(resolved->get_class());
+  bool is_external = resolved_cls && resolved_cls->is_external();
+  // 1. If the resolved target is an excluded external, we bail.
+  if (is_external && is_excluded_external(excluded_externals, show(resolved))) {
+    TRACE(RESO, 4, "Bailed on excluded external%s", SHOW(resolved));
+    return boost::none;
+  }
+
+  // 2. If the resolved target is external and is referenced in support
+  // libraries, we bail.
+  if (is_external && api::is_android_sdk_type(resolved->get_class()) &&
+      is_support_lib) {
+    TRACE(RESO, 4, "Bailed on external in support lib %s", SHOW(resolved));
+    return boost::none;
+  }
+
+  if (!type::can_access(caller, resolved)) {
+    TRACE(RESO, 4, "Bailed on inaccessible %s from %s", SHOW(resolved),
+          SHOW(caller));
+    return boost::none;
+  }
+
+  TRACE(RESO, 2, "Inferred to %s for type %s", SHOW(resolved),
+        SHOW(inferred_type));
+  return boost::optional<DexMethod*>(const_cast<DexMethod*>(resolved));
+}
+
+} // namespace impl
+
+using namespace impl;
+
+void ResolveRefsPass::resolve_method_refs(const DexMethod* caller,
+                                          IRInstruction* insn,
+                                          RefStats& stats) {
+  always_assert(insn->has_method());
+  auto mref = insn->get_method();
+  auto mdef = resolve_method(mref, opcode_to_search(insn), caller);
+  bool resolved_to_interface = false;
+  if (!mdef && opcode_to_search(insn) == MethodSearch::Virtual) {
+    mdef = resolve_method(mref, MethodSearch::InterfaceVirtual, caller);
+    if (mdef) {
+      TRACE(RESO, 4, "InterfaceVirtual resolve to %s in %s", SHOW(mdef),
+            SHOW(insn));
+      const auto* cls = type_class(mdef->get_class());
+      resolved_to_interface = cls && is_interface(cls);
+    }
+  }
+  if (!mdef || mdef == mref) {
+    return;
+  }
+  // Handle external refs.
+  if (!m_refine_to_external && mdef->is_external()) {
+    return;
+  } else if (mdef->is_external() && !m_min_sdk_api->has_method(mdef)) {
+    // Resolving to external and the target is missing in the min_sdk_api.
+    TRACE(RESO, 4, "Bailed on mismatch with min_sdk %s", SHOW(mdef));
+    return;
+  }
+
+  auto cls = type_class(mdef->get_class());
+  // Bail out if the def is non public external
+  if (cls && cls->is_external() && !is_public(cls)) {
+    return;
+  }
+  redex_assert(cls != nullptr || !cls->is_external());
+  if (!is_public(cls)) {
+    set_public(cls);
+  }
+  TRACE(RESO, 2, "Resolving %s\n\t=>%s", SHOW(mref), SHOW(mdef));
+  insn->set_method(mdef);
+  stats.num_mref_resolved++;
+  if (resolved_to_interface && opcode::is_invoke_virtual(insn->opcode())) {
+    insn->set_opcode(OPCODE_INVOKE_INTERFACE);
+    stats.num_resolve_to_interface++;
+  }
+}
+
+RefStats ResolveRefsPass::resolve_refs(DexMethod* method) {
   RefStats stats;
   if (!method || !method->get_code()) {
     return stats;
@@ -166,89 +294,9 @@ RefStats resolve_refs(DexMethod* method) {
   return stats;
 }
 
-void try_desuperify(const DexMethod* caller,
-                    IRInstruction* insn,
-                    RefStats& stats) {
-  if (!opcode::is_invoke_super(insn->opcode())) {
-    return;
-  }
-  auto cls = type_class(caller->get_class());
-  if (cls == nullptr) {
-    return;
-  }
-  // Skip if the callee is an interface default method (037).
-  auto callee_cls = type_class(insn->get_method()->get_class());
-  if (!callee_cls || is_interface(callee_cls)) {
-    return;
-  }
-  // resolve_method_ref will start its search in the superclass of :cls.
-  auto callee = resolve_method_ref(cls, insn->get_method()->get_name(),
-                                   insn->get_method()->get_proto(),
-                                   MethodSearch::Virtual);
-  // External methods may not always be final across runtime versions
-  if (callee == nullptr || callee->is_external() || !is_final(callee)) {
-    return;
-  }
-
-  TRACE(RESO, 5, "Desuperifying %s because %s is final", SHOW(insn),
-        SHOW(callee));
-  insn->set_opcode(OPCODE_INVOKE_VIRTUAL);
-  stats.num_invoke_super_removed++;
-}
-
-bool is_excluded_external(const std::vector<std::string>& excluded_externals,
-                          const std::string& name) {
-  for (auto& excluded : excluded_externals) {
-    if (boost::starts_with(name, excluded)) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-boost::optional<DexMethod*> get_inferred_method_def(
-    const std::vector<std::string>& excluded_externals,
-    const bool is_support_lib,
-    DexMethod* callee,
-    const DexType* inferred_type) {
-
-  auto inferred_cls = type_class(inferred_type);
-  if (!inferred_cls || is_interface(inferred_cls)) {
-    return boost::none;
-  }
-  auto resolved = resolve_method(inferred_cls, callee->get_name(),
-                                 callee->get_proto(), MethodSearch::Virtual);
-  if (!resolved || !resolved->is_def()) {
-    return boost::none;
-  }
-  auto resolved_cls = type_class(resolved->get_class());
-  bool is_external = resolved_cls && resolved_cls->is_external();
-  // 1. If the resolved target is an excluded external, we bail.
-  if (is_external && is_excluded_external(excluded_externals, show(resolved))) {
-    TRACE(RESO, 4, "Bailed on excluded external%s", SHOW(resolved));
-    return boost::none;
-  }
-
-  // 2. If the resolved target is external and is referenced in support
-  // libraries, we bail.
-  if (is_external && api::is_android_sdk_type(resolved->get_class()) &&
-      is_support_lib) {
-    TRACE(RESO, 4, "Bailed on external in support lib %s", SHOW(resolved));
-    return boost::none;
-  }
-
-  TRACE(RESO, 2, "Inferred to %s for type %s", SHOW(resolved),
-        SHOW(inferred_type));
-  return boost::optional<DexMethod*>(const_cast<DexMethod*>(resolved));
-}
-
-} // namespace impl
-
-using namespace impl;
-
 RefStats ResolveRefsPass::refine_virtual_callsites(DexMethod* method,
-                                                   bool desuperify) {
+                                                   bool desuperify,
+                                                   bool specialize_rtype) {
   RefStats stats;
   if (!method || !method->get_code()) {
     return stats;
@@ -261,6 +309,7 @@ RefStats ResolveRefsPass::refine_virtual_callsites(DexMethod* method,
   inference.run(method);
   auto& envs = inference.get_type_environments();
   auto is_support_lib = api::is_support_lib_type(method->get_class());
+  DexTypeDomain rtype_domain = DexTypeDomain::bottom();
 
   for (auto& mie : InstructionIterable(code)) {
     IRInstruction* insn = mie.insn;
@@ -269,6 +318,14 @@ RefStats ResolveRefsPass::refine_virtual_callsites(DexMethod* method,
     }
 
     auto opcode = insn->opcode();
+    if (specialize_rtype && opcode::is_return_object(opcode)) {
+      auto& env = envs.at(insn);
+      auto inferred_rtype = env.get_type_domain(insn->src(0));
+      stats.rtype_candidates.collect_inferred_rtype(method, inferred_rtype,
+                                                    rtype_domain);
+      continue;
+    }
+
     if (!opcode::is_invoke_virtual(opcode) &&
         !opcode::is_invoke_interface(opcode)) {
       continue;
@@ -290,8 +347,8 @@ RefStats ResolveRefsPass::refine_virtual_callsites(DexMethod* method,
     }
 
     // replace it with the actual implementation if any provided.
-    auto m_def = get_inferred_method_def(m_excluded_externals, is_support_lib,
-                                         callee, *dex_type);
+    auto m_def = get_inferred_method_def(method, m_excluded_externals,
+                                         is_support_lib, callee, *dex_type);
     if (!m_def) {
       continue;
     }
@@ -322,6 +379,7 @@ RefStats ResolveRefsPass::refine_virtual_callsites(DexMethod* method,
     }
   }
 
+  stats.rtype_candidates.collect_specializable_rtype(method, rtype_domain);
   return stats;
 }
 
@@ -332,8 +390,26 @@ void ResolveRefsPass::run_pass(DexStoresVector& stores,
   Scope scope = build_class_scope(stores);
   impl::RefStats stats =
       walk::parallel::methods<impl::RefStats>(scope, [&](DexMethod* method) {
-        auto local_stats = impl::resolve_refs(method);
-        local_stats += refine_virtual_callsites(method, m_desuperify);
+        auto local_stats = resolve_refs(method);
+        local_stats +=
+            refine_virtual_callsites(method, m_desuperify, m_specialize_rtype);
+        return local_stats;
+      });
+  stats.print(&mgr);
+
+  if (!m_specialize_rtype) {
+    return;
+  }
+  RtypeSpecialization rs(stats.rtype_candidates.get_candidates());
+  rs.specialize_rtypes(scope);
+  rs.print_stats(&mgr);
+
+  // Resolve virtual method refs again based on the new rtypes. But further
+  // rtypes collection is disabled.
+  stats =
+      walk::parallel::methods<impl::RefStats>(scope, [&](DexMethod* method) {
+        auto local_stats = refine_virtual_callsites(
+            method, false /* desuperfy */, false /* specialize_rtype */);
         return local_stats;
       });
   stats.print(&mgr);

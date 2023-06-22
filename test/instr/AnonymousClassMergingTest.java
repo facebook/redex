@@ -14,6 +14,9 @@
 
 package com.facebook.redextest;
 
+import android.annotation.TargetApi;
+import java.util.Arrays;
+import java.util.Comparator;
 import org.junit.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -29,11 +32,16 @@ public class AnonymousClassMergingTest {
   public void testDefaultInterfaceMethod() {
     Interface1 a = new Interface1() {
       @Override
+      public int magic1() {
+        return 24;
+        //
+      }
+      @Override
       public int magic2() {
         return 142;
       }
     };
-    assertThat(a.magic1()).isEqualTo(42);
+    assertThat(a.magic1()).isEqualTo(24);
     assertThat(a.magic2()).isEqualTo(142);
 
     Interface1 b = new Interface1() {
@@ -71,5 +79,45 @@ public class AnonymousClassMergingTest {
     };
     assertThat(e.magic1()).isEqualTo(42);
     assertThat(e.magic2()).isEqualTo(146);
+  }
+
+  class Item {
+    Item(int v) { this.val = v; }
+    public final int val;
+    @Override
+    public String toString() { return String.valueOf(this.val); }
+  }
+
+  @Test
+  @TargetApi(24)
+  public void testExternalDefaultInterfaceMethod() {
+    Comparator<Item> c1 = new Comparator<Item>() {
+      @Override
+      public int compare(Item l, Item r) {
+        return (int) (l.val - r.val);
+      }
+    };
+    Item[] arr1 = {new Item(2), new Item(1)};
+    Arrays.sort(arr1, c1);
+    assertThat(Arrays.toString(arr1)).isEqualTo("[1, 2]");
+    Arrays.sort(arr1, c1.reversed());
+    assertThat(Arrays.toString(arr1)).isEqualTo("[2, 1]");
+
+    Comparator<Item> c2 = new Comparator<Item>() {
+      @Override
+      public int compare(Item l, Item r) {
+        return (int) (r.val - l.val);
+      }
+      @Override
+      public Comparator<Item> reversed () {
+        // Not really the reversed.
+        return this;
+      }
+    };
+    Item[] arr2 = {new Item(1), new Item(2)};
+    Arrays.sort(arr2, c2);
+    assertThat(Arrays.toString(arr2)).isEqualTo("[2, 1]");
+    Arrays.sort(arr2, c2.reversed());
+    assertThat(Arrays.toString(arr2)).isEqualTo("[2, 1]");
   }
 }

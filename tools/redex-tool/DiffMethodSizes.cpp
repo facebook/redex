@@ -38,16 +38,19 @@ JarMethodInfoMap load_jar_method_info(const std::string& base_directory,
                                       const std::vector<std::string>& jars) {
   JarMethodInfoMap info;
   auto hook = [&info](boost::variant<DexField*, DexMethod*> field_or_method,
-                      const char* attribute_name,
-                      uint8_t* attribute_pointer) {
+                      const auto& attribute_name, uint8_t* attribute_pointer,
+                      uint8_t* attribute_pointer_end) {
     // 0: DexField, 1: DexMethod
-    if (field_or_method.which() != 1 || strcmp(attribute_name, "Code") != 0) {
+    if (field_or_method.which() != 1 || attribute_name != "Code" != 0) {
       return;
     }
 
-    uint16_t max_stack = JarLoaderUtil::read16(attribute_pointer);
-    uint16_t max_locals = JarLoaderUtil::read16(attribute_pointer);
-    uint32_t code_length = JarLoaderUtil::read32(attribute_pointer);
+    uint16_t max_stack =
+        JarLoaderUtil::read16(attribute_pointer, attribute_pointer_end);
+    uint16_t max_locals =
+        JarLoaderUtil::read16(attribute_pointer, attribute_pointer_end);
+    uint32_t code_length =
+        JarLoaderUtil::read32(attribute_pointer, attribute_pointer_end);
     DexMethod* method = boost::get<DexMethod*>(field_or_method);
     info.emplace(show(method),
                  std::make_tuple(max_stack, max_locals, code_length));
@@ -317,8 +320,8 @@ class DiffMethodSizes : public Tool {
         dump_method_sizes_from_dexen_dir(dexen_dirs[0]);
         break;
       case 2:
-        diff_from_two_dexen_dirs(
-            dexen_dirs[0], dexen_dirs[1], true /* is_comparing_dex_size */);
+        diff_from_two_dexen_dirs(dexen_dirs[0], dexen_dirs[1],
+                                 true /* is_comparing_dex_size */);
         break;
       default:
         std::cerr << "Only one or two --dexendir can be provided" << std::endl;
@@ -332,8 +335,8 @@ class DiffMethodSizes : public Tool {
         dump_method_move_info_from_dex_dir(dex_dirs[0]);
         break;
       case 2:
-        diff_from_two_dexen_dirs(
-            dex_dirs[0], dex_dirs[1], false /* is_comparing_dex_size */);
+        diff_from_two_dexen_dirs(dex_dirs[0], dex_dirs[1],
+                                 false /* is_comparing_dex_size */);
         break;
       default:
         std::cerr << "Only one or two --dexendir can be provided" << std::endl;

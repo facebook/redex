@@ -15,6 +15,6 @@ TEST_F(PostVerify, SinkCommonCtorInvocation) {
       classes,
       "Lkotlin/sequences/SequencesKt___SequencesKt$runningReduceIndexed$1;");
 
-  verify_type_erased(cls_coroutine_1);
-  verify_type_erased(cls_coroutine_2);
+  verify_class_merged(cls_coroutine_1);
+  verify_class_merged(cls_coroutine_2);
 }

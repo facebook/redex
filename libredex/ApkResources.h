@@ -8,6 +8,7 @@
 #pragma once
 
 #include <boost/optional.hpp>
+#include <cstdint>
 #include <map>
 #include <string>
 #include <sys/types.h>
@@ -359,6 +360,18 @@ class ApkResources : public AndroidResources {
   void obfuscate_xml_files(const std::unordered_set<std::string>& allowed_types,
                            const std::unordered_set<std::string>&
                                do_not_obfuscate_elements) override;
+  // given a manifest xml file, add a string to its global string pool
+  static size_t add_string_to_xml_file(const std::string& file_path,
+                                       const std::string& new_string);
+
+  // Given the bytes of a binary XML file, add new_string to its ResStringPool
+  // Returns android::NO_ERROR (0) on success, or one of the corresponding
+  // android:: error codes for failure conditions/bad input data.
+  static int appened_xml_string_pool(const void* data,
+                                     const size_t len,
+                                     const std::string& new_string,
+                                     android::Vector<char>* out_data,
+                                     size_t* idx);
 
  protected:
   std::vector<std::string> find_res_directories() override;

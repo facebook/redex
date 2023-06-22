@@ -13,6 +13,17 @@ class ShortenSrcStringsPass : public Pass {
  public:
   ShortenSrcStringsPass() : Pass("ShortenSrcStringsPass") {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::interactions;
+    using namespace redex_properties::names;
+    return {
+        {DexLimitsObeyed, Preserves},
+        {HasSourceBlocks, Preserves},
+        {RenameClass, Preserves},
+    };
+  }
+
   void bind_config() override {
     bind("filename_mappings", "redex-src-strings-map.txt", m_filename_mappings);
     trait(Traits::Pass::unique, true);

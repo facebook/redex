@@ -48,6 +48,17 @@ class GlobalTypeAnalysisPass : public Pass {
   explicit GlobalTypeAnalysisPass(Config config)
       : Pass("GlobalTypeAnalysisPass", Pass::ANALYSIS), m_config(config) {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::interactions;
+    using namespace redex_properties::names;
+    return {
+        {DexLimitsObeyed, Preserves},
+        {HasSourceBlocks, Preserves},
+        {NoSpuriousGetClassCalls, Preserves},
+    };
+  }
+
   GlobalTypeAnalysisPass() : GlobalTypeAnalysisPass(Config()) {}
 
   void bind_config() override {

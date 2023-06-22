@@ -55,7 +55,7 @@ AnnoKill::AnnoKill(
   // Load annotations that should not be deleted.
   TRACE(ANNO, 2, "Keep annotations count %zu", keep.size());
   for (const auto& anno_name : keep) {
-    auto anno_type = DexType::get_type(anno_name.c_str());
+    auto anno_type = DexType::get_type(anno_name);
     TRACE(ANNO, 2, "Keep annotation type string %s", anno_name.c_str());
     if (anno_type) {
       TRACE(ANNO, 2, "Keep annotation type %s", SHOW(anno_type));
@@ -79,7 +79,7 @@ AnnoKill::AnnoKill(
 
   // Load annotations we know and want dead.
   for (auto const& anno_name : force_kill) {
-    DexType* anno = DexType::get_type(anno_name.c_str());
+    DexType* anno = DexType::get_type(anno_name);
     TRACE(ANNO, 2, "Force kill annotation type string %s", anno_name.c_str());
     if (anno) {
       TRACE(ANNO, 2, "Force kill anno: %s", SHOW(anno));
@@ -101,7 +101,7 @@ AnnoKill::AnnoKill(
     TypeSet type_refs;
     get_all_children_or_implementors(ch, m_scope, type_cls, type_refs);
     for (auto& anno : it.second) {
-      auto* anno_type = DexType::get_type(anno.c_str());
+      auto* anno_type = DexType::get_type(anno);
       for (auto type_ref : type_refs) {
         m_anno_class_hierarchy_keep[type_ref].insert(anno_type);
       }
@@ -118,9 +118,9 @@ AnnoKill::AnnoKill(
   }
   // Populate anno keep map
   for (const auto& it : annotated_keep_annos) {
-    auto* type = DexType::get_type(it.first.c_str());
+    auto* type = DexType::get_type(it.first);
     for (auto& anno : it.second) {
-      auto* anno_type = DexType::get_type(anno.c_str());
+      auto* anno_type = DexType::get_type(anno);
       m_annotated_keep_annos[type].insert(anno_type);
     }
   }

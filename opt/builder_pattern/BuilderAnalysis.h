@@ -9,6 +9,7 @@
 
 #include <unordered_set>
 
+#include "ControlFlow.h"
 #include "DexClass.h"
 #include "IRCode.h"
 
@@ -27,7 +28,8 @@ class InstructionToEnvMap;
 } // namespace impl
 
 using InstantiationToUsage =
-    std::unordered_map<const IRInstruction*, std::vector<IRList::iterator>>;
+    std::unordered_map<const IRInstruction*,
+                       std::vector<cfg::InstructionIterator>>;
 
 class BuilderAnalysis final {
  public:

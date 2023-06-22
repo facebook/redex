@@ -20,6 +20,8 @@
 #include "DexHasher.h"
 #include "JsonWrapper.h"
 #include "RedexOptions.h"
+#include "RedexProperties.h"
+#include "RedexPropertyCheckerRegistry.h"
 #include "Timer.h"
 
 struct ConfigFiles;
@@ -37,6 +39,10 @@ struct ProguardConfiguration;
 // Must match DexStore.
 using DexStoresVector = std::vector<DexStore>;
 
+namespace redex_properties {
+class Manager;
+} // namespace redex_properties
+
 class PassManager {
  public:
   explicit PassManager(const std::vector<Pass*>& passes);
@@ -49,7 +55,8 @@ class PassManager {
   PassManager(const std::vector<Pass*>& passes,
               std::unique_ptr<keep_rules::ProguardConfiguration> pg_config,
               const ConfigFiles& config,
-              const RedexOptions& options = RedexOptions{});
+              const RedexOptions& options = RedexOptions{},
+              redex_properties::Manager* properties_manager = nullptr);
 
   ~PassManager();
 
@@ -62,6 +69,7 @@ class PassManager {
     std::unordered_map<std::string, int64_t> metrics;
     JsonWrapper config;
     boost::optional<hashing::DexHash> hash;
+    redex_properties::PropertyInteractions property_interactions;
   };
 
   void run_passes(DexStoresVector&, ConfigFiles&);
@@ -135,6 +143,8 @@ class PassManager {
 
   void eval_passes(DexStoresVector&, ConfigFiles&);
 
+  void init_property_interactions(ConfigFiles& conf);
+
   AssetManager m_asset_mgr;
   std::vector<Pass*> m_registered_passes;
   std::vector<Pass*> m_activated_passes;
@@ -152,7 +162,6 @@ class PassManager {
   bool m_materialize_nullchecks_has_run{false};
   bool m_interdex_has_run{false};
   bool m_unreliable_virtual_scopes{false};
-
   Pass* m_malloc_profile_pass{nullptr};
 
   boost::optional<hashing::DexHash> m_initial_hash;
@@ -164,4 +173,6 @@ class PassManager {
   // unique_ptr to avoid header include.
   struct InternalFields;
   std::unique_ptr<InternalFields> m_internal_fields;
+
+  redex_properties::Manager* m_properties_manager{nullptr};
 };

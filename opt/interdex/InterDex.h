@@ -134,6 +134,10 @@ class InterDex {
     return m_transitive_closure_moved;
   }
 
+  const std::vector<DexInfo>& get_dex_info() const {
+    return m_emitting_state.dexes_structure.get_dex_info();
+  }
+
   const OverflowStats& get_overflow_stats() const {
     return m_emitting_state.dexes_structure.get_overflow_stats();
   }

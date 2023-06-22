@@ -316,7 +316,7 @@ bool create_move_and_fix_clobbered(
 
       // Make a copy.
       IRInstruction* copy_insn;
-      if (type.equals(type_inference::TypeDomain(REFERENCE))) {
+      if (type.equals(type_inference::TypeDomain(IRType::REFERENCE))) {
         copy_insn = new IRInstruction(OPCODE_MOVE_OBJECT);
       } else {
         copy_insn = new IRInstruction(OPCODE_MOVE);

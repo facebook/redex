@@ -144,6 +144,13 @@ class PrimitiveAnalyzer final
                                   ConstantEnvironment* env);
 };
 
+class InjectionIdAnalyzer final
+    : public InstructionAnalyzerBase<InjectionIdAnalyzer, ConstantEnvironment> {
+ public:
+  static bool analyze_injection_id(const IRInstruction* insn,
+                                   ConstantEnvironment* env);
+};
+
 // This is the most common use of constant propagation, so we define this alias
 // for our convenience.
 using ConstantPrimitiveAnalyzer =
@@ -172,9 +179,9 @@ class HeapEscapeAnalyzer final
  * Handle non-escaping arrays.
  *
  * This Analyzer should typically be used followed by the
- * HeapEscapeAnalyzer in a combined analysis -- LocalArrayAnalyzer only
- * handles the creation and mutation of array values, but does not account for
- * how they may escape.
+ * HeapEscapeAnalyzer in a combined analysis -- LocalArrayAnalyzer
+ * only handles the creation and mutation of array values, but does not account
+ * for how they may escape.
  */
 class LocalArrayAnalyzer final
     : public InstructionAnalyzerBase<LocalArrayAnalyzer, ConstantEnvironment> {

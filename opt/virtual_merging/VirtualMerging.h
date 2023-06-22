@@ -109,6 +109,7 @@ class VirtualMerging {
   struct PerfConfig {
     float appear100_threshold;
     float call_count_threshold;
+    std::vector<std::string> interactions{"ColdStart"};
 
     PerfConfig()
         : appear100_threshold(101.0), call_count_threshold(0) {} // Default: off
@@ -176,6 +177,17 @@ class VirtualMerging {
 class VirtualMergingPass : public Pass {
  public:
   VirtualMergingPass() : Pass("VirtualMergingPass") {}
+
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::interactions;
+    using namespace redex_properties::names;
+    return {
+        {DexLimitsObeyed, Preserves},
+        {HasSourceBlocks, RequiresAndEstablishes},
+        {NoSpuriousGetClassCalls, Preserves},
+    };
+  }
 
   void bind_config() override;
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;

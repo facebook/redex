@@ -13,70 +13,105 @@
 
 #include "Show.h"
 #include "Trace.h"
+#include "TypeUtil.h"
 
 std::ostream& operator<<(std::ostream& output, const IRType& type) {
   switch (type) {
-  case BOTTOM: {
+  case IRType::BOTTOM: {
     output << "BOTTOM";
     break;
   }
-  case ZERO: {
+  case IRType::ZERO: {
     output << "ZERO";
     break;
   }
-  case CONST: {
+  case IRType::CONST: {
     output << "CONST";
     break;
   }
-  case CONST1: {
+  case IRType::CONST1: {
     output << "CONST1";
     break;
   }
-  case CONST2: {
+  case IRType::CONST2: {
     output << "CONST2";
     break;
   }
-  case REFERENCE: {
+  case IRType::REFERENCE: {
     output << "REF";
     break;
   }
-  case INT: {
+  case IRType::INT: {
     output << "INT";
     break;
   }
-  case FLOAT: {
+  case IRType::FLOAT: {
     output << "FLOAT";
     break;
   }
-  case LONG1: {
+  case IRType::LONG1: {
     output << "LONG1";
     break;
   }
-  case LONG2: {
+  case IRType::LONG2: {
     output << "LONG2";
     break;
   }
-  case DOUBLE1: {
+  case IRType::DOUBLE1: {
     output << "DOUBLE1";
     break;
   }
-  case DOUBLE2: {
+  case IRType::DOUBLE2: {
     output << "DOUBLE2";
     break;
   }
-  case SCALAR: {
+  case IRType::SCALAR: {
     output << "SCALAR";
     break;
   }
-  case SCALAR1: {
+  case IRType::SCALAR1: {
     output << "SCALAR1";
     break;
   }
-  case SCALAR2: {
+  case IRType::SCALAR2: {
     output << "SCALAR2";
     break;
   }
-  case TOP: {
+  case IRType::TOP: {
+    output << "TOP";
+    break;
+  }
+  }
+  return output;
+}
+
+std::ostream& operator<<(std::ostream& output, const IntType& type) {
+  switch (type) {
+  case IntType::BOTTOM: {
+    output << "BOTTOM";
+    break;
+  }
+  case IntType::INT: {
+    output << "INT";
+    break;
+  }
+  case IntType::CHAR: {
+    output << "CHAR";
+    break;
+  }
+  case IntType::SHORT: {
+    output << "SHORT";
+    break;
+  }
+  case IntType::BOOLEAN: {
+    output << "BOOLEAN";
+    break;
+  }
+  case IntType::BYTE: {
+    output << "BYTE";
+    break;
+  }
+  case IntType::TOP: {
     output << "TOP";
     break;
   }
@@ -113,39 +148,56 @@ bool is_safely_usable_in_ifs(IRType type) {
 }
 
 TypeLattice type_lattice(
-    {BOTTOM, ZERO, CONST, CONST1, CONST2, REFERENCE, INT, FLOAT, LONG1, LONG2,
-     DOUBLE1, DOUBLE2, SCALAR, SCALAR1, SCALAR2, TOP},
-    {{BOTTOM, ZERO},    {BOTTOM, CONST1},   {BOTTOM, CONST2},
-     {ZERO, REFERENCE}, {ZERO, CONST},      {CONST, INT},
-     {CONST, FLOAT},    {CONST1, LONG1},    {CONST1, DOUBLE1},
-     {CONST2, LONG2},   {CONST2, DOUBLE2},  {INT, SCALAR},
-     {FLOAT, SCALAR},   {LONG1, SCALAR1},   {DOUBLE1, SCALAR1},
-     {LONG2, SCALAR2},  {DOUBLE2, SCALAR2}, {REFERENCE, TOP},
-     {SCALAR, TOP},     {SCALAR1, TOP},     {SCALAR2, TOP}});
+    {IRType::BOTTOM, IRType::ZERO, IRType::CONST, IRType::CONST1,
+     IRType::CONST2, IRType::REFERENCE, IRType::INT, IRType::FLOAT,
+     IRType::LONG1, IRType::LONG2, IRType::DOUBLE1, IRType::DOUBLE2,
+     IRType::SCALAR, IRType::SCALAR1, IRType::SCALAR2, IRType::TOP},
+    {{IRType::BOTTOM, IRType::ZERO},     {IRType::BOTTOM, IRType::CONST1},
+     {IRType::BOTTOM, IRType::CONST2},   {IRType::ZERO, IRType::REFERENCE},
+     {IRType::ZERO, IRType::CONST},      {IRType::CONST, IRType::INT},
+     {IRType::CONST, IRType::FLOAT},     {IRType::CONST1, IRType::LONG1},
+     {IRType::CONST1, IRType::DOUBLE1},  {IRType::CONST2, IRType::LONG2},
+     {IRType::CONST2, IRType::DOUBLE2},  {IRType::INT, IRType::SCALAR},
+     {IRType::FLOAT, IRType::SCALAR},    {IRType::LONG1, IRType::SCALAR1},
+     {IRType::DOUBLE1, IRType::SCALAR1}, {IRType::LONG2, IRType::SCALAR2},
+     {IRType::DOUBLE2, IRType::SCALAR2}, {IRType::REFERENCE, IRType::TOP},
+     {IRType::SCALAR, IRType::TOP},      {IRType::SCALAR1, IRType::TOP},
+     {IRType::SCALAR2, IRType::TOP}});
+
+IntTypeLattice int_type_lattice({IntType::BOTTOM, IntType::INT, IntType::CHAR,
+                                 IntType::SHORT, IntType::BOOLEAN,
+                                 IntType::BYTE, IntType::TOP},
+                                {{IntType::BOTTOM, IntType::BOOLEAN},
+                                 {IntType::BOOLEAN, IntType::CHAR},
+                                 {IntType::BOOLEAN, IntType::BYTE},
+                                 {IntType::BYTE, IntType::SHORT},
+                                 {IntType::SHORT, IntType::INT},
+                                 {IntType::CHAR, IntType::INT},
+                                 {IntType::INT, IntType::TOP}});
 
 void set_type(TypeEnvironment* state, reg_t reg, const TypeDomain& type) {
   state->set_type(reg, type);
 }
 
-void set_integer(TypeEnvironment* state, reg_t reg) {
-  state->set_type(reg, TypeDomain(INT));
+void set_integral(TypeEnvironment* state, reg_t reg) {
+  state->set_type(reg, TypeDomain(IRType::INT));
   state->reset_dex_type(reg);
 }
 
 void set_float(TypeEnvironment* state, reg_t reg) {
-  state->set_type(reg, TypeDomain(FLOAT));
+  state->set_type(reg, TypeDomain(IRType::FLOAT));
   state->reset_dex_type(reg);
 }
 
 void set_scalar(TypeEnvironment* state, reg_t reg) {
-  state->set_type(reg, TypeDomain(SCALAR));
+  state->set_type(reg, TypeDomain(IRType::SCALAR));
   state->reset_dex_type(reg);
 }
 
 void set_reference(TypeEnvironment* state,
                    reg_t reg,
                    const boost::optional<const DexType*>& dex_type_opt) {
-  state->set_type(reg, TypeDomain(REFERENCE));
+  state->set_type(reg, TypeDomain(IRType::REFERENCE));
   const DexTypeDomain dex_type =
       dex_type_opt ? DexTypeDomain(*dex_type_opt) : DexTypeDomain::top();
   state->set_dex_type(reg, dex_type);
@@ -154,29 +206,63 @@ void set_reference(TypeEnvironment* state,
 void set_reference(TypeEnvironment* state,
                    reg_t reg,
                    const DexTypeDomain& dex_type) {
-  state->set_type(reg, TypeDomain(REFERENCE));
+  state->set_type(reg, TypeDomain(IRType::REFERENCE));
   state->set_dex_type(reg, dex_type);
 }
 
 void set_long(TypeEnvironment* state, reg_t reg) {
-  state->set_type(reg, TypeDomain(LONG1));
-  state->set_type(reg + 1, TypeDomain(LONG2));
+  state->set_type(reg, TypeDomain(IRType::LONG1));
+  state->set_type(reg + 1, TypeDomain(IRType::LONG2));
   state->reset_dex_type(reg);
   state->reset_dex_type(reg + 1);
 }
 
 void set_double(TypeEnvironment* state, reg_t reg) {
-  state->set_type(reg, TypeDomain(DOUBLE1));
-  state->set_type(reg + 1, TypeDomain(DOUBLE2));
+  state->set_type(reg, TypeDomain(IRType::DOUBLE1));
+  state->set_type(reg + 1, TypeDomain(IRType::DOUBLE2));
   state->reset_dex_type(reg);
   state->reset_dex_type(reg + 1);
 }
 
 void set_wide_scalar(TypeEnvironment* state, reg_t reg) {
-  state->set_type(reg, TypeDomain(SCALAR1));
-  state->set_type(reg + 1, TypeDomain(SCALAR2));
+  state->set_type(reg, TypeDomain(IRType::SCALAR1));
+  state->set_type(reg + 1, TypeDomain(IRType::SCALAR2));
   state->reset_dex_type(reg);
   state->reset_dex_type(reg + 1);
+}
+
+void set_type(TypeEnvironment* state, reg_t reg, const IntTypeDomain& type) {
+  state->set_type(reg, type);
+}
+
+void set_int(TypeEnvironment* state, reg_t reg) {
+  state->set_type(reg, IntTypeDomain(IntType::INT));
+  state->reset_dex_type(reg);
+  set_integral(state, reg);
+}
+
+void set_char(TypeEnvironment* state, reg_t reg) {
+  state->set_type(reg, IntTypeDomain(IntType::CHAR));
+  state->reset_dex_type(reg);
+  set_integral(state, reg);
+}
+
+void set_short(TypeEnvironment* state, reg_t reg) {
+  state->set_type(reg, IntTypeDomain(IntType::SHORT));
+  state->reset_dex_type(reg);
+  set_integral(state, reg);
+}
+
+void set_boolean(TypeEnvironment* state, reg_t reg) {
+  state->set_type(reg, IntTypeDomain(IntType::BOOLEAN));
+  state->reset_dex_type(reg);
+  set_integral(state, reg);
+}
+
+void set_byte(TypeEnvironment* state, reg_t reg) {
+  state->set_type(reg, IntTypeDomain(IntType::BYTE));
+  state->reset_dex_type(reg);
+  set_integral(state, reg);
 }
 
 // This is used for the operand of a comparison operation with zero. The
@@ -188,13 +274,13 @@ void refine_comparable_with_zero(TypeEnvironment* state, reg_t reg) {
     return;
   }
   IRType t = state->get_type(reg).element();
-  if (t == SCALAR) {
+  if (t == IRType::SCALAR) {
     // We can't say anything conclusive about a register that has SCALAR type,
     // so we just bail out.
     return;
   }
-  if (!(TypeDomain(t).leq(TypeDomain(REFERENCE)) ||
-        TypeDomain(t).leq(TypeDomain(INT)))) {
+  if (!(TypeDomain(t).leq(TypeDomain(IRType::REFERENCE)) ||
+        TypeDomain(t).leq(TypeDomain(IRType::INT)))) {
     // The type is incompatible with the operation and hence, the code that
     // follows is unreachable.
     state->set_to_bottom();
@@ -212,11 +298,11 @@ void refine_comparable(TypeEnvironment* state, reg_t reg1, reg_t reg2) {
   }
   IRType t1 = state->get_type(reg1).element();
   IRType t2 = state->get_type(reg2).element();
-  if (!((TypeDomain(t1).leq(TypeDomain(REFERENCE)) &&
-         TypeDomain(t2).leq(TypeDomain(REFERENCE))) ||
-        (TypeDomain(t1).leq(TypeDomain(SCALAR)) &&
-         TypeDomain(t2).leq(TypeDomain(SCALAR)) && (t1 != FLOAT) &&
-         (t2 != FLOAT)))) {
+  if (!((TypeDomain(t1).leq(TypeDomain(IRType::REFERENCE)) &&
+         TypeDomain(t2).leq(TypeDomain(IRType::REFERENCE))) ||
+        (TypeDomain(t1).leq(TypeDomain(IRType::SCALAR)) &&
+         TypeDomain(t2).leq(TypeDomain(IRType::SCALAR)) &&
+         (t1 != IRType::FLOAT) && (t2 != IRType::FLOAT)))) {
     // Two values can be used in a comparison operation if they either both
     // have the REFERENCE type or have non-float scalar types. Note that in
     // the case where one or both types have the SCALAR type, we can't
@@ -269,6 +355,7 @@ TypeDomain TypeInference::refine_type(const TypeDomain& type,
   if (type.leq(TypeDomain(const_type)) && expected != scalar_type) {
     return refined_type.is_bottom() ? refined_type : TypeDomain(expected);
   }
+
   return refined_type;
 }
 
@@ -276,8 +363,16 @@ void TypeInference::refine_type(TypeEnvironment* state,
                                 reg_t reg,
                                 IRType expected) const {
   state->update_type(reg, [this, expected](const TypeDomain& type) {
-    return refine_type(type, expected, /* const_type */ CONST,
-                       /* scalar_type */ SCALAR);
+    return refine_type(type, expected, /* const_type */ IRType::CONST,
+                       /* scalar_type */ IRType::SCALAR);
+  });
+}
+
+void TypeInference::refine_type(TypeEnvironment* state,
+                                reg_t reg,
+                                IntType expected) const {
+  state->update_type(reg, [expected](const IntTypeDomain& type) {
+    return type.meet(IntTypeDomain(expected));
   });
 }
 
@@ -288,59 +383,90 @@ void TypeInference::refine_wide_type(TypeEnvironment* state,
   state->update_type(reg, [this, expected1](const TypeDomain& type) {
     return refine_type(type,
                        expected1,
-                       /* const_type */ CONST1,
-                       /* scalar_type */ SCALAR1);
+                       /* const_type */ IRType::CONST1,
+                       /* scalar_type */ IRType::SCALAR1);
   });
   state->update_type(reg + 1, [this, expected2](const TypeDomain& type) {
     return refine_type(type,
                        expected2,
-                       /* const_type */ CONST2,
-                       /* scalar_type */ SCALAR2);
+                       /* const_type */ IRType::CONST2,
+                       /* scalar_type */ IRType::SCALAR2);
   });
 }
 
 void TypeInference::refine_reference(TypeEnvironment* state, reg_t reg) const {
   refine_type(state,
               reg,
-              /* expected */ REFERENCE);
+              /* expected */ IRType::REFERENCE);
 }
 
 void TypeInference::refine_scalar(TypeEnvironment* state, reg_t reg) const {
   refine_type(state,
               reg,
-              /* expected */ SCALAR);
+              /* expected */ IRType::SCALAR);
   state->reset_dex_type(reg);
 }
 
-void TypeInference::refine_integer(TypeEnvironment* state, reg_t reg) const {
-  refine_type(state, reg, /* expected */ INT);
+void TypeInference::refine_integral(TypeEnvironment* state, reg_t reg) const {
+  refine_type(state, reg, /* expected */ IRType::INT);
   state->reset_dex_type(reg);
 }
 
 void TypeInference::refine_float(TypeEnvironment* state, reg_t reg) const {
-  refine_type(state, reg, /* expected */ FLOAT);
+  refine_type(state, reg, /* expected */ IRType::FLOAT);
   state->reset_dex_type(reg);
 }
 
 void TypeInference::refine_wide_scalar(TypeEnvironment* state,
                                        reg_t reg) const {
-  refine_wide_type(state, reg, /* expected1 */ SCALAR1,
-                   /* expected2 */ SCALAR2);
+  refine_wide_type(state, reg, /* expected1 */ IRType::SCALAR1,
+                   /* expected2 */ IRType::SCALAR2);
   state->reset_dex_type(reg);
   state->reset_dex_type(reg + 1);
 }
 
 void TypeInference::refine_long(TypeEnvironment* state, reg_t reg) const {
-  refine_wide_type(state, reg, /* expected1 */ LONG1, /* expected2 */ LONG2);
+  refine_wide_type(state, reg, /* expected1 */ IRType::LONG1,
+                   /* expected2 */ IRType::LONG2);
   state->reset_dex_type(reg);
   state->reset_dex_type(reg + 1);
 }
 
 void TypeInference::refine_double(TypeEnvironment* state, reg_t reg) const {
-  refine_wide_type(state, reg, /* expected1 */ DOUBLE1,
-                   /* expected2 */ DOUBLE2);
+  refine_wide_type(state, reg, /* expected1 */ IRType::DOUBLE1,
+                   /* expected2 */ IRType::DOUBLE2);
   state->reset_dex_type(reg);
   state->reset_dex_type(reg + 1);
+}
+
+void TypeInference::refine_int(TypeEnvironment* state, reg_t reg) const {
+  refine_type(state, reg, /* expected1 */ IntType::INT);
+  state->reset_dex_type(reg);
+  refine_integral(state, reg);
+}
+
+void TypeInference::refine_char(TypeEnvironment* state, reg_t reg) const {
+  refine_type(state, reg, /* expected1 */ IntType::CHAR);
+  state->reset_dex_type(reg);
+  refine_integral(state, reg);
+}
+
+void TypeInference::refine_boolean(TypeEnvironment* state, reg_t reg) const {
+  refine_type(state, reg, /* expected1 */ IntType::BOOLEAN);
+  state->reset_dex_type(reg);
+  refine_integral(state, reg);
+}
+
+void TypeInference::refine_short(TypeEnvironment* state, reg_t reg) const {
+  refine_type(state, reg, /* expected1 */ IntType::SHORT);
+  state->reset_dex_type(reg);
+  refine_integral(state, reg);
+}
+
+void TypeInference::refine_byte(TypeEnvironment* state, reg_t reg) const {
+  refine_type(state, reg, /* expected1 */ IntType::BYTE);
+  state->reset_dex_type(reg);
+  refine_integral(state, reg);
 }
 
 void TypeInference::run(const DexMethod* dex_method) {
@@ -379,11 +505,22 @@ void TypeInference::run(bool is_static,
     }
     case IOPCODE_LOAD_PARAM: {
       always_assert(sig_it != args->end());
-      if (type::is_float(*sig_it++)) {
+      if (type::is_float(*sig_it)) {
         set_float(&init_state, insn->dest());
       } else {
-        set_integer(&init_state, insn->dest());
+        if (type::is_char(*sig_it)) {
+          set_char(&init_state, insn->dest());
+        } else if (type::is_short(*sig_it)) {
+          set_short(&init_state, insn->dest());
+        } else if (type::is_boolean(*sig_it)) {
+          set_boolean(&init_state, insn->dest());
+        } else if (type::is_byte(*sig_it)) {
+          set_byte(&init_state, insn->dest());
+        } else {
+          set_int(&init_state, insn->dest());
+        }
       }
+      sig_it++;
       break;
     }
     case IOPCODE_LOAD_PARAM_WIDE: {
@@ -426,16 +563,21 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     refine_scalar(current_state, insn->src(0));
     set_type(current_state, insn->dest(),
              current_state->get_type(insn->src(0)));
+    set_type(current_state, insn->dest(),
+             current_state->get_int_type(insn->src(0)));
     break;
   }
   case OPCODE_MOVE_OBJECT: {
     refine_reference(current_state, insn->src(0));
-    if (current_state->get_type(insn->src(0)) == TypeDomain(REFERENCE)) {
+    if (current_state->get_type(insn->src(0)) ==
+        TypeDomain(IRType::REFERENCE)) {
       const auto dex_type = current_state->get_type_domain(insn->src(0));
       set_reference(current_state, insn->dest(), dex_type);
     } else {
       set_type(current_state, insn->dest(),
                current_state->get_type(insn->src(0)));
+      set_type(current_state, insn->dest(),
+               current_state->get_int_type(insn->src(0)));
     }
     break;
   }
@@ -452,6 +594,8 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     refine_scalar(current_state, RESULT_REGISTER);
     set_type(current_state, insn->dest(),
              current_state->get_type(RESULT_REGISTER));
+    set_type(current_state, insn->dest(),
+             current_state->get_int_type(RESULT_REGISTER));
     break;
   }
   case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT:
@@ -530,18 +674,20 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     refine_reference(current_state, insn->src(0));
     break;
   }
-  case OPCODE_CONST: {
+  case OPCODE_CONST:
+  case IOPCODE_INJECTION_ID: {
     if (insn->get_literal() == 0) {
       current_state->set_dex_type(insn->dest(), DexTypeDomain::null());
-      set_type(current_state, insn->dest(), TypeDomain(ZERO));
+      set_type(current_state, insn->dest(), TypeDomain(IRType::ZERO));
     } else {
-      set_type(current_state, insn->dest(), TypeDomain(CONST));
+      set_type(current_state, insn->dest(), TypeDomain(IRType::CONST));
     }
+    set_type(current_state, insn->dest(), IntTypeDomain(IntType::BOOLEAN));
     break;
   }
   case OPCODE_CONST_WIDE: {
-    set_type(current_state, insn->dest(), TypeDomain(CONST1));
-    set_type(current_state, insn->dest() + 1, TypeDomain(CONST2));
+    set_type(current_state, insn->dest(), TypeDomain(IRType::CONST1));
+    set_type(current_state, insn->dest() + 1, TypeDomain(IRType::CONST2));
     break;
   }
   case OPCODE_CONST_STRING: {
@@ -572,19 +718,35 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   case OPCODE_CHECK_CAST: {
     refine_reference(current_state, insn->src(0));
     auto to_type = insn->get_type();
-    auto to_cls = type_class(to_type);
-    if (m_skip_check_cast_to_intf && to_cls && is_interface(to_cls)) {
-      set_reference(current_state, RESULT_REGISTER,
-                    current_state->get_type_domain(insn->src(0)));
+
+    if (!m_skip_check_cast_upcasting) {
+      set_reference(current_state, RESULT_REGISTER, to_type);
     } else {
-      set_reference(current_state, RESULT_REGISTER, insn->get_type());
+      // Avoid using this check-cast type if casting to base class or an
+      // interface.
+      auto to_cls = type_class(to_type);
+      auto current_type_domain = current_state->get_type_domain(insn->src(0));
+      auto current_type = current_type_domain.get_dex_type();
+      auto is_intf = to_cls && is_interface(to_cls);
+      auto is_cast_to_base =
+          current_type && to_type &&
+          type::check_cast(*current_type, /* base_type */ to_type);
+      if (is_intf || is_cast_to_base) {
+        set_reference(current_state, RESULT_REGISTER, current_type_domain);
+      } else {
+        set_reference(current_state, RESULT_REGISTER, to_type);
+      }
     }
     break;
   }
-  case OPCODE_INSTANCE_OF:
+  case OPCODE_INSTANCE_OF: {
+    refine_reference(current_state, insn->src(0));
+    set_boolean(current_state, RESULT_REGISTER);
+    break;
+  }
   case OPCODE_ARRAY_LENGTH: {
     refine_reference(current_state, insn->src(0));
-    set_integer(current_state, RESULT_REGISTER);
+    set_int(current_state, RESULT_REGISTER);
     break;
   }
   case OPCODE_NEW_INSTANCE: {
@@ -592,7 +754,7 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     break;
   }
   case OPCODE_NEW_ARRAY: {
-    refine_integer(current_state, insn->src(0));
+    refine_int(current_state, insn->src(0));
     set_reference(current_state, RESULT_REGISTER, insn->get_type());
     break;
   }
@@ -624,27 +786,27 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     break;
   }
   case OPCODE_SWITCH: {
-    refine_integer(current_state, insn->src(0));
+    refine_int(current_state, insn->src(0));
     break;
   }
   case OPCODE_CMPL_FLOAT:
   case OPCODE_CMPG_FLOAT: {
     refine_float(current_state, insn->src(0));
     refine_float(current_state, insn->src(1));
-    set_integer(current_state, insn->dest());
+    set_boolean(current_state, insn->dest());
     break;
   }
   case OPCODE_CMPL_DOUBLE:
   case OPCODE_CMPG_DOUBLE: {
     refine_double(current_state, insn->src(0));
     refine_double(current_state, insn->src(1));
-    set_integer(current_state, insn->dest());
+    set_boolean(current_state, insn->dest());
     break;
   }
   case OPCODE_CMP_LONG: {
     refine_long(current_state, insn->src(0));
     refine_long(current_state, insn->src(1));
-    set_integer(current_state, insn->dest());
+    set_boolean(current_state, insn->dest());
     break;
   }
   case OPCODE_IF_EQ:
@@ -656,8 +818,8 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   case OPCODE_IF_GE:
   case OPCODE_IF_GT:
   case OPCODE_IF_LE: {
-    refine_integer(current_state, insn->src(0));
-    refine_integer(current_state, insn->src(1));
+    refine_int(current_state, insn->src(0));
+    refine_int(current_state, insn->src(1));
     break;
   }
   case OPCODE_IF_EQZ:
@@ -669,33 +831,48 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   case OPCODE_IF_GEZ:
   case OPCODE_IF_GTZ:
   case OPCODE_IF_LEZ: {
-    refine_integer(current_state, insn->src(0));
+    refine_int(current_state, insn->src(0));
     break;
   }
   case OPCODE_AGET: {
     refine_reference(current_state, insn->src(0));
-    refine_integer(current_state, insn->src(1));
+    refine_int(current_state, insn->src(1));
     set_scalar(current_state, RESULT_REGISTER);
     break;
   }
-  case OPCODE_AGET_BOOLEAN:
-  case OPCODE_AGET_BYTE:
-  case OPCODE_AGET_CHAR:
+  case OPCODE_AGET_BOOLEAN: {
+    refine_reference(current_state, insn->src(0));
+    refine_int(current_state, insn->src(1));
+    set_boolean(current_state, RESULT_REGISTER);
+    break;
+  }
+  case OPCODE_AGET_BYTE: {
+    refine_reference(current_state, insn->src(0));
+    refine_int(current_state, insn->src(1));
+    set_byte(current_state, RESULT_REGISTER);
+    break;
+  }
+  case OPCODE_AGET_CHAR: {
+    refine_reference(current_state, insn->src(0));
+    refine_int(current_state, insn->src(1));
+    set_char(current_state, RESULT_REGISTER);
+    break;
+  }
   case OPCODE_AGET_SHORT: {
     refine_reference(current_state, insn->src(0));
-    refine_integer(current_state, insn->src(1));
-    set_integer(current_state, RESULT_REGISTER);
+    refine_int(current_state, insn->src(1));
+    set_short(current_state, RESULT_REGISTER);
     break;
   }
   case OPCODE_AGET_WIDE: {
     refine_reference(current_state, insn->src(0));
-    refine_integer(current_state, insn->src(1));
+    refine_int(current_state, insn->src(1));
     set_wide_scalar(current_state, RESULT_REGISTER);
     break;
   }
   case OPCODE_AGET_OBJECT: {
     refine_reference(current_state, insn->src(0));
-    refine_integer(current_state, insn->src(1));
+    refine_int(current_state, insn->src(1));
     const auto dex_type_opt = current_state->get_dex_type(insn->src(0));
     if (dex_type_opt && *dex_type_opt && type::is_array(*dex_type_opt)) {
       const auto etype = type::get_array_component_type(*dex_type_opt);
@@ -708,28 +885,43 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   case OPCODE_APUT: {
     refine_scalar(current_state, insn->src(0));
     refine_reference(current_state, insn->src(1));
-    refine_integer(current_state, insn->src(2));
+    refine_int(current_state, insn->src(2));
     break;
   }
-  case OPCODE_APUT_BOOLEAN:
-  case OPCODE_APUT_BYTE:
-  case OPCODE_APUT_CHAR:
-  case OPCODE_APUT_SHORT: {
-    refine_integer(current_state, insn->src(0));
+  case OPCODE_APUT_BOOLEAN: {
+    refine_boolean(current_state, insn->src(0));
     refine_reference(current_state, insn->src(1));
-    refine_integer(current_state, insn->src(2));
+    refine_int(current_state, insn->src(2));
+    break;
+  }
+  case OPCODE_APUT_BYTE: {
+    refine_byte(current_state, insn->src(0));
+    refine_reference(current_state, insn->src(1));
+    refine_int(current_state, insn->src(2));
+    break;
+  }
+  case OPCODE_APUT_CHAR: {
+    refine_char(current_state, insn->src(0));
+    refine_reference(current_state, insn->src(1));
+    refine_int(current_state, insn->src(2));
+    break;
+  }
+  case OPCODE_APUT_SHORT: {
+    refine_short(current_state, insn->src(0));
+    refine_reference(current_state, insn->src(1));
+    refine_int(current_state, insn->src(2));
     break;
   }
   case OPCODE_APUT_WIDE: {
     refine_wide_scalar(current_state, insn->src(0));
     refine_reference(current_state, insn->src(1));
-    refine_integer(current_state, insn->src(2));
+    refine_int(current_state, insn->src(2));
     break;
   }
   case OPCODE_APUT_OBJECT: {
     refine_reference(current_state, insn->src(0));
     refine_reference(current_state, insn->src(1));
-    refine_integer(current_state, insn->src(2));
+    refine_int(current_state, insn->src(2));
     break;
   }
   case OPCODE_IGET: {
@@ -738,16 +930,28 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     if (type::is_float(type)) {
       set_float(current_state, RESULT_REGISTER);
     } else {
-      set_integer(current_state, RESULT_REGISTER);
+      set_int(current_state, RESULT_REGISTER);
     }
     break;
   }
-  case OPCODE_IGET_BOOLEAN:
-  case OPCODE_IGET_BYTE:
-  case OPCODE_IGET_CHAR:
+  case OPCODE_IGET_BOOLEAN: {
+    refine_reference(current_state, insn->src(0));
+    set_boolean(current_state, RESULT_REGISTER);
+    break;
+  }
+  case OPCODE_IGET_BYTE: {
+    refine_reference(current_state, insn->src(0));
+    set_byte(current_state, RESULT_REGISTER);
+    break;
+  }
+  case OPCODE_IGET_CHAR: {
+    refine_reference(current_state, insn->src(0));
+    set_char(current_state, RESULT_REGISTER);
+    break;
+  }
   case OPCODE_IGET_SHORT: {
     refine_reference(current_state, insn->src(0));
-    set_integer(current_state, RESULT_REGISTER);
+    set_short(current_state, RESULT_REGISTER);
     break;
   }
   case OPCODE_IGET_WIDE: {
@@ -772,16 +976,28 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     if (type::is_float(type)) {
       refine_float(current_state, insn->src(0));
     } else {
-      refine_integer(current_state, insn->src(0));
+      refine_int(current_state, insn->src(0));
     }
     refine_reference(current_state, insn->src(1));
     break;
   }
-  case OPCODE_IPUT_BOOLEAN:
-  case OPCODE_IPUT_BYTE:
-  case OPCODE_IPUT_CHAR:
+  case OPCODE_IPUT_BOOLEAN: {
+    refine_boolean(current_state, insn->src(0));
+    refine_reference(current_state, insn->src(1));
+    break;
+  }
+  case OPCODE_IPUT_BYTE: {
+    refine_byte(current_state, insn->src(0));
+    refine_reference(current_state, insn->src(1));
+    break;
+  }
+  case OPCODE_IPUT_CHAR: {
+    refine_char(current_state, insn->src(0));
+    refine_reference(current_state, insn->src(1));
+    break;
+  }
   case OPCODE_IPUT_SHORT: {
-    refine_integer(current_state, insn->src(0));
+    refine_short(current_state, insn->src(0));
     refine_reference(current_state, insn->src(1));
     break;
   }
@@ -800,15 +1016,24 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     if (type::is_float(type)) {
       set_float(current_state, RESULT_REGISTER);
     } else {
-      set_integer(current_state, RESULT_REGISTER);
+      set_int(current_state, RESULT_REGISTER);
     }
     break;
   }
-  case OPCODE_SGET_BOOLEAN:
-  case OPCODE_SGET_BYTE:
-  case OPCODE_SGET_CHAR:
+  case OPCODE_SGET_BOOLEAN: {
+    set_boolean(current_state, RESULT_REGISTER);
+    break;
+  }
+  case OPCODE_SGET_BYTE: {
+    set_byte(current_state, RESULT_REGISTER);
+    break;
+  }
+  case OPCODE_SGET_CHAR: {
+    set_char(current_state, RESULT_REGISTER);
+    break;
+  }
   case OPCODE_SGET_SHORT: {
-    set_integer(current_state, RESULT_REGISTER);
+    set_short(current_state, RESULT_REGISTER);
     break;
   }
   case OPCODE_SGET_WIDE: {
@@ -831,15 +1056,24 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     if (type::is_float(type)) {
       refine_float(current_state, insn->src(0));
     } else {
-      refine_integer(current_state, insn->src(0));
+      refine_int(current_state, insn->src(0));
     }
     break;
   }
-  case OPCODE_SPUT_BOOLEAN:
-  case OPCODE_SPUT_BYTE:
-  case OPCODE_SPUT_CHAR:
+  case OPCODE_SPUT_BOOLEAN: {
+    refine_boolean(current_state, insn->src(0));
+    break;
+  }
+  case OPCODE_SPUT_BYTE: {
+    refine_byte(current_state, insn->src(0));
+    break;
+  }
+  case OPCODE_SPUT_CHAR: {
+    refine_char(current_state, insn->src(0));
+    break;
+  }
   case OPCODE_SPUT_SHORT: {
-    refine_integer(current_state, insn->src(0));
+    refine_short(current_state, insn->src(0));
     break;
   }
   case OPCODE_SPUT_WIDE: {
@@ -880,9 +1114,27 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
         refine_reference(current_state, insn->src(src_idx++));
         continue;
       }
-      if (type::is_integer(arg_type)) {
-        refine_integer(current_state, insn->src(src_idx++));
-        continue;
+      if (type::is_integral(arg_type)) {
+        if (type::is_int(arg_type)) {
+          refine_int(current_state, insn->src(src_idx++));
+          continue;
+        }
+        if (type::is_char(arg_type)) {
+          refine_char(current_state, insn->src(src_idx++));
+          continue;
+        }
+        if (type::is_boolean(arg_type)) {
+          refine_boolean(current_state, insn->src(src_idx++));
+          continue;
+        }
+        if (type::is_short(arg_type)) {
+          refine_short(current_state, insn->src(src_idx++));
+          continue;
+        }
+        if (type::is_byte(arg_type)) {
+          refine_byte(current_state, insn->src(src_idx++));
+          continue;
+        }
       }
       if (type::is_long(arg_type)) {
         refine_long(current_state, insn->src(src_idx++));
@@ -903,9 +1155,27 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
       set_reference(current_state, RESULT_REGISTER, return_type);
       break;
     }
-    if (type::is_integer(return_type)) {
-      set_integer(current_state, RESULT_REGISTER);
-      break;
+    if (type::is_integral(return_type)) {
+      if (type::is_int(return_type)) {
+        set_int(current_state, RESULT_REGISTER);
+        break;
+      }
+      if (type::is_char(return_type)) {
+        set_char(current_state, RESULT_REGISTER);
+        break;
+      }
+      if (type::is_boolean(return_type)) {
+        set_boolean(current_state, RESULT_REGISTER);
+        break;
+      }
+      if (type::is_short(return_type)) {
+        set_short(current_state, RESULT_REGISTER);
+        break;
+      }
+      if (type::is_byte(return_type)) {
+        set_byte(current_state, RESULT_REGISTER);
+        break;
+      }
     }
     if (type::is_long(return_type)) {
       set_long(current_state, RESULT_REGISTER);
@@ -921,8 +1191,8 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   }
   case OPCODE_NEG_INT:
   case OPCODE_NOT_INT: {
-    refine_integer(current_state, insn->src(0));
-    set_integer(current_state, insn->dest());
+    refine_int(current_state, insn->src(0));
+    set_int(current_state, insn->dest());
     break;
   }
   case OPCODE_NEG_LONG:
@@ -941,30 +1211,38 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     set_double(current_state, insn->dest());
     break;
   }
-  case OPCODE_INT_TO_BYTE:
-  case OPCODE_INT_TO_CHAR:
+  case OPCODE_INT_TO_BYTE: {
+    refine_int(current_state, insn->src(0));
+    set_byte(current_state, insn->dest());
+    break;
+  }
+  case OPCODE_INT_TO_CHAR: {
+    refine_int(current_state, insn->src(0));
+    set_char(current_state, insn->dest());
+    break;
+  }
   case OPCODE_INT_TO_SHORT: {
-    refine_integer(current_state, insn->src(0));
-    set_integer(current_state, insn->dest());
+    refine_int(current_state, insn->src(0));
+    set_short(current_state, insn->dest());
     break;
   }
   case OPCODE_LONG_TO_INT: {
     refine_long(current_state, insn->src(0));
-    set_integer(current_state, insn->dest());
+    set_int(current_state, insn->dest());
     break;
   }
   case OPCODE_FLOAT_TO_INT: {
     refine_float(current_state, insn->src(0));
-    set_integer(current_state, insn->dest());
+    set_int(current_state, insn->dest());
     break;
   }
   case OPCODE_DOUBLE_TO_INT: {
     refine_double(current_state, insn->src(0));
-    set_integer(current_state, insn->dest());
+    set_int(current_state, insn->dest());
     break;
   }
   case OPCODE_INT_TO_LONG: {
-    refine_integer(current_state, insn->src(0));
+    refine_int(current_state, insn->src(0));
     set_long(current_state, insn->dest());
     break;
   }
@@ -979,7 +1257,7 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     break;
   }
   case OPCODE_INT_TO_FLOAT: {
-    refine_integer(current_state, insn->src(0));
+    refine_int(current_state, insn->src(0));
     set_float(current_state, insn->dest());
     break;
   }
@@ -994,7 +1272,7 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     break;
   }
   case OPCODE_INT_TO_DOUBLE: {
-    refine_integer(current_state, insn->src(0));
+    refine_int(current_state, insn->src(0));
     set_double(current_state, insn->dest());
     break;
   }
@@ -1011,22 +1289,33 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   case OPCODE_ADD_INT:
   case OPCODE_SUB_INT:
   case OPCODE_MUL_INT:
-  case OPCODE_AND_INT:
-  case OPCODE_OR_INT:
-  case OPCODE_XOR_INT:
   case OPCODE_SHL_INT:
   case OPCODE_SHR_INT:
   case OPCODE_USHR_INT: {
-    refine_integer(current_state, insn->src(0));
-    refine_integer(current_state, insn->src(1));
-    set_integer(current_state, insn->dest());
+    refine_int(current_state, insn->src(0));
+    refine_int(current_state, insn->src(1));
+    set_int(current_state, insn->dest());
     break;
   }
+  case OPCODE_AND_INT:
+  case OPCODE_OR_INT:
+  case OPCODE_XOR_INT: {
+    // TODO: The IntType of the destination is set to boolean to make the
+    // IntTypePatcher more conservative when finding conversions. The
+    // Android 4.4 verifier actually determines the type for the destination
+    // based on types of the inputs, so a possible improvement would be to set
+    // the IntType based on the inputs.
+    refine_int(current_state, insn->src(0));
+    refine_int(current_state, insn->src(1));
+    set_boolean(current_state, insn->dest());
+    break;
+  }
+
   case OPCODE_DIV_INT:
   case OPCODE_REM_INT: {
-    refine_integer(current_state, insn->src(0));
-    refine_integer(current_state, insn->src(1));
-    set_integer(current_state, RESULT_REGISTER);
+    refine_int(current_state, insn->src(0));
+    refine_int(current_state, insn->src(1));
+    set_int(current_state, RESULT_REGISTER);
     break;
   }
   case OPCODE_ADD_LONG:
@@ -1051,7 +1340,7 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   case OPCODE_SHR_LONG:
   case OPCODE_USHR_LONG: {
     refine_long(current_state, insn->src(0));
-    refine_integer(current_state, insn->src(1));
+    refine_int(current_state, insn->src(1));
     set_long(current_state, insn->dest());
     break;
   }
@@ -1078,20 +1367,24 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   case OPCODE_ADD_INT_LIT:
   case OPCODE_RSUB_INT_LIT:
   case OPCODE_MUL_INT_LIT:
-  case OPCODE_AND_INT_LIT:
-  case OPCODE_OR_INT_LIT:
-  case OPCODE_XOR_INT_LIT:
   case OPCODE_SHL_INT_LIT:
   case OPCODE_SHR_INT_LIT:
   case OPCODE_USHR_INT_LIT: {
-    refine_integer(current_state, insn->src(0));
-    set_integer(current_state, insn->dest());
+    refine_int(current_state, insn->src(0));
+    set_int(current_state, insn->dest());
+    break;
+  }
+  case OPCODE_AND_INT_LIT:
+  case OPCODE_OR_INT_LIT:
+  case OPCODE_XOR_INT_LIT: {
+    refine_int(current_state, insn->src(0));
+    set_boolean(current_state, insn->dest());
     break;
   }
   case OPCODE_DIV_INT_LIT:
   case OPCODE_REM_INT_LIT: {
-    refine_integer(current_state, insn->src(0));
-    set_integer(current_state, RESULT_REGISTER);
+    refine_int(current_state, insn->src(0));
+    set_int(current_state, RESULT_REGISTER);
     break;
   }
   case IOPCODE_INIT_CLASS: {
@@ -1102,6 +1395,7 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   // If the opcode does not set the RESULT_REGISTER, clear it.
   if (!insn->has_move_result_any()) {
     set_type(current_state, RESULT_REGISTER, TypeDomain::top());
+    set_type(current_state, RESULT_REGISTER, IntTypeDomain::top());
     current_state->reset_dex_type(RESULT_REGISTER);
   }
 }

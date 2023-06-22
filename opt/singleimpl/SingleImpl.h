@@ -26,6 +26,16 @@ class SingleImplPass : public Pass {
  public:
   SingleImplPass() : Pass("SingleImplPass") {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::interactions;
+    using namespace redex_properties::names;
+    return {
+        {HasSourceBlocks, Preserves},
+        {NoSpuriousGetClassCalls, Preserves},
+    };
+  }
+
   void bind_config() override {
     bind("allowlist", {}, m_pass_config.allowlist);
     bind("package_allowlist", {}, m_pass_config.package_allowlist);

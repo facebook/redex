@@ -14,6 +14,17 @@ class OriginalNamePass : public Pass {
  public:
   OriginalNamePass() : Pass("OriginalNamePass") {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::interactions;
+    using namespace redex_properties::names;
+    return {
+        {DexLimitsObeyed, Preserves},
+        {HasSourceBlocks, Preserves},
+        {RenameClass, Preserves},
+    };
+  }
+
   void bind_config() override {
     bind("hierarchy_roots", {}, m_hierarchy_roots);
     trait(Traits::Pass::unique, true);

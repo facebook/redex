@@ -452,13 +452,6 @@ Classes that are referenced by code or annotations are kept.
 See related:
 * [`StaticReloPassV2`](#staticrelopassv2)
 
-## RemoveGotosPass
-
-Remove unnecessary control flow edges. A merge of blocks `B` and `C` is done iff:
-* `B` jumps to `C` unconditionally
-* The only [predecessor] of `C` is `B`
-* `B` and `C` both point to the same catch handler
-
 ## RemoveInterfacePass
 
 The motivation of this pass is to remove a hierarchy of interfaces extending

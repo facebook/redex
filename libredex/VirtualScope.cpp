@@ -6,6 +6,10 @@
  */
 
 #include "VirtualScope.h"
+
+#include <map>
+#include <set>
+
 #include "Creators.h"
 #include "DexAccess.h"
 #include "DexUtil.h"
@@ -13,9 +17,6 @@
 #include "Show.h"
 #include "Timer.h"
 #include "Trace.h"
-
-#include <map>
-#include <set>
 
 namespace {
 
@@ -170,6 +171,8 @@ void create_object_class() {
   }
 }
 
+} // namespace
+
 // map from a proto to the set of interface implementing that sig
 using IntfProtoMap = std::map<const DexProto*, TypeSet, dexprotos_comparator>;
 
@@ -182,6 +185,7 @@ using BaseSigs = std::map<const DexString*,
                           std::set<const DexProto*, dexprotos_comparator>,
                           dexstrings_comparator>;
 
+namespace virt_scope {
 /**
  * Create a BaseSig which is the set of method definitions in a type.
  */
@@ -771,8 +775,6 @@ void get_root_scopes(const SignatureMap& sig_map,
   get_rooted_interface_scope(sig_map, type, type_class(type), cls_scopes);
 }
 
-} // namespace
-
 SignatureMap build_signature_map(const ClassHierarchy& class_hierarchy) {
   SignatureMap signature_map;
   build_signature_map(class_hierarchy, type::java_lang_Object(), signature_map);
@@ -919,3 +921,5 @@ InterfaceScope ClassScopes::find_interface_scope(const DexMethod* meth) const {
 }
 
 std::string ClassScopes::show_type(const DexType* type) { return show(type); }
+
+} // namespace virt_scope

@@ -21,5 +21,6 @@ void run_inliner(DexStoresVector& stores,
                  ConfigFiles& conf,
                  bool intra_dex = false,
                  InlineForSpeed* inline_for_speed = nullptr,
-                 bool inline_bridge_synth_only = false);
+                 bool inline_bridge_synth_only = false,
+                 bool local_only = false);
 } // namespace inliner

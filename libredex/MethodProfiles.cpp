@@ -310,6 +310,10 @@ double MethodProfiles::get_process_unresolved_lines_seconds() {
 }
 
 void MethodProfiles::process_unresolved_lines() {
+  if (m_unresolved_lines.empty()) {
+    return;
+  }
+
   auto timer_scope = s_process_unresolved_lines_timer.scope();
 
   std::set<ParsedMain*> resolved;
@@ -635,67 +639,4 @@ bool dexmethods_profiled_comparator::operator()(DexMethod* a, DexMethod* b) {
   }
 
   return m_initial_order.at(a) < m_initial_order.at(b);
-}
-
-dexmethods_profiled_secondary_comparator::
-    dexmethods_profiled_secondary_comparator(
-        const std::vector<DexMethod*>& initial_order,
-        const method_profiles::MethodProfiles* method_profiles,
-        const MethodProfileOrderingConfig* config)
-    : m_method_profiles(method_profiles) {
-  always_assert(m_method_profiles != nullptr);
-  for (auto method : initial_order) {
-    m_initial_order.emplace(method, m_initial_order.size());
-  }
-}
-
-bool dexmethods_profiled_secondary_comparator::operator()(DexMethod* a,
-                                                          DexMethod* b) {
-  if (a == nullptr) {
-    return b != nullptr;
-  } else if (b == nullptr) {
-    return false;
-  }
-
-  // If both don't meet appear100 threshold, e.g. not 0.0.  Then return initial
-  // order.
-  // If A appear100 == 0.0, and B is not, then B < A, ordering A after B.
-  // If both do meet threshold, then return initial order.
-
-  const auto& stats_map = m_method_profiles->method_stats("DittoCoverageMain");
-  auto it_a = stats_map.find(a);
-  auto it_b = stats_map.find(b);
-  if (it_a == stats_map.end() && it_b == stats_map.end()) {
-    return m_initial_order.at(a) < m_initial_order.at(b);
-  } else if (it_a == stats_map.end()) {
-    double appear_pct_b = it_b->second.appear_percent;
-    // If appear pct b is 0.0, then we want a < b to have b be at the end.
-    // If appear pct b is bigger than 0.0, then we want initial ordering
-    if (appear_pct_b == 0.0) {
-      return true;
-    } else {
-      return m_initial_order.at(a) < m_initial_order.at(b);
-    }
-  } else if (it_b == stats_map.end()) {
-    double appear_pct_a = it_a->second.appear_percent;
-    // If appear pct a is 0.0, then we want a > b to have a be at the end.
-    // If appear pct a is bigger than 0.0, then we want initial ordering
-    if (appear_pct_a == 0.0) {
-      return false;
-    } else {
-      return m_initial_order.at(a) < m_initial_order.at(b);
-    }
-  }
-
-  double appear_pct_a = it_a->second.appear_percent;
-  double appear_pct_b = it_b->second.appear_percent;
-
-  // Eventually config for hardcoded threshold of appear100 <= 0.0.
-  if (appear_pct_a == 0.0 && appear_pct_b >= 0.0) {
-    return false;
-  } else if (appear_pct_a >= 0.0 && appear_pct_b == 0.0) {
-    return true;
-  } else {
-    return m_initial_order.at(a) < m_initial_order.at(b);
-  }
 }

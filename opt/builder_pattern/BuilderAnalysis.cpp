@@ -9,7 +9,6 @@
 
 #include "BaseIRAnalyzer.h"
 #include "ConstantAbstractDomain.h"
-#include "ControlFlow.h"
 #include "Liveness.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "Resolver.h"
@@ -218,13 +217,14 @@ void BuilderAnalysis::run_analysis() {
     return;
   }
 
-  code->build_cfg(/* editable */ false);
+  always_assert(code->editable_cfg_built());
   cfg::ControlFlowGraph& cfg = code->cfg();
   cfg.calculate_exit_block();
   m_analyzer.reset(new impl::Analyzer(
       cfg, m_builder_types, m_excluded_builder_types, m_accept_excluded));
 
   populate_usage();
+  cfg.recompute_registers_size();
   update_stats();
 }
 
@@ -300,7 +300,7 @@ void BuilderAnalysis::populate_usage() {
   // If the instantiated type is not excluded, updates the usages map.
   // Otherwise, update the excluded instantiation list.
   auto update_usages = [&](const IRInstruction* val,
-                           const IRList::iterator& use) {
+                           const cfg::InstructionIterator& use) {
     if (auto referenced_type = get_instantiated_type(val)) {
       if (m_excluded_builder_types.count(referenced_type) == 0) {
         m_usage[val].push_back(use);
@@ -318,7 +318,7 @@ void BuilderAnalysis::populate_usage() {
   for (cfg::Block* block : cfg.blocks()) {
     auto env = m_analyzer->get_entry_state_at(block);
     for (auto& mie : InstructionIterable(block)) {
-      auto it = code->iterator_to(mie);
+      auto it = block->to_cfg_instruction_iterator(mie);
       IRInstruction* insn = mie.insn;
       m_insn_to_env->emplace(insn, env);
       m_analyzer->analyze_instruction(insn, &env);

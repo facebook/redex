@@ -16,10 +16,21 @@ namespace builder_pattern {
 class RemoveBuilderPatternPass : public Pass {
  public:
   RemoveBuilderPatternPass() : Pass("RemoveBuilderPatternPass") {}
+
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::interactions;
+    using namespace redex_properties::names;
+    return {
+        {HasSourceBlocks, Preserves},
+    };
+  }
+
   explicit RemoveBuilderPatternPass(const std::string& name) : Pass(name) {}
 
   void bind_config() override;
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  bool is_editable_cfg_friendly() override { return true; }
 
   std::unique_ptr<Pass> clone(const std::string& new_name) const override {
     return std::make_unique<RemoveBuilderPatternPass>(new_name);

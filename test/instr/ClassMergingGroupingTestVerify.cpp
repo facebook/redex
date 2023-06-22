@@ -15,11 +15,11 @@ TEST_F(PostVerify, MergeablesRemoval) {
   auto s4 = find_class_named(classes, "Lcom/facebook/redextest/S4;");
   auto s5 = find_class_named(classes, "Lcom/facebook/redextest/S5;");
   auto s6 = find_class_named(classes, "Lcom/facebook/redextest/S6;");
-  verify_type_erased(s1);
-  verify_type_erased(s2);
-  verify_type_erased(s3);
-  verify_type_erased(s4);
-  verify_type_erased(s5);
+  verify_class_merged(s1);
+  verify_class_merged(s2);
+  verify_class_merged(s3);
+  verify_class_merged(s4);
+  verify_class_merged(s5);
   // s6 is not erased because the max_count is 5.
   EXPECT_EQ(s6->get_vmethods().size(), 1);
   EXPECT_EQ(s6->get_dmethods().size(), 1);
@@ -31,13 +31,13 @@ TEST_F(PostVerify, MergeablesRemoval) {
   auto q5 = find_class_named(classes, "Lcom/facebook/redextest/Q5;");
   auto q6 = find_class_named(classes, "Lcom/facebook/redextest/Q6;");
   auto q7 = find_class_named(classes, "Lcom/facebook/redextest/Q7;");
-  verify_type_erased(q1);
-  verify_type_erased(q2);
-  verify_type_erased(q3);
-  verify_type_erased(q4);
-  verify_type_erased(q5);
-  verify_type_erased(q6);
-  verify_type_erased(q7);
+  verify_class_merged(q1);
+  verify_class_merged(q2);
+  verify_class_merged(q3);
+  verify_class_merged(q4);
+  verify_class_merged(q5);
+  verify_class_merged(q6);
+  verify_class_merged(q7);
 }
 
 TEST_F(PostVerify, ShapeWithGrouping) {

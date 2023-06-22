@@ -16,8 +16,6 @@
 #include "Trace.h"
 #include "Walkers.h"
 
-namespace mog = method_override_graph;
-
 namespace {
 
 std::unordered_set<DexMethod*> methodgroups_to_methodset(

@@ -33,6 +33,7 @@
 #include "ApiLevelChecker.h"
 #include "AssetManager.h"
 #include "CFGMutation.h"
+#include "ClassChecker.h"
 #include "CommandProfiling.h"
 #include "ConfigFiles.h"
 #include "Debug.h"
@@ -55,6 +56,7 @@
 #include "ProguardReporting.h"
 #include "Purity.h"
 #include "ReachableClasses.h"
+#include "RedexPropertiesManager.h"
 #include "Sanitizers.h"
 #include "ScopedCFG.h"
 #include "ScopedMemStats.h"
@@ -109,8 +111,7 @@ class CheckerConfig {
     m_annotated_cfg_on_error_reduced =
         type_checker_args.get("annotated_cfg_on_error_reduced", true).asBool();
 
-    m_check_num_of_refs =
-        type_checker_args.get("check_num_of_refs", false).asBool();
+    m_check_classes = type_checker_args.get("check_classes", true).asBool();
 
     for (auto& trigger_pass : type_checker_args["run_after_passes"]) {
       m_type_checker_trigger_passes.insert(trigger_pass.asString());
@@ -157,62 +158,6 @@ class CheckerConfig {
   bool run_after_pass(const Pass* pass) {
     return m_run_type_checker_after_each_pass ||
            m_type_checker_trigger_passes.count(pass->name()) > 0;
-  }
-
-  /**
-   * Return activated_passes.size() if the checking is turned off.
-   * Otherwize, return 0 or the index of the last InterDexPass.
-   */
-  size_t min_pass_idx_for_dex_ref_check(
-      const std::vector<Pass*>& activated_passes) {
-    if (!m_check_num_of_refs) {
-      return activated_passes.size();
-    }
-    size_t idx = 0;
-    for (size_t i = 0; i < activated_passes.size(); i++) {
-      if (activated_passes[i]->name() == "InterDexPass") {
-        idx = i;
-      }
-    }
-    return idx;
-  }
-
-  static void ref_validation(const DexStoresVector& stores,
-                             const std::string& pass_name) {
-    Timer t("ref_validation");
-    auto check_ref_num = [pass_name](const DexClasses& classes,
-                                     const DexStore& store, size_t dex_id) {
-      constexpr size_t limit = 65536;
-      std::unordered_set<DexMethodRef*> total_method_refs;
-      std::unordered_set<DexFieldRef*> total_field_refs;
-      std::unordered_set<DexType*> total_type_refs;
-      for (const auto cls : classes) {
-        std::vector<DexMethodRef*> method_refs;
-        std::vector<DexFieldRef*> field_refs;
-        std::vector<DexType*> type_refs;
-        cls->gather_methods(method_refs);
-        cls->gather_fields(field_refs);
-        cls->gather_types(type_refs);
-        total_type_refs.insert(type_refs.begin(), type_refs.end());
-        total_field_refs.insert(field_refs.begin(), field_refs.end());
-        total_method_refs.insert(method_refs.begin(), method_refs.end());
-      }
-      TRACE(PM, 1, "dex %s: method refs %zu, filed refs %zu, type refs %zu",
-            dex_name(store, dex_id).c_str(), total_method_refs.size(),
-            total_field_refs.size(), total_type_refs.size());
-      always_assert_log(total_method_refs.size() <= limit,
-                        "%s adds too many method refs", pass_name.c_str());
-      always_assert_log(total_field_refs.size() <= limit,
-                        "%s adds too many field refs", pass_name.c_str());
-      always_assert_log(total_type_refs.size() <= limit,
-                        "%s adds too many type refs", pass_name.c_str());
-    };
-    for (const auto& store : stores) {
-      size_t dex_id = 0;
-      for (const auto& classes : store.get_dexen()) {
-        check_ref_num(classes, store, dex_id++);
-      }
-    }
   }
 
   // Literate style.
@@ -292,27 +237,42 @@ class CheckerConfig {
           return Result(dex_method);
         });
 
-    if (res.errors == 0) {
+    if (res.errors != 0) {
+      // Re-run the smallest method to produce error message.
+      auto checker = run_checker(res.smallest_error_method);
+      redex_assert(checker.fail());
+
+      std::ostringstream oss;
+      oss << "Inconsistency found in Dex code for "
+          << show(res.smallest_error_method) << std::endl
+          << " " << checker.what() << std::endl
+          << "Code:" << std::endl
+          << run_checker_error(res.smallest_error_method);
+
+      if (res.errors > 1) {
+        oss << "\n(" << (res.errors - 1) << " more issues!)";
+      }
+
+      always_assert_log(!exit_on_fail, "%s", oss.str().c_str());
+      return oss.str();
+    }
+
+    if (!m_check_classes) {
       return boost::none;
     }
 
-    // Re-run the smallest method to produce error message.
-    auto checker = run_checker(res.smallest_error_method);
-    redex_assert(checker.fail());
+    TRACE(PM, 1, "Running NonAbstractClassChecker...");
+    Timer t1("NonAbstractClassChecker");
 
-    std::ostringstream oss;
-    oss << "Inconsistency found in Dex code for "
-        << show(res.smallest_error_method) << std::endl
-        << " " << checker.what() << std::endl
-        << "Code:" << std::endl
-        << run_checker_error(res.smallest_error_method);
-
-    if (res.errors > 1) {
-      oss << "\n(" << (res.errors - 1) << " more issues!)";
+    ClassChecker class_checker;
+    class_checker.run(scope);
+    if (class_checker.fail()) {
+      std::ostringstream oss = class_checker.print_failed_classes();
+      always_assert_log(!exit_on_fail, "%s", oss.str().c_str());
+      return oss.str();
     }
 
-    always_assert_log(!exit_on_fail, "%s", oss.str().c_str());
-    return oss.str();
+    return boost::none;
   }
 
   static void fail_error(const std::string& error_msg, size_t errors = 1) {
@@ -331,11 +291,11 @@ class CheckerConfig {
   bool m_verify_moves;
   bool m_validate_invoke_super;
   bool m_check_no_overwrite_this;
-  bool m_check_num_of_refs;
   // TODO(fengliu): Kill the `validate_access` flag.
   bool m_validate_access{true};
   bool m_annotated_cfg_on_error{false};
   bool m_annotated_cfg_on_error_reduced{true};
+  bool m_check_classes;
 };
 
 class CheckUniqueDeobfuscatedNames {
@@ -1043,14 +1003,16 @@ PassManager::PassManager(
     const std::vector<Pass*>& passes,
     std::unique_ptr<keep_rules::ProguardConfiguration> pg_config,
     const ConfigFiles& config,
-    const RedexOptions& options)
+    const RedexOptions& options,
+    redex_properties::Manager* properties_manager)
     : m_asset_mgr(get_apk_dir(config)),
       m_registered_passes(passes),
       m_current_pass_info(nullptr),
       m_pg_config(std::move(pg_config)),
       m_redex_options(options),
       m_testing_mode(false),
-      m_internal_fields(new InternalFields()) {
+      m_internal_fields(new InternalFields()),
+      m_properties_manager(properties_manager) {
   init(config);
   if (getenv("MALLOC_PROFILE_PASS")) {
     m_malloc_profile_pass = find_pass(getenv("MALLOC_PROFILE_PASS"));
@@ -1178,6 +1140,29 @@ void PassManager::eval_passes(DexStoresVector& stores, ConfigFiles& conf) {
   }
 }
 
+void PassManager::init_property_interactions(ConfigFiles& conf) {
+  for (size_t i = 0; i < m_activated_passes.size(); ++i) {
+    Pass* pass = m_activated_passes[i];
+    auto* pass_info = &m_pass_info[i];
+    auto m = pass->get_property_interactions();
+    for (auto it = m.begin(); it != m.end();) {
+      auto&& [name, property_interaction] = *it;
+
+      if (m_properties_manager != nullptr &&
+          !m_properties_manager->property_is_enabled(name)) {
+        it = m.erase(it);
+        continue;
+      }
+
+      always_assert_log(property_interaction.is_valid(),
+                        "%s has an invalid property interaction for %s",
+                        pass->name().c_str(), name.c_str());
+      ++it;
+    }
+    pass_info->property_interactions = std::move(m);
+  }
+}
+
 void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   const auto* pm_config =
       conf.get_global_config().get_config_by_name<PassManagerConfig>(
@@ -1222,6 +1207,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
 
   eval_passes(stores, conf);
 
+  init_property_interactions(conf);
+
   // Retrieve the hasher's settings.
   bool run_hasher_after_each_pass =
       is_run_hasher_after_each_pass(conf, get_redex_options());
@@ -1257,13 +1244,27 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   const bool hwm_per_pass =
       conf.get_json_config().get("mem_stats_per_pass", true);
 
-  size_t min_pass_idx_for_dex_ref_check =
-      checker_conf.min_pass_idx_for_dex_ref_check(m_activated_passes);
-
   // Abort if the analysis pass dependencies are not satisfied.
   AnalysisUsage::check_dependencies(m_activated_passes);
 
   AfterPassSizes after_pass_size(this, conf);
+
+  if (pm_config->check_pass_order_properties) {
+    std::vector<std::pair<std::string, redex_properties::PropertyInteractions>>
+        pass_interactions;
+    for (size_t i = 0; i < m_activated_passes.size(); ++i) {
+      Pass* pass = m_activated_passes[i];
+      auto* pass_info = &m_pass_info[i];
+      pass_interactions.emplace_back(pass->name(),
+                                     pass_info->property_interactions);
+    }
+    auto failure = redex_properties::Manager::verify_pass_interactions(
+        pass_interactions, conf);
+    if (failure) {
+      fprintf(stderr, "ABORT! Illegal pass order:\n%s", failure->c_str());
+      exit(EXIT_FAILURE);
+    }
+  }
 
   // For core loop legibility, have a lambda here.
 
@@ -1334,10 +1335,18 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       auto timer = m_check_unique_deobfuscateds_timer.scope();
       check_unique_deobfuscated.run_after_pass(pass, scope);
     }
-    if (i >= min_pass_idx_for_dex_ref_check) {
-      CheckerConfig::ref_validation(stores, pass->name());
+    if (pm_config->check_properties_deep && m_properties_manager != nullptr) {
+      TRACE(PM, 2, "Checking established properties of %s...",
+            m_current_pass_info->pass->name().c_str());
+      m_properties_manager->apply_and_check(
+          m_current_pass_info->property_interactions, stores, *this);
     }
   };
+
+  if (pm_config->check_properties_deep && m_properties_manager != nullptr) {
+    TRACE(PM, 2, "Checking initial properties of...");
+    m_properties_manager->check(stores, *this);
+  }
 
   JNINativeContextHelper jni_native_context_helper(
       scope, m_redex_options.jni_summary_path);
@@ -1459,6 +1468,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       method_profiles::MethodProfiles::get_process_unresolved_lines_seconds());
   Timer::add_timer("compute_locations_closure_wto",
                    get_compute_locations_closure_wto_seconds());
+  Timer::add_timer("cc_impl::destructor_second",
+                   cc_impl::get_destructor_seconds());
 }
 
 void PassManager::activate_pass(const std::string& name,

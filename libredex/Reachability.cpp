@@ -275,10 +275,9 @@ void TransitiveClosureMarker::push(const Parent* parent, const DexClass* cls) {
     return;
   }
   record_reachability(parent, cls);
-  if (m_reachable_objects->marked(cls)) {
+  if (!m_reachable_objects->mark(cls)) {
     return;
   }
-  m_reachable_objects->mark(cls);
   m_worker_state->push_task(ReachableObject(cls));
 }
 
@@ -289,14 +288,13 @@ void TransitiveClosureMarker::push(const Parent* parent,
     return;
   }
   record_reachability(parent, field);
-  if (m_reachable_objects->marked(field)) {
+  if (!m_reachable_objects->mark(field)) {
     return;
   }
   auto f = field->as_def();
   if (f) {
     gather_and_push(f);
   }
-  m_reachable_objects->mark(field);
   m_worker_state->push_task(ReachableObject(field));
 }
 
@@ -308,10 +306,9 @@ void TransitiveClosureMarker::push(const Parent* parent,
   }
 
   record_reachability(parent, method);
-  if (m_reachable_objects->marked(method)) {
+  if (!m_reachable_objects->mark(method)) {
     return;
   }
-  m_reachable_objects->mark(method);
   m_worker_state->push_task(ReachableObject(method));
 }
 
@@ -417,8 +414,8 @@ template <class Parent>
 void TransitiveClosureMarker::push_typelike_strings(
     const Parent* parent, const std::vector<const DexString*>& strings) {
   for (auto const& str : strings) {
-    auto internal = java_names::external_to_internal(str->c_str());
-    auto type = DexType::get_type(internal.c_str());
+    auto internal = java_names::external_to_internal(str->str());
+    auto type = DexType::get_type(internal);
     if (!type) {
       continue;
     }
@@ -430,7 +427,9 @@ void TransitiveClosureMarker::visit_cls(const DexClass* cls) {
   TRACE(REACH, 4, "Visiting class: %s", SHOW(cls));
   for (auto& m : cls->get_dmethods()) {
     if (method::is_clinit(m)) {
-      push(cls, m);
+      if (!m->get_code() || !method::is_trivial_clinit(*m->get_code())) {
+        push(cls, m);
+      }
     } else if (!m_remove_no_argument_constructors &&
                method::is_argless_init(m)) {
       // Push the parameterless constructor, in case it's constructed via
@@ -718,10 +717,10 @@ void sweep(DexStoresVector& stores,
   }
 
   auto sweep_method = [&](DexMethodRef* m) {
-    if (m->is_def()) {
-      m->as_def()->release_code(); // Free code.
-    }
     DexMethod::erase_method(m);
+    if (m->is_def()) {
+      DexMethod::delete_method(m->as_def());
+    }
   };
 
   walk::parallel::classes(scope, [&](DexClass* cls) {

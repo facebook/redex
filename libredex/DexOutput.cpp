@@ -282,22 +282,6 @@ void GatheredTypes::sort_dexmethod_emitlist_profiled_order(
   std::stable_sort(lmeth.begin(), lmeth.end(), std::ref(comparator));
 }
 
-void GatheredTypes::sort_dexmethod_emitlist_profiled_secondary_order(
-    std::vector<DexMethod*>& lmeth) {
-  redex_assert(m_config != nullptr);
-
-  MethodProfileOrderingConfig* config =
-      m_config->get_global_config()
-          .get_config_by_name<MethodProfileOrderingConfig>(
-              "method_profile_order");
-
-  method_profiles::dexmethods_profiled_secondary_comparator comparator(
-      lmeth, &m_config->get_secondary_method_profiles(), config);
-
-  // Use std::ref to avoid comparator copies.
-  std::stable_sort(lmeth.begin(), lmeth.end(), std::ref(comparator));
-}
-
 void GatheredTypes::sort_dexmethod_emitlist_clinit_order(
     std::vector<DexMethod*>& lmeth) {
   std::stable_sort(lmeth.begin(), lmeth.end(),
@@ -568,7 +552,6 @@ DexOutput::DexOutput(
     std::unordered_map<DexMethod*, uint64_t>* method_to_id,
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
     const DexOutputConfig& dex_output_config,
-    PostLowering* post_lowering,
     int min_sdk)
     : m_classes(classes),
       m_gtypes(std::move(gtypes)),
@@ -592,14 +575,14 @@ DexOutput::DexOutput(
   always_assert_log(
       m_dodx->method_to_idx().size() <= kMaxMethodRefs,
       "Trying to encode too many method refs in dex %s: %lu (limit: %lu). Run "
-      "with `-J ir_type_checker.check_num_of_refs=true`.",
+      "with check_properties_deep turned on.",
       boost::filesystem::path(path).filename().c_str(),
       m_dodx->method_to_idx().size(),
       kMaxMethodRefs);
   always_assert_log(
       m_dodx->field_to_idx().size() <= kMaxFieldRefs,
       "Trying to encode too many field refs in dex %s: %lu (limit: %lu). Run "
-      "with `-J ir_type_checker.check_num_of_refs=true`.",
+      "with check_properties_deep turned on.",
       boost::filesystem::path(path).filename().c_str(),
       m_dodx->field_to_idx().size(),
       kMaxFieldRefs);
@@ -619,9 +602,6 @@ DexOutput::DexOutput(
   m_locator_index = locator_index;
   m_normal_primary_dex = normal_primary_dex;
   m_debug_info_kind = debug_info_kind;
-  if (post_lowering) {
-    m_detached_methods = post_lowering->get_detached_methods();
-  }
 }
 
 void DexOutput::insert_map_item(uint16_t maptype,
@@ -1099,11 +1079,6 @@ void DexOutput::generate_code_items(const std::vector<SortMode>& mode) {
     case SortMode::METHOD_SIMILARITY:
       TRACE(CUSTOMSORT, 2, "using method similarity order");
       m_gtypes->sort_dexmethod_emitlist_method_similarity_order(lmeth);
-      break;
-    case SortMode::METHOD_PROFILED_SECONDARY_ORDER:
-      TRACE(CUSTOMSORT, 2,
-            "using method profiled secondary order for bytecode sorting");
-      m_gtypes->sort_dexmethod_emitlist_profiled_secondary_order(lmeth);
       break;
     case SortMode::DEFAULT:
       TRACE(CUSTOMSORT, 2, "using default sorting order");
@@ -2712,11 +2687,7 @@ const char* deobf_primitive(char type) {
   }
 }
 
-void write_pg_mapping(
-    const std::string& filename,
-    DexClasses* classes,
-    const std::unordered_map<DexClass*, std::vector<DexMethod*>>*
-        detached_methods) {
+void write_pg_mapping(const std::string& filename, DexClasses* classes) {
   if (filename.empty()) return;
 
   auto deobf_class = [&](DexClass* cls) {
@@ -2757,7 +2728,7 @@ void write_pg_mapping(
         } else if (type::is_primitive(type)) {
           return std::string(deobf_primitive(type->c_str()[0]));
         } else {
-          return java_names::internal_to_external(type->c_str());
+          return java_names::internal_to_external(type->str());
         }
       }
     }
@@ -2828,33 +2799,23 @@ void write_pg_mapping(
   for (auto cls : *classes) {
     auto deobf_cls = deobf_class(cls);
     ofs << java_names::internal_to_external(deobf_cls) << " -> "
-        << java_names::internal_to_external(cls->get_type()->c_str()) << ":"
-        << std::endl;
+        << java_names::internal_to_external(cls->get_type()->str()) << ":"
+        << "\n";
     for (auto field : cls->get_ifields()) {
       auto deobf = deobf_field(field);
-      ofs << "    " << deobf << " -> " << field->c_str() << std::endl;
+      ofs << "    " << deobf << " -> " << field->c_str() << "\n";
     }
     for (auto field : cls->get_sfields()) {
       auto deobf = deobf_field(field);
-      ofs << "    " << deobf << " -> " << field->c_str() << std::endl;
+      ofs << "    " << deobf << " -> " << field->c_str() << "\n";
     }
     for (auto meth : cls->get_dmethods()) {
       auto deobf = deobf_meth(meth);
-      ofs << "    " << deobf << " -> " << meth->c_str() << std::endl;
+      ofs << "    " << deobf << " -> " << meth->c_str() << "\n";
     }
     for (auto meth : cls->get_vmethods()) {
       auto deobf = deobf_meth(meth);
-      ofs << "    " << deobf << " -> " << meth->c_str() << std::endl;
-    }
-    if (detached_methods) {
-      auto it = detached_methods->find(cls);
-      if (it != detached_methods->end()) {
-        ofs << "    --- detached methods ---" << std::endl;
-        for (auto meth : it->second) {
-          auto deobf = deobf_meth(meth);
-          ofs << "    " << deobf << " -> " << meth->c_str() << std::endl;
-        }
-      }
+      ofs << "    " << deobf << " -> " << meth->c_str() << "\n";
     }
   }
 }
@@ -2867,27 +2828,27 @@ void write_full_mapping(const std::string& filename,
   std::ofstream ofs(filename.c_str(), std::ofstream::out | std::ofstream::app);
   for (auto cls : *classes) {
     ofs << "type " << cls->get_deobfuscated_name_or_empty() << " -> "
-        << show(cls) << std::endl;
+        << show(cls) << "\n";
     if (store_name) {
       const auto& original_store_name = cls->get_location()->get_store_name();
       ofs << "store " << std::quoted(original_store_name) << " -> "
-          << std::quoted(*store_name) << std::endl;
+          << std::quoted(*store_name) << "\n";
     }
     for (auto field : cls->get_ifields()) {
       ofs << "ifield " << field->get_deobfuscated_name_or_empty() << " -> "
-          << show(field) << std::endl;
+          << show(field) << "\n";
     }
     for (auto field : cls->get_sfields()) {
       ofs << "sfield " << field->get_deobfuscated_name_or_empty() << " -> "
-          << show(field) << std::endl;
+          << show(field) << "\n";
     }
     for (auto method : cls->get_dmethods()) {
       ofs << "dmethod " << method->get_deobfuscated_name_or_empty() << " -> "
-          << show(method) << std::endl;
+          << show(method) << "\n";
     }
     for (auto method : cls->get_vmethods()) {
       ofs << "vmethod " << method->get_deobfuscated_name_or_empty() << " -> "
-          << show(method) << std::endl;
+          << show(method) << "\n";
     }
   }
 }
@@ -2920,7 +2881,7 @@ void DexOutput::write_symbol_files() {
                         hdr.class_defs_size, hdr.signature);
     // XXX: should write_bytecode_offset_mapping be included here too?
   }
-  write_pg_mapping(m_pg_mapping_filename, m_classes, &m_detached_methods);
+  write_pg_mapping(m_pg_mapping_filename, m_classes);
   write_full_mapping(m_full_mapping_filename, m_classes, m_store_name);
   write_bytecode_offset_mapping(m_bytecode_offset_filename,
                                 m_method_bytecode_offsets);
@@ -3049,8 +3010,6 @@ static SortMode make_sort_bytecode(const std::string& sort_bytecode) {
     return SortMode::METHOD_PROFILED_ORDER;
   } else if (sort_bytecode == "method_similarity_order") {
     return SortMode::METHOD_SIMILARITY;
-  } else if (sort_bytecode == "method_profiled_secondary_order") {
-    return SortMode::METHOD_PROFILED_SECONDARY_ORDER;
   } else {
     return SortMode::DEFAULT;
   }
@@ -3072,7 +3031,6 @@ enhanced_dex_stats_t write_classes_to_dex(
     IODIMetadata* iodi_metadata,
     const std::string& dex_magic,
     const DexOutputConfig& dex_output_config,
-    PostLowering* post_lowering,
     int min_sdk) {
   const JsonWrapper& json_cfg = conf.get_json_config();
   bool force_single_dex = json_cfg.get("force_single_dex", false);
@@ -3125,7 +3083,7 @@ enhanced_dex_stats_t write_classes_to_dex(
   DexOutput dout(filename.c_str(), classes, std::move(gtypes), locator_index,
                  normal_primary_dex, store_number, store_name, dex_number,
                  debug_info_kind, iodi_metadata, conf, pos_mapper, method_to_id,
-                 code_debug_lines, dex_output_config, post_lowering, min_sdk);
+                 code_debug_lines, dex_output_config, min_sdk);
 
   dout.prepare(string_sort_mode, code_sort_mode, conf, dex_magic);
   dout.write();

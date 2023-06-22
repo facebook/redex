@@ -134,8 +134,11 @@ class LogcatSymbolicator(object):
         return result
 
     def symbolicate(self, line):
-        line = self.CLASS_REGEX.sub(self.class_replacer, line)
+        orig_line = line
         line = self.TRACE_REGEX.sub(self.line_replacer, line)
+        if orig_line == line:
+            # if line replacer didn't work, use plain old class replacer
+            line = self.CLASS_REGEX.sub(self.class_replacer, line)
         return line
 
     @staticmethod

@@ -84,6 +84,16 @@ DexMethod* find_vmethod_named(const DexClass& cls, const char* name) {
   return it == vmethods.end() ? nullptr : *it;
 }
 
+DexMethod* find_vmethod(const DexClass& cls,
+                        const char* name,
+                        const DexProto* proto) {
+  auto vmethods = cls.get_vmethods();
+  auto it = std::find_if(vmethods.begin(), vmethods.end(), [&](DexMethod* m) {
+    return strcmp(name, m->get_name()->c_str()) == 0 && m->get_proto() == proto;
+  });
+  return it == vmethods.end() ? nullptr : *it;
+}
+
 DexMethod* find_dmethod_named(const DexClass& cls, const char* name) {
   auto dmethods = cls.get_dmethods();
   auto it =
@@ -183,7 +193,7 @@ DexInstruction* find_instruction(DexMethod* m, DexOpcode opcode) {
   return it == insns.end() ? nullptr : *it;
 }
 
-void verify_type_erased(const DexClass* cls, size_t num_dmethods) {
+void verify_class_merged(const DexClass* cls, size_t num_dmethods) {
   if (!cls) {
     ASSERT_EQ(num_dmethods, 0)
         << "cls is null, can not have " << num_dmethods << " dmethods\n";

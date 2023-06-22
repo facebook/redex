@@ -57,6 +57,17 @@ class InterDexReshufflePass : public Pass {
   };
   explicit InterDexReshufflePass() : Pass("InterDexReshufflePass") {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::interactions;
+    using namespace redex_properties::names;
+    return {
+        {DexLimitsObeyed, Preserves},
+        {HasSourceBlocks, Preserves},
+        {NoSpuriousGetClassCalls, Preserves},
+    };
+  }
+
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   void bind_config() override {

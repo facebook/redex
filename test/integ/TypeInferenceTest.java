@@ -112,4 +112,54 @@ public class TypeInferenceTest {
     }
     o.get();
   }
+
+  static char testChar() {
+    char x = 'b';
+    x += 'a';
+    return x;
+  }
+
+  static short testShort() {
+    short x = 4;
+    x += 4;
+    return x;
+  }
+
+  static byte testByte() {
+    byte x = 10;
+    x += 10;
+    return x;
+  }
+
+  static int testCharToInt() {
+    char x = 'b';
+    x += 10;
+    int y = 10;
+    y += x;
+    return y;
+  }
+
+  static int testByteToInt() {
+    byte x = 20;
+    x += 10;
+    int y = 10;
+    y += x;
+    return y;
+  }
+
+  static int testShortToInt() {
+    short x = 20;
+    x += 10;
+    int y = 10;
+    y += x;
+    return y;
+  }
+
+  static short testByteToShort() {
+    byte x = 20;
+    x += 10;
+    short y = 10;
+    y += x;
+    return y;
+  }
 }

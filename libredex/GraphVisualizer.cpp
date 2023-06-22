@@ -716,7 +716,7 @@ void Classes::add_all(const std::string& class_names) {
 }
 
 bool Classes::add(const std::string& class_name, bool add_initial_pass) {
-  auto type = DexType::make_type(class_name.c_str());
+  auto type = DexType::make_type(class_name);
   auto klass = type_class(type);
   if (!klass) {
     return false;

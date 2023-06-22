@@ -33,7 +33,19 @@ class InstructionSequenceOutliner : public Pass {
  public:
   InstructionSequenceOutliner() : Pass("InstructionSequenceOutlinerPass") {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::interactions;
+    using namespace redex_properties::names;
+    return {
+        {DexLimitsObeyed, Preserves},
+        {HasSourceBlocks, RequiresAndEstablishes},
+        {NoSpuriousGetClassCalls, Establishes},
+    };
+  }
+
   void bind_config() override;
+
   void run_pass(DexStoresVector& stores,
                 ConfigFiles& config,
                 PassManager& mgr) override;

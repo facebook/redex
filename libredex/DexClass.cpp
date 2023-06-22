@@ -394,7 +394,9 @@ static std::vector<DexDebugEntry> eval_debug_instructions(
       uint8_t adjustment = op - DBG_FIRST_SPECIAL;
       absolute_line += DBG_LINE_BASE + (adjustment % DBG_LINE_RANGE);
       pc += adjustment / DBG_LINE_RANGE;
-      entries.emplace_back(pc, std::make_unique<DexPosition>(absolute_line));
+      entries.emplace_back(
+          pc, std::make_unique<DexPosition>(
+                  DexString::make_string("UnknownSource"), absolute_line));
       break;
     }
     }
@@ -481,9 +483,9 @@ std::vector<std::unique_ptr<DexDebugInstruction>> generate_debug_instructions(
     for (; it != entries.end() && it->addr == addr; ++it) {
       switch (it->type) {
       case DexDebugEntryType::Position:
-        if (it->pos->file != nullptr) {
-          positions.push_back(it->pos.get());
-        }
+        always_assert_log(it->pos->file != nullptr,
+                          "Position file has nullptr");
+        positions.push_back(it->pos.get());
         break;
       case DexDebugEntryType::Instruction:
         insns.push_back(it->insn.get());
@@ -565,7 +567,11 @@ void DexDebugItem::bind_positions(DexMethod* method, const DexString* file) {
   for (auto& entry : m_dbg_entries) {
     switch (entry.type) {
     case DexDebugEntryType::Position:
-      entry.pos->bind(method_str, file);
+      if (file) {
+        entry.pos->bind(method_str, file);
+      } else {
+        entry.pos->bind(method_str);
+      }
       break;
     case DexDebugEntryType::Instruction:
       break;
@@ -887,12 +893,12 @@ DexMethodRef* DexMethod::make_method(
     const std::string& return_type) {
   DexTypeList::ContainerType dex_types;
   for (const std::string& type_str : arg_types) {
-    dex_types.push_back(DexType::make_type(type_str.c_str()));
+    dex_types.push_back(DexType::make_type(type_str));
   }
   return DexMethod::make_method(
-      DexType::make_type(class_type.c_str()),
+      DexType::make_type(class_type),
       DexString::make_string(name),
-      DexProto::make_proto(DexType::make_type(return_type.c_str()),
+      DexProto::make_proto(DexType::make_type(return_type),
                            DexTypeList::make_type_list(std::move(dex_types))));
 }
 

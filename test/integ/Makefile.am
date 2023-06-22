@@ -12,7 +12,6 @@ LOG_COMPILER = sh
 AM_LOG_FLAGS = -c 'dexfile=$0-class.dex $0'
 
 check_PROGRAMS = \
-    ab_experiment_context_test \
 	app_module_usage_test \
     call_graph_test \
     clinit_side_effect_test \
@@ -48,9 +47,6 @@ check_PROGRAMS = \
     verifier_artifacts_test
 
 TESTS = $(check_PROGRAMS)
-
-ab_experiment_context_test_SOURCES = ABExperimentContextTest.cpp
-EXTRA_ab_experiment_context_test_DEPENDENCIES = ab_experiment_context_test-class.dex
 
 app_module_usage_test_SOURCES = AppModuleUsageTest.cpp
 EXTRA_app_module_usage_test_DEPNDENCIES = uses_app_module_annotation-class.dex app_module_usage_test-class.dex app_module_usage_test_other-class.dex app_module_usage_test_third-class.dex
@@ -167,9 +163,6 @@ SUFFIXES = .dex
 
 .jar.dex:
 	$(DX) --dex --output=$@ $^
-
-ab_experiment_context_test-class.jar: ABExperimentContextTest.java
-	$(create_jar)
 
 app_module_usage_test-class.jar: AppModuleUsageClass.java
 	$(create_jar)

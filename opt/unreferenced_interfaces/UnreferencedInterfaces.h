@@ -19,11 +19,21 @@ class UnreferencedInterfacesPass : public Pass {
  public:
   UnreferencedInterfacesPass() : Pass("UnreferencedInterfacesPass") {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::interactions;
+    using namespace redex_properties::names;
+    return {
+        {DexLimitsObeyed, Preserves},
+        {HasSourceBlocks, Preserves},
+        {NoSpuriousGetClassCalls, Preserves},
+    };
+  }
+
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   struct Metric {
     size_t candidates{0};
-    size_t external{0};
     size_t on_abstract_cls{0};
     size_t field_refs{0};
     size_t sig_refs{0};

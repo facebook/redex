@@ -244,14 +244,14 @@ bool CFGMutation::ChangeSet::apply(ControlFlowGraph& cfg,
   } else {
     std::vector<IRInstruction*> replacement;
     if (!m_insert_before.empty()) {
-      std::copy(m_insert_before.begin(),
-                m_insert_before.end(),
-                std::back_inserter(replacement));
+      replacement.reserve(m_insert_before.size());
+      replacement.insert(replacement.end(), m_insert_before.begin(),
+                         m_insert_before.end());
     }
     if (m_replace.has_value()) {
-      std::copy(m_replace.get().begin(),
-                m_replace.get().end(),
-                std::back_inserter(replacement));
+      replacement.reserve(replacement.size() + m_replace.get().size());
+      replacement.insert(replacement.end(), m_replace.get().begin(),
+                         m_replace.get().end());
     } else {
       // Copying to avoid problem, replacing insn B with A-B-C
       auto* insn_copy = new IRInstruction(*it->insn);
@@ -259,9 +259,9 @@ bool CFGMutation::ChangeSet::apply(ControlFlowGraph& cfg,
     }
 
     if (!m_insert_after.empty()) {
-      std::copy(m_insert_after.begin(),
-                m_insert_after.end(),
-                std::back_inserter(replacement));
+      replacement.reserve(replacement.size() + m_insert_after.size());
+      replacement.insert(replacement.end(), m_insert_after.begin(),
+                         m_insert_after.end());
     }
 
     it++;

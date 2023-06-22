@@ -54,7 +54,7 @@ DexType* get_dextype_from_dotname(const char* dotname) {
   buf += dotname;
   buf += ';';
   std::replace(buf.begin(), buf.end(), '.', '/');
-  return DexType::get_type(buf.c_str());
+  return DexType::get_type(buf);
 }
 
 // Search a class name in a list of package names, return true if there is a
@@ -85,7 +85,7 @@ void process_signature_anno(const DexString* dstring) {
   }
   std::string buf(cstr);
   buf += ';';
-  auto dtype = DexType::get_type(buf.c_str());
+  auto dtype = DexType::get_type(buf);
   referenced_classes.insert(type_class(dtype));
 }
 

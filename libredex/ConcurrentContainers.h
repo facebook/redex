@@ -16,6 +16,7 @@
 #include <utility>
 
 #include "Debug.h"
+#include "Timer.h"
 
 // Forward declaration.
 namespace cc_impl {
@@ -23,7 +24,37 @@ namespace cc_impl {
 template <typename Container, size_t n_slots>
 class ConcurrentContainerIterator;
 
+inline AccumulatingTimer s_destructor{};
+
+inline double get_destructor_seconds() { return s_destructor.get_seconds(); }
+
+inline size_t s_concurrent_destruction_threshold{
+    std::numeric_limits<size_t>::max()};
+
+void workqueue_run_for(size_t start,
+                       size_t end,
+                       const std::function<void(size_t)>& fn);
+
 } // namespace cc_impl
+
+// Use this scope at the top-level function of your application to allow for
+// fast concurrent destruction. Avoid changing the threshold in the global scope
+// due to hard to control global destruction order, and our dependency on
+// threading / the sparta-workqueue for concurrent destruction.
+class ConcurrentContainerConcurrentDestructionScope {
+  size_t m_last_threshold;
+
+ public:
+  explicit ConcurrentContainerConcurrentDestructionScope(
+      size_t threshold = 4096)
+      : m_last_threshold(threshold) {
+    std::swap(cc_impl::s_concurrent_destruction_threshold, m_last_threshold);
+  }
+
+  ~ConcurrentContainerConcurrentDestructionScope() {
+    std::swap(cc_impl::s_concurrent_destruction_threshold, m_last_threshold);
+  }
+};
 
 /*
  * This class implements the common functionalities of concurrent sets and maps.
@@ -55,7 +86,17 @@ class ConcurrentContainer {
   using const_iterator =
       cc_impl::ConcurrentContainerIterator<const Container, n_slots>;
 
-  virtual ~ConcurrentContainer() {}
+  virtual ~ConcurrentContainer() {
+    auto timer_scope = cc_impl::s_destructor.scope();
+    if (size() <= cc_impl::s_concurrent_destruction_threshold) {
+      for (size_t slot = 0; slot < n_slots; ++slot) {
+        m_slots[slot] = Container();
+      }
+      return;
+    }
+    cc_impl::workqueue_run_for(
+        0, n_slots, [this](size_t slot) { m_slots[slot] = Container(); });
+  }
 
   /*
    * Using iterators or accessor functions while the container is concurrently
@@ -203,7 +244,6 @@ class ConcurrentContainer {
 
   std::mutex& get_lock(size_t slot) const { return m_locks[slot]; }
 
- protected:
   mutable std::mutex m_locks[n_slots];
   Container m_slots[n_slots];
 };
@@ -373,6 +413,17 @@ class ConcurrentMapContainer
     std::pair<Key, Value> entry(std::forward<Args>(args)...);
     size_t slot = Hash()(entry.first) % n_slots;
     std::unique_lock<std::mutex> lock(this->get_lock(slot));
+    auto& map = this->get_container(slot);
+    return map
+        .emplace(KeyProjection()(std::move(entry.first)),
+                 std::move(entry.second))
+        .second;
+  }
+
+  template <typename... Args>
+  bool emplace_unsafe(Args&&... args) {
+    std::pair<Key, Value> entry(std::forward<Args>(args)...);
+    size_t slot = Hash()(entry.first) % n_slots;
     auto& map = this->get_container(slot);
     return map
         .emplace(KeyProjection()(std::move(entry.first)),

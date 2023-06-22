@@ -64,6 +64,8 @@
 #include "ProguardPrintConfiguration.h" // New ProGuard configuration
 #include "ReachableClasses.h"
 #include "RedexContext.h"
+#include "RedexPropertiesManager.h"
+#include "RedexPropertyCheckerRegistry.h"
 #include "RedexResources.h"
 #include "Sanitizers.h"
 #include "SanitizersConfig.h"
@@ -1194,13 +1196,6 @@ void redex_backend(ConfigFiles& conf,
   std::set<uint32_t> signatures;
   std::unique_ptr<PostLowering> post_lowering =
       redex_options.redacted ? PostLowering::create() : nullptr;
-  bool symbolicate_detached_methods;
-  conf.get_json_config().get("symbolicate_detached_methods", false,
-                             symbolicate_detached_methods);
-
-  if (post_lowering) {
-    post_lowering->sync();
-  }
 
   const bool mem_stats_enabled =
       traceEnabled(STATS, 1) || conf.get_json_config().get("mem_stats", true);
@@ -1249,7 +1244,6 @@ void redex_backend(ConfigFiles& conf,
             is_iodi(dik) ? &iodi_metadata : nullptr,
             stores[0].get_dex_magic(),
             dex_output_config,
-            symbolicate_detached_methods ? post_lowering.get() : nullptr,
             manager.get_redex_options().min_sdk);
 
         output_totals += this_dex_stats;
@@ -1267,15 +1261,6 @@ void redex_backend(ConfigFiles& conf,
 
   std::vector<DexMethod*> needs_debug_line_mapping;
   if (post_lowering) {
-    if (symbolicate_detached_methods) {
-      post_lowering->emit_symbolication_metadata(
-          pos_mapper.get(),
-          needs_addresses ? &method_to_id : nullptr,
-          needs_addresses ? &code_debug_lines : nullptr,
-          is_iodi(dik) ? &iodi_metadata : nullptr,
-          needs_debug_line_mapping,
-          signatures);
-    }
     post_lowering->run(stores);
     post_lowering->finalize(manager.asset_manager());
   }
@@ -1435,6 +1420,7 @@ void copy_proguard_stats(Json::Value& stats) {
 
 } // namespace
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 int main(int argc, char* argv[]) {
   signal(SIGABRT, debug_backtrace_handler);
   signal(SIGINT, debug_backtrace_handler);
@@ -1456,6 +1442,9 @@ int main(int argc, char* argv[]) {
 
   auto maybe_global_profile =
       ScopedCommandProfiling::maybe_from_env("GLOBAL_", "global");
+
+  ConcurrentContainerConcurrentDestructionScope
+      concurrent_container_destruction_scope;
 
   std::string stats_output_path;
   Json::Value stats;
@@ -1536,7 +1525,10 @@ int main(int argc, char* argv[]) {
     check_required_resources(conf, true);
 
     auto const& passes = PassRegistry::get().get_passes();
-    PassManager manager(passes, std::move(pg_config), conf, args.redex_options);
+    auto props_manager = redex_properties::Manager(
+        conf, redex_properties::PropertyCheckerRegistry::get().get_checkers());
+    PassManager manager(passes, std::move(pg_config), conf, args.redex_options,
+                        &props_manager);
 
     {
       Timer t("Running optimization passes");

@@ -4,6 +4,7 @@
 COMMON_INCLUDES = \
 	-I$(top_srcdir)/analysis/ip-reflection-analysis \
 	-I$(top_srcdir)/analysis/max-depth \
+	-I$(top_srcdir)/checkers \
 	-I$(top_srcdir)/liblocator \
 	-I$(top_srcdir)/libredex \
 	-I$(top_srcdir)/libresource \
@@ -64,7 +65,6 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/opt/remove-apilevel-checks \
 	-I$(top_srcdir)/opt/remove-builders \
 	-I$(top_srcdir)/opt/remove_empty_classes \
-	-I$(top_srcdir)/opt/remove_gotos \
 	-I$(top_srcdir)/opt/remove-interfaces \
 	-I$(top_srcdir)/opt/remove-nullcheck-string-arg \
 	-I$(top_srcdir)/opt/remove-recursive-locks \

@@ -7,9 +7,12 @@
 
 #include <gtest/gtest.h>
 
+#include "ControlFlow.h"
+
 #include "DexClass.h"
 #include "PureMethods.h"
 #include "RedexTest.h"
+#include "Walkers.h"
 
 class PureMethodTest : public RedexIntegrationTest {
  protected:
@@ -20,6 +23,10 @@ class PureMethodTest : public RedexIntegrationTest {
 
 TEST_F(PureMethodTest, VirtuamMethodTest) {
   auto scope = build_class_scope(stores);
+  // Build all the CFGs
+  walk::parallel::code(scope,
+                       [&](DexMethod*, IRCode& code) { code.build_cfg(); });
+
   AnalyzePureMethodsPass pass;
   pass.analyze_and_set_pure_methods(scope);
   auto b_f0 = get_method("Lcom/facebook/redextest/Base;.fn0:()I");

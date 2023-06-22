@@ -154,7 +154,7 @@ bool is_reference_array(const DexType* type) {
   return !is_primitive(ctype);
 }
 
-bool is_integer(const DexType* type) {
+bool is_integral(const DexType* type) {
   char sig = type->get_name()->c_str()[0];
   switch (sig) {
   case 'Z':
@@ -170,8 +170,22 @@ bool is_integer(const DexType* type) {
   }
 }
 
+bool is_int(const DexType* type) { return type->get_name()->c_str()[0] == 'I'; }
+
+bool is_char(const DexType* type) {
+  return type->get_name()->c_str()[0] == 'C';
+}
+
+bool is_short(const DexType* type) {
+  return type->get_name()->c_str()[0] == 'S';
+}
+
 bool is_boolean(const DexType* type) {
   return type->get_name()->c_str()[0] == 'Z';
+}
+
+bool is_byte(const DexType* type) {
+  return type->get_name()->c_str()[0] == 'B';
 }
 
 bool is_long(const DexType* type) {

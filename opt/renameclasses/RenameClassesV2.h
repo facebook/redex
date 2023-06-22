@@ -41,6 +41,17 @@ class RenameClassesPassV2 : public Pass {
  public:
   RenameClassesPassV2() : Pass("RenameClassesPassV2") {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::interactions;
+    using namespace redex_properties::names;
+    return {
+        {DexLimitsObeyed, Preserves},
+        {HasSourceBlocks, Preserves},
+        {RenameClass, EstablishesAndRequiresFinally},
+    };
+  }
+
   void bind_config() override {
     bind("rename_annotations", false, m_rename_annotations);
     bind("force_rename_hierarchies", {}, m_force_rename_hierarchies);

@@ -125,6 +125,8 @@ bool UpCodeMotionPass::gather_movable_instructions(
     case OPCODE_SHL_INT_LIT:
     case OPCODE_SHR_INT_LIT:
     case OPCODE_USHR_INT_LIT:
+
+    case IOPCODE_INJECTION_ID:
       instructions->push_back(insn);
       continue;
 
@@ -327,7 +329,8 @@ UpCodeMotionPass::Stats UpCodeMotionPass::process_code(
             temp = cfg.allocate_temp();
             auto it = b->to_cfg_instruction_iterator(last_insn_it);
             IRInstruction* move_insn = new IRInstruction(
-                type.element() == REFERENCE ? OPCODE_MOVE_OBJECT : OPCODE_MOVE);
+                type.element() == IRType::REFERENCE ? OPCODE_MOVE_OBJECT
+                                                    : OPCODE_MOVE);
             move_insn->set_src(0, dest)->set_dest(temp);
             cfg.insert_before(it, move_insn);
             stats.clobbered_registers++;

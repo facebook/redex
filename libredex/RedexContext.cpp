@@ -46,10 +46,10 @@ RedexContext::~RedexContext() {
     if (timer_name != nullptr) {
       Timer timer(timer_name, /*indent=*/false);
       workqueue_run<std::function<void()>>(
-          [](std::function<void()>& fn) { fn(); }, fns);
+          [](const std::function<void()>& fn) { fn(); }, fns);
     } else {
       workqueue_run<std::function<void()>>(
-          [](std::function<void()>& fn) { fn(); }, fns);
+          [](const std::function<void()>& fn) { fn(); }, fns);
     }
   };
 
@@ -691,11 +691,10 @@ void RedexContext::mutate_method(DexMethodRef* method,
       std::string cls_name = show_deobfuscated(old_spec.cls);
       std::regex separator{"[/;]"};
       std::vector<std::string> parts;
-      std::copy(std::sregex_token_iterator(cls_name.begin(), cls_name.end(),
-                                           separator, -1),
-                std::sregex_token_iterator(),
-                std::back_inserter(parts));
-
+      parts.insert(parts.end(),
+                   std::sregex_token_iterator(cls_name.begin(), cls_name.end(),
+                                              separator, -1),
+                   std::sregex_token_iterator());
       // Make a name like "name$Bar$foo", or "$clinit$$Bar$foo".
       std::stringstream ss;
       if (old_spec.name->str().front() == '<') {

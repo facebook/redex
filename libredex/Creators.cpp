@@ -685,9 +685,9 @@ DexMethod* MethodCreator::create() {
     // Insert a fake position entry for redex generated method when we
     // add debug item.
     auto main_block_it = meth_code->get_param_instructions().end();
-    auto position = std::make_unique<DexPosition>(0);
-    position->bind(DexString::make_string(show(method)),
-                   DexString::make_string("RedexGenerated"));
+    auto position = std::make_unique<DexPosition>(
+        DexString::make_string("RedexGenerated"), 0);
+    position->bind(DexString::make_string(show(method)));
     meth_code->insert_before(main_block_it, std::move(position));
   }
   return method;

@@ -25,7 +25,20 @@
 class VerticalMergingPass : public Pass {
  public:
   VerticalMergingPass() : Pass("VerticalMergingPass") {}
+
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::interactions;
+    using namespace redex_properties::names;
+    return {
+        {HasSourceBlocks, Preserves},
+        {NoSpuriousGetClassCalls, Preserves},
+        {NeedsEverythingPublic, Establishes}, // TT150850158
+    };
+  }
+
   void bind_config() override { bind("blocklist", {}, m_blocklist); }
+
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:

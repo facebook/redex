@@ -21,7 +21,6 @@
 #include "SourceBlocks.h"
 #include "Trace.h"
 
-#pragma clang optimize off
 class DexMethod;
 class DexMethodRef;
 class DexString;

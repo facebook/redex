@@ -7,13 +7,14 @@
 
 #pragma once
 
+#include <map>
+#include <unordered_map>
+#include <vector>
+
 #include "ClassHierarchy.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "Timer.h"
-#include <map>
-#include <unordered_map>
-#include <vector>
 
 /*
  * NOTE: Before using this code, check and see if MethodOverrideGraph.h or
@@ -47,6 +48,8 @@
  *    and so we cannot tell anything about all methods in the branch where that
  *    happened. The method is effectively unknown
  */
+
+namespace virt_scope {
 
 /* clang-format off */
 enum VirtualFlags : uint16_t {
@@ -422,7 +425,7 @@ class ClassScopes {
    * Given a DexMethod return the scope the method is in.
    */
   const VirtualScope& find_virtual_scope(const DexMethod* meth) const {
-    return ::find_virtual_scope(m_sig_map, meth);
+    return virt_scope::find_virtual_scope(m_sig_map, meth);
   }
 
   /**
@@ -468,3 +471,5 @@ struct virtualscopes_comparator {
     return compare_dexmethods(a->methods.at(0).first, b->methods.at(0).first);
   }
 };
+
+} // namespace virt_scope

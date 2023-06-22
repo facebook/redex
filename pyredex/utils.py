@@ -100,8 +100,10 @@ class _FindAndroidBuildToolHelper:
             return res
 
         if self.omit_sdk_tool_discovery:
-            raise RuntimeError(f'Path for {tool} was not provided and the --omit-sdk-tool-discovery flag was set requiring tool paths to be explicitly provided.')
-            
+            raise RuntimeError(
+                f"Path for {tool} was not provided and the --omit-sdk-tool-discovery flag was set requiring tool paths to be explicitly provided."
+            )
+
         result, _ = self._run(tool)
         if result:
             return result
@@ -331,7 +333,7 @@ def omit_sdk_tool_discovery() -> None:
 
 def find_apksigner() -> str:
     return FIND_HELPER.find("apksigner", "apksigner.bat" if IS_WINDOWS else "apksigner")
-    
+
 
 def find_zipalign() -> str:
     return FIND_HELPER.find("zipalign", "zipalign.exe" if IS_WINDOWS else "zipalign")

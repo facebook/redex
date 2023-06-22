@@ -193,10 +193,6 @@ class SignedConstantDomain final
     return boost::optional<int64_t>(m_bounds.l);
   }
 
-  static SignedConstantDomain default_value() {
-    return SignedConstantDomain(0);
-  }
-
   /* Return the largest element within the interval. */
   int64_t max_element() const {
     always_assert(m_bounds.l <= m_bounds.u);

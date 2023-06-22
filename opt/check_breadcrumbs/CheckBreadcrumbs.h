@@ -27,6 +27,18 @@ class CheckBreadcrumbsPass : public Pass {
  public:
   CheckBreadcrumbsPass() : Pass("CheckBreadcrumbsPass") {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::interactions;
+    using namespace redex_properties::names;
+    return {
+        {DexLimitsObeyed, Preserves},
+        {HasSourceBlocks, Preserves},
+        {NoInitClassInstructions, Preserves},
+        {RenameClass, Preserves},
+    };
+  }
+
   void bind_config() override {
     bind("fail", false, fail);
     bind("fail_if_illegal_refs", false, fail_if_illegal_refs);

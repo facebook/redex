@@ -75,6 +75,7 @@ size_t set_difference_size(const std::unordered_set<T>& a,
 } // namespace
 
 namespace interdex {
+
 /**
  * Estimates the linear alloc space consumed by the class at runtime.
  */
@@ -223,6 +224,8 @@ DexClasses DexesStructure::end_dex(DexInfo dex_info) {
     m_info.num_scroll_dexes++;
   }
 
+  m_dex_info.push_back(dex_info);
+
   m_current_dex.check_refs_count();
 
   DexClasses all_classes = m_current_dex.get_classes();
@@ -272,7 +275,7 @@ void DexStructure::resolve_init_classes(
       continue;
     }
     const auto& fields = cls->get_sfields();
-     if (std::any_of(fields.begin(), fields.end(), [&](DexField* field) {
+    if (std::any_of(fields.begin(), fields.end(), [&](DexField* field) {
           return m_frefs.count(field) || frefs.count(field);
         })) {
       continue;

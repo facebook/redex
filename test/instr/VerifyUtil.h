@@ -54,6 +54,9 @@ DexField* find_ifield_named(const DexClass& cls, const char* name);
 DexField* find_sfield_named(const DexClass& cls, const char* name);
 DexField* find_field_named(const DexClass& cls, const char* name);
 DexMethod* find_vmethod_named(const DexClass& cls, const char* name);
+DexMethod* find_vmethod(const DexClass& cls,
+                        const char* name,
+                        const DexProto* proto);
 DexMethod* find_dmethod_named(const DexClass& cls, const char* name);
 DexMethod* find_method_named(const DexClass& cls, const char* name);
 /* Find the first invoke instruction that calls a particular method name */
@@ -74,7 +77,7 @@ size_t find_num_invoke(const DexMethod* m,
                        const char* target_mname,
                        DexType* receiver = nullptr);
 
-void verify_type_erased(const DexClass* cls, size_t num_dmethods = 0);
+void verify_class_merged(const DexClass* cls, size_t num_dmethods = 0);
 
 // A quick helper to dump CFGs before/after verify
 //

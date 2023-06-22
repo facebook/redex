@@ -35,6 +35,17 @@ class RemoveUninstantiablesPass : public Pass {
  public:
   RemoveUninstantiablesPass() : Pass("RemoveUninstantiablesPass") {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::interactions;
+    using namespace redex_properties::names;
+    return {
+        {DexLimitsObeyed, Preserves},
+        {HasSourceBlocks, Preserves},
+        {NoSpuriousGetClassCalls, Preserves},
+    };
+  }
+
   /// Counts of references to uninstantiable classes removed.
   struct Stats {
     int instance_ofs = 0;
@@ -45,6 +56,7 @@ class RemoveUninstantiablesPass : public Pass {
     int abstracted_vmethods = 0;
     int removed_vmethods = 0;
     int get_uninstantiables = 0;
+    int invoke_uninstantiables = 0;
     int check_casts = 0;
 
     Stats& operator+=(const Stats&);

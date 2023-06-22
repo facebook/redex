@@ -172,6 +172,16 @@ class DedupStringsPass : public Pass {
  public:
   DedupStringsPass() : Pass("DedupStringsPass") {}
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::interactions;
+    using namespace redex_properties::names;
+    return {
+        {DexLimitsObeyed, Preserves},
+        {HasSourceBlocks, RequiresAndEstablishes},
+    };
+  }
+
   void bind_config() override;
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
   bool is_editable_cfg_friendly() override { return true; }

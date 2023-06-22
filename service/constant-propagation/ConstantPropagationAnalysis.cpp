@@ -243,7 +243,7 @@ bool LocalArrayAnalyzer::analyze_new_array(const IRInstruction* insn,
     return false;
   }
   env->new_heap_value(RESULT_REGISTER, insn,
-                      ConstantPrimitiveArrayDomain(*length_value_opt));
+                      ConstantValueArrayDomain(*length_value_opt));
   return true;
 }
 
@@ -257,7 +257,7 @@ bool LocalArrayAnalyzer::analyze_aget(const IRInstruction* insn,
   if (!idx_opt) {
     return false;
   }
-  auto arr = env->get_pointee<ConstantPrimitiveArrayDomain>(insn->src(0));
+  auto arr = env->get_pointee<ConstantValueArrayDomain>(insn->src(0));
   env->set(RESULT_REGISTER, arr.get(*idx_opt));
   return true;
 }
@@ -272,7 +272,7 @@ bool LocalArrayAnalyzer::analyze_aput(const IRInstruction* insn,
   if (!idx_opt) {
     return false;
   }
-  auto val = env->get<SignedConstantDomain>(insn->src(0));
+  auto val = env->get(insn->src(0));
   env->set_array_binding(insn->src(1), *idx_opt, val);
   return true;
 }
@@ -543,6 +543,15 @@ bool PrimitiveAnalyzer::analyze_binop(const IRInstruction* insn,
     return true;
   }
   return analyze_default(insn, env);
+}
+
+bool InjectionIdAnalyzer::analyze_injection_id(const IRInstruction* insn,
+                                               ConstantEnvironment* env) {
+  auto id = static_cast<int32_t>(insn->get_literal());
+  TRACE(CONSTP, 5, "Discovered new injection id for reg: %d value: %d",
+        insn->dest(), id);
+  env->set(insn->dest(), ConstantInjectionIdDomain(id));
+  return true;
 }
 
 bool ClinitFieldAnalyzer::analyze_sget(const DexType* class_under_init,
@@ -1334,13 +1343,13 @@ static SignedConstantDomain refine_ne_left(const SignedConstantDomain& left,
       if (*c >= left.max_element_int()) {
         return SignedConstantDomain::bottom();
       }
-      return SignedConstantDomain(*c + 1, left.max_element_int());
+      return left.meet(SignedConstantDomain(*c + 1, left.max_element_int()));
     }
     if (*c == left.max_element_int()) {
       if (*c <= left.min_element_int()) {
         return SignedConstantDomain::bottom();
       }
-      return SignedConstantDomain(left.min_element_int(), *c - 1);
+      return left.meet(SignedConstantDomain(left.min_element_int(), *c - 1));
     }
   }
   return left;

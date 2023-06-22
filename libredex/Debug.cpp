@@ -7,6 +7,7 @@
 
 #include "Debug.h"
 
+#include <array>
 #include <atomic>
 #include <cstring>
 #include <exception>

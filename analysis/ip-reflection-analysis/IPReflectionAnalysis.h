@@ -15,6 +15,16 @@ class IPReflectionAnalysisPass : public Pass {
  public:
   IPReflectionAnalysisPass()
       : Pass("IPReflectionAnalysisPass", Pass::ANALYSIS) {}
+
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::interactions;
+    using namespace redex_properties::names;
+    return {
+        {HasSourceBlocks, Preserves},
+    };
+  }
+
   void bind_config() override {
     bind("max_iteration", 20U, m_max_iteration);
     bind("export_results", false, m_export_results,

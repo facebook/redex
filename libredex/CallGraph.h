@@ -96,7 +96,6 @@ class Node {
   explicit Node(NodeType type) : m_method(nullptr), m_type(type) {}
 
   const DexMethod* method() const { return m_method; }
-  bool operator==(const Node& that) const { return method() == that.method(); }
   const Edges& callers() const { return m_predecessors; }
   const Edges& callees() const { return m_successors; }
 
@@ -209,7 +208,15 @@ class MultipleCalleeBaseStrategy : public SingleCalleeStrategy {
     return std::vector<const DexMethod*>();
   }
 
+  const std::vector<const DexMethod*>& get_ordered_overriding_methods_with_code(
+      const DexMethod* method) const;
+
   const method_override_graph::Graph& m_method_override_graph;
+
+ private:
+  mutable ConcurrentMap<const DexMethod*,
+                        std::shared_ptr<std::vector<const DexMethod*>>>
+      m_overriding_methods_cache;
 };
 
 class CompleteCallGraphStrategy : public MultipleCalleeBaseStrategy {

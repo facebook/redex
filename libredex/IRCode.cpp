@@ -1186,6 +1186,33 @@ size_t IRCode::sum_opcode_sizes() const {
   return m_ir_list->sum_opcode_sizes();
 }
 
+// similar to sum_opcode_sizes, but takes into account non-opcode payloads
+uint32_t IRCode::estimate_code_units() const {
+  if (editable_cfg_built()) {
+    return m_cfg->estimate_code_units();
+  }
+  uint32_t code_units = m_ir_list->estimate_code_units();
+  std::unordered_map<MethodItemEntry*, std::vector<int32_t>> switch_case_keys;
+  for (auto it = m_ir_list->begin(); it != m_ir_list->end(); it++) {
+    if (it->type == MFLOW_TARGET && it->target->type == BRANCH_MULTI) {
+      switch_case_keys[it->target->src].push_back(it->target->case_key);
+    }
+  }
+  for (auto&& [_, case_keys] : switch_case_keys) {
+    std::sort(case_keys.begin(), case_keys.end());
+    if (instruction_lowering::sufficiently_sparse(case_keys)) {
+      // sparse-switch-payload
+      code_units += 4 + 4 * case_keys.size();
+    } else {
+      // packed-switch-payload
+      const uint64_t size =
+          instruction_lowering::get_packed_switch_size(case_keys);
+      code_units += 4 + size * 2;
+    }
+  }
+  return code_units;
+}
+
 /*
  * Returns the number of instructions.
  */

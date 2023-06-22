@@ -23,7 +23,7 @@ class CommonSubexpressionEliminationTest : public RedexTest {
   CommonSubexpressionEliminationTest() {
     // Calling get_vmethods under the hood initializes the object-class, which
     // we need in the tests to create a proper scope
-    get_vmethods(type::java_lang_Object());
+    virt_scope::get_vmethods(type::java_lang_Object());
   }
 };
 
@@ -1992,6 +1992,104 @@ TEST_F(CommonSubexpressionEliminationTest, no_phi_node) {
   test(Scope{type_class(type::java_lang_Object())}, code_str, expected_str, 0);
 }
 
+TEST_F(CommonSubexpressionEliminationTest, phi_node_sget) {
+  auto code_str = R"(
+    (
+      (load-param v0)
+      (if-eqz v0 :L1)
+      (sget "LFoo;.s:I")
+      (move-result-pseudo v0)
+      (:L2)
+      (sget "LFoo;.s:I")
+      (move-result-pseudo v1)
+      (return v1)
+      (:L1)
+      (sget "LFoo;.s:I")
+      (move-result-pseudo v2)
+      (goto :L2)
+    )
+  )";
+  auto expected_str = R"(
+    (
+      (load-param v0)
+      (if-eqz v0 :L1)
+      (sget "LFoo;.s:I")
+      (move-result-pseudo v0)
+      (move v3 v0)
+      (:L2)
+      (sget "LFoo;.s:I")
+      (move-result-pseudo v1)
+      (move v1 v3)
+      (return v1)
+      (:L1)
+      (sget "LFoo;.s:I")
+      (move-result-pseudo v2)
+      (move v3 v2)
+      (goto :L2)
+    )
+  )";
+  test(Scope{type_class(type::java_lang_Object())}, code_str, expected_str, 1);
+}
+
+TEST_F(CommonSubexpressionEliminationTest, phi_node_sget_memory_barrier) {
+  auto code_str = R"(
+    (
+      (load-param v0)
+      (if-eqz v0 :L1)
+      (sget "LFoo;.s:I")
+      (move-result-pseudo v0)
+      (:L2)
+      (sget "LFoo;.s:I")
+      (move-result-pseudo v1)
+      (return v3)
+      (:L1)
+      (sget "LFoo;.s:I")
+      (move-result-pseudo v2)
+      (invoke-static () "LWhat;.ever:()V")
+      (goto :L2)
+    )
+  )";
+  auto expected_str = code_str;
+  test(Scope{type_class(type::java_lang_Object())}, code_str, expected_str, 0);
+}
+
+TEST_F(CommonSubexpressionEliminationTest, phi_node_sput_sget_forwarding) {
+  auto code_str = R"(
+    (
+      (load-param v0)
+      (load-param v1)
+      (if-eqz v0 :L1)
+      (sput v1 "LFoo;.s:I")
+      (:L2)
+      (sget "LFoo;.s:I")
+      (move-result-pseudo v1)
+      (return v1)
+      (:L1)
+      (sput v1 "LFoo;.s:I")
+      (goto :L2)
+    )
+  )";
+  auto expected_str = R"(
+    (
+      (load-param v0)
+      (load-param v1)
+      (if-eqz v0 :L1)
+      (sput v1 "LFoo;.s:I")
+      (move v2 v1)
+      (:L2)
+      (sget "LFoo;.s:I")
+      (move-result-pseudo v1)
+      (move v1 v2)
+      (return v1)
+      (:L1)
+      (sput v1 "LFoo;.s:I")
+      (move v2 v1)
+      (goto :L2)
+    )
+  )";
+  test(Scope{type_class(type::java_lang_Object())}, code_str, expected_str, 1);
+}
+
 TEST_F(CommonSubexpressionEliminationTest, phi_node_sput_sget_forwarding_try) {
   auto code_str = R"(
     (
@@ -2010,6 +2108,28 @@ TEST_F(CommonSubexpressionEliminationTest, phi_node_sput_sget_forwarding_try) {
       (.try_end foo)
       (.catch (foo))
       (move-exception v0)
+      (goto :L2)
+    )
+  )";
+  auto expected_str = code_str;
+  test(Scope{type_class(type::java_lang_Object())}, code_str, expected_str, 0);
+}
+
+TEST_F(CommonSubexpressionEliminationTest,
+       phi_node_sput_sget_forwarding_memory_barrier) {
+  auto code_str = R"(
+    (
+      (load-param v0)
+      (load-param v1)
+      (if-eqz v0 :L1)
+      (sput v1 "LFoo;.s:I")
+      (:L2)
+      (sget "LFoo;.s:I")
+      (move-result-pseudo v1)
+      (return v1)
+      (:L1)
+      (sput v1 "LFoo;.s:I")
+      (invoke-static () "LWhat;.ever:()V")
       (goto :L2)
     )
   )";

@@ -22,6 +22,7 @@ check_PROGRAMS = \
     cfg_inliner_test \
     cfg_mutation_test \
     cfg_positions_test \
+    class_checker_test \
     check_breadcrumbs_test \
     check_cast_analysis_test \
     concurrent_containers_test \
@@ -109,7 +110,6 @@ check_PROGRAMS = \
     reg_alloc_test \
     registers_test \
     remove_apilevel_checks_test \
-    remove_gotos_test \
     remove_null_check_string_arg_test \
     remove_recursive_locks_test \
     remove_redundant_check_casts_test \
@@ -126,6 +126,7 @@ check_PROGRAMS = \
     static_relo_v2_test \
     strip_debug_info_test \
     switch_dispatch_test \
+    switch_equiv_test \
     switch_partitioning_test \
     timer_test \
     trace_multithreading_test \
@@ -171,6 +172,8 @@ cfg_positions_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 check_breadcrumbs_test_SOURCES = CheckBreadCrumbsTest.cpp
 
 check_cast_analysis_test_SOURCES = CheckCastAnalysisTest.cpp
+
+class_checker_test_SOURCES = ClassCheckerTest.cpp ScopeHelper.cpp
 
 concurrent_containers_test_SOURCES = ConcurrentContainersTest.cpp
 
@@ -367,8 +370,6 @@ registers_test_SOURCES = RegistersTest.cpp OpcodeList.cpp
 remove_apilevel_checks_test_SOURCES = RemoveApiLevelChecksTest.cpp
 remove_apilevel_checks_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
-remove_gotos_test_SOURCES = RemoveGotosTest.cpp VirtScopeHelper.cpp ScopeHelper.cpp
-
 remove_null_check_string_arg_test_SOURCES = RemoveNullCheckStringArgTest.cpp ScopeHelper.cpp
 
 remove_recursive_locks_test_SOURCES = RemoveRecursiveLocksTest.cpp
@@ -408,6 +409,9 @@ string_propagation_test_SOURCES = constant-propagation/StringPropagationTest.cpp
 strip_debug_info_test_SOURCES = StripDebugInfoTest.cpp
 
 switch_dispatch_test_SOURCES = SwitchDispatchTest.cpp
+
+switch_equiv_test_SOURCES = SwitchEquivFinderTest.cpp
+switch_equiv_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 switch_partitioning_test_SOURCES = SwitchPartitioningTest.cpp
 
@@ -469,6 +473,7 @@ TESTS = \
     cfg_positions_test \
     check_breadcrumbs_test \
     check_cast_analysis_test \
+    class_checker_test \
     concurrent_containers_test \
     configurable_test \
     constructor_analysis_test \
@@ -549,7 +554,6 @@ TESTS = \
     reg_alloc_test \
     registers_test \
     remove_apilevel_checks_test \
-    remove_gotos_test \
     remove_null_check_string_arg_test \
     remove_recursive_locks_test \
     remove_redundant_check_casts_test \
@@ -566,6 +570,7 @@ TESTS = \
     static_relo_v2_test \
     strip_debug_info_test \
     switch_dispatch_test \
+    switch_equiv_test \
     switch_partitioning_test \
     timer_test \
     trace_multithreading_test \

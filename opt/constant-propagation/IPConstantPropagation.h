@@ -37,6 +37,17 @@ class PassImpl : public Pass {
     RuntimeAssertTransform::Config runtime_assert;
   };
 
+  redex_properties::PropertyInteractions get_property_interactions()
+      const override {
+    using namespace redex_properties::interactions;
+    using namespace redex_properties::names;
+    return {
+        {DexLimitsObeyed, Preserves},
+        {HasSourceBlocks, Preserves},
+        {NoSpuriousGetClassCalls, Preserves},
+    };
+  }
+
   explicit PassImpl(Config config)
       : Pass("InterproceduralConstantPropagationPass"),
         m_config(std::move(config)) {}

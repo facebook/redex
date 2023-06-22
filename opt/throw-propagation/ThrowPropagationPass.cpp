@@ -42,10 +42,10 @@
 #include "PassManager.h"
 #include "Purity.h"
 #include "Resolver.h"
-#include "ScopedCFG.h"
 #include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"
+#include "WorkQueue.h"
 
 namespace {
 
@@ -54,6 +54,12 @@ constexpr const char* METRIC_UNREACHABLE_INSTRUCTIONS =
     "num_unreachable_instructions";
 constexpr const char* METRIC_NO_RETURN_METHODS = "num_no_return_methods";
 constexpr const char* METRIC_ITERATIONS = "num_iterations";
+
+bool exclude_method(DexMethod* method) {
+  return method->get_code() == nullptr || is_abstract(method) ||
+         method->is_external() || is_native(method) ||
+         method->rstate.no_optimizations();
+}
 
 } // namespace
 
@@ -66,44 +72,47 @@ void ThrowPropagationPass::bind_config() {
        "have no return.");
 }
 
+bool ThrowPropagationPass::is_no_return_method(const Config& config,
+                                               DexMethod* method) {
+  if (exclude_method(method)) {
+    return false;
+  }
+  if (config.blocklist.count(method->get_class())) {
+    TRACE(TP, 4, "black-listed method: %s", SHOW(method));
+    return false;
+  }
+  bool can_return{false};
+  editable_cfg_adapter::iterate_with_iterator(
+      method->get_code(), [&can_return](const IRList::iterator& it) {
+        if (opcode::is_a_return(it->insn->opcode())) {
+          can_return = true;
+          return editable_cfg_adapter::LOOP_BREAK;
+        }
+        return editable_cfg_adapter::LOOP_CONTINUE;
+      });
+  return !can_return;
+}
+
 std::unordered_set<DexMethod*> ThrowPropagationPass::get_no_return_methods(
     const Config& config, const Scope& scope) {
   ConcurrentSet<DexMethod*> concurrent_no_return_methods;
   walk::parallel::methods(scope, [&](DexMethod* method) {
-    if (is_abstract(method) || method->is_external() || is_native(method) ||
-        method->rstate.no_optimizations()) {
-      return;
-    }
-    if (config.blocklist.count(method->get_class())) {
-      TRACE(TP, 4, "black-listed method: %s", SHOW(method));
-      return;
-    }
-    bool can_return{false};
-    editable_cfg_adapter::iterate_with_iterator(
-        method->get_code(), [&can_return](const IRList::iterator& it) {
-          if (opcode::is_a_return(it->insn->opcode())) {
-            can_return = true;
-            return editable_cfg_adapter::LOOP_BREAK;
-          } else {
-            return editable_cfg_adapter::LOOP_CONTINUE;
-          }
-        });
-    if (!can_return) {
+    if (is_no_return_method(config, method)) {
       concurrent_no_return_methods.insert(method);
     }
   });
-  std::unordered_set<DexMethod*> no_return_methods(
-      concurrent_no_return_methods.begin(), concurrent_no_return_methods.end());
-  return no_return_methods;
+  return concurrent_no_return_methods.move_to_container();
 }
 
 ThrowPropagationPass::Stats ThrowPropagationPass::run(
     const Config& config,
     const std::unordered_set<DexMethod*>& no_return_methods,
     const method_override_graph::Graph& graph,
-    IRCode* code) {
+    IRCode* code,
+    std::unordered_set<DexMethod*>* no_return_methods_checked) {
   ThrowPropagationPass::Stats stats;
-  cfg::ScopedCFG cfg(code);
+  auto& cfg = code->cfg();
+  std::vector<DexMethod*> return_methods;
   auto is_no_return_invoke = [&](IRInstruction* insn) {
     if (!opcode::is_an_invoke(insn->opcode())) {
       return false;
@@ -122,10 +131,13 @@ ThrowPropagationPass::Stats ThrowPropagationPass::run(
       TRACE(TP, 4, "annotation interface method: %s", SHOW(method));
       return false;
     }
-    bool invoke_can_return{false};
+    return_methods.clear();
     auto check_for_no_return = [&](DexMethod* other_method) {
+      if (exclude_method(other_method)) {
+        return false;
+      }
       if (!no_return_methods.count(other_method)) {
-        invoke_can_return = true;
+        return_methods.push_back(other_method);
       }
       return true;
     };
@@ -135,14 +147,23 @@ ThrowPropagationPass::Stats ThrowPropagationPass::run(
             check_for_no_return)) {
       return false;
     }
-    return !invoke_can_return;
+    if (no_return_methods_checked != nullptr) {
+      // Tracking any of the return_methods is sufficient. We pick one in a
+      // deterministic way.
+      auto return_method_it = std::min_element(
+          return_methods.begin(), return_methods.end(), compare_dexmethods);
+      if (return_method_it != return_methods.end()) {
+        no_return_methods_checked->insert(*return_method_it);
+      }
+    }
+    return return_methods.empty();
   };
 
   boost::optional<std::pair<reg_t, reg_t>> regs;
   auto will_throw_or_not_terminate = [&cfg](cfg::InstructionIterator it) {
     std::unordered_set<IRInstruction*> visited{it->insn};
     while (true) {
-      it = cfg->next_following_gotos(it);
+      it = cfg.next_following_gotos(it);
       if (!visited.insert(it->insn).second) {
         // We found a loop
         return true;
@@ -153,9 +174,8 @@ ThrowPropagationPass::Stats ThrowPropagationPass::run(
       case OPCODE_MOVE:
       case OPCODE_NOP:
       case OPCODE_NEW_INSTANCE:
-      case IOPCODE_LOAD_PARAM:
-      case IOPCODE_LOAD_PARAM_OBJECT:
-      case IOPCODE_MOVE_RESULT_PSEUDO:
+      case OPCODE_MOVE_RESULT_OBJECT:
+      case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT:
         break;
       case OPCODE_INVOKE_DIRECT: {
         auto method = it->insn->get_method();
@@ -200,9 +220,9 @@ ThrowPropagationPass::Stats ThrowPropagationPass::run(
         // As above, nothing to do, since an exception will be thrown anyway.
         return false;
       }
-      always_assert(cfg->get_succ_edge_of_type(block, cfg::EDGE_THROW) ==
+      always_assert(cfg.get_succ_edge_of_type(block, cfg::EDGE_THROW) ==
                     nullptr);
-      cfg->split_block(cfg_it);
+      cfg.split_block(cfg_it);
       always_assert(insn == block->get_last_insn()->insn);
     }
     return true;
@@ -214,11 +234,11 @@ ThrowPropagationPass::Stats ThrowPropagationPass::run(
       message += SHOW(insn);
     }
     if (!regs) {
-      regs = std::make_pair(cfg->allocate_temp(), cfg->allocate_temp());
+      regs = std::make_pair(cfg.allocate_temp(), cfg.allocate_temp());
     }
     auto exception_reg = regs->first;
     auto string_reg = regs->second;
-    cfg::Block* new_block = cfg->create_block();
+    cfg::Block* new_block = cfg.create_block();
     std::vector<IRInstruction*> insns;
     auto new_instance_insn = new IRInstruction(OPCODE_NEW_INSTANCE);
     auto exception_type = type::java_lang_RuntimeException();
@@ -252,13 +272,13 @@ ThrowPropagationPass::Stats ThrowPropagationPass::run(
     throw_insn->set_src(0, exception_reg);
     insns.push_back(throw_insn);
     new_block->push_back(insns);
-    cfg->copy_succ_edges_of_type(block, new_block, cfg::EDGE_THROW);
-    auto existing_goto_edge = cfg->get_succ_edge_of_type(block, cfg::EDGE_GOTO);
+    cfg.copy_succ_edges_of_type(block, new_block, cfg::EDGE_THROW);
+    auto existing_goto_edge = cfg.get_succ_edge_of_type(block, cfg::EDGE_GOTO);
     always_assert(existing_goto_edge != nullptr);
-    cfg->set_edge_target(existing_goto_edge, new_block);
+    cfg.set_edge_target(existing_goto_edge, new_block);
     stats.throws_inserted++;
   };
-  for (auto block : cfg->blocks()) {
+  for (auto block : cfg.blocks()) {
     auto ii = InstructionIterable(block);
     for (auto it = ii.begin(); it != ii.end(); it++) {
       auto insn = it->insn;
@@ -279,8 +299,8 @@ ThrowPropagationPass::Stats ThrowPropagationPass::run(
 
   if (stats.throws_inserted > 0) {
     stats.unreachable_instruction_count +=
-        cfg->remove_unreachable_blocks().first;
-    cfg->recompute_registers_size();
+        cfg.remove_unreachable_blocks().first;
+    cfg.recompute_registers_size();
   }
 
   return stats;
@@ -290,53 +310,76 @@ void ThrowPropagationPass::run_pass(DexStoresVector& stores,
                                     ConfigFiles&,
                                     PassManager& mgr) {
   Scope scope = build_class_scope(stores);
-  walk::parallel::code(scope, [&](const DexMethod* method, IRCode& code) {
+  auto override_graph = method_override_graph::build_graph(scope);
+  std::unordered_set<DexMethod*> no_return_methods;
+  {
+    Timer t("get_no_return_methods");
+    no_return_methods = get_no_return_methods(m_config, scope);
+  }
+  std::unordered_set<DexMethod*> impacted_methods;
+  walk::code(scope, [&](DexMethod* method, IRCode&) {
     if (!method->rstate.no_optimizations()) {
-      code.build_cfg(/* editable */ true);
+      impacted_methods.insert(method);
     }
   });
-  auto override_graph = method_override_graph::build_graph(scope);
-  size_t last_no_return_methods{0};
-  int iterations = 0;
+  ConcurrentMap<DexMethod*, std::unordered_set<DexMethod*>> dependencies;
+  std::unordered_set<DexMethod*> new_no_return_methods;
+  std::mutex new_no_return_methods_mutex;
   Stats stats;
-  while (true) {
+  int iterations = 0;
+  while (!impacted_methods.empty()) {
+    TRACE(TP, 2,
+          "iteration %d, no_return_methods: %zu, impacted_methods: %zu, "
+          "new_no_return_methods: %zu",
+          iterations, no_return_methods.size(), impacted_methods.size(),
+          new_no_return_methods.size());
     iterations++;
-    std::unordered_set<DexMethod*> no_return_methods =
-        get_no_return_methods(m_config, scope);
-    TRACE(TP,
-          2,
-          "iteration %d, no_return_methods: %zu",
-          iterations,
-          no_return_methods.size());
-    if (no_return_methods.size() == last_no_return_methods) {
-      break;
-    }
-    last_no_return_methods = no_return_methods.size();
-    auto last_stats =
-        walk::parallel::methods<Stats>(scope, [&](DexMethod* method) -> Stats {
+    std::mutex stats_mutex;
+    new_no_return_methods.clear();
+    workqueue_run<DexMethod*>(
+        [&](DexMethod* method) {
           auto code = method->get_code();
-          if (method->rstate.no_optimizations() || code == nullptr) {
-            return {};
+          if (method->rstate.no_optimizations()) {
+            return;
           }
 
-          return run(m_config, no_return_methods, *override_graph, code);
-        });
-    if (last_stats.throws_inserted == 0) {
-      break;
+          std::unordered_set<DexMethod*> no_return_methods_checked;
+          auto local_stats = run(m_config,
+                                 no_return_methods,
+                                 *override_graph,
+                                 code,
+                                 &no_return_methods_checked);
+          for (auto* other_method : no_return_methods_checked) {
+            dependencies.update(other_method, [&](auto*, auto& set, bool) {
+              set.insert(method);
+            });
+          }
+          if (local_stats.throws_inserted > 0) {
+            if (!no_return_methods.count(method) &&
+                is_no_return_method(m_config, method)) {
+              std::lock_guard<std::mutex> lock_guard(
+                  new_no_return_methods_mutex);
+              new_no_return_methods.insert(method);
+            }
+            std::lock_guard<std::mutex> lock_guard(stats_mutex);
+            stats += local_stats;
+          }
+        },
+        impacted_methods);
+    impacted_methods.clear();
+    for (auto* method : new_no_return_methods) {
+      auto it = dependencies.find(method);
+      if (it != dependencies.end()) {
+        impacted_methods.insert(it->second.begin(), it->second.end());
+      }
+      no_return_methods.insert(method);
     }
-    stats += last_stats;
   }
-
-  walk::parallel::code(scope, [&](const DexMethod* method, IRCode& code) {
-    if (!method->rstate.no_optimizations()) {
-      code.clear_cfg();
-    }
-  });
 
   mgr.incr_metric(METRIC_THROWS_INSERTED, stats.throws_inserted);
   mgr.incr_metric(METRIC_UNREACHABLE_INSTRUCTIONS,
                   stats.unreachable_instruction_count);
-  mgr.incr_metric(METRIC_NO_RETURN_METHODS, last_no_return_methods);
+  mgr.incr_metric(METRIC_NO_RETURN_METHODS, no_return_methods.size());
   mgr.incr_metric(METRIC_ITERATIONS, iterations);
 }
 

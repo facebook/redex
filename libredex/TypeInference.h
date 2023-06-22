@@ -99,7 +99,7 @@
  * control-flow graph.
  */
 
-enum IRType {
+enum class IRType {
   BOTTOM,
   ZERO,
   CONST,
@@ -118,7 +118,34 @@ enum IRType {
   TOP
 };
 
+/*
+ * The IRType enum class does not differentiate between the different integral
+ * types. This IntType enum class contains all the primitive integral types and
+ * their conversions. The type lattice below is from the conversion relationship
+ * in the Dalvik verifier
+ * http://androidxref.com/4.4_r1/xref/dalvik/vm/analysis/CodeVerify.cpp#271
+ *
+ *                              TOP
+ *                               |
+ *                              INT
+ *                               |
+ *         +--------------------------------------------+
+ *         |                                            |
+ *        SHORT                                       CHAR
+ *         |                                            |
+ *        BYTE                                          |
+ *         |                                            |
+ *         ----------------------+-----------------------
+ *                               |
+ *                            BOOLEAN
+ *                               |
+ *                             BOTTOM
+ */
+
+enum class IntType { TOP, INT, CHAR, SHORT, BOOLEAN, BYTE, BOTTOM };
+
 std::ostream& operator<<(std::ostream& output, const IRType& type);
+std::ostream& operator<<(std::ostream& output, const IntType& type);
 
 namespace type_inference {
 
@@ -128,23 +155,34 @@ namespace type_inference {
  * might still cause problems with array instructions.
  */
 bool is_safely_usable_in_ifs(IRType type);
+bool is_safely_usable_in_ifs(IntType type);
 
 using std::placeholders::_1;
 
 using TypeLattice = sparta::BitVectorLattice<IRType,
                                              /* kCardinality */ 16>;
+using IntTypeLattice = sparta::BitVectorLattice<IntType,
+                                                /* kCardinality */ 7>;
 
 extern TypeLattice type_lattice;
+extern IntTypeLattice int_type_lattice;
 
 using TypeDomain = sparta::FiniteAbstractDomain<IRType,
                                                 TypeLattice,
                                                 TypeLattice::Encoding,
                                                 &type_lattice>;
+using IntTypeDomain = sparta::FiniteAbstractDomain<IntType,
+                                                   IntTypeLattice,
+                                                   IntTypeLattice::Encoding,
+                                                   &int_type_lattice>;
 
 using namespace ir_analyzer;
 
 using BasicTypeEnvironment =
     sparta::PatriciaTreeMapAbstractEnvironment<reg_t, TypeDomain>;
+
+using IntTypeEnvironment =
+    sparta::PatriciaTreeMapAbstractEnvironment<reg_t, IntTypeDomain>;
 
 /*
  * Note that we only track the register DexTypeDomain mapping here. We always
@@ -159,23 +197,36 @@ using BasicTypeEnvironment =
 class TypeEnvironment final
     : public sparta::ReducedProductAbstractDomain<TypeEnvironment,
                                                   BasicTypeEnvironment,
-                                                  RegTypeEnvironment> {
+                                                  RegTypeEnvironment,
+                                                  IntTypeEnvironment> {
+
  public:
   using ReducedProductAbstractDomain::ReducedProductAbstractDomain;
 
-  static void reduce_product(
-      std::tuple<BasicTypeEnvironment, RegTypeEnvironment>& /* product */) {}
+  static void reduce_product(std::tuple<BasicTypeEnvironment,
+                                        RegTypeEnvironment,
+                                        IntTypeEnvironment>& /* product */) {}
 
   TypeDomain get_type(reg_t reg) const { return get<0>().get(reg); }
+  IntTypeDomain get_int_type(reg_t reg) const { return get<2>().get(reg); }
 
   void set_type(reg_t reg, const TypeDomain type) {
     apply<0>([=](auto env) { env->set(reg, type); }, true);
+  }
+
+  void set_type(reg_t reg, const IntTypeDomain& type) {
+    apply<2>([=](auto env) { env->set(reg, type); }, true);
   }
 
   void update_type(
       reg_t reg,
       const std::function<TypeDomain(const TypeDomain&)>& operation) {
     apply<0>([=](auto env) { env->update(reg, operation); }, true);
+  }
+  void update_type(
+      reg_t reg,
+      const std::function<IntTypeDomain(const IntTypeDomain&)>& operation) {
+    apply<2>([=](auto env) { env->update(reg, operation); }, true);
   }
 
   boost::optional<const DexType*> get_dex_type(reg_t reg) const {
@@ -197,10 +248,10 @@ class TypeInference final
     : public ir_analyzer::BaseIRAnalyzer<TypeEnvironment> {
  public:
   explicit TypeInference(const cfg::ControlFlowGraph& cfg,
-                         bool skip_check_cast_to_intf = false)
+                         bool skip_check_cast_upcasting = false)
       : ir_analyzer::BaseIRAnalyzer<TypeEnvironment>(cfg),
         m_cfg(cfg),
-        m_skip_check_cast_to_intf(skip_check_cast_to_intf) {}
+        m_skip_check_cast_upcasting(skip_check_cast_upcasting) {}
 
   void run(const DexMethod* dex_method);
 
@@ -242,24 +293,35 @@ class TypeInference final
 
   const cfg::ControlFlowGraph& m_cfg;
   std::unordered_map<const IRInstruction*, TypeEnvironment> m_type_envs;
-  const bool m_skip_check_cast_to_intf;
+  const bool m_skip_check_cast_upcasting;
 
   TypeDomain refine_type(const TypeDomain& type,
                          IRType expected,
                          IRType const_type,
                          IRType scalar_type) const;
+  TypeDomain refine_type(const IntTypeDomain& type,
+                         IntType expected,
+                         IRType const_type,
+                         IRType scalar_type) const;
+  IntTypeDomain refine_type(const IntTypeDomain& type, IntType expected) const;
   void refine_type(TypeEnvironment* state, reg_t reg, IRType expected) const;
+  void refine_type(TypeEnvironment* state, reg_t reg, IntType expected) const;
   void refine_wide_type(TypeEnvironment* state,
                         reg_t reg,
                         IRType expected1,
                         IRType expected2) const;
   void refine_reference(TypeEnvironment* state, reg_t reg) const;
   void refine_scalar(TypeEnvironment* state, reg_t reg) const;
-  void refine_integer(TypeEnvironment* state, reg_t reg) const;
+  void refine_integral(TypeEnvironment* state, reg_t reg) const;
   void refine_float(TypeEnvironment* state, reg_t reg) const;
   void refine_wide_scalar(TypeEnvironment* state, reg_t reg) const;
   void refine_long(TypeEnvironment* state, reg_t reg) const;
   void refine_double(TypeEnvironment* state, reg_t reg) const;
+  void refine_int(TypeEnvironment* state, reg_t reg) const;
+  void refine_char(TypeEnvironment* state, reg_t reg) const;
+  void refine_boolean(TypeEnvironment* state, reg_t reg) const;
+  void refine_short(TypeEnvironment* state, reg_t reg) const;
+  void refine_byte(TypeEnvironment* state, reg_t reg) const;
 };
 
 } // namespace type_inference

@@ -20,10 +20,10 @@ Serdes get_serdes(const DexClass* cls) {
   std::replace(flatbuf_name.begin(), flatbuf_name.end(), '$', '_');
 
   std::string desername = name + "$Deserializer;";
-  DexType* deser = DexType::get_type(desername.c_str());
+  DexType* deser = DexType::get_type(desername);
 
   std::string flatbuf_desername = flatbuf_name + "Deserializer;";
-  DexType* flatbuf_deser = DexType::get_type(flatbuf_desername.c_str());
+  DexType* flatbuf_deser = DexType::get_type(flatbuf_desername);
 
   std::string sername = name + "$Serializer;";
   DexType* ser = DexType::get_type(sername);

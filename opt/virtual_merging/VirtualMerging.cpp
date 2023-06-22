@@ -42,6 +42,8 @@
 
 #include "VirtualMerging.h"
 
+#include <utility>
+
 #include "ConfigFiles.h"
 #include "ControlFlow.h"
 #include "CppUtil.h"
@@ -107,7 +109,7 @@ VirtualMerging::VirtualMerging(DexStoresVector& stores,
       m_inliner_config(inliner_config),
       m_init_classes_with_side_effects(m_scope,
                                        /* create_init_class_insns */ false),
-      m_perf_config(perf_config) {
+      m_perf_config(std::move(perf_config)) {
   std::unordered_set<DexMethod*> no_default_inlinables;
   // disable shrinking options, minimizing initialization time
   m_inliner_config.shrinker = shrinker::ShrinkerConfig();
@@ -527,15 +529,16 @@ class MergePairsBuilder {
             if (!profiles.has_stats()) {
               return false;
             }
-            auto opt_stat = profiles.get_method_stat("ColdStart", t_method);
-            if (!opt_stat) {
-              return false;
+            for (auto& interaction : m_perf_config.interactions) {
+              auto opt_stat = profiles.get_method_stat(interaction, t_method);
+              if (opt_stat &&
+                  opt_stat->appear_percent >=
+                      m_perf_config.appear100_threshold &&
+                  opt_stat->call_count >= m_perf_config.call_count_threshold) {
+                return true;
+              }
             }
-            if (opt_stat->appear_percent < m_perf_config.appear100_threshold ||
-                opt_stat->call_count < m_perf_config.call_count_threshold) {
-              return false;
-            }
-            return true;
+            return false;
           }();
 
           if (should_keep) {
@@ -661,7 +664,7 @@ VirtualMerging::compute_mergeable_pairs_by_virtual_scopes(
       mergeable_pairs_by_virtual_scopes;
   SimpleOrderingProvider ordering_provider{profiles};
   walk::parallel::virtual_scopes(
-      virtual_scopes, [&](const VirtualScope* virtual_scope) {
+      virtual_scopes, [&](const virt_scope::VirtualScope* virtual_scope) {
         MergePairsBuilder mpb(virtual_scope, ordering_provider, m_perf_config);
         auto res = mpb.build(m_mergeable_scope_methods.at(virtual_scope),
                              m_xstores, m_xdexes, profiles, strategy);
@@ -1439,6 +1442,8 @@ void VirtualMergingPass::bind_config() {
        m_perf_config.appear100_threshold);
   bind("perf_call_count_threshold", m_perf_config.call_count_threshold,
        m_perf_config.call_count_threshold);
+  bind("perf_interactions", m_perf_config.interactions,
+       m_perf_config.interactions);
 
   after_configuration([this, strategy, insertion_strategy] {
     always_assert(m_max_overriding_method_instructions >= 0);
