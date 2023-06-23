@@ -41,7 +41,7 @@ macro(add_dependent_packages_for_redex)
 
     if(ENABLE_STATIC)
         set(Boost_USE_STATIC_LIBS ON)
-        if(NOT APPLE)
+        if((NOT APPLE) AND (NOT MINGW))
             set(Boost_USE_STATIC_RUNTIME ON)
         endif()
         set(Boost_USE_MULTITHREADED ON)
