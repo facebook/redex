@@ -10,6 +10,7 @@
 #include "Macros.h" // For ATTR_FORMAT.
 #include "RedexException.h"
 
+#include <cstdint>
 #include <iosfwd>
 #include <stdexcept>
 
