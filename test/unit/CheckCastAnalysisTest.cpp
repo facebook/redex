@@ -8,10 +8,15 @@
 #include <gtest/gtest.h>
 
 #include "CheckCastAnalysis.h"
+#include "FrameworkApi.h"
 #include "IRAssembler.h"
 #include "RedexTest.h"
 
-struct CheckCastAnalysisTest : public RedexTest {};
+struct CheckCastAnalysisTest : public RedexTest {
+  static api::AndroidSDK create_empty_sdk() {
+    return api::AndroidSDK(boost::none);
+  }
+};
 
 TEST_F(CheckCastAnalysisTest, simple_string) {
   auto method = assembler::method_from_string(R"(
@@ -27,7 +32,8 @@ TEST_F(CheckCastAnalysisTest, simple_string) {
   )");
   method->get_code()->build_cfg(true);
   check_casts::CheckCastConfig config;
-  check_casts::impl::CheckCastAnalysis analysis(config, method);
+  auto api = create_empty_sdk();
+  check_casts::impl::CheckCastAnalysis analysis(config, method, api);
   auto replacements = analysis.collect_redundant_checks_replacement();
 
   EXPECT_EQ(replacements.size(), 1);
@@ -54,7 +60,8 @@ TEST_F(CheckCastAnalysisTest, new_instance) {
   )");
   method->get_code()->build_cfg(true);
   check_casts::CheckCastConfig config;
-  check_casts::impl::CheckCastAnalysis analysis(config, method);
+  auto api = create_empty_sdk();
+  check_casts::impl::CheckCastAnalysis analysis(config, method, api);
   auto replacements = analysis.collect_redundant_checks_replacement();
 
   EXPECT_EQ(replacements.size(), 1);
@@ -81,7 +88,8 @@ TEST_F(CheckCastAnalysisTest, parameter) {
   )");
   method->get_code()->build_cfg(true);
   check_casts::CheckCastConfig config;
-  check_casts::impl::CheckCastAnalysis analysis(config, method);
+  auto api = create_empty_sdk();
+  check_casts::impl::CheckCastAnalysis analysis(config, method, api);
   auto replacements = analysis.collect_redundant_checks_replacement();
 
   EXPECT_EQ(replacements.size(), 1);
@@ -107,7 +115,8 @@ TEST_F(CheckCastAnalysisTest, array_parameter) {
   )");
   method->get_code()->build_cfg(true);
   check_casts::CheckCastConfig config;
-  check_casts::impl::CheckCastAnalysis analysis(config, method);
+  auto api = create_empty_sdk();
+  check_casts::impl::CheckCastAnalysis analysis(config, method, api);
   auto replacements = analysis.collect_redundant_checks_replacement();
 
   EXPECT_EQ(replacements.size(), 1);
@@ -134,7 +143,8 @@ TEST_F(CheckCastAnalysisTest, this_parameter) {
   )");
   method->get_code()->build_cfg(true);
   check_casts::CheckCastConfig config;
-  check_casts::impl::CheckCastAnalysis analysis(config, method);
+  auto api = create_empty_sdk();
+  check_casts::impl::CheckCastAnalysis analysis(config, method, api);
   auto replacements = analysis.collect_redundant_checks_replacement();
 
   EXPECT_EQ(replacements.size(), 1);
@@ -162,7 +172,8 @@ TEST_F(CheckCastAnalysisTest, get_field) {
   )");
   method->get_code()->build_cfg(true);
   check_casts::CheckCastConfig config{.weaken = false};
-  check_casts::impl::CheckCastAnalysis analysis(config, method);
+  auto api = create_empty_sdk();
+  check_casts::impl::CheckCastAnalysis analysis(config, method, api);
   auto replacements = analysis.collect_redundant_checks_replacement();
 
   EXPECT_EQ(replacements.size(), 1);
@@ -190,7 +201,8 @@ TEST_F(CheckCastAnalysisTest, weaken_disabled) {
   )");
   method->get_code()->build_cfg(true);
   check_casts::CheckCastConfig config{.weaken = false};
-  check_casts::impl::CheckCastAnalysis analysis(config, method);
+  auto api = create_empty_sdk();
+  check_casts::impl::CheckCastAnalysis analysis(config, method, api);
   auto replacements = analysis.collect_redundant_checks_replacement();
 
   EXPECT_EQ(replacements.size(), 0);
@@ -211,7 +223,8 @@ TEST_F(CheckCastAnalysisTest, weaken_replace) {
   )");
   method->get_code()->build_cfg(true);
   check_casts::CheckCastConfig config;
-  check_casts::impl::CheckCastAnalysis analysis(config, method);
+  auto api = create_empty_sdk();
+  check_casts::impl::CheckCastAnalysis analysis(config, method, api);
   auto replacements = analysis.collect_redundant_checks_replacement();
 
   EXPECT_EQ(replacements.size(), 1);
@@ -251,7 +264,8 @@ TEST_F(CheckCastAnalysisTest, weaken) {
   )");
   method->get_code()->build_cfg(true);
   check_casts::CheckCastConfig config;
-  check_casts::impl::CheckCastAnalysis analysis(config, method);
+  auto api = create_empty_sdk();
+  check_casts::impl::CheckCastAnalysis analysis(config, method, api);
   auto replacements = analysis.collect_redundant_checks_replacement();
 
   EXPECT_EQ(replacements.size(), 1);
@@ -297,7 +311,8 @@ TEST_F(CheckCastAnalysisTest, weaken_interface_to_interface) {
   )");
   method->get_code()->build_cfg(true);
   check_casts::CheckCastConfig config;
-  check_casts::impl::CheckCastAnalysis analysis(config, method);
+  auto api = create_empty_sdk();
+  check_casts::impl::CheckCastAnalysis analysis(config, method, api);
   auto replacements = analysis.collect_redundant_checks_replacement();
 
   EXPECT_EQ(replacements.size(), 1);
@@ -342,7 +357,8 @@ TEST_F(CheckCastAnalysisTest, weaken_replace_class_to_interface) {
   )");
   method->get_code()->build_cfg(true);
   check_casts::CheckCastConfig config;
-  check_casts::impl::CheckCastAnalysis analysis(config, method);
+  auto api = create_empty_sdk();
+  check_casts::impl::CheckCastAnalysis analysis(config, method, api);
   auto replacements = analysis.collect_redundant_checks_replacement();
 
   EXPECT_EQ(replacements.size(), 1);
@@ -385,8 +401,106 @@ TEST_F(CheckCastAnalysisTest, do_not_weaken_class_to_interface) {
   )");
   method->get_code()->build_cfg(true);
   check_casts::CheckCastConfig config;
-  check_casts::impl::CheckCastAnalysis analysis(config, method);
+  auto api = create_empty_sdk();
+  check_casts::impl::CheckCastAnalysis analysis(config, method, api);
   auto replacements = analysis.collect_redundant_checks_replacement();
 
   EXPECT_EQ(replacements.size(), 0);
 }
+
+namespace {
+
+std::tuple<DexType*, DexType*, DexType*, DexType*> create_chain_of_four() {
+  auto create_class = [](const char* t_name, DexType* super_type,
+                         bool external) {
+    auto t_type = DexType::make_type(t_name);
+    ClassCreator t_creator(t_type);
+    t_creator.set_super(super_type);
+    if (external) {
+      t_creator.set_external();
+    }
+    t_creator.create();
+    return t_type;
+  };
+
+  auto t1_type = create_class("LT1;", type::java_lang_Object(), true);
+  auto t2_type = create_class("LT2;", t1_type, true);
+  auto t3_type = create_class("LT3;", t2_type, true);
+  auto t4_type = create_class("LT4;", t3_type, false);
+
+  return std::make_tuple(t1_type, t2_type, t3_type, t4_type);
+}
+
+} // namespace
+
+class CheckCastAnalysisSDKTest
+    : public RedexTest,
+      public testing::WithParamInterface<
+          std::tuple<const char*, const char*, bool>> {};
+
+TEST_P(CheckCastAnalysisSDKTest, parameter) {
+  auto [t1_type, t2_type, t3_type, t4_type] = create_chain_of_four();
+
+  auto api = api::AndroidSDK::from_string(std::get<1>(GetParam()));
+
+  auto method = assembler::method_from_string(R"(
+    (method (public) "LFoo;.bar:(LT3;)LT1;"
+      (
+        (load-param-object v0)
+        (load-param-object v1)
+        (check-cast v1 "LT1;")
+        (move-result-pseudo-object v0)
+        (return-object v0)
+      )
+    )
+  )");
+  method->get_code()->build_cfg(true);
+  check_casts::CheckCastConfig config;
+  check_casts::impl::CheckCastAnalysis analysis(config, method, api);
+  auto replacements = analysis.collect_redundant_checks_replacement();
+
+  if (std::get<2>(GetParam())) {
+    ASSERT_EQ(replacements.size(), 1);
+    auto& rep = replacements[0];
+    EXPECT_EQ(rep.insn->opcode(), OPCODE_CHECK_CAST);
+    ASSERT_TRUE(rep.replacement_insn);
+    EXPECT_EQ((*rep.replacement_insn)->opcode(), OPCODE_MOVE_OBJECT);
+    EXPECT_EQ(rep.replacement_type, boost::none);
+  } else {
+    EXPECT_EQ(replacements.size(), 0);
+  }
+  method->get_code()->clear_cfg();
+}
+
+INSTANTIATE_TEST_SUITE_P(SDKCombinations,
+                         CheckCastAnalysisSDKTest,
+                         testing::Values(std::make_tuple("Full_Chain",
+                                                         R"(
+    LT1; 1 Ljava/lang/Object; 0 0
+    LT2; 1 LT1; 0 0
+    LT3; 1 LT2; 0 0
+  )",
+                                                         true),
+                                         std::make_tuple("Hierarchy_Bypass",
+                                                         R"(
+    LT1; 1 Ljava/lang/Object; 0 0
+    LT2; 1 LT1; 0 0
+    LT3; 1 LT1; 0 0
+  )",
+                                                         true),
+                                         std::make_tuple("Source_Not_In_SDK",
+                                                         R"(
+    LT1; 1 Ljava/lang/Object; 0 0
+    LT2; 1 LT1; 0 0
+  )",
+                                                         false),
+                                         std::make_tuple("SDK_Not_Related",
+                                                         R"(
+    LT1; 1 Ljava/lang/Object; 0 0
+    LT2; 1 Ljava/lang/Object; 0 0
+    LT3; 1 LT2; 0 0
+  )",
+                                                         false)),
+                         [](const auto& info) {
+                           return std::get<0>(info.param);
+                         });

@@ -9,6 +9,8 @@
 
 #include <boost/algorithm/string.hpp>
 #include <fstream>
+#include <istream>
+#include <sstream>
 
 namespace api {
 
@@ -78,7 +80,7 @@ bool FrameworkAPI::has_field(const std::string& simple_deobfuscated_name,
 
 /**
  * File format:
- *  <framework_cls> <super_cls> <num_methods> <num_fields>
+ *  <framework_cls> <access_flags> <super_cls> <num_methods> <num_fields>
  *      M <method0>
  *      M <method1>
  *      ...
@@ -87,12 +89,11 @@ bool FrameworkAPI::has_field(const std::string& simple_deobfuscated_name,
  *      ...
  */
 
-void AndroidSDK::load_framework_classes() {
+namespace {
 
-  std::ifstream infile(m_sdk_api_file.c_str());
-  assert_log(infile, "Failed to open framework api file: %s\n",
-             m_sdk_api_file.c_str());
-
+void parse_framework_description(
+    std::istream& input,
+    std::unordered_map<const DexType*, FrameworkAPI>* framework_classes) {
   std::string framework_cls_str;
   std::string super_cls_str;
   std::string class_name;
@@ -100,11 +101,11 @@ void AndroidSDK::load_framework_classes() {
   uint32_t num_fields;
   uint32_t access_flags;
 
-  while (infile >> framework_cls_str >> access_flags >> super_cls_str >>
+  while (input >> framework_cls_str >> access_flags >> super_cls_str >>
          num_methods >> num_fields) {
     FrameworkAPI framework_api;
     framework_api.cls = DexType::make_type(framework_cls_str);
-    always_assert_log(m_framework_classes.count(framework_api.cls) == 0,
+    always_assert_log(framework_classes->count(framework_api.cls) == 0,
                       "Duplicated class name!");
     framework_api.super_cls = DexType::make_type(super_cls_str);
     framework_api.access_flags = DexAccessFlags(access_flags);
@@ -114,7 +115,7 @@ void AndroidSDK::load_framework_classes() {
       std::string tag;
       uint32_t m_access_flags;
 
-      infile >> tag >> method_str >> m_access_flags;
+      input >> tag >> method_str >> m_access_flags;
 
       always_assert(tag == "M");
       DexMethodRef* mref = DexMethod::make_method(method_str);
@@ -127,7 +128,7 @@ void AndroidSDK::load_framework_classes() {
       std::string tag;
       uint32_t f_access_flags;
 
-      infile >> tag >> field_str >> f_access_flags;
+      input >> tag >> field_str >> f_access_flags;
 
       always_assert(tag == "F");
       DexFieldRef* fref = DexField::make_field(field_str);
@@ -135,11 +136,30 @@ void AndroidSDK::load_framework_classes() {
                                             DexAccessFlags(f_access_flags));
     }
 
-    auto& map_entry = m_framework_classes[framework_api.cls];
+    auto& map_entry = (*framework_classes)[framework_api.cls];
     map_entry = std::move(framework_api);
   }
-  always_assert_log(!m_framework_classes.empty(),
+  always_assert_log(!framework_classes->empty(),
                     "Failed to load any class from the framework api file");
+}
+
+} // namespace
+
+AndroidSDK AndroidSDK::from_string(const std::string& input) {
+  AndroidSDK sdk{};
+
+  std::istringstream iss{input};
+  parse_framework_description(iss, &sdk.m_framework_classes);
+
+  return sdk;
+}
+
+void AndroidSDK::load_framework_classes() {
+  std::ifstream infile(m_sdk_api_file.c_str());
+  assert_log(infile, "Failed to open framework api file: %s\n",
+             m_sdk_api_file.c_str());
+
+  parse_framework_description(infile, &m_framework_classes);
 }
 
 } // namespace api

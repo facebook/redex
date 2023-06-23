@@ -7,14 +7,139 @@
 
 #include "CheckCastAnalysis.h"
 
+#include <sstream>
+
 #include "DexUtil.h"
+#include "FrameworkApi.h"
+#include "Lazy.h"
 #include "ReachingDefinitions.h"
 #include "Show.h"
 #include "StlUtil.h"
+#include "Trace.h"
 
 namespace check_casts {
 
 namespace impl {
+
+namespace {
+
+bool is_min_sdk_acceptable_impl(const DexType* source_type,
+                                const DexType* cur_type,
+                                const DexType* target_type,
+                                const api::AndroidSDK& api,
+                                Lazy<std::ostringstream>& msg) {
+  // Adapted check_cast algorithm.
+  if (cur_type == target_type) {
+    return true;
+  }
+
+  const auto cls = type_class(cur_type);
+  if (cls == nullptr) {
+    return false;
+  }
+
+  bool is_external = cls->is_external();
+  if (is_external && !api.has_type(cur_type)) {
+    *msg << "Filtering " << show(source_type) << " -> " << show(target_type)
+         << " because " << show(cur_type) << " is not available in min-sdk";
+    return false;
+  }
+
+  if (is_min_sdk_acceptable_impl(source_type, cls->get_super_class(),
+                                 target_type, api, msg)) {
+    if (is_external && api.get_framework_classes().at(cur_type).super_cls !=
+                           cls->get_super_class()) {
+      *msg << "Filtering " << show(source_type) << " -> " << show(target_type)
+           << " because " << show(cur_type) << "'s superclass is "
+           << show(api.get_framework_classes().at(cur_type).super_cls)
+           << "in min-sdk but " << show(cls->get_super_class()) << " now.";
+      return false;
+    }
+    return true;
+  }
+
+  auto intfs = cls->get_interfaces();
+  for (auto intf : *intfs) {
+    if (is_min_sdk_acceptable_impl(source_type, intf, target_type, api, msg)) {
+      // We do not currently know implemented interfaces in AndroidSDK.
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool is_min_sdk_acceptable_sdk_chain(const DexType* cur_type,
+                                     const DexType* target_type,
+                                     const api::AndroidSDK& api) {
+  // Adapted check_cast algorithm.
+  if (cur_type == target_type) {
+    return true;
+  }
+
+  const auto cls = type_class(cur_type);
+  if (cls == nullptr) {
+    return false;
+  }
+
+  bool is_external = cls->is_external();
+  if (is_external && !api.has_type(cur_type)) {
+    return false;
+  }
+
+  auto superclass = cls->get_super_class();
+  if (is_external) {
+    superclass = api.get_framework_classes().at(cur_type).super_cls;
+  }
+  if (superclass == nullptr) {
+    return false;
+  }
+
+  return is_min_sdk_acceptable_sdk_chain(superclass, target_type, api);
+  // No support for interfaces.
+}
+
+// Ensure that the relationship is available in the MinSdk. Assumes a type
+// cast would succeed in the current SDK representation.
+bool is_min_sdk_acceptable(const DexType* source_type,
+                           const DexType* target_type,
+                           const api::AndroidSDK& api) {
+  // For arrays, this is really about the element types.
+  source_type = type::get_element_type_if_array(source_type);
+  target_type = type::get_element_type_if_array(target_type);
+
+  // Early cutout: always accept target-type = Object.
+  if (target_type == type::java_lang_Object()) {
+    return true;
+  }
+
+  Lazy<std::ostringstream> impl_msg{
+      []() { return std::make_unique<std::ostringstream>(); }};
+
+  // This checks whether the current hierarchy is accepted at MinSDK.
+  if (is_min_sdk_acceptable_impl(source_type, source_type, target_type, api,
+                                 impl_msg)) {
+    return true;
+  }
+
+  // There are common cases around exceptions where the hierarchy changed.
+  // Attempt to walk along the superclass chain.
+  if (!is_interface(type_class(source_type)) &&
+      !is_interface(type_class(target_type))) {
+    if (is_min_sdk_acceptable_sdk_chain(source_type, target_type, api)) {
+      TRACE(RMRCC, 1, "%s -> %s accepted with MinSDK superclass chain",
+            SHOW(source_type), SHOW(target_type));
+      return true;
+    }
+  }
+
+  redex_assert(impl_msg);
+  TRACE(RMRCC, 1, "%s", impl_msg->str().c_str());
+
+  return false;
+}
+
+} // namespace
 
 // Nullptr indicates that the type demand could not be computed exactly, and no
 // weakening should take place.
@@ -338,10 +463,12 @@ DexType* CheckCastAnalysis::weaken_to_demand(
 }
 
 CheckCastAnalysis::CheckCastAnalysis(const CheckCastConfig& config,
-                                     DexMethod* method)
+                                     DexMethod* method,
+                                     const api::AndroidSDK& api)
     : m_class_cast_exception_type(
           DexType::make_type("Ljava/lang/ClassCastException;")),
-      m_method(method) {
+      m_method(method),
+      m_api(api) {
   always_assert(m_class_cast_exception_type);
   if (!method || !method->get_code()) {
     return;
@@ -518,11 +645,16 @@ bool CheckCastAnalysis::is_check_cast_redundant(IRInstruction* insn,
   }
 
   auto dex_type = env.get_dex_type(reg);
-  if (dex_type && type::check_cast(*dex_type, check_type)) {
-    return true;
+  if (!dex_type || !type::check_cast(*dex_type, check_type)) {
+    return false;
   }
 
-  return false;
+  // Ensure that the relationship is available in the MinSdk.
+  if (!is_min_sdk_acceptable(*dex_type, check_type, m_api)) {
+    return false;
+  }
+
+  return true;
 }
 
 type_inference::TypeInference* CheckCastAnalysis::get_type_inference() const {

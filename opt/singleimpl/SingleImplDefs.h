@@ -20,6 +20,10 @@
 #include "IRList.h"
 #include "SingleImpl.h"
 
+namespace api {
+class AndroidSDK;
+} // namespace api
+
 struct ProguardMap;
 
 /**
@@ -207,4 +211,5 @@ struct OptimizeStats {
 OptimizeStats optimize(std::unique_ptr<SingleImplAnalysis> analysis,
                        const ClassHierarchy& ch,
                        Scope& scope,
-                       const SingleImplConfig& config);
+                       const SingleImplConfig& config,
+                       const api::AndroidSDK& api);

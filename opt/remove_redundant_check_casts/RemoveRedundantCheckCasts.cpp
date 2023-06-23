@@ -9,6 +9,7 @@
 
 #include "CheckCastAnalysis.h"
 #include "CheckCastTransform.h"
+#include "ConfigFiles.h"
 #include "DexClass.h"
 #include "PassManager.h"
 #include "Walkers.h"
@@ -16,14 +17,15 @@
 namespace check_casts {
 
 impl::Stats remove_redundant_check_casts(const CheckCastConfig& config,
-                                         DexMethod* method) {
+                                         DexMethod* method,
+                                         const api::AndroidSDK& android_sdk) {
   if (!method || !method->get_code() || method->rstate.no_optimizations()) {
     return impl::Stats{};
   }
 
   auto* code = method->get_code();
   code->build_cfg(/* editable */ true);
-  impl::CheckCastAnalysis analysis(config, method);
+  impl::CheckCastAnalysis analysis(config, method, android_sdk);
   auto casts = analysis.collect_redundant_checks_replacement();
   auto stats = impl::apply(method, casts);
 
@@ -36,13 +38,15 @@ void RemoveRedundantCheckCastsPass::bind_config() {
 }
 
 void RemoveRedundantCheckCastsPass::run_pass(DexStoresVector& stores,
-                                             ConfigFiles&,
+                                             ConfigFiles& conf,
                                              PassManager& mgr) {
   auto scope = build_class_scope(stores);
+  const auto& android_sdk =
+      conf.get_android_sdk_api(mgr.get_redex_options().min_sdk);
 
   auto stats =
       walk::parallel::methods<impl::Stats>(scope, [&](DexMethod* method) {
-        return remove_redundant_check_casts(m_config, method);
+        return remove_redundant_check_casts(m_config, method, android_sdk);
       });
 
   mgr.set_metric("num_removed_casts", stats.removed_casts);
