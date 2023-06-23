@@ -320,7 +320,7 @@ void ModelMethodMerger::fix_visibility() {
   auto call_sites =
       method_reference::collect_call_refs(m_scope, vmethods_created);
   for (const auto& callsite : call_sites) {
-    auto insn = callsite.insn;
+    auto insn = callsite.mie->insn;
     always_assert(opcode::is_invoke_direct(insn->opcode()));
     insn->set_opcode(OPCODE_INVOKE_VIRTUAL);
   }

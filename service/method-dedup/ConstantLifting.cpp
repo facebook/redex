@@ -167,7 +167,7 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
   auto call_sites = method_reference::collect_call_refs(scope, lifted);
   for (const auto& callsite : call_sites) {
     auto meth = callsite.caller;
-    auto insn = callsite.insn;
+    auto insn = callsite.mie->insn;
     const auto callee =
         resolve_method(insn->get_method(), opcode_to_search(insn));
     always_assert(callee != nullptr);
