@@ -2116,26 +2116,14 @@ DexProto* DexType::get_non_overlapping_proto(const DexString* method_name,
 void DexMethod::add_load_params(size_t num_add_loads) {
   IRCode* code = this->get_code();
   always_assert_log(code, "Method don't have IRCode\n");
-  always_assert_log(code->editable_cfg_built(),
-                    "should be edtiable cfg here\n");
-  auto& cfg = code->cfg();
-  auto block = cfg.entry_block();
-  auto last_loading = block->get_last_param_loading_insn();
+  auto callee_params = code->get_param_instructions();
   size_t added_params = 0;
   while (added_params < num_add_loads) {
     ++added_params;
-    auto temp = cfg.allocate_temp();
+    auto temp = code->allocate_temp();
     IRInstruction* new_param_load = new IRInstruction(IOPCODE_LOAD_PARAM);
     new_param_load->set_dest(temp);
-    if (last_loading != block->end()) {
-      cfg.insert_after(block->to_cfg_instruction_iterator(last_loading),
-                       new_param_load);
-    } else {
-      cfg.insert_before(block->to_cfg_instruction_iterator(
-                            block->get_first_non_param_loading_insn()),
-                        new_param_load);
-    }
-    last_loading = block->get_last_param_loading_insn();
+    code->insert_before(callee_params.end(), new_param_load);
   }
 }
 
