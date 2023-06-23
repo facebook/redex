@@ -181,8 +181,9 @@ using CheckCastSet = std::unordered_set<const IRInstruction*>;
 
 struct OptimizationImpl {
   OptimizationImpl(std::unique_ptr<SingleImplAnalysis> analysis,
-                   const ClassHierarchy& ch)
-      : single_impls(std::move(analysis)), ch(ch) {}
+                   const ClassHierarchy& ch,
+                   const api::AndroidSDK& api)
+      : single_impls(std::move(analysis)), ch(ch), m_api(api) {}
 
   OptimizeStats optimize(Scope& scope, const SingleImplConfig& config);
 
@@ -223,6 +224,7 @@ struct OptimizationImpl {
   std::unordered_set<DexType*> optimized;
   const ClassHierarchy& ch;
   std::unordered_map<std::string_view, size_t> deobfuscated_name_counters;
+  const api::AndroidSDK& m_api;
 };
 
 /**
@@ -825,9 +827,10 @@ check_casts::impl::Stats OptimizationImpl::post_process(
   // parallel.
   check_casts::impl::Stats stats;
   std::mutex mutex;
+  auto& api = m_api;
   for_all_methods(
       methods,
-      [&stats, &mutex, removed_instructions](const DexMethod* m_const) {
+      [&stats, &mutex, removed_instructions, &api](const DexMethod* m_const) {
         auto m = const_cast<DexMethod*>(m_const);
         auto code = m->get_code();
         always_assert(!code->editable_cfg_built());
@@ -837,7 +840,7 @@ check_casts::impl::Stats OptimizationImpl::post_process(
         // occurs here within SingleImplPass, but not in subsequent
         // CheckCastRemovals where weaken is enabled by default.
         check_casts::CheckCastConfig config{.weaken = false};
-        check_casts::impl::CheckCastAnalysis analysis(config, m);
+        check_casts::impl::CheckCastAnalysis analysis(config, m, api);
         auto casts = analysis.collect_redundant_checks_replacement();
         auto local_stats = check_casts::impl::apply(m, casts);
         std::lock_guard<std::mutex> lock_guard(mutex);
@@ -858,7 +861,8 @@ check_casts::impl::Stats OptimizationImpl::post_process(
 OptimizeStats optimize(std::unique_ptr<SingleImplAnalysis> analysis,
                        const ClassHierarchy& ch,
                        Scope& scope,
-                       const SingleImplConfig& config) {
-  OptimizationImpl optimizer(std::move(analysis), ch);
+                       const SingleImplConfig& config,
+                       const api::AndroidSDK& api) {
+  OptimizationImpl optimizer(std::move(analysis), ch, api);
   return optimizer.optimize(scope, config);
 }

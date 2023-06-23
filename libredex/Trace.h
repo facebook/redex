@@ -131,6 +131,7 @@ class DexType;
   TM(RME)               \
   TM(RMGOTO)            \
   TM(RM_INTF)           \
+  TM(RMRCC)             \
   TM(RMU)               \
   TM(RMUF)              \
   TM(RMUNINST)          \

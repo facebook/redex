@@ -134,6 +134,8 @@ void SingleImplPass::run_pass(DexStoresVector& stores,
   size_t previous_invoke_intf_count = s_invoke_intf_count;
   OptimizeStats stats;
   const auto& pg_map = conf.get_proguard_map();
+  const auto& android_sdk =
+      conf.get_android_sdk_api(mgr.get_redex_options().min_sdk);
   while (true) {
     Timer t{std::string("Iteration ").append(std::to_string(max_steps + 1))};
     TRACE(INTF, 9, "\tOPTIMIZE ROUND %d", max_steps);
@@ -149,7 +151,7 @@ void SingleImplPass::run_pass(DexStoresVector& stores,
                                     m_pass_config);
 
     auto optimized_stats =
-        optimize(std::move(single_impls), ch, scope, m_pass_config);
+        optimize(std::move(single_impls), ch, scope, m_pass_config, android_sdk);
     stats += optimized_stats;
     if (optimized_stats.removed_interfaces == 0 || ++max_steps >= MAX_PASSES) {
       break;

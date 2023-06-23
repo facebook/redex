@@ -45,6 +45,8 @@ struct FrameworkAPI {
 };
 
 class AndroidSDK {
+  AndroidSDK() = default;
+
  public:
   explicit AndroidSDK(boost::optional<std::string> sdk_api_file) {
     if (sdk_api_file) {
@@ -55,6 +57,8 @@ class AndroidSDK {
       m_sdk_api_file = "";
     }
   }
+
+  static AndroidSDK from_string(const std::string& input);
 
   const std::unordered_map<const DexType*, FrameworkAPI>&
   get_framework_classes() const {

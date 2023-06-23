@@ -14,6 +14,10 @@
 #include "ControlFlow.h"
 #include "TypeInference.h"
 
+namespace api {
+class AndroidSDK;
+} // namespace api
+
 namespace check_casts {
 
 namespace impl {
@@ -41,7 +45,9 @@ using CheckCastReplacements = std::vector<CheckCastReplacementItem>;
 class CheckCastAnalysis {
 
  public:
-  explicit CheckCastAnalysis(const CheckCastConfig& config, DexMethod* method);
+  CheckCastAnalysis(const CheckCastConfig& config,
+                    DexMethod* method,
+                    const api::AndroidSDK& api);
   CheckCastReplacements collect_redundant_checks_replacement() const;
 
  private:
@@ -60,6 +66,7 @@ class CheckCastAnalysis {
   std::unique_ptr<InstructionTypeDemands> m_insn_demands;
   std::vector<cfg::InstructionIterator> m_check_cast_its;
   mutable std::unique_ptr<type_inference::TypeInference> m_type_inference;
+  const api::AndroidSDK& m_api;
 };
 
 } // namespace impl
