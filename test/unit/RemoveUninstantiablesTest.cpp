@@ -10,6 +10,7 @@
 #include "Creators.h"
 #include "IRAssembler.h"
 #include "RedexTest.h"
+#include "RemoveUninstantiablesImpl.h"
 #include "RemoveUninstantiablesPass.h"
 #include "ScopeHelper.h"
 #include "VirtualScope.h"
@@ -39,15 +40,15 @@ std::unordered_set<DexType*> compute_uninstantiable_types() {
   return RemoveUninstantiablesPass::compute_scoped_uninstantiable_types(scope);
 }
 
-RemoveUninstantiablesPass::Stats replace_uninstantiable_refs(
+remove_uninstantiables_impl::Stats replace_uninstantiable_refs(
     cfg::ControlFlowGraph& cfg) {
-  return RemoveUninstantiablesPass::replace_uninstantiable_refs(
+  return remove_uninstantiables_impl::replace_uninstantiable_refs(
       compute_uninstantiable_types(), cfg);
 }
 
-RemoveUninstantiablesPass::Stats replace_all_with_throw(
+remove_uninstantiables_impl::Stats replace_all_with_throw(
     cfg::ControlFlowGraph& cfg) {
-  return RemoveUninstantiablesPass::replace_all_with_throw(cfg);
+  return remove_uninstantiables_impl::replace_all_with_throw(cfg);
 }
 
 /// Expect \c RemoveUninstantiablesPass to convert \p ACTUAL into \p EXPECTED
@@ -187,7 +188,7 @@ TEST_F(RemoveUninstantiablesTest, InstanceOf) {
   ASSERT_TRUE(type::is_uninstantiable_class(DexType::get_type("LFoo;")));
   ASSERT_FALSE(type::is_uninstantiable_class(DexType::get_type("LBar;")));
 
-  RemoveUninstantiablesPass::Stats stats;
+  remove_uninstantiables_impl::Stats stats;
   EXPECT_CHANGE(replace_uninstantiable_refs,
                 stats,
                 /* ACTUAL */ R"((
@@ -209,7 +210,7 @@ TEST_F(RemoveUninstantiablesTest, InstanceOfUnimplementedInterface) {
   auto cls = def_class("LFoo;");
   cls->set_access(cls->get_access() | ACC_INTERFACE | ACC_ABSTRACT);
 
-  RemoveUninstantiablesPass::Stats stats;
+  remove_uninstantiables_impl::Stats stats;
   EXPECT_CHANGE(replace_uninstantiable_refs,
                 stats,
                 /* ACTUAL */ R"((
@@ -230,7 +231,7 @@ TEST_F(RemoveUninstantiablesTest, Invoke) {
   ASSERT_TRUE(type::is_uninstantiable_class(DexType::get_type("LFoo;")));
   ASSERT_FALSE(type::is_uninstantiable_class(DexType::get_type("LBar;")));
 
-  RemoveUninstantiablesPass::Stats stats;
+  remove_uninstantiables_impl::Stats stats;
   EXPECT_CHANGE(replace_uninstantiable_refs,
                 stats,
                 /* ACTUAL */ R"((
@@ -341,7 +342,7 @@ TEST_F(RemoveUninstantiablesTest, CheckCast) {
   ASSERT_TRUE(type::is_uninstantiable_class(DexType::get_type("LFoo;")));
   ASSERT_FALSE(type::is_uninstantiable_class(DexType::get_type("LBar;")));
 
-  RemoveUninstantiablesPass::Stats stats;
+  remove_uninstantiables_impl::Stats stats;
   EXPECT_CHANGE(replace_uninstantiable_refs,
                 stats,
                 /* ACTUAL */ R"((
@@ -407,7 +408,7 @@ TEST_F(RemoveUninstantiablesTest, GetField) {
   ASSERT_TRUE(type::is_uninstantiable_class(DexType::get_type("LFoo;")));
   ASSERT_FALSE(type::is_uninstantiable_class(DexType::get_type("LBar;")));
 
-  RemoveUninstantiablesPass::Stats stats;
+  remove_uninstantiables_impl::Stats stats;
   EXPECT_CHANGE(replace_uninstantiable_refs,
                 stats,
                 /* ACTUAL */ R"((
@@ -442,7 +443,7 @@ TEST_F(RemoveUninstantiablesTest, PutField) {
   ASSERT_TRUE(type::is_uninstantiable_class(DexType::get_type("LFoo;")));
   ASSERT_FALSE(type::is_uninstantiable_class(DexType::get_type("LBar;")));
 
-  RemoveUninstantiablesPass::Stats stats;
+  remove_uninstantiables_impl::Stats stats;
   EXPECT_CHANGE(replace_uninstantiable_refs,
                 stats,
                 /* ACTUAL */ R"((
@@ -483,7 +484,7 @@ TEST_F(RemoveUninstantiablesTest, GetUninstantiable) {
   ASSERT_TRUE(type::is_uninstantiable_class(DexType::get_type("LFoo;")));
   ASSERT_FALSE(type::is_uninstantiable_class(DexType::get_type("LBar;")));
 
-  RemoveUninstantiablesPass::Stats stats;
+  remove_uninstantiables_impl::Stats stats;
   EXPECT_CHANGE(replace_uninstantiable_refs,
                 stats,
                 /* ACTUAL */ R"((
@@ -526,7 +527,7 @@ TEST_F(RemoveUninstantiablesTest, InvokeUninstantiable) {
   ASSERT_TRUE(type::is_uninstantiable_class(DexType::get_type("LFoo;")));
   ASSERT_FALSE(type::is_uninstantiable_class(DexType::get_type("LBar;")));
 
-  RemoveUninstantiablesPass::Stats stats;
+  remove_uninstantiables_impl::Stats stats;
   EXPECT_CHANGE(replace_uninstantiable_refs,
                 stats,
                 /* ACTUAL */ R"((
@@ -547,7 +548,7 @@ TEST_F(RemoveUninstantiablesTest, InvokeUninstantiable) {
 }
 
 TEST_F(RemoveUninstantiablesTest, ReplaceAllWithThrow) {
-  RemoveUninstantiablesPass::Stats stats;
+  remove_uninstantiables_impl::Stats stats;
   EXPECT_CHANGE(replace_all_with_throw,
                 stats,
                 /* ACTUAL */ R"((
@@ -712,7 +713,7 @@ TEST_F(RemoveUninstantiablesTest, InvokeInterfaceOnUninstantiable) {
       DexProto::make_proto(void_t, DexTypeList::make_type_list({}));
   create_abstract_method(foo, "abs", void_void);
 
-  RemoveUninstantiablesPass::Stats stats;
+  remove_uninstantiables_impl::Stats stats;
   EXPECT_CHANGE(replace_uninstantiable_refs,
                 stats,
                 /* ACTUAL */ R"((
@@ -742,7 +743,7 @@ TEST_F(RemoveUninstantiablesTest, InvokeSuperOnUninstantiable) {
   auto bar = def_class("LBar;");
   bar->set_super_class(foo->get_type());
 
-  RemoveUninstantiablesPass::Stats stats;
+  remove_uninstantiables_impl::Stats stats;
   EXPECT_CHANGE(replace_uninstantiable_refs,
                 stats,
                 /* ACTUAL */ R"((

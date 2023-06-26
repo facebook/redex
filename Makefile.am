@@ -159,6 +159,7 @@ libredex_la_SOURCES = \
 	libredex/RedexResources.cpp \
 	libredex/ReflectionAnalysis.cpp \
 	libredex/RefChecker.cpp \
+	libredex/RemoveUninstantiablesImpl.cpp \
 	libredex/Resolver.cpp \
 	libredex/ScopedMetrics.cpp \
 	libredex/Show.cpp \
