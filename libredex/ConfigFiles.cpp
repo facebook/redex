@@ -9,7 +9,6 @@
 
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
-#include <charconv>
 #include <fstream>
 #include <json/json.h>
 #include <string>
@@ -56,6 +55,13 @@ class StringTabSplitter {
   }
 };
 
+void from_chars(std::string_view s, int64_t* res) {
+  // make 0-terminated, probably using small-string optimization
+  std::string copy(s);
+  char* endptr = nullptr;
+  *res = strtol(copy.data(), &endptr, 10);
+  always_assert(endptr == copy.data() + copy.size());
+}
 } // namespace
 
 ConfigFiles::ConfigFiles(const Json::Value& config, const std::string& outdir)
@@ -318,14 +324,10 @@ void ConfigFiles::build_dead_class_and_live_class_split_lists() {
         std::string_view classname = splitter.get();
         if (splitter.next()) {
           std::string_view str = splitter.get();
-          auto [_, ec1] = std::from_chars(str.data(), str.data() + str.size(),
-                                          load_counts.sampled);
-          always_assert(ec1 == std::errc{});
+          from_chars(str, &load_counts.sampled);
           if (splitter.next()) {
             str = splitter.get();
-            auto [_, ec2] = std::from_chars(str.data(), str.data() + str.size(),
-                                            load_counts.unsampled);
-            always_assert(ec2 == std::errc{});
+            from_chars(str, &load_counts.unsampled);
           }
         }
         bool is_relocated = is_relocated_class(classname);
