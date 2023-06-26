@@ -36,7 +36,7 @@ struct RefStats {
   size_t num_array_clone_ref_resolved = 0;
   size_t num_invoke_interface_replaced = 0;
   size_t num_invoke_super_removed = 0;
-  // External method refs
+  // External method/field refs
   size_t num_bailed_on_external = 0;
   size_t num_bailed_on_min_sdk_mismatch = 0;
   // The method ref is not solvable by the Resolver to continue.
@@ -154,27 +154,6 @@ bool is_array_clone(IRInstruction* insn) {
   auto* type = mref->get_class();
   return type::is_array(type) && mref->get_name()->str() == "clone" &&
          !type::is_primitive(type::get_array_element_type(type));
-}
-
-void resolve_field_refs(IRInstruction* insn,
-                        FieldSearch field_search,
-                        RefStats& stats) {
-  const auto fref = insn->get_field();
-  if (fref->is_def()) {
-    return;
-  }
-  const auto real_ref = resolve_field(fref, field_search);
-  if (real_ref && !real_ref->is_external() && real_ref != fref) {
-    TRACE(RESO, 2, "Resolving %s\n\t=>%s", SHOW(fref), SHOW(real_ref));
-    insn->set_field(real_ref);
-    stats.num_fref_simple_resolved++;
-    auto cls = type_class(real_ref->get_class());
-    always_assert(cls != nullptr);
-    if (!is_public(cls)) {
-      if (cls->is_external()) return;
-      set_public(cls);
-    }
-  }
 }
 
 void try_desuperify(const DexMethod* caller,
@@ -315,6 +294,39 @@ void ResolveRefsPass::resolve_method_refs(const DexMethod* caller,
     insn->set_opcode(OPCODE_INVOKE_INTERFACE);
     stats.num_resolve_to_interface++;
   }
+}
+
+void ResolveRefsPass::resolve_field_refs(IRInstruction* insn,
+                                         const FieldSearch field_search,
+                                         RefStats& stats) {
+  const auto fref = insn->get_field();
+  const auto fdef = resolve_field(fref, field_search);
+  if (!fdef || fdef == fref) {
+    return;
+  }
+  // Handle external refs.
+  if (!m_refine_to_external && fdef->is_external()) {
+    return;
+  } else if (fdef->is_external() && !m_min_sdk_api->has_field(fdef)) {
+    // Resolving to external and the target is missing in the min_sdk_api.
+    TRACE(RESO, 4, "Bailed on mismatch with min_sdk %s", SHOW(fdef));
+    stats.num_bailed_on_min_sdk_mismatch++;
+    return;
+  }
+
+  auto cls = type_class(fdef->get_class());
+  // Bail out if the def is non public external
+  if (cls && cls->is_external() && !is_public(cls)) {
+    return;
+  }
+  redex_assert(cls != nullptr || !cls->is_external());
+  if (!is_public(cls)) {
+    set_public(cls);
+  }
+
+  TRACE(RESO, 2, "Resolving %s\n\t=>%s", SHOW(fref), SHOW(fdef));
+  insn->set_field(fdef);
+  stats.num_fref_simple_resolved++;
 }
 
 RefStats ResolveRefsPass::resolve_refs(DexMethod* method) {

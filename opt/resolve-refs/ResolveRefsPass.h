@@ -30,6 +30,7 @@ struct RefStats;
 } // namespace impl
 
 class IRInstruction;
+enum class FieldSearch;
 
 class ResolveRefsPass : public ExternalRefsManglingPass {
  public:
@@ -67,6 +68,9 @@ class ResolveRefsPass : public ExternalRefsManglingPass {
   void resolve_method_refs(const DexMethod* caller,
                            IRInstruction* insn,
                            impl::RefStats& stats);
+  void resolve_field_refs(IRInstruction* insn,
+                          const FieldSearch field_search,
+                          impl::RefStats& stats);
   impl::RefStats resolve_refs(DexMethod* method);
   impl::RefStats refine_virtual_callsites(DexMethod* method,
                                           bool desuperify,
