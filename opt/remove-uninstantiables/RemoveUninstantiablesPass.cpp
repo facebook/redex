@@ -13,7 +13,7 @@
 #include "ControlFlow.h"
 #include "DexUtil.h"
 #include "IRCode.h"
-#include "MethodDedup.h"
+#include "MethodFixup.h"
 #include "NullPointerExceptionUtil.h"
 #include "PassManager.h"
 #include "Resolver.h"
@@ -551,7 +551,7 @@ void RemoveUninstantiablesPass::run_pass(DexStoresVector& stores,
                           });
 
   // Forward chains.
-  method_dedup::fixup_references_to_removed_methods(scope, removed_vmethods);
+  method_fixup::fixup_references_to_removed_methods(scope, removed_vmethods);
 
   stats.report(mgr);
 }

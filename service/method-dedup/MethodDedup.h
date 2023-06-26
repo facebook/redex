@@ -56,9 +56,4 @@ size_t dedup_methods(
     boost::optional<std::unordered_map<DexMethod*, MethodOrderedSet>>&
         new_to_old);
 
-/** Removes uninstantiable virtual methods */
-void fixup_references_to_removed_methods(
-    const Scope& scope,
-    std::unordered_map<DexMethodRef*, DexMethodRef*>& removed_vmethods);
-
 } // namespace method_dedup

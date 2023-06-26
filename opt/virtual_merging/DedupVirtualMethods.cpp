@@ -6,7 +6,7 @@
  */
 
 #include "DexUtil.h"
-#include "MethodDedup.h"
+#include "MethodFixup.h"
 #include "MethodOverrideGraph.h"
 #include "Show.h"
 #include "StlUtil.h"
@@ -134,7 +134,7 @@ uint32_t remove_duplicated_vmethods(
     }
   });
 
-  method_dedup::fixup_references_to_removed_methods(scope, removed_vmethods);
+  method_fixup::fixup_references_to_removed_methods(scope, removed_vmethods);
 
   return ret;
 }
