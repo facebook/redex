@@ -46,6 +46,9 @@ class RemoveUnreachablePassBase : public Pass {
     bind("prune_uncallable_instance_method_bodies",
          false,
          m_prune_uncallable_instance_method_bodies);
+    bind("prune_uncallable_virtual_methods",
+         false,
+         m_prune_uncallable_virtual_methods);
     after_configuration([this] {
       // To keep the backward compatability of this code, ensure that the
       // "MemberClasses" annotation is always in system_annos.
@@ -81,6 +84,7 @@ class RemoveUnreachablePassBase : public Pass {
   bool m_relaxed_keep_class_members = false;
   bool m_prune_uninstantiable_insns = false;
   bool m_prune_uncallable_instance_method_bodies = false;
+  bool m_prune_uncallable_virtual_methods = false;
 };
 
 class RemoveUnreachablePass : public RemoveUnreachablePassBase {

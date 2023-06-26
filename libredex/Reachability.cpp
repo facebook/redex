@@ -1497,6 +1497,7 @@ void sweep(DexStoresVector& stores,
 remove_uninstantiables_impl::Stats sweep_code(
     DexStoresVector& stores,
     bool prune_uncallable_instance_method_bodies,
+    bool skip_uncallable_virtual_methods,
     const ReachableAspects& reachable_aspects) {
   Timer t("Sweep Code");
   auto scope = build_class_scope(stores);
@@ -1530,6 +1531,9 @@ remove_uninstantiables_impl::Stats sweep_code(
         always_assert(code->editable_cfg_built());
         auto& cfg = code->cfg();
         if (uncallable_instance_methods.count(method)) {
+          if (skip_uncallable_virtual_methods && method->is_virtual()) {
+            return remove_uninstantiables_impl::Stats();
+          }
           return remove_uninstantiables_impl::replace_all_with_throw(cfg);
         }
         auto stats = remove_uninstantiables_impl::replace_uninstantiable_refs(
@@ -1537,6 +1541,30 @@ remove_uninstantiables_impl::Stats sweep_code(
         cfg.remove_unreachable_blocks();
         return stats;
       });
+}
+
+remove_uninstantiables_impl::Stats sweep_uncallable_virtual_methods(
+    DexStoresVector& stores, const ReachableAspects& reachable_aspects) {
+  Timer t("Sweep Uncallable Virtual Methods");
+  auto scope = build_class_scope(stores);
+  std::unordered_set<DexMethod*> uncallable_instance_methods;
+  for (auto* cls : scope) {
+    if (is_interface(cls)) {
+      // TODO: Is this needed?
+      continue;
+    }
+    walk::methods((Scope){cls}, [&](DexMethod* m) {
+      if (is_static(m)) {
+        return;
+      }
+      if (!m->rstate.no_optimizations() && m->get_code() &&
+          !reachable_aspects.callable_instance_methods.count_unsafe(m)) {
+        uncallable_instance_methods.insert(m);
+      }
+    });
+  }
+  return remove_uninstantiables_impl::reduce_uncallable_instance_methods(
+      scope, uncallable_instance_methods);
 }
 
 ObjectCounts count_objects(const DexStoresVector& stores) {

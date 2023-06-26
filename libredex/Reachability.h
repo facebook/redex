@@ -569,13 +569,17 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
 
 void sweep(DexStoresVector& stores,
            const ReachableObjects& reachables,
-           ConcurrentSet<std::string>* removed_symbols,
+           ConcurrentSet<std::string>* removed_symbols = nullptr,
            bool output_full_removed_symbols = false);
 
 remove_uninstantiables_impl::Stats sweep_code(
     DexStoresVector& stores,
     bool prune_uncallable_instance_method_bodies,
+    bool skip_uncallable_virtual_methods,
     const ReachableAspects& reachable_aspects);
+
+remove_uninstantiables_impl::Stats sweep_uncallable_virtual_methods(
+    DexStoresVector& stores, const ReachableAspects& reachable_aspects);
 
 struct ObjectCounts {
   size_t num_classes{0};

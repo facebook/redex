@@ -226,12 +226,18 @@ void RemoveUnreachablePassBase::run_pass(DexStoresVector& stores,
   }
   if (m_prune_uninstantiable_insns) {
     auto uninstantiables_stats = reachability::sweep_code(
-        stores, m_prune_uncallable_instance_method_bodies, reachable_aspects);
+        stores, m_prune_uncallable_instance_method_bodies,
+        m_prune_uncallable_virtual_methods, reachable_aspects);
     uninstantiables_stats.report(pm);
   }
   reachability::sweep(stores, *reachables,
                       output_unreachable_symbols ? &removed_symbols : nullptr,
                       m_output_full_removed_symbols);
+  if (m_prune_uncallable_virtual_methods) {
+    auto uninstantiables_stats = reachability::sweep_uncallable_virtual_methods(
+        stores, reachable_aspects);
+    uninstantiables_stats.report(pm);
+  }
 
   reachability::ObjectCounts after = reachability::count_objects(stores);
   TRACE(RMU, 1, "after: %lu classes, %lu fields, %lu methods",
