@@ -191,9 +191,11 @@ void RemoveUnreachablePassBase::run_pass(DexStoresVector& stores,
   TRACE(RMU, 2, "RMU: remove_no_argument_constructors %d",
         m_remove_no_argument_constructors);
   int num_ignore_check_strings = 0;
+  reachability::ReachableAspects reachable_aspects;
   auto reachables = this->compute_reachable_objects(
-      stores, pm, &num_ignore_check_strings, emit_graph_this_run,
-      m_relaxed_keep_class_members, m_remove_no_argument_constructors);
+      stores, pm, &num_ignore_check_strings, &reachable_aspects,
+      emit_graph_this_run, m_relaxed_keep_class_members,
+      m_prune_uninstantiable_insns, m_remove_no_argument_constructors);
 
   reachability::ObjectCounts before = reachability::count_objects(stores);
   TRACE(RMU, 1, "before: %lu classes, %lu fields, %lu methods",
@@ -204,12 +206,25 @@ void RemoveUnreachablePassBase::run_pass(DexStoresVector& stores,
   pm.set_metric("marked_classes", reachables->num_marked_classes());
   pm.set_metric("marked_fields", reachables->num_marked_fields());
   pm.set_metric("marked_methods", reachables->num_marked_methods());
+  pm.incr_metric("dynamically_referenced_classes",
+                 reachable_aspects.dynamically_referenced_classes.size());
+  pm.incr_metric("instantiable_types",
+                 reachable_aspects.instantiable_types.size());
+  pm.incr_metric("uninstantiable_dependencies",
+                 reachable_aspects.uninstantiable_dependencies.size());
+  pm.incr_metric("instructions_unvisited",
+                 reachable_aspects.instructions_unvisited);
 
   ConcurrentReferencesMap references;
   if (output_unreachable_symbols && m_emit_removed_symbols_references) {
     // Before actually cleaning things up, keep track, if requested, of
     // references of removed symbols (which, of course, will be from dead code).
     gather_references_from_removed_symbols(stores, *reachables, references);
+  }
+  if (m_prune_uninstantiable_insns) {
+    auto uninstantiables_stats =
+        reachability::sweep_code(stores, reachable_aspects);
+    uninstantiables_stats.report(pm);
   }
   reachability::sweep(stores, *reachables,
                       output_unreachable_symbols ? &removed_symbols : nullptr,
@@ -279,12 +294,15 @@ RemoveUnreachablePass::compute_reachable_objects(
     const DexStoresVector& stores,
     PassManager& /* pm */,
     int* num_ignore_check_strings,
+    reachability::ReachableAspects* reachable_aspects,
     bool emit_graph_this_run,
     bool relaxed_keep_class_members,
+    bool cfg_gathering_check_instantiable,
     bool remove_no_argument_constructors) {
   return reachability::compute_reachable_objects(
-      stores, m_ignore_sets, num_ignore_check_strings, emit_graph_this_run,
-      relaxed_keep_class_members, false, nullptr,
+      stores, m_ignore_sets, num_ignore_check_strings, reachable_aspects,
+      emit_graph_this_run, relaxed_keep_class_members,
+      cfg_gathering_check_instantiable, false, nullptr,
       remove_no_argument_constructors);
 }
 

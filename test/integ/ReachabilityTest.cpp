@@ -9,6 +9,7 @@
 
 #include "Reachability.h"
 #include "RedexTest.h"
+#include "Walkers.h"
 
 class ReachabilityTest : public RedexIntegrationTest {};
 
@@ -36,8 +37,12 @@ TEST_F(ReachabilityTest, ReachabilityFromProguardTest) {
 
   int num_ignore_check_strings = 0;
   reachability::IgnoreSets ig_sets;
+  reachability::ReachableAspects reachable_aspects;
+  auto scope = build_class_scope(stores);
+  walk::parallel::code(scope, [&](auto*, auto& code) { code.build_cfg(); });
   auto reachable_objects = reachability::compute_reachable_objects(
-      stores, ig_sets, &num_ignore_check_strings);
+      stores, ig_sets, &num_ignore_check_strings, &reachable_aspects);
+  walk::parallel::code(scope, [&](auto*, auto& code) { code.clear_cfg(); });
 
   reachability::sweep(stores, *reachable_objects, nullptr);
 
@@ -72,10 +77,15 @@ TEST_F(ReachabilityTest, ReachabilityMarkAllTest) {
 
   int num_ignore_check_strings = 0;
   reachability::IgnoreSets ig_sets;
+  reachability::ReachableAspects reachable_aspects;
+  auto scope = build_class_scope(stores);
+  walk::parallel::code(scope, [&](auto*, auto& code) { code.build_cfg(); });
   auto reachable_objects = reachability::compute_reachable_objects(
-      stores, ig_sets, &num_ignore_check_strings,
+      stores, ig_sets, &num_ignore_check_strings, &reachable_aspects,
       /* record_reachability */ false, /* relaxed_keep_class_members */ false,
+      /* cfg_gathering_check_instantiable */ false,
       /* should_mark_all_as_seed */ true, nullptr);
+  walk::parallel::code(scope, [&](auto*, auto& code) { code.clear_cfg(); });
 
   reachability::sweep(stores, *reachable_objects, nullptr);
 
