@@ -718,6 +718,20 @@ void TransitiveClosureMarker::push_typelike_strings(
 
 void TransitiveClosureMarker::visit_cls(const DexClass* cls) {
   TRACE(REACH, 4, "Visiting class: %s", SHOW(cls));
+  auto is_interface_instantiable = [](const DexClass* interface) {
+    if (is_annotation(interface) || root(interface) || !can_rename(interface)) {
+      return true;
+    }
+    for (auto method : interface->get_vmethods()) {
+      if (root(method) || !can_rename(method)) {
+        return true;
+      }
+    }
+    return false;
+  };
+  if (is_interface(cls) && is_interface_instantiable(cls)) {
+    instantiable(cls->get_type());
+  }
   push(cls, type_class(cls->get_super_class()));
   for (auto const& t : *cls->get_interfaces()) {
     push(cls, t);
