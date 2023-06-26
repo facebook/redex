@@ -47,22 +47,25 @@ class TypeAnaysisAwareClosureMarker final
       bool record_reachability,
       bool relaxed_keep_class_members,
       bool cfg_gathering_check_instantiable,
+      bool cfg_gathering_check_instance_callable,
       ConditionallyMarked* cond_marked,
       ReachableObjects* reachable_objects,
       reachability::ReachableAspects* reachable_aspects,
       MarkWorkerState* worker_state,
       Stats* stats,
       std::shared_ptr<type_analyzer::global::GlobalTypeAnalyzer> gta)
-      : reachability::TransitiveClosureMarker(ignore_sets,
-                                              method_override_graph,
-                                              record_reachability,
-                                              relaxed_keep_class_members,
-                                              cfg_gathering_check_instantiable,
-                                              cond_marked,
-                                              reachable_objects,
-                                              reachable_aspects,
-                                              worker_state,
-                                              stats),
+      : reachability::TransitiveClosureMarker(
+            ignore_sets,
+            method_override_graph,
+            record_reachability,
+            relaxed_keep_class_members,
+            cfg_gathering_check_instantiable,
+            cfg_gathering_check_instance_callable,
+            cond_marked,
+            reachable_objects,
+            reachable_aspects,
+            worker_state,
+            stats),
         m_gta(std::move(gta)) {}
 
   void gather_and_push(const DexMethod* method) override {
@@ -72,7 +75,8 @@ class TypeAnaysisAwareClosureMarker final
       bool default_gather_methods =
           mie.type != MFLOW_OPCODE || !opcode::is_an_invoke(mie.insn->opcode());
       MethodReferencesGatherer::default_gather_mie(
-          m_relaxed_keep_class_members, mie, refs, default_gather_methods);
+          method, m_relaxed_keep_class_members, mie, refs,
+          default_gather_methods);
       if (!default_gather_methods) {
         if (!insns_methods) {
           insns_methods = gather_methods_on_insns(method);
@@ -84,6 +88,7 @@ class TypeAnaysisAwareClosureMarker final
         create_method_references_gatherer(method,
                                           /* consider_code */ true,
                                           std::move(gather_mie)),
+        reachability::MethodReferencesGatherer::AdvanceKind::Initial,
         /* instantiable_cls */ nullptr);
   }
 
@@ -104,7 +109,16 @@ class TypeAnaysisAwareClosureMarker final
       push(method, t);
     }
     if (cls && !is_abstract(cls) && method::is_init(method)) {
-      instantiable(method->get_class());
+      if (!m_cfg_gathering_check_instance_callable) {
+        instantiable(method->get_class());
+      }
+      if (m_relaxed_keep_class_members &&
+          consider_dynamically_referenced(cls)) {
+        push_directly_instantiable_if_class_dynamically_referenced(
+            method->get_class());
+      } else {
+        directly_instantiable(method->get_class());
+      }
     }
 
     auto m = method->as_def();
@@ -260,10 +274,11 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects_with_type_anaysis(
     const DexStoresVector& stores,
     const IgnoreSets& ignore_sets,
     int* num_ignore_check_strings,
-    reachability::ReachableAspects* reachable_aspects,
+    ReachableAspects* reachable_aspects,
     bool record_reachability,
     bool relaxed_keep_class_members,
     bool cfg_gathering_check_instantiable,
+    bool cfg_gathering_check_instance_callable,
     std::shared_ptr<type_analyzer::global::GlobalTypeAnalyzer> gta,
     bool /*unused*/) {
   Timer t("Marking");
@@ -290,8 +305,9 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects_with_type_anaysis(
         TypeAnaysisAwareClosureMarker transitive_closure_marker(
             ignore_sets, *method_override_graph, record_reachability,
             relaxed_keep_class_members, cfg_gathering_check_instantiable,
-            &cond_marked, reachable_objects.get(), reachable_aspects,
-            worker_state, &stats_arr[worker_state->worker_id()], gta);
+            cfg_gathering_check_instance_callable, &cond_marked,
+            reachable_objects.get(), reachable_aspects, worker_state,
+            &stats_arr[worker_state->worker_id()], gta);
         transitive_closure_marker.visit(obj);
         return nullptr;
       },
@@ -321,6 +337,7 @@ TypeAnalysisAwareRemoveUnreachablePass::compute_reachable_objects(
     bool emit_graph_this_run,
     bool relaxed_keep_class_members,
     bool cfg_gathering_check_instantiable,
+    bool cfg_gathering_check_instance_callable,
     bool remove_no_argument_constructors) {
   // Fetch analysis result
   auto analysis = pm.template get_preserved_analysis<GlobalTypeAnalysisPass>();
@@ -331,7 +348,8 @@ TypeAnalysisAwareRemoveUnreachablePass::compute_reachable_objects(
   return compute_reachable_objects_with_type_anaysis(
       stores, m_ignore_sets, num_ignore_check_strings, reachable_aspects,
       emit_graph_this_run, relaxed_keep_class_members,
-      cfg_gathering_check_instantiable, gta, remove_no_argument_constructors);
+      cfg_gathering_check_instantiable, cfg_gathering_check_instance_callable,
+      gta, remove_no_argument_constructors);
 }
 
 static TypeAnalysisAwareRemoveUnreachablePass s_pass;

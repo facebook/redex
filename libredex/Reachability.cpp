@@ -33,13 +33,13 @@ namespace {
 
 static ReachableObject SEED_SINGLETON{};
 
-bool consider_dynamically_referenced(const DexClass* cls) {
-  return !root(cls) && !is_interface(cls) && !is_annotation(cls);
-}
-
 } // namespace
 
 namespace reachability {
+
+bool consider_dynamically_referenced(const DexClass* cls) {
+  return !root(cls) && !is_interface(cls) && !is_annotation(cls);
+}
 
 DexMethodRef* TransitiveClosureMarker::s_class_forname = nullptr;
 
@@ -444,7 +444,10 @@ void TransitiveClosureMarker::push_if_class_instantiable(
           }
         });
     if (method_references_gatherer) {
-      gather_and_push(std::move(method_references_gatherer), cls);
+      gather_and_push(
+          std::move(method_references_gatherer),
+          MethodReferencesGatherer::AdvanceKind::InstantiableDependencyResolved,
+          cls);
     }
   }
 }
@@ -470,6 +473,36 @@ void TransitiveClosureMarker::push_if_class_retained(const DexField* field) {
   m_cond_marked->if_class_retained.fields.insert(field);
   if (m_reachable_objects->marked(clazz)) {
     push(clazz, field);
+  }
+}
+
+void TransitiveClosureMarker::
+    push_directly_instantiable_if_class_dynamically_referenced(DexType* type) {
+  m_cond_marked->if_class_dynamically_referenced.directly_instantiable_types
+      .insert(type);
+  auto clazz = type_class(type);
+  if (m_reachable_aspects->dynamically_referenced_classes.count(clazz)) {
+    directly_instantiable(type);
+  }
+}
+
+void TransitiveClosureMarker::push_if_instance_method_callable(
+    std::shared_ptr<MethodReferencesGatherer> method_references_gatherer) {
+  auto* method = method_references_gatherer->get_method();
+  m_cond_marked->if_instance_method_callable.update(
+      method, [&](auto*, auto& value, bool) {
+        always_assert(!value);
+        value = std::move(method_references_gatherer);
+      });
+  if (m_reachable_aspects->callable_instance_methods.count(method)) {
+    m_cond_marked->if_instance_method_callable.update(
+        method, [&](auto*, auto& value, bool) {
+          std::swap(method_references_gatherer, value);
+        });
+    if (method_references_gatherer) {
+      gather_and_push(method_references_gatherer,
+                      MethodReferencesGatherer::AdvanceKind::Callable, nullptr);
+    }
   }
 }
 
@@ -593,31 +626,22 @@ void gather_dynamic_references(const MethodItemEntry* item,
 MethodReferencesGatherer::MethodReferencesGatherer(
     const DexMethod* method,
     bool include_dynamic_references,
+    bool check_init_instantiable,
     std::function<bool(const DexClass*)> is_class_instantiable,
     bool consider_code,
     std::function<void(const MethodItemEntry&, References*)> gather_mie)
     : m_method(method),
       m_include_dynamic_references(include_dynamic_references),
+      m_check_init_instantiable(check_init_instantiable),
       m_is_class_instantiable(std::move(is_class_instantiable)),
       m_consider_code(consider_code),
       m_gather_mie(gather_mie ? std::move(gather_mie)
                               : std::bind(default_gather_mie,
+                                          method,
                                           include_dynamic_references,
                                           std::placeholders::_1,
                                           std::placeholders::_2,
-                                          /* gather_methods */ true)) {
-  std::vector<CFGNeedle> cfg_needles;
-  auto code = method->get_code();
-  if (code && m_consider_code) {
-    always_assert_log(code->editable_cfg_built(),
-                      "%s does not have editable cfg", SHOW(method));
-    auto& cfg = code->cfg();
-    auto b = cfg.entry_block();
-    cfg_needles.push_back((CFGNeedle){b, b->begin()});
-    m_pushed_blocks.insert(b);
-  }
-  m_instantiable_dependencies.emplace(nullptr, std::move(cfg_needles));
-}
+                                          /* gather_methods */ true)) {}
 
 std::optional<MethodReferencesGatherer::InstantiableDependency>
 MethodReferencesGatherer::get_instantiable_dependency(
@@ -634,7 +658,8 @@ MethodReferencesGatherer::get_instantiable_dependency(
   } else if (opcode::is_invoke_virtual(op) || opcode::is_invoke_super(op) ||
              opcode::is_invoke_interface(op) ||
              (opcode::is_invoke_direct(op) &&
-              !method::is_init(insn->get_method()))) {
+              (m_check_init_instantiable ||
+               !method::is_init(insn->get_method())))) {
     res.cls = type_class(insn->get_method()->get_class());
     res.may_continue_normally_if_uninstantiable = false;
   } else if (opcode::is_instance_of(op)) {
@@ -651,6 +676,7 @@ MethodReferencesGatherer::get_instantiable_dependency(
 };
 
 void MethodReferencesGatherer::default_gather_mie(
+    const DexMethod* method,
     bool include_dynamic_references,
     const MethodItemEntry& mie,
     References* refs,
@@ -664,24 +690,31 @@ void MethodReferencesGatherer::default_gather_mie(
   if (include_dynamic_references) {
     relaxed_keep_class_members_impl::gather_dynamic_references(&mie, refs);
   }
+  if (mie.type == MFLOW_OPCODE) {
+    if (opcode::is_new_instance(mie.insn->opcode())) {
+      refs->new_instances.push_back(mie.insn->get_type());
+    } else if (opcode::is_invoke_super(mie.insn->opcode())) {
+      auto callee =
+          resolve_method(mie.insn->get_method(), MethodSearch::Super, method);
+      if (callee && !callee->is_external()) {
+        refs->called_super_methods.push_back(callee);
+      }
+    }
+  }
 }
 
-References MethodReferencesGatherer::advance(
-    const DexClass* instantiable_cls = nullptr) {
-  std::lock_guard<std::mutex> lock_guard(m_mutex);
-  References refs;
-  auto it = m_instantiable_dependencies.find(instantiable_cls);
-  if (it == m_instantiable_dependencies.end()) {
-    return refs;
-  }
-  if (instantiable_cls == nullptr) {
+void MethodReferencesGatherer::advance(AdvanceKind kind,
+                                       const DexClass* instantiable_cls,
+                                       References* refs) {
+  always_assert(kind == m_next_advance_kind);
+  if (kind == AdvanceKind::Initial) {
     // initial gathering
-    m_method->gather_types_shallow(refs.types); // Handle DexMethodRef parts.
-    auto gather_from_anno_set = [&refs](auto* anno_set) {
-      anno_set->gather_strings(refs.strings);
-      anno_set->gather_types(refs.types);
-      anno_set->gather_fields(refs.fields);
-      anno_set->gather_methods(refs.methods);
+    m_method->gather_types_shallow(refs->types); // Handle DexMethodRef parts.
+    auto gather_from_anno_set = [refs](auto* anno_set) {
+      anno_set->gather_strings(refs->strings);
+      anno_set->gather_types(refs->types);
+      anno_set->gather_fields(refs->fields);
+      anno_set->gather_methods(refs->methods);
     };
     auto anno_set = m_method->get_anno_set();
     if (anno_set) {
@@ -695,23 +728,45 @@ References MethodReferencesGatherer::advance(
     }
     if (m_include_dynamic_references) {
       relaxed_keep_class_members_impl::gather_dynamic_references(m_method,
-                                                                 &refs);
+                                                                 refs);
     }
+    refs->method_references_gatherer_dependency_if_instance_method_callable =
+        true;
+    m_next_advance_kind = AdvanceKind::Callable;
+    return;
   }
+  std::lock_guard<std::mutex> lock_guard(m_mutex);
   std::queue<CFGNeedle> queue;
-  if (m_consider_code) {
+  if (instantiable_cls == nullptr) {
+    always_assert(kind == AdvanceKind::Callable);
+    std::vector<CFGNeedle> cfg_needles;
+    auto code = m_method->get_code();
+    if (code && m_consider_code) {
+      always_assert_log(code->editable_cfg_built(),
+                        "%s does not have editable cfg", SHOW(m_method));
+      auto& cfg = code->cfg();
+      auto b = cfg.entry_block();
+      queue.push((CFGNeedle){b, b->begin()});
+    }
+    m_next_advance_kind = AdvanceKind::InstantiableDependencyResolved;
+  } else {
+    always_assert(kind == AdvanceKind::InstantiableDependencyResolved);
+    auto it = m_instantiable_dependencies.find(instantiable_cls);
+    if (it == m_instantiable_dependencies.end()) {
+      return;
+    }
     for (auto& cfg_needle : it->second) {
       queue.push(cfg_needle);
     }
+    m_instantiable_dependencies.erase(it);
   }
-  m_instantiable_dependencies.erase(it);
-  auto advance_in_block = [this, &refs](auto* block, auto& it) {
+  auto advance_in_block = [this, refs](auto* block, auto& it) {
     for (; it != block->end(); ++it) {
       auto dep = get_instantiable_dependency(*it);
       if (dep) {
         return dep;
       }
-      m_gather_mie(*it, &refs);
+      m_gather_mie(*it, refs);
       if (it->type == MFLOW_OPCODE) {
         m_instructions_visited++;
       }
@@ -728,7 +783,7 @@ References MethodReferencesGatherer::advance(
           if (e->type() == cfg::EDGE_THROW) {
             auto catch_type = e->throw_info()->catch_type;
             if (catch_type && m_covered_catch_types.insert(catch_type).second) {
-              refs.types.push_back(catch_type);
+              refs->types.push_back(catch_type);
             }
           }
           if (m_pushed_blocks.insert(e->target()).second) {
@@ -750,7 +805,7 @@ References MethodReferencesGatherer::advance(
       auto [deps_it, emplaced] = m_instantiable_dependencies.emplace(
           dep->cls, std::vector<CFGNeedle>());
       if (emplaced) {
-        refs.method_references_gatherer_dependencies_if_class_instantiable
+        refs->method_references_gatherer_dependencies_if_class_instantiable
             .push_back(dep->cls);
       }
       deps_it->second.push_back((CFGNeedle){block, it});
@@ -764,7 +819,6 @@ References MethodReferencesGatherer::advance(
     m_instructions_visited++;
     queue.push((CFGNeedle){block, std::next(it)});
   }
-  return refs;
 }
 
 void gather_dynamic_references(const DexAnnotation* item,
@@ -816,10 +870,27 @@ bool TransitiveClosureMarker::has_class_forname(const DexMethod* meth) {
 
 void TransitiveClosureMarker::gather_and_push(
     std::shared_ptr<MethodReferencesGatherer> method_references_gatherer,
+    MethodReferencesGatherer::AdvanceKind advance_kind,
     const DexClass* instantiable_cls) {
   always_assert(method_references_gatherer);
-  auto refs = method_references_gatherer->advance(instantiable_cls);
+  References refs;
+  method_references_gatherer->advance(advance_kind, instantiable_cls, &refs);
   auto* meth = method_references_gatherer->get_method();
+  if (refs.method_references_gatherer_dependency_if_instance_method_callable &&
+      (!m_cfg_gathering_check_instantiable ||
+       !m_cfg_gathering_check_instance_callable ||
+       meth->rstate.no_optimizations() || is_static(meth) ||
+       m_reachable_aspects->callable_instance_methods.count(meth))) {
+    always_assert(advance_kind ==
+                  MethodReferencesGatherer::AdvanceKind::Initial);
+    always_assert(instantiable_cls == nullptr);
+    refs.method_references_gatherer_dependency_if_instance_method_callable =
+        false;
+    method_references_gatherer->advance(
+        MethodReferencesGatherer::AdvanceKind::Callable, nullptr, &refs);
+    always_assert(
+        !refs.method_references_gatherer_dependency_if_instance_method_callable);
+  }
   auto* type = meth->get_class();
   auto* cls = type_class(type);
   bool check_strings = m_ignore_sets.keep_class_in_string;
@@ -849,6 +920,15 @@ void TransitiveClosureMarker::gather_and_push(
     push_if_class_instantiable(vmeth);
   }
   dynamically_referenced(refs.classes_dynamically_referenced);
+  directly_instantiable(refs.new_instances);
+  instance_callable(refs.called_super_methods);
+  if (refs.method_references_gatherer_dependency_if_instance_method_callable) {
+    push_if_instance_method_callable(method_references_gatherer);
+    always_assert(
+        refs.method_references_gatherer_dependencies_if_class_instantiable
+            .empty());
+    return;
+  }
   auto& v = refs.method_references_gatherer_dependencies_if_class_instantiable;
   if (v.empty()) {
     return;
@@ -862,6 +942,7 @@ void TransitiveClosureMarker::gather_and_push(
 
 void TransitiveClosureMarker::gather_and_push(const DexMethod* meth) {
   gather_and_push(create_method_references_gatherer(meth),
+                  MethodReferencesGatherer::AdvanceKind::Initial,
                   /* instantiable_cls */ nullptr);
 }
 
@@ -878,7 +959,8 @@ TransitiveClosureMarker::create_method_references_gatherer(
     return !instantiable_types || instantiable_types->count(cls);
   };
   return std::make_shared<MethodReferencesGatherer>(
-      method, m_relaxed_keep_class_members, std::move(is_class_instantiable),
+      method, m_relaxed_keep_class_members,
+      m_cfg_gathering_check_instance_callable, std::move(is_class_instantiable),
       consider_code, std::move(gather_mie));
 }
 
@@ -890,6 +972,8 @@ void TransitiveClosureMarker::gather_and_push(T t) {
   push(t, refs.fields.begin(), refs.fields.end());
   push(t, refs.methods.begin(), refs.methods.end());
   dynamically_referenced(refs.classes_dynamically_referenced);
+  always_assert(refs.new_instances.empty());
+  always_assert(refs.called_super_methods.empty());
 }
 
 template <class Parent>
@@ -1047,7 +1131,50 @@ void TransitiveClosureMarker::instantiable(DexType* type) {
         method_references_gatherers = std::move(map);
       });
   for (auto&& [_, method_references_gatherer] : method_references_gatherers) {
-    gather_and_push(std::move(method_references_gatherer), cls);
+    gather_and_push(
+        std::move(method_references_gatherer),
+        MethodReferencesGatherer::AdvanceKind::InstantiableDependencyResolved,
+        cls);
+  }
+}
+
+void TransitiveClosureMarker::directly_instantiable(DexType* type) {
+  if (m_cfg_gathering_check_instance_callable) {
+    instantiable(type);
+  }
+  std::unordered_set<const DexMethod*> uncallable_vmethods;
+  for (auto cls = type_class(type); cls && !cls->is_external();
+       cls = type_class(cls->get_super_class())) {
+    for (auto* m : cls->get_dmethods()) {
+      if (!is_static(m)) {
+        instance_callable(m);
+      }
+    }
+    for (auto* m : cls->get_vmethods()) {
+      if (uncallable_vmethods.count(m)) {
+        continue;
+      }
+      instance_callable(m);
+      const auto& overridden_methods =
+          mog::get_overridden_methods(m_method_override_graph, m);
+      uncallable_vmethods.insert(overridden_methods.begin(),
+                                 overridden_methods.end());
+    }
+  }
+}
+
+void TransitiveClosureMarker::instance_callable(DexMethod* method) {
+  if (!m_reachable_aspects->callable_instance_methods.insert(method)) {
+    return;
+  }
+  std::shared_ptr<MethodReferencesGatherer> method_references_gatherer;
+  m_cond_marked->if_instance_method_callable.update(
+      method, [&](auto*, auto& value, bool) {
+        std::swap(method_references_gatherer, value);
+      });
+  if (method_references_gatherer) {
+    gather_and_push(method_references_gatherer,
+                    MethodReferencesGatherer::AdvanceKind::Callable, nullptr);
   }
 }
 
@@ -1077,6 +1204,11 @@ void TransitiveClosureMarker::dynamically_referenced(const DexClass* cls) {
       push_if_class_retained(m);
     }
   }
+  auto type = cls->get_type();
+  if (m_cond_marked->if_class_dynamically_referenced.directly_instantiable_types
+          .count(type)) {
+    directly_instantiable(type);
+  }
 }
 
 void TransitiveClosureMarker::visit_method_ref(const DexMethodRef* method) {
@@ -1096,7 +1228,15 @@ void TransitiveClosureMarker::visit_method_ref(const DexMethodRef* method) {
     push(method, t);
   }
   if (cls && !is_abstract(cls) && method::is_init(method)) {
-    instantiable(method->get_class());
+    if (!m_cfg_gathering_check_instance_callable) {
+      instantiable(method->get_class());
+    }
+    if (m_relaxed_keep_class_members && consider_dynamically_referenced(cls)) {
+      push_directly_instantiable_if_class_dynamically_referenced(
+          method->get_class());
+    } else {
+      directly_instantiable(method->get_class());
+    }
   }
   auto m = method->as_def();
   if (!m) {
@@ -1164,6 +1304,7 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
     bool record_reachability,
     bool relaxed_keep_class_members,
     bool cfg_gathering_check_instantiable,
+    bool cfg_gathering_check_instance_callable,
     bool should_mark_all_as_seed,
     std::unique_ptr<const mog::Graph>* out_method_override_graph,
     bool remove_no_argument_constructors) {
@@ -1192,8 +1333,9 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
         TransitiveClosureMarker transitive_closure_marker(
             ignore_sets, *method_override_graph, record_reachability,
             relaxed_keep_class_members, cfg_gathering_check_instantiable,
-            &cond_marked, reachable_objects.get(), reachable_aspects,
-            worker_state, &stats_arr[worker_state->worker_id()]);
+            cfg_gathering_check_instance_callable, &cond_marked,
+            reachable_objects.get(), reachable_aspects, worker_state,
+            &stats_arr[worker_state->worker_id()]);
         transitive_closure_marker.visit(obj);
         return nullptr;
       },
@@ -1353,13 +1495,29 @@ void sweep(DexStoresVector& stores,
 }
 
 remove_uninstantiables_impl::Stats sweep_code(
-    DexStoresVector& stores, const ReachableAspects& reachable_aspects) {
+    DexStoresVector& stores,
+    bool prune_uncallable_instance_method_bodies,
+    const ReachableAspects& reachable_aspects) {
   Timer t("Sweep Code");
   auto scope = build_class_scope(stores);
   std::unordered_set<DexType*> uninstantiable_types;
+  std::unordered_set<DexMethod*> uncallable_instance_methods;
   for (auto* cls : scope) {
     if (!reachable_aspects.instantiable_types.count_unsafe(cls)) {
       uninstantiable_types.insert(cls->get_type());
+    }
+    if (prune_uncallable_instance_method_bodies) {
+      for (auto* m : cls->get_dmethods()) {
+        if (!is_static(m) &&
+            !reachable_aspects.callable_instance_methods.count_unsafe(m)) {
+          uncallable_instance_methods.insert(m);
+        }
+      }
+      for (auto* m : cls->get_vmethods()) {
+        if (!reachable_aspects.callable_instance_methods.count_unsafe(m)) {
+          uncallable_instance_methods.insert(m);
+        }
+      }
     }
   }
   uninstantiable_types.insert(type::java_lang_Void());
@@ -1371,6 +1529,9 @@ remove_uninstantiables_impl::Stats sweep_code(
         }
         always_assert(code->editable_cfg_built());
         auto& cfg = code->cfg();
+        if (uncallable_instance_methods.count(method)) {
+          return remove_uninstantiables_impl::replace_all_with_throw(cfg);
+        }
         auto stats = remove_uninstantiables_impl::replace_uninstantiable_refs(
             uninstantiable_types, cfg);
         cfg.remove_unreachable_blocks();

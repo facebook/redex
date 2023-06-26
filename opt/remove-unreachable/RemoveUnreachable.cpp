@@ -195,7 +195,8 @@ void RemoveUnreachablePassBase::run_pass(DexStoresVector& stores,
   auto reachables = this->compute_reachable_objects(
       stores, pm, &num_ignore_check_strings, &reachable_aspects,
       emit_graph_this_run, m_relaxed_keep_class_members,
-      m_prune_uninstantiable_insns, m_remove_no_argument_constructors);
+      m_prune_uninstantiable_insns, m_prune_uncallable_instance_method_bodies,
+      m_remove_no_argument_constructors);
 
   reachability::ObjectCounts before = reachability::count_objects(stores);
   TRACE(RMU, 1, "before: %lu classes, %lu fields, %lu methods",
@@ -214,6 +215,8 @@ void RemoveUnreachablePassBase::run_pass(DexStoresVector& stores,
                  reachable_aspects.uninstantiable_dependencies.size());
   pm.incr_metric("instructions_unvisited",
                  reachable_aspects.instructions_unvisited);
+  pm.incr_metric("callable_instance_methods",
+                 reachable_aspects.callable_instance_methods.size());
 
   ConcurrentReferencesMap references;
   if (output_unreachable_symbols && m_emit_removed_symbols_references) {
@@ -222,8 +225,8 @@ void RemoveUnreachablePassBase::run_pass(DexStoresVector& stores,
     gather_references_from_removed_symbols(stores, *reachables, references);
   }
   if (m_prune_uninstantiable_insns) {
-    auto uninstantiables_stats =
-        reachability::sweep_code(stores, reachable_aspects);
+    auto uninstantiables_stats = reachability::sweep_code(
+        stores, m_prune_uncallable_instance_method_bodies, reachable_aspects);
     uninstantiables_stats.report(pm);
   }
   reachability::sweep(stores, *reachables,
@@ -298,12 +301,13 @@ RemoveUnreachablePass::compute_reachable_objects(
     bool emit_graph_this_run,
     bool relaxed_keep_class_members,
     bool cfg_gathering_check_instantiable,
+    bool cfg_gathering_check_instance_callable,
     bool remove_no_argument_constructors) {
   return reachability::compute_reachable_objects(
       stores, m_ignore_sets, num_ignore_check_strings, reachable_aspects,
       emit_graph_this_run, relaxed_keep_class_members,
-      cfg_gathering_check_instantiable, false, nullptr,
-      remove_no_argument_constructors);
+      cfg_gathering_check_instantiable, cfg_gathering_check_instance_callable,
+      false, nullptr, remove_no_argument_constructors);
 }
 
 static RemoveUnreachablePass s_pass;

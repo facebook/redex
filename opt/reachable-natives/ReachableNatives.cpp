@@ -97,7 +97,7 @@ void ReachableNativesPass::run_pass(DexStoresVector& stores,
       [&](reachability::MarkWorkerState* worker_state,
           const reachability::ReachableObject& obj) {
         reachability::TransitiveClosureMarker transitive_closure_marker(
-            ignore_sets, *method_override_graph, false, false, false,
+            ignore_sets, *method_override_graph, false, false, false, false,
             &cond_marked, reachable_objects.get(), &reachable_aspects,
             worker_state, &stats_arr[worker_state->worker_id()]);
         transitive_closure_marker.visit(obj);

@@ -84,6 +84,7 @@ TEST_F(ReachabilityTest, ReachabilityMarkAllTest) {
       stores, ig_sets, &num_ignore_check_strings, &reachable_aspects,
       /* record_reachability */ false, /* relaxed_keep_class_members */ false,
       /* cfg_gathering_check_instantiable */ false,
+      /* cfg_gathering_check_instance_callable */ false,
       /* should_mark_all_as_seed */ true, nullptr);
   walk::parallel::code(scope, [&](auto*, auto& code) { code.clear_cfg(); });
 

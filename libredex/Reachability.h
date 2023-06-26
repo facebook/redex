@@ -188,17 +188,27 @@ class MethodReferencesGatherer {
   MethodReferencesGatherer(
       const DexMethod* method,
       bool include_dynamic_references,
+      bool check_init_instantiable,
       std::function<bool(const DexClass*)> is_class_instantiable,
       bool consider_code,
       std::function<void(const MethodItemEntry&, References*)> gather_mie);
 
-  References advance(const DexClass* instantiable_cls);
+  enum class AdvanceKind {
+    Initial,
+    Callable,
+    InstantiableDependencyResolved, // iff instantiable_cls
+  };
+
+  void advance(AdvanceKind kind,
+               const DexClass* instantiable_cls,
+               References* refs);
 
   const DexMethod* get_method() const { return m_method; }
 
   uint32_t get_instructions_visited() const { return m_instructions_visited; }
 
-  static void default_gather_mie(bool include_dynamic_references,
+  static void default_gather_mie(const DexMethod* method,
+                                 bool include_dynamic_references,
                                  const MethodItemEntry& mie,
                                  References* refs,
                                  bool gather_methods = true);
@@ -214,6 +224,7 @@ class MethodReferencesGatherer {
 
   const DexMethod* m_method;
   bool m_include_dynamic_references;
+  bool m_check_init_instantiable;
   std::function<bool(const DexClass*)> m_is_class_instantiable;
   bool m_consider_code;
   std::function<void(const MethodItemEntry&, References*)> m_gather_mie;
@@ -223,6 +234,7 @@ class MethodReferencesGatherer {
   std::unordered_map<const DexClass*, std::vector<CFGNeedle>>
       m_instantiable_dependencies;
   uint32_t m_instructions_visited{0};
+  AdvanceKind m_next_advance_kind{AdvanceKind::Initial};
 };
 
 using MethodReferencesGatherers =
@@ -235,6 +247,7 @@ struct ConditionallyMarked {
     ConcurrentSet<const DexMethod*> methods;
     ConcurrentMap<const DexClass*, MethodReferencesGatherers>
         method_references_gatherers;
+    ConcurrentSet<DexType*> directly_instantiable_types;
   };
 
   // If any reference to the class if retained as part of any reachable
@@ -248,13 +261,18 @@ struct ConditionallyMarked {
   // If the class is not abstract and has a constructor, or has a derived class
   // that does.
   MarkedItems if_class_instantiable;
+
+  ConcurrentMap<const DexMethod*, std::shared_ptr<MethodReferencesGatherer>>
+      if_instance_method_callable;
 };
 
+using CallableInstanceMethods = ConcurrentSet<const DexMethod*>;
 using InstantiableTypes = ConcurrentSet<const DexClass*>;
 using DynamicallyReferencedClasses = ConcurrentSet<const DexClass*>;
 
 struct ReachableAspects {
   DynamicallyReferencedClasses dynamically_referenced_classes;
+  CallableInstanceMethods callable_instance_methods;
   InstantiableTypes instantiable_types;
   InstantiableTypes uninstantiable_dependencies;
   uint64_t instructions_unvisited{0};
@@ -272,6 +290,9 @@ struct References {
   std::unordered_set<const DexClass*> classes_dynamically_referenced;
   std::vector<const DexClass*>
       method_references_gatherer_dependencies_if_class_instantiable;
+  bool method_references_gatherer_dependency_if_instance_method_callable{false};
+  std::vector<DexType*> new_instances;
+  std::vector<DexMethod*> called_super_methods;
 };
 
 void gather_dynamic_references(const DexAnnotation* item,
@@ -377,6 +398,7 @@ class TransitiveClosureMarker {
       bool record_reachability,
       bool relaxed_keep_class_members,
       bool cfg_gathering_check_instantiable,
+      bool cfg_gathering_check_instance_callable,
       ConditionallyMarked* cond_marked,
       ReachableObjects* reachable_objects,
       ReachableAspects* reachable_aspects,
@@ -387,6 +409,8 @@ class TransitiveClosureMarker {
         m_record_reachability(record_reachability),
         m_relaxed_keep_class_members(relaxed_keep_class_members),
         m_cfg_gathering_check_instantiable(cfg_gathering_check_instantiable),
+        m_cfg_gathering_check_instance_callable(
+            cfg_gathering_check_instance_callable),
         m_cond_marked(cond_marked),
         m_reachable_objects(reachable_objects),
         m_reachable_aspects(reachable_aspects),
@@ -448,10 +472,17 @@ class TransitiveClosureMarker {
 
   void push_if_class_retained(const DexMethod* method);
 
+  void push_directly_instantiable_if_class_dynamically_referenced(
+      DexType* type);
+
+  void push_if_instance_method_callable(
+      std::shared_ptr<MethodReferencesGatherer> method_references_gatherer);
+
   bool has_class_forname(const DexMethod* meth);
 
   void gather_and_push(
       std::shared_ptr<MethodReferencesGatherer> method_references_gatherer,
+      MethodReferencesGatherer::AdvanceKind advance_kind,
       const DexClass* instantiable_cls);
 
   std::shared_ptr<MethodReferencesGatherer> create_method_references_gatherer(
@@ -481,6 +512,20 @@ class TransitiveClosureMarker {
 
   void instantiable(DexType* type);
 
+  void directly_instantiable(DexType* type);
+  void directly_instantiable(const std::vector<DexType*>& types) {
+    for (auto* type : types) {
+      directly_instantiable(type);
+    }
+  }
+
+  void instance_callable(DexMethod* method);
+  void instance_callable(const std::vector<DexMethod*>& methods) {
+    for (auto* m : methods) {
+      instance_callable(m);
+    }
+  }
+
   void dynamically_referenced(const DexClass* cls);
   void dynamically_referenced(
       const std::unordered_set<const DexClass*>& classes) {
@@ -494,6 +539,7 @@ class TransitiveClosureMarker {
   bool m_record_reachability;
   bool m_relaxed_keep_class_members;
   bool m_cfg_gathering_check_instantiable;
+  bool m_cfg_gathering_check_instance_callable;
   ConditionallyMarked* m_cond_marked;
   ReachableObjects* m_reachable_objects;
   ReachableAspects* m_reachable_aspects;
@@ -515,6 +561,7 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
     bool record_reachability = false,
     bool relaxed_keep_class_members = false,
     bool cfg_gathering_check_instantiable = false,
+    bool cfg_gathering_check_instance_callable = false,
     bool should_mark_all_as_seed = false,
     std::unique_ptr<const method_override_graph::Graph>*
         out_method_override_graph = nullptr,
@@ -526,7 +573,9 @@ void sweep(DexStoresVector& stores,
            bool output_full_removed_symbols = false);
 
 remove_uninstantiables_impl::Stats sweep_code(
-    DexStoresVector& stores, const ReachableAspects& reachable_aspects);
+    DexStoresVector& stores,
+    bool prune_uncallable_instance_method_bodies,
+    const ReachableAspects& reachable_aspects);
 
 struct ObjectCounts {
   size_t num_classes{0};
@@ -541,5 +590,7 @@ struct ObjectCounts {
 ObjectCounts count_objects(const DexStoresVector& stores);
 
 void dump_graph(std::ostream& os, const ReachableObjectGraph& retainers_of);
+
+bool consider_dynamically_referenced(const DexClass* cls);
 
 } // namespace reachability
