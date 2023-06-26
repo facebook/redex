@@ -86,7 +86,13 @@ struct ConfigFiles {
     return m_class_lists.at(name);
   }
 
-  const std::unordered_map<std::string, int64_t>& get_dead_class_list();
+  struct DeadClassLoadCounts {
+    int64_t sampled{50}; // legacy
+    int64_t unsampled{0};
+  };
+
+  const std::unordered_map<std::string, DeadClassLoadCounts>&
+  get_dead_class_list();
   const std::unordered_set<std::string>& get_live_class_split_list();
 
   void clear_dead_class_and_live_relocated_sets() {
@@ -212,7 +218,7 @@ struct ConfigFiles {
   mutable std::unique_ptr<method_profiles::MethodProfiles> m_method_profiles;
   mutable std::unique_ptr<method_profiles::MethodProfiles>
       m_secondary_method_profiles;
-  std::unordered_map<std::string, int64_t> m_dead_classes;
+  std::unordered_map<std::string, DeadClassLoadCounts> m_dead_classes;
   std::unordered_set<std::string> m_live_relocated_classes;
 
   // limits the output instruction size of any DexMethod to 2^n

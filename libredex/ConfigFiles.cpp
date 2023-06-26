@@ -9,6 +9,7 @@
 
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
+#include <charconv>
 #include <fstream>
 #include <json/json.h>
 #include <string>
@@ -22,6 +23,40 @@
 #include "ProguardMap.h"
 
 using namespace std::string_literals;
+
+namespace {
+
+class StringTabSplitter {
+ private:
+  std::string_view m_line;
+  std::string_view::size_type m_start{0};
+  std::string_view::size_type m_end;
+
+  std::string_view::size_type get_end() const {
+    auto end = m_line.find('\t', m_start);
+    return end == std::string::npos ? m_line.size() : end;
+  }
+
+ public:
+  explicit StringTabSplitter(std::string_view line)
+      : m_line(line), m_end(get_end()) {}
+
+  std::string_view get() const {
+    return m_line.substr(m_start, m_end - m_start);
+  }
+
+  bool next() {
+    if (m_end == m_line.size()) {
+      return false;
+    }
+    always_assert(m_line[m_end] == '\t');
+    m_start = m_end + 1;
+    m_end = get_end();
+    return true;
+  }
+};
+
+} // namespace
 
 ConfigFiles::ConfigFiles(const Json::Value& config, const std::string& outdir)
     : m_json(config),
@@ -235,7 +270,7 @@ ConfigFiles::load_class_lists() {
   return lists;
 }
 
-const std::unordered_map<std::string, int64_t>&
+const std::unordered_map<std::string, ConfigFiles::DeadClassLoadCounts>&
 ConfigFiles::get_dead_class_list() {
   build_dead_class_and_live_class_split_lists();
   return m_dead_classes;
@@ -278,17 +313,20 @@ void ConfigFiles::build_dead_class_and_live_class_split_lists() {
                                 [](auto c) { return c > ' '; })
                        .base(),
                    line.end());
-        int64_t load_count = 50; // legacy
-        auto i = line.find('\t');
-        std::string_view classname;
-        if (i == std::string::npos) {
-          classname = line;
-        } else {
-          classname = ((std::string_view)line).substr(0, i);
-          char* endptr = nullptr;
-          long parsed = strtol(line.c_str() + i + 1, &endptr, 10);
-          always_assert(endptr == line.c_str() + line.length());
-          load_count = parsed;
+        DeadClassLoadCounts load_counts;
+        StringTabSplitter splitter(line);
+        std::string_view classname = splitter.get();
+        if (splitter.next()) {
+          std::string_view str = splitter.get();
+          auto [_, ec1] = std::from_chars(str.data(), str.data() + str.size(),
+                                          load_counts.sampled);
+          always_assert(ec1 == std::errc{});
+          if (splitter.next()) {
+            str = splitter.get();
+            auto [_, ec2] = std::from_chars(str.data(), str.data() + str.size(),
+                                            load_counts.unsampled);
+            always_assert(ec2 == std::errc{});
+          }
         }
         bool is_relocated = is_relocated_class(classname);
         if (is_relocated) {
@@ -302,7 +340,7 @@ void ConfigFiles::build_dead_class_and_live_class_split_lists() {
         std::replace(converted.begin(), converted.end(), '.', '/');
         if (!is_relocated) {
           auto translated = m_proguard_map->translate_class(converted);
-          m_dead_classes.emplace(std::move(translated), load_count);
+          m_dead_classes.emplace(std::move(translated), load_counts);
         } else {
           // No need to proguard translate the name of the live classes since
           // we use the unobfuscated name. The unobfuscated name is already
