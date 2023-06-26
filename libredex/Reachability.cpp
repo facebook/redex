@@ -570,17 +570,18 @@ void gather_dynamic_references(const MethodItemEntry* item,
   if (item->type != MFLOW_OPCODE) {
     return;
   }
-  auto opcode = item->insn;
+  auto insn = item->insn;
   // Matches any stringref that name-aliases a type.
-  if (opcode->has_string()) {
-    const DexString* dsclzref = opcode->get_string();
+  if (insn->has_string()) {
+    const DexString* dsclzref = insn->get_string();
     auto* cls = type_class(get_dextype_from_dotname(dsclzref->str()));
     if (cls) {
       references->classes_dynamically_referenced.insert(cls);
     }
   }
-  if (opcode->has_type()) {
-    auto* cls = type_class(opcode->get_type());
+  if (opcode::is_new_instance(insn->opcode()) ||
+      opcode::is_const_class(insn->opcode())) {
+    auto* cls = type_class(insn->get_type());
     if (cls) {
       references->classes_dynamically_referenced.insert(cls);
     }
@@ -761,14 +762,6 @@ References MethodReferencesGatherer::advance(
       continue;
     }
     m_instructions_visited++;
-    if (m_include_dynamic_references) {
-      // FIXME: any instruction that has_type() currently gets its typed picked
-      // as a "dynamic" type reference, as that's what the DelInitPass
-      // historically does. However, we are probably NOT actually after
-      // check-cast and instance-of instructions, which should be okay to skip
-      // here. But we leave that for another diff.
-      relaxed_keep_class_members_impl::gather_dynamic_references(&*it, &refs);
-    }
     queue.push((CFGNeedle){block, std::next(it)});
   }
   return refs;

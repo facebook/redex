@@ -38,7 +38,7 @@ TEST_F(FlowSensitiveReachabilityTest,
       /* cfg_gathering_check_instantiable */ true);
 
   //// instantiable_types
-  EXPECT_EQ(reachable_aspects.instantiable_types.size(), 6);
+  EXPECT_EQ(reachable_aspects.instantiable_types.size(), 5);
   auto is_instantiable = [&](const std::string_view& s) {
     return std::any_of(reachable_aspects.instantiable_types.begin(),
                        reachable_aspects.instantiable_types.end(),
@@ -47,14 +47,14 @@ TEST_F(FlowSensitiveReachabilityTest,
   EXPECT_TRUE(is_instantiable("LFlowSensitiveReachabilityTest;"));
   EXPECT_FALSE(is_instantiable("LData;"));
   EXPECT_FALSE(is_instantiable("LDataHolder;"));
-  EXPECT_TRUE(is_instantiable("LLegacyInstantiable;"));
+  EXPECT_FALSE(is_instantiable("LLegacyInstantiable;"));
   EXPECT_TRUE(is_instantiable("LStringInstantiable;"));
   EXPECT_TRUE(is_instantiable("LBase;"));
   EXPECT_TRUE(is_instantiable("LIntermediate;"));
   EXPECT_TRUE(is_instantiable("LRegularInstantiable;"));
 
   //// dynamically_referenced_classes
-  EXPECT_EQ(reachable_aspects.dynamically_referenced_classes.size(), 3);
+  EXPECT_EQ(reachable_aspects.dynamically_referenced_classes.size(), 2);
   auto is_dynamically_referenced = [&](const std::string_view& s) {
     return std::any_of(reachable_aspects.dynamically_referenced_classes.begin(),
                        reachable_aspects.dynamically_referenced_classes.end(),
@@ -63,7 +63,7 @@ TEST_F(FlowSensitiveReachabilityTest,
   EXPECT_FALSE(is_dynamically_referenced("LFlowSensitiveReachabilityTest;"));
   EXPECT_FALSE(is_dynamically_referenced("LData;"));
   EXPECT_FALSE(is_dynamically_referenced("LDataHolder;"));
-  EXPECT_TRUE(is_dynamically_referenced("LLegacyInstantiable;"));
+  EXPECT_FALSE(is_dynamically_referenced("LLegacyInstantiable;"));
   EXPECT_TRUE(is_dynamically_referenced("LStringInstantiable;"));
   EXPECT_TRUE(is_dynamically_referenced("LRegularInstantiable;"));
 
@@ -84,8 +84,8 @@ TEST_F(FlowSensitiveReachabilityTest,
       reachability::sweep_code(stores, reachable_aspects);
   EXPECT_EQ(uninstantiables_stats.field_accesses_on_uninstantiable, 3);
   EXPECT_EQ(uninstantiables_stats.invokes, 2);
-  EXPECT_EQ(uninstantiables_stats.check_casts, 0);
-  EXPECT_EQ(uninstantiables_stats.instance_ofs, 0);
+  EXPECT_EQ(uninstantiables_stats.check_casts, 1);
+  EXPECT_EQ(uninstantiables_stats.instance_ofs, 1);
 
   walk::parallel::code(scope, [&](auto*, auto& code) { code.clear_cfg(); });
 }

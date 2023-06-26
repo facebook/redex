@@ -133,18 +133,19 @@ void find_referenced_classes(const Scope& scope) {
       [](DexMethod*) { return true; },
       [&](DexMethod* meth, IRCode& code) {
         for (const auto& mie : InstructionIterable(meth->get_code())) {
-          auto opcode = mie.insn;
+          auto insn = mie.insn;
           // Matches any stringref that name-aliases a type.
-          if (opcode->has_string()) {
-            const DexString* dsclzref = opcode->get_string();
+          if (insn->has_string()) {
+            const DexString* dsclzref = insn->get_string();
             DexType* dtexclude = get_dextype_from_dotname(dsclzref->c_str());
             if (dtexclude == nullptr) continue;
             TRACE(PGR, 3, "string_ref: %s", SHOW(dtexclude));
             referenced_classes.insert(type_class(dtexclude));
           }
-          if (opcode->has_type()) {
-            TRACE(PGR, 3, "type_ref: %s", SHOW(opcode->get_type()));
-            referenced_classes.insert(type_class(opcode->get_type()));
+          if (opcode::is_new_instance(insn->opcode()) ||
+              opcode::is_const_class(insn->opcode())) {
+            TRACE(PGR, 3, "type_ref: %s", SHOW(insn->get_type()));
+            referenced_classes.insert(type_class(insn->get_type()));
           }
         }
       });
