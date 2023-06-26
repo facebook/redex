@@ -28,8 +28,10 @@ bool DexLimitsInfo::update_refs_by_adding_class(DexClass* cls) {
   TypeRefs pending_init_class_fields;
   TypeRefs pending_init_class_types;
 
-  cls->gather_init_classes(itrefs);
-  init_refs.insert(itrefs.begin(), itrefs.end());
+  if (m_init_classes_with_side_effects) {
+    cls->gather_init_classes(itrefs);
+    init_refs.insert(itrefs.begin(), itrefs.end());
+  }
   cls->gather_methods(method_refs);
   cls->gather_fields(field_refs);
   cls->gather_types(type_refs);
@@ -59,8 +61,10 @@ void DexLimitsInfo::update_refs_by_erasing_class(DexClass* cls) {
   TypeRefs pending_init_class_fields;
   TypeRefs pending_init_class_types;
 
-  cls->gather_init_classes(itrefs);
-  init_refs.insert(itrefs.begin(), itrefs.end());
+  if (m_init_classes_with_side_effects) {
+    cls->gather_init_classes(itrefs);
+    init_refs.insert(itrefs.begin(), itrefs.end());
+  }
   cls->gather_methods(method_refs);
   cls->gather_fields(field_refs);
   cls->gather_types(type_refs);

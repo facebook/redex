@@ -37,13 +37,18 @@ void DexLimitsChecker::run_checker(DexStoresVector& stores,
 
   std::ostringstream result;
   Scope scope = build_class_scope(stores);
-  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
-      scope, conf.create_init_class_insns());
+  std::unique_ptr<init_classes::InitClassesWithSideEffects>
+      init_classes_with_side_effects;
+  if (!mgr.init_class_lowering_has_run()) {
+    init_classes_with_side_effects =
+        std::make_unique<init_classes::InitClassesWithSideEffects>(
+            scope, conf.create_init_class_insns());
+  }
 
   auto check_ref_num =
       [&init_classes_with_side_effects, &pass_name, &result](
           const DexClasses& classes, const DexStore& store, size_t dex_id) {
-        DexLimitsInfo dex_limits(&init_classes_with_side_effects);
+        DexLimitsInfo dex_limits(init_classes_with_side_effects.get());
         for (const auto& cls : classes) {
           if (!dex_limits.update_refs_by_adding_class(cls)) {
             if (dex_limits.is_method_overflow()) {
