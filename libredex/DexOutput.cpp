@@ -3066,7 +3066,8 @@ enhanced_dex_stats_t write_classes_to_dex(
         global_config.get_config_by_name<MethodSimilarityOrderingConfig>(
             "method_similarity_order");
   }
-  if (similarity_config == nullptr || similarity_config->disable) {
+  if (similarity_config == nullptr || similarity_config->disable ||
+      similarity_config->store_name_to_disable == *store_name) {
     TRACE(OPUT, 3, "[write_classes_to_dex] disable_method_similarity_order");
     code_sort_mode.erase(
         std::remove_if(

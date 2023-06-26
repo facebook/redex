@@ -91,6 +91,7 @@ void MethodSimilarityOrderingConfig::bind_config() {
   bind("use_compression_conscious_order", use_compression_conscious_order,
        use_compression_conscious_order);
   bind("disable", disable, disable);
+  bind("store_name_to_disable", store_name_to_disable, store_name_to_disable);
 }
 
 void ProguardConfig::bind_config() {
