@@ -225,11 +225,15 @@ boost::optional<DexMethod*> get_inferred_method_def(
   }
 
   // 3. Accessibility check.
-  if (!type::can_access(caller, resolved)) {
+  if (!type::can_access(caller, resolved) ||
+      (is_external && !is_public(resolved_cls))) {
     TRACE(RESO, 4, "Bailed on inaccessible %s from %s", SHOW(resolved),
           SHOW(caller));
     stats.num_failed_infer_cannot_access++;
     return boost::none;
+  }
+  if (!is_external && !is_public(resolved_cls)) {
+    set_public(resolved_cls);
   }
 
   TRACE(RESO, 4, "Inferred to %s for type %s", SHOW(resolved),
