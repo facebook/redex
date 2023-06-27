@@ -10,6 +10,7 @@
 #include <boost/bimap/bimap.hpp>
 #include <boost/bimap/unordered_set_of.hpp>
 #include <boost/range/adaptor/map.hpp>
+#include <cinttypes>
 
 #include "BinarySerialization.h"
 #include "CFGMutation.h"
@@ -722,8 +723,8 @@ void MethodReferencesGatherer::advance(AdvanceKind kind,
     }
     auto param_anno = m_method->get_param_anno();
     if (param_anno) {
-      for (auto&& [_, anno_set] : *param_anno) {
-        gather_from_anno_set(anno_set.get());
+      for (auto&& [_, param_anno_set] : *param_anno) {
+        gather_from_anno_set(param_anno_set.get());
       }
     }
     if (m_include_dynamic_references) {
@@ -1292,7 +1293,8 @@ void ReachableAspects::finish(const ConditionallyMarked& cond_marked) {
       },
       remaining_method_references_gatherers);
   instructions_unvisited = (uint64_t)concurrent_instructions_unvisited;
-  TRACE(RMU, 1, "%lu uninstantiable_dependencies, %lu instructions_unvisited",
+  TRACE(RMU, 1,
+        "%zu uninstantiable_dependencies, %" PRIu64 " instructions_unvisited",
         uninstantiable_dependencies.size(), instructions_unvisited);
 }
 
