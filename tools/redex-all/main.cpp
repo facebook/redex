@@ -1276,11 +1276,15 @@ void redex_backend(ConfigFiles& conf,
       *conf.get_global_config().get_config_by_name<DexOutputConfig>(
           "dex_output");
 
+  auto string_sort_mode = get_string_sort_mode(conf);
+
   {
     ScopedMemStats wod_mem_stats{mem_stats_enabled, reset_hwm};
     for (size_t store_number = 0; store_number < stores.size();
          ++store_number) {
       auto& store = stores[store_number];
+      const auto& store_name = store.get_name();
+      auto code_sort_mode = get_code_sort_mode(conf, store_name);
       Timer t("Writing optimized dexes");
       for (size_t i = 0; i < store.get_dexen().size(); i++) {
         auto gtypes = std::make_shared<GatheredTypes>(&store.get_dexen()[i]);
@@ -1288,7 +1292,7 @@ void redex_backend(ConfigFiles& conf,
         if (post_lowering) {
           post_lowering->load_dex_indexes(
               conf, manager.get_redex_options().min_sdk, &store.get_dexen()[i],
-              *gtypes, store.get_name(), i);
+              *gtypes, store_name, i);
         }
 
         auto this_dex_stats = write_classes_to_dex(
@@ -1297,7 +1301,7 @@ void redex_backend(ConfigFiles& conf,
             gtypes,
             locator_index,
             store_number,
-            &store.get_name(),
+            &store_name,
             i,
             conf,
             pos_mapper.get(),
@@ -1307,7 +1311,9 @@ void redex_backend(ConfigFiles& conf,
             is_iodi(dik) ? &iodi_metadata : nullptr,
             stores[0].get_dex_magic(),
             dex_output_config,
-            manager.get_redex_options().min_sdk);
+            manager.get_redex_options().min_sdk,
+            code_sort_mode,
+            string_sort_mode);
 
         output_totals += this_dex_stats;
         // Remove class sizes here to free up memory.
