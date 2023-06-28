@@ -9,6 +9,7 @@
 
 #include <atomic>
 
+#include "ApiLevelsUtils.h"
 #include "DexClass.h"
 #include "Resolver.h"
 
@@ -42,7 +43,8 @@ class RtypeCandidates final {
   void collect_inferred_rtype(const DexMethod* meth,
                               const DexTypeDomain& inferred_rtype,
                               DexTypeDomain& curr_rtype);
-  void collect_specializable_rtype(DexMethod* meth,
+  void collect_specializable_rtype(const api::AndroidSDK* min_sdk_api,
+                                   DexMethod* meth,
                                    const DexTypeDomain& rtype_domain);
   const MethodToInferredReturnType& get_candidates() {
     return m_rtype_candidates;

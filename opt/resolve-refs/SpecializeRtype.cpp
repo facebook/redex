@@ -195,7 +195,9 @@ void RtypeCandidates::collect_inferred_rtype(
 }
 
 void RtypeCandidates::collect_specializable_rtype(
-    DexMethod* meth, const DexTypeDomain& rtype_domain) {
+    const api::AndroidSDK* min_sdk_api,
+    DexMethod* meth,
+    const DexTypeDomain& rtype_domain) {
   if (rtype_domain.is_bottom() || rtype_domain.is_top()) {
     return;
   }
@@ -207,6 +209,11 @@ void RtypeCandidates::collect_specializable_rtype(
   redex_assert(type::is_object(rtype));
   redex_assert(better_rtype);
   if (*better_rtype == rtype || type::is_array(rtype)) {
+    return;
+  }
+  auto better_rtype_cls = type_class(*better_rtype);
+  if (better_rtype_cls && better_rtype_cls->is_external() &&
+      !min_sdk_api->has_type(*better_rtype)) {
     return;
   }
   // `better_rtype` is a subtype of the exsting `rtype`.
