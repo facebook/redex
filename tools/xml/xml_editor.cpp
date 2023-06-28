@@ -12,11 +12,12 @@
 #include <memory>
 #include <secure_lib/secure_string.h>
 
-#include "ApkResources.h"
 #include "androidfw/ResourceTypes.h"
 #include "utils/ByteOrder.h"
 #include "utils/Errors.h"
 #include "utils/Log.h"
+#include "utils/Serialize.h"
+#include "utils/Vector.h"
 #include "utils/Visitor.h"
 
 namespace {
@@ -117,9 +118,35 @@ class XmlAttributeSetter : public arsc::XmlFileVisitor {
 };
 } // namespace
 
-size_t append_in_xml_string_pool(const std::string& path,
-                                 const std::string& new_string) {
-  return ApkResources::add_string_to_xml_file(path, new_string);
+// Writes the new string into the file's pool, if necessary and returns the pool
+// index (or a negative value on error).
+ssize_t ensure_string_in_xml_string_pool(const std::string& path,
+                                         const std::string& new_string) {
+  android::Vector<char> new_bytes;
+  size_t idx{0};
+  {
+    auto map = std::make_unique<boost::iostreams::mapped_file>();
+    auto mode = (std::ios_base::openmode)std::ios_base::in;
+    map->open(path, mode);
+    if (!map->is_open()) {
+      std::cerr << "Could not map " << path << std::endl;
+      return -1;
+    }
+
+    auto result = arsc::ensure_string_in_xml_pool(
+        map->const_data(), map->size(), new_string, &new_bytes, &idx);
+    if (result != android::OK) {
+      std::cerr << "Unable to parse " << path << std::endl;
+      return -1;
+    }
+  }
+  if (!new_bytes.empty()) {
+    std::ofstream ofs(path,
+                      std::ofstream::out | std::ofstream::trunc |
+                          std::ofstream::binary);
+    ofs.write(&(new_bytes[0]), new_bytes.size());
+  }
+  return idx;
 }
 
 // This tool accepts a tag name, attribute ID as defined in the Android SDK, see
@@ -145,7 +172,12 @@ int main(int argc, char** argv) {
     data = strtol(argv[4], nullptr, 0);
   } else {
     std::cout << "adding " << argv[4] << " into string pool" << std::endl;
-    data = (uint32_t)(append_in_xml_string_pool(path, std::string(argv[4])));
+    auto ensure_result =
+        ensure_string_in_xml_string_pool(path, std::string(argv[4]));
+    if (ensure_result < 0) {
+      return 1;
+    }
+    data = (uint32_t)ensure_result;
     std::cout << "finished appending string pool with new idx " << data
               << std::endl;
   }

@@ -20,6 +20,7 @@
 #include "utils/String8.h"
 #include "utils/Unicode.h"
 #include "utils/Vector.h"
+#include "utils/Visitor.h"
 
 namespace arsc {
 
@@ -854,6 +855,53 @@ void replace_xml_string_pool(android::ResChunk_header* data,
   void* start_ptr = ((char*)data) + start;
   push_data_no_swap(start_ptr, remaining, out);
   write_long_at_pos(total_size_pos, out->size() - initial_vec_size, out);
+}
+
+int ensure_string_in_xml_pool(const void* data,
+                              const size_t len,
+                              const std::string& new_string,
+                              android::Vector<char>* out_data,
+                              size_t* idx) {
+  int validation_result = validate_xml_string_pool(data, len);
+  if (validation_result != android::OK) {
+    return validation_result;
+  }
+  SimpleXmlParser parser;
+  LOG_ALWAYS_FATAL_IF(!parser.visit((void*)data, len), "Invalid file");
+  auto& pool = parser.global_strings();
+  size_t pool_size = pool.size();
+  // Check if there is already a non-attribute with the given value.
+  for (size_t i = parser.attribute_count(); i < pool_size; i++) {
+    if (is_valid_string_idx(pool, i)) {
+      auto s = get_string_from_pool(pool, i);
+      if (s == new_string) {
+        *idx = i;
+        // Convention to leave out_data unchanged in this case.
+        return android::OK;
+      }
+    }
+  }
+
+  // Add given string to the end of a new pool.
+  auto flags = pool.isUTF8() ? htodl(android::ResStringPool_header::UTF8_FLAG)
+                             : (uint32_t)0;
+  arsc::ResStringPoolBuilder pool_builder(flags);
+  for (size_t i = 0; i < pool_size; i++) {
+    size_t length;
+    if (pool.isUTF8()) {
+      auto s = pool.string8At(i, &length);
+      pool_builder.add_string(s, length);
+    } else {
+      auto s = pool.stringAt(i, &length);
+      pool_builder.add_string(s, length);
+    }
+  }
+  *idx = pool_size;
+  pool_builder.add_string(new_string);
+  // Serialize new string pool into out data.
+  replace_xml_string_pool((android::ResChunk_header*)data, len,
+                                pool_builder, out_data);
+  return android::OK;
 }
 
 bool is_empty(const EntryValueData& ev) {

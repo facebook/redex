@@ -431,20 +431,33 @@ ParsedAaptOutput aapt_dump_and_parse(const std::string& arsc_path,
 } // namespace
 
 TEST(ResStringPool, AppendStringInXmlLayout) {
+  std::string to_add("test_test");
   auto f = RedexMappedFile::open(std::getenv("test_layout_path"));
+
   android::Vector<char> serialized;
   size_t new_idx;
-  int status = ApkResources::appened_xml_string_pool(f.const_data(), f.size(),
-                                                     std::string("test_test"),
-                                                     &serialized, &new_idx);
-  EXPECT_EQ(status, android::OK);
+  EXPECT_EQ(arsc::ensure_string_in_xml_pool(f.const_data(), f.size(), to_add,
+                                            &serialized, &new_idx),
+            android::OK);
   EXPECT_EQ(new_idx, 19);
+  EXPECT_FALSE(serialized.empty());
+  auto serialized_data = (char*)&(serialized[0]);
   const auto chunk_size = sizeof(android::ResChunk_header);
   auto pool_ptr =
-      (android::ResStringPool_header*)((char*)(&(serialized[0])) + chunk_size);
+      (android::ResStringPool_header*)(serialized_data + chunk_size);
   android::ResStringPool pool(pool_ptr, dtohl(pool_ptr->header.size));
   auto new_str = apk::get_string_from_pool(pool, new_idx);
   EXPECT_EQ(new_str, "test_test");
+
+  // Append the data again, we should get a successful result with the same
+  // index and no outputted binary data.
+  android::Vector<char> again;
+  size_t again_idx;
+  EXPECT_EQ(arsc::ensure_string_in_xml_pool(serialized_data, serialized.size(),
+                                            to_add, &again, &again_idx),
+            android::OK);
+  EXPECT_EQ(again_idx, new_idx);
+  EXPECT_TRUE(again.empty());
 }
 
 TEST(ResStringPool, ReplaceStringsInXmlLayout) {

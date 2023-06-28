@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "androidfw/ResourceTypes.h"
+#include "utils/ByteOrder.h"
 
 namespace arsc {
 
@@ -19,7 +20,11 @@ namespace arsc {
 void collect_spans(android::ResStringPool_span* ptr,
                    std::vector<android::ResStringPool_span*>* out);
 
+// Validates data is a sensible ResChunk_header struct
 bool is_binary_xml(const void* data, size_t size);
+
+// Validates that the data is a sensible ResChunk_header struct followed by
+// enough data for a ResStringPool_header.
 int validate_xml_string_pool(const void* data, const size_t len);
 
 class VisitorBase {
@@ -162,6 +167,30 @@ class XmlFileVisitor : public VisitorBase {
   virtual bool visit_typed_data(android::Res_value* value);
   virtual bool visit_string_ref(android::ResStringPool_ref* ref);
   virtual ~XmlFileVisitor() {}
+};
+
+class SimpleXmlParser : public arsc::XmlFileVisitor {
+ public:
+  ~SimpleXmlParser() override {}
+
+  bool visit_attribute_ids(uint32_t* id, size_t count) override {
+    m_attribute_count = count;
+    return true;
+  }
+
+  bool visit_global_strings(android::ResStringPool_header* pool) override {
+    LOG_ALWAYS_FATAL_IF(m_global_strings.setTo(pool, dtohl(pool->header.size),
+                                               true) != android::NO_ERROR,
+                        "Invalid string pool");
+    return arsc::XmlFileVisitor::visit_global_strings(pool);
+  }
+
+ android::ResStringPool& global_strings() { return m_global_strings; }
+ size_t attribute_count() { return m_attribute_count; }
+
+ private:
+  size_t m_attribute_count{0};
+  android::ResStringPool m_global_strings;
 };
 } // namespace arsc
 #endif

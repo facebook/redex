@@ -56,11 +56,13 @@
 #endif
 
 namespace apk {
+// CLEANUP NEEDED: cut over usages to Visitor.h
 bool is_valid_string_idx(const android::ResStringPool& pool, size_t idx) {
   size_t u16_len;
   return pool.stringAt(idx, &u16_len) != nullptr;
 }
 
+// CLEANUP NEEDED: cut over usages to Visitor.h
 std::string get_string_from_pool(const android::ResStringPool& pool,
                                  size_t idx) {
   size_t u16_len;
@@ -1113,33 +1115,6 @@ void add_existing_string_to_builder(const android::ResStringPool& string_pool,
 }
 } // namespace
 
-int ApkResources::appened_xml_string_pool(const void* data,
-                                          const size_t len,
-                                          const std::string& new_string,
-                                          android::Vector<char>* out_data,
-                                          size_t* idx) {
-  int validation_result = arsc::validate_xml_string_pool(data, len);
-  if (validation_result != android::OK) {
-    return validation_result;
-  }
-
-  const auto chunk_size = sizeof(android::ResChunk_header);
-  auto pool_ptr = (android::ResStringPool_header*)((char*)data + chunk_size);
-  android::ResStringPool pool(pool_ptr, dtohl(pool_ptr->header.size));
-  auto flags = pool.isUTF8() ? htodl(android::ResStringPool_header::UTF8_FLAG)
-                             : (uint32_t)0;
-  arsc::ResStringPoolBuilder pool_builder(flags);
-  for (size_t i = 0; i < dtohl(pool_ptr->stringCount); i++) {
-    add_existing_string_to_builder(pool, &pool_builder, i);
-  }
-  *idx = dtohl(pool_ptr->stringCount);
-  pool_builder.add_string(new_string);
-  // serialize new string pool into out data
-  arsc::replace_xml_string_pool((android::ResChunk_header*)data, len,
-                                pool_builder, out_data);
-  return android::OK;
-}
-
 int ApkResources::replace_in_xml_string_pool(
     const void* data,
     const size_t len,
@@ -1196,23 +1171,6 @@ bool ApkResources::rename_classes_in_layout(
   }
   write_serialized_data(serialized, std::move(f));
   return true;
-}
-
-// add a new string to string pool in the xml file.
-// and return this new string's index
-size_t ApkResources::add_string_to_xml_file(const std::string& file_path,
-                                            const std::string& new_string) {
-  RedexMappedFile f = RedexMappedFile::open(file_path, /* read_only= */ false);
-  size_t len = f.size();
-  android::Vector<char> serialized;
-  size_t new_idx;
-  auto status =
-      appened_xml_string_pool(f.data(), len, new_string, &serialized, &new_idx);
-  always_assert_log(status == android::OK,
-                    "Failed to get parsed string pool from %s",
-                    file_path.c_str());
-  write_serialized_data_with_expansion(serialized, std::move(f));
-  return new_idx;
 }
 
 std::unordered_set<std::string> ApkResources::find_all_xml_files() {

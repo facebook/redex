@@ -50,6 +50,23 @@ float complex_value(uint32_t complex);
 // For a Res_value marked with FLAG_COMPLEX, return the unit part.
 uint32_t complex_unit(uint32_t complex, bool isFraction);
 
+// Returns whether or not idx is a non null string.
+inline bool is_valid_string_idx(const android::ResStringPool& pool, size_t idx) {
+  size_t u16_len;
+  return pool.stringAt(idx, &u16_len) != nullptr;
+}
+
+// Converts the string at given index, if needed, to utf-8 and returns it as
+// std::string for convenience.
+inline std::string get_string_from_pool(const android::ResStringPool& pool,
+                                        size_t idx) {
+  size_t u16_len;
+  auto wide_chars = pool.stringAt(idx, &u16_len);
+  android::String16 s16(wide_chars, u16_len);
+  android::String8 string8(s16);
+  return std::string(string8.string());
+}
+
 enum StringKind { STD_STRING, STRING_8, STRING_16 };
 
 struct StringHolder {
@@ -122,6 +139,17 @@ void replace_xml_string_pool(android::ResChunk_header* data,
                              size_t len,
                              ResStringPoolBuilder& builder,
                              android::Vector<char>* out);
+
+// Parse the given binary xml bytes, and augments the string pool (if needed) to
+// ensure that the given string is present and usable as a string ref. Return
+// value will indicate whether or not the file was parsed successfully, and if
+// parsed, the index of the given string is supplied to the output param
+// (whether or not the pool was modified).
+int ensure_string_in_xml_pool(const void* data,
+                              const size_t len,
+                              const std::string& new_string,
+                              android::Vector<char>* out_data,
+                              size_t* idx);
 
 using EntryValueData = PtrLen<uint8_t>;
 using EntryOffsetData = std::pair<EntryValueData, uint32_t>;
