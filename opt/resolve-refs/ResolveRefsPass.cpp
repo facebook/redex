@@ -383,7 +383,8 @@ RefStats ResolveRefsPass::refine_virtual_callsites(DexMethod* method,
     }
   }
 
-  stats.rtype_candidates.collect_specializable_rtype(method, rtype_domain);
+  stats.rtype_candidates.collect_specializable_rtype(m_min_sdk_api, method,
+                                                     rtype_domain);
   return stats;
 }
 
