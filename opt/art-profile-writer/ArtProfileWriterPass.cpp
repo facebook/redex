@@ -24,7 +24,7 @@
 
 namespace {
 const std::string BASELINE_PROFILES_FILE =
-    "redex-baseline-profiles.txt";
+    "additional-baseline-profiles.list";
 
 struct ArtProfileEntryFlags {
   bool hot{false};
