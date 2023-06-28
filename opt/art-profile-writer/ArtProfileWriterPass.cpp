@@ -23,7 +23,7 @@
 #include "Show.h"
 
 namespace {
-const std::string BASELINE_PROFILES_FILE = "redex-baseline-profiles.txt";
+const std::string BASELINE_PROFILES_FILE = "additional-baseline-profiles.list";
 
 struct ArtProfileEntryFlags {
   bool hot{false};
