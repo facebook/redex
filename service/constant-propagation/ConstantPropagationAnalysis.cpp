@@ -104,9 +104,6 @@ void analyze_compare(const IRInstruction* insn, ConstantEnvironment* env) {
   }
 }
 
-bool is_zero(boost::optional<SignedConstantDomain> src) {
-  return src && src->get_constant() && *(src->get_constant()) == 0;
-}
 } // namespace
 
 namespace constant_propagation {
@@ -331,8 +328,8 @@ bool PrimitiveAnalyzer::analyze_const(const IRInstruction* insn,
 
 bool PrimitiveAnalyzer::analyze_check_cast(const IRInstruction* insn,
                                            ConstantEnvironment* env) {
-  auto src = env->get(insn->src(0)).maybe_get<SignedConstantDomain>();
-  if (is_zero(src)) {
+  auto src = env->get(insn->src(0));
+  if (src.is_zero()) {
     env->set(RESULT_REGISTER, SignedConstantDomain(0));
     return true;
   }
@@ -341,8 +338,8 @@ bool PrimitiveAnalyzer::analyze_check_cast(const IRInstruction* insn,
 
 bool PrimitiveAnalyzer::analyze_instance_of(const IRInstruction* insn,
                                             ConstantEnvironment* env) {
-  auto src = env->get(insn->src(0)).maybe_get<SignedConstantDomain>();
-  if (is_zero(src)) {
+  auto src = env->get(insn->src(0));
+  if (src.is_zero()) {
     env->set(RESULT_REGISTER, SignedConstantDomain(0));
     return true;
   }
@@ -1277,7 +1274,8 @@ void FixpointIterator::analyze_no_throw(const IRInstruction* insn,
   }
   auto src = insn->src(*src_index);
   auto value = env->get(src);
-  env->set(src, meet(value, SignedConstantDomain(sign_domain::Interval::NEZ)));
+  value.meet_with(SignedConstantDomain(sign_domain::Interval::NEZ));
+  env->set(src, value);
 }
 
 /*
@@ -1375,20 +1373,20 @@ void FixpointIterator::analyze_if(const IRInstruction* insn,
   auto right =
       insn->srcs_size() > 1 ? env->get(insn->src(1)) : SignedConstantDomain(0);
   const IfZeroMeetWith& izmw = if_zero_meet_with.at(op);
-  if (right == SignedConstantDomain(0)) {
+  if (right.is_zero()) {
     env->set(insn->src(0),
-             meet(left, SignedConstantDomain(izmw.right_zero_meet_interval)));
+             left.meet(SignedConstantDomain(izmw.right_zero_meet_interval)));
     return;
   }
-  if (left == SignedConstantDomain(0)) {
+  if (left.is_zero()) {
     env->set(insn->src(1),
-             meet(right, SignedConstantDomain(*izmw.left_zero_meet_interval)));
+             right.meet(SignedConstantDomain(*izmw.left_zero_meet_interval)));
     return;
   }
 
   switch (op) {
   case OPCODE_IF_EQ: {
-    auto refined_value = meet(left, right);
+    auto refined_value = left.meet(right);
     env->set(insn->src(0), refined_value);
     env->set(insn->src(1), refined_value);
     break;
