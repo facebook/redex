@@ -193,6 +193,16 @@ void gather_possible_transformations(
   pending_transforms->emplace_back(std::move(t));
 }
 
+uint32_t fnv1(const std::string& str) {
+  uint32_t x = 0x811c9dc5;
+  uint32_t p = 0x01000193;
+  for (size_t i = 0; i < str.length(); i++) {
+    x = x * p;
+    x = x ^ str[i];
+  }
+  return x;
+}
+
 Stats apply_transform(const PassState& pass_state,
                       PendingTransform& transform) {
   Stats result;
@@ -271,12 +281,26 @@ Stats apply_transform(const PassState& pass_state,
   default_value_const->set_dest(default_value_reg);
   replacements.push_back(default_value_const);
 
+  // Integrity check values
+  auto string_len_reg = cfg.allocate_temp();
+  auto string_len_const = new IRInstruction(OPCODE_CONST);
+  string_len_const->set_literal(encoded_str.length());
+  string_len_const->set_dest(string_len_reg);
+  replacements.push_back(string_len_const);
+  auto magic_reg = cfg.allocate_temp();
+  auto magic_const = new IRInstruction(OPCODE_CONST);
+  magic_const->set_literal((int32_t)fnv1(encoded_str));
+  magic_const->set_dest(magic_reg);
+  replacements.push_back(magic_const);
+
   auto invoke_string_tree = new IRInstruction(OPCODE_INVOKE_STATIC);
   invoke_string_tree->set_method(pass_state.lookup_method);
-  invoke_string_tree->set_srcs_size(3);
+  invoke_string_tree->set_srcs_size(5);
   invoke_string_tree->set_src(0, string_name_reg);
   invoke_string_tree->set_src(1, encoded_str_reg);
   invoke_string_tree->set_src(2, default_value_reg);
+  invoke_string_tree->set_src(3, string_len_reg);
+  invoke_string_tree->set_src(4, magic_reg);
   replacements.push_back(invoke_string_tree);
 
   // Just reuse a reg we don't need anymore
