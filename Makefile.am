@@ -311,6 +311,7 @@ libopt_la_SOURCES = \
 	opt/annokill/AnnoKill.cpp \
 	opt/analyze-pure-method/PureMethods.cpp \
 	opt/app_module_usage/AppModuleUsage.cpp \
+	opt/art-profile-writer/ArtProfileWriterPass.cpp \
 	opt/builder_pattern/BuilderAnalysis.cpp \
 	opt/builder_pattern/BuilderTransform.cpp \
 	opt/builder_pattern/RemoveBuilderPattern.cpp \
