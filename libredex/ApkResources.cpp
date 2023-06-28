@@ -56,22 +56,6 @@
 #endif
 
 namespace apk {
-// CLEANUP NEEDED: cut over usages to Visitor.h
-bool is_valid_string_idx(const android::ResStringPool& pool, size_t idx) {
-  size_t u16_len;
-  return pool.stringAt(idx, &u16_len) != nullptr;
-}
-
-// CLEANUP NEEDED: cut over usages to Visitor.h
-std::string get_string_from_pool(const android::ResStringPool& pool,
-                                 size_t idx) {
-  size_t u16_len;
-  auto wide_chars = pool.stringAt(idx, &u16_len);
-  android::String16 s16(wide_chars, u16_len);
-  android::String8 string8(s16);
-  return std::string(string8.string());
-}
-
 bool TableParser::visit_global_strings(android::ResStringPool_header* pool) {
   m_global_pool_header = pool;
   arsc::StringPoolRefVisitor::visit_global_strings(pool);
@@ -315,7 +299,7 @@ std::string TableSnapshot::get_resource_name(uint32_t id) {
     return "";
   }
   auto& pool = m_key_strings.at(package_id);
-  return get_string_from_pool(pool, result);
+  return arsc::get_string_from_pool(pool, result);
 }
 
 size_t TableSnapshot::package_count() {
@@ -326,7 +310,7 @@ void TableSnapshot::get_type_names(uint32_t package_id,
                                    std::vector<std::string>* out) {
   auto& pool = m_type_strings.at(package_id);
   for (size_t i = 0; i < pool.size(); i++) {
-    out->emplace_back(get_string_from_pool(pool, i));
+    out->emplace_back(arsc::get_string_from_pool(pool, i));
   }
 }
 
@@ -337,7 +321,7 @@ void TableSnapshot::get_configurations(
   uint8_t type_id = 0;
   auto& pool = m_type_strings.at(package_id);
   for (size_t i = 0; i < pool.size(); i++) {
-    if (type_name == get_string_from_pool(pool, i)) {
+    if (type_name == arsc::get_string_from_pool(pool, i)) {
       type_id = i + 1;
       break;
     }
@@ -508,11 +492,11 @@ void TableSnapshot::collect_resource_values(
 }
 
 bool TableSnapshot::is_valid_global_string_idx(size_t idx) const {
-  return is_valid_string_idx(m_global_strings, idx);
+  return arsc::is_valid_string_idx(m_global_strings, idx);
 }
 
 std::string TableSnapshot::get_global_string(size_t idx) const {
-  return get_string_from_pool(m_global_strings, idx);
+  return arsc::get_string_from_pool(m_global_strings, idx);
 }
 
 } // namespace apk
@@ -967,8 +951,8 @@ class XmlStringAttributeCollector : public arsc::XmlFileVisitor {
   bool visit_typed_data(android::Res_value* value) override {
     if (value->dataType == android::Res_value::TYPE_STRING) {
       auto idx = dtohl(value->data);
-      if (apk::is_valid_string_idx(*m_string_pool, idx)) {
-        auto s = apk::get_string_from_pool(*m_string_pool, idx);
+      if (arsc::is_valid_string_idx(*m_string_pool, idx)) {
+        auto s = arsc::get_string_from_pool(*m_string_pool, idx);
         m_values.emplace(s);
       }
     }
@@ -1134,7 +1118,7 @@ int ApkResources::replace_in_xml_string_pool(
                              : (uint32_t)0;
   arsc::ResStringPoolBuilder pool_builder(flags);
   for (size_t i = 0; i < dtohl(pool_ptr->stringCount); i++) {
-    auto existing_str = apk::get_string_from_pool(pool, i);
+    auto existing_str = arsc::get_string_from_pool(pool, i);
     auto replacement = rename_map.find(existing_str);
     if (replacement == rename_map.end()) {
       add_existing_string_to_builder(pool, &pool_builder, i);
@@ -1234,7 +1218,7 @@ void obfuscate_xml_attributes(
       builder.add_string(empty_str.string(), empty_str.size());
     }
     for (size_t i = attribute_count; i < string_count; i++) {
-      auto element = apk::get_string_from_pool(pool, i);
+      auto element = arsc::get_string_from_pool(pool, i);
       if (do_not_obfuscate_elements.count(element) > 0) {
         TRACE(RES, 9, "NOT obfuscating xml file %s", filename.c_str());
         return;
@@ -1423,7 +1407,7 @@ class GlobalStringPoolReader : public arsc::ResourceTableVisitor {
     m_global_strings_header = header;
     auto size = m_global_strings->size();
     for (uint32_t i = 0; i < size; i++) {
-      auto value = apk::get_string_from_pool(*m_global_strings, i);
+      auto value = arsc::get_string_from_pool(*m_global_strings, i);
       m_string_to_idx.emplace(value, i);
       TRACE(RES, 9, "GLOBAL STRING [%u] = %s", i, value.c_str());
     }
@@ -1813,8 +1797,8 @@ void ResourcesArscFile::finalize_resource_table(const ResourceConfig& config) {
       for (auto& info : types) {
         std::string type_name;
         auto type_string_idx = info.spec->id - 1;
-        if (apk::is_valid_string_idx(type_strings, type_string_idx)) {
-          type_name = apk::get_string_from_pool(type_strings, type_string_idx);
+        if (arsc::is_valid_string_idx(type_strings, type_string_idx)) {
+          type_name = arsc::get_string_from_pool(type_strings, type_string_idx);
         }
         if (!type_name.empty() &&
             config.canonical_entry_types.count(type_name) > 0) {
@@ -2001,7 +1985,7 @@ size_t ResourcesArscFile::obfuscate_resource_and_serialize(
       for (auto& ref : refs) {
         auto old = dtohl(ref->index);
         std::string old_string =
-            apk::get_string_from_pool(*key_string_pool, old);
+            arsc::get_string_from_pool(*key_string_pool, old);
         if (keep_resource_specific.count(old_string) > 0 ||
             std::find_if(keep_resource_prefixes.begin(),
                          keep_resource_prefixes.end(),

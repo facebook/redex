@@ -446,7 +446,7 @@ TEST(ResStringPool, AppendStringInXmlLayout) {
   auto pool_ptr =
       (android::ResStringPool_header*)(serialized_data + chunk_size);
   android::ResStringPool pool(pool_ptr, dtohl(pool_ptr->header.size));
-  auto new_str = apk::get_string_from_pool(pool, new_idx);
+  auto new_str = arsc::get_string_from_pool(pool, new_idx);
   EXPECT_EQ(new_str, "test_test");
 
   // Append the data again, we should get a successful result with the same
@@ -728,12 +728,12 @@ TEST(ResStringPoolBuilder, TestAllTheOptions) {
     EXPECT_EQ(pool.setTo(data, size, true), 0);
     EXPECT_EQ(pool.styleCount(), 1);
     EXPECT_EQ(pool.size(), 5);
-    EXPECT_STREQ(apk::get_string_from_pool(pool, 0).c_str(), "Hello world!");
-    EXPECT_STREQ(apk::get_string_from_pool(pool, 1).c_str(), "foo");
-    EXPECT_STREQ(apk::get_string_from_pool(pool, 2).c_str(), "bar");
-    EXPECT_STREQ(apk::get_string_from_pool(pool, 3).c_str(),
+    EXPECT_STREQ(arsc::get_string_from_pool(pool, 0).c_str(), "Hello world!");
+    EXPECT_STREQ(arsc::get_string_from_pool(pool, 1).c_str(), "foo");
+    EXPECT_STREQ(arsc::get_string_from_pool(pool, 2).c_str(), "bar");
+    EXPECT_STREQ(arsc::get_string_from_pool(pool, 3).c_str(),
                  big_std_string.c_str());
-    EXPECT_STREQ(apk::get_string_from_pool(pool, 4).c_str(), "em");
+    EXPECT_STREQ(arsc::get_string_from_pool(pool, 4).c_str(), "em");
   };
 
   {
@@ -1110,7 +1110,7 @@ TEST(ResTable, DeleteAllEntriesInType) {
           EXPECT_EQ(pool.size(), 3);
           std::unordered_set<std::string> string_values;
           for (size_t i = 0; i < pool.size(); i++) {
-            string_values.emplace(apk::get_string_from_pool(pool, i));
+            string_values.emplace(arsc::get_string_from_pool(pool, i));
           }
           EXPECT_EQ(string_values.count("fourth"), 0);
           EXPECT_EQ(string_values.count("first"), 1);
@@ -1122,7 +1122,7 @@ TEST(ResTable, DeleteAllEntriesInType) {
           EXPECT_EQ(load_type_strings(built_arsc_file, &pool), 0);
           std::unordered_set<std::string> string_values;
           for (size_t i = 0; i < pool.size(); i++) {
-            string_values.emplace(apk::get_string_from_pool(pool, i));
+            string_values.emplace(arsc::get_string_from_pool(pool, i));
           }
           EXPECT_EQ(string_values.count("dimen"), 1);
           EXPECT_EQ(string_values.count("style"), 0);

@@ -44,9 +44,6 @@ bool get_bool_attribute_value(const android::ResXMLTree& parser,
                               bool default_value);
 
 namespace apk {
-std::string get_string_from_pool(const android::ResStringPool& pool,
-                                 size_t idx);
-
 class XmlValueCollector : public arsc::XmlFileVisitor {
  public:
   ~XmlValueCollector() override {}
