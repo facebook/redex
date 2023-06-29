@@ -910,8 +910,7 @@ TEST_F(ConstantPropagationTest, ForwardBranchesIf) {
   )");
 
   do_const_prop(code.get(), cp::ConstantPrimitiveAnalyzer(),
-                cp::Transform::Config(),
-                /* editable_cfg */ true);
+                cp::Transform::Config(), ConstPropMode::OnlyForwardTargets);
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -944,8 +943,7 @@ TEST_F(ConstantPropagationTest, ForwardBranchesIfSideEffectFreeComputation) {
   )");
 
   do_const_prop(code.get(), cp::ConstantPrimitiveAnalyzer(),
-                cp::Transform::Config(),
-                /* editable_cfg */ true);
+                cp::Transform::Config(), ConstPropMode::OnlyForwardTargets);
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -979,8 +977,7 @@ TEST_F(ConstantPropagationTest, ForwardBranchesIfSideEffectingComputation) {
   )");
 
   do_const_prop(code.get(), cp::ConstantPrimitiveAnalyzer(),
-                cp::Transform::Config(),
-                /* editable_cfg */ true);
+                cp::Transform::Config(), ConstPropMode::OnlyForwardTargets);
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -1031,8 +1028,7 @@ TEST_F(ConstantPropagationTest, ForwardBranchesSwitch) {
   )");
 
   do_const_prop(code.get(), cp::ConstantPrimitiveAnalyzer(),
-                cp::Transform::Config(),
-                /* editable_cfg */ true);
+                cp::Transform::Config(), ConstPropMode::OnlyForwardTargets);
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -1061,8 +1057,7 @@ TEST_F(ConstantPropagationTest, RedundantNullCheck) {
   )");
 
   do_const_prop(code.get(), cp::ConstantPrimitiveAnalyzer(),
-                cp::Transform::Config(),
-                /* editable_cfg */ false);
+                cp::Transform::Config());
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -1089,8 +1084,7 @@ TEST_F(ConstantPropagationTest, RedundantNullCheckCmp) {
   )");
 
   do_const_prop(code.get(), cp::ConstantPrimitiveAnalyzer(),
-                cp::Transform::Config(),
-                /* editable_cfg */ false);
+                cp::Transform::Config());
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -1150,8 +1144,7 @@ TEST_F(ConstantPropagationTest, ArithmeticFolding) {
 
   DexMethod::make_method("LFoo;.bar:(I)I");
   do_const_prop(code.get(), cp::ConstantPrimitiveAnalyzer(),
-                cp::Transform::Config(),
-                /* editable_cfg */ false);
+                cp::Transform::Config());
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -1238,8 +1231,7 @@ TEST_F(ConstantPropagationTest, ArithmeticFoldingFromLit) {
 
   DexMethod::make_method("LFoo;.bar:(I)I");
   do_const_prop(code.get(), cp::ConstantPrimitiveAnalyzer(),
-                cp::Transform::Config(),
-                /* editable_cfg */ false);
+                cp::Transform::Config());
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -1304,8 +1296,7 @@ TEST_F(ConstantPropagationTest, ArithmeticFoldingToLit8) {
 
   DexMethod::make_method("LFoo;.bar:(I)I");
   do_const_prop(code.get(), cp::ConstantPrimitiveAnalyzer(),
-                cp::Transform::Config(),
-                /* editable_cfg */ false);
+                cp::Transform::Config());
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -1359,8 +1350,7 @@ TEST_F(ConstantPropagationTest, ArithmeticFoldingToLit16) {
   DexMethod::make_method("LFoo;.bar:(I)I");
   auto config = cp::Transform::Config();
   config.to_int_lit16 = true;
-  do_const_prop(code.get(), cp::ConstantPrimitiveAnalyzer(), config,
-                /* editable_cfg */ false);
+  do_const_prop(code.get(), cp::ConstantPrimitiveAnalyzer(), config);
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -1471,4 +1461,54 @@ TEST_F(ConstantPropagationTest, NEChopsOffNumericInterval) {
 
   EXPECT_EQ(assembler::to_s_expr(code.get()),
             assembler::to_s_expr(expected_code.get()));
+}
+
+TEST_F(ConstantPropagationTest,
+       ForwardAfterReplacingMoveResultWithThrowBlockRegression) {
+  // The bug was that "(move-result-pseudo v1)" gets folded to "const v1 2", but
+  // in the wrong block, so that the earlier assigned value 23 leaked through.
+  // This caused the forwarding logic to apply a wrong transformation.
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (load-param v3)
+      (const v1 23)
+      (if-ge v3 v1 :exit)
+
+    (.try_start a)
+    (:start)
+      (const v0 6)
+      (div-int/lit v0 3)
+      (move-result-pseudo v1)
+      (if-lt v1 v3 :exit)
+      (const v0 42)
+      (return v0)
+    (:exit)
+      (return v0)
+    (.try_end a)
+    (.catch (a))
+    (:loop)
+      (goto :loop)
+    )
+  )");
+
+  do_const_prop(code.get(), cp::ConstantPrimitiveAnalyzer(),
+                cp::Transform::Config(), ConstPropMode::All);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (load-param v3)
+      (const v1 23)
+      (if-ge v3 v1 :exit)
+      (const v0 6)
+      (const v1 2)
+      (if-lt v1 v3 :exit)
+      (const v0 42)
+      (return v0)
+    (:exit)
+      (return v0)
+    )
+  )");
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
