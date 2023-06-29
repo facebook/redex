@@ -69,19 +69,20 @@ class TypeAnaysisAwareClosureMarker final
         m_gta(std::move(gta)) {}
 
   void gather_and_push(const DexMethod* method) override {
-    auto gather_mie = [this, method,
-                       insns_methods = std::optional<InsnsMethods>()](
+    // Don't capture `this`, as the lifetime of the gather_mie function may
+    // extend beyond the lifetime of the TypeAnaysisAwareClosureMarker, which
+    // dies when the current thread is out of work.
+    auto gather_mie = [relaxed_keep_class_members =
+                           m_relaxed_keep_class_members,
+                       method, insns_methods = gather_methods_on_insns(method)](
                           auto& mie, auto* refs) mutable {
       bool default_gather_methods =
           mie.type != MFLOW_OPCODE || !opcode::is_an_invoke(mie.insn->opcode());
       MethodReferencesGatherer::default_gather_mie(
-          method, m_relaxed_keep_class_members, mie, refs,
+          method, relaxed_keep_class_members, mie, refs,
           default_gather_methods);
       if (!default_gather_methods) {
-        if (!insns_methods) {
-          insns_methods = gather_methods_on_insns(method);
-        }
-        insns_methods->at(mie.insn).add_to(refs);
+        insns_methods.at(mie.insn).add_to(refs);
       }
     };
     reachability::TransitiveClosureMarker::gather_and_push(
