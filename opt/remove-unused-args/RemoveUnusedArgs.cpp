@@ -746,7 +746,7 @@ std::pair<size_t, LocalDce::Stats> RemoveArgs::update_callsites() {
 
         return callsite_args_removed;
       });
-  return std::make_pair(cnt, std::move(local_dce_stats));
+  return std::make_pair(cnt, local_dce_stats);
 }
 
 void RemoveUnusedArgsPass::run_pass(DexStoresVector& stores,
