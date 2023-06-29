@@ -180,13 +180,13 @@ class SimpleXmlParser : public arsc::XmlFileVisitor {
 
   bool visit_global_strings(android::ResStringPool_header* pool) override {
     LOG_ALWAYS_FATAL_IF(m_global_strings.setTo(pool, dtohl(pool->header.size),
-                                               true) != android::NO_ERROR,
+                                               true) != android::OK,
                         "Invalid string pool");
     return arsc::XmlFileVisitor::visit_global_strings(pool);
   }
 
- android::ResStringPool& global_strings() { return m_global_strings; }
- size_t attribute_count() { return m_attribute_count; }
+  android::ResStringPool& global_strings() { return m_global_strings; }
+  size_t attribute_count() { return m_attribute_count; }
 
  private:
   size_t m_attribute_count{0};
