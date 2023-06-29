@@ -38,7 +38,23 @@ bool Transform::replace_with_const(const ConstantEnvironment& env,
   }
   if (opcode::is_a_move_result_pseudo(insn->opcode())) {
     auto primary_it = cfg_it.cfg().primary_instruction_of_move_result(cfg_it);
-    m_mutation->replace(primary_it, replacement);
+    always_assert(!replacement.empty());
+    if (replacement.size() == 1) {
+      always_assert(opcode::is_a_literal_const(replacement.front()->opcode()));
+      // The move-result-pseudo instruction might be in a different block. We
+      // cannot use the CFGMutator's replace functionality, as it would put the
+      // replacement into the wrong block --- the block of the primary
+      // instruction, not the following block. This is not generally a problem,
+      // except that we might later want to run forward_targets, which requires
+      // blocks, their recorded entry/state states and containing instructions
+      // to be consistent. So we work around that here by directly inserting in
+      // the right place...
+      cfg_it.cfg().insert_after(cfg_it, replacement);
+      m_mutation->remove(primary_it);
+    } else {
+      always_assert(opcode::may_throw(replacement.front()->opcode()));
+      m_mutation->replace(primary_it, replacement);
+    }
   } else {
     m_mutation->replace(cfg_it, replacement);
   }
