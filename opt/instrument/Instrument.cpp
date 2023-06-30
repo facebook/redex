@@ -433,8 +433,6 @@ void count_source_block_chain_length(DexStoresVector& stores, PassManager& pm) {
 
 } // namespace
 
-constexpr const char* InstrumentPass::STATS_FIELD_NAME;
-
 // Find a sequence of opcode that creates a static array. Patch the array size.
 void InstrumentPass::patch_array_size(DexClass* analysis_cls,
                                       const std::string_view array_name,

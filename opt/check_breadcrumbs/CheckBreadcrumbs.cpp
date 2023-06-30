@@ -177,7 +177,7 @@ void print_allowed_violations_per_class(
     std::ostringstream fields_detail;
     auto fields = illegal_fields.find(type);
     if (fields != illegal_fields.end()) {
-      for (const auto f : fields->second) {
+      for (const auto& f : fields->second) {
         fields_detail << "    " << f.first->get_deobfuscated_name_or_empty()
                       << " (" << get_store_name(xstores, f.first->get_type())
                       << ")" << std::endl;
@@ -188,7 +188,7 @@ void print_allowed_violations_per_class(
       std::ostringstream method_detail;
       auto protos = illegal_method.find(method);
       if (protos != illegal_method.end()) {
-        for (const auto proto_type : protos->second) {
+        for (const auto& proto_type : protos->second) {
           method_detail << "      Proto type "
                         << show_deobfuscated(proto_type.first) << " ("
                         << get_store_name(xstores, proto_type.first) << ")"
@@ -197,7 +197,7 @@ void print_allowed_violations_per_class(
       }
       auto type_insns = illegal_type.find(method);
       if (type_insns != illegal_type.end()) {
-        for (const auto insn : type_insns->second) {
+        for (const auto& insn : type_insns->second) {
           method_detail << "      Instruction type "
                         << show_deobfuscated(insn.first) << " ("
                         << get_store_name(xstores, insn.first->get_type())
@@ -206,7 +206,7 @@ void print_allowed_violations_per_class(
       }
       auto field_type_insns = illegal_field_type.find(method);
       if (field_type_insns != illegal_field_type.end()) {
-        for (const auto insn : field_type_insns->second) {
+        for (const auto& insn : field_type_insns->second) {
           method_detail
               << "      Field type " << show_deobfuscated(insn.first) << " ("
               << get_store_name(xstores, insn.first->get_field()->get_type())
@@ -215,7 +215,7 @@ void print_allowed_violations_per_class(
       }
       auto field_cls_insns = illegal_field_cls.find(method);
       if (field_cls_insns != illegal_field_cls.end()) {
-        for (const auto insn : field_cls_insns->second) {
+        for (const auto& insn : field_cls_insns->second) {
           method_detail
               << "      Field class " << show_deobfuscated(insn.first) << " ("
               << get_store_name(xstores, insn.first->get_field()->get_class())
@@ -224,7 +224,7 @@ void print_allowed_violations_per_class(
       }
       auto method_calls = illegal_method_call.find(method);
       if (method_calls != illegal_method_call.end()) {
-        for (const auto insn : method_calls->second) {
+        for (const auto& insn : method_calls->second) {
           method_detail
               << "      Callee class " << show_deobfuscated(insn.first) << " ("
               << get_store_name(xstores, insn.first->get_method()->get_class())
@@ -444,7 +444,7 @@ size_t Breadcrumbs::process_illegal_elements(
        << method->get_deobfuscated_name_or_empty() << " ("
        << get_store_name(xstores, method->get_class()) << ")" << std::endl;
     num_illegal_cross_store_refs += insns.size();
-    for (const auto insn : insns) {
+    for (const auto& insn : insns) {
       ss << "\t" << show_deobfuscated(insn.first) << " ("
          << get_store_name(xstores, get_type_from_insn(insn.first)) << ")  By  "
          << show_deobfuscated(insn.second) << " ("
@@ -475,7 +475,7 @@ void Breadcrumbs::report_illegal_refs(bool fail_if_illegal_refs,
     ss << "Illegal fields in class "
        << type_class(type)->get_deobfuscated_name_or_empty() << " ("
        << get_store_name(m_xstores, type) << ")" << std::endl;
-    for (const auto field : fields) {
+    for (const auto& field : fields) {
       ss << "\t" << field.first->get_deobfuscated_name_or_empty() << " ("
          << get_store_name(m_xstores, field.first->get_type()) << ")  By  "
          << show_deobfuscated(field.second) << " ("
@@ -496,7 +496,7 @@ void Breadcrumbs::report_illegal_refs(bool fail_if_illegal_refs,
     num_illegal_method_defs++;
     ss << "Illegal types in method proto " << show_deobfuscated(method) << " ("
        << get_store_name(m_xstores, method->get_class()) << ")" << std::endl;
-    for (const auto t : types) {
+    for (const auto& t : types) {
       ss << "\t" << show_deobfuscated(t.first) << " ("
          << get_store_name(m_xstores, t.first) << ")  By  "
          << show_deobfuscated(t.second) << " ("
