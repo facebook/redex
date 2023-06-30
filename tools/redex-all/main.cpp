@@ -1279,6 +1279,9 @@ void redex_backend(ConfigFiles& conf,
   auto string_sort_mode = get_string_sort_mode(conf);
 
   {
+    redex_assert(!stores.empty());
+    const auto& dex_magic = stores[0].get_dex_magic();
+    auto min_sdk = manager.get_redex_options().min_sdk;
     ScopedMemStats wod_mem_stats{mem_stats_enabled, reset_hwm};
     for (size_t store_number = 0; store_number < stores.size();
          ++store_number) {
@@ -1287,17 +1290,17 @@ void redex_backend(ConfigFiles& conf,
       auto code_sort_mode = get_code_sort_mode(conf, store_name);
       Timer t("Writing optimized dexes");
       for (size_t i = 0; i < store.get_dexen().size(); i++) {
-        auto gtypes = std::make_shared<GatheredTypes>(&store.get_dexen()[i]);
+        DexClasses* classes = &store.get_dexen()[i];
+        auto gtypes = std::make_shared<GatheredTypes>(classes);
 
         if (post_lowering) {
-          post_lowering->load_dex_indexes(
-              conf, manager.get_redex_options().min_sdk, &store.get_dexen()[i],
-              *gtypes, store_name, i);
+          post_lowering->load_dex_indexes(conf, min_sdk, classes, *gtypes,
+                                          store_name, i);
         }
 
         auto this_dex_stats = write_classes_to_dex(
             redex::get_dex_output_name(output_dir, store, i),
-            &store.get_dexen()[i],
+            classes,
             gtypes,
             locator_index,
             store_number,
@@ -1309,9 +1312,9 @@ void redex_backend(ConfigFiles& conf,
             needs_addresses ? &method_to_id : nullptr,
             needs_addresses ? &code_debug_lines : nullptr,
             is_iodi(dik) ? &iodi_metadata : nullptr,
-            stores[0].get_dex_magic(),
+            dex_magic,
             dex_output_config,
-            manager.get_redex_options().min_sdk,
+            min_sdk,
             code_sort_mode,
             string_sort_mode);
 
