@@ -204,7 +204,7 @@ class ConcurrentContainer {
    */
   std::mutex& get_lock(const Key& key) const {
     size_t slot = Hash()(key) % n_slots;
-    return get_lock(slot);
+    return get_lock_by_slot(slot);
   }
 
   /*
@@ -242,7 +242,7 @@ class ConcurrentContainer {
 
   const Container& get_container(size_t slot) const { return m_slots[slot]; }
 
-  std::mutex& get_lock(size_t slot) const { return m_locks[slot]; }
+  std::mutex& get_lock_by_slot(size_t slot) const { return m_locks[slot]; }
 
   mutable std::mutex m_locks[n_slots];
   Container m_slots[n_slots];
@@ -312,7 +312,7 @@ class ConcurrentMapContainer
    */
   Value at(const Key& key) const {
     size_t slot = Hash()(key) % n_slots;
-    std::unique_lock<std::mutex> lock(this->get_lock(slot));
+    std::unique_lock<std::mutex> lock(this->get_lock_by_slot(slot));
     return this->get_container(slot).at(KeyProjection()(key));
   }
 
@@ -349,7 +349,7 @@ class ConcurrentMapContainer
    */
   Value get(const Key& key, Value default_value) const {
     size_t slot = Hash()(key) % n_slots;
-    std::unique_lock<std::mutex> lock(this->get_lock(slot));
+    std::unique_lock<std::mutex> lock(this->get_lock_by_slot(slot));
     const auto& map = this->get_container(slot);
     const auto& it = map.find(KeyProjection()(key));
     if (it == map.end()) {
@@ -369,7 +369,7 @@ class ConcurrentMapContainer
    */
   bool insert(const std::pair<Key, Value>& entry) {
     size_t slot = Hash()(entry.first) % n_slots;
-    std::unique_lock<std::mutex> lock(this->get_lock(slot));
+    std::unique_lock<std::mutex> lock(this->get_lock_by_slot(slot));
     auto& map = this->get_container(slot);
     return map
         .insert(std::make_pair(KeyProjection()(entry.first), entry.second))
@@ -400,7 +400,7 @@ class ConcurrentMapContainer
    */
   void insert_or_assign(const std::pair<Key, Value>& entry) {
     size_t slot = Hash()(entry.first) % n_slots;
-    std::unique_lock<std::mutex> lock(this->get_lock(slot));
+    std::unique_lock<std::mutex> lock(this->get_lock_by_slot(slot));
     auto& map = this->get_container(slot);
     map[KeyProjection()(entry.first)] = entry.second;
   }
@@ -412,7 +412,7 @@ class ConcurrentMapContainer
   bool emplace(Args&&... args) {
     std::pair<Key, Value> entry(std::forward<Args>(args)...);
     size_t slot = Hash()(entry.first) % n_slots;
-    std::unique_lock<std::mutex> lock(this->get_lock(slot));
+    std::unique_lock<std::mutex> lock(this->get_lock_by_slot(slot));
     auto& map = this->get_container(slot);
     return map
         .emplace(KeyProjection()(std::move(entry.first)),
@@ -440,7 +440,7 @@ class ConcurrentMapContainer
       typename UpdateFn = const std::function<void(const Key&, Value&, bool)>&>
   void update(const Key& key, UpdateFn updater) {
     size_t slot = Hash()(key) % n_slots;
-    std::unique_lock<std::mutex> lock(this->get_lock(slot));
+    std::unique_lock<std::mutex> lock(this->get_lock_by_slot(slot));
     auto& map = this->get_container(slot);
     auto it = map.find(KeyProjection()(key));
     if (it == map.end()) {
@@ -511,7 +511,7 @@ class ConcurrentSet final
    */
   bool insert(const Key& key) {
     size_t slot = Hash()(key) % n_slots;
-    std::unique_lock<std::mutex> lock(this->get_lock(slot));
+    std::unique_lock<std::mutex> lock(this->get_lock_by_slot(slot));
     auto& set = this->get_container(slot);
     return set.insert(key).second;
   }
@@ -542,7 +542,7 @@ class ConcurrentSet final
   bool emplace(Args&&... args) {
     Key key(std::forward<Args>(args)...);
     size_t slot = Hash()(key) % n_slots;
-    std::unique_lock<std::mutex> lock(this->get_lock(slot));
+    std::unique_lock<std::mutex> lock(this->get_lock_by_slot(slot));
     auto& set = this->get_container(slot);
     return set.emplace(std::move(key)).second;
   }
@@ -582,7 +582,7 @@ class InsertOnlyConcurrentSetContainer final
    */
   std::pair<const Key*, bool> insert(const Key& key) {
     size_t slot = Hash()(key) % n_slots;
-    std::unique_lock<std::mutex> lock(this->get_lock(slot));
+    std::unique_lock<std::mutex> lock(this->get_lock_by_slot(slot));
     auto& set = this->get_container(slot);
     // `std::unordered_set::insert` does not invalidate references,
     // thus it is safe to return a reference on the object.
@@ -596,7 +596,7 @@ class InsertOnlyConcurrentSetContainer final
    */
   const Key* get(const Key& key) const {
     size_t slot = Hash()(key) % n_slots;
-    std::unique_lock<std::mutex> lock(this->get_lock(slot));
+    std::unique_lock<std::mutex> lock(this->get_lock_by_slot(slot));
     const auto& set = this->get_container(slot);
     auto result = set.find(key);
     if (result == set.end()) {
