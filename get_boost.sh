@@ -27,4 +27,4 @@ tar --bzip2 -xf "$BOOST_TAR_LOCAL"
 
 cd "$BOOST_DIR"
 ./bootstrap.sh --with-libraries=filesystem,iostreams,program_options,regex,system,thread
-./b2 -d0 install
+./b2 -j 4 -d0 install
