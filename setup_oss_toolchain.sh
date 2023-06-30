@@ -47,7 +47,7 @@ function install_protobuf3_from_source {
 
     pushd protobuf-3.17.3
     ./configure
-    make V=0 && make install V=0
+    make -j 4 V=0 && make install V=0
 }
 
 function install_from_apt {
