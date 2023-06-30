@@ -937,30 +937,22 @@ void ApkResources::collect_layout_classes_and_attributes_for_file(
 }
 
 namespace {
-class XmlStringAttributeCollector : public arsc::XmlFileVisitor {
+class XmlStringAttributeCollector : public arsc::SimpleXmlParser {
  public:
   ~XmlStringAttributeCollector() override {}
-
-  bool visit_global_strings(android::ResStringPool_header* pool) override {
-    always_assert_log(m_string_pool->setTo(pool, dtohl(pool->header.size),
-                                           true) == android::NO_ERROR,
-                      "Failed to parse xml strings!");
-    return true;
-  }
 
   bool visit_typed_data(android::Res_value* value) override {
     if (value->dataType == android::Res_value::TYPE_STRING) {
       auto idx = dtohl(value->data);
-      if (arsc::is_valid_string_idx(*m_string_pool, idx)) {
-        auto s = arsc::get_string_from_pool(*m_string_pool, idx);
+      auto& pool = global_strings();
+      if (arsc::is_valid_string_idx(pool, idx)) {
+        auto s = arsc::get_string_from_pool(pool, idx);
         m_values.emplace(s);
       }
     }
     return true;
   }
 
-  std::shared_ptr<android::ResStringPool> m_string_pool =
-      std::make_shared<android::ResStringPool>();
   std::unordered_set<std::string> m_values;
 };
 } // namespace

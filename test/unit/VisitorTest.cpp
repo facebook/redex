@@ -140,23 +140,17 @@ class StringTestVisitor : public arsc::StringPoolRefVisitor {
   std::unordered_set<uint32_t> m_key_strings_seen;
 };
 
-class XmlStringCollector : public arsc::XmlFileVisitor {
+class XmlStringCollector : public arsc::SimpleXmlParser {
  public:
   ~XmlStringCollector() override {}
 
   XmlStringCollector() {}
 
-  bool visit_global_strings(android::ResStringPool_header* pool) override {
-    LOG_ALWAYS_FATAL_IF(m_global_strings.setTo(pool, dtohl(pool->header.size),
-                                               true) != android::NO_ERROR,
-                        "Invalid string pool");
-    return arsc::XmlFileVisitor::visit_global_strings(pool);
-  }
-
   std::string get_global_string(const android::ResStringPool_ref& ref) {
     auto idx = dtohl(ref.index);
     size_t len;
-    auto chars = m_global_strings.stringAt(idx, &len);
+    auto& pool = global_strings();
+    auto chars = pool.stringAt(idx, &len);
     always_assert_log(chars != nullptr, "invalid string ref %d", idx);
     android::String16 s16(chars, len);
     android::String8 s8(s16);
@@ -164,7 +158,7 @@ class XmlStringCollector : public arsc::XmlFileVisitor {
   }
 
   bool visit_string_ref(android::ResStringPool_ref* ref) override {
-    auto ret = XmlFileVisitor::visit_string_ref(ref);
+    auto ret = SimpleXmlParser::visit_string_ref(ref);
     auto idx = dtohl(ref->index);
     if (idx != 0xFFFFFFFF) {
       auto str = get_global_string(*ref);
@@ -173,7 +167,6 @@ class XmlStringCollector : public arsc::XmlFileVisitor {
     return ret;
   }
 
-  android::ResStringPool m_global_strings;
   std::unordered_set<std::string> m_encountered_strings;
 };
 } // namespace

@@ -179,9 +179,8 @@ class SimpleXmlParser : public arsc::XmlFileVisitor {
   }
 
   bool visit_global_strings(android::ResStringPool_header* pool) override {
-    LOG_ALWAYS_FATAL_IF(m_global_strings.setTo(pool, dtohl(pool->header.size),
-                                               true) != android::OK,
-                        "Invalid string pool");
+    auto status = m_global_strings.setTo(pool, dtohl(pool->header.size), true);
+    LOG_ALWAYS_FATAL_IF(status != android::OK, "Invalid string pool");
     return arsc::XmlFileVisitor::visit_global_strings(pool);
   }
 
