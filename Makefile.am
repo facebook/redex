@@ -3,7 +3,44 @@ AUTOMAKE_OPTIONS = foreign
 SUBDIRS = . test
 
 ACLOCAL_AMFLAGS = -I m4
-AM_CXXFLAGS = --std=gnu++17 -O3 -Wall -g
+
+# Disable some warnings so we can enable -Werror for the rest.
+#
+# Using -Wno- as that is explicitly specified as backwards-compatible, while
+# I cannot find the same for the -Wno-error= form.
+
+# attributes: unsupported CFI attribute warnings.
+# comment: unhappy with use of "\" in comments, which we use for diagrams.
+# unknown-warning-option: Clang doesn't follow GCC's "no-" backwards approach.
+DISABLED_WARNINGS_HARD = \
+  -Wno-attributes \
+  -Wno-comment \
+  -Wno-unknown-warning-option
+
+# TODO: Minimize this list.
+DISABLED_WARNINGS = \
+  $(DISABLED_WARNINGS_HARD) \
+  -Wno-class-memaccess \
+  -Wno-deprecated-declarations \
+  -Wno-format \
+  -Wno-format-truncation \
+  -Wno-format-zero-length \
+  -Wno-invalid-offsetof \
+  -Wno-maybe-uninitialized \
+  -Wno-parentheses \
+  -Wno-return-type \
+  -Wno-shift-count-overflow \
+  -Wno-sign-compare \
+  -Wno-strict-aliasing \
+  -Wno-stringop-overflow \
+  -Wno-uninitialized \
+  -Wno-unused-but-set-variable \
+  -Wno-unused-function \
+  -Wno-unused-private-field \
+  -Wno-unused-result \
+  -Wno-unused-variable
+
+AM_CXXFLAGS = --std=gnu++17 -O3 -Wall -Werror $(DISABLED_WARNINGS) -g
 
 include $(top_srcdir)/Makefile.inc
 
