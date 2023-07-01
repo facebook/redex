@@ -142,7 +142,7 @@ commands:
           name: Configure
           command: |
             autoreconf -ivf
-            ./configure << parameters.configure_extra >>
+            ./configure --enable-protobuf << parameters.configure_extra >>
 
       # Actual build.
       - run:
