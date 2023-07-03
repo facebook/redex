@@ -40,7 +40,7 @@ void scope_info(const ClassScopes& class_scopes) {
         if (cls == nullptr || cls->is_external()) return;
         auto scope_meth_count = scope->methods.size();
         if (scope_meth_count > 100) {
-          TRACE(OBFUSCATE, 2, "BIG SCOPE: %ld on %s", scope_meth_count,
+          TRACE(OBFUSCATE, 2, "BIG SCOPE: %zu on %s", scope_meth_count,
                 SHOW(scope->methods[0].first));
         }
         // class is internal
@@ -71,9 +71,9 @@ void scope_info(const ClassScopes& class_scopes) {
   };
   TRACE(OBFUSCATE, 2,
         "scopes (scope count, method count)"
-        "easy (%ld, %ld), "
-        "impl (%ld, %ld), "
-        "can't rename (%ld, %ld)\n",
+        "easy (%zu, %zu), "
+        "impl (%zu, %zu), "
+        "can't rename (%zu, %zu)\n",
         scope_count(easy_scopes), method_count(easy_scopes),
         scope_count(impl_scopes), method_count(impl_scopes),
         scope_count(cant_rename_scopes), method_count(cant_rename_scopes));
@@ -342,7 +342,7 @@ int VirtualRenamer::rename_interface_scopes(int& seed) {
           const TypeSet& intfs) {
         // if any scope cannot be renamed let it go, we don't
         // rename anything
-        TRACE(OBFUSCATE, 5, "Got %ld scopes for %s%s", scopes.size(),
+        TRACE(OBFUSCATE, 5, "Got %zu scopes for %s%s", scopes.size(),
               SHOW(name), SHOW(proto));
         for (auto& scope : scopes) {
           redex_assert(type_class(scope->type) != nullptr);
@@ -441,7 +441,7 @@ int VirtualRenamer::rename_virtual_scopes(const DexType* type, int& seed) {
               });
     // rename all scopes at this level that are not interface
     // and can be renamed
-    TRACE(OBFUSCATE, 5, "Found %ld scopes in %s", scopes_copy.size(),
+    TRACE(OBFUSCATE, 5, "Found %zu scopes in %s", scopes_copy.size(),
           SHOW(type));
     for (auto& scope : scopes_copy) {
       if (!can_rename_scope(scope)) {
@@ -560,12 +560,12 @@ size_t rename_virtuals(
   const auto obj_t = type::java_lang_Object();
   int seed = 0;
   size_t renamed = vr.rename_virtual_scopes(obj_t, seed);
-  TRACE(OBFUSCATE, 2, "Virtual renamed: %ld", renamed);
+  TRACE(OBFUSCATE, 2, "Virtual renamed: %zu", renamed);
 
   // rename interfaces
   std::unordered_set<const VirtualScope*> visited;
   size_t intf_renamed = vr.rename_interface_scopes(seed);
-  TRACE(OBFUSCATE, 2, "Interface renamed: %ld", intf_renamed);
+  TRACE(OBFUSCATE, 2, "Interface renamed: %zu", intf_renamed);
   TRACE(OBFUSCATE, 2, "MAX seed: %d", seed);
   return renamed + intf_renamed;
 }

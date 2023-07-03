@@ -68,7 +68,7 @@ struct Rebinder {
     void insert(T tin) { insert(tin, T()); }
 
     void print(const char* tag, PassManager& mgr) const {
-      TRACE(BIND, 1, "%11s [call sites: %6d, old refs: %6lu, new refs: %6lu]",
+      TRACE(BIND, 1, "%11s [call sites: %6d, old refs: %6zu, new refs: %6zu]",
             tag, count, in.size(), out.size());
 
       using std::string;

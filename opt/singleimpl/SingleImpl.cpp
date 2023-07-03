@@ -160,8 +160,8 @@ void SingleImplPass::run_pass(DexStoresVector& stores,
   }
 
   TRACE(INTF, 2, "\ttotal steps %d", max_steps);
-  TRACE(INTF, 1, "Removed interfaces %ld", removed_count);
-  TRACE(INTF, 1, "Updated invoke-interface to invoke-virtual %ld",
+  TRACE(INTF, 1, "Removed interfaces %zu", removed_count);
+  TRACE(INTF, 1, "Updated invoke-interface to invoke-virtual %zu",
         s_invoke_intf_count - previous_invoke_intf_count);
 
   mgr.incr_metric(METRIC_REMOVED_INTERFACES, stats.removed_interfaces);

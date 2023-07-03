@@ -136,8 +136,8 @@ class RemoveClasses {
     mgr.set_metric(root_name + "_num_total_usages", m_num_usages);
     mgr.set_metric(root_name + "_num_removed_usages", m_num_removed_usages);
 
-    TRACE(BLD_PATTERN, 1, "num_classes_excluded %lu", m_excluded_types.size());
-    TRACE(BLD_PATTERN, 1, "num_classes_removed %lu", m_removed_types.size());
+    TRACE(BLD_PATTERN, 1, "num_classes_excluded %zu", m_excluded_types.size());
+    TRACE(BLD_PATTERN, 1, "num_classes_removed %zu", m_removed_types.size());
     for (const auto& type : m_excluded_types) {
       TRACE(BLD_PATTERN, 2, "Excluded type: %s", SHOW(type));
     }
@@ -149,7 +149,7 @@ class RemoveClasses {
       std::stringstream metric;
       metric << "_num_inline_iteration_" << pair.first;
       mgr.incr_metric(root_name + metric.str(), pair.second);
-      TRACE(BLD_PATTERN, 4, "%s_num_inline_iteration %ld %ld",
+      TRACE(BLD_PATTERN, 4, "%s_num_inline_iteration %zu %zu",
             root_name.c_str(), pair.first, pair.second);
     }
   }
@@ -446,7 +446,7 @@ void RemoveBuilderPatternPass::run_pass(DexStoresVector& stores,
       scope, conf.create_init_class_insns());
 
   for (const auto& root : m_roots) {
-    TRACE(BLD_PATTERN, 1, "removing root %s w/ %ld iterations", SHOW(root),
+    TRACE(BLD_PATTERN, 1, "removing root %s w/ %zu iterations", SHOW(root),
           m_max_num_inline_iteration);
     Timer t("root_iteration");
     RemoveClasses rm_builder_pattern(

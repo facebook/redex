@@ -1773,7 +1773,7 @@ std::vector<Block*> ControlFlowGraph::order(
                                 : wto_chains(std::move(wto));
 
   always_assert_log(result.size() == m_blocks.size(),
-                    "result has %lu blocks, m_blocks has %lu", result.size(),
+                    "result has %zu blocks, m_blocks has %zu", result.size(),
                     m_blocks.size());
 
   // The entry block must always be first.

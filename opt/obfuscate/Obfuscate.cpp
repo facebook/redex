@@ -249,9 +249,9 @@ void obfuscate(Scope& scope,
   debug_logging(scope);
 
   TRACE(OBFUSCATE, 1,
-        "%s: %ld\n%s: %ld\n"
-        "%s: %ld\n%s: %ld\n"
-        "%s: %ld\n%s: %ld",
+        "%s: %zu\n%s: %zu\n"
+        "%s: %zu\n%s: %zu\n"
+        "%s: %zu\n%s: %zu",
         METRIC_FIELD_TOTAL, stats.fields_total, METRIC_FIELD_RENAMED,
         stats.fields_renamed, METRIC_DMETHODS_TOTAL, stats.dmethods_total,
         METRIC_DMETHODS_RENAMED, stats.dmethods_renamed, METRIC_VMETHODS_TOTAL,

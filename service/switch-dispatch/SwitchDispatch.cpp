@@ -470,7 +470,7 @@ DexMethodRef* create_dispatch_method_ref(
     const std::map<SwitchIndices, DexMethod*>& indices_to_callee) {
 
   if (indices_to_callee.size() < 2) {
-    LOG_AND_RETURN("Not enough methods(should >= 2) in indices_to_callee %lu\n",
+    LOG_AND_RETURN("Not enough methods(should >= 2) in indices_to_callee %zu\n",
                    indices_to_callee.size());
   }
   auto first_method = indices_to_callee.begin()->second;

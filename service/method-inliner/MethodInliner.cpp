@@ -280,20 +280,20 @@ std::unordered_set<DexMethod*> gather_non_virtual_methods(
     }
   }
 
-  TRACE(INLINE, 2, "All methods count: %ld", all_methods);
-  TRACE(INLINE, 2, "Direct methods count: %ld", direct_methods);
-  TRACE(INLINE, 2, "Virtual methods count: %ld", all_methods - direct_methods);
-  TRACE(INLINE, 2, "Direct methods no code: %ld", direct_no_code);
-  TRACE(INLINE, 2, "Direct methods with code: %ld",
+  TRACE(INLINE, 2, "All methods count: %zu", all_methods);
+  TRACE(INLINE, 2, "Direct methods count: %zu", direct_methods);
+  TRACE(INLINE, 2, "Virtual methods count: %zu", all_methods - direct_methods);
+  TRACE(INLINE, 2, "Direct methods no code: %zu", direct_no_code);
+  TRACE(INLINE, 2, "Direct methods with code: %zu",
         direct_methods - direct_no_code);
-  TRACE(INLINE, 2, "Constructors with or without code: %ld", init);
-  TRACE(INLINE, 2, "Static constructors: %ld", clinit);
-  TRACE(INLINE, 2, "Static methods: %ld", static_methods);
-  TRACE(INLINE, 2, "Private methods: %ld", private_methods);
-  TRACE(INLINE, 2, "Virtual methods non virtual count: %ld", non_virt_methods);
-  TRACE(INLINE, 2, "Non virtual no code count: %ld", non_virtual_no_code);
-  TRACE(INLINE, 2, "Non virtual no strip count: %ld", non_virt_dont_strip);
-  TRACE(INLINE, 2, "Don't strip inlinable methods count: %ld", dont_strip);
+  TRACE(INLINE, 2, "Constructors with or without code: %zu", init);
+  TRACE(INLINE, 2, "Static constructors: %zu", clinit);
+  TRACE(INLINE, 2, "Static methods: %zu", static_methods);
+  TRACE(INLINE, 2, "Private methods: %zu", private_methods);
+  TRACE(INLINE, 2, "Virtual methods non virtual count: %zu", non_virt_methods);
+  TRACE(INLINE, 2, "Non virtual no code count: %zu", non_virtual_no_code);
+  TRACE(INLINE, 2, "Non virtual no strip count: %zu", non_virt_dont_strip);
+  TRACE(INLINE, 2, "Don't strip inlinable methods count: %zu", dont_strip);
   return methods;
 }
 
@@ -836,39 +836,39 @@ void run_inliner(DexStoresVector& stores,
     }
   }
 
-  TRACE(INLINE, 3, "recursive %ld", inliner.get_info().recursive);
-  TRACE(INLINE, 3, "max_call_stack_depth %ld",
+  TRACE(INLINE, 3, "recursive %zu", inliner.get_info().recursive);
+  TRACE(INLINE, 3, "max_call_stack_depth %zu",
         inliner.get_info().max_call_stack_depth);
-  TRACE(INLINE, 3, "waited seconds %ld", inliner.get_info().waited_seconds);
-  TRACE(INLINE, 3, "blocklisted meths %ld",
+  TRACE(INLINE, 3, "waited seconds %zu", inliner.get_info().waited_seconds);
+  TRACE(INLINE, 3, "blocklisted meths %zu",
         (size_t)inliner.get_info().blocklisted);
-  TRACE(INLINE, 3, "virtualizing methods %ld",
+  TRACE(INLINE, 3, "virtualizing methods %zu",
         (size_t)inliner.get_info().need_vmethod);
-  TRACE(INLINE, 3, "invoke super %ld", (size_t)inliner.get_info().invoke_super);
-  TRACE(INLINE, 3, "escaped virtual %ld",
+  TRACE(INLINE, 3, "invoke super %zu", (size_t)inliner.get_info().invoke_super);
+  TRACE(INLINE, 3, "escaped virtual %zu",
         (size_t)inliner.get_info().escaped_virtual);
-  TRACE(INLINE, 3, "known non public virtual %ld",
+  TRACE(INLINE, 3, "known non public virtual %zu",
         (size_t)inliner.get_info().non_pub_virtual);
-  TRACE(INLINE, 3, "non public ctor %ld",
+  TRACE(INLINE, 3, "non public ctor %zu",
         (size_t)inliner.get_info().non_pub_ctor);
-  TRACE(INLINE, 3, "unknown field %ld",
+  TRACE(INLINE, 3, "unknown field %zu",
         (size_t)inliner.get_info().escaped_field);
-  TRACE(INLINE, 3, "non public field %ld",
+  TRACE(INLINE, 3, "non public field %zu",
         (size_t)inliner.get_info().non_pub_field);
-  TRACE(INLINE, 3, "throws %ld", (size_t)inliner.get_info().throws);
-  TRACE(INLINE, 3, "multiple returns %ld",
+  TRACE(INLINE, 3, "throws %zu", (size_t)inliner.get_info().throws);
+  TRACE(INLINE, 3, "multiple returns %zu",
         (size_t)inliner.get_info().multi_ret);
-  TRACE(INLINE, 3, "references cross stores %ld",
+  TRACE(INLINE, 3, "references cross stores %zu",
         (size_t)inliner.get_info().cross_store);
-  TRACE(INLINE, 3, "api level mismatches %ld",
+  TRACE(INLINE, 3, "api level mismatches %zu",
         (size_t)inliner.get_info().api_level_mismatch);
-  TRACE(INLINE, 3, "illegal references %ld",
+  TRACE(INLINE, 3, "illegal references %zu",
         (size_t)inliner.get_info().problematic_refs);
-  TRACE(INLINE, 3, "not found %ld", (size_t)inliner.get_info().not_found);
-  TRACE(INLINE, 3, "caller too large %ld",
+  TRACE(INLINE, 3, "not found %zu", (size_t)inliner.get_info().not_found);
+  TRACE(INLINE, 3, "caller too large %zu",
         (size_t)inliner.get_info().caller_too_large);
   TRACE(INLINE, 3, "inlined ctors %zu", inlined_init_count);
-  TRACE(INLINE, 1, "%ld inlined calls over %ld methods and %ld methods removed",
+  TRACE(INLINE, 1, "%zu inlined calls over %zu methods and %zu methods removed",
         (size_t)inliner.get_info().calls_inlined, inlined_count,
         deleted.size());
 

@@ -249,27 +249,27 @@ TypeSet MergeabilityChecker::get_non_mergeables() {
   size_t prev_size = 0;
 
   exclude_unsupported_cls_property(non_mergeables);
-  TRACE(CLMG, 4, "Non mergeables (no delete) %ld", non_mergeables.size());
+  TRACE(CLMG, 4, "Non mergeables (no delete) %zu", non_mergeables.size());
   prev_size = non_mergeables.size();
 
   exclude_unsupported_bytecode(non_mergeables);
   TRACE(CLMG,
         4,
-        "Non mergeables (opcodes) %ld",
+        "Non mergeables (opcodes) %zu",
         non_mergeables.size() - prev_size);
   prev_size = non_mergeables.size();
 
   exclude_static_fields(non_mergeables);
   TRACE(CLMG,
         4,
-        "Non mergeables (static fields) %ld",
+        "Non mergeables (static fields) %zu",
         non_mergeables.size() - prev_size);
   prev_size = non_mergeables.size();
 
   exclude_unsafe_sdk_and_store_refs(non_mergeables);
   TRACE(CLMG,
         4,
-        "Non mergeables (unsafe refs) %ld",
+        "Non mergeables (unsafe refs) %zu",
         non_mergeables.size() - prev_size);
   return non_mergeables;
 }

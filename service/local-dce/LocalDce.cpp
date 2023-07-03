@@ -115,7 +115,7 @@ LocalDce::get_dead_instructions(const cfg::ControlFlowGraph& cfg,
       auto prev_liveness = liveness.at(b->id());
       auto& bliveness = liveness.at(b->id());
       bliveness.reset();
-      TRACE(DCE, 5, "B%lu: %s", b->id(), show(bliveness).c_str());
+      TRACE(DCE, 5, "B%zu: %s", b->id(), show(bliveness).c_str());
 
       // Compute live-out for this block from its successors.
       for (auto& s : b->succs()) {
@@ -124,7 +124,7 @@ LocalDce::get_dead_instructions(const cfg::ControlFlowGraph& cfg,
         }
         TRACE(DCE,
               5,
-              "  S%lu: %s",
+              "  S%zu: %s",
               s->target()->id(),
               SHOW(liveness.at(s->target()->id())));
         bliveness |= liveness.at(s->target()->id());

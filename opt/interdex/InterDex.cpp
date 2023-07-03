@@ -168,12 +168,12 @@ void print_stats(DexesStructure* dexes_structure) {
         dexes_structure->get_num_scroll_dexes());
 
   TRACE(IDEX, 2, "Global stats:");
-  TRACE(IDEX, 2, "\t %lu classes", dexes_structure->get_num_classes());
-  TRACE(IDEX, 2, "\t %lu mrefs", dexes_structure->get_num_mrefs());
-  TRACE(IDEX, 2, "\t %lu frefs", dexes_structure->get_num_frefs());
-  TRACE(IDEX, 2, "\t %lu dmethods", dexes_structure->get_num_dmethods());
-  TRACE(IDEX, 2, "\t %lu vmethods", dexes_structure->get_num_vmethods());
-  TRACE(IDEX, 2, "\t %lu mrefs", dexes_structure->get_num_mrefs());
+  TRACE(IDEX, 2, "\t %zu classes", dexes_structure->get_num_classes());
+  TRACE(IDEX, 2, "\t %zu mrefs", dexes_structure->get_num_mrefs());
+  TRACE(IDEX, 2, "\t %zu frefs", dexes_structure->get_num_frefs());
+  TRACE(IDEX, 2, "\t %zu dmethods", dexes_structure->get_num_dmethods());
+  TRACE(IDEX, 2, "\t %zu vmethods", dexes_structure->get_num_vmethods());
+  TRACE(IDEX, 2, "\t %zu mrefs", dexes_structure->get_num_mrefs());
 }
 
 /**

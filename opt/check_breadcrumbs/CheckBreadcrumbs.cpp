@@ -362,11 +362,11 @@ void Breadcrumbs::report_deleted_types(bool report_only, PassManager& mgr) {
       }
     }
     TRACE(BRCR, 1,
-          "Dangling References in Fields: %ld\n"
-          "Dangling References in Methods: %ld\n"
-          "Dangling References in Type Instructions: %ld\n"
-          "Dangling References in Fields Field Instructions: %ld\n"
-          "Dangling References in Method Instructions: %ld\n",
+          "Dangling References in Fields: %zu\n"
+          "Dangling References in Methods: %zu\n"
+          "Dangling References in Type Instructions: %zu\n"
+          "Dangling References in Fields Field Instructions: %zu\n"
+          "Dangling References in Method Instructions: %zu\n",
           bad_fields_count, bad_methods_count, bad_type_insns_count,
           bad_field_insns_count, bad_meths_insns_count);
     TRACE(BRCR, 2, "%s", ss.str().c_str());
@@ -531,12 +531,12 @@ void Breadcrumbs::report_illegal_refs(bool fail_if_illegal_refs,
 
   TRACE(BRCR,
         1,
-        "Illegal fields : %ld\n"
-        "Illegal type refs : %ld\n"
-        "Illegal field type refs : %ld\n"
-        "Illegal field cls refs : %ld\n"
-        "Illegal method calls : %ld\n"
-        "Illegal method defs : %ld\n",
+        "Illegal fields : %zu\n"
+        "Illegal type refs : %zu\n"
+        "Illegal field type refs : %zu\n"
+        "Illegal field cls refs : %zu\n"
+        "Illegal method calls : %zu\n"
+        "Illegal method defs : %zu\n",
         num_illegal_fields,
         num_illegal_type_refs,
         num_illegal_field_type_refs,
@@ -554,12 +554,12 @@ void Breadcrumbs::report_illegal_refs(bool fail_if_illegal_refs,
                  m_types_with_allowed_violations.size());
   TRACE(BRCR,
         1,
-        "Allowed Illegal fields : %ld\n"
-        "Allowed Illegal type refs : %ld\n"
-        "Allowed Illegal field type refs : %ld\n"
-        "Allowed Illegal field cls refs : %ld\n"
-        "Allowed Illegal method calls : %ld\n"
-        "Allowed Illegal method defs : %ld\n",
+        "Allowed Illegal fields : %zu\n"
+        "Allowed Illegal type refs : %zu\n"
+        "Allowed Illegal field type refs : %zu\n"
+        "Allowed Illegal field cls refs : %zu\n"
+        "Allowed Illegal method calls : %zu\n"
+        "Allowed Illegal method defs : %zu\n",
         num_allowed_illegal_fields,
         sum_instructions(allowed_illegal_type),
         sum_instructions(allowed_illegal_field_type),

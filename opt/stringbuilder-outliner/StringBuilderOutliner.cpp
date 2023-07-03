@@ -244,7 +244,7 @@ void Outliner::create_outline_helpers(DexStoresVector* stores) {
       continue;
     }
     TRACE(STRBUILD, 3,
-          "Outlining %lu StringBuilders of length %lu with typelist %s", count,
+          "Outlining %zu StringBuilders of length %zu with typelist %s", count,
           typelist->size(), SHOW(typelist));
     m_stats.stringbuilders_removed += count;
     m_stats.operations_removed += count * typelist->size();

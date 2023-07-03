@@ -157,7 +157,7 @@ Stats remove_empty_classes(Scope& classes) {
                 classes.end());
 
   auto num_classes_removed = classes_before_size - classes.size();
-  TRACE(EMPTY, 1, "Empty classes removed: %ld", num_classes_removed);
+  TRACE(EMPTY, 1, "Empty classes removed: %zu", num_classes_removed);
   return Stats{num_classes_removed, clinit_removed.load()};
 }
 

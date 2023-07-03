@@ -22,7 +22,6 @@ DISABLED_WARNINGS = \
   $(DISABLED_WARNINGS_HARD) \
   -Wno-class-memaccess \
   -Wno-deprecated-declarations \
-  -Wno-format \
   -Wno-format-truncation \
   -Wno-format-zero-length \
   -Wno-invalid-offsetof \

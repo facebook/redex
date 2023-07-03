@@ -387,7 +387,7 @@ struct Matcher {
       bool retry = (match_index == 1);
       TRACE(PEEPHOLE,
             8,
-            "Not Matched: %s[%lu] != %s",
+            "Not Matched: %s[%zu] != %s",
             pattern.name.c_str(),
             match_index,
             SHOW(insn));
@@ -404,7 +404,7 @@ struct Matcher {
 
     TRACE(PEEPHOLE,
           8,
-          "Matched [%lu/%lu]: %s",
+          "Matched [%zu/%zu]: %s",
           match_index + 1,
           pattern.match.size(),
           SHOW(insn));
@@ -642,7 +642,7 @@ struct Matcher {
         }
         default:
           not_reached_log("Unexpected string directive: 0x%x",
-                          replace_info.string);
+                          (int)replace_info.string);
         }
       } else if (replace_info.kind == DexPattern::Kind::literal) {
         switch (replace_info.literal) {
@@ -688,7 +688,8 @@ struct Matcher {
           replace->set_type(matched_types.at(Type::B));
           break;
         default:
-          not_reached_log("Unexpected type directive 0x%x", replace_info.type);
+          not_reached_log("Unexpected type directive 0x%x",
+                          (int)replace_info.type);
         }
       } else if (replace_info.kind == DexPattern::Kind::field) {
         switch (replace_info.field) {
@@ -700,7 +701,7 @@ struct Matcher {
           break;
         default:
           not_reached_log("Unexpected field directive 0x%x",
-                          replace_info.field);
+                          (int)replace_info.field);
         }
       }
     }

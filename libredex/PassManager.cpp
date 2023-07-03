@@ -474,7 +474,7 @@ class JNINativeContextHelper {
       }
     });
 
-    TRACE(NATIVE, 2, "Total removable natives: %lu",
+    TRACE(NATIVE, 2, "Total removable natives: %zu",
           m_removable_natives.size());
 
     auto removable_natives_file_name = conf.metafile(REMOVABLE_NATIVES);

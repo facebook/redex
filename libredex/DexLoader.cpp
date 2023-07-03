@@ -32,7 +32,7 @@ static void validate_dex_header(const dex_header* dh,
                                 size_t dexsize,
                                 int support_dex_version) {
   always_assert_log(sizeof(dex_header) <= dexsize,
-                    "Header size (%lu) is larger than file size (%zu)\n",
+                    "Header size (%zu) is larger than file size (%zu)\n",
                     dexsize,
                     sizeof(dex_header));
   bool supported = false;

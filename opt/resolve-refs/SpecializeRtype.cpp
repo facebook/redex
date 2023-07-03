@@ -305,7 +305,7 @@ void RtypeSpecialization::specialize_true_virtuals(
       if (can_update_rtype_for(overridden, better_rtype) &&
           share_common_rtype_candidate(m_candidates, global_overridings,
                                        better_rtype)) {
-        TRACE(RESO, 4, "global overrides %ld -> %s ", global_overridings.size(),
+        TRACE(RESO, 4, "global overrides %zu -> %s ", global_overridings.size(),
               SHOW(better_rtype));
         DexProto* updated_proto =
             DexProto::make_proto(better_rtype, meth->get_proto()->get_args());
