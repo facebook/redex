@@ -37,15 +37,15 @@ void RegAllocPass::run_pass(DexStoresVector& stores,
     return graph_coloring::allocate(allocator_config, m);
   });
 
-  TRACE(REG, 1, "Total reiteration count: %lu", stats.reiteration_count);
-  TRACE(REG, 1, "Total Params spilled early: %lu", stats.params_spill_early);
-  TRACE(REG, 1, "Total spill count: %lu", stats.moves_inserted());
-  TRACE(REG, 1, "  Total param spills: %lu", stats.param_spill_moves);
-  TRACE(REG, 1, "  Total range spills: %lu", stats.range_spill_moves);
-  TRACE(REG, 1, "  Total global spills: %lu", stats.global_spill_moves);
-  TRACE(REG, 1, "  Total splits: %lu", stats.split_moves);
-  TRACE(REG, 1, "Total coalesce count: %lu", stats.moves_coalesced);
-  TRACE(REG, 1, "Total net moves: %ld", stats.net_moves());
+  TRACE(REG, 1, "Total reiteration count: %zu", stats.reiteration_count);
+  TRACE(REG, 1, "Total Params spilled early: %zu", stats.params_spill_early);
+  TRACE(REG, 1, "Total spill count: %zu", stats.moves_inserted());
+  TRACE(REG, 1, "  Total param spills: %zu", stats.param_spill_moves);
+  TRACE(REG, 1, "  Total range spills: %zu", stats.range_spill_moves);
+  TRACE(REG, 1, "  Total global spills: %zu", stats.global_spill_moves);
+  TRACE(REG, 1, "  Total splits: %zu", stats.split_moves);
+  TRACE(REG, 1, "Total coalesce count: %zu", stats.moves_coalesced);
+  TRACE(REG, 1, "Total net moves: %zu", stats.net_moves());
 
   mgr.incr_metric("param spilled too early", stats.params_spill_early);
   mgr.incr_metric("reiteration_count", stats.reiteration_count);

@@ -1063,18 +1063,18 @@ class EnumTransformer final {
       auto attributes = optimize_enums::analyze_enum_clinit(enum_cls);
       size_t num_enum_constants = attributes.m_constants_map.size();
       if (num_enum_constants == 0) {
-        TRACE(ENUM, 2, "\tCannot analyze enum %s : ord %lu sfields %lu",
+        TRACE(ENUM, 2, "\tCannot analyze enum %s : ord %zu sfields %zu",
               SHOW(enum_cls), num_enum_constants,
               enum_cls->get_sfields().size());
         continue;
       } else if (num_enum_constants > config.max_enum_size) {
         if (!config.breaking_reference_equality_allowlist.count(*it)) {
-          TRACE(ENUM, 2, "\tSkip %s %lu values", SHOW(enum_cls),
+          TRACE(ENUM, 2, "\tSkip %s %zu values", SHOW(enum_cls),
                 num_enum_constants);
           continue;
         } else {
           TRACE(ENUM, 2,
-                "\tOptimimze %s (%lu values) but object equality is not "
+                "\tOptimimze %s (%zu values) but object equality is not "
                 "guaranteed",
                 SHOW(enum_cls), num_enum_constants);
         }

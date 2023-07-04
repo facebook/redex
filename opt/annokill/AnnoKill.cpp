@@ -692,20 +692,20 @@ bool AnnoKill::kill_annotations() {
   if (traceEnabled(ANNO, 3)) {
     for (const auto& p : m_build_anno_map) {
       TRACE(
-          ANNO, 3, "Build anno: %lu, %s", p.second, str_copy(p.first).c_str());
+          ANNO, 3, "Build anno: %zu, %s", p.second, str_copy(p.first).c_str());
     }
 
     for (const auto& p : m_runtime_anno_map) {
       TRACE(ANNO,
             3,
-            "Runtime anno: %lu, %s",
+            "Runtime anno: %zu, %s",
             p.second,
             str_copy(p.first).c_str());
     }
 
     for (const auto& p : m_system_anno_map) {
       TRACE(
-          ANNO, 3, "System anno: %lu, %s", p.second, str_copy(p.first).c_str());
+          ANNO, 3, "System anno: %zu, %s", p.second, str_copy(p.first).c_str());
     }
   }
 

@@ -280,7 +280,7 @@ class KeepRuleMatcher {
         m_regex_map(regex_map) {}
 
   ~KeepRuleMatcher() {
-    TRACE(PGR, 3, "%s matched %lu classes and %lu members",
+    TRACE(PGR, 3, "%s matched %zu classes and %zu members",
           show_keep(m_keep_rule).c_str(), m_class_matches, m_member_matches);
   }
 

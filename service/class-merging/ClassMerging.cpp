@@ -140,7 +140,7 @@ ModelStats merge_model(const TypeSystem& type_system,
   always_assert(s_is_initialized);
   TRACE(CLMG,
         2,
-        "[ClassMerging] merging %s model merging targets %lu roots %lu",
+        "[ClassMerging] merging %s model merging targets %zu roots %zu",
         spec.name.c_str(),
         spec.merging_targets.size(),
         spec.roots.size());

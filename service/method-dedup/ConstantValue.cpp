@@ -132,7 +132,7 @@ ConstantValues::ConstantValues(const TypeTags* type_tags,
   if (kinds_str.size() > MAX_NUM_CONST_VALUE) {
     TRACE(METH_DEDUP,
           8,
-          "const value: skip large number of const values %ld",
+          "const value: skip large number of const values %zu",
           kinds_str.size());
     return;
   }

@@ -1133,15 +1133,15 @@ void Allocator::allocate(cfg::ControlFlowGraph& cfg, bool is_static) {
     }
   }
 
-  TRACE(REG, 3, "Reiteration count: %lu", m_stats.reiteration_count);
-  TRACE(REG, 3, "Spill count: %lu", m_stats.moves_inserted());
-  TRACE(REG, 3, "  Param spills: %lu", m_stats.param_spill_moves);
-  TRACE(REG, 3, "  Range spills: %lu", m_stats.range_spill_moves);
-  TRACE(REG, 3, "  Global spills: %lu", m_stats.global_spill_moves);
-  TRACE(REG, 3, "  splits: %lu", m_stats.split_moves);
-  TRACE(REG, 3, "Coalesce count: %lu", m_stats.moves_coalesced);
-  TRACE(REG, 3, "Params spilled too early: %lu", m_stats.params_spill_early);
-  TRACE(REG, 3, "Net moves: %ld", m_stats.net_moves());
+  TRACE(REG, 3, "Reiteration count: %zu", m_stats.reiteration_count);
+  TRACE(REG, 3, "Spill count: %zu", m_stats.moves_inserted());
+  TRACE(REG, 3, "  Param spills: %zu", m_stats.param_spill_moves);
+  TRACE(REG, 3, "  Range spills: %zu", m_stats.range_spill_moves);
+  TRACE(REG, 3, "  Global spills: %zu", m_stats.global_spill_moves);
+  TRACE(REG, 3, "  splits: %zu", m_stats.split_moves);
+  TRACE(REG, 3, "Coalesce count: %zu", m_stats.moves_coalesced);
+  TRACE(REG, 3, "Params spilled too early: %zu", m_stats.params_spill_early);
+  TRACE(REG, 3, "Net moves: %zu", m_stats.net_moves());
 }
 
 } // namespace graph_coloring

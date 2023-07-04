@@ -390,7 +390,7 @@ MethodOrderedSet find_dispatch_targets(const TypeSystem& type_system,
   MethodOrderedSet targets;
   for (const auto& virt_scope : intf_scope) {
     auto top_def = virt_scope->methods.front();
-    TRACE(RM_INTF, 5, "Scanning virt scope %s[%ld]", SHOW(top_def.first),
+    TRACE(RM_INTF, 5, "Scanning virt scope %s[%zu]", SHOW(top_def.first),
           virt_scope->methods.size());
     std::vector<const DexType*> matched;
     for (const auto impl : implementors) {
@@ -542,7 +542,7 @@ void RemoveInterfacePass::remove_interfaces_for_root(
       exclude_unremovables(scope, stores, type_system, m_include_primary_dex,
                            m_excluded_interfaces, interfaces);
 
-  TRACE(RM_INTF, 5, "removable interfaces %ld", interfaces.size());
+  TRACE(RM_INTF, 5, "removable interfaces %zu", interfaces.size());
   TypeSet removed =
       remove_leaf_interfaces(scope, root, interfaces, type_system);
 
@@ -551,7 +551,7 @@ void RemoveInterfacePass::remove_interfaces_for_root(
       interfaces.erase(intf);
       m_removed_interfaces.insert(intf);
     }
-    TRACE(RM_INTF, 5, "non-leaf removable interfaces %ld", interfaces.size());
+    TRACE(RM_INTF, 5, "non-leaf removable interfaces %zu", interfaces.size());
     removed = remove_leaf_interfaces(scope, root, interfaces, type_system);
   }
 
@@ -595,10 +595,10 @@ void RemoveInterfacePass::run_pass(DexStoresVector& stores,
   mgr.incr_metric("num_total_interface", m_total_num_interface);
   mgr.incr_metric("num_interface_excluded", m_num_interface_excluded);
   mgr.incr_metric("num_interface_removed", m_num_interface_removed);
-  TRACE(RM_INTF, 5, "total number of interfaces %ld", m_total_num_interface);
-  TRACE(RM_INTF, 5, "number of excluded interfaces %ld",
+  TRACE(RM_INTF, 5, "total number of interfaces %zu", m_total_num_interface);
+  TRACE(RM_INTF, 5, "number of excluded interfaces %zu",
         m_num_interface_excluded);
-  TRACE(RM_INTF, 5, "number of removed interfaces %ld",
+  TRACE(RM_INTF, 5, "number of removed interfaces %zu",
         m_num_interface_removed);
 
   for (const auto& stat : m_dispatch_stats) {

@@ -382,7 +382,7 @@ void merge(const BaseSigs& base_sigs,
           for (const auto& scope : scopes) {
             TRACE(VIRT,
                   4,
-                  "- copy %s (%s:%s): (%ld) %s",
+                  "- copy %s (%s:%s): (%zu) %s",
                   SHOW(scope.type),
                   SHOW(name),
                   SHOW(proto),
@@ -400,7 +400,7 @@ void merge(const BaseSigs& base_sigs,
       always_assert(!virt_scopes.empty());
       TRACE(VIRT,
             4,
-            "- found existing scopes for %s:%s (%ld) - first: %s, %ld, %ld",
+            "- found existing scopes for %s:%s (%zu) - first: %s, %zu, %zu",
             SHOW(name),
             SHOW(proto),
             virt_scopes.size(),
@@ -416,7 +416,7 @@ void merge(const BaseSigs& base_sigs,
         // with that of base which is now the top definition
         TRACE(VIRT,
               4,
-              "-- checking scope type %s(%ld)",
+              "-- checking scope type %s(%zu)",
               SHOW(scope.type),
               scope.methods.size());
         TRACE(VIRT,
@@ -429,7 +429,7 @@ void merge(const BaseSigs& base_sigs,
             !is_interface(type_class(scope.type))) {
           TRACE(VIRT,
                 4,
-                "-- merging with base scopes %s(%ld) : %s",
+                "-- merging with base scopes %s(%zu) : %s",
                 SHOW(virt_scopes[0].type),
                 virt_scopes[0].methods.size(),
                 SHOW(virt_scopes[0].methods[0].first));
@@ -758,7 +758,7 @@ void get_root_scopes(const SignatureMap& sig_map,
                      const DexType* type,
                      Scopes& cls_scopes) {
   const std::vector<DexMethod*>& methods = get_vmethods(type);
-  TRACE(VIRT, 9, "found %ld vmethods for %s", methods.size(), SHOW(type));
+  TRACE(VIRT, 9, "found %zu vmethods for %s", methods.size(), SHOW(type));
   for (const auto meth : methods) {
     const auto& protos = sig_map.find(meth->get_name());
     always_assert(protos != sig_map.end());

@@ -194,25 +194,25 @@ void AccessMarkingPass::run_pass(DexStoresVector& stores,
   if (m_finalize_classes) {
     auto n_classes_final = mark_classes_final(scope);
     pm.incr_metric("finalized_classes", n_classes_final);
-    TRACE(ACCESS, 1, "Finalized %lu classes", n_classes_final);
+    TRACE(ACCESS, 1, "Finalized %zu classes", n_classes_final);
   }
   if (m_finalize_methods) {
     auto n_methods_final = mark_methods_final(scope, *override_graph);
     pm.incr_metric("finalized_methods", n_methods_final);
-    TRACE(ACCESS, 1, "Finalized %lu methods", n_methods_final);
+    TRACE(ACCESS, 1, "Finalized %zu methods", n_methods_final);
   }
   if (m_finalize_unwritten_fields || m_finalize_written_fields) {
     auto n_fields_final = mark_fields_final(
         scope, m_finalize_unwritten_fields, m_finalize_written_fields);
     pm.incr_metric("finalized_fields", n_fields_final);
-    TRACE(ACCESS, 1, "Finalized %lu fields", n_fields_final);
+    TRACE(ACCESS, 1, "Finalized %zu fields", n_fields_final);
   }
   if (m_privatize_methods) {
     auto privates = find_private_methods(scope, *override_graph);
     fix_call_sites_private(scope, privates);
     mark_methods_private(privates);
     pm.incr_metric("privatized_methods", privates.size());
-    TRACE(ACCESS, 1, "Privatized %lu methods", privates.size());
+    TRACE(ACCESS, 1, "Privatized %zu methods", privates.size());
   }
 }
 
