@@ -139,7 +139,7 @@ class FinalInlineImpl {
     }
     TRACE(FINALINLINE,
           1,
-          "Removable fields %lu/%lu",
+          "Removable fields %zu/%zu",
           dead_fields.size(),
           moveable_fields.size());
 
@@ -373,7 +373,7 @@ class FinalInlineImpl {
     // Attach encoded values and remove the clinit
     TRACE(FINALINLINE,
           8,
-          "Replacing <clinit> %s: %lu pairs...",
+          "Replacing <clinit> %s: %zu pairs...",
           SHOW(clinit),
           const_sputs.size());
     for (auto& pair : const_sputs) {
@@ -427,7 +427,7 @@ class FinalInlineImpl {
     }
     TRACE(FINALINLINE,
           1,
-          "Replaced %lu/%lu clinits with encoded values",
+          "Replaced %zu/%zu clinits with encoded values",
           nreplaced,
           ntotal);
     return nreplaced;
@@ -527,7 +527,7 @@ class FinalInlineImpl {
       }
     }
     TRACE(
-        FINALINLINE, 1, "Resolved %lu static finals via const prop", nresolved);
+        FINALINLINE, 1, "Resolved %zu static finals via const prop", nresolved);
     return nresolved;
   }
 

@@ -212,7 +212,7 @@ void MethodDevirtualizer::staticize_methods_not_using_this(
     const std::unordered_set<DexMethod*>& methods) {
   fix_call_sites(scope, methods, m_metrics, true /* drop_this */);
   make_methods_static(methods, false);
-  TRACE(VIRT, 1, "Staticized %lu methods not using this", methods.size());
+  TRACE(VIRT, 1, "Staticized %zu methods not using this", methods.size());
   m_metrics.num_methods_not_using_this += methods.size();
 }
 
@@ -221,7 +221,7 @@ void MethodDevirtualizer::staticize_methods_using_this(
     const std::unordered_set<DexMethod*>& methods) {
   fix_call_sites(scope, methods, m_metrics, false /* drop_this */);
   make_methods_static(methods, true);
-  TRACE(VIRT, 1, "Staticized %lu methods using this", methods.size());
+  TRACE(VIRT, 1, "Staticized %zu methods using this", methods.size());
   m_metrics.num_methods_using_this += methods.size();
 }
 
@@ -234,7 +234,7 @@ DevirtualizerMetrics MethodDevirtualizer::devirtualize_methods(
   verify_and_split(vmethods, using_this, not_using_this);
   TRACE(VIRT,
         2,
-        " VIRT to devirt vmethods using this %lu, not using this %lu",
+        " VIRT to devirt vmethods using this %zu, not using this %zu",
         using_this.size(),
         not_using_this.size());
 
@@ -253,7 +253,7 @@ DevirtualizerMetrics MethodDevirtualizer::devirtualize_methods(
   verify_and_split(dmethods, using_this, not_using_this);
   TRACE(VIRT,
         2,
-        " VIRT to devirt dmethods using this %lu, not using this %lu",
+        " VIRT to devirt dmethods using this %zu, not using this %zu",
         using_this.size(),
         not_using_this.size());
 

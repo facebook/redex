@@ -574,14 +574,14 @@ DexOutput::DexOutput(
 
   always_assert_log(
       m_dodx->method_to_idx().size() <= kMaxMethodRefs,
-      "Trying to encode too many method refs in dex %s: %lu (limit: %lu). Run "
+      "Trying to encode too many method refs in dex %s: %zu (limit: %zu). Run "
       "with check_properties_deep turned on.",
       boost::filesystem::path(path).filename().c_str(),
       m_dodx->method_to_idx().size(),
       kMaxMethodRefs);
   always_assert_log(
       m_dodx->field_to_idx().size() <= kMaxFieldRefs,
-      "Trying to encode too many field refs in dex %s: %lu (limit: %lu). Run "
+      "Trying to encode too many field refs in dex %s: %zu (limit: %zu). Run "
       "with check_properties_deep turned on.",
       boost::filesystem::path(path).filename().c_str(),
       m_dodx->field_to_idx().size(),
@@ -897,9 +897,9 @@ void DexOutput::emit_magic_locators() {
 void DexOutput::generate_type_data() {
   always_assert_log(
       m_dodx->type_to_idx().size() < get_max_type_refs(m_min_sdk),
-      "Trying to encode too many type refs in dex %lu: %lu (limit: %lu).\n"
+      "Trying to encode too many type refs in dex %zu: %zu (limit: %zu).\n"
       "NOTE: Please check InterDexPass config flags and set: "
-      "`reserved_trefs: %lu` (or larger, until the issue goes away)",
+      "`reserved_trefs: %zu` (or larger, until the issue goes away)",
       m_dex_number,
       m_dodx->type_to_idx().size(),
       get_max_type_refs(m_min_sdk),

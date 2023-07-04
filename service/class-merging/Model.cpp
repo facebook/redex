@@ -98,10 +98,10 @@ void print_interface_maps(const TypeToTypeSet& intf_to_classes,
             });
   for (const auto& intf : intfs) {
     const auto& classes = intf_to_classes.at(intf);
-    TRACE(CLMG, 8, "- interface %s -> %ld", SHOW(intf), classes.size());
+    TRACE(CLMG, 8, "- interface %s -> %zu", SHOW(intf), classes.size());
     if (classes.size() <= 5) {
       for (const auto& cls : classes) {
-        TRACE(CLMG, 8, "\t-(%ld) %s", types.count(cls), SHOW(cls));
+        TRACE(CLMG, 8, "\t-(%zu) %s", types.count(cls), SHOW(cls));
       }
     }
   }
@@ -115,14 +115,14 @@ size_t trim_shapes(MergerType::ShapeCollector& shapes, size_t min_count) {
   std::vector<MergerType::Shape> shapes_to_remove;
   for (const auto& shape_it : shapes) {
     if (shape_it.second.types.size() >= min_count) {
-      TRACE(CLMG, 7, "Keep shape %s (%ld)", shape_it.first.to_string().c_str(),
+      TRACE(CLMG, 7, "Keep shape %s (%zu)", shape_it.first.to_string().c_str(),
             shape_it.second.types.size());
       continue;
     }
     shapes_to_remove.push_back(shape_it.first);
   }
   for (const auto& shape : shapes_to_remove) {
-    TRACE(CLMG, 7, "Drop shape %s (%ld)", shape.to_string().c_str(),
+    TRACE(CLMG, 7, "Drop shape %s (%zu)", shape.to_string().c_str(),
           shapes[shape].types.size());
     num_trimmed_types += shapes[shape].types.size();
     shapes.erase(shape);
@@ -140,7 +140,7 @@ size_t trim_groups(MergerType::ShapeCollector& shapes, size_t min_count) {
     std::vector<TypeSet> groups_to_remove;
     for (const auto& group_it : shape_it.second.groups) {
       if (group_it.second.size() >= min_count) {
-        TRACE(CLMG, 7, "Keep group (%ld) on %s", group_it.second.size(),
+        TRACE(CLMG, 7, "Keep group (%zu) on %s", group_it.second.size(),
               shape_it.first.to_string().c_str());
         continue;
       }
@@ -148,7 +148,7 @@ size_t trim_groups(MergerType::ShapeCollector& shapes, size_t min_count) {
     }
     for (const auto& group : groups_to_remove) {
       auto& types = shape_it.second.groups[group];
-      TRACE(CLMG, 7, "Drop group (%ld) on %s", types.size(),
+      TRACE(CLMG, 7, "Drop group (%zu) on %s", types.size(),
             shape_it.first.to_string().c_str());
       num_trimmed_types += types.size();
       for (const auto& type : types) {
@@ -198,11 +198,11 @@ void Model::init(const Scope& scope,
   TypeSet generated;
   load_generated_types(spec, scope, type_system, m_spec.merging_targets,
                        generated);
-  TRACE(CLMG, 4, "Generated types %ld", generated.size());
+  TRACE(CLMG, 4, "Generated types %zu", generated.size());
   exclude_types(spec.exclude_types);
   MergeabilityChecker checker(scope, spec, m_ref_checker, generated);
   m_non_mergeables = checker.get_non_mergeables();
-  TRACE(CLMG, 3, "Non mergeables %ld", m_non_mergeables.size());
+  TRACE(CLMG, 3, "Non mergeables %zu", m_non_mergeables.size());
   m_stats.m_non_mergeables = m_non_mergeables.size();
   m_stats.m_all_types = m_spec.merging_targets.size();
 }
@@ -315,7 +315,7 @@ MergerType& Model::create_merger_shape(
     const DexType* parent,
     const TypeSet& intfs,
     const std::vector<const DexType*>& classes) {
-  TRACE(CLMG, 7, "Create Shape %s - %s, parent %s, intfs %ld, classes %ld",
+  TRACE(CLMG, 7, "Create Shape %s - %s, parent %s, intfs %zu, classes %zu",
         SHOW(shape_type), shape.to_string().c_str(), SHOW(parent), intfs.size(),
         classes.size());
   auto& merger = m_mergers[shape_type];
@@ -422,7 +422,7 @@ void Model::exclude_types(const ConstTypeHashSet& exclude_types) {
       m_type_system.get_all_children(type, m_excluded);
     }
   }
-  TRACE(CLMG, 4, "Excluding types %ld", m_excluded.size());
+  TRACE(CLMG, 4, "Excluding types %zu", m_excluded.size());
 }
 
 bool Model::is_excluded(const DexType* type) const {
@@ -476,7 +476,7 @@ void Model::shape_model() {
 
   // Update excluded metrics
   m_stats.m_excluded = m_excluded.size();
-  TRACE(CLMG, 4, "Excluded types total %ld", m_excluded.size());
+  TRACE(CLMG, 4, "Excluded types total %zu", m_excluded.size());
 }
 
 void Model::shape_merger(const MergerType& root,
@@ -506,7 +506,7 @@ void Model::shape_merger(const MergerType& root,
 
     MergerType::Shape shape(cls->get_ifields());
 
-    TRACE(CLMG, 9, "Shape of %s [%ld]: %s", SHOW(child),
+    TRACE(CLMG, 9, "Shape of %s [%zu]: %s", SHOW(child),
           cls->get_ifields().size(), shape.to_string().c_str());
 
     shapes[shape].types.insert(child);
@@ -532,7 +532,7 @@ void Model::approximate_shapes(MergerType::ShapeCollector& shapes) {
   size_t num_before_shapes = 0;
   TRACE(CLMG, 3, "[approx] Shapes before approximation:");
   for (const auto& s : shapes) {
-    TRACE(CLMG, 3, "         Shape: %s, mergeables = %ld",
+    TRACE(CLMG, 3, "         Shape: %s, mergeables = %zu",
           s.first.to_string().c_str(), s.second.types.size());
     num_before_shapes++;
     num_total_mergeable += s.second.types.size();
@@ -562,7 +562,7 @@ void Model::approximate_shapes(MergerType::ShapeCollector& shapes) {
   size_t num_after_shapes = 0;
   TRACE(CLMG, 3, "[approx] Shapes after approximation:");
   for (const auto& s_pair : shapes) {
-    TRACE(CLMG, 3, "         Shape: %s, mergeables = %ld",
+    TRACE(CLMG, 3, "         Shape: %s, mergeables = %zu",
           s_pair.first.to_string().c_str(), s_pair.second.types.size());
     num_after_shapes++;
     num_total_mergeable -= s_pair.second.types.size();
@@ -592,7 +592,7 @@ void Model::break_by_interface(const MergerType& merger,
     auto& intfs = cls_intfs->second;
     hier.groups[intfs].insert(type);
   }
-  TRACE(CLMG, 7, "%ld groups created for shape %s (%ld)", hier.groups.size(),
+  TRACE(CLMG, 7, "%zu groups created for shape %s (%zu)", hier.groups.size(),
         shape.to_string().c_str(), hier.types.size());
 }
 
@@ -999,7 +999,7 @@ void Model::collect_methods() {
     }
     TRACE(CLMG,
           8,
-          "Collect methods for merger %s [%ld]",
+          "Collect methods for merger %s [%zu]",
           SHOW(merger.type),
           merger.mergeables.size());
     for (const auto* mergeable : merger.mergeables) {
@@ -1008,7 +1008,7 @@ void Model::collect_methods() {
       TRACE(CLMG, 8, "  mergeable %s", SHOW(mergeable));
       TRACE(CLMG,
             8,
-            "%ld dmethods in %s",
+            "%zu dmethods in %s",
             cls->get_dmethods().size(),
             SHOW(cls->get_type()));
       bool has_ctor = false;
@@ -1023,7 +1023,7 @@ void Model::collect_methods() {
                         SHOW(mergeable));
 
       const auto& virt_scopes = m_type_system.get_class_scopes().get(mergeable);
-      TRACE(CLMG, 8, "%ld virtual scopes in %s", virt_scopes.size(),
+      TRACE(CLMG, 8, "%zu virtual scopes in %s", virt_scopes.size(),
             SHOW(mergeable));
       for (const auto* virt_scope : virt_scopes) {
 
@@ -1031,7 +1031,7 @@ void Model::collect_methods() {
         if (is_impl_scope(virt_scope)) {
           TRACE(CLMG,
                 8,
-                "interface virtual scope [%ld]",
+                "interface virtual scope [%zu]",
                 virt_scope->methods.size());
           add_interface_scope(merger, *virt_scope);
           continue;
@@ -1205,7 +1205,7 @@ void Model::distribute_virtual_methods(
     const DexType* type, std::vector<const VirtualScope*> base_scopes) {
   TRACE(CLMG,
         8,
-        "distribute virtual methods for %s, parent virtual scope %ld",
+        "distribute virtual methods for %s, parent virtual scope %zu",
         SHOW(type),
         base_scopes.size());
   // add to the base_scope the class scope of the merger type
@@ -1217,7 +1217,7 @@ void Model::distribute_virtual_methods(
     }
     TRACE(CLMG,
           8,
-          "virtual scope found [%ld] %s",
+          "virtual scope found [%zu] %s",
           virt_scope->methods.size(),
           SHOW(virt_scope->methods[0].first));
     base_scopes.emplace_back(virt_scope);
@@ -1232,7 +1232,7 @@ void Model::distribute_virtual_methods(
     for (const auto& virt_scope : base_scopes) {
       TRACE(CLMG,
             8,
-            "walking virtual scope [%s, %ld] %s (%s)",
+            "walking virtual scope [%s, %zu] %s (%s)",
             SHOW(virt_scope->type),
             virt_scope->methods.size(),
             virt_scope->methods[0]
@@ -1486,7 +1486,7 @@ std::string Model::print(const DexType* type, int nest) const {
           if (!intf_meths.overridden_meth) {
             const auto& methods = intf_meths.methods;
             TRACE(CLMG, 8,
-                  "interface method entry missing overridden method %s %ld",
+                  "interface method entry missing overridden method %s %zu",
                   SHOW(methods.front()), methods.size());
           }
         }
@@ -1558,7 +1558,7 @@ void ModelStats::update_redex_stats(const std::string& prefix,
     auto group_size = pair.second;
     mgr.incr_metric(prefix + "_interdex_group_" + std::to_string(group_id),
                     group_size);
-    TRACE(CLMG, 3, "InterDex Group %s_%u %lu", prefix.c_str(), group_id,
+    TRACE(CLMG, 3, "InterDex Group %s_%u %zu", prefix.c_str(), group_id,
           group_size);
   }
 

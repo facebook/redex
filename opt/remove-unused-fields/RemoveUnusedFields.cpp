@@ -137,7 +137,7 @@ class RemoveUnusedFields final {
       auto& stats = pair.second;
       TRACE(RMUF,
             3,
-            "%s: %lu %lu %d",
+            "%s: %zu %zu %d",
             SHOW(field),
             stats.reads,
             stats.writes,

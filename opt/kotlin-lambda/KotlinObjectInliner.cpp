@@ -617,15 +617,15 @@ void KotlinObjectInliner::Stats::report(PassManager& mgr) const {
   TRACE(KOTLIN_OBJ_INLINE, 2, "KotlinObjectInliner Stats:");
   TRACE(KOTLIN_OBJ_INLINE,
         2,
-        "kotlin_candidate_companion_objects = %lu",
+        "kotlin_candidate_companion_objects = %zu",
         kotlin_candidate_companion_objects);
   TRACE(KOTLIN_OBJ_INLINE,
         2,
-        "kotlin_untrackable_companion_objects = %lu",
+        "kotlin_untrackable_companion_objects = %zu",
         kotlin_untrackable_companion_objects);
   TRACE(KOTLIN_OBJ_INLINE,
         2,
-        "kotlin_companion_objects_inlined = %lu",
+        "kotlin_companion_objects_inlined = %zu",
         kotlin_companion_objects_inlined);
 }
 

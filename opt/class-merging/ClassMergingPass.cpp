@@ -268,7 +268,7 @@ void ClassMergingPass::bind_config() {
       m_model_specs.emplace_back(std::move(model));
     }
 
-    TRACE(CLMG, 2, "[ClassMerging] valid model specs %ld",
+    TRACE(CLMG, 2, "[ClassMerging] valid model specs %zu",
           m_model_specs.size());
   });
 }

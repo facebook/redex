@@ -122,7 +122,7 @@ static void strip_src_strings(DexStoresVector& stores,
     }
   }
 
-  TRACE(SHORTEN, 1, "src strings shortened %ld, %lu bytes saved", shortened,
+  TRACE(SHORTEN, 1, "src strings shortened %zu, %zu bytes saved", shortened,
         string_savings);
 
   mgr.incr_metric(METRIC_SHORTENED_STRINGS, shortened);

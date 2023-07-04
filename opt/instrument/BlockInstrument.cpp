@@ -1418,7 +1418,7 @@ MethodInfo instrument_basic_blocks(
           info.num_non_entry_blocks - info.rejected_blocks.size()) {
     TRACE(INSTRUMENT, 7, "Post condition violation! in %s", SHOW(method));
     TRACE(INSTRUMENT, 7, "- Instrumented type: %d",
-          get_instrumented_type(info));
+          (int)get_instrumented_type(info));
     TRACE(INSTRUMENT, 7, "  %zu != %zu - %zu", num_to_instrument,
           info.num_non_entry_blocks, info.rejected_blocks.size());
     TRACE(INSTRUMENT, 7, "  original non-entry blocks: %zu",

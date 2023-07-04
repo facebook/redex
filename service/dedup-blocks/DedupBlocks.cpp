@@ -1150,7 +1150,7 @@ class DedupBlocksImpl {
     TRACE(DEDUP_BLOCKS, 4, "duplicate blocks set: {");
     for (const auto& entry : dups) {
       TRACE(
-          DEDUP_BLOCKS, 4, "  hash = %lu",
+          DEDUP_BLOCKS, 4, "  hash = %zu",
           DedupBlkValueNumbering::BlockValueHasher{}(*entry.first.block_value));
       for (cfg::Block* b : entry.second) {
         TRACE(DEDUP_BLOCKS, 4, "    block %zu", b->id());

@@ -181,7 +181,7 @@ void find_throwing_block(const Scope& scope) {
       }
     }
   });
-  fprintf(stderr, "throwing blocks %ld\n", throwing_blocks.size());
+  fprintf(stderr, "throwing blocks %zu\n", throwing_blocks.size());
   print_blocks_by_size(throwing_blocks);
 }
 

@@ -157,7 +157,7 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
   }
   TRACE(METH_DEDUP,
         5,
-        "constant lifting applied to %ld among %ld",
+        "constant lifting applied to %zu among %zu",
         lifted.size(),
         methods.size());
   m_num_const_lifted_methods += lifted.size();

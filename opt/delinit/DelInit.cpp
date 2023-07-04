@@ -355,7 +355,7 @@ void DeadRefs::find_unreachable(Scope& scope) {
     vmethods += p.second.vmethods.size();
     ifields += p.second.ifields.size();
   }
-  TRACE(DELINIT, 2, "Uninstantiable classes %ld: vmethods %ld, ifields %ld",
+  TRACE(DELINIT, 2, "Uninstantiable classes %zu: vmethods %zu, ifields %zu",
         classes.size(), vmethods, ifields);
 }
 
@@ -418,7 +418,7 @@ void DeadRefs::collect_dmethods(Scope& scope) {
     acc.initmethods += p.second.initmethods;
     acc.dmethods += p.second.dmethods;
   }
-  TRACE(DELINIT, 3, "Found %ld init and %ld dmethods", acc.initmethods,
+  TRACE(DELINIT, 3, "Found %zu init and %zu dmethods", acc.initmethods,
         acc.dmethods);
 }
 
@@ -485,7 +485,7 @@ void DeadRefs::track_callers(Scope& scope) {
       ci.ifields.erase(ifield);
     }
   });
-  TRACE(DELINIT, 3, "Unreachable (not called) %ld vmethods and %ld ifields",
+  TRACE(DELINIT, 3, "Unreachable (not called) %zu vmethods and %zu ifields",
         vmethods, ifields);
 }
 

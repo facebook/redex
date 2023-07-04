@@ -788,7 +788,7 @@ void ModelMethodMerger::dedup_non_ctor_non_virt_methods() {
           annotated.push_back(m);
         }
       }
-      TRACE(CLMG, 8, "const lift: start %ld", annotated.size());
+      TRACE(CLMG, 8, "const lift: start %zu", annotated.size());
       auto stub_methods = const_lift.lift_constants_from(
           m_scope, m_type_tags, annotated, CONST_LIFT_STUB_THRESHOLD);
       to_dedup.insert(to_dedup.end(), stub_methods.begin(), stub_methods.end());
