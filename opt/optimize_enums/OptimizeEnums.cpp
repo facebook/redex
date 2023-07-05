@@ -372,6 +372,7 @@ class OptimizeEnums {
    * Replace enum with Boxed Integer object
    */
   void replace_enum_with_int(
+      PassManager& mgr,
       int max_enum_size,
       bool skip_sanity_check,
       const std::vector<DexType*>& allowlist,
@@ -506,7 +507,7 @@ class OptimizeEnums {
     }
 
     m_stats.num_enum_objs = optimize_enums::transform_enums(
-        config, &m_stores, &m_stats.num_int_objs);
+        mgr, config, &m_stores, &m_stats.num_int_objs);
     m_stats.num_enum_classes = config.candidate_enums.size();
   }
 
@@ -873,7 +874,7 @@ void OptimizeEnumsPass::run_pass(DexStoresVector& stores,
   OptimizeEnums opt_enums(stores, conf);
   opt_enums.remove_redundant_generated_classes();
   std::unordered_map<UnsafeType, size_t> unsafe_counts;
-  opt_enums.replace_enum_with_int(m_max_enum_size, m_skip_sanity_check,
+  opt_enums.replace_enum_with_int(mgr, m_max_enum_size, m_skip_sanity_check,
                                   m_enum_to_integer_allowlist, conf,
                                   unsafe_counts);
   opt_enums.remove_enum_generated_methods();
