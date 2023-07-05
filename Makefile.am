@@ -32,6 +32,7 @@ DISABLED_WARNINGS = \
   -Wno-sign-compare \
   -Wno-strict-aliasing \
   -Wno-stringop-overflow \
+  -Wno-stringop-overread \
   -Wno-uninitialized \
   -Wno-unused-but-set-variable \
   -Wno-unused-function \
