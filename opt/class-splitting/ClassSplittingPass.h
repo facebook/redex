@@ -62,8 +62,6 @@ class ClassSplittingPass : public Pass {
                   !m_config.combine_target_classes_by_api_level);
   }
 
-  bool is_cfg_legacy() override { return true; }
-
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
