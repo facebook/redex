@@ -20,6 +20,7 @@ DISABLED_WARNINGS_HARD = \
 # TODO: Minimize this list.
 DISABLED_WARNINGS = \
   $(DISABLED_WARNINGS_HARD) \
+  -Wno-array-bounds \
   -Wno-class-memaccess \
   -Wno-deprecated-declarations \
   -Wno-format-truncation \
