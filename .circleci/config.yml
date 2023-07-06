@@ -249,6 +249,9 @@ jobs:
       - image: circleci/buildpack-deps:bionic
     # GCC is hungry.
     resource_class: large
+    environment:
+      CFLAGS: -O0
+      CPPFLAGS: -O0
     steps:
       - checkout
       - debian-based-image-build-setup
@@ -259,6 +262,9 @@ jobs:
       - image: circleci/buildpack-deps:focal
     # GCC is hungry.
     resource_class: large
+    environment:
+      CFLAGS: -O0
+      CPPFLAGS: -O0
     steps:
       - checkout
       - debian-based-image-build-setup
@@ -270,6 +276,9 @@ jobs:
       - image: cimg/base:current-22.04
     # GCC is hungry.
     resource_class: large
+    environment:
+      CFLAGS: -O0
+      CPPFLAGS: -O0
     steps:
       - checkout
       - debian-based-image-build-setup
@@ -285,6 +294,9 @@ jobs:
       - image: buildpack-deps:oldoldstable-scm
     # GCC is hungry.
     resource_class: large
+    environment:
+      CFLAGS: -O0
+      CPPFLAGS: -O0
     steps:
       - checkout
       - debian-based-image-build-setup
@@ -295,6 +307,9 @@ jobs:
       - image: buildpack-deps:stable-scm
     # GCC is hungry.
     resource_class: large
+    environment:
+      CFLAGS: -O0
+      CPPFLAGS: -O0
     steps:
       - checkout
       - debian-based-image-build-setup
@@ -307,6 +322,8 @@ jobs:
     environment:
       CC: clang
       CXX: clang++
+      CFLAGS: -O0
+      CPPFLAGS: -O0
     steps:
       - checkout
       - debian-based-image-build-setup
@@ -321,6 +338,9 @@ jobs:
       - image: buildpack-deps:unstable-scm
     # GCC is hungry.
     resource_class: large
+    environment:
+      CFLAGS: -O0
+      CPPFLAGS: -O0
     steps:
       - checkout
       - debian-based-image-build-setup
@@ -333,6 +353,8 @@ jobs:
     environment:
       CC: clang
       CXX: clang++
+      CFLAGS: -O0
+      CPPFLAGS: -O0
     steps:
       - checkout
       - debian-based-image-build-setup
