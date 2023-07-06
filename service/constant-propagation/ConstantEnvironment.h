@@ -17,6 +17,7 @@
 #include "DisjointUnionWithSignedConstantDomain.h"
 #include "HashedAbstractPartition.h"
 #include "HashedSetAbstractDomain.h"
+#include "NewObjectDomain.h"
 #include "ObjectDomain.h"
 #include "ObjectWithImmutAttr.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
@@ -68,6 +69,8 @@ class is_object_visitor : public boost::static_visitor<bool> {
 
   bool operator()(const AbstractHeapPointer&) const { return true; }
 
+  bool operator()(const NewObjectDomain&) const { return true; }
+
   template <typename Domain>
   bool operator()(const Domain&) const {
     return false;
@@ -85,6 +88,7 @@ using ConstantValue =
                                           ConstantClassObjectDomain,
                                           ConstantInjectionIdDomain,
                                           ObjectWithImmutAttrDomain,
+                                          NewObjectDomain,
                                           AbstractHeapPointer>;
 
 struct ConstantValueDefaultValue {

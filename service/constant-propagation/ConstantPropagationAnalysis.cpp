@@ -817,6 +817,90 @@ bool StringAnalyzer::analyze_invoke(const IRInstruction* insn,
   return false;
 }
 
+bool NewObjectAnalyzer::ignore_type(
+    const ImmutableAttributeAnalyzerState* state, DexType* type) {
+  // Avoid types that may interact other more specialized object domains.
+  if (state->may_be_initialized_type(type) ||
+      type == type::java_lang_String() || type == type::java_lang_Boolean()) {
+    return true;
+  }
+  auto cls = type_class(type);
+  return cls && is_enum(cls);
+}
+
+bool NewObjectAnalyzer::analyze_new_instance(
+    const ImmutableAttributeAnalyzerState* state,
+    const IRInstruction* insn,
+    ConstantEnvironment* env) {
+  if (ignore_type(state, insn->get_type())) {
+    return false;
+  }
+  env->set(RESULT_REGISTER, NewObjectDomain(insn));
+  return true;
+}
+
+bool NewObjectAnalyzer::analyze_filled_new_array(
+    const ImmutableAttributeAnalyzerState* state,
+    const IRInstruction* insn,
+    ConstantEnvironment* env) {
+  if (ignore_type(state, insn->get_type())) {
+    return false;
+  }
+  auto array_length = SignedConstantDomain(insn->srcs_size());
+  env->set(RESULT_REGISTER, NewObjectDomain(insn, array_length));
+  return true;
+}
+
+bool NewObjectAnalyzer::analyze_new_array(
+    const ImmutableAttributeAnalyzerState* state,
+    const IRInstruction* insn,
+    ConstantEnvironment* env) {
+  if (ignore_type(state, insn->get_type())) {
+    return false;
+  }
+  boost::optional<SignedConstantDomain> array_length_opt =
+      env->get<SignedConstantDomain>(insn->src(0));
+  SignedConstantDomain array_length =
+      array_length_opt ? *array_length_opt : SignedConstantDomain::top();
+  array_length.meet_with(SignedConstantDomain(sign_domain::Interval::GEZ));
+  env->set(RESULT_REGISTER, NewObjectDomain(insn, array_length));
+  return true;
+}
+
+bool NewObjectAnalyzer::analyze_instance_of(
+    const ImmutableAttributeAnalyzerState*,
+    const IRInstruction* insn,
+    ConstantEnvironment* env) {
+  auto new_obj_opt = env->get(insn->src(0)).maybe_get<NewObjectDomain>();
+  if (!new_obj_opt) {
+    return false;
+  }
+  auto obj_type = new_obj_opt->get_type();
+  if (!obj_type) {
+    return false;
+  }
+  auto cls = type_class(type::get_element_type_if_array(obj_type));
+  if (!cls || (cls->is_external() && obj_type != insn->get_type())) {
+    return false;
+  }
+  auto res = type::check_cast(obj_type, insn->get_type());
+  env->set(RESULT_REGISTER, SignedConstantDomain(res ? 1 : 0));
+  return true;
+}
+
+bool NewObjectAnalyzer::analyze_array_length(
+    const ImmutableAttributeAnalyzerState*,
+    const IRInstruction* insn,
+    ConstantEnvironment* env) {
+  auto new_obj_opt = env->get(insn->src(0)).maybe_get<NewObjectDomain>();
+  if (!new_obj_opt) {
+    return false;
+  }
+  auto array_length = new_obj_opt->get_array_length();
+  env->set(RESULT_REGISTER, SignedConstantDomain(array_length));
+  return true;
+}
+
 ImmutableAttributeAnalyzerState::Initializer&
 ImmutableAttributeAnalyzerState::add_initializer(DexMethod* initialize_method,
                                                  DexMethod* attr) {
@@ -836,6 +920,7 @@ ImmutableAttributeAnalyzerState::add_initializer(DexMethod* initialize_method,
                   });
       });
   redex_assert(new_initializer);
+  initialized_types.insert(initialized_type(initialize_method));
   return *new_initializer;
 }
 
@@ -858,6 +943,7 @@ ImmutableAttributeAnalyzerState::add_initializer(DexMethod* initialize_method,
                   });
       });
   redex_assert(new_initializer);
+  initialized_types.insert(initialized_type(initialize_method));
   return *new_initializer;
 }
 
@@ -932,6 +1018,28 @@ DexType* ImmutableAttributeAnalyzerState::initialized_type(
   return method::is_init(initialize_method)
              ? initialize_method->get_class()
              : initialize_method->get_proto()->get_rtype();
+}
+
+bool ImmutableAttributeAnalyzerState::may_be_initialized_type(
+    DexType* type) const {
+  auto res = may_be_initialized_types.get(type, std::nullopt);
+  if (!res) {
+    res = false;
+    for (auto* initialized_type : initialized_types) {
+      if (type::check_cast(type, initialized_type)) {
+        res = true;
+        break;
+      }
+    }
+    may_be_initialized_types.update(type, [&](auto*, auto& value, bool exists) {
+      if (exists) {
+        always_assert(value == res);
+      } else {
+        value = res;
+      }
+    });
+  }
+  return *res;
 }
 
 bool ImmutableAttributeAnalyzer::analyze_iget(

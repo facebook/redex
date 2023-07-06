@@ -52,6 +52,7 @@ using CombinedAnalyzer =
                                 StringAnalyzer,
                                 ConstantClassObjectAnalyzer,
                                 ApiLevelAnalyzer,
+                                NewObjectAnalyzer,
                                 PrimitiveAnalyzer>;
 
 class AnalyzerGenerator {
@@ -96,19 +97,16 @@ class AnalyzerGenerator {
 
     auto wps_accessor = std::make_unique<WholeProgramStateAccessor>(wps);
     auto wps_accessor_ptr = wps_accessor.get();
+    auto immut_analyzer_state =
+        const_cast<ImmutableAttributeAnalyzerState*>(m_immut_analyzer_state);
     return std::make_unique<IntraproceduralAnalysis>(
         std::move(wps_accessor), code.cfg(),
         CombinedAnalyzer(
-            class_under_init,
-            const_cast<ImmutableAttributeAnalyzerState*>(
-                m_immut_analyzer_state),
-            wps_accessor_ptr,
-            EnumFieldAnalyzerState::get(),
-            BoxedBooleanAnalyzerState::get(),
-            nullptr,
-            nullptr,
+            class_under_init, immut_analyzer_state, wps_accessor_ptr,
+            EnumFieldAnalyzerState::get(), BoxedBooleanAnalyzerState::get(),
+            nullptr, nullptr,
             *const_cast<ApiLevelAnalyzerState*>(m_api_level_analyzer_state),
-            nullptr),
+            immut_analyzer_state, nullptr),
         std::move(env));
   }
 };
