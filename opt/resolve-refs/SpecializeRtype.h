@@ -15,6 +15,7 @@
 
 class PassManager;
 class DexTypeDomain;
+class XStoreRefs;
 
 namespace method_override_graph {
 class Graph;
@@ -44,6 +45,7 @@ class RtypeCandidates final {
                               const DexTypeDomain& inferred_rtype,
                               DexTypeDomain& curr_rtype);
   void collect_specializable_rtype(const api::AndroidSDK* min_sdk_api,
+                                   const XStoreRefs& xstores,
                                    DexMethod* meth,
                                    const DexTypeDomain& rtype_domain);
   const MethodToInferredReturnType& get_candidates() {
@@ -61,14 +63,16 @@ class RtypeCandidates final {
 
 class RtypeSpecialization final {
  public:
-  explicit RtypeSpecialization(const MethodToInferredReturnType& candidates)
-      : m_candidates(candidates) {}
+  explicit RtypeSpecialization(const MethodToInferredReturnType& candidates,
+                               const XStoreRefs& xstores)
+      : m_candidates(candidates), m_xstores(xstores) {}
 
   void specialize_rtypes(const Scope& scope);
   void print_stats(PassManager* mgr) const { m_stats.print(mgr); }
 
  private:
   const MethodToInferredReturnType m_candidates;
+  const XStoreRefs m_xstores;
   RtypeStats m_stats;
 
   void specialize_non_true_virtuals(
@@ -86,6 +90,10 @@ class RtypeSpecialization final {
       RtypeStats& stats) const;
   bool shares_identical_rtype_candidate(DexMethod* meth,
                                         const DexType* better_rtype) const;
+  bool share_common_rtype_candidate(
+      const MethodToInferredReturnType& rtype_candidates,
+      const std::vector<const DexMethod*>& meths,
+      const DexType* better_rtype) const;
 };
 
 } // namespace resolve_refs

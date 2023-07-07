@@ -73,7 +73,8 @@ class ResolveRefsPass : public ExternalRefsManglingPass {
                           const FieldSearch field_search,
                           impl::RefStats& stats);
   impl::RefStats resolve_refs(DexMethod* method);
-  impl::RefStats refine_virtual_callsites(DexMethod* method,
+  impl::RefStats refine_virtual_callsites(const XStoreRefs& xstores,
+                                          DexMethod* method,
                                           bool desuperify,
                                           bool specialize_rtype);
   bool m_desuperify;
