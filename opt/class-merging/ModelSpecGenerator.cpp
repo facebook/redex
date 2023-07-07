@@ -88,7 +88,8 @@ TypeSet collect_reflected_mergeables(
   if (!code) {
     return non_mergeables;
   }
-
+  // Make sure code in editable cfg mode before ReflectionAnalysis.
+  code->build_cfg();
   std::unique_ptr<reflection::ReflectionAnalysis> analysis =
       std::make_unique<reflection::ReflectionAnalysis>(
           /* dex_method */ method,
@@ -97,9 +98,10 @@ TypeSet collect_reflected_mergeables(
           /* metadata_cache */ &refl_metadata_cache);
 
   if (!analysis->has_found_reflection()) {
+    code->clear_cfg();
     return non_mergeables;
   }
-
+  code->clear_cfg();
   for (const auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
     auto aobj = analysis->get_result_abstract_object(insn);

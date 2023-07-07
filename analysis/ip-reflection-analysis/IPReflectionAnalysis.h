@@ -31,7 +31,7 @@ class IPReflectionAnalysisPass : public Pass {
          "Generate redex-reflection-analysis.txt file containing the analysis "
          "results.");
   }
-  bool is_cfg_legacy() override { return true; }
+
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   using Result =

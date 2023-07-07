@@ -17,6 +17,7 @@
 #include <unordered_set>
 
 #include "ClassHierarchy.h"
+#include "ControlFlow.h"
 #include "DexClass.h"
 #include "FbjniMarker.h"
 #include "Match.h"
@@ -192,7 +193,9 @@ void analyze_reflection(const Scope& scope) {
   std::mutex mutation_mutex;
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
     std::unique_ptr<ReflectionAnalysis> analysis = nullptr;
-    for (auto& mie : InstructionIterable(code)) {
+    code.build_cfg(true, false);
+    auto& cfg = code.cfg();
+    for (auto& mie : InstructionIterable(cfg)) {
       IRInstruction* insn = mie.insn;
       if (!opcode::is_an_invoke(insn->opcode())) {
         continue;
@@ -275,6 +278,7 @@ void analyze_reflection(const Scope& scope) {
         break;
       }
     }
+    code.clear_cfg();
   });
 }
 
@@ -696,7 +700,6 @@ void init_reachable_classes(const Scope& scope,
   {
     Timer t{"Analyzing reflection"};
     analyze_reflection(scope);
-
     std::unordered_set<DexClass*> reflected_package_classes;
     for (auto clazz : scope) {
       const auto name = clazz->get_type()->get_name()->str();

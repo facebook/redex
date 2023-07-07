@@ -64,8 +64,10 @@ TEST_F(SimpleReflectionAnalysisTest, nominalCases) {
         "Lcom/facebook/redextest/ReflectionAnalysis$Isolate;") {
       for (const auto& method : cls->get_dmethods()) {
         if (method->get_name()->str() == "main") {
+          method->get_code()->build_cfg();
+          auto& cfg = method->get_code()->cfg();
           ReflectionAnalysis analysis(method);
-          for (auto& mie : InstructionIterable(method->get_code())) {
+          for (auto& mie : InstructionIterable(cfg)) {
             IRInstruction* insn = mie.insn;
             if (insn->opcode() == OPCODE_INVOKE_STATIC &&
                 insn->get_method()->get_name()->str() == "check") {

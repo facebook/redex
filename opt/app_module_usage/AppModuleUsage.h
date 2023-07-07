@@ -67,8 +67,6 @@ class AppModuleUsagePass : public Pass {
     bind("crash_with_violations", false, m_crash_with_violations);
   }
 
-  bool is_cfg_legacy() override { return true; }
-
   // Entrypoint for the AppModuleUsagePass pass
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
