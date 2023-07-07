@@ -68,8 +68,11 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
           stat.call_count >= m_perf_config.call_count_threshold) {
         auto& mf = method_flags[method];
         mf.hot = true;
+        // consistent with buck python config in the post-process baseline profile
+        // generator, which is set both flags true for ColdStart methods
         if (startup) {
           mf.startup = true;
+          mf.not_startup = true;
         } else {
           mf.not_startup = true;
         }
