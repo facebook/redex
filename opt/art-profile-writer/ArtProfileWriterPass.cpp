@@ -68,7 +68,11 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
         auto& mf = method_flags[method];
         mf.hot = true;
         if (startup) {
+          // consistent with buck python config in the post-process baseline
+          // profile generator, which is set both flags true for ColdStart
+          // methods
           mf.startup = true;
+          mf.not_startup = true;
         } else {
           mf.not_startup = true;
         }
