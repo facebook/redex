@@ -462,8 +462,24 @@ workflows:
   version: 2.1
   build_main:
     jobs:
+      # Oldest officially supported Ubuntu build. Will go away soon.
       - build-18_04:
           filters: *filter-only-main
+      # Current Ubuntu LTS.
+      - build-20_04:
+          filters: *filter-only-main
+      # Oldest officially supported Debian build.
+      - build-deb_oldoldstable:
+          filters: *filter-only-main
+      # For better format strings checking.
+      - build-deb_stable-32:
+          filters: *filter-only-main
+      # For newer compilers.
+      - build-deb_unstable:
+          filters: *filter-only-main
+      - build-deb_unstable-w-clang:
+          filters: *filter-only-main
+      # For compatibility.
       - build-windows:
           filters: *filter-only-main
 
@@ -496,10 +512,11 @@ workflows:
           cron: "0 0 * * *"
           filters: *filter-only-main
     jobs:
+      - build-18_04
       - build-20_04
       - build-22_04
-      - build-deb_stable
       - build-deb_oldoldstable
+      - build-deb_stable
       - build-deb_stable-w-clang
       - build-deb_stable-32
       - build-deb_unstable
