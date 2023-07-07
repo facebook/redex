@@ -142,7 +142,7 @@ class ResChunkPullParser {
     const std::ptrdiff_t diff =
         (const char*)m_current_chunk - (const char*)m_data;
     LOG_FATAL_IF(diff < 0, "diff is negative");
-    const size_t offset = static_cast<const size_t>(diff);
+    const size_t offset = static_cast<size_t>(diff);
 
     if (offset == m_len) {
       m_current_chunk = nullptr;

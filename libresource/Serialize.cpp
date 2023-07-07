@@ -883,8 +883,9 @@ int ensure_string_in_xml_pool(const void* data,
   }
 
   // Add given string to the end of a new pool.
-  auto flags = pool.isUTF8() ? htodl(android::ResStringPool_header::UTF8_FLAG)
-                             : (uint32_t)0;
+  auto flags = pool.isUTF8()
+                   ? htodl((uint32_t)android::ResStringPool_header::UTF8_FLAG)
+                   : (uint32_t)0;
   arsc::ResStringPoolBuilder pool_builder(flags);
   for (size_t i = 0; i < pool_size; i++) {
     size_t length;

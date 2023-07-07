@@ -1106,8 +1106,9 @@ int ApkResources::replace_in_xml_string_pool(
   auto pool_ptr = (android::ResStringPool_header*)((char*)data + chunk_size);
   size_t num_replaced = 0;
   android::ResStringPool pool(pool_ptr, dtohl(pool_ptr->header.size));
-  auto flags = pool.isUTF8() ? htodl(android::ResStringPool_header::UTF8_FLAG)
-                             : (uint32_t)0;
+  auto flags = pool.isUTF8()
+                   ? htodl((uint32_t)android::ResStringPool_header::UTF8_FLAG)
+                   : (uint32_t)0;
   arsc::ResStringPoolBuilder pool_builder(flags);
   for (size_t i = 0; i < dtohl(pool_ptr->stringCount); i++) {
     auto existing_str = arsc::get_string_from_pool(pool, i);
