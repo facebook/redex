@@ -104,29 +104,6 @@ bool can_update_rtype_for_list(const std::vector<const DexMethod*>& meths,
   return true;
 }
 
-bool share_common_rtype_candidate(
-    const MethodToInferredReturnType& rtype_candidates,
-    const std::vector<const DexMethod*>& meths,
-    const DexType* better_rtype) {
-  for (auto* m : meths) {
-    if (!m->get_code()) {
-      continue;
-    }
-    auto* meth = const_cast<DexMethod*>(m);
-    if (rtype_candidates.count(meth) == 0) {
-      return false;
-    }
-    const auto* candidate_rtype = rtype_candidates.at(meth);
-    if (candidate_rtype != better_rtype) {
-      TRACE(RESO, 4, "overridden mismatch better rtype %s -> %s vs %s",
-            SHOW(candidate_rtype), SHOW(candidate_rtype), SHOW(better_rtype));
-      return false;
-    }
-  }
-
-  return true;
-}
-
 void update_rtype_for(DexMethod* meth,
                       const DexType* new_rtype,
                       RtypeStats& stats,
@@ -189,13 +166,12 @@ void RtypeCandidates::collect_inferred_rtype(
     return;
   }
 
-  TRACE(RESO, 4, "collect rtype for %s inferred %s", SHOW(meth),
-        SHOW(inferred_rtype));
   curr_rtype.join_with(inferred_rtype);
 }
 
 void RtypeCandidates::collect_specializable_rtype(
     const api::AndroidSDK* min_sdk_api,
+    const XStoreRefs& xstores,
     DexMethod* meth,
     const DexTypeDomain& rtype_domain) {
   if (rtype_domain.is_bottom() || rtype_domain.is_top()) {
@@ -211,9 +187,17 @@ void RtypeCandidates::collect_specializable_rtype(
   if (*better_rtype == rtype || type::is_array(rtype)) {
     return;
   }
+
+  TRACE(RESO, 3, "collect rtype for %s inferred %s", SHOW(meth),
+        SHOW(*better_rtype));
   auto better_rtype_cls = type_class(*better_rtype);
   if (better_rtype_cls && better_rtype_cls->is_external() &&
       !min_sdk_api->has_type(*better_rtype)) {
+    return;
+  }
+  // Drop cross dex store ref from the current method. Make sure that all
+  // collected candidates are free of illegal refs.
+  if (xstores.illegal_ref(meth->get_class(), *better_rtype)) {
     return;
   }
   // `better_rtype` is a subtype of the exsting `rtype`.
@@ -226,7 +210,11 @@ void RtypeCandidates::collect_specializable_rtype(
 bool RtypeSpecialization::shares_identical_rtype_candidate(
     DexMethod* meth, const DexType* better_rtype) const {
   if (!meth->get_code()) {
-    return true;
+    // Interface methods w/ no code are not in the rtype_candidates map. Cross
+    // dex store refs check was not done earlier.
+    bool is_illegal_ref =
+        m_xstores.illegal_ref(meth->get_class(), better_rtype);
+    return !is_illegal_ref;
   }
 
   if (m_candidates.count(meth) == 0) {
@@ -235,6 +223,34 @@ bool RtypeSpecialization::shares_identical_rtype_candidate(
   const auto* candidate_rtype = m_candidates.at(meth);
   if (candidate_rtype != better_rtype) {
     return false;
+  }
+
+  return true;
+}
+
+bool RtypeSpecialization::share_common_rtype_candidate(
+    const MethodToInferredReturnType& rtype_candidates,
+    const std::vector<const DexMethod*>& meths,
+    const DexType* better_rtype) const {
+  for (auto* m : meths) {
+    if (!m->get_code()) {
+      // Interface methods w/ no code are not in the rtype_candidates map. Cross
+      // dex store refs check was not done earlier.
+      if (m_xstores.illegal_ref(m->get_class(), better_rtype)) {
+        return false;
+      }
+      continue;
+    }
+    auto* meth = const_cast<DexMethod*>(m);
+    if (rtype_candidates.count(meth) == 0) {
+      return false;
+    }
+    const auto* candidate_rtype = rtype_candidates.at(meth);
+    if (candidate_rtype != better_rtype) {
+      TRACE(RESO, 4, "overridden mismatch better rtype %s -> %s vs %s",
+            SHOW(candidate_rtype), SHOW(candidate_rtype), SHOW(better_rtype));
+      return false;
+    }
   }
 
   return true;
@@ -315,13 +331,13 @@ void RtypeSpecialization::specialize_true_virtuals(
       }
       return;
     }
-    TRACE(RESO, 4, "specialize virtual 1 overridden %s w/ rtype %s", SHOW(meth),
+    TRACE(RESO, 3, "specialize virtual 1 overridden %s w/ rtype %s", SHOW(meth),
           SHOW(better_rtype));
     if (can_update_rtype_for(overridden, better_rtype) &&
         can_update_rtype_for(meth, better_rtype)) {
       stats.num_rtype_specialized_virtual_1++;
       virtual_roots.emplace(overridden, better_rtype);
-      TRACE(RESO, 4, "root virtual 1 overridden %s w/ rtype %s",
+      TRACE(RESO, 3, "root virtual 1 overridden %s w/ rtype %s",
             SHOW(overridden), SHOW(better_rtype));
     }
   } else {

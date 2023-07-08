@@ -298,7 +298,8 @@ RefStats ResolveRefsPass::resolve_refs(DexMethod* method) {
   return stats;
 }
 
-RefStats ResolveRefsPass::refine_virtual_callsites(DexMethod* method,
+RefStats ResolveRefsPass::refine_virtual_callsites(const XStoreRefs& xstores,
+                                                   DexMethod* method,
                                                    bool desuperify,
                                                    bool specialize_rtype) {
   RefStats stats;
@@ -383,8 +384,8 @@ RefStats ResolveRefsPass::refine_virtual_callsites(DexMethod* method,
     }
   }
 
-  stats.rtype_candidates.collect_specializable_rtype(m_min_sdk_api, method,
-                                                     rtype_domain);
+  stats.rtype_candidates.collect_specializable_rtype(m_min_sdk_api, xstores,
+                                                     method, rtype_domain);
   return stats;
 }
 
@@ -393,11 +394,12 @@ void ResolveRefsPass::run_pass(DexStoresVector& stores,
                                PassManager& mgr) {
   always_assert(m_min_sdk_api);
   Scope scope = build_class_scope(stores);
-  impl::RefStats stats =
-      walk::parallel::methods<impl::RefStats>(scope, [&](DexMethod* method) {
+  XStoreRefs xstores(stores);
+  impl::RefStats stats = walk::parallel::methods<impl::RefStats>(
+      scope, [this, &xstores](DexMethod* method) {
         auto local_stats = resolve_refs(method);
-        local_stats +=
-            refine_virtual_callsites(method, m_desuperify, m_specialize_rtype);
+        local_stats += refine_virtual_callsites(xstores, method, m_desuperify,
+                                                m_specialize_rtype);
         return local_stats;
       });
   stats.print(&mgr);
@@ -405,7 +407,7 @@ void ResolveRefsPass::run_pass(DexStoresVector& stores,
   if (!m_specialize_rtype) {
     return;
   }
-  RtypeSpecialization rs(stats.rtype_candidates.get_candidates());
+  RtypeSpecialization rs(stats.rtype_candidates.get_candidates(), xstores);
   rs.specialize_rtypes(scope);
   rs.print_stats(&mgr);
 
@@ -413,8 +415,9 @@ void ResolveRefsPass::run_pass(DexStoresVector& stores,
   // rtypes collection is disabled.
   stats =
       walk::parallel::methods<impl::RefStats>(scope, [&](DexMethod* method) {
-        auto local_stats = refine_virtual_callsites(
-            method, false /* desuperfy */, false /* specialize_rtype */);
+        auto local_stats =
+            refine_virtual_callsites(xstores, method, false /* desuperfy */,
+                                     false /* specialize_rtype */);
         return local_stats;
       });
   stats.print(&mgr);
