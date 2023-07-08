@@ -52,7 +52,7 @@ class ResolveRefsPass : public ExternalRefsManglingPass {
     bind("desuperify", true, m_desuperify,
          "Convert invoke-super calls to invoke-virtual where possible");
     bind(
-        "specialize_return_type", false, m_specialize_rtype,
+        "specialize_return_type", true, m_specialize_rtype,
         "Specialize the return type of methods based on local type inference.");
     trait(Traits::Pass::atleast, 1);
   }
