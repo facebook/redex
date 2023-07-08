@@ -184,6 +184,9 @@ struct CFGNeedle {
   IRList::const_iterator it;
 };
 
+using GatherMieFunction =
+    std::function<void(const DexMethod*, const MethodItemEntry&, References*)>;
+
 class MethodReferencesGatherer {
  public:
   MethodReferencesGatherer(
@@ -192,7 +195,7 @@ class MethodReferencesGatherer {
       bool check_init_instantiable,
       std::function<bool(const DexClass*)> is_class_instantiable,
       bool consider_code,
-      std::function<void(const MethodItemEntry&, References*)> gather_mie);
+      GatherMieFunction gather_mie);
 
   enum class AdvanceKind {
     Initial,
@@ -208,8 +211,8 @@ class MethodReferencesGatherer {
 
   uint32_t get_instructions_visited() const { return m_instructions_visited; }
 
-  static void default_gather_mie(const DexMethod* method,
-                                 bool include_dynamic_references,
+  static void default_gather_mie(bool include_dynamic_references,
+                                 const DexMethod* method,
                                  const MethodItemEntry& mie,
                                  References* refs,
                                  bool gather_methods = true);
@@ -228,7 +231,7 @@ class MethodReferencesGatherer {
   bool m_check_init_instantiable;
   std::function<bool(const DexClass*)> m_is_class_instantiable;
   bool m_consider_code;
-  std::function<void(const MethodItemEntry&, References*)> m_gather_mie;
+  GatherMieFunction m_gather_mie;
   std::mutex m_mutex;
   std::unordered_set<cfg::Block*> m_pushed_blocks;
   std::unordered_set<DexType*> m_covered_catch_types;
@@ -406,6 +409,13 @@ struct TransitiveClosureMarkerSharedState {
 using TransitiveClosureMarkerWorkerState =
     sparta::SpartaWorkerState<ReachableObject>;
 
+/*
+ * Resolve the method reference more conservatively without the context of the
+ * call, such as call instruction, target type and the caller method.
+ */
+const DexMethod* resolve_without_context(const DexMethodRef* method,
+                                         const DexClass* cls);
+
 class TransitiveClosureMarkerWorker {
  public:
   TransitiveClosureMarkerWorker(
@@ -479,8 +489,7 @@ class TransitiveClosureMarkerWorker {
   std::shared_ptr<MethodReferencesGatherer> create_method_references_gatherer(
       const DexMethod* method,
       bool consider_code = true,
-      std::function<void(const MethodItemEntry&, References*)> gather_mie =
-          nullptr);
+      GatherMieFunction gather_mie = nullptr);
 
   virtual void gather_and_push(const DexMethod* meth);
 
@@ -493,13 +502,6 @@ class TransitiveClosureMarkerWorker {
 
   template <class Parent, class Object>
   void record_reachability(Parent* parent, Object* object);
-
-  /*
-   * Resolve the method reference more conservatively without the context of the
-   * call, such as call instruction, target type and the caller method.
-   */
-  static const DexMethod* resolve_without_context(const DexMethodRef* method,
-                                                  const DexClass* cls);
 
   void instantiable(DexType* type);
 

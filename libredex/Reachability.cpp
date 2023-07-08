@@ -635,7 +635,7 @@ MethodReferencesGatherer::MethodReferencesGatherer(
     bool check_init_instantiable,
     std::function<bool(const DexClass*)> is_class_instantiable,
     bool consider_code,
-    std::function<void(const MethodItemEntry&, References*)> gather_mie)
+    GatherMieFunction gather_mie)
     : m_method(method),
       m_include_dynamic_references(include_dynamic_references),
       m_check_init_instantiable(check_init_instantiable),
@@ -643,10 +643,10 @@ MethodReferencesGatherer::MethodReferencesGatherer(
       m_consider_code(consider_code),
       m_gather_mie(gather_mie ? std::move(gather_mie)
                               : std::bind(default_gather_mie,
-                                          method,
                                           include_dynamic_references,
                                           std::placeholders::_1,
                                           std::placeholders::_2,
+                                          std::placeholders::_3,
                                           /* gather_methods */ true)) {}
 
 std::optional<MethodReferencesGatherer::InstantiableDependency>
@@ -682,8 +682,8 @@ MethodReferencesGatherer::get_instantiable_dependency(
 };
 
 void MethodReferencesGatherer::default_gather_mie(
-    const DexMethod* method,
     bool include_dynamic_references,
+    const DexMethod* method,
     const MethodItemEntry& mie,
     References* refs,
     bool gather_methods) {
@@ -772,7 +772,7 @@ void MethodReferencesGatherer::advance(AdvanceKind kind,
       if (dep) {
         return dep;
       }
-      m_gather_mie(*it, refs);
+      m_gather_mie(m_method, *it, refs);
       if (it->type == MFLOW_OPCODE) {
         m_instructions_visited++;
       }
@@ -958,9 +958,7 @@ void TransitiveClosureMarkerWorker::gather_and_push(const DexMethod* meth) {
 
 std::shared_ptr<MethodReferencesGatherer>
 TransitiveClosureMarkerWorker::create_method_references_gatherer(
-    const DexMethod* method,
-    bool consider_code,
-    std::function<void(const MethodItemEntry&, References*)> gather_mie) {
+    const DexMethod* method, bool consider_code, GatherMieFunction gather_mie) {
   const auto* instantiable_types =
       (m_shared_state->cfg_gathering_check_instantiable &&
        !method->rstate.no_optimizations())
@@ -1080,8 +1078,8 @@ void TransitiveClosureMarkerWorker::visit_field_ref(const DexFieldRef* field) {
   push(field, field->get_type());
 }
 
-const DexMethod* TransitiveClosureMarkerWorker::resolve_without_context(
-    const DexMethodRef* method, const DexClass* cls) {
+const DexMethod* resolve_without_context(const DexMethodRef* method,
+                                         const DexClass* cls) {
   if (!cls) return nullptr;
   for (auto const& m : cls->get_vmethods()) {
     if (method::signatures_match(method, m)) {
