@@ -15,6 +15,7 @@
 #include "DexClass.h"
 #include "KeepReason.h"
 #include "MethodOverrideGraph.h"
+#include "MethodUtil.h"
 #include "Pass.h"
 #include "RemoveUninstantiablesImpl.h"
 #include "SpartaWorkQueue.h"
@@ -167,7 +168,7 @@ class ReachableObjects {
   ReachableObjectGraph m_retainers_of;
 
   friend class RootSetMarker;
-  friend class TransitiveClosureMarker;
+  friend class TransitiveClosureMarkerWorker;
 };
 
 enum class Condition {
@@ -301,13 +302,9 @@ void gather_dynamic_references(const DexAnnotation* item,
 void gather_dynamic_references(const MethodItemEntry* mie,
                                References* references);
 
-// Each thread will have its own instance of Stats, so align it in order to
-// avoid false sharing.
-struct alignas(CACHE_LINE_SIZE) Stats {
-  int num_ignore_check_strings;
+struct Stats {
+  std::atomic<int> num_ignore_check_strings{0};
 };
-
-using MarkWorkerState = sparta::SpartaWorkerState<ReachableObject>;
 
 /*
  * These helper classes compute reachable objects by a DFS+marking algorithm.
@@ -390,39 +387,33 @@ class RootSetMarker {
   ConcurrentSet<ReachableObject, ReachableObjectHash>* m_root_set;
 };
 
-class TransitiveClosureMarker {
- public:
-  TransitiveClosureMarker(
-      const IgnoreSets& ignore_sets,
-      const method_override_graph::Graph& method_override_graph,
-      bool record_reachability,
-      bool relaxed_keep_class_members,
-      bool cfg_gathering_check_instantiable,
-      bool cfg_gathering_check_instance_callable,
-      ConditionallyMarked* cond_marked,
-      ReachableObjects* reachable_objects,
-      ReachableAspects* reachable_aspects,
-      MarkWorkerState* worker_state,
-      Stats* stats)
-      : m_ignore_sets(ignore_sets),
-        m_method_override_graph(method_override_graph),
-        m_record_reachability(record_reachability),
-        m_relaxed_keep_class_members(relaxed_keep_class_members),
-        m_cfg_gathering_check_instantiable(cfg_gathering_check_instantiable),
-        m_cfg_gathering_check_instance_callable(
-            cfg_gathering_check_instance_callable),
-        m_cond_marked(cond_marked),
-        m_reachable_objects(reachable_objects),
-        m_reachable_aspects(reachable_aspects),
-        m_worker_state(worker_state),
-        m_stats(stats) {
-    if (s_class_forname == nullptr) {
-      s_class_forname = DexMethod::get_method(
-          "Ljava/lang/Class;.forName:(Ljava/lang/String;)Ljava/lang/Class;");
-    }
-  }
+class TransitiveClosureMarkerWorker;
 
-  virtual ~TransitiveClosureMarker() = default;
+struct TransitiveClosureMarkerSharedState {
+  const IgnoreSets* ignore_sets;
+  const method_override_graph::Graph* method_override_graph;
+  bool record_reachability;
+  bool relaxed_keep_class_members;
+  bool cfg_gathering_check_instantiable;
+  bool cfg_gathering_check_instance_callable;
+
+  ConditionallyMarked* cond_marked;
+  ReachableObjects* reachable_objects;
+  ReachableAspects* reachable_aspects;
+  Stats* stats;
+};
+
+using TransitiveClosureMarkerWorkerState =
+    sparta::SpartaWorkerState<ReachableObject>;
+
+class TransitiveClosureMarkerWorker {
+ public:
+  TransitiveClosureMarkerWorker(
+      const TransitiveClosureMarkerSharedState* shared_state,
+      TransitiveClosureMarkerWorkerState* worker_state)
+      : m_shared_state(shared_state), m_worker_state(worker_state) {}
+
+  virtual ~TransitiveClosureMarkerWorker() = default;
 
   /*
    * Marks :obj and pushes its immediately reachable neighbors onto the local
@@ -478,7 +469,7 @@ class TransitiveClosureMarker {
   void push_if_instance_method_callable(
       std::shared_ptr<MethodReferencesGatherer> method_references_gatherer);
 
-  bool has_class_forname(const DexMethod* meth);
+  bool has_class_forName(const DexMethod* meth);
 
   void gather_and_push(
       std::shared_ptr<MethodReferencesGatherer> method_references_gatherer,
@@ -534,19 +525,8 @@ class TransitiveClosureMarker {
     }
   }
 
-  const IgnoreSets& m_ignore_sets;
-  const method_override_graph::Graph& m_method_override_graph;
-  bool m_record_reachability;
-  bool m_relaxed_keep_class_members;
-  bool m_cfg_gathering_check_instantiable;
-  bool m_cfg_gathering_check_instance_callable;
-  ConditionallyMarked* m_cond_marked;
-  ReachableObjects* m_reachable_objects;
-  ReachableAspects* m_reachable_aspects;
-  MarkWorkerState* m_worker_state;
-  Stats* m_stats;
-
-  static DexMethodRef* s_class_forname;
+  const TransitiveClosureMarkerSharedState* const m_shared_state;
+  TransitiveClosureMarkerWorkerState* const m_worker_state;
 };
 
 /*

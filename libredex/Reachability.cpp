@@ -42,8 +42,6 @@ bool consider_dynamically_referenced(const DexClass* cls) {
   return !root(cls) && !is_interface(cls) && !is_annotation(cls);
 }
 
-DexMethodRef* TransitiveClosureMarker::s_class_forname = nullptr;
-
 std::ostream& operator<<(std::ostream& os, const ReachableObject& obj) {
   switch (obj.type) {
   case ReachableObjectType::ANNO:
@@ -302,7 +300,7 @@ void RootSetMarker::mark_external_method_overriders() {
  * Marks :obj and pushes its immediately reachable neighbors onto the local
  * task queue of the current worker.
  */
-void TransitiveClosureMarker::visit(const ReachableObject& obj) {
+void TransitiveClosureMarkerWorker::visit(const ReachableObject& obj) {
   switch (obj.type) {
   case ReachableObjectType::CLASS:
     visit_cls(obj.cls);
@@ -320,46 +318,48 @@ void TransitiveClosureMarker::visit(const ReachableObject& obj) {
 }
 
 template <class Parent, class InputIt>
-void TransitiveClosureMarker::push(const Parent* parent,
-                                   InputIt begin,
-                                   InputIt end) {
+void TransitiveClosureMarkerWorker::push(const Parent* parent,
+                                         InputIt begin,
+                                         InputIt end) {
   for (auto it = begin; it != end; ++it) {
     push(parent, *it);
   }
 }
 
 template <class Parent>
-void TransitiveClosureMarker::push(const Parent* parent, const DexType* type) {
+void TransitiveClosureMarkerWorker::push(const Parent* parent,
+                                         const DexType* type) {
   type = type::get_element_type_if_array(type);
   push(parent, type_class(type));
 }
 
-void TransitiveClosureMarker::push(const DexMethodRef* parent,
-                                   const DexType* type) {
+void TransitiveClosureMarkerWorker::push(const DexMethodRef* parent,
+                                         const DexType* type) {
   type = type::get_element_type_if_array(type);
   push(parent, type_class(type));
 }
 
 template <class Parent>
-void TransitiveClosureMarker::push(const Parent* parent, const DexClass* cls) {
+void TransitiveClosureMarkerWorker::push(const Parent* parent,
+                                         const DexClass* cls) {
   if (!cls) {
     return;
   }
   record_reachability(parent, cls);
-  if (!m_reachable_objects->mark(cls)) {
+  if (!m_shared_state->reachable_objects->mark(cls)) {
     return;
   }
   m_worker_state->push_task(ReachableObject(cls));
 }
 
 template <class Parent>
-void TransitiveClosureMarker::push(const Parent* parent,
-                                   const DexFieldRef* field) {
+void TransitiveClosureMarkerWorker::push(const Parent* parent,
+                                         const DexFieldRef* field) {
   if (!field) {
     return;
   }
   record_reachability(parent, field);
-  if (!m_reachable_objects->mark(field)) {
+  if (!m_shared_state->reachable_objects->mark(field)) {
     return;
   }
   auto f = field->as_def();
@@ -370,32 +370,32 @@ void TransitiveClosureMarker::push(const Parent* parent,
 }
 
 template <class Parent>
-void TransitiveClosureMarker::push(const Parent* parent,
-                                   const DexMethodRef* method) {
+void TransitiveClosureMarkerWorker::push(const Parent* parent,
+                                         const DexMethodRef* method) {
   if (!method) {
     return;
   }
 
   record_reachability(parent, method);
-  if (!m_reachable_objects->mark(method)) {
+  if (!m_shared_state->reachable_objects->mark(method)) {
     return;
   }
   m_worker_state->push_task(ReachableObject(method));
 }
 
-void TransitiveClosureMarker::push(const DexMethodRef* parent,
-                                   const DexMethodRef* method) {
+void TransitiveClosureMarkerWorker::push(const DexMethodRef* parent,
+                                         const DexMethodRef* method) {
   this->template push<DexMethodRef>(parent, method);
 }
 
-void TransitiveClosureMarker::push_if_class_instantiable(
+void TransitiveClosureMarkerWorker::push_if_class_instantiable(
     const DexMethod* method) {
-  if (!method || m_reachable_objects->marked(method)) return;
+  if (!method || m_shared_state->reachable_objects->marked(method)) return;
   TRACE(REACH, 4,
         "Conditionally marking method if declaring class is instantiable: %s",
         SHOW(method));
   auto clazz = type_class(method->get_class());
-  m_cond_marked->if_class_instantiable.methods.insert(method);
+  m_shared_state->cond_marked->if_class_instantiable.methods.insert(method);
   // If :clazz is already known to be instantiable, then we cannot count on
   // instantiable(DexClass*) to have moved the
   // conditionally-if-instantiable-marked methods into the actually-marked ones
@@ -403,41 +403,42 @@ void TransitiveClosureMarker::push_if_class_instantiable(
   // :method to m_cond_marked to avoid a race condition where we add to
   // m_cond_marked after instantiable(DexClass*) has finished moving its
   // contents over to m_reachable_objects.
-  if (m_reachable_aspects->instantiable_types.count(clazz)) {
+  if (m_shared_state->reachable_aspects->instantiable_types.count(clazz)) {
     push(clazz, method);
   }
 }
 
-void TransitiveClosureMarker::push_if_class_instantiable(
+void TransitiveClosureMarkerWorker::push_if_class_instantiable(
     const DexField* field) {
-  if (!field || m_reachable_objects->marked(field)) return;
+  if (!field || m_shared_state->reachable_objects->marked(field)) return;
   TRACE(REACH, 4,
         "Conditionally marking field if declaring class is instantiable: %s",
         SHOW(field));
   auto clazz = type_class(field->get_class());
-  m_cond_marked->if_class_instantiable.fields.insert(field);
-  if (m_reachable_aspects->instantiable_types.count(clazz)) {
+  m_shared_state->cond_marked->if_class_instantiable.fields.insert(field);
+  if (m_shared_state->reachable_aspects->instantiable_types.count(clazz)) {
     push(clazz, field);
   }
 }
 
-void TransitiveClosureMarker::push_if_class_instantiable(
+void TransitiveClosureMarkerWorker::push_if_class_instantiable(
     const DexClass* cls,
     std::shared_ptr<MethodReferencesGatherer> method_references_gatherer) {
   always_assert(method_references_gatherer);
   auto method = method_references_gatherer->get_method();
   bool emplaced = false;
-  m_cond_marked->if_class_instantiable.method_references_gatherers.update(
-      cls, [&](auto*, auto& map, bool) {
+  m_shared_state->cond_marked->if_class_instantiable.method_references_gatherers
+      .update(cls, [&](auto*, auto& map, bool) {
         auto ptr = method_references_gatherer.get();
         auto p = map.emplace(method, std::move(method_references_gatherer));
         always_assert(ptr == p.first->second.get()); // emplaced or not
         emplaced = p.second;
       });
   always_assert(!method_references_gatherer);
-  if (emplaced && m_reachable_aspects->instantiable_types.count(cls)) {
-    m_cond_marked->if_class_instantiable.method_references_gatherers.update(
-        cls, [&](auto*, auto& map, bool) {
+  if (emplaced &&
+      m_shared_state->reachable_aspects->instantiable_types.count(cls)) {
+    m_shared_state->cond_marked->if_class_instantiable
+        .method_references_gatherers.update(cls, [&](auto*, auto& map, bool) {
           auto it = map.find(method);
           if (it != map.end()) {
             method_references_gatherer = std::move(it->second);
@@ -453,50 +454,54 @@ void TransitiveClosureMarker::push_if_class_instantiable(
   }
 }
 
-void TransitiveClosureMarker::push_if_class_retained(const DexMethod* method) {
-  if (!method || m_reachable_objects->marked(method)) return;
+void TransitiveClosureMarkerWorker::push_if_class_retained(
+    const DexMethod* method) {
+  if (!method || m_shared_state->reachable_objects->marked(method)) return;
   TRACE(REACH, 4,
         "Conditionally marking method if declaring class is instantiable: %s",
         SHOW(method));
   auto clazz = type_class(method->get_class());
-  m_cond_marked->if_class_retained.methods.insert(method);
-  if (m_reachable_objects->marked(clazz)) {
+  m_shared_state->cond_marked->if_class_retained.methods.insert(method);
+  if (m_shared_state->reachable_objects->marked(clazz)) {
     push(clazz, method);
   }
 }
 
-void TransitiveClosureMarker::push_if_class_retained(const DexField* field) {
-  if (!field || m_reachable_objects->marked(field)) return;
+void TransitiveClosureMarkerWorker::push_if_class_retained(
+    const DexField* field) {
+  if (!field || m_shared_state->reachable_objects->marked(field)) return;
   TRACE(REACH, 4,
         "Conditionally marking field if declaring class is instantiable: %s",
         SHOW(field));
   auto clazz = type_class(field->get_class());
-  m_cond_marked->if_class_retained.fields.insert(field);
-  if (m_reachable_objects->marked(clazz)) {
+  m_shared_state->cond_marked->if_class_retained.fields.insert(field);
+  if (m_shared_state->reachable_objects->marked(clazz)) {
     push(clazz, field);
   }
 }
 
-void TransitiveClosureMarker::
+void TransitiveClosureMarkerWorker::
     push_directly_instantiable_if_class_dynamically_referenced(DexType* type) {
-  m_cond_marked->if_class_dynamically_referenced.directly_instantiable_types
-      .insert(type);
+  m_shared_state->cond_marked->if_class_dynamically_referenced
+      .directly_instantiable_types.insert(type);
   auto clazz = type_class(type);
-  if (m_reachable_aspects->dynamically_referenced_classes.count(clazz)) {
+  if (m_shared_state->reachable_aspects->dynamically_referenced_classes.count(
+          clazz)) {
     directly_instantiable(type);
   }
 }
 
-void TransitiveClosureMarker::push_if_instance_method_callable(
+void TransitiveClosureMarkerWorker::push_if_instance_method_callable(
     std::shared_ptr<MethodReferencesGatherer> method_references_gatherer) {
   auto* method = method_references_gatherer->get_method();
-  m_cond_marked->if_instance_method_callable.update(
+  m_shared_state->cond_marked->if_instance_method_callable.update(
       method, [&](auto*, auto& value, bool) {
         always_assert(!value);
         value = std::move(method_references_gatherer);
       });
-  if (m_reachable_aspects->callable_instance_methods.count(method)) {
-    m_cond_marked->if_instance_method_callable.update(
+  if (m_shared_state->reachable_aspects->callable_instance_methods.count(
+          method)) {
+    m_shared_state->cond_marked->if_instance_method_callable.update(
         method, [&](auto*, auto& value, bool) {
           std::swap(method_references_gatherer, value);
         });
@@ -845,31 +850,33 @@ static References generic_gather(T t, bool include_dynamic_references) {
   return refs;
 }
 
-References TransitiveClosureMarker::gather(const DexAnnotation* anno) const {
-  return generic_gather(anno, m_relaxed_keep_class_members);
+References TransitiveClosureMarkerWorker::gather(
+    const DexAnnotation* anno) const {
+  return generic_gather(anno, m_shared_state->relaxed_keep_class_members);
 }
 
-References TransitiveClosureMarker::gather(const DexField* field) const {
-  return generic_gather(field, m_relaxed_keep_class_members);
+References TransitiveClosureMarkerWorker::gather(const DexField* field) const {
+  return generic_gather(field, m_shared_state->relaxed_keep_class_members);
 }
 
-bool TransitiveClosureMarker::has_class_forname(const DexMethod* meth) {
+bool TransitiveClosureMarkerWorker::has_class_forName(const DexMethod* meth) {
   auto code = meth->get_code();
-  if (!code || !s_class_forname) {
+  auto* class_forName = method::java_lang_Class_forName();
+  if (!code || !class_forName) {
     return false;
   }
   always_assert(code->editable_cfg_built());
   auto& cfg = code->cfg();
   for (auto& mie : InstructionIterable(cfg)) {
     auto insn = mie.insn;
-    if (insn->has_method() && insn->get_method() == s_class_forname) {
+    if (insn->has_method() && insn->get_method() == class_forName) {
       return true;
     }
   }
   return false;
 }
 
-void TransitiveClosureMarker::gather_and_push(
+void TransitiveClosureMarkerWorker::gather_and_push(
     std::shared_ptr<MethodReferencesGatherer> method_references_gatherer,
     MethodReferencesGatherer::AdvanceKind advance_kind,
     const DexClass* instantiable_cls) {
@@ -878,10 +885,11 @@ void TransitiveClosureMarker::gather_and_push(
   method_references_gatherer->advance(advance_kind, instantiable_cls, &refs);
   auto* meth = method_references_gatherer->get_method();
   if (refs.method_references_gatherer_dependency_if_instance_method_callable &&
-      (!m_cfg_gathering_check_instantiable ||
-       !m_cfg_gathering_check_instance_callable ||
+      (!m_shared_state->cfg_gathering_check_instantiable ||
+       !m_shared_state->cfg_gathering_check_instance_callable ||
        meth->rstate.no_optimizations() || is_static(meth) ||
-       m_reachable_aspects->callable_instance_methods.count(meth))) {
+       m_shared_state->reachable_aspects->callable_instance_methods.count(
+           meth))) {
     always_assert(advance_kind ==
                   MethodReferencesGatherer::AdvanceKind::Initial);
     always_assert(instantiable_cls == nullptr);
@@ -894,18 +902,19 @@ void TransitiveClosureMarker::gather_and_push(
   }
   auto* type = meth->get_class();
   auto* cls = type_class(type);
-  bool check_strings = m_ignore_sets.keep_class_in_string;
-  if (!check_strings && !refs.strings.empty() && has_class_forname(meth)) {
+  bool check_strings = m_shared_state->ignore_sets->keep_class_in_string;
+  if (!check_strings && !refs.strings.empty() && has_class_forName(meth)) {
     check_strings = true;
   }
-  if (m_ignore_sets.string_literals.count(type)) {
-    ++m_stats->num_ignore_check_strings;
+  if (m_shared_state->ignore_sets->string_literals.count(type)) {
+    ++m_shared_state->stats->num_ignore_check_strings;
     check_strings = false;
   }
   if (cls && check_strings) {
-    for (const auto& ignore_anno_type : m_ignore_sets.string_literal_annos) {
+    for (const auto& ignore_anno_type :
+         m_shared_state->ignore_sets->string_literal_annos) {
       if (has_anno(cls, ignore_anno_type)) {
-        ++m_stats->num_ignore_check_strings;
+        ++m_shared_state->stats->num_ignore_check_strings;
         check_strings = false;
         break;
       }
@@ -941,32 +950,33 @@ void TransitiveClosureMarker::gather_and_push(
                              std::move(method_references_gatherer));
 }
 
-void TransitiveClosureMarker::gather_and_push(const DexMethod* meth) {
+void TransitiveClosureMarkerWorker::gather_and_push(const DexMethod* meth) {
   gather_and_push(create_method_references_gatherer(meth),
                   MethodReferencesGatherer::AdvanceKind::Initial,
                   /* instantiable_cls */ nullptr);
 }
 
 std::shared_ptr<MethodReferencesGatherer>
-TransitiveClosureMarker::create_method_references_gatherer(
+TransitiveClosureMarkerWorker::create_method_references_gatherer(
     const DexMethod* method,
     bool consider_code,
     std::function<void(const MethodItemEntry&, References*)> gather_mie) {
   const auto* instantiable_types =
-      (m_cfg_gathering_check_instantiable && !method->rstate.no_optimizations())
-          ? &m_reachable_aspects->instantiable_types
+      (m_shared_state->cfg_gathering_check_instantiable &&
+       !method->rstate.no_optimizations())
+          ? &m_shared_state->reachable_aspects->instantiable_types
           : nullptr;
   auto is_class_instantiable = [instantiable_types](const auto* cls) {
     return !instantiable_types || instantiable_types->count(cls);
   };
   return std::make_shared<MethodReferencesGatherer>(
-      method, m_relaxed_keep_class_members,
-      m_cfg_gathering_check_instance_callable, std::move(is_class_instantiable),
-      consider_code, std::move(gather_mie));
+      method, m_shared_state->relaxed_keep_class_members,
+      m_shared_state->cfg_gathering_check_instance_callable,
+      std::move(is_class_instantiable), consider_code, std::move(gather_mie));
 }
 
 template <typename T>
-void TransitiveClosureMarker::gather_and_push(T t) {
+void TransitiveClosureMarkerWorker::gather_and_push(T t) {
   auto refs = gather(t);
   push_typelike_strings(t, refs.strings);
   push(t, refs.types.begin(), refs.types.end());
@@ -978,7 +988,7 @@ void TransitiveClosureMarker::gather_and_push(T t) {
 }
 
 template <class Parent>
-void TransitiveClosureMarker::push_typelike_strings(
+void TransitiveClosureMarkerWorker::push_typelike_strings(
     const Parent* parent, const std::vector<const DexString*>& strings) {
   for (auto const& str : strings) {
     auto internal = java_names::external_to_internal(str->str());
@@ -990,7 +1000,7 @@ void TransitiveClosureMarker::push_typelike_strings(
   }
 }
 
-void TransitiveClosureMarker::visit_cls(const DexClass* cls) {
+void TransitiveClosureMarkerWorker::visit_cls(const DexClass* cls) {
   TRACE(REACH, 4, "Visiting class: %s", SHOW(cls));
   auto is_interface_instantiable = [](const DexClass* interface) {
     if (is_annotation(interface) || root(interface) || !can_rename(interface)) {
@@ -1013,13 +1023,13 @@ void TransitiveClosureMarker::visit_cls(const DexClass* cls) {
   const DexAnnotationSet* annoset = cls->get_anno_set();
   if (annoset) {
     for (auto const& anno : annoset->get_annotations()) {
-      if (m_ignore_sets.system_annos.count(anno->type())) {
+      if (m_shared_state->ignore_sets->system_annos.count(anno->type())) {
         TRACE(REACH,
               5,
               "Stop marking from %s by system anno: %s",
               SHOW(cls),
               SHOW(anno->type()));
-        if (m_relaxed_keep_class_members) {
+        if (m_shared_state->relaxed_keep_class_members) {
           References refs;
           gather_dynamic_references(anno.get(), &refs);
           dynamically_referenced(refs.classes_dynamically_referenced);
@@ -1031,34 +1041,35 @@ void TransitiveClosureMarker::visit_cls(const DexClass* cls) {
     }
   }
 
-  if (m_relaxed_keep_class_members && consider_dynamically_referenced(cls) &&
-      marked_by_string(cls)) {
+  if (m_shared_state->relaxed_keep_class_members &&
+      consider_dynamically_referenced(cls) && marked_by_string(cls)) {
     dynamically_referenced(cls);
   }
 
+  auto* cond_marked = m_shared_state->cond_marked;
   for (auto const& m : cls->get_ifields()) {
-    if (m_cond_marked->if_class_retained.fields.count(m)) {
+    if (cond_marked->if_class_retained.fields.count(m)) {
       push(cls, m);
     }
   }
   for (auto const& m : cls->get_sfields()) {
-    if (m_cond_marked->if_class_retained.fields.count(m)) {
+    if (cond_marked->if_class_retained.fields.count(m)) {
       push(cls, m);
     }
   }
   for (auto const& m : cls->get_dmethods()) {
-    if (m_cond_marked->if_class_retained.methods.count(m)) {
+    if (cond_marked->if_class_retained.methods.count(m)) {
       push(cls, m);
     }
   }
   for (auto const& m : cls->get_vmethods()) {
-    if (m_cond_marked->if_class_retained.methods.count(m)) {
+    if (cond_marked->if_class_retained.methods.count(m)) {
       push(cls, m);
     }
   }
 }
 
-void TransitiveClosureMarker::visit_field_ref(const DexFieldRef* field) {
+void TransitiveClosureMarkerWorker::visit_field_ref(const DexFieldRef* field) {
   TRACE(REACH, 4, "Visiting field: %s", SHOW(field));
   if (!field->is_concrete()) {
     auto const& realfield =
@@ -1069,7 +1080,7 @@ void TransitiveClosureMarker::visit_field_ref(const DexFieldRef* field) {
   push(field, field->get_type());
 }
 
-const DexMethod* TransitiveClosureMarker::resolve_without_context(
+const DexMethod* TransitiveClosureMarkerWorker::resolve_without_context(
     const DexMethodRef* method, const DexClass* cls) {
   if (!cls) return nullptr;
   for (auto const& m : cls->get_vmethods()) {
@@ -1099,35 +1110,36 @@ const DexMethod* TransitiveClosureMarker::resolve_without_context(
   return nullptr;
 }
 
-void TransitiveClosureMarker::instantiable(DexType* type) {
+void TransitiveClosureMarkerWorker::instantiable(DexType* type) {
   auto cls = type_class(type);
   if (!cls || cls->is_external()) {
     return;
   }
-  if (!m_reachable_aspects->instantiable_types.insert(cls)) {
+  if (!m_shared_state->reachable_aspects->instantiable_types.insert(cls)) {
     return;
   }
   instantiable(cls->get_super_class());
   for (auto* intf : *cls->get_interfaces()) {
     instantiable(intf);
   }
+  auto* cond_marked = m_shared_state->cond_marked;
   for (auto const& f : cls->get_ifields()) {
-    if (m_cond_marked->if_class_instantiable.fields.count(f)) {
+    if (cond_marked->if_class_instantiable.fields.count(f)) {
       push(cls, f);
     }
   }
   for (auto const& m : cls->get_dmethods()) {
-    if (m_cond_marked->if_class_instantiable.methods.count(m)) {
+    if (cond_marked->if_class_instantiable.methods.count(m)) {
       push(cls, m);
     }
   }
   for (auto const& m : cls->get_vmethods()) {
-    if (m_cond_marked->if_class_instantiable.methods.count(m)) {
+    if (cond_marked->if_class_instantiable.methods.count(m)) {
       push(cls, m);
     }
   }
   MethodReferencesGatherers method_references_gatherers;
-  m_cond_marked->if_class_instantiable.method_references_gatherers.update(
+  cond_marked->if_class_instantiable.method_references_gatherers.update(
       cls, [&](auto*, auto& map, bool) {
         method_references_gatherers = std::move(map);
       });
@@ -1139,11 +1151,12 @@ void TransitiveClosureMarker::instantiable(DexType* type) {
   }
 }
 
-void TransitiveClosureMarker::directly_instantiable(DexType* type) {
-  if (m_cfg_gathering_check_instance_callable) {
+void TransitiveClosureMarkerWorker::directly_instantiable(DexType* type) {
+  if (m_shared_state->cfg_gathering_check_instance_callable) {
     instantiable(type);
   }
   std::unordered_set<const DexMethod*> uncallable_vmethods;
+  auto& method_override_graph = *m_shared_state->method_override_graph;
   for (auto cls = type_class(type); cls && !cls->is_external();
        cls = type_class(cls->get_super_class())) {
     for (auto* m : cls->get_dmethods()) {
@@ -1157,19 +1170,20 @@ void TransitiveClosureMarker::directly_instantiable(DexType* type) {
       }
       instance_callable(m);
       const auto& overridden_methods =
-          mog::get_overridden_methods(m_method_override_graph, m);
+          mog::get_overridden_methods(method_override_graph, m);
       uncallable_vmethods.insert(overridden_methods.begin(),
                                  overridden_methods.end());
     }
   }
 }
 
-void TransitiveClosureMarker::instance_callable(DexMethod* method) {
-  if (!m_reachable_aspects->callable_instance_methods.insert(method)) {
+void TransitiveClosureMarkerWorker::instance_callable(DexMethod* method) {
+  if (!m_shared_state->reachable_aspects->callable_instance_methods.insert(
+          method)) {
     return;
   }
   std::shared_ptr<MethodReferencesGatherer> method_references_gatherer;
-  m_cond_marked->if_instance_method_callable.update(
+  m_shared_state->cond_marked->if_instance_method_callable.update(
       method, [&](auto*, auto& value, bool) {
         std::swap(method_references_gatherer, value);
       });
@@ -1179,40 +1193,44 @@ void TransitiveClosureMarker::instance_callable(DexMethod* method) {
   }
 }
 
-void TransitiveClosureMarker::dynamically_referenced(const DexClass* cls) {
-  always_assert(m_relaxed_keep_class_members);
+void TransitiveClosureMarkerWorker::dynamically_referenced(
+    const DexClass* cls) {
+  always_assert(m_shared_state->relaxed_keep_class_members);
   if (!consider_dynamically_referenced(cls) ||
-      !m_reachable_aspects->dynamically_referenced_classes.insert(cls)) {
+      !m_shared_state->reachable_aspects->dynamically_referenced_classes.insert(
+          cls)) {
     return;
   }
+  auto* cond_marked = m_shared_state->cond_marked;
   for (auto const& f : cls->get_ifields()) {
-    if (m_cond_marked->if_class_dynamically_referenced.fields.count(f)) {
+    if (cond_marked->if_class_dynamically_referenced.fields.count(f)) {
       push_if_class_retained(f);
     }
   }
   for (auto const& f : cls->get_sfields()) {
-    if (m_cond_marked->if_class_dynamically_referenced.fields.count(f)) {
+    if (cond_marked->if_class_dynamically_referenced.fields.count(f)) {
       push_if_class_retained(f);
     }
   }
   for (auto const& m : cls->get_dmethods()) {
-    if (m_cond_marked->if_class_dynamically_referenced.methods.count(m)) {
+    if (cond_marked->if_class_dynamically_referenced.methods.count(m)) {
       push_if_class_retained(m);
     }
   }
   for (auto const& m : cls->get_vmethods()) {
-    if (m_cond_marked->if_class_dynamically_referenced.methods.count(m)) {
+    if (cond_marked->if_class_dynamically_referenced.methods.count(m)) {
       push_if_class_retained(m);
     }
   }
   auto type = cls->get_type();
-  if (m_cond_marked->if_class_dynamically_referenced.directly_instantiable_types
+  if (cond_marked->if_class_dynamically_referenced.directly_instantiable_types
           .count(type)) {
     directly_instantiable(type);
   }
 }
 
-void TransitiveClosureMarker::visit_method_ref(const DexMethodRef* method) {
+void TransitiveClosureMarkerWorker::visit_method_ref(
+    const DexMethodRef* method) {
   TRACE(REACH, 4, "Visiting method: %s", SHOW(method));
   auto cls = type_class(method->get_class());
   auto resolved_method = resolve_without_context(method, cls);
@@ -1229,10 +1247,11 @@ void TransitiveClosureMarker::visit_method_ref(const DexMethodRef* method) {
     push(method, t);
   }
   if (cls && !is_abstract(cls) && method::is_init(method)) {
-    if (!m_cfg_gathering_check_instance_callable) {
+    if (!m_shared_state->cfg_gathering_check_instance_callable) {
       instantiable(method->get_class());
     }
-    if (m_relaxed_keep_class_members && consider_dynamically_referenced(cls)) {
+    if (m_shared_state->relaxed_keep_class_members &&
+        consider_dynamically_referenced(cls)) {
       push_directly_instantiable_if_class_dynamically_referenced(
           method->get_class());
     } else {
@@ -1247,7 +1266,7 @@ void TransitiveClosureMarker::visit_method_ref(const DexMethodRef* method) {
   // implementations and overriding methods respectively.
   if (m->is_virtual() || !m->is_concrete()) {
     const auto& overriding_methods =
-        mog::get_overriding_methods(m_method_override_graph, m);
+        mog::get_overriding_methods(*m_shared_state->method_override_graph, m);
     for (auto* overriding : overriding_methods) {
       push_if_class_instantiable(overriding);
     }
@@ -1255,11 +1274,11 @@ void TransitiveClosureMarker::visit_method_ref(const DexMethodRef* method) {
 }
 
 template <class Parent, class Object>
-void TransitiveClosureMarker::record_reachability(Parent* parent,
-                                                  Object* object) {
-  if (m_record_reachability) {
+void TransitiveClosureMarkerWorker::record_reachability(Parent* parent,
+                                                        Object* object) {
+  if (m_shared_state->record_reachability) {
     redex_assert(parent != nullptr && object != nullptr);
-    m_reachable_objects->record_reachability(parent, object);
+    m_shared_state->reachable_objects->record_reachability(parent, object);
   }
 }
 
@@ -1329,16 +1348,23 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
   }
 
   size_t num_threads = redex_parallel::default_num_threads();
-  auto stats_arr = std::make_unique<Stats[]>(num_threads);
+  Stats stats;
+  TransitiveClosureMarkerSharedState shared_state{
+      &ignore_sets,
+      method_override_graph.get(),
+      record_reachability,
+      relaxed_keep_class_members,
+      cfg_gathering_check_instantiable,
+      cfg_gathering_check_instance_callable,
+      &cond_marked,
+      reachable_objects.get(),
+      reachable_aspects,
+      &stats};
   workqueue_run<ReachableObject>(
-      [&](MarkWorkerState* worker_state, const ReachableObject& obj) {
-        TransitiveClosureMarker transitive_closure_marker(
-            ignore_sets, *method_override_graph, record_reachability,
-            relaxed_keep_class_members, cfg_gathering_check_instantiable,
-            cfg_gathering_check_instance_callable, &cond_marked,
-            reachable_objects.get(), reachable_aspects, worker_state,
-            &stats_arr[worker_state->worker_id()]);
-        transitive_closure_marker.visit(obj);
+      [&](TransitiveClosureMarkerWorkerState* worker_state,
+          const ReachableObject& obj) {
+        TransitiveClosureMarkerWorker worker(&shared_state, worker_state);
+        worker.visit(obj);
         return nullptr;
       },
       root_set,
@@ -1346,9 +1372,7 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
       /*push_tasks_while_running=*/true);
 
   if (num_ignore_check_strings != nullptr) {
-    for (size_t i = 0; i < num_threads; ++i) {
-      *num_ignore_check_strings += stats_arr[i].num_ignore_check_strings;
-    }
+    *num_ignore_check_strings = (int)stats.num_ignore_check_strings;
   }
 
   if (out_method_override_graph) {
@@ -1644,6 +1668,6 @@ void dump_graph(std::ostream& os, const ReachableObjectGraph& retainers_of) {
   gw.write(os, keys);
 }
 
-template void TransitiveClosureMarker::push<DexClass>(const DexClass* parent,
-                                                      const DexType* type);
+template void TransitiveClosureMarkerWorker::push<DexClass>(
+    const DexClass* parent, const DexType* type);
 } // namespace reachability

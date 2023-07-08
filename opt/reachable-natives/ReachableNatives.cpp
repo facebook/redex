@@ -91,16 +91,25 @@ void ReachableNativesPass::run_pass(DexStoresVector& stores,
                                        g_redex->blanket_native_root_methods);
 
   size_t num_threads = redex_parallel::default_num_threads();
-  auto stats_arr = std::make_unique<reachability::Stats[]>(num_threads);
   reachability::IgnoreSets ignore_sets;
+  reachability::Stats stats;
+  reachability::TransitiveClosureMarkerSharedState shared_state{
+      &ignore_sets,
+      method_override_graph.get(),
+      false,
+      false,
+      false,
+      false,
+      &cond_marked,
+      reachable_objects.get(),
+      &reachable_aspects,
+      &stats};
   workqueue_run<reachability::ReachableObject>(
-      [&](reachability::MarkWorkerState* worker_state,
+      [&](reachability::TransitiveClosureMarkerWorkerState* worker_state,
           const reachability::ReachableObject& obj) {
-        reachability::TransitiveClosureMarker transitive_closure_marker(
-            ignore_sets, *method_override_graph, false, false, false, false,
-            &cond_marked, reachable_objects.get(), &reachable_aspects,
-            worker_state, &stats_arr[worker_state->worker_id()]);
-        transitive_closure_marker.visit(obj);
+        reachability::TransitiveClosureMarkerWorker worker(&shared_state,
+                                                           worker_state);
+        worker.visit(obj);
         return nullptr;
       },
       root_set,
