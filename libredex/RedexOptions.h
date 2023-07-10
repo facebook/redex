@@ -49,7 +49,7 @@ class RedexOptions {
   bool is_art_build{false};
   bool disable_dex_hasher{false};
   bool instrument_pass_enabled{false};
-  bool redacted{false};
+  bool post_lowering{false};
   int32_t min_sdk{0};
   Architecture arch{Architecture::UNKNOWN};
   DebugInfoKind debug_info_kind{DebugInfoKind::NoCustomSymbolication};

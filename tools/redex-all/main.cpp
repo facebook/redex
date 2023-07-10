@@ -292,10 +292,9 @@ Arguments parse_args(int argc, char* argv[]) {
           ->default_value(false),
       "If specified, states that the current run disables dex hasher.\n");
   od.add_options()(
-      "redacted",
-      po::bool_switch(&args.redex_options.redacted)->default_value(false),
-      "If specified then resulting dex files will have class data placed at"
-      " the end of the file, i.e. last map item entry just before map list.\n");
+      "post-lowering",
+      po::bool_switch(&args.redex_options.post_lowering)->default_value(false),
+      "If specified, post lowering steps are run.\n");
   od.add_options()(
       "arch,A",
       po::value<std::vector<std::string>>(),
@@ -1195,7 +1194,7 @@ void redex_backend(ConfigFiles& conf,
 
   std::set<uint32_t> signatures;
   std::unique_ptr<PostLowering> post_lowering =
-      redex_options.redacted ? PostLowering::create() : nullptr;
+      redex_options.post_lowering ? PostLowering::create() : nullptr;
 
   const bool mem_stats_enabled =
       traceEnabled(STATS, 1) || conf.get_json_config().get("mem_stats", true);
