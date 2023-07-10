@@ -38,6 +38,7 @@ check_PROGRAMS = \
     pure_method_test \
     reachability_test \
     reflection_analysis_test \
+    resolve_refs_test \
     remove_unreachable_test \
     result_propagation_test \
     strip_debug_info_test \
@@ -128,6 +129,9 @@ EXTRA_reachability_test_DEPENDENCIES = reachability_test-class.dex
 
 reflection_analysis_test_SOURCES = ReflectionAnalysisTest.cpp
 EXTRA_reflection_analysis_test_DEPENDENCIES = reflection_analysis_test-class.dex
+
+resolve_refs_test_SOURCES = ResolveRefsTest.cpp
+EXTRA_resolve_refs_test_DEPENDENCIES = resolve_refs_test-class.dex
 
 remove_unreachable_test_SOURCES = RemoveUnreachableTest.cpp
 EXTRA_remove_unreachable_test_DEPENDENCIES = remove_unreachable_test-class.dex
@@ -246,6 +250,9 @@ reachability_test-class.jar: RemoveUnreachableTest.java
 	$(create_jar)
 
 reflection_analysis_test-class.jar: ReflectionAnalysis.java
+	$(create_jar)
+
+resolve_refs_test-class.jar: ResolveRefsTest.java
 	$(create_jar)
 
 remove_unreachable_test-class.jar: RemoveUnreachableTest.java
