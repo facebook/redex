@@ -279,8 +279,8 @@ def run_redex_binary(
     if state.args.is_art_build:
         args += ["--is-art-build"]
 
-    if state.args.redacted:
-        args += ["--redacted"]
+    if state.args.post_lowering:
+        args += ["--post-lowering"]
 
     if state.args.disable_dex_hasher:
         args += ["--disable-dex-hasher"]
@@ -654,10 +654,10 @@ Given an APK, produce a better APK!
         help="States that this is an art only build",
     )
     parser.add_argument(
-        "--redacted",
+        "--post-lowering",
         action="store_true",
         default=False,
-        help="Specifies how dex files should be laid out",
+        help="Specifies whether post lowering processing should be done",
     )
     parser.add_argument(
         "--disable-dex-hasher", action="store_true", help="Disable DexHasher"
