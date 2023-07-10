@@ -209,6 +209,10 @@ void RtypeCandidates::collect_specializable_rtype(
 
 bool RtypeSpecialization::shares_identical_rtype_candidate(
     DexMethod* meth, const DexType* better_rtype) const {
+  if (type_class_internal(meth->get_class()) == nullptr) {
+    // Cannot modify external method.
+    return false;
+  }
   if (!meth->get_code()) {
     // Interface methods w/ no code are not in the rtype_candidates map. Cross
     // dex store refs check was not done earlier.
@@ -233,6 +237,10 @@ bool RtypeSpecialization::share_common_rtype_candidate(
     const std::vector<const DexMethod*>& meths,
     const DexType* better_rtype) const {
   for (auto* m : meths) {
+    if (type_class_internal(m->get_class()) == nullptr) {
+      // Cannot modify external method.
+      return false;
+    }
     if (!m->get_code()) {
       // Interface methods w/ no code are not in the rtype_candidates map. Cross
       // dex store refs check was not done earlier.
