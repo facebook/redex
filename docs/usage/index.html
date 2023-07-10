@@ -80,7 +80,7 @@ invocation is:</p>
                 [-k [KEEP]] [-A [ARCH]] [-S PASSTHRU] [-J PASSTHRU_JSON]
                 [<span class="hljs-comment">--lldb] [--gdb] [--ignore-zipalign] [--verify-none-mode]</span>
                 [<span class="hljs-comment">--enable-instrument-pass] [--is-art-build] [--enable-pgi]</span>
-                [<span class="hljs-comment">--redacted] [--disable-dex-hasher] [--page-align-libs]</span>
+                [<span class="hljs-comment">--post-lowering] [--disable-dex-hasher] [--page-align-libs]</span>
                 [<span class="hljs-comment">--side-effect-summaries SIDE_EFFECT_SUMMARIES]</span>
                 [<span class="hljs-comment">--escape-summaries ESCAPE_SUMMARIES] [--stop-pass STOP_PASS]</span>
                 [<span class="hljs-comment">--output-ir OUTPUT_IR]</span>
@@ -140,7 +140,7 @@ optional arguments:
                         Enable InstrumentPass if any
   <span class="hljs-comment">--is-art-build        States that this is an art only build</span>
   <span class="hljs-comment">--enable-pgi          If not passed, Profile Guided Inlining is disabled</span>
-  <span class="hljs-comment">--redacted            Specifies how dex files should be laid out</span>
+  <span class="hljs-comment">--post-lowering       Specifies whether post lowering steps should be run</span>
   <span class="hljs-comment">--disable-dex-hasher  Disable DexHasher</span>
   <span class="hljs-comment">--page-align-libs     Preserve 4k page alignment for uncompressed libs</span>
   <span class="hljs-comment">--side-effect-summaries SIDE_EFFECT_SUMMARIES</span>
@@ -182,7 +182,7 @@ category <code>X</code> must have level <code>Y</code> or higher:</p>
 variable:</p>
 <pre><code class="hljs"><span class="hljs-builtin-name">export</span> <span class="hljs-attribute">TRACEFILE</span>=/path/to/trace.txt
 </code></pre>
-</span></div></article></div><div class="docLastUpdate"><em>Last updated on 7/8/2023 by generatedunixname89002005232357</em></div><div class="docs-prevnext"><a class="docs-prev button" href="/docs/passes"><span class="arrow-prev">← </span><span>Passes</span></a><a class="docs-next button" href="/docs/proguard"><span class="function-name-prevnext">Using ProGuard Rules with Redex</span><span class="arrow-next"> →</span></a></div></div></div><nav class="onPageNav"><ul class="toc-headings"><li><a href="#basic-usage">Basic Usage</a></li><li><a href="#tracing">Tracing</a></li></ul></nav></div><footer class="nav-footer" id="footer"><section class="sitemap"><a href="/" class="nav-home"><img src="/img/redex.png" alt="Redex" width="66" height="58"/></a><div class="footerSection"><h5>Docs</h5><a href="
+</span></div></article></div><div class="docLastUpdate"><em>Last updated on 7/10/2023 by Adrian Catana</em></div><div class="docs-prevnext"><a class="docs-prev button" href="/docs/passes"><span class="arrow-prev">← </span><span>Passes</span></a><a class="docs-next button" href="/docs/proguard"><span class="function-name-prevnext">Using ProGuard Rules with Redex</span><span class="arrow-next"> →</span></a></div></div></div><nav class="onPageNav"><ul class="toc-headings"><li><a href="#basic-usage">Basic Usage</a></li><li><a href="#tracing">Tracing</a></li></ul></nav></div><footer class="nav-footer" id="footer"><section class="sitemap"><a href="/" class="nav-home"><img src="/img/redex.png" alt="Redex" width="66" height="58"/></a><div class="footerSection"><h5>Docs</h5><a href="
                 /docs/en/installation">Getting Started</a><a href="
                 /docs/en/configuring">Configuring</a><a href="
                 /docs/en/usage">Using</a><a href="
