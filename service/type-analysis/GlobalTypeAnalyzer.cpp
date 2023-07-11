@@ -137,6 +137,10 @@ DexTypeEnvironment env_with_params(const IRCode* code,
 void GlobalTypeAnalyzer::analyze_node(
     const call_graph::NodeId& node,
     ArgumentTypePartition* current_partition) const {
+  current_partition->set(CURRENT_PARTITION_LABEL,
+                         ArgumentTypeEnvironment::bottom());
+  always_assert(current_partition->is_bottom());
+
   const DexMethod* method = node->method();
 
   if (method == nullptr) {
