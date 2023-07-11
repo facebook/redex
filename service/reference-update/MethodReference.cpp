@@ -7,6 +7,7 @@
 
 #include "MethodReference.h"
 
+#include "ControlFlow.h"
 #include "IRList.h"
 #include "Resolver.h"
 #include "Show.h"
@@ -65,23 +66,44 @@ void patch_callsite(const CallSite& callsite, const NewCallee& new_callee) {
                     SHOW(new_callee.method), SHOW(callsite.caller));
 
   auto code = callsite.caller->get_code();
-  auto iterator = code->iterator_to(*callsite.mie);
-  auto insn = callsite.mie->insn;
-  if (new_callee.additional_args != boost::none) {
-    const auto& args = new_callee.additional_args.get();
-    auto old_size = insn->srcs_size();
-    insn->set_srcs_size(old_size + args.size());
-    size_t pos = old_size;
-    for (uint32_t arg : args) {
-      auto reg = code->allocate_temp();
-      // Seems it is different from dasm(OPCODE_CONST, {{VREG, reg}, {LITERAL,
-      // arg}}) which will cause instruction_lowering crash. Why?
-      auto load_const = make_load_const(reg, arg);
-      code->insert_before(iterator, load_const);
-      insn->set_src(pos++, reg);
+  if (code->editable_cfg_built()) {
+    auto& cfg = code->cfg();
+    auto* insn = callsite.insn;
+    auto iterator = cfg.find_insn(insn);
+    if (new_callee.additional_args != boost::none) {
+      const auto& args = new_callee.additional_args.get();
+      auto old_size = insn->srcs_size();
+      insn->set_srcs_size(old_size + args.size());
+      size_t pos = old_size;
+      for (uint32_t arg : args) {
+        auto reg = cfg.allocate_temp();
+        // Seems it is different from dasm(OPCODE_CONST, {{VREG, reg}, {LITERAL,
+        // arg}}) which will cause instruction_lowering crash. Why?
+        auto load_const = make_load_const(reg, arg);
+        cfg.insert_before(iterator, load_const);
+        insn->set_src(pos++, reg);
+      }
     }
+    insn->set_method(new_callee.method);
+  } else {
+    auto iterator = code->iterator_to(*callsite.mie);
+    auto insn = callsite.mie->insn;
+    if (new_callee.additional_args != boost::none) {
+      const auto& args = new_callee.additional_args.get();
+      auto old_size = insn->srcs_size();
+      insn->set_srcs_size(old_size + args.size());
+      size_t pos = old_size;
+      for (uint32_t arg : args) {
+        auto reg = code->allocate_temp();
+        // Seems it is different from dasm(OPCODE_CONST, {{VREG, reg}, {LITERAL,
+        // arg}}) which will cause instruction_lowering crash. Why?
+        auto load_const = make_load_const(reg, arg);
+        code->insert_before(iterator, load_const);
+        insn->set_src(pos++, reg);
+      }
+    }
+    insn->set_method(new_callee.method);
   }
-  insn->set_method(new_callee.method);
   // Assuming the following move-result is there and good.
 }
 
@@ -93,31 +115,62 @@ void update_call_refs_simple(
   }
 
   auto patcher = [&](DexMethod* meth, IRCode& code) {
-    for (auto& mie : InstructionIterable(code)) {
-      auto insn = mie.insn;
-      if (!insn->has_method()) {
-        continue;
+    if (code.editable_cfg_built()) {
+      auto& cfg = code.cfg();
+      for (auto& mie : cfg::InstructionIterable(cfg)) {
+        auto* insn = mie.insn;
+        if (!insn->has_method()) {
+          continue;
+        }
+        const auto method =
+            resolve_method(insn->get_method(), opcode_to_search(insn), meth);
+        if (method == nullptr || old_to_new_callee.count(method) == 0) {
+          continue;
+        }
+        auto new_callee = old_to_new_callee.at(method);
+        // At this point, a non static private should not exist.
+        always_assert_log(!is_private(new_callee) || is_static(new_callee),
+                          "%s\n",
+                          vshow(new_callee).c_str());
+        TRACE(REFU, 9, " Updated call %s to %s", SHOW(insn), SHOW(new_callee));
+        insn->set_method(new_callee);
+        if (new_callee->is_virtual()) {
+          always_assert_log(opcode::is_invoke_virtual(insn->opcode()),
+                            "invalid callsite %s\n",
+                            SHOW(insn));
+        } else if (is_static(new_callee)) {
+          always_assert_log(opcode::is_invoke_static(insn->opcode()),
+                            "invalid callsite %s\n",
+                            SHOW(insn));
+        }
       }
-      const auto method =
-          resolve_method(insn->get_method(), opcode_to_search(insn), meth);
-      if (method == nullptr || old_to_new_callee.count(method) == 0) {
-        continue;
-      }
-      auto new_callee = old_to_new_callee.at(method);
-      // At this point, a non static private should not exist.
-      always_assert_log(!is_private(new_callee) || is_static(new_callee),
-                        "%s\n",
-                        vshow(new_callee).c_str());
-      TRACE(REFU, 9, " Updated call %s to %s", SHOW(insn), SHOW(new_callee));
-      insn->set_method(new_callee);
-      if (new_callee->is_virtual()) {
-        always_assert_log(opcode::is_invoke_virtual(insn->opcode()),
-                          "invalid callsite %s\n",
-                          SHOW(insn));
-      } else if (is_static(new_callee)) {
-        always_assert_log(opcode::is_invoke_static(insn->opcode()),
-                          "invalid callsite %s\n",
-                          SHOW(insn));
+    } else {
+      for (auto& mie : InstructionIterable(code)) {
+        auto insn = mie.insn;
+        if (!insn->has_method()) {
+          continue;
+        }
+        const auto method =
+            resolve_method(insn->get_method(), opcode_to_search(insn), meth);
+        if (method == nullptr || old_to_new_callee.count(method) == 0) {
+          continue;
+        }
+        auto new_callee = old_to_new_callee.at(method);
+        // At this point, a non static private should not exist.
+        always_assert_log(!is_private(new_callee) || is_static(new_callee),
+                          "%s\n",
+                          vshow(new_callee).c_str());
+        TRACE(REFU, 9, " Updated call %s to %s", SHOW(insn), SHOW(new_callee));
+        insn->set_method(new_callee);
+        if (new_callee->is_virtual()) {
+          always_assert_log(opcode::is_invoke_virtual(insn->opcode()),
+                            "invalid callsite %s\n",
+                            SHOW(insn));
+        } else if (is_static(new_callee)) {
+          always_assert_log(opcode::is_invoke_static(insn->opcode()),
+                            "invalid callsite %s\n",
+                            SHOW(insn));
+        }
       }
     }
   };
@@ -136,22 +189,41 @@ CallSites collect_call_refs(const Scope& scope, const T& callees) {
     if (!code) {
       return call_sites;
     }
+    if (code->editable_cfg_built()) {
+      auto& cfg = code->cfg();
+      for (auto& mie : cfg::InstructionIterable(cfg)) {
+        auto insn = mie.insn;
+        if (!insn->has_method()) {
+          continue;
+        }
 
-    for (auto& mie : InstructionIterable(caller->get_code())) {
-      auto insn = mie.insn;
-      if (!insn->has_method()) {
-        continue;
+        const auto callee = resolve_method(
+            insn->get_method(),
+            opcode_to_search(const_cast<IRInstruction*>(insn)), caller);
+        if (callee == nullptr || callees.count(callee) == 0) {
+          continue;
+        }
+
+        call_sites.emplace_back(caller, &mie, insn, callee);
+        TRACE(REFU, 9, "  Found call %s from %s", SHOW(insn), SHOW(caller));
       }
+    } else {
+      for (auto& mie : InstructionIterable(caller->get_code())) {
+        auto insn = mie.insn;
+        if (!insn->has_method()) {
+          continue;
+        }
 
-      const auto callee = resolve_method(
-          insn->get_method(),
-          opcode_to_search(const_cast<IRInstruction*>(insn)), caller);
-      if (callee == nullptr || callees.count(callee) == 0) {
-        continue;
+        const auto callee = resolve_method(
+            insn->get_method(),
+            opcode_to_search(const_cast<IRInstruction*>(insn)), caller);
+        if (callee == nullptr || callees.count(callee) == 0) {
+          continue;
+        }
+
+        call_sites.emplace_back(caller, &mie, insn, callee);
+        TRACE(REFU, 9, "  Found call %s from %s", SHOW(insn), SHOW(caller));
       }
-
-      call_sites.emplace_back(caller, &mie, callee);
-      TRACE(REFU, 9, "  Found call %s from %s", SHOW(insn), SHOW(caller));
     }
 
     return call_sites;
@@ -199,18 +271,38 @@ int wrap_instance_call_with_static(
     }
     auto code = method->get_code();
     if (code) {
-      for (auto& mie : InstructionIterable(code)) {
-        IRInstruction* insn = mie.insn;
-        if (insn->opcode() != OPCODE_INVOKE_VIRTUAL) {
-          continue;
+      if (code->editable_cfg_built()) {
+        auto& cfg = code->cfg();
+        for (auto& mie : cfg::InstructionIterable(cfg)) {
+          IRInstruction* insn = mie.insn;
+          if (insn->opcode() != OPCODE_INVOKE_VIRTUAL) {
+            continue;
+          }
+          auto method_ref = insn->get_method();
+          auto it =
+              methods_replacement.find(static_cast<DexMethod*>(method_ref));
+          if (it != methods_replacement.end()) {
+            always_assert(is_static(it->second));
+            insn->set_opcode(OPCODE_INVOKE_STATIC);
+            insn->set_method(it->second);
+            ++total;
+          }
         }
-        auto method_ref = insn->get_method();
-        auto it = methods_replacement.find(static_cast<DexMethod*>(method_ref));
-        if (it != methods_replacement.end()) {
-          always_assert(is_static(it->second));
-          insn->set_opcode(OPCODE_INVOKE_STATIC);
-          insn->set_method(it->second);
-          ++total;
+      } else {
+        for (auto& mie : InstructionIterable(code)) {
+          IRInstruction* insn = mie.insn;
+          if (insn->opcode() != OPCODE_INVOKE_VIRTUAL) {
+            continue;
+          }
+          auto method_ref = insn->get_method();
+          auto it =
+              methods_replacement.find(static_cast<DexMethod*>(method_ref));
+          if (it != methods_replacement.end()) {
+            always_assert(is_static(it->second));
+            insn->set_opcode(OPCODE_INVOKE_STATIC);
+            insn->set_method(it->second);
+            ++total;
+          }
         }
       }
     }
