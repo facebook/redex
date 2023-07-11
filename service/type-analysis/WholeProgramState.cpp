@@ -227,18 +227,24 @@ void WholeProgramState::analyze_clinits_and_ctors(
     const Scope& scope,
     const global::GlobalTypeAnalyzer& gta,
     DexTypeFieldPartition* field_partition) {
-  for (DexClass* cls : scope) {
-    auto clinit = cls->get_clinit();
-    if (clinit) {
-      IRCode* code = clinit->get_code();
-      auto& cfg = code->cfg();
-      auto lta = gta.get_local_analysis(clinit);
-      const auto& env = lta->get_exit_state_at(cfg.exit_block());
-      set_sfields_in_partition(cls, env, field_partition);
-    } else {
-      DexTypeEnvironment env;
-      set_encoded_values(cls, &env);
-      set_sfields_in_partition(cls, env, field_partition);
+
+  std::mutex mutex;
+  walk::parallel::classes(scope, [&](auto* cls) {
+    DexTypeFieldPartition cls_field_partition;
+
+    if (!cls->get_sfields().empty()) {
+      auto clinit = cls->get_clinit();
+      if (clinit) {
+        IRCode* code = clinit->get_code();
+        auto& cfg = code->cfg();
+        auto lta = gta.get_local_analysis(clinit);
+        const auto& env = lta->get_exit_state_at(cfg.exit_block());
+        set_sfields_in_partition(cls, env, &cls_field_partition);
+      } else {
+        DexTypeEnvironment env;
+        set_encoded_values(cls, &env);
+        set_sfields_in_partition(cls, env, &cls_field_partition);
+      }
     }
 
     const auto& ctors = cls->get_ctors();
@@ -250,9 +256,12 @@ void WholeProgramState::analyze_clinits_and_ctors(
       auto& cfg = code->cfg();
       auto lta = gta.get_local_analysis(ctor);
       const auto& env = lta->get_exit_state_at(cfg.exit_block());
-      set_ifields_in_partition(cls, env, field_partition);
+      set_ifields_in_partition(cls, env, &cls_field_partition);
     }
-  }
+
+    std::lock_guard<std::mutex> lock_guard(mutex);
+    field_partition->join_with(cls_field_partition);
+  });
 }
 
 void WholeProgramState::collect(const Scope& scope,
