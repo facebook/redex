@@ -57,8 +57,30 @@ bool returns_reference(const DexMethod* method) {
   return type::is_object(rtype);
 }
 
+void set_encoded_values(const DexClass* cls, DexTypeEnvironment* env) {
+  for (auto* sfield : cls->get_sfields()) {
+    if (sfield->is_external() || !is_reference(sfield)) {
+      continue;
+    }
+    redex_assert(!type::is_primitive(sfield->get_type()));
+    auto value = sfield->get_static_value();
+    if (value == nullptr || value->evtype() == DEVT_NULL) {
+      env->set(sfield, DexTypeDomain::null());
+    } else if (sfield->get_type() == type::java_lang_String() &&
+               value->evtype() == DEVT_STRING) {
+      env->set(sfield, DexTypeDomain(type::java_lang_String()));
+    } else if (sfield->get_type() == type::java_lang_Class() &&
+               value->evtype() == DEVT_TYPE) {
+      env->set(sfield, DexTypeDomain(type::java_lang_Class()));
+    } else {
+      env->set(sfield, DexTypeDomain::top());
+    }
+  }
+}
+
 /*
- * If a static field is not populated in clinit, it is implicitly null.
+ * If a static field is not populated in clinit, it is implicitly null or
+ * unknown.
  */
 void set_sfields_in_partition(const DexClass* cls,
                               const DexTypeEnvironment& env,
@@ -75,8 +97,8 @@ void set_sfields_in_partition(const DexClass* cls,
             SHOW(domain));
       always_assert(field->get_class() == cls->get_type());
     } else {
-      TRACE(TYPE, 5, "%s has null type after <clinit>", SHOW(field));
-      domain = DexTypeDomain::null();
+      // Other encoded value might not be fully supported.
+      TRACE(TYPE, 5, "%s has unknown type after <clinit>", SHOW(field));
     }
     field_partition->set(field, domain);
   }
@@ -214,7 +236,9 @@ void WholeProgramState::analyze_clinits_and_ctors(
       const auto& env = lta->get_exit_state_at(cfg.exit_block());
       set_sfields_in_partition(cls, env, field_partition);
     } else {
-      set_sfields_in_partition(cls, DexTypeEnvironment::top(), field_partition);
+      DexTypeEnvironment env;
+      set_encoded_values(cls, &env);
+      set_sfields_in_partition(cls, env, field_partition);
     }
 
     const auto& ctors = cls->get_ctors();
