@@ -154,13 +154,13 @@ class WholeProgramState {
   void collect_field_types(
       const IRInstruction* insn,
       const DexTypeEnvironment& env,
-      ConcurrentMap<const DexField*, std::vector<DexTypeDomain>>* field_tmp);
+      ConcurrentMap<const DexField*, DexTypeDomain>* field_tmp);
 
   void collect_return_types(
       const IRInstruction* insn,
       const DexTypeEnvironment& env,
       const DexMethod* method,
-      ConcurrentMap<const DexMethod*, std::vector<DexTypeDomain>>* method_tmp);
+      ConcurrentMap<const DexMethod*, DexTypeDomain>* method_tmp);
 
   bool is_reachable(const global::GlobalTypeAnalyzer&, const DexMethod*) const;
 

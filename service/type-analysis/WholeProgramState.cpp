@@ -100,7 +100,7 @@ void set_sfields_in_partition(const DexClass* cls,
       // Other encoded value might not be fully supported.
       TRACE(TYPE, 5, "%s has unknown type after <clinit>", SHOW(field));
     }
-    field_partition->set(field, domain);
+    field_partition->set(field, std::move(domain));
   }
 }
 
@@ -266,8 +266,8 @@ void WholeProgramState::analyze_clinits_and_ctors(
 
 void WholeProgramState::collect(const Scope& scope,
                                 const global::GlobalTypeAnalyzer& gta) {
-  ConcurrentMap<const DexField*, std::vector<DexTypeDomain>> fields_tmp;
-  ConcurrentMap<const DexMethod*, std::vector<DexTypeDomain>> methods_tmp;
+  ConcurrentMap<const DexField*, DexTypeDomain> fields_tmp;
+  ConcurrentMap<const DexMethod*, DexTypeDomain> methods_tmp;
 
   walk::parallel::methods(scope, [&](DexMethod* method) {
     IRCode* code = method->get_code();
@@ -290,25 +290,21 @@ void WholeProgramState::collect(const Scope& scope,
     }
   });
   for (const auto& pair : fields_tmp) {
-    for (auto& type : pair.second) {
-      m_field_partition.update(pair.first, [&type](auto* current_type) {
-        current_type->join_with(type);
-      });
-    }
+    m_field_partition.update(pair.first, [&pair](auto* current_type) {
+      current_type->join_with(pair.second);
+    });
   }
   for (const auto& pair : methods_tmp) {
-    for (auto& type : pair.second) {
-      m_method_partition.update(pair.first, [&type](auto* current_type) {
-        current_type->join_with(type);
-      });
-    }
+    m_method_partition.update(pair.first, [&pair](auto* current_type) {
+      current_type->join_with(pair.second);
+    });
   }
 }
 
 void WholeProgramState::collect_field_types(
     const IRInstruction* insn,
     const DexTypeEnvironment& env,
-    ConcurrentMap<const DexField*, std::vector<DexTypeDomain>>* field_tmp) {
+    ConcurrentMap<const DexField*, DexTypeDomain>* field_tmp) {
   if (!opcode::is_an_sput(insn->opcode()) &&
       !opcode::is_an_iput(insn->opcode())) {
     return;
@@ -323,17 +319,22 @@ void WholeProgramState::collect_field_types(
     ss << type;
     TRACE(TYPE, 5, "collecting field %s -> %s", SHOW(field), ss.str().c_str());
   }
-  field_tmp->update(field,
-                    [type](const DexField*,
-                           std::vector<DexTypeDomain>& s,
-                           bool /* exists */) { s.emplace_back(type); });
+  field_tmp->update(
+      field,
+      [&type](const DexField*, DexTypeDomain& current_type, bool exists) {
+        if (exists) {
+          current_type.join_with(type);
+        } else {
+          current_type = std::move(type);
+        }
+      });
 }
 
 void WholeProgramState::collect_return_types(
     const IRInstruction* insn,
     const DexTypeEnvironment& env,
     const DexMethod* method,
-    ConcurrentMap<const DexMethod*, std::vector<DexTypeDomain>>* method_tmp) {
+    ConcurrentMap<const DexMethod*, DexTypeDomain>* method_tmp) {
   auto op = insn->opcode();
   if (!opcode::is_a_return(op)) {
     return;
@@ -345,8 +346,8 @@ void WholeProgramState::collect_return_types(
     // reachable.
     method_tmp->update(
         method,
-        [](const DexMethod*, std::vector<DexTypeDomain>& s, bool /* exists */) {
-          s.emplace_back(DexTypeDomain::top());
+        [](const DexMethod*, DexTypeDomain& current_type, bool /* exists */) {
+          current_type = DexTypeDomain::top();
         });
     return;
   }
@@ -357,10 +358,14 @@ void WholeProgramState::collect_return_types(
     TRACE(TYPE, 5, "collecting method %s -> %s", SHOW(method),
           ss.str().c_str());
   }
-  method_tmp->update(method,
-                     [type](const DexMethod*,
-                            std::vector<DexTypeDomain>& s,
-                            bool /* exists */) { s.emplace_back(type); });
+  method_tmp->update(method, [&type](const DexMethod*,
+                                     DexTypeDomain& current_type, bool exists) {
+    if (exists) {
+      current_type.join_with(type);
+    } else {
+      current_type = std::move(type);
+    }
+  });
 }
 
 bool WholeProgramState::is_reachable(const global::GlobalTypeAnalyzer& gta,
