@@ -348,7 +348,7 @@ class DexEncodedValueArray : public DexEncodedValue {
   std::string show() const override;
   std::string show_deobfuscated() const override;
 
-  bool operator==(const DexEncodedValueArray& that) const {
+  virtual bool operator==(const DexEncodedValueArray& that) const {
     if (evalues()->size() != that.evalues()->size()) {
       return false;
     }
