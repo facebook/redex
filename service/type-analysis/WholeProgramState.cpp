@@ -190,6 +190,16 @@ WholeProgramState::WholeProgramState(
   collect(scope, gta);
 }
 
+WholeProgramState::WholeProgramState(
+    const Scope& scope,
+    const global::GlobalTypeAnalyzer& gta,
+    const std::unordered_set<DexMethod*>& non_true_virtuals,
+    const ConcurrentSet<const DexMethod*>& any_init_reachables,
+    const call_graph::Graph& call_graph)
+    : WholeProgramState(scope, gta, non_true_virtuals, any_init_reachables) {
+  m_call_graph = call_graph;
+}
+
 std::string WholeProgramState::show_field(const DexField* f) { return show(f); }
 std::string WholeProgramState::show_method(const DexMethod* m) {
   return show(m);
@@ -471,6 +481,26 @@ bool WholeProgramAwareAnalyzer::analyze_invoke(
   if (known_type) {
     env->set(RESULT_REGISTER, *known_type);
     return false;
+  }
+
+  if (whole_program_state->has_call_graph()) {
+    auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
+    if (method == nullptr && opcode_to_search(insn) == MethodSearch::Virtual) {
+      method =
+          resolve_method(insn->get_method(), MethodSearch::InterfaceVirtual);
+    }
+    if (method == nullptr) {
+      return false;
+    }
+    if (whole_program_state->method_is_dynamic(method)) {
+      return false;
+    }
+    auto type = whole_program_state->get_return_type_from_cg(insn);
+    if (type.is_top()) {
+      return false;
+    }
+    env->set(RESULT_REGISTER, type);
+    return true;
   }
 
   auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
