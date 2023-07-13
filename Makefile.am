@@ -27,6 +27,7 @@ DISABLED_WARNINGS = \
   -Wno-format-zero-length \
   -Wno-invalid-offsetof \
   -Wno-maybe-uninitialized \
+  -Wno-overloaded-virtual \
   -Wno-parentheses \
   -Wno-return-type \
   -Wno-shift-count-overflow \
