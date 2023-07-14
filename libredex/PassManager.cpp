@@ -1025,56 +1025,18 @@ PassManager::PassManager(
 PassManager::~PassManager() {}
 
 void PassManager::init(const ConfigFiles& config) {
-  if (config.get_json_config().contains("redex") &&
-      config.get_json_config().get("redex", Json::Value()).isMember("passes")) {
-    PassManagerConfig default_config;
-    auto& pm_config = [&]() -> PassManagerConfig& {
-      if (!config.get_global_config().has_config_by_name("pass_manager")) {
-        return default_config;
-      }
-      return *config.get_global_config().get_config_by_name<PassManagerConfig>(
-          "pass_manager");
-    }();
-    auto get_alias = [pm_config](const auto& name) -> const std::string* {
-      auto it = pm_config.pass_aliases.find(name);
-      if (it == pm_config.pass_aliases.end()) {
-        return nullptr;
-      }
-      return &it->second;
-    };
+  auto activated =
+      compute_activated_passes(m_registered_passes, config, nullptr);
 
-    const auto& json_config = config.get_json_config();
-    const auto& passes_from_config = json_config["redex"]["passes"];
-    for (const auto& pass : passes_from_config) {
-      std::string pass_name = pass.asString();
-
-      // Check whether it is explicitly disabled.
-      auto is_disabled = [&json_config, &pass_name]() {
-        if (!json_config.contains(pass_name.c_str())) {
-          return false;
-        }
-        const auto& pass_data = json_config[pass_name.c_str()];
-        if (!pass_data.isMember("disabled")) {
-          return false;
-        }
-        return pass_data["disabled"].asBool();
-      };
-      if (is_disabled()) {
-        continue;
-      }
-
-      activate_pass(pass_name, get_alias(pass_name),
-                    config.get_json_config().unwrap());
-    }
-  } else {
-    // If config isn't set up, run all registered passes.
-    m_activated_passes = m_registered_passes;
-    // But do not forget to initialize them.
-    const auto& json_config = config.get_json_config();
-    for (auto* pass : m_activated_passes) {
-      pass->parse_config(JsonWrapper(json_config[pass->name().c_str()]));
-    }
-  }
+  m_activated_passes.reserve(activated.activated_passes.size());
+  const auto& json_config = config.get_json_config();
+  std::transform(
+      activated.activated_passes.begin(), activated.activated_passes.end(),
+      std::back_inserter(m_activated_passes), [&json_config](auto& x) {
+        x.first->parse_config(JsonWrapper(json_config[x.second.c_str()]));
+        return x.first;
+      });
+  m_cloned_passes = std::move(activated.cloned_passes);
 
   // Count the number of appearances of each pass name.
   std::unordered_map<const Pass*, size_t> pass_repeats;
@@ -1472,46 +1434,96 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
                    cc_impl::get_destructor_seconds());
 }
 
-void PassManager::activate_pass(const std::string& name,
-                                const std::string* alias,
-                                const Json::Value& conf) {
-  // Names may or may not have a "#<id>" suffix to indicate their order in the
-  // pass list, which needs to be removed for matching.
-  auto activate = [this, &conf](const std::string& n, const std::string* a) {
-    for (auto pass : m_registered_passes) {
-      if (n == pass->name()) {
-        if (a != nullptr) {
-          auto cloned_pass = pass->clone(*a);
-          always_assert_log(cloned_pass != nullptr,
-                            "Cannot clone pass %s to make alias %s", n.c_str(),
-                            a->c_str());
-          pass = cloned_pass.get();
-          m_cloned_passes.emplace_back(std::move(cloned_pass));
-        }
-
-        m_activated_passes.push_back(pass);
-
-        // Retrieving the configuration specific to this particular run
-        // of the pass.
-        pass->parse_config(JsonWrapper(conf[a == nullptr ? n : *a]));
-        return true;
+PassManager::ActivatedPasses PassManager::compute_activated_passes(
+    std::vector<Pass*> registered_passes,
+    const ConfigFiles& config,
+    PassManagerConfig* pm_config_override) {
+  ActivatedPasses result;
+  if (config.get_json_config().contains("redex") &&
+      config.get_json_config().get("redex", Json::Value()).isMember("passes")) {
+    PassManagerConfig default_config;
+    auto& pm_config = [&]() -> PassManagerConfig& {
+      if (pm_config_override != nullptr) {
+        return *pm_config_override;
       }
+      if (!config.get_global_config().has_config_by_name("pass_manager")) {
+        return default_config;
+      }
+      return *config.get_global_config().get_config_by_name<PassManagerConfig>(
+          "pass_manager");
+    }();
+    auto get_alias = [pm_config](const auto& name) -> const std::string* {
+      auto it = pm_config.pass_aliases.find(name);
+      if (it == pm_config.pass_aliases.end()) {
+        return nullptr;
+      }
+      return &it->second;
+    };
+
+    const auto& json_config = config.get_json_config();
+    const auto& passes_from_config = json_config["redex"]["passes"];
+    for (const auto& pass : passes_from_config) {
+      std::string pass_name = pass.asString();
+
+      // Check whether it is explicitly disabled.
+      auto is_disabled = [&json_config, &pass_name]() {
+        if (!json_config.contains(pass_name.c_str())) {
+          return false;
+        }
+        const auto& pass_data = json_config[pass_name.c_str()];
+        if (!pass_data.isMember("disabled")) {
+          return false;
+        }
+        return pass_data["disabled"].asBool();
+      };
+      if (is_disabled()) {
+        continue;
+      }
+
+      // Names may or may not have a "#<id>" suffix to indicate their order in
+      // the pass list, which needs to be removed for matching.
+      auto activate = [&registered_passes, &result](const std::string& n,
+                                                    const std::string* a) {
+        for (auto pass : registered_passes) {
+          if (n == pass->name()) {
+            if (a != nullptr) {
+              auto cloned_pass = pass->clone(*a);
+              always_assert_log(cloned_pass != nullptr,
+                                "Cannot clone pass %s to make alias %s",
+                                n.c_str(), a->c_str());
+              pass = cloned_pass.get();
+              result.cloned_passes.emplace_back(std::move(cloned_pass));
+            }
+
+            result.activated_passes.emplace_back(pass, a == nullptr ? n : *a);
+
+            return true;
+          }
+        }
+        return false;
+      };
+
+      // Does a pass exist with this name (directly)?
+      if (activate(pass_name, nullptr)) {
+        continue;
+      }
+
+      // Can we find it under the given alias?
+      auto* alias = get_alias(pass_name);
+      if (alias != nullptr && activate(*alias, &pass_name)) {
+        continue;
+      }
+
+      not_reached_log("No pass named %s(%s)!", pass_name.c_str(),
+                      alias != nullptr ? alias->c_str() : "n/a");
     }
-    return false;
-  };
-
-  // Does a pass exist with this name (directly)?
-  if (activate(name, nullptr)) {
-    return;
+  } else {
+    result.activated_passes.reserve(registered_passes.size());
+    for (auto* pass : registered_passes) {
+      result.activated_passes.emplace_back(pass, pass->name());
+    }
   }
-
-  // Can we find it under the given alias?
-  if (alias != nullptr && activate(*alias, &name)) {
-    return;
-  }
-
-  not_reached_log("No pass named %s(%s)!", name.c_str(),
-                  alias != nullptr ? alias->c_str() : "n/a");
+  return result;
 }
 
 Pass* PassManager::find_pass(const std::string& pass_name) const {
