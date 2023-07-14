@@ -234,6 +234,75 @@ Json::Value reflect_config(const Configurable::Reflection& cr) {
   return reflected_config;
 }
 
+void add_pass_properties_reflection(Json::Value& value, Pass* pass) {
+  auto interactions = pass->get_property_interactions();
+  if (interactions.empty()) {
+    return;
+  }
+
+  Json::Value establishes = Json::arrayValue;
+  Json::Value requires = Json::arrayValue;
+  Json::Value preserves = Json::arrayValue;
+  Json::Value requires_finally = Json::arrayValue;
+
+  for (const auto& [property, inter] : interactions) {
+    if (inter.establishes) {
+      establishes.append(property);
+    }
+    if (inter.requires_) {
+      requires.append(property);
+    }
+    if (inter.preserves) {
+      preserves.append(property);
+    }
+    if (inter.requires_finally) {
+      requires_finally.append(property);
+    }
+  }
+
+  Json::Value properties;
+  properties["establishes"] = establishes;
+  properties["requires"] = requires;
+  properties["preserves"] = preserves;
+  properties["requires_finally"] = requires_finally;
+
+  value["properties"] = properties;
+}
+
+Json::Value reflect_property_definitions() {
+  Json::Value properties;
+
+  properties["properties"] = []() {
+    Json::Value prop_map;
+    auto all = redex_properties::Manager::get_all_properties();
+    for (auto& prop : all) {
+      Json::Value prop_value;
+      prop_value["negative"] = redex_properties::Manager::is_negative(prop);
+      prop_map[prop] = std::move(prop_value);
+    }
+    return prop_map;
+  }();
+
+  auto create_sorted = [](const auto& input) {
+    std::vector<redex_properties::PropertyName> tmp;
+    std::copy(input.begin(), input.end(), std::back_inserter(tmp));
+    std::sort(tmp.begin(), tmp.end());
+
+    Json::Value holder = Json::arrayValue;
+    for (auto& prop : tmp) {
+      holder.append(prop);
+    }
+    return holder;
+  };
+
+  properties["initial"] =
+      create_sorted(redex_properties::Manager::get_default_initial());
+  properties["final"] =
+      create_sorted(redex_properties::Manager::get_default_final());
+
+  return properties;
+}
+
 Arguments parse_args(int argc, char* argv[]) {
   Arguments args;
   args.out_dir = ".";
@@ -372,8 +441,12 @@ Arguments parse_args(int argc, char* argv[]) {
     for (size_t i = 0; i < passes.size(); ++i) {
       auto& pass = passes[i];
       pass_configs[static_cast<int>(i)] = reflect_config(pass->reflect());
+      add_pass_properties_reflection(pass_configs[static_cast<int>(i)], pass);
     }
     reflected_config["passes"] = pass_configs;
+
+    reflected_config["properties"] = reflect_property_definitions();
+
     std::cout << reflected_config << std::flush;
     exit(EXIT_SUCCESS);
   }
