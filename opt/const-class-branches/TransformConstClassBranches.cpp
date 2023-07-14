@@ -32,6 +32,7 @@ constexpr const char* METRIC_TOTAL_STRING_SIZE = "total_string_size";
 
 struct PassState {
   DexMethodRef* lookup_method;
+  DexMethodRef* integrity_method;
   bool consider_external_classes;
   size_t min_cases;
   size_t max_cases;
@@ -193,6 +194,16 @@ void gather_possible_transformations(
   pending_transforms->emplace_back(std::move(t));
 }
 
+uint32_t fnv1(const std::string& str) {
+  uint32_t x = 0x811c9dc5;
+  uint32_t p = 0x01000193;
+  for (size_t i = 0; i < str.length(); i++) {
+    x = x * p;
+    x = x ^ str[i];
+  }
+  return x;
+}
+
 Stats apply_transform(const PassState& pass_state,
                       PendingTransform& transform) {
   Stats result;
@@ -296,10 +307,39 @@ Stats apply_transform(const PassState& pass_state,
   cfg.create_branch(transform.last_prologue_block, new_switch, nullptr,
                     new_edges);
 
+  // Insert a new block with a call to the integrity method, if configured. This
+  // will actually be the switch's default case, which will invoke a method
+  // expected to throw a RuntimeException if things are in a bad state, and
+  // otherwise goto the original default case.
+  cfg::Block* default_case_for_switch = default_case;
+  if (pass_state.integrity_method != nullptr) {
+    default_case_for_switch = cfg.create_block();
+    auto string_len_reg = cfg.allocate_temp();
+    auto string_len_const = new IRInstruction(OPCODE_CONST);
+    string_len_const->set_literal(encoded_str.length());
+    string_len_const->set_dest(string_len_reg);
+    default_case_for_switch->push_back(string_len_const);
+    auto magic_reg = cfg.allocate_temp();
+    auto magic_const = new IRInstruction(OPCODE_CONST);
+    magic_const->set_literal((int32_t)fnv1(encoded_str));
+    magic_const->set_dest(magic_reg);
+    default_case_for_switch->push_back(magic_const);
+    auto invoke_integrity = new IRInstruction(OPCODE_INVOKE_STATIC);
+    invoke_integrity->set_method(pass_state.integrity_method);
+    invoke_integrity->set_srcs_size(5);
+    invoke_integrity->set_src(0, string_name_reg);
+    invoke_integrity->set_src(1, encoded_str_reg);
+    invoke_integrity->set_src(2, default_value_reg);
+    invoke_integrity->set_src(3, string_len_reg);
+    invoke_integrity->set_src(4, magic_reg);
+    default_case_for_switch->push_back(invoke_integrity);
+    cfg.add_edge(default_case_for_switch, default_case, cfg::EDGE_GOTO);
+  }
+
   // Reset successor of last prologue block to implement the default case.
   for (auto& edge : transform.last_prologue_block->succs()) {
     if (edge->type() == cfg::EDGE_GOTO) {
-      cfg.set_edge_target(edge, default_case);
+      cfg.set_edge_target(edge, default_case_for_switch);
     }
   }
 
@@ -349,6 +389,7 @@ void TransformConstClassBranchesPass::bind_config() {
   // Arbitrary default values to avoid creating unbounded amounts of encoded
   // string data.
   bind("max_cases", 2000, m_max_cases);
+  bind("string_tree_integrity_method", "", m_string_tree_integrity_method);
   bind("string_tree_lookup_method", "", m_string_tree_lookup_method);
   trait(Traits::Pass::unique, true);
 
@@ -380,10 +421,20 @@ void TransformConstClassBranchesPass::run_pass(DexStoresVector& stores,
     return;
   }
 
+  DexMethodRef* string_tree_integrity_method{nullptr};
+  if (!m_string_tree_integrity_method.empty()) {
+    string_tree_integrity_method =
+        DexMethod::get_method(m_string_tree_integrity_method);
+  }
+
   std::vector<PendingTransform> transforms;
   std::mutex transforms_mutex;
-  PassState pass_state{string_tree_lookup_method, m_consider_external_classes,
-                       m_min_cases, m_max_cases, transforms_mutex};
+  PassState pass_state{string_tree_lookup_method,
+                       string_tree_integrity_method,
+                       m_consider_external_classes,
+                       m_min_cases,
+                       m_max_cases,
+                       transforms_mutex};
   walk::parallel::methods(scope, [&](DexMethod* method) {
     if (should_consider_method(method)) {
       gather_possible_transformations(

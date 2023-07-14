@@ -32,5 +32,6 @@ class TransformConstClassBranchesPass : public Pass {
   bool m_consider_external_classes;
   size_t m_min_cases;
   size_t m_max_cases;
+  std::string m_string_tree_integrity_method;
   std::string m_string_tree_lookup_method;
 };
