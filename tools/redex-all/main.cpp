@@ -107,6 +107,7 @@ struct Arguments {
   boost::optional<int> stop_pass_idx;
   RedexOptions redex_options;
   bool properties_check{false};
+  bool properties_check_allow_disabled{false};
 };
 
 UNUSED void dump_args(const Arguments& args) {
@@ -319,6 +320,9 @@ Arguments parse_args(int argc, char* argv[]) {
   od.add_options()(
       "properties-check",
       "parse configuration, perform a stack properties check and exit");
+  od.add_options()(
+      "properties-check-allow-disabled",
+      "accept the disable flag in the configuration");
   od.add_options()("apkdir,a",
                    // We allow overwrites to most of the options but will take
                    // only the last one.
@@ -468,6 +472,9 @@ Arguments parse_args(int argc, char* argv[]) {
 
   if (vm.count("properties-check")) {
     args.properties_check = true;
+  }
+  if (vm.count("properties-check-allow-disabled")) {
+    args.properties_check_allow_disabled = true;
   }
 
   if (vm.count("dex-files")) {
@@ -1582,6 +1589,12 @@ int check_pass_properties(const Arguments& args) {
   if (conf.get_json_config().contains("pass_manager")) {
     pmc.parse_config(JsonWrapper(conf.get_json_config().get(
         "pass_manager", (Json::Value)Json::nullValue)));
+  }
+
+  if (!pmc.check_pass_order_properties &&
+      args.properties_check_allow_disabled) {
+    std::cout << "Properties checks are disabled, skipping." << std::endl;
+    return 0;
   }
 
   auto const& all_passes = PassRegistry::get().get_passes();
