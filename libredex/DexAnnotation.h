@@ -303,6 +303,7 @@ class DexEncodedValueArray : public DexEncodedValue {
   bool m_static_val;
 
  public:
+  using DexEncodedValue::operator==; // Inherit all parent ops
   using Storage = std::vector<std::unique_ptr<DexEncodedValue>>;
 
   /*
