@@ -173,6 +173,12 @@ void OriginalNamePass::run_pass(DexStoresVector& stores,
           canary_cls =
               create_canary(dexnum, DexString::make_string(store.get_name()));
         }
+        for (auto* m : canary_cls->get_all_methods()) {
+          if (m->get_code() == nullptr) {
+            continue;
+          }
+          m->get_code()->build_cfg();
+        }
         new_dex.push_back(canary_cls);
         new_dex.insert(new_dex.end(), overflow_classes.begin(),
                        overflow_classes.end());
