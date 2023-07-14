@@ -779,31 +779,29 @@ void MethodReferencesGatherer::advance(AdvanceKind kind,
     }
     return std::optional<InstantiableDependency>();
   };
-  auto visit_succs =
-      [this, &refs, &queue](
-          auto* block, const std::function<bool(cfg::Edge*)>& pred = nullptr) {
-        for (auto* e : block->succs()) {
-          if (pred && !pred(e)) {
-            continue;
-          }
-          if (e->type() == cfg::EDGE_THROW) {
-            auto catch_type = e->throw_info()->catch_type;
-            if (catch_type && m_covered_catch_types.insert(catch_type).second) {
-              refs->types.push_back(catch_type);
-            }
-          }
-          if (m_pushed_blocks.insert(e->target()).second) {
-            queue.push((CFGNeedle){e->target(), e->target()->begin()});
-          }
+  auto visit_succs = [this, &refs, &queue](auto* block, const auto& pred) {
+    for (auto* e : block->succs()) {
+      if (!pred(e)) {
+        continue;
+      }
+      if (e->type() == cfg::EDGE_THROW) {
+        auto catch_type = e->throw_info()->catch_type;
+        if (catch_type && m_covered_catch_types.insert(catch_type).second) {
+          refs->types.push_back(catch_type);
         }
-      };
+      }
+      if (m_pushed_blocks.insert(e->target()).second) {
+        queue.push((CFGNeedle){e->target(), e->target()->begin()});
+      }
+    }
+  };
   while (!queue.empty()) {
     auto [block, it] = queue.front();
     queue.pop();
     auto dep = advance_in_block(block, it);
     if (!dep) {
       always_assert(it == block->end());
-      visit_succs(block);
+      visit_succs(block, [](auto*) { return true; });
       continue;
     }
     always_assert(it->type == MFLOW_OPCODE);
