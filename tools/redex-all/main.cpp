@@ -1367,7 +1367,14 @@ void redex_backend(ConfigFiles& conf,
 
   auto string_sort_mode = get_string_sort_mode(conf);
 
-  {
+  bool should_preserve_input_dexes =
+      conf.get_json_config().get("preserve_input_dexes", false);
+  if (should_preserve_input_dexes) {
+    always_assert_log(
+        !post_lowering,
+        "post lowering should be off when preserving input dex option is on");
+    TRACE(MAIN, 1, "Skipping writing output dexes as configured");
+  } else {
     redex_assert(!stores.empty());
     const auto& dex_magic = stores[0].get_dex_magic();
     auto min_sdk = manager.get_redex_options().min_sdk;

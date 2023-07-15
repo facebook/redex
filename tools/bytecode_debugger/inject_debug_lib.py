@@ -11,7 +11,7 @@ from pyredex.utils import (
     add_tool_override,
     dex_glob,
     make_temp_dir,
-    move_dexen_to_directories,
+    relocate_dexen_to_directories,
     sign_apk,
 )
 
@@ -23,7 +23,7 @@ def run_debug_injector(args):
     with ZipManager(args.input_apk, extracted_apk_dir, args.output_apk), UnpackManager(
         args.input_apk, extracted_apk_dir, dex_dir
     ) as store_files, LibraryManager(extracted_apk_dir):
-        dexen = move_dexen_to_directories(dex_dir, dex_glob(dex_dir)) + store_files
+        dexen = relocate_dexen_to_directories(dex_dir, dex_glob(dex_dir)) + store_files
         try:
             subprocess.check_output(
                 [args.bin_path, "-o", dex_dir, "--dex-files"] + dexen,
