@@ -320,9 +320,8 @@ Arguments parse_args(int argc, char* argv[]) {
   od.add_options()(
       "properties-check",
       "parse configuration, perform a stack properties check and exit");
-  od.add_options()(
-      "properties-check-allow-disabled",
-      "accept the disable flag in the configuration");
+  od.add_options()("properties-check-allow-disabled",
+                   "accept the disable flag in the configuration");
   od.add_options()("apkdir,a",
                    // We allow overwrites to most of the options but will take
                    // only the last one.
