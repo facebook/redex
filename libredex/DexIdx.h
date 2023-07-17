@@ -168,13 +168,16 @@ class DexIdx {
     return m_proto_cache[pidx];
   }
 
+  uint32_t get_file_size() const { return ((dex_header*)m_dexbase)->file_size; }
+
   const uint32_t* get_uint_data(uint32_t offset) {
-    always_assert(offset < ((dex_header*)m_dexbase)->file_size);
+    always_assert(offset < offset + 4);
+    always_assert(offset + 4 <= get_file_size());
     return (uint32_t*)(m_dexbase + offset);
   }
 
   const uint8_t* get_uleb_data(uint32_t offset) {
-    always_assert(offset < ((dex_header*)m_dexbase)->file_size);
+    always_assert(offset < get_file_size()); // Best effort.
     return m_dexbase + offset;
   }
 
