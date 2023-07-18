@@ -1560,7 +1560,7 @@ DexClass::DexClass(DexIdx* idx,
       m_location(location),
       m_access_flags((DexAccessFlags)cdef->access_flags),
       m_external(false),
-      m_perf_sensitive(false) {}
+      m_perf_sensitive(PerfSensitiveGroup::NONE) {}
 
 DexClass::~DexClass() = default; // For forwarding.
 

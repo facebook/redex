@@ -101,8 +101,8 @@ TEST_F(DexOutputTest, TEST_SIMILARITY_ORDERER_PERF_SENSITIVE) {
   config_files.parse_global_config();
   std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make(""));
 
-  (*classes)[1]->set_perf_sensitive(true);
-  (*classes)[2]->set_perf_sensitive(true);
+  (*classes)[1]->set_perf_sensitive(PerfSensitiveGroup::BETAMAP_ORDERED);
+  (*classes)[2]->set_perf_sensitive(PerfSensitiveGroup::BETAMAP_ORDERED);
 
   auto scope = build_class_scope(stores);
 
@@ -220,8 +220,8 @@ TEST_F(DexOutputTest, TEST_COMPRESSION_ORDERER_PERF_SENSITIVE) {
   config_files.parse_global_config();
   std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make(""));
 
-  (*classes)[1]->set_perf_sensitive(true);
-  (*classes)[2]->set_perf_sensitive(true);
+  (*classes)[1]->set_perf_sensitive(PerfSensitiveGroup::BETAMAP_ORDERED);
+  (*classes)[2]->set_perf_sensitive(PerfSensitiveGroup::BETAMAP_ORDERED);
 
   auto scope = build_class_scope(stores);
 

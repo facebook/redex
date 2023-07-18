@@ -187,7 +187,7 @@ void do_order_classes(const std::vector<std::string>& coldstart_class_names,
     if (DexType* type = DexType::get_type(class_name)) {
       if (auto cls = type_class(type)) {
         class_to_priority[cls] = priority++;
-        cls->set_perf_sensitive(true);
+        cls->set_perf_sensitive(PerfSensitiveGroup::BETAMAP_ORDERED);
       }
     }
   }
@@ -248,7 +248,7 @@ InterDex::EmitResult InterDex::emit_class(
   }
 
   if (perf_sensitive) {
-    clazz->set_perf_sensitive(true);
+    clazz->set_perf_sensitive(PerfSensitiveGroup::BETAMAP_ORDERED);
   }
 
   // Calculate the extra method and field refs that we would need to add to
@@ -1262,7 +1262,7 @@ void InterDex::post_process_dex(EmittingState& emitting_state,
       // classes in this dex, then we treat the additional classes as
       // perf-sensitive, to be conservative.
       if (fodr.primary_or_betamap_ordered) {
-        cls->set_perf_sensitive(true);
+        cls->set_perf_sensitive(PerfSensitiveGroup::BETAMAP_ORDERED);
       }
     }
   }

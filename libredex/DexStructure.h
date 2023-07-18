@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "DexClass.h"
+#include "DexStoreUtil.h"
 #include "InitClassesWithSideEffects.h"
 #include "Pass.h"
 #include "Util.h"
@@ -63,8 +64,36 @@ class DexStructure {
 
   bool empty() const { return m_classes_iterators.empty(); }
 
-  DexClasses get_classes() const {
-    return DexClasses(m_classes.begin(), m_classes.end());
+  DexClasses get_classes(bool perf_based = false) const {
+    DexClasses dex = DexClasses(m_classes.begin(), m_classes.end());
+    if (!perf_based) {
+      return dex;
+    }
+    // Sort classes to make sure all perf_sensitive classes are before non-perf
+    // but after canary if there is any.
+    size_t perf_idx = 0;
+    size_t idx = 0;
+    while (true) {
+      while (idx < dex.size() &&
+             (dex[idx]->is_perf_sensitive() || is_canary(dex[idx]))) {
+        idx++;
+      }
+      if (idx >= dex.size()) {
+        break;
+      }
+      perf_idx = idx + 1;
+      while (perf_idx < dex.size() && !dex[perf_idx]->is_perf_sensitive()) {
+        perf_idx++;
+      }
+      if (perf_idx >= dex.size()) {
+        break;
+      }
+      DexClass* tmp = dex[perf_idx];
+      dex[perf_idx] = dex[idx];
+      dex[idx] = tmp;
+    }
+
+    return dex;
   }
 
   /**

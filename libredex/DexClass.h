@@ -118,7 +118,6 @@ class DexString {
 
   static const std::string EMPTY;
 
- public:
   bool is_simple() const { return size() == m_utfsize; }
 
   const char* c_str() const { return m_storage; }
@@ -225,7 +224,6 @@ class DexType {
     return get_type(DexString::get_string(str));
   }
 
- public:
   void set_name(const DexString* new_name);
 
   const DexString* get_name() const { return m_name; }
@@ -383,7 +381,6 @@ class DexField : public DexFieldRef {
     return ret;
   }
 
- public:
   DexAnnotationSet* get_anno_set() const { return m_anno.get(); }
   DexEncodedValue* get_static_value() const { return m_value.get(); }
   DexAccessFlags get_access() const {
@@ -575,7 +572,6 @@ class DexProto {
   // Return an existing DexProto or nullptr if one does not exist.
   static DexProto* get_proto(const DexType* rtype, const DexTypeList* args);
 
- public:
   DexType* get_rtype() const { return m_rtype; }
   DexTypeList* get_args() const { return m_args; }
   const DexString* get_shorty() const { return m_shorty; }
@@ -619,6 +615,13 @@ struct DebugLineItem {
  */
 enum class DexDebugEntryType { Instruction, Position };
 
+enum class PerfSensitiveGroup {
+  NONE,
+  BETAMAP_ORDERED,
+  OUTLINED,
+  STRINGS_LOOKUP
+};
+
 struct DexDebugEntry final {
   DexDebugEntryType type;
   uint32_t addr;
@@ -649,8 +652,6 @@ class DexDebugItem {
   DexDebugItem(const DexDebugItem&);
   static std::unique_ptr<DexDebugItem> get_dex_debug(DexIdx* idx,
                                                      uint32_t offset);
-
- public:
   std::vector<DexDebugEntry>& get_entries() { return m_dbg_entries; }
   const auto& get_entries() const { return m_dbg_entries; }
   void set_entries(std::vector<DexDebugEntry> dbg_entries) {
@@ -723,7 +724,6 @@ class DexCode {
 
   ~DexCode();
 
- public:
   const DexDebugItem* get_debug_item() const { return m_dbg.get(); }
   void set_debug_item(std::unique_ptr<DexDebugItem> dbg) {
     m_dbg = std::move(dbg);
@@ -975,7 +975,6 @@ class DexMethod : public DexMethodRef {
     return ret;
   }
 
- public:
   const DexAnnotationSet* get_anno_set() const { return m_anno.get(); }
   DexAnnotationSet* get_anno_set() { return m_anno.get(); }
   const DexCode* get_dex_code() const { return m_dex_code.get(); }
@@ -1147,7 +1146,7 @@ class DexClass {
   std::vector<DexMethod*> m_vmethods;
   DexAccessFlags m_access_flags;
   bool m_external;
-  bool m_perf_sensitive;
+  PerfSensitiveGroup m_perf_sensitive;
 
   explicit DexClass(const DexLocation* location);
   void load_class_annotations(DexIdx* idx, uint32_t anno_off);
@@ -1337,8 +1336,13 @@ class DexClass {
 
   // Whether to optimize for perf, instead of space.
   // This bit is only set by the InterDex pass and not available earlier.
-  bool is_perf_sensitive() const { return m_perf_sensitive; }
-  void set_perf_sensitive(bool value) { m_perf_sensitive = value; }
+  bool is_perf_sensitive() const {
+    return m_perf_sensitive != PerfSensitiveGroup::NONE;
+  }
+  void set_perf_sensitive(PerfSensitiveGroup value) {
+    m_perf_sensitive = value;
+  }
+  PerfSensitiveGroup get_perf_sensitive() { return m_perf_sensitive; }
 
   // Find methods and fields from a class using its obfuscated name.
   DexField* find_field_from_simple_deobfuscated_name(

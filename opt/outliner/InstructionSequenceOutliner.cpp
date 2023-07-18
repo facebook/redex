@@ -2193,7 +2193,7 @@ class HostClassSelector {
     m_outlined_cls = cc.create();
     m_outlined_cls->rstate.set_generated();
     m_outlined_cls->rstate.set_outlined();
-    m_outlined_cls->set_perf_sensitive(true);
+    m_outlined_cls->set_perf_sensitive(PerfSensitiveGroup::OUTLINED);
     m_dex_state.insert_outlined_class(m_outlined_cls);
   }
 
@@ -2383,11 +2383,24 @@ bool outline_candidate(const Config& config,
       methods.push_back(p.first);
     }
   }
+
+  DexClass* outlined_method_host_cls = type_class(outlined_method->get_class());
   dex_state->insert_type_refs(type_refs_to_insert);
   auto call_site_pattern_ids =
       outlined_method_creator->get_call_site_pattern_ids();
   for (auto& p : ci.methods) {
     auto method = p.first;
+    // If any outlined method comes from BETAMAP class, its host class should
+    // also marked as BETAMAP_ORDERED.
+    if (outlined_method_host_cls->get_perf_sensitive() !=
+        PerfSensitiveGroup::BETAMAP_ORDERED) {
+      DexClass* method_host_cls = type_class(method->get_class());
+      if (method_host_cls->get_perf_sensitive() ==
+          PerfSensitiveGroup::BETAMAP_ORDERED) {
+        outlined_method_host_cls->set_perf_sensitive(
+            PerfSensitiveGroup::BETAMAP_ORDERED);
+      }
+    }
     auto& cfg = method->get_code()->cfg();
 
     TRACE(ISO, 7, "[invoke sequence outliner] before outlined %s from %s\n%s",

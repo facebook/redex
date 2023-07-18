@@ -231,7 +231,7 @@ DexMethod* DedupStrings::make_const_string_loader_method(
   host_cls_creator.set_super(type::java_lang_Object());
   auto host_cls = host_cls_creator.create();
   host_cls->rstate.set_generated();
-  host_cls->set_perf_sensitive(true);
+  host_cls->set_perf_sensitive(PerfSensitiveGroup::STRINGS_LOOKUP);
   // Insert class at beginning of dex, but after canary class, if any
   auto dex_it = dex.begin();
   for (; dex_it != dex.end() && is_canary(*dex_it); dex_it++) {
