@@ -9,7 +9,7 @@
 #define _FB_MACROS_REIMPLEMENTATION
 
 #ifndef FALLTHROUGH_INTENDED
-#define FALLTHROUGH_INTENDED [[clang::fallthrough]]
+#define FALLTHROUGH_INTENDED [[fallthrough]]
 #endif
 
 #endif // _FB_MACROS_REIMPLEMENTATION

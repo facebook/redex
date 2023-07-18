@@ -28,20 +28,25 @@ DISABLED_WARNINGS = \
   -Wno-invalid-offsetof \
   -Wno-maybe-uninitialized \
   -Wno-parentheses \
+  -Wno-range-loop-analysis \
+  -Wno-redundant-move \
   -Wno-return-type \
   -Wno-shift-count-overflow \
   -Wno-sign-compare \
   -Wno-strict-aliasing \
   -Wno-stringop-overflow \
   -Wno-stringop-overread \
+  -Wno-type-limits \
   -Wno-uninitialized \
   -Wno-unused-but-set-variable \
   -Wno-unused-function \
+  -Wno-unused-parameter \
   -Wno-unused-private-field \
   -Wno-unused-result \
+  -Wno-unused-value \
   -Wno-unused-variable
 
-AM_CXXFLAGS = --std=gnu++17 -O3 -Wall -Werror $(DISABLED_WARNINGS) -g
+AM_CXXFLAGS = --std=gnu++17 -O3 -Wall -Werror -Wextra $(DISABLED_WARNINGS) -g
 
 include $(top_srcdir)/Makefile.inc
 
