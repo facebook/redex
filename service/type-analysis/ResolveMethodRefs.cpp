@@ -18,6 +18,7 @@ ResolveMethodRefs::ResolveMethodRefs(
     const Scope& scope,
     const type_analyzer::global::GlobalTypeAnalyzer& gta,
     const XStoreRefs& xstores) {
+  Timer t("ResolveMethodRefs");
   walk::methods(scope, [&](DexMethod* method) {
     auto* code = const_cast<IRCode*>(method->get_code());
     if (!code) {
