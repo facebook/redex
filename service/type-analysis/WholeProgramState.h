@@ -48,7 +48,7 @@ class WholeProgramState {
                     const global::GlobalTypeAnalyzer&,
                     const std::unordered_set<DexMethod*>&,
                     const ConcurrentSet<const DexMethod*>&,
-                    const call_graph::Graph& call_graph);
+                    std::shared_ptr<const call_graph::Graph> call_graph);
 
   void set_to_top() {
     m_field_partition.set_to_top();
@@ -131,11 +131,10 @@ class WholeProgramState {
            !is_any_init_reachable(method);
   }
 
-  bool has_call_graph() const { return m_call_graph != boost::none; }
+  bool has_call_graph() const { return !!m_call_graph; }
 
   DexTypeDomain get_return_type_from_cg(const IRInstruction* insn) const {
-    auto callees =
-        call_graph::resolve_callees_in_graph(m_call_graph.get(), insn);
+    auto callees = call_graph::resolve_callees_in_graph(*m_call_graph, insn);
     if (callees.empty()) {
       return DexTypeDomain::top();
     }
@@ -151,7 +150,7 @@ class WholeProgramState {
   }
 
   bool method_is_dynamic(const DexMethod* method) const {
-    return call_graph::method_is_dynamic(m_call_graph.get(), method);
+    return call_graph::method_is_dynamic(*m_call_graph, method);
   }
 
   // For debugging
@@ -194,7 +193,7 @@ class WholeProgramState {
 
   bool is_reachable(const global::GlobalTypeAnalyzer&, const DexMethod*) const;
 
-  boost::optional<call_graph::Graph> m_call_graph;
+  std::shared_ptr<const call_graph::Graph> m_call_graph;
 
   // To avoid "Show.h" in the header.
   static std::string show_field(const DexField* f);

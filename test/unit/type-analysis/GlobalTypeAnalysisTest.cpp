@@ -84,10 +84,10 @@ TEST_F(GlobalTypeAnalysisTest, SimpleArgumentPassingTest) {
   creator.add_method(meth_foo);
   scope.push_back(creator.create());
 
-  call_graph::Graph cg = call_graph::single_callee_graph(
-      *method_override_graph::build_graph(scope), scope);
+  auto cg = std::make_shared<call_graph::Graph>(call_graph::single_callee_graph(
+      *method_override_graph::build_graph(scope), scope));
   walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(); });
-  GlobalTypeAnalyzer gta(std::move(cg));
+  GlobalTypeAnalyzer gta(cg);
   gta.run({{CURRENT_PARTITION_LABEL, ArgumentTypeEnvironment()}});
 
   auto& graph = gta.get_call_graph();
@@ -145,10 +145,10 @@ TEST_F(GlobalTypeAnalysisTest, ArgumentPassingJoinWithNullTest) {
   creator.add_method(meth_foo);
   scope.push_back(creator.create());
 
-  call_graph::Graph cg = call_graph::single_callee_graph(
-      *method_override_graph::build_graph(scope), scope);
+  auto cg = std::make_shared<call_graph::Graph>(call_graph::single_callee_graph(
+      *method_override_graph::build_graph(scope), scope));
   walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(); });
-  GlobalTypeAnalyzer gta(std::move(cg));
+  GlobalTypeAnalyzer gta(cg);
   gta.run({{CURRENT_PARTITION_LABEL, ArgumentTypeEnvironment()}});
 
   auto& graph = gta.get_call_graph();

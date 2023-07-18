@@ -195,9 +195,9 @@ WholeProgramState::WholeProgramState(
     const global::GlobalTypeAnalyzer& gta,
     const std::unordered_set<DexMethod*>& non_true_virtuals,
     const ConcurrentSet<const DexMethod*>& any_init_reachables,
-    const call_graph::Graph& call_graph)
+    std::shared_ptr<const call_graph::Graph> call_graph)
     : WholeProgramState(scope, gta, non_true_virtuals, any_init_reachables) {
-  m_call_graph = call_graph;
+  m_call_graph = std::move(call_graph);
 }
 
 std::string WholeProgramState::show_field(const DexField* f) { return show(f); }

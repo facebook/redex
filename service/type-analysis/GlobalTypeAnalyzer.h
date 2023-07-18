@@ -65,9 +65,10 @@ class GlobalTypeAnalyzer : public sparta::ParallelMonotonicFixpointIterator<
                                call_graph::GraphInterface,
                                ArgumentTypePartition> {
  public:
-  explicit GlobalTypeAnalyzer(call_graph::Graph&& call_graph)
-      : ParallelMonotonicFixpointIterator(call_graph),
-        m_call_graph(std::forward<call_graph::Graph>(call_graph)) {
+  explicit GlobalTypeAnalyzer(
+      std::shared_ptr<const call_graph::Graph> call_graph)
+      : ParallelMonotonicFixpointIterator(*call_graph),
+        m_call_graph(std::move(call_graph)) {
     auto wps = new WholeProgramState();
     wps->set_to_top();
     m_wps.reset(wps);
@@ -93,13 +94,13 @@ class GlobalTypeAnalyzer : public sparta::ParallelMonotonicFixpointIterator<
     m_wps = std::move(wps);
   }
 
-  const call_graph::Graph& get_call_graph() { return m_call_graph; }
+  const call_graph::Graph& get_call_graph() { return *m_call_graph; }
 
   bool is_reachable(const DexMethod* method) const;
 
  private:
   std::unique_ptr<const WholeProgramState> m_wps;
-  call_graph::Graph m_call_graph;
+  std::shared_ptr<const call_graph::Graph> m_call_graph;
 
   std::unique_ptr<local::LocalTypeAnalyzer> analyze_method(
       const DexMethod* method,
@@ -131,7 +132,7 @@ class GlobalTypeAnalysis {
   void find_any_init_reachables(
       const method_override_graph::Graph& method_override_graph,
       const Scope&,
-      const call_graph::Graph&);
+      std::shared_ptr<const call_graph::Graph>);
 
   void trace_stats(WholeProgramState& wps);
 };
