@@ -71,4 +71,26 @@ inline const PropertyName UltralightCodePatterns("UltralightCodePatterns");
 
 } // namespace names
 
+namespace simple {
+
+// Only use for plain analysis passes. Otherwise it may be better to be
+// explicit.
+inline PropertyInteractions preserves_all() {
+  using namespace redex_properties::interactions;
+  using namespace redex_properties::names;
+  return {
+      {DexLimitsObeyed, Preserves},
+      {HasSourceBlocks, Preserves},
+      {NeedsEverythingPublic, Preserves},
+      {NeedsInjectionIdLowering, Preserves},
+      {NoInitClassInstructions, Preserves},
+      {NoResolvablePureRefs, Preserves},
+      {NoSpuriousGetClassCalls, Preserves},
+      {RenameClass, Preserves},
+      {UltralightCodePatterns, Preserves},
+  };
+}
+
+} // namespace simple
+
 } // namespace redex_properties
