@@ -869,6 +869,7 @@ void InterDex::emit_remaining_classes_exploring_alternatives(
       worst_classes.push_back(nullptr);
     }
 
+    best->cross_dex_ref_minimizer.compact();
     std::unique_ptr<Alternative> last;
     std::swap(last, best);
     std::mutex best_mutex;
@@ -888,14 +889,17 @@ void InterDex::emit_remaining_classes_exploring_alternatives(
                 "Found cross-dex-ref-minimization solution with %f remaining "
                 "difficulity at index %zu",
                 remaining_difficulty, index);
-
-          std::lock_guard<std::mutex> lock_guard(best_mutex);
-          if (!best || remaining_difficulty < best_remaining_difficulty ||
-              (remaining_difficulty == best_remaining_difficulty &&
-               index < best_index)) {
-            best = std::move(alt);
-            best_remaining_difficulty = remaining_difficulty;
-            best_index = index;
+          {
+            std::lock_guard<std::mutex> lock_guard(best_mutex);
+            if (!best || remaining_difficulty < best_remaining_difficulty ||
+                (remaining_difficulty == best_remaining_difficulty &&
+                 index < best_index)) {
+              // swap so that we destroy the dead alternative outside of the
+              // lock
+              std::swap(best, alt);
+              best_remaining_difficulty = remaining_difficulty;
+              best_index = index;
+            }
           }
         });
   }

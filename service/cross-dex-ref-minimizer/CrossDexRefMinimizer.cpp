@@ -70,6 +70,36 @@ uint64_t CrossDexRefMinimizer::ClassInfo::get_priority() const {
   return (primary_priority << 24) | secondary_priority;
 }
 
+void CrossDexRefMinimizer::ClassDiffSet::insert(DexClass* value) {
+  always_assert(!m_diff.count(value));
+  m_base->insert(value);
+}
+
+void CrossDexRefMinimizer::ClassDiffSet::erase(DexClass* value) {
+  always_assert(m_base->count(value));
+  m_diff.insert(value);
+  if (m_diff.size() >= (m_base->size() + 1) / 2) {
+    // When diff set size becomes significant, create a new *shared* base set,
+    // so that operations such as enumeration over all elements retain their
+    // expected complexity.
+    auto new_base = std::make_shared<Repr>(size());
+    for (auto* cls : *m_base) {
+      if (!m_diff.count(cls)) {
+        new_base->insert(cls);
+      }
+    }
+    m_base = std::move(new_base);
+    m_diff.clear();
+  }
+}
+
+void CrossDexRefMinimizer::ClassDiffSet::compact() {
+  for (auto* cls : m_diff) {
+    m_base->erase(cls);
+  }
+  m_diff.clear();
+}
+
 void CrossDexRefMinimizer::reprioritize(
     const std::unordered_map<DexClass*, CrossDexRefMinimizer::ClassInfoDelta>&
         affected_classes) {
@@ -262,7 +292,7 @@ void CrossDexRefMinimizer::insert(DexClass* cls) {
     // There's an implicit invariant that class_info and the keys of
     // affected_classes are disjoint, so we are not going to reprioritize
     // the class that we are adding here.
-    classes.emplace(cls);
+    classes.insert(cls);
   }
   const auto priority = class_info.get_priority();
   m_prioritized_classes.insert(cls, priority);
@@ -407,8 +437,7 @@ size_t CrossDexRefMinimizer::erase(DexClass* cls, bool emitted, bool reset) {
       auto& classes = classes_it->second;
       size_t frequency = classes.size();
       always_assert(frequency > 0);
-      const auto erased = classes.erase(cls);
-      always_assert(erased);
+      classes.erase(cls);
       if (frequency <= INFREQUENT_REFS_COUNT) {
         for (DexClass* affected_class : classes) {
           affected_classes[affected_class]
@@ -477,6 +506,12 @@ size_t CrossDexRefMinimizer::get_unapplied_refs(DexClass* cls) const {
     }
   }
   return unapplied_refs;
+}
+
+void CrossDexRefMinimizer::compact() {
+  for (auto&& [ref, classes] : m_ref_classes) {
+    classes.compact();
+  }
 }
 
 double CrossDexRefMinimizer::get_remaining_difficulty() const {

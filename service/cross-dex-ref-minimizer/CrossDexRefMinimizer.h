@@ -102,9 +102,81 @@ class CrossDexRefMinimizer {
     uint64_t get_primary_priority_denominator() const;
     uint64_t get_priority() const;
   };
+
+  // A set of classes, represented by a *shared* base set, and a set of
+  // intermediate removed elements. The sharing of the base set enables
+  // efficient copies of the CrossDexRefMinimizer e.g. for concurrent
+  // exploration of alternatives.
+  class ClassDiffSet {
+    using Repr = std::unordered_set<DexClass*>;
+
+   public:
+    class Iterator {
+      using set_iterator = Repr::iterator;
+
+     public:
+      using iterator_category = std::input_iterator_tag;
+      using difference_type = std::ptrdiff_t;
+      using value_type = DexClass*;
+      using pointer = value_type*;
+      using reference = value_type&;
+
+      Iterator(const ClassDiffSet& owner, const set_iterator& base_it)
+          : m_owner(owner), m_base_it(base_it) {
+        advance();
+      }
+
+      Iterator& operator++() {
+        ++m_base_it;
+        advance();
+        return *this;
+      }
+
+      bool operator==(const Iterator& rhs) const {
+        return m_base_it == rhs.m_base_it;
+      }
+
+      bool operator!=(const Iterator& rhs) const {
+        return m_base_it != rhs.m_base_it;
+      }
+
+      const value_type& operator*() const { return *m_base_it; }
+
+     private:
+      const ClassDiffSet& m_owner;
+      set_iterator m_base_it;
+
+      void advance() {
+        for (const auto end = m_owner.m_base->end();
+             m_base_it != end && m_owner.m_diff.count(*m_base_it);
+             m_base_it++) {
+        }
+      }
+    };
+
+    size_t size() const { return m_base->size() - m_diff.size(); }
+
+    Iterator begin() const { return Iterator(*this, m_base->begin()); }
+
+    Iterator end() const { return Iterator(*this, m_base->end()); }
+
+    // mutates the *shared* base set
+    void insert(DexClass* value);
+
+    // mutates the local diff set
+    void erase(DexClass* value);
+
+    // mutates the *shared* base set
+    void compact();
+
+   private:
+    std::shared_ptr<Repr> m_base{std::make_shared<Repr>()};
+    Repr m_diff;
+  };
+
   std::unordered_map<DexClass*, ClassInfo> m_class_infos;
   uint32_t m_next_index{0};
-  std::unordered_map<const void*, std::unordered_set<DexClass*>> m_ref_classes;
+  std::unordered_map<const void*, ClassDiffSet> m_ref_classes;
   CrossDexRefMinimizerStats m_stats;
   CrossDexRefMinimizerConfig m_config;
 
@@ -193,6 +265,7 @@ class CrossDexRefMinimizer {
   size_t get_unapplied_refs(DexClass* cls) const;
   double get_remaining_difficulty() const;
   size_t size() const { return m_class_infos.size(); }
+  void compact();
 
   std::string get_json_class_index(DexClass* cls);
   Json::Value get_json_class_indices(const std::vector<DexClass*>& classes);
