@@ -50,6 +50,8 @@ void ArtProfileWriterPass::bind_config() {
        m_perf_config.appear100_threshold);
   bind("perf_call_count_threshold", m_perf_config.call_count_threshold,
        m_perf_config.call_count_threshold);
+  bind("perf_coldstart_appear100_threshold", m_perf_config.appear100_threshold,
+       m_perf_config.coldstart_appear100_threshold);
   bind("perf_interactions", m_perf_config.interactions,
        m_perf_config.interactions);
 }
@@ -63,7 +65,9 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
     bool startup = interaction_id == "ColdStart";
     const auto& method_stats = method_profiles.method_stats(interaction_id);
     for (auto&& [method, stat] : method_stats) {
-      if (stat.appear_percent >= m_perf_config.appear100_threshold &&
+      if (stat.appear_percent >=
+              (startup ? m_perf_config.coldstart_appear100_threshold
+                       : m_perf_config.appear100_threshold) &&
           stat.call_count >= m_perf_config.call_count_threshold) {
         auto& mf = method_flags[method];
         mf.hot = true;
