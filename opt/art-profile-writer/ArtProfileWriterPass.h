@@ -33,12 +33,17 @@ class ArtProfileWriterPass : public Pass {
   struct PerfConfig {
     float appear100_threshold;
     float call_count_threshold;
+    float coldstart_appear100_threshold;
     std::vector<std::string> interactions{"ColdStart"};
 
     PerfConfig()
-        : appear100_threshold(101.0), call_count_threshold(0) {} // Default: off
-    PerfConfig(float a, float c)
-        : appear100_threshold(a), call_count_threshold(c) {}
+        : appear100_threshold(101.0),
+          call_count_threshold(0),
+          coldstart_appear100_threshold(80.0) {} // Default: off
+    PerfConfig(float a, float c, float ca)
+        : appear100_threshold(a),
+          call_count_threshold(c),
+          coldstart_appear100_threshold(ca) {}
   };
 
   PerfConfig m_perf_config;
