@@ -16,6 +16,7 @@ struct Config {
   size_t min_insns_size{3};
   size_t max_insns_size{77};
   bool reorder_with_method_profiles{true};
+  bool derive_method_profiles_stats{false};
   bool reuse_outlined_methods_across_dexes{true};
   size_t max_outlined_methods_per_class{100};
   size_t savings_threshold{10};

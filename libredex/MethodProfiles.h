@@ -134,6 +134,11 @@ class MethodProfiles {
       const std::unordered_map<dex_member_refs::MethodDescriptorTokens,
                                std::vector<DexMethodRef*>>& map);
 
+  // If there are not observed stats for the target, derive it from the given
+  // sources.
+  size_t derive_stats(DexMethod* target,
+                      const std::vector<DexMethod*>& sources);
+
  private:
   static AccumulatingTimer s_process_unresolved_lines_timer;
   AllInteractions m_method_stats;
