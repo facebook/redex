@@ -87,6 +87,7 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
   int32_t min_sdk = mgr.get_redex_options().min_sdk;
   mgr.incr_metric("min_sdk", min_sdk);
   auto end = min_sdk >= 21 ? dexen.size() : 1;
+  size_t methods_with_baseline_profile = 0;
   for (size_t dex_idx = 0; dex_idx < end; dex_idx++) {
     auto& dex = dexen.at(dex_idx);
     for (auto* cls : dex) {
@@ -101,9 +102,13 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
         boost::replace_all(descriptor, ".", "->");
         boost::replace_all(descriptor, ":(", "(");
         ofs << it->second << descriptor << std::endl;
+        methods_with_baseline_profile++;
       }
     }
   }
+
+  mgr.incr_metric("methods_with_baseline_profile",
+                  methods_with_baseline_profile);
 }
 
 static ArtProfileWriterPass s_pass;
