@@ -275,6 +275,42 @@ bool MethodProfiles::apply_main_internal_result(ParsedMain v,
   }
 }
 
+size_t MethodProfiles::derive_stats(DexMethod* target,
+                                    const std::vector<DexMethod*>& sources) {
+  size_t res = 0;
+  for (auto& [interaction_id, method_stats] : m_method_stats) {
+    if (method_stats.count(target)) {
+      // No need to derive anything, we have a match.
+      continue;
+    }
+
+    std::optional<Stats> stats;
+    for (auto* src : sources) {
+      auto it = method_stats.find(src);
+      if (it == method_stats.end()) {
+        continue;
+      }
+      if (!stats) {
+        stats = it->second;
+        continue;
+      }
+      stats->appear_percent =
+          std::max(stats->appear_percent, it->second.appear_percent);
+      stats->call_count += it->second.call_count;
+      stats->order_percent =
+          std::min(stats->order_percent, it->second.order_percent);
+      stats->min_api_level =
+          std::min(stats->min_api_level, it->second.min_api_level);
+    }
+
+    if (stats) {
+      method_stats.emplace(target, *stats);
+      res++;
+    }
+  }
+  return res;
+}
+
 bool MethodProfiles::parse_main(const std::string& line,
                                 std::string* interaction_id) {
   auto result = parse_main_internal(line);

@@ -2767,6 +2767,22 @@ void reorder_all_methods(
   }
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// derive_method_profiles_stats
+////////////////////////////////////////////////////////////////////////////////
+size_t derive_method_profiles_stats(
+    ConfigFiles& config,
+    const OutlinedMethodsToReorder& outlined_methods_by_dex) {
+  auto& method_profiles = config.get_method_profiles();
+  size_t res = 0;
+  for (auto& [dex, outlined_methods] : outlined_methods_by_dex) {
+    for (auto& [target, sources] : outlined_methods) {
+      res += method_profiles.derive_stats(target, sources);
+    }
+  }
+  return res;
+}
+
 class OutlinedMethodBodySetter {
  private:
   const Config& m_config;
@@ -3048,6 +3064,11 @@ void InstructionSequenceOutliner::bind_config() {
        m_config.reuse_outlined_methods_across_dexes,
        "Whether to allow reusing outlined methods across dexes within the same "
        "store");
+  bind("derive_method_profiles_stats",
+       m_config.derive_method_profiles_stats,
+       m_config.derive_method_profiles_stats,
+       "Whether to derive method profile stats for generated outline methods "
+       "from methods outlined from");
   bind("max_outlined_methods_per_class",
        m_config.max_outlined_methods_per_class,
        m_config.max_outlined_methods_per_class,
@@ -3204,6 +3225,12 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
   outlined_method_body_setter.set_method_body(outlined_methods);
   reorder_all_methods(m_config, mgr, methods_global_order,
                       outlined_methods_to_reorder);
+  if (m_config.derive_method_profiles_stats) {
+    size_t derived_method_profile_stats =
+        derive_method_profiles_stats(config, outlined_methods_to_reorder);
+    mgr.incr_metric("num_derived_method_profile_stats",
+                    derived_method_profile_stats);
+  }
   size_t resolved_method_profiles =
       update_method_profiles(config, outlined_methods_to_reorder);
   mgr.incr_metric("num_resolved_method_profiles", resolved_method_profiles);
