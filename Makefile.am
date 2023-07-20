@@ -339,6 +339,7 @@ libopt_la_SOURCES = \
 	analysis/max-depth/MaxDepthAnalysis.cpp \
 	analysis/ip-reflection-analysis/IPReflectionAnalysis.cpp \
 	opt/access-marking/AccessMarking.cpp \
+	opt/add-secondary-dex/AddSecondaryDexPass.cpp \
 	opt/annokill/AnnoKill.cpp \
 	opt/analyze-pure-method/PureMethods.cpp \
 	opt/app_module_usage/AppModuleUsage.cpp \
