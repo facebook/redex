@@ -245,7 +245,7 @@ void add_pass_properties_reflection(Json::Value& value, Pass* pass) {
   }
 
   Json::Value establishes = Json::arrayValue;
-  Json::Value requires = Json::arrayValue;
+  Json::Value requires_ = Json::arrayValue;
   Json::Value preserves = Json::arrayValue;
   Json::Value requires_finally = Json::arrayValue;
 
@@ -254,7 +254,7 @@ void add_pass_properties_reflection(Json::Value& value, Pass* pass) {
       establishes.append(property);
     }
     if (inter.requires_) {
-      requires.append(property);
+      requires_.append(property);
     }
     if (inter.preserves) {
       preserves.append(property);
@@ -266,7 +266,7 @@ void add_pass_properties_reflection(Json::Value& value, Pass* pass) {
 
   Json::Value properties;
   properties["establishes"] = establishes;
-  properties["requires"] = requires;
+  properties["requires"] = requires_;
   properties["preserves"] = preserves;
   properties["requires_finally"] = requires_finally;
 
