@@ -27,6 +27,7 @@
 struct ConfigFiles;
 class DexStore;
 class Pass;
+struct PassManagerConfig;
 
 namespace Json {
 class Value;
@@ -132,11 +133,16 @@ class PassManager {
 
   Pass* find_pass(const std::string& pass_name) const;
 
- private:
-  void activate_pass(const std::string& name,
-                     const std::string* alias,
-                     const Json::Value& conf);
+  struct ActivatedPasses {
+    std::vector<std::pair<Pass*, std::string>> activated_passes;
+    std::vector<std::unique_ptr<Pass>> cloned_passes;
+  };
+  static ActivatedPasses compute_activated_passes(
+      std::vector<Pass*> m_registered_passes,
+      const ConfigFiles& config,
+      PassManagerConfig* pm_config_override = nullptr);
 
+ private:
   void init(const ConfigFiles& config);
 
   hashing::DexHash run_hasher(const char* name, const Scope& scope);

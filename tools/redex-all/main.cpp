@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "json/value.h"
 #include <boost/thread/thread.hpp>
 #include <cinttypes>
 #include <cstring>
@@ -38,6 +39,7 @@
 #include "AggregateException.h"
 #include "CommandProfiling.h"
 #include "CommentFilter.h"
+#include "ConfigFiles.h"
 #include "ControlFlow.h" // To set DEBUG.
 #include "Debug.h"
 #include "DexClass.h"
@@ -104,6 +106,7 @@ struct Arguments {
   Json::Value entry_data;
   boost::optional<int> stop_pass_idx;
   RedexOptions redex_options;
+  bool properties_check{false};
 };
 
 UNUSED void dump_args(const Arguments& args) {
@@ -313,6 +316,9 @@ Arguments parse_args(int argc, char* argv[]) {
   od.add_options()("help,h", "print this help message");
   od.add_options()("reflect-config",
                    "print a reflection of the config and exit");
+  od.add_options()(
+      "properties-check",
+      "parse configuration, perform a stack properties check and exit");
   od.add_options()("apkdir,a",
                    // We allow overwrites to most of the options but will take
                    // only the last one.
@@ -460,9 +466,13 @@ Arguments parse_args(int argc, char* argv[]) {
     exit(EXIT_SUCCESS);
   }
 
+  if (vm.count("properties-check")) {
+    args.properties_check = true;
+  }
+
   if (vm.count("dex-files")) {
     args.dex_files = vm["dex-files"].as<std::vector<std::string>>();
-  } else {
+  } else if (!args.properties_check) {
     std::cerr << "error: no input dex files" << std::endl << std::endl;
     print_usage();
     exit(EXIT_SUCCESS);
@@ -1490,6 +1500,52 @@ void copy_proguard_stats(Json::Value& stats) {
   }
 }
 
+int check_pass_properties(const Arguments& args) {
+  // Cannot parse GlobalConfig nor passes, as they may require binding
+  // to dex elements. So this looks more complicated than necessary.
+
+  ConfigFiles conf(args.config, args.out_dir);
+
+  PassManagerConfig pmc;
+  if (conf.get_json_config().contains("pass_manager")) {
+    pmc.parse_config(JsonWrapper(conf.get_json_config().get(
+        "pass_manager", (Json::Value)Json::nullValue)));
+  }
+
+  auto const& all_passes = PassRegistry::get().get_passes();
+  auto props_manager = redex_properties::Manager(
+      conf, redex_properties::PropertyCheckerRegistry::get().get_checkers());
+  auto active_passes =
+      PassManager::compute_activated_passes(all_passes, conf, &pmc);
+
+  std::vector<std::pair<std::string, redex_properties::PropertyInteractions>>
+      pass_interactions;
+  for (const auto& [pass, _] : active_passes.activated_passes) {
+    auto m = pass->get_property_interactions();
+    for (auto it = m.begin(); it != m.end();) {
+      auto&& [name, property_interaction] = *it;
+
+      if (!props_manager.property_is_enabled(name)) {
+        it = m.erase(it);
+        continue;
+      }
+
+      always_assert_log(property_interaction.is_valid(),
+                        "%s has an invalid property interaction for %s",
+                        pass->name().c_str(), name.c_str());
+      ++it;
+    }
+    pass_interactions.emplace_back(pass->name(), std::move(m));
+  }
+  auto failure = redex_properties::Manager::verify_pass_interactions(
+      pass_interactions, conf);
+  if (failure) {
+    std::cerr << "Illegal pass order:\n" << *failure << std::endl;
+    return 1;
+  }
+  return 0;
+}
+
 } // namespace
 
 // NOLINTNEXTLINE(bugprone-exception-escape)
@@ -1537,6 +1593,10 @@ int main(int argc, char* argv[]) {
     // TODO: Make the command line -jarpath option like a colon separated
     //       list of library JARS.
     Arguments args = parse_args(argc, argv);
+
+    if (args.properties_check) {
+      return check_pass_properties(args);
+    }
 
     keep_reason::Reason::set_record_keep_reasons(
         args.config.get("record_keep_reasons", false).asBool());
