@@ -15,6 +15,7 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/libresource/utils \
 	-I$(top_srcdir)/opt \
 	-I$(top_srcdir)/opt/access-marking \
+	-I$(top_srcdir)/opt/add-secondary-dex \
 	-I$(top_srcdir)/opt/add_redex_txt_to_apk \
 	-I$(top_srcdir)/opt/analyze-pure-method \
 	-I$(top_srcdir)/opt/app_module_usage \
