@@ -33,7 +33,10 @@ class Manager {
   bool property_is_enabled(const PropertyName& property_name) const;
 
   std::unordered_set<PropertyName> get_initial() const;
+  static const std::unordered_set<PropertyName>& get_default_initial();
+
   std::unordered_set<PropertyName> get_final() const;
+  static const std::unordered_set<PropertyName>& get_default_final();
 
   std::unordered_set<PropertyName> get_required(
       const PropertyInteractions& interactions) const;
@@ -55,6 +58,10 @@ class Manager {
   const std::unordered_set<PropertyName>& get_established() const {
     return m_established;
   }
+
+  static std::vector<PropertyName> get_all_properties();
+
+  static bool is_negative(const PropertyName& property);
 
  private:
   // TODO: See whether we can make checkers use const.

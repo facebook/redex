@@ -41,38 +41,43 @@ CollectionT filter_out_disabled_properties(const CollectionT& c,
 
 } // namespace
 
-std::unordered_set<PropertyName> Manager::get_initial() const {
+const std::unordered_set<PropertyName>& Manager::get_default_initial() {
   using namespace names;
   static const std::unordered_set<PropertyName> default_initial_properties{};
-  return filter_out_disabled_properties(default_initial_properties, *this);
+  return default_initial_properties;
 }
 
-std::unordered_set<PropertyName> Manager::get_final() const {
+std::unordered_set<PropertyName> Manager::get_initial() const {
+  return filter_out_disabled_properties(get_default_initial(), *this);
+}
+
+const std::unordered_set<PropertyName>& Manager::get_default_final() {
   using namespace names;
   static const std::unordered_set<PropertyName> default_final_properties{
       NoInitClassInstructions, DexLimitsObeyed};
-  return filter_out_disabled_properties(default_final_properties, *this);
+  return default_final_properties;
 }
 
-namespace {
-
-using namespace names;
+std::unordered_set<PropertyName> Manager::get_final() const {
+  return filter_out_disabled_properties(get_default_final(), *this);
+}
 
 // TODO: Figure out a way to keep this complete.
 //
 //       We could move to an enum with the typical .def file to autogenerate.
-std::vector<PropertyName> get_all_properties() {
+std::vector<PropertyName> Manager::get_all_properties() {
+  using namespace names;
   return {
       NoInitClassInstructions, DexLimitsObeyed,         NeedsEverythingPublic,
       HasSourceBlocks,         NoSpuriousGetClassCalls, RenameClass,
   };
 }
 
-bool is_negative(const PropertyName& property) {
+// TODO: This should really be with the RedexProperties definitions.
+bool Manager::is_negative(const PropertyName& property) {
+  using namespace names;
   return property == NeedsEverythingPublic;
 }
-
-} // namespace
 
 std::unordered_set<PropertyName> Manager::get_required(
     const PropertyInteractions& interactions) const {
