@@ -699,6 +699,8 @@ bool XmlFileVisitor::visit_start_namespace(
     android::ResXMLTree_node* node,
     android::ResXMLTree_namespaceExt* extension) {
   LOGVV("visit start namespace ext, offset = %ld", get_file_offset(extension));
+  visit_string_ref(&extension->prefix);
+  visit_string_ref(&extension->uri);
   return true;
 }
 

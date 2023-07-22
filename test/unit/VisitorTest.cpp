@@ -162,12 +162,12 @@ class XmlStringCollector : public arsc::SimpleXmlParser {
     auto idx = dtohl(ref->index);
     if (idx != 0xFFFFFFFF) {
       auto str = get_global_string(*ref);
-      m_encountered_strings.emplace(str);
+      m_encountered_strings[str]++;
     }
     return ret;
   }
 
-  std::unordered_set<std::string> m_encountered_strings;
+  std::unordered_map<std::string, size_t> m_encountered_strings;
 };
 } // namespace
 
@@ -211,14 +211,18 @@ TEST(Visitor, VisitXmlStrings) {
   XmlStringCollector collector;
   collector.visit(const_cast<char*>(f.const_data()), f.size());
   EXPECT_EQ(collector.m_encountered_strings.size(), 8);
-  EXPECT_EQ(collector.m_encountered_strings.count("Button"), 1);
-  EXPECT_EQ(collector.m_encountered_strings.count("background"), 1);
-  EXPECT_EQ(collector.m_encountered_strings.count("padding"), 1);
-  EXPECT_EQ(collector.m_encountered_strings.count("layout_width"), 1);
-  EXPECT_EQ(collector.m_encountered_strings.count("layout_height"), 1);
-  EXPECT_EQ(collector.m_encountered_strings.count("text"), 1);
-  EXPECT_EQ(collector.m_encountered_strings.count("android"), 1);
-  EXPECT_EQ(collector.m_encountered_strings.count(
+  // Twice for the start/end node.
+  EXPECT_EQ(collector.m_encountered_strings.at("Button"), 2);
+  EXPECT_EQ(collector.m_encountered_strings.at("background"), 1);
+  EXPECT_EQ(collector.m_encountered_strings.at("padding"), 1);
+  EXPECT_EQ(collector.m_encountered_strings.at("layout_width"), 1);
+  EXPECT_EQ(collector.m_encountered_strings.at("layout_height"), 1);
+  EXPECT_EQ(collector.m_encountered_strings.at("text"), 1);
+  // Twice for start/end namespace.
+  EXPECT_EQ(collector.m_encountered_strings.at("android"), 2);
+  // Twice for the start/end namespace, plus 5 for each attribute in the
+  // namespace (note that attribute string ref points to the uri not the name).
+  EXPECT_EQ(collector.m_encountered_strings.at(
                 "http://schemas.android.com/apk/res/android"),
-            1);
+            7);
 }
