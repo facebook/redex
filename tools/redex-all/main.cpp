@@ -773,8 +773,7 @@ Json::Value get_position_stats(const PositionMapper* pos_mapper) {
   return obj;
 }
 
-template <typename StatsT>
-Json::Value get_detailed_stats(const std::vector<StatsT>& dexes_stats) {
+Json::Value get_detailed_stats(const std::vector<dex_stats_t>& dexes_stats) {
   Json::Value dexes;
   int i = 0;
   for (const dex_stats_t& stats : dexes_stats) {
@@ -806,15 +805,29 @@ Json::Value get_input_stats(const dex_stats_t& stats,
   return d;
 }
 
+Json::Value get_output_dexes_stats(
+    const std::vector<std::pair<std::string, enhanced_dex_stats_t>>&
+        dexes_stats) {
+  Json::Value dexes;
+  int i = 0;
+  for (const auto& [store_name, stats] : dexes_stats) {
+    dexes[i] = get_stats(stats);
+    dexes[i]["store_name"] = store_name;
+    ++i;
+  }
+  return dexes;
+}
+
 Json::Value get_output_stats(
     const dex_stats_t& stats,
-    const std::vector<enhanced_dex_stats_t>& dexes_stats,
+    const std::vector<std::pair<std::string, enhanced_dex_stats_t>>&
+        dexes_stats,
     const PassManager& mgr,
     const instruction_lowering::Stats& instruction_lowering_stats,
     const PositionMapper* pos_mapper) {
   Json::Value d;
   d["total_stats"] = get_stats(stats);
-  d["dexes_stats"] = get_detailed_stats(dexes_stats);
+  d["dexes_stats"] = get_output_dexes_stats(dexes_stats);
   d["pass_stats"] = get_pass_stats(mgr);
   d["pass_hashes"] = get_pass_hashes(mgr);
   d["lowering_stats"] = get_lowering_stats(instruction_lowering_stats);
@@ -1259,7 +1272,7 @@ void redex_backend(ConfigFiles& conf,
   }
 
   enhanced_dex_stats_t output_totals;
-  std::vector<enhanced_dex_stats_t> output_dexes_stats;
+  std::vector<std::pair<std::string, enhanced_dex_stats_t>> output_dexes_stats;
 
   const std::string& line_number_map_filename = conf.metafile(LINE_NUMBER_MAP);
   const std::string& debug_line_map_filename = conf.metafile(DEBUG_LINE_MAP);
@@ -1338,9 +1351,10 @@ void redex_backend(ConfigFiles& conf,
         output_totals += this_dex_stats;
         // Remove class sizes here to free up memory.
         this_dex_stats.class_size.clear();
-        output_dexes_stats.push_back(this_dex_stats);
         signatures.insert(
             *reinterpret_cast<uint32_t*>(this_dex_stats.signature));
+        output_dexes_stats.push_back(
+            std::make_pair(store.get_name(), std::move(this_dex_stats)));
       }
     }
     wod_mem_stats.trace_log("Writing optimized dexes");
