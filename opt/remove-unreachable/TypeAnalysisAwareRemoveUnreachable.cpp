@@ -199,8 +199,7 @@ class TypeAnalysisAwareClosureMarkerWorker final
         create_method_references_gatherer(method,
                                           /* consider_code */ true,
                                           std::move(gather_mie)),
-        reachability::MethodReferencesGatherer::AdvanceKind::Initial,
-        /* instantiable_cls */ nullptr);
+        reachability::MethodReferencesGatherer::Advance::initial());
   }
 
   void visit_method_ref(const DexMethodRef* method) override {

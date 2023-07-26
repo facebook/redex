@@ -203,9 +203,27 @@ class MethodReferencesGatherer {
     InstantiableDependencyResolved, // iff instantiable_cls
   };
 
-  void advance(AdvanceKind kind,
-               const DexClass* instantiable_cls,
-               References* refs);
+  class Advance {
+    explicit Advance(AdvanceKind kind) : m_kind(kind) {}
+    Advance(AdvanceKind kind, const DexClass* instantiable_cls)
+        : m_kind(kind), m_instantiable_cls(instantiable_cls) {}
+
+   public:
+    static Advance initial() { return Advance(AdvanceKind::Initial); }
+    static Advance callable() { return Advance(AdvanceKind::Callable); }
+    static Advance instantiable(const DexClass* instantiable_cls) {
+      return Advance(AdvanceKind::InstantiableDependencyResolved,
+                     instantiable_cls);
+    }
+    AdvanceKind kind() const { return m_kind; }
+    const DexClass* instantiable_cls() const { return m_instantiable_cls; }
+
+   private:
+    AdvanceKind m_kind;
+    const DexClass* m_instantiable_cls{nullptr};
+  };
+
+  void advance(const Advance& advance, References* refs);
 
   const DexMethod* get_method() const { return m_method; }
 
@@ -483,8 +501,7 @@ class TransitiveClosureMarkerWorker {
 
   void gather_and_push(
       std::shared_ptr<MethodReferencesGatherer> method_references_gatherer,
-      MethodReferencesGatherer::AdvanceKind advance_kind,
-      const DexClass* instantiable_cls);
+      const MethodReferencesGatherer::Advance& advance);
 
   std::shared_ptr<MethodReferencesGatherer> create_method_references_gatherer(
       const DexMethod* method,
