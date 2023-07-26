@@ -236,7 +236,11 @@ Stats reduce_uncallable_instance_methods(
           std::lock_guard<std::mutex> lock_guard(stats_mutex);
           stats.abstracted_vmethods++;
         } else if (overridden_method != nullptr && can_delete(method) &&
-                   (is_protected(method) || is_public(overridden_method))) {
+                   get_visibility(method) ==
+                       get_visibility(overridden_method)) {
+          // We require same visibility, as we are going to remove the method
+          // and rewrite all references to the overridden method. TODO: Consider
+          // upgrading the visibility of the overriden method.
           always_assert(overridden_method != method);
           class_post_processing.update(
               type_class(method->get_class()),

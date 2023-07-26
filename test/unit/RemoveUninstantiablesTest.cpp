@@ -798,4 +798,33 @@ TEST_F(RemoveUninstantiablesTest, RunPassInstantiableChildrenDefined) {
   EXPECT_EQ(0, rm_uninst->metrics.at("get_uninstantiables"));
 }
 
+TEST_F(RemoveUninstantiablesTest, RemovePackagePrivateVMethod) {
+  DexStoresVector dss{DexStore{"test_store"}};
+
+  auto* Foo = def_class("LFoo;", Foo_baz, Foo_qux, Foo_fox);
+  auto* Bar = def_class("LBar;", Bar_init, Bar_baz, Bar_qux);
+  auto* FooBar = def_class("LFooBar;", FooBar_baz);
+  dss.back().add_classes({Foo, Bar, FooBar});
+  FooBar->set_super_class(Foo->get_type());
+
+  DexField::make_field("LBar;.mFoo:LFoo;")->make_concrete(ACC_PUBLIC);
+  DexField::make_field("LFoo;.mBar:LBar;")->make_concrete(ACC_PUBLIC);
+
+  auto* Foo_baz_method = DexMethod::get_method("LFoo;.baz:()V")->as_def();
+  auto* FooBar_baz_method = DexMethod::get_method("LFooBar;.baz:()V")->as_def();
+  EXPECT_TRUE(is_public(Foo_baz_method));
+  EXPECT_TRUE(is_public(FooBar_baz_method));
+  set_package_private(Foo_baz_method);
+  set_package_private(FooBar_baz_method);
+
+  RemoveUninstantiablesPass pass;
+  PassManager pm({&pass});
+
+  ConfigFiles c(Json::nullValue);
+  c.parse_global_config();
+  pm.run_passes(dss, c);
+
+  EXPECT_NO_METHOD_DEF("LFooBar;.baz:()V");
+}
+
 } // namespace

@@ -33,12 +33,6 @@ inline bool match(const DexString* name,
   return name == cls_meth->get_name() && proto == cls_meth->get_proto();
 }
 
-// Only looking at the public, protected and private bits.
-template <typename DexMember>
-DexAccessFlags get_visibility(const DexMember* member) {
-  return member->get_access() & VISIBILITY_MASK;
-}
-
 struct Rebinder {
  private:
   template <typename T>
