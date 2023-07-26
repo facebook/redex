@@ -55,6 +55,7 @@ using InsnsMethods = std::unordered_map<const IRInstruction*, MethodReferences>;
 struct TypeAnalysisAwareClosureMarkerSharedState final
     : public reachability::TransitiveClosureMarkerSharedState {
   type_analyzer::global::GlobalTypeAnalyzer* gta;
+  mutable std::atomic<int> num_exact_resolved_callees{0};
 
   void gather_mie(const std::shared_ptr<InsnsMethods>& insns_methods_cache,
                   const DexMethod* method,
@@ -89,6 +90,7 @@ struct TypeAnalysisAwareClosureMarkerSharedState final
                                       IRInstruction* invoke,
                                       MethodReferences& refs) const {
     TRACE(TRMU, 5, "Gathering method from true virtual call %s", SHOW(invoke));
+    always_assert(!opcode::is_invoke_super(invoke->opcode()));
     auto* callee_ref = invoke->get_method();
     // If we failed to resolve the callee earlier and we know this is might be a
     // true virtual call, resolve the callee in a more conservative way to
@@ -103,6 +105,44 @@ struct TypeAnalysisAwareClosureMarkerSharedState final
     refs.methods.push_back(resolved_callee);
 
     auto domain = env.get(invoke->src(0));
+
+    // Can we leverage exact types?
+    const auto& set_domain = domain.get_set_domain();
+    if (!set_domain.is_top()) {
+      const auto& types = set_domain.get_types();
+      if (!types.contains(type::java_lang_Throwable())) {
+        std::vector<std::pair<DexClass*, DexMethod*>> analysis_resolved_callees;
+        for (auto* type : types) {
+          auto analysis_cls = type_class(type);
+          if (!analysis_cls) {
+            break;
+          }
+          auto method_search = get_method_search(analysis_cls, invoke);
+          auto analysis_resolved_callee =
+              resolve_method(analysis_cls, callee_ref->get_name(),
+                             callee_ref->get_proto(), method_search);
+          if (!analysis_resolved_callee) {
+            break;
+          }
+          analysis_resolved_callees.emplace_back(analysis_cls,
+                                                 analysis_resolved_callee);
+        }
+        if (analysis_resolved_callees.size() == types.size()) {
+          for (auto [analysis_cls, analysis_resolved_callee] :
+               analysis_resolved_callees) {
+            TRACE(TRMU, 5, "Exact resolved callee %s for analysis cls %s",
+                  SHOW(analysis_resolved_callee), SHOW(analysis_cls));
+            always_assert(analysis_resolved_callee->is_virtual());
+            refs.vmethods_if_class_instantiable.push_back(
+                analysis_resolved_callee);
+          }
+          num_exact_resolved_callees++;
+          return;
+        }
+      }
+    }
+
+    // Can we leverage best known approximation?
     auto analysis_cls = domain.get_dex_cls();
     DexMethod* analysis_resolved_callee = nullptr;
     if (analysis_cls) {
@@ -115,7 +155,8 @@ struct TypeAnalysisAwareClosureMarkerSharedState final
         if (analysis_resolved_callee != resolved_callee) {
           TRACE(TRMU, 5, "Push analysis resolved callee %s",
                 SHOW(analysis_resolved_callee));
-          refs.methods.push_back(analysis_resolved_callee);
+          refs.vmethods_if_class_instantiable.push_back(
+              analysis_resolved_callee);
         }
         resolved_callee = analysis_resolved_callee;
         TRACE(TRMU, 5, "Resolved callee %s for analysis cls %s",
@@ -128,7 +169,6 @@ struct TypeAnalysisAwareClosureMarkerSharedState final
               SHOW(invoke), SHOW(*analysis_cls));
       }
     }
-    always_assert(!opcode::is_invoke_super(invoke->opcode()));
     const auto& overriding_methods =
         mog::get_overriding_methods(*method_override_graph, resolved_callee);
     for (auto overriding_method : overriding_methods) {
@@ -265,7 +305,8 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects_with_type_anaysis(
     bool cfg_gathering_check_instantiable,
     bool cfg_gathering_check_instance_callable,
     type_analyzer::global::GlobalTypeAnalyzer* gta,
-    bool /*unused*/) {
+    bool /*unused*/,
+    int* num_exact_resolved_callees) {
   Timer t("Marking");
   auto scope = build_class_scope(stores);
   walk::parallel::code(scope, [](DexMethod*, IRCode& code) {
@@ -306,6 +347,9 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects_with_type_anaysis(
   if (num_ignore_check_strings != nullptr) {
     *num_ignore_check_strings = (int)stats.num_ignore_check_strings;
   }
+  if (num_exact_resolved_callees != nullptr) {
+    *num_exact_resolved_callees = (int)shared_state.num_exact_resolved_callees;
+  }
 
   reachable_aspects->finish(cond_marked);
 
@@ -331,11 +375,15 @@ TypeAnalysisAwareRemoveUnreachablePass::compute_reachable_objects(
   auto gta = analysis->get_result();
   always_assert(gta);
 
-  return compute_reachable_objects_with_type_anaysis(
+  int num_exact_resolved_callees;
+  auto res = compute_reachable_objects_with_type_anaysis(
       stores, m_ignore_sets, num_ignore_check_strings, reachable_aspects,
       emit_graph_this_run, relaxed_keep_class_members,
       cfg_gathering_check_instantiable, cfg_gathering_check_instance_callable,
-      gta.get(), remove_no_argument_constructors);
+      gta.get(), remove_no_argument_constructors, &num_exact_resolved_callees);
+  pm.incr_metric("num_exact_resolved_callees", num_exact_resolved_callees);
+  TRACE(TRMU, 1, "num_exact_resolved_callees %d", num_exact_resolved_callees);
+  return res;
 }
 
 static TypeAnalysisAwareRemoveUnreachablePass s_pass;

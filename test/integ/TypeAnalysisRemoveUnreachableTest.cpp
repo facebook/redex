@@ -67,3 +67,28 @@ TEST_F(TypeAnalysisRemoveUnreachableTest, TypeAnalysisRMUTest2) {
   ASSERT_TRUE(find_vmethod(*classes, "LImpl1;", "I", "bar", {}));
   ASSERT_FALSE(find_vmethod(*classes, "LImpl2;", "I", "bar", {}));
 }
+
+TEST_F(TypeAnalysisRemoveUnreachableTest, TypeAnalysisRMUTest3) {
+  // Just because an instance of a class is being created, doesn't mean that all
+  // of its methods must become vmethod targets; this is due the ability to
+  // track exact vmethod targets
+  const auto& dexen = stores[0].get_dexen();
+  auto pg_config = process_and_get_proguard_config(dexen, R"(
+    -keepclasseswithmembers public class TypeAnalysisRemoveUnreachableTest {
+      public void typeAnalysisRMUTest3();
+    }
+  )");
+
+  ASSERT_TRUE(pg_config->ok);
+  ASSERT_EQ(pg_config->keep_rules.size(), 1);
+
+  run_passes({{new GlobalTypeAnalysisPass(),
+               new TypeAnalysisAwareRemoveUnreachablePass()}},
+             std::move(pg_config));
+  ASSERT_TRUE(find_class(*classes, "LBase1;"));
+  ASSERT_TRUE(find_class(*classes, "LSub1;"));
+  ASSERT_TRUE(find_class(*classes, "LSubSub1;"));
+  ASSERT_TRUE(find_vmethod(*classes, "LBase1;", "I", "foo", {}));
+  ASSERT_TRUE(find_vmethod(*classes, "LSub1;", "I", "foo", {}));
+  ASSERT_FALSE(find_vmethod(*classes, "LSubSub1;", "I", "foo", {}));
+}

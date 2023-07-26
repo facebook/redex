@@ -52,4 +52,10 @@ public class TypeAnalysisRemoveUnreachableTest {
     i.bar();
     i = Impl2.createImpl2();
   }
+
+  public void typeAnalysisRMUTest3() {
+    Base1 b = Sub1.createSub1();
+    SubSub1.createSubSub1();
+    b.foo();
+  }
 }
