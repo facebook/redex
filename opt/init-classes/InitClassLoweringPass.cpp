@@ -220,14 +220,14 @@ void make_public(const std::vector<DexField*>& fields,
     auto cls = type_class(type);
     if (cls && !cls->is_external() && !is_public(cls)) {
       set_public(cls);
-      types_made_public++;
+      (*types_made_public)++;
       visit(cls->get_super_class());
     }
   };
   for (auto& f : fields) {
     if (!is_public(f)) {
       set_public(f);
-      fields_made_public++;
+      (*fields_made_public)++;
     }
     visit(f->get_class());
     visit(f->get_type());
