@@ -67,4 +67,24 @@ inline const PropertyName NoSpuriousGetClassCalls("NoSpuriousGetClassCalls");
 inline const PropertyName RenameClass("RenameClass");
 
 } // namespace names
+
+namespace simple {
+
+// Only use for plain analysis passes. Otherwise it may be better to be
+// explicit.
+inline PropertyInteractions preserves_all() {
+  using namespace redex_properties::interactions;
+  using namespace redex_properties::names;
+  return {
+      {DexLimitsObeyed, Preserves},
+      {HasSourceBlocks, Preserves},
+      {NeedsEverythingPublic, Preserves},
+      {NoInitClassInstructions, Preserves},
+      {NoSpuriousGetClassCalls, Preserves},
+      {RenameClass, Preserves},
+  };
+}
+
+} // namespace simple
+
 } // namespace redex_properties
