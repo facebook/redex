@@ -27,6 +27,9 @@ commands:
       install_clang:
         type: boolean
         default: false
+      install_clang_llvm_org:
+        type: integer
+        default: -1  # Off
     steps:
       - run:
           name: Update Apt Data
@@ -46,6 +49,47 @@ commands:
                 name: Install Clang
                 command: |
                   sudo apt-get install -y --no-install-recommends clang
+      # Clang from llvm.org
+      #
+      # add-apt-repository in the install script needs to be rewritten:
+      #   * -y to not ask for input
+      #   * seemingly the first run does not insert the source, so need to run twice
+      #
+      # We symlink the clang-X binary, there is no update-alternatives it seems.
+      # For simplicity assume there is only one version installed.
+      #
+      # 1. 0 = default version
+      - when:
+          condition:
+            equal: [0, << parameters.install_clang_llvm_org >> ]
+          steps:
+            - run:
+                name: Install Clang (apt.llvm.org)
+                # Link the numbered version so it's easier to use.
+                command: |
+                  sudo apt-get install -y --no-install-recommends lsb-release wget software-properties-common gnupg
+                  sudo /bin/bash -c "$(wget -O - https://apt.llvm.org/llvm.sh | sed -e 's/^add-apt-repository.*$/& -y\n& -y/')"
+                  ls /usr/bin/clang*
+                  sudo ln -s /usr/bin/clang-?? /usr/bin/clang
+                  sudo ln -s /usr/bin/clang++-?? /usr/bin/clang++
+      # 2. >0 = specific version
+      - when:
+          condition:
+            and:
+              - not:
+                  equal: [-1, << parameters.install_clang_llvm_org >> ]
+              - not:
+                  equal: [0, << parameters.install_clang_llvm_org >> ]
+          steps:
+            - run:
+                name: Install Clang (apt.llvm.org)
+                # Link the numbered version so it's easier to use.
+                command: |
+                  sudo apt-get install -y --no-install-recommends lsb-release wget software-properties-common gnupg
+                  sudo /bin/bash -c "$(wget -O - https://apt.llvm.org/llvm.sh | sed -e 's/^add-apt-repository.*$/& -y\n& -y/')" "llvm.sh" << parameters.install_clang_llvm_org >>
+                  ls /usr/bin/clang*
+                  sudo ln -s /usr/bin/clang-?? /usr/bin/clang
+                  sudo ln -s /usr/bin/clang++-?? /usr/bin/clang++
 
   # Setup. Includes boost.
   base-build-setup:
@@ -269,6 +313,9 @@ commands:
       install_clang:
         type: boolean
         default: false
+      install_clang_llvm_org:
+        type: integer
+        default: -1
       mode_32:
         type: boolean
         default: false
@@ -279,6 +326,7 @@ commands:
       - checkout
       - debian-based-image-build-setup:
           install_clang: << parameters.install_clang>>
+          install_clang_llvm_org: << parameters.install_clang_llvm_org >>
           mode_32: << parameters.mode_32>>
       - setup-build-and-test-w-make:
           save_boost_cache: << parameters.save_boost_cache >>
@@ -390,6 +438,21 @@ jobs:
       - build_debian:
           mode_32: true
 
+  build-deb_stable-w-clang-llvm-org:
+    docker:
+      - image: buildpack-deps:stable-scm
+    resource_class: large
+    environment:
+      CC: clang
+      CXX: clang++
+    parameters:
+      clang_version:
+        type: integer
+        default: 0
+    steps:
+      - build_debian:
+          install_clang_llvm_org: << parameters.clang_version>>
+
   # Note: buildpack-deps:testing is the same as stable at time of writing,
   #       so jump to unstable directly.
 
@@ -479,6 +542,9 @@ workflows:
           filters: *filter-only-main
       - build-deb_unstable-w-clang:
           filters: *filter-only-main
+      # At least one Clang check.
+      - build-deb_stable-w-clang-llvm-org:
+          filters: *filter-only-main
       # For compatibility.
       - build-windows:
           filters: *filter-only-main
@@ -494,6 +560,9 @@ workflows:
       - build-deb_stable:
           filters: *filter-not-gh-pages-not-main
       - build-deb_stable-32:
+          filters: *filter-not-gh-pages-not-main
+      # Only use the default (supposed stable) version on diffs.
+      - build-deb_stable-w-clang-llvm-org:
           filters: *filter-not-gh-pages-not-main
       - build-deb_oldoldstable:
           filters: *filter-not-gh-pages-not-main
@@ -523,3 +592,8 @@ workflows:
       - build-deb_unstable-w-clang
       - build-deb_unstable-32
       - build-windows-artifacts
+      # All llvm.org versions. Keep this up-to-date. Ignore the duplicate.
+      - build-deb_stable-w-clang-llvm-org:
+          matrix:
+            parameters:
+              clang_version: [0, 15, 16, 17]
