@@ -269,11 +269,11 @@ void DexEncodedValue::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
 void DexEncodedValue::vencode(DexOutputIdx* dodx, std::vector<uint8_t>& bytes) {
   // Relatively large buffer as Kotlin metadata annotations may be huge.
   constexpr size_t kRedZone = 1024;
-  constexpr size_t kBufferSize = 8192 - kRedZone;
+  constexpr size_t kBufferSize = 16384;
   uint8_t buffer[kBufferSize];
   uint8_t* pend = buffer;
   encode(dodx, pend);
-  always_assert_log((size_t)(pend - buffer) <= kBufferSize,
+  always_assert_log((size_t)(pend - buffer) <= kBufferSize - kRedZone,
                     "DexEncodedValue::vencode overflow, size %d: %s",
                     (int)(pend - buffer), show().c_str());
   for (uint8_t* p = buffer; p < pend; p++) {
