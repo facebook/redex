@@ -599,6 +599,8 @@ std::unique_ptr<DexAnnotationSet> DexAnnotationSet::get_annotation_set(
   const uint32_t* adata = idx->get_uint_data(aset_off);
   auto aset = std::make_unique<DexAnnotationSet>();
   uint32_t count = *adata++;
+  always_assert(adata <= adata + count);
+  always_assert((uint8_t*)(adata + count) <= idx->end());
 
   aset->m_annotations.reserve(count - std::count(adata, adata + count, 0));
 

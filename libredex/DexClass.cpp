@@ -621,7 +621,7 @@ DexCode::~DexCode() {
 
 std::unique_ptr<DexCode> DexCode::get_dex_code(DexIdx* idx, uint32_t offset) {
   if (offset == 0) return std::unique_ptr<DexCode>();
-  const dex_code_item* code = (const dex_code_item*)idx->get_uint_data(offset);
+  const dex_code_item* code = idx->get_data<dex_code_item>(offset);
   std::unique_ptr<DexCode> dc(new DexCode());
   dc->m_registers_size = code->registers_size;
   dc->m_ins_size = code->ins_size;
@@ -633,6 +633,8 @@ std::unique_ptr<DexCode> DexCode::get_dex_code(DexIdx* idx, uint32_t offset) {
     // On average there seem to be about two code units per instruction
     dc->m_insns->reserve(code->insns_size / 2);
     const uint16_t* end = cdata + code->insns_size;
+    always_assert(cdata <= end);
+    always_assert((uint8_t*)(end) <= idx->end());
     while (cdata < end) {
       DexInstruction* dop = DexInstruction::make_instruction(idx, &cdata);
       always_assert_log(dop != nullptr,
@@ -650,6 +652,8 @@ std::unique_ptr<DexCode> DexCode::get_dex_code(DexIdx* idx, uint32_t offset) {
 
   if (tries) {
     const dex_tries_item* dti = (const dex_tries_item*)cdata;
+    always_assert(dti <= dti + tries);
+    always_assert((uint8_t*)(dti + tries) <= idx->end());
     const uint8_t* handlers = (const uint8_t*)(dti + tries);
     for (uint32_t i = 0; i < tries; i++) {
       DexTryItem* dextry = new DexTryItem(dti[i].start_addr, dti[i].insn_count);
@@ -1388,10 +1392,12 @@ int DexClass::encode(DexOutputIdx* dodx,
 void DexClass::load_class_annotations(DexIdx* idx, uint32_t anno_off) {
   if (anno_off == 0) return;
   const dex_annotations_directory_item* annodir =
-      (const dex_annotations_directory_item*)idx->get_uint_data(anno_off);
+      idx->get_data<dex_annotations_directory_item>(anno_off);
   m_anno =
       DexAnnotationSet::get_annotation_set(idx, annodir->class_annotations_off);
   const uint32_t* annodata = (uint32_t*)(annodir + 1);
+  always_assert(annodata <= annodata + annodir->fields_size * 2);
+  always_assert((uint8_t*)(annodata + annodir->fields_size * 2) <= idx->end());
   for (uint32_t i = 0; i < annodir->fields_size; i++) {
     uint32_t fidx = *annodata++;
     uint32_t off = *annodata++;
@@ -1399,6 +1405,8 @@ void DexClass::load_class_annotations(DexIdx* idx, uint32_t anno_off) {
     auto aset = DexAnnotationSet::get_annotation_set(idx, off);
     field->attach_annotation_set(std::move(aset));
   }
+  always_assert(annodata <= annodata + annodir->methods_size * 2);
+  always_assert((uint8_t*)(annodata + annodir->methods_size * 2) <= idx->end());
   for (uint32_t i = 0; i < annodir->methods_size; i++) {
     uint32_t midx = *annodata++;
     uint32_t off = *annodata++;
@@ -1406,6 +1414,9 @@ void DexClass::load_class_annotations(DexIdx* idx, uint32_t anno_off) {
     auto aset = DexAnnotationSet::get_annotation_set(idx, off);
     method->attach_annotation_set(std::move(aset));
   }
+  always_assert(annodata <= annodata + annodir->parameters_size * 2);
+  always_assert((uint8_t*)(annodata + annodir->parameters_size * 2) <=
+                idx->end());
   for (uint32_t i = 0; i < annodir->parameters_size; i++) {
     uint32_t midx = *annodata++;
     uint32_t xrefoff = *annodata++;
@@ -1413,6 +1424,8 @@ void DexClass::load_class_annotations(DexIdx* idx, uint32_t anno_off) {
       DexMethod* method = static_cast<DexMethod*>(idx->get_methodidx(midx));
       const uint32_t* annoxref = idx->get_uint_data(xrefoff);
       uint32_t count = *annoxref++;
+      always_assert(annoxref <= annoxref + count);
+      always_assert((uint8_t*)(annoxref + count) <= idx->end());
       for (uint32_t j = 0; j < count; j++) {
         uint32_t off = annoxref[j];
         auto aset = DexAnnotationSet::get_annotation_set(idx, off);
