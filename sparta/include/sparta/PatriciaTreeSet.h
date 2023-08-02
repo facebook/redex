@@ -15,9 +15,9 @@
 #include <type_traits>
 #include <utility>
 
-#include "Exceptions.h"
-#include "PatriciaTreeCore.h"
-#include "PatriciaTreeUtil.h"
+#include <sparta/Exceptions.h>
+#include <sparta/PatriciaTreeCore.h>
+#include <sparta/PatriciaTreeUtil.h>
 
 namespace sparta {
 

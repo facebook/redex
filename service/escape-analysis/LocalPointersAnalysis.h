@@ -10,16 +10,17 @@
 #include <iosfwd>
 #include <utility>
 
+#include <sparta/PatriciaTreeMapAbstractPartition.h>
+#include <sparta/PatriciaTreeSetAbstractDomain.h>
+#include <sparta/ReducedProductAbstractDomain.h>
+#include <sparta/S_Expression.h>
+
 #include "BaseIRAnalyzer.h"
 #include "CallGraph.h"
 #include "ConcurrentContainers.h"
 #include "ControlFlow.h"
 #include "DexClass.h"
 #include "ObjectDomain.h"
-#include "PatriciaTreeMapAbstractPartition.h"
-#include "PatriciaTreeSetAbstractDomain.h"
-#include "ReducedProductAbstractDomain.h"
-#include "S_Expression.h"
 
 /*
  * This analysis identifies heap values that are allocated within a given

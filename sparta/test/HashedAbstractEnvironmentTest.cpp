@@ -5,14 +5,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "HashedAbstractEnvironment.h"
+#include <sparta/HashedAbstractEnvironment.h>
+#include <sparta/HashedSetAbstractDomain.h>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <sstream>
 #include <string>
-
-#include "HashedSetAbstractDomain.h"
 
 using namespace sparta;
 

@@ -10,6 +10,8 @@
 #include <boost/optional.hpp>
 #include <mutex>
 
+#include <sparta/MonotonicFixpointIterator.h>
+
 #include "AliasedRegisters.h"
 #include "CFGMutation.h"
 #include "CanonicalizeLocks.h"
@@ -20,7 +22,6 @@
 #include "IRInstruction.h"
 #include "IROpcode.h"
 #include "IRTypeChecker.h"
-#include "MonotonicFixpointIterator.h"
 #include "Resolver.h"
 #include "ScopedCFG.h"
 #include "Show.h"

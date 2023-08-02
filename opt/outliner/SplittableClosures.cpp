@@ -7,12 +7,13 @@
 
 #include "SplittableClosures.h"
 
+#include <sparta/PatriciaTreeSet.h>
+
 #include "ClosureAggregator.h"
 #include "ConcurrentContainers.h"
 #include "Lazy.h"
 #include "Liveness.h"
 #include "OutlinerTypeAnalysis.h"
-#include "PatriciaTreeSet.h"
 #include "ReducedCFGClosureAdapter.h"
 #include "Show.h"
 #include "StlUtil.h"

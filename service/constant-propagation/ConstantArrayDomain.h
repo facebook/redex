@@ -13,10 +13,11 @@
 #include <sstream>
 #include <utility>
 
-#include "ConstantAbstractDomain.h"
+#include <sparta/ConstantAbstractDomain.h>
+#include <sparta/PatriciaTreeMapAbstractEnvironment.h>
+#include <sparta/ReducedProductAbstractDomain.h>
+
 #include "Debug.h"
-#include "PatriciaTreeMapAbstractEnvironment.h"
-#include "ReducedProductAbstractDomain.h"
 
 /*
  * An abstract domain modeling an array that has a fixed, statically determined

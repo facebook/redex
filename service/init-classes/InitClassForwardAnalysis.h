@@ -10,12 +10,13 @@
 #include <unordered_set>
 #include <utility>
 
+#include <sparta/MonotonicFixpointIterator.h>
+
 #include "ControlFlow.h"
 #include "DexUtil.h"
 #include "IROpcode.h"
 #include "InitClassDomain.h"
 #include "InitClassesWithSideEffects.h"
-#include "MonotonicFixpointIterator.h"
 #include "Resolver.h"
 
 namespace init_classes {

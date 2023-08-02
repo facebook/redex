@@ -10,18 +10,19 @@
 #include <cinttypes>
 #include <vector>
 
+#include <sparta/ConstantAbstractDomain.h>
+#include <sparta/HashedSetAbstractDomain.h>
+#include <sparta/PatriciaTreeMap.h>
+#include <sparta/PatriciaTreeMapAbstractEnvironment.h>
+#include <sparta/PatriciaTreeSet.h>
+
 #include "BaseIRAnalyzer.h"
 #include "CFGMutation.h"
-#include "ConstantAbstractDomain.h"
 #include "ControlFlow.h"
-#include "HashedSetAbstractDomain.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "InterDexPass.h"
 #include "PassManager.h"
-#include "PatriciaTreeMap.h"
-#include "PatriciaTreeMapAbstractEnvironment.h"
-#include "PatriciaTreeSet.h"
 #include "PluginRegistry.h"
 #include "Resolver.h"
 #include "Show.h"

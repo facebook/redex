@@ -10,6 +10,8 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include <sparta/SpartaWorkQueue.h>
+
 #include "ConcurrentContainers.h"
 #include "ControlFlow.h"
 #include "DexClass.h"
@@ -18,7 +20,6 @@
 #include "MethodUtil.h"
 #include "Pass.h"
 #include "RemoveUninstantiablesImpl.h"
-#include "SpartaWorkQueue.h"
 #include "Thread.h"
 
 class DexAnnotation;

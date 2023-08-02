@@ -15,7 +15,7 @@
 #include <unordered_map>
 #include <utility>
 
-#include "AbstractDomain.h"
+#include <sparta/AbstractDomain.h>
 
 namespace sparta {
 

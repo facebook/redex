@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "WeakPartialOrdering.h"
+#include <sparta/WeakPartialOrdering.h>
 
 #include <gtest/gtest.h>
 #include <set>

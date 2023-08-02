@@ -15,7 +15,7 @@
 #include <tuple>
 #include <type_traits>
 
-#include "AbstractDomain.h"
+#include <sparta/AbstractDomain.h>
 
 // Forward declarations.
 namespace sparta {

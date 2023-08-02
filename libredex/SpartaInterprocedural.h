@@ -7,11 +7,12 @@
 
 #pragma once
 
-#include "Analyzer.h"
+#include <sparta/Analyzer.h>
+#include <sparta/MonotonicFixpointIterator.h>
+
 #include "CallGraph.h"
 #include "DexClass.h"
 #include "MethodOverrideGraph.h"
-#include "MonotonicFixpointIterator.h"
 
 namespace sparta_interprocedural {
 

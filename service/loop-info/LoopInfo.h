@@ -7,8 +7,9 @@
 
 #pragma once
 
+#include <sparta/WeakTopologicalOrdering.h>
+
 #include "ControlFlow.h"
-#include "WeakTopologicalOrdering.h"
 
 #include <queue>
 

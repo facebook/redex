@@ -9,8 +9,9 @@
 
 #include <queue>
 
+#include <sparta/WeakTopologicalOrdering.h>
+
 #include "CppUtil.h"
-#include "WeakTopologicalOrdering.h"
 
 namespace method_splitting_impl {
 

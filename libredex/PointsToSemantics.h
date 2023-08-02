@@ -18,10 +18,11 @@
 #include <boost/container/flat_map.hpp>
 #include <boost/optional.hpp>
 
+#include <sparta/S_Expression.h>
+
 #include "ControlFlow.h"
 #include "DexClass.h"
 #include "PointsToSemanticsUtils.h"
-#include "S_Expression.h"
 #include "TypeSystem.h"
 
 /*

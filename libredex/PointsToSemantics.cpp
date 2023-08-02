@@ -27,6 +27,9 @@
 #include <boost/functional/hash_fwd.hpp>
 #include <boost/optional.hpp>
 
+#include <sparta/PatriciaTreeMapAbstractEnvironment.h>
+#include <sparta/PatriciaTreeSetAbstractDomain.h>
+
 #include "BaseIRAnalyzer.h"
 #include "ControlFlow.h"
 #include "Debug.h"
@@ -37,8 +40,6 @@
 #include "IRInstruction.h"
 #include "IROpcode.h"
 #include "Macros.h"
-#include "PatriciaTreeMapAbstractEnvironment.h"
-#include "PatriciaTreeSetAbstractDomain.h"
 #include "PointsToSemanticsUtils.h"
 #include "RedexContext.h"
 #include "Show.h"

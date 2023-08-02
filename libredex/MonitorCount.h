@@ -7,8 +7,9 @@
 
 #pragma once
 
+#include <sparta/ConstantAbstractDomain.h>
+
 #include "BaseIRAnalyzer.h"
-#include "ConstantAbstractDomain.h"
 #include "DexClass.h"
 
 namespace monitor_count {

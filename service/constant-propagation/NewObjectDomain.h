@@ -9,9 +9,10 @@
 
 #include <ostream>
 
-#include "ConstantAbstractDomain.h"
+#include <sparta/ConstantAbstractDomain.h>
+#include <sparta/ReducedProductAbstractDomain.h>
+
 #include "DexClass.h"
-#include "ReducedProductAbstractDomain.h"
 #include "Show.h"
 #include "SignedConstantDomain.h"
 

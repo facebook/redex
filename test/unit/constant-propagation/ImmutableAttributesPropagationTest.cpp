@@ -9,12 +9,13 @@
 
 #include <gtest/gtest.h>
 
+#include <sparta/S_Expression.h>
+
 #include "ConstantPropagationTestUtil.h"
 #include "ConstructorParams.h"
 #include "Creators.h"
 #include "IRAssembler.h"
 #include "JarLoader.h"
-#include "S_Expression.h"
 
 using ImmutableAnalyzer =
     InstructionAnalyzerCombiner<cp::StringAnalyzer,

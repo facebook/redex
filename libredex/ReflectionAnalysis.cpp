@@ -13,14 +13,15 @@
 
 #include <boost/optional.hpp>
 
+#include <sparta/FiniteAbstractDomain.h>
+#include <sparta/PatriciaTreeMapAbstractEnvironment.h>
+#include <sparta/ReducedProductAbstractDomain.h>
+
 #include "BaseIRAnalyzer.h"
 #include "ControlFlow.h"
-#include "FiniteAbstractDomain.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "IROpcode.h"
-#include "PatriciaTreeMapAbstractEnvironment.h"
-#include "ReducedProductAbstractDomain.h"
 #include "Resolver.h"
 #include "Show.h"
 #include "Trace.h"

@@ -21,7 +21,7 @@
 #include <thread>
 #include <utility>
 
-#include "Arity.h"
+#include <sparta/Arity.h>
 
 namespace sparta {
 

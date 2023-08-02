@@ -7,7 +7,8 @@
 
 #pragma once
 
-#include "ConstantAbstractDomain.h"
+#include <sparta/ConstantAbstractDomain.h>
+
 #include "DexClass.h"
 
 /*

@@ -5,7 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "PatriciaTreeSetAbstractDomain.h"
+#include <sparta/PatriciaTreeSet.h>
+#include <sparta/PatriciaTreeSetAbstractDomain.h>
 
 #include <algorithm>
 #include <gmock/gmock.h>
@@ -13,8 +14,6 @@
 #include <memory>
 #include <string>
 #include <vector>
-
-#include "PatriciaTreeSet.h"
 
 using namespace sparta;
 

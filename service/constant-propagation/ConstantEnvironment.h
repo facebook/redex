@@ -10,19 +10,20 @@
 #include <limits>
 #include <utility>
 
-#include "ConstantAbstractDomain.h"
+#include <sparta/ConstantAbstractDomain.h>
+#include <sparta/DisjointUnionAbstractDomain.h>
+#include <sparta/HashedAbstractPartition.h>
+#include <sparta/HashedSetAbstractDomain.h>
+#include <sparta/PatriciaTreeMapAbstractEnvironment.h>
+#include <sparta/PatriciaTreeSetAbstractDomain.h>
+#include <sparta/ReducedProductAbstractDomain.h>
+
 #include "ConstantArrayDomain.h"
 #include "ControlFlow.h"
-#include "DisjointUnionAbstractDomain.h"
 #include "DisjointUnionWithSignedConstantDomain.h"
-#include "HashedAbstractPartition.h"
-#include "HashedSetAbstractDomain.h"
 #include "NewObjectDomain.h"
 #include "ObjectDomain.h"
 #include "ObjectWithImmutAttr.h"
-#include "PatriciaTreeMapAbstractEnvironment.h"
-#include "PatriciaTreeSetAbstractDomain.h"
-#include "ReducedProductAbstractDomain.h"
 #include "SignedConstantDomain.h"
 #include "SingletonObject.h"
 

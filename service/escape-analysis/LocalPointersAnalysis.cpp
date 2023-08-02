@@ -9,8 +9,9 @@
 
 #include <ostream>
 
+#include <sparta/PatriciaTreeSet.h>
+
 #include "DexUtil.h"
-#include "PatriciaTreeSet.h"
 #include "Resolver.h"
 #include "Walkers.h"
 #include "WorkQueue.h"

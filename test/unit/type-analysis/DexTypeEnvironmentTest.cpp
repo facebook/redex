@@ -9,8 +9,9 @@
 
 #include <boost/optional/optional_io.hpp>
 
+#include <sparta/PatriciaTreeSet.h>
+
 #include "Creators.h"
-#include "PatriciaTreeSet.h"
 #include "RedexTest.h"
 
 using TypeSet = sparta::PatriciaTreeSet<const DexType*>;

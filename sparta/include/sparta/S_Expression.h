@@ -27,7 +27,7 @@
 #include <boost/intrusive_ptr.hpp>
 #include <boost/optional.hpp>
 
-#include "Exceptions.h"
+#include <sparta/Exceptions.h>
 
 namespace sparta {
 

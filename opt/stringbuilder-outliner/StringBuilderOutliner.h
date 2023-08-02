@@ -7,10 +7,11 @@
 
 #include <boost/optional.hpp>
 
-#include "AbstractDomain.h"
+#include <sparta/AbstractDomain.h>
+#include <sparta/PatriciaTreeMapAbstractEnvironment.h>
+
 #include "LocalPointersAnalysis.h"
 #include "Pass.h"
-#include "PatriciaTreeMapAbstractEnvironment.h"
 
 /*
  * This pass looks for recurring sequences of StringBuilder calls and outlines

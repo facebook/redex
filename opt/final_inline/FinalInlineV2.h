@@ -9,12 +9,13 @@
 
 #include <optional>
 
+#include <sparta/PatriciaTreeSetAbstractDomain.h>
+
 #include "ConstantPropagationWholeProgramState.h"
 #include "DexClass.h"
 #include "IRCode.h"
 #include "InitClassesWithSideEffects.h"
 #include "Pass.h"
-#include "PatriciaTreeSetAbstractDomain.h"
 
 class FinalInlinePassV2 : public Pass {
  public:

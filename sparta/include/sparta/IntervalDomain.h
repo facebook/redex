@@ -11,7 +11,7 @@
 #include <limits>
 #include <ostream>
 
-#include "AbstractDomain.h"
+#include <sparta/AbstractDomain.h>
 
 namespace sparta {
 

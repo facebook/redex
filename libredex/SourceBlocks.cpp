@@ -14,6 +14,8 @@
 #include <string>
 #include <unordered_map>
 
+#include <sparta/S_Expression.h>
+
 #include "ControlFlow.h"
 #include "Debug.h"
 #include "DexClass.h"
@@ -22,7 +24,6 @@
 #include "IROpcode.h"
 #include "Macros.h"
 #include "RedexContext.h"
-#include "S_Expression.h"
 #include "ScopedCFG.h"
 #include "ScopedMetrics.h"
 #include "Show.h"

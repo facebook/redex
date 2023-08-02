@@ -7,14 +7,15 @@
 
 #include "MaxDepthAnalysis.h"
 
-#include "AbstractDomain.h"
-#include "ConstantAbstractDomain.h"
+#include <sparta/AbstractDomain.h>
+#include <sparta/ConstantAbstractDomain.h>
+#include <sparta/HashedSetAbstractDomain.h>
+#include <sparta/PatriciaTreeMapAbstractEnvironment.h>
+
 #include "ControlFlow.h"
 #include "DexClass.h"
-#include "HashedSetAbstractDomain.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
-#include "PatriciaTreeMapAbstractEnvironment.h"
 #include "SpartaInterprocedural.h"
 
 namespace {

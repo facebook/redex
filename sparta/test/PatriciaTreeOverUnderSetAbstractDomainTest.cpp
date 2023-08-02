@@ -5,9 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <gmock/gmock.h>
+#include <sparta/PatriciaTreeOverUnderSetAbstractDomain.h>
 
-#include "PatriciaTreeOverUnderSetAbstractDomain.h"
+#include <gmock/gmock.h>
 
 using namespace sparta;
 

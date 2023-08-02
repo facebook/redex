@@ -7,15 +7,16 @@
 
 #include "ConstructorParams.h"
 
+#include <sparta/ConstantAbstractDomain.h>
+#include <sparta/PatriciaTreeMapAbstractEnvironment.h>
+#include <sparta/ReducedProductAbstractDomain.h>
+
 #include "BaseIRAnalyzer.h"
-#include "ConstantAbstractDomain.h"
 #include "ConstantPropagationAnalysis.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "IRList.h"
-#include "PatriciaTreeMapAbstractEnvironment.h"
 #include "ReachableClasses.h"
-#include "ReducedProductAbstractDomain.h"
 #include "Resolver.h"
 #include "ScopedCFG.h"
 #include "Walkers.h"

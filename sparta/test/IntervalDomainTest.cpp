@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "IntervalDomain.h"
+#include <sparta/IntervalDomain.h>
 
 #include <gtest/gtest.h>
 #include <limits>

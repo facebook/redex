@@ -14,7 +14,7 @@
 #include <ostream>
 #include <vector>
 
-#include "PatriciaTreeUtil.h"
+#include <sparta/PatriciaTreeUtil.h>
 
 namespace sparta {
 

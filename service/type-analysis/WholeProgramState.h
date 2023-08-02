@@ -9,10 +9,11 @@
 
 #include <boost/optional/optional_io.hpp>
 
+#include <sparta/HashedAbstractPartition.h>
+
 #include "CallGraph.h"
 #include "ConcurrentContainers.h"
 #include "DexTypeEnvironment.h"
-#include "HashedAbstractPartition.h"
 #include "InstructionAnalyzer.h"
 #include "Trace.h"
 

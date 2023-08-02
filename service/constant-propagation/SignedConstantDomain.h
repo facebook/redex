@@ -7,9 +7,10 @@
 
 #pragma once
 
-#include "AbstractDomain.h"
-#include "ConstantAbstractDomain.h"
-#include "IntervalDomain.h"
+#include <sparta/AbstractDomain.h>
+#include <sparta/ConstantAbstractDomain.h>
+#include <sparta/IntervalDomain.h>
+
 #include "SignDomain.h"
 
 using ConstantDomain = sparta::ConstantAbstractDomain<int64_t>;

@@ -9,9 +9,10 @@
 
 #include <boost/range/adaptor/map.hpp>
 
+#include <sparta/PatriciaTreeMap.h>
+#include <sparta/PatriciaTreeSet.h>
+
 #include "BinarySerialization.h"
-#include "PatriciaTreeMap.h"
-#include "PatriciaTreeSet.h"
 #include "Show.h"
 #include "Timer.h"
 #include "Walkers.h"

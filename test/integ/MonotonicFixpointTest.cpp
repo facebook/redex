@@ -5,8 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "MonotonicFixpointIterator.h"
-
 #include <algorithm>
 #include <cstring>
 #include <functional>
@@ -16,6 +14,9 @@
 #include <memory>
 #include <sstream>
 
+#include <sparta/HashedSetAbstractDomain.h>
+#include <sparta/MonotonicFixpointIterator.h>
+
 #include "ControlFlow.h"
 #include "DexInstruction.h"
 #include "DexPosition.h"
@@ -24,8 +25,6 @@
 #include "IRInstruction.h"
 #include "RedexTest.h"
 #include "Show.h"
-
-#include "HashedSetAbstractDomain.h"
 
 using namespace sparta;
 

@@ -8,10 +8,10 @@
 #pragma once
 #include <vector>
 
-#include "DisjointUnionAbstractDomain.h"
-#include "SignedConstantDomain.h"
+#include <sparta/DisjointUnionAbstractDomain.h>
 
 #include "Show.h"
+#include "SignedConstantDomain.h"
 #include "TemplateUtil.h"
 #include "TypeUtil.h"
 

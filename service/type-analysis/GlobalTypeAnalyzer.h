@@ -7,9 +7,10 @@
 
 #pragma once
 
+#include <sparta/HashedAbstractPartition.h>
+
 #include "CallGraph.h"
 #include "DexTypeEnvironment.h"
-#include "HashedAbstractPartition.h"
 #include "LocalTypeAnalyzer.h"
 #include "MethodOverrideGraph.h"
 #include "WholeProgramState.h"

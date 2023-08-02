@@ -15,8 +15,9 @@
 #include <utility>
 #include <vector>
 
+#include <sparta/S_Expression.h>
+
 #include "Debug.h"
-#include "S_Expression.h"
 #include "Trace.h"
 
 // A simple random forest implementation for inlining decisions. The structure

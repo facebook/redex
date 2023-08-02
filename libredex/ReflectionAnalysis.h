@@ -13,13 +13,14 @@
 #include <boost/optional.hpp>
 #include <utility>
 
-#include "AbstractDomain.h"
-#include "ConstantAbstractDomain.h"
+#include <sparta/AbstractDomain.h>
+#include <sparta/ConstantAbstractDomain.h>
+#include <sparta/PatriciaTreeMapAbstractEnvironment.h>
+#include <sparta/PatriciaTreeMapAbstractPartition.h>
+
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"
-#include "PatriciaTreeMapAbstractEnvironment.h"
-#include "PatriciaTreeMapAbstractPartition.h"
 
 namespace reflection {
 

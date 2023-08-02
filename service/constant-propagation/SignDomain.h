@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include "FiniteAbstractDomain.h"
+#include <sparta/FiniteAbstractDomain.h>
 
 /*
  * This module deals with the signedness of integer types, representing them

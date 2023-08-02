@@ -9,6 +9,8 @@
 
 #include <sstream>
 
+#include <sparta/WeakTopologicalOrdering.h>
+
 #include "ConfigFiles.h"
 #include "ControlFlow.h"
 #include "EditableCfgAdapter.h"
@@ -18,7 +20,6 @@
 #include "StlUtil.h"
 #include "Trace.h"
 #include "Walkers.h"
-#include "WeakTopologicalOrdering.h"
 #include "WorkQueue.h"
 
 std::ostream& operator<<(std::ostream& o, const CseLocation& l) {

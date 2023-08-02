@@ -54,16 +54,17 @@
 #include <cinttypes>
 #include <utility>
 
+#include <sparta/ConstantAbstractDomain.h>
+#include <sparta/PatriciaTreeMapAbstractEnvironment.h>
+#include <sparta/PatriciaTreeSetAbstractDomain.h>
+#include <sparta/ReducedProductAbstractDomain.h>
+
 #include "BaseIRAnalyzer.h"
 #include "CFGMutation.h"
-#include "ConstantAbstractDomain.h"
 #include "ControlFlow.h"
 #include "FieldOpTracker.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
-#include "PatriciaTreeMapAbstractEnvironment.h"
-#include "PatriciaTreeSetAbstractDomain.h"
-#include "ReducedProductAbstractDomain.h"
 #include "Resolver.h"
 #include "Show.h"
 #include "StlUtil.h"

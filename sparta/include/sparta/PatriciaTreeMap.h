@@ -16,9 +16,9 @@
 
 #include <boost/optional.hpp>
 
-#include "Exceptions.h"
-#include "PatriciaTreeCore.h"
-#include "PatriciaTreeUtil.h"
+#include <sparta/Exceptions.h>
+#include <sparta/PatriciaTreeCore.h>
+#include <sparta/PatriciaTreeUtil.h>
 
 // Forward declarations
 namespace sparta {

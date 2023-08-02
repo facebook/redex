@@ -7,18 +7,20 @@
 
 #pragma once
 
-#include <boost/dynamic_bitset.hpp>
-#include <boost/optional/optional.hpp>
-#include <boost/range/sub_range.hpp>
 #include <type_traits>
 #include <unordered_set>
 #include <utility>
 #include <vector>
 
+#include <boost/dynamic_bitset.hpp>
+#include <boost/optional/optional.hpp>
+#include <boost/range/sub_range.hpp>
+
+#include <sparta/WeakTopologicalOrdering.h>
+
 #include "DexPosition.h"
 #include "IRCode.h"
 #include "SingletonIterable.h"
-#include "WeakTopologicalOrdering.h"
 
 /**
  * A Control Flow Graph is a directed graph of Basic Blocks.

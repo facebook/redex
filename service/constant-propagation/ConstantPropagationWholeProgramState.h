@@ -7,9 +7,10 @@
 
 #pragma once
 
+#include <sparta/HashedAbstractPartition.h>
+
 #include "CallGraph.h"
 #include "ConstantEnvironment.h"
-#include "HashedAbstractPartition.h"
 #include "InstructionAnalyzer.h"
 
 namespace constant_propagation {

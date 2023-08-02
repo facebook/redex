@@ -9,10 +9,11 @@
 
 #include <unordered_map>
 
-#include "ConstantAbstractDomain.h"
+#include <sparta/ConstantAbstractDomain.h>
+#include <sparta/PatriciaTreeMapAbstractEnvironment.h>
+
 #include "DexClass.h"
 #include "IRInstruction.h"
-#include "PatriciaTreeMapAbstractEnvironment.h"
 
 namespace uninitialized_objects {
 

@@ -7,12 +7,14 @@
 
 #pragma once
 
-#include <boost/optional.hpp>
-#include <boost/variant.hpp>
 #include <sstream>
 
-#include "AbstractDomain.h"
-#include "DisjointUnionAbstractDomain.h"
+#include <boost/optional.hpp>
+#include <boost/variant.hpp>
+
+#include <sparta/AbstractDomain.h>
+#include <sparta/DisjointUnionAbstractDomain.h>
+
 #include "ObjectWithImmutAttr.h"
 #include "SignedConstantDomain.h"
 #include "SingletonObject.h"

@@ -5,14 +5,16 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <boost/functional/hash.hpp>
 #include <cstdint>
 #include <unordered_map>
 #include <unordered_set>
 
+#include <boost/functional/hash.hpp>
+
+#include <sparta/PatriciaTreeSet.h>
+
 #include "ControlFlow.h"
 #include "IRInstruction.h"
-#include "PatriciaTreeSet.h"
 #include "ReachingDefinitions.h"
 
 class IRCode;

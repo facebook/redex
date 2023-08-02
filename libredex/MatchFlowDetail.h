@@ -16,11 +16,12 @@
 #include <unordered_set>
 #include <vector>
 
+#include <sparta/HashedSetAbstractDomain.h>
+#include <sparta/PatriciaTreeMapAbstractPartition.h>
+
 #include "BaseIRAnalyzer.h"
-#include "HashedSetAbstractDomain.h"
 #include "IRInstruction.h"
 #include "Match.h"
-#include "PatriciaTreeMapAbstractPartition.h"
 
 namespace mf {
 namespace detail {

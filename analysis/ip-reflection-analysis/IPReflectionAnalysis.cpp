@@ -9,12 +9,13 @@
 
 #include <fstream>
 
-#include "AbstractDomain.h"
+#include <sparta/AbstractDomain.h>
+#include <sparta/PatriciaTreeMapAbstractEnvironment.h>
+#include <sparta/PatriciaTreeMapAbstractPartition.h>
+
 #include "CallGraph.h"
 #include "ConfigFiles.h"
 #include "MethodOverrideGraph.h"
-#include "PatriciaTreeMapAbstractEnvironment.h"
-#include "PatriciaTreeMapAbstractPartition.h"
 #include "Resolver.h"
 #include "Show.h"
 #include "SpartaInterprocedural.h"

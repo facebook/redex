@@ -5,7 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "PatriciaTreeMapAbstractPartition.h"
+#include <sparta/HashedSetAbstractDomain.h>
+#include <sparta/PatriciaTreeMapAbstractPartition.h>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -13,7 +14,6 @@
 #include <string>
 
 #include "AbstractDomainPropertyTest.h"
-#include "HashedSetAbstractDomain.h"
 
 using namespace sparta;
 

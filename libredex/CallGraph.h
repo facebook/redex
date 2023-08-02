@@ -9,9 +9,10 @@
 
 #include <unordered_map>
 
+#include <sparta/MonotonicFixpointIterator.h>
+
 #include "DexClass.h"
 #include "IRCode.h"
-#include "MonotonicFixpointIterator.h"
 #include "Resolver.h"
 
 namespace method_override_graph {

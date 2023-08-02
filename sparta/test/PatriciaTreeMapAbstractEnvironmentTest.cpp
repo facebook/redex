@@ -5,7 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "PatriciaTreeMapAbstractEnvironment.h"
+#include <sparta/HashedAbstractEnvironment.h>
+#include <sparta/HashedSetAbstractDomain.h>
+#include <sparta/PatriciaTreeMapAbstractEnvironment.h>
 
 #include <cstdint>
 #include <gmock/gmock.h>
@@ -13,9 +15,6 @@
 #include <limits>
 #include <random>
 #include <sstream>
-
-#include "HashedAbstractEnvironment.h"
-#include "HashedSetAbstractDomain.h"
 
 using namespace sparta;
 

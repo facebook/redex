@@ -5,15 +5,15 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "ReducedProductAbstractDomain.h"
+#include <sparta/FiniteAbstractDomain.h>
+#include <sparta/HashedAbstractPartition.h>
+#include <sparta/ReducedProductAbstractDomain.h>
 
 #include <gtest/gtest.h>
 #include <sstream>
 #include <tuple>
 
 #include "AbstractDomainPropertyTest.h"
-#include "FiniteAbstractDomain.h"
-#include "HashedAbstractPartition.h"
 
 using namespace sparta;
 

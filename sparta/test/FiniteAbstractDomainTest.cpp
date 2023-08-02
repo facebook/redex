@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "FiniteAbstractDomain.h"
+#include <sparta/FiniteAbstractDomain.h>
 
 #include <gtest/gtest.h>
 #include <sstream>

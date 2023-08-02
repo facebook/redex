@@ -7,15 +7,16 @@
 
 #include "DefinitelyAssignedIFields.h"
 
-#include "AbstractDomain.h"
+#include <sparta/AbstractDomain.h>
+#include <sparta/ConstantAbstractDomain.h>
+#include <sparta/PatriciaTreeMapAbstractEnvironment.h>
+#include <sparta/PatriciaTreeSetAbstractDomain.h>
+#include <sparta/ReducedProductAbstractDomain.h>
+
 #include "BaseIRAnalyzer.h"
-#include "ConstantAbstractDomain.h"
 #include "ConstantPropagationAnalysis.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
-#include "PatriciaTreeMapAbstractEnvironment.h"
-#include "PatriciaTreeSetAbstractDomain.h"
-#include "ReducedProductAbstractDomain.h"
 #include "Resolver.h"
 #include "StlUtil.h"
 #include "Timer.h"

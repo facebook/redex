@@ -17,6 +17,8 @@
 #include <utility>
 #include <vector>
 
+#include <sparta/SpartaWorkQueue.h>
+
 #include "CFGMutation.h"
 #include "ControlFlow.h"
 #include "DexClass.h"
@@ -26,7 +28,6 @@
 #include "PassManager.h"
 #include "RedundantCheckCastRemover.h"
 #include "Show.h"
-#include "SpartaWorkQueue.h"
 #include "Trace.h"
 #include "Walkers.h"
 

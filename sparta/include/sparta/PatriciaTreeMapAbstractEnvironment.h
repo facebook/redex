@@ -15,8 +15,8 @@
 #include <unordered_map>
 #include <utility>
 
-#include "AbstractDomain.h"
-#include "PatriciaTreeMap.h"
+#include <sparta/AbstractDomain.h>
+#include <sparta/PatriciaTreeMap.h>
 
 namespace sparta {
 

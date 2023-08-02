@@ -21,9 +21,9 @@
 #include <boost/intrusive_ptr.hpp>
 #include <boost/optional.hpp>
 
-#include "AbstractDomain.h"
-#include "Exceptions.h"
-#include "PatriciaTreeUtil.h"
+#include <sparta/AbstractDomain.h>
+#include <sparta/Exceptions.h>
+#include <sparta/PatriciaTreeUtil.h>
 
 namespace sparta {
 

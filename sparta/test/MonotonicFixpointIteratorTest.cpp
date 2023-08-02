@@ -5,10 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "MonotonicFixpointIterator.h"
-#include "HashedSetAbstractDomain.h"
-#include "PatriciaTreeMapAbstractEnvironment.h"
-#include "PatriciaTreeSet.h"
+#include <sparta/HashedSetAbstractDomain.h>
+#include <sparta/MonotonicFixpointIterator.h>
+#include <sparta/PatriciaTreeMapAbstractEnvironment.h>
+#include <sparta/PatriciaTreeSet.h>
 
 #include <functional>
 #include <gmock/gmock.h>

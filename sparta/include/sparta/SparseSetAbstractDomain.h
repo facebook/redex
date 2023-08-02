@@ -11,7 +11,7 @@
 #include <ostream>
 #include <vector>
 
-#include "PowersetAbstractDomain.h"
+#include <sparta/PowersetAbstractDomain.h>
 
 namespace sparta {
 

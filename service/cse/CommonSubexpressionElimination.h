@@ -7,10 +7,11 @@
 
 #pragma once
 
+#include <sparta/PatriciaTreeSet.h>
+
 #include "ConcurrentContainers.h"
 #include "IROpcode.h"
 #include "MethodOverrideGraph.h"
-#include "PatriciaTreeSet.h"
 #include "Purity.h"
 
 class DexField;

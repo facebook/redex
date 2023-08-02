@@ -15,8 +15,8 @@
 #include <ostream>
 #include <utility>
 
-#include "AbstractDomain.h"
-#include "PatriciaTreeMap.h"
+#include <sparta/AbstractDomain.h>
+#include <sparta/PatriciaTreeMap.h>
 
 namespace sparta {
 

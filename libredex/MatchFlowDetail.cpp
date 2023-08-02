@@ -12,8 +12,9 @@
 
 #include <boost/optional/optional.hpp>
 
-#include "MonotonicFixpointIterator.h"
-#include "PatriciaTreeSetAbstractDomain.h"
+#include <sparta/MonotonicFixpointIterator.h>
+#include <sparta/PatriciaTreeSetAbstractDomain.h>
+
 #include "Show.h"
 #include "Trace.h"
 
