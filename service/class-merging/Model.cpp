@@ -798,25 +798,26 @@ std::ostream& operator<<(std::ostream& os,
  * Group merging targets according to their dex ids. Return a vector of dex_id
  * and types.
  */
-TypeGroupByDex Model::group_per_dex(bool per_dex_grouping,
-                                    const TypeSet& types) {
-  if (!per_dex_grouping) {
+TypeGroupByDex Model::group_per_dex(const TypeSet& types,
+                                    const ModelSpec& spec) {
+  if (!spec.per_dex_grouping) {
     TypeSet group(types.begin(), types.end());
     return {{boost::none, group}};
-  } else {
-    std::vector<TypeSet> new_groups(m_x_dex.num_dexes());
-    for (auto type : types) {
-      auto dex_id = m_x_dex.get_dex_idx(type);
-      new_groups[dex_id].emplace(type);
-    }
-    TypeGroupByDex result(m_x_dex.num_dexes());
-    size_t dex_id = 0;
-    for (auto&& group : new_groups) {
-      result.emplace_back(std::make_pair(dex_id, std::move(group)));
-      ++dex_id;
-    }
-    return result;
   }
+  std::vector<TypeSet> new_groups(m_x_dex.num_dexes());
+  for (auto type : types) {
+    auto dex_id = m_x_dex.get_dex_idx(type);
+    new_groups[dex_id].emplace(type);
+  }
+  TypeGroupByDex result(m_x_dex.num_dexes());
+  for (size_t dex_id = 0; dex_id < new_groups.size(); ++dex_id) {
+    auto& group = new_groups[dex_id];
+    if (group.size() >= spec.min_count) {
+      TRACE(CLMG, 7, "dex_id %zu: group %zu", dex_id, group.size());
+      result.emplace_back(std::make_pair(dex_id, std::move(group)));
+    }
+  }
+  return result;
 }
 
 TypeSet Model::get_types_in_current_interdex_group(
@@ -914,7 +915,7 @@ void Model::flatten_shapes(const MergerType& merger,
 
     for (const TypeSet* intf_set : intf_sets) {
       const TypeSet& implementors = shape_hierarchy.groups.at(*intf_set);
-      for (auto& pair : group_per_dex(m_spec.per_dex_grouping, implementors)) {
+      for (auto& pair : group_per_dex(implementors, m_spec)) {
         auto dex_id = pair.first;
         auto group_values = pair.second;
         if (all_interdex_groups.size() > 1) {

@@ -446,7 +446,7 @@ class Model {
                           MergerType::ShapeHierarchy& hier);
   void flatten_shapes(const MergerType& merger,
                       MergerType::ShapeCollector& shapes);
-  TypeGroupByDex group_per_dex(bool per_dex_grouping, const TypeSet& types);
+  TypeGroupByDex group_per_dex(const TypeSet& types, const ModelSpec& spec);
   TypeSet get_types_in_current_interdex_group(
       const TypeSet& types, const ConstTypeHashSet& interdex_group_types);
 
