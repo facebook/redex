@@ -11,8 +11,8 @@
 #include <initializer_list>
 #include <unordered_set>
 
-#include "PatriciaTreeSet.h"
-#include "PowersetAbstractDomain.h"
+#include <sparta/PatriciaTreeSet.h>
+#include <sparta/PowersetAbstractDomain.h>
 
 namespace sparta {
 

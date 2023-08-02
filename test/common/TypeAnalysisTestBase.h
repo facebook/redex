@@ -7,8 +7,9 @@
 
 #include <gtest/gtest.h>
 
+#include <sparta/PatriciaTreeSet.h>
+
 #include "DexTypeEnvironment.h"
-#include "PatriciaTreeSet.h"
 #include "RedexTest.h"
 
 using TypeSet = sparta::PatriciaTreeSet<const DexType*>;

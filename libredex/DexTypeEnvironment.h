@@ -11,13 +11,14 @@
 
 #include <boost/optional.hpp>
 
-#include "AbstractDomain.h"
+#include <sparta/AbstractDomain.h>
+#include <sparta/FiniteAbstractDomain.h>
+#include <sparta/PatriciaTreeMapAbstractEnvironment.h>
+#include <sparta/PatriciaTreeSet.h>
+#include <sparta/ReducedProductAbstractDomain.h>
+
 #include "DexUtil.h"
-#include "FiniteAbstractDomain.h"
 #include "NullnessDomain.h"
-#include "PatriciaTreeMapAbstractEnvironment.h"
-#include "PatriciaTreeSet.h"
-#include "ReducedProductAbstractDomain.h"
 #include "TypeUtil.h"
 
 namespace dtv_impl {

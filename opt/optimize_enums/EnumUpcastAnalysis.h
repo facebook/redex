@@ -8,12 +8,13 @@
 #pragma once
 #include <limits>
 
+#include <sparta/PatriciaTreeMapAbstractEnvironment.h>
+#include <sparta/PatriciaTreeSetAbstractDomain.h>
+
 #include "BaseIRAnalyzer.h"
 #include "ControlFlow.h"
 #include "DexUtil.h"
 #include "EnumConfig.h"
-#include "PatriciaTreeMapAbstractEnvironment.h"
-#include "PatriciaTreeSetAbstractDomain.h"
 
 namespace optimize_enums {
 

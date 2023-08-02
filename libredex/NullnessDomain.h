@@ -7,12 +7,13 @@
 
 #pragma once
 
-#include "ConstantAbstractDomain.h"
+#include <sparta/ConstantAbstractDomain.h>
+#include <sparta/DisjointUnionAbstractDomain.h>
+#include <sparta/FiniteAbstractDomain.h>
+#include <sparta/PatriciaTreeMapAbstractEnvironment.h>
+#include <sparta/ReducedProductAbstractDomain.h>
+
 #include "DexUtil.h"
-#include "DisjointUnionAbstractDomain.h"
-#include "FiniteAbstractDomain.h"
-#include "PatriciaTreeMapAbstractEnvironment.h"
-#include "ReducedProductAbstractDomain.h"
 
 enum Nullness {
   NN_BOTTOM,

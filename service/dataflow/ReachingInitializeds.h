@@ -7,13 +7,14 @@
 
 #pragma once
 
+#include <sparta/ConstantAbstractDomain.h>
+#include <sparta/PatriciaTreeMapAbstractEnvironment.h>
+
 #include "BaseIRAnalyzer.h"
-#include "ConstantAbstractDomain.h"
 #include "ControlFlow.h"
 #include "DexClass.h"
 #include "IROpcode.h"
 #include "MethodUtil.h"
-#include "PatriciaTreeMapAbstractEnvironment.h"
 
 namespace reaching_initializeds {
 

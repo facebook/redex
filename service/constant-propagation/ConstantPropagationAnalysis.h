@@ -11,6 +11,8 @@
 #include <unordered_set>
 #include <utility>
 
+#include <sparta/MonotonicFixpointIterator.h>
+
 #include "BaseIRAnalyzer.h"
 #include "ConcurrentContainers.h"
 #include "ConstantEnvironment.h"
@@ -18,7 +20,6 @@
 #include "InstructionAnalyzer.h"
 #include "KotlinNullCheckMethods.h"
 #include "MethodUtil.h"
-#include "MonotonicFixpointIterator.h"
 
 class DexMethodRef;
 

@@ -8,9 +8,9 @@
 // Because of the rules of argument-dependent lookup, we need to include the
 // definition of operator<< for ConstantAbstractDomain before that of operator<<
 // for DisjointUnionAbstractDomain.
-#include "ConstantAbstractDomain.h"
+#include <sparta/ConstantAbstractDomain.h>
 
-#include "DisjointUnionAbstractDomain.h"
+#include <sparta/DisjointUnionAbstractDomain.h>
 
 #include <gtest/gtest.h>
 #include <string>

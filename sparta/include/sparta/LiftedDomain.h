@@ -11,8 +11,8 @@
 #include <ostream>
 #include <type_traits>
 
-#include "AbstractDomain.h"
-#include "Exceptions.h"
+#include <sparta/AbstractDomain.h>
+#include <sparta/Exceptions.h>
 
 namespace sparta {
 

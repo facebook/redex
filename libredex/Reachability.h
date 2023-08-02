@@ -10,12 +10,13 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include <sparta/SpartaWorkQueue.h>
+
 #include "ConcurrentContainers.h"
 #include "DexClass.h"
 #include "KeepReason.h"
 #include "MethodOverrideGraph.h"
 #include "Pass.h"
-#include "SpartaWorkQueue.h"
 #include "Thread.h"
 
 class DexAnnotation;

@@ -12,7 +12,7 @@
 #include <memory>
 #include <unordered_set>
 
-#include "PowersetAbstractDomain.h"
+#include <sparta/PowersetAbstractDomain.h>
 
 namespace sparta {
 

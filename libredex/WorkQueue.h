@@ -10,7 +10,7 @@
 #include <boost/thread/thread.hpp>
 #include <exception>
 
-#include "SpartaWorkQueue.h"
+#include <sparta/SpartaWorkQueue.h>
 
 namespace redex_workqueue_impl {
 

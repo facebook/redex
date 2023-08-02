@@ -7,7 +7,8 @@
 
 #pragma once
 
-#include "FiniteAbstractDomain.h"
+#include <sparta/FiniteAbstractDomain.h>
+
 #include "IRInstruction.h"
 
 namespace regalloc {

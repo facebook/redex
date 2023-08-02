@@ -8,16 +8,17 @@
 #include <utility>
 #include <vector>
 
+#include <sparta/ConstantAbstractDomain.h>
+#include <sparta/PatriciaTreeMapAbstractEnvironment.h>
+#include <sparta/ReducedProductAbstractDomain.h>
+
 #include "BaseIRAnalyzer.h"
-#include "ConstantAbstractDomain.h"
 #include "ControlFlow.h"
 #include "DexClass.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "MethodUtil.h"
-#include "PatriciaTreeMapAbstractEnvironment.h"
 #include "ReachingDefinitions.h"
-#include "ReducedProductAbstractDomain.h"
 #include "Resolver.h"
 #include "Show.h"
 

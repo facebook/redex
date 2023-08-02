@@ -13,7 +13,7 @@
 #include <sstream>
 #include <type_traits>
 
-#include "AbstractDomain.h"
+#include <sparta/AbstractDomain.h>
 
 namespace sparta {
 namespace pad_impl {

@@ -5,9 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <gmock/gmock.h>
+#include <sparta/SmallSortedSetAbstractDomain.h>
 
-#include "SmallSortedSetAbstractDomain.h"
+#include <gmock/gmock.h>
 
 using namespace sparta;
 

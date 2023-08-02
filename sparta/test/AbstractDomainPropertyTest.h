@@ -9,7 +9,7 @@
 
 #include <gtest/gtest.h>
 
-#include "AbstractDomain.h"
+#include <sparta/AbstractDomain.h>
 
 /*
  * Scaffold for testing that implementations of AbstractDomain satisfy various

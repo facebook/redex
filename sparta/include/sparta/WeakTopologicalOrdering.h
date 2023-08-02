@@ -17,7 +17,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "Exceptions.h"
+#include <sparta/Exceptions.h>
 
 namespace sparta {
 

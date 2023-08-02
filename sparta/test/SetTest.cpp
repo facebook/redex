@@ -5,8 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "FlatSet.h"
-#include "PatriciaTreeSet.h"
+#include <sparta/FlatSet.h>
+#include <sparta/PatriciaTreeSet.h>
 
 #include <cstdint>
 #include <limits>

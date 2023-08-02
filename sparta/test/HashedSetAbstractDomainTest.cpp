@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "HashedSetAbstractDomain.h"
+#include <sparta/HashedSetAbstractDomain.h>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>

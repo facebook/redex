@@ -13,15 +13,16 @@
 #include <iostream>
 #include <limits>
 
+#include <sparta/ConstantAbstractDomain.h>
+#include <sparta/PatriciaTreeMapAbstractEnvironment.h>
+
 #include "BaseIRAnalyzer.h"
 #include "CFGMutation.h"
 #include "ConfigFiles.h"
-#include "ConstantAbstractDomain.h"
 #include "ControlFlow.h"
 #include "IRInstruction.h"
 #include "MethodProfiles.h"
 #include "PassManager.h"
-#include "PatriciaTreeMapAbstractEnvironment.h"
 #include "ReachingDefinitions.h"
 #include "ScopedCFG.h"
 #include "Show.h"

@@ -15,11 +15,11 @@
 #include <unordered_map>
 #include <vector>
 
-#include "AbstractDomain.h"
-#include "FixpointIterator.h"
-#include "SpartaWorkQueue.h"
-#include "WeakPartialOrdering.h"
-#include "WeakTopologicalOrdering.h"
+#include <sparta/AbstractDomain.h>
+#include <sparta/FixpointIterator.h>
+#include <sparta/SpartaWorkQueue.h>
+#include <sparta/WeakPartialOrdering.h>
+#include <sparta/WeakTopologicalOrdering.h>
 
 namespace sparta {
 

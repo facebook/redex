@@ -14,9 +14,10 @@
 #include <unordered_map>
 #include <vector>
 
+#include <sparta/MonotonicFixpointIterator.h>
+
 #include "ControlFlow.h"
 #include "Dominators.h"
-#include "MonotonicFixpointIterator.h"
 #include "Show.h"
 #include "SourceBlocks.h"
 #include "Trace.h"

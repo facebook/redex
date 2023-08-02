@@ -5,12 +5,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "AbstractDomain.h"
-#include "Analyzer.h"
-#include "FiniteAbstractDomain.h"
-#include "HashedSetAbstractDomain.h"
-#include "MonotonicFixpointIterator.h"
-#include "PatriciaTreeMapAbstractEnvironment.h"
+#include <sparta/AbstractDomain.h>
+#include <sparta/Analyzer.h>
+#include <sparta/FiniteAbstractDomain.h>
+#include <sparta/HashedSetAbstractDomain.h>
+#include <sparta/MonotonicFixpointIterator.h>
+#include <sparta/PatriciaTreeMapAbstractEnvironment.h>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>

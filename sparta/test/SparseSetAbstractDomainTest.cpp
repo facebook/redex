@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "SparseSetAbstractDomain.h"
+#include <sparta/SparseSetAbstractDomain.h>
 
 #include <cstdint>
 #include <gmock/gmock.h>

@@ -10,8 +10,9 @@
 #include <istream>
 #include <ostream>
 
+#include <sparta/S_Expression.h>
+
 #include "DexClass.h"
-#include "S_Expression.h"
 #include "Show.h"
 #include "Trace.h"
 

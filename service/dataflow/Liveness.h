@@ -7,9 +7,10 @@
 
 #pragma once
 
+#include <sparta/PatriciaTreeSetAbstractDomain.h>
+
 #include "BaseIRAnalyzer.h"
 #include "ControlFlow.h"
-#include "PatriciaTreeSetAbstractDomain.h"
 
 using LivenessDomain = sparta::PatriciaTreeSetAbstractDomain<reg_t>;
 

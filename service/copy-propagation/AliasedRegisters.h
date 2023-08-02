@@ -10,10 +10,11 @@
 #include <boost/optional.hpp>
 #include <limits>
 
-#include "AbstractDomain.h"
+#include <sparta/AbstractDomain.h>
+#include <sparta/PatriciaTreeMap.h>
+
 #include "ConstantUses.h"
 #include "DexClass.h"
-#include "PatriciaTreeMap.h"
 
 namespace aliased_registers {
 

@@ -7,14 +7,16 @@
 
 #pragma once
 
-#include <boost/optional/optional_io.hpp>
 #include <ostream>
+
+#include <boost/optional/optional_io.hpp>
+
+#include <sparta/FiniteAbstractDomain.h>
+#include <sparta/PatriciaTreeMapAbstractEnvironment.h>
+#include <sparta/ReducedProductAbstractDomain.h>
 
 #include "BaseIRAnalyzer.h"
 #include "DexTypeEnvironment.h"
-#include "FiniteAbstractDomain.h"
-#include "PatriciaTreeMapAbstractEnvironment.h"
-#include "ReducedProductAbstractDomain.h"
 
 /*
  * This is the implementation of a type checker for the IR that aims at

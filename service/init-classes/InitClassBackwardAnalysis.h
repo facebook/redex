@@ -10,10 +10,11 @@
 #include <unordered_set>
 #include <utility>
 
+#include <sparta/ConstantAbstractDomain.h>
+#include <sparta/MonotonicFixpointIterator.h>
+
 #include "BaseIRAnalyzer.h"
-#include "ConstantAbstractDomain.h"
 #include "DexUtil.h"
-#include "MonotonicFixpointIterator.h"
 
 namespace init_classes {
 

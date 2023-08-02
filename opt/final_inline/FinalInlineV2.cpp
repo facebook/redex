@@ -13,6 +13,8 @@
 #include <unordered_set>
 #include <vector>
 
+#include <sparta/WeakTopologicalOrdering.h>
+
 #include "CFGMutation.h"
 #include "ConcurrentContainers.h"
 #include "ConfigFiles.h"
@@ -33,7 +35,6 @@
 #include "TypeSystem.h"
 #include "TypeUtil.h"
 #include "Walkers.h"
-#include "WeakTopologicalOrdering.h"
 
 /*
  * dx-generated class initializers often use verbose bytecode sequences to

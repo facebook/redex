@@ -7,10 +7,11 @@
 
 #pragma once
 
-#include "AbstractDomain.h"
+#include <sparta/AbstractDomain.h>
+#include <sparta/PatriciaTreeSetAbstractDomain.h>
+
 #include "DexClass.h"
 #include "InitClassesWithSideEffects.h"
-#include "PatriciaTreeSetAbstractDomain.h"
 
 namespace init_classes {
 

@@ -7,13 +7,14 @@
 
 #pragma once
 
-#include "AbstractDomain.h"
+#include <sparta/AbstractDomain.h>
+#include <sparta/PatriciaTreeMapAbstractEnvironment.h>
+#include <sparta/PatriciaTreeSetAbstractDomain.h>
+
 #include "BaseIRAnalyzer.h"
 #include "ControlFlow.h"
 #include "DexClass.h"
 #include "IROpcode.h"
-#include "PatriciaTreeMapAbstractEnvironment.h"
-#include "PatriciaTreeSetAbstractDomain.h"
 
 namespace reaching_defs {
 

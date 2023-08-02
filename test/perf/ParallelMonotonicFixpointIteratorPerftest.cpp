@@ -5,8 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "MonotonicFixpointIterator.h"
-
 #include <functional>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -16,7 +14,9 @@
 #include <unordered_set>
 #include <vector>
 
-#include "HashedSetAbstractDomain.h"
+#include <sparta/HashedSetAbstractDomain.h>
+#include <sparta/MonotonicFixpointIterator.h>
+
 #include "Thread.h"
 #include "WorkQueue.h"
 

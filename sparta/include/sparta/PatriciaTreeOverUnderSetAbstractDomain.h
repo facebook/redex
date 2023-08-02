@@ -9,9 +9,9 @@
 
 #include <initializer_list>
 
-#include "AbstractDomain.h"
-#include "Exceptions.h"
-#include "PatriciaTreeSet.h"
+#include <sparta/AbstractDomain.h>
+#include <sparta/Exceptions.h>
+#include <sparta/PatriciaTreeSet.h>
 
 namespace sparta {
 

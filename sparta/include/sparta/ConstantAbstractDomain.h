@@ -15,7 +15,7 @@
 #include <boost/intrusive/pointer_plus_bits.hpp>
 #include <boost/optional.hpp>
 
-#include "AbstractDomain.h"
+#include <sparta/AbstractDomain.h>
 
 namespace sparta {
 

@@ -5,14 +5,15 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "PatriciaTreeMap.h"
+#include <sparta/PatriciaTreeMap.h>
 
-#include <boost/concept/assert.hpp>
-#include <boost/concept_check.hpp>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <initializer_list>
 #include <unordered_map>
+
+#include <boost/concept/assert.hpp>
+#include <boost/concept_check.hpp>
 
 using namespace sparta;
 

@@ -7,10 +7,11 @@
 
 #pragma once
 
+#include <sparta/FiniteAbstractDomain.h>
+#include <sparta/PatriciaTreeMapAbstractEnvironment.h>
+#include <sparta/ReducedProductAbstractDomain.h>
+
 #include "DexClass.h"
-#include "FiniteAbstractDomain.h"
-#include "PatriciaTreeMapAbstractEnvironment.h"
-#include "ReducedProductAbstractDomain.h"
 
 /*
  * ObjectDomain is an abstract environment coupled with logic that tracks

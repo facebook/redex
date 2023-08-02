@@ -58,11 +58,16 @@
 #include <algorithm>
 #include <optional>
 
+#include <sparta/ConstantAbstractDomain.h>
+#include <sparta/PatriciaTreeMap.h>
+#include <sparta/PatriciaTreeMapAbstractEnvironment.h>
+#include <sparta/PatriciaTreeSet.h>
+#include <sparta/PatriciaTreeSetAbstractDomain.h>
+
 #include "ApiLevelChecker.h"
 #include "BaseIRAnalyzer.h"
 #include "CFGMutation.h"
 #include "ConfigFiles.h"
-#include "ConstantAbstractDomain.h"
 #include "ControlFlow.h"
 #include "DexClass.h"
 #include "ExpandableMethodParams.h"
@@ -75,10 +80,6 @@
 #include "LiveRange.h"
 #include "MethodOverrideGraph.h"
 #include "PassManager.h"
-#include "PatriciaTreeMap.h"
-#include "PatriciaTreeMapAbstractEnvironment.h"
-#include "PatriciaTreeSet.h"
-#include "PatriciaTreeSetAbstractDomain.h"
 #include "Resolver.h"
 #include "Show.h"
 #include "StringBuilder.h"

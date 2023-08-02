@@ -9,14 +9,15 @@
 
 #include <unordered_set>
 
+#include <sparta/IntervalDomain.h>
+#include <sparta/LiftedDomain.h>
+#include <sparta/PatriciaTreeMapAbstractEnvironment.h>
+#include <sparta/PatriciaTreeSetAbstractDomain.h>
+#include <sparta/ReducedProductAbstractDomain.h>
+
 #include "DexClass.h"
 #include "IRInstruction.h"
-#include "IntervalDomain.h"
-#include "LiftedDomain.h"
 #include "LocalPointersAnalysis.h"
-#include "PatriciaTreeMapAbstractEnvironment.h"
-#include "PatriciaTreeSetAbstractDomain.h"
-#include "ReducedProductAbstractDomain.h"
 
 /*
  * A variant of local escape analysis.  In addition to tracking which abstract

@@ -10,13 +10,14 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include <sparta/S_Expression.h>
+
 #include "ConcurrentContainers.h"
 #include "DexClass.h"
 #include "InitClassesWithSideEffects.h"
 #include "LocalPointersAnalysis.h"
 #include "ReachingDefinitions.h"
 #include "Resolver.h"
-#include "S_Expression.h"
 
 /*
  * This analysis identifies the side effects that methods have. A significant

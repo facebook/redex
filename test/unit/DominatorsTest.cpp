@@ -9,7 +9,8 @@
 
 #include <gtest/gtest.h>
 
-#include "MonotonicFixpointIterator.h"
+#include <sparta/MonotonicFixpointIterator.h>
+
 #include "SimpleGraph.h"
 
 TEST(DominatorsTest, simple) {

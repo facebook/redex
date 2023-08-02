@@ -7,9 +7,10 @@
 
 #include "Interference.h"
 
+#include <sparta/MonotonicFixpointIterator.h>
+
 #include "DexOpcode.h"
 #include "DexUtil.h"
-#include "MonotonicFixpointIterator.h"
 #include "Show.h"
 
 namespace regalloc {

@@ -7,9 +7,10 @@
 
 #pragma once
 
+#include <sparta/MonotonicFixpointIterator.h>
+
 #include "ControlFlow.h"
 #include "IRInstruction.h"
-#include "MonotonicFixpointIterator.h"
 
 namespace ir_analyzer {
 

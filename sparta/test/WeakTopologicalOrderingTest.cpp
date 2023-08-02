@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "WeakTopologicalOrdering.h"
+#include <sparta/WeakTopologicalOrdering.h>
 
 #include <gtest/gtest.h>
 #include <set>
