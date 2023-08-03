@@ -17,7 +17,7 @@
 #include <utility>
 #include <vector>
 
-#include <sparta/SpartaWorkQueue.h>
+#include <sparta/WorkQueue.h>
 
 #include "CFGMutation.h"
 #include "ControlFlow.h"
@@ -1852,7 +1852,7 @@ void PeepholePass::run_pass(DexStoresVector& stores,
   }
 
   workqueue_run<DexClass*>(
-      [&peephole_optimizers](sparta::SpartaWorkerState<DexClass*>* state,
+      [&peephole_optimizers](sparta::WorkerState<DexClass*>* state,
                              DexClass* cls) {
         auto& ph = peephole_optimizers[state->worker_id()];
         for (const auto& m : cls->get_dmethods()) {

@@ -556,8 +556,7 @@ void gather_true_virtual_methods(
     true_virtual_callees.push_back(p.first);
   }
   workqueue_run<const DexMethod*>(
-      [&](sparta::SpartaWorkerState<const DexMethod*>*,
-          const DexMethod* callee) {
+      [&](sparta::WorkerState<const DexMethod*>*, const DexMethod* callee) {
         auto& caller_to_invocations =
             concurrent_true_virtual_callers.at_unsafe(callee);
         if (caller_to_invocations.caller_insns.empty()) {

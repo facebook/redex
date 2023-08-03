@@ -42,7 +42,7 @@ void BalancedPartitioning::run() const {
   };
 
   auto wq = workqueue_foreach<WorkItem>(
-      [&](sparta::SpartaWorkerState<WorkItem>* worker_state,
+      [&](sparta::WorkerState<WorkItem>* worker_state,
           const WorkItem& work_item) {
         uint32_t num_documents =
             std::distance(work_item.document_begin, work_item.document_end);

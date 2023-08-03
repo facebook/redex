@@ -19,7 +19,7 @@ constexpr unsigned int NUM_STRINGS = 100'000;
 constexpr unsigned int NUM_INTS = 1000;
 
 //==========
-// Test for correctness. Duplicate of SpartaWorkQueue to check that the
+// Test for correctness. Duplicate of `sparta::WorkQueue` to check that the
 // Redex layer is functional.
 //==========
 
@@ -101,7 +101,7 @@ TEST(WorkQueueTest, checkDynamicallyAddingTasks) {
   constexpr size_t num_threads{3};
   auto results = std::make_unique<int[]>(num_threads);
   auto wq = workqueue_foreach<int>(
-      [&](sparta::SpartaWorkerState<int>* worker_state, int a) {
+      [&](sparta::WorkerState<int>* worker_state, int a) {
         if (a > 0) {
           worker_state->push_task(a - 1);
           results[worker_state->worker_id()] += a;

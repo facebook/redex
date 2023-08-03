@@ -10,7 +10,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include <sparta/SpartaWorkQueue.h>
+#include <sparta/WorkQueue.h>
 
 #include "ConcurrentContainers.h"
 #include "ControlFlow.h"
@@ -425,8 +425,7 @@ struct TransitiveClosureMarkerSharedState {
   Stats* stats;
 };
 
-using TransitiveClosureMarkerWorkerState =
-    sparta::SpartaWorkerState<ReachableObject>;
+using TransitiveClosureMarkerWorkerState = sparta::WorkerState<ReachableObject>;
 
 /*
  * Resolve the method reference more conservatively without the context of the

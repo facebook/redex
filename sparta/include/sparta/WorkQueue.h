@@ -113,18 +113,18 @@ struct StateCounters {
 } // namespace workqueue_impl
 
 template <class Input, typename Executor>
-class SpartaWorkQueue;
+class WorkQueue;
 
 template <class Input>
-class SpartaWorkerState final {
+class WorkerState final {
  public:
-  SpartaWorkerState(size_t id, workqueue_impl::StateCounters* sc, bool can_push)
+  WorkerState(size_t id, workqueue_impl::StateCounters* sc, bool can_push)
       : m_id(id), m_state_counters(sc), m_can_push_task(can_push) {}
 
   /*
    * Add more items to the queue of the currently-running worker. When a
-   * SpartaWorkQueue is running, this should be used instead of
-   * SpartaWorkQueue::add_item() as the latter is not thread-safe.
+   * `WorkQueue` is running, this should be used instead of
+   * `WorkQueue::add_item()` as the latter is not thread-safe.
    */
   void push_task(Input task) {
     assert(m_can_push_task);
@@ -151,7 +151,7 @@ class SpartaWorkerState final {
   };
 
  private:
-  boost::optional<Input> pop_task(SpartaWorkerState<Input>* other) {
+  boost::optional<Input> pop_task(WorkerState<Input>* other) {
     std::lock_guard<std::mutex> guard(m_queue_mtx);
     if (!m_queue.empty()) {
       other->set_running(true);
@@ -174,37 +174,37 @@ class SpartaWorkerState final {
   const bool m_can_push_task{false};
 
   template <class, typename>
-  friend class SpartaWorkQueue;
+  friend class WorkQueue;
 };
 
 template <class Input, typename Executor>
-class SpartaWorkQueue {
+class WorkQueue {
  private:
   // Using templates for Executor to avoid the performance overhead of
   // std::function
   Executor m_executor;
-  std::vector<std::unique_ptr<SpartaWorkerState<Input>>> m_states;
+  std::vector<std::unique_ptr<WorkerState<Input>>> m_states;
   const size_t m_num_threads{1};
   size_t m_insert_idx{0};
   workqueue_impl::StateCounters m_state_counters;
   const bool m_can_push_task{false};
 
  public:
-  SpartaWorkQueue(Executor,
-                  unsigned int num_threads = parallel::default_num_threads(),
-                  // push_tasks_while_running:
-                  // * When this flag is true, all threads stay alive until the
-                  //   last task is finished. Useful when threads are adding
-                  //   more work to the queue via SpartaWorkerState::push_task.
-                  // * When this flag is false, threads can
-                  //   exit as soon as there is no more work (to avoid
-                  //   preempting a thread that has useful work)
-                  bool push_tasks_while_running = false);
+  WorkQueue(Executor,
+            unsigned int num_threads = parallel::default_num_threads(),
+            // push_tasks_while_running:
+            // * When this flag is true, all threads stay alive until the
+            //   last task is finished. Useful when threads are adding
+            //   more work to the queue via `WorkerState::push_task`.
+            // * When this flag is false, threads can
+            //   exit as soon as there is no more work (to avoid
+            //   preempting a thread that has useful work)
+            bool push_tasks_while_running = false);
 
   // copies are not allowed
-  SpartaWorkQueue(const SpartaWorkQueue&) = delete;
+  WorkQueue(const WorkQueue&) = delete;
   // moves are allowed
-  SpartaWorkQueue(SpartaWorkQueue&&) = default;
+  WorkQueue(WorkQueue&&) = default;
 
   /* Adds (a copy of) an item to a pseudo-random worker. */
   void add_item(Input task);
@@ -218,33 +218,33 @@ class SpartaWorkQueue {
   void run_all();
 
   template <class>
-  friend class SpartaWorkerState;
+  friend class WorkerState;
 };
 
 template <class Input, typename Executor>
-SpartaWorkQueue<Input, Executor>::SpartaWorkQueue(Executor executor,
-                                                  unsigned int num_threads,
-                                                  bool push_tasks_while_running)
+WorkQueue<Input, Executor>::WorkQueue(Executor executor,
+                                      unsigned int num_threads,
+                                      bool push_tasks_while_running)
     : m_executor(executor),
       m_num_threads(num_threads),
       m_state_counters(num_threads),
       m_can_push_task(push_tasks_while_running) {
   assert(num_threads >= 1);
   for (unsigned int i = 0; i < m_num_threads; ++i) {
-    m_states.emplace_back(std::make_unique<SpartaWorkerState<Input>>(
+    m_states.emplace_back(std::make_unique<WorkerState<Input>>(
         i, &m_state_counters, m_can_push_task));
   }
 }
 
 template <class Input, typename Executor>
-void SpartaWorkQueue<Input, Executor>::add_item(Input task) {
+void WorkQueue<Input, Executor>::add_item(Input task) {
   m_insert_idx = (m_insert_idx + 1) % m_num_threads;
   assert(m_insert_idx < m_states.size());
   m_states[m_insert_idx]->m_queue.push(std::move(task));
 }
 
 template <class Input, typename Executor>
-void SpartaWorkQueue<Input, Executor>::add_item(Input task, size_t worker_id) {
+void WorkQueue<Input, Executor>::add_item(Input task, size_t worker_id) {
   assert(worker_id < m_states.size());
   m_states[worker_id]->m_queue.push(std::move(task));
 }
@@ -254,13 +254,13 @@ void SpartaWorkQueue<Input, Executor>::add_item(Input task, size_t worker_id) {
  * looks randomly at other queues to try and steal work.
  */
 template <class Input, typename Executor>
-void SpartaWorkQueue<Input, Executor>::run_all() {
+void WorkQueue<Input, Executor>::run_all() {
   m_state_counters.num_non_empty = 0;
   m_state_counters.num_running = 0;
   m_state_counters.waiter->take_all();
   std::mutex exception_mutex;
   std::exception_ptr exception;
-  auto worker = [&](SpartaWorkerState<Input>* state, size_t state_idx) {
+  auto worker = [&](WorkerState<Input>* state, size_t state_idx) {
     try {
       auto attempts =
           workqueue_impl::create_permutation(m_num_threads, state_idx);
@@ -357,27 +357,26 @@ namespace workqueue_impl {
 template <typename Input, typename Fn>
 struct NoStateWorkQueueHelper {
   Fn fn;
-  void operator()(SpartaWorkerState<Input>*, Input a) { fn(std::move(a)); }
+  void operator()(WorkerState<Input>*, Input a) { fn(std::move(a)); }
 };
 template <typename Input, typename Fn>
 struct WithStateWorkQueueHelper {
   Fn fn;
-  void operator()(SpartaWorkerState<Input>* state, Input a) {
+  void operator()(WorkerState<Input>* state, Input a) {
     fn(state, std::move(a));
   }
 };
 } // namespace workqueue_impl
 
-// These functions are the most convenient way to create a SpartaWorkQueue
+// These functions are the most convenient way to create a WorkQueue
 template <class Input,
           typename Fn,
           typename std::enable_if<Arity<Fn>::value == 1, int>::type = 0>
-SpartaWorkQueue<Input, workqueue_impl::NoStateWorkQueueHelper<Input, Fn>>
-work_queue(const Fn& fn,
-           unsigned int num_threads = parallel::default_num_threads(),
-           bool push_tasks_while_running = false) {
-  return SpartaWorkQueue<Input,
-                         workqueue_impl::NoStateWorkQueueHelper<Input, Fn>>(
+WorkQueue<Input, workqueue_impl::NoStateWorkQueueHelper<Input, Fn>> work_queue(
+    const Fn& fn,
+    unsigned int num_threads = parallel::default_num_threads(),
+    bool push_tasks_while_running = false) {
+  return WorkQueue<Input, workqueue_impl::NoStateWorkQueueHelper<Input, Fn>>(
       workqueue_impl::NoStateWorkQueueHelper<Input, Fn>{fn},
       num_threads,
       push_tasks_while_running);
@@ -385,12 +384,11 @@ work_queue(const Fn& fn,
 template <class Input,
           typename Fn,
           typename std::enable_if<Arity<Fn>::value == 2, int>::type = 0>
-SpartaWorkQueue<Input, workqueue_impl::WithStateWorkQueueHelper<Input, Fn>>
+WorkQueue<Input, workqueue_impl::WithStateWorkQueueHelper<Input, Fn>>
 work_queue(const Fn& fn,
            unsigned int num_threads = parallel::default_num_threads(),
            bool push_tasks_while_running = false) {
-  return SpartaWorkQueue<Input,
-                         workqueue_impl::WithStateWorkQueueHelper<Input, Fn>>(
+  return WorkQueue<Input, workqueue_impl::WithStateWorkQueueHelper<Input, Fn>>(
       workqueue_impl::WithStateWorkQueueHelper<Input, Fn>{fn},
       num_threads,
       push_tasks_while_running);

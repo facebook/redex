@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <sparta/SpartaWorkQueue.h>
+#include <sparta/WorkQueue.h>
 
 #include <array>
 #include <atomic>
@@ -19,13 +19,13 @@ constexpr unsigned int NUM_INTS = 1000;
 // Test for correctness
 //==========
 
-TEST(SpartaWorkQueueTest, EmptyQueue) {
+TEST(WorkQueueTest, EmptyQueue) {
   auto wq = sparta::work_queue<std::string>(
       [](std::string /* unused */) { return 0; });
   wq.run_all();
 }
 
-TEST(SpartaWorkQueueTest, foreachTest) {
+TEST(WorkQueueTest, foreachTest) {
   std::array<int, NUM_INTS> array = {0};
 
   auto wq = sparta::work_queue<int*>([](int* a) { (*a)++; });
@@ -39,7 +39,7 @@ TEST(SpartaWorkQueueTest, foreachTest) {
   }
 }
 
-TEST(SpartaWorkQueueTest, singleThreadTest) {
+TEST(WorkQueueTest, singleThreadTest) {
   std::array<int, NUM_INTS> array = {0};
 
   auto wq = sparta::work_queue<int*>([](int* a) { (*a)++; }, 1);
@@ -53,7 +53,7 @@ TEST(SpartaWorkQueueTest, singleThreadTest) {
   }
 }
 
-TEST(SpartaWorkQueueTest, startFromOneTest) {
+TEST(WorkQueueTest, startFromOneTest) {
   std::array<int, NUM_INTS> array = {0};
 
   auto wq = sparta::work_queue<int*>([](int* a) { (*a)++; }, 1);
@@ -68,11 +68,11 @@ TEST(SpartaWorkQueueTest, startFromOneTest) {
 }
 
 // Check that we can dynamically add work items during execution.
-TEST(SpartaWorkQueueTest, checkDynamicallyAddingTasks) {
+TEST(WorkQueueTest, checkDynamicallyAddingTasks) {
   constexpr size_t num_threads{3};
   std::atomic<int> result{0};
   auto wq = sparta::work_queue<int>(
-      [&](sparta::SpartaWorkerState<int>* worker_state, int a) {
+      [&](sparta::WorkerState<int>* worker_state, int a) {
         if (a > 0) {
           worker_state->push_task(a - 1);
           result += a;
@@ -87,7 +87,7 @@ TEST(SpartaWorkQueueTest, checkDynamicallyAddingTasks) {
   EXPECT_EQ(55, result);
 }
 
-TEST(SpartaWorkQueueTest, preciseScheduling) {
+TEST(WorkQueueTest, preciseScheduling) {
   std::array<int, NUM_INTS> array = {0};
 
   auto wq = sparta::work_queue<int*>([](int* a) { (*a)++; });
@@ -101,7 +101,7 @@ TEST(SpartaWorkQueueTest, preciseScheduling) {
   }
 }
 
-TEST(SpartaWorkQueueTest, exceptionPropagation) {
+TEST(WorkQueueTest, exceptionPropagation) {
   auto wq = sparta::work_queue<int>([](int i) {
     if (i == 666) {
       throw std::logic_error("exception!");
@@ -114,7 +114,7 @@ TEST(SpartaWorkQueueTest, exceptionPropagation) {
   ASSERT_THROW(wq.run_all(), std::logic_error);
 }
 
-TEST(SpartaWorkQueueTest, multipleExceptions) {
+TEST(WorkQueueTest, multipleExceptions) {
   auto wq = sparta::work_queue<int>([](int i) {
     if (i % 3 == 0) {
       throw std::logic_error("exception!");

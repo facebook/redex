@@ -227,7 +227,7 @@ void AndroidResources::collect_layout_classes_and_attributes(
   auto collect_fn = [&](const std::vector<std::string>& prefixes) {
     std::mutex out_mutex;
     workqueue_run<std::string>(
-        [&](sparta::SpartaWorkerState<std::string>* worker_state,
+        [&](sparta::WorkerState<std::string>* worker_state,
             const std::string& input) {
           if (input.empty()) {
             // Dispatcher, find files and create tasks.
@@ -300,7 +300,7 @@ void AndroidResources::collect_xml_attribute_string_values(
     std::unordered_set<std::string>* out) {
   std::mutex out_mutex;
   workqueue_run<std::string>(
-      [&](sparta::SpartaWorkerState<std::string>* worker_state,
+      [&](sparta::WorkerState<std::string>* worker_state,
           const std::string& input) {
         if (input.empty()) {
           // Dispatcher, find files and create tasks.
@@ -332,7 +332,7 @@ void AndroidResources::collect_xml_attribute_string_values(
 void AndroidResources::rename_classes_in_layouts(
     const std::map<std::string, std::string>& rename_map) {
   workqueue_run<std::string>(
-      [&](sparta::SpartaWorkerState<std::string>* worker_state,
+      [&](sparta::WorkerState<std::string>* worker_state,
           const std::string& input) {
         if (input.empty()) {
           // Dispatcher, find files and create tasks.
@@ -402,7 +402,7 @@ std::unordered_set<std::string> AndroidResources::get_native_classes() {
   std::mutex out_mutex;
   std::unordered_set<std::string> all_classes;
   workqueue_run<std::string>(
-      [&](sparta::SpartaWorkerState<std::string>* worker_state,
+      [&](sparta::WorkerState<std::string>* worker_state,
           const std::string& input) {
         if (input.empty()) {
           // Dispatcher, find files and create tasks.
