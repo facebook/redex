@@ -354,6 +354,19 @@ void InterDex::emit_interdex_classes(
     return;
   }
 
+  if (!m_order_interdex) {
+    // We still want to mark the interdex classes as perf-sensitive, so that
+    // other optimizations such as outlining and sort-remaining-classes treat
+    // interdex classes appropriately.
+    for (auto* type : interdex_types) {
+      DexClass* cls = type_class(type);
+      if (cls && !unreferenced_classes.count(cls)) {
+        cls->set_perf_sensitive(PerfSensitiveGroup::BETAMAP_ORDERED);
+      }
+    }
+    return;
+  }
+
   // NOTE: coldstart has no interaction with extended and scroll set, but that
   //       is not true for the later 2.
   dex_info.coldstart = true;
