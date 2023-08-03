@@ -441,8 +441,8 @@ class walk {
       std::vector<CacheAligned<Accumulator>> acc_vec(num_threads, init);
       auto reduce = Reduce();
       workqueue_run<DexClass*>( // over-parallelized maybe
-          [&walker, &acc_vec, &reduce](
-              sparta::SpartaWorkerState<DexClass*>* state, DexClass* cls) {
+          [&walker, &acc_vec, &reduce](sparta::WorkerState<DexClass*>* state,
+                                       DexClass* cls) {
             Accumulator& acc = acc_vec[state->worker_id()];
             reduce(walker(cls), &acc);
           },
@@ -488,7 +488,7 @@ class walk {
       std::vector<CacheAligned<Accumulator>> acc_vec(num_threads, init);
 
       workqueue_run<DexClass*>(
-          [&](sparta::SpartaWorkerState<DexClass*>* state, DexClass* cls) {
+          [&](sparta::WorkerState<DexClass*>* state, DexClass* cls) {
             Accumulator& acc = acc_vec[state->worker_id()];
             for (auto dmethod : cls->get_dmethods()) {
               TraceContext context(dmethod);
@@ -563,8 +563,8 @@ class walk {
       std::vector<CacheAligned<Accumulator>> acc_vec(num_threads, init);
       auto reduce = Reduce();
       workqueue_run<DexClass*>(
-          [&walker, &acc_vec, &reduce](
-              sparta::SpartaWorkerState<DexClass*>* state, DexClass* cls) {
+          [&walker, &acc_vec, &reduce](sparta::WorkerState<DexClass*>* state,
+                                       DexClass* cls) {
             Accumulator& acc = acc_vec[state->worker_id()];
             walk::iterate_fields(cls,
                                  [&](auto arg) { reduce(walker(arg), &acc); });

@@ -10,7 +10,7 @@
 #include <atomic>
 #include <boost/optional.hpp>
 
-#include <sparta/SpartaWorkQueue.h> // For `default_num_threads`.
+#include <sparta/WorkQueue.h> // For `default_num_threads`.
 
 // We for now need a larger stack size than the default, and on Mac OS
 // this is the only way (or pthreads directly), as `ulimit -s` does not

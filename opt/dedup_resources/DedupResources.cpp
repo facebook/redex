@@ -272,8 +272,7 @@ void compute_res_file_hashes(
   }
   std::mutex out_mutex;
   workqueue_run<std::string>(
-      [&](sparta::SpartaWorkerState<std::string>* /* unused */,
-          std::string path) {
+      [&](sparta::WorkerState<std::string>* /* unused */, std::string path) {
         HashType hash = 31;
         redex::read_file_with_contents(path,
                                        [&](const char* data, size_t size) {

@@ -17,9 +17,9 @@
 
 #include <sparta/AbstractDomain.h>
 #include <sparta/FixpointIterator.h>
-#include <sparta/SpartaWorkQueue.h>
 #include <sparta/WeakPartialOrdering.h>
 #include <sparta/WeakTopologicalOrdering.h>
+#include <sparta/WorkQueue.h>
 
 namespace sparta {
 
@@ -374,7 +374,7 @@ class ParallelMonotonicFixpointIterator
   using EdgeId = typename GraphInterface::EdgeId;
   using Context =
       fp_impl::MonotonicFixpointIteratorContext<NodeId, Domain, NodeHash>;
-  using WPOWorkerState = SpartaWorkerState<uint32_t>;
+  using WPOWorkerState = WorkerState<uint32_t>;
 
   ParallelMonotonicFixpointIterator(
       const Graph& graph, size_t num_thread = parallel::default_num_threads())
@@ -428,7 +428,7 @@ class ParallelMonotonicFixpointIterator
       linear_map.push_back(&state);
     }
     auto wq = sparta::work_queue<size_t>(
-        [&linear_map](SpartaWorkerState<size_t>* worker_state, size_t start) {
+        [&linear_map](WorkerState<size_t>* worker_state, size_t start) {
           size_t end = std::min(linear_map.size(), start + ChunkSize);
           for (size_t i = start; i < end; i++) {
             *linear_map[i] = Domain::bottom();

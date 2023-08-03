@@ -10,7 +10,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include <sparta/SpartaWorkQueue.h>
+#include <sparta/WorkQueue.h>
 
 #include "ConcurrentContainers.h"
 #include "DexClass.h"
@@ -190,7 +190,7 @@ struct alignas(CACHE_LINE_SIZE) Stats {
   int num_ignore_check_strings;
 };
 
-using MarkWorkerState = sparta::SpartaWorkerState<ReachableObject>;
+using MarkWorkerState = sparta::WorkerState<ReachableObject>;
 
 /*
  * These helper classes compute reachable objects by a DFS+marking algorithm.

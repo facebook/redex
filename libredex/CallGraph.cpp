@@ -463,7 +463,7 @@ Graph::Graph(const BuildStrategy& strat)
     bool caller_is_root;
   };
   auto wq = workqueue_foreach<WorkItem>(
-      [&](sparta::SpartaWorkerState<WorkItem>* worker_state,
+      [&](sparta::WorkerState<WorkItem>* worker_state,
           const WorkItem& work_item) {
         auto caller = work_item.caller;
         auto caller_node = work_item.caller_node;
