@@ -50,6 +50,7 @@ constexpr const char* METRIC_RESERVED_FREFS = "reserved_frefs";
 constexpr const char* METRIC_RESERVED_TREFS = "reserved_trefs";
 constexpr const char* METRIC_RESERVED_MREFS = "reserved_mrefs";
 constexpr const char* METRIC_EMIT_CANARIES = "emit_canaries";
+constexpr const char* METRIC_ORDER_INTERDEX = "order_interdex";
 
 class InterDexPass : public Pass {
  public:
@@ -89,6 +90,7 @@ class InterDexPass : public Pass {
 
  private:
   bool m_static_prune;
+  bool m_order_interdex;
   bool m_emit_canaries;
   bool m_normal_primary_dex;
   bool m_keep_primary_order;

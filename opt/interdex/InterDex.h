@@ -47,6 +47,7 @@ class InterDex {
            bool normal_primary_dex,
            bool keep_primary_order,
            bool force_single_dex,
+           bool order_interdex,
            bool emit_canaries,
            bool minimize_cross_dex_refs,
            bool fill_last_coldstart_dex,
@@ -68,6 +69,7 @@ class InterDex {
         m_normal_primary_dex(normal_primary_dex),
         m_keep_primary_order(keep_primary_order),
         m_force_single_dex(force_single_dex),
+        m_order_interdex(order_interdex),
         m_emit_canaries(emit_canaries),
         m_minimize_cross_dex_refs(minimize_cross_dex_refs),
         m_fill_last_coldstart_dex(fill_last_coldstart_dex),
@@ -217,6 +219,7 @@ class InterDex {
   bool m_normal_primary_dex;
   bool m_keep_primary_order;
   bool m_force_single_dex;
+  bool m_order_interdex;
   bool m_emit_canaries;
   bool m_minimize_cross_dex_refs;
   bool m_fill_last_coldstart_dex;

@@ -41,6 +41,7 @@ void InterDexPass::bind_config() {
   bind("static_prune", false, m_static_prune);
   bind("emit_canaries", true, m_emit_canaries);
   bind("normal_primary_dex", false, m_normal_primary_dex);
+  bind("order_interdex", true, m_order_interdex);
   bind("keep_primary_order", true, m_keep_primary_order);
   always_assert_log(m_keep_primary_order || m_normal_primary_dex,
                     "We always need to respect primary dex order if we treat "
@@ -124,6 +125,7 @@ void InterDexPass::run_pass(
   mgr.set_metric(METRIC_RESERVED_TREFS, refs_info.trefs);
   mgr.set_metric(METRIC_RESERVED_MREFS, refs_info.mrefs);
   mgr.set_metric(METRIC_EMIT_CANARIES, m_emit_canaries);
+  mgr.set_metric(METRIC_ORDER_INTERDEX, m_order_interdex);
 
   // Reflect configuration in stats.
   mgr.set_metric("config.normal_primary_dex", m_normal_primary_dex);
@@ -144,7 +146,7 @@ void InterDexPass::run_pass(
   InterDex interdex(
       original_scope, dexen, mgr.asset_manager(), conf, plugins,
       m_linear_alloc_limit, m_static_prune, m_normal_primary_dex,
-      m_keep_primary_order, force_single_dex, m_emit_canaries,
+      m_keep_primary_order, force_single_dex, m_order_interdex, m_emit_canaries,
       m_minimize_cross_dex_refs, m_fill_last_coldstart_dex,
       m_minimize_cross_dex_refs_config, refs_info, &xstore_refs,
       mgr.get_redex_options().min_sdk, m_methods_for_canary_clinit_reference,
@@ -234,7 +236,7 @@ void InterDexPass::run_pass_on_nonroot_store(
   InterDex interdex(
       original_scope, dexen, mgr.asset_manager(), conf, plugins,
       m_linear_alloc_limit, m_static_prune, m_normal_primary_dex,
-      m_keep_primary_order, false /* force single dex */,
+      m_keep_primary_order, false /* force single dex */, m_order_interdex,
       false /* emit canaries */, false /* minimize_cross_dex_refs */,
       /* fill_last_coldstart_dex=*/false, cross_dex_refs_config, refs_info,
       &xstore_refs, mgr.get_redex_options().min_sdk,

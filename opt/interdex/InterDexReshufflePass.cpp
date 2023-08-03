@@ -35,10 +35,6 @@ const interdex::InterDexPass* get_interdex_pass(const PassManager& mgr) {
   return pass;
 }
 
-bool can_move(DexClass* cls) {
-  return !cls->is_perf_sensitive() && !interdex::is_canary(cls);
-}
-
 // Compute gain powers by reference occurrences. We don't use the upper 20 (19,
 // actually, because sign bit) bits to allow for adding all gains of a class.
 // TODO: While this integer-based representation allows for a fast and
@@ -272,6 +268,8 @@ class Impl {
     m_dexes_structure.set_reserve_mrefs(
         (it != interdex_metrics.end() ? it->second : 0) +
         m_config.reserved_extra_mrefs);
+    it = interdex_metrics.find(interdex::METRIC_ORDER_INTERDEX);
+    m_order_interdex = it == interdex_metrics.end() || it->second;
 
     m_mutable_dexen.resize(dexen.size());
     m_mutable_dexen_strings.resize(dexen.size());
@@ -282,7 +280,8 @@ class Impl {
          dex_index++) {
       auto& dex = dexen.at(dex_index);
       if (dex_index == m_first_dex_index &&
-          !std::any_of(dex.begin(), dex.end(), can_move)) {
+          !std::any_of(dex.begin(), dex.end(),
+                       [this](auto* cls) { return can_move(cls); })) {
         m_first_dex_index++;
         continue;
       }
@@ -453,6 +452,11 @@ class Impl {
     return true;
   }
 
+  bool can_move(DexClass* cls) {
+    return (!m_order_interdex || !cls->is_perf_sensitive()) &&
+           !interdex::is_canary(cls);
+  }
+
   ConfigFiles& m_conf;
   PassManager& m_mgr;
   InterDexReshufflePass::Config& m_config;
@@ -467,6 +471,7 @@ class Impl {
   std::vector<std::unordered_map<const DexString*, size_t>>
       m_mutable_dexen_strings;
   size_t m_first_dex_index{1}; // skip primary dex
+  bool m_order_interdex;
 };
 } // namespace
 
