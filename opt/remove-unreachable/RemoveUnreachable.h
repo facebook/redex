@@ -21,6 +21,7 @@ class RemoveUnreachablePassBase : public Pass {
     return {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, Preserves},
+        {NoResolvablePureRefs, Preserves},
         {NoSpuriousGetClassCalls, Preserves},
         {UltralightCodePatterns, Preserves},
     };
