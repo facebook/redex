@@ -131,10 +131,7 @@ ssize_t ensure_string_in_xml_string_pool(const std::string& path,
     }
   }
   if (!new_bytes.empty()) {
-    std::ofstream ofs(path,
-                      std::ofstream::out | std::ofstream::trunc |
-                          std::ofstream::binary);
-    ofs.write(&(new_bytes[0]), new_bytes.size());
+    arsc::write_bytes_to_file(new_bytes, path);
   }
   return idx;
 }

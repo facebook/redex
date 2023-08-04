@@ -119,12 +119,7 @@ bool are_files_equal(const std::string& p1, const std::string& p2) {
 
 void write_to_file(const std::string& output_path,
                    android::Vector<char>& data) {
-  std::ofstream fout(output_path,
-                     std::ios::out | std::ios::binary | std::ios::trunc);
-  always_assert_log(fout.is_open(), "Could not open path %s for writing",
-                    output_path.c_str());
-  fout.write(data.array(), data.size());
-  fout.close();
+  arsc::write_bytes_to_file(data, output_path);
 }
 
 // Runs `aapt d --values resources <an .apk file>` against a zip file containing
@@ -441,7 +436,7 @@ TEST(ResStringPool, AppendStringInXmlLayout) {
             android::OK);
   EXPECT_EQ(new_idx, 19);
   EXPECT_FALSE(serialized.empty());
-  auto serialized_data = (char*)&(serialized[0]);
+  auto serialized_data = (char*)serialized.array();
   const auto chunk_size = sizeof(android::ResChunk_header);
   auto pool_ptr =
       (android::ResStringPool_header*)(serialized_data + chunk_size);
@@ -522,7 +517,7 @@ TEST(ResStringPool, ReplaceStringsInXmlLayout) {
 
   EXPECT_EQ(num_renamed, 3);
   android::ResXMLTree parser;
-  parser.setTo(&serialized[0], serialized.size());
+  parser.setTo(serialized.array(), serialized.size());
   EXPECT_EQ(android::NO_ERROR, parser.getError())
       << "Error parsing layout after rename";
 

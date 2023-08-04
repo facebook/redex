@@ -8,6 +8,7 @@
 #ifndef _FB_ANDROID_SERIALIZE_H
 #define _FB_ANDROID_SERIALIZE_H
 
+#include <fstream>
 #include <map>
 #include <memory>
 #include <set>
@@ -36,6 +37,18 @@ void push_long(uint32_t data, android::Vector<char>* vec);
 void push_u8_length(size_t len, android::Vector<char>* vec);
 void encode_string8(const android::String8& s, android::Vector<char>* vec);
 void encode_string16(const android::String16& s, android::Vector<char>* vec);
+
+// Write the data to the file; overwrite existing data. Asserts that is was
+// successful.
+inline void write_bytes_to_file(const android::Vector<char>& vector,
+                                const std::string& filename) {
+  std::ofstream ofs(filename,
+                    std::ofstream::out | std::ofstream::trunc |
+                        std::ofstream::binary);
+  ofs.write(vector.array(), vector.size());
+  ofs.close();
+  LOG_ALWAYS_FATAL_IF(!ofs, "Unable to write to %s", filename.c_str());
+}
 
 // Returns the size of the entry and the value data structure(s) that follow it.
 size_t compute_entry_value_length(android::ResTable_entry* entry);

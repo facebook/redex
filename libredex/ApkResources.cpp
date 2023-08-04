@@ -513,27 +513,24 @@ namespace {
  * ofstream to write to arsc file for input bigger than original
  * file size.
  */
-size_t write_serialized_data_with_expansion(const android::Vector<char>& cVec,
+size_t write_serialized_data_with_expansion(const android::Vector<char>& vector,
                                             RedexMappedFile f) {
-  size_t vec_size = cVec.size();
+  size_t vec_size = vector.size();
   auto filename = f.filename.c_str();
   // Close current opened file.
   f.file.reset();
   // Write to arsc through ofstream
-  std::ofstream ofs(filename,
-                    std::ofstream::out | std::ofstream::trunc |
-                        std::ofstream::binary);
-  ofs.write(&(cVec[0]), vec_size);
+  arsc::write_bytes_to_file(vector, filename);
   return vec_size;
 }
 
-size_t write_serialized_data(const android::Vector<char>& cVec,
+size_t write_serialized_data(const android::Vector<char>& vector,
                              RedexMappedFile f) {
-  size_t vec_size = cVec.size();
+  size_t vec_size = vector.size();
   size_t f_size = f.size();
   always_assert_log(vec_size <= f_size, "Growing file not supported");
   if (vec_size > 0) {
-    memcpy(f.data(), &(cVec[0]), vec_size);
+    memcpy(f.data(), vector.array(), vec_size);
   }
   f.file.reset(); // Close the map.
 #if IS_WINDOWS
