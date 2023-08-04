@@ -460,6 +460,48 @@ TEST(ResStringPool, AppendStringInXmlLayout) {
   EXPECT_TRUE(again.empty());
 }
 
+TEST(ResStringPool, AppendStringsInXmlLayout) {
+  // The test will request 3 strings to be added, one of which will already
+  // exist in the file's pool. We should get back sensible data with the two new
+  // ones added at the back of pool.
+  std::set<std::string> strings_to_add{"TextView", "aaaaa", "bbbbb"};
+  std::unordered_map<std::string, uint32_t> string_to_idx;
+  auto f = RedexMappedFile::open(std::getenv("test_layout_path"));
+
+  android::Vector<char> serialized;
+  EXPECT_EQ(arsc::ensure_strings_in_xml_pool(f.const_data(), f.size(),
+                                             strings_to_add, &serialized,
+                                             &string_to_idx),
+            android::OK);
+
+  EXPECT_EQ(string_to_idx.at("TextView"), 11);
+  EXPECT_EQ(string_to_idx.at("aaaaa"), 19);
+  EXPECT_EQ(string_to_idx.at("bbbbb"), 20);
+  EXPECT_FALSE(serialized.empty());
+  auto serialized_data = (char*)serialized.array();
+  auto pool_ptr =
+      (android::ResStringPool_header*)(serialized_data +
+                                       sizeof(android::ResChunk_header));
+  android::ResStringPool pool(pool_ptr, dtohl(pool_ptr->header.size));
+  EXPECT_EQ(arsc::get_string_from_pool(pool, 11), "TextView");
+  EXPECT_EQ(arsc::get_string_from_pool(pool, 19), "aaaaa");
+  EXPECT_EQ(arsc::get_string_from_pool(pool, 20), "bbbbb");
+
+  // Append the data again, we should get a successful result with the same
+  // index and no outputted binary data.
+  android::Vector<char> again;
+  std::unordered_map<std::string, uint32_t> again_idx;
+  EXPECT_EQ(arsc::ensure_strings_in_xml_pool(serialized_data, serialized.size(),
+                                             strings_to_add, &again,
+                                             &again_idx),
+            android::OK);
+  EXPECT_EQ(again_idx.size(), 3);
+  EXPECT_EQ(again_idx.at("TextView"), 11);
+  EXPECT_EQ(again_idx.at("aaaaa"), 19);
+  EXPECT_EQ(again_idx.at("bbbbb"), 20);
+  EXPECT_TRUE(again.empty());
+}
+
 TEST(ResStringPool, ReplaceStringsInXmlLayout) {
   // Given layout file should have a series of View subclasses in the XML, which
   // we will rename. Parse the resulting binary data, and make sure all tags are

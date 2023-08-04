@@ -10,6 +10,7 @@
 
 #include <map>
 #include <memory>
+#include <set>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -51,7 +52,8 @@ float complex_value(uint32_t complex);
 uint32_t complex_unit(uint32_t complex, bool isFraction);
 
 // Returns whether or not idx is a non null string.
-inline bool is_valid_string_idx(const android::ResStringPool& pool, size_t idx) {
+inline bool is_valid_string_idx(const android::ResStringPool& pool,
+                                size_t idx) {
   size_t u16_len;
   return pool.stringAt(idx, &u16_len) != nullptr;
 }
@@ -150,6 +152,14 @@ int ensure_string_in_xml_pool(const void* data,
                               const std::string& new_string,
                               android::Vector<char>* out_data,
                               size_t* idx);
+// Like above, but takes an ordered set of strings and returns a map to their
+// indices.
+int ensure_strings_in_xml_pool(
+    const void* data,
+    const size_t len,
+    const std::set<std::string>& strings_to_add,
+    android::Vector<char>* out_data,
+    std::unordered_map<std::string, uint32_t>* string_to_idx);
 
 using EntryValueData = PtrLen<uint8_t>;
 using EntryOffsetData = std::pair<EntryValueData, uint32_t>;

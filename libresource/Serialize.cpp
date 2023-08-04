@@ -862,6 +862,23 @@ int ensure_string_in_xml_pool(const void* data,
                               const std::string& new_string,
                               android::Vector<char>* out_data,
                               size_t* idx) {
+  std::unordered_map<std::string, uint32_t> out_idx;
+  auto ret =
+      ensure_strings_in_xml_pool(data, len, {new_string}, out_data, &out_idx);
+  if (ret == android::OK) {
+    *idx = out_idx.at(new_string);
+  }
+  return ret;
+}
+
+int ensure_strings_in_xml_pool(
+    const void* data,
+    const size_t len,
+    const std::set<std::string>& strings_to_add,
+    android::Vector<char>* out_data,
+    std::unordered_map<std::string, uint32_t>* string_to_idx) {
+  LOG_ALWAYS_FATAL_IF(!string_to_idx->empty(),
+                      "string_to_idx should start empty");
   int validation_result = validate_xml_string_pool(data, len);
   if (validation_result != android::OK) {
     return validation_result;
@@ -874,15 +891,19 @@ int ensure_string_in_xml_pool(const void* data,
   for (size_t i = parser.attribute_count(); i < pool_size; i++) {
     if (is_valid_string_idx(pool, i)) {
       auto s = get_string_from_pool(pool, i);
-      if (s == new_string) {
-        *idx = i;
-        // Convention to leave out_data unchanged in this case.
-        return android::OK;
+      if (strings_to_add.count(s) > 0) {
+        string_to_idx->emplace(s, i);
       }
     }
   }
 
-  // Add given string to the end of a new pool.
+  if (strings_to_add.size() == string_to_idx->size()) {
+    // Everything was already present, just return and do no futher work.
+    // Convention to leave out_data unchanged in this case.
+    return android::OK;
+  }
+
+  // Add given strings to the end of a new pool.
   auto flags = pool.isUTF8()
                    ? htodl((uint32_t)android::ResStringPool_header::UTF8_FLAG)
                    : (uint32_t)0;
@@ -897,11 +918,17 @@ int ensure_string_in_xml_pool(const void* data,
       pool_builder.add_string(s, length);
     }
   }
-  *idx = pool_size;
-  pool_builder.add_string(new_string);
+
+  for (const auto& s : strings_to_add) {
+    if (string_to_idx->count(s) == 0) {
+      auto idx = pool_builder.string_count();
+      pool_builder.add_string(s);
+      string_to_idx->emplace(s, idx);
+    }
+  }
   // Serialize new string pool into out data.
-  replace_xml_string_pool((android::ResChunk_header*)data, len,
-                                pool_builder, out_data);
+  replace_xml_string_pool((android::ResChunk_header*)data, len, pool_builder,
+                          out_data);
   return android::OK;
 }
 
