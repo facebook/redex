@@ -650,7 +650,7 @@ bool XmlFileVisitor::visit(void* data, size_t len) {
     }
   }
   if (parser.event() == ResChunkPullParser::Event::BadDocument) {
-    ALOGE("corrupt resource table");
+    ALOGE("corrupt document");
     return false;
   }
   return true;
