@@ -749,6 +749,7 @@ void MethodReferencesGatherer::advance(const Advance& advance,
       auto& cfg = code->cfg();
       auto b = cfg.entry_block();
       queue.push((CFGNeedle){b, b->begin()});
+      m_pushed_blocks.insert(b);
     }
     m_next_advance_kind = AdvanceKind::InstantiableDependencyResolved;
   } else {
