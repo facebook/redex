@@ -464,6 +464,7 @@ def align_and_sign_output_apk(
     key_alias: str,
     key_password: str,
     ignore_zipalign: bool,
+    ignore_apksigner: bool,
     page_align: bool,
 ) -> None:
     if isfile(output_apk_path):
@@ -482,7 +483,7 @@ def align_and_sign_output_apk(
 
     # Add new signature
     if sign:
-        sign_apk(keystore, key_password, key_alias, output_apk_path)
+        sign_apk(keystore, key_password, key_alias, output_apk_path, ignore_apksigner)
 
 
 def copy_file_to_out_dir(
@@ -649,6 +650,11 @@ Given an APK, produce a better APK!
     parser.add_argument("--gdb", action="store_true", help="Run redex binary in gdb")
     parser.add_argument(
         "--ignore-zipalign", action="store_true", help="Ignore if zipalign is not found"
+    )
+    parser.add_argument(
+        "--ignore-apksigner",
+        action="store_true",
+        help="Ignore if apksigner is not found",
     )
     parser.add_argument(
         "--verify-none-mode",
@@ -1306,6 +1312,7 @@ def finalize_redex(state: State) -> None:
         state.args.keyalias,
         state.args.keypass,
         state.args.ignore_zipalign,
+        state.args.ignore_apksigner,
         state.args.page_align_libs,
     )
 
