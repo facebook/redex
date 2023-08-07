@@ -543,7 +543,6 @@ TESTS = \
     outliner_type_analysis_test \
     partial_pass_test \
     peephole_test \
-    print_kotlin_stats_test \
     proguard_lexer_test \
     proguard_map_test \
     proguard_parser_test \
