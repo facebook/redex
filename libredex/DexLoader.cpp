@@ -93,7 +93,7 @@ static void validate_dex_header(const dex_header* dh,
       dex_methodhandle_id* methodhandle_ids =
           (dex_methodhandle_id*)((uint8_t*)dh + item.offset);
       auto methodhandle_ids_limit =
-          methodhandle_ids_off + item.size * sizeof(dex_callsite_id);
+          methodhandle_ids_off + item.size * sizeof(dex_methodhandle_id);
       always_assert_log(methodhandle_ids_limit < dexsize,
                         "inavlid methodhandle_ids size");
     } break;
