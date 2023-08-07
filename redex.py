@@ -512,13 +512,27 @@ def copy_all_file_to_out_dir(
 
 def validate_args(args: argparse.Namespace) -> None:
     if args.sign:
-        for arg_name in ["keystore", "keyalias", "keypass"]:
-            if getattr(args, arg_name) is None:
-                raise argparse.ArgumentTypeError(
-                    "Could not find a suitable default for --{} and no value "
-                    "was provided.  This argument is required when --sign "
-                    "is used".format(arg_name)
-                )
+
+        def raise_error(arg_name: str) -> None:
+            raise argparse.ArgumentTypeError(
+                "Could not find a suitable default for --{} and no value "
+                "was provided.  This argument is required when --sign "
+                "is used".format(arg_name)
+            )
+
+        if not args.keystore:
+            raise_error("keystore")
+
+        if not args.keyalias:
+            raise_error("keyalias")
+
+        if not args.keypass:
+            raise_error("keypass")
+
+        if not isfile(args.keystore):
+            raise argparse.ArgumentTypeError(
+                f'Keystore path "{args.keystore}" is invalid.'
+            )
 
 
 def arg_parser(
