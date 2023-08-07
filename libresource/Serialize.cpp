@@ -955,4 +955,54 @@ PtrLen<uint8_t> get_value_data(const EntryValueData& ev) {
   auto ptr = (uint8_t*)entry + entry_size;
   return {ptr, entry_and_value_len - entry_size};
 }
+
+void ResFileManipulator::serialize(android::Vector<char>* out) {
+  auto vec_start = out->size();
+  ssize_t final_size = m_length;
+  for (const auto& [c, block] : m_additions) {
+    final_size += block.size;
+  }
+  for (const auto& [c, size] : m_deletions) {
+    final_size -= size;
+  }
+  LOG_ALWAYS_FATAL_IF(final_size < 0, "final size went negative");
+  // Copy the original data, applying our edits along the way.
+  char* current = m_data;
+  size_t i = 0;
+  auto emit = [&](const Block& block) {
+    out->appendArray((const char*)block.buffer.get(), block.size);
+  };
+  auto advance = [&](size_t amount) {
+    i += amount;
+    current += amount;
+  };
+  while (i < m_length) {
+    auto addition = m_additions.find(current);
+    if (addition != m_additions.end()) {
+      emit(addition->second);
+    }
+    auto deletion = m_deletions.find(current);
+    if (deletion != m_deletions.end()) {
+      advance(deletion->second);
+      continue;
+    }
+    out->push_back(*current);
+    advance(1);
+  }
+  // Lastly, check if there is a request to add at the very end of the file.
+  auto addition = m_additions.find(m_data + m_length);
+  if (addition != m_additions.end()) {
+    emit(addition->second);
+  }
+  // Assert everything is good.
+  auto actual_size = out->size() - vec_start;
+  LOG_ALWAYS_FATAL_IF(
+      actual_size != final_size,
+      "did not write expected number of bytes; wrote %ld, expected %zu",
+      actual_size, (size_t)final_size);
+  // Fix up the file size, assuming our original data starts in a proper chunk.
+  if (actual_size >= sizeof(android::ResChunk_header)) {
+    write_long_at_pos(vec_start + sizeof(uint16_t) * 2, final_size, out);
+  }
+}
 } // namespace arsc

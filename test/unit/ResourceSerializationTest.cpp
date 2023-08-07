@@ -1703,3 +1703,161 @@ TEST(ResTable, BuildDumpAndParseSparseType) {
         << "Expected small type size due to sparse encoding";
   }
 }
+
+constexpr uint32_t WRAP_CONTENT = 0xFFFFFFFE;
+// A class which will mess around with the first Button element it finds, wiping
+// out all its attributes and replacing them with layout_width/layout_height.
+class ButtonFiddler : public arsc::SimpleXmlParser {
+ public:
+  explicit ButtonFiddler(arsc::ResFileManipulator* file_manupulator)
+      : m_file_manipulator(file_manupulator) {}
+
+  bool find_string_idx(const std::string& target, uint32_t* out_idx) {
+    auto& string_pool = global_strings();
+    for (size_t i = 0; i < string_pool.size(); i++) {
+      auto s = arsc::get_string_from_pool(string_pool, i);
+      if (s == target) {
+        *out_idx = i;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool visit_start_tag(android::ResXMLTree_node* node,
+                       android::ResXMLTree_attrExt* extension) override {
+    auto& string_pool = global_strings();
+    auto element_name =
+        arsc::get_string_from_pool(string_pool, dtohl(extension->name.index));
+    if (element_name == "Button") {
+      // Read some basic info about the file's strings. We will simply reuse
+      // existing string data and clobber the node and its attributes down to a
+      // node with only layout_width and layout_height (both set to
+      // "wrap_content").
+      uint32_t layout_width_idx;
+      uint32_t layout_height_idx;
+      uint32_t uri_idx;
+      always_assert_log(find_string_idx("layout_width", &layout_width_idx),
+                        "pool did not have expected width string");
+      always_assert_log(find_string_idx("layout_height", &layout_height_idx),
+                        "pool did not have expected height string");
+      always_assert_log(
+          find_string_idx("http://schemas.android.com/apk/res/android",
+                          &uri_idx),
+          "pool did not have expected uri string");
+
+      // Build up all the structs we will be inserting
+      auto new_data_size = sizeof(android::ResXMLTree_node) +
+                           sizeof(android::ResXMLTree_attrExt) +
+                           2 * sizeof(android::ResXMLTree_attribute);
+      arsc::ResFileManipulator::Block block(new_data_size);
+
+      // Start filling out the data. Copy existing and change small details.
+      android::ResXMLTree_node new_node = *node;
+      new_node.header.size = new_data_size;
+      block.write(new_node);
+
+      android::ResXMLTree_attrExt new_extension = *extension;
+      new_extension.attributeCount = 2;
+      new_extension.idIndex = 0;
+      new_extension.classIndex = 0;
+      new_extension.styleIndex = 0;
+      block.write(new_extension);
+
+      // Attributes are built up from scratch.
+      android::ResXMLTree_attribute layout_width;
+      layout_width.ns.index = uri_idx;
+      layout_width.name.index = layout_width_idx;
+      layout_width.rawValue.index = 0xFFFFFFFF;
+      layout_width.typedValue.size = sizeof(android::Res_value);
+      layout_width.typedValue.dataType = android::Res_value::TYPE_INT_DEC;
+      layout_width.typedValue.data = WRAP_CONTENT;
+      block.write(layout_width);
+
+      android::ResXMLTree_attribute layout_height;
+      layout_height.ns.index = uri_idx;
+      layout_height.name.index = layout_height_idx;
+      layout_height.rawValue.index = 0xFFFFFFFF;
+      layout_height.typedValue.size = sizeof(android::Res_value);
+      layout_height.typedValue.dataType = android::Res_value::TYPE_INT_DEC;
+      layout_height.typedValue.data = WRAP_CONTENT;
+      block.write(layout_height);
+
+      m_file_manipulator->add_at(node, std::move(block));
+      m_file_manipulator->delete_at(node, dtohl(node->header.size));
+      m_changes++;
+    }
+    return arsc::SimpleXmlParser::visit_start_tag(node, extension);
+  }
+
+  size_t changes() { return m_changes; }
+
+  arsc::ResFileManipulator* m_file_manipulator;
+  size_t m_changes{0};
+};
+
+class AttributeCounter : public arsc::SimpleXmlParser {
+ public:
+  bool visit_start_tag(android::ResXMLTree_node* node,
+                       android::ResXMLTree_attrExt* extension) override {
+    return arsc::SimpleXmlParser::visit_start_tag(node, extension);
+  }
+
+  bool visit_attribute(android::ResXMLTree_node* node,
+                       android::ResXMLTree_attrExt* extension,
+                       android::ResXMLTree_attribute* attribute) override {
+    m_attributes++;
+    auto& string_pool = global_strings();
+    auto attribute_name =
+        arsc::get_string_from_pool(string_pool, dtohl(attribute->name.index));
+    m_found_attributes.emplace(attribute_name);
+    return arsc::SimpleXmlParser::visit_attribute(node, extension, attribute);
+  }
+
+  size_t m_attributes{0};
+  std::unordered_set<std::string> m_found_attributes;
+};
+
+TEST(FileManipulator, RebuildXmlFile) {
+  auto path = std::getenv("xml_path");
+  auto f = RedexMappedFile::open(path);
+  auto data = (char*)f.const_data();
+
+  arsc::ResFileManipulator file_manipulator(data, f.size());
+  ButtonFiddler fiddler(&file_manipulator);
+  fiddler.visit(data, f.size());
+  EXPECT_EQ(fiddler.changes(), 1);
+  android::Vector<char> serialized;
+  file_manipulator.serialize(&serialized);
+
+  // Read the serialized data with visitor API, should encounter start/end tag
+  // with two attributes.
+  AttributeCounter counter;
+  EXPECT_TRUE(counter.visit((char*)serialized.array(), serialized.size()));
+  EXPECT_EQ(counter.m_attributes, 2);
+  EXPECT_EQ(counter.m_found_attributes.count("layout_width"), 1);
+  EXPECT_EQ(counter.m_found_attributes.count("layout_height"), 1);
+}
+
+TEST(FileManipulator, AppendAtEnd) {
+  auto path = std::getenv("xml_path");
+  auto f = RedexMappedFile::open(path);
+  auto data_ptr = (char*)f.const_data();
+
+  arsc::ResFileManipulator file_manipulator(data_ptr, f.size());
+  android::ResChunk_header new_data;
+  new_data.type = 0x99;
+  new_data.headerSize = sizeof(android::ResChunk_header);
+  new_data.size = 0xCCCC;
+  // append at the very end of the file, make sure it actually works.
+  for (size_t i = 0; i < f.size(); i++, data_ptr++) {
+    // simulate doing something...
+    if (i % 10 == 0) {
+      file_manipulator.replace_at(data_ptr, *data_ptr);
+    }
+  }
+  file_manipulator.add_at(data_ptr, new_data);
+
+  android::Vector<char> serialized;
+  file_manipulator.serialize(&serialized);
+}

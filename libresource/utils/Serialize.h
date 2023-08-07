@@ -439,5 +439,72 @@ class ResTableBuilder {
       std::pair<std::shared_ptr<ResPackageBuilder>, android::ResTable_package*>>
       m_packages;
 };
+
+// Helper to organize edits to a binary chunk of data that is assumed to start
+// in a ResChunk_header. It takes a chunk of original data, and allows for
+// noting edits at certain positions and applying them later. Some basic
+// conventions:
+// 1) The deletions/additions are not expected to be disjointed. As a result,
+//    deleting a range of data will not apply an addition within it (you can
+//    delete bytes at pos N and add bytes at pos N, just not add at N+1).
+// 2) Resulting file size will be computed, but this assumes that all the
+//    operations are sensible, not disjointed, and don't ask for any change that
+//    is out of bounds.
+class ResFileManipulator {
+ public:
+  struct Block {
+    Block(size_t s) : buffer(std::unique_ptr<char[]>(new char[s]())), size(s) {}
+
+    template <typename T>
+    void write(const T& item) {
+      auto t_size = sizeof(T);
+      LOG_ALWAYS_FATAL_IF(t_size + written_bytes > size,
+                          "Will not write beyond the allocated size %zu", size);
+      char* dest = buffer.get() + written_bytes;
+      memcpy(dest, &item, t_size);
+      written_bytes += t_size;
+    }
+
+    std::unique_ptr<char[]> buffer;
+    size_t size;
+    size_t written_bytes{0};
+  };
+
+  ResFileManipulator(char* data, size_t length)
+      : m_data(data), m_length(length) {}
+
+  void delete_at(void* pos, size_t size) {
+    m_deletions.emplace((char*)pos, size);
+  }
+  void add_at(void* pos, Block block) {
+    m_additions.emplace((char*)pos, std::move(block));
+  }
+  template <typename T>
+  void add_at(void* pos, const T& item) {
+    Block block(sizeof(T));
+    block.write(item);
+    m_additions.emplace((char*)pos, std::move(block));
+  }
+  // Shorthand for deleting N bytes at the position and adding N different
+  // bytes.
+  template <typename T>
+  void replace_at(void* pos, const T& item) {
+    delete_at(pos, sizeof(T));
+    add_at(pos, item);
+  }
+
+  // Build the final file to the given vector.
+  void serialize(android::Vector<char>* out);
+
+ private:
+  // At a given position, how many bytes to delete.
+  std::unordered_map<char*, size_t> m_deletions;
+  // Data that will be written in the given position.
+  std::unordered_map<char*, Block> m_additions;
+
+  // The original file data
+  char* m_data;
+  size_t m_length;
+};
 } // namespace arsc
 #endif
