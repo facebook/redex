@@ -11,22 +11,28 @@
 #include <type_traits>
 #include <utility>
 
+#include <sparta/PatriciaTreeKeyTrait.h>
+
 namespace sparta {
 
 namespace pt_util {
 
 template <typename Key>
 struct Codec {
-  // Every permitted key type is reinterpretable as an integer, so encoding and
-  // decoding each simply consist of a (possibly identity) reinterpret cast.
-  using IntegerType =
-      typename std::conditional_t<std::is_pointer_v<Key>, uintptr_t, Key>;
+  using IntegerType = typename PatriciaTreeKeyTrait<Key>::IntegerType;
 
   static_assert(std::is_unsigned_v<IntegerType>,
                 "IntegerType is not an unsigned arithmetic type");
 
-  static IntegerType encode(Key key) {
-    return reinterpret_cast<IntegerType>(key);
+  static_assert(sizeof(IntegerType) == sizeof(Key),
+                "IntegerType and Key must have the same size");
+
+  static_assert(std::alignment_of<IntegerType>::value ==
+                    std::alignment_of<Key>::value,
+                "IntegerType and Key must have the same alignment");
+
+  static const IntegerType& encode(const Key& key) {
+    return reinterpret_cast<const IntegerType&>(key);
   }
 
   // To correctly conform to the forward iterator concept, these must
