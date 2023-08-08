@@ -502,14 +502,17 @@ def _verify_dex(dex_file: str, cmd: str) -> bool:
     logging.debug("Verifying %s...", dex_file)
 
     res = subprocess.run(
-        f"{cmd} '{dex_file}'", shell=True, text=True, capture_output=True
+        f"{cmd} '{dex_file}'", shell=True, text=False, capture_output=True
     )
     if res.returncode == 0:
         return True
 
-    logging.error(
-        "Failed verification for %s:\n%s\n---\n%s", dex_file, res.stdout, res.stderr
-    )
+    try:
+        stderr_str = res.stderr.decode("utf-8")
+    except BaseException:
+        stderr_str = "<unable to decode, contains non-UTF8>"
+
+    logging.error("Failed verification for %s:\n%s", dex_file, stderr_str)
     return False
 
 
