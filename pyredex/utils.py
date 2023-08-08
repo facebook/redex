@@ -13,12 +13,14 @@ import distutils.version
 import glob
 import json
 import logging
+import multiprocessing
 import os
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
+import timeit
 import typing
 import zipfile
 from os.path import basename, dirname, isfile, join
@@ -494,3 +496,41 @@ def ensure_libs_dir(libs_dir: str, sub_dir: str) -> str:
 
 def get_file_ext(file_name: str) -> str:
     return os.path.splitext(file_name)[1]
+
+
+def _verify_dex(dex_file: str, cmd: str) -> bool:
+    logging.debug("Verifying %s...", dex_file)
+
+    res = subprocess.run(
+        f"{cmd} '{dex_file}'", shell=True, text=True, capture_output=True
+    )
+    if res.returncode == 0:
+        return True
+
+    logging.error(
+        "Failed verification for %s:\n%s\n---\n%s", dex_file, res.stdout, res.stderr
+    )
+    return False
+
+
+def verify_dexes(dex_dir: str, cmd: str) -> None:
+    timer = timeit.default_timer
+    start = timer()
+
+    dex_files = glob.glob(join(join(dex_dir, "**"), "*.dex"), recursive=True)
+    if not dex_files:
+        logging.warning("Found no dex files to verify")
+        return
+
+    logging.info("Verifying %d dex files...", len(dex_files))
+
+    with multiprocessing.Pool() as pool:
+        result = pool.starmap(
+            _verify_dex,
+            ((dex_file, cmd) for dex_file in dex_files),
+        )
+
+    assert all(result), "Some dex files failed to verify!"
+
+    end = timer()
+    logging.debug("Dex verification finished in {:.2f} seconds".format(end - start))

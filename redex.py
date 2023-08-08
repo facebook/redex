@@ -47,6 +47,7 @@ from pyredex.utils import (
     relocate_dexen_to_directories,
     remove_comments,
     sign_apk,
+    verify_dexes,
     with_temp_cleanup,
 )
 
@@ -785,6 +786,10 @@ Given an APK, produce a better APK!
         help="Path to JNI summary directory of json files.",
     )
 
+    parser.add_argument(
+        "--verify-dexes", type=str, help="Verify dex files with the supplied command"
+    )
+
     # Manual tool paths.
 
     # Must be subclassed.
@@ -1296,6 +1301,9 @@ def get_compression_list() -> typing.List[CompressionEntry]:
 
 
 def finalize_redex(state: State) -> None:
+    if state.args.verify_dexes:
+        verify_dexes(state.dex_dir, state.args.verify_dexes)
+
     if state.dexen_initial_state is not None:
         dexen_final_state = DexenSnapshot(state.dex_dir)
         assert _assert_val(state.dexen_initial_state).equals(
