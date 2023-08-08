@@ -90,6 +90,7 @@ void OriginalNamePass::run_pass(DexStoresVector& stores,
     // Backup dex, in case we exceed field limits. We assuem there is at most 1
     // new dex for each store.
     DexClasses new_dex;
+    bool canary_inserted = false;
     size_t dex_id = 0;
     for (auto& dex : store.get_dexen()) {
       DexLimitsInfo dex_limits(&init_classes_with_side_effects);
@@ -165,21 +166,26 @@ void OriginalNamePass::run_pass(DexStoresVector& stores,
             "rest number is %zu\n",
             overflow_classes.size(), removed, dex_id, store.get_name().c_str(),
             dex.size());
-        int dexnum = store.get_dexen().size();
-        DexClass* canary_cls;
-        if (store.is_root_store()) {
-          canary_cls = create_canary(dexnum);
-        } else {
-          canary_cls =
-              create_canary(dexnum, DexString::make_string(store.get_name()));
-        }
-        for (auto* m : canary_cls->get_all_methods()) {
-          if (m->get_code() == nullptr) {
-            continue;
+        if (new_dex.empty()) {
+          // A canary_cls need to be added when a new dex is created.
+          int dexnum = store.get_dexen().size();
+          DexClass* canary_cls;
+          if (store.is_root_store()) {
+            canary_cls = create_canary(dexnum);
+          } else {
+            canary_cls =
+                create_canary(dexnum, DexString::make_string(store.get_name()));
           }
-          m->get_code()->build_cfg();
+          for (auto* m : canary_cls->get_all_methods()) {
+            if (m->get_code() == nullptr) {
+              continue;
+            }
+            m->get_code()->build_cfg();
+          }
+          always_assert(!canary_inserted);
+          new_dex.push_back(canary_cls);
+          canary_inserted = true;
         }
-        new_dex.push_back(canary_cls);
         new_dex.insert(new_dex.end(), overflow_classes.begin(),
                        overflow_classes.end());
       }
