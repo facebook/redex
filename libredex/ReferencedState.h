@@ -89,6 +89,9 @@ class ReferencedState {
     // Whether this member is an outlined class or method.
     bool m_outlined : 1;
 
+    // Is this member is a kotlin class or method
+    bool m_is_kotlin : 1;
+
     bool m_name_used : 1;
 
     // Whether a field is used to indicate that an sget cannot be removed
@@ -128,6 +131,7 @@ class ReferencedState {
       m_immutable_getter = false;
       m_pure_method = false;
       m_outlined = false;
+      m_is_kotlin = false;
 
       m_name_used = false;
 
@@ -215,6 +219,8 @@ class ReferencedState {
           other.inner_struct.m_immutable_getter;
       this->inner_struct.m_pure_method =
           this->inner_struct.m_pure_method & other.inner_struct.m_pure_method;
+      this->inner_struct.m_is_kotlin =
+          this->inner_struct.m_is_kotlin & other.inner_struct.m_is_kotlin;
       this->inner_struct.m_outlined =
           this->inner_struct.m_outlined & other.inner_struct.m_outlined;
 
@@ -393,6 +399,8 @@ class ReferencedState {
   bool outlined() const { return inner_struct.m_outlined; }
   void set_outlined() { inner_struct.m_outlined = true; }
   void reset_outlined() { inner_struct.m_outlined = false; }
+  bool is_cls_kotlin() const { return inner_struct.m_is_kotlin; }
+  void set_cls_kotlin() { inner_struct.m_is_kotlin = true; }
   void set_name_used() { inner_struct.m_name_used = true; }
   bool name_used() { return inner_struct.m_name_used; }
 

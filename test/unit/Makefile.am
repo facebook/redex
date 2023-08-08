@@ -96,6 +96,7 @@ check_PROGRAMS = \
     outliner_type_analysis_test \
     partial_pass_test \
     peephole_test \
+    print_kotlin_stats_test \
     proguard_lexer_test \
     proguard_map_test \
     proguard_matcher_test \
@@ -333,6 +334,8 @@ outliner_type_analysis_test_SOURCES = OutlinerTypeAnalysisTest.cpp
 partial_pass_test_SOURCES = PartialPassTest.cpp
 
 peephole_test_SOURCES = PeepholeTest.cpp
+
+print_kotlin_stats_test_SOURCES = PrintKotlinStatsTest.cpp
 
 proguard_lexer_test_SOURCES = ProguardLexerTest.cpp
 
