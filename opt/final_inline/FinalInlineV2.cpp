@@ -28,7 +28,6 @@
 #include "PassManager.h"
 #include "Purity.h"
 #include "Resolver.h"
-#include "ScopedCFG.h"
 #include "Shrinker.h"
 #include "Timer.h"
 #include "Trace.h"
@@ -568,15 +567,15 @@ cp::WholeProgramState analyze_and_simplify_clinits(
     if (clinit != nullptr && clinit->get_code() != nullptr) {
       auto* code = clinit->get_code();
       {
-        cfg::ScopedCFG cfg(code);
-        cfg->calculate_exit_block();
+        auto& cfg = code->cfg();
+        cfg.calculate_exit_block();
         constant_propagation::WholeProgramStateAccessor wps_accessor(wps);
         cp::intraprocedural::FixpointIterator intra_cp(
-            *cfg,
+            cfg,
             CombinedAnalyzer(cls->get_type(), &wps_accessor, nullptr, nullptr,
                              nullptr));
         intra_cp.run(env);
-        env = intra_cp.get_exit_state_at(cfg->exit_block());
+        env = intra_cp.get_exit_state_at(cfg.exit_block());
 
         // Generate the new encoded_values and re-run the analysis.
         StaticFieldReadAnalysis::Result res = analysis.analyze(clinit);
@@ -597,10 +596,10 @@ cp::WholeProgramState analyze_and_simplify_clinits(
         transform_config.class_under_init = cls->get_type();
         cp::Transform(transform_config, &runtime_cache)
             .legacy_apply_constants_and_prune_unreachable(
-                intra_cp, wps, *cfg, xstores, cls->get_type());
+                intra_cp, wps, cfg, xstores, cls->get_type());
         // Delete the instructions rendered dead by the removal of those sputs.
         LocalDce(&init_classes_with_side_effects, pure_methods)
-            .dce(*cfg, /* normalize_new_instances */ true, clinit->get_class());
+            .dce(cfg, /* normalize_new_instances */ true, clinit->get_class());
       }
       // If the clinit is empty now, delete it.
       if (method::is_trivial_clinit(*code)) {
@@ -659,25 +658,25 @@ cp::WholeProgramState analyze_and_simplify_inits(
       auto ctor = ctors[0];
       if (ctor->get_code() != nullptr) {
         auto* code = ctor->get_code();
-        cfg::ScopedCFG cfg(code);
-        cfg->calculate_exit_block();
+        auto& cfg = code->cfg();
+        cfg.calculate_exit_block();
         constant_propagation::WholeProgramStateAccessor wps_accessor(wps);
         cp::intraprocedural::FixpointIterator intra_cp(
-            *cfg,
+            cfg,
             CombinedInitAnalyzer(cls->get_type(), &wps_accessor, nullptr,
                                  nullptr, nullptr));
         intra_cp.run(env);
-        env = intra_cp.get_exit_state_at(cfg->exit_block());
+        env = intra_cp.get_exit_state_at(cfg.exit_block());
 
         // Remove redundant iputs in inits
         cp::Transform::Config transform_config;
         transform_config.class_under_init = cls->get_type();
         cp::Transform(transform_config)
             .legacy_apply_constants_and_prune_unreachable(
-                intra_cp, wps, *cfg, xstores, cls->get_type());
+                intra_cp, wps, cfg, xstores, cls->get_type());
         // Delete the instructions rendered dead by the removal of those iputs.
         LocalDce(&init_classes_with_side_effects, pure_methods)
-            .dce(*cfg, /* normalize_new_instances */ true, ctor->get_class());
+            .dce(cfg, /* normalize_new_instances */ true, ctor->get_class());
       }
     }
     wps.collect_instance_finals(cls, eligible_ifields,
@@ -959,7 +958,6 @@ ConcurrentSet<DexField*> get_ifields_read_in_callees(
   walk::parallel::classes(relevant_classes, [](DexClass* cls) {
     auto ctor = cls->get_ctors().front();
     auto code = ctor->get_code();
-    code->build_cfg(/* editable */ true);
     code->cfg().calculate_exit_block();
   });
   walk::parallel::classes(
@@ -998,11 +996,6 @@ ConcurrentSet<DexField*> get_ifields_read_in_callees(
           }
         }
       });
-  walk::parallel::classes(relevant_classes, [](DexClass* cls) {
-    auto ctor = cls->get_ctors().front();
-    auto code = ctor->get_code();
-    code->clear_cfg();
-  });
   return return_ifields;
 }
 
@@ -1107,7 +1100,6 @@ FinalInlinePassV2::Stats inline_final_gets(
     if (field_type == cp::FieldType::STATIC && method::is_clinit(method)) {
       return;
     }
-    code.build_cfg(/* editable */);
     cfg::CFGMutation mutation(code.cfg());
     size_t replacements = 0;
     for (auto block : code.cfg().blocks()) {
@@ -1152,11 +1144,7 @@ FinalInlinePassV2::Stats inline_final_gets(
       }
     }
     mutation.flush();
-    code.clear_cfg();
     if (replacements > 0 && maybe_shrinker) {
-      // We need to rebuild the cfg.
-      code.build_cfg(/* editable */);
-      code.clear_cfg();
       maybe_shrinker->shrink_method(method);
     }
     inlined_count.fetch_add(replacements);

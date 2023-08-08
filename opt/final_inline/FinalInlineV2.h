@@ -74,8 +74,6 @@ class FinalInlinePassV2 : public Pass {
       const Config& config = Config(),
       std::optional<DexStoresVector*> stores = std::nullopt);
 
-  bool is_cfg_legacy() override { return true; }
-
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
