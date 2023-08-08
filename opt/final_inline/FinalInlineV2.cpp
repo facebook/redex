@@ -1023,7 +1023,8 @@ cp::EligibleIfields gather_ifield_candidates(
     ifields_candidates.emplace(field);
   });
 
-  walk::code(scope, [&](DexMethod* method, IRCode& code) {
+  ConcurrentSet<DexField*> invalid_candidates;
+  walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
     // Remove candidate field if it was written in code other than its class'
     // init function.
     editable_cfg_adapter::iterate_with_iterator(
@@ -1053,13 +1054,15 @@ cp::EligibleIfields gather_ifield_candidates(
                 "file, for temporary solution set "
                 "\"inline_instance_field\" in \"FinalInlinePassV2\" "
                 "to be false.");
-            ifields_candidates.erase(field);
+            invalid_candidates.insert(field);
           }
           return editable_cfg_adapter::LOOP_CONTINUE;
         });
   });
   for (DexField* field : ifields_candidates) {
-    eligible_ifields.emplace(field);
+    if (!invalid_candidates.count(field)) {
+      eligible_ifields.emplace(field);
+    }
   }
   auto blocklist_ifields =
       get_ifields_read_in_callees(scope, allowlist_method_names);
