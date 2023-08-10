@@ -998,7 +998,7 @@ void ResFileManipulator::serialize(android::Vector<char>* out) {
   auto actual_size = out->size() - vec_start;
   LOG_ALWAYS_FATAL_IF(
       actual_size != final_size,
-      "did not write expected number of bytes; wrote %ld, expected %zu",
+      "did not write expected number of bytes; wrote %zu, expected %zu",
       actual_size, (size_t)final_size);
   // Fix up the file size, assuming our original data starts in a proper chunk.
   if (actual_size >= sizeof(android::ResChunk_header)) {
