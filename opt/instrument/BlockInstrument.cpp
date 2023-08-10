@@ -26,6 +26,7 @@
 #include <fstream>
 #include <limits>
 #include <map>
+#include <optional>
 #include <set>
 #include <string>
 #include <tuple>
@@ -167,10 +168,22 @@ struct BlockInfo {
   cfg::Block* block;
   loop_impl::Loop* loop;
   BlockType type;
-  IRList::iterator it;
+  std::optional<IRList::iterator> it;
   BitId bit_id;
   size_t index_id;
   std::vector<cfg::Block*> merge_in;
+
+  BlockInfo(cfg::Block* b, loop_impl::Loop* l, BlockType t)
+      : block(b),
+        loop(l),
+        type(t),
+        it(std::nullopt),
+        bit_id(std::numeric_limits<BitId>::max()),
+        index_id(std::numeric_limits<size_t>::max()) {
+    redex_assert(t == BlockType::Unspecified || t == BlockType::Empty ||
+                 t == BlockType::Catch || t == BlockType::Useless ||
+                 (t & BlockType::NoSourceBlock) == BlockType::NoSourceBlock);
+  }
 
   BlockInfo(cfg::Block* b,
             loop_impl::Loop* l,
@@ -590,8 +603,8 @@ auto insert_prologue_insts(cfg::ControlFlowGraph& cfg,
   IRInstruction* eb_insn = nullptr;
   if (!blocks.empty()) {
     auto& b = blocks.front();
-    if (b.block == eb && b.it != b.block->end()) {
-      eb_insn = b.it->insn;
+    if (b.block == eb && b.it) {
+      eb_insn = (*b.it)->insn;
     }
   }
 
@@ -614,6 +627,13 @@ auto insert_prologue_insts(cfg::ControlFlowGraph& cfg,
       if (b.block == eb) {
         continue;
       }
+      // Skip if it's not instrumentable.
+      if (!b.is_instrumentable()) {
+        redex_assert(!b.it);
+        continue;
+      }
+      redex_assert(b.it);
+
       auto is_in_block = [&]() {
         for (auto it = b.block->begin(); it != b.block->end(); ++it) {
           if (it == b.it) {
@@ -623,7 +643,7 @@ auto insert_prologue_insts(cfg::ControlFlowGraph& cfg,
         return false;
       };
       assert_log(b.block->end() == b.it || is_in_block(), "%s\n%s",
-                 SHOW(b.block), SHOW(*b.it));
+                 SHOW(b.block), SHOW(**b.it));
     }
   }
 
@@ -987,7 +1007,7 @@ void create_block_info(
   if (!has_opcodes) {
     if (!source_blocks::has_source_blocks(block)) {
       trg_block_info->update_merge(
-          {block, trg_block_info->loop, BlockType::Empty, {}});
+          {block, trg_block_info->loop, BlockType::Empty});
       return;
     }
 
@@ -999,7 +1019,7 @@ void create_block_info(
       TRACE(INSTRUMENT, 9, "Not instrumenting empty block B%zu", block->id());
       block_mapping.at(*next_opt)->merge_in.push_back(block);
       trg_block_info->update_merge(
-          {block, trg_block_info->loop, BlockType::Empty, {}});
+          {block, trg_block_info->loop, BlockType::Empty});
       return;
     }
   }
@@ -1009,7 +1029,7 @@ void create_block_info(
   // we don't instrument catch blocks with the hope these blocks are cold.
   if (block->is_catch() && !options.instrument_catches) {
     trg_block_info->update_merge(
-        {block, trg_block_info->loop, BlockType::Catch, {}});
+        {block, trg_block_info->loop, BlockType::Catch});
     return;
   }
 
@@ -1035,7 +1055,7 @@ void create_block_info(
               block->id(), SHOW(block));
         block_mapping.at(*next_opt)->merge_in.push_back(block);
         trg_block_info->update_merge(
-            {block, trg_block_info->loop, BlockType::Useless, {}});
+            {block, trg_block_info->loop, BlockType::Useless});
         return;
       }
     }
@@ -1047,7 +1067,7 @@ void create_block_info(
   if (!options.instrument_blocks_without_source_block &&
       !source_blocks::has_source_blocks(block) && !block->succs().empty()) {
     trg_block_info->update_merge(
-        {block, trg_block_info->loop, BlockType::NoSourceBlock | type, {}});
+        {block, trg_block_info->loop, BlockType::NoSourceBlock | type});
     return;
   }
 
@@ -1089,8 +1109,7 @@ auto get_blocks_to_instrument(const DexMethod* m,
   block_info_list.reserve(blocks.size());
   std::unordered_map<const cfg::Block*, BlockInfo*> block_mapping;
   for (cfg::Block* b : blocks) {
-    block_info_list.emplace_back(b, LI.get_loop_for(b), BlockType::Unspecified,
-                                 b->end());
+    block_info_list.emplace_back(b, LI.get_loop_for(b), BlockType::Unspecified);
     block_mapping[b] = &block_info_list.back();
   }
 
@@ -1134,7 +1153,7 @@ void insert_block_coverage_computations(const std::vector<BlockInfo>& blocks,
     inst->set_literal(static_cast<int16_t>(1ULL << (bit_id % BIT_VECTOR_SIZE)));
     inst->set_src(0, reg_vectors.at(vector_id));
     inst->set_dest(reg_vectors.at(vector_id));
-    block->insert_before(block->to_cfg_instruction_iterator(insert_pos), inst);
+    block->insert_before(block->to_cfg_instruction_iterator(*insert_pos), inst);
   }
 }
 
