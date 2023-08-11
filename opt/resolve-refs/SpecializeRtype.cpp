@@ -104,6 +104,28 @@ bool can_update_rtype_for_list(const std::vector<const DexMethod*>& meths,
   return true;
 }
 
+/*
+ * We want to make sure that all the global overrides share the same set of
+ * common overriddens. If it's not the case, one of the candidate here might
+ * have been rejected due to having too many overriddens.
+ */
+bool share_common_overriddens_size(
+    const method_override_graph::Graph& override_graph,
+    const std::vector<const DexMethod*>& meths) {
+  size_t num_overriddens = 0;
+  for (size_t i = 0; i < meths.size(); i++) {
+    const auto* meth = meths[i];
+    auto overriddens = method_override_graph::get_overridden_methods(
+        override_graph, meth, true);
+    if (i == 0) {
+      num_overriddens = overriddens.size();
+    } else if (num_overriddens != overriddens.size()) {
+      return false;
+    }
+  }
+  return true;
+}
+
 void update_rtype_for(DexMethod* meth,
                       const DexType* new_rtype,
                       RtypeStats& stats,
@@ -328,7 +350,8 @@ void RtypeSpecialization::specialize_true_virtuals(
       stats.num_rtype_specialized_virtual_1p++;
       if (can_update_rtype_for(overridden, better_rtype) &&
           share_common_rtype_candidate(m_candidates, global_overridings,
-                                       better_rtype)) {
+                                       better_rtype) &&
+          share_common_overriddens_size(override_graph, global_overridings)) {
         TRACE(RESO, 4, "global overrides %zu -> %s ", global_overridings.size(),
               SHOW(better_rtype));
         DexProto* updated_proto =

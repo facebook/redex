@@ -110,6 +110,32 @@ final class Copiable {
   }
 }
 
+/*
+ * Rtype specialization for input with overridding miranda methods
+ */
+interface Mad {
+  Animal baz();
+}
+class MadMan implements Mad {
+  @Override
+  public Animal baz() {
+    return new Cat();
+  }
+}
+class MadWoman implements Mad {
+  @Override
+  public Animal baz() {
+    return new Cat();
+  }
+}
+interface Crazy {
+  Animal baz();
+}
+@OkToExtend
+class CrazyPerson extends MadMan implements Crazy {
+  // no impl. so fall back to super.
+}
+
 @KeepForRedexTest
 public class ResolveRefsTest {
 
@@ -183,5 +209,16 @@ public class ResolveRefsTest {
     Copiable[] arrCopy = c.copyToArray();
     assertThat(arrCopy.length).isEqualTo(1);
     assertThat(arrCopy[0].val).isEqualTo(42);
+  }
+
+  @KeepForRedexTest
+  @Test
+  public void testRTypeSpecializationOnMirandaOverridden() {
+    Mad m = new MadMan();
+    assertThat(m.baz().getName()).isEqualTo("Cat");
+    m = new MadWoman();
+    assertThat(m.baz().getName()).isEqualTo("Cat");
+    Crazy c = new CrazyPerson();
+    assertThat(c.baz().getName()).isEqualTo("Cat");
   }
 }
