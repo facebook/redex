@@ -148,8 +148,6 @@ class InterDex {
   struct EmitResult {
     bool emitted{false};
     bool overflowed{false};
-
-    operator bool() const { return emitted; }
   };
 
   struct FlushOutDexResult {

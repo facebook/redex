@@ -798,20 +798,20 @@ void InterDex::emit_remaining_classes_legacy(DexInfo& dex_info,
     }
 
     std::optional<FlushOutDexResult> opt_fodr;
-    bool emitted =
+    auto res =
         emit_class(m_emitting_state, dex_info, cls, /* check_if_skip */ false,
                    /* perf_sensitive */ false, canary_cls, &opt_fodr);
     if (opt_fodr) {
-      always_assert(!emitted);
+      always_assert(!res.emitted);
       post_process_dex(m_emitting_state, *opt_fodr);
       m_cross_dex_ref_minimizer.reset();
       pick_worst = true;
       continue;
     }
 
-    m_cross_dex_ref_minimizer.erase(cls, emitted);
+    m_cross_dex_ref_minimizer.erase(cls, res.emitted);
 
-    pick_worst = pick_worst && !emitted;
+    pick_worst = pick_worst && !res.emitted;
   }
 }
 
@@ -846,18 +846,18 @@ void InterDex::emit_remaining_classes_exploring_alternatives(
         }
 
         std::optional<FlushOutDexResult> opt_fodr;
-        bool emitted = inter_dex->emit_class(emitting_state, dex_info, cls,
-                                             /* check_if_skip */ false,
-                                             /* perf_sensitive */ false,
-                                             &canary_cls, &opt_fodr);
+        auto res = inter_dex->emit_class(emitting_state, dex_info, cls,
+                                         /* check_if_skip */ false,
+                                         /* perf_sensitive */ false,
+                                         &canary_cls, &opt_fodr);
         if (opt_fodr) {
-          always_assert(!emitted);
+          always_assert(!res.emitted);
           cross_dex_ref_minimizer.reset();
           fodrs.push_back(*opt_fodr);
           break;
         }
 
-        cross_dex_ref_minimizer.erase(cls, emitted);
+        cross_dex_ref_minimizer.erase(cls, res.emitted);
       }
       return cross_dex_ref_minimizer.get_remaining_difficulty();
     }
