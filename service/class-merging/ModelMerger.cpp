@@ -142,7 +142,8 @@ void update_code_type_refs(
         // through another interface method search. Maybe we should fix it in
         // ReBindRefs.
         if (meth_def == nullptr) {
-          auto intf_def = resolve_method(meth_ref, MethodSearch::Interface);
+          auto intf_def =
+              resolve_method(meth_ref, MethodSearch::InterfaceVirtual);
           always_assert(insn->opcode() == OPCODE_INVOKE_VIRTUAL && intf_def);
           auto new_proto =
               type_reference::get_new_proto(proto, mergeable_to_merger);
