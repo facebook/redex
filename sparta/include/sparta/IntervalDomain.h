@@ -11,6 +11,8 @@
 #include <limits>
 #include <ostream>
 
+#include <boost/functional/hash.hpp>
+
 #include <sparta/AbstractDomain.h>
 
 namespace sparta {
@@ -264,3 +266,20 @@ inline std::ostream& operator<<(std::ostream& o,
 }
 
 } // namespace sparta
+
+template <typename Num>
+struct std::hash<sparta::IntervalDomain<Num>> {
+  std::size_t operator()(const sparta::IntervalDomain<Num>& interval) const {
+    std::size_t seed = 0;
+
+    if (interval.is_bottom()) {
+      boost::hash_combine(seed, sparta::IntervalDomain<Num>::MAX);
+      boost::hash_combine(seed, sparta::IntervalDomain<Num>::MIN);
+    } else {
+      boost::hash_combine(seed, interval.lower_bound());
+      boost::hash_combine(seed, interval.upper_bound());
+    }
+
+    return seed;
+  }
+};

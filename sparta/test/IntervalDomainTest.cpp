@@ -148,4 +148,23 @@ TEST(IntervalDomainTest, lattice) {
   EXPECT_EQ(top.narrowing(b).narrowing(a), Domain::finite(0, 4));
 }
 
+TEST(IntervalDomainTest, hash) {
+  const auto top = Domain::top();
+  const auto bot = Domain::bottom();
+
+  const auto a = Domain::finite(0, 5);
+
+  EXPECT_NE(std::hash<Domain>()(top), std::hash<Domain>()(bot));
+  EXPECT_NE(std::hash<Domain>()(top), std::hash<Domain>()(a));
+  EXPECT_EQ(std::hash<Domain>()(top), std::hash<Domain>()(top));
+
+  EXPECT_EQ(std::hash<Domain>()(bot), std::hash<Domain>()(bot));
+  EXPECT_NE(std::hash<Domain>()(bot), std::hash<Domain>()(a));
+  EXPECT_NE(std::hash<Domain>()(bot), std::hash<Domain>()(top));
+
+  EXPECT_NE(std::hash<Domain>()(a), std::hash<Domain>()(bot));
+  EXPECT_EQ(std::hash<Domain>()(a), std::hash<Domain>()(a));
+  EXPECT_NE(std::hash<Domain>()(a), std::hash<Domain>()(top));
+}
+
 } // namespace
