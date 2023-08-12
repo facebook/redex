@@ -1072,22 +1072,6 @@ std::unordered_set<uint32_t> ApkResources::get_xml_reference_attributes(
   return collector.m_ids;
 }
 
-namespace {
-// Insert string data from the given pool at the given index to the builder.
-void add_existing_string_to_builder(const android::ResStringPool& string_pool,
-                                    arsc::ResStringPoolBuilder* builder,
-                                    size_t idx) {
-  size_t length;
-  if (string_pool.isUTF8()) {
-    auto s = string_pool.string8At(idx, &length);
-    builder->add_string(s, length);
-  } else {
-    auto s = string_pool.stringAt(idx, &length);
-    builder->add_string(s, length);
-  }
-}
-} // namespace
-
 int ApkResources::replace_in_xml_string_pool(
     const void* data,
     const size_t len,
@@ -1111,7 +1095,7 @@ int ApkResources::replace_in_xml_string_pool(
     auto existing_str = arsc::get_string_from_pool(pool, i);
     auto replacement = rename_map.find(existing_str);
     if (replacement == rename_map.end()) {
-      add_existing_string_to_builder(pool, &pool_builder, i);
+      pool_builder.add_string(pool, i);
     } else {
       pool_builder.add_string(replacement->second);
       num_replaced++;
@@ -1661,7 +1645,7 @@ void rebuild_type_strings(
                     "type strings should not have styles");
   const auto original_string_count = string_pool.size();
   for (size_t idx = 0; idx < original_string_count; idx++) {
-    add_existing_string_to_builder(string_pool, builder, idx);
+    builder->add_string(string_pool, idx);
   }
   for (auto& type_def : added_types) {
     if (type_def.package_id != package_id) {
@@ -1863,7 +1847,7 @@ void rebuild_string_pool_with_addition(
   const auto original_string_count = string_pool.size();
   // Add all existing strings in original string pool to builder.
   for (size_t idx = 0; idx < original_string_count; idx++) {
-    add_existing_string_to_builder(string_pool, builder, idx);
+    builder->add_string(string_pool, idx);
   }
   // Add additional strings to builder.
   for (size_t idx = 0; idx < id_to_new_strings.size(); idx++) {

@@ -126,6 +126,17 @@ class ResStringPoolBuilder {
   void add_string(std::string);
   void add_string(const char*, size_t);
   void add_string(const char16_t*, size_t);
+  // Insert string data from the given pool at the given index to the builder.
+  void add_string(const android::ResStringPool& string_pool, size_t idx) {
+    size_t length;
+    if (string_pool.isUTF8()) {
+      auto s = string_pool.string8At(idx, &length);
+      add_string(s, length);
+    } else {
+      auto s = string_pool.stringAt(idx, &length);
+      add_string(s, length);
+    }
+  }
   void add_style(std::string, SpanVector);
   void add_style(const char*, size_t, SpanVector);
   void add_style(const char16_t*, size_t, SpanVector);
