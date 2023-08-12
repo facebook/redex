@@ -188,6 +188,45 @@ TEST_F(PostVerify, RTypeSpecializationCollision) {
   ASSERT_EQ(nullptr, foo_cat);
 }
 
+TEST_F(PostVerify, testRTypeSpecializationOnMirandaOverridden) {
+  auto ani_cls = find_class_named(classes, "Lcom/facebook/redextest/Animal;");
+  ASSERT_NE(nullptr, ani_cls);
+  auto cat_cls = find_class_named(classes, "Lcom/facebook/redextest/Cat;");
+  ASSERT_NE(nullptr, cat_cls);
+
+  auto mad_cls = find_class_named(classes, "Lcom/facebook/redextest/Mad;");
+  ASSERT_NE(nullptr, mad_cls);
+  auto madman_cls =
+      find_class_named(classes, "Lcom/facebook/redextest/MadMan;");
+  ASSERT_NE(nullptr, madman_cls);
+  auto madwoman_cls =
+      find_class_named(classes, "Lcom/facebook/redextest/MadWoman;");
+  ASSERT_NE(nullptr, madwoman_cls);
+
+  auto crazy_cls = find_class_named(classes, "Lcom/facebook/redextest/Crazy;");
+  ASSERT_NE(nullptr, crazy_cls);
+  auto crazyperson_cls =
+      find_class_named(classes, "Lcom/facebook/redextest/CrazyPerson;");
+  ASSERT_NE(nullptr, crazyperson_cls);
+
+  // rtype is not specialized due to complex miranda overridden.
+  auto mad_baz = find_vmethod_named(*mad_cls, "baz");
+  ASSERT_NE(nullptr, mad_baz);
+  ASSERT_EQ(mad_baz->get_proto()->get_rtype(), ani_cls->get_type());
+
+  auto madman_baz = find_vmethod_named(*madman_cls, "baz");
+  ASSERT_NE(nullptr, madman_baz);
+  ASSERT_EQ(madman_baz->get_proto()->get_rtype(), ani_cls->get_type());
+
+  auto madwoman_baz = find_vmethod_named(*madwoman_cls, "baz");
+  ASSERT_NE(nullptr, madwoman_baz);
+  ASSERT_EQ(madwoman_baz->get_proto()->get_rtype(), ani_cls->get_type());
+
+  auto crazy_baz = find_vmethod_named(*crazy_cls, "baz");
+  ASSERT_NE(nullptr, crazy_baz);
+  ASSERT_EQ(crazy_baz->get_proto()->get_rtype(), ani_cls->get_type());
+}
+
 TEST_F(PreVerify, ResolveMirandaToInterface) {
   auto conc_cls = find_class_named(classes, "Lcom/facebook/redextest/Concept;");
   ASSERT_NE(nullptr, conc_cls);
