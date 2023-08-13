@@ -7,12 +7,17 @@
 
 #pragma once
 
+#include <memory>
 #include <unordered_map>
 #include <unordered_set>
 
 #include "Pass.h"
 
 class DexMethod;
+
+namespace interdex {
+class InterDexPassPlugin;
+} // namespace interdex
 
 namespace instrument {
 
@@ -29,7 +34,8 @@ enum class ProfileTypeFlags {
 
 class InstrumentPass : public Pass {
  public:
-  InstrumentPass() : Pass("InstrumentPass") {}
+  InstrumentPass();
+  ~InstrumentPass();
 
   redex_properties::PropertyInteractions get_property_interactions()
       const override {
@@ -100,6 +106,7 @@ class InstrumentPass : public Pass {
 
  private:
   Options m_options;
+  std::unique_ptr<interdex::InterDexPassPlugin> m_plugin;
 };
 
 } // namespace instrument

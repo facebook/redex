@@ -56,20 +56,17 @@ constexpr const char* METHOD_REPLACEMENT = "methods_replacement";
 
 class InstrumentInterDexPlugin : public interdex::InterDexPassPlugin {
  public:
-  explicit InstrumentInterDexPlugin(size_t max_analysis_methods)
-      : m_max_analysis_methods(max_analysis_methods) {}
+  InstrumentInterDexPlugin(size_t frefs, size_t trefs, size_t mrefs)
+      : m_frefs(frefs), m_trefs(trefs), m_mrefs(mrefs) {}
 
   interdex::ReserveRefsInfo reserve_refs() override {
-    // We may introduce a new field. We introduce a type reference to the
-    // analysis class in each dex. We will introduce more method refs from
-    // analysis methods.
-    return interdex::ReserveRefsInfo(/* frefs */ 1,
-                                     /* trefs */ 1,
-                                     /* mrefs */ m_max_analysis_methods);
+    return interdex::ReserveRefsInfo(m_frefs, m_trefs, m_mrefs);
   }
 
  private:
-  const size_t m_max_analysis_methods;
+  const size_t m_frefs;
+  const size_t m_trefs;
+  const size_t m_mrefs;
 };
 
 // For example, say that "Lcom/facebook/debug/" is in the set. We match either
@@ -433,6 +430,9 @@ void count_source_block_chain_length(DexStoresVector& stores, PassManager& pm) {
 
 } // namespace
 
+InstrumentPass::InstrumentPass() : Pass("InstrumentPass") {}
+InstrumentPass::~InstrumentPass() {}
+
 // Find a sequence of opcode that creates a static array. Patch the array size.
 void InstrumentPass::patch_array_size(DexClass* analysis_cls,
                                       const std::string_view array_name,
@@ -557,25 +557,7 @@ void InstrumentPass::bind_config() {
   bind("inline_onNonLoopBlockHit", false, m_options.inline_onNonLoopBlockHit);
   bind("apply_CSE_CopyProp", false, m_options.apply_CSE_CopyProp);
 
-  size_t max_analysis_methods;
-  if (m_options.instrumentation_strategy == SIMPLE_METHOD_TRACING) {
-    max_analysis_methods = m_options.num_shards;
-  } else if (m_options.instrumentation_strategy == BASIC_BLOCK_TRACING) {
-    // Our current DynamicAnalysis has 7 onMethodExits and 1 onMethodBegin.
-    max_analysis_methods = 8;
-  } else {
-    max_analysis_methods = 1;
-  }
-
-  after_configuration([this, max_analysis_methods] {
-    // Make a small room for additional method refs during InterDex.
-    interdex::InterDexRegistry* registry =
-        static_cast<interdex::InterDexRegistry*>(
-            PluginRegistry::get().pass_registry(interdex::INTERDEX_PASS_NAME));
-    registry->register_plugin(
-        "INSTRUMENT_PASS_PLUGIN", [max_analysis_methods]() {
-          return new InstrumentInterDexPlugin(max_analysis_methods);
-        });
+  after_configuration([this] {
     // Currently we only support instance call to static call.
     for (auto& pair : m_options.methods_replacement) {
       always_assert(!is_static(pair.first));
@@ -670,6 +652,33 @@ void InstrumentPass::eval_pass(DexStoresVector& stores,
 
   set_no_opt_flag_on_analysis_methods(true, m_options.analysis_class_name,
                                       m_options.analysis_method_names);
+
+  // Make a small room for additional method refs during InterDex. We may
+  // introduce a new field. We introduce a type reference to the analysis class
+  // in each dex. We will introduce more method refs from analysis methods.
+
+  interdex::InterDexRegistry* registry =
+      static_cast<interdex::InterDexRegistry*>(
+          PluginRegistry::get().pass_registry(interdex::INTERDEX_PASS_NAME));
+
+  size_t max_analysis_methods;
+  if (m_options.instrumentation_strategy == SIMPLE_METHOD_TRACING) {
+    max_analysis_methods = m_options.num_shards;
+  } else if (m_options.instrumentation_strategy == BASIC_BLOCK_TRACING) {
+    // TODO: Derive this from the source.
+    // Our current DynamicAnalysis has 2 * 7 onMethodExits and 1 onMethodBegin.
+    max_analysis_methods = 15;
+  } else {
+    max_analysis_methods = 1;
+  }
+
+  m_plugin = std::unique_ptr<interdex::InterDexPassPlugin>(
+      new InstrumentInterDexPlugin(1, 1, max_analysis_methods));
+
+  registry->register_plugin("INSTRUMENT_PASS_PLUGIN", [this]() {
+    return new InstrumentInterDexPlugin(
+        *(InstrumentInterDexPlugin*)m_plugin.get());
+  });
 }
 
 // Check for inclusion in allow/block lists of methods/classes. It supports:
