@@ -49,6 +49,9 @@ using ClassSignatureMaps = ConcurrentMap<const DexClass*, ClassSignatureMap>;
 
 using InterfaceSignatureMaps = ConcurrentMap<const DexClass*, SignatureMap>;
 
+using UnifiedInterfacesSignatureMaps =
+    ConcurrentMap<const DexTypeList*, SignatureMap>;
+
 void update_signature_map(const DexMethod* method,
                           MethodSet value,
                           SignatureMap* map) {
@@ -217,20 +220,31 @@ class GraphBuilder {
   }
 
   SignatureMap unify_super_interface_signatures(const DexClass* cls) {
+    auto* type_list = cls->get_interfaces();
+    if (m_unified_interfaces_signature_maps.count(type_list)) {
+      return m_unified_interfaces_signature_maps.at(type_list);
+    }
+
     SignatureMap super_interface_signatures;
-    for (auto* intf : *cls->get_interfaces()) {
+    for (auto* intf : *type_list) {
       auto intf_cls = type_class(intf);
       if (intf_cls != nullptr) {
         unify_signature_maps(analyze_interface(intf_cls),
                              &super_interface_signatures);
       }
     }
-    return super_interface_signatures;
+
+    if (m_unified_interfaces_signature_maps.emplace(
+            type_list, super_interface_signatures)) {
+      return super_interface_signatures;
+    }
+    return m_unified_interfaces_signature_maps.at(type_list);
   }
 
   std::unique_ptr<Graph> m_graph;
   ClassSignatureMaps m_class_signature_maps;
   InterfaceSignatureMaps m_interface_signature_maps;
+  UnifiedInterfacesSignatureMaps m_unified_interfaces_signature_maps;
   const Scope& m_scope;
 };
 
