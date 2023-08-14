@@ -33,7 +33,8 @@ std::unique_ptr<const Graph> build_graph(const Scope&);
 std::vector<const DexMethod*> get_overriding_methods(
     const Graph& graph,
     const DexMethod* method,
-    bool include_interfaces = false);
+    bool include_interfaces = false,
+    const DexType* base_type = nullptr);
 
 /*
  * Returns all the methods that are overridden by :method. The set does *not*
@@ -64,9 +65,19 @@ std::unordered_set<DexMethod*> get_non_true_virtuals(const Graph& graph,
  * Node's method.
  */
 struct Node {
+  // The set of immediately overridden / implemented methods.
   std::vector<const DexMethod*> parents;
+  // The set of immediately overriding / implementing methods.
   std::vector<const DexMethod*> children;
+  // The set of classes where this node implements a previously unimplemented
+  // method. (This is usually absent.)
+  std::unique_ptr<std::vector<const DexClass*>> other_implementation_classes;
+  // Whether the current Node's method is an interface method.
   bool is_interface;
+
+  // Checks whther the current method's class, or any other implementation
+  // class, can be cast to the given base type.
+  bool overrides(const DexMethod* current, const DexType* base_type) const;
 };
 
 class Graph {
@@ -81,6 +92,9 @@ class Graph {
                 bool overridden_is_interface,
                 const DexMethod* overriding,
                 bool overriding_is_interface);
+
+  void add_other_implementation_class(const DexMethod* overriding,
+                                      const DexClass* cls);
 
   void dump(std::ostream&) const;
 

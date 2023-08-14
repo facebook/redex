@@ -19,14 +19,16 @@ namespace mog = method_override_graph;
 
 struct MethodOverrideGraphTest : public RedexIntegrationTest {};
 
-std::vector<std::string> get_overriding_methods(const mog::Graph& graph,
-                                                const DexMethodRef* mref,
-                                                bool include_interface) {
+std::vector<std::string> get_overriding_methods(
+    const mog::Graph& graph,
+    const DexMethodRef* mref,
+    bool include_interface,
+    const DexType* parent_class = nullptr) {
   std::vector<std::string> overriding;
   always_assert(mref->is_def());
   auto method = static_cast<const DexMethod*>(mref);
-  for (auto* overriding_method :
-       mog::get_overriding_methods(graph, method, include_interface)) {
+  for (auto* overriding_method : mog::get_overriding_methods(
+           graph, method, include_interface, parent_class)) {
     overriding.emplace_back(show(overriding_method));
   }
   return overriding;
@@ -35,6 +37,19 @@ std::vector<std::string> get_overriding_methods(const mog::Graph& graph,
 std::vector<std::string> get_overridden_methods(const mog::Graph& graph,
                                                 const DexMethodRef* mref,
                                                 bool include_interface) {
+  std::vector<std::string> overridden;
+  always_assert(mref->is_def());
+  auto method = static_cast<const DexMethod*>(mref);
+  for (auto* overridden_method :
+       mog::get_overridden_methods(graph, method, include_interface)) {
+    overridden.emplace_back(show(overridden_method));
+  }
+  return overridden;
+}
+
+std::vector<std::string> get_implemented(const mog::Graph& graph,
+                                         const DexMethodRef* mref,
+                                         bool include_interface) {
   std::vector<std::string> overridden;
   always_assert(mref->is_def());
   auto method = static_cast<const DexMethod*>(mref);
@@ -54,6 +69,8 @@ TEST_F(MethodOverrideGraphTest, verify) {
   const char* A_M = "Lcom/facebook/redextest/A;.m:()V";
   const char* A_N = "Lcom/facebook/redextest/A;.n:()V";
   const char* B_M = "Lcom/facebook/redextest/B;.m:()V";
+  const char* IB = "Lcom/facebook/redextest/IB;";
+  const char* B = "Lcom/facebook/redextest/B;";
 
   auto graph = mog::build_graph(build_class_scope(stores));
   // Find the methods that override the given methods
@@ -70,6 +87,14 @@ TEST_F(MethodOverrideGraphTest, verify) {
       ::testing::UnorderedElementsAre(B_M));
   EXPECT_THAT(
       get_overriding_methods(*graph, DexMethod::get_method(IB_N), false),
+      ::testing::UnorderedElementsAre(A_N));
+  EXPECT_THAT(
+      get_overriding_methods(
+          *graph, DexMethod::get_method(IB_N), false, DexType::get_type(B)),
+      ::testing::UnorderedElementsAre(A_N));
+  EXPECT_THAT(
+      get_overriding_methods(
+          *graph, DexMethod::get_method(IB_N), false, DexType::get_type(IB)),
       ::testing::UnorderedElementsAre(A_N));
 
   // Find the methods that the given methods override

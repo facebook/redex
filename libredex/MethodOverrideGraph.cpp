@@ -166,13 +166,19 @@ class GraphBuilder {
       // methods.
       for (auto&& [unimplementeds, implementation] :
            unimplemented_implementations) {
+        bool any_other_implementation_class = false;
         for (auto unimplemented : unimplementeds) {
           m_graph->add_edge(unimplemented,
                             /* overridden_is_interface */ true, implementation,
                             /* overriding_is_interface */ false);
+          if (implementation->get_class() != cls->get_type()) {
+            any_other_implementation_class = true;
+          }
+        }
+        if (any_other_implementation_class) {
+          m_graph->add_other_implementation_class(implementation, cls);
         }
       }
-
       return class_signatures;
     }
     return m_class_signature_maps.at(cls);
@@ -258,6 +264,24 @@ namespace method_override_graph {
 
 Node Graph::empty_node;
 
+bool Node::overrides(const DexMethod* current, const DexType* base_type) const {
+  // Trivial case.
+  if (type::check_cast(current->get_class(), base_type)) {
+    return true;
+  }
+  // We also check if the current method was fulfilling an implementation
+  // demand for any class that can be cast to the given base_type.
+  if (!other_implementation_classes) {
+    return false;
+  }
+  for (auto* cls : *other_implementation_classes) {
+    if (type::check_cast(cls->get_type(), base_type)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 const Node& Graph::get_node(const DexMethod* method) const {
   auto it = m_nodes.find(method);
   if (it == m_nodes.end()) {
@@ -299,6 +323,18 @@ void Graph::add_edge(const DexMethod* overridden,
   });
 }
 
+void Graph::add_other_implementation_class(const DexMethod* overriding,
+                                           const DexClass* cls) {
+  m_nodes.update(overriding, [&](const DexMethod*, Node& node, bool exists) {
+    always_assert(exists);
+    if (!node.other_implementation_classes) {
+      node.other_implementation_classes =
+          std::make_unique<std::vector<const DexClass*>>();
+    }
+    node.other_implementation_classes->push_back(cls);
+  });
+}
+
 void Graph::dump(std::ostream& os) const {
   namespace bs = binary_serialization;
   bs::write_header(os, /* version */ 1);
@@ -324,9 +360,13 @@ std::unique_ptr<const Graph> build_graph(const Scope& scope) {
 
 std::vector<const DexMethod*> get_overriding_methods(const Graph& graph,
                                                      const DexMethod* method,
-                                                     bool include_interfaces) {
+                                                     bool include_interfaces,
+                                                     const DexType* base_type) {
   std::vector<const DexMethod*> overrides;
   const Node& root = graph.get_node(method);
+  if (base_type && method->get_class() == base_type) {
+    base_type = nullptr;
+  }
   if (root.is_interface) {
     std::unordered_set<const DexMethod*> visited{method};
     std::function<void(const DexMethod*)> visit =
@@ -338,7 +378,8 @@ std::vector<const DexMethod*> get_overriding_methods(const Graph& graph,
           for (const auto* child : node.children) {
             visit(child);
           }
-          if (include_interfaces || !node.is_interface) {
+          if ((include_interfaces || !node.is_interface) &&
+              (!base_type || node.overrides(current, base_type))) {
             overrides.push_back(current);
           }
         };
@@ -353,7 +394,9 @@ std::vector<const DexMethod*> get_overriding_methods(const Graph& graph,
     for (const auto* child : node.children) {
       visit(child);
     }
-    overrides.push_back(current);
+    if (!base_type || node.overrides(current, base_type)) {
+      overrides.push_back(current);
+    }
   };
   for (const auto* child : root.children) {
     visit(child);
