@@ -881,15 +881,6 @@ std::string BundleResources::get_base_assets_dir() {
 }
 
 namespace {
-const std::unordered_set<std::string> NON_CLASS_ELEMENTS = {
-    "fragment", "view", "dialog", "activity", "intent",
-};
-const std::vector<std::string> CLASS_XML_ATTRIBUTES = {
-    "class",
-    "name",
-    "targetClass",
-};
-
 // Collect all resource ids referred in an given xml element.
 // attr->compiled_item->ref->id
 void collect_rids_for_element(const aapt::pb::XmlElement& element,
@@ -915,8 +906,9 @@ void collect_layout_classes_and_attributes_for_element(
     std::unordered_set<std::string>* out_classes,
     std::unordered_multimap<std::string, std::string>* out_attributes) {
   const auto& element_name = element.name();
-  if (NON_CLASS_ELEMENTS.count(element_name) > 0) {
-    for (const auto& attr : CLASS_XML_ATTRIBUTES) {
+  // XML element could itself be a class, with classes in its attribute values.
+  if (resources::KNOWN_ELEMENTS_WITH_CLASS_ATTRIBUTES.count(element_name) > 0) {
+    for (const auto& attr : resources::POSSIBLE_CLASS_ATTRIBUTES) {
       auto classname = get_string_attribute_value(element, attr);
       if (!classname.empty() && classname.find('.') != std::string::npos) {
         auto internal = java_names::external_to_internal(classname);
@@ -928,7 +920,8 @@ void collect_layout_classes_and_attributes_for_element(
         break;
       }
     }
-  } else if (element_name.find('.') != std::string::npos) {
+  }
+  if (element_name.find('.') != std::string::npos) {
     // Consider the element name itself as a possible class in the
     // application
     auto internal = java_names::external_to_internal(element_name);
