@@ -382,6 +382,7 @@ libopt_la_SOURCES = \
 	opt/evaluate_type_checks/EvaluateTypeChecks.cpp \
 	opt/final_inline/FinalInline.cpp \
 	opt/final_inline/FinalInlineV2.cpp \
+	opt/fully-qualify-layouts/FullyQualifyLayouts.cpp \
 	opt/init-classes/InitClassLoweringPass.cpp \
 	opt/insert-source-blocks/InsertSourceBlocks.cpp \
 	opt/instrument/BlockInstrument.cpp \

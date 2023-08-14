@@ -733,13 +733,13 @@ ManifestClassInfo extract_classes_from_manifest(const char* data, size_t size) {
 
   return manifest_classes;
 }
+} // namespace
 
 std::string convert_from_string16(const android::String16& string16) {
   android::String8 string8(string16);
   std::string converted(string8.string());
   return converted;
 }
-} // namespace
 
 // Returns the attribute with the given name for the current XML element
 std::string get_string_attribute_value(
@@ -953,6 +953,146 @@ class XmlStringAttributeCollector : public arsc::SimpleXmlParser {
 
   std::unordered_set<std::string> m_values;
 };
+
+class XmlElementCollector : public arsc::SimpleXmlParser {
+ public:
+  ~XmlElementCollector() override {}
+
+  boost::optional<std::string> get_element_name(
+      android::ResXMLTree_attrExt* extension) {
+    auto ns = dtohl(extension->ns.index);
+    auto name_idx = dtohl(extension->name.index);
+    auto& string_pool = global_strings();
+    if (arsc::is_valid_string_idx(string_pool, name_idx)) {
+      auto element_name = arsc::get_string_from_pool(string_pool, name_idx);
+      if (arsc::is_valid_string_idx(string_pool, ns)) {
+        auto ns_name = arsc::get_string_from_pool(string_pool, ns);
+        return ns_name + ":" + element_name;
+      }
+      return element_name;
+    }
+    return boost::none;
+  }
+
+  bool visit_start_tag(android::ResXMLTree_node* node,
+                       android::ResXMLTree_attrExt* extension) override {
+    auto name = get_element_name(extension);
+    if (name != boost::none) {
+      m_element_names.emplace(*name);
+    }
+    return arsc::SimpleXmlParser::visit_start_tag(node, extension);
+  }
+
+  std::unordered_set<std::string> m_element_names;
+};
+
+// Rewrites node, extension, and attribute list to transform encountered
+// elements into the form: <view class="" ... />
+class NodeAttributeTransformer : public XmlElementCollector {
+ public:
+  ~NodeAttributeTransformer() override {}
+
+  NodeAttributeTransformer(
+      const std::unordered_map<std::string, std::string>& element_to_class_name,
+      const std::unordered_map<std::string, uint32_t>& class_name_to_idx,
+      uint32_t class_attr_idx,
+      uint32_t view_idx)
+      : m_element_to_class_name(element_to_class_name),
+        m_class_name_to_idx(class_name_to_idx),
+        m_class_attr_idx(class_attr_idx),
+        m_view_idx(view_idx) {}
+
+  bool visit(void* data, size_t len) override {
+    m_file_manipulator =
+        std::make_unique<arsc::ResFileManipulator>((char*)data, len);
+    return XmlElementCollector::visit(data, len);
+  }
+
+  bool visit_start_tag(android::ResXMLTree_node* node,
+                       android::ResXMLTree_attrExt* extension) override {
+    auto name = get_element_name(extension);
+    if (name != boost::none) {
+      auto search = m_element_to_class_name.find(*name);
+      if (search != m_element_to_class_name.end()) {
+        // Make the new "class" attribute
+        android::ResXMLTree_attribute new_attr{};
+        new_attr.name.index = htodl(m_class_attr_idx);
+        auto class_name = search->second;
+        auto attribute_value_idx = m_class_name_to_idx.at(class_name);
+        new_attr.ns.index = 0xFFFFFFFF;
+        new_attr.rawValue.index = htodl(attribute_value_idx);
+        new_attr.typedValue.size = htods(sizeof(android::Res_value));
+        new_attr.typedValue.dataType = android::Res_value::TYPE_STRING;
+        new_attr.typedValue.data = htodl(attribute_value_idx);
+        // Find the position at which the "class" attribute should go. It should
+        // not be present, but if it is we will skip it (no idea wtf to do in
+        // that case).
+        auto pool_lookup = [&](uint32_t idx) {
+          auto& pool = global_strings();
+          return arsc::get_string_from_pool(pool, idx);
+        };
+        auto ordinal = arsc::find_attribute_ordinal(
+            node, extension, &new_attr, attribute_count(), pool_lookup);
+        if (ordinal >= 0) {
+          TRACE(RES, 9,
+                "Node has %d attributes, class will be added at ordinal %d",
+                extension->attributeCount, (uint32_t)ordinal);
+          // Make a copy of the extension to begin changes. First, set the
+          // element's name to "view".
+          android::ResXMLTree_attrExt new_extension = *extension;
+          new_extension.name.index = htodl(m_view_idx);
+          new_extension.attributeCount =
+              htods(dtohs(extension->attributeCount) + 1);
+          new_extension.classIndex = htods(ordinal + 1); // this is 1 based
+          if (extension->styleIndex != 0) {
+            // Adjust this count too, as we should be adding before it.
+            new_extension.styleIndex = htods(dtohs(extension->styleIndex) + 1);
+          }
+          TRACE(RES, 9, "Replacing node extension at 0x%lx",
+                get_file_offset(extension));
+          m_file_manipulator->replace_at(extension, new_extension);
+
+          // Note the place where the new attribute should be inserted.
+          auto offset = (char*)arsc::get_attribute_pointer(extension) +
+                        ordinal * sizeof(android::ResXMLTree_attribute);
+          m_file_manipulator->add_at(offset, new_attr);
+
+          // Finally, fix up the node's size to reflect the growing data.
+          android::ResXMLTree_node new_node = *node;
+          new_node.header.size = htodl(dtohl(node->header.size) +
+                                       sizeof(android::ResXMLTree_attribute));
+          TRACE(RES, 9, "Replacing node at 0x%lx", get_file_offset(node));
+          m_file_manipulator->replace_at(node, new_node);
+          m_changes++;
+        } else {
+          TRACE(RES, 9,
+                "Cannot modify node %s; new attribute cannot be inserted",
+                name->c_str());
+        }
+      }
+    }
+    return XmlElementCollector::visit_start_tag(node, extension);
+  }
+
+  size_t change_count() { return m_changes; }
+
+  // Build the final file to the given vector.
+  void serialize(android::Vector<char>* out) {
+    m_file_manipulator->serialize(out);
+  }
+
+  // Offset information about the string pool of the document
+  const std::unordered_map<std::string, std::string>& m_element_to_class_name;
+  const std::unordered_map<std::string, uint32_t>& m_class_name_to_idx;
+  // This is the string pool index for the string "class"
+  uint32_t m_class_attr_idx;
+  // This is the string pool index for the string "view"
+  uint32_t m_view_idx;
+
+  // Tracks ongoing changes and builds the result.
+  std::unique_ptr<arsc::ResFileManipulator> m_file_manipulator;
+  size_t m_changes{0};
+};
 } // namespace
 
 void ApkResources::collect_xml_attribute_string_values_for_file(
@@ -965,6 +1105,67 @@ void ApkResources::collect_xml_attribute_string_values_for_file(
       }
     }
   });
+}
+
+void ApkResources::fully_qualify_layout(
+    const std::unordered_map<std::string, std::string>& element_to_class_name,
+    const std::string& file_path,
+    size_t* changes) {
+  // Check if this file has any applicable elements to fully qualify. If any
+  // are found, add their fully qualified element names to the document's
+  // string pool, along with the replacement element name and attribute name
+  // that we'll need.
+  std::set<std::string> strings_to_add;
+  std::unordered_map<std::string, uint32_t> string_to_idx;
+  bool needs_changes = false;
+  android::Vector<char> file_vec;
+
+  redex::read_file_with_contents(file_path, [&](const char* data, size_t size) {
+    XmlElementCollector collector;
+    if (collector.visit((void*)data, size)) {
+      for (const auto& [element, class_name] : element_to_class_name) {
+        if (collector.m_element_names.count(element) > 0) {
+          strings_to_add.emplace(class_name);
+          needs_changes = true;
+        }
+      }
+    }
+    if (needs_changes) {
+      strings_to_add.emplace("class");
+      strings_to_add.emplace("view");
+      auto result = arsc::ensure_strings_in_xml_pool(data, size, strings_to_add,
+                                                     &file_vec, &string_to_idx);
+      always_assert_log(result == android::OK,
+                        "Failed to edit file %s; it may not be valid",
+                        file_path.c_str());
+      // file_data will contain the edited document, or be empty signaling the
+      // original file bytes should suffice. To normalize things in the unusual
+      // case of all the necessary strings being present, we'll just slurp the
+      // original bytes up.
+      if (file_vec.empty()) {
+        file_vec.appendArray(data, size);
+      }
+    }
+  });
+
+  if (!needs_changes) {
+    return;
+  }
+  auto class_idx = string_to_idx.at("class");
+  auto view_idx = string_to_idx.at("view");
+
+  auto file_data = (char*)file_vec.array();
+  NodeAttributeTransformer transformer(element_to_class_name, string_to_idx,
+                                       class_idx, view_idx);
+  auto successful_visit = transformer.visit(file_data, file_vec.size());
+  always_assert_log(successful_visit,
+                    "could not parse xml file after ensuring strings");
+  if (transformer.change_count() > 0) {
+    android::Vector<char> final_bytes;
+    transformer.serialize(&final_bytes);
+    arsc::write_bytes_to_file(final_bytes, file_path);
+    *changes = transformer.change_count();
+  }
 }
 
 namespace {

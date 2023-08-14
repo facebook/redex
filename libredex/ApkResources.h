@@ -25,6 +25,7 @@
 #include "RedexResources.h"
 
 // Compiled XML reading helper functions. Only applicable to APK input files.
+std::string convert_from_string16(const android::String16& string16);
 std::string get_string_attribute_value(const android::ResXMLTree& parser,
                                        const android::String16& attribute_name);
 
@@ -335,6 +336,10 @@ class ApkResources : public AndroidResources {
   void collect_xml_attribute_string_values_for_file(
       const std::string& file_path,
       std::unordered_set<std::string>* out) override;
+  void fully_qualify_layout(
+      const std::unordered_map<std::string, std::string>& element_to_class_name,
+      const std::string& file_path,
+      size_t* changes) override;
 
   // Given the bytes of a binary XML file, replace the entries (if any) in the
   // ResStringPool. Writes result to the given Vector output param.

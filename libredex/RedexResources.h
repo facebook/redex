@@ -252,6 +252,22 @@ class ResourceTableFile {
     return std::vector<uint32_t>{};
   }
 
+  // For a given type name like "layout" return all resource ids in that type.
+  std::vector<uint32_t> get_res_ids_by_type_name(const std::string& type) {
+    std::vector<uint32_t> result;
+    std::unordered_set<std::string> types{type};
+    auto type_ids = get_types_by_name(types);
+    if (!type_ids.empty()) {
+      auto type_id = *type_ids.begin();
+      for (const auto& id : sorted_res_ids) {
+        if ((id & type_id) == type_id) {
+          result.emplace_back(id);
+        }
+      }
+    }
+    return result;
+  }
+
   std::vector<uint32_t> sorted_res_ids;
   std::map<uint32_t, std::string> id_to_name;
   std::map<std::string, std::vector<uint32_t>> name_to_ids;
@@ -303,6 +319,14 @@ class AndroidResources {
   // As above, for single file.
   virtual void collect_xml_attribute_string_values_for_file(
       const std::string& file_path, std::unordered_set<std::string>* out) = 0;
+  // Transforms element names in the given map to be <view> elements with their
+  // class name specified fully qualified. Out param indicates the number of
+  // elements that were changed.
+  virtual void fully_qualify_layout(
+      const std::unordered_map<std::string, std::string>& element_to_class_name,
+      const std::string& file_path,
+      size_t* changes) = 0;
+
   virtual std::unique_ptr<ResourceTableFile> load_res_table() = 0;
   virtual size_t remap_xml_reference_attributes(
       const std::string& filename,

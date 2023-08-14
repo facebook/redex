@@ -1235,6 +1235,11 @@ void BundleResources::collect_xml_attribute_string_values_for_file(
       });
 }
 
+void BundleResources::fully_qualify_layout(
+    const std::unordered_map<std::string, std::string>& element_to_class_name,
+    const std::string& file_path,
+    size_t* changes) {}
+
 size_t BundleResources::remap_xml_reference_attributes(
     const std::string& filename,
     const std::map<uint32_t, uint32_t>& kept_to_remapped_ids) {
