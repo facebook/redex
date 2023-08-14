@@ -116,8 +116,8 @@ class GraphBuilder {
     auto inherited_implemented = class_signatures.implemented;
     for (auto* method : cls->get_vmethods()) {
       // Replace the overridden methods by the overriding ones.
-      update_signature_map(
-          method, MethodSet{method}, &class_signatures.implemented);
+      update_signature_map(method, MethodSet{method},
+                           &class_signatures.implemented);
     }
 
     // Find all implementation methods reachable via their interface methods.
@@ -147,8 +147,8 @@ class GraphBuilder {
     // Remove the newly implemented methods from the set of unimplemented
     // interface methods.
     for (auto&& [_, implementation] : unimplemented_implementations) {
-      update_signature_map(
-          implementation, MethodSet{}, &class_signatures.unimplemented);
+      update_signature_map(implementation, MethodSet{},
+                           &class_signatures.unimplemented);
     }
 
     if (m_class_signature_maps.emplace(cls, class_signatures)) {
@@ -158,7 +158,8 @@ class GraphBuilder {
             inherited_implemented.at(method->get_name())
                 .at(method->get_proto());
         for (auto overridden : overridden_set) {
-          m_graph->add_edge(overridden, method);
+          m_graph->add_edge(overridden, /* overridden_is_interface */ false,
+                            method, /* overriding_is_interface */ false);
         }
       }
       // Mark all implementation methods as reachable via their interface
@@ -166,7 +167,9 @@ class GraphBuilder {
       for (auto&& [unimplementeds, implementation] :
            unimplemented_implementations) {
         for (auto unimplemented : unimplementeds) {
-          m_graph->add_edge(unimplemented, implementation);
+          m_graph->add_edge(unimplemented,
+                            /* overridden_is_interface */ true, implementation,
+                            /* overriding_is_interface */ false);
         }
       }
 
@@ -210,7 +213,8 @@ class GraphBuilder {
         // added here to find them. This design reduces the number of edges
         // necessary for building the graph.
         for (auto overridden : overridden_set) {
-          m_graph->add_edge(overridden, method);
+          m_graph->add_edge(overridden, /* overridden_is_interface */ true,
+                            method, /* overriding_is_interface */ true);
         }
       }
 
@@ -248,14 +252,6 @@ class GraphBuilder {
   const Scope& m_scope;
 };
 
-bool may_be_interface_method(const DexMethod* method) {
-  if (method == nullptr) {
-    return false;
-  }
-  auto method_cls = type_class(method->get_class());
-  return method_cls == nullptr || is_interface(method_cls);
-}
-
 } // namespace
 
 namespace method_override_graph {
@@ -271,14 +267,36 @@ const Node& Graph::get_node(const DexMethod* method) const {
 }
 
 void Graph::add_edge(const DexMethod* overridden, const DexMethod* overriding) {
-  m_nodes.update(overridden,
-                 [&](const DexMethod*, Node& node, bool /* exists */) {
-                   node.children.push_back(overriding);
-                 });
-  m_nodes.update(overriding,
-                 [&](const DexMethod*, Node& node, bool /* exists */) {
-                   node.parents.push_back(overridden);
-                 });
+  // The type-class lookup should only ever fail during testing if the
+  // environment isn't fully build up.
+  auto may_be_interface = [](DexType* t) {
+    auto cls = type_class(t);
+    return !cls || is_interface(cls);
+  };
+  add_edge(overridden, may_be_interface(overridden->get_class()), overriding,
+           may_be_interface(overridden->get_class()));
+}
+
+void Graph::add_edge(const DexMethod* overridden,
+                     bool overridden_is_interface,
+                     const DexMethod* overriding,
+                     bool overriding_is_interface) {
+  m_nodes.update(overridden, [&](const DexMethod*, Node& node, bool exists) {
+    node.children.push_back(overriding);
+    if (exists) {
+      always_assert(node.is_interface == overridden_is_interface);
+    } else {
+      node.is_interface = overridden_is_interface;
+    }
+  });
+  m_nodes.update(overriding, [&](const DexMethod*, Node& node, bool exists) {
+    node.parents.push_back(overridden);
+    if (exists) {
+      always_assert(node.is_interface == overriding_is_interface);
+    } else {
+      node.is_interface = overriding_is_interface;
+    }
+  });
 }
 
 void Graph::dump(std::ostream& os) const {
@@ -308,35 +326,37 @@ std::vector<const DexMethod*> get_overriding_methods(const Graph& graph,
                                                      const DexMethod* method,
                                                      bool include_interfaces) {
   std::vector<const DexMethod*> overrides;
-  if (may_be_interface_method(method)) {
-    std::unordered_set<const DexMethod*> visited;
-    std::function<bool(const DexMethod*)> visit =
-        [&](const DexMethod* current) {
-          if (!visited.emplace(current).second) {
-            return false;
-          }
-          const Node& node = graph.get_node(current);
-          for (const auto* child : node.children) {
-            if (visit(child) &&
-                (include_interfaces ||
-                 !is_interface(type_class(child->get_class())))) {
-              overrides.push_back(child);
-            }
-          }
-          return true;
-        };
-    visit(method);
-  } else {
-    // optimized code path
+  const Node& root = graph.get_node(method);
+  if (root.is_interface) {
+    std::unordered_set<const DexMethod*> visited{method};
     std::function<void(const DexMethod*)> visit =
         [&](const DexMethod* current) {
+          if (!visited.emplace(current).second) {
+            return;
+          }
           const Node& node = graph.get_node(current);
           for (const auto* child : node.children) {
             visit(child);
-            overrides.push_back(child);
+          }
+          if (include_interfaces || !node.is_interface) {
+            overrides.push_back(current);
           }
         };
-    visit(method);
+    for (const auto* child : root.children) {
+      visit(child);
+    }
+    return overrides;
+  }
+  // optimized code path
+  std::function<void(const DexMethod*)> visit = [&](const DexMethod* current) {
+    const Node& node = graph.get_node(current);
+    for (const auto* child : node.children) {
+      visit(child);
+    }
+    overrides.push_back(current);
+  };
+  for (const auto* child : root.children) {
+    visit(child);
   }
   return overrides;
 }
@@ -345,22 +365,45 @@ std::vector<const DexMethod*> get_overridden_methods(const Graph& graph,
                                                      const DexMethod* method,
                                                      bool include_interfaces) {
   std::vector<const DexMethod*> overridden;
-  std::unordered_set<const DexMethod*> visited;
-  std::function<bool(const DexMethod*)> visit = [&](const DexMethod* current) {
-    if (!visited.emplace(current).second) {
-      return false;
+  const Node& root = graph.get_node(method);
+  if (include_interfaces) {
+    std::unordered_set<const DexMethod*> visited{method};
+    std::function<void(const DexMethod*)> visit =
+        [&](const DexMethod* current) {
+          if (!visited.emplace(current).second) {
+            return;
+          }
+          const Node& node = graph.get_node(current);
+          if (!include_interfaces && node.is_interface) {
+            return;
+          }
+          for (const auto* parent : node.parents) {
+            visit(parent);
+          }
+          overridden.push_back(current);
+        };
+    for (const auto* parent : root.parents) {
+      visit(parent);
     }
+    return overridden;
+  }
+  if (root.is_interface) {
+    return overridden;
+  }
+  // optimized code path
+  std::function<void(const DexMethod*)> visit = [&](const DexMethod* current) {
     const Node& node = graph.get_node(current);
-    for (const auto* parent : node.parents) {
-      if ((include_interfaces ||
-           !is_interface(type_class(parent->get_class()))) &&
-          visit(parent)) {
-        overridden.push_back(parent);
-      }
+    if (!include_interfaces && node.is_interface) {
+      return;
     }
-    return true;
+    for (const auto* parent : node.parents) {
+      visit(parent);
+    }
+    overridden.push_back(current);
   };
-  visit(method);
+  for (const auto* parent : root.parents) {
+    visit(parent);
+  }
   return overridden;
 }
 

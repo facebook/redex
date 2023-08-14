@@ -66,6 +66,7 @@ std::unordered_set<DexMethod*> get_non_true_virtuals(const Graph& graph,
 struct Node {
   std::vector<const DexMethod*> parents;
   std::vector<const DexMethod*> children;
+  bool is_interface;
 };
 
 class Graph {
@@ -75,6 +76,11 @@ class Graph {
   const ConcurrentMap<const DexMethod*, Node>& nodes() const { return m_nodes; }
 
   void add_edge(const DexMethod* overridden, const DexMethod* overriding);
+
+  void add_edge(const DexMethod* overridden,
+                bool overridden_is_interface,
+                const DexMethod* overriding,
+                bool overriding_is_interface);
 
   void dump(std::ostream&) const;
 
