@@ -138,7 +138,8 @@ static bool compare_weighted_dexprotos(const std::pair<DexProto*, size_t>& a,
   return compare_dexprotos(a.first, b.first);
 }
 
-static bool any_external(const std::unordered_set<const DexMethod*>& methods) {
+template <typename Collection>
+static bool any_external(const Collection& methods) {
   for (auto method : methods) {
     auto cls = type_class(method->get_class());
     if (cls == nullptr || cls->is_external()) {

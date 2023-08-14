@@ -110,23 +110,18 @@ class GraphBuilder {
     unify_signature_maps(unify_super_interface_signatures(cls),
                          &class_signatures.unimplemented);
 
-    // Mark all overriding methods as reachable via their parent method ref.
+    auto inherited_implemented = class_signatures.implemented;
     for (auto* method : cls->get_vmethods()) {
-      const auto& overridden_set =
-          class_signatures.implemented.at(method->get_name())
-              .at(method->get_proto());
-      for (auto overridden : overridden_set) {
-        m_graph->add_edge(overridden, method);
-      }
       // Replace the overridden methods by the overriding ones.
       update_signature_map(
           method, MethodSet{method}, &class_signatures.implemented);
     }
 
-    // Mark all implementation methods as reachable via their interface methods.
+    // Find all implementation methods reachable via their interface methods.
     // Note that an interface method can be implemented by a method inherited
     // from a superclass.
-    std::vector<const DexMethod*> new_implementations;
+    std::vector<std::pair<MethodSet, const DexMethod*>>
+        unimplemented_implementations;
     for (const auto& protos_pair : class_signatures.unimplemented) {
       auto name = protos_pair.first;
       const auto& named_implemented_protos =
@@ -142,20 +137,36 @@ class GraphBuilder {
         }
         always_assert(implemented_set.size() == 1);
         auto implementation = *implemented_set.begin();
-        for (auto unimplemented : ms_pair.second) {
-          m_graph->add_edge(unimplemented, implementation);
-        }
-        new_implementations.push_back(implementation);
+        unimplemented_implementations.emplace_back(ms_pair.second,
+                                                   implementation);
       }
     }
     // Remove the newly implemented methods from the set of unimplemented
     // interface methods.
-    for (auto implementation : new_implementations) {
+    for (auto&& [_, implementation] : unimplemented_implementations) {
       update_signature_map(
           implementation, MethodSet{}, &class_signatures.unimplemented);
     }
 
     if (m_class_signature_maps.emplace(cls, class_signatures)) {
+      // Mark all overriding methods as reachable via their parent method ref.
+      for (auto* method : cls->get_vmethods()) {
+        const auto& overridden_set =
+            inherited_implemented.at(method->get_name())
+                .at(method->get_proto());
+        for (auto overridden : overridden_set) {
+          m_graph->add_edge(overridden, method);
+        }
+      }
+      // Mark all implementation methods as reachable via their interface
+      // methods.
+      for (auto&& [unimplementeds, implementation] :
+           unimplemented_implementations) {
+        for (auto unimplemented : unimplementeds) {
+          m_graph->add_edge(unimplemented, implementation);
+        }
+      }
+
       return class_signatures;
     }
     return m_class_signature_maps.at(cls);
@@ -168,33 +179,38 @@ class GraphBuilder {
     }
 
     SignatureMap interface_signatures = unify_super_interface_signatures(cls);
+    auto inherited_interface_signatures = interface_signatures;
     for (auto* method : cls->get_vmethods()) {
-      const auto& overridden_set =
-          interface_signatures.at(method->get_name()).at(method->get_proto());
-      // These edges connect a method in a superinterface to the overriding
-      // methods in a subinterface. A reference to the superinterface's method
-      // will not resolve to the subinterface's method at runtime, but these
-      // edges are critical because we do not add an edge between overridden
-      // superinterface methods and their implementors. Concretely, given the
-      // following code:
-      //
-      //   interface IA { void m(); }
-      //   interface IB extends IA { void m(); }
-      //   class C implements IB { void m(); }
-      //
-      // Our graph will contain an edge between IA::m and IB::m, and an edge
-      // between IB::m and C::m. It will *not* contain an edge between IA::m and
-      // C::m, even though C::m does implement IA::m as well. Therefore to get
-      // all the implementors of IA::m, we need to traverse the edges added here
-      // to find them. This design reduces the number of edges necessary for
-      // building the graph.
-      for (auto overridden : overridden_set) {
-        m_graph->add_edge(overridden, method);
-      }
       update_signature_map(method, MethodSet{method}, &interface_signatures);
     }
 
     if (m_interface_signature_maps.emplace(cls, interface_signatures)) {
+      for (auto* method : cls->get_vmethods()) {
+        const auto& overridden_set =
+            inherited_interface_signatures.at(method->get_name())
+                .at(method->get_proto());
+        // These edges connect a method in a superinterface to the overriding
+        // methods in a subinterface. A reference to the superinterface's method
+        // will not resolve to the subinterface's method at runtime, but these
+        // edges are critical because we do not add an edge between overridden
+        // superinterface methods and their implementors. Concretely, given the
+        // following code:
+        //
+        //   interface IA { void m(); }
+        //   interface IB extends IA { void m(); }
+        //   class C implements IB { void m(); }
+        //
+        // Our graph will contain an edge between IA::m and IB::m, and an edge
+        // between IB::m and C::m. It will *not* contain an edge between IA::m
+        // and C::m, even though C::m does implement IA::m as well. Therefore to
+        // get all the implementors of IA::m, we need to traverse the edges
+        // added here to find them. This design reduces the number of edges
+        // necessary for building the graph.
+        for (auto overridden : overridden_set) {
+          m_graph->add_edge(overridden, method);
+        }
+      }
+
       return interface_signatures;
     }
     return m_interface_signature_maps.at(cls);
@@ -243,11 +259,11 @@ const Node& Graph::get_node(const DexMethod* method) const {
 void Graph::add_edge(const DexMethod* overridden, const DexMethod* overriding) {
   m_nodes.update(overridden,
                  [&](const DexMethod*, Node& node, bool /* exists */) {
-                   node.children.insert(overriding);
+                   node.children.push_back(overriding);
                  });
   m_nodes.update(overriding,
                  [&](const DexMethod*, Node& node, bool /* exists */) {
-                   node.parents.insert(overridden);
+                   node.parents.push_back(overridden);
                  });
 }
 

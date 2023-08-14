@@ -64,8 +64,8 @@ std::unordered_set<DexMethod*> get_non_true_virtuals(const Graph& graph,
  * Node's method.
  */
 struct Node {
-  std::unordered_set<const DexMethod*> parents;
-  std::unordered_set<const DexMethod*> children;
+  std::vector<const DexMethod*> parents;
+  std::vector<const DexMethod*> children;
 };
 
 class Graph {
