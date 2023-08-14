@@ -9,6 +9,7 @@
 #define _FB_ANDROID_SERIALIZE_H
 
 #include <fstream>
+#include <functional>
 #include <map>
 #include <memory>
 #include <set>
@@ -28,6 +29,8 @@
 #include "utils/Vector.h"
 
 namespace arsc {
+// Used for things like offsets to denote no value.
+constexpr uint32_t NO_VALUE = 0xFFFFFFFF;
 
 constexpr uint32_t PACKAGE_NAME_ARR_LENGTH = 128;
 
@@ -81,6 +84,17 @@ inline std::string get_string_from_pool(const android::ResStringPool& pool,
   android::String8 string8(s16);
   return std::string(string8.string());
 }
+
+// Given a node, return the zero based ordinal where "new_attr" would appear,
+// or -1 if the attribute already exists. This takes a callback function that is
+// capable of returning the string bytes for a given index to follow the sorting
+// convention used by aapt2.
+ssize_t find_attribute_ordinal(
+    android::ResXMLTree_node* node,
+    android::ResXMLTree_attrExt* extension,
+    android::ResXMLTree_attribute* new_attr,
+    const size_t& attribute_id_count,
+    const std::function<std::string(uint32_t)>& pool_lookup);
 
 enum StringKind { STD_STRING, STRING_8, STRING_16 };
 

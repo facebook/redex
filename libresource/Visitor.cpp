@@ -188,6 +188,27 @@ void collect_spans(android::ResStringPool_span* ptr,
   }
 }
 
+android::ResXMLTree_attribute* get_attribute_pointer(
+    android::ResXMLTree_attrExt* extension) {
+  auto count = dtohl(extension->attributeCount);
+  if (count == 0) {
+    return nullptr;
+  }
+  auto start = dtohs(extension->attributeStart);
+  return (android::ResXMLTree_attribute*)((uint8_t*)extension + start);
+}
+
+void collect_attributes(android::ResXMLTree_attrExt* extension,
+                        std::vector<android::ResXMLTree_attribute*>* out) {
+  auto attribute_ptr = get_attribute_pointer(extension);
+  if (attribute_ptr != nullptr) {
+    auto count = dtohl(extension->attributeCount);
+    for (size_t i = 0; i < count; i++, attribute_ptr++) {
+      out->emplace_back(attribute_ptr);
+    }
+  }
+}
+
 bool ResourceTableVisitor::valid(const android::ResTable_package* package) {
   if (package == nullptr) {
     return false;
@@ -717,9 +738,7 @@ bool XmlFileVisitor::visit_start_tag(android::ResXMLTree_node* node,
                                      android::ResXMLTree_attrExt* extension) {
   LOGVV("visit start element ext, offset = %ld", get_file_offset(extension));
   auto count = dtohl(extension->attributeCount);
-  auto attribute =
-      (android::ResXMLTree_attribute*)((uint8_t*)extension +
-                                       dtohs(extension->attributeStart));
+  auto attribute = get_attribute_pointer(extension);
   LOG_FATAL_IF(
       dtohs(extension->attributeSize) != sizeof(android::ResXMLTree_attribute),
       "Unable to read attribute, ResXMLTree_attribute struct mismatch");

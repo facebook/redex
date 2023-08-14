@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <algorithm>
 #include <boost/functional/hash.hpp>
 #include <cstddef>
 #include <iostream>
@@ -197,6 +198,71 @@ bool are_configs_equivalent(android::ResTable_config* a,
   }
   // Can't deal with newer ResTable_config layouts that we don't know about.
   return false;
+}
+
+ssize_t find_attribute_ordinal(
+    android::ResXMLTree_node* node,
+    android::ResXMLTree_attrExt* extension,
+    android::ResXMLTree_attribute* new_attr,
+    const size_t& attribute_id_count,
+    const std::function<std::string(uint32_t)>& pool_lookup) {
+  std::vector<android::ResXMLTree_attribute*> attributes;
+  collect_attributes(extension, &attributes);
+  if (attributes.empty()) {
+    return 0;
+  }
+  // Attributes are sorted first by id, when available, or sorted
+  // lexographically by string name when the attribute does not
+  // have an id. This is modelled after the aapt2 logic.
+  // https://cs.android.com/android/platform/superproject/+/android-13.0.0_r1:frameworks/base/tools/aapt2/format/binary/XmlFlattener.cpp;l=45
+  auto less_than = [&](android::ResXMLTree_attribute* this_attr,
+                       android::ResXMLTree_attribute* that_attr) {
+    auto this_name = dtohl(this_attr->name.index);
+    auto this_uri = dtohl(this_attr->ns.index);
+    auto this_has_id = this_name < attribute_id_count;
+
+    auto that_name = dtohl(that_attr->name.index);
+    auto that_uri = dtohl(that_attr->ns.index);
+    auto that_has_id = that_name < attribute_id_count;
+
+    if (this_has_id != that_has_id) {
+      return this_has_id;
+    } else if (this_has_id) {
+      // names are offsets into id array, which is sorted, just compare name
+      // index.
+      return this_name < that_name;
+    } else {
+      // Compare uri first, if equal go to actual string name. Honestly this
+      // does not make much sense since it is unclear how an attribute can have
+      // a namespace and not an id. Hmmmmmmmmm.
+      auto this_uri_str =
+          this_uri != NO_VALUE ? pool_lookup(this_uri) : std::string("");
+      auto that_uri_str =
+          that_uri != NO_VALUE ? pool_lookup(that_uri) : std::string("");
+      auto diff = this_uri_str.compare(that_uri_str);
+      if (diff < 0) {
+        return true;
+      }
+      if (diff > 0) {
+        return false;
+      }
+      auto this_str = pool_lookup(this_name);
+      auto that_str = pool_lookup(that_name);
+      return this_str < that_str;
+    }
+  };
+  // Find the first element that is greater than or equal to the new attribute.
+  auto it = std::lower_bound(attributes.begin(), attributes.end(), new_attr,
+                             less_than);
+  if (it == attributes.end()) {
+    return attributes.size();
+  } else {
+    // Check if the item we found is actually equal; this should be unsupported.
+    if (!less_than(new_attr, *it)) {
+      return -1;
+    }
+    return it - attributes.begin();
+  }
 }
 
 float complex_value(uint32_t complex) {

@@ -1861,3 +1861,133 @@ TEST(FileManipulator, AppendAtEnd) {
   android::Vector<char> serialized;
   file_manipulator.serialize(&serialized);
 }
+
+TEST(Xml, AttributeSorting) {
+  constexpr uint32_t ATTR_ID_COUNT = 4;
+  // Fictional string pool
+  std::vector<std::string> strings = {
+      "id",
+      "layout_width",
+      "layout_height",
+      "layout_margin",
+      "Button",
+      "yolo",
+      "class",
+      "style",
+      "http://schemas.android.com/apk/res/android"};
+  constexpr uint32_t ID_INDEX = 0;
+  constexpr uint32_t LAYOUT_WIDTH_INDEX = 1;
+  constexpr uint32_t LAYOUT_HEIGHT_INDEX = 2;
+  constexpr uint32_t LAYOUT_MARGIN_INDEX = 3;
+  constexpr uint32_t BUTTON_INDEX = 4;
+  constexpr uint32_t YOLO_INDEX = 5;
+  constexpr uint32_t CLASS_INDEX = 6;
+  constexpr uint32_t STYLE_INDEX = 7;
+  constexpr uint32_t URI_INDEX = 8;
+  auto pool_lookup = [&](uint32_t idx) { return strings.at(idx); };
+
+  auto extension_and_attributes_size =
+      sizeof(android::ResXMLTree_attrExt) +
+      4 * sizeof(android::ResXMLTree_attribute);
+
+  android::ResXMLTree_node node{};
+  node.header.type = android::RES_XML_START_ELEMENT_TYPE;
+  node.header.headerSize = sizeof(android::ResXMLTree_node);
+  node.header.size =
+      sizeof(android::ResXMLTree_node) + extension_and_attributes_size;
+  node.comment.index = arsc::NO_VALUE;
+  node.lineNumber = 2;
+
+  // Set up fictional xml element data with 4 sequential attributes
+  arsc::ResFileManipulator::Block block(extension_and_attributes_size);
+  android::ResXMLTree_attrExt extension{};
+  extension.attributeCount = 4;
+  extension.attributeSize = sizeof(android::ResXMLTree_attribute);
+  extension.attributeStart = sizeof(android::ResXMLTree_attrExt);
+  extension.ns.index = arsc::NO_VALUE;
+  extension.idIndex = 0;
+  extension.classIndex = 0;
+  extension.styleIndex = 3;
+  block.write(extension);
+
+  // Attributes
+  android::ResXMLTree_attribute layout_width;
+  layout_width.ns.index = URI_INDEX;
+  layout_width.name.index = LAYOUT_WIDTH_INDEX;
+  layout_width.rawValue.index = arsc::NO_VALUE;
+  layout_width.typedValue.size = sizeof(android::Res_value);
+  layout_width.typedValue.dataType = android::Res_value::TYPE_INT_DEC;
+  layout_width.typedValue.data = WRAP_CONTENT;
+  block.write(layout_width);
+
+  android::ResXMLTree_attribute layout_height;
+  layout_height.ns.index = URI_INDEX;
+  layout_height.name.index = LAYOUT_HEIGHT_INDEX;
+  layout_height.rawValue.index = arsc::NO_VALUE;
+  layout_height.typedValue.size = sizeof(android::Res_value);
+  layout_height.typedValue.dataType = android::Res_value::TYPE_INT_DEC;
+  layout_height.typedValue.data = WRAP_CONTENT;
+  block.write(layout_height);
+
+  android::ResXMLTree_attribute layout_margin;
+  layout_margin.ns.index = URI_INDEX;
+  layout_margin.name.index = LAYOUT_MARGIN_INDEX;
+  layout_margin.rawValue.index = arsc::NO_VALUE;
+  layout_margin.typedValue.size = sizeof(android::Res_value);
+  layout_margin.typedValue.dataType = android::Res_value::TYPE_INT_DEC;
+  layout_margin.typedValue.data = 123;
+  block.write(layout_margin);
+
+  android::ResXMLTree_attribute style_attr;
+  style_attr.ns.index = arsc::NO_VALUE;
+  style_attr.name.index = STYLE_INDEX;
+  style_attr.rawValue.index = arsc::NO_VALUE;
+  style_attr.typedValue.size = sizeof(android::Res_value);
+  style_attr.typedValue.dataType = android::Res_value::TYPE_REFERENCE;
+  style_attr.typedValue.data = 0x7f050005;
+  block.write(style_attr);
+
+  auto extension_ptr = (android::ResXMLTree_attrExt*)block.buffer.get();
+
+  // class attribute should come before style.
+  {
+    android::ResXMLTree_attribute class_attr;
+    class_attr.ns.index = arsc::NO_VALUE;
+    class_attr.name.index = CLASS_INDEX;
+    class_attr.rawValue.index = BUTTON_INDEX;
+    class_attr.typedValue.size = sizeof(android::Res_value);
+    class_attr.typedValue.dataType = android::Res_value::TYPE_STRING;
+    class_attr.typedValue.data = BUTTON_INDEX;
+    EXPECT_EQ(arsc::find_attribute_ordinal(&node, extension_ptr, &class_attr,
+                                           ATTR_ID_COUNT, pool_lookup),
+              3);
+  }
+  // id attribute should come before all others (id has a lower id, lol).
+  {
+    android::ResXMLTree_attribute id_attr;
+    id_attr.ns.index = URI_INDEX;
+    id_attr.name.index = ID_INDEX;
+    id_attr.rawValue.index = arsc::NO_VALUE;
+    id_attr.typedValue.size = sizeof(android::Res_value);
+    id_attr.typedValue.dataType = android::Res_value::TYPE_REFERENCE;
+    id_attr.typedValue.data = 0x7f030001;
+    EXPECT_EQ(arsc::find_attribute_ordinal(&node, extension_ptr, &id_attr,
+                                           ATTR_ID_COUNT, pool_lookup),
+              0);
+  }
+  // This is a fictional attribute, but should exercise this un-namespaced
+  // attribute coming last
+  {
+    android::ResXMLTree_attribute yolo;
+    yolo.ns.index = arsc::NO_VALUE;
+    yolo.name.index = YOLO_INDEX;
+    // yolo="yolo" of course
+    yolo.rawValue.index = YOLO_INDEX;
+    yolo.typedValue.size = sizeof(android::Res_value);
+    yolo.typedValue.dataType = android::Res_value::TYPE_STRING;
+    yolo.typedValue.data = YOLO_INDEX;
+    EXPECT_EQ(arsc::find_attribute_ordinal(&node, extension_ptr, &yolo,
+                                           ATTR_ID_COUNT, pool_lookup),
+              4);
+  }
+}

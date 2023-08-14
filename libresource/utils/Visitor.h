@@ -19,6 +19,13 @@ namespace arsc {
 // Helper methods regarding the serialization format.
 void collect_spans(android::ResStringPool_span* ptr,
                    std::vector<android::ResStringPool_span*>* out);
+// Advance the pointer past the extension to where the attributes start, unless
+// there are no attributes (null pointer is returned in that case).
+android::ResXMLTree_attribute* get_attribute_pointer(
+    android::ResXMLTree_attrExt* extension);
+// Helper methods for traversing attributes
+void collect_attributes(android::ResXMLTree_attrExt* extension,
+                        std::vector<android::ResXMLTree_attribute*>* out);
 
 // Validates data is a sensible ResChunk_header struct
 bool is_binary_xml(const void* data, size_t size);
