@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:gravity="center_horizontal"
+    >
+  <!--
+  Please note: this file is not necessarily meant to be runnable; it's just for making test cases
+  for our parsers.
+   -->
+  <view
+      class="com.facebook.BananaView"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      />
+  <androidx.fragment.app.FragmentContainerView
+      android:name="com.facebook.SomeFragment"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:tag="fragment_container_view"
+      />
+  <fragment
+      android:name="com.facebook.AnotherFragment"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:tag="fragment_element"
+      />
+  <com.facebook.CoolView
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      />
+</LinearLayout>
