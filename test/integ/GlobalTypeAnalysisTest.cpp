@@ -131,9 +131,9 @@ TEST_F(GlobalTypeAnalysisTest, SmallSetDexTypeDomainTest) {
                                   "Lcom/facebook/redextest/TestE$Base;");
   auto rtype = wps.get_return_type(meth_ret_subs);
   EXPECT_TRUE(rtype.is_nullable());
-  auto single_domain = rtype.get_single_domain();
+  const auto& single_domain = rtype.get_single_domain();
   EXPECT_EQ(single_domain, SingletonDexTypeDomain(get_type("TestE$Base")));
-  auto set_domain = rtype.get_set_domain();
+  const auto& set_domain = rtype.get_set_domain();
   EXPECT_EQ(set_domain.get_types(),
             get_type_set({get_type("TestE$SubOne"), get_type("TestE$SubTwo"),
                           get_type("TestE$SubThree")}));

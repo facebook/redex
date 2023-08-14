@@ -37,7 +37,7 @@ bool trace_results_if_different(const std::string& prefix,
   if (gdomain.is_top() || gdomain.is_bottom()) {
     return false;
   }
-  auto gtype = gdomain.get_single_domain().get_dex_type();
+  const auto& gtype = gdomain.get_single_domain().get_dex_type();
   if (!are_different(gtype, ltype)) {
     return false;
   }
