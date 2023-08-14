@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.fb.resources"
+    android:versionCode="100"
+    android:versionName="1.0">
+
+  <instrumentation
+      android:name="androidx.test.runner.AndroidJUnitRunner"
+      android:targetPackage="com.fb.resources" />
+
+  <uses-sdk android:targetSdkVersion="29" android:minSdkVersion="21" />
+
+  <application
+      android:allowBackup="true"
+      android:label="Resources">
+  </application>
+
+</manifest>

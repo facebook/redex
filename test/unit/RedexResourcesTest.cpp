@@ -47,4 +47,20 @@ TEST(RedexResources, ReadXmlTagsAndAttributes) {
 
   auto no_ns_vals = multimap_values_to_set(attribute_values, "onClick");
   EXPECT_EQ(no_ns_vals.size(), 0);
+
+  // Parse another file with slightly different form.
+  std::unordered_set<std::string> more_classes;
+  std::unordered_multimap<std::string, std::string> more_attribute_values;
+  resources.collect_layout_classes_and_attributes_for_file(
+      std::getenv("another_layout_path"),
+      {},
+      &more_classes,
+      &more_attribute_values);
+  EXPECT_EQ(more_classes.size(), 5);
+  EXPECT_EQ(more_classes.count("Lcom/facebook/BananaView;"), 1);
+  EXPECT_EQ(more_classes.count("Landroidx/fragment/app/FragmentContainerView;"),
+            1);
+  EXPECT_EQ(more_classes.count("Lcom/facebook/SomeFragment;"), 1);
+  EXPECT_EQ(more_classes.count("Lcom/facebook/AnotherFragment;"), 1);
+  EXPECT_EQ(more_classes.count("Lcom/facebook/CoolView;"), 1);
 }

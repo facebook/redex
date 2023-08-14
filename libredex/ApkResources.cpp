@@ -871,10 +871,6 @@ void extract_classes_from_layout(
   android::ResXMLTree parser;
   parser.setTo(data, size);
 
-  android::String16 name("name");
-  android::String16 klazz("class");
-  android::String16 target_class("targetClass");
-
   if (parser.getError() != android::NO_ERROR) {
     return;
   }
@@ -886,27 +882,32 @@ void extract_classes_from_layout(
     if (type == android::ResXMLParser::START_TAG) {
       size_t len;
       android::String16 tag(parser.getElementName(&len));
-      std::string classname = convert_from_string16(tag);
-      if (!strcmp(classname.c_str(), "fragment") ||
-          !strcmp(classname.c_str(), "view") ||
-          !strcmp(classname.c_str(), "dialog") ||
-          !strcmp(classname.c_str(), "activity") ||
-          !strcmp(classname.c_str(), "intent")) {
-        classname = get_string_attribute_value(parser, klazz);
-        if (classname.empty()) {
-          classname = get_string_attribute_value(parser, name);
-        }
-        if (classname.empty()) {
-          classname = get_string_attribute_value(parser, target_class);
+      std::string element_name = convert_from_string16(tag);
+      if (resources::KNOWN_ELEMENTS_WITH_CLASS_ATTRIBUTES.count(element_name) >
+          0) {
+        for (const auto& attr : resources::POSSIBLE_CLASS_ATTRIBUTES) {
+          android::String16 attr_name(attr.c_str(), attr.length());
+          auto classname = get_string_attribute_value(parser, attr_name);
+          if (!classname.empty() && classname.find('.') != std::string::npos) {
+            auto internal = java_names::external_to_internal(classname);
+            TRACE(RES, 9,
+                  "Considering %s as possible class in XML "
+                  "resource from element %s",
+                  internal.c_str(), element_name.c_str());
+            out_classes->emplace(internal);
+            break;
+          }
         }
       }
-      std::string converted = std::string("L") + classname + std::string(";");
+      if (element_name.find('.') != std::string::npos) {
+        // Consider the element name itself as a possible class in the
+        // application
+        auto internal = java_names::external_to_internal(element_name);
+        TRACE(RES, 9, "Considering %s as possible class in XML resource",
+              internal.c_str());
+        out_classes->emplace(internal);
+      }
 
-      bool is_classname = converted.find('.') != std::string::npos;
-      if (is_classname) {
-        std::replace(converted.begin(), converted.end(), '.', '/');
-        out_classes->insert(converted);
-      }
       if (!attributes_to_read.empty()) {
         for (size_t i = 0; i < parser.getAttributeCount(); i++) {
           auto ns_id = parser.getAttributeNamespaceID(i);

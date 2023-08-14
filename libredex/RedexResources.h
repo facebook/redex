@@ -51,6 +51,18 @@ inline bool is_resource_class_name(const std::string_view c_name) {
 }
 bool is_r_class(const DexClass* cls);
 void gather_r_classes(const Scope& scope, std::vector<DexClass*>* vec);
+// List of tags in xml documents for which we should hunt in attribute values
+// for class names.
+const inline std::unordered_set<std::string>
+    KNOWN_ELEMENTS_WITH_CLASS_ATTRIBUTES = {
+        "fragment", "view",   "dialog",
+        "activity", "intent", "androidx.fragment.app.FragmentContainerView",
+};
+const inline std::vector<std::string> POSSIBLE_CLASS_ATTRIBUTES = {
+    "class",
+    "name",
+    "targetClass",
+};
 } // namespace resources
 
 /*
