@@ -1073,3 +1073,116 @@ TEST_F(SwitchEquivFinderTest, test_class_switch_with_dup_keys_extra_load) {
   // that survive to leafs; this will not successfully represent out of caution.
   EXPECT_FALSE(finder.success());
 }
+
+TEST_F(SwitchEquivFinderTest, test_class_switch_with_move_duplicate) {
+  setup();
+
+  // A form where the result of a const-class gets moved into a higher register
+  // for use again later in a check. Derived from a real world example.
+  auto code_with_move_dup = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v1)
+
+      (const-class "LBaz;")
+      (move-result-pseudo-object v0)
+      (if-ne v1 v0 :not_baz)
+      (const v0 101)
+      (goto :out)
+
+      (:not_baz)
+      (const-class "LBar;")
+      (move-result-pseudo-object v0)
+      (move-object v2 v0)
+      (if-ne v1 v0 :not_bar)
+      (const v0 100)
+      (invoke-virtual (v2) "Ljava/lang/Object;.hashCode:()I")
+      (goto :out)
+
+      (:not_bar)
+      (const-class "LBoo;")
+      (move-result-pseudo-object v0)
+      (if-ne v1 v0 :not_boo)
+      (const v0 102)
+      (invoke-virtual (v2) "Ljava/lang/Object;.hashCode:()I")
+      (goto :out)
+
+      (:not_boo)
+      (if-ne v1 v2 :definitely_not_bar)
+      (const v0 9999)
+      (goto :out)
+
+      (:definitely_not_bar)
+      (const-class "LFoo;")
+      (move-result-pseudo-object v0)
+      (if-ne v1 v0 :case_default)
+      (const v0 103)
+      (goto :out)
+
+      (:case_default)
+      (const v0 -1)
+
+      (:out)
+      (return v0)
+    )
+)");
+
+  // Make this code conform to SwitchEquivFinder expectations so that
+  // move-object does not appear in non-leaf block.
+  SwitchEquivEditor::simplify_moves(code_with_move_dup.get());
+
+  code_with_move_dup->build_cfg();
+  auto& cfg = code_with_move_dup->cfg();
+  // By default, duplicated cases like this will not return success. Run this
+  // variant and make sure it behaves reasonably.
+  {
+    SwitchEquivFinder finder(&cfg, get_first_branch(cfg), 1);
+    EXPECT_FALSE(finder.success());
+  }
+  // Turn on option to support dup
+  SwitchEquivFinder finder(&cfg,
+                           get_first_branch(cfg),
+                           1,
+                           SwitchEquivFinder::NO_LEAF_DUPLICATION,
+                           {},
+                           SwitchEquivFinder::EXECUTION_ORDER);
+  EXPECT_TRUE(finder.success());
+  EXPECT_TRUE(finder.are_keys_uniform(SwitchEquivFinder::KeyKind::CLASS));
+  auto& key_to_case = finder.key_to_case();
+  EXPECT_EQ(key_to_case.size(), 5);
+
+  auto default_case = finder.default_case();
+  EXPECT_NE(default_case, boost::none);
+  EXPECT_EQ(get_first_instruction_literal(*default_case), -1);
+
+  auto bar_type = DexType::get_type("LBar;");
+  auto bar_block = key_to_case.at(bar_type);
+  // The finder should not get confused, the case_decoy block should NOT be
+  // chosen here!
+  EXPECT_EQ(get_first_instruction_literal(bar_block), 100);
+
+  auto baz_type = DexType::get_type("LBaz;");
+  auto baz_block = key_to_case.at(baz_type);
+  EXPECT_EQ(get_first_instruction_literal(baz_block), 101);
+
+  auto boo_type = DexType::get_type("LBoo;");
+  auto boo_block = key_to_case.at(boo_type);
+  EXPECT_EQ(get_first_instruction_literal(boo_block), 102);
+
+  auto foo_type = DexType::get_type("LFoo;");
+  auto foo_block = key_to_case.at(foo_type);
+  EXPECT_EQ(get_first_instruction_literal(foo_block), 103);
+
+  // Make sure that the use of v2 from leaf blocks is handled properly.
+  auto instructions_copied =
+      SwitchEquivEditor::copy_extra_loads_to_leaf_blocks(finder, &cfg);
+  std::cerr << "Post edit " << SHOW(cfg) << std::endl;
+  EXPECT_GT(instructions_copied, 0);
+  // Ensure the blocks that use v2 get a new def that makes sense. More than
+  // these two blocks will get the new instructions (as it is overly broad) but
+  // these are the only two that actually matter to check for correctness
+  // purposes.
+  EXPECT_EQ(bar_block->begin()->insn->opcode(), OPCODE_CONST_CLASS);
+  EXPECT_EQ(bar_block->begin()->insn->get_type(), bar_type);
+  EXPECT_EQ(boo_block->begin()->insn->opcode(), OPCODE_CONST_CLASS);
+  EXPECT_EQ(boo_block->begin()->insn->get_type(), bar_type);
+}

@@ -195,4 +195,8 @@ class SwitchEquivEditor {
   // to the beginning of leaf.
   static size_t copy_extra_loads_to_leaf_blocks(const SwitchEquivFinder& finder,
                                                 cfg::ControlFlowGraph* cfg);
+  // Undo the effect of CSE which would emit moves for const-class objects that
+  // are used later. Replace such a move with a duplicated const-class/move
+  // result pseudo to make the logic in SwitchEquivFinder less complicated.
+  static size_t simplify_moves(IRCode* code);
 };
