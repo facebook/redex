@@ -50,6 +50,7 @@ struct PendingTransform {
   IRInstruction* insn;
   size_t insn_idx;
   reg_t determining_reg;
+  std::unique_ptr<IRCode> code_copy;
   std::unique_ptr<cfg::ScopedCFG> scoped_cfg;
   std::unique_ptr<SwitchEquivFinder> switch_equiv;
 };
@@ -111,8 +112,11 @@ void gather_possible_transformations(
     DexClass* cls,
     DexMethod* method,
     std::vector<PendingTransform>* pending_transforms) {
-  auto code = method->get_code();
-  auto scoped_cfg = std::make_unique<cfg::ScopedCFG>(code);
+  // First step is to operate on a simplified copy of the code. If the transform
+  // is applicable, this copy will take effect.
+  auto code_copy = std::make_unique<IRCode>(*method->get_code());
+  SwitchEquivEditor::simplify_moves(code_copy.get());
+  auto scoped_cfg = std::make_unique<cfg::ScopedCFG>(code_copy.get());
   auto& cfg = **scoped_cfg;
   // Many checks to see if this method conforms to the types of patterns that
   // are able to be easily represented without losing information. At the time
@@ -189,6 +193,7 @@ void gather_possible_transformations(
                      last_prologue_insn->insn,
                      insn_idx,
                      determining_reg,
+                     std::move(code_copy),
                      std::move(scoped_cfg),
                      std::move(finder)};
   pending_transforms->emplace_back(std::move(t));
@@ -366,6 +371,9 @@ Stats apply_transform(const PassState& pass_state,
   result.const_class_instructions_removed =
       before_const_class_count - num_const_class_opcodes(&cfg);
   always_assert(result.const_class_instructions_removed >= 0);
+
+  // Make the copy take effect.
+  transform.method->set_code(std::move(transform.code_copy));
   return result;
 }
 

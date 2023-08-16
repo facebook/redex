@@ -11,8 +11,11 @@
 #include <queue>
 #include <vector>
 
+#include "CFGMutation.h"
 #include "ConstantPropagationAnalysis.h"
+#include "LiveRange.h"
 #include "ReachingDefinitions.h"
+#include "ScopedCFG.h"
 #include "SourceBlocks.h"
 #include "StlUtil.h"
 #include "Trace.h"
@@ -647,4 +650,34 @@ size_t SwitchEquivEditor::copy_extra_loads_to_leaf_blocks(
     result += copy_extra_loads_to_leaf_block(extra_loads, cfg, pair.second);
   }
   return result;
+}
+
+size_t SwitchEquivEditor::simplify_moves(IRCode* code) {
+  auto scoped_cfg = std::make_unique<cfg::ScopedCFG>(code);
+  auto& cfg = **scoped_cfg;
+
+  size_t changes{0};
+  cfg::CFGMutation mutation(cfg);
+  auto udchains = live_range::MoveAwareChains(cfg).get_use_def_chains();
+
+  auto ii = InstructionIterable(cfg);
+  for (auto it = ii.begin(); it != ii.end(); ++it) {
+    auto insn = it->insn;
+    if (insn->opcode() == OPCODE_MOVE_OBJECT) {
+      auto search = udchains.find((live_range::Use){insn, 0});
+      if (search != udchains.end() && search->second.size() == 1) {
+        auto* def = *search->second.begin();
+        if (def->opcode() == OPCODE_CONST_CLASS) {
+          auto duplicated_const_class = new IRInstruction(*def);
+          auto move_pseudo =
+              new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
+          move_pseudo->set_dest(insn->dest());
+          mutation.replace(it, {duplicated_const_class, move_pseudo});
+          changes++;
+        }
+      }
+    }
+  }
+  mutation.flush();
+  return changes;
 }
