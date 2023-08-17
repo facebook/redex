@@ -105,6 +105,7 @@ check_PROGRAMS = \
     pure_analysis_test \
     random_forest_test \
     reaching_definitions_test \
+    rearrange_enum_clinit_test \
     reduce_array_literals_test \
     reduce_boolean_branches_test \
     reduce_gotos_test \
@@ -355,6 +356,8 @@ pure_analysis_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 random_forest_test_SOURCES = RandomForestTest.cpp
 
 reaching_definitions_test_SOURCES = ReachingDefinitionsTest.cpp
+
+rearrange_enum_clinit_test_SOURCES = RearrangeEnumClinitTest.cpp
 
 reduce_array_literals_test_SOURCES = ReduceArrayLiteralsTest.cpp
 reduce_array_literals_test_LDADD = $(COMMON_MOCK_TEST_LIBS)

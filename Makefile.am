@@ -420,7 +420,8 @@ libopt_la_SOURCES = \
 	opt/peephole/RedundantCheckCastRemover.cpp \
 	opt/print-kotlin-stats/PrintKotlinStats.cpp \
 	opt/print-members/PrintMembers.cpp \
-  opt/reachable-natives/ReachableNatives.cpp \
+	opt/reachable-natives/ReachableNatives.cpp \
+	opt/rearrange-enum-clinit/RearrangeEnumClinit.cpp \
 	opt/rebindrefs/ReBindRefs.cpp \
 	opt/regalloc/RegAlloc.cpp \
 	opt/regalloc-fast/FastRegAlloc.cpp \
