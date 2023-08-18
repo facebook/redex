@@ -1256,8 +1256,19 @@ void Model::distribute_virtual_methods(
       // the emitted code is correct. Virtual method refs can be rebound at a
       // later point.
       auto top_def = virt_scope->methods[0];
-      DexMethod* overridden_meth =
-          top_def.first->is_def() ? top_def.first : nullptr;
+      // We emit invoke_super agaist the overridden method by default in the
+      // virtual dispatch. A non-external abstract method is not a valid target
+      // for invoke-super, so we skip it.
+      const auto get_initial_overridden = [](DexMethod* meth) -> DexMethod* {
+        if (!meth->is_def()) {
+          return nullptr;
+        }
+        if (!meth->is_external() && is_abstract(meth)) {
+          return nullptr;
+        }
+        return meth;
+      };
+      DexMethod* overridden_meth = get_initial_overridden(top_def.first);
       const auto update_overridden = [&merger, &overridden_meth](
                                          const VirtualMethod& top_def,
                                          DexMethod* virt_meth) {
@@ -1278,6 +1289,10 @@ void Model::distribute_virtual_methods(
       for (const auto& pair : virt_scope->methods) {
         auto* virt_meth = pair.first;
         if (!virt_meth->is_def()) {
+          continue;
+        }
+        if (!virt_meth->is_external() && is_abstract(virt_meth)) {
+          // Skip abstract overridden
           continue;
         }
         if (merger.mergeables.count(virt_meth->get_class()) == 0) {

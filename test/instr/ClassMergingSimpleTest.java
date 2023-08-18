@@ -149,15 +149,20 @@ class D extends Base {
   }
 }
 
-abstract class SecondBase {}
+abstract class SecondBase {
+  abstract String foo();
+}
 class SecondA extends SecondBase {
   int getA() { return 1; }
+  String foo() { return "A"; }
 }
 class SecondB extends SecondBase {
   int getB() { return 2; }
+  String foo() { return "B"; }
 }
 class SecondC extends SecondBase {
   int getC() { return 3; }
+  String foo() { return "C"; }
 }
 
 public class ClassMergingSimpleTest {
@@ -360,5 +365,15 @@ public class ClassMergingSimpleTest {
     assertThat(a.getA()).isEqualTo(1);
     assertThat(b.getB()).isEqualTo(2);
     assertThat(c.getC()).isEqualTo(3);
+  }
+
+  @Test
+  public void testSecondRootAbstractOverridden() {
+    SecondA a = new SecondA();
+    SecondB b = new SecondB();
+    SecondC c = new SecondC();
+    assertThat(a.foo()).isEqualTo("A");
+    assertThat(b.foo()).isEqualTo("B");
+    assertThat(c.foo()).isEqualTo("C");
   }
 }
