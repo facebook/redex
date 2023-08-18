@@ -344,7 +344,9 @@ class DexField : public DexFieldRef {
   DexField(const DexField&) = delete;
   ~DexField();
 
-  ReferencedState rstate; // Tracks whether this field can be deleted or renamed
+  ReferencedState rstate =
+      ReferencedState(RefStateType::FieldState); // Tracks whether this field
+                                                 // can be deleted or renamed
 
   // DexField retrieval/creation
 
@@ -889,7 +891,7 @@ class DexMethod : public DexMethodRef {
   DexMethod(const DexMethodRef&) = delete;
 
   // Tracks whether this method can be deleted or renamed
-  ReferencedState rstate;
+  ReferencedState rstate = ReferencedState(RefStateType::MethodState);
 
   // DexMethod retrieval/creation
 
@@ -1162,7 +1164,7 @@ class DexClass {
   std::string self_show() const; // To avoid "Show.h" in the header.
 
  public:
-  ReferencedState rstate;
+  ReferencedState rstate = ReferencedState(RefStateType::ClassState);
 
   ~DexClass();
 

@@ -28,10 +28,15 @@ class KeepState;
 
 using InterdexSubgroupIdx = uint32_t;
 
+enum class RefStateType { ClassState, MethodState, FieldState };
+
 class ReferencedState {
  private:
   struct InnerStruct {
     int8_t m_api_level{-1};
+
+    // 00--invalid; 01 -- class; 10 -- method; 11 -- field.
+    uint8_t m_stype : 2;
 
     // Whether this DexMember is referenced by one of the strings in the native
     // libraries. Note that this doesn't allow us to distinguish
@@ -66,46 +71,60 @@ class ReferencedState {
     // For keep modifier: -keep,includedescriptorclasses
     bool m_includedescriptorclasses : 1;
 
-    bool m_no_optimizations : 1;
-
     bool m_generated : 1;
-
-    // For inlining configurations.
-    bool m_dont_inline : 1;
-    bool m_force_inline : 1;
-
-    // This is set by the ImmutableGetters pass. It indicates that a method
-    // is pure.
-    bool m_immutable_getter : 1;
-
-    // This is set by the AnalyzePureMethodsPass. It indicates that a method
-    // is pure as defined in Purity.h.
-    // *WARNING*
-    // Any optimisation that might alter the semantics in such a way that it is
-    // no longer pure should invalidate this flag. It could also be invalidated
-    // by running AnalyzePureMethodsPass which would recompute it.
-    bool m_pure_method : 1;
 
     // Whether this member is an outlined class or method.
     bool m_outlined : 1;
 
-    // Is this member is a kotlin class or method
-    bool m_is_kotlin : 1;
-
     bool m_name_used : 1;
 
-    // Whether a field is used to indicate that an sget cannot be removed
-    // because it signals that the class must be initialized at this point.
-    bool m_init_class : 1;
+    union {
+      // This is for class only. Currently, the number of flags is 2. Once new
+      // flag is added, please update the corresponding number in comment.
+      struct {
+        // Is this member is a kotlin class
+        bool m_is_kotlin : 1;
+        // This may be set on classes, indicating that its static initializer
+        // has no side effects.
+        bool m_clinit_has_no_side_effects : 1;
+      };
+      // This is for method only. Currently, the number of flags
+      // is 6. Once new flag is added, please update the corresponding number in
+      // comment.
+      struct {
+        bool m_no_optimizations : 1;
+        // This is set by the AnalyzePureMethodsPass. It indicates that a method
+        // is pure as defined in Purity.h.
+        // *WARNING*
+        // Any optimisation that might alter the semantics in such a way that it
+        // is no longer pure should invalidate this flag. It could also be
+        // invalidated by running AnalyzePureMethodsPass which would recompute
+        // it.
+        bool m_pure_method : 1;
 
-    // This may be set on classes, indicating that its static initializer has no
-    // side effects.
-    bool m_clinit_has_no_side_effects : 1;
+        // This is set by the ImmutableGetters pass. It indicates that a method
+        // is pure.
+        bool m_immutable_getter : 1;
 
-    bool m_too_large_for_inlining_into : 1;
+        // For inlining configurations.
+        bool m_dont_inline : 1;
+        bool m_force_inline : 1;
+        bool m_too_large_for_inlining_into : 1;
+      };
+      // This is for filed only.  Currently the number of flags
+      // is 1. Once new flag is added, please update the corresponding number in
+      // comment.
+      struct {
+        // Whether a field is used to indicate that an sget cannot be removed
+        // because it signals that the class must be initialized at this point.
+        bool m_init_class : 1;
+      };
+    };
 
     InnerStruct() {
       // Initializers in bit fields are C++20...
+      m_stype = 0;
+
       m_by_string = false;
       m_by_resources = false;
       m_is_serde = false;
@@ -120,25 +139,38 @@ class ReferencedState {
       m_unset_allowobfuscation = false;
 
       m_includedescriptorclasses = false;
-
-      m_no_optimizations = false;
-
       m_generated = false;
-
-      m_dont_inline = false;
-      m_force_inline = false;
-
-      m_immutable_getter = false;
-      m_pure_method = false;
       m_outlined = false;
-      m_is_kotlin = false;
-
       m_name_used = false;
 
-      m_init_class = false;
-      m_clinit_has_no_side_effects = false;
+      // Only need to initialize the largest field in union.
+      m_no_optimizations = false;
+      m_pure_method = false;
+      m_immutable_getter = false;
+      m_dont_inline = false;
+      m_force_inline = false;
       m_too_large_for_inlining_into = false;
     }
+
+    void set_state_type(RefStateType stype) {
+      switch (stype) {
+      case RefStateType::ClassState:
+        m_stype = 1;
+        break;
+      case RefStateType::MethodState:
+        m_stype = 2;
+        break;
+      case RefStateType::FieldState:
+        m_stype = 3;
+        break;
+      default:;
+      }
+    }
+
+    bool is_class() const { return m_stype == 1; }
+    bool is_method() const { return m_stype == 2; }
+    bool is_field() const { return m_stype == 3; }
+
   } inner_struct;
 
   // InterDex subgroup, if any.
@@ -156,7 +188,10 @@ class ReferencedState {
   mutable std::atomic<KeepReasons*> m_keep_reasons{nullptr};
 
  public:
-  ReferencedState() = default;
+  explicit ReferencedState(RefStateType stype) {
+    inner_struct.set_state_type(stype);
+  }
+
   ReferencedState(const ReferencedState&) = delete;
   ~ReferencedState() { delete m_keep_reasons.load(); }
 
@@ -172,60 +207,76 @@ class ReferencedState {
   }
 
   void join_with(const ReferencedState& other) {
-    if (this != &other) {
-      this->inner_struct.m_by_string =
-          this->inner_struct.m_by_string | other.inner_struct.m_by_string;
-      this->inner_struct.m_by_resources =
-          this->inner_struct.m_by_resources | other.inner_struct.m_by_resources;
-      this->inner_struct.m_is_serde =
-          this->inner_struct.m_is_serde | other.inner_struct.m_is_serde;
+    if (this == &other) {
+      return;
+    }
 
-      this->inner_struct.m_keep =
-          this->inner_struct.m_keep | other.inner_struct.m_keep;
-      this->inner_struct.m_assumenosideeffects =
-          this->inner_struct.m_assumenosideeffects &
-          other.inner_struct.m_assumenosideeffects;
-      this->inner_struct.m_whyareyoukeeping =
-          this->inner_struct.m_whyareyoukeeping |
-          other.inner_struct.m_whyareyoukeeping;
+    // Common flags.
+    this->inner_struct.m_by_string =
+        this->inner_struct.m_by_string | other.inner_struct.m_by_string;
+    this->inner_struct.m_by_resources =
+        this->inner_struct.m_by_resources | other.inner_struct.m_by_resources;
+    this->inner_struct.m_is_serde =
+        this->inner_struct.m_is_serde | other.inner_struct.m_is_serde;
 
-      this->inner_struct.m_set_allowshrinking =
-          this->inner_struct.m_set_allowshrinking &
-          other.inner_struct.m_set_allowshrinking;
-      this->inner_struct.m_unset_allowshrinking =
-          this->inner_struct.m_unset_allowshrinking |
-          other.inner_struct.m_unset_allowshrinking;
-      this->inner_struct.m_set_allowobfuscation =
-          this->inner_struct.m_set_allowobfuscation &
-          other.inner_struct.m_set_allowobfuscation;
-      this->inner_struct.m_unset_allowobfuscation =
-          this->inner_struct.m_unset_allowobfuscation |
-          other.inner_struct.m_unset_allowobfuscation;
+    this->inner_struct.m_keep =
+        this->inner_struct.m_keep | other.inner_struct.m_keep;
 
-      this->inner_struct.m_includedescriptorclasses =
-          this->inner_struct.m_includedescriptorclasses |
-          other.inner_struct.m_includedescriptorclasses;
+    this->inner_struct.m_assumenosideeffects =
+        this->inner_struct.m_assumenosideeffects &
+        other.inner_struct.m_assumenosideeffects;
+    this->inner_struct.m_whyareyoukeeping =
+        this->inner_struct.m_whyareyoukeeping |
+        other.inner_struct.m_whyareyoukeeping;
 
+    this->inner_struct.m_set_allowshrinking =
+        this->inner_struct.m_set_allowshrinking &
+        other.inner_struct.m_set_allowshrinking;
+    this->inner_struct.m_unset_allowshrinking =
+        this->inner_struct.m_unset_allowshrinking |
+        other.inner_struct.m_unset_allowshrinking;
+    this->inner_struct.m_set_allowobfuscation =
+        this->inner_struct.m_set_allowobfuscation &
+        other.inner_struct.m_set_allowobfuscation;
+    this->inner_struct.m_unset_allowobfuscation =
+        this->inner_struct.m_unset_allowobfuscation |
+        other.inner_struct.m_unset_allowobfuscation;
+
+    this->inner_struct.m_includedescriptorclasses =
+        this->inner_struct.m_includedescriptorclasses |
+        other.inner_struct.m_includedescriptorclasses;
+
+    // m_generated skipped.
+
+    this->inner_struct.m_outlined =
+        this->inner_struct.m_outlined & other.inner_struct.m_outlined;
+
+    // m_name_used skipped.
+
+    if (this->inner_struct.is_class()) {
+      this->inner_struct.m_is_kotlin =
+          this->inner_struct.m_is_kotlin & other.inner_struct.m_is_kotlin;
+    } else if (this->inner_struct.is_method()) {
       this->inner_struct.m_no_optimizations =
           this->inner_struct.m_no_optimizations |
           other.inner_struct.m_no_optimizations;
+      this->inner_struct.m_pure_method =
+          this->inner_struct.m_pure_method & other.inner_struct.m_pure_method;
+      this->inner_struct.m_immutable_getter =
+          this->inner_struct.m_immutable_getter &
+          other.inner_struct.m_immutable_getter;
       this->inner_struct.m_dont_inline =
           this->inner_struct.m_dont_inline | other.inner_struct.m_dont_inline;
       this->inner_struct.m_force_inline =
           this->inner_struct.m_force_inline & other.inner_struct.m_force_inline;
-
-      this->inner_struct.m_immutable_getter =
-          this->inner_struct.m_immutable_getter &
-          other.inner_struct.m_immutable_getter;
-      this->inner_struct.m_pure_method =
-          this->inner_struct.m_pure_method & other.inner_struct.m_pure_method;
-      this->inner_struct.m_is_kotlin =
-          this->inner_struct.m_is_kotlin & other.inner_struct.m_is_kotlin;
-      this->inner_struct.m_outlined =
-          this->inner_struct.m_outlined & other.inner_struct.m_outlined;
-
+      this->inner_struct.m_too_large_for_inlining_into =
+          this->inner_struct.m_too_large_for_inlining_into |
+          other.inner_struct.m_too_large_for_inlining_into;
+    } else if (this->inner_struct.is_field()) {
       this->inner_struct.m_init_class =
           this->inner_struct.m_init_class | other.inner_struct.m_init_class;
+    } else {
+      always_assert_log(0, "invalid state\n");
     }
   }
 
@@ -375,51 +426,104 @@ class ReferencedState {
     inner_struct.m_api_level = api_level;
   }
 
-  bool no_optimizations() const { return inner_struct.m_no_optimizations; }
-  void set_no_optimizations() { inner_struct.m_no_optimizations = true; }
-  void reset_no_optimizations() { inner_struct.m_no_optimizations = false; }
+  bool no_optimizations() const {
+    always_assert(inner_struct.is_method());
+    return inner_struct.m_no_optimizations;
+  }
+  void set_no_optimizations() {
+    always_assert(inner_struct.is_method());
+    inner_struct.m_no_optimizations = true;
+  }
+  void reset_no_optimizations() {
+    always_assert(inner_struct.is_method());
+    inner_struct.m_no_optimizations = false;
+  }
 
   // Methods and classes marked as "generated" tend to not have stable names,
   // and don't properly participate in coldstart tracking.
   bool is_generated() const { return inner_struct.m_generated; }
   void set_generated() { inner_struct.m_generated = true; }
 
-  bool force_inline() const { return inner_struct.m_force_inline; }
-  void set_force_inline() { inner_struct.m_force_inline = true; }
-  bool dont_inline() const { return inner_struct.m_dont_inline; }
-  void set_dont_inline() { inner_struct.m_dont_inline = true; }
+  bool force_inline() const {
+    always_assert(inner_struct.is_method());
+    return inner_struct.m_force_inline;
+  }
+  void set_force_inline() {
+    always_assert(inner_struct.is_method());
+    inner_struct.m_force_inline = true;
+  }
+  bool dont_inline() const {
+    always_assert(inner_struct.is_method());
+    return inner_struct.m_dont_inline;
+  }
+  void set_dont_inline() {
+    always_assert(inner_struct.is_method());
+    inner_struct.m_dont_inline = true;
+  }
 
-  bool immutable_getter() const { return inner_struct.m_immutable_getter; }
-  void set_immutable_getter() { inner_struct.m_immutable_getter = true; }
+  bool immutable_getter() const {
+    always_assert(inner_struct.is_method());
+    return inner_struct.m_immutable_getter;
+  }
+  void set_immutable_getter() {
+    always_assert(inner_struct.is_method());
+    inner_struct.m_immutable_getter = true;
+  }
 
-  bool pure_method() const { return inner_struct.m_pure_method; }
-  void set_pure_method() { inner_struct.m_pure_method = true; }
-  void reset_pure_method() { inner_struct.m_pure_method = false; }
+  bool pure_method() const {
+    always_assert(inner_struct.is_method());
+    return inner_struct.m_pure_method;
+  }
+  void set_pure_method() {
+    always_assert(inner_struct.is_method());
+    inner_struct.m_pure_method = true;
+  }
+  void reset_pure_method() {
+    always_assert(inner_struct.is_method());
+    inner_struct.m_pure_method = false;
+  }
 
   bool outlined() const { return inner_struct.m_outlined; }
   void set_outlined() { inner_struct.m_outlined = true; }
   void reset_outlined() { inner_struct.m_outlined = false; }
-  bool is_cls_kotlin() const { return inner_struct.m_is_kotlin; }
-  void set_cls_kotlin() { inner_struct.m_is_kotlin = true; }
+  bool is_cls_kotlin() const {
+    always_assert(inner_struct.is_class());
+    return inner_struct.m_is_kotlin;
+  }
+  void set_cls_kotlin() {
+    always_assert(inner_struct.is_class());
+    inner_struct.m_is_kotlin = true;
+  }
   void set_name_used() { inner_struct.m_name_used = true; }
   bool name_used() { return inner_struct.m_name_used; }
 
-  bool init_class() const { return inner_struct.m_init_class; }
-  void set_init_class() { inner_struct.m_init_class = true; }
+  bool init_class() const {
+    always_assert(inner_struct.is_field());
+    return inner_struct.m_init_class;
+  }
+  void set_init_class() {
+    always_assert(inner_struct.is_field());
+    inner_struct.m_init_class = true;
+  }
   void set_clinit_has_no_side_effects() {
+    always_assert(inner_struct.is_class());
     inner_struct.m_clinit_has_no_side_effects = true;
   }
   bool clinit_has_no_side_effects() const {
+    always_assert(inner_struct.is_class());
     return inner_struct.m_clinit_has_no_side_effects;
   }
 
   void set_too_large_for_inlining_into() {
+    always_assert(inner_struct.is_method());
     inner_struct.m_too_large_for_inlining_into = true;
   }
   void reset_too_large_for_inlining_into() {
+    always_assert(inner_struct.is_method());
     inner_struct.m_too_large_for_inlining_into = false;
   }
   bool too_large_for_inlining_into() const {
+    always_assert(inner_struct.is_method());
     return inner_struct.m_too_large_for_inlining_into;
   }
 
