@@ -14,7 +14,7 @@
 #include "verify/VerifyUtil.h"
 
 TEST_F(PostVerify, VerifyNewTypeCreated) {
-  auto resources_path = resources["resources.arsc"];
+  auto resources_path = resources.at("resources.arsc");
   ResourcesArscFile arsc_file(resources_path);
   auto& table_snapshot = arsc_file.get_table_snapshot();
   // Actual lookup, data type validation will differ for .apk. Do that in the
