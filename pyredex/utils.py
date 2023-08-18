@@ -346,23 +346,34 @@ def remove_signature_files(extracted_apk_dir: str) -> None:
             os.remove(cert_path)
 
 
-def sign_apk(keystore: str, keypass: str, keyalias: str, apk: str) -> None:
-    subprocess.check_call(
-        [
-            find_apksigner(),
-            "sign",
-            "--v1-signing-enabled",
-            "--v2-signing-enabled",
-            "--ks",
-            keystore,
-            "--ks-pass",
-            "pass:" + keypass,
-            "--ks-key-alias",
-            keyalias,
-            apk,
-        ],
-        stdout=sys.stderr,
-    )
+def sign_apk(
+    keystore: str, keypass: str, keyalias: str, apk: str, ignore_apksigner: bool = False
+) -> None:
+    def run() -> None:
+        subprocess.check_call(
+            [
+                find_apksigner(),
+                "sign",
+                "--v1-signing-enabled",
+                "--v2-signing-enabled",
+                "--ks",
+                keystore,
+                "--ks-pass",
+                "pass:" + keypass,
+                "--ks-key-alias",
+                keyalias,
+                apk,
+            ],
+            stdout=sys.stderr,
+        )
+
+    if ignore_apksigner:
+        try:
+            run()
+        except FileNotFoundError:
+            logging.warning("Failed to find apksigner binary. Continuing...")
+    else:
+        run()
 
 
 def remove_comments_from_line(line: str) -> str:
