@@ -11,13 +11,13 @@
 #include "ObfuscateResourcesVerifyHelper.h"
 
 TEST_F(PreVerify, ApkObfuscateResourceTest) {
-  const auto& resource_arsc_file = resources["resources.arsc"];
+  const auto& resource_arsc_file = resources.at("resources.arsc");
   auto res_table = ResourcesArscFile(resource_arsc_file);
   obfuscateresource_preverify(&res_table);
 }
 
 TEST_F(PostVerify, ApkObfuscateResourceTest) {
-  const auto& resource_arsc_file = resources["resources.arsc"];
+  const auto& resource_arsc_file = resources.at("resources.arsc");
   auto res_table = ResourcesArscFile(resource_arsc_file);
   obfuscateresource_postverify(&res_table);
 

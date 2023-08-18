@@ -10,6 +10,7 @@
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/regex.hpp>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <gtest/gtest.h>
 #include <sstream>
@@ -168,17 +169,30 @@ ResourceFiles decode_resource_paths(const char* location, const char* suffix) {
   ResourceFiles files;
   std::istringstream input;
   input.str(location);
+
+  std::string long_suffix = suffix + std::string("__/out");
+  auto match_dir = [&suffix, &long_suffix](const auto& path) {
+    if (boost::algorithm::ends_with(path, suffix)) {
+      return true;
+    }
+    return boost::algorithm::ends_with(path, long_suffix);
+  };
+
   for (std::string file_path; std::getline(input, file_path, ':');) {
     auto pos = file_path.rfind('/');
     always_assert(pos >= 0 && pos + 1 < file_path.length());
     auto directory = file_path.substr(0, pos);
-    if (boost::algorithm::ends_with(directory, suffix)) {
+    if (match_dir(directory)) {
       auto original_name = file_path.substr(pos + 1);
       // Undo simple escaping at buck_imports/redex_utils
       boost::replace_all(original_name, "zC", ":");
       boost::replace_all(original_name, "zS", "/");
       boost::replace_all(original_name, "zZ", "z");
       files.emplace(original_name, file_path);
+      always_assert_log(std::filesystem::exists(file_path),
+                        "%s -> %s does not exist!",
+                        original_name.c_str(),
+                        file_path.c_str());
     }
   }
   return files;
