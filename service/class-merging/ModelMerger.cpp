@@ -121,7 +121,7 @@ void update_code_type_refs(
       auto insn = it->insn;
 
       /////////////////////////////////////////////////////
-      // Rebind method refs referencing a mergeable to defs
+      // Resolve method refs referencing a mergeable to defs
       /////////////////////////////////////////////////////
       if (insn->has_method()) {
         auto meth_ref = insn->get_method();
@@ -135,12 +135,12 @@ void update_code_type_refs(
         }
         const auto meth_def =
             resolve_method(meth_ref, opcode_to_search(insn), meth);
-        // This is a very tricky case where RebindRefs cannot resolve a
+        // This is a very tricky case where ResolveRefs cannot resolve a
         // MethodRef to MethodDef. It is a invoke-virtual with a MethodRef
         // referencing an interface method implmentation defined in a subclass
         // of the referenced type. To resolve the actual def we need to go
         // through another interface method search. Maybe we should fix it in
-        // ReBindRefs.
+        // ResolveRefs.
         if (meth_def == nullptr) {
           auto intf_def =
               resolve_method(meth_ref, MethodSearch::InterfaceVirtual);
@@ -433,11 +433,6 @@ void fix_existing_merger_cls(const Model& model,
   const auto& intfs = model.get_interfaces(type);
   set_interfaces(cls, intfs);
   cls->set_super_class(const_cast<DexType*>(model.get_parent(type)));
-  if (merger.kill_fields) {
-    for (const auto& field : cls->get_ifields()) {
-      cls->remove_field(field);
-    }
-  }
   TRACE(CLMG,
         5,
         "create hierarhcy: updated DexClass from MergerType: %s",
