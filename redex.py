@@ -1395,7 +1395,7 @@ def _init_logging(level_str: str) -> None:
     level = levels[level_str]
     logging.basicConfig(
         level=level,
-        format="[%(levelname)-8s] %(message)s",
+        format="[%(levelname)-8s][%(asctime)-23s][%(name)-25s] %(message)s",
     )
 
 
