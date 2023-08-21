@@ -72,6 +72,7 @@ class InterDexPass : public Pass {
     return {
         {DexLimitsObeyed, Establishes},
         {HasSourceBlocks, Preserves},
+        {NoResolvablePureRefs, Preserves},
         {NoSpuriousGetClassCalls, Preserves},
     };
   }

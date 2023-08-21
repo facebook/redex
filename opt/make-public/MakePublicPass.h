@@ -25,7 +25,7 @@ class MakePublicPass : public Pass {
     return {
         {DexLimitsObeyed, Preserves},      {HasSourceBlocks, Preserves},
         {NeedsEverythingPublic, Destroys}, {NoInitClassInstructions, Preserves},
-        {RenameClass, Preserves},
+        {NoResolvablePureRefs, Preserves}, {RenameClass, Preserves},
     };
   }
 

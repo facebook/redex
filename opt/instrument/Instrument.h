@@ -44,6 +44,7 @@ class InstrumentPass : public Pass {
     return {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, Requires},
+        {NoResolvablePureRefs, Preserves},
         {RenameClass, Preserves},
     };
   }

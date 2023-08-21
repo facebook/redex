@@ -19,11 +19,9 @@ class CopyPropagationPass : public Pass {
     using namespace redex_properties::interactions;
     using namespace redex_properties::names;
     return {
-        {DexLimitsObeyed, Preserves},
-        {HasSourceBlocks, Preserves},
-        {NoInitClassInstructions, Preserves},
-        {NoSpuriousGetClassCalls, Preserves},
-        {RenameClass, Preserves},
+        {DexLimitsObeyed, Preserves},         {HasSourceBlocks, Preserves},
+        {NoInitClassInstructions, Preserves}, {NoResolvablePureRefs, Preserves},
+        {NoSpuriousGetClassCalls, Preserves}, {RenameClass, Preserves},
     };
   }
 

@@ -22,6 +22,7 @@ class InitClassLoweringPass : public Pass {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, Preserves},
         {NoInitClassInstructions, Establishes},
+        {NoResolvablePureRefs, Preserves},
         {RenameClass, Preserves},
     };
   }

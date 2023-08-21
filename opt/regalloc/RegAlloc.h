@@ -26,6 +26,7 @@ class RegAllocPass : public Pass {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, Preserves},
         {NoInitClassInstructions, Preserves},
+        {NoResolvablePureRefs, Preserves},
         {RenameClass, Preserves},
     };
   }

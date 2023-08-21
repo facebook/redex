@@ -41,6 +41,7 @@ class InstructionSequenceOutliner : public Pass {
     return {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, RequiresAndEstablishes},
+        {NoResolvablePureRefs, Preserves},
         {NoSpuriousGetClassCalls, Establishes},
     };
   }

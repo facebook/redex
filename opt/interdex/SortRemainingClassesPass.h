@@ -20,6 +20,7 @@ class SortRemainingClassesPass : public Pass {
     return {
         {DexLimitsObeyed, RequiresAndEstablishes},
         {HasSourceBlocks, Preserves},
+        {NoResolvablePureRefs, Preserves},
     };
   }
 
