@@ -55,8 +55,9 @@ void gather_r_classes(const Scope& scope, std::vector<DexClass*>* vec);
 // for class names.
 const inline std::unordered_set<std::string>
     KNOWN_ELEMENTS_WITH_CLASS_ATTRIBUTES = {
-        "fragment", "view",   "dialog",
-        "activity", "intent", "androidx.fragment.app.FragmentContainerView",
+        "fragment",   "view",   "dialog",
+        "activity",   "intent", "androidx.fragment.app.FragmentContainerView",
+        "transition",
 };
 const inline std::vector<std::string> POSSIBLE_CLASS_ATTRIBUTES = {
     "class",
