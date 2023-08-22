@@ -100,8 +100,19 @@ class Analyzer final : public BaseIRAnalyzer<ConstructorAnalysisEnvironment> {
   Analyzer(const cfg::ControlFlowGraph& cfg, const DexType* declaring_type)
       : BaseIRAnalyzer(cfg),
         m_declaring_type(declaring_type),
-        m_super_type(type_class(declaring_type)->get_super_class()),
         m_first_load_param(get_first_load_param(cfg)) {
+    // We need to check superclass chain because dex spec allows calling
+    // constructor on superclass of superclass
+    // https://cs.android.com/android/platform/superproject/main/+/main:art/runtime/verifier/method_verifier.cc;l=2940
+    auto super_cls_type = type_class(declaring_type)->get_super_class();
+    while (super_cls_type && m_super_types.count(super_cls_type) == 0) {
+      m_super_types.emplace(super_cls_type);
+      auto super_cls = type_class(super_cls_type);
+      if (!super_cls) {
+        break;
+      }
+      super_cls_type = super_cls->get_super_class();
+    }
     MonotonicFixpointIterator::run({});
   }
 
@@ -166,12 +177,15 @@ class Analyzer final : public BaseIRAnalyzer<ConstructorAnalysisEnvironment> {
           return;
         }
         auto method_class = method->get_class();
-        if (method_class == m_declaring_type || method_class == m_super_type) {
+
+        if (method_class == m_declaring_type ||
+            m_super_types.count(method_class)) {
           auto first_param = current_state->get_params().get(insn->src(0));
           if (!first_param.get_constant() || *first_param.get_constant()) {
             // We've encountered a call to another constructor on a value
             // that might be `this`
-            if (method_class == m_super_type || !first_param.get_constant()) {
+            if (m_super_types.count(method_class) ||
+                !first_param.get_constant()) {
               current_state->set_uninlinable(BoolDomain(true));
             } else {
               current_state->set_initialized(BoolDomain(true));
@@ -192,7 +206,7 @@ class Analyzer final : public BaseIRAnalyzer<ConstructorAnalysisEnvironment> {
 
  private:
   const DexType* m_declaring_type;
-  const DexType* m_super_type;
+  std::unordered_set<DexType*> m_super_types;
   const IRInstruction* m_first_load_param;
 };
 } // namespace
@@ -230,12 +244,13 @@ bool can_inline_init(
         // Shouldn't happen, but we play it safe.
         return false;
       }
-      always_assert_log(*initialized.get_constant(),
-                        "%s returns at %p without having called an appropriate "
-                        "constructor from the same or its immediate super "
-                        "class. This indicates malformed DEX code.\n%s",
-                        SHOW(init_method), block->get_last_insn()->insn,
-                        SHOW(cfg));
+      always_assert_log(
+          *initialized.get_constant(),
+          "%s returns at %p: %s without having called an appropriate "
+          "constructor from the same or its immediate super "
+          "class. This indicates malformed DEX code.\n%s",
+          SHOW(init_method), block->get_last_insn()->insn,
+          SHOW(block->get_last_insn()->insn), SHOW(cfg));
     }
   }
   for (const auto& mie : InstructionIterable(cfg)) {
