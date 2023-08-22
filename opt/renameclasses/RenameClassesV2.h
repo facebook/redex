@@ -128,7 +128,6 @@ class RenameClassesPassV2 : public Pass {
   std::string m_package_prefix;
 
   // Decisions we made in the eval_classes pass
-  std::unordered_set<const DexClass*> m_force_rename_classes;
   std::unordered_map<const DexClass*, DontRenameReason> m_dont_rename_reasons;
 
   std::string m_apk_dir;

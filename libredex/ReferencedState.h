@@ -87,6 +87,11 @@ class ReferencedState {
         // This may be set on classes, indicating that its static initializer
         // has no side effects.
         bool m_clinit_has_no_side_effects : 1;
+
+        // m_force_rename and m_dont_rename should be set during evaluating
+        // RenameClassesPassV2 based on its config file.
+        bool m_force_rename : 1;
+        bool m_dont_rename : 1;
       };
       // This is for method only. Currently, the number of flags
       // is 6. Once new flag is added, please update the corresponding number in
@@ -512,6 +517,26 @@ class ReferencedState {
   bool clinit_has_no_side_effects() const {
     always_assert(inner_struct.is_class());
     return inner_struct.m_clinit_has_no_side_effects;
+  }
+
+  bool is_force_rename() {
+    always_assert(inner_struct.is_class());
+    return inner_struct.m_force_rename;
+  }
+
+  bool is_dont_rename() {
+    always_assert(inner_struct.is_class());
+    return inner_struct.m_dont_rename;
+  }
+
+  void set_force_rename() {
+    always_assert(inner_struct.is_class());
+    inner_struct.m_force_rename = true;
+  }
+
+  void set_dont_rename() {
+    always_assert(inner_struct.is_class());
+    inner_struct.m_dont_rename = true;
   }
 
   void set_too_large_for_inlining_into() {
