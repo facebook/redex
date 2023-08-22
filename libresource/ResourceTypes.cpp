@@ -132,12 +132,12 @@ void Res_value::copyFrom_dtoh(const Res_value& src)
 // --------------------------------------------------------------------
 
 ResStringPool::ResStringPool()
-    : mError(NO_INIT), mOwnedData(NULL), mHeader(NULL), mCache(NULL)
+    : mError(NO_INIT), mOwnedData(nullptr), mHeader(nullptr), mCache(nullptr)
 {
 }
 
 ResStringPool::ResStringPool(const void* data, size_t size, bool copyData)
-    : mError(NO_INIT), mOwnedData(NULL), mHeader(NULL), mCache(NULL)
+    : mError(NO_INIT), mOwnedData(nullptr), mHeader(nullptr), mCache(nullptr)
 {
     setTo(data, size, copyData);
 }
@@ -154,11 +154,11 @@ void ResStringPool::setToEmpty()
     mOwnedData = calloc(1, sizeof(ResStringPool_header));
     ResStringPool_header* header = (ResStringPool_header*) mOwnedData;
     mSize = 0;
-    mEntries = NULL;
-    mStrings = NULL;
+    mEntries = nullptr;
+    mStrings = nullptr;
     mStringPoolSize = 0;
-    mEntryStyles = NULL;
-    mStyles = NULL;
+    mEntryStyles = nullptr;
+    mStyles = nullptr;
     mStylePoolSize = 0;
     mHeader = (const ResStringPool_header*) header;
 }
@@ -191,7 +191,7 @@ status_t ResStringPool::setTo(const void* data, size_t size, bool copyData)
 
     if (copyData || notDeviceEndian) {
         mOwnedData = malloc(size);
-        if (mOwnedData == NULL) {
+        if (mOwnedData == nullptr) {
             return (mError=NO_MEMORY);
         }
         memcpy(mOwnedData, data, size);
@@ -300,7 +300,7 @@ status_t ResStringPool::setTo(const void* data, size_t size, bool copyData)
             return (mError=BAD_TYPE);
         }
     } else {
-        mStrings = NULL;
+        mStrings = nullptr;
         mStringPoolSize = 0;
     }
 
@@ -350,8 +350,8 @@ status_t ResStringPool::setTo(const void* data, size_t size, bool copyData)
             return (mError=BAD_TYPE);
         }
     } else {
-        mEntryStyles = NULL;
-        mStyles = NULL;
+        mEntryStyles = nullptr;
+        mStyles = nullptr;
         mStylePoolSize = 0;
     }
 
@@ -366,15 +366,15 @@ status_t ResStringPool::getError() const
 void ResStringPool::uninit()
 {
     mError = NO_INIT;
-    if (mHeader != NULL && mCache != NULL) {
+    if (mHeader != nullptr && mCache != nullptr) {
         for (size_t x = 0; x < mHeader->stringCount; x++) {
-            if (mCache[x] != NULL) {
+            if (mCache[x] != nullptr) {
                 free(mCache[x]);
-                mCache[x] = NULL;
+                mCache[x] = nullptr;
             }
         }
         free(mCache);
-        mCache = NULL;
+        mCache = nullptr;
     }
     if (mOwnedData) {
         free(mOwnedData);
