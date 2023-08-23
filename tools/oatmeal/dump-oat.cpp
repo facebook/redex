@@ -1531,9 +1531,6 @@ class SamsungLookupTables {
   };
 
   struct LookupTable {
-    LookupTable(LookupTable&&) = default;
-    LookupTable& operator=(LookupTable&&) = default;
-
     std::unique_ptr<LookupTableEntry[]> data;
     uint32_t size;
 
