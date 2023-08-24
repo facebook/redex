@@ -16,6 +16,7 @@
 #include <sparta/ReducedProductAbstractDomain.h>
 
 #include "BaseIRAnalyzer.h"
+#include "DexAnnotation.h"
 #include "DexTypeEnvironment.h"
 
 /*
@@ -235,6 +236,10 @@ class TypeEnvironment final
     return get<1>().get(reg).get_dex_type();
   }
 
+  boost::optional<const DexType*> get_annotation(reg_t reg) const {
+    return get<1>().get(reg).get_annotation_type();
+  }
+
   DexTypeDomain get_type_domain(reg_t reg) const { return get<1>().get(reg); }
 
   void set_dex_type(reg_t reg, const DexTypeDomain& dex_type) {
@@ -250,14 +255,20 @@ class TypeInference final
     : public ir_analyzer::BaseIRAnalyzer<TypeEnvironment> {
  public:
   explicit TypeInference(const cfg::ControlFlowGraph& cfg,
-                         bool skip_check_cast_upcasting = false)
+                         bool skip_check_cast_upcasting = false,
+                         const std::unordered_set<DexType*>& annotations =
+                             std::unordered_set<DexType*>())
       : ir_analyzer::BaseIRAnalyzer<TypeEnvironment>(cfg),
         m_cfg(cfg),
-        m_skip_check_cast_upcasting(skip_check_cast_upcasting) {}
+        m_skip_check_cast_upcasting(skip_check_cast_upcasting),
+        m_annotations{annotations} {}
 
   void run(const DexMethod* dex_method);
 
-  void run(bool is_static, DexType* declaring_type, DexTypeList* args);
+  void run(bool is_static,
+           DexType* declaring_type,
+           DexTypeList* args,
+           const ParamAnnotations* param_anno = nullptr);
 
   void analyze_node(const cfg::GraphInterface::NodeId& node,
                     TypeEnvironment* current_state) const override {
@@ -290,12 +301,18 @@ class TypeInference final
     return m_type_envs;
   }
 
+  // if one of these annotations has the str_typedef_anno or int_typedef_anno
+  // annotation, return it
+  boost::optional<const DexType*> get_typedef_annotation(
+      const std::vector<std::unique_ptr<DexAnnotation>>& annotations) const;
+
  private:
   void populate_type_environments();
 
   const cfg::ControlFlowGraph& m_cfg;
   std::unordered_map<const IRInstruction*, TypeEnvironment> m_type_envs;
   const bool m_skip_check_cast_upcasting;
+  const std::unordered_set<DexType*> m_annotations;
 
   TypeDomain refine_type(const TypeDomain& type,
                          IRType expected,
@@ -324,6 +341,9 @@ class TypeInference final
   void refine_boolean(TypeEnvironment* state, reg_t reg) const;
   void refine_short(TypeEnvironment* state, reg_t reg) const;
   void refine_byte(TypeEnvironment* state, reg_t reg) const;
+
+  boost::optional<const DexType*> get_typedef_anno_from_method(
+      DexMethodRef* method) const;
 };
 
 } // namespace type_inference

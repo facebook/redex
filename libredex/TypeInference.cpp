@@ -11,6 +11,7 @@
 #include <ostream>
 #include <sstream>
 
+#include "AnnoUtils.h"
 #include "Show.h"
 #include "Trace.h"
 #include "TypeUtil.h"
@@ -179,9 +180,16 @@ void set_type(TypeEnvironment* state, reg_t reg, const TypeDomain& type) {
   state->set_type(reg, type);
 }
 
-void set_integral(TypeEnvironment* state, reg_t reg) {
+void set_integral(
+    TypeEnvironment* state,
+    reg_t reg,
+    const boost::optional<const DexType*>& annotation = boost::none) {
   state->set_type(reg, TypeDomain(IRType::INT));
-  state->reset_dex_type(reg);
+  if (annotation) {
+    state->set_dex_type(reg, DexTypeDomain(nullptr, *annotation));
+  } else {
+    state->reset_dex_type(reg);
+  }
 }
 
 void set_float(TypeEnvironment* state, reg_t reg) {
@@ -194,13 +202,16 @@ void set_scalar(TypeEnvironment* state, reg_t reg) {
   state->reset_dex_type(reg);
 }
 
-void set_reference(TypeEnvironment* state,
-                   reg_t reg,
-                   const boost::optional<const DexType*>& dex_type_opt) {
+void set_reference(
+    TypeEnvironment* state,
+    reg_t reg,
+    const boost::optional<const DexType*>& dex_type_opt,
+    const boost::optional<const DexType*>& annotation = boost::none) {
   state->set_type(reg, TypeDomain(IRType::REFERENCE));
-  const DexTypeDomain dex_type =
-      dex_type_opt ? DexTypeDomain(*dex_type_opt) : DexTypeDomain::top();
-  state->set_dex_type(reg, dex_type);
+  auto dex_type = dex_type_opt ? *dex_type_opt : nullptr;
+  auto anno = annotation ? *annotation : nullptr;
+  const DexTypeDomain dex_type_domain = DexTypeDomain(dex_type, anno);
+  state->set_dex_type(reg, dex_type_domain);
 }
 
 void set_reference(TypeEnvironment* state,
@@ -235,10 +246,14 @@ void set_type(TypeEnvironment* state, reg_t reg, const IntTypeDomain& type) {
   state->set_type(reg, type);
 }
 
-void set_int(TypeEnvironment* state, reg_t reg) {
+void set_int(TypeEnvironment* state,
+             reg_t reg,
+             const boost::optional<const DexType*>& annotation = boost::none) {
   state->set_type(reg, IntTypeDomain(IntType::INT));
-  state->reset_dex_type(reg);
-  set_integral(state, reg);
+  if (annotation == boost::none) {
+    state->reset_dex_type(reg);
+  }
+  set_integral(state, reg, annotation);
 }
 
 void set_char(TypeEnvironment* state, reg_t reg) {
@@ -343,6 +358,47 @@ const DexType* merge_dex_types(const DexTypeIt& begin,
       });
 }
 
+boost::optional<const DexType*> TypeInference::get_typedef_annotation(
+    const std::vector<std::unique_ptr<DexAnnotation>>& annotations) const {
+  for (auto const& anno : annotations) {
+    auto const anno_class = type_class(anno->type());
+    if (!anno_class) {
+      continue;
+    }
+    bool has_typedef = false;
+    for (auto annotation : m_annotations) {
+      if (get_annotation(anno_class, annotation)) {
+        if (has_typedef) {
+          always_assert_log(
+              false,
+              "Annotation %s cannot be annotated with more than one TypeDef "
+              "annotation",
+              SHOW(anno_class->get_deobfuscated_name_or_empty_copy()));
+        }
+        has_typedef = true;
+      }
+    }
+    if (has_typedef) {
+      return DexType::make_type(anno->type()->get_name());
+    }
+  }
+  return boost::none;
+}
+
+boost::optional<const DexType*> TypeInference::get_typedef_anno_from_method(
+    DexMethodRef* method) const {
+  boost::optional<const DexType*> annotation = boost::none;
+  if (!m_annotations.empty() && method->is_def()) {
+    DexMethod* dex_method_def = method->as_def();
+    auto annotations = dex_method_def->get_anno_set();
+    if (annotations != nullptr) {
+      annotation =
+          TypeInference::get_typedef_annotation(annotations->get_annotations());
+    }
+  }
+  return annotation;
+}
+
 TypeDomain TypeInference::refine_type(const TypeDomain& type,
                                       IRType expected,
                                       IRType const_type,
@@ -404,7 +460,11 @@ void TypeInference::refine_scalar(TypeEnvironment* state, reg_t reg) const {
   refine_type(state,
               reg,
               /* expected */ IRType::SCALAR);
-  state->reset_dex_type(reg);
+  const DexTypeDomain dex_type =
+      state->get_annotation(reg)
+          ? DexTypeDomain(nullptr, *state->get_annotation(reg))
+          : DexTypeDomain::top();
+  state->set_dex_type(reg, dex_type);
 }
 
 void TypeInference::refine_integral(TypeEnvironment* state, reg_t reg) const {
@@ -471,12 +531,13 @@ void TypeInference::refine_byte(TypeEnvironment* state, reg_t reg) const {
 
 void TypeInference::run(const DexMethod* dex_method) {
   run(is_static(dex_method), dex_method->get_class(),
-      dex_method->get_proto()->get_args());
+      dex_method->get_proto()->get_args(), dex_method->get_param_anno());
 }
 
 void TypeInference::run(bool is_static,
                         DexType* declaring_type,
-                        DexTypeList* args) {
+                        DexTypeList* args,
+                        const ParamAnnotations* param_anno) {
   // We need to compute the initial environment by assigning the parameter
   // registers their correct types derived from the method's signature. The
   // IOPCODE_LOAD_PARAM_* instructions are pseudo-operations that are used to
@@ -484,21 +545,30 @@ void TypeInference::run(bool is_static,
   // separately.
   auto init_state = TypeEnvironment::top();
   auto sig_it = args->begin();
+  int arg_index = 0;
   bool first_param = true;
   for (const auto& mie : InstructionIterable(m_cfg.get_param_instructions())) {
     IRInstruction* insn = mie.insn;
+    boost::optional<const DexType*> annotation = boost::none;
+
+    if (!m_annotations.empty() && param_anno &&
+        param_anno->find(arg_index) != param_anno->end()) {
+      annotation = get_typedef_annotation(
+          (&param_anno->at(arg_index))->get()->get_annotations());
+    }
+
     switch (insn->opcode()) {
     case IOPCODE_LOAD_PARAM_OBJECT: {
       if (first_param && !is_static) {
         // If the method is not static, the first parameter corresponds to
         // `this`.
         first_param = false;
-        set_reference(&init_state, insn->dest(), declaring_type);
+        set_reference(&init_state, insn->dest(), declaring_type, annotation);
       } else {
         // This is a regular parameter of the method.
         always_assert(sig_it != args->end());
         const DexType* type = *sig_it;
-        set_reference(&init_state, insn->dest(), type);
+        set_reference(&init_state, insn->dest(), type, annotation);
         ++sig_it;
       }
       break;
@@ -517,7 +587,7 @@ void TypeInference::run(bool is_static,
         } else if (type::is_byte(*sig_it)) {
           set_byte(&init_state, insn->dest());
         } else {
-          set_int(&init_state, insn->dest());
+          set_int(&init_state, insn->dest(), annotation);
         }
       }
       sig_it++;
@@ -535,6 +605,7 @@ void TypeInference::run(bool is_static,
     default:
       not_reached();
     }
+    arg_index += 1;
   }
   MonotonicFixpointIterator::run(init_state);
   populate_type_environments();
@@ -596,6 +667,10 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
              current_state->get_type(RESULT_REGISTER));
     set_type(current_state, insn->dest(),
              current_state->get_int_type(RESULT_REGISTER));
+    if (!m_annotations.empty()) {
+      current_state->set_dex_type(
+          insn->dest(), current_state->get_type_domain(RESULT_REGISTER));
+    }
     break;
   }
   case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT:
@@ -1152,12 +1227,16 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
       break;
     }
     if (type::is_object(return_type)) {
-      set_reference(current_state, RESULT_REGISTER, return_type);
+      boost::optional<const DexType*> annotation =
+          get_typedef_anno_from_method(dex_method);
+      set_reference(current_state, RESULT_REGISTER, return_type, annotation);
       break;
     }
     if (type::is_integral(return_type)) {
       if (type::is_int(return_type)) {
-        set_int(current_state, RESULT_REGISTER);
+        boost::optional<const DexType*> annotation =
+            get_typedef_anno_from_method(dex_method);
+        set_int(current_state, RESULT_REGISTER, annotation);
         break;
       }
       if (type::is_char(return_type)) {
