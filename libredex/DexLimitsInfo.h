@@ -47,7 +47,10 @@ class DexLimitsInfo {
   // Calculate the refs after adding \p cls to current dex. If the dex is still
   // valid, update the refs and return true. Otherwise, return false.
   bool update_refs_by_adding_class(DexClass* cls);
+  void update_refs_by_always_adding_class(DexClass* cls);
 
   // Update the the refs when cls is removed from current dex.
   void update_refs_by_erasing_class(DexClass* cls);
+
+  const DexStructure& get_dex() const { return m_dex; }
 };

@@ -9,6 +9,13 @@
 
 #include "RedexPropertyChecker.h"
 
+#include <string>
+#include <vector>
+
+class DexFieldRef;
+class DexMethodRef;
+class DexType;
+
 namespace redex_properties {
 
 class DexLimitsChecker : public PropertyChecker {
@@ -16,6 +23,14 @@ class DexLimitsChecker : public PropertyChecker {
   DexLimitsChecker() : PropertyChecker(names::DexLimitsObeyed) {}
 
   void run_checker(DexStoresVector&, ConfigFiles&, PassManager&, bool) override;
+
+  struct DexData {
+    std::unordered_set<DexFieldRef*> fields;
+    std::unordered_set<DexMethodRef*> methods;
+    std::unordered_set<DexType*> types;
+  };
+
+  std::unordered_map<std::string, std::vector<DexData>> m_data;
 };
 
 } // namespace redex_properties

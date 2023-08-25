@@ -170,9 +170,20 @@ also reject some legal cases.
 
   size_t get_num_classes() const { return m_classes.size(); }
 
+  size_t get_num_trefs() const { return m_trefs.size(); }
+  const std::unordered_map<DexType*, size_t>& get_trefs() const {
+    return m_trefs;
+  }
+
   size_t get_num_mrefs() const { return m_mrefs.size(); }
+  const std::unordered_map<DexMethodRef*, size_t>& get_mrefs() const {
+    return m_mrefs;
+  }
 
   size_t get_num_frefs() const { return m_frefs.size(); }
+  const std::unordered_map<DexFieldRef*, size_t>& get_frefs() const {
+    return m_frefs;
+  }
 
   const OverflowStats& get_overflow_stats() const { return m_overflow_stats; }
 
