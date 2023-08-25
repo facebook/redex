@@ -166,17 +166,15 @@ class GraphBuilder {
       // methods.
       for (auto&& [unimplementeds, implementation] :
            unimplemented_implementations) {
-        bool any_other_implementation_class = false;
         for (auto unimplemented : unimplementeds) {
-          m_graph->add_edge(unimplemented,
-                            /* overridden_is_interface */ true, implementation,
-                            /* overriding_is_interface */ false);
-          if (implementation->get_class() != cls->get_type()) {
-            any_other_implementation_class = true;
+          if (implementation->get_class() == cls->get_type() ||
+              m_graph->add_other_implementation_class(unimplemented,
+                                                      implementation, cls)) {
+            m_graph->add_edge(unimplemented,
+                              /* overridden_is_interface */ true,
+                              implementation,
+                              /* overriding_is_interface */ false);
           }
-        }
-        if (any_other_implementation_class) {
-          m_graph->add_other_implementation_class(implementation, cls);
         }
       }
       return class_signatures;
@@ -271,10 +269,10 @@ bool Node::overrides(const DexMethod* current, const DexType* base_type) const {
   }
   // We also check if the current method was fulfilling an implementation
   // demand for any class that can be cast to the given base_type.
-  if (!other_implementation_classes) {
+  if (!other_interface_implementations) {
     return false;
   }
-  for (auto* cls : *other_implementation_classes) {
+  for (auto* cls : other_interface_implementations->classes) {
     if (type::check_cast(cls->get_type(), base_type)) {
       return true;
     }
@@ -323,16 +321,19 @@ void Graph::add_edge(const DexMethod* overridden,
   });
 }
 
-void Graph::add_other_implementation_class(const DexMethod* overriding,
+bool Graph::add_other_implementation_class(const DexMethod* overridden,
+                                           const DexMethod* overriding,
                                            const DexClass* cls) {
-  m_nodes.update(overriding, [&](const DexMethod*, Node& node, bool exists) {
-    always_assert(exists);
-    if (!node.other_implementation_classes) {
-      node.other_implementation_classes =
-          std::make_unique<std::vector<const DexClass*>>();
+  bool parent_inserted = false;
+  m_nodes.update(overriding, [&](const DexMethod*, Node& node, bool) {
+    auto& oii = node.other_interface_implementations;
+    if (!oii) {
+      oii = std::make_unique<OtherInterfaceImplementations>();
     }
-    node.other_implementation_classes->push_back(cls);
+    oii->classes.push_back(cls);
+    parent_inserted = oii->parents.insert(overridden).second;
   });
+  return parent_inserted;
 }
 
 void Graph::dump(std::ostream& os) const {

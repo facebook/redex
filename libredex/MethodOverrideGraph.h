@@ -61,6 +61,18 @@ std::unordered_set<DexMethod*> get_non_true_virtuals(const Graph& graph,
                                                      const Scope& scope);
 
 /*
+ * When a class method implements interface methods only in a subclass of the
+ * method's declaring class, then we need to track additional information.
+ */
+struct OtherInterfaceImplementations {
+  // The set of immediately implemented interface methods.
+  std::unordered_set<const DexMethod*> parents;
+  // The set of the classes for which the current method implements those
+  // interface methods for the first time.
+  std::vector<const DexClass*> classes;
+};
+
+/*
  * The `children` edges point to the overriders / implementors of the current
  * Node's method.
  */
@@ -69,9 +81,10 @@ struct Node {
   std::vector<const DexMethod*> parents;
   // The set of immediately overriding / implementing methods.
   std::vector<const DexMethod*> children;
-  // The set of classes where this node implements a previously unimplemented
-  // method. (This is usually absent.)
-  std::unique_ptr<std::vector<const DexClass*>> other_implementation_classes;
+  // The set of parents and classes where this node implements a previously
+  // unimplemented method. (This is usually absent.)
+  std::unique_ptr<OtherInterfaceImplementations>
+      other_interface_implementations;
   // Whether the current Node's method is an interface method.
   bool is_interface;
 
@@ -93,7 +106,8 @@ class Graph {
                 const DexMethod* overriding,
                 bool overriding_is_interface);
 
-  void add_other_implementation_class(const DexMethod* overriding,
+  bool add_other_implementation_class(const DexMethod* overridden,
+                                      const DexMethod* overriding,
                                       const DexClass* cls);
 
   void dump(std::ostream&) const;
