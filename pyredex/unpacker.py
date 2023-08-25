@@ -1132,7 +1132,7 @@ class ZipReset:
     def reset_array_like(
         inout: typing.Union[bytearray, mmap.mmap],
         size: int,
-        date: DateType = (1980, 1, 1, 0, 0, 0),
+        date: DateType = (1985, 2, 1, 0, 0, 0),
     ) -> None:
         eocd_len: int = 22
         eocd_signature: typing.ByteString = b"\x50\x4b\x05\x06"
@@ -1141,6 +1141,7 @@ class ZipReset:
         lfh_signature: typing.ByteString = b"\x50\x4b\x03\x04"
         cde_signature: typing.ByteString = b"\x50\x4b\x01\x02"
         cde_len: int = 46
+        # A410000
         time_code: int = date[3] << 11 | date[4] << 5 | date[5]
         date_code: int = (date[0] - 1980) << 9 | date[1] << 5 | date[2]
 
@@ -1213,7 +1214,7 @@ class ZipReset:
         return data
 
     @staticmethod
-    def reset_file(filename: str, date: DateType = (1980, 1, 1, 0, 0, 0)) -> None:
+    def reset_file(filename: str, date: DateType = (1985, 2, 1, 0, 0, 0)) -> None:
         with open(filename, "r+b") as f:
             with mmap.mmap(f.fileno(), 0) as map:
                 ZipReset.reset_array_like(map, map.size(), date)
