@@ -13,6 +13,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "ClassReferencesCache.h"
 #include "DexClass.h"
 #include "MutablePriorityQueue.h"
 
@@ -179,6 +180,7 @@ class CrossDexRefMinimizer {
   std::unordered_map<const void*, ClassDiffSet> m_ref_classes;
   CrossDexRefMinimizerStats m_stats;
   CrossDexRefMinimizerConfig m_config;
+  ClassReferencesCache* m_cache;
 
   struct ClassInfoDelta {
     std::array<int32_t, INFREQUENT_REFS_COUNT> infrequent_refs_weight{};
@@ -190,12 +192,6 @@ class CrossDexRefMinimizer {
 
   std::unordered_map<const void*, size_t> m_ref_counts;
   size_t m_max_ref_count{0};
-
-  void gather_refs(DexClass* cls,
-                   std::vector<DexMethodRef*>& method_refs,
-                   std::vector<DexFieldRef*>& field_refs,
-                   std::vector<DexType*>& types,
-                   std::vector<const DexString*>& strings);
 
   std::optional<Json::Value> m_json_classes;
   template <class Ref>
@@ -237,8 +233,9 @@ class CrossDexRefMinimizer {
   JsonRefIndices<const DexString*> m_json_strings{"S"};
 
  public:
-  explicit CrossDexRefMinimizer(const CrossDexRefMinimizerConfig& config)
-      : m_config(config) {
+  CrossDexRefMinimizer(const CrossDexRefMinimizerConfig& config,
+                       ClassReferencesCache& cache)
+      : m_config(config), m_cache(&cache) {
     if (config.emit_json) {
       m_json_classes = Json::objectValue;
     }

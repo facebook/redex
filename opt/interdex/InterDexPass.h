@@ -122,7 +122,8 @@ class InterDexPass : public Pass {
                         std::vector<std::unique_ptr<InterDexPassPlugin>>&,
                         ConfigFiles&,
                         PassManager&,
-                        const ReserveRefsInfo&);
+                        const ReserveRefsInfo&,
+                        ClassReferencesCache& cache);
 
   void run_pass_on_nonroot_store(const Scope&,
                                  const XStoreRefs&,
@@ -131,7 +132,8 @@ class InterDexPass : public Pass {
                                  DexClassesVector&,
                                  ConfigFiles&,
                                  PassManager&,
-                                 const ReserveRefsInfo&);
+                                 const ReserveRefsInfo&,
+                                 ClassReferencesCache& cache);
 };
 
 } // namespace interdex

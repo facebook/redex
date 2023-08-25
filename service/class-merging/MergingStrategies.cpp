@@ -149,12 +149,20 @@ void MergingStrategy::group_by_refs(const TypeSet& mergeable_types,
 
   std::vector<const DexType*> current_group;
 
-  cross_dex_ref_minimizer::CrossDexRefMinimizer cross_dex_ref_minimizer({});
-  for (auto type : mergeable_types) {
-    cross_dex_ref_minimizer.sample(type_class(type));
+  Scope mergeable_classes;
+  mergeable_classes.reserve(mergeable_types.size());
+  for (auto* type : mergeable_types) {
+    mergeable_classes.push_back(type_class(type));
+    ;
   }
-  for (auto type : mergeable_types) {
-    cross_dex_ref_minimizer.insert(type_class(type));
+  ClassReferencesCache cache(mergeable_classes);
+  cross_dex_ref_minimizer::CrossDexRefMinimizer cross_dex_ref_minimizer({},
+                                                                        cache);
+  for (auto* cls : mergeable_classes) {
+    cross_dex_ref_minimizer.sample(cls);
+  }
+  for (auto* cls : mergeable_classes) {
+    cross_dex_ref_minimizer.insert(cls);
   }
   size_t estimated_merged_code_size = 0;
   size_t current_cls_refs = 0;
