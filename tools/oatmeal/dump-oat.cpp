@@ -642,7 +642,7 @@ class OatClasses {
     case Type::kOatClassMax:
       return "kOatClassMax";
     default:
-      return "<UKNOWN>";
+      return "<UNKNOWN>";
     }
   }
 
