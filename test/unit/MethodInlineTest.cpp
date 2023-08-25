@@ -815,8 +815,8 @@ TEST_F(MethodInlineTest, inline_beneficial_on_average_after_constant_prop) {
   inliner_config.throws_inline = true;
   inliner_config.shrinker.run_const_prop = true;
   inliner_config.shrinker.run_local_dce = true;
-  check_method->get_code()->build_cfg(true);
-  foo_main->get_code()->build_cfg(true);
+  check_method->get_code()->build_cfg();
+  foo_main->get_code()->build_cfg();
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, /* create_init_class_insns */ false);
   int min_sdk = 0;
@@ -883,8 +883,8 @@ TEST_F(MethodInlineTest,
   inliner_config.throws_inline = true;
   inliner_config.shrinker.run_const_prop = true;
   inliner_config.shrinker.run_local_dce = true;
-  check_method->get_code()->build_cfg(true);
-  foo_main->get_code()->build_cfg(true);
+  check_method->get_code()->build_cfg();
+  foo_main->get_code()->build_cfg();
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, /* create_init_class_insns */ false);
   int min_sdk = 0;
@@ -962,8 +962,8 @@ TEST_F(
   inliner_config.throws_inline = true;
   inliner_config.shrinker.run_const_prop = true;
   inliner_config.shrinker.run_local_dce = true;
-  check_method->get_code()->build_cfg(true);
-  foo_main->get_code()->build_cfg(true);
+  check_method->get_code()->build_cfg();
+  foo_main->get_code()->build_cfg();
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, /* create_init_class_insns */ false);
   int min_sdk = 0;
@@ -1034,8 +1034,8 @@ TEST_F(MethodInlineTest, throw_after_no_return) {
   inliner_config.populate(scope);
   inliner_config.throws_inline = true;
   inliner_config.throw_after_no_return = true;
-  check_method->get_code()->build_cfg(true);
-  foo_main->get_code()->build_cfg(true);
+  check_method->get_code()->build_cfg();
+  foo_main->get_code()->build_cfg();
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, /* create_init_class_insns */ false);
   int min_sdk = 0;
@@ -1109,8 +1109,8 @@ TEST_F(MethodInlineTest, boxed_boolean) {
   inliner_config.shrinker.run_const_prop = true;
   inliner_config.shrinker.run_local_dce = true;
   inliner_config.shrinker.compute_pure_methods = false;
-  check_method->get_code()->build_cfg(true);
-  foo_main->get_code()->build_cfg(true);
+  check_method->get_code()->build_cfg();
+  foo_main->get_code()->build_cfg();
   std::unordered_set<DexMethodRef*> pure_methods{
       DexMethod::get_method("Ljava/lang/Boolean;.booleanValue:()Z")};
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
@@ -1198,8 +1198,8 @@ TEST_F(MethodInlineTest, boxed_boolean_without_shrinking) {
   inliner::InlinerConfig inliner_config;
   inliner_config.populate(scope);
   inliner_config.throws_inline = true;
-  check_method->get_code()->build_cfg(true);
-  foo_main->get_code()->build_cfg(true);
+  check_method->get_code()->build_cfg();
+  foo_main->get_code()->build_cfg();
   std::unordered_set<DexMethodRef*> pure_methods{
       DexMethod::get_method("Ljava/lang/Boolean;.booleanValue:()Z")};
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
@@ -1373,12 +1373,12 @@ TEST_F(MethodInlineTest, visibility_change_static_invoke) {
   inliner_config.shrinker.run_local_dce = false;
   inliner_config.shrinker.compute_pure_methods = false;
 
-  caller->get_code()->build_cfg(true);
-  callee->get_code()->build_cfg(true);
-  nested_callee->get_code()->build_cfg(true);
-  caller_inside->get_code()->build_cfg(true);
-  nested_callee_2->get_code()->build_cfg(true);
-  init->get_code()->build_cfg(true);
+  caller->get_code()->build_cfg();
+  callee->get_code()->build_cfg();
+  nested_callee->get_code()->build_cfg();
+  caller_inside->get_code()->build_cfg();
+  nested_callee_2->get_code()->build_cfg();
+  init->get_code()->build_cfg();
 
   {
     init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
@@ -1552,8 +1552,8 @@ TEST_F(MethodInlineTest, unused_result) {
   inliner_config.shrinker.run_local_dce = true;
   inliner_config.shrinker.compute_pure_methods = false;
 
-  caller->get_code()->build_cfg(true);
-  callee->get_code()->build_cfg(true);
+  caller->get_code()->build_cfg();
+  callee->get_code()->build_cfg();
 
   {
     init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
@@ -1699,9 +1699,9 @@ TEST_F(MethodInlineTest, caller_caller_callee_call_site) {
   inliner_config.shrinker.run_const_prop = true;
   inliner_config.shrinker.compute_pure_methods = false;
 
-  outer_caller->get_code()->build_cfg(true);
-  inner_caller->get_code()->build_cfg(true);
-  callee->get_code()->build_cfg(true);
+  outer_caller->get_code()->build_cfg();
+  inner_caller->get_code()->build_cfg();
+  callee->get_code()->build_cfg();
 
   {
     init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
@@ -1807,8 +1807,8 @@ TEST_F(MethodInlineTest,
   inliner::InlinerConfig inliner_config;
   inliner_config.populate(scope);
 
-  caller->get_code()->build_cfg(true);
-  callee->get_code()->build_cfg(true);
+  caller->get_code()->build_cfg();
+  callee->get_code()->build_cfg();
 
   {
     init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
@@ -1889,8 +1889,8 @@ TEST_F(MethodInlineTest, dont_inline_sketchy_callee_into_into_try) {
   inliner::InlinerConfig inliner_config;
   inliner_config.populate(scope);
 
-  caller->get_code()->build_cfg(true);
-  callee->get_code()->build_cfg(true);
+  caller->get_code()->build_cfg();
+  callee->get_code()->build_cfg();
 
   {
     init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
@@ -1989,8 +1989,8 @@ TEST_F(MethodInlineTest, inline_with_string_analyzer) {
   inliner_config.shrinker.run_const_prop = true;
   inliner_config.shrinker.compute_pure_methods = false;
 
-  caller->get_code()->build_cfg(true);
-  callee->get_code()->build_cfg(true);
+  caller->get_code()->build_cfg();
+  callee->get_code()->build_cfg();
 
   {
     init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
@@ -2085,9 +2085,9 @@ TEST_F(MethodInlineTest, max_cost_for_constant_propagation) {
   // thus end up no inlining. this number 8 is carefully chosen as to
   // let check_method fail to inline and small_method go
   inliner_config.max_cost_for_constant_propagation = 8;
-  check_method->get_code()->build_cfg(true);
-  small_method->get_code()->build_cfg(true);
-  foo_main->get_code()->build_cfg(true);
+  check_method->get_code()->build_cfg();
+  small_method->get_code()->build_cfg();
+  foo_main->get_code()->build_cfg();
   std::unordered_set<DexMethodRef*> pure_methods{
       DexMethod::get_method("Ljava/lang/Boolean;.booleanValue:()Z")};
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(

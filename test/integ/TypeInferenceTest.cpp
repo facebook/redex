@@ -33,7 +33,7 @@ struct TypeInferenceTest : public RedexIntegrationTest {
 
   cfg::ControlFlowGraph& get_cfg(DexMethod* method) {
     auto code = method->get_code();
-    code->build_cfg(/* editable */ false);
+    code->build_cfg();
     auto& cfg = code->cfg();
     cfg.calculate_exit_block();
     return cfg;
@@ -49,14 +49,14 @@ TEST_F(TypeInferenceTest, test_move_exception_type) {
                     ->as_def();
 
   auto code = method->get_code();
-  code->build_cfg(/* editable */ false);
+  code->build_cfg();
   auto& cfg = code->cfg();
   type_inference::TypeInference inference(cfg);
   inference.run(method);
 
   bool insn_found = false;
   auto& envs = inference.get_type_environments();
-  for (auto& mie : InstructionIterable(*code)) {
+  for (auto& mie : InstructionIterable(cfg)) {
     auto insn = mie.insn;
     if (opcode::is_an_invoke(insn->opcode()) &&
         insn->get_method() == m_what_is_this) {
@@ -81,7 +81,7 @@ TEST_F(TypeInferenceTest, test_dedup_blocks_exception_type) {
                     ->as_def();
 
   auto code = method->get_code();
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& cfg = code->cfg();
 
   using namespace dedup_blocks_impl;

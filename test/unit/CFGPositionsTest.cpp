@@ -37,7 +37,7 @@ void EXPECT_MUTATION(const std::function<void(IRCode&, ControlFlowGraph&)>& m,
   auto actual_ir = assembler::ircode_from_string(actual);
   const auto expected_ir = assembler::ircode_from_string(expected);
 
-  actual_ir->build_cfg(/* editable */ true);
+  actual_ir->build_cfg();
 
   // Run body of test (that performs the mutation).
   m(*actual_ir, actual_ir->cfg());

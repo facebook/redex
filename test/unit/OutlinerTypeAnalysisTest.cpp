@@ -47,7 +47,7 @@ TEST_F(OutlinerTypeAnalysisTest, get_result_type_primitive) {
         (xor-int v2 v2 v2)
         (return-void)
       )))");
-  foo_method->get_code()->build_cfg(true);
+  foo_method->get_code()->build_cfg();
   outliner_impl::OutlinerTypeAnalysis ota(foo_method);
 
   {
@@ -130,7 +130,7 @@ TEST_F(OutlinerTypeAnalysisTest, get_result_type_object) {
         (load-param-object v2)
         (load-param-object v3)
       )))");
-  foo_method->get_code()->build_cfg(true);
+  foo_method->get_code()->build_cfg();
   foo_creator.add_method(foo_method);
   object_creator.create();
   auto foo_type = foo_creator.create()->get_type();
@@ -206,7 +206,7 @@ TEST_F(OutlinerTypeAnalysisTest, get_result_type_object_with_interfaces) {
         (load-param-object v2)
         (return-void)
       )))");
-  foo_method->get_code()->build_cfg(true);
+  foo_method->get_code()->build_cfg();
   foo_creator.add_method(foo_method);
   object_creator.create();
   auto foo_type = foo_creator.create()->get_type();
@@ -270,7 +270,7 @@ TEST_F(OutlinerTypeAnalysisTest, get_type_demand_primitive) {
         (xor-int v2 v2 v2)
         (return v2)
       )))");
-  foo_method->get_code()->build_cfg(true);
+  foo_method->get_code()->build_cfg();
   outliner_impl::OutlinerTypeAnalysis ota(foo_method);
 
   {
@@ -320,7 +320,7 @@ TEST_F(OutlinerTypeAnalysisTest, get_type_demand_sputs_of_zero) {
         (sput-object v0 "LFoo;.s2:LBar2;")
         (return-void)
       )))");
-  foo_method->get_code()->build_cfg(true);
+  foo_method->get_code()->build_cfg();
   outliner_impl::OutlinerTypeAnalysis ota(foo_method);
 
   {
@@ -344,7 +344,7 @@ TEST_F(OutlinerTypeAnalysisTest, get_type_demand_if_of_zero) {
         (return-void)
       ))";
   auto code = assembler::ircode_from_string(src);
-  code->build_cfg(true);
+  code->build_cfg();
   auto foo_method =
       DexMethod::make_method("LFoo;.foo:()V")
           ->make_concrete(ACC_PUBLIC | ACC_STATIC, std::move(code),
@@ -372,7 +372,7 @@ TEST_F(OutlinerTypeAnalysisTest, get_type_demand_if_of_nonzero) {
         (return-void)
       ))";
   auto code = assembler::ircode_from_string(src);
-  code->build_cfg(true);
+  code->build_cfg();
   auto foo_method =
       DexMethod::make_method("LFoo;.foo:()V")
           ->make_concrete(ACC_PUBLIC | ACC_STATIC, std::move(code),
@@ -398,7 +398,7 @@ TEST_F(OutlinerTypeAnalysisTest, get_type_demand_if_of_large_constants) {
         (return-void)
       ))";
   auto code = assembler::ircode_from_string(src);
-  code->build_cfg(true);
+  code->build_cfg();
   auto foo_method =
       DexMethod::make_method("LFoo;.foo:()V")
           ->make_concrete(ACC_PUBLIC | ACC_STATIC, std::move(code),
@@ -429,7 +429,7 @@ TEST_F(OutlinerTypeAnalysisTest, get_type_demand_primitive_narrow) {
         (return-void)
       ))";
   auto code = assembler::ircode_from_string(src);
-  code->build_cfg(true);
+  code->build_cfg();
   auto foo_method = DexMethod::make_method("LFoo;.foo:()V")
                         ->make_concrete(ACC_PUBLIC, std::move(code),
                                         /*is_virtual=*/false);
@@ -457,7 +457,7 @@ TEST_F(OutlinerTypeAnalysisTest, get_type_demand_aput_object) {
         (return-void)
       ))";
   auto code = assembler::ircode_from_string(src);
-  code->build_cfg(true);
+  code->build_cfg();
   auto foo_method = DexMethod::make_method(
                         "LFoo;.foo:(Ljava/lang/String;[Ljava/lang/String;)V")
                         ->make_concrete(ACC_PUBLIC, std::move(code),
@@ -500,7 +500,7 @@ TEST_F(OutlinerTypeAnalysisTest, get_type_demand_inference) {
         (return-void)
       ))";
   auto code = assembler::ircode_from_string(src);
-  code->build_cfg(true);
+  code->build_cfg();
   auto foo_method = DexMethod::make_method("LFoo;.foo:(LBar;)V")
                         ->make_concrete(ACC_PUBLIC, std::move(code),
                                         /*is_virtual=*/false);

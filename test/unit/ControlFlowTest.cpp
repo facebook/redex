@@ -236,7 +236,7 @@ TEST_F(ControlFlowTest, iterate1) {
       (return-void)
     )
   )");
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   for (Block* b : code->cfg().blocks()) {
     EXPECT_NE(nullptr, b);
   }
@@ -259,7 +259,7 @@ TEST_F(ControlFlowTest, iterate2) {
      (return-void)
     )
 )");
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   for (Block* b : code->cfg().blocks()) {
     EXPECT_NE(nullptr, b);
   }
@@ -299,7 +299,7 @@ TEST_F(ControlFlowTest, iterate3) {
      (return-void)
     )
 )");
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   // Check that ++ and -- agree
   auto iterable = cfg::InstructionIterable(code->cfg());
   std::stack<cfg::InstructionIterator> iterators;
@@ -327,7 +327,7 @@ TEST_F(ControlFlowTest, nullForwardIterators) {
       (return-void)
     )
   )");
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& cfg = code->cfg();
   for (int i = 0; i < 100; i++) {
     auto a = new cfg::InstructionIterable(cfg);
@@ -364,7 +364,7 @@ TEST_F(ControlFlowTest, copyConstructibleIterator) {
       (return-void)
     )
   )");
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   ControlFlowGraph& cfg = code->cfg();
   auto ii = cfg::InstructionIterable(cfg);
   boost::optional<cfg::InstructionIterator> opt;
@@ -385,7 +385,7 @@ TEST_F(ControlFlowTest, editableBuildAndLinearizeNoChange) {
   auto input_code = assembler::ircode_from_string(str);
   auto expected_code = assembler::ircode_from_string(str);
 
-  input_code->build_cfg(/* editable */ true);
+  input_code->build_cfg();
   input_code->clear_cfg();
 
   EXPECT_CODE_EQ(expected_code.get(), input_code.get());
@@ -402,7 +402,7 @@ TEST_F(ControlFlowTest, infinite) {
   auto expected_code = assembler::ircode_from_string(str);
 
   TRACE(CFG, 1, "%s", SHOW(input_code));
-  input_code->build_cfg(/* editable */ true);
+  input_code->build_cfg();
   TRACE(CFG, 1, "%s", SHOW(input_code->cfg()));
   input_code->clear_cfg();
 
@@ -420,7 +420,7 @@ TEST_F(ControlFlowTest, infinite2) {
   auto input_code = assembler::ircode_from_string(str);
   auto expected_code = assembler::ircode_from_string(str);
 
-  input_code->build_cfg(/* editable */ true);
+  input_code->build_cfg();
   TRACE(CFG, 1, "%s", SHOW(input_code->cfg()));
   input_code->clear_cfg();
 
@@ -443,7 +443,7 @@ TEST_F(ControlFlowTest, unreachable) {
     )
   )");
 
-  input_code->build_cfg(/* editable */ true);
+  input_code->build_cfg();
   TRACE(CFG, 1, "%s", SHOW(input_code->cfg()));
   input_code->clear_cfg();
 
@@ -467,7 +467,7 @@ TEST_F(ControlFlowTest, unreachable2) {
     )
   )");
 
-  input_code->build_cfg(/* editable */ true);
+  input_code->build_cfg();
   TRACE(CFG, 1, "%s", SHOW(input_code->cfg()));
   input_code->clear_cfg();
 
@@ -483,7 +483,7 @@ TEST_F(ControlFlowTest, remove_non_branch) {
       (return-void)
     )
   )");
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& cfg = code->cfg();
 
   auto iterable = cfg::InstructionIterable(cfg);
@@ -542,7 +542,7 @@ TEST_F(ControlFlowTest, remove_non_branch_with_loop) {
     )
 )");
 
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& cfg = code->cfg();
   delete_if(cfg, [](IROpcode op) { return op == OPCODE_CONST; });
   code->clear_cfg();
@@ -575,7 +575,7 @@ TEST_F(ControlFlowTest, remove_branch) {
     )
   )");
 
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& cfg = code->cfg();
   delete_if(cfg, [](IROpcode op) { return op == OPCODE_IF_EQZ; });
   code->clear_cfg();
@@ -603,7 +603,7 @@ TEST_F(ControlFlowTest, remove_branch_with_loop) {
     )
 )");
 
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& cfg = code->cfg();
   delete_if(cfg, [](IROpcode op) { return op == OPCODE_IF_GEZ; });
   code->clear_cfg();
@@ -631,7 +631,7 @@ TEST_F(ControlFlowTest, remove_all_but_return) {
     )
 )");
 
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& cfg = code->cfg();
   delete_if(cfg, [](IROpcode op) { return op != OPCODE_RETURN_VOID; });
   code->clear_cfg();
@@ -662,7 +662,7 @@ TEST_F(ControlFlowTest, remove_switch) {
     )
 )");
 
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& cfg = code->cfg();
   delete_if(cfg, [](IROpcode op) { return op == OPCODE_SWITCH; });
   code->clear_cfg();
@@ -694,7 +694,7 @@ TEST_F(ControlFlowTest, remove_switch2) {
     )
 )");
 
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& cfg = code->cfg();
   delete_if(cfg, [](IROpcode op) { return op == OPCODE_SWITCH; });
   code->clear_cfg();
@@ -727,7 +727,7 @@ TEST_F(ControlFlowTest, remove_pred_edge_if) {
     )
 )");
 
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& cfg = code->cfg();
   cfg.delete_pred_edge_if(cfg.entry_block(), [](const cfg::Edge* e) {
     return e->type() == EDGE_BRANCH;
@@ -770,7 +770,7 @@ TEST_F(ControlFlowTest, cleanup_after_deleting_branch) {
     )
 )");
 
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& cfg = code->cfg();
   cfg.delete_succ_edge_if(cfg.entry_block(), [](const cfg::Edge* e) {
     return e->type() == EDGE_BRANCH;
@@ -800,7 +800,7 @@ TEST_F(ControlFlowTest, cleanup_after_deleting_goto) {
     )
 )");
 
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
 
   auto& cfg = code->cfg();
   cfg.delete_succ_edge_if(cfg.entry_block(), [](const cfg::Edge* e) {
@@ -829,7 +829,7 @@ TEST_F(ControlFlowTest, remove_sget) {
     )
 )");
 
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& cfg = code->cfg();
   auto iterable = cfg::InstructionIterable(cfg);
   std::vector<cfg::InstructionIterator> to_delete;
@@ -877,7 +877,7 @@ TEST_F(ControlFlowTest, branchingness) {
     )
 )");
 
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& cfg = code->cfg();
   uint16_t blocks_checked = 0;
   for (Block* b : cfg.blocks()) {
@@ -911,7 +911,7 @@ TEST_F(ControlFlowTest, empty_first_block) {
     )
 )");
 
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& cfg = code->cfg();
 
   auto iterable = cfg::InstructionIterable(cfg);
@@ -943,7 +943,7 @@ TEST_F(ControlFlowTest, exit_blocks) {
     )
 )");
 
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   EXPECT_EQ(2, cfg.real_exit_blocks().size());
@@ -961,7 +961,7 @@ TEST_F(ControlFlowTest, exit_blocks_change) {
     )
 )");
 
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& cfg = code->cfg();
   EXPECT_EQ(2, cfg.real_exit_blocks().size());
 
@@ -990,7 +990,7 @@ TEST_F(ControlFlowTest, remove_ghost_exit_block) {
     )
 )");
 
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& cfg = code->cfg();
   EXPECT_EQ(cfg.num_blocks(), 3);
   EXPECT_EQ(cfg.exit_block(), nullptr);
@@ -1013,7 +1013,7 @@ TEST_F(ControlFlowTest, remove_real_exit_block) {
     )
 )");
 
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& cfg = code->cfg();
   EXPECT_EQ(cfg.num_blocks(), 2);
   EXPECT_EQ(cfg.exit_block(), nullptr);
@@ -1037,7 +1037,7 @@ TEST_F(ControlFlowTest, deep_copy1) {
     )
 )");
 
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& orig = code->cfg();
 
   cfg::ControlFlowGraph copy;
@@ -1066,7 +1066,7 @@ TEST_F(ControlFlowTest, deep_copy2) {
     )
 )");
 
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& orig = code->cfg();
 
   cfg::ControlFlowGraph copy;
@@ -1104,7 +1104,7 @@ TEST_F(ControlFlowTest, deep_copy3) {
     )
 )");
 
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& orig = code->cfg();
 
   cfg::ControlFlowGraph copy;
@@ -1142,10 +1142,10 @@ TEST_F(ControlFlowTest, deep_copy_into_existing_cfg) {
     )
 )");
 
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& orig = code->cfg();
 
-  copy_code->build_cfg(/* editable */ true);
+  copy_code->build_cfg();
   auto& copy = copy_code->cfg();
 
   orig.deep_copy(&copy);
@@ -1179,7 +1179,7 @@ TEST_F(ControlFlowTest, line_numbers) {
     )
   )");
 
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   code->clear_cfg();
 
   auto expected = assembler::ircode_from_string(R"(
@@ -1287,7 +1287,7 @@ TEST_F(ControlFlowTest, insertion) {
       (goto :exit)
     )
   )");
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& cfg = code->cfg();
   IRInstruction add{OPCODE_ADD_INT_LIT};
   add.set_literal(1);
@@ -1340,7 +1340,7 @@ TEST_F(ControlFlowTest, insertion_it) {
       (goto :exit)
     )
   )");
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& cfg = code->cfg();
   IRInstruction add{OPCODE_ADD_INT_LIT};
   add.set_literal(1);
@@ -1400,7 +1400,7 @@ TEST_F(ControlFlowTest, insertion_it_var) {
       (goto :exit)
     )
   )");
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& cfg = code->cfg();
   IRInstruction add{OPCODE_ADD_INT_LIT};
   add.set_literal(1);
@@ -1468,7 +1468,7 @@ TEST_F(ControlFlowTest, insertion_after_may_throw) {
       (return v1)
     )
   )");
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& cfg = code->cfg();
   auto ii = cfg::InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
@@ -1517,7 +1517,7 @@ TEST_F(ControlFlowTest, insertion_after_may_throw_with_move_result) {
       (return v1)
     )
   )");
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& cfg = code->cfg();
   auto ii = cfg::InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
@@ -1576,7 +1576,7 @@ TEST_F(ControlFlowTest, add_sget) {
       (goto :exit)
     )
   )");
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& cfg = code->cfg();
   auto ii = cfg::InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
@@ -1631,7 +1631,7 @@ TEST_F(ControlFlowTest, add_return) {
       (goto :exit)
     )
   )");
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& cfg = code->cfg();
   auto ii = cfg::InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
@@ -1679,7 +1679,7 @@ TEST_F(ControlFlowTest, add_throw) {
       (return v1)
     )
   )");
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& cfg = code->cfg();
   auto ii = cfg::InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
@@ -1714,7 +1714,7 @@ TEST_F(ControlFlowTest, add_branch) {
       (return v0)
     )
   )");
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& cfg = code->cfg();
   auto entry_block = cfg.entry_block();
   auto load_param =
@@ -1769,7 +1769,7 @@ TEST_F(ControlFlowTest, test_first_non_param_loading_insn) {
       (return v1)
     )
   )");
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& cfg = code->cfg();
   auto entry_block = cfg.entry_block();
 
@@ -1815,7 +1815,7 @@ TEST_F(ControlFlowTest, add_branch_null_goto_block) {
       (return v1)
     )
   )");
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& cfg = code->cfg();
 
   auto new_block = create_ret_const_block(cfg, 30);
@@ -1870,7 +1870,7 @@ TEST_F(ControlFlowTest, add_branch_redirect_goto_block) {
       (return v1)
     )
   )");
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& cfg = code->cfg();
 
   auto thirty = create_ret_const_block(cfg, 30);
@@ -1917,7 +1917,7 @@ TEST_F(ControlFlowTest, add_switch) {
       (return v0)
     )
   )");
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& cfg = code->cfg();
 
   auto ten = create_ret_const_block(cfg, 10);
@@ -1970,7 +1970,7 @@ TEST_F(ControlFlowTest, replace_insn_basic) {
       (return v0)
     )
   )");
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& cfg = code->cfg();
 
   auto ii = cfg::InstructionIterable(cfg);
@@ -2015,7 +2015,7 @@ TEST_F(ControlFlowTest, replace_insn_may_throw) {
       (return v0)
     )
   )");
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& cfg = code->cfg();
 
   auto ii = cfg::InstructionIterable(cfg);
@@ -2063,7 +2063,7 @@ TEST_F(ControlFlowTest, replace_insn_may_throw2) {
       (return v0)
     )
   )");
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& cfg = code->cfg();
 
   auto ii = cfg::InstructionIterable(cfg);
@@ -2110,7 +2110,7 @@ TEST_F(ControlFlowTest, replace_insn_may_throw3) {
       (return v0)
     )
   )");
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& cfg = code->cfg();
 
   auto ii = cfg::InstructionIterable(cfg);
@@ -2158,7 +2158,7 @@ TEST_F(ControlFlowTest, replace_insn_invoke) {
       (return v0)
     )
   )");
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& cfg = code->cfg();
 
   auto ii = cfg::InstructionIterable(cfg);
@@ -2194,7 +2194,7 @@ TEST_F(ControlFlowTest, replace_if_with_return) {
       (return v2)
     )
   )");
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& cfg = code->cfg();
 
   auto ii = cfg::InstructionIterable(cfg);
@@ -2232,7 +2232,7 @@ TEST_F(ControlFlowTest, split_block) {
       (return v1)
     )
   )");
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
 
   auto& cfg = code->cfg();
 
@@ -2286,8 +2286,8 @@ TEST_F(ControlFlowTest, block_begins_with) {
     )
   )");
 
-  full_code->build_cfg(/* editable */ false);
-  partial_code->build_cfg(/* editable */ false);
+  full_code->build_cfg();
+  partial_code->build_cfg();
 
   auto& full_cfg = full_code->cfg();
   auto& partial_cfg = partial_code->cfg();
@@ -2306,7 +2306,7 @@ TEST_F(ControlFlowTest, get_param_instructions_basic) {
     )
   )");
 
-  code->build_cfg(/* editable= */ true);
+  code->build_cfg();
   auto& cfg = code->cfg();
 
   MethodItemEntry* param_insn = &*cfg.entry_block()->begin();
@@ -2326,7 +2326,7 @@ TEST_F(ControlFlowTest, get_param_instructions_basic_non_editable) {
     )
   )");
 
-  code->build_cfg(/* editable= */ false);
+  code->build_cfg();
   auto& cfg = code->cfg();
 
   MethodItemEntry* param_insn = &*cfg.entry_block()->begin();
@@ -2343,7 +2343,7 @@ TEST_F(ControlFlowTest, get_param_instructions_empty) {
     )
   )");
 
-  code->build_cfg(/* editable= */ true);
+  code->build_cfg();
   auto& cfg = code->cfg();
 
   EXPECT_TRUE(cfg.get_param_instructions().empty());
@@ -2356,7 +2356,7 @@ TEST_F(ControlFlowTest, get_param_instructions_empty_not_editable) {
     )
   )");
 
-  code->build_cfg(/* editable= */ false);
+  code->build_cfg();
   auto& cfg = code->cfg();
 
   EXPECT_TRUE(cfg.get_param_instructions().empty());
@@ -2369,7 +2369,7 @@ TEST_F(ControlFlowTest, no_crash_on_remove_insn) {
       (invoke-virtual (v) "LFoo;.bar:()V")
     )
   )");
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& cfg = code->cfg();
 
   auto it = InstructionIterator{cfg, /*is_begin=*/true};
@@ -2402,7 +2402,7 @@ TEST_F(ControlFlowTest, move_result_chain) {
       (return v1)
     )
   )");
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& cfg = code->cfg();
 
   // Find the add, break that block.
@@ -2648,7 +2648,7 @@ TEST_F(ControlFlowTest, non_editable_cfg_case_keys) {
     )
 )");
 
-  code->build_cfg(/* editable */ false);
+  code->build_cfg();
   auto& cfg = code->cfg();
   std::vector<int32_t> case_keys;
   auto switch_block = cfg.entry_block();
@@ -2685,7 +2685,7 @@ TEST_F(ControlFlowTest, insert_block_if) {
       (return v1)
     )
   )");
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& cfg = code->cfg();
   EXPECT_EQ(cfg.num_blocks(), 3);
 
@@ -2741,7 +2741,7 @@ TEST_F(ControlFlowTest, insert_block_switch) {
     )
   )");
 
-  code->build_cfg(/* editable */ true);
+  code->build_cfg();
   auto& cfg = code->cfg();
   EXPECT_EQ(cfg.num_blocks(), 3);
 

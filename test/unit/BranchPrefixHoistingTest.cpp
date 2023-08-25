@@ -35,7 +35,7 @@ void test(const std::string& code_str,
   cls->add_method(method);
   method->set_code(assembler::ircode_from_string(code_str));
   auto code = method->get_code();
-  code->build_cfg(true);
+  code->build_cfg();
   auto& cfg = code->cfg();
   std::cerr << "before:" << std::endl << SHOW(cfg);
 

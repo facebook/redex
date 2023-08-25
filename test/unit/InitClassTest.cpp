@@ -17,7 +17,7 @@
 void test_init_class(const std::string& original_str,
                      const std::string& expected_str) {
   auto original_code = assembler::ircode_from_string(original_str);
-  original_code->build_cfg(true);
+  original_code->build_cfg();
   auto& original = original_code->cfg();
 
   auto expected_code = assembler::ircode_from_string(expected_str);

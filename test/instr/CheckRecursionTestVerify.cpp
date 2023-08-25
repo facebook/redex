@@ -12,7 +12,7 @@
 #include "VerifyUtil.h"
 
 static bool HasCatchBlock(IRCode* code) {
-  code->build_cfg(/* editable */ false);
+  code->build_cfg();
   bool has_catch = false;
   for (auto it : code->cfg().blocks()) {
     if (it->is_catch()) {

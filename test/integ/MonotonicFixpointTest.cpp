@@ -113,7 +113,7 @@ TEST_F(MonotonicFixpointTest, livenessAnalysis) {
       for (const auto& method : cls->get_vmethods()) {
         if (std::strcmp(method->get_name()->c_str(), "function_1") == 0) {
           auto code = method->get_code();
-          code->build_cfg(/* editable */ false);
+          code->build_cfg();
           cfg::ControlFlowGraph& cfg = code->cfg();
           cfg.calculate_exit_block();
           std::cout << "CFG of function_1:" << std::endl

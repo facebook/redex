@@ -843,7 +843,7 @@ TEST_F(ConstantPropagationTest, WhiteBox1) {
     )
   )");
 
-  code->build_cfg(/* editable */ false);
+  code->build_cfg();
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   cp::intraprocedural::FixpointIterator intra_cp(
@@ -878,7 +878,7 @@ TEST_F(ConstantPropagationTest, WhiteBox2) {
     )
   )");
 
-  code->build_cfg(/* editable */ false);
+  code->build_cfg();
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   cp::intraprocedural::FixpointIterator intra_cp(
