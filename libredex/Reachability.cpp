@@ -572,12 +572,27 @@ void gather_dynamic_references_impl(const DexAnnotation* anno,
   }
 }
 
-template <class T>
-void gather_dynamic_references(T item, References* references) {
-  auto* anno_set = item->get_anno_set();
+void gather_dynamic_references_anno_set(const DexAnnotationSet* anno_set,
+                                        References* references) {
   if (anno_set) {
     for (auto& anno : anno_set->get_annotations()) {
       gather_dynamic_references_impl(anno.get(), references);
+    }
+  }
+}
+
+template <class T>
+void gather_dynamic_references(T item, References* references) {
+  gather_dynamic_references_anno_set(item->get_anno_set(), references);
+}
+
+template <>
+void gather_dynamic_references(const DexMethod* item, References* references) {
+  gather_dynamic_references_anno_set(item->get_anno_set(), references);
+  auto param_anno = item->get_param_anno();
+  if (param_anno) {
+    for (auto&& [_, param_anno_set] : *param_anno) {
+      gather_dynamic_references_anno_set(param_anno_set.get(), references);
     }
   }
 }
