@@ -535,8 +535,7 @@ void process_signature_anno(const DexString* dstring, References* references) {
 
 void gather_dynamic_references_impl(const DexAnnotation* anno,
                                     References* references) {
-  static DexType* dalviksig =
-      DexType::get_type("Ldalvik/annotation/Signature;");
+  DexType* dalviksig = type::dalvik_annotation_Signature();
   // Signature annotations contain strings that Jackson uses
   // to construct the underlying types.
   if (anno->type() == dalviksig) {

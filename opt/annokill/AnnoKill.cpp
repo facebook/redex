@@ -441,7 +441,7 @@ void AnnoKill::cleanup_aset(
       return true;
     }
 
-    if (anno_type == DexType::get_type("Ldalvik/annotation/Signature;")) {
+    if (anno_type == type::dalvik_annotation_Signature()) {
       if (should_kill_bad_signature(da.get())) {
         stats.signatures_killed++;
         return true;

@@ -165,8 +165,7 @@ const DexString* TypeStringMap::get_new_type_name(
 
 void rewrite_dalvik_annotation_signature(const Scope& scope,
                                          const TypeStringMap& mapping) {
-  static DexType* dalviksig =
-      DexType::get_type("Ldalvik/annotation/Signature;");
+  DexType* dalviksig = type::dalvik_annotation_Signature();
   walk::parallel::annotations(scope, [&](DexAnnotation* anno) {
     if (anno->type() != dalviksig) return;
     auto& elems = anno->anno_elems();

@@ -90,9 +90,8 @@ void process_signature_anno(const DexString* dstring) {
 }
 
 void find_referenced_classes(const Scope& scope) {
+  DexType* dalviksig = type::dalvik_annotation_Signature();
   walk::parallel::annotations(scope, [&](DexAnnotation* anno) {
-    static DexType* dalviksig =
-        DexType::get_type("Ldalvik/annotation/Signature;");
     // Signature annotations contain strings that Jackson uses
     // to construct the underlying types.
     if (anno->type() == dalviksig) {
