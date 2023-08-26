@@ -46,6 +46,7 @@ AnnoKill::AnnoKill(
     const std::unordered_map<std::string, std::vector<std::string>>&
         annotated_keep_annos)
     : m_scope(scope),
+      m_scope_set(scope.begin(), scope.end()),
       m_only_force_kill(only_force_kill),
       m_kill_bad_signatures(kill_bad_signatures) {
   TRACE(ANNO,
@@ -458,20 +459,10 @@ bool AnnoKill::should_kill_bad_signature(DexAnnotation* da) const {
   if (!m_kill_bad_signatures) return false;
   bool res = false;
   annotation_signature_parser::parse(da, [&](auto* devs, auto* sigcls) {
-    if (sigcls && !sigcls->is_external()) {
-      bool found = false;
-      for (auto cls : m_scope) {
-        if (cls == sigcls) {
-          // Valid class, we're good, go to element in array
-          found = true;
-          continue;
-        }
-      }
+    if (sigcls && !sigcls->is_external() && !m_scope_set.count(sigcls)) {
       // Could not find the (non-external) class in Scope, so set signal
       // to kill
-      if (!found) {
-        sigcls = nullptr;
-      }
+      sigcls = nullptr;
     }
     if (!sigcls) {
       TRACE(ANNO, 3, "Killing bad @Signature: %s", devs->string()->c_str());

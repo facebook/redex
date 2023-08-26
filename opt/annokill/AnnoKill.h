@@ -96,6 +96,7 @@ class AnnoKill {
   void count_annotation(const DexAnnotation* da, AnnoKillStats& stats) const;
 
   Scope& m_scope;
+  std::unordered_set<DexClass*> m_scope_set;
   const bool m_only_force_kill;
   const bool m_kill_bad_signatures;
   AnnoSet m_kill;
