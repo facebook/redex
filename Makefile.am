@@ -87,6 +87,7 @@ libredex_la_SOURCES = \
 	libredex/AggregateException.cpp \
 	libredex/AnalysisUsage.cpp \
 	libredex/AnnoUtils.cpp \
+	libredex/AnnotationSignatureParser.cpp \
 	libredex/ApiLevelChecker.cpp \
 	libredex/ApkResources.cpp \
 	libredex/AssetManager.cpp \

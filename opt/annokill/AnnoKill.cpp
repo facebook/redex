@@ -7,6 +7,7 @@
 
 #include "AnnoKill.h"
 
+#include "AnnotationSignatureParser.h"
 #include "ClassHierarchy.h"
 #include "Debug.h"
 #include "DexAnnotation.h"
@@ -455,79 +456,31 @@ void AnnoKill::cleanup_aset(
 
 bool AnnoKill::should_kill_bad_signature(DexAnnotation* da) const {
   if (!m_kill_bad_signatures) return false;
-  TRACE(ANNO, 3, "Examining @Signature instance %s", SHOW(da));
-  auto& elems = da->anno_elems();
-  for (auto& elem : elems) {
-    auto& ev = elem.encoded_value;
-    if (ev->evtype() != DEVT_ARRAY) continue;
-    auto arrayev = static_cast<DexEncodedValueArray*>(ev.get());
-    auto const& evs = arrayev->evalues();
-    for (auto& strev : *evs) {
-      if (strev->evtype() != DEVT_STRING) continue;
-      const std::string sigstr =
-          static_cast<DexEncodedValueString*>(strev.get())
-              ->string()
-              ->str_copy();
-      always_assert(sigstr.length() > 0);
-      const auto* sigcstr = sigstr.c_str();
-      // @Signature grammar is non-trivial[1], nevermind the fact that
-      // Signatures are broken up into arbitrary arrays of strings concatenated
-      // at runtime. It seems like types are reliably never broken apart, so we
-      // can usually find an entire type name in each DexEncodedValueString.
-      //
-      // We also crudely approximate that something looks like a typename in the
-      // first place since there's a lot of mark up in the @Signature grammar,
-      // e.g. formal type parameter names. We look for things that look like
-      // "L*/*", don't include ":" (formal type parameter separator), and may or
-      // may not end with a semicolon or angle bracket.
-      //
-      // I'm working on a C++ port of the AOSP generic signature parser so we
-      // can make this more robust in the future.
-      //
-      // [1] androidxref.com/8.0.0_r4/xref/libcore/luni/src/main/java/libcore/
-      //     reflect/GenericSignatureParser.java
-      if (sigstr[0] == 'L' && strchr(sigcstr, '/') && !strchr(sigcstr, ':')) {
-        auto* sigtype = DexType::get_type(sigstr);
-        if (!sigtype) {
-          // Try with semicolon.
-          sigtype = DexType::get_type(sigstr + ';');
-        }
-        if (!sigtype && sigstr.back() == '<') {
-          // Try replacing angle bracket with semicolon
-          // d8 often encodes signature annotations this way
-          std::string copy = str_copy(sigstr);
-          copy.pop_back();
-          copy.push_back(';');
-          sigtype = DexType::get_type(copy);
-        }
-        if (sigtype) {
-          auto* sigcls = type_class(sigtype);
-          if (!sigcls) {
-            sigtype = nullptr;
-          } else if (!sigcls->is_external()) {
-            bool found = false;
-            for (auto cls : m_scope) {
-              if (cls == sigcls) {
-                // Valid class, we're good, go to element in array
-                found = true;
-                continue;
-              }
-            }
-            // Could not find the (non-external) class in Scope, so set signal
-            // to kill
-            if (!found) {
-              sigtype = nullptr;
-            }
-          }
-        }
-        if (!sigtype) {
-          TRACE(ANNO, 3, "Killing bad @Signature: %s", sigcstr);
-          return true;
+  bool res = false;
+  annotation_signature_parser::parse(da, [&](auto* devs, auto* sigcls) {
+    if (sigcls && !sigcls->is_external()) {
+      bool found = false;
+      for (auto cls : m_scope) {
+        if (cls == sigcls) {
+          // Valid class, we're good, go to element in array
+          found = true;
+          continue;
         }
       }
+      // Could not find the (non-external) class in Scope, so set signal
+      // to kill
+      if (!found) {
+        sigcls = nullptr;
+      }
     }
-  }
-  return false;
+    if (!sigcls) {
+      TRACE(ANNO, 3, "Killing bad @Signature: %s", devs->string()->c_str());
+      res = true;
+      return false;
+    }
+    return true;
+  });
+  return res;
 }
 
 std::unordered_set<const DexType*> AnnoKill::build_anno_keep(
