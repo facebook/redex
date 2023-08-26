@@ -12,6 +12,7 @@
 #include <boost/range/adaptor/map.hpp>
 #include <cinttypes>
 
+#include "AnnotationSignatureParser.h"
 #include "BinarySerialization.h"
 #include "CFGMutation.h"
 #include "DexAnnotation.h"
@@ -513,44 +514,18 @@ void TransitiveClosureMarkerWorker::push_if_instance_method_callable(
 // Adapted from DelInitPass
 namespace relaxed_keep_class_members_impl {
 
-void process_signature_anno(const DexString* dstring, References* references) {
-  const char* cstr = dstring->c_str();
-  size_t len = strlen(cstr);
-  if (len < 3) return;
-  if (cstr[0] != 'L') return;
-  if (cstr[len - 1] == ';') {
-    auto cls = type_class(DexType::get_type(dstring));
-    if (cls) {
-      references->classes_dynamically_referenced.insert(cls);
-    }
-    return;
-  }
-  std::string buf(cstr);
-  buf += ';';
-  auto cls = type_class(DexType::get_type(buf));
-  if (cls) {
-    references->classes_dynamically_referenced.insert(cls);
-  }
-}
-
 void gather_dynamic_references_impl(const DexAnnotation* anno,
                                     References* references) {
   DexType* dalviksig = type::dalvik_annotation_Signature();
   // Signature annotations contain strings that Jackson uses
   // to construct the underlying types.
   if (anno->type() == dalviksig) {
-    auto& elems = anno->anno_elems();
-    for (auto const& elem : elems) {
-      auto& ev = elem.encoded_value;
-      if (ev->evtype() != DEVT_ARRAY) continue;
-      auto arrayev = static_cast<DexEncodedValueArray*>(ev.get());
-      auto const& evs = arrayev->evalues();
-      for (auto& strev : *evs) {
-        if (strev->evtype() != DEVT_STRING) continue;
-        auto stringev = static_cast<DexEncodedValueString*>(strev.get());
-        process_signature_anno(stringev->string(), references);
+    annotation_signature_parser::parse(anno, [&](auto*, auto* sigcls) {
+      if (sigcls) {
+        references->classes_dynamically_referenced.insert(sigcls);
       }
-    }
+      return true;
+    });
     return;
   }
   // Class literals in annotations.
