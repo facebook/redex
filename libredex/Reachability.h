@@ -298,6 +298,7 @@ struct ReachableAspects {
   CallableInstanceMethods callable_instance_methods;
   InstantiableTypes instantiable_types;
   InstantiableTypes uninstantiable_dependencies;
+  std::unordered_set<const DexClass*> deserializable_types{};
   uint64_t instructions_unvisited{0};
   void finish(const ConditionallyMarked& cond_marked);
 };

@@ -941,13 +941,15 @@ void TransitiveClosureMarkerWorker::gather_and_push(const DexMethod* meth) {
 std::shared_ptr<MethodReferencesGatherer>
 TransitiveClosureMarkerWorker::create_method_references_gatherer(
     const DexMethod* method, bool consider_code, GatherMieFunction gather_mie) {
-  const auto* instantiable_types =
-      (m_shared_state->cfg_gathering_check_instantiable &&
-       !method->rstate.no_optimizations())
-          ? &m_shared_state->reachable_aspects->instantiable_types
-          : nullptr;
-  auto is_class_instantiable = [instantiable_types](const auto* cls) {
-    return !instantiable_types || instantiable_types->count(cls);
+  bool check = m_shared_state->cfg_gathering_check_instantiable &&
+               !method->rstate.no_optimizations();
+  auto is_class_instantiable = [ra = m_shared_state->reachable_aspects,
+                                check](const auto* cls) {
+    if (!check) {
+      return true;
+    }
+    return ra->instantiable_types.count(cls) ||
+           ra->deserializable_types.count(cls);
   };
   return std::make_shared<MethodReferencesGatherer>(
       method, m_shared_state->relaxed_keep_class_members,
