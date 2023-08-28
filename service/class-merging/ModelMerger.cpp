@@ -7,6 +7,7 @@
 
 #include "ModelMerger.h"
 
+#include "CFGMutation.h"
 #include "ClassAssemblingUtils.h"
 #include "ConfigFiles.h"
 #include "DexUtil.h"
@@ -116,7 +117,8 @@ void update_code_type_refs(
     mergeables.insert(pair.first);
   }
   auto patcher = [&](DexMethod* meth, IRCode& code) {
-    auto ii = InstructionIterable(code);
+    auto& cfg = code.cfg();
+    auto ii = cfg::InstructionIterable(cfg);
     for (auto it = ii.begin(); it != ii.end(); ++it) {
       auto insn = it->insn;
 
@@ -198,7 +200,8 @@ void update_refs_to_mergeable_fields(
   }
   TRACE(CLMG, 8, "  Updating field refs");
   walk::parallel::code(scope, [&](DexMethod* meth, IRCode& code) {
-    auto ii = InstructionIterable(code);
+    auto& cfg = code.cfg();
+    auto ii = cfg::InstructionIterable(cfg);
     for (auto it = ii.begin(); it != ii.end(); ++it) {
       auto insn = it->insn;
       if (!insn->has_field()) {
@@ -230,9 +233,9 @@ void update_refs_to_mergeable_fields(
         field_type = mergeable_to_merger.count(field_type) > 0
                          ? mergeable_to_merger.at(field_type)
                          : field_type;
-        patch_iget(meth, it.unwrap(), field_type);
+        patch_iget(cfg, it, field_type);
       } else if (opcode::is_an_iput(insn->opcode())) {
-        patch_iput(it.unwrap());
+        patch_iput(it);
       }
     }
   });
@@ -284,7 +287,10 @@ void update_instance_of(
         merger_to_instance_of_meth,
     const TypeTags& type_tags) {
   walk::parallel::code(scope, [&](DexMethod* caller, IRCode& code) {
-    auto ii = InstructionIterable(code);
+    always_assert(code.editable_cfg_built());
+    auto& cfg = code.cfg();
+    cfg::CFGMutation mutation(cfg);
+    auto ii = cfg::InstructionIterable(cfg);
     for (auto it = ii.begin(); it != ii.end(); ++it) {
       auto insn = it->insn;
       if (!insn->has_type() || insn->opcode() != OPCODE_INSTANCE_OF) {
@@ -300,7 +306,7 @@ void update_instance_of(
           CLMG, 9, " patching INSTANCE_OF at %s %s", SHOW(insn), SHOW(caller));
       // Load type_tag.
       auto type_tag = type_tags.get_type_tag(type);
-      auto type_tag_reg = code.allocate_temp();
+      auto type_tag_reg = cfg.allocate_temp();
       auto load_type_tag =
           method_reference::make_load_const(type_tag_reg, type_tag);
       // Replace INSTANCE_OF with INVOKE_STATIC to instance_of_meth.
@@ -314,13 +320,14 @@ void update_instance_of(
       // MOVE_RESULT to dst of INSTANCE_OF.
       auto move_res = new IRInstruction(OPCODE_MOVE_RESULT);
       move_res->set_dest(std::next(it)->insn->dest());
-      code.insert_after(
-          insn, std::vector<IRInstruction*>{load_type_tag, invoke, move_res});
+      mutation.insert_after(
+          it, std::vector<IRInstruction*>{load_type_tag, invoke, move_res});
       // remove original INSTANCE_OF.
-      code.remove_opcode(insn);
+      mutation.remove(it);
 
-      TRACE(CLMG, 9, " patched INSTANCE_OF in \n%s", SHOW(&code));
+      TRACE(CLMG, 9, " patched INSTANCE_OF in \n%s", SHOW(cfg));
     }
+    mutation.flush();
   });
 }
 
@@ -328,7 +335,9 @@ void update_instance_of_no_type_tag(
     const Scope& scope,
     const std::unordered_map<const DexType*, DexType*>& mergeable_to_merger) {
   walk::parallel::code(scope, [&](DexMethod* caller, IRCode& code) {
-    auto ii = InstructionIterable(code);
+    always_assert(code.editable_cfg_built());
+    auto& cfg = code.cfg();
+    auto ii = cfg::InstructionIterable(cfg);
     for (auto it = ii.begin(); it != ii.end(); ++it) {
       auto insn = it->insn;
       if (!insn->has_type() || insn->opcode() != OPCODE_INSTANCE_OF) {
@@ -342,7 +351,7 @@ void update_instance_of_no_type_tag(
       always_assert(type_class(type));
       auto merger_type = mergeable_to_merger.at(type);
       insn->set_type(merger_type);
-      TRACE(CLMG, 9, " patched INSTANCE_OF no type tag in \n%s", SHOW(&code));
+      TRACE(CLMG, 9, " patched INSTANCE_OF no type tag in \n%s", SHOW(cfg));
     }
   });
 }
@@ -376,6 +385,7 @@ void update_refs_to_mergeable_types(
     auto type = merger->type;
     auto type_tag_field = type_tag_fields.at(merger);
     auto instance_of_meth = create_instanceof_method(type, type_tag_field);
+    instance_of_meth->get_code()->build_cfg();
     merger_to_instance_of_meth[type] = instance_of_meth;
     type_class(type)->add_method(instance_of_meth);
   }

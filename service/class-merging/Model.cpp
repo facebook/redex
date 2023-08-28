@@ -1459,7 +1459,8 @@ std::string Model::print(const DexType* type, int nest) const {
       if (meth) {
         ss << "# " << show_deobfuscated(meth) << " ("
            << meth->get_name()->c_str() << ") ["
-           << (meth->get_code() ? meth->get_code()->count_opcodes() : 0) << "]";
+           << (meth->get_code() ? meth->get_code()->cfg().num_opcodes() : 0)
+           << "]";
       } else {
         ss << "# missing";
       }

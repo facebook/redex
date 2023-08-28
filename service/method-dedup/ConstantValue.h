@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "ControlFlow.h"
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "MethodReference.h"
@@ -42,7 +43,7 @@ class ConstantValue {
 
  public:
   // The insn and the dest. OPCODE_CONST_STRING does not have a dest in itself.
-  using ConstantLoad = std::pair<IRInstruction*, reg_t>;
+  using ConstantLoad = std::pair<cfg::InstructionIterator, reg_t>;
 
   ConstantValue(const TypeTags* type_tags,
                 const std::string& kind_str,
@@ -72,7 +73,8 @@ class ConstantValue {
     }
   }
 
-  std::vector<ConstantLoad> collect_constant_loads_in(const IRCode* code);
+  std::vector<ConstantLoad> collect_constant_loads_in(
+      cfg::ControlFlowGraph& cfg);
 
   std::vector<IRInstruction*> make_load_const(reg_t const_reg);
 
@@ -108,9 +110,10 @@ class ConstantValues {
                  const std::string& kinds_str,
                  const std::string& vals_str,
                  const size_t stud_method_threshold,
-                 IRCode* code);
+                 cfg::ControlFlowGraph& cfg);
 
-  std::vector<ConstantValueLoad> collect_constant_loads(const IRCode* code);
+  std::vector<ConstantValueLoad> collect_constant_loads(
+      cfg::ControlFlowGraph& cfg);
 
   std::vector<ConstantValue> get_constant_values() const {
     return m_const_vals;

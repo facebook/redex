@@ -8,6 +8,7 @@
 #include "ModelMethodMerger.h"
 
 #include "AnnoUtils.h"
+#include "CFGMutation.h"
 #include "ConstantLifting.h"
 #include "Creators.h"
 #include "DexUtil.h"
@@ -70,7 +71,8 @@ void staticize_with_new_arg_head(DexMethod* meth, DexType* new_head) {
 template <typename T>
 void fix_visibility_helper(DexMethod* method, T& vmethods_created) {
   // Fix non-static non-ctor private callees
-  for (auto& mie : InstructionIterable(method->get_code())) {
+  auto& cfg = method->get_code()->cfg();
+  for (auto& mie : cfg::InstructionIterable(cfg)) {
     auto insn = mie.insn;
     auto opcode = insn->opcode();
     if (!opcode::is_invoke_direct(opcode)) {
@@ -141,7 +143,7 @@ static void find_common_ctor_invocations(
     cfg::Block* switch_block,
     cfg::Block* return_block,
     DexMethod*& common_ctor,
-    std::vector<IRList::iterator>& invocations) {
+    std::vector<cfg::InstructionIterator>& invocations) {
   // edges could point to the same target, but we only care unique targets.
   std::unordered_set<cfg::Block*> targets;
   for (auto& s : switch_block->succs()) {
@@ -156,13 +158,9 @@ static void find_common_ctor_invocations(
       return;
     }
     auto last_non_goto_insn = target->get_last_insn();
-    if (opcode::is_goto(last_non_goto_insn->insn->opcode())) {
-      do {
-        assert_log(last_non_goto_insn != target->get_first_insn(),
-                   "Should have at least one non-goto opcode!");
-        last_non_goto_insn = std::prev(last_non_goto_insn);
-      } while (last_non_goto_insn->type != MFLOW_OPCODE);
-    }
+    assert_log(last_non_goto_insn != target->end(),
+               "Should have at least one insn!");
+
     if (!opcode::is_invoke_direct(last_non_goto_insn->insn->opcode())) {
       invocations.clear();
       return;
@@ -177,7 +175,8 @@ static void find_common_ctor_invocations(
       return;
     }
     common_ctor = meth;
-    invocations.emplace_back(last_non_goto_insn);
+    invocations.emplace_back(
+        target->to_cfg_instruction_iterator(last_non_goto_insn));
   }
 }
 } // namespace
@@ -198,7 +197,7 @@ void MethodStats::add(const MethodOrderedSet& methods) {
     method_counts[name]++;
     if (samples.count(name) == 0 || samples[name].size() < 3) {
       std::string sample_str = show_deobfuscated(m) + "\n";
-      sample_str += show(m->get_code());
+      sample_str += show(m->get_code()->cfg());
       samples[name].push_back(std::move(sample_str));
     }
   }
@@ -372,10 +371,21 @@ std::map<SwitchIndices, DexMethod*> ModelMethodMerger::get_dedupped_indices_map(
   always_assert(targets.size());
   std::map<SwitchIndices, DexMethod*> indices_to_callee;
 
+  // TODO "structural_equals" feature of editable cfg hasn't been implenmented
+  // yet. Currently, we still need to use irlist::structural_equals. Therefore,
+  // we need to clear_cfg before finding equivalent methods. Once
+  // structural_equals of editable cfg is added, the following clear_cfg will be
+  // removed.
+  for (size_t i = 0; i < targets.size(); i++) {
+    targets[i]->get_code()->clear_cfg();
+  }
   // Find equivalent methods.
   std::vector<MethodOrderedSet> duplicates =
       method_dedup::group_identical_methods(
           targets, m_model_spec.dedup_fill_in_stack_trace);
+  for (size_t i = 0; i < targets.size(); i++) {
+    targets[i]->get_code()->build_cfg();
+  }
   for (const auto& duplicate : duplicates) {
     SwitchIndices switch_indices;
     for (auto& meth : duplicate) {
@@ -416,27 +426,23 @@ DexType* ModelMethodMerger::get_merger_type(DexType* mergeable) {
  */
 void ModelMethodMerger::sink_common_ctor_to_return_block(DexMethod* dispatch) {
   auto dispatch_code = dispatch->get_code();
-  // TODO (cnli): use editable CFG and update insert logic.
-  dispatch_code->build_cfg(/* editable */ false);
-  const auto& cfg = dispatch_code->cfg();
+  always_assert(dispatch_code->editable_cfg_built());
+  auto& cfg = dispatch_code->cfg();
   if (cfg.return_blocks().size() != 1) {
-    dispatch_code->clear_cfg();
     return;
   }
   auto return_block = cfg.return_blocks()[0];
 
   auto switch_block = find_single_switch(cfg);
   if (!switch_block) {
-    dispatch_code->clear_cfg();
     return;
   }
 
-  std::vector<IRList::iterator> invocations;
+  std::vector<cfg::InstructionIterator> invocations;
   DexMethod* common_ctor = nullptr;
   find_common_ctor_invocations(switch_block, return_block, common_ctor,
                                invocations);
   if (invocations.empty()) {
-    dispatch_code->clear_cfg();
     return;
   }
   assert(common_ctor != nullptr);
@@ -465,28 +471,28 @@ void ModelMethodMerger::sink_common_ctor_to_return_block(DexMethod* dispatch) {
   new_srcs.reserve(1 + common_ctor_args->size());
   // For "this" pointer which should be an object reference and is not a wide
   // register.
-  new_srcs.push_back(dispatch_code->allocate_temp());
+  new_srcs.push_back(cfg.allocate_temp());
   for (auto arg_type : *common_ctor_args) {
-    new_srcs.push_back(type::is_wide_type(arg_type)
-                           ? dispatch_code->allocate_wide_temp()
-                           : dispatch_code->allocate_temp());
+    new_srcs.push_back(type::is_wide_type(arg_type) ? cfg.allocate_wide_temp()
+                                                    : cfg.allocate_temp());
   }
 
+  cfg::CFGMutation mutation(cfg);
   for (const auto& invocation : invocations) {
     // For "this" pointer.
-    dispatch_code->insert_before(invocation,
-                                 (new IRInstruction(OPCODE_MOVE_OBJECT))
-                                     ->set_src(0, invocation->insn->src(0))
-                                     ->set_dest(new_srcs[0]));
+    mutation.insert_before(invocation,
+                           {(new IRInstruction(OPCODE_MOVE_OBJECT))
+                                ->set_src(0, invocation->insn->src(0))
+                                ->set_dest(new_srcs[0])});
     auto arg_it = common_ctor_args->begin();
     for (size_t i = 1; i < invocation->insn->srcs_size(); ++i, ++arg_it) {
       redex_assert(arg_it != common_ctor_args->end());
       auto mov = (new IRInstruction(opcode::move_opcode(*arg_it)))
                      ->set_src(0, invocation->insn->src(i))
                      ->set_dest(new_srcs[i]);
-      dispatch_code->insert_before(invocation, mov);
+      mutation.insert_before(invocation, {mov});
     }
-    dispatch_code->erase_and_dispose(invocation);
+    mutation.remove(invocation);
   }
 
   auto invoke = (new IRInstruction(OPCODE_INVOKE_DIRECT))
@@ -495,8 +501,10 @@ void ModelMethodMerger::sink_common_ctor_to_return_block(DexMethod* dispatch) {
   for (size_t i = 0; i < new_srcs.size(); ++i) {
     invoke->set_src(i, new_srcs[i]);
   }
-  dispatch_code->insert_before(return_block->get_first_insn(), invoke);
-  dispatch_code->clear_cfg();
+  auto pos = return_block->get_first_insn();
+  mutation.insert_before(return_block->to_cfg_instruction_iterator(pos),
+                         {invoke});
+  mutation.flush();
 }
 
 /**
@@ -509,14 +517,7 @@ void ModelMethodMerger::inline_dispatch_entries(
     DexMethod* dispatch,
     std::vector<std::pair<DexType*, DexMethod*>>&
         not_inlined_dispatch_entries) {
-  // TODO:The clear_cfg flag is used to make sure that using editable cfg in
-  // this function won't affect other parts which use non-editable cfg. Once the
-  // pass is updated to editable cfg, this flag and check can be removed.
-  bool clear_cfg = false;
-  if (!dispatch->get_code()->editable_cfg_built()) {
-    dispatch->get_code()->build_cfg();
-    clear_cfg = true;
-  }
+  always_assert(dispatch->get_code()->editable_cfg_built());
   auto& dispatch_cfg = dispatch->get_code()->cfg();
   std::vector<std::pair<DexMethod*, IRInstruction*>> callsites;
   auto insns = InstructionIterable(dispatch_cfg);
@@ -532,28 +533,17 @@ void ModelMethodMerger::inline_dispatch_entries(
   }
 
   for (auto&& [callee, callsite] : callsites) {
-    // TODO: same as clear_cfg flag.
-    bool to_clear = false;
-    if (!callee->get_code()->editable_cfg_built()) {
-      callee->get_code()->build_cfg();
-      to_clear = true;
-    }
+    always_assert(callee->get_code()->editable_cfg_built());
     bool inlined = inliner::inline_with_cfg(dispatch, callee, callsite,
                                             /* needs_receiver_cast */ nullptr,
                                             /* needs_init_class */ nullptr,
                                             dispatch_cfg.get_registers_size());
-    if (to_clear) {
-      callee->get_code()->clear_cfg();
-    }
     if (!inlined) {
       TRACE(CLMG, 9, "inline dispatch entry %s failed!", SHOW(callee));
       not_inlined_dispatch_entries.emplace_back(merger_type, callee);
     }
   }
   TRACE(CLMG, 9, "inlined dispatch %s\n%s", SHOW(dispatch), SHOW(dispatch_cfg));
-  if (clear_cfg) {
-    dispatch->get_code()->clear_cfg();
-  }
 }
 
 std::string ModelMethodMerger::get_method_signature_string(DexMethod* meth) {
@@ -603,8 +593,10 @@ void ModelMethodMerger::merge_virtual_methods(
                         boost::none,     m_model_spec.keep_debug_info};
     dispatch::DispatchMethod dispatch = create_dispatch_method(spec, meth_lst);
     for (const auto sub_dispatch : dispatch.sub_dispatches) {
+      sub_dispatch->get_code()->build_cfg();
       dispatch_methods.emplace_back(target_cls, sub_dispatch);
     }
+    dispatch.main_dispatch->get_code()->build_cfg();
     dispatch_methods.emplace_back(target_cls, dispatch.main_dispatch);
     for (const auto& m : meth_lst) {
       old_to_new_callee[m] = dispatch.main_dispatch;
@@ -705,6 +697,7 @@ void ModelMethodMerger::merge_ctors() {
       m_stats.m_num_ctor_dedupped += ctors.size() - indices_to_callee.size();
       auto dispatch =
           dispatch::create_ctor_or_static_dispatch(spec, indices_to_callee);
+      dispatch->get_code()->build_cfg();
       for (const auto& m : ctors) {
         old_to_new_callee[m] = dispatch;
       }
@@ -796,10 +789,20 @@ void ModelMethodMerger::dedup_non_ctor_non_virt_methods() {
     auto new_to_old_optional =
         boost::optional<std::unordered_map<DexMethod*, MethodOrderedSet>>(
             new_to_old);
+    // TODO "structural_equals" feature of editable cfg hasn't been implenmented
+    // yet. Currently, we still need to use irlist::structural_equals.
+    // Therefore, we need to clear_cfg before finding equivalent methods. Once
+    // structural_equals of editable cfg is added, the following clear_cfg will
+    // be removed.
+    for (size_t i = 0; i < to_dedup.size(); i++) {
+      to_dedup[i]->get_code()->clear_cfg();
+    }
     m_stats.m_num_static_non_virt_dedupped += method_dedup::dedup_methods(
         m_scope, to_dedup, m_model_spec.dedup_fill_in_stack_trace, replacements,
         new_to_old_optional);
-
+    for (size_t i = 0; i < replacements.size(); i++) {
+      replacements[i]->get_code()->build_cfg();
+    }
     // Relocate the remainders.
     std::set<DexMethod*, dexmethods_comparator> to_relocate(
         replacements.begin(), replacements.end());
