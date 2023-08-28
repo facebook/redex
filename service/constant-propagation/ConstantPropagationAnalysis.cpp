@@ -1200,12 +1200,12 @@ void semantically_inline_method(
     const IRInstruction* insn,
     const InstructionAnalyzer<ConstantEnvironment>& analyzer,
     ConstantEnvironment* env) {
-  callee_code->build_cfg(/* editable */ false);
+  always_assert(callee_code->editable_cfg_built());
   auto& cfg = callee_code->cfg();
 
   // Set up the environment at entry into the callee.
   ConstantEnvironment call_entry_env;
-  auto load_params = callee_code->get_param_instructions();
+  auto load_params = cfg.get_param_instructions();
   auto load_params_it = InstructionIterable(load_params).begin();
   for (size_t i = 0; i < insn->srcs_size(); ++i) {
     call_entry_env.set(load_params_it->insn->dest(), env->get(insn->src(i)));
@@ -1228,6 +1228,7 @@ void semantically_inline_method(
 
 ReturnState collect_return_state(
     IRCode* code, const intraprocedural::FixpointIterator& fp_iter) {
+  always_assert(code->editable_cfg_built());
   auto& cfg = code->cfg();
   auto return_state = ReturnState::bottom();
   for (cfg::Block* b : cfg.blocks()) {
