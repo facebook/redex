@@ -12,7 +12,7 @@
 #include "RedexTest.h"
 #include "TypeInference.h"
 
-struct TypeDefAnnoTest : public RedexIntegrationTest {
+struct TypedefAnnosTest : public RedexIntegrationTest {
   cfg::ControlFlowGraph& get_cfg(DexMethod* method) {
     auto code = method->get_code();
     code->build_cfg(/* editable */ false);
@@ -30,10 +30,10 @@ struct TypeDefAnnoTest : public RedexIntegrationTest {
   }
 };
 
-TEST_F(TypeDefAnnoTest, test_anno_load_param_object) {
+TEST_F(TypedefAnnosTest, test_anno_load_param_object) {
   auto method = DexMethod::get_method(
                     "Lcom/facebook/redextest/"
-                    "TypeDefAnnoTest;.testAnnoObject:(Lcom/facebook/redextest/"
+                    "TypedefAnnosTest;.testAnnoObject:(Lcom/facebook/redextest/"
                     "I;)Lcom/facebook/redextest/I;")
                     ->as_def();
   auto& cfg = get_cfg(method);
@@ -49,10 +49,10 @@ TEST_F(TypeDefAnnoTest, test_anno_load_param_object) {
   }
 }
 
-TEST_F(TypeDefAnnoTest, test_int_anno_load_param) {
+TEST_F(TypedefAnnosTest, test_int_anno_load_param) {
   auto method = DexMethod::get_method(
                     "Lcom/facebook/redextest/"
-                    "TypeDefAnnoTest;.testIntAnnoParam:(I)I")
+                    "TypedefAnnosTest;.testIntAnnoParam:(I)I")
                     ->as_def();
   auto& cfg = get_cfg(method);
   const auto& val = get_annotation_set();
@@ -67,10 +67,10 @@ TEST_F(TypeDefAnnoTest, test_int_anno_load_param) {
   }
 }
 
-TEST_F(TypeDefAnnoTest, test_anno_invoke_static) {
+TEST_F(TypedefAnnosTest, test_anno_invoke_static) {
   auto method = DexMethod::get_method(
                     "Lcom/facebook/redextest/"
-                    "TypeDefAnnoTest;.testAnnoInvokeStatic:(Lcom/facebook/"
+                    "TypedefAnnosTest;.testAnnoInvokeStatic:(Lcom/facebook/"
                     "redextest/"
                     "I;)Lcom/facebook/redextest/I;")
                     ->as_def();
@@ -87,10 +87,10 @@ TEST_F(TypeDefAnnoTest, test_anno_invoke_static) {
   }
 }
 
-TEST_F(TypeDefAnnoTest, test_int_anno_invoke_static) {
+TEST_F(TypedefAnnosTest, test_int_anno_invoke_static) {
   auto method = DexMethod::get_method(
                     "Lcom/facebook/redextest/"
-                    "TypeDefAnnoTest;.testIntAnnoInvokeStatic:(I)I")
+                    "TypedefAnnosTest;.testIntAnnoInvokeStatic:(I)I")
                     ->as_def();
   auto& cfg = get_cfg(method);
   const auto& val = get_annotation_set();
@@ -105,10 +105,10 @@ TEST_F(TypeDefAnnoTest, test_int_anno_invoke_static) {
   }
 }
 
-TEST_F(TypeDefAnnoTest, test_string_anno_load_parm) {
+TEST_F(TypedefAnnosTest, test_string_anno_load_parm) {
   auto method = DexMethod::get_method(
                     "Lcom/facebook/redextest/"
-                    "TypeDefAnnoTest;.testStringAnnoParam:(Ljava/lang/"
+                    "TypedefAnnosTest;.testStringAnnoParam:(Ljava/lang/"
                     "String;)Ljava/lang/String;")
                     ->as_def();
   auto& cfg = get_cfg(method);
@@ -124,10 +124,10 @@ TEST_F(TypeDefAnnoTest, test_string_anno_load_parm) {
   }
 }
 
-TEST_F(TypeDefAnnoTest, test_string_anno_invoke_static) {
+TEST_F(TypedefAnnosTest, test_string_anno_invoke_static) {
   auto method = DexMethod::get_method(
                     "Lcom/facebook/redextest/"
-                    "TypeDefAnnoTest;.testStringAnnoInvokeStatic:(Ljava/lang/"
+                    "TypedefAnnosTest;.testStringAnnoInvokeStatic:(Ljava/lang/"
                     "String;)Ljava/lang/String;")
                     ->as_def();
   auto& cfg = get_cfg(method);
@@ -143,10 +143,10 @@ TEST_F(TypeDefAnnoTest, test_string_anno_invoke_static) {
   }
 }
 
-TEST_F(TypeDefAnnoTest, test_no_anno_inference) {
+TEST_F(TypedefAnnosTest, test_no_anno_inference) {
   auto method = DexMethod::get_method(
                     "Lcom/facebook/redextest/"
-                    "TypeDefAnnoTest;.testAnnoObject:(Lcom/facebook/redextest/"
+                    "TypedefAnnosTest;.testAnnoObject:(Lcom/facebook/redextest/"
                     "I;)Lcom/facebook/redextest/I;")
                     ->as_def();
   auto& cfg = get_cfg(method);

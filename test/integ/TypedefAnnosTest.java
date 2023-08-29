@@ -16,7 +16,7 @@ interface I {
   int get();
 }
 
-public class TypeDefAnnoTest {
+public class TypedefAnnosTest {
   // test that TypeInference can correctly parse through all the parameter annotations
   static @NotSafeAnno @TestIntDef int testIntAnnoParam(@NotSafeAnno @TestIntDef int val) {
     return val;
