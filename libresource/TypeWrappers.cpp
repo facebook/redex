@@ -51,7 +51,7 @@ static bool keyCompare(uint32_t entry, uint16_t index) {
 const ResTable_entry* TypeVariant::iterator::operator*() const {
     const ResTable_type* type = mTypeVariant->data;
     if (mIndex >= mTypeVariant->mLength) {
-        return nullptr;
+        return NULL;
     }
 
     const uint32_t entryCount = dtohl(mTypeVariant->data->entryCount);
@@ -61,7 +61,7 @@ const ResTable_entry* TypeVariant::iterator::operator*() const {
             reinterpret_cast<uintptr_t>(type) + dtohs(type->header.headerSize));
     if (reinterpret_cast<uintptr_t>(entryIndices) + (sizeof(uint32_t) * entryCount) > containerEnd) {
         ALOGE("Type's entry indices extend beyond its boundaries");
-        return nullptr;
+        return NULL;
     }
 
     uint32_t entryOffset;
@@ -69,7 +69,7 @@ const ResTable_entry* TypeVariant::iterator::operator*() const {
       auto iter = std::lower_bound(entryIndices, entryIndices + entryCount, mIndex, keyCompare);
       if (iter == entryIndices + entryCount
               || dtohs(ResTable_sparseTypeEntry{*iter}.idx) != mIndex) {
-        return nullptr;
+        return NULL;
       }
 
       entryOffset = static_cast<uint32_t>(dtohs(ResTable_sparseTypeEntry{*iter}.offset)) * 4u;
@@ -78,25 +78,25 @@ const ResTable_entry* TypeVariant::iterator::operator*() const {
     }
 
     if (entryOffset == ResTable_type::NO_ENTRY) {
-        return nullptr;
+        return NULL;
     }
 
     if ((entryOffset & 0x3) != 0) {
         ALOGE("Index %u points to entry with unaligned offset 0x%08x", mIndex, entryOffset);
-        return nullptr;
+        return NULL;
     }
 
     const ResTable_entry* entry = reinterpret_cast<const ResTable_entry*>(
             reinterpret_cast<uintptr_t>(type) + dtohl(type->entriesStart) + entryOffset);
     if (reinterpret_cast<uintptr_t>(entry) > containerEnd - sizeof(*entry)) {
         ALOGE("Entry offset at index %u points outside the Type's boundaries", mIndex);
-        return nullptr;
+        return NULL;
     } else if (reinterpret_cast<uintptr_t>(entry) + dtohs(entry->size) > containerEnd) {
         ALOGE("Entry at index %u extends beyond Type's boundaries", mIndex);
-        return nullptr;
+        return NULL;
     } else if (dtohs(entry->size) < sizeof(*entry)) {
         ALOGE("Entry at index %u is too small (%u)", mIndex, dtohs(entry->size));
-        return nullptr;
+        return NULL;
     }
     return entry;
 }
