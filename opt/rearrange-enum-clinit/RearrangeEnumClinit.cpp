@@ -55,6 +55,8 @@ struct Rearranger {
         }(cfg.entry_block())) {}
 
   IRInstruction* find_values_sput() {
+    // TODO(T162335058): Needs to be generalized to look at the `values()`
+    //                   function.
     for (auto it = b->rbegin(); it != b->rend(); ++it) {
       if (it->type == MFLOW_OPCODE &&
           it->insn->opcode() == OPCODE_SPUT_OBJECT) {
@@ -65,7 +67,7 @@ struct Rearranger {
         }
       }
     }
-    not_reached();
+    return nullptr;
   }
 
   reg_t move_new_array_to_front() {
@@ -151,6 +153,9 @@ struct Rearranger {
   bool run() {
     // Find a sput-object for `$VALUES`.
     array_sput = find_values_sput();
+    if (array_sput == nullptr) {
+      return false;
+    }
     redex_assert(array_sput->opcode() == OPCODE_SPUT_OBJECT);
 
     // Find the definition of the field object.
