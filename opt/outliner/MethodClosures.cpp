@@ -88,14 +88,21 @@ void split_blocks(DexMethod* method,
   // TODO: Instead of "blindly" going by opcode count, instead nudge the split
   // points towards points with least live registers.
   for (auto* block : cfg.blocks()) {
+    if (cfg.get_succ_edge_of_type(block, cfg::EDGE_THROW)) {
+      // don't bother
+      continue;
+    }
     auto ii = InstructionIterable(block);
-    if (cfg.get_succ_edge_of_type(block, cfg::EDGE_THROW) ||
-        ii.begin() == ii.end()) {
+    // We don't want to break up chains of load-param instructions, let's skip
+    // over them.
+    auto begin = ir_list::InstructionIterator(
+        block->get_first_non_param_loading_insn(), block->end());
+    if (begin == ii.end()) {
       // don't bother
       continue;
     }
     size_t count = 1;
-    for (auto it = std::prev(ii.end()); it != ii.begin(); it--, count++) {
+    for (auto it = std::prev(ii.end()); it != begin; it--, count++) {
       if (count < split_block_size) {
         continue;
       }

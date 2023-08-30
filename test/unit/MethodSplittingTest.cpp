@@ -10,6 +10,7 @@
 
 #include <gtest/gtest.h>
 
+#include "MethodClosures.h"
 #include "MethodSplitter.h"
 
 #include "Creators.h"
@@ -731,4 +732,26 @@ TEST_F(MethodSplitterTest, SplitTypeDemands) {
            {std::make_pair<std::string, std::string>("", after),
             std::make_pair<std::string, std::string>("split$cold0", split0)});
   ASSERT_TRUE(res);
+}
+
+TEST_F(MethodSplitterTest, DontSplitLoadParamChains) {
+  auto code_str = R"(
+    (
+      (load-param v0)
+      (load-param v1)
+      (load-param v2)
+      (load-param v3)
+      (load-param v4)
+      (load-param v5)
+      (load-param v6)
+      (load-param v7)
+      (load-param v8)
+      (load-param v9)
+      (return v0)
+    ))";
+  auto [cls, m] = create("(IIIIIIIIII)I", code_str);
+  m->get_code()->build_cfg();
+  method_splitting_impl::discover_closures(m, defaultConfig());
+  ASSERT_EQ(m->get_code()->cfg().blocks().size(), 1);
+  m->get_code()->clear_cfg();
 }
