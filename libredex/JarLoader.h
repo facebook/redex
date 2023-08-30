@@ -7,6 +7,7 @@
 
 #pragma once
 
+class DexClass;
 class DexLocation;
 class DexField;
 class DexMethod;
@@ -29,9 +30,21 @@ using attribute_hook_t =
                        uint8_t* attribute_pointer,
                        uint8_t* attribute_pointer_end)>;
 
+namespace jar_loader {
+
+using duplicate_allowed_hook_t =
+    std::function<bool(const DexClass*, const std::string&)>;
+
+// Legacy implementation for other clients.
+bool default_duplicate_allow_fn(const DexClass* c, const std::string& jar_name);
+
+} // namespace jar_loader
+
 bool load_jar_file(const DexLocation* location,
                    Scope* classes = nullptr,
-                   const attribute_hook_t& = nullptr);
+                   const attribute_hook_t& attr_hook = nullptr,
+                   const jar_loader::duplicate_allowed_hook_t& is_allowed =
+                       jar_loader::default_duplicate_allow_fn);
 
 bool load_class_file(const std::string& filename, Scope* classes = nullptr);
 
@@ -40,10 +53,12 @@ bool process_jar(const DexLocation* location,
                  const uint8_t* mapping,
                  size_t size,
                  Scope* classes,
-                 const attribute_hook_t& attr_hook);
+                 const attribute_hook_t& attr_hook,
+                 const jar_loader::duplicate_allowed_hook_t& is_allowed);
 
 bool parse_class(uint8_t* buffer,
                  size_t buffer_size,
                  Scope* classes,
                  attribute_hook_t attr_hook,
+                 const jar_loader::duplicate_allowed_hook_t& is_allowed,
                  const DexLocation* jar_location);
