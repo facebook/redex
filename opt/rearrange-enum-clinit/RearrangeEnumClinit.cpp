@@ -8,6 +8,7 @@
 #include "RearrangeEnumClinit.h"
 
 #include <atomic>
+#include <optional>
 
 #include "Debug.h"
 #include "DexUtil.h"
@@ -17,6 +18,7 @@
 #include "PassManager.h"
 #include "ScopedCFG.h"
 #include "Show.h"
+#include "TypeUtil.h"
 #include "Walkers.h"
 
 namespace rearrange_enum_clinit {
@@ -55,8 +57,7 @@ struct Rearranger {
         }(cfg.entry_block())) {}
 
   IRInstruction* find_values_sput() {
-    // TODO(T162335058): Needs to be generalized to look at the `values()`
-    //                   function.
+    // Optimistically look for the `$VALUES` field and accept it.
     for (auto it = b->rbegin(); it != b->rend(); ++it) {
       if (it->type == MFLOW_OPCODE &&
           it->insn->opcode() == OPCODE_SPUT_OBJECT) {
@@ -67,6 +68,110 @@ struct Rearranger {
         }
       }
     }
+
+    // Look for the `values()` function and analyze it.
+    auto* c = type_class(m->get_class());
+    redex_assert(c != nullptr);
+
+    auto* values_method = [&c]() -> DexMethod* {
+      for (auto* dm : c->get_dmethods()) {
+        if (dm->get_name()->str() == "values") {
+          auto* p = dm->get_proto();
+          if (p->get_args()->empty() && type::is_array(p->get_rtype())) {
+            return dm;
+          }
+        }
+      }
+      return nullptr;
+    }();
+
+    if (values_method == nullptr) {
+      return nullptr;
+    }
+
+    auto* field = analyze_values_method(values_method);
+    if (field == nullptr) {
+      return nullptr;
+    }
+
+    for (auto it = b->rbegin(); it != b->rend(); ++it) {
+      if (it->type == MFLOW_OPCODE &&
+          it->insn->opcode() == OPCODE_SPUT_OBJECT) {
+        if (field == it->insn->get_field()) {
+          return it->insn;
+        }
+      }
+    }
+
+    return nullptr;
+  }
+
+  static DexFieldRef* analyze_values_method(DexMethod* values_method) {
+    cfg::ScopedCFG cfg(values_method->get_code());
+
+    std::optional<IRInstruction*> ret_opt{};
+    for (auto& mie : cfg::InstructionIterable(*cfg)) {
+      if (mie.insn->opcode() == OPCODE_RETURN_OBJECT) {
+        if (ret_opt) {
+          return nullptr; // Single return only.
+        }
+        ret_opt = mie.insn;
+      }
+    }
+    redex_assert(ret_opt);
+
+    using namespace live_range;
+    MoveAwareChains mac(*cfg);
+    auto use_def = mac.get_use_def_chains();
+
+    auto get_singleton = [&use_def](IRInstruction* insn,
+                                    src_index_t idx) -> IRInstruction* {
+      auto it = use_def.find(Use{insn, idx});
+      if (it == use_def.end()) {
+        return nullptr;
+      }
+      if (it->second.size() != 1) {
+        return nullptr;
+      }
+      return *it->second.begin();
+    };
+
+    for (IRInstruction* insn = *ret_opt; insn != nullptr;) {
+      // Written this way to ensure safe coding, always make progress.
+      src_index_t use_idx;
+      switch (insn->opcode()) {
+      case OPCODE_RETURN_OBJECT:
+      case OPCODE_CHECK_CAST:
+        use_idx = 0;
+        break;
+
+      case OPCODE_SGET_OBJECT: {
+        auto* f = insn->get_field();
+        if (f->get_class() == values_method->get_class() &&
+            type::get_element_type_if_array(f->get_type()) == f->get_class()) {
+          return f;
+        }
+        return nullptr;
+      }
+
+      case OPCODE_INVOKE_VIRTUAL: {
+        auto* mref = insn->get_method();
+        // Only support `clone()`.
+        if (mref->get_name()->str() != "clone" ||
+            mref->get_proto()->get_rtype() != type::java_lang_Object()) {
+          return nullptr;
+        }
+        use_idx = 0;
+      } break;
+
+      // Unsupported opcodes.
+      default:
+        return nullptr;
+      }
+
+      insn = get_singleton(insn, use_idx);
+    }
+
     return nullptr;
   }
 
