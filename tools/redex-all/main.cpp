@@ -1113,8 +1113,28 @@ void load_library_jars(Arguments& args,
     }
   };
 
+  // We cannot use GlobalConfig here, it is too early.
+  JarLoaderConfig jar_conf{};
+  if (args.config.isMember("jar_loader")) {
+    jar_conf.parse_config(
+        JsonWrapper(args.config.get("jar_loader", Json::nullValue)));
+  }
+
   Timer t("Load library jars");
-  load(jar_loader::default_duplicate_allow_fn);
+
+  if (jar_conf.legacy_mode) {
+    load(jar_loader::default_duplicate_allow_fn);
+  } else {
+    load([&](auto* c, auto& jar_name [[maybe_unused]]) {
+      auto sv = c->get_name()->str();
+      for (const auto& prefix : jar_conf.allowed_prefixes) {
+        if (sv.substr(0, prefix.size()) == prefix) {
+          return true;
+        }
+      }
+      return false;
+    });
+  }
 }
 
 /**
