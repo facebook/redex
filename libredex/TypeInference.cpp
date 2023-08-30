@@ -462,7 +462,12 @@ void TypeInference::refine_scalar(TypeEnvironment* state, reg_t reg) const {
 
 void TypeInference::refine_integral(TypeEnvironment* state, reg_t reg) const {
   refine_type(state, reg, /* expected */ IRType::INT);
-  state->reset_dex_type(reg);
+  const boost::optional<const DexType*> annotation = state->get_annotation(reg);
+  if (annotation) {
+    state->set_dex_type(reg, DexTypeDomain(nullptr, *annotation));
+  } else {
+    state->reset_dex_type(reg);
+  }
 }
 
 void TypeInference::refine_float(TypeEnvironment* state, reg_t reg) const {
@@ -539,10 +544,13 @@ void TypeInference::run(bool is_static,
     IRInstruction* insn = mie.insn;
     boost::optional<const DexType*> annotation = boost::none;
 
-    if (!m_annotations.empty() && param_anno &&
-        param_anno->find(arg_index) != param_anno->end()) {
-      annotation = get_typedef_annotation(
-          (&param_anno->at(arg_index))->get()->get_annotations());
+    if (!first_param || is_static) {
+      if (!m_annotations.empty() && param_anno &&
+          param_anno->find(arg_index) != param_anno->end()) {
+        annotation = get_typedef_annotation(
+            (&param_anno->at(arg_index))->get()->get_annotations());
+      }
+      arg_index += 1;
     }
 
     switch (insn->opcode()) {
@@ -593,7 +601,6 @@ void TypeInference::run(bool is_static,
     default:
       not_reached();
     }
-    arg_index += 1;
   }
   MonotonicFixpointIterator::run(init_state);
   populate_type_environments();
@@ -1036,6 +1043,12 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   }
   case OPCODE_IPUT: {
     const DexType* type = insn->get_field()->get_type();
+    if (!m_annotations.empty()) {
+      auto annotation = current_state->get_annotation(insn->src(0));
+      auto anno = annotation ? *annotation : nullptr;
+      const DexTypeDomain dex_type_domain = DexTypeDomain(type, anno);
+      current_state->set_dex_type(insn->src(1), dex_type_domain);
+    }
     if (type::is_float(type)) {
       refine_float(current_state, insn->src(0));
     } else {
@@ -1070,6 +1083,14 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     break;
   }
   case OPCODE_IPUT_OBJECT: {
+    if (!m_annotations.empty()) {
+      auto annotation = current_state->get_annotation(insn->src(0));
+      auto anno = annotation ? *annotation : nullptr;
+      auto type = current_state->get_dex_type(insn->src(1));
+      auto dex_type = type ? *type : nullptr;
+      const DexTypeDomain dex_type_domain = DexTypeDomain(dex_type, anno);
+      current_state->set_dex_type(insn->src(1), dex_type_domain);
+    }
     refine_reference(current_state, insn->src(0));
     refine_reference(current_state, insn->src(1));
     break;

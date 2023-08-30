@@ -17,6 +17,10 @@ interface I {
 }
 
 public class TypedefAnnosTest {
+
+  @TestIntDef int int_field;
+  @TestStringDef String str_field;
+
   // test that TypeInference can correctly parse through all the parameter annotations
   static @NotSafeAnno @TestIntDef int testIntAnnoParam(@NotSafeAnno @TestIntDef int val) {
     return val;
@@ -55,5 +59,13 @@ public class TypedefAnnosTest {
 
   static @TestStringDef String testStringAnnoInvokeStatic(@TestStringDef String o) {
     return testAnnoString(o);
+  }
+
+  void testIntField(@TestIntDef int val) {
+    int_field = val;
+  }
+
+  void testStringField(@TestStringDef String val) {
+    str_field = val;
   }
 }
