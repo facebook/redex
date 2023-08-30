@@ -1079,6 +1079,44 @@ void process_proguard_rules(ConfigFiles& conf,
   }
 }
 
+void load_library_jars(Arguments& args,
+                       Scope& external_classes,
+                       const std::set<std::string>& library_jars,
+                       const std::string& base_dir) {
+  args.entry_data["jars"] = Json::arrayValue;
+  if (library_jars.empty()) {
+    return;
+  }
+
+  auto load = [&](const auto& allowed_fn) {
+    for (const auto& library_jar : library_jars) {
+      TRACE(MAIN, 1, "LIBRARY JAR: %s", library_jar.c_str());
+      if (load_jar_file(DexLocation::make_location("", library_jar),
+                        &external_classes, /*attr_hook=*/nullptr, allowed_fn)) {
+        auto abs_path = boost::filesystem::absolute(library_jar);
+        args.entry_data["jars"].append(abs_path.string());
+        continue;
+      }
+
+      // Try again with the basedir
+      std::string basedir_path = base_dir + "/" + library_jar;
+      if (load_jar_file(DexLocation::make_location("", basedir_path),
+                        /*classes=*/nullptr, /*attr_hook=*/nullptr,
+                        allowed_fn)) {
+        args.entry_data["jars"].append(basedir_path);
+        continue;
+      }
+
+      std::cerr << "error: library jar could not be loaded: " << library_jar
+                << std::endl;
+      _exit(EXIT_FAILURE);
+    }
+  };
+
+  Timer t("Load library jars");
+  load(jar_loader::default_duplicate_allow_fn);
+}
+
 /**
  * Pre processing steps: load dex and configurations
  */
@@ -1192,31 +1230,8 @@ void redex_frontend(ConfigFiles& conf, /* input */
   });
 
   Scope external_classes;
-  args.entry_data["jars"] = Json::arrayValue;
-  if (!library_jars.empty()) {
-    Timer t("Load library jars");
-
-    for (const auto& library_jar : library_jars) {
-      TRACE(MAIN, 1, "LIBRARY JAR: %s", library_jar.c_str());
-      if (!load_jar_file(DexLocation::make_location("", library_jar),
-                         &external_classes, /*attr_hook=*/nullptr,
-                         jar_loader::default_duplicate_allow_fn)) {
-        // Try again with the basedir
-        std::string basedir_path = pg_config.basedirectory + "/" + library_jar;
-        if (!load_jar_file(DexLocation::make_location("", basedir_path),
-                           /*classes=*/nullptr, /*attr_hook=*/nullptr,
-                           jar_loader::default_duplicate_allow_fn)) {
-          std::cerr << "error: library jar could not be loaded: " << library_jar
-                    << std::endl;
-          exit(EXIT_FAILURE);
-        }
-        args.entry_data["jars"].append(basedir_path);
-      } else {
-        auto abs_path = boost::filesystem::absolute(library_jar);
-        args.entry_data["jars"].append(abs_path.string());
-      }
-    }
-  }
+  load_library_jars(args, external_classes, library_jars,
+                    pg_config.basedirectory);
 
   {
     Timer t("Deobfuscating dex elements");
