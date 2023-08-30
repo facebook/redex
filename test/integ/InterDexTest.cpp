@@ -25,7 +25,8 @@ class InterDexTest : public RedexIntegrationTest {
  public:
   void define_test(const std::vector<std::string>& betmap,
                    const std::string& expected_manifest,
-                   bool minimize_cross_dex_refs_explore_alternatives = false) {
+                   bool minimize_cross_dex_refs_explore_alternatives = false,
+                   bool order_interdex = true) {
     std::cout << "Loaded classes: " << classes->size() << std::endl;
 
     auto tmp_dir = redex::make_tmp_dir("redex_interdex_test_%%%%%%%%");
@@ -44,6 +45,7 @@ class InterDexTest : public RedexIntegrationTest {
       cfg["InterDexPass"]["minimize_cross_dex_refs"] = true;
       cfg["InterDexPass"]["reserved_trefs"] = kOldMaxTypeRefs - 16;
       cfg["InterDexPass"]["minimize_cross_dex_refs_explore_alternatives"] = 24;
+      cfg["InterDexPass"]["order_interdex"] = order_interdex;
     }
 
     auto path = boost::filesystem::path(tmp_dir.path);
@@ -342,6 +344,56 @@ TEST_F(InterDexTest, interdex_test_validate_class_spec) {
     "Lsecondary/dex01/Canary;,ordinal=1,coldstart=1,extended=0,primary=0,scroll=0,background=0\n"
     "Lsecondary/dex02/Canary;,ordinal=2,coldstart=0,extended=0,primary=0,scroll=0,background=0\n"
   );
+}
+
+TEST_F(InterDexTest, without_order_interdex) {
+  // When order_interdex is off, classes are distributed across dexes in a way that's not guided by the betamap; however, within each dexes, betamap classes are still ordered according to the betamap.
+  define_test({
+      "com/facebook/redextest/InterDexPrimary.class",
+      "com/facebook/redextest/C0.class",
+      "com/facebook/redextest/C1.class",
+      "com/facebook/redextest/C2.class",
+      "com/facebook/redextest/C3.class",
+      "com/facebook/redextest/C4.class",
+      "com/facebook/redextest/C5.class",
+      "com/facebook/redextest/C6.class",
+      "com/facebook/redextest/C7.class",
+      "com/facebook/redextest/C8.class",
+      "com/facebook/redextest/C9.class",
+      "com/facebook/redextest/C10.class",
+      "com/facebook/redextest/C11.class",
+      "com/facebook/redextest/C12.class",
+      "DexEndMarker0.class",
+    },
+    "Lsecondary/dex00/Canary;,ordinal=0,coldstart=0,extended=0,primary=0,scroll=0,background=0\n"
+    "Lsecondary/dex01/Canary;,ordinal=1,coldstart=0,extended=0,primary=0,scroll=0,background=0\n",
+    /* minimize_cross_dex_refs_explore_alternatives */ true,
+    /* order_interdex */ false
+  );
+
+  auto get_class = [&](size_t dex_idx, size_t idx) {
+    return stores[0].get_dexen()[dex_idx][idx]->get_name()->str();
+  };
+  EXPECT_EQ(stores.size(), 1);
+  EXPECT_EQ(stores[0].get_dexen().size(), 2);
+  EXPECT_EQ(stores[0].get_dexen()[0].size(), 11);
+  EXPECT_EQ(get_class(0, 0), "Lcom/facebook/redextest/InterDexPrimary;");
+  EXPECT_EQ(get_class(0, 1), "Lcom/facebook/redextest/C0;");
+  EXPECT_EQ(get_class(0, 2), "Lcom/facebook/redextest/C1;");
+  EXPECT_EQ(get_class(0, 3), "Lcom/facebook/redextest/C2;");
+  EXPECT_EQ(get_class(0, 4), "Lcom/facebook/redextest/C3;");
+  EXPECT_EQ(get_class(0, 5), "Lcom/facebook/redextest/C4;");
+  EXPECT_EQ(get_class(0, 6), "Lcom/facebook/redextest/C7;");
+  EXPECT_EQ(get_class(0, 7), "Lcom/facebook/redextest/C10;");
+  EXPECT_EQ(get_class(0, 8), "Lcom/facebook/redextest/C11;");
+  EXPECT_EQ(get_class(0, 9), "Lcom/facebook/redextest/C12;");
+  EXPECT_EQ(stores[0].get_dexen()[1].size(), 6);
+  EXPECT_EQ(get_class(1, 0), "Lcom/facebook/redextest/C5;");
+  EXPECT_EQ(get_class(1, 1), "Lcom/facebook/redextest/C6;");
+  EXPECT_EQ(get_class(1, 2), "Lcom/facebook/redextest/C8;");
+  EXPECT_EQ(get_class(1, 3), "Lcom/facebook/redextest/C9;");
+
+  // First regular class is the one with highest seed weight
 }
 
 /* clang-format on */

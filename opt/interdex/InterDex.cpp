@@ -364,6 +364,7 @@ void InterDex::emit_interdex_classes(
       DexClass* cls = type_class(type);
       if (cls && !unreferenced_classes.count(cls)) {
         cls->set_perf_sensitive(PerfSensitiveGroup::BETAMAP_ORDERED);
+        m_interdex_order.emplace(cls, m_interdex_order.size());
       }
     }
     return;
@@ -1285,6 +1286,20 @@ void InterDex::post_process_dex(EmittingState& emitting_state,
         cls->set_perf_sensitive(PerfSensitiveGroup::BETAMAP_ORDERED);
       }
     }
+  }
+
+  if (!m_order_interdex && !m_interdex_order.empty()) {
+    // BETAMAP_ORDERED classes didn't get ordered yet, let's at least establish
+    // their relative order within this dex
+    auto get_index = [this](const DexClass* cls) {
+      auto it = m_interdex_order.find(cls);
+      return it == m_interdex_order.end() ? std::numeric_limits<size_t>::max()
+                                          : it->second;
+    };
+    std::stable_sort(classes.begin(), classes.end(),
+                     [&get_index](const DexClass* a, const DexClass* b) {
+                       return get_index(a) < get_index(b);
+                     });
   }
 }
 

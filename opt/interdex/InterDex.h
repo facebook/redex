@@ -222,6 +222,7 @@ class InterDex {
   bool m_minimize_cross_dex_refs;
   bool m_fill_last_coldstart_dex;
 
+  std::unordered_map<const DexClass*, size_t> m_interdex_order;
   bool m_emitting_scroll_set;
   bool m_emitting_bg_set;
   bool m_emitted_bg_set;
