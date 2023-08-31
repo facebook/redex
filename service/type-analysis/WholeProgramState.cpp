@@ -489,25 +489,17 @@ bool WholeProgramAwareAnalyzer::analyze_invoke(
       method =
           resolve_method(insn->get_method(), MethodSearch::InterfaceVirtual);
     }
-    if (method == nullptr) {
-      return false;
-    }
-    if (whole_program_state->method_is_dynamic(method)) {
+    if (method == nullptr || whole_program_state->method_is_dynamic(method)) {
+      env->set(RESULT_REGISTER, DexTypeDomain::top());
       return false;
     }
     auto type = whole_program_state->get_return_type_from_cg(insn);
-    if (type.is_top()) {
-      return false;
-    }
     env->set(RESULT_REGISTER, type);
     return true;
   }
 
   auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
-  if (method == nullptr) {
-    return false;
-  }
-  if (!returns_reference(method)) {
+  if (method == nullptr || !returns_reference(method)) {
     // Reset RESULT_REGISTER
     env->set(RESULT_REGISTER, DexTypeDomain::top());
     return false;

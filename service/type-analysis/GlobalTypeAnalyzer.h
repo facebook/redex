@@ -112,8 +112,10 @@ class GlobalTypeAnalyzer : public sparta::ParallelMonotonicFixpointIterator<
 class GlobalTypeAnalysis {
 
  public:
-  explicit GlobalTypeAnalysis(size_t max_global_analysis_iteration = 10)
-      : m_max_global_analysis_iteration(max_global_analysis_iteration) {}
+  explicit GlobalTypeAnalysis(size_t max_global_analysis_iteration = 10,
+                              bool use_multiple_callee_callgraph = false)
+      : m_max_global_analysis_iteration(max_global_analysis_iteration),
+        m_use_multiple_callee_callgraph(use_multiple_callee_callgraph) {}
 
   void run(Scope& scope) { analyze(scope); }
 
@@ -121,6 +123,7 @@ class GlobalTypeAnalysis {
 
  private:
   size_t m_max_global_analysis_iteration;
+  bool m_use_multiple_callee_callgraph;
   // Methods reachable from clinit that read static fields and reachable from
   // ctors that read instance fields.
   ConcurrentSet<const DexMethod*> m_any_init_reachables;

@@ -84,8 +84,8 @@ bool RegisterTypeAnalyzer::analyze_aget(const IRInstruction* insn,
     return true;
   }
 
-  always_assert_log(type::is_array(*array_type), "Wrong array type %s",
-                    SHOW(*array_type));
+  always_assert_log(type::is_array(*array_type), "Wrong array type %s in %s",
+                    SHOW(*array_type), SHOW(insn));
   auto idx_opt = env->get(insn->src(1)).get_constant();
   auto nullness = env->get(insn->src(0)).get_array_element_nullness(idx_opt);
   const auto ctype = type::get_array_component_type(*array_type);

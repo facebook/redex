@@ -411,8 +411,15 @@ void GlobalTypeAnalysis::find_any_init_reachables(
 std::unique_ptr<GlobalTypeAnalyzer> GlobalTypeAnalysis::analyze(
     const Scope& scope) {
   auto method_override_graph = mog::build_graph(scope);
-  auto cg = std::make_shared<call_graph::Graph>(
-      call_graph::single_callee_graph(*method_override_graph, scope));
+  auto cg =
+      m_use_multiple_callee_callgraph
+          ? std::make_shared<call_graph::Graph>(
+                call_graph::multiple_callee_graph(*method_override_graph, scope,
+                                                  5))
+          : std::make_shared<call_graph::Graph>(
+                call_graph::single_callee_graph(*method_override_graph, scope));
+  TRACE(TYPE, 2, "[global] multiple callee graph %zu",
+        (size_t)m_use_multiple_callee_callgraph);
   // Rebuild all CFGs here -- this should be more efficient than doing them
   // within FixpointIterator::analyze_node(), since that can get called
   // multiple times for a given method
@@ -436,8 +443,12 @@ std::unique_ptr<GlobalTypeAnalyzer> GlobalTypeAnalysis::analyze(
   for (size_t i = 0; i < m_max_global_analysis_iteration; ++i) {
     // Build an approximation of all the field values and method return values.
     TRACE(TYPE, 2, "[global] Collecting WholeProgramState");
-    auto wps = std::make_unique<WholeProgramState>(
-        scope, *gta, non_true_virtuals, m_any_init_reachables);
+    auto wps =
+        m_use_multiple_callee_callgraph
+            ? std::make_unique<WholeProgramState>(
+                  scope, *gta, non_true_virtuals, m_any_init_reachables, cg)
+            : std::make_unique<WholeProgramState>(
+                  scope, *gta, non_true_virtuals, m_any_init_reachables);
     trace_whole_program_state(*wps);
     trace_stats(*wps);
     trace_whole_program_state_diff(gta->get_whole_program_state(), *wps);

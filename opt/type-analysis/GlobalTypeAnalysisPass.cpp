@@ -130,7 +130,8 @@ void GlobalTypeAnalysisPass::run_pass(DexStoresVector& stores,
   null_assertion_set.insert(method::redex_internal_checkObjectNotNull());
   Scope scope = build_class_scope(stores);
   XStoreRefs xstores(stores);
-  global::GlobalTypeAnalysis analysis(m_config.max_global_analysis_iteration);
+  global::GlobalTypeAnalysis analysis(m_config.max_global_analysis_iteration,
+                                      m_config.use_multiple_callee_callgraph);
   auto gta = analysis.analyze(scope);
   optimize(scope, xstores, *gta, null_assertion_set, mgr);
   m_result = std::move(gta);

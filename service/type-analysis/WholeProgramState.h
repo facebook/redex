@@ -86,7 +86,11 @@ class WholeProgramState {
    * don't want to propagate Bottom to local analysis.
    */
   DexTypeDomain get_return_type(const DexMethod* method) const {
-    if (!m_known_methods.count(method)) {
+    // When call graph is present, this is only used for testing purposes. That
+    // way to bypass the known_methods check and go straight to the partition.
+    // When call graph is not present, this is the fallback path for the
+    // analysis to look up the return type only for the known_methods.
+    if (!has_call_graph() && !m_known_methods.count(method)) {
       return DexTypeDomain::top();
     }
     auto domain = m_method_partition.get(method);

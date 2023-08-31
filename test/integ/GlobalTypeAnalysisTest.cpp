@@ -117,6 +117,16 @@ TEST_F(GlobalTypeAnalysisTest, TrueVirtualFieldTypeTest) {
   auto field_val =
       get_field("TestD$State;.mVal:Lcom/facebook/redextest/TestD$Base;");
   EXPECT_TRUE(wps.get_field_type(field_val).is_top());
+
+  // Multiple callee call graph
+  GlobalTypeAnalysis analysis1(10, true);
+  auto gta1 = analysis1.analyze(scope);
+  auto wps1 = gta1->get_whole_program_state();
+
+  // Multiple callee call graph can propagate via true virtual calls
+  EXPECT_FALSE(wps1.get_field_type(field_val).is_top());
+  EXPECT_EQ(*wps1.get_field_type(field_val).get_dex_type(),
+            get_type("TestD$Sub"));
 }
 
 TEST_F(GlobalTypeAnalysisTest, SmallSetDexTypeDomainTest) {
@@ -360,4 +370,65 @@ TEST_F(GlobalTypeAnalysisTest, ArrayNullnessEscape2Test) {
             SingletonDexTypeDomain(
                 get_type_simple("Lcom/facebook/redextest/TestN$A;")));
   EXPECT_TRUE(rtype.get_array_nullness().is_top());
+}
+
+TEST_F(GlobalTypeAnalysisTest, MultipleCalleeTest) {
+  auto scope = build_class_scope(stores);
+  set_root_method("Lcom/facebook/redextest/TestO;.main:()V");
+  GlobalTypeAnalysis analysis(10, true);
+
+  auto gta = analysis.analyze(scope);
+  auto wps = gta->get_whole_program_state();
+
+  auto base_same =
+      get_method("TestO$Base;.same", "", "Lcom/facebook/redextest/TestO$I;");
+  EXPECT_TRUE(base_same != nullptr);
+  auto rtype = wps.get_return_type(base_same);
+  EXPECT_FALSE(rtype.is_top());
+  EXPECT_EQ(rtype.get_single_domain(),
+            SingletonDexTypeDomain(
+                get_type_simple("Lcom/facebook/redextest/TestO$B;")));
+
+  auto sub_same =
+      get_method("TestO$Sub;.same", "", "Lcom/facebook/redextest/TestO$I;");
+  EXPECT_TRUE(sub_same != nullptr);
+  rtype = wps.get_return_type(sub_same);
+  EXPECT_FALSE(rtype.is_top());
+  EXPECT_EQ(rtype.get_single_domain(),
+            SingletonDexTypeDomain(
+                get_type_simple("Lcom/facebook/redextest/TestO$B;")));
+
+  auto call_same =
+      get_method("TestO;.callSame", "I", "Lcom/facebook/redextest/TestO$I;");
+  EXPECT_TRUE(call_same != nullptr);
+  rtype = wps.get_return_type(call_same);
+  EXPECT_FALSE(rtype.is_top());
+  EXPECT_EQ(rtype.get_single_domain(),
+            SingletonDexTypeDomain(
+                get_type_simple("Lcom/facebook/redextest/TestO$B;")));
+
+  auto base_diff =
+      get_method("TestO$Base;.diff", "", "Lcom/facebook/redextest/TestO$I;");
+  EXPECT_TRUE(base_diff != nullptr);
+  rtype = wps.get_return_type(base_diff);
+  EXPECT_FALSE(rtype.is_top());
+  EXPECT_EQ(rtype.get_single_domain(),
+            SingletonDexTypeDomain(
+                get_type_simple("Lcom/facebook/redextest/TestO$A;")));
+
+  auto sub_diff =
+      get_method("TestO$Sub;.diff", "", "Lcom/facebook/redextest/TestO$I;");
+  EXPECT_TRUE(sub_diff != nullptr);
+  rtype = wps.get_return_type(sub_diff);
+  EXPECT_FALSE(rtype.is_top());
+  EXPECT_EQ(rtype.get_single_domain(),
+            SingletonDexTypeDomain(
+                get_type_simple("Lcom/facebook/redextest/TestO$B;")));
+
+  auto call_diff =
+      get_method("TestO;.callDiff", "I", "Lcom/facebook/redextest/TestO$I;");
+  EXPECT_TRUE(call_diff != nullptr);
+  rtype = wps.get_return_type(call_diff);
+  EXPECT_FALSE(rtype.is_top());
+  EXPECT_TRUE(rtype.get_single_domain().is_top());
 }

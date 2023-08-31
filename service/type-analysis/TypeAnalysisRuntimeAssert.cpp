@@ -287,21 +287,38 @@ bool RuntimeAssertTransform::insert_return_value_assert(
   if (!opcode::is_an_invoke(insn->opcode())) {
     return false;
   }
-  auto* callee = resolve_method(insn->get_method(), opcode_to_search(insn));
-  if (callee == nullptr) {
-    return false;
+
+  DexMethod* callee = nullptr;
+  DexTypeDomain domain = DexTypeDomain::top();
+  if (wps.has_call_graph()) {
+    callee = resolve_method(insn->get_method(), opcode_to_search(insn));
+    if (callee == nullptr && opcode_to_search(insn) == MethodSearch::Virtual) {
+      callee =
+          resolve_method(insn->get_method(), MethodSearch::InterfaceVirtual);
+    }
+    if (callee == nullptr || wps.method_is_dynamic(callee)) {
+      domain = DexTypeDomain::top();
+    }
+    domain = wps.get_return_type_from_cg(insn);
+  } else {
+    callee = resolve_method(insn->get_method(), opcode_to_search(insn));
+    if (callee == nullptr) {
+      return false;
+    }
+    auto ret_type = callee->get_proto()->get_rtype();
+    if (!type::is_object(ret_type)) {
+      return false;
+    }
+    domain = wps.get_return_type(callee);
   }
-  auto ret_type = callee->get_proto()->get_rtype();
-  if (!type::is_object(ret_type)) {
-    return false;
-  }
-  auto domain = wps.get_return_type(callee);
+
   if (domain.is_top()) {
     return false;
   }
   if (it.is_end_in_block()) {
     return false;
   }
+  always_assert(callee);
 
   auto mov_res_it = cfg.move_result_of(it);
   if (mov_res_it.is_end()) {
