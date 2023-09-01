@@ -1324,6 +1324,9 @@ void TransitiveClosureMarkerWorker::
 void TransitiveClosureMarkerWorker::exact_invoke_virtual_target(
     const DexMethod* method) {
   always_assert(!is_abstract(method));
+  if (method->is_external()) {
+    return;
+  }
   if (!m_shared_state->reachable_aspects->exact_invoke_virtual_targets.insert(
           method)) {
     return;
