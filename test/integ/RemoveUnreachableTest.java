@@ -136,8 +136,21 @@ class UseHasher {
 
 class OnlyInArray {}
 
+interface J {
+  public void implementMe();
+}
+
+class Instantiated implements J {
+  public void implementMe() {}
+}
+class Uninstantiated implements J {
+  public Uninstantiated(int dummyParameterToAvoidInclusionOfDefaultArglessConstructor) { }
+  public static J retainMe() { return new Instantiated(); }
+  public void implementMe() {}
+}
+
 public class RemoveUnreachableTest {
-  public void testMethod() {
+  public static void testMethod() {
     // Inheritance test
     A d = new D();
     D d2 = (D) d;
@@ -146,5 +159,10 @@ public class RemoveUnreachableTest {
     // Triangle inheritance
     I i = new Sub();
     i.wat();
+  }
+
+  public static void testUninstantiated() {
+    J j = Uninstantiated.retainMe();
+    j.implementMe();
   }
 }

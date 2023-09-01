@@ -568,6 +568,11 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
         out_method_override_graph = nullptr,
     bool remove_no_argument_constructors = false);
 
+std::vector<DexClass*> mark_classes_abstract(
+    DexStoresVector& stores,
+    const ReachableObjects& reachables,
+    const ReachableAspects& reachable_aspects);
+
 void sweep(DexStoresVector& stores,
            const ReachableObjects& reachables,
            ConcurrentSet<std::string>* removed_symbols = nullptr,

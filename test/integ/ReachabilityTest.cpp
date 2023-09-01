@@ -31,8 +31,8 @@ TEST_F(ReachabilityTest, ReachabilityFromProguardTest) {
 
   reachability::ObjectCounts before = reachability::count_objects(stores);
 
-  EXPECT_EQ(before.num_classes, 20);
-  EXPECT_EQ(before.num_methods, 39);
+  EXPECT_EQ(before.num_classes, 23);
+  EXPECT_EQ(before.num_methods, 46);
   EXPECT_EQ(before.num_fields, 3);
 
   int num_ignore_check_strings = 0;
@@ -44,6 +44,8 @@ TEST_F(ReachabilityTest, ReachabilityFromProguardTest) {
       stores, ig_sets, &num_ignore_check_strings, &reachable_aspects);
   walk::parallel::code(scope, [&](auto*, auto& code) { code.clear_cfg(); });
 
+  reachability::mark_classes_abstract(stores, *reachable_objects,
+                                      reachable_aspects);
   reachability::sweep(stores, *reachable_objects, nullptr);
 
   reachability::ObjectCounts after = reachability::count_objects(stores);
@@ -71,8 +73,8 @@ TEST_F(ReachabilityTest, ReachabilityMarkAllTest) {
 
   reachability::ObjectCounts before = reachability::count_objects(stores);
 
-  EXPECT_EQ(before.num_classes, 20);
-  EXPECT_EQ(before.num_methods, 39);
+  EXPECT_EQ(before.num_classes, 23);
+  EXPECT_EQ(before.num_methods, 46);
   EXPECT_EQ(before.num_fields, 3);
 
   int num_ignore_check_strings = 0;
@@ -88,11 +90,65 @@ TEST_F(ReachabilityTest, ReachabilityMarkAllTest) {
       /* should_mark_all_as_seed */ true, nullptr);
   walk::parallel::code(scope, [&](auto*, auto& code) { code.clear_cfg(); });
 
+  reachability::mark_classes_abstract(stores, *reachable_objects,
+                                      reachable_aspects);
   reachability::sweep(stores, *reachable_objects, nullptr);
 
   reachability::ObjectCounts after = reachability::count_objects(stores);
 
-  EXPECT_EQ(after.num_classes, 20);
-  EXPECT_EQ(after.num_methods, 39);
+  EXPECT_EQ(after.num_classes, 23);
+  EXPECT_EQ(after.num_methods, 46);
   EXPECT_EQ(after.num_fields, 3);
+}
+
+TEST_F(ReachabilityTest, NotDireclyInstantiatedClassesBecomeAbstract) {
+  // Not directly instantiated classes need to be made abstract, as we may
+  // remove implementations/overrides from it.
+  const auto& dexen = stores[0].get_dexen();
+  auto pg_config = process_and_get_proguard_config(dexen, R"(
+    -keepclasseswithmembers public class RemoveUnreachableTest {
+      public void testUninstantiated();
+    }
+  )");
+
+  EXPECT_TRUE(pg_config->ok);
+  EXPECT_EQ(pg_config->keep_rules.size(), 1);
+
+  int num_ignore_check_strings = 0;
+  reachability::IgnoreSets ig_sets;
+  reachability::ReachableAspects reachable_aspects;
+  auto scope = build_class_scope(stores);
+  walk::parallel::code(scope, [&](auto*, auto& code) { code.build_cfg(); });
+  auto reachable_objects = reachability::compute_reachable_objects(
+      stores, ig_sets, &num_ignore_check_strings, &reachable_aspects);
+  walk::parallel::code(scope, [&](auto*, auto& code) { code.clear_cfg(); });
+  auto abstracted_classes = reachability::mark_classes_abstract(
+      stores, *reachable_objects, reachable_aspects);
+  EXPECT_EQ(abstracted_classes.size(), 1);
+  reachability::sweep(stores, *reachable_objects, nullptr);
+
+  //// instantiable_types
+  EXPECT_EQ(reachable_aspects.instantiable_types.size(), 3);
+  auto is_instantiable = [&](const std::string_view& s) {
+    return std::any_of(reachable_aspects.instantiable_types.begin(),
+                       reachable_aspects.instantiable_types.end(),
+                       [s](const auto* cls) { return cls->str() == s; });
+  };
+  EXPECT_TRUE(is_instantiable("LJ;"));
+  EXPECT_TRUE(is_instantiable("LInstantiated;"));
+  EXPECT_FALSE(is_instantiable("LUninstantiated;"));
+
+  auto instantiated_cls = find_class(scope, "LInstantiated;");
+  EXPECT_TRUE(instantiated_cls);
+  EXPECT_FALSE(is_abstract(instantiated_cls));
+  auto instantiated_implement_me =
+      find_vmethod(*classes, "LInstantiated;", "V", "implementMe", {});
+  ASSERT_TRUE(instantiated_implement_me);
+
+  auto uninstantiated_cls = find_class(scope, "LUninstantiated;");
+  EXPECT_TRUE(uninstantiated_cls);
+  EXPECT_TRUE(is_abstract(uninstantiated_cls));
+  auto uninstantiated_implement_me =
+      find_vmethod(*classes, "LUninstantiated;", "V", "implementMe", {});
+  ASSERT_FALSE(uninstantiated_implement_me);
 }

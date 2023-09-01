@@ -212,6 +212,9 @@ void RemoveUnreachablePassBase::run_pass(DexStoresVector& stores,
     // references of removed symbols (which, of course, will be from dead code).
     gather_references_from_removed_symbols(stores, *reachables, references);
   }
+  auto abstracted_classes = reachability::mark_classes_abstract(
+      stores, *reachables, reachable_aspects);
+  pm.incr_metric("abstracted_classes", abstracted_classes.size());
   if (m_prune_uninstantiable_insns) {
     auto uninstantiables_stats = reachability::sweep_code(
         stores, m_prune_uncallable_instance_method_bodies,

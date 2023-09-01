@@ -244,11 +244,14 @@ TEST_F(FlowSensitiveReachabilityTest, sweep_uncallable_virtual_methods) {
   EXPECT_EQ(uninstantiables_stats.instance_ofs, 1);
   EXPECT_EQ(uninstantiables_stats.throw_null_methods, 3);
 
+  auto abstracted_classes = reachability::mark_classes_abstract(
+      stores, *reachable_objects, reachable_aspects);
+  EXPECT_EQ(abstracted_classes.size(), 5);
   reachability::sweep(stores, *reachable_objects);
   uninstantiables_stats =
       reachability::sweep_uncallable_virtual_methods(stores, reachable_aspects);
   EXPECT_EQ(uninstantiables_stats.abstracted_vmethods, 1);
-  EXPECT_EQ(uninstantiables_stats.abstracted_classes, 1);
+  EXPECT_EQ(uninstantiables_stats.abstracted_classes, 0);
   EXPECT_EQ(uninstantiables_stats.removed_vmethods, 1);
 
   walk::parallel::code(scope, [&](auto*, auto& code) { code.clear_cfg(); });

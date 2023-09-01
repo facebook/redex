@@ -1456,6 +1456,27 @@ static void sweep_if_unmarked(const ReachableObjects& reachables,
   c->erase(it, c->end());
 }
 
+std::vector<DexClass*> mark_classes_abstract(
+    DexStoresVector& stores,
+    const ReachableObjects& reachables,
+    const ReachableAspects& reachable_aspects) {
+  std::vector<DexClass*> res;
+  for (auto& store : stores) {
+    for (auto& classes : store.get_dexen()) {
+      for (auto cls : classes) {
+        if (!is_abstract(cls) &&
+            !reachable_aspects.directly_instantiable_types.count_unsafe(
+                cls->get_type()) &&
+            reachables.marked_unsafe(cls)) {
+          cls->set_access((cls->get_access() & ~ACC_FINAL) | ACC_ABSTRACT);
+          res.push_back(cls);
+        }
+      }
+    }
+  }
+  return res;
+}
+
 void sweep(DexStoresVector& stores,
            const ReachableObjects& reachables,
            ConcurrentSet<std::string>* removed_symbols,
