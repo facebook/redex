@@ -674,26 +674,29 @@ void RenameClassesPassV2::rename_classes(
     if (clazz->rstate.is_force_rename()) {
       mgr.incr_metric(METRIC_FORCE_RENAMED_CLASSES, 1);
       TRACE(RENAME, 2, "Forced renamed: '%s'", oldname->c_str());
-    } else if (m_dont_rename_reasons.find(clazz) !=
-               m_dont_rename_reasons.end()) {
-      auto reason = m_dont_rename_reasons[clazz];
-      std::string metric = dont_rename_reason_to_metric(reason.code);
-      mgr.incr_metric(metric, 1);
-      if (dont_rename_reason_to_metric_per_rule(reason.code)) {
-        std::string str = metric + "::" + std::string(reason.rule);
-        mgr.incr_metric(str, 1);
-        TRACE(RENAME, 2, "'%s' NOT RENAMED due to %s'", oldname->c_str(),
-              str.c_str());
-      } else {
-        TRACE(RENAME, 2, "'%s' NOT RENAMED due to %s'", oldname->c_str(),
-              metric.c_str());
+    } else if (!clazz->rstate.is_renamable_initialized_and_renamable() ||
+               clazz->rstate.is_generated()) {
+      // Either cls is not renamble, or it is a Redex newly generated class.
+      if (m_dont_rename_reasons.find(clazz) != m_dont_rename_reasons.end()) {
+        auto reason = m_dont_rename_reasons[clazz];
+        std::string metric = dont_rename_reason_to_metric(reason.code);
+        mgr.incr_metric(metric, 1);
+        if (dont_rename_reason_to_metric_per_rule(reason.code)) {
+          std::string str = metric + "::" + std::string(reason.rule);
+          mgr.incr_metric(str, 1);
+          TRACE(RENAME, 2, "'%s' NOT RENAMED due to %s'", oldname->c_str(),
+                str.c_str());
+        } else {
+          TRACE(RENAME, 2, "'%s' NOT RENAMED due to %s'", oldname->c_str(),
+                metric.c_str());
+        }
+        sequence++;
+        always_assert(!renamable_classes.count(clazz));
+        continue;
       }
-      sequence++;
-      always_assert(!renamable_classes.count(clazz));
-      continue;
     }
-    always_assert(renamable_classes.count(clazz));
 
+    always_assert(renamable_classes.count(clazz));
     mgr.incr_metric(METRIC_RENAMED_CLASSES, 1);
 
     char descriptor[Locator::encoded_global_class_index_max];
@@ -774,8 +777,9 @@ void RenameClassesPassV2::rename_classes(
 
 void RenameClassesPassV2::rename_classes_in_layouts(
     const rewriter::TypeStringMap& name_mapping, PassManager& mgr) {
-  // Sync up ResStringPool entries in XML layouts. Class names should appear in
-  // their "external" name, i.e. java.lang.String instead of Ljava/lang/String;
+  // Sync up ResStringPool entries in XML layouts. Class names should appear
+  // in their "external" name, i.e. java.lang.String instead of
+  // Ljava/lang/String;
   std::map<std::string, std::string> aliases_for_layouts;
   for (const auto& apair : name_mapping.get_class_map()) {
     aliases_for_layouts.emplace(

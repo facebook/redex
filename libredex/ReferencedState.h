@@ -79,7 +79,7 @@ class ReferencedState {
     bool m_name_used : 1;
 
     union {
-      // This is for class only. Currently, the number of flags is 2. Once new
+      // This is for class only. Currently, the number of flags is 5. Once new
       // flag is added, please update the corresponding number in comment.
       struct {
         // Is this member is a kotlin class
@@ -92,6 +92,10 @@ class ReferencedState {
         // RenameClassesPassV2 based on its config file.
         bool m_force_rename : 1;
         bool m_dont_rename : 1;
+
+        // m_renamable_initialized being true means a class' renamable status
+        // has been set and can't be changed after that.
+        bool m_renamable_initialized : 1;
       };
       // This is for method only. Currently, the number of flags
       // is 6. Once new flag is added, please update the corresponding number in
@@ -299,6 +303,17 @@ class ReferencedState {
   bool can_rename() const {
     return can_rename_if_also_renaming_xml() && !inner_struct.m_by_resources &&
            !inner_struct.m_name_used;
+  }
+
+  // \returns true if the current class' renamable satus has been set.
+  bool is_renamable_initialized() const {
+    return inner_struct.m_renamable_initialized;
+  }
+
+  // \returns true if the current class will be renamed in RenameClassesPassV2.
+  // Otherwise, returns false.
+  bool is_renamable_initialized_and_renamable() const {
+    return inner_struct.m_renamable_initialized && inner_struct.m_force_rename;
   }
 
   /*
@@ -531,11 +546,13 @@ class ReferencedState {
 
   void set_force_rename() {
     always_assert(inner_struct.is_class());
+    inner_struct.m_renamable_initialized = true;
     inner_struct.m_force_rename = true;
   }
 
   void set_dont_rename() {
     always_assert(inner_struct.is_class());
+    inner_struct.m_renamable_initialized = true;
     inner_struct.m_dont_rename = true;
   }
 

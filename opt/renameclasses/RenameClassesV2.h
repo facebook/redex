@@ -79,6 +79,10 @@ class RenameClassesPassV2 : public Pass {
                                                       ConfigFiles& conf,
                                                       PassManager& mgr);
 
+  void eval_classes_post(Scope& scope,
+                         const ClassHierarchy& class_hierarchy,
+                         PassManager& mgr);
+
  private:
   std::unordered_map<const DexType*, std::string>
   build_force_rename_hierarchies(PassManager&, Scope&, const ClassHierarchy&);
@@ -100,10 +104,9 @@ class RenameClassesPassV2 : public Pass {
                     ConfigFiles& conf,
                     bool rename_annotations,
                     PassManager& mgr);
-  void eval_classes_post(Scope& scope,
-                         const ClassHierarchy& class_hierarchy,
-                         PassManager& mgr);
+
   std::unordered_set<DexClass*> get_renamable_classes(Scope& scope);
+
   void rename_classes(Scope& scope,
                       const std::unordered_set<DexClass*>& renamable_classes,
                       PassManager& mgr);

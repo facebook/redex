@@ -15,7 +15,6 @@
 
 #include "DexUtil.h"
 #include "PassManager.h"
-#include "RenameClassesV2.h"
 #include "Show.h"
 #include "StlUtil.h"
 #include "Trace.h"
@@ -72,19 +71,6 @@ void OriginalNamePass::run_pass(DexStoresVector& stores,
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, conf.create_init_class_insns());
 
-  std::unique_ptr<std::unordered_set<DexType*>> renamable_types;
-  auto rename_classes_pass =
-      static_cast<RenameClassesPassV2*>(mgr.find_pass("RenameClassesPassV2"));
-  if (rename_classes_pass) {
-    std::unordered_set<DexClass*> ren_classes =
-        rename_classes_pass->get_renamable_classes(scope, conf, mgr);
-    std::unordered_set<DexType*> ren_types;
-    for (const auto& cls : ren_classes) {
-      ren_types.insert(cls->get_type());
-    }
-    renamable_types = std::make_unique<std::unordered_set<DexType*>>(ren_types);
-  }
-
   size_t store_id = 0;
   for (auto& store : stores) {
     // Backup dex, in case we exceed field limits. We assuem there is at most 1
@@ -97,8 +83,9 @@ void OriginalNamePass::run_pass(DexStoresVector& stores,
       DexClasses overflow_classes;
       for (auto const& cls : dex) {
         DexType* cls_type = cls->get_type();
-        if (!to_annotate.count(cls_type) || !rename_classes_pass ||
-            renamable_types->count(cls_type) == 0) {
+        if (!to_annotate.count(cls_type) ||
+            !cls->rstate.is_renamable_initialized_and_renamable() ||
+            cls->rstate.is_generated()) {
           // No need to keep original name.
           if (!dex_limits.update_refs_by_adding_class(cls)) {
             // Move cls from current dex to new_dex.

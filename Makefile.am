@@ -442,6 +442,7 @@ libopt_la_SOURCES = \
 	opt/remove-unused-fields/RemoveUnusedFields.cpp \
 	opt/remove_empty_classes/RemoveEmptyClasses.cpp \
 	opt/remove-unused-args/RemoveUnusedArgs.cpp \
+	opt/renameclasses/InitialRenameClassesPass.cpp \
 	opt/renameclasses/RenameClassesV2.cpp \
 	opt/reorder-interfaces-decl/ReorderInterfacesDecl.cpp \
 	opt/reduce-array-literals/ReduceArrayLiterals.cpp \
