@@ -452,18 +452,18 @@ void TransitiveClosureMarkerWorker::push_if_class_instantiable(
 
 void TransitiveClosureMarkerWorker::push_if_class_instantiable(
     const DexClass* cls,
-    std::shared_ptr<MethodReferencesGatherer> method_references_gatherer) {
-  always_assert(method_references_gatherer);
-  auto method = method_references_gatherer->get_method();
+    std::shared_ptr<MethodReferencesGatherer> mrefs_gatherer) {
+  always_assert(mrefs_gatherer);
+  auto method = mrefs_gatherer->get_method();
   bool emplaced = false;
   m_shared_state->cond_marked->if_class_instantiable.method_references_gatherers
       .update(cls, [&](auto*, auto& map, bool) {
-        auto ptr = method_references_gatherer.get();
-        auto p = map.emplace(method, std::move(method_references_gatherer));
+        auto ptr = mrefs_gatherer.get();
+        auto p = map.emplace(method, std::move(mrefs_gatherer));
         always_assert(ptr == p.first->second.get()); // emplaced or not
         emplaced = p.second;
       });
-  always_assert(!method_references_gatherer);
+  always_assert(!mrefs_gatherer);
   if (emplaced &&
       m_shared_state->reachable_aspects->instantiable_types.count(cls)) {
     // We lost the race. Oh well. Let's schedule one extra task to make sure
@@ -511,21 +511,20 @@ void TransitiveClosureMarkerWorker::
 }
 
 void TransitiveClosureMarkerWorker::push_if_instance_method_callable(
-    std::shared_ptr<MethodReferencesGatherer> method_references_gatherer) {
-  auto* method = method_references_gatherer->get_method();
+    std::shared_ptr<MethodReferencesGatherer> mrefs_gatherer) {
+  auto* method = mrefs_gatherer->get_method();
   m_shared_state->cond_marked->if_instance_method_callable.update(
       method, [&](auto*, auto& value, bool) {
         always_assert(!value);
-        value = std::move(method_references_gatherer);
+        value = std::move(mrefs_gatherer);
       });
   if (m_shared_state->reachable_aspects->callable_instance_methods.count(
           method)) {
     m_shared_state->cond_marked->if_instance_method_callable.update(
-        method, [&](auto*, auto& value, bool) {
-          std::swap(method_references_gatherer, value);
-        });
-    if (method_references_gatherer) {
-      gather_and_push(method_references_gatherer,
+        method,
+        [&](auto*, auto& value, bool) { std::swap(mrefs_gatherer, value); });
+    if (mrefs_gatherer) {
+      gather_and_push(mrefs_gatherer,
                       MethodReferencesGatherer::Advance::callable());
     }
   }
@@ -912,12 +911,12 @@ bool TransitiveClosureMarkerWorker::has_class_forName(const DexMethod* meth) {
 }
 
 void TransitiveClosureMarkerWorker::gather_and_push(
-    std::shared_ptr<MethodReferencesGatherer> method_references_gatherer,
+    std::shared_ptr<MethodReferencesGatherer> mrefs_gatherer,
     const MethodReferencesGatherer::Advance& advance) {
-  always_assert(method_references_gatherer);
+  always_assert(mrefs_gatherer);
   References refs;
-  method_references_gatherer->advance(advance, &refs);
-  auto* meth = method_references_gatherer->get_method();
+  mrefs_gatherer->advance(advance, &refs);
+  auto* meth = mrefs_gatherer->get_method();
   if (refs.method_references_gatherer_dependency_if_instance_method_callable &&
       (!m_shared_state->cfg_gathering_check_instantiable ||
        !m_shared_state->cfg_gathering_check_instance_callable ||
@@ -928,8 +927,8 @@ void TransitiveClosureMarkerWorker::gather_and_push(
                   MethodReferencesGatherer::AdvanceKind::Initial);
     refs.method_references_gatherer_dependency_if_instance_method_callable =
         false;
-    method_references_gatherer->advance(
-        MethodReferencesGatherer::Advance::callable(), &refs);
+    mrefs_gatherer->advance(MethodReferencesGatherer::Advance::callable(),
+                            &refs);
     always_assert(
         !refs.method_references_gatherer_dependency_if_instance_method_callable);
   }
@@ -970,7 +969,7 @@ void TransitiveClosureMarkerWorker::gather_and_push(
   dynamically_referenced(refs.classes_dynamically_referenced);
   directly_instantiable(refs.new_instances);
   if (refs.method_references_gatherer_dependency_if_instance_method_callable) {
-    push_if_instance_method_callable(method_references_gatherer);
+    push_if_instance_method_callable(mrefs_gatherer);
     always_assert(
         refs.method_references_gatherer_dependencies_if_class_instantiable
             .empty());
@@ -981,10 +980,9 @@ void TransitiveClosureMarkerWorker::gather_and_push(
     return;
   }
   for (size_t i = 0; i < v.size() - 1; ++i) {
-    push_if_class_instantiable(v[i], method_references_gatherer);
+    push_if_class_instantiable(v[i], mrefs_gatherer);
   }
-  push_if_class_instantiable(v[v.size() - 1],
-                             std::move(method_references_gatherer));
+  push_if_class_instantiable(v[v.size() - 1], std::move(mrefs_gatherer));
 }
 
 void TransitiveClosureMarkerWorker::gather_and_push(const DexMethod* meth) {
@@ -1143,12 +1141,10 @@ void TransitiveClosureMarkerWorker::visit_instantiable(const DexClass* cls) {
     }
   }
 
-  size_t method_references_gatherers{0};
+  size_t mrefs_gatherers{0};
   cond_marked->if_class_instantiable.method_references_gatherers.update(
-      cls, [&](auto*, auto& map, bool) {
-        method_references_gatherers = map.size();
-      });
-  for (size_t i = 0; i < method_references_gatherers; i++) {
+      cls, [&](auto*, auto& map, bool) { mrefs_gatherers = map.size(); });
+  for (size_t i = 0; i < mrefs_gatherers; i++) {
     m_worker_state->push_task(ReachableObject(
         cls, ReachableObjectType::METHOD_REFERENCES_GATHERER_INSTANTIABLE));
   }
@@ -1160,17 +1156,17 @@ void TransitiveClosureMarkerWorker::
         "Visiting method-references-gatherer for instantiable class: %s",
         SHOW(cls));
 
-  std::shared_ptr<MethodReferencesGatherer> method_references_gatherer;
+  std::shared_ptr<MethodReferencesGatherer> mrefs_gatherer;
   m_shared_state->cond_marked->if_class_instantiable.method_references_gatherers
       .update(cls, [&](auto*, auto& map, bool) {
         if (!map.empty()) {
           auto it = map.begin();
-          method_references_gatherer = std::move(it->second);
+          mrefs_gatherer = std::move(it->second);
           map.erase(it);
         }
       });
-  if (method_references_gatherer) {
-    gather_and_push(std::move(method_references_gatherer),
+  if (mrefs_gatherer) {
+    gather_and_push(std::move(mrefs_gatherer),
                     MethodReferencesGatherer::Advance::instantiable(cls));
   }
 }
@@ -1236,13 +1232,11 @@ void TransitiveClosureMarkerWorker::instantiable(DexType* type) {
       push(cls, m);
     }
   }
-  MethodReferencesGatherers method_references_gatherers;
+  MethodReferencesGatherers mrefs_gatherers;
   cond_marked->if_class_instantiable.method_references_gatherers.update(
-      cls, [&](auto*, auto& map, bool) {
-        method_references_gatherers = std::move(map);
-      });
-  for (auto&& [_, method_references_gatherer] : method_references_gatherers) {
-    gather_and_push(std::move(method_references_gatherer),
+      cls, [&](auto*, auto& map, bool) { mrefs_gatherers = std::move(map); });
+  for (auto&& [_, mrefs_gatherer] : mrefs_gatherers) {
+    gather_and_push(std::move(mrefs_gatherer),
                     MethodReferencesGatherer::Advance::instantiable(cls));
   }
 }
@@ -1288,13 +1282,12 @@ void TransitiveClosureMarkerWorker::instance_callable(const DexMethod* method) {
   }
   always_assert(!method->is_external());
   always_assert(!is_abstract(method));
-  std::shared_ptr<MethodReferencesGatherer> method_references_gatherer;
+  std::shared_ptr<MethodReferencesGatherer> mrefs_gatherer;
   m_shared_state->cond_marked->if_instance_method_callable.update(
-      method, [&](auto*, auto& value, bool) {
-        std::swap(method_references_gatherer, value);
-      });
-  if (method_references_gatherer) {
-    gather_and_push(method_references_gatherer,
+      method,
+      [&](auto*, auto& value, bool) { std::swap(mrefs_gatherer, value); });
+  if (mrefs_gatherer) {
+    gather_and_push(mrefs_gatherer,
                     MethodReferencesGatherer::Advance::callable());
   }
 }
@@ -1564,9 +1557,9 @@ void ReachableAspects::finish(const ConditionallyMarked& cond_marked,
     }
     always_assert(!instantiable_types.count(cls));
     uninstantiable_dependencies.insert(cls);
-    for (auto&& [method, method_references_gatherer] : map) {
-      remaining_method_references_gatherers.emplace(
-          method, method_references_gatherer.get());
+    for (auto&& [method, mrefs_gatherer] : map) {
+      remaining_method_references_gatherers.emplace(method,
+                                                    mrefs_gatherer.get());
     }
   }
   std::atomic<uint64_t> concurrent_instructions_unvisited{0};

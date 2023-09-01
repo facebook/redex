@@ -526,7 +526,7 @@ class TransitiveClosureMarkerWorker {
 
   void push_if_class_instantiable(
       const DexClass* cls,
-      std::shared_ptr<MethodReferencesGatherer> method_references_gatherer);
+      std::shared_ptr<MethodReferencesGatherer> mrefs_gatherer);
 
   void push_if_class_retained(const DexField* field);
 
@@ -536,13 +536,12 @@ class TransitiveClosureMarkerWorker {
       DexType* type);
 
   void push_if_instance_method_callable(
-      std::shared_ptr<MethodReferencesGatherer> method_references_gatherer);
+      std::shared_ptr<MethodReferencesGatherer> mrefs_gatherer);
 
   bool has_class_forName(const DexMethod* meth);
 
-  void gather_and_push(
-      std::shared_ptr<MethodReferencesGatherer> method_references_gatherer,
-      const MethodReferencesGatherer::Advance& advance);
+  void gather_and_push(std::shared_ptr<MethodReferencesGatherer> mrefs_gatherer,
+                       const MethodReferencesGatherer::Advance& advance);
 
   std::shared_ptr<MethodReferencesGatherer> create_method_references_gatherer(
       const DexMethod* method,
