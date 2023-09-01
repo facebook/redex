@@ -252,7 +252,7 @@ class Model {
    */
   static Model build_model(const Scope& scope,
                            const DexStoresVector& stores,
-                           const ConfigFiles& conf,
+                           ConfigFiles& conf,
                            const ModelSpec& spec,
                            const TypeSystem& type_system,
                            const RefChecker& refchecker);
@@ -303,8 +303,6 @@ class Model {
 
   bool process_method_meta() const { return m_spec.process_method_meta; }
   bool keep_debug_info() const { return m_spec.keep_debug_info; }
-
-  static void build_interdex_groups(ConfigFiles& conf);
 
   /**
    * Print everything about the model.
@@ -383,11 +381,8 @@ class Model {
   std::map<MergerType::Shape, size_t, MergerType::ShapeComp> m_shape_to_count;
 
   const Scope& m_scope;
-  const ConfigFiles& m_conf;
+  ConfigFiles& m_conf;
   const XDexRefs m_x_dex;
-
-  static std::unordered_map<DexType*, size_t> s_cls_to_interdex_group;
-  static size_t s_num_interdex_groups;
 
   /**
    * Build a Model given a set of roots and a set of types deriving from the
@@ -395,7 +390,7 @@ class Model {
    */
   Model(const Scope& scope,
         const DexStoresVector& stores,
-        const ConfigFiles& conf,
+        ConfigFiles& conf,
         const ModelSpec& spec,
         const TypeSystem& type_system,
         const RefChecker& refchecker);

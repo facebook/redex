@@ -20,27 +20,12 @@ using namespace class_merging;
 
 namespace {
 
-bool s_is_initialized = false;
-
-/*
- * Initialize a number of static states for the output mapping file and the
- * interdex group mapping.
- */
-void set_up(ConfigFiles& conf) {
-  if (s_is_initialized) {
-    // Already initialized.
-    return;
-  }
-  Model::build_interdex_groups(conf);
-  s_is_initialized = true;
-}
-
 /**
- * Create a ref checker for checking cross-store references and Android SDK api
- * usages. When the per_dex_grouping is false, the create ref checker will check
- * cross-store references. When the per_dex_grouping is true, the checker
- * doesn't check cross-store reference and will let the class merging grouping
- * do the correct grouping for each dex.
+ * Create a ref checker for checking cross-store references and Android SDK
+ * api usages. When the per_dex_grouping is false, the create ref checker will
+ * check cross-store references. When the per_dex_grouping is true, the
+ * checker doesn't check cross-store reference and will let the class merging
+ * grouping do the correct grouping for each dex.
  */
 std::unique_ptr<RefChecker> create_ref_checker(const bool per_dex_grouping,
                                                XStoreRefs* xstores,
@@ -136,8 +121,6 @@ ModelStats merge_model(const TypeSystem& type_system,
                        PassManager& mgr,
                        DexStoresVector& stores,
                        ModelSpec& spec) {
-  set_up(conf);
-  always_assert(s_is_initialized);
   TRACE(CLMG,
         2,
         "[ClassMerging] merging %s model merging targets %zu roots %zu",

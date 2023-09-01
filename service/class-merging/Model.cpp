@@ -27,12 +27,7 @@
 
 using namespace class_merging;
 
-size_t Model::s_num_interdex_groups = 0;
-std::unordered_map<DexType*, size_t> Model::s_cls_to_interdex_group;
-
 namespace {
-
-constexpr const char* CLASS_MARKER_DELIMITER = "DexEndMarker";
 
 std::string to_string(const ModelSpec& spec) {
   std::ostringstream ss;
@@ -168,7 +163,7 @@ const TypeSet Model::empty_set = TypeSet();
 
 Model::Model(const Scope& scope,
              const DexStoresVector& stores,
-             const ConfigFiles& conf,
+             ConfigFiles& conf,
              const ModelSpec& spec,
              const TypeSystem& type_system,
              const RefChecker& refchecker)
@@ -250,39 +245,6 @@ MergerType* Model::build_mergers(const DexType* root) {
     }
   }
   return &merger;
-}
-
-void Model::build_interdex_groups(ConfigFiles& conf) {
-  const auto& interdex_order = conf.get_coldstart_classes();
-  if (interdex_order.empty()) {
-    // No grouping based on interdex.
-    s_num_interdex_groups = 0;
-    return;
-  }
-
-  size_t group_id = 0;
-  for (auto it = interdex_order.begin(); it != interdex_order.end(); ++it) {
-    const auto& cls_name = *it;
-    bool is_marker_delim =
-        cls_name.find(CLASS_MARKER_DELIMITER) != std::string::npos;
-
-    if (is_marker_delim || std::next(it) == interdex_order.end()) {
-      group_id++;
-
-      if (is_marker_delim) {
-        continue;
-      }
-    }
-
-    DexType* type = DexType::get_type(cls_name);
-    if (type && s_cls_to_interdex_group.count(type) == 0) {
-      s_cls_to_interdex_group[type] = group_id;
-    }
-  }
-
-  // group_id + 1 represents the number of groups (considering the classes
-  // outside of the interdex order as a group on its own).
-  s_num_interdex_groups = group_id + 1;
 }
 
 MergerType& Model::create_dummy_merger(const DexType* type) {
@@ -837,9 +799,13 @@ TypeSet Model::get_types_in_current_interdex_group(
  */
 std::vector<ConstTypeHashSet> Model::group_by_interdex_set(
     const ConstTypeHashSet& types) {
+  const auto& cls_to_interdex_groups = m_conf.get_cls_interdex_groups();
+  auto num_interdex_groups = m_conf.get_num_interdex_groups();
+  TRACE(CLMG, 5, "num_interdex_groups %zu; cls_to_interdex_groups %zu",
+        num_interdex_groups, cls_to_interdex_groups.size());
   size_t num_group = 1;
-  if (is_interdex_grouping_enabled() && s_num_interdex_groups > 1) {
-    num_group = s_num_interdex_groups;
+  if (is_interdex_grouping_enabled() && num_interdex_groups > 1) {
+    num_group = num_interdex_groups;
   }
   std::vector<ConstTypeHashSet> new_groups(num_group);
   if (num_group == 1) {
@@ -849,8 +815,8 @@ std::vector<ConstTypeHashSet> Model::group_by_interdex_set(
   const auto& type_to_usages =
       get_type_usages(types, m_scope, m_spec.interdex_grouping_inferring_mode);
   for (const auto& pair : type_to_usages) {
-    auto index = get_interdex_group(pair.second, s_cls_to_interdex_group,
-                                    s_num_interdex_groups);
+    auto index = get_interdex_group(pair.second, cls_to_interdex_groups,
+                                    num_interdex_groups);
     if (m_spec.interdex_grouping == InterDexGroupingType::NON_HOT_SET) {
       if (index == 0) {
         // Drop mergeables that are in the hot set.
@@ -858,7 +824,7 @@ std::vector<ConstTypeHashSet> Model::group_by_interdex_set(
       }
     } else if (m_spec.interdex_grouping ==
                InterDexGroupingType::NON_ORDERED_SET) {
-      if (index < s_num_interdex_groups - 1) {
+      if (index < num_interdex_groups - 1) {
         // Only merge the last group which are not in ordered set, drop other
         // mergeables.
         continue;
@@ -1524,7 +1490,7 @@ std::string Model::print(const DexType* type, int nest) const {
 
 Model Model::build_model(const Scope& scope,
                          const DexStoresVector& stores,
-                         const ConfigFiles& conf,
+                         ConfigFiles& conf,
                          const ModelSpec& spec,
                          const TypeSystem& type_system,
                          const RefChecker& refchecker) {
