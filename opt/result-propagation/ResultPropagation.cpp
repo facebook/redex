@@ -304,11 +304,12 @@ boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
       return boost::none;
     }
 
-    const auto overriding_methods =
-        method_override_graph::get_overriding_methods(m_graph, callee);
     auto static_base_type = method->get_class();
+    const auto overriding_methods =
+        method_override_graph::get_overriding_methods(
+            m_graph, callee, /* include_interfaces */ false, static_base_type);
     for (auto* overriding : overriding_methods) {
-      if (!type::check_cast(overriding->get_class(), static_base_type)) {
+      if (!method::may_be_invoke_target(overriding)) {
         continue;
       }
       const auto& mwrpit = methods_which_return_parameter.find(overriding);

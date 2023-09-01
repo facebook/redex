@@ -347,7 +347,7 @@ SameImplementationMap get_same_implementation_map(
       return true;
     };
     for (auto overriding_method : overriding_methods) {
-      if (is_abstract(overriding_method)) {
+      if (!method::may_be_invoke_target(overriding_method)) {
         continue;
       }
       if (!overriding_method->get_code()) {
@@ -511,7 +511,9 @@ void gather_true_virtual_methods(
                 method_override_graph, callee, /* include_interfaces */ false,
                 static_base_type);
             for (auto overriding_method : overriding_methods) {
-              add_other_call_site(overriding_method);
+              if (method::may_be_invoke_target(overriding_method)) {
+                add_other_call_site(overriding_method);
+              }
             }
           }
           continue;
@@ -534,8 +536,9 @@ void gather_true_virtual_methods(
         auto overriding_methods = mog::get_overriding_methods(
             method_override_graph, callee, /* include_interfaces */ false,
             static_base_type);
-        std20::erase_if(overriding_methods,
-                        [&](auto* m) { return is_abstract(m); });
+        std20::erase_if(overriding_methods, [&](auto* m) {
+          return !method::may_be_invoke_target(m);
+        });
         if (overriding_methods.empty()) {
           // There is no override for this method
           add_monomorphic_call_site(method, insn, callee);
