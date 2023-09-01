@@ -213,6 +213,7 @@ libredex_la_SOURCES = \
 	libredex/SourceBlocks.cpp \
 	libredex/StringTreeSet.cpp \
 	libredex/Timer.cpp \
+	libredex/ThrowPropagationImpl.cpp \
 	libredex/Trace.cpp \
 	libredex/Transform.cpp \
 	libredex/TypeInference.cpp \
