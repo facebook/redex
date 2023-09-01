@@ -43,6 +43,7 @@ class ReduceGotosPass : public Pass {
         {HasSourceBlocks, Preserves},
         {NoInitClassInstructions, Preserves},
         {NoResolvablePureRefs, Preserves},
+        {NoUnreachableInstructions, Preserves},
         {RenameClass, Preserves},
     };
   }

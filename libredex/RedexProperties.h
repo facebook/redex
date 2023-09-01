@@ -59,6 +59,8 @@ using PropertyInteractions =
 namespace names {
 
 inline const PropertyName NoInitClassInstructions("NoInitClassInstructions");
+inline const PropertyName NoUnreachableInstructions(
+    "NoUnreachableInstructions");
 inline const PropertyName DexLimitsObeyed("DexLimitsObeyed");
 // Stand-in for fixing up passes.
 inline const PropertyName NeedsEverythingPublic("NeedsEverythingPublic");
@@ -84,6 +86,7 @@ inline PropertyInteractions preserves_all() {
       {NeedsEverythingPublic, Preserves},
       {NeedsInjectionIdLowering, Preserves},
       {NoInitClassInstructions, Preserves},
+      {NoUnreachableInstructions, Preserves},
       {NoResolvablePureRefs, Preserves},
       {NoSpuriousGetClassCalls, Preserves},
       {RenameClass, Preserves},

@@ -263,6 +263,7 @@ DexType* CheckCastAnalysis::get_type_demand(IRInstruction* insn,
   case OPCODE_SPUT_WIDE:
   case IOPCODE_INIT_CLASS:
   case IOPCODE_INJECTION_ID:
+  case IOPCODE_UNREACHABLE:
     not_reached();
 
   case OPCODE_FILLED_NEW_ARRAY:

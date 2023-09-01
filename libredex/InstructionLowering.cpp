@@ -281,6 +281,11 @@ DexInstruction* create_dex_instruction(const IRInstruction* insn) {
   if (insn->opcode() == IOPCODE_INJECTION_ID) {
     return new DexInstruction(DOPCODE_CONST);
   }
+  // TODO: Assert that this never happens. IOPCODE_UNREACHABLE should never
+  // make it here.
+  if (insn->opcode() == IOPCODE_UNREACHABLE) {
+    return new DexInstruction(DOPCODE_CONST);
+  }
 
   auto op = opcode::to_dex_opcode(insn->opcode());
   switch (opcode::ref(insn->opcode())) {

@@ -259,6 +259,8 @@ init_class_pruner_test_SOURCES = InitClassPrunerTest.cpp
 
 init_class_lowering_pass_test_SOURCES = InitClassLoweringPassTest.cpp
 
+unreachable_lowering_pass_test_SOURCES = UnreachableLoweringPassTest.cpp
+
 int_type_patcher_test_SOURCES = IntTypePatcherTest.cpp
 
 instruction_sequence_outliner_test_SOURCES = InstructionSequenceOutlinerTest.cpp ScopeHelper.cpp

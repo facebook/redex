@@ -55,7 +55,7 @@ std::unordered_set<PropertyName> Manager::get_initial() const {
 const std::unordered_set<PropertyName>& Manager::get_default_final() {
   using namespace names;
   static const std::unordered_set<PropertyName> default_final_properties{
-      NoInitClassInstructions, DexLimitsObeyed};
+      NoInitClassInstructions, NoUnreachableInstructions, DexLimitsObeyed};
   return default_final_properties;
 }
 
@@ -69,13 +69,10 @@ std::unordered_set<PropertyName> Manager::get_final() const {
 std::vector<PropertyName> Manager::get_all_properties() {
   using namespace names;
   return {
-      NoInitClassInstructions,
-      DexLimitsObeyed,
-      NeedsEverythingPublic,
-      NeedsInjectionIdLowering,
-      HasSourceBlocks,
-      NoSpuriousGetClassCalls,
-      RenameClass,
+      NoInitClassInstructions,  NoUnreachableInstructions,
+      DexLimitsObeyed,          NeedsEverythingPublic,
+      NeedsInjectionIdLowering, HasSourceBlocks,
+      NoSpuriousGetClassCalls,  RenameClass,
       UltralightCodePatterns,
   };
 }

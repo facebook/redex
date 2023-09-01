@@ -31,6 +31,14 @@ IRInstruction* ir_const(uint32_t dest, int64_t lit) {
   return insn;
 }
 
+/// \return a new \c IRInstruction representing a `unreachable` operation
+/// writing the impossible value into register \p dest.
+IRInstruction* ir_unreachable(uint32_t dest) {
+  auto insn = new IRInstruction(IOPCODE_UNREACHABLE);
+  insn->set_dest(dest);
+  return insn;
+}
+
 /// \return a new \c IRInstruction representing a `throw` operation, throwing
 /// the contents of register \p src.
 IRInstruction* ir_throw(uint32_t src) {
@@ -193,7 +201,7 @@ Stats replace_uninstantiable_refs(
   return stats;
 }
 
-Stats replace_all_with_throw(cfg::ControlFlowGraph& cfg) {
+Stats replace_all_with_unreachable_throw(cfg::ControlFlowGraph& cfg) {
   auto* entry = cfg.entry_block();
   always_assert_log(entry, "Expect an entry block");
 
@@ -202,7 +210,7 @@ Stats replace_all_with_throw(cfg::ControlFlowGraph& cfg) {
   always_assert_log(!it.is_end(), "Expecting a non-param loading instruction");
 
   auto tmp = cfg.allocate_temp();
-  cfg.insert_before(it, {ir_const(tmp, 0), ir_throw(tmp)});
+  cfg.insert_before(it, {ir_unreachable(tmp), ir_throw(tmp)});
 
   Stats stats;
   stats.throw_null_methods++;
@@ -253,7 +261,8 @@ Stats reduce_uncallable_instance_methods(
         } else {
           cfg::ScopedCFG cfg(method->get_code());
           auto method_stats =
-              remove_uninstantiables_impl::replace_all_with_throw(*cfg);
+              remove_uninstantiables_impl::replace_all_with_unreachable_throw(
+                  *cfg);
           std::lock_guard<std::mutex> lock_guard(stats_mutex);
           stats += method_stats;
         }

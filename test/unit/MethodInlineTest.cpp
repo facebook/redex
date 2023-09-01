@@ -1051,7 +1051,7 @@ TEST_F(MethodInlineTest, throw_after_no_return) {
     (
       (const v0 0)
       (invoke-static (v0) "Lfoo;.check:(I)V")
-      (const v1 0)
+      (unreachable v1)
       (throw v1)
     )
   )";

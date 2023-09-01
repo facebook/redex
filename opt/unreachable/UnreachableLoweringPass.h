@@ -7,12 +7,12 @@
 
 #pragma once
 
-#include "LocalDce.h"
 #include "Pass.h"
+#include "PassManager.h"
 
-class LocalDcePass : public Pass {
+class UnreachableLoweringPass : public Pass {
  public:
-  LocalDcePass() : Pass("LocalDcePass") {}
+  UnreachableLoweringPass() : Pass("UnreachableLoweringPass") {}
 
   redex_properties::PropertyInteractions get_property_interactions()
       const override {
@@ -22,13 +22,10 @@ class LocalDcePass : public Pass {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, Preserves},
         {NoInitClassInstructions, Preserves},
-        {NoUnreachableInstructions, Preserves},
-        {NoResolvablePureRefs, Preserves},
-        {NoSpuriousGetClassCalls, Preserves},
+        {NoUnreachableInstructions, Establishes},
         {RenameClass, Preserves},
     };
   }
 
-  bool is_cfg_legacy() override { return true; }
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 };

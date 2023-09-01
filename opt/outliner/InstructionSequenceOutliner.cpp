@@ -565,6 +565,7 @@ static bool can_outline_opcode(IROpcode opcode, bool outline_control_flow) {
   case IOPCODE_LOAD_PARAM:
   case IOPCODE_LOAD_PARAM_OBJECT:
   case IOPCODE_LOAD_PARAM_WIDE:
+  case IOPCODE_UNREACHABLE:
   case OPCODE_GOTO:
   case OPCODE_INVOKE_SUPER:
   case OPCODE_MONITOR_ENTER:

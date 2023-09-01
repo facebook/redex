@@ -46,9 +46,9 @@ remove_uninstantiables_impl::Stats replace_uninstantiable_refs(
       compute_uninstantiable_types(), cfg);
 }
 
-remove_uninstantiables_impl::Stats replace_all_with_throw(
+remove_uninstantiables_impl::Stats replace_all_with_unreachable_throw(
     cfg::ControlFlowGraph& cfg) {
-  return remove_uninstantiables_impl::replace_all_with_throw(cfg);
+  return remove_uninstantiables_impl::replace_all_with_unreachable_throw(cfg);
 }
 
 /// Expect \c RemoveUninstantiablesPass to convert \p ACTUAL into \p EXPECTED
@@ -549,7 +549,7 @@ TEST_F(RemoveUninstantiablesTest, InvokeUninstantiable) {
 
 TEST_F(RemoveUninstantiablesTest, ReplaceAllWithThrow) {
   remove_uninstantiables_impl::Stats stats;
-  EXPECT_CHANGE(replace_all_with_throw,
+  EXPECT_CHANGE(replace_all_with_unreachable_throw,
                 stats,
                 /* ACTUAL */ R"((
                   (load-param-object v0)
@@ -563,7 +563,7 @@ TEST_F(RemoveUninstantiablesTest, ReplaceAllWithThrow) {
                 ))",
                 /* EXPECTED */ R"((
                   (load-param-object v0)
-                  (const v3 0)
+                  (unreachable v3)
                   (throw v3)
                 ))");
   EXPECT_EQ(1, stats.throw_null_methods);
@@ -595,7 +595,7 @@ TEST_F(RemoveUninstantiablesTest, RunPass) {
   EXPECT_METHOD("LFoo;.fox:()LFoo;",
                 R"((
                   (load-param-object v0)
-                  (const v1 0)
+                  (unreachable v1)
                   (throw v1)
                 ))");
 

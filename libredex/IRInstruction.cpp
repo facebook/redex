@@ -162,7 +162,7 @@ IRInstruction* IRInstruction::set_srcs_size(size_t count) {
 uint16_t IRInstruction::size() const {
   auto op = m_opcode;
   if (opcode::is_an_internal(op)) {
-    return opcode::is_injection_id(op) ? 2 : 0;
+    return opcode::is_injection_id(op) ? 2 : opcode::is_unreachable(op) ? 1 : 0;
   }
   static int args[] = {
       0, /* FMT_f00x   */

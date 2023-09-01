@@ -23,9 +23,13 @@ class MakePublicPass : public Pass {
     using namespace redex_properties::interactions;
     using namespace redex_properties::names;
     return {
-        {DexLimitsObeyed, Preserves},      {HasSourceBlocks, Preserves},
-        {NeedsEverythingPublic, Destroys}, {NoInitClassInstructions, Preserves},
-        {NoResolvablePureRefs, Preserves}, {RenameClass, Preserves},
+        {DexLimitsObeyed, Preserves},
+        {HasSourceBlocks, Preserves},
+        {NeedsEverythingPublic, Destroys},
+        {NoInitClassInstructions, Preserves},
+        {NoResolvablePureRefs, Preserves},
+        {NoUnreachableInstructions, Preserves},
+        {RenameClass, Preserves},
     };
   }
 

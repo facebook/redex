@@ -516,6 +516,14 @@ bool no_invoke_super(const IRCode& code) {
   return !has_invoke_super;
 }
 
+bool may_be_invoke_target(const DexMethod* method) {
+  if (is_native(method) || method->is_external()) {
+    // We don't know
+    return true;
+  }
+  return !is_abstract(method) && !method->get_code()->is_unreachable();
+}
+
 #define DEFINE_CACHED_METHOD(func_name, _)                 \
   DexMethod* func_name() {                                 \
     return g_redex->pointers_cache().method_##func_name(); \

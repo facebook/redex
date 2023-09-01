@@ -83,6 +83,7 @@ libredex_la_SOURCES = \
 	checkers/DexLimitsChecker.cpp \
 	checkers/NoInitClassInstructionsChecker.cpp \
 	checkers/NoResolvablePureRefsChecker.cpp \
+	checkers/NoUnreachableInstructionsChecker.cpp \
 	liblocator/locator.cpp \
 	libredex/AggregateException.cpp \
 	libredex/AnalysisUsage.cpp \
@@ -348,6 +349,7 @@ libopt_la_SOURCES = \
 	checkers/HasSourceBlocksChecker.cpp \
 	checkers/InjectionIdInstructionsChecker.cpp \
 	checkers/NoInitClassInstructionsChecker.cpp \
+	checkers/NoUnreachableInstructionsChecker.cpp \
 	checkers/NoSpuriousGetClassCallsChecker.cpp \
 	checkers/RenameClassChecker.cpp \
 	analysis/max-depth/MaxDepthAnalysis.cpp \
@@ -455,6 +457,7 @@ libopt_la_SOURCES = \
 	opt/resolve-proguard-values/ResolveProguardAssumeValues.cpp \
 	opt/shorten-srcstrings/Shorten.cpp \
 	opt/shrinker/ShrinkerPass.cpp \
+	opt/unreachable/UnreachableLoweringPass.cpp \
 	opt/make-public/MakePublicPass.cpp \
 	opt/methodinline/IntraDexInlinePass.cpp \
 	opt/methodinline/LocalMethodInlinePass.cpp \

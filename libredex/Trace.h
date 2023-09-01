@@ -161,6 +161,7 @@ class DexType;
   TM(TYPE_TRANSFORM)    \
   TM(UCM)               \
   TM(UNREF_INTF)        \
+  TM(UNREACHABLE)       \
   TM(USES_NAMES)        \
   TM(VERIFY)            \
   TM(VIRT)              \

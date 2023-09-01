@@ -1235,3 +1235,13 @@ bool IRCode::has_try_blocks() const {
   return std::any_of(this->begin(), this->end(),
                      [](auto& mie) { return mie.type == MFLOW_TRY; });
 }
+
+bool IRCode::is_unreachable() const {
+  if (editable_cfg_built()) {
+    return this->cfg().entry_block()->is_unreachable();
+  }
+  auto it = InstructionIterable(this).begin();
+  for (; opcode::is_a_load_param(it->insn->opcode()); it++) {
+  }
+  return opcode::is_unreachable(it->insn->opcode());
+}

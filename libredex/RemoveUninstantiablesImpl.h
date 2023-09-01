@@ -43,11 +43,11 @@ Stats replace_uninstantiable_refs(
     const std::unordered_set<DexType*>& scoped_uninstantiable_types,
     cfg::ControlFlowGraph& cfg);
 
-/// Replace the instructions in \p cfg with `throw null;`.  Preserves the
+/// Replace the instructions in \p cfg with `throw unreachable;`.  Preserves the
 /// initial run of load-param instructions in the ControlFlowGraph.
 ///
 /// \pre Assumes that \p cfg is a non-empty instance method body.
-Stats replace_all_with_throw(cfg::ControlFlowGraph& cfg);
+Stats replace_all_with_unreachable_throw(cfg::ControlFlowGraph& cfg);
 
 /// Perform structural changes to non-static methods that cannot be called, by
 /// either making them abstract, removing their body, or deleting them.

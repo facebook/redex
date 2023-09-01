@@ -663,13 +663,12 @@ size_t MultiMethodInliner::inline_inlinables(
         }
         // Copying to avoid cfg limitation
         auto* callsite_copy = new IRInstruction(*callsite_it->insn);
-        auto* const_insn = (new IRInstruction(OPCODE_CONST))
-                               ->set_dest(temp_reg)
-                               ->set_literal(0);
+        auto* unreachable_insn =
+            (new IRInstruction(IOPCODE_UNREACHABLE))->set_dest(temp_reg);
         auto* throw_insn =
             (new IRInstruction(OPCODE_THROW))->set_src(0, temp_reg);
         caller_cfg.replace_insns(callsite_it,
-                                 {callsite_copy, const_insn, throw_insn});
+                                 {callsite_copy, unreachable_insn, throw_insn});
         auto p = caller_cfg.remove_unreachable_blocks();
         auto unreachable_insn_count = p.first;
         auto registers_size_possibly_reduced = p.second;
@@ -1176,6 +1175,8 @@ static size_t get_inlined_cost(IRInstruction* insn) {
       cost += 2;
     } else if (op == IOPCODE_INJECTION_ID) {
       cost += 3;
+    } else if (op == IOPCODE_UNREACHABLE) {
+      cost += 1;
     }
   } else {
     cost++;

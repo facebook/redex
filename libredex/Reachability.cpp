@@ -1528,25 +1528,26 @@ remove_uninstantiables_impl::Stats sweep_code(
     }
   }
   uninstantiable_types.insert(type::java_lang_Void());
-  return walk::parallel::methods<remove_uninstantiables_impl::Stats>(
-      scope, [&](DexMethod* method) {
-        auto code = method->get_code();
-        if (!code || method->rstate.no_optimizations()) {
-          return remove_uninstantiables_impl::Stats();
-        }
-        always_assert(code->editable_cfg_built());
-        auto& cfg = code->cfg();
-        if (uncallable_instance_methods.count(method)) {
-          if (skip_uncallable_virtual_methods && method->is_virtual()) {
-            return remove_uninstantiables_impl::Stats();
-          }
-          return remove_uninstantiables_impl::replace_all_with_throw(cfg);
-        }
-        auto stats = remove_uninstantiables_impl::replace_uninstantiable_refs(
-            uninstantiable_types, cfg);
-        cfg.remove_unreachable_blocks();
-        return stats;
-      });
+  return walk::parallel::methods<
+      remove_uninstantiables_impl::Stats>(scope, [&](DexMethod* method) {
+    auto code = method->get_code();
+    if (!code || method->rstate.no_optimizations()) {
+      return remove_uninstantiables_impl::Stats();
+    }
+    always_assert(code->editable_cfg_built());
+    auto& cfg = code->cfg();
+    if (uncallable_instance_methods.count(method)) {
+      if (skip_uncallable_virtual_methods && method->is_virtual()) {
+        return remove_uninstantiables_impl::Stats();
+      }
+      return remove_uninstantiables_impl::replace_all_with_unreachable_throw(
+          cfg);
+    }
+    auto stats = remove_uninstantiables_impl::replace_uninstantiable_refs(
+        uninstantiable_types, cfg);
+    cfg.remove_unreachable_blocks();
+    return stats;
+  });
 }
 
 remove_uninstantiables_impl::Stats sweep_uncallable_virtual_methods(

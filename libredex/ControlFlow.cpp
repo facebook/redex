@@ -336,6 +336,25 @@ uint32_t Block::estimate_code_units() const {
   return code_units;
 }
 
+bool Block::is_unreachable() const {
+  std::unordered_set<const cfg::Block*> visited;
+  for (auto* block = this; block && visited.insert(block).second;) {
+    auto ii = ir_list::ConstInstructionIterable(block);
+    for (auto it = ii.begin(); it != ii.end(); ++it) {
+      if (opcode::is_unreachable(it->insn->opcode())) {
+        return true;
+      }
+      if (opcode::is_a_load_param(it->insn->opcode())) {
+        continue;
+      }
+      return false;
+    }
+    block = block->goes_to_only_edge();
+  }
+  // We hit a non-terminating loop; that doesn't make this this unreachable.
+  return false;
+}
+
 // shallowly copy pointers (edges and parent cfg)
 // but deeply copy MethodItemEntries
 Block::Block(const Block& b, MethodItemEntryCloner* cloner)

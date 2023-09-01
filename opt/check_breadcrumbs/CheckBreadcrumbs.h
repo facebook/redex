@@ -31,13 +31,7 @@ class CheckBreadcrumbsPass : public Pass {
       const override {
     using namespace redex_properties::interactions;
     using namespace redex_properties::names;
-    return {
-        {DexLimitsObeyed, Preserves},
-        {HasSourceBlocks, Preserves},
-        {NoInitClassInstructions, Preserves},
-        {NoResolvablePureRefs, Preserves},
-        {RenameClass, Preserves},
-    };
+    return redex_properties::simple::preserves_all();
   }
 
   void bind_config() override {
