@@ -688,13 +688,22 @@ void MethodReferencesGatherer::default_gather_mie(
     relaxed_keep_class_members_impl::gather_dynamic_references(&mie, refs);
   }
   if (mie.type == MFLOW_OPCODE) {
-    if (opcode::is_new_instance(mie.insn->opcode())) {
-      refs->new_instances.push_back(mie.insn->get_type());
-    } else if (opcode::is_invoke_super(mie.insn->opcode())) {
+    auto insn = mie.insn;
+    auto op = insn->opcode();
+    if (opcode::is_new_instance(op)) {
+      refs->new_instances.push_back(insn->get_type());
+    } else if (gather_methods && opcode::is_invoke_super(op)) {
       auto callee =
-          resolve_method(mie.insn->get_method(), MethodSearch::Super, method);
+          resolve_method(insn->get_method(), MethodSearch::Super, method);
       if (callee && !callee->is_external()) {
-        refs->called_super_methods.push_back(callee);
+        always_assert(callee->is_virtual());
+        if (is_abstract(callee)) {
+          TRACE(REACH, 1,
+                "invoke super target of {%s} is abstract method %s in %s",
+                SHOW(insn), SHOW(callee), SHOW(method));
+        } else {
+          refs->invoke_super_targets.insert(callee);
+        }
       }
     }
   }
@@ -918,7 +927,7 @@ void TransitiveClosureMarkerWorker::gather_and_push(
   }
   dynamically_referenced(refs.classes_dynamically_referenced);
   directly_instantiable(refs.new_instances);
-  instance_callable(refs.called_super_methods);
+  instance_callable(refs.invoke_super_targets);
   if (refs.method_references_gatherer_dependency_if_instance_method_callable) {
     push_if_instance_method_callable(method_references_gatherer);
     always_assert(
@@ -970,7 +979,7 @@ void TransitiveClosureMarkerWorker::gather_and_push(T t) {
   push(t, refs.methods.begin(), refs.methods.end());
   dynamically_referenced(refs.classes_dynamically_referenced);
   always_assert(refs.new_instances.empty());
-  always_assert(refs.called_super_methods.empty());
+  always_assert(refs.invoke_super_targets.empty());
 }
 
 template <class Parent>
@@ -1230,6 +1239,8 @@ void TransitiveClosureMarkerWorker::instance_callable(const DexMethod* method) {
           method)) {
     return;
   }
+  always_assert(!method->is_external());
+  always_assert(!is_abstract(method));
   std::shared_ptr<MethodReferencesGatherer> method_references_gatherer;
   m_shared_state->cond_marked->if_instance_method_callable.update(
       method, [&](auto*, auto& value, bool) {

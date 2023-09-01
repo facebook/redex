@@ -41,12 +41,16 @@ MethodSearch get_method_search(const DexClass* analysis_cls,
 struct MethodReferences {
   std::vector<DexMethodRef*> methods;
   std::vector<const DexMethod*> vmethods_if_class_instantiable;
+  const DexMethod* invoke_super_target{nullptr};
   void add_to(References* refs) const {
     refs->methods.insert(refs->methods.end(), methods.begin(), methods.end());
     refs->vmethods_if_class_instantiable.insert(
         refs->vmethods_if_class_instantiable.end(),
         vmethods_if_class_instantiable.begin(),
         vmethods_if_class_instantiable.end());
+    if (invoke_super_target) {
+      refs->invoke_super_targets.insert(invoke_super_target);
+    }
   }
 };
 
@@ -133,8 +137,11 @@ struct TypeAnalysisAwareClosureMarkerSharedState final
             TRACE(TRMU, 5, "Exact resolved callee %s for analysis cls %s",
                   SHOW(analysis_resolved_callee), SHOW(analysis_cls));
             always_assert(analysis_resolved_callee->is_virtual());
-            refs.vmethods_if_class_instantiable.push_back(
-                analysis_resolved_callee);
+            if (!analysis_resolved_callee->is_external()) {
+              always_assert(!is_abstract(analysis_resolved_callee));
+              refs.vmethods_if_class_instantiable.push_back(
+                  analysis_resolved_callee);
+            }
           }
           num_exact_resolved_callees++;
           return;
@@ -169,6 +176,15 @@ struct TypeAnalysisAwareClosureMarkerSharedState final
               SHOW(invoke), SHOW(*analysis_cls));
       }
     }
+
+    if (!resolved_callee) {
+      // Typically clone() on an array, or other obscure external references
+      TRACE(TRMU, 2, "Unresolved callee at %s without analysis cls",
+            SHOW(invoke));
+      return;
+    }
+
+    always_assert(resolved_callee);
     const auto& overriding_methods =
         mog::get_overriding_methods(*method_override_graph, resolved_callee);
     for (auto overriding_method : overriding_methods) {
@@ -201,17 +217,29 @@ struct TypeAnalysisAwareClosureMarkerSharedState final
         }
         auto* resolved_callee = resolve_method(
             insn->get_method(), opcode_to_search(insn), resolved_refs, method);
+        auto& refs = insns_refs[insn];
         if (!is_potentially_true_virtual(resolved_callee, insn)) {
           // Gather declared method ref
           auto* method_ref = insn->get_method();
           always_assert(method_ref);
-          insns_refs[insn].methods.push_back(method_ref);
+          refs.methods.push_back(method_ref);
+          if (opcode::is_invoke_super(insn->opcode()) && resolved_callee &&
+              !resolved_callee->is_external()) {
+            always_assert(resolved_callee->is_virtual());
+            always_assert(refs.invoke_super_target == nullptr);
+            if (is_abstract(resolved_callee)) {
+              TRACE(REACH, 1,
+                    "invoke super target of {%s} is abstract method %s in %s",
+                    SHOW(insn), SHOW(resolved_callee), SHOW(method));
+            } else {
+              refs.invoke_super_target = resolved_callee;
+            }
+          }
           TRACE(TRMU, 5, "Gather non-true-virtual at %s resolved as %s",
                 SHOW(insn), SHOW(resolved_callee));
           continue;
         }
-        gather_methods_on_virtual_call(env, resolved_callee, insn,
-                                       insns_refs[insn]);
+        gather_methods_on_virtual_call(env, resolved_callee, insn, refs);
       }
     }
     return insns_refs;

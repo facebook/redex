@@ -336,7 +336,7 @@ struct References {
       method_references_gatherer_dependencies_if_class_instantiable;
   bool method_references_gatherer_dependency_if_instance_method_callable{false};
   std::vector<DexType*> new_instances;
-  std::vector<const DexMethod*> called_super_methods;
+  std::unordered_set<const DexMethod*> invoke_super_targets;
 };
 
 void gather_dynamic_references(const DexAnnotation* item,
@@ -555,7 +555,7 @@ class TransitiveClosureMarkerWorker {
   }
 
   void instance_callable(const DexMethod* method);
-  void instance_callable(const std::vector<const DexMethod*>& methods) {
+  void instance_callable(const std::unordered_set<const DexMethod*>& methods) {
     for (auto* m : methods) {
       instance_callable(m);
     }
