@@ -1416,17 +1416,15 @@ void TransitiveClosureMarkerWorker::visit_method_ref(
     }
   }
   auto m = method->as_def();
-  if (!m || m->is_external()) {
+  if (!m || m->is_external() || !m->is_virtual()) {
     return;
   }
   always_assert_log(m->is_concrete(), "%s is not concrete", SHOW(m));
   // RootSetMarker already covers external overrides, so we skip them here.
   // If we're keeping an interface or virtual method, we have to keep its
   // implementations and overriding methods respectively.
-  if (m->is_virtual()) {
-    base_invoke_virtual_target(m);
-    m_shared_state->reachable_aspects->zombie_implementation_methods.erase(m);
-  }
+  base_invoke_virtual_target(m);
+  m_shared_state->reachable_aspects->zombie_implementation_methods.erase(m);
 }
 
 template <class Parent, class Object>

@@ -302,7 +302,7 @@ class TypeAnalysisAwareClosureMarkerWorker final
     }
 
     auto m = method->as_def();
-    if (!m || m->is_external()) {
+    if (!m || m->is_external() || !m->is_virtual()) {
       return;
     }
     if (m->is_virtual()) {
@@ -314,9 +314,7 @@ class TypeAnalysisAwareClosureMarkerWorker final
     always_assert_log(m->is_concrete(), "%s is not concrete", SHOW(m));
     // We still have to conditionally mark root overrides. RootSetMarker already
     // covers external overrides, so we skip them here.
-    if (m->is_virtual()) {
-      base_invoke_virtual_target(m);
-    }
+    base_invoke_virtual_target(m);
   }
 
  private:
