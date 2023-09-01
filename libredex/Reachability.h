@@ -32,6 +32,8 @@ enum class ReachableObjectType : uint8_t {
   FIELD,
   METHOD,
   SEED,
+  INSTANTIABLE,
+  METHOD_REFERENCES_GATHERER_INSTANTIABLE,
 };
 
 /**
@@ -62,6 +64,12 @@ struct ReachableObject {
       : type{ReachableObjectType::FIELD}, field{field} {}
   explicit ReachableObject(const keep_reason::Reason* keep_reason)
       : type(ReachableObjectType::SEED), keep_reason(keep_reason) {}
+  explicit ReachableObject(const DexClass* cls, ReachableObjectType type)
+      : type{type}, cls{cls} {
+    always_assert(
+        type == ReachableObjectType::INSTANTIABLE ||
+        type == ReachableObjectType::METHOD_REFERENCES_GATHERER_INSTANTIABLE);
+  }
   explicit ReachableObject() : type{ReachableObjectType::SEED} {}
 
   friend std::ostream& operator<<(std::ostream&, const ReachableObject&);
@@ -467,6 +475,10 @@ class TransitiveClosureMarkerWorker {
   virtual void visit_method_ref(const DexMethodRef* method);
 
   void visit_field_ref(const DexFieldRef* field);
+
+  void visit_instantiable(const DexClass* cls);
+
+  void visit_method_references_gatherer_instantiable(const DexClass* cls);
 
   virtual References gather(const DexAnnotation* anno) const;
 

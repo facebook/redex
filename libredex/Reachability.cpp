@@ -54,6 +54,11 @@ std::ostream& operator<<(std::ostream& os, const ReachableObject& obj) {
     return os << show_deobfuscated(obj.field);
   case ReachableObjectType::METHOD:
     return os << show_deobfuscated(obj.method);
+  case ReachableObjectType::INSTANTIABLE:
+    return os << "instantiable(" << show_deobfuscated(obj.cls) << ")";
+  case ReachableObjectType::METHOD_REFERENCES_GATHERER_INSTANTIABLE:
+    return os << "method-references-gatherer-instantiable("
+              << show_deobfuscated(obj.cls) << ")";
   case ReachableObjectType::SEED: {
     if (obj.keep_reason) {
       return os << *obj.keep_reason;
@@ -313,6 +318,12 @@ void TransitiveClosureMarkerWorker::visit(const ReachableObject& obj) {
   case ReachableObjectType::METHOD:
     visit_method_ref(obj.method);
     break;
+  case ReachableObjectType::INSTANTIABLE:
+    visit_instantiable(obj.cls);
+    break;
+  case ReachableObjectType::METHOD_REFERENCES_GATHERER_INSTANTIABLE:
+    visit_method_references_gatherer_instantiable(obj.cls);
+    break;
   case ReachableObjectType::ANNO:
   case ReachableObjectType::SEED:
     not_reached_log("Unexpected ReachableObject type");
@@ -439,18 +450,10 @@ void TransitiveClosureMarkerWorker::push_if_class_instantiable(
   always_assert(!method_references_gatherer);
   if (emplaced &&
       m_shared_state->reachable_aspects->instantiable_types.count(cls)) {
-    m_shared_state->cond_marked->if_class_instantiable
-        .method_references_gatherers.update(cls, [&](auto*, auto& map, bool) {
-          auto it = map.find(method);
-          if (it != map.end()) {
-            method_references_gatherer = std::move(it->second);
-            map.erase(it);
-          }
-        });
-    if (method_references_gatherer) {
-      gather_and_push(std::move(method_references_gatherer),
-                      MethodReferencesGatherer::Advance::instantiable(cls));
-    }
+    // We lost the race. Oh well. Let's schedule one extra task to make sure
+    // this class gets processed.
+    m_worker_state->push_task(ReachableObject(
+        cls, ReachableObjectType::METHOD_REFERENCES_GATHERER_INSTANTIABLE));
   }
 }
 
@@ -1063,6 +1066,62 @@ void TransitiveClosureMarkerWorker::visit_field_ref(const DexFieldRef* field) {
   push(field, field->get_type());
 }
 
+void TransitiveClosureMarkerWorker::visit_instantiable(const DexClass* cls) {
+  TRACE(REACH, 4, "Visiting instantiable class: %s", SHOW(cls));
+
+  instantiable(cls->get_super_class());
+  for (auto* intf : *cls->get_interfaces()) {
+    instantiable(intf);
+  }
+  auto* cond_marked = m_shared_state->cond_marked;
+  for (auto const& f : cls->get_ifields()) {
+    if (cond_marked->if_class_instantiable.fields.count(f)) {
+      push(cls, f);
+    }
+  }
+  for (auto const& m : cls->get_dmethods()) {
+    if (cond_marked->if_class_instantiable.methods.count(m)) {
+      push(cls, m);
+    }
+  }
+  for (auto const& m : cls->get_vmethods()) {
+    if (cond_marked->if_class_instantiable.methods.count(m)) {
+      push(cls, m);
+    }
+  }
+
+  size_t method_references_gatherers{0};
+  cond_marked->if_class_instantiable.method_references_gatherers.update(
+      cls, [&](auto*, auto& map, bool) {
+        method_references_gatherers = map.size();
+      });
+  for (size_t i = 0; i < method_references_gatherers; i++) {
+    m_worker_state->push_task(ReachableObject(
+        cls, ReachableObjectType::METHOD_REFERENCES_GATHERER_INSTANTIABLE));
+  }
+}
+
+void TransitiveClosureMarkerWorker::
+    visit_method_references_gatherer_instantiable(const DexClass* cls) {
+  TRACE(REACH, 4,
+        "Visiting method-references-gatherer for instantiable class: %s",
+        SHOW(cls));
+
+  std::shared_ptr<MethodReferencesGatherer> method_references_gatherer;
+  m_shared_state->cond_marked->if_class_instantiable.method_references_gatherers
+      .update(cls, [&](auto*, auto& map, bool) {
+        if (!map.empty()) {
+          auto it = map.begin();
+          method_references_gatherer = std::move(it->second);
+          map.erase(it);
+        }
+      });
+  if (method_references_gatherer) {
+    gather_and_push(std::move(method_references_gatherer),
+                    MethodReferencesGatherer::Advance::instantiable(cls));
+  }
+}
+
 const DexMethod* resolve_without_context(const DexMethodRef* method,
                                          const DexClass* cls) {
   if (!cls) return nullptr;
@@ -1376,6 +1435,7 @@ void ReachableAspects::finish(const ConditionallyMarked& cond_marked) {
   for (auto&& [cls, map] :
        cond_marked.if_class_instantiable.method_references_gatherers) {
     if (map.empty()) {
+      always_assert(instantiable_types.count(cls));
       continue;
     }
     always_assert(!instantiable_types.count(cls));
@@ -1819,6 +1879,9 @@ void dump_graph(std::ostream& os, const ReachableObjectGraph& retainers_of) {
       oss2 << rhs;
       return oss1.str() < oss2.str();
     }
+    case ReachableObjectType::INSTANTIABLE:
+    case ReachableObjectType::METHOD_REFERENCES_GATHERER_INSTANTIABLE:
+      __builtin_unreachable();
     }
     __builtin_unreachable();
   };
