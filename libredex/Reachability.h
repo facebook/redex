@@ -581,6 +581,10 @@ remove_uninstantiables_impl::Stats sweep_code(
 remove_uninstantiables_impl::Stats sweep_uncallable_virtual_methods(
     DexStoresVector& stores, const ReachableAspects& reachable_aspects);
 
+void report(PassManager& pm,
+            const ReachableObjects& reachable_objects,
+            const ReachableAspects& reachable_aspects);
+
 struct ObjectCounts {
   size_t num_classes{0};
   size_t num_fields{0};

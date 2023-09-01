@@ -17,6 +17,7 @@
 #include "CFGMutation.h"
 #include "DexAnnotation.h"
 #include "DexUtil.h"
+#include "PassManager.h"
 #include "ProguardConfiguration.h"
 #include "ReachableClasses.h"
 #include "Resolver.h"
@@ -1572,6 +1573,24 @@ remove_uninstantiables_impl::Stats sweep_uncallable_virtual_methods(
   }
   return remove_uninstantiables_impl::reduce_uncallable_instance_methods(
       scope, uncallable_instance_methods);
+}
+
+void report(PassManager& pm,
+            const ReachableObjects& reachable_objects,
+            const ReachableAspects& reachable_aspects) {
+  pm.set_metric("marked_classes", reachable_objects.num_marked_classes());
+  pm.set_metric("marked_fields", reachable_objects.num_marked_fields());
+  pm.set_metric("marked_methods", reachable_objects.num_marked_methods());
+  pm.incr_metric("dynamically_referenced_classes",
+                 reachable_aspects.dynamically_referenced_classes.size());
+  pm.incr_metric("instantiable_types",
+                 reachable_aspects.instantiable_types.size());
+  pm.incr_metric("uninstantiable_dependencies",
+                 reachable_aspects.uninstantiable_dependencies.size());
+  pm.incr_metric("instructions_unvisited",
+                 reachable_aspects.instructions_unvisited);
+  pm.incr_metric("callable_instance_methods",
+                 reachable_aspects.callable_instance_methods.size());
 }
 
 ObjectCounts count_objects(const DexStoresVector& stores) {

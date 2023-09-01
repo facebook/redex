@@ -204,19 +204,7 @@ void RemoveUnreachablePassBase::run_pass(DexStoresVector& stores,
   pm.set_metric("before.num_classes", before.num_classes);
   pm.set_metric("before.num_fields", before.num_fields);
   pm.set_metric("before.num_methods", before.num_methods);
-  pm.set_metric("marked_classes", reachables->num_marked_classes());
-  pm.set_metric("marked_fields", reachables->num_marked_fields());
-  pm.set_metric("marked_methods", reachables->num_marked_methods());
-  pm.incr_metric("dynamically_referenced_classes",
-                 reachable_aspects.dynamically_referenced_classes.size());
-  pm.incr_metric("instantiable_types",
-                 reachable_aspects.instantiable_types.size());
-  pm.incr_metric("uninstantiable_dependencies",
-                 reachable_aspects.uninstantiable_dependencies.size());
-  pm.incr_metric("instructions_unvisited",
-                 reachable_aspects.instructions_unvisited);
-  pm.incr_metric("callable_instance_methods",
-                 reachable_aspects.callable_instance_methods.size());
+  reachability::report(pm, *reachables, reachable_aspects);
 
   ConcurrentReferencesMap references;
   if (output_unreachable_symbols && m_emit_removed_symbols_references) {
