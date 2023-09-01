@@ -185,6 +185,14 @@ also reject some legal cases.
     return m_frefs;
   }
 
+  const TypeRefs& get_pending_init_class_fields() const {
+    return m_pending_init_class_fields;
+  }
+
+  const TypeRefs& get_pending_init_class_types() const {
+    return m_pending_init_class_types;
+  }
+
   const OverflowStats& get_overflow_stats() const { return m_overflow_stats; }
 
  private:

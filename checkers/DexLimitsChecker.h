@@ -28,6 +28,8 @@ class DexLimitsChecker : public PropertyChecker {
     std::unordered_set<DexFieldRef*> fields;
     std::unordered_set<DexMethodRef*> methods;
     std::unordered_set<DexType*> types;
+    std::unordered_set<DexType*> pending_init_class_fields;
+    std::unordered_set<DexType*> pending_init_class_types;
   };
 
   std::unordered_map<std::string, std::vector<DexData>> m_data;

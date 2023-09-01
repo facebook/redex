@@ -58,8 +58,12 @@ dex_data_map_t create_data(
       auto& dex_struct = dex_limits.get_dex();
 
       dexes_data.emplace_back(DexLimitsChecker::DexData{
-          extract(dex_struct.get_frefs()), extract(dex_struct.get_mrefs()),
-          extract(dex_struct.get_trefs())});
+          extract(dex_struct.get_frefs()),
+          extract(dex_struct.get_mrefs()),
+          extract(dex_struct.get_trefs()),
+          dex_struct.get_pending_init_class_fields(),
+          dex_struct.get_pending_init_class_types(),
+      });
     }
     tmp.emplace(store.get_name(), std::move(dexes_data));
   }
@@ -127,8 +131,13 @@ std::string print_new_entries(const dex_data_map_t& old_map,
 
     bool had_fields{false};
     if (i.field_overflow) {
-      had_fields = print_differences(
-          old_dexes[i.dex_id].fields, new_dexes[i.dex_id].fields, "Fields: ");
+      had_fields =
+          print_differences(old_dexes[i.dex_id].fields,
+                            new_dexes[i.dex_id].fields,
+                            "Fields: ") ||
+          print_differences(old_dexes[i.dex_id].pending_init_class_fields,
+                            new_dexes[i.dex_id].pending_init_class_fields,
+                            "Pending init-class Fields For: ");
       if (!had_fields) {
         oss << "Failed detecting field changes for " << store_name << "@"
             << i.dex_id << "\n";
@@ -146,8 +155,13 @@ std::string print_new_entries(const dex_data_map_t& old_map,
     }
     bool had_types{false};
     if (i.type_overflow) {
-      had_types = print_differences(
-          old_dexes[i.dex_id].types, new_dexes[i.dex_id].types, "Types: ");
+      had_types =
+          print_differences(old_dexes[i.dex_id].types,
+                            new_dexes[i.dex_id].types,
+                            "Types: ") ||
+          print_differences(old_dexes[i.dex_id].pending_init_class_types,
+                            new_dexes[i.dex_id].pending_init_class_types,
+                            "Pending init-class Types: ");
       if (!had_types) {
         oss << "Failed detecting type changes for " << store_name << "@"
             << i.dex_id << "\n";
@@ -158,6 +172,9 @@ std::string print_new_entries(const dex_data_map_t& old_map,
       if (!i.field_overflow) {
         print_differences(
             old_dexes[i.dex_id].fields, new_dexes[i.dex_id].fields, "Fields: ");
+        print_differences(old_dexes[i.dex_id].pending_init_class_fields,
+                          new_dexes[i.dex_id].pending_init_class_fields,
+                          "Pending init-class Fields For: ");
       }
       if (!i.method_overflow) {
         print_differences(old_dexes[i.dex_id].methods,
@@ -167,6 +184,9 @@ std::string print_new_entries(const dex_data_map_t& old_map,
       if (!i.type_overflow) {
         print_differences(
             old_dexes[i.dex_id].types, new_dexes[i.dex_id].types, "Types: ");
+        print_differences(old_dexes[i.dex_id].pending_init_class_types,
+                          new_dexes[i.dex_id].pending_init_class_types,
+                          "Pending init-class Types: ");
       }
     }
   }
