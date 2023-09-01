@@ -202,8 +202,10 @@ struct CFGNeedle {
   IRList::const_iterator it;
 };
 
-using GatherMieFunction =
-    std::function<void(const DexMethod*, const MethodItemEntry&, References*)>;
+class MethodReferencesGatherer;
+
+using GatherMieFunction = std::function<void(
+    MethodReferencesGatherer*, const MethodItemEntry&, References*)>;
 
 class MethodReferencesGatherer {
  public:
@@ -245,12 +247,9 @@ class MethodReferencesGatherer {
 
   uint32_t get_instructions_visited() const { return m_instructions_visited; }
 
-  static void default_gather_mie(
-      const TransitiveClosureMarkerSharedState* shared_state,
-      const DexMethod* method,
-      const MethodItemEntry& mie,
-      References* refs,
-      bool gather_methods = true);
+  void default_gather_mie(const MethodItemEntry& mie,
+                          References* refs,
+                          bool gather_methods = true);
 
  private:
   struct InstantiableDependency {

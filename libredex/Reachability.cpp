@@ -36,6 +36,12 @@ namespace {
 
 static ReachableObject SEED_SINGLETON{};
 
+GatherMieFunction default_gather_mie_with_gather_methods =
+    std::bind(&MethodReferencesGatherer::default_gather_mie,
+              std::placeholders::_1,
+              std::placeholders::_2,
+              std::placeholders::_3,
+              /* gather_methods */ true);
 } // namespace
 
 namespace reachability {
@@ -629,12 +635,7 @@ MethodReferencesGatherer::MethodReferencesGatherer(
       m_method(method),
       m_consider_code(consider_code),
       m_gather_mie(gather_mie ? std::move(gather_mie)
-                              : std::bind(default_gather_mie,
-                                          shared_state,
-                                          std::placeholders::_1,
-                                          std::placeholders::_2,
-                                          std::placeholders::_3,
-                                          /* gather_methods */ true)) {}
+                              : default_gather_mie_with_gather_methods) {}
 
 std::optional<MethodReferencesGatherer::InstantiableDependency>
 MethodReferencesGatherer::get_instantiable_dependency(
@@ -677,19 +678,16 @@ MethodReferencesGatherer::get_instantiable_dependency(
   return res;
 };
 
-void MethodReferencesGatherer::default_gather_mie(
-    const TransitiveClosureMarkerSharedState* shared_state,
-    const DexMethod* method,
-    const MethodItemEntry& mie,
-    References* refs,
-    bool gather_methods) {
+void MethodReferencesGatherer::default_gather_mie(const MethodItemEntry& mie,
+                                                  References* refs,
+                                                  bool gather_methods) {
   mie.gather_strings(refs->strings);
   mie.gather_types(refs->types);
   mie.gather_fields(refs->fields);
   if (gather_methods) {
     mie.gather_methods(refs->methods);
   }
-  if (shared_state->relaxed_keep_class_members) {
+  if (m_shared_state->relaxed_keep_class_members) {
     relaxed_keep_class_members_impl::gather_dynamic_references(&mie, refs);
   }
   if (mie.type == MFLOW_OPCODE) {
@@ -699,13 +697,13 @@ void MethodReferencesGatherer::default_gather_mie(
       refs->new_instances.push_back(insn->get_type());
     } else if (gather_methods && opcode::is_invoke_super(op)) {
       auto callee =
-          resolve_method(insn->get_method(), MethodSearch::Super, method);
+          resolve_method(insn->get_method(), MethodSearch::Super, m_method);
       if (callee && !callee->is_external()) {
         always_assert(callee->is_virtual());
         if (is_abstract(callee)) {
           TRACE(REACH, 1,
                 "invoke super target of {%s} is abstract method %s in %s",
-                SHOW(insn), SHOW(callee), SHOW(method));
+                SHOW(insn), SHOW(callee), SHOW(m_method));
         } else {
           refs->invoke_super_targets.insert(callee);
         }
@@ -795,7 +793,7 @@ void MethodReferencesGatherer::advance(const Advance& advance,
       if (dep) {
         return dep;
       }
-      m_gather_mie(m_method, *it, refs);
+      m_gather_mie(this, *it, refs);
       if (it->type == MFLOW_OPCODE) {
         m_instructions_visited++;
       }

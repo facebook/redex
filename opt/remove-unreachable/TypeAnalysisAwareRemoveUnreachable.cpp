@@ -69,15 +69,15 @@ struct TypeAnalysisAwareClosureMarkerSharedState final
   mutable std::atomic<int> num_exact_resolved_callees{0};
 
   void gather_mie(const std::shared_ptr<InsnsMethods>& insns_methods_cache,
-                  const DexMethod* method,
+                  MethodReferencesGatherer* mrefs_gatherer,
                   const MethodItemEntry& mie,
                   reachability::References* refs) const {
     bool default_gather_methods =
         mie.type != MFLOW_OPCODE || !opcode::is_an_invoke(mie.insn->opcode());
-    MethodReferencesGatherer::default_gather_mie(this, method, mie, refs,
-                                                 default_gather_methods);
+    mrefs_gatherer->default_gather_mie(mie, refs, default_gather_methods);
     if (!default_gather_methods) {
       if (insns_methods_cache->empty()) {
+        auto* method = mrefs_gatherer->get_method();
         *insns_methods_cache = gather_methods_on_insns(method);
       }
       insns_methods_cache->at(mie.insn).add_to(refs);
