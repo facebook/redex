@@ -193,6 +193,8 @@ enum class Condition {
   ClassInstantiable,
 };
 
+struct TransitiveClosureMarkerSharedState;
+
 struct References;
 
 struct CFGNeedle {
@@ -206,10 +208,8 @@ using GatherMieFunction =
 class MethodReferencesGatherer {
  public:
   MethodReferencesGatherer(
+      const TransitiveClosureMarkerSharedState* shared_state,
       const DexMethod* method,
-      bool include_dynamic_references,
-      bool check_init_instantiable,
-      std::function<bool(const DexClass*)> is_class_instantiable,
       bool consider_code,
       GatherMieFunction gather_mie);
 
@@ -245,11 +245,12 @@ class MethodReferencesGatherer {
 
   uint32_t get_instructions_visited() const { return m_instructions_visited; }
 
-  static void default_gather_mie(bool include_dynamic_references,
-                                 const DexMethod* method,
-                                 const MethodItemEntry& mie,
-                                 References* refs,
-                                 bool gather_methods = true);
+  static void default_gather_mie(
+      const TransitiveClosureMarkerSharedState* shared_state,
+      const DexMethod* method,
+      const MethodItemEntry& mie,
+      References* refs,
+      bool gather_methods = true);
 
  private:
   struct InstantiableDependency {
@@ -260,10 +261,8 @@ class MethodReferencesGatherer {
   std::optional<InstantiableDependency> get_instantiable_dependency(
       const MethodItemEntry& mie) const;
 
+  const TransitiveClosureMarkerSharedState* m_shared_state;
   const DexMethod* m_method;
-  bool m_include_dynamic_references;
-  bool m_check_init_instantiable;
-  std::function<bool(const DexClass*)> m_is_class_instantiable;
   bool m_consider_code;
   GatherMieFunction m_gather_mie;
   std::mutex m_mutex;

@@ -621,20 +621,16 @@ void gather_dynamic_references(const MethodItemEntry* item,
 } // namespace relaxed_keep_class_members_impl
 
 MethodReferencesGatherer::MethodReferencesGatherer(
+    const TransitiveClosureMarkerSharedState* shared_state,
     const DexMethod* method,
-    bool include_dynamic_references,
-    bool check_init_instantiable,
-    std::function<bool(const DexClass*)> is_class_instantiable,
     bool consider_code,
     GatherMieFunction gather_mie)
-    : m_method(method),
-      m_include_dynamic_references(include_dynamic_references),
-      m_check_init_instantiable(check_init_instantiable),
-      m_is_class_instantiable(std::move(is_class_instantiable)),
+    : m_shared_state(shared_state),
+      m_method(method),
       m_consider_code(consider_code),
       m_gather_mie(gather_mie ? std::move(gather_mie)
                               : std::bind(default_gather_mie,
-                                          include_dynamic_references,
+                                          shared_state,
                                           std::placeholders::_1,
                                           std::placeholders::_2,
                                           std::placeholders::_3,
@@ -655,7 +651,7 @@ MethodReferencesGatherer::get_instantiable_dependency(
   } else if (opcode::is_invoke_virtual(op) || opcode::is_invoke_super(op) ||
              opcode::is_invoke_interface(op) ||
              (opcode::is_invoke_direct(op) &&
-              (m_check_init_instantiable ||
+              (m_shared_state->cfg_gathering_check_instance_callable ||
                !method::is_init(insn->get_method())))) {
     res.cls = type_class(insn->get_method()->get_class());
     res.may_continue_normally_if_uninstantiable = false;
@@ -665,7 +661,16 @@ MethodReferencesGatherer::get_instantiable_dependency(
   } else if (opcode::is_check_cast(op)) {
     res.cls = type_class(insn->get_type());
   }
-  if (!res.cls || m_is_class_instantiable(res.cls) ||
+  auto is_class_instantiable = [this](const auto* cls) -> bool {
+    if (!m_shared_state->cfg_gathering_check_instantiable ||
+        m_method->rstate.no_optimizations()) {
+      return true;
+    }
+    auto* ra = m_shared_state->reachable_aspects;
+    return ra->instantiable_types.count(cls) ||
+           ra->deserializable_types.count(cls);
+  };
+  if (!res.cls || is_class_instantiable(res.cls) ||
       (res.cls->is_external() && !type::is_void(res.cls->get_type()))) {
     return std::nullopt;
   }
@@ -673,7 +678,7 @@ MethodReferencesGatherer::get_instantiable_dependency(
 };
 
 void MethodReferencesGatherer::default_gather_mie(
-    bool include_dynamic_references,
+    const TransitiveClosureMarkerSharedState* shared_state,
     const DexMethod* method,
     const MethodItemEntry& mie,
     References* refs,
@@ -684,11 +689,11 @@ void MethodReferencesGatherer::default_gather_mie(
   if (gather_methods) {
     mie.gather_methods(refs->methods);
   }
-  if (include_dynamic_references) {
+  if (shared_state->relaxed_keep_class_members) {
     relaxed_keep_class_members_impl::gather_dynamic_references(&mie, refs);
   }
   if (mie.type == MFLOW_OPCODE) {
-    auto insn = mie.insn;
+    auto* insn = mie.insn;
     auto op = insn->opcode();
     if (opcode::is_new_instance(op)) {
       refs->new_instances.push_back(insn->get_type());
@@ -705,6 +710,23 @@ void MethodReferencesGatherer::default_gather_mie(
           refs->invoke_super_targets.insert(callee);
         }
       }
+    } else if (gather_methods && (opcode::is_invoke_virtual(op) ||
+                                  opcode::is_invoke_interface(op))) {
+      auto resolved_callee =
+          resolve_method(insn->get_method(), opcode_to_search(insn));
+      if (resolved_callee == nullptr) {
+        // There are some invoke-virtual call on methods whose def are
+        // actually in interface.
+        resolved_callee =
+            resolve_method(insn->get_method(), MethodSearch::InterfaceVirtual);
+      }
+      if (!resolved_callee) {
+        // Typically clone() on an array, or other obscure external references
+        TRACE(REACH, 2, "Unresolved virtual callee at %s", SHOW(insn));
+        return;
+      }
+      refs->base_invoke_virtual_targets_if_class_instantiable.insert(
+          resolved_callee);
     }
   }
 }
@@ -731,7 +753,7 @@ void MethodReferencesGatherer::advance(const Advance& advance,
         gather_from_anno_set(param_anno_set.get());
       }
     }
-    if (m_include_dynamic_references) {
+    if (m_shared_state->relaxed_keep_class_members) {
       relaxed_keep_class_members_impl::gather_dynamic_references(m_method,
                                                                  refs);
     }
@@ -955,20 +977,8 @@ void TransitiveClosureMarkerWorker::gather_and_push(const DexMethod* meth) {
 std::shared_ptr<MethodReferencesGatherer>
 TransitiveClosureMarkerWorker::create_method_references_gatherer(
     const DexMethod* method, bool consider_code, GatherMieFunction gather_mie) {
-  bool check = m_shared_state->cfg_gathering_check_instantiable &&
-               !method->rstate.no_optimizations();
-  auto is_class_instantiable = [ra = m_shared_state->reachable_aspects,
-                                check](const auto* cls) {
-    if (!check) {
-      return true;
-    }
-    return ra->instantiable_types.count(cls) ||
-           ra->deserializable_types.count(cls);
-  };
   return std::make_shared<MethodReferencesGatherer>(
-      method, m_shared_state->relaxed_keep_class_members,
-      m_shared_state->cfg_gathering_check_instance_callable,
-      std::move(is_class_instantiable), consider_code, std::move(gather_mie));
+      m_shared_state, method, consider_code, std::move(gather_mie));
 }
 
 template <typename T>
@@ -1418,14 +1428,18 @@ void TransitiveClosureMarkerWorker::visit_method_ref(
       directly_instantiable(method->get_class());
     }
   }
+
   auto m = method->as_def();
   if (!m || m->is_external() || !m->is_virtual()) {
     return;
   }
   always_assert_log(m->is_concrete(), "%s is not concrete", SHOW(m));
   // RootSetMarker already covers external overrides, so we skip them here.
-  // If we're keeping an interface or virtual method, we have to keep its
-  // implementations and overriding methods respectively.
+  if (!root(m)) {
+    return;
+  }
+  // We still have to conditionally mark root overrides. RootSetMarker already
+  // covers external overrides, so we skip them here.
   base_invoke_virtual_target(m);
   m_shared_state->reachable_aspects->zombie_implementation_methods.erase(m);
 }

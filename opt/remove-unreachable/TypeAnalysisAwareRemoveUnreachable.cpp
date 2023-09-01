@@ -72,8 +72,8 @@ struct TypeAnalysisAwareClosureMarkerSharedState final
                   reachability::References* refs) const {
     bool default_gather_methods =
         mie.type != MFLOW_OPCODE || !opcode::is_an_invoke(mie.insn->opcode());
-    MethodReferencesGatherer::default_gather_mie(
-        relaxed_keep_class_members, method, mie, refs, default_gather_methods);
+    MethodReferencesGatherer::default_gather_mie(this, method, mie, refs,
+                                                 default_gather_methods);
     if (!default_gather_methods) {
       if (insns_methods_cache->empty()) {
         *insns_methods_cache = gather_methods_on_insns(method);
@@ -270,51 +270,6 @@ class TypeAnalysisAwareClosureMarkerWorker final
                                           /* consider_code */ true,
                                           std::move(gather_mie)),
         reachability::MethodReferencesGatherer::Advance::initial());
-  }
-
-  void visit_method_ref(const DexMethodRef* method) override {
-    TRACE(REACH, 4, "Visiting method: %s", SHOW(method));
-    auto cls = type_class(method->get_class());
-    auto resolved_method = resolve_without_context(method, cls);
-    if (resolved_method != nullptr) {
-      TRACE(REACH, 5, "    Resolved to: %s", SHOW(resolved_method));
-      this->push(method, resolved_method);
-      if (resolved_method == method) {
-        gather_and_push(resolved_method);
-      }
-    }
-    push(method, method->get_class());
-    push(method, method->get_proto()->get_rtype());
-    for (auto const& t : *method->get_proto()->get_args()) {
-      push(method, t);
-    }
-    if (cls && !is_abstract(cls) && method::is_init(method)) {
-      if (!m_shared_state->cfg_gathering_check_instance_callable) {
-        instantiable(method->get_class());
-      }
-      if (m_shared_state->relaxed_keep_class_members &&
-          consider_dynamically_referenced(cls)) {
-        push_directly_instantiable_if_class_dynamically_referenced(
-            method->get_class());
-      } else {
-        directly_instantiable(method->get_class());
-      }
-    }
-
-    auto m = method->as_def();
-    if (!m || m->is_external() || !m->is_virtual()) {
-      return;
-    }
-    if (m->is_virtual()) {
-      m_shared_state->reachable_aspects->zombie_implementation_methods.erase(m);
-    }
-    if (!root(m)) {
-      return;
-    }
-    always_assert_log(m->is_concrete(), "%s is not concrete", SHOW(m));
-    // We still have to conditionally mark root overrides. RootSetMarker already
-    // covers external overrides, so we skip them here.
-    base_invoke_virtual_target(m);
   }
 
  private:
