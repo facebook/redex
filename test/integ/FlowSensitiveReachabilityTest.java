@@ -38,6 +38,8 @@ class SurpriseSub extends Surprise {
   public void foo() {}
 }
 
+class Dead {}
+
 public class FlowSensitiveReachabilityTest {
   public static void root() {
     clone(null);
@@ -80,5 +82,10 @@ public class FlowSensitiveReachabilityTest {
   public static void abstract_overrides_non_abstract() {
     SurpriseBase base = new SurpriseSub();
     base.foo();
+  }
+
+  public static void throw_propagation() {
+    throw_propagation();
+    new Dead();
   }
 }

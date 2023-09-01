@@ -22,6 +22,8 @@
 #include "ReachableClasses.h"
 #include "Resolver.h"
 #include "Show.h"
+#include "StlUtil.h"
+#include "ThrowPropagationImpl.h"
 #include "Timer.h"
 #include "Trace.h"
 #include "Walkers.h"
@@ -65,6 +67,11 @@ std::ostream& operator<<(std::ostream& os, const ReachableObject& obj) {
   case ReachableObjectType::METHOD_REFERENCES_GATHERER_INSTANTIABLE:
     return os << "method-references-gatherer-instantiable("
               << show_deobfuscated(obj.cls) << ")";
+  case ReachableObjectType::RETURNS:
+    return os << "returns(" << show_deobfuscated(obj.method) << ")";
+  case ReachableObjectType::METHOD_REFERENCES_GATHERER_RETURNING:
+    return os << "method-references-gatherer-returning("
+              << show_deobfuscated(obj.method) << ")";
   case ReachableObjectType::SEED: {
     if (obj.keep_reason) {
       return os << *obj.keep_reason;
@@ -330,6 +337,13 @@ void TransitiveClosureMarkerWorker::visit(const ReachableObject& obj) {
   case ReachableObjectType::METHOD_REFERENCES_GATHERER_INSTANTIABLE:
     visit_method_references_gatherer_instantiable(obj.cls);
     break;
+  case ReachableObjectType::RETURNS:
+    visit_returns(static_cast<const DexMethod*>(obj.method));
+    break;
+  case ReachableObjectType::METHOD_REFERENCES_GATHERER_RETURNING:
+    visit_method_references_gatherer_returning(
+        static_cast<const DexMethod*>(obj.method));
+    break;
   case ReachableObjectType::ANNO:
   case ReachableObjectType::SEED:
     not_reached_log("Unexpected ReachableObject type");
@@ -456,7 +470,7 @@ void TransitiveClosureMarkerWorker::push_if_class_instantiable(
   always_assert(mrefs_gatherer);
   auto method = mrefs_gatherer->get_method();
   bool emplaced = false;
-  m_shared_state->cond_marked->if_class_instantiable.method_references_gatherers
+  m_shared_state->cond_marked->method_references_gatherers_if_class_instantiable
       .update(cls, [&](auto*, auto& map, bool) {
         auto ptr = mrefs_gatherer.get();
         auto p = map.emplace(method, std::move(mrefs_gatherer));
@@ -470,6 +484,30 @@ void TransitiveClosureMarkerWorker::push_if_class_instantiable(
     // this class gets processed.
     m_worker_state->push_task(ReachableObject(
         cls, ReachableObjectType::METHOD_REFERENCES_GATHERER_INSTANTIABLE));
+  }
+}
+
+void TransitiveClosureMarkerWorker::push_if_method_returning(
+    const DexMethod* returning_method,
+    std::shared_ptr<MethodReferencesGatherer> mrefs_gatherer) {
+  always_assert(mrefs_gatherer);
+  auto method = mrefs_gatherer->get_method();
+  bool emplaced = false;
+  m_shared_state->cond_marked->method_references_gatherers_if_method_returning
+      .update(returning_method, [&](auto*, auto& map, bool) {
+        auto ptr = mrefs_gatherer.get();
+        auto p = map.emplace(method, std::move(mrefs_gatherer));
+        always_assert(ptr == p.first->second.get()); // emplaced or not
+        emplaced = p.second;
+      });
+  always_assert(!mrefs_gatherer);
+  if (emplaced && m_shared_state->reachable_aspects->returning_methods.count(
+                      returning_method)) {
+    // We lost the race. Oh well. Let's schedule one extra task to make sure
+    // this method gets processed.
+    m_worker_state->push_task(ReachableObject(
+        returning_method,
+        ReachableObjectType::METHOD_REFERENCES_GATHERER_RETURNING));
   }
 }
 
@@ -647,12 +685,8 @@ MethodReferencesGatherer::MethodReferencesGatherer(
                               : default_gather_mie_with_gather_methods) {}
 
 std::optional<MethodReferencesGatherer::InstantiableDependency>
-MethodReferencesGatherer::get_instantiable_dependency(
-    const MethodItemEntry& mie, References* refs) const {
-  if (mie.type != MFLOW_OPCODE) {
-    return std::nullopt;
-  }
-  auto insn = mie.insn;
+MethodReferencesGatherer::get_instantiable_dependency(const IRInstruction* insn,
+                                                      References* refs) const {
   auto op = insn->opcode();
   InstantiableDependency res;
   if (opcode::is_an_ifield_op(op)) {
@@ -692,6 +726,118 @@ MethodReferencesGatherer::get_instantiable_dependency(
   }
   return res;
 };
+
+std::optional<MethodReferencesGatherer::ReturningDependency>
+MethodReferencesGatherer::get_returning_dependency(
+    const IRInstruction* insn, const References* refs) const {
+  auto op = insn->opcode();
+  always_assert(opcode::is_an_invoke(op));
+  auto is_method_returning = [&](const auto* method) -> bool {
+    always_assert(method);
+    always_assert(!is_abstract(method));
+    return method->is_external() || is_native(method) ||
+           method->rstate.no_optimizations() ||
+           m_shared_state->reachable_aspects->returning_methods.count(method);
+  };
+  if (opcode::is_invoke_static(op) || opcode::is_invoke_direct(op)) {
+    always_assert(refs->methods.size() == 1);
+    const auto* resolved_callee =
+        resolve_method(insn->get_method(), opcode_to_search(insn), m_method);
+    if (resolved_callee) {
+      always_assert(!resolved_callee->is_virtual());
+      always_assert(!is_abstract(resolved_callee));
+      if (!is_method_returning(resolved_callee)) {
+        return std::optional<MethodReferencesGatherer::ReturningDependency>(
+            (ReturningDependency){{resolved_callee}});
+      }
+    }
+  } else if (opcode::is_invoke_super(op) &&
+             !refs->invoke_super_targets.empty()) {
+    always_assert(refs->invoke_super_targets.size() == 1);
+    auto super_method = *refs->invoke_super_targets.begin();
+    always_assert(super_method->is_virtual());
+    always_assert(!super_method->is_external());
+    if (!is_abstract(super_method) && !is_method_returning(super_method)) {
+      return std::optional<MethodReferencesGatherer::ReturningDependency>(
+          (ReturningDependency){{super_method}});
+    }
+  } else if (opcode::is_invoke_virtual(op) || opcode::is_invoke_interface(op)) {
+    if (refs->unknown_invoke_virtual_targets) {
+      return std::nullopt;
+    }
+    // We cannot have both exact and base targets.
+    always_assert(
+        refs->exact_invoke_virtual_targets_if_class_instantiable.empty() ||
+        refs->base_invoke_virtual_targets_if_class_instantiable.empty());
+    always_assert(
+        refs->base_invoke_virtual_targets_if_class_instantiable.size() <= 1);
+    // TODO: Track returnability for base methods (which then includes all
+    // overriding methods) to avoid computing and iterating over all overriding
+    // methods for each invocation.
+    // First, we check whether we already know that any eligible virtual target
+    // returns.
+    auto any = [&](auto& f) {
+      std::unordered_set<const DexMethod*> unique_methods;
+      auto identity = [](const auto* x) { return x; };
+      auto select_first = [](const auto& p) { return p.first; };
+      auto any_of = [&](const auto& collection, const auto& p) {
+        for (auto&& item : collection) {
+          auto* m = p(item);
+          if (!unique_methods.insert(m).second) {
+            continue;
+          }
+          always_assert(m->is_virtual());
+          if (is_abstract(m)) {
+            continue;
+          }
+          if (f(m)) {
+            return true;
+          }
+        }
+        return false;
+      };
+      if (any_of(refs->exact_invoke_virtual_targets_if_class_instantiable,
+                 identity) ||
+          any_of(refs->base_invoke_virtual_targets_if_class_instantiable,
+                 select_first)) {
+        return true;
+      }
+      for (auto&& [base_method, base_types] :
+           refs->base_invoke_virtual_targets_if_class_instantiable) {
+        for (auto* base_type : base_types) {
+          always_assert(!type_class(base_type)->is_external());
+          auto overriding_methods = mog::get_overriding_methods(
+              *m_shared_state->method_override_graph, base_method,
+              /* include_interfaces*/ false, base_type);
+          if (any_of(overriding_methods, identity)) {
+            return true;
+          }
+        }
+      }
+      return false;
+    };
+    if (any(is_method_returning)) {
+      return std::nullopt;
+    }
+    // Second, we build the list of virtual targets we need to wait for.
+    std::unordered_set<const DexMethod*> target_methods;
+    auto add = [&](const auto* method) {
+      target_methods.insert(method);
+      return false;
+    };
+    any(add);
+    if (target_methods.empty()) {
+      // So there's no method that could be invoked that could ever return. To
+      // make our internal accounting happy, and to track this properly, we'll
+      // pretend that there's a dependency on the "null" method, which of course
+      // will never be found to return.
+      target_methods.insert(nullptr);
+    }
+    return std::optional<MethodReferencesGatherer::ReturningDependency>(
+        ReturningDependency{std::move(target_methods)});
+  }
+  return std::nullopt;
+}
 
 void MethodReferencesGatherer::default_gather_mie(const MethodItemEntry& mie,
                                                   References* refs,
@@ -736,18 +882,37 @@ void MethodReferencesGatherer::default_gather_mie(const MethodItemEntry& mie,
       if (!resolved_callee) {
         // Typically clone() on an array, or other obscure external references
         TRACE(REACH, 2, "Unresolved virtual callee at %s", SHOW(insn));
+        refs->unknown_invoke_virtual_targets = true;
         return;
       }
-      auto static_base_type = method_ref->get_class();
+      auto base_type = method_ref->get_class();
       refs->base_invoke_virtual_targets_if_class_instantiable[resolved_callee]
-          .insert(static_base_type);
+          .insert(base_type);
+      auto* base_cls = type_class(base_type);
+      always_assert(base_cls);
+      if (base_cls->is_external() ||
+          (!is_abstract(resolved_callee) && resolved_callee->is_external())) {
+        refs->unknown_invoke_virtual_targets = true;
+      } else if (opcode::is_invoke_interface(op) && is_interface(base_cls)) {
+        // Why can_rename? To mirror what VirtualRenamer looks at.
+        if (root(resolved_callee) || !can_rename(resolved_callee)) {
+          // We cannot rule out that there are dynamically added classes,
+          // possibly even created at runtime via Proxy.newProxyInstance, that
+          // override this method. So we assume the worst.
+          refs->unknown_invoke_virtual_targets = true;
+        } else if (is_annotation(base_cls)) {
+          refs->unknown_invoke_virtual_targets = true;
+        }
+      }
+    } else if (opcode::is_a_return(op)) {
+      refs->returns = true;
     }
   }
 }
 
 void MethodReferencesGatherer::advance(const Advance& advance,
                                        References* refs) {
-  always_assert(advance.kind() == m_next_advance_kind);
+  always_assert((advance.kind() & m_next_advance_kinds) != AdvanceKind::None);
   if (advance.kind() == AdvanceKind::Initial) {
     // initial gathering
     m_method->gather_types_shallow(refs->types); // Handle DexMethodRef parts.
@@ -773,7 +938,7 @@ void MethodReferencesGatherer::advance(const Advance& advance,
     }
     refs->method_references_gatherer_dependency_if_instance_method_callable =
         true;
-    m_next_advance_kind = AdvanceKind::Callable;
+    m_next_advance_kinds = AdvanceKind::Callable;
     return;
   }
   std::lock_guard<std::mutex> lock_guard(m_mutex);
@@ -781,18 +946,23 @@ void MethodReferencesGatherer::advance(const Advance& advance,
   if (advance.kind() == AdvanceKind::Callable) {
     std::vector<CFGNeedle> cfg_needles;
     auto code = m_method->get_code();
-    if (code && m_consider_code) {
-      always_assert_log(code->editable_cfg_built(),
-                        "%s does not have editable cfg", SHOW(m_method));
-      auto& cfg = code->cfg();
-      auto b = cfg.entry_block();
-      queue.push((CFGNeedle){b, b->begin()});
-      m_pushed_blocks.insert(b);
+    if (code) {
+      if (m_consider_code) {
+        always_assert_log(code->editable_cfg_built(),
+                          "%s does not have editable cfg", SHOW(m_method));
+        auto& cfg = code->cfg();
+        auto b = cfg.entry_block();
+        queue.push((CFGNeedle){b, b->begin()});
+        m_pushed_blocks.insert(b);
+      } else {
+        // While the code's references must get collected elsewhere, we
+        // generally assume that the code will return.
+        refs->returns = true;
+      }
     }
-    m_next_advance_kind = AdvanceKind::InstantiableDependencyResolved;
-  } else {
-    always_assert(advance.kind() ==
-                  AdvanceKind::InstantiableDependencyResolved);
+    m_next_advance_kinds = AdvanceKind::InstantiableDependencyResolved |
+                           AdvanceKind::ReturningDependencyResolved;
+  } else if (advance.kind() == AdvanceKind::InstantiableDependencyResolved) {
     auto it = m_instantiable_dependencies.find(advance.instantiable_cls());
     if (it == m_instantiable_dependencies.end()) {
       return;
@@ -801,33 +971,98 @@ void MethodReferencesGatherer::advance(const Advance& advance,
       queue.push(cfg_needle);
     }
     m_instantiable_dependencies.erase(it);
+  } else {
+    always_assert(advance.kind() == AdvanceKind::ReturningDependencyResolved);
+    auto it = m_returning_dependencies.find(advance.returning_method());
+    if (it == m_returning_dependencies.end()) {
+      return;
+    }
+    std::unordered_set<const MethodItemEntry*> mies;
+    mies.reserve(it->second.size());
+    for (auto& cfg_needle : it->second) {
+      mies.insert(&*cfg_needle.it);
+      queue.push(cfg_needle);
+    }
+    m_returning_dependencies.erase(it);
+    std20::erase_if(m_returning_dependencies, [&mies](auto& p) {
+      auto& cfg_needles = p.second;
+      std20::erase_if(cfg_needles, [&mies](const auto& cfg_needle) {
+        return mies.count(&*cfg_needle.it);
+      });
+      return cfg_needles.empty();
+    });
   }
+  using Dependency = std::variant<InstantiableDependency, ReturningDependency>;
   auto advance_in_block = [this, refs](auto* block, auto& it) {
     for (; it != block->end(); ++it) {
-      auto dep = get_instantiable_dependency(*it, refs);
-      if (dep) {
-        return dep;
-      }
-      m_gather_mie(this, *it, refs);
       if (it->type == MFLOW_OPCODE) {
+        auto instantiable_dep = get_instantiable_dependency(it->insn, refs);
+        if (instantiable_dep) {
+          return std::make_optional<Dependency>(*instantiable_dep);
+        }
         m_instructions_visited++;
-      }
-    }
-    return std::optional<InstantiableDependency>();
-  };
-  auto visit_succs = [this, &refs, &queue](auto* block, const auto& pred) {
-    for (auto* e : block->succs()) {
-      if (!pred(e)) {
-        continue;
-      }
-      if (e->type() == cfg::EDGE_THROW) {
-        auto catch_type = e->throw_info()->catch_type;
-        if (catch_type && m_covered_catch_types.insert(catch_type).second) {
-          refs->types.push_back(catch_type);
+        if (opcode::is_an_invoke(it->insn->opcode()) &&
+            m_shared_state->cfg_gathering_check_returning &&
+            !m_method->rstate.no_optimizations()) {
+          auto methods = std::move(refs->methods);
+          auto invoke_super_targets = std::move(refs->invoke_super_targets);
+          auto exact_invoke_virtual_targets_if_class_instantiable = std::move(
+              refs->exact_invoke_virtual_targets_if_class_instantiable);
+          auto base_invoke_virtual_targets_if_class_instantiable = std::move(
+              refs->base_invoke_virtual_targets_if_class_instantiable);
+          auto unknown_invoke_virtual_targets =
+              refs->unknown_invoke_virtual_targets;
+          refs->unknown_invoke_virtual_targets = false;
+          m_gather_mie(this, *it, refs);
+          auto returning_dep = get_returning_dependency(it->insn, refs);
+          std::swap(methods, refs->methods);
+          refs->methods.insert(refs->methods.end(), methods.begin(),
+                               methods.end());
+          std::swap(invoke_super_targets, refs->invoke_super_targets);
+          refs->invoke_super_targets.insert(invoke_super_targets.begin(),
+                                            invoke_super_targets.end());
+          std::swap(exact_invoke_virtual_targets_if_class_instantiable,
+                    refs->exact_invoke_virtual_targets_if_class_instantiable);
+          refs->exact_invoke_virtual_targets_if_class_instantiable.insert(
+              exact_invoke_virtual_targets_if_class_instantiable.begin(),
+              exact_invoke_virtual_targets_if_class_instantiable.end());
+          std::swap(base_invoke_virtual_targets_if_class_instantiable,
+                    refs->base_invoke_virtual_targets_if_class_instantiable);
+          for (auto&& [base_method, base_types] :
+               base_invoke_virtual_targets_if_class_instantiable) {
+            refs->base_invoke_virtual_targets_if_class_instantiable[base_method]
+                .insert(base_types.begin(), base_types.end());
+          }
+          if (unknown_invoke_virtual_targets) {
+            refs->unknown_invoke_virtual_targets = true;
+          }
+          if (returning_dep) {
+            return std::make_optional<Dependency>(std::move(*returning_dep));
+          }
+          continue;
         }
       }
-      if (m_pushed_blocks.insert(e->target()).second) {
-        queue.push((CFGNeedle){e->target(), e->target()->begin()});
+      m_gather_mie(this, *it, refs);
+    }
+    return std::optional<Dependency>();
+  };
+  auto visit_succ = [this, &refs, &queue](auto* e) {
+    if (e->type() == cfg::EDGE_THROW) {
+      auto catch_type = e->throw_info()->catch_type;
+      if (catch_type && m_covered_catch_types.insert(catch_type).second) {
+        refs->types.push_back(catch_type);
+      }
+    }
+    if (m_pushed_blocks.insert(e->target()).second) {
+      queue.push((CFGNeedle){e->target(), e->target()->begin()});
+    }
+  };
+  auto visit_throw_succs_if_last_insn = [&visit_succ](auto* block, auto it) {
+    if (block->get_last_insn() == it) {
+      for (auto* e : block->succs()) {
+        if (e->type() == cfg::EDGE_THROW) {
+          visit_succ(e);
+        }
       }
     }
   };
@@ -837,28 +1072,53 @@ void MethodReferencesGatherer::advance(const Advance& advance,
     auto dep = advance_in_block(block, it);
     if (!dep) {
       always_assert(it == block->end());
-      visit_succs(block, [](auto*) { return true; });
+      for (auto* e : block->succs()) {
+        visit_succ(e);
+      }
       continue;
     }
     always_assert(it->type == MFLOW_OPCODE);
-    if (!dep->may_continue_normally_if_uninstantiable) {
-      auto [deps_it, emplaced] = m_instantiable_dependencies.emplace(
-          dep->cls, std::vector<CFGNeedle>());
-      if (emplaced) {
-        refs->method_references_gatherer_dependencies_if_class_instantiable
-            .push_back(dep->cls);
+    auto* instantiable_dep = std::get_if<InstantiableDependency>(&*dep);
+    if (instantiable_dep) {
+      if (!instantiable_dep->may_continue_normally_if_uninstantiable) {
+        auto [deps_it, emplaced] = m_instantiable_dependencies.emplace(
+            instantiable_dep->cls, std::vector<CFGNeedle>());
+        if (emplaced) {
+          refs->method_references_gatherer_dependencies_if_class_instantiable
+              .push_back(instantiable_dep->cls);
+        }
+        deps_it->second.push_back((CFGNeedle){block, it});
+        always_assert(instantiable_dep->may_throw_if_uninstantiable);
+        visit_throw_succs_if_last_insn(block, it);
+        continue;
       }
-      deps_it->second.push_back((CFGNeedle){block, it});
-      always_assert(dep->may_throw_if_uninstantiable);
-      if (block->get_last_insn() == it) {
-        visit_succs(block,
-                    [](auto* e) { return e->type() == cfg::EDGE_THROW; });
-      }
+      m_instructions_visited++;
+      queue.push((CFGNeedle){block, std::next(it)});
       continue;
     }
-    m_instructions_visited++;
-    queue.push((CFGNeedle){block, std::next(it)});
+    auto& returning_dep = std::get<ReturningDependency>(*dep);
+    for (auto* m : returning_dep.methods) {
+      auto [deps_it, emplaced] =
+          m_returning_dependencies.emplace(m, std::vector<CFGNeedle>());
+      if (emplaced) {
+        refs->method_references_gatherer_dependencies_if_method_returning
+            .push_back(m);
+      }
+      deps_it->second.push_back((CFGNeedle){block, std::next(it)});
+    }
+    visit_throw_succs_if_last_insn(block, it);
   }
+}
+
+std::unordered_set<const IRInstruction*>
+MethodReferencesGatherer::get_non_returning_insns() const {
+  std::unordered_set<const IRInstruction*> set;
+  for (auto&& [_, needles] : m_returning_dependencies) {
+    for (auto& needle : needles) {
+      set.insert(std::prev(needle.it)->insn);
+    }
+  }
+  return set;
 }
 
 void gather_dynamic_references(const DexAnnotation* item,
@@ -973,16 +1233,26 @@ void TransitiveClosureMarkerWorker::gather_and_push(
     always_assert(
         refs.method_references_gatherer_dependencies_if_class_instantiable
             .empty());
+    always_assert(
+        refs.method_references_gatherer_dependencies_if_method_returning
+            .empty());
+    always_assert(!refs.returns);
     return;
   }
-  auto& v = refs.method_references_gatherer_dependencies_if_class_instantiable;
-  if (v.empty()) {
-    return;
+  for (auto* dep_cls :
+       refs.method_references_gatherer_dependencies_if_class_instantiable) {
+    push_if_class_instantiable(dep_cls, mrefs_gatherer);
   }
-  for (size_t i = 0; i < v.size() - 1; ++i) {
-    push_if_class_instantiable(v[i], mrefs_gatherer);
+  auto& v = refs.method_references_gatherer_dependencies_if_method_returning;
+  if (!v.empty()) {
+    for (size_t i = 0; i < v.size() - 1; ++i) {
+      push_if_method_returning(v[i], mrefs_gatherer);
+    }
+    push_if_method_returning(v[v.size() - 1], std::move(mrefs_gatherer));
   }
-  push_if_class_instantiable(v[v.size() - 1], std::move(mrefs_gatherer));
+  if (refs.returns) {
+    returns(meth);
+  }
 }
 
 void TransitiveClosureMarkerWorker::gather_and_push(const DexMethod* meth) {
@@ -1019,7 +1289,7 @@ bool References::maybe_from_code() const {
          !method_references_gatherer_dependencies_if_class_instantiable
               .empty() ||
          method_references_gatherer_dependency_if_instance_method_callable ||
-         !invoke_super_targets.empty();
+         !invoke_super_targets.empty() || returns;
 }
 
 template <class Parent>
@@ -1125,6 +1395,9 @@ void TransitiveClosureMarkerWorker::visit_instantiable(const DexClass* cls) {
     instantiable(intf);
   }
   auto* cond_marked = m_shared_state->cond_marked;
+  if (cond_marked->if_class_instantiable.classes.count(cls)) {
+    push(cls, cls);
+  }
   for (auto const& f : cls->get_ifields()) {
     if (cond_marked->if_class_instantiable.fields.count(f)) {
       push(cls, f);
@@ -1142,7 +1415,7 @@ void TransitiveClosureMarkerWorker::visit_instantiable(const DexClass* cls) {
   }
 
   size_t mrefs_gatherers{0};
-  cond_marked->if_class_instantiable.method_references_gatherers.update(
+  cond_marked->method_references_gatherers_if_class_instantiable.update(
       cls, [&](auto*, auto& map, bool) { mrefs_gatherers = map.size(); });
   for (size_t i = 0; i < mrefs_gatherers; i++) {
     m_worker_state->push_task(ReachableObject(
@@ -1157,7 +1430,7 @@ void TransitiveClosureMarkerWorker::
         SHOW(cls));
 
   std::shared_ptr<MethodReferencesGatherer> mrefs_gatherer;
-  m_shared_state->cond_marked->if_class_instantiable.method_references_gatherers
+  m_shared_state->cond_marked->method_references_gatherers_if_class_instantiable
       .update(cls, [&](auto*, auto& map, bool) {
         if (!map.empty()) {
           auto it = map.begin();
@@ -1168,6 +1441,40 @@ void TransitiveClosureMarkerWorker::
   if (mrefs_gatherer) {
     gather_and_push(std::move(mrefs_gatherer),
                     MethodReferencesGatherer::Advance::instantiable(cls));
+  }
+}
+
+void TransitiveClosureMarkerWorker::visit_returns(const DexMethod* method) {
+  TRACE(REACH, 4, "Visiting returning method: %s", SHOW(method));
+
+  size_t mrefs_gatherers{0};
+  m_shared_state->cond_marked->method_references_gatherers_if_method_returning
+      .update(method,
+              [&](auto*, auto& map, bool) { mrefs_gatherers = map.size(); });
+  for (size_t i = 0; i < mrefs_gatherers; i++) {
+    m_worker_state->push_task(ReachableObject(
+        method, ReachableObjectType::METHOD_REFERENCES_GATHERER_RETURNING));
+  }
+}
+
+void TransitiveClosureMarkerWorker::visit_method_references_gatherer_returning(
+    const DexMethod* method) {
+  TRACE(REACH, 4,
+        "Visiting method-references-gatherer for returning method: %s",
+        SHOW(method));
+
+  std::shared_ptr<MethodReferencesGatherer> mrefs_gatherer;
+  m_shared_state->cond_marked->method_references_gatherers_if_method_returning
+      .update(method, [&](auto*, auto& map, bool) {
+        if (!map.empty()) {
+          auto it = map.begin();
+          mrefs_gatherer = std::move(it->second);
+          map.erase(it);
+        }
+      });
+  if (mrefs_gatherer) {
+    gather_and_push(std::move(mrefs_gatherer),
+                    MethodReferencesGatherer::Advance::returning(method));
   }
 }
 
@@ -1201,6 +1508,14 @@ const DexMethod* resolve_without_context(const DexMethodRef* method,
   return nullptr;
 }
 
+void TransitiveClosureMarkerWorker::returns(const DexMethod* method) {
+  if (!m_shared_state->reachable_aspects->returning_methods.insert(method)) {
+    return;
+  }
+  m_worker_state->push_task(
+      ReachableObject(method, ReachableObjectType::RETURNS));
+}
+
 void TransitiveClosureMarkerWorker::instantiable(DexType* type) {
   auto cls = type_class(type);
   if (!cls || cls->is_external()) {
@@ -1209,36 +1524,8 @@ void TransitiveClosureMarkerWorker::instantiable(DexType* type) {
   if (!m_shared_state->reachable_aspects->instantiable_types.insert(cls)) {
     return;
   }
-  instantiable(cls->get_super_class());
-  for (auto* intf : *cls->get_interfaces()) {
-    instantiable(intf);
-  }
-  auto* cond_marked = m_shared_state->cond_marked;
-  if (cond_marked->if_class_instantiable.classes.count(cls)) {
-    push(cls, cls);
-  }
-  for (auto const& f : cls->get_ifields()) {
-    if (cond_marked->if_class_instantiable.fields.count(f)) {
-      push(cls, f);
-    }
-  }
-  for (auto const& m : cls->get_dmethods()) {
-    if (cond_marked->if_class_instantiable.methods.count(m)) {
-      push(cls, m);
-    }
-  }
-  for (auto const& m : cls->get_vmethods()) {
-    if (cond_marked->if_class_instantiable.methods.count(m)) {
-      push(cls, m);
-    }
-  }
-  MethodReferencesGatherers mrefs_gatherers;
-  cond_marked->if_class_instantiable.method_references_gatherers.update(
-      cls, [&](auto*, auto& map, bool) { mrefs_gatherers = std::move(map); });
-  for (auto&& [_, mrefs_gatherer] : mrefs_gatherers) {
-    gather_and_push(std::move(mrefs_gatherer),
-                    MethodReferencesGatherer::Advance::instantiable(cls));
-  }
+  m_worker_state->push_task(
+      ReachableObject(cls, ReachableObjectType::INSTANTIABLE));
 }
 
 void TransitiveClosureMarkerWorker::directly_instantiable(DexType* type) {
@@ -1543,39 +1830,56 @@ void compute_zombie_methods(
 
 void ReachableAspects::finish(const ConditionallyMarked& cond_marked,
                               const ReachableObjects& reachable_objects) {
-  always_assert(
-      cond_marked.if_class_retained.method_references_gatherers.empty());
-  always_assert(cond_marked.if_class_dynamically_referenced
-                    .method_references_gatherers.empty());
+  Timer t("finish");
   std::unordered_map<const DexMethod*, const MethodReferencesGatherer*>
-      remaining_method_references_gatherers;
+      remaining_mrefs_gatherers;
+  auto add = [&](auto& map) {
+    for (auto&& [method, mrefs_gatherer] : map) {
+      remaining_mrefs_gatherers.emplace(method, mrefs_gatherer.get());
+    }
+  };
   for (auto&& [cls, map] :
-       cond_marked.if_class_instantiable.method_references_gatherers) {
+       cond_marked.method_references_gatherers_if_class_instantiable) {
     if (map.empty()) {
       always_assert(instantiable_types.count(cls));
       continue;
     }
     always_assert(!instantiable_types.count(cls));
     uninstantiable_dependencies.insert(cls);
-    for (auto&& [method, mrefs_gatherer] : map) {
-      remaining_method_references_gatherers.emplace(method,
-                                                    mrefs_gatherer.get());
+    add(map);
+  }
+  for (auto&& [method, map] :
+       cond_marked.method_references_gatherers_if_method_returning) {
+    if (map.empty()) {
+      always_assert(returning_methods.count(method));
+      continue;
     }
+    always_assert(!returning_methods.count(method));
+    non_returning_dependencies.insert(method);
+    add(map);
+  }
+  for (auto&& [method, mrefs_gatherer] : remaining_mrefs_gatherers) {
+    non_returning_insns.emplace(method,
+                                mrefs_gatherer->get_non_returning_insns());
   }
   std::atomic<uint64_t> concurrent_instructions_unvisited{0};
   workqueue_run<std::pair<const DexMethod*, const MethodReferencesGatherer*>>(
       [&](std::pair<const DexMethod*, const MethodReferencesGatherer*> p) {
         auto ii = InstructionIterable(p.first->get_code()->cfg());
-        auto size = std::distance(ii.begin(), ii.end());
+        size_t size = std::distance(ii.begin(), ii.end());
         auto visited = p.second->get_instructions_visited();
-        always_assert(visited <= size);
+        always_assert_log(
+            visited <= size, "[%s] visited instructions %u <= %zu:\n%s",
+            SHOW(p.first), visited, size, SHOW(p.first->get_code()->cfg()));
         concurrent_instructions_unvisited += size - visited;
       },
-      remaining_method_references_gatherers);
+      remaining_mrefs_gatherers);
   instructions_unvisited = (uint64_t)concurrent_instructions_unvisited;
   TRACE(RMU, 1,
-        "%zu uninstantiable_dependencies, %" PRIu64 " instructions_unvisited",
-        uninstantiable_dependencies.size(), instructions_unvisited);
+        "%zu uninstantiable_dependencies, %zu non_returning_dependencies, "
+        "%" PRIu64 " instructions_unvisited",
+        uninstantiable_dependencies.size(), non_returning_dependencies.size(),
+        instructions_unvisited);
 
   // Prune all unmarked methods from callable_instance_methods
   std::vector<const DexMethod*> to_erase;
@@ -1599,6 +1903,7 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
     bool relaxed_keep_interfaces,
     bool cfg_gathering_check_instantiable,
     bool cfg_gathering_check_instance_callable,
+    bool cfg_gathering_check_returning,
     bool should_mark_all_as_seed,
     std::unique_ptr<const mog::Graph>* out_method_override_graph,
     bool remove_no_argument_constructors) {
@@ -1630,6 +1935,7 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
       relaxed_keep_interfaces,
       cfg_gathering_check_instantiable,
       cfg_gathering_check_instance_callable,
+      cfg_gathering_check_returning,
       &cond_marked,
       reachable_objects.get(),
       reachable_aspects,
@@ -1856,7 +2162,7 @@ void reanimate_zombie_methods(const ReachableAspects& reachable_aspects) {
   }
 }
 
-remove_uninstantiables_impl::Stats sweep_code(
+std::pair<remove_uninstantiables_impl::Stats, size_t> sweep_code(
     DexStoresVector& stores,
     bool prune_uncallable_instance_method_bodies,
     bool skip_uncallable_virtual_methods,
@@ -1884,7 +2190,8 @@ remove_uninstantiables_impl::Stats sweep_code(
     }
   }
   uninstantiable_types.insert(type::java_lang_Void());
-  return walk::parallel::methods<
+  std::atomic<size_t> throws_inserted{0};
+  auto res = walk::parallel::methods<
       remove_uninstantiables_impl::Stats>(scope, [&](DexMethod* method) {
     auto code = method->get_code();
     if (!code || method->rstate.no_optimizations()) {
@@ -1892,6 +2199,25 @@ remove_uninstantiables_impl::Stats sweep_code(
     }
     always_assert(code->editable_cfg_built());
     auto& cfg = code->cfg();
+    auto non_returning_it = reachable_aspects.non_returning_insns.find(method);
+    if (non_returning_it != reachable_aspects.non_returning_insns.end()) {
+      auto& non_returning_insns = non_returning_it->second;
+      throw_propagation_impl::ThrowPropagator impl(cfg, /* debug */ false);
+      for (auto block : cfg.blocks()) {
+        auto ii = InstructionIterable(block);
+        for (auto it = ii.begin(); it != ii.end(); it++) {
+          if (!non_returning_insns.count(it->insn)) {
+            continue;
+          }
+          if (impl.try_apply(block->to_cfg_instruction_iterator(it))) {
+            throws_inserted++;
+          }
+          // Stop processing more instructions in this block
+          break;
+        }
+      }
+      cfg.remove_unreachable_blocks();
+    }
     if (uncallable_instance_methods.count(method)) {
       if (skip_uncallable_virtual_methods && method->is_virtual()) {
         return remove_uninstantiables_impl::Stats();
@@ -1904,6 +2230,7 @@ remove_uninstantiables_impl::Stats sweep_code(
     cfg.remove_unreachable_blocks();
     return stats;
   });
+  return std::make_pair(res, (size_t)throws_inserted);
 }
 
 remove_uninstantiables_impl::Stats sweep_uncallable_virtual_methods(
@@ -1991,6 +2318,10 @@ void report(PassManager& pm,
   pm.incr_metric("zombie_implementation_methods",
                  reachable_aspects.zombie_implementation_methods.size());
   pm.incr_metric("zombie_methods", reachable_aspects.zombie_methods.size());
+  pm.incr_metric("non_returning_dependencies",
+                 reachable_aspects.non_returning_dependencies.size());
+  pm.incr_metric("returning_methods",
+                 reachable_aspects.returning_methods.size());
 }
 
 ObjectCounts count_objects(const DexStoresVector& stores) {
@@ -2043,8 +2374,11 @@ void dump_graph(std::ostream& os, const ReachableObjectGraph& retainers_of) {
       oss2 << rhs;
       return oss1.str() < oss2.str();
     }
+
     case ReachableObjectType::INSTANTIABLE:
     case ReachableObjectType::METHOD_REFERENCES_GATHERER_INSTANTIABLE:
+    case ReachableObjectType::RETURNS:
+    case ReachableObjectType::METHOD_REFERENCES_GATHERER_RETURNING:
       __builtin_unreachable();
     }
     __builtin_unreachable();

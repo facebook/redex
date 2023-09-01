@@ -81,11 +81,11 @@ TEST_F(FlowSensitiveReachabilityTest,
   EXPECT_TRUE(is_uninstantiable_dependency("LDataHolder;"));
 
   // Code sweeping
-  auto uninstantiables_stats = reachability::sweep_code(
+  auto [uninstantiables_stats, throws_inserted] = reachability::sweep_code(
       stores, /* prune_uncallable_instance_method_bodies */ false,
       /* skip_uncallable_virtual_methods */ false, reachable_aspects);
   EXPECT_EQ(uninstantiables_stats.field_accesses_on_uninstantiable, 3);
-  EXPECT_EQ(uninstantiables_stats.invokes, 6);
+  EXPECT_EQ(uninstantiables_stats.invokes, 7);
   EXPECT_EQ(uninstantiables_stats.check_casts, 1);
   EXPECT_EQ(uninstantiables_stats.instance_ofs, 1);
 
@@ -159,14 +159,14 @@ TEST_F(FlowSensitiveReachabilityTest, cfg_gathering_check_instance_callable) {
   EXPECT_TRUE(is_uninstantiable_dependency("LDataHolder;"));
 
   // Code sweeping
-  auto uninstantiables_stats = reachability::sweep_code(
+  auto [uninstantiables_stats, throws_inserted] = reachability::sweep_code(
       stores, /* prune_uncallable_instance_method_bodies */ true,
       /* skip_uncallable_virtual_methods */ false, reachable_aspects);
   EXPECT_EQ(uninstantiables_stats.field_accesses_on_uninstantiable, 1);
-  EXPECT_EQ(uninstantiables_stats.invokes, 4);
+  EXPECT_EQ(uninstantiables_stats.invokes, 5);
   EXPECT_EQ(uninstantiables_stats.check_casts, 1);
   EXPECT_EQ(uninstantiables_stats.instance_ofs, 1);
-  EXPECT_EQ(uninstantiables_stats.throw_null_methods, 11);
+  EXPECT_EQ(uninstantiables_stats.throw_null_methods, 12);
 
   walk::parallel::code(scope, [&](auto*, auto& code) { code.clear_cfg(); });
 }
@@ -238,14 +238,14 @@ TEST_F(FlowSensitiveReachabilityTest, sweep_uncallable_virtual_methods) {
   EXPECT_TRUE(is_uninstantiable_dependency("LDataHolder;"));
 
   // Code sweeping
-  auto uninstantiables_stats = reachability::sweep_code(
+  auto [uninstantiables_stats, throws_inserted] = reachability::sweep_code(
       stores, /* prune_uncallable_instance_method_bodies */ true,
       /* skip_uncallable_virtual_methods */ true, reachable_aspects);
   EXPECT_EQ(uninstantiables_stats.field_accesses_on_uninstantiable, 1);
-  EXPECT_EQ(uninstantiables_stats.invokes, 4);
+  EXPECT_EQ(uninstantiables_stats.invokes, 5);
   EXPECT_EQ(uninstantiables_stats.check_casts, 1);
   EXPECT_EQ(uninstantiables_stats.instance_ofs, 1);
-  EXPECT_EQ(uninstantiables_stats.throw_null_methods, 6);
+  EXPECT_EQ(uninstantiables_stats.throw_null_methods, 7);
 
   auto abstracted_classes = reachability::mark_classes_abstract(
       stores, *reachable_objects, reachable_aspects);
@@ -303,4 +303,53 @@ TEST_F(FlowSensitiveReachabilityTest, abstract_overrides_non_abstract) {
       DexMethod::get_method("LSurpriseSub;.foo:()V")));
 
   walk::parallel::code(scope, [&](auto*, auto& code) { code.clear_cfg(); });
+}
+
+TEST_F(FlowSensitiveReachabilityTest, throw_propagation) {
+  const auto& dexen = stores[0].get_dexen();
+  auto pg_config = process_and_get_proguard_config(dexen, R"(
+    -keepclasseswithmembers public class FlowSensitiveReachabilityTest {
+      public void throw_propagation();
+    }
+  )");
+
+  EXPECT_TRUE(pg_config->ok);
+  EXPECT_EQ(pg_config->keep_rules.size(), 1);
+
+  int num_ignore_check_strings = 0;
+  reachability::IgnoreSets ig_sets;
+  reachability::ReachableAspects reachable_aspects;
+  auto scope = build_class_scope(stores);
+  walk::parallel::code(scope, [&](auto*, auto& code) { code.build_cfg(); });
+
+  auto reachable_objects = reachability::compute_reachable_objects(
+      stores, ig_sets, &num_ignore_check_strings, &reachable_aspects, false,
+      /* relaxed_keep_class_members */ true,
+      /* relaxed_keep_interfaces */ true,
+      /* cfg_gathering_check_instantiable */ true,
+      /* cfg_gathering_check_instance_callable */ true,
+      /* cfg_gathering_check_returning */ true);
+
+  //// returning_methods
+  for (auto* m : reachable_aspects.returning_methods) {
+    EXPECT_TRUE(method::is_init(m)); // only the FlowSensitiveReachabilityTest
+                                     // contructor returns
+  }
+  auto dead_cls = find_class(*classes, "LDead;");
+  ASSERT_TRUE(dead_cls);
+  ASSERT_FALSE(reachable_objects->marked_unsafe(dead_cls));
+
+  // Code sweeping
+  reachability::sweep_code(
+      stores, /* prune_uncallable_instance_method_bodies */ true,
+      /* skip_uncallable_virtual_methods */ true, reachable_aspects);
+
+  walk::parallel::code(scope, [&](auto*, auto& code) { code.clear_cfg(); });
+
+  auto method = find_dmethod(*classes, "LFlowSensitiveReachabilityTest;", "V",
+                             "throw_propagation", {});
+  ASSERT_TRUE(method);
+  auto ii = InstructionIterable(method->get_code());
+  ASSERT_TRUE(ii.begin()->insn->opcode() == OPCODE_INVOKE_STATIC);
+  ASSERT_TRUE(std::prev(ii.end())->insn->opcode() == OPCODE_THROW);
 }

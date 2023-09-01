@@ -44,6 +44,7 @@ struct MethodReferences {
       exact_invoke_virtual_targets_if_class_instantiable;
   std::optional<std::pair<const DexType*, const DexMethod*>>
       base_invoke_virtual_target_if_class_instantiable;
+  bool unknown_invoke_virtual_targets{false};
   const DexMethod* invoke_super_target{nullptr};
   void add_to(References* refs) const {
     refs->methods.insert(refs->methods.end(), methods.begin(), methods.end());
@@ -54,6 +55,9 @@ struct MethodReferences {
       refs->base_invoke_virtual_targets_if_class_instantiable
           [base_invoke_virtual_target_if_class_instantiable->second]
               .insert(base_invoke_virtual_target_if_class_instantiable->first);
+    }
+    if (unknown_invoke_virtual_targets) {
+      refs->unknown_invoke_virtual_targets = true;
     }
     if (invoke_super_target) {
       refs->invoke_super_targets.insert(invoke_super_target);
@@ -67,6 +71,8 @@ struct TypeAnalysisAwareClosureMarkerSharedState final
     : public reachability::TransitiveClosureMarkerSharedState {
   type_analyzer::global::GlobalTypeAnalyzer* gta;
   mutable std::atomic<int> num_exact_resolved_callees{0};
+  mutable std::atomic<int> num_unreachable_invokes{0};
+  mutable std::atomic<int> num_null_invokes{0};
 
   void gather_mie(const std::shared_ptr<InsnsMethods>& insns_methods_cache,
                   MethodReferencesGatherer* mrefs_gatherer,
@@ -117,6 +123,17 @@ struct TypeAnalysisAwareClosureMarkerSharedState final
     refs.methods.push_back(resolved_callee);
 
     auto domain = env.get(invoke->src(0));
+    if (domain.is_bottom()) {
+      // no need to look for callees to mark them as invoke-virtual targets,
+      // this is unreachable
+      num_unreachable_invokes++;
+      return;
+    } else if (domain.is_null()) {
+      // no need to look for callees to mark them as invoke-virtual targets,
+      // this will throw NPE
+      num_null_invokes++;
+      return;
+    }
 
     // Can we leverage exact types?
     const auto& set_domain = domain.get_set_domain();
@@ -130,6 +147,9 @@ struct TypeAnalysisAwareClosureMarkerSharedState final
             break;
           }
           always_assert(!is_interface(analysis_cls));
+          if (analysis_cls->is_external()) {
+            refs.unknown_invoke_virtual_targets = true;
+          }
           auto method_search = get_method_search(analysis_cls, invoke);
           auto analysis_resolved_callee =
               resolve_method(analysis_cls, callee_ref->get_name(),
@@ -141,6 +161,8 @@ struct TypeAnalysisAwareClosureMarkerSharedState final
                                                  analysis_resolved_callee);
         }
         if (analysis_resolved_callees.size() == types.size()) {
+          always_assert_log(!analysis_resolved_callees.empty(), "%s",
+                            SHOW(domain));
           for (auto [analysis_cls, analysis_resolved_callee] :
                analysis_resolved_callees) {
             TRACE(TRMU, 5, "Exact resolved callee %s for analysis cls %s",
@@ -150,6 +172,8 @@ struct TypeAnalysisAwareClosureMarkerSharedState final
               always_assert(!is_abstract(analysis_resolved_callee));
               refs.exact_invoke_virtual_targets_if_class_instantiable.push_back(
                   analysis_resolved_callee);
+            } else {
+              refs.unknown_invoke_virtual_targets = true;
             }
           }
           num_exact_resolved_callees++;
@@ -161,15 +185,14 @@ struct TypeAnalysisAwareClosureMarkerSharedState final
     // Can we leverage best known approximation?
     auto analysis_cls = domain.get_dex_cls();
     DexMethod* analysis_resolved_callee = nullptr;
-    auto static_base_type = callee_ref->get_class();
+    auto base_type = callee_ref->get_class();
     if (analysis_cls) {
       // If the analysis_cls is actually more precise than static_base_type,
       // then we can use that. However, sometimes it falls back to a too generic
       // object type that cannot represent all interface demands, and then the
       // following check-cast fails, and we cannot use the analysis_cls.
-      if (type::check_cast((*analysis_cls)->get_type(),
-                           callee_ref->get_class())) {
-        static_base_type = (*analysis_cls)->get_type();
+      if (type::check_cast((*analysis_cls)->get_type(), base_type)) {
+        base_type = (*analysis_cls)->get_type();
       }
       auto method_search = get_method_search(*analysis_cls, invoke);
       analysis_resolved_callee =
@@ -195,13 +218,30 @@ struct TypeAnalysisAwareClosureMarkerSharedState final
       // Typically clone() on an array, or other obscure external references
       TRACE(TRMU, 2, "Unresolved callee at %s without analysis cls",
             SHOW(invoke));
+      refs.unknown_invoke_virtual_targets = true;
       return;
     }
 
     always_assert(resolved_callee);
     always_assert(!refs.base_invoke_virtual_target_if_class_instantiable);
     refs.base_invoke_virtual_target_if_class_instantiable =
-        std::make_pair(static_base_type, resolved_callee);
+        std::make_pair(base_type, resolved_callee);
+    auto base_cls = type_class(base_type);
+    if (base_cls->is_external() ||
+        (!is_abstract(resolved_callee) && resolved_callee->is_external())) {
+      refs.unknown_invoke_virtual_targets = true;
+    } else if (opcode::is_invoke_interface(invoke->opcode()) &&
+               is_interface(base_cls)) {
+      // Why can_rename? To mirror what VirtualRenamer looks at.
+      if (root(resolved_callee) || !can_rename(resolved_callee)) {
+        // We cannot rule out that there are dynamically added classes, possibly
+        // even created at runtime via Proxy.newProxyInstance, that override
+        // this method. So we assume the worst.
+        refs.unknown_invoke_virtual_targets = true;
+      } else if (is_annotation(base_cls)) {
+        refs.unknown_invoke_virtual_targets = true;
+      }
+    }
   }
 
   InsnsMethods gather_methods_on_insns(const DexMethod* method) const {
@@ -224,30 +264,37 @@ struct TypeAnalysisAwareClosureMarkerSharedState final
         if (!opcode::is_an_invoke(insn->opcode())) {
           continue;
         }
+        auto* method_ref = insn->get_method();
         auto* resolved_callee = resolve_method(
-            insn->get_method(), opcode_to_search(insn), resolved_refs, method);
+            method_ref, opcode_to_search(insn), resolved_refs, method);
         auto& refs = insns_refs[insn];
         if (!is_potentially_true_virtual(resolved_callee, insn)) {
           // Gather declared method ref
-          auto* method_ref = insn->get_method();
+          auto op = insn->opcode();
           always_assert(method_ref);
           refs.methods.push_back(method_ref);
-          if (opcode::is_invoke_super(insn->opcode()) && resolved_callee &&
-              !resolved_callee->is_external()) {
-            always_assert(resolved_callee->is_virtual());
-            always_assert(refs.invoke_super_target == nullptr);
-            if (is_abstract(resolved_callee)) {
-              TRACE(REACH, 1,
-                    "invoke super target of {%s} is abstract method %s in %s",
-                    SHOW(insn), SHOW(resolved_callee), SHOW(method));
-            } else {
-              refs.invoke_super_target = resolved_callee;
+          if (opcode::is_invoke_super(op)) {
+            if (resolved_callee && !resolved_callee->is_external()) {
+              always_assert(resolved_callee->is_virtual());
+              always_assert(refs.invoke_super_target == nullptr);
+              if (is_abstract(resolved_callee)) {
+                TRACE(REACH, 1,
+                      "invoke super target of {%s} is abstract method %s in %s",
+                      SHOW(insn), SHOW(resolved_callee), SHOW(method));
+              } else {
+                refs.invoke_super_target = resolved_callee;
+              }
             }
-          } else if (resolved_callee && resolved_callee->is_virtual() &&
-                     !resolved_callee->is_external()) {
-            always_assert(!is_abstract(resolved_callee));
-            refs.exact_invoke_virtual_targets_if_class_instantiable.push_back(
-                resolved_callee);
+          } else if (opcode::is_invoke_virtual(op) ||
+                     opcode::is_invoke_interface(op)) {
+            if (resolved_callee && !resolved_callee->is_external()) {
+              always_assert(resolved_callee->is_virtual());
+              always_assert(!is_abstract(resolved_callee));
+              refs.exact_invoke_virtual_targets_if_class_instantiable.push_back(
+                  resolved_callee);
+            } else {
+              refs.unknown_invoke_virtual_targets = true;
+            }
           }
           TRACE(TRMU, 5, "Gather non-true-virtual at %s resolved as %s",
                 SHOW(insn), SHOW(resolved_callee));
@@ -298,9 +345,12 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects_with_type_anaysis(
     bool relaxed_keep_interfaces,
     bool cfg_gathering_check_instantiable,
     bool cfg_gathering_check_instance_callable,
+    bool cfg_gathering_check_returning,
     type_analyzer::global::GlobalTypeAnalyzer* gta,
     bool /*unused*/,
-    int* num_exact_resolved_callees) {
+    int* num_exact_resolved_callees,
+    int* num_unreachable_invokes,
+    int* num_null_invokes) {
   Timer t("Marking");
   auto scope = build_class_scope(stores);
   walk::parallel::code(scope, [](DexMethod*, IRCode& code) {
@@ -324,7 +374,8 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects_with_type_anaysis(
       {&ignore_sets, method_override_graph.get(), record_reachability,
        relaxed_keep_class_members, relaxed_keep_interfaces,
        cfg_gathering_check_instantiable, cfg_gathering_check_instance_callable,
-       &cond_marked, reachable_objects.get(), reachable_aspects, &stats},
+       cfg_gathering_check_returning, &cond_marked, reachable_objects.get(),
+       reachable_aspects, &stats},
       gta};
 
   workqueue_run<ReachableObject>(
@@ -346,6 +397,12 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects_with_type_anaysis(
   if (num_exact_resolved_callees != nullptr) {
     *num_exact_resolved_callees = (int)shared_state.num_exact_resolved_callees;
   }
+  if (num_unreachable_invokes != nullptr) {
+    *num_unreachable_invokes = (int)shared_state.num_unreachable_invokes;
+  }
+  if (num_null_invokes != nullptr) {
+    *num_null_invokes = (int)shared_state.num_null_invokes;
+  }
 
   reachable_aspects->finish(cond_marked, *reachable_objects);
 
@@ -365,6 +422,7 @@ TypeAnalysisAwareRemoveUnreachablePass::compute_reachable_objects(
     bool relaxed_keep_interfaces,
     bool cfg_gathering_check_instantiable,
     bool cfg_gathering_check_instance_callable,
+    bool cfg_gathering_check_returning,
     bool remove_no_argument_constructors) {
   // Fetch analysis result
   auto analysis = pm.template get_preserved_analysis<GlobalTypeAnalysisPass>();
@@ -373,13 +431,21 @@ TypeAnalysisAwareRemoveUnreachablePass::compute_reachable_objects(
   always_assert(gta);
 
   int num_exact_resolved_callees;
+  int num_unreachable_invokes;
+  int num_null_invokes;
   auto res = compute_reachable_objects_with_type_anaysis(
       stores, m_ignore_sets, num_ignore_check_strings, reachable_aspects,
       emit_graph_this_run, relaxed_keep_class_members, relaxed_keep_interfaces,
       cfg_gathering_check_instantiable, cfg_gathering_check_instance_callable,
-      gta.get(), remove_no_argument_constructors, &num_exact_resolved_callees);
+      cfg_gathering_check_returning, gta.get(), remove_no_argument_constructors,
+      &num_exact_resolved_callees, &num_unreachable_invokes, &num_null_invokes);
   pm.incr_metric("num_exact_resolved_callees", num_exact_resolved_callees);
-  TRACE(TRMU, 1, "num_exact_resolved_callees %d", num_exact_resolved_callees);
+  pm.incr_metric("num_unreachable_invokes", num_unreachable_invokes);
+  pm.incr_metric("num_null_invokes", num_null_invokes);
+  TRACE(TRMU, 1,
+        "num_exact_resolved_callees %d, num_unreachable_invokes %d, "
+        "num_null_invokes %d",
+        num_exact_resolved_callees, num_unreachable_invokes, num_null_invokes);
   return res;
 }
 

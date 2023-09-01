@@ -196,7 +196,7 @@ void RemoveUnreachablePassBase::run_pass(DexStoresVector& stores,
       stores, pm, &num_ignore_check_strings, &reachable_aspects,
       emit_graph_this_run, m_relaxed_keep_class_members,
       m_prune_unreferenced_interfaces, m_prune_uninstantiable_insns,
-      m_prune_uncallable_instance_method_bodies,
+      m_prune_uncallable_instance_method_bodies, m_throw_propagation,
       m_remove_no_argument_constructors);
 
   reachability::ObjectCounts before = reachability::count_objects(stores);
@@ -219,11 +219,12 @@ void RemoveUnreachablePassBase::run_pass(DexStoresVector& stores,
   auto abstracted_classes = reachability::mark_classes_abstract(
       stores, *reachables, reachable_aspects);
   pm.incr_metric("abstracted_classes", abstracted_classes.size());
-  if (m_prune_uninstantiable_insns) {
-    auto uninstantiables_stats = reachability::sweep_code(
+  if (m_prune_uninstantiable_insns || m_throw_propagation) {
+    auto [uninstantiables_stats, throws_inserted] = reachability::sweep_code(
         stores, m_prune_uncallable_instance_method_bodies,
         m_prune_uncallable_virtual_methods, reachable_aspects);
     uninstantiables_stats.report(pm);
+    pm.incr_metric("throws_inserted", throws_inserted);
   }
   reachability::sweep(stores, *reachables,
                       output_unreachable_symbols ? &removed_symbols : nullptr,
@@ -304,12 +305,14 @@ RemoveUnreachablePass::compute_reachable_objects(
     bool relaxed_keep_interfaces,
     bool cfg_gathering_check_instantiable,
     bool cfg_gathering_check_instance_callable,
+    bool cfg_gathering_check_returning,
     bool remove_no_argument_constructors) {
   return reachability::compute_reachable_objects(
       stores, m_ignore_sets, num_ignore_check_strings, reachable_aspects,
       emit_graph_this_run, relaxed_keep_class_members, relaxed_keep_interfaces,
       cfg_gathering_check_instantiable, cfg_gathering_check_instance_callable,
-      false, nullptr, remove_no_argument_constructors);
+      cfg_gathering_check_returning, false, nullptr,
+      remove_no_argument_constructors);
 }
 
 static RemoveUnreachablePass s_pass;

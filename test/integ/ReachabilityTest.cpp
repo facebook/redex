@@ -88,6 +88,7 @@ TEST_F(ReachabilityTest, ReachabilityMarkAllTest) {
       /* relaxed_keep_interfaces */ false,
       /* cfg_gathering_check_instantiable */ false,
       /* cfg_gathering_check_instance_callable */ false,
+      /* cfg_gathering_check_returning */ false,
       /* should_mark_all_as_seed */ true, nullptr);
   walk::parallel::code(scope, [&](auto*, auto& code) { code.clear_cfg(); });
 

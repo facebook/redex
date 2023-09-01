@@ -32,5 +32,6 @@ class TypeAnalysisAwareRemoveUnreachablePass
       bool relaxed_keep_interfaces,
       bool cfg_gathering_check_instantiable,
       bool cfg_gathering_check_instance_callable,
+      bool cfg_gathering_check_returning,
       bool remove_no_argument_constructors) override;
 };

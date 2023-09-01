@@ -53,6 +53,7 @@ class RemoveUnreachablePassBase : public Pass {
     bind("prune_unreferenced_interfaces",
          false,
          m_prune_unreferenced_interfaces);
+    bind("throw_propagation", false, m_throw_propagation);
     after_configuration([this] {
       // To keep the backward compatability of this code, ensure that the
       // "MemberClasses" annotation is always in system_annos.
@@ -73,6 +74,7 @@ class RemoveUnreachablePassBase : public Pass {
                             bool relaxed_keep_interfaces,
                             bool cfg_gathering_check_instantiable,
                             bool cfg_gathering_check_instance_callable,
+                            bool cfg_gathering_check_returning,
                             bool remove_no_argument_constructors) = 0;
 
   void write_out_removed_symbols(
@@ -91,6 +93,7 @@ class RemoveUnreachablePassBase : public Pass {
   bool m_prune_uncallable_instance_method_bodies = false;
   bool m_prune_uncallable_virtual_methods = false;
   bool m_prune_unreferenced_interfaces = false;
+  bool m_throw_propagation = false;
 };
 
 class RemoveUnreachablePass : public RemoveUnreachablePassBase {
@@ -108,5 +111,6 @@ class RemoveUnreachablePass : public RemoveUnreachablePassBase {
       bool relaxed_keep_interfaces,
       bool cfg_gathering_check_instantiable,
       bool cfg_gathering_check_instance_callable,
+      bool cfg_gathering_check_returning,
       bool remove_no_argument_constructors) override;
 };

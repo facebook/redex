@@ -25,7 +25,7 @@ constexpr const char* METRIC_REACHABLE_METHODS_WITH_UNREACHABLE_INSTRUCTIONS =
 } // namespace
 
 void UnreachableLoweringPass::run_pass(DexStoresVector& stores,
-                                       ConfigFiles& conf,
+                                       ConfigFiles&,
                                        PassManager& mgr) {
   const auto scope = build_class_scope(stores);
   std::atomic<size_t> unreachable_instructions{0};

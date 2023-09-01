@@ -34,6 +34,8 @@ enum class ReachableObjectType : uint8_t {
   SEED,
   INSTANTIABLE,
   METHOD_REFERENCES_GATHERER_INSTANTIABLE,
+  RETURNS,
+  METHOD_REFERENCES_GATHERER_RETURNING,
 };
 
 /**
@@ -69,6 +71,12 @@ struct ReachableObject {
     always_assert(
         type == ReachableObjectType::INSTANTIABLE ||
         type == ReachableObjectType::METHOD_REFERENCES_GATHERER_INSTANTIABLE);
+  }
+  explicit ReachableObject(const DexMethod* method, ReachableObjectType type)
+      : type{type}, method{method} {
+    always_assert(
+        type == ReachableObjectType::RETURNS ||
+        type == ReachableObjectType::METHOD_REFERENCES_GATHERER_RETURNING);
   }
   explicit ReachableObject() : type{ReachableObjectType::SEED} {}
 
@@ -209,22 +217,26 @@ using GatherMieFunction = std::function<void(
 
 class MethodReferencesGatherer {
  public:
+  enum class AdvanceKind : uint8_t {
+    None = 0,
+    Initial = 1,
+    Callable = 2,
+    InstantiableDependencyResolved = 4, // iff instantiable_cls
+    ReturningDependencyResolved = 8,
+  };
+
   MethodReferencesGatherer(
       const TransitiveClosureMarkerSharedState* shared_state,
       const DexMethod* method,
       bool consider_code,
       GatherMieFunction gather_mie);
 
-  enum class AdvanceKind {
-    Initial,
-    Callable,
-    InstantiableDependencyResolved, // iff instantiable_cls
-  };
-
   class Advance {
     explicit Advance(AdvanceKind kind) : m_kind(kind) {}
     Advance(AdvanceKind kind, const DexClass* instantiable_cls)
         : m_kind(kind), m_instantiable_cls(instantiable_cls) {}
+    Advance(AdvanceKind kind, const DexMethod* returning_method)
+        : m_kind(kind), m_returning_method(returning_method) {}
 
    public:
     static Advance initial() { return Advance(AdvanceKind::Initial); }
@@ -233,12 +245,20 @@ class MethodReferencesGatherer {
       return Advance(AdvanceKind::InstantiableDependencyResolved,
                      instantiable_cls);
     }
+    static Advance returning(const DexMethod* returning_method) {
+      return Advance(AdvanceKind::ReturningDependencyResolved,
+                     returning_method);
+    }
     AdvanceKind kind() const { return m_kind; }
     const DexClass* instantiable_cls() const { return m_instantiable_cls; }
+    const DexMethod* returning_method() const { return m_returning_method; }
 
    private:
     AdvanceKind m_kind;
-    const DexClass* m_instantiable_cls{nullptr};
+    union {
+      const DexClass* m_instantiable_cls{nullptr};
+      const DexMethod* m_returning_method;
+    };
   };
 
   void advance(const Advance& advance, References* refs);
@@ -246,6 +266,8 @@ class MethodReferencesGatherer {
   const DexMethod* get_method() const { return m_method; }
 
   uint32_t get_instructions_visited() const { return m_instructions_visited; }
+
+  std::unordered_set<const IRInstruction*> get_non_returning_insns() const;
 
   void default_gather_mie(const MethodItemEntry& mie,
                           References* refs,
@@ -258,7 +280,12 @@ class MethodReferencesGatherer {
     bool may_throw_if_uninstantiable{true};
   };
   std::optional<InstantiableDependency> get_instantiable_dependency(
-      const MethodItemEntry& mie, References* refs) const;
+      const IRInstruction* insn, References* refs) const;
+  struct ReturningDependency {
+    std::unordered_set<const DexMethod*> methods;
+  };
+  std::optional<ReturningDependency> get_returning_dependency(
+      const IRInstruction* insn, const References* refs) const;
 
   const TransitiveClosureMarkerSharedState* m_shared_state;
   const DexMethod* m_method;
@@ -269,9 +296,23 @@ class MethodReferencesGatherer {
   std::unordered_set<DexType*> m_covered_catch_types;
   std::unordered_map<const DexClass*, std::vector<CFGNeedle>>
       m_instantiable_dependencies;
+  std::unordered_map<const DexMethod*, std::vector<CFGNeedle>>
+      m_returning_dependencies;
   uint32_t m_instructions_visited{0};
-  AdvanceKind m_next_advance_kind{AdvanceKind::Initial};
+  AdvanceKind m_next_advance_kinds{AdvanceKind::Initial};
 };
+
+inline MethodReferencesGatherer::AdvanceKind operator&(
+    const MethodReferencesGatherer::AdvanceKind a,
+    const MethodReferencesGatherer::AdvanceKind b) {
+  return (MethodReferencesGatherer::AdvanceKind)((uint8_t)a & (uint8_t)b);
+}
+
+inline MethodReferencesGatherer::AdvanceKind operator|(
+    const MethodReferencesGatherer::AdvanceKind a,
+    const MethodReferencesGatherer::AdvanceKind b) {
+  return (MethodReferencesGatherer::AdvanceKind)((uint8_t)a | (uint8_t)b);
+}
 
 using MethodReferencesGatherers =
     std::unordered_map<const DexMethod*,
@@ -282,8 +323,6 @@ struct ConditionallyMarked {
     ConcurrentSet<const DexField*> fields;
     ConcurrentSet<const DexMethod*> methods;
     ConcurrentSet<const DexClass*> classes;
-    ConcurrentMap<const DexClass*, MethodReferencesGatherers>
-        method_references_gatherers;
     ConcurrentSet<DexType*> directly_instantiable_types;
   };
 
@@ -298,6 +337,11 @@ struct ConditionallyMarked {
   // If the class is not abstract and has a constructor, or has a derived class
   // that does.
   MarkedItems if_class_instantiable;
+
+  ConcurrentMap<const DexClass*, MethodReferencesGatherers>
+      method_references_gatherers_if_class_instantiable;
+  ConcurrentMap<const DexMethod*, MethodReferencesGatherers>
+      method_references_gatherers_if_method_returning;
 
   ConcurrentMap<const DexMethod*, std::shared_ptr<MethodReferencesGatherer>>
       if_instance_method_callable;
@@ -316,7 +360,11 @@ struct ReachableAspects {
   ConcurrentMap<const DexMethod*, std::unordered_set<const DexType*>>
       base_invoke_virtual_targets;
   InstantiableTypes instantiable_types;
-  InstantiableTypes uninstantiable_dependencies;
+  std::unordered_set<const DexClass*> uninstantiable_dependencies;
+  std::unordered_set<const DexMethod*> non_returning_dependencies;
+  std::unordered_map<const DexMethod*, std::unordered_set<const IRInstruction*>>
+      non_returning_insns;
+  ConcurrentSet<const DexMethod*> returning_methods;
   ConcurrentSet<DexType*> directly_instantiable_types;
   CallableInstanceMethods implementation_methods;
   InstantiableTypes incomplete_directly_instantiable_types;
@@ -335,17 +383,26 @@ struct References {
   std::vector<DexMethodRef*> methods;
   // Conditional virtual method references. They are already resolved DexMethods
   // conditionally reachable at virtual call sites.
+  // Exact invoke-virtual targets must be non-external.
   std::unordered_set<const DexMethod*>
       exact_invoke_virtual_targets_if_class_instantiable;
+  // Base invoke-virtual targets may include external virtual methods, and they
+  // imply that all overriding methods may be targets as well.
   std::unordered_map<const DexMethod*, std::unordered_set<const DexType*>>
       base_invoke_virtual_targets_if_class_instantiable;
+  // Whether there are may have been any unresolved or external invoke virtual
+  // targets.
+  bool unknown_invoke_virtual_targets{false};
   std::unordered_set<const DexClass*> classes_dynamically_referenced;
   std::vector<const DexClass*>
       method_references_gatherer_dependencies_if_class_instantiable;
+  std::vector<const DexMethod*>
+      method_references_gatherer_dependencies_if_method_returning;
   bool method_references_gatherer_dependency_if_instance_method_callable{false};
   std::vector<DexType*> new_instances;
   std::unordered_set<const DexMethod*> invoke_super_targets;
   std::vector<const DexClass*> classes_if_instantiable;
+  bool returns{false};
 
   // Whether this instance contains any entries that can only arise from
   // MethodItemEntries.
@@ -453,6 +510,7 @@ struct TransitiveClosureMarkerSharedState {
   bool relaxed_keep_interfaces;
   bool cfg_gathering_check_instantiable;
   bool cfg_gathering_check_instance_callable;
+  bool cfg_gathering_check_returning;
 
   ConditionallyMarked* cond_marked;
   ReachableObjects* reachable_objects;
@@ -494,6 +552,10 @@ class TransitiveClosureMarkerWorker {
 
   void visit_method_references_gatherer_instantiable(const DexClass* cls);
 
+  void visit_returns(const DexMethod* method);
+
+  void visit_method_references_gatherer_returning(const DexMethod* method);
+
   virtual References gather(const DexAnnotation* anno) const;
 
   virtual References gather(const DexField* field) const;
@@ -528,6 +590,10 @@ class TransitiveClosureMarkerWorker {
       const DexClass* cls,
       std::shared_ptr<MethodReferencesGatherer> mrefs_gatherer);
 
+  void push_if_method_returning(
+      const DexMethod* method,
+      std::shared_ptr<MethodReferencesGatherer> mrefs_gatherer);
+
   void push_if_class_retained(const DexField* field);
 
   void push_if_class_retained(const DexMethod* method);
@@ -559,6 +625,8 @@ class TransitiveClosureMarkerWorker {
 
   template <class Parent, class Object>
   void record_reachability(Parent* parent, Object* object);
+
+  void returns(const DexMethod* method);
 
   void instantiable(DexType* type);
 
@@ -630,6 +698,7 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
     bool relaxed_keep_interfaces = false,
     bool cfg_gathering_check_instantiable = false,
     bool cfg_gathering_check_instance_callable = false,
+    bool cfg_gathering_check_returning = false,
     bool should_mark_all_as_seed = false,
     std::unique_ptr<const method_override_graph::Graph>*
         out_method_override_graph = nullptr,
@@ -652,7 +721,7 @@ void sweep(DexStoresVector& stores,
 
 void reanimate_zombie_methods(const ReachableAspects& reachable_aspects);
 
-remove_uninstantiables_impl::Stats sweep_code(
+std::pair<remove_uninstantiables_impl::Stats, size_t> sweep_code(
     DexStoresVector& stores,
     bool prune_uncallable_instance_method_bodies,
     bool skip_uncallable_virtual_methods,
