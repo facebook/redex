@@ -42,7 +42,8 @@ struct MethodReferences {
   std::vector<DexMethodRef*> methods;
   std::vector<const DexMethod*>
       exact_invoke_virtual_targets_if_class_instantiable;
-  const DexMethod* base_invoke_virtual_target_if_class_instantiable{nullptr};
+  std::optional<std::pair<const DexType*, const DexMethod*>>
+      base_invoke_virtual_target_if_class_instantiable;
   const DexMethod* invoke_super_target{nullptr};
   void add_to(References* refs) const {
     refs->methods.insert(refs->methods.end(), methods.begin(), methods.end());
@@ -50,8 +51,9 @@ struct MethodReferences {
         exact_invoke_virtual_targets_if_class_instantiable.begin(),
         exact_invoke_virtual_targets_if_class_instantiable.end());
     if (base_invoke_virtual_target_if_class_instantiable) {
-      refs->base_invoke_virtual_targets_if_class_instantiable.insert(
-          base_invoke_virtual_target_if_class_instantiable);
+      refs->base_invoke_virtual_targets_if_class_instantiable
+          [base_invoke_virtual_target_if_class_instantiable->second]
+              .insert(base_invoke_virtual_target_if_class_instantiable->first);
     }
     if (invoke_super_target) {
       refs->invoke_super_targets.insert(invoke_super_target);
@@ -99,13 +101,14 @@ struct TypeAnalysisAwareClosureMarkerSharedState final
                                       IRInstruction* invoke,
                                       MethodReferences& refs) const {
     TRACE(TRMU, 5, "Gathering method from true virtual call %s", SHOW(invoke));
-    always_assert(!opcode::is_invoke_super(invoke->opcode()));
+    auto op = invoke->opcode();
+    always_assert(opcode::is_invoke_virtual(op) ||
+                  opcode::is_invoke_interface(op));
     auto* callee_ref = invoke->get_method();
     // If we failed to resolve the callee earlier and we know this is might be a
     // true virtual call, resolve the callee in a more conservative way to
     // ensure we don't miss potential callees.
-    if (resolved_callee == nullptr &&
-        opcode::is_invoke_virtual(invoke->opcode())) {
+    if (resolved_callee == nullptr && opcode::is_invoke_virtual(op)) {
       resolved_callee = const_cast<DexMethod*>(resolve_without_context(
           callee_ref, type_class(callee_ref->get_class())));
     }
@@ -158,7 +161,16 @@ struct TypeAnalysisAwareClosureMarkerSharedState final
     // Can we leverage best known approximation?
     auto analysis_cls = domain.get_dex_cls();
     DexMethod* analysis_resolved_callee = nullptr;
+    auto static_base_type = callee_ref->get_class();
     if (analysis_cls) {
+      // If the analysis_cls is actually more precise than static_base_type,
+      // then we can use that. However, sometimes it falls back to a too generic
+      // object type that cannot represent all interface demands, and then the
+      // following check-cast fails, and we cannot use the analysis_cls.
+      if (type::check_cast((*analysis_cls)->get_type(),
+                           callee_ref->get_class())) {
+        static_base_type = (*analysis_cls)->get_type();
+      }
       auto method_search = get_method_search(*analysis_cls, invoke);
       analysis_resolved_callee =
           resolve_method(*analysis_cls, callee_ref->get_name(),
@@ -187,9 +199,9 @@ struct TypeAnalysisAwareClosureMarkerSharedState final
     }
 
     always_assert(resolved_callee);
-    always_assert(refs.base_invoke_virtual_target_if_class_instantiable ==
-                  nullptr);
-    refs.base_invoke_virtual_target_if_class_instantiable = resolved_callee;
+    always_assert(!refs.base_invoke_virtual_target_if_class_instantiable);
+    refs.base_invoke_virtual_target_if_class_instantiable =
+        std::make_pair(static_base_type, resolved_callee);
   }
 
   InsnsMethods gather_methods_on_insns(const DexMethod* method) const {

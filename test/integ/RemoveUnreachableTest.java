@@ -149,6 +149,17 @@ class Uninstantiated implements J {
   public void implementMe() {}
 }
 
+interface K {
+  public void foo();
+}
+abstract class KImpl1Abstract implements K { }
+class KImpl1Derived extends KImpl1Abstract {
+  public void foo() { };
+}
+class KImpl2 implements K {
+  public void foo() { };
+}
+
 public class RemoveUnreachableTest {
   public static void testMethod() {
     // Inheritance test
@@ -164,5 +175,11 @@ public class RemoveUnreachableTest {
   public static void testUninstantiated() {
     J j = Uninstantiated.retainMe();
     j.implementMe();
+  }
+
+  public static void testSharpening() {
+    KImpl1Abstract k = new KImpl1Derived();
+    k.foo();
+    new KImpl2();
   }
 }

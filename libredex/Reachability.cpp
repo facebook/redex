@@ -712,21 +712,22 @@ void MethodReferencesGatherer::default_gather_mie(
       }
     } else if (gather_methods && (opcode::is_invoke_virtual(op) ||
                                   opcode::is_invoke_interface(op))) {
-      auto resolved_callee =
-          resolve_method(insn->get_method(), opcode_to_search(insn));
-      if (resolved_callee == nullptr) {
+      auto method_ref = insn->get_method();
+      auto resolved_callee = resolve_method(method_ref, opcode_to_search(insn));
+      if (resolved_callee == nullptr && opcode::is_invoke_virtual(op)) {
         // There are some invoke-virtual call on methods whose def are
         // actually in interface.
         resolved_callee =
-            resolve_method(insn->get_method(), MethodSearch::InterfaceVirtual);
+            resolve_method(method_ref, MethodSearch::InterfaceVirtual);
       }
       if (!resolved_callee) {
         // Typically clone() on an array, or other obscure external references
         TRACE(REACH, 2, "Unresolved virtual callee at %s", SHOW(insn));
         return;
       }
-      refs->base_invoke_virtual_targets_if_class_instantiable.insert(
-          resolved_callee);
+      auto static_base_type = method_ref->get_class();
+      refs->base_invoke_virtual_targets_if_class_instantiable[resolved_callee]
+          .insert(static_base_type);
     }
   }
 }
@@ -1349,17 +1350,24 @@ void TransitiveClosureMarkerWorker::exact_invoke_virtual_target(
 }
 
 void TransitiveClosureMarkerWorker::base_invoke_virtual_target(
-    const DexMethod* method) {
-  if (!m_shared_state->reachable_aspects->base_invoke_virtual_targets.insert(
-          method)) {
+    const DexMethod* method, const DexType* base_type, bool is_child) {
+  if (base_type && method->get_class() == base_type) {
+    base_type = nullptr;
+  }
+  bool inserted = false;
+  m_shared_state->reachable_aspects->base_invoke_virtual_targets.update(
+      method,
+      [&](auto*, auto& set, bool) { inserted = set.insert(base_type).second; });
+  if (!inserted) {
     return;
   }
-  if (!is_abstract(method)) {
+  auto& node = m_shared_state->method_override_graph->get_node(method);
+  if (!is_abstract(method) &&
+      (!is_child || !base_type || node.overrides(method, base_type))) {
     exact_invoke_virtual_target(method);
   }
-  for (auto* child :
-       m_shared_state->method_override_graph->get_node(method).children) {
-    base_invoke_virtual_target(child);
+  for (auto* child : node.children) {
+    base_invoke_virtual_target(child, base_type, /* is_child */ true);
   }
 }
 
@@ -1440,7 +1448,7 @@ void TransitiveClosureMarkerWorker::visit_method_ref(
   }
   // We still have to conditionally mark root overrides. RootSetMarker already
   // covers external overrides, so we skip them here.
-  base_invoke_virtual_target(m);
+  base_invoke_virtual_target(m, /* base_type */ nullptr);
   m_shared_state->reachable_aspects->zombie_implementation_methods.erase(m);
 }
 

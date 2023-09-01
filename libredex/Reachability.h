@@ -313,7 +313,8 @@ struct ReachableAspects {
   DynamicallyReferencedClasses dynamically_referenced_classes;
   CallableInstanceMethods callable_instance_methods;
   CallableInstanceMethods exact_invoke_virtual_targets;
-  CallableInstanceMethods base_invoke_virtual_targets;
+  ConcurrentMap<const DexMethod*, std::unordered_set<const DexType*>>
+      base_invoke_virtual_targets;
   InstantiableTypes instantiable_types;
   InstantiableTypes uninstantiable_dependencies;
   ConcurrentSet<DexType*> directly_instantiable_types;
@@ -336,7 +337,7 @@ struct References {
   // conditionally reachable at virtual call sites.
   std::unordered_set<const DexMethod*>
       exact_invoke_virtual_targets_if_class_instantiable;
-  std::unordered_set<const DexMethod*>
+  std::unordered_map<const DexMethod*, std::unordered_set<const DexType*>>
       base_invoke_virtual_targets_if_class_instantiable;
   std::unordered_set<const DexClass*> classes_dynamically_referenced;
   std::vector<const DexClass*>
@@ -586,11 +587,17 @@ class TransitiveClosureMarkerWorker {
       exact_invoke_virtual_target(m);
     }
   }
-  void base_invoke_virtual_target(const DexMethod* method);
+  void base_invoke_virtual_target(const DexMethod* method,
+                                  const DexType* base_type,
+                                  bool is_child = false);
   void base_invoke_virtual_target(
-      const std::unordered_set<const DexMethod*>& methods) {
-    for (auto* m : methods) {
-      base_invoke_virtual_target(m);
+      const std::unordered_map<const DexMethod*,
+                               std::unordered_set<const DexType*>>&
+          base_invoke_virtual_targets) {
+    for (auto&& [method, base_types] : base_invoke_virtual_targets) {
+      for (auto* base_type : base_types) {
+        base_invoke_virtual_target(method, base_type);
+      }
     }
   }
 
