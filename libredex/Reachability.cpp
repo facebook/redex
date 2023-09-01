@@ -1133,6 +1133,10 @@ void TransitiveClosureMarkerWorker::instantiable(DexType* type) {
 }
 
 void TransitiveClosureMarkerWorker::directly_instantiable(DexType* type) {
+  if (!m_shared_state->reachable_aspects->directly_instantiable_types.insert(
+          type)) {
+    return;
+  }
   if (m_shared_state->cfg_gathering_check_instance_callable) {
     instantiable(type);
   }
@@ -1591,6 +1595,8 @@ void report(PassManager& pm,
                  reachable_aspects.instructions_unvisited);
   pm.incr_metric("callable_instance_methods",
                  reachable_aspects.callable_instance_methods.size());
+  pm.incr_metric("directly_instantiable_types",
+                 reachable_aspects.directly_instantiable_types.size());
 }
 
 ObjectCounts count_objects(const DexStoresVector& stores) {
