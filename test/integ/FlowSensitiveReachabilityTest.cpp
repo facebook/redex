@@ -84,7 +84,7 @@ TEST_F(FlowSensitiveReachabilityTest,
       stores, /* prune_uncallable_instance_method_bodies */ false,
       /* skip_uncallable_virtual_methods */ false, reachable_aspects);
   EXPECT_EQ(uninstantiables_stats.field_accesses_on_uninstantiable, 3);
-  EXPECT_EQ(uninstantiables_stats.invokes, 2);
+  EXPECT_EQ(uninstantiables_stats.invokes, 6);
   EXPECT_EQ(uninstantiables_stats.check_casts, 1);
   EXPECT_EQ(uninstantiables_stats.instance_ofs, 1);
 
@@ -161,10 +161,10 @@ TEST_F(FlowSensitiveReachabilityTest, cfg_gathering_check_instance_callable) {
       stores, /* prune_uncallable_instance_method_bodies */ true,
       /* skip_uncallable_virtual_methods */ false, reachable_aspects);
   EXPECT_EQ(uninstantiables_stats.field_accesses_on_uninstantiable, 1);
-  EXPECT_EQ(uninstantiables_stats.invokes, 2);
+  EXPECT_EQ(uninstantiables_stats.invokes, 4);
   EXPECT_EQ(uninstantiables_stats.check_casts, 1);
   EXPECT_EQ(uninstantiables_stats.instance_ofs, 1);
-  EXPECT_EQ(uninstantiables_stats.throw_null_methods, 6);
+  EXPECT_EQ(uninstantiables_stats.throw_null_methods, 11);
 
   walk::parallel::code(scope, [&](auto*, auto& code) { code.clear_cfg(); });
 }
@@ -239,10 +239,10 @@ TEST_F(FlowSensitiveReachabilityTest, sweep_uncallable_virtual_methods) {
       stores, /* prune_uncallable_instance_method_bodies */ true,
       /* skip_uncallable_virtual_methods */ true, reachable_aspects);
   EXPECT_EQ(uninstantiables_stats.field_accesses_on_uninstantiable, 1);
-  EXPECT_EQ(uninstantiables_stats.invokes, 2);
+  EXPECT_EQ(uninstantiables_stats.invokes, 4);
   EXPECT_EQ(uninstantiables_stats.check_casts, 1);
   EXPECT_EQ(uninstantiables_stats.instance_ofs, 1);
-  EXPECT_EQ(uninstantiables_stats.throw_null_methods, 3);
+  EXPECT_EQ(uninstantiables_stats.throw_null_methods, 6);
 
   auto abstracted_classes = reachability::mark_classes_abstract(
       stores, *reachable_objects, reachable_aspects);
@@ -253,6 +253,50 @@ TEST_F(FlowSensitiveReachabilityTest, sweep_uncallable_virtual_methods) {
   EXPECT_EQ(uninstantiables_stats.abstracted_vmethods, 1);
   EXPECT_EQ(uninstantiables_stats.abstracted_classes, 0);
   EXPECT_EQ(uninstantiables_stats.removed_vmethods, 1);
+
+  walk::parallel::code(scope, [&](auto*, auto& code) { code.clear_cfg(); });
+}
+
+TEST_F(FlowSensitiveReachabilityTest, abstract_overrides_non_abstract) {
+  const auto& dexen = stores[0].get_dexen();
+  auto pg_config = process_and_get_proguard_config(dexen, R"(
+    -keepclasseswithmembers public class FlowSensitiveReachabilityTest {
+      public void abstract_overrides_non_abstract();
+    }
+  )");
+
+  EXPECT_TRUE(pg_config->ok);
+  EXPECT_EQ(pg_config->keep_rules.size(), 1);
+
+  int num_ignore_check_strings = 0;
+  reachability::IgnoreSets ig_sets;
+  reachability::ReachableAspects reachable_aspects;
+  auto scope = build_class_scope(stores);
+  walk::parallel::code(scope, [&](auto*, auto& code) { code.build_cfg(); });
+
+  auto reachable_objects = reachability::compute_reachable_objects(
+      stores, ig_sets, &num_ignore_check_strings, &reachable_aspects, false,
+      /* relaxed_keep_class_members */ true,
+      /* cfg_gathering_check_instantiable */ true);
+
+  //// instantiable_types
+  EXPECT_EQ(reachable_aspects.instantiable_types.size(), 4);
+  auto is_instantiable = [&](const std::string_view& s) {
+    return std::any_of(reachable_aspects.instantiable_types.begin(),
+                       reachable_aspects.instantiable_types.end(),
+                       [s](const auto* cls) { return cls->str() == s; });
+  };
+  EXPECT_TRUE(is_instantiable("LFlowSensitiveReachabilityTest;"));
+  EXPECT_TRUE(is_instantiable("LSurpriseBase;"));
+  EXPECT_TRUE(is_instantiable("LSurprise;"));
+  EXPECT_TRUE(is_instantiable("LSurpriseSub;"));
+
+  EXPECT_TRUE(reachable_objects->marked_unsafe(
+      DexMethod::get_method("LSurpriseBase;.foo:()V")));
+  EXPECT_FALSE(reachable_objects->marked_unsafe(
+      DexMethod::get_method("LSurprise;.foo:()V")));
+  EXPECT_TRUE(reachable_objects->marked_unsafe(
+      DexMethod::get_method("LSurpriseSub;.foo:()V")));
 
   walk::parallel::code(scope, [&](auto*, auto& code) { code.clear_cfg(); });
 }

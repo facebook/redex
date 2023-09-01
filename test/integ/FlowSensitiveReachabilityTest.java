@@ -28,6 +28,16 @@ class RegularInstantiable extends Intermediate {
   public void foo() {} // overrides
 }
 
+class SurpriseBase {
+  public void foo() {}
+}
+abstract class Surprise extends SurpriseBase {
+  public abstract void foo();
+}
+class SurpriseSub extends Surprise {
+  public void foo() {}
+}
+
 public class FlowSensitiveReachabilityTest {
   public static void root() {
     clone(null);
@@ -65,5 +75,10 @@ public class FlowSensitiveReachabilityTest {
 
   static RegularInstantiable regular_instantiable() {
     return new RegularInstantiable();
+  }
+
+  public static void abstract_overrides_non_abstract() {
+    SurpriseBase base = new SurpriseSub();
+    base.foo();
   }
 }

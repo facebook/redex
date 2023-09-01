@@ -1346,11 +1346,6 @@ void TransitiveClosureMarkerWorker::base_invoke_virtual_target(
   }
   for (auto* child :
        m_shared_state->method_override_graph->get_node(method).children) {
-    if (is_abstract(child) && !is_interface(type_class(child->get_class()))) {
-      // We keep *all* abstract methods in non-interfaces, reflecting previous
-      // behavior.
-      push_if_class_instantiable(child);
-    }
     base_invoke_virtual_target(child);
   }
 }
