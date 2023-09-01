@@ -922,12 +922,13 @@ void TransitiveClosureMarkerWorker::gather_and_push(
   push(meth, refs.types.begin(), refs.types.end());
   push(meth, refs.fields.begin(), refs.fields.end());
   push(meth, refs.methods.begin(), refs.methods.end());
-  for (auto* vmeth : refs.vmethods_if_class_instantiable) {
-    push_if_class_instantiable(vmeth);
-  }
+  exact_invoke_virtual_target(
+      refs.exact_invoke_virtual_targets_if_class_instantiable);
+  base_invoke_virtual_target(
+      refs.base_invoke_virtual_targets_if_class_instantiable);
+  instance_callable(refs.invoke_super_targets);
   dynamically_referenced(refs.classes_dynamically_referenced);
   directly_instantiable(refs.new_instances);
-  instance_callable(refs.invoke_super_targets);
   if (refs.method_references_gatherer_dependency_if_instance_method_callable) {
     push_if_instance_method_callable(method_references_gatherer);
     always_assert(
@@ -978,8 +979,21 @@ void TransitiveClosureMarkerWorker::gather_and_push(T t) {
   push(t, refs.fields.begin(), refs.fields.end());
   push(t, refs.methods.begin(), refs.methods.end());
   dynamically_referenced(refs.classes_dynamically_referenced);
-  always_assert(refs.new_instances.empty());
-  always_assert(refs.invoke_super_targets.empty());
+  always_assert_log(!refs.maybe_from_code(),
+                    "gather_and_push(%s) should not produce entries that can "
+                    "only arise from MethodItemEntries, as those would then "
+                    "not get processed by (default_)gather_mie.",
+                    typeid(T).name());
+}
+
+bool References::maybe_from_code() const {
+  return !new_instances.empty() ||
+         !exact_invoke_virtual_targets_if_class_instantiable.empty() ||
+         !base_invoke_virtual_targets_if_class_instantiable.empty() ||
+         !method_references_gatherer_dependencies_if_class_instantiable
+              .empty() ||
+         method_references_gatherer_dependency_if_instance_method_callable ||
+         !invoke_super_targets.empty();
 }
 
 template <class Parent>
@@ -1268,7 +1282,21 @@ void TransitiveClosureMarkerWorker::implementation_method(
   always_assert(method->is_virtual());
   always_assert(!is_abstract(method));
 
-  instance_callable(method);
+  auto is_unconditionally_instance_callable = [](const DexMethod* m) {
+    return root(m) || m->is_external() || m->rstate.no_optimizations();
+  };
+  bool unconditionally_instance_callable{
+      is_unconditionally_instance_callable(method)};
+  for (auto* overridden_method : newly_overridden_methods) {
+    if (is_unconditionally_instance_callable(overridden_method)) {
+      unconditionally_instance_callable = true;
+    }
+  }
+  if (unconditionally_instance_callable) {
+    instance_callable(method);
+  } else {
+    instance_callable_if_exact_invoke_virtual_target(method);
+  }
 
   if (!m_shared_state->reachable_objects->marked(method) &&
       std::any_of(newly_overridden_methods.begin(),
@@ -1278,6 +1306,52 @@ void TransitiveClosureMarkerWorker::implementation_method(
                   })) {
     m_shared_state->reachable_aspects->zombie_implementation_methods.insert(
         method);
+  }
+}
+
+void TransitiveClosureMarkerWorker::
+    instance_callable_if_exact_invoke_virtual_target(const DexMethod* method) {
+  if (!m_shared_state->cond_marked->if_exact_invoke_virtual_target.insert(
+          method)) {
+    return;
+  }
+  if (m_shared_state->reachable_aspects->exact_invoke_virtual_targets.count(
+          method)) {
+    instance_callable(method);
+  }
+}
+
+void TransitiveClosureMarkerWorker::exact_invoke_virtual_target(
+    const DexMethod* method) {
+  always_assert(!is_abstract(method));
+  if (!m_shared_state->reachable_aspects->exact_invoke_virtual_targets.insert(
+          method)) {
+    return;
+  }
+  push_if_class_instantiable(method);
+  if (m_shared_state->cond_marked->if_exact_invoke_virtual_target.count(
+          method)) {
+    instance_callable(method);
+  }
+}
+
+void TransitiveClosureMarkerWorker::base_invoke_virtual_target(
+    const DexMethod* method) {
+  if (!m_shared_state->reachable_aspects->base_invoke_virtual_targets.insert(
+          method)) {
+    return;
+  }
+  if (!is_abstract(method)) {
+    exact_invoke_virtual_target(method);
+  }
+  for (auto* child :
+       m_shared_state->method_override_graph->get_node(method).children) {
+    if (is_abstract(child) && !is_interface(type_class(child->get_class()))) {
+      // We keep *all* abstract methods in non-interfaces, reflecting previous
+      // behavior.
+      push_if_class_instantiable(child);
+    }
+    base_invoke_virtual_target(child);
   }
 }
 
@@ -1347,17 +1421,15 @@ void TransitiveClosureMarkerWorker::visit_method_ref(
     }
   }
   auto m = method->as_def();
-  if (!m) {
+  if (!m || m->is_external()) {
     return;
   }
+  always_assert_log(m->is_concrete(), "%s is not concrete", SHOW(m));
+  // RootSetMarker already covers external overrides, so we skip them here.
   // If we're keeping an interface or virtual method, we have to keep its
   // implementations and overriding methods respectively.
-  if (m->is_virtual() || !m->is_concrete()) {
-    const auto& overriding_methods =
-        mog::get_overriding_methods(*m_shared_state->method_override_graph, m);
-    for (auto* overriding : overriding_methods) {
-      push_if_class_instantiable(overriding);
-    }
+  if (m->is_virtual()) {
+    base_invoke_virtual_target(m);
     m_shared_state->reachable_aspects->zombie_implementation_methods.erase(m);
   }
 }
@@ -1840,6 +1912,10 @@ void report(PassManager& pm,
                  reachable_aspects.instructions_unvisited);
   pm.incr_metric("callable_instance_methods",
                  reachable_aspects.callable_instance_methods.size());
+  pm.incr_metric("exact_invoke_virtual_targets",
+                 reachable_aspects.exact_invoke_virtual_targets.size());
+  pm.incr_metric("base_invoke_virtual_targets",
+                 reachable_aspects.base_invoke_virtual_targets.size());
   pm.incr_metric("directly_instantiable_types",
                  reachable_aspects.directly_instantiable_types.size());
   pm.incr_metric("implementation_methods",

@@ -302,6 +302,8 @@ struct ConditionallyMarked {
 
   ConcurrentMap<const DexMethod*, std::shared_ptr<MethodReferencesGatherer>>
       if_instance_method_callable;
+
+  ConcurrentSet<const DexMethod*> if_exact_invoke_virtual_target;
 };
 
 using CallableInstanceMethods = ConcurrentSet<const DexMethod*>;
@@ -311,6 +313,8 @@ using DynamicallyReferencedClasses = ConcurrentSet<const DexClass*>;
 struct ReachableAspects {
   DynamicallyReferencedClasses dynamically_referenced_classes;
   CallableInstanceMethods callable_instance_methods;
+  CallableInstanceMethods exact_invoke_virtual_targets;
+  CallableInstanceMethods base_invoke_virtual_targets;
   InstantiableTypes instantiable_types;
   InstantiableTypes uninstantiable_dependencies;
   ConcurrentSet<DexType*> directly_instantiable_types;
@@ -331,13 +335,20 @@ struct References {
   std::vector<DexMethodRef*> methods;
   // Conditional virtual method references. They are already resolved DexMethods
   // conditionally reachable at virtual call sites.
-  std::vector<const DexMethod*> vmethods_if_class_instantiable;
+  std::unordered_set<const DexMethod*>
+      exact_invoke_virtual_targets_if_class_instantiable;
+  std::unordered_set<const DexMethod*>
+      base_invoke_virtual_targets_if_class_instantiable;
   std::unordered_set<const DexClass*> classes_dynamically_referenced;
   std::vector<const DexClass*>
       method_references_gatherer_dependencies_if_class_instantiable;
   bool method_references_gatherer_dependency_if_instance_method_callable{false};
   std::vector<DexType*> new_instances;
   std::unordered_set<const DexMethod*> invoke_super_targets;
+
+  // Whether this instance contains any entries that can only arise from
+  // MethodItemEntries.
+  bool maybe_from_code() const;
 };
 
 void gather_dynamic_references(const DexAnnotation* item,
@@ -565,6 +576,24 @@ class TransitiveClosureMarkerWorker {
   void implementation_method(
       const DexMethod* method,
       std::unordered_set<const DexMethod*>* overridden_methods);
+
+  void instance_callable_if_exact_invoke_virtual_target(
+      const DexMethod* method);
+
+  void exact_invoke_virtual_target(const DexMethod* method);
+  void exact_invoke_virtual_target(
+      const std::unordered_set<const DexMethod*>& methods) {
+    for (auto* m : methods) {
+      exact_invoke_virtual_target(m);
+    }
+  }
+  void base_invoke_virtual_target(const DexMethod* method);
+  void base_invoke_virtual_target(
+      const std::unordered_set<const DexMethod*>& methods) {
+    for (auto* m : methods) {
+      base_invoke_virtual_target(m);
+    }
+  }
 
   void dynamically_referenced(const DexClass* cls);
   void dynamically_referenced(

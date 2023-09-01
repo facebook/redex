@@ -58,6 +58,15 @@ class Sub4 extends Intermediate4 {
   void foo() {
   }
 }
+
+class Dead {}
+class Base5 {
+  void foo() { new Dead(); }
+}
+class Sub5 extends Base5 {
+  void foo() {}
+}
+
 public class TypeAnalysisRemoveUnreachableTest {
   public void typeAnalysisRMUTest1() {
     Base1 b = Sub1.createSub1();
@@ -80,5 +89,11 @@ public class TypeAnalysisRemoveUnreachableTest {
     new Intermediate4(); // must have a non-abstract foo() override
     Base4 b = new Sub4();
     b.foo();
+  }
+
+  public void typeAnalysisRMUTest5() {
+    Base5 b = new Base5(); // Base5 is directly instantiated
+    b = new Sub5();
+    b.foo(); // Invokes Sub5.foo(). Sub4.foo() is not instance-callable.
   }
 }

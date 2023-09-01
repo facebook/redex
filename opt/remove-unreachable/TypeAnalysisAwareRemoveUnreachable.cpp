@@ -40,14 +40,19 @@ MethodSearch get_method_search(const DexClass* analysis_cls,
 
 struct MethodReferences {
   std::vector<DexMethodRef*> methods;
-  std::vector<const DexMethod*> vmethods_if_class_instantiable;
+  std::vector<const DexMethod*>
+      exact_invoke_virtual_targets_if_class_instantiable;
+  const DexMethod* base_invoke_virtual_target_if_class_instantiable{nullptr};
   const DexMethod* invoke_super_target{nullptr};
   void add_to(References* refs) const {
     refs->methods.insert(refs->methods.end(), methods.begin(), methods.end());
-    refs->vmethods_if_class_instantiable.insert(
-        refs->vmethods_if_class_instantiable.end(),
-        vmethods_if_class_instantiable.begin(),
-        vmethods_if_class_instantiable.end());
+    refs->exact_invoke_virtual_targets_if_class_instantiable.insert(
+        exact_invoke_virtual_targets_if_class_instantiable.begin(),
+        exact_invoke_virtual_targets_if_class_instantiable.end());
+    if (base_invoke_virtual_target_if_class_instantiable) {
+      refs->base_invoke_virtual_targets_if_class_instantiable.insert(
+          base_invoke_virtual_target_if_class_instantiable);
+    }
     if (invoke_super_target) {
       refs->invoke_super_targets.insert(invoke_super_target);
     }
@@ -121,6 +126,7 @@ struct TypeAnalysisAwareClosureMarkerSharedState final
           if (!analysis_cls) {
             break;
           }
+          always_assert(!is_interface(analysis_cls));
           auto method_search = get_method_search(analysis_cls, invoke);
           auto analysis_resolved_callee =
               resolve_method(analysis_cls, callee_ref->get_name(),
@@ -139,7 +145,7 @@ struct TypeAnalysisAwareClosureMarkerSharedState final
             always_assert(analysis_resolved_callee->is_virtual());
             if (!analysis_resolved_callee->is_external()) {
               always_assert(!is_abstract(analysis_resolved_callee));
-              refs.vmethods_if_class_instantiable.push_back(
+              refs.exact_invoke_virtual_targets_if_class_instantiable.push_back(
                   analysis_resolved_callee);
             }
           }
@@ -159,12 +165,8 @@ struct TypeAnalysisAwareClosureMarkerSharedState final
                          callee_ref->get_proto(), method_search);
       TRACE(TRMU, 5, "Analysis type %s", SHOW(*analysis_cls));
       if (analysis_resolved_callee) {
-        if (analysis_resolved_callee != resolved_callee) {
-          TRACE(TRMU, 5, "Push analysis resolved callee %s",
-                SHOW(analysis_resolved_callee));
-          refs.vmethods_if_class_instantiable.push_back(
-              analysis_resolved_callee);
-        }
+        TRACE(TRMU, 5, "Push analysis resolved callee %s",
+              SHOW(analysis_resolved_callee));
         resolved_callee = analysis_resolved_callee;
         TRACE(TRMU, 5, "Resolved callee %s for analysis cls %s",
               SHOW(resolved_callee), SHOW(*analysis_cls));
@@ -185,14 +187,9 @@ struct TypeAnalysisAwareClosureMarkerSharedState final
     }
 
     always_assert(resolved_callee);
-    const auto& overriding_methods =
-        mog::get_overriding_methods(*method_override_graph, resolved_callee);
-    for (auto overriding_method : overriding_methods) {
-      TRACE(TRMU, 5, "Gather conditional method ref %s",
-            SHOW(overriding_method));
-      always_assert(overriding_method->is_virtual());
-      refs.vmethods_if_class_instantiable.push_back(overriding_method);
-    }
+    always_assert(refs.base_invoke_virtual_target_if_class_instantiable ==
+                  nullptr);
+    refs.base_invoke_virtual_target_if_class_instantiable = resolved_callee;
   }
 
   InsnsMethods gather_methods_on_insns(const DexMethod* method) const {
@@ -234,6 +231,11 @@ struct TypeAnalysisAwareClosureMarkerSharedState final
             } else {
               refs.invoke_super_target = resolved_callee;
             }
+          } else if (resolved_callee && resolved_callee->is_virtual() &&
+                     !resolved_callee->is_external()) {
+            always_assert(!is_abstract(resolved_callee));
+            refs.exact_invoke_virtual_targets_if_class_instantiable.push_back(
+                resolved_callee);
           }
           TRACE(TRMU, 5, "Gather non-true-virtual at %s resolved as %s",
                 SHOW(insn), SHOW(resolved_callee));
@@ -309,19 +311,11 @@ class TypeAnalysisAwareClosureMarkerWorker final
     if (!root(m)) {
       return;
     }
+    always_assert_log(m->is_concrete(), "%s is not concrete", SHOW(m));
     // We still have to conditionally mark root overrides. RootSetMarker already
     // covers external overrides, so we skip them here.
-    if (m->is_virtual() || !m->is_concrete()) {
-      const auto& overriding_methods = mog::get_overriding_methods(
-          *m_shared_state->method_override_graph, m);
-      if (!overriding_methods.empty()) {
-        TRACE(REACH, 3, "root with overrides: %zu %s",
-              overriding_methods.size(), SHOW(m));
-      }
-      for (auto* overriding : overriding_methods) {
-        push_if_class_instantiable(overriding);
-        TRACE(REACH, 3, "marking root override: %s", SHOW(overriding));
-      }
+    if (m->is_virtual()) {
+      base_invoke_virtual_target(m);
     }
   }
 

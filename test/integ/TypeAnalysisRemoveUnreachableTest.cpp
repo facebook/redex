@@ -121,3 +121,41 @@ TEST_F(TypeAnalysisRemoveUnreachableTest, TypeAnalysisRMUTest4) {
   ASSERT_TRUE(!is_abstract(intermediate_cls));
   ASSERT_TRUE(!is_abstract(intermediate_foo));
 }
+
+TEST_F(TypeAnalysisRemoveUnreachableTest, TypeAnalysisRMUTest5) {
+  const auto& dexen = stores[0].get_dexen();
+  auto pg_config = process_and_get_proguard_config(dexen, R"(
+    -keepclasseswithmembers public class TypeAnalysisRemoveUnreachableTest {
+      public void typeAnalysisRMUTest5();
+    }
+  )");
+
+  ASSERT_TRUE(pg_config->ok);
+  ASSERT_EQ(pg_config->keep_rules.size(), 1);
+
+  Json::Value config(Json::objectValue);
+  config["redex"] = Json::objectValue;
+  config["redex"]["passes"] = Json::arrayValue;
+  config["redex"]["passes"].append("GlobalTypeAnalysisPass");
+  config["redex"]["passes"].append("TypeAnalysisAwareRemoveUnreachablePass");
+  config["GlobalTypeAnalysisPass"] = Json::objectValue;
+  config["TypeAnalysisAwareRemoveUnreachablePass"] = Json::objectValue;
+  config["TypeAnalysisAwareRemoveUnreachablePass"]
+        ["prune_uncallable_instance_method_bodies"] = true;
+  config["TypeAnalysisAwareRemoveUnreachablePass"]
+        ["prune_uninstantiable_insns"] = true;
+
+  run_passes({{new GlobalTypeAnalysisPass(),
+               new TypeAnalysisAwareRemoveUnreachablePass()}},
+             std::move(pg_config), config);
+  ASSERT_TRUE(find_class(*classes, "LBase5;"));
+  ASSERT_TRUE(find_class(*classes, "LSub5;"));
+  ASSERT_TRUE(find_vmethod(*classes, "LSub5;", "V", "foo", {}));
+  auto base_foo = find_vmethod(*classes, "LBase5;", "V", "foo", {});
+  ASSERT_TRUE(base_foo);
+  auto ii = InstructionIterable(base_foo->get_code());
+  ASSERT_TRUE(std::any_of(ii.begin(), ii.end(), [](const MethodItemEntry& mie) {
+    return opcode::is_throw(mie.insn->opcode());
+  }));
+  ASSERT_FALSE(find_class(*classes, "LDead;"));
+}

@@ -35,13 +35,15 @@ void fixup_references_to_removed_methods(
   walk::parallel::code(scope, [&](DexMethod*, IRCode& code) {
     editable_cfg_adapter::iterate(&code, [&](MethodItemEntry& mie) {
       auto insn = mie.insn;
-      if (insn->opcode() == OPCODE_INVOKE_VIRTUAL) {
+      auto op = insn->opcode();
+      if (opcode::is_invoke_virtual(op)) {
         auto it = removed_vmethods.find(insn->get_method());
         if (it != removed_vmethods.end()) {
           insn->set_method(it->second);
         }
       }
-      always_assert_log(!insn->has_method() ||
+      always_assert_log(!opcode::is_invoke_virtual(op) ||
+                            !opcode::is_invoke_interface(op) ||
                             !removed_vmethods.count(insn->get_method()),
                         "%s", SHOW(insn));
       return editable_cfg_adapter::LOOP_CONTINUE;
