@@ -33,14 +33,31 @@ class Impl1 implements Intf1 {
     return 1;
   }
 }
-class Impl2 implements Intf1 {
-  static Intf1 createImpl2() { return new Impl2(); }
+class Impl2Base implements Intf1 {
   @Override
   public int bar() {
     return 2;
   }
 }
+class Impl2 extends Impl2Base {
+  static Intf1 createImpl2() { return new Impl2(); }
+  @Override
+  public int bar() {
+    return 3;
+  }
+}
 
+abstract class Base4 {
+  abstract void foo();
+}
+class Intermediate4 extends Base4 {
+  void foo() {
+  }
+}
+class Sub4 extends Intermediate4 {
+  void foo() {
+  }
+}
 public class TypeAnalysisRemoveUnreachableTest {
   public void typeAnalysisRMUTest1() {
     Base1 b = Sub1.createSub1();
@@ -56,6 +73,12 @@ public class TypeAnalysisRemoveUnreachableTest {
   public void typeAnalysisRMUTest3() {
     Base1 b = Sub1.createSub1();
     SubSub1.createSubSub1();
+    b.foo();
+  }
+
+  public void typeAnalysisRMUTest4() {
+    new Intermediate4(); // must have a non-abstract foo() override
+    Base4 b = new Sub4();
     b.foo();
   }
 }

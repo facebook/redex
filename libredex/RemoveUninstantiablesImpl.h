@@ -53,5 +53,6 @@ Stats replace_all_with_unreachable_throw(cfg::ControlFlowGraph& cfg);
 /// either making them abstract, removing their body, or deleting them.
 Stats reduce_uncallable_instance_methods(
     const Scope& scope,
-    const std::unordered_set<DexMethod*>& uncallable_instance_methods);
+    const std::unordered_set<DexMethod*>& uncallable_instance_methods,
+    const std::function<bool(const DexMethod*)>& is_implementation_methods);
 } // namespace remove_uninstantiables_impl

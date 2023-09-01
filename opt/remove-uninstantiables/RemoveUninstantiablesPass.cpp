@@ -266,8 +266,7 @@ void RemoveUninstantiablesPass::run_pass(DexStoresVector& stores,
   ConcurrentSet<DexMethod*> uncallable_instance_methods;
   auto stats = walk::parallel::methods<remove_uninstantiables_impl::Stats>(
       scope,
-      [&scoped_uninstantiable_types,
-       &overridden_virtual_scopes_analysis,
+      [&scoped_uninstantiable_types, &overridden_virtual_scopes_analysis,
        &uncallable_instance_methods](DexMethod* method) {
         auto code = method->get_code();
         if (method->rstate.no_optimizations() || code == nullptr) {
@@ -284,7 +283,8 @@ void RemoveUninstantiablesPass::run_pass(DexStoresVector& stores,
       });
 
   stats += remove_uninstantiables_impl::reduce_uncallable_instance_methods(
-      scope, uncallable_instance_methods.move_to_container());
+      scope, uncallable_instance_methods.move_to_container(),
+      [&](const DexMethod* m) { return false; });
 
   stats.report(mgr);
 }

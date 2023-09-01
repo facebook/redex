@@ -212,6 +212,9 @@ void RemoveUnreachablePassBase::run_pass(DexStoresVector& stores,
     // references of removed symbols (which, of course, will be from dead code).
     gather_references_from_removed_symbols(stores, *reachables, references);
   }
+
+  reanimate_zombie_methods(reachable_aspects);
+
   auto abstracted_classes = reachability::mark_classes_abstract(
       stores, *reachables, reachable_aspects);
   pm.incr_metric("abstracted_classes", abstracted_classes.size());

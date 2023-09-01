@@ -1140,8 +1140,7 @@ void TransitiveClosureMarkerWorker::directly_instantiable(DexType* type) {
   if (m_shared_state->cfg_gathering_check_instance_callable) {
     instantiable(type);
   }
-  std::unordered_set<const DexMethod*> uncallable_vmethods;
-  auto& method_override_graph = *m_shared_state->method_override_graph;
+  std::unordered_set<const DexMethod*> overridden_methods;
   for (auto cls = type_class(type); cls && !cls->is_external();
        cls = type_class(cls->get_super_class())) {
     for (auto* m : cls->get_dmethods()) {
@@ -1150,19 +1149,24 @@ void TransitiveClosureMarkerWorker::directly_instantiable(DexType* type) {
       }
     }
     for (auto* m : cls->get_vmethods()) {
-      if (uncallable_vmethods.count(m)) {
+      if (overridden_methods.count(m)) {
         continue;
       }
-      instance_callable(m);
-      const auto& overridden_methods =
-          mog::get_overridden_methods(method_override_graph, m);
-      uncallable_vmethods.insert(overridden_methods.begin(),
-                                 overridden_methods.end());
+      if (is_abstract(m)) {
+        TRACE(REACH, 1,
+              "[marking] abstract method {%s} is not overridden in directly "
+              "instantiable class {%s}",
+              SHOW(m), SHOW(type));
+        m_shared_state->reachable_aspects
+            ->incomplete_directly_instantiable_types.insert(type_class(type));
+        continue;
+      }
+      implementation_method(m, &overridden_methods);
     }
   }
 }
 
-void TransitiveClosureMarkerWorker::instance_callable(DexMethod* method) {
+void TransitiveClosureMarkerWorker::instance_callable(const DexMethod* method) {
   if (!m_shared_state->reachable_aspects->callable_instance_methods.insert(
           method)) {
     return;
@@ -1175,6 +1179,35 @@ void TransitiveClosureMarkerWorker::instance_callable(DexMethod* method) {
   if (method_references_gatherer) {
     gather_and_push(method_references_gatherer,
                     MethodReferencesGatherer::Advance::callable());
+  }
+}
+
+void TransitiveClosureMarkerWorker::implementation_method(
+    const DexMethod* method,
+    std::unordered_set<const DexMethod*>* overridden_methods) {
+  auto newly_overridden_methods =
+      mog::get_overridden_methods(*m_shared_state->method_override_graph,
+                                  method, /* include_interfaces */ true);
+  overridden_methods->insert(newly_overridden_methods.begin(),
+                             newly_overridden_methods.end());
+
+  if (!m_shared_state->reachable_aspects->implementation_methods.insert(
+          method)) {
+    return;
+  }
+  always_assert(method->is_virtual());
+  always_assert(!is_abstract(method));
+
+  instance_callable(method);
+
+  if (!m_shared_state->reachable_objects->marked(method) &&
+      std::any_of(newly_overridden_methods.begin(),
+                  newly_overridden_methods.end(), [](auto* overridden_method) {
+                    return is_abstract(overridden_method) ||
+                           overridden_method->is_external();
+                  })) {
+    m_shared_state->reachable_aspects->zombie_implementation_methods.insert(
+        method);
   }
 }
 
@@ -1255,6 +1288,7 @@ void TransitiveClosureMarkerWorker::visit_method_ref(
     for (auto* overriding : overriding_methods) {
       push_if_class_instantiable(overriding);
     }
+    m_shared_state->reachable_aspects->zombie_implementation_methods.erase(m);
   }
 }
 
@@ -1264,6 +1298,71 @@ void TransitiveClosureMarkerWorker::record_reachability(Parent* parent,
   if (m_shared_state->record_reachability) {
     redex_assert(parent != nullptr && object != nullptr);
     m_shared_state->reachable_objects->record_reachability(parent, object);
+  }
+}
+
+void compute_zombie_methods(
+    const method_override_graph::Graph& method_override_graph,
+    ReachableObjects& reachable_objects,
+    ReachableAspects& reachable_aspects) {
+  // Some directly instantiable classes may have vmethods that were not
+  // marked. Simply removing those methods might leave behind the class with
+  // unimplemented inherited abstract methods. Here, we find if that's the case,
+  // and pick the first non-abstract override to add as an additional root.
+  ConcurrentMap<DexMethod*, std::unordered_set<const DexClass*>> zombies;
+  workqueue_run<const DexMethod*>(
+      [&](const DexMethod* m) {
+        bool any_abstract_methods = false;
+        const DexMethod* unmarked_elder = nullptr;
+        const DexMethod* elder_parent = m;
+        std::function<void(const DexMethod*)> visit_abstract_method;
+        visit_abstract_method = [&](const DexMethod* elder) {
+          if (reachable_objects.marked_unsafe(elder) || elder->is_external()) {
+            any_abstract_methods = true;
+          }
+          for (auto* parent : method_override_graph.get_node(elder).parents) {
+            if (is_abstract(parent)) {
+              visit_abstract_method(parent);
+            }
+          }
+        };
+        while (unmarked_elder != elder_parent) {
+          if (reachable_objects.marked_unsafe(elder_parent) ||
+              elder_parent->is_external()) {
+            reachable_aspects.zombie_implementation_methods.erase(m);
+            return;
+          }
+          unmarked_elder = elder_parent;
+          for (auto* parent :
+               method_override_graph.get_node(unmarked_elder).parents) {
+            if (is_abstract(parent)) {
+              visit_abstract_method(parent);
+            } else {
+              elder_parent = parent;
+            }
+          }
+        }
+        if (!any_abstract_methods) {
+          reachable_aspects.zombie_implementation_methods.erase(m);
+          return;
+        }
+        always_assert_log(unmarked_elder, "{%s} has no unmarked elder",
+                          SHOW(m));
+        auto cls = type_class(m->get_class());
+        zombies.update(const_cast<DexMethod*>(unmarked_elder),
+                       [&](auto*, auto& set, bool) { set.insert(cls); });
+      },
+      reachable_aspects.zombie_implementation_methods);
+  for (auto&& [m, unmarked_implementation_methods_classes] : zombies) {
+    for (auto* cls : unmarked_implementation_methods_classes) {
+      reachable_objects.record_reachability(cls, m);
+    }
+    auto marked = reachable_objects.mark(m);
+    always_assert(marked);
+    reachable_aspects.zombie_methods.push_back(m);
+    // These "zombies" are callable in the sense that possible eager verifier
+    // may want to see such methods overriding all inherited abstract methods.
+    reachable_aspects.callable_instance_methods.insert(m);
   }
 }
 
@@ -1345,6 +1444,7 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
       reachable_objects.get(),
       reachable_aspects,
       &stats};
+
   workqueue_run<ReachableObject>(
       [&](TransitiveClosureMarkerWorkerState* worker_state,
           const ReachableObject& obj) {
@@ -1352,9 +1452,10 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
         worker.visit(obj);
         return nullptr;
       },
-      root_set,
-      num_threads,
+      root_set, num_threads,
       /*push_tasks_while_running=*/true);
+  compute_zombie_methods(*method_override_graph, *reachable_objects,
+                         *reachable_aspects);
 
   if (num_ignore_check_strings != nullptr) {
     *num_ignore_check_strings = (int)stats.num_ignore_check_strings;
@@ -1526,6 +1627,15 @@ void sweep(DexStoresVector& stores,
   });
 }
 
+void reanimate_zombie_methods(const ReachableAspects& reachable_aspects) {
+  for (auto* m : reachable_aspects.zombie_methods) {
+    auto& cfg = m->get_code()->cfg();
+    remove_uninstantiables_impl::replace_all_with_unreachable_throw(cfg);
+    m->clear_annotations();
+    m->release_param_anno();
+  }
+}
+
 remove_uninstantiables_impl::Stats sweep_code(
     DexStoresVector& stores,
     bool prune_uncallable_instance_method_bodies,
@@ -1580,6 +1690,34 @@ remove_uninstantiables_impl::Stats sweep_uncallable_virtual_methods(
     DexStoresVector& stores, const ReachableAspects& reachable_aspects) {
   Timer t("Sweep Uncallable Virtual Methods");
   auto scope = build_class_scope(stores);
+  // We determine which methods are responsible for ultimately overriding
+  // abstract methods, if any, so that we won't make them abstract or remove
+  // them.
+  ConcurrentSet<const DexMethod*> implementation_methods;
+  workqueue_run<DexType*>(
+      [&](DexType* type) {
+        std::unordered_map<const DexString*,
+                           std::unordered_set<const DexProto*>>
+            implemented;
+        for (auto cls = type_class(type);
+             cls && !is_interface(cls) && !cls->is_external();
+             cls = type_class(cls->get_super_class())) {
+          for (auto* m : cls->get_vmethods()) {
+            if (implemented[m->get_name()].insert(m->get_proto()).second) {
+              if (is_abstract(m)) {
+                TRACE(REACH, 1,
+                      "[sweeping] abstract method {%s} is not overridden in "
+                      "directly "
+                      "instantiable class {%s}",
+                      SHOW(m), SHOW(type));
+                continue;
+              }
+              implementation_methods.insert(m);
+            }
+          }
+        }
+      },
+      reachable_aspects.directly_instantiable_types);
   std::unordered_set<DexMethod*> uncallable_instance_methods;
   for (auto* cls : scope) {
     if (is_interface(cls)) {
@@ -1596,8 +1734,11 @@ remove_uninstantiables_impl::Stats sweep_uncallable_virtual_methods(
       }
     });
   }
+  auto is_implementation_method = [&](const DexMethod* m) {
+    return implementation_methods.count_unsafe(m) != 0;
+  };
   return remove_uninstantiables_impl::reduce_uncallable_instance_methods(
-      scope, uncallable_instance_methods);
+      scope, uncallable_instance_methods, is_implementation_method);
 }
 
 void report(PassManager& pm,
@@ -1618,6 +1759,14 @@ void report(PassManager& pm,
                  reachable_aspects.callable_instance_methods.size());
   pm.incr_metric("directly_instantiable_types",
                  reachable_aspects.directly_instantiable_types.size());
+  pm.incr_metric("implementation_methods",
+                 reachable_aspects.implementation_methods.size());
+  pm.incr_metric(
+      "incomplete_directly_instantiable_types",
+      reachable_aspects.incomplete_directly_instantiable_types.size());
+  pm.incr_metric("zombie_implementation_methods",
+                 reachable_aspects.zombie_implementation_methods.size());
+  pm.incr_metric("zombie_methods", reachable_aspects.zombie_methods.size());
 }
 
 ObjectCounts count_objects(const DexStoresVector& stores) {

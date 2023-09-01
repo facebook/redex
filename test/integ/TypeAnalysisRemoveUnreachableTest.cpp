@@ -92,3 +92,32 @@ TEST_F(TypeAnalysisRemoveUnreachableTest, TypeAnalysisRMUTest3) {
   ASSERT_TRUE(find_vmethod(*classes, "LSub1;", "I", "foo", {}));
   ASSERT_FALSE(find_vmethod(*classes, "LSubSub1;", "I", "foo", {}));
 }
+
+TEST_F(TypeAnalysisRemoveUnreachableTest, TypeAnalysisRMUTest4) {
+  // We need to make sure that all directly instantiable classes somehow
+  // override all inherited abstract methods.
+  const auto& dexen = stores[0].get_dexen();
+  auto pg_config = process_and_get_proguard_config(dexen, R"(
+    -keepclasseswithmembers public class TypeAnalysisRemoveUnreachableTest {
+      public void typeAnalysisRMUTest4();
+    }
+  )");
+
+  ASSERT_TRUE(pg_config->ok);
+  ASSERT_EQ(pg_config->keep_rules.size(), 1);
+
+  run_passes({{new GlobalTypeAnalysisPass(),
+               new TypeAnalysisAwareRemoveUnreachablePass()}},
+             std::move(pg_config));
+  ASSERT_TRUE(find_class(*classes, "LBase4;"));
+  auto intermediate_cls = find_class(*classes, "LIntermediate4;");
+  ASSERT_TRUE(intermediate_cls);
+  ASSERT_TRUE(find_class(*classes, "LSub4;"));
+  ASSERT_TRUE(find_vmethod(*classes, "LBase4;", "V", "foo", {}));
+  auto intermediate_foo =
+      find_vmethod(*classes, "LIntermediate4;", "V", "foo", {});
+  ASSERT_TRUE(intermediate_foo);
+  ASSERT_TRUE(find_vmethod(*classes, "LSub4;", "V", "foo", {}));
+  ASSERT_TRUE(!is_abstract(intermediate_cls));
+  ASSERT_TRUE(!is_abstract(intermediate_foo));
+}

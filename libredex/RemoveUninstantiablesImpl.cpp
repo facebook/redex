@@ -219,7 +219,8 @@ Stats replace_all_with_unreachable_throw(cfg::ControlFlowGraph& cfg) {
 
 Stats reduce_uncallable_instance_methods(
     const Scope& scope,
-    const std::unordered_set<DexMethod*>& uncallable_instance_methods) {
+    const std::unordered_set<DexMethod*>& uncallable_instance_methods,
+    const std::function<bool(const DexMethod*)>& is_implementation_method) {
   // We perform structural changes, i.e. whether a method has a body and
   // removal, as a post-processing step, to streamline the main operations
   struct ClassPostProcessing {
@@ -235,7 +236,8 @@ Stats reduce_uncallable_instance_methods(
             method->is_virtual()
                 ? resolve_method(method, MethodSearch::Super, method)
                 : nullptr;
-        if (overridden_method == nullptr && method->is_virtual()) {
+        if (overridden_method == nullptr && method->is_virtual() &&
+            !is_implementation_method(method)) {
           class_post_processing.update(
               type_class(method->get_class()),
               [method](DexClass*, ClassPostProcessing& cpp, bool) {
@@ -245,7 +247,8 @@ Stats reduce_uncallable_instance_methods(
           stats.abstracted_vmethods++;
         } else if (overridden_method != nullptr && can_delete(method) &&
                    get_visibility(method) ==
-                       get_visibility(overridden_method)) {
+                       get_visibility(overridden_method) &&
+                   !is_implementation_method(method)) {
           // We require same visibility, as we are going to remove the method
           // and rewrite all references to the overridden method. TODO: Consider
           // upgrading the visibility of the overriden method.

@@ -112,9 +112,10 @@ void ReachableNativesPass::run_pass(DexStoresVector& stores,
         worker.visit(obj);
         return nullptr;
       },
-      root_set,
-      num_threads,
-      /*push_tasks_while_running=*/true);
+      root_set, num_threads,
+      /* push_tasks_while_running */ true);
+  compute_zombie_methods(*method_override_graph, *reachable_objects,
+                         reachable_aspects);
 
   std::unordered_set<DexMethod*> reachable_natives;
   std::unordered_set<DexMethod*> unreachable_natives;

@@ -95,6 +95,8 @@ using ReachableObjectSet =
 using ReachableObjectGraph =
     ConcurrentMap<ReachableObject, ReachableObjectSet, ReachableObjectHash>;
 
+struct ReachableAspects;
+
 class ReachableObjects {
  public:
   const ReachableObjectGraph& retainers_of() const { return m_retainers_of; }
@@ -170,6 +172,11 @@ class ReachableObjects {
 
   friend class RootSetMarker;
   friend class TransitiveClosureMarkerWorker;
+  friend struct TransitiveClosureMarkerSharedState;
+  friend void compute_zombie_methods(
+      const method_override_graph::Graph& method_override_graph,
+      ReachableObjects&,
+      ReachableAspects&);
 };
 
 enum class Condition {
@@ -299,6 +306,10 @@ struct ReachableAspects {
   InstantiableTypes instantiable_types;
   InstantiableTypes uninstantiable_dependencies;
   ConcurrentSet<DexType*> directly_instantiable_types;
+  CallableInstanceMethods implementation_methods;
+  InstantiableTypes incomplete_directly_instantiable_types;
+  CallableInstanceMethods zombie_implementation_methods;
+  std::vector<DexMethod*> zombie_methods;
   std::unordered_set<const DexClass*> deserializable_types{};
   uint64_t instructions_unvisited{0};
   void finish(const ConditionallyMarked& cond_marked);
@@ -317,7 +328,7 @@ struct References {
       method_references_gatherer_dependencies_if_class_instantiable;
   bool method_references_gatherer_dependency_if_instance_method_callable{false};
   std::vector<DexType*> new_instances;
-  std::vector<DexMethod*> called_super_methods;
+  std::vector<const DexMethod*> called_super_methods;
 };
 
 void gather_dynamic_references(const DexAnnotation* item,
@@ -531,12 +542,16 @@ class TransitiveClosureMarkerWorker {
     }
   }
 
-  void instance_callable(DexMethod* method);
-  void instance_callable(const std::vector<DexMethod*>& methods) {
+  void instance_callable(const DexMethod* method);
+  void instance_callable(const std::vector<const DexMethod*>& methods) {
     for (auto* m : methods) {
       instance_callable(m);
     }
   }
+
+  void implementation_method(
+      const DexMethod* method,
+      std::unordered_set<const DexMethod*>* overridden_methods);
 
   void dynamically_referenced(const DexClass* cls);
   void dynamically_referenced(
@@ -568,6 +583,11 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
         out_method_override_graph = nullptr,
     bool remove_no_argument_constructors = false);
 
+void compute_zombie_methods(
+    const method_override_graph::Graph& method_override_graph,
+    ReachableObjects& reachable_objects,
+    ReachableAspects& reachable_aspects);
+
 std::vector<DexClass*> mark_classes_abstract(
     DexStoresVector& stores,
     const ReachableObjects& reachables,
@@ -577,6 +597,8 @@ void sweep(DexStoresVector& stores,
            const ReachableObjects& reachables,
            ConcurrentSet<std::string>* removed_symbols = nullptr,
            bool output_full_removed_symbols = false);
+
+void reanimate_zombie_methods(const ReachableAspects& reachable_aspects);
 
 remove_uninstantiables_impl::Stats sweep_code(
     DexStoresVector& stores,

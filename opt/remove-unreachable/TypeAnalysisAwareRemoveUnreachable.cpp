@@ -272,7 +272,13 @@ class TypeAnalysisAwareClosureMarkerWorker final
     }
 
     auto m = method->as_def();
-    if (!m || !root(m) || m->is_external()) {
+    if (!m || m->is_external()) {
+      return;
+    }
+    if (m->is_virtual()) {
+      m_shared_state->reachable_aspects->zombie_implementation_methods.erase(m);
+    }
+    if (!root(m)) {
       return;
     }
     // We still have to conditionally mark root overrides. RootSetMarker already
@@ -332,6 +338,7 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects_with_type_anaysis(
        cfg_gathering_check_instance_callable, &cond_marked,
        reachable_objects.get(), reachable_aspects, &stats},
       gta};
+
   workqueue_run<ReachableObject>(
       [&](TransitiveClosureMarkerWorkerState* worker_state,
           const ReachableObject& obj) {
@@ -340,9 +347,10 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects_with_type_anaysis(
         worker.visit(obj);
         return nullptr;
       },
-      root_set,
-      num_threads,
-      /*push_tasks_while_running=*/true);
+      root_set, num_threads,
+      /* push_tasks_while_running*/ true);
+  compute_zombie_methods(*method_override_graph, *reachable_objects,
+                         *reachable_aspects);
 
   if (num_ignore_check_strings != nullptr) {
     *num_ignore_check_strings = (int)stats.num_ignore_check_strings;
