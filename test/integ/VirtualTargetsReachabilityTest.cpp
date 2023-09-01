@@ -36,6 +36,7 @@ TEST_F(VirtualTargetsReachabilityTest, invoke_super_subtlety) {
   auto reachable_objects = reachability::compute_reachable_objects(
       stores, ig_sets, &num_ignore_check_strings, &reachable_aspects, false,
       /* relaxed_keep_class_members */ true,
+      /* relaxed_keep_interfaces */ false,
       /* cfg_gathering_check_instantiable */ true);
 
   //// callable_instance_methods

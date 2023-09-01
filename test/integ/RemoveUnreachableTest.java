@@ -160,6 +160,16 @@ class KImpl2 implements K {
   public void foo() { };
 }
 
+interface ReferencedInterface {
+  public void foo();
+}
+interface UnreferencedInterface extends ReferencedInterface {
+}
+class ClassImplementingUnreferencedInterface implements UnreferencedInterface {
+  public void foo() {}
+}
+
+
 public class RemoveUnreachableTest {
   public static void testMethod() {
     // Inheritance test
@@ -181,5 +191,10 @@ public class RemoveUnreachableTest {
     KImpl1Abstract k = new KImpl1Derived();
     k.foo();
     new KImpl2();
+  }
+
+  public static void unreferencedInterface() {
+    ReferencedInterface ri = new ClassImplementingUnreferencedInterface();
+    ri.foo();
   }
 }

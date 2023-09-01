@@ -50,6 +50,9 @@ class RemoveUnreachablePassBase : public Pass {
     bind("prune_uncallable_virtual_methods",
          false,
          m_prune_uncallable_virtual_methods);
+    bind("prune_unreferenced_interfaces",
+         false,
+         m_prune_unreferenced_interfaces);
     after_configuration([this] {
       // To keep the backward compatability of this code, ensure that the
       // "MemberClasses" annotation is always in system_annos.
@@ -67,6 +70,7 @@ class RemoveUnreachablePassBase : public Pass {
                             reachability::ReachableAspects* reachable_aspects,
                             bool emit_graph_this_run,
                             bool relaxed_keep_class_members,
+                            bool relaxed_keep_interfaces,
                             bool cfg_gathering_check_instantiable,
                             bool cfg_gathering_check_instance_callable,
                             bool remove_no_argument_constructors) = 0;
@@ -86,6 +90,7 @@ class RemoveUnreachablePassBase : public Pass {
   bool m_prune_uninstantiable_insns = false;
   bool m_prune_uncallable_instance_method_bodies = false;
   bool m_prune_uncallable_virtual_methods = false;
+  bool m_prune_unreferenced_interfaces = false;
 };
 
 class RemoveUnreachablePass : public RemoveUnreachablePassBase {
@@ -100,6 +105,7 @@ class RemoveUnreachablePass : public RemoveUnreachablePassBase {
       reachability::ReachableAspects* reachable_aspects,
       bool emit_graph_this_run,
       bool relaxed_keep_class_members,
+      bool relaxed_keep_interfaces,
       bool cfg_gathering_check_instantiable,
       bool cfg_gathering_check_instance_callable,
       bool remove_no_argument_constructors) override;

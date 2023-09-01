@@ -31,8 +31,8 @@ TEST_F(ReachabilityTest, ReachabilityFromProguardTest) {
 
   reachability::ObjectCounts before = reachability::count_objects(stores);
 
-  EXPECT_EQ(before.num_classes, 27);
-  EXPECT_EQ(before.num_methods, 53);
+  EXPECT_EQ(before.num_classes, 30);
+  EXPECT_EQ(before.num_methods, 57);
   EXPECT_EQ(before.num_fields, 3);
 
   int num_ignore_check_strings = 0;
@@ -73,8 +73,8 @@ TEST_F(ReachabilityTest, ReachabilityMarkAllTest) {
 
   reachability::ObjectCounts before = reachability::count_objects(stores);
 
-  EXPECT_EQ(before.num_classes, 27);
-  EXPECT_EQ(before.num_methods, 53);
+  EXPECT_EQ(before.num_classes, 30);
+  EXPECT_EQ(before.num_methods, 57);
   EXPECT_EQ(before.num_fields, 3);
 
   int num_ignore_check_strings = 0;
@@ -85,6 +85,7 @@ TEST_F(ReachabilityTest, ReachabilityMarkAllTest) {
   auto reachable_objects = reachability::compute_reachable_objects(
       stores, ig_sets, &num_ignore_check_strings, &reachable_aspects,
       /* record_reachability */ false, /* relaxed_keep_class_members */ false,
+      /* relaxed_keep_interfaces */ false,
       /* cfg_gathering_check_instantiable */ false,
       /* cfg_gathering_check_instance_callable */ false,
       /* should_mark_all_as_seed */ true, nullptr);
@@ -96,8 +97,8 @@ TEST_F(ReachabilityTest, ReachabilityMarkAllTest) {
 
   reachability::ObjectCounts after = reachability::count_objects(stores);
 
-  EXPECT_EQ(after.num_classes, 27);
-  EXPECT_EQ(after.num_methods, 53);
+  EXPECT_EQ(after.num_classes, 30);
+  EXPECT_EQ(after.num_methods, 57);
   EXPECT_EQ(after.num_fields, 3);
 }
 

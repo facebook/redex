@@ -441,6 +441,16 @@ void TransitiveClosureMarkerWorker::push_if_class_instantiable(
 }
 
 void TransitiveClosureMarkerWorker::push_if_class_instantiable(
+    const DexClass* cls) {
+  if (!cls || m_shared_state->reachable_objects->marked(cls)) return;
+  TRACE(REACH, 4, "Conditionally marking class if instantiable: %s", SHOW(cls));
+  m_shared_state->cond_marked->if_class_instantiable.classes.insert(cls);
+  if (m_shared_state->reachable_aspects->instantiable_types.count(cls)) {
+    push(cls, cls);
+  }
+}
+
+void TransitiveClosureMarkerWorker::push_if_class_instantiable(
     const DexClass* cls,
     std::shared_ptr<MethodReferencesGatherer> method_references_gatherer) {
   always_assert(method_references_gatherer);
@@ -639,7 +649,7 @@ MethodReferencesGatherer::MethodReferencesGatherer(
 
 std::optional<MethodReferencesGatherer::InstantiableDependency>
 MethodReferencesGatherer::get_instantiable_dependency(
-    const MethodItemEntry& mie) const {
+    const MethodItemEntry& mie, References* refs) const {
   if (mie.type != MFLOW_OPCODE) {
     return std::nullopt;
   }
@@ -659,8 +669,14 @@ MethodReferencesGatherer::get_instantiable_dependency(
   } else if (opcode::is_instance_of(op)) {
     res.cls = type_class(insn->get_type());
     res.may_throw_if_uninstantiable = false;
+    if (res.cls && !res.cls->is_external()) {
+      refs->classes_if_instantiable.push_back(res.cls);
+    }
   } else if (opcode::is_check_cast(op)) {
     res.cls = type_class(insn->get_type());
+    if (res.cls && !res.cls->is_external()) {
+      refs->classes_if_instantiable.push_back(res.cls);
+    }
   }
   auto is_class_instantiable = [this](const auto* cls) -> bool {
     if (!m_shared_state->cfg_gathering_check_instantiable ||
@@ -789,7 +805,7 @@ void MethodReferencesGatherer::advance(const Advance& advance,
   }
   auto advance_in_block = [this, refs](auto* block, auto& it) {
     for (; it != block->end(); ++it) {
-      auto dep = get_instantiable_dependency(*it);
+      auto dep = get_instantiable_dependency(*it, refs);
       if (dep) {
         return dep;
       }
@@ -948,6 +964,9 @@ void TransitiveClosureMarkerWorker::gather_and_push(
   base_invoke_virtual_target(
       refs.base_invoke_virtual_targets_if_class_instantiable);
   instance_callable(refs.invoke_super_targets);
+  for (auto* iface_cls : refs.classes_if_instantiable) {
+    push_if_class_instantiable(iface_cls);
+  }
   dynamically_referenced(refs.classes_dynamically_referenced);
   directly_instantiable(refs.new_instances);
   if (refs.method_references_gatherer_dependency_if_instance_method_callable) {
@@ -1035,8 +1054,10 @@ void TransitiveClosureMarkerWorker::visit_cls(const DexClass* cls) {
     instantiable(cls->get_type());
   }
   push(cls, type_class(cls->get_super_class()));
-  for (auto const& t : *cls->get_interfaces()) {
-    push(cls, t);
+  if (!m_shared_state->relaxed_keep_interfaces) {
+    for (auto* t : *cls->get_interfaces()) {
+      push(cls, t);
+    }
   }
   const DexAnnotationSet* annoset = cls->get_anno_set();
   if (annoset) {
@@ -1197,6 +1218,9 @@ void TransitiveClosureMarkerWorker::instantiable(DexType* type) {
     instantiable(intf);
   }
   auto* cond_marked = m_shared_state->cond_marked;
+  if (cond_marked->if_class_instantiable.classes.count(cls)) {
+    push(cls, cls);
+  }
   for (auto const& f : cls->get_ifields()) {
     if (cond_marked->if_class_instantiable.fields.count(f)) {
       push(cls, f);
@@ -1579,6 +1603,7 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
     ReachableAspects* reachable_aspects,
     bool record_reachability,
     bool relaxed_keep_class_members,
+    bool relaxed_keep_interfaces,
     bool cfg_gathering_check_instantiable,
     bool cfg_gathering_check_instance_callable,
     bool should_mark_all_as_seed,
@@ -1609,6 +1634,7 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
       method_override_graph.get(),
       record_reachability,
       relaxed_keep_class_members,
+      relaxed_keep_interfaces,
       cfg_gathering_check_instantiable,
       cfg_gathering_check_instance_callable,
       &cond_marked,
@@ -1728,6 +1754,35 @@ static void sweep_if_unmarked(const ReachableObjects& reachables,
   c->erase(it, c->end());
 }
 
+void sweep_interfaces(const ReachableObjects& reachables, DexClass* cls) {
+  std::unordered_set<DexType*> new_interfaces_set;
+  std::vector<DexType*> new_interfaces_vec;
+  std::function<void(DexTypeList*)> visit;
+  visit = [&](auto* interfaces) {
+    for (auto* intf : *interfaces) {
+      auto cls_intf = type_class(intf);
+      if (cls_intf == nullptr || cls_intf->is_external() ||
+          reachables.marked_unsafe(cls_intf)) {
+        if (new_interfaces_set.insert(intf).second) {
+          new_interfaces_vec.push_back(intf);
+        }
+        continue;
+      }
+      visit(cls_intf->get_interfaces());
+    }
+  };
+  visit(cls->get_interfaces());
+  always_assert(new_interfaces_set.size() == new_interfaces_vec.size());
+  auto new_interfaces =
+      DexTypeList::make_type_list(std::move(new_interfaces_vec));
+  if (new_interfaces == cls->get_interfaces()) {
+    return;
+  }
+  TRACE(RMU, 2, "Changing interfaces of %s from {%s} to {%s}", SHOW(cls),
+        SHOW(cls->get_interfaces()), SHOW(new_interfaces));
+  cls->set_interfaces(new_interfaces);
+}
+
 std::vector<DexClass*> mark_classes_abstract(
     DexStoresVector& stores,
     const ReachableObjects& reachables,
@@ -1795,6 +1850,7 @@ void sweep(DexStoresVector& stores,
                       removed_symbols);
     sweep_if_unmarked(reachables, sweep_method, &cls->get_vmethods(),
                       removed_symbols);
+    sweep_interfaces(reachables, cls);
   });
 }
 

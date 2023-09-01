@@ -258,7 +258,7 @@ class MethodReferencesGatherer {
     bool may_throw_if_uninstantiable{true};
   };
   std::optional<InstantiableDependency> get_instantiable_dependency(
-      const MethodItemEntry& mie) const;
+      const MethodItemEntry& mie, References* refs) const;
 
   const TransitiveClosureMarkerSharedState* m_shared_state;
   const DexMethod* m_method;
@@ -281,6 +281,7 @@ struct ConditionallyMarked {
   struct MarkedItems {
     ConcurrentSet<const DexField*> fields;
     ConcurrentSet<const DexMethod*> methods;
+    ConcurrentSet<const DexClass*> classes;
     ConcurrentMap<const DexClass*, MethodReferencesGatherers>
         method_references_gatherers;
     ConcurrentSet<DexType*> directly_instantiable_types;
@@ -344,6 +345,7 @@ struct References {
   bool method_references_gatherer_dependency_if_instance_method_callable{false};
   std::vector<DexType*> new_instances;
   std::unordered_set<const DexMethod*> invoke_super_targets;
+  std::vector<const DexClass*> classes_if_instantiable;
 
   // Whether this instance contains any entries that can only arise from
   // MethodItemEntries.
@@ -448,6 +450,7 @@ struct TransitiveClosureMarkerSharedState {
   const method_override_graph::Graph* method_override_graph;
   bool record_reachability;
   bool relaxed_keep_class_members;
+  bool relaxed_keep_interfaces;
   bool cfg_gathering_check_instantiable;
   bool cfg_gathering_check_instance_callable;
 
@@ -518,6 +521,8 @@ class TransitiveClosureMarkerWorker {
   void push_if_class_instantiable(const DexField* field);
 
   void push_if_class_instantiable(const DexMethod* method);
+
+  void push_if_class_instantiable(const DexClass* cls);
 
   void push_if_class_instantiable(
       const DexClass* cls,
@@ -623,6 +628,7 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
     ReachableAspects* reachable_aspects,
     bool record_reachability = false,
     bool relaxed_keep_class_members = false,
+    bool relaxed_keep_interfaces = false,
     bool cfg_gathering_check_instantiable = false,
     bool cfg_gathering_check_instance_callable = false,
     bool should_mark_all_as_seed = false,

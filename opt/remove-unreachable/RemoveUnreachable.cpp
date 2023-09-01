@@ -195,7 +195,8 @@ void RemoveUnreachablePassBase::run_pass(DexStoresVector& stores,
   auto reachables = this->compute_reachable_objects(
       stores, pm, &num_ignore_check_strings, &reachable_aspects,
       emit_graph_this_run, m_relaxed_keep_class_members,
-      m_prune_uninstantiable_insns, m_prune_uncallable_instance_method_bodies,
+      m_prune_unreferenced_interfaces, m_prune_uninstantiable_insns,
+      m_prune_uncallable_instance_method_bodies,
       m_remove_no_argument_constructors);
 
   reachability::ObjectCounts before = reachability::count_objects(stores);
@@ -300,12 +301,13 @@ RemoveUnreachablePass::compute_reachable_objects(
     reachability::ReachableAspects* reachable_aspects,
     bool emit_graph_this_run,
     bool relaxed_keep_class_members,
+    bool relaxed_keep_interfaces,
     bool cfg_gathering_check_instantiable,
     bool cfg_gathering_check_instance_callable,
     bool remove_no_argument_constructors) {
   return reachability::compute_reachable_objects(
       stores, m_ignore_sets, num_ignore_check_strings, reachable_aspects,
-      emit_graph_this_run, relaxed_keep_class_members,
+      emit_graph_this_run, relaxed_keep_class_members, relaxed_keep_interfaces,
       cfg_gathering_check_instantiable, cfg_gathering_check_instance_callable,
       false, nullptr, remove_no_argument_constructors);
 }

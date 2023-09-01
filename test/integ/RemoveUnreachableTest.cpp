@@ -20,6 +20,7 @@
 
 #include "GlobalTypeAnalysisPass.h"
 #include "RemoveUnreachable.h"
+#include "Show.h"
 #include "TypeAnalysisAwareRemoveUnreachable.h"
 
 class RemoveUnreachableTest : public RedexIntegrationTest {};
@@ -325,4 +326,37 @@ TEST_F(RemoveUnreachableTest, StaticInitializerTest) {
   ASSERT_TRUE(d);
   ASSERT_FALSE(a->get_clinit());
   ASSERT_TRUE(d->get_clinit());
+}
+
+TEST_F(RemoveUnreachableTest, UnreferencedInterfaces) {
+  // Make sure some things exist before we start.
+  auto* cls = find_class(*classes, "LClassImplementingUnreferencedInterface;");
+  ASSERT_TRUE(cls);
+  const auto* interfaces = cls->get_interfaces();
+  ASSERT_EQ(show(interfaces), "LUnreferencedInterface;");
+
+  const auto& dexen = stores[0].get_dexen();
+  auto pg_config = process_and_get_proguard_config(dexen, R"(
+    -keepclasseswithmembers public class RemoveUnreachableTest {
+      public void unreferencedInterface();
+    }
+  )");
+
+  ASSERT_TRUE(pg_config->ok);
+  ASSERT_EQ(pg_config->keep_rules.size(), 1);
+
+  Json::Value config(Json::objectValue);
+  config["redex"] = Json::objectValue;
+  config["redex"]["passes"] = Json::arrayValue;
+  config["redex"]["passes"].append("RemoveUnreachablePass");
+  config["RemoveUnreachablePass"] = Json::objectValue;
+  config["RemoveUnreachablePass"]["prune_unreferenced_interfaces"] = true;
+
+  run_passes({new RemoveUnreachablePass()}, std::move(pg_config), config);
+
+  ASSERT_TRUE(find_class(*classes, "LClassImplementingUnreferencedInterface;"));
+  ASSERT_TRUE(find_class(*classes, "LReferencedInterface;"));
+  ASSERT_FALSE(find_class(*classes, "LUnreferencedInterface;"));
+  interfaces = cls->get_interfaces();
+  ASSERT_EQ(show(interfaces), "LReferencedInterface;");
 }

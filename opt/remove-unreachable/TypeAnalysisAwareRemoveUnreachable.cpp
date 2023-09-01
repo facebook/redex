@@ -295,6 +295,7 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects_with_type_anaysis(
     ReachableAspects* reachable_aspects,
     bool record_reachability,
     bool relaxed_keep_class_members,
+    bool relaxed_keep_interfaces,
     bool cfg_gathering_check_instantiable,
     bool cfg_gathering_check_instance_callable,
     type_analyzer::global::GlobalTypeAnalyzer* gta,
@@ -321,9 +322,9 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects_with_type_anaysis(
   Stats stats;
   TypeAnalysisAwareClosureMarkerSharedState shared_state{
       {&ignore_sets, method_override_graph.get(), record_reachability,
-       relaxed_keep_class_members, cfg_gathering_check_instantiable,
-       cfg_gathering_check_instance_callable, &cond_marked,
-       reachable_objects.get(), reachable_aspects, &stats},
+       relaxed_keep_class_members, relaxed_keep_interfaces,
+       cfg_gathering_check_instantiable, cfg_gathering_check_instance_callable,
+       &cond_marked, reachable_objects.get(), reachable_aspects, &stats},
       gta};
 
   workqueue_run<ReachableObject>(
@@ -361,6 +362,7 @@ TypeAnalysisAwareRemoveUnreachablePass::compute_reachable_objects(
     reachability::ReachableAspects* reachable_aspects,
     bool emit_graph_this_run,
     bool relaxed_keep_class_members,
+    bool relaxed_keep_interfaces,
     bool cfg_gathering_check_instantiable,
     bool cfg_gathering_check_instance_callable,
     bool remove_no_argument_constructors) {
@@ -373,7 +375,7 @@ TypeAnalysisAwareRemoveUnreachablePass::compute_reachable_objects(
   int num_exact_resolved_callees;
   auto res = compute_reachable_objects_with_type_anaysis(
       stores, m_ignore_sets, num_ignore_check_strings, reachable_aspects,
-      emit_graph_this_run, relaxed_keep_class_members,
+      emit_graph_this_run, relaxed_keep_class_members, relaxed_keep_interfaces,
       cfg_gathering_check_instantiable, cfg_gathering_check_instance_callable,
       gta.get(), remove_no_argument_constructors, &num_exact_resolved_callees);
   pm.incr_metric("num_exact_resolved_callees", num_exact_resolved_callees);
