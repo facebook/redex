@@ -1436,7 +1436,8 @@ void compute_zombie_methods(
   }
 }
 
-void ReachableAspects::finish(const ConditionallyMarked& cond_marked) {
+void ReachableAspects::finish(const ConditionallyMarked& cond_marked,
+                              const ReachableObjects& reachable_objects) {
   always_assert(
       cond_marked.if_class_retained.method_references_gatherers.empty());
   always_assert(cond_marked.if_class_dynamically_referenced
@@ -1470,6 +1471,17 @@ void ReachableAspects::finish(const ConditionallyMarked& cond_marked) {
   TRACE(RMU, 1,
         "%zu uninstantiable_dependencies, %" PRIu64 " instructions_unvisited",
         uninstantiable_dependencies.size(), instructions_unvisited);
+
+  // Prune all unmarked methods from callable_instance_methods
+  std::vector<const DexMethod*> to_erase;
+  for (auto* m : callable_instance_methods) {
+    if (!reachable_objects.marked_unsafe(m)) {
+      to_erase.push_back(m);
+    }
+  }
+  for (auto* m : to_erase) {
+    callable_instance_methods.erase(m);
+  }
 }
 
 std::unique_ptr<ReachableObjects> compute_reachable_objects(
@@ -1536,7 +1548,7 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
     *out_method_override_graph = std::move(method_override_graph);
   }
 
-  reachable_aspects->finish(cond_marked);
+  reachable_aspects->finish(cond_marked, *reachable_objects);
 
   return reachable_objects;
 }

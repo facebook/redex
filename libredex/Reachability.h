@@ -320,7 +320,8 @@ struct ReachableAspects {
   std::vector<DexMethod*> zombie_methods;
   std::unordered_set<const DexClass*> deserializable_types{};
   uint64_t instructions_unvisited{0};
-  void finish(const ConditionallyMarked& cond_marked);
+  void finish(const ConditionallyMarked& cond_marked,
+              const ReachableObjects& reachable_objects);
 };
 
 struct References {

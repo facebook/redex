@@ -387,7 +387,7 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects_with_type_anaysis(
     *num_exact_resolved_callees = (int)shared_state.num_exact_resolved_callees;
   }
 
-  reachable_aspects->finish(cond_marked);
+  reachable_aspects->finish(cond_marked, *reachable_objects);
 
   return reachable_objects;
 }
