@@ -39,7 +39,7 @@ void UnreachableLoweringPass::run_pass(DexStoresVector& stores,
     }
     size_t local_unreachable_instructions{0};
     Lazy<live_range::DefUseChains> duchains([&cfg]() {
-      live_range::Chains chains(cfg);
+      live_range::MoveAwareChains chains(cfg);
       return chains.get_def_use_chains();
     });
     for (auto& mie : InstructionIterable(cfg)) {
@@ -47,14 +47,22 @@ void UnreachableLoweringPass::run_pass(DexStoresVector& stores,
         continue;
       }
       local_unreachable_instructions++;
+      // We want to enforce that the (dummy) value produced by the "unreachable"
+      // instruction is only used by a "throw" instruction.
+      // TODO: In practice, the InstrumentPass might also squeeze in an
+      // (unreachable) DynamicAnalysis.onMethodExit invocation in between the
+      // "unreachable" instruction and the "throw". This should be avoided, and
+      // then we can assert even stricter code patterns here.
       auto& uses = (*duchains)[mie.insn];
       for (auto& use : uses) {
-        auto throw_insn = uses.begin()->insn;
-        always_assert_log(opcode::is_throw(throw_insn->opcode()),
+        auto* insn = use.insn;
+        if (opcode::is_move_object(insn->opcode())) {
+          continue;
+        }
+        always_assert_log(opcode::is_throw(insn->opcode()),
                           "only unreachable instruction {%s} use {%s} must be "
                           "throw in %s:\n%s",
-                          SHOW(mie.insn), SHOW(throw_insn), SHOW(method),
-                          SHOW(cfg));
+                          SHOW(mie.insn), SHOW(insn), SHOW(method), SHOW(cfg));
       }
 
       // TODO: Consider other transformations, e.g. just return if there are no

@@ -83,3 +83,41 @@ TEST_F(UnreachableLoweringPassTest, simple) {
     )";
   ASSERT_TRUE(run_test(original_code, expected_code));
 }
+
+TEST_F(UnreachableLoweringPassTest, move_objects_are_tolerated) {
+  auto original_code = R"(
+     (
+      (unreachable v0)
+      (move-object v1 v0)
+      (throw v1)
+     )
+    )";
+  auto expected_code = R"(
+     (
+      (const v0 0)
+      (move-object v1 v0)
+      (throw v1)
+     )
+    )";
+  ASSERT_TRUE(run_test(original_code, expected_code));
+}
+
+TEST_F(UnreachableLoweringPassTest, invokes_are_tolerated) {
+  auto original_code = R"(
+     (
+      (unreachable v0)
+      (move-object v1 v0)
+      (invoke-static () "Lcom/facebook/redex/dynamicanalysis/DynamicAnalysis;.onMethodExit:()V")
+      (throw v1)
+     )
+    )";
+  auto expected_code = R"(
+     (
+      (const v0 0)
+      (move-object v1 v0)
+      (invoke-static () "Lcom/facebook/redex/dynamicanalysis/DynamicAnalysis;.onMethodExit:()V")
+      (throw v1)
+     )
+    )";
+  ASSERT_TRUE(run_test(original_code, expected_code));
+}
