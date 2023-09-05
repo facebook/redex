@@ -8,6 +8,7 @@
 #pragma once
 
 #include <boost/optional.hpp>
+#include <list>
 #include <memory>
 #include <string>
 #include <typeinfo>
@@ -43,6 +44,10 @@ using DexStoresVector = std::vector<DexStore>;
 namespace redex_properties {
 class Manager;
 } // namespace redex_properties
+
+struct ReserveRefsInfo;
+using ReserveRefsInfoList = std::list<std::pair<std::string, ReserveRefsInfo>>;
+using ReserveRefsInfoHandle = ReserveRefsInfoList::iterator;
 
 class PassManager {
  public:
@@ -142,6 +147,16 @@ class PassManager {
       const ConfigFiles& config,
       PassManagerConfig* pm_config_override = nullptr);
 
+  // Reserves refs in every dex, effectively lowering the capacity of each dex.
+  // This is applied uniformly (e.g., cannot be a per-dex value).
+  // All reserved refs must eventually released.
+  ReserveRefsInfoHandle reserve_refs(const std::string& name,
+                                     const ReserveRefsInfo& info);
+
+  void release_reserved_refs(ReserveRefsInfoHandle handle);
+
+  ReserveRefsInfo get_reserved_refs() const;
+
  private:
   void init(const ConfigFiles& config);
 
@@ -150,6 +165,8 @@ class PassManager {
   void eval_passes(DexStoresVector&, ConfigFiles&);
 
   void init_property_interactions(ConfigFiles& conf);
+
+  void check_unreleased_reserved_refs();
 
   AssetManager m_asset_mgr;
   std::vector<Pass*> m_registered_passes;
@@ -168,6 +185,7 @@ class PassManager {
   bool m_materialize_nullchecks_has_run{false};
   bool m_interdex_has_run{false};
   bool m_unreliable_virtual_scopes{false};
+  ReserveRefsInfoList m_reserved_ref_infos;
   Pass* m_malloc_profile_pass{nullptr};
 
   boost::optional<hashing::DexHash> m_initial_hash;

@@ -264,14 +264,12 @@ void InterDexPass::run_pass(DexStoresVector& stores,
       PluginRegistry::get().pass_registry(INTERDEX_PASS_NAME));
   auto plugins = registry->create_plugins();
 
-  ReserveRefsInfo refs_info = m_reserve_refs;
   for (const auto& plugin : plugins) {
     plugin->configure(original_scope, conf);
-    const auto plugin_reserve_refs = plugin->reserve_refs();
-    refs_info.frefs += plugin_reserve_refs.frefs;
-    refs_info.trefs += plugin_reserve_refs.trefs;
-    refs_info.mrefs += plugin_reserve_refs.mrefs;
   }
+
+  ReserveRefsInfo refs_info = m_reserve_refs;
+  refs_info += mgr.get_reserved_refs();
 
   ClassReferencesCache cache(original_scope);
 

@@ -9,6 +9,7 @@
 
 #include "InterDexPass.h"
 #include "Pass.h"
+#include "PassManager.h"
 #include "PluginRegistry.h"
 
 namespace method_profiles {
@@ -184,10 +185,14 @@ class DedupStringsPass : public Pass {
   }
 
   void bind_config() override;
+
+  void eval_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
   int64_t m_max_factory_methods;
   float m_method_profiles_appear_percent_threshold{1.f};
   DedupStringsPerfMode m_perf_mode;
+  std::optional<ReserveRefsInfoHandle> m_reserved_refs_handle;
 };

@@ -11,6 +11,7 @@
 
 #include "IRInstruction.h" // For reg_t.
 #include "Pass.h"
+#include "PassManager.h"
 #include "RedexOptions.h" // For Architecture.
 
 class DexType;
@@ -85,10 +86,17 @@ class ReduceArrayLiteralsPass : public Pass {
   }
 
   void bind_config() override;
+
   bool is_cfg_legacy() override { return true; }
+
+  void eval_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
   size_t m_max_filled_elements;
   bool m_debug;
+  std::optional<ReserveRefsInfoHandle> m_reserved_refs_handle;
+  size_t m_run{0}; // Which iteration of `run_pass`.
+  size_t m_eval{0}; // How many `eval_pass` iterations.
 };

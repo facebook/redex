@@ -256,20 +256,15 @@ class Impl {
     auto it = interdex_metrics.find(interdex::METRIC_LINEAR_ALLOC_LIMIT);
     m_linear_alloc_limit = (it != interdex_metrics.end() ? it->second : 0) +
                            m_config.extra_linear_alloc_limit;
-    it = interdex_metrics.find(interdex::METRIC_RESERVED_FREFS);
-    m_dexes_structure.set_reserve_frefs(
-        (it != interdex_metrics.end() ? it->second : 0) +
-        m_config.reserved_extra_frefs);
-    it = interdex_metrics.find(interdex::METRIC_RESERVED_TREFS);
-    m_dexes_structure.set_reserve_trefs(
-        (it != interdex_metrics.end() ? it->second : 0) +
-        m_config.reserved_extra_trefs);
-    it = interdex_metrics.find(interdex::METRIC_RESERVED_MREFS);
-    m_dexes_structure.set_reserve_mrefs(
-        (it != interdex_metrics.end() ? it->second : 0) +
-        m_config.reserved_extra_mrefs);
     it = interdex_metrics.find(interdex::METRIC_ORDER_INTERDEX);
     m_order_interdex = it == interdex_metrics.end() || it->second;
+    auto refs_info = mgr.get_reserved_refs();
+    m_dexes_structure.set_reserve_frefs(refs_info.frefs +
+                                        m_config.reserved_extra_frefs);
+    m_dexes_structure.set_reserve_trefs(refs_info.trefs +
+                                        m_config.reserved_extra_trefs);
+    m_dexes_structure.set_reserve_mrefs(refs_info.mrefs +
+                                        m_config.reserved_extra_mrefs);
 
     m_mutable_dexen.resize(dexen.size());
     m_mutable_dexen_strings.resize(dexen.size());

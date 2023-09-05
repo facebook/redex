@@ -719,24 +719,6 @@ void DedupStrings::rewrite_const_string_instructions(
       });
 }
 
-// In each dex, we might introduce as many new method refs and type refs as we
-// might add factory methods. This makes sure that the inter-dex pass keeps
-// space for that many method refs and type refs.
-class DedupStringsInterDexPlugin : public interdex::InterDexPassPlugin {
- public:
-  explicit DedupStringsInterDexPlugin(size_t max_factory_methods)
-      : m_max_factory_methods(max_factory_methods) {}
-
-  ReserveRefsInfo reserve_refs() override {
-    return ReserveRefsInfo(/* frefs */ 0,
-                           /* trefs */ m_max_factory_methods,
-                           /* mrefs */ m_max_factory_methods);
-  }
-
- private:
-  size_t m_max_factory_methods;
-};
-
 void DedupStringsPass::bind_config() {
   // The dedup-strings transformation introduces new method refs to refer
   // to factory methods. Factory methods are currently only placed into
@@ -761,23 +743,32 @@ void DedupStringsPass::bind_config() {
   trait(Traits::Pass::unique, true);
 
   after_configuration([this, perf_mode_str = std::move(perf_mode_str)] {
-    always_assert(m_max_factory_methods > 0);
-    interdex::InterDexRegistry* registry =
-        static_cast<interdex::InterDexRegistry*>(
-            PluginRegistry::get().pass_registry(interdex::INTERDEX_PASS_NAME));
-    std::function<interdex::InterDexPassPlugin*()> fn =
-        [this]() -> interdex::InterDexPassPlugin* {
-      return new DedupStringsInterDexPlugin(m_max_factory_methods);
-    };
-    registry->register_plugin("DEDUP_STRINGS_PLUGIN", std::move(fn));
     always_assert(!perf_mode_str.empty());
     m_perf_mode = parse_perf_mode(perf_mode_str);
   });
 }
 
+void DedupStringsPass::eval_pass(DexStoresVector&,
+                                 ConfigFiles&,
+                                 PassManager& mgr) {
+  // In each dex, we might introduce as many new method refs and type refs as we
+  // might add factory methods. This makes sure that the inter-dex pass keeps
+  // space for that many method refs and type refs.
+  always_assert(m_max_factory_methods > 0);
+  m_reserved_refs_handle =
+      mgr.reserve_refs(name(),
+                       ReserveRefsInfo(/* frefs */ 0,
+                                       /* trefs */ m_max_factory_methods,
+                                       /* mrefs */ m_max_factory_methods));
+}
+
 void DedupStringsPass::run_pass(DexStoresVector& stores,
                                 ConfigFiles& conf,
                                 PassManager& mgr) {
+  always_assert(m_reserved_refs_handle);
+  mgr.release_reserved_refs(*m_reserved_refs_handle);
+  m_reserved_refs_handle = std::nullopt;
+
   DedupStrings ds(m_max_factory_methods,
                   m_method_profiles_appear_percent_threshold, m_perf_mode,
                   conf.get_method_profiles());

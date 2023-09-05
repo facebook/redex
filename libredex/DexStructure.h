@@ -28,6 +28,13 @@ struct ReserveRefsInfo {
 
   ReserveRefsInfo(size_t frefs, size_t trefs, size_t mrefs)
       : frefs(frefs), trefs(trefs), mrefs(mrefs) {}
+
+  ReserveRefsInfo& operator+=(const ReserveRefsInfo& rhs) {
+    frefs += rhs.frefs;
+    trefs += rhs.trefs;
+    mrefs += rhs.mrefs;
+    return *this;
+  }
 };
 
 using MethodRefs = std::unordered_set<DexMethodRef*>;

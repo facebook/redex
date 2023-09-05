@@ -377,17 +377,6 @@ Stats apply_transform(const PassState& pass_state,
   return result;
 }
 
-class TransformConstClassBranchesInterDexPlugin
-    : public interdex::InterDexPassPlugin {
- public:
-  explicit TransformConstClassBranchesInterDexPlugin() {}
-
-  ReserveRefsInfo reserve_refs() override {
-    return ReserveRefsInfo(/* frefs */ 0,
-                           /* trefs */ 0,
-                           /* mrefs */ 2);
-  }
-};
 } // namespace
 
 void TransformConstClassBranchesPass::bind_config() {
@@ -400,23 +389,24 @@ void TransformConstClassBranchesPass::bind_config() {
   bind("string_tree_integrity_method", "", m_string_tree_integrity_method);
   bind("string_tree_lookup_method", "", m_string_tree_lookup_method);
   trait(Traits::Pass::unique, true);
+}
 
-  after_configuration([] {
-    interdex::InterDexRegistry* registry =
-        static_cast<interdex::InterDexRegistry*>(
-            PluginRegistry::get().pass_registry(interdex::INTERDEX_PASS_NAME));
-    std::function<interdex::InterDexPassPlugin*()> fn =
-        []() -> interdex::InterDexPassPlugin* {
-      return new TransformConstClassBranchesInterDexPlugin();
-    };
-    registry->register_plugin("TRANSFORM_CONST_CLASS_BRANCHES_PLUGIN",
-                              std::move(fn));
-  });
+void TransformConstClassBranchesPass::eval_pass(DexStoresVector&,
+                                                ConfigFiles&,
+                                                PassManager& mgr) {
+  m_reserved_refs_handle = mgr.reserve_refs(name(),
+                                            ReserveRefsInfo(/* frefs */ 0,
+                                                            /* trefs */ 0,
+                                                            /* mrefs */ 2));
 }
 
 void TransformConstClassBranchesPass::run_pass(DexStoresVector& stores,
                                                ConfigFiles& /* unused */,
                                                PassManager& mgr) {
+  always_assert(m_reserved_refs_handle);
+  mgr.release_reserved_refs(*m_reserved_refs_handle);
+  m_reserved_refs_handle = std::nullopt;
+
   auto scope = build_class_scope(stores);
   if (m_string_tree_lookup_method.empty()) {
     TRACE(CCB, 1, "Pass not configured; returning.");

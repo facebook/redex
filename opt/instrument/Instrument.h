@@ -12,6 +12,7 @@
 #include <unordered_set>
 
 #include "Pass.h"
+#include "PassManager.h"
 
 class DexMethod;
 
@@ -109,6 +110,7 @@ class InstrumentPass : public Pass {
  private:
   Options m_options;
   std::unique_ptr<interdex::InterDexPassPlugin> m_plugin;
+  std::optional<ReserveRefsInfoHandle> m_reserved_refs_handle;
 };
 
 } // namespace instrument

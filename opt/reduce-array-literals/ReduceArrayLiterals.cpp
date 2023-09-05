@@ -641,15 +641,6 @@ size_t ReduceArrayLiterals::patch_new_array_chunk(
   return chunk_size;
 }
 
-class ReduceArrayLiteralsInterDexPlugin : public interdex::InterDexPassPlugin {
- public:
-  ReserveRefsInfo reserve_refs() override {
-    return ReserveRefsInfo(/* frefs */ 0,
-                           /* trefs */ 0,
-                           /* mrefs */ 1);
-  }
-};
-
 void ReduceArrayLiteralsPass::bind_config() {
   bind("debug", false, m_debug);
   // The default value 27 is somewhat arbitrary and could be tweaked.
@@ -658,22 +649,31 @@ void ReduceArrayLiteralsPass::bind_config() {
   // runtime, while also being reasonably large so that this optimization still
   // results in a significant win in terms of instructions count.
   bind("max_filled_elements", 27, m_max_filled_elements);
-  after_configuration([this] {
-    always_assert(m_max_filled_elements < 0xff);
-    interdex::InterDexRegistry* registry =
-        static_cast<interdex::InterDexRegistry*>(
-            PluginRegistry::get().pass_registry(interdex::INTERDEX_PASS_NAME));
-    std::function<interdex::InterDexPassPlugin*()> fn =
-        []() -> interdex::InterDexPassPlugin* {
-      return new ReduceArrayLiteralsInterDexPlugin();
-    };
-    registry->register_plugin("REDUCE_ARRAY_LITERALS_PLUGIN", std::move(fn));
-  });
+  after_configuration([this] { always_assert(m_max_filled_elements < 0xff); });
+}
+
+void ReduceArrayLiteralsPass::eval_pass(DexStoresVector&,
+                                        ConfigFiles&,
+                                        PassManager& mgr) {
+  if (m_eval++ == 0) {
+    m_reserved_refs_handle = mgr.reserve_refs(name(),
+                                              ReserveRefsInfo(/* frefs */ 0,
+                                                              /* trefs */ 0,
+                                                              /* mrefs */ 1));
+  }
 }
 
 void ReduceArrayLiteralsPass::run_pass(DexStoresVector& stores,
                                        ConfigFiles& /* conf */,
                                        PassManager& mgr) {
+  ++m_run;
+  // For the last invocation, release reserved refs.
+  if (m_eval == m_run) {
+    always_assert(m_reserved_refs_handle);
+    mgr.release_reserved_refs(*m_reserved_refs_handle);
+    m_reserved_refs_handle = std::nullopt;
+  }
+
   int32_t min_sdk = mgr.get_redex_options().min_sdk;
   Architecture arch = mgr.get_redex_options().arch;
   TRACE(RAL, 1, "[RAL] min_sdk=%d, arch=%s", min_sdk,

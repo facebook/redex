@@ -41,6 +41,7 @@
 #include "DexClass.h"
 #include "DexLoader.h"
 #include "DexOutput.h"
+#include "DexStructure.h"
 #include "DexUtil.h"
 #include "GlobalConfig.h"
 #include "GraphVisualizer.h"
@@ -1435,6 +1436,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
 
   check_unique_deobfuscated.run_finally(scope);
 
+  check_unreleased_reserved_refs();
+
   graph_visualizer.finalize();
 
   maybe_print_seeds_outgoing(conf, it);
@@ -1585,4 +1588,30 @@ PassManager::get_interdex_metrics() {
   }
   static std::unordered_map<std::string, int64_t> empty;
   return empty;
+}
+
+ReserveRefsInfoHandle PassManager::reserve_refs(const std::string& name,
+                                                const ReserveRefsInfo& info) {
+  return m_reserved_ref_infos.insert(m_reserved_ref_infos.end(),
+                                     std::make_pair(name, info));
+}
+
+void PassManager::release_reserved_refs(ReserveRefsInfoHandle handle) {
+  m_reserved_ref_infos.erase(handle);
+}
+
+ReserveRefsInfo PassManager::get_reserved_refs() const {
+  ReserveRefsInfo res;
+  for (const auto& [_, info] : m_reserved_ref_infos) {
+    res += info;
+  }
+  return res;
+}
+
+void PassManager::check_unreleased_reserved_refs() {
+  for (const auto& [name, info] : m_reserved_ref_infos) {
+    fprintf(stderr, "ABORT! Unreleased reserved refs: %s(%zu, %zu, %zu)\n",
+            name.c_str(), info.frefs, info.trefs, info.mrefs);
+    exit(EXIT_FAILURE);
+  }
 }

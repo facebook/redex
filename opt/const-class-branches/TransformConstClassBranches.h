@@ -9,6 +9,7 @@
 
 #include "InterDexPass.h"
 #include "Pass.h"
+#include "PassManager.h"
 #include "PluginRegistry.h"
 
 class TransformConstClassBranchesPass : public Pass {
@@ -27,6 +28,9 @@ class TransformConstClassBranchesPass : public Pass {
     };
   }
   void bind_config() override;
+
+  void eval_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
@@ -35,4 +39,5 @@ class TransformConstClassBranchesPass : public Pass {
   size_t m_max_cases;
   std::string m_string_tree_integrity_method;
   std::string m_string_tree_lookup_method;
+  std::optional<ReserveRefsInfoHandle> m_reserved_refs_handle;
 };

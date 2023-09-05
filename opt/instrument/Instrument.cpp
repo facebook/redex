@@ -54,21 +54,6 @@ constexpr const char* BASIC_BLOCK_TRACING = "basic_block_tracing";
 constexpr const char* BASIC_BLOCK_HIT_COUNT = "basic_block_hit_count";
 constexpr const char* METHOD_REPLACEMENT = "methods_replacement";
 
-class InstrumentInterDexPlugin : public interdex::InterDexPassPlugin {
- public:
-  InstrumentInterDexPlugin(size_t frefs, size_t trefs, size_t mrefs)
-      : m_frefs(frefs), m_trefs(trefs), m_mrefs(mrefs) {}
-
-  ReserveRefsInfo reserve_refs() override {
-    return ReserveRefsInfo(m_frefs, m_trefs, m_mrefs);
-  }
-
- private:
-  const size_t m_frefs;
-  const size_t m_trefs;
-  const size_t m_mrefs;
-};
-
 // For example, say that "Lcom/facebook/debug/" is in the set. We match either
 // "^Lcom/facebook/debug/*" or "^Lcom/facebook/debug;".
 bool match_class_name(std::string cls_name,
@@ -556,6 +541,7 @@ void InstrumentPass::bind_config() {
   bind("inline_onBlockHit", false, m_options.inline_onBlockHit);
   bind("inline_onNonLoopBlockHit", false, m_options.inline_onNonLoopBlockHit);
   bind("apply_CSE_CopyProp", false, m_options.apply_CSE_CopyProp);
+  trait(Traits::Pass::unique, true);
 
   after_configuration([this] {
     // Currently we only support instance call to static call.
@@ -672,13 +658,11 @@ void InstrumentPass::eval_pass(DexStoresVector& stores,
     max_analysis_methods = 1;
   }
 
-  m_plugin = std::unique_ptr<interdex::InterDexPassPlugin>(
-      new InstrumentInterDexPlugin(1, 1, max_analysis_methods));
-
-  registry->register_plugin("INSTRUMENT_PASS_PLUGIN", [this]() {
-    return new InstrumentInterDexPlugin(
-        *(InstrumentInterDexPlugin*)m_plugin.get());
-  });
+  m_reserved_refs_handle =
+      mgr.reserve_refs(name(),
+                       ReserveRefsInfo(/* frefs */ 1,
+                                       /* trefs */ 1,
+                                       /* mrefs */ max_analysis_methods));
 }
 
 // Check for inclusion in allow/block lists of methods/classes. It supports:
@@ -933,6 +917,10 @@ InstrumentPass::patch_sharded_arrays(
 void InstrumentPass::run_pass(DexStoresVector& stores,
                               ConfigFiles& cfg,
                               PassManager& pm) {
+  if (m_reserved_refs_handle) {
+    pm.release_reserved_refs(*m_reserved_refs_handle);
+  }
+
   // TODO(fengliu): We may need change this but leave it here for local test.
   if (m_options.instrumentation_strategy == METHOD_REPLACEMENT) {
     bool exclude_primary_dex =
@@ -941,6 +929,7 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
         method_reference::wrap_instance_call_with_static(
             stores, m_options.methods_replacement, exclude_primary_dex);
     pm.set_metric("wrapped_invocations", num_wrapped_invocations);
+    m_reserved_refs_handle = std::nullopt;
     return;
   }
 
@@ -954,6 +943,9 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
     pm.set_metric("skipped_pass", 1);
     return;
   }
+
+  always_assert(m_reserved_refs_handle);
+  m_reserved_refs_handle = std::nullopt;
 
   // Append block listed classes from the file, if exists.
   if (!m_options.blocklist_file_name.empty()) {
