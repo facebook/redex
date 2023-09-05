@@ -689,9 +689,11 @@ bool may_be_dispatch(const DexMethod* method) {
   if (name.find(DISPATCH_PREFIX) != 0) {
     return false;
   }
-  auto code = method->get_code();
+  auto code = const_cast<DexMethod*>(method)->get_code();
+  always_assert(code->editable_cfg_built());
+  auto& cfg = code->cfg();
   uint32_t branches = 0;
-  for (auto& mie : InstructionIterable(code)) {
+  for (auto& mie : cfg::InstructionIterable(cfg)) {
     auto op = mie.insn->opcode();
     if (opcode::is_switch(op)) {
       return true;
