@@ -52,8 +52,15 @@ void ArtProfileWriterPass::bind_config() {
        m_perf_config.call_count_threshold);
   bind("perf_coldstart_appear100_threshold", m_perf_config.appear100_threshold,
        m_perf_config.coldstart_appear100_threshold);
+  bind("perf_coldstart_appear100_nonhot_threshold",
+       m_perf_config.coldstart_appear100_threshold,
+       m_perf_config.coldstart_appear100_nonhot_threshold);
   bind("perf_interactions", m_perf_config.interactions,
        m_perf_config.interactions);
+  after_configuration([this] {
+    always_assert(m_perf_config.coldstart_appear100_nonhot_threshold <
+                  m_perf_config.coldstart_appear100_threshold);
+  });
 }
 
 void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
@@ -65,18 +72,27 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
     bool startup = interaction_id == "ColdStart";
     const auto& method_stats = method_profiles.method_stats(interaction_id);
     for (auto&& [method, stat] : method_stats) {
+      // for startup interaction, we can include it into baseline profile
+      // as non hot method if the method appear100 is above nonhot_threshold
       if (stat.appear_percent >=
-              (startup ? m_perf_config.coldstart_appear100_threshold
+              (startup ? m_perf_config.coldstart_appear100_nonhot_threshold
                        : m_perf_config.appear100_threshold) &&
           stat.call_count >= m_perf_config.call_count_threshold) {
         auto& mf = method_flags[method];
-        mf.hot = true;
+        mf.hot = startup ? stat.appear_percent >
+                               m_perf_config.coldstart_appear100_threshold
+                         : true;
         if (startup) {
           // consistent with buck python config in the post-process baseline
           // profile generator, which is set both flags true for ColdStart
           // methods
           mf.startup = true;
-          mf.not_startup = true;
+          // if startup method is not hot, we do not set its not_startup flag
+          // the method still has a change to get it set if it appears in other
+          // interactions' hot list. Remember, ART only uses this flag to guide
+          // dexlayout decision, so we don't have to be pedantic to assume it
+          // never gets exectued post startup
+          mf.not_startup = mf.hot;
         } else {
           mf.not_startup = true;
         }
