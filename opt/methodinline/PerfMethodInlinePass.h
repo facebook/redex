@@ -23,6 +23,7 @@ class PerfMethodInlinePass : public Pass {
         {HasSourceBlocks, RequiresAndEstablishes},
         {NoResolvablePureRefs, Preserves},
         {NoSpuriousGetClassCalls, Preserves},
+        {InitialRenameClass, Preserves},
     };
   }
 

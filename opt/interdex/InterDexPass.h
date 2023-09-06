@@ -70,10 +70,9 @@ class InterDexPass : public Pass {
     using namespace redex_properties::interactions;
     using namespace redex_properties::names;
     return {
-        {DexLimitsObeyed, Establishes},
-        {HasSourceBlocks, Preserves},
-        {NoResolvablePureRefs, Preserves},
-        {NoSpuriousGetClassCalls, Preserves},
+        {DexLimitsObeyed, Establishes},    {HasSourceBlocks, Preserves},
+        {NoResolvablePureRefs, Preserves}, {NoSpuriousGetClassCalls, Preserves},
+        {InitialRenameClass, Preserves},
     };
   }
 

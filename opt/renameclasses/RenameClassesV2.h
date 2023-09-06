@@ -49,6 +49,7 @@ class RenameClassesPassV2 : public Pass {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, Preserves},
         {NoResolvablePureRefs, Preserves},
+        {InitialRenameClass, Preserves},
         {RenameClass, EstablishesAndRequiresFinally},
     };
   }

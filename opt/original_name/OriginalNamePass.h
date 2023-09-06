@@ -23,6 +23,7 @@ class OriginalNamePass : public Pass {
         {HasSourceBlocks, Preserves},
         {NoResolvablePureRefs, Preserves},
         {RenameClass, Preserves},
+        {InitialRenameClass, RequiresAndEstablishes},
     };
   }
 

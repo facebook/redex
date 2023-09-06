@@ -68,6 +68,7 @@ inline const PropertyName NeedsInjectionIdLowering("NeedsInjectionIdLowering");
 inline const PropertyName HasSourceBlocks("HasSourceBlocks");
 inline const PropertyName NoResolvablePureRefs("NoResolvablePureRefs");
 inline const PropertyName NoSpuriousGetClassCalls("NoSpuriousGetClassCalls");
+inline const PropertyName InitialRenameClass("InitialRenameClass");
 inline const PropertyName RenameClass("RenameClass");
 inline const PropertyName UltralightCodePatterns("UltralightCodePatterns");
 

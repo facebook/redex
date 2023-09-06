@@ -187,6 +187,7 @@ class VirtualMergingPass : public Pass {
         {HasSourceBlocks, RequiresAndEstablishes},
         {NoResolvablePureRefs, Preserves},
         {NoSpuriousGetClassCalls, Preserves},
+        {InitialRenameClass, Preserves},
     };
   }
 

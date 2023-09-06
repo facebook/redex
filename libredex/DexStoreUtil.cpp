@@ -42,6 +42,7 @@ DexClass* create_canary(int dexnum, const DexString* store_name) {
     canary_cls = cc.create();
     // Don't rename the Canary we've created
     canary_cls->rstate.set_keepnames();
+    canary_cls->rstate.set_generated();
   }
   return canary_cls;
 }

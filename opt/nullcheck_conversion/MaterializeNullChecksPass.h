@@ -45,6 +45,7 @@ class MaterializeNullChecksPass : public Pass {
         {DexLimitsObeyed, Preserves},
         {NoResolvablePureRefs, Preserves},
         {HasSourceBlocks, Preserves},
+        {InitialRenameClass, Preserves},
     };
   }
 

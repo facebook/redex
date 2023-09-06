@@ -22,10 +22,9 @@ class RemoveRecursiveLocksPass : public Pass {
     using namespace redex_properties::interactions;
     using namespace redex_properties::names;
     return {
-        {DexLimitsObeyed, Preserves},
-        {HasSourceBlocks, Preserves},
-        {NoResolvablePureRefs, Preserves},
-        {NoSpuriousGetClassCalls, Preserves},
+        {DexLimitsObeyed, Preserves},      {HasSourceBlocks, Preserves},
+        {NoResolvablePureRefs, Preserves}, {NoSpuriousGetClassCalls, Preserves},
+        {InitialRenameClass, Preserves},
     };
   }
   bool is_cfg_legacy() override { return true; }

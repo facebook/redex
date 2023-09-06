@@ -181,6 +181,7 @@ class DedupStringsPass : public Pass {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, RequiresAndEstablishes},
         {NoResolvablePureRefs, Preserves},
+        {InitialRenameClass, Preserves},
     };
   }
 

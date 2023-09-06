@@ -43,6 +43,7 @@ class InstructionSequenceOutliner : public Pass {
         {HasSourceBlocks, RequiresAndEstablishes},
         {NoResolvablePureRefs, Preserves},
         {NoSpuriousGetClassCalls, Establishes},
+        {InitialRenameClass, Preserves},
     };
   }
 

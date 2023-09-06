@@ -26,6 +26,7 @@ class LocalDcePass : public Pass {
         {NoResolvablePureRefs, Preserves},
         {NoSpuriousGetClassCalls, Preserves},
         {RenameClass, Preserves},
+        {InitialRenameClass, Preserves},
     };
   }
 

@@ -21,6 +21,7 @@ class SortRemainingClassesPass : public Pass {
         {DexLimitsObeyed, RequiresAndEstablishes},
         {HasSourceBlocks, Preserves},
         {NoResolvablePureRefs, Preserves},
+        {InitialRenameClass, Preserves},
     };
   }
 

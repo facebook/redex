@@ -349,6 +349,7 @@ endif
 
 libopt_la_SOURCES = \
 	checkers/HasSourceBlocksChecker.cpp \
+	checkers/InitialRenameClassCheker.cpp \
 	checkers/InjectionIdInstructionsChecker.cpp \
 	checkers/NoInitClassInstructionsChecker.cpp \
 	checkers/NoUnreachableInstructionsChecker.cpp \

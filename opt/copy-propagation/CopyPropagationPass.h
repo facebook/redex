@@ -25,6 +25,7 @@ class CopyPropagationPass : public Pass {
         {NoUnreachableInstructions, Preserves},
         {NoResolvablePureRefs, Preserves},
         {NoSpuriousGetClassCalls, Preserves},
+        {InitialRenameClass, Preserves},
         {RenameClass, Preserves},
     };
   }

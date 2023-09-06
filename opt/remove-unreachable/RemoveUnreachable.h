@@ -24,6 +24,7 @@ class RemoveUnreachablePassBase : public Pass {
         {NoResolvablePureRefs, Preserves},
         {NoSpuriousGetClassCalls, Preserves},
         {UltralightCodePatterns, Preserves},
+        {InitialRenameClass, Preserves},
     };
   }
 

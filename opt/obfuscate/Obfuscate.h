@@ -21,6 +21,7 @@ class ObfuscatePass : public Pass {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, Preserves},
         {NoResolvablePureRefs, Preserves},
+        {InitialRenameClass, Preserves},
     };
   }
 
