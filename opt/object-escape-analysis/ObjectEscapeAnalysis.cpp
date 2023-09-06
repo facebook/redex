@@ -996,6 +996,7 @@ class RootMethodReducer {
       auto param_index = it2->second;
       auto expanded_method_ref = expand_invoke(mutation, it, param_index);
       if (!expanded_method_ref) {
+        mutation.clear();
         return false;
       }
       expanded_method_refs->insert(expanded_method_ref);
