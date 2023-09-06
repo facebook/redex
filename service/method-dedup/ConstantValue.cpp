@@ -230,28 +230,27 @@ DexMethod* ConstantValues::create_stub_method(DexMethod* callee) {
   auto name = DexString::make_string(callee->get_name()->str() + "$stub");
   name = DexMethod::get_unique_name(type, name, stub_proto);
   TRACE(METH_DEDUP, 9, "const value: stub name %s", name->c_str());
-  auto mc = new MethodCreator(type,
-                              name,
-                              stub_proto,
-                              callee->get_access(),
-                              nullptr, // anno
-                              false // with_debug_item
-  );
-  auto mb = mc->get_main_block();
+  auto mc = MethodCreator(type,
+                          name,
+                          stub_proto,
+                          callee->get_access(),
+                          /* anno=*/nullptr,
+                          /* with_debug_item= */ false);
+  auto mb = mc.get_main_block();
   // Setup args for calling the callee.
   size_t arg_loc = 0;
   std::vector<Location> args;
   if (!is_static(callee)) {
-    args.push_back(mc->get_local(arg_loc++));
+    args.push_back(mc.get_local(arg_loc++));
   }
   for (size_t i = 0; i < stub_arg_list->size(); ++i) {
-    args.push_back(mc->get_local(arg_loc++));
+    args.push_back(mc.get_local(arg_loc++));
   }
   for (auto& cval : m_const_vals) {
     if (cval.is_invalid()) {
       continue;
     }
-    auto loc = mc->make_local(cval.get_constant_type());
+    auto loc = mc.make_local(cval.get_constant_type());
     if (cval.is_int_value()) {
       mb->load_const(loc, static_cast<int32_t>(cval.get_int_value()));
     } else {
@@ -265,12 +264,12 @@ DexMethod* ConstantValues::create_stub_method(DexMethod* callee) {
   if (ret_type == type::_void()) {
     mb->ret_void();
   } else {
-    auto ret_loc = mc->make_local(ret_type);
+    auto ret_loc = mc.make_local(ret_type);
     mb->move_result(ret_loc, ret_type);
     mb->ret(ret_type, ret_loc);
   }
 
-  auto stub = mc->create();
+  auto stub = mc.create();
   // Propogate deobfuscated name
   const auto orig_name = callee->get_deobfuscated_name_or_empty();
   auto pos = orig_name.find(':');

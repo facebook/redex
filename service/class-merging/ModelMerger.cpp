@@ -247,23 +247,23 @@ DexMethod* create_instanceof_method(const DexType* merger_type,
       DexTypeList::make_type_list({type::java_lang_Object(), type::_int()});
   auto proto = DexProto::make_proto(type::_boolean(), arg_list);
   auto access = ACC_PUBLIC | ACC_STATIC;
-  auto mc = new MethodCreator(const_cast<DexType*>(merger_type),
-                              DexString::make_string(INSTANCE_OF_STUB_NAME),
-                              proto,
-                              access);
-  auto obj_loc = mc->get_local(0);
-  auto type_tag_loc = mc->get_local(1);
+  auto mc = MethodCreator(const_cast<DexType*>(merger_type),
+                          DexString::make_string(INSTANCE_OF_STUB_NAME),
+                          proto,
+                          access);
+  auto obj_loc = mc.get_local(0);
+  auto type_tag_loc = mc.get_local(1);
   // first type check result loc.
-  auto check_res_loc = mc->make_local(type::_boolean());
-  auto mb = mc->get_main_block();
+  auto check_res_loc = mc.make_local(type::_boolean());
+  auto mb = mc.get_main_block();
   mb->instance_of(obj_loc, check_res_loc, const_cast<DexType*>(merger_type));
   // ret slot.
-  auto ret_loc = mc->make_local(type::_boolean());
+  auto ret_loc = mc.make_local(type::_boolean());
   // first check and branch off. Zero means fail.
   auto instance_of_block = mb->if_testz(OPCODE_IF_EQZ, check_res_loc);
 
   // Fall through. Check succeed.
-  auto itype_tag_loc = mc->make_local(type::_int());
+  auto itype_tag_loc = mc.make_local(type::_int());
   // CHECK_CAST obj to merger type.
   instance_of_block->check_cast(obj_loc, const_cast<DexType*>(merger_type));
   instance_of_block->iget(type_tag_field, obj_loc, itype_tag_loc);
@@ -277,7 +277,7 @@ DexMethod* create_instanceof_method(const DexType* merger_type,
   instance_of_block->load_const(ret_loc, 0);
   instance_of_block->ret(ret_loc);
 
-  return mc->create();
+  return mc.create();
 }
 
 void update_instance_of(
