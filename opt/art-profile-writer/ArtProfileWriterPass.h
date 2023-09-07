@@ -29,21 +29,27 @@ class ArtProfileWriterPass : public Pass {
   void bind_config() override;
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
- private:
+private:
   struct PerfConfig {
     float appear100_threshold;
     float call_count_threshold;
     float coldstart_appear100_threshold;
+    // Threshold to include a coldstart method in the profile,
+    // but not as a hot method. This threshold must be lower than
+    // coldstart_appear100_threshold.
+    float coldstart_appear100_nonhot_threshold;
     std::vector<std::string> interactions{"ColdStart"};
 
     PerfConfig()
         : appear100_threshold(101.0),
           call_count_threshold(0),
-          coldstart_appear100_threshold(80.0) {} // Default: off
-    PerfConfig(float a, float c, float ca)
+          coldstart_appear100_threshold(80.0),
+          coldstart_appear100_nonhot_threshold(50.0) {} // Default: off
+    PerfConfig(float a, float c, float ca, float can)
         : appear100_threshold(a),
           call_count_threshold(c),
-          coldstart_appear100_threshold(ca) {}
+          coldstart_appear100_threshold(ca),
+          coldstart_appear100_nonhot_threshold(can) {}
   };
 
   PerfConfig m_perf_config;
