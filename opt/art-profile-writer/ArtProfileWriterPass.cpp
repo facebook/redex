@@ -54,12 +54,12 @@ void ArtProfileWriterPass::bind_config() {
        m_perf_config.coldstart_appear100_threshold,
        m_perf_config.coldstart_appear100_threshold);
   bind("perf_coldstart_appear100_nonhot_threshold",
-       m_perf_config.coldstart_appear100_nonhot_threshold,
+       m_perf_config.coldstart_appear100_threshold,
        m_perf_config.coldstart_appear100_nonhot_threshold);
   bind("perf_interactions", m_perf_config.interactions,
        m_perf_config.interactions);
   after_configuration([this] {
-    always_assert(m_perf_config.coldstart_appear100_nonhot_threshold <
+    always_assert(m_perf_config.coldstart_appear100_nonhot_threshold <=
                   m_perf_config.coldstart_appear100_threshold);
   });
 }
