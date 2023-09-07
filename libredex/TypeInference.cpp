@@ -185,11 +185,9 @@ void set_integral(
     reg_t reg,
     const boost::optional<const DexType*>& annotation = boost::none) {
   state->set_type(reg, TypeDomain(IRType::INT));
-  if (annotation) {
-    state->set_dex_type(reg, DexTypeDomain(nullptr, *annotation));
-  } else {
-    state->reset_dex_type(reg);
-  }
+  const auto anno = DexAnnoType(annotation);
+  DexTypeDomain dex_type_domain = DexTypeDomain(&anno);
+  state->set_dex_type(reg, dex_type_domain);
 }
 
 void set_float(TypeEnvironment* state, reg_t reg) {
@@ -209,8 +207,8 @@ void set_reference(
     const boost::optional<const DexType*>& annotation = boost::none) {
   state->set_type(reg, TypeDomain(IRType::REFERENCE));
   auto dex_type = dex_type_opt ? *dex_type_opt : nullptr;
-  auto anno = annotation ? *annotation : nullptr;
-  const DexTypeDomain dex_type_domain = DexTypeDomain(dex_type, anno);
+  const auto anno = DexAnnoType(annotation);
+  const DexTypeDomain dex_type_domain = DexTypeDomain(dex_type, &anno);
   state->set_dex_type(reg, dex_type_domain);
 }
 
@@ -453,21 +451,18 @@ void TypeInference::refine_scalar(TypeEnvironment* state, reg_t reg) const {
   refine_type(state,
               reg,
               /* expected */ IRType::SCALAR);
-  const DexTypeDomain dex_type =
-      state->get_annotation(reg)
-          ? DexTypeDomain(nullptr, *state->get_annotation(reg))
-          : DexTypeDomain::top();
-  state->set_dex_type(reg, dex_type);
+  const boost::optional<const DexType*> annotation = state->get_annotation(reg);
+  const auto anno = DexAnnoType(annotation);
+  DexTypeDomain dex_type_domain = DexTypeDomain(&anno);
+  state->set_dex_type(reg, dex_type_domain);
 }
 
 void TypeInference::refine_integral(TypeEnvironment* state, reg_t reg) const {
   refine_type(state, reg, /* expected */ IRType::INT);
   const boost::optional<const DexType*> annotation = state->get_annotation(reg);
-  if (annotation) {
-    state->set_dex_type(reg, DexTypeDomain(nullptr, *annotation));
-  } else {
-    state->reset_dex_type(reg);
-  }
+  const auto anno = DexAnnoType(annotation);
+  DexTypeDomain dex_type_domain = DexTypeDomain(&anno);
+  state->set_dex_type(reg, dex_type_domain);
 }
 
 void TypeInference::refine_float(TypeEnvironment* state, reg_t reg) const {
@@ -1051,8 +1046,8 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     const DexType* type = insn->get_field()->get_type();
     if (!m_annotations.empty()) {
       auto annotation = current_state->get_annotation(insn->src(0));
-      auto anno = annotation ? *annotation : nullptr;
-      const DexTypeDomain dex_type_domain = DexTypeDomain(type, anno);
+      const DexAnnoType anno = DexAnnoType(annotation);
+      const DexTypeDomain dex_type_domain = DexTypeDomain(type, &anno);
       current_state->set_dex_type(insn->src(1), dex_type_domain);
     }
     if (type::is_float(type)) {
@@ -1091,10 +1086,10 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   case OPCODE_IPUT_OBJECT: {
     if (!m_annotations.empty()) {
       auto annotation = current_state->get_annotation(insn->src(0));
-      auto anno = annotation ? *annotation : nullptr;
+      const auto anno = DexAnnoType(annotation);
       auto type = current_state->get_dex_type(insn->src(1));
       auto dex_type = type ? *type : nullptr;
-      const DexTypeDomain dex_type_domain = DexTypeDomain(dex_type, anno);
+      const DexTypeDomain dex_type_domain = DexTypeDomain(dex_type, &anno);
       current_state->set_dex_type(insn->src(1), dex_type_domain);
     }
     refine_reference(current_state, insn->src(0));

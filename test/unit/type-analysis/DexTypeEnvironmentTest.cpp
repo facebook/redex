@@ -240,6 +240,12 @@ struct DexTypeEnvironmentTest : public RedexTest {
     creator.set_super(type::java_lang_Object());
     creator.create();
 
+    m_anno_d1 = new DexAnnoType(m_type_d1);
+    m_anno_d2 = new DexAnnoType(m_type_d2);
+    m_anno_d3 = new DexAnnoType(m_type_d3);
+    m_anno_d4 = new DexAnnoType(m_type_d4);
+    m_anno_d5 = new DexAnnoType(m_type_d5);
+
     m_map_entry_array = type::make_array_type(m_map_entry);
     m_im_map_entry_array = type::make_array_type(m_im_map_entry);
   }
@@ -299,6 +305,12 @@ struct DexTypeEnvironmentTest : public RedexTest {
   DexType* m_type_d3;
   DexType* m_type_d4;
   DexType* m_type_d5;
+
+  DexAnnoType* m_anno_d1;
+  DexAnnoType* m_anno_d2;
+  DexAnnoType* m_anno_d3;
+  DexAnnoType* m_anno_d4;
+  DexAnnoType* m_anno_d5;
 };
 
 TEST_F(DexTypeEnvironmentTest, BasicTest) {
@@ -326,13 +338,13 @@ TEST_F(DexTypeEnvironmentTest, RegisterEnvTest) {
   auto a_join_a1 = DexTypeDomain(m_type_a);
   a_join_a1.join_with(env.get(v1));
   EXPECT_EQ(a_join_a1.get_single_domain(), SingletonDexTypeDomain(m_type_a));
-  EXPECT_EQ(a_join_a1.get_annotation_domain(), TypedefAnnotationDomain::none());
+  EXPECT_EQ(a_join_a1.get_annotation_domain(), TypedefAnnotationDomain::top());
   EXPECT_EQ(a_join_a1.get_type_set(), get_type_set({m_type_a, m_type_a1}));
 
   auto a1_join_a = DexTypeDomain(m_type_a1);
   a1_join_a.join_with(env.get(v0));
   EXPECT_EQ(a1_join_a.get_single_domain(), SingletonDexTypeDomain(m_type_a));
-  EXPECT_EQ(a1_join_a.get_annotation_domain(), TypedefAnnotationDomain::none());
+  EXPECT_EQ(a1_join_a.get_annotation_domain(), TypedefAnnotationDomain::top());
   EXPECT_EQ(a1_join_a.get_type_set(), get_type_set({m_type_a, m_type_a1}));
 }
 
@@ -342,14 +354,14 @@ TEST_F(DexTypeEnvironmentTest, AnnotationRegisterEnvTest) {
   auto type = env.get(v0);
   EXPECT_TRUE(type.is_top());
 
-  env.set(v0, DexTypeDomain(m_type_a, m_type_d1));
-  EXPECT_EQ(env.get(v0), DexTypeDomain(m_type_a, m_type_d1));
+  env.set(v0, DexTypeDomain(m_type_a, m_anno_d1));
+  EXPECT_EQ(env.get(v0), DexTypeDomain(m_type_a, m_anno_d1));
 
   reg_t v1 = 1;
-  env.set(v1, DexTypeDomain(m_type_a1, m_type_d2));
-  EXPECT_EQ(env.get(v1), DexTypeDomain(m_type_a1, m_type_d2));
+  env.set(v1, DexTypeDomain(m_type_a1, m_anno_d2));
+  EXPECT_EQ(env.get(v1), DexTypeDomain(m_type_a1, m_anno_d2));
 
-  auto a_join_a1 = DexTypeDomain(m_type_a, m_type_d1);
+  auto a_join_a1 = DexTypeDomain(m_type_a, m_anno_d1);
   a_join_a1.join_with(env.get(v1));
   EXPECT_EQ(a_join_a1.get_single_domain(), SingletonDexTypeDomain(m_type_a));
   EXPECT_EQ(a_join_a1.get_annotation_domain(),
@@ -357,7 +369,7 @@ TEST_F(DexTypeEnvironmentTest, AnnotationRegisterEnvTest) {
 
   EXPECT_EQ(a_join_a1.get_type_set(), get_type_set({m_type_a, m_type_a1}));
 
-  auto a1_join_a = DexTypeDomain(m_type_a1, m_type_d1);
+  auto a1_join_a = DexTypeDomain(m_type_a1, m_anno_d1);
   a1_join_a.join_with(env.get(v0));
   EXPECT_EQ(a1_join_a.get_single_domain(), SingletonDexTypeDomain(m_type_a));
   EXPECT_EQ(a1_join_a.get_annotation_domain(),
@@ -383,7 +395,7 @@ TEST_F(DexTypeEnvironmentTest, FieldEnvTest) {
   auto a_join_a1 = env.get(f2);
   a_join_a1.join_with(env.get(f1));
   EXPECT_EQ(a_join_a1.get_single_domain(), SingletonDexTypeDomain(m_type_a));
-  EXPECT_EQ(a_join_a1.get_annotation_domain(), TypedefAnnotationDomain::none());
+  EXPECT_EQ(a_join_a1.get_annotation_domain(), TypedefAnnotationDomain::top());
   EXPECT_EQ(a_join_a1.get_type_set(), get_type_set({m_type_a, m_type_a1}));
   EXPECT_EQ(env.get(f1), DexTypeDomain(m_type_a1));
   EXPECT_EQ(env.get(f2), DexTypeDomain(m_type_a));
@@ -391,7 +403,7 @@ TEST_F(DexTypeEnvironmentTest, FieldEnvTest) {
   auto a1_join_a = env.get(f1);
   a1_join_a.join_with(env.get(f2));
   EXPECT_EQ(a1_join_a.get_single_domain(), SingletonDexTypeDomain(m_type_a));
-  EXPECT_EQ(a1_join_a.get_annotation_domain(), TypedefAnnotationDomain::none());
+  EXPECT_EQ(a1_join_a.get_annotation_domain(), TypedefAnnotationDomain::top());
   EXPECT_EQ(a1_join_a.get_type_set(), get_type_set({m_type_a, m_type_a1}));
   EXPECT_EQ(env.get(f1), DexTypeDomain(m_type_a1));
   EXPECT_EQ(env.get(f2), DexTypeDomain(m_type_a));
@@ -490,30 +502,28 @@ TEST_F(DexTypeEnvironmentTest, JoinWithTest) {
 }
 
 TEST_F(DexTypeEnvironmentTest, AnnotationJoinWithTest) {
-  auto domain_a1 = DexTypeDomain(m_type_a1, m_type_d1);
-  auto domain_a2 = DexTypeDomain(m_type_a2, m_type_d2);
+  auto domain_a1 = DexTypeDomain(m_type_a1, m_anno_d1);
+  auto domain_a2 = DexTypeDomain(m_type_a2, m_anno_d2);
   domain_a1.join_with(domain_a2);
   EXPECT_EQ(domain_a1.get_annotation_domain(),
             TypedefAnnotationDomain(type::java_lang_Object()));
 
-  domain_a1 = DexTypeDomain(m_type_a1, m_type_d3);
+  domain_a1 = DexTypeDomain(m_type_a1, m_anno_d3);
   auto domain_a21 = DexTypeDomain(m_type_a21, nullptr);
   domain_a1.join_with(domain_a21);
-  EXPECT_EQ(domain_a1.get_annotation_domain(),
-            TypedefAnnotationDomain(m_type_d3));
+  EXPECT_EQ(domain_a1.get_annotation_domain(), TypedefAnnotationDomain::top());
 
   EXPECT_EQ(domain_a1.get_type_set(), get_type_set({m_type_a1, m_type_a21}));
 
   domain_a1 = DexTypeDomain(m_type_a1, nullptr);
-  auto domain_a211 = DexTypeDomain(m_type_a211, m_type_d3);
+  auto domain_a211 = DexTypeDomain(m_type_a211, m_anno_d3);
   domain_a1.join_with(domain_a211);
-  EXPECT_EQ(domain_a1.get_annotation_domain(),
-            TypedefAnnotationDomain(m_type_d3));
+  EXPECT_EQ(domain_a1.get_annotation_domain(), TypedefAnnotationDomain::top());
 
   EXPECT_EQ(domain_a1.get_type_set(), get_type_set({m_type_a1, m_type_a211}));
 
-  auto domain_a = DexTypeDomain(m_type_a, m_type_d4);
-  domain_a211 = DexTypeDomain(m_type_a211, m_type_d4);
+  auto domain_a = DexTypeDomain(m_type_a, m_anno_d4);
+  domain_a211 = DexTypeDomain(m_type_a211, m_anno_d4);
   domain_a.join_with(domain_a211);
   EXPECT_EQ(domain_a.get_annotation_domain(),
             TypedefAnnotationDomain(m_type_d4));
@@ -527,12 +537,12 @@ TEST_F(DexTypeEnvironmentTest, AnnotationJoinWithTest) {
   domain_a = DexTypeDomain(m_type_a);
   auto domain_b = DexTypeDomain(m_type_b);
   domain_a.join_with(domain_b);
-  EXPECT_EQ(domain_a.get_annotation_domain(), TypedefAnnotationDomain::none());
+  EXPECT_EQ(domain_a.get_annotation_domain(), TypedefAnnotationDomain::top());
 
   domain_a1 = DexTypeDomain(m_type_a1, nullptr);
   domain_b = DexTypeDomain(m_type_b, nullptr);
   domain_a1.join_with(domain_b);
-  EXPECT_EQ(domain_a1.get_annotation_domain(), TypedefAnnotationDomain::none());
+  EXPECT_EQ(domain_a1.get_annotation_domain(), TypedefAnnotationDomain::top());
 }
 
 TEST_F(DexTypeEnvironmentTest, InterfaceJoinTest) {
@@ -769,27 +779,27 @@ TEST_F(DexTypeEnvironmentTest, NullableDexTypeDomainTest) {
   EXPECT_TRUE(null1.get_single_domain().is_none());
   EXPECT_TRUE(null1.get_annotation_domain().is_none());
 
-  auto type_a = DexTypeDomain(m_type_a, m_type_d1);
+  auto type_a = DexTypeDomain(m_type_a, m_anno_d1);
   null1.join_with(type_a);
   EXPECT_FALSE(null1.is_null());
   EXPECT_FALSE(null1.is_not_null());
   EXPECT_TRUE(null1.is_nullable());
-  EXPECT_NE(null1, DexTypeDomain(m_type_a, m_type_d1));
+  EXPECT_NE(null1, DexTypeDomain(m_type_a, m_anno_d1));
   EXPECT_EQ(*null1.get_dex_type(), m_type_a);
   EXPECT_EQ(*null1.get_annotation_type(), m_type_d1);
-  EXPECT_EQ(type_a, DexTypeDomain(m_type_a, m_type_d1));
+  EXPECT_EQ(type_a, DexTypeDomain(m_type_a, m_anno_d1));
   EXPECT_FALSE(null1.get_single_domain().is_none());
   EXPECT_FALSE(type_a.get_single_domain().is_none());
   EXPECT_FALSE(null1.get_annotation_domain().is_none());
   EXPECT_FALSE(type_a.get_annotation_domain().is_none());
 
-  type_a = DexTypeDomain(m_type_a, m_type_d1);
+  type_a = DexTypeDomain(m_type_a, m_anno_d1);
   null1 = DexTypeDomain::null();
   type_a.join_with(null1);
   EXPECT_FALSE(type_a.is_null());
   EXPECT_FALSE(type_a.is_not_null());
   EXPECT_TRUE(type_a.is_nullable());
-  EXPECT_NE(type_a, DexTypeDomain(m_type_d1, m_type_a));
+  EXPECT_NE(type_a, DexTypeDomain(m_type_a, m_anno_d1));
   EXPECT_EQ(*type_a.get_dex_type(), m_type_a);
   EXPECT_EQ(*type_a.get_annotation_type(), m_type_d1);
   EXPECT_EQ(null1, DexTypeDomain::null());
@@ -1002,34 +1012,32 @@ TEST_F(DexTypeEnvironmentTest, SmallSetDexTypeDomainMixedHierarchyTest) {
 }
 
 TEST_F(DexTypeEnvironmentTest, DexTypeDomainReduceProductTest) {
-  auto domain =
-      DexTypeDomain(type::java_lang_Object(), type::java_lang_Object());
+  auto domain = DexTypeDomain(type::java_lang_Object(),
+                              new DexAnnoType(type::java_lang_Object()));
 
   domain.join_with(
       DexTypeDomain(type::make_array_type(type::java_lang_String())));
   EXPECT_TRUE(domain.get_single_domain().is_top());
-  EXPECT_FALSE(domain.get_annotation_domain().is_top());
-  EXPECT_EQ(domain.get_annotation_domain(),
-            TypedefAnnotationDomain(type::java_lang_Object()));
+  EXPECT_TRUE(domain.get_annotation_domain().is_top());
   EXPECT_FALSE(domain.get_set_domain().is_top());
   EXPECT_EQ(domain.get_type_set(),
             get_type_set({type::java_lang_Object(),
                           type::make_array_type(type::java_lang_String())}));
 
-  auto domain_c1 = DexTypeDomain(m_type_c1, m_type_d1);
-  domain_c1.join_with(DexTypeDomain(m_type_c2, m_type_d2));
-  domain_c1.join_with(DexTypeDomain(m_type_c3, m_type_d3));
-  domain_c1.join_with(DexTypeDomain(m_type_c4, m_type_d4));
-  domain_c1.join_with(DexTypeDomain(m_type_c5, m_type_d5));
+  auto domain_c1 = DexTypeDomain(m_type_c1, m_anno_d1);
+  domain_c1.join_with(DexTypeDomain(m_type_c2, m_anno_d2));
+  domain_c1.join_with(DexTypeDomain(m_type_c3, m_anno_d3));
+  domain_c1.join_with(DexTypeDomain(m_type_c4, m_anno_d4));
+  domain_c1.join_with(DexTypeDomain(m_type_c5, m_anno_d5));
   EXPECT_FALSE(domain_c1.get_single_domain().is_top());
   EXPECT_FALSE(domain_c1.get_annotation_domain().is_top());
   EXPECT_TRUE(domain_c1.get_set_domain().is_top());
 
-  domain_c1 = DexTypeDomain(m_type_c1, m_type_d1);
-  auto domain_c2 = DexTypeDomain(m_type_c2, m_type_d2);
-  domain_c2.join_with(DexTypeDomain(m_type_c3, m_type_d3));
-  domain_c2.join_with(DexTypeDomain(m_type_c4, m_type_d4));
-  domain_c2.join_with(DexTypeDomain(m_type_c5, m_type_d5));
+  domain_c1 = DexTypeDomain(m_type_c1, m_anno_d1);
+  auto domain_c2 = DexTypeDomain(m_type_c2, m_anno_d2);
+  domain_c2.join_with(DexTypeDomain(m_type_c3, m_anno_d3));
+  domain_c2.join_with(DexTypeDomain(m_type_c4, m_anno_d4));
+  domain_c2.join_with(DexTypeDomain(m_type_c5, m_anno_d5));
   EXPECT_FALSE(domain_c2.get_single_domain().is_top());
   EXPECT_FALSE(domain_c2.get_annotation_domain().is_top());
   EXPECT_FALSE(domain_c2.get_set_domain().is_top());
@@ -1160,4 +1168,15 @@ TEST_F(DexTypeEnvironmentTest, BaseClassInterfaceJoinTest) {
   EXPECT_FALSE(im_me_array.is_top());
   EXPECT_EQ(im_me_array, SingletonDexTypeDomain(m_map_entry_array));
   EXPECT_FALSE(intf_array.is_top());
+}
+
+TEST_F(DexTypeEnvironmentTest, TypedefAnnotationDomain) {
+  auto d1 = DexTypeDomain(m_anno_d1);
+  EXPECT_FALSE(d1.is_top());
+  EXPECT_EQ(*d1.get_annotation_type(), m_type_d1);
+
+  auto d2 = DexTypeDomain(m_anno_d2);
+  d1.join_with(d2);
+  EXPECT_EQ(d1.get_annotation_domain(),
+            TypedefAnnotationDomain(type::java_lang_Object()));
 }
