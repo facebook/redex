@@ -1137,10 +1137,13 @@ void redex_frontend(ConfigFiles& conf, /* input */
     for (const auto& library_jar : library_jars) {
       TRACE(MAIN, 1, "LIBRARY JAR: %s", library_jar.c_str());
       if (!load_jar_file(DexLocation::make_location("", library_jar),
-                         &external_classes)) {
+                         &external_classes, /*attr_hook=*/nullptr,
+                         jar_loader::default_duplicate_allow_fn)) {
         // Try again with the basedir
         std::string basedir_path = pg_config.basedirectory + "/" + library_jar;
-        if (!load_jar_file(DexLocation::make_location("", basedir_path))) {
+        if (!load_jar_file(DexLocation::make_location("", basedir_path),
+                           /*classes=*/nullptr, /*attr_hook=*/nullptr,
+                           jar_loader::default_duplicate_allow_fn)) {
           std::cerr << "error: library jar could not be loaded: " << library_jar
                     << std::endl;
           exit(EXIT_FAILURE);

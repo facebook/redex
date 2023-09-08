@@ -390,6 +390,7 @@ bool parse_class(uint8_t* buffer,
                  size_t buffer_size,
                  Scope* classes,
                  attribute_hook_t attr_hook,
+                 const jar_loader::duplicate_allowed_hook_t& is_allowed,
                  const DexLocation* jar_location) {
   auto buffer_end = buffer + buffer_size;
   uint32_t magic = read32(buffer, buffer_end);
@@ -445,11 +446,7 @@ bool parse_class(uint8_t* buffer,
             SHOW(self), jar_location->get_file_name().c_str(),
             cls->get_location()->get_file_name().c_str());
 
-      // TODO: There are still blocking issues in instrumentation test that are
-      // blocking. We currently only fail for duplicate `android*` classes,
-      // we can make this throw for all the classes once they are fixed.
-
-      if (boost::starts_with(cls->str(), "Landroid")) {
+      if (!is_allowed(cls, jar_location->get_file_name())) {
         throw RedexException(RedexError::DUPLICATE_CLASSES,
                              "Found duplicate class in two different files.",
                              {{"class", SHOW(self)},
@@ -577,8 +574,10 @@ bool load_class_file(const std::string& filename, Scope* classes) {
   auto buffer = std::make_unique<char[]>(size);
   buf->sgetn(buffer.get(), size);
   auto jar_location = DexLocation::make_location("", filename);
-  return parse_class(reinterpret_cast<uint8_t*>(buffer.get()), size, classes,
-                     /* attr_hook */ nullptr, jar_location);
+  return parse_class(
+      reinterpret_cast<uint8_t*>(buffer.get()), size, classes,
+      /* attr_hook */ nullptr,
+      /* is_allowed=*/[](auto*, auto&) { return true; }, jar_location);
 }
 
 /******************
@@ -845,12 +844,14 @@ bool decompress_class(jar_entry& file,
 
 constexpr size_t kStartBufferSize = 128 * 1024;
 
-bool process_jar_entries(const DexLocation* location,
-                         std::vector<jar_entry>& files,
-                         const uint8_t* mapping,
-                         const size_t map_size,
-                         Scope* classes,
-                         const attribute_hook_t& attr_hook) {
+bool process_jar_entries(
+    const DexLocation* location,
+    std::vector<jar_entry>& files,
+    const uint8_t* mapping,
+    const size_t map_size,
+    Scope* classes,
+    const attribute_hook_t& attr_hook,
+    const jar_loader::duplicate_allowed_hook_t& is_allowed) {
   ssize_t bufsize = kStartBufferSize;
   std::unique_ptr<uint8_t[]> outbuffer = std::make_unique<uint8_t[]>(bufsize);
   constexpr std::string_view kClassEndString = ".class";
@@ -876,7 +877,8 @@ bool process_jar_entries(const DexLocation* location,
       return false;
     }
 
-    if (!parse_class(outbuffer.get(), bufsize, classes, attr_hook, location)) {
+    if (!parse_class(outbuffer.get(), bufsize, classes, attr_hook, is_allowed,
+                     location)) {
       return false;
     }
   }
@@ -885,11 +887,20 @@ bool process_jar_entries(const DexLocation* location,
 
 } // namespace
 
+namespace jar_loader {
+
+bool default_duplicate_allow_fn(const DexClass* c, const std::string&) {
+  return !boost::starts_with(c->str(), "Landroid");
+}
+
+} // namespace jar_loader
+
 bool process_jar(const DexLocation* location,
                  const uint8_t* mapping,
                  size_t size,
                  Scope* classes,
-                 const attribute_hook_t& attr_hook) {
+                 const attribute_hook_t& attr_hook,
+                 const jar_loader::duplicate_allowed_hook_t& is_allowed) {
   pk_cdir_end pce;
   std::vector<jar_entry> files;
   if (!find_central_directory(mapping, size, pce)) {
@@ -901,8 +912,8 @@ bool process_jar(const DexLocation* location,
   if (!get_jar_entries(mapping, size, pce, files)) {
     return false;
   }
-  if (!process_jar_entries(location, files, mapping, size, classes,
-                           attr_hook)) {
+  if (!process_jar_entries(location, files, mapping, size, classes, attr_hook,
+                           is_allowed)) {
     return false;
   }
   return true;
@@ -910,7 +921,8 @@ bool process_jar(const DexLocation* location,
 
 bool load_jar_file(const DexLocation* location,
                    Scope* classes,
-                   const attribute_hook_t& attr_hook) {
+                   const attribute_hook_t& attr_hook,
+                   const jar_loader::duplicate_allowed_hook_t& is_allowed) {
   boost::iostreams::mapped_file file;
   try {
     file.open(location->get_file_name().c_str(),
@@ -922,7 +934,8 @@ bool load_jar_file(const DexLocation* location,
   }
 
   auto mapping = reinterpret_cast<const uint8_t*>(file.const_data());
-  if (!process_jar(location, mapping, file.size(), classes, attr_hook)) {
+  if (!process_jar(location, mapping, file.size(), classes, attr_hook,
+                   is_allowed)) {
     std::cerr << "error: cannot process jar: " << location->get_file_name()
               << "\n";
     return false;
