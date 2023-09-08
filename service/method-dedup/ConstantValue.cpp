@@ -10,9 +10,12 @@
 #include <boost/algorithm/string.hpp>
 
 #include "Creators.h"
+#include "DexAsm.h"
 #include "Show.h"
 #include "Trace.h"
 #include "TypeReference.h"
+
+using namespace dex_asm;
 
 namespace {
 
@@ -21,13 +24,10 @@ constexpr uint64_t MAX_NUM_CONST_VALUE = 10;
 std::vector<IRInstruction*> make_string_const(reg_t dest,
                                               const std::string& val) {
   std::vector<IRInstruction*> res;
-  IRInstruction* load = new IRInstruction(OPCODE_CONST_STRING);
-  load->set_string(DexString::make_string(val));
-  IRInstruction* move_result_pseudo =
-      new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
-  move_result_pseudo->set_dest(dest);
+  auto load = dasm(OPCODE_CONST_STRING, DexString::make_string(val));
+  auto move_res = dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {{VREG, dest}});
   res.push_back(load);
-  res.push_back(move_result_pseudo);
+  res.push_back(move_res);
   return res;
 }
 

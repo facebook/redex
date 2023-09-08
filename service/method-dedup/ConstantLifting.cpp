@@ -56,8 +56,7 @@ void patch_invoke(cfg::ControlFlowGraph& meth_cfg,
   auto move_res_old = meth_cfg.move_result_of(cfg_it);
   if (!move_res_old.is_end()) {
     auto dest = move_res_old->insn->dest();
-    auto move_res_new =
-        dasm(move_res_old->insn->opcode(), {{dex_asm::VREG, dest}});
+    auto move_res_new = dasm(move_res_old->insn->opcode(), {{VREG, dest}});
     mutation.insert_before(cfg_it, {move_res_new});
   }
 
@@ -151,11 +150,10 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
       if (const_val.is_invalid()) {
         continue;
       }
+      auto opcode = const_val.is_int_value() ? IOPCODE_LOAD_PARAM
+                                             : IOPCODE_LOAD_PARAM_OBJECT;
       auto load_type_tag_param =
-          const_val.is_int_value()
-              ? new IRInstruction(IOPCODE_LOAD_PARAM)
-              : new IRInstruction(IOPCODE_LOAD_PARAM_OBJECT);
-      load_type_tag_param->set_dest(const_val.get_param_reg());
+          dasm(opcode, {{VREG, const_val.get_param_reg()}});
       if (last_loading != block->end()) {
         cfg.insert_after(block->to_cfg_instruction_iterator(last_loading),
                          load_type_tag_param);
@@ -172,11 +170,9 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
       auto const_val = load.first;
       auto insn_it = load.second.first;
       auto dest = load.second.second;
-      auto move_const_arg = const_val.is_int_value()
-                                ? new IRInstruction(OPCODE_MOVE)
-                                : new IRInstruction(OPCODE_MOVE_OBJECT);
-      move_const_arg->set_dest(dest);
-      move_const_arg->set_src(0, const_val.get_param_reg());
+      auto opcode = const_val.is_int_value() ? OPCODE_MOVE : OPCODE_MOVE_OBJECT;
+      auto move_const_arg =
+          dasm(opcode, {{VREG, dest}, {VREG, const_val.get_param_reg()}});
       cfg.insert_before(insn_it, move_const_arg);
       cfg.remove_insn(insn_it);
     }
