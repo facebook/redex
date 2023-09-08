@@ -89,6 +89,7 @@ struct ConfigFiles {
   struct DeadClassLoadCounts {
     int64_t sampled{50}; // legacy
     int64_t unsampled{0};
+    int64_t beta_unsampled{0}; // Whether is beta sample or not
   };
 
   const std::unordered_map<std::string, DeadClassLoadCounts>&

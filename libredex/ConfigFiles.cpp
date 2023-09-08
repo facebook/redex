@@ -328,6 +328,10 @@ void ConfigFiles::build_dead_class_and_live_class_split_lists() {
           if (splitter.next()) {
             str = splitter.get();
             from_chars(str, &load_counts.unsampled);
+            if (splitter.next()) {
+              str = splitter.get();
+              from_chars(str, &load_counts.beta_unsampled);
+            }
           }
         }
         bool is_relocated = is_relocated_class(classname);
