@@ -240,14 +240,12 @@ class MoveGains {
 
 class Impl {
  public:
-  Impl(bool e_dex,
-       ConfigFiles& conf,
+  Impl(ConfigFiles& conf,
        PassManager& mgr,
        InterDexReshufflePass::Config& config,
        DexClasses& original_scope,
        DexClassesVector& dexen)
-      : m_remove_dex(e_dex),
-        m_conf(conf),
+      : m_conf(conf),
         m_mgr(mgr),
         m_config(config),
         m_init_classes_with_side_effects(original_scope,
@@ -275,10 +273,6 @@ class Impl {
     DexClasses classes;
     for (size_t dex_index = m_first_dex_index; dex_index < dexen.size();
          dex_index++) {
-      m_dex_eliminate.emplace(dex_index, true);
-    }
-    for (size_t dex_index = m_first_dex_index; dex_index < dexen.size();
-         dex_index++) {
       auto& dex = dexen.at(dex_index);
       if (dex_index == m_first_dex_index &&
           !std::any_of(dex.begin(), dex.end(),
@@ -290,11 +284,6 @@ class Impl {
         classes.push_back(cls);
         m_class_refs.emplace(cls, Refs());
         if (!can_move(cls)) {
-          if (!is_canary(cls)) {
-            // If a dex contains any non-canary classes which couldn't be
-            // moved, this dex can not be eliminated.
-            m_dex_eliminate.at(dex_index) = false;
-          }
           continue;
         }
         m_movable_classes.push_back(cls);
@@ -337,143 +326,7 @@ class Impl {
         });
   }
 
-  size_t get_eliminate_dex() {
-    size_t e_dex_idx = 0;
-    size_t mrefs_limit = m_dexes_structure.get_mrefs_limit();
-    size_t rrefs_limit = m_dexes_structure.get_frefs_limit();
-    size_t mrefs = mrefs_limit;
-    size_t frefs = rrefs_limit;
-    size_t mrefs_avail = 0;
-    size_t frefs_avail = 0;
-    TRACE(IDEXR, 1, "mutable dexen are %zu, and orignial dexen are %zu\n",
-          m_mutable_dexen.size(), m_dexen.size());
-    // Step1: find out the dex with the smallest refs.
-    for (size_t dex_index = m_first_dex_index;
-         dex_index < m_mutable_dexen.size();
-         dex_index++) {
-      auto& cur = m_mutable_dexen.at(dex_index);
-      auto cur_mrefs = cur.get_num_mrefs();
-      auto cur_frefs = cur.get_num_frefs();
-      mrefs_avail += (mrefs_limit - cur_mrefs);
-      frefs_avail += (rrefs_limit - cur_frefs);
-      if (!m_dex_eliminate.at(dex_index)) {
-        continue;
-      }
-      TRACE(IDEXR, 1, "In dex %zu, mrefs is %zu, frefs is %zu\n", dex_index,
-            cur_mrefs, cur_frefs);
-      if (cur_mrefs > mrefs) {
-        continue;
-      }
-      if (cur_mrefs < mrefs) {
-        mrefs = cur_mrefs;
-        frefs = cur_frefs;
-        e_dex_idx = dex_index;
-        continue;
-      }
-      if (cur_frefs < frefs) {
-        mrefs = cur_mrefs;
-        frefs = cur_frefs;
-        e_dex_idx = dex_index;
-      }
-    }
-
-    // Step2. Check if the rest of dexes have enough space for classes moving in
-    // a high level.
-    mrefs_avail -= (mrefs_limit - mrefs);
-    frefs_avail -= (rrefs_limit - frefs);
-    if (mrefs_avail <= mrefs || frefs_avail <= frefs) {
-      return 0;
-    }
-    return e_dex_idx;
-  }
-
-  // \returns the dex with smallest mrefs.
-  size_t choose_target_dex(size_t e_dex_idx) {
-    size_t target_dex = e_dex_idx;
-    size_t mrefs = m_dexes_structure.get_mrefs_limit();
-    size_t frefs = m_dexes_structure.get_frefs_limit();
-    for (size_t dex_index = m_first_dex_index;
-         dex_index < m_mutable_dexen.size();
-         dex_index++) {
-      if (dex_index == e_dex_idx) {
-        continue;
-      }
-      auto& cur = m_mutable_dexen.at(dex_index);
-      auto cur_mrefs = cur.get_num_mrefs();
-      auto cur_frefs = cur.get_num_frefs();
-      if (cur_frefs > frefs) {
-        continue;
-      }
-      if (cur_frefs < frefs) {
-        mrefs = cur_mrefs;
-        frefs = cur_frefs;
-        target_dex = dex_index;
-        continue;
-      }
-      if (cur_mrefs < mrefs) {
-        mrefs = cur_mrefs;
-        frefs = cur_frefs;
-        target_dex = dex_index;
-      }
-    }
-
-    return target_dex;
-  }
-
-  // Try to evenly distribute classes in dex to other dexes. Return true if all
-  // classes can be moved. Otherwise, stop moving classes, and return false.
-  bool rearrange_dexes(size_t e_dex_idx) {
-    auto& dex = m_dexen.at(e_dex_idx);
-    for (auto cls : dex) {
-      if (is_canary(cls)) {
-        continue;
-      }
-      auto target_dex_index = choose_target_dex(e_dex_idx);
-      Move move;
-      move.cls = cls;
-      move.gain = 0;
-      move.target_dex_index = target_dex_index;
-      if (!try_plan_move(move)) {
-        return false;
-      }
-    }
-    return true;
-  }
-
   void compute_plan() {
-    // Reshuffle algorithm just moves classes between dexes, and won't reduce
-    // the number of dexes. However, based on the total number of refs, it is
-    // possible to fully eliminate a dex and moving all its classes to other
-    // dexes. Current approach is : 1) pick up the dex with the smallest number
-    // of refs; 2) move all its classes to other dexes; 3) run reshuffle
-    // algorithm without moving any class back to that picked dex; 4) fully
-    // remove that dex. This flow is only run in the last InterDexReshufflePass.
-    size_t e_dex_idx = 0;
-    if (m_remove_dex) {
-      // It is the last run of InterDexReshufflePass, try to find the dex to be
-      // removed.
-      e_dex_idx = get_eliminate_dex();
-    }
-
-    if (e_dex_idx != 0) {
-      TRACE(IDEXR, 1,
-            "Found dex to be eliminated: %zu\n, containing %zu classes",
-            e_dex_idx, m_mutable_dexen.at(e_dex_idx).get_num_classes());
-      // Try to move all non-canary classes from to the dex to other dexes, and
-      // then eliminate this dex.
-      bool succ = rearrange_dexes(e_dex_idx);
-      if (succ) {
-        TRACE(IDEXR, 1, " Dex %zu will be removed\n", e_dex_idx);
-      } else {
-        // Failed. But the previous classes movement won't be canceled. Leaving
-        // them to be reshuffled later.
-        e_dex_idx = 0;
-        TRACE(IDEXR, 1, " Failed to remove Dex %zu, keep it\n", e_dex_idx);
-      }
-      print_stats();
-      TRACE(IDEXR, 1, "Starting regular reshuffle algorithm\n");
-    }
-
     Timer t("compute_plan");
     MoveGains move_gains(m_first_dex_index, m_movable_classes,
                          m_class_dex_indices, m_class_refs, m_mutable_dexen,
@@ -500,7 +353,7 @@ class Impl {
         }
 
         // Check if it is a valid move.
-        if (move.target_dex_index == e_dex_idx || !try_plan_move(move)) {
+        if (!try_plan_move(move)) {
           continue;
         }
         if (traceEnabled(IDEXR, 5)) {
@@ -537,7 +390,6 @@ class Impl {
   }
 
  private:
-  bool m_remove_dex{false};
   void print_stats() {
     size_t n_classes = 0;
     size_t n_mrefs = 0;
@@ -547,10 +399,6 @@ class Impl {
       n_classes += mutable_dex.get_num_classes();
       n_mrefs += mutable_dex.get_num_mrefs();
       n_frefs += mutable_dex.get_num_frefs();
-      TRACE(IDEXR, 5, "Global stats for dex %zu:", idx);
-      TRACE(IDEXR, 5, "\t %zu classes", mutable_dex.get_num_classes());
-      TRACE(IDEXR, 5, "\t %zu mrefs", mutable_dex.get_num_mrefs());
-      TRACE(IDEXR, 5, "\t %zu frefs", mutable_dex.get_num_frefs());
     }
 
     TRACE(IDEXR, 5, "Global stats:");
@@ -613,7 +461,6 @@ class Impl {
   size_t m_linear_alloc_limit;
   DexesStructure m_dexes_structure;
   std::vector<DexClass*> m_movable_classes;
-  std::unordered_map<size_t, bool> m_dex_eliminate;
   std::unordered_map<DexClass*, size_t> m_class_dex_indices;
   std::unordered_map<DexClass*, Refs> m_class_refs;
   std::vector<DexStructure> m_mutable_dexen;
@@ -623,12 +470,6 @@ class Impl {
   bool m_order_interdex;
 };
 } // namespace
-
-void InterDexReshufflePass::eval_pass(DexStoresVector&,
-                                      ConfigFiles&,
-                                      PassManager&) {
-  ++m_eval;
-}
 
 void InterDexReshufflePass::run_pass(DexStoresVector& stores,
                                      ConfigFiles& conf,
@@ -647,95 +488,24 @@ void InterDexReshufflePass::run_pass(DexStoresVector& stores,
 
   auto& root_store = stores.at(0);
   auto& root_dexen = root_store.get_dexen();
-  TRACE(IDEXR, 1, "The number of dexes before reshuffle is %zu **",
-        root_dexen.size());
   if (root_dexen.size() == 1) {
     // only a primary dex? Nothing to do
     return;
   }
 
-  ++m_run;
-  bool remove_dex = false;
-  if (m_eval == m_run) {
-    remove_dex = true;
-    TRACE(IDEXR, 1, "This is the last run of InterDexReshuffle\n");
-  }
-
-  Impl impl(remove_dex, conf, mgr, m_config, original_scope, root_dexen);
+  Impl impl(conf, mgr, m_config, original_scope, root_dexen);
   impl.compute_plan();
   impl.apply_plan();
 
-  // Check root_store (i.e. dex reshuffle is applied). If there is any dex with
-  // only canary class left, remove this dex.
-  std::vector<size_t> idxes;
-  for (size_t idx = 0; idx < root_dexen.size(); idx++) {
-    if (root_dexen[idx].size() == 1) {
-      auto it = root_dexen[idx].begin();
-      if (is_canary(*it)) {
-        idxes.push_back(idx);
-      }
-    }
-  }
-
-  if (!idxes.empty()) {
-    for (size_t i = 0; i < idxes.size(); i++) {
-      auto idx = idxes[idxes.size() - 1 - i];
-      root_dexen.erase(root_dexen.begin() + idx);
-    }
-    // The canary class name encodes the dex index. Since now some dexes are
-    // moved, the dex index has been changed. Therefore, update each the name of
-    // canary class if necessary.
-    for (size_t i = idxes[0]; i < root_dexen.size(); i++) {
-      auto& dex = root_dexen.at(i);
-      for (auto cls : dex) {
-        if (is_canary(cls)) {
-          std::string expected_name = get_canary_name(i, nullptr);
-          auto dtype = cls->get_type();
-          auto oldname = dtype->get_name();
-          if (oldname->str() != expected_name) {
-            // Need to update canary name. No need to add array type since this
-            // is canary class.
-            auto dstring = DexString::make_string(expected_name);
-            always_assert_log(
-                !DexType::get_type(dstring),
-                "Type name collision detected. %s already exists.",
-                expected_name.c_str());
-            dtype->set_name(dstring);
-          }
-          break;
-        }
-      }
-    }
-  }
-
-  auto& root_store_new = stores.at(0);
-  auto& root_dexen_new = root_store_new.get_dexen();
-  TRACE(IDEXR, 1, "The number of dexes after reshuffle is %zu **",
-        root_dexen_new.size());
   // Sanity check
   std::unordered_set<DexClass*> original_scope_set(original_scope.begin(),
                                                    original_scope.end());
   auto new_scope = build_class_scope(stores);
   std::unordered_set<DexClass*> new_scope_set(new_scope.begin(),
                                               new_scope.end());
-  always_assert(original_scope_set.size() ==
-                new_scope_set.size() + idxes.size());
-  mgr.incr_metric("number_of_dexes", root_dexen_new.size());
-  for (auto cls : new_scope_set) {
-    always_assert(original_scope_set.count(cls));
-  }
-  // Check canaries being contiguous.
-  for (size_t i = 0; i < root_dexen.size(); i++) {
-    auto& dex = root_dexen.at(i);
-    for (auto cls : dex) {
-      if (is_canary(cls)) {
-        std::string expected_name = get_canary_name(i, nullptr);
-        auto dtype = cls->get_type();
-        auto oldname = dtype->get_name();
-        always_assert(oldname->str() == expected_name);
-        break;
-      }
-    }
+  always_assert(original_scope_set.size() == new_scope_set.size());
+  for (auto cls : original_scope_set) {
+    always_assert(new_scope_set.count(cls));
   }
 }
 

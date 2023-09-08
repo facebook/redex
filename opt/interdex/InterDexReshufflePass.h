@@ -68,10 +68,6 @@ class InterDexReshufflePass : public Pass {
     };
   }
 
-  void eval_pass(DexStoresVector& stores,
-                 ConfigFiles& conf,
-                 PassManager& mgr) override;
-
   bool is_cfg_legacy() override { return true; }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
@@ -111,6 +107,4 @@ class InterDexReshufflePass : public Pass {
 
  private:
   Config m_config;
-  size_t m_run{0}; // Which iteration of `run_pass`.
-  size_t m_eval{0}; // How many `eval_pass` iterations.
 };
