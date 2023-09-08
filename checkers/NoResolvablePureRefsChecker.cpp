@@ -47,6 +47,10 @@ bool is_resolvable(const DexMethodRef* mref) {
   if (is_array_clone(mref)) {
     return false;
   }
+  // TODO: resolve pure ref ctor.
+  if (method::is_init(mref)) {
+    return false;
+  }
   std::vector<DexType*> type_refs;
   mref->gather_types_shallow(type_refs);
   for (auto type : type_refs) {
