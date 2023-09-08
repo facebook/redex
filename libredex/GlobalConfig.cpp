@@ -121,6 +121,11 @@ void DexOutputConfig::bind_config() {
   bind("write_class_sizes", write_class_sizes, write_class_sizes);
 }
 
+void JarLoaderConfig::bind_config() {
+  bind("legacy_mode", legacy_mode, legacy_mode);
+  bind("allowed_prefixes", allowed_prefixes, allowed_prefixes);
+}
+
 void GlobalConfig::bind_config() {
   bool bool_param;
   std::string string_param;
@@ -209,6 +214,7 @@ GlobalConfigRegistry& GlobalConfig::default_registry() {
       register_as<PassManagerConfig>("pass_manager"),
       register_as<ResourceConfig>("resources"),
       register_as<DexOutputConfig>("dex_output"),
+      register_as<JarLoaderConfig>("jar_loader"),
   };
   return registry;
 }

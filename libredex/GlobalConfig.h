@@ -189,6 +189,18 @@ struct DexOutputConfig : public Configurable {
   bool write_class_sizes{false};
 };
 
+struct JarLoaderConfig : public Configurable {
+  void bind_config() override;
+
+  std::string get_config_name() override { return "JarLoaderConfig"; }
+  std::string get_config_doc() override {
+    return "This configuration holds values that switch JarLoader behavior.";
+  }
+
+  std::vector<std::string> allowed_prefixes;
+  bool legacy_mode{true};
+};
+
 class GlobalConfig;
 
 using BindOperationFn = std::function<std::unique_ptr<Configurable>(
