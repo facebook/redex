@@ -43,14 +43,28 @@ class WritesAnalyzer {
  private:
   const field_op_tracker::TypeLifetimes* m_type_lifetimes;
   const field_op_tracker::FieldStatsMap& m_field_stats;
-  std::unordered_map<const DexMethod*, InstructionEscapes>
+  mutable ConcurrentMap<const DexMethod*, std::shared_ptr<InstructionEscapes>>
       m_method_insn_escapes;
-  // We track the set of actively analyzed methods to find recursive cases.
-  std::unordered_set<const DexMethod*> m_active;
 
-  bool has_lifetime(const DexType* t) {
+  bool has_lifetime(const DexType* t) const {
     return (!m_type_lifetimes && type::is_object(t)) ||
            m_type_lifetimes->has_lifetime(t);
+  }
+
+  const InstructionEscapes& get_insn_escapes(const DexMethod* method) const {
+    auto res = m_method_insn_escapes.get(method, nullptr);
+    if (!res) {
+      res = std::make_shared<InstructionEscapes>(compute_insn_escapes(method));
+      m_method_insn_escapes.update(method,
+                                   [&](auto*, auto& value, bool exists) {
+                                     if (exists) {
+                                       res = value;
+                                     } else {
+                                       value = res;
+                                     }
+                                   });
+    }
+    return *res;
   }
 
   // Compute information about which values (represented by
@@ -58,7 +72,7 @@ class WritesAnalyzer {
   // elements, passed as the first argument to a constructor, or escape
   // otherwise. We also record writing a non-zero value to a field / array
   // element with a (relevant) lifetime type as an "other" escape.
-  InstructionEscapes compute_insn_escapes(const DexMethod* method) {
+  InstructionEscapes compute_insn_escapes(const DexMethod* method) const {
     auto& cfg = method->get_code()->cfg();
     Lazy<type_inference::TypeInference> type_inference([&cfg, method] {
       auto res = std::make_unique<type_inference::TypeInference>(cfg);
@@ -218,7 +232,8 @@ class WritesAnalyzer {
   }
 
   // Whether a constructor can store any values with (relevant) lifetimes
-  bool may_capture(const DexMethodRef* method) {
+  bool may_capture(const sparta::PatriciaTreeSet<const DexMethod*>& active,
+                   const DexMethodRef* method) const {
     always_assert(method::is_init(method));
     auto type = method->get_class();
     if (type == type::java_lang_Object()) {
@@ -231,21 +246,22 @@ class WritesAnalyzer {
     if (cls == nullptr || cls->is_external()) {
       return true;
     }
-    std::unordered_set<DexField*> non_vestigial_objects_written_fields;
+    bool any_non_vestigial_objects_written_fields{false};
     std::unordered_set<DexMethod*> invoked_base_ctors;
     bool other_escapes{false};
-    if (!get_writes(method->as_def(),
+    if (!get_writes(active, method->as_def(),
                     /* non_zero_written_fields */ nullptr,
-                    &non_vestigial_objects_written_fields, &invoked_base_ctors,
-                    &other_escapes)) {
+                    /* non_vestigial_objects_written_fields */ nullptr,
+                    &any_non_vestigial_objects_written_fields,
+                    &invoked_base_ctors, &other_escapes)) {
       // mutual recursion across constructor invocations, which can happen when
       // a constructor creates a new object of some other type
       return true;
     }
-    if (other_escapes || !non_vestigial_objects_written_fields.empty() ||
+    if (other_escapes || any_non_vestigial_objects_written_fields ||
         (std::find_if(invoked_base_ctors.begin(), invoked_base_ctors.end(),
-                      [this](DexMethod* invoked_base_ctor) {
-                        return may_capture(invoked_base_ctor);
+                      [&](DexMethod* invoked_base_ctor) {
+                        return may_capture(active, invoked_base_ctor);
                       }) != invoked_base_ctors.end())) {
       return true;
     }
@@ -254,8 +270,9 @@ class WritesAnalyzer {
 
   // Whether a newly created object may capture any values with (relevant)
   // lifetimes, or itself, as part of its creation
-  bool may_capture(const IRInstruction* insn,
-                   const std::unordered_set<DexMethod*>& invoked_ctors) {
+  bool may_capture(const sparta::PatriciaTreeSet<const DexMethod*>& active,
+                   const IRInstruction* insn,
+                   const std::unordered_set<DexMethod*>& invoked_ctors) const {
     switch (insn->opcode()) {
     case OPCODE_NEW_ARRAY:
       return false;
@@ -267,7 +284,7 @@ class WritesAnalyzer {
       always_assert(!invoked_ctors.empty());
       for (auto method : invoked_ctors) {
         always_assert(method->get_class() == insn->get_type());
-        if (may_capture(method)) {
+        if (may_capture(active, method)) {
           return true;
         }
       }
@@ -281,16 +298,9 @@ class WritesAnalyzer {
   explicit WritesAnalyzer(const Scope& scope,
                           const field_op_tracker::FieldStatsMap& field_stats,
                           const field_op_tracker::TypeLifetimes* type_lifetimes)
-      : m_type_lifetimes(type_lifetimes), m_field_stats(field_stats) {
-    walk::code(scope, [this](const DexMethod* method, const IRCode&) {
-      m_method_insn_escapes[method];
-    });
-    walk::parallel::code(scope, [&](const DexMethod* method, const IRCode&) {
-      m_method_insn_escapes.at(method) = compute_insn_escapes(method);
-    });
-  }
+      : m_type_lifetimes(type_lifetimes), m_field_stats(field_stats) {}
 
-  bool any_read(const std::unordered_set<DexField*>& fields) {
+  bool any_read(const std::unordered_set<DexField*>& fields) const {
     for (auto field : fields) {
       if (m_field_stats.at(field).reads != 0) {
         return true;
@@ -301,15 +311,19 @@ class WritesAnalyzer {
 
   // Result indicates whether we ran into a recursive case.
   bool get_writes(
+      const sparta::PatriciaTreeSet<const DexMethod*>& old_active,
       const DexMethod* method,
-      std::unordered_set<DexField*>* non_zero_written_fields,
-      std::unordered_set<DexField*>* non_vestigial_objects_written_fields,
+      ConcurrentSet<DexField*>* non_zero_written_fields,
+      ConcurrentSet<DexField*>* non_vestigial_objects_written_fields,
+      bool* any_non_vestigial_objects_written_fields,
       std::unordered_set<DexMethod*>* invoked_base_ctors,
-      bool* other_escapes) {
-    if (!m_active.insert(method).second) {
+      bool* other_escapes) const {
+    auto active = old_active;
+    active.insert(method);
+    if (active.reference_equals(old_active)) {
       return false;
     }
-    auto& insn_escapes = m_method_insn_escapes.at(method);
+    auto& insn_escapes = get_insn_escapes(method);
     auto init_load_param_this =
         method::is_init(method)
             ? method->get_code()->cfg().get_param_instructions().front().insn
@@ -327,14 +341,19 @@ class WritesAnalyzer {
           opcode::is_a_new(insn->opcode()) &&
           !(any_read(escapes.put_value_fields) || escapes.other) &&
           !(has_lifetime(insn->get_type()) &&
-            may_capture(insn, escapes.invoked_ctors));
+            may_capture(active, insn, escapes.invoked_ctors));
       for (auto field : escapes.put_value_fields) {
         always_assert(field != nullptr);
         if (non_zero_written_fields) {
           non_zero_written_fields->insert(field);
         }
         if (!is_vestigial_object && has_lifetime(field->get_type())) {
-          non_vestigial_objects_written_fields->insert(field);
+          if (non_vestigial_objects_written_fields) {
+            non_vestigial_objects_written_fields->insert(field);
+          }
+          if (any_non_vestigial_objects_written_fields) {
+            *any_non_vestigial_objects_written_fields = true;
+          }
         }
       }
       if (!escapes.invoked_ctors.empty() && invoked_base_ctors &&
@@ -346,7 +365,6 @@ class WritesAnalyzer {
         *other_escapes = true;
       }
     }
-    m_active.erase(method);
     return true;
   }
 };
@@ -381,22 +399,20 @@ bool TypeLifetimes::has_lifetime(const DexType* t) const {
   return true;
 }
 
-FieldWrites analyze_writes(const Scope& scope,
-                           const FieldStatsMap& field_stats,
-                           const TypeLifetimes* type_lifetimes) {
-  std::unordered_set<DexField*> non_zero_written_fields;
-  std::unordered_set<DexField*> non_vestigial_objects_written_fields;
+void analyze_writes(const Scope& scope,
+                    const FieldStatsMap& field_stats,
+                    const TypeLifetimes* type_lifetimes,
+                    FieldWrites* res) {
   WritesAnalyzer analyzer(scope, field_stats, type_lifetimes);
-  walk::code(scope, [&](const DexMethod* method, const IRCode&) {
-    auto success = analyzer.get_writes(method,
-                                       &non_zero_written_fields,
-                                       &non_vestigial_objects_written_fields,
-                                       /* invoked_base_ctors */ nullptr,
-                                       /* other_escapes */ nullptr);
+  walk::parallel::code(scope, [&](const DexMethod* method, const IRCode&) {
+    auto success = analyzer.get_writes(
+        /*active*/ {}, method, &res->non_zero_written_fields,
+        &res->non_vestigial_objects_written_fields,
+        /* any_non_vestigial_objects_written_fields */ nullptr,
+        /* invoked_base_ctors */ nullptr,
+        /* other_escapes */ nullptr);
     always_assert(success);
   });
-  return FieldWrites{non_zero_written_fields,
-                     non_vestigial_objects_written_fields};
 };
 
 FieldStatsMap analyze(const Scope& scope) {

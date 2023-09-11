@@ -123,13 +123,15 @@ class RemoveUnusedFields final {
       code.build_cfg(/* editable = true*/);
     });
 
-    boost::optional<field_op_tracker::FieldWrites> field_writes;
+    std::unique_ptr<field_op_tracker::FieldWrites> field_writes;
     if (m_config.remove_zero_written_fields ||
         m_config.remove_vestigial_objects_written_fields) {
-      field_writes = field_op_tracker::analyze_writes(
+      field_writes = std::make_unique<field_op_tracker::FieldWrites>();
+      field_op_tracker::analyze_writes(
           m_scope, field_stats,
           m_config.remove_vestigial_objects_written_fields ? &m_type_lifetimes
-                                                           : nullptr);
+                                                           : nullptr,
+          field_writes.get());
     }
 
     for (auto& pair : field_stats) {
@@ -146,7 +148,7 @@ class RemoveUnusedFields final {
         if (m_config.remove_unread_fields && stats.reads == 0) {
           m_unread_fields.emplace(field);
           if (m_config.remove_vestigial_objects_written_fields &&
-              !field_writes->non_vestigial_objects_written_fields.count(
+              !field_writes->non_vestigial_objects_written_fields.count_unsafe(
                   field)) {
             m_vestigial_objects_written_fields.emplace(field);
           }
@@ -154,7 +156,7 @@ class RemoveUnusedFields final {
                    !has_non_zero_static_value(field)) {
           m_unwritten_fields.emplace(field);
         } else if (m_config.remove_zero_written_fields &&
-                   !field_writes->non_zero_written_fields.count(field) &&
+                   !field_writes->non_zero_written_fields.count_unsafe(field) &&
                    !has_non_zero_static_value(field)) {
           m_zero_written_fields.emplace(field);
         }
