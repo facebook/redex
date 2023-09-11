@@ -626,6 +626,10 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
              current_state->get_type(insn->src(0)));
     set_type(current_state, insn->dest(),
              current_state->get_int_type(insn->src(0)));
+    if (!m_annotations.empty()) {
+      current_state->set_dex_type(insn->dest(),
+                                  current_state->get_type_domain(insn->src(0)));
+    }
     break;
   }
   case OPCODE_MOVE_OBJECT: {
