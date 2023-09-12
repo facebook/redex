@@ -387,8 +387,8 @@ ParsedAaptOutput aapt_dump_and_parse(const std::string& arsc_path,
       uint32_t data = std::stoul(what[5], nullptr, 16);
       output.id_fully_qualified_names.emplace(id, fully_qualified);
       output.fully_qualified_name_to_id.emplace(fully_qualified, id);
-      android::Res_value value{
-          sizeof(android::Res_value), 0, (uint8_t)type, {data}};
+      android::Res_value value{sizeof(android::Res_value), 0, (uint8_t)type,
+                               data};
       SimpleEntry entry{id, fully_qualified, value};
       simple_values.emplace(id, std::move(entry));
     } else if (boost::regex_search(line, what, bag_exp)) {
