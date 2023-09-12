@@ -63,8 +63,10 @@ class Semaphore {
   explicit Semaphore(size_t initial = 0u) : m_count(initial) {}
 
   inline void give(size_t n = 1u) {
-    std::unique_lock<std::mutex> lock(m_mtx);
-    m_count += n;
+    {
+      std::lock_guard<std::mutex> lock(m_mtx);
+      m_count += n;
+    }
     if (n == 1) {
       m_cv.notify_one();
     } else {
@@ -81,7 +83,7 @@ class Semaphore {
   }
 
   inline void take_all() {
-    std::unique_lock<std::mutex> lock(m_mtx);
+    std::lock_guard<std::mutex> lock(m_mtx);
     m_count = 0;
   }
 
