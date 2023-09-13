@@ -10,7 +10,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include <sparta/WorkQueue.h>
+#include <WorkQueue.h>
 
 #include "ConcurrentContainers.h"
 #include "ControlFlow.h"
