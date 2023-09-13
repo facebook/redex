@@ -258,11 +258,6 @@ void MultiMethodInliner::inline_methods(bool methods_need_deconstruct) {
     }
   }
 
-  // Inlining and shrinking initiated from within this method will be done
-  // in parallel.
-  m_scheduler.get_thread_pool().set_num_threads(
-      m_config.debug ? 1 : redex_parallel::default_num_threads());
-
   // The order in which we inline is such that once a callee is considered to
   // be inlined, it's code will no longer change. So we can cache...
   // - its size
@@ -319,6 +314,11 @@ void MultiMethodInliner::inline_methods(bool methods_need_deconstruct) {
         /* filter_fn */ nullptr, &info.call_site_summary_stats);
     m_call_site_summarizer->summarize();
   }
+
+  // Inlining and shrinking initiated from within this method will be done
+  // in parallel.
+  m_scheduler.get_thread_pool().set_num_threads(
+      m_config.debug ? 1 : redex_parallel::default_num_threads());
 
   // Second, compute caller priorities --- the callers get a priority assigned
   // that reflects how many other callers will be waiting for them.
