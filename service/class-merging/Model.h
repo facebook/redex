@@ -420,7 +420,8 @@ class Model {
   void break_by_interface(const MergerType& merger,
                           const MergerType::Shape& shape,
                           MergerType::ShapeHierarchy& hier);
-  void flatten_shapes(const MergerType& merger,
+  void flatten_shapes(const InterDexGrouping& interdex_grouping,
+                      const MergerType& merger,
                       MergerType::ShapeCollector& shapes);
   TypeGroupByDex group_per_dex(const TypeSet& types, const ModelSpec& spec);
 

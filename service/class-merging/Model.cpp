@@ -425,6 +425,8 @@ void Model::shape_model() {
               return compare_dextypes(first->type, second->type);
             });
 
+  InterDexGrouping interdex_grouping(m_scope, m_conf, m_spec.interdex_config,
+                                     m_spec.merging_targets);
   for (auto merger : mergers) {
     TRACE(CLMG, 6, "Build shapes from %s", SHOW(merger->type));
     MergerType::ShapeCollector shapes;
@@ -436,7 +438,7 @@ void Model::shape_model() {
       break_by_interface(*merger, shape_it.first, shape_it.second);
     }
 
-    flatten_shapes(*merger, shapes);
+    flatten_shapes(interdex_grouping, *merger, shapes);
   }
 
   // Update excluded metrics
@@ -589,12 +591,12 @@ TypeGroupByDex Model::group_per_dex(const TypeSet& types,
   return result;
 }
 
-void Model::flatten_shapes(const MergerType& merger,
+void Model::flatten_shapes(const InterDexGrouping& interdex_grouping,
+                           const MergerType& merger,
                            MergerType::ShapeCollector& shapes) {
   size_t num_trimmed_types = trim_groups(shapes, m_spec.min_count);
   m_stats.m_dropped += num_trimmed_types;
-  InterDexGrouping interdex_grouping(m_scope, m_conf, m_spec.interdex_config,
-                                     m_spec.merging_targets);
+
   // Shape based grouping layer
   // sort shapes by mergeables count
   std::vector<const MergerType::Shape*> keys;
