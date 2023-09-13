@@ -7,6 +7,7 @@
 
 #include "InterDexGrouping.h"
 
+#include "Model.h"
 #include "ScopedCFG.h"
 #include "Show.h"
 #include "SourceBlocks.h"
@@ -177,8 +178,8 @@ namespace class_merging {
  * Split the types into groups according to the interdex grouping information.
  * Note that types may be dropped if they are not allowed be merged.
  */
-std::vector<ConstTypeHashSet>& InterDexGrouping::group_by_interdex_set(
-    const Scope& scope, const ConstTypeHashSet& types) {
+void InterDexGrouping::build_interdex_grouping(
+    const Scope& scope, const ConstTypeHashSet& merging_targets) {
   const auto& cls_to_interdex_groups = m_conf.get_cls_interdex_groups();
   auto num_interdex_groups = m_conf.get_num_interdex_groups();
   TRACE(CLMG, 5, "num_interdex_groups %zu; cls_to_interdex_groups %zu",
@@ -189,11 +190,12 @@ std::vector<ConstTypeHashSet>& InterDexGrouping::group_by_interdex_set(
   }
   m_all_interdexing_groups = std::vector<ConstTypeHashSet>(num_group);
   if (num_group == 1) {
-    m_all_interdexing_groups[0].insert(types.begin(), types.end());
-    return m_all_interdexing_groups;
+    m_all_interdexing_groups[0].insert(merging_targets.begin(),
+                                       merging_targets.end());
+    return;
   }
   const auto& type_to_usages =
-      get_type_usages(types, scope, m_config.inferring_mode);
+      get_type_usages(merging_targets, scope, m_config.inferring_mode);
   for (const auto& pair : type_to_usages) {
     auto index = get_interdex_group(pair.second, cls_to_interdex_groups,
                                     num_interdex_groups);
@@ -211,19 +213,35 @@ std::vector<ConstTypeHashSet>& InterDexGrouping::group_by_interdex_set(
     }
     m_all_interdexing_groups[index].emplace(pair.first);
   }
-
-  return m_all_interdexing_groups;
 }
 
-TypeSet InterDexGrouping::get_types_in_current_interdex_group(
-    const TypeSet& types, const ConstTypeHashSet& interdex_group_types) {
+TypeSet InterDexGrouping::get_types_in_group(const InterdexSubgroupIdx id,
+                                             const TypeSet& types) const {
+  auto& interdex_group = m_all_interdexing_groups.at(id);
   TypeSet group;
   for (auto* type : types) {
-    if (interdex_group_types.count(type)) {
+    if (interdex_group.count(type)) {
       group.insert(type);
     }
   }
   return group;
+}
+
+void InterDexGrouping::visit_groups(
+    const ModelSpec& spec,
+    const TypeSet& current_group,
+    const std::function<void(const InterdexSubgroupIdx, const TypeSet&)>&
+        visit_fn) const {
+  for (InterdexSubgroupIdx id = 0; id < m_all_interdexing_groups.size(); id++) {
+    if (m_all_interdexing_groups.at(id).empty()) {
+      continue;
+    }
+    auto new_group = this->get_types_in_group(id, current_group);
+    if (new_group.size() < spec.min_count) {
+      continue;
+    }
+    visit_fn(id, new_group);
+  }
 }
 
 void InterDexGroupingConfig::init_type(const std::string& interdex_grouping) {

@@ -593,9 +593,9 @@ void Model::flatten_shapes(const MergerType& merger,
                            MergerType::ShapeCollector& shapes) {
   size_t num_trimmed_types = trim_groups(shapes, m_spec.min_count);
   m_stats.m_dropped += num_trimmed_types;
-  InterDexGrouping interdex_grouping(m_conf, m_spec.interdex_config);
-  const auto& all_interdex_groups =
-      interdex_grouping.group_by_interdex_set(m_scope, m_spec.merging_targets);
+  InterDexGrouping interdex_grouping(m_scope, m_conf, m_spec.interdex_config,
+                                     m_spec.merging_targets);
+  // Shape based grouping layer
   // sort shapes by mergeables count
   std::vector<const MergerType::Shape*> keys;
   for (auto& shape_it : shapes) {
@@ -632,34 +632,27 @@ void Model::flatten_shapes(const MergerType& merger,
 
                 return left_group.size() > right_group.size();
               });
-
+    // Type identity grouping layer (interface impl set)
     for (const TypeSet* intf_set : intf_sets) {
       const TypeSet& implementors = shape_hierarchy.groups.at(*intf_set);
+      // Per dex grouping layer
       for (auto& pair : group_per_dex(implementors, m_spec)) {
         auto dex_id = pair.first;
-        auto group_values = pair.second;
-        if (all_interdex_groups.size() > 1) {
-          for (InterdexSubgroupIdx interdex_gid = 0;
-               interdex_gid < all_interdex_groups.size();
-               interdex_gid++) {
-            if (all_interdex_groups[interdex_gid].empty()) {
-              continue;
-            }
-            auto new_group =
-                interdex_grouping.get_types_in_current_interdex_group(
-                    group_values, all_interdex_groups[interdex_gid]);
-            if (new_group.size() < m_spec.min_count) {
-              continue;
-            }
-            create_mergers_helper(merger.type, *shape, *intf_set, dex_id,
-                                  new_group, m_spec.strategy, interdex_gid,
-                                  m_spec.max_count, m_spec.min_count);
-            m_stats.m_interdex_groups[interdex_gid] += new_group.size();
-          }
-        } else {
+        auto group = pair.second;
+        const auto interdex_visitor = [&](const InterdexSubgroupIdx gid,
+                                          const TypeSet& itd_group) {
           create_mergers_helper(merger.type, *shape, *intf_set, dex_id,
-                                group_values, m_spec.strategy, boost::none,
+                                itd_group, m_spec.strategy, gid,
                                 m_spec.max_count, m_spec.min_count);
+          m_stats.m_interdex_groups[gid] += itd_group.size();
+        };
+        // InterDex grouping layer
+        if (interdex_grouping.num_groups() > 1) {
+          interdex_grouping.visit_groups(m_spec, group, interdex_visitor);
+        } else {
+          create_mergers_helper(merger.type, *shape, *intf_set, dex_id, group,
+                                m_spec.strategy, boost::none, m_spec.max_count,
+                                m_spec.min_count);
         }
       }
     }
