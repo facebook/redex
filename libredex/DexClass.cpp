@@ -110,7 +110,7 @@ std::string get_simple_deobf_name(const T* ref) {
   const auto& full_name = ref->get_deobfuscated_name_or_empty();
   if (full_name.empty()) {
     // This comes up for redex-created methods/fields.
-    return std::string(ref->c_str());
+    return ref->str_copy();
   }
   auto dot_pos = full_name.find('.');
   auto colon_pos = full_name.find(':');

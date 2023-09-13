@@ -515,7 +515,7 @@ void RedexContext::mutate_field(DexFieldRef* field,
   if (rename_on_collision && s_field_map.find(r) != s_field_map.end()) {
     uint32_t i = 0;
     while (true) {
-      r.name = DexString::make_string(("f$" + std::to_string(i++)).c_str());
+      r.name = DexString::make_string("f$" + std::to_string(i++));
       if (s_field_map.find(r) == s_field_map.end()) {
         break;
       }
@@ -680,7 +680,7 @@ void RedexContext::mutate_method(DexMethodRef* method,
         prefix = r.name->str() + "$";
       }
       do {
-        r.name = DexString::make_string((prefix + std::to_string(i++)).c_str());
+        r.name = DexString::make_string(prefix + std::to_string(i++));
       } while (s_method_map.count(r));
     } else {
       // We are about to change its class. Use a better name to remember its
