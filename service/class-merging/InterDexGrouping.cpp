@@ -82,40 +82,6 @@ ConcurrentMap<DexType*, TypeHashSet> get_type_usages(
   };
 
   switch (mode) {
-  case InterDexGroupingInferringMode::kAllTypeRefs: {
-    walk::parallel::opcodes(scope, [&](DexMethod* method, IRInstruction* insn) {
-      auto cls = method->get_class();
-      const auto& updater =
-          [&cls](DexType* /* key */, std::unordered_set<DexType*>& set,
-                 bool /* already_exists */) { set.emplace(cls); };
-
-      auto current_instance = check_current_instance(types, insn);
-      if (current_instance) {
-        res.update(current_instance, updater);
-      }
-
-      if (insn->has_method()) {
-        auto callee =
-            resolve_method(insn->get_method(), opcode_to_search(insn), method);
-        if (!callee) {
-          return;
-        }
-        auto proto = callee->get_proto();
-        auto rtype = proto->get_rtype();
-        if (rtype && types.count(rtype)) {
-          res.update(rtype, updater);
-        }
-
-        for (const auto& type : *proto->get_args()) {
-          if (type && types.count(type)) {
-            res.update(type, updater);
-          }
-        }
-      }
-    });
-    break;
-  }
-
   case InterDexGroupingInferringMode::kClassLoads: {
     walk::parallel::opcodes(scope, [&](DexMethod* method, IRInstruction* insn) {
       auto cls = method->get_class();
@@ -262,11 +228,9 @@ void InterDexGroupingConfig::init_type(const std::string& interdex_grouping) {
 
 void InterDexGroupingConfig::init_inferring_mode(const std::string& mode) {
   if (mode.empty()) {
-    this->inferring_mode = InterDexGroupingInferringMode::kAllTypeRefs;
+    this->inferring_mode = InterDexGroupingInferringMode::kClassLoads;
   }
-  if (mode == "all-types") {
-    this->inferring_mode = InterDexGroupingInferringMode::kAllTypeRefs;
-  } else if (mode == "class-loads") {
+  if (mode == "class-loads") {
     this->inferring_mode = InterDexGroupingInferringMode::kClassLoads;
   } else if (mode == "class-loads-bb") {
     this->inferring_mode =
@@ -279,9 +243,6 @@ void InterDexGroupingConfig::init_inferring_mode(const std::string& mode) {
 
 std::ostream& operator<<(std::ostream& os, InterDexGroupingInferringMode mode) {
   switch (mode) {
-  case InterDexGroupingInferringMode::kAllTypeRefs:
-    os << "all";
-    break;
   case InterDexGroupingInferringMode::kClassLoads:
     os << "class-loads";
     break;
