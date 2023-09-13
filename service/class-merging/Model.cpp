@@ -593,9 +593,7 @@ void Model::flatten_shapes(const MergerType& merger,
                            MergerType::ShapeCollector& shapes) {
   size_t num_trimmed_types = trim_groups(shapes, m_spec.min_count);
   m_stats.m_dropped += num_trimmed_types;
-  // Group all merging targets according to interdex grouping.
-  InterDexGrouping interdex_grouping(m_conf, m_spec.interdex_grouping,
-                                     m_spec.interdex_grouping_inferring_mode);
+  InterDexGrouping interdex_grouping(m_conf, m_spec.interdex_config);
   const auto& all_interdex_groups =
       interdex_grouping.group_by_interdex_set(m_scope, m_spec.merging_targets);
   // sort shapes by mergeables count

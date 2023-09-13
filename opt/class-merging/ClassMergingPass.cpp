@@ -133,9 +133,9 @@ void ClassMergingPass::bind_config() {
   std::vector<Json::Value> models;
   bind("models", {}, models);
 
-  std::string dflt_interdex_grouping_inferring_mode;
-  bind("default_interdex_grouping_inferring_mode", "",
-       dflt_interdex_grouping_inferring_mode);
+  std::string interdex_grouping_inferring_mode;
+  bind("interdex_grouping_inferring_mode", "class-loads",
+       interdex_grouping_inferring_mode);
 
   after_configuration([=] {
     if (max_num_dispatch_target > 0) {
@@ -143,28 +143,9 @@ void ClassMergingPass::bind_config() {
           boost::optional<size_t>(static_cast<size_t>(max_num_dispatch_target));
     }
 
-    if (models.empty()) return;
-
-    auto parse_grouping_inferring_mode = [](const std::string& s,
-                                            InterDexGroupingInferringMode
-                                                dflt) {
-      if (s.empty()) {
-        return dflt;
-      }
-      if (s == "all-types") {
-        return InterDexGroupingInferringMode::kAllTypeRefs;
-      } else if (s == "class-loads") {
-        return InterDexGroupingInferringMode::kClassLoads;
-      } else if (s == "class-loads-bb") {
-        return InterDexGroupingInferringMode::kClassLoadsBasicBlockFiltering;
-      } else {
-        always_assert_log(false, "Unknown interdex-grouping-inferring-mode %s",
-                          s.c_str());
-      }
-    };
-    InterDexGroupingInferringMode default_mode = parse_grouping_inferring_mode(
-        dflt_interdex_grouping_inferring_mode,
-        ModelSpec().interdex_grouping_inferring_mode);
+    if (models.empty()) {
+      return;
+    }
 
     // load each model spec for erasure
     for (auto it = models.begin(); it != models.end(); ++it) {
@@ -224,10 +205,9 @@ void ClassMergingPass::bind_config() {
       // InterDex grouping option is by default `non-ordered-set`.
       std::string interdex_grouping;
       model_spec.get("interdex_grouping", "non-ordered-set", interdex_grouping);
-      model.interdex_grouping =
-          InterDexGrouping::get_merge_per_interdex_type(interdex_grouping);
+      model.interdex_config.init_type(interdex_grouping);
 
-      always_assert_log(!model.interdex_grouping ||
+      always_assert_log(!model.interdex_config.is_enabled() ||
                             (model.type_tag_config != TypeTagConfig::NONE),
                         "Cannot group %s when type tag is not needed.",
                         model.name.c_str());
@@ -262,10 +242,8 @@ void ClassMergingPass::bind_config() {
       // Assume config based models are all generated code.
       model_spec.get("is_generated_code", true, model.is_generated_code);
 
-      std::string usage_mode_str =
-          model_spec.get("type_usage_mode", std::string(""));
-      model.interdex_grouping_inferring_mode =
-          parse_grouping_inferring_mode(usage_mode_str, default_mode);
+      model.interdex_config.init_inferring_mode(
+          interdex_grouping_inferring_mode);
 
       if (!verify_model_spec(m_model_specs, model)) {
         continue;

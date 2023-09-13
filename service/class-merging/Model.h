@@ -140,7 +140,7 @@ struct ModelSpec {
   strategy::Strategy strategy{strategy::BY_CLASS_COUNT};
   // Group splitting. This is looser than the per dex split and takes into
   // account the interdex order (if any provided).
-  InterDexGroupingType interdex_grouping{InterDexGroupingType::DISABLED};
+  InterDexGroupingConfig interdex_config{InterDexGroupingType::DISABLED};
   // whether to perform class merging on the primary dex.
   bool include_primary_dex{false};
   // Process @MethodMeta annotations
@@ -165,9 +165,6 @@ struct ModelSpec {
   // The Model targets are generated code. If so, we consider merging_targets as
   // a part of the generated set.
   bool is_generated_code{false};
-
-  InterDexGroupingInferringMode interdex_grouping_inferring_mode{
-      InterDexGroupingInferringMode::kAllTypeRefs};
 
   bool generate_type_tag() const {
     return type_tag_config == TypeTagConfig::GENERATE;
@@ -279,10 +276,6 @@ class Model {
 
   const std::string& get_class_name_prefix() const {
     return m_spec.class_name_prefix;
-  }
-
-  bool is_interdex_grouping_enabled() const {
-    return m_spec.interdex_grouping != InterDexGroupingType::DISABLED;
   }
 
   const ModelSpec& get_model_spec() const { return m_spec; }
