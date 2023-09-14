@@ -75,13 +75,13 @@ class PatriciaTreeMap final {
   // C++ container concept member types
   using key_type = Key;
   using mapped_type = typename Core::ValueType;
-  using value_type = std::pair<const Key, mapped_type>;
+  using value_type = std::pair<Key, mapped_type>;
   using iterator = typename Core::IteratorType;
   using const_iterator = iterator;
   using difference_type = std::ptrdiff_t;
   using size_type = size_t;
-  using const_reference = const mapped_type&;
-  using const_pointer = const mapped_type*;
+  using const_reference = const value_type&;
+  using const_pointer = const value_type*;
 
   using IntegerType = typename Codec::IntegerType;
 
