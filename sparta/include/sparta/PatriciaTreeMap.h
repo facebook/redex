@@ -20,7 +20,6 @@
 #include <sparta/PatriciaTreeCore.h>
 #include <sparta/PatriciaTreeUtil.h>
 
-// Forward declarations
 namespace sparta {
 
 /*
