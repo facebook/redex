@@ -202,9 +202,7 @@ std::vector<uint64_t> create_kmers(const std::vector<uint8_t>& content) {
 
 std::vector<uint8_t>
 MethodSimilarityCompressionConsciousOrderer::get_encoded_method_content(
-    DexMethod* meth,
-    std::unique_ptr<DexOutputIdx>& dodx,
-    std::unique_ptr<uint8_t[]>& output) {
+    DexMethod* meth, DexOutputIdx& dodx, std::unique_ptr<uint8_t[]>& output) {
   // Get the code
   DexCode* code = meth->get_dex_code();
   always_assert_log(code != nullptr, "Empty code for method %s", SHOW(meth));
@@ -213,7 +211,7 @@ MethodSimilarityCompressionConsciousOrderer::get_encoded_method_content(
   memset(output.get(), 0, METHOD_MAX_OUTPUT_SIZE);
 
   // Encode
-  size_t size = code->encode(dodx.get(), (uint32_t*)(output.get()));
+  size_t size = code->encode(&dodx, (uint32_t*)(output.get()));
   always_assert_log(size <= METHOD_MAX_OUTPUT_SIZE,
                     "Encoded code size limit exceeded %zu versus %zu", size,
                     METHOD_MAX_OUTPUT_SIZE);
@@ -236,7 +234,7 @@ void MethodSimilarityCompressionConsciousOrderer::order(
 
   // We assume no method takes more than 512KB
   auto output = std::make_unique<uint8_t[]>(METHOD_MAX_OUTPUT_SIZE);
-  auto dodx = std::make_unique<DexOutputIdx>(*m_gtypes->get_dodx(output.get()));
+  auto dodx = m_gtypes->get_dodx(output.get());
 
   // Collect binary functions in the original order
   std::vector<BinaryFunction> functions;

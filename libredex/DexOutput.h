@@ -53,76 +53,70 @@ enum class SortMode {
 
 class DexOutputIdx {
  private:
-  dexstring_to_idx* m_string;
-  dextype_to_idx* m_type;
-  dexproto_to_idx* m_proto;
-  dexfield_to_idx* m_field;
-  dexmethod_to_idx* m_method;
-  std::vector<DexTypeList*>* m_typelist;
-  dexcallsite_to_idx* m_callsite;
-  dexmethodhandle_to_idx* m_methodhandle;
+  dexstring_to_idx m_string;
+  dextype_to_idx m_type;
+  dexproto_to_idx m_proto;
+  dexfield_to_idx m_field;
+  dexmethod_to_idx m_method;
+  std::vector<DexTypeList*> m_typelist;
+  dexcallsite_to_idx m_callsite;
+  dexmethodhandle_to_idx m_methodhandle;
   const uint8_t* m_base;
 
  public:
-  DexOutputIdx(dexstring_to_idx* string,
-               dextype_to_idx* type,
-               dexproto_to_idx* proto,
-               dexfield_to_idx* field,
-               dexmethod_to_idx* method,
-               std::vector<DexTypeList*>* typelist,
-               dexcallsite_to_idx* callsite,
-               dexmethodhandle_to_idx* methodhandle,
-               const uint8_t* base) {
-    m_string = string;
-    m_type = type;
-    m_proto = proto;
-    m_field = field;
-    m_method = method;
-    m_typelist = typelist;
-    m_callsite = callsite;
-    m_methodhandle = methodhandle;
-    m_base = base;
+  DexOutputIdx(dexstring_to_idx string,
+               dextype_to_idx type,
+               dexproto_to_idx proto,
+               dexfield_to_idx field,
+               dexmethod_to_idx method,
+               std::vector<DexTypeList*> typelist,
+               dexcallsite_to_idx callsite,
+               dexmethodhandle_to_idx methodhandle,
+               const uint8_t* base)
+      : m_string(std::move(string)),
+        m_type(std::move(type)),
+        m_proto(std::move(proto)),
+        m_field(std::move(field)),
+        m_method(std::move(method)),
+        m_typelist(std::move(typelist)),
+        m_callsite(std::move(callsite)),
+        m_methodhandle(std::move(methodhandle)),
+        m_base(base) {}
+
+  DexOutputIdx(const DexOutputIdx&) = delete;
+  DexOutputIdx& operator=(const DexOutputIdx&) = delete;
+
+  DexOutputIdx(DexOutputIdx&&) = default;
+  DexOutputIdx& operator=(DexOutputIdx&&) = default;
+
+  const dexstring_to_idx& string_to_idx() const { return m_string; }
+  const dextype_to_idx& type_to_idx() const { return m_type; }
+  const dexproto_to_idx& proto_to_idx() const { return m_proto; }
+  const dexfield_to_idx& field_to_idx() const { return m_field; }
+  const dexmethod_to_idx& method_to_idx() const { return m_method; }
+  const std::vector<DexTypeList*>& typelist_list() const { return m_typelist; }
+  const dexcallsite_to_idx& callsite_to_idx() const { return m_callsite; }
+  const dexmethodhandle_to_idx& methodhandle_to_idx() const {
+    return m_methodhandle;
   }
 
-  ~DexOutputIdx() {
-    delete m_string;
-    delete m_type;
-    delete m_proto;
-    delete m_field;
-    delete m_method;
-    delete m_typelist;
-    delete m_callsite;
-    delete m_methodhandle;
-  }
-
-  dexstring_to_idx& string_to_idx() const { return *m_string; }
-  dextype_to_idx& type_to_idx() const { return *m_type; }
-  dexproto_to_idx& proto_to_idx() const { return *m_proto; }
-  dexfield_to_idx& field_to_idx() const { return *m_field; }
-  dexmethod_to_idx& method_to_idx() const { return *m_method; }
-  std::vector<DexTypeList*>& typelist_list() const { return *m_typelist; }
-  dexcallsite_to_idx& callsite_to_idx() const { return *m_callsite; }
-  dexmethodhandle_to_idx& methodhandle_to_idx() const {
-    return *m_methodhandle;
-  }
-
-  uint32_t stringidx(const DexString* s) const { return m_string->at(s); }
-  uint16_t typeidx(DexType* t) const { return m_type->at(t); }
-  uint16_t protoidx(DexProto* p) const { return m_proto->at(p); }
-  uint32_t fieldidx(DexFieldRef* f) const { return m_field->at(f); }
-  uint32_t methodidx(DexMethodRef* m) const { return m_method->at(m); }
-  uint32_t callsiteidx(DexCallSite* c) const { return m_callsite->at(c); }
+  uint32_t stringidx(const DexString* s) const { return m_string.at(s); }
+  uint16_t typeidx(DexType* t) const { return m_type.at(t); }
+  uint16_t protoidx(DexProto* p) const { return m_proto.at(p); }
+  uint32_t fieldidx(DexFieldRef* f) const { return m_field.at(f); }
+  uint32_t methodidx(DexMethodRef* m) const { return m_method.at(m); }
+  uint32_t callsiteidx(DexCallSite* c) const { return m_callsite.at(c); }
   uint32_t methodhandleidx(DexMethodHandle* c) const {
-    return m_methodhandle->at(c);
+    return m_methodhandle.at(c);
   }
 
-  size_t stringsize() const { return m_string->size(); }
-  size_t typesize() const { return m_type->size(); }
-  size_t protosize() const { return m_proto->size(); }
-  size_t fieldsize() const { return m_field->size(); }
-  size_t methodsize() const { return m_method->size(); }
-  size_t callsitesize() const { return m_callsite->size(); }
-  size_t methodhandlesize() const { return m_methodhandle->size(); }
+  size_t stringsize() const { return m_string.size(); }
+  size_t typesize() const { return m_type.size(); }
+  size_t protosize() const { return m_proto.size(); }
+  size_t fieldsize() const { return m_field.size(); }
+  size_t methodsize() const { return m_method.size(); }
+  size_t callsitesize() const { return m_callsite.size(); }
+  size_t methodhandlesize() const { return m_methodhandle.size(); }
 
   uint32_t get_offset(uint8_t* ptr) { return (uint32_t)(ptr - m_base); }
 
@@ -246,16 +240,16 @@ class GatheredTypes {
   std::unordered_map<const DexMethod*, unsigned int> m_methods_in_cls_order;
   ConfigFiles* m_config{nullptr};
 
-  dexstring_to_idx* get_string_index(cmp_dstring cmp = compare_dexstrings);
-  dextype_to_idx* get_type_index(cmp_dtype cmp = compare_dextypes);
-  dexproto_to_idx* get_proto_index(cmp_dproto cmp = compare_dexprotos);
-  dexfield_to_idx* get_field_index(cmp_dfield cmp = compare_dexfields);
-  dexmethod_to_idx* get_method_index(cmp_dmethod cmp = compare_dexmethods);
-  std::vector<DexTypeList*>* get_typelist_list(
+  dexstring_to_idx get_string_index(cmp_dstring cmp = compare_dexstrings);
+  dextype_to_idx get_type_index(cmp_dtype cmp = compare_dextypes);
+  dexproto_to_idx get_proto_index(cmp_dproto cmp = compare_dexprotos);
+  dexfield_to_idx get_field_index(cmp_dfield cmp = compare_dexfields);
+  dexmethod_to_idx get_method_index(cmp_dmethod cmp = compare_dexmethods);
+  std::vector<DexTypeList*> get_typelist_list(
       dexproto_to_idx* protos, cmp_dtypelist cmp = compare_dextypelists);
-  dexcallsite_to_idx* get_callsite_index(
+  dexcallsite_to_idx get_callsite_index(
       cmp_callsite cmp = compare_dexcallsites);
-  dexmethodhandle_to_idx* get_methodhandle_index(
+  dexmethodhandle_to_idx get_methodhandle_index(
       cmp_methodhandle cmp = compare_dexmethodhandles);
 
   void build_cls_load_map();
@@ -265,7 +259,7 @@ class GatheredTypes {
  public:
   explicit GatheredTypes(DexClasses* classes);
 
-  DexOutputIdx* get_dodx(const uint8_t* base);
+  DexOutputIdx get_dodx(const uint8_t* base);
   template <class T = decltype(compare_dexstrings)>
   std::vector<const DexString*> get_dexstring_emitlist(
       T cmp = compare_dexstrings);
@@ -326,10 +320,10 @@ class DexOutput {
 
  private:
   DexClasses* m_classes;
-  std::unique_ptr<DexOutputIdx> m_dodx;
-  std::shared_ptr<GatheredTypes> m_gtypes;
   const size_t m_output_size;
   std::unique_ptr<uint8_t[]> m_output;
+  std::shared_ptr<GatheredTypes> m_gtypes;
+  DexOutputIdx m_dodx;
   uint32_t m_offset;
   const char* m_filename;
   size_t m_store_number;
