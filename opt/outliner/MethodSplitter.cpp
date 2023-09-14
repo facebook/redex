@@ -292,7 +292,8 @@ std::unordered_set<DexMethod*> split_splittable_closures(
     ConcurrentMap<std::string, size_t>* uniquifiers,
     Stats* stats,
     std::unordered_map<DexClasses*, std::unique_ptr<DexState>>* dex_states,
-    ConcurrentSet<DexMethod*>* concurrent_added_methods) {
+    ConcurrentSet<DexMethod*>* concurrent_added_methods,
+    ConcurrentMap<DexMethod*, DexMethod*>* concurrent_new_hot_methods) {
   Timer t("split");
   ConcurrentSet<DexMethod*> concurrent_affected_methods;
   auto process_dex = [&](DexClasses* dex) {
@@ -358,9 +359,15 @@ std::unordered_set<DexMethod*> split_splittable_closures(
         stats->split_count_switch_cases += splittable_closure->closures.size();
       }
       switch (splittable_closure->hot_split_kind) {
-      case HotSplitKind::Hot:
+      case HotSplitKind::Hot: {
         stats->hot_split_count++;
+        if (concurrent_new_hot_methods) {
+          auto hot_root_method =
+              concurrent_new_hot_methods->get(method, method);
+          concurrent_new_hot_methods->emplace(new_method, hot_root_method);
+        }
         break;
+      }
       case HotSplitKind::HotCold:
         stats->hot_cold_split_count++;
         break;
@@ -385,14 +392,16 @@ std::unordered_set<DexMethod*> split_splittable_closures(
 
 namespace method_splitting_impl {
 
-void split_methods_in_stores(DexStoresVector& stores,
-                             int32_t min_sdk,
-                             const Config& config,
-                             bool create_init_class_insns,
-                             size_t reserved_mrefs,
-                             size_t reserved_trefs,
-                             Stats* stats,
-                             const std::string& name_infix) {
+void split_methods_in_stores(
+    DexStoresVector& stores,
+    int32_t min_sdk,
+    const Config& config,
+    bool create_init_class_insns,
+    size_t reserved_mrefs,
+    size_t reserved_trefs,
+    Stats* stats,
+    const std::string& name_infix,
+    ConcurrentMap<DexMethod*, DexMethod*>* concurrent_new_hot_methods) {
   auto scope = build_class_scope(stores);
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, create_init_class_insns);
@@ -419,7 +428,7 @@ void split_methods_in_stores(DexStoresVector& stores,
     methods = split_splittable_closures(
         dexen, min_sdk, init_classes_with_side_effects, reserved_trefs,
         reserved_mrefs, splittable_closures, name_infix, &uniquifiers, stats,
-        &dex_states, &concurrent_added_methods);
+        &dex_states, &concurrent_added_methods, concurrent_new_hot_methods);
     stats->added_methods.insert(concurrent_added_methods.begin(),
                                 concurrent_added_methods.end());
     TRACE(MS, 1, "[%zu] Split out %zu methods", iteration,

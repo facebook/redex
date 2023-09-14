@@ -12,6 +12,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "ConcurrentContainers.h"
 #include "DexClass.h"
 #include "MethodSplittingConfig.h"
 
@@ -40,6 +41,8 @@ void split_methods_in_stores(DexStoresVector& stores,
                              size_t reserved_mrefs,
                              size_t reserved_trefs,
                              Stats* stats,
-                             const std::string& name_infix = "");
+                             const std::string& name_infix = "",
+                             ConcurrentMap<DexMethod*, DexMethod*>*
+                                 concurrent_new_hot_methods = nullptr);
 
 } // namespace method_splitting_impl

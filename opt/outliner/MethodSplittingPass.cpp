@@ -13,6 +13,7 @@
 
 #include "ConfigFiles.h"
 #include "InterDexPass.h"
+#include "MethodProfiles.h"
 #include "MethodSplitter.h"
 #include "PassManager.h"
 #include "Show.h"
@@ -66,9 +67,18 @@ void MethodSplittingPass::run_pass(DexStoresVector& stores,
 
   auto name_infix = "$" + std::to_string(m_iteration) + "$";
   Stats stats;
+  ConcurrentMap<DexMethod*, DexMethod*> concurrent_new_hot_methods;
   split_methods_in_stores(stores, mgr.get_redex_options().min_sdk, m_config,
                           conf.create_init_class_insns(), reserved_mrefs,
-                          reserved_trefs, &stats, name_infix);
+                          reserved_trefs, &stats, name_infix,
+                          &concurrent_new_hot_methods);
+
+  auto& method_profiles = conf.get_method_profiles();
+  size_t derived_method_profile_stats{0};
+  for (auto [new_method, root_method] : concurrent_new_hot_methods) {
+    derived_method_profile_stats +=
+        method_profiles.derive_stats(new_method, {root_method});
+  }
 
   mgr.set_metric("split_count", stats.added_methods.size());
   mgr.set_metric("split_count_simple", (size_t)stats.split_count_simple);
@@ -81,6 +91,8 @@ void MethodSplittingPass::run_pass(DexStoresVector& stores,
   mgr.set_metric("dex_limits_hit", (size_t)stats.dex_limits_hit);
   mgr.set_metric("added_code_size", (size_t)stats.added_code_size);
   mgr.set_metric("split_code_size", (size_t)stats.split_code_size);
+  mgr.set_metric("new_hot_methods", concurrent_new_hot_methods.size());
+  mgr.set_metric("derived_method_profile_stats", derived_method_profile_stats);
   TRACE(MS, 1, "Split out %zu methods", stats.added_methods.size());
 
   m_iteration++;
