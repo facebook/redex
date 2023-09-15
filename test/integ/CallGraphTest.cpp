@@ -169,8 +169,8 @@ TEST_F(CallGraphTest, test_resolve_static_callees) {
     }
   }
   ASSERT_NE(invoke_insn, nullptr);
-  auto callees = call_graph::resolve_callees_in_graph(
-      *complete_graph, clinit, invoke_insn);
+  auto callees =
+      call_graph::resolve_callees_in_graph(*complete_graph, invoke_insn);
   EXPECT_THAT(callees, ::testing::UnorderedElementsAre(base_foo));
 }
 
@@ -183,8 +183,8 @@ TEST_F(CallGraphTest, test_resolve_virtual_callees) {
     }
   }
   ASSERT_NE(invoke_insn, nullptr);
-  auto callees = call_graph::resolve_callees_in_graph(
-      *complete_graph, calls_returns_int, invoke_insn);
+  auto callees =
+      call_graph::resolve_callees_in_graph(*complete_graph, invoke_insn);
   EXPECT_THAT(callees,
               ::testing::UnorderedElementsAre(base_returns_int,
                                               extended_returns_int,

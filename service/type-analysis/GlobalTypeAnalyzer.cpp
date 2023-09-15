@@ -84,7 +84,7 @@ void scan_any_init_reachables(
             SHOW(method));
       continue;
     }
-    auto callees = resolve_callees_in_graph(cg, method, insn);
+    auto callees = resolve_callees_in_graph(cg, insn);
     for (const DexMethod* callee : callees) {
       scan_any_init_reachables(cg, method_override_graph, callee, false,
                                reachables);
@@ -371,7 +371,7 @@ void GlobalTypeAnalysis::find_any_init_reachables(
               SHOW(method));
         continue;
       }
-      auto callees = resolve_callees_in_graph(*cg, method, insn);
+      auto callees = resolve_callees_in_graph(*cg, insn);
       for (const DexMethod* callee : callees) {
         bool trace_callbacks_in_callee_cls =
             is_leaking_this_in_ctor(method, callee);

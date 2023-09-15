@@ -606,27 +606,6 @@ void Graph::add_edge(const NodeId& caller,
   callee->m_predecessors.emplace_back(std::move(edge));
 }
 
-MethodSet resolve_callees_in_graph(const Graph& graph,
-                                   const DexMethod* method,
-                                   const IRInstruction* insn) {
-
-  always_assert(insn);
-  MethodSet ret;
-  for (const auto& edge_id : graph.node(method)->callees()) {
-    auto invoke_insn = edge_id->invoke_insn();
-    if (invoke_insn == insn) {
-      auto callee_node_id = edge_id->callee();
-      if (callee_node_id) {
-        auto callee = callee_node_id->method();
-        if (callee) {
-          ret.emplace(callee);
-        }
-      }
-    }
-  }
-  return ret;
-}
-
 const MethodSet& resolve_callees_in_graph(const Graph& graph,
                                           const IRInstruction* insn) {
   const auto& insn_to_callee = graph.get_insn_to_callee();

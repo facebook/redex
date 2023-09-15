@@ -264,10 +264,6 @@ class GraphInterface {
   }
 };
 
-MethodSet resolve_callees_in_graph(const Graph& graph,
-                                   const DexMethod* method,
-                                   const IRInstruction* insn);
-
 const MethodSet& resolve_callees_in_graph(const Graph& graph,
                                           const IRInstruction* insn);
 

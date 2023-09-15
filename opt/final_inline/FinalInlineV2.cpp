@@ -499,7 +499,7 @@ StaticFieldReadAnalysis::Result StaticFieldReadAnalysis::analyze(
               m_allowed_opaque_callees.count(callee_method_def)) {
             return editable_cfg_adapter::LOOP_CONTINUE;
           }
-          auto callees = resolve_callees_in_graph(m_graph, method, insn);
+          auto callees = resolve_callees_in_graph(m_graph, insn);
           if (callees.empty()) {
             TRACE(FINALINLINE, 2, "%s has opaque callees %s", SHOW(method),
                   SHOW(insn->get_method()));
