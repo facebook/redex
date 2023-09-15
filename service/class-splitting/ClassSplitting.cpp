@@ -526,7 +526,6 @@ void ClassSplitter::cleanup(const Scope& final_scope) {
     }
     change_visibility(method, target_cls->get_type());
     relocate_method(method, target_cls->get_type());
-    change_visibility(method);
   }
   TRACE(CS, 2, "[class splitting] Made {%zu} methods static.",
         methods_to_staticize.size());

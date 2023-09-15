@@ -441,7 +441,6 @@ bool relocate_method_if_no_changes(DexMethod* method, DexType* to_type) {
   set_public(method);
   change_visibility(method, to_type);
   relocate_method(method, to_type);
-  change_visibility(method);
 
   return true;
 }
