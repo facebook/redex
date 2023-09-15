@@ -2716,6 +2716,7 @@ void reorder_with_method_profiles(
             "from %s to %s",
             SHOW(method->get_name()), SHOW(method->get_class()),
             SHOW(target_class));
+      change_visibility(method, target_class->get_type());
       relocate_method(method, target_class->get_type());
       method->set_deobfuscated_name(show(method));
       relocated_outlined_methods++;

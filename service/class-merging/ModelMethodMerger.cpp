@@ -822,6 +822,7 @@ void ModelMethodMerger::dedup_non_ctor_non_virt_methods() {
             SHOW(merger_type));
 
       TRACE(CLMG, 8, "dedup: moving static|non_virt method %s", SHOW(m));
+      change_visibility(m, merger_type);
       relocate_method(m, merger_type);
     }
 
@@ -920,6 +921,7 @@ void ModelMethodMerger::merge_virt_itf_methods() {
   for (const auto& pair : not_inlined_dispatch_entries) {
     auto merger_type = pair.first;
     auto not_inlined = pair.second;
+    change_visibility(not_inlined, merger_type);
     relocate_method(not_inlined, merger_type);
   }
 }

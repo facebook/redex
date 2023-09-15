@@ -248,7 +248,6 @@ void create_store(const std::string& store_name,
 }
 
 void relocate_field(DexField* field, DexType* to_type) {
-  // change_visibility(field, to_type);
   auto from_cls = type_class(field->get_class());
   auto to_cls = type_class(to_type);
   from_cls->remove_field(field);
@@ -259,7 +258,6 @@ void relocate_field(DexField* field, DexType* to_type) {
 }
 
 void relocate_method(DexMethod* method, DexType* to_type) {
-  change_visibility(method, to_type);
   auto from_cls = type_class(method->get_class());
   auto to_cls = type_class(to_type);
   from_cls->remove_method(method);
@@ -441,6 +439,7 @@ bool relocate_method_if_no_changes(DexMethod* method, DexType* to_type) {
   }
 
   set_public(method);
+  change_visibility(method, to_type);
   relocate_method(method, to_type);
   change_visibility(method);
 

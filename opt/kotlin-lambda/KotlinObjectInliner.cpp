@@ -104,6 +104,7 @@ void make_static_and_relocate_method(DexMethod* method, DexType* to_type) {
                           uses_this(method, true) ? mutators::KeepThis::Yes
                                                   : mutators::KeepThis::No);
   }
+  change_visibility(method, to_type);
   relocate_method(method, to_type);
 }
 

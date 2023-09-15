@@ -201,6 +201,7 @@ int relocate_clusters(const StaticCallGraph& graph, const Scope& scope) {
         // caller
         int caller_id = *graph.callers[vertex.id].begin();
         DexMethod* caller = graph.vertices[caller_id].method;
+        change_visibility(vertex.method, caller->get_class());
         relocate_method(vertex.method, caller->get_class());
         relocated_methods++;
         set_public(vertex.method);
@@ -212,6 +213,7 @@ int relocate_clusters(const StaticCallGraph& graph, const Scope& scope) {
       // higher or equal to the api level of the method.
       if (to_class->rstate.get_api_level() >=
           api::LevelChecker::get_method_level(vertex.method)) {
+        change_visibility(vertex.method, to_class->get_type());
         relocate_method(vertex.method, to_class->get_type());
         relocated_methods++;
       }

@@ -524,6 +524,7 @@ void ClassSplitter::cleanup(const Scope& final_scope) {
     if (!is_static(method)) {
       mutators::make_static(method);
     }
+    change_visibility(method, target_cls->get_type());
     relocate_method(method, target_cls->get_type());
     change_visibility(method);
   }
