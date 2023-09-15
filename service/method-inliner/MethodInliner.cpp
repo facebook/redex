@@ -406,15 +406,16 @@ bool can_have_unknown_implementations(const mog::Graph& method_override_graph,
     return true;
   }
   // Also check that for all overridden methods.
-  const auto& overridden_methods = mog::get_overridden_methods(
-      method_override_graph, method, /* include_interfaces */ true);
-  for (auto overridden_method : overridden_methods) {
-    if (is_interface(type_class(overridden_method->get_class())) &&
-        (root(overridden_method) || !can_rename(overridden_method))) {
-      return true;
-    }
-  }
-  return false;
+  return mog::any_overridden_methods(
+      method_override_graph, method,
+      [&](auto* overridden_method) {
+        if (is_interface(type_class(overridden_method->get_class())) &&
+            (root(overridden_method) || !can_rename(overridden_method))) {
+          return true;
+        }
+        return false;
+      },
+      /* include_interfaces */ true);
 };
 
 /**

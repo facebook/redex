@@ -399,18 +399,18 @@ bool process_base_and_overriding_methods(
   }
 
   // Okay, let's process all overridden methods just like the base method.
-  auto overriding_methods = method_override_graph::get_overriding_methods(
-      *method_override_graph, method);
-  for (auto overriding_method : overriding_methods) {
-    action = get_base_or_overriding_method_action(
-        overriding_method, methods_to_ignore,
-        ignore_methods_with_assumenosideeffects);
-    if (action == MethodOverrideAction::UNKNOWN ||
-        (action == MethodOverrideAction::INCLUDE &&
-         !handler_func(const_cast<DexMethod*>(overriding_method)))) {
-      return false;
-    }
-  }
+  return method_override_graph::all_overriding_methods(
+      *method_override_graph, method, [&](const DexMethod* overriding_method) {
+        action = get_base_or_overriding_method_action(
+            overriding_method, methods_to_ignore,
+            ignore_methods_with_assumenosideeffects);
+        if (action == MethodOverrideAction::UNKNOWN ||
+            (action == MethodOverrideAction::INCLUDE &&
+             !handler_func(const_cast<DexMethod*>(overriding_method)))) {
+          return false;
+        }
+        return true;
+      });
   return true;
 }
 

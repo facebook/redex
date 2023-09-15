@@ -363,92 +363,29 @@ std::vector<const DexMethod*> get_overriding_methods(const Graph& graph,
                                                      const DexMethod* method,
                                                      bool include_interfaces,
                                                      const DexType* base_type) {
-  std::vector<const DexMethod*> overrides;
-  const Node& root = graph.get_node(method);
-  if (base_type && method->get_class() == base_type) {
-    base_type = nullptr;
-  }
-  if (root.is_interface) {
-    std::unordered_set<const DexMethod*> visited{method};
-    std::function<void(const DexMethod*)> visit =
-        [&](const DexMethod* current) {
-          if (!visited.emplace(current).second) {
-            return;
-          }
-          const Node& node = graph.get_node(current);
-          for (const auto* child : node.children) {
-            visit(child);
-          }
-          if ((include_interfaces || !node.is_interface) &&
-              (!base_type || node.overrides(current, base_type))) {
-            overrides.push_back(current);
-          }
-        };
-    for (const auto* child : root.children) {
-      visit(child);
-    }
-    return overrides;
-  }
-  // optimized code path
-  std::function<void(const DexMethod*)> visit = [&](const DexMethod* current) {
-    const Node& node = graph.get_node(current);
-    for (const auto* child : node.children) {
-      visit(child);
-    }
-    if (!base_type || node.overrides(current, base_type)) {
-      overrides.push_back(current);
-    }
-  };
-  for (const auto* child : root.children) {
-    visit(child);
-  }
-  return overrides;
+  std::vector<const DexMethod*> res;
+  all_overriding_methods(
+      graph, method,
+      [&](const DexMethod* method) {
+        res.push_back(method);
+        return true;
+      },
+      include_interfaces, base_type);
+  return res;
 }
 
 std::vector<const DexMethod*> get_overridden_methods(const Graph& graph,
                                                      const DexMethod* method,
                                                      bool include_interfaces) {
-  std::vector<const DexMethod*> overridden;
-  const Node& root = graph.get_node(method);
-  if (include_interfaces) {
-    std::unordered_set<const DexMethod*> visited{method};
-    std::function<void(const DexMethod*)> visit =
-        [&](const DexMethod* current) {
-          if (!visited.emplace(current).second) {
-            return;
-          }
-          const Node& node = graph.get_node(current);
-          if (!include_interfaces && node.is_interface) {
-            return;
-          }
-          for (const auto* parent : node.parents) {
-            visit(parent);
-          }
-          overridden.push_back(current);
-        };
-    for (const auto* parent : root.parents) {
-      visit(parent);
-    }
-    return overridden;
-  }
-  if (root.is_interface) {
-    return overridden;
-  }
-  // optimized code path
-  std::function<void(const DexMethod*)> visit = [&](const DexMethod* current) {
-    const Node& node = graph.get_node(current);
-    if (!include_interfaces && node.is_interface) {
-      return;
-    }
-    for (const auto* parent : node.parents) {
-      visit(parent);
-    }
-    overridden.push_back(current);
-  };
-  for (const auto* parent : root.parents) {
-    visit(parent);
-  }
-  return overridden;
+  std::vector<const DexMethod*> res;
+  all_overridden_methods(
+      graph, method,
+      [&](const DexMethod* method) {
+        res.push_back(method);
+        return true;
+      },
+      include_interfaces);
+  return res;
 }
 
 bool is_true_virtual(const Graph& graph, const DexMethod* method) {
@@ -470,6 +407,139 @@ std::unordered_set<DexMethod*> get_non_true_virtuals(const Graph& graph,
     }
   }
   return non_true_virtuals;
+}
+
+bool all_overriding_methods(const Graph& graph,
+                            const DexMethod* method,
+                            const std::function<bool(const DexMethod*)>& f,
+                            bool include_interfaces,
+                            const DexType* base_type) {
+  const Node& root = graph.get_node(method);
+  if (base_type && method->get_class() == base_type) {
+    base_type = nullptr;
+  }
+  if (root.is_interface) {
+    std::unordered_set<const DexMethod*> visited{method};
+    std::function<bool(const DexMethod*)> visit =
+        [&](const DexMethod* current) {
+          if (!visited.emplace(current).second) {
+            return true;
+          }
+          const Node& node = graph.get_node(current);
+          for (const auto* child : node.children) {
+            if (!visit(child)) {
+              return false;
+            }
+          }
+          if ((include_interfaces || !node.is_interface) &&
+              (!base_type || node.overrides(current, base_type))) {
+            if (!f(current)) {
+              return false;
+            }
+          }
+          return true;
+        };
+    for (const auto* child : root.children) {
+      if (!visit(child)) {
+        return false;
+      }
+    }
+    return true;
+  }
+  // optimized code path
+  std::function<bool(const DexMethod*)> visit = [&](const DexMethod* current) {
+    const Node& node = graph.get_node(current);
+    for (const auto* child : node.children) {
+      if (!visit(child)) {
+        return false;
+      }
+    }
+    if (!base_type || node.overrides(current, base_type)) {
+      if (!f(current)) {
+        return false;
+      }
+    }
+    return true;
+  };
+  for (const auto* child : root.children) {
+    if (!visit(child)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool any_overriding_methods(const Graph& graph,
+                            const DexMethod* method,
+                            const std::function<bool(const DexMethod*)>& f,
+                            bool include_interfaces,
+                            const DexType* base_type) {
+  return !all_overriding_methods(
+      graph, method, [&](const DexMethod* m) { return !f(m); },
+      include_interfaces, base_type);
+}
+
+bool all_overridden_methods(const Graph& graph,
+                            const DexMethod* method,
+                            const std::function<bool(const DexMethod*)>& f,
+                            bool include_interfaces) {
+  const Node& root = graph.get_node(method);
+  if (include_interfaces) {
+    std::unordered_set<const DexMethod*> visited{method};
+    std::function<bool(const DexMethod*)> visit =
+        [&](const DexMethod* current) {
+          if (!visited.emplace(current).second) {
+            return true;
+          }
+          const Node& node = graph.get_node(current);
+          if (!include_interfaces && node.is_interface) {
+            return true;
+          }
+          for (const auto* parent : node.parents) {
+            if (!visit(parent)) {
+              return false;
+            }
+          }
+          return f(current);
+        };
+    for (const auto* parent : root.parents) {
+      if (!visit(parent)) {
+        return false;
+      }
+    }
+    return true;
+  }
+  if (root.is_interface) {
+    return true;
+  }
+  // optimized code path
+  std::function<bool(const DexMethod*)> visit = [&](const DexMethod* current) {
+    const Node& node = graph.get_node(current);
+    if (node.is_interface) {
+      return true;
+    }
+    for (const auto* parent : node.parents) {
+      if (!visit(parent)) {
+        return false;
+      }
+    }
+    return f(current);
+  };
+  for (const auto* parent : root.parents) {
+    if (!visit(parent)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool any_overridden_methods(const Graph& graph,
+                            const DexMethod* method,
+                            const std::function<bool(const DexMethod*)>& f,
+                            bool include_interfaces) {
+  return !all_overridden_methods(
+      graph, method, [&](const DexMethod* m) { return !f(m); },
+      include_interfaces);
 }
 
 } // namespace method_override_graph

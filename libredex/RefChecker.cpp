@@ -136,17 +136,21 @@ bool RefChecker::check_class(
       return false;
     }
     if (mog && method->is_virtual()) {
-      const auto& overriddens =
-          method_override_graph::get_overridden_methods(*mog, method, true);
-      for (const auto* m : overriddens) {
-        if (!m->is_external()) {
-          continue;
-        }
-        if (m_min_sdk_api && !m_min_sdk_api->has_method(m)) {
-          TRACE(REFC, 4, "Risky external method override %s -> %s",
-                SHOW(method), SHOW(m));
-          return false;
-        }
+      if (method_override_graph::any_overridden_methods(
+              *mog, method,
+              [&](const auto* m) {
+                if (!m->is_external()) {
+                  return false;
+                }
+                if (m_min_sdk_api && !m_min_sdk_api->has_method(m)) {
+                  TRACE(REFC, 4, "Risky external method override %s -> %s",
+                        SHOW(method), SHOW(m));
+                  return true;
+                }
+                return false;
+              },
+              true)) {
+        return false;
       }
     }
   }

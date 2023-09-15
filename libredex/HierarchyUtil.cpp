@@ -19,9 +19,7 @@ std::unordered_set<const DexMethod*> find_non_overridden_virtuals(
   g_redex->walk_type_class([&](const DexType*, const DexClass* cls) {
     if (!cls->is_external()) {
       for (auto* method : cls->get_vmethods()) {
-        const auto& overrides =
-            mog::get_overriding_methods(override_graph, method);
-        if (overrides.empty()) {
+        if (!mog::any_overriding_methods(override_graph, method)) {
           non_overridden_virtuals.emplace(method);
         }
       }

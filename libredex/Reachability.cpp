@@ -780,17 +780,20 @@ MethodReferencesGatherer::get_returning_dependency(
       std::unordered_set<const DexMethod*> unique_methods;
       auto identity = [](const auto* x) { return x; };
       auto select_first = [](const auto& p) { return p.first; };
+      auto is = [&](const auto& item, const auto& p) {
+        auto* m = p(item);
+        if (!unique_methods.insert(m).second) {
+          return false;
+        }
+        always_assert(m->is_virtual());
+        if (is_abstract(m)) {
+          return false;
+        }
+        return f(m);
+      };
       auto any_of = [&](const auto& collection, const auto& p) {
         for (auto&& item : collection) {
-          auto* m = p(item);
-          if (!unique_methods.insert(m).second) {
-            continue;
-          }
-          always_assert(m->is_virtual());
-          if (is_abstract(m)) {
-            continue;
-          }
-          if (f(m)) {
+          if (is(item, p)) {
             return true;
           }
         }
@@ -806,10 +809,12 @@ MethodReferencesGatherer::get_returning_dependency(
            refs->base_invoke_virtual_targets_if_class_instantiable) {
         for (auto* base_type : base_types) {
           always_assert(!type_class(base_type)->is_external());
-          auto overriding_methods = mog::get_overriding_methods(
-              *m_shared_state->method_override_graph, base_method,
-              /* include_interfaces*/ false, base_type);
-          if (any_of(overriding_methods, identity)) {
+          if (mog::any_overriding_methods(
+                  *m_shared_state->method_override_graph, base_method,
+                  [&](const DexMethod* overriding_method) {
+                    return is(overriding_method, identity);
+                  },
+                  /* include_interfaces*/ false, base_type)) {
             return true;
           }
         }
