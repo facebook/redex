@@ -124,7 +124,7 @@ using Locations = std::vector<std::pair<DexMethod*, const IRInstruction*>>;
 // invocation dependencies.
 void analyze_scope(
     const Scope& scope,
-    const std::unordered_set<const DexMethod*>& non_overridden_virtuals,
+    const hier::NonOverriddenVirtuals& non_overridden_virtuals,
     std::unordered_map<DexType*, Locations>* new_instances,
     std::unordered_map<DexMethod*, Locations>* invokes,
     std::unordered_map<DexMethod*, std::unordered_set<DexMethod*>>*
@@ -366,7 +366,7 @@ MethodSummaries compute_method_summaries(
     const Scope& scope,
     const std::unordered_map<DexMethod*, std::unordered_set<DexMethod*>>&
         dependencies,
-    const std::unordered_set<const DexMethod*>& non_overridden_virtuals) {
+    const hier::NonOverriddenVirtuals& non_overridden_virtuals) {
   Timer t("compute_method_summaries");
 
   std::unordered_set<DexMethod*> impacted_methods;
@@ -1704,8 +1704,8 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
   auto method_override_graph = mog::build_graph(scope);
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, conf.create_init_class_insns(), method_override_graph.get());
-  auto non_overridden_virtuals =
-      hier::find_non_overridden_virtuals(*method_override_graph);
+  hier::NonOverriddenVirtuals non_overridden_virtuals(scope,
+                                                      *method_override_graph);
 
   std::unordered_map<DexType*, Locations> new_instances;
   std::unordered_map<DexMethod*, Locations> invokes;

@@ -8,30 +8,28 @@
 #include "HierarchyUtil.h"
 
 #include "RedexContext.h"
+#include "Walkers.h"
 
 namespace mog = method_override_graph;
 
 namespace hierarchy_util {
 
-std::unordered_set<const DexMethod*> find_non_overridden_virtuals(
-    const mog::Graph& override_graph) {
-  std::unordered_set<const DexMethod*> non_overridden_virtuals;
-  g_redex->walk_type_class([&](const DexType*, const DexClass* cls) {
-    if (!cls->is_external()) {
-      for (auto* method : cls->get_vmethods()) {
-        if (!mog::any_overriding_methods(override_graph, method)) {
-          non_overridden_virtuals.emplace(method);
-        }
-      }
-    } else {
-      for (auto* method : cls->get_vmethods()) {
-        if (is_final(cls) || is_final(method)) {
-          non_overridden_virtuals.emplace(method);
-        }
+NonOverriddenVirtuals::NonOverriddenVirtuals(
+    const Scope& scope, const method_override_graph::Graph& override_graph) {
+  walk::parallel::classes(scope, [&](DexClass* cls) {
+    for (auto* method : cls->get_vmethods()) {
+      if (!mog::any_overriding_methods(override_graph, method)) {
+        m_non_overridden_virtuals.emplace(method);
       }
     }
   });
-  return non_overridden_virtuals;
+}
+
+size_t NonOverriddenVirtuals::count(const DexMethod* method) const {
+  if (method->is_external()) {
+    return is_final(method) || is_final(type_class(method->get_class()));
+  }
+  return m_non_overridden_virtuals.count_unsafe(method);
 }
 
 } // namespace hierarchy_util

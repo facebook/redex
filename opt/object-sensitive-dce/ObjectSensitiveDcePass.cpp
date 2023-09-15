@@ -49,8 +49,7 @@ namespace uv = used_vars;
 class CallGraphStrategy final : public call_graph::BuildStrategy {
  public:
   explicit CallGraphStrategy(const Scope& scope)
-      : m_scope(scope),
-        m_non_overridden_virtuals(hier::find_non_overridden_virtuals(scope)) {}
+      : m_scope(scope), m_non_overridden_virtuals(scope) {}
 
   call_graph::CallSites get_callsites(const DexMethod* method) const override {
     call_graph::CallSites callsites;
@@ -95,7 +94,7 @@ class CallGraphStrategy final : public call_graph::BuildStrategy {
   }
 
   const Scope& m_scope;
-  std::unordered_set<const DexMethod*> m_non_overridden_virtuals;
+  hier::NonOverriddenVirtuals m_non_overridden_virtuals;
 };
 
 static side_effects::InvokeToSummaryMap build_summary_map(
