@@ -13,6 +13,7 @@
 #include <sparta/PatriciaTreeSet.h>
 
 #include "BinarySerialization.h"
+#include "CppUtil.h"
 #include "Show.h"
 #include "Timer.h"
 #include "Walkers.h"
@@ -420,53 +421,42 @@ bool all_overriding_methods(const Graph& graph,
   }
   if (root.is_interface) {
     std::unordered_set<const DexMethod*> visited{method};
-    std::function<bool(const DexMethod*)> visit =
-        [&](const DexMethod* current) {
-          if (!visited.emplace(current).second) {
-            return true;
-          }
-          const Node& node = graph.get_node(current);
-          for (const auto* child : node.children) {
-            if (!visit(child)) {
+    return self_recursive_fn(
+        [&](auto self, const auto& children) -> bool {
+          for (const auto* current : children) {
+            if (!visited.emplace(current).second) {
+              continue;
+            }
+            const Node& node = graph.get_node(current);
+            if (!self(self, node.children)) {
               return false;
             }
-          }
-          if ((include_interfaces || !node.is_interface) &&
-              (!base_type || node.overrides(current, base_type))) {
-            if (!f(current)) {
+            if ((include_interfaces || !node.is_interface) &&
+                (!base_type || node.overrides(current, base_type)) &&
+                !f(current)) {
               return false;
             }
           }
           return true;
-        };
-    for (const auto* child : root.children) {
-      if (!visit(child)) {
-        return false;
-      }
-    }
-    return true;
+        },
+        root.children);
   }
   // optimized code path
-  std::function<bool(const DexMethod*)> visit = [&](const DexMethod* current) {
-    const Node& node = graph.get_node(current);
-    for (const auto* child : node.children) {
-      if (!visit(child)) {
-        return false;
-      }
-    }
-    if (!base_type || node.overrides(current, base_type)) {
-      if (!f(current)) {
-        return false;
-      }
-    }
-    return true;
-  };
-  for (const auto* child : root.children) {
-    if (!visit(child)) {
-      return false;
-    }
-  }
-  return true;
+  return self_recursive_fn(
+      [&](auto self, const auto& children) -> bool {
+        for (const auto* current : children) {
+          const Node& node = graph.get_node(current);
+          if (!self(self, node.children)) {
+            return false;
+          }
+          if ((!base_type || node.overrides(current, base_type)) &&
+              !f(current)) {
+            return false;
+          }
+        }
+        return true;
+      },
+      root.children);
 }
 
 bool any_overriding_methods(const Graph& graph,
@@ -486,51 +476,48 @@ bool all_overridden_methods(const Graph& graph,
   const Node& root = graph.get_node(method);
   if (include_interfaces) {
     std::unordered_set<const DexMethod*> visited{method};
-    std::function<bool(const DexMethod*)> visit =
-        [&](const DexMethod* current) {
-          if (!visited.emplace(current).second) {
-            return true;
-          }
-          const Node& node = graph.get_node(current);
-          if (!include_interfaces && node.is_interface) {
-            return true;
-          }
-          for (const auto* parent : node.parents) {
-            if (!visit(parent)) {
+    return self_recursive_fn(
+        [&](auto self, const auto& children) -> bool {
+          for (const auto* current : children) {
+            if (!visited.emplace(current).second) {
+              continue;
+            }
+            const Node& node = graph.get_node(current);
+            if (!include_interfaces && node.is_interface) {
+              continue;
+            }
+            if (!self(self, node.parents)) {
+              return false;
+            }
+            if (!f(current)) {
               return false;
             }
           }
-          return f(current);
-        };
-    for (const auto* parent : root.parents) {
-      if (!visit(parent)) {
-        return false;
-      }
-    }
-    return true;
+          return true;
+        },
+        root.parents);
   }
   if (root.is_interface) {
     return true;
   }
   // optimized code path
-  std::function<bool(const DexMethod*)> visit = [&](const DexMethod* current) {
-    const Node& node = graph.get_node(current);
-    if (node.is_interface) {
-      return true;
-    }
-    for (const auto* parent : node.parents) {
-      if (!visit(parent)) {
-        return false;
-      }
-    }
-    return f(current);
-  };
-  for (const auto* parent : root.parents) {
-    if (!visit(parent)) {
-      return false;
-    }
-  }
-  return true;
+  return self_recursive_fn(
+      [&](auto self, const auto& children) -> bool {
+        for (const auto* current : children) {
+          const Node& node = graph.get_node(current);
+          if (node.is_interface) {
+            continue;
+          }
+          if (!self(self, node.parents)) {
+            return false;
+          }
+          if (!f(current)) {
+            return false;
+          }
+        }
+        return true;
+      },
+      root.parents);
 }
 
 bool any_overridden_methods(const Graph& graph,
