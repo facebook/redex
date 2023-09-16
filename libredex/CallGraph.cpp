@@ -40,11 +40,8 @@ Graph multiple_callee_graph(const mog::Graph& method_override_graph,
 
 SingleCalleeStrategy::SingleCalleeStrategy(
     const mog::Graph& method_override_graph, const Scope& scope)
-    : m_scope(scope) {
-  auto non_virtual_vec =
-      mog::get_non_true_virtuals(method_override_graph, scope);
-  m_non_virtual.insert(non_virtual_vec.begin(), non_virtual_vec.end());
-}
+    : m_scope(scope),
+      m_non_virtual(mog::get_non_true_virtuals(method_override_graph, scope)) {}
 
 CallSites SingleCalleeStrategy::get_callsites(const DexMethod* method) const {
   CallSites callsites;
