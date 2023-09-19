@@ -115,7 +115,7 @@ struct InlinedCost {
   // Maximum or call-site specific estimated callee size after pruning
   size_t insn_size;
 
-  bool operator==(const InlinedCost& other) {
+  bool operator==(const InlinedCost& other) const {
     // TODO: Also check that reduced_cfg's are equivalent
     return full_code == other.full_code && code == other.code &&
            method_refs == other.method_refs && other_refs == other.other_refs &&
@@ -514,22 +514,21 @@ class MultiMethodInliner {
 
   // Cache of the inlined costs of fully inlining a calle without using any
   // summaries for pruning.
-  mutable ConcurrentMap<const DexMethod*, std::shared_ptr<InlinedCost>>
+  mutable InsertOnlyConcurrentMap<const DexMethod*, InlinedCost>
       m_fully_inlined_costs;
 
   // Cache of the average inlined costs of each method.
-  mutable ConcurrentMap<const DexMethod*, std::shared_ptr<InlinedCost>>
+  mutable InsertOnlyConcurrentMap<const DexMethod*, InlinedCost>
       m_average_inlined_costs;
 
   // Cache of the inlined costs of each call-site summary after pruning.
-  mutable ConcurrentMap<CalleeCallSiteSummary,
-                        std::shared_ptr<InlinedCost>,
-                        boost::hash<CalleeCallSiteSummary>>
+  mutable InsertOnlyConcurrentMap<CalleeCallSiteSummary,
+                                  InlinedCost,
+                                  boost::hash<CalleeCallSiteSummary>>
       m_call_site_inlined_costs;
 
   // Cache of the inlined costs of each call-site after pruning.
-  mutable ConcurrentMap<const IRInstruction*,
-                        boost::optional<const InlinedCost*>>
+  mutable InsertOnlyConcurrentMap<const IRInstruction*, const InlinedCost*>
       m_invoke_call_site_inlined_costs;
 
   // Priority thread pool to handle parallel processing of methods, either
@@ -550,7 +549,7 @@ class MultiMethodInliner {
   std::mutex m_visibility_changes_mutex;
 
   // Cache for should_inline function
-  ConcurrentMap<const DexMethod*, boost::optional<bool>> m_should_inline;
+  InsertOnlyConcurrentMap<const DexMethod*, bool> m_should_inline;
 
   // Optional cache for get_callee_insn_size function
   std::unique_ptr<ConcurrentMap<const DexMethod*, size_t>> m_callee_insn_sizes;
@@ -569,8 +568,7 @@ class MultiMethodInliner {
       m_callee_caller_refs;
 
   // Cache of whether a constructor can be unconditionally inlined.
-  mutable ConcurrentMap<const DexMethod*, boost::optional<bool>>
-      m_can_inline_init;
+  mutable InsertOnlyConcurrentMap<const DexMethod*, bool> m_can_inline_init;
 
   std::unique_ptr<inliner::CallSiteSummarizer> m_call_site_summarizer;
 
