@@ -305,10 +305,10 @@ class ConcurrentMapContainer
 
   /*
    * This operation is always thread-safe. Note that it returns a copy of Value
-   * rather than a reference since insertions from other threads may cause the
-   * hashtables to be resized. If you are reading from a ConcurrentMap that is
-   * not being concurrently modified, it will probably be faster to use
-   * `find()` or `at_unsafe()` to avoid the copy.
+   * rather than a reference since erasing or updating from other threads may
+   * cause a stored value to become invalid. If you are reading from a
+   * ConcurrentMap that is not being concurrently modified, it will probably be
+   * faster to use `find()` or `at_unsafe()` to avoid the copy.
    */
   Value at(const Key& key) const {
     size_t slot = Hash()(key) % n_slots;
@@ -476,6 +476,243 @@ using ConcurrentMap =
                            Hash,
                            Identity,
                            n_slots>;
+
+/**
+ * A concurrent container with map semantics that only accepts insertions.
+ *
+ * This allows accessing constant references on values safely.
+ */
+template <typename MapContainer,
+          typename Key,
+          typename Value,
+          typename Hash = std::hash<Key>,
+          typename KeyProjection = Identity,
+          size_t n_slots = 31>
+class InsertOnlyConcurrentMapContainer
+    : public ConcurrentContainer<MapContainer, Key, Hash, n_slots> {
+ public:
+  using typename ConcurrentContainer<MapContainer, Key, Hash, n_slots>::
+      const_iterator;
+  using
+      typename ConcurrentContainer<MapContainer, Key, Hash, n_slots>::iterator;
+
+  using ConcurrentContainer<MapContainer, Key, Hash, n_slots>::m_slots;
+  using ConcurrentContainer<MapContainer, Key, Hash, n_slots>::end;
+
+  InsertOnlyConcurrentMapContainer() = default;
+
+  InsertOnlyConcurrentMapContainer(
+      const InsertOnlyConcurrentMapContainer& container)
+      : ConcurrentContainer<MapContainer, Key, Hash, n_slots>(container) {}
+
+  InsertOnlyConcurrentMapContainer(
+      InsertOnlyConcurrentMapContainer&& container) noexcept
+      : ConcurrentContainer<MapContainer, Key, Hash, n_slots>(
+            std::move(container)) {}
+
+  InsertOnlyConcurrentMapContainer& operator=(
+      InsertOnlyConcurrentMapContainer&&) noexcept = default;
+
+  InsertOnlyConcurrentMapContainer& operator=(
+      const InsertOnlyConcurrentMapContainer&) noexcept = default;
+
+  template <typename InputIt>
+  InsertOnlyConcurrentMapContainer(InputIt first, InputIt last) {
+    insert(first, last);
+  }
+
+  /*
+   * This operation is always thread-safe.
+   */
+  const Value* get(const Key& key) const {
+    size_t slot = Hash()(key) % n_slots;
+    std::unique_lock<std::mutex> lock(this->get_lock_by_slot(slot));
+    const auto& map = this->get_container(slot);
+    const auto& it = map.find(KeyProjection()(key));
+    if (it == map.end()) {
+      return nullptr;
+    }
+    return &it->second;
+  }
+
+  Value* get_unsafe(const Key& key) {
+    size_t slot = Hash()(key) % n_slots;
+    auto& map = this->get_container(slot);
+    const auto& it = map.find(KeyProjection()(key));
+    if (it == map.end()) {
+      return nullptr;
+    }
+    return &it->second;
+  }
+
+  /*
+   * This operation is always thread-safe. If you are reading from a
+   * ConcurrentMap that is not being concurrently modified, it will probably be
+   * faster to use `find()` or `at_unsafe()` to avoid locking.
+   */
+  const Value& at(const Key& key) const {
+    size_t slot = Hash()(key) % n_slots;
+    std::unique_lock<std::mutex> lock(this->get_lock_by_slot(slot));
+    return this->get_container(slot).at(KeyProjection()(key));
+  }
+
+  Value& at_unsafe(const Key& key) {
+    size_t slot = Hash()(key) % n_slots;
+    return this->get_container(slot).at(KeyProjection()(key));
+  }
+
+  /* NOT thread-safe */
+  iterator find(const Key& key) {
+    size_t slot = Hash()(key) % n_slots;
+    const auto& it = m_slots[slot].find(KeyProjection()(key));
+    if (it == m_slots[slot].end()) {
+      return end();
+    }
+    return iterator(&m_slots[0], slot, it);
+  }
+
+  /* NOT thread-safe */
+  const_iterator find(const Key& key) const {
+    size_t slot = Hash()(key) % n_slots;
+    const auto& it = m_slots[slot].find(KeyProjection()(key));
+    if (it == m_slots[slot].end()) {
+      return end();
+    }
+    return const_iterator(&m_slots[0], slot, it);
+  }
+
+  /*
+   * The Boolean return value denotes whether the insertion took place.
+   * This operation is always thread-safe.
+   *
+   * Note that while the STL containers' insert() methods return both an
+   * iterator and a boolean success value, we only return the boolean value
+   * here as any operations on a returned iterator are not guaranteed to be
+   * thread-safe.
+   */
+  bool insert(const std::pair<Key, Value>& entry) {
+    size_t slot = Hash()(entry.first) % n_slots;
+    std::unique_lock<std::mutex> lock(this->get_lock_by_slot(slot));
+    auto& map = this->get_container(slot);
+    return map
+        .insert(std::make_pair(KeyProjection()(entry.first), entry.second))
+        .second;
+  }
+
+  /*
+   * This operation is always thread-safe.
+   */
+  void insert(std::initializer_list<std::pair<Key, Value>> l) {
+    for (const auto& entry : l) {
+      insert(entry);
+    }
+  }
+
+  /*
+   * This operation is always thread-safe.
+   */
+  template <typename InputIt>
+  void insert(InputIt first, InputIt last) {
+    for (; first != last; ++first) {
+      insert(*first);
+    }
+  }
+
+  void insert_or_assign_unsafe(const std::pair<Key, Value>& entry) {
+    size_t slot = Hash()(entry.first) % n_slots;
+    auto& map = this->get_container(slot);
+    map[KeyProjection()(entry.first)] = entry.second;
+  }
+
+  /*
+   * This operation is always thread-safe.
+   */
+  template <typename... Args>
+  bool emplace(Args&&... args) {
+    std::pair<Key, Value> entry(std::forward<Args>(args)...);
+    size_t slot = Hash()(entry.first) % n_slots;
+    std::unique_lock<std::mutex> lock(this->get_lock_by_slot(slot));
+    auto& map = this->get_container(slot);
+    return map
+        .emplace(KeyProjection()(std::move(entry.first)),
+                 std::move(entry.second))
+        .second;
+  }
+
+  /*
+   * This operation is always thread-safe.
+   */
+  template <typename ValueEqual = std::equal_to<Value>, typename... Args>
+  std::pair<const Value*, bool> get_or_emplace_and_assert_equal(
+      Key&& key, Args&&... args) {
+    size_t slot = Hash()(std::forward<Key>(key)) % n_slots;
+    auto&& [it, emplaced] = [&]() {
+      std::unique_lock<std::mutex> lock(this->get_lock_by_slot(slot));
+      auto& map = this->get_container(slot);
+      return map.try_emplace(KeyProjection()(std::forward<Key>(key)),
+                             std::forward<Args>(args)...);
+    }();
+    always_assert(emplaced ||
+                  ValueEqual()(it->second, std::forward<Args>(args)...));
+    return std::make_pair(&it->second, emplaced);
+  }
+
+  /*
+   * This operation is always thread-safe.
+   */
+  template <typename ValueEqual = std::equal_to<Value>, typename... Args>
+  std::pair<const Value*, bool> get_or_emplace_and_assert_equal(
+      const Key& key, Args&&... args) {
+    size_t slot = Hash()(key) % n_slots;
+    auto&& [it, emplaced] = [&]() {
+      std::unique_lock<std::mutex> lock(this->get_lock_by_slot(slot));
+      auto& map = this->get_container(slot);
+      return map.try_emplace(KeyProjection()(key), std::forward<Args>(args)...);
+    }();
+    always_assert(emplaced ||
+                  ValueEqual()(it->second, std::forward<Args>(args)...));
+    return std::make_pair(&it->second, emplaced);
+  }
+
+  template <typename... Args>
+  bool emplace_unsafe(Args&&... args) {
+    std::pair<Key, Value> entry(std::forward<Args>(args)...);
+    size_t slot = Hash()(entry.first) % n_slots;
+    auto& map = this->get_container(slot);
+    return map
+        .emplace(KeyProjection()(std::move(entry.first)),
+                 std::move(entry.second))
+        .second;
+  }
+
+  template <
+      typename UpdateFn = const std::function<void(const Key&, Value&, bool)>&>
+  void update_unsafe(const Key& key, UpdateFn updater) {
+    size_t slot = Hash()(key) % n_slots;
+    auto& map = this->get_container(slot);
+    auto it = map.find(KeyProjection()(key));
+    if (it == map.end()) {
+      updater(KeyProjection()(key), map[KeyProjection()(key)], false);
+    } else {
+      updater(it->first, it->second, true);
+    }
+  }
+
+  size_t erase(const Key& key) = delete;
+};
+
+template <typename Key,
+          typename Value,
+          typename Hash = std::hash<Key>,
+          typename Equal = std::equal_to<Key>,
+          size_t n_slots = 31>
+using InsertOnlyConcurrentMap = InsertOnlyConcurrentMapContainer<
+    std::unordered_map<Key, Value, Hash, Equal>,
+    Key,
+    Value,
+    Hash,
+    Identity,
+    n_slots>;
 
 template <typename Key,
           typename Hash = std::hash<Key>,
