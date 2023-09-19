@@ -674,6 +674,39 @@ class InsertOnlyConcurrentMapContainer
     return std::make_pair(&it->second, emplaced);
   }
 
+  /*
+   * This operation is always thread-safe.
+   */
+  template <typename ValueEqual = std::equal_to<Value>,
+            typename Creator,
+            typename... Args>
+  std::pair<const Value*, bool> get_or_create_and_assert_equal(
+      const Key& key, const Creator& creator, Args&&... args) {
+    auto* ptr = get(key);
+    if (ptr) {
+      return std::make_pair(ptr, false);
+    }
+    return get_or_emplace_and_assert_equal<ValueEqual>(
+        key, creator(key, std::forward<Args>(args)...));
+  }
+
+  /*
+   * This operation is always thread-safe.
+   */
+  template <typename ValueEqual = std::equal_to<Value>,
+            typename Creator,
+            typename... Args>
+  std::pair<const Value*, bool> get_or_create_and_assert_equal(
+      Key&& key, const Creator& creator, Args&&... args) {
+    auto* ptr = get(key);
+    if (ptr) {
+      return std::make_pair(ptr, false);
+    }
+    return get_or_emplace_and_assert_equal<ValueEqual>(
+        std::forward<Key>(key),
+        creator(std::forward<Key>(key), std::forward<Args>(args)...));
+  }
+
   template <typename... Args>
   bool emplace_unsafe(Args&&... args) {
     std::pair<Key, Value> entry(std::forward<Args>(args)...);

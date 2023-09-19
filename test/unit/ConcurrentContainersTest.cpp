@@ -319,9 +319,14 @@ TEST_F(ConcurrentContainersTest, insertOnlyConcurrentMapTest) {
   run_on_samples([&map, &ptrs](const std::vector<uint32_t>& sample) {
     for (size_t i = 0; i < sample.size(); ++i) {
       std::string s = std::to_string(sample[i]);
-      if (i % 2 == 0) {
+      if (i % 3 == 0) {
         map.insert({s, sample[i]});
         ptrs.emplace(s, map.get(s));
+      } else if (i % 3 == 1) {
+        auto [ptr, created] = map.get_or_create_and_assert_equal(
+            s, [](const auto& t) { return (uint32_t)atoi(t.c_str()); });
+        EXPECT_TRUE(created);
+        ptrs.emplace(s, ptr);
       } else {
         auto [ptr, emplaced] =
             map.get_or_emplace_and_assert_equal(s, sample[i]);
@@ -335,9 +340,13 @@ TEST_F(ConcurrentContainersTest, insertOnlyConcurrentMapTest) {
   run_on_samples([&map, &ptrs](const std::vector<uint32_t>& sample) {
     for (size_t i = 0; i < sample.size(); ++i) {
       std::string s = std::to_string(sample[i]);
-      auto [ptr, emplaced] = map.get_or_emplace_and_assert_equal(s, sample[i]);
+      auto [ptr1, emplaced] = map.get_or_emplace_and_assert_equal(s, sample[i]);
       EXPECT_FALSE(emplaced);
-      EXPECT_EQ(ptrs.at(s), ptr);
+      auto [ptr2, created] = map.get_or_create_and_assert_equal(
+          s, [](const auto& t) -> uint32_t { not_reached(); });
+      EXPECT_FALSE(created);
+      EXPECT_EQ(ptrs.at(s), ptr1);
+      EXPECT_EQ(ptr1, ptr2);
     }
   });
   EXPECT_EQ(m_data_set.size(), map.size());
