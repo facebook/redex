@@ -364,7 +364,7 @@ boost::optional<const DexType*> TypeInference::get_typedef_annotation(
               false,
               "Annotation %s cannot be annotated with more than one TypeDef "
               "annotation",
-              SHOW(anno_class->get_deobfuscated_name_or_empty_copy()));
+              SHOW(anno_class));
         }
         has_typedef = true;
       }
