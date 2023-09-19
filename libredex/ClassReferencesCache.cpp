@@ -36,26 +36,24 @@ ClassReferences::ClassReferences(const DexClass* cls) {
   std::sort(init_types.begin(), init_types.end(), compare_dextypes);
 }
 
+bool ClassReferences::operator==(const ClassReferences& other) const {
+  return method_refs == other.method_refs && field_refs == other.field_refs &&
+         types == other.types && strings == other.strings &&
+         init_types == other.init_types;
+}
+
 ClassReferencesCache::ClassReferencesCache(
     const std::vector<DexClass*>& classes) {
   workqueue_run<DexClass*>(
-      [&](DexClass* cls) {
-        m_cache.emplace(cls, std::make_shared<const ClassReferences>(cls));
-      },
+      [&](DexClass* cls) { m_cache.emplace(cls, ClassReferences(cls)); },
       classes);
 }
 
-std::shared_ptr<const ClassReferences> ClassReferencesCache::get(
-    const DexClass* cls) const {
-  auto res = m_cache.get(cls, nullptr);
-  if (res) {
-    return res;
+const ClassReferences& ClassReferencesCache::get(const DexClass* cls) const {
+  const auto* cached = m_cache.get(cls);
+  if (cached) {
+    return *cached;
   }
-  res = std::make_shared<const ClassReferences>(cls);
-  if (m_cache.emplace(cls, res)) {
-    return res;
-  }
-  res = m_cache.get(cls, nullptr);
-  always_assert(res);
-  return res;
+  return *m_cache.get_or_emplace_and_assert_equal(cls, ClassReferences(cls))
+              .first;
 }

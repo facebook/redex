@@ -104,8 +104,8 @@ std::unordered_set<DexClass*> find_unrefenced_coldstart_classes(
     // opcodes directly.
     for (const auto& cls : input_scope) {
       if (cold_cold_references.count(cls->get_type())) {
-        auto refs = class_references_cache.get(cls);
-        for (const auto& type : refs->types) {
+        const auto& refs = class_references_cache.get(cls);
+        for (const auto& type : refs.types) {
           cold_cold_references.insert(type);
         }
       }
@@ -136,11 +136,11 @@ void gather_refs(
     FieldRefs* frefs,
     TypeRefs* trefs,
     TypeRefs* itrefs) {
-  auto refs = class_references_cache.get(cls);
-  mrefs->insert(refs->method_refs.begin(), refs->method_refs.end());
-  frefs->insert(refs->field_refs.begin(), refs->field_refs.end());
-  trefs->insert(refs->types.begin(), refs->types.end());
-  itrefs->insert(refs->init_types.begin(), refs->init_types.end());
+  const auto& refs = class_references_cache.get(cls);
+  mrefs->insert(refs.method_refs.begin(), refs.method_refs.end());
+  frefs->insert(refs.field_refs.begin(), refs.field_refs.end());
+  trefs->insert(refs.types.begin(), refs.types.end());
+  itrefs->insert(refs.init_types.begin(), refs.init_types.end());
 
   std::vector<DexMethodRef*> method_refs;
   std::vector<DexFieldRef*> field_refs;

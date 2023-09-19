@@ -136,7 +136,7 @@ void CrossDexRefMinimizer::reprioritize(
 }
 
 void CrossDexRefMinimizer::sample(DexClass* cls) {
-  auto cls_refs = m_cache->get(cls);
+  const auto& cls_refs = m_cache->get(cls);
   auto increment = [&ref_counts = m_ref_counts,
                     &max_ref_count = m_max_ref_count](const void* ref) {
     size_t& count = ref_counts[ref];
@@ -144,25 +144,25 @@ void CrossDexRefMinimizer::sample(DexClass* cls) {
       max_ref_count = count;
     }
   };
-  for (auto ref : cls_refs->method_refs) {
+  for (auto ref : cls_refs.method_refs) {
     increment(ref);
   }
-  for (auto ref : cls_refs->field_refs) {
+  for (auto ref : cls_refs.field_refs) {
     increment(ref);
   }
-  for (auto ref : cls_refs->types) {
+  for (auto ref : cls_refs.types) {
     increment(ref);
   }
-  for (auto ref : cls_refs->strings) {
+  for (auto ref : cls_refs.strings) {
     increment(ref);
   }
 
   if (m_json_classes) {
     Json::Value json_class;
-    json_class["method_refs"] = m_json_methods.get(cls_refs->method_refs);
-    json_class["field_refs"] = m_json_fields.get(cls_refs->field_refs);
-    json_class["types"] = m_json_types.get(cls_refs->types);
-    json_class["strings"] = m_json_strings.get(cls_refs->strings);
+    json_class["method_refs"] = m_json_methods.get(cls_refs.method_refs);
+    json_class["field_refs"] = m_json_fields.get(cls_refs.field_refs);
+    json_class["types"] = m_json_types.get(cls_refs.types);
+    json_class["strings"] = m_json_strings.get(cls_refs.strings);
     json_class["is_generated"] = cls->rstate.is_generated();
     json_class["insert_index"] = -1;
     (*m_json_classes)[get_json_class_index(cls)] = json_class;
@@ -181,11 +181,11 @@ void CrossDexRefMinimizer::insert(DexClass* cls) {
   // entries.
   // We don't bother with protos and type_lists, as they are directly related
   // to method refs (I tried, didn't help).
-  auto cls_refs = m_cache->get(cls);
+  const auto& cls_refs = m_cache->get(cls);
 
   auto& refs = *class_info.refs;
-  refs.reserve(cls_refs->method_refs.size() + cls_refs->field_refs.size() +
-               cls_refs->types.size() + cls_refs->strings.size());
+  refs.reserve(cls_refs.method_refs.size() + cls_refs.field_refs.size() +
+               cls_refs.types.size() + cls_refs.strings.size());
   uint64_t& refs_weight = class_info.refs_weight;
   uint64_t& seed_weight = class_info.seed_weight;
 
@@ -215,16 +215,16 @@ void CrossDexRefMinimizer::insert(DexClass* cls) {
   // different values and observing the effect on APK size.
   // We discount references that occur in many classes.
   // TODO: Try some other variations.
-  for (auto mref : cls_refs->method_refs) {
+  for (auto mref : cls_refs.method_refs) {
     add_weight(mref, m_config.method_ref_weight, m_config.method_seed_weight);
   }
-  for (auto type : cls_refs->types) {
+  for (auto type : cls_refs.types) {
     add_weight(type, m_config.type_ref_weight, m_config.type_seed_weight);
   }
-  for (auto string : cls_refs->strings) {
+  for (auto string : cls_refs.strings) {
     add_weight(string, m_config.string_ref_weight, m_config.string_seed_weight);
   }
-  for (auto fref : cls_refs->field_refs) {
+  for (auto fref : cls_refs.field_refs) {
     add_weight(fref, m_config.field_ref_weight, m_config.field_seed_weight);
   }
 
