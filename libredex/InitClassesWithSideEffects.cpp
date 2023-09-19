@@ -18,10 +18,10 @@ const InitClasses* InitClassesWithSideEffects::compute(
     const DexClass* cls,
     const method::ClInitHasNoSideEffectsPredicate& clinit_has_no_side_effects,
     const std::unordered_set<DexMethod*>* non_true_virtuals) {
-  auto res =
-      m_init_classes.get(cls->get_type(), std::shared_ptr<InitClasses>());
-  if (res) {
-    return res.get();
+  const DexType* key = cls->get_type();
+  const auto* cached = m_init_classes.get(key);
+  if (cached) {
+    return cached;
   }
 
   InitClasses classes;
@@ -42,21 +42,12 @@ const InitClasses* InitClassesWithSideEffects::compute(
                      super_classes->end());
     }
   }
-  m_init_classes.update(
-      cls->get_type(),
-      [&res, &classes, this](const DexType*,
-                             std::shared_ptr<InitClasses>& value, bool exist) {
-        if (exist) {
-          always_assert(classes == *value);
-        } else {
-          if (classes.empty()) {
-            m_trivial_init_classes++;
-          }
-          value = std::make_shared<InitClasses>(std::move(classes));
-        }
-        res = value;
-      });
-  return res.get();
+  auto [ptr, emplaced] =
+      m_init_classes.get_or_emplace_and_assert_equal(key, std::move(classes));
+  if (emplaced && ptr->empty()) {
+    m_trivial_init_classes++;
+  }
+  return ptr;
 }
 
 InitClassesWithSideEffects::InitClassesWithSideEffects(
@@ -79,7 +70,7 @@ InitClassesWithSideEffects::InitClassesWithSideEffects(
         [&](const DexType* type) {
           auto it = prev_init_classes.find(type);
           if (it != prev_init_classes.end()) {
-            return it->second->empty();
+            return it->second.empty();
           }
           auto cls = type_class(type);
           return cls && (cls->is_external() ||
@@ -106,7 +97,7 @@ InitClassesWithSideEffects::InitClassesWithSideEffects(
 
 const InitClasses* InitClassesWithSideEffects::get(const DexType* type) const {
   auto it = m_init_classes.find(type);
-  return it == m_init_classes.end() ? &m_empty_init_classes : it->second.get();
+  return it == m_init_classes.end() ? &m_empty_init_classes : &it->second;
 }
 
 const DexType* InitClassesWithSideEffects::refine(const DexType* type) const {
