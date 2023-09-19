@@ -376,20 +376,6 @@ boost::optional<const DexType*> TypeInference::get_typedef_annotation(
   return boost::none;
 }
 
-boost::optional<const DexType*> TypeInference::get_typedef_anno_from_method(
-    DexMethodRef* method) const {
-  boost::optional<const DexType*> annotation = boost::none;
-  if (!m_annotations.empty() && method->is_def()) {
-    DexMethod* dex_method_def = method->as_def();
-    auto annotations = dex_method_def->get_anno_set();
-    if (annotations != nullptr) {
-      annotation =
-          TypeInference::get_typedef_annotation(annotations->get_annotations());
-    }
-  }
-  return annotation;
-}
-
 TypeDomain TypeInference::refine_type(const TypeDomain& type,
                                       IRType expected,
                                       IRType const_type,
@@ -1002,10 +988,12 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   case OPCODE_IGET: {
     refine_reference(current_state, insn->src(0));
     const DexType* type = insn->get_field()->get_type();
+    boost::optional<const DexType*> annotation =
+        get_typedef_anno_from_member(insn->get_field());
     if (type::is_float(type)) {
       set_float(current_state, RESULT_REGISTER);
     } else {
-      set_int(current_state, RESULT_REGISTER);
+      set_int(current_state, RESULT_REGISTER, annotation);
     }
     break;
   }
@@ -1041,9 +1029,12 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   }
   case OPCODE_IGET_OBJECT: {
     refine_reference(current_state, insn->src(0));
+    boost::optional<const DexType*> annotation =
+        get_typedef_anno_from_member(insn->get_field());
     always_assert(insn->has_field());
     const auto field = insn->get_field();
-    set_reference(current_state, RESULT_REGISTER, field->get_type());
+    set_reference(current_state, RESULT_REGISTER, field->get_type(),
+                  annotation);
     break;
   }
   case OPCODE_IPUT: {
@@ -1242,14 +1233,14 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     }
     if (type::is_object(return_type)) {
       boost::optional<const DexType*> annotation =
-          get_typedef_anno_from_method(dex_method);
+          get_typedef_anno_from_member(dex_method);
       set_reference(current_state, RESULT_REGISTER, return_type, annotation);
       break;
     }
     if (type::is_integral(return_type)) {
       if (type::is_int(return_type)) {
         boost::optional<const DexType*> annotation =
-            get_typedef_anno_from_method(dex_method);
+            get_typedef_anno_from_member(dex_method);
         set_int(current_state, RESULT_REGISTER, annotation);
         break;
       }

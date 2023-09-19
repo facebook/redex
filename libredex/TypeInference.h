@@ -306,6 +306,19 @@ class TypeInference final
   boost::optional<const DexType*> get_typedef_annotation(
       const std::vector<std::unique_ptr<DexAnnotation>>& annotations) const;
 
+  template <typename DexMember>
+  boost::optional<const DexType*> get_typedef_anno_from_member(
+      const DexMember* member) const {
+    if (!m_annotations.empty() && member->is_def()) {
+      auto member_def = member->as_def();
+      auto anno_set = member_def->get_anno_set();
+      if (anno_set) {
+        return get_typedef_annotation(anno_set->get_annotations());
+      }
+    }
+    return boost::none;
+  }
+
  private:
   void populate_type_environments();
 
@@ -341,9 +354,6 @@ class TypeInference final
   void refine_boolean(TypeEnvironment* state, reg_t reg) const;
   void refine_short(TypeEnvironment* state, reg_t reg) const;
   void refine_byte(TypeEnvironment* state, reg_t reg) const;
-
-  boost::optional<const DexType*> get_typedef_anno_from_method(
-      DexMethodRef* method) const;
 };
 
 } // namespace type_inference

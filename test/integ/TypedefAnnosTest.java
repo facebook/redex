@@ -68,4 +68,14 @@ public class TypedefAnnosTest {
   void testStringField(@TestStringDef String val) {
     str_field = val;
   }
+
+  @TestIntDef int testReadIntField() {
+    @TestIntDef int val = int_field;
+    return val;
+  }
+
+  @TestStringDef String testReadStringField() {
+    @TestStringDef String val = str_field;
+    return val;
+  }
 }

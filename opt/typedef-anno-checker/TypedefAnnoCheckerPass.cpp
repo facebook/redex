@@ -156,17 +156,8 @@ void TypedefAnnoChecker::check_instruction(
   case OPCODE_IPUT:
   case OPCODE_IPUT_OBJECT: {
     auto env_anno = env.get_annotation(insn->src(0));
-    auto field_ref = insn->get_field();
-    if (!field_ref->is_def()) {
-      break;
-    }
-    auto field_def = field_ref->as_def();
-    auto field_anno_set = field_def->get_anno_set();
-    if (!field_anno_set) {
-      break;
-    }
     auto field_anno =
-        inference->get_typedef_annotation(field_anno_set->get_annotations());
+        inference->get_typedef_anno_from_member(insn->get_field());
     if (env_anno != boost::none && field_anno != boost::none &&
         env_anno.value() != field_anno.value()) {
       std::ostringstream out;
@@ -179,9 +170,9 @@ void TypedefAnnoChecker::check_instruction(
     }
     break;
   }
-    // if there's an annotation that has a string typedef or an int typedef
-    // annotation in the method's signature, check that TypeInference
-    // inferred that annotation in the retured value
+  // if there's an annotation that has a string typedef or an int typedef
+  // annotation in the method's signature, check that TypeInference
+  // inferred that annotation in the retured value
   case OPCODE_RETURN:
   case OPCODE_RETURN_OBJECT: {
     if (return_annotation) {
