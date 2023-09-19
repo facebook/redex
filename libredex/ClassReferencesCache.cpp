@@ -50,10 +50,8 @@ ClassReferencesCache::ClassReferencesCache(
 }
 
 const ClassReferences& ClassReferencesCache::get(const DexClass* cls) const {
-  const auto* cached = m_cache.get(cls);
-  if (cached) {
-    return *cached;
-  }
-  return *m_cache.get_or_emplace_and_assert_equal(cls, ClassReferences(cls))
+  return *m_cache
+              .get_or_create_and_assert_equal(
+                  cls, [](const auto* cls) { return ClassReferences(cls); })
               .first;
 }

@@ -19,31 +19,28 @@ const InitClasses* InitClassesWithSideEffects::compute(
     const method::ClInitHasNoSideEffectsPredicate& clinit_has_no_side_effects,
     const std::unordered_set<DexMethod*>* non_true_virtuals) {
   const DexType* key = cls->get_type();
-  const auto* cached = m_init_classes.get(key);
-  if (cached) {
-    return cached;
-  }
-
-  InitClasses classes;
-  const auto* refined_cls = method::clinit_may_have_side_effects(
-      cls, /* allow_benign_method_invocations */ true,
-      &clinit_has_no_side_effects, non_true_virtuals);
-  if (refined_cls == nullptr) {
-  } else if (refined_cls != cls) {
-    classes =
-        *compute(refined_cls, clinit_has_no_side_effects, non_true_virtuals);
-  } else {
-    classes.push_back(cls);
-    auto super_cls = type_class(cls->get_super_class());
-    if (super_cls) {
-      const auto super_classes =
-          compute(super_cls, clinit_has_no_side_effects, non_true_virtuals);
-      classes.insert(classes.end(), super_classes->begin(),
-                     super_classes->end());
-    }
-  }
   auto [ptr, emplaced] =
-      m_init_classes.get_or_emplace_and_assert_equal(key, std::move(classes));
+      m_init_classes.get_or_create_and_assert_equal(key, [&](const auto*) {
+        InitClasses classes;
+        const auto* refined_cls = method::clinit_may_have_side_effects(
+            cls, /* allow_benign_method_invocations */ true,
+            &clinit_has_no_side_effects, non_true_virtuals);
+        if (refined_cls == nullptr) {
+        } else if (refined_cls != cls) {
+          classes = *compute(refined_cls, clinit_has_no_side_effects,
+                             non_true_virtuals);
+        } else {
+          classes.push_back(cls);
+          auto super_cls = type_class(cls->get_super_class());
+          if (super_cls) {
+            const auto super_classes = compute(
+                super_cls, clinit_has_no_side_effects, non_true_virtuals);
+            classes.insert(classes.end(), super_classes->begin(),
+                           super_classes->end());
+          }
+        }
+        return classes;
+      });
   if (emplaced && ptr->empty()) {
     m_trivial_init_classes++;
   }

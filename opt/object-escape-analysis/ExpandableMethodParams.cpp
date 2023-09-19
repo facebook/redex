@@ -150,12 +150,9 @@ ExpandableMethodParams::MethodInfo ExpandableMethodParams::create_method_info(
 // Get or create the method-info for a given type, method-name, rtype.
 const ExpandableMethodParams::MethodInfo*
 ExpandableMethodParams::get_method_info(const MethodKey& key) const {
-  const auto* cached = m_method_infos.get(key);
-  if (cached) {
-    return cached;
-  }
   return m_method_infos
-      .get_or_emplace_and_assert_equal(key, create_method_info(key))
+      .get_or_create_and_assert_equal(
+          key, [this](const auto& _) { return create_method_info(_); })
       .first;
 }
 

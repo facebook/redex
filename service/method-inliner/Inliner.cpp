@@ -1101,21 +1101,19 @@ bool MultiMethodInliner::should_inline_always(const DexMethod* callee) {
     return true;
   }
 
-  const auto* cached = m_should_inline.get(callee);
-  if (cached) {
-    return *cached;
-  }
-
-  always_assert(!for_speed());
-  always_assert(!callee->rstate.force_inline());
-  bool res;
-  if (too_many_callers(callee)) {
-    log_nopt(INL_TOO_MANY_CALLERS, callee);
-    res = false;
-  } else {
-    res = true;
-  }
-  return *m_should_inline.get_or_emplace_and_assert_equal(callee, res).first;
+  return *m_should_inline
+              .get_or_create_and_assert_equal(
+                  callee,
+                  [&](const auto&) {
+                    always_assert(!for_speed());
+                    always_assert(!callee->rstate.force_inline());
+                    if (too_many_callers(callee)) {
+                      log_nopt(INL_TOO_MANY_CALLERS, callee);
+                      return false;
+                    }
+                    return true;
+                  })
+              .first;
 }
 
 size_t MultiMethodInliner::get_callee_insn_size(const DexMethod* callee) {
@@ -1394,43 +1392,42 @@ InlinedCost MultiMethodInliner::get_inlined_cost(
 
 const InlinedCost* MultiMethodInliner::get_fully_inlined_cost(
     const DexMethod* callee) {
-  const auto* cached = m_fully_inlined_costs.get(callee);
-  if (cached) {
-    return cached;
-  }
-  InlinedCost inlined_cost(
-      get_inlined_cost(is_static(callee), callee->get_class(),
-                       callee->get_proto(), callee->get_code()));
-  TRACE(INLINE, 4, "get_fully_inlined_cost(%s) = {%zu,%f,%f,%f,%s,%f,%d,%zu}",
-        SHOW(callee), inlined_cost.full_code, inlined_cost.code,
-        inlined_cost.method_refs, inlined_cost.other_refs,
-        inlined_cost.no_return ? "no_return" : "return",
-        inlined_cost.result_used, !!inlined_cost.reduced_code,
-        inlined_cost.insn_size);
   return m_fully_inlined_costs
-      .get_or_emplace_and_assert_equal(callee, std::move(inlined_cost))
+      .get_or_create_and_assert_equal(
+          callee,
+          [&](const auto&) {
+            InlinedCost inlined_cost(
+                get_inlined_cost(is_static(callee), callee->get_class(),
+                                 callee->get_proto(), callee->get_code()));
+            TRACE(INLINE, 4,
+                  "get_fully_inlined_cost(%s) = {%zu,%f,%f,%f,%s,%f,%d,%zu}",
+                  SHOW(callee), inlined_cost.full_code, inlined_cost.code,
+                  inlined_cost.method_refs, inlined_cost.other_refs,
+                  inlined_cost.no_return ? "no_return" : "return",
+                  inlined_cost.result_used, !!inlined_cost.reduced_code,
+                  inlined_cost.insn_size);
+            return inlined_cost;
+          })
       .first;
 }
 
 const InlinedCost* MultiMethodInliner::get_call_site_inlined_cost(
     const IRInstruction* invoke_insn, const DexMethod* callee) {
-  const auto* cached = m_invoke_call_site_inlined_costs.get(invoke_insn);
-  if (cached) {
-    return *cached;
-  }
-
-  auto call_site_summary =
-      m_call_site_summarizer
-          ? m_call_site_summarizer->get_instruction_call_site_summary(
-                invoke_insn)
-          : nullptr;
-  const InlinedCost* res = nullptr;
-  if (call_site_summary != nullptr) {
-    res = get_call_site_inlined_cost(call_site_summary, callee);
-  }
-
   return *m_invoke_call_site_inlined_costs
-              .get_or_emplace_and_assert_equal(invoke_insn, res)
+              .get_or_create_and_assert_equal(
+                  invoke_insn,
+                  [&](const auto&) {
+                    auto call_site_summary =
+                        m_call_site_summarizer
+                            ? m_call_site_summarizer
+                                  ->get_instruction_call_site_summary(
+                                      invoke_insn)
+                            : nullptr;
+                    return call_site_summary == nullptr
+                               ? nullptr
+                               : get_call_site_inlined_cost(call_site_summary,
+                                                            callee);
+                  })
               .first;
 }
 
@@ -1444,25 +1441,27 @@ const InlinedCost* MultiMethodInliner::get_call_site_inlined_cost(
   }
 
   CalleeCallSiteSummary key{callee, call_site_summary};
-  const auto* cached = m_call_site_inlined_costs.get(key);
-  if (cached) {
-    return cached;
-  }
-
-  auto inlined_cost = get_inlined_cost(is_static(callee), callee->get_class(),
-                                       callee->get_proto(), callee->get_code(),
-                                       call_site_summary);
-  TRACE(
-      INLINE, 4, "get_call_site_inlined_cost(%s) = {%zu,%f,%f,%f,%s,%f,%d,%zu}",
-      call_site_summary->get_key().c_str(), inlined_cost.full_code,
-      inlined_cost.code, inlined_cost.method_refs, inlined_cost.other_refs,
-      inlined_cost.no_return ? "no_return" : "return", inlined_cost.result_used,
-      !!inlined_cost.reduced_code, inlined_cost.insn_size);
-  if (inlined_cost.insn_size >= fully_inlined_cost->insn_size) {
-    inlined_cost.reduced_code.reset();
-  }
   return m_call_site_inlined_costs
-      .get_or_emplace_and_assert_equal(key, std::move(inlined_cost))
+      .get_or_create_and_assert_equal(
+          key,
+          [&](const auto&) {
+            auto inlined_cost = get_inlined_cost(
+                is_static(callee), callee->get_class(), callee->get_proto(),
+                callee->get_code(), call_site_summary);
+            TRACE(
+                INLINE, 4,
+                "get_call_site_inlined_cost(%s) = {%zu,%f,%f,%f,%s,%f,%d,%zu}",
+                call_site_summary->get_key().c_str(), inlined_cost.full_code,
+                inlined_cost.code, inlined_cost.method_refs,
+                inlined_cost.other_refs,
+                inlined_cost.no_return ? "no_return" : "return",
+                inlined_cost.result_used, !!inlined_cost.reduced_code,
+                inlined_cost.insn_size);
+            if (inlined_cost.insn_size >= fully_inlined_cost->insn_size) {
+              inlined_cost.reduced_code.reset();
+            }
+            return inlined_cost;
+          })
       .first;
 }
 
@@ -1551,15 +1550,15 @@ const InlinedCost* MultiMethodInliner::get_average_inlined_cost(
 }
 
 bool MultiMethodInliner::can_inline_init(const DexMethod* init_method) {
-  const auto* cached = m_can_inline_init.get(init_method);
-  if (cached) {
-    return *cached;
-  }
-
-  const auto* finalizable_fields = m_shrinker.get_finalizable_fields();
-  bool res =
-      constructor_analysis::can_inline_init(init_method, finalizable_fields);
-  return *m_can_inline_init.get_or_emplace_and_assert_equal(init_method, res)
+  return *m_can_inline_init
+              .get_or_create_and_assert_equal(
+                  init_method,
+                  [&](const auto&) {
+                    const auto* finalizable_fields =
+                        m_shrinker.get_finalizable_fields();
+                    return constructor_analysis::can_inline_init(
+                        init_method, finalizable_fields);
+                  })
               .first;
 }
 

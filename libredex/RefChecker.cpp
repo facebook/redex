@@ -79,37 +79,26 @@ CodeRefs::CodeRefs(const DexMethod* method) {
 }
 
 bool RefChecker::check_type(const DexType* type) const {
-  const auto* cached = m_type_cache.get(type);
-  if (cached) {
-    return *cached;
-  }
-
   return *m_type_cache
-              .get_or_emplace_and_assert_equal(type, check_type_internal(type))
+              .get_or_create_and_assert_equal(
+                  type,
+                  [this](const auto* _) { return check_type_internal(_); })
               .first;
 }
 
 bool RefChecker::check_method(const DexMethod* method) const {
-  const auto* cached = m_method_cache.get(method);
-  if (cached) {
-    return *cached;
-  }
-
   return *m_method_cache
-              .get_or_emplace_and_assert_equal(method,
-                                               check_method_internal(method))
+              .get_or_create_and_assert_equal(
+                  method,
+                  [this](const auto* _) { return check_method_internal(_); })
               .first;
 }
 
 bool RefChecker::check_field(const DexField* field) const {
-  const auto* cached = m_field_cache.get(field);
-  if (cached) {
-    return *cached;
-  }
-
   return *m_field_cache
-              .get_or_emplace_and_assert_equal(field,
-                                               check_field_internal(field))
+              .get_or_create_and_assert_equal(
+                  field,
+                  [this](const auto* _) { return check_field_internal(_); })
               .first;
 }
 
