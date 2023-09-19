@@ -939,7 +939,7 @@ class RootMethodReducer {
     auto callee = resolve_method(insn->get_method(), opcode_to_search(insn));
     always_assert(callee);
     always_assert(callee->is_concrete());
-    std::vector<DexField*>* fields;
+    std::vector<DexField*> const* fields;
     auto expanded_method_ref =
         m_expandable_method_params.get_expanded_method_ref(callee, param_index,
                                                            &fields);
