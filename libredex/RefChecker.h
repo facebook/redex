@@ -79,9 +79,9 @@ class RefChecker {
   size_t m_store_idx;
   const api::AndroidSDK* m_min_sdk_api;
 
-  mutable ConcurrentMap<const DexType*, boost::optional<bool>> m_type_cache;
-  mutable ConcurrentMap<const DexMethod*, boost::optional<bool>> m_method_cache;
-  mutable ConcurrentMap<const DexField*, boost::optional<bool>> m_field_cache;
+  mutable InsertOnlyConcurrentMap<const DexType*, bool> m_type_cache;
+  mutable InsertOnlyConcurrentMap<const DexMethod*, bool> m_method_cache;
+  mutable InsertOnlyConcurrentMap<const DexField*, bool> m_field_cache;
 
   bool check_type_internal(const DexType* type) const;
 

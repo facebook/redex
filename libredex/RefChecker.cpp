@@ -79,44 +79,38 @@ CodeRefs::CodeRefs(const DexMethod* method) {
 }
 
 bool RefChecker::check_type(const DexType* type) const {
-  auto res = m_type_cache.get(type, boost::none);
-  if (res == boost::none) {
-    res = check_type_internal(type);
-    m_type_cache.update(
-        type, [res](const DexType*, boost::optional<bool>& value, bool exists) {
-          always_assert(!exists || value == res);
-          value = res;
-        });
+  const auto* cached = m_type_cache.get(type);
+  if (cached) {
+    return *cached;
   }
-  return *res;
+
+  return *m_type_cache
+              .get_or_emplace_and_assert_equal(type, check_type_internal(type))
+              .first;
 }
 
 bool RefChecker::check_method(const DexMethod* method) const {
-  auto res = m_method_cache.get(method, boost::none);
-  if (res == boost::none) {
-    res = check_method_internal(method);
-    m_method_cache.update(
-        method,
-        [res](const DexMethod*, boost::optional<bool>& value, bool exists) {
-          always_assert(!exists || value == res);
-          value = res;
-        });
+  const auto* cached = m_method_cache.get(method);
+  if (cached) {
+    return *cached;
   }
-  return *res;
+
+  return *m_method_cache
+              .get_or_emplace_and_assert_equal(method,
+                                               check_method_internal(method))
+              .first;
 }
 
 bool RefChecker::check_field(const DexField* field) const {
-  auto res = m_field_cache.get(field, boost::none);
-  if (res == boost::none) {
-    res = check_field_internal(field);
-    m_field_cache.update(
-        field,
-        [res](const DexField*, boost::optional<bool>& value, bool exists) {
-          always_assert(!exists || value == res);
-          value = res;
-        });
+  const auto* cached = m_field_cache.get(field);
+  if (cached) {
+    return *cached;
   }
-  return *res;
+
+  return *m_field_cache
+              .get_or_emplace_and_assert_equal(field,
+                                               check_field_internal(field))
+              .first;
 }
 
 bool RefChecker::check_class(
