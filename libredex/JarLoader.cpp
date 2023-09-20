@@ -58,6 +58,17 @@ uint32_t read16(uint8_t*& buffer, uint8_t* buffer_end) {
   buffer = next;
   return htons(rv);
 }
+
+uint32_t read8(uint8_t*& buffer, uint8_t* buffer_end) {
+  uint8_t rv;
+  auto next = buffer + sizeof(uint8_t);
+  if (next >= buffer_end) {
+    throw RedexException(RedexError::BUFFER_END_EXCEEDED);
+  }
+  memcpy(&rv, buffer, sizeof(uint8_t));
+  buffer = next;
+  return rv;
+}
 } // namespace JarLoaderUtil
 
 using namespace JarLoaderUtil;
@@ -139,7 +150,7 @@ bool parse_cp_entry(uint8_t*& buffer, uint8_t* buffer_end, cp_entry& cpe) {
     cpe.s1 = read16(buffer, buffer_end);
     return true;
   case CP_CONST_METHHANDLE:
-    cpe.s0 = *buffer++;
+    cpe.s0 = read8(buffer, buffer_end);
     cpe.s1 = read16(buffer, buffer_end);
     return true;
   case CP_CONST_INT:
