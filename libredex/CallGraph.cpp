@@ -56,14 +56,12 @@ CallSites SingleCalleeStrategy::get_callsites(const DexMethod* method) const {
           auto callee = this->resolve_callee(method, insn);
           if (callee == nullptr || is_definitely_virtual(callee)) {
             return editable_cfg_adapter::LOOP_CONTINUE;
-            ;
           }
           if (callee->is_concrete()) {
             callsites.emplace_back(callee, insn);
           }
         }
         return editable_cfg_adapter::LOOP_CONTINUE;
-        ;
       });
   return callsites;
 }
@@ -270,7 +268,6 @@ CallSites CompleteCallGraphStrategy::get_callsites(
           }
         }
         return editable_cfg_adapter::LOOP_CONTINUE;
-        ;
       });
   return callsites;
 }
@@ -386,7 +383,6 @@ CallSites MultipleCalleeStrategy::get_callsites(const DexMethod* method) const {
             callee = resolve_interface_virtual_callee(insn, method);
             if (callee == nullptr) {
               return editable_cfg_adapter::LOOP_CONTINUE;
-              ;
             }
           }
           if (is_definitely_virtual(callee)) {
@@ -410,7 +406,6 @@ CallSites MultipleCalleeStrategy::get_callsites(const DexMethod* method) const {
           }
         }
         return editable_cfg_adapter::LOOP_CONTINUE;
-        ;
       });
   return callsites;
 }
