@@ -79,6 +79,11 @@ class TypeAnalysisBasedStrategy : public MultipleCalleeBaseStrategy {
           continue;
         }
         auto* resolved_callee = this->resolve_callee(method, insn);
+        if (resolved_callee == nullptr &&
+            opcode_to_search(insn) == MethodSearch::Virtual) {
+          resolved_callee = resolve_method(
+              insn->get_method(), MethodSearch::InterfaceVirtual, method);
+        }
         if (resolved_callee == nullptr) {
           continue;
         }
