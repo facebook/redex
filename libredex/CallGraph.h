@@ -187,8 +187,6 @@ class SingleCalleeStrategy : public BuildStrategy {
 
  protected:
   bool is_definitely_virtual(DexMethod* method) const;
-  virtual DexMethod* resolve_callee(const DexMethod* caller,
-                                    IRInstruction* invoke) const;
 
   const Scope& m_scope;
   std::unordered_set<DexMethod*> m_non_virtual;

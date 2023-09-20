@@ -27,17 +27,12 @@ CodeRefs::CodeRefs(const DexMethod* method) {
           always_assert(insn->get_type());
           types_set.insert(insn->get_type());
         } else if (insn->has_method()) {
-          auto callee_ref = insn->get_method();
-          auto callee =
-              resolve_method(callee_ref, opcode_to_search(insn), method);
-          if (!callee && opcode_to_search(insn) == MethodSearch::Virtual) {
-            callee = resolve_method(callee_ref, MethodSearch::InterfaceVirtual,
-                                    method);
-          }
+          auto callee = resolve_invoke_method(insn, method);
           if (!callee) {
             invalid_refs = true;
             return editable_cfg_adapter::LOOP_BREAK;
           }
+          auto callee_ref = insn->get_method();
           if (callee != callee_ref) {
             types_set.insert(callee_ref->get_class());
           }

@@ -876,20 +876,14 @@ void MethodReferencesGatherer::default_gather_mie(const MethodItemEntry& mie,
       }
     } else if (gather_methods && (opcode::is_invoke_virtual(op) ||
                                   opcode::is_invoke_interface(op))) {
-      auto method_ref = insn->get_method();
-      auto resolved_callee = resolve_method(method_ref, opcode_to_search(insn));
-      if (resolved_callee == nullptr && opcode::is_invoke_virtual(op)) {
-        // There are some invoke-virtual call on methods whose def are
-        // actually in interface.
-        resolved_callee =
-            resolve_method(method_ref, MethodSearch::InterfaceVirtual);
-      }
+      auto resolved_callee = resolve_invoke_method(insn, m_method);
       if (!resolved_callee) {
         // Typically clone() on an array, or other obscure external references
         TRACE(REACH, 2, "Unresolved virtual callee at %s", SHOW(insn));
         refs->unknown_invoke_virtual_targets = true;
         return;
       }
+      auto method_ref = insn->get_method();
       auto base_type = method_ref->get_class();
       refs->base_invoke_virtual_targets_if_class_instantiable[resolved_callee]
           .insert(base_type);

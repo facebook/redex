@@ -484,11 +484,7 @@ bool WholeProgramAwareAnalyzer::analyze_invoke(
   }
 
   if (whole_program_state->has_call_graph()) {
-    auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
-    if (method == nullptr && opcode_to_search(insn) == MethodSearch::Virtual) {
-      method =
-          resolve_method(insn->get_method(), MethodSearch::InterfaceVirtual);
-    }
+    auto method = resolve_invoke_method(insn);
     if (method == nullptr || whole_program_state->method_is_dynamic(method)) {
       env->set(RESULT_REGISTER, DexTypeDomain::top());
       return false;

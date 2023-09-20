@@ -489,14 +489,7 @@ void gather_true_virtual_methods(
           continue;
         }
         auto insn_method = insn->get_method();
-        auto callee =
-            resolve_method(insn_method, opcode_to_search(insn), method);
-        if (callee == nullptr) {
-          // There are some invoke-virtual call on methods whose def are
-          // actually in interface.
-          callee = resolve_method(insn->get_method(),
-                                  MethodSearch::InterfaceVirtual);
-        }
+        auto callee = resolve_invoke_method(insn, method);
         if (callee == nullptr) {
           continue;
         }

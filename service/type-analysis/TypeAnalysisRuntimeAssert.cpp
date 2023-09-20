@@ -291,11 +291,7 @@ bool RuntimeAssertTransform::insert_return_value_assert(
   DexMethod* callee = nullptr;
   DexTypeDomain domain = DexTypeDomain::top();
   if (wps.has_call_graph()) {
-    callee = resolve_method(insn->get_method(), opcode_to_search(insn));
-    if (callee == nullptr && opcode_to_search(insn) == MethodSearch::Virtual) {
-      callee =
-          resolve_method(insn->get_method(), MethodSearch::InterfaceVirtual);
-    }
+    callee = resolve_invoke_method(insn);
     if (callee == nullptr || wps.method_is_dynamic(callee)) {
       domain = DexTypeDomain::top();
     }

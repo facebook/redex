@@ -265,12 +265,7 @@ boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
     return 0;
   }
 
-  auto callee = resolve_method(method, opcode_to_search(insn), resolved_refs);
-  if (callee == nullptr && opcode == OPCODE_INVOKE_VIRTUAL) {
-    // There are some invoke-virtual call on methods whose def are
-    // actually in interface.
-    callee = resolve_method(method, MethodSearch::InterfaceVirtual);
-  }
+  auto callee = resolve_invoke_method(insn, resolved_refs);
   if (callee == nullptr) {
     return boost::none;
   }

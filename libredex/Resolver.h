@@ -286,6 +286,50 @@ inline DexMethod* resolve_method(DexMethodRef* method,
 }
 
 /**
+ * Resolve the method of an invoke instruction. Note that there are some
+ * invoke-virtual call on methods whose def are actually in interface. Thus, for
+ * an invoke-virtual, it first tries MethodSearch::Virtual, and then
+ * MethodSearch::InterfaceVirtual.
+ */
+inline DexMethod* resolve_invoke_method(
+    const IRInstruction* insn,
+    const DexMethod* caller = nullptr,
+    bool* resolved_virtual_to_interface = nullptr) {
+  auto callee_ref = insn->get_method();
+  auto search = opcode_to_search(insn);
+  auto callee = resolve_method(callee_ref, search, caller);
+  if (!callee && search == MethodSearch::Virtual) {
+    callee = resolve_method(callee_ref, MethodSearch::InterfaceVirtual, caller);
+    if (resolved_virtual_to_interface) {
+      *resolved_virtual_to_interface = callee != nullptr;
+    }
+  } else if (resolved_virtual_to_interface) {
+    *resolved_virtual_to_interface = false;
+  }
+  return callee;
+}
+
+inline DexMethod* resolve_invoke_method(
+    const IRInstruction* insn,
+    MethodRefCache& ref_cache,
+    const DexMethod* caller = nullptr,
+    bool* resolved_virtual_to_interface = nullptr) {
+  auto callee_ref = insn->get_method();
+  auto search = opcode_to_search(insn);
+  auto callee = resolve_method(callee_ref, search, ref_cache, caller);
+  if (!callee && search == MethodSearch::Virtual) {
+    callee = resolve_method(callee_ref, MethodSearch::InterfaceVirtual,
+                            ref_cache, caller);
+    if (resolved_virtual_to_interface) {
+      *resolved_virtual_to_interface = callee != nullptr;
+    }
+  } else if (resolved_virtual_to_interface) {
+    *resolved_virtual_to_interface = false;
+  }
+  return callee;
+}
+
+/**
  * Given a scope defined by DexClass, a name and a proto look for the vmethod
  * on the top ancestor. Essentially finds where the method was introduced.
  * Stop the search when the type is unknown.

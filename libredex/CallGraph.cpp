@@ -53,7 +53,7 @@ CallSites SingleCalleeStrategy::get_callsites(const DexMethod* method) const {
       code, [&](const IRList::iterator& it) {
         auto insn = it->insn;
         if (opcode::is_an_invoke(insn->opcode())) {
-          auto callee = this->resolve_callee(method, insn);
+          auto callee = resolve_invoke_method(insn, method);
           if (callee == nullptr || is_definitely_virtual(callee)) {
             return editable_cfg_adapter::LOOP_CONTINUE;
           }
@@ -80,11 +80,6 @@ RootAndDynamic SingleCalleeStrategy::get_roots() const {
 
 bool SingleCalleeStrategy::is_definitely_virtual(DexMethod* method) const {
   return method->is_virtual() && m_non_virtual.count(method) == 0;
-}
-
-DexMethod* SingleCalleeStrategy::resolve_callee(const DexMethod* caller,
-                                                IRInstruction* invoke) const {
-  return resolve_method(invoke->get_method(), opcode_to_search(invoke), caller);
 }
 
 MultipleCalleeBaseStrategy::MultipleCalleeBaseStrategy(
@@ -219,23 +214,6 @@ CompleteCallGraphStrategy::CompleteCallGraphStrategy(
     const mog::Graph& method_override_graph, const Scope& scope)
     : MultipleCalleeBaseStrategy(method_override_graph, scope) {}
 
-static DexMethod* resolve_interface_virtual_callee(const IRInstruction* insn,
-                                                   const DexMethod* caller) {
-  DexMethod* callee = nullptr;
-  if (opcode_to_search(insn) == MethodSearch::Virtual) {
-    callee = resolve_method(insn->get_method(), MethodSearch::InterfaceVirtual,
-                            caller);
-    if (callee == nullptr) {
-      auto insn_method_cls = type_class(insn->get_method()->get_class());
-      if (insn_method_cls != nullptr && !insn_method_cls->is_external()) {
-        TRACE(CALLGRAPH, 1, "Unexpected unresolved insn %s in %s", SHOW(insn),
-              SHOW(caller));
-      }
-    }
-  }
-  return callee;
-}
-
 CallSites CompleteCallGraphStrategy::get_callsites(
     const DexMethod* method) const {
   CallSites callsites;
@@ -247,12 +225,9 @@ CallSites CompleteCallGraphStrategy::get_callsites(
       code, [&](const IRList::iterator& it) {
         auto insn = it->insn;
         if (opcode::is_an_invoke(insn->opcode())) {
-          auto callee = this->resolve_callee(method, insn);
+          auto callee = resolve_invoke_method(insn, method);
           if (callee == nullptr) {
-            callee = resolve_interface_virtual_callee(insn, method);
-            if (callee == nullptr) {
-              return editable_cfg_adapter::LOOP_CONTINUE;
-            }
+            return editable_cfg_adapter::LOOP_CONTINUE;
           }
           if (callee->is_concrete()) {
             callsites.emplace_back(callee, insn);
@@ -332,39 +307,35 @@ MultipleCalleeStrategy::MultipleCalleeStrategy(
   // Gather big overrides true virtual methods.
   ConcurrentSet<const DexMethod*> concurrent_callees;
   ConcurrentSet<const DexMethod*> concurrent_big_overrides;
-  walk::parallel::opcodes(scope, [&](const DexMethod* method,
-                                     IRInstruction* insn) {
-    if (opcode::is_an_invoke(insn->opcode())) {
-      auto callee =
-          resolve_method(insn->get_method(), opcode_to_search(insn), method);
-      if (callee == nullptr) {
-        callee = resolve_interface_virtual_callee(insn, method);
-        if (callee == nullptr) {
-          return;
+  walk::parallel::opcodes(
+      scope, [&](const DexMethod* method, IRInstruction* insn) {
+        if (opcode::is_an_invoke(insn->opcode())) {
+          auto callee = resolve_invoke_method(insn, method);
+          if (callee == nullptr) {
+            return;
+          }
+          if (!callee->is_virtual()) {
+            return;
+          }
+          if (!concurrent_callees.insert(callee)) {
+            return;
+          }
+          const auto& overriding_methods =
+              mog::get_overriding_methods(m_method_override_graph, callee);
+          uint32_t num_override = 0;
+          for (auto overriding_method : overriding_methods) {
+            if (overriding_method->get_code()) {
+              ++num_override;
+            }
+          }
+          if (num_override > big_override_threshold) {
+            concurrent_big_overrides.emplace(callee);
+            for (auto overriding_method : overriding_methods) {
+              concurrent_big_overrides.emplace(overriding_method);
+            }
+          }
         }
-      }
-      if (!callee->is_virtual()) {
-        return;
-      }
-      if (!concurrent_callees.insert(callee)) {
-        return;
-      }
-      const auto& overriding_methods =
-          mog::get_overriding_methods(m_method_override_graph, callee);
-      uint32_t num_override = 0;
-      for (auto overriding_method : overriding_methods) {
-        if (overriding_method->get_code()) {
-          ++num_override;
-        }
-      }
-      if (num_override > big_override_threshold) {
-        concurrent_big_overrides.emplace(callee);
-        for (auto overriding_method : overriding_methods) {
-          concurrent_big_overrides.emplace(overriding_method);
-        }
-      }
-    }
-  });
+      });
   m_big_override = concurrent_big_overrides.move_to_container();
 }
 
@@ -378,12 +349,9 @@ CallSites MultipleCalleeStrategy::get_callsites(const DexMethod* method) const {
       code, [&](const IRList::iterator& it) {
         auto insn = it->insn;
         if (opcode::is_an_invoke(insn->opcode())) {
-          auto callee = this->resolve_callee(method, insn);
+          auto callee = resolve_invoke_method(insn, method);
           if (callee == nullptr) {
-            callee = resolve_interface_virtual_callee(insn, method);
-            if (callee == nullptr) {
-              return editable_cfg_adapter::LOOP_CONTINUE;
-            }
+            return editable_cfg_adapter::LOOP_CONTINUE;
           }
           if (is_definitely_virtual(callee)) {
             // For true virtual callees, add the callee itself and all of its

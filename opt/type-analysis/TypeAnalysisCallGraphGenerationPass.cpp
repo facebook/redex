@@ -78,12 +78,7 @@ class TypeAnalysisBasedStrategy : public MultipleCalleeBaseStrategy {
         if (!opcode::is_an_invoke(insn->opcode())) {
           continue;
         }
-        auto* resolved_callee = this->resolve_callee(method, insn);
-        if (resolved_callee == nullptr &&
-            opcode_to_search(insn) == MethodSearch::Virtual) {
-          resolved_callee = resolve_method(
-              insn->get_method(), MethodSearch::InterfaceVirtual, method);
-        }
+        auto* resolved_callee = resolve_invoke_method(insn, method);
         if (resolved_callee == nullptr) {
           continue;
         }
