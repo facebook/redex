@@ -88,7 +88,8 @@ TEST_F(GlobalTypeAnalysisTest, SimpleArgumentPassingTest) {
       *method_override_graph::build_graph(scope), scope));
   walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(); });
   GlobalTypeAnalyzer gta(cg);
-  gta.run({{CURRENT_PARTITION_LABEL, ArgumentTypeEnvironment()}});
+  gta.run(ArgumentTypePartition{
+      {CURRENT_PARTITION_LABEL, ArgumentTypeEnvironment()}});
 
   auto& graph = gta.get_call_graph();
 
@@ -149,7 +150,8 @@ TEST_F(GlobalTypeAnalysisTest, ArgumentPassingJoinWithNullTest) {
       *method_override_graph::build_graph(scope), scope));
   walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(); });
   GlobalTypeAnalyzer gta(cg);
-  gta.run({{CURRENT_PARTITION_LABEL, ArgumentTypeEnvironment()}});
+  gta.run(ArgumentTypePartition{
+      {CURRENT_PARTITION_LABEL, ArgumentTypeEnvironment()}});
 
   auto& graph = gta.get_call_graph();
 

@@ -82,10 +82,10 @@ class HashedAbstractEnvironment final
   HashedAbstractEnvironment()
       : AbstractDomainScaffolding<Value, HashedAbstractEnvironment>() {}
 
-  HashedAbstractEnvironment(AbstractValueKind kind)
+  explicit HashedAbstractEnvironment(AbstractValueKind kind)
       : AbstractDomainScaffolding<Value, HashedAbstractEnvironment>(kind) {}
 
-  HashedAbstractEnvironment(
+  explicit HashedAbstractEnvironment(
       std::initializer_list<std::pair<Variable, Domain>> l) {
     for (const auto& p : l) {
       if (p.second.is_bottom()) {

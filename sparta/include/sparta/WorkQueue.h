@@ -192,16 +192,17 @@ class WorkQueue {
   const bool m_can_push_task{false};
 
  public:
-  WorkQueue(Executor,
-            unsigned int num_threads = parallel::default_num_threads(),
-            // push_tasks_while_running:
-            // * When this flag is true, all threads stay alive until the
-            //   last task is finished. Useful when threads are adding
-            //   more work to the queue via `WorkerState::push_task`.
-            // * When this flag is false, threads can
-            //   exit as soon as there is no more work (to avoid
-            //   preempting a thread that has useful work)
-            bool push_tasks_while_running = false);
+  explicit WorkQueue(Executor,
+                     unsigned int num_threads = parallel::default_num_threads(),
+                     // push_tasks_while_running:
+                     // * When this flag is true, all threads stay alive until
+                     //   the last task is finished. Useful when threads are
+                     //   adding more work to the queue via
+                     //   `WorkerState::push_task`.
+                     // * When this flag is false, threads can
+                     //   exit as soon as there is no more work (to avoid
+                     //   preempting a thread that has useful work)
+                     bool push_tasks_while_running = false);
 
   // copies are not allowed
   WorkQueue(const WorkQueue&) = delete;

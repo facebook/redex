@@ -56,11 +56,11 @@ class PatriciaTreeMapAbstractEnvironment final
       : AbstractDomainScaffolding<Value, PatriciaTreeMapAbstractEnvironment>() {
   }
 
-  PatriciaTreeMapAbstractEnvironment(AbstractValueKind kind)
+  explicit PatriciaTreeMapAbstractEnvironment(AbstractValueKind kind)
       : AbstractDomainScaffolding<Value, PatriciaTreeMapAbstractEnvironment>(
             kind) {}
 
-  PatriciaTreeMapAbstractEnvironment(
+  explicit PatriciaTreeMapAbstractEnvironment(
       std::initializer_list<std::pair<Variable, Domain>> l) {
     for (const auto& p : l) {
       if (p.second.is_bottom()) {

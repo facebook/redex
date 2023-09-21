@@ -116,7 +116,8 @@ class MonotonicFixpointIteratorBase
    * the constructor, so as to prevent unnecessary resizing of the underlying
    * hashtables during the iteration.
    */
-  MonotonicFixpointIteratorBase(const Graph& graph, size_t cfg_size_hint = 4)
+  explicit MonotonicFixpointIteratorBase(const Graph& graph,
+                                         size_t cfg_size_hint = 4)
       : m_graph(graph),
         m_entry_states(cfg_size_hint),
         m_exit_states(cfg_size_hint) {}
@@ -220,7 +221,7 @@ class SuccessorNodeListBuilder {
   using NodeId = typename GraphInterface::NodeId;
 
  public:
-  SuccessorNodeListBuilder(const Graph& graph) : m_graph(graph) {}
+  explicit SuccessorNodeListBuilder(const Graph& graph) : m_graph(graph) {}
 
   std::vector<NodeId> operator()(const NodeId& x) {
     const auto& succ_edges = GraphInterface::successors(m_graph, x);
@@ -277,7 +278,8 @@ class WTOMonotonicFixpointIterator
   using Context =
       fp_impl::MonotonicFixpointIteratorContext<NodeId, Domain, NodeHash>;
 
-  WTOMonotonicFixpointIterator(const Graph& graph, size_t cfg_size_hint = 4)
+  explicit WTOMonotonicFixpointIterator(const Graph& graph,
+                                        size_t cfg_size_hint = 4)
       : fp_impl::MonotonicFixpointIteratorBase<GraphInterface,
                                                Domain,
                                                NodeHash>(graph, cfg_size_hint),
@@ -376,7 +378,7 @@ class ParallelMonotonicFixpointIterator
       fp_impl::MonotonicFixpointIteratorContext<NodeId, Domain, NodeHash>;
   using WPOWorkerState = WorkerState<uint32_t>;
 
-  ParallelMonotonicFixpointIterator(
+  explicit ParallelMonotonicFixpointIterator(
       const Graph& graph, size_t num_thread = parallel::default_num_threads())
       : fp_impl::
             MonotonicFixpointIteratorBase<GraphInterface, Domain, NodeHash>(
@@ -572,7 +574,8 @@ class MonotonicFixpointIterator
   using Context =
       fp_impl::MonotonicFixpointIteratorContext<NodeId, Domain, NodeHash>;
 
-  MonotonicFixpointIterator(const Graph& graph, size_t cfg_size_hint = 4)
+  explicit MonotonicFixpointIterator(const Graph& graph,
+                                     size_t cfg_size_hint = 4)
       : fp_impl::MonotonicFixpointIteratorBase<GraphInterface,
                                                Domain,
                                                NodeHash>(graph, cfg_size_hint),

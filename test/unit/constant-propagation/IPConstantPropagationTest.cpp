@@ -478,7 +478,7 @@ TEST_F(InterproceduralConstantPropagationTest, unreachableInvoke) {
                                  std::move(env));
                            });
 
-  fp_iter.run({{CURRENT_PARTITION_LABEL, ArgumentDomain()}});
+  fp_iter.run(Domain{{CURRENT_PARTITION_LABEL, ArgumentDomain()}});
 
   // Check m2 is reachable, despite m3 being unreachable
   auto& graph = fp_iter.get_call_graph();

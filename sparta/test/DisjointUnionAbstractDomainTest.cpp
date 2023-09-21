@@ -30,24 +30,26 @@ INSTANTIATE_TYPED_TEST_CASE_P(DisjointUnionAbstractDomain,
 template <>
 std::vector<IntStringDomain>
 AbstractDomainPropertyTest<IntStringDomain>::top_values() {
-  return {IntDomain::top(), StringDomain::top()};
+  return {IntStringDomain{IntDomain::top()},
+          IntStringDomain{StringDomain::top()}};
 }
 
 template <>
 std::vector<IntStringDomain>
 AbstractDomainPropertyTest<IntStringDomain>::bottom_values() {
-  return {IntDomain::bottom(), StringDomain::bottom()};
+  return {IntStringDomain{IntDomain::bottom()},
+          IntStringDomain{StringDomain::bottom()}};
 }
 
 template <>
 std::vector<IntStringDomain>
 AbstractDomainPropertyTest<IntStringDomain>::non_extremal_values() {
-  return {IntDomain(0), StringDomain("foo")};
+  return {IntStringDomain{IntDomain(0)}, IntStringDomain{StringDomain("foo")}};
 }
 
 TEST(DisjointUnionAbstractDomainTest, basicOperations) {
-  IntStringDomain zero = IntDomain(0);
-  IntStringDomain str = StringDomain("");
+  auto zero = IntStringDomain{IntDomain(0)};
+  auto str = IntStringDomain{StringDomain("")};
   EXPECT_TRUE(zero.join(str).is_top());
   EXPECT_TRUE(zero.meet(str).is_bottom());
   EXPECT_NLEQ(zero, str);
