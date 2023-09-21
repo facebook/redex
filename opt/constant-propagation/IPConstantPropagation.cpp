@@ -152,7 +152,7 @@ std::unique_ptr<FixpointIterator> PassImpl::analyze(
       cg_for_wps);
   // Run the bootstrap. All field value and method return values are
   // represented by Top.
-  fp_iter->run({{CURRENT_PARTITION_LABEL, ArgumentDomain()}});
+  fp_iter->run(Domain{{CURRENT_PARTITION_LABEL, ArgumentDomain()}});
   auto non_true_virtuals =
       mog::get_non_true_virtuals(*method_override_graph, scope);
   std::unordered_set<const DexField*> definitely_assigned_ifields;
@@ -173,7 +173,7 @@ std::unique_ptr<FixpointIterator> PassImpl::analyze(
     // Use the refined WholeProgramState to propagate more constants via
     // the stack and registers.
     fp_iter->set_whole_program_state(std::move(wps));
-    fp_iter->run({{CURRENT_PARTITION_LABEL, ArgumentDomain()}});
+    fp_iter->run(Domain{{CURRENT_PARTITION_LABEL, ArgumentDomain()}});
   }
   compute_analysis_stats(fp_iter->get_whole_program_state(),
                          definitely_assigned_ifields);

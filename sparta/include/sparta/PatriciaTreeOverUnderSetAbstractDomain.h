@@ -23,13 +23,13 @@ class OverUnderSetValue final
  public:
   OverUnderSetValue() = default;
 
-  OverUnderSetValue(Element e)
+  explicit OverUnderSetValue(Element e)
       : OverUnderSetValue(PatriciaTreeSet<Element>{std::move(e)}) {}
 
-  OverUnderSetValue(std::initializer_list<Element> l)
+  explicit OverUnderSetValue(std::initializer_list<Element> l)
       : OverUnderSetValue(PatriciaTreeSet<Element>(l)) {}
 
-  OverUnderSetValue(PatriciaTreeSet<Element> over_and_under)
+  explicit OverUnderSetValue(PatriciaTreeSet<Element> over_and_under)
       : m_over(over_and_under), m_under(std::move(over_and_under)) {
     // Union is unnecessary.
   }

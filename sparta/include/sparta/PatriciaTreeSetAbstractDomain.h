@@ -32,11 +32,12 @@ class SetValue final
  public:
   SetValue() = default;
 
-  SetValue(Element e) : m_set(std::move(e)) {}
+  explicit SetValue(Element e) : m_set(std::move(e)) {}
 
-  SetValue(std::initializer_list<Element> l) : m_set(l.begin(), l.end()) {}
+  explicit SetValue(std::initializer_list<Element> l)
+      : m_set(l.begin(), l.end()) {}
 
-  SetValue(PatriciaTreeSet<Element> set) : m_set(std::move(set)) {}
+  explicit SetValue(PatriciaTreeSet<Element> set) : m_set(std::move(set)) {}
 
   const PatriciaTreeSet<Element>& elements() const { return m_set; }
 
@@ -129,7 +130,7 @@ class PatriciaTreeSetAbstractDomain final
                                const PatriciaTreeSet<Element>&,
                                PatriciaTreeSetAbstractDomain>() {}
 
-  PatriciaTreeSetAbstractDomain(AbstractValueKind kind)
+  explicit PatriciaTreeSetAbstractDomain(AbstractValueKind kind)
       : PowersetAbstractDomain<Element,
                                Value,
                                const PatriciaTreeSet<Element>&,

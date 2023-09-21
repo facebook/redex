@@ -35,9 +35,9 @@ class SetValue final : public PowersetImplementation<
 
   SetValue() = default;
 
-  SetValue(Element e) { add(std::move(e)); }
+  explicit SetValue(Element e) { add(std::move(e)); }
 
-  SetValue(std::initializer_list<Element> l) {
+  explicit SetValue(std::initializer_list<Element> l) {
     if (l.begin() != l.end()) {
       m_set = std::make_unique<SetImplType>(l.begin(), l.end());
     }
@@ -193,7 +193,7 @@ class HashedSetAbstractDomain final
                                const std::unordered_set<Element, Hash, Equal>&,
                                HashedSetAbstractDomain>() {}
 
-  HashedSetAbstractDomain(AbstractValueKind kind)
+  explicit HashedSetAbstractDomain(AbstractValueKind kind)
       : PowersetAbstractDomain<Element,
                                Value,
                                const std::unordered_set<Element, Hash, Equal>&,

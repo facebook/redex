@@ -51,7 +51,8 @@ class HashedAbstractPartition final
    */
   HashedAbstractPartition() = default;
 
-  HashedAbstractPartition(std::initializer_list<std::pair<Label, Domain>> l) {
+  explicit HashedAbstractPartition(
+      std::initializer_list<std::pair<Label, Domain>> l) {
     for (const auto& p : l) {
       set(p.first, p.second);
     }

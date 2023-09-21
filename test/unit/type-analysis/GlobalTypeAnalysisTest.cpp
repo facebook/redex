@@ -90,7 +90,8 @@ TEST_F(GlobalTypeAnalysisTest, SimpleArgumentPassingTest) {
     code.build_cfg(/* editable */ false);
   });
   GlobalTypeAnalyzer gta(std::move(cg));
-  gta.run({{CURRENT_PARTITION_LABEL, ArgumentTypeEnvironment()}});
+  gta.run(ArgumentTypePartition{
+      {CURRENT_PARTITION_LABEL, ArgumentTypeEnvironment()}});
 
   auto& graph = gta.get_call_graph();
 
@@ -153,7 +154,8 @@ TEST_F(GlobalTypeAnalysisTest, ArgumentPassingJoinWithNullTest) {
     code.build_cfg(/* editable */ false);
   });
   GlobalTypeAnalyzer gta(std::move(cg));
-  gta.run({{CURRENT_PARTITION_LABEL, ArgumentTypeEnvironment()}});
+  gta.run(ArgumentTypePartition{
+      {CURRENT_PARTITION_LABEL, ArgumentTypeEnvironment()}});
 
   auto& graph = gta.get_call_graph();
 

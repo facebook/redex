@@ -42,7 +42,7 @@ class SparseSetValue final
   SparseSetValue() : m_capacity(0), m_element_num(0) {}
 
   // Returns an empty set over a universe of the given size.
-  SparseSetValue(size_t max_size)
+  explicit SparseSetValue(size_t max_size)
       : m_capacity(max_size),
         m_element_num(0),
         m_dense(max_size),

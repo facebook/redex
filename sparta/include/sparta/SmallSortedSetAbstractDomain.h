@@ -22,7 +22,7 @@ class SetValue final : public AbstractValue<SetValue<Element, MaxCount>> {
  public:
   SetValue() = default;
 
-  SetValue(FlatSet<Element> set) : m_set(std::move(set)) {}
+  explicit SetValue(FlatSet<Element> set) : m_set(std::move(set)) {}
 
   void clear() { m_set.clear(); }
 

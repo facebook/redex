@@ -417,7 +417,8 @@ std::unique_ptr<GlobalTypeAnalyzer> GlobalTypeAnalysis::analyze(
   // represented by Top.
   TRACE(TYPE, 2, "[global] Bootstrap run");
   auto gta = std::make_unique<GlobalTypeAnalyzer>(std::move(cg));
-  gta->run({{CURRENT_PARTITION_LABEL, ArgumentTypeEnvironment()}});
+  gta->run(ArgumentTypePartition{
+      {CURRENT_PARTITION_LABEL, ArgumentTypeEnvironment()}});
   auto non_true_virtuals =
       mog::get_non_true_virtuals(*method_override_graph, scope);
   size_t iteration_cnt = 0;
@@ -438,7 +439,8 @@ std::unique_ptr<GlobalTypeAnalyzer> GlobalTypeAnalysis::analyze(
     // the stack and registers.
     TRACE(TYPE, 2, "[global] Start a new global analysis run");
     gta->set_whole_program_state(std::move(wps));
-    gta->run({{CURRENT_PARTITION_LABEL, ArgumentTypeEnvironment()}});
+    gta->run(ArgumentTypePartition{
+        {CURRENT_PARTITION_LABEL, ArgumentTypeEnvironment()}});
     ++iteration_cnt;
   }
 
