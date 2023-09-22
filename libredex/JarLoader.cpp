@@ -40,7 +40,7 @@ namespace JarLoaderUtil {
 uint32_t read32(uint8_t*& buffer, uint8_t* buffer_end) {
   uint32_t rv;
   auto next = buffer + sizeof(uint32_t);
-  if (next >= buffer_end) {
+  if (next > buffer_end) {
     throw RedexException(RedexError::BUFFER_END_EXCEEDED);
   }
   memcpy(&rv, buffer, sizeof(uint32_t));
@@ -48,10 +48,10 @@ uint32_t read32(uint8_t*& buffer, uint8_t* buffer_end) {
   return htonl(rv);
 }
 
-uint32_t read16(uint8_t*& buffer, uint8_t* buffer_end) {
+uint16_t read16(uint8_t*& buffer, uint8_t* buffer_end) {
   uint16_t rv;
   auto next = buffer + sizeof(uint16_t);
-  if (next >= buffer_end) {
+  if (next > buffer_end) {
     throw RedexException(RedexError::BUFFER_END_EXCEEDED);
   }
   memcpy(&rv, buffer, sizeof(uint16_t));
@@ -59,15 +59,11 @@ uint32_t read16(uint8_t*& buffer, uint8_t* buffer_end) {
   return htons(rv);
 }
 
-uint32_t read8(uint8_t*& buffer, uint8_t* buffer_end) {
-  uint8_t rv;
-  auto next = buffer + sizeof(uint8_t);
-  if (next >= buffer_end) {
+uint8_t read8(uint8_t*& buffer, uint8_t* buffer_end) {
+  if (buffer >= buffer_end) {
     throw RedexException(RedexError::BUFFER_END_EXCEEDED);
   }
-  memcpy(&rv, buffer, sizeof(uint8_t));
-  buffer = next;
-  return rv;
+  return *buffer++;
 }
 } // namespace JarLoaderUtil
 
@@ -133,7 +129,7 @@ constexpr size_t CP_CONST_PACKAGE =     20;
 /* clang-format on */
 
 bool parse_cp_entry(uint8_t*& buffer, uint8_t* buffer_end, cp_entry& cpe) {
-  cpe.tag = *buffer++;
+  cpe.tag = read8(buffer, buffer_end);
   switch (cpe.tag) {
   case CP_CONST_CLASS:
   case CP_CONST_STRING:
