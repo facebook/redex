@@ -162,6 +162,9 @@ bool parse_cp_entry(uint8_t*& buffer, uint8_t* buffer_end, cp_entry& cpe) {
     cpe.len = read16(buffer, buffer_end);
     cpe.data = buffer;
     buffer += cpe.len;
+    if (buffer > buffer_end) {
+      throw RedexException(RedexError::BUFFER_END_EXCEEDED);
+    }
     return true;
   case CP_CONST_INVOKEDYN:
     std::cerr << "INVOKEDYN constant unsupported, Bailing\n";
