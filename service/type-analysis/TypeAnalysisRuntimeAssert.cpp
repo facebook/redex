@@ -294,6 +294,7 @@ bool RuntimeAssertTransform::insert_return_value_assert(
     callee = resolve_invoke_method(insn);
     if (callee == nullptr || wps.method_is_dynamic(callee)) {
       domain = DexTypeDomain::top();
+      return false;
     }
     domain = wps.get_return_type_from_cg(insn);
   } else {
