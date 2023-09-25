@@ -594,14 +594,14 @@ size_t process_hoisting_for_block(
 size_t BranchPrefixHoistingPass::process_code(IRCode* code,
                                               DexMethod* method,
                                               bool can_allocate_regs) {
-  cfg::ScopedCFG cfg(code);
-  TRACE(BPH, 5, "%s", SHOW(*cfg));
+  auto& cfg = code->cfg();
+  TRACE(BPH, 5, "%s", SHOW(cfg));
   Lazy<const constant_uses::ConstantUses> constant_uses([&] {
     return std::make_unique<const constant_uses::ConstantUses>(
-        *cfg, method,
+        cfg, method,
         /* force_type_inference */ true);
   });
-  size_t ret = process_cfg(*cfg, constant_uses, can_allocate_regs);
+  size_t ret = process_cfg(cfg, constant_uses, can_allocate_regs);
   return ret;
 }
 

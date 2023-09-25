@@ -30,7 +30,5 @@ class CheckRecursionPass : public Pass {
     bind("bad_recursion_count", 4, bad_recursion_count);
   }
 
-  bool is_cfg_legacy() override { return true; }
-
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 };

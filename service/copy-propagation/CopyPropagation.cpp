@@ -561,10 +561,10 @@ Stats CopyPropagation::run(IRCode* code,
                            DexTypeList* args,
                            std::function<std::string()> method_describer) {
   Stats stats;
-  cfg::ScopedCFG cfg(code);
-
+  always_assert(code->editable_cfg_built());
+  auto& cfg = code->cfg();
   if (m_config.canonicalize_locks && !m_config.regalloc_has_run) {
-    auto res = locks::run(*cfg);
+    auto res = locks::run(cfg);
     stats.lock_fixups = res.fixups;
     stats.non_singleton_lock_rdefs = res.non_singleton_rdefs ? 1 : 0;
   }
@@ -575,7 +575,7 @@ Stats CopyPropagation::run(IRCode* code,
   // the registers.
   std::unordered_set<const IRInstruction*> range_set;
   if (m_config.regalloc_has_run) {
-    for (auto& mie : InstructionIterable(*cfg)) {
+    for (auto& mie : InstructionIterable(cfg)) {
       auto* insn = mie.insn;
       if (opcode::has_range_form(insn->opcode())) {
         insn->denormalize_registers();
@@ -587,15 +587,15 @@ Stats CopyPropagation::run(IRCode* code,
     }
   }
 
-  auto check_cast_throw_targets_regs = get_check_cast_throw_targets_regs(*cfg);
+  auto check_cast_throw_targets_regs = get_check_cast_throw_targets_regs(cfg);
 
   AliasFixpointIterator fixpoint(
-      *cfg, is_static, declaring_type, rtype, args, std::move(method_describer),
+      cfg, is_static, declaring_type, rtype, args, std::move(method_describer),
       m_config, range_set, stats, check_cast_throw_targets_regs);
   fixpoint.run(AliasDomain());
 
-  cfg::CFGMutation mutation{*cfg};
-  for (auto block : cfg->blocks()) {
+  cfg::CFGMutation mutation{cfg};
+  for (auto block : cfg.blocks()) {
     AliasDomain domain = fixpoint.get_entry_state_at(block);
     domain.update(
         [&fixpoint, block, &mutation, &stats](AliasedRegisters& aliases) {
