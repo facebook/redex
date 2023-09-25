@@ -301,6 +301,7 @@ void analyze_scope(const init_classes::InitClassesWithSideEffects&
       auto new_summary =
           analyze_method(init_classes_with_side_effects, method, call_graph,
                          ptrs_fp_iter_map, *effect_summaries);
+      new_summary.normalize();
       auto it = effect_summaries->find(method);
       if (it != effect_summaries->end() && it->second == new_summary) {
         return;

@@ -53,6 +53,7 @@ enum Effects : size_t {
   // Marked by @DoNotOptimize
   EFF_NO_OPTIMIZE = 1 << 4,
   EFF_INIT_CLASS = 1 << 5,
+  EFF_NORMALIZED = 1 << 6,
 };
 
 struct Summary {
@@ -82,6 +83,14 @@ struct Summary {
   friend bool operator==(const Summary& a, const Summary& b) {
     return a.effects == b.effects && a.modified_params == b.modified_params &&
            a.may_read_external == b.may_read_external;
+  }
+
+  void normalize() {
+    if (effects != EFF_NONE) {
+      effects = EFF_NORMALIZED;
+      modified_params.clear();
+      may_read_external = false;
+    }
   }
 
   static Summary from_s_expr(const sparta::s_expr&);
