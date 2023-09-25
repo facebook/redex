@@ -238,6 +238,23 @@ class ConcurrentContainer {
     }
   }
 
+  ConcurrentContainer& operator=(ConcurrentContainer&& container) noexcept {
+    for (size_t i = 0; i < n_slots; ++i) {
+      m_slots[i] = std::move(container.m_slots[i]);
+    }
+    return *this;
+  }
+
+  ConcurrentContainer& operator=(
+      const ConcurrentContainer& container) noexcept {
+    if (this != &container) {
+      for (size_t i = 0; i < n_slots; ++i) {
+        m_slots[i] = container.m_slots[i];
+      }
+    }
+    return *this;
+  }
+
   Container& get_container(size_t slot) { return m_slots[slot]; }
 
   const Container& get_container(size_t slot) const { return m_slots[slot]; }
@@ -545,6 +562,16 @@ class InsertOnlyConcurrentMapContainer
     return &it->second;
   }
 
+  const Value* get_unsafe(const Key& key) const {
+    size_t slot = Hash()(key) % n_slots;
+    auto& map = this->get_container(slot);
+    const auto& it = map.find(KeyProjection()(key));
+    if (it == map.end()) {
+      return nullptr;
+    }
+    return &it->second;
+  }
+
   /*
    * This operation is always thread-safe. If you are reading from a
    * ConcurrentMap that is not being concurrently modified, it will probably be
@@ -557,6 +584,11 @@ class InsertOnlyConcurrentMapContainer
   }
 
   Value& at_unsafe(const Key& key) {
+    size_t slot = Hash()(key) % n_slots;
+    return this->get_container(slot).at(KeyProjection()(key));
+  }
+
+  const Value& at_unsafe(const Key& key) const {
     size_t slot = Hash()(key) % n_slots;
     return this->get_container(slot).at(KeyProjection()(key));
   }
@@ -653,7 +685,7 @@ class InsertOnlyConcurrentMapContainer
                              std::forward<Args>(args)...);
     }();
     always_assert(emplaced ||
-                  ValueEqual()(it->second, std::forward<Args>(args)...));
+                  ValueEqual()(it->second, Value(std::forward<Args>(args)...)));
     return std::make_pair(&it->second, emplaced);
   }
 
@@ -670,7 +702,7 @@ class InsertOnlyConcurrentMapContainer
       return map.try_emplace(KeyProjection()(key), std::forward<Args>(args)...);
     }();
     always_assert(emplaced ||
-                  ValueEqual()(it->second, std::forward<Args>(args)...));
+                  ValueEqual()(it->second, Value(std::forward<Args>(args)...)));
     return std::make_pair(&it->second, emplaced);
   }
 
