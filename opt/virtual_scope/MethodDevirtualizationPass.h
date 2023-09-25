@@ -41,7 +41,6 @@ class MethodDevirtualizationPass : public Pass {
     bind("ignore_keep", false, m_ignore_keep);
   }
 
-  bool is_cfg_legacy() override { return true; }
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:

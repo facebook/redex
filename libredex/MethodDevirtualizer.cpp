@@ -65,7 +65,9 @@ void fix_call_sites(const std::vector<DexClass*>& scope,
       return call_counter;
     }
 
-    for (const MethodItemEntry& mie : InstructionIterable(code)) {
+    always_assert(code->editable_cfg_built());
+    auto& cfg = code->cfg();
+    for (const MethodItemEntry& mie : InstructionIterable(cfg)) {
       IRInstruction* insn = mie.insn;
       if (!insn->has_method()) {
         continue;
@@ -117,14 +119,17 @@ void make_methods_static(const std::unordered_set<DexMethod*>& methods,
 }
 
 bool uses_this(const DexMethod* method) {
-  auto const* code = method->get_code();
+  auto code = (const_cast<DexMethod*>(method))->get_code();
   always_assert_log(!is_static(method) && code != nullptr, "%s", SHOW(method));
 
-  auto iterable = InstructionIterable(code);
-  auto const this_insn = iterable.begin()->insn;
+  always_assert(code->editable_cfg_built());
+  auto& cfg = code->cfg();
+  auto first = cfg.entry_block()->get_first_insn();
+  always_assert(first != cfg.entry_block()->end());
+  auto this_insn = first->insn;
   always_assert(this_insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT);
   auto const this_reg = this_insn->dest();
-  for (const auto& mie : iterable) {
+  for (const auto& mie : cfg::InstructionIterable(cfg)) {
     auto insn = mie.insn;
     for (unsigned i = 0; i < insn->srcs_size(); i++) {
       if (this_reg == insn->src(i)) {
