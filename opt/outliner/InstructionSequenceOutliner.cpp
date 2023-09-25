@@ -1219,7 +1219,7 @@ static void get_recurring_cores(
         if (!can_outline_from_method(method)) {
           return;
         }
-        code.build_cfg(/* editable */ true);
+        always_assert(code.editable_cfg_built());
         code.cfg().calculate_exit_block();
         CanOutlineBlockDecider block_decider(
             config.profile_guidance, sufficiently_warm_methods.count(method),
@@ -2733,19 +2733,17 @@ void reorder_with_method_profiles(
 // clear_cfgs
 ////////////////////////////////////////////////////////////////////////////////
 
-static size_t clear_cfgs(const Scope& scope) {
-  std::atomic<size_t> methods{0};
-  walk::parallel::code(scope, [&methods](DexMethod* method, IRCode& code) {
+static size_t count_methods(const Scope& scope) {
+  size_t methods{0};
+  walk::parallel::code(scope, [&methods](DexMethod* method, IRCode&) {
     if (!can_outline_from_method(method)) {
       return;
     }
 
-    code.clear_cfg();
-
     methods++;
   });
 
-  return (size_t)methods;
+  return methods;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2973,6 +2971,7 @@ class OutlinedMethodBodySetter {
           get_outlined_code(outlined_method, c, position_pattern_ids));
       change_visibility(outlined_method->get_code(),
                         outlined_method->get_class(), outlined_method);
+      outlined_method->get_code()->build_cfg();
       TRACE(ISO, 5, "[invoke sequence outliner] set the body of %s as \n%s",
             SHOW(outlined_method), SHOW(outlined_method->get_code()));
       m_outlined_method_body_set++;
@@ -3213,7 +3212,7 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
                   &num_reused_methods);
       outlined_methods_to_reorder.push_back({&dex, newly_outlined_methods});
       auto affected_methods = count_affected_methods(newly_outlined_methods);
-      auto total_methods = clear_cfgs(dex);
+      auto total_methods = count_methods(dex);
       if (total_methods > 0) {
         mgr.incr_metric(std::string("percent_methods_affected_in_Dex") +
                             std::to_string(dex_id),

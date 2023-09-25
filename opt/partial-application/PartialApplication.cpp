@@ -275,7 +275,7 @@ void gather_caller_callees(
       concurrent_callee_caller_classes;
 
   walk::parallel::code(scope, [&](DexMethod* caller, IRCode& code) {
-    code.build_cfg(true);
+    always_assert(code.editable_cfg_built());
     CanOutlineBlockDecider block_decider(
         profile_guidance_config, sufficiently_warm_methods.count(caller),
         sufficiently_hot_methods.count(caller));
@@ -985,7 +985,6 @@ void rewrite_callers(
         (*removed_args) += removed_srcs;
       }
     }
-    code.clear_cfg();
   });
 }
 
@@ -1101,9 +1100,11 @@ void create_partial_application_methods(EnumUtilsCache& enum_utils_cache,
       pa_method->set_virtual(true);
     }
     pa_method->set_deobfuscated_name(show_deobfuscated(pa_method));
+    pa_method->get_code()->build_cfg();
     cls->add_method(pa_method);
     TRACE(PA, 5, "[PartialApplication] Created %s binding %s:\n%s",
-          SHOW(pa_method), css->get_key().c_str(), SHOW(pa_method->get_code()));
+          SHOW(pa_method), css->get_key().c_str(),
+          SHOW(pa_method->get_code()->cfg()));
   }
 }
 
