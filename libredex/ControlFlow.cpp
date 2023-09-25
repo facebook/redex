@@ -1601,6 +1601,26 @@ void ControlFlowGraph::gather_methodhandles(
   }
 }
 
+cfg::InstructionIterator
+ControlFlowGraph::primary_instruction_of_move_result_for_type_check(
+    const cfg::InstructionIterator& it) {
+  auto move_result_insn = it->insn;
+  always_assert(opcode::is_move_result_any(move_result_insn->opcode()));
+  auto block = const_cast<Block*>(it.block());
+  if (block->get_first_insn()->insn == move_result_insn) {
+    auto& preds = block->preds();
+    always_assert(preds.size() == 1);
+    auto previous_block = preds.front()->src();
+    auto res = previous_block->to_cfg_instruction_iterator(
+        previous_block->get_last_insn());
+    return res;
+  } else {
+    auto res = std::prev(it);
+    always_assert(res.block() == it.block());
+    return res;
+  }
+}
+
 cfg::InstructionIterator ControlFlowGraph::primary_instruction_of_move_result(
     const cfg::InstructionIterator& it) {
   auto move_result_insn = it->insn;

@@ -9,6 +9,7 @@
 
 #include <boost/optional/optional.hpp>
 
+#include "BigBlocks.h"
 #include "Debug.h"
 #include "DexPosition.h"
 #include "DexUtil.h"
@@ -352,15 +353,6 @@ class Result final {
   Result() = default;
 };
 
-static bool has_move_result_pseudo(const MethodItemEntry& mie) {
-  return mie.type == MFLOW_OPCODE && mie.insn->has_move_result_pseudo();
-}
-
-static bool is_move_result_pseudo(const MethodItemEntry& mie) {
-  return mie.type == MFLOW_OPCODE &&
-         opcode::is_a_move_result_pseudo(mie.insn->opcode());
-}
-
 Result check_load_params(const DexMethod* method) {
   bool is_static_method = is_static(method);
   const auto* signature = method->get_proto()->get_args();
@@ -445,117 +437,133 @@ Result check_load_params(const DexMethod* method) {
 // Every variable created by a new-instance call should be initialized by a
 // proper invoke-direct <init>. Here, we perform simple check to find some
 // missing calls resulting in use of uninitialized variables. We correctly track
-// variables in a basic block, the most common form of allocation+init.
+// variables in a "big block", the most common form of allocation+init.
 Result check_uninitialized(const DexMethod* method) {
-  auto* code = method->get_code();
-  std::map<uint16_t, IRInstruction*> uninitialized_regs;
-  std::map<IRInstruction*, std::set<uint16_t>> uninitialized_regs_rev;
-  auto remove_from_uninitialized_list = [&](uint16_t reg) {
-    auto it = uninitialized_regs.find(reg);
-    if (it != uninitialized_regs.end()) {
-      uninitialized_regs_rev[it->second].erase(reg);
-      uninitialized_regs.erase(reg);
-    }
-  };
+  auto code = (const_cast<DexMethod*>(method))->get_code();
+  always_assert(code->editable_cfg_built());
+  auto& cfg = code->cfg();
 
-  for (auto it = code->begin(); it != code->end(); ++it) {
-    if (it->type != MFLOW_OPCODE) {
+  std::unordered_set<cfg::BlockId> block_visited;
+  auto ordered_blocks = cfg.order();
+
+  for (cfg::Block* block : ordered_blocks) {
+    if (block_visited.count(block->id())) {
       continue;
     }
-    auto* insn = it->insn;
-    auto op = insn->opcode();
-
-    if (op == OPCODE_NEW_INSTANCE) {
-      ++it;
-      while (it != code->end() && it->type != MFLOW_OPCODE)
-        ++it;
-      if (it == code->end() ||
-          it->insn->opcode() != IOPCODE_MOVE_RESULT_PSEUDO_OBJECT) {
-        auto prev = it;
-        prev--;
-        return Result::make_error("No opcode-move-result after new-instance " +
-                                  show(*prev) + " in \n" + show(code->cfg()));
+    auto big_block = big_blocks::get_big_block(block);
+    if (!big_block) {
+      continue;
+    }
+    // Find a big block starting from current block.
+    for (auto b : big_block->get_blocks()) {
+      block_visited.emplace(b->id());
+    }
+    std::map<uint16_t, IRInstruction*> uninitialized_regs;
+    std::map<IRInstruction*, std::set<uint16_t>> uninitialized_regs_rev;
+    auto remove_from_uninitialized_list = [&](uint16_t reg) {
+      auto it = uninitialized_regs.find(reg);
+      if (it != uninitialized_regs.end()) {
+        uninitialized_regs_rev[it->second].erase(reg);
+        uninitialized_regs.erase(reg);
       }
-
-      auto reg_dest = it->insn->dest();
-      remove_from_uninitialized_list(reg_dest);
-
-      uninitialized_regs[reg_dest] = insn;
-      uninitialized_regs_rev[insn].insert(reg_dest);
-      continue;
-    }
-
-    if (opcode::is_a_move(op) && !opcode::is_move_result_any(op)) {
-      assert(insn->srcs().size() > 0);
-      auto src = insn->srcs()[0];
-      auto dest = insn->dest();
-      if (src == dest) continue;
-
-      auto it_src = uninitialized_regs.find(src);
-      // We no longer care about the old dest
-      remove_from_uninitialized_list(dest);
-      // But if src was uninitialized, dest is now too
-      if (it_src != uninitialized_regs.end()) {
-        uninitialized_regs[dest] = it_src->second;
-        uninitialized_regs_rev[it_src->second].insert(dest);
-      }
-      continue;
-    }
-
-    auto create_error = [&](const IRInstruction* instruction,
-                            const IRCode* code) {
-      return Result::make_error("Use of uninitialized variable " +
-                                show(instruction) + " detected at " +
-                                show(*it) + " in \n" + show(code->cfg()));
     };
 
-    if (op == OPCODE_INVOKE_DIRECT) {
-      auto const& sources = insn->srcs();
-      auto object = sources[0];
+    auto current_block = big_block->get_first_block();
+    while (current_block) {
+      auto ii = InstructionIterable(current_block);
+      for (auto it = ii.begin(); it != ii.end(); it++) {
+        auto* insn = it->insn;
+        auto op = insn->opcode();
+        if (op == OPCODE_NEW_INSTANCE) {
+          auto cfg_it = current_block->to_cfg_instruction_iterator(it);
+          auto move_result = cfg.move_result_of(cfg_it);
+          if (move_result.is_end()) {
+            return Result::make_error(
+                "No opcode-move-result after new-instance " + show(*cfg_it) +
+                " in \n" + show(cfg));
+          }
 
-      auto object_it = uninitialized_regs.find(object);
-      if (object_it != uninitialized_regs.end()) {
-        auto* object_ir = object_it->second;
-        if (insn->get_method()->get_name()->str() != "<init>") {
-          return create_error(object_ir, code);
+          auto reg_dest = move_result->insn->dest();
+          remove_from_uninitialized_list(reg_dest);
+
+          uninitialized_regs[reg_dest] = insn;
+          uninitialized_regs_rev[insn].insert(reg_dest);
+          // skip the move_result
+          it++;
+          if (it == ii.end()) {
+            break;
+          }
+          continue;
         }
-        if (insn->get_method()->get_class()->str() !=
-            object_ir->get_type()->str()) {
-          return Result::make_error("Variable " + show(object_ir) +
-                                    "initialized with the wrong type at " +
-                                    show(*it) + " in \n" + show(code->cfg()));
+
+        if (opcode::is_a_move(op) && !opcode::is_move_result_any(op)) {
+          assert(insn->srcs().size() > 0);
+          auto src = insn->srcs()[0];
+          auto dest = insn->dest();
+          if (src == dest) continue;
+
+          auto it_src = uninitialized_regs.find(src);
+          // We no longer care about the old dest
+          remove_from_uninitialized_list(dest);
+          // But if src was uninitialized, dest is now too
+          if (it_src != uninitialized_regs.end()) {
+            uninitialized_regs[dest] = it_src->second;
+            uninitialized_regs_rev[it_src->second].insert(dest);
+          }
+          continue;
         }
-        for (auto reg : uninitialized_regs_rev[object_ir]) {
-          uninitialized_regs.erase(reg);
+
+        auto create_error = [&](const IRInstruction* instruction,
+                                const cfg::ControlFlowGraph& cfg) {
+          return Result::make_error("Use of uninitialized variable " +
+                                    show(instruction) + " detected at " +
+                                    show(*it) + " in \n" + show(cfg));
+        };
+
+        if (op == OPCODE_INVOKE_DIRECT) {
+          auto const& sources = insn->srcs();
+          auto object = sources[0];
+
+          auto object_it = uninitialized_regs.find(object);
+          if (object_it != uninitialized_regs.end()) {
+            auto* object_ir = object_it->second;
+            if (insn->get_method()->get_name()->str() != "<init>") {
+              return create_error(object_ir, cfg);
+            }
+            if (insn->get_method()->get_class()->str() !=
+                object_ir->get_type()->str()) {
+              return Result::make_error("Variable " + show(object_ir) +
+                                        "initialized with the wrong type at " +
+                                        show(*it) + " in \n" + show(cfg));
+            }
+            for (auto reg : uninitialized_regs_rev[object_ir]) {
+              uninitialized_regs.erase(reg);
+            }
+            uninitialized_regs_rev.erase(object_ir);
+          }
+
+          for (unsigned int i = 1; i < sources.size(); i++) {
+            auto u_it = uninitialized_regs.find(sources[i]);
+            if (u_it != uninitialized_regs.end())
+              return create_error(u_it->second, cfg);
+          }
+          continue;
         }
-        uninitialized_regs_rev.erase(object_ir);
+
+        auto const& sources = insn->srcs();
+        for (auto reg : sources) {
+          auto u_it = uninitialized_regs.find(reg);
+          if (u_it != uninitialized_regs.end())
+            return create_error(u_it->second, cfg);
+        }
+
+        if (insn->has_dest()) remove_from_uninitialized_list(insn->dest());
       }
-
-      for (unsigned int i = 1; i < sources.size(); i++) {
-        auto u_it = uninitialized_regs.find(sources[i]);
-        if (u_it != uninitialized_regs.end())
-          return create_error(u_it->second, code);
+      // get the the next block.
+      if (current_block == big_block->get_last_block()) {
+        break;
       }
-      continue;
-    }
-
-    auto const& sources = insn->srcs();
-    for (auto reg : sources) {
-      auto u_it = uninitialized_regs.find(reg);
-      if (u_it != uninitialized_regs.end())
-        return create_error(u_it->second, code);
-    }
-
-    if (insn->has_dest()) remove_from_uninitialized_list(insn->dest());
-
-    // We clear the structures after any branch, this doesn't cover all the
-    // possible issues, but is simple
-    auto branchingness = opcode::branchingness(op);
-    if (op == OPCODE_THROW ||
-        (branchingness != opcode::Branchingness::BRANCH_NONE &&
-         branchingness != opcode::Branchingness::BRANCH_THROW)) {
-      uninitialized_regs.clear();
-      uninitialized_regs_rev.clear();
+      current_block = current_block->goes_to();
     }
   }
   return Result::Ok();
@@ -564,81 +572,92 @@ Result check_uninitialized(const DexMethod* method) {
 /*
  * Do a linear pass to sanity-check the structure of the bytecode.
  */
-Result check_structure(const DexMethod* method, bool check_no_overwrite_this) {
+Result check_structure(const DexMethod* method,
+                       cfg::ControlFlowGraph& cfg,
+                       bool check_no_overwrite_this) {
   check_no_overwrite_this &= !is_static(method);
-  auto* code = method->get_code();
   IRInstruction* this_insn = nullptr;
-  bool has_seen_non_load_param_opcode{false};
-  for (auto it = code->begin(); it != code->end(); ++it) {
-    // XXX we are using IRList::iterator instead of InstructionIterator here
-    // because the latter does not support reverse iteration
-    if (it->type != MFLOW_OPCODE) {
-      continue;
-    }
-    auto* insn = it->insn;
-    auto op = insn->opcode();
-
-    if (has_seen_non_load_param_opcode && opcode::is_a_load_param(op)) {
-      return Result::make_error("Encountered " + show(*it) +
-                                " not at the start of the method");
-    }
-    has_seen_non_load_param_opcode = !opcode::is_a_load_param(op);
-
-    if (check_no_overwrite_this) {
-      if (op == IOPCODE_LOAD_PARAM_OBJECT && this_insn == nullptr) {
-        this_insn = insn;
-      } else if (insn->has_dest() && insn->dest() == this_insn->dest()) {
-        return Result::make_error(
-            "Encountered overwrite of `this` register by " + show(insn));
+  auto entry_block = cfg.entry_block();
+  for (cfg::Block* block : cfg.blocks()) {
+    bool has_seen_non_load_param_opcode{false};
+    auto ii = InstructionIterable(block);
+    for (auto it = ii.begin(); it != ii.end(); it++) {
+      auto* insn = it->insn;
+      auto op = insn->opcode();
+      auto cfg_it = block->to_cfg_instruction_iterator(it);
+      if ((block != entry_block || has_seen_non_load_param_opcode) &&
+          opcode::is_a_load_param(op)) {
+        return Result::make_error("Encountered " + show(*it) +
+                                  " not at the start of the method");
       }
-    }
+      has_seen_non_load_param_opcode = !opcode::is_a_load_param(op);
 
-    // The instruction immediately before a move-result instruction must be
-    // either an invoke-* or a filled-new-array instruction.
-    if (opcode::is_a_move_result(op)) {
-      auto prev = it;
-      while (prev != code->begin()) {
-        --prev;
-        if (prev->type == MFLOW_OPCODE) {
-          break;
+      if (check_no_overwrite_this) {
+        if (op == IOPCODE_LOAD_PARAM_OBJECT && this_insn == nullptr) {
+          this_insn = insn;
+        } else if (insn->has_dest() && insn->dest() == this_insn->dest()) {
+          return Result::make_error(
+              "Encountered overwrite of `this` register by " + show(insn));
         }
       }
-      if (it == code->begin() || prev->type != MFLOW_OPCODE) {
-        return Result::make_error("Encountered " + show(*it) +
-                                  " at start of the method");
+
+      if (opcode::is_move_result_any(op)) {
+        if (block == cfg.entry_block() && it == ii.begin()) {
+          return Result::make_error("Encountered " + show(*it) +
+                                    " at start of the method");
+        }
+        auto prev =
+            cfg.primary_instruction_of_move_result_for_type_check(cfg_it);
+        // The instruction immediately before a move-result instruction must be
+        // either an invoke-* or a filled-new-array instruction.
+        if (opcode::is_a_move_result(op)) {
+          if (prev->type != MFLOW_OPCODE) {
+            return Result::make_error("Encountered " + show(*it) +
+                                      " at start of the method");
+          }
+          auto prev_op = prev->insn->opcode();
+          if (!(opcode::is_an_invoke(prev_op) ||
+                opcode::is_filled_new_array(prev_op))) {
+            return Result::make_error(
+                "Encountered " + show(*it) +
+                " without appropriate prefix "
+                "instruction. Expected invoke or filled-new-array, got " +
+                show(prev->insn));
+          }
+          if (!prev->insn->has_move_result()) {
+            return Result::make_error("Encountered " + show(*it) +
+                                      " without appropriate prefix "
+                                      "instruction");
+          }
+        }
+
+        if (opcode::is_a_move_result_pseudo(insn->opcode()) &&
+            (!prev->insn->has_move_result_pseudo())) {
+          return Result::make_error("Encountered " + show(*it) +
+                                    " without appropriate prefix "
+                                    "instruction");
+        }
       }
-      auto prev_op = prev->insn->opcode();
-      if (!(opcode::is_an_invoke(prev_op) ||
-            opcode::is_filled_new_array(prev_op))) {
-        return Result::make_error(
-            "Encountered " + show(*it) +
-            " without appropriate prefix "
-            "instruction. Expected invoke or filled-new-array, got " +
-            show(prev->insn));
+      if (insn->has_move_result_pseudo()) {
+        auto move_result = cfg.move_result_of(cfg_it);
+        if (move_result.is_end() ||
+            !opcode::is_a_move_result_pseudo(move_result->insn->opcode())) {
+          return Result::make_error("Did not find move-result-pseudo after " +
+                                    show(*it) + " in \n" + show(cfg));
+        }
       }
-    } else if (opcode::is_a_move_result_pseudo(insn->opcode()) &&
-               (it == code->begin() ||
-                !has_move_result_pseudo(*std::prev(it)))) {
-      return Result::make_error("Encountered " + show(*it) +
-                                " without appropriate prefix "
-                                "instruction");
-    } else if (insn->has_move_result_pseudo() &&
-               (it == code->end() || std::next(it) == code->end() ||
-                !is_move_result_pseudo(*std::next(it)))) {
-      return Result::make_error("Did not find move-result-pseudo after " +
-                                show(*it) + " in \n" + show(code));
     }
   }
   return check_uninitialized(method);
 }
 
 /*
- * Do a linear pass to sanity-check the structure of the positions.
+ * Sanity-check the structure of the positions for editable cfg format.
  */
-Result check_positions(const DexMethod* method) {
-  auto code = method->get_code();
+Result check_positions_cfg(cfg::ControlFlowGraph& cfg) {
   std::unordered_set<DexPosition*> positions;
-  for (auto it = code->begin(); it != code->end(); ++it) {
+  auto iterable = cfg::InstructionIterable(cfg);
+  for (auto it = iterable.begin(); it != iterable.end(); ++it) {
     if (it->type != MFLOW_POSITION) {
       continue;
     }
@@ -647,6 +666,7 @@ Result check_positions(const DexMethod* method) {
       return Result::make_error("Duplicate position " + show(pos));
     }
   }
+
   std::unordered_set<DexPosition*> visited_parents;
   for (auto pos : positions) {
     if (!pos->parent) {
@@ -897,8 +917,9 @@ void IRTypeChecker::run() {
     return;
   }
 
-  code->build_cfg(/* editable */ false);
-  auto result = check_structure(m_dex_method, m_check_no_overwrite_this);
+  cfg::ScopedCFG cfg(code);
+
+  auto result = check_structure(m_dex_method, *cfg, m_check_no_overwrite_this);
   if (result != Result::Ok()) {
     m_complete = true;
     m_good = false;
@@ -907,8 +928,6 @@ void IRTypeChecker::run() {
   }
 
   // We then infer types for all the registers used in the method.
-  const cfg::ControlFlowGraph& cfg = code->cfg();
-
   // Check that the load-params match the signature.
   auto params_result = check_load_params(m_dex_method);
   if (params_result != Result::Ok()) {
@@ -918,18 +937,18 @@ void IRTypeChecker::run() {
     return;
   }
 
-  m_type_inference = std::make_unique<TypeInference>(cfg);
+  m_type_inference = std::make_unique<TypeInference>(*cfg);
   m_type_inference->run(m_dex_method);
 
   // Finally, we use the inferred types to type-check each instruction in the
   // method. We stop at the first type error encountered.
   auto& type_envs = m_type_inference->get_type_environments();
-  for (const MethodItemEntry& mie : InstructionIterable(code)) {
+  for (const MethodItemEntry& mie : InstructionIterable(*cfg)) {
     IRInstruction* insn = mie.insn;
     try {
       auto it = type_envs.find(insn);
       always_assert_log(
-          it != type_envs.end(), "%s in:\n%s", SHOW(mie), SHOW(code));
+          it != type_envs.end(), "%s in:\n%s", SHOW(mie), SHOW(*cfg));
       check_instruction(insn, &it->second);
     } catch (const TypeCheckingException& e) {
       m_good = false;
@@ -944,7 +963,8 @@ void IRTypeChecker::run() {
     }
   }
 
-  auto positions_result = check_positions(m_dex_method);
+  auto positions_result = check_positions_cfg(*cfg);
+
   if (positions_result != Result::Ok()) {
     m_complete = true;
     m_good = false;

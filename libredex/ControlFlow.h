@@ -965,6 +965,11 @@ class ControlFlowGraph {
   void gather_callsites(std::vector<DexCallSite*>& callsites) const;
   void gather_methodhandles(std::vector<DexMethodHandle*>& methodhandles) const;
 
+  // Different from primary_instruction_of_move_result(), this method is only
+  // used for IR type check.
+  cfg::InstructionIterator primary_instruction_of_move_result_for_type_check(
+      const cfg::InstructionIterator& it);
+
   cfg::InstructionIterator primary_instruction_of_move_result(
       const cfg::InstructionIterator& it);
 

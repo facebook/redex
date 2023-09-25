@@ -1246,6 +1246,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
                                                         IRCode& code) {
       if (is_editable_cfg_friendly) {
         always_assert_log(code.editable_cfg_built(), "%s has a cfg!", SHOW(m));
+        code.cfg().reset_exit_block();
       }
       if (slow_invariants_debug) {
         std::vector<DexMethodRef*> methods;
