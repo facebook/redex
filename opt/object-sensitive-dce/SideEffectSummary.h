@@ -75,9 +75,10 @@ struct Summary {
   Summary(const std::initializer_list<param_idx_t>& modified_params)
       : modified_params(modified_params) {}
 
-  bool is_pure() {
+  bool is_pure() const {
     return effects == EFF_NONE && modified_params.empty() && !may_read_external;
   }
+
   friend bool operator==(const Summary& a, const Summary& b) {
     return a.effects == b.effects && a.modified_params == b.modified_params &&
            a.may_read_external == b.may_read_external;
@@ -138,8 +139,7 @@ void analyze_scope(const init_classes::InitClassesWithSideEffects&
                        init_classes_with_side_effects,
                    const Scope& scope,
                    const call_graph::Graph&,
-                   const ConcurrentMap<const DexMethodRef*,
-                                       local_pointers::FixpointIterator*>&,
+                   const local_pointers::FixpointIteratorMap&,
                    SummaryMap* effect_summaries);
 
 } // namespace side_effects

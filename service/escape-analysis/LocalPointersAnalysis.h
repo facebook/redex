@@ -206,6 +206,11 @@ struct EscapeSummary {
       : escaping_parameters(l), returned_parameters(std::move(ps)) {}
 
   static EscapeSummary from_s_expr(const sparta::s_expr&);
+
+  bool operator==(const EscapeSummary& other) const {
+    return escaping_parameters == other.escaping_parameters &&
+           returned_parameters == other.returned_parameters;
+  }
 };
 
 std::ostream& operator<<(std::ostream& o, const EscapeSummary& summary);
@@ -292,8 +297,7 @@ void escape_invoke_params(const IRInstruction* insn, EnvironmentWithStore* env);
 void default_instruction_handler(const IRInstruction* insn,
                                  EnvironmentWithStore* env);
 
-using FixpointIteratorMap =
-    ConcurrentMap<const DexMethodRef*, FixpointIterator*>;
+using FixpointIteratorMap = ConcurrentMap<const DexMethod*, FixpointIterator*>;
 
 struct FixpointIteratorMapDeleter final {
   void operator()(FixpointIteratorMap*);
@@ -304,18 +308,16 @@ using FixpointIteratorMapPtr =
 
 using SummaryMap = std::unordered_map<const DexMethodRef*, EscapeSummary>;
 
-using SummaryCMap = ConcurrentMap<const DexMethodRef*, EscapeSummary>;
-
 /*
  * Analyze all methods in scope, making sure to analyze the callees before
  * their callers.
  *
- * If a non-null SummaryCMap pointer is passed in, it will get populated
+ * If a non-null SummaryMap pointer is passed in, it will get populated
  * with the escape summaries of the methods in scope.
  */
 FixpointIteratorMapPtr analyze_scope(const Scope&,
                                      const call_graph::Graph&,
-                                     SummaryCMap* = nullptr);
+                                     SummaryMap* = nullptr);
 
 /*
  * Join over all possible returned and thrown values.

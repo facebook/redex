@@ -140,10 +140,8 @@ void ObjectSensitiveDcePass::run_pass(DexStoresVector& stores,
     std::ifstream file_input(*m_external_escape_summaries_file);
     summary_serialization::read(file_input, &escape_summaries);
   }
-  ptrs::SummaryCMap escape_summaries_cmap(escape_summaries.begin(),
-                                          escape_summaries.end());
   auto ptrs_fp_iter_map =
-      ptrs::analyze_scope(scope, call_graph, &escape_summaries_cmap);
+      ptrs::analyze_scope(scope, call_graph, &escape_summaries);
 
   side_effects::SummaryMap effect_summaries;
   if (m_external_side_effect_summaries_file) {
@@ -164,7 +162,7 @@ void ObjectSensitiveDcePass::run_pass(DexStoresVector& stores,
     always_assert(code.editable_cfg_built());
     auto& cfg = code.cfg();
     uv::FixpointIterator used_vars_fp_iter(
-        *ptrs_fp_iter_map->find(method)->second,
+        *ptrs_fp_iter_map->at_unsafe(method),
         build_summary_map(effect_summaries, call_graph, method),
         cfg);
     used_vars_fp_iter.run(uv::UsedVarsSet());

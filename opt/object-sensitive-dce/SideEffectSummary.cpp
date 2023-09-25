@@ -230,38 +230,27 @@ void SummaryBuilder::classify_heap_write(const ptrs::Environment& env,
 }
 
 /*
- * Analyze :method and insert its summary into :summary_cmap. Recursively
- * analyze the callees if necessary. This method is thread-safe.
+ * Analyze :method.
  */
-void analyze_method_recursive(const init_classes::InitClassesWithSideEffects&
-                                  init_classes_with_side_effects,
-                              const DexMethod* method,
-                              const call_graph::Graph& call_graph,
-                              const ptrs::FixpointIteratorMap& ptrs_fp_iter_map,
-                              PatriciaTreeSet<const DexMethodRef*> visiting,
-                              SummaryConcurrentMap* summary_cmap) {
-  if (!method || summary_cmap->count(method) != 0 ||
-      visiting.contains(method) || method->get_code() == nullptr) {
-    return;
-  }
-  visiting.insert(method);
-
+Summary analyze_method(const init_classes::InitClassesWithSideEffects&
+                           init_classes_with_side_effects,
+                       const DexMethod* method,
+                       const call_graph::Graph& call_graph,
+                       const ptrs::FixpointIteratorMap& ptrs_fp_iter_map,
+                       const SummaryMap& summary_map) {
   InvokeToSummaryMap invoke_to_summary_cmap;
   if (call_graph.has_node(method)) {
     const auto& callee_edges = call_graph.node(method)->callees();
     for (const auto& edge : callee_edges) {
       auto* callee = edge->callee()->method();
-      analyze_method_recursive(init_classes_with_side_effects, callee,
-                               call_graph, ptrs_fp_iter_map, visiting,
-                               summary_cmap);
-      if (summary_cmap->count(callee) != 0) {
-        invoke_to_summary_cmap.emplace(edge->invoke_insn(),
-                                       summary_cmap->at(callee));
+      auto it = summary_map.find(callee);
+      if (it != summary_map.end()) {
+        invoke_to_summary_cmap.emplace(edge->invoke_insn(), it->second);
       }
     }
   }
 
-  const auto* ptrs_fp_iter = ptrs_fp_iter_map.find(method)->second;
+  const auto* ptrs_fp_iter = ptrs_fp_iter_map.at_unsafe(method);
   auto summary =
       SummaryBuilder(init_classes_with_side_effects, invoke_to_summary_cmap,
                      *ptrs_fp_iter, method->get_code())
@@ -269,7 +258,6 @@ void analyze_method_recursive(const init_classes::InitClassesWithSideEffects&
   if (method->rstate.no_optimizations()) {
     summary.effects |= EFF_NO_OPTIMIZE;
   }
-  summary_cmap->emplace(method, summary);
 
   if (traceEnabled(OSDCE, 3)) {
     TRACE(OSDCE, 3, "%s %s unknown side effects (%zu)", SHOW(method),
@@ -283,6 +271,8 @@ void analyze_method_recursive(const init_classes::InitClassesWithSideEffects&
       TRACE(OSDCE, 3, "");
     }
   }
+
+  return summary;
 }
 
 Summary analyze_code(const init_classes::InitClassesWithSideEffects&
@@ -295,14 +285,12 @@ Summary analyze_code(const init_classes::InitClassesWithSideEffects&
       .build();
 }
 
-void analyze_scope(
-    const init_classes::InitClassesWithSideEffects&
-        init_classes_with_side_effects,
-    const Scope& scope,
-    const call_graph::Graph& call_graph,
-    const ConcurrentMap<const DexMethodRef*, ptrs::FixpointIterator*>&
-        ptrs_fp_iter_map,
-    SummaryMap* effect_summaries) {
+void analyze_scope(const init_classes::InitClassesWithSideEffects&
+                       init_classes_with_side_effects,
+                   const Scope& scope,
+                   const call_graph::Graph& call_graph,
+                   const ptrs::FixpointIteratorMap& ptrs_fp_iter_map,
+                   SummaryMap* effect_summaries) {
   // This method is special: the bytecode verifier requires that this method
   // be called before a newly-allocated object gets used in any way. We can
   // model this by treating the method as modifying its `this` parameter --
@@ -310,19 +298,24 @@ void analyze_scope(
   (*effect_summaries)[DexMethod::get_method("Ljava/lang/Object;.<init>:()V")] =
       Summary({0});
 
-  SummaryConcurrentMap summary_cmap;
-  for (auto& pair : *effect_summaries) {
-    summary_cmap.insert(pair);
-  }
-
-  walk::parallel::code(scope, [&](const DexMethod* method, IRCode& code) {
-    PatriciaTreeSet<const DexMethodRef*> visiting;
-    analyze_method_recursive(init_classes_with_side_effects, method, call_graph,
-                             ptrs_fp_iter_map, visiting, &summary_cmap);
-  });
-
-  for (auto& pair : summary_cmap) {
-    effect_summaries->insert(pair);
+  while (true) {
+    SummaryConcurrentMap changed_effect_summaries;
+    walk::parallel::code(scope, [&](const DexMethod* method, IRCode&) {
+      auto new_summary =
+          analyze_method(init_classes_with_side_effects, method, call_graph,
+                         ptrs_fp_iter_map, *effect_summaries);
+      auto it = effect_summaries->find(method);
+      if (it != effect_summaries->end() && it->second == new_summary) {
+        return;
+      }
+      changed_effect_summaries.emplace(method, std::move(new_summary));
+    });
+    if (changed_effect_summaries.empty()) {
+      break;
+    }
+    for (auto&& [method, summary] : changed_effect_summaries) {
+      (*effect_summaries)[method] = std::move(summary);
+    }
   }
 }
 

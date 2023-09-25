@@ -379,68 +379,69 @@ void FixpointIteratorMapDeleter::operator()(FixpointIteratorMap* map) {
   delete map;
 }
 
-static void analyze_method_recursive(
+std::pair<std::unique_ptr<FixpointIterator>, EscapeSummary> analyze_method(
     const DexMethod* method,
     const call_graph::Graph& call_graph,
-    sparta::PatriciaTreeSet<const DexMethodRef*> visiting,
-    FixpointIteratorMap* fp_iter_map,
-    SummaryCMap* summary_map) {
-  if (!method || summary_map->count(method) != 0 || visiting.contains(method) ||
-      method->get_code() == nullptr) {
-    return;
-  }
-  visiting.insert(method);
-
+    const SummaryMap& summary_map) {
   std::unordered_map<const IRInstruction*, EscapeSummary> invoke_to_summary_map;
   if (call_graph.has_node(method)) {
     const auto& callee_edges = call_graph.node(method)->callees();
     for (const auto& edge : callee_edges) {
       auto* callee = edge->callee()->method();
-      analyze_method_recursive(callee, call_graph, visiting, fp_iter_map,
-                               summary_map);
-      if (summary_map->count(callee) != 0) {
-        invoke_to_summary_map.emplace(edge->invoke_insn(),
-                                      summary_map->at(callee));
+      auto it = summary_map.find(callee);
+      if (it != summary_map.end()) {
+        invoke_to_summary_map.emplace(edge->invoke_insn(), it->second);
       }
     }
   }
 
   auto* code = method->get_code();
   auto& cfg = code->cfg();
-  auto fp_iter = new FixpointIterator(cfg, std::move(invoke_to_summary_map));
+  auto fp_iter =
+      std::make_unique<FixpointIterator>(cfg, std::move(invoke_to_summary_map));
   fp_iter->run(Environment());
 
-  // The following updates form a critical section.
-  {
-    std::unique_lock<std::mutex> lock(fp_iter_map->get_lock(method));
-    fp_iter_map->update_unsafe(method,
-                               [&](auto, FixpointIterator*& v, bool exists) {
-                                 redex_assert(!(exists ^ (v != nullptr)));
-                                 delete v;
-                                 v = fp_iter;
-                               });
-    summary_map->update(method, [&](auto, EscapeSummary& v, bool) {
-      v = get_escape_summary(*fp_iter, *code);
-    });
-  }
+  auto summary = get_escape_summary(*fp_iter, *code);
+  return std::make_pair(std::move(fp_iter), std::move(summary));
 }
 
 FixpointIteratorMapPtr analyze_scope(const Scope& scope,
                                      const call_graph::Graph& call_graph,
-                                     SummaryCMap* summary_map_ptr) {
+                                     SummaryMap* summary_map_ptr) {
   FixpointIteratorMapPtr fp_iter_map(new FixpointIteratorMap());
-  SummaryCMap summary_map;
+  SummaryMap summary_map;
   if (summary_map_ptr == nullptr) {
     summary_map_ptr = &summary_map;
   }
   summary_map_ptr->emplace(
       DexMethod::get_method("Ljava/lang/Object;.<init>:()V"), EscapeSummary{});
 
-  walk::parallel::code(scope, [&](const DexMethod* method, IRCode& code) {
-    sparta::PatriciaTreeSet<const DexMethodRef*> visiting;
-    analyze_method_recursive(method, call_graph, visiting, fp_iter_map.get(),
-                             summary_map_ptr);
-  });
+  while (true) {
+    ConcurrentMap<const DexMethod*, EscapeSummary> changed_effect_summaries;
+    walk::parallel::code(scope, [&](const DexMethod* method, IRCode&) {
+      auto p = analyze_method(method, call_graph, *summary_map_ptr);
+      auto& new_fp_iter = p.first;
+      auto& new_summary = p.second;
+      fp_iter_map->update(method, [&](auto*, auto& v, bool exists) {
+        redex_assert(!(exists ^ (v != nullptr)));
+        std::unique_ptr<FixpointIterator> w(v);
+        std::swap(new_fp_iter, w);
+        v = w.release();
+      });
+      auto it = summary_map_ptr->find(method);
+      if (it != summary_map_ptr->end() && it->second == new_summary) {
+        return;
+      }
+      changed_effect_summaries.emplace(method, std::move(new_summary));
+    });
+    if (changed_effect_summaries.empty()) {
+      break;
+    }
+    for (auto&& [method, summary] : changed_effect_summaries) {
+      (*summary_map_ptr)[method] = std::move(summary);
+    }
+  }
+
   return fp_iter_map;
 }
 
