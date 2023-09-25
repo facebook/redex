@@ -44,10 +44,9 @@ void test(const std::string& code_str, const std::string& expected_str) {
 
   auto code = assembler::ircode_from_string(code_str);
   auto expected = assembler::ircode_from_string(expected_str);
-
-  ResolveProguardAssumeValuesPass::process_for_code(code.get());
   auto code_ptr = code.get();
   code_ptr->build_cfg();
+  ResolveProguardAssumeValuesPass::process_for_code(code_ptr->cfg());
   auto& cfg = code_ptr->cfg();
   std::cerr << "after:" << std::endl << SHOW(cfg);
 

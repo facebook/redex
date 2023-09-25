@@ -122,7 +122,7 @@ class ResultPropagation {
   /*
    * Patch code based on analysis results.
    */
-  void patch(PassManager&, IRCode*);
+  void patch(PassManager&, cfg::ControlFlowGraph&);
 
  private:
   const std::unordered_map<const DexMethod*, ParamIndex>&

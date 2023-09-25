@@ -389,10 +389,9 @@ void StringConcatenatorPass::run_pass(DexStoresVector& stores,
           return Stats{};
         }
 
-        code->build_cfg(/* editable */ true);
+        always_assert(code->editable_cfg_built());
         Stats stats =
             Concatenator{config}.run(&code->cfg(), m, &methods_to_remove);
-        code->clear_cfg();
 
         return stats;
       },

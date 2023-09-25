@@ -12,7 +12,6 @@
 #include "IRCode.h"
 #include "LocalPointersAnalysis.h"
 #include "PassManager.h"
-#include "ScopedCFG.h"
 #include "SideEffectSummary.h"
 #include "SummarySerialization.h"
 
@@ -22,8 +21,9 @@ bool check_inits_has_side_effects(
         init_classes_with_side_effects,
     IRCode* code,
     const std::unordered_set<DexMethodRef*>& safe_base_invoke) {
-  cfg::ScopedCFG cfg(code);
-  auto iterable = cfg::InstructionIterable(*cfg);
+  always_assert(code->editable_cfg_built());
+  auto& cfg = code->cfg();
+  auto iterable = cfg::InstructionIterable(cfg);
   side_effects::Summary summary(side_effects::EFF_NONE, {});
   side_effects::InvokeToSummaryMap summary_map;
 
@@ -38,10 +38,10 @@ bool check_inits_has_side_effects(
     }
   }
 
-  reaching_defs::MoveAwareFixpointIterator reaching_defs_iter(*cfg);
+  reaching_defs::MoveAwareFixpointIterator reaching_defs_iter(cfg);
   reaching_defs_iter.run({});
 
-  local_pointers::FixpointIterator fp_iter(*cfg);
+  local_pointers::FixpointIterator fp_iter(cfg);
   fp_iter.run({});
 
   auto side_effect_summary =

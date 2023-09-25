@@ -28,6 +28,7 @@ void test(const std::string& code_str,
   bool is_static = true;
   DexTypeList* args = DexTypeList::make_type_list({});
   DexType* declaring_type = nullptr;
+  code->build_cfg();
   UpCodeMotionPass::Stats stats = UpCodeMotionPass::process_code(
       is_static, declaring_type, args, code.get(), branch_hotness_check);
   EXPECT_EQ(expected_instructions_moved, stats.instructions_moved);
@@ -36,6 +37,7 @@ void test(const std::string& code_str,
             stats.inverted_conditional_branches);
   EXPECT_EQ(expected_clobbered_registers, stats.clobbered_registers);
 
+  code->clear_cfg();
   printf("%s\n", assembler::to_string(code.get()).c_str());
   EXPECT_CODE_EQ(code.get(), expected.get());
 };

@@ -8,7 +8,6 @@
 #include "KotlinInstanceRewriter.h"
 #include "CFGMutation.h"
 #include "PassManager.h"
-#include "ScopedCFG.h"
 #include "Show.h"
 #include "Walkers.h"
 
@@ -73,8 +72,9 @@ KotlinInstanceRewriter::Stats KotlinInstanceRewriter::remove_escaping_instance(
               return stats;
             }
 
-            cfg::ScopedCFG cfg(method->get_code());
-            auto iterable = cfg::InstructionIterable(*cfg);
+            always_assert(method->get_code()->editable_cfg_built());
+            auto& cfg = method->get_code()->cfg();
+            auto iterable = cfg::InstructionIterable(cfg);
             for (auto it = iterable.begin(); it != iterable.end(); it++) {
               auto insn = it->insn;
 
@@ -147,11 +147,11 @@ KotlinInstanceRewriter::Stats KotlinInstanceRewriter::transform(
     auto dmethods = cls->get_dmethods();
     for (auto* meth : dmethods) {
       if (method::is_clinit(meth)) {
-        cfg::ScopedCFG cfg(meth->get_code());
-        cfg::CFGMutation m(*cfg);
+        auto& cfg = meth->get_code()->cfg();
+        cfg::CFGMutation m(cfg);
         TRACE(KOTLIN_INSTANCE, 5, "%s <clinit> before\n%s", SHOW(cls),
-              SHOW(*cfg));
-        auto iterable = cfg::InstructionIterable(*cfg);
+              SHOW(cfg));
+        auto iterable = cfg::InstructionIterable(cfg);
         for (auto insn_it = iterable.begin(); insn_it != iterable.end();
              insn_it++) {
           auto insn = insn_it->insn;
@@ -165,7 +165,7 @@ KotlinInstanceRewriter::Stats KotlinInstanceRewriter::transform(
         }
         m.flush();
         TRACE(KOTLIN_INSTANCE, 5, "%s <clinit> after\n%s", SHOW(cls),
-              SHOW(*cfg));
+              SHOW(cfg));
         break;
       }
     }
@@ -173,23 +173,23 @@ KotlinInstanceRewriter::Stats KotlinInstanceRewriter::transform(
     // Convert INSTANCE read to new instance creation
     for (auto& method_it : concurrent_instance_map.find(field)->second) {
       auto* meth = method_it.second;
-      cfg::ScopedCFG cfg(meth->get_code());
-      cfg::CFGMutation m(*cfg);
-      TRACE(KOTLIN_INSTANCE, 5, "%s before\n%s", SHOW(meth), SHOW(*cfg));
+      auto& cfg = meth->get_code()->cfg();
+      cfg::CFGMutation m(cfg);
+      TRACE(KOTLIN_INSTANCE, 5, "%s before\n%s", SHOW(meth), SHOW(cfg));
       DexMethodRef* init = DexMethod::get_method(
           cls->get_type(), DexString::make_string("<init>"),
           DexProto::make_proto(type::_void(), DexTypeList::make_type_list({})));
       always_assert(init);
       // Make this constructor publcic
       set_public(init->as_def());
-      auto iterable = cfg::InstructionIterable(*cfg);
+      auto iterable = cfg::InstructionIterable(cfg);
       for (auto insn_it = iterable.begin(); insn_it != iterable.end();
            insn_it++) {
         auto insn = insn_it->insn;
         if (!opcode::is_an_sget(insn->opcode()) || insn->get_field() != field) {
           continue;
         }
-        auto move_result_it = cfg->move_result_of(insn_it);
+        auto move_result_it = cfg.move_result_of(insn_it);
         IRInstruction* new_isn = new IRInstruction(OPCODE_NEW_INSTANCE);
         new_isn->set_type(cls->get_type());
         IRInstruction* mov_result =
@@ -203,7 +203,7 @@ KotlinInstanceRewriter::Stats KotlinInstanceRewriter::transform(
         stats.kotlin_new_inserted++;
       }
       m.flush();
-      TRACE(KOTLIN_INSTANCE, 5, "%s after\n%s", SHOW(meth), SHOW(*cfg));
+      TRACE(KOTLIN_INSTANCE, 5, "%s after\n%s", SHOW(meth), SHOW(cfg));
     }
     cls->remove_field(resolve_field(field));
   }
