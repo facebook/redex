@@ -242,7 +242,7 @@ class InterproceduralAnalyzer {
         fp = std::make_shared<CallGraphFixpointIterator>(
             *callgraph,
             &this->registry,
-            [this, callgraph](
+            [this, &callgraph](
                 const Function& func, Registry* reg,
                 CallerContext* context) -> std::shared_ptr<FunctionAnalyzer> {
               // intraprocedural part
