@@ -50,6 +50,5 @@ class ReBindRefsPass : public ExternalRefsManglingPass {
     ExternalRefsManglingPass::eval_pass(stores, conf, mgr);
   }
 
-  bool is_cfg_legacy() override { return true; }
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 };

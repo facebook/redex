@@ -218,15 +218,15 @@ void analyze_true_instance_ofs(
 }
 
 RemoveResult analyze_and_evaluate_instance_of(DexMethod* method) {
-  ScopedCFG cfg(method->get_code());
-  CFGMutation mutation(*cfg);
+  auto& cfg = method->get_code()->cfg();
+  CFGMutation mutation(cfg);
 
   RemoveResult res;
   std::vector<const MethodItemEntry*> true_modulo_nulls;
 
   // Figure out types. Find guaranteed-false checks.
   {
-    TypeInference type_inf(*cfg);
+    TypeInference type_inf(cfg);
     type_inf.run(method);
 
     auto& type_envs = type_inf.get_type_environments();
@@ -239,7 +239,7 @@ RemoveResult analyze_and_evaluate_instance_of(DexMethod* method) {
       return &it->second;
     };
 
-    for (const MethodItemEntry& mie : cfg::InstructionIterable(*cfg)) {
+    for (const MethodItemEntry& mie : cfg::InstructionIterable(cfg)) {
       auto insn = mie.insn;
       if (insn->opcode() != OPCODE_INSTANCE_OF) {
         continue;
@@ -282,8 +282,8 @@ RemoveResult analyze_and_evaluate_instance_of(DexMethod* method) {
       }
       redex_assert(*eval == 0);
 
-      auto def_it = cfg->find_insn(insn);
-      auto move_it = cfg->move_result_of(def_it);
+      auto def_it = cfg.find_insn(insn);
+      auto move_it = cfg.move_result_of(def_it);
       if (move_it.is_end()) { // Should not happen.
         continue;
       }
@@ -303,7 +303,7 @@ RemoveResult analyze_and_evaluate_instance_of(DexMethod* method) {
   // See whether the checks that will succeed if the value is not null
   // can be turned into a null check. If the result is used for more
   // than a branch, transformation is likely not beneficial at the moment.
-  analyze_true_instance_ofs(*cfg, mutation, res, true_modulo_nulls);
+  analyze_true_instance_ofs(cfg, mutation, res, true_modulo_nulls);
 
   mutation.flush();
   return res;
@@ -347,14 +347,15 @@ void handle_false_case(IRInstruction* insn,
 }
 
 RemoveResult analyze_and_evaluate(DexMethod* method) {
-  ScopedCFG cfg(method->get_code());
-  CFGMutation mutation(*cfg);
+  always_assert(method->get_code()->editable_cfg_built());
+  auto& cfg = method->get_code()->cfg();
+  CFGMutation mutation(cfg);
 
   RemoveResult res;
 
   // Figure out types.
   {
-    TypeInference type_inf(*cfg);
+    TypeInference type_inf(cfg);
     type_inf.run(method);
 
     auto& type_envs = type_inf.get_type_environments();
@@ -367,7 +368,7 @@ RemoveResult analyze_and_evaluate(DexMethod* method) {
       return &it->second;
     };
 
-    for (const MethodItemEntry& mie : cfg::InstructionIterable(*cfg)) {
+    for (const MethodItemEntry& mie : cfg::InstructionIterable(cfg)) {
       auto insn = mie.insn;
       if (insn->opcode() != OPCODE_CHECK_CAST) {
         continue;
@@ -404,15 +405,15 @@ RemoveResult analyze_and_evaluate(DexMethod* method) {
       }
 
       if (*eval == 0) {
-        handle_false_case(insn, *cfg, mutation, res);
+        handle_false_case(insn, cfg, mutation, res);
         continue;
       }
       redex_assert(*eval == 1);
 
       // Successful check, can be eliminated.
       reg_t src_reg = insn->src(0);
-      auto def_it = cfg->find_insn(insn);
-      auto move_it = cfg->move_result_of(def_it);
+      auto def_it = cfg.find_insn(insn);
+      auto move_it = cfg.move_result_of(def_it);
       if (move_it.is_end()) { // Should not happen.
         continue;
       }
@@ -511,7 +512,9 @@ void EvaluateTypeChecksPass::run_pass(DexStoresVector& stores,
         }
         auto has_instance_of_check_cast = [&code]() {
           std::pair<bool, bool> res;
-          for (const auto& mie : *code) {
+          always_assert(code->editable_cfg_built());
+          auto& cfg = code->cfg();
+          for (const auto& mie : cfg::InstructionIterable(cfg)) {
             if (mie.type != MFLOW_OPCODE) {
               continue;
             }

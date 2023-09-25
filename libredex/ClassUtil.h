@@ -39,7 +39,7 @@ Serdes get_serdes(const DexClass* cls);
  * Looks for a <clinit> method for the given class, creates a new one if it
  * does not exist
  */
-DexMethod* get_or_create_clinit(DexClass* cls);
+DexMethod* get_or_create_clinit(DexClass* cls, bool need_editable_cfg = false);
 
 /**
  * Return true if the parent chain leads to known classes.

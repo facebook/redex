@@ -366,15 +366,16 @@ void InitClassLoweringPass::run_pass(DexStoresVector& stores,
         if (!code) {
           return Stats();
         }
+        always_assert(code->editable_cfg_built());
+        auto& cfg = code->cfg();
         if (method::is_clinit(method)) {
           clinits.insert(method);
         }
-        if (!method::count_opcode_of_types(code, {IOPCODE_INIT_CLASS})) {
+        if (!method::count_opcode_of_types(cfg, {IOPCODE_INIT_CLASS})) {
           return Stats();
         }
-        cfg::ScopedCFG cfg(code);
         InitClassPruner pruner(init_classes_with_side_effects,
-                               method->get_class(), *cfg);
+                               method->get_class(), cfg);
         pruner.apply();
         auto local_stats = pruner.get_stats();
         if (local_stats.init_class_instructions == 0) {
@@ -385,25 +386,25 @@ void InitClassLoweringPass::run_pass(DexStoresVector& stores,
               "[InitClassLowering] method %s with %zu init-classes:\n%s",
               SHOW(method),
               local_stats.init_class_instructions,
-              SHOW(*cfg));
+              SHOW(cfg));
         methods_with_init_class++;
         boost::optional<reg_t> tmp_reg;
         boost::optional<reg_t> wide_tmp_reg;
         auto get_reg = [&](DexField* field) {
           if (type::is_wide_type(field->get_type())) {
             if (!wide_tmp_reg) {
-              wide_tmp_reg = cfg->allocate_wide_temp();
+              wide_tmp_reg = cfg.allocate_wide_temp();
             }
             return *wide_tmp_reg;
           }
           if (!tmp_reg) {
-            tmp_reg = cfg->allocate_temp();
+            tmp_reg = cfg.allocate_temp();
           }
           return *tmp_reg;
         };
-        cfg::CFGMutation mutation(*cfg);
+        cfg::CFGMutation mutation(cfg);
         size_t local_sget_instructions_added = 0;
-        for (auto block : cfg->blocks()) {
+        for (auto block : cfg.blocks()) {
           auto ii = InstructionIterable(block);
           for (auto it = ii.begin(); it != ii.end(); it++) {
             if (it->insn->opcode() != IOPCODE_INIT_CLASS) {
@@ -420,7 +421,7 @@ void InitClassLoweringPass::run_pass(DexStoresVector& stores,
             auto cfg_it = block->to_cfg_instruction_iterator(it);
             if (tag_str) {
               auto message = get_init_class_message(method, type, cfg_it);
-              auto log_insns = log_creator.get_insns(*cfg, tag_str, message);
+              auto log_insns = log_creator.get_insns(cfg, tag_str, message);
               replacements.insert(replacements.begin(), log_insns.begin(),
                                   log_insns.end());
             }
@@ -456,11 +457,11 @@ void InitClassLoweringPass::run_pass(DexStoresVector& stores,
       auto count = p.second;
       auto clinit = cls->get_clinit();
       always_assert(clinit);
-      cfg::ScopedCFG cfg(clinit->get_code());
+      auto& cfg = clinit->get_code()->cfg();
       TRACE(ICL, 5,
             "[InitClassLowering] clinit of %s referenced by %zu init-class "
             "instructions:\n%s",
-            SHOW(cls), count, SHOW(*cfg));
+            SHOW(cls), count, SHOW(cfg));
     }
   }
 

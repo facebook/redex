@@ -73,9 +73,9 @@ class EvaluateTypeChecksTest : public RedexTest {
 
     auto method_str = std::string("(") + method_line + " " + in + " )";
     auto method = assembler::class_with_method(type, method_str);
-
+    method->get_code()->build_cfg();
     check_casts::EvaluateTypeChecksPass::optimize(method, shrinker);
-
+    method->get_code()->clear_cfg();
     auto expected_str = regularize(out);
     auto actual_str = assembler::to_string(method->get_code());
     if (expected_str == actual_str) {
