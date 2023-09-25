@@ -118,11 +118,6 @@ class RemoveUnusedFields final {
     field_op_tracker::FieldStatsMap field_stats =
         field_op_tracker::analyze(m_scope);
 
-    // analyze_non_zero_writes and the later transform() need (editable) cfg
-    walk::parallel::code(m_scope, [&](const DexMethod*, IRCode& code) {
-      code.build_cfg(/* editable = true*/);
-    });
-
     std::unique_ptr<field_op_tracker::FieldWrites> field_writes;
     if (m_config.remove_zero_written_fields ||
         m_config.remove_vestigial_objects_written_fields) {
@@ -175,6 +170,7 @@ class RemoveUnusedFields final {
     // Replace reads to unwritten fields with appropriate const-0 instructions,
     // and remove the writes to unread fields.
     walk::parallel::code(m_scope, [&](const DexMethod* method, IRCode& code) {
+      always_assert(code.editable_cfg_built());
       auto& cfg = code.cfg();
       cfg::CFGMutation m(cfg);
       auto iterable = cfg::InstructionIterable(cfg);
@@ -247,7 +243,6 @@ class RemoveUnusedFields final {
       if (any_changes) {
         m_shrinker.shrink_method(const_cast<DexMethod*>(method));
       }
-      code.clear_cfg();
     });
   }
 

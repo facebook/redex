@@ -39,10 +39,9 @@ void RemoveNullcheckStringArg::run_pass(DexStoresVector& stores,
         new_methods.count(method)) {
       return Stats();
     }
-    code->build_cfg();
+    always_assert(code->editable_cfg_built());
     auto local_stats = change_in_cfg(code->cfg(), transfer_map_param,
                                      transfer_map_expr, method->is_virtual());
-    code->clear_cfg();
     return local_stats;
   });
 
@@ -164,6 +163,7 @@ DexMethod* RemoveNullcheckStringArg::get_wrapper_method_with_msg(
   main_block->ret_void();
 
   auto new_method = method_creator.create();
+  new_method->get_code()->build_cfg();
   TRACE(NULLCHECK, 5, "Created Method : %s", SHOW(new_method->get_code()));
   host_cls->add_method(new_method);
   return new_method;
@@ -254,6 +254,7 @@ DexMethod* RemoveNullcheckStringArg::get_wrapper_method_with_int_index(
   main_block->ret_void();
 
   auto new_method = method_creator.create();
+  new_method->get_code()->build_cfg();
   TRACE(NULLCHECK, 5, "Created Method : %s", SHOW(new_method->get_code()));
   host_cls->add_method(new_method);
   return new_method;

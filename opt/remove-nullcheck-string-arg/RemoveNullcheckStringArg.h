@@ -91,7 +91,6 @@ class RemoveNullcheckStringArg : public Pass {
   bool setup(TransferMapForParam& transfer_map_param,
              TransferMapForExpr& transfer_map_expr,
              NewMethodSet& new_methods);
-  bool is_cfg_legacy() override { return true; }
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
   RemoveNullcheckStringArg::Stats change_in_cfg(
       cfg::ControlFlowGraph& cfg,

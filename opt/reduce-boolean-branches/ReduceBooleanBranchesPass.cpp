@@ -42,8 +42,7 @@ void ReduceBooleanBranchesPass::run_pass(DexStoresVector& stores,
         if (!code) {
           return reduce_boolean_branches_impl::Stats{};
         }
-
-        code->build_cfg(/* editable */ true);
+        always_assert(code->editable_cfg_built());
         reduce_boolean_branches_impl::ReduceBooleanBranches rbb(
             config, is_static(method), method->get_proto()->get_args(), code);
         while (rbb.run()) {
@@ -55,7 +54,6 @@ void ReduceBooleanBranchesPass::run_pass(DexStoresVector& stores,
               .dce(code);
         }
 
-        code->clear_cfg();
         return rbb.get_stats();
       });
 

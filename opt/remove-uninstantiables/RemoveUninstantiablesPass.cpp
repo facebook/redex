@@ -11,7 +11,6 @@
 
 #include "MethodFixup.h"
 #include "RemoveUninstantiablesImpl.h"
-#include "ScopedCFG.h"
 #include "Walkers.h"
 
 namespace {
@@ -272,11 +271,11 @@ void RemoveUninstantiablesPass::run_pass(DexStoresVector& stores,
         if (method->rstate.no_optimizations() || code == nullptr) {
           return remove_uninstantiables_impl::Stats();
         }
-
+        always_assert(code->editable_cfg_built());
         if (overridden_virtual_scopes_analysis.keep_code(method)) {
-          cfg::ScopedCFG cfg(code);
+          auto& cfg = code->cfg();
           return remove_uninstantiables_impl::replace_uninstantiable_refs(
-              scoped_uninstantiable_types, *cfg);
+              scoped_uninstantiable_types, cfg);
         }
         uncallable_instance_methods.insert(method);
         return remove_uninstantiables_impl::Stats();

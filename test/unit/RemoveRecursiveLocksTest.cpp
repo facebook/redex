@@ -34,6 +34,7 @@ TEST_F(RemoveRecursiveLocksTest, no_single_blocks) {
         (monitor-exit v1)
       )
     ))");
+  method->get_code()->build_cfg();
   auto res = RemoveRecursiveLocksPass::run(method, method->get_code());
   ASSERT_FALSE(res);
 }
@@ -81,10 +82,10 @@ TEST_F(RemoveRecursiveLocksTest, recursion) {
       )
     ))");
   auto code = method->get_code();
-
+  code->build_cfg();
   auto res = RemoveRecursiveLocksPass::run(method, code);
   ASSERT_TRUE(res);
-
+  code->clear_cfg();
   auto expected_code = assembler::ircode_from_string(R"(
     (
         (load-param-object v0)
@@ -177,10 +178,10 @@ TEST_F(RemoveRecursiveLocksTest, recursion_nested) {
       )
     ))");
   auto code = method->get_code();
-
+  code->build_cfg();
   auto res = RemoveRecursiveLocksPass::run(method, code);
   ASSERT_TRUE(res);
-
+  code->clear_cfg();
   auto expected_code = assembler::ircode_from_string(R"(
     (
         (load-param-object v1)

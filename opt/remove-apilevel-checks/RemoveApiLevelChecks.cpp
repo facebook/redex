@@ -250,10 +250,10 @@ RemoveApiLevelChecksPass::ApiLevelStats RemoveApiLevelChecksPass::run(
   if (!code) {
     return ApiLevelStats{};
   }
+  always_assert(code->editable_cfg_built());
+  auto& cfg = code->cfg();
 
-  cfg::ScopedCFG cfg(code);
-
-  auto sdk_int_sgets = find_sdk_int_sgets(*cfg, sdk_int_field);
+  auto sdk_int_sgets = find_sdk_int_sgets(cfg, sdk_int_field);
   if (sdk_int_sgets.empty()) {
     return ApiLevelStats();
   }
@@ -261,7 +261,7 @@ RemoveApiLevelChecksPass::ApiLevelStats RemoveApiLevelChecksPass::run(
   ApiLevelStats ret;
   ret.num_field_gets = sdk_int_sgets.size();
   ret.num_methods = 1;
-  ret.num_removed = analyze_and_rewrite(*cfg, sdk_int_sgets, min_sdk);
+  ret.num_removed = analyze_and_rewrite(cfg, sdk_int_sgets, min_sdk);
   return ret;
 }
 

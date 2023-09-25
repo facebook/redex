@@ -86,8 +86,6 @@ class PassImpl : public Pass {
          "Write all removed fields to " + std::string(REMOVED_FIELDS_FILENAME));
   }
 
-  bool is_cfg_legacy() override { return true; }
-
   void run_pass(DexStoresVector& stores,
                 ConfigFiles& conf,
                 PassManager& mgr) override;

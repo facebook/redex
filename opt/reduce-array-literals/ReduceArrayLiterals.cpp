@@ -688,12 +688,10 @@ void ReduceArrayLiteralsPass::run_pass(DexStoresVector& stores,
         if (code == nullptr || m->rstate.no_optimizations()) {
           return ReduceArrayLiterals::Stats();
         }
-
-        code->build_cfg(/* editable */ true);
+        always_assert(code->editable_cfg_built());
         ReduceArrayLiterals ral(code->cfg(), m_max_filled_elements, min_sdk,
                                 arch);
         ral.patch();
-        code->clear_cfg();
         return ral.get_stats();
       },
       m_debug ? 1 : redex_parallel::default_num_threads());
