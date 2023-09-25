@@ -60,7 +60,7 @@ class EnvironmentWithStore {
 
   virtual bool may_have_escaped(const IRInstruction* ptr) const = 0;
 
-  PointerSet get_pointers(reg_t reg) const {
+  const PointerSet& get_pointers(reg_t reg) const {
     return get_pointer_environment().get(reg);
   }
 
@@ -119,7 +119,7 @@ class EnvironmentWithStoreImpl final
 
   void set_pointers(reg_t reg, PointerSet pset) override {
     Base::template apply<0>(
-        [&](PointerEnvironment* penv) { penv->set(reg, pset); });
+        [&](PointerEnvironment* penv) { penv->set(reg, std::move(pset)); });
   }
 
   void set_fresh_pointer(reg_t reg, const IRInstruction* pointer) override {
@@ -141,7 +141,7 @@ class EnvironmentWithStoreImpl final
 
   template <class F>
   void update_store(reg_t reg, F updater) {
-    auto pointers = get_pointers(reg);
+    const auto& pointers = get_pointers(reg);
     if (!pointers.is_value()) {
       return;
     }

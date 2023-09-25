@@ -209,7 +209,7 @@ void SummaryBuilder::analyze_instruction_effects(
 void SummaryBuilder::classify_heap_write(const ptrs::Environment& env,
                                          reg_t modified_ptr_reg,
                                          Summary* summary) {
-  auto pointers = env.get_pointers(modified_ptr_reg);
+  const auto& pointers = env.get_pointers(modified_ptr_reg);
   if (!pointers.is_value()) {
     summary->effects |= EFF_WRITE_MAY_ESCAPE;
     return;

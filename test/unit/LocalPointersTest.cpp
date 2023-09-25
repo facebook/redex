@@ -80,7 +80,7 @@ TEST_F(LocalPointersTest, simple) {
   ptrs::FixpointIterator fp_iter(cfg, invoke_to_summary_map);
   fp_iter.run(ptrs::Environment());
 
-  auto exit_env = fp_iter.get_exit_state_at(cfg.exit_block());
+  const auto& exit_env = fp_iter.get_exit_state_at(cfg.exit_block());
   EXPECT_EQ(exit_env.get_pointers(0).size(), 2);
   EXPECT_THAT(exit_env.get_pointers(0).elements(),
               UnorderedElementsAre(
@@ -88,7 +88,7 @@ TEST_F(LocalPointersTest, simple) {
                                    .set_type(DexType::get_type("LFoo;"))))),
                   Pointee(Eq(*(
                       IRInstruction(IOPCODE_LOAD_PARAM_OBJECT).set_dest(0))))));
-  auto pointers = exit_env.get_pointers(0);
+  const auto& pointers = exit_env.get_pointers(0);
   for (auto insn : pointers.elements()) {
     if (insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT ||
         insn->opcode() == OPCODE_NEW_INSTANCE) {
@@ -121,8 +121,8 @@ TEST_F(LocalPointersTest, aliasEscape) {
   ptrs::FixpointIterator fp_iter(cfg, invoke_to_summary_map);
   fp_iter.run(ptrs::Environment());
 
-  auto exit_env = fp_iter.get_exit_state_at(cfg.exit_block());
-  auto returned_ptrs = exit_env.get_pointers(0);
+  const auto& exit_env = fp_iter.get_exit_state_at(cfg.exit_block());
+  const auto& returned_ptrs = exit_env.get_pointers(0);
   EXPECT_EQ(returned_ptrs.size(), 2);
   EXPECT_THAT(
       returned_ptrs.elements(),
@@ -155,10 +155,10 @@ TEST_F(LocalPointersTest, filledNewArrayEscape) {
   ptrs::FixpointIterator fp_iter(cfg, invoke_to_summary_map);
   fp_iter.run(ptrs::Environment());
 
-  auto exit_env = fp_iter.get_exit_state_at(cfg.exit_block());
-  auto foo_ptr_set = exit_env.get_pointers(0);
+  const auto& exit_env = fp_iter.get_exit_state_at(cfg.exit_block());
+  const auto& foo_ptr_set = exit_env.get_pointers(0);
   EXPECT_EQ(foo_ptr_set.size(), 1);
-  auto foo_ptr = *foo_ptr_set.elements().begin();
+  const auto& foo_ptr = *foo_ptr_set.elements().begin();
   EXPECT_EQ(*foo_ptr,
             *(IRInstruction(OPCODE_NEW_INSTANCE)
                   .set_type(DexType::get_type("LFoo;"))));
@@ -326,7 +326,7 @@ TEST_F(LocalPointersTest, returnFreshValue) {
     ptrs::FixpointIterator fp_iter(cfg, invoke_to_summary_map);
     fp_iter.run(ptrs::Environment());
 
-    auto exit_env = fp_iter.get_exit_state_at(cfg.exit_block());
+    const auto& exit_env = fp_iter.get_exit_state_at(cfg.exit_block());
     EXPECT_THAT(exit_env.get_pointers(0).elements(),
                 UnorderedElementsAre(Pointee(Eq(*invoke_insn))));
     EXPECT_FALSE(exit_env.may_have_escaped(invoke_insn));
@@ -392,7 +392,7 @@ TEST_F(LocalPointersTest, returnEscapedValue) {
     ptrs::FixpointIterator fp_iter(cfg, invoke_to_summary_map);
     fp_iter.run(ptrs::Environment());
 
-    auto exit_env = fp_iter.get_exit_state_at(cfg.exit_block());
+    const auto& exit_env = fp_iter.get_exit_state_at(cfg.exit_block());
     EXPECT_THAT(exit_env.get_pointers(0).elements(),
                 UnorderedElementsAre(Pointee(Eq(*invoke_insn))));
     EXPECT_TRUE(exit_env.may_have_escaped(invoke_insn));

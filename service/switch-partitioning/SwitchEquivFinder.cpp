@@ -580,8 +580,8 @@ void SwitchEquivFinder::find_case_keys(const std::vector<cfg::Edge*>& leaves) {
     // Get the inferred value of m_switching_reg at the end of `edge_to_leaf`
     // but before the beginning of the leaf block because we would lose the
     // information by merging all the incoming edges.
-    auto env = fixpoint.get_exit_state_at(edge_to_leaf->src());
-    env = fixpoint.analyze_edge(edge_to_leaf, env);
+    const auto& exit_env = fixpoint.get_exit_state_at(edge_to_leaf->src());
+    auto env = fixpoint.analyze_edge(edge_to_leaf, exit_env);
     const auto& val = env.get(m_switching_reg);
     return ConstantValue::apply_visitor(key_creating_visitor(), val);
   };

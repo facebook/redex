@@ -78,7 +78,7 @@ void FixpointIterator::analyze_instruction(IRInstruction* insn,
     for (size_t i = 0; i < insn->srcs_size(); ++i) {
       auto reg = insn->src(i);
       used_vars->add(reg);
-      auto pointers = env.get_pointers(reg);
+      const auto& pointers = env.get_pointers(reg);
       if (!pointers.is_value()) {
         continue;
       }
@@ -98,7 +98,7 @@ void FixpointIterator::analyze_instruction(IRInstruction* insn,
 bool FixpointIterator::is_used_or_escaping_write(const ptrs::Environment& env,
                                                  const UsedVarsSet& used_vars,
                                                  reg_t obj_reg) const {
-  auto pointers = env.get_pointers(obj_reg);
+  const auto& pointers = env.get_pointers(obj_reg);
   if (!pointers.is_value()) {
     return true;
   }
