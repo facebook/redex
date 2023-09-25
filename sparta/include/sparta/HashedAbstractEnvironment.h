@@ -12,10 +12,10 @@
 #include <initializer_list>
 #include <ostream>
 #include <sstream>
-#include <unordered_map>
 #include <utility>
 
 #include <sparta/AbstractDomain.h>
+#include <sparta/HashMap.h>
 
 namespace sparta {
 
@@ -26,6 +26,8 @@ template <typename Variable,
           typename VariableHash,
           typename VariableEqual>
 class MapValue;
+
+class value_is_bottom {};
 
 } // namespace hae_impl
 
@@ -113,7 +115,7 @@ class HashedAbstractEnvironment final
                   invalid_abstract_value()
                       << expected_kind(AbstractValueKind::Value)
                       << actual_kind(this->kind()));
-    return this->get_value()->m_map;
+    return this->get_value()->m_map.bindings();
   }
 
   const Domain& get(const Variable& variable) const {
@@ -121,12 +123,7 @@ class HashedAbstractEnvironment final
       static const Domain bottom = Domain::bottom();
       return bottom;
     }
-    auto binding = this->get_value()->m_map.find(variable);
-    if (binding == this->get_value()->m_map.end()) {
-      static const Domain top = Domain::top();
-      return top;
-    }
-    return binding->second;
+    return this->get_value()->m_map.at(variable);
   }
 
   HashedAbstractEnvironment& set(const Variable& variable,
@@ -144,26 +141,18 @@ class HashedAbstractEnvironment final
     if (this->is_bottom()) {
       return *this;
     }
-    auto& map = this->get_value()->m_map;
-    auto binding = map.find(variable);
-    Domain* value;
-    if (binding == map.end()) {
-      // This means it's an implicit binding (variable, Top). We explicitly
-      // construct the Top value in order to apply the operation.
-      value = &map[variable];
-      value->set_to_top();
-    } else {
-      value = &binding->second;
-    }
-    operation(value);
-    // We normalize the abstract environment after the operation has been
-    // completed.
-    if (value->is_bottom()) {
+    try {
+      this->get_value()->m_map.update(
+          [operation = std::forward<Operation>(operation)](Domain* value) {
+            operation(value);
+            if (value->is_bottom()) {
+              throw hae_impl::value_is_bottom();
+            }
+          },
+          variable);
+    } catch (const hae_impl::value_is_bottom&) {
       this->set_to_bottom();
       return *this;
-    }
-    if (value->is_top()) {
-      map.erase(variable);
     }
     this->normalize();
     return *this;
@@ -255,6 +244,21 @@ class MapValue final
     : public AbstractValue<
           MapValue<Variable, Domain, VariableHash, VariableEqual>> {
  public:
+  struct ValueInterface {
+    using type = Domain;
+
+    static type default_value() { return type::top(); }
+
+    static bool is_default_value(const type& x) { return x.is_top(); }
+
+    static bool equals(const type& x, const type& y) { return x.equals(y); }
+
+    static bool leq(const type& x, const type& y) { return x.leq(y); }
+  };
+
+  using MapType =
+      HashMap<Variable, Domain, ValueInterface, VariableHash, VariableEqual>;
+
   MapValue() = default;
 
   MapValue(const Variable& variable, Domain value) {
@@ -270,51 +274,9 @@ class MapValue final
                                : AbstractValueKind::Value;
   }
 
-  bool leq(const MapValue& other) const {
-    if (other.m_map.size() > m_map.size()) {
-      // In this case, there is a variable bound to a non-Top value in 'other'
-      // that is not defined in 'this' (and is therefore implicitly bound to
-      // Top).
-      return false;
-    }
-    for (const auto& binding : m_map) {
-      auto it = other.m_map.find(binding.first);
-      if (it == other.m_map.end()) {
-        // The other value is Top.
-        continue;
-      }
-      if (!binding.second.leq(it->second)) {
-        return false;
-      }
-    }
-    // Now we look for a variable appearing in 'other' that is not defined in
-    // 'this' (and thus bound to Top).
-    for (const auto& binding : other.m_map) {
-      auto it = m_map.find(binding.first);
-      if (it == m_map.end()) {
-        // The value is Top, but we know by construction that binding.second is
-        // not Top.
-        return false;
-      }
-    }
-    return true;
-  }
+  bool leq(const MapValue& other) const { return m_map.leq(other.m_map); }
 
-  bool equals(const MapValue& other) const {
-    if (m_map.size() != other.m_map.size()) {
-      return false;
-    }
-    for (const auto& binding : m_map) {
-      auto it = other.m_map.find(binding.first);
-      if (it == other.m_map.end()) {
-        return false;
-      }
-      if (!binding.second.equals(it->second)) {
-        return false;
-      }
-    }
-    return true;
-  }
+  bool equals(const MapValue& other) const { return m_map.equals(other.m_map); }
 
   AbstractValueKind join_with(const MapValue& other) {
     return join_like_operation(
@@ -342,63 +304,37 @@ class MapValue final
     // The Bottom value is handled in HashedAbstractEnvironment and should
     // never occur here.
     RUNTIME_CHECK(!value.is_bottom(), internal_error());
-    if (value.is_top()) {
-      // Bindings with the Top value are not explicitly represented.
-      m_map.erase(variable);
-    } else {
-      m_map.insert_or_assign(variable, std::forward<D>(value));
-    }
+    m_map.insert_or_assign(variable, std::forward<D>(value));
   }
 
   template <typename Operation> // void(Domain*, const Domain&)
   AbstractValueKind join_like_operation(const MapValue& other,
                                         Operation&& operation) {
-    for (auto it = m_map.begin(); it != m_map.end();) {
-      auto other_binding = other.m_map.find(it->first);
-      if (other_binding == other.m_map.end()) {
-        // The other value is Top, we just erase the binding. We need to use a
-        // different iterator, because all iterators to an erased binding are
-        // invalidated.
-        auto to_erase = it++;
-        m_map.erase(to_erase);
-      } else {
-        // We compute the join-like combination of the values.
-        operation(&it->second, other_binding->second);
-        if (it->second.is_top()) {
-          // If the result is Top, we erase the binding.
-          auto to_erase = it++;
-          m_map.erase(to_erase);
-        } else {
-          ++it;
-        }
-      }
-    }
+    m_map.intersection_with(std::forward<Operation>(operation), other.m_map);
     return kind();
   }
 
   template <typename Operation> // void(Domain*, const Domain&)
   AbstractValueKind meet_like_operation(const MapValue& other,
                                         Operation&& operation) {
-    for (const auto& other_binding : other.m_map) {
-      auto binding = m_map.find(other_binding.first);
-      if (binding == m_map.end()) {
-        // The value is Top, we just insert the other value (Top is the identity
-        // for meet-like operations).
-        m_map[other_binding.first] = other_binding.second;
-      } else {
-        // We compute the meet-like combination of the values.
-        operation(&binding->second, other_binding.second);
-        if (binding->second.is_bottom()) {
-          // If the result is Bottom, the entire environment becomes Bottom.
-          clear();
-          return AbstractValueKind::Bottom;
-        }
-      }
+    try {
+      m_map.union_with(
+          [operation = std::forward<Operation>(operation)](
+              Domain* left, const Domain& right) {
+            operation(left, right);
+            if (left->is_bottom()) {
+              throw value_is_bottom();
+            }
+          },
+          other.m_map);
+    } catch (const value_is_bottom&) {
+      clear();
+      return AbstractValueKind::Bottom;
     }
     return kind();
   }
 
-  std::unordered_map<Variable, Domain, VariableHash, VariableEqual> m_map;
+  MapType m_map;
 
   template <typename T1, typename T2, typename T3, typename T4>
   friend class sparta::HashedAbstractEnvironment;

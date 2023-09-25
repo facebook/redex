@@ -1,0 +1,295 @@
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+#pragma once
+
+#include <algorithm>
+#include <functional>
+#include <initializer_list>
+#include <limits>
+#include <ostream>
+#include <unordered_map>
+
+#include <sparta/PatriciaTreeCore.h>
+
+namespace sparta {
+
+/*
+ * A hash map.
+ *
+ * It is similar to `std::unordered_map` but provides map operations
+ * such as union and intersection, using the same interface as
+ * `PatriciaTreeMap`.
+ */
+template <typename Key,
+          typename ValueType,
+          typename Value = pt_core::SimpleValue<ValueType>,
+          typename KeyHash = std::hash<Key>,
+          typename KeyEqual = std::equal_to<Key>>
+class HashMap final {
+ public:
+  using StdUnorderedMap = std::unordered_map<Key, ValueType, KeyHash, KeyEqual>;
+
+  // C++ container concept member types
+  using key_type = Key;
+  using mapped_type = typename Value::type;
+  using value_type = typename StdUnorderedMap::value_type;
+  using iterator = typename StdUnorderedMap::const_iterator;
+  using const_iterator = iterator;
+  using difference_type = typename StdUnorderedMap::difference_type;
+  using size_type = typename StdUnorderedMap::size_type;
+  using const_reference = typename StdUnorderedMap::const_reference;
+  using const_pointer = typename StdUnorderedMap::const_pointer;
+
+  static_assert(std::is_same_v<ValueType, mapped_type>,
+                "ValueType must be equal to Value::type");
+
+  explicit HashMap() = default;
+
+  explicit HashMap(std::initializer_list<std::pair<Key, ValueType>> l) {
+    for (const auto& p : l) {
+      insert_or_assign(p.first, p.second);
+    }
+  }
+
+  bool empty() const { return m_map.empty(); }
+
+  size_t size() const { return m_map.size(); }
+
+  size_t max_size() const { return m_map.max_size(); }
+
+  iterator begin() const { return m_map.cbegin(); }
+
+  iterator end() const { return m_map.cend(); }
+
+  const mapped_type& at(const Key& key) const {
+    auto it = m_map.find(key);
+    if (it == m_map.end()) {
+      static const ValueType default_value = Value::default_value();
+      return default_value;
+    } else {
+      return it->second;
+    }
+  }
+
+  HashMap& remove(const Key& key) {
+    m_map.erase(key);
+    return *this;
+  }
+
+  HashMap& insert_or_assign(const Key& key, const mapped_type& value) {
+    if (Value::is_default_value(value)) {
+      remove(key);
+    } else {
+      m_map.insert_or_assign(key, value);
+    }
+    return *this;
+  }
+
+  HashMap& insert_or_assign(const Key& key, mapped_type&& value) {
+    if (Value::is_default_value(value)) {
+      remove(key);
+    } else {
+      m_map.insert_or_assign(key, std::move(value));
+    }
+    return *this;
+  }
+
+  const StdUnorderedMap& bindings() const { return m_map; }
+
+  template <typename Operation> // void(mapped_type*)
+  HashMap& update(Operation&& operation, const Key& key) {
+    auto it = m_map.find(key);
+    bool existing = it != m_map.end();
+
+    ValueType new_value = Value::default_value();
+    ValueType* value = existing ? &it->second : &new_value;
+
+    operation(value);
+
+    if (Value::is_default_value(*value)) {
+      if (existing) {
+        m_map.erase(it);
+      }
+    } else {
+      if (!existing) {
+        m_map.emplace(key, std::move(*value));
+      }
+    }
+
+    return *this;
+  }
+
+ private:
+  bool leq_when_default_is_top(const HashMap& other) const {
+    if (m_map.size() < other.m_map.size()) {
+      // In this case, there is a key bound to a non-Top value in 'other'
+      // that is not defined in 'this' (and is therefore implicitly bound to
+      // Top).
+      return false;
+    }
+
+    for (const auto& binding : other.m_map) {
+      auto it = m_map.find(binding.first);
+      if (it == m_map.end()) {
+        // The value is Top, but we know by construction that binding.second is
+        // not Top.
+        return false;
+      }
+      if (!Value::leq(it->second, binding.second)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  bool leq_when_default_is_bottom(const HashMap& other) const {
+    if (m_map.size() > other.m_map.size()) {
+      // `this` has at least one non-default binding that `other` doesn't have.
+      // There exists a key such that this[key] != Bottom and other[key] ==
+      // Bottom.
+      return false;
+    }
+
+    for (const auto& binding : m_map) {
+      auto it = other.m_map.find(binding.first);
+      if (it == other.m_map.end()) {
+        // The other value is Bottom.
+        return false;
+      }
+      if (!Value::leq(binding.second, it->second)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+ public:
+  bool leq(const HashMap& other) const {
+    static_assert(std::is_base_of_v<AbstractDomain<ValueType>, ValueType>,
+                  "leq can only be used when Value implements AbstractDomain");
+
+    // Assumes Value::default_value() is either Top or Bottom.
+    if (Value::default_value().is_top()) {
+      return this->leq_when_default_is_top(other);
+    } else if (Value::default_value().is_bottom()) {
+      return this->leq_when_default_is_bottom(other);
+    } else {
+      RUNTIME_CHECK(false, undefined_operation());
+    }
+  }
+
+  bool equals(const HashMap& other) const {
+    if (m_map.size() != other.m_map.size()) {
+      return false;
+    }
+    for (const auto& binding : m_map) {
+      auto it = other.m_map.find(binding.first);
+      if (it == other.m_map.end()) {
+        return false;
+      }
+      if (!Value::equals(binding.second, it->second)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  friend bool operator==(const HashMap& m1, const HashMap& m2) {
+    return m1.equals(m2);
+  }
+
+  friend bool operator!=(const HashMap& m1, const HashMap& m2) {
+    return !m1.equals(m2);
+  }
+
+  template <typename MappingFunction> // void(mapped_type*)
+  HashMap& map(MappingFunction&& f) {
+    auto it = m_map.begin(), end = m_map.end();
+    while (it != end) {
+      f(&it->second);
+      if (Value::is_default_value(it->second)) {
+        it = m_map.erase(it);
+      } else {
+        ++it;
+      }
+    }
+    return *this;
+  }
+
+  template <typename Predicate> // bool(const Key&, const ValueType&)
+  HashMap& filter(Predicate&& predicate) {
+    auto it = m_map.begin(), end = m_map.end();
+    while (it != end) {
+      if (!predicate(it->first, it->second)) {
+        it = m_map.erase(it);
+      } else {
+        ++it;
+      }
+    }
+    return *this;
+  }
+
+  // Requires CombiningFunction to coerce to
+  // std::function<void(mapped_type*, const mapped_type&)>
+  template <typename CombiningFunction>
+  void union_with(const CombiningFunction& combine, const HashMap& other) {
+    for (const auto& other_binding : other.m_map) {
+      auto binding = m_map.find(other_binding.first);
+      if (binding == m_map.end()) {
+        m_map.emplace(other_binding.first, other_binding.second);
+      } else {
+        combine(&binding->second, other_binding.second);
+        if (Value::is_default_value(binding->second)) {
+          m_map.erase(binding);
+        }
+      }
+    }
+  }
+
+  // Requires CombiningFunction to coerce to
+  // std::function<void(mapped_type*, const mapped_type&)>
+  template <typename CombiningFunction>
+  void intersection_with(const CombiningFunction& combine,
+                         const HashMap& other) {
+    auto it = m_map.begin(), end = m_map.end();
+    while (it != end) {
+      auto other_binding = other.m_map.find(it->first);
+      if (other_binding == other.m_map.end()) {
+        it = m_map.erase(it);
+      } else {
+        combine(&it->second, other_binding->second);
+        if (Value::is_default_value(it->second)) {
+          it = m_map.erase(it);
+        } else {
+          ++it;
+        }
+      }
+    }
+  }
+
+  void clear() { m_map.clear(); }
+
+  friend std::ostream& operator<<(std::ostream& o, const HashMap& m) {
+    using namespace sparta;
+    o << "{";
+    for (auto it = m.begin(); it != m.end(); ++it) {
+      o << pt_util::deref(it->first) << " -> " << it->second;
+      if (std::next(it) != m.end()) {
+        o << ", ";
+      }
+    }
+    o << "}";
+    return o;
+  }
+
+ private:
+  StdUnorderedMap m_map;
+};
+
+} // namespace sparta
