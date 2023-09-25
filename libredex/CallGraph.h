@@ -131,6 +131,13 @@ class Graph final {
  public:
   explicit Graph(const BuildStrategy&);
 
+  Graph(Graph&&) = default;
+  Graph& operator=(Graph&&) = default;
+
+  // Copying the callgraph accidentally is expensive, we don't allow that.
+  Graph(const Graph&) = delete;
+  Graph& operator=(const Graph&) = delete;
+
   NodeId entry() const { return m_entry.get(); }
   NodeId exit() const { return m_exit.get(); }
 
