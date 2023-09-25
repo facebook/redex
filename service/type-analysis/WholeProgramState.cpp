@@ -157,7 +157,7 @@ WholeProgramState::WholeProgramState(
     const global::GlobalTypeAnalyzer& gta,
     const std::unordered_set<DexMethod*>& non_true_virtuals,
     const ConcurrentSet<const DexMethod*>& any_init_reachables)
-    : m_any_init_reachables(any_init_reachables) {
+    : m_any_init_reachables(&any_init_reachables) {
   // Exclude fields we cannot correctly analyze.
   walk::fields(scope, [&](DexField* field) {
     if (!type::is_object(field->get_type())) {

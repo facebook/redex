@@ -122,7 +122,7 @@ class WholeProgramState {
   }
 
   bool is_any_init_reachable(const DexMethod* method) const {
-    return m_any_init_reachables.count(method);
+    return m_any_init_reachables && m_any_init_reachables->count(method);
   }
 
   /*
@@ -213,7 +213,7 @@ class WholeProgramState {
   std::unordered_set<const DexMethod*> m_known_methods;
   // Methods reachable from clinit that read static fields and reachable from
   // ctors that raed instance fields.
-  ConcurrentSet<const DexMethod*> m_any_init_reachables;
+  const ConcurrentSet<const DexMethod*>* m_any_init_reachables{nullptr};
 
   DexTypeFieldPartition m_field_partition;
   DexTypeMethodPartition m_method_partition;

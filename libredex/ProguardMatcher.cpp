@@ -396,8 +396,8 @@ class ProguardMatcher {
 
   DexClass* find_single_class(const std::string& descriptor) const;
 
-  const ConcurrentSet<const KeepSpec*>& get_unused_rules() const {
-    return m_unused_rules;
+  ConcurrentSet<const KeepSpec*> steal_unused_rules() {
+    return std::move(m_unused_rules);
   }
 
  private:
@@ -1016,7 +1016,7 @@ ConcurrentSet<const KeepSpec*> process_proguard_rules(
   if (keep_all_annotation_classes) {
     pg_matcher.mark_all_annotation_classes_as_keep();
   }
-  return pg_matcher.get_unused_rules();
+  return pg_matcher.steal_unused_rules();
 }
 
 namespace testing {
