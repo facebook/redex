@@ -7,15 +7,14 @@
 
 #pragma once
 
-#include <cstddef>
 #include <functional>
 #include <initializer_list>
 #include <ostream>
 #include <sstream>
-#include <unordered_map>
 #include <utility>
 
 #include <sparta/AbstractDomain.h>
+#include <sparta/HashMap.h>
 
 namespace sparta {
 
@@ -46,6 +45,20 @@ class HashedAbstractPartition final
     : public AbstractDomain<
           HashedAbstractPartition<Label, Domain, LabelHash, LabelEqual>> {
  public:
+  struct ValueInterface {
+    using type = Domain;
+
+    static type default_value() { return type::bottom(); }
+
+    static bool is_default_value(const type& x) { return x.is_bottom(); }
+
+    static bool equals(const type& x, const type& y) { return x.equals(y); }
+
+    static bool leq(const type& x, const type& y) { return x.leq(y); }
+  };
+
+  using MapType = HashMap<Label, Domain, ValueInterface, LabelHash, LabelEqual>;
+
   /*
    * The default constructor produces the Bottom value.
    */
@@ -74,7 +87,7 @@ class HashedAbstractPartition final
   const std::unordered_map<Label, Domain, LabelHash, LabelEqual>& bindings()
       const {
     RUNTIME_CHECK(!is_top(), undefined_operation());
-    return m_map;
+    return m_map.bindings();
   }
 
   const Domain& get(const Label& label) const {
@@ -82,12 +95,7 @@ class HashedAbstractPartition final
       static const Domain top = Domain::top();
       return top;
     }
-    auto binding = m_map.find(label);
-    if (binding == m_map.end()) {
-      static const Domain bottom = Domain::bottom();
-      return bottom;
-    }
-    return binding->second;
+    return m_map.at(label);
   }
 
   /*
@@ -112,20 +120,7 @@ class HashedAbstractPartition final
     if (is_top()) {
       return *this;
     }
-    auto binding = m_map.find(label);
-    Domain* value;
-    if (binding == m_map.end()) {
-      // This means it's an implicit binding. We explicitly construct the
-      // Bottom value in order to apply the operation.
-      value = &m_map[label];
-      value->set_to_bottom();
-    } else {
-      value = &binding->second;
-    }
-    operation(value);
-    if (value->is_bottom()) {
-      m_map.erase(label);
-    }
+    m_map.update(std::forward<Operation>(operation), label);
     return *this;
   }
 
@@ -150,39 +145,14 @@ class HashedAbstractPartition final
     if (other.is_top()) {
       return true;
     }
-    if (m_map.size() > other.m_map.size()) {
-      // In this case, there is a label bound to a non-Bottom value in
-      // 'this' that is not defined in 'other' (and is therefore implicitly
-      // bound to Bottom).
-      return false;
-    }
-    for (const auto& binding : m_map) {
-      auto it = other.m_map.find(binding.first);
-      if (it == other.m_map.end()) {
-        // The other value is Bottom.
-        return false;
-      }
-      if (!binding.second.leq(it->second)) {
-        return false;
-      }
-    }
-    return true;
+    return m_map.leq(other.m_map);
   }
 
   bool equals(const HashedAbstractPartition& other) const {
-    if (m_is_top != other.m_is_top || m_map.size() != other.m_map.size()) {
+    if (m_is_top != other.m_is_top) {
       return false;
     }
-    for (const auto& binding : m_map) {
-      auto it = other.m_map.find(binding.first);
-      if (it == other.m_map.end()) {
-        return false;
-      }
-      if (!binding.second.equals(it->second)) {
-        return false;
-      }
-    }
-    return true;
+    return m_map.equals(other.m_map);
   }
 
   void join_with(const HashedAbstractPartition& other) {
@@ -215,20 +185,7 @@ class HashedAbstractPartition final
       set_to_top();
       return;
     }
-    for (const auto& other_binding : other.m_map) {
-      auto binding = m_map.find(other_binding.first);
-      if (binding == m_map.end()) {
-        // The value is Bottom, we just insert the other value (Bottom is the
-        // identity for join-like operations).
-        m_map[other_binding.first] = other_binding.second;
-      } else {
-        // We compute the join-like combination of the values.
-        operation(&binding->second, other_binding.second);
-        // By construction, it's impossible to have Bottom in both operands,
-        // hence the result can never be Bottom.
-        RUNTIME_CHECK(!binding->second.is_bottom(), internal_error());
-      }
-    }
+    m_map.union_with(std::forward<Operation>(operation), other.m_map);
   }
 
   template <typename Operation> // void(Domain*, const Domain&)
@@ -241,26 +198,7 @@ class HashedAbstractPartition final
     if (other.is_top()) {
       return;
     }
-    for (auto it = m_map.begin(); it != m_map.end();) {
-      auto other_binding = other.m_map.find(it->first);
-      if (other_binding == other.m_map.end()) {
-        // The other value is Bottom, we just erase the binding. We need to use
-        // a different iterator, because all iterators to an erased binding are
-        // invalidated.
-        auto to_erase = it++;
-        m_map.erase(to_erase);
-      } else {
-        // We compute the meet-like combination of the values.
-        operation(&it->second, other_binding->second);
-        if (it->second.is_bottom()) {
-          // If the result is Bottom, we erase the binding.
-          auto to_erase = it++;
-          m_map.erase(to_erase);
-        } else {
-          ++it;
-        }
-      }
-    }
+    m_map.intersection_with(std::forward<Operation>(operation), other.m_map);
   }
 
   static HashedAbstractPartition bottom() { return HashedAbstractPartition(); }
@@ -277,15 +215,11 @@ class HashedAbstractPartition final
     if (is_top()) {
       return *this;
     }
-    if (value.is_bottom()) {
-      m_map.erase(label);
-    } else {
-      m_map.insert_or_assign(label, std::forward<D>(value));
-    }
+    m_map.insert_or_assign(label, std::forward<D>(value));
     return *this;
   }
 
-  std::unordered_map<Label, Domain, LabelHash, LabelEqual> m_map;
+  MapType m_map;
   bool m_is_top{false};
 };
 
