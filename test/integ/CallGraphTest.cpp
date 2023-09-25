@@ -42,18 +42,18 @@ struct CallGraphTest : public RedexIntegrationTest {
 
   Scope scope;
   std::unique_ptr<const method_override_graph::Graph> method_override_graph;
-  boost::optional<call_graph::Graph> complete_graph;
-  boost::optional<call_graph::Graph> multiple_graph;
+  std::unique_ptr<call_graph::Graph> complete_graph;
+  std::unique_ptr<call_graph::Graph> multiple_graph;
 
  public:
   CallGraphTest() {}
   void SetUp() override {
     scope = build_class_scope(stores);
     method_override_graph = method_override_graph::build_graph(scope);
-    complete_graph =
-        call_graph::complete_call_graph(*method_override_graph, scope);
-    multiple_graph =
-        call_graph::multiple_callee_graph(*method_override_graph, scope, 5);
+    complete_graph = std::make_unique<call_graph::Graph>(
+        call_graph::complete_call_graph(*method_override_graph, scope));
+    multiple_graph = std::make_unique<call_graph::Graph>(
+        call_graph::multiple_callee_graph(*method_override_graph, scope, 5));
     clinit = DexMethod::get_method(
                  "Lcom/facebook/redextest/CallGraphTest;.<clinit>:()V")
                  ->as_def();

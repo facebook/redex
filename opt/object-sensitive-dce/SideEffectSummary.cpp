@@ -315,16 +315,8 @@ void analyze_scope(const init_classes::InitClassesWithSideEffects&
             return;
           }
           changed_effect_summaries.emplace(method, std::move(new_summary));
-          if (call_graph.has_node(method)) {
-            const auto& caller_edges = call_graph.node(method)->callers();
-            std::unordered_set<const DexMethod*> callers;
-            for (const auto& edge : caller_edges) {
-              auto* caller = edge->caller()->method();
-              if (caller && callers.insert(caller).second) {
-                next_affected_methods->insert(caller);
-              }
-            }
-          }
+          const auto& callers = call_graph.get_callers(method);
+          next_affected_methods->insert(callers.begin(), callers.end());
         },
         *affected_methods);
     for (auto&& [method, summary] : changed_effect_summaries) {

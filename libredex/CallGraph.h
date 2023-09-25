@@ -59,6 +59,7 @@ struct CallSite {
 
 using CallSites = std::vector<CallSite>;
 using MethodSet = std::unordered_set<const DexMethod*>;
+using MethodVector = std::vector<const DexMethod*>;
 
 struct RootAndDynamic {
   std::vector<const DexMethod*> roots;
@@ -162,6 +163,8 @@ class Graph final {
     return m_dynamic_methods;
   }
 
+  const MethodVector& get_callers(const DexMethod* callee) const;
+
  private:
   NodeId make_node(const DexMethod*);
 
@@ -174,6 +177,9 @@ class Graph final {
   std::unordered_map<const DexMethod*, std::shared_ptr<Node>> m_nodes;
   std::unordered_map<const IRInstruction*, std::unordered_set<const DexMethod*>>
       m_insn_to_callee;
+  mutable InsertOnlyConcurrentMap<const DexMethod*, MethodVector>
+      m_callee_to_callers;
+
   // Methods that might have unknown inputs/outputs that we need special handle.
   // Like external methods with internal overrides, they might have external
   // implementation that we don't know about. Or methods that might have
@@ -271,6 +277,9 @@ class GraphInterface {
 
 const MethodSet& resolve_callees_in_graph(const Graph& graph,
                                           const IRInstruction* insn);
+
+const MethodVector& get_callee_to_callers(const Graph& graph,
+                                          const DexMethod* callee);
 
 bool method_is_dynamic(const Graph& graph, const DexMethod* method);
 

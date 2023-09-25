@@ -606,4 +606,21 @@ CallgraphStats get_num_nodes_edges(const Graph& graph) {
   return CallgraphStats(visited_node.size(), num_edge, num_callsites);
 }
 
+const MethodVector& Graph::get_callers(const DexMethod* callee) const {
+  return *m_callee_to_callers
+              .get_or_create_and_assert_equal(
+                  callee,
+                  [&](const DexMethod*) {
+                    std::unordered_set<const DexMethod*> set;
+                    if (has_node(callee)) {
+                      for (const auto& edge : node(callee)->callers()) {
+                        set.insert(edge->caller()->method());
+                      }
+                      set.erase(nullptr);
+                    }
+                    return MethodVector(set.begin(), set.end());
+                  })
+              .first;
+}
+
 } // namespace call_graph
