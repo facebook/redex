@@ -404,28 +404,45 @@ FixpointIteratorMap analyze_scope(const Scope& scope,
   summary_map_ptr->emplace(
       DexMethod::get_method("Ljava/lang/Object;.<init>:()V"), EscapeSummary{});
 
-  while (true) {
+  auto affected_methods = std::make_unique<ConcurrentSet<const DexMethod*>>();
+  walk::parallel::code(scope, [&](const DexMethod* method, IRCode&) {
+    affected_methods->insert(method);
+  });
+
+  while (!affected_methods->empty()) {
     ConcurrentMap<const DexMethod*, EscapeSummary> changed_effect_summaries;
-    walk::parallel::code(scope, [&](const DexMethod* method, IRCode&) {
-      auto p = analyze_method(method, call_graph, *summary_map_ptr);
-      auto& new_fp_iter = p.first;
-      auto& new_summary = p.second;
-      fp_iter_map.update(method, [&](auto*, auto& v, bool exists) {
-        redex_assert(!(exists ^ (v != nullptr)));
-        std::swap(new_fp_iter, v);
-      });
-      auto it = summary_map_ptr->find(method);
-      if (it != summary_map_ptr->end() && it->second == new_summary) {
-        return;
-      }
-      changed_effect_summaries.emplace(method, std::move(new_summary));
-    });
-    if (changed_effect_summaries.empty()) {
-      break;
-    }
+    auto next_affected_methods =
+        std::make_unique<ConcurrentSet<const DexMethod*>>();
+    workqueue_run<const DexMethod*>(
+        [&](const DexMethod* method) {
+          auto p = analyze_method(method, call_graph, *summary_map_ptr);
+          auto& new_fp_iter = p.first;
+          auto& new_summary = p.second;
+          fp_iter_map.update(method, [&](auto*, auto& v, bool exists) {
+            redex_assert(!(exists ^ (v != nullptr)));
+            std::swap(new_fp_iter, v);
+          });
+          auto it = summary_map_ptr->find(method);
+          if (it != summary_map_ptr->end() && it->second == new_summary) {
+            return;
+          }
+          changed_effect_summaries.emplace(method, std::move(new_summary));
+          if (call_graph.has_node(method)) {
+            const auto& caller_edges = call_graph.node(method)->callers();
+            std::unordered_set<const DexMethod*> callers;
+            for (const auto& edge : caller_edges) {
+              auto* caller = edge->caller()->method();
+              if (caller && callers.insert(caller).second) {
+                next_affected_methods->insert(caller);
+              }
+            }
+          }
+        },
+        *affected_methods);
     for (auto&& [method, summary] : changed_effect_summaries) {
       (*summary_map_ptr)[method] = std::move(summary);
     }
+    std::swap(next_affected_methods, affected_methods);
   }
 
   return fp_iter_map;

@@ -329,5 +329,4 @@ void collect_exiting_pointers(const FixpointIterator& fp_iter,
  */
 EscapeSummary get_escape_summary(const FixpointIterator& fp_iter,
                                  const IRCode& code);
-
 } // namespace local_pointers

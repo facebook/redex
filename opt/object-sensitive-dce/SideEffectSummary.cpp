@@ -295,25 +295,42 @@ void analyze_scope(const init_classes::InitClassesWithSideEffects&
   (*effect_summaries)[DexMethod::get_method("Ljava/lang/Object;.<init>:()V")] =
       Summary({0});
 
-  while (true) {
+  auto affected_methods = std::make_unique<ConcurrentSet<const DexMethod*>>();
+  walk::parallel::code(scope, [&](const DexMethod* method, IRCode&) {
+    affected_methods->insert(method);
+  });
+
+  while (!affected_methods->empty()) {
     SummaryConcurrentMap changed_effect_summaries;
-    walk::parallel::code(scope, [&](const DexMethod* method, IRCode&) {
-      auto new_summary =
-          analyze_method(init_classes_with_side_effects, method, call_graph,
-                         ptrs_fp_iter_map, *effect_summaries);
-      new_summary.normalize();
-      auto it = effect_summaries->find(method);
-      if (it != effect_summaries->end() && it->second == new_summary) {
-        return;
-      }
-      changed_effect_summaries.emplace(method, std::move(new_summary));
-    });
-    if (changed_effect_summaries.empty()) {
-      break;
-    }
+    auto next_affected_methods =
+        std::make_unique<ConcurrentSet<const DexMethod*>>();
+    workqueue_run<const DexMethod*>(
+        [&](const DexMethod* method) {
+          auto new_summary =
+              analyze_method(init_classes_with_side_effects, method, call_graph,
+                             ptrs_fp_iter_map, *effect_summaries);
+          new_summary.normalize();
+          auto it = effect_summaries->find(method);
+          if (it != effect_summaries->end() && it->second == new_summary) {
+            return;
+          }
+          changed_effect_summaries.emplace(method, std::move(new_summary));
+          if (call_graph.has_node(method)) {
+            const auto& caller_edges = call_graph.node(method)->callers();
+            std::unordered_set<const DexMethod*> callers;
+            for (const auto& edge : caller_edges) {
+              auto* caller = edge->caller()->method();
+              if (caller && callers.insert(caller).second) {
+                next_affected_methods->insert(caller);
+              }
+            }
+          }
+        },
+        *affected_methods);
     for (auto&& [method, summary] : changed_effect_summaries) {
       (*effect_summaries)[method] = std::move(summary);
     }
+    std::swap(next_affected_methods, affected_methods);
   }
 }
 
