@@ -149,7 +149,7 @@ void ObjectSensitiveDcePass::run_pass(DexStoresVector& stores,
     summary_serialization::read(file_input, &effect_summaries);
   }
   side_effects::analyze_scope(init_classes_with_side_effects, scope, call_graph,
-                              *ptrs_fp_iter_map, &effect_summaries);
+                              ptrs_fp_iter_map, &effect_summaries);
 
   std::atomic<size_t> removed{0};
   std::atomic<size_t> init_class_instructions_added{0};
@@ -162,7 +162,7 @@ void ObjectSensitiveDcePass::run_pass(DexStoresVector& stores,
     always_assert(code.editable_cfg_built());
     auto& cfg = code.cfg();
     uv::FixpointIterator used_vars_fp_iter(
-        *ptrs_fp_iter_map->at_unsafe(method),
+        *ptrs_fp_iter_map.at_unsafe(method),
         build_summary_map(effect_summaries, call_graph, method),
         cfg);
     used_vars_fp_iter.run(uv::UsedVarsSet());

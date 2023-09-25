@@ -20,9 +20,6 @@ namespace ptrs = local_pointers;
 
 namespace side_effects {
 
-using PointersFixpointIteratorMap =
-    ConcurrentMap<const DexMethodRef*, ptrs::FixpointIterator*>;
-
 using SummaryConcurrentMap = ConcurrentMap<const DexMethodRef*, Summary>;
 
 SummaryBuilder::SummaryBuilder(
@@ -250,10 +247,10 @@ Summary analyze_method(const init_classes::InitClassesWithSideEffects&
     }
   }
 
-  const auto* ptrs_fp_iter = ptrs_fp_iter_map.at_unsafe(method);
+  const auto& ptrs_fp_iter = *ptrs_fp_iter_map.at_unsafe(method);
   auto summary =
       SummaryBuilder(init_classes_with_side_effects, invoke_to_summary_cmap,
-                     *ptrs_fp_iter, method->get_code())
+                     ptrs_fp_iter, method->get_code())
           .build();
   if (method->rstate.no_optimizations()) {
     summary.effects |= EFF_NO_OPTIMIZE;

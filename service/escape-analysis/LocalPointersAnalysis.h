@@ -297,14 +297,8 @@ void escape_invoke_params(const IRInstruction* insn, EnvironmentWithStore* env);
 void default_instruction_handler(const IRInstruction* insn,
                                  EnvironmentWithStore* env);
 
-using FixpointIteratorMap = ConcurrentMap<const DexMethod*, FixpointIterator*>;
-
-struct FixpointIteratorMapDeleter final {
-  void operator()(FixpointIteratorMap*);
-};
-
-using FixpointIteratorMapPtr =
-    std::unique_ptr<FixpointIteratorMap, FixpointIteratorMapDeleter>;
+using FixpointIteratorMap =
+    ConcurrentMap<const DexMethod*, std::unique_ptr<FixpointIterator>>;
 
 using SummaryMap = std::unordered_map<const DexMethodRef*, EscapeSummary>;
 
@@ -315,9 +309,9 @@ using SummaryMap = std::unordered_map<const DexMethodRef*, EscapeSummary>;
  * If a non-null SummaryMap pointer is passed in, it will get populated
  * with the escape summaries of the methods in scope.
  */
-FixpointIteratorMapPtr analyze_scope(const Scope&,
-                                     const call_graph::Graph&,
-                                     SummaryMap* = nullptr);
+FixpointIteratorMap analyze_scope(const Scope&,
+                                  const call_graph::Graph&,
+                                  SummaryMap* = nullptr);
 
 /*
  * Join over all possible returned and thrown values.

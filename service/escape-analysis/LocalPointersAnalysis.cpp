@@ -367,18 +367,6 @@ void FixpointIterator::analyze_instruction(const IRInstruction* insn,
   }
 }
 
-void FixpointIteratorMapDeleter::operator()(FixpointIteratorMap* map) {
-  // Deletion is actually really expensive due to the reference counts of the
-  // shared_ptrs in the Patricia trees, so we do it in parallel.
-  auto wq = workqueue_foreach<FixpointIterator*>(
-      [](FixpointIterator* fp_iter) { delete fp_iter; });
-  for (auto& pair : *map) {
-    wq.add_item(pair.second);
-  }
-  wq.run_all();
-  delete map;
-}
-
 std::pair<std::unique_ptr<FixpointIterator>, EscapeSummary> analyze_method(
     const DexMethod* method,
     const call_graph::Graph& call_graph,
@@ -405,10 +393,10 @@ std::pair<std::unique_ptr<FixpointIterator>, EscapeSummary> analyze_method(
   return std::make_pair(std::move(fp_iter), std::move(summary));
 }
 
-FixpointIteratorMapPtr analyze_scope(const Scope& scope,
-                                     const call_graph::Graph& call_graph,
-                                     SummaryMap* summary_map_ptr) {
-  FixpointIteratorMapPtr fp_iter_map(new FixpointIteratorMap());
+FixpointIteratorMap analyze_scope(const Scope& scope,
+                                  const call_graph::Graph& call_graph,
+                                  SummaryMap* summary_map_ptr) {
+  FixpointIteratorMap fp_iter_map;
   SummaryMap summary_map;
   if (summary_map_ptr == nullptr) {
     summary_map_ptr = &summary_map;
@@ -422,11 +410,9 @@ FixpointIteratorMapPtr analyze_scope(const Scope& scope,
       auto p = analyze_method(method, call_graph, *summary_map_ptr);
       auto& new_fp_iter = p.first;
       auto& new_summary = p.second;
-      fp_iter_map->update(method, [&](auto*, auto& v, bool exists) {
+      fp_iter_map.update(method, [&](auto*, auto& v, bool exists) {
         redex_assert(!(exists ^ (v != nullptr)));
-        std::unique_ptr<FixpointIterator> w(v);
-        std::swap(new_fp_iter, w);
-        v = w.release();
+        std::swap(new_fp_iter, v);
       });
       auto it = summary_map_ptr->find(method);
       if (it != summary_map_ptr->end() && it->second == new_summary) {
