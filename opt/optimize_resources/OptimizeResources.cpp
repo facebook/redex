@@ -83,11 +83,12 @@ void extract_resources_from_static_arrays(
     if (ir_code == nullptr) {
       continue;
     }
-    cfg::ScopedCFG cfg(ir_code);
-    live_range::MoveAwareChains move_aware_chains(*cfg);
+    always_assert(ir_code->editable_cfg_built());
+    auto& cfg = ir_code->cfg();
+    live_range::MoveAwareChains move_aware_chains(cfg);
     auto use_defs = move_aware_chains.get_use_def_chains();
     auto def_uses = move_aware_chains.get_def_use_chains();
-    for (const auto& mie : InstructionIterable(*cfg)) {
+    for (const auto& mie : InstructionIterable(cfg)) {
       auto insn = mie.insn;
       if (!opcode::is_an_sput(insn->opcode())) {
         continue;
@@ -108,7 +109,7 @@ void extract_resources_from_static_arrays(
         always_assert_log(array_def->opcode() == OPCODE_NEW_ARRAY,
                           "OptimizeResources does not support extracting "
                           "resources from array created by %s\nin %s:\n%s",
-                          SHOW(array_def), SHOW(clinit), SHOW(*cfg));
+                          SHOW(array_def), SHOW(clinit), SHOW(cfg));
         // should be only one, but we can be conservative and consider all
         for (auto& use : uses) {
           switch (use.insn->opcode()) {
@@ -373,12 +374,12 @@ void remap_resource_class_clinit(
     DexMethod* clinit) {
   const auto c_name = cls->get_name()->str();
   IRCode* ir_code = clinit->get_code();
-
+  always_assert(ir_code->editable_cfg_built());
   // Lookup from new-array instruction to an updated array size.
   std::unordered_map<IRInstruction*, uint32_t> new_array_size_updates;
   IRInstruction* last_new_array = nullptr;
-
-  for (const MethodItemEntry& mie : InstructionIterable(ir_code)) {
+  auto& cfg = ir_code->cfg();
+  for (const MethodItemEntry& mie : cfg::InstructionIterable(cfg)) {
     IRInstruction* insn = mie.insn;
     if (insn->opcode() == OPCODE_CONST) {
       auto const_literal = insn->get_literal();
@@ -457,7 +458,7 @@ void remap_resource_class_clinit(
   if (new_array_size_updates.empty()) {
     return;
   }
-  auto ii = InstructionIterable(ir_code);
+  auto ii = cfg::InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
     IRInstruction* insn = it->insn;
     auto search = new_array_size_updates.find(insn);
@@ -468,12 +469,12 @@ void remap_resource_class_clinit(
       // Make this additive to not impact other instructions.
       // Note that the naive numbering scheme here requires RegAlloc to be run
       // later (which should be the case for all apps).
-      auto new_reg = ir_code->allocate_temp();
+      auto new_reg = cfg.allocate_temp();
       auto const_insn = new IRInstruction(OPCODE_CONST);
       const_insn->set_literal(new_size);
       const_insn->set_dest(new_reg);
       insn->set_src(0, new_reg);
-      ir_code->insert_before(it.unwrap(), const_insn);
+      cfg.insert_before(it, const_insn);
     }
   }
 }
