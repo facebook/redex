@@ -71,7 +71,6 @@
 #include "ControlFlow.h"
 #include "DexClass.h"
 #include "ExpandableMethodParams.h"
-#include "HierarchyUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "IROpcode.h"
@@ -87,7 +86,6 @@
 
 using namespace sparta;
 namespace mog = method_override_graph;
-namespace hier = hierarchy_util;
 
 namespace {
 
@@ -124,7 +122,7 @@ using Locations = std::vector<std::pair<DexMethod*, const IRInstruction*>>;
 // invocation dependencies.
 void analyze_scope(
     const Scope& scope,
-    const hier::NonOverriddenVirtuals& non_overridden_virtuals,
+    const mog::Graph& method_override_graph,
     std::unordered_map<DexType*, Locations>* new_instances,
     std::unordered_map<DexMethod*, Locations>* invokes,
     std::unordered_map<DexMethod*, std::unordered_set<DexMethod*>>*
@@ -136,6 +134,10 @@ void analyze_scope(
       concurrent_dependencies;
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
     code.build_cfg(/* editable */ true);
+    LazyUnorderedMap<DexMethod*, bool> is_not_overridden([&](auto* m) {
+      return !m->is_virtual() ||
+             !mog::any_overriding_methods(method_override_graph, m);
+    });
     for (auto& mie : InstructionIterable(code.cfg())) {
       auto insn = mie.insn;
       if (insn->opcode() == OPCODE_NEW_INSTANCE) {
@@ -148,12 +150,12 @@ void analyze_scope(
       } else if (opcode::is_an_invoke(insn->opcode())) {
         auto callee =
             resolve_method(insn->get_method(), opcode_to_search(insn));
-        if (callee &&
-            (!callee->is_virtual() || non_overridden_virtuals.count(callee))) {
+        if (callee && callee->get_code() && !callee->is_external() &&
+            is_not_overridden[callee]) {
           concurrent_invokes.update(callee, [&](auto*, auto& vec, bool) {
             vec.emplace_back(method, insn);
           });
-          if (!method->is_virtual() || non_overridden_virtuals.count(method)) {
+          if (is_not_overridden[method]) {
             concurrent_dependencies.update(
                 callee,
                 [method](auto, auto& set, auto) { set.insert(method); });
@@ -366,12 +368,13 @@ MethodSummaries compute_method_summaries(
     const Scope& scope,
     const std::unordered_map<DexMethod*, std::unordered_set<DexMethod*>>&
         dependencies,
-    const hier::NonOverriddenVirtuals& non_overridden_virtuals) {
+    const mog::Graph& method_override_graph) {
   Timer t("compute_method_summaries");
 
   std::unordered_set<DexMethod*> impacted_methods;
   walk::code(scope, [&](DexMethod* method, IRCode&) {
-    if (!method->is_virtual() || non_overridden_virtuals.count(method)) {
+    if (!method->is_virtual() ||
+        !mog::any_overriding_methods(method_override_graph, method)) {
       impacted_methods.insert(method);
     }
   });
@@ -1704,17 +1707,15 @@ void ObjectEscapeAnalysisPass::run_pass(DexStoresVector& stores,
   auto method_override_graph = mog::build_graph(scope);
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
       scope, conf.create_init_class_insns(), method_override_graph.get());
-  hier::NonOverriddenVirtuals non_overridden_virtuals(scope,
-                                                      *method_override_graph);
 
   std::unordered_map<DexType*, Locations> new_instances;
   std::unordered_map<DexMethod*, Locations> invokes;
   std::unordered_map<DexMethod*, std::unordered_set<DexMethod*>> dependencies;
-  analyze_scope(scope, non_overridden_virtuals, &new_instances, &invokes,
+  analyze_scope(scope, *method_override_graph, &new_instances, &invokes,
                 &dependencies);
 
   auto method_summaries = compute_method_summaries(mgr, scope, dependencies,
-                                                   non_overridden_virtuals);
+                                                   *method_override_graph);
 
   auto inline_anchors = compute_inline_anchors(scope, method_summaries);
 
