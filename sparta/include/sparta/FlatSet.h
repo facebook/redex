@@ -10,9 +10,9 @@
 #include <algorithm>
 #include <functional>
 #include <initializer_list>
-#include <limits>
 #include <ostream>
-#include <vector>
+
+#include <boost/container/flat_set.hpp>
 
 #include <sparta/PatriciaTreeUtil.h>
 
@@ -27,17 +27,23 @@ namespace sparta {
  */
 template <typename Element,
           typename Compare = std::less<Element>,
-          typename Equal = std::equal_to<Element>>
+          typename Equal = std::equal_to<Element>,
+          typename AllocatorOrContainer =
+              boost::container::new_allocator<Element>>
 class FlatSet final {
+ private:
+  using BoostFlatSet =
+      boost::container::flat_set<Element, Compare, AllocatorOrContainer>;
+
  public:
   // C++ container concept member types
-  using iterator = typename std::vector<Element>::const_iterator;
+  using iterator = typename BoostFlatSet::const_iterator;
   using const_iterator = iterator;
   using value_type = Element;
-  using difference_type = std::ptrdiff_t;
-  using size_type = std::size_t;
-  using const_reference = const Element&;
-  using const_pointer = const Element*;
+  using difference_type = typename BoostFlatSet::difference_type;
+  using size_type = typename BoostFlatSet::size_type;
+  using const_reference = typename BoostFlatSet::const_reference;
+  using const_pointer = typename BoostFlatSet::const_pointer;
 
   FlatSet() = default;
 
@@ -54,26 +60,22 @@ class FlatSet final {
     }
   }
 
-  bool empty() const { return m_vector.empty(); }
+  bool empty() const { return m_set.empty(); }
 
-  std::size_t size() const { return m_vector.size(); }
+  std::size_t size() const { return m_set.size(); }
 
-  std::size_t max_size() const { return m_vector.max_size(); }
+  std::size_t max_size() const { return m_set.max_size(); }
 
-  iterator begin() const { return m_vector.begin(); }
+  iterator begin() const { return m_set.begin(); }
 
-  iterator end() const { return m_vector.end(); }
+  iterator end() const { return m_set.end(); }
 
-  bool contains(const Element& key) const {
-    auto it =
-        std::lower_bound(m_vector.begin(), m_vector.end(), key, Compare());
-    return it != m_vector.end() && Equal()(*it, key);
-  }
+  bool contains(const Element& key) const { return m_set.contains(key); }
 
   bool is_subset_of(const FlatSet& other) const {
     // This is optimized for `this.size() << other.size()`.
-    auto it = m_vector.begin(), end = m_vector.end();
-    auto other_it = other.m_vector.begin(), other_end = other.m_vector.end();
+    auto it = m_set.begin(), end = m_set.end();
+    auto other_it = other.m_set.begin(), other_end = other.m_set.end();
     while (it != end) {
       if (std::distance(it, end) > std::distance(other_it, other_end)) {
         return false;
@@ -89,8 +91,8 @@ class FlatSet final {
   }
 
   bool equals(const FlatSet& other) const {
-    return std::equal(m_vector.begin(), m_vector.end(), other.m_vector.begin(),
-                      other.m_vector.end(), Equal());
+    return std::equal(m_set.begin(), m_set.end(), other.m_set.begin(),
+                      other.m_set.end(), Equal());
   }
 
   friend bool operator==(const FlatSet& s1, const FlatSet& s2) {
@@ -102,40 +104,36 @@ class FlatSet final {
   }
 
   FlatSet& insert(Element key) {
-    auto it =
-        std::lower_bound(m_vector.begin(), m_vector.end(), key, Compare());
-    if (it == m_vector.end() || !Equal()(key, *it)) {
-      m_vector.insert(it, std::move(key));
-    }
+    m_set.insert(key);
     return *this;
   }
 
   FlatSet& remove(const Element& key) {
-    auto it =
-        std::lower_bound(m_vector.begin(), m_vector.end(), key, Compare());
-    if (it != m_vector.end() && Equal()(key, *it)) {
-      m_vector.erase(it);
-    }
+    m_set.erase(key);
     return *this;
   }
 
   template <typename Predicate> // bool(const Element&)
   FlatSet& filter(Predicate&& predicate) {
-    m_vector.erase(
-        std::remove_if(m_vector.begin(), m_vector.end(),
+    auto container = m_set.extract_sequence();
+    container.erase(
+        std::remove_if(container.begin(), container.end(),
                        [&](const Element& e) { return !predicate(e); }),
-        m_vector.end());
+        container.end());
+    m_set.adopt_sequence(boost::container::ordered_unique_range,
+                         std::move(container));
     return *this;
   }
 
   FlatSet& union_with(const FlatSet& other) {
     // This is optimized for `this.size() >> other.size()`.
-    auto it = m_vector.begin();
-    auto other_it = other.m_vector.begin(), other_end = other.m_vector.end();
+    auto it = m_set.begin(), end = m_set.end();
+    auto other_it = other.m_set.begin(), other_end = other.m_set.end();
     while (other_it != other_end) {
-      it = std::lower_bound(it, m_vector.end(), *other_it, Compare());
-      if (it == m_vector.end() || !Equal()(*it, *other_it)) {
-        it = m_vector.insert(it, *other_it);
+      it = std::lower_bound(it, end, *other_it, Compare());
+      if (it == end || !Equal()(*it, *other_it)) {
+        it = m_set.insert(it, *other_it);
+        end = m_set.end();
       }
       ++it;
       ++other_it;
@@ -145,9 +143,10 @@ class FlatSet final {
 
   FlatSet& intersection_with(const FlatSet& other) {
     // This is optimized for `this.size() << other.size()`.
-    auto first = m_vector.begin(); // Where to write the next element to keep.
-    auto it = m_vector.begin(), end = m_vector.end();
-    auto other_it = other.m_vector.begin(), other_end = other.m_vector.end();
+    auto container = m_set.extract_sequence();
+    auto first = container.begin(); // Where to write the next element to keep.
+    auto it = container.begin(), end = container.end();
+    auto other_it = other.m_set.begin(), other_end = other.m_set.end();
     while (it != end) {
       other_it = std::lower_bound(other_it, other_end, *it, Compare());
       if (other_it != other_end && Equal()(*it, *other_it)) {
@@ -159,18 +158,21 @@ class FlatSet final {
       }
       ++it;
     }
-    m_vector.erase(first, end);
+    container.erase(first, end);
+    m_set.adopt_sequence(boost::container::ordered_unique_range,
+                         std::move(container));
     return *this;
   }
 
   FlatSet& difference_with(const FlatSet& other) {
     // This is optimized for `this.size() >> other.size()`.
-    auto it = m_vector.begin();
-    auto other_it = other.m_vector.begin(), other_end = other.m_vector.end();
+    auto it = m_set.begin(), end = m_set.end();
+    auto other_it = other.m_set.begin(), other_end = other.m_set.end();
     while (other_it != other_end) {
-      it = std::lower_bound(it, m_vector.end(), *other_it);
-      if (it != m_vector.end() && Equal()(*it, *other_it)) {
-        it = m_vector.erase(it);
+      it = std::lower_bound(it, end, *other_it);
+      if (it != end && Equal()(*it, *other_it)) {
+        it = m_set.erase(it);
+        end = m_set.end();
         ++it;
       }
       ++other_it;
@@ -179,7 +181,7 @@ class FlatSet final {
   }
 
   FlatSet get_union_with(const FlatSet& other) const {
-    if (m_vector.size() > other.m_vector.size()) {
+    if (m_set.size() > other.m_set.size()) {
       auto result = *this;
       result.union_with(other);
       return result;
@@ -191,7 +193,7 @@ class FlatSet final {
   }
 
   FlatSet get_intersection_with(const FlatSet& other) const {
-    if (m_vector.size() < other.m_vector.size()) {
+    if (m_set.size() < other.m_set.size()) {
       auto result = *this;
       result.intersection_with(other);
       return result;
@@ -208,7 +210,7 @@ class FlatSet final {
     return result;
   }
 
-  void clear() { m_vector.clear(); }
+  void clear() { m_set.clear(); }
 
   friend std::ostream& operator<<(std::ostream& o, const FlatSet<Element>& s) {
     o << "{";
@@ -224,7 +226,7 @@ class FlatSet final {
   }
 
  private:
-  std::vector<Element> m_vector;
+  BoostFlatSet m_set;
 };
 
 } // namespace sparta
