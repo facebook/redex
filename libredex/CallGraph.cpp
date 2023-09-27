@@ -19,6 +19,12 @@
 
 namespace mog = method_override_graph;
 
+namespace {
+
+static AccumulatingTimer s_timer;
+
+} // namespace
+
 namespace call_graph {
 
 Graph single_callee_graph(const mog::Graph& method_override_graph,
@@ -112,6 +118,7 @@ MultipleCalleeBaseStrategy::get_ordered_overriding_methods_with_code(
 }
 
 RootAndDynamic MultipleCalleeBaseStrategy::get_roots() const {
+  Timer t("get_roots");
   RootAndDynamic root_and_dynamic;
   MethodSet emplaced_methods;
   auto& roots = root_and_dynamic.roots;
@@ -394,9 +401,13 @@ std::vector<const DexMethod*> MultipleCalleeStrategy::get_additional_roots(
 Edge::Edge(NodeId caller, NodeId callee, IRInstruction* invoke_insn)
     : m_caller(caller), m_callee(callee), m_invoke_insn(invoke_insn) {}
 
+double Graph::get_seconds() { return s_timer.get_seconds(); }
+
 Graph::Graph(const BuildStrategy& strat)
     : m_entry(std::make_shared<Node>(Node::GHOST_ENTRY)),
       m_exit(std::make_shared<Node>(Node::GHOST_EXIT)) {
+  auto timer_scope = s_timer.scope();
+  Timer t("Graph::Graph");
   // Obtain the callsites of each method recursively, building the graph in the
   // process.
   ConcurrentMap<const DexMethod*, NodeId> concurrent_nodes;

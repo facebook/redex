@@ -34,6 +34,7 @@
 #include "ApiLevelChecker.h"
 #include "AssetManager.h"
 #include "CFGMutation.h"
+#include "CallGraph.h"
 #include "ClassChecker.h"
 #include "CommandProfiling.h"
 #include "ConfigFiles.h"
@@ -1450,6 +1451,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   Timer::add_timer("PassManager.CheckUniqueDeobfuscateds",
                    m_check_unique_deobfuscateds_timer.get_seconds());
   Timer::add_timer("CFGMutation", cfg::CFGMutation::get_seconds());
+  Timer::add_timer("CallGraph", call_graph::Graph::get_seconds());
   Timer::add_timer(
       "MethodProfiles::process_unresolved_lines",
       method_profiles::MethodProfiles::get_process_unresolved_lines_seconds());

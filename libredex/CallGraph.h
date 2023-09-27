@@ -165,6 +165,8 @@ class Graph final {
 
   const MethodVector& get_callers(const DexMethod* callee) const;
 
+  static double get_seconds();
+
  private:
   NodeId make_node(const DexMethod*);
 
