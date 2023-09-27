@@ -116,19 +116,22 @@ TEST_F(FlatMapTest, updates) {
   EXPECT_EQ(0, m1.at(20));
 }
 
+struct StringSetPartitionInterface {
+  using type = StringAbstractSet;
+
+  static type default_value() { return type::bottom(); }
+
+  static bool is_default_value(const type& x) { return x.is_bottom(); }
+
+  static bool equals(const type& x, const type& y) { return x.equals(y); }
+
+  static bool leq(const type& x, const type& y) { return x.leq(y); }
+
+  constexpr static AbstractValueKind default_value_kind =
+      AbstractValueKind::Bottom;
+};
+
 TEST_F(FlatMapTest, partitionLeq) {
-  struct StringSetPartitionInterface {
-    using type = StringAbstractSet;
-
-    static type default_value() { return type::bottom(); }
-
-    static bool is_default_value(const type& x) { return x.is_bottom(); }
-
-    static bool equals(const type& x, const type& y) { return x.equals(y); }
-
-    static bool leq(const type& x, const type& y) { return x.leq(y); }
-  };
-
   using Partition =
       FlatMap<uint32_t, StringAbstractSet, StringSetPartitionInterface>;
 
@@ -222,19 +225,22 @@ TEST_F(FlatMapTest, partitionLeq) {
   }
 }
 
+struct StringSetEnvironmentInterface {
+  using type = StringAbstractSet;
+
+  static type default_value() { return type::top(); }
+
+  static bool is_default_value(const type& x) { return x.is_top(); }
+
+  static bool equals(const type& x, const type& y) { return x.equals(y); }
+
+  static bool leq(const type& x, const type& y) { return x.leq(y); }
+
+  constexpr static AbstractValueKind default_value_kind =
+      AbstractValueKind::Top;
+};
+
 TEST_F(FlatMapTest, environmentLeq) {
-  struct StringSetEnvironmentInterface {
-    using type = StringAbstractSet;
-
-    static type default_value() { return type::top(); }
-
-    static bool is_default_value(const type& x) { return x.is_top(); }
-
-    static bool equals(const type& x, const type& y) { return x.equals(y); }
-
-    static bool leq(const type& x, const type& y) { return x.leq(y); }
-  };
-
   using Environment =
       FlatMap<uint32_t, StringAbstractSet, StringSetEnvironmentInterface>;
 

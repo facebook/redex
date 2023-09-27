@@ -174,13 +174,17 @@ class HashMap final {
     static_assert(std::is_base_of_v<AbstractDomain<ValueType>, ValueType>,
                   "leq can only be used when Value implements AbstractDomain");
 
-    // Assumes Value::default_value() is either Top or Bottom.
-    if (Value::default_value().is_top()) {
+    // Assumes Value::default_value_kind is either Top or Bottom.
+    if constexpr (Value::default_value_kind == AbstractValueKind::Top) {
       return this->leq_when_default_is_top(other);
-    } else if (Value::default_value().is_bottom()) {
+    } else if constexpr (Value::default_value_kind ==
+                         AbstractValueKind::Bottom) {
       return this->leq_when_default_is_bottom(other);
     } else {
-      RUNTIME_CHECK(false, undefined_operation());
+      static_assert(
+          Value::default_value_kind == AbstractValueKind::Top ||
+              Value::default_value_kind == AbstractValueKind::Bottom,
+          "leq can only be used when Value::default_value() is top or bottom");
     }
   }
 
