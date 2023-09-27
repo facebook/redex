@@ -2734,16 +2734,15 @@ void reorder_with_method_profiles(
 ////////////////////////////////////////////////////////////////////////////////
 
 static size_t count_methods(const Scope& scope) {
-  size_t methods{0};
+  std::atomic<size_t> methods{0};
   walk::parallel::code(scope, [&methods](DexMethod* method, IRCode&) {
     if (!can_outline_from_method(method)) {
       return;
     }
-
     methods++;
   });
 
-  return methods;
+  return (size_t)methods;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
