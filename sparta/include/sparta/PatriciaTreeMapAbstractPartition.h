@@ -51,6 +51,9 @@ class PatriciaTreeMapAbstractPartition final
     static bool equals(const type& x, const type& y) { return x.equals(y); }
 
     static bool leq(const type& x, const type& y) { return x.leq(y); }
+
+    constexpr static AbstractValueKind default_value_kind =
+        AbstractValueKind::Bottom;
   };
 
   using MapType = PatriciaTreeMap<Label, Domain, ValueInterface>;

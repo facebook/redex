@@ -68,6 +68,9 @@ struct SimpleValue {
   static bool is_default_value(const T& t) { return t == T(); }
 
   static bool equals(const T& a, const T& b) { return a == b; }
+
+  constexpr static AbstractValueKind default_value_kind =
+      AbstractValueKind::Value;
 };
 
 /*
@@ -83,6 +86,9 @@ struct EmptyValue {
   static bool is_default_value(const type&) { return true; }
 
   static bool equals(const type&, const type&) { return true; }
+
+  constexpr static AbstractValueKind default_value_kind =
+      AbstractValueKind::Value;
 };
 
 template <typename IntegerType, typename Value>
@@ -590,7 +596,7 @@ inline bool is_tree_subset_of(
   return false;
 }
 
-/* Assumes Value::default_value() is either Top or Bottom */
+/* Assumes Value::default_value_kind is either Top or Bottom */
 template <typename IntegerType, typename Value>
 inline bool is_tree_leq(
     const intrusive_ptr<PatriciaTreeNode<IntegerType, Value>>& s,
@@ -606,18 +612,17 @@ inline bool is_tree_leq(
                 "Value::leq() is defined, but Value::type is not an "
                 "implementation of AbstractDomain");
 
-  RUNTIME_CHECK(Value::default_value().is_top() ||
-                    Value::default_value().is_bottom(),
-                undefined_operation());
+  static_assert(Value::default_value_kind == AbstractValueKind::Top ||
+                Value::default_value_kind == AbstractValueKind::Bottom);
 
   if (s == t) {
     // This condition allows the leq operation to run in sublinear time when
     // comparing Patricia trees that share some structure.
     return true;
   } else if (s == nullptr) {
-    return Value::default_value().is_bottom();
+    return Value::default_value_kind == AbstractValueKind::Bottom;
   } else if (t == nullptr) {
-    return Value::default_value().is_top();
+    return Value::default_value_kind == AbstractValueKind::Top;
   }
 
   const auto* s_leaf = s->as_leaf();
@@ -629,7 +634,7 @@ inline bool is_tree_leq(
            Value::leq(s_leaf->value(), t_leaf->value());
   } else if (s_leaf) {
     // t has at least one non-default binding that s doesn't have.
-    if (Value::default_value().is_top()) {
+    if (Value::default_value_kind == AbstractValueKind::Top) {
       // The non-default binding in t can never be <= Top.
       return false;
     }
@@ -648,7 +653,7 @@ inline bool is_tree_leq(
     }
   } else if (t_leaf) {
     // s has at least one non-default binding that t doesn't have.
-    if (Value::default_value().is_bottom()) {
+    if (Value::default_value_kind == AbstractValueKind::Bottom) {
       // There exists a key such that s[key] != Bottom and t[key] == Bottom.
       return false;
     }
@@ -678,12 +683,12 @@ inline bool is_tree_leq(
   } else if (m < n && match_prefix(q, p, m)) {
     // The tree t only contains bindings present in a subtree of s, and s has
     // bindings not present in t.
-    return Value::default_value().is_top() &&
+    return Value::default_value_kind == AbstractValueKind::Top &&
            is_tree_leq(is_zero_bit(q, m) ? s0 : s1, t);
   } else if (m > n && match_prefix(p, q, n)) {
     // The tree s only contains bindings present in a subtree of t, and t has
     // bindings not present in s.
-    return Value::default_value().is_bottom() &&
+    return Value::default_value_kind == AbstractValueKind::Bottom &&
            is_tree_leq(s, is_zero_bit(p, n) ? t0 : t1);
   } else {
     // s and t both have bindings that are not present in the other tree.
@@ -1317,6 +1322,9 @@ class PatriciaTreeCore {
                                             std::declval<ValueType>())),
                      bool>,
       "Value::equals() does not exist");
+  static_assert(std::is_same_v<decltype(Value::default_value_kind),
+                               const AbstractValueKind>,
+                "Value::default_value_kind does not exist");
 
   inline bool empty() const { return m_tree == nullptr; }
 
