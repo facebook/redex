@@ -11,7 +11,7 @@
 #endif
 
 // REDEX_PROPS(Name,                   Negative, DefaultInitial, DefaultFinal)
-REDEX_PROPS(DexLimitsObeyed,           false,    false,          true)
+REDEX_PROPS(DexLimitsObeyed,           false,    true,           true)
 REDEX_PROPS(HasSourceBlocks,           false,    false,          false)
 REDEX_PROPS(InitialRenameClass,        false,    false,          false)
 REDEX_PROPS(NeedsEverythingPublic,     true,     false,          false)
