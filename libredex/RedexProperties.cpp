@@ -12,44 +12,31 @@
 namespace redex_properties {
 
 bool is_negative(Property property) {
-  return property == Property::NeedsEverythingPublic ||
-         property == Property::NeedsInjectionIdLowering;
+  switch (property) {
+#define REDEX_PROPS(name, neg, _init, _final) \
+  case Property::name:                        \
+    return neg;
+#include "RedexProperties.def"
+#undef REDEX_PROPS
+  }
+  return false;
 }
 
 std::vector<Property> get_all_properties() {
   return {
-      Property::NoInitClassInstructions,  Property::NoUnreachableInstructions,
-      Property::DexLimitsObeyed,          Property::NeedsEverythingPublic,
-      Property::NeedsInjectionIdLowering, Property::HasSourceBlocks,
-      Property::NoSpuriousGetClassCalls,  Property::RenameClass,
-      Property::UltralightCodePatterns,
+#define REDEX_PROPS(name, _neg, _init, _final) Property::name,
+#include "RedexProperties.def"
+#undef REDEX_PROPS
   };
 }
 
 const char* get_name(Property property) {
   switch (property) {
-  case Property::NoInitClassInstructions:
-    return "NoInitClassInstructions";
-  case Property::NoUnreachableInstructions:
-    return "NoUnreachableInstructions";
-  case Property::DexLimitsObeyed:
-    return "DexLimitsObeyed";
-  case Property::NeedsEverythingPublic:
-    return "NeedsEverythingPublic";
-  case Property::NeedsInjectionIdLowering:
-    return "NeedsInjectionIdLowering";
-  case Property::HasSourceBlocks:
-    return "HasSourceBlocks";
-  case Property::NoResolvablePureRefs:
-    return "NoResolvablePureRefs";
-  case Property::NoSpuriousGetClassCalls:
-    return "NoSpuriousGetClassCalls";
-  case Property::InitialRenameClass:
-    return "InitialRenameClass";
-  case Property::RenameClass:
-    return "RenameClass";
-  case Property::UltralightCodePatterns:
-    return "UltralightCodePatterns";
+#define REDEX_PROPS(name, _neg, _init, _final) \
+  case Property::name:                         \
+    return #name;
+#include "RedexProperties.def"
+#undef REDEX_PROPS
   }
   return "";
 }

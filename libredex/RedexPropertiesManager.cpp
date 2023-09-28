@@ -42,8 +42,16 @@ CollectionT filter_out_disabled_properties(const CollectionT& c,
 } // namespace
 
 const std::unordered_set<Property>& Manager::get_default_initial() {
-  static const std::unordered_set<Property> default_initial_properties{
-      Property::UltralightCodePatterns};
+  static const auto default_initial_properties = []() {
+    std::unordered_set<Property> set;
+#define REDEX_PROPS(name, _neg, is_init, _final) \
+  if (is_init) {                                 \
+    set.insert(Property::name);                  \
+  }
+#include "RedexProperties.def"
+#undef REDEX_PROPS
+    return set;
+  }();
   return default_initial_properties;
 }
 
@@ -52,9 +60,16 @@ std::unordered_set<Property> Manager::get_initial() const {
 }
 
 const std::unordered_set<Property>& Manager::get_default_final() {
-  static const std::unordered_set<Property> default_final_properties{
-      Property::NoInitClassInstructions, Property::NoUnreachableInstructions,
-      Property::DexLimitsObeyed};
+  static const auto default_final_properties = []() {
+    std::unordered_set<Property> set;
+#define REDEX_PROPS(name, _neg, _init, is_final) \
+  if (is_final) {                                \
+    set.insert(Property::name);                  \
+  }
+#include "RedexProperties.def"
+#undef REDEX_PROPS
+    return set;
+  }();
   return default_final_properties;
 }
 

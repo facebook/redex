@@ -1,0 +1,24 @@
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+
+#ifndef REDEX_PROPS
+#error "You must define REDEX_PROPS!"
+#endif
+
+// REDEX_PROPS(Name,                   Negative, DefaultInitial, DefaultFinal)
+REDEX_PROPS(DexLimitsObeyed,           false,    false,          true)
+REDEX_PROPS(HasSourceBlocks,           false,    false,          false)
+REDEX_PROPS(InitialRenameClass,        false,    false,          false)
+REDEX_PROPS(NeedsEverythingPublic,     true,     false,          false)
+REDEX_PROPS(NeedsInjectionIdLowering,  true,     false,          false)
+REDEX_PROPS(NoInitClassInstructions,   false,    false,          true)
+REDEX_PROPS(NoResolvablePureRefs,      false,    false,          false)
+REDEX_PROPS(NoSpuriousGetClassCalls,   false,    false,          false)
+REDEX_PROPS(NoUnreachableInstructions, false,    false,          true)
+REDEX_PROPS(RenameClass,               false,    false,          false)
+REDEX_PROPS(UltralightCodePatterns,    false,    true,           false)

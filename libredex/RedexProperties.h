@@ -55,18 +55,9 @@ inline const PropertyInteraction EstablishesAndRequiresFinally =
 } // namespace interactions
 
 enum class Property {
-  NoInitClassInstructions,
-  NoUnreachableInstructions,
-  DexLimitsObeyed,
-  // Stand-in for fixing up passes.
-  NeedsEverythingPublic,
-  NeedsInjectionIdLowering,
-  HasSourceBlocks,
-  NoResolvablePureRefs,
-  NoSpuriousGetClassCalls,
-  InitialRenameClass,
-  RenameClass,
-  UltralightCodePatterns,
+#define REDEX_PROPS(name, _neg, _init, _final) name,
+#include "RedexProperties.def"
+#undef REDEX_PROPS
 };
 
 bool is_negative(Property property);
@@ -81,19 +72,10 @@ using PropertyInteractions = std::unordered_map<Property, PropertyInteraction>;
 
 namespace names {
 
-constexpr Property NoInitClassInstructions = Property::NoInitClassInstructions;
-constexpr Property NoUnreachableInstructions =
-    Property::NoUnreachableInstructions;
-constexpr Property DexLimitsObeyed = Property::DexLimitsObeyed;
-constexpr Property NeedsEverythingPublic = Property::NeedsEverythingPublic;
-constexpr Property NeedsInjectionIdLowering =
-    Property::NeedsInjectionIdLowering;
-constexpr Property HasSourceBlocks = Property::HasSourceBlocks;
-constexpr Property NoResolvablePureRefs = Property::NoResolvablePureRefs;
-constexpr Property NoSpuriousGetClassCalls = Property::NoSpuriousGetClassCalls;
-constexpr Property InitialRenameClass = Property::InitialRenameClass;
-constexpr Property RenameClass = Property::RenameClass;
-constexpr Property UltralightCodePatterns = Property::UltralightCodePatterns;
+#define REDEX_PROPS(name, _neg, _init, _final) \
+  constexpr Property name = Property::name;
+#include "RedexProperties.def"
+#undef REDEX_PROPS
 
 } // namespace names
 
@@ -104,16 +86,9 @@ namespace simple {
 inline PropertyInteractions preserves_all() {
   using namespace redex_properties::interactions;
   return {
-      {Property::DexLimitsObeyed, Preserves},
-      {Property::HasSourceBlocks, Preserves},
-      {Property::NeedsEverythingPublic, Preserves},
-      {Property::NeedsInjectionIdLowering, Preserves},
-      {Property::NoInitClassInstructions, Preserves},
-      {Property::NoUnreachableInstructions, Preserves},
-      {Property::NoResolvablePureRefs, Preserves},
-      {Property::NoSpuriousGetClassCalls, Preserves},
-      {Property::RenameClass, Preserves},
-      {Property::UltralightCodePatterns, Preserves},
+#define REDEX_PROPS(name, _neg, _init, _final) {Property::name, Preserves},
+#include "RedexProperties.def"
+#undef REDEX_PROPS
   };
 }
 
