@@ -23,8 +23,6 @@ class IntTypePatcherPass : public Pass {
     return {{DexLimitsObeyed, Preserves},
             {UltralightCodePatterns, Preserves},
             {NoInitClassInstructions, Preserves},
-            {NeedsEverythingPublic, Preserves},
-            {NeedsInjectionIdLowering, Preserves},
             {RenameClass, Preserves}};
   }
 
