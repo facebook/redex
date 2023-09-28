@@ -30,7 +30,7 @@ namespace {
 
 using CallSites = std::vector<std::pair<DexMethod*, IRInstruction*>>;
 
-const std::string TE_MAPPING_FILE_NAME = "redex-type-erasure-mappings.txt";
+const std::string CM_MAP_FILE_NAME = "redex-class-merging-map.txt";
 
 TypeTags gen_type_tags(const std::vector<const MergerType*>& mergers) {
   TypeTags res;
@@ -467,7 +467,7 @@ void trim_method_debug_map(
 void write_out_type_mapping(const ConfigFiles& conf,
                             const std::vector<const MergerType*>& mergers,
                             const TypeToMethodMap& method_dedup_map) {
-  std::string mapping_file = conf.metafile(TE_MAPPING_FILE_NAME);
+  std::string mapping_file = conf.metafile(CM_MAP_FILE_NAME);
   std::ofstream os(mapping_file, std::ios_base::app);
   if (!os.is_open()) {
     return;
