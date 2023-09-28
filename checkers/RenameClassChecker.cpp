@@ -33,7 +33,7 @@ void RenameClassChecker::run_checker(DexStoresVector& stores,
       always_assert_log(
           sequence_nr == global_cls_nr,
           "[%s] invalid class number, expected %u, got %u, class %s!\n",
-          get_property_name().c_str(), sequence_nr, global_cls_nr, cls_name);
+          get_name(get_property()), sequence_nr, global_cls_nr, cls_name);
     }
     ++sequence_nr;
   });

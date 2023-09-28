@@ -37,7 +37,7 @@ void NoSpuriousGetClassCallsChecker::check_spurious_getClass(
       always_assert_log(
           !move_result.is_end(),
           "[%s] %s contains spurious Object.getClass() instruction!\n  {%s}",
-          get_property_name().c_str(), SHOW(method), SHOW(insn));
+          get_name(get_property()), SHOW(method), SHOW(insn));
     }
   }
 }

@@ -41,55 +41,33 @@ CollectionT filter_out_disabled_properties(const CollectionT& c,
 
 } // namespace
 
-const std::unordered_set<PropertyName>& Manager::get_default_initial() {
-  using namespace names;
-  static const std::unordered_set<PropertyName> default_initial_properties{
-      UltralightCodePatterns};
+const std::unordered_set<Property>& Manager::get_default_initial() {
+  static const std::unordered_set<Property> default_initial_properties{
+      Property::UltralightCodePatterns};
   return default_initial_properties;
 }
 
-std::unordered_set<PropertyName> Manager::get_initial() const {
+std::unordered_set<Property> Manager::get_initial() const {
   return filter_out_disabled_properties(get_default_initial(), *this);
 }
 
-const std::unordered_set<PropertyName>& Manager::get_default_final() {
-  using namespace names;
-  static const std::unordered_set<PropertyName> default_final_properties{
-      NoInitClassInstructions, NoUnreachableInstructions, DexLimitsObeyed};
+const std::unordered_set<Property>& Manager::get_default_final() {
+  static const std::unordered_set<Property> default_final_properties{
+      Property::NoInitClassInstructions, Property::NoUnreachableInstructions,
+      Property::DexLimitsObeyed};
   return default_final_properties;
 }
 
-std::unordered_set<PropertyName> Manager::get_final() const {
+std::unordered_set<Property> Manager::get_final() const {
   return filter_out_disabled_properties(get_default_final(), *this);
 }
 
-// TODO: Figure out a way to keep this complete.
-//
-//       We could move to an enum with the typical .def file to autogenerate.
-std::vector<PropertyName> Manager::get_all_properties() {
-  using namespace names;
-  return {
-      NoInitClassInstructions,  NoUnreachableInstructions,
-      DexLimitsObeyed,          NeedsEverythingPublic,
-      NeedsInjectionIdLowering, HasSourceBlocks,
-      NoSpuriousGetClassCalls,  RenameClass,
-      UltralightCodePatterns,
-  };
-}
-
-// TODO: This should really be with the RedexProperties definitions.
-bool Manager::is_negative(const PropertyName& property) {
-  using namespace names;
-  return property == NeedsEverythingPublic ||
-         property == NeedsInjectionIdLowering;
-}
-
-std::unordered_set<PropertyName> Manager::get_required(
+std::unordered_set<Property> Manager::get_required(
     const PropertyInteractions& interactions) const {
-  std::unordered_set<PropertyName> res;
-  for (const auto& [property_name, interaction] : interactions) {
+  std::unordered_set<Property> res;
+  for (const auto& [property, interaction] : interactions) {
     if (interaction.requires_) {
-      res.insert(property_name);
+      res.insert(property);
     }
   }
   return res;
@@ -97,31 +75,31 @@ std::unordered_set<PropertyName> Manager::get_required(
 
 void Manager::check(DexStoresVector& stores, PassManager& mgr) {
   for (auto* checker : m_checkers) {
-    TRACE(PM, 3, "Checking for %s...", checker->get_property_name().c_str());
+    TRACE(PM, 3, "Checking for %s...", get_name(checker->get_property()));
     checker->run_checker(stores, m_conf, mgr,
-                         m_established.count(checker->get_property_name()));
+                         m_established.count(checker->get_property()));
   }
 }
 
-const std::unordered_set<PropertyName>& Manager::apply(
+const std::unordered_set<Property>& Manager::apply(
     const PropertyInteractions& interactions) {
-  std20::erase_if(m_established, [&](const auto& property_name) {
-    auto it = interactions.find(property_name);
+  std20::erase_if(m_established, [&](const auto& property) {
+    auto it = interactions.find(property);
     if (it == interactions.end()) {
-      return !is_negative(property_name);
+      return !is_negative(property);
     }
     const auto& interaction = it->second;
     return !interaction.preserves;
   });
-  for (const auto& [property_name, interaction] : interactions) {
+  for (const auto& [property, interaction] : interactions) {
     if (interaction.establishes) {
-      m_established.insert(property_name);
+      m_established.insert(property);
     }
   }
   return m_established;
 }
 
-const std::unordered_set<PropertyName>& Manager::apply_and_check(
+const std::unordered_set<Property>& Manager::apply_and_check(
     const PropertyInteractions& interactions,
     DexStoresVector& stores,
     PassManager& mgr) {
@@ -142,18 +120,18 @@ std::optional<std::string> Manager::verify_pass_interactions(
 
   auto log_established_properties = [&](const std::string& title) {
     oss << "  " << title << ": ";
-    for (auto& property_name : m.m_established) {
-      oss << property_name << ", ";
+    for (auto& property : m.m_established) {
+      oss << property << ", ";
     }
     oss << "\n";
   };
   log_established_properties("initial state establishes");
 
   auto check = [&](const auto& properties) {
-    for (auto& property_name : properties) {
-      if (!m.m_established.count(property_name)) {
+    for (auto& property : properties) {
+      if (!m.m_established.count(property)) {
         oss << "    *** REQUIRED PROPERTY NOT CURRENTLY ESTABLISHED ***: "
-            << property_name << "\n";
+            << property << "\n";
         failed = true;
       }
     }
@@ -168,22 +146,22 @@ std::optional<std::string> Manager::verify_pass_interactions(
     oss << pass_name << "\n";
     m.apply(interactions);
     log_established_properties("establishes");
-    for (const auto& [property_name, interaction] : interactions) {
+    for (const auto& [property, interaction] : interactions) {
       if (interaction.requires_finally) {
-        final_properties.insert(property_name);
+        final_properties.insert(property);
       }
     }
   }
   log_established_properties("final state requires");
   check(final_properties);
 
-  for (auto& property_name : get_all_properties()) {
-    if (!is_negative(property_name)) {
+  for (auto& property : get_all_properties()) {
+    if (!is_negative(property)) {
       continue;
     }
-    if (m.m_established.count(property_name)) {
+    if (m.m_established.count(property)) {
       oss << "    *** MUST-NOT PROPERTY IS ESTABLISHED IN FINAL STATE ***: "
-          << property_name << "\n";
+          << property << "\n";
       failed = true;
     }
   }
@@ -219,18 +197,18 @@ static bool pass_is_enabled(const std::string& pass_name,
   return true;
 }
 
-bool Manager::property_is_enabled(const PropertyName& property_name) const {
+bool Manager::property_is_enabled(const Property& property) const {
   // If we had c++20, we could use a constexpr sorted std::array with
   // std::lower_bound for fast lookups...
-  static const std::unordered_map<PropertyName, bool (*)(const ConfigFiles&)>
+  static const std::unordered_map<Property, bool (*)(const ConfigFiles&)>
       enable_check_funcs{{
-          names::HasSourceBlocks,
+          Property::HasSourceBlocks,
           [](const ConfigFiles& conf) {
             return pass_is_enabled("InsertSourceBlocksPass", conf);
           },
       }};
 
-  auto it = enable_check_funcs.find(property_name);
+  auto it = enable_check_funcs.find(property);
   if (it == enable_check_funcs.end()) {
     return true;
   }

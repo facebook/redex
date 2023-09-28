@@ -1121,7 +1121,7 @@ void PassManager::init_property_interactions(ConfigFiles& conf) {
 
       always_assert_log(property_interaction.is_valid(),
                         "%s has an invalid property interaction for %s",
-                        pass->name().c_str(), name.c_str());
+                        pass->name().c_str(), redex_properties::get_name(name));
       ++it;
     }
     pass_info->property_interactions = std::move(m);

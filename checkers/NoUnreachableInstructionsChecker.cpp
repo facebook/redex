@@ -25,7 +25,7 @@ void NoUnreachableInstructionsChecker::run_checker(DexStoresVector& stores,
   walk::parallel::opcodes(scope, [&](DexMethod* method, IRInstruction* insn) {
     always_assert_log(!opcode::is_unreachable(insn->opcode()),
                       "[%s] %s contains unreachable instruction!\n  {%s}",
-                      get_property_name().c_str(), SHOW(method), SHOW(insn));
+                      get_name(get_property()), SHOW(method), SHOW(insn));
   });
 }
 

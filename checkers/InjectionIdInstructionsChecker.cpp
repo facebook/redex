@@ -25,7 +25,7 @@ void InjectionIdInstructionsChecker::run_checker(DexStoresVector& stores,
   walk::parallel::opcodes(scope, [&](DexMethod* method, IRInstruction* insn) {
     always_assert_log(!opcode::is_injection_id(insn->opcode()),
                       "[%s] %s contains injection id instruction!\n  {%s}",
-                      get_property_name().c_str(), SHOW(method), SHOW(insn));
+                      get_name(get_property()), SHOW(method), SHOW(insn));
   });
 }
 

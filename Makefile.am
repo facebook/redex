@@ -197,6 +197,7 @@ libredex_la_SOURCES = \
 	libredex/RedexMappedFile.cpp \
 	libredex/ReadMaybeMapped.cpp \
 	libredex/RedexContext.cpp \
+	libredex/RedexProperties.cpp \
 	libredex/RedexPropertiesManager.cpp \
 	libredex/RedexPropertyChecker.cpp \
 	libredex/RedexPropertyCheckerRegistry.cpp \

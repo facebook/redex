@@ -66,6 +66,7 @@
 #include "ProguardPrintConfiguration.h" // New ProGuard configuration
 #include "ReachableClasses.h"
 #include "RedexContext.h"
+#include "RedexProperties.h"
 #include "RedexPropertiesManager.h"
 #include "RedexPropertyCheckerRegistry.h"
 #include "RedexResources.h"
@@ -239,6 +240,7 @@ Json::Value reflect_config(const Configurable::Reflection& cr) {
 }
 
 void add_pass_properties_reflection(Json::Value& value, Pass* pass) {
+  using namespace redex_properties;
   auto interactions = pass->get_property_interactions();
   if (interactions.empty()) {
     return;
@@ -251,16 +253,16 @@ void add_pass_properties_reflection(Json::Value& value, Pass* pass) {
 
   for (const auto& [property, inter] : interactions) {
     if (inter.establishes) {
-      establishes.append(property);
+      establishes.append(get_name(property));
     }
     if (inter.requires_) {
-      requires_.append(property);
+      requires_.append(get_name(property));
     }
     if (inter.preserves) {
-      preserves.append(property);
+      preserves.append(get_name(property));
     }
     if (inter.requires_finally) {
-      requires_finally.append(property);
+      requires_finally.append(get_name(property));
     }
   }
 
@@ -278,23 +280,23 @@ Json::Value reflect_property_definitions() {
 
   properties["properties"] = []() {
     Json::Value prop_map;
-    auto all = redex_properties::Manager::get_all_properties();
+    auto all = redex_properties::get_all_properties();
     for (auto& prop : all) {
       Json::Value prop_value;
-      prop_value["negative"] = redex_properties::Manager::is_negative(prop);
-      prop_map[prop] = std::move(prop_value);
+      prop_value["negative"] = redex_properties::is_negative(prop);
+      prop_map[redex_properties::get_name(prop)] = std::move(prop_value);
     }
     return prop_map;
   }();
 
   auto create_sorted = [](const auto& input) {
-    std::vector<redex_properties::PropertyName> tmp;
+    std::vector<redex_properties::Property> tmp;
     std::copy(input.begin(), input.end(), std::back_inserter(tmp));
     std::sort(tmp.begin(), tmp.end());
 
     Json::Value holder = Json::arrayValue;
     for (auto& prop : tmp) {
-      holder.append(prop);
+      holder.append(redex_properties::get_name(prop));
     }
     return holder;
   };
@@ -1638,6 +1640,7 @@ void copy_proguard_stats(Json::Value& stats) {
 }
 
 int check_pass_properties(const Arguments& args) {
+  using namespace redex_properties;
   // Cannot parse GlobalConfig nor passes, as they may require binding
   // to dex elements. So this looks more complicated than necessary.
 
@@ -1656,13 +1659,12 @@ int check_pass_properties(const Arguments& args) {
   }
 
   auto const& all_passes = PassRegistry::get().get_passes();
-  auto props_manager = redex_properties::Manager(
-      conf, redex_properties::PropertyCheckerRegistry::get().get_checkers());
+  auto props_manager =
+      Manager(conf, PropertyCheckerRegistry::get().get_checkers());
   auto active_passes =
       PassManager::compute_activated_passes(all_passes, conf, &pmc);
 
-  std::vector<std::pair<std::string, redex_properties::PropertyInteractions>>
-      pass_interactions;
+  std::vector<std::pair<std::string, PropertyInteractions>> pass_interactions;
   for (const auto& [pass, _] : active_passes.activated_passes) {
     auto m = pass->get_property_interactions();
     for (auto it = m.begin(); it != m.end();) {
@@ -1675,13 +1677,12 @@ int check_pass_properties(const Arguments& args) {
 
       always_assert_log(property_interaction.is_valid(),
                         "%s has an invalid property interaction for %s",
-                        pass->name().c_str(), name.c_str());
+                        pass->name().c_str(), get_name(name));
       ++it;
     }
     pass_interactions.emplace_back(pass->name(), std::move(m));
   }
-  auto failure = redex_properties::Manager::verify_pass_interactions(
-      pass_interactions, conf);
+  auto failure = Manager::verify_pass_interactions(pass_interactions, conf);
   if (failure) {
     std::cerr << "Illegal pass order:\n" << *failure << std::endl;
     return 1;

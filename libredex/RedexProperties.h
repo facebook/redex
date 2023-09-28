@@ -7,8 +7,10 @@
 
 #pragma once
 
+#include <iosfwd>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace redex_properties {
 
@@ -52,25 +54,46 @@ inline const PropertyInteraction EstablishesAndRequiresFinally =
     PropertyInteraction(true, false, false, true);
 } // namespace interactions
 
-using PropertyName = std::string;
-using PropertyInteractions =
-    std::unordered_map<PropertyName, PropertyInteraction>;
+enum class Property {
+  NoInitClassInstructions,
+  NoUnreachableInstructions,
+  DexLimitsObeyed,
+  // Stand-in for fixing up passes.
+  NeedsEverythingPublic,
+  NeedsInjectionIdLowering,
+  HasSourceBlocks,
+  NoResolvablePureRefs,
+  NoSpuriousGetClassCalls,
+  InitialRenameClass,
+  RenameClass,
+  UltralightCodePatterns,
+};
+
+bool is_negative(Property property);
+std::vector<Property> get_all_properties();
+
+const char* get_name(Property property);
+std::ostream& operator<<(std::ostream& os, const Property& property);
+
+using PropertyInteractions = std::unordered_map<Property, PropertyInteraction>;
+
+// Legacy naming scheme. May update references at some point.
 
 namespace names {
 
-inline const PropertyName NoInitClassInstructions("NoInitClassInstructions");
-inline const PropertyName NoUnreachableInstructions(
-    "NoUnreachableInstructions");
-inline const PropertyName DexLimitsObeyed("DexLimitsObeyed");
-// Stand-in for fixing up passes.
-inline const PropertyName NeedsEverythingPublic("NeedsEverythingPublic");
-inline const PropertyName NeedsInjectionIdLowering("NeedsInjectionIdLowering");
-inline const PropertyName HasSourceBlocks("HasSourceBlocks");
-inline const PropertyName NoResolvablePureRefs("NoResolvablePureRefs");
-inline const PropertyName NoSpuriousGetClassCalls("NoSpuriousGetClassCalls");
-inline const PropertyName InitialRenameClass("InitialRenameClass");
-inline const PropertyName RenameClass("RenameClass");
-inline const PropertyName UltralightCodePatterns("UltralightCodePatterns");
+constexpr Property NoInitClassInstructions = Property::NoInitClassInstructions;
+constexpr Property NoUnreachableInstructions =
+    Property::NoUnreachableInstructions;
+constexpr Property DexLimitsObeyed = Property::DexLimitsObeyed;
+constexpr Property NeedsEverythingPublic = Property::NeedsEverythingPublic;
+constexpr Property NeedsInjectionIdLowering =
+    Property::NeedsInjectionIdLowering;
+constexpr Property HasSourceBlocks = Property::HasSourceBlocks;
+constexpr Property NoResolvablePureRefs = Property::NoResolvablePureRefs;
+constexpr Property NoSpuriousGetClassCalls = Property::NoSpuriousGetClassCalls;
+constexpr Property InitialRenameClass = Property::InitialRenameClass;
+constexpr Property RenameClass = Property::RenameClass;
+constexpr Property UltralightCodePatterns = Property::UltralightCodePatterns;
 
 } // namespace names
 
@@ -80,18 +103,17 @@ namespace simple {
 // explicit.
 inline PropertyInteractions preserves_all() {
   using namespace redex_properties::interactions;
-  using namespace redex_properties::names;
   return {
-      {DexLimitsObeyed, Preserves},
-      {HasSourceBlocks, Preserves},
-      {NeedsEverythingPublic, Preserves},
-      {NeedsInjectionIdLowering, Preserves},
-      {NoInitClassInstructions, Preserves},
-      {NoUnreachableInstructions, Preserves},
-      {NoResolvablePureRefs, Preserves},
-      {NoSpuriousGetClassCalls, Preserves},
-      {RenameClass, Preserves},
-      {UltralightCodePatterns, Preserves},
+      {Property::DexLimitsObeyed, Preserves},
+      {Property::HasSourceBlocks, Preserves},
+      {Property::NeedsEverythingPublic, Preserves},
+      {Property::NeedsInjectionIdLowering, Preserves},
+      {Property::NoInitClassInstructions, Preserves},
+      {Property::NoUnreachableInstructions, Preserves},
+      {Property::NoResolvablePureRefs, Preserves},
+      {Property::NoSpuriousGetClassCalls, Preserves},
+      {Property::RenameClass, Preserves},
+      {Property::UltralightCodePatterns, Preserves},
   };
 }
 
