@@ -12,7 +12,7 @@
 
 // REDEX_PROPS(Name,                   Negative, DefaultInitial, DefaultFinal, DefaultPreserve)
 REDEX_PROPS(DexLimitsObeyed,           false,    true,           true,         false)
-REDEX_PROPS(HasSourceBlocks,           false,    false,          false,        false)
+REDEX_PROPS(HasSourceBlocks,           false,    false,          false,        true)
 REDEX_PROPS(InitialRenameClass,        false,    false,          false,        false)
 REDEX_PROPS(NeedsEverythingPublic,     true,     false,          false,        false)
 REDEX_PROPS(NeedsInjectionIdLowering,  true,     false,          false,        false)

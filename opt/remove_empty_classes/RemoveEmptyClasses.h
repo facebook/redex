@@ -17,9 +17,7 @@ class RemoveEmptyClassesPass : public Pass {
       const override {
     using namespace redex_properties::interactions;
     using namespace redex_properties::names;
-    return {
-        {HasSourceBlocks, Preserves},
-    };
+    return {};
   }
 
   bool is_cfg_legacy() override { return true; }

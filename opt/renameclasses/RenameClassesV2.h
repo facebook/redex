@@ -47,7 +47,6 @@ class RenameClassesPassV2 : public Pass {
     using namespace redex_properties::names;
     return {
         {DexLimitsObeyed, Preserves},
-        {HasSourceBlocks, Preserves},
         {NoResolvablePureRefs, Preserves},
         {InitialRenameClass, Preserves},
         {RenameClass, EstablishesAndRequiresFinally},

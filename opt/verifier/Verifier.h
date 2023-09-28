@@ -19,7 +19,6 @@ class VerifierPass : public Pass {
     using namespace redex_properties::names;
     return {
         {DexLimitsObeyed, Preserves},
-        {HasSourceBlocks, Preserves},
         {UltralightCodePatterns, Preserves},
     };
   }

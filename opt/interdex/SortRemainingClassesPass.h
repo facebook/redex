@@ -19,7 +19,6 @@ class SortRemainingClassesPass : public Pass {
     using namespace redex_properties::names;
     return {
         {DexLimitsObeyed, RequiresAndEstablishes},
-        {HasSourceBlocks, Preserves},
         {NoResolvablePureRefs, Preserves},
         {InitialRenameClass, Preserves},
     };

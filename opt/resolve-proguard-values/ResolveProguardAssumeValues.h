@@ -59,9 +59,7 @@ class ResolveProguardAssumeValuesPass : public Pass {
       const override {
     using namespace redex_properties::interactions;
     using namespace redex_properties::names;
-    return {
-        {HasSourceBlocks, Preserves},
-    };
+    return {};
   }
 
   static ResolveProguardAssumeValuesPass::Stats process_for_code(

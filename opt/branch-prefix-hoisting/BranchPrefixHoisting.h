@@ -33,7 +33,6 @@ class BranchPrefixHoistingPass : public Pass {
     using namespace redex_properties::names;
     return {
         {DexLimitsObeyed, Preserves},
-        {HasSourceBlocks, Preserves},
         {NoInitClassInstructions, Preserves},
         {NoUnreachableInstructions, Preserves},
         {NoResolvablePureRefs, Preserves},

@@ -19,8 +19,9 @@ class RemoveUnreachablePassBase : public Pass {
     using namespace redex_properties::interactions;
     using namespace redex_properties::names;
     return {
-        {DexLimitsObeyed, Preserves},      {HasSourceBlocks, Preserves},
-        {NoResolvablePureRefs, Preserves}, {UltralightCodePatterns, Preserves},
+        {DexLimitsObeyed, Preserves},
+        {NoResolvablePureRefs, Preserves},
+        {UltralightCodePatterns, Preserves},
         {InitialRenameClass, Preserves},
     };
   }

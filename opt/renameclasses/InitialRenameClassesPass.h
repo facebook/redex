@@ -29,7 +29,6 @@ class InitialRenameClassesPass : public Pass {
     using namespace redex_properties::names;
     return {
         {DexLimitsObeyed, Preserves},
-        {HasSourceBlocks, Preserves},
         {InitialRenameClass, Establishes},
     };
   }

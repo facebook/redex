@@ -25,7 +25,6 @@ class ObjectSensitiveDcePass final : public Pass {
     using namespace redex_properties::interactions;
     using namespace redex_properties::names;
     return {
-        {HasSourceBlocks, Preserves},
         {NoResolvablePureRefs, Preserves},
     };
   }
