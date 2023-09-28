@@ -21,7 +21,9 @@ class MethodInlinePass : public Pass {
     return {
         {HasSourceBlocks, Preserves},
         {NoResolvablePureRefs, Preserves},
-        {NoSpuriousGetClassCalls, Preserves},
+        // This may be too conservative as the inliner can be configured not to
+        // DCE in the shrinker.
+        {NoSpuriousGetClassCalls, RequiresAndPreserves},
     };
   }
 

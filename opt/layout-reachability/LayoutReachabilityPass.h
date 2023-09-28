@@ -27,7 +27,6 @@ class LayoutReachabilityPass : Pass {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, Preserves},
         {NoResolvablePureRefs, Preserves},
-        {NoSpuriousGetClassCalls, Preserves},
     };
   }
 

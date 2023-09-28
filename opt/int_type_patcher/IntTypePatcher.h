@@ -26,7 +26,6 @@ class IntTypePatcherPass : public Pass {
             {NoInitClassInstructions, Preserves},
             {NeedsEverythingPublic, Preserves},
             {NeedsInjectionIdLowering, Preserves},
-            {NoSpuriousGetClassCalls, Preserves},
             {RenameClass, Preserves}};
   }
 

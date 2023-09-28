@@ -23,7 +23,6 @@ class OptimizeEnumsPass : public Pass {
     return {
         {HasSourceBlocks, Preserves},
         {NoResolvablePureRefs, Preserves},
-        {NoSpuriousGetClassCalls, Preserves},
     };
   }
 

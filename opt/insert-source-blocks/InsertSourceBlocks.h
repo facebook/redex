@@ -29,7 +29,6 @@ class InsertSourceBlocksPass : public Pass {
     return {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, Establishes},
-        {NoSpuriousGetClassCalls, Preserves},
         {UltralightCodePatterns, Preserves},
     };
   }

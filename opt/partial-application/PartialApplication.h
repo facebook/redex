@@ -21,6 +21,7 @@ class PartialApplicationPass : public Pass {
     return {
         {HasSourceBlocks, Preserves},
         {NoResolvablePureRefs, Preserves},
+        {NoSpuriousGetClassCalls, RequiresAndPreserves},
     };
   }
 

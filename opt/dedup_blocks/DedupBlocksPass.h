@@ -24,7 +24,7 @@ class DedupBlocksPass : public Pass {
         {NoInitClassInstructions, Preserves},
         {NoUnreachableInstructions, Preserves},
         {NoResolvablePureRefs, Preserves},
-        {NoSpuriousGetClassCalls, Preserves},
+
         {RenameClass, Preserves},
     };
   }

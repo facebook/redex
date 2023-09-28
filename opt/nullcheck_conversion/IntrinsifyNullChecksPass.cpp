@@ -34,6 +34,7 @@ void IntrinsifyNullChecksPass::create_null_check_class(
   cls->rstate.set_generated();
   cls->rstate.set_clinit_has_no_side_effects();
   cls->rstate.set_name_used();
+  cls->rstate.set_dont_rename();
   // Crate method for null check.
   auto meth_name = DexString::make_string("null_check");
   DexProto* proto = DexProto::make_proto(
@@ -62,6 +63,8 @@ void IntrinsifyNullChecksPass::create_null_check_class(
   cfg.create_branch(entry_block, dasm(OPCODE_IF_EQZ, {0_v}), return_block,
                     throw_block);
   cfg.recompute_registers_size();
+  method->rstate.set_keepnames(keep_reason::KeepReasonType::UNKNOWN);
+  method->rstate.set_dont_inline();
   cls->add_method(method);
   TRACE(NCI, 1, "the added method is %s\n", SHOW(method));
   TRACE(NCI, 1, "the code is %s\n", SHOW(cfg));

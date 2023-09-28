@@ -32,7 +32,6 @@ class VerticalMergingPass : public Pass {
     return {
         {HasSourceBlocks, Preserves},
         {NoResolvablePureRefs, Preserves},
-        {NoSpuriousGetClassCalls, Preserves},
         {NeedsEverythingPublic, Establishes}, // TT150850158
     };
   }

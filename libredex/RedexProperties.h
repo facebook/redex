@@ -50,6 +50,8 @@ inline const PropertyInteraction Establishes =
     PropertyInteraction(true, false, false, false);
 inline const PropertyInteraction RequiresAndEstablishes =
     PropertyInteraction(true, true, true, false);
+inline const PropertyInteraction RequiresAndPreserves =
+    PropertyInteraction(false, true, true, false);
 inline const PropertyInteraction EstablishesAndRequiresFinally =
     PropertyInteraction(true, false, false, true);
 } // namespace interactions

@@ -51,7 +51,7 @@ class PassImpl : public Pass {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, Preserves},
         {NoResolvablePureRefs, Preserves},
-        {NoSpuriousGetClassCalls, Preserves},
+        {NoSpuriousGetClassCalls, RequiresAndPreserves},
     };
   }
 

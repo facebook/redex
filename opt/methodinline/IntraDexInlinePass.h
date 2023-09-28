@@ -19,8 +19,12 @@ class IntraDexInlinePass : public Pass {
     using namespace redex_properties::interactions;
     using namespace redex_properties::names;
     return {
-        {DexLimitsObeyed, Preserves},      {HasSourceBlocks, Preserves},
-        {NoResolvablePureRefs, Preserves}, {NoSpuriousGetClassCalls, Preserves},
+        {DexLimitsObeyed, Preserves},
+        {HasSourceBlocks, Preserves},
+        {NoResolvablePureRefs, Preserves},
+        // This may be too conservative as the inliner can be configured not
+        // to DCE in the shrinker.
+        {NoSpuriousGetClassCalls, RequiresAndPreserves},
         {InitialRenameClass, Preserves},
     };
   }

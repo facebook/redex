@@ -61,7 +61,6 @@ class ResolveProguardAssumeValuesPass : public Pass {
     using namespace redex_properties::names;
     return {
         {HasSourceBlocks, Preserves},
-        {NoSpuriousGetClassCalls, Preserves},
     };
   }
 

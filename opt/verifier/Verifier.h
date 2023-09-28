@@ -20,7 +20,6 @@ class VerifierPass : public Pass {
     return {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, Preserves},
-        {NoSpuriousGetClassCalls, Preserves},
         {UltralightCodePatterns, Preserves},
     };
   }

@@ -65,7 +65,6 @@ class PrintKotlinStats : public Pass {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, Preserves},
         {NoResolvablePureRefs, Preserves},
-        {NoSpuriousGetClassCalls, Preserves},
         {UltralightCodePatterns, Preserves},
     };
   }

@@ -20,7 +20,7 @@ class ObjectEscapeAnalysisPass : public Pass {
     return {
         {HasSourceBlocks, Preserves},
         {NoResolvablePureRefs, Preserves},
-        {NoSpuriousGetClassCalls, Preserves},
+        {NoSpuriousGetClassCalls, RequiresAndPreserves},
     };
   }
 

@@ -43,7 +43,6 @@ class ResolveRefsPass : public ExternalRefsManglingPass {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, Preserves},
         {NoResolvablePureRefs, Establishes},
-        {NoSpuriousGetClassCalls, Preserves},
     };
   }
 

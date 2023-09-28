@@ -40,7 +40,6 @@ class UpCodeMotionPass : public Pass {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, RequiresAndEstablishes},
         {NoResolvablePureRefs, Preserves},
-        {NoSpuriousGetClassCalls, Preserves},
         {InitialRenameClass, Preserves},
     };
   }

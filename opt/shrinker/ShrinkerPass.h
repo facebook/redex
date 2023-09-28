@@ -22,7 +22,9 @@ class ShrinkerPass : public Pass {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, Preserves},
         {NoResolvablePureRefs, Preserves},
-        {NoSpuriousGetClassCalls, Preserves},
+        // This may be too conservative as the shrinker can be configured not to
+        // DCE.
+        {NoSpuriousGetClassCalls, RequiresAndPreserves},
     };
   }
 

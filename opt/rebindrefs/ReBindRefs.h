@@ -38,7 +38,6 @@ class ReBindRefsPass : public ExternalRefsManglingPass {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, Preserves},
         {NoResolvablePureRefs, Preserves},
-        {NoSpuriousGetClassCalls, Preserves},
     };
   }
 

@@ -22,7 +22,9 @@ class PerfMethodInlinePass : public Pass {
         {DexLimitsObeyed, Preserves},
         {HasSourceBlocks, RequiresAndEstablishes},
         {NoResolvablePureRefs, Preserves},
-        {NoSpuriousGetClassCalls, Preserves},
+        // This may be too conservative as the inliner can be configured not to
+        // DCE in the shrinker.
+        {NoSpuriousGetClassCalls, RequiresAndPreserves},
         {InitialRenameClass, Preserves},
     };
   }

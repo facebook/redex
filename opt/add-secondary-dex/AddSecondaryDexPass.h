@@ -23,7 +23,6 @@ class AddSecondaryDexPass : public Pass {
         {NoInitClassInstructions, Preserves},
         {NoResolvablePureRefs, Preserves},
         {NoUnreachableInstructions, Preserves},
-        {NoSpuriousGetClassCalls, Preserves},
         {RenameClass, Preserves},
     };
   }
