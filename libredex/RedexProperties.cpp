@@ -13,9 +13,20 @@ namespace redex_properties {
 
 bool is_negative(Property property) {
   switch (property) {
-#define REDEX_PROPS(name, neg, _init, _final) \
-  case Property::name:                        \
+#define REDEX_PROPS(name, neg, _init, _final, _def_pres) \
+  case Property::name:                                   \
     return neg;
+#include "RedexProperties.def"
+#undef REDEX_PROPS
+  }
+  return false;
+}
+
+bool is_default_preserving(Property property) {
+  switch (property) {
+#define REDEX_PROPS(name, _neg, _init, _final, def_pres) \
+  case Property::name:                                   \
+    return def_pres;
 #include "RedexProperties.def"
 #undef REDEX_PROPS
   }
@@ -24,7 +35,7 @@ bool is_negative(Property property) {
 
 std::vector<Property> get_all_properties() {
   return {
-#define REDEX_PROPS(name, _neg, _init, _final) Property::name,
+#define REDEX_PROPS(name, _neg, _init, _final, _def_pres) Property::name,
 #include "RedexProperties.def"
 #undef REDEX_PROPS
   };
@@ -32,8 +43,8 @@ std::vector<Property> get_all_properties() {
 
 const char* get_name(Property property) {
   switch (property) {
-#define REDEX_PROPS(name, _neg, _init, _final) \
-  case Property::name:                         \
+#define REDEX_PROPS(name, _neg, _init, _final, _def_pres) \
+  case Property::name:                                    \
     return #name;
 #include "RedexProperties.def"
 #undef REDEX_PROPS

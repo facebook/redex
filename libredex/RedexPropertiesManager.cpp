@@ -44,9 +44,9 @@ CollectionT filter_out_disabled_properties(const CollectionT& c,
 const std::unordered_set<Property>& Manager::get_default_initial() {
   static const auto default_initial_properties = []() {
     std::unordered_set<Property> set;
-#define REDEX_PROPS(name, _neg, is_init, _final) \
-  if (is_init) {                                 \
-    set.insert(Property::name);                  \
+#define REDEX_PROPS(name, _neg, is_init, _final, _def_pres) \
+  if (is_init) {                                            \
+    set.insert(Property::name);                             \
   }
 #include "RedexProperties.def"
 #undef REDEX_PROPS
@@ -62,9 +62,9 @@ std::unordered_set<Property> Manager::get_initial() const {
 const std::unordered_set<Property>& Manager::get_default_final() {
   static const auto default_final_properties = []() {
     std::unordered_set<Property> set;
-#define REDEX_PROPS(name, _neg, _init, is_final) \
-  if (is_final) {                                \
-    set.insert(Property::name);                  \
+#define REDEX_PROPS(name, _neg, _init, is_final, _def_pres) \
+  if (is_final) {                                           \
+    set.insert(Property::name);                             \
   }
 #include "RedexProperties.def"
 #undef REDEX_PROPS
@@ -101,7 +101,7 @@ const std::unordered_set<Property>& Manager::apply(
   std20::erase_if(m_established, [&](const auto& property) {
     auto it = interactions.find(property);
     if (it == interactions.end()) {
-      return !is_negative(property);
+      return !is_negative(property) && !is_default_preserving(property);
     }
     const auto& interaction = it->second;
     return !interaction.preserves;

@@ -57,12 +57,13 @@ inline const PropertyInteraction EstablishesAndRequiresFinally =
 } // namespace interactions
 
 enum class Property {
-#define REDEX_PROPS(name, _neg, _init, _final) name,
+#define REDEX_PROPS(name, _neg, _init, _final, _def_pres) name,
 #include "RedexProperties.def"
 #undef REDEX_PROPS
 };
 
 bool is_negative(Property property);
+bool is_default_preserving(Property property);
 std::vector<Property> get_all_properties();
 
 const char* get_name(Property property);
@@ -74,7 +75,7 @@ using PropertyInteractions = std::unordered_map<Property, PropertyInteraction>;
 
 namespace names {
 
-#define REDEX_PROPS(name, _neg, _init, _final) \
+#define REDEX_PROPS(name, _neg, _init, _final, _def_pres) \
   constexpr Property name = Property::name;
 #include "RedexProperties.def"
 #undef REDEX_PROPS
@@ -88,7 +89,8 @@ namespace simple {
 inline PropertyInteractions preserves_all() {
   using namespace redex_properties::interactions;
   return {
-#define REDEX_PROPS(name, _neg, _init, _final) {Property::name, Preserves},
+#define REDEX_PROPS(name, _neg, _init, _final, _def_pres) \
+  {Property::name, Preserves},
 #include "RedexProperties.def"
 #undef REDEX_PROPS
   };
