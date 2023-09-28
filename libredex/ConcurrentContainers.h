@@ -215,9 +215,8 @@ class ConcurrentContainer {
     res.reserve(size());
     for (size_t slot = 0; slot < n_slots; ++slot) {
       auto& c = m_slots[slot];
-      res.insert(std::make_move_iterator(c.begin()),
-                 std::make_move_iterator(c.end()));
-      c.clear();
+      res.merge(c);
+      always_assert(c.empty());
     }
     return res;
   }
