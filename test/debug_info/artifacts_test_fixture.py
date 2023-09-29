@@ -47,6 +47,9 @@ class ArtifactsTestFixture(unittest.TestCase):
                     os.environ["REDEX_BINARY"],
                     "-o",
                     os.path.join(self.tmp, "out.apk"),
+                    # We don't care about zipalign or apk signing.
+                    "--ignore-zipalign",
+                    "--no-sign",
                     os.environ["INPUT_APK"],
                 ],
                 check=True,
