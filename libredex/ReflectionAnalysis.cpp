@@ -353,6 +353,10 @@ class AbstractObjectEnvironment final
     return get<0>().get(reg);
   }
 
+  const BasicAbstractObjectEnvironment& get_basic_abstract_obj_env() const {
+    return get<0>();
+  }
+
   void set_abstract_obj(reg_t reg, const AbstractObjectDomain aobj) {
     apply<0>([=](auto env) { env->set(reg, aobj); }, true);
   }
@@ -760,6 +764,16 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     return it->second.get_abstract_obj(reg).get_object();
   }
 
+  const AbstractObjectEnvironment& get_abstract_object_env(
+      IRInstruction* insn) const {
+    auto it = m_environments.find(insn);
+    if (it == m_environments.end()) {
+      static const AbstractObjectEnvironment empty_environment;
+      return empty_environment;
+    }
+    return it->second;
+  }
+
   boost::optional<ClassObjectSource> get_class_source(
       size_t reg, IRInstruction* insn) const {
     auto it = m_environments.find(insn);
@@ -1096,32 +1110,39 @@ ReflectionAnalysis::ReflectionAnalysis(DexMethod* dex_method,
   m_analyzer->run(context);
 }
 
-void ReflectionAnalysis::get_reflection_site(
-    const reg_t reg,
+void ReflectionAnalysis::gather_reflection_sites(
     IRInstruction* insn,
     std::map<reg_t, ReflectionAbstractObject>* abstract_objects) const {
-  auto aobj = m_analyzer->get_abstract_object(reg, insn);
-  if (!aobj) {
+  const auto& env =
+      m_analyzer->get_abstract_object_env(insn).get_basic_abstract_obj_env();
+  if (env.kind() != AbstractValueKind::Value) {
     return;
   }
-  if (is_not_reflection_output(*aobj)) {
-    return;
-  }
-  boost::optional<ClassObjectSource> cls_src =
-      aobj->is_class() ? m_analyzer->get_class_source(reg, insn) : boost::none;
-  if (aobj->is_class() && cls_src == ClassObjectSource::NON_REFLECTION) {
-    return;
-  }
-  if (traceEnabled(REFL, 5)) {
-    std::ostringstream out;
-    out << "reg " << reg << " " << *aobj << " ";
-    if (cls_src) {
-      out << *cls_src;
+  for (auto&& [reg, domain] : env.bindings()) {
+    auto aobj = domain.get_object();
+    if (!aobj) {
+      continue;
     }
-    out << std::endl;
-    TRACE(REFL, 5, " reflection site: %s", out.str().c_str());
+    if (is_not_reflection_output(*aobj)) {
+      continue;
+    }
+    boost::optional<ClassObjectSource> cls_src =
+        aobj->is_class() ? m_analyzer->get_class_source(reg, insn)
+                         : boost::none;
+    if (aobj->is_class() && cls_src == ClassObjectSource::NON_REFLECTION) {
+      continue;
+    }
+    if (traceEnabled(REFL, 5)) {
+      std::ostringstream out;
+      out << "reg " << reg << " " << *aobj << " ";
+      if (cls_src) {
+        out << *cls_src;
+      }
+      out << std::endl;
+      TRACE(REFL, 5, " reflection site: %s", out.str().c_str());
+    }
+    (*abstract_objects)[reg] = ReflectionAbstractObject(*aobj, cls_src);
   }
-  (*abstract_objects)[reg] = ReflectionAbstractObject(*aobj, cls_src);
 }
 
 ReflectionSites ReflectionAnalysis::get_reflection_sites() const {
@@ -1136,13 +1157,10 @@ ReflectionSites ReflectionAnalysis::get_reflection_sites() const {
   for (auto& mie : InstructionIterable(cfg)) {
     IRInstruction* insn = mie.insn;
     std::map<reg_t, ReflectionAbstractObject> abstract_objects;
-    for (size_t i = 0; i < reg_size; i++) {
-      get_reflection_site(i, insn, &abstract_objects);
-    }
-    get_reflection_site(RESULT_REGISTER, insn, &abstract_objects);
+    gather_reflection_sites(insn, &abstract_objects);
 
     if (!abstract_objects.empty()) {
-      reflection_sites.push_back(std::make_pair(insn, abstract_objects));
+      reflection_sites.emplace_back(insn, std::move(abstract_objects));
     }
   }
   return reflection_sites;
