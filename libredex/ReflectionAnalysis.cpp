@@ -349,7 +349,7 @@ class AbstractObjectEnvironment final
                                         ReturnValueDomain,
                                         CallingContextMap>& /* product */) {}
 
-  AbstractObjectDomain get_abstract_obj(reg_t reg) const {
+  const AbstractObjectDomain& get_abstract_obj(reg_t reg) const {
     return get<0>().get(reg);
   }
 
@@ -357,26 +357,26 @@ class AbstractObjectEnvironment final
     return get<0>();
   }
 
-  void set_abstract_obj(reg_t reg, const AbstractObjectDomain aobj) {
-    apply<0>([=](auto env) { env->set(reg, aobj); }, true);
+  void set_abstract_obj(reg_t reg, const AbstractObjectDomain& aobj) {
+    apply<0>([&](auto env) { env->set(reg, aobj); }, true);
   }
 
   void update_abstract_obj(
       reg_t reg,
       const std::function<AbstractObjectDomain(const AbstractObjectDomain&)>&
           operation) {
-    apply<0>([=](auto env) { env->update(reg, operation); }, true);
+    apply<0>([&](auto env) { env->update(reg, operation); }, true);
   }
 
-  ClassObjectSourceDomain get_class_source(reg_t reg) const {
+  const ClassObjectSourceDomain& get_class_source(reg_t reg) const {
     return get<1>().get(reg);
   }
 
-  void set_class_source(reg_t reg, const ClassObjectSourceDomain cls_src) {
+  void set_class_source(reg_t reg, const ClassObjectSourceDomain& cls_src) {
     apply<1>([=](auto env) { env->set(reg, cls_src); }, true);
   }
 
-  ConstantAbstractDomain<std::vector<DexType*>> get_heap_class_array(
+  const ConstantAbstractDomain<std::vector<DexType*>>& get_heap_class_array(
       AbstractHeapAddress addr) const {
     return get<2>().get(addr);
   }
@@ -393,7 +393,7 @@ class AbstractObjectEnvironment final
     set_heap_class_array(addr, domain);
   }
 
-  ReturnValueDomain get_return_value() const { return get<3>(); }
+  const ReturnValueDomain& get_return_value() const { return get<3>(); }
 
   void join_return_value(const ReturnValueDomain& domain) {
     apply<3>([=](auto original) { original->join_with(domain); }, true);
@@ -488,7 +488,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       auto srcs = insn->srcs();
       for (param_index_t i = 0; i < srcs.size(); i++) {
         reg_t src = insn->src(i);
-        auto aobj = current_state->get_abstract_obj(src);
+        const auto& aobj = current_state->get_abstract_obj(src);
         cc.set(i, aobj);
       }
       if (!cc.is_bottom()) {
@@ -510,14 +510,14 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     }
     case OPCODE_MOVE:
     case OPCODE_MOVE_OBJECT: {
-      const auto aobj = current_state->get_abstract_obj(insn->src(0));
+      const auto& aobj = current_state->get_abstract_obj(insn->src(0));
       current_state->set_abstract_obj(insn->dest(), aobj);
       set_class_source(insn->src(0), insn->dest(), aobj, current_state);
       break;
     }
     case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT:
     case OPCODE_MOVE_RESULT_OBJECT: {
-      const auto aobj = current_state->get_abstract_obj(RESULT_REGISTER);
+      const auto& aobj = current_state->get_abstract_obj(RESULT_REGISTER);
       current_state->set_abstract_obj(insn->dest(), aobj);
       set_class_source(RESULT_REGISTER, insn->dest(), aobj, current_state);
       break;
@@ -539,7 +539,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       break;
     }
     case OPCODE_CHECK_CAST: {
-      const auto aobj = current_state->get_abstract_obj(insn->src(0));
+      const auto& aobj = current_state->get_abstract_obj(insn->src(0));
       set_abstract_obj(RESULT_REGISTER, AbstractObjectKind::OBJECT,
                        insn->get_type(), current_state);
       set_class_source(insn->src(0), RESULT_REGISTER, aobj, current_state);
@@ -551,7 +551,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       break;
     }
     case OPCODE_INSTANCE_OF: {
-      const auto aobj = current_state->get_abstract_obj(insn->src(0));
+      const auto& aobj = current_state->get_abstract_obj(insn->src(0));
       auto obj = aobj.get_object();
       // Append the referenced type here to the potential dex types list.
       // Doing this increases the type information we have at the reflection
@@ -783,7 +783,9 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     return it->second.get_class_source(reg).get_constant();
   }
 
-  AbstractObjectDomain get_return_value() const { return m_return_value; }
+  const AbstractObjectDomain& get_return_value() const {
+    return m_return_value;
+  }
 
   const AbstractObjectEnvironment& get_exit_state() const {
     return get_exit_state_at(m_cfg.exit_block());
