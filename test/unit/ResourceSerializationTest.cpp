@@ -899,15 +899,11 @@ void build_arsc_file_and_validate(
       foo_package.id, 1, dimen_configs, dimen_flags);
   package_builder->add_type(dimen_type_definer);
 
-  dimen_type_definer->add(&default_config,
-                          {(uint8_t*)&e0, sizeof(EntryAndValue)});
-  dimen_type_definer->add(&land_config,
-                          {(uint8_t*)&e0_land, sizeof(EntryAndValue)});
-  dimen_type_definer->add(&default_config,
-                          {(uint8_t*)&e1, sizeof(EntryAndValue)});
+  dimen_type_definer->add(&default_config, &e0);
+  dimen_type_definer->add(&land_config, &e0_land);
+  dimen_type_definer->add(&default_config, &e1);
   dimen_type_definer->add_empty(&land_config);
-  dimen_type_definer->add(&default_config,
-                          {(uint8_t*)&e2, sizeof(EntryAndValue)});
+  dimen_type_definer->add(&default_config, &e2);
   dimen_type_definer->add_empty(&land_config);
 
   // style
@@ -926,8 +922,7 @@ void build_arsc_file_and_validate(
   style.item1.value.dataType = android::Res_value::TYPE_INT_COLOR_RGB8;
   style.item1.value.data = 0xFF00FF00;
 
-  style_type_definer->add(&xxhdpi_config,
-                          {(uint8_t*)&style, sizeof(MapEntryAndValues)});
+  style_type_definer->add(&xxhdpi_config, &style);
 
   // Write to a file, give the callback the temp dir and file to validate
   // against.
@@ -1223,16 +1218,16 @@ void build_table_with_ids(const std::string& dest_file_path,
   auto type_definer = std::make_shared<arsc::ResTableTypeDefiner>(
       foo_package.id, 1, id_configs, flags, canonical_entries);
   package_builder->add_type(type_definer);
-  type_definer->add(&default_config, {(uint8_t*)&id_0, sizeof(EntryAndValue)});
+  type_definer->add(&default_config, &id_0);
   // When canonical_entries is true, following three items will generate three
   // offsets that point to just a single copy of the 16 entry/value bytes.
-  type_definer->add(&default_config, {(uint8_t*)&id_1, sizeof(EntryAndValue)});
-  type_definer->add(&default_config, {(uint8_t*)&id_1, sizeof(EntryAndValue)});
-  type_definer->add(&default_config, {(uint8_t*)&id_1, sizeof(EntryAndValue)});
+  type_definer->add(&default_config, &id_1);
+  type_definer->add(&default_config, &id_1);
+  type_definer->add(&default_config, &id_1);
   // When canonical_entries is true, following two items will generate two
   // offsets that point to just a single copy of the 16 entry/value bytes.
-  type_definer->add(&default_config, {(uint8_t*)&id_2, sizeof(EntryAndValue)});
-  type_definer->add(&default_config, {(uint8_t*)&id_2, sizeof(EntryAndValue)});
+  type_definer->add(&default_config, &id_2);
+  type_definer->add(&default_config, &id_2);
 
   android::Vector<char> out;
   table_builder->serialize(&out);
@@ -1277,24 +1272,24 @@ TEST(ResTable, ValueEquality) {
 
   // 0x7f010000
   type_definer->add_empty(&default_config);
-  type_definer->add(&land_config, {(uint8_t*)&a, sizeof(EntryAndValue)});
-  type_definer->add(&xxhdpi_config, {(uint8_t*)&b, sizeof(EntryAndValue)});
+  type_definer->add(&land_config, &a);
+  type_definer->add(&xxhdpi_config, &b);
   // 0x7f010001, make it the reverse of the above (not equal)
   type_definer->add_empty(&default_config);
-  type_definer->add(&land_config, {(uint8_t*)&b, sizeof(EntryAndValue)});
-  type_definer->add(&xxhdpi_config, {(uint8_t*)&a, sizeof(EntryAndValue)});
+  type_definer->add(&land_config, &b);
+  type_definer->add(&xxhdpi_config, &a);
   // 0x7f010002
-  type_definer->add(&default_config, {(uint8_t*)&x, sizeof(EntryAndValue)});
-  type_definer->add(&land_config, {(uint8_t*)&y, sizeof(EntryAndValue)});
-  type_definer->add(&xxhdpi_config, {(uint8_t*)&z, sizeof(EntryAndValue)});
+  type_definer->add(&default_config, &x);
+  type_definer->add(&land_config, &y);
+  type_definer->add(&xxhdpi_config, &z);
   // 0x7f010003
   type_definer->add_empty(&default_config);
-  type_definer->add(&land_config, {(uint8_t*)&b, sizeof(EntryAndValue)});
+  type_definer->add(&land_config, &b);
   type_definer->add_empty(&xxhdpi_config);
   // 0x7f010004, should be equal to 0x7f010002
-  type_definer->add(&default_config, {(uint8_t*)&x, sizeof(EntryAndValue)});
-  type_definer->add(&land_config, {(uint8_t*)&y, sizeof(EntryAndValue)});
-  type_definer->add(&xxhdpi_config, {(uint8_t*)&z, sizeof(EntryAndValue)});
+  type_definer->add(&default_config, &x);
+  type_definer->add(&land_config, &y);
+  type_definer->add(&xxhdpi_config, &z);
 
   android::Vector<char> out;
   table_builder->serialize(&out);
@@ -1429,30 +1424,25 @@ TEST(ResTable, GetStringsByName) {
   package_builder->add_type(type_definer);
 
   EntryAndValue first(0, android::Res_value::TYPE_STRING, 0);
-  type_definer->add(&default_config, {(uint8_t*)&first, sizeof(EntryAndValue)});
+  type_definer->add(&default_config, &first);
   type_definer->add_empty(&land_config);
 
   EntryAndValue second(1, android::Res_value::TYPE_STRING, 1);
   EntryAndValue second_land(1, android::Res_value::TYPE_STRING, 2);
-  type_definer->add(&default_config,
-                    {(uint8_t*)&second, sizeof(EntryAndValue)});
-  type_definer->add(&land_config,
-                    {(uint8_t*)&second_land, sizeof(EntryAndValue)});
+  type_definer->add(&default_config, &second);
+  type_definer->add(&land_config, &second_land);
 
   // These next two entries are diabolical as some of their entries will be
   // cyclic.
   EntryAndValue third(2, android::Res_value::TYPE_STRING, 3);
   EntryAndValue third_land(2, android::Res_value::TYPE_REFERENCE, 0x7f010003);
   type_definer->add(&default_config, {(uint8_t*)&third, sizeof(EntryAndValue)});
-  type_definer->add(&land_config,
-                    {(uint8_t*)&third_land, sizeof(EntryAndValue)});
+  type_definer->add(&land_config, &third_land);
 
   EntryAndValue fourth(3, android::Res_value::TYPE_REFERENCE, 0x7f010002);
   EntryAndValue fourth_land(3, android::Res_value::TYPE_STRING, 4);
-  type_definer->add(&default_config,
-                    {(uint8_t*)&fourth, sizeof(EntryAndValue)});
-  type_definer->add(&land_config,
-                    {(uint8_t*)&fourth_land, sizeof(EntryAndValue)});
+  type_definer->add(&default_config, &fourth);
+  type_definer->add(&land_config, &fourth_land);
 
   android::Vector<char> out;
   table_builder->serialize(&out);
@@ -1521,43 +1511,37 @@ TEST(ResTable, BuildDumpAndParseSparseType) {
   // Add all 8 values
   uint32_t key_idx = 0;
   EntryAndValue first(key_idx++, android::Res_value::TYPE_DIMENSION, 1);
-  type_definer->add(&default_config, {(uint8_t*)&first, sizeof(EntryAndValue)});
+  type_definer->add(&default_config, &first);
   type_definer->add_empty(&land_config);
 
   EntryAndValue second(key_idx, android::Res_value::TYPE_DIMENSION, 2);
   EntryAndValue second_land(key_idx++, android::Res_value::TYPE_DIMENSION, 22);
-  type_definer->add(&default_config,
-                    {(uint8_t*)&second, sizeof(EntryAndValue)});
-  type_definer->add(&land_config,
-                    {(uint8_t*)&second_land, sizeof(EntryAndValue)});
+  type_definer->add(&default_config, &second);
+  type_definer->add(&land_config, &second_land);
 
   EntryAndValue third(key_idx++, android::Res_value::TYPE_DIMENSION, 3);
-  type_definer->add(&default_config, {(uint8_t*)&third, sizeof(EntryAndValue)});
+  type_definer->add(&default_config, &third);
   type_definer->add_empty(&land_config);
 
   EntryAndValue fourth(key_idx, android::Res_value::TYPE_DIMENSION, 4);
   EntryAndValue fourth_land(key_idx++, android::Res_value::TYPE_DIMENSION, 44);
-  type_definer->add(&default_config,
-                    {(uint8_t*)&fourth, sizeof(EntryAndValue)});
-  type_definer->add(&land_config,
-                    {(uint8_t*)&fourth_land, sizeof(EntryAndValue)});
+  type_definer->add(&default_config, &fourth);
+  type_definer->add(&land_config, &fourth_land);
 
   EntryAndValue fifth(key_idx++, android::Res_value::TYPE_DIMENSION, 5);
-  type_definer->add(&default_config, {(uint8_t*)&fifth, sizeof(EntryAndValue)});
+  type_definer->add(&default_config, &fifth);
   type_definer->add_empty(&land_config);
 
   EntryAndValue sixth(key_idx++, android::Res_value::TYPE_DIMENSION, 6);
-  type_definer->add(&default_config, {(uint8_t*)&sixth, sizeof(EntryAndValue)});
+  type_definer->add(&default_config, &sixth);
   type_definer->add_empty(&land_config);
 
   EntryAndValue seventh(key_idx++, android::Res_value::TYPE_DIMENSION, 7);
-  type_definer->add(&default_config,
-                    {(uint8_t*)&seventh, sizeof(EntryAndValue)});
+  type_definer->add(&default_config, &seventh);
   type_definer->add_empty(&land_config);
 
   EntryAndValue eighth(key_idx++, android::Res_value::TYPE_DIMENSION, 8);
-  type_definer->add(&default_config,
-                    {(uint8_t*)&eighth, sizeof(EntryAndValue)});
+  type_definer->add(&default_config, &eighth);
   type_definer->add_empty(&land_config);
 
   android::Vector<char> out;

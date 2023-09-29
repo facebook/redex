@@ -336,6 +336,11 @@ class ResTableTypeDefiner : public ResTableTypeBuilder {
     auto& vec = m_data.at(config);
     vec.emplace_back(data);
   }
+  // Convenience method for above.
+  template <typename T>
+  void add(android::ResTable_config* config, T* ptr) {
+    add(config, {(uint8_t*)ptr, sizeof(T)});
+  }
   // Convenience method to add empty entry/value to the given config.
   void add_empty(android::ResTable_config* config) {
     EntryValueData ev(nullptr, 0);
