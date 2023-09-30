@@ -107,11 +107,11 @@ class PatriciaTreeMapAbstractEnvironment final
   }
 
   template <typename Operation> // Domain(const Domain&)
-  bool map(Operation f) {
+  bool map(Operation&& f) {
     if (this->is_bottom()) {
       return false;
     }
-    bool res = this->get_value()->map(f);
+    bool res = this->get_value()->map(std::forward<Operation>(f));
     this->normalize();
     return res;
   }
@@ -142,7 +142,7 @@ class PatriciaTreeMapAbstractEnvironment final
     }
     try {
       this->get_value()->m_map.update(
-          [&operation](const Domain& x) {
+          [operation = std::forward<Operation>(operation)](const Domain& x) {
             Domain result = operation(x);
             if (result.is_bottom()) {
               throw ptmae_impl::value_is_bottom();
@@ -287,7 +287,7 @@ class MapValue final : public AbstractValue<MapValue<Variable, Domain>> {
 
   template <typename Operation> // Domain(const Domain&)
   bool map(Operation&& f) {
-    return m_map.map(f);
+    return m_map.map(std::forward<Operation>(f));
   }
 
   bool erase_all_matching(const Variable& variable_mask) {
@@ -297,7 +297,7 @@ class MapValue final : public AbstractValue<MapValue<Variable, Domain>> {
   template <typename Operation> // Domain(const Domain&, const Domain&)
   AbstractValueKind join_like_operation(const MapValue& other,
                                         Operation&& operation) {
-    m_map.intersection_with(operation, other.m_map);
+    m_map.intersection_with(std::forward<Operation>(operation), other.m_map);
     return kind();
   }
 
@@ -306,7 +306,8 @@ class MapValue final : public AbstractValue<MapValue<Variable, Domain>> {
                                         Operation&& operation) {
     try {
       m_map.union_with(
-          [&operation](const Domain& x, const Domain& y) {
+          [operation = std::forward<Operation>(operation)](const Domain& x,
+                                                           const Domain& y) {
             Domain result = operation(x, y);
             if (result.is_bottom()) {
               throw value_is_bottom();
