@@ -540,3 +540,73 @@ TEST_F(FlatMapTest, intersectionWith) {
     EXPECT_EQ(p1, p3);
   }
 }
+
+TEST_F(FlatMapTest, difference) {
+  auto difference = [](IntFlatMap x, const IntFlatMap& y) -> IntFlatMap {
+    auto substract = [](uint32_t* x, uint32_t y) -> void {
+      // bottom - anything = bottom
+      if (*x != 0) {
+        *x -= y;
+      }
+    };
+    x.difference_with(substract, y);
+    return x;
+  };
+
+  EXPECT_EQ(difference(IntFlatMap(), IntFlatMap()), IntFlatMap());
+  EXPECT_EQ(difference(IntFlatMap({{1, 1}}), IntFlatMap()),
+            IntFlatMap({{1, 1}}));
+  EXPECT_EQ(difference(IntFlatMap(), IntFlatMap({{1, 1}})), IntFlatMap());
+
+  EXPECT_EQ(difference(IntFlatMap({{1, 1}}), IntFlatMap({{1, 1}})),
+            IntFlatMap());
+  EXPECT_EQ(difference(IntFlatMap({{1, 3}}), IntFlatMap({{1, 1}})),
+            IntFlatMap({{1, 2}}));
+  EXPECT_EQ(difference(IntFlatMap({{1, 3}}), IntFlatMap({{2, 1}})),
+            IntFlatMap({{1, 3}}));
+  EXPECT_EQ(difference(IntFlatMap({{1, 3}}), IntFlatMap({{1, 1}, {2, 1}})),
+            IntFlatMap({{1, 2}}));
+
+  EXPECT_EQ(difference(IntFlatMap({{1, 3}, {2, 3}}), IntFlatMap({{1, 1}})),
+            IntFlatMap({{1, 2}, {2, 3}}));
+  EXPECT_EQ(
+      difference(IntFlatMap({{1, 3}, {2, 3}, {3, 3}}), IntFlatMap({{2, 1}})),
+      IntFlatMap({{1, 3}, {2, 2}, {3, 3}}));
+  EXPECT_EQ(
+      difference(IntFlatMap({{1, 3}, {2, 3}, {3, 3}}), IntFlatMap({{4, 1}})),
+      IntFlatMap({{1, 3}, {2, 3}, {3, 3}}));
+  EXPECT_EQ(
+      difference(IntFlatMap({{1, 3}, {2, 3}, {3, 3}}), IntFlatMap({{2, 3}})),
+      IntFlatMap({{1, 3}, {3, 3}}));
+
+  EXPECT_EQ(
+      difference(IntFlatMap({{1, 3}, {2, 3}}), IntFlatMap({{1, 3}, {2, 3}})),
+      IntFlatMap());
+  EXPECT_EQ(
+      difference(IntFlatMap({{1, 3}, {2, 3}}), IntFlatMap({{1, 1}, {2, 1}})),
+      IntFlatMap({{1, 2}, {2, 2}}));
+  EXPECT_EQ(difference(IntFlatMap({{1, 3}, {2, 3}, {3, 3}}),
+                       IntFlatMap({{1, 1}, {2, 1}, {3, 1}})),
+            IntFlatMap({{1, 2}, {2, 2}, {3, 2}}));
+
+  EXPECT_EQ(difference(IntFlatMap({{1, 3}, {2, 3}, {3, 3}}),
+                       IntFlatMap({{1, 1}, {2, 1}})),
+            IntFlatMap({{1, 2}, {2, 2}, {3, 3}}));
+  EXPECT_EQ(difference(IntFlatMap({{1, 3}, {2, 3}, {3, 3}, {4, 3}}),
+                       IntFlatMap({{1, 1}, {3, 1}})),
+            IntFlatMap({{1, 2}, {2, 3}, {3, 2}, {4, 3}}));
+
+  EXPECT_EQ(difference(IntFlatMap({{1, 3}, {3, 3}}),
+                       IntFlatMap({{1, 1}, {2, 1}, {3, 1}, {4, 1}})),
+            IntFlatMap({{1, 2}, {3, 2}}));
+  EXPECT_EQ(difference(IntFlatMap({{1, 3}, {3, 3}}),
+                       IntFlatMap({{1, 1}, {2, 1}, {3, 1}})),
+            IntFlatMap({{1, 2}, {3, 2}}));
+
+  EXPECT_EQ(
+      difference(IntFlatMap({{1, 3}, {3, 3}}), IntFlatMap({{2, 1}, {4, 1}})),
+      IntFlatMap({{1, 3}, {3, 3}}));
+  EXPECT_EQ(difference(IntFlatMap({{1, 3}, {3, 3}, {5, 3}}),
+                       IntFlatMap({{2, 1}, {4, 1}, {6, 1}})),
+            IntFlatMap({{1, 3}, {3, 3}, {5, 3}}));
+}

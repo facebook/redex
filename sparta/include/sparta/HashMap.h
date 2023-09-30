@@ -277,6 +277,22 @@ class HashMap final {
     }
   }
 
+  // Requires CombiningFunction to coerce to
+  // std::function<void(mapped_type*, const mapped_type&)>
+  // Requires `combine(bottom, ...)` to be a no-op.
+  template <typename CombiningFunction>
+  void difference_with(CombiningFunction&& combine, const HashMap& other) {
+    for (const auto& other_binding : other.m_map) {
+      auto binding = m_map.find(other_binding.first);
+      if (binding != m_map.end()) {
+        combine(&binding->second, other_binding.second);
+        if (Value::is_default_value(binding->second)) {
+          m_map.erase(binding);
+        }
+      }
+    }
+  }
+
   void clear() { m_map.clear(); }
 
   friend std::ostream& operator<<(std::ostream& o, const HashMap& m) {

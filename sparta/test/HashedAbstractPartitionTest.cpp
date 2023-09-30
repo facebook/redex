@@ -170,3 +170,126 @@ TEST(HashedAbstractPartitionTest, destructiveOperations) {
   EXPECT_TRUE(p6.get("v1").is_top());
   EXPECT_TRUE(p6.is_top());
 }
+
+TEST(HashedAbstractPartitionTest, difference) {
+  auto difference = [](Partition x, const Partition& y) -> Partition {
+    auto substract = [](Domain* x, const Domain& y) -> void {
+      x->difference_with(y);
+      if (x->is_value() && x->size() == 0) {
+        x->set_to_bottom();
+      }
+    };
+    x.difference_like_operation(y, substract);
+    return x;
+  };
+
+  EXPECT_EQ(difference(Partition::top(), Partition::bottom()),
+            Partition::top());
+  EXPECT_EQ(difference(Partition::top(), Partition::top()),
+            Partition::bottom());
+  EXPECT_EQ(difference(Partition::bottom(), Partition::bottom()),
+            Partition::bottom());
+  EXPECT_EQ(difference(Partition{{"a", Domain{"a"}}}, Partition::bottom()),
+            Partition({{"a", Domain{"a"}}}));
+  EXPECT_EQ(difference(Partition{{"a", Domain{"a"}}}, Partition::top()),
+            Partition::bottom());
+
+  EXPECT_EQ(
+      difference(Partition{{"a", Domain{"a"}}}, Partition{{"a", Domain{"a"}}}),
+      Partition::bottom());
+  EXPECT_EQ(difference(Partition{{"a", Domain{"b"}}},
+                       Partition{{"a", Domain{"a", "b", "c"}}}),
+            Partition::bottom());
+  EXPECT_EQ(
+      difference(Partition{{"a", Domain{"a"}}}, Partition{{"a", Domain{"b"}}}),
+      (Partition{{"a", Domain{"a"}}}));
+  EXPECT_EQ(
+      difference(Partition{{"a", Domain{"a"}}}, Partition{{"b", Domain{"a"}}}),
+      (Partition{{"a", Domain{"a"}}}));
+  EXPECT_EQ(difference(Partition{{"a", Domain{"a"}}},
+                       Partition{{"a", Domain{"b"}}, {"b", Domain{"b"}}}),
+            (Partition{{"a", Domain{"a"}}}));
+  EXPECT_EQ(difference(Partition{{"a", Domain{"a"}}},
+                       Partition{{"a", Domain{"a"}}, {"b", Domain{"b"}}}),
+            Partition::bottom());
+
+  EXPECT_EQ(difference(Partition({{"a", Domain{"c"}}, {"b", Domain{"c"}}}),
+                       Partition({{"a", Domain{"a"}}})),
+            Partition({{"a", Domain{"c"}}, {"b", Domain{"c"}}}));
+  EXPECT_EQ(
+      difference(
+          Partition(
+              {{"a", Domain{"c"}}, {"b", Domain{"c"}}, {"c", Domain{"c"}}}),
+          Partition({{"b", Domain{"a"}}})),
+      Partition({{"a", Domain{"c"}}, {"b", Domain{"c"}}, {"c", Domain{"c"}}}));
+  EXPECT_EQ(
+      difference(
+          Partition(
+              {{"a", Domain{"c"}}, {"b", Domain{"c"}}, {"c", Domain{"c"}}}),
+          Partition({{"d", Domain{"c"}}})),
+      Partition({{"a", Domain{"c"}}, {"b", Domain{"c"}}, {"c", Domain{"c"}}}));
+  EXPECT_EQ(difference(Partition({{"a", Domain{"c"}},
+                                  {"b", Domain{"c"}},
+                                  {"c", Domain{"c"}}}),
+                       Partition({{"b", Domain{"c"}}})),
+            Partition({{"a", Domain{"c"}}, {"c", Domain{"c"}}}));
+  EXPECT_EQ(
+      difference(
+          Partition(
+              {{"a", Domain{"c"}}, {"b", Domain{"c"}}, {"c", Domain{"c"}}}),
+          Partition({{"b", Domain{"a", "b", "c"}}, {"c", Domain{"a"}}})),
+      Partition({{"a", Domain{"c"}}, {"c", Domain{"c"}}}));
+  EXPECT_EQ(
+      difference(
+          Partition(
+              {{"a", Domain{"c"}}, {"b", Domain{"c"}}, {"c", Domain{"c"}}}),
+          Partition({{"b", Domain{"a", "b", "c"}}, {"c", Domain{"c"}}})),
+      Partition({{"a", Domain{"c"}}}));
+
+  EXPECT_EQ(difference(Partition({{"a", Domain{"c"}}, {"b", Domain{"c"}}}),
+                       Partition({{"a", Domain{"c"}}, {"b", Domain{"c"}}})),
+            Partition::bottom());
+  EXPECT_EQ(difference(Partition({{"a", Domain{"c"}}, {"b", Domain{"c"}}}),
+                       Partition({{"a", Domain{"a"}}, {"b", Domain{"c"}}})),
+            Partition({{"a", Domain{"c"}}}));
+  EXPECT_EQ(difference(Partition({{"a", Domain{"c"}},
+                                  {"b", Domain{"c"}},
+                                  {"c", Domain{"a", "b", "c"}}}),
+                       Partition({{"a", Domain{"c"}},
+                                  {"b", Domain{"a"}},
+                                  {"c", Domain{"b"}}})),
+            Partition({{"b", Domain{"c"}}, {"c", Domain{"a", "c"}}}));
+
+  EXPECT_EQ(difference(Partition({{"a", Domain{"a", "b", "c"}},
+                                  {"b", Domain{"a", "b", "c"}},
+                                  {"c", Domain{"a", "b", "c"}},
+                                  {"d", Domain{"a", "b", "c"}}}),
+                       Partition({{"a", Domain{"a"}}, {"c", Domain{"c"}}})),
+            Partition({{"a", Domain{"b", "c"}},
+                       {"b", Domain{"a", "b", "c"}},
+                       {"c", Domain{"a", "b"}},
+                       {"d", Domain{"a", "b", "c"}}}));
+
+  EXPECT_EQ(difference(Partition({{"a", Domain{"c"}}, {"c", Domain{"c"}}}),
+                       Partition({{"a", Domain{"a"}},
+                                  {"b", Domain{"a"}},
+                                  {"c", Domain{"a", "b", "c"}},
+                                  {"d", Domain{"a"}}})),
+            Partition({{"a", Domain{"c"}}}));
+  EXPECT_EQ(difference(Partition({{"a", Domain{"c"}}, {"c", Domain{"c"}}}),
+                       Partition({{"a", Domain{"a", "b", "c"}},
+                                  {"b", Domain{"a"}},
+                                  {"c", Domain{"a"}}})),
+            Partition({{"c", Domain{"c"}}}));
+
+  EXPECT_EQ(difference(Partition({{"a", Domain{"c"}}, {"c", Domain{"c"}}}),
+                       Partition({{"b", Domain{"a"}}, {"d", Domain{"a"}}})),
+            Partition({{"a", Domain{"c"}}, {"c", Domain{"c"}}}));
+  EXPECT_EQ(
+      difference(
+          Partition(
+              {{"a", Domain{"c"}}, {"c", Domain{"c"}}, {"d", Domain{"c"}}}),
+          Partition(
+              {{"b", Domain{"a"}}, {"d", Domain{"a"}}, {"e", Domain{"c"}}})),
+      Partition({{"a", Domain{"c"}}, {"c", Domain{"c"}}, {"d", Domain{"c"}}}));
+}
