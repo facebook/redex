@@ -121,7 +121,7 @@ class PatriciaTreeMapAbstractPartition final
     if (is_top()) {
       return *this;
     }
-    m_map.update(operation, label);
+    m_map.update(std::forward<Operation>(operation), label);
     return *this;
   }
 
@@ -130,7 +130,7 @@ class PatriciaTreeMapAbstractPartition final
     if (is_top()) {
       return false;
     }
-    return m_map.map(f);
+    return m_map.map(std::forward<Operation>(f));
   }
 
   bool is_top() const { return m_is_top; }
@@ -194,7 +194,7 @@ class PatriciaTreeMapAbstractPartition final
       set_to_top();
       return;
     }
-    m_map.union_with(operation, other.m_map);
+    m_map.union_with(std::forward<Operation>(operation), other.m_map);
   }
 
   template <typename Operation> // Domain(const Domain&, const Domain&)
@@ -207,7 +207,7 @@ class PatriciaTreeMapAbstractPartition final
     if (other.is_top()) {
       return;
     }
-    m_map.intersection_with(operation, other.m_map);
+    m_map.intersection_with(std::forward<Operation>(operation), other.m_map);
   }
 
   template <typename Operation> // Domain(const Domain&, const Domain&)
@@ -218,7 +218,7 @@ class PatriciaTreeMapAbstractPartition final
     } else if (is_top()) {
       return;
     } else {
-      m_map.difference_with(operation, other.m_map);
+      m_map.difference_with(std::forward<Operation>(operation), other.m_map);
     }
   }
 

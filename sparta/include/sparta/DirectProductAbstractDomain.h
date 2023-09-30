@@ -190,7 +190,8 @@ class DirectProductAbstractDomain : public AbstractDomain<Derived> {
   template <class Predicate>
   bool all_of(Predicate&& predicate) const {
     return tuple_apply(
-        [predicate](const Domains&... component) {
+        [predicate =
+             std::forward<Predicate>(predicate)](const Domains&... component) {
           bool result = true;
           discard({(result &= predicate(component))...});
           return result;
@@ -201,7 +202,8 @@ class DirectProductAbstractDomain : public AbstractDomain<Derived> {
   template <class Predicate>
   bool any_of(Predicate&& predicate) const {
     return tuple_apply(
-        [predicate](const Domains&... component) {
+        [predicate =
+             std::forward<Predicate>(predicate)](const Domains&... component) {
           bool result = false;
           discard({(result |= predicate(component))...});
           return result;

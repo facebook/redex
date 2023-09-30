@@ -975,7 +975,8 @@ inline intrusive_ptr<PatriciaTreeLeaf<IntegerType, Value>> combine_leafs(
     intrusive_ptr<PatriciaTreeLeaf<IntegerType, Value>> other,
     intrusive_ptr<PatriciaTreeLeaf<IntegerType, Value>> leaf) {
   return update_leaf(
-      [&](auto leaf) {
+      [leaf_combine = std::forward<LeafCombine>(leaf_combine),
+       &other](auto leaf) {
         return leaf_combine(std::move(leaf), std::move(other));
       },
       std::move(leaf));
@@ -988,7 +989,8 @@ inline intrusive_ptr<PatriciaTreeNode<IntegerType, Value>> combine_leafs_by_key(
     IntegerType key,
     const intrusive_ptr<PatriciaTreeNode<IntegerType, Value>>& tree) {
   return update_leaf_by_key(
-      [&](auto leaf) {
+      [leaf_combine = std::forward<LeafCombine>(leaf_combine),
+       &other](auto leaf) {
         return leaf_combine(std::move(leaf), std::move(other));
       },
       key, tree);
@@ -1436,7 +1438,8 @@ class PatriciaTreeCore {
   template <typename Predicate>
   inline void filter(Predicate&& predicate) {
     m_tree = pt_core::filter_tree(
-        [&](IntegerType key, const ValueType& value) {
+        [predicate = std::forward<Predicate>(predicate)](
+            IntegerType key, const ValueType& value) {
           return predicate(Codec::decode(key), value);
         },
         m_tree);

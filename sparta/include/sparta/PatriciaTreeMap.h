@@ -145,13 +145,14 @@ class PatriciaTreeMap final {
 
   template <typename Operation> // mapped_type(const mapped_type&)
   PatriciaTreeMap& update(Operation&& operation, Key key) {
-    m_core.update(apply_leafs(operation), key);
+    m_core.update(apply_leafs(std::forward<Operation>(operation)), key);
     return *this;
   }
 
   template <typename MappingFunction> // mapped_type(const mapped_type&)
   bool map(MappingFunction&& f) {
-    return m_core.update_all_leafs(apply_leafs(f));
+    return m_core.update_all_leafs(
+        apply_leafs(std::forward<MappingFunction>(f)));
   }
 
   PatriciaTreeMap& remove(Key key) {
@@ -161,7 +162,7 @@ class PatriciaTreeMap final {
 
   template <typename Predicate> // bool(const Key&, const ValueType&)
   PatriciaTreeMap& filter(Predicate&& predicate) {
-    m_core.filter(predicate);
+    m_core.filter(std::forward<Predicate>(predicate));
     return *this;
   }
 
