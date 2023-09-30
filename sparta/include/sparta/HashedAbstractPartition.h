@@ -204,6 +204,18 @@ class HashedAbstractPartition final
     m_map.intersection_with(std::forward<Operation>(operation), other.m_map);
   }
 
+  template <typename Operation> // void(Domain*, const Domain&)
+  void difference_like_operation(const HashedAbstractPartition& other,
+                                 Operation&& operation) {
+    if (other.is_top()) {
+      set_to_bottom();
+    } else if (is_top()) {
+      return;
+    } else {
+      m_map.difference_with(std::forward<Operation>(operation), other.m_map);
+    }
+  }
+
   static HashedAbstractPartition bottom() { return HashedAbstractPartition(); }
 
   static HashedAbstractPartition top() {

@@ -307,6 +307,27 @@ class FlatMap final {
     erase_default_values();
   }
 
+  // Requires CombiningFunction to coerce to
+  // std::function<void(mapped_type*, const mapped_type&)>
+  // Requires `combine(bottom, ...)` to be a no-op.
+  template <typename CombiningFunction>
+  void difference_with(CombiningFunction&& combine, const FlatMap& other) {
+    auto it = m_map.begin(), end = m_map.end();
+    auto other_it = other.m_map.begin(), other_end = other.m_map.end();
+    while (other_it != other_end) {
+      it = std::lower_bound(it, end, other_it->first, ComparePairWithKey());
+      if (it == end) {
+        return;
+      }
+      if (KeyEqual()(it->first, other_it->first)) {
+        combine(&it->second, other_it->second);
+        ++it;
+      }
+      ++other_it;
+    }
+    erase_default_values();
+  }
+
   void clear() { m_map.clear(); }
 
   friend std::ostream& operator<<(std::ostream& o, const FlatMap& m) {
