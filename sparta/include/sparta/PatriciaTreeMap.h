@@ -173,48 +173,51 @@ class PatriciaTreeMap final {
   // Requires CombiningFunction to coerce to
   // std::function<mapped_type(const mapped_type&, const mapped_type&)>
   template <typename CombiningFunction>
-  PatriciaTreeMap& union_with(const CombiningFunction& combine,
+  PatriciaTreeMap& union_with(CombiningFunction&& combine,
                               const PatriciaTreeMap& other) {
-    m_core.merge(apply_leafs(combine), other.m_core);
+    m_core.merge(apply_leafs(std::forward<CombiningFunction>(combine)),
+                 other.m_core);
     return *this;
   }
 
   template <typename CombiningFunction>
-  PatriciaTreeMap& intersection_with(const CombiningFunction& combine,
+  PatriciaTreeMap& intersection_with(CombiningFunction&& combine,
                                      const PatriciaTreeMap& other) {
-    m_core.intersect(apply_leafs(combine), other.m_core);
+    m_core.intersect(apply_leafs(std::forward<CombiningFunction>(combine)),
+                     other.m_core);
     return *this;
   }
 
   // Requires that `combine(bottom, ...) = bottom`.
   template <typename CombiningFunction>
-  PatriciaTreeMap& difference_with(const CombiningFunction& combine,
+  PatriciaTreeMap& difference_with(CombiningFunction&& combine,
                                    const PatriciaTreeMap& other) {
-    m_core.diff(apply_leafs(combine), other.m_core);
+    m_core.diff(apply_leafs(std::forward<CombiningFunction>(combine)),
+                other.m_core);
     return *this;
   }
 
   template <typename CombiningFunction>
-  PatriciaTreeMap get_union_with(const CombiningFunction& combine,
+  PatriciaTreeMap get_union_with(CombiningFunction&& combine,
                                  const PatriciaTreeMap& other) const {
     auto result = *this;
-    result.union_with(combine, other);
+    result.union_with(std::forward<CombiningFunction>(combine), other);
     return result;
   }
 
   template <typename CombiningFunction>
-  PatriciaTreeMap get_intersection_with(const CombiningFunction& combine,
+  PatriciaTreeMap get_intersection_with(CombiningFunction&& combine,
                                         const PatriciaTreeMap& other) const {
     auto result = *this;
-    result.intersection_with(combine, other);
+    result.intersection_with(std::forward<CombiningFunction>(combine), other);
     return result;
   }
 
   template <typename CombiningFunction>
-  PatriciaTreeMap get_difference_with(const CombiningFunction& combine,
+  PatriciaTreeMap get_difference_with(CombiningFunction&& combine,
                                       const PatriciaTreeMap& other) const {
     auto result = *this;
-    result.difference_with(combine, other);
+    result.difference_with(std::forward<CombiningFunction>(combine), other);
     return result;
   }
 

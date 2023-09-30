@@ -259,7 +259,7 @@ class FlatMap final {
   // Requires CombiningFunction to coerce to
   // std::function<void(mapped_type*, const mapped_type&)>
   template <typename CombiningFunction>
-  void union_with(const CombiningFunction& combine, const FlatMap& other) {
+  void union_with(CombiningFunction&& combine, const FlatMap& other) {
     auto it = m_map.begin(), end = m_map.end();
     auto other_it = other.m_map.begin(), other_end = other.m_map.end();
     while (other_it != other_end) {
@@ -284,8 +284,7 @@ class FlatMap final {
   // Requires CombiningFunction to coerce to
   // std::function<void(mapped_type*, const mapped_type&)>
   template <typename CombiningFunction>
-  void intersection_with(const CombiningFunction& combine,
-                         const FlatMap& other) {
+  void intersection_with(CombiningFunction&& combine, const FlatMap& other) {
     auto it = m_map.begin(), end = m_map.end();
     auto other_it = other.m_map.begin(), other_end = other.m_map.end();
     while (it != end) {

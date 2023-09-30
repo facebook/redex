@@ -242,7 +242,7 @@ class HashMap final {
   // Requires CombiningFunction to coerce to
   // std::function<void(mapped_type*, const mapped_type&)>
   template <typename CombiningFunction>
-  void union_with(const CombiningFunction& combine, const HashMap& other) {
+  void union_with(CombiningFunction&& combine, const HashMap& other) {
     for (const auto& other_binding : other.m_map) {
       auto binding = m_map.find(other_binding.first);
       if (binding == m_map.end()) {
@@ -259,8 +259,7 @@ class HashMap final {
   // Requires CombiningFunction to coerce to
   // std::function<void(mapped_type*, const mapped_type&)>
   template <typename CombiningFunction>
-  void intersection_with(const CombiningFunction& combine,
-                         const HashMap& other) {
+  void intersection_with(CombiningFunction&& combine, const HashMap& other) {
     auto it = m_map.begin(), end = m_map.end();
     while (it != end) {
       auto other_binding = other.m_map.find(it->first);
