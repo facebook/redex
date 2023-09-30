@@ -127,6 +127,14 @@ class HashedAbstractPartition final
     return *this;
   }
 
+  template <typename Operation> // void(Domain*)
+  void map(Operation&& f) {
+    if (is_top()) {
+      return;
+    }
+    m_map.map(std::forward<Operation>(f));
+  }
+
   bool is_top() const { return m_is_top; }
 
   bool is_bottom() const { return !m_is_top && m_map.empty(); }
