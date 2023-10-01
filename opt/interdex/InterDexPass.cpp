@@ -80,10 +80,10 @@ void InterDexPass::bind_config() {
   bind("minimize_cross_dex_refs_field_seed_weight",
        m_minimize_cross_dex_refs_config.field_seed_weight,
        m_minimize_cross_dex_refs_config.field_seed_weight);
-  bind("minimize_cross_dex_refs_type_ref_weight",
+  bind("minimize_cross_dex_refs_type_seed_weight",
        m_minimize_cross_dex_refs_config.type_seed_weight,
        m_minimize_cross_dex_refs_config.type_seed_weight);
-  bind("minimize_cross_dex_refs_string_ref_weight",
+  bind("minimize_cross_dex_refs_string_seed_weight",
        m_minimize_cross_dex_refs_config.string_seed_weight,
        m_minimize_cross_dex_refs_config.string_seed_weight);
   bind("minimize_cross_dex_refs_emit_json", false,
